@@ -17,6 +17,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -367,6 +368,7 @@ func rehearseMain() error {
 		return fmt.Errorf(jobValidationOutput)
 	}
 
+	var errs []error
 	cleanup, err := setupDependencies(
 		presubmitsToRehearse,
 		prNumber,
@@ -382,10 +384,12 @@ func rehearseMain() error {
 		rehearsalClusterProfiles,
 		imagestreamtags)
 	if err != nil {
-		logger.WithError(err).Error("Failed to set up dependencies")
-		return errors.New(failedSetupOutput)
+		logger.WithError(err).Error("Failed to set up dependencies. This might cause subsequent failures.")
+		errs = append(errs, err)
 	}
-	defer cleanup()
+	if cleanup != nil {
+		defer cleanup()
+	}
 
 	executor := rehearse.NewExecutor(presubmitsToRehearse, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient, prConfig.Prow.ProwJobNamespace)
 	success, err := executor.ExecuteJobs()
@@ -396,9 +400,10 @@ func rehearseMain() error {
 	if !success {
 		logger.Error("Some jobs failed their rehearsal runs")
 		return fmt.Errorf(jobsFailureOutput)
+	} else {
+		logger.Info("All jobs were rehearsed successfully")
 	}
-	logger.Info("All jobs were rehearsed successfully")
-	return nil
+	return utilerrors.NewAggregate(errs)
 }
 
 func main() {
@@ -441,7 +446,7 @@ func setupDependencies(
 	changedTemplates rehearse.ConfigMaps,
 	changedClusterProfiles rehearse.ConfigMaps,
 	requiredImageStreamTags apihelper.ImageStreamTagMap,
-) (_ cleanup, retErr error) {
+) (cleanup, error) {
 	buildClusters := sets.String{}
 	for _, job := range jobs {
 		if _, ok := configs[job.Cluster]; !ok && !dryRun {
@@ -452,11 +457,6 @@ func setupDependencies(
 
 	var cleanups cleanups
 	cleanupsLock := &sync.Mutex{}
-	defer func() {
-		if retErr != nil {
-			cleanups.cleanup()
-		}
-	}()
 
 	// Otherwise we flake in integration tests because we just capture stdout. Its not
 	// really possible to sort this as we use a client per cluster. Furthermore the output

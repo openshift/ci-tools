@@ -77,7 +77,7 @@ func FromConfig(
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not get template client for cluster config: %w", err)
 		}
-		templateClient = steps.NewTemplateClient(templateGetter, templateGetter.RESTClient())
+		templateClient = steps.NewTemplateClient(client, templateGetter.RESTClient())
 
 		coreGetter, err := coreclientset.NewForConfig(clusterConfig)
 		if err != nil {
@@ -210,7 +210,7 @@ func FromConfig(
 			} else if test := testStep.OpenshiftInstallerClusterTestConfiguration; test != nil {
 				if testStep.OpenshiftInstallerClusterTestConfiguration.Upgrade {
 					var err error
-					step, err = clusterinstall.E2ETestStep(*testStep.OpenshiftInstallerClusterTestConfiguration, *testStep, params, podClient, templateClient, client, artifactDir, jobSpec, config.Resources)
+					step, err = clusterinstall.E2ETestStep(*testStep.OpenshiftInstallerClusterTestConfiguration, *testStep, params, podClient, templateClient, artifactDir, jobSpec, config.Resources)
 					if err != nil {
 						return nil, nil, fmt.Errorf("unable to create end to end test step: %w", err)
 					}
@@ -237,7 +237,7 @@ func FromConfig(
 	}
 
 	for _, template := range templates {
-		step := steps.TemplateExecutionStep(template, params, podClient, client, templateClient, artifactDir, jobSpec, config.Resources)
+		step := steps.TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec, config.Resources)
 		var hasClusterType, hasUseLease bool
 		for _, p := range template.Parameters {
 			hasClusterType = hasClusterType || p.Name == "CLUSTER_TYPE"

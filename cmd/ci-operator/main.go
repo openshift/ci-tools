@@ -1717,5 +1717,8 @@ func addSchemes() error {
 	if err := buildv1.AddToScheme(scheme.Scheme); err != nil {
 		return fmt.Errorf("failed to add buildv1 to scheme: %w", err)
 	}
+	if err := templateapi.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add templatev1 to scheme: %w", err)
+	}
 	return nil
 }

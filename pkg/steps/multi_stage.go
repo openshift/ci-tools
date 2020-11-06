@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -63,7 +62,6 @@ type multiStageTestStep struct {
 	podClient          PodClient
 	eventClient        coreclientset.EventsGetter
 	saClient           coreclientset.ServiceAccountsGetter
-	rbacClient         rbacclientset.RbacV1Interface
 	client             ctrlruntimeclient.Client
 	artifactDir        string
 	jobSpec            *api.JobSpec
@@ -79,12 +77,11 @@ func MultiStageTestStep(
 	podClient PodClient,
 	eventClient coreclientset.EventsGetter,
 	saClient coreclientset.ServiceAccountsGetter,
-	rbacClient rbacclientset.RbacV1Interface,
 	client ctrlruntimeclient.Client,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, podClient, eventClient, saClient, rbacClient, client, artifactDir, jobSpec)
+	return newMultiStageTestStep(testConfig, config, params, podClient, eventClient, saClient, client, artifactDir, jobSpec)
 }
 
 func newMultiStageTestStep(
@@ -94,7 +91,6 @@ func newMultiStageTestStep(
 	podClient PodClient,
 	eventClient coreclientset.EventsGetter,
 	saClient coreclientset.ServiceAccountsGetter,
-	rbacClient rbacclientset.RbacV1Interface,
 	client ctrlruntimeclient.Client,
 	artifactDir string,
 	jobSpec *api.JobSpec,
@@ -112,7 +108,6 @@ func newMultiStageTestStep(
 		podClient:          podClient,
 		eventClient:        eventClient,
 		saClient:           saClient,
-		rbacClient:         rbacClient,
 		client:             client,
 		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,
@@ -234,7 +229,7 @@ func (s *multiStageTestStep) SubTests() []*junit.TestCase { return s.subTests }
 
 func (s *multiStageTestStep) setupRBAC() error {
 	labels := map[string]string{MultiStageTestLabel: s.name}
-	m := meta.ObjectMeta{Name: s.name, Labels: labels}
+	m := meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.name, Labels: labels}
 	sa := &coreapi.ServiceAccount{ObjectMeta: m}
 	role := &rbacapi.Role{
 		ObjectMeta: m,
@@ -265,10 +260,10 @@ func (s *multiStageTestStep) setupRBAC() error {
 	if _, err := s.saClient.ServiceAccounts(s.jobSpec.Namespace()).Create(context.TODO(), sa, meta.CreateOptions{}); !check(err) {
 		return err
 	}
-	if _, err := s.rbacClient.Roles(s.jobSpec.Namespace()).Create(context.TODO(), role, meta.CreateOptions{}); !check(err) {
+	if err := s.client.Create(context.TODO(), role); !check(err) {
 		return err
 	}
-	if _, err := s.rbacClient.RoleBindings(s.jobSpec.Namespace()).Create(context.TODO(), binding, meta.CreateOptions{}); !check(err) {
+	if err := s.client.Create(context.TODO(), binding); !check(err) {
 		return err
 	}
 	return nil

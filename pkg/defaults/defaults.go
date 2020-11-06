@@ -10,7 +10,6 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -60,7 +59,6 @@ func FromConfig(
 	var buildClient steps.BuildClient
 	var templateClient steps.TemplateClient
 	var podClient steps.PodClient
-	var rbacClient rbacclientset.RbacV1Interface
 	var saGetter coreclientset.ServiceAccountsGetter
 	var namespaceClient coreclientset.NamespaceInterface
 	var eventClient coreclientset.EventsGetter
@@ -93,11 +91,6 @@ func FromConfig(
 
 		podClient = steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
 
-		rbacGetter, err := rbacclientset.NewForConfig(clusterConfig)
-		if err != nil {
-			return nil, nil, fmt.Errorf("could not get RBAC client for cluster config: %w", err)
-		}
-		rbacClient = rbacGetter
 		saGetter = coreGetter
 	}
 
@@ -204,7 +197,7 @@ func FromConfig(
 			step = release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, eventClient, client, artifactDir, jobSpec, pullSecret)
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
-				step = steps.MultiStageTestStep(*testStep, config, params, podClient, eventClient, saGetter, rbacClient, client, artifactDir, jobSpec)
+				step = steps.MultiStageTestStep(*testStep, config, params, podClient, eventClient, saGetter, client, artifactDir, jobSpec)
 				if test.ClusterProfile != "" {
 					leases := []api.StepLease{{
 						ResourceType: test.ClusterProfile.LeaseType(),

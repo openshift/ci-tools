@@ -152,7 +152,7 @@ func newOpts() (*options, error) {
 		}
 	}
 	opts.testImagesDistributorOptions.additionalImageStreams = sets.String{}
-	if vals := opts.testImagesDistributorOptions.additionalImageStreamTagsRaw.Strings(); len(vals) > 0 {
+	if vals := opts.testImagesDistributorOptions.additionalImageStreamsRaw.Strings(); len(vals) > 0 {
 		for _, val := range vals {
 			slashSplit := strings.Split(val, "/")
 			if len(slashSplit) != 2 {

@@ -10,6 +10,8 @@ const (
 	ServiceDomainCI    = "ci.openshift.org"
 	ServiceDomainAPICI = "svc.ci.openshift.org"
 	ServiceDomainAPPCI = "apps.ci.l2s4.p1.openshiftapps.com"
+
+	ServiceDomainAPPCIRegistry = "registry.ci.openshift.org"
 )
 
 type Service string

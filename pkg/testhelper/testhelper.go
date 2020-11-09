@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pmezard/go-difflib/difflib"
 
 	"sigs.k8s.io/yaml"
@@ -138,3 +139,15 @@ func sanitizeFilename(s string) string {
 	}
 	return "zz_fixture_" + result.String()
 }
+
+var (
+	// EquateErrorMessage reports errors to be equal if both are nil
+	// or both have the same message.
+	//https://github.com/google/go-cmp/issues/24#issuecomment-317635190
+	EquateErrorMessage = cmp.Comparer(func(x, y error) bool {
+		if x == nil || y == nil {
+			return x == nil && y == nil
+		}
+		return x.Error() == y.Error()
+	})
+)

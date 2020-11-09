@@ -18,15 +18,14 @@ import (
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
 
@@ -159,42 +158,13 @@ func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
 	return tests
 }
 
-type podCmdExecutor interface {
+type podExpansion interface {
 	Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error)
+	GetLogs(namespace, name string, opts *coreapi.PodLogOptions) *rest.Request
 }
 
-type fakePodExec struct{}
-
-func (fakePodExec) Stream(remotecommand.StreamOptions) error { return nil }
-
-type podClient struct {
-	coreclientset.PodsGetter
-	config *rest.Config
-	client rest.Interface
-}
-
-type fakePodsInterface struct {
-	coreclientset.PodInterface
-}
-
-func (fakePodsInterface) GetLogs(string, *coreapi.PodLogOptions) *rest.Request {
-	return rest.NewRequestWithClient(nil, "", rest.ClientContentConfig{}, nil)
-}
-
-type fakePodClient struct {
-	coreclientset.PodsGetter
-}
-
-func (c *fakePodClient) Pods(ns string) coreclientset.PodInterface {
-	return &fakePodsInterface{PodInterface: c.PodsGetter.Pods(ns)}
-}
-
-func (c *fakePodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
-	return &fakePodExec{}, nil
-}
-
-func NewPodClient(podsClient coreclientset.PodsGetter, config *rest.Config, client rest.Interface) PodClient {
-	return &podClient{PodsGetter: podsClient, config: config, client: client}
+func NewPodClient(ctrlclient ctrlruntimeclient.Client, config *rest.Config, client rest.Interface) PodClient {
+	return &podClient{Client: ctrlclient, config: config, client: client}
 }
 
 func (c podClient) Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
@@ -206,9 +176,19 @@ func (c podClient) Exec(namespace, pod string, opts *coreapi.PodExecOptions) (re
 	return e, nil
 }
 
+func (c podClient) GetLogs(namespace, name string, opts *coreapi.PodLogOptions) *rest.Request {
+	return c.client.Get().Namespace(namespace).Name(name).Resource("pods").SubResource("log").VersionedParams(opts, scheme.ParameterCodec)
+}
+
 type PodClient interface {
-	coreclientset.PodsGetter
-	podCmdExecutor
+	ctrlruntimeclient.Client
+	podExpansion
+}
+
+type podClient struct {
+	ctrlruntimeclient.Client
+	config *rest.Config
+	client rest.Interface
 }
 
 // Allow tests to accelerate time
@@ -222,8 +202,8 @@ func waitForContainer(podClient PodClient, ns, name, containerName string) error
 	}).Trace("Waiting for container to be running.")
 
 	return wait.PollImmediate(time.Second, 30*timeSecond, func() (bool, error) {
-		pod, err := podClient.Pods(ns).Get(context.TODO(), name, meta.GetOptions{})
-		if err != nil {
+		pod := &coreapi.Pod{}
+		if err := podClient.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, pod); err != nil {
 			logrus.WithError(err).Errorf("Waiting for container %s in pod %s in namespace %s", containerName, name, ns)
 			return false, nil
 		}
@@ -425,7 +405,7 @@ type ArtifactWorker struct {
 	hasArtifacts sets.String
 }
 
-func NewArtifactWorker(podClient PodClient, artifactDir, namespace string, ctx context.Context) *ArtifactWorker {
+func NewArtifactWorker(ctx context.Context, podClient PodClient, artifactDir, namespace string) *ArtifactWorker {
 	// stream artifacts in the background
 	w := &ArtifactWorker{
 		podClient: podClient,
@@ -666,14 +646,13 @@ func hasMountsArtifactsVolume(pod *coreapi.Pod) bool {
 
 func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podName string) error {
 	var validationErrors []error
-	list, err := podClient.Pods(namespace).List(context.TODO(), meta.ListOptions{FieldSelector: fields.Set{"metadata.name": podName}.AsSelector().String()})
-	if err != nil {
+	pod := &coreapi.Pod{}
+	if err := podClient.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: podName}, pod); err != nil {
+		if kerrors.IsNotFound(err) {
+			return nil
+		}
 		return fmt.Errorf("could not list pod: %w", err)
 	}
-	if len(list.Items) == 0 {
-		return nil
-	}
-	pod := &list.Items[0]
 
 	if pod.Annotations[annotationSaveContainerLogs] != "true" {
 		return nil
@@ -694,7 +673,7 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 			defer file.Close()
 
 			w := gzip.NewWriter(file)
-			if s, err := podClient.Pods(namespace).GetLogs(podName, &coreapi.PodLogOptions{Container: status.Name}).Stream(context.TODO()); err == nil {
+			if s, err := podClient.GetLogs(namespace, podName, &coreapi.PodLogOptions{Container: status.Name}).Stream(context.TODO()); err == nil {
 				if _, err := io.Copy(w, s); err != nil {
 					validationErrors = append(validationErrors, fmt.Errorf("error: Unable to copy log output from pod container %s: %w", status.Name, err))
 				}

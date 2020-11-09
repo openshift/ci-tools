@@ -7,13 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/openshift/ci-tools/pkg/util/namespacewrapper"
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -323,7 +322,7 @@ func (s *multiStageTestStep) runSteps(
 	select {
 	case <-ctx.Done():
 		log.Printf("cleanup: Deleting pods with label %s=%s", MultiStageTestLabel, s.name)
-		if err := deletePods(s.podClient.Pods(s.jobSpec.Namespace()), s.name); err != nil {
+		if err := deletePods(namespacewrapper.New(s.client, s.jobSpec.Namespace()), s.name); err != nil {
 			errs = append(errs, fmt.Errorf("failed to delete pods with label %s=%s: %w", MultiStageTestLabel, s.name, err))
 		}
 		errs = append(errs, fmt.Errorf("cancelled"))
@@ -594,10 +593,10 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 }
 
 func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *TestCaseNotifier) error {
-	if _, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod); err != nil {
+	if _, err := createOrRestartPod(namespacewrapper.New(s.client, s.jobSpec.Namespace()), pod); err != nil {
 		return fmt.Errorf("failed to create or restart %q pod: %w", pod.Name, err)
 	}
-	newPod, err := waitForPodCompletion(ctx, s.podClient.Pods(s.jobSpec.Namespace()), s.client, pod.Name, notifier, false)
+	newPod, err := waitForPodCompletion(ctx, s.podClient, pod.Name, notifier, false)
 	if newPod != nil {
 		pod = newPod
 	}
@@ -621,16 +620,8 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	return nil
 }
 
-func deletePods(client coreclientset.PodInterface, test string) error {
-	err := client.DeleteCollection(
-		context.TODO(),
-		meta.DeleteOptions{},
-		meta.ListOptions{
-			LabelSelector: fields.Set{
-				MultiStageTestLabel: test,
-			}.AsSelector().String(),
-		},
-	)
+func deletePods(client ctrlruntimeclient.Client, test string) error {
+	err := client.DeleteAllOf(context.TODO(), &coreapi.Pod{}, ctrlruntimeclient.MatchingLabels{MultiStageTestLabel: test})
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}

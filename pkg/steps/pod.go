@@ -17,6 +17,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/util/namespacewrapper"
 )
 
 const (
@@ -102,12 +103,12 @@ func (s *podStep) run(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 		log.Printf("cleanup: Deleting %s pod %s", s.name, s.config.As)
-		if err := s.podClient.Pods(s.jobSpec.Namespace()).Delete(context.TODO(), s.config.As, meta.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+		if err := s.podClient.Delete(ctx, &coreapi.Pod{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.config.As}}); err != nil && !errors.IsNotFound(err) {
 			log.Printf("error: Could not delete %s pod: %v", s.name, err)
 		}
 	}()
 
-	pod, err = createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod)
+	pod, err = createOrRestartPod(namespacewrapper.New(s.podClient, s.jobSpec.Namespace()), pod)
 	if err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %w", s.name, err)
 	}
@@ -116,7 +117,7 @@ func (s *podStep) run(ctx context.Context) error {
 		s.subTests = testCaseNotifier.SubTests(s.Description() + " - ")
 	}()
 
-	if _, err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace()), s.client, pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
+	if _, err := waitForPodCompletion(context.TODO(), s.podClient, pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
 		return fmt.Errorf("%s %q failed: %w", s.name, pod.Name, err)
 	}
 	return nil
@@ -290,10 +291,10 @@ func getSecretVolumeMountFromSecret(secretMountPath string) []coreapi.VolumeMoun
 // PodStep and is intended for other steps that may need to run transient actions.
 // This pod will not be able to gather artifacts, nor will it report log messages
 // unless it fails.
-func RunPod(ctx context.Context, podClient PodClient, client ctrlruntimeclient.Client, pod *coreapi.Pod) (*coreapi.Pod, error) {
-	pod, err := createOrRestartPod(podClient.Pods(pod.Namespace), pod)
+func RunPod(ctx context.Context, podClient PodClient, pod *coreapi.Pod) (*coreapi.Pod, error) {
+	pod, err := createOrRestartPod(podClient, pod)
 	if err != nil {
 		return pod, err
 	}
-	return waitForPodCompletion(ctx, podClient.Pods(pod.Namespace), client, pod.Name, nil, true)
+	return waitForPodCompletion(ctx, podClient, pod.Name, nil, true)
 }

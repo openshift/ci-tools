@@ -14,9 +14,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
-	"k8s.io/client-go/kubernetes/fake"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/junit"
 )
@@ -534,8 +535,8 @@ func TestArtifactWorker(t *testing.T) {
 		}
 	}()
 	pod := "pod"
-	podClient := testPodClient{
-		PodsGetter: fake.NewSimpleClientset(&coreapi.Pod{
+	podClient := &podClient{Client: fakectrlruntimeclient.NewFakeClient(
+		&coreapi.Pod{
 			ObjectMeta: meta.ObjectMeta{
 				Name:      pod,
 				Namespace: "namespace",
@@ -550,11 +551,8 @@ func TestArtifactWorker(t *testing.T) {
 					},
 				},
 			},
-		}).CoreV1(),
-		namespace: "namespace",
-		name:      pod,
-	}
-	w := NewArtifactWorker(podClient, tmp, podClient.namespace, context.Background())
+		})}
+	w := NewArtifactWorker(context.Background(), podClient, tmp, "")
 	w.CollectFromPod(pod, []string{"container"}, nil)
 	w.Complete(pod)
 	select {
@@ -665,4 +663,28 @@ func TestArtifactsContainer(t *testing.T) {
 	if !reflect.DeepEqual(artifacts, testArtifactsContainer) {
 		t.Fatal(diff.ObjectReflectDiff(artifacts, testArtifactsContainer))
 	}
+}
+
+type fakePodExec struct{}
+
+func (fakePodExec) Stream(remotecommand.StreamOptions) error { return nil }
+
+type fakePodsInterface struct {
+	coreclientset.PodInterface
+}
+
+func (fakePodsInterface) GetLogs(string, *coreapi.PodLogOptions) *rest.Request {
+	return rest.NewRequestWithClient(nil, "", rest.ClientContentConfig{}, nil)
+}
+
+type fakePodClient struct {
+	coreclientset.PodsGetter
+}
+
+func (c *fakePodClient) Pods(ns string) coreclientset.PodInterface {
+	return &fakePodsInterface{PodInterface: c.PodsGetter.Pods(ns)}
+}
+
+func (c *fakePodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
+	return &fakePodExec{}, nil
 }

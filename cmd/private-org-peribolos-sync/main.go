@@ -11,7 +11,7 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
-	kerrors "k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/config/org"
 	"k8s.io/test-infra/prow/config/secret"
@@ -74,7 +74,7 @@ func validateOptions(o *options) error {
 	if err := o.Validate(); err != nil {
 		validationErrors = append(validationErrors, err)
 	}
-	return kerrors.NewAggregate(validationErrors)
+	return utilerrors.NewAggregate(validationErrors)
 }
 
 func main() {

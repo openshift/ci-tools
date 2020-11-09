@@ -15,7 +15,7 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
-	kerrors "k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
@@ -42,7 +42,7 @@ func (c *Config) validate() error {
 		}
 	}
 
-	return kerrors.NewAggregate(errs)
+	return utilerrors.NewAggregate(errs)
 }
 
 type options struct {

@@ -20,7 +20,7 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	kerrors "k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -700,7 +700,7 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 			w.Close()
 		}
 	}
-	return kerrors.NewAggregate(validationErrors)
+	return utilerrors.NewAggregate(validationErrors)
 }
 
 // for gathering successful build logs to the artifacts, there is no way to augment the pod spec

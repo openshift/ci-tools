@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -39,7 +39,7 @@ func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 		}
 		ret = append(ret, stack.records[0].checkUnused(&stack)...)
 	}
-	return errors.NewAggregate(ret)
+	return utilerrors.NewAggregate(ret)
 }
 
 // registry will hold all the registry information needed to convert between the
@@ -134,7 +134,7 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 	}
 	expandedFlow.Observers = observers
 	if resolveErrors != nil {
-		return api.MultiStageTestConfigurationLiteral{}, errors.NewAggregate(resolveErrors)
+		return api.MultiStageTestConfigurationLiteral{}, utilerrors.NewAggregate(resolveErrors)
 	}
 	return expandedFlow, nil
 }

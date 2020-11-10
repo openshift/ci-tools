@@ -323,9 +323,6 @@ func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperator
 		template = "cluster-launch-installer-upi-src"
 		needsLeaseServer = true
 		clusterProfile = conf.ClusterProfile
-	} else if conf := test.OpenshiftInstallerConsoleClusterTestConfiguration; conf != nil {
-		template = "cluster-launch-installer-console"
-		clusterProfile = conf.ClusterProfile
 	} else if conf := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-installer-custom-test-image"
 		needsLeaseServer = true

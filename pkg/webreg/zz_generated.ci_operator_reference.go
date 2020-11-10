@@ -555,13 +555,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            cluster_profile: ' '\n" +
 	"        openshift_ansible_src:\n" +
 	"            cluster_profile: ' '\n" +
-	"        openshift_ansible_upgrade:\n" +
-	"            cluster_profile: ' '\n" +
-	"            previous_rpm_deps: ' '\n" +
-	"            previous_version: ' '\n" +
 	"        openshift_installer:\n" +
-	"            cluster_profile: ' '\n" +
-	"        openshift_installer_console:\n" +
 	"            cluster_profile: ' '\n" +
 	"        openshift_installer_custom_test_image:\n" +
 	"            cluster_profile: ' '\n" +
@@ -1090,13 +1084,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        cluster_profile: ' '\n" +
 	"    openshift_ansible_src:\n" +
 	"        cluster_profile: ' '\n" +
-	"    openshift_ansible_upgrade:\n" +
-	"        cluster_profile: ' '\n" +
-	"        previous_rpm_deps: ' '\n" +
-	"        previous_version: ' '\n" +
 	"    openshift_installer:\n" +
-	"        cluster_profile: ' '\n" +
-	"    openshift_installer_console:\n" +
 	"        cluster_profile: ' '\n" +
 	"    openshift_installer_custom_test_image:\n" +
 	"        cluster_profile: ' '\n" +

@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"sync"
 )
@@ -79,9 +80,11 @@ func (p *DeferredParameters) Set(name, value string) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	if _, ok := p.fns[name]; ok {
+		log.Printf("warning: ignoring parameter %q, already set", name)
 		return
 	}
 	if _, ok := p.values[name]; ok {
+		log.Printf("warning: ignoring parameter %q, already set", name)
 		return
 	}
 	p.values[name] = value
@@ -90,6 +93,9 @@ func (p *DeferredParameters) Set(name, value string) {
 func (p *DeferredParameters) Add(name string, fn func() (string, error)) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
+	if _, ok := p.fns[name]; ok {
+		log.Printf("warning: overriding parameter %q", name)
+	}
 	p.fns[name] = fn
 }
 

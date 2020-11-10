@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -474,4 +475,53 @@ func (client *imageImportStatusSettingClient) Create(ctx context.Context, obj ru
 		}
 	}
 	return client.Client.Create(ctx, obj, opts...)
+}
+
+func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
+	testCases := []struct {
+		name                  string
+		l                     *logrus.Entry
+		imageStreamTags       sets.String
+		imageStreams          sets.String
+		imageStreamNamespaces sets.String
+		nn                    types.NamespacedName
+		expected              bool
+	}{
+		{
+			name: "default",
+			nn:   types.NamespacedName{Namespace: "some-namespace", Name: "some-name:some-tag"},
+		},
+		{
+			name:            "imageStreamTags",
+			nn:              types.NamespacedName{Namespace: "some-namespace", Name: "some-name:some-tag"},
+			imageStreamTags: sets.NewString("some-namespace/some-name:some-tag"),
+			expected:        true,
+		},
+		{
+			name:         "imageStreams",
+			nn:           types.NamespacedName{Namespace: "some-namespace", Name: "some-name:some-tag"},
+			imageStreams: sets.NewString("some-namespace/some-name"),
+			expected:     true,
+		},
+		{
+			name:                  "imageStreamNamespaces",
+			nn:                    types.NamespacedName{Namespace: "some-namespace", Name: "some-name:some-tag"},
+			imageStreamNamespaces: sets.NewString("some-namespace"),
+			expected:              true,
+		},
+		{
+			name: "not valid isTag name",
+			nn:   types.NamespacedName{Namespace: "some-namespace", Name: "not-valid-name"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.l = logrus.WithField("tc.name", tc.name)
+			objectFilter := testInputImageStreamTagFilterFactory(tc.l, tc.imageStreamTags, tc.imageStreams, tc.imageStreamNamespaces)
+			if diff := cmp.Diff(tc.expected, objectFilter(tc.nn)); diff != "" {
+				t.Errorf("actual does not match expected, diff: %s", diff)
+			}
+		})
+	}
 }

@@ -11,6 +11,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -32,13 +33,19 @@ const ControllerName = "registry_syncer"
 func AddToManager(mgr manager.Manager,
 	managers map[string]manager.Manager,
 	pullSecretGetter func() []byte,
+	imageStreamTags sets.String,
+	imageStreams sets.String,
+	imageStreamNamespaces sets.String,
 ) error {
 	log := logrus.WithField("controller", ControllerName)
 	r := &reconciler{
-		ctx:              context.Background(),
-		log:              log,
-		registryClients:  map[string]ctrlruntimeclient.Client{},
-		pullSecretGetter: pullSecretGetter,
+		ctx:                   context.Background(),
+		log:                   log,
+		registryClients:       map[string]ctrlruntimeclient.Client{},
+		pullSecretGetter:      pullSecretGetter,
+		imageStreamTags:       imageStreamTags,
+		imageStreams:          imageStreams,
+		imageStreamNamespaces: imageStreamNamespaces,
 	}
 	for clusterName, m := range managers {
 		r.registryClients[clusterName] = imagestreamtagwrapper.MustNew(m.GetClient(), m.GetCache())
@@ -58,7 +65,7 @@ func AddToManager(mgr manager.Manager,
 	for _, m := range managers {
 		if err := c.Watch(
 			source.NewKindWithCache(&imagev1.ImageStream{}, m.GetCache()),
-			handlerFactory(testInputImageStreamTagFilterFactory()),
+			handlerFactory(testInputImageStreamTagFilterFactory(log, imageStreamTags, imageStreams, imageStreamNamespaces)),
 		); err != nil {
 			return fmt.Errorf("failed to create watch for ImageStreams: %w", err)
 		}
@@ -86,10 +93,13 @@ func handlerFactory(filter objectFilter) handler.EventHandler {
 }
 
 type reconciler struct {
-	ctx              context.Context
-	log              *logrus.Entry
-	registryClients  map[string]ctrlruntimeclient.Client
-	pullSecretGetter func() []byte
+	ctx                   context.Context
+	log                   *logrus.Entry
+	registryClients       map[string]ctrlruntimeclient.Client
+	pullSecretGetter      func() []byte
+	imageStreamTags       sets.String
+	imageStreams          sets.String
+	imageStreamNamespaces sets.String
 }
 
 func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
@@ -296,11 +306,38 @@ func (r *reconciler) pullSecret(namespace string) (*corev1.Secret, crcontrolleru
 	}
 }
 
-func testInputImageStreamTagFilterFactory() objectFilter {
+func testInputImageStreamTagFilterFactory(
+	l *logrus.Entry,
+	imageStreamTags sets.String,
+	imageStreams sets.String,
+	imageStreamNamespaces sets.String,
+) objectFilter {
+	l = logrus.WithField("subcomponent", "test-input-image-stream-tag-filter")
 	return func(nn types.NamespacedName) bool {
-		// TODO: make the filter for deny-list
-		return true
+		if imageStreamTags.Has(nn.String()) {
+			return true
+		}
+		if imageStreamNamespaces.Has(nn.Namespace) {
+			return true
+		}
+		imageStreamName, err := imageStreamNameFromImageStreamTagName(nn)
+		if err != nil {
+			l.WithField("name", nn.String()).WithError(err).Error("Failed to get imagestreamname for imagestreamtag")
+			return false
+		}
+		if imageStreams.Has(imageStreamName.String()) {
+			return true
+		}
+		return false
 	}
+}
+
+func imageStreamNameFromImageStreamTagName(nn types.NamespacedName) (types.NamespacedName, error) {
+	colonSplit := strings.Split(nn.Name, ":")
+	if n := len(colonSplit); n != 2 {
+		return types.NamespacedName{}, fmt.Errorf("splitting %s by `:` didn't yield two but %d results", nn.Name, n)
+	}
+	return types.NamespacedName{Namespace: nn.Namespace, Name: colonSplit[0]}, nil
 }
 
 func publicDomainForImage(clusterName, potentiallyPrivate string) (string, error) {

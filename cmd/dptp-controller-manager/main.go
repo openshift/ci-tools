@@ -84,7 +84,13 @@ type testImagesDistributorOptions struct {
 }
 
 type registrySyncerOptions struct {
-	imagePullSecretPath string
+	imagePullSecretPath      string
+	imageStreamTagsRaw       flagutil.Strings
+	imageStreamTags          sets.String
+	imageStreamsRaw          flagutil.Strings
+	imageStreams             sets.String
+	imageStreamNamespacesRaw flagutil.Strings
+	imageStreamNamespaces    sets.String
 }
 
 type secretSyncerConfigOptions struct {
@@ -117,6 +123,9 @@ func newOpts() (*options, error) {
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamTagsRaw, "testImagesDistributorOptions.additional-image-stream-tag", "An imagestreamtag that will be distributed even if no test explicitly references it. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamsRaw, "testImagesDistributorOptions.additional-image-stream", "An imagestream that will be distributed even if no test explicitly references it. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw, "testImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
+	flag.Var(&opts.registrySyncerOptions.imageStreamTagsRaw, "registrySyncerOptions.image-stream-tag", "An imagestreamtag that will be synced. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
+	flag.Var(&opts.registrySyncerOptions.imageStreamsRaw, "registrySyncerOptions.image-stream", "An imagestream that will be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
+	flag.Var(&opts.registrySyncerOptions.imageStreamNamespacesRaw, "registrySyncerOptions.image-stream-namespace", "A namespace in which imagestreams will be synced (e.G `ci`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.forbiddenRegistriesRaw, "testImagesDistributorOptions.forbidden-registry", "The hostname of an image registry from which there is no synchronization of its images. Can be passed multiple times.")
 	flag.StringVar(&opts.registrySyncerOptions.imagePullSecretPath, "registrySyncerOptions.imagePullSecretPath", "", "A file to use for reading an ImagePullSecret that will be bound to all `default` ServiceAccounts in all namespaces that have a test ImageStream on all build clusters")
 	flag.StringVar(&opts.secretSyncerConfigOptions.configFile, "secretSyncerConfigOptions.config", "", "The config file for the secret syncer controller")
@@ -145,43 +154,26 @@ func newOpts() (*options, error) {
 		}
 	}
 
-	opts.testImagesDistributorOptions.additionalImageStreamTags = sets.String{}
-	if vals := opts.testImagesDistributorOptions.additionalImageStreamTagsRaw.Strings(); len(vals) > 0 {
-		for _, val := range vals {
-			slashSplit := strings.Split(val, "/")
-			if len(slashSplit) != 2 {
-				errs = append(errs, fmt.Errorf("--testImagesDistributorOptions.additional-image-stream-tag value %s was not in namespace/name:tag format", val))
-				continue
-			}
-			if dotSplit := strings.Split(slashSplit[1], ":"); len(dotSplit) != 2 {
-				errs = append(errs, fmt.Errorf("name in --testImagesDistributorOptions.additional-image-stream-tag must be of imagestreamname:tag format, wasn't the case for %s", slashSplit[1]))
-				continue
-			}
-			opts.testImagesDistributorOptions.additionalImageStreamTags.Insert(val)
-		}
-	}
-	opts.testImagesDistributorOptions.additionalImageStreams = sets.String{}
-	if vals := opts.testImagesDistributorOptions.additionalImageStreamsRaw.Strings(); len(vals) > 0 {
-		for _, val := range vals {
-			slashSplit := strings.Split(val, "/")
-			if len(slashSplit) != 2 {
-				errs = append(errs, fmt.Errorf("--testImagesDistributorOptions.additional-image-stream value %s was not in namespace/name format", val))
-				continue
-			}
-			opts.testImagesDistributorOptions.additionalImageStreams.Insert(val)
-		}
-	}
-	opts.testImagesDistributorOptions.additionalImageStreamNamespaces = sets.String{}
-	if vals := opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw.Strings(); len(vals) > 0 {
-		for _, val := range vals {
-			opts.testImagesDistributorOptions.additionalImageStreamNamespaces.Insert(val)
-		}
-	}
+	isTags, isTagErrors := completeImageStreamTags("testImagesDistributorOptions.additional-image-stream-tag", opts.testImagesDistributorOptions.additionalImageStreamTagsRaw)
+	errs = append(errs, isTagErrors...)
+	opts.testImagesDistributorOptions.additionalImageStreamTags = isTags
 
-	opts.testImagesDistributorOptions.forbiddenRegistries = sets.String{}
-	if vals := opts.testImagesDistributorOptions.forbiddenRegistriesRaw.Strings(); len(vals) > 0 {
-		opts.testImagesDistributorOptions.forbiddenRegistries.Insert(vals...)
-	}
+	imageStreams, isErrors := completeImageStream("testImagesDistributorOptions.additional-image-stream", opts.testImagesDistributorOptions.additionalImageStreamsRaw)
+	errs = append(errs, isErrors...)
+	opts.testImagesDistributorOptions.additionalImageStreams = imageStreams
+
+	opts.testImagesDistributorOptions.additionalImageStreamNamespaces = completeSet(opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw)
+	opts.testImagesDistributorOptions.forbiddenRegistries = completeSet(opts.testImagesDistributorOptions.forbiddenRegistriesRaw)
+
+	isTags, isTagErrors = completeImageStreamTags("registrySyncerOptions.image-stream-tag", opts.registrySyncerOptions.imageStreamTagsRaw)
+	errs = append(errs, isTagErrors...)
+	opts.registrySyncerOptions.imageStreamTags = isTags
+
+	imageStreams, isErrors = completeImageStream("registrySyncerOptions.image-stream", opts.registrySyncerOptions.imageStreamsRaw)
+	errs = append(errs, isErrors...)
+	opts.registrySyncerOptions.imageStreams = imageStreams
+
+	opts.registrySyncerOptions.imageStreamNamespaces = completeSet(opts.registrySyncerOptions.imageStreamNamespacesRaw)
 
 	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) && opts.stepConfigPath == "" {
 		errs = append(errs, fmt.Errorf("--step-config-path is required when the %s controller is enabled", testimagesdistributor.ControllerName))
@@ -201,6 +193,52 @@ func newOpts() (*options, error) {
 	}
 
 	return opts, utilerrors.NewAggregate(errs)
+}
+
+func completeImageStreamTags(name string, raw flagutil.Strings) (sets.String, []error) {
+	isTags := sets.String{}
+	var errs []error
+	if vals := raw.Strings(); len(vals) > 0 {
+		for _, val := range vals {
+			slashSplit := strings.Split(val, "/")
+			if len(slashSplit) != 2 {
+				errs = append(errs, fmt.Errorf("--%s value %s was not in namespace/name:tag format", name, val))
+				continue
+			}
+			if dotSplit := strings.Split(slashSplit[1], ":"); len(dotSplit) != 2 {
+				errs = append(errs, fmt.Errorf("name in --%s must be of imagestreamname:tag format, wasn't the case for %s", name, slashSplit[1]))
+				continue
+			}
+			isTags.Insert(val)
+		}
+	}
+	return isTags, errs
+}
+
+func completeImageStream(name string, raw flagutil.Strings) (sets.String, []error) {
+	imageStreams := sets.String{}
+	var errs []error
+	if vals := raw.Strings(); len(vals) > 0 {
+		for _, val := range vals {
+			slashSplit := strings.Split(val, "/")
+			if len(slashSplit) != 2 {
+				errs = append(errs, fmt.Errorf("--%s value %s was not in namespace/name format", name, val))
+				continue
+			}
+			imageStreams.Insert(val)
+		}
+	}
+	return imageStreams, errs
+}
+
+func completeSet(raw flagutil.Strings) sets.String {
+	result := sets.String{}
+	if vals := raw.Strings(); len(vals) > 0 {
+		for _, val := range vals {
+			result.Insert(val)
+		}
+	}
+	return result
 }
 
 func main() {
@@ -411,6 +449,9 @@ func main() {
 			mgr,
 			map[string]manager.Manager{apiCIContextName: allManagers[apiCIContextName], appCIContextName: allManagers[appCIContextName]},
 			secretAgent.GetTokenGenerator(opts.registrySyncerOptions.imagePullSecretPath),
+			opts.registrySyncerOptions.imageStreamTags,
+			opts.registrySyncerOptions.imageStreams,
+			opts.registrySyncerOptions.imageStreamNamespaces,
 		); err != nil {
 			logrus.WithError(err).Fatal("failed to add registrysyncer")
 		}

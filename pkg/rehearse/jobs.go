@@ -16,7 +16,6 @@ import (
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -937,7 +936,7 @@ func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 		pjs = append(pjs, created)
 	}
 
-	return pjs, kerrors.NewAggregate(errors)
+	return pjs, utilerrors.NewAggregate(errors)
 }
 
 func (e *Executor) submitPresubmit(job *prowconfig.Presubmit) (*pjapi.ProwJob, error) {

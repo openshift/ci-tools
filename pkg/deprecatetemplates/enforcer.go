@@ -82,3 +82,7 @@ func (e *Enforcer) ingest(job prowconfig.JobBase) {
 func (e *Enforcer) SaveAllowlist(path string) error {
 	return e.allowlist.Save(path)
 }
+
+func (e *Enforcer) Prune() {
+	e.allowlist.Prune()
+}

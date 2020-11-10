@@ -63,6 +63,10 @@ func (m *mockAllowlist) Save(_ string) error {
 	panic("this should never be called")
 }
 
+func (m *mockAllowlist) Prune() {
+	panic("this should never be called")
+}
+
 type mockJobConfig struct {
 	presubmits  []config.Presubmit
 	postsubmits []config.Postsubmit

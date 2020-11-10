@@ -1,0 +1,28 @@
+templates:
+  testing-template:
+    blockers:
+      DPTP-1234:
+        description: "serious problem"
+        jobs:
+          periodic-job-1:
+            generated: false
+            kind: periodic
+          periodic-job-2:
+            generated: false
+            kind: periodic
+          should-be-pruned:
+            generated: false
+            kind: periodic
+      SHOULD-BE-PRUNED:
+        description: "no serious problem"
+        jobs:
+          should-be-pruned-too:
+            generated: false
+            kind: periodic
+    template_name: testing-template
+    unknown_blocker:
+      description: unknown
+      jobs:
+        this-should-be-pruned-too:
+          generated: false
+          kind: periodic

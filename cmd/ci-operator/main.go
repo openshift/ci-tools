@@ -25,6 +25,7 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
+	appsv1 "k8s.io/api/apps/v1"
 	authapi "k8s.io/api/authorization/v1"
 	coreapi "k8s.io/api/core/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
@@ -46,13 +47,14 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	buildv1 "github.com/openshift/api/build/v1"
 	imageapi "github.com/openshift/api/image/v1"
 	projectapi "github.com/openshift/api/project/v1"
+	routev1 "github.com/openshift/api/route/v1"
 	v1 "github.com/openshift/api/route/v1"
 	templateapi "github.com/openshift/api/template/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	projectclientset "github.com/openshift/client-go/project/clientset/versioned"
-	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
 
@@ -65,6 +67,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
+	"github.com/openshift/ci-tools/pkg/util/imageapiregistration"
 	"github.com/openshift/ci-tools/pkg/util/namespacewrapper"
 )
 
@@ -203,6 +206,9 @@ func main() {
 			opt.cleanupDurationSet = true
 		}
 	})
+	if err := addSchemes(); err != nil {
+		logrus.WithError(err).Fatal("failed to set up scheme")
+	}
 
 	if err := opt.Complete(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -704,10 +710,11 @@ func (o *options) resolveInputs(steps []api.Step) error {
 	o.jobSpec.SetNamespace(o.namespace)
 
 	//If we can resolve the field, use it. If not, don't.
-	if routeGetter, err := routeclientset.NewForConfig(o.clusterConfig); err != nil {
-		log.Printf("could not get route client for cluster config")
+	if client, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{}); err != nil {
+		log.Printf("could not get route client for cluster config: %v", err)
 	} else {
-		if consoleRoutes, err := routeGetter.Routes("openshift-console").List(context.TODO(), meta.ListOptions{}); err != nil {
+		consoleRoutes := &routev1.RouteList{}
+		if err := client.List(context.TODO(), consoleRoutes, ctrlruntimeclient.InNamespace("openshift-console")); err != nil {
 			log.Printf("could not get routes in namespace openshift-console: %v", err)
 		} else {
 			hostForRoute := func(name string, routes []v1.Route) string {
@@ -1718,4 +1725,23 @@ func monitorNamespace(ctx context.Context, cancel func(), namespace string, clie
 			}
 		}
 	}
+}
+
+func addSchemes() error {
+	if err := imageapiregistration.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add imagev1 to scheme: %w", err)
+	}
+	if err := routev1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add routev1 to scheme: %w", err)
+	}
+	if err := appsv1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add appsv1 to scheme: %w", err)
+	}
+	if err := buildv1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add buildv1 to scheme: %w", err)
+	}
+	if err := templateapi.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add templatev1 to scheme: %w", err)
+	}
+	return nil
 }

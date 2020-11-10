@@ -17,10 +17,11 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/util/imageapiregistration"
 )
 
 func init() {
-	if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
+	if err := imageapiregistration.AddToScheme(scheme.Scheme); err != nil {
 		panic(fmt.Sprintf("failed to add imagev1 to scheme: %v", err))
 	}
 }

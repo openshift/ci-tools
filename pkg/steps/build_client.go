@@ -5,27 +5,26 @@ import (
 	"io"
 
 	"k8s.io/client-go/rest"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
 	"github.com/openshift/client-go/build/clientset/versioned/scheme"
-	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 )
 
 type BuildClient interface {
-	buildclientset.BuildsGetter
+	ctrlruntimeclient.Client
 	Logs(namespace, name string, options *buildapi.BuildLogOptions) (io.ReadCloser, error)
 }
 
 type buildClient struct {
-	buildclientset.BuildsGetter
-
+	ctrlruntimeclient.Client
 	client rest.Interface
 }
 
-func NewBuildClient(client buildclientset.BuildsGetter, restClient rest.Interface) BuildClient {
+func NewBuildClient(client ctrlruntimeclient.Client, restClient rest.Interface) BuildClient {
 	return &buildClient{
-		BuildsGetter: client,
-		client:       restClient,
+		Client: client,
+		client: restClient,
 	}
 }
 

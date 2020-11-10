@@ -96,7 +96,7 @@ RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/o
 RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/origin-metering-hadoop:4.6?some-reg/target-namespace/stable@metering-hadoop?g {} +
 RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/origin-ghostunnel:4.6?some-reg/target-namespace/stable@ghostunnel?g {} +`
 
-	client := fakectrlruntimeclient.NewFakeClient(
+	client := &buildClient{Client: fakectrlruntimeclient.NewFakeClient(
 		&imagev1.ImageStream{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "target-namespace",
@@ -146,7 +146,7 @@ RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/o
 					}},
 				}},
 			},
-		})
+		})}
 
 	s := bundleSourceStep{
 		config: api.BundleSourceStepConfiguration{

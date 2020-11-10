@@ -23,14 +23,15 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	templateapi "github.com/openshift/api/template/v1"
-	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+	"github.com/openshift/ci-tools/pkg/util/namespacewrapper"
 )
 
 const (
@@ -42,14 +43,13 @@ const (
 )
 
 type templateExecutionStep struct {
-	template       *templateapi.Template
-	resources      api.ResourceConfiguration
-	params         api.Parameters
-	templateClient TemplateClient
-	podClient      PodClient
-	eventClient    coreclientset.EventsGetter
-	artifactDir    string
-	jobSpec        *api.JobSpec
+	template    *templateapi.Template
+	resources   api.ResourceConfiguration
+	params      api.Parameters
+	podClient   PodClient
+	client      TemplateClient
+	artifactDir string
+	jobSpec     *api.JobSpec
 
 	subTests []*junit.TestCase
 }
@@ -118,23 +118,19 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 		log.Printf("cleanup: Deleting template %s", s.template.Name)
-		policy := meta.DeletePropagationForeground
-		opt := meta.DeleteOptions{
-			PropagationPolicy: &policy,
-		}
-		if err := s.templateClient.TemplateInstances(s.jobSpec.Namespace()).Delete(ctx, s.template.Name, opt); err != nil && !kerrors.IsNotFound(err) {
+		if err := s.client.Delete(ctx, &templateapi.TemplateInstance{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.template.Name}}, ctrlruntimeclient.PropagationPolicy(meta.DeletePropagationForeground)); err != nil && !kerrors.IsNotFound(err) {
 			log.Printf("error: Could not delete template instance: %v", err)
 		}
 	}()
 
 	log.Printf("Creating or restarting template instance")
-	_, err := createOrRestartTemplateInstance(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), s.podClient.Pods(s.jobSpec.Namespace()), instance)
+	_, err := createOrRestartTemplateInstance(namespacewrapper.New(s.client, s.jobSpec.Namespace()), s.podClient.Pods(s.jobSpec.Namespace()), instance)
 	if err != nil {
 		return fmt.Errorf("could not create or restart template instance: %w", err)
 	}
 
 	log.Printf("Waiting for template instance to be ready")
-	instance, err = waitForTemplateInstanceReady(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), s.template.Name)
+	instance, err = waitForTemplateInstanceReady(namespacewrapper.New(s.client, s.jobSpec.Namespace()), s.template.Name)
 	if err != nil {
 		return fmt.Errorf("could not wait for template instance to be ready: %w", err)
 	}
@@ -166,7 +162,7 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			_, err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace()), s.eventClient.Events(s.jobSpec.Namespace()), ref.Ref.Name, testCaseNotifier, false)
+			_, err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace()), s.client, ref.Ref.Name, testCaseNotifier, false)
 			s.subTests = append(s.subTests, testCaseNotifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), ref.Ref.Name))...)
 			if err != nil {
 				return fmt.Errorf("template pod %q failed: %w", ref.Ref.Name, err)
@@ -271,33 +267,32 @@ func (s *templateExecutionStep) Description() string {
 	return fmt.Sprintf("Run template %s", s.template.Name)
 }
 
-func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, eventClient coreclientset.EventsGetter, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec, resources api.ResourceConfiguration) api.Step {
+func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec, resources api.ResourceConfiguration) api.Step {
 	return &templateExecutionStep{
-		template:       template,
-		resources:      resources,
-		params:         params,
-		podClient:      podClient,
-		eventClient:    eventClient,
-		templateClient: templateClient,
-		artifactDir:    artifactDir,
-		jobSpec:        jobSpec,
+		template:    template,
+		resources:   resources,
+		params:      params,
+		podClient:   podClient,
+		client:      templateClient,
+		artifactDir: artifactDir,
+		jobSpec:     jobSpec,
 	}
 }
 
 type TemplateClient interface {
-	templateclientset.TemplateV1Interface
+	ctrlruntimeclient.Client
 	Process(namespace string, template *templateapi.Template) (*templateapi.Template, error)
 }
 
 type templateClient struct {
-	templateclientset.TemplateV1Interface
+	ctrlruntimeclient.Client
 	restClient rest.Interface
 }
 
-func NewTemplateClient(client templateclientset.TemplateV1Interface, restClient rest.Interface) TemplateClient {
+func NewTemplateClient(client ctrlruntimeclient.Client, restClient rest.Interface) TemplateClient {
 	return &templateClient{
-		TemplateV1Interface: client,
-		restClient:          restClient,
+		Client:     client,
+		restClient: restClient,
 	}
 }
 
@@ -312,12 +307,11 @@ func (c *templateClient) Process(namespace string, template *templateapi.Templat
 	return processed, fmt.Errorf("could not process template: %w", err)
 }
 
-func waitForTemplateInstanceReady(templateClient templateclientset.TemplateInstanceInterface, name string) (*templateapi.TemplateInstance, error) {
-	var instance *templateapi.TemplateInstance
+func waitForTemplateInstanceReady(client ctrlruntimeclient.Client, name string) (*templateapi.TemplateInstance, error) {
+	instance := &templateapi.TemplateInstance{}
 	err := wait.PollImmediate(2*time.Second, 10*time.Minute, func() (bool, error) {
-		var getErr error
-		if instance, getErr = templateClient.Get(context.TODO(), name, meta.GetOptions{}); getErr != nil {
-			return false, nil
+		if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Name: name}, instance); err != nil {
+			return false, err
 		}
 
 		return templateInstanceReady(instance)
@@ -326,26 +320,26 @@ func waitForTemplateInstanceReady(templateClient templateclientset.TemplateInsta
 	return instance, err
 }
 
-func createOrRestartTemplateInstance(templateClient templateclientset.TemplateInstanceInterface, podClient coreclientset.PodInterface, instance *templateapi.TemplateInstance) (*templateapi.TemplateInstance, error) {
-	if err := waitForCompletedTemplateInstanceDeletion(templateClient, podClient, instance.Name); err != nil {
+func createOrRestartTemplateInstance(client ctrlruntimeclient.Client, podClient coreclientset.PodInterface, instance *templateapi.TemplateInstance) (*templateapi.TemplateInstance, error) {
+	if err := waitForCompletedTemplateInstanceDeletion(client, podClient, instance.Name); err != nil {
 		return nil, fmt.Errorf("unable to delete completed template instance: %w", err)
 	}
-	created, err := templateClient.Create(context.TODO(), instance, meta.CreateOptions{})
+	err := client.Create(context.TODO(), instance)
 	if err != nil && !kerrors.IsAlreadyExists(err) {
 		return nil, fmt.Errorf("unable to create template instance: %w", err)
 	}
 	if err != nil {
-		created, err = templateClient.Get(context.TODO(), instance.Name, meta.GetOptions{})
-		if err != nil {
+		if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Name: instance.Name}, instance); err != nil {
 			return nil, fmt.Errorf("unable to retrieve pod: %w", err)
 		}
 		log.Printf("Waiting for running template %s to finish", instance.Name)
 	}
-	return created, nil
+	return instance, nil
 }
 
-func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.TemplateInstanceInterface, podClient coreclientset.PodInterface, name string) error {
-	instance, err := templateClient.Get(context.TODO(), name, meta.GetOptions{})
+func waitForCompletedTemplateInstanceDeletion(client ctrlruntimeclient.Client, podClient coreclientset.PodInterface, name string) error {
+	instance := &templateapi.TemplateInstance{}
+	err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Name: name}, instance)
 	if kerrors.IsNotFound(err) {
 		log.Printf("Template instance %s already deleted, do not need to wait any longer", name)
 		return nil
@@ -354,10 +348,11 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 	// delete the instance we had before, otherwise another user has relaunched this template
 	uid := instance.UID
 	policy := meta.DeletePropagationForeground
-	err = templateClient.Delete(context.TODO(), name, meta.DeleteOptions{
+	opts := &ctrlruntimeclient.DeleteOptions{Raw: &meta.DeleteOptions{
 		PropagationPolicy: &policy,
 		Preconditions:     &meta.Preconditions{UID: &uid},
-	})
+	}}
+	err = client.Delete(context.TODO(), instance, opts)
 	if kerrors.IsNotFound(err) {
 		log.Printf("After initial existence check, a delete of template %s and instance %s received a not found error ",
 			name, string(instance.UID))
@@ -368,7 +363,7 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 	}
 
 	for i := 0; ; i++ {
-		instance, err := templateClient.Get(context.TODO(), name, meta.GetOptions{})
+		err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Name: name}, instance)
 		if kerrors.IsNotFound(err) {
 			break
 		}
@@ -477,7 +472,7 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 	return waitForPodDeletion(podClient, name, uid)
 }
 
-func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterface, eventClient coreclientset.EventInterface, name string, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, error) {
+func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterface, client ctrlruntimeclient.Client, name string, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, error) {
 	if notifier == nil {
 		notifier = NopNotifier
 	}
@@ -486,7 +481,7 @@ func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterf
 	completed := make(map[string]time.Time)
 	var pod *coreapi.Pod
 	for {
-		newPod, retry, err := waitForPodCompletionOrTimeout(ctx, podClient, eventClient, name, completed, notifier, skipLogs)
+		newPod, retry, err := waitForPodCompletionOrTimeout(ctx, podClient, client, name, completed, notifier, skipLogs)
 		if newPod != nil {
 			pod = newPod
 		}
@@ -515,7 +510,7 @@ func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterf
 	return pod, nil
 }
 
-func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.PodInterface, eventClient coreclientset.EventInterface, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, bool, error) {
+func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.PodInterface, client ctrlruntimeclient.Client, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, bool, error) {
 	// Warning: this is extremely fragile, inherited legacy code.  Please be
 	// careful and test thoroughly when making changes, as they very frequently
 	// lead to systemic production failures.  Some guidance:
@@ -577,7 +572,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 			pod = newPod
 			timeout := 15 * time.Minute
 			if !podHasStarted(pod) && time.Since(pod.CreationTimestamp.Time) > timeout {
-				message := fmt.Sprintf("pod didn't start running within %s: %s\n%s", timeout, getReasonsForUnreadyContainers(pod), getEventsForPod(pod, eventClient, ctx))
+				message := fmt.Sprintf("pod didn't start running within %s: %s\n%s", timeout, getReasonsForUnreadyContainers(pod), getEventsForPod(ctx, pod, client))
 				log.Print(message)
 				notifier.Complete(name)
 				return pod, false, errors.New(message)

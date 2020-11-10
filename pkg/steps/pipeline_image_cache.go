@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	coreapi "k8s.io/api/core/v1"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
 
@@ -23,8 +22,7 @@ RUN ["/bin/bash", "-c", %s]`, api.PipelineImageStream, from, strconv.Quote(fmt.S
 type pipelineImageCacheStep struct {
 	config      api.PipelineImageCacheStepConfiguration
 	resources   api.ResourceConfiguration
-	buildClient BuildClient
-	client      ctrlruntimeclient.Client
+	client      BuildClient
 	artifactDir string
 	jobSpec     *api.JobSpec
 	pullSecret  *coreapi.Secret
@@ -42,7 +40,7 @@ func (s *pipelineImageCacheStep) Run(ctx context.Context) error {
 
 func (s *pipelineImageCacheStep) run(ctx context.Context) error {
 	dockerfile := rawCommandDockerfile(s.config.From, s.config.Commands)
-	return handleBuild(ctx, s.buildClient, buildFromSource(
+	return handleBuild(ctx, s.client, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
@@ -77,11 +75,10 @@ func (s *pipelineImageCacheStep) Description() string {
 	return fmt.Sprintf("Store build results into a layer on top of %s and save as %s", s.config.From, s.config.To)
 }
 
-func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, client ctrlruntimeclient.Client, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, client BuildClient, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &pipelineImageCacheStep{
 		config:      config,
 		resources:   resources,
-		buildClient: buildClient,
 		client:      client,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,

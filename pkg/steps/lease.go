@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -33,16 +32,14 @@ type leaseStep struct {
 	wrapped api.Step
 
 	// for sending heartbeats during lease acquisition
-	namespace       func() string
-	namespaceClient coreclientset.NamespaceInterface
+	namespace func() string
 }
 
-func LeaseStep(client *lease.Client, leases []api.StepLease, wrapped api.Step, namespace func() string, namespaceClient coreclientset.NamespaceInterface) api.Step {
+func LeaseStep(client *lease.Client, leases []api.StepLease, wrapped api.Step, namespace func() string) api.Step {
 	ret := leaseStep{
-		client:          client,
-		wrapped:         wrapped,
-		namespace:       namespace,
-		namespaceClient: namespaceClient,
+		client:    client,
+		wrapped:   wrapped,
+		namespace: namespace,
 	}
 	for _, l := range leases {
 		ret.leases = append(ret.leases, stepLease{StepLease: l})

@@ -16,8 +16,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/watch"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/clonerefs"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
@@ -148,8 +146,7 @@ func defaultPodLabels(jobSpec *api.JobSpec) map[string]string {
 type sourceStep struct {
 	config          api.SourceStepConfiguration
 	resources       api.ResourceConfiguration
-	buildClient     BuildClient
-	client          ctrlruntimeclient.Client
+	client          BuildClient
 	artifactDir     string
 	jobSpec         *api.JobSpec
 	cloneAuthConfig *CloneAuthConfig
@@ -172,7 +169,7 @@ func (s *sourceStep) run(ctx context.Context) error {
 		return fmt.Errorf("could not resolve clonerefs source: %w", err)
 	}
 
-	return handleBuild(ctx, s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret), s.artifactDir)
+	return handleBuild(ctx, s.client, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret), s.artifactDir)
 }
 
 func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef corev1.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret) *buildapi.Build {
@@ -354,12 +351,12 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 }
 
 func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.Build, artifactDir string) error {
-	if _, err := buildClient.Builds(build.Namespace).Create(ctx, build, metav1.CreateOptions{}); err != nil {
+	if err := buildClient.Create(ctx, build); err != nil {
 		if !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create build %s: %w", build.Name, err)
 		}
-		b, err := buildClient.Builds(build.Namespace).Get(ctx, build.Name, metav1.GetOptions{})
-		if err != nil {
+		b := &buildapi.Build{}
+		if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: build.Namespace, Name: build.Name}, b); err != nil {
 			return fmt.Errorf("could not get build %s: %w", build.Name, err)
 		}
 
@@ -373,18 +370,18 @@ func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.B
 				Preconditions:      &metav1.Preconditions{UID: &b.UID},
 				PropagationPolicy:  &foreground,
 			}
-			if err := buildClient.Builds(build.Namespace).Delete(ctx, build.Name, opts); err != nil && !kerrors.IsNotFound(err) && !kerrors.IsConflict(err) {
+			if err := buildClient.Delete(ctx, build, &ctrlruntimeclient.DeleteOptions{Raw: &opts}); err != nil && !kerrors.IsNotFound(err) && !kerrors.IsConflict(err) {
 				return fmt.Errorf("could not delete build %s: %w", build.Name, err)
 			}
 			if err := waitForBuildDeletion(ctx, buildClient, build.Namespace, build.Name); err != nil {
 				return fmt.Errorf("could not wait for build %s to be deleted: %w", build.Name, err)
 			}
-			if _, err := buildClient.Builds(build.Namespace).Create(ctx, build, metav1.CreateOptions{}); err != nil && !kerrors.IsAlreadyExists(err) {
+			if err := buildClient.Create(ctx, build); err != nil && !kerrors.IsAlreadyExists(err) {
 				return fmt.Errorf("could not recreate build %s: %w", build.Name, err)
 			}
 		}
 	}
-	err := waitForBuild(ctx, buildClient, build.Namespace, build.Name)
+	err := waitForBuildOrTimeout(ctx, buildClient, build.Namespace, build.Name)
 	if err == nil && len(artifactDir) > 0 {
 		if err := gatherSuccessfulBuildLog(buildClient, artifactDir, build.Namespace, build.Name); err != nil {
 			// log error but do not fail successful build
@@ -396,13 +393,13 @@ func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.B
 
 }
 
-func waitForBuildDeletion(ctx context.Context, client BuildClient, ns, name string) error {
+func waitForBuildDeletion(ctx context.Context, client ctrlruntimeclient.Client, ns, name string) error {
 	ch := make(chan error)
 	go func() {
 		ch <- wait.ExponentialBackoff(wait.Backoff{
 			Duration: 10 * time.Millisecond, Factor: 2, Steps: 10,
 		}, func() (done bool, err error) {
-			if _, err := client.Builds(ns).Get(ctx, name, metav1.GetOptions{}); err != nil {
+			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &buildapi.Build{}); err != nil {
 				if kerrors.IsNotFound(err) {
 					return true, nil
 				}
@@ -453,20 +450,7 @@ func hintsAtInfraReason(logSnippet string) bool {
 		strings.Contains(logSnippet, "connection reset by peer")
 }
 
-func waitForBuild(ctx context.Context, buildClient BuildClient, namespace, name string) error {
-	for {
-		retry, err := waitForBuildOrTimeout(ctx, buildClient, namespace, name)
-		if err != nil {
-			return fmt.Errorf("could not wait for build: %w", err)
-		}
-		if !retry {
-			break
-		}
-	}
-	return nil
-}
-
-func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespace, name string) (bool, error) {
+func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespace, name string) error {
 	isOK := func(b *buildapi.Build) bool {
 		return b.Status.Phase == buildapi.BuildPhaseComplete
 	}
@@ -476,88 +460,44 @@ func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespa
 			b.Status.Phase == buildapi.BuildPhaseError
 	}
 
-	// First we set up a watcher to catch all events that happen while we check
-	// the build status
-	watcher, err := buildClient.Builds(namespace).Watch(ctx, metav1.ListOptions{
-		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
-		Watch:         true,
-	})
-	if err != nil {
-		return false, fmt.Errorf("could not create watcher for build %s: %w", name, err)
+	build := &buildapi.Build{}
+	if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, build); err != nil {
+		if kerrors.IsNotFound(err) {
+			return fmt.Errorf("could not find build %s", name)
+		}
+		return fmt.Errorf("could not get build: %w", err)
 	}
-	defer watcher.Stop()
-
-	list, err := buildClient.Builds(namespace).List(ctx, metav1.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
-	if err != nil {
-		return false, fmt.Errorf("could not list builds: %w", err)
-	}
-	if len(list.Items) != 1 {
-		return false, fmt.Errorf("could not find build %s", name)
-	}
-	build := &list.Items[0]
 	if isOK(build) {
 		log.Printf("Build %s already succeeded in %s", build.Name, buildDuration(build))
-		return false, nil
+		return nil
 	}
 	if isFailed(build) {
 		log.Printf("Build %s failed, printing logs:", build.Name)
 		printBuildLogs(buildClient, build.Namespace, build.Name)
-		return false, appendLogToError(fmt.Errorf("the build %s failed with reason %s: %s", build.Name, build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
+		return appendLogToError(fmt.Errorf("the build %s failed with reason %s: %s", build.Name, build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 	}
-	done := ctx.Done()
-	ch := watcher.ResultChan()
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
 	for {
-		var event watch.Event
-		var ok bool
 		select {
-		case <-done:
-			return false, ctx.Err()
-		case event, ok = <-ch:
-		}
-		if !ok {
-			// restart
-			return true, nil
-		}
-		build, ok := event.Object.(*buildapi.Build)
-		if !ok {
-			continue
-		}
-
-		if isOK(build) {
-			log.Printf("Build %s succeeded after %s", build.Name, buildDuration(build).Truncate(time.Second))
-			return false, nil
-		}
-		if isFailed(build) {
-			log.Printf("Build %s failed, printing logs:", build.Name)
-			printBuildLogs(buildClient, build.Namespace, build.Name)
-			// BUG: builds report Failed before they set log snippet
-			build = waitForBuildWithSnippet(build, ch)
-			return false, appendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
-		}
-	}
-}
-
-func waitForBuildWithSnippet(build *buildapi.Build, ch <-chan watch.Event) *buildapi.Build {
-	timeout := time.After(10 * time.Second)
-	for len(build.Status.LogSnippet) == 0 {
-		select {
-		case <-timeout:
-			return build
-		case event, ok := <-ch:
-			if !ok {
-				return build
-			}
-			nextBuild, ok := event.Object.(*buildapi.Build)
-			if !ok {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, build); err != nil {
+				log.Printf("Failed to get build %s: %v", name, err)
 				continue
 			}
-			if nextBuild.Status.Phase != build.Status.Phase {
-				return build
+			if isOK(build) {
+				log.Printf("Build %s succeeded after %s", build.Name, buildDuration(build).Truncate(time.Second))
+				return nil
 			}
-			build = nextBuild
+			if isFailed(build) {
+				log.Printf("Build %s failed, printing logs:", build.Name)
+				printBuildLogs(buildClient, build.Namespace, build.Name)
+				return appendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
+			}
 		}
 	}
-	return build
 }
 
 func appendLogToError(err error, log string) error {
@@ -640,13 +580,11 @@ func (s *sourceStep) Description() string {
 }
 
 func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient,
-	client ctrlruntimeclient.Client,
 	artifactDir string, jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret) api.Step {
 	return &sourceStep{
 		config:          config,
 		resources:       resources,
-		buildClient:     buildClient,
-		client:          client,
+		client:          buildClient,
 		artifactDir:     artifactDir,
 		jobSpec:         jobSpec,
 		cloneAuthConfig: cloneAuthConfig,
@@ -701,23 +639,19 @@ func getReasonsForUnreadyContainers(p *corev1.Pod) string {
 	return builder.String()
 }
 
-func getEventsForPod(pod *corev1.Pod, client coreclientset.EventInterface, ctx context.Context) string {
-	events, err := client.List(ctx, metav1.ListOptions{})
-	if err != nil {
+func getEventsForPod(ctx context.Context, pod *corev1.Pod, client ctrlruntimeclient.Client) string {
+	events := &corev1.EventList{}
+	listOpts := &ctrlruntimeclient.ListOptions{
+		Namespace:     pod.Namespace,
+		FieldSelector: fields.OneTermEqualSelector("involvedObject.uid", string(pod.GetUID())),
+	}
+	if err := client.List(ctx, events, listOpts); err != nil {
 		log.Printf("Could not fetch events: %v", err)
-	}
-	var filtered []corev1.Event
-	for _, event := range events.Items {
-		if event.InvolvedObject.Name == pod.Name {
-			filtered = append(filtered, event)
-		}
-	}
-	if len(filtered) == 0 {
 		return ""
 	}
 	builder := &strings.Builder{}
-	_, _ = builder.WriteString(fmt.Sprintf("Found %d events for Pod %s:", len(filtered), pod.Name))
-	for _, event := range filtered {
+	_, _ = builder.WriteString(fmt.Sprintf("Found %d events for Pod %s:", len(events.Items), pod.Name))
+	for _, event := range events.Items {
 		_, _ = builder.WriteString(fmt.Sprintf("\n* %dx %s: %s", event.Count, event.Source.Component, event.Message))
 	}
 	return builder.String()

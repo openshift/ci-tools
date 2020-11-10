@@ -14,7 +14,6 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/util/retry"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -36,7 +35,6 @@ type promotionStep struct {
 	dstClient      ctrlruntimeclient.Client
 	jobSpec        *api.JobSpec
 	podClient      steps.PodClient
-	eventClient    coreclientset.EventsGetter
 	pushSecret     *coreapi.Secret
 }
 
@@ -87,7 +85,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 			return nil
 		}
 
-		if _, err := steps.RunPod(ctx, s.podClient, s.eventClient, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace())); err != nil {
+		if _, err := steps.RunPod(ctx, s.podClient, s.srcClient, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace())); err != nil {
 			return fmt.Errorf("unable to run promotion pod: %w", err)
 		}
 		return nil
@@ -374,7 +372,7 @@ func (s *promotionStep) Description() string {
 
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skipped.
-func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, srcClient, dstClient ctrlruntimeclient.Client, jobSpec *api.JobSpec, podClient steps.PodClient, eventClient coreclientset.EventsGetter, pushSecret *coreapi.Secret) api.Step {
+func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, srcClient, dstClient ctrlruntimeclient.Client, jobSpec *api.JobSpec, podClient steps.PodClient, pushSecret *coreapi.Secret) api.Step {
 	return &promotionStep{
 		config:         config,
 		images:         images,
@@ -383,7 +381,6 @@ func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirect
 		dstClient:      dstClient,
 		jobSpec:        jobSpec,
 		podClient:      podClient,
-		eventClient:    eventClient,
 		pushSecret:     pushSecret,
 	}
 }

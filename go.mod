@@ -11,13 +11,13 @@ replace (
 	github.com/moby/buildkit => github.com/dmcgowan/buildkit v0.0.0-20170731200553-da2b9dc7dab9
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20200521150516-05eb9880269c
 	github.com/openshift/library-go => github.com/openshift/library-go v0.0.0-20200527213645-a9b77f5402e3
-	k8s.io/api => k8s.io/api v0.18.6
-	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.18.6
-	k8s.io/apimachinery => k8s.io/apimachinery v0.18.6
-	k8s.io/client-go => k8s.io/client-go v0.18.6
-	k8s.io/code-generator => k8s.io/code-generator v0.18.6
-	k8s.io/component-base => k8s.io/component-base v0.18.6
-	k8s.io/kubectl => k8s.io/kubectl v0.18.6
+	k8s.io/api => k8s.io/api v0.19.3
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.19.3
+	k8s.io/apimachinery => k8s.io/apimachinery v0.19.3
+	k8s.io/client-go => k8s.io/client-go v0.19.3
+	k8s.io/code-generator => k8s.io/code-generator v0.19.3
+	k8s.io/component-base => k8s.io/component-base v0.19.3
+	k8s.io/kubectl => k8s.io/kubectl v0.19.3
 )
 
 require (
@@ -31,7 +31,7 @@ require (
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
 	github.com/getlantern/deepcopy v0.0.0-20160317154340-7f45deb8130a
 	github.com/ghodss/yaml v1.0.0
-	github.com/google/go-cmp v0.5.0
+	github.com/google/go-cmp v0.5.2
 	github.com/google/gofuzz v1.1.0
 	github.com/hashicorp/go-retryablehttp v0.6.6
 	github.com/kataras/tablewriter v0.0.0-20180708051242-e063d29b7c23
@@ -46,8 +46,8 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/polyfloyd/go-errorlint v0.0.0-20200429095719-920be198a950
-	github.com/prometheus/client_golang v1.6.0
-	github.com/prometheus/common v0.9.1
+	github.com/prometheus/client_golang v1.7.1
+	github.com/prometheus/common v0.10.0
 	github.com/shurcooL/githubv4 v0.0.0-20191102174205-af46314aec7b
 	github.com/sirupsen/logrus v1.6.0
 	github.com/slack-go/slack v0.6.6
@@ -56,13 +56,13 @@ require (
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 	google.golang.org/api v0.29.0
 	gopkg.in/fsnotify.v1 v1.4.7
-	k8s.io/api v0.18.7-rc.0
-	k8s.io/apimachinery v0.18.7-rc.0
+	k8s.io/api v0.19.3
+	k8s.io/apimachinery v0.19.3
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
-	k8s.io/test-infra v0.0.0-20201029180605-20aad120bf8a
-	k8s.io/utils v0.0.0-20200603063816-c1c6865ac451
+	k8s.io/test-infra v0.0.0-20201110204727-1435ed8f712b
+	k8s.io/utils v0.0.0-20200912215256-4140de9c8800
 	sigs.k8s.io/boskos v0.0.0-20200617235605-f289ba6555ba
-	sigs.k8s.io/controller-runtime v0.6.2
+	sigs.k8s.io/controller-runtime v0.7.0-alpha.6.0.20201110172840-3e4e60cdb09e
 	sigs.k8s.io/controller-tools v0.3.0
 	sigs.k8s.io/yaml v1.2.0
 )

@@ -96,3 +96,21 @@ func PatchResponseFromRaw(original, current []byte) Response {
 		},
 	}
 }
+
+// validationResponseFromStatus returns a response for admitting a request with provided Status object.
+func validationResponseFromStatus(allowed bool, status metav1.Status) Response {
+	resp := Response{
+		AdmissionResponse: admissionv1beta1.AdmissionResponse{
+			Allowed: allowed,
+			Result:  &status,
+		},
+	}
+	return resp
+}
+
+// WithWarnings adds the given warnings to the Response.
+// If any warnings were already given, they will not be overwritten.
+func (r Response) WithWarnings(warnings ...string) Response {
+	r.AdmissionResponse.Warnings = append(r.AdmissionResponse.Warnings, warnings...)
+	return r
+}

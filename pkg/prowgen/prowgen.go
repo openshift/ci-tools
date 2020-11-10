@@ -300,10 +300,6 @@ func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperator
 		template = "cluster-launch-e2e-openshift-ansible"
 		clusterProfile = conf.ClusterProfile
 		needsReleaseRpms = true
-	} else if conf := test.OpenshiftAnsibleUpgradeClusterTestConfiguration; conf != nil {
-		template = "cluster-launch-e2e-upgrade"
-		clusterProfile = conf.ClusterProfile
-		needsReleaseRpms = true
 	} else if conf := test.OpenshiftAnsible40ClusterTestConfiguration; conf != nil {
 		template = "cluster-scaleup-e2e-40"
 		clusterProfile = conf.ClusterProfile
@@ -384,18 +380,6 @@ func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperator
 				Name:  "RPM_REPO_CRIO_DIR",
 				Value: fmt.Sprintf("%s-rhel-7", release)},
 		)
-	}
-	if conf := test.OpenshiftAnsibleUpgradeClusterTestConfiguration; conf != nil {
-		container.Env = append(
-			container.Env,
-			corev1.EnvVar{Name: "PREVIOUS_ANSIBLE_VERSION",
-				Value: conf.PreviousVersion},
-			corev1.EnvVar{Name: "PREVIOUS_IMAGE_ANSIBLE",
-				Value: fmt.Sprintf("docker.io/openshift/origin-ansible:v%s", conf.PreviousVersion)},
-			corev1.EnvVar{Name: "PREVIOUS_RPM_DEPENDENCIES_REPO",
-				Value: conf.PreviousRPMDeps},
-			corev1.EnvVar{Name: "PREVIOUS_RPM_REPO",
-				Value: fmt.Sprintf("%s/openshift-origin-v%s/", cioperatorapi.URLForService(cioperatorapi.ServiceRPMs), conf.PreviousVersion)})
 	}
 	return podSpec
 }
@@ -531,7 +515,7 @@ func generateJobBase(name, prefix string, info *ProwgenInfo, podSpec *corev1.Pod
 	labels := map[string]string{prowJobLabelGenerated: string(newlyGenerated)}
 
 	if rehearsable {
-		labels[jc.CanBeRehearsedLabel] = string(jc.CanBeRehearsedValue)
+		labels[jc.CanBeRehearsedLabel] = jc.CanBeRehearsedValue
 	}
 
 	jobName := info.JobName(prefix, name)

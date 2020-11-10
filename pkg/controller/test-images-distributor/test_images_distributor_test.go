@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
@@ -591,14 +590,6 @@ func TestReconcile(t *testing.T) {
 				registryClient:      tc.registryClient,
 				buildClusterClients: tc.buildClusterClients,
 				pullSecretGetter:    func() []byte { return pullSecretData },
-				successfulImportsCounter: prometheus.NewCounterVec(
-					prometheus.CounterOpts{},
-					[]string{"cluster", "ns"},
-				),
-				failedImportsCounter: prometheus.NewCounterVec(
-					prometheus.CounterOpts{},
-					[]string{"cluster", "ns"},
-				),
 				forbiddenRegistries: sets.NewString("default-route-openshift-image-registry.apps.build01.ci.devcluster.openshift.com",
 					"registry.build01.ci.openshift.org",
 					"registry.build02.ci.openshift.org",

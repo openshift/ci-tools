@@ -48,7 +48,6 @@ func AddToManager(mgr manager.Manager,
 	log := logrus.WithField("controller", ControllerName)
 
 	r := &reconciler{
-		ctx:                 context.Background(),
 		log:                 log,
 		registryClient:      imagestreamtagwrapper.MustNew(registryManager.GetClient(), registryManager.GetCache()),
 		buildClusterClients: map[string]ctrlruntimeclient.Client{},
@@ -98,19 +97,17 @@ func AddToManager(mgr manager.Manager,
 }
 
 func testImageStreamTagImportHandler() handler.EventHandler {
-	return &handler.EnqueueRequestsFromMapFunc{ToRequests: handler.ToRequestsFunc(
-		func(mo handler.MapObject) []reconcile.Request {
-			testimagestreamtagimport, ok := mo.Object.(*testimagestreamtagimportv1.TestImageStreamTagImport)
-			if !ok {
-				logrus.WithField("type", fmt.Sprintf("%T", mo.Object)).Error("Got object that was not an ImageStram")
-				return nil
-			}
-			return []reconcile.Request{{NamespacedName: types.NamespacedName{
-				Namespace: testimagestreamtagimport.Spec.ClusterName + clusterAndNamespaceDelimiter + testimagestreamtagimport.Spec.Namespace,
-				Name:      testimagestreamtagimport.Spec.Name,
-			}}}
-		},
-	)}
+	return handler.EnqueueRequestsFromMapFunc(func(o ctrlruntimeclient.Object) []reconcile.Request {
+		testimagestreamtagimport, ok := o.(*testimagestreamtagimportv1.TestImageStreamTagImport)
+		if !ok {
+			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not an ImageStram")
+			return nil
+		}
+		return []reconcile.Request{{NamespacedName: types.NamespacedName{
+			Namespace: testimagestreamtagimport.Spec.ClusterName + clusterAndNamespaceDelimiter + testimagestreamtagimport.Spec.Namespace,
+			Name:      testimagestreamtagimport.Spec.Name,
+		}}}
+	})
 }
 
 type objectFilter func(types.NamespacedName) bool
@@ -153,7 +150,6 @@ func decodeRequest(req reconcile.Request) (string, types.NamespacedName, error) 
 }
 
 type reconciler struct {
-	ctx                 context.Context
 	log                 *logrus.Entry
 	registryClient      ctrlruntimeclient.Client
 	buildClusterClients map[string]ctrlruntimeclient.Client
@@ -161,10 +157,10 @@ type reconciler struct {
 	forbiddenRegistries sets.String
 }
 
-func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
+func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	log := r.log.WithField("request", req.String())
 	log.Info("Starting reconciliation")
-	err := r.reconcile(req, log)
+	err := r.reconcile(ctx, req, log)
 	if err != nil {
 		log.WithError(err).Error("Reconciliation failed")
 	} else {
@@ -173,14 +169,13 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 	return reconcile.Result{}, controllerutil.SwallowIfTerminal(err)
 }
 
-func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
+func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *logrus.Entry) error {
 	cluster, decoded, err := decodeRequest(req)
 	if err != nil {
 		return fmt.Errorf("failed to decode request %s: %w", req, err)
 	}
 
-	// Propagate the cluster field back up
-	*log = *log.WithField("cluster", cluster)
+	log = log.WithField("cluster", cluster)
 
 	// Fail asap if we cannot reconcile this
 	client, ok := r.buildClusterClients[cluster]
@@ -189,7 +184,7 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 	}
 
 	sourceImageStreamTag := &imagev1.ImageStreamTag{}
-	if err := r.registryClient.Get(r.ctx, decoded, sourceImageStreamTag); err != nil {
+	if err := r.registryClient.Get(ctx, decoded, sourceImageStreamTag); err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Debug("Source imageStreamTag not found")
 			return nil
@@ -204,7 +199,7 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 	imageStreamName, imageTag := imageStreamNameAndTag[0], imageStreamNameAndTag[1]
 	isName := types.NamespacedName{Namespace: decoded.Namespace, Name: imageStreamName}
 	sourceImageStream := &imagev1.ImageStream{}
-	if err := r.registryClient.Get(r.ctx, isName, sourceImageStream); err != nil {
+	if err := r.registryClient.Get(ctx, isName, sourceImageStream); err != nil {
 		return fmt.Errorf("failed to get imageStream %s from registry cluster: %w", isName.String(), err)
 	}
 
@@ -214,26 +209,26 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 		return nil
 	}
 
-	if err := client.Get(r.ctx, types.NamespacedName{Name: decoded.Namespace}, &corev1.Namespace{}); err != nil {
+	if err := client.Get(ctx, types.NamespacedName{Name: decoded.Namespace}, &corev1.Namespace{}); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to check if namespace %s exists: %w", decoded.Namespace, err)
 		}
-		if err := client.Create(r.ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: decoded.Namespace}}); err != nil && !apierrors.IsAlreadyExists(err) {
+		if err := client.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: decoded.Namespace}}); err != nil && !apierrors.IsAlreadyExists(err) {
 			return fmt.Errorf("failed to create namespace %s: %w", decoded.Namespace, err)
 		}
 	}
 
-	if err := r.ensureCIOperatorRoleBinding(decoded.Namespace, client, log); err != nil {
+	if err := r.ensureCIOperatorRoleBinding(ctx, decoded.Namespace, client, log); err != nil {
 		return fmt.Errorf("failed to ensure rolebinding: %w", err)
 	}
-	if err := r.ensureCIOperatorRole(decoded.Namespace, client, log); err != nil {
+	if err := r.ensureCIOperatorRole(ctx, decoded.Namespace, client, log); err != nil {
 		return fmt.Errorf("failed to ensure role: %w", err)
 	}
-	if err := r.ensureImageStream(sourceImageStream, client, log); err != nil {
+	if err := r.ensureImageStream(ctx, sourceImageStream, client, log); err != nil {
 		return fmt.Errorf("failed to ensure imagestream: %w", err)
 	}
 
-	isCurrent, err := r.isImageStreamTagCurrent(decoded, client, sourceImageStreamTag)
+	isCurrent, err := r.isImageStreamTagCurrent(ctx, decoded, client, sourceImageStreamTag)
 	if err != nil {
 		return fmt.Errorf("failed to check if imageStreamTag %s on cluster %s is current: %w", decoded.String(), cluster, err)
 	}
@@ -242,7 +237,7 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 		return nil
 	}
 
-	if err := r.ensureImagePullSecret(decoded.Namespace, client, log); err != nil {
+	if err := r.ensureImagePullSecret(ctx, decoded.Namespace, client, log); err != nil {
 		return fmt.Errorf("failed to ensure imagePullSecret: %w", err)
 	}
 
@@ -267,7 +262,7 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 	}
 
 	// ImageStreamImport is not an ordinary api but a virtual one that does the import synchronously
-	if err := client.Create(r.ctx, imageStreamImport); err != nil {
+	if err := client.Create(ctx, imageStreamImport); err != nil {
 		controllerutil.CountImportResult(ControllerName, cluster, decoded.Namespace, false)
 		return fmt.Errorf("failed to import Image: %w", err)
 	}
@@ -287,13 +282,14 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 }
 
 func (r *reconciler) isImageStreamTagCurrent(
+	ctx context.Context,
 	name types.NamespacedName,
 	targetClient ctrlruntimeclient.Client,
 	reference *imagev1.ImageStreamTag,
 ) (bool, error) {
 
 	imageStreamTag := &imagev1.ImageStreamTag{}
-	if err := targetClient.Get(r.ctx, name, imageStreamTag); err != nil {
+	if err := targetClient.Get(ctx, name, imageStreamTag); err != nil {
 		if apierrors.IsNotFound(err) {
 			return false, nil
 		}
@@ -305,9 +301,9 @@ func (r *reconciler) isImageStreamTagCurrent(
 
 const pullSecretName = "registry-cluster-pull-secret"
 
-func (r *reconciler) ensureImagePullSecret(namespace string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
+func (r *reconciler) ensureImagePullSecret(ctx context.Context, namespace string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
 	secret, mutateFn := r.pullSecret(namespace)
-	return upsertObject(r.ctx, client, secret, mutateFn, log)
+	return upsertObject(ctx, client, secret, mutateFn, log)
 }
 
 const ciOperatorPullerRoleName = "ci-operator-image-puller"
@@ -331,9 +327,9 @@ func ciOperatorRole(namespace string) (*rbacv1.Role, crcontrollerutil.MutateFn) 
 	}
 }
 
-func (r *reconciler) ensureCIOperatorRole(namespace string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
+func (r *reconciler) ensureCIOperatorRole(ctx context.Context, namespace string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
 	role, mutateFn := ciOperatorRole(namespace)
-	return upsertObject(r.ctx, client, role, mutateFn, log)
+	return upsertObject(ctx, client, role, mutateFn, log)
 }
 
 func ciOperatorRoleBinding(namespace string) (*rbacv1.RoleBinding, crcontrollerutil.MutateFn) {
@@ -359,9 +355,9 @@ func ciOperatorRoleBinding(namespace string) (*rbacv1.RoleBinding, crcontrolleru
 	}
 }
 
-func (r *reconciler) ensureCIOperatorRoleBinding(namespace string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
+func (r *reconciler) ensureCIOperatorRoleBinding(ctx context.Context, namespace string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
 	roleBinding, mutateFn := ciOperatorRoleBinding(namespace)
-	return upsertObject(r.ctx, client, roleBinding, mutateFn, log)
+	return upsertObject(ctx, client, roleBinding, mutateFn, log)
 }
 
 // ci-operator uses the release controller configuration to determine
@@ -391,9 +387,9 @@ func imagestream(imageStream *imagev1.ImageStream) (*imagev1.ImageStream, crcont
 	}
 }
 
-func (r *reconciler) ensureImageStream(imageStream *imagev1.ImageStream, client ctrlruntimeclient.Client, log *logrus.Entry) error {
+func (r *reconciler) ensureImageStream(ctx context.Context, imageStream *imagev1.ImageStream, client ctrlruntimeclient.Client, log *logrus.Entry) error {
 	stream, mutateFn := imagestream(imageStream)
-	return upsertObject(r.ctx, client, stream, mutateFn, log)
+	return upsertObject(ctx, client, stream, mutateFn, log)
 }
 
 func (r *reconciler) pullSecret(namespace string) (*corev1.Secret, crcontrollerutil.MutateFn) {

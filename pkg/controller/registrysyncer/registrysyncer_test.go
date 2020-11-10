@@ -239,7 +239,7 @@ func TestReconcile(t *testing.T) {
 				Name:      "applyconfig:latest",
 				Namespace: "ci",
 			},
-			apiCIClient: fakeclient.NewFakeClient([]runtime.Object{applyconfigISTag.DeepCopy()}...),
+			apiCIClient: fakeclient.NewFakeClient([]ctrlruntimeclient.Object{applyconfigISTag.DeepCopy()}...),
 			appCIClient: fakeclient.NewFakeClient(),
 			expected:    fmt.Errorf("failed to get imageStream %s from registry cluster: %w", "ci/applyconfig", fmt.Errorf("imagestreams.image.openshift.io \"applyconfig\" not found")),
 		},
@@ -249,7 +249,7 @@ func TestReconcile(t *testing.T) {
 				Name:      "applyconfig:latest",
 				Namespace: "ci",
 			},
-			apiCIClient: fakeclient.NewFakeClient([]runtime.Object{applyconfigISTag.DeepCopy(), applyconfigIS.DeepCopy()}...),
+			apiCIClient: fakeclient.NewFakeClient([]ctrlruntimeclient.Object{applyconfigISTag.DeepCopy(), applyconfigIS.DeepCopy()}...),
 			appCIClient: bcc(fakeclient.NewFakeClient()),
 
 			verify: func(apiCIClient ctrlruntimeclient.Client, appCIClient ctrlruntimeclient.Client) error {
@@ -343,8 +343,8 @@ func TestReconcile(t *testing.T) {
 				Name:      "applyconfig:latest",
 				Namespace: "ci",
 			},
-			apiCIClient: bcc(fakeclient.NewFakeClient([]runtime.Object{applyconfigISTag.DeepCopy()}...)),
-			appCIClient: fakeclient.NewFakeClient([]runtime.Object{applyconfigISTagNewer.DeepCopy(), applyconfigIS.DeepCopy()}...),
+			apiCIClient: bcc(fakeclient.NewFakeClient(applyconfigISTag.DeepCopy())),
+			appCIClient: fakeclient.NewFakeClient(applyconfigISTagNewer.DeepCopy(), applyconfigIS.DeepCopy()),
 
 			verify: func(apiCIClient ctrlruntimeclient.Client, appCIClient ctrlruntimeclient.Client) error {
 				actualImageStreamImport := &imagev1.ImageStreamImport{}
@@ -394,8 +394,8 @@ func TestReconcile(t *testing.T) {
 				Name:      "applyconfig:latest",
 				Namespace: "ci",
 			},
-			apiCIClient: fakeclient.NewFakeClient([]runtime.Object{applyconfigISTag.DeepCopy()}...),
-			appCIClient: fakeclient.NewFakeClient([]runtime.Object{applyconfigISTagNewerSameName.DeepCopy(), applyconfigIS.DeepCopy()}...),
+			apiCIClient: fakeclient.NewFakeClient(applyconfigISTag.DeepCopy()),
+			appCIClient: fakeclient.NewFakeClient(applyconfigISTagNewerSameName.DeepCopy(), applyconfigIS.DeepCopy()),
 
 			verify: func(apiCIClient ctrlruntimeclient.Client, appCIClient ctrlruntimeclient.Client) error {
 				for clusterName, client := range map[string]ctrlruntimeclient.Client{apiCI: apiCIClient, appCI: appCIClient} {
@@ -416,7 +416,7 @@ func TestReconcile(t *testing.T) {
 				Name:      "applyconfig:latest",
 				Namespace: "ci",
 			},
-			apiCIClient: fakeclient.NewFakeClient([]runtime.Object{applyconfigISTag.DeepCopy(), applyconfigIS.DeepCopy()}...),
+			apiCIClient: fakeclient.NewFakeClient(applyconfigISTag.DeepCopy(), applyconfigIS.DeepCopy()),
 			appCIClient: bcc(fakeclient.NewFakeClient(), func(c *imageImportStatusSettingClient) { c.failure = true }),
 			expected:    fmt.Errorf("imageStreamImport did not succeed: reason: , message: failing as requested"),
 		},
@@ -426,7 +426,6 @@ func TestReconcile(t *testing.T) {
 		}
 		t.Run(tc.name, func(t *testing.T) {
 			r := &reconciler{
-				ctx: context.Background(),
 				log: logrus.NewEntry(logrus.New()),
 				registryClients: map[string]ctrlruntimeclient.Client{
 					apiCI: tc.apiCIClient,
@@ -436,7 +435,7 @@ func TestReconcile(t *testing.T) {
 			}
 
 			request := reconcile.Request{NamespacedName: tc.request}
-			actual := r.reconcile(request, r.log)
+			actual := r.reconcile(context.Background(), request, r.log)
 
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("actualError does not match expectedError, diff: %s", diff)
@@ -465,7 +464,7 @@ type imageImportStatusSettingClient struct {
 	failure bool
 }
 
-func (client *imageImportStatusSettingClient) Create(ctx context.Context, obj runtime.Object, opts ...ctrlruntimeclient.CreateOption) error {
+func (client *imageImportStatusSettingClient) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
 	if asserted, match := obj.(*imagev1.ImageStreamImport); match {
 		asserted.Status.Images = []imagev1.ImageImportStatus{{}}
 		if client.failure {

@@ -39,7 +39,7 @@ func TestImageStreamTagMapper(t *testing.T) {
 						Tags: []imagev1.NamedTagEventList{{Tag: "1"}, {Tag: "2"}},
 					},
 				}
-				return event.CreateEvent{Meta: imageStream, Object: imageStream}
+				return event.CreateEvent{Object: imageStream}
 			},
 			expectedRequests: []string{
 				"first_namespace/name:1",
@@ -65,9 +65,7 @@ func TestImageStreamTagMapper(t *testing.T) {
 				ImageStreamNew.Status.Tags[0].Items = []imagev1.TagEvent{{Image: "some-image"}}
 
 				return event.UpdateEvent{
-					MetaOld:   imageStreamOld,
 					ObjectOld: imageStreamOld,
-					MetaNew:   ImageStreamNew,
 					ObjectNew: ImageStreamNew,
 				}
 			},
@@ -88,7 +86,7 @@ func TestImageStreamTagMapper(t *testing.T) {
 						Tags: []imagev1.NamedTagEventList{{Tag: "1"}, {Tag: "2"}},
 					},
 				}
-				return event.DeleteEvent{Meta: imageStream, Object: imageStream}
+				return event.DeleteEvent{Object: imageStream}
 			},
 			expectedRequests: []string{
 				"first_namespace/name:1",
@@ -109,7 +107,7 @@ func TestImageStreamTagMapper(t *testing.T) {
 						Tags: []imagev1.NamedTagEventList{{Tag: "1"}, {Tag: "2"}},
 					},
 				}
-				return event.GenericEvent{Meta: ImageStram, Object: ImageStram}
+				return event.GenericEvent{Object: ImageStram}
 			},
 			expectedRequests: []string{
 				"first_namespace/name:1",

@@ -6,10 +6,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -29,7 +28,7 @@ type imagestreamtagmapper struct {
 }
 
 func (m *imagestreamtagmapper) Create(e event.CreateEvent, q workqueue.RateLimitingInterface) {
-	m.generic(e.Object, e.Meta, q)
+	m.generic(e.Object, q)
 }
 
 func (m *imagestreamtagmapper) Update(e event.UpdateEvent, q workqueue.RateLimitingInterface) {
@@ -49,8 +48,8 @@ func (m *imagestreamtagmapper) Update(e event.UpdateEvent, q workqueue.RateLimit
 		}
 		for _, request := range m.upstream(reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Namespace: e.MetaNew.GetNamespace(),
-				Name:      e.MetaNew.GetName() + ":" + newTag.Tag,
+				Namespace: e.ObjectNew.GetNamespace(),
+				Name:      e.ObjectNew.GetName() + ":" + newTag.Tag,
 			},
 		}) {
 			q.Add(request)
@@ -68,14 +67,14 @@ func namedTagEventListHasElement(slice []imagev1.NamedTagEventList, element imag
 }
 
 func (m *imagestreamtagmapper) Delete(e event.DeleteEvent, q workqueue.RateLimitingInterface) {
-	m.generic(e.Object, e.Meta, q)
+	m.generic(e.Object, q)
 }
 
 func (m *imagestreamtagmapper) Generic(e event.GenericEvent, q workqueue.RateLimitingInterface) {
-	m.generic(e.Object, e.Meta, q)
+	m.generic(e.Object, q)
 }
 
-func (m *imagestreamtagmapper) generic(o runtime.Object, meta metav1.Object, q workqueue.RateLimitingInterface) {
+func (m *imagestreamtagmapper) generic(o ctrlruntimeclient.Object, q workqueue.RateLimitingInterface) {
 	imageStream, ok := o.(*imagev1.ImageStream)
 	if !ok {
 		logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not an ImageStram")
@@ -85,8 +84,8 @@ func (m *imagestreamtagmapper) generic(o runtime.Object, meta metav1.Object, q w
 	for _, imageStreamTag := range imageStream.Status.Tags {
 		for _, request := range m.upstream(reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Namespace: meta.GetNamespace(),
-				Name:      meta.GetName() + ":" + imageStreamTag.Tag,
+				Namespace: o.GetNamespace(),
+				Name:      o.GetName() + ":" + imageStreamTag.Tag,
 			},
 		}) {
 			q.Add(request)

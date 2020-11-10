@@ -46,8 +46,14 @@ func TestGetImageStreamTag(t *testing.T) {
 		t.Fatalf("failed to register imagev1 to scheme: %v", err)
 	}
 
+	var imagesPlain []ctrlruntimeclient.Object
+	for _, item := range images.Items {
+		imagesPlain = append(imagesPlain, item.DeepCopy())
+	}
+	imagesPlain = append(imagesPlain, imageStream)
+
 	client := &imagestreamtagwrapper{
-		Client: fakectrlruntimeclient.NewFakeClientWithScheme(scheme, imageStream, images),
+		Client: fakectrlruntimeclient.NewFakeClientWithScheme(scheme, imagesPlain...),
 	}
 	ctx := context.Background()
 

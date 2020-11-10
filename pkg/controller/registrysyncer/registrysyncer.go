@@ -39,7 +39,6 @@ func AddToManager(mgr manager.Manager,
 ) error {
 	log := logrus.WithField("controller", ControllerName)
 	r := &reconciler{
-		ctx:                   context.Background(),
 		log:                   log,
 		registryClients:       map[string]ctrlruntimeclient.Client{},
 		pullSecretGetter:      pullSecretGetter,
@@ -93,7 +92,6 @@ func handlerFactory(filter objectFilter) handler.EventHandler {
 }
 
 type reconciler struct {
-	ctx                   context.Context
 	log                   *logrus.Entry
 	registryClients       map[string]ctrlruntimeclient.Client
 	pullSecretGetter      func() []byte
@@ -102,10 +100,10 @@ type reconciler struct {
 	imageStreamNamespaces sets.String
 }
 
-func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
+func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	log := r.log.WithField("request", req.String())
 	log.Info("Starting reconciliation")
-	err := r.reconcile(req, log)
+	err := r.reconcile(ctx, req, log)
 	if err != nil {
 		log.WithError(err).Error("Reconciliation failed")
 	} else {
@@ -118,12 +116,12 @@ const (
 	annotationDPTPRequester = "dptp.openshift.io/requester"
 )
 
-func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
+func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *logrus.Entry) error {
 	isTags := map[string]*imagev1.ImageStreamTag{}
 	for clusterName, client := range r.registryClients {
-		*log = *log.WithField("clusterName", clusterName)
+		log = log.WithField("clusterName", clusterName)
 		imageStreamTag := &imagev1.ImageStreamTag{}
-		if err := client.Get(r.ctx, req.NamespacedName, imageStreamTag); err != nil {
+		if err := client.Get(ctx, req.NamespacedName, imageStreamTag); err != nil {
 			if apierrors.IsNotFound(err) {
 				log.Debug("Source imageStreamTag not found")
 				continue
@@ -148,7 +146,7 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 	imageStreamName, imageTag := imageStreamNameAndTag[0], imageStreamNameAndTag[1]
 	isName := types.NamespacedName{Namespace: req.Namespace, Name: imageStreamName}
 	sourceImageStream := &imagev1.ImageStream{}
-	if err := r.registryClients[srcClusterName].Get(r.ctx, isName, sourceImageStream); err != nil {
+	if err := r.registryClients[srcClusterName].Get(ctx, isName, sourceImageStream); err != nil {
 		// received a request on the isTag, but the 'is' is no longer there
 		return fmt.Errorf("failed to get imageStream %s from registry cluster: %w", isName.String(), err)
 	}
@@ -159,11 +157,11 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 		if clusterName == srcClusterName {
 			continue
 		}
-		if err := client.Get(r.ctx, types.NamespacedName{Name: req.Namespace}, &corev1.Namespace{}); err != nil {
+		if err := client.Get(ctx, types.NamespacedName{Name: req.Namespace}, &corev1.Namespace{}); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return fmt.Errorf("failed to check if namespace %s exists: %w", req.Namespace, err)
 			}
-			if err := client.Create(r.ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
+			if err := client.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 				Name:        req.Namespace,
 				Annotations: map[string]string{annotationDPTPRequester: ControllerName},
 			}}); err != nil && !apierrors.IsAlreadyExists(err) {
@@ -171,7 +169,7 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 			}
 		}
 
-		if err := r.ensureImageStream(sourceImageStream, client, log); err != nil {
+		if err := r.ensureImageStream(ctx, sourceImageStream, client, log); err != nil {
 			return fmt.Errorf("failed to ensure imagestream: %w", err)
 		}
 
@@ -181,7 +179,7 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 			return nil
 		}
 
-		if err := r.ensureImagePullSecret(req.Namespace, client, log); err != nil {
+		if err := r.ensureImagePullSecret(ctx, req.Namespace, client, log); err != nil {
 			return fmt.Errorf("failed to ensure imagePullSecret: %w", err)
 		}
 		imageName, err := publicDomainForImage(srcClusterName, sourceImageStreamTag.Image.DockerImageReference)
@@ -211,7 +209,7 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 
 		*log = *log.WithField("imageStreamImport.Namespace", imageStreamImport.Namespace).WithField("imageStreamImport.Name", imageStreamImport.Name)
 		log.Debug("creating imageStreamImport")
-		if err := createAndCheckStatus(r.ctx, client, imageStreamImport); err != nil {
+		if err := createAndCheckStatus(ctx, client, imageStreamImport); err != nil {
 			controllerutil.CountImportResult(ControllerName, clusterName, req.Namespace, false)
 			return fmt.Errorf("failed to create and check the status for imageStreamImport %v : %w", imageStreamImport, err)
 		}
@@ -251,9 +249,9 @@ func findNewest(isTags map[string]*imagev1.ImageStreamTag) string {
 
 const pullSecretName = "registry-cluster-pull-secret"
 
-func (r *reconciler) ensureImagePullSecret(namespace string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
+func (r *reconciler) ensureImagePullSecret(ctx context.Context, namespace string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
 	secret, mutateFn := r.pullSecret(namespace)
-	return upsertObject(r.ctx, client, secret, mutateFn, log)
+	return upsertObject(ctx, client, secret, mutateFn, log)
 }
 
 // https://issues.redhat.com/browse/DPTP-1656?focusedCommentId=15345756&page=com.atlassian.jira.plugin.system.issuetabpanels%3Acomment-tabpanel#comment-15345756
@@ -286,9 +284,9 @@ func imagestream(imageStream *imagev1.ImageStream) (*imagev1.ImageStream, crcont
 	}
 }
 
-func (r *reconciler) ensureImageStream(imageStream *imagev1.ImageStream, client ctrlruntimeclient.Client, log *logrus.Entry) error {
+func (r *reconciler) ensureImageStream(ctx context.Context, imageStream *imagev1.ImageStream, client ctrlruntimeclient.Client, log *logrus.Entry) error {
 	stream, mutateFn := imagestream(imageStream)
-	return upsertObject(r.ctx, client, stream, mutateFn, log)
+	return upsertObject(ctx, client, stream, mutateFn, log)
 }
 
 func (r *reconciler) pullSecret(namespace string) (*corev1.Secret, crcontrollerutil.MutateFn) {

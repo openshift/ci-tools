@@ -33,6 +33,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/controller/secretsyncer"
 	secretsyncerconfig "github.com/openshift/ci-tools/pkg/controller/secretsyncer/config"
 	testimagesdistributor "github.com/openshift/ci-tools/pkg/controller/test-images-distributor"
+	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/util"
 )
@@ -389,6 +390,13 @@ func main() {
 			continue
 		}
 		allClustersExceptAPICI[cluster] = manager
+	}
+
+	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) ||
+		opts.enabledControllersSet.Has(registrysyncer.ControllerName) {
+		if err := controllerutil.RegisterMetrics(); err != nil {
+			logrus.WithError(err).Fatal("failed to register metrics")
+		}
 	}
 
 	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) {

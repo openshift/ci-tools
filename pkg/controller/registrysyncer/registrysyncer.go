@@ -211,10 +211,11 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 
 		*log = *log.WithField("imageStreamImport.Namespace", imageStreamImport.Namespace).WithField("imageStreamImport.Name", imageStreamImport.Name)
 		log.Debug("creating imageStreamImport")
-		// TODO (hongkliu): Add metrics for recording the results
 		if err := createAndCheckStatus(r.ctx, client, imageStreamImport); err != nil {
+			controllerutil.CountImportResult(ControllerName, clusterName, req.Namespace, false)
 			return fmt.Errorf("failed to create and check the status for imageStreamImport %v : %w", imageStreamImport, err)
 		}
+		controllerutil.CountImportResult(ControllerName, clusterName, req.Namespace, true)
 		log.Debug("Imported successfully")
 	}
 	return nil

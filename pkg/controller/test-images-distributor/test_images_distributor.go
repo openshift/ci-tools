@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
@@ -19,7 +18,6 @@ import (
 	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -49,32 +47,13 @@ func AddToManager(mgr manager.Manager,
 ) error {
 	log := logrus.WithField("controller", ControllerName)
 
-	successfulImportsCounter := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: ControllerName,
-		Name:      "imagestream_successful_import_count",
-		Help:      "The number of imagestream imports the controller created succesfull",
-	}, []string{"cluster", "namespace"})
-	if err := metrics.Registry.Register(successfulImportsCounter); err != nil {
-		return fmt.Errorf("failed to register successfulImportsCounter metric: %w", err)
-	}
-	failedImportsCounter := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: ControllerName,
-		Name:      "imagestream_failed_import_count",
-		Help:      "The number of failed imagestream imports the controller create",
-	}, []string{"cluster", "namespace"})
-	if err := metrics.Registry.Register(failedImportsCounter); err != nil {
-		return fmt.Errorf("failed to register failedImportsCounter metric: %w", err)
-	}
-
 	r := &reconciler{
-		ctx:                      context.Background(),
-		log:                      log,
-		registryClient:           imagestreamtagwrapper.MustNew(registryManager.GetClient(), registryManager.GetCache()),
-		buildClusterClients:      map[string]ctrlruntimeclient.Client{},
-		pullSecretGetter:         pullSecretGetter,
-		successfulImportsCounter: successfulImportsCounter,
-		failedImportsCounter:     failedImportsCounter,
-		forbiddenRegistries:      forbiddenRegistries,
+		ctx:                 context.Background(),
+		log:                 log,
+		registryClient:      imagestreamtagwrapper.MustNew(registryManager.GetClient(), registryManager.GetCache()),
+		buildClusterClients: map[string]ctrlruntimeclient.Client{},
+		pullSecretGetter:    pullSecretGetter,
+		forbiddenRegistries: forbiddenRegistries,
 	}
 	c, err := controller.New(ControllerName, mgr, controller.Options{
 		Reconciler: r,
@@ -174,14 +153,12 @@ func decodeRequest(req reconcile.Request) (string, types.NamespacedName, error) 
 }
 
 type reconciler struct {
-	ctx                      context.Context
-	log                      *logrus.Entry
-	registryClient           ctrlruntimeclient.Client
-	buildClusterClients      map[string]ctrlruntimeclient.Client
-	pullSecretGetter         func() []byte
-	successfulImportsCounter *prometheus.CounterVec
-	failedImportsCounter     *prometheus.CounterVec
-	forbiddenRegistries      sets.String
+	ctx                 context.Context
+	log                 *logrus.Entry
+	registryClient      ctrlruntimeclient.Client
+	buildClusterClients map[string]ctrlruntimeclient.Client
+	pullSecretGetter    func() []byte
+	forbiddenRegistries sets.String
 }
 
 func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
@@ -291,7 +268,7 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 
 	// ImageStreamImport is not an ordinary api but a virtual one that does the import synchronously
 	if err := client.Create(r.ctx, imageStreamImport); err != nil {
-		r.failedImportsCounter.WithLabelValues(cluster, decoded.Namespace).Inc()
+		controllerutil.CountImportResult(ControllerName, cluster, decoded.Namespace, false)
 		return fmt.Errorf("failed to import Image: %w", err)
 	}
 
@@ -303,7 +280,7 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 		return fmt.Errorf("imageStreamImport did not succeed: reason: %s, message: %s", imageStreamImport.Status.Images[0].Status.Reason, imageStreamImport.Status.Images[0].Status.Message)
 	}
 
-	r.successfulImportsCounter.WithLabelValues(cluster, decoded.Namespace).Inc()
+	controllerutil.CountImportResult(ControllerName, cluster, decoded.Namespace, true)
 
 	log.Debug("Imported successfully")
 	return nil

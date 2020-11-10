@@ -749,11 +749,11 @@ func (o *options) initializeNamespace() error {
 	if err != nil {
 		return fmt.Errorf("could not get project client for cluster config: %w", err)
 	}
-	client, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{})
+	nonNamespacedClient, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{})
 	if err != nil {
 		return fmt.Errorf("failed to construct client: %w", err)
 	}
-	client = namespacewrapper.New(client, o.namespace)
+	client := namespacewrapper.New(nonNamespacedClient, o.namespace)
 	ctx := context.Background()
 
 	log.Printf("Creating namespace %s", o.namespace)
@@ -790,6 +790,29 @@ func (o *options) initializeNamespace() error {
 			continue
 		}
 		break
+	}
+
+	var selfSubjectAccessReviewSucceeded bool
+	for i := 0; i < 30; i++ {
+		sar := &authapi.SelfSubjectAccessReview{Spec: authapi.SelfSubjectAccessReviewSpec{ResourceAttributes: &authapi.ResourceAttributes{
+			Namespace: o.namespace,
+			Verb:      "create",
+			Resource:  "rolebindings",
+		}}}
+		if err := nonNamespacedClient.Create(ctx, sar); err != nil {
+			log.Printf("Warning: failed to create SelfSubjectAccessReview: %v\n", err)
+			continue
+		}
+		if sar.Status.Allowed {
+			selfSubjectAccessReviewSucceeded = true
+			break
+		}
+		log.Printf("[%d/30] RBAC in namespace not yet ready, sleeping for a second...\n", i)
+		time.Sleep(time.Second)
+	}
+	if !selfSubjectAccessReviewSucceeded {
+		log.Println("ERROR: timed out waiting for RBAC")
+		return errors.New("timed out waiting for RBAC")
 	}
 
 	if o.givePrAuthorAccessToNamespace {

@@ -30,4 +30,9 @@ cp "${inputs}/blockered-allowlist.yaml" "${allowlist}"
 os::cmd::expect_success "template-deprecator --prow-jobs-dir ${inputs}/jobs --prow-config-path ${inputs}/config.yaml --prow-plugin-config-path ${inputs}/plugins.yaml --allowlist-path ${allowlist}"
 os::integration::compare "${allowlist}" "${suite_dir}/expected/blockered-allowlist.yaml"
 
+# this invocation should prune old jobs from the allowlist
+cp "${inputs}/to-be-pruned-allowlist.yaml" "${allowlist}"
+os::cmd::expect_success "template-deprecator --prune=true --prow-jobs-dir ${inputs}/jobs --prow-config-path ${inputs}/config.yaml --prow-plugin-config-path ${inputs}/plugins.yaml --allowlist-path ${allowlist}"
+os::integration::compare "${allowlist}" "${suite_dir}/expected/blockered-allowlist.yaml"
+
 os::test::junit::declare_suite_end

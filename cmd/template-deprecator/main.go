@@ -18,6 +18,7 @@ type options struct {
 	prowConfigPath       string
 	prowPluginConfigPath string
 	allowlistPath        string
+	prune                bool
 
 	help bool
 }
@@ -29,6 +30,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.StringVar(&opt.prowConfigPath, "prow-config-path", "", "Path to the Prow configuration file")
 	fs.StringVar(&opt.prowPluginConfigPath, "prow-plugin-config-path", "", "Path to the Prow plugin configuration file")
 	fs.StringVar(&opt.allowlistPath, "allowlist-path", "", "Path to template deprecation allowlist")
+	fs.BoolVar(&opt.prune, "prune", false, "If set, remove from allowlist all jobs that either no longer exist or no longer use a template")
 
 	return opt
 }
@@ -79,6 +81,10 @@ func main() {
 
 	enforcer.LoadTemplates(pluginCfg)
 	enforcer.ProcessJobs(prowCfg)
+
+	if opt.prune {
+		enforcer.Prune()
+	}
 
 	if err := enforcer.SaveAllowlist(opt.allowlistPath); err != nil {
 		logrus.WithError(err).Fatal("Failed to save template deprecation allowlist")

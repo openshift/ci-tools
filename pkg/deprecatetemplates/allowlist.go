@@ -36,6 +36,12 @@ func getKind(job config.JobBase) string {
 }
 
 type blockedJob struct {
+	// unexported field so it is never serialized and it is `false` by default on
+	// read. We touch this field when we process jobs so that we know this is a
+	// still existing job, so that we can recognize nonexistent jobs later and remove
+	// them
+	current bool
+
 	Generated bool   `json:"generated"`
 	Kind      string `json:"kind"`
 }
@@ -49,6 +55,7 @@ func (b blockedJobs) Has(job config.JobBase) bool {
 
 func (b blockedJobs) Insert(job config.JobBase) {
 	b[job.Name] = blockedJob{
+		current:   true,
 		Generated: prowgen.IsGenerated(job),
 		Kind:      getKind(job),
 	}
@@ -77,21 +84,59 @@ type deprecatedTemplate struct {
 }
 
 func (d deprecatedTemplate) insert(job config.JobBase) {
+	var knownBlocker bool
 	for _, blocker := range d.Blockers {
 		if blocker.Jobs.Has(job) {
-			return
+			// we need to insert to mark the job as 'current' so it is not pruned later
+			// we need to do this for each blocker where this job is listed
+			blocker.Jobs.Insert(job)
+			knownBlocker = true
 		}
 	}
+	if knownBlocker {
+		return
+	}
 	d.UnknownBlocker.Jobs.Insert(job)
+}
+
+// prune removes all jobs that were not inserted into the allowlist by this
+// execution
+func (d *deprecatedTemplate) prune() {
+	for key, blocker := range d.Blockers {
+		for name, job := range blocker.Jobs {
+			if !job.current {
+				delete(d.Blockers[key].Jobs, name)
+			}
+		}
+		if len(blocker.Jobs) == 0 {
+			delete(d.Blockers, key)
+		}
+	}
+	if len(d.Blockers) == 0 {
+		d.Blockers = nil
+	}
+
+	for name, job := range d.UnknownBlocker.Jobs {
+		if !job.current {
+			delete(d.UnknownBlocker.Jobs, name)
+		}
+	}
 }
 
 type Allowlist interface {
 	Insert(job config.JobBase, template string)
 	Save(path string) error
+	Prune()
 }
 
 type allowlist struct {
 	Templates map[string]deprecatedTemplate `json:"templates"`
+}
+
+func (a *allowlist) Prune() {
+	for _, template := range a.Templates {
+		template.prune()
+	}
 }
 
 func (a *allowlist) Insert(job config.JobBase, template string) {

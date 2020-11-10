@@ -706,6 +706,109 @@ func WebRegHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent) 
 	}
 }
 
+// multiLineHighlightJS allows to append -$NUMBER to one of the line anchors
+// (e.G. `#line18-20`) and will then highlight all the lines.
+const multiLineHighlightJS = `<script>
+function getLinesToHighlight() {
+  let result = [];
+  let url = window.location.href;
+  let anchorSplitUrl = url.split("#");
+  // No results
+  if (anchorSplitUrl.length < 2) {
+    return result;
+  }
+
+  sourceDestSplit = anchorSplitUrl[1].split("-");
+  result.push(sourceDestSplit[0]);
+
+  // Only a start
+  if (sourceDestSplit.length === 1) {
+    return result;
+  }
+
+  let identifierNumberRe = /([a-z]*)(\d+)/;
+  sourceMatches = identifierNumberRe.exec(sourceDestSplit[0]);
+  if (sourceMatches.length != 3) {
+    return result;
+  }
+  destMatches = identifierNumberRe.exec(sourceDestSplit[1]);
+  if (destMatches.length != 3) {
+    return result;
+  }
+  prefix = sourceMatches[1];
+  startNumber = sourceMatches[2];
+  endNumber = destMatches[2];
+
+  result.pop();
+  for (i = startNumber; i <= endNumber; i++){
+    result.push(prefix + i);
+  }
+
+  return result;
+}
+
+function highlightLines() {
+
+  toHighlight = getLinesToHighlight();
+  if (toHighlight.length < 1){
+    return;
+  }
+
+  // Prevent hotlooping, the location replacements triggers the script again.
+  // * Case one: We redirected to set the anchor, local storage allows us to
+  //   differentiate that from a user action.
+  if (toHighlight.length < 2 && localStorage["highlightLines_redirect"] === true) {
+    localStorage["highlightLines_redirect"] = false;
+    return;
+  };
+  // * Case two: Local storage tells us a different incarnation of us already took care
+  //   We can not reset the state store, because all mutations call us again. Our previous
+  //   instance will do this after a sleep.
+  if (window["localStorage"]["highlightLines"] === toHighlight.toString()){
+    return;
+  }
+
+  // Reset everything, won't work if we don't have at least one line to highlight
+  allLines = document.getElementsByClassName(document.getElementById(toHighlight[0]).className);
+  for (line of allLines){
+    element = document.getElementById(line.id);
+    element.style.color = "";
+    element.style.backgroundColor = "";
+  }
+
+  let color = "";
+  let backgroundColor = "";
+  originalURL = window.location.href;
+  toHighlight.forEach(function(id){
+    if (color === ""){
+      localStorage["highlightLines_redirect"] = true;
+      location.replace("#" + id);
+      element = document.getElementById(id);
+      targetClass = document.querySelector("." + element.className + ":target");
+      style = getComputedStyle(targetClass);
+      color = style.color;
+      backgroundColor = style.backgroundColor;
+    };
+
+    element = document.getElementById(id);
+    element.style.color = color;
+    element.style.backgroundColor = backgroundColor;
+  });
+
+  window["localStorage"]["highlightLines"] = toHighlight.toString();
+  location.replace(originalURL);
+
+  // Sleep one second, then reset the state store
+	window.setTimeout(function() {
+    window.localStorage.highlightLines = null;
+  }, 1000);
+}
+
+highlightLines();
+window.onhashchange = highlightLines;
+</script>
+`
+
 func syntax(source string, lexer chroma.Lexer) (string, error) {
 	var output bytes.Buffer
 	style := styles.Get("dracula")
@@ -723,6 +826,7 @@ func syntax(source string, lexer chroma.Lexer) (string, error) {
 	if err := formatter.Format(&output, style, iterator); err != nil {
 		return "", err
 	}
+	output.WriteString(multiLineHighlightJS)
 	return output.String(), nil
 }
 

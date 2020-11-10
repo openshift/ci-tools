@@ -12,7 +12,6 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	utilpointer "k8s.io/utils/pointer"
@@ -154,7 +153,7 @@ type creatingClientWithCallBack struct {
 	ctrlruntimeclient.Client
 }
 
-func (c *creatingClientWithCallBack) Create(ctx context.Context, obj runtime.Object, opts ...ctrlruntimeclient.CreateOption) error {
+func (c *creatingClientWithCallBack) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
 	c.callback()
 	return c.Client.Create(ctx, obj, opts...)
 }

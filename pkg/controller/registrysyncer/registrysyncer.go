@@ -362,7 +362,7 @@ func domainForClusterName(ClusterName string) (string, error) {
 	return "", fmt.Errorf("failed to get the domain for cluster %s", ClusterName)
 }
 
-func upsertObject(ctx context.Context, c ctrlruntimeclient.Client, obj crcontrollerutil.Object, mutateFn crcontrollerutil.MutateFn, log *logrus.Entry) error {
+func upsertObject(ctx context.Context, c ctrlruntimeclient.Client, obj ctrlruntimeclient.Object, mutateFn crcontrollerutil.MutateFn, log *logrus.Entry) error {
 	// Create log here in case the operation fails and the obj is nil
 	log = log.WithFields(logrus.Fields{"namespace": obj.GetNamespace(), "name": obj.GetName(), "type": fmt.Sprintf("%T", obj)})
 	result, err := crcontrollerutil.CreateOrUpdate(ctx, c, obj, mutateFn)

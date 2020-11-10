@@ -515,7 +515,7 @@ func publicURLForImage(potentiallyPrivate string) string {
 	return strings.ReplaceAll(potentiallyPrivate, "docker-registry.default.svc:5000", api.DomainForService(api.ServiceRegistry))
 }
 
-func upsertObject(ctx context.Context, c ctrlruntimeclient.Client, obj crcontrollerutil.Object, mutateFn crcontrollerutil.MutateFn, log *logrus.Entry) error {
+func upsertObject(ctx context.Context, c ctrlruntimeclient.Client, obj ctrlruntimeclient.Object, mutateFn crcontrollerutil.MutateFn, log *logrus.Entry) error {
 	// Create log here in case the operation fails and the obj is nil
 	log = log.WithFields(logrus.Fields{"namespace": obj.GetNamespace(), "name": obj.GetName(), "type": fmt.Sprintf("%T", obj)})
 	result, err := crcontrollerutil.CreateOrUpdate(ctx, c, obj, mutateFn)

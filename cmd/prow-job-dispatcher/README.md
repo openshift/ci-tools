@@ -24,3 +24,5 @@ buildFarm:
 ```
 
 The tool `sanitize-prow-jobs` will then use the stored information to generate the `cluster` field of the Prow jobs.
+
+We can use [run-prow-job-dispatcher.sh](../../hack/run-prow-job-dispatcher.sh) to build and run the tool locally.

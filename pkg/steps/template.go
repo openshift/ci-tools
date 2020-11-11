@@ -123,13 +123,13 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 	}()
 
 	log.Printf("Creating or restarting template instance")
-	_, err := createOrRestartTemplateInstance(s.client, s.podClient.Pods(s.jobSpec.Namespace()), instance)
+	_, err := createOrRestartTemplateInstance(ctrlruntimeclient.NewNamespacedClient(s.client, s.jobSpec.Namespace()), s.podClient.Pods(s.jobSpec.Namespace()), instance)
 	if err != nil {
 		return fmt.Errorf("could not create or restart template instance: %w", err)
 	}
 
 	log.Printf("Waiting for template instance to be ready")
-	instance, err = waitForTemplateInstanceReady(s.client, s.template.Name)
+	instance, err = waitForTemplateInstanceReady(ctrlruntimeclient.NewNamespacedClient(s.client, s.jobSpec.Namespace()), s.template.Name)
 	if err != nil {
 		return fmt.Errorf("could not wait for template instance to be ready: %w", err)
 	}

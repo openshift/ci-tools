@@ -538,7 +538,7 @@ func ensureImageStreamTags(ctx context.Context, client ctrlruntimeclient.Client,
 				istLog.Info("ImageStreamTag already exists in the build cluster")
 				return nil
 			}
-			if !apierrors.IsNotFound(err) {
+			if !apierrors.IsNotFound(err) && !apierrors.IsForbidden(err) {
 				return fmt.Errorf("failed to check if imagestreamtag %s exists: %w", requiredImageStreamTag, err)
 			}
 			istImport := &testimagestreamtagimportv1.TestImageStreamTagImport{

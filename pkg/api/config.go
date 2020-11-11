@@ -514,11 +514,6 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		needsReleaseRpms = true
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
-	if testConfig := test.OpenshiftAnsibleUpgradeClusterTestConfiguration; testConfig != nil {
-		typeCount++
-		needsReleaseRpms = true
-		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
-	}
 	if testConfig := test.OpenshiftInstallerClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
@@ -532,10 +527,6 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerUPISrcClusterTestConfiguration; testConfig != nil {
-		typeCount++
-		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
-	}
-	if testConfig := test.OpenshiftInstallerConsoleClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}

@@ -90,7 +90,7 @@ func newSource() (Enqueuer, source.Source) {
 }
 
 func orcbToEvent(orbc OrgRepoBranchCommit) event.GenericEvent {
-	// The object type is irrelvant for us but we need to fullfil the client.Object interface
+	// The object type is irrelvant for us but we need to fulfill the client.Object interface
 	return event.GenericEvent{Object: &prowv1.ProwJob{ObjectMeta: metav1.ObjectMeta{
 		Name: fmt.Sprintf("%s|%s|%s|%s", orbc.Org, orbc.Repo, orbc.Branch, orbc.Commit),
 	}}}

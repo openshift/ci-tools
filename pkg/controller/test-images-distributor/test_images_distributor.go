@@ -175,7 +175,8 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		return fmt.Errorf("failed to decode request %s: %w", req, err)
 	}
 
-	log = log.WithField("cluster", cluster)
+	// Propagate the cluster field back up
+	*log = *log.WithField("cluster", cluster)
 
 	// Fail asap if we cannot reconcile this
 	client, ok := r.buildClusterClients[cluster]

@@ -239,7 +239,7 @@ func TestReconcile(t *testing.T) {
 				Name:      "applyconfig:latest",
 				Namespace: "ci",
 			},
-			apiCIClient: fakeclient.NewFakeClient([]ctrlruntimeclient.Object{applyconfigISTag.DeepCopy()}...),
+			apiCIClient: fakeclient.NewFakeClient(applyconfigISTag.DeepCopy()),
 			appCIClient: fakeclient.NewFakeClient(),
 			expected:    fmt.Errorf("failed to get imageStream %s from registry cluster: %w", "ci/applyconfig", fmt.Errorf("imagestreams.image.openshift.io \"applyconfig\" not found")),
 		},
@@ -249,7 +249,7 @@ func TestReconcile(t *testing.T) {
 				Name:      "applyconfig:latest",
 				Namespace: "ci",
 			},
-			apiCIClient: fakeclient.NewFakeClient([]ctrlruntimeclient.Object{applyconfigISTag.DeepCopy(), applyconfigIS.DeepCopy()}...),
+			apiCIClient: fakeclient.NewFakeClient(applyconfigISTag.DeepCopy(), applyconfigIS.DeepCopy()),
 			appCIClient: bcc(fakeclient.NewFakeClient()),
 
 			verify: func(apiCIClient ctrlruntimeclient.Client, appCIClient ctrlruntimeclient.Client) error {

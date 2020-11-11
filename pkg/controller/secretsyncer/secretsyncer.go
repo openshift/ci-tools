@@ -72,8 +72,7 @@ func AddToManager(mgr manager.Manager,
 				requests = append(requests, requestForCluster(targetCluster, o.GetNamespace(), o.GetName()))
 			}
 			return requests
-		},
-		),
+		}),
 	); err != nil {
 		return fmt.Errorf("failed to create watch on reference cluster %s: %w", referenceClusterName, err)
 	}

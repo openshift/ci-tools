@@ -114,8 +114,8 @@ readonly -f os::integration::configresolver::wait_for_registry_update
 
 # os::integration::configresolver::check_log searches for errors in the log.
 function os::integration::configresolver::check_log() {
-    if grep -qE "level=(error|fatal)" "${LOG_DIR}/configresolver.log"; then
-        grep -E "level=(error|fatal)" "${LOG_DIR}/configresolver.log"
+    if cat ${LOG_DIR}/configresolver.log|grep -v 'Failed to initialize commentMap'|grep -qE "level=(error|fatal)"; then
+        cat ${LOG_DIR}/configresolver.log|grep -v 'Failed to initialize commentMap'|grep -E "level=(error|fatal)"
         os::log::fatal "Detected errors in the ci-operator-configresolver log!"
     fi
 }

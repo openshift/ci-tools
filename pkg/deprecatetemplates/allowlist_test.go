@@ -275,3 +275,73 @@ func TestAllowlistInsert(t *testing.T) {
 		})
 	}
 }
+
+func TestStatsFromJobs(t *testing.T) {
+	jobs := blockedJobs{
+		"1": blockedJob{Generated: false, Kind: "presubmit"},
+		"2": blockedJob{Generated: false, Kind: "presubmit"},
+		"3": blockedJob{Generated: true, Kind: "periodic"},
+		"4": blockedJob{Generated: true, Kind: "release"},
+		"5": blockedJob{Generated: false, Kind: "unknown"},
+	}
+	stats := statsFromJobs("name", "blocker", jobs)
+	expected := statsLine{
+		template:    "name",
+		blocker:     "blocker",
+		total:       5,
+		handcrafted: 3,
+		generated:   2,
+		presubmits:  2,
+		postsubmits: 0,
+		release:     1,
+		periodics:   1,
+		unknown:     1,
+	}
+	if diff := cmp.Diff(stats, expected, cmp.AllowUnexported(statsLine{})); diff != "" {
+		t.Errorf("stats differ from expected:\n%s", diff)
+	}
+}
+
+func TestAllowlistStats(t *testing.T) {
+	d := deprecatedTemplate{
+		Name: "template",
+		UnknownBlocker: deprecatedTemplateBlocker{
+			Jobs: map[string]blockedJob{
+				"1": {Generated: true, Kind: "presubmit"},
+				"2": {Generated: false, Kind: "presubmit"},
+			},
+		},
+		Blockers: map[string]deprecatedTemplateBlocker{
+			"blocker-1": {
+				Jobs: blockedJobs{
+					"3": {Generated: false, Kind: "periodic"},
+					"4": {Generated: false, Kind: "periodic"},
+					"5": {Generated: true, Kind: "release"},
+				},
+			},
+			"blocker-2": {
+				Jobs: blockedJobs{
+					"5": {Generated: true, Kind: "release"},
+					"6": {Generated: false, Kind: "unknown"},
+				},
+			},
+		},
+	}
+	expectedTotal := statsLine{template: "template", blocker: blockerColTotal, total: 6, handcrafted: 4, generated: 2, presubmits: 2, postsubmits: 0, release: 1, periodics: 2, unknown: 1}
+	expectedUnknown := statsLine{template: "template", blocker: blockerColUnknown, total: 2, handcrafted: 1, generated: 1, presubmits: 2}
+	expectedBlockers := []statsLine{
+		{template: "template", blocker: "blocker-1", total: 3, handcrafted: 2, generated: 1, periodics: 2, release: 1},
+		{template: "template", blocker: "blocker-2", total: 2, handcrafted: 1, generated: 1, release: 1, unknown: 1},
+	}
+	total, unknown, blockers := d.Stats()
+	allowunexported := cmp.AllowUnexported(statsLine{})
+	if diff := cmp.Diff(expectedTotal, total, allowunexported); diff != "" {
+		t.Errorf("Total stats differ from expected:\n%s", diff)
+	}
+	if diff := cmp.Diff(expectedUnknown, unknown, allowunexported); diff != "" {
+		t.Errorf("Unknown blocker stats differ from expected:\n%s", diff)
+	}
+	if diff := cmp.Diff(expectedBlockers, blockers, allowunexported); diff != "" {
+		t.Errorf("Blocker stats differ from expected:\n%s", diff)
+	}
+}

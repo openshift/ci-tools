@@ -3,6 +3,7 @@ package deprecatetemplates
 import (
 	"io/ioutil"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -17,6 +18,9 @@ import (
 const (
 	release = "release"
 	unknown = "unknown"
+
+	blockerColUnknown = "unknown"
+	blockerColTotal   = "total"
 )
 
 func getKind(job config.JobBase) string {
@@ -123,10 +127,78 @@ func (d *deprecatedTemplate) prune() {
 	}
 }
 
+type statsLine struct {
+	template string
+	blocker  string
+	total    int
+
+	handcrafted int
+	generated   int
+
+	presubmits  int
+	postsubmits int
+	release     int
+	periodics   int
+	unknown     int
+}
+
+func statsFromJobs(name, blocker string, jobs blockedJobs) statsLine {
+	stats := statsLine{
+		template: name,
+		blocker:  blocker,
+	}
+	for _, job := range jobs {
+		stats.total++
+
+		if job.Generated {
+			stats.generated++
+		} else {
+			stats.handcrafted++
+		}
+
+		switch job.Kind {
+		case "presubmit":
+			stats.presubmits++
+		case "postsubmit":
+			stats.postsubmits++
+		case "release":
+			stats.release++
+		case "periodic":
+			stats.periodics++
+		default:
+			stats.unknown++
+		}
+	}
+
+	return stats
+}
+
+func (d *deprecatedTemplate) Stats() (total, unknown statsLine, blockers []statsLine) {
+	allJobs := blockedJobs{}
+
+	unknown = statsFromJobs(d.Name, blockerColUnknown, d.UnknownBlocker.Jobs)
+	allJobs = allJobs.Union(d.UnknownBlocker.Jobs)
+
+	for jira, blocker := range d.Blockers {
+		blockerStats := statsFromJobs(d.Name, jira, blocker.Jobs)
+		blockers = append(blockers, blockerStats)
+		allJobs = allJobs.Union(blocker.Jobs)
+	}
+
+	sort.Slice(blockers, func(i, j int) bool {
+		return blockers[i].blocker < blockers[j].blocker
+	})
+
+	total = statsFromJobs(d.Name, blockerColTotal, allJobs)
+
+	return total, unknown, blockers
+}
+
 type Allowlist interface {
 	Insert(job config.JobBase, template string)
 	Save(path string) error
 	Prune()
+	GetTemplates() map[string]deprecatedTemplate
 }
 
 type allowlist struct {
@@ -148,7 +220,7 @@ func (a *allowlist) Insert(job config.JobBase, template string) {
 		a.Templates[template] = deprecatedTemplate{
 			Name: template,
 			UnknownBlocker: deprecatedTemplateBlocker{
-				Description: "unknown",
+				Description: blockerColUnknown,
 				Jobs:        blockedJobs{},
 			},
 		}
@@ -166,8 +238,7 @@ func loadAllowlist(allowlistPath string) (Allowlist, error) {
 	}
 
 	if err == nil {
-		err := yaml.Unmarshal(raw, &allowlist)
-		return &allowlist, err
+		return &allowlist, yaml.Unmarshal(raw, &allowlist)
 	}
 
 	logrus.Warn("template deprecation allowlist does not exist, will populate a new one")
@@ -185,4 +256,12 @@ func (a allowlist) Save(path string) error {
 	}
 
 	return nil
+}
+
+func (a *allowlist) GetTemplates() map[string]deprecatedTemplate {
+	t := map[string]deprecatedTemplate{}
+	for k, v := range a.Templates {
+		t[k] = v
+	}
+	return t
 }

@@ -2,6 +2,8 @@ package deprecatetemplates
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -85,4 +87,108 @@ func (e *Enforcer) SaveAllowlist(path string) error {
 
 func (e *Enforcer) Prune() {
 	e.allowlist.Prune()
+}
+
+func asLine(stats statsLine) []string {
+	return []string{
+		stats.template,
+		stats.blocker,
+		strconv.Itoa(stats.total),
+		strconv.Itoa(stats.generated),
+		strconv.Itoa(stats.handcrafted),
+		strconv.Itoa(stats.presubmits),
+		strconv.Itoa(stats.postsubmits),
+		strconv.Itoa(stats.release),
+		strconv.Itoa(stats.periodics),
+		strconv.Itoa(stats.unknown),
+	}
+}
+
+func blockerSortKey(blocker string) string {
+	// this determines sort order in stats when the numerical data are equal
+	// general idea is to have `total` always at the bottom, `unknown` above it
+	// and the actual blockers above it, sorted by the key
+	switch {
+	case blocker == blockerColTotal:
+		// pls dont laugh at me too hard
+		return "zzzzzzzzzz"
+	case blocker == blockerColUnknown:
+		return "yzzzzzzzzz"
+	}
+	return blocker
+}
+
+func (e *Enforcer) Stats() (header, footer []string, lines [][]string) {
+	header = []string{"Template", "Blocker", "Total", "Generated", "Handcrafted", "Presubmits", "Postsubmits", "Release", "Periodics", "Unknown"}
+	var data []statsLine
+	var sumTotal int
+	var sumGenerated int
+	var sumHandcrafted int
+	var sumPre int
+	var sumPost int
+	var sumRelease int
+	var sumPeriodics int
+	var sumUnknown int
+
+	totals := map[string]int{}
+	templates := e.allowlist.GetTemplates()
+	for name, template := range templates {
+		total, unknown, blockers := template.Stats()
+		totals[name] = total.total
+		data = append(data, total, unknown)
+		data = append(data, blockers...)
+
+		sumTotal += total.total
+		sumGenerated += total.generated
+		sumHandcrafted += total.handcrafted
+		sumPre += total.presubmits
+		sumPost += total.postsubmits
+		sumRelease += total.release
+		sumPeriodics += total.periodics
+		sumUnknown += total.unknown
+	}
+
+	sort.Slice(data, func(i, j int) bool {
+		switch {
+		// Primary sort by total jobs using this template
+		case totals[data[i].template] < totals[data[j].template]:
+			return true
+		case totals[data[j].template] < totals[data[i].template]:
+			return false
+		// Secondary sort by # of jobs using this template for a given blocker
+		case data[i].total < data[j].total:
+			return true
+		case data[j].total < data[i].total:
+			return false
+		// Tertiary sort by template name
+		case data[i].template < data[j].template:
+			return true
+		case data[j].template < data[i].template:
+			return false
+		// Last sort by blocker name
+		case blockerSortKey(data[i].blocker) < blockerSortKey(data[j].blocker):
+			return true
+		case blockerSortKey(data[j].blocker) < blockerSortKey(data[i].blocker):
+			return false
+		}
+		return false
+	})
+
+	for _, item := range data {
+		lines = append(lines, asLine(item))
+	}
+
+	footer = []string{
+		fmt.Sprintf("%d templates", len(templates)),
+		"Total",
+		strconv.Itoa(sumTotal),
+		strconv.Itoa(sumGenerated),
+		strconv.Itoa(sumHandcrafted),
+		strconv.Itoa(sumPre),
+		strconv.Itoa(sumPost),
+		strconv.Itoa(sumRelease),
+		strconv.Itoa(sumPeriodics),
+		strconv.Itoa(sumUnknown),
+	}
+	return header, footer, lines
 }

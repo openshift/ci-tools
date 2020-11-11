@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kataras/tablewriter"
 	"github.com/sirupsen/logrus"
 
 	prowconfig "k8s.io/test-infra/prow/config"
@@ -19,6 +20,7 @@ type options struct {
 	prowPluginConfigPath string
 	allowlistPath        string
 	prune                bool
+	printStats           bool
 
 	help bool
 }
@@ -31,6 +33,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.StringVar(&opt.prowPluginConfigPath, "prow-plugin-config-path", "", "Path to the Prow plugin configuration file")
 	fs.StringVar(&opt.allowlistPath, "allowlist-path", "", "Path to template deprecation allowlist")
 	fs.BoolVar(&opt.prune, "prune", false, "If set, remove from allowlist all jobs that either no longer exist or no longer use a template")
+	fs.BoolVar(&opt.printStats, "stats", false, "If true, print template usage stats")
 
 	return opt
 }
@@ -84,6 +87,15 @@ func main() {
 
 	if opt.prune {
 		enforcer.Prune()
+	}
+
+	if opt.printStats {
+		header, footer, data := enforcer.Stats()
+		table := tablewriter.NewWriter(os.Stdout)
+		table.SetHeader(header)
+		table.SetFooter(footer)
+		table.AppendBulk(data)
+		table.Render()
 	}
 
 	if err := enforcer.SaveAllowlist(opt.allowlistPath); err != nil {

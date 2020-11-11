@@ -15,6 +15,7 @@ func TestValidateTests(t *testing.T) {
 	for _, tc := range []struct {
 		id            string
 		release       *ReleaseTagConfiguration
+		releases      sets.String
 		tests         []TestStepConfiguration
 		resolved      bool
 		expectedValid bool
@@ -387,7 +388,7 @@ func TestValidateTests(t *testing.T) {
 		},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
-			if errs := validateTestStepConfiguration("tests", tc.tests, tc.release, tc.resolved); len(errs) > 0 && tc.expectedValid {
+			if errs := validateTestStepConfiguration("tests", tc.tests, tc.release, tc.releases, tc.resolved); len(errs) > 0 && tc.expectedValid {
 				t.Errorf("expected to be valid, got: %v", errs)
 			} else if !tc.expectedValid && len(errs) == 0 {
 				t.Error("expected to be invalid, but returned valid")
@@ -527,10 +528,11 @@ func TestValidateTestSteps(t *testing.T) {
 	asReference := "as"
 	yes := true
 	for _, tc := range []struct {
-		name  string
-		steps []TestStep
-		seen  sets.String
-		errs  []error
+		name     string
+		steps    []TestStep
+		seen     sets.String
+		errs     []error
+		releases sets.String
 	}{{
 		name: "valid step",
 		steps: []TestStep{{
@@ -687,6 +689,27 @@ func TestValidateTestSteps(t *testing.T) {
 		}},
 		errs: []error{errors.New("test[0].from: unknown imagestream 'no-such-imagestream'")},
 	}, {
+		name: "custom imagestream",
+		steps: []TestStep{{
+			LiteralTestStep: &LiteralTestStep{
+				As:        "as",
+				From:      "stable-previous:base",
+				Commands:  "commands",
+				Resources: resources},
+		}},
+		releases: sets.NewString("previous"),
+	}, {
+		name: "invalid image 4",
+		steps: []TestStep{{
+			LiteralTestStep: &LiteralTestStep{
+				As:        "as",
+				From:      "stable-nonexistent:base",
+				Commands:  "commands",
+				Resources: resources},
+		}},
+		releases: sets.NewString("previous"),
+		errs:     []error{errors.New("test[0].from: unknown imagestream 'stable-nonexistent'")},
+	}, {
 		name: "no commands",
 		steps: []TestStep{{
 			LiteralTestStep: &LiteralTestStep{
@@ -758,7 +781,7 @@ func TestValidateTestSteps(t *testing.T) {
 			if seen == nil {
 				seen = sets.NewString()
 			}
-			ret := validateTestStepsTest("test", tc.steps, seen, nil)
+			ret := validateTestStepsTest("test", tc.steps, seen, nil, tc.releases)
 			if !errListMessagesEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
 			}
@@ -773,10 +796,11 @@ func TestValidatePostSteps(t *testing.T) {
 	}
 	yes := true
 	for _, tc := range []struct {
-		name  string
-		steps []TestStep
-		seen  sets.String
-		errs  []error
+		name     string
+		steps    []TestStep
+		seen     sets.String
+		errs     []error
+		releases sets.String
 	}{{
 		name: "Valid Post steps",
 
@@ -794,7 +818,7 @@ func TestValidatePostSteps(t *testing.T) {
 			if seen == nil {
 				seen = sets.NewString()
 			}
-			ret := validateTestStepsPost("test", tc.steps, seen, nil)
+			ret := validateTestStepsPost("test", tc.steps, seen, nil, tc.releases)
 			if !errListMessagesEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
 			}
@@ -805,10 +829,11 @@ func TestValidatePostSteps(t *testing.T) {
 func TestValidateParameters(t *testing.T) {
 	defaultStr := "default"
 	for _, tc := range []struct {
-		name   string
-		params []StepParameter
-		env    TestEnvironment
-		err    []error
+		name     string
+		params   []StepParameter
+		env      TestEnvironment
+		err      []error
+		releases sets.String
 	}{{
 		name: "no parameters",
 	}, {
@@ -834,7 +859,7 @@ func TestValidateParameters(t *testing.T) {
 					Limits:   ResourceList{"memory": "1m"},
 				},
 				Environment: tc.params,
-			}, sets.NewString(), tc.env)
+			}, sets.NewString(), tc.env, tc.releases)
 			if diff := diff.ObjectReflectDiff(err, tc.err); diff != "<no diffs>" {
 				t.Errorf("incorrect error: %s", diff)
 			}

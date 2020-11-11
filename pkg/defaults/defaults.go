@@ -47,18 +47,7 @@ func FromConfig(
 	cloneAuthConfig *steps.CloneAuthConfig,
 	pullSecret, pushSecret *coreapi.Secret,
 ) ([]api.Step, []api.Step, error) {
-	requiredNames := sets.NewString()
-	for _, target := range requiredTargets {
-		requiredNames.Insert(target)
-	}
-
-	var buildClient steps.BuildClient
-	var templateClient steps.TemplateClient
-	var podClient steps.PodClient
-	var client ctrlruntimeclient.Client
-
-	var err error
-	client, err = ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
+	client, err := ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to construct client: %w", err)
 	}
@@ -66,22 +55,43 @@ func FromConfig(
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not get build client for cluster config: %w", err)
 	}
-	buildClient = steps.NewBuildClient(client, buildGetter.RESTClient())
+	buildClient := steps.NewBuildClient(client, buildGetter.RESTClient())
 
 	templateGetter, err := templateclientset.NewForConfig(clusterConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not get template client for cluster config: %w", err)
 	}
-	templateClient = steps.NewTemplateClient(client, templateGetter.RESTClient())
+	templateClient := steps.NewTemplateClient(client, templateGetter.RESTClient())
 
 	coreGetter, err := coreclientset.NewForConfig(clusterConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not get core client for cluster config: %w", err)
 	}
 
-	podClient = steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
+	podClient := steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
+	return fromConfig(config, jobSpec, templates, paramFile, artifactDir, promote, client, buildClient, templateClient, podClient, leaseClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters())
+}
 
-	params := api.NewDeferredParameters()
+func fromConfig(
+	config *api.ReleaseBuildConfiguration,
+	jobSpec *api.JobSpec,
+	templates []*templateapi.Template,
+	paramFile, artifactDir string,
+	promote bool,
+	client ctrlruntimeclient.Client,
+	buildClient steps.BuildClient,
+	templateClient steps.TemplateClient,
+	podClient steps.PodClient,
+	leaseClient *lease.Client,
+	requiredTargets []string,
+	cloneAuthConfig *steps.CloneAuthConfig,
+	pullSecret, pushSecret *coreapi.Secret,
+	params *api.DeferredParameters,
+) ([]api.Step, []api.Step, error) {
+	requiredNames := sets.NewString()
+	for _, target := range requiredTargets {
+		requiredNames.Insert(target)
+	}
 	params.Add("JOB_NAME", func() (string, error) { return jobSpec.Job, nil })
 	params.Add("JOB_NAME_HASH", func() (string, error) { return jobSpec.JobNameHash(), nil })
 	params.Add("JOB_NAME_SAFE", func() (string, error) { return strings.Replace(jobSpec.Job, "_", "-", -1), nil })

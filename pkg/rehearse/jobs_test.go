@@ -697,7 +697,7 @@ func TestWaitForJobs(t *testing.T) {
 	testCases := []struct {
 		id      string
 		pjs     sets.String
-		events  []ctrlruntimeclient.Object
+		events  []runtime.Object
 		success bool
 		err     error
 	}{{
@@ -707,11 +707,11 @@ func TestWaitForJobs(t *testing.T) {
 		id:      "one successful job",
 		success: true,
 		pjs:     sets.NewString("success0"),
-		events:  []ctrlruntimeclient.Object{&pjSuccess0},
+		events:  []runtime.Object{&pjSuccess0},
 	}, {
 		id:  "mixed states",
 		pjs: sets.NewString("failure", "success0", "aborted", "error"),
-		events: []ctrlruntimeclient.Object{
+		events: []runtime.Object{
 			&pjFailure, &pjPending, &pjSuccess0,
 			&pjTriggered, &pjAborted, &pjError,
 		},
@@ -719,16 +719,16 @@ func TestWaitForJobs(t *testing.T) {
 		id:      "ignored states",
 		success: true,
 		pjs:     sets.NewString("success0"),
-		events:  []ctrlruntimeclient.Object{&pjPending, &pjSuccess0, &pjTriggered},
+		events:  []runtime.Object{&pjPending, &pjSuccess0, &pjTriggered},
 	}, {
 		id:      "not watched",
 		success: true,
 		pjs:     sets.NewString("success1"),
-		events:  []ctrlruntimeclient.Object{&pjSuccess0, &pjFailure, &pjSuccess1},
+		events:  []runtime.Object{&pjSuccess0, &pjFailure, &pjSuccess1},
 	}, {
 		id:     "not watched failure",
 		pjs:    sets.NewString("failure"),
-		events: []ctrlruntimeclient.Object{&pjSuccess0, &pjFailure},
+		events: []runtime.Object{&pjSuccess0, &pjFailure},
 	}}
 	for idx := range testCases {
 		tc := testCases[idx]
@@ -1148,7 +1148,7 @@ func TestVariantFromLabels(t *testing.T) {
 	}
 }
 
-func newTC(initObjs ...ctrlruntimeclient.Object) *tc {
+func newTC(initObjs ...runtime.Object) *tc {
 	return &tc{Client: fakectrlruntimeclient.NewFakeClient(initObjs...)}
 }
 

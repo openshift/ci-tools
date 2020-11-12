@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -87,14 +88,14 @@ func TestOutputImageStep(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		input []ctrlruntimeclient.Object
+		input []runtime.Object
 
 		execSpecification      executionExpectation
 		expectedImageStreamTag *imagev1.ImageStreamTag
 	}{
 		{
 			name: "image stream exists and creates new image stream",
-			input: []ctrlruntimeclient.Object{
+			input: []runtime.Object{
 				outputImageStream,
 				pipelineRoot,
 			},
@@ -107,7 +108,7 @@ func TestOutputImageStep(t *testing.T) {
 		},
 		{
 			name: "image stream and desired image stream tag exists",
-			input: []ctrlruntimeclient.Object{
+			input: []runtime.Object{
 				outputImageStream,
 				pipelineRoot,
 				outputImageStreamTag,

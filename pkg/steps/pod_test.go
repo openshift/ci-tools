@@ -98,8 +98,8 @@ func TestPodStepExecution(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.purpose, func(t *testing.T) {
-			ps, _, client := preparePodStep(t, namespace)
-			client.Client = &podStatusChangingClient{Client: client.Client, dest: tc.podStatus}
+			ps, _, _ := preparePodStep(t, namespace)
+			ps.client = &podClient{Client: &podStatusChangingClient{Client: fakectrlruntimeclient.NewFakeClient(), dest: tc.podStatus}}
 
 			executionExpectation := executionExpectation{
 				prerun: doneExpectation{
@@ -116,7 +116,7 @@ func TestPodStepExecution(t *testing.T) {
 			executeStep(t, ps, executionExpectation, nil)
 
 			pod := &corev1.Pod{}
-			if err := client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: ps.Name()}, pod); err != nil {
+			if err := ps.client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: ps.Name()}, pod); err != nil {
 				t.Fatalf("failed to get pod: %v", err)
 			}
 			testhelper.CompareWithFixture(t, pod)
@@ -224,5 +224,5 @@ func (ps *podStatusChangingClient) Create(ctx context.Context, o runtime.Object,
 	if pod, ok := o.(*corev1.Pod); ok {
 		pod.Status.Phase = ps.dest
 	}
-	return ps.Create(ctx, o, opts...)
+	return ps.Client.Create(ctx, o, opts...)
 }

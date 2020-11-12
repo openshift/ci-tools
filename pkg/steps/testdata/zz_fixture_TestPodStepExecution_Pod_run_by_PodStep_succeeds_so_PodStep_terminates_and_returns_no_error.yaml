@@ -60,4 +60,5 @@ spec:
     resources: {}
     terminationMessagePolicy: FallbackToLogsOnError
   restartPolicy: Never
-status: {}
+status:
+  phase: Succeeded

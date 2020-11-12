@@ -16,7 +16,7 @@ limitations under the License.
 package main
 
 import (
-	"github.com/coreydaley-redhat/osgoimports/cmd"
+	"github.com/coreydaley/openshift-goimports/cmd"
 )
 
 func main() {

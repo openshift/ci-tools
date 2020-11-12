@@ -99,7 +99,7 @@ func addSpaces(r io.Reader, breaks []string) ([]byte, error) {
 }
 
 // Format takes a channel of file paths and formats the files imports
-func Format(files chan string, wg *sync.WaitGroup, modulePtr *string) {
+func Format(files chan string, wg *sync.WaitGroup, modulePtr *string, dry *bool) {
 	defer wg.Done()
 	importRegexp = []ImportRegexp{
 		{Bucket: "module", Regexp: regexp.MustCompile(*modulePtr)},
@@ -137,7 +137,6 @@ func Format(files chan string, wg *sync.WaitGroup, modulePtr *string) {
 			}
 			found := false
 			for _, r := range importRegexp {
-
 				if r.Regexp.MatchString(i.Path.Value) {
 					importGroups[r.Bucket] = append(importGroups[r.Bucket], *i)
 					found = true
@@ -170,10 +169,8 @@ func Format(files chan string, wg *sync.WaitGroup, modulePtr *string) {
 							breaks = append(breaks, newstr)
 						}
 					}
-
 				}
 			}
-
 		}
 
 		printerMode := printer.TabIndent
@@ -186,9 +183,16 @@ func Format(files chan string, wg *sync.WaitGroup, modulePtr *string) {
 		}
 		out, err := addSpaces(bytes.NewReader(buf.Bytes()), breaks)
 		out, err = format.Source(out)
-		info, err := os.Stat(path)
-		if err = ioutil.WriteFile(path, out, info.Mode()); err != nil {
-			klog.Errorf("%#v", err)
+		if bytes.Compare(contents, out) != 0 {
+			if *dry {
+				klog.Infof("%s is not sorted", path)
+			} else {
+				info, err := os.Stat(path)
+				if err = ioutil.WriteFile(path, out, info.Mode()); err != nil {
+					klog.Errorf("%#v", err)
+				}
+				klog.Infof("%s updated", path)
+			}
 		}
 
 	}

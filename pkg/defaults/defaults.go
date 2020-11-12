@@ -120,7 +120,7 @@ func FromConfig(
 				case resolveConfig.Candidate != nil:
 					value, err = candidate.ResolvePullSpec(*resolveConfig.Candidate)
 				case resolveConfig.Release != nil:
-					value, err = official.ResolvePullSpec(*resolveConfig.Release)
+					value, _, err = official.ResolvePullSpecAndVersion(*resolveConfig.Release)
 				case resolveConfig.Prerelease != nil:
 					value, err = prerelease.ResolvePullSpec(*resolveConfig.Prerelease)
 				}

@@ -26,7 +26,7 @@ require (
 	github.com/alecthomas/chroma v0.8.2-0.20201103103104-ab61726cdb54
 	github.com/andygrunwald/go-jira v1.12.0
 	github.com/blang/semver v3.5.1+incompatible
-	github.com/coreydaley-redhat/osgoimports v0.0.0-20201029204054-eab74506eec3
+	github.com/coreydaley/openshift-goimports v0.0.0-20201111145504-7b4aecddd198
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
 	github.com/getlantern/deepcopy v0.0.0-20160317154340-7f45deb8130a

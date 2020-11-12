@@ -12,12 +12,10 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/results"
-	"github.com/openshift/ci-tools/pkg/util/namespacewrapper"
 )
 
 const (
@@ -50,8 +48,7 @@ type podStep struct {
 	name        string
 	config      PodStepConfiguration
 	resources   api.ResourceConfiguration
-	podClient   PodClient
-	client      ctrlruntimeclient.Client
+	client      PodClient
 	artifactDir string
 	jobSpec     *api.JobSpec
 
@@ -90,7 +87,7 @@ func (s *podStep) run(ctx context.Context) error {
 	// when the test container terminates and artifact directory has been set, grab everything under the directory
 	var notifier ContainerNotifier = NopNotifier
 	if s.gatherArtifacts() {
-		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.config.As), s.jobSpec.Namespace(), ctx)
+		artifacts := NewArtifactWorker(ctx, s.client, filepath.Join(s.artifactDir, s.config.As), s.jobSpec.Namespace())
 		artifacts.CollectFromPod(pod.Name, []string{s.name}, nil)
 		notifier = artifacts
 	}
@@ -103,12 +100,12 @@ func (s *podStep) run(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 		log.Printf("cleanup: Deleting %s pod %s", s.name, s.config.As)
-		if err := s.podClient.Delete(ctx, &coreapi.Pod{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.config.As}}); err != nil && !errors.IsNotFound(err) {
+		if err := s.client.Delete(ctx, &coreapi.Pod{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.config.As}}); err != nil && !errors.IsNotFound(err) {
 			log.Printf("error: Could not delete %s pod: %v", s.name, err)
 		}
 	}()
 
-	pod, err = createOrRestartPod(namespacewrapper.New(s.podClient, s.jobSpec.Namespace()), pod)
+	pod, err = createOrRestartPod(s.client, pod)
 	if err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %w", s.name, err)
 	}
@@ -117,7 +114,7 @@ func (s *podStep) run(ctx context.Context) error {
 		s.subTests = testCaseNotifier.SubTests(s.Description() + " - ")
 	}()
 
-	if _, err := waitForPodCompletion(context.TODO(), s.podClient, pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
+	if _, err := waitForPodCompletion(context.TODO(), s.client, pod.Namespace, pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
 		return fmt.Errorf("%s %q failed: %w", s.name, pod.Name, err)
 	}
 	return nil
@@ -152,7 +149,7 @@ func (s *podStep) Description() string {
 	return fmt.Sprintf("Run test %s", s.config.As)
 }
 
-func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, client ctrlruntimeclient.Client, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return PodStep(
 		"test",
 		PodStepConfiguration{
@@ -164,19 +161,17 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 			MemoryBackedVolume: config.ContainerTestConfiguration.MemoryBackedVolume,
 		},
 		resources,
-		podClient,
 		client,
 		artifactDir,
 		jobSpec,
 	)
 }
 
-func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, client ctrlruntimeclient.Client, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, client PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &podStep{
 		name:        name,
 		config:      config,
 		resources:   resources,
-		podClient:   podClient,
 		client:      client,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
@@ -185,7 +180,8 @@ func PodStep(name string, config PodStepConfiguration, resources api.ResourceCon
 
 func generateBasePod(
 	jobSpec *api.JobSpec,
-	podName, containerName string,
+	name string,
+	containerName string,
 	command []string,
 	image string,
 	containerResources coreapi.ResourceRequirements,
@@ -198,8 +194,9 @@ func generateBasePod(
 	}
 	pod := &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
-			Name:   podName,
-			Labels: defaultPodLabels(jobSpec),
+			Namespace: jobSpec.Namespace(),
+			Name:      name,
+			Labels:    defaultPodLabels(jobSpec),
 			Annotations: map[string]string{
 				JobSpecAnnotation:                     jobSpec.RawSpec(),
 				annotationContainersForSubTestResults: containerName,
@@ -296,5 +293,5 @@ func RunPod(ctx context.Context, podClient PodClient, pod *coreapi.Pod) (*coreap
 	if err != nil {
 		return pod, err
 	}
-	return waitForPodCompletion(ctx, podClient, pod.Name, nil, true)
+	return waitForPodCompletion(ctx, podClient, pod.Namespace, pod.Name, nil, true)
 }

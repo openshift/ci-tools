@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -502,28 +503,6 @@ func (c testPodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions
 	return &testExecutor{command: opts.Command}, nil
 }
 
-type testExecutor struct {
-	command []string
-}
-
-func (e testExecutor) Stream(opts remotecommand.StreamOptions) error {
-	if reflect.DeepEqual(e.command, []string{"tar", "czf", "-", "-C", "/tmp/artifacts", "."}) {
-		var tar []byte
-		tar, err := base64.StdEncoding.DecodeString(`
-H4sIAMq1b10AA+3RPQrDMAyGYc09hU8QrCpOzuOAKR2y2Ar0+HX/tnboEErhfRbxoW8QyEvzwS8uO4r
-dNI63qXOK96yP/JRELZnNdpySSlTrBQlxz6Netua5hiDLctrOa665tA+9Ut9v/pr3/x9+fQQAAAAAAA
-AAAAAAAAAA4GtXigWTnQAoAAA=`)
-		if err != nil {
-			return err
-		}
-		_, err = opts.Stdout.Write(tar)
-		return err
-	} else if reflect.DeepEqual(e.command, []string{"rm", "-f", "/tmp/done"}) {
-		return nil
-	}
-	return fmt.Errorf("unexpected command: %v", e.command)
-}
-
 func TestArtifactWorker(t *testing.T) {
 	tmp, err := ioutil.TempDir("", "")
 	if err != nil {
@@ -535,7 +514,7 @@ func TestArtifactWorker(t *testing.T) {
 		}
 	}()
 	pod := "pod"
-	podClient := &podClient{Client: fakectrlruntimeclient.NewFakeClient(
+	podClient := &fakePodClient{&fakePodExecutor{Client: fakectrlruntimeclient.NewFakeClient(
 		&coreapi.Pod{
 			ObjectMeta: meta.ObjectMeta{
 				Name:      pod,
@@ -551,8 +530,8 @@ func TestArtifactWorker(t *testing.T) {
 					},
 				},
 			},
-		})}
-	w := NewArtifactWorker(context.Background(), podClient, tmp, "")
+		})}}
+	w := NewArtifactWorker(context.Background(), podClient, tmp, "namespace")
 	w.CollectFromPod(pod, []string{"container"}, nil)
 	w.Complete(pod)
 	select {
@@ -568,8 +547,8 @@ func TestArtifactWorker(t *testing.T) {
 	for _, f := range files {
 		names = append(names, f.Name())
 	}
-	if !reflect.DeepEqual(names, []string{"test.txt"}) {
-		t.Fatalf("unexpected content in the artifact directory: %v", names)
+	if diff := cmp.Diff(names, []string{"test.txt"}); diff != "" {
+		t.Fatalf("artifacts do not match expected: %s", diff)
 	}
 }
 
@@ -665,26 +644,36 @@ func TestArtifactsContainer(t *testing.T) {
 	}
 }
 
-type fakePodExec struct{}
-
-func (fakePodExec) Stream(remotecommand.StreamOptions) error { return nil }
-
-type fakePodsInterface struct {
-	coreclientset.PodInterface
+type fakePodClient struct {
+	*fakePodExecutor
 }
 
-func (fakePodsInterface) GetLogs(string, *coreapi.PodLogOptions) *rest.Request {
+func (*fakePodClient) GetLogs(string, string, *coreapi.PodLogOptions) *rest.Request {
 	return rest.NewRequestWithClient(nil, "", rest.ClientContentConfig{}, nil)
 }
 
-type fakePodClient struct {
-	coreclientset.PodsGetter
+func (*fakePodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
+	return &testExecutor{command: opts.Command}, nil
 }
 
-func (c *fakePodClient) Pods(ns string) coreclientset.PodInterface {
-	return &fakePodsInterface{PodInterface: c.PodsGetter.Pods(ns)}
+type testExecutor struct {
+	command []string
 }
 
-func (c *fakePodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
-	return &fakePodExec{}, nil
+func (e testExecutor) Stream(opts remotecommand.StreamOptions) error {
+	if reflect.DeepEqual(e.command, []string{"tar", "czf", "-", "-C", "/tmp/artifacts", "."}) {
+		var tar []byte
+		tar, err := base64.StdEncoding.DecodeString(`
+H4sIAMq1b10AA+3RPQrDMAyGYc09hU8QrCpOzuOAKR2y2Ar0+HX/tnboEErhfRbxoW8QyEvzwS8uO4r
+dNI63qXOK96yP/JRELZnNdpySSlTrBQlxz6Netua5hiDLctrOa665tA+9Ut9v/pr3/x9+fQQAAAAAAA
+AAAAAAAAAA4GtXigWTnQAoAAA=`)
+		if err != nil {
+			return err
+		}
+		_, err = opts.Stdout.Write(tar)
+		return err
+	} else if reflect.DeepEqual(e.command, []string{"rm", "-f", "/tmp/done"}) {
+		return nil
+	}
+	return fmt.Errorf("unexpected command: %v", e.command)
 }

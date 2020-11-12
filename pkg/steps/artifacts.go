@@ -158,11 +158,6 @@ func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
 	return tests
 }
 
-type podExpansion interface {
-	Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error)
-	GetLogs(namespace, name string, opts *coreapi.PodLogOptions) *rest.Request
-}
-
 func NewPodClient(ctrlclient ctrlruntimeclient.Client, config *rest.Config, client rest.Interface) PodClient {
 	return &podClient{Client: ctrlclient, config: config, client: client}
 }
@@ -182,7 +177,8 @@ func (c podClient) GetLogs(namespace, name string, opts *coreapi.PodLogOptions) 
 
 type PodClient interface {
 	ctrlruntimeclient.Client
-	podExpansion
+	Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error)
+	GetLogs(namespace, name string, opts *coreapi.PodLogOptions) *rest.Request
 }
 
 type podClient struct {

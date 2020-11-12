@@ -58,8 +58,7 @@ type multiStageTestStep struct {
 	// params exposes getters for variables created by other steps
 	params             api.Parameters
 	env                api.TestEnvironment
-	podClient          PodClient
-	client             ctrlruntimeclient.Client
+	client             PodClient
 	artifactDir        string
 	jobSpec            *api.JobSpec
 	pre, test, post    []api.LiteralTestStep
@@ -71,20 +70,18 @@ func MultiStageTestStep(
 	testConfig api.TestStepConfiguration,
 	config *api.ReleaseBuildConfiguration,
 	params api.Parameters,
-	podClient PodClient,
-	client ctrlruntimeclient.Client,
+	client PodClient,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, podClient, client, artifactDir, jobSpec)
+	return newMultiStageTestStep(testConfig, config, params, client, artifactDir, jobSpec)
 }
 
 func newMultiStageTestStep(
 	testConfig api.TestStepConfiguration,
 	config *api.ReleaseBuildConfiguration,
 	params api.Parameters,
-	podClient PodClient,
-	client ctrlruntimeclient.Client,
+	client PodClient,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 ) *multiStageTestStep {
@@ -98,7 +95,6 @@ func newMultiStageTestStep(
 		config:             config,
 		params:             params,
 		env:                ms.Environment,
-		podClient:          podClient,
 		client:             client,
 		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,
@@ -575,7 +571,7 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 			if c.Name == "artifacts" {
 				container := pod.Spec.Containers[0].Name
 				dir := filepath.Join(s.artifactDir, strings.TrimPrefix(pod.Name, namePrefix))
-				artifacts := NewArtifactWorker(s.podClient, dir, s.jobSpec.Namespace(), ctx)
+				artifacts := NewArtifactWorker(ctx, s.client, dir, s.jobSpec.Namespace())
 				artifacts.CollectFromPod(pod.Name, []string{container}, nil)
 				notifier = artifacts
 				break
@@ -596,7 +592,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	if _, err := createOrRestartPod(namespacewrapper.New(s.client, s.jobSpec.Namespace()), pod); err != nil {
 		return fmt.Errorf("failed to create or restart %q pod: %w", pod.Name, err)
 	}
-	newPod, err := waitForPodCompletion(ctx, s.podClient, pod.Name, notifier, false)
+	newPod, err := waitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, notifier, false)
 	if newPod != nil {
 		pod = newPod
 	}

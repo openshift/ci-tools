@@ -95,6 +95,7 @@ update-vendor:
 		-w /go/src/github.com/openshift/ci-tools \
 		-e GO111MODULE=on \
 		-e GOPROXY=https://proxy.golang.org \
+		-e GOCACHE=/tmp/go-build-cache \
 		golang:1.15 \
 		/bin/bash -c "go mod tidy && go mod vendor"
 .PHONY: update-vendor
@@ -188,7 +189,7 @@ check-breaking-changes:
 generate:
 	hack/update-codegen.sh
 	hack/generate-ci-op-reference.sh
-	go run  ./vendor/github.com/coreydaley-redhat/osgoimports/ -m github.com/openshift/ci-tools
+	go run  ./vendor/github.com/coreydaley/openshift-goimports/ -m github.com/openshift/ci-tools
 
 .PHONY: verify-gen
 verify-gen: generate

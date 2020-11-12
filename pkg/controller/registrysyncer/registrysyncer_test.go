@@ -525,3 +525,68 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 		})
 	}
 }
+
+func TestImagestream(t *testing.T) {
+	testCases := []struct {
+		name        string
+		imageStream *imagev1.ImageStream
+		expected    *imagev1.ImageStream
+	}{
+		{
+			name: "basic case",
+			imageStream: &imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ci",
+					Name:      "applyconfig",
+					Annotations: map[string]string{
+						"release.openshift.io-something": "copied",
+						"something":                      "not-copied",
+					},
+				},
+				Spec: imagev1.ImageStreamSpec{
+					LookupPolicy: imagev1.ImageLookupPolicy{
+						Local: true,
+					},
+					Tags: []imagev1.TagReference{
+						{
+							Name: "7.5.0",
+							ReferencePolicy: imagev1.TagReferencePolicy{
+								Type: imagev1.SourceTagReferencePolicy,
+							},
+							From: &corev1.ObjectReference{
+								Kind: "DockerImage",
+								Name: "registry.redhat.io/rhpam-7/rhpam-businesscentral-monitoring-rhel8:7.5.0",
+							},
+						},
+					},
+				},
+			},
+			expected: &imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ci",
+					Name:      "applyconfig",
+					Annotations: map[string]string{
+						"release.openshift.io-something": "copied",
+					},
+				},
+				Spec: imagev1.ImageStreamSpec{
+					LookupPolicy: imagev1.ImageLookupPolicy{
+						Local: true,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, fn := imagestream(tc.imageStream)
+			if err := fn(); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("actual does not match expected, diff: %s", diff)
+			}
+		})
+	}
+}

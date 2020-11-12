@@ -279,9 +279,6 @@ func imagestream(imageStream *imagev1.ImageStream) (*imagev1.ImageStream, crcont
 			}
 		}
 		stream.Spec.LookupPolicy.Local = imageStream.Spec.LookupPolicy.Local
-		for i := range stream.Spec.Tags {
-			stream.Spec.Tags[i].ReferencePolicy.Type = imageStream.Spec.Tags[i].ReferencePolicy.Type
-		}
 		return nil
 	}
 }

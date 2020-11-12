@@ -139,7 +139,7 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 			switch {
 			case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
 				pod := &coreapi.Pod{}
-				if err := s.podClient.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Name: ref.Ref.Name}, pod); err != nil {
+				if err := s.podClient.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: ref.Ref.Name}, pod); err != nil {
 					return fmt.Errorf("unable to retrieve pod from template - possibly deleted: %w", err)
 				}
 				addArtifactContainersFromPod(pod, artifacts)
@@ -318,7 +318,8 @@ func waitForTemplateInstanceReady(client ctrlruntimeclient.Client, name string) 
 }
 
 func createOrRestartTemplateInstance(client ctrlruntimeclient.Client, instance *templateapi.TemplateInstance) (*templateapi.TemplateInstance, error) {
-	if err := waitForCompletedTemplateInstanceDeletion(client, instance.Namespace, instance.Name); err != nil {
+	namespace, name := instance.Namespace, instance.Name
+	if err := waitForCompletedTemplateInstanceDeletion(client, namespace, name); err != nil {
 		return nil, fmt.Errorf("unable to delete completed template instance: %w", err)
 	}
 	err := client.Create(context.TODO(), instance)
@@ -326,7 +327,7 @@ func createOrRestartTemplateInstance(client ctrlruntimeclient.Client, instance *
 		return nil, fmt.Errorf("unable to create template instance: %w", err)
 	}
 	if err != nil {
-		if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Name: instance.Name}, instance); err != nil {
+		if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: instance.Name}, instance); err != nil {
 			return nil, fmt.Errorf("unable to retrieve pod: %w", err)
 		}
 		log.Printf("Waiting for running template %s to finish", instance.Name)
@@ -392,8 +393,7 @@ func waitForCompletedTemplateInstanceDeletion(client ctrlruntimeclient.Client, n
 }
 
 func createOrRestartPod(podClient ctrlruntimeclient.Client, pod *coreapi.Pod) (*coreapi.Pod, error) {
-	name := pod.Name
-	namespace := pod.Namespace
+	namespace, name := pod.Namespace, pod.Name
 	if err := waitForCompletedPodDeletion(podClient, namespace, name); err != nil {
 		return nil, fmt.Errorf("unable to delete completed pod: %w", err)
 	}

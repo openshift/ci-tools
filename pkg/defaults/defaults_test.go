@@ -1,9 +1,12 @@
 package defaults
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"sort"
 	"testing"
 
@@ -21,6 +24,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/lease"
+	"github.com/openshift/ci-tools/pkg/release"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"github.com/openshift/ci-tools/pkg/util/imageapiregistration"
@@ -571,8 +575,32 @@ func sortStepConfig(in []api.StepConfiguration) []api.StepConfiguration {
 	return in
 }
 
+type environmentOverride struct {
+	m map[string]string
+}
+
+func (e environmentOverride) Has(name string) bool {
+	_, ok := e.m[name]
+	return ok
+}
+
+func (e environmentOverride) HasInput(name string) bool {
+	return e.Has(name)
+}
+
+func (e environmentOverride) Get(name string) (string, error) {
+	return e.m[name], nil
+}
+
 func TestFromConfig(t *testing.T) {
 	ns := "ns"
+	httpClient := release.NewFakeHTTPClient(func(req *http.Request) (*http.Response, error) {
+		content := `{"nodes": [{"version": "version", "payload": "payload"}]}`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       ioutil.NopCloser(bytes.NewBuffer([]byte(content))),
+		}, nil
+	})
 	client := ctrlruntimeclient.NewFakeClient()
 	if err := imageapiregistration.AddToScheme(scheme.Scheme); err != nil {
 		t.Fatal(err)
@@ -589,7 +617,7 @@ func TestFromConfig(t *testing.T) {
 		},
 	}, {
 		name: "release",
-		tags: []string{"initial", "latest"},
+		tags: []string{"initial", "latest", "release"},
 	}, {
 		name: "from",
 		tags: []string{"latest"},
@@ -628,6 +656,7 @@ func TestFromConfig(t *testing.T) {
 		paramFiles     string
 		promote        bool
 		templates      []*templateapi.Template
+		env            api.Parameters
 		params         map[string]string
 		expectedSteps  []string
 		expectedPost   []string
@@ -778,8 +807,10 @@ func TestFromConfig(t *testing.T) {
 				},
 			},
 		},
-		params: map[string]string{
-			utils.ReleaseImageEnv(api.LatestReleaseName): "latest_release_name",
+		env: environmentOverride{
+			m: map[string]string{
+				utils.ReleaseImageEnv(api.LatestReleaseName): "latest",
+			},
 		},
 		expectedSteps: []string{
 			"[release:initial]",
@@ -791,6 +822,37 @@ func TestFromConfig(t *testing.T) {
 			"IMAGE_FORMAT":          "public_docker_image_repository/ns/stable:${component}",
 			"RELEASE_IMAGE_INITIAL": "public_docker_image_repository:initial",
 			"RELEASE_IMAGE_LATEST":  "public_docker_image_repository:latest",
+		},
+	}, {
+		name: "resolve release",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: api.InputConfiguration{
+				Releases: map[string]api.UnresolvedRelease{
+					"release": {Release: &api.Release{Version: "version"}},
+				},
+			},
+		},
+		expectedSteps: []string{"[release:release]", "[images]"},
+		expectedParams: map[string]string{
+			utils.ReleaseImageEnv("release"): "public_docker_image_repository:release",
+		},
+	}, {
+		name: "resolve release with input",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: api.InputConfiguration{
+				Releases: map[string]api.UnresolvedRelease{
+					"release": {Release: &api.Release{Version: "version"}},
+				},
+			},
+		},
+		env: environmentOverride{
+			m: map[string]string{
+				utils.ReleaseImageEnv("release"): "release",
+			},
+		},
+		expectedSteps: []string{"[release:release]", "[images]"},
+		expectedParams: map[string]string{
+			utils.ReleaseImageEnv("release"): "public_docker_image_repository:release",
 		},
 	}, {
 		name: "container test",
@@ -893,11 +955,11 @@ func TestFromConfig(t *testing.T) {
 				},
 			}
 			jobSpec.SetNamespace(ns)
-			params := api.NewDeferredParameters(nil)
+			params := api.NewDeferredParameters(tc.env)
 			for k, v := range tc.params {
 				params.Add(k, func() (string, error) { return v, nil })
 			}
-			steps, post, err := fromConfig(&tc.config, &jobSpec, tc.templates, tc.paramFiles, "", tc.promote, client, buildClient, templateClient, podClient, leaseClient, nil, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params)
+			steps, post, err := fromConfig(&tc.config, &jobSpec, tc.templates, tc.paramFiles, "", tc.promote, client, buildClient, templateClient, podClient, leaseClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params)
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}

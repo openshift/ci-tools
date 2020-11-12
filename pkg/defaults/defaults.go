@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 
 	coreapi "k8s.io/api/core/v1"
@@ -125,8 +124,12 @@ func fromConfig(
 			// this is a disgusting hack but the simplest implementation until we
 			// factor release steps into something more reusable
 			hasReleaseStep = true
-			value := os.Getenv(utils.ReleaseImageEnv(resolveConfig.Name))
-			if value != "" {
+			var value string
+			if env := utils.ReleaseImageEnv(resolveConfig.Name); params.HasInput(env) {
+				value, err = params.Get(env)
+				if err != nil {
+					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to get %q parameter: %w", env, err))
+				}
 				log.Printf("Using explicitly provided pull-spec for release %s (%s)", resolveConfig.Name, value)
 			} else {
 				switch {

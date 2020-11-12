@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/release"
 )
 
 func ServiceHost(product api.ReleaseProduct, arch api.ReleaseArchitecture) string {
@@ -53,11 +54,11 @@ func defaultFields(candidate api.Candidate) api.Candidate {
 }
 
 // ResolvePullSpec determines the pull spec for the candidate release
-func ResolvePullSpec(candidate api.Candidate) (string, error) {
-	return resolvePullSpec(endpoint(defaultFields(candidate)), candidate.Relative)
+func ResolvePullSpec(client release.HTTPClient, candidate api.Candidate) (string, error) {
+	return resolvePullSpec(client, endpoint(defaultFields(candidate)), candidate.Relative)
 }
 
-func resolvePullSpec(endpoint string, relative int) (string, error) {
+func resolvePullSpec(client release.HTTPClient, endpoint string, relative int) (string, error) {
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return "", err
@@ -68,7 +69,6 @@ func resolvePullSpec(endpoint string, relative int) (string, error) {
 		q.Add("rel", strconv.Itoa(relative))
 		req.URL.RawQuery = q.Encode()
 	}
-	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to request latest release: %w", err)

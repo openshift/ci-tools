@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 
@@ -20,13 +21,14 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/lease"
+	"github.com/openshift/ci-tools/pkg/release"
 	"github.com/openshift/ci-tools/pkg/release/candidate"
 	"github.com/openshift/ci-tools/pkg/release/official"
 	"github.com/openshift/ci-tools/pkg/release/prerelease"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/clusterinstall"
-	"github.com/openshift/ci-tools/pkg/steps/release"
+	releasesteps "github.com/openshift/ci-tools/pkg/steps/release"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
@@ -69,7 +71,7 @@ func FromConfig(
 	}
 
 	podClient := steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
-	return fromConfig(config, jobSpec, templates, paramFile, artifactDir, promote, client, buildClient, templateClient, podClient, leaseClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters())
+	return fromConfig(config, jobSpec, templates, paramFile, artifactDir, promote, client, buildClient, templateClient, podClient, leaseClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters())
 }
 
 func fromConfig(
@@ -83,6 +85,7 @@ func fromConfig(
 	templateClient steps.TemplateClient,
 	podClient steps.PodClient,
 	leaseClient *lease.Client,
+	httpClient release.HTTPClient,
 	requiredTargets []string,
 	cloneAuthConfig *steps.CloneAuthConfig,
 	pullSecret, pushSecret *coreapi.Secret,
@@ -128,18 +131,18 @@ func fromConfig(
 			} else {
 				switch {
 				case resolveConfig.Candidate != nil:
-					value, err = candidate.ResolvePullSpec(*resolveConfig.Candidate)
+					value, err = candidate.ResolvePullSpec(httpClient, *resolveConfig.Candidate)
 				case resolveConfig.Release != nil:
-					value, _, err = official.ResolvePullSpecAndVersion(*resolveConfig.Release)
+					value, _, err = official.ResolvePullSpecAndVersion(httpClient, *resolveConfig.Release)
 				case resolveConfig.Prerelease != nil:
-					value, err = prerelease.ResolvePullSpec(*resolveConfig.Prerelease)
+					value, err = prerelease.ResolvePullSpec(httpClient, *resolveConfig.Prerelease)
 				}
 				if err != nil {
 					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to resolve release %s: %w", resolveConfig.Name, err))
 				}
 				log.Printf("Resolved release %s to %s", resolveConfig.Name, value)
 			}
-			step := release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, client, artifactDir, jobSpec, pullSecret)
+			step := releasesteps.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, client, artifactDir, jobSpec, pullSecret)
 			buildSteps = append(buildSteps, step)
 			addProvidesForStep(step, params)
 			continue
@@ -173,7 +176,7 @@ func fromConfig(
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
 			// if the user has specified a tag_specification we always
 			// will import those images to the stable stream
-			step = release.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, client, params, jobSpec)
+			step = releasesteps.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, client, params, jobSpec)
 			stepLinks = append(stepLinks, step.Creates()...)
 
 			hasReleaseStep = true
@@ -191,9 +194,9 @@ func fromConfig(
 						return nil, nil, results.ForReason("reading_release").ForError(fmt.Errorf("failed to read input release pullSpec %s: %w", name, err))
 					}
 					log.Printf("Resolved release %s to %s", name, pullSpec)
-					releaseStep = release.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, client, artifactDir, jobSpec, pullSecret)
+					releaseStep = releasesteps.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, client, artifactDir, jobSpec, pullSecret)
 				} else {
-					releaseStep = release.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, client, artifactDir, jobSpec)
+					releaseStep = releasesteps.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, client, artifactDir, jobSpec)
 				}
 				overridableSteps = append(overridableSteps, releaseStep)
 				addProvidesForStep(releaseStep, params)
@@ -242,7 +245,7 @@ func fromConfig(
 	}
 
 	if !hasReleaseStep {
-		step := release.StableImagesTagStep(client, jobSpec)
+		step := releasesteps.StableImagesTagStep(client, jobSpec)
 		buildSteps = append(buildSteps, step)
 		addProvidesForStep(step, params)
 	}
@@ -256,7 +259,7 @@ func fromConfig(
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not determine promotion defaults: %w", err)
 		}
-		postSteps = append(postSteps, release.PromotionStep(*cfg, config.Images, requiredNames, client, client, jobSpec, podClient, pushSecret))
+		postSteps = append(postSteps, releasesteps.PromotionStep(*cfg, config.Images, requiredNames, client, client, jobSpec, podClient, pushSecret))
 	}
 
 	return append(overridableSteps, buildSteps...), postSteps, nil

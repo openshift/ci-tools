@@ -22,15 +22,15 @@ func defaultFields(release api.Release) api.Release {
 	return release
 }
 
-// ResolvePullSpec determines the pull spec for the official release
-func ResolvePullSpec(release api.Release) (string, error) {
+// ResolvePullSpecAndVersion determines the pull spec and version for the official release
+func ResolvePullSpecAndVersion(release api.Release) (string, string, error) {
 	return resolvePullSpec(cincinnatiAddress, defaultFields(release))
 }
 
-func resolvePullSpec(endpoint string, release api.Release) (string, error) {
+func resolvePullSpec(endpoint string, release api.Release) (string, string, error) {
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	req.Header.Set("Accept", "application/json")
 	query := req.URL.Query()
@@ -40,35 +40,36 @@ func resolvePullSpec(endpoint string, release api.Release) (string, error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to request latest release: %w", err)
+		return "", "", fmt.Errorf("failed to request latest release: %w", err)
 	}
 	if resp == nil {
-		return "", errors.New("failed to request latest release: got a nil response")
+		return "", "", errors.New("failed to request latest release: got a nil response")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to request latest release: server responded with %d: %s", resp.StatusCode, resp.Body)
+		return "", "", fmt.Errorf("failed to request latest release: server responded with %d: %s", resp.StatusCode, resp.Body)
 	}
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
+		return "", "", fmt.Errorf("failed to read response body: %w", err)
 	}
 	response := Response{}
 	err = json.Unmarshal(data, &response)
 	if err != nil {
-		return "", fmt.Errorf("failed to unmarshal response: %w", err)
+		return "", "", fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 	if len(response.Nodes) == 0 {
-		return "", errors.New("failed to request latest release: server returned empty list of releases (despite status code 200)")
+		return "", "", errors.New("failed to request latest release: server returned empty list of releases (despite status code 200)")
 	}
-	return latestPullSpec(response.Nodes), nil
+	pullspec, version := latestPullSpecAndVersion(response.Nodes)
+	return pullspec, version, nil
 }
 
-// latestPullSpec returns the pullSpec of the latest release in the list
-func latestPullSpec(options []Release) string {
+// latestPullSpecAndVersion returns the pullSpec of the latest release in the list as a payload and version
+func latestPullSpecAndVersion(options []Release) (string, string) {
 	sort.Slice(options, func(i, j int) bool {
 		vi := semver.MustParse(options[i].Version)
 		vj := semver.MustParse(options[j].Version)
 		return vi.GTE(vj) // greater, not less, so we get descending order
 	})
-	return options[0].Payload
+	return options[0].Payload, options[0].Version
 }

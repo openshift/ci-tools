@@ -490,6 +490,7 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 
 type fakePodClient struct {
 	*fakePodExecutor
+	namespace, name string
 }
 
 func (*fakePodClient) GetLogs(string, string, *coreapi.PodLogOptions) *rest.Request {
@@ -533,23 +534,28 @@ func TestArtifactWorker(t *testing.T) {
 		}
 	}()
 	pod := "pod"
-	podClient := &fakePodClient{&fakePodExecutor{Client: fakectrlruntimeclient.NewFakeClient(
-		&coreapi.Pod{
-			ObjectMeta: meta.ObjectMeta{
-				Name:      pod,
-				Namespace: "namespace",
-			},
-			Status: coreapi.PodStatus{
-				ContainerStatuses: []coreapi.ContainerStatus{
-					{
-						Name: "artifacts",
-						State: coreapi.ContainerState{
-							Running: &coreapi.ContainerStateRunning{},
+	podClient := &fakePodClient{
+		fakePodExecutor: &fakePodExecutor{Client: fakectrlruntimeclient.NewFakeClient(
+			&coreapi.Pod{
+				ObjectMeta: meta.ObjectMeta{
+					Name:      pod,
+					Namespace: "namespace",
+				},
+				Status: coreapi.PodStatus{
+					ContainerStatuses: []coreapi.ContainerStatus{
+						{
+							Name: "artifacts",
+							State: coreapi.ContainerState{
+								Running: &coreapi.ContainerStateRunning{},
+							},
 						},
 					},
 				},
-			},
-		})}}
+			}),
+		},
+		namespace: "namespace",
+		name:      pod,
+	}
 	w := NewArtifactWorker(context.Background(), podClient, tmp, "namespace")
 	w.CollectFromPod(pod, []string{"container"}, nil)
 	w.Complete(pod)

@@ -3,7 +3,6 @@ package steps
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -279,7 +278,6 @@ func (f *fakePodExecutor) Get(ctx context.Context, n ctrlruntimeclient.ObjectKey
 		fail := f.failures.Has(n.Name)
 		if fail {
 			pod.Status.Phase = coreapi.PodFailed
-			_ = fmt.Sprintf
 		} else {
 			pod.Status.Phase = coreapi.PodSucceeded
 		}
@@ -354,7 +352,7 @@ func TestRun(t *testing.T) {
 					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: &yes}},
 					AllowSkipOnSuccess: &yes,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{crclient}, "", &jobSpec)
+			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: crclient}, "", &jobSpec)
 			if err := step.Run(context.Background()); (err != nil) != (tc.failures != nil) {
 				t.Errorf("expected error: %t, got error: %v", (tc.failures != nil), err)
 			}
@@ -407,7 +405,7 @@ func TestArtifacts(t *testing.T) {
 				{As: "test1", ArtifactDir: "/path/to/artifacts"},
 			},
 		},
-	}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{&fakePodExecutor{Client: fakectrlruntimeclient.NewFakeClient()}}, tmp, &jobSpec)
+	}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: &fakePodExecutor{Client: fakectrlruntimeclient.NewFakeClient()}}, tmp, &jobSpec)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := step.Run(ctx); err != nil {
@@ -483,7 +481,7 @@ func TestJUnit(t *testing.T) {
 					Test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
 					Post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{client}, "/dev/null", &jobSpec)
+			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: client}, "/dev/null", &jobSpec)
 			if err := step.Run(context.Background()); tc.failures == nil && err != nil {
 				t.Error(err)
 				return

@@ -493,12 +493,18 @@ type fakePodClient struct {
 	namespace, name string
 }
 
-func (*fakePodClient) GetLogs(string, string, *coreapi.PodLogOptions) *rest.Request {
-	return rest.NewRequestWithClient(nil, "", rest.ClientContentConfig{}, nil)
+func (f *fakePodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
+	if namespace != f.namespace {
+		return nil, fmt.Errorf("unexpected namespace: %q", namespace)
+	}
+	if name != f.name {
+		return nil, fmt.Errorf("unexpected name: %q", name)
+	}
+	return &testExecutor{command: opts.Command}, nil
 }
 
-func (*fakePodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
-	return &testExecutor{command: opts.Command}, nil
+func (*fakePodClient) GetLogs(string, string, *coreapi.PodLogOptions) *rest.Request {
+	return rest.NewRequestWithClient(nil, "", rest.ClientContentConfig{}, nil)
 }
 
 type testExecutor struct {

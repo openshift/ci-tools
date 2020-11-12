@@ -95,7 +95,7 @@ func TestInputImageTagStep(t *testing.T) {
 
 	// Test all step methods
 	examineStep(t, iits, specification)
-	executeStep(t, iits, execSpecification, nil)
+	executeStep(t, iits, execSpecification)
 
 	// Test that executing the step resulted in an expected ImageStreamTag
 	// created

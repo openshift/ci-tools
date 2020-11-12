@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -486,21 +486,6 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 			}
 		})
 	}
-}
-
-type testPodClient struct {
-	coreclientset.PodsGetter
-	namespace, name string
-}
-
-func (c testPodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
-	if namespace != c.namespace {
-		return nil, fmt.Errorf("unexpected namespace: %q", namespace)
-	}
-	if name != c.name {
-		return nil, fmt.Errorf("unexpected name: %q", name)
-	}
-	return &testExecutor{command: opts.Command}, nil
 }
 
 func TestArtifactWorker(t *testing.T) {

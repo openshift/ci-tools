@@ -48,7 +48,7 @@ func TestWriteParamsStep(t *testing.T) {
 	}
 
 	examineStep(t, wps, specification)
-	executeStep(t, wps, execSpecification, nil)
+	executeStep(t, wps, execSpecification)
 
 	expectedWrittenParams := "K1=V1\nK2='V:2'\n"
 	written, err := ioutil.ReadFile(paramFile.Name())

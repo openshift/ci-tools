@@ -35,5 +35,5 @@ func TestImagesReadyStep(t *testing.T) {
 	}
 
 	examineStep(t, irs, specification)
-	executeStep(t, irs, execSpecification, nil)
+	executeStep(t, irs, execSpecification)
 }

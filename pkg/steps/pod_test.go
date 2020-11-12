@@ -15,7 +15,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, *podClient) {
+func preparePodStep(namespace string) (*podStep, stepExpectation) {
 	stepName := "StepName"
 	podName := "TestName"
 	var artifactDir string
@@ -69,12 +69,12 @@ func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, 
 		},
 	}
 
-	return ps.(*podStep), specification, client
+	return ps.(*podStep), specification
 }
 
 func TestPodStepMethods(t *testing.T) {
 	namespace := "TestNamespace"
-	ps, spec, _ := preparePodStep(t, namespace)
+	ps, spec := preparePodStep(namespace)
 	examineStep(t, ps, spec)
 }
 
@@ -98,7 +98,7 @@ func TestPodStepExecution(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.purpose, func(t *testing.T) {
-			ps, _, _ := preparePodStep(t, namespace)
+			ps, _ := preparePodStep(namespace)
 			ps.client = &podClient{Client: &podStatusChangingClient{Client: fakectrlruntimeclient.NewFakeClient(), dest: tc.podStatus}}
 
 			executionExpectation := executionExpectation{
@@ -113,7 +113,7 @@ func TestPodStepExecution(t *testing.T) {
 				},
 			}
 
-			executeStep(t, ps, executionExpectation, nil)
+			executeStep(t, ps, executionExpectation)
 
 			pod := &corev1.Pod{}
 			if err := ps.client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: ps.Name()}, pod); err != nil {

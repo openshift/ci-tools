@@ -383,7 +383,7 @@ func waitForCompletedTemplateInstanceDeletion(client ctrlruntimeclient.Client, n
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			if err := waitForPodDeletion(client, namespace, ref.Ref.Name, types.UID(ref.Ref.UID)); err != nil {
+			if err := waitForPodDeletion(client, namespace, ref.Ref.Name, ref.Ref.UID); err != nil {
 				return err
 			}
 		}
@@ -413,10 +413,10 @@ func createOrRestartPod(podClient ctrlruntimeclient.Client, pod *coreapi.Pod) (*
 			}
 			if !kerrors.IsAlreadyExists(err) {
 				return false, err
+			}
 
-				if err := podClient.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, pod); err != nil {
-					return false, err
-				}
+			if err := podClient.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, pod); err != nil {
+				return false, err
 			}
 		}
 		return true, nil

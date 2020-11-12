@@ -9,7 +9,7 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -242,7 +242,7 @@ func (s *multiStageTestStep) setupRBAC() error {
 		Subjects:   subj,
 	}
 	check := func(err error) bool {
-		return err == nil || errors.IsAlreadyExists(err)
+		return err == nil || kerrors.IsAlreadyExists(err)
 	}
 	if err := s.client.Create(context.TODO(), sa); !check(err) {
 		return err
@@ -259,7 +259,7 @@ func (s *multiStageTestStep) setupRBAC() error {
 func (s *multiStageTestStep) createSecret() error {
 	log.Printf("Creating multi-stage test secret %q", s.name)
 	secret := &coreapi.Secret{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.name}}
-	if err := s.client.Delete(context.TODO(), secret); err != nil && !errors.IsNotFound(err) {
+	if err := s.client.Delete(context.TODO(), secret); err != nil && !kerrors.IsNotFound(err) {
 		return fmt.Errorf("cannot delete secret %q: %w", s.name, err)
 	}
 	return s.client.Create(context.TODO(), secret)
@@ -293,7 +293,7 @@ func (s *multiStageTestStep) createCredentials() error {
 	}
 
 	for name := range toCreate {
-		if err := s.client.Create(context.TODO(), toCreate[name]); err != nil && !errors.IsAlreadyExists(err) {
+		if err := s.client.Create(context.TODO(), toCreate[name]); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create source credential: %w", err)
 		}
 	}
@@ -618,7 +618,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 
 func deletePods(client ctrlruntimeclient.Client, test string) error {
 	err := client.DeleteAllOf(context.TODO(), &coreapi.Pod{}, ctrlruntimeclient.MatchingLabels{MultiStageTestLabel: test})
-	if err != nil && !errors.IsNotFound(err) {
+	if err != nil && !kerrors.IsNotFound(err) {
 		return err
 	}
 	return nil

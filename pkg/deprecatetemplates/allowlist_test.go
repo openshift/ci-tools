@@ -160,6 +160,15 @@ func TestDeprecatedTemplateInsert(t *testing.T) {
 				UnknownBlocker: deprecatedTemplateBlocker{Jobs: blockedJobs{job: blockedJob{Generated: false, Kind: "unknown", current: true}}},
 			},
 		},
+		{
+			description: "do not choke on nil map",
+			existingDT: deprecatedTemplate{
+				UnknownBlocker: deprecatedTemplateBlocker{Jobs: nil},
+			},
+			expectedDT: deprecatedTemplate{
+				UnknownBlocker: deprecatedTemplateBlocker{Jobs: blockedJobs{job: blockedJob{Generated: false, Kind: "unknown", current: true}}},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -179,12 +188,12 @@ func TestAllowlistInsert(t *testing.T) {
 
 	testCases := []struct {
 		description   string
-		before        map[string]deprecatedTemplate
-		expectedAfter map[string]deprecatedTemplate
+		before        map[string]*deprecatedTemplate
+		expectedAfter map[string]*deprecatedTemplate
 	}{
 		{
 			description: "add job to new template record",
-			expectedAfter: map[string]deprecatedTemplate{
+			expectedAfter: map[string]*deprecatedTemplate{
 				template: {
 					Name: template,
 					UnknownBlocker: deprecatedTemplateBlocker{
@@ -196,7 +205,7 @@ func TestAllowlistInsert(t *testing.T) {
 		},
 		{
 			description: "add job to existing template record",
-			before: map[string]deprecatedTemplate{
+			before: map[string]*deprecatedTemplate{
 				template: {
 					Name: template,
 					UnknownBlocker: deprecatedTemplateBlocker{
@@ -204,7 +213,7 @@ func TestAllowlistInsert(t *testing.T) {
 					},
 				},
 			},
-			expectedAfter: map[string]deprecatedTemplate{
+			expectedAfter: map[string]*deprecatedTemplate{
 				template: {
 					Name: template,
 					UnknownBlocker: deprecatedTemplateBlocker{
@@ -216,7 +225,7 @@ func TestAllowlistInsert(t *testing.T) {
 		},
 		{
 			description: "add job to existing template record, already known blocker",
-			before: map[string]deprecatedTemplate{
+			before: map[string]*deprecatedTemplate{
 				template: {
 					Name: template,
 					Blockers: map[string]deprecatedTemplateBlocker{
@@ -226,7 +235,7 @@ func TestAllowlistInsert(t *testing.T) {
 					},
 				},
 			},
-			expectedAfter: map[string]deprecatedTemplate{
+			expectedAfter: map[string]*deprecatedTemplate{
 				template: {
 					Name: template,
 					Blockers: map[string]deprecatedTemplateBlocker{
@@ -239,7 +248,7 @@ func TestAllowlistInsert(t *testing.T) {
 		},
 		{
 			description: "add job to existing template record, already unknown blocker",
-			before: map[string]deprecatedTemplate{
+			before: map[string]*deprecatedTemplate{
 				template: {
 					Name: template,
 					UnknownBlocker: deprecatedTemplateBlocker{
@@ -250,7 +259,7 @@ func TestAllowlistInsert(t *testing.T) {
 					},
 				},
 			},
-			expectedAfter: map[string]deprecatedTemplate{
+			expectedAfter: map[string]*deprecatedTemplate{
 				template: {
 					Name: template,
 					UnknownBlocker: deprecatedTemplateBlocker{

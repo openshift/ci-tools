@@ -50,7 +50,7 @@ func TestLoadTemplates(t *testing.T) {
 
 type mockAllowlist struct {
 	jobs         map[string]sets.String
-	getTemplates map[string]deprecatedTemplate
+	getTemplates map[string]*deprecatedTemplate
 }
 
 func (m *mockAllowlist) Insert(job config.JobBase, template string) {
@@ -68,7 +68,7 @@ func (m *mockAllowlist) Prune() {
 	panic("this should never be called")
 }
 
-func (m *mockAllowlist) GetTemplates() map[string]deprecatedTemplate {
+func (m *mockAllowlist) GetTemplates() map[string]*deprecatedTemplate {
 	return m.getTemplates
 }
 
@@ -169,7 +169,7 @@ func TestProcessJobs(t *testing.T) {
 
 func TestEnforcerStats(t *testing.T) {
 	mock := &mockAllowlist{
-		getTemplates: map[string]deprecatedTemplate{
+		getTemplates: map[string]*deprecatedTemplate{
 			"template-1": {
 				Name: "template-1",
 				UnknownBlocker: deprecatedTemplateBlocker{

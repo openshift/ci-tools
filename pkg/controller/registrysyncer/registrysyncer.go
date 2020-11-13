@@ -119,14 +119,14 @@ const (
 func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *logrus.Entry) error {
 	isTags := map[string]*imagev1.ImageStreamTag{}
 	for clusterName, client := range r.registryClients {
-		log = log.WithField("clusterName", clusterName)
+		*log = *log.WithField("clusterName", clusterName)
 		imageStreamTag := &imagev1.ImageStreamTag{}
 		if err := client.Get(ctx, req.NamespacedName, imageStreamTag); err != nil {
 			if apierrors.IsNotFound(err) {
 				log.Debug("Source imageStreamTag not found")
 				continue
 			}
-			return fmt.Errorf("failed to get imageStreamTag %s from registry cluster: %w", req.NamespacedName.String(), err)
+			return fmt.Errorf("failed to get imageStreamTag %s from cluster %s: %w", req.NamespacedName.String(), clusterName, err)
 		}
 		isTags[clusterName] = imageStreamTag
 	}
@@ -148,29 +148,30 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 	sourceImageStream := &imagev1.ImageStream{}
 	if err := r.registryClients[srcClusterName].Get(ctx, isName, sourceImageStream); err != nil {
 		// received a request on the isTag, but the 'is' is no longer there
-		return fmt.Errorf("failed to get imageStream %s from registry cluster: %w", isName.String(), err)
+		return fmt.Errorf("failed to get imageStream %s from cluster %s: %w", isName.String(), srcClusterName, err)
 	}
 
 	*log = *log.WithField("docker_image_reference", sourceImageStreamTag.Image.DockerImageReference)
 
 	for clusterName, client := range r.registryClients {
+		*log = *log.WithField("clusterName", clusterName)
 		if clusterName == srcClusterName {
 			continue
 		}
 		if err := client.Get(ctx, types.NamespacedName{Name: req.Namespace}, &corev1.Namespace{}); err != nil {
 			if !apierrors.IsNotFound(err) {
-				return fmt.Errorf("failed to check if namespace %s exists: %w", req.Namespace, err)
+				return fmt.Errorf("failed to check if namespace %s exists on cluster %s: %w", req.Namespace, clusterName, err)
 			}
 			if err := client.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 				Name:        req.Namespace,
 				Annotations: map[string]string{annotationDPTPRequester: ControllerName},
 			}}); err != nil && !apierrors.IsAlreadyExists(err) {
-				return fmt.Errorf("failed to create namespace %s: %w", req.Namespace, err)
+				return fmt.Errorf("failed to create namespace %s on cluster %s: %w", req.Namespace, clusterName, err)
 			}
 		}
 
 		if err := r.ensureImageStream(ctx, sourceImageStream, client, log); err != nil {
-			return fmt.Errorf("failed to ensure imagestream: %w", err)
+			return fmt.Errorf("failed to ensure imagestream on cluster %s: %w", clusterName, err)
 		}
 
 		isTag, found := isTags[clusterName]
@@ -180,7 +181,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		}
 
 		if err := r.ensureImagePullSecret(ctx, req.Namespace, client, log); err != nil {
-			return fmt.Errorf("failed to ensure imagePullSecret: %w", err)
+			return fmt.Errorf("failed to ensure imagePullSecret on cluster %s: %w", clusterName, err)
 		}
 		imageName, err := publicDomainForImage(srcClusterName, sourceImageStreamTag.Image.DockerImageReference)
 		if err != nil {
@@ -211,7 +212,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		log.Debug("creating imageStreamImport")
 		if err := createAndCheckStatus(ctx, client, imageStreamImport); err != nil {
 			controllerutil.CountImportResult(ControllerName, clusterName, req.Namespace, false)
-			return fmt.Errorf("failed to create and check the status for imageStreamImport %v : %w", imageStreamImport, err)
+			return fmt.Errorf("failed to create and check the status for imageStreamImport on cluster %s %v : %w", clusterName, imageStreamImport, err)
 		}
 		controllerutil.CountImportResult(ControllerName, clusterName, req.Namespace, true)
 		log.Debug("Imported successfully")

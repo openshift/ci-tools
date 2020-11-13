@@ -87,7 +87,7 @@ type deprecatedTemplate struct {
 	Blockers       map[string]deprecatedTemplateBlocker `json:"blockers,omitempty"`
 }
 
-func (d deprecatedTemplate) insert(job config.JobBase) {
+func (d *deprecatedTemplate) insert(job config.JobBase) {
 	var knownBlocker bool
 	for _, blocker := range d.Blockers {
 		if blocker.Jobs.Has(job) {
@@ -99,6 +99,9 @@ func (d deprecatedTemplate) insert(job config.JobBase) {
 	}
 	if knownBlocker {
 		return
+	}
+	if d.UnknownBlocker.Jobs == nil {
+		d.UnknownBlocker.Jobs = blockedJobs{}
 	}
 	d.UnknownBlocker.Jobs.Insert(job)
 }
@@ -198,11 +201,11 @@ type Allowlist interface {
 	Insert(job config.JobBase, template string)
 	Save(path string) error
 	Prune()
-	GetTemplates() map[string]deprecatedTemplate
+	GetTemplates() map[string]*deprecatedTemplate
 }
 
 type allowlist struct {
-	Templates map[string]deprecatedTemplate `json:"templates"`
+	Templates map[string]*deprecatedTemplate `json:"templates"`
 }
 
 func (a *allowlist) Prune() {
@@ -213,11 +216,11 @@ func (a *allowlist) Prune() {
 
 func (a *allowlist) Insert(job config.JobBase, template string) {
 	if a.Templates == nil {
-		a.Templates = map[string]deprecatedTemplate{}
+		a.Templates = map[string]*deprecatedTemplate{}
 	}
 
 	if _, ok := a.Templates[template]; !ok {
-		a.Templates[template] = deprecatedTemplate{
+		a.Templates[template] = &deprecatedTemplate{
 			Name: template,
 			UnknownBlocker: deprecatedTemplateBlocker{
 				Description: blockerColUnknown,
@@ -258,8 +261,8 @@ func (a allowlist) Save(path string) error {
 	return nil
 }
 
-func (a *allowlist) GetTemplates() map[string]deprecatedTemplate {
-	t := map[string]deprecatedTemplate{}
+func (a *allowlist) GetTemplates() map[string]*deprecatedTemplate {
+	t := map[string]*deprecatedTemplate{}
 	for k, v := range a.Templates {
 		t[k] = v
 	}

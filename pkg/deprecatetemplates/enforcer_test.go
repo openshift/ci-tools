@@ -49,7 +49,8 @@ func TestLoadTemplates(t *testing.T) {
 }
 
 type mockAllowlist struct {
-	jobs map[string]sets.String
+	jobs         map[string]sets.String
+	getTemplates map[string]deprecatedTemplate
 }
 
 func (m *mockAllowlist) Insert(job config.JobBase, template string) {
@@ -65,6 +66,10 @@ func (m *mockAllowlist) Save(_ string) error {
 
 func (m *mockAllowlist) Prune() {
 	panic("this should never be called")
+}
+
+func (m *mockAllowlist) GetTemplates() map[string]deprecatedTemplate {
+	return m.getTemplates
 }
 
 type mockJobConfig struct {
@@ -159,5 +164,67 @@ func TestProcessJobs(t *testing.T) {
 				t.Errorf("%s: inserted jobs differ:\n%s", tc.description, diff)
 			}
 		})
+	}
+}
+
+func TestEnforcerStats(t *testing.T) {
+	mock := &mockAllowlist{
+		getTemplates: map[string]deprecatedTemplate{
+			"template-1": {
+				Name: "template-1",
+				UnknownBlocker: deprecatedTemplateBlocker{
+					Jobs: blockedJobs{
+						"1": blockedJob{Generated: false, Kind: "periodic"},
+						"2": blockedJob{Generated: false, Kind: "periodic"},
+						"3": blockedJob{Generated: false, Kind: "periodic"},
+						"4": blockedJob{Generated: false, Kind: "periodic"},
+						"5": blockedJob{Generated: false, Kind: "periodic"},
+					},
+				},
+			},
+			"template-2": {
+				Name: "template-2",
+				Blockers: map[string]deprecatedTemplateBlocker{
+					"B1": {Jobs: blockedJobs{"6": blockedJob{Generated: true, Kind: "presubmit"}}},
+					"B2": {Jobs: blockedJobs{"7": blockedJob{Generated: true, Kind: "postsubmit"}}},
+				},
+			},
+			"template-3": {
+				Name: "template-3",
+				UnknownBlocker: deprecatedTemplateBlocker{
+					Jobs: blockedJobs{"8": blockedJob{Generated: false, Kind: "periodic"}},
+				},
+				Blockers: map[string]deprecatedTemplateBlocker{
+					"B3": {Jobs: blockedJobs{"9": blockedJob{Generated: true, Kind: "presubmit"}}},
+					"B4": {Jobs: blockedJobs{"10": blockedJob{Generated: true, Kind: "presubmit"}}},
+				},
+			},
+		},
+	}
+	enforcer := &Enforcer{allowlist: mock}
+	expectedHeader := []string{"Template", "Blocker", "Total", "Generated", "Handcrafted", "Presubmits", "Postsubmits", "Release", "Periodics", "Unknown"}
+	expectedFooter := []string{"3 templates", "Total", "10", "4", "6", "3", "1", "0", "6", "0"}
+	expectedData := [][]string{
+		{"template-2", blockerColUnknown, "0", "0", "0", "0", "0", "0", "0", "0"},
+		{"template-2", "B1", "1", "1", "0", "1", "0", "0", "0", "0"},
+		{"template-2", "B2", "1", "1", "0", "0", "1", "0", "0", "0"},
+		{"template-2", blockerColTotal, "2", "2", "0", "1", "1", "0", "0", "0"},
+		{"template-3", "B3", "1", "1", "0", "1", "0", "0", "0", "0"},
+		{"template-3", "B4", "1", "1", "0", "1", "0", "0", "0", "0"},
+		{"template-3", blockerColUnknown, "1", "0", "1", "0", "0", "0", "1", "0"},
+		{"template-3", blockerColTotal, "3", "2", "1", "2", "0", "0", "1", "0"},
+		{"template-1", blockerColUnknown, "5", "0", "5", "0", "0", "0", "5", "0"},
+		{"template-1", blockerColTotal, "5", "0", "5", "0", "0", "0", "5", "0"},
+	}
+
+	header, footer, data := enforcer.Stats()
+	if diff := cmp.Diff(expectedHeader, header); diff != "" {
+		t.Errorf("Header differs from expected:\n%s", diff)
+	}
+	if diff := cmp.Diff(expectedFooter, footer); diff != "" {
+		t.Errorf("Footer differs from expected:\n%s", diff)
+	}
+	if diff := cmp.Diff(expectedData, data); diff != "" {
+		t.Errorf("Data differs from expected:\n%s", diff)
 	}
 }

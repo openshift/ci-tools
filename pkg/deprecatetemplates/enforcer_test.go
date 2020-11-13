@@ -172,7 +172,7 @@ func TestEnforcerStats(t *testing.T) {
 		getTemplates: map[string]*deprecatedTemplate{
 			"template-1": {
 				Name: "template-1",
-				UnknownBlocker: deprecatedTemplateBlocker{
+				UnknownBlocker: &deprecatedTemplateBlocker{
 					Jobs: blockedJobs{
 						"1": blockedJob{Generated: false, Kind: "periodic"},
 						"2": blockedJob{Generated: false, Kind: "periodic"},
@@ -191,7 +191,7 @@ func TestEnforcerStats(t *testing.T) {
 			},
 			"template-3": {
 				Name: "template-3",
-				UnknownBlocker: deprecatedTemplateBlocker{
+				UnknownBlocker: &deprecatedTemplateBlocker{
 					Jobs: blockedJobs{"8": blockedJob{Generated: false, Kind: "periodic"}},
 				},
 				Blockers: map[string]deprecatedTemplateBlocker{
@@ -205,7 +205,6 @@ func TestEnforcerStats(t *testing.T) {
 	expectedHeader := []string{"Template", "Blocker", "Total", "Generated", "Handcrafted", "Presubmits", "Postsubmits", "Release", "Periodics", "Unknown"}
 	expectedFooter := []string{"3 templates", "Total", "10", "4", "6", "3", "1", "0", "6", "0"}
 	expectedData := [][]string{
-		{"template-2", blockerColUnknown, "0", "0", "0", "0", "0", "0", "0", "0"},
 		{"template-2", "B1", "1", "1", "0", "1", "0", "0", "0", "0"},
 		{"template-2", "B2", "1", "1", "0", "0", "1", "0", "0", "0"},
 		{"template-2", blockerColTotal, "2", "2", "0", "1", "1", "0", "0", "0"},
@@ -217,7 +216,7 @@ func TestEnforcerStats(t *testing.T) {
 		{"template-1", blockerColTotal, "5", "0", "5", "0", "0", "0", "5", "0"},
 	}
 
-	header, footer, data := enforcer.Stats()
+	header, footer, data := enforcer.Stats(false)
 	if diff := cmp.Diff(expectedHeader, header); diff != "" {
 		t.Errorf("Header differs from expected:\n%s", diff)
 	}

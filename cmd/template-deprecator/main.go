@@ -21,6 +21,7 @@ type options struct {
 	allowlistPath        string
 	prune                bool
 	printStats           bool
+	hideTotals           bool
 
 	help bool
 }
@@ -34,6 +35,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.StringVar(&opt.allowlistPath, "allowlist-path", "", "Path to template deprecation allowlist")
 	fs.BoolVar(&opt.prune, "prune", false, "If set, remove from allowlist all jobs that either no longer exist or no longer use a template")
 	fs.BoolVar(&opt.printStats, "stats", false, "If true, print template usage stats")
+	fs.BoolVar(&opt.hideTotals, "hide-totals", false, "If true, hide totals in template usage stats")
 
 	return opt
 }
@@ -90,7 +92,7 @@ func main() {
 	}
 
 	if opt.printStats {
-		header, footer, data := enforcer.Stats()
+		header, footer, data := enforcer.Stats(opt.hideTotals)
 		table := tablewriter.NewWriter(os.Stdout)
 		table.SetHeader(header)
 		table.SetFooter(footer)

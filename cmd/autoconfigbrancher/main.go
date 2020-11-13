@@ -185,6 +185,16 @@ func main() {
 			command:   "/usr/bin/sanitize-prow-jobs",
 			arguments: []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"},
 		},
+		{
+			command: "/usr/bin/template-deprecator",
+			arguments: []string{
+				"--prow-config-path", "./core-services/prow/02_config/_config.yaml",
+				"--prow-plugin-config-path", "./core-services/prow/02_config/_plugins.yaml",
+				"--prow-jobs-dir", "./ci-operator/jobs",
+				"--allowlist-path", "./core-services/template-deprecation/_allowlist.yaml",
+				"--prune=true",
+			},
+		},
 	}
 
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: sa}

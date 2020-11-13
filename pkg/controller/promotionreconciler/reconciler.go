@@ -63,7 +63,6 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 
 	log := logrus.WithField("controller", ControllerName)
 	r := &reconciler{
-		ctx:    context.Background(),
 		log:    log,
 		client: imagestreamtagwrapper.MustNew(opts.RegistryManager.GetClient(), opts.RegistryManager.GetCache()),
 		releaseBuildConfigs: func(identifier string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
@@ -102,7 +101,6 @@ type githubClient interface {
 }
 
 type reconciler struct {
-	ctx                 context.Context
 	log                 *logrus.Entry
 	client              ctrlruntimeclient.Client
 	releaseBuildConfigs ciOperatorConfigGetter
@@ -110,13 +108,13 @@ type reconciler struct {
 	enqueueJob          prowjobreconciler.Enqueuer
 }
 
-func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime.Result, error) {
+func (r *reconciler) Reconcile(ctx context.Context, req controllerruntime.Request) (controllerruntime.Result, error) {
 	log := r.log.WithField("name", req.Name).WithField("namespace", req.Namespace)
 	log.Trace("Starting reconciliation")
 	startTime := time.Now()
 	defer func() { log.WithField("duration", time.Since(startTime)).Trace("Finished reconciliation") }()
 
-	err := r.reconcile(req, log)
+	err := r.reconcile(ctx, req, log)
 	if err != nil {
 		log := log.WithError(err)
 		// Degrade terminal errors to debug, they most lilely just mean a given imageStreamTag wasn't built
@@ -131,9 +129,9 @@ func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime
 	return controllerruntime.Result{}, controllerutil.SwallowIfTerminal(err)
 }
 
-func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry) error {
+func (r *reconciler) reconcile(ctx context.Context, req controllerruntime.Request, log *logrus.Entry) error {
 	ist := &imagev1.ImageStreamTag{}
-	if err := r.client.Get(r.ctx, req.NamespacedName, ist); err != nil {
+	if err := r.client.Get(ctx, req.NamespacedName, ist); err != nil {
 		// Object got deleted while it was in the workqueue
 		if apierrors.IsNotFound(err) {
 			return nil

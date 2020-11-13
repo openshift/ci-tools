@@ -68,7 +68,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/imageapiregistration"
-	"github.com/openshift/ci-tools/pkg/util/namespacewrapper"
 )
 
 const usage = `Orchestrate multi-stage image-based builds
@@ -756,11 +755,11 @@ func (o *options) initializeNamespace() error {
 	if err != nil {
 		return fmt.Errorf("could not get project client for cluster config: %w", err)
 	}
-	nonNamespacedClient, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{})
+	client, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{})
 	if err != nil {
 		return fmt.Errorf("failed to construct client: %w", err)
 	}
-	client := namespacewrapper.New(nonNamespacedClient, o.namespace)
+	client = ctrlruntimeclient.NewNamespacedClient(client, o.namespace)
 	ctx := context.Background()
 
 	log.Printf("Creating namespace %s", o.namespace)
@@ -806,7 +805,7 @@ func (o *options) initializeNamespace() error {
 			Verb:      "create",
 			Resource:  "rolebindings",
 		}}}
-		if err := nonNamespacedClient.Create(ctx, sar); err != nil {
+		if err := client.Create(ctx, sar); err != nil {
 			log.Printf("Warning: failed to create SelfSubjectAccessReview: %v\n", err)
 			continue
 		}

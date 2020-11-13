@@ -27,7 +27,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
-	"github.com/openshift/ci-tools/pkg/util/namespacewrapper"
 )
 
 const (
@@ -237,7 +236,7 @@ fi
 	if err := s.client.Create(ctx, route); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server route: %w", err)
 	}
-	if err := waitForDeployment(ctx, namespacewrapper.New(s.client, s.jobSpec.Namespace()), deployment.Name); err != nil {
+	if err := waitForDeployment(ctx, ctrlruntimeclient.NewNamespacedClient(s.client, s.jobSpec.Namespace()), deployment.Name); err != nil {
 		return fmt.Errorf("could not wait for RPM repo server to deploy: %w", err)
 	}
 	return waitForRouteReachable(ctx, s.client, s.jobSpec.Namespace(), route.Name, "http")

@@ -55,7 +55,6 @@ func AddToManager(mgr controllerruntime.Manager, config config.Getter, dryRun bo
 	ctrl, err := controller.New(controllerName, mgr, controller.Options{
 		MaxConcurrentReconciles: 10,
 		Reconciler: &reconciler{
-			ctx:    context.Background(),
 			log:    logrus.WithField("controller", controllerName),
 			config: config,
 			client: mgr.GetClient(),
@@ -91,11 +90,10 @@ func newSource() (Enqueuer, source.Source) {
 }
 
 func orcbToEvent(orbc OrgRepoBranchCommit) event.GenericEvent {
-	return event.GenericEvent{
-		Meta: &metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s|%s|%s|%s", orbc.Org, orbc.Repo, orbc.Branch, orbc.Commit),
-		},
-	}
+	// The object type is irrelvant for us but we need to fulfill the client.Object interface
+	return event.GenericEvent{Object: &prowv1.ProwJob{ObjectMeta: metav1.ObjectMeta{
+		Name: fmt.Sprintf("%s|%s|%s|%s", orbc.Org, orbc.Repo, orbc.Branch, orbc.Commit),
+	}}}
 }
 
 func nameToORBC(name string) (*OrgRepoBranchCommit, error) {
@@ -114,7 +112,6 @@ func nameToORBC(name string) (*OrgRepoBranchCommit, error) {
 var _ reconcile.Reconciler = &reconciler{}
 
 type reconciler struct {
-	ctx                  context.Context
 	log                  *logrus.Entry
 	config               config.Getter
 	client               ctrlruntimeclient.Client
@@ -123,16 +120,16 @@ type reconciler struct {
 	dryRun               bool
 }
 
-func (r *reconciler) Reconcile(request controllerruntime.Request) (controllerruntime.Result, error) {
+func (r *reconciler) Reconcile(ctx context.Context, request controllerruntime.Request) (controllerruntime.Result, error) {
 	log := r.log.WithField("request", request.String())
-	err := r.reconcile(log, request)
+	err := r.reconcile(ctx, log, request)
 	if err != nil {
 		log.WithError(err).Error("Reconciliation failed")
 	}
 	return reconcile.Result{}, err
 }
 
-func (r *reconciler) reconcile(log *logrus.Entry, request controllerruntime.Request) error {
+func (r *reconciler) reconcile(ctx context.Context, log *logrus.Entry, request controllerruntime.Request) error {
 	orbc, err := nameToORBC(request.Name)
 	if err != nil {
 		return nonRetriableError{err: fmt.Errorf("failed to decode key: %w", err)}
@@ -144,7 +141,7 @@ func (r *reconciler) reconcile(log *logrus.Entry, request controllerruntime.Requ
 		return nil
 	}
 
-	isJobAlreadyRunning, err := r.isJobAlreadyRunning(pj)
+	isJobAlreadyRunning, err := r.isJobAlreadyRunning(ctx, pj)
 	if err != nil {
 		return fmt.Errorf("failed to check if job is already running: %w", err)
 	}
@@ -160,7 +157,7 @@ func (r *reconciler) reconcile(log *logrus.Entry, request controllerruntime.Requ
 		return nil
 	}
 
-	if err := r.client.Create(r.ctx, pj); err != nil {
+	if err := r.client.Create(ctx, pj); err != nil {
 		return fmt.Errorf("failed to create prowjob: %w", err)
 	}
 	r.createdJobsCounter.WithLabelValues(orbc.Org, orbc.Repo, orbc.Branch).Inc()
@@ -170,7 +167,7 @@ func (r *reconciler) reconcile(log *logrus.Entry, request controllerruntime.Requ
 	// it successfully.
 	key := ctrlruntimeclient.ObjectKey{Namespace: pj.Namespace, Name: pj.Name}
 	if err := wait.Poll(100*time.Millisecond, 5*time.Second, func() (bool, error) {
-		if err := r.client.Get(r.ctx, key, &prowv1.ProwJob{}); err != nil {
+		if err := r.client.Get(ctx, key, &prowv1.ProwJob{}); err != nil {
 			if kerrors.IsNotFound(err) {
 				return false, nil
 			}
@@ -184,7 +181,7 @@ func (r *reconciler) reconcile(log *logrus.Entry, request controllerruntime.Requ
 	return nil
 }
 
-func (r *reconciler) isJobAlreadyRunning(pj *prowv1.ProwJob) (bool, error) {
+func (r *reconciler) isJobAlreadyRunning(ctx context.Context, pj *prowv1.ProwJob) (bool, error) {
 
 	if pj.Labels[kube.ProwJobAnnotation] == "" ||
 		pj.Labels[kube.OrgLabel] == "" ||
@@ -201,7 +198,7 @@ func (r *reconciler) isJobAlreadyRunning(pj *prowv1.ProwJob) (bool, error) {
 	namespaceSelector := ctrlruntimeclient.InNamespace(r.config().ProwJobNamespace)
 
 	prowJobs := &prowv1.ProwJobList{}
-	if err := r.client.List(r.ctx, prowJobs, labelSelector, namespaceSelector); err != nil {
+	if err := r.client.List(ctx, prowJobs, labelSelector, namespaceSelector); err != nil {
 		return false, fmt.Errorf("failed to list prowjobs: %w", err)
 	}
 

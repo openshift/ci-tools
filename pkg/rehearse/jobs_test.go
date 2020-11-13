@@ -1158,7 +1158,7 @@ type tc struct {
 	postListReactors []func(runtime.Object) error
 }
 
-func (tc *tc) Create(ctx context.Context, obj runtime.Object, opts ...ctrlruntimeclient.CreateOption) error {
+func (tc *tc) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
 	for _, createReactor := range tc.createReactors {
 		if err := createReactor(obj); err != nil {
 			return err
@@ -1168,7 +1168,7 @@ func (tc *tc) Create(ctx context.Context, obj runtime.Object, opts ...ctrlruntim
 	return tc.Client.Create(ctx, obj, opts...)
 }
 
-func (tc *tc) List(ctx context.Context, obj runtime.Object, opts ...ctrlruntimeclient.ListOption) error {
+func (tc *tc) List(ctx context.Context, obj ctrlruntimeclient.ObjectList, opts ...ctrlruntimeclient.ListOption) error {
 	if err := tc.Client.List(ctx, obj, opts...); err != nil {
 		return err
 	}

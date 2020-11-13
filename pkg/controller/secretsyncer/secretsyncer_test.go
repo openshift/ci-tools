@@ -10,7 +10,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -103,13 +102,12 @@ func TestMirrorSecret(t *testing.T) {
 
 			req := requestForCluster(cluster, "test-ns", "src")
 			r := &reconciler{
-				ctx:                    context.Background(),
 				config:                 ca.Config,
 				referenceClusterClient: fakectrlruntimeclient.NewFakeClient(&tc.src),
 				clients:                map[string]ctrlruntimeclient.Client{"some-cluster": targetClient},
 				targetFilter:           tc.targetFilter,
 			}
-			if err := r.reconcile(logrus.NewEntry(logrus.New()), req); err != nil != tc.shouldErr {
+			if err := r.reconcile(context.Background(), logrus.NewEntry(logrus.New()), req); err != nil != tc.shouldErr {
 				t.Fatalf("shouldErr is %t, got %v", tc.shouldErr, err)
 			}
 			if len(tc.expectedData) == 0 {
@@ -131,7 +129,7 @@ type potentiallyCreateErroringClient struct {
 	err error
 }
 
-func (pcec *potentiallyCreateErroringClient) Create(ctx context.Context, obj runtime.Object, opts ...ctrlruntimeclient.CreateOption) error {
+func (pcec *potentiallyCreateErroringClient) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
 	if pcec.err != nil {
 		return pcec.err
 	}

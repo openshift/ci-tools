@@ -53,7 +53,7 @@ type imagestreamtagwrapper struct {
 	ctrlruntimeclient.Client
 }
 
-func (istw *imagestreamtagwrapper) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj runtime.Object) error {
+func (istw *imagestreamtagwrapper) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object) error {
 	if imageStreamTag, isImageStreamTag := obj.(*imagev1.ImageStreamTag); isImageStreamTag {
 		return istw.assembleImageStreamTag(ctx, key, imageStreamTag)
 	}
@@ -422,7 +422,7 @@ func fillImageLayers(image *imagev1.Image, manifest dockerapi10.DockerImageManif
 	return nil
 }
 
-func (istw *imagestreamtagwrapper) List(ctx context.Context, list runtime.Object, opts ...ctrlruntimeclient.ListOption) error {
+func (istw *imagestreamtagwrapper) List(ctx context.Context, list ctrlruntimeclient.ObjectList, opts ...ctrlruntimeclient.ListOption) error {
 	if _, isImageStreamTagList := list.(*imagev1.ImageStreamTagList); isImageStreamTagList {
 		return errors.New("list for imageStramTags is not implemented")
 	}

@@ -1,6 +1,7 @@
 package promotionreconciler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -311,7 +312,7 @@ func TestReconcile(t *testing.T) {
 				enqueueJob:   func(orbc prowjobreconciler.OrgRepoBranchCommit) { req = &orbc },
 			}
 
-			err := r.reconcile(reconcile.Request{NamespacedName: types.NamespacedName{
+			err := r.reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{
 				Namespace: "namespace",
 				Name:      "name:tag",
 			}}, r.log)

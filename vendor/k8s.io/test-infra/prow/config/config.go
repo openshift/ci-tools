@@ -105,9 +105,9 @@ type ProwConfig struct {
 	Plank            Plank            `json:"plank,omitempty"`
 	Sinker           Sinker           `json:"sinker,omitempty"`
 	Deck             Deck             `json:"deck,omitempty"`
-	BranchProtection BranchProtection `json:"branch-protection,omitempty"`
-	Gerrit           Gerrit           `json:"gerrit,omitempty"`
-	GitHubReporter   GitHubReporter   `json:"github_reporter,omitempty"`
+	BranchProtection BranchProtection `json:"branch-protection"`
+	Gerrit           Gerrit           `json:"gerrit"`
+	GitHubReporter   GitHubReporter   `json:"github_reporter"`
 	// Deprecated: this option will be removed in May 2020.
 	SlackReporter        *SlackReporter       `json:"slack_reporter,omitempty"`
 	SlackReporterConfigs SlackReporterConfigs `json:"slack_reporter_configs,omitempty"`
@@ -1097,8 +1097,7 @@ func yamlToConfig(path string, nc interface{}) error {
 		jc = &v.JobConfig
 	}
 	for rep := range jc.PresubmitsStatic {
-		var fix func(*Presubmit)
-		fix = func(job *Presubmit) {
+		fix := func(job *Presubmit) {
 			job.SourcePath = path
 		}
 		for i := range jc.PresubmitsStatic[rep] {
@@ -1106,8 +1105,7 @@ func yamlToConfig(path string, nc interface{}) error {
 		}
 	}
 	for rep := range jc.PostsubmitsStatic {
-		var fix func(*Postsubmit)
-		fix = func(job *Postsubmit) {
+		fix := func(job *Postsubmit) {
 			job.SourcePath = path
 		}
 		for i := range jc.PostsubmitsStatic[rep] {

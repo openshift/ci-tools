@@ -16,7 +16,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -113,7 +112,7 @@ func TestRegistryClusterHandlerFactory(t *testing.T) {
 					Tags: []imagev1.NamedTagEventList{{Tag: tagName}},
 				},
 			}
-			event := event.CreateEvent{Meta: obj, Object: obj}
+			event := event.CreateEvent{Object: obj}
 			handler.Create(event, queue)
 
 			if diff := cmp.Diff(tc.expected, queue.received); diff != "" {
@@ -585,7 +584,6 @@ func TestReconcile(t *testing.T) {
 			log := logrus.NewEntry(logrus.StandardLogger())
 			logrus.SetLevel(logrus.TraceLevel)
 			r := &reconciler{
-				ctx:                 ctx,
 				log:                 log,
 				registryClient:      tc.registryClient,
 				buildClusterClients: tc.buildClusterClients,
@@ -597,7 +595,7 @@ func TestReconcile(t *testing.T) {
 			}
 
 			request := reconcile.Request{NamespacedName: tc.request}
-			err := r.reconcile(request, r.log)
+			err := r.reconcile(context.Background(), request, r.log)
 			if err := tc.verify(r.registryClient, r.buildClusterClients, err); err != nil {
 				t.Errorf("verification failed: %v", err)
 			}
@@ -620,7 +618,7 @@ type imageImportStatusSettingClient struct {
 	failure bool
 }
 
-func (client *imageImportStatusSettingClient) Create(ctx context.Context, obj runtime.Object, opts ...ctrlruntimeclient.CreateOption) error {
+func (client *imageImportStatusSettingClient) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
 	if asserted, match := obj.(*imagev1.ImageStreamImport); match {
 		asserted.Status.Images = []imagev1.ImageImportStatus{{}}
 		if client.failure {
@@ -646,7 +644,7 @@ func TestTestImageStramTagImportHandlerRoundTrips(t *testing.T) {
 	}
 	queue := &hijackingQueue{}
 
-	event := event.CreateEvent{Meta: obj, Object: obj}
+	event := event.CreateEvent{Object: obj}
 	testImageStreamTagImportHandler().Create(event, queue)
 
 	if n := len(queue.received); n != 1 {

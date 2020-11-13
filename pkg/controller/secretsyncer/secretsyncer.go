@@ -39,7 +39,6 @@ func AddToManager(mgr manager.Manager,
 ) error {
 
 	r := &reconciler{
-		ctx:                    context.Background(),
 		log:                    logrus.WithField("controller", ControllerName),
 		config:                 config,
 		referenceClusterClient: referenceCluster.GetClient(),
@@ -66,16 +65,14 @@ func AddToManager(mgr manager.Manager,
 
 	if err := c.Watch(
 		source.NewKindWithCache(&corev1.Secret{}, referenceCluster.GetCache()),
-		&handler.EnqueueRequestsFromMapFunc{ToRequests: handler.ToRequestsFunc(
-			func(mo handler.MapObject) []reconcile.Request {
-				// The reference cluster enq all clusters
-				var requests []reconcile.Request
-				for _, targetCluster := range allTargetClusters.List() {
-					requests = append(requests, requestForCluster(targetCluster, mo.Meta.GetNamespace(), mo.Meta.GetName()))
-				}
-				return requests
-			},
-		)},
+		handler.EnqueueRequestsFromMapFunc(func(o ctrlruntimeclient.Object) []reconcile.Request {
+			// The reference cluster enq all clusters
+			var requests []reconcile.Request
+			for _, targetCluster := range allTargetClusters.List() {
+				requests = append(requests, requestForCluster(targetCluster, o.GetNamespace(), o.GetName()))
+			}
+			return requests
+		}),
 	); err != nil {
 		return fmt.Errorf("failed to create watch on reference cluster %s: %w", referenceClusterName, err)
 	}
@@ -86,7 +83,6 @@ func AddToManager(mgr manager.Manager,
 type filter func(target *boostrapSecretConfigTarget) bool
 
 type reconciler struct {
-	ctx                    context.Context
 	log                    *logrus.Entry
 	config                 config.Getter
 	referenceClusterClient ctrlruntimeclient.Client
@@ -94,9 +90,9 @@ type reconciler struct {
 	targetFilter           filter
 }
 
-func (r *reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *reconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	log := r.log.WithField("request", request.String())
-	err := r.reconcile(log, request)
+	err := r.reconcile(ctx, log, request)
 	if err != nil {
 		log.WithError(err).Error("Reconciliation failed")
 	} else {
@@ -105,7 +101,7 @@ func (r *reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	return reconcile.Result{}, controllerutil.SwallowIfTerminal(err)
 }
 
-func (r *reconciler) reconcile(log *logrus.Entry, encodedRequest reconcile.Request) error {
+func (r *reconciler) reconcile(ctx context.Context, log *logrus.Entry, encodedRequest reconcile.Request) error {
 	cluster, sourceSecretName, err := decodeRequest(encodedRequest)
 	if err != nil {
 		return fmt.Errorf("failed to decode request %s: %w", encodedRequest, err)
@@ -118,7 +114,7 @@ func (r *reconciler) reconcile(log *logrus.Entry, encodedRequest reconcile.Reque
 	log.WithField("request", sourceSecretName.String()).Trace("Reconciling")
 
 	source := &corev1.Secret{}
-	if err := r.referenceClusterClient.Get(r.ctx, sourceSecretName, source); err != nil {
+	if err := r.referenceClusterClient.Get(ctx, sourceSecretName, source); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
@@ -142,13 +138,13 @@ func (r *reconciler) reconcile(log *logrus.Entry, encodedRequest reconcile.Reque
 
 		// TODO: Ideally we would would create one reconcile.Request per target. This here means
 		// that if a single target is broken, it will send all targets into exponential backoff.
-		mirrorErrors = append(mirrorErrors, r.mirrorSecret(log, cluster, client, source, mirrorConfig.To.SecretLocation))
+		mirrorErrors = append(mirrorErrors, r.mirrorSecret(ctx, log, cluster, client, source, mirrorConfig.To.SecretLocation))
 	}
 
 	return utilerrors.NewAggregate(mirrorErrors)
 }
 
-func (r *reconciler) mirrorSecret(log *logrus.Entry, cluster string, c ctrlruntimeclient.Client, source *corev1.Secret, to config.SecretLocation) error {
+func (r *reconciler) mirrorSecret(ctx context.Context, log *logrus.Entry, cluster string, c ctrlruntimeclient.Client, source *corev1.Secret, to config.SecretLocation) error {
 	*log = *log.WithFields(logrus.Fields{"target-namespace": to.Namespace, "target-secret": to.Name})
 
 	data := map[string][]byte{}
@@ -166,11 +162,11 @@ func (r *reconciler) mirrorSecret(log *logrus.Entry, cluster string, c ctrlrunti
 		data,
 		source.Type,
 	)
-	result, err := crcontrollerutil.CreateOrUpdate(r.ctx, c, secret, mutateFn)
+	result, err := crcontrollerutil.CreateOrUpdate(ctx, c, secret, mutateFn)
 	if err != nil {
 		// Happens if someone changes the type, just re-create it
 		if strings.Contains(err.Error(), "field is immutable") {
-			if err := recreateSecret(r.ctx, c, secret); err != nil {
+			if err := recreateSecret(ctx, c, secret); err != nil {
 				return fmt.Errorf("failed to recreate secret %s/%s: %w", secret.Namespace, secret.Name, err)
 			}
 		}

@@ -53,15 +53,15 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # either \"nginx:latest\" or \"base\" in this array will replace that\n" +
 	"                # image with the pipeline input.\n" +
 	"                as:\n" +
-	"                  - \"\"\n" +
+	"                    - \"\"\n" +
 	"                # Paths is a list of paths to copy out of this image and into the\n" +
 	"                # context directory.\n" +
 	"                paths:\n" +
-	"                  - # DestinationDir is the directory in the destination image to copy\n" +
-	"                    # to.\n" +
-	"                    destination_dir: ' '\n" +
-	"                    # SourcePath is a file or directory in the source image to copy from.\n" +
-	"                    source_path: ' '\n" +
+	"                    - # DestinationDir is the directory in the destination image to copy\n" +
+	"                      # to.\n" +
+	"                      destination_dir: ' '\n" +
+	"                      # SourcePath is a file or directory in the source image to copy from.\n" +
+	"                      source_path: ' '\n" +
 	"# CanonicalGoRepository is a directory path that represents\n" +
 	"# the desired location of the contents of this repository in\n" +
 	"# Go. If specified the location of the repository we are\n" +
@@ -72,17 +72,17 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# process. The name of each image is its \"to\" value\n" +
 	"# and can be used to build only a specific image.\n" +
 	"images:\n" +
-	"  - # ContextDir is the directory in the project\n" +
-	"    # from which this build should be run.\n" +
-	"    context_dir: ' '\n" +
-	"    # DockerfilePath is the path to a Dockerfile in the\n" +
-	"    # project to run relative to the context_dir.\n" +
-	"    dockerfile_path: ' '\n" +
-	"    from: ' '\n" +
-	"    # Inputs is a map of tag reference name to image input changes\n" +
-	"    # that will populate the build context for the Dockerfile or\n" +
-	"    # alter the input image for a multi-stage build.\n" +
-	"    inputs:\n" +
+	"    - # ContextDir is the directory in the project\n" +
+	"      # from which this build should be run.\n" +
+	"      context_dir: ' '\n" +
+	"      # DockerfilePath is the path to a Dockerfile in the\n" +
+	"      # project to run relative to the context_dir.\n" +
+	"      dockerfile_path: ' '\n" +
+	"      from: ' '\n" +
+	"      # Inputs is a map of tag reference name to image input changes\n" +
+	"      # that will populate the build context for the Dockerfile or\n" +
+	"      # alter the input image for a multi-stage build.\n" +
+	"      inputs:\n" +
 	"        \"\":\n" +
 	"            # As is a list of multi-stage step names or image names that will\n" +
 	"            # be replaced by the image reference from this step. For instance,\n" +
@@ -90,29 +90,29 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # either \"nginx:latest\" or \"base\" in this array will replace that\n" +
 	"            # image with the pipeline input.\n" +
 	"            as:\n" +
-	"              - \"\"\n" +
+	"                - \"\"\n" +
 	"            # Paths is a list of paths to copy out of this image and into the\n" +
 	"            # context directory.\n" +
 	"            paths:\n" +
-	"              - # DestinationDir is the directory in the destination image to copy\n" +
-	"                # to.\n" +
-	"                destination_dir: ' '\n" +
-	"                # SourcePath is a file or directory in the source image to copy from.\n" +
-	"                source_path: ' '\n" +
-	"    to: ' '\n" +
+	"                - # DestinationDir is the directory in the destination image to copy\n" +
+	"                  # to.\n" +
+	"                  destination_dir: ' '\n" +
+	"                  # SourcePath is a file or directory in the source image to copy from.\n" +
+	"                  source_path: ' '\n" +
+	"      to: ' '\n" +
 	"# Operator describes the operator bundle(s) that is built by the project\n" +
 	"operator:\n" +
 	"    # Bundles define a dockerfile and build context to build a bundle\n" +
 	"    bundles:\n" +
-	"      - context_dir: ' '\n" +
-	"        dockerfile_path: ' '\n" +
+	"        - context_dir: ' '\n" +
+	"          dockerfile_path: ' '\n" +
 	"    # Substitutions describes the pullspecs in the operator manifests that must be subsituted\n" +
 	"    # with the pull specs of the images in the CI registry\n" +
 	"    substitutions:\n" +
-	"      - # PullSpec is the pullspec that needs to be replaced\n" +
-	"        pullspec: ' '\n" +
-	"        # With is the string that the PullSpec is being replaced by\n" +
-	"        with: ' '\n" +
+	"        - # PullSpec is the pullspec that needs to be replaced\n" +
+	"          pullspec: ' '\n" +
+	"          # With is the string that the PullSpec is being replaced by\n" +
+	"          with: ' '\n" +
 	"# PromotionConfiguration determines how images are promoted\n" +
 	"# by this command. It is ignored unless promotion has specifically\n" +
 	"# been requested. Promotion is performed after all other steps\n" +
@@ -131,7 +131,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"    # Use exclusions when you want to build images for testing\n" +
 	"    # but not promote them afterwards.\n" +
 	"    excluded_images:\n" +
-	"      - \"\"\n" +
+	"        - \"\"\n" +
 	"    # Name is an optional image stream name to use that\n" +
 	"    # contains all component tags. If specified, tag is\n" +
 	"    # ignored.\n" +
@@ -148,21 +148,21 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# RawSteps are literal Steps that should be\n" +
 	"# included in the final pipeline.\n" +
 	"raw_steps:\n" +
-	"  - bundle_source_step:\n" +
+	"    - bundle_source_step:\n" +
 	"        # Substitutions contains pullspecs that need to be replaced by images\n" +
 	"        # in the CI cluster for operator bundle images\n" +
 	"        substitutions:\n" +
-	"          - # PullSpec is the pullspec that needs to be replaced\n" +
-	"            pullspec: ' '\n" +
-	"            # With is the string that the PullSpec is being replaced by\n" +
-	"            with: ' '\n" +
-	"    index_generator_step:\n" +
+	"            - # PullSpec is the pullspec that needs to be replaced\n" +
+	"              pullspec: ' '\n" +
+	"              # With is the string that the PullSpec is being replaced by\n" +
+	"              with: ' '\n" +
+	"      index_generator_step:\n" +
 	"        # OperatorIndex is a list of the names of the bundle images that the\n" +
 	"        # index will contain in its database.\n" +
 	"        operator_index:\n" +
-	"          - \"\"\n" +
+	"            - \"\"\n" +
 	"        to: ' '\n" +
-	"    input_image_tag_step:\n" +
+	"      input_image_tag_step:\n" +
 	"        base_image:\n" +
 	"            # As is an optional string to use as the intermediate name for this reference.\n" +
 	"            as: ' '\n" +
@@ -170,7 +170,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            namespace: ' '\n" +
 	"            tag: ' '\n" +
 	"        to: ' '\n" +
-	"    output_image_tag_step:\n" +
+	"      output_image_tag_step:\n" +
 	"        from: ' '\n" +
 	"        # Optional means the output step is not built, published, or\n" +
 	"        # promoted unless explicitly targeted. Use for builds which\n" +
@@ -182,14 +182,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            name: ' '\n" +
 	"            namespace: ' '\n" +
 	"            tag: ' '\n" +
-	"    pipeline_image_cache_step:\n" +
+	"      pipeline_image_cache_step:\n" +
 	"        # Commands are the shell commands to run in\n" +
 	"        # the repository root to create the cached\n" +
 	"        # content.\n" +
 	"        commands: ' '\n" +
 	"        from: ' '\n" +
 	"        to: ' '\n" +
-	"    project_directory_image_build_inputs:\n" +
+	"      project_directory_image_build_inputs:\n" +
 	"        # ContextDir is the directory in the project\n" +
 	"        # from which this build should be run.\n" +
 	"        context_dir: ' '\n" +
@@ -207,16 +207,16 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # either \"nginx:latest\" or \"base\" in this array will replace that\n" +
 	"                # image with the pipeline input.\n" +
 	"                as:\n" +
-	"                  - \"\"\n" +
+	"                    - \"\"\n" +
 	"                # Paths is a list of paths to copy out of this image and into the\n" +
 	"                # context directory.\n" +
 	"                paths:\n" +
-	"                  - # DestinationDir is the directory in the destination image to copy\n" +
-	"                    # to.\n" +
-	"                    destination_dir: ' '\n" +
-	"                    # SourcePath is a file or directory in the source image to copy from.\n" +
-	"                    source_path: ' '\n" +
-	"    project_directory_image_build_step:\n" +
+	"                    - # DestinationDir is the directory in the destination image to copy\n" +
+	"                      # to.\n" +
+	"                      destination_dir: ' '\n" +
+	"                      # SourcePath is a file or directory in the source image to copy from.\n" +
+	"                      source_path: ' '\n" +
+	"      project_directory_image_build_step:\n" +
 	"        # ContextDir is the directory in the project\n" +
 	"        # from which this build should be run.\n" +
 	"        context_dir: ' '\n" +
@@ -235,17 +235,17 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # either \"nginx:latest\" or \"base\" in this array will replace that\n" +
 	"                # image with the pipeline input.\n" +
 	"                as:\n" +
-	"                  - \"\"\n" +
+	"                    - \"\"\n" +
 	"                # Paths is a list of paths to copy out of this image and into the\n" +
 	"                # context directory.\n" +
 	"                paths:\n" +
-	"                  - # DestinationDir is the directory in the destination image to copy\n" +
-	"                    # to.\n" +
-	"                    destination_dir: ' '\n" +
-	"                    # SourcePath is a file or directory in the source image to copy from.\n" +
-	"                    source_path: ' '\n" +
+	"                    - # DestinationDir is the directory in the destination image to copy\n" +
+	"                      # to.\n" +
+	"                      destination_dir: ' '\n" +
+	"                      # SourcePath is a file or directory in the source image to copy from.\n" +
+	"                      source_path: ' '\n" +
 	"        to: ' '\n" +
-	"    release_images_tag_step:\n" +
+	"      release_images_tag_step:\n" +
 	"        # Name is the image stream name to use that contains all\n" +
 	"        # component tags.\n" +
 	"        name: ' '\n" +
@@ -256,7 +256,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # all release artifacts not built in the current\n" +
 	"        # job are tagged from.\n" +
 	"        namespace: ' '\n" +
-	"    resolved_release_images_step:\n" +
+	"      resolved_release_images_step:\n" +
 	"        # Candidate describes a candidate release payload\n" +
 	"        candidate:\n" +
 	"            # Architecture is the architecture for the product.\n" +
@@ -289,12 +289,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            channel: ' '\n" +
 	"            # Version is the minor version to search for\n" +
 	"            version: ' '\n" +
-	"    rpm_image_injection_step:\n" +
+	"      rpm_image_injection_step:\n" +
 	"        from: ' '\n" +
 	"        to: ' '\n" +
-	"    rpm_serve_step:\n" +
+	"      rpm_serve_step:\n" +
 	"        from: ' '\n" +
-	"    source_step:\n" +
+	"      source_step:\n" +
 	"        # ClonerefsImage is the image where we get the clonerefs tool\n" +
 	"        clonerefs_image:\n" +
 	"            # As is an optional string to use as the intermediate name for this reference.\n" +
@@ -307,7 +307,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        clonerefs_path: ' '\n" +
 	"        from: ' '\n" +
 	"        to: ' '\n" +
-	"    test_step:\n" +
+	"      test_step:\n" +
 	"        # ArtifactDir is an optional directory that contains the\n" +
 	"        # artifacts to upload. If unset, this will default to\n" +
 	"        # \"/tmp/artifacts\".\n" +
@@ -347,206 +347,206 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                \"\": \"\"\n" +
 	"            # Observers are the observers that need to be run\n" +
 	"            observers:\n" +
-	"              - # Commands is the command(s) that will be run inside the image.\n" +
-	"                commands: ' '\n" +
-	"                # From is the container image that will be used for this observer.\n" +
-	"                from: ' '\n" +
-	"                # FromImage is a literal ImageStreamTag reference to use for this observer.\n" +
-	"                from_image:\n" +
+	"                - # Commands is the command(s) that will be run inside the image.\n" +
+	"                  commands: ' '\n" +
+	"                  # From is the container image that will be used for this observer.\n" +
+	"                  from: ' '\n" +
+	"                  # FromImage is a literal ImageStreamTag reference to use for this observer.\n" +
+	"                  from_image:\n" +
 	"                    # As is an optional string to use as the intermediate name for this reference.\n" +
 	"                    as: ' '\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
-	"                # Name is the name of this observer\n" +
-	"                name: ' '\n" +
+	"                  # Name is the name of this observer\n" +
+	"                  name: ' '\n" +
 	"            # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"            # Post steps always run, even if previous steps fail.\n" +
 	"            post:\n" +
-	"              - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
-	"                active_deadline_seconds: 0\n" +
-	"                # ArtifactDir is the directory from which artifacts will be extracted\n" +
-	"                # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
-	"                artifact_dir: ' '\n" +
-	"                # As is the name of the LiteralTestStep.\n" +
-	"                as: ' '\n" +
-	"                # Cli is the (optional) name of the release from which the `oc` binary\n" +
-	"                # will be injected into this step.\n" +
-	"                cli: ' '\n" +
-	"                # Commands is the command(s) that will be run inside the image.\n" +
-	"                commands: ' '\n" +
-	"                # Credentials defines the credentials we'll mount into this step.\n" +
-	"                credentials:\n" +
-	"                  - # MountPath is where the secret should be mounted.\n" +
-	"                    mount_path: ' '\n" +
-	"                    # Names is which source secret to mount.\n" +
-	"                    name: ' '\n" +
-	"                    # Namespace is where the source secret exists.\n" +
-	"                    namespace: ' '\n" +
-	"                # Dependencies lists images which must be available before the test runs\n" +
-	"                # and the environment variables which are used to expose their pull specs.\n" +
-	"                dependencies:\n" +
-	"                  - # Env is the environment variable that the image's pull spec is exposed with\n" +
-	"                    env: ' '\n" +
-	"                    # Name is the tag or stream:tag that this dependency references\n" +
-	"                    name: ' '\n" +
-	"                # Environment lists parameters that should be set by the test.\n" +
-	"                env:\n" +
-	"                  - # Default if not set, optional, makes the parameter not required if set.\n" +
-	"                    default: \"\"\n" +
-	"                    # Documentation is a textual description of the parameter.\n" +
-	"                    documentation: ' '\n" +
-	"                    # Name of the environment variable.\n" +
-	"                    name: ' '\n" +
-	"                # From is the container image that will be used for this step.\n" +
-	"                from: ' '\n" +
-	"                # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
-	"                from_image:\n" +
+	"                - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
+	"                  active_deadline_seconds: 0\n" +
+	"                  # ArtifactDir is the directory from which artifacts will be extracted\n" +
+	"                  # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
+	"                  artifact_dir: ' '\n" +
+	"                  # As is the name of the LiteralTestStep.\n" +
+	"                  as: ' '\n" +
+	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
+	"                  # will be injected into this step.\n" +
+	"                  cli: ' '\n" +
+	"                  # Commands is the command(s) that will be run inside the image.\n" +
+	"                  commands: ' '\n" +
+	"                  # Credentials defines the credentials we'll mount into this step.\n" +
+	"                  credentials:\n" +
+	"                    - # MountPath is where the secret should be mounted.\n" +
+	"                      mount_path: ' '\n" +
+	"                      # Names is which source secret to mount.\n" +
+	"                      name: ' '\n" +
+	"                      # Namespace is where the source secret exists.\n" +
+	"                      namespace: ' '\n" +
+	"                  # Dependencies lists images which must be available before the test runs\n" +
+	"                  # and the environment variables which are used to expose their pull specs.\n" +
+	"                  dependencies:\n" +
+	"                    - # Env is the environment variable that the image's pull spec is exposed with\n" +
+	"                      env: ' '\n" +
+	"                      # Name is the tag or stream:tag that this dependency references\n" +
+	"                      name: ' '\n" +
+	"                  # Environment lists parameters that should be set by the test.\n" +
+	"                  env:\n" +
+	"                    - # Default if not set, optional, makes the parameter not required if set.\n" +
+	"                      default: \"\"\n" +
+	"                      # Documentation is a textual description of the parameter.\n" +
+	"                      documentation: ' '\n" +
+	"                      # Name of the environment variable.\n" +
+	"                      name: ' '\n" +
+	"                  # From is the container image that will be used for this step.\n" +
+	"                  from: ' '\n" +
+	"                  # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
+	"                  from_image:\n" +
 	"                    # As is an optional string to use as the intermediate name for this reference.\n" +
 	"                    as: ' '\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
-	"                # Observers are the observers that should be running\n" +
-	"                observers:\n" +
-	"                  - \"\"\n" +
-	"                # OptionalOnSuccess defines if this step should be skipped as long\n" +
-	"                # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
-	"                # flag is set to true in MultiStageTestConfiguration. This option is\n" +
-	"                # applicable to `post` steps.\n" +
-	"                optional_on_success: false\n" +
-	"                # Resources defines the resource requirements for the step.\n" +
-	"                resources:\n" +
+	"                  # Observers are the observers that should be running\n" +
+	"                  observers:\n" +
+	"                    - \"\"\n" +
+	"                  # OptionalOnSuccess defines if this step should be skipped as long\n" +
+	"                  # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
+	"                  # flag is set to true in MultiStageTestConfiguration. This option is\n" +
+	"                  # applicable to `post` steps.\n" +
+	"                  optional_on_success: false\n" +
+	"                  # Resources defines the resource requirements for the step.\n" +
+	"                  resources:\n" +
 	"                    limits:\n" +
 	"                        \"\": \"\"\n" +
 	"                    requests:\n" +
 	"                        \"\": \"\"\n" +
-	"                # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
-	"                termination_grace_period_seconds: 0\n" +
+	"                  # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
+	"                  termination_grace_period_seconds: 0\n" +
 	"            # Pre is the array of test steps run to set up the environment for the test.\n" +
 	"            pre:\n" +
-	"              - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
-	"                active_deadline_seconds: 0\n" +
-	"                # ArtifactDir is the directory from which artifacts will be extracted\n" +
-	"                # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
-	"                artifact_dir: ' '\n" +
-	"                # As is the name of the LiteralTestStep.\n" +
-	"                as: ' '\n" +
-	"                # Cli is the (optional) name of the release from which the `oc` binary\n" +
-	"                # will be injected into this step.\n" +
-	"                cli: ' '\n" +
-	"                # Commands is the command(s) that will be run inside the image.\n" +
-	"                commands: ' '\n" +
-	"                # Credentials defines the credentials we'll mount into this step.\n" +
-	"                credentials:\n" +
-	"                  - # MountPath is where the secret should be mounted.\n" +
-	"                    mount_path: ' '\n" +
-	"                    # Names is which source secret to mount.\n" +
-	"                    name: ' '\n" +
-	"                    # Namespace is where the source secret exists.\n" +
-	"                    namespace: ' '\n" +
-	"                # Dependencies lists images which must be available before the test runs\n" +
-	"                # and the environment variables which are used to expose their pull specs.\n" +
-	"                dependencies:\n" +
-	"                  - # Env is the environment variable that the image's pull spec is exposed with\n" +
-	"                    env: ' '\n" +
-	"                    # Name is the tag or stream:tag that this dependency references\n" +
-	"                    name: ' '\n" +
-	"                # Environment lists parameters that should be set by the test.\n" +
-	"                env:\n" +
-	"                  - # Default if not set, optional, makes the parameter not required if set.\n" +
-	"                    default: \"\"\n" +
-	"                    # Documentation is a textual description of the parameter.\n" +
-	"                    documentation: ' '\n" +
-	"                    # Name of the environment variable.\n" +
-	"                    name: ' '\n" +
-	"                # From is the container image that will be used for this step.\n" +
-	"                from: ' '\n" +
-	"                # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
-	"                from_image:\n" +
+	"                - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
+	"                  active_deadline_seconds: 0\n" +
+	"                  # ArtifactDir is the directory from which artifacts will be extracted\n" +
+	"                  # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
+	"                  artifact_dir: ' '\n" +
+	"                  # As is the name of the LiteralTestStep.\n" +
+	"                  as: ' '\n" +
+	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
+	"                  # will be injected into this step.\n" +
+	"                  cli: ' '\n" +
+	"                  # Commands is the command(s) that will be run inside the image.\n" +
+	"                  commands: ' '\n" +
+	"                  # Credentials defines the credentials we'll mount into this step.\n" +
+	"                  credentials:\n" +
+	"                    - # MountPath is where the secret should be mounted.\n" +
+	"                      mount_path: ' '\n" +
+	"                      # Names is which source secret to mount.\n" +
+	"                      name: ' '\n" +
+	"                      # Namespace is where the source secret exists.\n" +
+	"                      namespace: ' '\n" +
+	"                  # Dependencies lists images which must be available before the test runs\n" +
+	"                  # and the environment variables which are used to expose their pull specs.\n" +
+	"                  dependencies:\n" +
+	"                    - # Env is the environment variable that the image's pull spec is exposed with\n" +
+	"                      env: ' '\n" +
+	"                      # Name is the tag or stream:tag that this dependency references\n" +
+	"                      name: ' '\n" +
+	"                  # Environment lists parameters that should be set by the test.\n" +
+	"                  env:\n" +
+	"                    - # Default if not set, optional, makes the parameter not required if set.\n" +
+	"                      default: \"\"\n" +
+	"                      # Documentation is a textual description of the parameter.\n" +
+	"                      documentation: ' '\n" +
+	"                      # Name of the environment variable.\n" +
+	"                      name: ' '\n" +
+	"                  # From is the container image that will be used for this step.\n" +
+	"                  from: ' '\n" +
+	"                  # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
+	"                  from_image:\n" +
 	"                    # As is an optional string to use as the intermediate name for this reference.\n" +
 	"                    as: ' '\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
-	"                # Observers are the observers that should be running\n" +
-	"                observers:\n" +
-	"                  - \"\"\n" +
-	"                # OptionalOnSuccess defines if this step should be skipped as long\n" +
-	"                # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
-	"                # flag is set to true in MultiStageTestConfiguration. This option is\n" +
-	"                # applicable to `post` steps.\n" +
-	"                optional_on_success: false\n" +
-	"                # Resources defines the resource requirements for the step.\n" +
-	"                resources:\n" +
+	"                  # Observers are the observers that should be running\n" +
+	"                  observers:\n" +
+	"                    - \"\"\n" +
+	"                  # OptionalOnSuccess defines if this step should be skipped as long\n" +
+	"                  # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
+	"                  # flag is set to true in MultiStageTestConfiguration. This option is\n" +
+	"                  # applicable to `post` steps.\n" +
+	"                  optional_on_success: false\n" +
+	"                  # Resources defines the resource requirements for the step.\n" +
+	"                  resources:\n" +
 	"                    limits:\n" +
 	"                        \"\": \"\"\n" +
 	"                    requests:\n" +
 	"                        \"\": \"\"\n" +
-	"                # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
-	"                termination_grace_period_seconds: 0\n" +
+	"                  # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
+	"                  termination_grace_period_seconds: 0\n" +
 	"            # Test is the array of test steps that define the actual test.\n" +
 	"            test:\n" +
-	"              - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
-	"                active_deadline_seconds: 0\n" +
-	"                # ArtifactDir is the directory from which artifacts will be extracted\n" +
-	"                # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
-	"                artifact_dir: ' '\n" +
-	"                # As is the name of the LiteralTestStep.\n" +
-	"                as: ' '\n" +
-	"                # Cli is the (optional) name of the release from which the `oc` binary\n" +
-	"                # will be injected into this step.\n" +
-	"                cli: ' '\n" +
-	"                # Commands is the command(s) that will be run inside the image.\n" +
-	"                commands: ' '\n" +
-	"                # Credentials defines the credentials we'll mount into this step.\n" +
-	"                credentials:\n" +
-	"                  - # MountPath is where the secret should be mounted.\n" +
-	"                    mount_path: ' '\n" +
-	"                    # Names is which source secret to mount.\n" +
-	"                    name: ' '\n" +
-	"                    # Namespace is where the source secret exists.\n" +
-	"                    namespace: ' '\n" +
-	"                # Dependencies lists images which must be available before the test runs\n" +
-	"                # and the environment variables which are used to expose their pull specs.\n" +
-	"                dependencies:\n" +
-	"                  - # Env is the environment variable that the image's pull spec is exposed with\n" +
-	"                    env: ' '\n" +
-	"                    # Name is the tag or stream:tag that this dependency references\n" +
-	"                    name: ' '\n" +
-	"                # Environment lists parameters that should be set by the test.\n" +
-	"                env:\n" +
-	"                  - # Default if not set, optional, makes the parameter not required if set.\n" +
-	"                    default: \"\"\n" +
-	"                    # Documentation is a textual description of the parameter.\n" +
-	"                    documentation: ' '\n" +
-	"                    # Name of the environment variable.\n" +
-	"                    name: ' '\n" +
-	"                # From is the container image that will be used for this step.\n" +
-	"                from: ' '\n" +
-	"                # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
-	"                from_image:\n" +
+	"                - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
+	"                  active_deadline_seconds: 0\n" +
+	"                  # ArtifactDir is the directory from which artifacts will be extracted\n" +
+	"                  # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
+	"                  artifact_dir: ' '\n" +
+	"                  # As is the name of the LiteralTestStep.\n" +
+	"                  as: ' '\n" +
+	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
+	"                  # will be injected into this step.\n" +
+	"                  cli: ' '\n" +
+	"                  # Commands is the command(s) that will be run inside the image.\n" +
+	"                  commands: ' '\n" +
+	"                  # Credentials defines the credentials we'll mount into this step.\n" +
+	"                  credentials:\n" +
+	"                    - # MountPath is where the secret should be mounted.\n" +
+	"                      mount_path: ' '\n" +
+	"                      # Names is which source secret to mount.\n" +
+	"                      name: ' '\n" +
+	"                      # Namespace is where the source secret exists.\n" +
+	"                      namespace: ' '\n" +
+	"                  # Dependencies lists images which must be available before the test runs\n" +
+	"                  # and the environment variables which are used to expose their pull specs.\n" +
+	"                  dependencies:\n" +
+	"                    - # Env is the environment variable that the image's pull spec is exposed with\n" +
+	"                      env: ' '\n" +
+	"                      # Name is the tag or stream:tag that this dependency references\n" +
+	"                      name: ' '\n" +
+	"                  # Environment lists parameters that should be set by the test.\n" +
+	"                  env:\n" +
+	"                    - # Default if not set, optional, makes the parameter not required if set.\n" +
+	"                      default: \"\"\n" +
+	"                      # Documentation is a textual description of the parameter.\n" +
+	"                      documentation: ' '\n" +
+	"                      # Name of the environment variable.\n" +
+	"                      name: ' '\n" +
+	"                  # From is the container image that will be used for this step.\n" +
+	"                  from: ' '\n" +
+	"                  # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
+	"                  from_image:\n" +
 	"                    # As is an optional string to use as the intermediate name for this reference.\n" +
 	"                    as: ' '\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
-	"                # Observers are the observers that should be running\n" +
-	"                observers:\n" +
-	"                  - \"\"\n" +
-	"                # OptionalOnSuccess defines if this step should be skipped as long\n" +
-	"                # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
-	"                # flag is set to true in MultiStageTestConfiguration. This option is\n" +
-	"                # applicable to `post` steps.\n" +
-	"                optional_on_success: false\n" +
-	"                # Resources defines the resource requirements for the step.\n" +
-	"                resources:\n" +
+	"                  # Observers are the observers that should be running\n" +
+	"                  observers:\n" +
+	"                    - \"\"\n" +
+	"                  # OptionalOnSuccess defines if this step should be skipped as long\n" +
+	"                  # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
+	"                  # flag is set to true in MultiStageTestConfiguration. This option is\n" +
+	"                  # applicable to `post` steps.\n" +
+	"                  optional_on_success: false\n" +
+	"                  # Resources defines the resource requirements for the step.\n" +
+	"                  resources:\n" +
 	"                    limits:\n" +
 	"                        \"\": \"\"\n" +
 	"                    requests:\n" +
 	"                        \"\": \"\"\n" +
-	"                # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
-	"                termination_grace_period_seconds: 0\n" +
+	"                  # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
+	"                  termination_grace_period_seconds: 0\n" +
 	"        openshift_ansible:\n" +
 	"            cluster_profile: ' '\n" +
 	"        openshift_ansible_40:\n" +
@@ -582,10 +582,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # You cannot set the Secret and Secrets attributes\n" +
 	"        # at the same time.\n" +
 	"        secrets:\n" +
-	"          - # Secret mount path. Defaults to /usr/test-secret\n" +
-	"            mount_path: ' '\n" +
-	"            # Secret name, used inside test containers\n" +
-	"            name: ' '\n" +
+	"            - # Secret mount path. Defaults to /usr/test-secret\n" +
+	"              mount_path: ' '\n" +
+	"              # Secret name, used inside test containers\n" +
+	"              name: ' '\n" +
 	"        steps:\n" +
 	"            # AllowSkipOnSuccess defines if any steps can be skipped when\n" +
 	"            # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
@@ -603,53 +603,53 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            observers:\n" +
 	"                # Disable is a list of named observers that should be disabled\n" +
 	"                disable:\n" +
-	"                  - \"\"\n" +
+	"                    - \"\"\n" +
 	"                # Enable is a list of named observer that should be enabled\n" +
 	"                enable:\n" +
-	"                  - \"\"\n" +
+	"                    - \"\"\n" +
 	"            # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"            # Post steps always run, even if previous steps fail. However, they have an option to skip\n" +
 	"            # execution if previous Pre and Test steps passed.\n" +
 	"            post:\n" +
-	"              # LiteralTestStep is a full test step definition.\n" +
-	"              - active_deadline_seconds: 0\n" +
-	"                artifact_dir: ' '\n" +
-	"                as: ' '\n" +
-	"                # Chain is the name of a step chain reference.\n" +
-	"                chain: \"\"\n" +
-	"                # Cli is the (optional) name of the release from which the `oc` binary\n" +
-	"                # will be injected into this step.\n" +
-	"                cli: ' '\n" +
-	"                commands: ' '\n" +
-	"                credentials:\n" +
-	"                  # LiteralTestStep is a full test step definition.\n" +
-	"                  - mount_path: ' '\n" +
-	"                    name: ' '\n" +
-	"                    namespace: ' '\n" +
-	"                dependencies:\n" +
-	"                  # LiteralTestStep is a full test step definition.\n" +
-	"                  - env: ' '\n" +
-	"                    name: ' '\n" +
-	"                env:\n" +
-	"                  # LiteralTestStep is a full test step definition.\n" +
-	"                  - default: \"\"\n" +
-	"                    documentation: ' '\n" +
-	"                    name: ' '\n" +
-	"                from: ' '\n" +
-	"                from_image:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - active_deadline_seconds: 0\n" +
+	"                  artifact_dir: ' '\n" +
+	"                  as: ' '\n" +
+	"                  # Chain is the name of a step chain reference.\n" +
+	"                  chain: \"\"\n" +
+	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
+	"                  # will be injected into this step.\n" +
+	"                  cli: ' '\n" +
+	"                  commands: ' '\n" +
+	"                  credentials:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - mount_path: ' '\n" +
+	"                      name: ' '\n" +
+	"                      namespace: ' '\n" +
+	"                  dependencies:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - env: ' '\n" +
+	"                      name: ' '\n" +
+	"                  env:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - default: \"\"\n" +
+	"                      documentation: ' '\n" +
+	"                      name: ' '\n" +
+	"                  from: ' '\n" +
+	"                  from_image:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    as: ' '\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
-	"                observers:\n" +
-	"                  # LiteralTestStep is a full test step definition.\n" +
-	"                  - \"\"\n" +
-	"                optional_on_success: false\n" +
-	"                # Reference is the name of a step reference.\n" +
-	"                ref: \"\"\n" +
-	"                # Resources defines the resource requirements for the step.\n" +
-	"                resources:\n" +
+	"                  observers:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - \"\"\n" +
+	"                  optional_on_success: false\n" +
+	"                  # Reference is the name of a step reference.\n" +
+	"                  ref: \"\"\n" +
+	"                  # Resources defines the resource requirements for the step.\n" +
+	"                  resources:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    limits:\n" +
 	"                        # LiteralTestStep is a full test step definition.\n" +
@@ -657,48 +657,48 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    requests:\n" +
 	"                        # LiteralTestStep is a full test step definition.\n" +
 	"                        \"\": \"\"\n" +
-	"                termination_grace_period_seconds: 0\n" +
+	"                  termination_grace_period_seconds: 0\n" +
 	"            # Pre is the array of test steps run to set up the environment for the test.\n" +
 	"            pre:\n" +
-	"              # LiteralTestStep is a full test step definition.\n" +
-	"              - active_deadline_seconds: 0\n" +
-	"                artifact_dir: ' '\n" +
-	"                as: ' '\n" +
-	"                # Chain is the name of a step chain reference.\n" +
-	"                chain: \"\"\n" +
-	"                # Cli is the (optional) name of the release from which the `oc` binary\n" +
-	"                # will be injected into this step.\n" +
-	"                cli: ' '\n" +
-	"                commands: ' '\n" +
-	"                credentials:\n" +
-	"                  # LiteralTestStep is a full test step definition.\n" +
-	"                  - mount_path: ' '\n" +
-	"                    name: ' '\n" +
-	"                    namespace: ' '\n" +
-	"                dependencies:\n" +
-	"                  # LiteralTestStep is a full test step definition.\n" +
-	"                  - env: ' '\n" +
-	"                    name: ' '\n" +
-	"                env:\n" +
-	"                  # LiteralTestStep is a full test step definition.\n" +
-	"                  - default: \"\"\n" +
-	"                    documentation: ' '\n" +
-	"                    name: ' '\n" +
-	"                from: ' '\n" +
-	"                from_image:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - active_deadline_seconds: 0\n" +
+	"                  artifact_dir: ' '\n" +
+	"                  as: ' '\n" +
+	"                  # Chain is the name of a step chain reference.\n" +
+	"                  chain: \"\"\n" +
+	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
+	"                  # will be injected into this step.\n" +
+	"                  cli: ' '\n" +
+	"                  commands: ' '\n" +
+	"                  credentials:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - mount_path: ' '\n" +
+	"                      name: ' '\n" +
+	"                      namespace: ' '\n" +
+	"                  dependencies:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - env: ' '\n" +
+	"                      name: ' '\n" +
+	"                  env:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - default: \"\"\n" +
+	"                      documentation: ' '\n" +
+	"                      name: ' '\n" +
+	"                  from: ' '\n" +
+	"                  from_image:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    as: ' '\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
-	"                observers:\n" +
-	"                  # LiteralTestStep is a full test step definition.\n" +
-	"                  - \"\"\n" +
-	"                optional_on_success: false\n" +
-	"                # Reference is the name of a step reference.\n" +
-	"                ref: \"\"\n" +
-	"                # Resources defines the resource requirements for the step.\n" +
-	"                resources:\n" +
+	"                  observers:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - \"\"\n" +
+	"                  optional_on_success: false\n" +
+	"                  # Reference is the name of a step reference.\n" +
+	"                  ref: \"\"\n" +
+	"                  # Resources defines the resource requirements for the step.\n" +
+	"                  resources:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    limits:\n" +
 	"                        # LiteralTestStep is a full test step definition.\n" +
@@ -706,48 +706,48 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    requests:\n" +
 	"                        # LiteralTestStep is a full test step definition.\n" +
 	"                        \"\": \"\"\n" +
-	"                termination_grace_period_seconds: 0\n" +
+	"                  termination_grace_period_seconds: 0\n" +
 	"            # Test is the array of test steps that define the actual test.\n" +
 	"            test:\n" +
-	"              # LiteralTestStep is a full test step definition.\n" +
-	"              - active_deadline_seconds: 0\n" +
-	"                artifact_dir: ' '\n" +
-	"                as: ' '\n" +
-	"                # Chain is the name of a step chain reference.\n" +
-	"                chain: \"\"\n" +
-	"                # Cli is the (optional) name of the release from which the `oc` binary\n" +
-	"                # will be injected into this step.\n" +
-	"                cli: ' '\n" +
-	"                commands: ' '\n" +
-	"                credentials:\n" +
-	"                  # LiteralTestStep is a full test step definition.\n" +
-	"                  - mount_path: ' '\n" +
-	"                    name: ' '\n" +
-	"                    namespace: ' '\n" +
-	"                dependencies:\n" +
-	"                  # LiteralTestStep is a full test step definition.\n" +
-	"                  - env: ' '\n" +
-	"                    name: ' '\n" +
-	"                env:\n" +
-	"                  # LiteralTestStep is a full test step definition.\n" +
-	"                  - default: \"\"\n" +
-	"                    documentation: ' '\n" +
-	"                    name: ' '\n" +
-	"                from: ' '\n" +
-	"                from_image:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - active_deadline_seconds: 0\n" +
+	"                  artifact_dir: ' '\n" +
+	"                  as: ' '\n" +
+	"                  # Chain is the name of a step chain reference.\n" +
+	"                  chain: \"\"\n" +
+	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
+	"                  # will be injected into this step.\n" +
+	"                  cli: ' '\n" +
+	"                  commands: ' '\n" +
+	"                  credentials:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - mount_path: ' '\n" +
+	"                      name: ' '\n" +
+	"                      namespace: ' '\n" +
+	"                  dependencies:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - env: ' '\n" +
+	"                      name: ' '\n" +
+	"                  env:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - default: \"\"\n" +
+	"                      documentation: ' '\n" +
+	"                      name: ' '\n" +
+	"                  from: ' '\n" +
+	"                  from_image:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    as: ' '\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
-	"                observers:\n" +
-	"                  # LiteralTestStep is a full test step definition.\n" +
-	"                  - \"\"\n" +
-	"                optional_on_success: false\n" +
-	"                # Reference is the name of a step reference.\n" +
-	"                ref: \"\"\n" +
-	"                # Resources defines the resource requirements for the step.\n" +
-	"                resources:\n" +
+	"                  observers:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - \"\"\n" +
+	"                  optional_on_success: false\n" +
+	"                  # Reference is the name of a step reference.\n" +
+	"                  ref: \"\"\n" +
+	"                  # Resources defines the resource requirements for the step.\n" +
+	"                  resources:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    limits:\n" +
 	"                        # LiteralTestStep is a full test step definition.\n" +
@@ -755,7 +755,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    requests:\n" +
 	"                        # LiteralTestStep is a full test step definition.\n" +
 	"                        \"\": \"\"\n" +
-	"                termination_grace_period_seconds: 0\n" +
+	"                  termination_grace_period_seconds: 0\n" +
 	"            # Workflow is the name of the workflow to be used for this configuration. For fields defined in both\n" +
 	"            # the config and the workflow, the fields from the config will override what is set in Workflow.\n" +
 	"            workflow: \"\"\n" +
@@ -837,17 +837,17 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# The images launched as pods but have no explicit access to\n" +
 	"# the cluster they are running on.\n" +
 	"tests:\n" +
-	"  - # ArtifactDir is an optional directory that contains the\n" +
-	"    # artifacts to upload. If unset, this will default to\n" +
-	"    # \"/tmp/artifacts\".\n" +
-	"    artifact_dir: ' '\n" +
-	"    # As is the name of the test.\n" +
-	"    as: ' '\n" +
-	"    # Commands are the shell commands to run in\n" +
-	"    # the repository root to execute tests.\n" +
-	"    commands: ' '\n" +
-	"    # Only one of the following can be not-null.\n" +
-	"    container:\n" +
+	"    - # ArtifactDir is an optional directory that contains the\n" +
+	"      # artifacts to upload. If unset, this will default to\n" +
+	"      # \"/tmp/artifacts\".\n" +
+	"      artifact_dir: ' '\n" +
+	"      # As is the name of the test.\n" +
+	"      as: ' '\n" +
+	"      # Commands are the shell commands to run in\n" +
+	"      # the repository root to execute tests.\n" +
+	"      commands: ' '\n" +
+	"      # Only one of the following can be not-null.\n" +
+	"      container:\n" +
 	"        # From is the image stream tag in the pipeline to run this\n" +
 	"        # command in.\n" +
 	"        from: ' '\n" +
@@ -857,11 +857,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Size is the requested size of the volume as a Kubernetes\n" +
 	"            # quantity, i.e. \"1Gi\" or \"500M\"\n" +
 	"            size: ' '\n" +
-	"    # Cron is how often the test is expected to run outside\n" +
-	"    # of pull request workflows. Setting this field will\n" +
-	"    # create a periodic job instead of a presubmit\n" +
-	"    cron: \"\"\n" +
-	"    literal_steps:\n" +
+	"      # Cron is how often the test is expected to run outside\n" +
+	"      # of pull request workflows. Setting this field will\n" +
+	"      # create a periodic job instead of a presubmit\n" +
+	"      cron: \"\"\n" +
+	"      literal_steps:\n" +
 	"        # AllowSkipOnSuccess defines if any steps can be skipped when\n" +
 	"        # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"        # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
@@ -876,246 +876,246 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            \"\": \"\"\n" +
 	"        # Observers are the observers that need to be run\n" +
 	"        observers:\n" +
-	"          - # Commands is the command(s) that will be run inside the image.\n" +
-	"            commands: ' '\n" +
-	"            # From is the container image that will be used for this observer.\n" +
-	"            from: ' '\n" +
-	"            # FromImage is a literal ImageStreamTag reference to use for this observer.\n" +
-	"            from_image:\n" +
+	"            - # Commands is the command(s) that will be run inside the image.\n" +
+	"              commands: ' '\n" +
+	"              # From is the container image that will be used for this observer.\n" +
+	"              from: ' '\n" +
+	"              # FromImage is a literal ImageStreamTag reference to use for this observer.\n" +
+	"              from_image:\n" +
 	"                # As is an optional string to use as the intermediate name for this reference.\n" +
 	"                as: ' '\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
-	"            # Name is the name of this observer\n" +
-	"            name: ' '\n" +
+	"              # Name is the name of this observer\n" +
+	"              name: ' '\n" +
 	"        # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"        # Post steps always run, even if previous steps fail.\n" +
 	"        post:\n" +
-	"          - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
-	"            active_deadline_seconds: 0\n" +
-	"            # ArtifactDir is the directory from which artifacts will be extracted\n" +
-	"            # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
-	"            artifact_dir: ' '\n" +
-	"            # As is the name of the LiteralTestStep.\n" +
-	"            as: ' '\n" +
-	"            # Cli is the (optional) name of the release from which the `oc` binary\n" +
-	"            # will be injected into this step.\n" +
-	"            cli: ' '\n" +
-	"            # Commands is the command(s) that will be run inside the image.\n" +
-	"            commands: ' '\n" +
-	"            # Credentials defines the credentials we'll mount into this step.\n" +
-	"            credentials:\n" +
-	"              - # MountPath is where the secret should be mounted.\n" +
-	"                mount_path: ' '\n" +
-	"                # Names is which source secret to mount.\n" +
-	"                name: ' '\n" +
-	"                # Namespace is where the source secret exists.\n" +
-	"                namespace: ' '\n" +
-	"            # Dependencies lists images which must be available before the test runs\n" +
-	"            # and the environment variables which are used to expose their pull specs.\n" +
-	"            dependencies:\n" +
-	"              - # Env is the environment variable that the image's pull spec is exposed with\n" +
-	"                env: ' '\n" +
-	"                # Name is the tag or stream:tag that this dependency references\n" +
-	"                name: ' '\n" +
-	"            # Environment lists parameters that should be set by the test.\n" +
-	"            env:\n" +
-	"              - # Default if not set, optional, makes the parameter not required if set.\n" +
-	"                default: \"\"\n" +
-	"                # Documentation is a textual description of the parameter.\n" +
-	"                documentation: ' '\n" +
-	"                # Name of the environment variable.\n" +
-	"                name: ' '\n" +
-	"            # From is the container image that will be used for this step.\n" +
-	"            from: ' '\n" +
-	"            # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
-	"            from_image:\n" +
+	"            - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
+	"              active_deadline_seconds: 0\n" +
+	"              # ArtifactDir is the directory from which artifacts will be extracted\n" +
+	"              # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
+	"              artifact_dir: ' '\n" +
+	"              # As is the name of the LiteralTestStep.\n" +
+	"              as: ' '\n" +
+	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
+	"              # will be injected into this step.\n" +
+	"              cli: ' '\n" +
+	"              # Commands is the command(s) that will be run inside the image.\n" +
+	"              commands: ' '\n" +
+	"              # Credentials defines the credentials we'll mount into this step.\n" +
+	"              credentials:\n" +
+	"                - # MountPath is where the secret should be mounted.\n" +
+	"                  mount_path: ' '\n" +
+	"                  # Names is which source secret to mount.\n" +
+	"                  name: ' '\n" +
+	"                  # Namespace is where the source secret exists.\n" +
+	"                  namespace: ' '\n" +
+	"              # Dependencies lists images which must be available before the test runs\n" +
+	"              # and the environment variables which are used to expose their pull specs.\n" +
+	"              dependencies:\n" +
+	"                - # Env is the environment variable that the image's pull spec is exposed with\n" +
+	"                  env: ' '\n" +
+	"                  # Name is the tag or stream:tag that this dependency references\n" +
+	"                  name: ' '\n" +
+	"              # Environment lists parameters that should be set by the test.\n" +
+	"              env:\n" +
+	"                - # Default if not set, optional, makes the parameter not required if set.\n" +
+	"                  default: \"\"\n" +
+	"                  # Documentation is a textual description of the parameter.\n" +
+	"                  documentation: ' '\n" +
+	"                  # Name of the environment variable.\n" +
+	"                  name: ' '\n" +
+	"              # From is the container image that will be used for this step.\n" +
+	"              from: ' '\n" +
+	"              # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
+	"              from_image:\n" +
 	"                # As is an optional string to use as the intermediate name for this reference.\n" +
 	"                as: ' '\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
-	"            # Observers are the observers that should be running\n" +
-	"            observers:\n" +
-	"              - \"\"\n" +
-	"            # OptionalOnSuccess defines if this step should be skipped as long\n" +
-	"            # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
-	"            # flag is set to true in MultiStageTestConfiguration. This option is\n" +
-	"            # applicable to `post` steps.\n" +
-	"            optional_on_success: false\n" +
-	"            # Resources defines the resource requirements for the step.\n" +
-	"            resources:\n" +
+	"              # Observers are the observers that should be running\n" +
+	"              observers:\n" +
+	"                - \"\"\n" +
+	"              # OptionalOnSuccess defines if this step should be skipped as long\n" +
+	"              # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
+	"              # flag is set to true in MultiStageTestConfiguration. This option is\n" +
+	"              # applicable to `post` steps.\n" +
+	"              optional_on_success: false\n" +
+	"              # Resources defines the resource requirements for the step.\n" +
+	"              resources:\n" +
 	"                limits:\n" +
 	"                    \"\": \"\"\n" +
 	"                requests:\n" +
 	"                    \"\": \"\"\n" +
-	"            # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
-	"            termination_grace_period_seconds: 0\n" +
+	"              # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
+	"              termination_grace_period_seconds: 0\n" +
 	"        # Pre is the array of test steps run to set up the environment for the test.\n" +
 	"        pre:\n" +
-	"          - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
-	"            active_deadline_seconds: 0\n" +
-	"            # ArtifactDir is the directory from which artifacts will be extracted\n" +
-	"            # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
-	"            artifact_dir: ' '\n" +
-	"            # As is the name of the LiteralTestStep.\n" +
-	"            as: ' '\n" +
-	"            # Cli is the (optional) name of the release from which the `oc` binary\n" +
-	"            # will be injected into this step.\n" +
-	"            cli: ' '\n" +
-	"            # Commands is the command(s) that will be run inside the image.\n" +
-	"            commands: ' '\n" +
-	"            # Credentials defines the credentials we'll mount into this step.\n" +
-	"            credentials:\n" +
-	"              - # MountPath is where the secret should be mounted.\n" +
-	"                mount_path: ' '\n" +
-	"                # Names is which source secret to mount.\n" +
-	"                name: ' '\n" +
-	"                # Namespace is where the source secret exists.\n" +
-	"                namespace: ' '\n" +
-	"            # Dependencies lists images which must be available before the test runs\n" +
-	"            # and the environment variables which are used to expose their pull specs.\n" +
-	"            dependencies:\n" +
-	"              - # Env is the environment variable that the image's pull spec is exposed with\n" +
-	"                env: ' '\n" +
-	"                # Name is the tag or stream:tag that this dependency references\n" +
-	"                name: ' '\n" +
-	"            # Environment lists parameters that should be set by the test.\n" +
-	"            env:\n" +
-	"              - # Default if not set, optional, makes the parameter not required if set.\n" +
-	"                default: \"\"\n" +
-	"                # Documentation is a textual description of the parameter.\n" +
-	"                documentation: ' '\n" +
-	"                # Name of the environment variable.\n" +
-	"                name: ' '\n" +
-	"            # From is the container image that will be used for this step.\n" +
-	"            from: ' '\n" +
-	"            # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
-	"            from_image:\n" +
+	"            - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
+	"              active_deadline_seconds: 0\n" +
+	"              # ArtifactDir is the directory from which artifacts will be extracted\n" +
+	"              # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
+	"              artifact_dir: ' '\n" +
+	"              # As is the name of the LiteralTestStep.\n" +
+	"              as: ' '\n" +
+	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
+	"              # will be injected into this step.\n" +
+	"              cli: ' '\n" +
+	"              # Commands is the command(s) that will be run inside the image.\n" +
+	"              commands: ' '\n" +
+	"              # Credentials defines the credentials we'll mount into this step.\n" +
+	"              credentials:\n" +
+	"                - # MountPath is where the secret should be mounted.\n" +
+	"                  mount_path: ' '\n" +
+	"                  # Names is which source secret to mount.\n" +
+	"                  name: ' '\n" +
+	"                  # Namespace is where the source secret exists.\n" +
+	"                  namespace: ' '\n" +
+	"              # Dependencies lists images which must be available before the test runs\n" +
+	"              # and the environment variables which are used to expose their pull specs.\n" +
+	"              dependencies:\n" +
+	"                - # Env is the environment variable that the image's pull spec is exposed with\n" +
+	"                  env: ' '\n" +
+	"                  # Name is the tag or stream:tag that this dependency references\n" +
+	"                  name: ' '\n" +
+	"              # Environment lists parameters that should be set by the test.\n" +
+	"              env:\n" +
+	"                - # Default if not set, optional, makes the parameter not required if set.\n" +
+	"                  default: \"\"\n" +
+	"                  # Documentation is a textual description of the parameter.\n" +
+	"                  documentation: ' '\n" +
+	"                  # Name of the environment variable.\n" +
+	"                  name: ' '\n" +
+	"              # From is the container image that will be used for this step.\n" +
+	"              from: ' '\n" +
+	"              # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
+	"              from_image:\n" +
 	"                # As is an optional string to use as the intermediate name for this reference.\n" +
 	"                as: ' '\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
-	"            # Observers are the observers that should be running\n" +
-	"            observers:\n" +
-	"              - \"\"\n" +
-	"            # OptionalOnSuccess defines if this step should be skipped as long\n" +
-	"            # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
-	"            # flag is set to true in MultiStageTestConfiguration. This option is\n" +
-	"            # applicable to `post` steps.\n" +
-	"            optional_on_success: false\n" +
-	"            # Resources defines the resource requirements for the step.\n" +
-	"            resources:\n" +
+	"              # Observers are the observers that should be running\n" +
+	"              observers:\n" +
+	"                - \"\"\n" +
+	"              # OptionalOnSuccess defines if this step should be skipped as long\n" +
+	"              # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
+	"              # flag is set to true in MultiStageTestConfiguration. This option is\n" +
+	"              # applicable to `post` steps.\n" +
+	"              optional_on_success: false\n" +
+	"              # Resources defines the resource requirements for the step.\n" +
+	"              resources:\n" +
 	"                limits:\n" +
 	"                    \"\": \"\"\n" +
 	"                requests:\n" +
 	"                    \"\": \"\"\n" +
-	"            # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
-	"            termination_grace_period_seconds: 0\n" +
+	"              # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
+	"              termination_grace_period_seconds: 0\n" +
 	"        # Test is the array of test steps that define the actual test.\n" +
 	"        test:\n" +
-	"          - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
-	"            active_deadline_seconds: 0\n" +
-	"            # ArtifactDir is the directory from which artifacts will be extracted\n" +
-	"            # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
-	"            artifact_dir: ' '\n" +
-	"            # As is the name of the LiteralTestStep.\n" +
-	"            as: ' '\n" +
-	"            # Cli is the (optional) name of the release from which the `oc` binary\n" +
-	"            # will be injected into this step.\n" +
-	"            cli: ' '\n" +
-	"            # Commands is the command(s) that will be run inside the image.\n" +
-	"            commands: ' '\n" +
-	"            # Credentials defines the credentials we'll mount into this step.\n" +
-	"            credentials:\n" +
-	"              - # MountPath is where the secret should be mounted.\n" +
-	"                mount_path: ' '\n" +
-	"                # Names is which source secret to mount.\n" +
-	"                name: ' '\n" +
-	"                # Namespace is where the source secret exists.\n" +
-	"                namespace: ' '\n" +
-	"            # Dependencies lists images which must be available before the test runs\n" +
-	"            # and the environment variables which are used to expose their pull specs.\n" +
-	"            dependencies:\n" +
-	"              - # Env is the environment variable that the image's pull spec is exposed with\n" +
-	"                env: ' '\n" +
-	"                # Name is the tag or stream:tag that this dependency references\n" +
-	"                name: ' '\n" +
-	"            # Environment lists parameters that should be set by the test.\n" +
-	"            env:\n" +
-	"              - # Default if not set, optional, makes the parameter not required if set.\n" +
-	"                default: \"\"\n" +
-	"                # Documentation is a textual description of the parameter.\n" +
-	"                documentation: ' '\n" +
-	"                # Name of the environment variable.\n" +
-	"                name: ' '\n" +
-	"            # From is the container image that will be used for this step.\n" +
-	"            from: ' '\n" +
-	"            # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
-	"            from_image:\n" +
+	"            - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
+	"              active_deadline_seconds: 0\n" +
+	"              # ArtifactDir is the directory from which artifacts will be extracted\n" +
+	"              # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
+	"              artifact_dir: ' '\n" +
+	"              # As is the name of the LiteralTestStep.\n" +
+	"              as: ' '\n" +
+	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
+	"              # will be injected into this step.\n" +
+	"              cli: ' '\n" +
+	"              # Commands is the command(s) that will be run inside the image.\n" +
+	"              commands: ' '\n" +
+	"              # Credentials defines the credentials we'll mount into this step.\n" +
+	"              credentials:\n" +
+	"                - # MountPath is where the secret should be mounted.\n" +
+	"                  mount_path: ' '\n" +
+	"                  # Names is which source secret to mount.\n" +
+	"                  name: ' '\n" +
+	"                  # Namespace is where the source secret exists.\n" +
+	"                  namespace: ' '\n" +
+	"              # Dependencies lists images which must be available before the test runs\n" +
+	"              # and the environment variables which are used to expose their pull specs.\n" +
+	"              dependencies:\n" +
+	"                - # Env is the environment variable that the image's pull spec is exposed with\n" +
+	"                  env: ' '\n" +
+	"                  # Name is the tag or stream:tag that this dependency references\n" +
+	"                  name: ' '\n" +
+	"              # Environment lists parameters that should be set by the test.\n" +
+	"              env:\n" +
+	"                - # Default if not set, optional, makes the parameter not required if set.\n" +
+	"                  default: \"\"\n" +
+	"                  # Documentation is a textual description of the parameter.\n" +
+	"                  documentation: ' '\n" +
+	"                  # Name of the environment variable.\n" +
+	"                  name: ' '\n" +
+	"              # From is the container image that will be used for this step.\n" +
+	"              from: ' '\n" +
+	"              # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
+	"              from_image:\n" +
 	"                # As is an optional string to use as the intermediate name for this reference.\n" +
 	"                as: ' '\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
-	"            # Observers are the observers that should be running\n" +
-	"            observers:\n" +
-	"              - \"\"\n" +
-	"            # OptionalOnSuccess defines if this step should be skipped as long\n" +
-	"            # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
-	"            # flag is set to true in MultiStageTestConfiguration. This option is\n" +
-	"            # applicable to `post` steps.\n" +
-	"            optional_on_success: false\n" +
-	"            # Resources defines the resource requirements for the step.\n" +
-	"            resources:\n" +
+	"              # Observers are the observers that should be running\n" +
+	"              observers:\n" +
+	"                - \"\"\n" +
+	"              # OptionalOnSuccess defines if this step should be skipped as long\n" +
+	"              # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
+	"              # flag is set to true in MultiStageTestConfiguration. This option is\n" +
+	"              # applicable to `post` steps.\n" +
+	"              optional_on_success: false\n" +
+	"              # Resources defines the resource requirements for the step.\n" +
+	"              resources:\n" +
 	"                limits:\n" +
 	"                    \"\": \"\"\n" +
 	"                requests:\n" +
 	"                    \"\": \"\"\n" +
-	"            # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
-	"            termination_grace_period_seconds: 0\n" +
-	"    openshift_ansible:\n" +
+	"              # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
+	"              termination_grace_period_seconds: 0\n" +
+	"      openshift_ansible:\n" +
 	"        cluster_profile: ' '\n" +
-	"    openshift_ansible_40:\n" +
+	"      openshift_ansible_40:\n" +
 	"        cluster_profile: ' '\n" +
-	"    openshift_ansible_custom:\n" +
+	"      openshift_ansible_custom:\n" +
 	"        cluster_profile: ' '\n" +
-	"    openshift_ansible_src:\n" +
+	"      openshift_ansible_src:\n" +
 	"        cluster_profile: ' '\n" +
-	"    openshift_installer:\n" +
+	"      openshift_installer:\n" +
 	"        cluster_profile: ' '\n" +
-	"    openshift_installer_custom_test_image:\n" +
+	"      openshift_installer_custom_test_image:\n" +
 	"        cluster_profile: ' '\n" +
 	"        # From defines the imagestreamtag that will be used to run the\n" +
 	"        # provided test command. e.g. stable:console-test\n" +
 	"        from: ' '\n" +
-	"    openshift_installer_src:\n" +
+	"      openshift_installer_src:\n" +
 	"        cluster_profile: ' '\n" +
-	"    openshift_installer_upi:\n" +
+	"      openshift_installer_upi:\n" +
 	"        cluster_profile: ' '\n" +
-	"    openshift_installer_upi_src:\n" +
+	"      openshift_installer_upi_src:\n" +
 	"        cluster_profile: ' '\n" +
-	"    # Secret is an optional secret object which\n" +
-	"    # will be mounted inside the test container.\n" +
-	"    # You cannot set the Secret and Secrets attributes\n" +
-	"    # at the same time.\n" +
-	"    secret:\n" +
+	"      # Secret is an optional secret object which\n" +
+	"      # will be mounted inside the test container.\n" +
+	"      # You cannot set the Secret and Secrets attributes\n" +
+	"      # at the same time.\n" +
+	"      secret:\n" +
 	"        # Secret mount path. Defaults to /usr/test-secret\n" +
 	"        mount_path: ' '\n" +
 	"        # Secret name, used inside test containers\n" +
 	"        name: ' '\n" +
-	"    # Secrets is an optional array of secret objects\n" +
-	"    # which will be mounted inside the test container.\n" +
-	"    # You cannot set the Secret and Secrets attributes\n" +
-	"    # at the same time.\n" +
-	"    secrets:\n" +
-	"      - # Secret mount path. Defaults to /usr/test-secret\n" +
-	"        mount_path: ' '\n" +
-	"        # Secret name, used inside test containers\n" +
-	"        name: ' '\n" +
-	"    steps:\n" +
+	"      # Secrets is an optional array of secret objects\n" +
+	"      # which will be mounted inside the test container.\n" +
+	"      # You cannot set the Secret and Secrets attributes\n" +
+	"      # at the same time.\n" +
+	"      secrets:\n" +
+	"        - # Secret mount path. Defaults to /usr/test-secret\n" +
+	"          mount_path: ' '\n" +
+	"          # Secret name, used inside test containers\n" +
+	"          name: ' '\n" +
+	"      steps:\n" +
 	"        # AllowSkipOnSuccess defines if any steps can be skipped when\n" +
 	"        # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"        # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
@@ -1132,53 +1132,53 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        observers:\n" +
 	"            # Disable is a list of named observers that should be disabled\n" +
 	"            disable:\n" +
-	"              - \"\"\n" +
+	"                - \"\"\n" +
 	"            # Enable is a list of named observer that should be enabled\n" +
 	"            enable:\n" +
-	"              - \"\"\n" +
+	"                - \"\"\n" +
 	"        # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"        # Post steps always run, even if previous steps fail. However, they have an option to skip\n" +
 	"        # execution if previous Pre and Test steps passed.\n" +
 	"        post:\n" +
-	"          # LiteralTestStep is a full test step definition.\n" +
-	"          - active_deadline_seconds: 0\n" +
-	"            artifact_dir: ' '\n" +
-	"            as: ' '\n" +
-	"            # Chain is the name of a step chain reference.\n" +
-	"            chain: \"\"\n" +
-	"            # Cli is the (optional) name of the release from which the `oc` binary\n" +
-	"            # will be injected into this step.\n" +
-	"            cli: ' '\n" +
-	"            commands: ' '\n" +
-	"            credentials:\n" +
-	"              # LiteralTestStep is a full test step definition.\n" +
-	"              - mount_path: ' '\n" +
-	"                name: ' '\n" +
-	"                namespace: ' '\n" +
-	"            dependencies:\n" +
-	"              # LiteralTestStep is a full test step definition.\n" +
-	"              - env: ' '\n" +
-	"                name: ' '\n" +
-	"            env:\n" +
-	"              # LiteralTestStep is a full test step definition.\n" +
-	"              - default: \"\"\n" +
-	"                documentation: ' '\n" +
-	"                name: ' '\n" +
-	"            from: ' '\n" +
-	"            from_image:\n" +
+	"            # LiteralTestStep is a full test step definition.\n" +
+	"            - active_deadline_seconds: 0\n" +
+	"              artifact_dir: ' '\n" +
+	"              as: ' '\n" +
+	"              # Chain is the name of a step chain reference.\n" +
+	"              chain: \"\"\n" +
+	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
+	"              # will be injected into this step.\n" +
+	"              cli: ' '\n" +
+	"              commands: ' '\n" +
+	"              credentials:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - mount_path: ' '\n" +
+	"                  name: ' '\n" +
+	"                  namespace: ' '\n" +
+	"              dependencies:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - env: ' '\n" +
+	"                  name: ' '\n" +
+	"              env:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - default: \"\"\n" +
+	"                  documentation: ' '\n" +
+	"                  name: ' '\n" +
+	"              from: ' '\n" +
+	"              from_image:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                as: ' '\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
-	"            observers:\n" +
-	"              # LiteralTestStep is a full test step definition.\n" +
-	"              - \"\"\n" +
-	"            optional_on_success: false\n" +
-	"            # Reference is the name of a step reference.\n" +
-	"            ref: \"\"\n" +
-	"            # Resources defines the resource requirements for the step.\n" +
-	"            resources:\n" +
+	"              observers:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - \"\"\n" +
+	"              optional_on_success: false\n" +
+	"              # Reference is the name of a step reference.\n" +
+	"              ref: \"\"\n" +
+	"              # Resources defines the resource requirements for the step.\n" +
+	"              resources:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                limits:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
@@ -1186,48 +1186,48 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                requests:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    \"\": \"\"\n" +
-	"            termination_grace_period_seconds: 0\n" +
+	"              termination_grace_period_seconds: 0\n" +
 	"        # Pre is the array of test steps run to set up the environment for the test.\n" +
 	"        pre:\n" +
-	"          # LiteralTestStep is a full test step definition.\n" +
-	"          - active_deadline_seconds: 0\n" +
-	"            artifact_dir: ' '\n" +
-	"            as: ' '\n" +
-	"            # Chain is the name of a step chain reference.\n" +
-	"            chain: \"\"\n" +
-	"            # Cli is the (optional) name of the release from which the `oc` binary\n" +
-	"            # will be injected into this step.\n" +
-	"            cli: ' '\n" +
-	"            commands: ' '\n" +
-	"            credentials:\n" +
-	"              # LiteralTestStep is a full test step definition.\n" +
-	"              - mount_path: ' '\n" +
-	"                name: ' '\n" +
-	"                namespace: ' '\n" +
-	"            dependencies:\n" +
-	"              # LiteralTestStep is a full test step definition.\n" +
-	"              - env: ' '\n" +
-	"                name: ' '\n" +
-	"            env:\n" +
-	"              # LiteralTestStep is a full test step definition.\n" +
-	"              - default: \"\"\n" +
-	"                documentation: ' '\n" +
-	"                name: ' '\n" +
-	"            from: ' '\n" +
-	"            from_image:\n" +
+	"            # LiteralTestStep is a full test step definition.\n" +
+	"            - active_deadline_seconds: 0\n" +
+	"              artifact_dir: ' '\n" +
+	"              as: ' '\n" +
+	"              # Chain is the name of a step chain reference.\n" +
+	"              chain: \"\"\n" +
+	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
+	"              # will be injected into this step.\n" +
+	"              cli: ' '\n" +
+	"              commands: ' '\n" +
+	"              credentials:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - mount_path: ' '\n" +
+	"                  name: ' '\n" +
+	"                  namespace: ' '\n" +
+	"              dependencies:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - env: ' '\n" +
+	"                  name: ' '\n" +
+	"              env:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - default: \"\"\n" +
+	"                  documentation: ' '\n" +
+	"                  name: ' '\n" +
+	"              from: ' '\n" +
+	"              from_image:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                as: ' '\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
-	"            observers:\n" +
-	"              # LiteralTestStep is a full test step definition.\n" +
-	"              - \"\"\n" +
-	"            optional_on_success: false\n" +
-	"            # Reference is the name of a step reference.\n" +
-	"            ref: \"\"\n" +
-	"            # Resources defines the resource requirements for the step.\n" +
-	"            resources:\n" +
+	"              observers:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - \"\"\n" +
+	"              optional_on_success: false\n" +
+	"              # Reference is the name of a step reference.\n" +
+	"              ref: \"\"\n" +
+	"              # Resources defines the resource requirements for the step.\n" +
+	"              resources:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                limits:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
@@ -1235,48 +1235,48 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                requests:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    \"\": \"\"\n" +
-	"            termination_grace_period_seconds: 0\n" +
+	"              termination_grace_period_seconds: 0\n" +
 	"        # Test is the array of test steps that define the actual test.\n" +
 	"        test:\n" +
-	"          # LiteralTestStep is a full test step definition.\n" +
-	"          - active_deadline_seconds: 0\n" +
-	"            artifact_dir: ' '\n" +
-	"            as: ' '\n" +
-	"            # Chain is the name of a step chain reference.\n" +
-	"            chain: \"\"\n" +
-	"            # Cli is the (optional) name of the release from which the `oc` binary\n" +
-	"            # will be injected into this step.\n" +
-	"            cli: ' '\n" +
-	"            commands: ' '\n" +
-	"            credentials:\n" +
-	"              # LiteralTestStep is a full test step definition.\n" +
-	"              - mount_path: ' '\n" +
-	"                name: ' '\n" +
-	"                namespace: ' '\n" +
-	"            dependencies:\n" +
-	"              # LiteralTestStep is a full test step definition.\n" +
-	"              - env: ' '\n" +
-	"                name: ' '\n" +
-	"            env:\n" +
-	"              # LiteralTestStep is a full test step definition.\n" +
-	"              - default: \"\"\n" +
-	"                documentation: ' '\n" +
-	"                name: ' '\n" +
-	"            from: ' '\n" +
-	"            from_image:\n" +
+	"            # LiteralTestStep is a full test step definition.\n" +
+	"            - active_deadline_seconds: 0\n" +
+	"              artifact_dir: ' '\n" +
+	"              as: ' '\n" +
+	"              # Chain is the name of a step chain reference.\n" +
+	"              chain: \"\"\n" +
+	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
+	"              # will be injected into this step.\n" +
+	"              cli: ' '\n" +
+	"              commands: ' '\n" +
+	"              credentials:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - mount_path: ' '\n" +
+	"                  name: ' '\n" +
+	"                  namespace: ' '\n" +
+	"              dependencies:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - env: ' '\n" +
+	"                  name: ' '\n" +
+	"              env:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - default: \"\"\n" +
+	"                  documentation: ' '\n" +
+	"                  name: ' '\n" +
+	"              from: ' '\n" +
+	"              from_image:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                as: ' '\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
-	"            observers:\n" +
-	"              # LiteralTestStep is a full test step definition.\n" +
-	"              - \"\"\n" +
-	"            optional_on_success: false\n" +
-	"            # Reference is the name of a step reference.\n" +
-	"            ref: \"\"\n" +
-	"            # Resources defines the resource requirements for the step.\n" +
-	"            resources:\n" +
+	"              observers:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - \"\"\n" +
+	"              optional_on_success: false\n" +
+	"              # Reference is the name of a step reference.\n" +
+	"              ref: \"\"\n" +
+	"              # Resources defines the resource requirements for the step.\n" +
+	"              resources:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                limits:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
@@ -1284,7 +1284,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                requests:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    \"\": \"\"\n" +
-	"            termination_grace_period_seconds: 0\n" +
+	"              termination_grace_period_seconds: 0\n" +
 	"        # Workflow is the name of the workflow to be used for this configuration. For fields defined in both\n" +
 	"        # the config and the workflow, the fields from the config will override what is set in Workflow.\n" +
 	"        workflow: \"\"\n" +

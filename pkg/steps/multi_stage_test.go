@@ -14,7 +14,6 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -259,7 +258,7 @@ type fakePodExecutor struct {
 	createdPods []*coreapi.Pod
 }
 
-func (f *fakePodExecutor) Create(ctx context.Context, o runtime.Object, opts ...ctrlruntimeclient.CreateOption) error {
+func (f *fakePodExecutor) Create(ctx context.Context, o ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
 	if pod, ok := o.(*coreapi.Pod); ok {
 		if pod.Namespace == "" {
 			return errors.New("pod had no namespace set")
@@ -270,7 +269,7 @@ func (f *fakePodExecutor) Create(ctx context.Context, o runtime.Object, opts ...
 	return f.Client.Create(ctx, o, opts...)
 }
 
-func (f *fakePodExecutor) Get(ctx context.Context, n ctrlruntimeclient.ObjectKey, o runtime.Object) error {
+func (f *fakePodExecutor) Get(ctx context.Context, n ctrlruntimeclient.ObjectKey, o ctrlruntimeclient.Object) error {
 	if err := f.Client.Get(ctx, n, o); err != nil {
 		return err
 	}

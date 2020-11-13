@@ -18,7 +18,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
-	"github.com/openshift/ci-tools/pkg/util/namespacewrapper"
 )
 
 const (
@@ -318,7 +317,7 @@ func (s *multiStageTestStep) runSteps(
 	select {
 	case <-ctx.Done():
 		log.Printf("cleanup: Deleting pods with label %s=%s", MultiStageTestLabel, s.name)
-		if err := deletePods(namespacewrapper.New(s.client, s.jobSpec.Namespace()), s.name); err != nil {
+		if err := deletePods(ctrlruntimeclient.NewNamespacedClient(s.client, s.jobSpec.Namespace()), s.name); err != nil {
 			errs = append(errs, fmt.Errorf("failed to delete pods with label %s=%s: %w", MultiStageTestLabel, s.name, err))
 		}
 		errs = append(errs, fmt.Errorf("cancelled"))
@@ -589,7 +588,7 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 }
 
 func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *TestCaseNotifier) error {
-	if _, err := createOrRestartPod(namespacewrapper.New(s.client, s.jobSpec.Namespace()), pod); err != nil {
+	if _, err := createOrRestartPod(s.client, pod); err != nil {
 		return fmt.Errorf("failed to create or restart %q pod: %w", pod.Name, err)
 	}
 	newPod, err := waitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, notifier, false)

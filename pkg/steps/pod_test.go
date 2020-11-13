@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -220,7 +219,7 @@ type podStatusChangingClient struct {
 	dest corev1.PodPhase
 }
 
-func (ps *podStatusChangingClient) Create(ctx context.Context, o runtime.Object, opts ...ctrlruntimeclient.CreateOption) error {
+func (ps *podStatusChangingClient) Create(ctx context.Context, o ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
 	if pod, ok := o.(*corev1.Pod); ok {
 		pod.Status.Phase = ps.dest
 	}

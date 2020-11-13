@@ -317,7 +317,7 @@ func (s *multiStageTestStep) runSteps(
 	select {
 	case <-ctx.Done():
 		log.Printf("cleanup: Deleting pods with label %s=%s", MultiStageTestLabel, s.name)
-		if err := deletePods(ctrlruntimeclient.NewNamespacedClient(s.client, s.jobSpec.Namespace()), s.name); err != nil {
+		if err := s.client.DeleteAllOf(ctx, &coreapi.Pod{}, ctrlruntimeclient.InNamespace(s.jobSpec.Namespace()), ctrlruntimeclient.MatchingLabels{MultiStageTestLabel: s.name}); err != nil && !kerrors.IsNotFound(err) {
 			errs = append(errs, fmt.Errorf("failed to delete pods with label %s=%s: %w", MultiStageTestLabel, s.name, err))
 		}
 		errs = append(errs, fmt.Errorf("cancelled"))
@@ -611,14 +611,6 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 			}
 		}
 		return fmt.Errorf("%q pod %q %s: %w\n%s", s.name, pod.Name, status, err, linksText.String())
-	}
-	return nil
-}
-
-func deletePods(client ctrlruntimeclient.Client, test string) error {
-	err := client.DeleteAllOf(context.TODO(), &coreapi.Pod{}, ctrlruntimeclient.MatchingLabels{MultiStageTestLabel: test})
-	if err != nil && !kerrors.IsNotFound(err) {
-		return err
 	}
 	return nil
 }

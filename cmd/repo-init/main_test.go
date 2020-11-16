@@ -588,6 +588,109 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "custom nightly release configured",
+			config: initConfig{
+				Org:                   "org",
+				Repo:                  "repo",
+				Branch:                "branch",
+				CanonicalGoRepository: "sometimes.com",
+				GoVersion:             "1",
+				ReleaseType:           "nightly",
+				ReleaseVersion:        "4.5",
+			},
+			originConfig: &api.PromotionConfiguration{
+				Namespace: "promote",
+				Name:      "version",
+			},
+			expected: ciopconfig.DataWithInfo{
+				Configuration: api.ReleaseBuildConfiguration{
+					InputConfiguration: api.InputConfiguration{
+						BuildRootImage: &api.BuildRootImageConfiguration{
+							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Namespace: "openshift",
+								Name:      "release",
+								Tag:       "golang-1",
+							},
+						},
+						Releases: map[string]api.UnresolvedRelease{
+							"latest": {
+								Candidate: &api.Candidate{
+									Architecture: "amd64",
+									Product:      "ocp",
+									Stream:       "nightly",
+									Version:      "4.5",
+								},
+							},
+						},
+					},
+					CanonicalGoRepository: strP("sometimes.com"),
+					Resources: map[string]api.ResourceRequirements{"*": {
+						Limits:   map[string]string{"memory": "4Gi"},
+						Requests: map[string]string{"memory": "200Mi", "cpu": "100m"},
+					}},
+					Tests: []api.TestStepConfiguration{},
+				},
+				Info: ciopconfig.Info{
+					Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					},
+				},
+			},
+		},
+		{
+			name: "custom published release configured",
+			config: initConfig{
+				Org:                   "org",
+				Repo:                  "repo",
+				Branch:                "branch",
+				CanonicalGoRepository: "sometimes.com",
+				GoVersion:             "1",
+				ReleaseType:           "published",
+				ReleaseVersion:        "4.5",
+			},
+			originConfig: &api.PromotionConfiguration{
+				Namespace: "promote",
+				Name:      "version",
+			},
+			expected: ciopconfig.DataWithInfo{
+				Configuration: api.ReleaseBuildConfiguration{
+					InputConfiguration: api.InputConfiguration{
+						BuildRootImage: &api.BuildRootImageConfiguration{
+							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Namespace: "openshift",
+								Name:      "release",
+								Tag:       "golang-1",
+							},
+						},
+						Releases: map[string]api.UnresolvedRelease{
+							"latest": {
+								Release: &api.Release{
+									Architecture: "amd64",
+									Channel:      "stable",
+									Version:      "4.5",
+								},
+							},
+						},
+					},
+					CanonicalGoRepository: strP("sometimes.com"),
+					Resources: map[string]api.ResourceRequirements{"*": {
+						Limits:   map[string]string{"memory": "4Gi"},
+						Requests: map[string]string{"memory": "200Mi", "cpu": "100m"},
+					}},
+					Tests: []api.TestStepConfiguration{},
+				},
+				Info: ciopconfig.Info{
+					Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					},
+				},
+			},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

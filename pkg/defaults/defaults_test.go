@@ -644,7 +644,7 @@ func TestFromConfig(t *testing.T) {
 	}
 	buildClient := steps.NewBuildClient(client, nil)
 	var templateClient steps.TemplateClient
-	var podClient steps.PodClient
+	podClient := steps.NewPodClient(client, nil, nil)
 	var leaseClient *lease.Client
 	var requiredTargets []string
 	var cloneAuthConfig *steps.CloneAuthConfig

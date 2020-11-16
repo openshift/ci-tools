@@ -69,7 +69,7 @@ func FromConfig(
 		return nil, nil, fmt.Errorf("could not get core client for cluster config: %w", err)
 	}
 
-	podClient = steps.NewPodClient(client, clusterConfig, coreGetter.RESTClient())
+	podClient := steps.NewPodClient(client, clusterConfig, coreGetter.RESTClient())
 	return fromConfig(config, jobSpec, templates, paramFile, artifactDir, promote, client, buildClient, templateClient, podClient, leaseClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil))
 }
 
@@ -144,7 +144,7 @@ func fromConfig(
 				}
 				log.Printf("Resolved release %s to %s", resolveConfig.Name, value)
 			}
-			step := release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, artifactDir, jobSpec, pullSecret)
+			step := releasesteps.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, artifactDir, jobSpec, pullSecret)
 			buildSteps = append(buildSteps, step)
 			addProvidesForStep(step, params)
 			continue

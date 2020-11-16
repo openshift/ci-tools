@@ -33,26 +33,21 @@ type options struct {
 
 	validationOnlyRun bool
 	jobsAllowListFile string
-	withoutAllowList  bool
 }
 
 func (o *options) Validate() error {
-	if o.prowJobConfigDir == "" {
+	if o.prowJobConfigDir == "" && !o.validationOnlyRun {
 		return errors.New("--prow-jobs-dir is required")
 	}
 	if o.releaseConfigDir == "" {
 		return errors.New("--release-config is required")
 	}
-	if o.testGridConfigDir == "" {
+	if o.testGridConfigDir == "" && !o.validationOnlyRun {
 		return errors.New("--testgrid-config is required")
 	}
 
-	if o.jobsAllowListFile == "" && !o.withoutAllowList {
-		return errors.New("--allow-list is required (possible to override with --no-allow-list)")
-	}
-
-	if o.jobsAllowListFile != "" && o.withoutAllowList {
-		return errors.New("--allow-list and --no-allow-list cannot be set together")
+	if o.jobsAllowListFile == "" {
+		return errors.New("--allow-list is required")
 	}
 
 	return nil
@@ -65,7 +60,6 @@ func gatherOptions() options {
 	fs.StringVar(&o.releaseConfigDir, "release-config", "", "Path to Release Controller configuration directory.")
 	fs.StringVar(&o.testGridConfigDir, "testgrid-config", "", "Path to TestGrid configuration directory.")
 	fs.StringVar(&o.jobsAllowListFile, "allow-list", "", "Path to file containing jobs to be overridden to informing jobs")
-	fs.BoolVar(&o.withoutAllowList, "no-allow-list", false, "If set, --allow-list does not need to be set")
 	fs.BoolVar(&o.validationOnlyRun, "validate", false, "Validate entries in file specified by allow-list (if allow_list is not specified validation would succeed)")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
@@ -207,22 +201,6 @@ var reVersion = regexp.MustCompile(`-(\d+\.\d+)(-|$)`)
 func main() {
 	o := gatherOptions()
 
-	// read the list of jobs from the allow list along with its release-type
-	var allowList map[string]string
-	if o.jobsAllowListFile != "" {
-		data, err := ioutil.ReadFile(o.jobsAllowListFile)
-		if err != nil {
-			logrus.WithError(err).Fatalf("could not read allow-list at %s", o.jobsAllowListFile)
-		}
-		allowList, err = getAllowList(data)
-		if err != nil {
-			logrus.WithError(err).Fatalf("failed to build allow-list dictionary")
-		}
-		if o.validationOnlyRun {
-			os.Exit(0)
-		}
-	}
-
 	if err := o.Validate(); err != nil {
 		logrus.Fatalf("Invalid options: %v", err)
 	}
@@ -268,6 +246,31 @@ func main() {
 		return nil
 	}); err != nil {
 		logrus.WithError(err).Fatal("Could not process input configurations.")
+	}
+
+	// read the list of jobs from the allow list along with its release-type
+	var allowList map[string]string
+	if o.jobsAllowListFile != "" {
+		data, err := ioutil.ReadFile(o.jobsAllowListFile)
+		if err != nil {
+			logrus.WithError(err).Fatalf("could not read allow-list at %s", o.jobsAllowListFile)
+		}
+		allowList, err = getAllowList(data)
+		if err != nil {
+			logrus.WithError(err).Fatalf("failed to build allow-list dictionary")
+		}
+		var disallowed []string
+		for job := range allowList {
+			if value, configured := configuredJobs[job]; configured && value == "blocking" {
+				disallowed = append(disallowed, job)
+			}
+		}
+		if len(disallowed) != 0 {
+			logrus.Fatalf("The following jobs are blocking by virtue of being in the release-controller configuration, but are also in the allow-list. Their entries in the allow-list are disallowed and should be removed: %v", strings.Join(disallowed, ", "))
+		}
+		if o.validationOnlyRun {
+			os.Exit(0)
+		}
 	}
 
 	// find and assign all jobs to the dashboards

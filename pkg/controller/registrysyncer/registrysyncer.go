@@ -35,6 +35,7 @@ func AddToManager(mgr manager.Manager,
 	pullSecretGetter func() []byte,
 	imageStreamTags sets.String,
 	imageStreams sets.String,
+	imageStreamPrefixes sets.String,
 	imageStreamNamespaces sets.String,
 ) error {
 	log := logrus.WithField("controller", ControllerName)
@@ -44,6 +45,7 @@ func AddToManager(mgr manager.Manager,
 		pullSecretGetter:      pullSecretGetter,
 		imageStreamTags:       imageStreamTags,
 		imageStreams:          imageStreams,
+		imageStreamPrefixes:   imageStreamPrefixes,
 		imageStreamNamespaces: imageStreamNamespaces,
 	}
 	for clusterName, m := range managers {
@@ -64,7 +66,7 @@ func AddToManager(mgr manager.Manager,
 	for _, m := range managers {
 		if err := c.Watch(
 			source.NewKindWithCache(&imagev1.ImageStream{}, m.GetCache()),
-			handlerFactory(testInputImageStreamTagFilterFactory(log, imageStreamTags, imageStreams, imageStreamNamespaces)),
+			handlerFactory(testInputImageStreamTagFilterFactory(log, imageStreamTags, imageStreams, imageStreamPrefixes, imageStreamNamespaces)),
 		); err != nil {
 			return fmt.Errorf("failed to create watch for ImageStreams: %w", err)
 		}
@@ -97,6 +99,7 @@ type reconciler struct {
 	pullSecretGetter      func() []byte
 	imageStreamTags       sets.String
 	imageStreams          sets.String
+	imageStreamPrefixes   sets.String
 	imageStreamNamespaces sets.String
 }
 
@@ -307,6 +310,7 @@ func testInputImageStreamTagFilterFactory(
 	l *logrus.Entry,
 	imageStreamTags sets.String,
 	imageStreams sets.String,
+	imageStreamPrefixes sets.String,
 	imageStreamNamespaces sets.String,
 ) objectFilter {
 	l = logrus.WithField("subcomponent", "test-input-image-stream-tag-filter")
@@ -324,6 +328,11 @@ func testInputImageStreamTagFilterFactory(
 		}
 		if imageStreams.Has(imageStreamName.String()) {
 			return true
+		}
+		for _, prefix := range imageStreamPrefixes.List() {
+			if strings.HasPrefix(imageStreamName.String(), prefix) {
+				return true
+			}
 		}
 		return false
 	}

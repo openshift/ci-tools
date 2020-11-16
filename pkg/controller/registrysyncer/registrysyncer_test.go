@@ -482,6 +482,7 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 		l                     *logrus.Entry
 		imageStreamTags       sets.String
 		imageStreams          sets.String
+		imageStreamPrefixes   sets.String
 		imageStreamNamespaces sets.String
 		nn                    types.NamespacedName
 		expected              bool
@@ -509,6 +510,17 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 			expected:              true,
 		},
 		{
+			name:                "imageStreamPrefixes: true",
+			nn:                  types.NamespacedName{Namespace: "openshift", Name: "knative-v0.11.0:knative-eventing-sources-heartbeats-receiver"},
+			imageStreamPrefixes: sets.NewString("openshift/knative-"),
+			expected:            true,
+		},
+		{
+			name:                "imageStreamPrefixes: false",
+			nn:                  types.NamespacedName{Namespace: "openshift", Name: "ruby:2.3"},
+			imageStreamPrefixes: sets.NewString("openshift/knative-"),
+		},
+		{
 			name: "not valid isTag name",
 			nn:   types.NamespacedName{Namespace: "some-namespace", Name: "not-valid-name"},
 		},
@@ -517,7 +529,7 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.l = logrus.WithField("tc.name", tc.name)
-			objectFilter := testInputImageStreamTagFilterFactory(tc.l, tc.imageStreamTags, tc.imageStreams, tc.imageStreamNamespaces)
+			objectFilter := testInputImageStreamTagFilterFactory(tc.l, tc.imageStreamTags, tc.imageStreams, tc.imageStreamPrefixes, tc.imageStreamNamespaces)
 			if diff := cmp.Diff(tc.expected, objectFilter(tc.nn)); diff != "" {
 				t.Errorf("actual does not match expected, diff: %s", diff)
 			}

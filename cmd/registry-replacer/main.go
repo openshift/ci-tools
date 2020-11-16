@@ -423,7 +423,7 @@ func upsertPR(gc pgithub.Client, dir, githubUsername string, token []byte, selfA
   to make sure all images are pulled from the build cluster registry`
 
 	if pruneUnusedReplacements {
-		prBody += "\n* Prunes existing replacements that do not match any FROM dircetive in the Dockerfile"
+		prBody += "\n* Prunes existing replacements that do not match any FROM directive in the Dockerfile"
 	}
 	if ensureCorrectPromotionDockerfile {
 		prBody += "\n* Ensures the Dockerfiles used for promotion jobs matches the ones configured in [ocp-build-data](https://github.com/openshift/ocp-build-data/tree/openshift-4.6/images)"

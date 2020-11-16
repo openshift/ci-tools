@@ -16,27 +16,15 @@ resources:
       cpu: 10m
 tests:
 - as: success
-  literal_steps:
+  steps:
     cluster_profile: aws
     test:
-    - as: test
-      commands: exit 0
-      from: os
-      resources:
-        requests:
-          cpu: 100m
-          memory: 200Mi
+    - ref: check-leased-resource
 - as: invalid-lease
-  literal_steps:
-    cluster_profile: gcp
+  steps:
+    cluster_profile: azure4
     test:
-    - as: test
-      commands: exit 0
-      from: os
-      resources:
-        requests:
-          cpu: 100m
-          memory: 200Mi
+    - ref: check-leased-resource
 zz_generated_metadata:
   branch: master
   org: test

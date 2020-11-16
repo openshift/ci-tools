@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
+	"net/http"
 	"strings"
 
 	coreapi "k8s.io/api/core/v1"
@@ -20,13 +20,14 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/lease"
+	"github.com/openshift/ci-tools/pkg/release"
 	"github.com/openshift/ci-tools/pkg/release/candidate"
 	"github.com/openshift/ci-tools/pkg/release/official"
 	"github.com/openshift/ci-tools/pkg/release/prerelease"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/clusterinstall"
-	"github.com/openshift/ci-tools/pkg/steps/release"
+	releasesteps "github.com/openshift/ci-tools/pkg/steps/release"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
@@ -47,18 +48,7 @@ func FromConfig(
 	cloneAuthConfig *steps.CloneAuthConfig,
 	pullSecret, pushSecret *coreapi.Secret,
 ) ([]api.Step, []api.Step, error) {
-	requiredNames := sets.NewString()
-	for _, target := range requiredTargets {
-		requiredNames.Insert(target)
-	}
-
-	var buildClient steps.BuildClient
-	var templateClient steps.TemplateClient
-	var podClient steps.PodClient
-	var client ctrlruntimeclient.Client
-
-	var err error
-	client, err = ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
+	client, err := ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to construct client: %w", err)
 	}
@@ -66,22 +56,44 @@ func FromConfig(
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not get build client for cluster config: %w", err)
 	}
-	buildClient = steps.NewBuildClient(client, buildGetter.RESTClient())
+	buildClient := steps.NewBuildClient(client, buildGetter.RESTClient())
 
 	templateGetter, err := templateclientset.NewForConfig(clusterConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not get template client for cluster config: %w", err)
 	}
-	templateClient = steps.NewTemplateClient(client, templateGetter.RESTClient())
+	templateClient := steps.NewTemplateClient(client, templateGetter.RESTClient())
 
 	coreGetter, err := coreclientset.NewForConfig(clusterConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not get core client for cluster config: %w", err)
 	}
 
-	podClient = steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
+	podClient := steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
+	return fromConfig(config, jobSpec, templates, paramFile, artifactDir, promote, client, buildClient, templateClient, podClient, leaseClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil))
+}
 
-	params := api.NewDeferredParameters()
+func fromConfig(
+	config *api.ReleaseBuildConfiguration,
+	jobSpec *api.JobSpec,
+	templates []*templateapi.Template,
+	paramFile, artifactDir string,
+	promote bool,
+	client ctrlruntimeclient.Client,
+	buildClient steps.BuildClient,
+	templateClient steps.TemplateClient,
+	podClient steps.PodClient,
+	leaseClient *lease.Client,
+	httpClient release.HTTPClient,
+	requiredTargets []string,
+	cloneAuthConfig *steps.CloneAuthConfig,
+	pullSecret, pushSecret *coreapi.Secret,
+	params *api.DeferredParameters,
+) ([]api.Step, []api.Step, error) {
+	requiredNames := sets.NewString()
+	for _, target := range requiredTargets {
+		requiredNames.Insert(target)
+	}
 	params.Add("JOB_NAME", func() (string, error) { return jobSpec.Job, nil })
 	params.Add("JOB_NAME_HASH", func() (string, error) { return jobSpec.JobNameHash(), nil })
 	params.Add("JOB_NAME_SAFE", func() (string, error) { return strings.Replace(jobSpec.Job, "_", "-", -1), nil })
@@ -100,7 +112,6 @@ func FromConfig(
 				return nil, nil, err
 			}
 			buildSteps = append(buildSteps, steps...)
-			addProvidesForStep(steps[0], params)
 			continue
 		}
 		if resolveConfig := rawStep.ResolvedReleaseImagesStepConfiguration; resolveConfig != nil {
@@ -112,24 +123,28 @@ func FromConfig(
 			// this is a disgusting hack but the simplest implementation until we
 			// factor release steps into something more reusable
 			hasReleaseStep = true
-			value := os.Getenv(utils.ReleaseImageEnv(resolveConfig.Name))
-			if value != "" {
+			var value string
+			if env := utils.ReleaseImageEnv(resolveConfig.Name); params.HasInput(env) {
+				value, err = params.Get(env)
+				if err != nil {
+					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to get %q parameter: %w", env, err))
+				}
 				log.Printf("Using explicitly provided pull-spec for release %s (%s)", resolveConfig.Name, value)
 			} else {
 				switch {
 				case resolveConfig.Candidate != nil:
-					value, err = candidate.ResolvePullSpec(*resolveConfig.Candidate)
+					value, err = candidate.ResolvePullSpec(httpClient, *resolveConfig.Candidate)
 				case resolveConfig.Release != nil:
-					value, _, err = official.ResolvePullSpecAndVersion(*resolveConfig.Release)
+					value, _, err = official.ResolvePullSpecAndVersion(httpClient, *resolveConfig.Release)
 				case resolveConfig.Prerelease != nil:
-					value, err = prerelease.ResolvePullSpec(*resolveConfig.Prerelease)
+					value, err = prerelease.ResolvePullSpec(httpClient, *resolveConfig.Prerelease)
 				}
 				if err != nil {
 					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to resolve release %s: %w", resolveConfig.Name, err))
 				}
 				log.Printf("Resolved release %s to %s", resolveConfig.Name, value)
 			}
-			step := release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, client, artifactDir, jobSpec, pullSecret)
+			step := releasesteps.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, client, artifactDir, jobSpec, pullSecret)
 			buildSteps = append(buildSteps, step)
 			addProvidesForStep(step, params)
 			continue
@@ -163,7 +178,7 @@ func FromConfig(
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
 			// if the user has specified a tag_specification we always
 			// will import those images to the stable stream
-			step = release.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, client, params, jobSpec)
+			step = releasesteps.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, client, params, jobSpec)
 			stepLinks = append(stepLinks, step.Creates()...)
 
 			hasReleaseStep = true
@@ -181,9 +196,9 @@ func FromConfig(
 						return nil, nil, results.ForReason("reading_release").ForError(fmt.Errorf("failed to read input release pullSpec %s: %w", name, err))
 					}
 					log.Printf("Resolved release %s to %s", name, pullSpec)
-					releaseStep = release.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, client, artifactDir, jobSpec, pullSecret)
+					releaseStep = releasesteps.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, client, artifactDir, jobSpec, pullSecret)
 				} else {
-					releaseStep = release.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, client, artifactDir, jobSpec)
+					releaseStep = releasesteps.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, client, artifactDir, jobSpec)
 				}
 				overridableSteps = append(overridableSteps, releaseStep)
 				addProvidesForStep(releaseStep, params)
@@ -232,7 +247,7 @@ func FromConfig(
 	}
 
 	if !hasReleaseStep {
-		step := release.StableImagesTagStep(client, jobSpec)
+		step := releasesteps.StableImagesTagStep(client, jobSpec)
 		buildSteps = append(buildSteps, step)
 		addProvidesForStep(step, params)
 	}
@@ -246,13 +261,16 @@ func FromConfig(
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not determine promotion defaults: %w", err)
 		}
-		postSteps = append(postSteps, release.PromotionStep(*cfg, config.Images, requiredNames, client, client, jobSpec, podClient, pushSecret))
+		postSteps = append(postSteps, releasesteps.PromotionStep(*cfg, config.Images, requiredNames, client, client, jobSpec, podClient, pushSecret))
 	}
 
 	return append(overridableSteps, buildSteps...), postSteps, nil
 }
 
 // stepForTest creates the appropriate step for each test type.
+// Test steps are always leaves and often pruned.  Each one is given its own
+// copy of `params` and their values from `Provides` only affect themselves,
+// thus avoiding conflicts with other tests pre-pruning.
 func stepForTest(
 	config *api.ReleaseBuildConfiguration,
 	params *api.DeferredParameters,
@@ -265,12 +283,16 @@ func stepForTest(
 	c *api.TestStepConfiguration,
 ) ([]api.Step, error) {
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
+		if test.ClusterProfile != "" {
+			params = api.NewDeferredParameters(params)
+		}
 		step := steps.MultiStageTestStep(*c, config, params, podClient, client, artifactDir, jobSpec)
 		if test.ClusterProfile != "" {
 			step = steps.LeaseStep(leaseClient, []api.StepLease{{
 				ResourceType: test.ClusterProfile.LeaseType(),
 				Env:          steps.DefaultLeaseEnv,
 			}}, step, jobSpec.Namespace)
+			addProvidesForStep(step, params)
 		}
 		return append([]api.Step{step}, stepsForStepImages(client, jobSpec, test)...), nil
 	}
@@ -278,14 +300,17 @@ func stepForTest(
 		if !test.Upgrade {
 			return nil, nil
 		}
+		params = api.NewDeferredParameters(params)
 		step, err := clusterinstall.E2ETestStep(*c.OpenshiftInstallerClusterTestConfiguration, *c, params, podClient, templateClient, artifactDir, jobSpec, config.Resources)
 		if err != nil {
 			return nil, fmt.Errorf("unable to create end to end test step: %w", err)
 		}
-		return []api.Step{steps.LeaseStep(leaseClient, []api.StepLease{{
+		step = steps.LeaseStep(leaseClient, []api.StepLease{{
 			ResourceType: test.ClusterProfile.LeaseType(),
 			Env:          steps.DefaultLeaseEnv,
-		}}, step, jobSpec.Namespace)}, nil
+		}}, step, jobSpec.Namespace)
+		addProvidesForStep(step, params)
+		return []api.Step{step}, nil
 	}
 	return []api.Step{steps.TestStep(*c, config.Resources, podClient, client, artifactDir, jobSpec)}, nil
 }

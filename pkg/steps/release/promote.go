@@ -364,7 +364,7 @@ func (s *promotionStep) Provides() api.ParameterMap {
 	return nil
 }
 
-func (s *promotionStep) Name() string { return "" }
+func (s *promotionStep) Name() string { return "[promotion]" }
 
 func (s *promotionStep) Description() string {
 	return fmt.Sprintf("Promote built images into the release image stream %s", targetName(s.config))

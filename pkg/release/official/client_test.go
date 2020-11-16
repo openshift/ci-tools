@@ -126,7 +126,7 @@ func TestResolvePullSpec(t *testing.T) {
 				}
 			}))
 			defer testServer.Close()
-			pullspec, version, err := resolvePullSpec(testServer.URL, testCase.release)
+			pullspec, version, err := resolvePullSpec(&http.Client{}, testServer.URL, testCase.release)
 			if err != nil && !testCase.expectedErr {
 				t.Errorf("%s: expected no error but got one: %v", testCase.name, err)
 			}

@@ -29,7 +29,7 @@ func ImageDigestFor(client ctrlruntimeclient.Client, namespace func() string, na
 			return fmt.Sprintf("%s@%s", registry, image), nil
 		}
 		if ref == nil && findSpecTag(is, tag) == nil {
-			return "", fmt.Errorf("image stream %s has no tag %s in spec or status", name, tag)
+			return "", fmt.Errorf("image stream %q has no tag %q in spec or status", name, tag)
 		}
 		return fmt.Sprintf("%s:%s", registry, tag), nil
 	}

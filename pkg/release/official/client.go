@@ -11,6 +11,7 @@ import (
 	"github.com/blang/semver"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/release"
 )
 
 const cincinnatiAddress = "https://api.openshift.com/api/upgrades_info/v1/graph"
@@ -23,11 +24,11 @@ func defaultFields(release api.Release) api.Release {
 }
 
 // ResolvePullSpecAndVersion determines the pull spec and version for the official release
-func ResolvePullSpecAndVersion(release api.Release) (string, string, error) {
-	return resolvePullSpec(cincinnatiAddress, defaultFields(release))
+func ResolvePullSpecAndVersion(client release.HTTPClient, release api.Release) (string, string, error) {
+	return resolvePullSpec(client, cincinnatiAddress, defaultFields(release))
 }
 
-func resolvePullSpec(endpoint string, release api.Release) (string, string, error) {
+func resolvePullSpec(client release.HTTPClient, endpoint string, release api.Release) (string, string, error) {
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return "", "", err
@@ -37,7 +38,6 @@ func resolvePullSpec(endpoint string, release api.Release) (string, string, erro
 	query.Add("channel", fmt.Sprintf("%s-%s", release.Channel, release.Version))
 	query.Add("arch", string(release.Architecture))
 	req.URL.RawQuery = query.Encode()
-	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to request latest release: %w", err)

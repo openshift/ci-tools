@@ -192,6 +192,7 @@ func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request to configresolver: %w", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("response from configresolver == %d (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
@@ -221,6 +222,7 @@ func literalConfigFromResolver(raw []byte, address string) (*api.ReleaseBuildCon
 	if err != nil {
 		return nil, fmt.Errorf("failed to request resolved config: %w", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("response from configresolver == %d (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}

@@ -52,6 +52,7 @@ func FileGetterFactory(org, repo, branch string, opts ...Opt) FileGetter {
 		if err != nil {
 			return nil, fmt.Errorf("failed to GET %s: %w", url, err)
 		}
+		defer resp.Body.Close()
 		if resp.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}

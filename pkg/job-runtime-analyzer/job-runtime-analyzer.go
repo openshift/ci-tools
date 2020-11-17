@@ -168,6 +168,7 @@ func fetchFromURL(urlString string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to GET %s: %w", parsedURL.String(), err)
 	}
+	defer result.Body.Close()
 	body, err := ioutil.ReadAll(result.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body for request to %s: %w", parsedURL.String(), err)

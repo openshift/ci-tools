@@ -45,6 +45,7 @@ func resolvePullSpec(client release.HTTPClient, endpoint string, release api.Rel
 	if resp == nil {
 		return "", "", errors.New("failed to request latest release: got a nil response")
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return "", "", fmt.Errorf("failed to request latest release: server responded with %d: %s", resp.StatusCode, resp.Body)
 	}

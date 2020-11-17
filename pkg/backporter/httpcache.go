@@ -67,6 +67,9 @@ func (t *cachingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	g := errgroup.Group{}
 	g.Go(func() error {
 		var err error
+		// Disable the bodyclose linter, in this particular case the caller is responsible
+		// for closing the body.
+		// nolint:bodyclose
 		resp, err = t.transport.RoundTrip(req)
 		if err != nil {
 			return err

@@ -543,8 +543,6 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient PodClient, nam
 		return pod, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
 	}
 	done := ctx.Done()
-	podTimeoutTicker := time.NewTicker(time.Minute)
-	defer podTimeoutTicker.Stop()
 
 	podCheckTicker := time.NewTicker(5 * time.Second)
 	defer podCheckTicker.Stop()

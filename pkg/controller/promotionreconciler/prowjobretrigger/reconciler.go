@@ -8,21 +8,20 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	prowjobsv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/github"
 	"sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
@@ -45,7 +44,6 @@ const (
 func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 	log := logrus.WithField("controller", ControllerName)
 	r := &reconciler{
-		ctx:          context.Background(),
 		log:          log,
 		client:       mgr.GetClient(),
 		gitHubClient: opts.GitHubClient,
@@ -65,13 +63,13 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 			UpdateFunc: func(e event.UpdateEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{
 					NamespacedName: types.NamespacedName{
-						Namespace: e.MetaNew.GetNamespace(),
-						Name:      e.MetaNew.GetName(),
+						Namespace: e.ObjectNew.GetNamespace(),
+						Name:      e.ObjectNew.GetName(),
 					},
 				})
 			},
 		},
-		predicate.NewPredicateFuncs(func(meta metav1.Object, object runtime.Object) bool {
+		predicate.NewPredicateFuncs(func(object client.Object) bool {
 			prowJob, ok := object.(*prowjobsv1.ProwJob)
 			if !ok {
 				return false
@@ -97,20 +95,19 @@ type RefGetter interface {
 }
 
 type reconciler struct {
-	ctx          context.Context
 	log          *logrus.Entry
 	client       ctrlruntimeclient.Client
 	gitHubClient RefGetter
 	enqueueJob   prowjobreconciler.Enqueuer
 }
 
-func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime.Result, error) {
+func (r *reconciler) Reconcile(ctx context.Context, req controllerruntime.Request) (controllerruntime.Result, error) {
 	log := r.log.WithField("name", req.Name).WithField("namespace", req.Namespace)
 	log.Trace("Starting reconciliation")
 	startTime := time.Now()
 	defer func() { log.WithField("duration", time.Since(startTime)).Trace("Finished reconciliation") }()
 
-	err := r.reconcile(req, log)
+	err := r.reconcile(ctx, req, log)
 	if err != nil {
 		log.WithError(err).Error("Reconciliation failed")
 	}
@@ -118,9 +115,9 @@ func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime
 	return controllerruntime.Result{}, controllerutil.SwallowIfTerminal(err)
 }
 
-func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry) error {
+func (r *reconciler) reconcile(ctx context.Context, req controllerruntime.Request, log *logrus.Entry) error {
 	prowJob := &prowjobsv1.ProwJob{}
-	if err := r.client.Get(r.ctx, req.NamespacedName, prowJob); err != nil {
+	if err := r.client.Get(ctx, req.NamespacedName, prowJob); err != nil {
 		// Object got deleted while it was in the workqueue
 		if apierrors.IsNotFound(err) {
 			return nil

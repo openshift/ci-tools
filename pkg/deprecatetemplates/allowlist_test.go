@@ -18,13 +18,13 @@ func TestDeprecatedTemplatePrune(t *testing.T) {
 		{
 			description: "non-current job is removed from unknown blockers",
 			input: deprecatedTemplate{
-				UnknownBlocker: deprecatedTemplateBlocker{
+				UnknownBlocker: &deprecatedTemplateBlocker{
 					Description: "unknown",
 					Jobs:        blockedJobs{"job": blockedJob{current: false}},
 				},
 			},
 			expected: deprecatedTemplate{
-				UnknownBlocker: deprecatedTemplateBlocker{
+				UnknownBlocker: &deprecatedTemplateBlocker{
 					Description: "unknown",
 					Jobs:        blockedJobs{},
 				},
@@ -33,7 +33,7 @@ func TestDeprecatedTemplatePrune(t *testing.T) {
 		{
 			description: "non-current job is removed from unknown blockers, current is kept",
 			input: deprecatedTemplate{
-				UnknownBlocker: deprecatedTemplateBlocker{
+				UnknownBlocker: &deprecatedTemplateBlocker{
 					Description: "unknown",
 					Jobs: blockedJobs{
 						"job":         blockedJob{current: false},
@@ -42,7 +42,7 @@ func TestDeprecatedTemplatePrune(t *testing.T) {
 				},
 			},
 			expected: deprecatedTemplate{
-				UnknownBlocker: deprecatedTemplateBlocker{
+				UnknownBlocker: &deprecatedTemplateBlocker{
 					Description: "unknown",
 					Jobs: blockedJobs{
 						"current-job": blockedJob{current: true},
@@ -63,10 +63,10 @@ func TestDeprecatedTemplatePrune(t *testing.T) {
 						"current-job": blockedJob{current: true},
 					}},
 				},
-				UnknownBlocker: deprecatedTemplateBlocker{Description: "unknown"},
+				UnknownBlocker: &deprecatedTemplateBlocker{Description: "unknown"},
 			},
 			expected: deprecatedTemplate{
-				UnknownBlocker: deprecatedTemplateBlocker{Description: "unknown"},
+				UnknownBlocker: &deprecatedTemplateBlocker{Description: "unknown"},
 				Blockers: map[string]deprecatedTemplateBlocker{
 					"BLOCKER-1": {Jobs: blockedJobs{
 						"current-job": blockedJob{current: true},
@@ -84,10 +84,10 @@ func TestDeprecatedTemplatePrune(t *testing.T) {
 					"BLOCKER-KEPT":    {Jobs: blockedJobs{"current-job": blockedJob{current: true}}},
 					"BLOCKER-REMOVED": {Jobs: blockedJobs{"job": blockedJob{current: false}}},
 				},
-				UnknownBlocker: deprecatedTemplateBlocker{Description: "unknown"},
+				UnknownBlocker: &deprecatedTemplateBlocker{Description: "unknown"},
 			},
 			expected: deprecatedTemplate{
-				UnknownBlocker: deprecatedTemplateBlocker{Description: "unknown"},
+				UnknownBlocker: &deprecatedTemplateBlocker{Description: "unknown"},
 				Blockers: map[string]deprecatedTemplateBlocker{
 					"BLOCKER-KEPT": {Jobs: blockedJobs{"current-job": blockedJob{current: true}}},
 				},
@@ -100,10 +100,10 @@ func TestDeprecatedTemplatePrune(t *testing.T) {
 					"BLOCKER-REMOVED":     {Jobs: blockedJobs{"job": blockedJob{current: false}}},
 					"BLOCKER-REMOVED-TOO": {Jobs: blockedJobs{"another-job": blockedJob{current: false}}},
 				},
-				UnknownBlocker: deprecatedTemplateBlocker{Description: "unknown"},
+				UnknownBlocker: &deprecatedTemplateBlocker{Description: "unknown"},
 			},
 			expected: deprecatedTemplate{
-				UnknownBlocker: deprecatedTemplateBlocker{Description: "unknown"},
+				UnknownBlocker: &deprecatedTemplateBlocker{Description: "unknown"},
 			},
 		},
 	}
@@ -128,10 +128,10 @@ func TestDeprecatedTemplateInsert(t *testing.T) {
 		{
 			description: "new job is added to unknown blockers",
 			existingDT: deprecatedTemplate{
-				UnknownBlocker: deprecatedTemplateBlocker{Jobs: blockedJobs{}},
+				UnknownBlocker: &deprecatedTemplateBlocker{Jobs: blockedJobs{}},
 			},
 			expectedDT: deprecatedTemplate{
-				UnknownBlocker: deprecatedTemplateBlocker{Jobs: blockedJobs{job: blockedJob{Generated: false, Kind: "unknown", current: true}}},
+				UnknownBlocker: &deprecatedTemplateBlocker{Jobs: blockedJobs{job: blockedJob{Generated: false, Kind: "unknown", current: true}}},
 			},
 		},
 		{
@@ -154,19 +154,19 @@ func TestDeprecatedTemplateInsert(t *testing.T) {
 		{
 			description: "adding job already in unknown blockers only sets the current field",
 			existingDT: deprecatedTemplate{
-				UnknownBlocker: deprecatedTemplateBlocker{Jobs: blockedJobs{job: blockedJob{Generated: false, Kind: "unknown"}}},
+				UnknownBlocker: &deprecatedTemplateBlocker{Jobs: blockedJobs{job: blockedJob{Generated: false, Kind: "unknown"}}},
 			},
 			expectedDT: deprecatedTemplate{
-				UnknownBlocker: deprecatedTemplateBlocker{Jobs: blockedJobs{job: blockedJob{Generated: false, Kind: "unknown", current: true}}},
+				UnknownBlocker: &deprecatedTemplateBlocker{Jobs: blockedJobs{job: blockedJob{Generated: false, Kind: "unknown", current: true}}},
 			},
 		},
 		{
 			description: "do not choke on nil map",
 			existingDT: deprecatedTemplate{
-				UnknownBlocker: deprecatedTemplateBlocker{Jobs: nil},
+				UnknownBlocker: &deprecatedTemplateBlocker{Jobs: nil},
 			},
 			expectedDT: deprecatedTemplate{
-				UnknownBlocker: deprecatedTemplateBlocker{Jobs: blockedJobs{job: blockedJob{Generated: false, Kind: "unknown", current: true}}},
+				UnknownBlocker: &deprecatedTemplateBlocker{Jobs: blockedJobs{job: blockedJob{Generated: false, Kind: "unknown", current: true}}},
 			},
 		},
 	}
@@ -196,7 +196,7 @@ func TestAllowlistInsert(t *testing.T) {
 			expectedAfter: map[string]*deprecatedTemplate{
 				template: {
 					Name: template,
-					UnknownBlocker: deprecatedTemplateBlocker{
+					UnknownBlocker: &deprecatedTemplateBlocker{
 						Description: "unknown",
 						Jobs:        blockedJobs{job: blockedJob{Generated: false, Kind: "unknown"}},
 					},
@@ -208,7 +208,7 @@ func TestAllowlistInsert(t *testing.T) {
 			before: map[string]*deprecatedTemplate{
 				template: {
 					Name: template,
-					UnknownBlocker: deprecatedTemplateBlocker{
+					UnknownBlocker: &deprecatedTemplateBlocker{
 						Jobs: blockedJobs{job: blockedJob{Generated: false, Kind: "unknown"}},
 					},
 				},
@@ -216,7 +216,7 @@ func TestAllowlistInsert(t *testing.T) {
 			expectedAfter: map[string]*deprecatedTemplate{
 				template: {
 					Name: template,
-					UnknownBlocker: deprecatedTemplateBlocker{
+					UnknownBlocker: &deprecatedTemplateBlocker{
 						Jobs: blockedJobs{job: blockedJob{Generated: false, Kind: "unknown"}},
 					},
 					Blockers: nil,
@@ -251,7 +251,7 @@ func TestAllowlistInsert(t *testing.T) {
 			before: map[string]*deprecatedTemplate{
 				template: {
 					Name: template,
-					UnknownBlocker: deprecatedTemplateBlocker{
+					UnknownBlocker: &deprecatedTemplateBlocker{
 						Jobs: blockedJobs{
 							job:        blockedJob{Generated: false, Kind: "unknown"},
 							anotherJob: blockedJob{Generated: false, Kind: "unknown"},
@@ -262,7 +262,7 @@ func TestAllowlistInsert(t *testing.T) {
 			expectedAfter: map[string]*deprecatedTemplate{
 				template: {
 					Name: template,
-					UnknownBlocker: deprecatedTemplateBlocker{
+					UnknownBlocker: &deprecatedTemplateBlocker{
 						Jobs: blockedJobs{
 							job:        blockedJob{Generated: false, Kind: "unknown"},
 							anotherJob: blockedJob{Generated: false, Kind: "unknown"},
@@ -314,7 +314,7 @@ func TestStatsFromJobs(t *testing.T) {
 func TestAllowlistStats(t *testing.T) {
 	d := deprecatedTemplate{
 		Name: "template",
-		UnknownBlocker: deprecatedTemplateBlocker{
+		UnknownBlocker: &deprecatedTemplateBlocker{
 			Jobs: map[string]blockedJob{
 				"1": {Generated: true, Kind: "presubmit"},
 				"2": {Generated: false, Kind: "presubmit"},

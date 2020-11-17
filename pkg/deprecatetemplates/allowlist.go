@@ -83,7 +83,7 @@ type deprecatedTemplateBlocker struct {
 
 type deprecatedTemplate struct {
 	Name           string                               `json:"template_name"`
-	UnknownBlocker deprecatedTemplateBlocker            `json:"unknown_blocker"`
+	UnknownBlocker *deprecatedTemplateBlocker           `json:"unknown_blocker,omitempty"`
 	Blockers       map[string]deprecatedTemplateBlocker `json:"blockers,omitempty"`
 }
 
@@ -100,7 +100,10 @@ func (d *deprecatedTemplate) insert(job config.JobBase) {
 	if knownBlocker {
 		return
 	}
-	if d.UnknownBlocker.Jobs == nil {
+
+	if d.UnknownBlocker == nil {
+		d.UnknownBlocker = &deprecatedTemplateBlocker{Jobs: blockedJobs{}}
+	} else if d.UnknownBlocker.Jobs == nil {
 		d.UnknownBlocker.Jobs = blockedJobs{}
 	}
 	d.UnknownBlocker.Jobs.Insert(job)
@@ -123,6 +126,9 @@ func (d *deprecatedTemplate) prune() {
 		d.Blockers = nil
 	}
 
+	if d.UnknownBlocker == nil {
+		return
+	}
 	for name, job := range d.UnknownBlocker.Jobs {
 		if !job.current {
 			delete(d.UnknownBlocker.Jobs, name)
@@ -179,8 +185,10 @@ func statsFromJobs(name, blocker string, jobs blockedJobs) statsLine {
 func (d *deprecatedTemplate) Stats() (total, unknown statsLine, blockers []statsLine) {
 	allJobs := blockedJobs{}
 
-	unknown = statsFromJobs(d.Name, blockerColUnknown, d.UnknownBlocker.Jobs)
-	allJobs = allJobs.Union(d.UnknownBlocker.Jobs)
+	if d.UnknownBlocker != nil {
+		unknown = statsFromJobs(d.Name, blockerColUnknown, d.UnknownBlocker.Jobs)
+		allJobs = allJobs.Union(d.UnknownBlocker.Jobs)
+	}
 
 	for jira, blocker := range d.Blockers {
 		blockerStats := statsFromJobs(d.Name, jira, blocker.Jobs)
@@ -222,7 +230,7 @@ func (a *allowlist) Insert(job config.JobBase, template string) {
 	if _, ok := a.Templates[template]; !ok {
 		a.Templates[template] = &deprecatedTemplate{
 			Name: template,
-			UnknownBlocker: deprecatedTemplateBlocker{
+			UnknownBlocker: &deprecatedTemplateBlocker{
 				Description: blockerColUnknown,
 				Jobs:        blockedJobs{},
 			},

@@ -27,7 +27,7 @@ type Enforcer struct {
 func NewEnforcer(allowlistPath string) (*Enforcer, error) {
 	allowlist, err := loadAllowlist(allowlistPath)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to load template deprecating allowlist from %q", allowlistPath)
+		return nil, fmt.Errorf("failed to load template deprecating allowlist from %q: %w", allowlistPath, err)
 	}
 	return &Enforcer{
 		allowlist:         allowlist,
@@ -118,7 +118,7 @@ func blockerSortKey(blocker string) string {
 	return blocker
 }
 
-func (e *Enforcer) Stats() (header, footer []string, lines [][]string) {
+func (e *Enforcer) Stats(hideTotals bool) (header, footer []string, lines [][]string) {
 	header = []string{"Template", "Blocker", "Total", "Generated", "Handcrafted", "Presubmits", "Postsubmits", "Release", "Periodics", "Unknown"}
 	var data []statsLine
 	var sumTotal int
@@ -134,8 +134,15 @@ func (e *Enforcer) Stats() (header, footer []string, lines [][]string) {
 	templates := e.allowlist.GetTemplates()
 	for name, template := range templates {
 		total, unknown, blockers := template.Stats()
-		totals[name] = total.total
-		data = append(data, total, unknown)
+		if !(name == blockerColTotal && hideTotals) {
+			totals[name] = total.total
+		}
+		if !hideTotals {
+			data = append(data, total)
+		}
+		if unknown.total != 0 {
+			data = append(data, unknown)
+		}
 		data = append(data, blockers...)
 
 		sumTotal += total.total

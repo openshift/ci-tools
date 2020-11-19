@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	"sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -22,7 +23,6 @@ import (
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler/prowjobreconciler"
-	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler/prowjobretrigger"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/promotion"
@@ -32,31 +32,46 @@ import (
 )
 
 type Options struct {
+	DryRun                bool
 	CIOperatorConfigAgent agents.ConfigAgent
+	ConfigGetter          config.Getter
 	GitHubClient          github.Client
-	Enqueuer              prowjobreconciler.Enqueuer
+	// The registryManager is set up to talk to the cluster
+	// that contains our imageRegistry. This cluster is
+	// most likely not the one the normal manager talks to.
+	RegistryManager controllerruntime.Manager
 }
 
 const ControllerName = "promotionreconciler"
 
-// AddToManager adds this controller to the manager, which must be the one for the cluster
-// hosting our central image registry, as we react to changes in ImageStreamTags there.
-func AddToManager(registryMgr controllerruntime.Manager, opts Options) error {
+func AddToManager(mgr controllerruntime.Manager, opts Options) error {
+	// Pre-Allocate the Image informer rather than letting it allocate on demand, because
+	// starting the watch takes very long (~2 minutes) and having that delay added to our
+	// first (# worker) reconciles skews the workqueue duration metric bigtimes.
+	if _, err := opts.RegistryManager.GetCache().GetInformer(context.TODO(), &imagev1.Image{}); err != nil {
+		return fmt.Errorf("failed to get informer for image: %w", err)
+	}
+
 	if err := opts.CIOperatorConfigAgent.AddIndex(configIndexName, configIndexFn); err != nil {
 		return fmt.Errorf("failed to add indexer to config-agent: %w", err)
+	}
+
+	prowJobEnqueuer, err := prowjobreconciler.AddToManager(mgr, opts.ConfigGetter, opts.DryRun)
+	if err != nil {
+		return fmt.Errorf("failed to construct prowjobreconciler: %w", err)
 	}
 
 	log := logrus.WithField("controller", ControllerName)
 	r := &reconciler{
 		log:    log,
-		client: imagestreamtagwrapper.MustNew(registryMgr.GetClient(), registryMgr.GetCache()),
+		client: imagestreamtagwrapper.MustNew(opts.RegistryManager.GetClient(), opts.RegistryManager.GetCache()),
 		releaseBuildConfigs: func(identifier string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
 			return opts.CIOperatorConfigAgent.GetFromIndex(configIndexName, identifier)
 		},
 		gitHubClient: opts.GitHubClient,
-		enqueueJob:   opts.Enqueuer,
+		enqueueJob:   prowJobEnqueuer,
 	}
-	c, err := controller.New(ControllerName, registryMgr, controller.Options{
+	c, err := controller.New(ControllerName, opts.RegistryManager, controller.Options{
 		Reconciler: r,
 		// We currently have 50k ImageStreamTags in the OCP namespace and need to periodically reconcile all of them,
 		// so don't be stingy with the workers
@@ -195,7 +210,20 @@ func commitForIST(ist *imagev1.ImageStreamTag) (string, error) {
 }
 
 func (r *reconciler) currentHEADForBranch(metadata cioperatorapi.Metadata, log *logrus.Entry) (string, bool, error) {
-	return prowjobretrigger.CurrentHEADForBranch(r.gitHubClient, metadata, log)
+	// We attempted for some time to use the gitClient for this, but we do so many reconciliations that
+	// it results in a massive performance issues that can easely kill the developers laptop.
+	ref, err := r.gitHubClient.GetRef(metadata.Org, metadata.Repo, "heads/"+metadata.Branch)
+	if err != nil {
+		if github.IsNotFound(err) {
+			return "", false, nil
+		}
+		if errors.Is(err, github.GetRefTooManyResultsError{}) {
+			log.WithError(err).Debug("got multiple refs back")
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("failed to get sha for ref %s/%s/heads/%s from github: %w", metadata.Org, metadata.Repo, metadata.Branch, err)
+	}
+	return ref, true, nil
 }
 
 const configIndexName = "release-build-config-by-image-stream-tag"

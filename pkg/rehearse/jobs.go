@@ -221,13 +221,9 @@ func hasRehearsableLabel(labels map[string]string) bool {
 }
 
 // getResolverConfigForTest returns a resolved ci-operator based on the provided filename and only includes the specified test in the
-// `tests` section of the config.
+// `tests` section of the config. If `testname` is empty, the resolved config will contain all items from the original `tests`.
 // The ImageStreamTagMap contains all imagestreamtags used within this config and is used to ensure they exist on all target clusters.
-func getResolvedConfigForTest(ciopConfigs config.DataByFilename, resolver registry.Resolver, filename, testname string) (string, apihelper.ImageStreamTagMap, error) {
-	ciopConfig, ok := ciopConfigs[filename]
-	if !ok {
-		return "", nil, fmt.Errorf("ci-operator config file %s was not found", filename)
-	}
+func getResolvedConfigForTest(ciopConfig config.DataWithInfo, resolver registry.Resolver, testname string) (string, apihelper.ImageStreamTagMap, error) {
 	// make copy so we don't change in-memory config
 	ciopCopy := config.DataWithInfo{
 		Configuration: ciopConfig.Configuration,
@@ -236,11 +232,11 @@ func getResolvedConfigForTest(ciopConfigs config.DataByFilename, resolver regist
 	// only include the test we need to reduce env var size
 	ciopCopy.Configuration.Tests = []api.TestStepConfiguration{}
 	for _, test := range ciopConfig.Configuration.Tests {
-		if test.As == testname {
+		if testname == "" || test.As == testname {
 			ciopCopy.Configuration.Tests = append(ciopCopy.Configuration.Tests, test)
-			break
 		}
 	}
+
 	ciopConfigResolved, err := registry.ResolveConfig(resolver, ciopCopy.Configuration)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed resolve ReleaseBuildConfiguration: %w", err)
@@ -258,45 +254,90 @@ func getResolvedConfigForTest(ciopConfigs config.DataByFilename, resolver regist
 	return string(ciOpConfigContent), imageStreamTags, nil
 }
 
-// inlineCiOpConfig detects whether a job needs a ci-operator config file
-// provided by a `ci-operator-configs` ConfigMap and if yes, returns a copy
-// of the job where a reference to this ConfigMap is replaced by the content
-// of the needed config file passed to the job as a direct value. This needs
-// to happen because the rehearsed Prow jobs may depend on these config files
-// being also changed by the tested PR.
+// inlineCiOpConfig detects whether a Container in a rehearsed job uses
+// a ci-operator config file and if yes, it modifies the Container so that its
+// environment has a CONFIG_SPEC variable containing a resolved configuration
+// coming from the content of the release repository.
+// This needs to happen because the config files or step registry content they
+// refer to may change in the PR that triggered a rehearsal, and the rehearsals
+// must use all content changed in this way.
+//
+// Also returns an ImageStreamTagMap with that contains all imagestreamtags used
+// within the inlined config (this is needed to later ensure they exist on all
+// target clusters where the rehearsals will execute).
 func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename, resolver registry.Resolver, metadata api.Metadata, testname string, loggers Loggers) (apihelper.ImageStreamTagMap, error) {
 	allImageStreamTags := apihelper.ImageStreamTagMap{}
-	// replace all ConfigMapKeyRef mounts with inline config maps
-	for index := range container.Env {
-		env := &(container.Env[index])
-		if env.Name == "CONFIG_SPEC" {
-			// if CONFIG_SPEC has already been set, do not add new CONFIG_SPEC section
+	if container.Command == nil || container.Command[0] != "ci-operator" {
+		return allImageStreamTags, nil
+	}
+
+	var hasConfigEnv bool
+	var ciopConfig config.DataWithInfo
+	var envs []v1.EnvVar
+	for idx, env := range container.Env {
+		switch {
+		case env.Name == "CONFIG_SPEC" && env.ValueFrom != nil:
+			// job attempts to get CONFIG_SPEC from cluster resource, which is weird,
+			// unexpected and we cannot support rehearsals for that
+			return nil, fmt.Errorf("CONFIG_SPEC is set from a cluster resource, cannot rehearse such job")
+		case env.Name == "UNRESOLVED_CONFIG" && env.ValueFrom != nil:
+			// job attempts to get UNRESOLVED_CONFIG from cluster resource, which is weird,
+			// unexpected and we cannot support rehearsals for that
+			return nil, fmt.Errorf("UNRESOLVED_CONFIG is set from a cluster resource, cannot rehearse such job")
+		case env.Name == "CONFIG_SPEC" && env.Value != "":
+			// job already has inline CONFIG_SPEC: we should not modify it
 			return allImageStreamTags, nil
+		case env.Name == "UNRESOLVED_CONFIG" && env.Value != "":
+			if err := yaml.Unmarshal([]byte(env.Value), &ciopConfig.Configuration); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal UNRESOLVED_CONFIG: %w", err)
+			}
+			// Annoying hack: UNRESOLVED_CONFIG means this is a handcrafted job, which means
+			// `testname` cannot be relied on (it is derived from job name, which is arbitrary
+			// in handcrafted jobs). We need the test name to know which `tests` field to
+			// resolve, so we try to detect it from `--target` arg, if present.
+			//
+			// The worst case is that we do not find the matching name. In such case,
+			// the inlined config will contain all items from `tests` stanza.
+			testname = ""
+			for idx, arg := range container.Args {
+				if strings.HasPrefix(arg, "--target=") {
+					testname = strings.TrimPrefix(arg, "--target=")
+					break
+				}
+				if arg == "--target" {
+					if len(container.Args) == (idx + 1) {
+						return nil, errors.New("plain '--target' is a last arg, expected to be followed with a value")
+					}
+					testname = container.Args[idx+1]
+					break
+				}
+			}
+			hasConfigEnv = true
+		default:
+			// Another envvar, we just need to keep it
+			envs = append(envs, container.Env[idx])
 		}
 	}
 
-	// inline CONFIG_SPEC for all ci-operator jobs
-	if container.Command != nil && container.Command[0] == "ci-operator" {
+	if !hasConfigEnv {
 		if err := metadata.IsComplete(); err != nil {
 			return nil, fmt.Errorf("could not infer which ci-operator config this job uses: %w", err)
 		}
 		filename := metadata.Basename()
-		loggers.Debug.WithField(logCiopConfigFile, filename).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
-		ciOpConfigContent, imageStreamTags, err := getResolvedConfigForTest(ciopConfigs, resolver, filename, testname)
-		if err != nil {
-			loggers.Job.WithError(err).Error("Failed to get resolved config for test")
-			return nil, err
+		if _, ok := ciopConfigs[filename]; !ok {
+			return nil, fmt.Errorf("ci-operator config file %s was not found", filename)
 		}
-		apihelper.MergeImageStreamTagMaps(allImageStreamTags, imageStreamTags)
-
-		envs := container.Env
-		env := v1.EnvVar{
-			Name:  "CONFIG_SPEC",
-			Value: ciOpConfigContent,
-		}
-		envs = append(envs, env)
-		container.Env = envs
+		ciopConfig = ciopConfigs[filename]
+		loggers.Debug.WithField(logCiopConfigFile, filename).Debug("Rehearsal job would use ci-operator config from registry, its content will be inlined")
 	}
+
+	ciOpConfigContent, imageStreamTags, err := getResolvedConfigForTest(ciopConfig, resolver, testname)
+	if err != nil {
+		loggers.Job.WithError(err).Error("Failed to get resolved config for test")
+		return nil, err
+	}
+	apihelper.MergeImageStreamTagMaps(allImageStreamTags, imageStreamTags)
+	container.Env = append(envs, v1.EnvVar{Name: "CONFIG_SPEC", Value: ciOpConfigContent})
 	return allImageStreamTags, nil
 }
 

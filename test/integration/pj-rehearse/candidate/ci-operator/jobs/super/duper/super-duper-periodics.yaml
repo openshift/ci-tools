@@ -75,3 +75,124 @@ periodics:
         requests:
           cpu: 10m
     serviceAccountName: ci-operator
+- agent: kubernetes
+  decorate: true
+  extra_refs:
+  - base_ref: ciop-cfg-change
+    org: super
+    repo: duper
+  interval: 24h
+  labels:
+    pj-rehearse.openshift.io/can-be-rehearsed: "true"
+  name: periodic-ci-super-duper-periodic-with-unresolved-config
+  spec:
+    containers:
+    - args:
+      - --no-ci-op-args
+      - --target=multistage
+      command:
+      - ci-operator
+      env:
+      - name: UNRESOLVED_CONFIG
+        value: |
+          resources:
+            '*':
+              limits:
+                cpu: 500Mi
+              requests:
+                cpu: 10Mi
+          tag_specification:
+            name: "4.7"
+            namespace: ocp
+          tests:
+          - as: multistage
+            steps:
+              cluster_profile: ""
+              test:
+              - as: e2e
+                commands: this is targeted, it should be in inlined CONFIG_SPEC
+                from: my-image
+                resources:
+                  requests:
+                    cpu: 1000m
+                    memory: 2Gi
+              workflow: ipi
+          - as: also-multistage
+            steps:
+              cluster_profile: ""
+              test:
+              - as: e2e
+                commands: this is not targeted, it should not be in inlined CONFIG_SPEC
+                from: my-image
+                resources:
+                  requests:
+                    cpu: 1000m
+                    memory: 2Gi
+              workflow: ipi
+      image: ci-operator:latest
+      imagePullPolicy: Always
+      name: ""
+      resources:
+        requests:
+          cpu: 10m
+    serviceAccountName: ci-operator
+- agent: kubernetes
+  decorate: true
+  extra_refs:
+  - base_ref: ciop-cfg-change
+    org: super
+    repo: duper
+  interval: 24h
+  labels:
+    pj-rehearse.openshift.io/can-be-rehearsed: "true"
+  name: periodic-ci-super-duper-periodic-with-unresolved-config-no-target
+  spec:
+    containers:
+    - args:
+      - --no-ci-op-args
+      command:
+      - ci-operator
+      env:
+      - name: UNRESOLVED_CONFIG
+        value: |
+          resources:
+            '*':
+              limits:
+                cpu: 500Mi
+              requests:
+                cpu: 10Mi
+          tag_specification:
+            name: "4.7"
+            namespace: ocp
+          tests:
+          - as: multistage
+            steps:
+              cluster_profile: ""
+              test:
+              - as: e2e
+                commands: this job has no --target so this test should be in inline CONFIG_SPEC
+                from: my-image
+                resources:
+                  requests:
+                    cpu: 1000m
+                    memory: 2Gi
+              workflow: ipi
+          - as: also-multistage
+            steps:
+              cluster_profile: ""
+              test:
+              - as: e2e
+                commands: this job has no --target so this test should be in inline CONFIG_SPEC
+                from: my-image
+                resources:
+                  requests:
+                    cpu: 1000m
+                    memory: 2Gi
+              workflow: ipi
+      image: ci-operator:latest
+      imagePullPolicy: Always
+      name: ""
+      resources:
+        requests:
+          cpu: 10m
+    serviceAccountName: ci-operator

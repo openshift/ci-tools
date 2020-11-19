@@ -29,8 +29,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
-	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler/prowjobreconciler"
-	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler/prowjobretrigger"
 	"github.com/openshift/ci-tools/pkg/controller/registrysyncer"
 	"github.com/openshift/ci-tools/pkg/controller/secretsyncer"
 	secretsyncerconfig "github.com/openshift/ci-tools/pkg/controller/secretsyncer/config"
@@ -354,25 +352,15 @@ func main() {
 		// reset is not synchronized with the github reset and we may get upgraded in which case we lose the bucket
 		// state.
 		gitHubClient.Throttle(300, 300)
-		prowJobEnqueuer, err := prowjobreconciler.AddToManager(mgr, configAgent.Config, opts.dryRun)
-		if err != nil {
-			logrus.WithError(err).Fatal("failed to construct prowjobreconciler")
-		}
 		promotionreconcilerOptions := promotionreconciler.Options{
+			DryRun:                opts.dryRun,
 			CIOperatorConfigAgent: ciOPConfigAgent,
+			ConfigGetter:          configAgent.Config,
 			GitHubClient:          gitHubClient,
-			Enqueuer:              prowJobEnqueuer,
+			RegistryManager:       registryMgr,
 		}
-		if err := promotionreconciler.AddToManager(registryMgr, promotionreconcilerOptions); err != nil {
+		if err := promotionreconciler.AddToManager(mgr, promotionreconcilerOptions); err != nil {
 			logrus.WithError(err).Fatal("Failed to add imagestreamtagreconciler")
-		}
-		prowJobRetriggerOptions := prowjobretrigger.Options{
-			CIOperatorConfigAgent: ciOPConfigAgent,
-			GitHubClient:          gitHubClient,
-			Enqueuer:              prowJobEnqueuer,
-		}
-		if err := prowjobretrigger.AddToManager(mgr, prowJobRetriggerOptions); err != nil {
-			logrus.WithError(err).Fatal("Failed to add prowjobretrigger")
 		}
 	}
 

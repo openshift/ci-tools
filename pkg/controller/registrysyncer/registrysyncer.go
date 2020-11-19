@@ -37,6 +37,7 @@ func AddToManager(mgr manager.Manager,
 	imageStreams sets.String,
 	imageStreamPrefixes sets.String,
 	imageStreamNamespaces sets.String,
+	deniedImageStreams sets.String,
 ) error {
 	log := logrus.WithField("controller", ControllerName)
 	r := &reconciler{
@@ -47,6 +48,7 @@ func AddToManager(mgr manager.Manager,
 		imageStreams:          imageStreams,
 		imageStreamPrefixes:   imageStreamPrefixes,
 		imageStreamNamespaces: imageStreamNamespaces,
+		deniedImageStreams:    deniedImageStreams,
 	}
 	for clusterName, m := range managers {
 		r.registryClients[clusterName] = imagestreamtagwrapper.MustNew(m.GetClient(), m.GetCache())
@@ -66,7 +68,7 @@ func AddToManager(mgr manager.Manager,
 	for _, m := range managers {
 		if err := c.Watch(
 			source.NewKindWithCache(&imagev1.ImageStream{}, m.GetCache()),
-			handlerFactory(testInputImageStreamTagFilterFactory(log, imageStreamTags, imageStreams, imageStreamPrefixes, imageStreamNamespaces)),
+			handlerFactory(testInputImageStreamTagFilterFactory(log, imageStreamTags, imageStreams, imageStreamPrefixes, imageStreamNamespaces, deniedImageStreams)),
 		); err != nil {
 			return fmt.Errorf("failed to create watch for ImageStreams: %w", err)
 		}
@@ -101,6 +103,7 @@ type reconciler struct {
 	imageStreams          sets.String
 	imageStreamPrefixes   sets.String
 	imageStreamNamespaces sets.String
+	deniedImageStreams    sets.String
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -312,19 +315,23 @@ func testInputImageStreamTagFilterFactory(
 	imageStreams sets.String,
 	imageStreamPrefixes sets.String,
 	imageStreamNamespaces sets.String,
+	deniedImageStreams sets.String,
 ) objectFilter {
 	l = logrus.WithField("subcomponent", "test-input-image-stream-tag-filter")
 	return func(nn types.NamespacedName) bool {
+		imageStreamName, err := imageStreamNameFromImageStreamTagName(nn)
+		if err != nil {
+			l.WithField("name", nn.String()).WithError(err).Error("Failed to get imagestreamname for imagestreamtag")
+			return false
+		}
+		if deniedImageStreams.Has(imageStreamName.String()) {
+			return false
+		}
 		if imageStreamTags.Has(nn.String()) {
 			return true
 		}
 		if imageStreamNamespaces.Has(nn.Namespace) {
 			return true
-		}
-		imageStreamName, err := imageStreamNameFromImageStreamTagName(nn)
-		if err != nil {
-			l.WithField("name", nn.String()).WithError(err).Error("Failed to get imagestreamname for imagestreamtag")
-			return false
 		}
 		if imageStreams.Has(imageStreamName.String()) {
 			return true

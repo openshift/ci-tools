@@ -484,6 +484,7 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 		imageStreams          sets.String
 		imageStreamPrefixes   sets.String
 		imageStreamNamespaces sets.String
+		deniedImageStreams    sets.String
 		nn                    types.NamespacedName
 		expected              bool
 	}{
@@ -524,12 +525,35 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 			name: "not valid isTag name",
 			nn:   types.NamespacedName{Namespace: "some-namespace", Name: "not-valid-name"},
 		},
+		{
+			name:                  "denied",
+			imageStreamNamespaces: sets.NewString("ocp"),
+			nn:                    types.NamespacedName{Namespace: "ocp", Name: "release:2.3"},
+			deniedImageStreams:    sets.NewString("ocp/release"),
+		},
+		{
+			name:                  "not denied: ocp",
+			imageStreamNamespaces: sets.NewString("ocp"),
+			nn:                    types.NamespacedName{Namespace: "ocp", Name: "ruby:2.3"},
+			deniedImageStreams:    sets.NewString("ocp/release"),
+			expected:              true,
+		},
+		{
+			name:                  "not denied: some-namespace",
+			imageStreamNamespaces: sets.NewString("some-namespace"),
+			nn:                    types.NamespacedName{Namespace: "some-namespace", Name: "ruby:2.3"},
+			deniedImageStreams:    sets.NewString("ocp/release"),
+			expected:              true,
+		},
 	}
 
 	for _, tc := range testCases {
+		if tc.name != "not denied" {
+			continue
+		}
 		t.Run(tc.name, func(t *testing.T) {
 			tc.l = logrus.WithField("tc.name", tc.name)
-			objectFilter := testInputImageStreamTagFilterFactory(tc.l, tc.imageStreamTags, tc.imageStreams, tc.imageStreamPrefixes, tc.imageStreamNamespaces)
+			objectFilter := testInputImageStreamTagFilterFactory(tc.l, tc.imageStreamTags, tc.imageStreams, tc.imageStreamPrefixes, tc.imageStreamNamespaces, tc.deniedImageStreams)
 			if diff := cmp.Diff(tc.expected, objectFilter(tc.nn)); diff != "" {
 				t.Errorf("actual does not match expected, diff: %s", diff)
 			}

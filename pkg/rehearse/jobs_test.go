@@ -158,20 +158,6 @@ func TestInlineCiopConfig(t *testing.T) {
 			As: "test2",
 		}},
 	}
-	testCiopConfigTest1 := api.ReleaseBuildConfiguration{Tests: []api.TestStepConfiguration{testCiopConfig.Tests[0]}}
-	testCiopConfigContentTest1, err := yaml.Marshal(&testCiopConfigTest1)
-	if err != nil {
-		t.Fatal("Failed to marshal ci-operator config")
-	}
-	testCiopConfigTest2 := api.ReleaseBuildConfiguration{
-		Tests: []api.TestStepConfiguration{{
-			As: "test2",
-		}},
-	}
-	testCiopConfigContentTest2, err := yaml.Marshal(&testCiopConfigTest2)
-	if err != nil {
-		t.Fatal("Failed to marshal ci-operator config")
-	}
 
 	testCases := []struct {
 		description               string
@@ -199,25 +185,17 @@ func TestInlineCiopConfig(t *testing.T) {
 		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference("test-cm", "key")}},
 		configs:     config.DataByFilename{},
 		expectedEnv: []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference("test-cm", "key")}},
-	}, {
-		description:               "CM reference to ci-operator-configs -> cm content inlined; test1",
-		testname:                  "test1",
-		sourceEnv:                 []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
-		configs:                   config.DataByFilename{"filename": {Info: config.Info{Metadata: testCiopConfigInfo}, Configuration: testCiopConfig}},
-		expectedEnv:               []v1.EnvVar{{Name: "T", Value: string(testCiopConfigContentTest1)}},
-		expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
-	}, {
-		description: "CM reference to ci-operator-configs -> cm content inlined; test2",
-		testname:    "test2",
-		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
-		configs:     config.DataByFilename{"filename": {Info: config.Info{Metadata: testCiopConfigInfo}, Configuration: testCiopConfig}},
-		expectedEnv: []v1.EnvVar{{Name: "T", Value: string(testCiopConfigContentTest2)}},
-	}, {
-		description:   "bad CM key is handled",
-		sourceEnv:     []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
-		configs:       config.DataByFilename{},
-		expectedError: true,
-	}}
+	},
+		{
+			// After DPTP-1685: jobs are not expected to refer to ci-operator CMs directly anymore, so
+			// rehearsals do not need to support that cases anymore
+			description: "CM reference to ci-operator-configs -> no changes; test1",
+			testname:    "test1",
+			sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
+			configs:     config.DataByFilename{"filename": {Info: config.Info{Metadata: testCiopConfigInfo}, Configuration: testCiopConfig}},
+			expectedEnv: []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
+		},
+	}
 
 	references, chains, workflows, _, _, observers, err := load.Registry(testingRegistry, false)
 	if err != nil {

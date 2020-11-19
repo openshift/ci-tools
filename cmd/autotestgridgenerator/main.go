@@ -88,6 +88,7 @@ func main() {
 		Info("running command")
 
 	c := exec.Command(command, arguments...)
+	c.Stderr = os.Stderr
 	err := c.Run()
 	if err != nil {
 		logrus.WithError(err).Fatalf("failed to run %s", fullCommand)

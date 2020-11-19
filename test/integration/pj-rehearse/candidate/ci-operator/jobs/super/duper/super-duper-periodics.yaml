@@ -68,12 +68,6 @@ periodics:
       - --CHANGED
       command:
       - no-ci-op
-      env:
-      - name: CONFIG_SPEC
-        valueFrom:
-          configMapKeyRef:
-            key: super-duper-ciop-cfg-change.yaml
-            name: ci-operator-misc-configs
       image: ci-operator:latest
       imagePullPolicy: Always
       name: ""

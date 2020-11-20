@@ -117,7 +117,8 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 		log.Printf("cleanup: Deleting template %s", s.template.Name)
-		if err := s.client.Delete(ctx, &templateapi.TemplateInstance{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.template.Name}}, ctrlruntimeclient.PropagationPolicy(meta.DeletePropagationForeground)); err != nil && !kerrors.IsNotFound(err) {
+		// we need the deletion to run regardless of what the test context
+		if err := s.client.Delete(context.Background(), &templateapi.TemplateInstance{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.template.Name}}, ctrlruntimeclient.PropagationPolicy(meta.DeletePropagationForeground)); err != nil && !kerrors.IsNotFound(err) {
 			log.Printf("error: Could not delete template instance: %v", err)
 		}
 	}()

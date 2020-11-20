@@ -94,6 +94,8 @@ type registrySyncerOptions struct {
 	imageStreamPrefixes      sets.String
 	imageStreamNamespacesRaw flagutil.Strings
 	imageStreamNamespaces    sets.String
+	deniedImageStreamsRaw    flagutil.Strings
+	deniedImageStreams       sets.String
 }
 
 type secretSyncerConfigOptions struct {
@@ -130,6 +132,7 @@ func newOpts() (*options, error) {
 	flag.Var(&opts.registrySyncerOptions.imageStreamsRaw, "registrySyncerOptions.image-stream", "An imagestream that will be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	flag.Var(&opts.registrySyncerOptions.imageStreamPrefixesRaw, "registrySyncerOptions.image-stream-prefix", "An imagestream prefix that will be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	flag.Var(&opts.registrySyncerOptions.imageStreamNamespacesRaw, "registrySyncerOptions.image-stream-namespace", "A namespace in which imagestreams will be synced (e.G `ci`). Can be passed multiple times.")
+	flag.Var(&opts.registrySyncerOptions.deniedImageStreamsRaw, "registrySyncerOptions.denied-image-stream", "An imagestream that will NOT be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.forbiddenRegistriesRaw, "testImagesDistributorOptions.forbidden-registry", "The hostname of an image registry from which there is no synchronization of its images. Can be passed multiple times.")
 	flag.StringVar(&opts.registrySyncerOptions.imagePullSecretPath, "registrySyncerOptions.imagePullSecretPath", "", "A file to use for reading an ImagePullSecret that will be bound to all `default` ServiceAccounts in all namespaces that have a test ImageStream on all build clusters")
 	flag.StringVar(&opts.secretSyncerConfigOptions.configFile, "secretSyncerConfigOptions.config", "", "The config file for the secret syncer controller")
@@ -180,6 +183,10 @@ func newOpts() (*options, error) {
 	imageStreamPrefixes, isErrors := completeImageStream("registrySyncerOptions.image-stream-prefix", opts.registrySyncerOptions.imageStreamPrefixesRaw)
 	errs = append(errs, isErrors...)
 	opts.registrySyncerOptions.imageStreamPrefixes = imageStreamPrefixes
+
+	deniedImageStreams, isErrors := completeImageStream("registrySyncerOptions.denied-image-stream", opts.registrySyncerOptions.deniedImageStreamsRaw)
+	errs = append(errs, isErrors...)
+	opts.registrySyncerOptions.deniedImageStreams = deniedImageStreams
 
 	opts.registrySyncerOptions.imageStreamNamespaces = completeSet(opts.registrySyncerOptions.imageStreamNamespacesRaw)
 
@@ -468,6 +475,7 @@ func main() {
 			opts.registrySyncerOptions.imageStreams,
 			opts.registrySyncerOptions.imageStreamPrefixes,
 			opts.registrySyncerOptions.imageStreamNamespaces,
+			opts.registrySyncerOptions.deniedImageStreams,
 		); err != nil {
 			logrus.WithError(err).Fatal("failed to add registrysyncer")
 		}

@@ -12,6 +12,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -117,6 +118,8 @@ func main() {
 			return nil
 		}
 
+		executeGitCmd := executeGitCMDFactory(repoDir)
+
 		remote, err := url.Parse(fmt.Sprintf("https://github.com/%s/%s", repoInfo.Org, repoInfo.Repo))
 		if err != nil {
 			logger.WithError(err).Fatal("Could not construct remote URL.")
@@ -125,16 +128,9 @@ func main() {
 			remote.User = url.UserPassword(o.username, token)
 		}
 		for _, command := range [][]string{{"init"}, {"fetch", "--depth", "1", remote.String(), repoInfo.Branch}} {
-			cmdLogger := logger.WithFields(logrus.Fields{"commands": fmt.Sprintf("git %s", strings.Join(command, " "))})
-			cmd := exec.Command("git", command...)
-			cmd.Dir = repoDir
-			cmdLogger.Debug("Running command.")
-			if out, err := cmd.CombinedOutput(); err != nil {
-				cmdLogger.WithError(err).WithFields(logrus.Fields{"output": string(out)}).Error("Failed to execute command.")
+			if err := executeGitCmd(logger, command...); err != nil {
 				failed = true
 				return nil
-			} else {
-				cmdLogger.WithFields(logrus.Fields{"output": string(out)}).Debug("Executed command.")
 			}
 		}
 
@@ -151,66 +147,39 @@ func main() {
 
 			// when we're initializing the branch, we just want to make sure
 			// it is in sync with the current branch that is promoting
-			branchLogger := logger.WithField("future-branch", futureBranch)
+			logger := logger.WithField("future-branch", futureBranch)
 			command := []string{"ls-remote", remote.String(), fmt.Sprintf("refs/heads/%s", futureBranch)}
-			cmdLogger := branchLogger.WithFields(logrus.Fields{"commands": fmt.Sprintf("git %s", strings.Join(command, " "))})
-			cmd := exec.Command("git", command...)
-			cmd.Dir = repoDir
-			cmdLogger.Debug("Running command.")
-			if out, err := cmd.CombinedOutput(); err != nil {
-				cmdLogger.WithError(err).WithFields(logrus.Fields{"output": string(out)}).Error("Failed to execute command.")
+			if err := executeGitCmd(logger, command...); err != nil {
 				failed = true
 				continue
-			} else {
-				cmdLogger.WithFields(logrus.Fields{"output": string(out)}).Debug("Executed command.")
-				if string(out) == "" && !o.fastForward {
-					branchLogger.Info("Remote already has branch, skipping.")
-					continue
-				}
 			}
 
 			if !o.Confirm {
-				branchLogger.Info("Would create new branch.")
+				logger.Info("Would create new branch.")
 				continue
 			}
 
 			pushBranch := func() (retry bool) {
 				command = []string{"push", remote.String(), fmt.Sprintf("FETCH_HEAD:refs/heads/%s", futureBranch)}
-				cmdLogger = branchLogger.WithFields(logrus.Fields{"commands": fmt.Sprintf("git %s", strings.Join(command, " "))})
-				cmd = exec.Command("git", command...)
-				cmd.Dir = repoDir
-				cmdLogger.Debug("Running command.")
-				if out, err := cmd.CombinedOutput(); err != nil {
-					errLogger := cmdLogger.WithError(err).WithFields(logrus.Fields{"output": string(out)})
-					tooShallowErr := strings.Contains(string(out), "Updates were rejected because the remote contains work that you do")
+				logger := logger.WithFields(logrus.Fields{"commands": fmt.Sprintf("git %s", strings.Join(command, " "))})
+				if err := executeGitCmd(logger, command...); err != nil {
+					tooShallowErr := strings.Contains(err.Error(), "Updates were rejected because the remote contains work that you do")
 					if tooShallowErr {
-						errLogger.Warn("Failed to push, trying a deeper clone...")
+						logger.Warn("Failed to push, trying a deeper clone...")
 						return true
 					}
-					errLogger.Error("Failed to execute command.")
 					failed = true
-					return false
-				} else {
-					cmdLogger.WithFields(logrus.Fields{"output": string(out)}).Debug("Executed command.")
-					branchLogger.Info("Pushed new branch.")
-					return false
 				}
+				return false
 			}
 
 			fetchDeeper := func(depth int) error {
 				command = []string{"fetch", "--depth", strconv.Itoa(depth), remote.String(), repoInfo.Branch}
-				cmdLogger := logger.WithFields(logrus.Fields{"commands": fmt.Sprintf("git %s", strings.Join(command, " "))})
-				cmd := exec.Command("git", command...)
-				cmd.Dir = repoDir
-				cmdLogger.Debug("Running command.")
-				if out, err := cmd.CombinedOutput(); err != nil {
-					cmdLogger.WithError(err).WithFields(logrus.Fields{"output": string(out)}).Error("Failed to execute command.")
+				if err := executeGitCmd(logger, command...); err != nil {
 					failed = true
 					return err
-				} else {
-					cmdLogger.WithFields(logrus.Fields{"output": string(out)}).Debug("Executed command.")
-					return nil
 				}
+				return nil
 			}
 
 			for depth := 1; depth < 9; depth += 1 {
@@ -220,7 +189,7 @@ func main() {
 				}
 
 				if depth == 8 && retry {
-					branchLogger.Error("Could not push branch even with retries.")
+					logger.Error("Could not push branch even with retries.")
 					failed = true
 					break
 				}
@@ -233,5 +202,36 @@ func main() {
 		return nil
 	}); err != nil || failed {
 		logrus.WithError(err).Fatal("Could not branch configurations.")
+	}
+}
+
+func executeGitCMDFactory(dir string) func(l *logrus.Entry, args ...string) error {
+	return func(l *logrus.Entry, args ...string) error {
+		l = l.WithField("commands", fmt.Sprintf("git %s", strings.Join(args, " ")))
+		var b []byte
+		var err error
+		l.Debug("Running command.")
+		sleepyTime := time.Second
+		for i := 0; i < 3; i++ {
+			c := exec.Command("git", args...)
+			c.Dir = dir
+			b, err = c.CombinedOutput()
+			if err != nil {
+				err = fmt.Errorf("running git %v returned error %w with output %q", args, err, string(b))
+				l.WithError(err).Debugf("Retrying #%d, if this is not the 3rd try then this will be retried", i+1)
+				time.Sleep(sleepyTime)
+				sleepyTime *= 2
+				continue
+			}
+			break
+		}
+		l = l.WithField("output", string(b))
+		if err != nil {
+			l.Error("Failed to execute command.")
+			return err
+		}
+
+		l.Debug("Executed command.")
+		return nil
 	}
 }

@@ -87,7 +87,7 @@ func TestRunNormalCase(t *testing.T) {
 		creates:   []api.StepLink{api.InternalImageLink("final")},
 	}
 
-	if _, err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final})); err != nil {
+	if _, _, err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final})); err != nil {
 		t.Errorf("got an error but expected none: %v", err)
 	}
 
@@ -152,7 +152,7 @@ func TestRunFailureCase(t *testing.T) {
 		creates:   []api.StepLink{api.InternalImageLink("final")},
 	}
 
-	suites, err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}))
+	suites, _, err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}))
 	if err == nil {
 		t.Error("got no error but expected one")
 	}

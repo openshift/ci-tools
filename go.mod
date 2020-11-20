@@ -21,7 +21,7 @@ replace (
 )
 
 require (
-	cloud.google.com/go/storage v1.10.0
+	cloud.google.com/go/storage v1.12.0
 	github.com/GoogleCloudPlatform/testgrid v0.0.13
 	github.com/alecthomas/chroma v0.8.2-0.20201103103104-ab61726cdb54
 	github.com/andygrunwald/go-jira v1.12.0
@@ -52,14 +52,14 @@ require (
 	github.com/sirupsen/logrus v1.6.0
 	github.com/slack-go/slack v0.6.6
 	github.com/spf13/afero v1.4.1
-	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
+	golang.org/x/oauth2 v0.0.0-20200902213428-5d25da1a8d43
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
-	google.golang.org/api v0.29.0
+	google.golang.org/api v0.32.0
 	gopkg.in/fsnotify.v1 v1.4.7
 	k8s.io/api v0.19.3
 	k8s.io/apimachinery v0.19.3
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
-	k8s.io/test-infra v0.0.0-20201110204727-1435ed8f712b
+	k8s.io/test-infra v0.0.0-20201118173605-9a0ab0b4b7d2
 	k8s.io/utils v0.0.0-20200912215256-4140de9c8800
 	sigs.k8s.io/boskos v0.0.0-20200617235605-f289ba6555ba
 	sigs.k8s.io/controller-runtime v0.7.0-alpha.6.0.20201112182909-33f1d80ebeaa

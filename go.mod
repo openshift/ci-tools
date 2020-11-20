@@ -9,6 +9,7 @@ replace (
 
 	github.com/docker/docker => github.com/openshift/moby-moby v1.4.2-0.20190308215630-da810a85109d
 	github.com/moby/buildkit => github.com/dmcgowan/buildkit v0.0.0-20170731200553-da2b9dc7dab9
+	github.com/openshift/api => github.com/openshift/api v0.0.0-20201120165435-072a4cd8ca42
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20200521150516-05eb9880269c
 	github.com/openshift/library-go => github.com/openshift/library-go v0.0.0-20200527213645-a9b77f5402e3
 	k8s.io/api => k8s.io/api v0.19.3

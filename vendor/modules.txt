@@ -333,7 +333,7 @@ github.com/opencontainers/image-spec/specs-go/v1
 # github.com/opencontainers/runc v1.0.0-rc9
 github.com/opencontainers/runc/libcontainer/system
 github.com/opencontainers/runc/libcontainer/user
-# github.com/openshift/api v0.0.0-20200521101457-60c476765272
+# github.com/openshift/api v0.0.0-20200521101457-60c476765272 => github.com/openshift/api v0.0.0-20201120165435-072a4cd8ca42
 ## explicit
 github.com/openshift/api/build/v1
 github.com/openshift/api/image
@@ -1212,6 +1212,7 @@ vbom.ml/util/sortorder
 # github.com/containerd/containerd => github.com/containerd/containerd v0.2.10-0.20180716142608-408d13de2fbb
 # github.com/docker/docker => github.com/openshift/moby-moby v1.4.2-0.20190308215630-da810a85109d
 # github.com/moby/buildkit => github.com/dmcgowan/buildkit v0.0.0-20170731200553-da2b9dc7dab9
+# github.com/openshift/api => github.com/openshift/api v0.0.0-20201120165435-072a4cd8ca42
 # github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20200521150516-05eb9880269c
 # github.com/openshift/library-go => github.com/openshift/library-go v0.0.0-20200527213645-a9b77f5402e3
 # k8s.io/api => k8s.io/api v0.19.3

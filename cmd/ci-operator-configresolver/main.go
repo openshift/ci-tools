@@ -153,7 +153,10 @@ func resolveAndRespond(registryAgent agents.RegistryAgent, config api.ReleaseBui
 	config, err := registryAgent.ResolveConfig(config)
 	if err != nil {
 		metrics.RecordError("failed to resolve config with registry", configresolverMetrics.ErrorRate)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
+		if _, writeErr := w.Write([]byte(fmt.Sprintf("failed to resolve config: %v", err))); writeErr != nil {
+			logger.WithError(writeErr).Warning("failed to write body after config resolving failed")
+		}
 		fmt.Fprintf(w, "failed to resolve config with registry: %v", err)
 		logger.WithError(err).Warning("failed to resolve config with registry")
 		return

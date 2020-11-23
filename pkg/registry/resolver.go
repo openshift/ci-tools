@@ -92,6 +92,9 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 				config.Dependencies[k] = v
 			}
 		}
+		if config.Leases == nil {
+			config.Leases = append(config.Leases, workflow.Leases...)
+		}
 		if config.AllowSkipOnSuccess == nil {
 			config.AllowSkipOnSuccess = workflow.AllowSkipOnSuccess
 		}
@@ -99,6 +102,7 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 	expandedFlow := api.MultiStageTestConfigurationLiteral{
 		ClusterProfile:     config.ClusterProfile,
 		AllowSkipOnSuccess: config.AllowSkipOnSuccess,
+		Leases:             config.Leases,
 	}
 	stack := stackForTest(name, config.Environment, config.Dependencies)
 	if config.Workflow != nil {

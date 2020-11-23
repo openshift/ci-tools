@@ -946,3 +946,67 @@ func TestResolveParameters(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveLeases(t *testing.T) {
+	ref0 := "ref0"
+	chain0 := "chain0"
+	workflow0 := "workflow0"
+	refs := ReferenceByName{
+		ref0: {Leases: []api.StepLease{{ResourceType: "from_ref"}}},
+	}
+	chains := ChainByName{
+		chain0: {
+			Leases: []api.StepLease{{ResourceType: "from_chain"}},
+		},
+	}
+	workflows := WorkflowByName{
+		workflow0: {
+			Leases: []api.StepLease{{ResourceType: "from_workflow"}},
+		},
+	}
+	for _, tc := range []struct {
+		name        string
+		test        api.MultiStageTestConfiguration
+		expected    []api.StepLease
+		expectedErr error
+	}{{
+		name: "listed directly in the test",
+		test: api.MultiStageTestConfiguration{
+			Leases: []api.StepLease{{ResourceType: "from_test"}},
+		},
+		expected: []api.StepLease{{ResourceType: "from_test"}},
+	}, {
+		name:     "from workflow",
+		test:     api.MultiStageTestConfiguration{Workflow: &workflow0},
+		expected: []api.StepLease{{ResourceType: "from_workflow"}},
+	}, {
+		name: "chain is deferred to test execution",
+		test: api.MultiStageTestConfiguration{
+			Pre: []api.TestStep{{Chain: &chain0}},
+		},
+	}, {
+		name: "reference is deferred to test execution",
+		test: api.MultiStageTestConfiguration{
+			Pre: []api.TestStep{{Reference: &ref0}},
+		},
+	}, {
+		name: "step is deferred to test execution",
+		test: api.MultiStageTestConfiguration{
+			Pre: []api.TestStep{{
+				LiteralTestStep: &api.LiteralTestStep{
+					Leases: []api.StepLease{{ResourceType: "from_step"}},
+				},
+			}},
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			ret, err := NewResolver(refs, chains, workflows, ObserverByName{}).Resolve("test", tc.test)
+			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
+				t.Errorf("unexpected error: %v", diff)
+			}
+			if diff := cmp.Diff(tc.expected, ret.Leases); diff != "" {
+				t.Errorf("unexpected leases: %v", diff)
+			}
+		})
+	}
+}

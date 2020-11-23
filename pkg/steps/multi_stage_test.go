@@ -73,7 +73,7 @@ func TestRequires(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			step := MultiStageTestStep(api.TestStepConfiguration{
 				MultiStageTestConfigurationLiteral: &tc.steps,
-			}, &tc.config, api.NewDeferredParameters(nil), nil, "", nil)
+			}, &tc.config, api.NewDeferredParameters(nil), nil, "", nil, nil)
 			ret := step.Requires()
 			if len(ret) == len(tc.req) {
 				matches := true
@@ -127,7 +127,7 @@ func TestGeneratePods(t *testing.T) {
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, "artifact_dir", &jobSpec)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, "artifact_dir", &jobSpec, nil)
 	env := []coreapi.EnvVar{
 		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
 		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
@@ -197,7 +197,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 					Test:        test,
 					Environment: tc.env,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, nil, "", &jobSpec)
+			}, &api.ReleaseBuildConfiguration{}, nil, nil, "", &jobSpec, nil)
 			pods, err := step.(*multiStageTestStep).generatePods(test, nil, false)
 			if err != nil {
 				t.Fatal(err)
@@ -244,7 +244,7 @@ func TestGeneratePodReadonly(t *testing.T) {
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, "artifact_dir", &jobSpec)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, "artifact_dir", &jobSpec, nil)
 	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, nil, false)
 	if err != nil {
 		t.Fatal(err)
@@ -351,7 +351,7 @@ func TestRun(t *testing.T) {
 					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: &yes}},
 					AllowSkipOnSuccess: &yes,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: crclient}, "", &jobSpec)
+			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: crclient}, "", &jobSpec, nil)
 			if err := step.Run(context.Background()); (err != nil) != (tc.failures != nil) {
 				t.Errorf("expected error: %t, got error: %v", (tc.failures != nil), err)
 			}
@@ -404,7 +404,7 @@ func TestArtifacts(t *testing.T) {
 				{As: "test1", ArtifactDir: "/path/to/artifacts"},
 			},
 		},
-	}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: &fakePodExecutor{Client: fakectrlruntimeclient.NewFakeClient()}}, tmp, &jobSpec)
+	}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: &fakePodExecutor{Client: fakectrlruntimeclient.NewFakeClient()}}, tmp, &jobSpec, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := step.Run(ctx); err != nil {
@@ -480,7 +480,7 @@ func TestJUnit(t *testing.T) {
 					Test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
 					Post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: client}, "/dev/null", &jobSpec)
+			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: client}, "/dev/null", &jobSpec, nil)
 			if err := step.Run(context.Background()); tc.failures == nil && err != nil {
 				t.Error(err)
 				return

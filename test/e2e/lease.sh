@@ -29,6 +29,8 @@ os::integration::boskos::start "${suite_dir}/boskos.yaml"
 os::cmd::expect_failure "ci-operator ${namespace} --registry ${suite_dir}/step-registry --config ${suite_dir}/config.yaml --target success"
 os::cmd::expect_success "ci-operator ${namespace} --registry ${suite_dir}/step-registry --config ${suite_dir}/config.yaml --lease-server http://localhost:8080 --lease-server-password-file /dev/null --lease-acquire-timeout 2s --target success --secret-dir ${cluster_profiles}/success-cluster-profile"
 os::cmd::expect_failure "ci-operator ${namespace} --registry ${suite_dir}/step-registry --config ${suite_dir}/config.yaml --lease-server http://localhost:8080 --lease-server-password-file /dev/null --lease-acquire-timeout 2s --target invalid-lease --secret-dir ${cluster_profiles}/invalid-lease-cluster-profile"
+os::cmd::expect_success "ci-operator ${namespace} --registry ${suite_dir}/step-registry --config ${suite_dir}/config.yaml --lease-server http://localhost:8080 --lease-server-password-file /dev/null --lease-acquire-timeout 2s --target configurable-leases --secret-dir ${cluster_profiles}/success-cluster-profile"
+os::cmd::expect_success "ci-operator ${namespace} --registry ${suite_dir}/step-registry --config ${suite_dir}/config.yaml --lease-server http://localhost:8080 --lease-server-password-file /dev/null --lease-acquire-timeout 2s --target configurable-leases-registry --secret-dir ${cluster_profiles}/success-cluster-profile"
 os::cmd::expect_success "CLUSTER_TYPE=aws ci-operator ${namespace} --registry ${suite_dir}/step-registry --config ${suite_dir}/config.yaml --lease-server http://localhost:8080 --lease-server-password-file /dev/null --lease-acquire-timeout 2s --target template --template ${suite_dir}/template.yaml"
 
 os::integration::boskos::stop

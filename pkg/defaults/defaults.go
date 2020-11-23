@@ -379,12 +379,10 @@ func leasesForTest(s *api.MultiStageTestConfigurationLiteral) (ret []api.StepLea
 			Env:          steps.DefaultLeaseEnv,
 		})
 	}
-	for _, l := range s.Leases {
-		ret = append(ret, api.StepLease{
-			ResourceType: l.ResourceType,
-			Env:          l.Env,
-		})
+	for _, step := range append(s.Pre, append(s.Test, s.Post...)...) {
+		ret = append(ret, step.Leases...)
 	}
+	ret = append(ret, s.Leases...)
 	return
 }
 

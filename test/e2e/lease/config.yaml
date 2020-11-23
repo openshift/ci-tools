@@ -37,12 +37,7 @@ tests:
 - as: configurable-leases-registry
   steps:
     test:
-    - ref: check-leases
-    leases:
-    - resource_type: aws-quota-slice
-      env: LEASE0
-    - resource_type: gcp-quota-slice
-      env: LEASE1
+    - ref: declare-and-check-leases
 zz_generated_metadata:
   branch: master
   org: test

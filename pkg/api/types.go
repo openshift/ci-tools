@@ -535,6 +535,8 @@ type RegistryChain struct {
 	Documentation string `json:"documentation,omitempty"`
 	// Environment lists parameters that should be set by the test.
 	Environment []StepParameter `json:"env,omitempty"`
+	// Leases lists resources that should be acquired for the test.
+	Leases []StepLease `json:"leases,omitempty"`
 }
 
 // RegistryWorkflowConfig is the struct that workflow references are unmarshalled into.
@@ -628,6 +630,8 @@ type LiteralTestStep struct {
 	// Dependencies lists images which must be available before the test runs
 	// and the environment variables which are used to expose their pull specs.
 	Dependencies []StepDependency `json:"dependencies,omitempty"`
+	// Leases lists resources that should be acquired for the test.
+	Leases []StepLease `json:"leases,omitempty"`
 	// OptionalOnSuccess defines if this step should be skipped as long
 	// as all `pre` and `test` steps were successful and AllowSkipOnSuccess
 	// flag is set to true in MultiStageTestConfiguration. This option is
@@ -723,6 +727,8 @@ type MultiStageTestConfiguration struct {
 	Environment TestEnvironment `json:"env,omitempty"`
 	// Dependencies holds override values for dependency parameters.
 	Dependencies TestDependencies `json:"dependencies,omitempty"`
+	// Leases lists resources that should be acquired for the test.
+	Leases []StepLease `json:"leases,omitempty"`
 	// AllowSkipOnSuccess defines if any steps can be skipped when
 	// all previous `pre` and `test` steps were successful. The given step must explicitly
 	// ask for being skipped by setting the OptionalOnSuccess flag to true.
@@ -748,6 +754,8 @@ type MultiStageTestConfigurationLiteral struct {
 	Environment TestEnvironment `json:"env,omitempty"`
 	// Dependencies holds override values for dependency parameters.
 	Dependencies TestDependencies `json:"dependencies,omitempty"`
+	// Leases lists resources that should be acquired for the test.
+	Leases []StepLease `json:"leases,omitempty"`
 	// AllowSkipOnSuccess defines if any steps can be skipped when
 	// all previous `pre` and `test` steps were successful. The given step must explicitly
 	// ask for being skipped by setting the OptionalOnSuccess flag to true.

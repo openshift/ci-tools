@@ -283,15 +283,13 @@ func stepForTest(
 	c *api.TestStepConfiguration,
 ) ([]api.Step, error) {
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
-		if test.ClusterProfile != "" {
+		leases := leasesForTest(test)
+		if len(leases) != 0 {
 			params = api.NewDeferredParameters(params)
 		}
-		step := steps.MultiStageTestStep(*c, config, params, podClient, client, artifactDir, jobSpec)
-		if test.ClusterProfile != "" {
-			step = steps.LeaseStep(leaseClient, []api.StepLease{{
-				ResourceType: test.ClusterProfile.LeaseType(),
-				Env:          steps.DefaultLeaseEnv,
-			}}, step, jobSpec.Namespace)
+		step := steps.MultiStageTestStep(*c, config, params, podClient, client, artifactDir, jobSpec, leases)
+		if len(leases) != 0 {
+			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
 			addProvidesForStep(step, params)
 		}
 		return append([]api.Step{step}, stepsForStepImages(client, jobSpec, test)...), nil
@@ -367,6 +365,25 @@ func promotionDefaults(configSpec *api.ReleaseBuildConfiguration) (*api.Promotio
 		return nil, fmt.Errorf("cannot promote images, no promotion or release tag configuration defined")
 	}
 	return config, nil
+}
+
+// leasesForTest aggregates all the lease configurations in a test.
+// It is assumed that they have been validated and contain only valid and
+// unique values.
+func leasesForTest(s *api.MultiStageTestConfigurationLiteral) (ret []api.StepLease) {
+	if p := s.ClusterProfile; p != "" {
+		ret = append(ret, api.StepLease{
+			ResourceType: p.LeaseType(),
+			Env:          steps.DefaultLeaseEnv,
+		})
+	}
+	for _, l := range s.Leases {
+		ret = append(ret, api.StepLease{
+			ResourceType: l.ResourceType,
+			Env:          l.Env,
+		})
+	}
+	return
 }
 
 type readFile func(string) ([]byte, error)

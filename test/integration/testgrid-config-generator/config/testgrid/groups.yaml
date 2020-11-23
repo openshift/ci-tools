@@ -1,4 +1,5 @@
 dashboard_groups:
 - dashboard_names:
   - other
+  - redhat-openshift-okd-release-1.1-informing
   name: redhat

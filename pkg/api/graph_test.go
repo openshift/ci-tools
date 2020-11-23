@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/gofuzz"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -399,5 +403,44 @@ func TestLinkForImage(t *testing.T) {
 		if diff := cmp.Diff(LinkForImage(testCase.stream, testCase.tag), testCase.expected, Comparer()); diff != "" {
 			t.Errorf("got incorrect link for %s:%s: %v", testCase.stream, testCase.tag, diff)
 		}
+	}
+}
+
+func TestCIOperatorStepGraphMergeFromKeepsAllData(t *testing.T) {
+	testCases := []struct {
+		name         string
+		existinGraph CIOperatorStepGraph
+	}{
+		{
+
+			name: "Empty graph gets appended",
+		},
+
+		{
+			name:         "Graph with one empty element, element gets merged into",
+			existinGraph: CIOperatorStepGraph{{}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			for i := 0; i < 100; i++ {
+				t.Run(strconv.Itoa(i), func(t *testing.T) {
+					existinGraphCopy := append(CIOperatorStepGraph{}, tc.existinGraph...)
+					step := CIOperatorStepWithDependencies{}
+					fuzz.New().Funcs(func(r *runtime.Object, _ fuzz.Continue) { *r = &corev1.Pod{} }).Fuzz(&step)
+					if len(existinGraphCopy) == 1 {
+						existinGraphCopy[0].StepName = step.StepName
+					}
+					existinGraphCopy.MergeFrom(step)
+					if n := len(existinGraphCopy); n != 1 {
+						t.Fatalf("expected graph to have exactly one element, had %d", n)
+					}
+					if diff := cmp.Diff(step, existinGraphCopy[0]); diff != "" {
+						t.Errorf("original element differs from merged element: %s", diff)
+					}
+				})
+			}
+		})
 	}
 }

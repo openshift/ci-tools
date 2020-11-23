@@ -33,6 +33,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	// TODO(nmoraitis,bbcaro): this is an integration test and should be factored better
 	testRepoPath := "../../test/integration/pj-rehearse/master"
 	testTemplatePath := filepath.Join(config.TemplatesPath, "subdir/test-template.yaml")
+	cluster := "cluster"
 	ns := "test-namespace"
 	contents, err := ioutil.ReadFile(filepath.Join(testRepoPath, testTemplatePath))
 	if err != nil {
@@ -41,8 +42,8 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	configUpdaterCfg := prowplugins.ConfigUpdater{
 		Maps: map[string]prowplugins.ConfigMapSpec{
 			testTemplatePath: {
-				Name:       "prow-job-test-template",
-				Namespaces: []string{ns},
+				Name:     "prow-job-test-template",
+				Clusters: map[string][]string{cluster: {ns}},
 			},
 		},
 	}
@@ -77,7 +78,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	client := cs.CoreV1().ConfigMaps(ns)
 	pr := 1234
 	buildId := "1234567890"
-	cmManager := NewCMManager(ns, client, configUpdaterCfg, pr, testRepoPath, logrus.NewEntry(logrus.New()))
+	cmManager := NewCMManager(cluster, ns, client, configUpdaterCfg, pr, testRepoPath, logrus.NewEntry(logrus.New()))
 	ciTemplates, err := NewConfigMaps([]string{testTemplatePath}, "template", buildId, pr, configUpdaterCfg)
 	if err != nil {
 		t.Fatal(err)
@@ -133,29 +134,30 @@ func TestCreateClusterProfiles(t *testing.T) {
 		}
 	}
 	profiles = profiles[:2]
+	cluster := "cluster"
 	ns := "test"
 	pr := 1234
 	buildId := "1234567890"
 	configUpdaterCfg := prowplugins.ConfigUpdater{
 		Maps: map[string]prowplugins.ConfigMapSpec{
 			filepath.Join(config.ClusterProfilesPath, "profile0", "file"): {
-				Name:       "profile0",
-				Namespaces: []string{ns},
+				Name:     "profile0",
+				Clusters: map[string][]string{cluster: {ns}},
 			},
 			filepath.Join(config.ClusterProfilesPath, "profile1", "file"): {
-				Name:       "profile1",
-				Namespaces: []string{ns},
+				Name:     "profile1",
+				Clusters: map[string][]string{cluster: {ns}},
 			},
 			filepath.Join(config.ClusterProfilesPath, "unchanged", "file"): {
-				Name:       "unchanged",
-				Namespaces: []string{ns},
+				Name:     "unchanged",
+				Clusters: map[string][]string{cluster: {ns}},
 			},
 		},
 	}
 	configUpdaterCfg.SetDefaults()
 	cs := fake.NewSimpleClientset()
 	client := cs.CoreV1().ConfigMaps(ns)
-	m := NewCMManager(ns, client, configUpdaterCfg, pr, dir, logrus.NewEntry(logrus.New()))
+	m := NewCMManager(cluster, ns, client, configUpdaterCfg, pr, dir, logrus.NewEntry(logrus.New()))
 	ciProfiles, err := NewConfigMaps(profiles, "cluster-profile", buildId, pr, configUpdaterCfg)
 	if err != nil {
 		t.Fatal(err)

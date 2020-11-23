@@ -137,7 +137,7 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 			env = append(env, optionalOperator.asEnv()...)
 		}
 	}
-	if err := s.createSecret(); err != nil {
+	if err := s.createSecret(ctx); err != nil {
 		return fmt.Errorf("failed to create secret: %w", err)
 	}
 	if err := s.createCredentials(); err != nil {
@@ -255,13 +255,13 @@ func (s *multiStageTestStep) setupRBAC() error {
 	return nil
 }
 
-func (s *multiStageTestStep) createSecret() error {
+func (s *multiStageTestStep) createSecret(ctx context.Context) error {
 	log.Printf("Creating multi-stage test secret %q", s.name)
 	secret := &coreapi.Secret{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.name}}
-	if err := s.client.Delete(context.TODO(), secret); err != nil && !kerrors.IsNotFound(err) {
+	if err := s.client.Delete(ctx, secret); err != nil && !kerrors.IsNotFound(err) {
 		return fmt.Errorf("cannot delete secret %q: %w", s.name, err)
 	}
-	return s.client.Create(context.TODO(), secret)
+	return s.client.Create(ctx, secret)
 }
 
 func (s *multiStageTestStep) createCredentials() error {

@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -418,9 +420,68 @@ func HasAllLinks(needles, haystack []StepLink) bool {
 
 type CIOperatorStepGraph []CIOperatorStepWithDependencies
 
+// MergeFrom merges two CIOperatorStepGraphs together using StepNames as merge keys.
+// The merging logic will never ovewrwrite data and only set unset fields.
+// Steps that do not exist in the first graph get appended.
+func (graph *CIOperatorStepGraph) MergeFrom(from ...CIOperatorStepWithDependencies) {
+	for _, step := range from {
+		var found bool
+		for idx, existing := range *graph {
+			if step.StepName != existing.StepName {
+				continue
+			}
+			found = true
+			(*graph)[idx] = mergeSteps(existing, step)
+		}
+		if !found {
+			*graph = append(*graph, step)
+		}
+	}
+
+}
+
+func mergeSteps(into, from CIOperatorStepWithDependencies) CIOperatorStepWithDependencies {
+	if into.Description == "" {
+		into.Description = from.Description
+	}
+	if into.Dependencies == nil {
+		into.Dependencies = from.Dependencies
+	}
+	if into.StartedAt == nil {
+		into.StartedAt = from.StartedAt
+	}
+	if into.StartedAt == nil {
+		into.StartedAt = from.StartedAt
+	}
+	if into.FinishedAt == nil {
+		into.FinishedAt = from.FinishedAt
+	}
+	if into.Duration == nil {
+		into.Duration = from.Duration
+	}
+	if into.Manifests == nil {
+		into.Manifests = from.Manifests
+	}
+	if into.LogURL == "" {
+		into.LogURL = from.LogURL
+	}
+	if into.Failed == nil {
+		into.Failed = from.Failed
+	}
+
+	return into
+}
+
 type CIOperatorStepWithDependencies struct {
-	StepName     string
-	Dependencies []string
+	StepName     string           `json:"name"`
+	Description  string           `json:"description"`
+	Dependencies []string         `json:"dependencies"`
+	StartedAt    *time.Time       `json:"started_at"`
+	FinishedAt   *time.Time       `json:"finished_at"`
+	Duration     *time.Duration   `json:"duration,omitempty"`
+	Manifests    []runtime.Object `json:"manifests"`
+	LogURL       string           `json:"log_url,omitempty"`
+	Failed       *bool            `json:"failed,omitempty"`
 }
 
 const CIOperatorStepGraphJSONFilename = "ci-operator-step-graph.json"

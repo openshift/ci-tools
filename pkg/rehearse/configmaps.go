@@ -86,17 +86,17 @@ func tempConfigMapName(purpose, source, buildId string, prNumber int) string {
 // as a template or cluster profile, is changed in a pull request. In such case
 // the rehearsals that use that ConfigMap must have access to the updated content.
 type CMManager struct {
-	namespace        string
-	cmclient         corev1.ConfigMapInterface
-	configUpdaterCfg prowplugins.ConfigUpdater
-	prNumber         int
-	releaseRepoPath  string
-	logger           *logrus.Entry
+	cluster, namespace string
+	cmclient           corev1.ConfigMapInterface
+	configUpdaterCfg   prowplugins.ConfigUpdater
+	prNumber           int
+	releaseRepoPath    string
+	logger             *logrus.Entry
 }
 
 // NewCMManager creates a new CMManager
 func NewCMManager(
-	namespace string,
+	cluster, namespace string,
 	cmclient corev1.ConfigMapInterface,
 	configUpdaterCfg prowplugins.ConfigUpdater,
 	prNumber int,
@@ -104,6 +104,7 @@ func NewCMManager(
 	logger *logrus.Entry,
 ) *CMManager {
 	return &CMManager{
+		cluster:          cluster,
 		namespace:        namespace,
 		cmclient:         cmclient,
 		configUpdaterCfg: configUpdaterCfg,
@@ -170,16 +171,15 @@ func genChanges(root string, patterns sets.String) ([]prowgithub.PullRequestChan
 	return ret, err
 }
 
-func replaceSpecNames(namespace string, cfg prowplugins.ConfigUpdater, mapping map[string]string) (ret prowplugins.ConfigUpdater) {
+func replaceSpecNames(cluster, namespace string, cfg prowplugins.ConfigUpdater, mapping map[string]string) (ret prowplugins.ConfigUpdater) {
 	ret = cfg
 	ret.Maps = make(map[string]prowplugins.ConfigMapSpec, len(cfg.Maps))
 	for k, v := range cfg.Maps {
-		if v.Namespaces[0] != "" && v.Namespaces[0] != namespace {
+		if namespaces, configured := v.Clusters[cluster]; !configured || !sets.NewString(namespaces...).Has(namespace) {
 			continue
 		}
 		if name, ok := mapping[v.Name]; ok {
 			v.Name = name
-			v.Namespaces = []string{""}
 			ret.Maps[k] = v
 		}
 	}
@@ -192,7 +192,7 @@ func (c *CMManager) Create(cms ConfigMaps) error {
 		return err
 	}
 	var errs []error
-	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.namespace, c.configUpdaterCfg, cms.Names), changes, c.namespace, c.logger) {
+	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.cluster, c.namespace, c.configUpdaterCfg, cms.Names), changes, c.namespace, c.logger) {
 		c.logger.WithFields(logrus.Fields{"cm-name": cm.Name}).Info("creating rehearsal configMap")
 		if err := c.createCM(cm.Name, data); err != nil {
 			errs = append(errs, err)

@@ -266,38 +266,15 @@ func getResolvedConfigForTest(ciopConfigs config.DataByFilename, resolver regist
 // being also changed by the tested PR.
 func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename, resolver registry.Resolver, metadata api.Metadata, testname string, loggers Loggers) (apihelper.ImageStreamTagMap, error) {
 	allImageStreamTags := apihelper.ImageStreamTagMap{}
-	configSpecSet := false
 	// replace all ConfigMapKeyRef mounts with inline config maps
 	for index := range container.Env {
 		env := &(container.Env[index])
 		if env.Name == "CONFIG_SPEC" {
-			configSpecSet = true
-		}
-		if env.ValueFrom == nil {
-			continue
-		}
-		if env.ValueFrom.ConfigMapKeyRef == nil {
-			continue
-		}
-		if api.IsCiopConfigCM(env.ValueFrom.ConfigMapKeyRef.Name) {
-			filename := env.ValueFrom.ConfigMapKeyRef.Key
-
-			loggers.Debug.WithField(logCiopConfigFile, filename).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
-			ciOpConfigContent, imageStreamTags, err := getResolvedConfigForTest(ciopConfigs, resolver, filename, testname)
-			if err != nil {
-				loggers.Job.WithError(err).Error("Failed to get resolved config for test")
-				return nil, err
-			}
-			apihelper.MergeImageStreamTagMaps(allImageStreamTags, imageStreamTags)
-
-			env.Value = ciOpConfigContent
-			env.ValueFrom = nil
+			// if CONFIG_SPEC has already been set, do not add new CONFIG_SPEC section
+			return allImageStreamTags, nil
 		}
 	}
-	// if CONFIG_SPEC has already been set, do not add new CONFIG_SPEC section
-	if configSpecSet {
-		return allImageStreamTags, nil
-	}
+
 	// inline CONFIG_SPEC for all ci-operator jobs
 	if container.Command != nil && container.Command[0] == "ci-operator" {
 		if err := metadata.IsComplete(); err != nil {

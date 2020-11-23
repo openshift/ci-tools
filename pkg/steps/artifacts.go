@@ -431,9 +431,6 @@ func (w *ArtifactWorker) run() {
 		w.lock.Lock()
 		close(w.remaining[podName].done)
 		delete(w.remaining, podName)
-		if len(w.remaining) == 0 {
-			close(w.podsToDownload)
-		}
 		w.lock.Unlock()
 	}
 }
@@ -505,19 +502,22 @@ func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, w
 }
 
 func (w *ArtifactWorker) Complete(podName string) {
-	if download := func() bool {
-		w.lock.Lock()
-		defer w.lock.Unlock()
+	w.lock.Lock()
+	defer w.lock.Unlock()
 
-		artifactContainers, ok := w.remaining[podName]
-		if !ok {
-			return false
-		}
+	artifactContainers, ok := w.remaining[podName]
+	if !ok {
+		return
+	}
 
-		// when all containers in a given pod that output artifacts have completed, exit
-		return artifactContainers.containers.Len() > 0
-	}(); download {
+	// when all containers in a given pod that output artifacts have completed, exit
+	if artifactContainers.containers.Len() > 0 {
+		w.lock.Unlock()
 		w.podsToDownload <- podName
+		w.lock.Lock()
+	}
+	if len(w.remaining) == 0 {
+		close(w.podsToDownload)
 	}
 }
 
@@ -546,32 +546,36 @@ func hasFailedContainers(pod *coreapi.Pod) bool {
 }
 
 func (w *ArtifactWorker) Notify(pod *coreapi.Pod, containerName string) {
-	if download := func() bool {
-		w.lock.Lock()
-		defer w.lock.Unlock()
+	w.lock.Lock()
+	defer w.lock.Unlock()
 
-		artifactContainers := w.remaining[pod.Name]
-		if !artifactContainers.containers.Has(containerName) {
-			return false
+	artifactContainers := w.remaining[pod.Name]
+	if !artifactContainers.containers.Has(containerName) {
+		return
+	}
+	requiredContainers := w.required[pod.Name]
+
+	artifactContainers.containers.Delete(containerName)
+	requiredContainers.Delete(containerName)
+
+	// if at least one container has failed, and there are no longer any
+	// remaining required containers, we don't have to wait for other artifact containers
+	// to exit
+	if hasFailedContainers(pod) && requiredContainers.Len() == 0 {
+		for k := range artifactContainers.containers {
+			artifactContainers.containers.Delete(k)
 		}
-		requiredContainers := w.required[pod.Name]
+	}
 
-		artifactContainers.containers.Delete(containerName)
-		requiredContainers.Delete(containerName)
-
-		// if at least one container has failed, and there are no longer any
-		// remaining required containers, we don't have to wait for other artifact containers
-		// to exit
-		if hasFailedContainers(pod) && requiredContainers.Len() == 0 {
-			for k := range artifactContainers.containers {
-				artifactContainers.containers.Delete(k)
-			}
-		}
-
-		// no more artifact containers, we can start grabbing artifacts
-		return artifactContainers.containers.Len() == 0
-	}(); download {
+	// no more artifact containers, we can start grabbing artifacts
+	if artifactContainers.containers.Len() == 0 {
+		w.lock.Unlock()
 		w.podsToDownload <- pod.Name
+		w.lock.Lock()
+	}
+
+	if len(w.remaining) == 0 {
+		close(w.podsToDownload)
 	}
 }
 

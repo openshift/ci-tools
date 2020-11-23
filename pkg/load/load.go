@@ -194,7 +194,13 @@ func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("response from configresolver == %d (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
+		var responseBody string
+		if data, err := ioutil.ReadAll(resp.Body); err != nil {
+			log.Printf("Failed to read response body from configresolver: %v\n", err)
+		} else {
+			responseBody = string(data)
+		}
+		return nil, fmt.Errorf("got unexpected http %d status code from configresolver: %s", resp.StatusCode, responseBody)
 	}
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {

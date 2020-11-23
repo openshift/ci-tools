@@ -479,7 +479,7 @@ func setupDependencies(
 				return errors.New(misconfigurationOutput)
 			}
 
-			cmManager := rehearse.NewCMManager(prowJobNamespace, cmClient, configUpdaterCfg, prNumber, releaseRepoPath, log)
+			cmManager := rehearse.NewCMManager(buildCluster, prowJobNamespace, cmClient, configUpdaterCfg, prNumber, releaseRepoPath, log)
 
 			cleanupsLock.Lock()
 			cleanups = append(cleanups, func() {

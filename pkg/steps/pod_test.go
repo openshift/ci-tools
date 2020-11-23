@@ -4,18 +4,17 @@ import (
 	"context"
 	"testing"
 
-	"k8s.io/api/core/v1"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
+	corev1 "k8s.io/api/core/v1"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, PodClient) {
+func preparePodStep(namespace string) (*podStep, stepExpectation) {
 	stepName := "StepName"
 	podName := "TestName"
 	var artifactDir string
@@ -53,12 +52,8 @@ func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, 
 	}
 	jobSpec.SetNamespace(namespace)
 
-	fakecs := ciopTestingClient{
-		kubecs: fake.NewSimpleClientset(),
-		t:      t,
-	}
-	client := NewPodClient(fakecs.Core(), nil, nil)
-	ps := PodStep(stepName, config, resources, client, fakectrlruntimeclient.NewFakeClient(), artifactDir, jobSpec)
+	client := &podClient{fakectrlruntimeclient.NewFakeClient(), nil, nil}
+	ps := PodStep(stepName, config, resources, client, artifactDir, jobSpec)
 
 	specification := stepExpectation{
 		name:     podName,
@@ -73,12 +68,12 @@ func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, 
 		},
 	}
 
-	return ps.(*podStep), specification, client
+	return ps.(*podStep), specification
 }
 
 func TestPodStepMethods(t *testing.T) {
 	namespace := "TestNamespace"
-	ps, spec, _ := preparePodStep(t, namespace)
+	ps, spec := preparePodStep(namespace)
 	examineStep(t, ps, spec)
 }
 
@@ -86,23 +81,24 @@ func TestPodStepExecution(t *testing.T) {
 	namespace := "TestNamespace"
 	testCases := []struct {
 		purpose        string
-		podStatus      v1.PodPhase
+		podStatus      corev1.PodPhase
 		expectRunError bool
 	}{
 		{
 			purpose:        "Pod run by PodStep succeeds so PodStep terminates and returns no error",
-			podStatus:      v1.PodSucceeded,
+			podStatus:      corev1.PodSucceeded,
 			expectRunError: false,
 		}, {
 			purpose:        "Pod run by PodStep fails so PodStep terminates and returns an error",
-			podStatus:      v1.PodFailed,
+			podStatus:      corev1.PodFailed,
 			expectRunError: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.purpose, func(t *testing.T) {
-			ps, _, client := preparePodStep(t, namespace)
+			ps, _ := preparePodStep(namespace)
+			ps.client = &podClient{Client: &podStatusChangingClient{Client: fakectrlruntimeclient.NewFakeClient(), dest: tc.podStatus}}
 
 			executionExpectation := executionExpectation{
 				prerun: doneExpectation{
@@ -116,41 +112,10 @@ func TestPodStepExecution(t *testing.T) {
 				},
 			}
 
-			watcher, err := client.Pods(namespace).Watch(context.TODO(), meta.ListOptions{})
-			if err != nil {
-				t.Errorf("Failed to create a watcher over pods in namespace")
-			}
-			defer watcher.Stop()
+			executeStep(t, ps, executionExpectation)
 
-			clusterBehavior := func() {
-				// Expect a single event (a Creation) to happen
-				// Immediately set the Pod status to Succeeded, because
-				// that is what the step waits on
-				for {
-					event, ok := <-watcher.ResultChan()
-					if !ok {
-						t.Error("Fake cluster: watcher event closed, exiting")
-						break
-					}
-					if pod, ok := event.Object.(*v1.Pod); ok {
-						t.Logf("Fake cluster: Received event on pod '%s': %s", pod.ObjectMeta.Name, event.Type)
-						t.Logf("Fake cluster: Updating pod '%s' status to '%s' and exiting", pod.ObjectMeta.Name, tc.podStatus)
-						// make a copy to avoid a race
-						newPod := pod.DeepCopy()
-						newPod.Status.Phase = tc.podStatus
-						if _, err := client.Pods(namespace).UpdateStatus(context.TODO(), newPod, meta.UpdateOptions{}); err != nil {
-							t.Errorf("Fake cluster: UpdateStatus() returned an error: %v", err)
-						}
-						break
-					}
-					t.Logf("Fake cluster: Received non-pod event: %v", event)
-				}
-			}
-
-			executeStep(t, ps, executionExpectation, clusterBehavior)
-
-			pod, err := client.Pods(namespace).Get(context.TODO(), ps.Name(), meta.GetOptions{})
-			if err != nil {
+			pod := &corev1.Pod{}
+			if err := ps.client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: ps.Name()}, pod); err != nil {
 				t.Fatalf("failed to get pod: %v", err)
 			}
 			testhelper.CompareWithFixture(t, pod)
@@ -210,7 +175,7 @@ func TestGetPodObjectMounts(t *testing.T) {
 			podStepTemplate := expectedPodStepTemplate()
 			tc.podStep(podStepTemplate)
 
-			pod, err := podStepTemplate.generatePodForStep("", v1.ResourceRequirements{})
+			pod, err := podStepTemplate.generatePodForStep("", corev1.ResourceRequirements{})
 			if err != nil {
 				t.Fatalf("unexpected err: %v", err)
 			}
@@ -223,7 +188,7 @@ func TestGetPodObjectMounts(t *testing.T) {
 }
 
 func expectedPodStepTemplate() *podStep {
-	return &podStep{
+	s := &podStep{
 		jobSpec: &api.JobSpec{
 			JobSpec: downwardapi.JobSpec{
 				Job:       "podStep.jobSpec.Job",
@@ -243,4 +208,20 @@ func expectedPodStepTemplate() *podStep {
 			},
 		},
 	}
+	s.jobSpec.SetNamespace("some-ns")
+	return s
+}
+
+var _ ctrlruntimeclient.Client = &podStatusChangingClient{}
+
+type podStatusChangingClient struct {
+	ctrlruntimeclient.Client
+	dest corev1.PodPhase
+}
+
+func (ps *podStatusChangingClient) Create(ctx context.Context, o ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+	if pod, ok := o.(*corev1.Pod); ok {
+		pod.Status.Phase = ps.dest
+	}
+	return ps.Client.Create(ctx, o, opts...)
 }

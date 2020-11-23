@@ -9,11 +9,9 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -59,8 +57,7 @@ type multiStageTestStep struct {
 	// params exposes getters for variables created by other steps
 	params             api.Parameters
 	env                api.TestEnvironment
-	podClient          PodClient
-	client             ctrlruntimeclient.Client
+	client             PodClient
 	artifactDir        string
 	jobSpec            *api.JobSpec
 	pre, test, post    []api.LiteralTestStep
@@ -73,21 +70,19 @@ func MultiStageTestStep(
 	testConfig api.TestStepConfiguration,
 	config *api.ReleaseBuildConfiguration,
 	params api.Parameters,
-	podClient PodClient,
-	client ctrlruntimeclient.Client,
+	client PodClient,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, podClient, client, artifactDir, jobSpec, leases)
+	return newMultiStageTestStep(testConfig, config, params, client, artifactDir, jobSpec, leases)
 }
 
 func newMultiStageTestStep(
 	testConfig api.TestStepConfiguration,
 	config *api.ReleaseBuildConfiguration,
 	params api.Parameters,
-	podClient PodClient,
-	client ctrlruntimeclient.Client,
+	client PodClient,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
@@ -102,7 +97,6 @@ func newMultiStageTestStep(
 		config:             config,
 		params:             params,
 		env:                ms.Environment,
-		podClient:          podClient,
 		client:             client,
 		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,
@@ -237,7 +231,7 @@ func (s *multiStageTestStep) setupRBAC() error {
 		Subjects:   subj,
 	}
 	check := func(err error) bool {
-		return err == nil || errors.IsAlreadyExists(err)
+		return err == nil || kerrors.IsAlreadyExists(err)
 	}
 	if err := s.client.Create(context.TODO(), sa); !check(err) {
 		return err
@@ -284,7 +278,7 @@ func (s *multiStageTestStep) environment(ctx context.Context) ([]coreapi.EnvVar,
 func (s *multiStageTestStep) createSecret(ctx context.Context) error {
 	log.Printf("Creating multi-stage test secret %q", s.name)
 	secret := &coreapi.Secret{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.name}}
-	if err := s.client.Delete(ctx, secret); err != nil && !errors.IsNotFound(err) {
+	if err := s.client.Delete(ctx, secret); err != nil && !kerrors.IsNotFound(err) {
 		return fmt.Errorf("cannot delete secret %q: %w", s.name, err)
 	}
 	return s.client.Create(ctx, secret)
@@ -318,7 +312,7 @@ func (s *multiStageTestStep) createCredentials() error {
 	}
 
 	for name := range toCreate {
-		if err := s.client.Create(context.TODO(), toCreate[name]); err != nil && !errors.IsAlreadyExists(err) {
+		if err := s.client.Create(context.TODO(), toCreate[name]); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create source credential: %w", err)
 		}
 	}
@@ -343,7 +337,7 @@ func (s *multiStageTestStep) runSteps(
 	select {
 	case <-ctx.Done():
 		log.Printf("cleanup: Deleting pods with label %s=%s", MultiStageTestLabel, s.name)
-		if err := deletePods(s.podClient.Pods(s.jobSpec.Namespace()), s.name); err != nil {
+		if err := s.client.DeleteAllOf(ctx, &coreapi.Pod{}, ctrlruntimeclient.InNamespace(s.jobSpec.Namespace()), ctrlruntimeclient.MatchingLabels{MultiStageTestLabel: s.name}); err != nil && !kerrors.IsNotFound(err) {
 			errs = append(errs, fmt.Errorf("failed to delete pods with label %s=%s: %w", MultiStageTestLabel, s.name, err))
 		}
 		errs = append(errs, fmt.Errorf("cancelled"))
@@ -596,7 +590,7 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 			if c.Name == "artifacts" {
 				container := pod.Spec.Containers[0].Name
 				dir := filepath.Join(s.artifactDir, strings.TrimPrefix(pod.Name, namePrefix))
-				artifacts := NewArtifactWorker(s.podClient, dir, s.jobSpec.Namespace(), ctx)
+				artifacts := NewArtifactWorker(ctx, s.client, dir, s.jobSpec.Namespace())
 				artifacts.CollectFromPod(pod.Name, []string{container}, nil)
 				notifier = artifacts
 				break
@@ -614,10 +608,10 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 }
 
 func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *TestCaseNotifier) error {
-	if _, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod); err != nil {
+	if _, err := createOrRestartPod(s.client, pod); err != nil {
 		return fmt.Errorf("failed to create or restart %q pod: %w", pod.Name, err)
 	}
-	newPod, err := waitForPodCompletion(ctx, s.podClient.Pods(s.jobSpec.Namespace()), s.client, pod.Name, notifier, false)
+	newPod, err := waitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, notifier, false)
 	if newPod != nil {
 		pod = newPod
 	}
@@ -637,22 +631,6 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 			}
 		}
 		return fmt.Errorf("%q pod %q %s: %w\n%s", s.name, pod.Name, status, err, linksText.String())
-	}
-	return nil
-}
-
-func deletePods(client coreclientset.PodInterface, test string) error {
-	err := client.DeleteCollection(
-		context.TODO(),
-		meta.DeleteOptions{},
-		meta.ListOptions{
-			LabelSelector: fields.Set{
-				MultiStageTestLabel: test,
-			}.AsSelector().String(),
-		},
-	)
-	if err != nil && !errors.IsNotFound(err) {
-		return err
 	}
 	return nil
 }

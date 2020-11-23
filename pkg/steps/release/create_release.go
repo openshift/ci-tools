@@ -48,8 +48,7 @@ type assembleReleaseStep struct {
 	config      *api.ReleaseTagConfiguration
 	name        string
 	resources   api.ResourceConfiguration
-	client      ctrlruntimeclient.Client
-	podClient   steps.PodClient
+	client      steps.PodClient
 	artifactDir string
 	jobSpec     *api.JobSpec
 }
@@ -215,7 +214,7 @@ oc adm release extract --from=%q --to=/tmp/artifacts/release-payload-%s
 		resources = copied
 	}
 
-	step := steps.PodStep("release", podConfig, resources, s.podClient, s.client, s.artifactDir, s.jobSpec)
+	step := steps.PodStep("release", podConfig, resources, s.client, s.artifactDir, s.jobSpec)
 
 	return results.ForReason("creating_release").ForError(step.Run(ctx))
 }
@@ -248,13 +247,12 @@ func (s *assembleReleaseStep) Description() string {
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
 func AssembleReleaseStep(name string, config *api.ReleaseTagConfiguration, resources api.ResourceConfiguration,
-	podClient steps.PodClient, client ctrlruntimeclient.Client,
+	client steps.PodClient,
 	artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &assembleReleaseStep{
 		config:      config,
 		name:        name,
 		resources:   resources,
-		podClient:   podClient,
 		client:      client,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,

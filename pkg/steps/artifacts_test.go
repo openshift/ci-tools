@@ -10,13 +10,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
-	"k8s.io/client-go/kubernetes/fake"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/junit"
 )
@@ -486,19 +488,23 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 	}
 }
 
-type testPodClient struct {
-	coreclientset.PodsGetter
+type fakePodClient struct {
+	*fakePodExecutor
 	namespace, name string
 }
 
-func (c testPodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
-	if namespace != c.namespace {
+func (f *fakePodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
+	if namespace != f.namespace {
 		return nil, fmt.Errorf("unexpected namespace: %q", namespace)
 	}
-	if name != c.name {
+	if name != f.name {
 		return nil, fmt.Errorf("unexpected name: %q", name)
 	}
 	return &testExecutor{command: opts.Command}, nil
+}
+
+func (*fakePodClient) GetLogs(string, string, *coreapi.PodLogOptions) *rest.Request {
+	return rest.NewRequestWithClient(nil, "", rest.ClientContentConfig{}, nil)
 }
 
 type testExecutor struct {
@@ -534,27 +540,29 @@ func TestArtifactWorker(t *testing.T) {
 		}
 	}()
 	pod := "pod"
-	podClient := testPodClient{
-		PodsGetter: fake.NewSimpleClientset(&coreapi.Pod{
-			ObjectMeta: meta.ObjectMeta{
-				Name:      pod,
-				Namespace: "namespace",
-			},
-			Status: coreapi.PodStatus{
-				ContainerStatuses: []coreapi.ContainerStatus{
-					{
-						Name: "artifacts",
-						State: coreapi.ContainerState{
-							Running: &coreapi.ContainerStateRunning{},
+	podClient := &fakePodClient{
+		fakePodExecutor: &fakePodExecutor{Client: fakectrlruntimeclient.NewFakeClient(
+			&coreapi.Pod{
+				ObjectMeta: meta.ObjectMeta{
+					Name:      pod,
+					Namespace: "namespace",
+				},
+				Status: coreapi.PodStatus{
+					ContainerStatuses: []coreapi.ContainerStatus{
+						{
+							Name: "artifacts",
+							State: coreapi.ContainerState{
+								Running: &coreapi.ContainerStateRunning{},
+							},
 						},
 					},
 				},
-			},
-		}).CoreV1(),
+			}),
+		},
 		namespace: "namespace",
 		name:      pod,
 	}
-	w := NewArtifactWorker(podClient, tmp, podClient.namespace, context.Background())
+	w := NewArtifactWorker(context.Background(), podClient, tmp, "namespace")
 	w.CollectFromPod(pod, []string{"container"}, nil)
 	w.Complete(pod)
 	select {
@@ -570,8 +578,8 @@ func TestArtifactWorker(t *testing.T) {
 	for _, f := range files {
 		names = append(names, f.Name())
 	}
-	if !reflect.DeepEqual(names, []string{"test.txt"}) {
-		t.Fatalf("unexpected content in the artifact directory: %v", names)
+	if diff := cmp.Diff(names, []string{"test.txt"}); diff != "" {
+		t.Fatalf("artifacts do not match expected: %s", diff)
 	}
 }
 

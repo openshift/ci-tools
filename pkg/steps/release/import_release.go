@@ -53,8 +53,7 @@ type importReleaseStep struct {
 	// append determines if we wait for other processes to create images first
 	append      bool
 	resources   api.ResourceConfiguration
-	client      ctrlruntimeclient.Client
-	podClient   steps.PodClient
+	client      steps.PodClient
 	artifactDir string
 	jobSpec     *api.JobSpec
 	pullSecret  *coreapi.Secret
@@ -156,7 +155,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	// get the CLI image from the payload (since we need it to run oc adm release extract)
 	target := fmt.Sprintf("release-images-%s", s.name)
 	targetCLI := fmt.Sprintf("%s-cli", target)
-	if _, err := steps.RunPod(context.TODO(), s.podClient, s.client, &coreapi.Pod{
+	if _, err := steps.RunPod(context.TODO(), s.client, &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      targetCLI,
 			Namespace: s.jobSpec.Namespace(),
@@ -174,8 +173,8 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	}); err != nil {
 		return fmt.Errorf("unable to find the 'cli' image in the provided release image: %w", err)
 	}
-	pod, err := s.podClient.Pods(s.jobSpec.Namespace()).Get(context.TODO(), targetCLI, meta.GetOptions{})
-	if err != nil {
+	pod := &coreapi.Pod{}
+	if err := s.client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: targetCLI}, pod); err != nil {
 		return fmt.Errorf("unable to extract the 'cli' image from the release image: %w", err)
 	}
 	if len(pod.Status.ContainerStatuses) == 0 || pod.Status.ContainerStatuses[0].State.Terminated == nil {
@@ -245,7 +244,7 @@ oc adm release extract%s --from=%q --file=image-references > /tmp/artifacts/%s
 		copied[podConfig.As] = api.ResourceRequirements{Requests: api.ResourceList{"cpu": "50m", "memory": "400Mi"}}
 		resources = copied
 	}
-	step := steps.PodStep("release", podConfig, resources, s.podClient, s.client, artifactDir, s.jobSpec)
+	step := steps.PodStep("release", podConfig, resources, s.client, artifactDir, s.jobSpec)
 	if err := step.Run(ctx); err != nil {
 		return err
 	}
@@ -416,14 +415,13 @@ func (s *importReleaseStep) Description() string {
 
 // ImportReleaseStep imports an existing update payload image
 func ImportReleaseStep(name, pullSpec string, append bool, resources api.ResourceConfiguration,
-	podClient steps.PodClient, client ctrlruntimeclient.Client,
+	client steps.PodClient,
 	artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &importReleaseStep{
 		name:        name,
 		pullSpec:    pullSpec,
 		append:      append,
 		resources:   resources,
-		podClient:   podClient,
 		client:      client,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,

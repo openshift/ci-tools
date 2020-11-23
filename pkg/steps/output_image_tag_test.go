@@ -133,7 +133,7 @@ func TestOutputImageStep(t *testing.T) {
 			oits := OutputImageTagStep(config, client, jobspec)
 
 			examineStep(t, oits, stepSpec)
-			executeStep(t, oits, tt.execSpecification, nil)
+			executeStep(t, oits, tt.execSpecification)
 
 			targetImageStreamTag := &imagev1.ImageStreamTag{}
 			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{

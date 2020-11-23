@@ -8,15 +8,10 @@ import (
 	"testing"
 
 	coreapi "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/diff"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/kubernetes/fake"
-	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	fakecorev1 "k8s.io/client-go/kubernetes/typed/core/v1/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -29,52 +24,6 @@ var (
 
 func init() {
 	utilruntime.Must(coreapi.AddToScheme(coreScheme))
-}
-
-// Fake Clientset, created so we can override its `Core()` method
-// and return our fake CoreV1 API (=ciopTestingCore)
-
-type ciopTestingClient struct {
-	kubecs *fake.Clientset
-	t      *testing.T
-}
-
-func (c *ciopTestingClient) Core() corev1.CoreV1Interface {
-	fc := c.kubecs.CoreV1().(*fakecorev1.FakeCoreV1)
-	return &ciopTestingCore{*fc, c.t}
-}
-
-// Fake CoreV1, created so we can override its `Pods()` method
-// and return our fake Pods API (=ciopTestingPods)
-
-type ciopTestingCore struct {
-	fakecorev1.FakeCoreV1
-	t *testing.T
-}
-
-func (c *ciopTestingCore) Pods(ns string) corev1.PodInterface {
-	pods := c.FakeCoreV1.Pods(ns).(*fakecorev1.FakePods)
-	return &ciopTestingPods{*pods, c.t}
-}
-
-// Fake Pods API
-
-type ciopTestingPods struct {
-	fakecorev1.FakePods
-	t *testing.T
-}
-
-// Fake Create() provided by the lib creates objects without default values, so
-// they would be created without any sensible Phase, which causes problems in
-// the ci-operator code. Therefore, our fake Create() always creates Pods with
-// a `Pending` phase if it does not carry phase already.
-func (c *ciopTestingPods) Create(ctx context.Context, pod *v1.Pod, o metav1.CreateOptions) (*v1.Pod, error) {
-	c.t.Logf("FakePods.Create(): ObjectMeta.Name=%s Status.Phase=%s", pod.ObjectMeta.Name, pod.Status.Phase)
-	if pod.Status.Phase == "" {
-		pod.Status.Phase = v1.PodPending
-		c.t.Logf("FakePods.Create(): Setting Status.Phase to '%s'", v1.PodPending)
-	}
-	return c.FakePods.Create(ctx, pod, o)
 }
 
 type doneExpectation struct {
@@ -162,10 +111,7 @@ func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
 	errorCheck(t, "step.Inputs", expected.inputs.err, err)
 }
 
-func executeStep(t *testing.T, step api.Step, expected executionExpectation, fakeClusterBehavior func()) {
+func executeStep(t *testing.T, step api.Step, expected executionExpectation) {
 	t.Helper()
-	if fakeClusterBehavior != nil {
-		go fakeClusterBehavior()
-	}
 	errorCheck(t, "step.Run()", expected.runError, step.Run(context.Background()))
 }

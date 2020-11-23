@@ -85,7 +85,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 			return nil
 		}
 
-		if _, err := steps.RunPod(ctx, s.podClient, s.srcClient, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace())); err != nil {
+		if _, err := steps.RunPod(ctx, s.podClient, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace())); err != nil {
 			return fmt.Errorf("unable to run promotion pod: %w", err)
 		}
 		return nil

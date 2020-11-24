@@ -14,6 +14,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"github.com/openshift/ci-tools/pkg/util"
 )
@@ -22,14 +23,14 @@ const releaseConfigAnnotation = "release.openshift.io/config"
 
 // stableImagesTagStep is used when no release configuration is necessary
 type stableImagesTagStep struct {
-	jobSpec   *api.JobSpec
-	dstClient ctrlruntimeclient.Client
+	jobSpec *api.JobSpec
+	client  loggingclient.LoggingClient
 }
 
-func StableImagesTagStep(dstClient ctrlruntimeclient.Client, jobSpec *api.JobSpec) api.Step {
+func StableImagesTagStep(client loggingclient.LoggingClient, jobSpec *api.JobSpec) api.Step {
 	return &stableImagesTagStep{
-		dstClient: dstClient,
-		jobSpec:   jobSpec,
+		client:  client,
+		jobSpec: jobSpec,
 	}
 }
 
@@ -51,7 +52,7 @@ func (s *stableImagesTagStep) run(ctx context.Context) error {
 			},
 		},
 	}
-	if err := s.dstClient.Create(ctx, newIS); err != nil && !kerrors.IsAlreadyExists(err) {
+	if err := s.client.Create(ctx, newIS); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create stable imagestreamtag: %w", err)
 	}
 	return nil
@@ -78,13 +79,17 @@ func (s *stableImagesTagStep) Description() string {
 	return fmt.Sprintf("Create the output image stream %s", api.StableImageStream)
 }
 
+func (s *stableImagesTagStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
+}
+
 // releaseImagesTagStep will tag a full release suite
 // of images in from the configured namespace. It is
 // expected that builds will overwrite these tags at
 // a later point, selectively
 type releaseImagesTagStep struct {
 	config  api.ReleaseTagConfiguration
-	client  ctrlruntimeclient.Client
+	client  loggingclient.LoggingClient
 	params  *api.DeferredParameters
 	jobSpec *api.JobSpec
 }
@@ -210,7 +215,11 @@ func (s *releaseImagesTagStep) Description() string {
 	return fmt.Sprintf("Find all of the input images from %s and tag them into the output image stream", sourceName(s.config))
 }
 
-func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client ctrlruntimeclient.Client, params *api.DeferredParameters, jobSpec *api.JobSpec) api.Step {
+func (s *releaseImagesTagStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
+}
+
+func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client loggingclient.LoggingClient, params *api.DeferredParameters, jobSpec *api.JobSpec) api.Step {
 	return &releaseImagesTagStep{
 		config:  config,
 		client:  client,

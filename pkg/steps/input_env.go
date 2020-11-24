@@ -4,6 +4,8 @@ import (
 	"context"
 	"sort"
 
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
@@ -58,5 +60,9 @@ func (s *inputEnvironmentStep) Creates() []api.StepLink {
 }
 
 func (s *inputEnvironmentStep) Provides() api.ParameterMap {
+	return nil
+}
+
+func (s *inputEnvironmentStep) Objects() []ctrlruntimeclient.Object {
 	return nil
 }

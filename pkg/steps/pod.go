@@ -12,6 +12,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -152,6 +153,10 @@ func (s *podStep) Name() string { return s.config.As }
 
 func (s *podStep) Description() string {
 	return fmt.Sprintf("Run test %s", s.config.As)
+}
+
+func (s *podStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
 }
 
 func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {

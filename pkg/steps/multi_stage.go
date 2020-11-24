@@ -152,6 +152,9 @@ func (s *multiStageTestStep) Name() string { return s.name }
 func (s *multiStageTestStep) Description() string {
 	return fmt.Sprintf("Run multi-stage test %s", s.name)
 }
+func (s *multiStageTestStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
+}
 
 func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 	var needsReleaseImage, needsReleasePayload bool

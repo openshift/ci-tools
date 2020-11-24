@@ -11,8 +11,8 @@ import (
 	"github.com/google/gofuzz"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestMatches(t *testing.T) {
@@ -117,10 +117,11 @@ func (f *fakeStep) Inputs() (InputDefinition, error) { return nil, nil }
 func (f *fakeStep) Validate() error                  { return nil }
 func (f *fakeStep) Run(ctx context.Context) error    { return nil }
 
-func (f *fakeStep) Requires() []StepLink { return f.requires }
-func (f *fakeStep) Creates() []StepLink  { return f.creates }
-func (f *fakeStep) Name() string         { return f.name }
-func (f *fakeStep) Description() string  { return f.name }
+func (f *fakeStep) Requires() []StepLink                { return f.requires }
+func (f *fakeStep) Creates() []StepLink                 { return f.creates }
+func (f *fakeStep) Name() string                        { return f.name }
+func (f *fakeStep) Description() string                 { return f.name }
+func (f *fakeStep) Objects() []ctrlruntimeclient.Object { return nil }
 
 func (f *fakeStep) Provides() ParameterMap { return nil }
 
@@ -235,14 +236,15 @@ type fakeValidationStep struct {
 	err  error
 }
 
-func (*fakeValidationStep) Inputs() (InputDefinition, error) { return nil, nil }
-func (*fakeValidationStep) Run(ctx context.Context) error    { return nil }
-func (*fakeValidationStep) Requires() []StepLink             { return nil }
-func (*fakeValidationStep) Creates() []StepLink              { return nil }
-func (f *fakeValidationStep) Name() string                   { return f.name }
-func (*fakeValidationStep) Description() string              { return "" }
-func (*fakeValidationStep) Provides() ParameterMap           { return nil }
-func (f *fakeValidationStep) Validate() error                { return f.err }
+func (*fakeValidationStep) Inputs() (InputDefinition, error)    { return nil, nil }
+func (*fakeValidationStep) Run(ctx context.Context) error       { return nil }
+func (*fakeValidationStep) Requires() []StepLink                { return nil }
+func (*fakeValidationStep) Creates() []StepLink                 { return nil }
+func (f *fakeValidationStep) Name() string                      { return f.name }
+func (*fakeValidationStep) Description() string                 { return "" }
+func (*fakeValidationStep) Provides() ParameterMap              { return nil }
+func (f *fakeValidationStep) Validate() error                   { return f.err }
+func (*fakeValidationStep) Objects() []ctrlruntimeclient.Object { return nil }
 
 func TestValidateGraph(t *testing.T) {
 	valid0 := fakeValidationStep{name: "valid0"}
@@ -428,7 +430,7 @@ func TestCIOperatorStepGraphMergeFromKeepsAllData(t *testing.T) {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
 					existinGraphCopy := append(CIOperatorStepGraph{}, tc.existinGraph...)
 					step := CIOperatorStepWithDependencies{}
-					fuzz.New().Funcs(func(r *runtime.Object, _ fuzz.Continue) { *r = &corev1.Pod{} }).Fuzz(&step)
+					fuzz.New().Funcs(func(r *ctrlruntimeclient.Object, _ fuzz.Continue) { *r = &corev1.Pod{} }).Fuzz(&step)
 					if len(existinGraphCopy) == 1 {
 						existinGraphCopy[0].StepName = step.StepName
 					}

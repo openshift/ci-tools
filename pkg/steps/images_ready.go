@@ -3,6 +3,8 @@ package steps
 import (
 	"context"
 
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
@@ -33,6 +35,10 @@ func (s *imagesReadyStep) Provides() api.ParameterMap {
 }
 
 func (s *imagesReadyStep) Name() string { return "[images]" }
+
+func (s *imagesReadyStep) Objects() []ctrlruntimeclient.Object {
+	return nil
+}
 
 func (s *imagesReadyStep) Description() string { return "All images are built and tagged into stable" }
 

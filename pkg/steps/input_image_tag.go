@@ -16,6 +16,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"github.com/openshift/ci-tools/pkg/util"
 )
@@ -29,7 +30,7 @@ var (
 // the base image
 type inputImageTagStep struct {
 	config  api.InputImageTagStepConfiguration
-	client  ctrlruntimeclient.Client
+	client  loggingclient.LoggingClient
 	jobSpec *api.JobSpec
 
 	imageName string
@@ -127,7 +128,11 @@ func (s *inputImageTagStep) Description() string {
 	return fmt.Sprintf("Find the input image %s and tag it into the pipeline", s.config.To)
 }
 
-func InputImageTagStep(config api.InputImageTagStepConfiguration, client ctrlruntimeclient.Client, jobSpec *api.JobSpec) api.Step {
+func (s *inputImageTagStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
+}
+
+func InputImageTagStep(config api.InputImageTagStepConfiguration, client loggingclient.LoggingClient, jobSpec *api.JobSpec) api.Step {
 	// when source and destination client are the same, we don't need to use external imports
 	return &inputImageTagStep{
 		config:  config,

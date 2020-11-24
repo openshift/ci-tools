@@ -15,6 +15,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
@@ -23,7 +24,7 @@ import (
 // pipeline image
 type outputImageTagStep struct {
 	config  api.OutputImageTagStepConfiguration
-	client  ctrlruntimeclient.Client
+	client  loggingclient.LoggingClient
 	jobSpec *api.JobSpec
 }
 
@@ -113,6 +114,10 @@ func (s *outputImageTagStep) Description() string {
 	return fmt.Sprintf("Tag the image %s into the stable image stream", s.config.From)
 }
 
+func (s *outputImageTagStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
+}
+
 func (s *outputImageTagStep) namespace() string {
 	if len(s.config.To.Namespace) != 0 {
 		return s.config.To.Namespace
@@ -139,7 +144,7 @@ func (s *outputImageTagStep) imageStreamTag(fromImage string) *imagev1.ImageStre
 	}
 }
 
-func OutputImageTagStep(config api.OutputImageTagStepConfiguration, client ctrlruntimeclient.Client, jobSpec *api.JobSpec) api.Step {
+func OutputImageTagStep(config api.OutputImageTagStepConfiguration, client loggingclient.LoggingClient, jobSpec *api.JobSpec) api.Step {
 	return &outputImageTagStep{
 		config:  config,
 		client:  client,

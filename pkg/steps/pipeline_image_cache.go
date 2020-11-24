@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	coreapi "k8s.io/api/core/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
 
@@ -73,6 +74,10 @@ func (s *pipelineImageCacheStep) Name() string { return string(s.config.To) }
 
 func (s *pipelineImageCacheStep) Description() string {
 	return fmt.Sprintf("Store build results into a layer on top of %s and save as %s", s.config.From, s.config.To)
+}
+
+func (s *pipelineImageCacheStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
 }
 
 func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, client BuildClient, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {

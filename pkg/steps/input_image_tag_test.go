@@ -15,6 +15,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 )
 
 func TestInputImageTagStep(t *testing.T) {
@@ -30,7 +31,7 @@ func TestInputImageTagStep(t *testing.T) {
 		BaseImage: baseImage,
 	}
 
-	client := fakectrlruntimeclient.NewFakeClient(
+	client := loggingclient.New(fakectrlruntimeclient.NewFakeClient(
 		&imagev1.ImageStream{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "target-namespace",
@@ -60,7 +61,7 @@ func TestInputImageTagStep(t *testing.T) {
 				Namespace: baseImage.Namespace,
 			},
 			Image: imagev1.Image{ObjectMeta: metav1.ObjectMeta{Name: "ddc0de"}},
-		})
+		}))
 
 	// Make a step instance
 	jobspec := &api.JobSpec{}

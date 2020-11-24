@@ -6,6 +6,7 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
 
@@ -70,6 +71,10 @@ func (s *gitSourceStep) Creates() []api.StepLink {
 
 func (s *gitSourceStep) Provides() api.ParameterMap {
 	return nil
+}
+
+func (s *gitSourceStep) Objects() []ctrlruntimeclient.Object {
+	return s.buildClient.Objects()
 }
 
 func determineRefsWorkdir(refs *prowapi.Refs, extraRefs []prowapi.Refs) *prowapi.Refs {

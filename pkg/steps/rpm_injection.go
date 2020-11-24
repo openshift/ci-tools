@@ -75,6 +75,10 @@ func (s *rpmImageInjectionStep) Description() string {
 	return "Inject an RPM repository that will point at the RPM server"
 }
 
+func (s *rpmImageInjectionStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
+}
+
 func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &rpmImageInjectionStep{
 		config:      config,

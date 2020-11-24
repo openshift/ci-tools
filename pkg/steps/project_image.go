@@ -155,6 +155,10 @@ func (s *projectDirectoryImageBuildStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", s.config.To)
 }
 
+func (s *projectDirectoryImageBuildStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
+}
+
 func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:      config,

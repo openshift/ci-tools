@@ -27,6 +27,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/release"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
@@ -601,7 +602,7 @@ func TestFromConfig(t *testing.T) {
 			Body:       ioutil.NopCloser(bytes.NewBuffer([]byte(content))),
 		}, nil
 	})
-	client := ctrlruntimeclient.NewFakeClient()
+	client := loggingclient.New(ctrlruntimeclient.NewFakeClient())
 	if err := imageapi.AddToScheme(scheme.Scheme); err != nil {
 		t.Fatal(err)
 	}

@@ -27,6 +27,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/clusterinstall"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	releasesteps "github.com/openshift/ci-tools/pkg/steps/release"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
@@ -48,10 +49,11 @@ func FromConfig(
 	cloneAuthConfig *steps.CloneAuthConfig,
 	pullSecret, pushSecret *coreapi.Secret,
 ) ([]api.Step, []api.Step, error) {
-	client, err := ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
+	crclient, err := ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to construct client: %w", err)
 	}
+	client := loggingclient.New(crclient)
 	buildGetter, err := buildclientset.NewForConfig(clusterConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not get build client for cluster config: %w", err)
@@ -79,7 +81,7 @@ func fromConfig(
 	templates []*templateapi.Template,
 	paramFile, artifactDir string,
 	promote bool,
-	client ctrlruntimeclient.Client,
+	client loggingclient.LoggingClient,
 	buildClient steps.BuildClient,
 	templateClient steps.TemplateClient,
 	podClient steps.PodClient,
@@ -277,7 +279,7 @@ func stepForTest(
 	podClient steps.PodClient,
 	leaseClient *lease.Client,
 	templateClient steps.TemplateClient,
-	client ctrlruntimeclient.Client,
+	client loggingclient.LoggingClient,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 	c *api.TestStepConfiguration,
@@ -315,7 +317,7 @@ func stepForTest(
 
 // stepsForStepImages creates steps that import images referenced in test steps.
 func stepsForStepImages(
-	client ctrlruntimeclient.Client,
+	client loggingclient.LoggingClient,
 	jobSpec *api.JobSpec,
 	test *api.MultiStageTestConfigurationLiteral,
 ) (ret []api.Step) {

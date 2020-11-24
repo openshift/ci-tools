@@ -21,6 +21,7 @@ import (
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 )
 
 var testArtifactsContainer = coreapi.Container{
@@ -541,7 +542,7 @@ func TestArtifactWorker(t *testing.T) {
 	}()
 	pod := "pod"
 	podClient := &fakePodClient{
-		fakePodExecutor: &fakePodExecutor{Client: fakectrlruntimeclient.NewFakeClient(
+		fakePodExecutor: &fakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(
 			&coreapi.Pod{
 				ObjectMeta: meta.ObjectMeta{
 					Name:      pod,
@@ -557,7 +558,7 @@ func TestArtifactWorker(t *testing.T) {
 						},
 					},
 				},
-			}),
+			})),
 		},
 		namespace: "namespace",
 		name:      pod,

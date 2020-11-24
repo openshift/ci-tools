@@ -912,36 +912,74 @@ func TestValidateDependencies(t *testing.T) {
 
 func TestValidateLeases(t *testing.T) {
 	for _, tc := range []struct {
-		name   string
-		leases []api.StepLease
-		err    []error
+		name string
+		test api.MultiStageTestConfigurationLiteral
+		err  []error
 	}{{
 		name: "valid leases",
-		leases: []api.StepLease{
-			{ResourceType: "aws-quota-slice"},
-			{ResourceType: "gcp-quota-slice"},
+		test: api.MultiStageTestConfigurationLiteral{
+			Leases: []api.StepLease{
+				{ResourceType: "aws-quota-slice", Env: "AWS_LEASED_RESOURCE"},
+				{ResourceType: "gcp-quota-slice", Env: "GCP_LEASED_RESOURCE"},
+			},
 		},
 	}, {
-		name:   "invalid empty name",
-		leases: []api.StepLease{{ResourceType: ""}},
+		name: "invalid empty name",
+		test: api.MultiStageTestConfigurationLiteral{
+			Leases: []api.StepLease{{Env: "AWS_LEASED_RESOURCE"}},
+		},
 		err: []error{
 			errors.New("test.leases[0]: 'resource_type' cannot be empty"),
 		},
 	}, {
-		name: "invalid duplicate names",
-		leases: []api.StepLease{
-			{ResourceType: "aws-quota-slice"},
-			{ResourceType: "aws-quota-slice"},
+		name: "invalid empty environment variable",
+		test: api.MultiStageTestConfigurationLiteral{
+			Leases: []api.StepLease{{ResourceType: "aws-quota-slice"}},
 		},
 		err: []error{
-			errors.New(`test.leases: duplicate names: [aws-quota-slice]`),
+			errors.New("test.leases[0]: 'env' cannot be empty"),
+		},
+	}, {
+		name: "invalid duplicate name",
+		test: api.MultiStageTestConfigurationLiteral{
+			Leases: []api.StepLease{
+				{ResourceType: "aws", Env: "AWS_LEASED_RESOURCE"},
+				{ResourceType: "aws", Env: "AWS_LEASED_RESOURCE"},
+			},
+		},
+		err: []error{
+			errors.New("test.leases[1]: duplicate environment variable: AWS_LEASED_RESOURCE"),
+		},
+	}, {
+		name: "invalid duplicate name from other steps",
+		test: api.MultiStageTestConfigurationLiteral{
+			Leases: []api.StepLease{
+				{ResourceType: "aws", Env: "AWS_LEASED_RESOURCE"},
+			},
+			Test: []api.LiteralTestStep{{
+				As:       "as",
+				From:     "from",
+				Commands: "commands",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1"},
+					Limits:   api.ResourceList{"memory": "1m"},
+				},
+				Leases: []api.StepLease{
+					{ResourceType: "aws", Env: "AWS_LEASED_RESOURCE"},
+				},
+			}},
+		},
+		err: []error{
+			errors.New("test.test[0].leases[0]: duplicate environment variable: AWS_LEASED_RESOURCE"),
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			context := newContext("test.leases", nil, nil)
-			err := validateLeases(&context, tc.leases)
+			test := api.TestStepConfiguration{
+				MultiStageTestConfigurationLiteral: &tc.test,
+			}
+			err := validateTestConfigurationType("test", test, nil, nil, true)
 			if diff := diff.ObjectReflectDiff(tc.err, err); diff != "<no diffs>" {
-				t.Errorf("incorrect: error: %s", diff)
+				t.Errorf("unexpected error: %s", diff)
 			}
 		})
 	}

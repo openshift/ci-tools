@@ -87,7 +87,7 @@ func (s *podStep) run(ctx context.Context) error {
 	// when the test container terminates and artifact directory has been set, grab everything under the directory
 	var notifier ContainerNotifier = NopNotifier
 	if s.gatherArtifacts() {
-		artifacts := NewArtifactWorker(ctx, s.client, filepath.Join(s.artifactDir, s.config.As), s.jobSpec.Namespace())
+		artifacts := NewArtifactWorker(s.client, filepath.Join(s.artifactDir, s.config.As), s.jobSpec.Namespace())
 		artifacts.CollectFromPod(pod.Name, []string{s.name}, nil)
 		notifier = artifacts
 	}

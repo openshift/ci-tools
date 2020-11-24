@@ -135,7 +135,7 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 
 	// now that the pods have been resolved by the template, add them to the artifact map
 	if len(s.artifactDir) > 0 {
-		artifacts := NewArtifactWorker(ctx, s.podClient, filepath.Join(s.artifactDir, s.template.Name), s.jobSpec.Namespace())
+		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.template.Name), s.jobSpec.Namespace())
 		for _, ref := range instance.Status.Objects {
 			switch {
 			case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":

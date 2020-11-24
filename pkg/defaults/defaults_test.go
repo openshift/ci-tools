@@ -28,7 +28,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/release"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
-	"github.com/openshift/ci-tools/pkg/util/imageapiregistration"
 )
 
 func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration {
@@ -603,7 +602,7 @@ func TestFromConfig(t *testing.T) {
 		}, nil
 	})
 	client := ctrlruntimeclient.NewFakeClient()
-	if err := imageapiregistration.AddToScheme(scheme.Scheme); err != nil {
+	if err := imageapi.AddToScheme(scheme.Scheme); err != nil {
 		t.Fatal(err)
 	}
 	for _, i := range []struct {

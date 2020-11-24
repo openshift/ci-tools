@@ -51,7 +51,6 @@ import (
 	imageapi "github.com/openshift/api/image/v1"
 	projectapi "github.com/openshift/api/project/v1"
 	routev1 "github.com/openshift/api/route/v1"
-	v1 "github.com/openshift/api/route/v1"
 	templateapi "github.com/openshift/api/template/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	projectclientset "github.com/openshift/client-go/project/clientset/versioned"
@@ -67,7 +66,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
-	"github.com/openshift/ci-tools/pkg/util/imageapiregistration"
 )
 
 const usage = `Orchestrate multi-stage image-based builds
@@ -750,7 +748,7 @@ func (o *options) resolveInputs(steps []api.Step) error {
 		if err := client.List(context.TODO(), consoleRoutes, ctrlruntimeclient.InNamespace("openshift-console")); err != nil {
 			log.Printf("could not get routes in namespace openshift-console: %v", err)
 		} else {
-			hostForRoute := func(name string, routes []v1.Route) string {
+			hostForRoute := func(name string, routes []routev1.Route) string {
 				for _, route := range routes {
 					if route.Name == name {
 						return route.Spec.Host
@@ -1746,7 +1744,7 @@ func monitorNamespace(ctx context.Context, cancel func(), namespace string, clie
 }
 
 func addSchemes() error {
-	if err := imageapiregistration.AddToScheme(scheme.Scheme); err != nil {
+	if err := imageapi.AddToScheme(scheme.Scheme); err != nil {
 		return fmt.Errorf("failed to add imagev1 to scheme: %w", err)
 	}
 	if err := routev1.AddToScheme(scheme.Scheme); err != nil {

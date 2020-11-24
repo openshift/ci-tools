@@ -1176,14 +1176,10 @@ github.com/opencontainers/selinux v1.2.2/go.mod h1:+BLncwf63G4dgOzykXAxcmnFlUaOl
 github.com/opencontainers/selinux v1.3.1/go.mod h1:yTcKuYAh6R95iDpefGLQaPaRwJFwyzAJufJyiTt7s0g=
 github.com/opencontainers/selinux v1.3.2/go.mod h1:yTcKuYAh6R95iDpefGLQaPaRwJFwyzAJufJyiTt7s0g=
 github.com/opencontainers/selinux v1.3.3/go.mod h1:yTcKuYAh6R95iDpefGLQaPaRwJFwyzAJufJyiTt7s0g=
-github.com/openshift/api v0.0.0-20200106203948-7ab22a2c8316/go.mod h1:dv+J0b/HWai0QnMVb37/H0v36klkLBi2TNpPeWDxX10=
-github.com/openshift/api v0.0.0-20200116145750-0e2ff1e215dd/go.mod h1:fT6U/JfG8uZzemTRwZA2kBDJP5nWz7v05UHnty/D+pk=
-github.com/openshift/api v0.0.0-20200217161739-c99157bc6492/go.mod h1:fT6U/JfG8uZzemTRwZA2kBDJP5nWz7v05UHnty/D+pk=
-github.com/openshift/api v0.0.0-20200319205122-2eb7761c21b1/go.mod h1:frTMT4l3rOMlXj3ClYgKxgkq24D7IKXb3Bl4vJEewJw=
-github.com/openshift/api v0.0.0-20200521101457-60c476765272 h1:tYm+7yLrK+Ivi5hESBUTIt8+4ejbVux9kdscALiu57g=
-github.com/openshift/api v0.0.0-20200521101457-60c476765272/go.mod h1:TkhafijfTiRi1Q3120/ZSE4oIWKQ4DGRh3byPywv4Mw=
-github.com/openshift/build-machinery-go v0.0.0-20200211121458-5e3d6e570160/go.mod h1:1CkcsT3aVebzRBzVTSbiKSkJMsC/CASqxesfqEMfJEc=
+github.com/openshift/api v0.0.0-20201120165435-072a4cd8ca42 h1:meFswbseUxIkrfb2+g91gHbPwh+16Kj/8E1AiR1jv6A=
+github.com/openshift/api v0.0.0-20201120165435-072a4cd8ca42/go.mod h1:RDvBcRQMGLa3aNuDuejVBbTEQj/2i14NXdpOLqbNBvM=
 github.com/openshift/build-machinery-go v0.0.0-20200424080330-082bf86082cc/go.mod h1:1CkcsT3aVebzRBzVTSbiKSkJMsC/CASqxesfqEMfJEc=
+github.com/openshift/build-machinery-go v0.0.0-20200917070002-f171684f77ab/go.mod h1:b1BuldmJlbA/xYtdZvKi+7j5YGB44qJUJDZ9zwiNCfE=
 github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0 h1:sl7XRcZyQARNkkC0LBbUsSTWPh9nKIVFvi8dUTJ3w/U=
 github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0/go.mod h1:DE+EEa9c2Bv/B4eQ64cYqTiarVTl9Kf5EQsUyEsZ2iU=
 github.com/openshift/client-go v0.0.0-20200521150516-05eb9880269c h1:l7CmbzzkyWl4Y6qHmy6m4FvbH4iLnIXGrXqOfE5IFNA=
@@ -1905,7 +1901,6 @@ golang.org/x/tools v0.0.0-20191130070609-6e064ea0cf2d/go.mod h1:b+2E5dAYhXwXZwtn
 golang.org/x/tools v0.0.0-20191216173652-a0e659d51361/go.mod h1:TB2adYChydJhpapKDTa4BR/hXlZSLoq2Wpct/0txZ28=
 golang.org/x/tools v0.0.0-20191227053925-7b8e75db28f4/go.mod h1:TB2adYChydJhpapKDTa4BR/hXlZSLoq2Wpct/0txZ28=
 golang.org/x/tools v0.0.0-20200102140908-9497f49d5709/go.mod h1:TB2adYChydJhpapKDTa4BR/hXlZSLoq2Wpct/0txZ28=
-golang.org/x/tools v0.0.0-20200115044656-831fdb1e1868/go.mod h1:TB2adYChydJhpapKDTa4BR/hXlZSLoq2Wpct/0txZ28=
 golang.org/x/tools v0.0.0-20200115165105-de0b1760071a h1:bEJ3JL2YUH3tt9KX9dsy0WUF3WOrhjtNjK93o0svepY=
 golang.org/x/tools v0.0.0-20200115165105-de0b1760071a/go.mod h1:TB2adYChydJhpapKDTa4BR/hXlZSLoq2Wpct/0txZ28=
 golang.org/x/tools v0.0.0-20200117161641-43d50277825c/go.mod h1:TB2adYChydJhpapKDTa4BR/hXlZSLoq2Wpct/0txZ28=

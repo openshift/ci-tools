@@ -782,7 +782,7 @@ func TestValidateTestSteps(t *testing.T) {
 			if seen == nil {
 				seen = sets.NewString()
 			}
-			ret := validateTestStepsTest("test", tc.steps, seen, nil, tc.releases)
+			ret := validateTestSteps("test", testStageTest, tc.steps, seen, nil, tc.releases)
 			if !errListMessagesEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
 			}
@@ -819,7 +819,7 @@ func TestValidatePostSteps(t *testing.T) {
 			if seen == nil {
 				seen = sets.NewString()
 			}
-			ret := validateTestStepsPost("test", tc.steps, seen, nil, tc.releases)
+			ret := validateTestSteps("test", testStagePost, tc.steps, seen, nil, tc.releases)
 			if !errListMessagesEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
 			}
@@ -851,7 +851,7 @@ func TestValidateParameters(t *testing.T) {
 		err:    []error{errors.New("test: unresolved parameter(s): [TEST1]")},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateLiteralTestStepTest("test", LiteralTestStep{
+			err := validateLiteralTestStep("test", testStageTest, LiteralTestStep{
 				As:       "as",
 				From:     "from",
 				Commands: "commands",

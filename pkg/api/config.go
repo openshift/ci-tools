@@ -14,6 +14,14 @@ import (
 
 const defaultArtifacts = "/tmp/artifacts"
 
+type testStage uint8
+
+const (
+	testStagePre testStage = iota
+	testStageTest
+	testStagePost
+)
+
 // Default sets default values after loading but before validation
 func (config *ReleaseBuildConfiguration) Default() {
 	def := func(p *string) {
@@ -547,9 +555,9 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
 		seen := sets.NewString()
-		validationErrors = append(validationErrors, validateTestStepsPre(fmt.Sprintf("%s.Pre", fieldRoot), testConfig.Pre, seen, testConfig.Environment, releases)...)
-		validationErrors = append(validationErrors, validateTestStepsTest(fmt.Sprintf("%s.Test", fieldRoot), testConfig.Test, seen, testConfig.Environment, releases)...)
-		validationErrors = append(validationErrors, validateTestStepsPost(fmt.Sprintf("%s.Post", fieldRoot), testConfig.Post, seen, testConfig.Environment, releases)...)
+		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Pre", fieldRoot), testStagePre, testConfig.Pre, seen, testConfig.Environment, releases)...)
+		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Test", fieldRoot), testStageTest, testConfig.Test, seen, testConfig.Environment, releases)...)
+		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Post", fieldRoot), testStagePost, testConfig.Post, seen, testConfig.Environment, releases)...)
 	}
 	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
 		typeCount++
@@ -559,15 +567,15 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		seen := sets.NewString()
 		for i, s := range testConfig.Pre {
 			fieldRootI := fmt.Sprintf("%s.Pre[%d]", fieldRoot, i)
-			validationErrors = append(validationErrors, validateLiteralTestStepPre(fieldRootI, s, seen, testConfig.Environment, releases)...)
+			validationErrors = append(validationErrors, validateLiteralTestStep(fieldRootI, testStagePre, s, seen, testConfig.Environment, releases)...)
 		}
 		for i, s := range testConfig.Test {
 			fieldRootI := fmt.Sprintf("%s.Test[%d]", fieldRoot, i)
-			validationErrors = append(validationErrors, validateLiteralTestStepTest(fieldRootI, s, seen, testConfig.Environment, releases)...)
+			validationErrors = append(validationErrors, validateLiteralTestStep(fieldRootI, testStageTest, s, seen, testConfig.Environment, releases)...)
 		}
 		for i, s := range testConfig.Post {
 			fieldRootI := fmt.Sprintf("%s.Post[%d]", fieldRoot, i)
-			validationErrors = append(validationErrors, validateLiteralTestStepPost(fieldRootI, s, seen, testConfig.Environment, releases)...)
+			validationErrors = append(validationErrors, validateLiteralTestStep(fieldRootI, testStagePost, s, seen, testConfig.Environment, releases)...)
 		}
 	}
 	if typeCount == 0 {
@@ -583,34 +591,12 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 	return validationErrors
 }
 
-func validateTestStepsPre(fieldRoot string, steps []TestStep, seen sets.String, env TestEnvironment, releases sets.String) (ret []error) {
+func validateTestSteps(fieldRoot string, stage testStage, steps []TestStep, seen sets.String, env TestEnvironment, releases sets.String) (ret []error) {
 	for i, s := range steps {
 		fieldRootI := fmt.Sprintf("%s[%d]", fieldRoot, i)
 		ret = validateTestStep(fieldRootI, s, seen)
 		if s.LiteralTestStep != nil {
-			ret = append(ret, validateLiteralTestStepPre(fieldRootI, *s.LiteralTestStep, seen, env, releases)...)
-		}
-	}
-	return
-}
-
-func validateTestStepsTest(fieldRoot string, steps []TestStep, seen sets.String, env TestEnvironment, releases sets.String) (ret []error) {
-	for i, s := range steps {
-		fieldRootI := fmt.Sprintf("%s[%d]", fieldRoot, i)
-		ret = validateTestStep(fieldRootI, s, seen)
-		if s.LiteralTestStep != nil {
-			ret = append(ret, validateLiteralTestStepTest(fieldRootI, *s.LiteralTestStep, seen, env, releases)...)
-		}
-	}
-	return
-}
-
-func validateTestStepsPost(fieldRoot string, steps []TestStep, seen sets.String, env TestEnvironment, releases sets.String) (ret []error) {
-	for i, s := range steps {
-		fieldRootI := fmt.Sprintf("%s[%d]", fieldRoot, i)
-		ret = validateTestStep(fieldRootI, s, seen)
-		if s.LiteralTestStep != nil {
-			ret = append(ret, validateLiteralTestStepPost(fieldRootI, *s.LiteralTestStep, seen, env, releases)...)
+			ret = append(ret, validateLiteralTestStep(fieldRootI, stage, *s.LiteralTestStep, seen, env, releases)...)
 		}
 	}
 	return
@@ -648,7 +634,7 @@ func validateTestStep(fieldRootI string, step TestStep, seen sets.String) (ret [
 	return
 }
 
-func validateLiteralTestStepCommon(fieldRoot string, step LiteralTestStep, seen sets.String, env TestEnvironment, releases sets.String) (ret []error) {
+func validateLiteralTestStep(fieldRoot string, stage testStage, step LiteralTestStep, seen sets.String, env TestEnvironment, releases sets.String) (ret []error) {
 	if len(step.As) == 0 {
 		ret = append(ret, fmt.Errorf("%s: `as` is required", fieldRoot))
 	} else if seen.Has(step.As) {
@@ -700,24 +686,12 @@ func validateLiteralTestStepCommon(fieldRoot string, step LiteralTestStep, seen 
 		ret = append(ret, err)
 	}
 	ret = append(ret, validateDependencies(fieldRoot, step.Dependencies)...)
-	return
-}
-
-func validateLiteralTestStepPre(fieldRoot string, step LiteralTestStep, seen sets.String, env TestEnvironment, releases sets.String) (ret []error) {
-	ret = validateLiteralTestStepCommon(fieldRoot, step, seen, env, releases)
-	if step.OptionalOnSuccess != nil {
-		ret = append(ret, fmt.Errorf("%s: `optional_on_success` is only allowed for Post steps", fieldRoot))
+	switch stage {
+	case testStagePre, testStageTest:
+		if step.OptionalOnSuccess != nil {
+			ret = append(ret, fmt.Errorf("%s: `optional_on_success` is only allowed for Post steps", fieldRoot))
+		}
 	}
-	return
-}
-
-func validateLiteralTestStepTest(fieldRoot string, step LiteralTestStep, seen sets.String, env TestEnvironment, releases sets.String) (ret []error) {
-	ret = validateLiteralTestStepPre(fieldRoot, step, seen, env, releases)
-	return
-}
-
-func validateLiteralTestStepPost(fieldRoot string, step LiteralTestStep, seen sets.String, env TestEnvironment, releases sets.String) (ret []error) {
-	ret = validateLiteralTestStepCommon(fieldRoot, step, seen, env, releases)
 	return
 }
 

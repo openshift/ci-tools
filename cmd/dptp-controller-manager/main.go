@@ -465,7 +465,7 @@ func main() {
 
 	if opts.enabledControllersSet.Has(registrysyncer.ControllerName) {
 		if opts.registrySyncerOptions.imagePullSecretPath == "" {
-			logrus.Fatal("The registrysyncer requires the --registrysyncer.imagePullSecretPath flag to be set ")
+			logrus.Fatal("The registrysyncer requires the --registrySyncerOptions.imagePullSecretPath flag to be set ")
 		}
 		if err := registrysyncer.AddToManager(
 			mgr,

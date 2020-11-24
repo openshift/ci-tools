@@ -12,12 +12,12 @@ var (
 	successfulImportsCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "imagestream_successful_import_count",
 		Help: "The number of imagestream imports the controller created succesfull",
-	}, []string{"controller", "cluster", "namespace"})
+	}, []string{"controller", "cluster", "namespace", "name"})
 
 	failedImportsCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "imagestream_failed_import_count",
 		Help: "The number of failed imagestream imports the controller create",
-	}, []string{"controller", "cluster", "namespace"})
+	}, []string{"controller", "cluster", "namespace", "name"})
 )
 
 // RegisterMetrics Registers metrics
@@ -32,10 +32,10 @@ func RegisterMetrics() error {
 }
 
 // CountImportResult increase the counter metric
-func CountImportResult(controllerName, cluster, namespace string, successful bool) {
+func CountImportResult(controllerName, cluster, namespace, name string, successful bool) {
 	if successful {
-		successfulImportsCounter.WithLabelValues(controllerName, cluster, namespace).Inc()
+		successfulImportsCounter.WithLabelValues(controllerName, cluster, namespace, name).Inc()
 	} else {
-		failedImportsCounter.WithLabelValues(controllerName, cluster, namespace).Inc()
+		failedImportsCounter.WithLabelValues(controllerName, cluster, namespace, name).Inc()
 	}
 }

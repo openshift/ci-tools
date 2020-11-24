@@ -264,7 +264,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 
 	// ImageStreamImport is not an ordinary api but a virtual one that does the import synchronously
 	if err := client.Create(ctx, imageStreamImport); err != nil {
-		controllerutil.CountImportResult(ControllerName, cluster, decoded.Namespace, false)
+		controllerutil.CountImportResult(ControllerName, cluster, decoded.Namespace, imageStreamName, false)
 		return fmt.Errorf("failed to import Image: %w", err)
 	}
 
@@ -276,7 +276,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		return fmt.Errorf("imageStreamImport did not succeed: reason: %s, message: %s", imageStreamImport.Status.Images[0].Status.Reason, imageStreamImport.Status.Images[0].Status.Message)
 	}
 
-	controllerutil.CountImportResult(ControllerName, cluster, decoded.Namespace, true)
+	controllerutil.CountImportResult(ControllerName, cluster, decoded.Namespace, imageStreamName, true)
 
 	log.Debug("Imported successfully")
 	return nil

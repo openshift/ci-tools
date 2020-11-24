@@ -31,10 +31,8 @@ type promotionStep struct {
 	config         api.PromotionConfiguration
 	images         []api.ProjectDirectoryImageBuildStepConfiguration
 	requiredImages sets.String
-	srcClient      ctrlruntimeclient.Client
-	dstClient      ctrlruntimeclient.Client
 	jobSpec        *api.JobSpec
-	podClient      steps.PodClient
+	client         steps.PodClient
 	pushSecret     *coreapi.Secret
 }
 
@@ -71,7 +69,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 
 	log.Printf("Promoting tags to %s: %s", targetName(s.config), strings.Join(names.List(), ", "))
 	pipeline := &imagev1.ImageStream{}
-	if err := s.srcClient.Get(ctx, ctrlruntimeclient.ObjectKey{
+	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{
 		Namespace: s.jobSpec.Namespace(),
 		Name:      api.PipelineImageStream,
 	}, pipeline); err != nil {
@@ -85,7 +83,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 			return nil
 		}
 
-		if _, err := steps.RunPod(ctx, s.podClient, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace())); err != nil {
+		if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace())); err != nil {
 			return fmt.Errorf("unable to run promotion pod: %w", err)
 		}
 		return nil
@@ -94,11 +92,11 @@ func (s *promotionStep) run(ctx context.Context) error {
 	if len(s.config.Name) > 0 {
 		return retry.RetryOnConflict(promotionRetry, func() error {
 			is := &imagev1.ImageStream{}
-			err := s.dstClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.config.Namespace, Name: s.config.Name}, is)
+			err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.config.Namespace, Name: s.config.Name}, is)
 			if errors.IsNotFound(err) {
 				is.Namespace = s.config.Namespace
 				is.Name = s.config.Name
-				if err := s.dstClient.Create(ctx, is); err != nil {
+				if err := s.client.Create(ctx, is); err != nil {
 					return fmt.Errorf("could not retrieve target imagestream: %w", err)
 				}
 			}
@@ -112,7 +110,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 				}
 			}
 
-			if err := s.dstClient.Update(ctx, is); err != nil {
+			if err := s.client.Update(ctx, is); err != nil {
 				if errors.IsConflict(err) {
 					return err
 				}
@@ -129,9 +127,9 @@ func (s *promotionStep) run(ctx context.Context) error {
 		}
 
 		err := retry.RetryOnConflict(promotionRetry, func() error {
-			err := s.dstClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.config.Namespace, Name: dst}, &imagev1.ImageStream{})
+			err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.config.Namespace, Name: dst}, &imagev1.ImageStream{})
 			if errors.IsNotFound(err) {
-				err = s.dstClient.Create(ctx, &imagev1.ImageStream{
+				err = s.client.Create(ctx, &imagev1.ImageStream{
 					ObjectMeta: meta.ObjectMeta{
 						Name:      dst,
 						Namespace: s.config.Namespace,
@@ -157,7 +155,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 					From: valid,
 				},
 			}
-			if err := s.dstClient.Update(ctx, ist); err != nil {
+			if err := s.client.Update(ctx, ist); err != nil {
 				if errors.IsConflict(err) {
 					return err
 				}
@@ -372,15 +370,13 @@ func (s *promotionStep) Description() string {
 
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skipped.
-func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, srcClient, dstClient ctrlruntimeclient.Client, jobSpec *api.JobSpec, podClient steps.PodClient, pushSecret *coreapi.Secret) api.Step {
+func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, jobSpec *api.JobSpec, client steps.PodClient, pushSecret *coreapi.Secret) api.Step {
 	return &promotionStep{
 		config:         config,
 		images:         images,
 		requiredImages: requiredImages,
-		srcClient:      srcClient,
-		dstClient:      dstClient,
 		jobSpec:        jobSpec,
-		podClient:      podClient,
+		client:         client,
 		pushSecret:     pushSecret,
 	}
 }

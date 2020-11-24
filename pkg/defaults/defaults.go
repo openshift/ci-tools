@@ -261,7 +261,7 @@ func fromConfig(
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not determine promotion defaults: %w", err)
 		}
-		postSteps = append(postSteps, releasesteps.PromotionStep(*cfg, config.Images, requiredNames, client, client, jobSpec, podClient, pushSecret))
+		postSteps = append(postSteps, releasesteps.PromotionStep(*cfg, config.Images, requiredNames, jobSpec, podClient, pushSecret))
 	}
 
 	return append(overridableSteps, buildSteps...), postSteps, nil

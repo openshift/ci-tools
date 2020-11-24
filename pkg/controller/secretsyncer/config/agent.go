@@ -35,7 +35,7 @@ type Agent struct {
 // Start will begin polling the config file at the path. If the first load
 // fails, Start will return the error and abort. Future load failures will log
 // the failure message but continue attempting to load.
-func (ca *Agent) Start(configLocation string) error {
+func (ca *Agent) Start(configLocation string, enqueuer func(secrets []MirrorConfig)) error {
 	c, err := Load(configLocation)
 	if err != nil {
 		return err
@@ -74,6 +74,7 @@ func (ca *Agent) Start(configLocation string) error {
 					logrus.Info("Changes of configuration detected.")
 				}
 				ca.Set(c)
+				enqueuer(ca.c.Secrets)
 			}
 		}
 	}()

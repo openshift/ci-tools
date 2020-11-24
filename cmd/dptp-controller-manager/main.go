@@ -447,9 +447,6 @@ func main() {
 			targetClusters[cluster] = manager
 		}
 		secretSyncerConfigAgent := &secretsyncerconfig.Agent{}
-		if err := secretSyncerConfigAgent.Start(opts.secretSyncerConfigOptions.configFile); err != nil {
-			logrus.WithError(err).Fatal("failed to start secretSyncerConfigAgent")
-		}
 		rawConfig, err := ioutil.ReadFile(opts.secretSyncerConfigOptions.secretBoostrapConfigFile)
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to read ci-secret-boostrap config")
@@ -458,8 +455,12 @@ func main() {
 		if err := yaml.Unmarshal(rawConfig, &secretBootstrapConfig); err != nil {
 			logrus.WithError(err).Fatal("Failed to unmarshal ci-secret-boostrap config")
 		}
-		if err := secretsyncer.AddToManager(mgr, allManagers[apiCIContextName], targetClusters, secretSyncerConfigAgent.Config, secretBootstrapConfig); err != nil {
+		configChangeEnqueuer, err := secretsyncer.AddToManager(mgr, allManagers[apiCIContextName], targetClusters, secretSyncerConfigAgent.Config, secretBootstrapConfig)
+		if err != nil {
 			logrus.WithError(err).Fatal("failed to add secret syncer controller")
+		}
+		if err := secretSyncerConfigAgent.Start(opts.secretSyncerConfigOptions.configFile, configChangeEnqueuer); err != nil {
+			logrus.WithError(err).Fatal("failed to start secretSyncerConfigAgent")
 		}
 	}
 

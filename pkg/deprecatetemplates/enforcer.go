@@ -24,11 +24,13 @@ type Enforcer struct {
 // NewEnforcer initializes a new enforcer instance. The enforcer will be
 // initialized with an allowlist from the given location. If the allowlist
 // does not exist, the enforcer will have an empty allowlist.
-func NewEnforcer(allowlistPath string) (*Enforcer, error) {
+func NewEnforcer(allowlistPath string, newJobBlockers JiraHints) (*Enforcer, error) {
 	allowlist, err := loadAllowlist(allowlistPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load template deprecating allowlist from %q: %w", allowlistPath, err)
 	}
+	allowlist.SetNewJobBlockers(newJobBlockers)
+
 	return &Enforcer{
 		allowlist:         allowlist,
 		existingTemplates: sets.NewString(),

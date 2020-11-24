@@ -94,6 +94,19 @@ func TestFindNewest(t *testing.T) {
 			isTags: map[string]*imagev1.ImageStreamTag{},
 		},
 		{
+			name: "1 cluster",
+			isTags: map[string]*imagev1.ImageStreamTag{
+				"cluster1": {
+					Image: imagev1.Image{
+						ObjectMeta: metav1.ObjectMeta{
+							CreationTimestamp: metav1.NewTime(now),
+						},
+					},
+				},
+			},
+			expected: "cluster1",
+		},
+		{
 			name: "basic case: 2 clusters",
 			isTags: map[string]*imagev1.ImageStreamTag{
 				"cluster1": {
@@ -241,7 +254,7 @@ func TestReconcile(t *testing.T) {
 			},
 			apiCIClient: fakeclient.NewFakeClient(applyconfigISTag.DeepCopy()),
 			appCIClient: fakeclient.NewFakeClient(),
-			expected:    fmt.Errorf("failed to get imageStream %s from registry cluster: %w", "ci/applyconfig", fmt.Errorf("imagestreams.image.openshift.io \"applyconfig\" not found")),
+			expected:    fmt.Errorf("failed to get imageStream %s from cluster api.ci: %w", "ci/applyconfig", fmt.Errorf("imagestreams.image.openshift.io \"applyconfig\" not found")),
 		},
 		{
 			name: "a new tag",
@@ -418,12 +431,10 @@ func TestReconcile(t *testing.T) {
 			},
 			apiCIClient: fakeclient.NewFakeClient(applyconfigISTag.DeepCopy(), applyconfigIS.DeepCopy()),
 			appCIClient: bcc(fakeclient.NewFakeClient(), func(c *imageImportStatusSettingClient) { c.failure = true }),
-			expected:    fmt.Errorf("imageStreamImport did not succeed: reason: , message: failing as requested"),
+			expected: fmt.Errorf("failed to create and check the status for imageStreamImport for tag latest of applyconfig in namespace ci on cluster app.ci: %w",
+				fmt.Errorf("imageStreamImport did not succeed: reason: , message: failing as requested")),
 		},
 	} {
-		if tc.name != "a new tag" {
-			continue
-		}
 		t.Run(tc.name, func(t *testing.T) {
 			r := &reconciler{
 				log: logrus.NewEntry(logrus.New()),
@@ -619,6 +630,115 @@ func TestImagestream(t *testing.T) {
 			if err := fn(); err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("actual does not match expected, diff: %s", diff)
+			}
+		})
+	}
+}
+
+func TestDockerImageImportedFromTargetingCluster(t *testing.T) {
+	testCases := []struct {
+		name           string
+		cluster        string
+		imageStreamTag *imagev1.ImageStreamTag
+		expected       bool
+	}{
+		{
+			name:    "api.ci cannot import api.ci",
+			cluster: "api.ci",
+			imageStreamTag: &imagev1.ImageStreamTag{
+				Tag: &imagev1.TagReference{
+					From: &corev1.ObjectReference{
+						Kind: "DockerImage",
+						Name: "registry.svc.ci.openshift.org/ocp/4.7-2020-11-17-181430@sha256:e9edaa5ea72b6e47a796856513368139cd3d0ec03cd26d145c5849e63aa5f0d2",
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name:    "app.ci cannot import app.ci",
+			cluster: "app.ci",
+			imageStreamTag: &imagev1.ImageStreamTag{
+				Tag: &imagev1.TagReference{
+					From: &corev1.ObjectReference{
+						Kind: "DockerImage",
+						Name: "registry.ci.openshift.org/ocp/4.7-2020-11-17-181430@sha256:e9edaa5ea72b6e47a796856513368139cd3d0ec03cd26d145c5849e63aa5f0d2",
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name:    "api.ci can import app.ci",
+			cluster: "api.ci",
+			imageStreamTag: &imagev1.ImageStreamTag{
+				Tag: &imagev1.TagReference{
+					From: &corev1.ObjectReference{
+						Kind: "DockerImage",
+						Name: "registry.ci.openshift.org/ocp/4.7-2020-11-17-181430@sha256:e9edaa5ea72b6e47a796856513368139cd3d0ec03cd26d145c5849e63aa5f0d2",
+					},
+				},
+			},
+		},
+		{
+			name:    "app.ci can import api.ci",
+			cluster: "app.ci",
+			imageStreamTag: &imagev1.ImageStreamTag{
+				Tag: &imagev1.TagReference{
+					From: &corev1.ObjectReference{
+						Kind: "DockerImage",
+						Name: "registry.svc.ci.openshift.org/ocp/4.7-2020-11-17-181430@sha256:e9edaa5ea72b6e47a796856513368139cd3d0ec03cd26d145c5849e63aa5f0d2",
+					},
+				},
+			},
+		},
+		{
+			name:    "build01 can import api.ci",
+			cluster: "build01",
+			imageStreamTag: &imagev1.ImageStreamTag{
+				Tag: &imagev1.TagReference{
+					From: &corev1.ObjectReference{
+						Kind: "DockerImage",
+						Name: "registry.svc.ci.openshift.org/ocp/4.7-2020-11-17-181430@sha256:e9edaa5ea72b6e47a796856513368139cd3d0ec03cd26d145c5849e63aa5f0d2",
+					},
+				},
+			},
+		},
+		{
+			name:    "nil isTag",
+			cluster: "build01",
+		},
+		{
+			name:           "nil Tag",
+			cluster:        "build01",
+			imageStreamTag: &imagev1.ImageStreamTag{},
+		},
+		{
+			name:    "nil From",
+			cluster: "build01",
+			imageStreamTag: &imagev1.ImageStreamTag{
+				Tag: &imagev1.TagReference{},
+			},
+		},
+		{
+			name:    "Not DockerImage kind",
+			cluster: "build01",
+			imageStreamTag: &imagev1.ImageStreamTag{
+				Tag: &imagev1.TagReference{
+					From: &corev1.ObjectReference{
+						Kind: "Not DockerImage kind",
+						Name: "registry.svc.ci.openshift.org/ocp/4.7-2020-11-17-181430@sha256:e9edaa5ea72b6e47a796856513368139cd3d0ec03cd26d145c5849e63aa5f0d2",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := dockerImageImportedFromTargetingCluster(tc.cluster, tc.imageStreamTag)
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("actual does not match expected, diff: %s", diff)
 			}

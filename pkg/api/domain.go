@@ -11,6 +11,7 @@ const (
 	ServiceDomainAPICI = "svc.ci.openshift.org"
 	ServiceDomainAPPCI = "apps.ci.l2s4.p1.openshiftapps.com"
 
+	ServiceDomainAPICIRegistry = "registry.svc.ci.openshift.org"
 	ServiceDomainAPPCIRegistry = "registry.ci.openshift.org"
 )
 

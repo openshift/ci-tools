@@ -548,6 +548,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient PodClient, nam
 	podCheckTicker := time.NewTicker(5 * time.Second)
 	defer podCheckTicker.Stop()
 	podStartTimeout := 15 * time.Minute
+	var podSeenRunning bool
 
 	for {
 		select {
@@ -561,11 +562,16 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient PodClient, nam
 				log.Printf("warning: failed to get pod %s: %v", name, err)
 				continue
 			}
-			if !podHasStarted(pod) && time.Since(pod.CreationTimestamp.Time) > podStartTimeout {
-				message := fmt.Sprintf("pod didn't start running within %s: %s\n%s", podStartTimeout, getReasonsForUnreadyContainers(pod), getEventsForPod(ctx, pod, podClient))
-				log.Print(message)
-				notifier.Complete(name)
-				return pod, errors.New(message)
+
+			if !podSeenRunning {
+				if podHasStarted(pod) {
+					podSeenRunning = true
+				} else if time.Since(pod.CreationTimestamp.Time) > podStartTimeout {
+					message := fmt.Sprintf("pod didn't start running within %s: %s\n%s", podStartTimeout, getReasonsForUnreadyContainers(pod), getEventsForPod(ctx, pod, podClient))
+					log.Print(message)
+					notifier.Complete(name)
+					return pod, errors.New(message)
+				}
 			}
 			podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
 			if podJobIsOK(pod) {

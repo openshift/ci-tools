@@ -166,6 +166,10 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		if clusterName == srcClusterName {
 			continue
 		}
+		if dockerImageImportedFromTargetingCluster(clusterName, sourceImageStreamTag) {
+			log.Debug("dockerImage imported from targeting cluster")
+			continue
+		}
 		if err := client.Get(ctx, types.NamespacedName{Name: req.Namespace}, &corev1.Namespace{}); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return fmt.Errorf("failed to check if namespace %s exists on cluster %s: %w", req.Namespace, clusterName, err)
@@ -235,12 +239,20 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		log.Debug("creating imageStreamImport")
 		if err := createAndCheckStatus(ctx, client, imageStreamImport); err != nil {
 			controllerutil.CountImportResult(ControllerName, clusterName, req.Namespace, imageStreamName, false)
-			return fmt.Errorf("failed to create and check the status for imageStreamImport on cluster %s %v : %w", clusterName, imageStreamImport, err)
+			return fmt.Errorf("failed to create and check the status for imageStreamImport for tag %s of %s in namespace %s on cluster %s: %w", imageTag, imageStreamImport.Name, imageStreamImport.Namespace, clusterName, err)
 		}
 		controllerutil.CountImportResult(ControllerName, clusterName, req.Namespace, imageStreamName, true)
 		log.Debug("Imported successfully")
 	}
 	return nil
+}
+
+func dockerImageImportedFromTargetingCluster(cluster string, tag *imagev1.ImageStreamTag) bool {
+	if tag == nil || tag.Tag == nil || tag.Tag.From == nil || tag.Tag.From.Kind != "DockerImage" {
+		return false
+	}
+	from := tag.Tag.From.Name
+	return strings.HasPrefix(from, api.ServiceDomainAPICIRegistry) && cluster == "api.ci" || strings.HasPrefix(from, api.ServiceDomainAPPCIRegistry) && cluster == "app.ci"
 }
 
 func createAndCheckStatus(ctx context.Context, client ctrlruntimeclient.Client, imageStreamImport *imagev1.ImageStreamImport) error {

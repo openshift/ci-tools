@@ -776,6 +776,25 @@ func TestValidateTestSteps(t *testing.T) {
 		errs: []error{
 			errors.New("test[0]: `optional_on_success` is only allowed for Post steps"),
 		},
+	}, {
+		name: "Multiple errors",
+		steps: []TestStep{{
+			LiteralTestStep: &LiteralTestStep{
+				From:      "from",
+				Commands:  "commands",
+				Resources: resources,
+			},
+		}, {
+			LiteralTestStep: &LiteralTestStep{
+				From:      "from",
+				Commands:  "commands",
+				Resources: resources,
+			},
+		}},
+		errs: []error{
+			errors.New("test[0]: `as` is required"),
+			errors.New("test[1]: `as` is required"),
+		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			seen := tc.seen

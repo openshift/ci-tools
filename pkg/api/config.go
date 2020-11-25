@@ -594,7 +594,7 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 func validateTestSteps(fieldRoot string, stage testStage, steps []TestStep, seen sets.String, env TestEnvironment, releases sets.String) (ret []error) {
 	for i, s := range steps {
 		fieldRootI := fmt.Sprintf("%s[%d]", fieldRoot, i)
-		ret = validateTestStep(fieldRootI, s, seen)
+		ret = append(ret, validateTestStep(fieldRootI, s, seen)...)
 		if s.LiteralTestStep != nil {
 			ret = append(ret, validateLiteralTestStep(fieldRootI, stage, *s.LiteralTestStep, seen, env, releases)...)
 		}

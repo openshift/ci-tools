@@ -681,11 +681,11 @@ func TestValidateTestSteps(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			seen := tc.seen
-			if seen == nil {
-				seen = sets.NewString()
+			context := newContext("test", nil, tc.releases)
+			if tc.seen != nil {
+				context.seen = tc.seen
 			}
-			ret := validateTestSteps("test", testStageTest, tc.steps, seen, nil, nil, tc.releases)
+			ret := validateTestSteps(context, testStageTest, tc.steps)
 			if !errListMessagesEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
 			}
@@ -718,11 +718,11 @@ func TestValidatePostSteps(t *testing.T) {
 		}},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			seen := tc.seen
-			if seen == nil {
-				seen = sets.NewString()
+			context := newContext("test", nil, tc.releases)
+			if tc.seen != nil {
+				context.seen = tc.seen
 			}
-			ret := validateTestSteps("test", testStagePost, tc.steps, seen, nil, nil, tc.releases)
+			ret := validateTestSteps(context, testStagePost, tc.steps)
 			if !errListMessagesEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
 			}
@@ -754,7 +754,7 @@ func TestValidateParameters(t *testing.T) {
 		err:    []error{errors.New("test: unresolved parameter(s): [TEST1]")},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateLiteralTestStep("test", testStageTest, api.LiteralTestStep{
+			err := validateLiteralTestStep(newContext("test", tc.env, tc.releases), testStageTest, api.LiteralTestStep{
 				As:       "as",
 				From:     "from",
 				Commands: "commands",
@@ -763,7 +763,7 @@ func TestValidateParameters(t *testing.T) {
 					Limits:   api.ResourceList{"memory": "1m"},
 				},
 				Environment: tc.params,
-			}, sets.NewString(), tc.env, tc.releases)
+			})
 			if diff := diff.ObjectReflectDiff(err, tc.err); diff != "<no diffs>" {
 				t.Errorf("incorrect error: %s", diff)
 			}
@@ -938,7 +938,8 @@ func TestValidateLeases(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateLeases("test.leases", tc.leases)
+			context := newContext("test.leases", nil, nil)
+			err := validateLeases(&context, tc.leases)
 			if diff := diff.ObjectReflectDiff(tc.err, err); diff != "<no diffs>" {
 				t.Errorf("incorrect: error: %s", diff)
 			}

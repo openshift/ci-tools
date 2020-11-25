@@ -1,7 +1,6 @@
 package main
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -27,19 +26,21 @@ func TestGetJobInfo(t *testing.T) {
 		isRelease: false,
 	}}
 	for _, testCase := range testCases {
-		info, isRelease := getJobInfo(testCase.name)
-		if isRelease != testCase.isRelease {
-			t.Errorf("%s: wrong `isNotRelease`. Actual: %t, Expected: %t", testCase.name, isRelease, testCase.isRelease)
-		}
-		if info.As != testCase.expected.As {
-			t.Errorf("%s: wrong `as`. Actual: %s, Expected: %s", testCase.name, info.As, testCase.expected.As)
-		}
-		if info.Product != testCase.expected.Product {
-			t.Errorf("%s: wrong `product`. Actual: %s, Expected: %s", testCase.name, info.Product, testCase.expected.Product)
-		}
-		if info.Version != testCase.expected.Version {
-			t.Errorf("%s: wrong `version`. Actual: %s, Expected: %s", testCase.name, info.Version, testCase.expected.Version)
-		}
+		t.Run(testCase.name, func(t *testing.T) {
+			info, isRelease := getJobInfo(testCase.name)
+			if isRelease != testCase.isRelease {
+				t.Errorf("wrong `isNotRelease`. Actual: %t, Expected: %t", isRelease, testCase.isRelease)
+			}
+			if info.As != testCase.expected.As {
+				t.Errorf("wrong `as`. Actual: %s, Expected: %s", info.As, testCase.expected.As)
+			}
+			if info.Product != testCase.expected.Product {
+				t.Errorf("wrong `product`. Actual: %s, Expected: %s", info.Product, testCase.expected.Product)
+			}
+			if info.Version != testCase.expected.Version {
+				t.Errorf("wrong `version`. Actual: %s, Expected: %s", info.Version, testCase.expected.Version)
+			}
+		})
 	}
 }
 
@@ -222,14 +223,16 @@ func TestUpdateBaseImages(t *testing.T) {
 		expectedErr: false,
 	}}
 	for _, testCase := range testCases {
-		if err := updateBaseImages(testCase.newImages, testCase.ciopImages, testCase.replacementImages, testCase.version); err != nil && !testCase.expectedErr {
-			t.Errorf("%s: Got error when one was not expected: %v", testCase.name, err)
-		} else if err == nil && testCase.expectedErr {
-			t.Errorf("%s: Did not get error when one was expected", testCase.name)
-		} else {
-			if !reflect.DeepEqual(testCase.replacementImages, testCase.expectedImages) {
-				t.Errorf("%s: expected does not match actual: %s", testCase.name, cmp.Diff(testCase.replacementImages, testCase.expectedImages))
+		t.Run(testCase.name, func(t *testing.T) {
+			if err := updateBaseImages(testCase.newImages, testCase.ciopImages, testCase.replacementImages, testCase.version); err != nil && !testCase.expectedErr {
+				t.Errorf("received error when one was not expected: %v", err)
+			} else if err == nil && testCase.expectedErr {
+				t.Error("Did not get error when one was expected")
+			} else {
+				if diff := cmp.Diff(testCase.replacementImages, testCase.expectedImages); diff != "" {
+					t.Errorf("expected does not match actual: %s", diff)
+				}
 			}
-		}
+		})
 	}
 }

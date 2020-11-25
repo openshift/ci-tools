@@ -62,10 +62,7 @@ func gatherOptions() (options, error) {
 	fs.StringVar(&o.ciopConfigDir, "ci-op-configs", "", "Path to ci-operator config files")
 	fs.StringVar(&o.rcConfigDir, "rc-configs", "", "Path to release-controller release config files")
 	fs.StringVar(&o.jobDir, "jobs", "", "Path to ci-operator jobs")
-	if err := fs.Parse(os.Args[1:]); err != nil {
-		return o, fmt.Errorf("failed to parse flags: %w", err)
-	}
-	return o, nil
+	return o, fs.Parse(os.Args[1:])
 }
 
 func validateOptions(o options) error {
@@ -84,6 +81,8 @@ func validateOptions(o options) error {
 	return nil
 }
 
+var versionRegex = regexp.MustCompile(`4.\d`)
+
 func getJobInfo(jobName string) (jobInfo, bool) {
 	// release jobs follow the format of "release-openshift-product-installer-testname-version"
 	if !strings.HasPrefix(jobName, "release-openshift-") {
@@ -94,7 +93,7 @@ func getJobInfo(jobName string) (jobInfo, bool) {
 		return jobInfo{}, false
 	}
 	version := splitName[len(splitName)-1]
-	if !regexp.MustCompile(`4.\d`).MatchString(version) {
+	if !versionRegex.MatchString(version) {
 		return jobInfo{}, false
 	}
 	return jobInfo{
@@ -278,7 +277,7 @@ func run(o options) error {
 					baseImages: make(map[string]api.ImageStreamTagReference),
 				}
 			}
-			var config testConfig
+			var conf testConfig
 			if isUnresolved {
 				target := ""
 				for _, arg := range periodic.Spec.Containers[0].Args {
@@ -304,23 +303,23 @@ func run(o options) error {
 				}
 				for _, test := range unmarshaledConfig.Tests {
 					if test.As == target {
-						config.Steps = test.MultiStageTestConfiguration
+						conf.Steps = test.MultiStageTestConfiguration
 					}
 				}
-				if config.Steps == nil {
+				if conf.Steps == nil {
 					return fmt.Errorf("failed to identify multi-stage test configuration for job %s", periodic.Name)
 				}
-				if err := updateBaseImages(config.BaseImages, ciopConfigs[filename].Configuration.BaseImages, replacements[filename].baseImages, info.Version); err != nil {
+				if err := updateBaseImages(conf.BaseImages, ciopConfigs[filename].Configuration.BaseImages, replacements[filename].baseImages, info.Version); err != nil {
 					return err
 				}
 			} else {
 				var ok bool
-				config, ok = generatorConfig.Configs[info.As]
+				conf, ok = generatorConfig.Configs[info.As]
 				if !ok {
 					configlessTests.Insert(info.As)
 					continue
 				}
-				if err := updateBaseImages(config.BaseImages, ciopConfigs[filename].Configuration.BaseImages, replacements[filename].baseImages, info.Version); err != nil {
+				if err := updateBaseImages(conf.BaseImages, ciopConfigs[filename].Configuration.BaseImages, replacements[filename].baseImages, info.Version); err != nil {
 					return err
 				}
 			}
@@ -338,7 +337,7 @@ func run(o options) error {
 			testsAndImages := replacements[filename]
 			testsAndImages.tests = append(testsAndImages.tests, api.TestStepConfiguration{
 				As:                          info.As,
-				MultiStageTestConfiguration: config.Steps,
+				MultiStageTestConfiguration: conf.Steps,
 				Cron:                        &cron,
 			})
 			replacements[filename] = testsAndImages
@@ -368,10 +367,10 @@ func run(o options) error {
 	}
 
 	// delete old jobs
-	for filename, config := range jobs {
+	for filename, oldConfig := range jobs {
 		newConfig := prowconfig.JobConfig{}
 		// remake periodic jobconfig excluding replaced jobs
-		for _, job := range config.Periodics {
+		for _, job := range oldConfig.Periodics {
 			if _, ok := replacedJobs[job.Name]; !ok {
 				newConfig.Periodics = append(newConfig.Periodics, job)
 			}
@@ -418,15 +417,15 @@ func run(o options) error {
 	}
 
 	if len(replacedJobs) > 0 {
-		fmt.Println("These jobs from the following files have been replaced:")
+		fmt.Println("The following jobs have been replaced:")
 		// print in alphabetical order
-		sortedNames := []string{}
+		var sortedNames []string
 		for oldName := range replacedJobs {
 			sortedNames = append(sortedNames, oldName)
 		}
 		sort.Strings(sortedNames)
 		for _, oldName := range sortedNames {
-			fmt.Printf("%s: %s\n", oldName, replacedJobs[oldName])
+			fmt.Printf("%s -> %s\n", oldName, replacedJobs[oldName])
 		}
 	} else {
 		fmt.Println("No jobs detected with matching config.")
@@ -450,7 +449,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed go gather options")
 	}
 	if err := validateOptions(o); err != nil {
-		logrus.Fatalf("invalid options: %v", err)
+		logrus.WithError(err).Fatal("invalid options")
 	}
 	if err := run(o); err != nil {
 		logrus.Fatalf("failed to generate jobs: %v", err)

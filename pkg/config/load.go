@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/validation"
 )
 
 // ProwgenFile is the name of prowgen's configuration file.
@@ -40,7 +41,7 @@ func readCiOperatorConfig(configFilePath string, info Info) (*cioperatorapi.Rele
 		return nil, fmt.Errorf("failed to load ci-operator config (%w)", err)
 	}
 
-	if err := configSpec.Validate(info.Org, info.Repo); err != nil {
+	if err := validation.IsValidConfiguration(configSpec, info.Org, info.Repo); err != nil {
 		return nil, fmt.Errorf("invalid ci-operator config: %w", err)
 	}
 

@@ -22,6 +22,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/validation"
 )
 
 // ResolverInfo contains the data needed to get a config from the configresolver
@@ -97,7 +98,7 @@ func fromPath(path string) (filenameToConfig, error) {
 					return fmt.Errorf("failed to load ci-operator config (%w)", err)
 				}
 
-				if err := configSpec.ValidateAtRuntime(); err != nil {
+				if err := validation.IsValidRuntimeConfiguration(configSpec); err != nil {
 					return fmt.Errorf("invalid ci-operator config: %w", err)
 				}
 				logrus.Tracef("Adding %s to filenameToConfig", filepath.Base(path))

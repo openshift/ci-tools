@@ -184,6 +184,8 @@
         value: release:latest
       - name: LEASED_RESOURCE
         value: uuid
+      - name: TEST_HOSTNAME
+        value: test.hostname
       - name: CLUSTER_TYPE
         value: aws
       - name: CLUSTER_PROFILE_DIR
@@ -219,6 +221,15 @@
       volumeMounts:
       - mountPath: /tmp/artifacts
         name: artifacts
+    hostAliases:
+    - hostnames:
+      - api.test.hostname.com
+      - test2
+      ip: 10.0.0.1
+    - hostnames:
+      - api.test.hostname.com
+      - test4
+      ip: 10.0.0.2
     initContainers:
     - args:
       - /bin/secret-wrapper

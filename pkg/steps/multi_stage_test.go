@@ -93,51 +93,87 @@ func TestRequires(t *testing.T) {
 }
 
 func TestGeneratePods(t *testing.T) {
-	config := api.ReleaseBuildConfiguration{
-		Tests: []api.TestStepConfiguration{{
-			As: "test",
-			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-				ClusterProfile: api.ClusterProfileAWS,
-				Test: []api.LiteralTestStep{{
-					As: "step0", From: "src", Commands: "command0",
-				}, {
-					As:          "step1",
-					From:        "image1",
-					Commands:    "command1",
-					ArtifactDir: "/artifact/dir",
-				}, {
-					As: "step2", From: "stable-initial:installer", Commands: "command2",
-				}},
-			},
-		}},
-	}
-
-	jobSpec := api.JobSpec{
-		JobSpec: prowdapi.JobSpec{
-			Job:       "job",
-			BuildID:   "build id",
-			ProwJobID: "prow job id",
-			Refs: &prowapi.Refs{
-				Org:     "org",
-				Repo:    "repo",
-				BaseRef: "base ref",
-				BaseSHA: "base sha",
-			},
-			Type: "postsubmit",
-		},
-	}
-	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, "artifact_dir", &jobSpec, nil)
 	env := []coreapi.EnvVar{
 		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
 		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
 		{Name: "LEASED_RESOURCE", Value: "uuid"},
 	}
-	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, env, false)
-	if err != nil {
-		t.Fatal(err)
+	hostnameEnvValue := "test.hostname"
+
+	testCases := []struct {
+		id      string
+		config  api.ReleaseBuildConfiguration
+		jobSpec api.JobSpec
+	}{{
+
+		id: "happy case",
+		config: api.ReleaseBuildConfiguration{
+			Tests: []api.TestStepConfiguration{
+				{
+					As: "test",
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						ClusterProfile: api.ClusterProfileAWS,
+						Test: []api.LiteralTestStep{
+							{
+								As: "step0", From: "src", Commands: "command0",
+							},
+							{
+								As:          "step1",
+								From:        "image1",
+								Commands:    "command1",
+								ArtifactDir: "/artifact/dir",
+								Environment: []api.StepParameter{
+									{
+										Name:    "TEST_HOSTNAME",
+										Default: &hostnameEnvValue,
+									},
+								},
+								HostAliases: []coreapi.HostAlias{
+									{
+										IP:        "10.0.0.1",
+										Hostnames: []string{"api.${TEST_HOSTNAME}.com", "test2"},
+									},
+									{
+										IP:        "10.0.0.2",
+										Hostnames: []string{"api.$TEST_HOSTNAME.com", "test4"},
+									},
+								},
+							},
+							{
+								As: "step2", From: "stable-initial:installer", Commands: "command2",
+							},
+						},
+					},
+				},
+			},
+		},
+		jobSpec: api.JobSpec{
+			JobSpec: prowdapi.JobSpec{
+				Job:       "job",
+				BuildID:   "build id",
+				ProwJobID: "prow job id",
+				Refs: &prowapi.Refs{
+					Org:     "org",
+					Repo:    "repo",
+					BaseRef: "base ref",
+					BaseSHA: "base sha",
+				},
+				Type: "postsubmit",
+			},
+		},
+	},
 	}
-	testhelper.CompareWithFixture(t, ret)
+
+	for _, tc := range testCases {
+		tc.jobSpec.SetNamespace("namespace")
+		step := newMultiStageTestStep(tc.config.Tests[0], &tc.config, nil, nil, "artifact_dir", &tc.jobSpec, nil)
+
+		ret, err := step.generatePods(tc.config.Tests[0].MultiStageTestConfigurationLiteral.Test, env, false)
+		if err != nil {
+			t.Fatalf("test %s failed with error: %v", tc.id, err)
+		}
+		testhelper.CompareWithFixture(t, ret)
+	}
 }
 
 func TestGeneratePodsEnvironment(t *testing.T) {
@@ -552,4 +588,60 @@ func TestAddCredentials(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestResolveHostAliases(t *testing.T) {
+	testCases := []struct {
+		id          string
+		envVars     []coreapi.EnvVar
+		hostAliases []coreapi.HostAlias
+		expected    []coreapi.HostAlias
+	}{
+		{
+			id:          "happy case, no env vars",
+			hostAliases: []coreapi.HostAlias{{IP: "10.0.0.1", Hostnames: []string{"hostname1"}}},
+			expected:    []coreapi.HostAlias{{IP: "10.0.0.1", Hostnames: []string{"hostname1"}}},
+		},
+		{
+			id: "happy case, with env vars ${var} style",
+			envVars: []coreapi.EnvVar{
+				{
+					Name:  "TEST_IP",
+					Value: "10.0.0.100",
+				},
+				{
+					Name:  "TEST_HOSTNAME",
+					Value: "test.hostname",
+				},
+			},
+			hostAliases: []coreapi.HostAlias{{IP: "${TEST_IP}", Hostnames: []string{"api.${TEST_HOSTNAME}.com"}}},
+			expected:    []coreapi.HostAlias{{IP: "10.0.0.100", Hostnames: []string{"api.test.hostname.com"}}},
+		},
+		{
+			id: "happy case, with env vars $var style",
+			envVars: []coreapi.EnvVar{
+				{
+					Name:  "TEST_IP",
+					Value: "10.0.0.100",
+				},
+				{
+					Name:  "TEST_HOSTNAME",
+					Value: "test.hostname",
+				},
+			},
+			hostAliases: []coreapi.HostAlias{{IP: "$TEST_IP", Hostnames: []string{"api.$TEST_HOSTNAME.com"}}},
+			expected:    []coreapi.HostAlias{{IP: "10.0.0.100", Hostnames: []string{"api.test.hostname.com"}}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.id, func(t *testing.T) {
+			resolveHostAliases(tc.hostAliases, tc.envVars)
+			if !reflect.DeepEqual(tc.hostAliases, tc.expected) {
+				t.Fatal(cmp.Diff(tc.hostAliases, tc.expected))
+			}
+
+		})
+	}
+
 }

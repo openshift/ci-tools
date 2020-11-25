@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -385,6 +386,19 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		pod.Spec.ServiceAccountName = s.name
 		pod.Spec.TerminationGracePeriodSeconds = step.TerminationGracePeriodSeconds
 		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{Name: homeVolumeName, VolumeSource: coreapi.VolumeSource{EmptyDir: &coreapi.EmptyDirVolumeSource{}}})
+
+		var allEnvVars []coreapi.EnvVar
+		allEnvVars = append(allEnvVars, []coreapi.EnvVar{
+			{Name: "NAMESPACE", Value: s.jobSpec.Namespace()},
+			{Name: "JOB_NAME_SAFE", Value: strings.Replace(s.name, "_", "-", -1)},
+			{Name: "JOB_NAME_HASH", Value: s.jobSpec.JobNameHash()},
+		}...)
+		allEnvVars = append(allEnvVars, env...)
+		allEnvVars = append(allEnvVars, s.generateParams(step.Environment)...)
+
+		resolveHostAliases(step.HostAliases, allEnvVars)
+		pod.Spec.HostAliases = step.HostAliases
+
 		for idx := range pod.Spec.Containers {
 			if pod.Spec.Containers[idx].Name != multiStageTestStepContainerName {
 				continue
@@ -396,13 +410,8 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			addSecretWrapper(pod)
 		}
 		container := &pod.Spec.Containers[0]
-		container.Env = append(container.Env, []coreapi.EnvVar{
-			{Name: "NAMESPACE", Value: s.jobSpec.Namespace()},
-			{Name: "JOB_NAME_SAFE", Value: strings.Replace(s.name, "_", "-", -1)},
-			{Name: "JOB_NAME_HASH", Value: s.jobSpec.JobNameHash()},
-		}...)
-		container.Env = append(container.Env, env...)
-		container.Env = append(container.Env, s.generateParams(step.Environment)...)
+		container.Env = append(container.Env, allEnvVars...)
+
 		depEnv, depErrs := s.envForDependencies(step)
 		if len(depErrs) != 0 {
 			errs = append(errs, depErrs...)
@@ -633,4 +642,22 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 		return fmt.Errorf("%q pod %q %s: %w\n%s", s.name, pod.Name, status, err, linksText.String())
 	}
 	return nil
+}
+
+func resolveHostAliases(hostAliases []coreapi.HostAlias, envs []coreapi.EnvVar) {
+	for _, envVar := range envs {
+		os.Setenv(envVar.Name, envVar.Value)
+	}
+	for i, hostAlias := range hostAliases {
+		hostAliases[i].IP = os.ExpandEnv(hostAlias.IP)
+		for j, hostname := range hostAlias.Hostnames {
+			hostAliases[i].Hostnames[j] = os.ExpandEnv(hostname)
+		}
+	}
+
+	defer func() {
+		for _, envVar := range envs {
+			os.Unsetenv(envVar.Name)
+		}
+	}()
 }

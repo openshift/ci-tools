@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/test-infra/prow/repoowners"
 )
 
@@ -645,6 +646,9 @@ type LiteralTestStep struct {
 	Cli string `json:"cli,omitempty"`
 	// Observers are the observers that should be running
 	Observers []string `json:"observers,omitempty"`
+	// HostAliases is an optional list of hosts and IPs that will be injected into the pod’s hosts file if specified.
+	// reference: https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases
+	HostAliases []corev1.HostAlias `json:"hostAliases,omitempty"`
 }
 
 // StepParameter is a variable set by the test, with an optional default.

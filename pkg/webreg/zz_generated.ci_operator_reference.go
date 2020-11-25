@@ -413,6 +413,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  # HostAliases is an optional list of hosts and IPs that will be injected into the pod’s hosts file if specified.\n" +
+	"                  # reference: https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases\n" +
+	"                  hostAliases:\n" +
+	"                    - hostnames:\n" +
+	"                        - \"\"\n" +
+	"                      ip: ' '\n" +
 	"                  # Leases lists resources that should be acquired for the test.\n" +
 	"                  leases:\n" +
 	"                    - # Env is the environment variable that will contain the resource name.\n" +
@@ -481,6 +487,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  # HostAliases is an optional list of hosts and IPs that will be injected into the pod’s hosts file if specified.\n" +
+	"                  # reference: https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases\n" +
+	"                  hostAliases:\n" +
+	"                    - hostnames:\n" +
+	"                        - \"\"\n" +
+	"                      ip: ' '\n" +
 	"                  # Leases lists resources that should be acquired for the test.\n" +
 	"                  leases:\n" +
 	"                    - # Env is the environment variable that will contain the resource name.\n" +
@@ -549,6 +561,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  # HostAliases is an optional list of hosts and IPs that will be injected into the pod’s hosts file if specified.\n" +
+	"                  # reference: https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases\n" +
+	"                  hostAliases:\n" +
+	"                    - hostnames:\n" +
+	"                        - \"\"\n" +
+	"                      ip: ' '\n" +
 	"                  # Leases lists resources that should be acquired for the test.\n" +
 	"                  leases:\n" +
 	"                    - # Env is the environment variable that will contain the resource name.\n" +
@@ -672,6 +690,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  hostAliases:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - hostnames:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        - \"\"\n" +
+	"                      ip: ' '\n" +
 	"                  leases:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
@@ -725,6 +749,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  hostAliases:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - hostnames:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        - \"\"\n" +
+	"                      ip: ' '\n" +
 	"                  leases:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
@@ -778,6 +808,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  hostAliases:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - hostnames:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        - \"\"\n" +
+	"                      ip: ' '\n" +
 	"                  leases:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
@@ -984,6 +1020,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              # HostAliases is an optional list of hosts and IPs that will be injected into the pod’s hosts file if specified.\n" +
+	"              # reference: https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases\n" +
+	"              hostAliases:\n" +
+	"                - hostnames:\n" +
+	"                    - \"\"\n" +
+	"                  ip: ' '\n" +
 	"              # Leases lists resources that should be acquired for the test.\n" +
 	"              leases:\n" +
 	"                - # Env is the environment variable that will contain the resource name.\n" +
@@ -1052,6 +1094,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              # HostAliases is an optional list of hosts and IPs that will be injected into the pod’s hosts file if specified.\n" +
+	"              # reference: https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases\n" +
+	"              hostAliases:\n" +
+	"                - hostnames:\n" +
+	"                    - \"\"\n" +
+	"                  ip: ' '\n" +
 	"              # Leases lists resources that should be acquired for the test.\n" +
 	"              leases:\n" +
 	"                - # Env is the environment variable that will contain the resource name.\n" +
@@ -1120,6 +1168,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              # HostAliases is an optional list of hosts and IPs that will be injected into the pod’s hosts file if specified.\n" +
+	"              # reference: https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases\n" +
+	"              hostAliases:\n" +
+	"                - hostnames:\n" +
+	"                    - \"\"\n" +
+	"                  ip: ' '\n" +
 	"              # Leases lists resources that should be acquired for the test.\n" +
 	"              leases:\n" +
 	"                - # Env is the environment variable that will contain the resource name.\n" +
@@ -1243,6 +1297,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              hostAliases:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - hostnames:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - \"\"\n" +
+	"                  ip: ' '\n" +
 	"              leases:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
@@ -1296,6 +1356,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              hostAliases:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - hostnames:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - \"\"\n" +
+	"                  ip: ' '\n" +
 	"              leases:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
@@ -1349,6 +1415,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              hostAliases:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - hostnames:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - \"\"\n" +
+	"                  ip: ' '\n" +
 	"              leases:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +

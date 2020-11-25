@@ -26,6 +26,11 @@ const (
 	openshiftCIEnv = "OPENSHIFT_CI"
 )
 
+// when we're cleaning up, we need a context to use for client calls, but we cannot
+// use the normal context we have in steps, as that may be cancelled (and that would
+// be why we're cleaning up in the first place).
+var cleanupCtx = context.Background()
+
 // PodStepConfiguration allows other steps to reuse the pod launching and monitoring
 // behavior without reimplementing function. It also enforces conventions like naming,
 // directory structure, and input image format. More sophisticated reuse of launching
@@ -100,7 +105,7 @@ func (s *podStep) run(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 		log.Printf("cleanup: Deleting %s pod %s", s.name, s.config.As)
-		if err := s.client.Delete(ctx, &coreapi.Pod{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.config.As}}); err != nil && !errors.IsNotFound(err) {
+		if err := s.client.Delete(cleanupCtx, &coreapi.Pod{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.config.As}}); err != nil && !errors.IsNotFound(err) {
 			log.Printf("error: Could not delete %s pod: %v", s.name, err)
 		}
 	}()

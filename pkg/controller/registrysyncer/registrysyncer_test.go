@@ -10,7 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -80,7 +80,7 @@ func TestPublicDomainForImage(t *testing.T) {
 }
 
 func TestFindNewest(t *testing.T) {
-	now := time.Now()
+	now := metav1.Now()
 	testCases := []struct {
 		name     string
 		isTags   map[string]*imagev1.ImageStreamTag
@@ -99,7 +99,7 @@ func TestFindNewest(t *testing.T) {
 				"cluster1": {
 					Image: imagev1.Image{
 						ObjectMeta: metav1.ObjectMeta{
-							CreationTimestamp: metav1.NewTime(now),
+							CreationTimestamp: now,
 						},
 					},
 				},
@@ -112,7 +112,7 @@ func TestFindNewest(t *testing.T) {
 				"cluster1": {
 					Image: imagev1.Image{
 						ObjectMeta: metav1.ObjectMeta{
-							CreationTimestamp: metav1.NewTime(now),
+							CreationTimestamp: now,
 						},
 					},
 				},
@@ -132,7 +132,7 @@ func TestFindNewest(t *testing.T) {
 				"cluster1": {
 					Image: imagev1.Image{
 						ObjectMeta: metav1.ObjectMeta{
-							CreationTimestamp: metav1.NewTime(now),
+							CreationTimestamp: now,
 						},
 					},
 				},
@@ -181,6 +181,9 @@ func TestReconcile(t *testing.T) {
 		return []byte("some-secret")
 	}
 
+	now := metav1.Now()
+	threeMinLater := metav1.NewTime(now.Add(3 * time.Minute))
+
 	applyconfigISTag := &imagev1.ImageStreamTag{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "ci",
@@ -189,7 +192,7 @@ func TestReconcile(t *testing.T) {
 		Image: imagev1.Image{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:              "sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
-				CreationTimestamp: metav1.Now(),
+				CreationTimestamp: now,
 			},
 			DockerImageReference: "docker-registry.default.svc:5000/ci/applyconfig@sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
 		},
@@ -203,7 +206,7 @@ func TestReconcile(t *testing.T) {
 		Image: imagev1.Image{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:              "sha256:new",
-				CreationTimestamp: metav1.NewTime(metav1.Now().Add(3 * time.Minute)),
+				CreationTimestamp: threeMinLater,
 			},
 			DockerImageReference: "image-registry.openshift-image-registry.svc:5000/ci/applyconfig@sha256:new",
 		},
@@ -217,7 +220,7 @@ func TestReconcile(t *testing.T) {
 		Image: imagev1.Image{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:              "sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
-				CreationTimestamp: metav1.NewTime(metav1.Now().Add(3 * time.Minute)),
+				CreationTimestamp: threeMinLater,
 			},
 			DockerImageReference: "image-registry.openshift-image-registry.svc:5000/ci/applyconfig@sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
 		},
@@ -231,6 +234,19 @@ func TestReconcile(t *testing.T) {
 				"release.openshift.io-something": "copied",
 				"something":                      "not-copied",
 			},
+		},
+	}
+
+	applyconfigISDeleted := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ci",
+			Name:      "applyconfig",
+			Annotations: map[string]string{
+				"release.openshift.io-something": "copied",
+				"something":                      "not-copied",
+			},
+			Finalizers:        []string{"registry_syncer"},
+			DeletionTimestamp: &now,
 		},
 	}
 
@@ -306,10 +322,34 @@ func TestReconcile(t *testing.T) {
 				}
 
 				actualImageStream := &imagev1.ImageStream{}
-				if err := appCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); err != nil {
+				if err := apiCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); err != nil {
 					return err
 				}
 				expectedImageStream := &imagev1.ImageStream{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "ImageStream",
+						APIVersion: "image.openshift.io/v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:       "ci",
+						Name:            "applyconfig",
+						ResourceVersion: "1",
+						Annotations: map[string]string{
+							"release.openshift.io-something": "copied",
+							"something":                      "not-copied",
+						},
+						Finalizers: []string{"registry_syncer"},
+					},
+				}
+				if diff := cmp.Diff(expectedImageStream, actualImageStream); diff != "" {
+					return fmt.Errorf("actual does not match expected, diff: %s", diff)
+				}
+
+				actualImageStream = &imagev1.ImageStream{}
+				if err := appCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); err != nil {
+					return err
+				}
+				expectedImageStream = &imagev1.ImageStream{
 					TypeMeta: metav1.TypeMeta{
 						Kind:       "ImageStream",
 						APIVersion: "image.openshift.io/v1",
@@ -416,7 +456,7 @@ func TestReconcile(t *testing.T) {
 					// if imagev1.ImageStreamImportList is available
 					actualImageStreamImport := &imagev1.ImageStreamImport{}
 					err := client.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStreamImport)
-					if !errors.IsNotFound(err) {
+					if !apierrors.IsNotFound(err) {
 						return fmt.Errorf("unexpected import on %s", clusterName)
 					}
 				}
@@ -433,6 +473,56 @@ func TestReconcile(t *testing.T) {
 			appCIClient: bcc(fakeclient.NewFakeClient(), func(c *imageImportStatusSettingClient) { c.failure = true }),
 			expected: fmt.Errorf("failed to create and check the status for imageStreamImport for tag latest of applyconfig in namespace ci on cluster app.ci: %w",
 				fmt.Errorf("imageStreamImport did not succeed: reason: , message: failing as requested")),
+		},
+		{
+			name: "IS on api.ci is deleted",
+			request: types.NamespacedName{
+				Name:      "applyconfig:latest",
+				Namespace: "ci",
+			},
+			apiCIClient: fakeclient.NewFakeClient(applyconfigISTagNewer.DeepCopy(), applyconfigISDeleted.DeepCopy()),
+			appCIClient: fakeclient.NewFakeClient(applyconfigISTag.DeepCopy(), applyconfigIS.DeepCopy()),
+
+			verify: func(apiCIClient ctrlruntimeclient.Client, appCIClient ctrlruntimeclient.Client) error {
+				actualImageStreamImport := &imagev1.ImageStreamImport{}
+				if err := appCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStreamImport); !apierrors.IsNotFound(err) {
+					t.Errorf("expected NotFound error did not occur and the actual error is: %v", err)
+				}
+
+				actualImageStream := &imagev1.ImageStream{}
+				if err := apiCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); err != nil {
+					return err
+				}
+				expectedImageStream := &imagev1.ImageStream{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "ImageStream",
+						APIVersion: "image.openshift.io/v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ci",
+						Name:      "applyconfig",
+						Annotations: map[string]string{
+							"release.openshift.io-something": "copied",
+							"something":                      "not-copied",
+						},
+						DeletionTimestamp: &now,
+						ResourceVersion:   "1",
+					},
+				}
+				if actualImageStream.DeletionTimestamp == nil {
+					t.Errorf("actualImageStream.DeletionTimestamp is nil")
+				}
+				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
+				expectedImageStream.DeletionTimestamp = actualImageStream.DeletionTimestamp
+				if diff := cmp.Diff(expectedImageStream, actualImageStream); diff != "" {
+					return fmt.Errorf("actual does not match expected, diff: %s", diff)
+				}
+				actualImageStream = &imagev1.ImageStream{}
+				if err := appCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); !apierrors.IsNotFound(err) {
+					t.Errorf("expected NotFound error did not occur and the actual error is: %v", err)
+				}
+				return nil
+			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -741,6 +831,121 @@ func TestDockerImageImportedFromTargetingCluster(t *testing.T) {
 			actual := dockerImageImportedFromTargetingCluster(tc.cluster, tc.imageStreamTag)
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("actual does not match expected, diff: %s", diff)
+			}
+		})
+	}
+}
+
+func TestEnsureRemoveFinalizer(t *testing.T) {
+	imageStream := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ci",
+			Name:      "applyconfig",
+			Annotations: map[string]string{
+				"release.openshift.io-something": "copied",
+				"something":                      "not-copied",
+			},
+			Finalizers:      []string{"registry_syncer", "some"},
+			ResourceVersion: "1",
+		},
+	}
+
+	imageStreamWithoutFinalizer := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ci",
+			Name:      "applyconfig",
+			Annotations: map[string]string{
+				"release.openshift.io-something": "copied",
+				"something":                      "not-copied",
+			},
+			ResourceVersion: "1",
+		},
+	}
+
+	testCases := []struct {
+		name        string
+		imageStream *imagev1.ImageStream
+		Client      ctrlruntimeclient.Client
+		expected    error
+		verify      func(client ctrlruntimeclient.Client) error
+	}{
+		{
+			name:        "basic case",
+			imageStream: imageStream,
+			Client:      fakeclient.NewFakeClient(imageStream.DeepCopy()),
+			verify: func(client ctrlruntimeclient.Client) error {
+				actualImageStream := &imagev1.ImageStream{}
+				if err := client.Get(context.TODO(), types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); err != nil {
+					return err
+				}
+				expectedImageStream := &imagev1.ImageStream{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "ImageStream",
+						APIVersion: "image.openshift.io/v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ci",
+						Name:      "applyconfig",
+						//fakeclient actually changes ResourceVersion
+						ResourceVersion: "2",
+						Annotations: map[string]string{
+							"release.openshift.io-something": "copied",
+							"something":                      "not-copied",
+						},
+						Finalizers: []string{"some"},
+					},
+				}
+				if diff := cmp.Diff(expectedImageStream, actualImageStream); diff != "" {
+					return fmt.Errorf("actual does not match expected, diff: %s", diff)
+				}
+				return nil
+			},
+		},
+		{
+			name:        "no patch without finalizer",
+			imageStream: imageStream,
+			Client:      fakeclient.NewFakeClient(imageStreamWithoutFinalizer.DeepCopy()),
+			verify: func(client ctrlruntimeclient.Client) error {
+				actualImageStream := &imagev1.ImageStream{}
+				if err := client.Get(context.TODO(), types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); err != nil {
+					return err
+				}
+				expectedImageStream := &imagev1.ImageStream{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "ImageStream",
+						APIVersion: "image.openshift.io/v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:       "ci",
+						Name:            "applyconfig",
+						ResourceVersion: "1",
+						Annotations: map[string]string{
+							"release.openshift.io-something": "copied",
+							"something":                      "not-copied",
+						},
+					},
+				}
+				if diff := cmp.Diff(expectedImageStream, actualImageStream); diff != "" {
+					return fmt.Errorf("actual does not match expected, diff: %s", diff)
+				}
+				return nil
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := ensureRemoveFinalizer(context.TODO(), tc.imageStream, tc.Client)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("actual does not match expected, diff: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("actual does not match expected, diff: %s", diff)
+			}
+			if actual == nil && tc.verify != nil {
+				if err := tc.verify(tc.Client); err != nil {
+					t.Errorf("unexpcected error: %v", err)
+				}
 			}
 		})
 	}

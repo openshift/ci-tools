@@ -197,7 +197,7 @@ func waitForContainer(podClient PodClient, ns, name, containerName string) error
 		"container": containerName,
 	}).Trace("Waiting for container to be running.")
 
-	return wait.PollImmediate(time.Second, 30*timeSecond, func() (bool, error) {
+	return wait.PollImmediate(time.Second, 300*timeSecond, func() (bool, error) {
 		pod := &coreapi.Pod{}
 		if err := podClient.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, pod); err != nil {
 			logrus.WithError(err).Errorf("Waiting for container %s in pod %s in namespace %s", containerName, name, ns)

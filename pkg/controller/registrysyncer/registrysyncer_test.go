@@ -245,7 +245,7 @@ func TestReconcile(t *testing.T) {
 				"release.openshift.io-something": "copied",
 				"something":                      "not-copied",
 			},
-			Finalizers:        []string{"registry_syncer"},
+			Finalizers:        []string{"dptp.openshift.io/registry-syncer"},
 			DeletionTimestamp: &now,
 		},
 	}
@@ -338,7 +338,7 @@ func TestReconcile(t *testing.T) {
 							"release.openshift.io-something": "copied",
 							"something":                      "not-copied",
 						},
-						Finalizers: []string{"registry_syncer"},
+						Finalizers: []string{"dptp.openshift.io/registry-syncer"},
 					},
 				}
 				if diff := cmp.Diff(expectedImageStream, actualImageStream); diff != "" {
@@ -845,7 +845,7 @@ func TestEnsureRemoveFinalizer(t *testing.T) {
 				"release.openshift.io-something": "copied",
 				"something":                      "not-copied",
 			},
-			Finalizers:      []string{"registry_syncer", "some"},
+			Finalizers:      []string{"dptp.openshift.io/registry-syncer", "some"},
 			ResourceVersion: "1",
 		},
 	}

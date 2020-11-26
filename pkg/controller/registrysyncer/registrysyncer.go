@@ -122,6 +122,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 const (
 	annotationDPTPRequester = "dptp.openshift.io/requester"
+	finalizerName           = "dptp.openshift.io/registry-syncer"
 )
 
 func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *logrus.Entry) error {
@@ -261,7 +262,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 
 func finalizeIfNeeded(ctx context.Context, stream *imagev1.ImageStream, srcClusterName string, clients map[string]ctrlruntimeclient.Client) error {
 	finalizerSet := sets.NewString(stream.Finalizers...)
-	if !finalizerSet.Has(ControllerName) {
+	if !finalizerSet.Has(finalizerName) {
 		return nil
 	}
 	for clusterName, client := range clients {
@@ -293,20 +294,20 @@ func finalizeIfNeeded(ctx context.Context, stream *imagev1.ImageStream, srcClust
 
 func ensureRemoveFinalizer(ctx context.Context, stream *imagev1.ImageStream, client ctrlruntimeclient.Client) error {
 	finalizerSet := sets.NewString(stream.Finalizers...)
-	if !finalizerSet.Has(ControllerName) {
+	if !finalizerSet.Has(finalizerName) {
 		return nil
 	}
 	originalStream := stream.DeepCopy()
-	stream.Finalizers = finalizerSet.Delete(ControllerName).List()
+	stream.Finalizers = finalizerSet.Delete(finalizerName).List()
 	// Use Patch instead of Update to avoid conflicting
 	return client.Patch(ctx, stream, ctrlruntimeclient.MergeFrom(originalStream))
 }
 
 func ensureFinalizer(ctx context.Context, stream *imagev1.ImageStream, client ctrlruntimeclient.Client) error {
-	if sets.NewString(stream.Finalizers...).Has(ControllerName) {
+	if sets.NewString(stream.Finalizers...).Has(finalizerName) {
 		return nil
 	}
-	stream.Finalizers = append(stream.Finalizers, ControllerName)
+	stream.Finalizers = append(stream.Finalizers, finalizerName)
 	return client.Update(ctx, stream)
 }
 

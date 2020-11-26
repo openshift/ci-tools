@@ -222,14 +222,15 @@ func uploadKubeconfig(ctx context.Context, client coreclientset.SecretInterface,
 		// kubeconfig already exists, no need to do anything
 		return
 	}
+	var uploadErr error
 	if err := wait.PollUntil(time.Second, func() (done bool, err error) {
-		if _, err := os.Stat(path.Join(dir, "kubeconfig")); err != nil {
+		if _, uploadErr = os.Stat(path.Join(dir, "kubeconfig")); uploadErr != nil {
 			return false, nil
 		}
 		// kubeconfig exists, we can upload it
-		uploadErr := createSecret(client, name, dir, dry)
+		uploadErr = createSecret(client, name, dir, dry)
 		return uploadErr == nil, nil // retry errors
 	}, ctx.Done()); err != nil {
-		log.Printf("Failed to upload $KUBECONFIG: %v\n", err)
+		log.Printf("Failed to upload $KUBECONFIG: %v: %v\n", err, uploadErr)
 	}
 }

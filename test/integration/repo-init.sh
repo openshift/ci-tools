@@ -76,6 +76,28 @@ inputs=(
 )
 export inputs
 os::cmd::expect_success 'for input in "${inputs[@]}"; do echo "${input}"; done | repo-init -release-repo "${actual}"'
+
+# this test case will use a custom release
+inputs=(
+              "org" # Enter the organization for the repository: org
+            "third" # Enter the repository to initialize: repo
+      "nonstandard" # Enter the development branch for the repository: [default: master]
+               "no" # Does the repository build and promote container images?  [default: no] yes
+             "1.15" # What version of Go does the repository build with? [default: 1.12]
+      "k8s.io/cool" # Enter the Go import path for the repository if it uses a vanity URL (e.g. "k8s.io/my-repo"):
+                 "" # What commands are used to build binaries in the repository? (e.g. "go install ./cmd/...") make install
+                 "" # What commands, if any, are used to build test binaries? (e.g. "go install -race ./cmd/..." or "go test -c ./test/...") make test-install
+               "no" # Are there any test scripts to configure?  [default: no] yes
+              "yes" # Are there any end-to-end test scripts to configure?  [default: no] yes
+              "e2e" # What is the name of this test (e.g. "e2e-operator")?  e2e
+                 "" # Which specific cloud provider does the test require, if any?  [default: aws]
+              "e2e" # What commands in the repository run the test (e.g. "make test-e2e")?  make test-e2e
+               "no" # Are there any more end-to-end test scripts to configure?  [default: no] no
+          "nightly" # What type of OpenShift release do the end-to-end tests run on top of? [nightly, published]
+              "4.4" # Which OpenShift version is being tested? [default: 4.6]
+)
+export inputs
+os::cmd::expect_success 'for input in "${inputs[@]}"; do echo "${input}"; done | repo-init -release-repo "${actual}"'
 os::cmd::expect_success 'ci-operator-prowgen --from-dir "${actual}/ci-operator/config" --to-dir "${actual}/ci-operator/jobs"'
 os::cmd::expect_success 'sanitize-prow-jobs --prow-jobs-dir "${actual}/ci-operator/jobs" --config-path "${actual}/core-services/sanitize-prow-jobs/_config.yaml"'
 os::cmd::expect_success 'determinize-ci-operator --config-dir "${actual}/ci-operator/config" --confirm'

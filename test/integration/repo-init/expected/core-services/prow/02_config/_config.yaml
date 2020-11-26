@@ -88,5 +88,6 @@ tide:
     - openshift/origin
     - org/repo
     - org/other
+    - org/third
   status_update_period: 1m0s
   sync_period: 1m0s

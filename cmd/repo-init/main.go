@@ -65,6 +65,8 @@ type initConfig struct {
 	TestBuildCommands     string    `json:"test_build_commands"`
 	Tests                 []test    `json:"tests"`
 	CustomE2E             []e2eTest `json:"custom_e2e"`
+	ReleaseType           string    `json:"release_type"`
+	ReleaseVersion        string    `json:"release_version"`
 }
 
 type test struct {
@@ -223,6 +225,22 @@ No cluster profile named %s exists. Please choose one from: %v.\n`, test.Profile
 			e2eTests = append(e2eTests, test)
 		}
 		config.CustomE2E = e2eTests
+		if len(config.CustomE2E) > 0 && !config.Promotes {
+			valid := sets.NewString("nightly", "published")
+			validFormatted := strings.Join(valid.List(), ", ")
+			releaseType := fetchWithPrompt(fmt.Sprintf("What type of OpenShift release do the end-to-end tests run on top of? [%s]", validFormatted))
+			for {
+				if !valid.Has(releaseType) {
+					fmt.Printf(`
+Unexpected release type %q. Please choose one from: [%v].\n`, releaseType, validFormatted)
+					releaseType = fetchWithPrompt(fmt.Sprintf("What type of OpenShift release do the end-to-end tests run on top of? [%s]", validFormatted))
+				} else {
+					break
+				}
+			}
+			config.ReleaseType = releaseType
+			config.ReleaseVersion = fetchOrDefaultWithPrompt("Which OpenShift version is being tested? ", "4.6")
+		}
 	}
 
 	marshalled, err := json.Marshal(&config)
@@ -373,7 +391,7 @@ No additional "tide" queries will be added.
 	switch {
 	case config.Promotes && config.PromotesWithOpenShift:
 		copyCatQueries = queries.ForRepo(prowconfig.OrgRepo{Org: "openshift", Repo: "origin"})
-	case config.Promotes && !config.PromotesWithOpenShift:
+	case !config.PromotesWithOpenShift:
 		copyCatQueries = queries.ForRepo(prowconfig.OrgRepo{Org: "openshift", Repo: "ci-tools"})
 	}
 
@@ -561,6 +579,26 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 				},
 			},
 		})
+	}
+
+	if config.ReleaseType != "" {
+		release := api.UnresolvedRelease{}
+		switch config.ReleaseType {
+		case "nightly":
+			release.Candidate = &api.Candidate{
+				Product:      api.ReleaseProductOCP,
+				Architecture: api.ReleaseArchitectureAMD64,
+				Stream:       api.ReleaseStreamNightly,
+				Version:      config.ReleaseVersion,
+			}
+		case "published":
+			release.Release = &api.Release{
+				Architecture: api.ReleaseArchitectureAMD64,
+				Channel:      api.ReleaseChannelStable,
+				Version:      config.ReleaseVersion,
+			}
+		}
+		generated.Configuration.Releases = map[string]api.UnresolvedRelease{api.LatestReleaseName: release}
 	}
 	return generated
 }

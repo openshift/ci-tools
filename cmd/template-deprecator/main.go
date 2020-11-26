@@ -4,11 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/kataras/tablewriter"
 	"github.com/sirupsen/logrus"
 
 	prowconfig "k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/flagutil"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 
 	"github.com/openshift/ci-tools/pkg/deprecatetemplates"
@@ -22,6 +24,7 @@ type options struct {
 	prune                bool
 	printStats           bool
 	hideTotals           bool
+	blockNewJobs         flagutil.Strings
 
 	help bool
 }
@@ -33,6 +36,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.StringVar(&opt.prowConfigPath, "prow-config-path", "", "Path to the Prow configuration file")
 	fs.StringVar(&opt.prowPluginConfigPath, "prow-plugin-config-path", "", "Path to the Prow plugin configuration file")
 	fs.StringVar(&opt.allowlistPath, "allowlist-path", "", "Path to template deprecation allowlist")
+	fs.Var(&opt.blockNewJobs, "block-new-jobs", "If set, new jobs will be added to this blocker instead of to the 'unknown blocker' list. Can be set multiple times and can have either JIRA or JIRA:description form")
 	fs.BoolVar(&opt.prune, "prune", false, "If set, remove from allowlist all jobs that either no longer exist or no longer use a template")
 	fs.BoolVar(&opt.printStats, "stats", false, "If true, print template usage stats")
 	fs.BoolVar(&opt.hideTotals, "hide-totals", false, "If true, hide totals in template usage stats")
@@ -79,7 +83,20 @@ func main() {
 		logrus.WithError(err).Fatal("failed to load Prow configuration")
 	}
 
-	enforcer, err := deprecatetemplates.NewEnforcer(opt.allowlistPath)
+	newJobBlockers := deprecatetemplates.JiraHints{}
+	for _, value := range opt.blockNewJobs.Strings() {
+		jira := strings.SplitN(value, ":", 2)
+		switch len(jira) {
+		case 1:
+			newJobBlockers[jira[0]] = ""
+		case 2:
+			newJobBlockers[jira[0]] = jira[1]
+		default:
+			logrus.WithError(err).Fatal("invalid --block-new-jobs value")
+		}
+	}
+
+	enforcer, err := deprecatetemplates.NewEnforcer(opt.allowlistPath, newJobBlockers)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize template deprecator")
 	}

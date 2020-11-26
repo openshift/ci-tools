@@ -87,7 +87,7 @@ type deprecatedTemplate struct {
 	Blockers       map[string]deprecatedTemplateBlocker `json:"blockers,omitempty"`
 }
 
-func (d *deprecatedTemplate) insert(job config.JobBase) {
+func (d *deprecatedTemplate) insert(job config.JobBase, defaultBlockers JiraHints) {
 	var knownBlocker bool
 	for _, blocker := range d.Blockers {
 		if blocker.Jobs.Has(job) {
@@ -98,6 +98,22 @@ func (d *deprecatedTemplate) insert(job config.JobBase) {
 		}
 	}
 	if knownBlocker {
+		return
+	}
+
+	if len(defaultBlockers) > 0 && (d.UnknownBlocker == nil || d.UnknownBlocker.Jobs == nil || !d.UnknownBlocker.Jobs.Has(job)) {
+		if d.Blockers == nil {
+			d.Blockers = map[string]deprecatedTemplateBlocker{}
+		}
+		for key, description := range defaultBlockers {
+			if _, ok := d.Blockers[key]; !ok {
+				d.Blockers[key] = deprecatedTemplateBlocker{
+					Description: description,
+					Jobs:        blockedJobs{},
+				}
+			}
+			d.Blockers[key].Jobs.Insert(job)
+		}
 		return
 	}
 
@@ -210,10 +226,19 @@ type Allowlist interface {
 	Save(path string) error
 	Prune()
 	GetTemplates() map[string]*deprecatedTemplate
+	SetNewJobBlockers(blockers JiraHints)
 }
 
+// JiraHints maps JIRA-1234 to (possibly empty) descriptions
+type JiraHints map[string]string
+
 type allowlist struct {
-	Templates map[string]*deprecatedTemplate `json:"templates"`
+	Templates      map[string]*deprecatedTemplate `json:"templates"`
+	newJobBlockers JiraHints
+}
+
+func (a *allowlist) SetNewJobBlockers(blockers JiraHints) {
+	a.newJobBlockers = blockers
 }
 
 func (a *allowlist) Prune() {
@@ -237,7 +262,7 @@ func (a *allowlist) Insert(job config.JobBase, template string) {
 		}
 	}
 
-	a.Templates[template].insert(job)
+	a.Templates[template].insert(job, a.newJobBlockers)
 }
 
 func loadAllowlist(allowlistPath string) (Allowlist, error) {

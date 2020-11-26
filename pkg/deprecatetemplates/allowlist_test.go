@@ -122,16 +122,40 @@ func TestDeprecatedTemplateInsert(t *testing.T) {
 
 	testCases := []struct {
 		description string
+		blockers    JiraHints
 		existingDT  deprecatedTemplate
 		expectedDT  deprecatedTemplate
 	}{
 		{
-			description: "new job is added to unknown blockers",
+			description: "new job is added to unknown blockers by default",
 			existingDT: deprecatedTemplate{
 				UnknownBlocker: &deprecatedTemplateBlocker{Jobs: blockedJobs{}},
 			},
 			expectedDT: deprecatedTemplate{
 				UnknownBlocker: &deprecatedTemplateBlocker{Jobs: blockedJobs{job: blockedJob{Generated: false, Kind: "unknown", current: true}}},
+			},
+		},
+		{
+			description: "new job is added to specified blockers if set",
+			blockers: JiraHints{
+				"HERE": "serious blocker",
+				"YADA": "ya does not correctly da",
+			},
+			existingDT: deprecatedTemplate{
+				UnknownBlocker: &deprecatedTemplateBlocker{Jobs: blockedJobs{}},
+			},
+			expectedDT: deprecatedTemplate{
+				UnknownBlocker: &deprecatedTemplateBlocker{Jobs: blockedJobs{}},
+				Blockers: map[string]deprecatedTemplateBlocker{
+					"HERE": {
+						Description: "serious blocker",
+						Jobs:        blockedJobs{job: blockedJob{Generated: false, Kind: "unknown", current: true}},
+					},
+					"YADA": {
+						Description: "ya does not correctly da",
+						Jobs:        blockedJobs{job: blockedJob{Generated: false, Kind: "unknown", current: true}},
+					},
+				},
 			},
 		},
 		{
@@ -173,7 +197,7 @@ func TestDeprecatedTemplateInsert(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			tc.existingDT.insert(config.JobBase{Name: job})
+			tc.existingDT.insert(config.JobBase{Name: job}, tc.blockers)
 			if diff := cmp.Diff(tc.existingDT, tc.expectedDT, cmp.AllowUnexported(blockedJob{})); diff != "" {
 				t.Errorf("%s: deprecated template record differs from expected:\n%s", tc.description, diff)
 			}

@@ -68,6 +68,10 @@ func (m *mockAllowlist) Prune() {
 	panic("this should never be called")
 }
 
+func (m *mockAllowlist) SetNewJobBlockers(_ JiraHints) {
+	panic("this should never be called")
+}
+
 func (m *mockAllowlist) GetTemplates() map[string]*deprecatedTemplate {
 	return m.getTemplates
 }

@@ -117,6 +117,7 @@ func runStep(ctx context.Context, node *api.StepNode, out chan<- message) {
 	}
 	duration := time.Since(start)
 	failed := err != nil
+	finishedAt := start.Add(duration)
 
 	out <- message{
 		node:            node,
@@ -127,7 +128,7 @@ func runStep(ctx context.Context, node *api.StepNode, out chan<- message) {
 			StepName:    node.Step.Name(),
 			Description: node.Step.Description(),
 			StartedAt:   &start,
-			FinishedAt:  func() *time.Time { start.Add(duration); return &start }(),
+			FinishedAt:  &finishedAt,
 			Duration:    &duration,
 			Manifests:   node.Step.Objects(),
 			Failed:      &failed,

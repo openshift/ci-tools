@@ -26,6 +26,9 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
+// the multiStageTestStep implements the subStepReporter interface
+var _ SubStepReporter = &multiStageTestStep{}
+
 func TestRequires(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

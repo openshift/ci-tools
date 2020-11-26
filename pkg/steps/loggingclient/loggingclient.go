@@ -15,6 +15,9 @@ type LoggingClient interface {
 	// Object contains the latest revision of each object the client has
 	// seen. Calling this will reset the cache.
 	Objects() []ctrlruntimeclient.Object
+	// New returns a new instance of a LoggingClient whose objects will
+	// not be logged in the parent.
+	New() LoggingClient
 }
 
 func New(upstream ctrlruntimeclient.Client) LoggingClient {
@@ -113,6 +116,10 @@ func (lc *loggingClient) Objects() []ctrlruntimeclient.Object {
 
 	lc.logTo = map[string]map[string]ctrlruntimeclient.Object{}
 	return result
+}
+
+func (lc *loggingClient) New() LoggingClient {
+	return New(lc.upstream)
 }
 
 func (lc *loggingClient) Status() ctrlruntimeclient.StatusWriter {

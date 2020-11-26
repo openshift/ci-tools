@@ -16,10 +16,10 @@ type message struct {
 	duration        time.Duration
 	err             error
 	additionalTests []*junit.TestCase
-	stepDetails     api.CIOperatorStepWithDependencies
+	stepDetails     api.CIOperatorStepDetails
 }
 
-func Run(ctx context.Context, graph []*api.StepNode) (*junit.TestSuites, []api.CIOperatorStepWithDependencies, []error) {
+func Run(ctx context.Context, graph []*api.StepNode) (*junit.TestSuites, []api.CIOperatorStepDetails, []error) {
 	var seen []api.StepLink
 	executionResults := make(chan message)
 	done := make(chan bool)
@@ -44,7 +44,7 @@ func Run(ctx context.Context, graph []*api.StepNode) (*junit.TestSuites, []api.C
 	}
 	suite := suites.Suites[0]
 	var executionErrors []error
-	var stepDetails []api.CIOperatorStepWithDependencies
+	var stepDetails []api.CIOperatorStepDetails
 	for {
 		select {
 		case <-ctxDone:
@@ -108,6 +108,12 @@ type subtestReporter interface {
 	SubTests() []*junit.TestCase
 }
 
+// substepReport allows steps to report substeps.
+// TODO: Should this be merged with the subtestReporter?
+type SubStepReporter interface {
+	SubSteps() []api.CIOperatorStepDetailInfo
+}
+
 func runStep(ctx context.Context, node *api.StepNode, out chan<- message) {
 	start := time.Now()
 	err := node.Step.Run(ctx)
@@ -119,19 +125,27 @@ func runStep(ctx context.Context, node *api.StepNode, out chan<- message) {
 	failed := err != nil
 	finishedAt := start.Add(duration)
 
+	var subSteps []api.CIOperatorStepDetailInfo
+	if x, ok := node.Step.(SubStepReporter); ok {
+		subSteps = x.SubSteps()
+	}
+
 	out <- message{
 		node:            node,
 		duration:        duration,
 		err:             err,
 		additionalTests: additionalTests,
-		stepDetails: api.CIOperatorStepWithDependencies{
-			StepName:    node.Step.Name(),
-			Description: node.Step.Description(),
-			StartedAt:   &start,
-			FinishedAt:  &finishedAt,
-			Duration:    &duration,
-			Manifests:   node.Step.Objects(),
-			Failed:      &failed,
+		stepDetails: api.CIOperatorStepDetails{
+			CIOperatorStepDetailInfo: api.CIOperatorStepDetailInfo{
+				StepName:    node.Step.Name(),
+				Description: node.Step.Description(),
+				StartedAt:   &start,
+				FinishedAt:  &finishedAt,
+				Duration:    &duration,
+				Manifests:   node.Step.Objects(),
+				Failed:      &failed,
+			},
+			Substeps: subSteps,
 		},
 	}
 }

@@ -159,8 +159,23 @@ func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
 	return tests
 }
 
+type PodClient interface {
+	loggingclient.LoggingClient
+	// WithNewLoggingClient returns a new instance of the PodClient that resets
+	// its LoggingClient.
+	WithNewLoggingClient() PodClient
+	Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error)
+	GetLogs(namespace, name string, opts *coreapi.PodLogOptions) *rest.Request
+}
+
 func NewPodClient(ctrlclient loggingclient.LoggingClient, config *rest.Config, client rest.Interface) PodClient {
 	return &podClient{LoggingClient: ctrlclient, config: config, client: client}
+}
+
+type podClient struct {
+	loggingclient.LoggingClient
+	config *rest.Config
+	client rest.Interface
 }
 
 func (c podClient) Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
@@ -176,16 +191,12 @@ func (c podClient) GetLogs(namespace, name string, opts *coreapi.PodLogOptions) 
 	return c.client.Get().Namespace(namespace).Name(name).Resource("pods").SubResource("log").VersionedParams(opts, scheme.ParameterCodec)
 }
 
-type PodClient interface {
-	loggingclient.LoggingClient
-	Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error)
-	GetLogs(namespace, name string, opts *coreapi.PodLogOptions) *rest.Request
-}
-
-type podClient struct {
-	loggingclient.LoggingClient
-	config *rest.Config
-	client rest.Interface
+func (c podClient) WithNewLoggingClient() PodClient {
+	return podClient{
+		LoggingClient: c.New(),
+		config:        c.config,
+		client:        c.client,
+	}
 }
 
 // Allow tests to accelerate time

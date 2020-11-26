@@ -6,12 +6,14 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
+	"time"
 
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -62,6 +64,7 @@ type multiStageTestStep struct {
 	jobSpec            *api.JobSpec
 	pre, test, post    []api.LiteralTestStep
 	subTests           []*junit.TestCase
+	subSteps           []api.CIOperatorStepDetailInfo
 	allowSkipOnSuccess *bool
 	leases             []api.StepLease
 }
@@ -154,6 +157,10 @@ func (s *multiStageTestStep) Description() string {
 }
 func (s *multiStageTestStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
+}
+
+func (s *multiStageTestStep) SubSteps() []api.CIOperatorStepDetailInfo {
+	return s.subSteps
 }
 
 func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
@@ -611,13 +618,26 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 }
 
 func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *TestCaseNotifier) error {
-	if _, err := createOrRestartPod(s.client, pod); err != nil {
+	start := time.Now()
+	client := s.client.WithNewLoggingClient()
+	if _, err := createOrRestartPod(client, pod); err != nil {
 		return fmt.Errorf("failed to create or restart %q pod: %w", pod.Name, err)
 	}
-	newPod, err := waitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, notifier, false)
+	newPod, err := waitForPodCompletion(ctx, client, pod.Namespace, pod.Name, notifier, false)
 	if newPod != nil {
 		pod = newPod
 	}
+	finished := time.Now()
+	duration := finished.Sub(start)
+	s.subSteps = append(s.subSteps, api.CIOperatorStepDetailInfo{
+		StepName:    pod.Name,
+		Description: fmt.Sprintf("Run pod %s", pod.Name),
+		StartedAt:   &start,
+		FinishedAt:  &finished,
+		Duration:    &duration,
+		Failed:      utilpointer.BoolPtr(err != nil),
+		Manifests:   client.Objects(),
+	})
 	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)
 	if err != nil {
 		linksText := strings.Builder{}

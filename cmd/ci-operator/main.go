@@ -680,19 +680,27 @@ func (o *options) Run() []error {
 
 // runStep mostly duplicates steps.runStep. The latter uses an *api.StepNode though and we only have an api.Step for the PostSteps
 // so we can not re-use it.
-func runStep(ctx context.Context, step api.Step) (api.CIOperatorStepWithDependencies, error) {
+func runStep(ctx context.Context, step api.Step) (api.CIOperatorStepDetails, error) {
 	start := time.Now()
 	err := step.Run(ctx)
 	duration := time.Since(start)
 	failed := err != nil
 
-	return api.CIOperatorStepWithDependencies{
-		StepName:    step.Name(),
-		Description: step.Description(),
-		StartedAt:   &start,
-		FinishedAt:  func() *time.Time { start.Add(duration); return &start }(),
-		Duration:    &duration,
-		Failed:      &failed,
+	var subSteps []api.CIOperatorStepDetailInfo
+	if x, ok := step.(steps.SubStepReporter); ok {
+		subSteps = x.SubSteps()
+	}
+
+	return api.CIOperatorStepDetails{
+		CIOperatorStepDetailInfo: api.CIOperatorStepDetailInfo{
+			StepName:    step.Name(),
+			Description: step.Description(),
+			StartedAt:   &start,
+			FinishedAt:  func() *time.Time { start.Add(duration); return &start }(),
+			Duration:    &duration,
+			Failed:      &failed,
+		},
+		Substeps: subSteps,
 	}, err
 }
 
@@ -1543,7 +1551,7 @@ func printExecutionOrder(nodes []*api.StepNode) error {
 func calculateGraph(nodes []*api.StepNode) *api.CIOperatorStepGraph {
 	var result api.CIOperatorStepGraph
 	api.IterateAllEdges(nodes, func(n *api.StepNode) {
-		r := api.CIOperatorStepWithDependencies{StepName: n.Step.Name(), Description: n.Step.Description()}
+		r := api.CIOperatorStepDetails{CIOperatorStepDetailInfo: api.CIOperatorStepDetailInfo{StepName: n.Step.Name(), Description: n.Step.Description()}}
 		for _, requirement := range n.Step.Requires() {
 			api.IterateAllEdges(nodes, func(inner *api.StepNode) {
 				if api.HasAnyLinks([]api.StepLink{requirement}, inner.Step.Creates()) {

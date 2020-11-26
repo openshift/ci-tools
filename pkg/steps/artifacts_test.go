@@ -507,6 +507,10 @@ func (*fakePodClient) GetLogs(string, string, *coreapi.PodLogOptions) *rest.Requ
 	return rest.NewRequestWithClient(nil, "", rest.ClientContentConfig{}, nil)
 }
 
+func (f *fakePodClient) WithNewLoggingClient() PodClient {
+	return f
+}
+
 type testExecutor struct {
 	command []string
 }

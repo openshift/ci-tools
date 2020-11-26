@@ -402,7 +402,7 @@ type ArtifactWorker struct {
 	hasArtifacts sets.String
 }
 
-func NewArtifactWorker(ctx context.Context, podClient PodClient, artifactDir, namespace string) *ArtifactWorker {
+func NewArtifactWorker(podClient PodClient, artifactDir, namespace string) *ArtifactWorker {
 	// stream artifacts in the background
 	w := &ArtifactWorker{
 		podClient: podClient,
@@ -415,10 +415,6 @@ func NewArtifactWorker(ctx context.Context, podClient PodClient, artifactDir, na
 
 		podsToDownload: make(chan string, 4),
 	}
-	go func() {
-		<-ctx.Done()
-		w.cancel()
-	}()
 	go w.run()
 	return w
 }
@@ -519,21 +515,6 @@ func (w *ArtifactWorker) Complete(podName string) {
 	}
 	if len(w.remaining) == 0 {
 		close(w.podsToDownload)
-	}
-}
-
-func (w *ArtifactWorker) cancel() {
-	w.lock.Lock()
-	defer w.lock.Unlock()
-	for podName := range w.remaining {
-		if !w.hasArtifacts.Has(podName) {
-			continue
-		}
-		go func(podName string) {
-			if err := removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"}); err != nil {
-				logrus.WithError(err).Error("failed to remove file")
-			}
-		}(podName)
 	}
 }
 

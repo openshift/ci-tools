@@ -22,6 +22,7 @@ import (
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -253,7 +254,7 @@ func TestGeneratePodReadonly(t *testing.T) {
 }
 
 type fakePodExecutor struct {
-	ctrlruntimeclient.Client
+	loggingclient.LoggingClient
 	failures    sets.String
 	createdPods []*coreapi.Pod
 }
@@ -266,11 +267,11 @@ func (f *fakePodExecutor) Create(ctx context.Context, o ctrlruntimeclient.Object
 		f.createdPods = append(f.createdPods, pod.DeepCopy())
 		pod.Status.Phase = coreapi.PodPending
 	}
-	return f.Client.Create(ctx, o, opts...)
+	return f.LoggingClient.Create(ctx, o, opts...)
 }
 
 func (f *fakePodExecutor) Get(ctx context.Context, n ctrlruntimeclient.ObjectKey, o ctrlruntimeclient.Object) error {
-	if err := f.Client.Get(ctx, n, o); err != nil {
+	if err := f.LoggingClient.Get(ctx, n, o); err != nil {
 		return err
 	}
 	if pod, ok := o.(*coreapi.Pod); ok {
@@ -333,7 +334,7 @@ func TestRun(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			name := "test"
-			crclient := &fakePodExecutor{Client: fakectrlruntimeclient.NewFakeClient(), failures: tc.failures}
+			crclient := &fakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient()), failures: tc.failures}
 			jobSpec := api.JobSpec{
 				JobSpec: prowdapi.JobSpec{
 					Job:       "job",
@@ -404,7 +405,7 @@ func TestArtifacts(t *testing.T) {
 				{As: "test1", ArtifactDir: "/path/to/artifacts"},
 			},
 		},
-	}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: &fakePodExecutor{Client: fakectrlruntimeclient.NewFakeClient()}}, tmp, &jobSpec, nil)
+	}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: &fakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient())}}, tmp, &jobSpec, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := step.Run(ctx); err != nil {
@@ -463,7 +464,7 @@ func TestJUnit(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			client := &fakePodExecutor{Client: fakectrlruntimeclient.NewFakeClient(), failures: tc.failures}
+			client := &fakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient()), failures: tc.failures}
 			jobSpec := api.JobSpec{
 				JobSpec: prowdapi.JobSpec{
 					Job:       "job",

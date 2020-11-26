@@ -8,6 +8,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -41,6 +42,10 @@ func (stepNeedsLease) Provides() api.ParameterMap {
 	return api.ParameterMap{
 		"parameter": func() (string, error) { return "map", nil },
 	}
+}
+
+func (stepNeedsLease) Objects() []ctrlruntimeclient.Object {
+	return nil
 }
 
 func (stepNeedsLease) SubTests() []*junit.TestCase {

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	coreapi "k8s.io/api/core/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
 
@@ -122,6 +123,10 @@ func (s *indexGeneratorStep) Name() string { return string(s.config.To) }
 
 func (s *indexGeneratorStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", s.config.To)
+}
+
+func (s *indexGeneratorStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
 }
 
 func IndexGeneratorStep(config api.IndexGeneratorStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {

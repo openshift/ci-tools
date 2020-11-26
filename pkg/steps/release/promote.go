@@ -368,6 +368,10 @@ func (s *promotionStep) Description() string {
 	return fmt.Sprintf("Promote built images into the release image stream %s", targetName(s.config))
 }
 
+func (s *promotionStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
+}
+
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skipped.
 func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, jobSpec *api.JobSpec, client steps.PodClient, pushSecret *coreapi.Secret) api.Step {

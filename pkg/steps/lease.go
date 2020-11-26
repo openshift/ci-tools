@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -58,10 +59,11 @@ func (s *leaseStep) Validate() error {
 	return nil
 }
 
-func (s *leaseStep) Name() string             { return s.wrapped.Name() }
-func (s *leaseStep) Description() string      { return s.wrapped.Description() }
-func (s *leaseStep) Requires() []api.StepLink { return s.wrapped.Requires() }
-func (s *leaseStep) Creates() []api.StepLink  { return s.wrapped.Creates() }
+func (s *leaseStep) Name() string                        { return s.wrapped.Name() }
+func (s *leaseStep) Description() string                 { return s.wrapped.Description() }
+func (s *leaseStep) Requires() []api.StepLink            { return s.wrapped.Requires() }
+func (s *leaseStep) Creates() []api.StepLink             { return s.wrapped.Creates() }
+func (s *leaseStep) Objects() []ctrlruntimeclient.Object { return s.wrapped.Objects() }
 func (s *leaseStep) Provides() api.ParameterMap {
 	parameters := s.wrapped.Provides()
 	if parameters == nil {

@@ -11,6 +11,7 @@ import (
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -52,7 +53,7 @@ func preparePodStep(namespace string) (*podStep, stepExpectation) {
 	}
 	jobSpec.SetNamespace(namespace)
 
-	client := &podClient{fakectrlruntimeclient.NewFakeClient(), nil, nil}
+	client := &podClient{loggingclient.New(fakectrlruntimeclient.NewFakeClient()), nil, nil}
 	ps := PodStep(stepName, config, resources, client, artifactDir, jobSpec)
 
 	specification := stepExpectation{
@@ -98,7 +99,7 @@ func TestPodStepExecution(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.purpose, func(t *testing.T) {
 			ps, _ := preparePodStep(namespace)
-			ps.client = &podClient{Client: &podStatusChangingClient{Client: fakectrlruntimeclient.NewFakeClient(), dest: tc.podStatus}}
+			ps.client = &podClient{LoggingClient: loggingclient.New(&podStatusChangingClient{Client: fakectrlruntimeclient.NewFakeClient(), dest: tc.podStatus})}
 
 			executionExpectation := executionExpectation{
 				prerun: doneExpectation{

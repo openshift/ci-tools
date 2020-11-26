@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
@@ -30,10 +32,11 @@ func (f *fakeStep) Run(ctx context.Context) error {
 
 	return f.runErr
 }
-func (f *fakeStep) Requires() []api.StepLink { return f.requires }
-func (f *fakeStep) Creates() []api.StepLink  { return f.creates }
-func (f *fakeStep) Name() string             { return f.name }
-func (f *fakeStep) Description() string      { return f.name }
+func (f *fakeStep) Requires() []api.StepLink          { return f.requires }
+func (f *fakeStep) Creates() []api.StepLink           { return f.creates }
+func (f *fakeStep) Name() string                      { return f.name }
+func (f *fakeStep) Description() string               { return f.name }
+func (*fakeStep) Objects() []ctrlruntimeclient.Object { return nil }
 
 func (f *fakeStep) Provides() api.ParameterMap { return nil }
 

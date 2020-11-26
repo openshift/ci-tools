@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
 )
@@ -67,6 +69,10 @@ func (s *writeParametersStep) Provides() api.ParameterMap {
 func (s *writeParametersStep) Name() string { return "parameters/write" }
 
 func (s *writeParametersStep) Description() string { return "Write the job parameters to disk" }
+
+func (s *writeParametersStep) Objects() []ctrlruntimeclient.Object {
+	return nil
+}
 
 func WriteParametersStep(params *api.DeferredParameters, paramFile string) api.Step {
 	return &writeParametersStep{

@@ -244,6 +244,10 @@ func (s *assembleReleaseStep) Description() string {
 	return fmt.Sprintf("Create the release image %q containing all images built by this job", s.name)
 }
 
+func (s *assembleReleaseStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
+}
+
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
 func AssembleReleaseStep(name string, config *api.ReleaseTagConfiguration, resources api.ResourceConfiguration,

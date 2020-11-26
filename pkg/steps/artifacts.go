@@ -30,6 +30,7 @@ import (
 	buildapi "github.com/openshift/api/build/v1"
 
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 )
 
 const (
@@ -158,8 +159,8 @@ func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
 	return tests
 }
 
-func NewPodClient(ctrlclient ctrlruntimeclient.Client, config *rest.Config, client rest.Interface) PodClient {
-	return &podClient{Client: ctrlclient, config: config, client: client}
+func NewPodClient(ctrlclient loggingclient.LoggingClient, config *rest.Config, client rest.Interface) PodClient {
+	return &podClient{LoggingClient: ctrlclient, config: config, client: client}
 }
 
 func (c podClient) Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
@@ -176,13 +177,13 @@ func (c podClient) GetLogs(namespace, name string, opts *coreapi.PodLogOptions) 
 }
 
 type PodClient interface {
-	ctrlruntimeclient.Client
+	loggingclient.LoggingClient
 	Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error)
 	GetLogs(namespace, name string, opts *coreapi.PodLogOptions) *rest.Request
 }
 
 type podClient struct {
-	ctrlruntimeclient.Client
+	loggingclient.LoggingClient
 	config *rest.Config
 	client rest.Interface
 }

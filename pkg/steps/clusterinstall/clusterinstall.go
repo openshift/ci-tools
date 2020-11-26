@@ -16,6 +16,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
@@ -23,7 +24,7 @@ type e2eTestStep struct {
 	config     api.OpenshiftInstallerClusterTestConfiguration
 	testConfig api.TestStepConfiguration
 
-	client  ctrlruntimeclient.Client
+	client  loggingclient.LoggingClient
 	jobSpec *api.JobSpec
 
 	step api.Step
@@ -154,4 +155,8 @@ func (s *e2eTestStep) Description() string {
 		return fmt.Sprintf("Run cluster install and upgrade %s", s.testConfig.As)
 	}
 	return fmt.Sprintf("Run cluster install %s", s.testConfig.As)
+}
+
+func (s *e2eTestStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
 }

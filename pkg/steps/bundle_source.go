@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	coreapi "k8s.io/api/core/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
 
@@ -109,6 +110,10 @@ func (s *bundleSourceStep) Creates() []api.StepLink {
 
 func (s *bundleSourceStep) Provides() api.ParameterMap {
 	return api.ParameterMap{}
+}
+
+func (s *bundleSourceStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
 }
 
 func (s *bundleSourceStep) Name() string {

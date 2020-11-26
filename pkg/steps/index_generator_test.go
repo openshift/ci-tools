@@ -11,6 +11,7 @@ import (
 	apiimagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 )
 
 func TestIndexGenDockerfile(t *testing.T) {
@@ -49,7 +50,7 @@ COPY --from=builder /database/ database`
 			OperatorIndex: []string{"ci-bundle0"},
 		},
 		jobSpec: &api.JobSpec{},
-		client:  &buildClient{Client: fakeClientSet},
+		client:  &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
 	}
 	stepSingleBundle.jobSpec.SetNamespace("target-namespace")
 	generatedDockerfile, err := stepSingleBundle.indexGenDockerfile()
@@ -73,7 +74,7 @@ COPY --from=builder /database/ database`
 			OperatorIndex: []string{"ci-bundle0", "ci-bundle1"},
 		},
 		jobSpec: &api.JobSpec{},
-		client:  &buildClient{Client: fakeClientSet},
+		client:  &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
 	}
 	stepMultiBundle.jobSpec.SetNamespace("target-namespace")
 	generatedDockerfile, err = stepMultiBundle.indexGenDockerfile()

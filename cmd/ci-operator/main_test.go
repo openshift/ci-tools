@@ -26,6 +26,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 )
 
 func init() {
@@ -396,7 +397,7 @@ func TestBuildPartialGraph(t *testing.T) {
 			input: []api.Step{
 				steps.InputImageTagStep(
 					api.InputImageTagStepConfiguration{To: api.PipelineImageStreamTagReferenceRoot},
-					fakectrlruntimeclient.NewFakeClient(&imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{Name: ":"}}),
+					loggingclient.New(fakectrlruntimeclient.NewFakeClient(&imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{Name: ":"}})),
 					nil,
 				),
 				steps.SourceStep(api.SourceStepConfiguration{From: api.PipelineImageStreamTagReferenceRoot, To: api.PipelineImageStreamTagReferenceSource}, api.ResourceConfiguration{}, nil, "", &api.JobSpec{}, nil, nil),

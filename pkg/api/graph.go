@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Step is a self-contained bit of work that the
@@ -28,6 +28,8 @@ type Step interface {
 	Requires() []StepLink
 	Creates() []StepLink
 	Provides() ParameterMap
+	// Objects returns all objects the client for this step has seen
+	Objects() []ctrlruntimeclient.Object
 }
 
 type InputDefinition []string
@@ -473,15 +475,15 @@ func mergeSteps(into, from CIOperatorStepWithDependencies) CIOperatorStepWithDep
 }
 
 type CIOperatorStepWithDependencies struct {
-	StepName     string           `json:"name"`
-	Description  string           `json:"description"`
-	Dependencies []string         `json:"dependencies"`
-	StartedAt    *time.Time       `json:"started_at"`
-	FinishedAt   *time.Time       `json:"finished_at"`
-	Duration     *time.Duration   `json:"duration,omitempty"`
-	Manifests    []runtime.Object `json:"manifests"`
-	LogURL       string           `json:"log_url,omitempty"`
-	Failed       *bool            `json:"failed,omitempty"`
+	StepName     string                     `json:"name"`
+	Description  string                     `json:"description"`
+	Dependencies []string                   `json:"dependencies"`
+	StartedAt    *time.Time                 `json:"started_at"`
+	FinishedAt   *time.Time                 `json:"finished_at"`
+	Duration     *time.Duration             `json:"duration,omitempty"`
+	Manifests    []ctrlruntimeclient.Object `json:"manifests"`
+	LogURL       string                     `json:"log_url,omitempty"`
+	Failed       *bool                      `json:"failed,omitempty"`
 }
 
 const CIOperatorStepGraphJSONFilename = "ci-operator-step-graph.json"

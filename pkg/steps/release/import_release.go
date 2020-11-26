@@ -413,6 +413,10 @@ func (s *importReleaseStep) Description() string {
 	return fmt.Sprintf("Import the release payload %q from an external source", s.name)
 }
 
+func (s *importReleaseStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
+}
+
 // ImportReleaseStep imports an existing update payload image
 func ImportReleaseStep(name, pullSpec string, append bool, resources api.ResourceConfiguration,
 	client steps.PodClient,

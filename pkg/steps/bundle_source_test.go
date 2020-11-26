@@ -15,6 +15,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 )
 
 var subs = []api.PullSpecSubstitution{
@@ -96,7 +97,7 @@ RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/o
 RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/origin-metering-hadoop:4.6?some-reg/target-namespace/stable@metering-hadoop?g {} +
 RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/origin-ghostunnel:4.6?some-reg/target-namespace/stable@ghostunnel?g {} +`
 
-	client := &buildClient{Client: fakectrlruntimeclient.NewFakeClient(
+	client := &buildClient{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(
 		&imagev1.ImageStream{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "target-namespace",
@@ -146,7 +147,7 @@ RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/o
 					}},
 				}},
 			},
-		})}
+		}))}
 
 	s := bundleSourceStep{
 		config: api.BundleSourceStepConfiguration{

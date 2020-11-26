@@ -27,6 +27,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
@@ -264,6 +265,10 @@ func (s *templateExecutionStep) Description() string {
 	return fmt.Sprintf("Run template %s", s.template.Name)
 }
 
+func (s *templateExecutionStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
+}
+
 func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec, resources api.ResourceConfiguration) api.Step {
 	return &templateExecutionStep{
 		template:    template,
@@ -277,19 +282,19 @@ func TemplateExecutionStep(template *templateapi.Template, params api.Parameters
 }
 
 type TemplateClient interface {
-	ctrlruntimeclient.Client
+	loggingclient.LoggingClient
 	Process(namespace string, template *templateapi.Template) (*templateapi.Template, error)
 }
 
 type templateClient struct {
-	ctrlruntimeclient.Client
+	loggingclient.LoggingClient
 	restClient rest.Interface
 }
 
-func NewTemplateClient(client ctrlruntimeclient.Client, restClient rest.Interface) TemplateClient {
+func NewTemplateClient(client loggingclient.LoggingClient, restClient rest.Interface) TemplateClient {
 	return &templateClient{
-		Client:     client,
-		restClient: restClient,
+		LoggingClient: client,
+		restClient:    restClient,
 	}
 }
 

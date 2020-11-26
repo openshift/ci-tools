@@ -129,6 +129,7 @@ func runStep(ctx context.Context, node *api.StepNode, out chan<- message) {
 			StartedAt:   &start,
 			FinishedAt:  func() *time.Time { start.Add(duration); return &start }(),
 			Duration:    &duration,
+			Manifests:   node.Step.Objects(),
 			Failed:      &failed,
 		},
 	}

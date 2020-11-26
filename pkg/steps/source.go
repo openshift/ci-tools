@@ -579,6 +579,10 @@ func (s *sourceStep) Description() string {
 	return fmt.Sprintf("Clone the correct source code into an image and tag it as %s", s.config.To)
 }
 
+func (s *sourceStep) Objects() []ctrlruntimeclient.Object {
+	return s.client.Objects()
+}
+
 func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient,
 	artifactDir string, jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret) api.Step {
 	return &sourceStep{

@@ -307,8 +307,9 @@ func ensureFinalizer(ctx context.Context, stream *imagev1.ImageStream, client ct
 	if sets.NewString(stream.Finalizers...).Has(finalizerName) {
 		return nil
 	}
+	originalStream := stream.DeepCopy()
 	stream.Finalizers = append(stream.Finalizers, finalizerName)
-	return client.Update(ctx, stream)
+	return client.Patch(ctx, stream, ctrlruntimeclient.MergeFrom(originalStream))
 }
 
 func dockerImageImportedFromTargetingCluster(cluster string, tag *imagev1.ImageStreamTag) bool {

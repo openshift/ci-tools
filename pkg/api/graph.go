@@ -2,12 +2,14 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -489,9 +491,44 @@ type CIOperatorStepDetailInfo struct {
 	StartedAt    *time.Time                 `json:"started_at"`
 	FinishedAt   *time.Time                 `json:"finished_at"`
 	Duration     *time.Duration             `json:"duration,omitempty"`
-	Manifests    []ctrlruntimeclient.Object `json:"manifests"`
+	Manifests    []ctrlruntimeclient.Object `json:"manifests,omitempty"`
 	LogURL       string                     `json:"log_url,omitempty"`
 	Failed       *bool                      `json:"failed,omitempty"`
+}
+
+func (c *CIOperatorStepDetailInfo) UnmarshalJSON(data []byte) error {
+	raw := map[string]interface{}{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	manifests := []*unstructured.Unstructured{}
+	if rawManifests, ok := raw["manifests"]; ok {
+		serializedManifests, err := json.Marshal(rawManifests)
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(serializedManifests, &manifests); err != nil {
+			return err
+		}
+		delete(raw, "manifests")
+	}
+	reserializedWithoutManifests, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+
+	type silbling CIOperatorStepDetailInfo
+	var unmarshalTo silbling
+	if err := json.Unmarshal(reserializedWithoutManifests, &unmarshalTo); err != nil {
+		return err
+	}
+	*c = CIOperatorStepDetailInfo(unmarshalTo)
+	c.Manifests = nil
+	for _, manifest := range manifests {
+		c.Manifests = append(c.Manifests, manifest)
+	}
+	return nil
+
 }
 
 const CIOperatorStepGraphJSONFilename = "ci-operator-step-graph.json"

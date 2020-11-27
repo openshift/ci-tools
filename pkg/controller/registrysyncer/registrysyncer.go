@@ -41,6 +41,8 @@ func AddToManager(mgr manager.Manager,
 	imageStreamPrefixes sets.String,
 	imageStreamNamespaces sets.String,
 	deniedImageStreams sets.String,
+	maxConcurrentReconciles int,
+	readOnly bool,
 ) error {
 	log := logrus.WithField("controller", ControllerName)
 	r := &reconciler{
@@ -57,6 +59,7 @@ func AddToManager(mgr manager.Manager,
 			locks:   map[simpleImageStream]*sync.Mutex{},
 			log:     log,
 		},
+		readOnly: readOnly,
 	}
 	r.imageStreamLocks.runCleanup()
 	for clusterName, m := range managers {
@@ -64,7 +67,7 @@ func AddToManager(mgr manager.Manager,
 	}
 	c, err := controller.New(ControllerName, mgr, controller.Options{
 		Reconciler:              r,
-		MaxConcurrentReconciles: 100,
+		MaxConcurrentReconciles: maxConcurrentReconciles,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to construct controller: %w", err)
@@ -161,6 +164,7 @@ type reconciler struct {
 	imageStreamNamespaces sets.String
 	deniedImageStreams    sets.String
 	imageStreamLocks      *shardedLock
+	readOnly              bool
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -309,6 +313,9 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 
 		*log = *log.WithField("imageStreamImport.Namespace", imageStreamImport.Namespace).WithField("imageStreamImport.Name", imageStreamImport.Name)
 		log.Debug("creating imageStreamImport")
+		if r.readOnly {
+			return nil
+		}
 		if err := createAndCheckStatus(ctx, client, imageStreamImport); err != nil {
 			controllerutil.CountImportResult(ControllerName, clusterName, req.Namespace, imageStreamName, false)
 			return fmt.Errorf("failed to create and check the status for imageStreamImport for tag %s of %s in namespace %s on cluster %s: %w", imageTag, imageStreamImport.Name, imageStreamImport.Namespace, clusterName, err)

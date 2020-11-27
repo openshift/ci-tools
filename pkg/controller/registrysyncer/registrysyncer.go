@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -51,17 +52,19 @@ func AddToManager(mgr manager.Manager,
 		imageStreamPrefixes:   imageStreamPrefixes,
 		imageStreamNamespaces: imageStreamNamespaces,
 		deniedImageStreams:    deniedImageStreams,
+		imageStreamLocks: &shardedLock{
+			mapLock: &sync.Mutex{},
+			locks:   map[simpleImageStream]*sync.Mutex{},
+			log:     log,
+		},
 	}
+	r.imageStreamLocks.runCleanup()
 	for clusterName, m := range managers {
 		r.registryClients[clusterName] = imagestreamtagwrapper.MustNew(m.GetClient(), m.GetCache())
 	}
 	c, err := controller.New(ControllerName, mgr, controller.Options{
-		Reconciler: r,
-		// We conflict on ImageStream level which means multiple request for imagestreamtags
-		// of the same imagestream will conflict so stay at one worker in order to reduce the
-		// number of errors we see. If we hit performance issues, we will probably need cluster
-		// and/or imagestream level locking.
-		MaxConcurrentReconciles: 1,
+		Reconciler:              r,
+		MaxConcurrentReconciles: 100,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to construct controller: %w", err)
@@ -78,6 +81,57 @@ func AddToManager(mgr manager.Manager,
 
 	r.log.Info("Successfully added reconciler to manager")
 	return nil
+}
+
+type simpleImageStream struct {
+	//Exclude cluster here intentionally: code is easier with litter performance impact
+	types.NamespacedName
+}
+
+type shardedLock struct {
+	mapLock *sync.Mutex
+	locks   map[simpleImageStream]*sync.Mutex
+	log     *logrus.Entry
+}
+
+func (s *shardedLock) getLock(key simpleImageStream) *sync.Mutex {
+	s.mapLock.Lock()
+	defer s.mapLock.Unlock()
+	if _, exists := s.locks[key]; !exists {
+		s.locks[key] = &sync.Mutex{}
+	}
+	return s.locks[key]
+}
+
+// cleanup deletes all locks by acquiring first
+// the mapLock and then each individual lock before
+// deleting it. The individual lock must be acquired
+// because otherwise it may be held, we delete it from
+// the map, it gets recreated and acquired and two
+// routines report in parallel for the same job.
+// Note that while this function is running, no new
+// reconcile can happen, as we hold the mapLock.
+func (s *shardedLock) cleanup() {
+	s.mapLock.Lock()
+	defer s.mapLock.Unlock()
+
+	for key, lock := range s.locks {
+		lock.Lock()
+		delete(s.locks, key)
+		lock.Unlock()
+	}
+}
+
+// runCleanup asynchronously runs the cleanup once per hour.
+func (s *shardedLock) runCleanup() {
+	go func() {
+		for range time.Tick(time.Hour) {
+			s.log.Debug("Starting to clean up imagestream locks")
+			startTime := time.Now()
+			s.cleanup()
+			s.log.WithField("duration", time.Since(startTime).String()).Debug("Finished cleaning up imagestream locks")
+		}
+	}()
 }
 
 type objectFilter func(types.NamespacedName) bool
@@ -106,6 +160,7 @@ type reconciler struct {
 	imageStreamPrefixes   sets.String
 	imageStreamNamespaces sets.String
 	deniedImageStreams    sets.String
+	imageStreamLocks      *shardedLock
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -126,6 +181,16 @@ const (
 )
 
 func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *logrus.Entry) error {
+	imageStreamNameAndTag := strings.Split(req.Name, ":")
+	if n := len(imageStreamNameAndTag); n != 2 {
+		return fmt.Errorf("when splitting imagestreamtagname %s by : expected two results, got %d", req.Name, n)
+	}
+	imageStreamName, imageTag := imageStreamNameAndTag[0], imageStreamNameAndTag[1]
+	key := simpleImageStream{NamespacedName: types.NamespacedName{Namespace: req.Namespace, Name: imageStreamName}}
+	lock := r.imageStreamLocks.getLock(key)
+	lock.Lock()
+	defer lock.Unlock()
+
 	isTags := map[string]*imagev1.ImageStreamTag{}
 	for clusterName, client := range r.registryClients {
 		*log = *log.WithField("clusterName", clusterName)
@@ -148,11 +213,6 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 	}
 	sourceImageStreamTag := isTags[srcClusterName]
 
-	imageStreamNameAndTag := strings.Split(req.Name, ":")
-	if n := len(imageStreamNameAndTag); n != 2 {
-		return fmt.Errorf("when splitting imagestreamtagname %s by : expected two results, got %d", req.Name, n)
-	}
-	imageStreamName, imageTag := imageStreamNameAndTag[0], imageStreamNameAndTag[1]
 	isName := types.NamespacedName{Namespace: req.Namespace, Name: imageStreamName}
 	sourceImageStream := &imagev1.ImageStream{}
 	if err := r.registryClients[srcClusterName].Get(ctx, isName, sourceImageStream); err != nil {
@@ -194,7 +254,6 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 				return fmt.Errorf("failed to create namespace %s on cluster %s: %w", req.Namespace, clusterName, err)
 			}
 		}
-
 		if err := r.ensureImageStream(ctx, sourceImageStream, client, log); err != nil {
 			return fmt.Errorf("failed to ensure imagestream on cluster %s: %w", clusterName, err)
 		}

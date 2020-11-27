@@ -133,7 +133,11 @@ func (p *DeferredParameters) Has(name string) bool {
 func (p *DeferredParameters) has(name string) bool {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	_, ok := p.fns[name]
+	_, ok := p.values[name]
+	if ok {
+		return true
+	}
+	_, ok = p.fns[name]
 	return ok
 }
 

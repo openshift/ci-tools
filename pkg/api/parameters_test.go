@@ -200,6 +200,9 @@ func TestDeferredParametersParent(t *testing.T) {
 			if ret != "expected" {
 				t.Errorf("got unexpected value %q", ret)
 			}
+			if !tc.params.Has("K") {
+				t.Errorf(`"Has" and "Get" disagree`)
+			}
 		})
 	}
 }

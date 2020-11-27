@@ -36,11 +36,11 @@ type Metrics struct {
 // Client manages resource leases, acquiring, releasing, and keeping them
 // updated.
 type Client interface {
-	// Acquire leases a resource and returns the lease name.
-	// Will block until a resource is available or 150m pass, `ctx` can be used
-	// to abort the operation, `cancel` is called if any subsequent updates to
-	// the lease fail.
-	Acquire(rtype string, ctx context.Context, cancel context.CancelFunc) (string, error)
+	// Acquire leases `n` resources and returns the lease names.
+	// Will block until resources are available or 150m pass, `n` must be > 0.
+	// `ctx` can be used to abort the operation, `cancel` is called if any
+	// subsequent updates to the lease fail.
+	Acquire(rtype string, n uint, ctx context.Context, cancel context.CancelFunc) ([]string, error)
 	// Heartbeat updates all leases. It calls the cancellation function of each
 	// lease it fails to update.
 	Heartbeat() error
@@ -95,18 +95,23 @@ type lease struct {
 	cancel context.CancelFunc
 }
 
-func (c *client) Acquire(rtype string, ctx context.Context, cancel context.CancelFunc) (string, error) {
+func (c *client) Acquire(rtype string, n uint, ctx context.Context, cancel context.CancelFunc) ([]string, error) {
 	var cancelAcquire context.CancelFunc
 	ctx, cancelAcquire = context.WithTimeout(ctx, c.acquireTimeout)
 	defer cancelAcquire()
-	r, err := c.boskos.AcquireWaitWithPriority(ctx, rtype, freeState, leasedState, randId())
-	if err != nil {
-		return "", err
+	var ret []string
+	// TODO `m` processes may fight for the last `m * n` remaining leases
+	for i := uint(0); i < n; i++ {
+		r, err := c.boskos.AcquireWaitWithPriority(ctx, rtype, freeState, leasedState, randId())
+		if err != nil {
+			return nil, err
+		}
+		c.Lock()
+		c.leases[r.Name] = &lease{cancel: cancel}
+		c.Unlock()
+		ret = append(ret, r.Name)
 	}
-	c.Lock()
-	c.leases[r.Name] = &lease{cancel: cancel}
-	c.Unlock()
-	return r.Name, nil
+	return ret, nil
 }
 
 func (c *client) Heartbeat() error {

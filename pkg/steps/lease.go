@@ -130,7 +130,7 @@ func acquireLeases(
 	for _, i := range sorted {
 		l := &leases[i]
 		log.Printf("Acquiring lease for %q", l.ResourceType)
-		name, err := client.Acquire(l.ResourceType, ctx, cancel)
+		names, err := client.Acquire(l.ResourceType, 1, ctx, cancel)
 		if err != nil {
 			if err == lease.ErrNotFound {
 				printResourceMetrics(client, l.ResourceType)
@@ -138,8 +138,8 @@ func acquireLeases(
 			errs = append(errs, results.ForReason(results.Reason("acquiring_lease:"+l.ResourceType)).WithError(err).Errorf("failed to acquire lease: %v", err))
 			break
 		}
-		log.Printf("Acquired lease %q for %q", name, l.ResourceType)
-		l.resource = name
+		log.Printf("Acquired lease %q for %q", names[0], l.ResourceType)
+		l.resource = names[0]
 	}
 	if errs != nil {
 		if err := releaseLeases(client, leases); err != nil {

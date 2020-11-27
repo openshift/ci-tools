@@ -54,7 +54,7 @@ done
 
 failed=""
 for workdir in $( find /tmp/deprovision -mindepth 1 -type d | shuf ); do
-  if ! timeout --signal=SIGQUIT 30m openshift-install --dir "${workdir}" --log-level debug destroy cluster; then
+  if ! timeout --signal=SIGQUIT 10m openshift-install --dir "${workdir}" --log-level debug destroy cluster; then
     failed+=",$( basename "${workdir}" )"
   fi
 done

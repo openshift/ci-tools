@@ -1013,6 +1013,7 @@ func TestLeasesForTest(t *testing.T) {
 		expected: []api.StepLease{{
 			ResourceType: "aws-quota-slice",
 			Env:          steps.DefaultLeaseEnv,
+			Count:        1,
 		}},
 	}, {
 		name: "explicit configuration, lease",

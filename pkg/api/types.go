@@ -684,6 +684,8 @@ type StepLease struct {
 	ResourceType string `json:"resource_type"`
 	// Env is the environment variable that will contain the resource name.
 	Env string `json:"env"`
+	// Count is the number of resources to acquire (optional, defaults to 1).
+	Count uint `json:"count,omitempty"`
 }
 
 // FromImageTag returns the internal name for the image tag that will be used

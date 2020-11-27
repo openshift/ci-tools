@@ -121,7 +121,7 @@ func TestLeaseStepForward(t *testing.T) {
 func TestProvidesStripsSuffix(t *testing.T) {
 	leases := []api.StepLease{{Env: DefaultLeaseEnv, ResourceType: "rtype"}}
 	withLease := LeaseStep(nil, leases, &stepNeedsLease{}, emptyNamespace)
-	withLease.(*leaseStep).leases[0].resource = "whatever--01"
+	withLease.(*leaseStep).leases[0].resources = []string{"whatever--01"}
 	expected := "whatever"
 	actual, err := withLease.Provides()[DefaultLeaseEnv]()
 	if err != nil {
@@ -134,8 +134,8 @@ func TestProvidesStripsSuffix(t *testing.T) {
 
 func TestError(t *testing.T) {
 	leases := []api.StepLease{
-		{ResourceType: "rtype0"},
-		{ResourceType: "rtype1"},
+		{ResourceType: "rtype0", Count: 1},
+		{ResourceType: "rtype1", Count: 1},
 	}
 	ctx := context.Background()
 	for _, tc := range []struct {
@@ -200,7 +200,10 @@ func TestError(t *testing.T) {
 func TestAcquireRelease(t *testing.T) {
 	var calls []string
 	client := lease.NewFakeClient("owner", "url", 0, nil, &calls)
-	leases := []api.StepLease{{ResourceType: "rtype1"}, {ResourceType: "rtype0"}}
+	leases := []api.StepLease{
+		{ResourceType: "rtype1", Count: 1},
+		{ResourceType: "rtype0", Count: 2},
+	}
 	step := stepNeedsLease{}
 	withLease := LeaseStep(&client, leases, &step, func() string { return "" })
 	if err := withLease.Run(context.Background()); err != nil {
@@ -211,9 +214,11 @@ func TestAcquireRelease(t *testing.T) {
 	}
 	expected := []string{
 		"acquire owner rtype0 free leased random",
+		"acquire owner rtype0 free leased random",
 		"acquire owner rtype1 free leased random",
-		"releaseone owner rtype1_1 free",
+		"releaseone owner rtype1_2 free",
 		"releaseone owner rtype0_0 free",
+		"releaseone owner rtype0_1 free",
 	}
 	if !reflect.DeepEqual(calls, expected) {
 		t.Fatalf("wrong calls to the lease client: %s", diff.ObjectDiff(calls, expected))

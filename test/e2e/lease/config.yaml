@@ -38,6 +38,10 @@ tests:
   steps:
     test:
     - ref: declare-and-check-leases
+- as: configurable-leases-count
+  steps:
+    test:
+    - ref: declare-and-check-leases-with-count
 zz_generated_metadata:
   branch: master
   org: test

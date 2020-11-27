@@ -8,22 +8,34 @@ const defaultArtifacts = "/tmp/artifacts"
 
 // Default sets default values after loading but before validation
 func (config *ReleaseBuildConfiguration) Default() {
-	def := func(p *string) {
+	defArtifacts := func(p *string) {
 		if *p == "" {
 			*p = defaultArtifacts
 		}
 	}
+	defLeases := func(l []StepLease) {
+		for i := range l {
+			if l[i].Count == 0 {
+				l[i].Count = 1
+			}
+		}
+	}
+	def := func(s *LiteralTestStep) {
+		defArtifacts(&s.ArtifactDir)
+		defLeases(s.Leases)
+	}
 	defTest := func(t *TestStepConfiguration) {
-		def(&t.ArtifactDir)
+		defArtifacts(&t.ArtifactDir)
 		if s := t.MultiStageTestConfigurationLiteral; s != nil {
+			defLeases(s.Leases)
 			for i := range s.Pre {
-				def(&s.Pre[i].ArtifactDir)
+				def(&s.Pre[i])
 			}
 			for i := range s.Test {
-				def(&s.Test[i].ArtifactDir)
+				def(&s.Test[i])
 			}
 			for i := range s.Post {
-				def(&s.Post[i].ArtifactDir)
+				def(&s.Post[i])
 			}
 		}
 	}

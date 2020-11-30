@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -426,7 +427,12 @@ func (w *ArtifactWorker) run() {
 		}
 		// indicate we are done with this pod by removing the map entry
 		w.lock.Lock()
-		close(w.remaining[podName].done)
+		if val, ok := w.remaining[podName]; ok && val.done != nil {
+			close(w.remaining[podName].done)
+		} else {
+			fmt.Printf("Pod %s found in map: %t, channel nil: %t\n", podName, ok, val.done == nil)
+			debug.PrintStack()
+		}
 		delete(w.remaining, podName)
 		w.lock.Unlock()
 	}

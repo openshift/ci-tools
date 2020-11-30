@@ -21,6 +21,7 @@ import (
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/pjutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/yaml"
@@ -305,6 +306,11 @@ func main() {
 
 	if err := imagev1.AddToScheme(mgr.GetScheme()); err != nil {
 		logrus.WithError(err).Fatal("Failed to add imagev1 to scheme")
+	}
+	// The image api is implemented via the Openshift Extension APIServer, so contrary
+	// to CRD-Based resources it supports protobuf.
+	if err := apiutil.AddToProtobufScheme(imagev1.AddToScheme); err != nil {
+		logrus.WithError(err).Fatal("Failed to add imagev1 api to protobuf scheme")
 	}
 	if err := prowv1.AddToScheme(mgr.GetScheme()); err != nil {
 		logrus.WithError(err).Fatal("Failed to add prowv1 to scheme")

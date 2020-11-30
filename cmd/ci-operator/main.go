@@ -66,6 +66,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
+	"github.com/openshift/ci-tools/pkg/validation"
 )
 
 const usage = `Orchestrate multi-stage image-based builds
@@ -422,7 +423,7 @@ func (o *options) Complete() error {
 		o.jobSpec.Refs.PathAlias = *config.CanonicalGoRepository
 	}
 	o.configSpec = config
-	if err := o.configSpec.ValidateResolved(); err != nil {
+	if err := validation.IsValidResolvedConfiguration(o.configSpec); err != nil {
 		return results.ForReason("validating_config").ForError(err)
 	}
 

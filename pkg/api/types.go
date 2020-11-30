@@ -1143,15 +1143,15 @@ type BundleSourceStepConfiguration struct {
 // PipelineImageStreamTagReferenceBundleSourceName is the name of the bundle source image built by the CI
 const PipelineImageStreamTagReferenceBundleSource PipelineImageStreamTagReference = "src-bundle"
 
-// bundlePrefix is the prefix used by ci-operator for bundle images
-const bundlePrefix = "ci-bundle"
+// BundlePrefix is the prefix used by ci-operator for bundle images
+const BundlePrefix = "ci-bundle"
 
 func IsBundleImage(imageName string) bool {
-	return strings.HasPrefix(imageName, bundlePrefix)
+	return strings.HasPrefix(imageName, BundlePrefix)
 }
 
 func BundleName(index int) string {
-	return fmt.Sprintf("%s%d", bundlePrefix, index)
+	return fmt.Sprintf("%s%d", BundlePrefix, index)
 }
 
 // ProjectDirectoryImageBuildStepConfiguration describes an

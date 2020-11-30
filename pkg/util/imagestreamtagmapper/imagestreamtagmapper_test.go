@@ -16,6 +16,7 @@ import (
 )
 
 func TestImageStreamTagMapper(t *testing.T) {
+	now := metav1.Now()
 	upstream := func(r reconcile.Request) []reconcile.Request {
 		return []reconcile.Request{
 			{NamespacedName: types.NamespacedName{Namespace: "first_" + r.Namespace, Name: r.Name}},
@@ -113,6 +114,34 @@ func TestImageStreamTagMapper(t *testing.T) {
 				"first_namespace/name:1",
 				"first_namespace/name:2",
 				"second_namespace/name:1",
+				"second_namespace/name:2",
+			},
+		},
+		{
+			name: "DeletionTimestamp is defined: returns all tags",
+			event: func() interface{} {
+				imageStreamOld := &imagev1.ImageStream{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "namespace",
+						Name:      "name",
+					},
+					Status: imagev1.ImageStreamStatus{
+						Tags: []imagev1.NamedTagEventList{{Tag: "1"}, {Tag: "2"}},
+					},
+				}
+
+				ImageStreamNew := imageStreamOld.DeepCopy()
+				ImageStreamNew.DeletionTimestamp = &now
+
+				return event.UpdateEvent{
+					ObjectOld: imageStreamOld,
+					ObjectNew: ImageStreamNew,
+				}
+			},
+			expectedRequests: []string{
+				"first_namespace/name:1",
+				"second_namespace/name:1",
+				"first_namespace/name:2",
 				"second_namespace/name:2",
 			},
 		},

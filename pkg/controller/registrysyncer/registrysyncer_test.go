@@ -177,6 +177,7 @@ func init() {
 }
 
 func TestReconcile(t *testing.T) {
+	t.Parallel()
 	pullSecretGetter := func() []byte {
 		return []byte("some-secret")
 	}
@@ -525,6 +526,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 	} {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			r := &reconciler{
 				log: logrus.NewEntry(logrus.New()),

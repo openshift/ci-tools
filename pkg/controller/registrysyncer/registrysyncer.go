@@ -57,11 +57,8 @@ func AddToManager(mgr manager.Manager,
 	}
 	c, err := controller.New(ControllerName, mgr, controller.Options{
 		Reconciler: r,
-		// We conflict on ImageStream level which means multiple request for imagestreamtags
-		// of the same imagestream will conflict so stay at one worker in order to reduce the
-		// number of errors we see. If we hit performance issues, we will probably need cluster
-		// and/or imagestream level locking.
-		MaxConcurrentReconciles: 1,
+		// When > 1, there will be IsConflict errors on updating the same ImageStream
+		MaxConcurrentReconciles: 100,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to construct controller: %w", err)
@@ -112,7 +109,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	log := r.log.WithField("request", req.String())
 	log.Info("Starting reconciliation")
 	err := r.reconcile(ctx, req, log)
-	if err != nil {
+	// Ignore the logging for IsConflict errors because they are results of concurrent reconciling
+	if err != nil && !apierrors.IsConflict(err) {
 		log.WithError(err).Error("Reconciliation failed")
 	} else {
 		log.Info("Finished reconciliation")
@@ -297,19 +295,16 @@ func ensureRemoveFinalizer(ctx context.Context, stream *imagev1.ImageStream, cli
 	if !finalizerSet.Has(finalizerName) {
 		return nil
 	}
-	originalStream := stream.DeepCopy()
 	stream.Finalizers = finalizerSet.Delete(finalizerName).List()
-	// Use Patch instead of Update to avoid conflicting
-	return client.Patch(ctx, stream, ctrlruntimeclient.MergeFrom(originalStream))
+	return client.Update(ctx, stream)
 }
 
 func ensureFinalizer(ctx context.Context, stream *imagev1.ImageStream, client ctrlruntimeclient.Client) error {
 	if sets.NewString(stream.Finalizers...).Has(finalizerName) {
 		return nil
 	}
-	originalStream := stream.DeepCopy()
 	stream.Finalizers = append(stream.Finalizers, finalizerName)
-	return client.Patch(ctx, stream, ctrlruntimeclient.MergeFrom(originalStream))
+	return client.Update(ctx, stream)
 }
 
 func dockerImageImportedFromTargetingCluster(cluster string, tag *imagev1.ImageStreamTag) bool {
@@ -475,7 +470,7 @@ func upsertObject(ctx context.Context, c ctrlruntimeclient.Client, obj ctrlrunti
 	log = log.WithFields(logrus.Fields{"namespace": obj.GetNamespace(), "name": obj.GetName(), "type": fmt.Sprintf("%T", obj)})
 	result, err := crcontrollerutil.CreateOrUpdate(ctx, c, obj, mutateFn)
 	log = log.WithField("operation", result)
-	if err != nil {
+	if err != nil && !apierrors.IsConflict(err) {
 		log.WithError(err).Error("Upsert failed")
 	} else if result != crcontrollerutil.OperationResultNone {
 		log.Info("Upsert succeeded")

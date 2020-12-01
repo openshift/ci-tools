@@ -42,8 +42,9 @@ func (m *imagestreamtagmapper) Update(e event.UpdateEvent, q workqueue.RateLimit
 		return
 	}
 
+	isDeleted := newStream.DeletionTimestamp != nil
 	for _, newTag := range newStream.Status.Tags {
-		if namedTagEventListHasElement(oldStream.Status.Tags, newTag) {
+		if !isDeleted && namedTagEventListHasElement(oldStream.Status.Tags, newTag) {
 			continue
 		}
 		for _, request := range m.upstream(reconcile.Request{

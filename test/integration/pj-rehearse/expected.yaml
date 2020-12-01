@@ -349,6 +349,327 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-periodic-with-unresolved-config
+    creationTimestamp: null
+    labels:
+      ci.openshift.org/rehearse: "1234"
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-periodic-with-unresolved
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: test-prowjob
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/periodic-ci-super-duper-periodic-with-unresolved-config
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: ciop-cfg-change
+      org: super
+      repo: duper
+      workdir: true
+    job: rehearse-1234-periodic-ci-super-duper-periodic-with-unresolved-config
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --no-ci-op-args
+        - --target=multistage
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          value: |
+            resources:
+              '*':
+                limits:
+                  cpu: 500Mi
+                requests:
+                  cpu: 10Mi
+            tag_specification:
+              name: "4.7"
+              namespace: ocp
+            tests:
+            - as: multistage
+              literal_steps:
+                cluster_profile: ""
+                post:
+                - as: ipi-deprovision-must-gather
+                  commands: |
+                    gather
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-deprovision-deprovision
+                  commands: |
+                    openshift-cluster destroy
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                pre:
+                - as: ipi-install-rbac
+                  commands: |
+                    setup-rbac-2
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-install-install
+                  commands: |
+                    openshift-cluster install --newFlag
+                  env:
+                  - default: test parameter default
+                    name: TEST_PARAMETER
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                test:
+                - as: e2e
+                  commands: this is targeted, it should be in inlined CONFIG_SPEC
+                  from: my-image
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+            zz_generated_metadata:
+              branch: ""
+              org: ""
+              repo: ""
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+    refs:
+      base_ref: master
+      base_sha: test_sha
+      org: openshift
+      pulls:
+      - author: petr-muller
+        number: 1234
+        sha: test_sha
+      repo: release
+    report: true
+    rerun_command: /test pj-rehearse
+    type: presubmit
+  status:
+    startTime: 2020-06-22T22:25:00Z
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-periodic-with-unresolved-config-no-target
+    creationTimestamp: null
+    labels:
+      ci.openshift.org/rehearse: "1234"
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-periodic-with-unresolved
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: test-prowjob
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/periodic-ci-super-duper-periodic-with-unresolved-config-no-target
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: ciop-cfg-change
+      org: super
+      repo: duper
+      workdir: true
+    job: rehearse-1234-periodic-ci-super-duper-periodic-with-unresolved-config-no-target
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --no-ci-op-args
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          value: |
+            resources:
+              '*':
+                limits:
+                  cpu: 500Mi
+                requests:
+                  cpu: 10Mi
+            tag_specification:
+              name: "4.7"
+              namespace: ocp
+            tests:
+            - as: multistage
+              literal_steps:
+                cluster_profile: ""
+                post:
+                - as: ipi-deprovision-must-gather
+                  commands: |
+                    gather
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-deprovision-deprovision
+                  commands: |
+                    openshift-cluster destroy
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                pre:
+                - as: ipi-install-rbac
+                  commands: |
+                    setup-rbac-2
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-install-install
+                  commands: |
+                    openshift-cluster install --newFlag
+                  env:
+                  - default: test parameter default
+                    name: TEST_PARAMETER
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                test:
+                - as: e2e
+                  commands: this job has no --target so this test should be in inline CONFIG_SPEC
+                  from: my-image
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+            - as: also-multistage
+              literal_steps:
+                cluster_profile: ""
+                post:
+                - as: ipi-deprovision-must-gather
+                  commands: |
+                    gather
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-deprovision-deprovision
+                  commands: |
+                    openshift-cluster destroy
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                pre:
+                - as: ipi-install-rbac
+                  commands: |
+                    setup-rbac-2
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-install-install
+                  commands: |
+                    openshift-cluster install --newFlag
+                  env:
+                  - default: test parameter default
+                    name: TEST_PARAMETER
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                test:
+                - as: e2e
+                  commands: this job has no --target so this test should be in inline CONFIG_SPEC
+                  from: my-image
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+            zz_generated_metadata:
+              branch: ""
+              org: ""
+              repo: ""
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+    refs:
+      base_ref: master
+      base_sha: test_sha
+      org: openshift
+      pulls:
+      - author: petr-muller
+        number: 1234
+        sha: test_sha
+      repo: release
+    report: true
+    rerun_command: /test pj-rehearse
+    type: presubmit
+  status:
+    startTime: 2020-06-22T22:25:00Z
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-custom
     creationTimestamp: null
     labels:

@@ -115,40 +115,40 @@ func generateTestConfigFiles() config.DataByFilename {
 
 var ignoreUnexported = cmpopts.IgnoreUnexported(prowconfig.Presubmit{}, prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{})
 
-func makeTestingPresubmitForEnv(env []v1.EnvVar) *prowconfig.Presubmit {
-	return &prowconfig.Presubmit{
-		JobBase: prowconfig.JobBase{
-			Agent:  "kubernetes",
-			Name:   "test-job-name",
-			Labels: map[string]string{"pj-rehearse.openshift.io/can-be-rehearsed": "true"},
-			Spec: &v1.PodSpec{
-				Containers: []v1.Container{
-					{Env: env},
+func TestInlineCiopConfig(t *testing.T) {
+	unresolvedConfig := api.ReleaseBuildConfiguration{
+		Tests: []api.TestStepConfiguration{
+			{
+				As: "test1",
+				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+					Pre: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{As: "test1-from-unresolved"}}},
+				},
+			},
+			{
+				As: "test2",
+			},
+		},
+	}
+	unresolvedConfigContent, err := yaml.Marshal(&unresolvedConfig)
+	if err != nil {
+		t.Fatal("Failed to marshal ci-operator config")
+	}
+	test1ConfigFromUnresolved := api.ReleaseBuildConfiguration{
+		Tests: []api.TestStepConfiguration{
+			{
+				As: "test1",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Pre: []api.LiteralTestStep{{As: "test1-from-unresolved"}},
 				},
 			},
 		},
 	}
-}
-
-func makeCMReference(cmName, key string) *v1.EnvVarSource {
-	return &v1.EnvVarSource{
-		ConfigMapKeyRef: &v1.ConfigMapKeySelector{
-			LocalObjectReference: v1.LocalObjectReference{
-				Name: cmName,
-			},
-			Key: key,
-		},
+	test1ConfigContentFromUnresolved, err := yaml.Marshal(&test1ConfigFromUnresolved)
+	if err != nil {
+		t.Fatal("Failed to marshal ci-operator config")
 	}
-}
 
-var testCiopConfigInfo = api.Metadata{
-	Org:    "targetOrg",
-	Repo:   "targetRepo",
-	Branch: "master",
-}
-
-func TestInlineCiopConfig(t *testing.T) {
-	testCiopConfig := api.ReleaseBuildConfiguration{
+	resolvedConfig := api.ReleaseBuildConfiguration{
 		Tests: []api.TestStepConfiguration{{
 			As: "test1",
 			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
@@ -159,41 +159,104 @@ func TestInlineCiopConfig(t *testing.T) {
 		}},
 	}
 
+	testCiopConfigTest1 := api.ReleaseBuildConfiguration{Tests: []api.TestStepConfiguration{resolvedConfig.Tests[0]}}
+	testCiopConfigContentTest1, err := yaml.Marshal(&testCiopConfigTest1)
+	if err != nil {
+		t.Fatal("Failed to marshal ci-operator config")
+	}
+
+	testCiopConfigTest2 := api.ReleaseBuildConfiguration{Tests: []api.TestStepConfiguration{resolvedConfig.Tests[1]}}
+	testCiopConfigContentTest2, err := yaml.Marshal(&testCiopConfigTest2)
+	if err != nil {
+		t.Fatal("Failed to marshal ci-operator config")
+	}
+
+	standardMetadata := api.Metadata{Org: "targetOrg", Repo: "targetRepo", Branch: "master"}
+	incompleteMetadata := api.Metadata{Org: "openshift", Repo: "release"}
+
+	makePresubmit := func(command string, env []v1.EnvVar, args []string) *prowconfig.Presubmit {
+		return &prowconfig.Presubmit{
+			JobBase: prowconfig.JobBase{
+				Agent:  "kubernetes",
+				Name:   "test-job-name",
+				Labels: map[string]string{"pj-rehearse.openshift.io/can-be-rehearsed": "true"},
+				Spec: &v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Args:    args,
+							Command: []string{command},
+							Env:     env,
+						},
+					},
+				},
+			},
+		}
+	}
+
+	configs := config.DataByFilename{
+		standardMetadata.Basename(): {
+			Info: config.Info{
+				Metadata: standardMetadata,
+			},
+			Configuration: resolvedConfig,
+		},
+	}
+
 	testCases := []struct {
-		description               string
-		testname                  string
-		sourceEnv                 []v1.EnvVar
-		configs                   config.DataByFilename
+		description string
+
+		testname  string
+		command   string
+		sourceEnv []v1.EnvVar
+		metadata  api.Metadata
+
 		expectedEnv               []v1.EnvVar
 		expectedError             bool
 		expectedImageStreamTagMap apihelper.ImageStreamTagMap
-	}{{
-		description: "empty env -> no changes",
-		configs:     config.DataByFilename{},
-	}, {
-		description: "no Env.ValueFrom -> no changes",
-		sourceEnv:   []v1.EnvVar{{Name: "T", Value: "V"}},
-		configs:     config.DataByFilename{},
-		expectedEnv: []v1.EnvVar{{Name: "T", Value: "V"}},
-	}, {
-		description: "no Env.ValueFrom.ConfigMapKeyRef -> no changes",
-		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: &v1.EnvVarSource{ResourceFieldRef: &v1.ResourceFieldSelector{}}}},
-		configs:     config.DataByFilename{},
-		expectedEnv: []v1.EnvVar{{Name: "T", ValueFrom: &v1.EnvVarSource{ResourceFieldRef: &v1.ResourceFieldSelector{}}}},
-	}, {
-		description: "CM reference but not ci-operator-configs -> no changes",
-		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference("test-cm", "key")}},
-		configs:     config.DataByFilename{},
-		expectedEnv: []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference("test-cm", "key")}},
-	},
+	}{
 		{
-			// After DPTP-1685: jobs are not expected to refer to ci-operator CMs directly anymore, so
-			// rehearsals do not need to support that cases anymore
-			description: "CM reference to ci-operator-configs -> no changes; test1",
+			description: "not a ci-operator job -> no changes",
+			command:     "not-ci-operator",
+			metadata:    standardMetadata,
+		},
+		{
+			description: "ci-operator job with CONFIG_SPEC -> no changes",
+			sourceEnv:   []v1.EnvVar{{Name: "CONFIG_SPEC", Value: "this is kept"}},
+			metadata:    standardMetadata,
+			expectedEnv: []v1.EnvVar{{Name: "CONFIG_SPEC", Value: "this is kept"}},
+		},
+		{
+			description:               "ci-operator job -> adds CONFIG_SPEC with resolved config for the given test (test1)",
+			testname:                  "test1",
+			metadata:                  standardMetadata,
+			expectedEnv:               []v1.EnvVar{{Name: "CONFIG_SPEC", Value: string(testCiopConfigContentTest1)}},
+			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
+		},
+		{
+			description: "ci-operator job -> adds CONFIG_SPEC with resolved config for the given test (test2)",
+			testname:    "test2",
+			metadata:    standardMetadata,
+			expectedEnv: []v1.EnvVar{{Name: "CONFIG_SPEC", Value: string(testCiopConfigContentTest2)}},
+		},
+		{
+			description: "ci-operator job with UNRESOLVED_CONFIG -> adds CONFIG_SPEC with resolved config for the given test (test1)",
 			testname:    "test1",
-			sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
-			configs:     config.DataByFilename{"filename": {Info: config.Info{Metadata: testCiopConfigInfo}, Configuration: testCiopConfig}},
-			expectedEnv: []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
+			metadata:    standardMetadata,
+			sourceEnv:   []v1.EnvVar{{Name: "UNRESOLVED_CONFIG", Value: string(unresolvedConfigContent)}},
+			expectedEnv: []v1.EnvVar{{Name: "CONFIG_SPEC", Value: string(test1ConfigContentFromUnresolved)}},
+		},
+		{
+			description:   "Incomplete metadata -> error",
+			testname:      "test1",
+			metadata:      incompleteMetadata,
+			expectedError: true,
+		},
+		{
+			description: "A non-ci-operator jobs with UNRESOLVED_CONFIG should be left untouched",
+			command:     "not-ci-operator",
+			metadata:    standardMetadata,
+			sourceEnv:   []v1.EnvVar{{Name: "UNRESOLVED_CONFIG", Value: "should not change"}},
+			expectedEnv: []v1.EnvVar{{Name: "UNRESOLVED_CONFIG", Value: "should not change"}},
 		},
 	}
 
@@ -205,10 +268,17 @@ func TestInlineCiopConfig(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			testLoggers := Loggers{logrus.New(), logrus.New()}
-			job := makeTestingPresubmitForEnv(tc.sourceEnv)
-			expectedJob := makeTestingPresubmitForEnv(tc.expectedEnv)
+			if tc.command == "" {
+				tc.command = "ci-operator"
+			}
+			var args []string
+			if tc.testname != "" {
+				args = append(args, fmt.Sprintf("--target=%s", tc.testname))
+			}
+			job := makePresubmit(tc.command, tc.sourceEnv, args)
+			expectedJob := makePresubmit(tc.command, tc.expectedEnv, args)
 
-			imageStreamTags, err := inlineCiOpConfig(&job.Spec.Containers[0], tc.configs, resolver, testCiopConfigInfo, tc.testname, testLoggers)
+			imageStreamTags, err := inlineCiOpConfig(&job.Spec.Containers[0], configs, resolver, tc.metadata, tc.testname, testLoggers)
 
 			if tc.expectedError && err == nil {
 				t.Fatalf("Expected inlineCiopConfig() to return an error, none returned")

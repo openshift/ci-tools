@@ -1020,6 +1020,14 @@ func TestLeasesForTest(t *testing.T) {
 			Leases: []api.StepLease{{ResourceType: "aws-quota-slice"}},
 		},
 		expected: []api.StepLease{{ResourceType: "aws-quota-slice"}},
+	}, {
+		name: "explicit configuration in step, lease",
+		tests: api.MultiStageTestConfigurationLiteral{
+			Test: []api.LiteralTestStep{
+				{Leases: []api.StepLease{{ResourceType: "aws-quota-slice"}}},
+			},
+		},
+		expected: []api.StepLease{{ResourceType: "aws-quota-slice"}},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			ret := leasesForTest(&tc.tests)

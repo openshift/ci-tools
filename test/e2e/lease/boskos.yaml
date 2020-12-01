@@ -4,3 +4,7 @@ resources:
   state: free
   min-count: 1
   max-count:  1
+- type: gcp-quota-slice
+  state: free
+  min-count: 1
+  max-count:  1

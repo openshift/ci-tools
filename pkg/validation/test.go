@@ -21,18 +21,20 @@ const (
 )
 
 type context struct {
-	fieldRoot string
-	env       api.TestEnvironment
-	seen      sets.String
-	releases  sets.String
+	fieldRoot  string
+	env        api.TestEnvironment
+	seen       sets.String
+	leasesSeen sets.String
+	releases   sets.String
 }
 
 func newContext(fieldRoot string, env api.TestEnvironment, releases sets.String) context {
 	return context{
-		fieldRoot: fieldRoot,
-		env:       env,
-		seen:      sets.NewString(),
-		releases:  releases,
+		fieldRoot:  fieldRoot,
+		env:        env,
+		seen:       sets.NewString(),
+		leasesSeen: sets.NewString(),
+		releases:   releases,
 	}
 }
 
@@ -332,6 +334,7 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
 		context := newContext(fieldRoot, testConfig.Environment, releases)
+		validationErrors = append(validationErrors, validateLeases(context.forField(".leases"), testConfig.Leases)...)
 		validationErrors = append(validationErrors, validateTestSteps(context.forField(".pre"), testStagePre, testConfig.Pre)...)
 		validationErrors = append(validationErrors, validateTestSteps(context.forField(".test"), testStageTest, testConfig.Test)...)
 		validationErrors = append(validationErrors, validateTestSteps(context.forField(".post"), testStagePost, testConfig.Post)...)
@@ -342,6 +345,7 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 		if testConfig.ClusterProfile != "" {
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
+		validationErrors = append(validationErrors, validateLeases(context.forField(".leases"), testConfig.Leases)...)
 		for i, s := range testConfig.Pre {
 			validationErrors = append(validationErrors, validateLiteralTestStep(context.forField(fmt.Sprintf(".pre[%d]", i)), testStagePre, s)...)
 		}
@@ -460,7 +464,7 @@ func validateLiteralTestStep(context context, stage testStage, step api.LiteralT
 		ret = append(ret, err)
 	}
 	ret = append(ret, validateDependencies(context.fieldRoot, step.Dependencies)...)
-	ret = append(ret, validateLeases(&context, step.Leases)...)
+	ret = append(ret, validateLeases(context.forField(".leases"), step.Leases)...)
 	switch stage {
 	case testStagePre, testStageTest:
 		if step.OptionalOnSuccess != nil {
@@ -551,21 +555,18 @@ func validateDependencies(fieldRoot string, dependencies []api.StepDependency) [
 	return errs
 }
 
-func validateLeases(context *context, leases []api.StepLease) []error {
-	var ret []error
-	var dup []string
-	seen := sets.NewString()
+func validateLeases(context context, leases []api.StepLease) (ret []error) {
 	for i, l := range leases {
 		if l.ResourceType == "" {
 			ret = append(ret, fmt.Errorf("%s[%d]: 'resource_type' cannot be empty", context.fieldRoot, i))
-		} else if seen.Has(l.ResourceType) {
-			dup = append(dup, l.ResourceType)
+		}
+		if l.Env == "" {
+			ret = append(ret, fmt.Errorf("%s[%d]: 'env' cannot be empty", context.fieldRoot, i))
+		} else if context.leasesSeen.Has(l.Env) {
+			ret = append(ret, fmt.Errorf("%s[%d]: duplicate environment variable: %s", context.fieldRoot, i, l.Env))
 		} else {
-			seen.Insert(l.ResourceType)
+			context.leasesSeen.Insert(l.Env)
 		}
 	}
-	if dup != nil {
-		ret = append(ret, fmt.Errorf("%s: duplicate names: %s", context.fieldRoot, dup))
-	}
-	return ret
+	return
 }

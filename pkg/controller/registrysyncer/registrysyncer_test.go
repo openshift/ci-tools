@@ -3,7 +3,6 @@ package registrysyncer
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -178,7 +177,6 @@ func init() {
 }
 
 func TestReconcile(t *testing.T) {
-	t.Parallel()
 	pullSecretGetter := func() []byte {
 		return []byte("some-secret")
 	}
@@ -527,7 +525,6 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 	} {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			r := &reconciler{
 				log: logrus.NewEntry(logrus.New()),
@@ -536,12 +533,8 @@ func TestReconcile(t *testing.T) {
 					appCI: tc.appCIClient,
 				},
 				pullSecretGetter: pullSecretGetter,
-				imageStreamLocks: &shardedLock{
-					mapLock: &sync.Mutex{},
-					locks:   map[simpleImageStream]*sync.Mutex{},
-				},
 			}
-			r.imageStreamLocks.runCleanup()
+
 			request := reconcile.Request{NamespacedName: tc.request}
 			actual := r.reconcile(context.Background(), request, r.log)
 

@@ -129,6 +129,14 @@ production-install:
 	hack/install.sh
 .PHONY: production-install
 
+# Install Go binaries with enabled race detector to $GOPATH/bin.
+# Set version and name variables.
+#
+# Example:
+#   make production-install
+race-install:
+	hack/install.sh race
+
 # Run integration tests.
 #
 # Accepts a specific suite to run as an argument.

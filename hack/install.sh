@@ -10,7 +10,14 @@ function cleanup() {
 }
 trap "cleanup" EXIT
 
-export CGO_ENABLED=0
+RACE_FLAG=""
+if [[ ${1:-} == "race" ]]; then
+  export CGO_ENABLED=1
+  RACE_FLAG="-race"
+else
+  export CGO_ENABLED=0
+fi
+
 
 git_commit="$( git describe --tags --always --dirty )"
 build_date="$( date -u '+%Y%m%d' )"
@@ -18,5 +25,5 @@ version="v${build_date}-${git_commit}"
 
 for dir in $( find ./cmd/ -mindepth 1 -maxdepth 1 -type d -not \( -name '*ipi-deprovison*' \) ); do
     command="$( basename "${dir}" )"
-    go install -ldflags "-X 'k8s.io/test-infra/prow/version.Name=${command}' -X 'k8s.io/test-infra/prow/version.Version=${version}'" "./cmd/${command}/..."
+    go install $RACE_FLAG -ldflags "-X 'k8s.io/test-infra/prow/version.Name=${command}' -X 'k8s.io/test-infra/prow/version.Version=${version}'" "./cmd/${command}/..."
 done

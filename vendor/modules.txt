@@ -1143,7 +1143,7 @@ knative.dev/pkg/kmp
 sigs.k8s.io/boskos/client
 sigs.k8s.io/boskos/common
 sigs.k8s.io/boskos/storage
-# sigs.k8s.io/controller-runtime v0.7.0-alpha.6.0.20201112182909-33f1d80ebeaa
+# sigs.k8s.io/controller-runtime v0.7.0-alpha.6.0.20201130155849-2879800afa6b
 ## explicit
 sigs.k8s.io/controller-runtime
 sigs.k8s.io/controller-runtime/pkg/builder

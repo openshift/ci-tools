@@ -13,7 +13,7 @@ func TestAcquire(t *testing.T) {
 	ctx := context.Background()
 	var calls []string
 	client := NewFakeClient("owner", "url", 0, nil, &calls)
-	if _, err := client.Acquire("rtype", ctx, nil); err != nil {
+	if _, err := client.Acquire("rtype", 1, ctx, nil); err != nil {
 		t.Fatal(err)
 	}
 	expected := []string{"acquire owner rtype free leased random"}
@@ -45,7 +45,7 @@ func TestHeartbeatCancel(t *testing.T) {
 	var calls []string
 	client := NewFakeClient("owner", "url", 0, sets.NewString("updateone owner rtype_0 leased 0"), &calls)
 	var called bool
-	if _, err := client.Acquire("rtype", ctx, func() { called = true }); err != nil {
+	if _, err := client.Acquire("rtype", 1, ctx, func() { called = true }); err != nil {
 		t.Fatal(err)
 	}
 	if err := client.Heartbeat(); err == nil {
@@ -104,7 +104,7 @@ func TestHeartbeatRetries(t *testing.T) {
 			var calls []string
 			client := NewFakeClient("owner", "url", 2, sets.NewString(tc.failures...), &calls)
 			var called bool
-			if _, err := client.Acquire("rtype", ctx, func() { called = true }); err != nil {
+			if _, err := client.Acquire("rtype", 1, ctx, func() { called = true }); err != nil {
 				t.Fatal(err)
 			}
 			for i := 0; i < tc.requests-1; i++ {

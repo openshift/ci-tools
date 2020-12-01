@@ -1,0 +1,16 @@
+ref:
+  as: declare-and-check-leases-with-count
+  commands: declare-and-check-leases-with-count-commands.sh
+  from: os
+  leases:
+  - resource_type: aws-quota-slice
+    env: LEASE0
+    count: 3
+  - resource_type: gcp-quota-slice
+    env: LEASE1
+    count: 5
+  readonly_shared_dir: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 200Mi

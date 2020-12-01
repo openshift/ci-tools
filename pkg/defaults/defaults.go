@@ -233,6 +233,7 @@ func fromConfig(
 				leases := []api.StepLease{{
 					ResourceType: lease,
 					Env:          steps.DefaultLeaseEnv,
+					Count:        1,
 				}}
 				step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
 				break
@@ -308,6 +309,7 @@ func stepForTest(
 		step = steps.LeaseStep(leaseClient, []api.StepLease{{
 			ResourceType: test.ClusterProfile.LeaseType(),
 			Env:          steps.DefaultLeaseEnv,
+			Count:        1,
 		}}, step, jobSpec.Namespace)
 		addProvidesForStep(step, params)
 		return []api.Step{step}, nil
@@ -377,6 +379,7 @@ func leasesForTest(s *api.MultiStageTestConfigurationLiteral) (ret []api.StepLea
 		ret = append(ret, api.StepLease{
 			ResourceType: p.LeaseType(),
 			Env:          steps.DefaultLeaseEnv,
+			Count:        1,
 		})
 	}
 	for _, step := range append(s.Pre, append(s.Test, s.Post...)...) {

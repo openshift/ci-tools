@@ -70,7 +70,7 @@ func TestConfig(t *testing.T) {
 	}
 
 	configAgent := &Agent{}
-	if err := configAgent.Start(configFile.Name()); err != nil {
+	if err := configAgent.Start(configFile.Name(), func(secrets []MirrorConfig) {}); err != nil {
 		t.Errorf("expected no error (configAgent.Start) but got one: %v", err)
 	}
 

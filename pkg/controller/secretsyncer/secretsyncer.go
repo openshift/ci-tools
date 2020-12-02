@@ -16,6 +16,7 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -31,12 +32,15 @@ const (
 	referenceClusterName = "api.ci"
 )
 
+// Enqueuer allows the caller to Enqueue a config change event
+type Enqueuer func(allSecretsInConfig []config.MirrorConfig)
+
 func AddToManager(mgr manager.Manager,
 	referenceCluster manager.Manager,
 	otherBuildClusters map[string]manager.Manager,
 	config config.Getter,
 	secretbootstrapConfig secretbootstrap.Config,
-) error {
+) (Enqueuer, error) {
 
 	r := &reconciler{
 		log:                    logrus.WithField("controller", ControllerName),
@@ -50,7 +54,7 @@ func AddToManager(mgr manager.Manager,
 		MaxConcurrentReconciles: 20,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to construct controller: %w", err)
+		return nil, fmt.Errorf("failed to construct controller: %w", err)
 	}
 
 	// Like the original implementation we don't handle the case of "someone changed target secret, find
@@ -74,10 +78,36 @@ func AddToManager(mgr manager.Manager,
 			return requests
 		}),
 	); err != nil {
-		return fmt.Errorf("failed to create watch on reference cluster %s: %w", referenceClusterName, err)
+		return nil, fmt.Errorf("failed to create watch on reference cluster %s: %w", referenceClusterName, err)
 	}
 
-	return nil
+	enqueuer, src := newConfigChangeSource()
+
+	if err := c.Watch(src, handler.EnqueueRequestsFromMapFunc(func(o ctrlruntimeclient.Object) []reconcile.Request {
+		// The reference cluster enq all clusters
+		var requests []reconcile.Request
+		for _, targetCluster := range allTargetClusters.List() {
+			requests = append(requests, requestForCluster(targetCluster, o.GetNamespace(), o.GetName()))
+		}
+		return requests
+	})); err != nil {
+		return nil, fmt.Errorf("failed to create watch on reference cluster %s: %w", referenceClusterName, err)
+	}
+
+	return enqueuer, nil
+}
+
+func newConfigChangeSource() (Enqueuer, source.Source) {
+	channel := make(chan event.GenericEvent)
+	src := &source.Channel{
+		Source: channel,
+	}
+	enqueuer := func(allSecretsInConfig []config.MirrorConfig) {
+		for _, secret := range allSecretsInConfig {
+			channel <- event.GenericEvent{Object: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: secret.From.Namespace, Name: secret.From.Name}}}
+		}
+	}
+	return enqueuer, src
 }
 
 type filter func(target *boostrapSecretConfigTarget) bool

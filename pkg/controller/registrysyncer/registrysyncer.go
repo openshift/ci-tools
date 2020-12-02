@@ -110,7 +110,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	log.Info("Starting reconciliation")
 	err := r.reconcile(ctx, req, log)
 	// Ignore the logging for IsConflict errors because they are results of concurrent reconciling
-	if err != nil && !apierrors.IsConflict(err) {
+	if err != nil && !apierrors.IsConflict(err) && !apierrors.IsAlreadyExists(err) {
 		log.WithError(err).Error("Reconciliation failed")
 	} else {
 		log.Info("Finished reconciliation")
@@ -481,7 +481,7 @@ func upsertObject(ctx context.Context, c ctrlruntimeclient.Client, obj ctrlrunti
 	log = log.WithFields(logrus.Fields{"namespace": obj.GetNamespace(), "name": obj.GetName(), "type": fmt.Sprintf("%T", obj)})
 	result, err := crcontrollerutil.CreateOrUpdate(ctx, c, obj, mutateFn)
 	log = log.WithField("operation", result)
-	if err != nil && !apierrors.IsConflict(err) {
+	if err != nil && !apierrors.IsConflict(err) && !apierrors.IsAlreadyExists(err) {
 		log.WithError(err).Error("Upsert failed")
 	} else if result != crcontrollerutil.OperationResultNone {
 		log.Info("Upsert succeeded")

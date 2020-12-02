@@ -3,7 +3,6 @@ package registrysyncer
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -536,12 +535,8 @@ func TestReconcile(t *testing.T) {
 					appCI: tc.appCIClient,
 				},
 				pullSecretGetter: pullSecretGetter,
-				imageStreamLocks: &shardedLock{
-					mapLock: &sync.Mutex{},
-					locks:   map[simpleImageStream]*sync.Mutex{},
-				},
 			}
-			r.imageStreamLocks.runCleanup()
+
 			request := reconcile.Request{NamespacedName: tc.request}
 			actual := r.reconcile(context.Background(), request, r.log)
 

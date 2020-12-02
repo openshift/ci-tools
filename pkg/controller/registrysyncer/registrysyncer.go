@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -52,18 +51,13 @@ func AddToManager(mgr manager.Manager,
 		imageStreamPrefixes:   imageStreamPrefixes,
 		imageStreamNamespaces: imageStreamNamespaces,
 		deniedImageStreams:    deniedImageStreams,
-		imageStreamLocks: &shardedLock{
-			mapLock: &sync.Mutex{},
-			locks:   map[simpleImageStream]*sync.Mutex{},
-			log:     log,
-		},
 	}
-	r.imageStreamLocks.runCleanup()
 	for clusterName, m := range managers {
 		r.registryClients[clusterName] = imagestreamtagwrapper.MustNew(m.GetClient(), m.GetCache())
 	}
 	c, err := controller.New(ControllerName, mgr, controller.Options{
-		Reconciler:              r,
+		Reconciler: r,
+		// When > 1, there will be IsConflict errors on updating the same ImageStream
 		MaxConcurrentReconciles: 100,
 	})
 	if err != nil {
@@ -81,57 +75,6 @@ func AddToManager(mgr manager.Manager,
 
 	r.log.Info("Successfully added reconciler to manager")
 	return nil
-}
-
-type simpleImageStream struct {
-	//Exclude cluster here intentionally: code is easier with litter performance impact
-	types.NamespacedName
-}
-
-type shardedLock struct {
-	mapLock *sync.Mutex
-	locks   map[simpleImageStream]*sync.Mutex
-	log     *logrus.Entry
-}
-
-func (s *shardedLock) getLock(key simpleImageStream) *sync.Mutex {
-	s.mapLock.Lock()
-	defer s.mapLock.Unlock()
-	if _, exists := s.locks[key]; !exists {
-		s.locks[key] = &sync.Mutex{}
-	}
-	return s.locks[key]
-}
-
-// cleanup deletes all locks by acquiring first
-// the mapLock and then each individual lock before
-// deleting it. The individual lock must be acquired
-// because otherwise it may be held, we delete it from
-// the map, it gets recreated and acquired and two
-// routines report in parallel for the same job.
-// Note that while this function is running, no new
-// reconcile can happen, as we hold the mapLock.
-func (s *shardedLock) cleanup() {
-	s.mapLock.Lock()
-	defer s.mapLock.Unlock()
-
-	for key, lock := range s.locks {
-		lock.Lock()
-		delete(s.locks, key)
-		lock.Unlock()
-	}
-}
-
-// runCleanup asynchronously runs the cleanup once per hour.
-func (s *shardedLock) runCleanup() {
-	go func() {
-		for range time.Tick(time.Hour) {
-			s.log.Debug("Starting to clean up imagestream locks")
-			startTime := time.Now()
-			s.cleanup()
-			s.log.WithField("duration", time.Since(startTime).String()).Debug("Finished cleaning up imagestream locks")
-		}
-	}()
 }
 
 type objectFilter func(types.NamespacedName) bool
@@ -160,14 +103,14 @@ type reconciler struct {
 	imageStreamPrefixes   sets.String
 	imageStreamNamespaces sets.String
 	deniedImageStreams    sets.String
-	imageStreamLocks      *shardedLock
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	log := r.log.WithField("request", req.String())
 	log.Info("Starting reconciliation")
 	err := r.reconcile(ctx, req, log)
-	if err != nil {
+	// Ignore the logging for IsConflict errors because they are results of concurrent reconciling
+	if err != nil && !apierrors.IsConflict(err) {
 		log.WithError(err).Error("Reconciliation failed")
 	} else {
 		log.Info("Finished reconciliation")
@@ -181,16 +124,6 @@ const (
 )
 
 func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *logrus.Entry) error {
-	imageStreamNameAndTag := strings.Split(req.Name, ":")
-	if n := len(imageStreamNameAndTag); n != 2 {
-		return fmt.Errorf("when splitting imagestreamtagname %s by : expected two results, got %d", req.Name, n)
-	}
-	imageStreamName, imageTag := imageStreamNameAndTag[0], imageStreamNameAndTag[1]
-	key := simpleImageStream{NamespacedName: types.NamespacedName{Namespace: req.Namespace, Name: imageStreamName}}
-	lock := r.imageStreamLocks.getLock(key)
-	lock.Lock()
-	defer lock.Unlock()
-
 	isTags := map[string]*imagev1.ImageStreamTag{}
 	for clusterName, client := range r.registryClients {
 		*log = *log.WithField("clusterName", clusterName)
@@ -213,6 +146,11 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 	}
 	sourceImageStreamTag := isTags[srcClusterName]
 
+	imageStreamNameAndTag := strings.Split(req.Name, ":")
+	if n := len(imageStreamNameAndTag); n != 2 {
+		return fmt.Errorf("when splitting imagestreamtagname %s by : expected two results, got %d", req.Name, n)
+	}
+	imageStreamName, imageTag := imageStreamNameAndTag[0], imageStreamNameAndTag[1]
 	isName := types.NamespacedName{Namespace: req.Namespace, Name: imageStreamName}
 	sourceImageStream := &imagev1.ImageStream{}
 	if err := r.registryClients[srcClusterName].Get(ctx, isName, sourceImageStream); err != nil {
@@ -254,6 +192,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 				return fmt.Errorf("failed to create namespace %s on cluster %s: %w", req.Namespace, clusterName, err)
 			}
 		}
+
 		if err := r.ensureImageStream(ctx, sourceImageStream, client, log); err != nil {
 			return fmt.Errorf("failed to ensure imagestream on cluster %s: %w", clusterName, err)
 		}
@@ -356,19 +295,16 @@ func ensureRemoveFinalizer(ctx context.Context, stream *imagev1.ImageStream, cli
 	if !finalizerSet.Has(finalizerName) {
 		return nil
 	}
-	originalStream := stream.DeepCopy()
 	stream.Finalizers = finalizerSet.Delete(finalizerName).List()
-	// Use Patch instead of Update to avoid conflicting
-	return client.Patch(ctx, stream, ctrlruntimeclient.MergeFrom(originalStream))
+	return client.Update(ctx, stream)
 }
 
 func ensureFinalizer(ctx context.Context, stream *imagev1.ImageStream, client ctrlruntimeclient.Client) error {
 	if sets.NewString(stream.Finalizers...).Has(finalizerName) {
 		return nil
 	}
-	originalStream := stream.DeepCopy()
 	stream.Finalizers = append(stream.Finalizers, finalizerName)
-	return client.Patch(ctx, stream, ctrlruntimeclient.MergeFrom(originalStream))
+	return client.Update(ctx, stream)
 }
 
 func dockerImageImportedFromTargetingCluster(cluster string, tag *imagev1.ImageStreamTag) bool {
@@ -534,7 +470,7 @@ func upsertObject(ctx context.Context, c ctrlruntimeclient.Client, obj ctrlrunti
 	log = log.WithFields(logrus.Fields{"namespace": obj.GetNamespace(), "name": obj.GetName(), "type": fmt.Sprintf("%T", obj)})
 	result, err := crcontrollerutil.CreateOrUpdate(ctx, c, obj, mutateFn)
 	log = log.WithField("operation", result)
-	if err != nil {
+	if err != nil && !apierrors.IsConflict(err) {
 		log.WithError(err).Error("Upsert failed")
 	} else if result != crcontrollerutil.OperationResultNone {
 		log.Info("Upsert succeeded")

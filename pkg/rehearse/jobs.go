@@ -84,19 +84,6 @@ func NewCMClient(clusterConfig *rest.Config, namespace string, dry bool) (corecl
 	return cmClient.ConfigMaps(namespace), nil
 }
 
-// TODO: remove this when we can upgrate test-infra
-func CompletePrimaryRefs(refs pjapi.Refs, jb prowconfig.JobBase) *pjapi.Refs {
-	if jb.PathAlias != "" {
-		refs.PathAlias = jb.PathAlias
-	}
-	if jb.CloneURI != "" {
-		refs.CloneURI = jb.CloneURI
-	}
-	refs.SkipSubmodules = jb.SkipSubmodules
-	refs.CloneDepth = jb.CloneDepth
-	return &refs
-}
-
 func BranchFromRegexes(branches []string) string {
 	return strings.TrimPrefix(strings.TrimSuffix(branches[0], "$"), "^")
 }
@@ -110,7 +97,7 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	rehearsal.Name = fmt.Sprintf("rehearse-%d-%s", prNumber, source.Name)
 
 	var branch string
-	var context string
+	var ghContext string
 
 	if len(source.Branches) > 0 {
 		branch = BranchFromRegexes(source.Branches)
@@ -125,7 +112,7 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 					// from the target repo with all the "extra" fields from the job
 					// config, like path_alias, then remove them from the config so we
 					// don't use them in the future for any other refs
-					rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, *CompletePrimaryRefs(pjapi.Refs{
+					rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, *pjutil.CompletePrimaryRefs(pjapi.Refs{
 						Org:     jobOrg,
 						Repo:    jobRepo,
 						BaseRef: branch,
@@ -137,18 +124,18 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 					rehearsal.CloneDepth = 0
 				}
 			}
-			context += repo + "/"
+			ghContext += repo + "/"
 		}
-		context += branch + "/"
+		ghContext += branch + "/"
 	}
 
 	shortName := strings.TrimPrefix(source.Context, "ci/prow/")
 	if len(shortName) > 0 {
-		context += shortName
+		ghContext += shortName
 	} else {
-		context += source.Name
+		ghContext += source.Name
 	}
-	rehearsal.Context = fmt.Sprintf("ci/rehearse/%s", context)
+	rehearsal.Context = fmt.Sprintf("ci/rehearse/%s", ghContext)
 
 	rehearsal.RerunCommand = defaultRehearsalRerunCommand
 	rehearsal.Trigger = defaultRehearsalTrigger
@@ -627,7 +614,7 @@ func AddRandomJobsForChangedRegistry(regSteps []registry.Node, prConfigPresubmit
 	// sort steps to make it deterministic
 	sort.Sort(nodeArr(regSteps))
 	// make list to store MultiStageTestConfigurations that we've already added to the test list
-	addedConfigs := []*api.MultiStageTestConfiguration{}
+	var addedConfigs []*api.MultiStageTestConfiguration
 	for _, step := range regSteps {
 		var presubmitsMap map[string][]prowconfig.Presubmit
 		presubmitsMap, addedConfigs, err = getPresubmitsForRegistryStep(step, configsByFilename, prConfigPresubmits, addedConfigs)
@@ -769,7 +756,7 @@ type Executor struct {
 	pollFunc func(interval, timeout time.Duration, condition wait.ConditionFunc) error
 }
 
-// NewExecutor creates an executor. It also confgures the rehearsal jobs as a list of presubmits.
+// NewExecutor creates an executor. It also configures the rehearsal jobs as a list of presubmits.
 func NewExecutor(presubmits []*prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs,
 	dryRun bool, loggers Loggers, pjclient ctrlruntimeclient.Client, namespace string) *Executor {
 	return &Executor{
@@ -941,20 +928,20 @@ func removeConfigResolverFlags(args []string) ([]string, api.Metadata) {
 }
 
 func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
-	var errors []error
+	var errs []error
 	var pjs []*pjapi.ProwJob
 
 	for _, job := range e.presubmits {
 		created, err := e.submitPresubmit(job)
 		if err != nil {
 			e.loggers.Job.WithError(err).Warn("Failed to execute a rehearsal presubmit")
-			errors = append(errors, err)
+			errs = append(errs, err)
 			continue
 		}
 		pjs = append(pjs, created)
 	}
 
-	return pjs, utilerrors.NewAggregate(errors)
+	return pjs, utilerrors.NewAggregate(errs)
 }
 
 func (e *Executor) submitPresubmit(job *prowconfig.Presubmit) (*pjapi.ProwJob, error) {

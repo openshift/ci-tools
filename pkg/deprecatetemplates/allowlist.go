@@ -77,6 +77,10 @@ func (b blockedJobs) Union(other blockedJobs) blockedJobs {
 }
 
 type deprecatedTemplateBlocker struct {
+	// unexported field so it is never serialized and it is `false` by default on
+	// read. we set this to true when we create new blockers to recognize them
+	newlyAdded bool
+
 	Description string      `json:"description"`
 	Jobs        blockedJobs `json:"jobs,omitempty"`
 }
@@ -118,8 +122,12 @@ func (d *deprecatedTemplate) insert(job config.JobBase, defaultBlockers JiraHint
 	}
 
 	if d.UnknownBlocker == nil {
-		d.UnknownBlocker = &deprecatedTemplateBlocker{Jobs: blockedJobs{}}
+		d.UnknownBlocker = &deprecatedTemplateBlocker{
+			newlyAdded: true,
+			Jobs:       blockedJobs{},
+		}
 	} else if d.UnknownBlocker.Jobs == nil {
+		d.UnknownBlocker.newlyAdded = true
 		d.UnknownBlocker.Jobs = blockedJobs{}
 	}
 	d.UnknownBlocker.Jobs.Insert(job)

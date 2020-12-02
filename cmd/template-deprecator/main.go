@@ -119,12 +119,13 @@ func main() {
 	}
 
 	if opt.checks {
-		if errs := enforcer.Validate(); len(errs) > 0 {
+		if violations := enforcer.Validate(); len(violations) > 0 {
 			fmt.Printf("ERROR: Template deprecation allowlist has errors:\n")
-			for idx, err := range errs {
+			for idx, violation := range violations {
 				fmt.Printf("\nERROR: %d)\n", idx+1)
-				fmt.Printf("%s\n", err.Error())
+				fmt.Printf("%s\n", violation)
 			}
+			fmt.Println()
 			logrus.Fatalf("Template deprecation allowlist failed validation")
 		}
 	}

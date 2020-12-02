@@ -158,16 +158,17 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		return fmt.Errorf("failed to get imageStream %s from cluster %s: %w", isName.String(), srcClusterName, err)
 	}
 
-	if sourceImageStream.DeletionTimestamp != nil {
-		if err := finalizeIfNeeded(ctx, sourceImageStream, srcClusterName, r.registryClients); err != nil {
-			return fmt.Errorf("failed to finalize %s from cluster %s: %w", isName.String(), srcClusterName, err)
-		}
-		// no sync if the srcIS is deleted
-		return nil
-	}
-
 	if err := ensureFinalizer(ctx, sourceImageStream, r.registryClients[srcClusterName]); err != nil {
 		return fmt.Errorf("failed to ensure finalizer to %s from cluster %s: %w", isName.String(), srcClusterName, err)
+	}
+
+	deleted, err := finalizeIfNeeded(ctx, sourceImageStream, r.registryClients, log)
+	if err != nil {
+		return fmt.Errorf("failed to finalize %s from cluster %s: %w", isName.String(), srcClusterName, err)
+	}
+	if deleted {
+		// no sync if the srcIS is deleted
+		return nil
 	}
 
 	*log = *log.WithField("docker_image_reference", sourceImageStreamTag.Image.DockerImageReference)
@@ -258,44 +259,54 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 	return nil
 }
 
-func finalizeIfNeeded(ctx context.Context, stream *imagev1.ImageStream, srcClusterName string, clients map[string]ctrlruntimeclient.Client) error {
-	finalizerSet := sets.NewString(stream.Finalizers...)
-	if !finalizerSet.Has(finalizerName) {
-		return nil
-	}
-	for clusterName, client := range clients {
-		if clusterName == srcClusterName {
-			continue
-		}
-
-		isToDelete := &imagev1.ImageStream{}
-		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: stream.Name, Namespace: stream.Namespace}, isToDelete); err != nil {
+func finalizeIfNeeded(ctx context.Context, sourceImageStream *imagev1.ImageStream, clients map[string]ctrlruntimeclient.Client, log *logrus.Entry) (bool, error) {
+	foundDeleteTimestamp := false
+	for _, client := range clients {
+		stream := &imagev1.ImageStream{}
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: sourceImageStream.Name, Namespace: sourceImageStream.Namespace}, stream); err != nil {
 			if apierrors.IsNotFound(err) {
 				continue
 			}
-			return err
+			return false, err
 		}
-
-		if err := ensureRemoveFinalizer(ctx, isToDelete, client); err != nil {
-			return err
-		}
-
-		// populate deleting to all clusters except srcClusterName
-		if err := client.Delete(ctx, isToDelete); err != nil && !apierrors.IsNotFound(err) {
-			return err
+		if stream.DeletionTimestamp != nil {
+			foundDeleteTimestamp = true
+			break
 		}
 	}
+	if !foundDeleteTimestamp {
+		return false, nil
+	}
 
-	// remove our finalizer from the list and update it.
-	return ensureRemoveFinalizer(ctx, stream, clients[srcClusterName])
+	for _, client := range clients {
+		stream := &imagev1.ImageStream{}
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: sourceImageStream.Name, Namespace: sourceImageStream.Namespace}, stream); err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			return false, err
+		}
+		if err := ensureRemoveFinalizer(ctx, stream, client, log); err != nil {
+			return false, err
+		}
+		// populate deleting to all clusters if it has not been deleted
+		if stream.DeletionTimestamp == nil {
+			log.Debug("deleting imagestream")
+			if err := client.Delete(ctx, stream); err != nil && !apierrors.IsNotFound(err) {
+				return false, err
+			}
+		}
+	}
+	return true, nil
 }
 
-func ensureRemoveFinalizer(ctx context.Context, stream *imagev1.ImageStream, client ctrlruntimeclient.Client) error {
+func ensureRemoveFinalizer(ctx context.Context, stream *imagev1.ImageStream, client ctrlruntimeclient.Client, log *logrus.Entry) error {
 	finalizerSet := sets.NewString(stream.Finalizers...)
 	if !finalizerSet.Has(finalizerName) {
 		return nil
 	}
 	stream.Finalizers = finalizerSet.Delete(finalizerName).List()
+	log.Debug("removing finalizer")
 	return client.Update(ctx, stream)
 }
 

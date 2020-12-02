@@ -2,12 +2,14 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -420,12 +422,12 @@ func HasAllLinks(needles, haystack []StepLink) bool {
 	return true
 }
 
-type CIOperatorStepGraph []CIOperatorStepWithDependencies
+type CIOperatorStepGraph []CIOperatorStepDetails
 
 // MergeFrom merges two CIOperatorStepGraphs together using StepNames as merge keys.
 // The merging logic will never ovewrwrite data and only set unset fields.
 // Steps that do not exist in the first graph get appended.
-func (graph *CIOperatorStepGraph) MergeFrom(from ...CIOperatorStepWithDependencies) {
+func (graph *CIOperatorStepGraph) MergeFrom(from ...CIOperatorStepDetails) {
 	for _, step := range from {
 		var found bool
 		for idx, existing := range *graph {
@@ -442,7 +444,7 @@ func (graph *CIOperatorStepGraph) MergeFrom(from ...CIOperatorStepWithDependenci
 
 }
 
-func mergeSteps(into, from CIOperatorStepWithDependencies) CIOperatorStepWithDependencies {
+func mergeSteps(into, from CIOperatorStepDetails) CIOperatorStepDetails {
 	if into.Description == "" {
 		into.Description = from.Description
 	}
@@ -470,20 +472,63 @@ func mergeSteps(into, from CIOperatorStepWithDependencies) CIOperatorStepWithDep
 	if into.Failed == nil {
 		into.Failed = from.Failed
 	}
+	if into.Substeps == nil {
+		into.Substeps = from.Substeps
+	}
 
 	return into
 }
 
-type CIOperatorStepWithDependencies struct {
+type CIOperatorStepDetails struct {
+	CIOperatorStepDetailInfo `json:",inline"`
+	Substeps                 []CIOperatorStepDetailInfo `json:"substeps,omitempty"`
+}
+
+type CIOperatorStepDetailInfo struct {
 	StepName     string                     `json:"name"`
 	Description  string                     `json:"description"`
 	Dependencies []string                   `json:"dependencies"`
 	StartedAt    *time.Time                 `json:"started_at"`
 	FinishedAt   *time.Time                 `json:"finished_at"`
 	Duration     *time.Duration             `json:"duration,omitempty"`
-	Manifests    []ctrlruntimeclient.Object `json:"manifests"`
+	Manifests    []ctrlruntimeclient.Object `json:"manifests,omitempty"`
 	LogURL       string                     `json:"log_url,omitempty"`
 	Failed       *bool                      `json:"failed,omitempty"`
+}
+
+func (c *CIOperatorStepDetailInfo) UnmarshalJSON(data []byte) error {
+	raw := map[string]interface{}{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	manifests := []*unstructured.Unstructured{}
+	if rawManifests, ok := raw["manifests"]; ok {
+		serializedManifests, err := json.Marshal(rawManifests)
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(serializedManifests, &manifests); err != nil {
+			return err
+		}
+		delete(raw, "manifests")
+	}
+	reserializedWithoutManifests, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+
+	type silbling CIOperatorStepDetailInfo
+	var unmarshalTo silbling
+	if err := json.Unmarshal(reserializedWithoutManifests, &unmarshalTo); err != nil {
+		return err
+	}
+	*c = CIOperatorStepDetailInfo(unmarshalTo)
+	c.Manifests = nil
+	for _, manifest := range manifests {
+		c.Manifests = append(c.Manifests, manifest)
+	}
+	return nil
+
 }
 
 const CIOperatorStepGraphJSONFilename = "ci-operator-step-graph.json"

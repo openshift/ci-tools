@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 type LoggingClient interface {
@@ -15,6 +18,9 @@ type LoggingClient interface {
 	// Object contains the latest revision of each object the client has
 	// seen. Calling this will reset the cache.
 	Objects() []ctrlruntimeclient.Object
+	// New returns a new instance of a LoggingClient whose objects will
+	// not be logged in the parent.
+	New() LoggingClient
 }
 
 func New(upstream ctrlruntimeclient.Client) LoggingClient {
@@ -88,6 +94,18 @@ func (lc *loggingClient) DeleteAllOf(ctx context.Context, obj ctrlruntimeclient.
 }
 
 func (lc *loggingClient) logObject(obj ctrlruntimeclient.Object) {
+	gvk, err := apiutil.GVKForObject(obj, lc.Scheme())
+	if err != nil {
+		logrus.WithError(err).Errorf("Failed to get gvk for object %+v ", obj)
+	}
+	obj = obj.DeepCopyObject().(ctrlruntimeclient.Object)
+	typeAccessor, err := meta.TypeAccessor(obj)
+	if err != nil {
+		logrus.WithError(err).Errorf("Failed to get type accessor for object %+v", obj)
+	} else {
+		typeAccessor.SetKind(gvk.Kind)
+		typeAccessor.SetAPIVersion(gvk.GroupVersion().String())
+	}
 	lc.lock.Lock()
 	defer lc.lock.Unlock()
 	t := fmt.Sprintf("%T", obj)
@@ -113,6 +131,10 @@ func (lc *loggingClient) Objects() []ctrlruntimeclient.Object {
 
 	lc.logTo = map[string]map[string]ctrlruntimeclient.Object{}
 	return result
+}
+
+func (lc *loggingClient) New() LoggingClient {
+	return New(lc.upstream)
 }
 
 func (lc *loggingClient) Status() ctrlruntimeclient.StatusWriter {

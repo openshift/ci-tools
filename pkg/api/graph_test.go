@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strconv"
@@ -429,7 +430,7 @@ func TestCIOperatorStepGraphMergeFromKeepsAllData(t *testing.T) {
 			for i := 0; i < 100; i++ {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
 					existinGraphCopy := append(CIOperatorStepGraph{}, tc.existinGraph...)
-					step := CIOperatorStepWithDependencies{}
+					step := CIOperatorStepDetails{}
 					fuzz.New().Funcs(func(r *ctrlruntimeclient.Object, _ fuzz.Continue) { *r = &corev1.Pod{} }).Fuzz(&step)
 					if len(existinGraphCopy) == 1 {
 						existinGraphCopy[0].StepName = step.StepName
@@ -442,6 +443,46 @@ func TestCIOperatorStepGraphMergeFromKeepsAllData(t *testing.T) {
 						t.Errorf("original element differs from merged element: %s", diff)
 					}
 				})
+			}
+		})
+	}
+}
+
+func TestCIOperatorStepWithDependenciesSerializationRoundTrips(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			step := &CIOperatorStepDetailInfo{}
+			fuzz.New().Funcs(func(r *ctrlruntimeclient.Object, _ fuzz.Continue) {
+				p := &corev1.Pod{}
+				p.APIVersion = "v1"
+				p.Kind = "Pod"
+				*r = p
+			}).Fuzz(&step)
+
+			serializedFirstPasss, err := json.Marshal(step)
+			if err != nil {
+				t.Fatalf("first serializiation failed: %v", err)
+			}
+			var stepRoundTripped CIOperatorStepDetailInfo
+			if err := json.Unmarshal(serializedFirstPasss, &stepRoundTripped); err != nil {
+				t.Fatalf("failed to unserialize: %v", err)
+			}
+			serializationSecondPass, err := json.Marshal(stepRoundTripped)
+			if err != nil {
+				t.Fatalf("second serialization failed: %v", err)
+			}
+
+			// Have to serialize them yet again, because the field order is not deterministic
+			var o1 interface{}
+			var o2 interface{}
+			if err = json.Unmarshal(serializationSecondPass, &o1); err != nil {
+				t.Fatalf("failed to re-marshal first serialization: %v", err)
+			}
+			if err = json.Unmarshal(serializationSecondPass, &o2); err != nil {
+				t.Fatalf("failed to re-marshal first serialization: %v", err)
+			}
+			if diff := cmp.Diff(o1, o2); diff != "" {
+				t.Errorf("Serializations differ: %s", diff)
 			}
 		})
 	}

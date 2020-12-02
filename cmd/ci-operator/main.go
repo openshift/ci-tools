@@ -786,11 +786,6 @@ func (o *options) resolveInputs(steps []api.Step) error {
 }
 
 func (o *options) initializeNamespace() error {
-
-	if err := imageapi.AddToScheme(scheme.Scheme); err != nil {
-		return fmt.Errorf("failed to add imageapi to scheme: %w", err)
-	}
-
 	// We have to keep the project client because it return a project for a projectCreationRequest, ctrlruntimeclient can not do dark magic like that
 	projectGetter, err := projectclientset.NewForConfig(o.clusterConfig)
 	if err != nil {

@@ -20,6 +20,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 const (
@@ -136,7 +137,7 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	if err := s.createCredentials(); err != nil {
 		return fmt.Errorf("failed to create credentials: %w", err)
 	}
-	if err := s.setupRBAC(); err != nil {
+	if err := s.setupRBAC(ctx); err != nil {
 		return fmt.Errorf("failed to create RBAC objects: %w", err)
 	}
 	var errs []error
@@ -213,7 +214,7 @@ func (s *multiStageTestStep) Provides() api.ParameterMap {
 }
 func (s *multiStageTestStep) SubTests() []*junit.TestCase { return s.subTests }
 
-func (s *multiStageTestStep) setupRBAC() error {
+func (s *multiStageTestStep) setupRBAC(ctx context.Context) error {
 	labels := map[string]string{MultiStageTestLabel: s.name}
 	m := meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.name, Labels: labels}
 	sa := &coreapi.ServiceAccount{ObjectMeta: m}
@@ -240,16 +241,7 @@ func (s *multiStageTestStep) setupRBAC() error {
 		RoleRef:    rbacapi.RoleRef{Kind: "Role", Name: s.name},
 		Subjects:   subj,
 	}
-	check := func(err error) bool {
-		return err == nil || kerrors.IsAlreadyExists(err)
-	}
-	if err := s.client.Create(context.TODO(), sa); !check(err) {
-		return err
-	}
-	if err := s.client.Create(context.TODO(), role); !check(err) {
-		return err
-	}
-	if err := s.client.Create(context.TODO(), binding); !check(err) {
+	if err := util.CreateRBACs(ctx, sa, role, binding, s.client, 1*time.Minute, 5*time.Minute); err != nil {
 		return err
 	}
 	return nil

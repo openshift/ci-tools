@@ -70,7 +70,7 @@ func (s *importReleaseStep) Run(ctx context.Context) error {
 }
 
 func (s *importReleaseStep) run(ctx context.Context) error {
-	_, err := setupReleaseImageStream(s.jobSpec.Namespace(), s.client)
+	_, err := setupReleaseImageStream(ctx, s.jobSpec.Namespace(), s.client)
 	if err != nil {
 		return err
 	}

@@ -25,6 +25,7 @@ type options struct {
 	printStats           bool
 	hideTotals           bool
 	blockNewJobs         flagutil.Strings
+	checks               bool
 
 	help bool
 }
@@ -40,6 +41,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.BoolVar(&opt.prune, "prune", false, "If set, remove from allowlist all jobs that either no longer exist or no longer use a template")
 	fs.BoolVar(&opt.printStats, "stats", false, "If true, print template usage stats")
 	fs.BoolVar(&opt.hideTotals, "hide-totals", false, "If true, hide totals in template usage stats")
+	fs.BoolVar(&opt.checks, "checks", true, "If true (default), validate allowlist for correctness after update")
 
 	return opt
 }
@@ -115,6 +117,18 @@ func main() {
 		table.SetFooter(footer)
 		table.AppendBulk(data)
 		table.Render()
+	}
+
+	if opt.checks {
+		if violations := enforcer.Validate(); len(violations) > 0 {
+			fmt.Printf("ERROR: Template deprecation allowlist has errors:\n")
+			for idx, violation := range violations {
+				fmt.Printf("\nERROR: %d)\n", idx+1)
+				fmt.Printf("%s\n", violation)
+			}
+			fmt.Println()
+			logrus.Fatalf("Template deprecation allowlist failed validation")
+		}
 	}
 
 	if err := enforcer.SaveAllowlist(opt.allowlistPath); err != nil {

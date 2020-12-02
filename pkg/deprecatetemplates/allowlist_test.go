@@ -107,10 +107,11 @@ func TestDeprecatedTemplatePrune(t *testing.T) {
 			},
 		},
 	}
+	allowUnexported := cmp.AllowUnexported(blockedJob{}, deprecatedTemplateBlocker{})
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			tc.input.prune()
-			if diff := cmp.Diff(tc.input, tc.expected, cmp.AllowUnexported(blockedJob{})); diff != "" {
+			if diff := cmp.Diff(tc.input, tc.expected, allowUnexported); diff != "" {
 				t.Errorf("%s: deprecated template record differs from expected:\n%s", tc.description, diff)
 			}
 		})
@@ -190,15 +191,19 @@ func TestDeprecatedTemplateInsert(t *testing.T) {
 				UnknownBlocker: &deprecatedTemplateBlocker{Jobs: nil},
 			},
 			expectedDT: deprecatedTemplate{
-				UnknownBlocker: &deprecatedTemplateBlocker{Jobs: blockedJobs{job: blockedJob{Generated: false, Kind: "unknown", current: true}}},
+				UnknownBlocker: &deprecatedTemplateBlocker{
+					Jobs:       blockedJobs{job: blockedJob{Generated: false, Kind: "unknown", current: true}},
+					newlyAdded: true,
+				},
 			},
 		},
 	}
 
+	allowUnexported := cmp.AllowUnexported(blockedJob{}, deprecatedTemplateBlocker{})
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			tc.existingDT.insert(config.JobBase{Name: job}, tc.blockers)
-			if diff := cmp.Diff(tc.existingDT, tc.expectedDT, cmp.AllowUnexported(blockedJob{})); diff != "" {
+			if diff := cmp.Diff(tc.existingDT, tc.expectedDT, allowUnexported); diff != "" {
 				t.Errorf("%s: deprecated template record differs from expected:\n%s", tc.description, diff)
 			}
 		})
@@ -297,12 +302,13 @@ func TestAllowlistInsert(t *testing.T) {
 		},
 	}
 
+	ignoreUnexported := cmpopts.IgnoreUnexported(allowlist{}, blockedJob{}, deprecatedTemplateBlocker{})
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			actual := allowlist{Templates: tc.before}
 			actual.Insert(config.JobBase{Name: job}, template)
 			expected := allowlist{Templates: tc.expectedAfter}
-			if diff := cmp.Diff(&expected, &actual, cmpopts.IgnoreUnexported(allowlist{}, blockedJob{})); diff != "" {
+			if diff := cmp.Diff(&expected, &actual, ignoreUnexported); diff != "" {
 				t.Errorf("%s: allowlist differs from expected:\n%s", tc.description, diff)
 			}
 		})

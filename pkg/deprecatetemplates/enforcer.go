@@ -1,6 +1,7 @@
 package deprecatetemplates
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -200,4 +201,73 @@ func (e *Enforcer) Stats(hideTotals bool) (header, footer []string, lines [][]st
 		strconv.Itoa(sumUnknown),
 	}
 	return header, footer, lines
+}
+
+type enforcingFunc func() []error
+
+func (e *Enforcer) noNewUnknownBlockers() []error {
+	makeError := func(template string, blockers map[string]deprecatedTemplateBlocker) error {
+		lines := []string{fmt.Sprintf(`Jobs using the '%s' template were added with an
+unknown blocker. Add them under one of existing blockers by running one of the following:`, template)}
+		for id, blocker := range blockers {
+			lines = append(lines, fmt.Sprintf("$ make template-allowlist BLOCKER=%s # %s", id, blocker.Description))
+		}
+		lines = append(lines, "", `Alternatively, create a new JIRA and start tracking it in the allowlist:
+$ make template-allowlist BLOCKER="JIRAID:short description"`)
+
+		return errors.New(strings.Join(lines, "\n"))
+	}
+
+	var errs []error
+	if e.allowlist == nil {
+		return errs
+	}
+
+	for name, record := range e.allowlist.GetTemplates() {
+		if record.UnknownBlocker != nil && record.UnknownBlocker.newlyAdded {
+			errs = append(errs, makeError(name, record.Blockers))
+		}
+	}
+	return errs
+}
+
+func (e *Enforcer) noUnusedTemplates() []error {
+	var unused []string
+	configured := e.existingTemplates
+	used := e.allowlist.GetTemplates()
+	for template := range configured {
+		if _, ok := used[template]; !ok {
+			unused = append(unused, template)
+		}
+	}
+
+	if len(unused) == 0 {
+		return nil
+	}
+	lines := []string{`The following templates are not used by any job. Please remove their
+config-updater config from core-services/prow/02_config/_plugins.yaml)
+and code from ci-operator/templates. If you are trying to add a new template,
+you should add multi-stage steps instead.`}
+	for _, line := range unused {
+		lines = append(lines, fmt.Sprintf("- %s", line))
+	}
+
+	return []error{errors.New(strings.Join(lines, "\n"))}
+}
+
+func (e *Enforcer) Validate() []string {
+	checks := []enforcingFunc{
+		e.noUnusedTemplates,
+		e.noNewUnknownBlockers,
+	}
+	var violations []string
+	for _, check := range checks {
+		if errs := check(); len(errs) > 0 {
+			for _, err := range errs {
+				violations = append(violations, err.Error())
+			}
+		}
+	}
+
+	return violations
 }

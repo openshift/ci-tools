@@ -63,7 +63,7 @@ func (s *assembleReleaseStep) Run(ctx context.Context) error {
 	return results.ForReason("assembling_release").ForError(s.run(ctx))
 }
 
-func setupReleaseImageStream(namespace string, client ctrlruntimeclient.Client) (string, error) {
+func setupReleaseImageStream(ctx context.Context, namespace string, client ctrlruntimeclient.Client) (string, error) {
 	sa := &coreapi.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ci-operator",
@@ -101,15 +101,8 @@ func setupReleaseImageStream(namespace string, client ctrlruntimeclient.Client) 
 			Name: "ci-operator-image",
 		},
 	}
-	ctx := context.TODO()
-	if err := client.Create(ctx, sa); err != nil && !kerrors.IsAlreadyExists(err) {
-		return "", results.ForReason("creating_service_account").WithError(err).Errorf("could not create service account 'ci-operator' for: %v", err)
-	}
-	if err := client.Create(ctx, role); err != nil && !kerrors.IsAlreadyExists(err) {
-		return "", results.ForReason("creating_roles").WithError(err).Errorf("could not create role 'ci-operator-image' for: %v", err)
-	}
-	if err := client.Create(ctx, roleBinding); err != nil && !kerrors.IsAlreadyExists(err) {
-		return "", results.ForReason("binding_roles").WithError(err).Errorf("could not create role binding 'ci-operator-image' for: %v", err)
+	if err := util.CreateRBACs(ctx, sa, role, roleBinding, client, 1*time.Minute, 5*time.Minute); err != nil {
+		return "", err
 	}
 
 	// ensure the image stream exists
@@ -126,7 +119,7 @@ func setupReleaseImageStream(namespace string, client ctrlruntimeclient.Client) 
 }
 
 func (s *assembleReleaseStep) run(ctx context.Context) error {
-	releaseImageStreamRepo, err := setupReleaseImageStream(s.jobSpec.Namespace(), s.client)
+	releaseImageStreamRepo, err := setupReleaseImageStream(ctx, s.jobSpec.Namespace(), s.client)
 	if err != nil {
 		return err
 	}

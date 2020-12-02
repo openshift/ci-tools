@@ -13,7 +13,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	coreapi "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -336,8 +338,12 @@ func TestRun(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
+			sa := &coreapi.ServiceAccount{
+				ObjectMeta:       metav1.ObjectMeta{Name: "test", Namespace: "ns", Labels: map[string]string{"ci.openshift.io/multi-stage-test": "test"}},
+				ImagePullSecrets: []v1.LocalObjectReference{{Name: "ci-operator-dockercfg-12345"}},
+			}
 			name := "test"
-			crclient := &fakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient()), failures: tc.failures}
+			crclient := &fakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(sa.DeepCopyObject())), failures: tc.failures}
 			jobSpec := api.JobSpec{
 				JobSpec: prowdapi.JobSpec{
 					Job:       "job",
@@ -400,6 +406,7 @@ func TestArtifacts(t *testing.T) {
 	}
 	jobSpec.SetNamespace(ns)
 	testName := "test"
+	sa := &coreapi.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "test", GenerateName: "", Namespace: "namespace", Labels: map[string]string{"ci.openshift.io/multi-stage-test": "test"}}}
 	step := MultiStageTestStep(api.TestStepConfiguration{
 		As: testName,
 		MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
@@ -408,7 +415,7 @@ func TestArtifacts(t *testing.T) {
 				{As: "test1", ArtifactDir: "/path/to/artifacts"},
 			},
 		},
-	}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: &fakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient())}}, tmp, &jobSpec, nil)
+	}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: &fakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(sa.DeepCopyObject()))}}, tmp, &jobSpec, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := step.Run(ctx); err != nil {
@@ -467,7 +474,9 @@ func TestJUnit(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			client := &fakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient()), failures: tc.failures}
+			sa := &coreapi.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-namespace", Labels: map[string]string{"ci.openshift.io/multi-stage-test": "test"}}}
+
+			client := &fakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(sa.DeepCopyObject())), failures: tc.failures}
 			jobSpec := api.JobSpec{
 				JobSpec: prowdapi.JobSpec{
 					Job:       "job",

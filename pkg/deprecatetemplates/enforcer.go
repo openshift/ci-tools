@@ -1,6 +1,7 @@
 package deprecatetemplates
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -202,7 +203,43 @@ func (e *Enforcer) Stats(hideTotals bool) (header, footer []string, lines [][]st
 	return header, footer, lines
 }
 
-func (e *Enforcer) Validate() []error {
-	var errs []error
-	return errs
+type enforcingFunc func() error
+
+func (e *Enforcer) enforceNoUnusedTemplates() error {
+	var unused []string
+	configured := e.existingTemplates
+	used := e.allowlist.GetTemplates()
+	for template := range configured {
+		if _, ok := used[template]; !ok {
+			unused = append(unused, template)
+		}
+	}
+
+	if len(unused) == 0 {
+		return nil
+	}
+	lines := []string{`ERROR: The following templates are not used by any job. Please remove their
+ERROR: config-updater config from core-services/prow/02_config/_plugins.yaml)
+ERROR: and code from ci-operator/templates. If you are trying to add a new template,
+ERROR: you should add multi-stage steps instead.
+`}
+	for _, line := range unused {
+		lines = append(lines, fmt.Sprintf("ERROR: - %s", line))
+	}
+
+	return errors.New(strings.Join(lines, "\n"))
+}
+
+func (e *Enforcer) Validate() []string {
+	checks := []enforcingFunc{
+		e.enforceNoUnusedTemplates,
+	}
+	var violations []string
+	for _, check := range checks {
+		if err := check(); err != nil {
+			violations = append(violations, err.Error())
+		}
+	}
+
+	return violations
 }

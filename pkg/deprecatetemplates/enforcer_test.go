@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -229,5 +230,44 @@ func TestEnforcerStats(t *testing.T) {
 	}
 	if diff := cmp.Diff(expectedData, data); diff != "" {
 		t.Errorf("Data differs from expected:\n%s", diff)
+	}
+}
+
+func TestEnforcer_Validate(t *testing.T) {
+	testCases := []struct {
+		description        string
+		templates          sets.String
+		allowlistTemplates map[string]*deprecatedTemplate
+		expected           []string
+	}{
+		{
+			description: "unused template is detected",
+			templates:   sets.NewString("unused", "used"),
+			allowlistTemplates: map[string]*deprecatedTemplate{"used": &deprecatedTemplate{
+				Name: "used",
+			}},
+			expected: []string{`ERROR: The following templates are not used by any job. Please remove their
+ERROR: config-updater config from core-services/prow/02_config/_plugins.yaml)
+ERROR: and code from ci-operator/templates. If you are trying to add a new template,
+ERROR: you should add multi-stage steps instead.
+
+ERROR: - unused`,
+			},
+		},
+	}
+	sortOpts := cmpopts.SortSlices(func(x, y string) bool { return x < y })
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			enforcer := Enforcer{
+				existingTemplates: tc.templates,
+				allowlist: &mockAllowlist{
+					getTemplates: tc.allowlistTemplates,
+				},
+			}
+			errs := enforcer.Validate()
+			if diff := cmp.Diff(tc.expected, errs, sortOpts); diff != "" {
+				t.Errorf("%s: results differ from expected:\n%s", tc.description, diff)
+			}
+		})
 	}
 }

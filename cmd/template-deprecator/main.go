@@ -123,7 +123,7 @@ func main() {
 			fmt.Printf("ERROR: Template deprecation allowlist has errors:\n")
 			for idx, err := range errs {
 				fmt.Printf("\nERROR: %d)\n", idx+1)
-				fmt.Printf(err.Error())
+				fmt.Printf("%s\n", err.Error())
 			}
 			logrus.Fatalf("Template deprecation allowlist failed validation")
 		}

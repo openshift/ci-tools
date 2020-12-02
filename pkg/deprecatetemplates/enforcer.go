@@ -207,15 +207,13 @@ type enforcingFunc func() []error
 
 func (e *Enforcer) noNewUnknownBlockers() []error {
 	makeError := func(template string, blockers map[string]deprecatedTemplateBlocker) error {
-		lines := []string{fmt.Sprintf(`ERROR: Jobs using the '%s' template were added with an
-ERROR: unknown blocker. Add them under one of existing blockers by running one of the following:
-`, template)}
+		lines := []string{fmt.Sprintf(`Jobs using the '%s' template were added with an
+unknown blocker. Add them under one of existing blockers by running one of the following:`, template)}
 		for id, blocker := range blockers {
-			lines = append(lines, fmt.Sprintf("ERROR: $ make template-allowlist BLOCKER=%s # %s", id, blocker.Description))
+			lines = append(lines, fmt.Sprintf("$ make template-allowlist BLOCKER=%s # %s", id, blocker.Description))
 		}
-		lines = append(lines, "", `ERROR: Alternatively, create a new JIRA and start tracking it in the allowlist:
-
-ERROR: $ make template-allowlist BLOCKER="JIRAID:short description"`)
+		lines = append(lines, "", `Alternatively, create a new JIRA and start tracking it in the allowlist:
+$ make template-allowlist BLOCKER="JIRAID:short description"`)
 
 		return errors.New(strings.Join(lines, "\n"))
 	}
@@ -246,12 +244,12 @@ func (e *Enforcer) noUnusedTemplates() []error {
 	if len(unused) == 0 {
 		return nil
 	}
-	lines := []string{`ERROR: The following templates are not used by any job. Please remove their
-ERROR: config-updater config from core-services/prow/02_config/_plugins.yaml)
-ERROR: and code from ci-operator/templates. If you are trying to add a new template,
-ERROR: you should add multi-stage steps instead.`}
+	lines := []string{`The following templates are not used by any job. Please remove their
+config-updater config from core-services/prow/02_config/_plugins.yaml)
+and code from ci-operator/templates. If you are trying to add a new template,
+you should add multi-stage steps instead.`}
 	for _, line := range unused {
-		lines = append(lines, fmt.Sprintf("ERROR: - %s", line))
+		lines = append(lines, fmt.Sprintf("- %s", line))
 	}
 
 	return []error{errors.New(strings.Join(lines, "\n"))}

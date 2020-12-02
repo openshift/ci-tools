@@ -244,11 +244,11 @@ func TestEnforcer_Validate(t *testing.T) {
 			description:        "unused template",
 			templates:          sets.NewString("unused", "used"),
 			allowlistTemplates: map[string]*deprecatedTemplate{"used": {Name: "used"}},
-			expected: []string{`ERROR: The following templates are not used by any job. Please remove their
-ERROR: config-updater config from core-services/prow/02_config/_plugins.yaml)
-ERROR: and code from ci-operator/templates. If you are trying to add a new template,
-ERROR: you should add multi-stage steps instead.
-ERROR: - unused`,
+			expected: []string{`The following templates are not used by any job. Please remove their
+config-updater config from core-services/prow/02_config/_plugins.yaml)
+and code from ci-operator/templates. If you are trying to add a new template,
+you should add multi-stage steps instead.
+- unused`,
 			},
 		},
 		{
@@ -265,14 +265,12 @@ ERROR: - unused`,
 					},
 				},
 			},
-			expected: []string{`ERROR: Jobs using the 'template' template were added with an
-ERROR: unknown blocker. Add them under one of existing blockers by running one of the following:
+			expected: []string{`Jobs using the 'template' template were added with an
+unknown blocker. Add them under one of existing blockers by running one of the following:
+$ make template-allowlist BLOCKER=BLOCKER-1 # known blocker
 
-ERROR: $ make template-allowlist BLOCKER=BLOCKER-1 # known blocker
-
-ERROR: Alternatively, create a new JIRA and start tracking it in the allowlist:
-
-ERROR: $ make template-allowlist BLOCKER="JIRAID:short description"`,
+Alternatively, create a new JIRA and start tracking it in the allowlist:
+$ make template-allowlist BLOCKER="JIRAID:short description"`,
 			},
 		},
 	}

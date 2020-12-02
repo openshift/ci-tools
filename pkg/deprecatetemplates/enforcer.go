@@ -201,3 +201,8 @@ func (e *Enforcer) Stats(hideTotals bool) (header, footer []string, lines [][]st
 	}
 	return header, footer, lines
 }
+
+func (e *Enforcer) Validate() []error {
+	var errs []error
+	return errs
+}

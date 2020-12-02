@@ -303,6 +303,9 @@ type options struct {
 	pushSecretPath string
 	pushSecret     *coreapi.Secret
 
+	uploadSecretPath string
+	uploadSecret     *coreapi.Secret
+
 	cloneAuthConfig *steps.CloneAuthConfig
 
 	resultsOptions results.Options
@@ -366,6 +369,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	flag.StringVar(&opt.pullSecretPath, "image-import-pull-secret", "", "A set of dockercfg credentials used to import images for the tag_specification.")
 	flag.StringVar(&opt.pushSecretPath, "image-mirror-push-secret", "", "A set of dockercfg credentials used to mirror images for the promotion.")
+	flag.StringVar(&opt.uploadSecretPath, "gcs-upload-secret", "", "GCS credentials used to upload logs and artifacts.")
 
 	opt.resultsOptions.Bind(flag)
 	return opt
@@ -528,6 +532,12 @@ func (o *options) Complete() error {
 	if o.pushSecretPath != "" {
 		if o.pushSecret, err = getSecret(api.RegistryPushCredentialsCICentralSecret, o.pushSecretPath); err != nil {
 			return fmt.Errorf("could not get push secret %s from path %s: %w", api.RegistryPushCredentialsCICentralSecret, o.pushSecretPath, err)
+		}
+	}
+
+	if o.uploadSecretPath != "" {
+		if o.uploadSecret, err = getSecret(api.GCSUploadCredentialsSecret, o.uploadSecretPath); err != nil {
+			return fmt.Errorf("could not get upload secret %s from path %s: %w", api.GCSUploadCredentialsSecret, o.uploadSecretPath, err)
 		}
 	}
 	return nil
@@ -882,7 +892,7 @@ func (o *options) initializeNamespace() error {
 		}
 	}
 
-	for _, secret := range []*coreapi.Secret{o.pullSecret, o.pushSecret} {
+	for _, secret := range []*coreapi.Secret{o.pullSecret, o.pushSecret, o.uploadSecret} {
 		if secret != nil {
 			if err := client.Create(ctx, secret); err != nil && !kerrors.IsAlreadyExists(err) {
 				return fmt.Errorf("couldn't create secret %s: %w", secret.Name, err)

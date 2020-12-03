@@ -43,7 +43,7 @@ spec:
 
       FROM pipeline:root
       ADD ./app.binary /clonerefs
-      RUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw
+      RUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs --max-procs 10 --max-args 100 --no-run-if-empty chmod g+xw
       WORKDIR /go/src/this/is/nuts/
       ENV GOPATH=/go
     images:

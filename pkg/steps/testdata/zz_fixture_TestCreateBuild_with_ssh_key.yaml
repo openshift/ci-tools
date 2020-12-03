@@ -45,7 +45,7 @@ spec:
       ADD ./app.binary /clonerefs
       ADD /ssh_config /etc/ssh/ssh_config
       COPY ./ssh-privatekey /sshprivatekey
-      RUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw
+      RUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs --max-procs 10 --max-args 100 --no-run-if-empty chmod g+xw
       WORKDIR /go/src/github.com/org/repo/
       ENV GOPATH=/go
       RUN rm -f /sshprivatekey

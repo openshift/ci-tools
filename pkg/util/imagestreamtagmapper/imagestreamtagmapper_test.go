@@ -163,11 +163,11 @@ func TestImageStreamTagMapper(t *testing.T) {
 					Tags: []imagev1.TagReference{
 						{
 							Name:        "1",
-							Annotations: map[string]string{"ci.openshift.io/not-soft-delete": "some"},
+							Annotations: map[string]string{"release.openshift.io/not-soft-delete": "some"},
 						},
 						{
 							Name:        "2",
-							Annotations: map[string]string{"ci.openshift.io/soft-delete": "some"},
+							Annotations: map[string]string{"release.openshift.io/soft-delete": "some"},
 						},
 					},
 				}

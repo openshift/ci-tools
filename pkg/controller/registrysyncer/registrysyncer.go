@@ -171,10 +171,14 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		return nil
 	}
 
-	clusterWithDeletedTag, ok := hasSoftDeleteAnnotation(isTags)
-	log.WithField("soft_delete_annotation_found", clusterWithDeletedTag).Debug("deleting imageStreamTags")
-	// if found soft-delete annotation on any isTag, delete the isTag on all clusters
+	clusterWithDeletedTag, ok, err := hasDueSoftDeleteAnnotation(isTags)
+	if err != nil {
+		return fmt.Errorf("failed to determine if the istags have due soft delete annaotion: %w", err)
+	}
+
+	// if found due soft-delete annotation on any isTag, delete the isTag on all clusters
 	if ok {
+		log.WithField("soft_delete_annotation_found", clusterWithDeletedTag).Debug("deleting imageStreamTags")
 		for clusterName, isTag := range isTags {
 			if err := r.registryClients[clusterName].Delete(ctx, isTag); err != nil && !apierrors.IsNotFound(err) {
 				return fmt.Errorf("failed to delete imageStream %s from cluster %s: %w", isTag.String(), clusterName, err)
@@ -252,16 +256,22 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 	return nil
 }
 
-func hasSoftDeleteAnnotation(streams map[string]*imagev1.ImageStreamTag) (string, bool) {
+func hasDueSoftDeleteAnnotation(streams map[string]*imagev1.ImageStreamTag) (string, bool, error) {
 	for cluster, stream := range streams {
 		if stream == nil || stream.Annotations == nil {
 			continue
 		}
-		if _, ok := stream.Annotations[api.ReleaseAnnotationSoftDelete]; ok {
-			return cluster, ok
+		if value, ok := stream.Annotations[api.ReleaseAnnotationSoftDelete]; ok {
+			t, err := time.Parse(time.RFC1123, value)
+			if err != nil {
+				return "", false, err
+			}
+			if time.Now().After(t) {
+				return cluster, true, nil
+			}
 		}
 	}
-	return "", false
+	return "", false, nil
 }
 
 func finalizeIfNeeded(ctx context.Context, sourceImageStream *imagev1.ImageStream, clients map[string]ctrlruntimeclient.Client, log *logrus.Entry) (bool, error) {

@@ -232,7 +232,7 @@ func TestReconcile(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   "ci",
 			Name:        "applyconfig:latest",
-			Annotations: map[string]string{"ci.openshift.io/soft-delete": "some"},
+			Annotations: map[string]string{"release.openshift.io/soft-delete": time.Now().Add(-time.Hour).Format(time.RFC1123)},
 		},
 		Image: imagev1.Image{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1199,23 +1199,90 @@ func TestEnsureImageStreamTag(t *testing.T) {
 	}
 }
 
-func TestHasSoftDeleteAnnotation(t *testing.T) {
-	now := metav1.NewTime(time.Now().Add(-24 * 3 * time.Hour))
+func TestHasDueSoftDeleteAnnotation(t *testing.T) {
+	now := metav1.NewTime(time.Now())
+	oneDayLater := time.Now().Add(24 * time.Hour)
+	oneDayBefore := time.Now().Add(-24 * time.Hour)
 
 	testCases := []struct {
 		name            string
 		isTags          map[string]*imagev1.ImageStreamTag
 		expectedCluster string
 		expectedOK      bool
+		expectedError   error
 	}{
 		{
-			name: "basic case",
+			name: "no soft-delete annotation",
+			isTags: map[string]*imagev1.ImageStreamTag{
+				"a": {
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ci",
+						Name:      "applyconfig:latest",
+					},
+					Image: imagev1.Image{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+							CreationTimestamp: now,
+						},
+						DockerImageReference: "docker-registry.default.svc:5000/ci/applyconfig@sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+					},
+				},
+			},
+		},
+		{
+			name: "abnormal soft-delete annotation",
 			isTags: map[string]*imagev1.ImageStreamTag{
 				"a": {
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace:   "ci",
 						Name:        "applyconfig:latest",
-						Annotations: map[string]string{"a": "c"},
+						Annotations: map[string]string{"a": "c", "release.openshift.io/soft-delete": "not a timestamp"},
+					},
+					Image: imagev1.Image{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+							CreationTimestamp: now,
+						},
+						DockerImageReference: "docker-registry.default.svc:5000/ci/applyconfig@sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+					},
+				},
+			},
+			expectedError: &time.ParseError{
+				Layout:     "Mon, 02 Jan 2006 15:04:05 MST",
+				Value:      "not a timestamp",
+				LayoutElem: "Mon",
+				ValueElem:  "not a timestamp",
+			},
+		},
+		{
+			name: "due soft-delete annotation",
+			isTags: map[string]*imagev1.ImageStreamTag{
+				"a": {
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:   "ci",
+						Name:        "applyconfig:latest",
+						Annotations: map[string]string{"a": "c", "release.openshift.io/soft-delete": oneDayBefore.Format(time.RFC1123)},
+					},
+					Image: imagev1.Image{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+							CreationTimestamp: now,
+						},
+						DockerImageReference: "docker-registry.default.svc:5000/ci/applyconfig@sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+					},
+				},
+			},
+			expectedCluster: "a",
+			expectedOK:      true,
+		},
+		{
+			name: "not due soft-delete annotation",
+			isTags: map[string]*imagev1.ImageStreamTag{
+				"a": {
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:   "ci",
+						Name:        "applyconfig:latest",
+						Annotations: map[string]string{"a": "c", "release.openshift.io/soft-delete": oneDayLater.Format(time.RFC1123)},
 					},
 					Image: imagev1.Image{
 						ObjectMeta: metav1.ObjectMeta{
@@ -1231,11 +1298,14 @@ func TestHasSoftDeleteAnnotation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualCluster, actualOK := hasSoftDeleteAnnotation(tc.isTags)
+			actualCluster, actualOK, acutalError := hasDueSoftDeleteAnnotation(tc.isTags)
 			if diff := cmp.Diff(tc.expectedCluster, actualCluster); diff != "" {
 				t.Errorf("actual does not match expected, diff: %s", diff)
 			}
 			if diff := cmp.Diff(tc.expectedOK, actualOK); diff != "" {
+				t.Errorf("actual does not match expected, diff: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedError, acutalError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("actual does not match expected, diff: %s", diff)
 			}
 		})

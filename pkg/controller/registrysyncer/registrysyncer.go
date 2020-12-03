@@ -150,7 +150,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 	if n := len(imageStreamNameAndTag); n != 2 {
 		return fmt.Errorf("when splitting imagestreamtagname %s by : expected two results, got %d", req.Name, n)
 	}
-	imageStreamName, imageTag := imageStreamNameAndTag[0], imageStreamNameAndTag[1]
+	imageStreamName := imageStreamNameAndTag[0]
 	isName := types.NamespacedName{Namespace: req.Namespace, Name: imageStreamName}
 	sourceImageStream := &imagev1.ImageStream{}
 	if err := r.registryClients[srcClusterName].Get(ctx, isName, sourceImageStream); err != nil {
@@ -222,36 +222,16 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		if err := r.ensureImagePullSecret(ctx, req.Namespace, client, log); err != nil {
 			return fmt.Errorf("failed to ensure imagePullSecret on cluster %s: %w", clusterName, err)
 		}
-		imageName, err := publicDomainForImage(srcClusterName, sourceImageStreamTag.Image.DockerImageReference)
+		dockerImageReference, err := publicDomainForImage(srcClusterName, sourceImageStreamTag.Image.DockerImageReference)
 		if err != nil {
 			return fmt.Errorf("failed to get the public domain: %w", err)
 		}
 
-		imageStreamImport := &imagev1.ImageStreamImport{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: req.Namespace,
-				Name:      imageStreamName,
-			},
-			Spec: imagev1.ImageStreamImportSpec{
-				Import: true,
-				Images: []imagev1.ImageImportSpec{{
-					From: corev1.ObjectReference{
-						Kind: "DockerImage",
-						Name: imageName,
-					},
-					To: &corev1.LocalObjectReference{Name: imageTag},
-					ReferencePolicy: imagev1.TagReferencePolicy{
-						Type: imagev1.LocalTagReferencePolicy,
-					},
-				}},
-			},
-		}
-
-		*log = *log.WithField("imageStreamImport.Namespace", imageStreamImport.Namespace).WithField("imageStreamImport.Name", imageStreamImport.Name)
-		log.Debug("creating imageStreamImport")
-		if err := createAndCheckStatus(ctx, client, imageStreamImport); err != nil {
+		log.Debug("creating imageStreamTag")
+		// TODO: (hongkliu) check the status of imports with another way
+		if err := r.ensureImageStreamTag(ctx, sourceImageStreamTag, dockerImageReference, client, log); err != nil {
 			controllerutil.CountImportResult(ControllerName, clusterName, req.Namespace, imageStreamName, false)
-			return fmt.Errorf("failed to create and check the status for imageStreamImport for tag %s of %s in namespace %s on cluster %s: %w", imageTag, imageStreamImport.Name, imageStreamImport.Namespace, clusterName, err)
+			return fmt.Errorf("failed to ensure ImageSteamTag: %w", err)
 		}
 		controllerutil.CountImportResult(ControllerName, clusterName, req.Namespace, imageStreamName, true)
 		log.Debug("Imported successfully")
@@ -326,20 +306,29 @@ func dockerImageImportedFromTargetingCluster(cluster string, tag *imagev1.ImageS
 	return strings.HasPrefix(from, api.ServiceDomainAPICIRegistry) && cluster == "api.ci" || strings.HasPrefix(from, api.ServiceDomainAPPCIRegistry) && cluster == "app.ci"
 }
 
-func createAndCheckStatus(ctx context.Context, client ctrlruntimeclient.Client, imageStreamImport *imagev1.ImageStreamImport) error {
-	// ImageStreamImport is not an ordinary api but a virtual one that does the import synchronously
-	if err := client.Create(ctx, imageStreamImport); err != nil {
-		return fmt.Errorf("failed to import Image: %w", err)
-	}
+func (r *reconciler) ensureImageStreamTag(ctx context.Context, imageStreamTag *imagev1.ImageStreamTag, dockerImageReference string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
+	isTag, mutateFn := imagestreamtag(imageStreamTag, dockerImageReference)
+	return upsertObject(ctx, client, isTag, mutateFn, log)
+}
 
-	// This should never be needed, but we shouldn't panic if the server screws up
-	if imageStreamImport.Status.Images == nil {
-		imageStreamImport.Status.Images = []imagev1.ImageImportStatus{{}}
+func imagestreamtag(sourceISTag *imagev1.ImageStreamTag, dockerImageReference string) (*imagev1.ImageStreamTag, crcontrollerutil.MutateFn) {
+	imageStreamTag := &imagev1.ImageStreamTag{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: sourceISTag.Namespace,
+			Name:      sourceISTag.Name,
+		},
 	}
-	if imageStreamImport.Status.Images[0].Image == nil {
-		return fmt.Errorf("imageStreamImport did not succeed: reason: %s, message: %s", imageStreamImport.Status.Images[0].Status.Reason, imageStreamImport.Status.Images[0].Status.Message)
+	return imageStreamTag, func() error {
+		copiedISTag := sourceISTag.DeepCopy()
+		imageStreamTag.Annotations = copiedISTag.Annotations
+		imageStreamTag.Tag = &imagev1.TagReference{
+			From: &corev1.ObjectReference{
+				Kind: "DockerImage",
+				Name: dockerImageReference,
+			},
+		}
+		return nil
 	}
-	return nil
 }
 
 func findNewest(isTags map[string]*imagev1.ImageStreamTag) string {

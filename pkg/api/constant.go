@@ -6,4 +6,6 @@ const (
 
 	GCSUploadCredentialsSecret          = "gce-sa-credentials-gcs-publisher"
 	GCSUploadCredentialsSecretMountPath = "/secrets/gcs"
+
+	ReleaseAnnotationSoftDelete = "ci.openshift.io/soft-delete"
 )

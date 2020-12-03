@@ -145,6 +145,43 @@ func TestImageStreamTagMapper(t *testing.T) {
 				"second_namespace/name:2",
 			},
 		},
+		{
+			name: "isTag is soft-deleted: only deleted tags",
+			event: func() interface{} {
+				imageStreamOld := &imagev1.ImageStream{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "namespace",
+						Name:      "name",
+					},
+					Status: imagev1.ImageStreamStatus{
+						Tags: []imagev1.NamedTagEventList{{Tag: "1"}, {Tag: "2"}},
+					},
+				}
+
+				ImageStreamNew := imageStreamOld.DeepCopy()
+				ImageStreamNew.Spec = imagev1.ImageStreamSpec{
+					Tags: []imagev1.TagReference{
+						{
+							Name:        "1",
+							Annotations: map[string]string{"ci.openshift.io/not-soft-delete": "some"},
+						},
+						{
+							Name:        "2",
+							Annotations: map[string]string{"ci.openshift.io/soft-delete": "some"},
+						},
+					},
+				}
+
+				return event.UpdateEvent{
+					ObjectOld: imageStreamOld,
+					ObjectNew: ImageStreamNew,
+				}
+			},
+			expectedRequests: []string{
+				"first_namespace/name:2",
+				"second_namespace/name:2",
+			},
+		},
 	}
 
 	for _, tc := range testCases {

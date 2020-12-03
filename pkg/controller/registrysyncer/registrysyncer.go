@@ -171,6 +171,19 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		return nil
 	}
 
+	clusterWithDeletedTag, ok := hasSoftDeleteAnnotation(isTags)
+	log.WithField("soft_delete_annotation_found", clusterWithDeletedTag).Debug("deleting imageStreamTags")
+	// if found soft-delete annotation on any isTag, delete the isTag on all clusters
+	if ok {
+		for clusterName, isTag := range isTags {
+			if err := r.registryClients[clusterName].Delete(ctx, isTag); err != nil && !apierrors.IsNotFound(err) {
+				return fmt.Errorf("failed to delete imageStream %s from cluster %s: %w", isTag.String(), clusterName, err)
+			}
+		}
+		// no sync if the isTag is deleted
+		return nil
+	}
+
 	*log = *log.WithField("docker_image_reference", sourceImageStreamTag.Image.DockerImageReference)
 
 	for clusterName, client := range r.registryClients {
@@ -237,6 +250,18 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		log.Debug("Imported successfully")
 	}
 	return nil
+}
+
+func hasSoftDeleteAnnotation(streams map[string]*imagev1.ImageStreamTag) (string, bool) {
+	for cluster, stream := range streams {
+		if stream == nil || stream.Annotations == nil {
+			continue
+		}
+		if _, ok := stream.Annotations[api.ReleaseAnnotationSoftDelete]; ok {
+			return cluster, ok
+		}
+	}
+	return "", false
 }
 
 func finalizeIfNeeded(ctx context.Context, sourceImageStream *imagev1.ImageStream, clients map[string]ctrlruntimeclient.Client, log *logrus.Entry) (bool, error) {

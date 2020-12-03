@@ -90,6 +90,28 @@ func (c *Config) UnmarshalJSON(d []byte) error {
 	return c.resolve()
 }
 
+func (c *Config) Validate() error {
+	var errs []error
+	for i, secretConfig := range c.Secrets {
+		var foundKey bool
+		for key := range secretConfig.From {
+			if key == corev1.DockerConfigJsonKey {
+				foundKey = true
+			}
+		}
+		k := -1
+		for j, secretContext := range secretConfig.To {
+			if secretContext.Type == corev1.SecretTypeDockerConfigJson {
+				k = j
+			}
+		}
+		if !foundKey && k > -1 {
+			errs = append(errs, fmt.Errorf("secret[%d] in secretConfig[%d] with kubernetes.io/dockerconfigjson type have no key named .dockerconfigjson", k, i))
+		}
+	}
+	return utilerrors.NewAggregate(errs)
+}
+
 func (c *Config) resolve() error {
 	var errs []error
 

@@ -772,7 +772,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 					Secrets: []secretbootstrap.SecretConfig{
 						{
 							From: map[string]secretbootstrap.BitWardenContext{
-								"key-name-1": {
+								".dockerconfigjson": {
 									BWItem: "item-name-1",
 									Field:  "field-name-1",
 								},
@@ -871,7 +871,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 					Secrets: []secretbootstrap.SecretConfig{
 						{
 							From: map[string]secretbootstrap.BitWardenContext{
-								"key-name-1": {
+								".dockerconfigjson": {
 									DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 										{
 											BWItem:                    "bitwarden-item",
@@ -910,7 +910,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 					Secrets: []secretbootstrap.SecretConfig{
 						{
 							From: map[string]secretbootstrap.BitWardenContext{
-								"key-name-1": {
+								".dockerconfigjson": {
 									DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 										{
 											BWItem:                  "bitwarden-item",
@@ -949,7 +949,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 					Secrets: []secretbootstrap.SecretConfig{
 						{
 							From: map[string]secretbootstrap.BitWardenContext{
-								"key-name-1": {
+								".dockerconfigjson": {
 									DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 										{
 											BWItem:                    "bitwarden-item",
@@ -973,7 +973,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 					},
 				},
 			},
-			expected: fmt.Errorf("config[0].from[key-name-1]: registry_url_bw_field and registry_url are mutualy exclusive"),
+			expected: fmt.Errorf("config[0].from[.dockerconfigjson]: registry_url_bw_field and registry_url are mutualy exclusive"),
 		},
 		{
 			name: "sad dockerconfigJSON configuration",

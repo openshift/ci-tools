@@ -8,6 +8,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	corev1 "k8s.io/api/core/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestResolving(t *testing.T) {
@@ -146,6 +149,50 @@ func TestLoadConfigFromFile(t *testing.T) {
 				t.Errorf("%s: expecting error msg %q, got %q", t.Name(), tc.expectedError.Error(), actualError.Error())
 			}
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("expected config differs from actual config: %s", diff)
+			}
+		})
+	}
+}
+
+func TestValidate(t *testing.T) {
+	testCases := []struct {
+		name     string
+		config   *Config
+		expected error
+	}{
+		{
+			name:   "empty case",
+			config: &Config{},
+		},
+		{
+			name: "valid",
+			config: &Config{Secrets: []SecretConfig{{
+				From: map[string]BitWardenContext{
+					".dockerconfigjson": {},
+				},
+				To: []SecretContext{{
+					Cluster: "cl",
+					Type:    "kubernetes.io/dockerconfigjson",
+				}}}}},
+		},
+		{
+			name: "kubernetes.io/dockerconfigjson type without the desired key",
+			config: &Config{Secrets: []SecretConfig{{
+				From: map[string]BitWardenContext{
+					"some-key": {},
+				},
+				To: []SecretContext{{
+					Cluster: "cl",
+					Type:    "kubernetes.io/dockerconfigjson",
+				}}}}},
+			expected: utilerrors.NewAggregate([]error{fmt.Errorf("secret[0] in secretConfig[0] with kubernetes.io/dockerconfigjson type have no key named .dockerconfigjson")}),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(tc.expected, tc.config.Validate(), testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("expected config differs from actual config: %s", diff)
 			}
 		})

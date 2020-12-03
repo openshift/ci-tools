@@ -241,7 +241,7 @@ func (s *multiStageTestStep) setupRBAC(ctx context.Context) error {
 		RoleRef:    rbacapi.RoleRef{Kind: "Role", Name: s.name},
 		Subjects:   subj,
 	}
-	if err := util.CreateRBACs(ctx, sa, role, binding, s.client, 1*time.Minute, 5*time.Minute); err != nil {
+	if err := util.CreateRBACs(ctx, sa, role, binding, s.client, 1*time.Minute, 10*time.Minute); err != nil {
 		return err
 	}
 	return nil

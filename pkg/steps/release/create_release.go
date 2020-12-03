@@ -101,7 +101,7 @@ func setupReleaseImageStream(ctx context.Context, namespace string, client ctrlr
 			Name: "ci-operator-image",
 		},
 	}
-	if err := util.CreateRBACs(ctx, sa, role, roleBinding, client, 1*time.Minute, 5*time.Minute); err != nil {
+	if err := util.CreateRBACs(ctx, sa, role, roleBinding, client, 1*time.Minute, 10*time.Minute); err != nil {
 		return "", err
 	}
 

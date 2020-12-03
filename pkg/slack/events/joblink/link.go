@@ -219,7 +219,7 @@ func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClie
 		text := bytes.Buffer{}
 		text.WriteString("*" + job.metadata.TestNameFromJobName(name, prefix) + ":*")
 		if rehearsalPR != "" {
-			text.WriteString("\n- This job is a rehearsal for <https://github.com/openshift/release/pulls/" + rehearsalPR + "|PR " + rehearsalPR + ">.")
+			text.WriteString("\n- This job is a rehearsal for <https://github.com/openshift/release/pull/" + rehearsalPR + "|PR " + rehearsalPR + ">.")
 		}
 		if generated {
 			text.WriteString("\n - `ci-operator` <https://github.com/openshift/release/tree/master/ci-operator/config/" + job.metadata.RelativePath() + "|config>.")

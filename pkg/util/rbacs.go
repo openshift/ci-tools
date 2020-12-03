@@ -17,7 +17,7 @@ import (
 // CreateRBACs creates the given service account, role, and role binding. In addition, it waits until the service account will be updated with an image pull secret.
 // Because the DockerCfgController controller needs some time to create the corresponding secrets we need to wait until this happens, otherwise, the pod that
 // will use this service account will fail to start since there are no credentials to pull any images.
-func CreateRBACs(ctx context.Context, sa *coreapi.ServiceAccount, role *rbacapi.Role, roleBinding *rbacapi.RoleBinding, client ctrlruntimeclient.Client, retryDuration, timeout time.Duration) error {
+func CreateRBACs(ctx context.Context, sa *coreapi.ServiceAccount, role *rbacapi.Role, roleBinding *rbacapi.RoleBinding, client ctrlruntimeclient.Client, interval, timeout time.Duration) error {
 	skipPoll := false
 
 	err := client.Create(ctx, sa)
@@ -40,7 +40,7 @@ func CreateRBACs(ctx context.Context, sa *coreapi.ServiceAccount, role *rbacapi.
 		return nil
 	}
 
-	if err := wait.Poll(retryDuration, timeout, func() (bool, error) {
+	if err := wait.Poll(interval, timeout, func() (bool, error) {
 		actualSA := &coreapi.ServiceAccount{}
 		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{
 			Namespace: sa.Namespace,

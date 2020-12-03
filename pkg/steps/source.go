@@ -94,7 +94,6 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, workingDir st
 	dockerCommands = append(dockerCommands, fmt.Sprintf("RUN umask 0002 && /clonerefs && find %s/src -type d -not -perm -0775 | xargs -r chmod g+xw", gopath))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("WORKDIR %s/", workingDir))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("ENV GOPATH=%s", gopath))
-	dockerCommands = append(dockerCommands, "RUN git submodule update --init")
 
 	// After the clonerefs command, we don't need the secret anymore.
 	// We don't want to let the key keep existing in the image's layer.

@@ -48,7 +48,6 @@ spec:
       RUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw
       WORKDIR /go/src/github.com/org/repo/
       ENV GOPATH=/go
-      RUN git submodule update --init
       RUN rm -f /sshprivatekey
     images:
     - from:

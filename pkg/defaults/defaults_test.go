@@ -33,7 +33,7 @@ import (
 
 func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration {
 	cfg.ClonerefsImage = api.ImageStreamTagReference{Namespace: "ci", Name: "clonerefs", Tag: "latest"}
-	cfg.ClonerefsPath = "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary"
+	cfg.ClonerefsPath = "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/app.binary_/app.binary"
 	return cfg
 }
 
@@ -539,7 +539,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					From:           "root",
 					To:             "src",
 					ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "clonerefs", Tag: "latest"},
-					ClonerefsPath:  "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
+					ClonerefsPath:  "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/app.binary_/app.binary",
 				},
 			}},
 		},

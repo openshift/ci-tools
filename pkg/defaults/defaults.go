@@ -432,7 +432,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 			To:   api.PipelineImageStreamTagReferenceSource,
 			ClonerefsImage: api.ImageStreamTagReference{
 				Namespace: "ci",
-				Name:      "clonerefs",
+				Name:      "managed-clonerefs",
 				Tag:       "latest",
 			},
 			ClonerefsPath: "/clonerefs",

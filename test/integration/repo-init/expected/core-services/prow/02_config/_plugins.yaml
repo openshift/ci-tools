@@ -232,7 +232,6 @@ plugins:
   - approve
 project_config: {}
 project_manager: {}
-requiresig: {}
 retitle: {}
 sigmention:
   regexp: (?m)@kubernetes/sig-([\w-]*)-(misc|test-failures|bugs|feature-requests|proposals|pr-reviews|api-reviews)

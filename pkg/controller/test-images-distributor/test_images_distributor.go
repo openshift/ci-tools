@@ -35,6 +35,7 @@ import (
 const ControllerName = "test_images_distributor"
 
 func AddToManager(mgr manager.Manager,
+	registryClusterName string,
 	registryManager manager.Manager,
 	buildClusterManagers map[string]manager.Manager,
 	configAgent agents.ConfigAgent,
@@ -49,6 +50,7 @@ func AddToManager(mgr manager.Manager,
 
 	r := &reconciler{
 		log:                 log,
+		registryClusterName: registryClusterName,
 		registryClient:      imagestreamtagwrapper.MustNew(registryManager.GetClient(), registryManager.GetCache()),
 		buildClusterClients: map[string]ctrlruntimeclient.Client{},
 		pullSecretGetter:    pullSecretGetter,
@@ -151,6 +153,7 @@ func decodeRequest(req reconcile.Request) (string, types.NamespacedName, error) 
 
 type reconciler struct {
 	log                 *logrus.Entry
+	registryClusterName string
 	registryClient      ctrlruntimeclient.Client
 	buildClusterClients map[string]ctrlruntimeclient.Client
 	pullSecretGetter    func() []byte
@@ -241,7 +244,10 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 	if err := r.ensureImagePullSecret(ctx, decoded.Namespace, client, log); err != nil {
 		return fmt.Errorf("failed to ensure imagePullSecret: %w", err)
 	}
-
+	publicDomainForImage, err := api.PublicDomainForImage(r.registryClusterName, sourceImageStreamTag.Image.DockerImageReference)
+	if err != nil {
+		return fmt.Errorf("failed to get public domain for %s and %s: %w", r.registryClusterName, sourceImageStreamTag.Image.DockerImageReference, err)
+	}
 	imageStreamImport := &imagev1.ImageStreamImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: decoded.Namespace,
@@ -252,7 +258,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 			Images: []imagev1.ImageImportSpec{{
 				From: corev1.ObjectReference{
 					Kind: "DockerImage",
-					Name: publicURLForImage(sourceImageStreamTag.Image.DockerImageReference),
+					Name: publicDomainForImage,
 				},
 				To: &corev1.LocalObjectReference{Name: imageTag},
 				ReferencePolicy: imagev1.TagReferencePolicy{
@@ -510,10 +516,6 @@ func indexConfigsByTestInputImageStramTag(resolver registryResolver) agents.Inde
 
 func indexKeyForImageStream(namespace, name string) string {
 	return "imagestream_" + namespace + name
-}
-
-func publicURLForImage(potentiallyPrivate string) string {
-	return strings.ReplaceAll(potentiallyPrivate, "docker-registry.default.svc:5000", api.DomainForService(api.ServiceRegistry))
 }
 
 func upsertObject(ctx context.Context, c ctrlruntimeclient.Client, obj ctrlruntimeclient.Object, mutateFn crcontrollerutil.MutateFn, log *logrus.Entry) error {

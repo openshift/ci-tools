@@ -585,6 +585,7 @@ func TestReconcile(t *testing.T) {
 			logrus.SetLevel(logrus.TraceLevel)
 			r := &reconciler{
 				log:                 log,
+				registryClusterName: "api.ci",
 				registryClient:      tc.registryClient,
 				buildClusterClients: tc.buildClusterClients,
 				pullSecretGetter:    func() []byte { return pullSecretData },

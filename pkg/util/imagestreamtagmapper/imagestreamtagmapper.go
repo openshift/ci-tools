@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/workqueue"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -14,6 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	imagev1 "github.com/openshift/api/image/v1"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 // New returns a new ImageStreamTagMapper. Its purpose is to extract all ImageStreamTag events
@@ -42,9 +45,19 @@ func (m *imagestreamtagmapper) Update(e event.UpdateEvent, q workqueue.RateLimit
 		return
 	}
 
+	deletedISTags := sets.NewString()
+	for _, tag := range newStream.Spec.Tags {
+		if tag.Annotations == nil {
+			continue
+		}
+		if _, ok := tag.Annotations[api.ReleaseAnnotationSoftDelete]; ok {
+			deletedISTags.Insert(tag.Name)
+		}
+	}
+
 	isDeleted := newStream.DeletionTimestamp != nil
 	for _, newTag := range newStream.Status.Tags {
-		if !isDeleted && namedTagEventListHasElement(oldStream.Status.Tags, newTag) {
+		if !isDeleted && !deletedISTags.Has(newTag.Tag) && namedTagEventListHasElement(oldStream.Status.Tags, newTag) {
 			continue
 		}
 		for _, request := range m.upstream(reconcile.Request{

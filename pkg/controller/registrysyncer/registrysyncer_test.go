@@ -228,6 +228,21 @@ func TestReconcile(t *testing.T) {
 		},
 	}
 
+	applyconfigISTagSoftDeleted := &imagev1.ImageStreamTag{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:   "ci",
+			Name:        "applyconfig:latest",
+			Annotations: map[string]string{"release.openshift.io/soft-delete": time.Now().Add(-time.Hour).Format(time.RFC1123)},
+		},
+		Image: imagev1.Image{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+				CreationTimestamp: now,
+			},
+			DockerImageReference: "docker-registry.default.svc:5000/ci/applyconfig@sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+		},
+	}
+
 	applyconfigIS := &imagev1.ImageStream{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "ci",
@@ -652,6 +667,46 @@ func TestReconcile(t *testing.T) {
 				expectedImageStream.DeletionTimestamp = actualImageStream.DeletionTimestamp
 				if diff := cmp.Diff(expectedImageStream, actualImageStream); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
+				}
+				return nil
+			},
+		},
+		{
+			name: "old ISTag on api.ci is deleted",
+			request: types.NamespacedName{
+				Name:      "applyconfig:latest",
+				Namespace: "ci",
+			},
+			apiCIClient: fakeclient.NewFakeClient(applyconfigISTagSoftDeleted.DeepCopy(), applyconfigIS.DeepCopy()),
+			appCIClient: fakeclient.NewFakeClient(applyconfigISTagNewer.DeepCopy(), applyconfigIS.DeepCopy()),
+
+			verify: func(apiCIClient ctrlruntimeclient.Client, appCIClient ctrlruntimeclient.Client) error {
+				actualImageStream := &imagev1.ImageStream{}
+				if err := apiCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); err != nil {
+					return err
+				}
+				expectedImageStream := &imagev1.ImageStream{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "ImageStream",
+						APIVersion: "image.openshift.io/v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ci",
+						Name:      "applyconfig",
+						Annotations: map[string]string{
+							"release.openshift.io-something": "copied",
+							"something":                      "not-copied",
+						},
+					},
+				}
+				if diff := cmp.Diff(expectedImageStream, actualImageStream); diff != "" {
+					return fmt.Errorf("actual does not match expected, diff: %s", diff)
+				}
+				for _, client := range []ctrlruntimeclient.Client{apiCIClient, appCIClient} {
+					actualImageStreamTag := &imagev1.ImageStreamTag{}
+					if err := client.Get(ctx, types.NamespacedName{Name: "applyconfig:latest", Namespace: "ci"}, actualImageStreamTag); !apierrors.IsNotFound(err) {
+						t.Errorf("expected NotFound error did not occur and the actual error is: %v", err)
+					}
 				}
 				return nil
 			},
@@ -1139,6 +1194,119 @@ func TestEnsureImageStreamTag(t *testing.T) {
 				if err := tc.verify(tc.client); err != nil {
 					t.Errorf("unexpcected error: %v", err)
 				}
+			}
+		})
+	}
+}
+
+func TestHasDueSoftDeleteAnnotation(t *testing.T) {
+	now := metav1.NewTime(time.Now())
+	oneDayLater := time.Now().Add(24 * time.Hour)
+	oneDayBefore := time.Now().Add(-24 * time.Hour)
+
+	testCases := []struct {
+		name            string
+		isTags          map[string]*imagev1.ImageStreamTag
+		expectedCluster string
+		expectedOK      bool
+		expectedError   error
+	}{
+		{
+			name: "no soft-delete annotation",
+			isTags: map[string]*imagev1.ImageStreamTag{
+				"a": {
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ci",
+						Name:      "applyconfig:latest",
+					},
+					Image: imagev1.Image{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+							CreationTimestamp: now,
+						},
+						DockerImageReference: "docker-registry.default.svc:5000/ci/applyconfig@sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+					},
+				},
+			},
+		},
+		{
+			name: "abnormal soft-delete annotation",
+			isTags: map[string]*imagev1.ImageStreamTag{
+				"a": {
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:   "ci",
+						Name:        "applyconfig:latest",
+						Annotations: map[string]string{"a": "c", "release.openshift.io/soft-delete": "not a timestamp"},
+					},
+					Image: imagev1.Image{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+							CreationTimestamp: now,
+						},
+						DockerImageReference: "docker-registry.default.svc:5000/ci/applyconfig@sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+					},
+				},
+			},
+			expectedError: &time.ParseError{
+				Layout:     "Mon, 02 Jan 2006 15:04:05 MST",
+				Value:      "not a timestamp",
+				LayoutElem: "Mon",
+				ValueElem:  "not a timestamp",
+			},
+		},
+		{
+			name: "due soft-delete annotation",
+			isTags: map[string]*imagev1.ImageStreamTag{
+				"a": {
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:   "ci",
+						Name:        "applyconfig:latest",
+						Annotations: map[string]string{"a": "c", "release.openshift.io/soft-delete": oneDayBefore.Format(time.RFC1123)},
+					},
+					Image: imagev1.Image{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+							CreationTimestamp: now,
+						},
+						DockerImageReference: "docker-registry.default.svc:5000/ci/applyconfig@sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+					},
+				},
+			},
+			expectedCluster: "a",
+			expectedOK:      true,
+		},
+		{
+			name: "not due soft-delete annotation",
+			isTags: map[string]*imagev1.ImageStreamTag{
+				"a": {
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:   "ci",
+						Name:        "applyconfig:latest",
+						Annotations: map[string]string{"a": "c", "release.openshift.io/soft-delete": oneDayLater.Format(time.RFC1123)},
+					},
+					Image: imagev1.Image{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+							CreationTimestamp: now,
+						},
+						DockerImageReference: "docker-registry.default.svc:5000/ci/applyconfig@sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualCluster, actualOK, acutalError := hasDueSoftDeleteAnnotation(tc.isTags)
+			if diff := cmp.Diff(tc.expectedCluster, actualCluster); diff != "" {
+				t.Errorf("actual does not match expected, diff: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedOK, actualOK); diff != "" {
+				t.Errorf("actual does not match expected, diff: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedError, acutalError, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("actual does not match expected, diff: %s", diff)
 			}
 		})
 	}

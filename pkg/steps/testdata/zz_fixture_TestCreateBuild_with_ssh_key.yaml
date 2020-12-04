@@ -42,7 +42,7 @@ spec:
     dockerfile: |2
 
       FROM pipeline:root
-      ADD ./app.binary /clonerefs
+      ADD ./clonerefs /clonerefs
       ADD /ssh_config /etc/ssh/ssh_config
       COPY ./ssh-privatekey /sshprivatekey
       RUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs --max-procs 10 --max-args 100 --no-run-if-empty chmod g+xw
@@ -56,7 +56,7 @@ spec:
         namespace: ci
       paths:
       - destinationDir: .
-        sourcePath: /app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary
+        sourcePath: /clonerefs
       - destinationDir: .
         sourcePath: /ssh_config
     secrets:

@@ -77,7 +77,7 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, workingDir st
 
 	dockerCommands = append(dockerCommands, "")
 	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, fromTag))
-	dockerCommands = append(dockerCommands, "ADD ./app.binary /clonerefs")
+	dockerCommands = append(dockerCommands, "ADD ./clonerefs /clonerefs")
 
 	if cloneAuthConfig != nil {
 		switch cloneAuthConfig.Type {

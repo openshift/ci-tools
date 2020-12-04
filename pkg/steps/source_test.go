@@ -35,7 +35,7 @@ func TestCreateBuild(t *testing.T) {
 					Name:      "clonerefs",
 					Tag:       "latest",
 				},
-				ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/app.binary_/app.binary",
+				ClonerefsPath: "/clonerefs",
 			},
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
@@ -67,7 +67,7 @@ func TestCreateBuild(t *testing.T) {
 					Name:      "clonerefs",
 					Tag:       "latest",
 				},
-				ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/app.binary_/app.binary",
+				ClonerefsPath: "/clonerefs",
 			},
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
@@ -104,7 +104,7 @@ func TestCreateBuild(t *testing.T) {
 					Name:      "clonerefs",
 					Tag:       "latest",
 				},
-				ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/app.binary_/app.binary",
+				ClonerefsPath: "/clonerefs",
 			},
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
@@ -134,10 +134,10 @@ func TestCreateBuild(t *testing.T) {
 				To:   api.PipelineImageStreamTagReferenceSource,
 				ClonerefsImage: api.ImageStreamTagReference{
 					Namespace: "ci",
-					Name:      "clonerefs",
+					Name:      "managed-clonerefs",
 					Tag:       "latest",
 				},
-				ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/app.binary_/app.binary",
+				ClonerefsPath: "/clonerefs",
 			},
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
@@ -175,7 +175,7 @@ func TestCreateBuild(t *testing.T) {
 					Name:      "clonerefs",
 					Tag:       "latest",
 				},
-				ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/app.binary_/app.binary",
+				ClonerefsPath: "/clonerefs",
 			},
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
@@ -221,7 +221,7 @@ func TestCreateBuild(t *testing.T) {
 					Name:      "clonerefs",
 					Tag:       "latest",
 				},
-				ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/app.binary_/app.binary",
+				ClonerefsPath: "/clonerefs",
 			},
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
@@ -261,7 +261,7 @@ func TestCreateBuild(t *testing.T) {
 					Name:      "clonerefs",
 					Tag:       "latest",
 				},
-				ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/app.binary_/app.binary",
+				ClonerefsPath: "/clonerefs",
 			},
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{

@@ -32,7 +32,7 @@ import (
 )
 
 func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration {
-	cfg.ClonerefsImage = api.ImageStreamTagReference{Namespace: "ci", Name: "clonerefs", Tag: "latest"}
+	cfg.ClonerefsImage = api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"}
 	cfg.ClonerefsPath = "/clonerefs"
 	return cfg
 }
@@ -538,7 +538,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 				SourceStepConfiguration: &api.SourceStepConfiguration{
 					From:           "root",
 					To:             "src",
-					ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "clonerefs", Tag: "latest"},
+					ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
 					ClonerefsPath:  "/clonerefs",
 				},
 			}},

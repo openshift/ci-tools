@@ -1010,7 +1010,7 @@ k8s.io/klog/v2
 k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/kubernetes v1.14.7
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20201118173605-9a0ab0b4b7d2
+# k8s.io/test-infra v0.0.0-20201203231326-dd9f08023280
 ## explicit
 k8s.io/test-infra/experiment/autobumper/bumper
 k8s.io/test-infra/experiment/image-bumper/bumper
@@ -1096,7 +1096,6 @@ k8s.io/test-infra/prow/plugins/project
 k8s.io/test-infra/prow/plugins/projectmanager
 k8s.io/test-infra/prow/plugins/releasenote
 k8s.io/test-infra/prow/plugins/require-matching-label
-k8s.io/test-infra/prow/plugins/requiresig
 k8s.io/test-infra/prow/plugins/retitle
 k8s.io/test-infra/prow/plugins/shrug
 k8s.io/test-infra/prow/plugins/sigmention

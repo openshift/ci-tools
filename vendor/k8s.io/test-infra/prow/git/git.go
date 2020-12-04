@@ -184,7 +184,7 @@ func (c *Client) Clone(organization, repository string) (*Repo, error) {
 	if b, err := exec.Command(c.git, "clone", cache, t).CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("git repo clone error: %v. output: %s", err, string(b))
 	}
-	return &Repo{
+	r := &Repo{
 		dir:    t,
 		logger: c.logger,
 		git:    c.git,
@@ -194,7 +194,12 @@ func (c *Client) Clone(organization, repository string) (*Repo, error) {
 		repo:   repository,
 		user:   user,
 		pass:   pass,
-	}, nil
+	}
+	// disable git GC
+	if err := r.Config("gc.auto", "0"); err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
 // Repo is a clone of a git repository. Create with Client.Clone, and don't
@@ -396,13 +401,18 @@ func (r *Repo) Am(path string) error {
 
 // Push pushes over https to the provided owner/repo#branch using a password
 // for basic auth.
-func (r *Repo) Push(branch string) error {
+func (r *Repo) Push(branch string, force bool) error {
 	if r.user == "" || r.pass == "" {
 		return errors.New("cannot push without credentials - configure your git client")
 	}
 	r.logger.Infof("Pushing to '%s/%s (branch: %s)'.", r.user, r.repo, branch)
 	remote := fmt.Sprintf("https://%s:%s@%s/%s/%s", r.user, r.pass, r.host, r.user, r.repo)
-	co := r.gitCommand("push", remote, branch)
+	var co *exec.Cmd
+	if !force {
+		co = r.gitCommand("push", remote, branch)
+	} else {
+		co = r.gitCommand("push", "--force", remote, branch)
+	}
 	out, err := co.CombinedOutput()
 	if err != nil {
 		r.logger.Errorf("Pushing failed with error: %v and output: %q", err, string(out))
@@ -455,6 +465,8 @@ func retryCmd(l *logrus.Entry, dir, cmd string, arg ...string) ([]byte, error) {
 	return b, err
 }
 
+// Diff runs 'git diff HEAD <sha> --name-only' and returns a list
+// of file names with upcoming changes
 func (r *Repo) Diff(head, sha string) (changes []string, err error) {
 	r.logger.Infof("Diff head with %s'.", sha)
 	output, err := r.gitCommand("diff", head, sha, "--name-only").CombinedOutput()

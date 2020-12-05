@@ -867,34 +867,6 @@ func (o *options) initializeNamespace() error {
 		return errors.New("timed out waiting for RBAC")
 	}
 
-	if o.givePrAuthorAccessToNamespace {
-		// Generate rolebinding for all the PR Authors.
-		for _, author := range o.authors {
-			log.Printf("Creating rolebinding for user %s in namespace %s", author, o.namespace)
-			if err := client.Create(ctx, &rbacapi.RoleBinding{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      "ci-op-author-access",
-					Namespace: o.namespace,
-				},
-				Subjects: []rbacapi.Subject{{Kind: "User", Name: author}},
-				RoleRef: rbacapi.RoleRef{
-					Kind: "ClusterRole",
-					Name: "admin",
-				},
-			}); err != nil && !kerrors.IsAlreadyExists(err) {
-				return fmt.Errorf("could not create role binding for: %w", err)
-			}
-		}
-	}
-
-	for _, secret := range []*coreapi.Secret{o.pullSecret, o.pushSecret, o.uploadSecret} {
-		if secret != nil {
-			if err := client.Create(ctx, secret); err != nil && !kerrors.IsAlreadyExists(err) {
-				return fmt.Errorf("couldn't create secret %s: %w", secret.Name, err)
-			}
-		}
-	}
-
 	updates := map[string]string{}
 	if o.idleCleanupDuration > 0 {
 		if o.idleCleanupDurationSet {
@@ -947,6 +919,34 @@ func (o *options) initializeNamespace() error {
 			return updateErr
 		}); err != nil {
 			return fmt.Errorf("could not update namespace to add TTLs and active annotations: %w", err)
+		}
+	}
+
+	if o.givePrAuthorAccessToNamespace {
+		// Generate rolebinding for all the PR Authors.
+		for _, author := range o.authors {
+			log.Printf("Creating rolebinding for user %s in namespace %s", author, o.namespace)
+			if err := client.Create(ctx, &rbacapi.RoleBinding{
+				ObjectMeta: meta.ObjectMeta{
+					Name:      "ci-op-author-access",
+					Namespace: o.namespace,
+				},
+				Subjects: []rbacapi.Subject{{Kind: "User", Name: author}},
+				RoleRef: rbacapi.RoleRef{
+					Kind: "ClusterRole",
+					Name: "admin",
+				},
+			}); err != nil && !kerrors.IsAlreadyExists(err) {
+				return fmt.Errorf("could not create role binding for: %w", err)
+			}
+		}
+	}
+
+	for _, secret := range []*coreapi.Secret{o.pullSecret, o.pushSecret, o.uploadSecret} {
+		if secret != nil {
+			if err := client.Create(ctx, secret); err != nil && !kerrors.IsAlreadyExists(err) {
+				return fmt.Errorf("couldn't create secret %s: %w", secret.Name, err)
+			}
 		}
 	}
 

@@ -43,8 +43,8 @@ const (
 		"set -eu\n" +
 		// provide a writeable kubeconfig so ppl can for example set a namespace, but do not pass it on to subsequent steps to limit the amount of possible footshooting
 		"if [[ -e ${KUBECONFIG:-} ]]; then WRITEABLE_KUBECONFIG_LOCATION=$(mktemp) && cp $KUBECONFIG $WRITEABLE_KUBECONFIG_LOCATION && export KUBECONFIG=$WRITEABLE_KUBECONFIG_LOCATION && unset WRITEABLE_KUBECONFIG_LOCATION; fi\n" +
-		// provide a home so kubectl discovery can be cached
-		"if ! [[ -d ${HOME:-} ]]; then export HOME=/alabama; fi\n"
+		// provide a writeable home so kubectl discovery can be cached
+		"if ! [[ -w ${HOME:-} ]]; then export HOME=/alabama; fi\n"
 )
 
 var envForProfile = []string{

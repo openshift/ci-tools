@@ -28,14 +28,14 @@ import (
 )
 
 const (
-	ControllerName       = "secret_syncer"
-	referenceClusterName = "api.ci"
+	ControllerName = "secret_syncer"
 )
 
 // Enqueuer allows the caller to Enqueue a config change event
 type Enqueuer func(allSecretsInConfig []config.MirrorConfig)
 
 func AddToManager(mgr manager.Manager,
+	referenceClusterName string,
 	referenceCluster manager.Manager,
 	otherBuildClusters map[string]manager.Manager,
 	config config.Getter,

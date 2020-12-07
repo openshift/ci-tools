@@ -239,7 +239,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		if err := r.ensureImagePullSecret(ctx, req.Namespace, client, log); err != nil {
 			return fmt.Errorf("failed to ensure imagePullSecret on cluster %s: %w", clusterName, err)
 		}
-		dockerImageReference, err := publicDomainForImage(srcClusterName, sourceImageStreamTag.Image.DockerImageReference)
+		dockerImageReference, err := api.PublicDomainForImage(srcClusterName, sourceImageStreamTag.Image.DockerImageReference)
 		if err != nil {
 			return fmt.Errorf("failed to get the public domain: %w", err)
 		}
@@ -475,29 +475,6 @@ func imageStreamNameFromImageStreamTagName(nn types.NamespacedName) (types.Names
 		return types.NamespacedName{}, fmt.Errorf("splitting %s by `:` didn't yield two but %d results", nn.Name, n)
 	}
 	return types.NamespacedName{Namespace: nn.Namespace, Name: colonSplit[0]}, nil
-}
-
-func publicDomainForImage(clusterName, potentiallyPrivate string) (string, error) {
-	d, err := domainForClusterName(clusterName)
-	if err != nil {
-		return "", err
-	}
-	svcDomainAndPort := "image-registry.openshift-image-registry.svc:5000"
-	if clusterName == "api.ci" {
-		svcDomainAndPort = "docker-registry.default.svc:5000"
-	}
-
-	return strings.ReplaceAll(potentiallyPrivate, svcDomainAndPort, d), nil
-}
-
-func domainForClusterName(ClusterName string) (string, error) {
-	switch ClusterName {
-	case "api.ci":
-		return api.DomainForService(api.ServiceRegistry), nil
-	case "app.ci":
-		return api.ServiceDomainAPPCIRegistry, nil
-	}
-	return "", fmt.Errorf("failed to get the domain for cluster %s", ClusterName)
 }
 
 func upsertObject(ctx context.Context, c ctrlruntimeclient.Client, obj ctrlruntimeclient.Object, mutateFn crcontrollerutil.MutateFn, log *logrus.Entry) error {

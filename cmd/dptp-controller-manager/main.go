@@ -61,6 +61,7 @@ type options struct {
 	leaderElectionSuffix         string
 	enabledControllers           flagutil.Strings
 	enabledControllersSet        sets.String
+	registryClusterName          string
 	dryRun                       bool
 	blockProfileRate             time.Duration
 	testImagesDistributorOptions testImagesDistributorOptions
@@ -139,6 +140,7 @@ func newOpts() (*options, error) {
 	flag.StringVar(&opts.secretSyncerConfigOptions.configFile, "secretSyncerConfigOptions.config", "", "The config file for the secret syncer controller")
 	flag.StringVar(&opts.secretSyncerConfigOptions.secretBoostrapConfigFile, "secretSyncerConfigOptions.secretBoostrapConfigFile", "", "The config file for ci-secret-boostrap")
 	flag.DurationVar(&opts.blockProfileRate, "block-profile-rate", time.Duration(0), "The block profile rate. Set to non-zero to enable.")
+	flag.StringVar(&opts.registryClusterName, "registry-cluster-name", "api.ci", "the cluster name on which the CI central registry is running")
 	flag.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	flag.Parse()
 
@@ -273,8 +275,8 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to load kubeconfigs")
 	}
-	if _, hasApiCI := kubeconfigs[apiCIContextName]; !hasApiCI {
-		logrus.Fatalf("--kubeconfig must include a context named `%s`", apiCIContextName)
+	if _, hasRegistryCluster := kubeconfigs[opts.registryClusterName]; !hasRegistryCluster {
+		logrus.Fatalf("--kubeconfig must include a context named `%s`", opts.registryClusterName)
 	}
 	if _, hasAppCi := kubeconfigs[appCIContextName]; !hasAppCi {
 		kubeconfigs[appCIContextName], err = rest.InClusterConfig()
@@ -293,17 +295,48 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to start config agent")
 	}
 
-	mgr, err := controllerruntime.NewManager(kubeconfigs[appCIContextName], controllerruntime.Options{
-		LeaderElection:          true,
-		LeaderElectionNamespace: opts.leaderElectionNamespace,
-		LeaderElectionID:        fmt.Sprintf("dptp-controller-manager%s", opts.leaderElectionSuffix),
-		DryRunClient:            opts.dryRun,
-		Logger:                  ctrlruntimelog.NullLogger{},
-	})
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to construct manager")
+	allManagers := map[string]controllerruntime.Manager{}
+	allClustersExceptRegistryCluster := map[string]controllerruntime.Manager{}
+	var registryMgr controllerruntime.Manager
+
+	var errs []error
+	for cluster, cfg := range kubeconfigs {
+		if _, alreadyExists := allManagers[cluster]; alreadyExists {
+			logrus.Fatalf("attempted duplicate creation of manager for cluster %s", cluster)
+		}
+
+		options := controllerruntime.Options{
+			DryRunClient: opts.dryRun,
+			Logger:       ctrlruntimelog.NullLogger{},
+		}
+		if cluster == appCIContextName {
+			options.LeaderElection = true
+			options.LeaderElectionNamespace = opts.leaderElectionNamespace
+			options.LeaderElectionID = fmt.Sprintf("dptp-controller-manager%s", opts.leaderElectionSuffix)
+		} else {
+			options.MetricsBindAddress = "0"
+		}
+		if cluster == opts.registryClusterName {
+			syncPeriod := 24 * time.Hour
+			options.SyncPeriod = &syncPeriod
+		}
+		mgr, err := controllerruntime.NewManager(cfg, options)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to construct manager for cluster %s: %w", cluster, err))
+			continue
+		}
+		allManagers[cluster] = mgr
+		if cluster == opts.registryClusterName {
+			registryMgr = mgr
+		} else {
+			allClustersExceptRegistryCluster[cluster] = mgr
+		}
+	}
+	if err := utilerrors.NewAggregate(errs); err != nil {
+		logrus.WithError(err).Fatal("Failed to construct cluster managers")
 	}
 
+	mgr := allManagers[appCIContextName]
 	if err := imagev1.AddToScheme(mgr.GetScheme()); err != nil {
 		logrus.WithError(err).Fatal("Failed to add imagev1 to scheme")
 	}
@@ -317,27 +350,17 @@ func main() {
 	}
 	pjutil.ServePProf(flagutil.DefaultPProfPort)
 
-	// Needed by the ImageStreamTagReconciler. This is a setting on the SharedInformer
-	// so its applied for all watches for all controllers in this manager. If needed,
-	// we can move this to a custom sigs.k8s.io/controller-runtime/pkg/source.Source
-	// so its only applied for the ImageStreamTagReconciler.
-	// TODO alvaroalmean: This is crap. Add a proper time-based trigger on controller-level,
-	// not a global one for everything because one controller happens to need it.
-	resyncInterval := 24 * time.Hour
-	registryMgr, err := controllerruntime.NewManager(kubeconfigs[apiCIContextName], controllerruntime.Options{
-		LeaderElection: false,
-		// The normal manager already serves these metrics and we must disable it here to not
-		// get an error when attempting to create the second listener on the same address.
-		MetricsBindAddress: "0",
-		SyncPeriod:         &resyncInterval,
-		DryRunClient:       opts.dryRun,
-		Logger:             ctrlruntimelog.NullLogger{},
-	})
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to construct manager for registry")
+	for cluster, buildClusterMgr := range allManagers {
+		if cluster == appCIContextName {
+			continue
+		}
+		if err := mgr.Add(buildClusterMgr); err != nil {
+			errs = append(errs, fmt.Errorf("failed to add buildClusterMgr for cluster %s to main mgr: %w", cluster, err))
+			continue
+		}
 	}
-	if err := mgr.Add(registryMgr); err != nil {
-		logrus.WithError(err).Fatal("Failed to add registry manager to main manager.")
+	if err := utilerrors.NewAggregate(errs); err != nil {
+		logrus.WithError(err).Fatal("Failed to add build cluster managers")
 	}
 
 	var secretPaths []string
@@ -377,41 +400,6 @@ func main() {
 		}
 	}
 
-	allManagers := map[string]controllerruntime.Manager{
-		appCIContextName: mgr,
-		apiCIContextName: registryMgr,
-	}
-	var errs []error
-	for cluster, cfg := range kubeconfigs {
-		if cluster == appCIContextName || cluster == apiCIContextName {
-			continue
-		}
-		if _, alreadyExists := allManagers[cluster]; alreadyExists {
-			logrus.Fatalf("attempted duplicate creation of manager for cluster %s", cluster)
-		}
-		buildClusterMgr, err := controllerruntime.NewManager(cfg, controllerruntime.Options{MetricsBindAddress: "0", LeaderElection: false, DryRunClient: opts.dryRun, Logger: ctrlruntimelog.NullLogger{}})
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to construct manager for cluster %s: %w", cluster, err))
-			continue
-		}
-		if err := mgr.Add(buildClusterMgr); err != nil {
-			errs = append(errs, fmt.Errorf("failed to add buildClusterMgr for cluster %s to main mgr: %w", cluster, err))
-			continue
-		}
-		allManagers[cluster] = buildClusterMgr
-	}
-	if err := utilerrors.NewAggregate(errs); err != nil {
-		logrus.WithError(err).Fatal("Failed to construct build cluster managers")
-	}
-
-	allClustersExceptAPICI := map[string]controllerruntime.Manager{}
-	for cluster, manager := range allManagers {
-		if cluster == apiCIContextName {
-			continue
-		}
-		allClustersExceptAPICI[cluster] = manager
-	}
-
 	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) ||
 		opts.enabledControllersSet.Has(registrysyncer.ControllerName) {
 		if err := controllerutil.RegisterMetrics(); err != nil {
@@ -430,8 +418,9 @@ func main() {
 
 		if err := testimagesdistributor.AddToManager(
 			mgr,
-			allManagers[apiCIContextName],
-			allClustersExceptAPICI,
+			opts.registryClusterName,
+			registryMgr,
+			allClustersExceptRegistryCluster,
 			ciOPConfigAgent,
 			secretAgent.GetTokenGenerator(opts.testImagesDistributorOptions.imagePullSecretPath),
 			registryConfigAgent,
@@ -445,9 +434,12 @@ func main() {
 	}
 
 	if opts.enabledControllersSet.Has(secretsyncer.ControllerName) {
+		// TODO (hongkliu): change this to app.ci when we are ready
+		// to let users maintain the source secrets on app.ci
+		referenceClusterName := apiCIContextName
 		targetClusters := map[string]controllerruntime.Manager{}
 		for cluster, manager := range allManagers {
-			if cluster == apiCIContextName {
+			if cluster == referenceClusterName {
 				continue
 			}
 			targetClusters[cluster] = manager
@@ -461,7 +453,7 @@ func main() {
 		if err := yaml.Unmarshal(rawConfig, &secretBootstrapConfig); err != nil {
 			logrus.WithError(err).Fatal("Failed to unmarshal ci-secret-boostrap config")
 		}
-		configChangeEnqueuer, err := secretsyncer.AddToManager(mgr, allManagers[apiCIContextName], targetClusters, secretSyncerConfigAgent.Config, secretBootstrapConfig)
+		configChangeEnqueuer, err := secretsyncer.AddToManager(mgr, referenceClusterName, allManagers[referenceClusterName], targetClusters, secretSyncerConfigAgent.Config, secretBootstrapConfig)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to add secret syncer controller")
 		}
@@ -473,6 +465,9 @@ func main() {
 	if opts.enabledControllersSet.Has(registrysyncer.ControllerName) {
 		if opts.registrySyncerOptions.imagePullSecretPath == "" {
 			logrus.Fatal("The registrysyncer requires the --registrySyncerOptions.imagePullSecretPath flag to be set ")
+		}
+		if _, hasApiCI := kubeconfigs[apiCIContextName]; !hasApiCI {
+			logrus.Fatalf("--kubeconfig must include a context named `%s`", apiCIContextName)
 		}
 		if err := registrysyncer.AddToManager(
 			mgr,

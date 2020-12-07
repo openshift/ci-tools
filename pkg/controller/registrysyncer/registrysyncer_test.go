@@ -232,7 +232,7 @@ func TestReconcile(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   "ci",
 			Name:        "applyconfig:latest",
-			Annotations: map[string]string{"release.openshift.io/soft-delete": time.Now().Add(-time.Hour).Format(time.RFC1123)},
+			Annotations: map[string]string{"release.openshift.io/soft-delete": time.Now().Add(-time.Hour).Format(time.RFC3339)},
 		},
 		Image: imagev1.Image{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1248,9 +1248,9 @@ func TestHasDueSoftDeleteAnnotation(t *testing.T) {
 				},
 			},
 			expectedError: &time.ParseError{
-				Layout:     "Mon, 02 Jan 2006 15:04:05 MST",
+				Layout:     "2006-01-02T15:04:05Z07:00",
 				Value:      "not a timestamp",
-				LayoutElem: "Mon",
+				LayoutElem: "2006",
 				ValueElem:  "not a timestamp",
 			},
 		},
@@ -1261,7 +1261,7 @@ func TestHasDueSoftDeleteAnnotation(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace:   "ci",
 						Name:        "applyconfig:latest",
-						Annotations: map[string]string{"a": "c", "release.openshift.io/soft-delete": oneDayBefore.Format(time.RFC1123)},
+						Annotations: map[string]string{"a": "c", "release.openshift.io/soft-delete": oneDayBefore.Format(time.RFC3339)},
 					},
 					Image: imagev1.Image{
 						ObjectMeta: metav1.ObjectMeta{
@@ -1282,7 +1282,7 @@ func TestHasDueSoftDeleteAnnotation(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace:   "ci",
 						Name:        "applyconfig:latest",
-						Annotations: map[string]string{"a": "c", "release.openshift.io/soft-delete": oneDayLater.Format(time.RFC1123)},
+						Annotations: map[string]string{"a": "c", "release.openshift.io/soft-delete": oneDayLater.Format(time.RFC3339)},
 					},
 					Image: imagev1.Image{
 						ObjectMeta: metav1.ObjectMeta{

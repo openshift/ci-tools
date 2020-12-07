@@ -262,7 +262,7 @@ func hasDueSoftDeleteAnnotation(streams map[string]*imagev1.ImageStreamTag) (str
 			continue
 		}
 		if value, ok := stream.Annotations[api.ReleaseAnnotationSoftDelete]; ok {
-			t, err := time.Parse(time.RFC1123, value)
+			t, err := time.Parse(time.RFC3339, value)
 			if err != nil {
 				return "", false, err
 			}

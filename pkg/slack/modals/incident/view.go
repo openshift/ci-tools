@@ -85,7 +85,7 @@ func View() slack.ModalViewRequest {
 			&slack.ActionBlock{
 				Type:    slack.MBTAction,
 				BlockID: blockIdSelectors,
-				Elements: slack.BlockElements{
+				Elements: &slack.BlockElements{
 					ElementSet: []slack.BlockElement{
 						&slack.SelectBlockElement{
 							Type:        slack.OptTypeChannels,

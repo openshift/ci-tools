@@ -42,8 +42,7 @@ func DomainForService(service Service) string {
 	switch service {
 	case ServiceBoskos, ServiceGCSWeb:
 		serviceDomain = ServiceDomainAPPCI
-	case ServiceRPMs, ServiceRegistry:
-		// TODO (hongkliu): registry migration
+	case ServiceRPMs:
 		serviceDomain = ServiceDomainAPICI
 	default:
 		serviceDomain = ServiceDomainCI

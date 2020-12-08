@@ -35,22 +35,14 @@ const ControllerName = "registry_syncer"
 func AddToManager(mgr manager.Manager,
 	managers map[string]manager.Manager,
 	pullSecretGetter func() []byte,
-	imageStreamTags sets.String,
-	imageStreams sets.String,
 	imageStreamPrefixes sets.String,
-	imageStreamNamespaces sets.String,
 	deniedImageStreams sets.String,
 ) error {
 	log := logrus.WithField("controller", ControllerName)
 	r := &reconciler{
-		log:                   log,
-		registryClients:       map[string]ctrlruntimeclient.Client{},
-		pullSecretGetter:      pullSecretGetter,
-		imageStreamTags:       imageStreamTags,
-		imageStreams:          imageStreams,
-		imageStreamPrefixes:   imageStreamPrefixes,
-		imageStreamNamespaces: imageStreamNamespaces,
-		deniedImageStreams:    deniedImageStreams,
+		log:              log,
+		registryClients:  map[string]ctrlruntimeclient.Client{},
+		pullSecretGetter: pullSecretGetter,
 	}
 	for clusterName, m := range managers {
 		r.registryClients[clusterName] = imagestreamtagwrapper.MustNew(m.GetClient(), m.GetCache())
@@ -67,7 +59,7 @@ func AddToManager(mgr manager.Manager,
 	for _, m := range managers {
 		if err := c.Watch(
 			source.NewKindWithCache(&imagev1.ImageStream{}, m.GetCache()),
-			handlerFactory(testInputImageStreamTagFilterFactory(log, imageStreamTags, imageStreams, imageStreamPrefixes, imageStreamNamespaces, deniedImageStreams)),
+			handlerFactory(testInputImageStreamTagFilterFactory(log, imageStreamPrefixes, deniedImageStreams)),
 		); err != nil {
 			return fmt.Errorf("failed to create watch for ImageStreams: %w", err)
 		}
@@ -95,14 +87,9 @@ func handlerFactory(filter objectFilter) handler.EventHandler {
 }
 
 type reconciler struct {
-	log                   *logrus.Entry
-	registryClients       map[string]ctrlruntimeclient.Client
-	pullSecretGetter      func() []byte
-	imageStreamTags       sets.String
-	imageStreams          sets.String
-	imageStreamPrefixes   sets.String
-	imageStreamNamespaces sets.String
-	deniedImageStreams    sets.String
+	log              *logrus.Entry
+	registryClients  map[string]ctrlruntimeclient.Client
+	pullSecretGetter func() []byte
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -433,12 +420,13 @@ func (r *reconciler) pullSecret(namespace string) (*corev1.Secret, crcontrolleru
 	}
 }
 
+var (
+	deniedNamespacePrefixes = sets.NewString("kube", "openshift", "default", "redhat", "ci-op")
+)
+
 func testInputImageStreamTagFilterFactory(
 	l *logrus.Entry,
-	imageStreamTags sets.String,
-	imageStreams sets.String,
 	imageStreamPrefixes sets.String,
-	imageStreamNamespaces sets.String,
 	deniedImageStreams sets.String,
 ) objectFilter {
 	l = logrus.WithField("subcomponent", "test-input-image-stream-tag-filter")
@@ -451,21 +439,17 @@ func testInputImageStreamTagFilterFactory(
 		if deniedImageStreams.Has(imageStreamName.String()) {
 			return false
 		}
-		if imageStreamTags.Has(nn.String()) {
-			return true
-		}
-		if imageStreamNamespaces.Has(nn.Namespace) {
-			return true
-		}
-		if imageStreams.Has(imageStreamName.String()) {
-			return true
-		}
-		for _, prefix := range imageStreamPrefixes.List() {
-			if strings.HasPrefix(imageStreamName.String(), prefix) {
-				return true
+		for _, deniedNamespacePrefix := range deniedNamespacePrefixes.List() {
+			if strings.HasPrefix(imageStreamName.Namespace, deniedNamespacePrefix) {
+				for _, prefix := range imageStreamPrefixes.List() {
+					if strings.HasPrefix(imageStreamName.String(), prefix) {
+						return true
+					}
+				}
+				return false
 			}
 		}
-		return false
+		return true
 	}
 }
 

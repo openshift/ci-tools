@@ -460,7 +460,7 @@ func addSecretWrapper(pod *coreapi.Pod) {
 	})
 	mount := coreapi.VolumeMount{Name: volume, MountPath: dir}
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, coreapi.Container{
-		Image:                    fmt.Sprintf("%s/ci/secret-wrapper:latest", apiCIRegistry),
+		Image:                    fmt.Sprintf("%s/ci/secret-wrapper:latest", ciRegistry),
 		Name:                     "cp-secret-wrapper",
 		Command:                  []string{"cp"},
 		Args:                     []string{"/bin/secret-wrapper", bin},

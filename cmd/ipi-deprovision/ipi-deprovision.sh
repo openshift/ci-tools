@@ -69,7 +69,8 @@ EOF
   echo "will deprovision GCE cluster ${infraID} in region ${region}"
 done
 
-for workdir in $( find "${ARTIFACTS}/deprovision" -mindepth 1 -type d | shuf ); do
+clusters=$( find "${ARTIFACTS}/deprovision" -mindepth 1 -type d )
+for workdir in $(shuf <<< ${clusters}); do
   queue deprovision "${workdir}"
 done
 
@@ -89,11 +90,11 @@ if [[ "${#buckets[@]}" -gt 0 ]]; then
   timeout 30m gsutil -m rm -r "${buckets[@]}"
 fi
 
-FAILED="$(ls "${ARTIFACTS}"/deprovision/*/failure)"
+FAILED="$(find ${clusters} -name failure -printf '%H\n' | sort)"
 if [[ -n "${FAILED}" ]]; then
   echo "Deprovision failed on the following clusters:"
-  echo "${FAILED}"
+  xargs --max-args 1 basename <<< $FAILED
   exit 1
-else
-  echo "Deprovision finished successfully"
 fi
+
+echo "Deprovision finished successfully"

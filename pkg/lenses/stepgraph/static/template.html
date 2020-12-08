@@ -1,0 +1,197 @@
+{{define "header"}}
+<link rel="stylesheet" type="text/css" href="junit.css">
+<script type="text/javascript" src="script_bundle.min.js"></script>
+{{end}}
+
+{{define "body"}}
+<style>
+#empty-junit-container {
+  color: #e8e8e8;
+  text-align: center;
+  padding-bottom: 10px;
+}
+
+.hidden-tests {
+  visibility: collapse;
+  display: none;
+}
+
+.hidden {
+  display: none;
+}
+
+.noselect {
+  user-select: none;
+}
+.expander {
+  font-weight:bold;
+  font-size:1.5em;
+}
+
+.expander:last-of-type {
+  text-align: right;
+}
+
+td.failed {
+  color: #ff4040;
+}
+
+td.flaky {
+  color: #dd99dd;
+}
+
+td.passed {
+  color: #61ff61;
+}
+
+td.skipped {
+  color: #ffe62d;
+}
+
+.failed-layout, .flaky-layout {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.failed-layout td, .flaky-layout td {
+  border: 0;
+  padding: 0;
+}
+
+.failure-name, .flaky-name {
+  cursor: pointer;
+}
+
+td {
+  white-space: normal !important;
+}
+
+/* We are engaged in a never-ending war of cascade escalation against MDL */
+#failed-tbody > tr:hover, #flaky-tbody > tr:hover {
+  background-color: unset !important;
+}
+
+table.failed-layout tbody tr.failure-text:hover {
+  background-color: unset !important;
+}
+
+table.flaky-layout tbody tr.flaky-text:hover {
+  background-color: unset !important;
+}
+
+.failure-text div, .flaky-text div {
+  padding-left: 20px;
+  padding-right: 20px;
+  white-space: pre-wrap;
+  font-family: monospace;
+  padding-bottom: 10px;
+}
+
+.failure-text td, .flaky-text td {
+  padding-bottom: 15px;
+}
+
+.arrow-icon {
+  vertical-align: middle;
+}
+</style>
+<script>
+function addSectionExpanders() {
+    var expanders = document.querySelectorAll('tr.section-expander');
+    var _loop_1 = function (expander) {
+        expander.onclick = function () {
+            var tbody = expander.parentElement.nextElementSibling;
+            var icon = expander.querySelector('i');
+            if (tbody.classList.contains('hidden-tests')) {
+                tbody.classList.remove('hidden-tests');
+                icon.innerText = 'expand_less';
+            }
+            else {
+                tbody.classList.add('hidden-tests');
+                icon.innerText = 'expand_more';
+            }
+            spyglass.contentUpdated();
+        };
+    };
+    for (var _i = 0, _a = Array.from(expanders); _i < _a.length; _i++) {
+        var expander = _a[_i];
+        _loop_1(expander);
+    }
+}
+function addTestExpanders() {
+    var rows = document.querySelectorAll('.failure-name,.flaky-name');
+    var _loop_2 = function (row) {
+        row.onclick = function () {
+            var sibling = row.nextElementSibling;
+            var icon = row.querySelector('i');
+            if (sibling.classList.contains('hidden')) {
+                sibling.classList.remove('hidden');
+                icon.innerText = 'expand_less';
+            }
+            else {
+                sibling.classList.add('hidden');
+                icon.innerText = 'expand_more';
+            }
+            spyglass.contentUpdated();
+        };
+    };
+    for (var _i = 0, _a = Array.from(rows); _i < _a.length; _i++) {
+        var row = _a[_i];
+        _loop_2(row);
+    }
+}
+function addStdoutOpeners() {
+    var links = document.querySelectorAll('a.open-stdout');
+    var _loop_3 = function (link) {
+        link.onclick = function (e) {
+            e.preventDefault();
+            var text = link.nextElementSibling.innerHTML;
+            var blob = new Blob(["\n      <head>\n        <title>Logs</title>\n      </head>\n      <body style=\"background-color: #303030; color: white; font-family: monospace; white-space: pre-wrap;\">" + text + "</body>"], { type: 'text/html' });
+            window.open(URL.createObjectURL(blob));
+        };
+    };
+    for (var _i = 0, _a = Array.from(links); _i < _a.length; _i++) {
+        var link = _a[_i];
+        _loop_3(link);
+    }
+}
+function loaded() {
+    addTestExpanders();
+    addStdoutOpeners();
+    addSectionExpanders();
+}
+window.addEventListener('DOMContentLoaded', loaded);
+</script>
+{{$num := len .}}
+<div id="junit-container">
+  <table id="junit-table" class="mdl-data-table mdl-js-data-table mdl-shadow--2dp">
+  {{if gt $num 0}}
+    <tr id="passed-theader" class="header section-expander">
+      <td class="mdl-data-table__cell--non-numeric expander passed" colspan="1"><h6>{{$num}} steps</h6></td>
+      <td class="mdl-data-table__cell--non-numeric expander"><i id="passed-expander" class="icon-button material-icons arrow-icon noselect">expand_more</i></td>
+    </tr>
+    <tbody id="passed-tbody" class="hidden-tests">
+      {{range .}}
+        <tr>
+          <td class="mdl-data-table__cell--non-numeric test-name">{{.StepName}}</td>
+          <td class="mdl-data-table__cell--non-numeric">{{.Duration}}</td>
+        </tr>
+        <tr>
+          <td colspan="2">
+            <table id="{{.StepName}}-manifests" class="mdl-data-table mdl-js-data-table mdl-shadow--2dp">
+              <tr id="passed-theader" class="header section-expander">
+                <td class="mdl-data-table__cell--non-numeric expander" colspan="1"><h6>Manifests</h6></td>
+                <td class="mdl-data-table__cell--non-numeric expander"><i id="{{.StepName}}-manifest-expander" class="icon-button material-icons arrow-icon noselect">expand_more</i></td>
+              </tr>
+              <tbody id="{{.StepName}}-manifest-tbody" class="hidden-tests">
+                {{range .ManifestsYAML}}<tr><td class="mdl-data-table__cell--non-numeric test-name"><pre style="white-space: pre-wrap;">{{.}}</td></tr>{{end}}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      {{end}}
+    </tbody>
+  {{end}}
+  </table>
+</div>
+{{end}}

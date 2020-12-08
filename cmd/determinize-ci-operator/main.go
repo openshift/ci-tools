@@ -20,9 +20,10 @@ const (
 	openshiftInstallerSRCTemplateName             = "openshift_installer_src"
 	openshiftInstallerCustomTestImageTemplateName = "openshift_installer_custom_test_image"
 	OpenshiftInstallerUPITemplateName             = "openshift_installer_upi"
+	OpenShiftInstallerTemplateName                = "openshift_installer"
 )
 
-var validTemplateMigrations = sets.NewString(openshiftInstallerSRCTemplateName, openshiftInstallerCustomTestImageTemplateName, OpenshiftInstallerUPITemplateName)
+var validTemplateMigrations = sets.NewString(openshiftInstallerSRCTemplateName, openshiftInstallerCustomTestImageTemplateName, OpenshiftInstallerUPITemplateName, OpenShiftInstallerTemplateName)
 
 type options struct {
 	config.ConfirmableOptions
@@ -73,14 +74,20 @@ func main() {
 			return nil
 		}
 
+		allowedBranches := o.templateMigrationAllowedBranches.StringSet()
+		allowedOrgs := o.templateMigrationAllowedOrgs.StringSet()
+		allowedClusterProfiles := o.templateMigrationAllowedClusterProfiles.StringSet()
 		if sets.NewString(o.enabledTemplateMigrations.Strings()...).Has(openshiftInstallerSRCTemplateName) && migratedCount <= o.templateMigrationCeiling {
-			migratedCount += migrateOpenshiftInstallerSRCTemplates(&output, o.templateMigrationAllowedBranches.StringSet(), o.templateMigrationAllowedOrgs.StringSet(), o.templateMigrationAllowedClusterProfiles.StringSet())
+			migratedCount += migrateOpenshiftInstallerSRCTemplates(&output, allowedBranches, allowedOrgs, allowedClusterProfiles)
 		}
 		if sets.NewString(o.enabledTemplateMigrations.Strings()...).Has(openshiftInstallerCustomTestImageTemplateName) && migratedCount <= o.templateMigrationCeiling {
-			migratedCount += migrateOpenshiftInstallerCustomTestImageTemplates(&output, o.templateMigrationAllowedBranches.StringSet(), o.templateMigrationAllowedOrgs.StringSet(), o.templateMigrationAllowedClusterProfiles.StringSet())
+			migratedCount += migrateOpenshiftInstallerCustomTestImageTemplates(&output, allowedBranches, allowedOrgs, allowedClusterProfiles)
 		}
 		if o.enabledTemplateMigrations.StringSet().Has(OpenshiftInstallerUPITemplateName) && migratedCount <= o.templateMigrationCeiling {
-			migratedCount += migrateOpenshiftOpenshiftInstallerUPIClusterTestConfiguration(&output, o.templateMigrationAllowedBranches.StringSet(), o.templateMigrationAllowedOrgs.StringSet(), o.templateMigrationAllowedClusterProfiles.StringSet())
+			migratedCount += migrateOpenshiftOpenshiftInstallerUPIClusterTestConfiguration(&output, allowedBranches, allowedOrgs, allowedClusterProfiles)
+		}
+		if o.enabledTemplateMigrations.StringSet().Has(OpenShiftInstallerTemplateName) && migratedCount <= o.templateMigrationCeiling {
+			migratedCount += migrateOpenShiftInstallerTemplates(&output, allowedBranches, allowedOrgs, allowedClusterProfiles)
 		}
 
 		// we treat the filepath as the ultimate source of truth for this
@@ -101,6 +108,56 @@ func main() {
 			logrus.WithError(err).Fatal("commitTo failed")
 		}
 	}
+}
+
+func upgradeWorkflowForClusterProfile(clusterProfile api.ClusterProfile) string {
+	return fmt.Sprintf("openshift-upgrade-%s-loki", clusterProfile)
+}
+
+func e2eWorkflowForClusterProfile(clusterProfile api.ClusterProfile) string {
+	return fmt.Sprintf("openshift-e2e-%s", clusterProfile)
+}
+
+func migrateOpenShiftInstallerTemplates(
+	configuration *config.DataWithInfo,
+	allowedBranches sets.String,
+	allowedOrgs sets.String,
+	allowedCloudproviders sets.String,
+) (migratedCount int) {
+	if (len(allowedBranches) != 0 && !allowedBranches.Has(configuration.Info.Branch)) || (len(allowedOrgs) != 0 && !allowedOrgs.Has(configuration.Info.Org)) {
+		return 0
+	}
+
+	for idx, test := range configuration.Configuration.Tests {
+		if test.OpenshiftInstallerClusterTestConfiguration == nil ||
+			(len(allowedCloudproviders) != 0 && !allowedCloudproviders.Has(string(test.OpenshiftInstallerClusterTestConfiguration.ClusterProfile))) {
+			continue
+		}
+
+		clusterProfile := test.OpenshiftInstallerClusterTestConfiguration.ClusterProfile
+		switch {
+		case test.OpenshiftInstallerClusterTestConfiguration.Upgrade:
+			test.OpenshiftInstallerClusterTestConfiguration = nil
+			test.MultiStageTestConfiguration = &api.MultiStageTestConfiguration{
+				ClusterProfile: clusterProfile,
+				Workflow:       utilpointer.StringPtr(upgradeWorkflowForClusterProfile(clusterProfile)),
+			}
+		case test.Commands == "setup_ssh_bastion; TEST_SUITE=openshift/disruptive run-tests; TEST_SUITE=openshift/conformance/parallel run-tests":
+			// TODO(muller): Unfortunately there is no easy way to express this ("run same step twice")
+			continue
+		default:
+			test.OpenshiftInstallerClusterTestConfiguration = nil
+			test.MultiStageTestConfiguration = &api.MultiStageTestConfiguration{
+				ClusterProfile: clusterProfile,
+				Workflow:       utilpointer.StringPtr(e2eWorkflowForClusterProfile(clusterProfile)),
+			}
+		}
+		test.Commands = ""
+		configuration.Configuration.Tests[idx] = test
+		migratedCount++
+	}
+
+	return migratedCount
 }
 
 func migrateOpenshiftInstallerSRCTemplates(

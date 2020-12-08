@@ -22,7 +22,7 @@ import (
 )
 
 var (
-	apiCIRegistry = api.DomainForService(api.ServiceRegistry)
+	ciRegistry = api.DomainForService(api.ServiceRegistry)
 )
 
 // inputImageTagStep will ensure that a tag exists

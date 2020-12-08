@@ -54,12 +54,15 @@ type options struct {
 	secretsGetters map[string]coreclientset.SecretsGetter
 	config         secretbootstrap.Config
 	bwAllowUnused  flagutil.Strings
+
+	validateOnly bool
 }
 
 func parseOptions() options {
 	var o options
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	o.bwAllowUnused = flagutil.NewStrings()
+	fs.BoolVar(&o.validateOnly, "validate-only", false, "If set, the tool exists after validating its config file.")
 	fs.Var(&o.bwAllowUnused, "bw-allow-unused", "One or more bitwarden items that will be ignored when the --validate-bitwarden-items-usage is specified")
 	fs.BoolVar(&o.validateBWItemsUsage, "validate-bitwarden-items-usage", false, "If set, the tool only validates if all attachments and custom fields that exist in BitWarden are being used in the given config.")
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with oc command")
@@ -163,6 +166,9 @@ func (o *options) completeOptions(secrets *sets.String) error {
 }
 
 func (o *options) validateCompletedOptions() error {
+	if err := o.config.Validate(); err != nil {
+		return fmt.Errorf("failed to validate the config: %w", err)
+	}
 	if o.bwPassword == "" {
 		return fmt.Errorf("--bw-password-file was empty")
 	}
@@ -613,6 +619,17 @@ func getUnusedBWItems(config secretbootstrap.Config, bwClient bitwarden.Client, 
 
 func main() {
 	o := parseOptions()
+	if o.validateOnly {
+		var config secretbootstrap.Config
+		if err := secretbootstrap.LoadConfigFromFile(o.configPath, &config); err != nil {
+			logrus.WithError(err).Fatalf("failed to load config from file: %s", o.configPath)
+		}
+		if err := config.Validate(); err != nil {
+			logrus.WithError(err).Fatal("failed to validate the config")
+		}
+		logrus.Infof("the config file %s has been validated", o.configPath)
+		return
+	}
 	secrets := sets.NewString()
 	logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, func() sets.String {
 		return secrets

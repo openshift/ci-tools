@@ -87,17 +87,11 @@ type testImagesDistributorOptions struct {
 }
 
 type registrySyncerOptions struct {
-	imagePullSecretPath      string
-	imageStreamTagsRaw       flagutil.Strings
-	imageStreamTags          sets.String
-	imageStreamsRaw          flagutil.Strings
-	imageStreams             sets.String
-	imageStreamPrefixesRaw   flagutil.Strings
-	imageStreamPrefixes      sets.String
-	imageStreamNamespacesRaw flagutil.Strings
-	imageStreamNamespaces    sets.String
-	deniedImageStreamsRaw    flagutil.Strings
-	deniedImageStreams       sets.String
+	imagePullSecretPath    string
+	imageStreamPrefixesRaw flagutil.Strings
+	imageStreamPrefixes    sets.String
+	deniedImageStreamsRaw  flagutil.Strings
+	deniedImageStreams     sets.String
 }
 
 type secretSyncerConfigOptions struct {
@@ -130,10 +124,7 @@ func newOpts() (*options, error) {
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamTagsRaw, "testImagesDistributorOptions.additional-image-stream-tag", "An imagestreamtag that will be distributed even if no test explicitly references it. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamsRaw, "testImagesDistributorOptions.additional-image-stream", "An imagestream that will be distributed even if no test explicitly references it. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw, "testImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
-	flag.Var(&opts.registrySyncerOptions.imageStreamTagsRaw, "registrySyncerOptions.image-stream-tag", "An imagestreamtag that will be synced. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
-	flag.Var(&opts.registrySyncerOptions.imageStreamsRaw, "registrySyncerOptions.image-stream", "An imagestream that will be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	flag.Var(&opts.registrySyncerOptions.imageStreamPrefixesRaw, "registrySyncerOptions.image-stream-prefix", "An imagestream prefix that will be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
-	flag.Var(&opts.registrySyncerOptions.imageStreamNamespacesRaw, "registrySyncerOptions.image-stream-namespace", "A namespace in which imagestreams will be synced (e.G `ci`). Can be passed multiple times.")
 	flag.Var(&opts.registrySyncerOptions.deniedImageStreamsRaw, "registrySyncerOptions.denied-image-stream", "An imagestream that will NOT be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.forbiddenRegistriesRaw, "testImagesDistributorOptions.forbidden-registry", "The hostname of an image registry from which there is no synchronization of its images. Can be passed multiple times.")
 	flag.StringVar(&opts.registrySyncerOptions.imagePullSecretPath, "registrySyncerOptions.imagePullSecretPath", "", "A file to use for reading an ImagePullSecret that will be bound to all `default` ServiceAccounts in all namespaces that have a test ImageStream on all build clusters")
@@ -175,14 +166,6 @@ func newOpts() (*options, error) {
 	opts.testImagesDistributorOptions.additionalImageStreamNamespaces = completeSet(opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw)
 	opts.testImagesDistributorOptions.forbiddenRegistries = completeSet(opts.testImagesDistributorOptions.forbiddenRegistriesRaw)
 
-	isTags, isTagErrors = completeImageStreamTags("registrySyncerOptions.image-stream-tag", opts.registrySyncerOptions.imageStreamTagsRaw)
-	errs = append(errs, isTagErrors...)
-	opts.registrySyncerOptions.imageStreamTags = isTags
-
-	imageStreams, isErrors = completeImageStream("registrySyncerOptions.image-stream", opts.registrySyncerOptions.imageStreamsRaw)
-	errs = append(errs, isErrors...)
-	opts.registrySyncerOptions.imageStreams = imageStreams
-
 	imageStreamPrefixes, isErrors := completeImageStream("registrySyncerOptions.image-stream-prefix", opts.registrySyncerOptions.imageStreamPrefixesRaw)
 	errs = append(errs, isErrors...)
 	opts.registrySyncerOptions.imageStreamPrefixes = imageStreamPrefixes
@@ -190,8 +173,6 @@ func newOpts() (*options, error) {
 	deniedImageStreams, isErrors := completeImageStream("registrySyncerOptions.denied-image-stream", opts.registrySyncerOptions.deniedImageStreamsRaw)
 	errs = append(errs, isErrors...)
 	opts.registrySyncerOptions.deniedImageStreams = deniedImageStreams
-
-	opts.registrySyncerOptions.imageStreamNamespaces = completeSet(opts.registrySyncerOptions.imageStreamNamespacesRaw)
 
 	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) && opts.stepConfigPath == "" {
 		errs = append(errs, fmt.Errorf("--step-config-path is required when the %s controller is enabled", testimagesdistributor.ControllerName))
@@ -473,10 +454,7 @@ func main() {
 			mgr,
 			map[string]manager.Manager{apiCIContextName: allManagers[apiCIContextName], appCIContextName: allManagers[appCIContextName]},
 			secretAgent.GetTokenGenerator(opts.registrySyncerOptions.imagePullSecretPath),
-			opts.registrySyncerOptions.imageStreamTags,
-			opts.registrySyncerOptions.imageStreams,
 			opts.registrySyncerOptions.imageStreamPrefixes,
-			opts.registrySyncerOptions.imageStreamNamespaces,
 			opts.registrySyncerOptions.deniedImageStreams,
 		); err != nil {
 			logrus.WithError(err).Fatal("failed to add registrysyncer")

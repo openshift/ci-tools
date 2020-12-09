@@ -25,7 +25,7 @@ fi
 os::test::junit::declare_suite_start "e2e/lease"
 
 export JOB_SPEC='{"type":"presubmit","job":"pull-ci-test-test-master-success","buildid":"0","prowjobid":"uuid","refs":{"org":"test","repo":"test","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[{"number":1234,"author":"droslean","sha":"538680dfd2f6cff3b3506c80ca182dcb0dd22a58"}]}}'
-os::integration::boskos::start "${suite_dir}/boskos.yaml"
+os::integration::boskos::start "${suite_dir}/boskos.yaml" aws-quota-slice
 os::cmd::expect_failure "ci-operator ${namespace} --registry ${suite_dir}/step-registry --config ${suite_dir}/config.yaml --target success"
 os::cmd::expect_success "ci-operator ${namespace} --registry ${suite_dir}/step-registry --config ${suite_dir}/config.yaml --lease-server http://localhost:8080 --lease-server-password-file /dev/null --lease-acquire-timeout 2s --target success --secret-dir ${cluster_profiles}/success-cluster-profile"
 os::cmd::expect_failure "ci-operator ${namespace} --registry ${suite_dir}/step-registry --config ${suite_dir}/config.yaml --lease-server http://localhost:8080 --lease-server-password-file /dev/null --lease-acquire-timeout 2s --target invalid-lease --secret-dir ${cluster_profiles}/invalid-lease-cluster-profile"

@@ -150,6 +150,8 @@ integration:
 	hack/test-integration.sh $(SUITE)
 .PHONY: integration
 
+TMPDIR ?= /tmp
+
 # Run e2e tests.
 #
 # Accepts a specific suite to run as an argument.
@@ -157,7 +159,9 @@ integration:
 # Example:
 #   make e2e
 #   make e2e SUITE=multi-stage
-e2e:
+e2e: $(TMPDIR)/pull-secret/.dockerconfigjson $(TMPDIR)/import-secret/.dockerconfigjson $(TMPDIR)/boskos
+	$(eval export PULL_SECRET_DIR=$(TMPDIR)/pull-secret)
+	$(eval export PATH=$$(shell echo -n "${PATH}:$(TMPDIR)"))
 	hack/test-e2e.sh $(SUITE)
 .PHONY: e2e
 
@@ -215,3 +219,18 @@ validate-registry-metadata:
 	git status -s ./test/multistage-registry/registry
 	test -z "$$(git status -s ./test/multistage-registry/registry | grep registry)"
 .PHONY: validate-registry-metadata
+
+$(TMPDIR)/pull-secret/.dockerconfigjson:
+	mkdir -p $(TMPDIR)/pull-secret
+	oc --context api.ci --as system:admin --namespace ci get secret registry-pull-credentials -o 'jsonpath={.data.\.dockerconfigjson}' | base64 --decode | jq > $(TMPDIR)/pull-secret/.dockerconfigjson
+
+$(TMPDIR)/import-secret/.dockerconfigjson:
+	mkdir -p $(TMPDIR)/import-secret
+	oc --context api.ci --as system:admin --namespace ci get secret ci-pull-credentials -o 'jsonpath={.data.\.dockerconfigjson}' | base64 --decode | jq > $(TMPDIR)/import-secret/.dockerconfigjson
+
+$(TMPDIR)/boskos:
+	mkdir -p $(TMPDIR)/image
+	oc image extract registry.ci.openshift.org/ci/boskos:latest --path /:$(TMPDIR)/image
+	mv $(TMPDIR)/image/app $(TMPDIR)/boskos
+	chmod +x $(TMPDIR)/boskos
+	rm -rf $(TMPDIR)/image

@@ -124,10 +124,25 @@ readonly -f os::integration::configresolver::check_log
 __os_integration_boskos_pid=
 
 # os::integration::boskos::start starts an in-memory boskos server.
+# The name of a valid resource is required to verify that the server has
+# successfully started.
 function os::integration::boskos::start() {
-    local config=$1
+    local config=$1 test_lease=$2
+    local url=http://localhost:8080
+    local curl='curl --request POST --silent --show-error --fail'
     boskos --in_memory --config "$1" &> "${LOG_DIR}/boskos.log" &
     __os_integration_boskos_pid=$!
+    os::log::info "Waiting for boskos to be ready..."
+    if ! os::cmd::try_until_success "${curl} '${url}/acquire?type=${test_lease}&state=free&dest=leased&owner=test'" 30; then
+        os::integration::boskos::stop
+        cat "${LOG_DIR}/boskos.log"
+        os::log::fatal 'failed to acquire the test lease'
+    fi
+    if ! os::cmd::expect_success "${curl} '${url}/reset?type=${test_lease}&state=leased&dest=free&expire=0'"; then
+        os::integration::boskos::stop
+        cat "${LOG_DIR}/boskos.log"
+        os::log::fatal 'failed to reset the test lease'
+    fi
 }
 readonly -f os::integration::boskos::start
 

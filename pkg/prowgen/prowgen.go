@@ -51,6 +51,11 @@ func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret) *corev1
 			MountPath: "/etc/report",
 			ReadOnly:  true,
 		},
+		{
+			Name:      "gcs-credentials",
+			MountPath: cioperatorapi.GCSUploadCredentialsSecretMountPath,
+			ReadOnly:  true,
+		},
 	}
 
 	volumes := []corev1.Volume{
@@ -238,6 +243,7 @@ func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secre
 	ret.Containers[0].Command = []string{"ci-operator"}
 	ret.Containers[0].Args = append([]string{
 		"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+		"--gcs-upload-secret=/secrets/gcs/service-account.json",
 		"--report-username=ci",
 		"--report-password-file=/etc/report/password.txt",
 	}, additionalArgs...)

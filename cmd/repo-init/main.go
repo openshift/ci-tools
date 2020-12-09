@@ -79,6 +79,7 @@ type e2eTest struct {
 	As      string             `json:"as"`
 	Profile api.ClusterProfile `json:"profile"`
 	Command string             `json:"command"`
+	Cli     bool               `json:"cli"`
 }
 
 func main() {
@@ -211,19 +212,23 @@ A test named %s already exists. Please choose a different name.\n`, test.As)
 					break
 				}
 			}
+
+			clusterProfiles := sets.NewString("gcp", "aws", "azure")
 			test.Profile = api.ClusterProfile(fetchOrDefaultWithPrompt("Which specific cloud provider does the test require, if any? ", string(api.ClusterProfileAWS)))
 			for {
-				if test.Profile.ClusterType() == "" {
-					fmt.Printf(`
-No cluster profile named %s exists. Please choose one from: %v.\n`, test.Profile, api.ClusterProfiles())
+				if !clusterProfiles.Has(string(test.Profile)) {
+					fmt.Printf("Cluster profile %s is not valid. Please choose one from: %s.\n", test.Profile, strings.Join(clusterProfiles.List(), ", "))
 					test.Profile = api.ClusterProfile(fetchOrDefaultWithPrompt("Which specific cloud provider does the test require, if any? ", string(api.ClusterProfileAWS)))
 				} else {
 					break
 				}
 			}
 			test.Command = fetchWithPrompt("What commands in the repository run the test (e.g. \"make test-e2e\")? ")
+			test.Cli = fetchBoolWithPrompt("Does your test require the OpenShift client (oc)? ")
+
 			e2eTests = append(e2eTests, test)
 		}
+
 		config.CustomE2E = e2eTests
 		if len(config.CustomE2E) > 0 && !config.Promotes {
 			valid := sets.NewString("nightly", "published")
@@ -517,13 +522,12 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 			Name:      originConfig.Name,
 		}
 		if config.PromotesWithOpenShift {
+			workflow := "openshift-e2e-aws"
 			generated.Configuration.Tests = append(generated.Configuration.Tests, api.TestStepConfiguration{
-				As:       "e2e-aws",
-				Commands: "TEST_SUITE=openshift/conformance/parallel run-tests",
-				OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
-					ClusterTestConfiguration: api.ClusterTestConfiguration{
-						ClusterProfile: api.ClusterProfileAWS,
-					},
+				As: "e2e-aws",
+				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+					Workflow:       &workflow,
+					ClusterProfile: "aws",
 				},
 			})
 		}
@@ -570,15 +574,29 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 	}
 
 	for _, test := range config.CustomE2E {
-		generated.Configuration.Tests = append(generated.Configuration.Tests, api.TestStepConfiguration{
-			As:       test.As,
-			Commands: test.Command,
-			OpenshiftInstallerSrcClusterTestConfiguration: &api.OpenshiftInstallerSrcClusterTestConfiguration{
-				ClusterTestConfiguration: api.ClusterTestConfiguration{
-					ClusterProfile: test.Profile,
+		t := api.TestStepConfiguration{
+			As: test.As,
+			MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+				Workflow:       determineWorkflowFromClusterPorfile(test.Profile),
+				ClusterProfile: test.Profile,
+				Test: []api.TestStep{
+					{
+						LiteralTestStep: &api.LiteralTestStep{
+							As:        test.As,
+							Commands:  test.Command,
+							From:      "src",
+							Resources: api.ResourceRequirements{Requests: map[string]string{"cpu": "100m"}},
+						},
+					},
 				},
 			},
-		})
+		}
+
+		if test.Cli {
+			t.MultiStageTestConfiguration.Test[0].Cli = "latest"
+		}
+
+		generated.Configuration.Tests = append(generated.Configuration.Tests, t)
 	}
 
 	if config.ReleaseType != "" {
@@ -601,4 +619,17 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 		generated.Configuration.Releases = map[string]api.UnresolvedRelease{api.LatestReleaseName: release}
 	}
 	return generated
+}
+
+func determineWorkflowFromClusterPorfile(clusterProfile api.ClusterProfile) *string {
+	var ret string
+	switch clusterProfile {
+	case api.ClusterProfileAWS:
+		ret = "ipi-aws"
+	case api.ClusterProfileAzure:
+		ret = "ipi-azure"
+	case api.ClusterProfileGCP:
+		ret = "ipi-gcp"
+	}
+	return &ret
 }

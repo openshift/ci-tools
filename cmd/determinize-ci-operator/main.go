@@ -111,7 +111,7 @@ func main() {
 }
 
 func upgradeWorkflowForClusterProfile(clusterProfile api.ClusterProfile) string {
-	return fmt.Sprintf("openshift-upgrade-%s-loki", clusterProfile)
+	return fmt.Sprintf("openshift-upgrade-%s", clusterProfile)
 }
 
 func e2eWorkflowForClusterProfile(clusterProfile api.ClusterProfile) string {

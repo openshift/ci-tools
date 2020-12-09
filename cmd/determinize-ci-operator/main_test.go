@@ -421,7 +421,7 @@ func TestMigrateOpenshiftInstallerTemplates(t *testing.T) {
 				Tests: []api.TestStepConfiguration{{
 					MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
 						ClusterProfile: "aws",
-						Workflow:       utilpointer.StringPtr("openshift-upgrade-aws-loki"),
+						Workflow:       utilpointer.StringPtr("openshift-upgrade-aws"),
 					},
 				}},
 			}},

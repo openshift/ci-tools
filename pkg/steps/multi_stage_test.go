@@ -139,7 +139,7 @@ func TestGeneratePods(t *testing.T) {
 		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
 		{Name: "LEASED_RESOURCE", Value: "uuid"},
 	}
-	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, env, false)
+	ret, _, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, env, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 					Environment: tc.env,
 				},
 			}, &api.ReleaseBuildConfiguration{}, nil, nil, "", &jobSpec, nil)
-			pods, err := step.(*multiStageTestStep).generatePods(test, nil, false)
+			pods, _, err := step.(*multiStageTestStep).generatePods(test, nil, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -251,11 +251,69 @@ func TestGeneratePodReadonly(t *testing.T) {
 	}
 	jobSpec.SetNamespace("namespace")
 	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, "artifact_dir", &jobSpec, nil)
-	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, nil, false)
+	ret, _, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	testhelper.CompareWithFixture(t, ret)
+}
+
+func TestGeneratePodBestEffort(t *testing.T) {
+	yes := true
+	no := false
+	config := api.ReleaseBuildConfiguration{
+		Tests: []api.TestStepConfiguration{{
+			As: "test",
+			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+				AllowBestEffortPostSteps: &yes,
+				Test: []api.LiteralTestStep{{
+					As:       "step0",
+					From:     "src",
+					Commands: "command0",
+				}},
+				Post: []api.LiteralTestStep{{
+					As:         "step1",
+					From:       "src",
+					Commands:   "command1",
+					BestEffort: &yes,
+				}, {
+					As:         "step2",
+					From:       "src",
+					Commands:   "command2",
+					BestEffort: &no,
+				}},
+			},
+		}},
+	}
+	jobSpec := api.JobSpec{
+		JobSpec: prowdapi.JobSpec{
+			Job:       "job",
+			BuildID:   "build id",
+			ProwJobID: "prow job id",
+			Refs: &prowapi.Refs{
+				Org:     "org",
+				Repo:    "repo",
+				BaseRef: "base ref",
+				BaseSHA: "base sha",
+			},
+			Type: "postsubmit",
+		},
+	}
+	jobSpec.SetNamespace("namespace")
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, "artifact_dir", &jobSpec, nil)
+	_, isBestEffort, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Post, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for pod, bestEffort := range map[string]bool{
+		"test-step0": false,
+		"test-step1": true,
+		"test-step2": false,
+	} {
+		if actual, expected := isBestEffort(pod), bestEffort; actual != expected {
+			t.Errorf("didn't check best-effort status of Pod %s correctly, expected %v", pod, bestEffort)
+		}
+	}
 }
 
 type fakePodExecutor struct {

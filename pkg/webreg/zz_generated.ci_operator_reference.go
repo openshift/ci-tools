@@ -333,6 +333,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # create a periodic job instead of a presubmit\n" +
 	"        cron: \"\"\n" +
 	"        literal_steps:\n" +
+	"            # AllowBestEffortPostSteps defines if any `post` steps can be ignored when\n" +
+	"            # they fail. The given step must explicitly ask for being ignored by setting\n" +
+	"            # the OptionalOnSuccess flag to true.\n" +
+	"            allow_best_effort_post_steps: false\n" +
 	"            # AllowSkipOnSuccess defines if any steps can be skipped when\n" +
 	"            # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"            # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
@@ -376,6 +380,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  artifact_dir: ' '\n" +
 	"                  # As is the name of the LiteralTestStep.\n" +
 	"                  as: ' '\n" +
+	"                  # BestEffort defines if this step should cause the job to fail when the\n" +
+	"                  # step fails. This only applies when AllowBestEffortPostSteps flag is set\n" +
+	"                  # to true in MultiStageTestConfiguration. This option is applicable to\n" +
+	"                  # `post` steps.\n" +
+	"                  best_effort: false\n" +
 	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"                  # will be injected into this step.\n" +
 	"                  cli: ' '\n" +
@@ -444,6 +453,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  artifact_dir: ' '\n" +
 	"                  # As is the name of the LiteralTestStep.\n" +
 	"                  as: ' '\n" +
+	"                  # BestEffort defines if this step should cause the job to fail when the\n" +
+	"                  # step fails. This only applies when AllowBestEffortPostSteps flag is set\n" +
+	"                  # to true in MultiStageTestConfiguration. This option is applicable to\n" +
+	"                  # `post` steps.\n" +
+	"                  best_effort: false\n" +
 	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"                  # will be injected into this step.\n" +
 	"                  cli: ' '\n" +
@@ -512,6 +526,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  artifact_dir: ' '\n" +
 	"                  # As is the name of the LiteralTestStep.\n" +
 	"                  as: ' '\n" +
+	"                  # BestEffort defines if this step should cause the job to fail when the\n" +
+	"                  # step fails. This only applies when AllowBestEffortPostSteps flag is set\n" +
+	"                  # to true in MultiStageTestConfiguration. This option is applicable to\n" +
+	"                  # `post` steps.\n" +
+	"                  best_effort: false\n" +
 	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"                  # will be injected into this step.\n" +
 	"                  cli: ' '\n" +
@@ -611,6 +630,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              # Secret name, used inside test containers\n" +
 	"              name: ' '\n" +
 	"        steps:\n" +
+	"            # AllowBestEffortPostSteps defines if any `post` steps can be ignored when\n" +
+	"            # they fail. The given step must explicitly ask for being ignored by setting\n" +
+	"            # the OptionalOnSuccess flag to true.\n" +
+	"            allow_best_effort_post_steps: false\n" +
 	"            # AllowSkipOnSuccess defines if any steps can be skipped when\n" +
 	"            # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"            # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
@@ -645,6 +668,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                - active_deadline_seconds: 0\n" +
 	"                  artifact_dir: ' '\n" +
 	"                  as: ' '\n" +
+	"                  best_effort: false\n" +
 	"                  # Chain is the name of a step chain reference.\n" +
 	"                  chain: \"\"\n" +
 	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
@@ -698,6 +722,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                - active_deadline_seconds: 0\n" +
 	"                  artifact_dir: ' '\n" +
 	"                  as: ' '\n" +
+	"                  best_effort: false\n" +
 	"                  # Chain is the name of a step chain reference.\n" +
 	"                  chain: \"\"\n" +
 	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
@@ -751,6 +776,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                - active_deadline_seconds: 0\n" +
 	"                  artifact_dir: ' '\n" +
 	"                  as: ' '\n" +
+	"                  best_effort: false\n" +
 	"                  # Chain is the name of a step chain reference.\n" +
 	"                  chain: \"\"\n" +
 	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
@@ -904,6 +930,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # create a periodic job instead of a presubmit\n" +
 	"      cron: \"\"\n" +
 	"      literal_steps:\n" +
+	"        # AllowBestEffortPostSteps defines if any `post` steps can be ignored when\n" +
+	"        # they fail. The given step must explicitly ask for being ignored by setting\n" +
+	"        # the OptionalOnSuccess flag to true.\n" +
+	"        allow_best_effort_post_steps: false\n" +
 	"        # AllowSkipOnSuccess defines if any steps can be skipped when\n" +
 	"        # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"        # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
@@ -947,6 +977,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              artifact_dir: ' '\n" +
 	"              # As is the name of the LiteralTestStep.\n" +
 	"              as: ' '\n" +
+	"              # BestEffort defines if this step should cause the job to fail when the\n" +
+	"              # step fails. This only applies when AllowBestEffortPostSteps flag is set\n" +
+	"              # to true in MultiStageTestConfiguration. This option is applicable to\n" +
+	"              # `post` steps.\n" +
+	"              best_effort: false\n" +
 	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"              # will be injected into this step.\n" +
 	"              cli: ' '\n" +
@@ -1015,6 +1050,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              artifact_dir: ' '\n" +
 	"              # As is the name of the LiteralTestStep.\n" +
 	"              as: ' '\n" +
+	"              # BestEffort defines if this step should cause the job to fail when the\n" +
+	"              # step fails. This only applies when AllowBestEffortPostSteps flag is set\n" +
+	"              # to true in MultiStageTestConfiguration. This option is applicable to\n" +
+	"              # `post` steps.\n" +
+	"              best_effort: false\n" +
 	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"              # will be injected into this step.\n" +
 	"              cli: ' '\n" +
@@ -1083,6 +1123,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              artifact_dir: ' '\n" +
 	"              # As is the name of the LiteralTestStep.\n" +
 	"              as: ' '\n" +
+	"              # BestEffort defines if this step should cause the job to fail when the\n" +
+	"              # step fails. This only applies when AllowBestEffortPostSteps flag is set\n" +
+	"              # to true in MultiStageTestConfiguration. This option is applicable to\n" +
+	"              # `post` steps.\n" +
+	"              best_effort: false\n" +
 	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"              # will be injected into this step.\n" +
 	"              cli: ' '\n" +
@@ -1182,6 +1227,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"          # Secret name, used inside test containers\n" +
 	"          name: ' '\n" +
 	"      steps:\n" +
+	"        # AllowBestEffortPostSteps defines if any `post` steps can be ignored when\n" +
+	"        # they fail. The given step must explicitly ask for being ignored by setting\n" +
+	"        # the OptionalOnSuccess flag to true.\n" +
+	"        allow_best_effort_post_steps: false\n" +
 	"        # AllowSkipOnSuccess defines if any steps can be skipped when\n" +
 	"        # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"        # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
@@ -1216,6 +1265,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            - active_deadline_seconds: 0\n" +
 	"              artifact_dir: ' '\n" +
 	"              as: ' '\n" +
+	"              best_effort: false\n" +
 	"              # Chain is the name of a step chain reference.\n" +
 	"              chain: \"\"\n" +
 	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
@@ -1269,6 +1319,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            - active_deadline_seconds: 0\n" +
 	"              artifact_dir: ' '\n" +
 	"              as: ' '\n" +
+	"              best_effort: false\n" +
 	"              # Chain is the name of a step chain reference.\n" +
 	"              chain: \"\"\n" +
 	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
@@ -1322,6 +1373,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            - active_deadline_seconds: 0\n" +
 	"              artifact_dir: ' '\n" +
 	"              as: ' '\n" +
+	"              best_effort: false\n" +
 	"              # Chain is the name of a step chain reference.\n" +
 	"              chain: \"\"\n" +
 	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +

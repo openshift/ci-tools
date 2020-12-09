@@ -1,0 +1,56 @@
+base_images:
+  os:
+    name: centos
+    namespace: openshift
+    tag: '7'
+resources:
+  '*':
+    limits:
+      cpu: 500m
+    requests:
+      cpu: 10m
+tests:
+  - as: best-effort-success
+    steps:
+      allow_best_effort_post_steps: true
+      test:
+        - as: whatever
+          commands: date
+          from: os
+          resources:
+            requests:
+              cpu: 10m
+              memory: 20Mi
+      post:
+        - as: failure
+          commands: exit 1
+          best_effort: true
+          from: os
+          resources:
+            requests:
+              cpu: 10m
+              memory: 20Mi
+  - as: best-effort-failure
+    steps:
+      allow_best_effort_post_steps: true
+      test:
+        - as: whatever
+          commands: date
+          from: os
+          resources:
+            requests:
+              cpu: 10m
+              memory: 20Mi
+      post:
+        - as: failure
+          commands: exit 1
+          best_effort: false
+          from: os
+          resources:
+            requests:
+              cpu: 10m
+              memory: 20Mi
+zz_generated_metadata:
+  branch: master
+  org: test
+  repo: test

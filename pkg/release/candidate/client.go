@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -69,6 +70,7 @@ func resolvePullSpec(client release.HTTPClient, endpoint string, relative int) (
 		q.Add("rel", strconv.Itoa(relative))
 		req.URL.RawQuery = q.Encode()
 	}
+	log.Println("INFO: Requesting a release from ", req.URL.String())
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to request latest release: %w", err)
@@ -77,12 +79,12 @@ func resolvePullSpec(client release.HTTPClient, endpoint string, relative int) (
 		return "", errors.New("failed to request latest release: got a nil response")
 	}
 	defer resp.Body.Close()
+	data, readErr := ioutil.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to request latest release: server responded with %d: %s", resp.StatusCode, resp.Body)
+		return "", fmt.Errorf("failed to request latest release: server responded with %d: %s", resp.StatusCode, data)
 	}
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
+	if readErr != nil {
+		return "", fmt.Errorf("failed to read response body: %w", readErr)
 	}
 	release := Release{}
 	err = json.Unmarshal(data, &release)

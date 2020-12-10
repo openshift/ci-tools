@@ -237,7 +237,7 @@ func TestGetPromotionPod(t *testing.T) {
 						{
 							Name: "promotion",
 							// TODO use local image image-registry.openshift-image-registry.svc:5000/ocp/4.6:cli after migrating promotion jobs to OCP4 clusters
-							Image:   "registry.ci.openshift.org/ocp/4.6:cli",
+							Image:   "registry.svc.ci.openshift.org/ocp/4.6:cli",
 							Command: []string{"/bin/sh", "-c"},
 							Args:    []string{"oc image mirror --registry-config=/etc/push-secret/.dockerconfigjson docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62 registy.ci.openshift.org/ci/applyconfig:latest && oc image mirror --registry-config=/etc/push-secret/.dockerconfigjson docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb registy.ci.openshift.org/ci/bin:latest"},
 							VolumeMounts: []coreapi.VolumeMount{
@@ -319,7 +319,7 @@ func TestGetImageMirror(t *testing.T) {
 					},
 				},
 			},
-			expected: map[string]string{"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb": "registry.ci.openshift.org/ci/a:latest", "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd": "registry.ci.openshift.org/ci/c:latest"},
+			expected: map[string]string{"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb": "registry.svc.ci.openshift.org/ci/a:latest", "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd": "registry.svc.ci.openshift.org/ci/c:latest"},
 		},
 		{
 			name: "basic case: config.Name",
@@ -355,7 +355,7 @@ func TestGetImageMirror(t *testing.T) {
 					},
 				},
 			},
-			expected: map[string]string{"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb": "registry.ci.openshift.org/ci/name:a", "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd": "registry.ci.openshift.org/ci/name:c"},
+			expected: map[string]string{"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb": "registry.svc.ci.openshift.org/ci/name:a", "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd": "registry.svc.ci.openshift.org/ci/name:c"},
 		},
 	}
 

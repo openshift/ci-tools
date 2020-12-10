@@ -98,11 +98,15 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 		if config.AllowSkipOnSuccess == nil {
 			config.AllowSkipOnSuccess = workflow.AllowSkipOnSuccess
 		}
+		if config.AllowBestEffortPostSteps == nil {
+			config.AllowBestEffortPostSteps = workflow.AllowBestEffortPostSteps
+		}
 	}
 	expandedFlow := api.MultiStageTestConfigurationLiteral{
-		ClusterProfile:     config.ClusterProfile,
-		AllowSkipOnSuccess: config.AllowSkipOnSuccess,
-		Leases:             config.Leases,
+		ClusterProfile:           config.ClusterProfile,
+		AllowSkipOnSuccess:       config.AllowSkipOnSuccess,
+		AllowBestEffortPostSteps: config.AllowBestEffortPostSteps,
+		Leases:                   config.Leases,
 	}
 	stack := stackForTest(name, config.Environment, config.Dependencies)
 	if config.Workflow != nil {

@@ -637,6 +637,11 @@ type LiteralTestStep struct {
 	// flag is set to true in MultiStageTestConfiguration. This option is
 	// applicable to `post` steps.
 	OptionalOnSuccess *bool `json:"optional_on_success,omitempty"`
+	// BestEffort defines if this step should cause the job to fail when the
+	// step fails. This only applies when AllowBestEffortPostSteps flag is set
+	// to true in MultiStageTestConfiguration. This option is applicable to
+	//`post` steps.
+	BestEffort *bool `json:"best_effort,omitempty"`
 	// ReadonlySharedDir reduces the run time of steps that do not update the
 	// shared directory.
 	ReadonlySharedDir bool `json:"readonly_shared_dir,omitempty"`
@@ -735,6 +740,10 @@ type MultiStageTestConfiguration struct {
 	// all previous `pre` and `test` steps were successful. The given step must explicitly
 	// ask for being skipped by setting the OptionalOnSuccess flag to true.
 	AllowSkipOnSuccess *bool `json:"allow_skip_on_success,omitempty"`
+	// AllowBestEffortPostSteps defines if any `post` steps can be ignored when
+	// they fail. The given step must explicitly ask for being ignored by setting
+	// the OptionalOnSuccess flag to true.
+	AllowBestEffortPostSteps *bool `json:"allow_best_effort_post_steps,omitempty"`
 	// Observers are the observers that should be running
 	Observers *Observers `json:"observers,omitempty"`
 }
@@ -762,6 +771,10 @@ type MultiStageTestConfigurationLiteral struct {
 	// all previous `pre` and `test` steps were successful. The given step must explicitly
 	// ask for being skipped by setting the OptionalOnSuccess flag to true.
 	AllowSkipOnSuccess *bool `json:"allow_skip_on_success,omitempty"`
+	// AllowBestEffortPostSteps defines if any `post` steps can be ignored when
+	// they fail. The given step must explicitly ask for being ignored by setting
+	// the OptionalOnSuccess flag to true.
+	AllowBestEffortPostSteps *bool `json:"allow_best_effort_post_steps,omitempty"`
 	// Observers are the observers that need to be run
 	Observers []Observer `json:"observers,omitempty"`
 }

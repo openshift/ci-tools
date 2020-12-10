@@ -13,6 +13,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -58,16 +59,17 @@ type multiStageTestStep struct {
 	profile api.ClusterProfile
 	config  *api.ReleaseBuildConfiguration
 	// params exposes getters for variables created by other steps
-	params             api.Parameters
-	env                api.TestEnvironment
-	client             PodClient
-	artifactDir        string
-	jobSpec            *api.JobSpec
-	pre, test, post    []api.LiteralTestStep
-	subTests           []*junit.TestCase
-	subSteps           []api.CIOperatorStepDetailInfo
-	allowSkipOnSuccess *bool
-	leases             []api.StepLease
+	params                   api.Parameters
+	env                      api.TestEnvironment
+	client                   PodClient
+	artifactDir              string
+	jobSpec                  *api.JobSpec
+	pre, test, post          []api.LiteralTestStep
+	subTests                 []*junit.TestCase
+	subSteps                 []api.CIOperatorStepDetailInfo
+	allowSkipOnSuccess       *bool
+	allowBestEffortPostSteps *bool
+	leases                   []api.StepLease
 }
 
 func MultiStageTestStep(
@@ -96,19 +98,20 @@ func newMultiStageTestStep(
 	}
 	ms := testConfig.MultiStageTestConfigurationLiteral
 	return &multiStageTestStep{
-		name:               testConfig.As,
-		profile:            ms.ClusterProfile,
-		config:             config,
-		params:             params,
-		env:                ms.Environment,
-		client:             client,
-		artifactDir:        artifactDir,
-		jobSpec:            jobSpec,
-		pre:                ms.Pre,
-		test:               ms.Test,
-		post:               ms.Post,
-		allowSkipOnSuccess: ms.AllowSkipOnSuccess,
-		leases:             leases,
+		name:                     testConfig.As,
+		profile:                  ms.ClusterProfile,
+		config:                   config,
+		params:                   params,
+		env:                      ms.Environment,
+		client:                   client,
+		artifactDir:              artifactDir,
+		jobSpec:                  jobSpec,
+		pre:                      ms.Pre,
+		test:                     ms.Test,
+		post:                     ms.Post,
+		allowSkipOnSuccess:       ms.AllowSkipOnSuccess,
+		allowBestEffortPostSteps: ms.AllowBestEffortPostSteps,
+		leases:                   leases,
 	}
 }
 
@@ -328,12 +331,12 @@ func (s *multiStageTestStep) runSteps(
 	shortCircuit bool,
 	hasPrevErrs bool,
 ) error {
-	pods, err := s.generatePods(steps, env, hasPrevErrs)
+	pods, isBestEffort, err := s.generatePods(steps, env, hasPrevErrs)
 	if err != nil {
 		return err
 	}
 	var errs []error
-	if err := s.runPods(ctx, pods, shortCircuit); err != nil {
+	if err := s.runPods(ctx, pods, shortCircuit, isBestEffort); err != nil {
 		errs = append(errs, err)
 	}
 	select {
@@ -352,7 +355,15 @@ func (s *multiStageTestStep) runSteps(
 const multiStageTestStepContainerName = "test"
 
 func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []coreapi.EnvVar,
-	hasPrevErrs bool) ([]coreapi.Pod, error) {
+	hasPrevErrs bool) ([]coreapi.Pod, func(string) bool, error) {
+	bestEffort := sets.NewString()
+	isBestEffort := func(podName string) bool {
+		if s.allowBestEffortPostSteps == nil || !*s.allowBestEffortPostSteps {
+			// the user has not requested best-effort steps or they've explicitly disabled them
+			return false
+		}
+		return bestEffort.Has(podName)
+	}
 	var ret []coreapi.Pod
 	var errs []error
 	for _, step := range steps {
@@ -375,6 +386,9 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			continue
 		}
 		name := fmt.Sprintf("%s-%s", s.name, step.As)
+		if step.BestEffort != nil && *step.BestEffort {
+			bestEffort.Insert(name)
+		}
 		pod, err := generateBasePod(s.jobSpec, name, multiStageTestStepContainerName, []string{"/bin/bash", "-c", CommandPrefix + step.Commands}, image, resources, step.ArtifactDir)
 		if err != nil {
 			errs = append(errs, err)
@@ -428,7 +442,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		addCredentials(step.Credentials, pod)
 		ret = append(ret, *pod)
 	}
-	return ret, utilerrors.NewAggregate(errs)
+	return ret, isBestEffort, utilerrors.NewAggregate(errs)
 }
 
 func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]coreapi.EnvVar, []error) {
@@ -583,7 +597,7 @@ func addCliInjector(release string, pod *coreapi.Pod) {
 	})
 }
 
-func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, shortCircuit bool) error {
+func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, shortCircuit bool, isBestEffort func(string) bool) error {
 	namePrefix := s.name + "-"
 	var errs []error
 	for _, pod := range pods {
@@ -600,6 +614,10 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 		}
 		err := s.runPod(ctx, &pod, NewTestCaseNotifier(notifier))
 		if err != nil {
+			if isBestEffort(pod.Name) {
+				log.Println(fmt.Sprintf("Pod %s is running in best-effort mode, ignoring the failure...", pod.Name))
+				continue
+			}
 			errs = append(errs, err)
 			if shortCircuit {
 				break

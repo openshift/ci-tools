@@ -37,8 +37,9 @@ func TestResolve(t *testing.T) {
 		// This is a full config that should not change (other than struct) when passed to the Resolver
 		name: "Full AWS IPI",
 		config: api.MultiStageTestConfiguration{
-			ClusterProfile:     api.ClusterProfileAWS,
-			AllowSkipOnSuccess: &yes,
+			ClusterProfile:           api.ClusterProfileAWS,
+			AllowSkipOnSuccess:       &yes,
+			AllowBestEffortPostSteps: &yes,
 			Pre: []api.TestStep{{
 				LiteralTestStep: &api.LiteralTestStep{
 					As:       "ipi-install",
@@ -72,8 +73,9 @@ func TestResolve(t *testing.T) {
 			}},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfile:     api.ClusterProfileAWS,
-			AllowSkipOnSuccess: &yes,
+			ClusterProfile:           api.ClusterProfileAWS,
+			AllowSkipOnSuccess:       &yes,
+			AllowBestEffortPostSteps: &yes,
 			Pre: []api.LiteralTestStep{{
 				As:       "ipi-install",
 				From:     "installer",

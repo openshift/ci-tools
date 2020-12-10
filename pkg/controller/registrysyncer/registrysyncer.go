@@ -421,7 +421,7 @@ func (r *reconciler) pullSecret(namespace string) (*corev1.Secret, crcontrolleru
 }
 
 var (
-	deniedNamespacePrefixes = sets.NewString("kube", "openshift", "default", "redhat", "ci-op")
+	deniedNamespacePrefixes = sets.NewString("kube", "openshift", "default", "redhat", "ci-op", "ci-ln")
 )
 
 func testInputImageStreamTagFilterFactory(

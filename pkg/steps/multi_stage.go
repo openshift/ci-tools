@@ -50,7 +50,6 @@ const (
 
 var envForProfile = []string{
 	utils.ReleaseImageEnv(api.LatestReleaseName),
-	DefaultLeaseEnv,
 	utils.ImageFormatEnv,
 }
 

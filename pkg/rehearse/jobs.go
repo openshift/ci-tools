@@ -84,8 +84,13 @@ func NewCMClient(clusterConfig *rest.Config, namespace string, dry bool) (corecl
 	return cmClient.ConfigMaps(namespace), nil
 }
 
+// BranchFromRegexes undoes the changes we add to a branch name to make it
+// an explicit regular expression. We can simply remove the "^$" pre/suffix
+// and we know that `\` is an invalid character in Git branch names, so any
+// that exist in the name have been placed there by regexp.QuoteMeta() and
+// can simply be removed as well.
 func BranchFromRegexes(branches []string) string {
-	return strings.TrimPrefix(strings.TrimSuffix(branches[0], "$"), "^")
+	return strings.ReplaceAll(strings.TrimPrefix(strings.TrimSuffix(branches[0], "$"), "^"), "\\", "")
 }
 
 func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int, refs *pjapi.Refs) (*prowconfig.Presubmit, error) {

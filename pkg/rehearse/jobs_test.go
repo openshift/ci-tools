@@ -1153,6 +1153,10 @@ func TestGetTrimmedBranch(t *testing.T) {
 		input:    []string{"^master$"},
 		expected: "master",
 	}, {
+		name:     "release-3.5 with regex",
+		input:    []string{"^release-3\\.5$"},
+		expected: "release-3.5",
+	}, {
 		name:     "release-4.2 no regex",
 		input:    []string{"release-4.2"},
 		expected: "release-4.2",

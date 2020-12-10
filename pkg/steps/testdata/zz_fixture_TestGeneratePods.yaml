@@ -94,7 +94,7 @@
       - /tmp/secret-wrapper/secret-wrapper
       command:
       - cp
-      image: registry.ci.openshift.org/ci/secret-wrapper:latest
+      image: registry.svc.ci.openshift.org/ci/secret-wrapper:latest
       name: cp-secret-wrapper
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError
@@ -225,7 +225,7 @@
       - /tmp/secret-wrapper/secret-wrapper
       command:
       - cp
-      image: registry.ci.openshift.org/ci/secret-wrapper:latest
+      image: registry.svc.ci.openshift.org/ci/secret-wrapper:latest
       name: cp-secret-wrapper
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError
@@ -344,7 +344,7 @@
       - /tmp/secret-wrapper/secret-wrapper
       command:
       - cp
-      image: registry.ci.openshift.org/ci/secret-wrapper:latest
+      image: registry.svc.ci.openshift.org/ci/secret-wrapper:latest
       name: cp-secret-wrapper
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError

@@ -159,11 +159,18 @@ TMPDIR ?= /tmp
 # Example:
 #   make e2e
 #   make e2e SUITE=multi-stage
-e2e: $(TMPDIR)/pull-secret/.dockerconfigjson $(TMPDIR)/import-secret/.dockerconfigjson $(TMPDIR)/boskos
+e2e: $(if $(CI),,e2e-local)
 	$(eval export PULL_SECRET_DIR=$(TMPDIR)/pull-secret)
 	$(eval export PATH=$$(shell echo -n "${PATH}:$(TMPDIR)"))
 	hack/test-e2e.sh $(SUITE)
 .PHONY: e2e
+
+# Dependencies required to execute the E2E tests outside of the CI environment.
+e2e-local: \
+	$(TMPDIR)/pull-secret/.dockerconfigjson \
+	$(TMPDIR)/import-secret/.dockerconfigjson \
+	$(TMPDIR)/boskos
+.PHONY: e2e-local
 
 # Update golden output files for integration tests.
 #

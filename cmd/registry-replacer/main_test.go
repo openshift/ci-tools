@@ -687,3 +687,39 @@ func TestPruneOCPBuilderReplacements(t *testing.T) {
 		})
 	}
 }
+
+func TestRegistryRegex(t *testing.T) {
+	tests := []struct {
+		name     string
+		line     string
+		expected string
+	}{
+		{
+			name: "some line",
+			line: "some line",
+		},
+		{
+			name:     "api.ci registry",
+			line:     "FROM registry.svc.ci.openshift.org/ocp/builder:rhel-8-base-openshift-4.7",
+			expected: "registry.svc.ci.openshift.org/ocp/builder:rhel-8-base-openshift-4.7",
+		},
+		{
+			name:     "app.ci registry",
+			line:     "FROM registry.ci.openshift.org/ocp/builder:rhel-8-base-openshift-4.7",
+			expected: "registry.ci.openshift.org/ocp/builder:rhel-8-base-openshift-4.7",
+		},
+		{
+			name: "need namespace",
+			line: "FROM registry.ci.openshift.org/",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := registryRegex.Find([]byte(tc.line))
+			if diff := cmp.Diff(tc.expected, string(actual)); diff != "" {
+				t.Errorf("actual does not match expected, diff: %s", diff)
+			}
+		})
+	}
+}

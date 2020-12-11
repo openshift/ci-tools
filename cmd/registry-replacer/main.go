@@ -296,7 +296,7 @@ func replacer(
 	}
 }
 
-var registryRegex = regexp.MustCompile(`registry\.svc\.ci\.openshift\.org\/[^\s]+`)
+var registryRegex = regexp.MustCompile(`registry\.(|svc\.)ci\.openshift\.org/\S+`)
 
 type orgRepoTag struct{ org, repo, tag string }
 
@@ -308,9 +308,6 @@ func ensureReplacement(image *api.ProjectDirectoryImageBuildStepConfiguration, d
 	var toReplace []string
 	for _, line := range bytes.Split(dockerfile, []byte("\n")) {
 		if !bytes.Contains(line, []byte("FROM")) && !bytes.Contains(line, []byte("COPY")) && !bytes.Contains(line, []byte("copy")) {
-			continue
-		}
-		if !bytes.Contains(line, []byte("registry.svc.ci.openshift.org")) {
 			continue
 		}
 		match := registryRegex.Find(line)

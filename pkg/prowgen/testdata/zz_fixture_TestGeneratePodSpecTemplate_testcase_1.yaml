@@ -1,6 +1,7 @@
 containers:
 - args:
   - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+  - --gcs-upload-secret=/secrets/gcs/service-account.json
   - --report-username=ci
   - --report-password-file=/etc/report/password.txt
   - --target=test
@@ -28,6 +29,9 @@ containers:
     readOnly: true
   - mountPath: /etc/report
     name: result-aggregator
+    readOnly: true
+  - mountPath: /secrets/gcs
+    name: gcs-credentials
     readOnly: true
   - mountPath: /etc/boskos
     name: boskos

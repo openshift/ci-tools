@@ -15,6 +15,7 @@ postsubmits:
       containers:
       - args:
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --report-username=ci
         - --report-password-file=/etc/report/password.txt
         - --promote
@@ -35,6 +36,9 @@ postsubmits:
           readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
+          readOnly: true
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
           readOnly: true
         - mountPath: /etc/push-secret
           name: push-secret
@@ -69,6 +73,7 @@ presubmits:
       containers:
       - args:
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --report-username=ci
         - --report-password-file=/etc/report/password.txt
         - --target=[images]
@@ -87,6 +92,9 @@ presubmits:
           readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
+          readOnly: true
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
           readOnly: true
       serviceAccountName: ci-operator
       volumes:

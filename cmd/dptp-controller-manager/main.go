@@ -256,15 +256,16 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to load kubeconfigs")
 	}
-	if _, hasRegistryCluster := kubeconfigs[opts.registryClusterName]; !hasRegistryCluster {
-		logrus.Fatalf("--kubeconfig must include a context named `%s`", opts.registryClusterName)
-	}
 	if _, hasAppCi := kubeconfigs[appCIContextName]; !hasAppCi {
 		kubeconfigs[appCIContextName], err = rest.InClusterConfig()
 		if err != nil {
 			logrus.WithError(err).Fatalf("--kubeconfig had no context for '%s' and loading InClusterConfig failed", appCIContextName)
 		}
 		logrus.Infof("Loaded %q context from in-cluster config", appCIContextName)
+	}
+
+	if _, hasRegistryCluster := kubeconfigs[opts.registryClusterName]; !hasRegistryCluster {
+		logrus.Fatalf("--kubeconfig must include a context named `%s`", opts.registryClusterName)
 	}
 
 	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath)

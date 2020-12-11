@@ -33,6 +33,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/controller/registrysyncer"
 	"github.com/openshift/ci-tools/pkg/controller/secretsyncer"
 	secretsyncerconfig "github.com/openshift/ci-tools/pkg/controller/secretsyncer/config"
+	serviceaccountsecretrefresher "github.com/openshift/ci-tools/pkg/controller/serviceaccount_secret_refresher"
 	testimagesdistributor "github.com/openshift/ci-tools/pkg/controller/test-images-distributor"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
@@ -49,24 +50,26 @@ var allControllers = sets.NewString(
 	testimagesdistributor.ControllerName,
 	secretsyncer.ControllerName,
 	registrysyncer.ControllerName,
+	serviceaccountsecretrefresher.ControllerName,
 )
 
 type options struct {
-	leaderElectionNamespace      string
-	ciOperatorconfigPath         string
-	stepConfigPath               string
-	configPath                   string
-	jobConfigPath                string
-	kubeconfig                   string
-	leaderElectionSuffix         string
-	enabledControllers           flagutil.Strings
-	enabledControllersSet        sets.String
-	registryClusterName          string
-	dryRun                       bool
-	blockProfileRate             time.Duration
-	testImagesDistributorOptions testImagesDistributorOptions
-	secretSyncerConfigOptions    secretSyncerConfigOptions
-	registrySyncerOptions        registrySyncerOptions
+	leaderElectionNamespace              string
+	ciOperatorconfigPath                 string
+	stepConfigPath                       string
+	configPath                           string
+	jobConfigPath                        string
+	kubeconfig                           string
+	leaderElectionSuffix                 string
+	enabledControllers                   flagutil.Strings
+	enabledControllersSet                sets.String
+	registryClusterName                  string
+	dryRun                               bool
+	blockProfileRate                     time.Duration
+	testImagesDistributorOptions         testImagesDistributorOptions
+	secretSyncerConfigOptions            secretSyncerConfigOptions
+	registrySyncerOptions                registrySyncerOptions
+	serviceAccountSecretRefresherOptions serviceAccountSecretRefresherOptions
 	*flagutil.GitHubOptions
 }
 
@@ -97,6 +100,11 @@ type registrySyncerOptions struct {
 type secretSyncerConfigOptions struct {
 	configFile               string
 	secretBoostrapConfigFile string
+}
+
+type serviceAccountSecretRefresherOptions struct {
+	enabledNamespaces flagutil.Strings
+	removeOldSecrets  bool
 }
 
 func newOpts() (*options, error) {
@@ -132,6 +140,8 @@ func newOpts() (*options, error) {
 	flag.StringVar(&opts.secretSyncerConfigOptions.secretBoostrapConfigFile, "secretSyncerConfigOptions.secretBoostrapConfigFile", "", "The config file for ci-secret-boostrap")
 	flag.DurationVar(&opts.blockProfileRate, "block-profile-rate", time.Duration(0), "The block profile rate. Set to non-zero to enable.")
 	flag.StringVar(&opts.registryClusterName, "registry-cluster-name", "api.ci", "the cluster name on which the CI central registry is running")
+	flag.Var(&opts.serviceAccountSecretRefresherOptions.enabledNamespaces, "serviceAccountRefresherOptions.enabled-namespace", "A namespace for which the serviceaccount_secret_refresher should be enabled. Can be passed multiple times.")
+	flag.BoolVar(&opts.serviceAccountSecretRefresherOptions.removeOldSecrets, "serviceAccountRefresherOptions.remove-old-secrets", false, "whether the serviceaccountsecretrefresher should delete secrets older than 30 days")
 	flag.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	flag.Parse()
 
@@ -184,6 +194,12 @@ func newOpts() (*options, error) {
 		}
 		if opts.secretSyncerConfigOptions.secretBoostrapConfigFile == "" {
 			errs = append(errs, fmt.Errorf("--secretSyncerConfigOptions.secretBoostrapConfigFile is required when the %s controller is enabled", secretsyncer.ControllerName))
+		}
+	}
+
+	if opts.enabledControllersSet.Has(serviceaccountsecretrefresher.ControllerName) {
+		if len(opts.serviceAccountSecretRefresherOptions.enabledNamespaces.Strings()) == 0 {
+			errs = append(errs, fmt.Errorf("--serviceAccountRefresherOptions.enabled-namespace must be set at least once when enabling the %s controller, otherwise it won't do anything", serviceaccountsecretrefresher.ControllerName))
 		}
 	}
 
@@ -460,6 +476,14 @@ func main() {
 			opts.registrySyncerOptions.deniedImageStreams,
 		); err != nil {
 			logrus.WithError(err).Fatal("failed to add registrysyncer")
+		}
+	}
+
+	if opts.enabledControllersSet.Has(serviceaccountsecretrefresher.ControllerName) {
+		for clusterName, clusterMgr := range allManagers {
+			if err := serviceaccountsecretrefresher.AddToManager(clusterName, clusterMgr, opts.serviceAccountSecretRefresherOptions.enabledNamespaces.StringSet(), opts.serviceAccountSecretRefresherOptions.removeOldSecrets); err != nil {
+				logrus.WithError(err).Fatalf("Failed to add the %s controller to the %s cluster", serviceaccountsecretrefresher.ControllerName, clusterName)
+			}
 		}
 	}
 

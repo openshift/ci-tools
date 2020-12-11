@@ -31,7 +31,8 @@ go build  -v -o /tmp/dptp-cm ./cmd/dptp-controller-manager
   --config-path="$(go env GOPATH)/src/github.com/openshift/release/core-services/prow/02_config/_config.yaml" \
   --job-config-path="$(go env GOPATH)/src/github.com/openshift/release/ci-operator/jobs" \
   --leader-election-suffix="$USER" \
-  --enable-controller=promotionreconciler \
+  --enable-controller=serviceaccount_secret_refresher \
+  --serviceAccountRefresherOptions.enabled-namespace=alvaro-test \
   --step-config-path="$(go env GOPATH)/src/github.com/openshift/release/ci-operator/step-registry" \
   --testImagesDistributorOptions.imagePullSecretPath=$dockercfg \
   --kubeconfig=$kubeconfig \

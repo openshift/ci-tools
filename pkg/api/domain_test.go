@@ -25,7 +25,7 @@ func TestDomainForService(t *testing.T) {
 		},
 		{
 			service:  ServiceRegistry,
-			expected: "registry.svc.ci.openshift.org",
+			expected: "registry.ci.openshift.org",
 		},
 		{
 			service:  ServiceProw,

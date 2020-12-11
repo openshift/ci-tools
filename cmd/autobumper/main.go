@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -86,9 +87,43 @@ func main() {
 	if err := os.Chdir(o.targetDir); err != nil {
 		logrus.WithError(err).Fatal("Failed to change to root dir")
 	}
-	images, err := bumper.UpdateReferences(true, true, true, "latest", []string{"clusters/", "cluster/ci/config/prow/", "core-services/prow", "ci-operator/", "hack/"}, []string{}, extraFiles)
+
+	opts := &bumper.Options{
+		GitHubOrg:           "openshift",
+		GitHubRepo:          "release",
+		GitHubLogin:         o.githubLogin,
+		GitHubToken:         string(sa.GetTokenGenerator(o.GitHubOptions.TokenPath)()),
+		GitName:             o.gitName,
+		GitEmail:            o.gitEmail,
+		IncludedConfigPaths: []string{"clusters/", "cluster/ci/config/prow/", "core-services/prow", "ci-operator/", "hack/"},
+		ExtraFiles:          extraFiles,
+		TargetVersion:       "latest",
+		RemoteName:          fmt.Sprintf("https://github.com/%s/%s.git", o.githubLogin, githubRepo),
+		Prefixes: []bumper.Prefix{
+			{
+				Name:             "Prow",
+				Prefix:           "gcr.io/k8s-prow/",
+				Repo:             "https://github.com/kubernetes/test-infra",
+				Summarise:        true,
+				ConsistentImages: true,
+			},
+			{
+				Name:             "Boskos",
+				Prefix:           "gcr.io/k8s-staging-boskos/",
+				Repo:             "https://github.com/kubernetes-sigs/boskos",
+				Summarise:        true,
+				ConsistentImages: true,
+			},
+		},
+	}
+	images, err := bumper.UpdateReferences(opts)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to update references.")
+	}
+
+	versions, err := getVersionsAndCheckConsistency(opts.Prefixes, images)
+	if err != nil {
+		logrus.WithError(err).Fatal("unable get get versions")
 	}
 
 	changed, err := bumper.HasChanges()
@@ -105,12 +140,31 @@ func main() {
 	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: sa}
 
 	remoteBranch := "autobump"
-	if err := bumper.MakeGitCommit(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin,
-		string(sa.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo), remoteBranch, o.gitName, o.gitEmail, images, stdout, stderr); err != nil {
+	if err := bumper.MakeGitCommit(fmt.Sprintf("git@github.com:%s/%s.git", o.githubLogin, githubRepo), remoteBranch, o.gitName, o.gitEmail, opts.Prefixes, stdout, stderr, versions); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 
-	if err := bumper.UpdatePR(gc, githubOrg, githubRepo, images, "/cc @"+o.assign, "Update prow to", o.githubLogin+":"+remoteBranch, "master", true); err != nil {
+	if err := bumper.UpdatePR(gc, githubOrg, githubRepo, images, "/cc @"+o.assign, "Update prow to", o.githubLogin+":"+remoteBranch, "master", true, opts.Prefixes, versions); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
+}
+
+func getVersionsAndCheckConsistency(prefixes []bumper.Prefix, images map[string]string) (map[string][]string, error) {
+	// Key is tag, value is full image.
+	versions := map[string][]string{}
+	for _, prefix := range prefixes {
+		newVersions := 0
+		for k, v := range images {
+			if strings.HasPrefix(k, prefix.Prefix) {
+				if _, ok := versions[v]; !ok {
+					newVersions++
+				}
+				versions[v] = append(versions[v], k)
+				if prefix.ConsistentImages && newVersions > 1 {
+					return nil, fmt.Errorf("%q was supposed to be bumped consistently but was not", prefix.Name)
+				}
+			}
+		}
+	}
+	return versions, nil
 }

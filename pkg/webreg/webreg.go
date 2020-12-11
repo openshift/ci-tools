@@ -164,21 +164,21 @@ const mainPage = `
 const referencePage = `
 <h2 id="title"><a href="#title">Step:</a> <nobr style="font-family:monospace">{{ .Reference.As }}</nobr></h2>
 <p id="documentation">{{ .Reference.Documentation }}</p>
-<h2 id="image"><a href="#image">Container image used for this step:</a> <span style="font-family:monospace">{{ .Reference.From }}</span></h2>
-<h2 id="source"><a href="#source">Source Code</a></h2>
+<h3 id="image"><a href="#image">Container image used for this step:</a> <span style="font-family:monospace">{{ .Reference.From }}</span></h3>
+<h3 id="source"><a href="#source">Source Code</a></h3>
 {{ syntaxedSource .Reference.Commands }}
-<h2 id="github"><a href="#github">GitHub Link:</a></h2>{{ githubLink .Metadata.Path }}
+<h3 id="github"><a href="#github">GitHub Link:</a></h3>{{ githubLink .Metadata.Path }}
 {{ ownersBlock .Metadata.Owners }}
 `
 
 const chainPage = `
-<h2 id="title"><a href="#title">Chains:</a> <nobr style="font-family:monospace">{{ .Chain.As }}</nobr></h2>
+<h2 id="title"><a href="#title">Chain:</a> <nobr style="font-family:monospace">{{ .Chain.As }}</nobr></h2>
 <p id="documentation">{{ .Chain.Documentation }}</p>
-<h2 id="steps" title="Step run by the chain, in runtime order"><a href="#steps">Steps</a></h2>
+<h3 id="steps" title="Step run by the chain, in runtime order"><a href="#steps">Steps</a></h3>
 {{ template "stepTable" .Chain.Steps}}
-<h2 id="graph" title="Visual representation of steps run by this chain"><a href="#graph">Step Graph</a></h2>
+<h3 id="graph" title="Visual representation of steps run by this chain"><a href="#graph">Step Graph</a></h3>
 {{ chainGraph .Chain.As }}
-<h2 id="github"><a href="#github">GitHub Link:</a></h2>{{ githubLink .Metadata.Path }}
+<h3 id="github"><a href="#github">GitHub Link:</a></h3>{{ githubLink .Metadata.Path }}
 {{ ownersBlock .Metadata.Owners }}
 `
 
@@ -190,18 +190,18 @@ const workflowJobPage = `
 	<p id="documentation">{{ .Workflow.Documentation }}</p>
 {{ end }}
 {{ if .Workflow.Steps.ClusterProfile }}
-	<h2 id="cluster_profile"><a href="#cluster_profile">Cluster Profile:</a> <span style="font-family:monospace">{{ .Workflow.Steps.ClusterProfile }}</span></h2>
+	<h3 id="cluster_profile"><a href="#cluster_profile">Cluster Profile:</a> <span style="font-family:monospace">{{ .Workflow.Steps.ClusterProfile }}</span></h3>
 {{ end }}
-<h2 id="pre" title="Steps run by this {{ toLower $type }} to set up and configure the tests, in runtime order"><a href="#pre">Pre Steps</a></h2>
+<h3 id="pre" title="Steps run by this {{ toLower $type }} to set up and configure the tests, in runtime order"><a href="#pre">Pre Steps</a></h3>
 {{ template "stepTable" .Workflow.Steps.Pre }}
-<h2 id="test" title="Steps in the {{ toLower $type }} that run actual tests, in runtime order"><a href="#test">Test Steps</a></h2>
+<h3 id="test" title="Steps in the {{ toLower $type }} that run actual tests, in runtime order"><a href="#test">Test Steps</a></h3>
 {{ template "stepTable" .Workflow.Steps.Test }}
-<h2 id="post" title="Steps run by this {{ toLower $type }} to clean up and teardown test resources, in runtime order"><a href="#post">Post Steps</a></h2>
+<h3 id="post" title="Steps run by this {{ toLower $type }} to clean up and teardown test resources, in runtime order"><a href="#post">Post Steps</a></h3>
 {{ template "stepTable" .Workflow.Steps.Post }}
-<h2 id="graph" title="Visual representation of steps run by this {{ toLower $type }}"><a href="#graph">Step Graph</a></h2>
+<h3 id="graph" title="Visual representation of steps run by this {{ toLower $type }}"><a href="#graph">Step Graph</a></h3>
 {{ workflowGraph .Workflow.As .Workflow.Type }}
 {{ if eq $type "Workflow" }}
-<h2 id="github"><a href="#github">GitHub Link:</a></h2>{{ githubLink .Metadata.Path }}
+<h3 id="github"><a href="#github">GitHub Link:</a></h3>{{ githubLink .Metadata.Path }}
 {{ ownersBlock .Metadata.Owners }}
 {{ end }}
 `
@@ -480,7 +480,7 @@ func createGitHubUserList(items []string) string {
 
 func ownersBlock(owners repoowners.Config) template.HTML {
 	var builder strings.Builder
-	builder.WriteString("<h2 id=\"owners\"><a href=\"#owners\">Owners:</a></h2>")
+	builder.WriteString("<h3 id=\"owners\"><a href=\"#owners\">Owners:</a></h3>")
 	if len(owners.Approvers) > 0 {
 		builder.WriteString("<h4 id=\"approvers\"><a href=\"#approvers\">Approvers:</a></h4>\n")
 		builder.WriteString(createGitHubUserList(owners.Approvers))

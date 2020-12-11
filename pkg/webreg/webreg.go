@@ -164,7 +164,8 @@ const mainPage = `
 const referencePage = `
 <h2 id="title"><a href="#title">Step:</a> <nobr style="font-family:monospace">{{ .Reference.As }}</nobr></h2>
 <p id="documentation">{{ .Reference.Documentation }}</p>
-<h3 id="image"><a href="#image">Container image used for this step:</a> <span style="font-family:monospace">{{ .Reference.From }}</span></h3>
+<h3 id="image"><a href="#image">Container image used for this step:</a> <span style="font-family:monospace">{{ fromImage .Reference.From .Reference.FromImage }}</span></h3>
+<p id="image">{{ fromImageDescription .Reference.From .Reference.FromImage }}</p>
 <h3 id="source"><a href="#source">Source Code</a></h3>
 {{ syntaxedSource .Reference.Commands }}
 <h3 id="github"><a href="#github">GitHub Link:</a></h3>{{ githubLink .Metadata.Path }}
@@ -838,6 +839,26 @@ func syntaxBash(source string) (string, error) {
 	return syntax(source, lexers.Get("bash"))
 }
 
+func fromImage(name string, reference *api.ImageStreamTagReference) string {
+	if reference != nil {
+		return fmt.Sprintf("%s/%s:%s", reference.Namespace, reference.Name, reference.Tag)
+	}
+	return name
+}
+
+const (
+	fromDocumentation      = "https://docs.ci.openshift.org/docs/architecture/step-registry/#referencing-another-configured-image"
+	fromImageDocumentation = "https://docs.ci.openshift.org/docs/architecture/step-registry/#referencing-a-literal-image"
+)
+
+func fromImageDescription(name string, reference *api.ImageStreamTagReference) template.HTML {
+	prefix := fmt.Sprintf("<span style=\"font-family:monospace\">%s</span> resolves to an ", fromImage(name, reference))
+	if reference != nil {
+		return template.HTML(fmt.Sprintf("%s image imported from the specified imagestream tag on the build farm (<a href=\"%s\">documentation</a>).", prefix, fromImageDocumentation))
+	}
+	return template.HTML(fmt.Sprintf("%s image built or imported by the ci-operator configuration (<a href=\"%s\">documentation</a>).", prefix, fromDocumentation))
+}
+
 func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
@@ -854,8 +875,10 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 				}
 				return template.HTML(formatted)
 			},
-			"githubLink":  githubLink,
-			"ownersBlock": ownersBlock,
+			"githubLink":           githubLink,
+			"ownersBlock":          ownersBlock,
+			"fromImage":            fromImage,
+			"fromImageDescription": fromImageDescription,
 		},
 	).Parse(referencePage)
 	if err != nil {
@@ -878,9 +901,10 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 	}{
 		Reference: api.RegistryReference{
 			LiteralTestStep: api.LiteralTestStep{
-				As:       name,
-				Commands: refs[name].Commands,
-				From:     refs[name].From,
+				As:        name,
+				Commands:  refs[name].Commands,
+				From:      refs[name].From,
+				FromImage: refs[name].FromImage,
 			},
 			Documentation: docs[name],
 		},

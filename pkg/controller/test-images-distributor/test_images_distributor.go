@@ -72,18 +72,26 @@ func AddToManager(mgr manager.Manager,
 	for buildClusterName, buildClusterManager := range buildClusterManagers {
 		buildClusters.Insert(buildClusterName)
 		r.buildClusterClients[buildClusterName] = imagestreamtagwrapper.MustNew(buildClusterManager.GetClient(), buildClusterManager.GetCache())
-		// TODO: Watch buildCluster ImageStreams as well. For now we assume no one will tamper with them.
-		if buildClusterName == "app.ci" {
-			if err := c.Watch(
-				source.NewKindWithCache(&testimagestreamtagimportv1.TestImageStreamTagImport{}, buildClusterManager.GetCache()),
-				testImageStreamTagImportHandler(),
-			); err != nil {
-				return fmt.Errorf("failed to create watch for testimagestreamtagimports: %w", err)
-			}
-		}
 	}
 
-	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent, r.buildClusterClients["app.ci"], resolver, additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces)
+	// TODO: Watch buildCluster ImageStreams as well. For now we assume no one will tamper with them.
+	if err := c.Watch(
+		source.NewKindWithCache(&testimagestreamtagimportv1.TestImageStreamTagImport{}, mgr.GetCache()),
+		testImageStreamTagImportHandler(),
+	); err != nil {
+		return fmt.Errorf("failed to create watch for testimagestreamtagimports: %w", err)
+	}
+
+	var appCIClient ctrlruntimeclient.Client
+
+	if client, ok := r.buildClusterClients["app.ci"]; ok {
+		appCIClient = client
+	} else {
+		//when app.ci is registryCluster
+		appCIClient = imagestreamtagwrapper.MustNew(mgr.GetClient(), mgr.GetCache())
+	}
+
+	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent, appCIClient, resolver, additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces)
 	if err != nil {
 		return fmt.Errorf("failed to get filter for ImageStreamTags: %w", err)
 	}

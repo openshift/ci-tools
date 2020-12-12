@@ -87,11 +87,12 @@ type testImagesDistributorOptions struct {
 }
 
 type registrySyncerOptions struct {
-	imagePullSecretPath    string
-	imageStreamPrefixesRaw flagutil.Strings
-	imageStreamPrefixes    sets.String
-	deniedImageStreamsRaw  flagutil.Strings
-	deniedImageStreams     sets.String
+	imagePullSecretPath                  string
+	imageStreamPrefixesRaw               flagutil.Strings
+	imageStreamPrefixes                  sets.String
+	deniedImageStreamsRaw                flagutil.Strings
+	deniedImageStreams                   sets.String
+	ingnoreReleaseControllerImageStreams bool
 }
 
 type secretSyncerConfigOptions struct {
@@ -126,6 +127,7 @@ func newOpts() (*options, error) {
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw, "testImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
 	flag.Var(&opts.registrySyncerOptions.imageStreamPrefixesRaw, "registrySyncerOptions.image-stream-prefix", "An imagestream prefix that will be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	flag.Var(&opts.registrySyncerOptions.deniedImageStreamsRaw, "registrySyncerOptions.denied-image-stream", "An imagestream that will NOT be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
+	flag.BoolVar(&opts.registrySyncerOptions.ingnoreReleaseControllerImageStreams, "registrySyncerOptions.ingnore-release-controller-image-streams", false, "If set, ignore the imagestreams used only by Release-Controller.")
 	flag.Var(&opts.testImagesDistributorOptions.forbiddenRegistriesRaw, "testImagesDistributorOptions.forbidden-registry", "The hostname of an image registry from which there is no synchronization of its images. Can be passed multiple times.")
 	flag.StringVar(&opts.registrySyncerOptions.imagePullSecretPath, "registrySyncerOptions.imagePullSecretPath", "", "A file to use for reading an ImagePullSecret that will be bound to all `default` ServiceAccounts in all namespaces that have a test ImageStream on all build clusters")
 	flag.StringVar(&opts.secretSyncerConfigOptions.configFile, "secretSyncerConfigOptions.config", "", "The config file for the secret syncer controller")
@@ -457,6 +459,7 @@ func main() {
 			secretAgent.GetTokenGenerator(opts.registrySyncerOptions.imagePullSecretPath),
 			opts.registrySyncerOptions.imageStreamPrefixes,
 			opts.registrySyncerOptions.deniedImageStreams,
+			opts.registrySyncerOptions.ingnoreReleaseControllerImageStreams,
 		); err != nil {
 			logrus.WithError(err).Fatal("failed to add registrysyncer")
 		}

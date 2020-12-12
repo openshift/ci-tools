@@ -687,12 +687,13 @@ func TestReconcile(t *testing.T) {
 
 func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 	testCases := []struct {
-		name                string
-		l                   *logrus.Entry
-		imageStreamPrefixes sets.String
-		deniedImageStreams  sets.String
-		nn                  types.NamespacedName
-		expected            bool
+		name                                 string
+		l                                    *logrus.Entry
+		imageStreamPrefixes                  sets.String
+		deniedImageStreams                   sets.String
+		nn                                   types.NamespacedName
+		ingnoreReleaseControllerImageStreams bool
+		expected                             bool
 	}{
 		{
 			name:     "default",
@@ -720,6 +721,12 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 			deniedImageStreams: sets.NewString("ocp/release"),
 		},
 		{
+			name:                                 "denied when ingnoreReleaseControllerImageStreams",
+			nn:                                   types.NamespacedName{Namespace: "ocp", Name: "release:2.3"},
+			deniedImageStreams:                   sets.NewString("ocp/release"),
+			ingnoreReleaseControllerImageStreams: true,
+		},
+		{
 			name:               "not denied: ocp",
 			nn:                 types.NamespacedName{Namespace: "ocp", Name: "ruby:2.3"},
 			deniedImageStreams: sets.NewString("ocp/release"),
@@ -731,12 +738,76 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 			deniedImageStreams: sets.NewString("ocp/release"),
 			expected:           true,
 		},
+		{
+			name:                                 "not denied: art-latest not in RC namespace",
+			nn:                                   types.NamespacedName{Namespace: "some-namespace", Name: "4.5-art-latest-priv:some"},
+			deniedImageStreams:                   sets.NewString("ocp/release"),
+			ingnoreReleaseControllerImageStreams: true,
+			expected:                             true,
+		},
+		{
+			name:                                 "denied: art-latest",
+			nn:                                   types.NamespacedName{Namespace: "ocp", Name: "4.5-art-latest-priv:some"},
+			ingnoreReleaseControllerImageStreams: true,
+		},
+		{
+			name:                                 "denied: 4.8-2020-12-11-135134",
+			nn:                                   types.NamespacedName{Namespace: "ocp", Name: "4.8-2020-12-11-135134:some"},
+			ingnoreReleaseControllerImageStreams: true,
+		},
+		{
+			name:                                 "denied: art-latest-nightly",
+			nn:                                   types.NamespacedName{Namespace: "ocp", Name: "4.5-art-latest-priv4.7.0-0.nightly-priv-2020-10-05-194727:some"},
+			deniedImageStreams:                   sets.NewString("ocp/release"),
+			ingnoreReleaseControllerImageStreams: true,
+		},
+		{
+			name:                                 "not denied: 4.6.7",
+			nn:                                   types.NamespacedName{Namespace: "ocp", Name: "4.6.7:some"},
+			deniedImageStreams:                   sets.NewString("ocp/release"),
+			ingnoreReleaseControllerImageStreams: true,
+			expected:                             true,
+		},
+		{
+			name:                                 "not denied: 4.7",
+			nn:                                   types.NamespacedName{Namespace: "ocp", Name: "4.7:some"},
+			deniedImageStreams:                   sets.NewString("ocp/release"),
+			ingnoreReleaseControllerImageStreams: true,
+			expected:                             true,
+		},
+		{
+			name:                                 "not denied: 4.6.0-fc.3",
+			nn:                                   types.NamespacedName{Namespace: "ocp", Name: "4.6.0-fc.3:some"},
+			deniedImageStreams:                   sets.NewString("ocp/release"),
+			ingnoreReleaseControllerImageStreams: true,
+			expected:                             true,
+		},
+		{
+			name:                                 "not denied: 4.6.0-rc.100",
+			nn:                                   types.NamespacedName{Namespace: "ocp", Name: "4.6.0-rc.100:some"},
+			deniedImageStreams:                   sets.NewString("ocp/release"),
+			ingnoreReleaseControllerImageStreams: true,
+			expected:                             true,
+		},
+		{
+			name:                                 "not denied: ubi-minimal",
+			nn:                                   types.NamespacedName{Namespace: "ocp", Name: "ubi-minimal:some"},
+			deniedImageStreams:                   sets.NewString("ocp/release"),
+			ingnoreReleaseControllerImageStreams: true,
+			expected:                             true,
+		},
+		{
+			name:                                 "denied: 4.6-art-latest-ppc64le-2020-12-12-030629:cli-artifacts",
+			nn:                                   types.NamespacedName{Namespace: "ocp-ppc64le", Name: "4.6-art-latest-ppc64le-2020-12-12-030629:cli-artifacts"},
+			deniedImageStreams:                   sets.NewString("ocp/release"),
+			ingnoreReleaseControllerImageStreams: true,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.l = logrus.WithField("tc.name", tc.name)
-			objectFilter := testInputImageStreamTagFilterFactory(tc.l, tc.imageStreamPrefixes, tc.deniedImageStreams)
+			objectFilter := testInputImageStreamTagFilterFactory(tc.l, tc.imageStreamPrefixes, tc.deniedImageStreams, tc.ingnoreReleaseControllerImageStreams)
 			if diff := cmp.Diff(tc.expected, objectFilter(tc.nn)); diff != "" {
 				t.Errorf("actual does not match expected, diff: %s", diff)
 			}

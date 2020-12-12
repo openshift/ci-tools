@@ -3,6 +3,7 @@ package registrysyncer
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -37,6 +38,7 @@ func AddToManager(mgr manager.Manager,
 	pullSecretGetter func() []byte,
 	imageStreamPrefixes sets.String,
 	deniedImageStreams sets.String,
+	ingnoreReleaseControllerImageStreams bool,
 ) error {
 	log := logrus.WithField("controller", ControllerName)
 	r := &reconciler{
@@ -59,7 +61,7 @@ func AddToManager(mgr manager.Manager,
 	for _, m := range managers {
 		if err := c.Watch(
 			source.NewKindWithCache(&imagev1.ImageStream{}, m.GetCache()),
-			handlerFactory(testInputImageStreamTagFilterFactory(log, imageStreamPrefixes, deniedImageStreams)),
+			handlerFactory(testInputImageStreamTagFilterFactory(log, imageStreamPrefixes, deniedImageStreams, ingnoreReleaseControllerImageStreams)),
 		); err != nil {
 			return fmt.Errorf("failed to create watch for ImageStreams: %w", err)
 		}
@@ -422,12 +424,20 @@ func (r *reconciler) pullSecret(namespace string) (*corev1.Secret, crcontrolleru
 
 var (
 	deniedNamespacePrefixes = sets.NewString("kube", "openshift", "default", "redhat", "ci-op", "ci-ln")
+	// releaseControllerImageStreamsRegEx defines the imagestreams to sync even if flag ingnoreReleaseControllerImageStreams is set
+	releaseControllerImageStreamsRegEx = regexp.MustCompile(`^(4\.\d+(|\.\d+)(|-(f|r)c\.\d+)|[^4]\S+)$`)
+	releaseControllerNamespaces        = sets.NewString("ocp", "ocp-priv", "ocp-ppc64le", "ocp-ppc64le-priv", "ocp-s390x", "ocp-s390x-priv")
 )
+
+func ignoredReleaseControllerImageStreams(namespace, name string) bool {
+	return releaseControllerNamespaces.Has(namespace) && !releaseControllerImageStreamsRegEx.Match([]byte(name))
+}
 
 func testInputImageStreamTagFilterFactory(
 	l *logrus.Entry,
 	imageStreamPrefixes sets.String,
 	deniedImageStreams sets.String,
+	ingnoreReleaseControllerImageStreams bool,
 ) objectFilter {
 	l = logrus.WithField("subcomponent", "test-input-image-stream-tag-filter")
 	return func(nn types.NamespacedName) bool {
@@ -448,6 +458,9 @@ func testInputImageStreamTagFilterFactory(
 				}
 				return false
 			}
+		}
+		if ingnoreReleaseControllerImageStreams && ignoredReleaseControllerImageStreams(imageStreamName.Namespace, imageStreamName.Name) {
+			return false
 		}
 		return true
 	}

@@ -167,12 +167,20 @@ func (c ResourceConfiguration) RequirementsForStep(name string) ResourceRequirem
 // to the individual steps in the job. They are passed directly to
 // builds or pods.
 type ResourceRequirements struct {
+	// Requests are resource requests applied to an individual step in the job.
+	// These are directly used in creating the Pods that execute the Job.
 	Requests ResourceList `json:"requests,omitempty"`
-	Limits   ResourceList `json:"limits,omitempty"`
+	// Limits are resource limits applied to an individual step in the job.
+	// These are directly used in creating the Pods that execute the Job.
+	Limits ResourceList `json:"limits,omitempty"`
 }
 
 // ResourceList is a map of string resource names and resource
-// quantities, as defined on Kubernetes objects.
+// quantities, as defined on Kubernetes objects. Common resources
+// to request or limit are `cpu` and `memory`. For `cpu`, values
+// are provided in vCPUs - for instance, `2` or `200m`. For
+// `memory`, values are provided in bytes - for instance, `20Mi`
+// or `3Gi`.
 type ResourceList map[string]string
 
 func (l ResourceList) Add(values ResourceList) {

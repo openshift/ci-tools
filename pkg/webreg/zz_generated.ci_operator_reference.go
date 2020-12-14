@@ -438,8 +438,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  optional_on_success: false\n" +
 	"                  # Resources defines the resource requirements for the step.\n" +
 	"                  resources:\n" +
+	"                    # Limits are resource limits applied to an individual step in the job.\n" +
+	"                    # These are directly used in creating the Pods that execute the Job.\n" +
 	"                    limits:\n" +
 	"                        \"\": \"\"\n" +
+	"                    # Requests are resource requests applied to an individual step in the job.\n" +
+	"                    # These are directly used in creating the Pods that execute the Job.\n" +
 	"                    requests:\n" +
 	"                        \"\": \"\"\n" +
 	"                  # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
@@ -511,8 +515,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  optional_on_success: false\n" +
 	"                  # Resources defines the resource requirements for the step.\n" +
 	"                  resources:\n" +
+	"                    # Limits are resource limits applied to an individual step in the job.\n" +
+	"                    # These are directly used in creating the Pods that execute the Job.\n" +
 	"                    limits:\n" +
 	"                        \"\": \"\"\n" +
+	"                    # Requests are resource requests applied to an individual step in the job.\n" +
+	"                    # These are directly used in creating the Pods that execute the Job.\n" +
 	"                    requests:\n" +
 	"                        \"\": \"\"\n" +
 	"                  # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
@@ -584,8 +592,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  optional_on_success: false\n" +
 	"                  # Resources defines the resource requirements for the step.\n" +
 	"                  resources:\n" +
+	"                    # Limits are resource limits applied to an individual step in the job.\n" +
+	"                    # These are directly used in creating the Pods that execute the Job.\n" +
 	"                    limits:\n" +
 	"                        \"\": \"\"\n" +
+	"                    # Requests are resource requests applied to an individual step in the job.\n" +
+	"                    # These are directly used in creating the Pods that execute the Job.\n" +
 	"                    requests:\n" +
 	"                        \"\": \"\"\n" +
 	"                  # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
@@ -1035,8 +1047,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              optional_on_success: false\n" +
 	"              # Resources defines the resource requirements for the step.\n" +
 	"              resources:\n" +
+	"                # Limits are resource limits applied to an individual step in the job.\n" +
+	"                # These are directly used in creating the Pods that execute the Job.\n" +
 	"                limits:\n" +
 	"                    \"\": \"\"\n" +
+	"                # Requests are resource requests applied to an individual step in the job.\n" +
+	"                # These are directly used in creating the Pods that execute the Job.\n" +
 	"                requests:\n" +
 	"                    \"\": \"\"\n" +
 	"              # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
@@ -1108,8 +1124,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              optional_on_success: false\n" +
 	"              # Resources defines the resource requirements for the step.\n" +
 	"              resources:\n" +
+	"                # Limits are resource limits applied to an individual step in the job.\n" +
+	"                # These are directly used in creating the Pods that execute the Job.\n" +
 	"                limits:\n" +
 	"                    \"\": \"\"\n" +
+	"                # Requests are resource requests applied to an individual step in the job.\n" +
+	"                # These are directly used in creating the Pods that execute the Job.\n" +
 	"                requests:\n" +
 	"                    \"\": \"\"\n" +
 	"              # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
@@ -1181,8 +1201,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              optional_on_success: false\n" +
 	"              # Resources defines the resource requirements for the step.\n" +
 	"              resources:\n" +
+	"                # Limits are resource limits applied to an individual step in the job.\n" +
+	"                # These are directly used in creating the Pods that execute the Job.\n" +
 	"                limits:\n" +
 	"                    \"\": \"\"\n" +
+	"                # Requests are resource requests applied to an individual step in the job.\n" +
+	"                # These are directly used in creating the Pods that execute the Job.\n" +
 	"                requests:\n" +
 	"                    \"\": \"\"\n" +
 	"              # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +

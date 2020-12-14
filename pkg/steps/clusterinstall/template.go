@@ -402,8 +402,6 @@ objects:
         value: /etc/openshift-installer/.awscred
       - name: AZURE_AUTH_LOCATION
         value: /etc/openshift-installer/osServicePrincipal.json
-      - name: GCP_REGION
-        value: us-east1
       - name: GCP_PROJECT
         value: openshift-gce-devel-ci
       - name: GOOGLE_CLOUD_KEYFILE_JSON
@@ -495,14 +493,11 @@ objects:
             elif has_variant "compact"; then
               master_type=m5.2xlarge
             fi
-            case $((RANDOM % 4)) in
-            0) AWS_REGION=us-east-1
+            AWS_REGION="${LEASED_RESOURCE}"
+            case "${AWS_REGION}" in
+            us-east-1)
                ZONE_1=us-east-1b
                ZONE_2=us-east-1c;;
-            1) AWS_REGION=us-east-2;;
-            2) AWS_REGION=us-west-1;;
-            3) AWS_REGION=us-west-2;;
-            *) echo >&2 "invalid AWS region index"; exit 1;;
             esac
             echo "AWS region: ${AWS_REGION} (zones: ${ZONE_1:-${AWS_REGION}a} ${ZONE_2:-${AWS_REGION}b})"
             subnets="[]"
@@ -564,17 +559,7 @@ objects:
         EOF
 
         elif [[ "${CLUSTER_TYPE}" == "azure4" ]]; then
-            case $((RANDOM % 8)) in
-            0) AZURE_REGION=centralus;;
-            1) AZURE_REGION=centralus;;
-            2) AZURE_REGION=centralus;;
-            3) AZURE_REGION=centralus;;
-            4) AZURE_REGION=centralus;;
-            5) AZURE_REGION=centralus;;
-            6) AZURE_REGION=eastus2;;
-            7) AZURE_REGION=westus;;
-            *) echo >&2 "invalid Azure region index"; exit 1;;
-            esac
+            AZURE_REGION="${LEASED_RESOURCE}"
             echo "Azure region: ${AZURE_REGION}"
 
             vnetrg=""
@@ -612,6 +597,7 @@ objects:
           ${SSH_PUB_KEY}
         EOF
         elif [[ "${CLUSTER_TYPE}" == "gcp" ]]; then
+            GCP_REGION="${LEASED_RESOURCE}"
             master_type=null
             if has_variant "xlarge"; then
               master_type=n1-standard-32

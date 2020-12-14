@@ -140,7 +140,7 @@ func main() {
 	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: sa}
 
 	remoteBranch := "autobump"
-	if err := bumper.MakeGitCommit(fmt.Sprintf("git@github.com:%s/%s.git", o.githubLogin, githubRepo), remoteBranch, o.gitName, o.gitEmail, opts.Prefixes, stdout, stderr, versions); err != nil {
+	if err := bumper.MakeGitCommit(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin, opts.GitHubToken, o.githubLogin, githubRepo), remoteBranch, o.gitName, o.gitEmail, opts.Prefixes, stdout, stderr, versions); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 

@@ -50,6 +50,7 @@ inputs=(
               "e2e" # What is the name of this test (e.g. "e2e-operator")?  e2e
                  "" # Which specific cloud provider does the test require, if any?  [default: aws]
               "e2e" # What commands in the repository run the test (e.g. "make test-e2e")?  make test-e2e
+              "yes" # Does your test require the OpenShift client (oc)?
                "no" # Are there any more end-to-end test scripts to configure?  [default: no] no
 )
 export inputs
@@ -92,6 +93,7 @@ inputs=(
               "e2e" # What is the name of this test (e.g. "e2e-operator")?  e2e
                  "" # Which specific cloud provider does the test require, if any?  [default: aws]
               "e2e" # What commands in the repository run the test (e.g. "make test-e2e")?  make test-e2e
+               "no" # Does your test require the OpenShift client (oc)? no
                "no" # Are there any more end-to-end test scripts to configure?  [default: no] no
           "nightly" # What type of OpenShift release do the end-to-end tests run on top of? [nightly, published]
               "4.4" # Which OpenShift version is being tested? [default: 4.6]

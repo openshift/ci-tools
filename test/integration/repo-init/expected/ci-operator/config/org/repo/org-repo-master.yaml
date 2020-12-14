@@ -25,9 +25,9 @@ tag_specification:
 test_binary_build_commands: make test-install
 tests:
 - as: e2e-aws
-  commands: TEST_SUITE=openshift/conformance/parallel run-tests
-  openshift_installer:
+  steps:
     cluster_profile: aws
+    workflow: openshift-e2e-aws
 - as: unit
   commands: unit
   container:
@@ -41,9 +41,17 @@ tests:
   container:
     from: test-bin
 - as: e2e
-  commands: e2e
-  openshift_installer_src:
+  steps:
     cluster_profile: aws
+    test:
+    - as: e2e
+      cli: latest
+      commands: e2e
+      from: src
+      resources:
+        requests:
+          cpu: 100m
+    workflow: ipi-aws
 zz_generated_metadata:
   branch: master
   org: org

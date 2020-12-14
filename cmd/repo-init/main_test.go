@@ -431,12 +431,10 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 					},
 					CanonicalGoRepository: strP("sometimes.com"),
 					Tests: []api.TestStepConfiguration{{
-						As:       "e2e-aws",
-						Commands: "TEST_SUITE=openshift/conformance/parallel run-tests",
-						OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
-							ClusterTestConfiguration: api.ClusterTestConfiguration{
-								ClusterProfile: api.ClusterProfileAWS,
-							},
+						As: "e2e-aws",
+						MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+							Workflow:       strP("openshift-e2e-aws"),
+							ClusterProfile: "aws",
 						},
 					}},
 					Resources: map[string]api.ResourceRequirements{"*": {
@@ -521,7 +519,7 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 				},
 				CustomE2E: []e2eTest{
 					{As: "operator-e2e", Command: "make e2e", Profile: "aws"},
-					{As: "operator-e2e-gcp", Command: "make e2e", Profile: "gcp"},
+					{As: "operator-e2e-gcp", Command: "make e2e", Profile: "gcp", Cli: true},
 				},
 			},
 			originConfig: &api.PromotionConfiguration{
@@ -556,20 +554,37 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 							},
 						},
 						{
-							As:       "operator-e2e",
-							Commands: "make e2e",
-							OpenshiftInstallerSrcClusterTestConfiguration: &api.OpenshiftInstallerSrcClusterTestConfiguration{
-								ClusterTestConfiguration: api.ClusterTestConfiguration{
-									ClusterProfile: "aws",
+							As: "operator-e2e",
+							MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+								Workflow:       strP("ipi-aws"),
+								ClusterProfile: "aws",
+								Test: []api.TestStep{
+									{
+										LiteralTestStep: &api.LiteralTestStep{
+											As:        "operator-e2e",
+											Commands:  "make e2e",
+											From:      "src",
+											Resources: api.ResourceRequirements{Requests: map[string]string{"cpu": "100m"}},
+										},
+									},
 								},
 							},
 						},
 						{
-							As:       "operator-e2e-gcp",
-							Commands: "make e2e",
-							OpenshiftInstallerSrcClusterTestConfiguration: &api.OpenshiftInstallerSrcClusterTestConfiguration{
-								ClusterTestConfiguration: api.ClusterTestConfiguration{
-									ClusterProfile: "gcp",
+							As: "operator-e2e-gcp",
+							MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+								Workflow:       strP("ipi-gcp"),
+								ClusterProfile: "gcp",
+								Test: []api.TestStep{
+									{
+										LiteralTestStep: &api.LiteralTestStep{
+											As:        "operator-e2e-gcp",
+											Commands:  "make e2e",
+											From:      "src",
+											Cli:       "latest",
+											Resources: api.ResourceRequirements{Requests: map[string]string{"cpu": "100m"}},
+										},
+									},
 								},
 							},
 						},

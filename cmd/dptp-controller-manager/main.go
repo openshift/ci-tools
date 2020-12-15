@@ -293,6 +293,7 @@ func main() {
 		}
 		if cluster == appCIContextName {
 			options.LeaderElection = true
+			options.LeaderElectionReleaseOnCancel = true
 			options.LeaderElectionNamespace = opts.leaderElectionNamespace
 			options.LeaderElectionID = fmt.Sprintf("dptp-controller-manager%s", opts.leaderElectionSuffix)
 		} else {

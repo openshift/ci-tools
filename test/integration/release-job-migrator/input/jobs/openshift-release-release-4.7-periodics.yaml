@@ -686,3 +686,119 @@ periodics:
         - key: sa.release-bot.app.ci.config
           path: sa.release-bot.app.ci.config
         secretName: build-farm-credentials
+- agent: kubernetes
+  cluster: api.ci
+  cron: '@yearly'
+  decorate: true
+  labels:
+    job-env: aws
+    job-release: "4.7"
+    job-test: e2e
+    pj-rehearse.openshift.io/can-be-rehearsed: "true"
+  name: release-openshift-origin-installer-e2e-aws-upgrade-rollback-4.6-to-4.7
+  spec:
+    containers:
+    - args:
+      - --artifact-dir=$(ARTIFACTS)
+      - --kubeconfig=/etc/apici/kubeconfig
+      - --lease-server-password-file=/etc/boskos/password
+      - --lease-server-username=ci
+      - --secret-dir=/usr/local/pull-secret
+      - --secret-dir=/usr/local/e2e-$(CLUSTER_TYPE)-upgrade-cluster-profile
+      - --target=e2e-$(CLUSTER_TYPE)-upgrade
+      - --input-hash=$(BUILD_ID)
+      - --input-hash=$(JOB_NAME)
+      command:
+      - ci-operator
+      env:
+      - name: RELEASE_IMAGE_INITIAL
+      - name: RELEASE_IMAGE_LATEST
+      - name: CLUSTER_TYPE
+        value: aws
+      - name: UNRESOLVED_CONFIG
+        value: |
+          base_images:
+            base:
+              name: "4.7"
+              namespace: ocp
+              tag: base
+          releases:
+            initial:
+              prerelease:
+                product: ocp
+                version_bounds:
+                  lower: "4.6.0"
+                  upper: "4.7.0-0"
+            latest:
+              candidate:
+                product: ocp
+                stream: ci
+                version: "4.7"
+          resources:
+            '*':
+              limits:
+                memory: 4Gi
+              requests:
+                cpu: 100m
+                memory: 200Mi
+          tests:
+          - as: e2e-$(CLUSTER_TYPE)-upgrade
+            steps:
+              cluster_profile: "$(CLUSTER_TYPE)"
+              env:
+                TEST_COMMAND: "run-upgrade"
+                TEST_SUITE: "all"
+                DELETE_MC: "false"
+                TEST_OPTIONS: "abort-at=99"
+              workflow: openshift-upgrade-aws
+      image: ci-operator:latest
+      imagePullPolicy: Always
+      name: ""
+      resources:
+        requests:
+          cpu: 10m
+      volumeMounts:
+      - mountPath: /etc/apici
+        name: apici-ci-operator-credentials
+        readOnly: true
+      - mountPath: /etc/boskos
+        name: boskos
+        readOnly: true
+      - mountPath: /usr/local/e2e-aws-upgrade-cluster-profile
+        name: cluster-profile
+      - mountPath: /usr/local/pull-secret
+        name: release-pull-secret
+      - mountPath: /etc/appci
+        name: appci-release-bot-credentials
+        readOnly: true
+    serviceAccountName: ci-operator
+    volumes:
+    - name: apici-ci-operator-credentials
+      secret:
+        items:
+        - key: sa.ci-operator.apici.config
+          path: kubeconfig
+        secretName: apici-ci-operator-credentials
+    - name: boskos
+      secret:
+        items:
+        - key: password
+          path: password
+        secretName: boskos-credentials
+    - name: cluster-profile
+      projected:
+        sources:
+        - secret:
+            name: cluster-secrets-aws
+    - name: pull-secret
+      secret:
+        secretName: registry-pull-credentials
+    - name: release-pull-secret
+      secret:
+        secretName: ci-pull-credentials
+    - name: appci-release-bot-credentials
+      secret:
+        items:
+        - key: sa.release-bot.app.ci.config
+          path: sa.release-bot.app.ci.config
+        secretName: build-farm-credentials

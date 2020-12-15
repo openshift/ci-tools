@@ -51,6 +51,7 @@ type assembleReleaseStep struct {
 	client      steps.PodClient
 	artifactDir string
 	jobSpec     *api.JobSpec
+	pullSecret  *coreapi.Secret
 }
 
 func (s *assembleReleaseStep) Inputs() (api.InputDefinition, error) {
@@ -177,6 +178,26 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 
 	destination := fmt.Sprintf("%s:%s", releaseImageStreamRepo, s.name)
 	log.Printf("Create release image %s", destination)
+
+	var registryConfig, copyCmd string
+	var secrets []*api.Secret
+	if s.pullSecret != nil {
+		registryConfig = " --registry-config=/tmp/.dockerconfigjson"
+		copyCmd = "cp /pull/.dockerconfigjson /tmp/.dockerconfigjson"
+		secrets = []*api.Secret{{
+			Name:      s.pullSecret.Name,
+			MountPath: "/pull",
+		}}
+	}
+	commands := fmt.Sprintf(`
+set -xeuo pipefail
+export HOME=/tmp
+%s
+oc registry login%s
+oc adm release new%s --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q --name %q
+oc adm release extract%s --from=%q --to=/tmp/artifacts/release-payload-%s
+`, copyCmd, registryConfig, registryConfig, s.jobSpec.Namespace(), streamName, cvo, destination, version, registryConfig, destination, s.name)
+
 	podConfig := steps.PodStepConfiguration{
 		SkipLogs: true,
 		As:       fmt.Sprintf("release-%s", s.name),
@@ -186,13 +207,8 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 		},
 		ServiceAccountName: "ci-operator",
 		ArtifactDir:        "/tmp/artifacts",
-		Commands: fmt.Sprintf(`
-set -xeuo pipefail
-export HOME=/tmp
-oc registry login
-oc adm release new --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q --name %q
-oc adm release extract --from=%q --to=/tmp/artifacts/release-payload-%s
-`, s.jobSpec.Namespace(), streamName, cvo, destination, version, destination, s.name),
+		Secrets:            secrets,
+		Commands:           commands,
 	}
 
 	// set an explicit default for release-latest resources, but allow customization if necessary
@@ -245,7 +261,8 @@ func (s *assembleReleaseStep) Objects() []ctrlruntimeclient.Object {
 // and the operators defined in the release configuration.
 func AssembleReleaseStep(name string, config *api.ReleaseTagConfiguration, resources api.ResourceConfiguration,
 	client steps.PodClient,
-	artifactDir string, jobSpec *api.JobSpec) api.Step {
+	artifactDir string, jobSpec *api.JobSpec,
+	pullSecret *coreapi.Secret) api.Step {
 	return &assembleReleaseStep{
 		config:      config,
 		name:        name,
@@ -253,5 +270,6 @@ func AssembleReleaseStep(name string, config *api.ReleaseTagConfiguration, resou
 		client:      client,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
+		pullSecret:  pullSecret,
 	}
 }

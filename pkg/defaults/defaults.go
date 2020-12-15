@@ -200,7 +200,7 @@ func fromConfig(
 					log.Printf("Resolved release %s to %s", name, pullSpec)
 					releaseStep = releasesteps.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, artifactDir, jobSpec, pullSecret)
 				} else {
-					releaseStep = releasesteps.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, artifactDir, jobSpec)
+					releaseStep = releasesteps.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, artifactDir, jobSpec, pullSecret)
 				}
 				overridableSteps = append(overridableSteps, releaseStep)
 				addProvidesForStep(releaseStep, params)

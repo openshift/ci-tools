@@ -31,6 +31,7 @@ parameters:
   required: false
 - name: CLUSTER_VARIANT
 - name: USE_LEASE_CLIENT
+- name: LEASED_RESOURCE
 
 objects:
 

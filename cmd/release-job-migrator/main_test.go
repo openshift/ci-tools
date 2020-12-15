@@ -19,11 +19,32 @@ func TestGetJobInfo(t *testing.T) {
 			As:      "e2e-gcp-upgrade",
 			Product: "origin",
 			Version: "4.7",
+			Upgrade: true,
 		},
 		isRelease: true,
 	}, {
 		name:      "promote-release-openshift-machine-os-content-e2e-aws-4.7",
 		isRelease: false,
+	}, {
+		name: "release-openshift-ocp-installer-e2e-aws-4.5",
+		expected: jobInfo{
+			As:      "e2e-aws",
+			Product: "ocp",
+			Version: "4.5",
+		},
+		isRelease: true,
+	}, {
+		name: "release-openshift-origin-installer-e2e-aws-upgrade-4.7-stable-to-4.8-ci",
+		expected: jobInfo{
+			As:          "e2e-aws-upgrade",
+			Product:     "origin",
+			Version:     "4.8",
+			FromVersion: "4.7",
+			FromStream:  "stable",
+			ToStream:    "ci",
+			Upgrade:     true,
+		},
+		isRelease: true,
 	}}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -31,14 +52,8 @@ func TestGetJobInfo(t *testing.T) {
 			if isRelease != testCase.isRelease {
 				t.Errorf("wrong `isNotRelease`. Actual: %t, Expected: %t", isRelease, testCase.isRelease)
 			}
-			if info.As != testCase.expected.As {
-				t.Errorf("wrong `as`. Actual: %s, Expected: %s", info.As, testCase.expected.As)
-			}
-			if info.Product != testCase.expected.Product {
-				t.Errorf("wrong `product`. Actual: %s, Expected: %s", info.Product, testCase.expected.Product)
-			}
-			if info.Version != testCase.expected.Version {
-				t.Errorf("wrong `version`. Actual: %s, Expected: %s", info.Version, testCase.expected.Version)
+			if diff := cmp.Diff(info, testCase.expected); diff != "" {
+				t.Errorf("expected does not match actual: %s", diff)
 			}
 		})
 	}

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -43,9 +44,13 @@ type testsAndBaseImages struct {
 }
 
 type jobInfo struct {
-	As      string
-	Product string
-	Version string
+	As          string
+	Product     string
+	Version     string
+	Upgrade     bool
+	FromStream  string
+	FromVersion string
+	ToStream    string
 }
 
 type options struct {
@@ -83,6 +88,45 @@ func validateOptions(o options) error {
 
 var versionRegex = regexp.MustCompile(`4.\d`)
 
+func parseUpgradeSuffix(suffixParts []string) (fromVersion, fromStream, version, toStream string, valid bool) {
+	// simplest case of upgrading from the same stream
+	if len(suffixParts) == 1 {
+		version = suffixParts[0]
+		if !versionRegex.MatchString(version) {
+			return "", "", "", "", false
+		}
+	} else {
+		pos := 0
+		fromVersion = suffixParts[pos]
+		if !versionRegex.MatchString(fromVersion) {
+			return "", "", "", "", false
+		}
+		pos++
+		if suffixParts[pos] != "to" {
+			fromStream = suffixParts[pos]
+			if fromStream != "ci" && fromStream != "nightly" && fromStream != "stable" {
+				return "", "", "", "", false
+			}
+			pos++
+		}
+		pos++
+		version = suffixParts[pos]
+		if !versionRegex.MatchString(version) {
+			return "", "", "", "", false
+		}
+		pos++
+		if len(suffixParts) == pos+1 {
+			toStream = suffixParts[pos]
+			if toStream != "ci" && toStream != "nightly" {
+				return "", "", "", "", false
+			}
+		} else if len(suffixParts) > pos+1 {
+			return "", "", "", "", false
+		}
+	}
+	return fromVersion, fromStream, version, toStream, true
+}
+
 func getJobInfo(jobName string) (jobInfo, bool) {
 	// release jobs follow the format of "release-openshift-product-installer-testname-version"
 	if !strings.HasPrefix(jobName, "release-openshift-") {
@@ -90,25 +134,73 @@ func getJobInfo(jobName string) (jobInfo, bool) {
 	}
 	splitName := strings.Split(jobName, "-")
 	if len(splitName) < 6 {
+		logrus.Warnf("Release job %s does not follow standard naming scheme; ignoring", jobName)
 		return jobInfo{}, false
 	}
-	version := splitName[len(splitName)-1]
-	if !versionRegex.MatchString(version) {
-		return jobInfo{}, false
+	var version, fromVersion, fromStream, toStream string
+	var beginVersion int
+	isUpgrade := strings.Contains(jobName, "upgrade")
+	// identify if this is an upgrade job
+	if isUpgrade {
+		var suffixParts []string
+		for index, str := range splitName {
+			if str == "upgrade" {
+				if len(splitName) == index+1 {
+					// this is one of the 3 upgrade jobs in "infra-periodics"; ignore
+					return jobInfo{}, false
+				}
+				if splitName[index+1] == "rollback" {
+					beginVersion = index + 2
+				} else {
+					beginVersion = index + 1
+				}
+				suffixParts = splitName[beginVersion:]
+				break
+			}
+		}
+		var valid bool
+		fromVersion, fromStream, version, toStream, valid = parseUpgradeSuffix(suffixParts)
+		if !valid {
+			logrus.Warnf("Upgrade release job %s does not follow standard naming scheme; ignoring", jobName)
+			return jobInfo{}, false
+		}
+	} else {
+		beginVersion = len(splitName) - 1
+		version = splitName[beginVersion]
+		if !versionRegex.MatchString(version) {
+			logrus.Warnf("Release job %s does not follow standard naming scheme; ignoring", jobName)
+			return jobInfo{}, false
+		}
 	}
 	return jobInfo{
-		As:      strings.Join(splitName[4:len(splitName)-1], "-"),
-		Product: splitName[2],
-		Version: splitName[len(splitName)-1],
+		As:          strings.Join(splitName[4:beginVersion], "-"),
+		Product:     splitName[2],
+		Version:     version,
+		Upgrade:     isUpgrade,
+		FromVersion: fromVersion,
+		FromStream:  fromStream,
+		ToStream:    toStream,
 	}, true
 }
 
 func metadataFromJobInfo(info jobInfo) *api.Metadata {
+	variant := info.Product
+	if info.FromVersion != "" {
+		variant = fmt.Sprintf("%s-%s", variant, info.FromVersion)
+		if info.FromStream != "" {
+			variant = fmt.Sprintf("%s-%s", variant, info.FromStream)
+		}
+		variant = fmt.Sprintf("%s-to", variant)
+	}
+	variant = fmt.Sprintf("%s-%s", variant, info.Version)
+	if info.ToStream != "" {
+		variant = fmt.Sprintf("%s-%s", variant, info.ToStream)
+	}
 	return &api.Metadata{
 		Org:     "openshift",
 		Repo:    "release",
 		Branch:  "master",
-		Variant: fmt.Sprintf("%s-%s", info.Product, info.Version),
+		Variant: variant,
 	}
 }
 
@@ -117,25 +209,41 @@ func newDataWithInfoFromFilename(filename string) configlib.DataWithInfo {
 	variant := strings.Split(strings.TrimSuffix(filename, ".yaml"), "__")[1]
 	splitVariant := strings.Split(variant, "-")
 	identifier := splitVariant[0]
+	var fromVersion, fromStream, version, toStream string
+	if len(splitVariant) > 2 {
+		fromVersion, fromStream, version, toStream, _ = parseUpgradeSuffix(splitVariant[1:])
+	} else {
+		version = splitVariant[1]
+	}
 	var product api.ReleaseProduct
 	var stream api.ReleaseStream
 	var namespace string
-	switch identifier {
-	case "ocp":
-		product = api.ReleaseProductOCP
-		stream = api.ReleaseStreamNightly
+	// toStream overrides the identifier
+	if toStream != "" {
 		namespace = "ocp"
-	case "origin":
 		product = api.ReleaseProductOCP
-		stream = api.ReleaseStreamCI
-		namespace = "ocp"
-	case "okd":
-		product = api.ReleaseProductOKD
-		stream = api.ReleaseStreamOKD
-		namespace = "origin"
+		if toStream == "nightly" {
+			stream = api.ReleaseStreamNightly
+		} else {
+			stream = api.ReleaseStreamCI
+		}
+	} else {
+		switch identifier {
+		case "ocp":
+			product = api.ReleaseProductOCP
+			stream = api.ReleaseStreamNightly
+			namespace = "ocp"
+		case "origin":
+			product = api.ReleaseProductOCP
+			stream = api.ReleaseStreamCI
+			namespace = "ocp"
+		case "okd":
+			product = api.ReleaseProductOKD
+			stream = api.ReleaseStreamOKD
+			namespace = "origin"
+		}
 	}
-	version := splitVariant[1]
-	return configlib.DataWithInfo{
+	data := configlib.DataWithInfo{
 		Info: config.Info{
 			Metadata: api.Metadata{
 				Org:     "openshift",
@@ -179,6 +287,48 @@ func newDataWithInfoFromFilename(filename string) configlib.DataWithInfo {
 			},
 		},
 	}
+	if product == api.ReleaseProductOKD {
+		return data
+	}
+	// add initial streams for upgrades
+	if fromVersion == "" {
+		data.Configuration.InputConfiguration.Releases["initial"] = api.UnresolvedRelease{
+			Candidate: &api.Candidate{
+				Product:  product,
+				Stream:   stream,
+				Version:  version,
+				Relative: 1,
+			},
+		}
+	} else if fromStream == "stable" || fromStream == "" {
+		// fromVersion is always in the form 4.X, so no need to check strconv error
+		minorVer, _ := strconv.Atoi(strings.Split(fromVersion, ".")[1])
+		data.Configuration.InputConfiguration.Releases["initial"] = api.UnresolvedRelease{
+			Prerelease: &api.Prerelease{
+				Product: product,
+				VersionBounds: api.VersionBounds{
+					Lower: fmt.Sprintf("4.%d.0-0", minorVer),
+					Upper: fmt.Sprintf("4.%d.0-0", minorVer+1),
+				},
+			},
+		}
+	} else {
+		var fromReleaseStream api.ReleaseStream
+		if fromStream == "nightly" {
+			fromReleaseStream = api.ReleaseStreamNightly
+		} else {
+			// the only possible stream options for upgrades are nightly and ci
+			fromReleaseStream = api.ReleaseStreamCI
+		}
+		data.Configuration.InputConfiguration.Releases["initial"] = api.UnresolvedRelease{
+			Candidate: &api.Candidate{
+				Product: product,
+				Stream:  fromReleaseStream,
+				Version: fromVersion,
+			},
+		}
+	}
+	return data
 }
 
 func updateBaseImages(newImages, ciOpImages, replacementImages map[string]api.ImageStreamTagReference, version string) error {
@@ -351,6 +501,10 @@ func run(o options) error {
 			ciopConfigs[filename] = newDataWithInfoFromFilename(filename)
 		}
 		updatedConfig := ciopConfigs[filename].Configuration
+		// if no tests for this file were able to be generated, skip
+		if len(replacement.tests) == 0 {
+			continue
+		}
 		updatedConfig.Tests = append(updatedConfig.Tests, replacement.tests...)
 		for name, ist := range replacement.baseImages {
 			if _, ok := updatedConfig.BaseImages[name]; !ok {

@@ -5,11 +5,11 @@ base_images:
     tag: base
 releases:
   initial:
-    candidate:
+    prerelease:
       product: ocp
-      relative: 1
-      stream: ci
-      version: "4.7"
+      version_bounds:
+        lower: 4.6.0-0
+        upper: 4.7.0-0
   latest:
     candidate:
       product: ocp
@@ -21,18 +21,18 @@ resources:
       cpu: 100m
       memory: 200Mi
 tests:
-- as: e2e-aws
-  cron: '@every 48h'
-  steps:
-    cluster_profile: aws
-    workflow: openshift-e2e-aws
-- as: e2e-gcp-upgrade
+- as: e2e-aws-upgrade-rollback
   cron: '@yearly'
   steps:
-    cluster_profile: gcp
-    workflow: openshift-upgrade-gcp-loki
+    cluster_profile: aws
+    env:
+      DELETE_MC: "false"
+      TEST_COMMAND: run-upgrade
+      TEST_OPTIONS: abort-at=99
+      TEST_SUITE: all
+    workflow: openshift-upgrade-aws
 zz_generated_metadata:
   branch: master
   org: openshift
   repo: release
-  variant: origin-4.7
+  variant: origin-4.6-to-4.7

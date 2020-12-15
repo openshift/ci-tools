@@ -4,6 +4,12 @@ base_images:
     namespace: ocp
     tag: base
 releases:
+  initial:
+    candidate:
+      product: ocp
+      relative: 1
+      stream: ci
+      version: "4.6"
   latest:
     candidate:
       product: ocp

@@ -3,6 +3,9 @@ release-openshift-ocp-installer-e2e-aws-4.7 -> periodic-ci-openshift-release-mas
 release-openshift-okd-installer-e2e-aws-4.7 -> periodic-ci-openshift-release-master-okd-4.7-e2e-aws
 release-openshift-origin-installer-e2e-aws-4.6 -> periodic-ci-openshift-release-master-origin-4.6-e2e-aws
 release-openshift-origin-installer-e2e-aws-4.7 -> periodic-ci-openshift-release-master-origin-4.7-e2e-aws
+release-openshift-origin-installer-e2e-aws-upgrade-4.4-nightly-to-4.4-nightly -> periodic-ci-openshift-release-master-origin-4.4-nightly-to-4.4-nightly-e2e-aws-upgrade
+release-openshift-origin-installer-e2e-aws-upgrade-4.5-stable-to-4.6-ci -> periodic-ci-openshift-release-master-origin-4.5-stable-to-4.6-ci-e2e-aws-upgrade
+release-openshift-origin-installer-e2e-aws-upgrade-rollback-4.6-to-4.7 -> periodic-ci-openshift-release-master-origin-4.6-to-4.7-e2e-aws-upgrade-rollback
 release-openshift-origin-installer-e2e-gcp-upgrade-4.7 -> periodic-ci-openshift-release-master-origin-4.7-e2e-gcp-upgrade
 
 The following tests do not have entries in the generator config:

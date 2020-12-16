@@ -184,7 +184,6 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		}
 		if dockerImageImportedFromTargetingCluster(clusterName, sourceImageStreamTag) {
 			log.Debug("dockerImage imported from targeting cluster")
-			continue
 		}
 		if err := client.Get(ctx, types.NamespacedName{Name: req.Namespace}, &corev1.Namespace{}); err != nil {
 			if !apierrors.IsNotFound(err) {

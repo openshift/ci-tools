@@ -554,7 +554,9 @@ func run(o options) error {
 			return fmt.Errorf("failed to read file %s: %w", info.Name(), err)
 		}
 		for oldName, newName := range replacedJobs {
-			raw = bytes.ReplaceAll(raw, []byte(oldName), []byte(newName))
+			oldJob := fmt.Sprintf("\"name\":\"%s\"", oldName)
+			newJob := fmt.Sprintf("\"name\":\"%s\"", newName)
+			raw = bytes.ReplaceAll(raw, []byte(oldJob), []byte(newJob))
 		}
 		if err := ioutil.WriteFile(path, raw, 0644); err != nil {
 			return fmt.Errorf("failed to write updated release-controller config file %s: %w", filepath.Base(path), err)

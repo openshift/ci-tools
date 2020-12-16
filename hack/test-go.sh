@@ -7,4 +7,5 @@ if [[ -n ${ARTIFACT_DIR:-} ]]; then
   JUNIT_ARG="--junitfile=$ARTIFACT_DIR/junit.xml"
 fi
 
-gotestsum $JUNIT_ARG -- ./... -race ${TESTFLAGS:-}
+set -o xtrace
+gotestsum $JUNIT_ARG -- ${PACKAGES:-"./..."} -race ${TESTFLAGS:-}

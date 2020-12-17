@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -230,7 +231,7 @@ func uploadKubeconfig(ctx context.Context, client coreclientset.SecretInterface,
 		// kubeconfig exists, we can upload it
 		uploadErr = createSecret(client, name, dir, dry)
 		return uploadErr == nil, nil // retry errors
-	}, ctx.Done()); err != nil {
+	}, ctx.Done()); !errors.Is(err, wait.ErrWaitTimeout) {
 		log.Printf("Failed to upload $KUBECONFIG: %v: %v\n", err, uploadErr)
 	}
 }

@@ -204,7 +204,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		// There is some delay until it gets back to our cache, so block until we can retrieve
 		// it successfully.
 		key := ctrlruntimeclient.ObjectKey{Name: sourceImageStream.Name, Namespace: sourceImageStream.Namespace}
-		if err := wait.Poll(100*time.Millisecond, 5*time.Second, func() (bool, error) {
+		if err := wait.Poll(100*time.Millisecond, 10*time.Second, func() (bool, error) {
 			if err := client.Get(ctx, key, &imagev1.ImageStream{}); err != nil {
 				if apierrors.IsNotFound(err) {
 					return false, nil

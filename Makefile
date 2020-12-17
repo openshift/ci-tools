@@ -64,7 +64,7 @@ lint:
 # Example:
 #   make test
 test:
-	GOTEST_FLAGS="$(TESTFLAGS)" hack/test-go.sh
+	TESTFLAGS="$(TESTFLAGS)" hack/test-go.sh
 .PHONY: test
 
 # Remove all build artifacts.
@@ -159,18 +159,21 @@ TMPDIR ?= /tmp
 # Example:
 #   make e2e
 #   make e2e SUITE=multi-stage
-e2e: $(if $(CI),,e2e-local)
-	$(eval export PULL_SECRET_DIR=$(TMPDIR)/pull-secret)
-	$(eval export PATH=$$(shell echo -n "${PATH}:$(TMPDIR)"))
+e2e:
+	PACKAGES="./test/e2e/..." TESTFLAGS="$(TESTFLAGS) -tags e2e -timeout 120m -parallel 100" hack/test-go.sh
 	hack/test-e2e.sh $(SUITE)
 .PHONY: e2e
 
 # Dependencies required to execute the E2E tests outside of the CI environment.
-e2e-local: \
-	$(TMPDIR)/pull-secret/.dockerconfigjson \
-	$(TMPDIR)/import-secret/.dockerconfigjson \
+local-e2e: \
+	$(TMPDIR)/local-secret/.dockerconfigjson \
+	$(TMPDIR)/remote-secret/.dockerconfigjson \
 	$(TMPDIR)/boskos
-.PHONY: e2e-local
+	$(eval export LOCAL_REGISTRY_SECRET_DIR=$(TMPDIR)/local-secret)
+	$(eval export REMOTE_REGISTRY_SECRET_DIR=$(TMPDIR)/remote-secret)
+	$(eval export PATH=$$(shell echo -n "${PATH}:$(TMPDIR)"))
+	@$(MAKE) e2e
+.PHONY: local-e2e
 
 # Update golden output files for integration tests.
 #
@@ -227,13 +230,13 @@ validate-registry-metadata:
 	test -z "$$(git status -s ./test/multistage-registry/registry | grep registry)"
 .PHONY: validate-registry-metadata
 
-$(TMPDIR)/pull-secret/.dockerconfigjson:
-	mkdir -p $(TMPDIR)/pull-secret
-	oc --context api.ci --as system:admin --namespace ci get secret registry-pull-credentials -o 'jsonpath={.data.\.dockerconfigjson}' | base64 --decode | jq > $(TMPDIR)/pull-secret/.dockerconfigjson
+$(TMPDIR)/local-secret/.dockerconfigjson:
+	mkdir -p $(TMPDIR)/local-secret
+	oc --context api.ci --as system:admin --namespace test-credentials get secret registry-pull-credentials -o 'jsonpath={.data.\.dockerconfigjson}' | base64 --decode | jq > $(TMPDIR)/local-secret/.dockerconfigjson
 
-$(TMPDIR)/import-secret/.dockerconfigjson:
-	mkdir -p $(TMPDIR)/import-secret
-	oc --context api.ci --as system:admin --namespace ci get secret ci-pull-credentials -o 'jsonpath={.data.\.dockerconfigjson}' | base64 --decode | jq > $(TMPDIR)/import-secret/.dockerconfigjson
+$(TMPDIR)/remote-secret/.dockerconfigjson:
+	mkdir -p $(TMPDIR)/remote-secret
+	oc --context api.ci --as system:admin --namespace test-credentials get secret ci-pull-credentials -o 'jsonpath={.data.\.dockerconfigjson}' | base64 --decode | jq > $(TMPDIR)/remote-secret/.dockerconfigjson
 
 $(TMPDIR)/boskos:
 	mkdir -p $(TMPDIR)/image

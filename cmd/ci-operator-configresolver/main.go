@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -25,16 +26,19 @@ import (
 )
 
 type options struct {
-	configPath   string
-	registryPath string
-	prowPath     string
-	jobPath      string
-	logLevel     string
-	address      string
-	uiAddress    string
-	gracePeriod  time.Duration
-	validateOnly bool
-	flatRegistry bool
+	configPath             string
+	registryPath           string
+	prowPath               string
+	jobPath                string
+	logLevel               string
+	address                string
+	port                   int
+	uiAddress              string
+	uiPort                 int
+	gracePeriod            time.Duration
+	validateOnly           bool
+	flatRegistry           bool
+	instrumentationOptions flagutil.InstrumentationOptions
 }
 
 var (
@@ -49,12 +53,15 @@ func gatherOptions() (options, error) {
 	fs.StringVar(&o.prowPath, "prow-config", "", "Path to prow config")
 	fs.StringVar(&o.jobPath, "jobs", "", "Path to job config dir")
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
-	fs.StringVar(&o.address, "address", ":8080", "Address to run server on")
-	fs.StringVar(&o.uiAddress, "ui-address", ":8082", "Address to run the registry UI on")
+	fs.StringVar(&o.address, "address", ":8080", "DEPRECATED: Address to run server on")
+	fs.StringVar(&o.uiAddress, "ui-address", ":8082", "DEPRECATED: Address to run the registry UI on")
+	fs.IntVar(&o.port, "port", 8080, "Port to run server on")
+	fs.IntVar(&o.uiPort, "ui-port", 8082, "Port to run the registry UI on")
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
 	_ = fs.Duration("cycle", time.Minute*2, "Legacy flag kept for compatibility. Does nothing")
 	fs.BoolVar(&o.validateOnly, "validate-only", false, "Load the config and registry, validate them and exit.")
 	fs.BoolVar(&o.flatRegistry, "flat-registry", false, "Disable directory structure based registry validation")
+	o.instrumentationOptions.AddFlags(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)
 	}
@@ -96,7 +103,7 @@ func validateOptions(o options) error {
 	if o.validateOnly && o.flatRegistry {
 		return errors.New("--validate-only and --flat-registry flags cannot be set simultaneously")
 	}
-	return nil
+	return o.instrumentationOptions.Validate(false)
 }
 
 func resolveConfig(configAgent agents.ConfigAgent, registryAgent agents.RegistryAgent) http.HandlerFunc {
@@ -218,7 +225,7 @@ func main() {
 	if o.validateOnly {
 		os.Exit(0)
 	}
-	health := pjutil.NewHealth()
+	health := pjutil.NewHealthOnPort(o.instrumentationOptions.HealthPort)
 	metrics.ExposeMetrics("ci-operator-configresolver", prowConfig.PushGateway{}, flagutil.DefaultMetricsPort)
 	simplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root
 		l("config"),
@@ -249,9 +256,9 @@ func main() {
 	http.HandleFunc("/resolve", handler(resolveLiteralConfig(registryAgent)).ServeHTTP)
 	http.HandleFunc("/configGeneration", handler(getConfigGeneration(configAgent)).ServeHTTP)
 	http.HandleFunc("/registryGeneration", handler(getRegistryGeneration(registryAgent)).ServeHTTP)
-	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
+	interrupts.ListenAndServe(&http.Server{Addr: ":" + strconv.Itoa(o.port)}, o.gracePeriod)
 	uiServer := &http.Server{
-		Addr:    o.uiAddress,
+		Addr:    ":" + strconv.Itoa(o.uiPort),
 		Handler: uihandler(webreg.WebRegHandler(registryAgent, configAgent)),
 	}
 	interrupts.ListenAndServe(uiServer, o.gracePeriod)

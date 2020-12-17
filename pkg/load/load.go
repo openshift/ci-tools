@@ -219,7 +219,7 @@ func literalConfigFromResolver(raw []byte, address string) (*api.ReleaseBuildCon
 	// check that the user has sent us something reasonable
 	unresolvedConfig := &api.ReleaseBuildConfiguration{}
 	if err := yaml.UnmarshalStrict(raw, unresolvedConfig); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal unresolved config: invalid configuration: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal unresolved config: invalid configuration: %w, raw: %v", err, string(raw))
 	}
 	encoded, err := json.Marshal(unresolvedConfig)
 	if err != nil {

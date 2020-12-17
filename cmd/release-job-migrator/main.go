@@ -217,10 +217,8 @@ func newDataWithInfoFromFilename(filename string) configlib.DataWithInfo {
 	}
 	var product api.ReleaseProduct
 	var stream api.ReleaseStream
-	var namespace string
 	// toStream overrides the identifier
 	if toStream != "" {
-		namespace = "ocp"
 		product = api.ReleaseProductOCP
 		if toStream == "nightly" {
 			stream = api.ReleaseStreamNightly
@@ -232,15 +230,12 @@ func newDataWithInfoFromFilename(filename string) configlib.DataWithInfo {
 		case "ocp":
 			product = api.ReleaseProductOCP
 			stream = api.ReleaseStreamNightly
-			namespace = "ocp"
 		case "origin":
 			product = api.ReleaseProductOCP
 			stream = api.ReleaseStreamCI
-			namespace = "ocp"
 		case "okd":
 			product = api.ReleaseProductOKD
 			stream = api.ReleaseStreamOKD
-			namespace = "origin"
 		}
 	}
 	data := configlib.DataWithInfo{
@@ -254,13 +249,7 @@ func newDataWithInfoFromFilename(filename string) configlib.DataWithInfo {
 		},
 		Configuration: api.ReleaseBuildConfiguration{
 			InputConfiguration: api.InputConfiguration{
-				BaseImages: map[string]api.ImageStreamTagReference{
-					"base": {
-						Name:      version,
-						Namespace: namespace,
-						Tag:       "base",
-					},
-				},
+				BaseImages: map[string]api.ImageStreamTagReference{},
 				Releases: map[string]api.UnresolvedRelease{
 					"latest": {
 						Candidate: &api.Candidate{

@@ -308,19 +308,7 @@ func toPromote(config api.PromotionConfiguration, images []api.ProjectDirectoryI
 		names.Insert(dst)
 	}
 
-	if config.NamePrefix == "" {
-		return tagsByDst, names
-	}
-
-	namesByDst := map[string]string{}
-	names = sets.NewString()
-	for dst, src := range tagsByDst {
-		name := fmt.Sprintf("%s%s", config.NamePrefix, dst)
-		namesByDst[name] = src
-		names.Insert(name)
-	}
-
-	return namesByDst, names
+	return tagsByDst, names
 }
 
 // PromotedTags returns the tags that are being promoted for the given ReleaseBuildConfiguration

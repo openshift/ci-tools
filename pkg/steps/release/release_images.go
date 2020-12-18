@@ -191,7 +191,7 @@ func (s *releaseImagesTagStep) imageFormat() (string, error) {
 		return "REGISTRY", err
 	}
 	registry := strings.SplitN(spec, "/", 2)[0]
-	format := fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace(), fmt.Sprintf("%s%s", s.config.NamePrefix, api.StableImageStream), api.ComponentFormatReplacement)
+	format := fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace(), api.StableImageStream, api.ComponentFormatReplacement)
 	return format, nil
 }
 

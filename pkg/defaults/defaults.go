@@ -32,6 +32,8 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
+type inputImageSet map[api.InputImageTagStepConfiguration]struct{}
+
 // FromConfig interprets the human-friendly fields in
 // the release build configuration and generates steps for
 // them, returning the full set of steps requires for the
@@ -100,6 +102,7 @@ func fromConfig(
 	params.Add("JOB_NAME_HASH", func() (string, error) { return jobSpec.JobNameHash(), nil })
 	params.Add("JOB_NAME_SAFE", func() (string, error) { return strings.Replace(jobSpec.Job, "_", "-", -1), nil })
 	params.Add("NAMESPACE", func() (string, error) { return jobSpec.Namespace(), nil })
+	inputImages := make(inputImageSet)
 	var overridableSteps, buildSteps, postSteps []api.Step
 	var imageStepLinks []api.StepLink
 	var hasReleaseStep bool
@@ -109,7 +112,7 @@ func fromConfig(
 	}
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, artifactDir, jobSpec, testStep)
+			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, artifactDir, jobSpec, inputImages, testStep)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -154,7 +157,12 @@ func fromConfig(
 		var step api.Step
 		var stepLinks []api.StepLink
 		if rawStep.InputImageTagStepConfiguration != nil {
-			step = steps.InputImageTagStep(*rawStep.InputImageTagStepConfiguration, client, jobSpec)
+			conf := *rawStep.InputImageTagStepConfiguration
+			if _, ok := inputImages[conf]; ok {
+				continue
+			}
+			step = steps.InputImageTagStep(conf, client, jobSpec)
+			inputImages[conf] = struct{}{}
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
 			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, artifactDir, jobSpec, pullSecret)
 		} else if rawStep.SourceStepConfiguration != nil {
@@ -283,6 +291,7 @@ func stepForTest(
 	client loggingclient.LoggingClient,
 	artifactDir string,
 	jobSpec *api.JobSpec,
+	inputImages inputImageSet,
 	c *api.TestStepConfiguration,
 ) ([]api.Step, error) {
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
@@ -295,7 +304,7 @@ func stepForTest(
 			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
 			addProvidesForStep(step, params)
 		}
-		return append([]api.Step{step}, stepsForStepImages(client, jobSpec, test)...), nil
+		return append([]api.Step{step}, stepsForStepImages(client, jobSpec, inputImages, test)...), nil
 	}
 	if test := c.OpenshiftInstallerClusterTestConfiguration; test != nil {
 		if !test.Upgrade {
@@ -321,6 +330,7 @@ func stepForTest(
 func stepsForStepImages(
 	client loggingclient.LoggingClient,
 	jobSpec *api.JobSpec,
+	inputImages inputImageSet,
 	test *api.MultiStageTestConfigurationLiteral,
 ) (ret []api.Step) {
 	for _, subStep := range append(append(test.Pre, test.Test...), test.Post...) {
@@ -329,6 +339,10 @@ func stepsForStepImages(
 				BaseImage: *subStep.FromImage,
 				To:        link,
 			}
+			if _, ok := inputImages[config]; ok {
+				continue
+			}
+			inputImages[config] = struct{}{}
 			ret = append(ret, steps.InputImageTagStep(config, client, jobSpec))
 		}
 	}

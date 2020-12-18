@@ -945,6 +945,34 @@ func TestFromConfig(t *testing.T) {
 		promote:       true,
 		expectedSteps: []string{"[output-images]", "[images]"},
 		expectedPost:  []string{"[promotion]"},
+	}, {
+		name: "duplicate input images",
+		config: api.ReleaseBuildConfiguration{
+			Tests: []api.TestStepConfiguration{{
+				As: "test",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Test: []api.LiteralTestStep{{
+						FromImage: &api.ImageStreamTagReference{
+							Namespace: ns,
+							Name:      "base_image",
+							Tag:       "tag",
+						},
+					}, {
+						FromImage: &api.ImageStreamTagReference{
+							Namespace: ns,
+							Name:      "base_image",
+							Tag:       "tag",
+						},
+					}},
+				},
+			}},
+		},
+		expectedSteps: []string{
+			"test",
+			"[input:ns-base_image-tag]",
+			"[output-images]",
+			"[images]",
+		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			jobSpec := api.JobSpec{

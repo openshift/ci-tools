@@ -67,14 +67,35 @@ func TestGeneratePodSpec(t *testing.T) {
 
 func TestGeneratePodSpecMultiStage(t *testing.T) {
 	info := ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}}
-	test := ciop.TestStepConfiguration{
-		As: "test",
-		MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
-			ClusterProfile: ciop.ClusterProfileAWS,
+	tests := []struct {
+		description string
+		test        *ciop.TestStepConfiguration
+	}{
+		{
+			description: "aws cluster profile",
+			test: &ciop.TestStepConfiguration{
+				As: "test",
+				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+					ClusterProfile: ciop.ClusterProfileAWS,
+				},
+			},
+		},
+		{
+			description: "aws cpaas cluster profile",
+			test: &ciop.TestStepConfiguration{
+				As: "test",
+				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+					ClusterProfile: ciop.ClusterProfileAWSCPaaS,
+				},
+			},
 		},
 	}
 
-	testhelper.CompareWithFixture(t, generatePodSpecMultiStage(&info, &test, true))
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
+			testhelper.CompareWithFixture(t, generatePodSpecMultiStage(&info, tc.test, true))
+		})
+	}
 }
 
 func TestGeneratePodSpecTemplate(t *testing.T) {

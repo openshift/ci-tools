@@ -648,7 +648,7 @@ type LiteralTestStep struct {
 	// BestEffort defines if this step should cause the job to fail when the
 	// step fails. This only applies when AllowBestEffortPostSteps flag is set
 	// to true in MultiStageTestConfiguration. This option is applicable to
-	//`post` steps.
+	// `post` steps.
 	BestEffort *bool `json:"best_effort,omitempty"`
 	// ReadonlySharedDir reduces the run time of steps that do not update the
 	// shared directory.
@@ -854,6 +854,7 @@ const (
 	ClusterProfilePacket             ClusterProfile = "packet"
 	ClusterProfileVSphere            ClusterProfile = "vsphere"
 	ClusterProfileKubevirt           ClusterProfile = "kubevirt"
+	ClusterProfileAWSCPaaS           ClusterProfile = "aws-cpaas"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -883,6 +884,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfilePacket,
 		ClusterProfileVSphere,
 		ClusterProfileKubevirt,
+		ClusterProfileAWSCPaaS,
 	}
 }
 
@@ -894,7 +896,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSAtomic,
 		ClusterProfileAWSCentos,
 		ClusterProfileAWSCentos40,
-		ClusterProfileAWSGluster:
+		ClusterProfileAWSGluster,
+		ClusterProfileAWSCPaaS:
 		return "aws"
 	case ClusterProfileAzure4:
 		return "azure4"
@@ -975,6 +978,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "vsphere-quota-slice"
 	case ClusterProfileKubevirt:
 		return "kubevirt-quota-slice"
+	case ClusterProfileAWSCPaaS:
+		return "aws-cpaas-quota-slice"
 	default:
 		return ""
 	}
@@ -983,7 +988,7 @@ func (p ClusterProfile) LeaseType() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "azure4", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "kubevirt":
+	case "aws", "azure4", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "kubevirt", "aws-cpaas":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

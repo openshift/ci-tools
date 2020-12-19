@@ -355,10 +355,6 @@ type ReleaseTagConfiguration struct {
 	// Name is the image stream name to use that contains all
 	// component tags.
 	Name string `json:"name"`
-
-	// NamePrefix is prepended to the final output image name
-	// if specified.
-	NamePrefix string `json:"name_prefix,omitempty"`
 }
 
 // ReleaseConfiguration records a resolved release with its name.
@@ -386,10 +382,6 @@ type PromotionConfiguration struct {
 	// Tag is the ImageStreamTag tagged in for each
 	// build image's ImageStream.
 	Tag string `json:"tag,omitempty"`
-
-	// NamePrefix is prepended to the final output image name
-	// if specified.
-	NamePrefix string `json:"name_prefix,omitempty"`
 
 	// ExcludedImages are image names that will not be promoted.
 	// Exclusions are made before additional_images are included.

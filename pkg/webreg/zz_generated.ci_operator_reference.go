@@ -136,9 +136,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"    # contains all component tags. If specified, tag is\n" +
 	"    # ignored.\n" +
 	"    name: ' '\n" +
-	"    # NamePrefix is prepended to the final output image name\n" +
-	"    # if specified.\n" +
-	"    name_prefix: ' '\n" +
 	"    # Namespace identifies the namespace to which the built\n" +
 	"    # artifacts will be published to.\n" +
 	"    namespace: ' '\n" +
@@ -249,9 +246,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Name is the image stream name to use that contains all\n" +
 	"        # component tags.\n" +
 	"        name: ' '\n" +
-	"        # NamePrefix is prepended to the final output image name\n" +
-	"        # if specified.\n" +
-	"        name_prefix: ' '\n" +
 	"        # Namespace identifies the namespace from which\n" +
 	"        # all release artifacts not built in the current\n" +
 	"        # job are tagged from.\n" +
@@ -902,9 +896,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"    # Name is the image stream name to use that contains all\n" +
 	"    # component tags.\n" +
 	"    name: ' '\n" +
-	"    # NamePrefix is prepended to the final output image name\n" +
-	"    # if specified.\n" +
-	"    name_prefix: ' '\n" +
 	"    # Namespace identifies the namespace from which\n" +
 	"    # all release artifacts not built in the current\n" +
 	"    # job are tagged from.\n" +

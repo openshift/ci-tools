@@ -518,21 +518,16 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 
 	for i := range config.Images {
 		image := &config.Images[i]
-		buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
-		var outputImageStreamName string
-		if config.ReleaseTagConfiguration != nil {
-			outputImageStreamName = fmt.Sprintf("%s%s", config.ReleaseTagConfiguration.NamePrefix, api.StableImageStream)
-		} else {
-			outputImageStreamName = api.StableImageStream
-		}
-		buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
-			From: image.To,
-			To: api.ImageStreamTagReference{
-				Name: outputImageStreamName,
-				Tag:  string(image.To),
-			},
-			Optional: image.Optional,
-		}})
+		buildSteps = append(buildSteps,
+			api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image},
+			api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+				From: image.To,
+				To: api.ImageStreamTagReference{
+					Name: api.StableImageStream,
+					Tag:  string(image.To),
+				},
+				Optional: image.Optional,
+			}})
 	}
 
 	if config.Operator != nil {

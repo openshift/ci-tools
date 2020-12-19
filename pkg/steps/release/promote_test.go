@@ -52,21 +52,6 @@ func TestToPromote(t *testing.T) {
 			expectedNames:    sets.NewString("foo", "bar", "baz"),
 		},
 		{
-			name: "enabled config with prefix returns prefixed input list",
-			config: api.PromotionConfiguration{
-				Disabled:   false,
-				NamePrefix: "some",
-			},
-			images: []api.ProjectDirectoryImageBuildStepConfiguration{
-				{To: api.PipelineImageStreamTagReference("foo")},
-				{To: api.PipelineImageStreamTagReference("bar")},
-				{To: api.PipelineImageStreamTagReference("baz")},
-			},
-			requiredImages:   sets.NewString(),
-			expectedBySource: map[string]string{"somefoo": "foo", "somebar": "bar", "somebaz": "baz"},
-			expectedNames:    sets.NewString("somefoo", "somebar", "somebaz"),
-		},
-		{
 			name: "enabled config with exclude returns filtered input list",
 			config: api.PromotionConfiguration{
 				ExcludedImages: []string{"foo"},

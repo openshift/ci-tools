@@ -25,12 +25,18 @@ import (
 )
 
 var ciOperatorRefRendered []byte
+var baseTemplate *template.Template
 
 func init() {
 	if renderedString, err := syntaxYAML(ciOperatorReferenceYaml); err != nil {
 		panic(fmt.Sprintf("Failed to render the ci-operator config as yaml: %v", err))
 	} else {
 		ciOperatorRefRendered = []byte("<style>body {background-color: #282a36;}</style>" + renderedString)
+	}
+
+	var err error
+	if baseTemplate, err = getBaseTemplate(); err != nil {
+		panic(fmt.Sprintf("Failed to parse the base template: %v", err))
 	}
 }
 
@@ -501,31 +507,20 @@ func ownersBlock(owners repoowners.Config) template.HTML {
 	return template.HTML(builder.String())
 }
 
-func getBaseTemplate(workflows registry.WorkflowByName, chains registry.ChainByName, docs map[string]string) *template.Template {
+func getBaseTemplate() (*template.Template, error) {
 	base := template.New("baseTemplate").Funcs(
 		template.FuncMap{
-			"docsForName": func(name string) string {
-				return docs[name]
-			},
+			// These three are placeholders to be overwritten by the handlers
+			// that actually care about this data (see set{Docs,ChainGraph,WorkflowGraph) functions
+			"docsForName":   func(string) string { return "" },
+			"workflowGraph": func(_, _ string) string { return "" },
+			"chainGraph":    func(string) string { return "" },
+
 			"testStepNameAndType": getTestStepNameAndType,
 			"noescape": func(str string) template.HTML {
 				return template.HTML(str)
 			},
-			"toLower": strings.ToLower,
-			"workflowGraph": func(as string, wfType string) template.HTML {
-				svg, err := WorkflowGraph(as, workflows, chains, wfType)
-				if err != nil {
-					return template.HTML(err.Error())
-				}
-				return template.HTML(svg)
-			},
-			"chainGraph": func(as string) template.HTML {
-				svg, err := ChainGraph(as, chains)
-				if err != nil {
-					return template.HTML(err.Error())
-				}
-				return template.HTML(svg)
-			},
+			"toLower":  strings.ToLower,
 			"orgSpan":  orgSpan,
 			"repoSpan": repoSpan,
 			"inc": func(i int) int {
@@ -538,11 +533,7 @@ func getBaseTemplate(workflows registry.WorkflowByName, chains registry.ChainByN
 			"ownersBlock": ownersBlock,
 		},
 	)
-	base, err := base.Parse(templateDefinitions)
-	if err != nil {
-		logrus.Errorf("Failed to load step list template: %v", err)
-	}
-	return base
+	return base.Parse(templateDefinitions)
 }
 
 type stepNameAndType struct {
@@ -641,15 +632,56 @@ func writePage(w http.ResponseWriter, title string, body *template.Template, dat
 	fmt.Fprintln(w, htmlPageEnd)
 }
 
+func setDocs(t *template.Template, docs map[string]string) *template.Template {
+	return t.Funcs(
+		template.FuncMap{
+			"docsForName": func(name string) string {
+				return docs[name]
+			},
+		})
+}
+
+func setWorkflowGraph(t *template.Template, chains registry.ChainByName, workflows registry.WorkflowByName) *template.Template {
+	return t.Funcs(
+		template.FuncMap{
+			"workflowGraph": func(as string, wfType string) template.HTML {
+				svg, err := WorkflowGraph(as, workflows, chains, wfType)
+				if err != nil {
+					return template.HTML(err.Error())
+				}
+				return template.HTML(svg)
+			},
+		})
+}
+
+func setChainGraph(t *template.Template, chains registry.ChainByName) *template.Template {
+	return t.Funcs(
+		template.FuncMap{
+			"chainGraph": func(as string) template.HTML {
+				svg, err := ChainGraph(as, chains)
+				if err != nil {
+					return template.HTML(err.Error())
+				}
+				return template.HTML(svg)
+			},
+		})
+}
+
 func mainPageHandler(agent agents.RegistryAgent, templateString string, w http.ResponseWriter, _ *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
 
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
-	refs, chains, wfs, docs, _ := agent.GetRegistryComponents()
-	page := getBaseTemplate(wfs, chains, docs)
-	page, err := page.Parse(templateString)
+	refs, chains, workflows, docs, _ := agent.GetRegistryComponents()
+	page, err := baseTemplate.Clone()
 	if err != nil {
+		writeErrorPage(w, err, http.StatusInternalServerError)
+		return
+	}
+	page = setDocs(page, docs)
+	page = setWorkflowGraph(page, chains, workflows)
+	page = setChainGraph(page, chains)
+	if page, err = page.Parse(templateString); err != nil {
 		writeErrorPage(w, err, http.StatusInternalServerError)
 		return
 	}
@@ -660,7 +692,7 @@ func mainPageHandler(agent agents.RegistryAgent, templateString string, w http.R
 	}{
 		References: refs,
 		Chains:     chains,
-		Workflows:  wfs,
+		Workflows:  workflows,
 	}
 	writePage(w, "Step Registry Help Page", page, comps)
 }
@@ -920,9 +952,14 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 	name := path.Base(req.URL.Path)
 
 	_, chains, _, docs, metadata := agent.GetRegistryComponents()
-	page := getBaseTemplate(nil, chains, docs)
-	page, err := page.Parse(chainPage)
+	page, err := baseTemplate.Clone()
 	if err != nil {
+		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
+		return
+	}
+	page = setDocs(page, docs)
+	page = setChainGraph(page, chains)
+	if page, err = page.Parse(chainPage); err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
@@ -956,9 +993,17 @@ func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *htt
 	name := path.Base(req.URL.Path)
 
 	_, chains, workflows, docs, metadata := agent.GetRegistryComponents()
-	page := getBaseTemplate(workflows, chains, docs)
-	page, err := page.Parse(workflowJobPage)
+	page, err := baseTemplate.Clone()
 	if err != nil {
+		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	page = setDocs(page, docs)
+	page = setWorkflowGraph(page, chains, workflows)
+	page = setChainGraph(page, chains)
+
+	if page, err = page.Parse(workflowJobPage); err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
@@ -1069,9 +1114,17 @@ func jobHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, w h
 		updatedWorkflows[k] = v
 	}
 	updatedWorkflows[name] = jobWorkflow.Steps
-	page := getBaseTemplate(updatedWorkflows, chains, docs)
-	page, err = page.Parse(workflowJobPage)
+
+	page, err := baseTemplate.Clone()
 	if err != nil {
+		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
+		return
+	}
+	page = setDocs(page, docs)
+	page = setWorkflowGraph(page, chains, workflows)
+	page = setChainGraph(page, chains)
+
+	if page, err = page.Parse(workflowJobPage); err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
@@ -1209,9 +1262,13 @@ func searchHandler(confAgent agents.ConfigAgent, w http.ResponseWriter, req *htt
 	if searchTerm != "" {
 		matches = searchJobs(matches, searchTerm)
 	}
-	page := getBaseTemplate(nil, nil, nil)
-	page, err := page.Parse(jobSearchPage)
+	page, err := baseTemplate.Clone()
 	if err != nil {
+		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	if page, err = page.Parse(jobSearchPage); err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}

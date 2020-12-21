@@ -145,6 +145,20 @@ func TestReconcile(t *testing.T) {
 		},
 	}
 
+	applyconfigISTagAppCI := &imagev1.ImageStreamTag{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ci",
+			Name:      "applyconfig:latest",
+		},
+		Image: imagev1.Image{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+				CreationTimestamp: now,
+			},
+			DockerImageReference: "image-registry.openshift-image-registry.svc:5000/ci/applyconfig@sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+		},
+	}
+
 	applyconfigISTagNewer := &imagev1.ImageStreamTag{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   "ci",
@@ -243,23 +257,24 @@ func TestReconcile(t *testing.T) {
 				Name:      "applyconfig:latest",
 				Namespace: "ci",
 			},
-			apiCIClient: fakeclient.NewFakeClient(applyconfigISTag.DeepCopy()),
-			appCIClient: fakeclient.NewFakeClient(),
-			expected:    fmt.Errorf("failed to get imageStream %s from cluster api.ci: %w", "ci/applyconfig", fmt.Errorf("imagestreams.image.openshift.io \"applyconfig\" not found")),
+			apiCIClient: fakeclient.NewFakeClient(),
+			appCIClient: fakeclient.NewFakeClient(applyconfigISTag.DeepCopy()),
+
+			expected: fmt.Errorf("failed to get imageStream %s from cluster app.ci: %w", "ci/applyconfig", fmt.Errorf("imagestreams.image.openshift.io \"applyconfig\" not found")),
 		},
 		{
-			name: "a new tag",
+			name: "a new tag is created in api.ci",
 			request: types.NamespacedName{
 				Name:      "applyconfig:latest",
 				Namespace: "ci",
 			},
-			apiCIClient: fakeclient.NewFakeClient(applyconfigISTag.DeepCopy(), applyconfigIS.DeepCopy()),
-			appCIClient: fakeclient.NewFakeClient(),
+			apiCIClient: fakeclient.NewFakeClient(),
+			appCIClient: fakeclient.NewFakeClient(applyconfigISTagAppCI.DeepCopy(), applyconfigIS.DeepCopy()),
 
 			verify: func(apiCIClient ctrlruntimeclient.Client, appCIClient ctrlruntimeclient.Client) error {
 				actualImageStreamTag := &imagev1.ImageStreamTag{}
-				if err := appCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig:latest", Namespace: "ci"}, actualImageStreamTag); err != nil {
-					return err
+				if err := apiCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig:latest", Namespace: "ci"}, actualImageStreamTag); err != nil {
+					return fmt.Errorf("faile to get tag imagestreamtag from api.ci: %w", err)
 				}
 				expectedImageStreamTag := &imagev1.ImageStreamTag{
 					TypeMeta: metav1.TypeMeta{
@@ -274,7 +289,7 @@ func TestReconcile(t *testing.T) {
 					Tag: &imagev1.TagReference{
 						From: &corev1.ObjectReference{
 							Kind: "DockerImage",
-							Name: "registry.svc.ci.openshift.org/ci/applyconfig@sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
+							Name: "registry.ci.openshift.org/ci/applyconfig@sha256:4ff455dca5145a078c263ebf716eb1ccd1fe6fd41c9f9de6f27a9af9bbb0349d",
 						},
 					},
 				}
@@ -297,9 +312,7 @@ func TestReconcile(t *testing.T) {
 						ResourceVersion: "1",
 						Annotations: map[string]string{
 							"release.openshift.io-something": "copied",
-							"something":                      "not-copied",
 						},
-						Finalizers: []string{"dptp.openshift.io/registry-syncer"},
 					},
 				}
 				if diff := cmp.Diff(expectedImageStream, actualImageStream); diff != "" {
@@ -321,7 +334,9 @@ func TestReconcile(t *testing.T) {
 						ResourceVersion: "1",
 						Annotations: map[string]string{
 							"release.openshift.io-something": "copied",
+							"something":                      "not-copied",
 						},
+						Finalizers: []string{"dptp.openshift.io/registry-syncer"},
 					},
 				}
 				if diff := cmp.Diff(expectedImageStream, actualImageStream); diff != "" {
@@ -329,7 +344,7 @@ func TestReconcile(t *testing.T) {
 				}
 
 				actualNamespace := &corev1.Namespace{}
-				if err := appCIClient.Get(ctx, types.NamespacedName{Name: "ci"}, actualNamespace); err != nil {
+				if err := apiCIClient.Get(ctx, types.NamespacedName{Name: "ci"}, actualNamespace); err != nil {
 					return err
 				}
 				expectedNamespace := &corev1.Namespace{
@@ -464,12 +479,12 @@ func TestReconcile(t *testing.T) {
 				Name:      "applyconfig:latest",
 				Namespace: "ci",
 			},
-			apiCIClient: fakeclient.NewFakeClient(applyconfigISTagNewer.DeepCopy(), applyconfigISDeleted.DeepCopy()),
-			appCIClient: fakeclient.NewFakeClient(applyconfigISTag.DeepCopy(), applyconfigIS.DeepCopy()),
+			apiCIClient: fakeclient.NewFakeClient(applyconfigISTagAppCI.DeepCopy(), applyconfigIS.DeepCopy()),
+			appCIClient: fakeclient.NewFakeClient(applyconfigISTagNewer.DeepCopy(), applyconfigISDeleted.DeepCopy()),
 
 			verify: func(apiCIClient ctrlruntimeclient.Client, appCIClient ctrlruntimeclient.Client) error {
 				actualImageStream := &imagev1.ImageStream{}
-				if err := apiCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); err != nil {
+				if err := appCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); err != nil {
 					return err
 				}
 				expectedImageStream := &imagev1.ImageStream{
@@ -484,8 +499,8 @@ func TestReconcile(t *testing.T) {
 							"release.openshift.io-something": "copied",
 							"something":                      "not-copied",
 						},
-						DeletionTimestamp: &now,
 						ResourceVersion:   "1",
+						DeletionTimestamp: &now,
 					},
 				}
 				if actualImageStream.DeletionTimestamp == nil {
@@ -497,8 +512,8 @@ func TestReconcile(t *testing.T) {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				actualImageStream = &imagev1.ImageStream{}
-				if err := appCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); !apierrors.IsNotFound(err) {
-					t.Errorf("expected NotFound error did not occur and the actual error is: %v", err)
+				if err := apiCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); !apierrors.IsNotFound(err) {
+					return fmt.Errorf("expected NotFound error did not occur and the actual error is: %v", err)
 				}
 				return nil
 			},
@@ -661,6 +676,7 @@ func TestReconcile(t *testing.T) {
 		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			r := &reconciler{
 				log: logrus.NewEntry(logrus.New()),
 				registryClients: map[string]ctrlruntimeclient.Client{

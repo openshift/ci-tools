@@ -9,11 +9,16 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
 
 func TestLoginAndListItems(t *testing.T) {
+	revDate, err := time.Parse(time.RFC3339, "2019-10-11T23:33:21.970Z")
+	if err != nil {
+		t.Fatal("Failed to parse a date")
+	}
 	testCases := []struct {
 		name               string
 		username           string
@@ -95,7 +100,7 @@ func TestLoginAndListItems(t *testing.T) {
         "url": "https://cdn.bitwarden.net/attachments/111/222"
       }
     ],
-    "revisionDate": "2019-04-04T03:43:19.503Z"
+    "revisionDate": "2019-10-11T23:33:21.970Z"
   }
 ]`),
 				},
@@ -107,9 +112,10 @@ func TestLoginAndListItems(t *testing.T) {
 			expectedSession: "not-going-to-tell-you==",
 			expectedSavedItems: []Item{
 				{
-					ID:   "id1",
-					Name: "unsplash.com",
-					Type: 2,
+					ID:           "id1",
+					Name:         "unsplash.com",
+					Type:         2,
+					RevisionTime: &revDate,
 					Fields: []Field{
 						{
 							Name:  "API Key",
@@ -118,10 +124,11 @@ func TestLoginAndListItems(t *testing.T) {
 					},
 				},
 				{
-					ID:    "id2",
-					Name:  "my-credentials",
-					Type:  2,
-					Login: &Login{Password: "yyy"},
+					ID:           "id2",
+					Name:         "my-credentials",
+					Type:         2,
+					Login:        &Login{Password: "yyy"},
+					RevisionTime: &revDate,
 					Attachments: []Attachment{
 						{
 							ID:       "a-id1",

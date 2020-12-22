@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
@@ -58,13 +59,19 @@ type options struct {
 	validateOnly bool
 }
 
+const (
+	// When checking for unused secrets in BitWarden, only report secrets that were last modified before X days, allowing to set up
+	// BitWarden items and matching bootstrap config without tripping an alert
+	allowUnusedDays = 7
+)
+
 func parseOptions() options {
 	var o options
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	o.bwAllowUnused = flagutil.NewStrings()
 	fs.BoolVar(&o.validateOnly, "validate-only", false, "If set, the tool exists after validating its config file.")
 	fs.Var(&o.bwAllowUnused, "bw-allow-unused", "One or more bitwarden items that will be ignored when the --validate-bitwarden-items-usage is specified")
-	fs.BoolVar(&o.validateBWItemsUsage, "validate-bitwarden-items-usage", false, "If set, the tool only validates if all attachments and custom fields that exist in BitWarden are being used in the given config.")
+	fs.BoolVar(&o.validateBWItemsUsage, "validate-bitwarden-items-usage", false, fmt.Sprintf("If set, the tool only validates if all attachments and custom fields that exist in BitWarden and were last modified before %d days ago are being used in the given config.", allowUnusedDays))
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with oc command")
 	fs.StringVar(&o.kubeConfigPath, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests.")
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
@@ -465,9 +472,10 @@ func writeSecrets(secretsMap map[string][]*coreapi.Secret, w io.Writer) error {
 }
 
 type comparable struct {
-	fields      sets.String
-	attachments sets.String
-	hasPassword bool
+	fields       sets.String
+	attachments  sets.String
+	hasPassword  bool
+	revisionTime time.Time
 }
 
 func (c *comparable) string() string {
@@ -513,6 +521,10 @@ func constructBWItemsByName(items []bitwarden.Item) map[string]*comparable {
 
 		if item.Login != nil && item.Login.Password != "" {
 			comparableItem.hasPassword = true
+		}
+
+		if item.RevisionTime != nil {
+			comparableItem.revisionTime = *item.RevisionTime
 		}
 
 		bwComparableItemsByName[item.Name] = comparableItem
@@ -565,14 +577,23 @@ func constructConfigItemsByName(config secretbootstrap.Config) map[string]*compa
 	return cfgComparableItemsByName
 }
 
-func getUnusedBWItems(config secretbootstrap.Config, bwClient bitwarden.Client, bwAllowUnused sets.String) error {
+func getUnusedBWItems(config secretbootstrap.Config, bwClient bitwarden.Client, bwAllowUnused sets.String, allowUnusedAfter time.Time) error {
 	bwComparableItemsByName := constructBWItemsByName(bwClient.GetAllItems())
 	cfgComparableItemsByName := constructConfigItemsByName(config)
 
 	unused := make(map[string]*comparable)
 	for bwName, item := range bwComparableItemsByName {
 		if bwAllowUnused.Has(bwName) {
-			logrus.WithField("bw_item", bwName).Info("Ignoring item...")
+			logrus.WithField("bw_item", bwName).Info("Unused item allowed by arguments")
+			continue
+		}
+
+		if item.revisionTime.After(allowUnusedAfter) {
+			logrus.WithFields(logrus.Fields{
+				"bw_item":   bwName,
+				"threshold": allowUnusedAfter,
+				"modified":  item.revisionTime,
+			}).Info("Unused item last modified after threshold")
 			continue
 		}
 
@@ -661,7 +682,8 @@ func main() {
 	}
 
 	if o.validateBWItemsUsage {
-		err := getUnusedBWItems(o.config, bwClient, o.bwAllowUnused.StringSet())
+		unusedGracePeriod := time.Now().AddDate(0, 0, -allowUnusedDays)
+		err := getUnusedBWItems(o.config, bwClient, o.bwAllowUnused.StringSet(), unusedGracePeriod)
 		if err != nil {
 			errs = append(errs, err)
 		}

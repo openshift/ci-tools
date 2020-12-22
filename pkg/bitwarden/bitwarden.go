@@ -2,6 +2,7 @@ package bitwarden
 
 import (
 	"os"
+	"time"
 )
 
 // Field represents a field in BitWarden
@@ -28,10 +29,13 @@ type Item struct {
 	Name  string `json:"name"`
 	Type  int    `json:"type"`
 	Notes string `json:"notes,omitempty"`
-	//Login does NOT exist on some BitWarden entries, e.g, secure notes.
+	// Login does NOT exist on some BitWarden entries, e.g, secure notes.
 	Login       *Login       `json:"login,omitempty"`
 	Fields      []Field      `json:"fields"`
 	Attachments []Attachment `json:"attachments"`
+	// RevisionTime is a pointer so that omitempty works. The field is set only
+	// when we get the record from BW but not e.g. when we create or update records
+	RevisionTime *time.Time `json:"revisionDate,omitempty"`
 }
 
 // Client is used to communicate with BitWarden

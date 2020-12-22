@@ -3,6 +3,7 @@ package registrysyncer
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -37,12 +38,14 @@ func AddToManager(mgr manager.Manager,
 	pullSecretGetter func() []byte,
 	imageStreamPrefixes sets.String,
 	deniedImageStreams sets.String,
+	dontImportFromApiCI []*regexp.Regexp,
 ) error {
 	log := logrus.WithField("controller", ControllerName)
 	r := &reconciler{
-		log:              log,
-		registryClients:  map[string]ctrlruntimeclient.Client{},
-		pullSecretGetter: pullSecretGetter,
+		log:                 log,
+		registryClients:     map[string]ctrlruntimeclient.Client{},
+		pullSecretGetter:    pullSecretGetter,
+		dontImportFromApiCI: dontImportFromApiCI,
 	}
 	for clusterName, m := range managers {
 		r.registryClients[clusterName] = imagestreamtagwrapper.MustNew(m.GetClient(), m.GetCache())
@@ -87,9 +90,10 @@ func handlerFactory(filter objectFilter) handler.EventHandler {
 }
 
 type reconciler struct {
-	log              *logrus.Entry
-	registryClients  map[string]ctrlruntimeclient.Client
-	pullSecretGetter func() []byte
+	log                 *logrus.Entry
+	registryClients     map[string]ctrlruntimeclient.Client
+	pullSecretGetter    func() []byte
+	dontImportFromApiCI []*regexp.Regexp
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -130,6 +134,15 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		// the isTag does NOT exist on both clusters
 		// This case is not an error but expected to happen occasionally
 		return nil
+	}
+
+	// Do not create imports in app.ci, it is our source of truth
+	if srcClusterName == "api.ci" {
+		for _, regexp := range r.dontImportFromApiCI {
+			if regexp.MatchString(req.String()) {
+				return nil
+			}
+		}
 	}
 	sourceImageStreamTag := isTags[srcClusterName]
 

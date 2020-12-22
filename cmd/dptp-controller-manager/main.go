@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -87,11 +88,13 @@ type testImagesDistributorOptions struct {
 }
 
 type registrySyncerOptions struct {
-	imagePullSecretPath    string
-	imageStreamPrefixesRaw flagutil.Strings
-	imageStreamPrefixes    sets.String
-	deniedImageStreamsRaw  flagutil.Strings
-	deniedImageStreams     sets.String
+	imagePullSecretPath       string
+	imageStreamPrefixesRaw    flagutil.Strings
+	imageStreamPrefixes       sets.String
+	deniedImageStreamsRaw     flagutil.Strings
+	deniedImageStreams        sets.String
+	dontImportFromAPICI       flagutil.Strings
+	dontImportFromAPICIParsed []*regexp.Regexp
 }
 
 type secretSyncerConfigOptions struct {
@@ -126,6 +129,7 @@ func newOpts() (*options, error) {
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw, "testImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
 	flag.Var(&opts.registrySyncerOptions.imageStreamPrefixesRaw, "registrySyncerOptions.image-stream-prefix", "An imagestream prefix that will be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	flag.Var(&opts.registrySyncerOptions.deniedImageStreamsRaw, "registrySyncerOptions.denied-image-stream", "An imagestream that will NOT be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
+	flag.Var(&opts.registrySyncerOptions.dontImportFromAPICI, "registrySyncerOptions.dont-import-from-api-ci", "A regex for an imagestreamtag, imagestreamtags that match this will only be synced from app.ci to api.ci but not the other way round. Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.forbiddenRegistriesRaw, "testImagesDistributorOptions.forbidden-registry", "The hostname of an image registry from which there is no synchronization of its images. Can be passed multiple times.")
 	flag.StringVar(&opts.registrySyncerOptions.imagePullSecretPath, "registrySyncerOptions.imagePullSecretPath", "", "A file to use for reading an ImagePullSecret that will be bound to all `default` ServiceAccounts in all namespaces that have a test ImageStream on all build clusters")
 	flag.StringVar(&opts.secretSyncerConfigOptions.configFile, "secretSyncerConfigOptions.config", "", "The config file for the secret syncer controller")
@@ -173,6 +177,15 @@ func newOpts() (*options, error) {
 	deniedImageStreams, isErrors := completeImageStream("registrySyncerOptions.denied-image-stream", opts.registrySyncerOptions.deniedImageStreamsRaw)
 	errs = append(errs, isErrors...)
 	opts.registrySyncerOptions.deniedImageStreams = deniedImageStreams
+
+	for _, rawRegex := range opts.registrySyncerOptions.dontImportFromAPICI.StringSet().List() {
+		parsedRegex, err := regexp.Compile(rawRegex)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("--registrySyncerOptions.dont-import-from-api-ci=%s is not a valid regexp: %w", rawRegex, err))
+			continue
+		}
+		opts.registrySyncerOptions.dontImportFromAPICIParsed = append(opts.registrySyncerOptions.dontImportFromAPICIParsed, parsedRegex)
+	}
 
 	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) && opts.stepConfigPath == "" {
 		errs = append(errs, fmt.Errorf("--step-config-path is required when the %s controller is enabled", testimagesdistributor.ControllerName))
@@ -457,6 +470,7 @@ func main() {
 			secretAgent.GetTokenGenerator(opts.registrySyncerOptions.imagePullSecretPath),
 			opts.registrySyncerOptions.imageStreamPrefixes,
 			opts.registrySyncerOptions.deniedImageStreams,
+			opts.registrySyncerOptions.dontImportFromAPICIParsed,
 		); err != nil {
 			logrus.WithError(err).Fatal("failed to add registrysyncer")
 		}

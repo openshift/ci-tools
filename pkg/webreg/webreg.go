@@ -79,7 +79,7 @@ svg|a:hover text, svg|a:active text {
 pre {
 	border: 10px solid transparent;
 }
-h1, h2, p {
+h1, h2, h3 {
 	padding-top: 10px;
 }
 h1 a:link,
@@ -174,7 +174,7 @@ const referencePage = `
 <p id="image">{{ fromImageDescription .Reference.From .Reference.FromImage }}</p>
 <h3 id="source"><a href="#source">Source Code</a></h3>
 {{ syntaxedSource .Reference.Commands }}
-<h3 id="github"><a href="#github">GitHub Link:</a></h3>{{ githubLink .Metadata.Path }}
+<h3 id="github"><p><a href="#github">GitHub Link:</a></h3></p>{{ githubLink .Metadata.Path }}
 {{ ownersBlock .Metadata.Owners }}
 `
 

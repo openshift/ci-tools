@@ -8,7 +8,7 @@ spec:
     - |-
       set -e
       retry() {
-        retries=3 ; shift
+        retries=3
 
         count=0
         delay=1

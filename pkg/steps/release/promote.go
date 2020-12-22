@@ -229,10 +229,10 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *cor
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		ocCommands = append(ocCommands, fmt.Sprintf("oc image mirror --registry-config=%s %s %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), k, imageMirrorTarget[k]))
+		ocCommands = append(ocCommands, fmt.Sprintf("retry oc image mirror --registry-config=%s %s %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), k, imageMirrorTarget[k]))
 	}
 	command := []string{"/bin/sh", "-c"}
-	args := []string{strings.Join(ocCommands, " && ")}
+	args := []string{"set -e\n" + bashRetryFn + "\n" + strings.Join(ocCommands, "\n")}
 	return &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      "promotion",
@@ -266,6 +266,26 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *cor
 		},
 	}
 }
+
+const bashRetryFn = `retry() {
+  retries=3 ; shift
+
+  count=0
+  delay=1
+  until "$@"; do
+    rc=$?
+    count=$(( count + 1 ))
+    if [ $count -lt "$retries" ]; then
+      echo "Retry $count/$retries exited $rc, retrying in $delay seconds..." >/dev/stderr
+      sleep $delay
+    else
+      echo "Retry $count/$retries exited $rc, no more retries left." >/dev/stderr
+      return $rc
+    fi
+    delay=$(( delay * 3 ))
+  done
+  return 0
+}`
 
 // findDockerImageReference returns DockerImageReference, the string that can be used to pull this image,
 // to a tag if it exists in the ImageStream's Spec

@@ -5,13 +5,13 @@ import (
 	"testing"
 
 	coreapi "k8s.io/api/core/v1"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/diff"
 
 	imageapi "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestToPromote(t *testing.T) {
@@ -211,47 +211,12 @@ func TestGetPromotionPod(t *testing.T) {
 				"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb":                                                              "registy.ci.openshift.org/ci/bin:latest",
 			},
 			namespace: "ci-op-zyvwvffx",
-			expected: &coreapi.Pod{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      "promotion",
-					Namespace: "ci-op-zyvwvffx",
-				},
-				Spec: coreapi.PodSpec{
-					RestartPolicy: coreapi.RestartPolicyNever,
-					Containers: []coreapi.Container{
-						{
-							Name: "promotion",
-							// TODO use local image image-registry.openshift-image-registry.svc:5000/ocp/4.6:cli after migrating promotion jobs to OCP4 clusters
-							Image:   "registry.ci.openshift.org/ocp/4.6:cli",
-							Command: []string{"/bin/sh", "-c"},
-							Args:    []string{"oc image mirror --registry-config=/etc/push-secret/.dockerconfigjson docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62 registy.ci.openshift.org/ci/applyconfig:latest && oc image mirror --registry-config=/etc/push-secret/.dockerconfigjson docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb registy.ci.openshift.org/ci/bin:latest"},
-							VolumeMounts: []coreapi.VolumeMount{
-								{
-									Name:      "push-secret",
-									MountPath: "/etc/push-secret",
-									ReadOnly:  true,
-								},
-							},
-						},
-					},
-					Volumes: []coreapi.Volume{
-						{
-							Name: "push-secret",
-							VolumeSource: coreapi.VolumeSource{
-								Secret: &coreapi.SecretVolumeSource{SecretName: api.RegistryPushCredentialsCICentralSecret},
-							},
-						},
-					},
-				},
-			},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := getPromotionPod(testCase.imageMirror, testCase.namespace), testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect promotion pod: %v", testCase.name, diff.ObjectDiff(actual, expected))
-			}
+			testhelper.CompareWithFixture(t, getPromotionPod(testCase.imageMirror, testCase.namespace))
 		})
 	}
 }

@@ -366,9 +366,11 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 	var ret []coreapi.Pod
 	var errs []error
 	for _, step := range steps {
+		name := fmt.Sprintf("%s-%s", s.name, step.As)
 		if s.allowSkipOnSuccess != nil && *s.allowSkipOnSuccess &&
 			step.OptionalOnSuccess != nil && *step.OptionalOnSuccess &&
 			!hasPrevErrs {
+			log.Println(fmt.Sprintf("Skipping optional step %q", name))
 			continue
 		}
 		image := step.From
@@ -384,7 +386,6 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			errs = append(errs, err)
 			continue
 		}
-		name := fmt.Sprintf("%s-%s", s.name, step.As)
 		if step.BestEffort != nil && *step.BestEffort {
 			bestEffort.Insert(name)
 		}

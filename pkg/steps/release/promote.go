@@ -268,7 +268,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *cor
 }
 
 const bashRetryFn = `retry() {
-  retries=3 ; shift
+  retries=3
 
   count=0
   delay=1

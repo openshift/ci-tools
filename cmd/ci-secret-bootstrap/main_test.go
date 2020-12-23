@@ -2142,6 +2142,10 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 }
 
 func TestGetUnusedBWItems(t *testing.T) {
+	threshold := time.Now()
+	dayAfter := threshold.AddDate(0, 0, 1)
+	dayBefore := threshold.AddDate(0, 0, -1)
+
 	testCases := []struct {
 		id           string
 		config       secretbootstrap.Config
@@ -2283,11 +2287,36 @@ func TestGetUnusedBWItems(t *testing.T) {
 				},
 			},
 		},
+		{
+			id: "unused item last modified after threshold is not reported",
+			bwClient: bitwarden.NewFakeClient(
+				[]bitwarden.Item{
+					{
+						ID:           "1",
+						Name:         "item-name-1",
+						Fields:       []bitwarden.Field{{Name: "field-name-1", Value: "value-1"}},
+						RevisionTime: &dayAfter,
+					},
+				}, nil),
+		},
+		{
+			id: "unused item last modified before threshold is reported",
+			bwClient: bitwarden.NewFakeClient(
+				[]bitwarden.Item{
+					{
+						ID:           "1",
+						Name:         "item-name-1",
+						Fields:       []bitwarden.Field{{Name: "field-name-1", Value: "value-1"}},
+						RevisionTime: &dayBefore,
+					},
+				}, nil),
+			expectedErr: "Unused bw item: 'item-name-1' with Fields: 'field-name-1'",
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.id, func(t *testing.T) {
-			actualErr := getUnusedBWItems(tc.config, tc.bwClient, tc.bwAllowItems)
+			actualErr := getUnusedBWItems(tc.config, tc.bwClient, tc.bwAllowItems, threshold)
 			if actualErr == nil && tc.expectedErr != "" {
 				t.Fatalf("Expected error '%s' but got nil", tc.expectedErr)
 			}

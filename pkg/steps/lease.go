@@ -154,7 +154,7 @@ func acquireLeases(
 			errs = append(errs, results.ForReason(results.Reason("acquiring_lease:"+l.ResourceType)).WithError(err).Errorf("failed to acquire lease: %v", err))
 			break
 		}
-		log.Printf("Acquired lease(s) %v for %q", names, l.ResourceType)
+		log.Printf("Acquired lease(s) for %q: %v", l.ResourceType, names)
 		l.resources = names
 	}
 	if errs != nil {
@@ -172,7 +172,7 @@ func releaseLeases(client lease.Client, leases []stepLease) error {
 			if r == "" {
 				continue
 			}
-			log.Printf("Releasing lease %v for %q", r, l.ResourceType)
+			log.Printf("Releasing lease for %q: %v", l.ResourceType, r)
 			if err := client.Release(r); err != nil {
 				errs = append(errs, err)
 			}

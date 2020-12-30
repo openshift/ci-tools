@@ -106,7 +106,17 @@ func setupReleaseImageStream(ctx context.Context, namespace string, client ctrlr
 	}
 
 	// ensure the image stream exists
-	release := &imagev1.ImageStream{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "release"}}
+	release := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      "release",
+		},
+		Spec: imagev1.ImageStreamSpec{
+			LookupPolicy: imagev1.ImageLookupPolicy{
+				Local: true,
+			},
+		},
+	}
 	if err := client.Create(ctx, release); err != nil {
 		if !kerrors.IsAlreadyExists(err) {
 			return "", err

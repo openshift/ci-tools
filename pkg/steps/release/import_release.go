@@ -92,8 +92,11 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 		},
 	})
 	if err != nil && !kerrors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not create stable imagestreamtag: %w", err)
+		return fmt.Errorf("could not create stable imagestream: %w", err)
 	}
+
+	// tag the release image in and let it import
+	var pullSpec string
 
 	// retry importing the image a few times because we might race against establishing credentials/roles
 	// and be unable to import images on the same cluster
@@ -133,15 +136,10 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 		if image.Image == nil {
 			return false, nil
 		}
+		pullSpec = streamImport.Status.Images[0].Image.DockerImageReference
 		return true, nil
 	}); err != nil {
 		return fmt.Errorf("unable to import %s release image: %w", s.name, err)
-	}
-
-	// read the pullSpec of the CLI image we need to use
-	pullSpec, err := utils.ImageDigestFor(s.client, s.jobSpec.Namespace, "release", s.name)()
-	if err != nil {
-		return fmt.Errorf("could not resolve release image after import: %w", err)
 	}
 
 	// override anything in stable with the contents of the release image
@@ -168,7 +166,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 			Containers: []coreapi.Container{
 				{
 					Name:    "release",
-					Image:   pullSpec,
+					Image:   fmt.Sprintf("release:%s", s.name), // the cluster will resolve this relative ref for us when we create Pods with it
 					Command: []string{"/bin/sh", "-c", "cluster-version-operator image cli > /dev/termination-log"},
 				},
 			},

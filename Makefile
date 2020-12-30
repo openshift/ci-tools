@@ -160,9 +160,11 @@ TMPDIR ?= /tmp
 #   make e2e
 #   make e2e SUITE=multi-stage
 e2e:
-	PACKAGES="./test/e2e/..." TESTFLAGS="$(TESTFLAGS) -tags e2e -timeout 120m -parallel 100" hack/test-go.sh
+	PACKAGES="./test/e2e/..." TESTFLAGS="$(TESTFLAGS) -tags e2e -timeout 40m -parallel 100" hack/test-go.sh
 	hack/test-e2e.sh $(SUITE)
 .PHONY: e2e
+
+CLUSTER ?= build01
 
 # Dependencies required to execute the E2E tests outside of the CI environment.
 local-e2e: \
@@ -171,7 +173,8 @@ local-e2e: \
 	$(TMPDIR)/boskos
 	$(eval export LOCAL_REGISTRY_SECRET_DIR=$(TMPDIR)/local-secret)
 	$(eval export REMOTE_REGISTRY_SECRET_DIR=$(TMPDIR)/remote-secret)
-	$(eval export PATH=$$(shell echo -n "${PATH}:$(TMPDIR)"))
+	$(eval export "PATH=$$(shell echo -n "${PATH}:$(TMPDIR)")")
+	oc config use-context "$(CLUSTER)"
 	@$(MAKE) e2e
 .PHONY: local-e2e
 
@@ -232,11 +235,11 @@ validate-registry-metadata:
 
 $(TMPDIR)/local-secret/.dockerconfigjson:
 	mkdir -p $(TMPDIR)/local-secret
-	oc --context api.ci --as system:admin --namespace test-credentials get secret registry-pull-credentials -o 'jsonpath={.data.\.dockerconfigjson}' | base64 --decode | jq > $(TMPDIR)/local-secret/.dockerconfigjson
+	oc --context $(CLUSTER) --as system:admin --namespace test-credentials get secret registry-pull-credentials -o 'jsonpath={.data.\.dockerconfigjson}' | base64 --decode | jq > $(TMPDIR)/local-secret/.dockerconfigjson
 
 $(TMPDIR)/remote-secret/.dockerconfigjson:
 	mkdir -p $(TMPDIR)/remote-secret
-	oc --context api.ci --as system:admin --namespace test-credentials get secret ci-pull-credentials -o 'jsonpath={.data.\.dockerconfigjson}' | base64 --decode | jq > $(TMPDIR)/remote-secret/.dockerconfigjson
+	oc --context $(CLUSTER) --as system:admin --namespace test-credentials get secret ci-pull-credentials -o 'jsonpath={.data.\.dockerconfigjson}' | base64 --decode | jq > $(TMPDIR)/remote-secret/.dockerconfigjson
 
 $(TMPDIR)/boskos:
 	mkdir -p $(TMPDIR)/image

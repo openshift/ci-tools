@@ -128,6 +128,7 @@ func TestDynamicReleases(t *testing.T) {
 			cmd.AddArgs(
 				"--config=dynamic-releases.yaml",
 				framework.LocalPullSecretFlag(t),
+				framework.RemotePullSecretFlag(t),
 				"--target=[release:"+testCase.release+"]",
 			)
 			cmd.AddEnv(`JOB_SPEC={"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[]}}`)
@@ -213,6 +214,7 @@ func TestOptionalOperators(t *testing.T) {
 		cmd.AddArgs(
 			"--config=optional-operators.yaml",
 			framework.LocalPullSecretFlag(t),
+			framework.RemotePullSecretFlag(t),
 			"--target=[images]",
 			"--target=ci-index",
 		)

@@ -87,7 +87,7 @@ func LocalPullSecretFlag(t *T) string {
 	if !set {
 		t.Fatal("required environment LOCAL_REGISTRY_SECRET_DIR is not set")
 	}
-	return flag("image-import-pull-secret", filepath.Join(value, ".dockerconfigjson"))
+	return flag("secret-dir", value)
 }
 
 // RemotePullSecretFlag formats a flag to provide access to remote registries for
@@ -97,7 +97,7 @@ func RemotePullSecretFlag(t *T) string {
 	if !set {
 		t.Fatal("required environment REMOTE_REGISTRY_SECRET_DIR is not set")
 	}
-	return flag("secret-dir", value)
+	return flag("image-import-pull-secret", filepath.Join(value, ".dockerconfigjson"))
 }
 
 // KubernetesClientEnv returns a list of formatted environment variables for

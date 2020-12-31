@@ -228,9 +228,11 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *cor
 	}
 	sort.Strings(keys)
 
+	var images []string
 	for _, k := range keys {
-		ocCommands = append(ocCommands, fmt.Sprintf("retry oc image mirror --registry-config=%s %s %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), k, imageMirrorTarget[k]))
+		images = append(images, fmt.Sprintf("%s=%s", k, imageMirrorTarget[k]))
 	}
+	ocCommands = append(ocCommands, fmt.Sprintf("retry oc image mirror --registry-config=%s --continue-on-error=true --max-per-registry=20 %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(images, " ")))
 	command := []string{"/bin/sh", "-c"}
 	args := []string{"set -e\n" + bashRetryFn + "\n" + strings.Join(ocCommands, "\n")}
 	return &coreapi.Pod{

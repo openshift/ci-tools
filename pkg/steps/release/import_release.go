@@ -116,6 +116,9 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 						Kind: "DockerImage",
 						Name: s.pullSpec,
 					},
+					ReferencePolicy: imagev1.TagReferencePolicy{
+						Type: imagev1.LocalTagReferencePolicy,
+					},
 				},
 			},
 		},

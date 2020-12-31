@@ -403,7 +403,7 @@ func createOrRestartPod(podClient ctrlruntimeclient.Client, pod *coreapi.Pod) (*
 		return nil, fmt.Errorf("unable to delete completed pod: %w", err)
 	}
 	if pod.Spec.ActiveDeadlineSeconds == nil {
-		log.Printf("Executing pod %q", pod.Name)
+		log.Printf("Executing pod %q running image %q", pod.Name, pod.Spec.Containers[0].Image)
 	} else {
 		log.Printf("Executing pod %q with activeDeadlineSeconds=%d", pod.Name, *pod.Spec.ActiveDeadlineSeconds)
 	}

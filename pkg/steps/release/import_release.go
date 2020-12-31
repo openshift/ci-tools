@@ -92,8 +92,9 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 		},
 	})
 	if err != nil && !kerrors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not create stable imagestreamtag: %w", err)
+		return fmt.Errorf("could not create stable imagestream: %w", err)
 	}
+
 	// tag the release image in and let it import
 	var pullSpec string
 
@@ -165,7 +166,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 			Containers: []coreapi.Container{
 				{
 					Name:    "release",
-					Image:   pullSpec,
+					Image:   fmt.Sprintf("release:%s", s.name), // the cluster will resolve this relative ref for us when we create Pods with it
 					Command: []string{"/bin/sh", "-c", "cluster-version-operator image cli > /dev/termination-log"},
 				},
 			},

@@ -481,7 +481,9 @@ func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, w
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	w.hasArtifacts.Insert(podName)
+	if len(hasArtifacts) > 0 {
+		w.hasArtifacts.Insert(podName)
+	}
 
 	m, ok := w.remaining[podName]
 	if !ok {
@@ -545,9 +547,6 @@ func (w *ArtifactWorker) Notify(pod *coreapi.Pod, containerName string) {
 	defer w.lock.Unlock()
 
 	artifactContainers := w.remaining[pod.Name]
-	if !artifactContainers.containers.Has(containerName) {
-		return
-	}
 	requiredContainers := w.required[pod.Name]
 
 	artifactContainers.containers.Delete(containerName)

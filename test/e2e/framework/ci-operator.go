@@ -5,6 +5,8 @@ package framework
 import (
 	"bytes"
 	"context"
+	"io"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -103,9 +105,20 @@ func newCiOperatorCommand(t *T) CiOperatorCommand {
 
 func (c *CiOperatorCommand) Run() ([]byte, error) {
 	c.t.Logf("running: %v", c.cmd.Args)
-	var b bytes.Buffer
-	c.cmd.Stdout = &b
-	c.cmd.Stderr = &b
+
+	logFile, err := os.Create(filepath.Join(c.artifactDir, "ci-operator.log"))
+	if err != nil {
+		c.t.Fatalf("could not create log file: %v", err)
+	}
+	defer func() {
+		if err := logFile.Close(); err != nil {
+			c.t.Errorf("failed to close logfile: %v", err)
+		}
+	}()
+	log := bytes.Buffer{}
+	tee := io.TeeReader(&log, logFile)
+	c.cmd.Stdout = &log
+	c.cmd.Stderr = &log
 	if err := c.cmd.Start(); err != nil {
 		c.t.Fatalf("could not start ci-operator command: %v", err)
 	}
@@ -131,8 +144,11 @@ func (c *CiOperatorCommand) Run() ([]byte, error) {
 		c.cleanupDone <- struct{}{}
 	}
 	// TODO(skuznets): stream this output?
-	err := c.cmd.Wait()
-	output := b.Bytes()
+	err = c.cmd.Wait()
+	output, readErr := ioutil.ReadAll(tee)
+	if readErr != nil {
+		c.t.Logf("could not read `ci-operator` log: %v", readErr)
+	}
 	c.t.Logf("ci-operator output:\n%v", string(output))
 	return output, err
 }

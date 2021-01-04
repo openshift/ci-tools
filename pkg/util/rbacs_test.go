@@ -2,6 +2,7 @@ package util
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -9,7 +10,9 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -81,14 +84,25 @@ func TestCreateRBACs(t *testing.T) {
 
 			if tc.expectedError == "" {
 				go func() {
-					time.Sleep(10 * time.Millisecond)
-					newSA := &coreapi.ServiceAccount{}
-					_ = client.Get(context.Background(), ctrlruntimeclient.ObjectKey{
-						Namespace: "test-namespace",
-						Name:      "ci-operator",
-					}, newSA)
-					newSA.ImagePullSecrets = append(newSA.ImagePullSecrets, v1.LocalObjectReference{Name: "ci-operator-dockercfg-12345"})
-					_ = client.Update(context.Background(), newSA)
+					if err := wait.Poll(10*time.Millisecond, 100*time.Millisecond, func() (bool, error) {
+						newSA := &coreapi.ServiceAccount{}
+						if err := client.Get(context.Background(), ctrlruntimeclient.ObjectKey{
+							Namespace: "test-namespace",
+							Name:      "ci-operator",
+						}, newSA); err != nil {
+							if apierrors.IsNotFound(err) {
+								return false, nil
+							}
+							return false, fmt.Errorf("unexpected error trying to get the sa: %w", err)
+						}
+						newSA.ImagePullSecrets = append(newSA.ImagePullSecrets, v1.LocalObjectReference{Name: "ci-operator-dockercfg-12345"})
+						if err := client.Update(context.Background(), newSA); err != nil {
+							return false, fmt.Errorf("failed to update the SA: %w", err)
+						}
+						return true, nil
+					}); err != nil {
+						panic(fmt.Sprintf("failed to add image pull secret to sa: %v", err))
+					}
 				}()
 			}
 

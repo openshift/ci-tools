@@ -445,8 +445,14 @@ func TestRun(t *testing.T) {
 }
 
 func TestArtifacts(t *testing.T) {
-	timeSecond = time.Nanosecond
-	defer func() { timeSecond = time.Second }()
+	intervalLock.Lock()
+	interval = time.Nanosecond
+	intervalLock.Unlock()
+	defer func() {
+		intervalLock.Lock()
+		interval = time.Second
+		intervalLock.Unlock()
+	}()
 
 	tmp, err := ioutil.TempDir("", "")
 	if err != nil {

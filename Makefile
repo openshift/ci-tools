@@ -161,7 +161,6 @@ TMPDIR ?= /tmp
 #   make e2e SUITE=multi-stage
 e2e:
 	PACKAGES="./test/e2e/..." TESTFLAGS="$(TESTFLAGS) -tags e2e -timeout 40m -parallel 100" hack/test-go.sh
-	hack/test-e2e.sh $(SUITE)
 .PHONY: e2e
 
 CLUSTER ?= build01
@@ -173,7 +172,7 @@ local-e2e: \
 	$(TMPDIR)/boskos
 	$(eval export LOCAL_REGISTRY_SECRET_DIR=$(TMPDIR)/local-secret)
 	$(eval export REMOTE_REGISTRY_SECRET_DIR=$(TMPDIR)/remote-secret)
-	$(eval export "PATH=$$(shell echo -n "${PATH}:$(TMPDIR)")")
+	$(eval export PATH=${PATH}:$(TMPDIR))
 	oc config use-context "$(CLUSTER)"
 	@$(MAKE) e2e
 .PHONY: local-e2e

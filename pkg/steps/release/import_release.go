@@ -207,10 +207,8 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 		return fmt.Errorf("unable to tag the 'cli' image into the stable stream: %w", err)
 	}
 
-	var registryConfig string
 	var secrets []*api.Secret
 	if s.pullSecret != nil {
-		registryConfig = " --registry-config=/pull/.dockerconfigjson"
 		secrets = []*api.Secret{{
 			Name:      s.pullSecret.Name,
 			MountPath: "/pull",
@@ -219,9 +217,13 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	commands := fmt.Sprintf(`
 set -euo pipefail
 export HOME=/tmp
+mkdir -p $HOME/.docker
+if [[ -f /pull ]]; then
+	cp /pull $HOME/.docker/config.json
+fi
 oc registry login
-oc adm release extract%s --from=%q --file=image-references > /tmp/artifacts/%s
-`, registryConfig, pullSpec, target)
+oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
+`, pullSpec, target)
 
 	// run adm release extract and grab the raw image-references from the payload
 	podConfig := steps.PodStepConfiguration{

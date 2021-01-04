@@ -26,6 +26,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
+	testimagedistrutorapi "github.com/openshift/ci-tools/pkg/controller/test-images-distributor/api"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/util/imagestreamtagmapper"
@@ -318,8 +319,6 @@ func (r *reconciler) isImageStreamTagCurrent(
 	return imageStreamTag.Image.Name == reference.Image.Name, nil
 }
 
-const pullSecretName = "registry-cluster-pull-secret"
-
 func (r *reconciler) ensureImagePullSecret(ctx context.Context, namespace string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
 	secret, mutateFn := r.pullSecret(namespace)
 	return upsertObject(ctx, client, secret, mutateFn, log)
@@ -415,7 +414,7 @@ func (r *reconciler) pullSecret(namespace string) (*corev1.Secret, crcontrolleru
 	s := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
-			Name:      pullSecretName,
+			Name:      testimagedistrutorapi.PullSecretName,
 		},
 	}
 	return s, func() error {

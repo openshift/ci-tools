@@ -26,6 +26,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	testimagedistrutorapi "github.com/openshift/ci-tools/pkg/controller/test-images-distributor/api"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/util/imagestreamtagmapper"
 	"github.com/openshift/ci-tools/pkg/util/imagestreamtagwrapper"
@@ -377,8 +378,6 @@ func findNewest(isTags map[string]*imagev1.ImageStreamTag) string {
 	return result
 }
 
-const pullSecretName = "registry-cluster-pull-secret"
-
 func (r *reconciler) ensureImagePullSecret(ctx context.Context, namespace string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
 	secret, mutateFn := r.pullSecret(namespace)
 	return upsertObject(ctx, client, secret, mutateFn, log)
@@ -420,7 +419,7 @@ func (r *reconciler) pullSecret(namespace string) (*corev1.Secret, crcontrolleru
 	s := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
-			Name:      pullSecretName,
+			Name:      testimagedistrutorapi.PullSecretName,
 		},
 	}
 	return s, func() error {

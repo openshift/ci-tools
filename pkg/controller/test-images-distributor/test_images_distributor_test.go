@@ -196,7 +196,7 @@ func TestReconcile(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: referenceImageStreamTag.Namespace,
 			// Do not use the const here, we want this to fail if someone changes its value
-			Name: "registry-cluster-pull-secret",
+			Name: "registry-pull-credentials",
 		},
 		Type: corev1.SecretTypeDockerConfigJson,
 		Data: map[string][]byte{

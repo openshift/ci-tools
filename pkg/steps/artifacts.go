@@ -200,7 +200,8 @@ func (c podClient) WithNewLoggingClient() PodClient {
 }
 
 // Allow tests to accelerate time
-var timeSecond = time.Second
+var intervalLock = &sync.RWMutex{}
+var interval = time.Second
 
 func waitForContainer(podClient PodClient, ns, name, containerName string) error {
 	logrus.WithFields(logrus.Fields{
@@ -209,7 +210,10 @@ func waitForContainer(podClient PodClient, ns, name, containerName string) error
 		"container": containerName,
 	}).Trace("Waiting for container to be running.")
 
-	return wait.PollImmediate(time.Second, 300*timeSecond, func() (bool, error) {
+	intervalLock.RLock()
+	i := interval
+	intervalLock.RUnlock()
+	return wait.PollImmediate(i, 300*i, func() (bool, error) {
 		pod := &coreapi.Pod{}
 		if err := podClient.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, pod); err != nil {
 			logrus.WithError(err).Errorf("Waiting for container %s in pod %s in namespace %s", containerName, name, ns)

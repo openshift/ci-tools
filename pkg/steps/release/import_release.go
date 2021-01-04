@@ -219,6 +219,10 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	commands := fmt.Sprintf(`
 set -euo pipefail
 export HOME=/tmp
+mkdir -p $HOME/.docker
+if [[ -d /pull ]]; then
+	cp /pull/.dockerconfigjson $HOME/.docker/config.json
+fi
 oc registry login
 oc adm release extract%s --from=%q --file=image-references > /tmp/artifacts/%s
 `, registryConfig, pullSpec, target)

@@ -18,8 +18,24 @@ type T struct {
 	*testing.T
 	ctx context.Context
 
+	logLock *sync.Mutex
+
 	errors chan error
 	fatals chan error
+}
+
+// the testing.T logger is not threadsafe...
+func (t *T) Log(args ...interface{}) {
+	t.logLock.Lock()
+	t.T.Log(args...)
+	t.logLock.Unlock()
+}
+
+// the testing.T logger is not threadsafe...
+func (t *T) Logf(format string, args ...interface{}) {
+	t.logLock.Lock()
+	t.T.Logf(format, args...)
+	t.logLock.Unlock()
 }
 
 func (t *T) Errorf(format string, args ...interface{}) {
@@ -43,9 +59,13 @@ func (t *T) Wait() {
 		case <-t.ctx.Done():
 			return
 		case err := <-t.errors:
+			t.logLock.Lock()
 			t.T.Error(err)
+			t.logLock.Unlock()
 		case fatal := <-t.fatals:
+			t.logLock.Lock()
 			t.T.Fatal(fatal)
+			t.logLock.Unlock()
 		}
 	}
 }
@@ -80,10 +100,11 @@ func Run(top *testing.T, name string, f TestFunc, accessories ...*Accessory) {
 		mid.Parallel()
 		ctx, cancel := context.WithCancel(context.Background())
 		bottom := T{
-			T:      mid,
-			ctx:    ctx,
-			errors: make(chan error, 10),
-			fatals: make(chan error, 10),
+			T:       mid,
+			ctx:     ctx,
+			logLock: &sync.Mutex{},
+			errors:  make(chan error, 10),
+			fatals:  make(chan error, 10),
 		}
 		cmd := newCiOperatorCommand(&bottom)
 		testDone, cleanupDone := make(chan struct{}), make(chan struct{})

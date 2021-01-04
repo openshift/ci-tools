@@ -171,7 +171,9 @@ const referencePage = `
 <h2 id="title"><a href="#title">Step:</a> <nobr style="font-family:monospace">{{ .Reference.As }}</nobr></h2>
 <p id="documentation">{{ .Reference.Documentation }}</p>
 <h3 id="image"><a href="#image">Container image used for this step:</a> <span style="font-family:monospace">{{ fromImage .Reference.From .Reference.FromImage }}</span></h3>
-<p id="image">{{ fromImageDescription .Reference.From .Reference.FromImage }}</p>
+<p id="image">{{ fromImageDescription .Reference.From .Reference.FromImage }}<d/p>
+<h3 id="environment"><a href="#environment">Environment</a></h3>
+{{ template "stepEnvironment" .Reference }}
 <h3 id="source"><a href="#source">Source Code</a></h3>
 {{ syntaxedSource .Reference.Commands }}
 <h3 id="github"><p><a href="#github">GitHub Link:</a></h3></p>{{ githubLink .Metadata.Path }}
@@ -232,6 +234,57 @@ const templateDefinitions = `
 
 {{ define "nameWithLinkWorkflow" }}
 	<nobr><a href="/workflow/{{ . }}" style="font-family:monospace">{{ . }}</a></nobr>
+{{ end }}
+
+{{ define "stepEnvironment" }}
+{{ if and (eq (len .Dependencies) 0) (eq (len .Environment) 0) (eq (len .Leases) 0) }}
+  <p>Step exposes no environmental variables except the <a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#available-environment-variables">defaults</a>.</p>
+{{ else }}
+    <p>In addition to the <a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#available-environment-variables">default</a> environment, the step exposes the following:</p>
+    <table class="table">
+    <thead>
+    <tr>
+     <th title="Environmental variable" class="info">Variable Name</th>
+     <th title="Content type" class="info">Type</th>
+     <th title="Content value" class="info">Variable Content</th>
+    </tr>
+   </thead>
+   <tbody>
+   {{ range $idx, $dep := .Dependencies }}
+   <tr>
+     <td style="font-family:monospace">{{ $dep.Env }}</td>
+     <td>Dependency<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/ci-operator/#referring-to-images-in-tests">?</a>]</sup></td>
+     <td>Pull specification for <span style="font-family:monospace">{{ $dep.Name }}</span> image</td>
+   </tr>
+   {{ end  }}
+   {{ range $idx, $env := .Environment }}
+   <tr>
+     <td style="font-family:monospace">{{ $env.Name }}</td>
+     <td>Parameter<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#parameters">?</a>]</sup></td>
+     <td>
+       {{ $env.Documentation }}
+       {{ if gt (len $env.Default) 0 }}
+         (default: <span style="font-family:monospace">{{ $env.Default }}</span>)
+       {{ end }}
+     </td>
+   </tr>
+   {{ end }}
+   {{ range $idx, $lease := .Leases }}
+   <tr>
+     <td style="font-family:monospace">{{ $lease.Env }}</td>
+     <td>Lease<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#explicit-lease-configuration">?</a>]</sup></td>
+     <td>
+       {{ if gt $lease.Count 1 }}
+         Names of {{ $lease.Count }} acquired leases of type <span style="font-family:monospace">{{ $lease.ResourceType }}</span>, separated by space
+       {{ else }}
+         Name of the acquired lease of type <span style="font-family:monospace">{{ $lease.ResourceType }}</span>
+       {{ end }}
+     </td>
+   </tr>
+   {{ end }}
+   </tbody>
+   </table>
+{{ end }}
 {{ end }}
 
 {{ define "stepTable" }}
@@ -896,8 +949,12 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	name := path.Base(req.URL.Path)
-
-	page, err := template.New("referencePage").Funcs(
+	page, err := baseTemplate.Clone()
+	if err != nil {
+		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
+		return
+	}
+	page, err = page.Funcs(
 		template.FuncMap{
 			"syntaxedSource": func(source string) template.HTML {
 				formatted, err := syntaxBash(source)
@@ -933,10 +990,13 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 	}{
 		Reference: api.RegistryReference{
 			LiteralTestStep: api.LiteralTestStep{
-				As:        name,
-				Commands:  refs[name].Commands,
-				From:      refs[name].From,
-				FromImage: refs[name].FromImage,
+				As:           name,
+				Commands:     refs[name].Commands,
+				From:         refs[name].From,
+				FromImage:    refs[name].FromImage,
+				Dependencies: refs[name].Dependencies,
+				Environment:  refs[name].Environment,
+				Leases:       refs[name].Leases,
 			},
 			Documentation: docs[name],
 		},

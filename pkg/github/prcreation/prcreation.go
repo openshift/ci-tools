@@ -102,10 +102,11 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		return nil
 	}
 
-	username, err := o.GithubClient.BotName()
+	user, err := o.GithubClient.BotUser()
 	if err != nil {
 		return fmt.Errorf("failed to get botname: %w", err)
 	}
+	username := user.Name
 	token := o.secretAgent.GetSecret(o.TokenPath)
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: o.secretAgent}
 	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: o.secretAgent}

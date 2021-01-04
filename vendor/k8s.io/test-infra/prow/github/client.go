@@ -132,6 +132,7 @@ type PullRequestClient interface {
 	Merge(org, repo string, pr int, details MergeDetails) error
 	IsMergeable(org, repo string, number int, SHA string) (bool, error)
 	ListPRCommits(org, repo string, number int) ([]RepositoryCommit, error)
+	UpdatePullRequestBranch(org, repo string, number int, expectedHeadSha *string) error
 }
 
 // CommitClient interface for commit related API actions
@@ -187,8 +188,12 @@ type TeamClient interface {
 
 // UserClient interface for user related API actions
 type UserClient interface {
-	BotName() (string, error)
+	// BotUser will return details about the user the client runs as. Use BotUserChecker()
+	// instead when checking for comment authorship, as the Username in comments might have
+	// a [bot] suffix when using github apps authentication.
 	BotUser() (*UserData, error)
+	// BotUserChecker can be used to check if a comment was authored by the bot user.
+	BotUserChecker() (func(candidate string) bool, error)
 	Email() (string, error)
 }
 
@@ -437,8 +442,6 @@ func (t *throttler) Query(ctx context.Context, q interface{}, vars map[string]in
 
 func (t *throttler) QueryWithGitHubAppsSupport(ctx context.Context, q interface{}, vars map[string]interface{}, org string) error {
 	t.Wait()
-	t.lock.Lock()
-	defer t.lock.Unlock()
 	return t.graph.QueryWithGitHubAppsSupport(ctx, q, vars, org)
 }
 
@@ -487,6 +490,8 @@ func (c *client) SetMax404Retries(max int) {
 	c.max404Retries = max
 }
 
+type GitHubAppTokenGenerator func(org string) (string, error)
+
 // NewClientWithFields creates a new fully operational GitHub client. With
 // added logging fields.
 // 'getToken' is a generator for the GitHub access token to use.
@@ -495,17 +500,21 @@ func (c *client) SetMax404Retries(max int) {
 //   This should be used when using the ghproxy GitHub proxy cache to allow
 //   this client to bypass the cache if it is temporarily unavailable.
 func NewClientWithFields(fields logrus.Fields, getToken func() []byte, censor func([]byte) []byte, graphqlEndpoint string, bases ...string) Client {
-	return newClient(fields, getToken, censor, "", nil, graphqlEndpoint, false, bases)
+	_, client := newClient(fields, getToken, censor, "", nil, graphqlEndpoint, false, bases)
+	return client
 }
 
-func NewAppsAuthClientWithFields(fields logrus.Fields, censor func([]byte) []byte, appID string, appPrivateKey func() *rsa.PrivateKey, graphqlEndpoint string, bases ...string) Client {
+func NewAppsAuthClientWithFields(fields logrus.Fields, censor func([]byte) []byte, appID string, appPrivateKey func() *rsa.PrivateKey, graphqlEndpoint string, bases ...string) (GitHubAppTokenGenerator, Client) {
 	return newClient(fields, nil, censor, appID, appPrivateKey, graphqlEndpoint, false, bases)
 }
 
-func newClient(fields logrus.Fields, getToken func() []byte, censor func([]byte) []byte, appID string, appPrivateKey func() *rsa.PrivateKey, graphqlEndpoint string, dryRun bool, bases []string) Client {
+func newClient(fields logrus.Fields, getToken func() []byte, censor func([]byte) []byte, appID string, appPrivateKey func() *rsa.PrivateKey, graphqlEndpoint string, dryRun bool, bases []string) (GitHubAppTokenGenerator, Client) {
 	// Will be nil if github app authentication is used
 	if getToken == nil {
 		getToken = func() []byte { return nil }
+	}
+	appsTokenGenerator := func(_ string) (string, error) {
+		return "", errors.New("BUG: GitHub apps authentication is not enabled, you shouldn't see this. Please report this in https://github.com/kubernetes/test-infra")
 	}
 	httpClient := &http.Client{Timeout: maxRequestTime}
 	graphQLTransport := newAddHeaderTransport()
@@ -543,9 +552,10 @@ func newClient(fields logrus.Fields, getToken func() []byte, censor func([]byte)
 		}
 		httpClient.Transport = appsTransport
 		graphQLTransport.upstream = appsTransport
+		appsTokenGenerator = appsTransport.installationTokenFor
 	}
 
-	return c
+	return appsTokenGenerator, c
 }
 
 type graphQLGitHubAppsAuthClientWrapper struct {
@@ -593,13 +603,14 @@ func NewClient(getToken func() []byte, censor func([]byte) []byte, graphqlEndpoi
 //   This should be used when using the ghproxy GitHub proxy cache to allow
 //   this client to bypass the cache if it is temporarily unavailable.
 func NewDryRunClientWithFields(fields logrus.Fields, getToken func() []byte, censor func([]byte) []byte, graphqlEndpoint string, bases ...string) Client {
-	return newClient(fields, getToken, censor, "", nil, graphqlEndpoint, true, bases)
+	_, client := newClient(fields, getToken, censor, "", nil, graphqlEndpoint, true, bases)
+	return client
 }
 
 // NewAppsAuthDryRunClientWithFields creates a new client that will not perform mutating actions
 // such as setting statuses or commenting, but it will still query GitHub and
 // use up API tokens. Additional fields are added to the logger.
-func NewAppsAuthDryRunClientWithFields(fields logrus.Fields, censor func([]byte) []byte, appId string, appPrivateKey func() *rsa.PrivateKey, graphqlEndpoint string, bases ...string) Client {
+func NewAppsAuthDryRunClientWithFields(fields logrus.Fields, censor func([]byte) []byte, appId string, appPrivateKey func() *rsa.PrivateKey, graphqlEndpoint string, bases ...string) (GitHubAppTokenGenerator, Client) {
 	return newClient(fields, nil, censor, appId, appPrivateKey, graphqlEndpoint, true, bases)
 }
 
@@ -997,20 +1008,6 @@ func (c *client) getUserData() error {
 	return nil
 }
 
-// BotName returns the login of the authenticated identity.
-//
-// See https://developer.github.com/v3/users/#get-the-authenticated-user
-func (c *client) BotName() (string, error) {
-	c.mut.Lock()
-	defer c.mut.Unlock()
-	if c.userData == nil {
-		if err := c.getUserData(); err != nil {
-			return "", fmt.Errorf("fetching bot name from GitHub: %v", err)
-		}
-	}
-	return c.userData.Login, nil
-}
-
 // BotUser returns the user data of the authenticated identity.
 //
 // See https://developer.github.com/v3/users/#get-the-authenticated-user
@@ -1023,6 +1020,24 @@ func (c *client) BotUser() (*UserData, error) {
 		}
 	}
 	return c.userData, nil
+}
+
+func (c *client) BotUserChecker() (func(candidate string) bool, error) {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+	if c.userData == nil {
+		if err := c.getUserData(); err != nil {
+			return nil, fmt.Errorf("fetching userdata from GitHub: %v", err)
+		}
+	}
+
+	botUser := c.userData.Login
+	return func(candidate string) bool {
+		if c.usesAppsAuth {
+			candidate = strings.TrimSuffix(candidate, "[bot]")
+		}
+		return candidate == botUser
+	}, nil
 }
 
 // Email returns the user-configured email for the authenticated identity.
@@ -3681,6 +3696,42 @@ func (c *client) ListPRCommits(org, repo string, number int) ([]RepositoryCommit
 		return nil, err
 	}
 	return commits, nil
+}
+
+// UpdatePullRequestBranch updates the pull request branch with the latest upstream changes by merging HEAD from the base branch into the pull request branch.
+//
+// GitHub API docs: https://developer.github.com/v3/pulls#update-a-pull-request-branch
+func (c *client) UpdatePullRequestBranch(org, repo string, number int, expectedHeadSha *string) error {
+	durationLogger := c.log("UpdatePullRequestBranch", org, repo, *expectedHeadSha)
+	defer durationLogger()
+
+	data := struct {
+		// The expected SHA of the pull request's HEAD ref. This is the most recent commit on the pull request's branch.
+		// If the expected SHA does not match the pull request's HEAD, you will receive a 422 Unprocessable Entity status.
+		// You can use the "List commits" endpoint to find the most recent commit SHA. Default: SHA of the pull request's current HEAD ref.
+		ExpectedHeadSha *string `json:"expected_head_sha,omitempty"`
+	}{
+		ExpectedHeadSha: expectedHeadSha,
+	}
+
+	ge := githubError{}
+	code, err := c.request(&request{
+		method:      http.MethodPut,
+		path:        fmt.Sprintf("/repos/%s/%s/pulls/%d/update-branch", org, repo, number),
+		accept:      "application/vnd.github.lydian-preview+json",
+		org:         org,
+		requestBody: &data,
+		exitCodes:   []int{202, 422},
+	}, &ge)
+	if err != nil {
+		return err
+	}
+
+	if code == http.StatusUnprocessableEntity {
+		return fmt.Errorf("mismatch expected head sha: %s", *expectedHeadSha)
+	}
+
+	return nil
 }
 
 // newReloadingTokenSource creates a reloadingTokenSource.

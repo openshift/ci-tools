@@ -120,7 +120,7 @@ func (s *podStep) run(ctx context.Context) error {
 		s.subTests = testCaseNotifier.SubTests(s.Description() + " - ")
 	}()
 
-	if _, err := waitForPodCompletion(context.TODO(), s.client, pod.Namespace, pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
+	if _, err := waitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
 		return fmt.Errorf("%s %q failed: %w", s.name, pod.Name, err)
 	}
 	return nil

@@ -284,12 +284,12 @@ func migrateOpenshiftOpenshiftInstallerUPIClusterTestConfiguration(
 			continue
 		}
 
-		var testCommandEnv string
+		var testTypeEnv string
 		switch commandFields[1] {
 		case "run-tests":
-			testCommandEnv = ""
+			testTypeEnv = ""
 		case "run-upgrade":
-			testCommandEnv = "run-upgrade"
+			testTypeEnv = "upgrade"
 		default:
 			log.Warnf("command %q has unrecognized command element %q, known elements: ['run-tests', 'run-upgrade'], skipping migration of openshift_installer_upi template", test.Commands, commandFields[1])
 			continue
@@ -305,9 +305,9 @@ func migrateOpenshiftOpenshiftInstallerUPIClusterTestConfiguration(
 			},
 			Workflow: utilpointer.StringPtr(fmt.Sprintf("openshift-e2e-%s-upi", providerNameForProfile(clusterProfile))),
 		}
-		if testCommandEnv != "" {
+		if testTypeEnv != "" {
 			// https://github.com/openshift/release/blob/ea3cc4842843c941e9fa1e71ce8a4dc3ce841184/ci-operator/step-registry/openshift/e2e/test/openshift-e2e-test-ref.yaml#L7
-			test.MultiStageTestConfiguration.Environment["TEST_COMMAND"] = testCommandEnv
+			test.MultiStageTestConfiguration.Environment["TEST_TYPE"] = testTypeEnv
 		}
 		test.Commands = ""
 

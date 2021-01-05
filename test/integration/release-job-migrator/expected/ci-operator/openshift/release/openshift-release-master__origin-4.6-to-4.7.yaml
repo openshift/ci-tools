@@ -22,9 +22,8 @@ tests:
     cluster_profile: aws
     env:
       DELETE_MC: "false"
-      TEST_COMMAND: run-upgrade
       TEST_OPTIONS: abort-at=99
-      TEST_SUITE: all
+      TEST_TYPE: upgrade
     workflow: openshift-upgrade-aws
 zz_generated_metadata:
   branch: master

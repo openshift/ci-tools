@@ -130,9 +130,11 @@ type Accessory struct {
 func (a *Accessory) Run(t *T, parentCtx context.Context) {
 	a.port, a.healthPort = getFreePort(t), getFreePort(t)
 	ctx, cancel := context.WithCancel(parentCtx)
+	cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
 	t.Cleanup(func() {
 		t.Logf("cleanup: killing `%s` process", a.command)
 		cancel()
+		<-cleanupCtx.Done()
 	})
 	cmd := exec.CommandContext(ctx, a.command, append(a.args, flags(map[string]string{
 		"port":        a.port,
@@ -149,6 +151,7 @@ func (a *Accessory) Run(t *T, parentCtx context.Context) {
 	cmd.Stdout = &log
 	cmd.Stderr = &log
 	go func() {
+		defer func() { cleanupCancel() }()
 		err := cmd.Run()
 		data, readErr := ioutil.ReadAll(tee)
 		if readErr != nil {

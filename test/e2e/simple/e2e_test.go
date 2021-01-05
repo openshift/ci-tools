@@ -152,61 +152,105 @@ func TestDynamicReleases(t *testing.T) {
 }
 
 func TestLiteralDynamicRelease(t *testing.T) {
-	framework.Run(t, "literal dynamic", func(t *framework.T, cmd *framework.CiOperatorCommand) {
-		type info struct {
-			Nodes []struct {
-				Payload string `json:"payload"`
-			} `json:"nodes"`
-		}
-		req, err := http.NewRequest(http.MethodGet, "https://api.openshift.com/api/upgrades_info/v1/graph?channel=stable-4.4&arch=amd64", nil)
-		if err != nil {
-			t.Fatalf("could not create request for Cincinnati: %v", err)
-		}
-		req.Header.Add("Accept", "application/json")
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatalf("could not fetch release from Cincinnati: %v", err)
-		}
-		defer func() {
-			if err := resp.Body.Close(); err != nil {
-				t.Errorf("could not close response body: %v", err)
-			}
-		}()
-		raw, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("could not read release from Cincinnati: %v", err)
-		}
-		var i info
-		if err := json.Unmarshal(raw, &i); err != nil {
-			t.Fatalf("could not parse release from Cincinnati: %v; raw:\n%v", err, string(raw))
-		}
-		if len(i.Nodes) < 1 {
-			t.Fatalf("did not get a release from Cincinnati: raw:\n%v", string(raw))
-		}
-		cmd.AddArgs(
-			"--config=dynamic-releases.yaml",
-			framework.LocalPullSecretFlag(t),
-			framework.RemotePullSecretFlag(t),
-			"--target=[release:latest]",
-		)
-		cmd.AddEnv(`JOB_SPEC={"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[]}}`)
-		cmd.AddEnv(framework.KubernetesClientEnv(t)...)
-		cmd.AddEnv(`RELEASE_IMAGE_LATEST=` + i.Nodes[0].Payload)
-		output, err := cmd.Run()
-		if err != nil {
-			t.Fatalf("explicit var: didn't expect an error from ci-operator: %v; output:\n%v", err, string(output))
-		}
-		for _, line := range []string{`Using explicitly provided pull-spec for release latest`, `Imported release.*to tag release:latest`} {
-			matcher, err := regexp.Compile(line)
+	var testCases = []struct {
+		name    string
+		release func(t *framework.T) string
+	}{
+		{
+			name: "published release",
+			release: func(t *framework.T) string {
+				type info struct {
+					Nodes []struct {
+						Payload string `json:"payload"`
+					} `json:"nodes"`
+				}
+				req, err := http.NewRequest(http.MethodGet, "https://api.openshift.com/api/upgrades_info/v1/graph?channel=stable-4.4&arch=amd64", nil)
+				if err != nil {
+					t.Fatalf("could not create request for Cincinnati: %v", err)
+				}
+				req.Header.Add("Accept", "application/json")
+				resp, err := http.DefaultClient.Do(req)
+				if err != nil {
+					t.Fatalf("could not fetch release from Cincinnati: %v", err)
+				}
+				defer func() {
+					if err := resp.Body.Close(); err != nil {
+						t.Errorf("could not close response body: %v", err)
+					}
+				}()
+				raw, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					t.Fatalf("could not read release from Cincinnati: %v", err)
+				}
+				var i info
+				if err := json.Unmarshal(raw, &i); err != nil {
+					t.Fatalf("could not parse release from Cincinnati: %v; raw:\n%v", err, string(raw))
+				}
+				if len(i.Nodes) < 1 {
+					t.Fatalf("did not get a release from Cincinnati: raw:\n%v", string(raw))
+				}
+				return i.Nodes[0].Payload
+			},
+		},
+		{
+			name: "nightly release",
+			release: func(t *framework.T) string {
+				type info struct {
+					PullSpec string `json:"pullSpec"`
+				}
+				req, err := http.NewRequest(http.MethodGet, "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream/4.5.0-0.nightly/latest?rel=1", nil)
+				if err != nil {
+					t.Fatalf("could not create request for Cincinnati: %v", err)
+				}
+				req.Header.Add("Accept", "application/json")
+				resp, err := http.DefaultClient.Do(req)
+				if err != nil {
+					t.Fatalf("could not fetch release from Cincinnati: %v", err)
+				}
+				defer func() {
+					if err := resp.Body.Close(); err != nil {
+						t.Errorf("could not close response body: %v", err)
+					}
+				}()
+				raw, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					t.Fatalf("could not read release from Cincinnati: %v", err)
+				}
+				var i info
+				if err := json.Unmarshal(raw, &i); err != nil {
+					t.Fatalf("could not parse release from Cincinnati: %v; raw:\n%v", err, string(raw))
+				}
+				return i.PullSpec
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		framework.Run(t, testCase.name, func(t *framework.T, cmd *framework.CiOperatorCommand) {
+			cmd.AddArgs(
+				"--config=dynamic-releases.yaml",
+				framework.LocalPullSecretFlag(t),
+				framework.RemotePullSecretFlag(t),
+				"--target=[release:latest]",
+			)
+			cmd.AddEnv(`JOB_SPEC={"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[]}}`)
+			cmd.AddEnv(framework.KubernetesClientEnv(t)...)
+			cmd.AddEnv(`RELEASE_IMAGE_LATEST=` + testCase.release(t))
+			output, err := cmd.Run()
 			if err != nil {
-				t.Errorf("explicit var: could not compile regex %q: %v", line, err)
-				continue
+				t.Fatalf("explicit var: didn't expect an error from ci-operator: %v; output:\n%v", err, string(output))
 			}
-			if !matcher.Match(output) {
-				t.Errorf("explicit var: could not find line %q in output; output:\n%v", line, string(output))
+			for _, line := range []string{`Using explicitly provided pull-spec for release latest`, `Imported release.*to tag release:latest`} {
+				matcher, err := regexp.Compile(line)
+				if err != nil {
+					t.Errorf("explicit var: could not compile regex %q: %v", line, err)
+					continue
+				}
+				if !matcher.Match(output) {
+					t.Errorf("explicit var: could not find line %q in output; output:\n%v", line, string(output))
+				}
 			}
-		}
-	})
+		})
+	}
 }
 
 func TestOptionalOperators(t *testing.T) {

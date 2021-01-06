@@ -32,7 +32,8 @@ func AddToManager(clusterName string, mgr manager.Manager, enabledNamespaces set
 		removeOldSecrets: removeOldSecrets,
 	}
 	c, err := controller.New(fmt.Sprintf("%s_%s", ControllerName, clusterName), mgr, controller.Options{
-		Reconciler:              r,
+		Reconciler: r,
+		// When > 1, there will be IsConflict errors on updating the same ServiceAccount
 		MaxConcurrentReconciles: 20,
 	})
 	if err != nil {
@@ -76,8 +77,11 @@ type reconciler struct {
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	l := r.log.WithField("request", req.String())
 	res, err := r.reconcile(ctx, l, req)
-	if err != nil {
+	// Ignore the logging for IsConflict errors because they are results of concurrent reconciling
+	if err != nil && !apierrors.IsConflict(err) && !apierrors.IsAlreadyExists(err) {
 		l.WithError(err).Error("Reconciliation failed")
+	} else {
+		l.Info("Finished reconciliation")
 	}
 	if res == nil {
 		res = &reconcile.Result{}
@@ -109,8 +113,8 @@ func (r *reconciler) reconcile(ctx context.Context, l *logrus.Entry, req reconci
 		}
 		if isObjectCurrent(*creationTimestamp) {
 			imagePullSecretsToKeep = append(imagePullSecretsToKeep, pullSecretRef)
-			if newReqeueAfter := -time.Since(creationTimestamp.Time.Add(thirtyDays)); requeueAfter == 0 || newReqeueAfter < requeueAfter {
-				requeueAfter = newReqeueAfter
+			if newRequeueAfter := -time.Since(creationTimestamp.Time.Add(thirtyDays)); requeueAfter == 0 || newRequeueAfter < requeueAfter {
+				requeueAfter = newRequeueAfter
 			}
 			continue
 		}
@@ -125,8 +129,8 @@ func (r *reconciler) reconcile(ctx context.Context, l *logrus.Entry, req reconci
 		}
 		if isObjectCurrent(*creationTimestamp) {
 			tokenSecretsToKeep = append(tokenSecretsToKeep, tokenSecretRef)
-			if newReqeueAfter := -time.Since(creationTimestamp.Time.Add(thirtyDays)); requeueAfter == 0 || newReqeueAfter < requeueAfter {
-				requeueAfter = newReqeueAfter
+			if newRequeueAfter := -time.Since(creationTimestamp.Time.Add(thirtyDays)); requeueAfter == 0 || newRequeueAfter < requeueAfter {
+				requeueAfter = newRequeueAfter
 			}
 			continue
 		}

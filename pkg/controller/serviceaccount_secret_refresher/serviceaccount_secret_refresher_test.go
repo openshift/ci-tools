@@ -51,6 +51,26 @@ func TestReconcile(t *testing.T) {
 			expectedTokenSecretName:    "new-token-secret",
 		},
 		{
+			name: "secrets are rotated but not old enough to be claned",
+			objects: []runtime.Object{
+				sa.DeepCopy(),
+				secretForSA(sa, corev1.SecretTypeDockercfg, func(s *corev1.Secret) {
+					s.Name = "pull-secret"
+					s.CreationTimestamp = metav1.NewTime(time.Now().Add(-59 * 24 * time.Hour))
+				}),
+				secretForSA(sa, corev1.SecretTypeServiceAccountToken, func(s *corev1.Secret) {
+					s.Name = "token-secret"
+					s.CreationTimestamp = metav1.NewTime(time.Now().Add(-59 * 24 * time.Hour))
+				}),
+			},
+			removeOldSecrets:           true,
+			expectedNumImagePullSecret: 2,
+			expectedNumTokenSecret:     2,
+			expectedPullSecretName:     "new-pull-secret",
+			expectedTokenSecretName:    "new-token-secret",
+			expectedRequeAfterHours:    23,
+		},
+		{
 			name: "secrets are rotated only",
 			objects: []runtime.Object{
 				sa.DeepCopy(),

@@ -106,8 +106,9 @@ type secretSyncerConfigOptions struct {
 }
 
 type serviceAccountSecretRefresherOptions struct {
-	enabledNamespaces flagutil.Strings
-	removeOldSecrets  bool
+	enabledNamespaces       flagutil.Strings
+	excludedServiceAccounts flagutil.Strings
+	removeOldSecrets        bool
 }
 
 func newOpts() (*options, error) {
@@ -145,6 +146,7 @@ func newOpts() (*options, error) {
 	flag.DurationVar(&opts.blockProfileRate, "block-profile-rate", time.Duration(0), "The block profile rate. Set to non-zero to enable.")
 	flag.StringVar(&opts.registryClusterName, "registry-cluster-name", "api.ci", "the cluster name on which the CI central registry is running")
 	flag.Var(&opts.serviceAccountSecretRefresherOptions.enabledNamespaces, "serviceAccountRefresherOptions.enabled-namespace", "A namespace for which the serviceaccount_secret_refresher should be enabled. Can be passed multiple times.")
+	flag.Var(&opts.serviceAccountSecretRefresherOptions.excludedServiceAccounts, "serviceAccountRefresherOptions.excludedServiceAccounts", "Excluded serviceaccounts in namespace/name format")
 	flag.BoolVar(&opts.serviceAccountSecretRefresherOptions.removeOldSecrets, "serviceAccountRefresherOptions.remove-old-secrets", false, "whether the serviceaccountsecretrefresher should delete secrets older than 30 days")
 	flag.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	flag.Parse()
@@ -173,18 +175,18 @@ func newOpts() (*options, error) {
 	errs = append(errs, isTagErrors...)
 	opts.testImagesDistributorOptions.additionalImageStreamTags = isTags
 
-	imageStreams, isErrors := completeImageStream("testImagesDistributorOptions.additional-image-stream", opts.testImagesDistributorOptions.additionalImageStreamsRaw)
+	imageStreams, isErrors := completeNamespaceNameFlag("testImagesDistributorOptions.additional-image-stream", opts.testImagesDistributorOptions.additionalImageStreamsRaw)
 	errs = append(errs, isErrors...)
 	opts.testImagesDistributorOptions.additionalImageStreams = imageStreams
 
 	opts.testImagesDistributorOptions.additionalImageStreamNamespaces = completeSet(opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw)
 	opts.testImagesDistributorOptions.forbiddenRegistries = completeSet(opts.testImagesDistributorOptions.forbiddenRegistriesRaw)
 
-	imageStreamPrefixes, isErrors := completeImageStream("registrySyncerOptions.image-stream-prefix", opts.registrySyncerOptions.imageStreamPrefixesRaw)
+	imageStreamPrefixes, isErrors := completeNamespaceNameFlag("registrySyncerOptions.image-stream-prefix", opts.registrySyncerOptions.imageStreamPrefixesRaw)
 	errs = append(errs, isErrors...)
 	opts.registrySyncerOptions.imageStreamPrefixes = imageStreamPrefixes
 
-	deniedImageStreams, isErrors := completeImageStream("registrySyncerOptions.denied-image-stream", opts.registrySyncerOptions.deniedImageStreamsRaw)
+	deniedImageStreams, isErrors := completeNamespaceNameFlag("registrySyncerOptions.denied-image-stream", opts.registrySyncerOptions.deniedImageStreamsRaw)
 	errs = append(errs, isErrors...)
 	opts.registrySyncerOptions.deniedImageStreams = deniedImageStreams
 
@@ -213,6 +215,9 @@ func newOpts() (*options, error) {
 	if opts.enabledControllersSet.Has(serviceaccountsecretrefresher.ControllerName) {
 		if len(opts.serviceAccountSecretRefresherOptions.enabledNamespaces.Strings()) == 0 {
 			errs = append(errs, fmt.Errorf("--serviceAccountRefresherOptions.enabled-namespace must be set at least once when enabling the %s controller, otherwise it won't do anything", serviceaccountsecretrefresher.ControllerName))
+		}
+		if _, subErrs := completeNamespaceNameFlag("serviceAccountRefresherOptions.excludedServiceAccounts", opts.serviceAccountSecretRefresherOptions.excludedServiceAccounts); len(subErrs) != 0 {
+			errs = append(errs, subErrs...)
 		}
 	}
 
@@ -243,8 +248,8 @@ func completeImageStreamTags(name string, raw flagutil.Strings) (sets.String, []
 	return isTags, errs
 }
 
-func completeImageStream(name string, raw flagutil.Strings) (sets.String, []error) {
-	imageStreams := sets.String{}
+func completeNamespaceNameFlag(name string, raw flagutil.Strings) (sets.String, []error) {
+	namespaceNames := sets.String{}
 	var errs []error
 	if vals := raw.Strings(); len(vals) > 0 {
 		for _, val := range vals {
@@ -253,10 +258,10 @@ func completeImageStream(name string, raw flagutil.Strings) (sets.String, []erro
 				errs = append(errs, fmt.Errorf("--%s value %s was not in namespace/name format", name, val))
 				continue
 			}
-			imageStreams.Insert(val)
+			namespaceNames.Insert(val)
 		}
 	}
-	return imageStreams, errs
+	return namespaceNames, errs
 }
 
 func completeSet(raw flagutil.Strings) sets.String {
@@ -495,7 +500,7 @@ func main() {
 
 	if opts.enabledControllersSet.Has(serviceaccountsecretrefresher.ControllerName) {
 		for clusterName, clusterMgr := range allManagers {
-			if err := serviceaccountsecretrefresher.AddToManager(clusterName, clusterMgr, opts.serviceAccountSecretRefresherOptions.enabledNamespaces.StringSet(), opts.serviceAccountSecretRefresherOptions.removeOldSecrets); err != nil {
+			if err := serviceaccountsecretrefresher.AddToManager(clusterName, clusterMgr, opts.serviceAccountSecretRefresherOptions.enabledNamespaces.StringSet(), opts.serviceAccountSecretRefresherOptions.excludedServiceAccounts.StringSet(), opts.serviceAccountSecretRefresherOptions.removeOldSecrets); err != nil {
 				logrus.WithError(err).Fatalf("Failed to add the %s controller to the %s cluster", serviceaccountsecretrefresher.ControllerName, clusterName)
 			}
 		}

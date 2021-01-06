@@ -83,7 +83,7 @@ func TestCompleteImageStream(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, actualErrors := completeImageStream(tc.flagName, tc.raw)
+			actual, actualErrors := completeNamespaceNameFlag(tc.flagName, tc.raw)
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("actual does not match expected, diff: %s", diff)
 			}

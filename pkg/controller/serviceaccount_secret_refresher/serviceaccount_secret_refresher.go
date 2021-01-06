@@ -23,10 +23,12 @@ import (
 
 const ControllerName = "serviceaccount_secret_refresher"
 
-func AddToManager(clusterName string, mgr manager.Manager, enabledNamespaces sets.String, removeOldSecrets bool) error {
+func AddToManager(clusterName string, mgr manager.Manager, enabledNamespaces sets.String, excludedServiceAccounts sets.String, removeOldSecrets bool) error {
 	r := &reconciler{
-		client:           mgr.GetClient(),
-		filter:           func(r reconcile.Request) bool { return enabledNamespaces.Has(r.Namespace) },
+		client: mgr.GetClient(),
+		filter: func(r reconcile.Request) bool {
+			return enabledNamespaces.Has(r.Namespace) && !excludedServiceAccounts.Has(r.String())
+		},
 		log:              logrus.WithField("controller", ControllerName).WithField("cluster", clusterName),
 		second:           time.Second,
 		removeOldSecrets: removeOldSecrets,

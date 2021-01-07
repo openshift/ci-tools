@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/hashicorp/go-version"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -22,21 +24,30 @@ import (
 )
 
 type command string
+type dryRunMethod string
 
 type options struct {
-	confirm     bool
 	user        *nullableStringFlag
 	directories flagutil.Strings
 	context     string
 	kubeConfig  string
+	dryRun      dryRunMethod
 }
 
 const (
 	ocApply   command = "apply"
 	ocProcess command = "process"
+	ocVersion command = "version"
+
+	dryNone   dryRunMethod = ""
+	dryAuto   dryRunMethod = "auto"
+	dryServer dryRunMethod = "server"
+	dryClient dryRunMethod = "client"
 )
 
 const defaultAdminUser = "system:admin"
+
+var validDryRunMethods = []string{string(dryAuto), string(dryClient), string(dryServer)}
 
 type nullableStringFlag struct {
 	val     string
@@ -54,12 +65,20 @@ func (n *nullableStringFlag) Set(val string) error {
 }
 
 func gatherOptions() *options {
-	opt := &options{user: &nullableStringFlag{}}
-	flag.BoolVar(&opt.confirm, "confirm", false, "Set to true to make applyconfig commit the config to the cluster")
+	// nonempy dryRun is a safe default (empty means not a dry run)
+	// TODO(muller): client dry run is default until we pass server one.
+	opt := &options{user: &nullableStringFlag{}, dryRun: dryClient}
+
+	var confirm bool
+	flag.BoolVar(&confirm, "confirm", false, "Set to true to make applyconfig commit the config to the cluster")
 	flag.Var(opt.user, "as", "Username to impersonate while applying the config")
 	flag.Var(&opt.directories, "config-dir", "Directory with config to apply. Can be repeated multiple times.")
 	flag.StringVar(&opt.context, "context", "", "Context name to use while applying the config")
 	flag.StringVar(&opt.kubeConfig, "kubeconfig", "", "Path to the kubeconfig file to apply the config")
+
+	var dryMethod string
+	dryRunMethods := strings.Join(validDryRunMethods, ",")
+	flag.StringVar(&dryMethod, "dry-run-method", string(opt.dryRun), fmt.Sprintf("Method to use when running when --confirm is not set to true (valid values: %s)", dryRunMethods))
 	flag.Parse()
 
 	if len(opt.directories.Strings()) < 1 || opt.directories.Strings()[0] == "" {
@@ -67,10 +86,25 @@ func gatherOptions() *options {
 		os.Exit(1)
 	}
 
+	switch dryRunMethod(dryMethod) {
+	case dryAuto, dryServer, dryClient:
+		if confirm {
+			opt.dryRun = dryNone
+		} else {
+			opt.dryRun = dryRunMethod(dryMethod)
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "--dry-run-method must be one of: %s", dryRunMethods)
+		os.Exit(1)
+	}
+
 	return opt
 }
 func makeOcCommand(cmd command, kubeConfig, context, path, user string, additionalArgs ...string) *exec.Cmd {
-	args := []string{string(cmd), "-f", path}
+	args := []string{string(cmd)}
+	if path != "" {
+		args = append(args, "-f", path)
+	}
 	args = append(args, additionalArgs...)
 
 	if user != "" {
@@ -119,13 +153,23 @@ type configApplier struct {
 	context    string
 	path       string
 	user       string
-	dry        bool
+	dry        dryRunMethod
 }
 
-func makeOcApply(kubeConfig, context, path, user string, dry bool) *exec.Cmd {
+func makeOcApply(kubeConfig, context, path, user string, dry dryRunMethod) *exec.Cmd {
 	cmd := makeOcCommand(ocApply, kubeConfig, context, path, user)
-	if dry {
-		cmd.Args = append(cmd.Args, "--dry-run")
+	switch dry {
+	case dryAuto:
+		logrus.Warn("BUG: Automated dryrun detection should be performed earlier; Using server-side validation")
+		fallthrough
+	case dryServer:
+		cmd.Args = append(cmd.Args, "--dry-run=server", "--validate=true")
+	case dryClient:
+		cmd.Args = append(cmd.Args, "--dry-run=client")
+	default:
+		panic(fmt.Sprintf("BUG: Unknown dry run method '%s' received, this should never happen", string(dry)))
+	case dryNone:
+		// No additional args needed
 	}
 	return cmd
 }
@@ -186,7 +230,7 @@ func isTemplate(input io.Reader) ([]templateapi.Parameter, bool) {
 	return nil, false
 }
 
-func apply(kubeConfig, context, path, user string, dry bool) error {
+func apply(kubeConfig, context, path, user string, dry dryRunMethod) error {
 	do := configApplier{kubeConfig: kubeConfig, context: context, path: path, user: user, dry: dry, executor: &commandExecutor{}}
 
 	file, err := os.Open(path)
@@ -233,7 +277,7 @@ func applyConfig(rootDir string, o *options) error {
 			return err
 		}
 
-		if err := apply(o.kubeConfig, o.context, path, o.user.val, !o.confirm); err != nil {
+		if err := apply(o.kubeConfig, o.context, path, o.user.val, o.dryRun); err != nil {
 			failures = true
 		}
 
@@ -298,14 +342,76 @@ func init() {
 	logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, secrets.getSecrets))
 }
 
+type ocVersionOutput struct {
+	Openshift string `json:"openshiftVersion"`
+}
+
+func selectDryRun(v ocVersionOutput) dryRunMethod {
+	minOpenshift := version.Must(version.NewVersion("4.5.0"))
+
+	// `oc` against `api.ci` does not contain the openshift version field, so if it's missing, we need to assume
+	// we're running against something old
+	if v.Openshift == "" {
+		logrus.Warning("oc version did not provide openshift version: guessing too old, will continue with client dry-run")
+		return dryClient
+	}
+
+	// Generally we want to prefer the stronger (server) validation unless
+	// we *know* we need to use the weak, client one -> so use server on errors
+	openshift, err := version.NewVersion(v.Openshift)
+	if err != nil {
+		logrus.WithError(err).Warning("Cannot parse openshift version; will continue with server dry-run")
+		return dryServer
+	}
+
+	if openshift.GreaterThanOrEqual(minOpenshift) {
+		return dryServer
+	}
+
+	return dryClient
+}
+
+func detectDryRunMethod(kubeconfig, context, username string) dryRunMethod {
+	logrus.Info("Detecting dry run capabilities")
+
+	// We always prefer stronger (server) validation unless we *know* we need
+	// to use the weak, client one -> so use server on errors
+	method := dryServer
+
+	executor := commandExecutor{}
+	cmd := makeOcCommand(ocVersion, kubeconfig, context, "", username, "--output=json")
+	out, err := executor.runAndCheck(cmd, "detect server version")
+	if err != nil {
+		logrus.WithError(err).Warning("Failed to detect dry run method from client and server versions; will continue with server dry-run")
+		return method
+	}
+
+	var v ocVersionOutput
+	if err := json.Unmarshal(out, &v); err != nil {
+		return method
+	}
+
+	method = selectDryRun(v)
+	logrus.WithFields(logrus.Fields{
+		"openshift-version": v.Openshift,
+		"method":            method,
+	}).Info("Selected dry run method")
+
+	return method
+}
+
 func main() {
 	o := gatherOptions()
-	var hadErr bool
 
 	if !o.user.beenSet {
 		o.user.val = defaultAdminUser
 	}
 
+	if o.dryRun == dryAuto {
+		o.dryRun = detectDryRunMethod(o.kubeConfig, o.context, o.user.val)
+	}
+
+	var hadErr bool
 	for _, dir := range o.directories.Strings() {
 		if err := applyConfig(dir, o); err != nil {
 			hadErr = true

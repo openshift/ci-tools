@@ -95,7 +95,7 @@ func TestMakeOcApply(t *testing.T) {
 		context    string
 		path       string
 		user       string
-		dry        bool
+		dry        dryRunMethod
 
 		expected []string
 	}{
@@ -105,17 +105,29 @@ func TestMakeOcApply(t *testing.T) {
 			expected: []string{"oc", "apply", "-f", "/path/to/file"},
 		},
 		{
-			name:     "no user, dry",
+			name:     "no user, client dry",
 			path:     "/path/to/different/file",
-			dry:      true,
-			expected: []string{"oc", "apply", "-f", "/path/to/different/file", "--dry-run"},
+			dry:      dryClient,
+			expected: []string{"oc", "apply", "-f", "/path/to/different/file", "--dry-run=client"},
 		},
 		{
-			name:     "user, dry",
+			name:     "no user, server dry",
+			path:     "/path/to/different/file",
+			dry:      dryServer,
+			expected: []string{"oc", "apply", "-f", "/path/to/different/file", "--dry-run=server", "--validate=true"},
+		},
+		{
+			name:     "no user, auto dry means server dry",
+			path:     "/path/to/different/file",
+			dry:      dryServer,
+			expected: []string{"oc", "apply", "-f", "/path/to/different/file", "--dry-run=server", "--validate=true"},
+		},
+		{
+			name:     "user, client dry",
 			path:     "/path/to/file",
-			dry:      true,
+			dry:      dryClient,
 			user:     "joe",
-			expected: []string{"oc", "apply", "-f", "/path/to/file", "--as", "joe", "--dry-run"},
+			expected: []string{"oc", "apply", "-f", "/path/to/file", "--as", "joe", "--dry-run=client"},
 		},
 		{
 			name:     "user, not dry",
@@ -193,15 +205,15 @@ func TestAsGenericManifest(t *testing.T) {
 		},
 		{
 			description:   "success: oc apply -f path --dry-run",
-			applier:       &configApplier{path: "path", dry: true},
+			applier:       &configApplier{path: "path", dry: dryClient},
 			executions:    []error{nil}, // expect a single successful call
-			expectedCalls: [][]string{{"oc", "apply", "-f", "path", "--dry-run"}},
+			expectedCalls: [][]string{{"oc", "apply", "-f", "path", "--dry-run=client"}},
 		},
 		{
 			description:   "success: oc apply -f path --dry-run --as user",
-			applier:       &configApplier{path: "path", user: "user", dry: true},
+			applier:       &configApplier{path: "path", user: "user", dry: dryClient},
 			executions:    []error{nil}, // expect a single successful call
-			expectedCalls: [][]string{{"oc", "apply", "-f", "path", "--as", "user", "--dry-run"}},
+			expectedCalls: [][]string{{"oc", "apply", "-f", "path", "--as", "user", "--dry-run=client"}},
 		},
 		{
 			description:   "failure: oc apply -f path",
@@ -425,7 +437,7 @@ spec:
 type fakeExecutor struct {
 }
 
-func (f *fakeExecutor) runAndCheck(cmd *exec.Cmd, _ string) ([]byte, error) {
+func (f *fakeExecutor) runAndCheck(_ *exec.Cmd, _ string) ([]byte, error) {
 	return nil, nil
 }
 
@@ -497,7 +509,7 @@ func TestCensoringFormatter(t *testing.T) {
 	secrets = &secretGetter{secrets: sets.NewString()}
 	formatter := logrusutil.NewCensoringFormatter(baseFormatter, secrets.getSecrets)
 	logrus.SetFormatter(formatter)
-	applier := &configApplier{path: "path", user: "user", dry: true, executor: &fakeExecutor{}}
+	applier := &configApplier{path: "path", user: "user", dry: dryClient, executor: &fakeExecutor{}}
 	err := applier.asTemplate([]templateapi.Parameter{
 		{
 			Name:  "test_env_var_0",
@@ -581,5 +593,35 @@ func TestFileFilter(t *testing.T) {
 		if skip != tc.expectSkip {
 			t.Errorf("expect skip: %t, got skip: %t", tc.expectSkip, skip)
 		}
+	}
+}
+
+func TestSelectDryRun(t *testing.T) {
+	testCases := []struct {
+		description      string
+		openshiftVersion string
+		expected         dryRunMethod
+	}{
+		{
+			description: "no openshift version -> client",
+			expected:    dryClient,
+		},
+		{
+			description:      "openshift under 4.5 -> client",
+			openshiftVersion: "4.4.9",
+			expected:         dryClient,
+		},
+		{
+			description:      "openshift at least 4.5 -> server",
+			openshiftVersion: "4.5.0",
+			expected:         dryServer,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			if method := selectDryRun(ocVersionOutput{Openshift: tc.openshiftVersion}); method != tc.expected {
+				t.Errorf("Expected dry run method %s, got %s", tc.expected, method)
+			}
+		})
 	}
 }

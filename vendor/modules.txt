@@ -278,6 +278,9 @@ github.com/hashicorp/go-multierror
 # github.com/hashicorp/go-retryablehttp v0.6.6
 ## explicit
 github.com/hashicorp/go-retryablehttp
+# github.com/hashicorp/go-version v1.2.1
+## explicit
+github.com/hashicorp/go-version
 # github.com/hashicorp/golang-lru v0.5.4
 github.com/hashicorp/golang-lru
 github.com/hashicorp/golang-lru/simplelru

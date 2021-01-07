@@ -294,8 +294,8 @@ func TestMigrateOpenshiftOpenshiftInstallerUPIClusterTestConfiguration(t *testin
 					MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
 						ClusterProfile: "aws",
 						Environment: api.TestEnvironment{
-							"TEST_SUITE":   "openshift/conformance/parallel",
-							"TEST_COMMAND": "run-upgrade",
+							"TEST_SUITE": "openshift/conformance/parallel",
+							"TEST_TYPE":  "upgrade",
 						},
 						Workflow: utilpointer.StringPtr("openshift-e2e-aws-upi"),
 					},

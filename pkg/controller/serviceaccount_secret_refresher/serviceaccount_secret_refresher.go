@@ -168,7 +168,13 @@ func (r *reconciler) reconcile(ctx context.Context, l *logrus.Entry, req reconci
 	}
 
 	for _, secret := range allSecrets.Items {
-		if secret.Annotations[corev1.ServiceAccountUIDKey] != string(sa.UID) || isObjectCurrent(secret.CreationTimestamp) {
+		if secret.Annotations[corev1.ServiceAccountUIDKey] != string(sa.UID) {
+			continue
+		}
+		if secret.CreationTimestamp.After(time.Now().Add(-2 * thirtyDays)) {
+			if newRequeueAfter := -time.Since(secret.CreationTimestamp.Time.Add(2 * thirtyDays)); requeueAfter == 0 || newRequeueAfter < requeueAfter {
+				requeueAfter = newRequeueAfter
+			}
 			continue
 		}
 

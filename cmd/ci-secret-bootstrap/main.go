@@ -33,6 +33,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/bitwarden"
+	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
@@ -304,6 +305,10 @@ func constructDockerConfigJSON(bwClient bitwarden.Client, dockerConfigJSONData [
 	b, err := json.Marshal(&secretbootstrap.DockerConfigJSON{Auths: auths})
 	if err != nil {
 		return nil, fmt.Errorf("couldn't marshal to json %w", err)
+	}
+
+	if err := json.Unmarshal(b, &credentialprovider.DockerConfigJSON{}); err != nil {
+		return nil, fmt.Errorf("the constructed dockerconfigJSON doesn't parse: %w", err)
 	}
 
 	return b, nil

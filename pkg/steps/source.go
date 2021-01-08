@@ -286,7 +286,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 						From:                    from,
 						ForcePull:               true,
 						NoCache:                 true,
-						Env:                     []corev1.EnvVar{{Name: "foo", Value: "bar"}}, // workaround https://bugzilla.redhat.com/show_bug.cgi?id=1784163#c8
+						Env:                     []corev1.EnvVar{{Name: "BUILD_LOGLEVEL", Value: "0"}}, // this mirrors the default and is done for documentary purposes
 						ImageOptimizationPolicy: &layer,
 					},
 				},

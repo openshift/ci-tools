@@ -70,6 +70,12 @@ func (t *T) Wait() {
 	}
 }
 
+// we want to ensure that everything runs in parallel and that users of this framework
+// do not need to explicitly remember to call the top-level testing.T method, so we do
+// it for them and keep track of which we've already done so we do not cause a double-
+// call panic
+var seen = sync.Map{}
+
 type TestFunc func(t *T, cmd *CiOperatorCommand)
 
 // Run mimics the testing.T.Run function while providing a nice set of concurrency
@@ -96,6 +102,9 @@ type TestFunc func(t *T, cmd *CiOperatorCommand)
 // to be able to influence the execution flow (e.g. preempt other routines) we must
 // have the central routine watch for incoming errors from delegate routines.
 func Run(top *testing.T, name string, f TestFunc, accessories ...*Accessory) {
+	if _, previouslyCalled := seen.LoadOrStore(fmt.Sprintf("%p", top), nil); !previouslyCalled {
+		top.Parallel()
+	}
 	top.Run(name, func(mid *testing.T) {
 		mid.Parallel()
 		ctx, cancel := context.WithCancel(context.Background())

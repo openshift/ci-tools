@@ -58,6 +58,7 @@ type options struct {
 	ciopConfigDir string
 	rcConfigDir   string
 	jobDir        string
+	testgrid      string
 }
 
 func gatherOptions() (options, error) {
@@ -67,6 +68,7 @@ func gatherOptions() (options, error) {
 	fs.StringVar(&o.ciopConfigDir, "ci-op-configs", "", "Path to ci-operator config files")
 	fs.StringVar(&o.rcConfigDir, "rc-configs", "", "Path to release-controller release config files")
 	fs.StringVar(&o.jobDir, "jobs", "", "Path to ci-operator jobs")
+	fs.StringVar(&o.testgrid, "testgrid-allowlist", "", "Path to testgrid allowlist")
 	return o, fs.Parse(os.Args[1:])
 }
 
@@ -82,6 +84,9 @@ func validateOptions(o options) error {
 	}
 	if len(o.jobDir) == 0 {
 		return errors.New("--jobs must be set")
+	}
+	if len(o.testgrid) == 0 {
+		return errors.New("--testgrid-allowlist must be set")
 	}
 	return nil
 }
@@ -559,6 +564,18 @@ func run(o options) error {
 	if len(replacedJobs) == 0 && len(configlessTests) == 0 {
 		fmt.Println("No non-generated release-controller jobs detected.")
 		return nil
+	}
+	raw, err := ioutil.ReadFile(o.testgrid)
+	if err != nil {
+		return fmt.Errorf("failed to read file %s: %w", o.testgrid, err)
+	}
+	for oldName, newName := range replacedJobs {
+		oldJob := fmt.Sprintf("%s:", oldName)
+		newJob := fmt.Sprintf("%s:", newName)
+		raw = bytes.ReplaceAll(raw, []byte(oldJob), []byte(newJob))
+	}
+	if err := ioutil.WriteFile(o.testgrid, raw, 0644); err != nil {
+		return fmt.Errorf("failed to write updated testgrid allowlist file %s: %w", o.testgrid, err)
 	}
 
 	if len(replacedJobs) > 0 {

@@ -36,6 +36,7 @@ require (
 	github.com/google/go-cmp v0.5.2
 	github.com/google/gofuzz v1.1.0
 	github.com/hashicorp/go-retryablehttp v0.6.6
+	github.com/hashicorp/go-version v1.2.1
 	github.com/kataras/tablewriter v0.0.0-20180708051242-e063d29b7c23
 	github.com/mattn/go-zglob v0.0.2
 	github.com/montanaflynn/stats v0.6.3

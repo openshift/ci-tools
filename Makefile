@@ -160,7 +160,7 @@ TMPDIR ?= /tmp
 #   make e2e
 #   make e2e SUITE=multi-stage
 e2e:
-	PACKAGES="./test/e2e/..." TESTFLAGS="$(TESTFLAGS) -tags e2e -timeout 40m -parallel 100" hack/test-go.sh
+	PACKAGES="./test/e2e/..." TESTFLAGS="$(TESTFLAGS) -tags e2e -timeout 70m -parallel 100" hack/test-go.sh
 .PHONY: e2e
 
 CLUSTER ?= build01

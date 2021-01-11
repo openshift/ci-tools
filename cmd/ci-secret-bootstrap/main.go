@@ -118,7 +118,7 @@ func (o *options) completeOptions(secrets *sets.String) error {
 	o.bwPassword = strings.TrimSpace(string(bytes))
 	secrets.Insert(o.bwPassword)
 
-	kubeConfigs, _, err := util.LoadKubeConfigs(o.kubeConfigPath)
+	kubeConfigs, _, err := util.LoadKubeConfigs(o.kubeConfigPath, nil)
 	if err != nil {
 		// We will bail out later on if we don't have the have the right kubeconfigs
 		logrus.WithError(err).Warn("Encountered errors while loading kubeconfigs")

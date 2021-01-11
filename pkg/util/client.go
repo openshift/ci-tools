@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"gopkg.in/fsnotify.v1"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/rest"
@@ -30,7 +31,9 @@ func LoadClusterConfig() (*rest.Config, error) {
 	return rest.InClusterConfig()
 }
 
-func LoadKubeConfigs(kubeconfig string) (map[string]*rest.Config, string, error) {
+// LoadKubeConfigs loads kubeconfigs. If the kubeconfigChangedCallBack is non-nil, it will watch all kubeconfigs it loaded
+// and call the callback once they change.
+func LoadKubeConfigs(kubeconfig string, kubeconfigChangedCallBack func(fsnotify.Event)) (map[string]*rest.Config, string, error) {
 	loader := clientcmd.NewDefaultClientConfigLoadingRules()
 	loader.ExplicitPath = kubeconfig
 	cfg, err := loader.Load()
@@ -52,5 +55,41 @@ func LoadKubeConfigs(kubeconfig string) (map[string]*rest.Config, string, error)
 	if kubeconfigsFromEnv := strings.Split(os.Getenv("KUBECONFIG"), ":"); len(kubeconfigsFromEnv) > 0 && len(kubeconfigsFromEnv) > len(configs) {
 		errs = append(errs, fmt.Errorf("KUBECONFIG env var with value %s had %d elements but only got %d kubeconfigs", os.Getenv("KUBECONFIG"), len(kubeconfigsFromEnv), len(configs)))
 	}
+
+	if kubeconfigChangedCallBack != nil {
+		if err := WatchFiles(append(loader.Precedence, kubeconfig), kubeconfigChangedCallBack); err != nil {
+			errs = append(errs, fmt.Errorf("failed to watch kubeconfigs: %w", err))
+		}
+	}
 	return configs, cfg.CurrentContext, utilerrors.NewAggregate(errs)
+}
+
+// WatchFiles watches the passed files if they exist and calls callback for all events
+// except Chmod, as Openshift seems to generate frequent Chmod events
+func WatchFiles(candidates []string, callback func(fsnotify.Event)) error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("failed to construct watcher: %w", err)
+	}
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err != nil {
+			continue
+		}
+		if err := watcher.Add(candidate); err != nil {
+			return fmt.Errorf("failed to watch %s: %w", candidate, err)
+		}
+	}
+
+	go func() {
+		for event := range watcher.Events {
+			if event.Op == fsnotify.Chmod {
+				// For some reason we get frequent chmod events
+				continue
+			}
+			logrus.WithField("event", event.String()).Info("File changed, calling callback")
+			callback(event)
+		}
+	}()
+
+	return nil
 }

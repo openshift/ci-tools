@@ -164,7 +164,7 @@ func rehearseMain() error {
 	if !o.dryRun {
 		// Only the env var allows to supply multiple kubeconfigs
 		if _, exists := os.LookupEnv("KUBECONFIG"); exists {
-			buildClusterConfigs, _, err = util.LoadKubeConfigs("")
+			buildClusterConfigs, _, err = util.LoadKubeConfigs("", nil)
 			if err != nil {
 				logger.WithError(err).Error("failed to read kubeconfigs")
 				return errors.New(misconfigurationOutput)

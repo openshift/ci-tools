@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"gopkg.in/fsnotify.v1"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -281,7 +283,15 @@ func main() {
 		runtime.SetBlockProfileRate(val)
 	}
 
-	kubeconfigs, _, err := util.LoadKubeConfigs(opts.kubeconfig)
+	ctx := controllerruntime.SetupSignalHandler()
+	ctx, cancel := context.WithCancel(ctx)
+
+	kubeconfigChangedCallBack := func(e fsnotify.Event) {
+		logrus.WithField("event", e.String()).Info("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
+		cancel()
+	}
+
+	kubeconfigs, _, err := util.LoadKubeConfigs(opts.kubeconfig, kubeconfigChangedCallBack)
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to load kubeconfigs")
 	}
@@ -291,6 +301,9 @@ func main() {
 			logrus.WithError(err).Fatalf("--kubeconfig had no context for '%s' and loading InClusterConfig failed", appCIContextName)
 		}
 		logrus.Infof("Loaded %q context from in-cluster config", appCIContextName)
+		if err := util.WatchFiles([]string{"/var/run/secrets/kubernetes.io/serviceaccount/token"}, kubeconfigChangedCallBack); err != nil {
+			logrus.WithError(err).Fatal("faild to watch in-cluster token")
+		}
 	}
 
 	if _, hasRegistryCluster := kubeconfigs[opts.registryClusterName]; !hasRegistryCluster {
@@ -501,8 +514,7 @@ func main() {
 		}
 	}
 
-	stopCh := controllerruntime.SetupSignalHandler()
-	if err := mgr.Start(stopCh); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		logrus.WithError(err).Fatal("Manager ended with error")
 	}
 

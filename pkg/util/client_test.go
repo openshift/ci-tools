@@ -101,7 +101,7 @@ func TestLoadKubeConfigs(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			os.Setenv("KUBECONFIG", tc.kubeconfigEnvVar)
-			configs, context, err := LoadKubeConfigs(tc.kubeconfig)
+			configs, context, err := LoadKubeConfigs(tc.kubeconfig, nil)
 			if err == nil && tc.expectedError != nil || err != nil && tc.expectedError == nil {
 				t.Errorf("actual error differs from expected:\n%s", cmp.Diff(err, tc.expectedError))
 			} else if err != nil && tc.expectedError != nil && !reflect.DeepEqual(err.Error(), tc.expectedError.Error()) {

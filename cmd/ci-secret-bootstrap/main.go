@@ -363,12 +363,12 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, bwClie
 							value, err = bwClient.GetPassword(bwContext.BWItem)
 						default:
 							// should never happen since we have validated the config
-							errChan <- fmt.Errorf("invalid attribute: only the '%s' is supported, not %s", secretbootstrap.AttributeTypePassword, bwContext.Attribute)
+							errChan <- fmt.Errorf("[%s] invalid attribute: only the '%s' is supported, not %s", key, secretbootstrap.AttributeTypePassword, bwContext.Attribute)
 							return
 						}
 					}
 					if err != nil {
-						errChan <- err
+						errChan <- fmt.Errorf("[%s] %w", key, err)
 						return
 					}
 					dataLock.Lock()

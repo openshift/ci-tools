@@ -416,7 +416,7 @@ func upsertPR(gc pgithub.Client, dir, githubUsername string, token []byte, selfA
 	}
 
 	prBody := `This PR:
-* Adds a replacement of all FROM registry.svc.ci.openshift.org/anything directives found in any Dockerfile
+* Adds a replacement of all FROM registry.ci.openshift.org/anything directives found in any Dockerfile
   to make sure all images are pulled from the build cluster registry`
 
 	if pruneUnusedReplacements {
@@ -622,7 +622,7 @@ func updateDockerfilesToMatchOCPBuildData(
 		if !ok {
 			continue
 		}
-		stringifiedPromotionTarget := fmt.Sprintf("registry.svc.ci.openshift.org/%s/%s:%s", promotionTarget.Namespace, promotionTarget.Name, image.To)
+		stringifiedPromotionTarget := fmt.Sprintf("registry.ci.openshift.org/%s/%s:%s", promotionTarget.Namespace, promotionTarget.Name, image.To)
 		dockerfilePath, ok := promotionTargetToDockerfileMapping[stringifiedPromotionTarget]
 		if !ok {
 			logrus.WithField("promotiontarget", stringifiedPromotionTarget).Info("Ignoring promotion target for which we have no ocp-build-data config")

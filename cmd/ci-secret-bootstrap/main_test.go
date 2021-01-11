@@ -1285,7 +1285,7 @@ func TestConstructSecrets(t *testing.T) {
 					"a-id-3-2": "attachment-name-3-2-value",
 				},
 			),
-			expectedError: fmt.Errorf("[failed to find field Pull Credentials in item quay.io, failed to find field field-name-1 in item item-name-1]"),
+			expectedError: fmt.Errorf("[[.dockerconfigjson] failed to find field Pull Credentials in item quay.io, [key-name-1] failed to find field field-name-1 in item item-name-1]"),
 		},
 		{
 			name:   "error: no such an attachment",
@@ -1363,7 +1363,7 @@ func TestConstructSecrets(t *testing.T) {
 					"a-id-3-2": "attachment-name-3-2-value",
 				},
 			),
-			expectedError: fmt.Errorf("[failed to find attachment attachment-name-1 in item item-name-2, failed to find field Pull Credentials in item quay.io, failed to find password in item item-name-3]"),
+			expectedError: fmt.Errorf("[[.dockerconfigjson] failed to find field Pull Credentials in item quay.io, [key-name-5] failed to find attachment attachment-name-1 in item item-name-2, [key-name-7] failed to find password in item item-name-3]"),
 		},
 	}
 

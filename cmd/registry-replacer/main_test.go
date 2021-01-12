@@ -179,7 +179,7 @@ func TestReplacer(t *testing.T) {
 				Metadata:               api.Metadata{Branch: "master"},
 			},
 			ensureCorrectPromotionDockerfile:   true,
-			promotionTargetToDockerfileMapping: map[string]dockerfileLocation{fmt.Sprintf("registry.svc.ci.openshift.org/ocp/%s:promotionTarget", majorMinor.String()): {dockerfile: "Dockerfile.rhel"}},
+			promotionTargetToDockerfileMapping: map[string]dockerfileLocation{fmt.Sprintf("registry.ci.openshift.org/ocp/%s:promotionTarget", majorMinor.String()): {dockerfile: "Dockerfile.rhel"}},
 			expectWrite:                        true,
 		},
 		{
@@ -233,7 +233,7 @@ func TestReplacer(t *testing.T) {
 				Metadata:               api.Metadata{Branch: "master"},
 			},
 			ensureCorrectPromotionDockerfile:   true,
-			promotionTargetToDockerfileMapping: map[string]dockerfileLocation{fmt.Sprintf("registry.svc.ci.openshift.org/ocp/%s:promotionTarget", majorMinor.String()): {contextDir: "other_dir", dockerfile: "Dockerfile.rhel"}},
+			promotionTargetToDockerfileMapping: map[string]dockerfileLocation{fmt.Sprintf("registry.ci.openshift.org/ocp/%s:promotionTarget", majorMinor.String()): {contextDir: "other_dir", dockerfile: "Dockerfile.rhel"}},
 			expectWrite:                        true,
 		},
 		{

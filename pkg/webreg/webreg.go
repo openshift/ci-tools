@@ -176,6 +176,8 @@ const referencePage = `
 {{ template "stepEnvironment" .Reference }}
 <h3 id="source"><a href="#source">Source Code</a></h3>
 {{ syntaxedSource .Reference.Commands }}
+<h3 id="properties"><a href="#properties">Properties</a></h3>
+{{ template "referenceProperties" .Reference }}
 <h3 id="github"><p><a href="#github">GitHub Link:</a></h3></p>{{ githubLink .Metadata.Path }}
 {{ ownersBlock .Metadata.Owners }}
 `
@@ -236,6 +238,79 @@ const templateDefinitions = `
 	<nobr><a href="/workflow/{{ . }}" style="font-family:monospace">{{ . }}</a></nobr>
 {{ end }}
 
+{{ define "referenceProperties" }}
+  <table class="table">
+  <thead>
+  <tr>
+    <th title="Property name" class="info">Property</th>
+    <th title="Property name" class="info">Value</th>
+    <th title="Property name" class="info">Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  {{ if .ActiveDeadlineSeconds }}
+    <tr>
+      <td>Step timeout</td>
+      <td>{{ .ActiveDeadlineSeconds }} seconds</td>
+      <td>Limits the execution time of the step.</td>
+    </tr>
+  {{ end }}
+  {{ if .TerminationGracePeriodSeconds }}
+    <tr>
+      <td>Termination grace period</td>
+      <td>{{ .TerminationGracePeriodSeconds }} seconds</td>
+      <td>Period of time until SIGKILL signal is sent to the test pod (after SIGTERM signal is sent).</td>
+    </tr>
+  {{ end }}
+  {{ if .Resources }}
+    {{ range $name, $value := .Resources.Requests }}
+     <tr>
+       <td>Resource requests ({{ $name }})</td>
+       <td>{{ $value }}</td>
+       <td>Used in <span style="font-family:monospace">.resources.requests</span> of the pod running this step.</td>
+     </tr>
+    {{ end }}
+    {{ range $name, $value := .Resources.Limits }}
+     <tr>
+       <td>Resource limits ({{ $name }})</td>
+       <td>{{ $value }}</td>
+       <td>Used in <span style="font-family:monospace">.resources.limits</span> of the pod running this step.</td>
+     </tr>
+    {{ end }}
+  {{ end }}
+  {{ if .OptionalOnSuccess }}
+    <tr>
+      <td>Optional on success<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#skipping-post-steps-on-success">?</a>]</td>
+      <td>{{ .OptionalOnSuccess}}</td>
+      <td>Allows the step to be skipped if all steps in <span style="font-family:monospace">pre</span> and <span style="font-family:monospace">test</span> phases succeeded.</td>
+    </tr>
+  {{ end }}
+  {{ if .BestEffort }}
+    <tr>
+      <td>Best effort<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#marking-post-steps-best-effort">?</a>]</td>
+      <td>{{ .BestEffort }}</td>
+      <td>This step's failure will not cause whole job to fail if the step is run in <span style="font-family:monospace">post</span> phase.</td>
+    </tr>
+  {{ end }}
+  {{ if .ReadonlySharedDir }}
+    <tr>
+      <td>Read-only shared directory<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#sharing-data-between-steps">?</a>]</td>
+      <td>{{ .ReadonlySharedDir }}</td>
+      <td>This step's writes to the <span style="font-family:monospace">$SHARED_DIR</span> directory are not propagated to following steps.</td>
+    </tr>
+  {{ end }}
+  {{ if .Cli }}
+    <tr>
+      <td>Inject <span style="font-family:monospace">oc</span> CLI<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#sharing-data-between-steps">?</a>]</td>
+      <td>{{ .Cli }}</td>
+      <td>The <span style="font-family:monospace">oc</span> CLI sourced from the specified release is injected into this step's' image.</td>
+    </tr>
+  {{ end }}
+  </tbody>
+  </table>
+
+{{ end }}
+
 {{ define "stepEnvironment" }}
 {{ if and (eq (len .Dependencies) 0) (eq (len .Environment) 0) (eq (len .Leases) 0) }}
   <p>Step exposes no environmental variables except the <a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#available-environment-variables">defaults</a>.</p>
@@ -263,8 +338,10 @@ const templateDefinitions = `
      <td>Parameter<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#parameters">?</a>]</sup></td>
      <td>
        {{ $env.Documentation }}
+       {{ if $env.Default }}
        {{ if gt (len $env.Default) 0 }}
          (default: <span style="font-family:monospace">{{ $env.Default }}</span>)
+       {{ end }}
        {{ end }}
      </td>
    </tr>
@@ -990,13 +1067,20 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 	}{
 		Reference: api.RegistryReference{
 			LiteralTestStep: api.LiteralTestStep{
-				As:           name,
-				Commands:     refs[name].Commands,
-				From:         refs[name].From,
-				FromImage:    refs[name].FromImage,
-				Dependencies: refs[name].Dependencies,
-				Environment:  refs[name].Environment,
-				Leases:       refs[name].Leases,
+				As:                            name,
+				Commands:                      refs[name].Commands,
+				From:                          refs[name].From,
+				FromImage:                     refs[name].FromImage,
+				Dependencies:                  refs[name].Dependencies,
+				Environment:                   refs[name].Environment,
+				Leases:                        refs[name].Leases,
+				ActiveDeadlineSeconds:         refs[name].ActiveDeadlineSeconds,
+				TerminationGracePeriodSeconds: refs[name].TerminationGracePeriodSeconds,
+				Resources:                     refs[name].Resources,
+				OptionalOnSuccess:             refs[name].OptionalOnSuccess,
+				BestEffort:                    refs[name].BestEffort,
+				ReadonlySharedDir:             refs[name].ReadonlySharedDir,
+				Cli:                           refs[name].Cli,
 			},
 			Documentation: docs[name],
 		},

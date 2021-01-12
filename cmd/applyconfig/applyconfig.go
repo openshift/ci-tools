@@ -66,8 +66,7 @@ func (n *nullableStringFlag) Set(val string) error {
 
 func gatherOptions() *options {
 	// nonempy dryRun is a safe default (empty means not a dry run)
-	// TODO(muller): client dry run is default until we pass server one.
-	opt := &options{user: &nullableStringFlag{}, dryRun: dryClient}
+	opt := &options{user: &nullableStringFlag{}, dryRun: dryAuto}
 
 	var confirm bool
 	flag.BoolVar(&confirm, "confirm", false, "Set to true to make applyconfig commit the config to the cluster")
@@ -388,6 +387,7 @@ func detectDryRunMethod(kubeconfig, context, username string) dryRunMethod {
 
 	var v ocVersionOutput
 	if err := json.Unmarshal(out, &v); err != nil {
+		logrus.WithError(err).Warning("Failed to detect dry run method from client and server versions; will continue with server dry-run")
 		return method
 	}
 

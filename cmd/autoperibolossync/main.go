@@ -144,7 +144,7 @@ func main() {
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
 
-	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, description, o.githubLogin, remoteBranch, "master", true, labelsToAdd); err != nil {
+	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, description, o.githubLogin+":"+remoteBranch, "master", remoteBranch, true, labelsToAdd); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 }

@@ -144,7 +144,7 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 
-	if err := bumper.UpdatePR(gc, githubOrg, githubRepo, images, "/cc @"+o.assign, o.githubLogin, remoteBranch, "master", true, opts.Prefixes, versions); err != nil {
+	if err := bumper.UpdatePR(gc, githubOrg, githubRepo, images, "/cc @"+o.assign, o.githubLogin, "master", remoteBranch, true, opts.Prefixes, versions); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 }

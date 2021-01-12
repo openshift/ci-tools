@@ -431,9 +431,9 @@ func upsertPR(gc pgithub.Client, dir, githubUsername string, token []byte, selfA
 		"release",
 		prTitle,
 		prBody,
-		githubUsername,
-		targetBranch,
+		githubUsername+":"+targetBranch,
 		"master",
+		targetBranch,
 		true,
 		labelsToAdd,
 	); err != nil {

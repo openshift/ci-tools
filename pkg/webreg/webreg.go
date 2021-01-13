@@ -250,14 +250,14 @@ const templateDefinitions = `
   <tbody>
   {{ if .ActiveDeadlineSeconds }}
     <tr>
-      <td>Step timeout</td>
+      <td>Step timeout<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/timeouts/#step-timeout">?</a>]</sup></td>
       <td>{{ .ActiveDeadlineSeconds }} seconds</td>
       <td>Limits the execution time of the step.</td>
     </tr>
   {{ end }}
   {{ if .TerminationGracePeriodSeconds }}
     <tr>
-      <td>Termination grace period</td>
+      <td>Termination grace period<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/timeouts/#step-timeout">?</a>]</sup></td>
       <td>{{ .TerminationGracePeriodSeconds }} seconds</td>
       <td>Period of time until SIGKILL signal is sent to the test pod (after SIGTERM signal is sent).</td>
     </tr>
@@ -280,28 +280,28 @@ const templateDefinitions = `
   {{ end }}
   {{ if .OptionalOnSuccess }}
     <tr>
-      <td>Optional on success<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#skipping-post-steps-on-success">?</a>]</td>
+      <td>Optional on success<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#skipping-post-steps-on-success">?</a>]</sup></td>
       <td>{{ .OptionalOnSuccess}}</td>
       <td>Allows the step to be skipped if all steps in <span style="font-family:monospace">pre</span> and <span style="font-family:monospace">test</span> phases succeeded.</td>
     </tr>
   {{ end }}
   {{ if .BestEffort }}
     <tr>
-      <td>Best effort<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#marking-post-steps-best-effort">?</a>]</td>
+      <td>Best effort<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#marking-post-steps-best-effort">?</a>]</sup></td>
       <td>{{ .BestEffort }}</td>
       <td>This step's failure will not cause whole job to fail if the step is run in <span style="font-family:monospace">post</span> phase.</td>
     </tr>
   {{ end }}
   {{ if .ReadonlySharedDir }}
     <tr>
-      <td>Read-only shared directory<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#sharing-data-between-steps">?</a>]</td>
+      <td>Read-only shared directory<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#sharing-data-between-steps">?</a>]</sup></td>
       <td>{{ .ReadonlySharedDir }}</td>
       <td>This step's writes to the <span style="font-family:monospace">$SHARED_DIR</span> directory are not propagated to following steps.</td>
     </tr>
   {{ end }}
   {{ if .Cli }}
     <tr>
-      <td>Inject <span style="font-family:monospace">oc</span> CLI<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#sharing-data-between-steps">?</a>]</td>
+      <td>Inject <span style="font-family:monospace">oc</span> CLI<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#sharing-data-between-steps">?</a>]</sup></td>
       <td>{{ .Cli }}</td>
       <td>The <span style="font-family:monospace">oc</span> CLI sourced from the specified release is injected into this step's' image.</td>
     </tr>

@@ -44,7 +44,7 @@ func (o OCPImageConfig) validate() error {
 }
 
 func (o OCPImageConfig) PromotesTo() string {
-	return fmt.Sprintf("registry.svc.ci.openshift.org/ocp/%s.%s:%s", o.Version.Major, o.Version.Minor, strings.TrimPrefix(o.Name, "openshift/ose-"))
+	return fmt.Sprintf("registry.ci.openshift.org/ocp/%s.%s:%s", o.Version.Major, o.Version.Minor, strings.TrimPrefix(o.Name, "openshift/ose-"))
 }
 
 type OCPImageConfigContent struct {

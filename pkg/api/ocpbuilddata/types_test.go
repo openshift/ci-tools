@@ -204,7 +204,7 @@ func TestDereferenceConfig(t *testing.T) {
 			expectedConfig: OCPImageConfig{
 				From: OCPImageConfigFrom{
 					OCPImageConfigFromStream: OCPImageConfigFromStream{
-						Stream: "registry.svc.ci.openshift.org/ocp/4.6:base"},
+						Stream: "registry.ci.openshift.org/ocp/4.6:base"},
 				},
 			},
 		},
@@ -245,9 +245,9 @@ func TestDereferenceConfig(t *testing.T) {
 			},
 			expectedConfig: OCPImageConfig{
 				From: OCPImageConfigFrom{
-					Builder: []OCPImageConfigFromStream{{Stream: "registry.svc.ci.openshift.org/ocp/4.6:base"}},
+					Builder: []OCPImageConfigFromStream{{Stream: "registry.ci.openshift.org/ocp/4.6:base"}},
 					OCPImageConfigFromStream: OCPImageConfigFromStream{
-						Stream: "registry.svc.ci.openshift.org/ocp/4.6:base"},
+						Stream: "registry.ci.openshift.org/ocp/4.6:base"},
 				},
 			},
 		},

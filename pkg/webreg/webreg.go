@@ -188,6 +188,9 @@ const chainPage = `
 <p id="documentation">{{ .Chain.Documentation }}</p>
 <h3 id="steps" title="Step run by the chain, in runtime order"><a href="#steps">Steps</a></h3>
 {{ template "stepTable" .Chain.Steps}}
+<h3 id="dependencies" title="Dependencies of steps involved in this chain"><a href="#dependencies">Dependencies</a></h3>
+{{ $depTable := "chain" }}
+{{ template "dependencyTable" .Chain.As }}
 <h3 id="graph" title="Visual representation of steps run by this chain"><a href="#graph">Step Graph</a></h3>
 {{ chainGraph .Chain.As }}
 <h3 id="github"><a href="#github">GitHub Link:</a></h3>{{ githubLink .Metadata.Path }}
@@ -211,7 +214,8 @@ const workflowJobPage = `
 <h3 id="post" title="Steps run by this {{ toLower $type }} to clean up and teardown test resources, in runtime order"><a href="#post">Post Steps</a></h3>
 {{ template "stepTable" .Workflow.Steps.Post }}
 <h3 id="dependencies" title="Dependencies of this {{ toLower $type }}"><a href="#dependencies">Dependencies</a></h3>
-{{ template "workflowDependencies" .Workflow.As }}
+{{ $depTable := "workflow" }}
+{{ template "dependencyTable" .Workflow.As }}
 <h3 id="graph" title="Visual representation of steps run by this {{ toLower $type }}"><a href="#graph">Step Graph</a></h3>
 {{ workflowGraph .Workflow.As .Workflow.Type }}
 {{ if eq $type "Workflow" }}
@@ -313,19 +317,25 @@ const templateDefinitions = `
   </table>
 {{ end  }}
 
-{{ define "workflowDependencies" }}
-  {{ $data := workflowDependencies . }}
+{{ define "dependencyTable" }}
+  {{ $data := getDependencies . }}
+
+  {{ if eq 0 ( len ($data.Items)) }}
+    No step in this {{ $data.Type }} sets dependencies.<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/ci-operator/#referring-to-images-in-tests">?</a>]</sup>
+  {{ else }}
   <table class="table">
   <thead>
     <tr>
-     <th title="Image on which this workflow depends">Image</th>
+     <th title="Image on which steps in this {{ $data.Type }}">Image</th>
      <th title="Environmental variable exposing the pullspec to steps">Exposed As</th>
-     <th title="Whether the value is an override in the workflow">Override<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/ci-operator/#dependency-overrides">?</a>]</sup></th>
+     {{ if ne $data.Type "chain" }}
+       <th title="Whether the value is an override in the workflow">Override<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/ci-operator/#dependency-overrides">?</a>]</sup></th>
+     {{ end }}
      <th title="Which steps consume the image exposed by this variable">Required By Steps</th>
     <tr>
   </thead>
   <tbody>
-  {{ range $dep, $vars := $data }}
+  {{ range $dep, $vars := $data.Items }}
     {{ $first := true }}
     {{ range $var, $line := $vars }}
     <tr>
@@ -333,7 +343,9 @@ const templateDefinitions = `
       <td rowspan={{ len $vars }} style="font-family:monospace">{{ $dep }}</td>
       {{ end }}
       <td><span style="font-family:monospace">{{ $var }}</span></td>
+      {{ if ne $data.Type "chain" }}
       <td>{{ if $line.Override }}yes{{ else }}no{{ end }}</td>
+      {{ end }}
       <td>
       {{ range $i, $step := $line.Steps }}
         <a href="/reference/{{ $step }}">{{ $step }}</a>
@@ -345,6 +357,7 @@ const templateDefinitions = `
   {{ end }}
   </tbody>
   </table>
+  {{ end }}
 {{ end }}
 
 {{ define "stepEnvironment" }}
@@ -678,10 +691,10 @@ func getBaseTemplate() (*template.Template, error) {
 		template.FuncMap{
 			// These three are placeholders to be overwritten by the handlers
 			// that actually care about this data (see set{Docs,ChainGraph,WorkflowGraph) functions
-			"docsForName":          func(string) string { return "" },
-			"workflowGraph":        func(_, _ string) string { return "" },
-			"chainGraph":           func(string) string { return "" },
-			"workflowDependencies": func(string) map[string]map[string][]string { return nil },
+			"docsForName":     func(string) string { return "" },
+			"workflowGraph":   func(_, _ string) string { return "" },
+			"chainGraph":      func(string) string { return "" },
+			"getDependencies": func(string) dependencyData { return dependencyData{} },
 
 			"testStepNameAndType": getTestStepNameAndType,
 			"noescape": func(str string) template.HTML {
@@ -821,31 +834,32 @@ func setWorkflowGraph(t *template.Template, chains registry.ChainByName, workflo
 		})
 }
 
-type workflowDependencyLine struct {
+type dependencyLine struct {
 	Steps    []string
 	Override bool
 }
-type workflowDependencyVars map[string]workflowDependencyLine
+type dependencyVars map[string]dependencyLine
 
 // release:latest --> ENV_VAR_1 -> { override=false steps=step1,step2 }
 //                \-> ENV_VAR_2 -> { override=true steps=step3 }
-type workflowDependencyData map[string]workflowDependencyVars
+type dependencyData struct {
+	Items map[string]dependencyVars
+	Type  string
+}
 
-func workflowDeps(as string, refs registry.ReferenceByName, chains registry.ChainByName, workflows registry.WorkflowByName) workflowDependencyData {
-	workflow := workflows[as]
-
-	data := workflowDependencyData{}
+func getDependencyDataItems(worklist []api.TestStep, registryRefs registry.ReferenceByName, registryChains registry.ChainByName, overrides api.TestDependencies) map[string]dependencyVars {
+	data := map[string]dependencyVars{}
 	add := func(image, variable, step string) {
-		override, isOverride := workflow.Dependencies[variable]
+		override, isOverride := overrides[variable]
 		if isOverride {
 			image = override
 		}
 
 		if _, ok := data[image]; !ok {
-			data[image] = workflowDependencyVars{}
+			data[image] = dependencyVars{}
 		}
 		if _, ok := data[image][variable]; !ok {
-			data[image][variable] = workflowDependencyLine{Override: isOverride}
+			data[image][variable] = dependencyLine{Override: isOverride}
 		}
 		line := data[image][variable]
 		line.Steps = append(line.Steps, step)
@@ -857,7 +871,7 @@ func workflowDeps(as string, refs registry.ReferenceByName, chains registry.Chai
 	dispatch := func(step api.TestStep) {
 		switch {
 		case step.Reference != nil:
-			ref := refs[*step.Reference]
+			ref := registryRefs[*step.Reference]
 			for _, dep := range ref.Dependencies {
 				add(dep.Name, dep.Env, ref.As)
 			}
@@ -872,16 +886,14 @@ func workflowDeps(as string, refs registry.ReferenceByName, chains registry.Chai
 		}
 	}
 
-	for _, list := range [][]api.TestStep{workflow.Pre, workflow.Test, workflow.Post} {
-		for _, step := range list {
-			dispatch(step)
-		}
+	for _, step := range worklist {
+		dispatch(step)
 	}
 
 	for len(chainWorklist) > 0 {
 		name, _ := chainWorklist.PopAny()
 		seenChains.Insert(name)
-		chain := chains[name]
+		chain := registryChains[name]
 		for _, item := range chain.Steps {
 			dispatch(item)
 		}
@@ -893,8 +905,29 @@ func workflowDeps(as string, refs registry.ReferenceByName, chains registry.Chai
 func setWorkflowDependencies(t *template.Template, refs registry.ReferenceByName, chains registry.ChainByName, workflows registry.WorkflowByName) *template.Template {
 	return t.Funcs(
 		template.FuncMap{
-			"workflowDependencies": func(as string) workflowDependencyData {
-				return workflowDeps(as, refs, chains, workflows)
+			"getDependencies": func(as string) dependencyData {
+				workflow := workflows[as]
+				var worklist []api.TestStep
+				for _, steps := range [][]api.TestStep{workflow.Pre, workflow.Test, workflow.Post} {
+					worklist = append(worklist, steps...)
+				}
+				return dependencyData{
+					Items: getDependencyDataItems(worklist, refs, chains, workflow.Dependencies),
+					Type:  "workflow",
+				}
+			},
+		})
+}
+
+func setChainDependencies(t *template.Template, refs registry.ReferenceByName, chains registry.ChainByName) *template.Template {
+	return t.Funcs(
+		template.FuncMap{
+			"getDependencies": func(as string) dependencyData {
+				chain := chains[as]
+				return dependencyData{
+					Items: getDependencyDataItems(chain.Steps, refs, chains, nil),
+					Type:  "chain",
+				}
 			},
 		})
 }
@@ -1210,7 +1243,7 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	name := path.Base(req.URL.Path)
 
-	_, chains, _, docs, metadata := agent.GetRegistryComponents()
+	refs, chains, _, docs, metadata := agent.GetRegistryComponents()
 	page, err := baseTemplate.Clone()
 	if err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
@@ -1218,6 +1251,7 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 	}
 	page = setDocs(page, docs)
 	page = setChainGraph(page, chains)
+	page = setChainDependencies(page, refs, chains)
 	if page, err = page.Parse(chainPage); err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
 		return

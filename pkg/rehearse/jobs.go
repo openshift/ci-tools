@@ -621,6 +621,8 @@ func AddRandomJobsForChangedRegistry(regSteps []registry.Node, prConfigPresubmit
 	// make list to store MultiStageTestConfigurations that we've already added to the test list
 	var addedConfigs []*api.MultiStageTestConfiguration
 	for _, step := range regSteps {
+		// only add one job per step
+		var added bool
 		var presubmitsMap map[string][]prowconfig.Presubmit
 		presubmitsMap, addedConfigs, err = getPresubmitsForRegistryStep(step, configsByFilename, prConfigPresubmits, addedConfigs)
 		if err != nil {
@@ -632,11 +634,13 @@ func AddRandomJobsForChangedRegistry(regSteps []registry.Node, prConfigPresubmit
 		}
 		for repo, presubmits := range presubmitsMap {
 			for _, job := range presubmits {
-				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", step.Name())}
-				loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
+				if !added {
+					selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", step.Name())}
+					loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
+					rehearsals[repo] = append(rehearsals[repo], job)
+					added = true
+				}
 			}
-			rehearsals[repo] = append(rehearsals[repo], presubmits...)
-			continue
 		}
 	}
 	return rehearsals

@@ -46,7 +46,7 @@ presubmits:
       volumes:
       - name: pull-secret
         secret:
-          secretName: registry-pull-credentials
+          secretName: registry-pull-credentials-all
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -95,7 +95,7 @@ presubmits:
       volumes:
       - name: pull-secret
         secret:
-          secretName: registry-pull-credentials
+          secretName: registry-pull-credentials-all
       - name: result-aggregator
         secret:
           secretName: result-aggregator

@@ -43,7 +43,7 @@ presubmits:
       volumes:
       - name: pull-secret
         secret:
-          secretName: registry-pull-credentials
+          secretName: registry-pull-credentials-all
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -117,7 +117,7 @@ presubmits:
         name: job-definition
       - name: pull-secret
         secret:
-          secretName: registry-pull-credentials
+          secretName: registry-pull-credentials-all
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -170,7 +170,7 @@ presubmits:
       volumes:
       - name: pull-secret
         secret:
-          secretName: registry-pull-credentials
+          secretName: registry-pull-credentials-all
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -228,7 +228,7 @@ presubmits:
       volumes:
       - name: pull-secret
         secret:
-          secretName: registry-pull-credentials
+          secretName: registry-pull-credentials-all
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -253,7 +253,6 @@ presubmits:
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --report-password-file=/etc/report/password.txt
         - --report-username=ci
-        - --secret-dir=/secrets/ci-pull-credentials
         - --target=steps
         command:
         - ci-operator
@@ -264,9 +263,6 @@ presubmits:
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /secrets/ci-pull-credentials
-          name: ci-pull-credentials
-          readOnly: true
         - mountPath: /secrets/gcs
           name: gcs-credentials
           readOnly: true
@@ -278,12 +274,9 @@ presubmits:
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
-      - name: ci-pull-credentials
-        secret:
-          secretName: ci-pull-credentials
       - name: pull-secret
         secret:
-          secretName: registry-pull-credentials
+          secretName: registry-pull-credentials-all
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -331,7 +324,7 @@ presubmits:
       volumes:
       - name: pull-secret
         secret:
-          secretName: registry-pull-credentials
+          secretName: registry-pull-credentials-all
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -383,7 +376,7 @@ presubmits:
       volumes:
       - name: pull-secret
         secret:
-          secretName: registry-pull-credentials
+          secretName: registry-pull-credentials-all
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -434,7 +427,7 @@ presubmits:
       volumes:
       - name: pull-secret
         secret:
-          secretName: registry-pull-credentials
+          secretName: registry-pull-credentials-all
       - name: result-aggregator
         secret:
           secretName: result-aggregator

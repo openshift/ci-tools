@@ -62,7 +62,7 @@ func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret) *corev1
 		{
 			Name: "pull-secret",
 			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{SecretName: "registry-pull-credentials"},
+				Secret: &corev1.SecretVolumeSource{SecretName: "registry-pull-credentials-all"},
 			},
 		},
 		{
@@ -154,7 +154,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		if element.ContainerTestConfiguration != nil {
 			podSpec = generateCiOperatorPodSpec(info, element.Secrets, []string{element.As})
 		} else if element.MultiStageTestConfiguration != nil {
-			podSpec = generatePodSpecMultiStage(info, &element, configSpec.Releases != nil)
+			podSpec = generatePodSpecMultiStage(info, &element)
 		} else {
 			var release string
 			if c := configSpec.ReleaseTagConfiguration; c != nil {
@@ -263,21 +263,9 @@ func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secre
 	return ret
 }
 
-func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepConfiguration, needsPullSecret bool) *corev1.PodSpec {
+func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepConfiguration) *corev1.PodSpec {
 	profile := test.MultiStageTestConfiguration.ClusterProfile
-	var secrets []*cioperatorapi.Secret
-	if needsPullSecret {
-		// If the ci-operator configuration resolves an official release,
-		// we need to create a pull secret in the namespace that ci-operator
-		// runs in. While the --secret-dir mechanism is *meant* to provide
-		// secrets to the tests themselves, this secret will have no consumer
-		// and that is OK. We just need it to exist in the test namespace so
-		// that the image import controller can use it.
-		secrets = append(secrets, &cioperatorapi.Secret{
-			Name: "ci-pull-credentials",
-		})
-	}
-	podSpec := generateCiOperatorPodSpec(info, secrets, []string{test.As})
+	podSpec := generateCiOperatorPodSpec(info, nil, []string{test.As})
 	if profile == "" {
 		return podSpec
 	}

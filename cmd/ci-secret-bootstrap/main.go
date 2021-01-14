@@ -382,7 +382,8 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, bwClie
 					secretContext.Type = coreapi.SecretTypeOpaque
 				}
 				secret := &coreapi.Secret{
-					Data: data,
+					TypeMeta: meta.TypeMeta{Kind: "Secret", APIVersion: "v1"},
+					Data:     data,
 					ObjectMeta: meta.ObjectMeta{
 						Name:      secretContext.Name,
 						Namespace: secretContext.Namespace,
@@ -452,26 +453,38 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 	return utilerrors.NewAggregate(errs)
 }
 
-func writeSecrets(secretsMap map[string][]*coreapi.Secret, w io.Writer) error {
-	var clusters []string
-	for cluster := range secretsMap {
-		clusters = append(clusters, cluster)
+func writeSecrets(secretsMap map[string][]*coreapi.Secret) error {
+	var tmpFiles []*os.File
+	defer func() {
+		for _, tf := range tmpFiles {
+			tf.Close()
+		}
+	}()
+
+	for cluster, secrets := range secretsMap {
+		tmpFile, err := ioutil.TempFile("", fmt.Sprintf("%s_*.yaml", cluster))
+		if err != nil {
+			return fmt.Errorf("failed to create tempfile: %w", err)
+		}
+		tmpFiles = append(tmpFiles, tmpFile)
+
+		logrus.Infof("Writing secrets from cluster %s to %s", cluster, tmpFile.Name())
+		if err := writeSecretsToFile(secrets, tmpFile); err != nil {
+			return fmt.Errorf("error while writing secrets for cluster %s to file %s: %w", cluster, tmpFile.Name(), err)
+		}
 	}
-	sort.Strings(clusters)
-	for _, cluster := range clusters {
-		if _, err := fmt.Fprintf(w, "###%s###\n", cluster); err != nil {
+	return nil
+}
+
+func writeSecretsToFile(secrets []*coreapi.Secret, w io.Writer) error {
+	serializerOptions := kubejson.SerializerOptions{Yaml: true, Pretty: true, Strict: true}
+	serializer := kubejson.NewSerializerWithOptions(kubejson.DefaultMetaFactory, scheme.Scheme, scheme.Scheme, serializerOptions)
+
+	for _, secret := range secrets {
+		if err := serializer.Encode(secret, w); err != nil {
 			return err
 		}
-		for _, secret := range secretsMap[cluster] {
-			if _, err := fmt.Fprintln(w, "---"); err != nil {
-				return err
-			}
-			s := kubejson.NewSerializerWithOptions(kubejson.DefaultMetaFactory, scheme.Scheme,
-				scheme.Scheme, kubejson.SerializerOptions{Yaml: true, Pretty: true, Strict: true})
-			if err := s.Encode(secret, w); err != nil {
-				return err
-			}
-		}
+		fmt.Fprintf(w, "---\n")
 	}
 	return nil
 }
@@ -695,13 +708,8 @@ func main() {
 	}
 
 	if o.dryRun {
-		tmpFile, err := ioutil.TempFile("", "ci-secret-bootstrapper")
-		if err != nil {
-			logrus.WithError(err).Fatal("failed to create tempfile")
-		}
-		defer tmpFile.Close()
-		logrus.Infof("Dry-Run enabled, writing secrets to %s", tmpFile.Name())
-		if err := writeSecrets(secretsMap, tmpFile); err != nil {
+		logrus.Infof("Running in dry-run mode")
+		if err := writeSecrets(secretsMap); err != nil {
 			errs = append(errs, fmt.Errorf("failed to write secrets on dry run: %w", err))
 		}
 	} else {

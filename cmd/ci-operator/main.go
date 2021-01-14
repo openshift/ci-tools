@@ -1723,8 +1723,9 @@ func (o *options) getResolverInfo(jobSpec *api.JobSpec) *load.ResolverInfo {
 }
 
 func monitorNamespace(ctx context.Context, cancel func(), namespace string, client coreclientset.NamespaceInterface) {
+reset:
 	for {
-		watcher, err := client.Watch(context.TODO(), meta.ListOptions{
+		watcher, err := client.Watch(context.Background(), meta.ListOptions{
 			TypeMeta:      meta.TypeMeta{},
 			FieldSelector: fields.Set{"metadata.name": namespace}.AsSelector().String(),
 			Watch:         true,
@@ -1741,7 +1742,7 @@ func monitorNamespace(ctx context.Context, cancel func(), namespace string, clie
 				return
 			case event, ok := <-watcher.ResultChan():
 				if !ok {
-					continue
+					continue reset
 				}
 				ns, ok := event.Object.(*coreapi.Namespace)
 				if !ok {

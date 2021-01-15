@@ -15,6 +15,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -306,8 +307,9 @@ type options struct {
 	pushSecretPath string
 	pushSecret     *coreapi.Secret
 
-	uploadSecretPath string
-	uploadSecret     *coreapi.Secret
+	uploadSecretPath  string
+	uploadSecret      *coreapi.Secret
+	uploadViaPodUtils bool
 
 	cloneAuthConfig *steps.CloneAuthConfig
 
@@ -373,6 +375,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.pullSecretPath, "image-import-pull-secret", "", "A set of dockercfg credentials used to import images for the tag_specification.")
 	flag.StringVar(&opt.pushSecretPath, "image-mirror-push-secret", "", "A set of dockercfg credentials used to mirror images for the promotion.")
 	flag.StringVar(&opt.uploadSecretPath, "gcs-upload-secret", "", "GCS credentials used to upload logs and artifacts.")
+	flag.BoolVar(&opt.uploadViaPodUtils, "upload-via-pod-utils", false, "Use the Prow pod utilities to upload logs and artifacts.")
 
 	opt.resultsOptions.Bind(flag)
 	return opt
@@ -528,12 +531,12 @@ func (o *options) Complete() error {
 	o.clusterConfig = clusterConfig
 
 	if o.pullSecretPath != "" {
-		if o.pullSecret, err = getSecret(steps.PullSecretName, o.pullSecretPath); err != nil {
+		if o.pullSecret, err = getDockerConfigSecret(steps.PullSecretName, o.pullSecretPath); err != nil {
 			return fmt.Errorf("could not get pull secret %s from path %s: %w", steps.PullSecretName, o.pullSecretPath, err)
 		}
 	}
 	if o.pushSecretPath != "" {
-		if o.pushSecret, err = getSecret(api.RegistryPushCredentialsCICentralSecret, o.pushSecretPath); err != nil {
+		if o.pushSecret, err = getDockerConfigSecret(api.RegistryPushCredentialsCICentralSecret, o.pushSecretPath); err != nil {
 			return fmt.Errorf("could not get push secret %s from path %s: %w", api.RegistryPushCredentialsCICentralSecret, o.pushSecretPath, err)
 		}
 	}
@@ -575,7 +578,7 @@ func (o *options) Run() []error {
 		leaseClient = &o.leaseClient
 	}
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.uploadViaPodUtils)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -1699,7 +1702,7 @@ func getHashFromBytes(b []byte) string {
 	return oneWayNameEncoding.EncodeToString(hash.Sum(nil)[:5])
 }
 
-func getSecret(name, filename string) (*coreapi.Secret, error) {
+func getDockerConfigSecret(name, filename string) (*coreapi.Secret, error) {
 	src, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("could not read file %s for secret %s: %w", filename, name, err)
@@ -1712,6 +1715,22 @@ func getSecret(name, filename string) (*coreapi.Secret, error) {
 			Name: name,
 		},
 		Type: coreapi.SecretTypeDockerConfigJson,
+	}, nil
+}
+
+func getSecret(name, filename string) (*coreapi.Secret, error) {
+	src, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("could not read file %s for secret %s: %w", filename, name, err)
+	}
+	return &coreapi.Secret{
+		Data: map[string][]byte{
+			path.Base(filename): src,
+		},
+		ObjectMeta: meta.ObjectMeta{
+			Name: name,
+		},
+		Type: coreapi.SecretTypeOpaque,
 	}, nil
 }
 

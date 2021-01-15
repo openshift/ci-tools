@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 
 	coreapi "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,14 +41,15 @@ type PodStepConfiguration struct {
 	// SkipLogs instructs the step to omit informational logs, such as when the pod is
 	// part of a larger step like release creation where displaying pod specific info
 	// is confusing to an end user. Failure logs are still printed.
-	SkipLogs           bool
-	As                 string
-	From               api.ImageStreamTagReference
-	Commands           string
-	ArtifactDir        string
-	ServiceAccountName string
-	Secrets            []*api.Secret
-	MemoryBackedVolume *api.MemoryBackedVolume
+	SkipLogs             bool
+	As                   string
+	From                 api.ImageStreamTagReference
+	Commands             string
+	ArtifactDir          string
+	ServiceAccountName   string
+	Secrets              []*api.Secret
+	MemoryBackedVolume   *api.MemoryBackedVolume
+	ArtifactsViaPodUtils bool
 }
 
 type podStep struct {
@@ -106,7 +108,7 @@ func (s *podStep) run(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 		log.Printf("cleanup: Deleting %s pod %s", s.name, s.config.As)
-		if err := s.client.Delete(cleanupCtx, &coreapi.Pod{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.config.As}}); err != nil && !errors.IsNotFound(err) {
+		if err := s.client.Delete(cleanupCtx, &coreapi.Pod{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.config.As}}); err != nil && !kerrors.IsNotFound(err) {
 			log.Printf("error: Could not delete %s pod: %v", s.name, err)
 		}
 	}()
@@ -159,16 +161,17 @@ func (s *podStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client PodClient, artifactDir string, jobSpec *api.JobSpec, artifactsViaPodUtils bool) api.Step {
 	return PodStep(
 		"test",
 		PodStepConfiguration{
-			As:                 config.As,
-			From:               api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
-			Commands:           config.Commands,
-			ArtifactDir:        config.ArtifactDir,
-			Secrets:            config.Secrets,
-			MemoryBackedVolume: config.ContainerTestConfiguration.MemoryBackedVolume,
+			As:                   config.As,
+			From:                 api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
+			Commands:             config.Commands,
+			ArtifactDir:          config.ArtifactDir,
+			Secrets:              config.Secrets,
+			MemoryBackedVolume:   config.ContainerTestConfiguration.MemoryBackedVolume,
+			ArtifactsViaPodUtils: artifactsViaPodUtils,
 		},
 		resources,
 		client,
@@ -196,6 +199,9 @@ func generateBasePod(
 	image string,
 	containerResources coreapi.ResourceRequirements,
 	artifactDir string,
+	artifactsViaPodUtils bool,
+	decorationConfig *v1.DecorationConfig,
+	rawJobSpec string,
 ) (*coreapi.Pod, error) {
 	envMap, err := downwardapi.EnvForSpec(jobSpec.JobSpec)
 	envMap[openshiftCIEnv] = "true"
@@ -227,13 +233,28 @@ func generateBasePod(
 		},
 	}
 	if artifactDir != "" {
-		addArtifacts(pod, artifactDir)
+		if artifactsViaPodUtils {
+			// When using the old-school artifacts upload, we can be declarative as to
+			// where the artifacts exist. In the pod-utils approach, we instead declare
+			// what the subdirectory should be for the upload. The subdirectory allows
+			// us to upload to where the old-school approach would have put things.
+			artifactDir = fmt.Sprintf("artifacts/%s", artifactDir)
+			if err := addPodUtils(pod, artifactDir, decorationConfig, rawJobSpec); err != nil {
+				return nil, fmt.Errorf("failed to decorate pod: %w", err)
+			}
+		} else {
+			addArtifacts(pod, artifactDir)
+		}
 	}
 	return pod, nil
 }
 
 func (s *podStep) generatePodForStep(image string, containerResources coreapi.ResourceRequirements) (*coreapi.Pod, error) {
-	pod, err := generateBasePod(s.jobSpec, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, s.config.ArtifactDir)
+	artifactDir := s.config.ArtifactDir
+	if s.config.ArtifactsViaPodUtils {
+		artifactDir = s.name
+	}
+	pod, err := generateBasePod(s.jobSpec, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.config.ArtifactsViaPodUtils, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec())
 	if err != nil {
 		return nil, err
 	}

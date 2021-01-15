@@ -395,7 +395,7 @@ No additional "tide" queries will be added.
 	var copyCatQueries prowconfig.TideQueries
 	switch {
 	case config.Promotes && config.PromotesWithOpenShift:
-		copyCatQueries = queries.ForRepo(prowconfig.OrgRepo{Org: "openshift", Repo: "origin"})
+		copyCatQueries = queries.ForRepo(prowconfig.OrgRepo{Org: "openshift", Repo: "cluster-version-operator"})
 	case !config.PromotesWithOpenShift:
 		copyCatQueries = queries.ForRepo(prowconfig.OrgRepo{Org: "openshift", Repo: "ci-tools"})
 	}

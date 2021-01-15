@@ -7,24 +7,10 @@ import (
 	"reflect"
 	"testing"
 
-	coreapi "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/diff"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
-
-var (
-	coreScheme   = runtime.NewScheme()
-	codecFactory = serializer.NewCodecFactory(coreScheme)
-	corev1Codec  = codecFactory.LegacyCodec(coreapi.SchemeGroupVersion)
-)
-
-func init() {
-	utilruntime.Must(coreapi.AddToScheme(coreScheme))
-}
 
 type doneExpectation struct {
 	value bool

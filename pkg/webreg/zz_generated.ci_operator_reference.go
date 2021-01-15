@@ -326,6 +326,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # of pull request workflows. Setting this field will\n" +
 	"        # create a periodic job instead of a presubmit\n" +
 	"        cron: \"\"\n" +
+	"        # Interval is how frequently the test should be run based\n" +
+	"        # on the last time the test ran. Setting this field will\n" +
+	"        # create a periodic job instead of a presubmit\n" +
+	"        interval: \"\"\n" +
 	"        literal_steps:\n" +
 	"            # AllowBestEffortPostSteps defines if any `post` steps can be ignored when\n" +
 	"            # they fail. The given step must explicitly ask for being ignored by setting\n" +
@@ -932,6 +936,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # of pull request workflows. Setting this field will\n" +
 	"      # create a periodic job instead of a presubmit\n" +
 	"      cron: \"\"\n" +
+	"      # Interval is how frequently the test should be run based\n" +
+	"      # on the last time the test ran. Setting this field will\n" +
+	"      # create a periodic job instead of a presubmit\n" +
+	"      interval: \"\"\n" +
 	"      literal_steps:\n" +
 	"        # AllowBestEffortPostSteps defines if any `post` steps can be ignored when\n" +
 	"        # they fail. The given step must explicitly ask for being ignored by setting\n" +

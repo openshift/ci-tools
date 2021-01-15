@@ -487,6 +487,11 @@ type TestStepConfiguration struct {
 	// create a periodic job instead of a presubmit
 	Cron *string `json:"cron,omitempty"`
 
+	// Interval is how frequently the test should be run based
+	// on the last time the test ran. Setting this field will
+	// create a periodic job instead of a presubmit
+	Interval *string `json:"interval,omitempty"`
+
 	// Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit
 	Postsubmit bool `json:"postsubmit,omitempty"`
 

@@ -781,7 +781,6 @@ func TestWaitForJobs(t *testing.T) {
 	for idx := range testCases {
 		tc := testCases[idx]
 		t.Run(tc.id, func(t *testing.T) {
-			t.Parallel()
 			client := newTC(tc.events...)
 
 			executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, loggers, client, "")

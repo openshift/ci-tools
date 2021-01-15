@@ -15,7 +15,7 @@ inputs="${workdir}/input"
 output="${workdir}/output.yaml"
 
 os::test::junit::declare_suite_start "integration/release-job-migrator"
-os::cmd::expect_success "release-job-migrator --config ${inputs}/config.yaml --jobs ${inputs}/jobs --ci-op-configs ${inputs}/ci-operator/openshift/release --rc-configs ${inputs}/releases -testgrid-allowlist ${inputs}/_allow-list.yaml > ${output}"
+os::cmd::expect_success "release-job-migrator --config ${inputs}/config.yaml --jobs ${inputs}/jobs --ci-op-configs ${inputs}/ci-operator/openshift/release --rc-configs ${inputs}/releases -testgrid-allowlist ${inputs}/_allow-list.yaml -ignore-release '4.8' > ${output}"
 os::integration::compare "${inputs}" "${suite_dir}/expected"
 os::integration::compare "${output}" "${suite_dir}/expected.txt"
 os::test::junit::declare_suite_end

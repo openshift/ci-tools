@@ -54,11 +54,13 @@ type jobInfo struct {
 }
 
 type options struct {
-	config        string
-	ciopConfigDir string
-	rcConfigDir   string
-	jobDir        string
-	testgrid      string
+	config              string
+	ciopConfigDir       string
+	rcConfigDir         string
+	jobDir              string
+	testgrid            string
+	ignoreReleaseString string
+	ignoreReleases      []string
 }
 
 func gatherOptions() (options, error) {
@@ -69,10 +71,11 @@ func gatherOptions() (options, error) {
 	fs.StringVar(&o.rcConfigDir, "rc-configs", "", "Path to release-controller release config files")
 	fs.StringVar(&o.jobDir, "jobs", "", "Path to ci-operator jobs")
 	fs.StringVar(&o.testgrid, "testgrid-allowlist", "", "Path to testgrid allowlist")
+	fs.StringVar(&o.ignoreReleaseString, "ignore-release", "", "Comma separated list of release versions (i.e. 4.X) to ignore")
 	return o, fs.Parse(os.Args[1:])
 }
 
-func validateOptions(o options) error {
+func validateOptions(o *options) error {
 	if len(o.config) == 0 {
 		return errors.New("--config must be set")
 	}
@@ -87,6 +90,14 @@ func validateOptions(o options) error {
 	}
 	if len(o.testgrid) == 0 {
 		return errors.New("--testgrid-allowlist must be set")
+	}
+	if len(o.ignoreReleaseString) != 0 {
+		o.ignoreReleases = strings.Split(o.ignoreReleaseString, ",")
+		for _, semver := range o.ignoreReleases {
+			if !versionRegex.MatchString(semver) {
+				return fmt.Errorf("%s is not a valid version", semver)
+			}
+		}
 	}
 	return nil
 }
@@ -401,6 +412,16 @@ func run(o options) error {
 			if !isReleaseJob {
 				continue
 			}
+			ignore := false
+			for _, semver := range o.ignoreReleases {
+				if info.Version == semver || info.FromVersion == semver {
+					ignore = true
+					break
+				}
+			}
+			if ignore {
+				continue
+			}
 			// avoid jobs that do more than just run ci-operator
 			if periodic.Spec.Containers[0].Command[0] != "ci-operator" {
 				logrus.Warnf("periodic job %s has a command != \"ci-operator\", ignoring", periodic.Name)
@@ -610,7 +631,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("failed go gather options")
 	}
-	if err := validateOptions(o); err != nil {
+	if err := validateOptions(&o); err != nil {
 		logrus.WithError(err).Fatal("invalid options")
 	}
 	if err := run(o); err != nil {

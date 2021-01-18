@@ -626,7 +626,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # You cannot set the Secret and Secrets attributes\n" +
 	"        # at the same time.\n" +
 	"        secret:\n" +
-	"            # Secret mount path. Defaults to /usr/test-secret\n" +
+	"            # Secret mount path. Defaults to /usr/test-secrets for first\n" +
+	"            # secret. /usr/test-secrets-2 for second, and so on.\n" +
 	"            mount_path: ' '\n" +
 	"            # Secret name, used inside test containers\n" +
 	"            name: ' '\n" +
@@ -635,7 +636,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # You cannot set the Secret and Secrets attributes\n" +
 	"        # at the same time.\n" +
 	"        secrets:\n" +
-	"            - # Secret mount path. Defaults to /usr/test-secret\n" +
+	"            - # Secret mount path. Defaults to /usr/test-secrets for first\n" +
+	"              # secret. /usr/test-secrets-2 for second, and so on.\n" +
 	"              mount_path: ' '\n" +
 	"              # Secret name, used inside test containers\n" +
 	"              name: ' '\n" +
@@ -1236,7 +1238,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # You cannot set the Secret and Secrets attributes\n" +
 	"      # at the same time.\n" +
 	"      secret:\n" +
-	"        # Secret mount path. Defaults to /usr/test-secret\n" +
+	"        # Secret mount path. Defaults to /usr/test-secrets for first\n" +
+	"        # secret. /usr/test-secrets-2 for second, and so on.\n" +
 	"        mount_path: ' '\n" +
 	"        # Secret name, used inside test containers\n" +
 	"        name: ' '\n" +
@@ -1245,7 +1248,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # You cannot set the Secret and Secrets attributes\n" +
 	"      # at the same time.\n" +
 	"      secrets:\n" +
-	"        - # Secret mount path. Defaults to /usr/test-secret\n" +
+	"        - # Secret mount path. Defaults to /usr/test-secrets for first\n" +
+	"          # secret. /usr/test-secrets-2 for second, and so on.\n" +
 	"          mount_path: ' '\n" +
 	"          # Secret name, used inside test containers\n" +
 	"          name: ' '\n" +

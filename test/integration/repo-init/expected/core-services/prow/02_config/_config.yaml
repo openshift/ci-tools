@@ -64,7 +64,7 @@ tide:
     - do-not-merge/invalid-owners-file
     - bugzilla/invalid-bug
     repos:
-    - openshift/origin
+    - openshift/cluster-version-operator
     - org/repo
   - excludedBranches:
     - release-4.0
@@ -85,7 +85,7 @@ tide:
     - bugzilla/invalid-bug
     repos:
     - openshift/ci-tools
-    - openshift/origin
+    - openshift/cluster-version-operator
     - org/repo
     - org/other
     - org/third

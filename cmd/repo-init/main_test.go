@@ -83,7 +83,7 @@ func TestEditProwConfig(t *testing.T) {
 				ProwConfig: prowconfig.ProwConfig{
 					Tide: prowconfig.Tide{
 						Queries: prowconfig.TideQueries{{
-							Repos: []string{"openshift/origin"},
+							Repos: []string{"openshift/cluster-version-operator"},
 						}},
 					},
 				},
@@ -92,7 +92,7 @@ func TestEditProwConfig(t *testing.T) {
 				ProwConfig: prowconfig.ProwConfig{
 					Tide: prowconfig.Tide{
 						Queries: prowconfig.TideQueries{{
-							Repos: []string{"openshift/origin", "org/repo"},
+							Repos: []string{"openshift/cluster-version-operator", "org/repo"},
 						}},
 					},
 				},
@@ -207,10 +207,10 @@ func TestEditPluginConfig(t *testing.T) {
 			},
 			pluginConfig: &plugins.Configuration{
 				Plugins: map[string][]string{
-					"openshift":        {"foo"},
-					"openshift/origin": {"bar"},
-					"org":              {"other"},
-					"org/repo":         {"something"},
+					"openshift":                          {"foo"},
+					"openshift/cluster-version-operator": {"bar"},
+					"org":                                {"other"},
+					"org/repo":                           {"something"},
 				},
 				ExternalPlugins: map[string][]plugins.ExternalPlugin{
 					"openshift": {{Endpoint: "oops"}},
@@ -220,10 +220,10 @@ func TestEditPluginConfig(t *testing.T) {
 			},
 			expected: &plugins.Configuration{
 				Plugins: map[string][]string{
-					"openshift":        {"foo"},
-					"openshift/origin": {"bar"},
-					"org":              {"other"},
-					"org/repo":         {"something"},
+					"openshift":                          {"foo"},
+					"openshift/cluster-version-operator": {"bar"},
+					"org":                                {"other"},
+					"org/repo":                           {"something"},
 				},
 				ExternalPlugins: map[string][]plugins.ExternalPlugin{
 					"openshift": {{Endpoint: "oops"}},

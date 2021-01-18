@@ -1,7 +1,7 @@
 tide:
   queries:
   - repos:
-    - openshift/origin
+    - openshift/cluster-version-operator
     includedBranches:
     - release-4.0
     - release-4.1
@@ -23,7 +23,7 @@ tide:
     - bugzilla/invalid-bug
   - repos:
     - openshift/ci-tools
-    - openshift/origin
+    - openshift/cluster-version-operator
     excludedBranches:
     - release-4.0
     - release-4.1

@@ -848,11 +848,15 @@ type dependencyData struct {
 }
 
 func getDependencyDataItems(worklist []api.TestStep, registryRefs registry.ReferenceByName, registryChains registry.ChainByName, overrides api.TestDependencies) map[string]dependencyVars {
-	data := map[string]dependencyVars{}
+	var data map[string]dependencyVars
 	add := func(image, variable, step string) {
 		override, isOverride := overrides[variable]
 		if isOverride {
 			image = override
+		}
+
+		if data == nil {
+			data = map[string]dependencyVars{}
 		}
 
 		if _, ok := data[image]; !ok {
@@ -871,7 +875,11 @@ func getDependencyDataItems(worklist []api.TestStep, registryRefs registry.Refer
 	dispatch := func(step api.TestStep) {
 		switch {
 		case step.Reference != nil:
-			ref := registryRefs[*step.Reference]
+			ref, ok := registryRefs[*step.Reference]
+			if !ok {
+				logrus.WithField("step-name", *step.Reference).Error("failed to resolve step dependencies, step not found in registry")
+				return
+			}
 			for _, dep := range ref.Dependencies {
 				add(dep.Name, dep.Env, ref.As)
 			}
@@ -893,7 +901,11 @@ func getDependencyDataItems(worklist []api.TestStep, registryRefs registry.Refer
 	for len(chainWorklist) > 0 {
 		name, _ := chainWorklist.PopAny()
 		seenChains.Insert(name)
-		chain := registryChains[name]
+		chain, ok := registryChains[name]
+		if !ok {
+			logrus.WithField("chain-name", name).Error("failed to resolve chain dependencies, chain not found in registry")
+			continue
+		}
 		for _, item := range chain.Steps {
 			dispatch(item)
 		}
@@ -906,15 +918,23 @@ func setWorkflowDependencies(t *template.Template, refs registry.ReferenceByName
 	return t.Funcs(
 		template.FuncMap{
 			"getDependencies": func(as string) dependencyData {
-				workflow := workflows[as]
+				ret := dependencyData{
+					Type: "workflow",
+				}
+
+				workflow, ok := workflows[as]
+				if !ok {
+					logrus.WithField("workflow-name", as).Error("failed to resolve workflow steps: workflow not found in registry")
+					return ret
+				}
+
 				var worklist []api.TestStep
 				for _, steps := range [][]api.TestStep{workflow.Pre, workflow.Test, workflow.Post} {
 					worklist = append(worklist, steps...)
 				}
-				return dependencyData{
-					Items: getDependencyDataItems(worklist, refs, chains, workflow.Dependencies),
-					Type:  "workflow",
-				}
+
+				ret.Items = getDependencyDataItems(worklist, refs, chains, workflow.Dependencies)
+				return ret
 			},
 		})
 }
@@ -923,11 +943,18 @@ func setChainDependencies(t *template.Template, refs registry.ReferenceByName, c
 	return t.Funcs(
 		template.FuncMap{
 			"getDependencies": func(as string) dependencyData {
-				chain := chains[as]
-				return dependencyData{
-					Items: getDependencyDataItems(chain.Steps, refs, chains, nil),
-					Type:  "chain",
+				ret := dependencyData{
+					Type: "chain",
 				}
+
+				chain, ok := chains[as]
+				if !ok {
+					logrus.WithField("chain-name", as).Error("failed to resolve chain steps: step not found in registry")
+					return ret
+				}
+
+				ret.Items = getDependencyDataItems(chain.Steps, refs, chains, nil)
+				return ret
 			},
 		})
 }

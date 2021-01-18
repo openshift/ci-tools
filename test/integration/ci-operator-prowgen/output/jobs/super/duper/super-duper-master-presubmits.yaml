@@ -79,7 +79,7 @@ presubmits:
         - name: JOB_NAME_SAFE
           value: e2e
         - name: RPM_REPO_OPENSHIFT_ORIGIN
-          value: https://rpms.svc.ci.openshift.org/openshift-origin-v4.0/
+          value: https://artifacts-rpms-openshift-origin-ci-rpms.apps.ci.l2s4.p1.openshiftapps.com/openshift-origin-v4.0/
         - name: TEST_COMMAND
           value: make e2e
         image: ci-operator:latest

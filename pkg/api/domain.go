@@ -24,7 +24,7 @@ type Service string
 const (
 	ServiceBoskos          Service = "boskos-ci"
 	ServiceRegistry        Service = "registry"
-	ServiceRPMs            Service = "rpms"
+	ServiceRPMs            Service = "artifacts-rpms-openshift-origin-ci-rpms"
 	ServiceProw            Service = "prow"
 	ServiceConfig          Service = "config"
 	ServiceGCSWeb          Service = "gcsweb-ci"
@@ -43,7 +43,7 @@ func DomainForService(service Service) string {
 	case ServiceBoskos, ServiceGCSWeb:
 		serviceDomain = ServiceDomainAPPCI
 	case ServiceRPMs:
-		serviceDomain = ServiceDomainAPICI
+		serviceDomain = ServiceDomainAPPCI
 	default:
 		serviceDomain = ServiceDomainCI
 	}

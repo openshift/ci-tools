@@ -163,8 +163,16 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			podSpec = generatePodSpecTemplate(info, release, &element)
 		}
 
-		if element.Cron != nil {
-			periodics = append(periodics, *generatePeriodicForTest(element.As, info, podSpec, true, *element.Cron, configSpec.CanonicalGoRepository, jobRelease, skipCloning))
+		if element.Cron != nil || element.Interval != nil {
+			cron := ""
+			if element.Cron != nil {
+				cron = *element.Cron
+			}
+			interval := ""
+			if element.Interval != nil {
+				interval = *element.Interval
+			}
+			periodics = append(periodics, *generatePeriodicForTest(element.As, info, podSpec, true, cron, interval, configSpec.CanonicalGoRepository, jobRelease, skipCloning))
 		} else if element.Postsubmit {
 			postsubmit := generatePostsubmitForTest(element.As, info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning)
 			postsubmit.MaxConcurrency = 1
@@ -428,7 +436,7 @@ func generatePostsubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.P
 	}
 }
 
-func generatePeriodicForTest(name string, info *ProwgenInfo, podSpec *corev1.PodSpec, rehearsable bool, cron string, pathAlias *string, jobRelease string, skipCloning bool) *prowconfig.Periodic {
+func generatePeriodicForTest(name string, info *ProwgenInfo, podSpec *corev1.PodSpec, rehearsable bool, cron string, interval string, pathAlias *string, jobRelease string, skipCloning bool) *prowconfig.Periodic {
 	base := generateJobBase(name, jc.PeriodicPrefix, info, podSpec, rehearsable, nil, jobRelease, skipCloning)
 	// periodics are not associated with a repo per se, but we can add in an
 	// extra ref so that periodics which want to access the repo tha they are
@@ -443,8 +451,9 @@ func generatePeriodicForTest(name string, info *ProwgenInfo, podSpec *corev1.Pod
 	}
 	base.ExtraRefs = append([]prowv1.Refs{ref}, base.ExtraRefs...)
 	return &prowconfig.Periodic{
-		JobBase: base,
-		Cron:    cron,
+		JobBase:  base,
+		Cron:     cron,
+		Interval: interval,
 	}
 }
 

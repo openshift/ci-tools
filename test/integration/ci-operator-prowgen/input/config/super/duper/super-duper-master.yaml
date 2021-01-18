@@ -60,6 +60,11 @@ tests:
   cron: '@yearly'
   openshift_ansible:
     cluster_profile: aws
+- as: e2e-aws-nightly-interval
+  commands: make e2e
+  interval: '24h'
+  openshift_ansible:
+    cluster_profile: aws
 - as: steps
   steps:
     test:

@@ -231,21 +231,34 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 		repoInfo   *ProwgenInfo
 		jobRelease string
 		clone      bool
-	}{{
-		description: "periodic for standard test",
-		test:        "testname",
-		repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-	},
+		cron       string
+		interval   string
+	}{
+		{
+			description: "periodic for standard test",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			cron:        "@yearly",
+		},
 		{
 			description: "periodic for a test in a variant config",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"}},
+			cron:        "@yearly",
 		},
 		{
 			description: "periodic for specific release",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			jobRelease:  "4.6",
+			cron:        "@yearly",
+		},
+		{
+			description: "periodic for specific release using interval",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			jobRelease:  "4.6",
+			interval:    "6h",
 		},
 		{
 			description: "periodic for specific release and clone: true",
@@ -253,12 +266,13 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			jobRelease:  "4.6",
 			clone:       true,
+			cron:        "@yearly",
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
 			// podSpec tested in generatePodSpec
-			testhelper.CompareWithFixture(t, generatePeriodicForTest(tc.test, tc.repoInfo, nil, true, "@yearly", nil, tc.jobRelease, !tc.clone))
+			testhelper.CompareWithFixture(t, generatePeriodicForTest(tc.test, tc.repoInfo, nil, true, tc.cron, tc.interval, nil, tc.jobRelease, !tc.clone))
 		})
 	}
 }

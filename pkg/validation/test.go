@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"gopkg.in/robfig/cron.v2"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -69,6 +72,25 @@ func validateTestStepConfiguration(fieldRoot string, input []api.TestStepConfigu
 
 		if test.Postsubmit && test.Cron != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron` and `postsubmit` are mututally exclusive", fieldRootN))
+		}
+		if test.Postsubmit && test.Interval != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` and `postsubmit` are mututally exclusive", fieldRootN))
+		}
+
+		if test.Cron != nil && test.Interval != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` and `cron` cannot both be set", fieldRootN))
+		}
+
+		if test.Interval != nil {
+			if _, err := time.ParseDuration(*test.Interval); err != nil {
+				validationErrors = append(validationErrors, fmt.Errorf("%s: cannot parse interval: %w", fieldRootN, err))
+			}
+		}
+
+		if test.Cron != nil {
+			if _, err := cron.Parse(*test.Cron); err != nil {
+				validationErrors = append(validationErrors, fmt.Errorf("%s: cannot parse cron: %w", fieldRootN, err))
+			}
 		}
 
 		// Validate Secret/Secrets

@@ -15,6 +15,9 @@ import (
 
 func TestValidateTests(t *testing.T) {
 	cronString := "0 0 * * 1"
+	invalidCronString := "r 0 * * 1"
+	intervalString := "6h"
+	invalidIntervalString := "6t"
 	for _, tc := range []struct {
 		id            string
 		release       *api.ReleaseTagConfiguration
@@ -388,6 +391,67 @@ func TestValidateTests(t *testing.T) {
 					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
 					Cron:                       &cronString,
 					Postsubmit:                 true,
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "valid cron",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Cron:                       &cronString,
+				},
+			},
+			expectedValid: true,
+		},
+		{
+			id: "valid interval",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Interval:                   &intervalString,
+				},
+			},
+			expectedValid: true,
+		},
+		{
+			id: "cron and interval together are invalid",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Cron:                       &cronString,
+					Interval:                   &intervalString,
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "invalid cron",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Cron:                       &invalidCronString,
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "invalid interval",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Interval:                   &invalidIntervalString,
 				},
 			},
 			expectedValid: false,

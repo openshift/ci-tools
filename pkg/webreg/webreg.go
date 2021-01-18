@@ -16,6 +16,7 @@ import (
 	"github.com/alecthomas/chroma/styles"
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/repoowners"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -187,6 +188,9 @@ const chainPage = `
 <p id="documentation">{{ .Chain.Documentation }}</p>
 <h3 id="steps" title="Step run by the chain, in runtime order"><a href="#steps">Steps</a></h3>
 {{ template "stepTable" .Chain.Steps}}
+<h3 id="dependencies" title="Dependencies of steps involved in this chain"><a href="#dependencies">Dependencies</a></h3>
+{{ $depTable := "chain" }}
+{{ template "dependencyTable" .Chain.As }}
 <h3 id="graph" title="Visual representation of steps run by this chain"><a href="#graph">Step Graph</a></h3>
 {{ chainGraph .Chain.As }}
 <h3 id="github"><a href="#github">GitHub Link:</a></h3>{{ githubLink .Metadata.Path }}
@@ -209,6 +213,9 @@ const workflowJobPage = `
 {{ template "stepTable" .Workflow.Steps.Test }}
 <h3 id="post" title="Steps run by this {{ toLower $type }} to clean up and teardown test resources, in runtime order"><a href="#post">Post Steps</a></h3>
 {{ template "stepTable" .Workflow.Steps.Post }}
+<h3 id="dependencies" title="Dependencies of this {{ toLower $type }}"><a href="#dependencies">Dependencies</a></h3>
+{{ $depTable := "workflow" }}
+{{ template "dependencyTable" .Workflow.As }}
 <h3 id="graph" title="Visual representation of steps run by this {{ toLower $type }}"><a href="#graph">Step Graph</a></h3>
 {{ workflowGraph .Workflow.As .Workflow.Type }}
 {{ if eq $type "Workflow" }}
@@ -308,7 +315,49 @@ const templateDefinitions = `
   {{ end }}
   </tbody>
   </table>
+{{ end  }}
 
+{{ define "dependencyTable" }}
+  {{ $data := getDependencies . }}
+
+  {{ if eq 0 ( len ($data.Items)) }}
+    No step in this {{ $data.Type }} sets dependencies.<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/ci-operator/#referring-to-images-in-tests">?</a>]</sup>
+  {{ else }}
+  <table class="table">
+  <thead>
+    <tr>
+     <th title="Image on which steps in this {{ $data.Type }}">Image</th>
+     <th title="Environmental variable exposing the pullspec to steps">Exposed As</th>
+     {{ if ne $data.Type "chain" }}
+       <th title="Whether the value is an override in the workflow">Override<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/ci-operator/#dependency-overrides">?</a>]</sup></th>
+     {{ end }}
+     <th title="Which steps consume the image exposed by this variable">Required By Steps</th>
+    <tr>
+  </thead>
+  <tbody>
+  {{ range $dep, $vars := $data.Items }}
+    {{ $first := true }}
+    {{ range $var, $line := $vars }}
+    <tr>
+      {{ if eq $first true }}
+      <td rowspan={{ len $vars }} style="font-family:monospace">{{ $dep }}</td>
+      {{ end }}
+      <td><span style="font-family:monospace">{{ $var }}</span></td>
+      {{ if ne $data.Type "chain" }}
+      <td>{{ if $line.Override }}yes{{ else }}no{{ end }}</td>
+      {{ end }}
+      <td>
+      {{ range $i, $step := $line.Steps }}
+        <a href="/reference/{{ $step }}">{{ $step }}</a>
+      {{ end }}
+     </td>
+    </tr>
+    {{ $first = false }}
+    {{ end }}
+  {{ end }}
+  </tbody>
+  </table>
+  {{ end }}
 {{ end }}
 
 {{ define "stepEnvironment" }}
@@ -642,9 +691,10 @@ func getBaseTemplate() (*template.Template, error) {
 		template.FuncMap{
 			// These three are placeholders to be overwritten by the handlers
 			// that actually care about this data (see set{Docs,ChainGraph,WorkflowGraph) functions
-			"docsForName":   func(string) string { return "" },
-			"workflowGraph": func(_, _ string) string { return "" },
-			"chainGraph":    func(string) string { return "" },
+			"docsForName":     func(string) string { return "" },
+			"workflowGraph":   func(_, _ string) string { return "" },
+			"chainGraph":      func(string) string { return "" },
+			"getDependencies": func(string) dependencyData { return dependencyData{} },
 
 			"testStepNameAndType": getTestStepNameAndType,
 			"noescape": func(str string) template.HTML {
@@ -780,6 +830,131 @@ func setWorkflowGraph(t *template.Template, chains registry.ChainByName, workflo
 					return template.HTML(err.Error())
 				}
 				return template.HTML(svg)
+			},
+		})
+}
+
+type dependencyLine struct {
+	Steps    []string
+	Override bool
+}
+type dependencyVars map[string]dependencyLine
+
+// release:latest --> ENV_VAR_1 -> { override=false steps=step1,step2 }
+//                \-> ENV_VAR_2 -> { override=true steps=step3 }
+type dependencyData struct {
+	Items map[string]dependencyVars
+	Type  string
+}
+
+func getDependencyDataItems(worklist []api.TestStep, registryRefs registry.ReferenceByName, registryChains registry.ChainByName, overrides api.TestDependencies) map[string]dependencyVars {
+	var data map[string]dependencyVars
+	add := func(image, variable, step string) {
+		override, isOverride := overrides[variable]
+		if isOverride {
+			image = override
+		}
+
+		if data == nil {
+			data = map[string]dependencyVars{}
+		}
+
+		if _, ok := data[image]; !ok {
+			data[image] = dependencyVars{}
+		}
+		if _, ok := data[image][variable]; !ok {
+			data[image][variable] = dependencyLine{Override: isOverride}
+		}
+		line := data[image][variable]
+		line.Steps = append(line.Steps, step)
+		data[image][variable] = line
+	}
+
+	chainWorklist := sets.NewString()
+	seenChains := sets.NewString()
+	dispatch := func(step api.TestStep) {
+		switch {
+		case step.Reference != nil:
+			ref, ok := registryRefs[*step.Reference]
+			if !ok {
+				logrus.WithField("step-name", *step.Reference).Error("failed to resolve step dependencies, step not found in registry")
+				return
+			}
+			for _, dep := range ref.Dependencies {
+				add(dep.Name, dep.Env, ref.As)
+			}
+		case step.Chain != nil:
+			if !seenChains.Has(*step.Chain) {
+				chainWorklist.Insert(*step.Chain)
+			}
+		case step.LiteralTestStep != nil:
+			for _, dep := range step.Dependencies {
+				add(dep.Name, dep.Env, step.As)
+			}
+		}
+	}
+
+	for _, step := range worklist {
+		dispatch(step)
+	}
+
+	for len(chainWorklist) > 0 {
+		name, _ := chainWorklist.PopAny()
+		seenChains.Insert(name)
+		chain, ok := registryChains[name]
+		if !ok {
+			logrus.WithField("chain-name", name).Error("failed to resolve chain dependencies, chain not found in registry")
+			continue
+		}
+		for _, item := range chain.Steps {
+			dispatch(item)
+		}
+	}
+
+	return data
+}
+
+func setWorkflowDependencies(t *template.Template, refs registry.ReferenceByName, chains registry.ChainByName, workflows registry.WorkflowByName) *template.Template {
+	return t.Funcs(
+		template.FuncMap{
+			"getDependencies": func(as string) dependencyData {
+				ret := dependencyData{
+					Type: "workflow",
+				}
+
+				workflow, ok := workflows[as]
+				if !ok {
+					logrus.WithField("workflow-name", as).Error("failed to resolve workflow steps: workflow not found in registry")
+					return ret
+				}
+
+				var worklist []api.TestStep
+				for _, steps := range [][]api.TestStep{workflow.Pre, workflow.Test, workflow.Post} {
+					worklist = append(worklist, steps...)
+				}
+
+				ret.Items = getDependencyDataItems(worklist, refs, chains, workflow.Dependencies)
+				return ret
+			},
+		})
+}
+
+func setChainDependencies(t *template.Template, refs registry.ReferenceByName, chains registry.ChainByName) *template.Template {
+	return t.Funcs(
+		template.FuncMap{
+			"getDependencies": func(as string) dependencyData {
+				ret := dependencyData{
+					Type: "chain",
+				}
+
+				chain, ok := chains[as]
+				if !ok {
+					logrus.WithField("chain-name", as).Error("failed to resolve chain steps: step not found in registry")
+					return ret
+				}
+
+				ret.Items = getDependencyDataItems(chain.Steps, refs, chains, nil)
+				return ret
 			},
 		})
 }
@@ -1095,7 +1270,7 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	name := path.Base(req.URL.Path)
 
-	_, chains, _, docs, metadata := agent.GetRegistryComponents()
+	refs, chains, _, docs, metadata := agent.GetRegistryComponents()
 	page, err := baseTemplate.Clone()
 	if err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
@@ -1103,6 +1278,7 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 	}
 	page = setDocs(page, docs)
 	page = setChainGraph(page, chains)
+	page = setChainDependencies(page, refs, chains)
 	if page, err = page.Parse(chainPage); err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
 		return
@@ -1136,7 +1312,7 @@ func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *htt
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	name := path.Base(req.URL.Path)
 
-	_, chains, workflows, docs, metadata := agent.GetRegistryComponents()
+	refs, chains, workflows, docs, metadata := agent.GetRegistryComponents()
 	page, err := baseTemplate.Clone()
 	if err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
@@ -1146,6 +1322,7 @@ func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *htt
 	page = setDocs(page, docs)
 	page = setWorkflowGraph(page, chains, workflows)
 	page = setChainGraph(page, chains)
+	page = setWorkflowDependencies(page, refs, chains, workflows)
 
 	if page, err = page.Parse(workflowJobPage); err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)

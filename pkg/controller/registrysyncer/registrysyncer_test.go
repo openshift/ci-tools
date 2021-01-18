@@ -277,14 +277,9 @@ func TestReconcile(t *testing.T) {
 					return fmt.Errorf("faile to get tag imagestreamtag from api.ci: %w", err)
 				}
 				expectedImageStreamTag := &imagev1.ImageStreamTag{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "ImageStreamTag",
-						APIVersion: "image.openshift.io/v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace:       "ci",
-						Name:            "applyconfig:latest",
-						ResourceVersion: "1",
+						Namespace: "ci",
+						Name:      "applyconfig:latest",
 					},
 					Tag: &imagev1.TagReference{
 						From: &corev1.ObjectReference{
@@ -293,7 +288,7 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 				}
-				if diff := cmp.Diff(expectedImageStreamTag, actualImageStreamTag); diff != "" {
+				if diff := cmp.Diff(expectedImageStreamTag, actualImageStreamTag, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 
@@ -302,20 +297,15 @@ func TestReconcile(t *testing.T) {
 					return err
 				}
 				expectedImageStream := &imagev1.ImageStream{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "ImageStream",
-						APIVersion: "image.openshift.io/v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace:       "ci",
-						Name:            "applyconfig",
-						ResourceVersion: "1",
+						Namespace: "ci",
+						Name:      "applyconfig",
 						Annotations: map[string]string{
 							"release.openshift.io-something": "copied",
 						},
 					},
 				}
-				if diff := cmp.Diff(expectedImageStream, actualImageStream); diff != "" {
+				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 
@@ -324,14 +314,9 @@ func TestReconcile(t *testing.T) {
 					return err
 				}
 				expectedImageStream = &imagev1.ImageStream{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "ImageStream",
-						APIVersion: "image.openshift.io/v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace:       "ci",
-						Name:            "applyconfig",
-						ResourceVersion: "1",
+						Namespace: "ci",
+						Name:      "applyconfig",
 						Annotations: map[string]string{
 							"release.openshift.io-something": "copied",
 							"something":                      "not-copied",
@@ -339,7 +324,7 @@ func TestReconcile(t *testing.T) {
 						Finalizers: []string{"dptp.openshift.io/registry-syncer"},
 					},
 				}
-				if diff := cmp.Diff(expectedImageStream, actualImageStream); diff != "" {
+				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 
@@ -348,10 +333,6 @@ func TestReconcile(t *testing.T) {
 					return err
 				}
 				expectedNamespace := &corev1.Namespace{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Namespace",
-						APIVersion: "v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "ci",
 						ResourceVersion: "1",
@@ -360,7 +341,7 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 				}
-				if diff := cmp.Diff(expectedNamespace, actualNamespace); diff != "" {
+				if diff := cmp.Diff(expectedNamespace, actualNamespace, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				return nil
@@ -381,15 +362,10 @@ func TestReconcile(t *testing.T) {
 					return err
 				}
 				expectedImageStreamTag := &imagev1.ImageStreamTag{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "ImageStreamTag",
-						APIVersion: "image.openshift.io/v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace:       "ci",
-						Name:            "applyconfig:latest",
-						Annotations:     map[string]string{"a": "b"},
-						ResourceVersion: "1",
+						Namespace:   "ci",
+						Name:        "applyconfig:latest",
+						Annotations: map[string]string{"a": "b"},
 					},
 					Tag: &imagev1.TagReference{
 						From: &corev1.ObjectReference{
@@ -407,7 +383,7 @@ func TestReconcile(t *testing.T) {
 				}
 				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
 				expectedImageStreamTag.Image.CreationTimestamp = actualImageStreamTag.Image.CreationTimestamp
-				if diff := cmp.Diff(expectedImageStreamTag, actualImageStreamTag); diff != "" {
+				if diff := cmp.Diff(expectedImageStreamTag, actualImageStreamTag, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				return nil
@@ -429,10 +405,6 @@ func TestReconcile(t *testing.T) {
 						return err
 					}
 					expectedImageStreamTag := &imagev1.ImageStreamTag{
-						TypeMeta: metav1.TypeMeta{
-							Kind:       "ImageStreamTag",
-							APIVersion: "image.openshift.io/v1",
-						},
 						ObjectMeta: metav1.ObjectMeta{
 							Namespace: "ci",
 							Name:      "applyconfig:latest",
@@ -447,10 +419,6 @@ func TestReconcile(t *testing.T) {
 					}
 					if clusterName == appCI {
 						expectedImageStreamTag = &imagev1.ImageStreamTag{
-							TypeMeta: metav1.TypeMeta{
-								Kind:       "ImageStreamTag",
-								APIVersion: "image.openshift.io/v1",
-							},
 							ObjectMeta: metav1.ObjectMeta{
 								Namespace: "ci",
 								Name:      "applyconfig:latest",
@@ -466,7 +434,7 @@ func TestReconcile(t *testing.T) {
 					}
 					//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
 					expectedImageStreamTag.Image.CreationTimestamp = actualImageStreamTag.Image.CreationTimestamp
-					if diff := cmp.Diff(expectedImageStreamTag, actualImageStreamTag); diff != "" {
+					if diff := cmp.Diff(expectedImageStreamTag, actualImageStreamTag, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
 						return fmt.Errorf("actual does not match expected, diff: %s", diff)
 					}
 				}
@@ -488,10 +456,6 @@ func TestReconcile(t *testing.T) {
 					return err
 				}
 				expectedImageStream := &imagev1.ImageStream{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "ImageStream",
-						APIVersion: "image.openshift.io/v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "ci",
 						Name:      "applyconfig",
@@ -508,7 +472,7 @@ func TestReconcile(t *testing.T) {
 				}
 				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
 				expectedImageStream.DeletionTimestamp = actualImageStream.DeletionTimestamp
-				if diff := cmp.Diff(expectedImageStream, actualImageStream); diff != "" {
+				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				actualImageStream = &imagev1.ImageStream{}
@@ -533,10 +497,6 @@ func TestReconcile(t *testing.T) {
 					return err
 				}
 				expectedImageStream := &imagev1.ImageStream{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "ImageStream",
-						APIVersion: "image.openshift.io/v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "ci",
 						Name:      "applyconfig",
@@ -553,7 +513,7 @@ func TestReconcile(t *testing.T) {
 				}
 				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
 				expectedImageStream.DeletionTimestamp = actualImageStream.DeletionTimestamp
-				if diff := cmp.Diff(expectedImageStream, actualImageStream); diff != "" {
+				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				actualImageStream = &imagev1.ImageStream{}
@@ -578,10 +538,6 @@ func TestReconcile(t *testing.T) {
 					return err
 				}
 				expectedImageStream := &imagev1.ImageStream{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "ImageStream",
-						APIVersion: "image.openshift.io/v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "ci",
 						Name:      "applyconfig",
@@ -590,7 +546,6 @@ func TestReconcile(t *testing.T) {
 							"something":                      "not-copied",
 						},
 						DeletionTimestamp: &now,
-						ResourceVersion:   "1",
 					},
 				}
 				if actualImageStream.DeletionTimestamp == nil {
@@ -598,7 +553,7 @@ func TestReconcile(t *testing.T) {
 				}
 				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
 				expectedImageStream.DeletionTimestamp = actualImageStream.DeletionTimestamp
-				if diff := cmp.Diff(expectedImageStream, actualImageStream); diff != "" {
+				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 
@@ -607,10 +562,6 @@ func TestReconcile(t *testing.T) {
 					return err
 				}
 				expectedImageStream = &imagev1.ImageStream{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "ImageStream",
-						APIVersion: "image.openshift.io/v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "ci",
 						Name:      "applyconfig",
@@ -618,7 +569,6 @@ func TestReconcile(t *testing.T) {
 							"release.openshift.io-something": "copied",
 						},
 						DeletionTimestamp: &now,
-						ResourceVersion:   "1",
 					},
 				}
 				if actualImageStream.DeletionTimestamp == nil {
@@ -626,7 +576,7 @@ func TestReconcile(t *testing.T) {
 				}
 				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
 				expectedImageStream.DeletionTimestamp = actualImageStream.DeletionTimestamp
-				if diff := cmp.Diff(expectedImageStream, actualImageStream); diff != "" {
+				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				return nil
@@ -647,10 +597,6 @@ func TestReconcile(t *testing.T) {
 					return err
 				}
 				expectedImageStream := &imagev1.ImageStream{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "ImageStream",
-						APIVersion: "image.openshift.io/v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "ci",
 						Name:      "applyconfig",
@@ -660,7 +606,7 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 				}
-				if diff := cmp.Diff(expectedImageStream, actualImageStream); diff != "" {
+				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				for _, client := range []ctrlruntimeclient.Client{apiCIClient, appCIClient} {
@@ -1082,15 +1028,10 @@ func TestEnsureImageStreamTag(t *testing.T) {
 					return err
 				}
 				expectedImageStreamTag := &imagev1.ImageStreamTag{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "ImageStreamTag",
-						APIVersion: "image.openshift.io/v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace:       "ci",
-						Name:            "applyconfig:latest",
-						Annotations:     map[string]string{"a": "c"},
-						ResourceVersion: "1",
+						Namespace:   "ci",
+						Name:        "applyconfig:latest",
+						Annotations: map[string]string{"a": "c"},
 					},
 					Tag: &imagev1.TagReference{
 						From: &corev1.ObjectReference{
@@ -1108,7 +1049,7 @@ func TestEnsureImageStreamTag(t *testing.T) {
 				}
 				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
 				expectedImageStreamTag.Image.CreationTimestamp = actualImageStreamTag.Image.CreationTimestamp
-				if diff := cmp.Diff(expectedImageStreamTag, actualImageStreamTag); diff != "" {
+				if diff := cmp.Diff(expectedImageStreamTag, actualImageStreamTag, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				return nil

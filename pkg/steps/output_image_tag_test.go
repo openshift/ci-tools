@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -18,6 +18,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func init() {
@@ -133,7 +134,9 @@ func TestOutputImageStep(t *testing.T) {
 			oits := OutputImageTagStep(config, client, jobspec)
 
 			examineStep(t, oits, stepSpec)
-			executeStep(t, oits, tt.execSpecification)
+			if err := oits.Run(ctx); err != nil != tt.execSpecification.runError {
+				t.Fatalf("expected error: %t, got error: %v", tt.execSpecification.runError, err)
+			}
 
 			targetImageStreamTag := &imagev1.ImageStreamTag{}
 			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{
@@ -142,10 +145,8 @@ func TestOutputImageStep(t *testing.T) {
 				t.Errorf("Failed to get ImageStreamTag '%s/%s' after step execution: %v", tt.expectedImageStreamTag.Namespace, tt.expectedImageStreamTag, err)
 			}
 
-			targetImageStreamTag.TypeMeta = metav1.TypeMeta{}
-			targetImageStreamTag.ResourceVersion = ""
-			if !equality.Semantic.DeepEqual(tt.expectedImageStreamTag, targetImageStreamTag) {
-				t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", diff.ObjectReflectDiff(tt.expectedImageStreamTag, targetImageStreamTag))
+			if diff := cmp.Diff(tt.expectedImageStreamTag, targetImageStreamTag, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", diff)
 			}
 		})
 	}

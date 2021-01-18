@@ -17,7 +17,9 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,6 +32,16 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
+
+var (
+	coreScheme   = runtime.NewScheme()
+	corev1Codec  = codecFactory.LegacyCodec(coreapi.SchemeGroupVersion)
+	codecFactory = serializer.NewCodecFactory(coreScheme)
+)
+
+func init() {
+	utilruntime.Must(coreapi.AddToScheme(coreScheme))
+}
 
 const (
 	RefsOrgLabel    = "ci.openshift.io/refs.org"

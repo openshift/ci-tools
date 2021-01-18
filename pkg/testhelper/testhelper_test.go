@@ -5,6 +5,11 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+
+	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 )
 
 func TestSanitizeString(t *testing.T) {
@@ -89,6 +94,47 @@ func TestEquateErrorMessage(t *testing.T) {
 			actual := actualDiffString == ""
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("actualError does not match expectedError, diff: %s", actualDiffString)
+			}
+		})
+	}
+}
+
+func TestCompareRuntimObjectIgnoreRvTypeMeta(t *testing.T) {
+	tests := []struct {
+		name           string
+		x              runtime.Object
+		y              runtime.Object
+		expectEquality bool
+	}{
+		{
+			name:           "Different RV, equal",
+			x:              &testimagestreamtagimportv1.TestImageStreamTagImport{ObjectMeta: metav1.ObjectMeta{ResourceVersion: "1"}},
+			y:              &testimagestreamtagimportv1.TestImageStreamTagImport{},
+			expectEquality: true,
+		},
+		{
+			name: "Different obj and different RV, not equal",
+			x:    &testimagestreamtagimportv1.TestImageStreamTagImport{ObjectMeta: metav1.ObjectMeta{ResourceVersion: "1"}},
+			y:    &testimagestreamtagimportv1.TestImageStreamTagImport{ObjectMeta: metav1.ObjectMeta{Name: "other"}},
+		},
+		{
+			name:           "Different TypeMeta, equal",
+			x:              &testimagestreamtagimportv1.TestImageStreamTagImport{TypeMeta: metav1.TypeMeta{Kind: "Pod"}},
+			y:              &testimagestreamtagimportv1.TestImageStreamTagImport{},
+			expectEquality: true,
+		},
+		{
+			name: "Different TypeMeta and object, not equal",
+			x:    &testimagestreamtagimportv1.TestImageStreamTagImport{TypeMeta: metav1.TypeMeta{Kind: "Pod"}},
+			y:    &testimagestreamtagimportv1.TestImageStreamTagImport{ObjectMeta: metav1.ObjectMeta{Name: "other"}},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			diff := cmp.Diff(tc.x, tc.y, RuntimObjectIgnoreRvTypeMeta)
+			if diff == "" != tc.expectEquality {
+				t.Errorf("expectEquality: %t, got diff: %s", tc.expectEquality, diff)
 			}
 		})
 	}

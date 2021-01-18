@@ -22,3 +22,7 @@ issues:
   - linters:
     - unparam
     text: \(\*leaseStep\)\.Provides\$1 - result 1 \(error\) is always nil
+  - linters:
+    - staticcheck
+    # Code has a "Deprecated:" comment
+    text: "SA1019:"

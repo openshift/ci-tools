@@ -10,6 +10,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pmezard/go-difflib/difflib"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/yaml"
 )
 
@@ -150,4 +153,24 @@ var (
 		}
 		return x.Error() == y.Error()
 	})
+
+	// RuntimObjectIgnoreRvTypeMeta compares two kubernetes objects, ignoring their resource
+	// version and TypeMeta. It is what you want 99% of the time.
+	RuntimObjectIgnoreRvTypeMeta = cmp.Comparer(func(x, y runtime.Object) bool {
+		xCopy := x.DeepCopyObject()
+		yCopy := y.DeepCopyObject()
+		cleanRVAndTypeMeta(xCopy)
+		cleanRVAndTypeMeta(yCopy)
+		return cmp.Diff(xCopy, yCopy) == ""
+
+	})
 )
+
+func cleanRVAndTypeMeta(r runtime.Object) {
+	if metaObject, ok := r.(metav1.Object); ok {
+		metaObject.SetResourceVersion("")
+	}
+	if typeObject, ok := r.(interface{ SetGroupVersionKind(schema.GroupVersionKind) }); ok {
+		typeObject.SetGroupVersionKind(schema.GroupVersionKind{})
+	}
+}

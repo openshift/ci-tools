@@ -61,6 +61,9 @@ func (s *outputImageTagStep) run(ctx context.Context) error {
 		if errors.IsNotFound(err) {
 			err = s.client.Create(ctx, ist)
 		}
+		if errors.IsConflict(err) {
+			err = s.client.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(ist), ist)
+		}
 		return err
 	}); err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not update output imagestreamtag: %w", err)

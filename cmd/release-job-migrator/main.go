@@ -488,9 +488,16 @@ func run(o options) error {
 					return err
 				}
 			}
-			cron := periodic.Cron
-			if cron == "" {
-				cron = fmt.Sprintf("@every %s", periodic.Interval)
+			var cron, interval *string
+			if periodic.Cron != "" {
+				// yaml.Marshal doesn't properly see &periodic.Cron, but does see &cronCopy...
+				cronCopy := periodic.Cron
+				cron = &cronCopy
+			}
+			if periodic.Interval != "" {
+				// yaml.Marshal doesn't properly see &periodic.Interval, but does see &intervalCopy...
+				intervalCopy := periodic.Interval
+				interval = &intervalCopy
 			}
 			// check that test does not already exist in config
 			combinedTests := append(replacements[filename].tests, ciopConfigs[filename].Configuration.Tests...)
@@ -503,7 +510,8 @@ func run(o options) error {
 			testsAndImages.tests = append(testsAndImages.tests, api.TestStepConfiguration{
 				As:                          info.As,
 				MultiStageTestConfiguration: conf.Steps,
-				Cron:                        &cron,
+				Cron:                        cron,
+				Interval:                    interval,
 			})
 			replacements[filename] = testsAndImages
 			replacedJobs[periodic.Name] = metadataFromJobInfo(info).JobName(jobconfig.PeriodicPrefix, info.As)

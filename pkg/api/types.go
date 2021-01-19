@@ -795,7 +795,8 @@ type TestDependencies map[string]string
 type Secret struct {
 	// Secret name, used inside test containers
 	Name string `json:"name"`
-	// Secret mount path. Defaults to /usr/test-secret
+	// Secret mount path. Defaults to /usr/test-secrets for first
+	// secret. /usr/test-secrets-2 for second, and so on.
 	MountPath string `json:"mount_path"`
 }
 

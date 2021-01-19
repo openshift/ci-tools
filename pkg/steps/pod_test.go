@@ -136,7 +136,7 @@ func TestGetPodObjectMounts(t *testing.T) {
 		{
 			name: "with secret name results in secret mounted with default path",
 			podStep: func(expectedPodStepTemplate *podStep) {
-				expectedPodStepTemplate.config.Secrets = []*api.Secret{{Name: testSecretName}}
+				expectedPodStepTemplate.config.Secrets = []*api.Secret{{Name: "some-secret"}}
 			},
 		},
 		{
@@ -144,7 +144,7 @@ func TestGetPodObjectMounts(t *testing.T) {
 			podStep: func(expectedPodStepTemplate *podStep) {
 				expectedPodStepTemplate.config.Secrets = []*api.Secret{
 					{
-						Name:      testSecretName,
+						Name:      "some-secret",
 						MountPath: "/usr/local/secrets",
 					},
 				}
@@ -155,8 +155,40 @@ func TestGetPodObjectMounts(t *testing.T) {
 			podStep: func(expectedPodStepTemplate *podStep) {
 				expectedPodStepTemplate.config.Secrets = []*api.Secret{
 					{
-						Name:      testSecretName,
+						Name:      "some-secret",
 						MountPath: "/usr/local/secrets",
+					},
+				}
+				expectedPodStepTemplate.artifactDir = "/tmp/artifacts"
+				expectedPodStepTemplate.config.ArtifactDir = "/tmp/artifacts"
+			},
+		},
+		{
+			name: "with artifacts, multiple secrets and path results in multiple mounts",
+			podStep: func(expectedPodStepTemplate *podStep) {
+				expectedPodStepTemplate.config.Secrets = []*api.Secret{
+					{
+						Name:      "some-secret",
+						MountPath: "/usr/local/secrets",
+					},
+					{
+						Name:      "another-secret",
+						MountPath: "/usr/local/secrets2",
+					},
+				}
+				expectedPodStepTemplate.artifactDir = "/tmp/artifacts"
+				expectedPodStepTemplate.config.ArtifactDir = "/tmp/artifacts"
+			},
+		},
+		{
+			name: "with artifacts, multiple secrets and path results with unspecified mounts",
+			podStep: func(expectedPodStepTemplate *podStep) {
+				expectedPodStepTemplate.config.Secrets = []*api.Secret{
+					{
+						Name: "some-secret",
+					},
+					{
+						Name: "another-secret",
 					},
 				}
 				expectedPodStepTemplate.artifactDir = "/tmp/artifacts"

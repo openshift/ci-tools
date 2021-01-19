@@ -20,9 +20,9 @@ import (
 )
 
 const (
-	testSecretName        = "test-secret"
-	testSecretDefaultPath = "/usr/test-secrets"
-	homeVolumeName        = "home"
+	testSecretVolumePrefix = "test-secret"
+	testSecretDefaultPath  = "/usr/test-secrets"
+	homeVolumeName         = "home"
 
 	openshiftCIEnv = "OPENSHIFT_CI"
 )
@@ -239,9 +239,9 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	}
 	pod.Spec.ServiceAccountName = s.config.ServiceAccountName
 	container := &pod.Spec.Containers[0]
-	for _, secret := range s.config.Secrets {
-		container.VolumeMounts = append(container.VolumeMounts, getSecretVolumeMountFromSecret(secret.MountPath)...)
-		pod.Spec.Volumes = append(pod.Spec.Volumes, getVolumeFromSecret(secret.Name)...)
+	for i, secret := range s.config.Secrets {
+		container.VolumeMounts = append(container.VolumeMounts, getSecretVolumeMountFromSecret(secret.MountPath, i)...)
+		pod.Spec.Volumes = append(pod.Spec.Volumes, getVolumeFromSecret(secret.Name, i)...)
 	}
 
 	if v := s.config.MemoryBackedVolume; v != nil {
@@ -268,10 +268,15 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	return pod, nil
 }
 
-func getVolumeFromSecret(secretName string) []coreapi.Volume {
+func getVolumeFromSecret(secretName string, secretIndex int) []coreapi.Volume {
+	volumeName := testSecretVolumePrefix
+	if secretIndex > 0 {
+		// Preserve mount volume name to preserve legacy in case anything cares.
+		volumeName = fmt.Sprintf("%s-%d", testSecretVolumePrefix, secretIndex+1)
+	}
 	return []coreapi.Volume{
 		{
-			Name: testSecretName,
+			Name: volumeName,
 			VolumeSource: coreapi.VolumeSource{
 				Secret: &coreapi.SecretVolumeSource{
 					SecretName: secretName,
@@ -281,13 +286,23 @@ func getVolumeFromSecret(secretName string) []coreapi.Volume {
 	}
 }
 
-func getSecretVolumeMountFromSecret(secretMountPath string) []coreapi.VolumeMount {
+func getSecretVolumeMountFromSecret(secretMountPath string, secretIndex int) []coreapi.VolumeMount {
 	if secretMountPath == "" {
 		secretMountPath = testSecretDefaultPath
+		if secretIndex > 0 {
+			// Preserve testSecretDefaultPath for the first entry to preserve legacy
+			// location.
+			secretMountPath = fmt.Sprintf("%s-%d", testSecretDefaultPath, secretIndex+1)
+		}
+	}
+	volumeName := testSecretVolumePrefix
+	if secretIndex > 0 {
+		// Preserve mount volume name to preserve legacy in case anything cares.
+		volumeName = fmt.Sprintf("%s-%d", testSecretVolumePrefix, secretIndex+1)
 	}
 	return []coreapi.VolumeMount{
 		{
-			Name:      testSecretName,
+			Name:      volumeName,
 			ReadOnly:  true,
 			MountPath: secretMountPath,
 		},

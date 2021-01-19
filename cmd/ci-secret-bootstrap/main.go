@@ -326,7 +326,8 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, bwClie
 	errChan := make(chan error, potentialErrors)
 
 	secretConfigWG := &sync.WaitGroup{}
-	for _, cfg := range config.Secrets {
+	for idx, cfg := range config.Secrets {
+		idx := idx
 		secretConfigWG.Add(1)
 
 		go func(secretConfig secretbootstrap.SecretConfig) {
@@ -368,7 +369,7 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, bwClie
 						}
 					}
 					if err != nil {
-						errChan <- fmt.Errorf("[%s] %w", key, err)
+						errChan <- fmt.Errorf("config.%d.\"%s\": %w", idx, key, err)
 						return
 					}
 					dataLock.Lock()

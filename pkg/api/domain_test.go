@@ -21,7 +21,7 @@ func TestDomainForService(t *testing.T) {
 		},
 		{
 			service:  ServiceRPMs,
-			expected: "rpms.svc.ci.openshift.org",
+			expected: "artifacts-rpms-openshift-origin-ci-rpms.apps.ci.l2s4.p1.openshiftapps.com",
 		},
 		{
 			service:  ServiceRegistry,

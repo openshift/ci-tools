@@ -222,7 +222,7 @@ if [[ -d /pull ]]; then
 	cp /pull/.dockerconfigjson $HOME/.docker/config.json
 fi
 oc registry login
-oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
+oc adm release extract --from=%q --file=image-references > ${ARTIFACT_DIR}/%s
 `, pullSpec, target)
 
 	// run adm release extract and grab the raw image-references from the payload

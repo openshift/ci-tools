@@ -847,6 +847,7 @@ func (o *options) initializeNamespace() error {
 		break
 	}
 
+	ssarStart := time.Now()
 	var selfSubjectAccessReviewSucceeded bool
 	for i := 0; i < 30; i++ {
 		sar := &authapi.SelfSubjectAccessReview{Spec: authapi.SelfSubjectAccessReviewSpec{ResourceAttributes: &authapi.ResourceAttributes{
@@ -865,9 +866,36 @@ func (o *options) initializeNamespace() error {
 		log.Printf("[%d/30] RBAC in namespace not yet ready, sleeping for a second...\n", i)
 		time.Sleep(time.Second)
 	}
+	log.Printf("Spent %v waiting for RBAC to initlize in the new namespace.\n", time.Since(ssarStart))
 	if !selfSubjectAccessReviewSucceeded {
 		log.Println("ERROR: timed out waiting for RBAC")
 		return errors.New("timed out waiting for RBAC")
+	}
+
+	pullStart := time.Now()
+	var imagePullSecretsMinted bool
+	for i := 0; i < 30; i++ {
+		imagePullSecretsMinted = true
+		serviceAccounts := map[string]*coreapi.ServiceAccount{
+			"builder": {},
+			"default": {},
+		}
+		for name := range serviceAccounts {
+			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: o.namespace, Name: name}, serviceAccounts[name]); err != nil && !kerrors.IsNotFound(err) {
+				return fmt.Errorf("failed to fetch service account %s: %w", name, err)
+			}
+			imagePullSecretsMinted = imagePullSecretsMinted && len(serviceAccounts[name].ImagePullSecrets) > 0
+		}
+		if imagePullSecretsMinted {
+			break
+		}
+		log.Printf("[%d/30] Image pull secrets in namespace not yet ready, sleeping for a second...\n", i)
+		time.Sleep(time.Second)
+	}
+	log.Printf("Spent %v waiting for image pull secrets to initlize in the new namespace.\n", time.Since(pullStart))
+	if !imagePullSecretsMinted {
+		log.Println("ERROR: timed out waiting for image pull secrets")
+		return errors.New("timed out waiting for image pull secrets")
 	}
 
 	updates := map[string]string{}

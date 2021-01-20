@@ -854,6 +854,7 @@ const (
 	ClusterProfileVSphere            ClusterProfile = "vsphere"
 	ClusterProfileKubevirt           ClusterProfile = "kubevirt"
 	ClusterProfileAWSCPaaS           ClusterProfile = "aws-cpaas"
+	ClusterProfileOSDEphemeral       ClusterProfile = "osd-ephemeral"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -885,6 +886,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileVSphere,
 		ClusterProfileKubevirt,
 		ClusterProfileAWSCPaaS,
+		ClusterProfileOSDEphemeral,
 	}
 }
 
@@ -933,6 +935,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "packet"
 	case ClusterProfileKubevirt:
 		return "kubevirt"
+	case ClusterProfileOSDEphemeral:
+		return "osd-ephemeral"
 	default:
 		return ""
 	}
@@ -992,7 +996,7 @@ func (p ClusterProfile) LeaseType() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "azure4", "azure-arc", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "kubevirt", "aws-cpaas":
+	case "aws", "azure4", "azure-arc", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "kubevirt", "aws-cpaas", "osd-ephemeral":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

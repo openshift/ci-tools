@@ -1161,7 +1161,7 @@ func TestConstructSecrets(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "prod-secret-1",
 							Namespace: "namespace-1",
-							Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 						},
 						Data: map[string][]byte{
 							"key-name-1": []byte("value1"),
@@ -1179,7 +1179,7 @@ func TestConstructSecrets(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "ci-pull-credentials",
 							Namespace: "ci",
-							Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 						},
 						Data: map[string][]byte{
 							".dockerconfigjson": []byte("123"),
@@ -1193,7 +1193,7 @@ func TestConstructSecrets(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "prod-secret-2",
 							Namespace: "namespace-2",
-							Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 						},
 						Data: map[string][]byte{
 							"key-name-1": []byte("value1"),
@@ -1422,7 +1422,7 @@ func TestUpdateSecrets(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "prod-secret-1",
 							Namespace: "namespace-1",
-							Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 						},
 						Data: map[string][]byte{
 							"key-name-1": []byte("value1"),
@@ -1440,7 +1440,7 @@ func TestUpdateSecrets(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "prod-secret-2",
 							Namespace: "namespace-2",
-							Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 						},
 						Data: map[string][]byte{
 							"key-name-1": []byte("value1"),
@@ -1460,7 +1460,7 @@ func TestUpdateSecrets(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "prod-secret-1",
 						Namespace: "namespace-1",
-						Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 					},
 					Data: map[string][]byte{
 						"key-name-1": []byte("value1"),
@@ -1478,7 +1478,7 @@ func TestUpdateSecrets(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "prod-secret-2",
 						Namespace: "namespace-2",
-						Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 					},
 					Data: map[string][]byte{
 						"key-name-1": []byte("value1"),
@@ -1512,7 +1512,7 @@ func TestUpdateSecrets(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "prod-secret-1",
 							Namespace: "namespace-1",
-							Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 						},
 						Data: map[string][]byte{
 							"key-name-1": []byte("value1"),
@@ -1530,7 +1530,7 @@ func TestUpdateSecrets(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "prod-secret-2",
 							Namespace: "namespace-2",
-							Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 						},
 						Data: map[string][]byte{
 							"key-name-1": []byte("value1"),
@@ -1550,7 +1550,7 @@ func TestUpdateSecrets(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "prod-secret-1",
 						Namespace: "namespace-1",
-						Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 					},
 					Data: map[string][]byte{
 						"key-name-1": []byte("value1"),
@@ -1569,7 +1569,7 @@ func TestUpdateSecrets(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "prod-secret-2",
 						Namespace: "namespace-2",
-						Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 					},
 					Data: map[string][]byte{
 						"key-name-1": []byte("value1"),
@@ -1590,7 +1590,7 @@ func TestUpdateSecrets(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "prod-secret-1",
 						Namespace: "namespace-1",
-						Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 					},
 					Data: map[string][]byte{
 						"key-name-1": []byte("abc"),
@@ -1603,7 +1603,7 @@ func TestUpdateSecrets(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "prod-secret-1",
 							Namespace: "namespace-1",
-							Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 						},
 						Data: map[string][]byte{
 							"key-name-1": []byte("value1"),
@@ -1617,7 +1617,7 @@ func TestUpdateSecrets(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "prod-secret-1",
 						Namespace: "namespace-1",
-						Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 					},
 					Data: map[string][]byte{
 						"key-name-1": []byte("abc"),
@@ -1632,7 +1632,7 @@ func TestUpdateSecrets(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:              "prod-secret-1",
 						Namespace:         "namespace-1",
-						Labels:            map[string]string{"ci.openshift.org/auto-managed": "true"},
+						Labels:            map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 						CreationTimestamp: metav1.NewTime(time.Now()),
 					},
 					Data: map[string][]byte{
@@ -1646,7 +1646,7 @@ func TestUpdateSecrets(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "prod-secret-1",
 							Namespace: "namespace-1",
-							Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 						},
 						Data: map[string][]byte{
 							"key-name-1": []byte("abc"),
@@ -1659,7 +1659,7 @@ func TestUpdateSecrets(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "prod-secret-1",
 						Namespace: "namespace-1",
-						Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 					},
 					Data: map[string][]byte{
 						"key-name-1": []byte("abc"),
@@ -1832,7 +1832,7 @@ func TestWriteSecrets(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "prod-secret-1",
 						Namespace: "namespace-1",
-						Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 					},
 					Data: map[string][]byte{
 						"key-name-1": []byte("value1"),
@@ -1848,7 +1848,7 @@ func TestWriteSecrets(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "prod-secret-2",
 						Namespace: "namespace-2",
-						Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 					},
 					Data: map[string][]byte{
 						"key-name-1": []byte("value1"),
@@ -1873,7 +1873,7 @@ kind: Secret
 metadata:
   creationTimestamp: null
   labels:
-    ci.openshift.org/auto-managed: "true"
+    dptp.openshift.io/requester: ci-secret-bootstrap
   name: prod-secret-1
   namespace: namespace-1
 ---
@@ -1889,7 +1889,7 @@ kind: Secret
 metadata:
   creationTimestamp: null
   labels:
-    ci.openshift.org/auto-managed: "true"
+    dptp.openshift.io/requester: ci-secret-bootstrap
   name: prod-secret-2
   namespace: namespace-2
 ---

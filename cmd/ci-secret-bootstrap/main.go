@@ -31,6 +31,7 @@ import (
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/logrusutil"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/bitwarden"
 	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
@@ -388,7 +389,7 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, bwClie
 					ObjectMeta: meta.ObjectMeta{
 						Name:      secretContext.Name,
 						Namespace: secretContext.Namespace,
-						Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+						Labels:    map[string]string{api.DPTPRequesterLabel: "ci-secret-bootstrap"},
 					},
 					Type: secretContext.Type,
 				}

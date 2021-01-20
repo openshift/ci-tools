@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/controller/secretsyncer/config"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
@@ -235,7 +236,7 @@ func secret(nn types.NamespacedName, data map[string][]byte, tp corev1.SecretTyp
 		if s.Labels == nil {
 			s.Labels = map[string]string{}
 		}
-		s.Labels["ci.openshift.org/secret-syncer-controller-managed"] = "true"
+		s.Labels[api.DPTPRequesterLabel] = ControllerName
 		if s.Data == nil {
 			s.Data = map[string][]byte{}
 		}

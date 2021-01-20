@@ -336,7 +336,7 @@ func TestReconcile(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "ci",
 						ResourceVersion: "1",
-						Annotations: map[string]string{
+						Labels: map[string]string{
 							"dptp.openshift.io/requester": "registry_syncer",
 						},
 					},

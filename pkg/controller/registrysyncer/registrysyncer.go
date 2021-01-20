@@ -110,8 +110,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 }
 
 const (
-	annotationDPTPRequester = "dptp.openshift.io/requester"
-	finalizerName           = "dptp.openshift.io/registry-syncer"
+	finalizerName = "dptp.openshift.io/registry-syncer"
 )
 
 func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *logrus.Entry) error {
@@ -203,8 +202,8 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 				return fmt.Errorf("failed to check if namespace %s exists on cluster %s: %w", req.Namespace, clusterName, err)
 			}
 			if err := client.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
-				Name:        req.Namespace,
-				Annotations: map[string]string{annotationDPTPRequester: ControllerName},
+				Name:   req.Namespace,
+				Labels: map[string]string{api.DPTPRequesterLabel: ControllerName},
 			}}); err != nil && !apierrors.IsAlreadyExists(err) {
 				return fmt.Errorf("failed to create namespace %s on cluster %s: %w", req.Namespace, clusterName, err)
 			}

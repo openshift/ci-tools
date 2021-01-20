@@ -32,6 +32,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
+	"github.com/openshift/ci-tools/pkg/controller/imagepusher"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
 	"github.com/openshift/ci-tools/pkg/controller/registrysyncer"
 	"github.com/openshift/ci-tools/pkg/controller/secretsyncer"
@@ -54,6 +55,7 @@ var allControllers = sets.NewString(
 	secretsyncer.ControllerName,
 	registrysyncer.ControllerName,
 	serviceaccountsecretrefresher.ControllerName,
+	imagepusher.ControllerName,
 )
 
 type options struct {
@@ -73,6 +75,7 @@ type options struct {
 	secretSyncerConfigOptions            secretSyncerConfigOptions
 	registrySyncerOptions                registrySyncerOptions
 	serviceAccountSecretRefresherOptions serviceAccountSecretRefresherOptions
+	imagePusherOptions                   imagePusherOptions
 	*flagutil.GitHubOptions
 }
 
@@ -100,6 +103,11 @@ type registrySyncerOptions struct {
 	deniedImageStreams        sets.String
 	dontImportFromAPICI       flagutil.Strings
 	dontImportFromAPICIParsed []*regexp.Regexp
+}
+
+type imagePusherOptions struct {
+	imageStreamsRaw flagutil.Strings
+	imageStreams    sets.String
 }
 
 type secretSyncerConfigOptions struct {
@@ -148,6 +156,7 @@ func newOpts() (*options, error) {
 	flag.StringVar(&opts.registryClusterName, "registry-cluster-name", "api.ci", "the cluster name on which the CI central registry is running")
 	flag.Var(&opts.serviceAccountSecretRefresherOptions.enabledNamespaces, "serviceAccountRefresherOptions.enabled-namespace", "A namespace for which the serviceaccount_secret_refresher should be enabled. Can be passed multiple times.")
 	flag.BoolVar(&opts.serviceAccountSecretRefresherOptions.removeOldSecrets, "serviceAccountRefresherOptions.remove-old-secrets", false, "whether the serviceaccountsecretrefresher should delete secrets older than 30 days")
+	flag.Var(&opts.imagePusherOptions.imageStreamsRaw, "imagePusher.image-stream", "An imagestream that will be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	flag.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	flag.Parse()
 
@@ -189,6 +198,10 @@ func newOpts() (*options, error) {
 	deniedImageStreams, isErrors := completeImageStream("registrySyncerOptions.denied-image-stream", opts.registrySyncerOptions.deniedImageStreamsRaw)
 	errs = append(errs, isErrors...)
 	opts.registrySyncerOptions.deniedImageStreams = deniedImageStreams
+
+	imagePusherImageStreams, isErrors := completeImageStream("uniRegistrySyncerOptions.image-stream", opts.imagePusherOptions.imageStreamsRaw)
+	errs = append(errs, isErrors...)
+	opts.imagePusherOptions.imageStreams = imagePusherImageStreams
 
 	for _, rawRegex := range opts.registrySyncerOptions.dontImportFromAPICI.StringSet().List() {
 		parsedRegex, err := regexp.Compile(rawRegex)
@@ -426,7 +439,8 @@ func main() {
 	}
 
 	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) ||
-		opts.enabledControllersSet.Has(registrysyncer.ControllerName) {
+		opts.enabledControllersSet.Has(registrysyncer.ControllerName) ||
+		opts.enabledControllersSet.Has(imagepusher.ControllerName) {
 		if err := controllerutil.RegisterMetrics(); err != nil {
 			logrus.WithError(err).Fatal("failed to register metrics")
 		}
@@ -501,6 +515,19 @@ func main() {
 			opts.registrySyncerOptions.imageStreamPrefixes,
 			opts.registrySyncerOptions.deniedImageStreams,
 			opts.registrySyncerOptions.dontImportFromAPICIParsed,
+		); err != nil {
+			logrus.WithError(err).Fatal("failed to add registrysyncer")
+		}
+	}
+
+	if opts.enabledControllersSet.Has(imagepusher.ControllerName) {
+		if _, hasApiCI := kubeconfigs[apiCIContextName]; !hasApiCI {
+			logrus.Fatalf("--kubeconfig must include a context named `%s`", apiCIContextName)
+		}
+		if err := imagepusher.AddToManager(
+			allManagers[appCIContextName],
+			allManagers[apiCIContextName],
+			opts.imagePusherOptions.imageStreams,
 		); err != nil {
 			logrus.WithError(err).Fatal("failed to add registrysyncer")
 		}

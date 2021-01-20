@@ -157,6 +157,15 @@ func reconcileRequest(namespace, name string) reconcile.Request {
 
 func TestReconcile(t *testing.T) {
 
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ci",
+			Name:      "registry-pull-credentials",
+		},
+		Data: map[string][]byte{corev1.DockerConfigJsonKey: []byte("abc")},
+		Type: corev1.SecretTypeDockerConfigJson,
+	}
+
 	referenceImageStreamTag := &imagev1.ImageStreamTag{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "ns",
@@ -191,16 +200,15 @@ func TestReconcile(t *testing.T) {
 		return copy
 	}
 
-	pullSecretData := []byte("abc")
 	expectedPullSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: referenceImageStreamTag.Namespace,
 			// Do not use the const here, we want this to fail if someone changes its value
-			Name: "registry-cluster-pull-secret",
+			Name: "registry-pull-credentials",
 		},
 		Type: corev1.SecretTypeDockerConfigJson,
 		Data: map[string][]byte{
-			corev1.DockerConfigJsonKey: pullSecretData,
+			corev1.DockerConfigJsonKey: []byte("abc"),
 		},
 	}
 	outdatedPullSecret := func() *corev1.Secret {
@@ -446,7 +454,7 @@ func TestReconcile(t *testing.T) {
 				Name:      referenceImageStreamTag.Name,
 			},
 			registryClient:      fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
-			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(outdatedImageStreamTag()))},
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(secret.DeepCopy(), outdatedImageStreamTag()))},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
 					return fmt.Errorf("unexpected error: %v", err)
@@ -462,6 +470,7 @@ func TestReconcile(t *testing.T) {
 			},
 			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
+				secret.DeepCopy(),
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
 			))},
@@ -480,6 +489,7 @@ func TestReconcile(t *testing.T) {
 			},
 			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
+				secret.DeepCopy(),
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
 				outdatedPullSecret(),
@@ -499,6 +509,7 @@ func TestReconcile(t *testing.T) {
 			},
 			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
+				secret.DeepCopy(),
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
 				outdatedRoleBindig(),
@@ -520,6 +531,7 @@ func TestReconcile(t *testing.T) {
 			},
 			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
+				secret.DeepCopy(),
 				expectedNamespace.DeepCopy(),
 				expectedPullSecret.DeepCopy(),
 				outdatedImageStream(),
@@ -540,6 +552,7 @@ func TestReconcile(t *testing.T) {
 			},
 			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
+				secret.DeepCopy(),
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
 				expectedPullSecret.DeepCopy(),
@@ -560,6 +573,7 @@ func TestReconcile(t *testing.T) {
 			},
 			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
+				secret.DeepCopy(),
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
 				expectedPullSecret.DeepCopy(),
@@ -588,7 +602,6 @@ func TestReconcile(t *testing.T) {
 				registryClusterName: "api.ci",
 				registryClient:      tc.registryClient,
 				buildClusterClients: tc.buildClusterClients,
-				pullSecretGetter:    func() []byte { return pullSecretData },
 				forbiddenRegistries: sets.NewString("default-route-openshift-image-registry.apps.build01.ci.devcluster.openshift.com",
 					"registry.build01.ci.openshift.org",
 					"registry.build02.ci.openshift.org",

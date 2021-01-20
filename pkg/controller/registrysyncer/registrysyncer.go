@@ -35,7 +35,6 @@ const ControllerName = "registry_syncer"
 
 func AddToManager(mgr manager.Manager,
 	managers map[string]manager.Manager,
-	pullSecretGetter func() []byte,
 	imageStreamPrefixes sets.String,
 	deniedImageStreams sets.String,
 	dontImportFromApiCI []*regexp.Regexp,
@@ -44,7 +43,6 @@ func AddToManager(mgr manager.Manager,
 	r := &reconciler{
 		log:                 log,
 		registryClients:     map[string]ctrlruntimeclient.Client{},
-		pullSecretGetter:    pullSecretGetter,
 		dontImportFromApiCI: dontImportFromApiCI,
 	}
 	for clusterName, m := range managers {
@@ -92,7 +90,6 @@ func handlerFactory(filter objectFilter) handler.EventHandler {
 type reconciler struct {
 	log                 *logrus.Entry
 	registryClients     map[string]ctrlruntimeclient.Client
-	pullSecretGetter    func() []byte
 	dontImportFromApiCI []*regexp.Regexp
 }
 
@@ -233,8 +230,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 			log.Debug("ImageStreamTag is current")
 			return nil
 		}
-
-		if err := r.ensureImagePullSecret(ctx, req.Namespace, client, log); err != nil {
+		if err := controllerutil.EnsureImagePullSecret(ctx, req.Namespace, client, log); err != nil {
 			return fmt.Errorf("failed to ensure imagePullSecret on cluster %s: %w", clusterName, err)
 		}
 		dockerImageReference, err := api.PublicDomainForImage(srcClusterName, sourceImageStreamTag.Image.DockerImageReference)
@@ -376,13 +372,6 @@ func findNewest(isTags map[string]*imagev1.ImageStreamTag) string {
 	return result
 }
 
-const pullSecretName = "registry-cluster-pull-secret"
-
-func (r *reconciler) ensureImagePullSecret(ctx context.Context, namespace string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
-	secret, mutateFn := r.pullSecret(namespace)
-	return upsertObject(ctx, client, secret, mutateFn, log)
-}
-
 // https://issues.redhat.com/browse/DPTP-1656?focusedCommentId=15345756&page=com.atlassian.jira.plugin.system.issuetabpanels%3Acomment-tabpanel#comment-15345756
 // E.g., ci-operator uses the release controller configuration to determine
 // the version of OpenShift we create from the ImageStream, so we need
@@ -413,22 +402,6 @@ func imagestream(imageStream *imagev1.ImageStream) (*imagev1.ImageStream, crcont
 func (r *reconciler) ensureImageStream(ctx context.Context, imageStream *imagev1.ImageStream, client ctrlruntimeclient.Client, log *logrus.Entry) error {
 	stream, mutateFn := imagestream(imageStream)
 	return upsertObject(ctx, client, stream, mutateFn, log)
-}
-
-func (r *reconciler) pullSecret(namespace string) (*corev1.Secret, crcontrollerutil.MutateFn) {
-	s := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      pullSecretName,
-		},
-	}
-	return s, func() error {
-		s.Data = map[string][]byte{
-			corev1.DockerConfigJsonKey: r.pullSecretGetter(),
-		}
-		s.Type = corev1.SecretTypeDockerConfigJson
-		return nil
-	}
 }
 
 var (

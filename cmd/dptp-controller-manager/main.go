@@ -405,12 +405,6 @@ func main() {
 	if opts.GitHubOptions.TokenPath != "" {
 		secretPaths = append(secretPaths, opts.GitHubOptions.TokenPath)
 	}
-	if opts.testImagesDistributorOptions.imagePullSecretPath != "" {
-		secretPaths = append(secretPaths, opts.testImagesDistributorOptions.imagePullSecretPath)
-	}
-	if opts.registrySyncerOptions.imagePullSecretPath != "" {
-		secretPaths = append(secretPaths, opts.registrySyncerOptions.imagePullSecretPath)
-	}
 	secretAgent := &secret.Agent{}
 	if err := secretAgent.Start(secretPaths); err != nil {
 		logrus.WithError(err).Fatal("Failed to start secret agent")
@@ -447,9 +441,6 @@ func main() {
 	}
 
 	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) {
-		if opts.testImagesDistributorOptions.imagePullSecretPath == "" {
-			logrus.Fatal("The testImagesDistributor requires the --testImagesDistributorOptions.imagePullSecretPath flag to be set ")
-		}
 		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to construct registryAgent")
@@ -461,7 +452,6 @@ func main() {
 			registryMgr,
 			allClustersExceptRegistryCluster,
 			ciOPConfigAgent,
-			secretAgent.GetTokenGenerator(opts.testImagesDistributorOptions.imagePullSecretPath),
 			registryConfigAgent,
 			opts.testImagesDistributorOptions.additionalImageStreamTags,
 			opts.testImagesDistributorOptions.additionalImageStreams,
@@ -502,16 +492,12 @@ func main() {
 	}
 
 	if opts.enabledControllersSet.Has(registrysyncer.ControllerName) {
-		if opts.registrySyncerOptions.imagePullSecretPath == "" {
-			logrus.Fatal("The registrysyncer requires the --registrySyncerOptions.imagePullSecretPath flag to be set ")
-		}
 		if _, hasApiCI := kubeconfigs[apiCIContextName]; !hasApiCI {
 			logrus.Fatalf("--kubeconfig must include a context named `%s`", apiCIContextName)
 		}
 		if err := registrysyncer.AddToManager(
 			mgr,
 			map[string]manager.Manager{apiCIContextName: allManagers[apiCIContextName], appCIContextName: allManagers[appCIContextName]},
-			secretAgent.GetTokenGenerator(opts.registrySyncerOptions.imagePullSecretPath),
 			opts.registrySyncerOptions.imageStreamPrefixes,
 			opts.registrySyncerOptions.deniedImageStreams,
 			opts.registrySyncerOptions.dontImportFromAPICIParsed,

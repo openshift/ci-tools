@@ -39,7 +39,6 @@ func AddToManager(mgr manager.Manager,
 	registryManager manager.Manager,
 	buildClusterManagers map[string]manager.Manager,
 	configAgent agents.ConfigAgent,
-	pullSecretGetter func() []byte,
 	resolver agents.RegistryAgent,
 	additionalImageStreamTags sets.String,
 	additionalImageStreams sets.String,
@@ -53,7 +52,6 @@ func AddToManager(mgr manager.Manager,
 		registryClusterName: registryClusterName,
 		registryClient:      imagestreamtagwrapper.MustNew(registryManager.GetClient(), registryManager.GetCache()),
 		buildClusterClients: map[string]ctrlruntimeclient.Client{},
-		pullSecretGetter:    pullSecretGetter,
 		forbiddenRegistries: forbiddenRegistries,
 	}
 	c, err := controller.New(ControllerName, mgr, controller.Options{
@@ -168,7 +166,6 @@ type reconciler struct {
 	registryClusterName string
 	registryClient      ctrlruntimeclient.Client
 	buildClusterClients map[string]ctrlruntimeclient.Client
-	pullSecretGetter    func() []byte
 	forbiddenRegistries sets.String
 }
 
@@ -252,9 +249,8 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		log.Debug("ImageStreamTag is current")
 		return nil
 	}
-
-	if err := r.ensureImagePullSecret(ctx, decoded.Namespace, client, log); err != nil {
-		return fmt.Errorf("failed to ensure imagePullSecret: %w", err)
+	if err := controllerutil.EnsureImagePullSecret(ctx, decoded.Namespace, client, log); err != nil {
+		return fmt.Errorf("failed to ensure imagePullSecret on cluster %s: %w", cluster, err)
 	}
 	publicDomainForImage, err := api.PublicDomainForImage(r.registryClusterName, sourceImageStreamTag.Image.DockerImageReference)
 	if err != nil {
@@ -316,13 +312,6 @@ func (r *reconciler) isImageStreamTagCurrent(
 	}
 
 	return imageStreamTag.Image.Name == reference.Image.Name, nil
-}
-
-const pullSecretName = "registry-cluster-pull-secret"
-
-func (r *reconciler) ensureImagePullSecret(ctx context.Context, namespace string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
-	secret, mutateFn := r.pullSecret(namespace)
-	return upsertObject(ctx, client, secret, mutateFn, log)
 }
 
 const ciOperatorPullerRoleName = "ci-operator-image-puller"
@@ -409,22 +398,6 @@ func imagestream(imageStream *imagev1.ImageStream) (*imagev1.ImageStream, crcont
 func (r *reconciler) ensureImageStream(ctx context.Context, imageStream *imagev1.ImageStream, client ctrlruntimeclient.Client, log *logrus.Entry) error {
 	stream, mutateFn := imagestream(imageStream)
 	return upsertObject(ctx, client, stream, mutateFn, log)
-}
-
-func (r *reconciler) pullSecret(namespace string) (*corev1.Secret, crcontrollerutil.MutateFn) {
-	s := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      pullSecretName,
-		},
-	}
-	return s, func() error {
-		s.Data = map[string][]byte{
-			corev1.DockerConfigJsonKey: r.pullSecretGetter(),
-		}
-		s.Type = corev1.SecretTypeDockerConfigJson
-		return nil
-	}
 }
 
 type registryResolver interface {

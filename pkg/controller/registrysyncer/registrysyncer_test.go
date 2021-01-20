@@ -124,9 +124,6 @@ func init() {
 
 func TestReconcile(t *testing.T) {
 	t.Parallel()
-	pullSecretGetter := func() []byte {
-		return []byte("some-secret")
-	}
 
 	now := metav1.Now()
 	threeMinLater := metav1.NewTime(now.Add(3 * time.Minute))
@@ -629,7 +626,6 @@ func TestReconcile(t *testing.T) {
 					apiCI: tc.apiCIClient,
 					appCI: tc.appCIClient,
 				},
-				pullSecretGetter: pullSecretGetter,
 			}
 
 			request := reconcile.Request{NamespacedName: tc.request}

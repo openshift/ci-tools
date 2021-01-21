@@ -201,7 +201,7 @@ set -xeuo pipefail
 export HOME=/tmp
 oc registry login
 oc adm release new --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q --name %q
-oc adm release extract --from=%q --to=/tmp/artifacts/release-payload-%s
+oc adm release extract --from=%q --to=${ARTIFACT_DIR}/release-payload-%s
 `, s.jobSpec.Namespace(), streamName, cvo, destination, version, destination, s.name),
 	}
 

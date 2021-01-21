@@ -251,6 +251,7 @@ func validateClusterProfile(fieldRoot string, p api.ClusterProfile) []error {
 		api.ClusterProfileAWSCentos40,
 		api.ClusterProfileAWSGluster,
 		api.ClusterProfileAzure4,
+		api.ClusterProfileAzureArc,
 		api.ClusterProfileGCP,
 		api.ClusterProfileGCP40,
 		api.ClusterProfileGCPHA,

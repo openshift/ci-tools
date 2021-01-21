@@ -416,39 +416,58 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, bwClie
 
 func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secretsMap map[string][]*coreapi.Secret, force bool) error {
 	var errs []error
+	shouldCreate := false
 	for cluster, secrets := range secretsMap {
 		for _, secret := range secrets {
-			logrus.Debugf("handling secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
-			secretsGetter := secretsGetters[cluster]
-			if existingSecret, err := secretsGetter.Secrets(secret.Namespace).Get(context.TODO(), secret.Name, meta.GetOptions{}); err == nil {
+			logger := logrus.WithFields(logrus.Fields{"cluster": cluster, "namespace": secret.Namespace, "name": secret.Name, "type": secret.Type})
+			logrus.Debugf("handling secret")
+
+			secretClient := secretsGetters[cluster].Secrets(secret.Namespace)
+
+			existingSecret, err := secretClient.Get(context.TODO(), secret.Name, meta.GetOptions{})
+			if err != nil && !kerrors.IsNotFound(err) {
+				errs = append(errs, fmt.Errorf("error reading secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
+			}
+
+			if err == nil {
 				if secret.Type != existingSecret.Type {
-					errs = append(errs, fmt.Errorf("cannot change secret type from %q to %q (immutable field): %s:%s/%s", existingSecret.Type, secret.Type, cluster, secret.Namespace, secret.Name))
-					continue
-				}
-				for k, v := range existingSecret.Data {
-					if _, exists := secret.Data[k]; exists {
+					if !force {
+						errs = append(errs, fmt.Errorf("cannot change secret type from %q to %q (immutable field): %s:%s/%s", existingSecret.Type, secret.Type, cluster, secret.Namespace, secret.Name))
 						continue
 					}
-					secret.Data[k] = v
+					if err := secretClient.Delete(context.TODO(), secret.Name, meta.DeleteOptions{}); err != nil {
+						errs = append(errs, fmt.Errorf("error deleting secret: %w", err))
+						continue
+					}
+					shouldCreate = true
 				}
-				if !force && !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data) {
-					logrus.Errorf("actual %s:%s/%s differs the expected:\n", cluster, secret.Namespace, secret.Name)
-					errs = append(errs, fmt.Errorf("secret %s:%s/%s needs updating in place, use --force to do so", cluster, secret.Namespace, secret.Name))
-					continue
+
+				if !shouldCreate {
+					for k, v := range existingSecret.Data {
+						if _, exists := secret.Data[k]; exists {
+							continue
+						}
+						secret.Data[k] = v
+					}
+					if !force && !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data) {
+						logger.Errorf("actual secret data differs the expected")
+						errs = append(errs, fmt.Errorf("secret %s:%s/%s needs updating in place, use --force to do so", cluster, secret.Namespace, secret.Name))
+						continue
+					}
+					if _, err := secretClient.Update(context.TODO(), secret, meta.UpdateOptions{}); err != nil {
+						errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
+						continue
+					}
+					logger.Debugf("secret updated")
 				}
-				if _, err := secretsGetter.Secrets(secret.Namespace).Update(context.TODO(), secret, meta.UpdateOptions{}); err != nil {
-					errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
-					continue
-				}
-				logrus.Debugf("updated secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
-			} else if kerrors.IsNotFound(err) {
-				if _, err := secretsGetter.Secrets(secret.Namespace).Create(context.TODO(), secret, meta.CreateOptions{}); err != nil {
+			}
+
+			if kerrors.IsNotFound(err) || shouldCreate {
+				if _, err := secretClient.Create(context.TODO(), secret, meta.CreateOptions{}); err != nil {
 					errs = append(errs, fmt.Errorf("error creating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 					continue
 				}
-				logrus.Debugf("created secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
-			} else {
-				errs = append(errs, fmt.Errorf("error reading secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
+				logger.Debugf("secret created")
 			}
 		}
 	}

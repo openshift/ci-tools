@@ -1705,11 +1705,11 @@ func TestUpdateSecrets(t *testing.T) {
   }
 }`),
 						},
+						Type: coreapi.SecretTypeOpaque,
 					},
 				},
 			},
-			force:    true,
-			expected: fmt.Errorf("cannot change secret type from \"kubernetes.io/dockerconfigjson\" to \"\" (immutable field): default:namespace-2/prod-secret-2"),
+			force: true,
 			expectedSecretsOnDefault: []coreapi.Secret{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1726,7 +1726,7 @@ func TestUpdateSecrets(t *testing.T) {
   }
 }`),
 					},
-					Type: coreapi.SecretTypeDockerConfigJson,
+					Type: coreapi.SecretTypeOpaque,
 				},
 			},
 		},

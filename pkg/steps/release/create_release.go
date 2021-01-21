@@ -87,6 +87,11 @@ func setupReleaseImageStream(ctx context.Context, namespace string, client ctrlr
 				Resources: []string{"imagestreams", "imagestreamtags"},
 				Verbs:     []string{"create", "get", "list", "update", "watch"},
 			},
+			{
+				APIGroups: []string{""},
+				Resources: []string{"configmaps"},
+				Verbs:     []string{"create", "get", "list", "update", "watch"},
+			},
 		},
 	}
 

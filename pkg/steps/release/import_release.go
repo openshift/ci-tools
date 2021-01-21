@@ -222,8 +222,17 @@ if [[ -d /pull ]]; then
 fi
 oc registry login
 oc adm release extract --from=%q --file=image-references > ${ARTIFACT_DIR}/%s
+# while release creation may happen more than once in the lifetime of a test
+# namespace, only one release creation Pod will ever run at once. Therefore,
+# while actions editing the output ConfigMap may race if done from ci-operator
+# itself, these actions cannot race from this Pod, as all active ci-operator
+# processes will launch and wait for but one release Pod. Here, we need to
+# delete any previously-existing ConfigMap if we're re-importing the release.
+if oc get configmap release-%s; then
+	oc delete configmap release-%s
+fi
 oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
-`, pullSpec, target, target, target, target)
+`, pullSpec, target, target, target, target, target, target)
 
 	// run adm release extract and grab the raw image-references from the payload
 	podConfig := steps.PodStepConfiguration{

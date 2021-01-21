@@ -492,6 +492,19 @@ func TestValidateTestSteps(t *testing.T) {
 				Resources: resources},
 		}},
 	}, {
+		name: "valid kvm",
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:       "as",
+				From:     "from",
+				Commands: "commands",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"devices.kubevirt.io/kvm": "1"},
+					Limits:   api.ResourceList{"devices.kubevirt.io/kvm": "1"},
+				},
+			},
+		}},
+	}, {
 		name: "no name",
 		steps: []api.TestStep{{
 			LiteralTestStep: &api.LiteralTestStep{
@@ -750,6 +763,9 @@ func TestValidateTestSteps(t *testing.T) {
 				context.seen = tc.seen
 			}
 			ret := validateTestSteps(context, testStageTest, tc.steps)
+			if len(ret) > 0 && len(tc.errs) == 0 {
+				t.Fatalf("Unexpected error %v", ret)
+			}
 			if !errListMessagesEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
 			}

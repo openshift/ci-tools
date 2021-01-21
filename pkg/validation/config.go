@@ -289,6 +289,11 @@ func validateResourceList(fieldRoot string, list api.ResourceList) []error {
 					validationErrors = append(validationErrors, fmt.Errorf("%s.%s: quantity cannot be negative", fieldRoot, key))
 				}
 			}
+		case "devices.kubevirt.io/kvm":
+			v := list[key]
+			if v != "1" {
+				validationErrors = append(validationErrors, fmt.Errorf("%s.%s: must be 1", fieldRoot, key))
+			}
 		default:
 			numInvalid++
 			validationErrors = append(validationErrors, fmt.Errorf("'%s' specifies an invalid key %s", fieldRoot, key))

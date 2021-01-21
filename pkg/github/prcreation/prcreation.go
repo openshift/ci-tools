@@ -106,7 +106,7 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 	if err != nil {
 		return fmt.Errorf("failed to get botname: %w", err)
 	}
-	username := user.Name
+	username := user.Login
 	token := o.secretAgent.GetSecret(o.TokenPath)
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: o.secretAgent}
 	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: o.secretAgent}
@@ -161,9 +161,9 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		repo,
 		prTitle,
 		prArgs.prBody+"\n/cc @"+prArgs.prAssignee,
-		prArgs.matchTitle,
 		username+":"+sourceBranchName,
 		branch,
+		sourceBranchName,
 		true,
 		labelsToAdd,
 	); err != nil {

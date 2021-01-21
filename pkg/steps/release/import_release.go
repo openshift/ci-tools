@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -223,7 +222,17 @@ if [[ -d /pull ]]; then
 fi
 oc registry login
 oc adm release extract --from=%q --file=image-references > ${ARTIFACT_DIR}/%s
-`, pullSpec, target)
+# while release creation may happen more than once in the lifetime of a test
+# namespace, only one release creation Pod will ever run at once. Therefore,
+# while actions editing the output ConfigMap may race if done from ci-operator
+# itself, these actions cannot race from this Pod, as all active ci-operator
+# processes will launch and wait for but one release Pod. Here, we need to
+# delete any previously-existing ConfigMap if we're re-importing the release.
+if oc get configmap release-%s; then
+	oc delete configmap release-%s
+fi
+oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
+`, pullSpec, target, target, target, target, target, target)
 
 	// run adm release extract and grab the raw image-references from the payload
 	podConfig := steps.PodStepConfiguration{
@@ -255,13 +264,18 @@ oc adm release extract --from=%q --file=image-references > ${ARTIFACT_DIR}/%s
 		return err
 	}
 
-	// read the contents from the artifacts directory
-	isContents, err := ioutil.ReadFile(filepath.Join(artifactDir, podConfig.As, target))
-	if err != nil {
-		return fmt.Errorf("unable to read release image stream: %w", err)
+	// read the contents from the configmap we created
+	var configMap coreapi.ConfigMap
+	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: fmt.Sprintf("release-%s", target)}, &configMap); err != nil {
+		return fmt.Errorf("could not fetch extracted release %s: %w", target, err)
+	}
+
+	isContents, ok := configMap.Data[fmt.Sprintf("%s.yaml", target)]
+	if !ok {
+		return fmt.Errorf("no imagestream data found in release configMap for %s: %w", target, err)
 	}
 	var releaseIS imagev1.ImageStream
-	if err := json.Unmarshal(isContents, &releaseIS); err != nil {
+	if err := json.Unmarshal([]byte(isContents), &releaseIS); err != nil {
 		return fmt.Errorf("unable to decode release image stream: %w", err)
 	}
 	if releaseIS.Kind != "ImageStream" || releaseIS.APIVersion != "image.openshift.io/v1" {

@@ -69,6 +69,7 @@ type multiStageTestStep struct {
 	allowSkipOnSuccess       *bool
 	allowBestEffortPostSteps *bool
 	leases                   []api.StepLease
+	artifactsViaPodUtils     bool
 }
 
 func MultiStageTestStep(
@@ -79,8 +80,9 @@ func MultiStageTestStep(
 	artifactDir string,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
+	artifactsViaPodUtils bool,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, client, artifactDir, jobSpec, leases)
+	return newMultiStageTestStep(testConfig, config, params, client, artifactDir, jobSpec, leases, artifactsViaPodUtils)
 }
 
 func newMultiStageTestStep(
@@ -91,6 +93,7 @@ func newMultiStageTestStep(
 	artifactDir string,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
+	artifactsViaPodUtils bool,
 ) *multiStageTestStep {
 	if artifactDir != "" {
 		artifactDir = filepath.Join(artifactDir, testConfig.As)
@@ -111,6 +114,7 @@ func newMultiStageTestStep(
 		allowSkipOnSuccess:       ms.AllowSkipOnSuccess,
 		allowBestEffortPostSteps: ms.AllowBestEffortPostSteps,
 		leases:                   leases,
+		artifactsViaPodUtils:     artifactsViaPodUtils,
 	}
 }
 
@@ -389,7 +393,11 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		if step.BestEffort != nil && *step.BestEffort {
 			bestEffort.Insert(name)
 		}
-		pod, err := generateBasePod(s.jobSpec, name, multiStageTestStepContainerName, []string{"/bin/bash", "-c", CommandPrefix + step.Commands}, image, resources, step.ArtifactDir)
+		artifactDir := step.ArtifactDir
+		if s.artifactsViaPodUtils {
+			artifactDir = fmt.Sprintf("%s/%s", s.name, step.As)
+		}
+		pod, err := generateBasePod(s.jobSpec, name, multiStageTestStepContainerName, []string{"/bin/bash", "-c", CommandPrefix + step.Commands}, image, resources, artifactDir, s.artifactsViaPodUtils, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec())
 		if err != nil {
 			errs = append(errs, err)
 			continue

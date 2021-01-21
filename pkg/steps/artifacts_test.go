@@ -17,10 +17,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
+	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 var testArtifactsContainer = coreapi.Container{
@@ -677,4 +679,36 @@ func TestArtifactsContainer(t *testing.T) {
 	if !reflect.DeepEqual(artifacts, testArtifactsContainer) {
 		t.Fatal(diff.ObjectReflectDiff(artifacts, testArtifactsContainer))
 	}
+}
+
+func TestAddPodUtils(t *testing.T) {
+	base := &coreapi.Pod{
+		TypeMeta:   meta.TypeMeta{Kind: "Pod", APIVersion: "v1"},
+		ObjectMeta: meta.ObjectMeta{Name: "test-pod"},
+		Spec: coreapi.PodSpec{
+			Containers: []coreapi.Container{
+				{
+					Name:    "test",
+					Command: []string{"cmd"},
+					Args:    []string{"arg1", "arg2"},
+				},
+			},
+		},
+	}
+	if err := addPodUtils(base, "mydir", &prowv1.DecorationConfig{
+		Timeout:     &prowv1.Duration{Duration: 4 * time.Hour},
+		GracePeriod: &prowv1.Duration{Duration: 30 * time.Minute},
+		UtilityImages: &prowv1.UtilityImages{
+			Entrypoint: "entrypoint",
+			Sidecar:    "sidecar",
+		},
+		GCSConfiguration: &prowv1.GCSConfiguration{
+			Bucket:       "bucket",
+			PathStrategy: prowv1.PathStrategyExplicit,
+		},
+		GCSCredentialsSecret: "gce-sa-credentials-gcs-publisher",
+	}, "rawspec"); err != nil {
+		t.Errorf("failed to decorate: %v", err)
+	}
+	testhelper.CompareWithFixture(t, base)
 }

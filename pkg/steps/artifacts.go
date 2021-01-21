@@ -25,6 +25,8 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
+	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/pod-utils/decorate"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
@@ -337,6 +339,30 @@ func removeFile(podClient PodClient, ns, name, containerName string, paths []str
 		return fmt.Errorf("could not run remote command: %w", err)
 	}
 
+	return nil
+}
+
+func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.DecorationConfig, rawJobSpec string) error {
+	logMount, logVolume := decorate.LogMountAndVolume()
+	toolsMount, toolsVolume := decorate.ToolsMountAndVolume()
+	blobStorageVolumes, blobStorageMounts, blobStorageOptions := decorate.BlobStorageOptions(*decorationConfig, false)
+	blobStorageOptions.SubDir = artifactDir
+	pod.Spec.InitContainers = append(pod.Spec.InitContainers, decorate.PlaceEntrypoint(decorationConfig, toolsMount))
+
+	wrapperOptions, err := decorate.InjectEntrypoint(&pod.Spec.Containers[0], decorationConfig.Timeout.Get(), decorationConfig.GracePeriod.Get(), "", "", false, logMount, toolsMount)
+	if err != nil {
+		return fmt.Errorf("could not inject entrypoint: %w", err)
+	}
+	pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, coreapi.EnvVar{Name: artifactEnv, Value: logMount.MountPath + "/artifacts"})
+
+	sidecar, err := decorate.Sidecar(decorationConfig, blobStorageOptions, blobStorageMounts, logMount, nil, rawJobSpec, !decorate.RequirePassingEntries, decorate.IgnoreInterrupts, *wrapperOptions)
+	if err != nil {
+		return fmt.Errorf("could not create sidecar: %w", err)
+	}
+	pod.Spec.Containers = append(pod.Spec.Containers, *sidecar)
+
+	pod.Spec.Volumes = append(pod.Spec.Volumes, logVolume, toolsVolume)
+	pod.Spec.Volumes = append(pod.Spec.Volumes, blobStorageVolumes...)
 	return nil
 }
 

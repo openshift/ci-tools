@@ -4,13 +4,13 @@ import (
 	"strings"
 )
 
-const defaultArtifacts = "/tmp/artifacts"
+const DefaultArtifacts = "/tmp/artifacts"
 
 // Default sets default values after loading but before validation
 func (config *ReleaseBuildConfiguration) Default() {
 	defArtifacts := func(p *string) {
 		if *p == "" {
-			*p = defaultArtifacts
+			*p = DefaultArtifacts
 		}
 	}
 	defLeases := func(l []StepLease) {

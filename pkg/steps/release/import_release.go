@@ -50,12 +50,13 @@ type importReleaseStep struct {
 	// pullSpec is the fully-resolved pull spec of the release payload image we are importing
 	pullSpec string
 	// append determines if we wait for other processes to create images first
-	append      bool
-	resources   api.ResourceConfiguration
-	client      steps.PodClient
-	artifactDir string
-	jobSpec     *api.JobSpec
-	pullSecret  *coreapi.Secret
+	append               bool
+	resources            api.ResourceConfiguration
+	client               steps.PodClient
+	artifactDir          string
+	jobSpec              *api.JobSpec
+	pullSecret           *coreapi.Secret
+	artifactsViaPodUtils bool
 }
 
 func (s *importReleaseStep) Inputs() (api.InputDefinition, error) {
@@ -242,10 +243,11 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 			Name: streamName,
 			Tag:  "cli",
 		},
-		ServiceAccountName: "ci-operator",
-		ArtifactDir:        "/tmp/artifacts",
-		Secrets:            secrets,
-		Commands:           commands,
+		ServiceAccountName:   "ci-operator",
+		ArtifactDir:          "/tmp/artifacts",
+		Secrets:              secrets,
+		Commands:             commands,
+		ArtifactsViaPodUtils: s.artifactsViaPodUtils,
 	}
 
 	// set an explicit default for release-latest resources, but allow customization if necessary
@@ -440,15 +442,16 @@ func (s *importReleaseStep) Objects() []ctrlruntimeclient.Object {
 // ImportReleaseStep imports an existing update payload image
 func ImportReleaseStep(name, pullSpec string, append bool, resources api.ResourceConfiguration,
 	client steps.PodClient,
-	artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+	artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret, artifactsViaPodUtils bool) api.Step {
 	return &importReleaseStep{
-		name:        name,
-		pullSpec:    pullSpec,
-		append:      append,
-		resources:   resources,
-		client:      client,
-		artifactDir: artifactDir,
-		jobSpec:     jobSpec,
-		pullSecret:  pullSecret,
+		name:                 name,
+		pullSpec:             pullSpec,
+		append:               append,
+		resources:            resources,
+		client:               client,
+		artifactDir:          artifactDir,
+		jobSpec:              jobSpec,
+		pullSecret:           pullSecret,
+		artifactsViaPodUtils: artifactsViaPodUtils,
 	}
 }

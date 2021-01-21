@@ -8,7 +8,7 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/util/retry"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -52,21 +52,20 @@ func (s *outputImageTagStep) run(ctx context.Context) error {
 	}, from); err != nil {
 		return fmt.Errorf("could not resolve base image: %w", err)
 	}
-	ist := s.imageStreamTag(from.Image.Name)
+	desired := s.imageStreamTag(from.Image.Name)
+	ist := &imagev1.ImageStreamTag{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: desired.ObjectMeta.Namespace,
+			Name:      desired.ObjectMeta.Name,
+		},
+	}
 
-	// ensure that the image stream tag points to the correct input, retry
-	// on conflict, and do nothing if another user creates before us
-	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		err := s.client.Update(ctx, ist)
-		if errors.IsNotFound(err) {
-			err = s.client.Create(ctx, ist)
-		}
-		if errors.IsConflict(err) {
-			err = s.client.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(ist), ist)
-		}
-		return err
-	}); err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not update output imagestreamtag: %w", err)
+	_, err := controllerruntime.CreateOrUpdate(ctx, s.client, ist, func() error {
+		ist.Tag = desired.Tag
+		return nil
+	})
+	if err != nil && !errors.IsConflict(err) && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("could not upsert output imagestreamtag: %w", err)
 	}
 	return nil
 }

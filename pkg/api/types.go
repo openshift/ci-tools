@@ -955,7 +955,7 @@ func (p ClusterProfile) LeaseType() string {
 	case ClusterProfileAzure4:
 		return "azure4-quota-slice"
 	case ClusterProfileAzureArc:
-		return "azure-arc"
+		return "azure-arc-quota-slice"
 	case
 		ClusterProfileGCP,
 		ClusterProfileGCP40,

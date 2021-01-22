@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -102,45 +103,45 @@ func TestMakeOcApply(t *testing.T) {
 		{
 			name:     "no user, not dry",
 			path:     "/path/to/file",
-			expected: []string{"oc", "apply", "-f", "/path/to/file"},
+			expected: []string{"oc", "apply", "-f", "/path/to/file", "-o", "name"},
 		},
 		{
 			name:     "no user, client dry",
 			path:     "/path/to/different/file",
 			dry:      dryClient,
-			expected: []string{"oc", "apply", "-f", "/path/to/different/file", "--dry-run=client"},
+			expected: []string{"oc", "apply", "-f", "/path/to/different/file", "-o", "name", "--dry-run=client"},
 		},
 		{
 			name:     "no user, server dry",
 			path:     "/path/to/different/file",
 			dry:      dryServer,
-			expected: []string{"oc", "apply", "-f", "/path/to/different/file", "--dry-run=server", "--validate=true"},
+			expected: []string{"oc", "apply", "-f", "/path/to/different/file", "-o", "name", "--dry-run=server", "--validate=true"},
 		},
 		{
 			name:     "no user, auto dry means server dry",
 			path:     "/path/to/different/file",
 			dry:      dryServer,
-			expected: []string{"oc", "apply", "-f", "/path/to/different/file", "--dry-run=server", "--validate=true"},
+			expected: []string{"oc", "apply", "-f", "/path/to/different/file", "-o", "name", "--dry-run=server", "--validate=true"},
 		},
 		{
 			name:     "user, client dry",
 			path:     "/path/to/file",
 			dry:      dryClient,
 			user:     "joe",
-			expected: []string{"oc", "apply", "-f", "/path/to/file", "--as", "joe", "--dry-run=client"},
+			expected: []string{"oc", "apply", "-f", "/path/to/file", "-o", "name", "--as", "joe", "--dry-run=client"},
 		},
 		{
 			name:     "user, not dry",
 			path:     "/path/to/file",
 			user:     "joe",
-			expected: []string{"oc", "apply", "-f", "/path/to/file", "--as", "joe"},
+			expected: []string{"oc", "apply", "-f", "/path/to/file", "-o", "name", "--as", "joe"},
 		},
 		{
 			name:     "context, user, not dry",
 			context:  "/context-name",
 			path:     "/path/to/file",
 			user:     "joe",
-			expected: []string{"oc", "apply", "-f", "/path/to/file", "--as", "joe", "--context", "/context-name"},
+			expected: []string{"oc", "apply", "-f", "/path/to/file", "-o", "name", "--as", "joe", "--context", "/context-name"},
 		},
 		{
 			name:       "kubeConfig, context, user, not dry",
@@ -148,25 +149,68 @@ func TestMakeOcApply(t *testing.T) {
 			context:    "/context-name",
 			path:       "/path/to/file",
 			user:       "joe",
-			expected:   []string{"oc", "apply", "-f", "/path/to/file", "--as", "joe", "--kubeconfig", "/tmp/config", "--context", "/context-name"},
+			expected:   []string{"oc", "apply", "-f", "/path/to/file", "-o", "name", "--as", "joe", "--kubeconfig", "/tmp/config", "--context", "/context-name"},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := makeOcApply(tc.kubeConfig, tc.context, tc.path, tc.user, tc.dry)
-			if !reflect.DeepEqual(cmd.Args, tc.expected) {
-				t.Errorf("Command differs from expected:\n%s", cmp.Diff(tc.expected, cmd.Args))
+			if diff := cmp.Diff(tc.expected, cmd.Args); diff != "" {
+				t.Errorf("Command differs from expected:\n%s", diff)
 			}
 		})
 	}
+}
+
+func TestInferMissingNamespaces(t *testing.T) {
+	testcases := []struct {
+		description   string
+		ocApplyOutput []byte
+		expected      sets.String
+	}{
+		{
+			description:   "single line of interest",
+			ocApplyOutput: []byte(`Error from server (NotFound): namespaces "this-is-missing" not found`),
+			expected:      sets.NewString("this-is-missing"),
+		},
+		{
+			description: "single line of interest between some clutter",
+			ocApplyOutput: []byte(`a line of clutter
+Error from server (NotFound): namespaces "this-is-missing" not found
+another line of clutter`),
+			expected: sets.NewString("this-is-missing"),
+		},
+		{
+			description: "multiple lines of interest in clutter",
+			ocApplyOutput: []byte(`a line of clutter
+Error from server (NotFound): namespaces "this-is-missing" not found
+another line of clutter
+Error from server (NotFound): namespaces "this-is-missing-too" not found
+`),
+			expected: sets.NewString("this-is-missing", "this-is-missing-too"),
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.description, func(t *testing.T) {
+			namespaces := inferMissingNamespaces(tc.ocApplyOutput)
+			if diff := cmp.Diff(tc.expected, namespaces); diff != "" {
+				t.Errorf("Detected missing namespaces differ:\n%s", diff)
+			}
+		})
+	}
+}
+
+type response struct {
+	output []byte
+	err    error
 }
 
 type mockExecutor struct {
 	t *testing.T
 
 	calls     []*exec.Cmd
-	responses []error
+	responses []response
 }
 
 func (m *mockExecutor) runAndCheck(cmd *exec.Cmd, _ string) ([]byte, error) {
@@ -176,7 +220,7 @@ func (m *mockExecutor) runAndCheck(cmd *exec.Cmd, _ string) ([]byte, error) {
 	if len(m.responses) < responseIdx+1 {
 		m.t.Fatalf("mockExecutor received unexpected call: %v", cmd.Args)
 	}
-	return []byte("MOCK OUTPUT"), m.responses[responseIdx]
+	return m.responses[responseIdx].output, m.responses[responseIdx].err
 }
 
 func (m *mockExecutor) getCalls() [][]string {
@@ -192,35 +236,114 @@ func TestAsGenericManifest(t *testing.T) {
 	testCases := []struct {
 		description string
 		applier     *configApplier
-		executions  []error
+		executions  []response
 
-		expectedCalls [][]string
-		expectedError bool
+		expectedCalls      [][]string
+		expectedNamespaces namespaceActions
+		expectedError      bool
 	}{
 		{
 			description:   "success: oc apply -f path",
 			applier:       &configApplier{path: "path"},
-			executions:    []error{nil}, // expect a single successful call
-			expectedCalls: [][]string{{"oc", "apply", "-f", "path"}},
+			executions:    []response{{err: nil}}, // expect a single successful call
+			expectedCalls: [][]string{{"oc", "apply", "-f", "path", "-o", "name"}},
 		},
 		{
 			description:   "success: oc apply -f path --dry-run",
 			applier:       &configApplier{path: "path", dry: dryClient},
-			executions:    []error{nil}, // expect a single successful call
-			expectedCalls: [][]string{{"oc", "apply", "-f", "path", "--dry-run=client"}},
+			executions:    []response{{err: nil}}, // expect a single successful call
+			expectedCalls: [][]string{{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=client"}},
 		},
 		{
 			description:   "success: oc apply -f path --dry-run --as user",
 			applier:       &configApplier{path: "path", user: "user", dry: dryClient},
-			executions:    []error{nil}, // expect a single successful call
-			expectedCalls: [][]string{{"oc", "apply", "-f", "path", "--as", "user", "--dry-run=client"}},
+			executions:    []response{{err: nil}}, // expect a single successful call
+			expectedCalls: [][]string{{"oc", "apply", "-f", "path", "-o", "name", "--as", "user", "--dry-run=client"}},
 		},
 		{
 			description:   "failure: oc apply -f path",
 			applier:       &configApplier{path: "path"},
-			executions:    []error{fmt.Errorf("NOPE")},
-			expectedCalls: [][]string{{"oc", "apply", "-f", "path"}},
+			executions:    []response{{err: fmt.Errorf("NOPE")}},
+			expectedCalls: [][]string{{"oc", "apply", "-f", "path", "-o", "name"}},
 			expectedError: true,
+		},
+		{
+			description:        "success: server-side dry run records which namespaces would be created",
+			applier:            &configApplier{path: "path", dry: dryServer},
+			executions:         []response{{output: []byte("namespace/to-be-created"), err: nil}}, // expect a single successful call
+			expectedCalls:      [][]string{{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"}},
+			expectedNamespaces: namespaceActions{Created: sets.NewString("to-be-created")},
+		},
+		{
+			description: "success: server-side dry recovers missing namespaces by creating them",
+			applier:     &configApplier{path: "path", dry: dryServer},
+			executions: []response{
+				{output: []byte("Error from server (NotFound): namespaces \"this-is-missing\" not found"), err: errors.New("NOPE")},
+				{err: nil},
+				{err: nil},
+			}, // expect a single successful call
+			expectedCalls: [][]string{
+				{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"},
+				{"oc", "apply", "-f", "-", "-o", "name"},
+				{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"},
+			},
+			expectedNamespaces: namespaceActions{Assumed: sets.NewString("this-is-missing")},
+		},
+		{
+			description: "success: server-side dry recovers multiple missing namespaces by creating them",
+			applier:     &configApplier{path: "path", dry: dryServer},
+			executions: []response{
+				{
+					output: []byte("Error from server (NotFound): namespaces \"missing-1\" not found\nError from server (NotFound): namespaces \"missing-2\" not found\n"),
+					err:    errors.New("NOPE"),
+				},
+				{err: nil},
+				{err: nil},
+				{
+					output: []byte("Error from server (NotFound): namespaces \"missing-3\" not found"),
+					err:    errors.New("NOPE"),
+				},
+				{err: nil},
+				{err: nil},
+			}, // expect a single successful call
+			expectedCalls: [][]string{
+				{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"}, // Fails because two namespaces are missing
+				{"oc", "apply", "-f", "-", "-o", "name"},                                           // Create one namespace
+				{"oc", "apply", "-f", "-", "-o", "name"},                                           // Create second namespace
+				{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"}, // Fails because a third namespace is missing
+				{"oc", "apply", "-f", "-", "-o", "name"},                                           // Create third namespace
+				{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"}, // Succeeds
+			},
+			expectedNamespaces: namespaceActions{Assumed: sets.NewString("missing-1", "missing-2", "missing-3")},
+		},
+		{
+			description: "failure: server-side dry does not try to recover from unrelated failures",
+			applier:     &configApplier{path: "path", dry: dryServer},
+			executions: []response{
+				{output: []byte("Error from server (BuggerOff): I hate these manifests"), err: errors.New("NOPE")},
+			}, // expect a single successful call
+			expectedCalls: [][]string{
+				{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"},
+			},
+			expectedError: true,
+		},
+		{
+			description: "success: server-side dry recovers missing namespaces by creating them, records if they would be created",
+			applier:     &configApplier{path: "path", dry: dryServer},
+			executions: []response{
+				{output: []byte("Error from server (NotFound): namespaces \"this-is-missing\" not found`"), err: errors.New("NOPE")},
+				{err: nil},
+				{output: []byte("namespace/this-is-missing"), err: nil},
+			}, // expect a single successful call
+			expectedCalls: [][]string{
+				{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"},
+				{"oc", "apply", "-f", "-", "-o", "name"},
+				{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"},
+			},
+			expectedNamespaces: namespaceActions{
+				Created: sets.NewString("this-is-missing"),
+				Assumed: sets.NewString("this-is-missing"),
+			},
 		},
 	}
 
@@ -228,7 +351,7 @@ func TestAsGenericManifest(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			executor := &mockExecutor{t: t, responses: tc.executions}
 			tc.applier.executor = executor
-			err := tc.applier.asGenericManifest()
+			namespaces, err := tc.applier.asGenericManifest()
 			if err != nil && !tc.expectedError {
 				t.Errorf("returned unexpected error: %v", err)
 			}
@@ -236,9 +359,13 @@ func TestAsGenericManifest(t *testing.T) {
 				t.Error("expected error, was not returned")
 			}
 
+			if diff := cmp.Diff(tc.expectedNamespaces, namespaces); diff != "" {
+				t.Errorf("Namespace actions differ from expected:\n%s", diff)
+			}
+
 			calls := executor.getCalls()
-			if !reflect.DeepEqual(tc.expectedCalls, calls) {
-				t.Errorf("calls differ from expected:\n%s", cmp.Diff(tc.expectedCalls, calls))
+			if diff := cmp.Diff(tc.expectedCalls, calls); diff != "" {
+				t.Errorf("calls differ from expected:\n%s", diff)
 			}
 		})
 	}
@@ -251,14 +378,15 @@ func TestAsTemplate(t *testing.T) {
 		executions  []error
 		params      []templateapi.Parameter
 
-		expectedCalls [][]string
-		expectedError bool
+		expectedCalls      [][]string
+		expectedNamespaces namespaceActions
+		expectedError      bool
 	}{
 		{
 			description:   "success",
 			applier:       &configApplier{path: "path"},
 			executions:    []error{nil, nil},
-			expectedCalls: [][]string{{"oc", "process", "-f", "path"}, {"oc", "apply", "-f", "-"}},
+			expectedCalls: [][]string{{"oc", "process", "-f", "path"}, {"oc", "apply", "-f", "-", "-o", "name"}},
 		},
 		{
 			description: "success with params",
@@ -278,13 +406,13 @@ func TestAsTemplate(t *testing.T) {
 				},
 				{Name: "name", Description: "description does not matter", Value: "master"},
 			},
-			expectedCalls: [][]string{{"oc", "process", "-f", "path", "-p", "image=docker.io/redis"}, {"oc", "apply", "-f", "-"}},
+			expectedCalls: [][]string{{"oc", "process", "-f", "path", "-p", "image=docker.io/redis"}, {"oc", "apply", "-f", "-", "-o", "name"}},
 		},
 		{
 			description:   "oc apply fails",
 			applier:       &configApplier{path: "path"},
 			executions:    []error{nil, fmt.Errorf("REALLY NOPE")},
-			expectedCalls: [][]string{{"oc", "process", "-f", "path"}, {"oc", "apply", "-f", "-"}},
+			expectedCalls: [][]string{{"oc", "process", "-f", "path"}, {"oc", "apply", "-f", "-", "-o", "name"}},
 			expectedError: true,
 		},
 		{
@@ -313,19 +441,26 @@ func TestAsTemplate(t *testing.T) {
 	}()
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			executor := &mockExecutor{t: t, responses: tc.executions}
+			var responses []response
+			for _, err := range tc.executions {
+				responses = append(responses, response{err: err})
+			}
+			executor := &mockExecutor{t: t, responses: responses}
 			tc.applier.executor = executor
-			err := tc.applier.asTemplate(tc.params)
+			namespaces, err := tc.applier.asTemplate(tc.params)
 			if err != nil && !tc.expectedError {
 				t.Errorf("returned unexpected error: %v", err)
 			}
 			if err == nil && tc.expectedError {
 				t.Error("expected error, was not returned")
 			}
+			if diff := cmp.Diff(tc.expectedNamespaces, namespaces); diff != "" {
+				t.Errorf("Namespace actions differ from expected:\n%s", diff)
+			}
 
 			calls := executor.getCalls()
-			if !reflect.DeepEqual(tc.expectedCalls, calls) {
-				t.Errorf("calls differ from expected:\n%s", cmp.Diff(tc.expectedCalls, calls))
+			if diff := cmp.Diff(tc.expectedCalls, calls); diff != "" {
+				t.Errorf("calls differ from expected:\n%s", diff)
 			}
 		})
 	}
@@ -510,7 +645,7 @@ func TestCensoringFormatter(t *testing.T) {
 	formatter := logrusutil.NewCensoringFormatter(baseFormatter, secrets.getSecrets)
 	logrus.SetFormatter(formatter)
 	applier := &configApplier{path: "path", user: "user", dry: dryClient, executor: &fakeExecutor{}}
-	err := applier.asTemplate([]templateapi.Parameter{
+	_, err := applier.asTemplate([]templateapi.Parameter{
 		{
 			Name:  "test_env_var_0",
 			Value: "test_env_var_0",
@@ -621,6 +756,37 @@ func TestSelectDryRun(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			if method := selectDryRun(ocVersionOutput{Openshift: tc.openshiftVersion}); method != tc.expected {
 				t.Errorf("Expected dry run method %s, got %s", tc.expected, method)
+			}
+		})
+	}
+}
+
+func TestExtractNamespaces(t *testing.T) {
+	testcases := []struct {
+		description string
+		applyOutput []byte
+		expected    sets.String
+	}{
+		{
+			description: "empty input",
+			expected:    sets.String{},
+		},
+		{
+			description: "single line",
+			applyOutput: []byte("namespace/ns-name"),
+			expected:    sets.NewString("ns-name"),
+		},
+		{
+			description: "multiple lines separated by clutter",
+			applyOutput: []byte("namespace/ns-name\n\n\ncluttter\nmorecluttter\nevenmorecluttern\nnamespaceclutter\nnamespace/another-ns-name"),
+			expected:    sets.NewString("ns-name", "another-ns-name"),
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.description, func(t *testing.T) {
+			nss := extractNamespaces(tc.applyOutput)
+			if diff := cmp.Diff(tc.expected, nss); diff != "" {
+				t.Errorf("Extracted namespace names differ from expected:\n%s", diff)
 			}
 		})
 	}

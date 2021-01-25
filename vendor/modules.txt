@@ -202,6 +202,8 @@ github.com/evanphx/json-patch
 github.com/fatih/color
 # github.com/fatih/structs v1.0.0
 github.com/fatih/structs
+# github.com/felixge/fgprof v0.9.1
+github.com/felixge/fgprof
 # github.com/form3tech-oss/jwt-go v3.2.2+incompatible
 github.com/form3tech-oss/jwt-go
 # github.com/fsnotify/fsnotify v1.4.9
@@ -254,6 +256,8 @@ github.com/google/go-querystring/query
 # github.com/google/gofuzz v1.1.0
 ## explicit
 github.com/google/gofuzz
+# github.com/google/pprof v0.0.0-20200905233945-acf8798be1f7
+github.com/google/pprof/profile
 # github.com/google/uuid v1.1.2
 github.com/google/uuid
 # github.com/google/wire v0.4.0
@@ -1044,7 +1048,7 @@ k8s.io/klog/v2
 k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/kubernetes v1.14.7
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20210115214543-aefe406fe7b6
+# k8s.io/test-infra v0.0.0-20210125145454-e3a8e137c7b9
 ## explicit
 k8s.io/test-infra/experiment/autobumper/bumper
 k8s.io/test-infra/experiment/image-bumper/bumper
@@ -1126,6 +1130,7 @@ k8s.io/test-infra/prow/plugins/milestoneapplier
 k8s.io/test-infra/prow/plugins/milestonestatus
 k8s.io/test-infra/prow/plugins/override
 k8s.io/test-infra/prow/plugins/owners-label
+k8s.io/test-infra/prow/plugins/ownersconfig
 k8s.io/test-infra/prow/plugins/pony
 k8s.io/test-infra/prow/plugins/project
 k8s.io/test-infra/prow/plugins/projectmanager

@@ -85,6 +85,10 @@ type FakeClient struct {
 	// and values map SHA to content
 	RemoteFiles map[string]map[string]string
 
+	// Fake remote git storage. Directory name are keys
+	// and values map SHA to directory content
+	RemoteDirectories map[string]map[string][]github.DirectoryContent
+
 	// A list of refs that got deleted via DeleteRef
 	RefsDeleted []struct{ Org, Repo, Ref string }
 
@@ -352,21 +356,35 @@ func (f *FakeClient) GetIssueLabels(owner, repo string, number int) ([]github.La
 
 // AddLabel adds a label
 func (f *FakeClient) AddLabel(owner, repo string, number int, label string) error {
-	labelString := fmt.Sprintf("%s/%s#%d:%s", owner, repo, number, label)
-	if sets.NewString(f.IssueLabelsAdded...).Has(labelString) {
-		return fmt.Errorf("cannot add %v to %s/%s/#%d", label, owner, repo, number)
-	}
-	if f.RepoLabelsExisting == nil {
-		f.IssueLabelsAdded = append(f.IssueLabelsAdded, labelString)
-		return nil
-	}
-	for _, l := range f.RepoLabelsExisting {
-		if label == l {
+	return f.AddLabels(owner, repo, number, label)
+}
+
+// AddLabels adds a list of labels
+func (f *FakeClient) AddLabels(owner, repo string, number int, labels ...string) error {
+	for _, label := range labels {
+		labelString := fmt.Sprintf("%s/%s#%d:%s", owner, repo, number, label)
+		if sets.NewString(f.IssueLabelsAdded...).Has(labelString) {
+			return fmt.Errorf("cannot add %v to %s/%s/#%d", label, owner, repo, number)
+		}
+
+		if f.RepoLabelsExisting == nil {
 			f.IssueLabelsAdded = append(f.IssueLabelsAdded, labelString)
-			return nil
+			continue
+		}
+
+		var repoLabelExists bool
+		for _, l := range f.RepoLabelsExisting {
+			if label == l {
+				f.IssueLabelsAdded = append(f.IssueLabelsAdded, labelString)
+				repoLabelExists = true
+				break
+			}
+		}
+		if !repoLabelExists {
+			return fmt.Errorf("cannot add %v to %s/%s/#%d", label, owner, repo, number)
 		}
 	}
-	return fmt.Errorf("cannot add %v to %s/%s/#%d", label, owner, repo, number)
+	return nil
 }
 
 // RemoveLabel removes a label
@@ -757,4 +775,25 @@ func (f *FakeClient) UpdatePullRequest(org, repo string, number int, title, body
 // It does not modify the passed interface at all.
 func (f *FakeClient) Query(ctx context.Context, q interface{}, vars map[string]interface{}) error {
 	return nil
+}
+
+// GetDirectory returns the contents of the file.
+func (f *FakeClient) GetDirectory(org, repo, dir, commit string) ([]github.DirectoryContent, error) {
+	contents, ok := f.RemoteDirectories[dir]
+	if !ok {
+		return nil, fmt.Errorf("could not find dir %s", dir)
+	}
+	if commit == "" {
+		if master, ok := contents["master"]; ok {
+			return master, nil
+		}
+
+		return nil, fmt.Errorf("could not find dir %s in master", dir)
+	}
+
+	if content, ok := contents[commit]; ok {
+		return content, nil
+	}
+
+	return nil, fmt.Errorf("could not find dir %s with ref %s", dir, commit)
 }

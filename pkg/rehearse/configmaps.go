@@ -135,7 +135,7 @@ func (c *CMManager) createCM(name string, data []updateconfig.ConfigMapUpdate) e
 	}
 	if _, err := c.cmclient.Create(context.TODO(), cm, metav1.CreateOptions{}); err != nil && !kerrors.IsAlreadyExists(err) {
 		return err
-	} else if err := updateconfig.Update(osFileGetter{root: c.releaseRepoPath}, c.cmclient, cm.Name, "", data, true, nil, c.logger); err != nil {
+	} else if err := updateconfig.Update(osFileGetter{root: c.releaseRepoPath}, c.cmclient, cm.Name, "", data, true, nil, c.logger, ""); err != nil {
 		return err
 	}
 	return nil

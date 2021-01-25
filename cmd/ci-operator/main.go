@@ -869,7 +869,7 @@ func (o *options) initializeNamespace() error {
 		log.Printf("[%d/30] RBAC in namespace not yet ready, sleeping for a second...\n", i)
 		time.Sleep(time.Second)
 	}
-	log.Printf("Spent %v waiting for RBAC to initlize in the new namespace.\n", time.Since(ssarStart))
+	log.Printf("Spent %v waiting for RBAC to initialize in the new namespace.\n", time.Since(ssarStart))
 	if !selfSubjectAccessReviewSucceeded {
 		log.Println("ERROR: timed out waiting for RBAC")
 		return errors.New("timed out waiting for RBAC")
@@ -895,7 +895,7 @@ func (o *options) initializeNamespace() error {
 		log.Printf("[%d/30] Image pull secrets in namespace not yet ready, sleeping for a second...\n", i)
 		time.Sleep(time.Second)
 	}
-	log.Printf("Spent %v waiting for image pull secrets to initlize in the new namespace.\n", time.Since(pullStart))
+	log.Printf("Spent %v waiting for image pull secrets to initialize in the new namespace.\n", time.Since(pullStart))
 	if !imagePullSecretsMinted {
 		log.Println("ERROR: timed out waiting for image pull secrets")
 		return errors.New("timed out waiting for image pull secrets")

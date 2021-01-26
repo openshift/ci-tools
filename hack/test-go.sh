@@ -4,7 +4,7 @@ set -euo pipefail
 
 JUNIT_ARG=""
 if [[ -n ${ARTIFACT_DIR:-} ]]; then
-  JUNIT_ARG="--junitfile=$ARTIFACT_DIR/junit.xml --jsonfile=$ARTIFACT_DIR/tests.json"
+  JUNIT_ARG="--junitfile=$ARTIFACT_DIR/junit.xml"
 fi
 
 set -o xtrace

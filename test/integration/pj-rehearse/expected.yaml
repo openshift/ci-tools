@@ -1662,7 +1662,8 @@
               name: origin-v4.0
               namespace: openshift
             tests:
-            - as: multistage
+            - artifact_dir: /tmp/artifacts
+              as: multistage
               literal_steps:
                 cluster_profile: ""
                 post:
@@ -1827,7 +1828,8 @@
               name: origin-v4.0
               namespace: openshift
             tests:
-            - as: multistage5
+            - artifact_dir: /tmp/artifacts
+              as: multistage5
               literal_steps:
                 cluster_profile: ""
                 test:
@@ -1954,7 +1956,8 @@
               name: origin-v4.0
               namespace: openshift
             tests:
-            - as: unit
+            - artifact_dir: /tmp/artifacts
+              as: unit
               commands: make unit CHANGED
               container:
                 from: src

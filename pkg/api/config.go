@@ -39,13 +39,13 @@ func (config *ReleaseBuildConfiguration) Default() {
 			}
 		}
 	}
-	for _, step := range config.RawSteps {
-		if test := step.TestStepConfiguration; test != nil {
+	for i := range config.RawSteps {
+		if test := config.RawSteps[i].TestStepConfiguration; test != nil {
 			defTest(test)
 		}
 	}
-	for _, test := range config.Tests {
-		defTest(&test)
+	for i := range config.Tests {
+		defTest(&config.Tests[i])
 	}
 }
 

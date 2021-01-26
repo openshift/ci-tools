@@ -25,7 +25,8 @@ resources:
       cpu: 100m
       memory: 200Mi
 tests:
-- as: e2e-metal-ipi
+- artifact_dir: /tmp/artifacts
+  as: e2e-metal-ipi
   cron: 0 0 1 1 *
   steps:
     cluster_profile: packet
@@ -34,7 +35,8 @@ tests:
         IP_STACK=v4
         NETWORK_TYPE=OpenShiftSDN
     workflow: baremetalds-e2e
-- as: e2e-aws-proxy
+- artifact_dir: /tmp/artifacts
+  as: e2e-aws-proxy
   cron: 0 0 */2 * *
   steps:
     cluster_profile: aws

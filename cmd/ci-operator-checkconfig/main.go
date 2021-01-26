@@ -17,7 +17,7 @@ func main() {
 	flag.Parse()
 
 	if configDir == "" {
-		fmt.Println("The --config-dir flag is required but was not provided")
+		fmt.Fprintln(os.Stderr, "The --config-dir flag is required but was not provided")
 		os.Exit(1)
 	}
 
@@ -30,7 +30,7 @@ func main() {
 		}
 		return nil
 	}); err != nil {
-		fmt.Printf("error validating configuration files: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error validating configuration files: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -49,9 +49,9 @@ func main() {
 		}
 	}
 	if len(dupes) > 0 {
-		fmt.Println("non-unique image publication found: ")
+		fmt.Fprintln(os.Stderr, "non-unique image publication found: ")
 		for _, dupe := range dupes {
-			fmt.Printf("ERROR: %v\n", dupe)
+			fmt.Fprintf(os.Stderr, "ERROR: %v\n", dupe)
 		}
 		os.Exit(1)
 	}

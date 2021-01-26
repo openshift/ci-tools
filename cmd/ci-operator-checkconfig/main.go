@@ -11,6 +11,8 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps/release"
 )
 
+type tagSet map[api.ImageStreamTagReference][]*config.Info
+
 func main() {
 	var configDir string
 	flag.StringVar(&configDir, "config-dir", "", "The directory containing configuration files.")
@@ -21,7 +23,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	seen := map[api.ImageStreamTagReference][]*config.Info{}
+	seen := tagSet{}
 	if err := config.OperateOnCIOperatorConfigDir(configDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		// validation is implicit, so we don't need to do anything
 		// but record the images we saw for future validation
@@ -36,17 +38,18 @@ func main() {
 
 	var dupes []error
 	for tag, infos := range seen {
-		if len(infos) > 1 {
-			formatted := []string{}
-			for _, info := range infos {
-				identifier := fmt.Sprintf("%s/%s@%s", info.Org, info.Repo, info.Branch)
-				if info.Variant != "" {
-					identifier = fmt.Sprintf("%s [%s]", identifier, info.Variant)
-				}
-				formatted = append(formatted, identifier)
-			}
-			dupes = append(dupes, fmt.Errorf("output tag %s/%s:%s is promoted from more than one place: %v", tag.Namespace, tag.Name, tag.Tag, strings.Join(formatted, ", ")))
+		if len(infos) <= 1 {
+			continue
 		}
+		formatted := []string{}
+		for _, info := range infos {
+			identifier := fmt.Sprintf("%s/%s@%s", info.Org, info.Repo, info.Branch)
+			if info.Variant != "" {
+				identifier = fmt.Sprintf("%s [%s]", identifier, info.Variant)
+			}
+			formatted = append(formatted, identifier)
+		}
+		dupes = append(dupes, fmt.Errorf("output tag %s/%s:%s is promoted from more than one place: %v", tag.Namespace, tag.Name, tag.Tag, strings.Join(formatted, ", ")))
 	}
 	if len(dupes) > 0 {
 		fmt.Fprintln(os.Stderr, "non-unique image publication found: ")

@@ -133,7 +133,7 @@ func (s *podStep) SubTests() []*junit.TestCase {
 }
 
 func (s *podStep) gatherArtifacts() bool {
-	return len(s.config.ArtifactDir) > 0 && len(s.artifactDir) > 0
+	return len(s.config.ArtifactDir) > 0 && len(s.artifactDir) > 0 && !s.config.ArtifactsViaPodUtils
 }
 
 func (s *podStep) Requires() []api.StepLink {

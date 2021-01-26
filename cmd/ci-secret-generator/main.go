@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -158,6 +159,12 @@ func executeCommand(command string) ([]byte, error) {
 	out, err := exec.Command("bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c", command).CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("%s : %w", string(out), err)
+	}
+	if len(out) == 0 || len(bytes.TrimSpace(out)) == 0 {
+		return nil, fmt.Errorf("command %q returned no output", command)
+	}
+	if string(bytes.TrimSpace(out)) == "null" {
+		return nil, fmt.Errorf("command %s returned 'null' as output", command)
 	}
 	return out, nil
 }

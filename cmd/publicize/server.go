@@ -166,6 +166,10 @@ func (s *server) mergeAndPushToRemote(sourceOrg, sourceRepo, destOrg, destRepo s
 		return "", fmt.Errorf("couldn't set config user.name=%s: %w", s.gitEmail, err)
 	}
 
+	if err := repoClient.Config("commit.gpgsign", "false"); err != nil {
+		return "", fmt.Errorf("failed to disable gpg signing: %w", err)
+	}
+
 	merged, err := repoClient.MergeWithStrategy("FETCH_HEAD", "merge", git.MergeOpt{CommitMessage: "DPTP reconciliation from downstream"})
 	if err != nil {
 		return "", fmt.Errorf("couldn't merge %s/%s, merge --abort failed with reason: %w", destOrg, destRepo, err)

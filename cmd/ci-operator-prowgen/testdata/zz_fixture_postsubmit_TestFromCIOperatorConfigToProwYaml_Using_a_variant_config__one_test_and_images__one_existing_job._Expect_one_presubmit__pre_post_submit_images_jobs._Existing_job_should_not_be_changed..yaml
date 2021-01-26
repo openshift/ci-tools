@@ -70,7 +70,7 @@ postsubmits:
       volumes:
       - name: pull-secret
         secret:
-          secretName: registry-pull-credentials
+          secretName: registry-pull-credentials-all
       - name: push-secret
         secret:
           secretName: registry-push-credentials-ci-central

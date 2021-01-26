@@ -46,7 +46,7 @@ postsubmits:
       volumes:
       - name: pull-secret
         secret:
-          secretName: registry-pull-credentials
+          secretName: registry-pull-credentials-all
       - name: push-secret
         secret:
           secretName: registry-push-credentials-ci-central
@@ -99,7 +99,7 @@ postsubmits:
       volumes:
       - name: pull-secret
         secret:
-          secretName: registry-pull-credentials
+          secretName: registry-pull-credentials-all
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -152,7 +152,7 @@ postsubmits:
       volumes:
       - name: pull-secret
         secret:
-          secretName: registry-pull-credentials
+          secretName: registry-pull-credentials-all
       - name: push-secret
         secret:
           secretName: registry-push-credentials-ci-central

@@ -375,7 +375,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.pullSecretPath, "image-import-pull-secret", "", "A set of dockercfg credentials used to import images for the tag_specification.")
 	flag.StringVar(&opt.pushSecretPath, "image-mirror-push-secret", "", "A set of dockercfg credentials used to mirror images for the promotion.")
 	flag.StringVar(&opt.uploadSecretPath, "gcs-upload-secret", "", "GCS credentials used to upload logs and artifacts.")
-	flag.BoolVar(&opt.uploadViaPodUtils, "upload-via-pod-utils", false, "Use the Prow pod utilities to upload logs and artifacts.")
+	flag.BoolVar(&opt.uploadViaPodUtils, "upload-via-pod-utils", true, "Use the Prow pod utilities to upload logs and artifacts.")
 
 	opt.resultsOptions.Bind(flag)
 	return opt

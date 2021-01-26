@@ -35,7 +35,16 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error validating configuration files: %v\n", err)
 		os.Exit(1)
 	}
+	if dupes := validateTags(seen); len(dupes) > 0 {
+		fmt.Fprintln(os.Stderr, "non-unique image publication found: ")
+		for _, dupe := range dupes {
+			fmt.Fprintf(os.Stderr, "ERROR: %v\n", dupe)
+		}
+		os.Exit(1)
+	}
+}
 
+func validateTags(seen tagSet) []error {
 	var dupes []error
 	for tag, infos := range seen {
 		if len(infos) <= 1 {
@@ -51,11 +60,5 @@ func main() {
 		}
 		dupes = append(dupes, fmt.Errorf("output tag %s/%s:%s is promoted from more than one place: %v", tag.Namespace, tag.Name, tag.Tag, strings.Join(formatted, ", ")))
 	}
-	if len(dupes) > 0 {
-		fmt.Fprintln(os.Stderr, "non-unique image publication found: ")
-		for _, dupe := range dupes {
-			fmt.Fprintf(os.Stderr, "ERROR: %v\n", dupe)
-		}
-		os.Exit(1)
-	}
+	return dupes
 }

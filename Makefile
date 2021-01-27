@@ -167,13 +167,14 @@ CLUSTER ?= build01
 
 # Dependencies required to execute the E2E tests outside of the CI environment.
 local-e2e: \
+	$(TMPDIR)/.kubeconfig \
 	$(TMPDIR)/local-secret/.dockerconfigjson \
 	$(TMPDIR)/remote-secret/.dockerconfigjson \
 	$(TMPDIR)/boskos
+	$(eval export KUBECONFIG=$(TMPDIR)/.kubeconfig)
 	$(eval export LOCAL_REGISTRY_SECRET_DIR=$(TMPDIR)/local-secret)
 	$(eval export REMOTE_REGISTRY_SECRET_DIR=$(TMPDIR)/remote-secret)
 	$(eval export PATH=${PATH}:$(TMPDIR))
-	oc config use-context "$(CLUSTER)"
 	@$(MAKE) e2e
 .PHONY: local-e2e
 
@@ -231,6 +232,9 @@ validate-registry-metadata:
 	git status -s ./test/multistage-registry/registry
 	test -z "$$(git status -s ./test/multistage-registry/registry | grep registry)"
 .PHONY: validate-registry-metadata
+
+$(TMPDIR)/.kubeconfig:
+	oc --context $(CLUSTER) --as system:admin --namespace ci serviceaccounts create-kubeconfig ci-operator > $(TMPDIR)/.kubeconfig
 
 $(TMPDIR)/local-secret/.dockerconfigjson:
 	mkdir -p $(TMPDIR)/local-secret

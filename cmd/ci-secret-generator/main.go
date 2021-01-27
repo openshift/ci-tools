@@ -23,6 +23,12 @@ import (
 	"github.com/openshift/ci-tools/pkg/bitwarden"
 )
 
+// CoreOS / OpenShift
+const defaultBwOrganization = "05ac4fbe-11d1-44df-bb29-a772017c6631"
+
+// OpenShift TestPlatform (CI)
+var defaultBwCollections = []string{"0247722f-3ab3-4fd4-a01d-a983013f3159"}
+
 type options struct {
 	logLevel            string
 	configPath          string
@@ -95,30 +101,30 @@ func (o *options) validateOptions() error {
 
 func (o *options) completeOptions(secrets sets.String) error {
 	if !o.validateOnly {
-		bytes, err := ioutil.ReadFile(o.bwPasswordPath)
+		pwBytes, err := ioutil.ReadFile(o.bwPasswordPath)
 		if err != nil {
 			return err
 		}
-		o.bwPassword = strings.TrimSpace(string(bytes))
+		o.bwPassword = strings.TrimSpace(string(pwBytes))
 		secrets.Insert(o.bwPassword)
 	}
 
-	bytes, err := ioutil.ReadFile(o.configPath)
+	cfgBytes, err := ioutil.ReadFile(o.configPath)
 	if err != nil {
 		return err
 	}
 
-	if err := yaml.Unmarshal(bytes, &o.config); err != nil {
+	if err := yaml.Unmarshal(cfgBytes, &o.config); err != nil {
 		return err
 	}
 
 	if o.bootstrapConfigPath != "" {
-		bytes, err = ioutil.ReadFile(o.bootstrapConfigPath)
+		cfgBytes, err = ioutil.ReadFile(o.bootstrapConfigPath)
 		if err != nil {
 			return err
 		}
 
-		if err := yaml.Unmarshal(bytes, &o.bootstrapConfig); err != nil {
+		if err := yaml.Unmarshal(cfgBytes, &o.bootstrapConfig); err != nil {
 			return err
 		}
 	}
@@ -175,9 +181,8 @@ func replaceParameter(paramName, param, template string) string {
 
 func processBwParameters(bwItems []bitWardenItem) ([]bitWardenItem, error) {
 	var errs []error
-	processedBwItems := []bitWardenItem{}
+	var processedBwItems []bitWardenItem
 	for _, bwItemWithParams := range bwItems {
-		hasErrors := false
 		bwItemsProcessingHolder := []bitWardenItem{bwItemWithParams}
 		for paramName, params := range bwItemWithParams.Params {
 			bwItemsProcessed := []bitWardenItem{}
@@ -204,15 +209,25 @@ func processBwParameters(bwItems []bitWardenItem) ([]bitWardenItem, error) {
 			}
 			bwItemsProcessingHolder = bwItemsProcessed
 		}
-		if !hasErrors {
+		if len(errs) == 0 {
 			processedBwItems = append(processedBwItems, bwItemsProcessingHolder...)
 		}
 	}
 	return processedBwItems, utilerrors.NewAggregate(errs)
 }
 
+func setDefaultsOnCreate(item *bitwarden.Item) error {
+	item.Organization = defaultBwOrganization
+	collections := sets.NewString(item.Collections...)
+	collections.Insert(defaultBwCollections...)
+	item.Collections = collections.List()
+
+	return nil
+}
+
 func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 	var errs []error
+	bwClient.OnCreate(setDefaultsOnCreate)
 	for _, bwItem := range bwItems {
 		logger := logrus.WithField("item", bwItem.ItemName)
 		for _, field := range bwItem.Fields {

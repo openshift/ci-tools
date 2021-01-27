@@ -23,6 +23,10 @@ type cliClient struct {
 	savedItems []Item
 	run        func(args ...string) ([]byte, error)
 	addSecret  func(s string)
+
+	// onCreate is called before secrets are created by client methods, allowing
+	// user code to default/validate created items
+	onCreate func(*Item) error
 }
 
 func newCliClient(username, password string, addSecret func(s string)) (Client, error) {
@@ -191,9 +195,20 @@ func (c *cliClient) Logout() ([]byte, error) {
 	return c.run("logout")
 }
 
-func (c *cliClient) createItem(itemTemplate string, targetItem *Item) error {
+func (c *cliClient) createItem(item Item, targetItem *Item) error {
+	if c.onCreate != nil {
+		if err := c.onCreate(&item); err != nil {
+			return fmt.Errorf("OnCreate() failed on item: %w", err)
+		}
+	}
+
+	itemBytes, err := json.Marshal(item)
+	if err != nil {
+		return fmt.Errorf("failed to serialize item: %w", err)
+	}
+
 	// the bitwarden cli expects the item to be base64 encoded
-	encItem := base64.StdEncoding.EncodeToString([]byte(itemTemplate))
+	encItem := base64.StdEncoding.EncodeToString(itemBytes)
 	out, err := c.runWithSession("create", "item", encItem)
 	if err != nil {
 		return err
@@ -220,9 +235,6 @@ func (c *cliClient) createAttachment(fileContents []byte, fileName string, itemI
 	if err != nil {
 		return fmt.Errorf("bw create failed: %w", err)
 	}
-	if err != nil {
-		return fmt.Errorf("failed to delete file %s: %w", filePath, err)
-	}
 	if err = json.Unmarshal(out, newAttachment); err != nil {
 		return fmt.Errorf("failed to parse bw output %s: %w", out, err)
 	}
@@ -235,11 +247,7 @@ func (c *cliClient) createEmptyItem(itemName string, targetItem *Item) error {
 		Name:  itemName,
 		Login: &Login{},
 	}
-	itemBytes, err := json.Marshal(item)
-	if err != nil {
-		return fmt.Errorf("failed to serialize item: %w", err)
-	}
-	return c.createItem(string(itemBytes), targetItem)
+	return c.createItem(item, targetItem)
 }
 
 func (c *cliClient) createItemWithPassword(itemName string, password []byte, targetItem *Item) error {
@@ -248,11 +256,7 @@ func (c *cliClient) createItemWithPassword(itemName string, password []byte, tar
 		Name:  itemName,
 		Login: &Login{string(password)},
 	}
-	itemBytes, err := json.Marshal(item)
-	if err != nil {
-		return fmt.Errorf("failed to serialize item: %w", err)
-	}
-	return c.createItem(string(itemBytes), targetItem)
+	return c.createItem(item, targetItem)
 }
 
 func (c *cliClient) createItemWithNotes(itemName, notes string, targetItem *Item) error {
@@ -262,11 +266,7 @@ func (c *cliClient) createItemWithNotes(itemName, notes string, targetItem *Item
 		Notes: notes,
 		Login: &Login{},
 	}
-	itemBytes, err := json.Marshal(item)
-	if err != nil {
-		return fmt.Errorf("failed to serialize item: %w", err)
-	}
-	return c.createItem(string(itemBytes), targetItem)
+	return c.createItem(item, targetItem)
 }
 
 func (c *cliClient) editItem(targetItem Item) error {
@@ -439,11 +439,15 @@ func (c *cliClient) SetPassword(itemName string, password []byte) error {
 	return nil
 }
 
+func (c *cliClient) OnCreate(callback func(*Item) error) {
+	c.onCreate = callback
+}
+
 type dryRunCliClient struct {
 	file *os.File
 }
 
-func (d *dryRunCliClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
+func (d *dryRunCliClient) GetFieldOnItem(_, _ string) ([]byte, error) {
 	return nil, nil
 }
 
@@ -451,14 +455,14 @@ func (d *dryRunCliClient) GetAllItems() []Item {
 	return nil
 }
 
-func (d *dryRunCliClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error) {
+func (d *dryRunCliClient) GetAttachmentOnItem(_, _ string) ([]byte, error) {
 	return nil, nil
 }
-func (d *dryRunCliClient) GetPassword(itemName string) ([]byte, error) {
+func (d *dryRunCliClient) GetPassword(_ string) ([]byte, error) {
 	return nil, nil
 }
 func (d *dryRunCliClient) Logout() ([]byte, error) {
-	d.file.Close()
+	_ = d.file.Close()
 	return nil, nil
 }
 func (d *dryRunCliClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {
@@ -477,6 +481,8 @@ func (d *dryRunCliClient) UpdateNotesOnItem(itemName, notes string) error {
 	fmt.Fprintf(d.file, "ItemName: %s\n\tNotes: %s\n", itemName, notes)
 	return nil
 }
+func (d *dryRunCliClient) OnCreate(func(*Item) error) {}
+
 func newDryRunClient(file *os.File) (Client, error) {
 	return &dryRunCliClient{
 		file: file,

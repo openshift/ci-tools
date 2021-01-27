@@ -114,6 +114,7 @@ func TestLoginAndListItems(t *testing.T) {
 				{
 					ID:           "id1",
 					Name:         "unsplash.com",
+					Organization: "org1",
 					Type:         2,
 					RevisionTime: &revDate,
 					Fields: []Field{
@@ -122,10 +123,12 @@ func TestLoginAndListItems(t *testing.T) {
 							Value: "value1",
 						},
 					},
+					Collections: []string{"id1"},
 				},
 				{
 					ID:           "id2",
 					Name:         "my-credentials",
+					Organization: "org1",
 					Type:         2,
 					Login:        &Login{Password: "yyy"},
 					RevisionTime: &revDate,
@@ -135,7 +138,8 @@ func TestLoginAndListItems(t *testing.T) {
 							FileName: "secret.auto.vars",
 						},
 					},
-					Notes: "important notes",
+					Notes:       "important notes",
+					Collections: []string{"id2"},
 				},
 			},
 		},

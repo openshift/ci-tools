@@ -36,6 +36,9 @@ type Item struct {
 	// RevisionTime is a pointer so that omitempty works. The field is set only
 	// when we get the record from BW but not e.g. when we create or update records
 	RevisionTime *time.Time `json:"revisionDate,omitempty"`
+
+	Organization string   `json:"organizationId,omitempty"`
+	Collections  []string `json:"collectionIds,omitempty"`
 }
 
 // Client is used to communicate with BitWarden
@@ -49,6 +52,8 @@ type Client interface {
 	SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) error
 	SetPassword(itemName string, password []byte) error
 	UpdateNotesOnItem(itemName string, notes string) error
+
+	OnCreate(func(*Item) error)
 }
 
 // NewClient generates a BitWarden client

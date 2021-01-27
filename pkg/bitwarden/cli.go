@@ -235,9 +235,6 @@ func (c *cliClient) createAttachment(fileContents []byte, fileName string, itemI
 	if err != nil {
 		return fmt.Errorf("bw create failed: %w", err)
 	}
-	if err != nil {
-		return fmt.Errorf("failed to delete file %s: %w", filePath, err)
-	}
 	if err = json.Unmarshal(out, newAttachment); err != nil {
 		return fmt.Errorf("failed to parse bw output %s: %w", out, err)
 	}
@@ -450,7 +447,7 @@ type dryRunCliClient struct {
 	file *os.File
 }
 
-func (d *dryRunCliClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
+func (d *dryRunCliClient) GetFieldOnItem(_, _ string) ([]byte, error) {
 	return nil, nil
 }
 
@@ -458,14 +455,14 @@ func (d *dryRunCliClient) GetAllItems() []Item {
 	return nil
 }
 
-func (d *dryRunCliClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error) {
+func (d *dryRunCliClient) GetAttachmentOnItem(_, _ string) ([]byte, error) {
 	return nil, nil
 }
-func (d *dryRunCliClient) GetPassword(itemName string) ([]byte, error) {
+func (d *dryRunCliClient) GetPassword(_ string) ([]byte, error) {
 	return nil, nil
 }
 func (d *dryRunCliClient) Logout() ([]byte, error) {
-	d.file.Close()
+	_ = d.file.Close()
 	return nil, nil
 }
 func (d *dryRunCliClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {

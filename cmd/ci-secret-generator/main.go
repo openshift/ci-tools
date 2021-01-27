@@ -101,30 +101,30 @@ func (o *options) validateOptions() error {
 
 func (o *options) completeOptions(secrets sets.String) error {
 	if !o.validateOnly {
-		bytes, err := ioutil.ReadFile(o.bwPasswordPath)
+		pwBytes, err := ioutil.ReadFile(o.bwPasswordPath)
 		if err != nil {
 			return err
 		}
-		o.bwPassword = strings.TrimSpace(string(bytes))
+		o.bwPassword = strings.TrimSpace(string(pwBytes))
 		secrets.Insert(o.bwPassword)
 	}
 
-	bytes, err := ioutil.ReadFile(o.configPath)
+	cfgBytes, err := ioutil.ReadFile(o.configPath)
 	if err != nil {
 		return err
 	}
 
-	if err := yaml.Unmarshal(bytes, &o.config); err != nil {
+	if err := yaml.Unmarshal(cfgBytes, &o.config); err != nil {
 		return err
 	}
 
 	if o.bootstrapConfigPath != "" {
-		bytes, err = ioutil.ReadFile(o.bootstrapConfigPath)
+		cfgBytes, err = ioutil.ReadFile(o.bootstrapConfigPath)
 		if err != nil {
 			return err
 		}
 
-		if err := yaml.Unmarshal(bytes, &o.bootstrapConfig); err != nil {
+		if err := yaml.Unmarshal(cfgBytes, &o.bootstrapConfig); err != nil {
 			return err
 		}
 	}
@@ -181,9 +181,8 @@ func replaceParameter(paramName, param, template string) string {
 
 func processBwParameters(bwItems []bitWardenItem) ([]bitWardenItem, error) {
 	var errs []error
-	processedBwItems := []bitWardenItem{}
+	var processedBwItems []bitWardenItem
 	for _, bwItemWithParams := range bwItems {
-		hasErrors := false
 		bwItemsProcessingHolder := []bitWardenItem{bwItemWithParams}
 		for paramName, params := range bwItemWithParams.Params {
 			bwItemsProcessed := []bitWardenItem{}
@@ -210,7 +209,7 @@ func processBwParameters(bwItems []bitWardenItem) ([]bitWardenItem, error) {
 			}
 			bwItemsProcessingHolder = bwItemsProcessed
 		}
-		if !hasErrors {
+		if len(errs) == 0 {
 			processedBwItems = append(processedBwItems, bwItemsProcessingHolder...)
 		}
 	}

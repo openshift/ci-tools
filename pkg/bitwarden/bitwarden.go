@@ -37,7 +37,7 @@ type Item struct {
 	// when we get the record from BW but not e.g. when we create or update records
 	RevisionTime *time.Time `json:"revisionDate,omitempty"`
 
-	Organization string   `json:"organizationId,omitempty""`
+	Organization string   `json:"organizationId,omitempty"`
 	Collections  []string `json:"collectionIds,omitempty"`
 }
 

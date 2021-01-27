@@ -10,8 +10,8 @@ type fakeClient struct {
 	attachments map[string]string
 }
 
-func (c fakeClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
-	for _, item := range c.items {
+func (f fakeClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
+	for _, item := range f.items {
 		if itemName == item.Name {
 			for _, field := range item.Fields {
 				if field.Name == fieldName {
@@ -26,12 +26,12 @@ func (c fakeClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
 func (f fakeClient) GetAllItems() []Item {
 	return f.items
 }
-func (c fakeClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error) {
-	for _, item := range c.items {
+func (f fakeClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error) {
+	for _, item := range f.items {
 		if itemName == item.Name {
 			for _, attachment := range item.Attachments {
 				if attachment.FileName == attachmentName {
-					if value, ok := c.attachments[attachment.ID]; ok {
+					if value, ok := f.attachments[attachment.ID]; ok {
 						return []byte(value), nil
 					}
 				}
@@ -41,12 +41,12 @@ func (c fakeClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte
 	return nil, fmt.Errorf("failed to find attachment %s in item %s", attachmentName, itemName)
 }
 
-func (c fakeClient) Logout() ([]byte, error) {
+func (f fakeClient) Logout() ([]byte, error) {
 	return []byte("logged out"), nil
 }
 
-func (c fakeClient) GetPassword(itemName string) ([]byte, error) {
-	for _, item := range c.items {
+func (f fakeClient) GetPassword(itemName string) ([]byte, error) {
+	for _, item := range f.items {
 		if itemName == item.Name {
 			if item.Login != nil {
 				return []byte(item.Login.Password), nil
@@ -61,17 +61,17 @@ func getNewUUID() string {
 	return fmt.Sprintf("%d", nanoTime)
 }
 
-func (c fakeClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {
+func (f fakeClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {
 	var targetItem *Item
 	var targetField *Field
-	for index, item := range c.items {
+	for index, item := range f.items {
 		if itemName != item.Name {
 			continue
 		}
-		targetItem = &c.items[index]
+		targetItem = &f.items[index]
 		for fieldIndex, field := range item.Fields {
 			if field.Name == fieldName {
-				targetField = &c.items[index].Fields[fieldIndex]
+				targetField = &f.items[index].Fields[fieldIndex]
 				break
 			}
 		}
@@ -80,8 +80,8 @@ func (c fakeClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte
 	}
 	if targetItem == nil {
 		newItemID := getNewUUID()
-		c.items = append(c.items, Item{ID: newItemID, Name: itemName, Type: 1})
-		targetItem = &c.items[len(c.items)-1]
+		f.items = append(f.items, Item{ID: newItemID, Name: itemName, Type: 1})
+		targetItem = &f.items[len(f.items)-1]
 	}
 	if targetField == nil {
 		targetItem.Fields = append(targetItem.Fields, Field{fieldName, string(fieldValue)})
@@ -91,17 +91,17 @@ func (c fakeClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte
 	return nil
 }
 
-func (c fakeClient) SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) error {
+func (f fakeClient) SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) error {
 	var targetItem *Item
 	var targetAttachment *Attachment
-	for index, item := range c.items {
+	for index, item := range f.items {
 		if itemName != item.Name {
 			continue
 		}
-		targetItem = &c.items[index]
+		targetItem = &f.items[index]
 		for attachmentIndex, attachment := range item.Attachments {
 			if attachment.FileName == attachmentName {
-				targetAttachment = &c.items[index].Attachments[attachmentIndex]
+				targetAttachment = &f.items[index].Attachments[attachmentIndex]
 				break
 			}
 		}
@@ -109,54 +109,54 @@ func (c fakeClient) SetAttachmentOnItem(itemName, attachmentName string, fileCon
 	}
 	if targetItem == nil {
 		newItemID := getNewUUID()
-		c.items = append(c.items, Item{ID: newItemID, Name: itemName, Type: 1})
-		targetItem = &c.items[len(c.items)-1]
+		f.items = append(f.items, Item{ID: newItemID, Name: itemName, Type: 1})
+		targetItem = &f.items[len(f.items)-1]
 	}
 	if targetAttachment == nil {
 		newAttachmentID := getNewUUID()
-		c.attachments[newAttachmentID] = string(fileContents)
+		f.attachments[newAttachmentID] = string(fileContents)
 		targetAttachment = &Attachment{newAttachmentID, attachmentName}
 		targetItem.Attachments = append(targetItem.Attachments, *targetAttachment)
 	}
-	c.attachments[targetAttachment.ID] = string(fileContents)
+	f.attachments[targetAttachment.ID] = string(fileContents)
 	return nil
 }
 
-func (c fakeClient) SetPassword(itemName string, password []byte) error {
+func (f fakeClient) SetPassword(itemName string, password []byte) error {
 	var targetItem *Item
-	for index, item := range c.items {
+	for index, item := range f.items {
 		if itemName == item.Name {
-			targetItem = &c.items[index]
+			targetItem = &f.items[index]
 			break
 		}
 	}
 	if targetItem == nil {
 		newItemID := getNewUUID()
-		c.items = append(c.items, Item{ID: newItemID, Name: itemName, Type: 1, Login: &Login{Password: string(password)}})
-		targetItem = &c.items[len(c.items)-1]
+		f.items = append(f.items, Item{ID: newItemID, Name: itemName, Type: 1, Login: &Login{Password: string(password)}})
+		targetItem = &f.items[len(f.items)-1]
 	}
 	targetItem.Login.Password = string(password)
 	return nil
 }
 
-func (c fakeClient) UpdateNotesOnItem(itemName, notes string) error {
+func (f fakeClient) UpdateNotesOnItem(itemName, notes string) error {
 	var targetItem *Item
-	for index, item := range c.items {
+	for index, item := range f.items {
 		if itemName == item.Name {
-			targetItem = &c.items[index]
+			targetItem = &f.items[index]
 			break
 		}
 	}
 	if targetItem == nil {
 		newItemID := getNewUUID()
-		c.items = append(c.items, Item{ID: newItemID, Name: itemName, Type: 1, Notes: notes})
-		targetItem = &c.items[len(c.items)-1]
+		f.items = append(f.items, Item{ID: newItemID, Name: itemName, Type: 1, Notes: notes})
+		targetItem = &f.items[len(f.items)-1]
 	}
 	targetItem.Notes = notes
 	return nil
 }
 
-func (c fakeClient) OnCreate(func(*Item) error) {}
+func (f fakeClient) OnCreate(func(*Item) error) {}
 
 // NewFakeClient generates a fake BitWarden client which is supposed to used only for testing
 func NewFakeClient(items []Item, attachments map[string]string) Client {

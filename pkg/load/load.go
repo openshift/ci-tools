@@ -17,6 +17,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/test-infra/prow/config"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -363,6 +364,10 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 				observers[observer.Observer.Name] = observer.Observer.Observer
 			} else if strings.HasSuffix(path, CommandsSuffix) {
 				// ignore
+			} else if filepath.Base(path) == config.ConfigVersionFileName {
+				if version, err := ioutil.ReadFile(path); err == nil {
+					logrus.WithField("version", string(version)).Info("Resolved configuration version")
+				}
 			} else {
 				return fmt.Errorf("invalid file name: %s", path)
 			}

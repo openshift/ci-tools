@@ -156,6 +156,8 @@ func (c fakeClient) UpdateNotesOnItem(itemName, notes string) error {
 	return nil
 }
 
+func (c fakeClient) OnCreate(func(*Item) error) {}
+
 // NewFakeClient generates a fake BitWarden client which is supposed to used only for testing
 func NewFakeClient(items []Item, attachments map[string]string) Client {
 	return fakeClient{items: items, attachments: attachments}

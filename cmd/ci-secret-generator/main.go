@@ -23,6 +23,12 @@ import (
 	"github.com/openshift/ci-tools/pkg/bitwarden"
 )
 
+// CoreOS / OpenShift
+const defaultBwOrganization = "05ac4fbe-11d1-44df-bb29-a772017c6631"
+
+// OpenShift TestPlatform (CI)
+var defaultBwCollections = []string{"0247722f-3ab3-4fd4-a01d-a983013f3159"}
+
 type options struct {
 	logLevel            string
 	configPath          string
@@ -211,8 +217,18 @@ func processBwParameters(bwItems []bitWardenItem) ([]bitWardenItem, error) {
 	return processedBwItems, utilerrors.NewAggregate(errs)
 }
 
+func setDefaultsOnCreate(item *bitwarden.Item) error {
+	item.Organization = defaultBwOrganization
+	collections := sets.NewString(item.Collections...)
+	collections.Insert(defaultBwCollections...)
+	item.Collections = collections.List()
+
+	return nil
+}
+
 func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 	var errs []error
+	bwClient.OnCreate(setDefaultsOnCreate)
 	for _, bwItem := range bwItems {
 		logger := logrus.WithField("item", bwItem.ItemName)
 		for _, field := range bwItem.Fields {

@@ -391,20 +391,20 @@ type OwnersDirBlacklist struct {
 	IgnorePreconfiguredDefaults bool `json:"ignore_preconfigured_defaults,omitempty"`
 }
 
-// DirBlacklist returns regular expressions matching directories to ignore when
+// ListIgnoredDirs returns regular expressions matching directories to ignore when
 // searching for OWNERS{,_ALIAS} files in a repo.
-func (ownersDirBlacklist OwnersDirBlacklist) DirBlacklist(org, repo string) (blacklist []string) {
-	blacklist = append(blacklist, ownersDirBlacklist.Default...)
+func (ownersDirBlacklist OwnersDirBlacklist) ListIgnoredDirs(org, repo string) (ignorelist []string) {
+	ignorelist = append(ignorelist, ownersDirBlacklist.Default...)
 	if bl, ok := ownersDirBlacklist.Repos[org]; ok {
-		blacklist = append(blacklist, bl...)
+		ignorelist = append(ignorelist, bl...)
 	}
 	if bl, ok := ownersDirBlacklist.Repos[org+"/"+repo]; ok {
-		blacklist = append(blacklist, bl...)
+		ignorelist = append(ignorelist, bl...)
 	}
 
 	preconfiguredDefaults := []string{"\\.git$", "_output$", "vendor/.*/.*"}
 	if !ownersDirBlacklist.IgnorePreconfiguredDefaults {
-		blacklist = append(blacklist, preconfiguredDefaults...)
+		ignorelist = append(ignorelist, preconfiguredDefaults...)
 	}
 	return
 }
@@ -902,14 +902,14 @@ type ManagedWebhookInfo struct {
 // ManagedWebhooks contains information about all the repos/orgs which are onboarded with auto-generated tokens.
 type ManagedWebhooks struct {
 	RespectLegacyGlobalToken bool                          `json:"respect_legacy_global_token"`
-	OrgRepoConfig            map[string]ManagedWebhookInfo `json:"org_repo_config"`
+	OrgRepoConfig            map[string]ManagedWebhookInfo `json:"org_repo_config,omitempty"`
 }
 
 // SlackReporter represents the config for the Slack reporter. The channel can be overridden
 // on the job via the .reporter_config.slack.channel property
 type SlackReporter struct {
-	JobTypesToReport  []prowapi.ProwJobType  `json:"job_types_to_report"`
-	JobStatesToReport []prowapi.ProwJobState `json:"job_states_to_report"`
+	JobTypesToReport  []prowapi.ProwJobType  `json:"job_types_to_report,omitempty"`
+	JobStatesToReport []prowapi.ProwJobState `json:"job_states_to_report,omitempty"`
 	Channel           string                 `json:"channel"`
 	ReportTemplate    string                 `json:"report_template"`
 }
@@ -1622,7 +1622,7 @@ func parseProwConfig(c *Config) error {
 	}
 
 	if c.Plank.PodPendingTimeout == nil {
-		c.Plank.PodPendingTimeout = &metav1.Duration{Duration: 24 * time.Hour}
+		c.Plank.PodPendingTimeout = &metav1.Duration{Duration: 10 * time.Minute}
 	}
 
 	if c.Plank.PodRunningTimeout == nil {
@@ -1630,7 +1630,7 @@ func parseProwConfig(c *Config) error {
 	}
 
 	if c.Plank.PodUnscheduledTimeout == nil {
-		c.Plank.PodUnscheduledTimeout = &metav1.Duration{Duration: 24 * time.Hour}
+		c.Plank.PodUnscheduledTimeout = &metav1.Duration{Duration: 5 * time.Minute}
 	}
 
 	if c.Gerrit.TickInterval == nil {

@@ -60,7 +60,7 @@ func TestGeneratePodSpec(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generateCiOperatorPodSpec(tc.info, tc.secrets, tc.targets, tc.additionalArgs...))
+			testhelper.CompareWithFixture(t, generateCiOperatorPodSpec(tc.info, tc.secrets, tc.targets, false, tc.additionalArgs...))
 		})
 	}
 }
@@ -108,8 +108,9 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
-				As:       "test",
-				Commands: "commands",
+				As:          "test",
+				Commands:    "commands",
+				ArtifactDir: "/tmp/artifacts",
 				OpenshiftAnsibleClusterTestConfiguration: &ciop.OpenshiftAnsibleClusterTestConfiguration{
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
 				},
@@ -119,8 +120,9 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
-				As:       "test",
-				Commands: "commands",
+				As:          "test",
+				Commands:    "commands",
+				ArtifactDir: "/tmp/artifacts",
 				OpenshiftInstallerClusterTestConfiguration: &ciop.OpenshiftInstallerClusterTestConfiguration{
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "aws"},
 				},
@@ -130,8 +132,9 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
-				As:       "test",
-				Commands: "commands",
+				As:          "test",
+				Commands:    "commands",
+				ArtifactDir: "/tmp/artifacts",
 				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
 					From:                     "pipeline:kubevirt-test",
@@ -142,8 +145,9 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
-				As:       "test",
-				Commands: "commands",
+				As:          "test",
+				Commands:    "commands",
+				ArtifactDir: "/tmp/artifacts",
 				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
 					From:                     "pipeline:kubevirt-test",
@@ -154,8 +158,9 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
-				As:       "test",
-				Commands: "commands",
+				As:          "test",
+				Commands:    "commands",
+				ArtifactDir: "/tmp/artifacts",
 				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
 					From:                     "pipeline:kubevirt-test",
@@ -166,8 +171,9 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
-				As:       "test",
-				Commands: "commands",
+				As:          "test",
+				Commands:    "commands",
+				ArtifactDir: "/tmp/artifacts",
 				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
 					From:                     "pipeline:kubevirt-test",

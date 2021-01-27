@@ -4,6 +4,7 @@ containers:
   - --gcs-upload-secret=/secrets/gcs/service-account.json
   - --report-username=ci
   - --report-password-file=/etc/report/password.txt
+  - --upload-via-pod-utils=false
   - --target=test
   - --secret-dir=/secrets/ci-pull-credentials
   - --secret-dir=/usr/local/test-cluster-profile

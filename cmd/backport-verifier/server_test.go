@@ -1,0 +1,188 @@
+package main
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/sirupsen/logrus"
+
+	"k8s.io/test-infra/prow/github"
+)
+
+type orgrepopr struct {
+	org, repo string
+	pr        int
+}
+
+type fakeClient struct {
+	commits      map[orgrepopr][]github.RepositoryCommit
+	commitErrors map[orgrepopr]error
+
+	prs      map[orgrepopr]*github.PullRequest
+	prErrors map[orgrepopr]error
+
+	comments map[orgrepopr][]string
+
+	labels map[orgrepopr][]string
+}
+
+func (c *fakeClient) ListPRCommits(org, repo string, number int) ([]github.RepositoryCommit, error) {
+	orp := orgrepopr{org: org, repo: repo, pr: number}
+	if err, exist := c.commitErrors[orp]; exist && err != nil {
+		return nil, err
+	}
+
+	if data, exist := c.commits[orp]; exist {
+		return data, nil
+	} else {
+		return nil, errors.New("no commits configured for this PR")
+	}
+}
+
+func (c *fakeClient) GetPullRequest(org, repo string, number int) (*github.PullRequest, error) {
+	orp := orgrepopr{org: org, repo: repo, pr: number}
+	if err, exist := c.prErrors[orp]; exist && err != nil {
+		return nil, err
+	}
+	if data, exist := c.prs[orp]; exist {
+		return data, nil
+	} else {
+		return nil, errors.New("no data configured for this PR")
+	}
+}
+
+func (c *fakeClient) CreateComment(owner, repo string, number int, comment string) error {
+	orp := orgrepopr{org: owner, repo: repo, pr: number}
+	c.comments[orp] = append(c.comments[orp], comment)
+	return nil
+}
+
+func (c *fakeClient) AddLabel(org, repo string, number int, label string) error {
+	orp := orgrepopr{org: org, repo: repo, pr: number}
+	c.labels[orp] = append(c.labels[orp], label)
+	return nil
+}
+
+func (c *fakeClient) RemoveLabel(org, repo string, number int, label string) error {
+	orp := orgrepopr{org: org, repo: repo, pr: number}
+	var updated []string
+	for _, old := range c.labels[orp] {
+		if old != label {
+			updated = append(updated, old)
+		}
+	}
+	c.labels[orp] = updated
+	return nil
+}
+
+func TestHandle(t *testing.T) {
+	var testCases = []struct {
+		name             string
+		config           Config
+		commits          []github.RepositoryCommit
+		commitError      error
+		prs              map[orgrepopr]*github.PullRequest
+		prErrors         map[orgrepopr]error
+		labels           []string
+		expectedLabels   []string
+		expectedComments []string
+	}{
+		{
+			name:             "no config",
+			config:           Config{Repositories: map[string]string{}},
+			expectedLabels:   []string{invalidBackportsLabel},
+			expectedComments: []string{"@author: no upstream repository is configured for validating backports for this repository."},
+		},
+		{
+			name:   "valid upstreams",
+			config: Config{Repositories: map[string]string{"org/repo": "upstream/repo"}},
+			commits: []github.RepositoryCommit{
+				{Commit: github.GitCommit{SHA: "123", Message: "UPSTREAM: 1: whoa"}},
+				{Commit: github.GitCommit{SHA: "456", Message: "UPSTREAM: 2: whoa"}},
+				{Commit: github.GitCommit{SHA: "789", Message: "UPSTREAM: 3: whoa"}},
+			},
+			prs: map[orgrepopr]*github.PullRequest{
+				{org: "upstream", repo: "repo", pr: 1}: {Merged: true},
+				{org: "upstream", repo: "repo", pr: 2}: {Merged: true},
+				{org: "upstream", repo: "repo", pr: 3}: {Merged: true},
+			},
+			labels:         []string{invalidBackportsLabel},
+			expectedLabels: []string{validBackportsLabel},
+			expectedComments: []string{`@author: the contents of this pull request could be automatically validated.
+
+The following commits are valid:
+ - 123: the upstream PR [upstream/repo#1](https://github.com/upstream/repo/pull/1) has merged
+ - 456: the upstream PR [upstream/repo#2](https://github.com/upstream/repo/pull/2) has merged
+ - 789: the upstream PR [upstream/repo#3](https://github.com/upstream/repo/pull/3) has merged`},
+		},
+		{
+			name:   "invalid upstreams",
+			config: Config{Repositories: map[string]string{"org/repo": "upstream/repo"}},
+			commits: []github.RepositoryCommit{
+				{Commit: github.GitCommit{SHA: "123", Message: "UPSTREAM: 1: whoa"}},
+				{Commit: github.GitCommit{SHA: "456", Message: "UPSTREAM: 2: whoa"}},
+				{Commit: github.GitCommit{SHA: "789", Message: "UPSTREAM: 3: whoa"}},
+				{Commit: github.GitCommit{SHA: "abc", Message: "UPSTREAM: <carry>: whoa"}},
+				{Commit: github.GitCommit{SHA: "def", Message: "UPSTREAM: 4: whoa"}},
+			},
+			prs: map[orgrepopr]*github.PullRequest{
+				{org: "upstream", repo: "repo", pr: 1}: {Merged: true},
+				{org: "upstream", repo: "repo", pr: 2}: {Merged: false},
+			},
+			prErrors: map[orgrepopr]error{
+				{org: "upstream", repo: "repo", pr: 3}: errors.New("injected error"),
+				{org: "upstream", repo: "repo", pr: 4}: github.NewNotFound(),
+			},
+			expectedLabels: []string{invalidBackportsLabel},
+			expectedComments: []string{`@author: the contents of this pull request could not be automatically validated.
+
+The following commits are valid:
+ - 123: the upstream PR [upstream/repo#1](https://github.com/upstream/repo/pull/1) has merged
+
+The following commits are invalid:
+ - 456: the upstream PR [upstream/repo#2](https://github.com/upstream/repo/pull/2) has not yet merged
+ - abc: does not specify an upstream backport in the commit message
+ - def: the upstream PR [upstream/repo#4](https://github.com/upstream/repo/pull/4) does not exist
+
+The following commits could not be processed:
+ - 789: failed to fetch upstream PR: injected error`},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			testCase := tc
+			t.Parallel()
+			orp := orgrepopr{
+				org:  "org",
+				repo: "repo",
+				pr:   1,
+			}
+			client := &fakeClient{
+				commits:      map[orgrepopr][]github.RepositoryCommit{orp: testCase.commits},
+				commitErrors: map[orgrepopr]error{orp: testCase.commitError},
+				prs:          testCase.prs,
+				prErrors:     testCase.prErrors,
+				comments:     map[orgrepopr][]string{orp: {}},
+				labels:       map[orgrepopr][]string{orp: testCase.labels},
+			}
+			s := &server{
+				config: func() *Config {
+					return &testCase.config
+				},
+				ghc: client,
+			}
+
+			s.handle(logrus.WithField("testcase", testCase.name), "org", "repo", "author", 1)
+
+			if diff := cmp.Diff(testCase.expectedComments, client.comments[orp]); diff != "" {
+				t.Errorf("%s: got incorrect comments: %v", testCase.name, diff)
+			}
+
+			if diff := cmp.Diff(testCase.expectedLabels, client.labels[orp]); diff != "" {
+				t.Errorf("%s: got incorrect labels: %v", testCase.name, diff)
+			}
+		})
+	}
+}

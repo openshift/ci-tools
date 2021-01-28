@@ -2,6 +2,7 @@ package dispatcher
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"net/http"
 	"time"
@@ -12,14 +13,37 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// PrometheusOptions exposes options used in contacting a Prometheus instance
+type PrometheusOptions struct {
+	PrometheusURL          string
+	PrometheusUsername     string
+	PrometheusPasswordPath string
+}
+
+// Validate validates the values in the options
+func (o *PrometheusOptions) Validate() error {
+	if (o.PrometheusUsername == "") != (o.PrometheusPasswordPath == "") {
+		return fmt.Errorf("--prometheus-username and --prometheus-password-path must be specified together")
+	}
+	return nil
+}
+
+// AddFlags sets up the flags for PrometheusOptions
+func (o *PrometheusOptions) AddFlags(fs *flag.FlagSet) {
+	fs.StringVar(&o.PrometheusURL, "prometheus-url", "https://prometheus-prow-monitoring.apps.ci.l2s4.p1.openshiftapps.com", "The prometheus URL")
+	fs.StringVar(&o.PrometheusUsername, "prometheus-username", "", "The Prometheus username.")
+	fs.StringVar(&o.PrometheusPasswordPath, "prometheus-password-path", "", "The path to a file containing the Prometheus password")
+}
+
 type basicAuthRoundTripper struct {
 	username             string
-	password             string
+	passwordPath         string
+	passwordGetter       func(passwordPath string) []byte
 	originalRoundTripper http.RoundTripper
 }
 
 func (rt *basicAuthRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.SetBasicAuth(rt.username, rt.password)
+	req.SetBasicAuth(rt.username, string(rt.passwordGetter(rt.passwordPath)))
 	return rt.originalRoundTripper.RoundTrip(req)
 }
 
@@ -53,10 +77,10 @@ func GetJobVolumesFromPrometheus(ctx context.Context, prometheusAPI PrometheusAP
 }
 
 // NewPrometheusClient return a Prometheus client
-func NewPrometheusClient(prometheusURL, username, password string) (api.Client, error) {
+func (o *PrometheusOptions) NewPrometheusClient(passwordGetter func(string) []byte) (api.Client, error) {
 	roundTripper := api.DefaultRoundTripper
-	if username != "" {
-		roundTripper = &basicAuthRoundTripper{username: username, password: password, originalRoundTripper: api.DefaultRoundTripper}
+	if o.PrometheusUsername != "" {
+		roundTripper = &basicAuthRoundTripper{username: o.PrometheusUsername, passwordPath: o.PrometheusPasswordPath, passwordGetter: passwordGetter, originalRoundTripper: api.DefaultRoundTripper}
 	}
-	return api.NewClient(api.Config{Address: prometheusURL, RoundTripper: roundTripper})
+	return api.NewClient(api.Config{Address: o.PrometheusURL, RoundTripper: roundTripper})
 }

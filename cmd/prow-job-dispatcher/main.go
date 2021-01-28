@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -19,24 +20,38 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/test-infra/experiment/autobumper/bumper"
 	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/logrusutil"
+	"k8s.io/test-infra/prow/config/secret"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/dispatcher"
+	"github.com/openshift/ci-tools/pkg/github/prcreation"
+)
+
+const (
+	githubOrg    = "openshift"
+	githubRepo   = "release"
+	githubLogin  = "openshift-bot"
+	matchTitle   = "Automate prow job dispatcher"
+	remoteBranch = "auto-prow-job-dispatcher"
 )
 
 type options struct {
 	prowJobConfigDir string
 	configPath       string
 
-	prometheusURL          string
-	prometheusUsername     string
-	prometheusPasswordPath string
-	prometheusDaysBefore   int
-	maxConcurrency         int
+	maxConcurrency       int
+	prometheusDaysBefore int
 
-	prometheusPassword string
+	createPR    bool
+	githubLogin string
+	targetDir   string
+	assign      string
+
+	bumper.GitAuthorOptions
+	dispatcher.PrometheusOptions
+	prcreation.PRCreationOptions
 }
 
 func gatherOptions() options {
@@ -45,13 +60,19 @@ func gatherOptions() options {
 
 	fs.StringVar(&o.prowJobConfigDir, "prow-jobs-dir", "", "Path to a root of directory structure with Prow job config files (ci-operator/jobs in openshift/release)")
 	fs.StringVar(&o.configPath, "config-path", "", "Path to the config file (core-services/sanitize-prow-jobs/_config.yaml in openshift/release)")
-
-	fs.StringVar(&o.prometheusURL, "prometheus-url", "https://prometheus-prow-monitoring.apps.ci.l2s4.p1.openshiftapps.com", "The prometheus URL")
-	fs.StringVar(&o.prometheusUsername, "prometheus-username", "", "The Prometheus username.")
-	fs.StringVar(&o.prometheusPasswordPath, "prometheus-password-path", "", "The path to a file containing the Prometheus password")
 	fs.IntVar(&o.prometheusDaysBefore, "prometheus-days-before", 1, "Number [1,15] of days before. Time 00-00-00 of that day will be used as time to query Prometheus. E.g., 1 means 00-00-00 of yesterday.")
 	fs.IntVar(&o.maxConcurrency, "concurrency", 0, "Maximum number of concurrent in-flight goroutines to handle files.")
 
+	fs.BoolVar(&o.createPR, "create-pr", false, "Create a pull request to the change made with this tool.")
+	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
+	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
+	fs.StringVar(&o.assign, "assign", "ghost", "The github username or group name to assign the created pull request to.")
+
+	o.GitAuthorOptions.AddFlags(fs)
+	o.PrometheusOptions.AddFlags(fs)
+	o.PRCreationOptions.AddFlags(fs)
+
+	o.AllowAnonymous = true
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
@@ -59,6 +80,9 @@ func gatherOptions() options {
 }
 
 func (o *options) validate() error {
+	if o.maxConcurrency == 0 {
+		o.maxConcurrency = runtime.GOMAXPROCS(0)
+	}
 	if o.prowJobConfigDir == "" {
 		return fmt.Errorf("mandatory argument --prow-jobs-dir wasn't set")
 	}
@@ -66,31 +90,28 @@ func (o *options) validate() error {
 		return fmt.Errorf("mandatory argument --config-path wasn't set")
 	}
 
-	if (o.prometheusUsername == "") != (o.prometheusPasswordPath == "") {
-		return fmt.Errorf("--prometheus-username and --prometheus-password-path must be specified together")
-	}
 	if o.prometheusDaysBefore < 1 || o.prometheusDaysBefore > 15 {
 		return fmt.Errorf("--prometheus-days-before must be between 1 and 15")
 	}
-	return nil
-}
-
-func (o *options) complete(secrets *sets.String) error {
-	if o.prometheusPasswordPath != "" {
-		bytes, err := ioutil.ReadFile(o.prometheusPasswordPath)
-		if err != nil {
+	if o.createPR {
+		logrus.Info("The tool will create a pull request")
+		if o.githubLogin == "" {
+			return fmt.Errorf("--github-login cannot be empty string")
+		}
+		if err := o.GitAuthorOptions.Validate(); err != nil {
 			return err
 		}
-		o.prometheusPassword = strings.TrimSpace(string(bytes))
-		if o.prometheusPassword == "" {
-			return fmt.Errorf("no content in file: %s", o.prometheusPasswordPath)
+		if o.targetDir == "" {
+			return fmt.Errorf("--target-dir is mandatory")
 		}
-		secrets.Insert(o.prometheusPassword)
+		if o.assign == "" {
+			return fmt.Errorf("--assign is mandatory")
+		}
+		if err := o.PRCreationOptions.GitHubOptions.Validate(false); err != nil {
+			return err
+		}
 	}
-	if o.maxConcurrency == 0 {
-		o.maxConcurrency = runtime.GOMAXPROCS(0)
-	}
-	return nil
+	return o.PrometheusOptions.Validate()
 }
 
 var (
@@ -329,20 +350,59 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 	return utilerrors.NewAggregate(errs)
 }
 
+func runAndCommitIfNeeded(stdout, stderr io.Writer, author, cmd string, args []string) (bool, error) {
+	fullCommand := fmt.Sprintf("%s %s", filepath.Base(cmd), strings.Join(args, " "))
+
+	if cmd != "" {
+		logrus.Infof("Running: %s", fullCommand)
+		if err := bumper.Call(stdout, stderr, cmd, args...); err != nil {
+			return false, fmt.Errorf("failed to run %s: %w", fullCommand, err)
+		}
+	}
+
+	changed, err := bumper.HasChanges()
+	if err != nil {
+		return false, fmt.Errorf("error occurred when checking changes: %w", err)
+	}
+
+	if !changed {
+		logrus.WithField("command", fullCommand).Info("No changes to commit")
+		return false, nil
+	}
+
+	gitCmd := "git"
+	if err := bumper.Call(stdout, stderr, gitCmd, []string{"add", "."}...); err != nil {
+		return false, fmt.Errorf("failed to 'git add .': %w", err)
+	}
+
+	commitMsg := fullCommand
+	if cmd == "" {
+		commitMsg = "Dispatch Prow jobs"
+	}
+	commitArgs := []string{"commit", "-m", commitMsg, "--author", author}
+	if err := bumper.Call(stdout, stderr, gitCmd, commitArgs...); err != nil {
+		return false, fmt.Errorf("fail to %s %s: %w", gitCmd, strings.Join(commitArgs, " "), err)
+	}
+
+	return true, nil
+}
+
 func main() {
-	secrets := sets.NewString()
-	logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, func() sets.String {
-		return secrets
-	}))
 	o := gatherOptions()
 	if err := o.validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to complete options.")
 	}
-	if err := o.complete(&secrets); err != nil {
-		logrus.WithError(err).Fatal("Failed to complete options.")
+
+	sa := &secret.Agent{}
+	paths := []string{o.PRCreationOptions.GitHubOptions.TokenPath}
+	if o.createPR {
+		paths = append(paths, o.PrometheusOptions.PrometheusPasswordPath)
+	}
+	if err := sa.Start(paths); err != nil {
+		logrus.WithError(err).Fatal("Failed to start secrets agent")
 	}
 
-	promClient, err := dispatcher.NewPrometheusClient(o.prometheusURL, o.prometheusUsername, o.prometheusPassword)
+	promClient, err := o.PrometheusOptions.NewPrometheusClient(sa.GetSecret)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create prometheus client.")
 	}
@@ -369,5 +429,68 @@ func main() {
 	}
 	if err := dispatcher.SaveConfig(config, o.configPath); err != nil {
 		logrus.WithError(err).Fatalf("Failed to save config file to %s", o.configPath)
+	}
+
+	if !o.createPR {
+		logrus.Info("Finished dispatching and create no PR, exiting ...")
+		os.Exit(0)
+	}
+
+	logrus.WithField("targetDir", o.targetDir).Info("Changing working directory ...")
+	if err := os.Chdir(o.targetDir); err != nil {
+		logrus.WithError(err).Fatal("Failed to change to root dir")
+	}
+
+	steps := []struct {
+		command   string
+		arguments []string
+	}{
+		{
+			// start with git commands without running any tools
+			command: "",
+		},
+		{
+			command:   "/usr/bin/sanitize-prow-jobs",
+			arguments: []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"},
+		},
+	}
+
+	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: sa}
+	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: sa}
+	author := fmt.Sprintf("%s <%s>", o.GitAuthorOptions.GitName, o.GitAuthorOptions.GitEmail)
+	commitsCounter := 0
+
+	for _, step := range steps {
+		committed, err := runAndCommitIfNeeded(stdout, stderr, author, step.command, step.arguments)
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to run command and commit the changes")
+		}
+
+		if committed {
+			commitsCounter++
+		}
+	}
+	if commitsCounter == 0 {
+		logrus.Info("no new commits, existing ...")
+		os.Exit(0)
+	}
+
+	if err := bumper.GitPush(
+		fmt.Sprintf("https://%s:%s@github.com/%s/%s.git",
+			o.githubLogin,
+			string(sa.GetTokenGenerator(o.PRCreationOptions.GitHubOptions.TokenPath)()),
+			o.githubLogin,
+			githubRepo),
+		remoteBranch,
+		stdout,
+		stderr,
+		"",
+	); err != nil {
+		logrus.WithError(err).Fatal("Failed to push changes.")
+	}
+
+	title := fmt.Sprintf("%s at %s", matchTitle, time.Now().Format(time.RFC1123))
+	if err := o.PRCreationOptions.UpsertPR(o.targetDir, githubOrg, githubRepo, remoteBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle)); err != nil {
+		logrus.WithError(err).Fatalf("failed to upsert PR")
 	}
 }

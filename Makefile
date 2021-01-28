@@ -170,10 +170,12 @@ local-e2e: \
 	$(TMPDIR)/.kubeconfig \
 	$(TMPDIR)/local-secret/.dockerconfigjson \
 	$(TMPDIR)/remote-secret/.dockerconfigjson \
+	$(TMPDIR)/gcs/service-account.json \
 	$(TMPDIR)/boskos
 	$(eval export KUBECONFIG=$(TMPDIR)/.kubeconfig)
 	$(eval export LOCAL_REGISTRY_SECRET_DIR=$(TMPDIR)/local-secret)
 	$(eval export REMOTE_REGISTRY_SECRET_DIR=$(TMPDIR)/remote-secret)
+	$(eval export GCS_CREDENTIALS_FILE=$(TMPDIR)/gcs/service-account.json)
 	$(eval export PATH=${PATH}:$(TMPDIR))
 	@$(MAKE) e2e
 .PHONY: local-e2e
@@ -243,6 +245,10 @@ $(TMPDIR)/local-secret/.dockerconfigjson:
 $(TMPDIR)/remote-secret/.dockerconfigjson:
 	mkdir -p $(TMPDIR)/remote-secret
 	oc --context $(CLUSTER) --as system:admin --namespace test-credentials get secret ci-pull-credentials -o 'jsonpath={.data.\.dockerconfigjson}' | base64 --decode | jq > $(TMPDIR)/remote-secret/.dockerconfigjson
+
+$(TMPDIR)/gcs/service-account.json:
+	mkdir -p $(TMPDIR)/gcs
+	oc --context $(CLUSTER) --as system:admin --namespace test-credentials get secret gce-sa-credentials-gcs-publisher -o 'jsonpath={.data.service-account\.json}' | base64 --decode | jq > $(TMPDIR)/gcs/service-account.json
 
 $(TMPDIR)/boskos:
 	mkdir -p $(TMPDIR)/image

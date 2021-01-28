@@ -21,13 +21,16 @@ function deprovision() {
   timeout --signal=SIGQUIT 30m openshift-install --dir "${WORKDIR}" --log-level error destroy cluster && touch "${WORKDIR}/success" || touch "${WORKDIR}/failure"
 }
 
+logdir="${ARTIFACTS}/deprovision"
+mkdir -p "${logdir}"
+
 aws_cluster_age_cutoff="$(TZ=":Africa/Abidjan" date --date="${CLUSTER_TTL}" '+%Y-%m-%dT%H:%M+0000')"
 echo "deprovisioning clusters with an expirationDate before ${aws_cluster_age_cutoff} in AWS ..."
 # we need to pass --region for ... some reason?
 for region in $( aws ec2 describe-regions --region us-east-1 --query "Regions[].{Name:RegionName}" --output text ); do
   echo "deprovisioning in AWS region ${region} ..."
   for cluster in $( aws ec2 describe-vpcs --output json --region "${region}" | jq --arg date "${aws_cluster_age_cutoff}" -r -S '.Vpcs[] | select (.Tags[]? | (.Key == "expirationDate" and .Value < $date)) | .Tags[] | select (.Value == "owned") | .Key' ); do
-    workdir="${ARTIFACTS}/deprovision/${cluster:22:14}"
+    workdir="${logdir}/${cluster:22:14}"
     mkdir -p "${workdir}"
     cat <<EOF >"${workdir}/metadata.json"
 {
@@ -55,7 +58,7 @@ for network in $( gcloud --project=openshift-gce-devel-ci compute networks list 
   if [[ -z "${region:-}" ]]; then
     region=us-east1
   fi
-  workdir="${ARTIFACTS}/deprovision/${infraID}"
+  workdir="${logdir}/${infraID}"
   mkdir -p "${workdir}"
   cat <<EOF >"${workdir}/metadata.json"
 {
@@ -69,7 +72,7 @@ EOF
   echo "will deprovision GCE cluster ${infraID} in region ${region}"
 done
 
-clusters=$( find "${ARTIFACTS}/deprovision" -mindepth 1 -type d )
+clusters=$( find "${logdir}" -mindepth 1 -type d )
 for workdir in $(shuf <<< ${clusters}); do
   queue deprovision "${workdir}"
 done

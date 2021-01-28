@@ -16,7 +16,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
@@ -157,39 +156,35 @@ func (o *options) getConfigWatchAndUpdate() (func(ctx context.Context), error) {
 
 func main() {
 	logrusutil.ComponentInit()
+	logger := logrus.WithField("plugin", "publicize")
 
 	o := gatherOptions()
 	if err := o.Validate(); err != nil {
-		logrus.Fatalf("Invalid options: %v", err)
+		logger.Fatalf("Invalid options: %v", err)
 	}
 
 	configWatchAndUpdate, err := o.getConfigWatchAndUpdate()
 	if err != nil {
-		logrus.WithError(err).Fatal("couldn't get config file watch and update function")
+		logger.WithError(err).Fatal("couldn't get config file watch and update function")
 	}
 	interrupts.Run(configWatchAndUpdate)
 
 	secretAgent := &secret.Agent{}
 	if err := secretAgent.Start([]string{o.github.TokenPath, o.webhookSecretFile}); err != nil {
-		logrus.WithError(err).Fatal("Error starting secrets agent.")
+		logger.WithError(err).Fatal("Error starting secrets agent.")
 	}
 
 	webhookTokenGenerator := secretAgent.GetTokenGenerator(o.webhookSecretFile)
 	githubTokenGenerator := secretAgent.GetTokenGenerator(o.github.TokenPath)
-	getter := func() sets.String {
-		return sets.NewString([]string{string(webhookTokenGenerator()), string(githubTokenGenerator())}...)
-	}
-	logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, getter))
-	logger := logrus.NewEntry(logrus.New())
 
 	githubClient, err := o.github.GitHubClient(secretAgent, o.dryRun)
 	if err != nil {
-		logrus.WithError(err).Fatal("Error getting GitHub client.")
+		logger.WithError(err).Fatal("Error getting GitHub client.")
 	}
 
 	gitClient, err := o.git.GitClient(githubClient, githubTokenGenerator, secretAgent.Censor, o.dryRun)
 	if err != nil {
-		logrus.WithError(err).Fatal("Error getting Git client.")
+		logger.WithError(err).Fatal("Error getting Git client.")
 	}
 
 	serv := &server{
@@ -205,7 +200,6 @@ func main() {
 		gitEmail:    o.gitEmail,
 		githubLogin: o.githubLogin,
 		githubHost:  o.github.Host,
-		secretAgent: secretAgent,
 		dry:         o.dryRun,
 	}
 

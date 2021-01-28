@@ -11,7 +11,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/git/localgit"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/github/fakegithub"
@@ -160,8 +159,7 @@ func TestCheckPrerequisites(t *testing.T) {
 					c.Repositories = tc.repositories
 					return c
 				},
-				secretAgent: &secret.Agent{},
-				dry:         true,
+				dry: true,
 			}
 
 			actualErr := serv.checkPrerequisites(logrus.WithField("id", tc.id), fc.PullRequests[1111], ice)

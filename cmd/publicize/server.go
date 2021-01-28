@@ -10,7 +10,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/pluginhelp"
@@ -49,8 +48,6 @@ type server struct {
 
 	ghc githubClient
 	gc  git.ClientFactory
-
-	secretAgent *secret.Agent
 
 	dry bool
 }
@@ -194,8 +191,7 @@ func (s *server) mergeAndPushToRemote(sourceOrg, sourceRepo, destOrg, destRepo s
 }
 
 func (s *server) createComment(ic github.IssueCommentEvent, message string, logger *logrus.Entry) {
-	censored := s.secretAgent.Censor([]byte(message))
-	if err := s.ghc.CreateComment(ic.Repo.Owner.Login, ic.Repo.Name, ic.Issue.Number, fmt.Sprintf("@%s: %s", ic.Comment.User.Login, censored)); err != nil {
+	if err := s.ghc.CreateComment(ic.Repo.Owner.Login, ic.Repo.Name, ic.Issue.Number, fmt.Sprintf("@%s: %s", ic.Comment.User.Login, message)); err != nil {
 		logger.WithError(err).Warn("coulnd't create comment")
 	}
 }

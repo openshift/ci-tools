@@ -106,9 +106,9 @@ func TestHandle(t *testing.T) {
 			name:   "valid upstreams",
 			config: Config{Repositories: map[string]string{"org/repo": "upstream/repo"}},
 			commits: []github.RepositoryCommit{
-				{Commit: github.GitCommit{SHA: "123", Message: "UPSTREAM: 1: whoa"}},
-				{Commit: github.GitCommit{SHA: "456", Message: "UPSTREAM: 2: whoa"}},
-				{Commit: github.GitCommit{SHA: "789", Message: "UPSTREAM: 3: whoa"}},
+				{SHA: "123", Commit: github.GitCommit{Message: "UPSTREAM: 1: whoa"}},
+				{SHA: "456", Commit: github.GitCommit{Message: "UPSTREAM: 2: whoa"}},
+				{SHA: "789", Commit: github.GitCommit{Message: "UPSTREAM: 3: whoa"}},
 			},
 			prs: map[orgrepopr]*github.PullRequest{
 				{org: "upstream", repo: "repo", pr: 1}: {Merged: true},
@@ -128,11 +128,11 @@ The following commits are valid:
 			name:   "invalid upstreams",
 			config: Config{Repositories: map[string]string{"org/repo": "upstream/repo"}},
 			commits: []github.RepositoryCommit{
-				{Commit: github.GitCommit{SHA: "123", Message: "UPSTREAM: 1: whoa"}},
-				{Commit: github.GitCommit{SHA: "456", Message: "UPSTREAM: 2: whoa"}},
-				{Commit: github.GitCommit{SHA: "789", Message: "UPSTREAM: 3: whoa"}},
-				{Commit: github.GitCommit{SHA: "abc", Message: "UPSTREAM: <carry>: whoa"}},
-				{Commit: github.GitCommit{SHA: "def", Message: "UPSTREAM: 4: whoa"}},
+				{SHA: "123", Commit: github.GitCommit{Message: "UPSTREAM: 1: whoa"}},
+				{SHA: "456", Commit: github.GitCommit{Message: "UPSTREAM: 2: whoa"}},
+				{SHA: "789", Commit: github.GitCommit{Message: "UPSTREAM: 3: whoa"}},
+				{SHA: "abc", Commit: github.GitCommit{Message: "UPSTREAM: <carry>: whoa"}},
+				{SHA: "def", Commit: github.GitCommit{Message: "UPSTREAM: 4: whoa"}},
 			},
 			prs: map[orgrepopr]*github.PullRequest{
 				{org: "upstream", repo: "repo", pr: 1}: {Merged: true},

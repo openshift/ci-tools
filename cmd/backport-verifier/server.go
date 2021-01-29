@@ -111,17 +111,17 @@ func (s *server) handle(l *logrus.Entry, org, repo, user string, num int, reques
 	for _, commit := range commits {
 		parts := upstreamPullRe.FindStringSubmatch(commit.Commit.Message)
 		if len(parts) != 2 {
-			invalidCommits[commit.Commit.SHA] = "does not specify an upstream backport in the commit message"
+			invalidCommits[commit.SHA] = "does not specify an upstream backport in the commit message"
 			continue
 		}
 		pr, err := strconv.Atoi(parts[1])
 		if err != nil {
 			// based on the regex this should not happen ...
 			logger.WithError(err).Warn("Failed to parse PR as integer")
-			errorsByCommit[commit.Commit.SHA] = fmt.Sprintf("failed to parse PR identifier: %s", err.Error())
+			errorsByCommit[commit.SHA] = fmt.Sprintf("failed to parse PR identifier: %s", err.Error())
 			continue
 		}
-		upstreamPullsByCommit[commit.Commit.SHA] = pr
+		upstreamPullsByCommit[commit.SHA] = pr
 	}
 
 	for commit, pull := range upstreamPullsByCommit {

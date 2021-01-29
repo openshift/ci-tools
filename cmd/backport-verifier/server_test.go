@@ -93,7 +93,7 @@ func TestHandle(t *testing.T) {
 			name:             "no config",
 			requested:        true,
 			config:           Config{Repositories: map[string]string{}},
-			expectedLabels:   []string{invalidBackportsLabel},
+			expectedLabels:   []string{unvalidatedBackportsLabel},
 			expectedComments: []string{"@author: no upstream repository is configured for validating backports for this repository."},
 		},
 		{
@@ -115,8 +115,8 @@ func TestHandle(t *testing.T) {
 				{org: "upstream", repo: "repo", pr: 2}: {Merged: true},
 				{org: "upstream", repo: "repo", pr: 3}: {Merged: true},
 			},
-			labels:         []string{invalidBackportsLabel},
-			expectedLabels: []string{validBackportsLabel},
+			labels:         []string{unvalidatedBackportsLabel},
+			expectedLabels: []string{validatedBackportsLabel},
 			expectedComments: []string{`@author: the contents of this pull request could be automatically validated.
 
 The following commits are valid:
@@ -142,13 +142,13 @@ The following commits are valid:
 				{org: "upstream", repo: "repo", pr: 3}: errors.New("injected error"),
 				{org: "upstream", repo: "repo", pr: 4}: github.NewNotFound(),
 			},
-			expectedLabels: []string{invalidBackportsLabel},
+			expectedLabels: []string{unvalidatedBackportsLabel},
 			expectedComments: []string{`@author: the contents of this pull request could not be automatically validated.
 
 The following commits are valid:
  - 123: the upstream PR [upstream/repo#1](https://github.com/upstream/repo/pull/1) has merged
 
-The following commits are invalid:
+The following commits could not be validated and must be approved by a top-level approver:
  - 456: the upstream PR [upstream/repo#2](https://github.com/upstream/repo/pull/2) has not yet merged
  - abc: does not specify an upstream backport in the commit message
  - def: the upstream PR [upstream/repo#4](https://github.com/upstream/repo/pull/4) does not exist

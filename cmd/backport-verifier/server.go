@@ -25,8 +25,8 @@ type githubClient interface {
 }
 
 const (
-	validBackportsLabel   = "backports/valid-commits"
-	invalidBackportsLabel = "backports/invalid-commits"
+	validatedBackportsLabel   = "backports/validated-commits"
+	unvalidatedBackportsLabel = "backports/unvalidated-commits"
 )
 
 var (
@@ -82,7 +82,7 @@ func (s *server) handle(l *logrus.Entry, org, repo, user string, num int, reques
 			if err := s.ghc.CreateComment(org, repo, num, fmt.Sprintf("@%s: no upstream repository is configured for validating backports for this repository.", user)); err != nil {
 				logger.WithError(err).Warn("couldn't create comment")
 			}
-			ensureLabels(s.ghc, l, invalidBackportsLabel, org, repo, num)
+			ensureLabels(s.ghc, l, unvalidatedBackportsLabel, org, repo, num)
 		}
 		return
 	}
@@ -143,10 +143,10 @@ func (s *server) handle(l *logrus.Entry, org, repo, user string, num int, reques
 		}
 	}
 
-	desired := invalidBackportsLabel
+	desired := unvalidatedBackportsLabel
 	verb := "could not"
 	if len(errorsByCommit) == 0 && len(invalidCommits) == 0 {
-		desired = validBackportsLabel
+		desired = validatedBackportsLabel
 		verb = "could"
 	}
 	ensureLabels(s.ghc, l, desired, org, repo, num)
@@ -157,7 +157,7 @@ func (s *server) handle(l *logrus.Entry, org, repo, user string, num int, reques
 		data      map[string]string
 	}{
 		{"are valid", validCommits},
-		{"are invalid", invalidCommits},
+		{"could not be validated and must be approved by a top-level approver", invalidCommits},
 		{"could not be processed", errorsByCommit},
 	} {
 		if len(item.data) > 0 {
@@ -176,10 +176,10 @@ func (s *server) handle(l *logrus.Entry, org, repo, user string, num int, reques
 
 func ensureLabels(client githubClient, l *logrus.Entry, desired string, org, repo string, num int) {
 	var unwanted string
-	if desired == validBackportsLabel {
-		unwanted = invalidBackportsLabel
+	if desired == validatedBackportsLabel {
+		unwanted = unvalidatedBackportsLabel
 	} else {
-		unwanted = validBackportsLabel
+		unwanted = validatedBackportsLabel
 	}
 	if err := client.AddLabel(org, repo, num, desired); err != nil {
 		l.WithError(err).Warn("could not add label", err)

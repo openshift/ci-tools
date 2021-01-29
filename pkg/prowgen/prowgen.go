@@ -255,9 +255,6 @@ func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secre
 		"--report-username=ci",
 		"--report-password-file=/etc/report/password.txt",
 	}, additionalArgs...)
-	if info.Repo == "ci-tools" {
-		ret.Containers[0].Args = append(ret.Containers[0].Args, "--upload-via-pod-utils")
-	}
 	if customArtifactDir {
 		ret.Containers[0].Args = append(ret.Containers[0].Args, "--upload-via-pod-utils=false")
 	}

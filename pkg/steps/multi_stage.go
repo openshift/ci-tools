@@ -14,8 +14,10 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/test-infra/prow/entrypoint"
 	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -444,7 +446,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			}...)
 		}
 		if step.Cli != "" {
-			addCliInjector(step.Cli, pod)
+			errs = append(errs, addCliInjector(step.Cli, pod, s.artifactsViaPodUtils))
 		}
 		addSecret(s.name, pod)
 		addCredentials(step.Credentials, pod)
@@ -567,7 +569,19 @@ func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
 	}}...)
 }
 
-func addCliInjector(release string, pod *coreapi.Pod) {
+func injectPath(initial []string) []string {
+	var args []string
+	for _, arg := range initial {
+		if strings.HasPrefix(arg, CommandPrefix) {
+			args = append(args, fmt.Sprintf("%s%s\n%s", CommandPrefix, `export PATH="${PATH}:${CLI_DIR}"`, strings.TrimPrefix(arg, CommandPrefix)))
+		} else {
+			args = append(args, arg)
+		}
+	}
+	return args
+}
+
+func addCliInjector(release string, pod *coreapi.Pod, artifactsViaPodUtils bool) error {
 	volumeName := "cli"
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
 		Name: volumeName,
@@ -586,15 +600,27 @@ func addCliInjector(release string, pod *coreapi.Pod) {
 		}},
 	})
 	container := &pod.Spec.Containers[0]
-	var args []string
-	for _, arg := range container.Args {
-		if strings.HasPrefix(arg, CommandPrefix) {
-			args = append(args, fmt.Sprintf("%s%s\n%s", CommandPrefix, `export PATH="${PATH}:${CLI_DIR}"`, strings.TrimPrefix(arg, CommandPrefix)))
-		} else {
-			args = append(args, arg)
+
+	if artifactsViaPodUtils {
+		for i, env := range container.Env {
+			if env.Name != entrypoint.JSONConfigEnvVar {
+				continue
+			}
+			var options entrypoint.Options
+			if err := yaml.Unmarshal([]byte(env.Value), &options); err != nil {
+				return err
+			}
+			options.Args = injectPath(options.Args)
+			encoded, err := entrypoint.Encode(options)
+			if err != nil {
+				return err
+			}
+			container.Env[i].Value = encoded
+			break
 		}
+	} else {
+		container.Args = injectPath(container.Args)
 	}
-	container.Args = args
 	container.VolumeMounts = append(container.VolumeMounts, coreapi.VolumeMount{
 		Name:      volumeName,
 		MountPath: CliMountPath,
@@ -603,6 +629,7 @@ func addCliInjector(release string, pod *coreapi.Pod) {
 		Name:  CliEnv,
 		Value: CliMountPath,
 	})
+	return nil
 }
 
 func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, shortCircuit bool, isBestEffort func(string) bool) error {

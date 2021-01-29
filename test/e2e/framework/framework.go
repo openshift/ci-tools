@@ -100,6 +100,16 @@ func RemotePullSecretFlag(t *T) string {
 	return flag("secret-dir", value)
 }
 
+// GCSPushCredentialsFlag formats a flag to provide access to push to GCS for
+// ci-operator, failing if the required env is not present to supply it.
+func GCSPushCredentialsFlag(t *T) string {
+	value, set := os.LookupEnv("GCS_CREDENTIALS_FILE")
+	if !set {
+		t.Fatal("required environment GCS_CREDENTIALS_FILE is not set")
+	}
+	return flag("gcs-upload-secret", value)
+}
+
 // KubernetesClientEnv returns a list of formatted environment variables for
 // use in providing to a exec.Command to allow it to talk to a k8s cluster.
 func KubernetesClientEnv(t *T) []string {

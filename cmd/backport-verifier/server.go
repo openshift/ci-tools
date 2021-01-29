@@ -58,7 +58,7 @@ func (s *server) handleIssueComment(l *logrus.Entry, ic github.IssueCommentEvent
 		return
 	}
 	l.Info("Backport validation of PR has been requested.")
-	s.handle(l, ic.Repo.Owner.Login, ic.Repo.Name, ic.Comment.User.Login, ic.Issue.Number)
+	s.handle(l, ic.Repo.Owner.Login, ic.Repo.Name, ic.Comment.User.Login, ic.Issue.Number, true)
 }
 
 func (s *server) handlePullRequestEvent(l *logrus.Entry, event github.PullRequestEvent) {
@@ -66,10 +66,10 @@ func (s *server) handlePullRequestEvent(l *logrus.Entry, event github.PullReques
 		return
 	}
 	l.Info("Changes to pull request require backport validation")
-	s.handle(l, event.Repo.Owner.Login, event.Repo.Name, event.PullRequest.User.Login, event.PullRequest.Number)
+	s.handle(l, event.Repo.Owner.Login, event.Repo.Name, event.PullRequest.User.Login, event.PullRequest.Number, false)
 }
 
-func (s *server) handle(l *logrus.Entry, org, repo, user string, num int) {
+func (s *server) handle(l *logrus.Entry, org, repo, user string, num int, requested bool) {
 	logger := l.WithFields(logrus.Fields{
 		github.OrgLogField:  org,
 		github.RepoLogField: repo,
@@ -78,10 +78,12 @@ func (s *server) handle(l *logrus.Entry, org, repo, user string, num int) {
 
 	upstream, configured := s.config().Repositories[fmt.Sprintf("%s/%s", org, repo)]
 	if !configured {
-		if err := s.ghc.CreateComment(org, repo, num, fmt.Sprintf("@%s: no upstream repository is configured for validating backports for this repository.", user)); err != nil {
-			logger.WithError(err).Warn("couldn't create comment")
+		if requested {
+			if err := s.ghc.CreateComment(org, repo, num, fmt.Sprintf("@%s: no upstream repository is configured for validating backports for this repository.", user)); err != nil {
+				logger.WithError(err).Warn("couldn't create comment")
+			}
+			ensureLabels(s.ghc, l, invalidBackportsLabel, org, repo, num)
 		}
-		ensureLabels(s.ghc, l, invalidBackportsLabel, org, repo, num)
 		return
 	}
 

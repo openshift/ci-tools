@@ -80,6 +80,7 @@ func TestHandle(t *testing.T) {
 	var testCases = []struct {
 		name             string
 		config           Config
+		requested        bool
 		commits          []github.RepositoryCommit
 		commitError      error
 		prs              map[orgrepopr]*github.PullRequest
@@ -90,9 +91,16 @@ func TestHandle(t *testing.T) {
 	}{
 		{
 			name:             "no config",
+			requested:        true,
 			config:           Config{Repositories: map[string]string{}},
 			expectedLabels:   []string{invalidBackportsLabel},
 			expectedComments: []string{"@author: no upstream repository is configured for validating backports for this repository."},
+		},
+		{
+			name:             "no but not requested explicitly",
+			requested:        false,
+			config:           Config{Repositories: map[string]string{}},
+			expectedComments: []string{},
 		},
 		{
 			name:   "valid upstreams",
@@ -174,7 +182,7 @@ The following commits could not be processed:
 				ghc: client,
 			}
 
-			s.handle(logrus.WithField("testcase", testCase.name), "org", "repo", "author", 1)
+			s.handle(logrus.WithField("testcase", testCase.name), "org", "repo", "author", 1, testCase.requested)
 
 			if diff := cmp.Diff(testCase.expectedComments, client.comments[orp]); diff != "" {
 				t.Errorf("%s: got incorrect comments: %v", testCase.name, diff)

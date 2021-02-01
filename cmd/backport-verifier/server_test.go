@@ -106,9 +106,9 @@ func TestHandle(t *testing.T) {
 			name:   "valid upstreams",
 			config: Config{Repositories: map[string]string{"org/repo": "upstream/repo"}},
 			commits: []github.RepositoryCommit{
-				{SHA: "123", Commit: github.GitCommit{Message: "UPSTREAM: 1: whoa"}},
-				{SHA: "456", Commit: github.GitCommit{Message: "UPSTREAM: 2: whoa"}},
-				{SHA: "789", Commit: github.GitCommit{Message: "UPSTREAM: 3: whoa"}},
+				{SHA: "123456789", Commit: github.GitCommit{Message: "UPSTREAM: 1: whoa"}},
+				{SHA: "456789abc", Commit: github.GitCommit{Message: "UPSTREAM: 2: whoa"}},
+				{SHA: "789abcdef", Commit: github.GitCommit{Message: "UPSTREAM: 3: whoa"}},
 			},
 			prs: map[orgrepopr]*github.PullRequest{
 				{org: "upstream", repo: "repo", pr: 1}: {Merged: true},
@@ -120,19 +120,19 @@ func TestHandle(t *testing.T) {
 			expectedComments: []string{`@author: the contents of this pull request could be automatically validated.
 
 The following commits are valid:
- - 123: the upstream PR [upstream/repo#1](https://github.com/upstream/repo/pull/1) has merged
- - 456: the upstream PR [upstream/repo#2](https://github.com/upstream/repo/pull/2) has merged
- - 789: the upstream PR [upstream/repo#3](https://github.com/upstream/repo/pull/3) has merged`},
+ - [1234567|UPSTREAM: 1: whoa](https://github.com/org/repo/commit/123456789): the upstream PR [upstream/repo#1](https://github.com/upstream/repo/pull/1) has merged
+ - [456789a|UPSTREAM: 2: whoa](https://github.com/org/repo/commit/456789abc): the upstream PR [upstream/repo#2](https://github.com/upstream/repo/pull/2) has merged
+ - [789abcd|UPSTREAM: 3: whoa](https://github.com/org/repo/commit/789abcdef): the upstream PR [upstream/repo#3](https://github.com/upstream/repo/pull/3) has merged`},
 		},
 		{
 			name:   "invalid upstreams",
 			config: Config{Repositories: map[string]string{"org/repo": "upstream/repo"}},
 			commits: []github.RepositoryCommit{
-				{SHA: "123", Commit: github.GitCommit{Message: "UPSTREAM: 1: whoa"}},
-				{SHA: "456", Commit: github.GitCommit{Message: "UPSTREAM: 2: whoa"}},
-				{SHA: "789", Commit: github.GitCommit{Message: "UPSTREAM: 3: whoa"}},
-				{SHA: "abc", Commit: github.GitCommit{Message: "UPSTREAM: <carry>: whoa"}},
-				{SHA: "def", Commit: github.GitCommit{Message: "UPSTREAM: 4: whoa"}},
+				{SHA: "123456789", Commit: github.GitCommit{Message: "UPSTREAM: 1: whoa"}},
+				{SHA: "456789abc", Commit: github.GitCommit{Message: "UPSTREAM: 2: whoa"}},
+				{SHA: "789abcdef", Commit: github.GitCommit{Message: "UPSTREAM: 3: whoa"}},
+				{SHA: "abcdefghi", Commit: github.GitCommit{Message: "UPSTREAM: <carry>: whoa"}},
+				{SHA: "defghijkl", Commit: github.GitCommit{Message: "UPSTREAM: 4: whoa"}},
 			},
 			prs: map[orgrepopr]*github.PullRequest{
 				{org: "upstream", repo: "repo", pr: 1}: {Merged: true},
@@ -146,15 +146,15 @@ The following commits are valid:
 			expectedComments: []string{`@author: the contents of this pull request could not be automatically validated.
 
 The following commits are valid:
- - 123: the upstream PR [upstream/repo#1](https://github.com/upstream/repo/pull/1) has merged
+ - [1234567|UPSTREAM: 1: whoa](https://github.com/org/repo/commit/123456789): the upstream PR [upstream/repo#1](https://github.com/upstream/repo/pull/1) has merged
 
 The following commits could not be validated and must be approved by a top-level approver:
- - 456: the upstream PR [upstream/repo#2](https://github.com/upstream/repo/pull/2) has not yet merged
- - abc: does not specify an upstream backport in the commit message
- - def: the upstream PR [upstream/repo#4](https://github.com/upstream/repo/pull/4) does not exist
+ - [456789a|UPSTREAM: 2: whoa](https://github.com/org/repo/commit/456789abc): the upstream PR [upstream/repo#2](https://github.com/upstream/repo/pull/2) has not yet merged
+ - [abcdefg|UPSTREAM: <carry>: whoa](https://github.com/org/repo/commit/abcdefghi): does not specify an upstream backport in the commit message
+ - [defghij|UPSTREAM: 4: whoa](https://github.com/org/repo/commit/defghijkl): the upstream PR [upstream/repo#4](https://github.com/upstream/repo/pull/4) does not exist
 
 The following commits could not be processed:
- - 789: failed to fetch upstream PR: injected error`},
+ - [789abcd|UPSTREAM: 3: whoa](https://github.com/org/repo/commit/789abcdef): failed to fetch upstream PR: injected error`},
 		},
 	}
 

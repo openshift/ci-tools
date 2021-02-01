@@ -108,7 +108,9 @@ func (s *server) handle(l *logrus.Entry, org, repo, user string, num int, reques
 	validCommits := map[string]string{}
 	upstreamPullsByCommit := map[string]int{}
 	errorsByCommit := map[string]string{}
+	messagesByCommit := map[string]string{}
 	for _, commit := range commits {
+		messagesByCommit[commit.SHA] = commit.Commit.Message
 		parts := upstreamPullRe.FindStringSubmatch(commit.Commit.Message)
 		if len(parts) != 2 {
 			invalidCommits[commit.SHA] = "does not specify an upstream backport in the commit message"
@@ -163,7 +165,7 @@ func (s *server) handle(l *logrus.Entry, org, repo, user string, num int, reques
 		if len(item.data) > 0 {
 			var formatted []string
 			for commit, why := range item.data {
-				formatted = append(formatted, fmt.Sprintf(" - %s: %s", commit, why))
+				formatted = append(formatted, fmt.Sprintf(" - [%s|%s](https://github.com/%s/%s/commit/%s): %s", commit[0:7], messagesByCommit[commit], org, repo, commit, why))
 			}
 			sort.Strings(formatted)
 			message = fmt.Sprintf("%s\n\nThe following commits %s:\n%s", message, item.qualifier, strings.Join(formatted, "\n"))

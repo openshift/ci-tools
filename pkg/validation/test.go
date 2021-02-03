@@ -270,7 +270,8 @@ func validateClusterProfile(fieldRoot string, p api.ClusterProfile) []error {
 		api.ClusterProfilePacket,
 		api.ClusterProfileVSphere,
 		api.ClusterProfileKubevirt,
-		api.ClusterProfileAWSCPaaS:
+		api.ClusterProfileAWSCPaaS,
+		api.ClusterProfileOSDEphemeral:
 		return nil
 	}
 	return []error{fmt.Errorf("%s: invalid cluster profile %q", fieldRoot, p)}

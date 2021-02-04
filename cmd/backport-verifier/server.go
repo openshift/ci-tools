@@ -110,7 +110,7 @@ func (s *server) handle(l *logrus.Entry, org, repo, user string, num int, reques
 	errorsByCommit := map[string]string{}
 	messagesByCommit := map[string]string{}
 	for _, commit := range commits {
-		messagesByCommit[commit.SHA] = commit.Commit.Message
+		messagesByCommit[commit.SHA] = strings.Split(commit.Commit.Message, "\n")[0]
 		parts := upstreamPullRe.FindStringSubmatch(commit.Commit.Message)
 		if len(parts) != 2 {
 			invalidCommits[commit.SHA] = "does not specify an upstream backport in the commit message"

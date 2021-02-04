@@ -31,7 +31,6 @@ parameters:
   required: false
 - name: CLUSTER_VARIANT
 - name: USE_LEASE_CLIENT
-- name: LEASED_RESOURCE
 
 objects:
 
@@ -99,7 +98,7 @@ objects:
     namespace: ${NAMESPACE}
     annotations:
       # we want to gather the teardown logs no matter what
-      ci-operator.openshift.io/wait-for-container-artifacts: resourcewatch,teardown
+      ci-operator.openshift.io/wait-for-container-artifacts: teardown
       ci-operator.openshift.io/save-container-logs: "true"
       ci-operator.openshift.io/container-sub-tests: "setup,test,teardown"
   spec:
@@ -116,54 +115,6 @@ objects:
         secretName: ${JOB_NAME_SAFE}-cluster-profile
 
     containers:
-    - name: resourcewatch
-      image: ${IMAGE_TESTS}
-      terminationMessagePolicy: FallbackToLogsOnError
-      volumeMounts:
-      - name: shared-tmp
-        mountPath: /tmp/shared
-      - name: artifacts
-        mountPath: /tmp/artifacts
-      env:
-      - name: ARTIFACT_DIR
-        value: /tmp/artifacts
-      - name: HOME
-        value: /tmp/home
-      - name: KUBECONFIG
-        value: /tmp/artifacts/installer/auth/kubeconfig
-      command:
-      - /bin/bash
-      - -c
-      - |
-        #!/bin/bash
-        set -uo pipefail
-
-        function runwatcher() {
-          while true; do
-            [[ ! -f "${KUBECONFIG}" ]] && sleep 1s && continue # make sure we have KUBECONFIG
-            echo "== $(date) =="
-            oc get clusteroperators --request-timeout=5s --insecure-skip-tls-verify --ignore-not-found -o jsonpath='{range .items[*]}{"\n"}{.metadata.name} {range .status.conditions[*]}{" "}{.type}={.status}({.reason}[{.message}])'
-            sleep 5s
-          done
-        }
-
-        trap 'jobs -p | xargs -r kill || true; exit 0' TERM
-
-        runwatcher &> /tmp/artifacts/resourcewatch.log &
-        watcherpid=$!
-
-        for i in $(seq 1 220); do
-          if [[ -f /tmp/shared/exit ]]; then
-            echo "== watch terminated at $(date)" >>/tmp/artifacts/resourcewatch.log
-            kill $watcherpid
-            exit 0
-          fi
-          sleep 60 &
-          sleeppid=$!
-          wait $sleeppid
-        done
-
-
     # Once the cluster is up, executes shared tests
     - name: test
       image: ${IMAGE_TESTS}
@@ -196,8 +147,6 @@ objects:
         value: ${IMAGE_FORMAT}
       - name: KUBECONFIG
         value: /tmp/artifacts/installer/auth/kubeconfig
-      - name: MIRROR_BASE
-        value: registry.svc.ci.openshift.org/${NAMESPACE}/release
       command:
       - /bin/bash
       - -c
@@ -211,26 +160,48 @@ objects:
         trap 'jobs -p | xargs -r kill || true; exit 0' TERM
 
         function fips_check() {
-          oc --insecure-skip-tls-verify --request-timeout=60s get nodes -o jsonpath --template '{range .items[*]}{.metadata.name}{"\n"}{end}' > /tmp/nodelist
-          while IFS= read -r i; do
-            oc -n default --insecure-skip-tls-verify --request-timeout=60s debug --image centos:7 node/$i -- cat /proc/sys/crypto/fips_enabled > /tmp/enabled
+          get_nodes=$(oc --request-timeout=60s get nodes -o jsonpath --template '{range .items[*]}{.metadata.name}{"\n"}{end}')
+          nodes=( $get_nodes )
+          # bash doesn't handle '.' in array elements easily
+          num_nodes="${#nodes[@]}"
+          # TODO: This must be replaced by code that waits for all the expected number
+          # of nodes to be ready.
+          for (( i=0; i<$num_nodes; i++ )); do
+            attempt=0
+            while true; do
+                out=$(oc --request-timeout=60s -n default debug node/"${nodes[i]}" -- cat /proc/sys/crypto/fips_enabled || true)
+                if [[ ! -z "${out}" ]]; then
+                    break
+                fi
+                attempt=$(( attempt + 1 ))
+                if [[ $attempt -gt 3 ]]; then
+                    break
+                fi
+                echo "command failed, $(( 4 - $attempt )) retries left"
+                sleep 5
+            done
+
+            if [[ -z "${out}" ]]; then
+              echo "oc debug node/${nodes[i]} failed"
+              exit 1
+            fi
             if [[ "${CLUSTER_VARIANT}" =~ "fips" ]]; then
-              if [[ $(< /tmp/enabled) == "0" ]]; then
-                echo fips not enabled in node "$i" but should be, exiting
+              if [[ "${out}" -ne 1 ]]; then
+                echo "fips not enabled in node ${nodes[i]} but should be, exiting"
                 exit 1
               fi
             else
-              if [[ $(< /tmp/enabled) == "1" ]]; then
-                echo fips is enabled in node "$i" but should not be, exiting
+              if [[ "${out}" -ne 0 ]]; then
+                echo "fips is enabled in node ${nodes[i]} but should not be, exiting"
                 exit 1
               fi
             fi
-          done </tmp/nodelist
-          rm -f /tmp/nodelist
-          rm -f /tmp/enabled
+          done
         }
 
         function patch_image_specs() {
+          MIRROR_BASE=$( KUBECONFIG= oc get is release -o 'jsonpath={.status.publicDockerImageRepository}' )
+
           cat <<EOF >samples-patch.yaml
         - op: add
           path: /spec/skippedImagestreams
@@ -312,9 +283,7 @@ objects:
           export KUBE_SSH_USER=core
           mkdir -p ~/.ssh
           cp /tmp/cluster/ssh-privatekey ~/.ssh/google_compute_engine || true
-          # TODO: make openshift-tests auto-discover this from cluster config
-          REGION="$(oc get -o jsonpath='{.status.platformStatus.gcp.region}' infrastructure cluster)"
-          export TEST_PROVIDER="{\"type\":\"gce\",\"region\":\"${REGION}\",\"multizone\": true,\"multimaster\":true,\"projectid\":\"openshift-gce-devel-ci\"}"
+          export TEST_PROVIDER='{"type":"gce","region":"us-east1","multizone": true,"multimaster":true,"projectid":"openshift-gce-devel-ci"}'
         elif [[ "${CLUSTER_TYPE}" == "aws" ]]; then
           mkdir -p ~/.ssh
           cp /tmp/cluster/ssh-privatekey ~/.ssh/kube_aws_rsa || true
@@ -374,13 +343,13 @@ objects:
 
         function run-upgrade-tests() {
           openshift-tests run-upgrade "${TEST_SUITE}" --to-image "${IMAGE:-${RELEASE_IMAGE_LATEST}}" \
-            --options "${TEST_OPTIONS:-}" \
-            --provider "${TEST_PROVIDER:-}" -o /tmp/artifacts/e2e.log --junit-dir /tmp/artifacts/junit
+            --options "${TEST_UPGRADE_OPTIONS:-}" \
+            --provider "${TEST_PROVIDER:-}" -o ${ARTIFACT_DIR}/e2e.log --junit-dir ${ARTIFACT_DIR}/junit
         }
 
         function run-tests() {
           openshift-tests run "${TEST_SUITE}" \
-            --provider "${TEST_PROVIDER:-}" -o /tmp/artifacts/e2e.log --junit-dir /tmp/artifacts/junit
+            --provider "${TEST_PROVIDER:-}" -o ${ARTIFACT_DIR}/e2e.log --junit-dir ${ARTIFACT_DIR}/junit
         }
 
         if [[ "${CLUSTER_TYPE}" == "gcp" ]]; then
@@ -401,10 +370,14 @@ objects:
       - name: artifacts
         mountPath: /tmp/artifacts
       env:
+      - name: ARTIFACT_DIR
+        value: /tmp/artifacts
       - name: AWS_SHARED_CREDENTIALS_FILE
         value: /etc/openshift-installer/.awscred
       - name: AZURE_AUTH_LOCATION
         value: /etc/openshift-installer/osServicePrincipal.json
+      - name: GCP_REGION
+        value: us-east1
       - name: GCP_PROJECT
         value: openshift-gce-devel-ci
       - name: GOOGLE_CLOUD_KEYFILE_JSON
@@ -429,8 +402,6 @@ objects:
         value: test
       - name: HOME
         value: /tmp
-      - name: MIRROR_BASE
-        value: registry.svc.ci.openshift.org/${NAMESPACE}/release
       - name: INSTALL_INITIAL_RELEASE
       - name: RELEASE_IMAGE_INITIAL
       command:
@@ -443,7 +414,7 @@ objects:
         trap 'rc=$?; if test "${rc}" -eq 0; then touch /tmp/setup-success; else touch /tmp/exit /tmp/setup-failed; fi; exit "${rc}"' EXIT
         trap 'CHILDREN=$(jobs -p); if test -n "${CHILDREN}"; then kill ${CHILDREN} && wait; fi' TERM
         cp "$(command -v openshift-install)" /tmp
-        mkdir /tmp/artifacts/installer
+        mkdir ${ARTIFACT_DIR}/installer
 
         function has_variant() {
           regex="(^|,)$1($|,)"
@@ -463,6 +434,7 @@ objects:
           # mirror the release image and override the release image to point to the mirrored one
           mkdir /tmp/.docker && cp /etc/openshift-installer/pull-secret /tmp/.docker/config.json
           oc registry login
+          MIRROR_BASE=$( oc get is release -o 'jsonpath={.status.publicDockerImageRepository}' )
           oc adm release new --from-release ${RELEASE_IMAGE_LATEST} --to-image ${MIRROR_BASE}-scratch:release --mirror ${MIRROR_BASE}-scratch || echo 'ignore: the release could not be reproduced from its inputs'
           oc adm release mirror --from ${MIRROR_BASE}-scratch:release --to ${MIRROR_BASE} --to-release-image ${MIRROR_BASE}:mirrored
           RELEASE_PAYLOAD_IMAGE_SHA=$(oc get istag ${MIRROR_BASE##*/}:mirrored -o=jsonpath="{.image.metadata.name}")
@@ -483,24 +455,35 @@ objects:
         mkdir -p ~/.ssh
         cp "${SSH_PRIV_KEY_PATH}" ~/.ssh/
 
+        masters=3
+        if has_variant "single-node" ;then
+          masters=1
+        fi
+
         workers=3
-        if has_variant "compact"; then
+        if has_variant "compact" || has_variant "multisocket" || has_variant "single-node"; then
           workers=0
         fi
-        if [[ "${CLUSTER_TYPE}" = "aws" ]]; then
+
+        if [[ "${CLUSTER_TYPE}" == "aws" ]]; then
             master_type=null
-            if has_variant "xlarge"; then
+            if has_variant "multisocket"; then
+              master_type=c5n.metal
+            elif has_variant "xlarge"; then
               master_type=m5.8xlarge
             elif has_variant "large"; then
               master_type=m5.4xlarge
             elif has_variant "compact"; then
               master_type=m5.2xlarge
             fi
-            AWS_REGION="${LEASED_RESOURCE}"
-            case "${AWS_REGION}" in
-            us-east-1)
+            case $((RANDOM % 4)) in
+            0) AWS_REGION=us-east-1
                ZONE_1=us-east-1b
                ZONE_2=us-east-1c;;
+            1) AWS_REGION=us-east-2;;
+            2) AWS_REGION=us-west-1;;
+            3) AWS_REGION=us-west-2;;
+            *) echo >&2 "invalid AWS region index"; exit 1;;
             esac
             echo "AWS region: ${AWS_REGION} (zones: ${ZONE_1:-${AWS_REGION}a} ${ZONE_2:-${AWS_REGION}b})"
             subnets="[]"
@@ -526,14 +509,14 @@ objects:
               esac
               echo "Subnets : ${subnets}"
             fi
-            cat > /tmp/artifacts/installer/install-config.yaml << EOF
+            cat > ${ARTIFACT_DIR}/installer/install-config.yaml << EOF
         apiVersion: v1
         baseDomain: ${BASE_DOMAIN:-origin-ci-int-aws.dev.rhcloud.com}
         metadata:
           name: ${CLUSTER_NAME}
         controlPlane:
           name: master
-          replicas: 3
+          replicas: ${masters}
           platform:
             aws:
               type: ${master_type}
@@ -562,7 +545,17 @@ objects:
         EOF
 
         elif [[ "${CLUSTER_TYPE}" == "azure4" ]]; then
-            AZURE_REGION="${LEASED_RESOURCE}"
+            case $((RANDOM % 8)) in
+            0) AZURE_REGION=centralus;;
+            1) AZURE_REGION=centralus;;
+            2) AZURE_REGION=centralus;;
+            3) AZURE_REGION=centralus;;
+            4) AZURE_REGION=centralus;;
+            5) AZURE_REGION=centralus;;
+            6) AZURE_REGION=eastus2;;
+            7) AZURE_REGION=westus;;
+            *) echo >&2 "invalid Azure region index"; exit 1;;
+            esac
             echo "Azure region: ${AZURE_REGION}"
 
             vnetrg=""
@@ -575,7 +568,7 @@ objects:
               ctrlsubnet="subnet-1"
               computesubnet="subnet-2"
             fi
-            cat > /tmp/artifacts/installer/install-config.yaml << EOF
+            cat > ${ARTIFACT_DIR}/installer/install-config.yaml << EOF
         apiVersion: v1
         baseDomain: ${BASE_DOMAIN:-ci.azure.devcluster.openshift.com}
         metadata:
@@ -586,6 +579,9 @@ objects:
         compute:
         - name: worker
           replicas: ${workers}
+          platform:
+            azure:
+              type: Standard_D4s_v3
         platform:
           azure:
             baseDomainResourceGroupName: os4-common
@@ -600,7 +596,6 @@ objects:
           ${SSH_PUB_KEY}
         EOF
         elif [[ "${CLUSTER_TYPE}" == "gcp" ]]; then
-            GCP_REGION="${LEASED_RESOURCE}"
             master_type=null
             if has_variant "xlarge"; then
               master_type=n1-standard-32
@@ -630,7 +625,7 @@ objects:
               ctrlsubnet="do-not-delete-shared-master-subnet"
               computesubnet="do-not-delete-shared-worker-subnet"
             fi
-            cat > /tmp/artifacts/installer/install-config.yaml << EOF
+            cat > ${ARTIFACT_DIR}/installer/install-config.yaml << EOF
         apiVersion: v1
         baseDomain: ${BASE_DOMAIN:-origin-ci-int-gce.dev.openshift.com}
         metadata:
@@ -669,7 +664,7 @@ objects:
         # use a http endpoint for the httpsProxy value
         # TODO: revert back to using https://ewolinet:5f6ccbbbafc66013d012839921ada773@35.231.5.161:3128/
 
-          cat >> /tmp/artifacts/installer/install-config.yaml << EOF
+          cat >> ${ARTIFACT_DIR}/installer/install-config.yaml << EOF
         proxy:
           httpsProxy: http://ewolinet:5f6ccbbbafc66013d012839921ada773@35.196.128.173:3128/
           httpProxy: http://ewolinet:5f6ccbbbafc66013d012839921ada773@35.196.128.173:3128/
@@ -749,10 +744,23 @@ objects:
         network_type="${CLUSTER_NETWORK_TYPE-}"
         if has_variant "ovn"; then
           network_type=OVNKubernetes
+        elif has_variant "calico"; then
+          network_type=Calico
         fi
+
+        cidr_size=16
+        host_prefix=23
+        if has_variant "xlarge" || has_variant "large"; then
+          cidr_size=12
+          host_prefix=22
+          if [[ -z "${network_type}" ]]; then
+            network_type=OpenShiftSDN
+          fi
+        fi
+
         if has_variant "ipv6"; then
           export OPENSHIFT_INSTALL_AZURE_EMULATE_SINGLESTACK_IPV6=true
-          cat >> /tmp/artifacts/installer/install-config.yaml << EOF
+          cat >> ${ARTIFACT_DIR}/installer/install-config.yaml << EOF
         networking:
           networkType: OVNKubernetes
           machineNetwork:
@@ -765,14 +773,18 @@ objects:
             - fd02::/112
         EOF
         elif [[ -n "${network_type}" ]]; then
-          cat >> /tmp/artifacts/installer/install-config.yaml << EOF
+          cat >> ${ARTIFACT_DIR}/installer/install-config.yaml << EOF
         networking:
           networkType: ${network_type}
+          machineNetwork:
+          - cidr: 10.0.0.0/16
+          clusterNetwork:
+          - cidr: 10.128.0.0/${cidr_size}
+            hostPrefix: ${host_prefix}
         EOF
         fi
-
         if has_variant "mirror"; then
-          cat >> /tmp/artifacts/installer/install-config.yaml << EOF
+          cat >> ${ARTIFACT_DIR}/installer/install-config.yaml << EOF
         imageContentSources:
         - source: "${MIRROR_BASE}-scratch"
           mirrors:
@@ -781,28 +793,61 @@ objects:
         fi
 
         if has_variant "fips"; then
-          cat >> /tmp/artifacts/installer/install-config.yaml << EOF
+          cat >> ${ARTIFACT_DIR}/installer/install-config.yaml << EOF
         fips: true
         EOF
         fi
 
-        if has_variant "preserve_bootstrap"; then
+        if has_variant "preserve-bootstrap"; then
           export OPENSHIFT_INSTALL_PRESERVE_BOOTSTRAP=true
         fi
 
-        # TODO: Replace with a more concise manifest injection approach
+        openshift-install --dir=${ARTIFACT_DIR}/installer/ create manifests &
+        wait "$!"
+
+        manifests=${ARTIFACT_DIR}/installer/manifests/
+
+        sed -i '/^  channel:/d' ${manifests}/cvo-overrides.yaml
+
         if [[ -n "${CLUSTER_NETWORK_MANIFEST:-}" ]]; then
-            openshift-install --dir=/tmp/artifacts/installer/ create manifests
-            echo "${CLUSTER_NETWORK_MANIFEST}" > /tmp/artifacts/installer/manifests/cluster-network-03-config.yml
+            echo "${CLUSTER_NETWORK_MANIFEST}" > ${manifests}/cluster-network-03-config.yml
+        fi
+
+        if [[ "${network_type}" == "Calico" ]]; then
+          pushd ${manifests}/..
+
+          # Copied exactly from https://docs.projectcalico.org/getting-started/openshift/installation
+          curl https://docs.projectcalico.org/manifests/ocp/crds/01-crd-installation.yaml -o manifests/01-crd-installation.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/crds/01-crd-tigerastatus.yaml -o manifests/01-crd-tigerastatus.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/crds/calico/kdd/crd.projectcalico.org_bgpconfigurations.yaml -o manifests/crd.projectcalico.org_bgpconfigurations.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/crds/calico/kdd/crd.projectcalico.org_bgppeers.yaml -o manifests/crd.projectcalico.org_bgppeers.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/crds/calico/kdd/crd.projectcalico.org_blockaffinities.yaml -o manifests/crd.projectcalico.org_blockaffinities.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/crds/calico/kdd/crd.projectcalico.org_clusterinformations.yaml -o manifests/crd.projectcalico.org_clusterinformations.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/crds/calico/kdd/crd.projectcalico.org_felixconfigurations.yaml -o manifests/crd.projectcalico.org_felixconfigurations.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/crds/calico/kdd/crd.projectcalico.org_globalnetworkpolicies.yaml -o manifests/crd.projectcalico.org_globalnetworkpolicies.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/crds/calico/kdd/crd.projectcalico.org_globalnetworksets.yaml -o manifests/crd.projectcalico.org_globalnetworksets.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/crds/calico/kdd/crd.projectcalico.org_hostendpoints.yaml -o manifests/crd.projectcalico.org_hostendpoints.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/crds/calico/kdd/crd.projectcalico.org_ipamblocks.yaml -o manifests/crd.projectcalico.org_ipamblocks.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/crds/calico/kdd/crd.projectcalico.org_ipamconfigs.yaml -o manifests/crd.projectcalico.org_ipamconfigs.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/crds/calico/kdd/crd.projectcalico.org_ipamhandles.yaml -o manifests/crd.projectcalico.org_ipamhandles.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/crds/calico/kdd/crd.projectcalico.org_ippools.yaml -o manifests/crd.projectcalico.org_ippools.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/crds/calico/kdd/crd.projectcalico.org_kubecontrollersconfigurations.yaml -o manifests/crd.projectcalico.org_kubecontrollersconfigurations.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/crds/calico/kdd/crd.projectcalico.org_networkpolicies.yaml -o manifests/crd.projectcalico.org_networkpolicies.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/crds/calico/kdd/crd.projectcalico.org_networksets.yaml -o manifests/crd.projectcalico.org_networksets.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/tigera-operator/00-namespace-tigera-operator.yaml -o manifests/00-namespace-tigera-operator.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/tigera-operator/02-rolebinding-tigera-operator.yaml -o manifests/02-rolebinding-tigera-operator.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/tigera-operator/02-role-tigera-operator.yaml -o manifests/02-role-tigera-operator.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/tigera-operator/02-serviceaccount-tigera-operator.yaml -o manifests/02-serviceaccount-tigera-operator.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/tigera-operator/02-configmap-calico-resources.yaml -o manifests/02-configmap-calico-resources.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/tigera-operator/02-tigera-operator.yaml -o manifests/02-tigera-operator.yaml
+          curl https://docs.projectcalico.org/manifests/ocp/01-cr-installation.yaml -o manifests/01-cr-installation.yaml
+          # end copied
+
+          popd
         fi
 
         if has_variant "rt"; then
-          if [[ -n "${CLUSTER_NETWORK_MANIFEST:-}" ]]; then
-            echo 'error: CLUSTER_NETWORK_MANIFEST is incompatible with the "rt" variant'
-            exit 1
-          fi
-          openshift-install --dir=/tmp/artifacts/installer/ create manifests
-          cat > /tmp/artifacts/installer/manifests/realtime-worker-machine-config.yml << EOF
+          cat > ${manifests}/realtime-worker-machine-config.yml << EOF
         apiVersion: machineconfiguration.openshift.io/v1
         kind: MachineConfig
         metadata:
@@ -814,8 +859,62 @@ objects:
         EOF
         fi
 
-        TF_LOG=debug openshift-install --dir=/tmp/artifacts/installer create cluster 2>&1 | grep --line-buffered -v password &
+        if has_variant "rt-debug"; then
+          cat > ${manifests}/realtime-worker-machine-config.yml << EOF
+        apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        metadata:
+          labels:
+            machineconfiguration.openshift.io/role: worker
+          name: realtime-worker
+        spec:
+          kernelType: realtime
+        EOF
+          cat > ${manifests}/worker-kernel-debug-machine-config.yml << EOF
+        apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        metadata:
+          labels:
+            machineconfiguration.openshift.io/role: worker
+          name: kernel-debug
+        spec:
+          kernelArguments:
+          - 'debug'
+        EOF
+        fi
+
+        if has_variant "multisocket"; then
+          # TODO: waiting for https://issues.redhat.com/browse/GRPA-1895
+          cat > ${manifests}/multisocket-machine-config.yml << EOF
+        ---
+        apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfigPool
+        metadata:
+          labels:
+            topology-manager: enabled
+          name: master
+        ---
+        apiVersion: machineconfiguration.openshift.io/v1
+        kind: KubeletConfig
+        metadata:
+          name: enable-topology-manager
+        spec:
+          machineConfigPoolSelector:
+            matchLabels:
+              topology-manager: enabled
+          kubeletConfig:
+            cpuManagerPolicy: "static"
+            cpuManagerReconcilePeriod: "10s"
+            topologyManagerPolicy: "single-numa-node"
+            reservedSystemCPUs: 1,3,5,7
+        EOF
+        fi
+
+        TF_LOG=debug openshift-install --dir=${ARTIFACT_DIR}/installer create cluster 2>&1 | grep --line-buffered -v password &
         wait "$!"
+
+        # Password for the cluster gets leaked in the installer logs and hence removing them.
+        sed -i 's/password: .*/password: REDACTED"/g' ${ARTIFACT_DIR}/installer/.openshift_install.log
 
     # Performs cleanup of all created resources
     - name: teardown
@@ -829,6 +928,8 @@ objects:
       - name: artifacts
         mountPath: /tmp/artifacts
       env:
+      - name: ARTIFACT_DIR
+        value: /tmp/artifacts
       - name: INSTANCE_PREFIX
         value: ${NAMESPACE}-${JOB_NAME_HASH}
       - name: AWS_SHARED_CREDENTIALS_FILE
@@ -874,7 +975,7 @@ objects:
           export PATH=$PATH:/tmp/shared
 
           echo "Gathering artifacts ..."
-          mkdir -p /tmp/artifacts/pods /tmp/artifacts/nodes /tmp/artifacts/metrics /tmp/artifacts/bootstrap /tmp/artifacts/network
+          mkdir -p ${ARTIFACT_DIR}/pods ${ARTIFACT_DIR}/nodes ${ARTIFACT_DIR}/metrics ${ARTIFACT_DIR}/bootstrap ${ARTIFACT_DIR}/network
 
           oc --insecure-skip-tls-verify --request-timeout=5s get nodes -o jsonpath --template '{range .items[*]}{.metadata.name}{"\n"}{end}' > /tmp/nodes
           oc --insecure-skip-tls-verify --request-timeout=5s get nodes -o jsonpath --template '{range .items[*]}{.spec.providerID}{"\n"}{end}' | sed 's|.*/||' > /tmp/node-provider-IDs
@@ -882,106 +983,110 @@ objects:
           oc --insecure-skip-tls-verify --request-timeout=5s get pods --all-namespaces --template '{{ range .items }}{{ $name := .metadata.name }}{{ $ns := .metadata.namespace }}{{ range .spec.containers }}-n {{ $ns }} {{ $name }} -c {{ .name }}{{ "\n" }}{{ end }}{{ range .spec.initContainers }}-n {{ $ns }} {{ $name }} -c {{ .name }}{{ "\n" }}{{ end }}{{ end }}' > /tmp/containers
           oc --insecure-skip-tls-verify --request-timeout=5s get pods -l openshift.io/component=api --all-namespaces --template '{{ range .items }}-n {{ .metadata.namespace }} {{ .metadata.name }}{{ "\n" }}{{ end }}' > /tmp/pods-api
 
-          queue /tmp/artifacts/config-resources.json oc --insecure-skip-tls-verify --request-timeout=5s get apiserver.config.openshift.io authentication.config.openshift.io build.config.openshift.io console.config.openshift.io dns.config.openshift.io featuregate.config.openshift.io image.config.openshift.io infrastructure.config.openshift.io ingress.config.openshift.io network.config.openshift.io oauth.config.openshift.io project.config.openshift.io scheduler.config.openshift.io -o json
-          queue /tmp/artifacts/apiservices.json oc --insecure-skip-tls-verify --request-timeout=5s get apiservices -o json
-          queue /tmp/artifacts/clusteroperators.json oc --insecure-skip-tls-verify --request-timeout=5s get clusteroperators -o json
-          queue /tmp/artifacts/clusterversion.json oc --insecure-skip-tls-verify --request-timeout=5s get clusterversion -o json
-          queue /tmp/artifacts/configmaps.json oc --insecure-skip-tls-verify --request-timeout=5s get configmaps --all-namespaces -o json
-          queue /tmp/artifacts/credentialsrequests.json oc --insecure-skip-tls-verify --request-timeout=5s get credentialsrequests --all-namespaces -o json
-          queue /tmp/artifacts/csr.json oc --insecure-skip-tls-verify --request-timeout=5s get csr -o json
-          queue /tmp/artifacts/endpoints.json oc --insecure-skip-tls-verify --request-timeout=5s get endpoints --all-namespaces -o json
-          FILTER=gzip queue /tmp/artifacts/deployments.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get deployments --all-namespaces -o json
-          FILTER=gzip queue /tmp/artifacts/daemonsets.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get daemonsets --all-namespaces -o json
-          queue /tmp/artifacts/events.json oc --insecure-skip-tls-verify --request-timeout=5s get events --all-namespaces -o json
-          queue /tmp/artifacts/kubeapiserver.json oc --insecure-skip-tls-verify --request-timeout=5s get kubeapiserver -o json
-          queue /tmp/artifacts/kubecontrollermanager.json oc --insecure-skip-tls-verify --request-timeout=5s get kubecontrollermanager -o json
-          queue /tmp/artifacts/machineconfigpools.json oc --insecure-skip-tls-verify --request-timeout=5s get machineconfigpools -o json
-          queue /tmp/artifacts/machineconfigs.json oc --insecure-skip-tls-verify --request-timeout=5s get machineconfigs -o json
-          queue /tmp/artifacts/machinesets.json oc --insecure-skip-tls-verify --request-timeout=5s get machinesets -A -o json
-          queue /tmp/artifacts/machines.json oc --insecure-skip-tls-verify --request-timeout=5s get machines -A -o json
-          queue /tmp/artifacts/namespaces.json oc --insecure-skip-tls-verify --request-timeout=5s get namespaces -o json
-          queue /tmp/artifacts/nodes.json oc --insecure-skip-tls-verify --request-timeout=5s get nodes -o json
-          queue /tmp/artifacts/openshiftapiserver.json oc --insecure-skip-tls-verify --request-timeout=5s get openshiftapiserver -o json
-          queue /tmp/artifacts/pods.json oc --insecure-skip-tls-verify --request-timeout=5s get pods --all-namespaces -o json
-          queue /tmp/artifacts/persistentvolumes.json oc --insecure-skip-tls-verify --request-timeout=5s get persistentvolumes --all-namespaces -o json
-          queue /tmp/artifacts/persistentvolumeclaims.json oc --insecure-skip-tls-verify --request-timeout=5s get persistentvolumeclaims --all-namespaces -o json
-          FILTER=gzip queue /tmp/artifacts/replicasets.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get replicasets --all-namespaces -o json
-          queue /tmp/artifacts/rolebindings.json oc --insecure-skip-tls-verify --request-timeout=5s get rolebindings --all-namespaces -o json
-          queue /tmp/artifacts/roles.json oc --insecure-skip-tls-verify --request-timeout=5s get roles --all-namespaces -o json
-          queue /tmp/artifacts/services.json oc --insecure-skip-tls-verify --request-timeout=5s get services --all-namespaces -o json
-          FILTER=gzip queue /tmp/artifacts/statefulsets.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get statefulsets --all-namespaces -o json
+          queue ${ARTIFACT_DIR}/config-resources.json oc --insecure-skip-tls-verify --request-timeout=5s get apiserver.config.openshift.io authentication.config.openshift.io build.config.openshift.io console.config.openshift.io dns.config.openshift.io featuregate.config.openshift.io image.config.openshift.io infrastructure.config.openshift.io ingress.config.openshift.io network.config.openshift.io oauth.config.openshift.io project.config.openshift.io scheduler.config.openshift.io -o json
+          queue ${ARTIFACT_DIR}/apiservices.json oc --insecure-skip-tls-verify --request-timeout=5s get apiservices -o json
+          queue ${ARTIFACT_DIR}/clusteroperators.json oc --insecure-skip-tls-verify --request-timeout=5s get clusteroperators -o json
+          queue ${ARTIFACT_DIR}/clusterversion.json oc --insecure-skip-tls-verify --request-timeout=5s get clusterversion -o json
+          queue ${ARTIFACT_DIR}/configmaps.json oc --insecure-skip-tls-verify --request-timeout=5s get configmaps --all-namespaces -o json
+          queue ${ARTIFACT_DIR}/credentialsrequests.json oc --insecure-skip-tls-verify --request-timeout=5s get credentialsrequests --all-namespaces -o json
+          queue ${ARTIFACT_DIR}/csr.json oc --insecure-skip-tls-verify --request-timeout=5s get csr -o json
+          queue ${ARTIFACT_DIR}/endpoints.json oc --insecure-skip-tls-verify --request-timeout=5s get endpoints --all-namespaces -o json
+          FILTER=gzip queue ${ARTIFACT_DIR}/deployments.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get deployments --all-namespaces -o json
+          FILTER=gzip queue ${ARTIFACT_DIR}/daemonsets.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get daemonsets --all-namespaces -o json
+          queue ${ARTIFACT_DIR}/events.json oc --insecure-skip-tls-verify --request-timeout=5s get events --all-namespaces -o json
+          queue ${ARTIFACT_DIR}/kubeapiserver.json oc --insecure-skip-tls-verify --request-timeout=5s get kubeapiserver -o json
+          queue ${ARTIFACT_DIR}/kubecontrollermanager.json oc --insecure-skip-tls-verify --request-timeout=5s get kubecontrollermanager -o json
+          queue ${ARTIFACT_DIR}/machineconfigpools.json oc --insecure-skip-tls-verify --request-timeout=5s get machineconfigpools -o json
+          queue ${ARTIFACT_DIR}/machineconfigs.json oc --insecure-skip-tls-verify --request-timeout=5s get machineconfigs -o json
+          queue ${ARTIFACT_DIR}/machinesets.json oc --insecure-skip-tls-verify --request-timeout=5s get machinesets -A -o json
+          queue ${ARTIFACT_DIR}/machines.json oc --insecure-skip-tls-verify --request-timeout=5s get machines -A -o json
+          queue ${ARTIFACT_DIR}/namespaces.json oc --insecure-skip-tls-verify --request-timeout=5s get namespaces -o json
+          queue ${ARTIFACT_DIR}/nodes.json oc --insecure-skip-tls-verify --request-timeout=5s get nodes -o json
+          queue ${ARTIFACT_DIR}/openshiftapiserver.json oc --insecure-skip-tls-verify --request-timeout=5s get openshiftapiserver -o json
+          queue ${ARTIFACT_DIR}/pods.json oc --insecure-skip-tls-verify --request-timeout=5s get pods --all-namespaces -o json
+          queue ${ARTIFACT_DIR}/persistentvolumes.json oc --insecure-skip-tls-verify --request-timeout=5s get persistentvolumes --all-namespaces -o json
+          queue ${ARTIFACT_DIR}/persistentvolumeclaims.json oc --insecure-skip-tls-verify --request-timeout=5s get persistentvolumeclaims --all-namespaces -o json
+          FILTER=gzip queue ${ARTIFACT_DIR}/replicasets.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get replicasets --all-namespaces -o json
+          queue ${ARTIFACT_DIR}/rolebindings.json oc --insecure-skip-tls-verify --request-timeout=5s get rolebindings --all-namespaces -o json
+          queue ${ARTIFACT_DIR}/roles.json oc --insecure-skip-tls-verify --request-timeout=5s get roles --all-namespaces -o json
+          queue ${ARTIFACT_DIR}/services.json oc --insecure-skip-tls-verify --request-timeout=5s get services --all-namespaces -o json
+          FILTER=gzip queue ${ARTIFACT_DIR}/statefulsets.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get statefulsets --all-namespaces -o json
 
-          FILTER=gzip queue /tmp/artifacts/openapi.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get --raw /openapi/v2
+          FILTER=gzip queue ${ARTIFACT_DIR}/openapi.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get --raw /openapi/v2
 
           # gather nodes first in parallel since they may contain the most relevant debugging info
           while IFS= read -r i; do
-            mkdir -p /tmp/artifacts/nodes/$i
-            queue /tmp/artifacts/nodes/$i/heap oc --insecure-skip-tls-verify get --request-timeout=20s --raw /api/v1/nodes/$i/proxy/debug/pprof/heap
+            mkdir -p ${ARTIFACT_DIR}/nodes/$i
+            queue ${ARTIFACT_DIR}/nodes/$i/heap oc --insecure-skip-tls-verify get --request-timeout=20s --raw /api/v1/nodes/$i/proxy/debug/pprof/heap
+            FILTER=gzip queue ${ARTIFACT_DIR}/nodes/$i/journal.gz oc --insecure-skip-tls-verify adm node-logs $i --unify=false
+            FILTER=gzip queue ${ARTIFACT_DIR}/nodes/$i/journal-previous.gz oc --insecure-skip-tls-verify adm node-logs $i --unify=false --boot=-1
           done < /tmp/nodes
 
-          if [[ "${CLUSTER_TYPE}" = "aws" ]]; then
+          if [[ "${CLUSTER_TYPE}" == "aws" ]]; then
             # FIXME: get epel-release or otherwise add awscli to our teardown image
             export PATH="${HOME}/.local/bin:${PATH}"
-            easy_install --user pip  # our Python 2.7.5 is even too old for ensurepip
+            easy_install --user 'pip<21'  # our Python 2.7.5 is even too old for ensurepip
             pip install --user awscli
-            export AWS_DEFAULT_REGION="$(python -c 'import json; data = json.load(open("/tmp/artifacts/installer/metadata.json")); print(data["aws"]["region"])')"
+            export AWS_DEFAULT_REGION="$(python -c 'import json; data = json.load(open("${ARTIFACT_DIR}/installer/metadata.json")); print(data["aws"]["region"])')"
             echo "gathering node console output from ${AWS_DEFAULT_REGION}"
           fi
 
           while IFS= read -r i; do
-            mkdir -p "/tmp/artifacts/nodes/${i}"
-            if [[ "${CLUSTER_TYPE}" = "aws" ]]; then
-              queue /tmp/artifacts/nodes/$i/console aws ec2 get-console-output --instance-id "${i}" --output text
+            mkdir -p "${ARTIFACT_DIR}/nodes/${i}"
+            if [[ "${CLUSTER_TYPE}" == "aws" ]]; then
+              queue ${ARTIFACT_DIR}/nodes/$i/console aws ec2 get-console-output --instance-id "${i}" --output text
             fi
           done < <(sort /tmp/node-provider-IDs | uniq)
-
-          FILTER=gzip queue /tmp/artifacts/nodes/masters-journal.gz oc --insecure-skip-tls-verify adm node-logs --role=master --unify=false
-          FILTER=gzip queue /tmp/artifacts/nodes/workers-journal.gz oc --insecure-skip-tls-verify adm node-logs --role=worker --unify=false
 
           # Snapshot iptables-save on each node for debugging possible kube-proxy issues
           oc --insecure-skip-tls-verify get --request-timeout=20s -n openshift-sdn -l app=sdn pods --template '{{ range .items }}{{ .metadata.name }}{{ "\n" }}{{ end }}' > /tmp/sdn-pods
           while IFS= read -r i; do
-            queue /tmp/artifacts/network/iptables-save-$i oc --insecure-skip-tls-verify rsh --timeout=20 -n openshift-sdn -c sdn $i iptables-save -c
+            queue ${ARTIFACT_DIR}/network/iptables-save-$i oc --insecure-skip-tls-verify rsh --timeout=20 -n openshift-sdn -c sdn $i iptables-save -c
           done < /tmp/sdn-pods
 
           while IFS= read -r i; do
             file="$( echo "$i" | cut -d ' ' -f 3 | tr -s ' ' '_' )"
-            queue /tmp/artifacts/metrics/${file}-heap oc --insecure-skip-tls-verify exec $i -- /bin/bash -c 'oc --insecure-skip-tls-verify get --raw /debug/pprof/heap --server "https://$( hostname ):8443" --config /etc/origin/master/admin.kubeconfig'
-            queue /tmp/artifacts/metrics/${file}-controllers-heap oc --insecure-skip-tls-verify exec $i -- /bin/bash -c 'oc --insecure-skip-tls-verify get --raw /debug/pprof/heap --server "https://$( hostname ):8444" --config /etc/origin/master/admin.kubeconfig'
+            queue ${ARTIFACT_DIR}/metrics/${file}-heap oc --insecure-skip-tls-verify exec $i -- /bin/bash -c 'oc --insecure-skip-tls-verify get --raw /debug/pprof/heap --server "https://$( hostname ):8443" --config /etc/origin/master/admin.kubeconfig'
+            queue ${ARTIFACT_DIR}/metrics/${file}-controllers-heap oc --insecure-skip-tls-verify exec $i -- /bin/bash -c 'oc --insecure-skip-tls-verify get --raw /debug/pprof/heap --server "https://$( hostname ):8444" --config /etc/origin/master/admin.kubeconfig'
           done < /tmp/pods-api
 
           while IFS= read -r i; do
             file="$( echo "$i" | cut -d ' ' -f 2,3,5 | tr -s ' ' '_' )"
-            FILTER=gzip queue /tmp/artifacts/pods/${file}.log.gz oc --insecure-skip-tls-verify logs --request-timeout=20s $i
-            FILTER=gzip queue /tmp/artifacts/pods/${file}_previous.log.gz oc --insecure-skip-tls-verify logs --request-timeout=20s -p $i
+            FILTER=gzip queue ${ARTIFACT_DIR}/pods/${file}.log.gz oc --insecure-skip-tls-verify logs --request-timeout=20s $i
+            FILTER=gzip queue ${ARTIFACT_DIR}/pods/${file}_previous.log.gz oc --insecure-skip-tls-verify logs --request-timeout=20s -p $i
           done < /tmp/containers
 
           echo "Snapshotting prometheus (may take 15s) ..."
-          queue /tmp/artifacts/metrics/prometheus.tar.gz oc --insecure-skip-tls-verify exec -n openshift-monitoring prometheus-k8s-0 -- tar cvzf - -C /prometheus .
-          FILTER=gzip queue /tmp/artifacts/metrics/prometheus-target-metadata.json.gz oc --insecure-skip-tls-verify exec -n openshift-monitoring prometheus-k8s-0 -- /bin/bash -c "curl -G http://localhost:9090/api/v1/targets/metadata --data-urlencode 'match_target={instance!=\"\"}'"
+          queue ${ARTIFACT_DIR}/metrics/prometheus.tar.gz oc --insecure-skip-tls-verify exec -n openshift-monitoring prometheus-k8s-0 -- tar cvzf - -C /prometheus .
+          FILTER=gzip queue ${ARTIFACT_DIR}/metrics/prometheus-target-metadata.json.gz oc --insecure-skip-tls-verify exec -n openshift-monitoring prometheus-k8s-0 -- /bin/bash -c "curl -G http://localhost:9090/api/v1/targets/metadata --data-urlencode 'match_target={instance!=\"\"}'"
 
           echo "Running must-gather..."
-          mkdir -p /tmp/artifacts/must-gather
-          queue /tmp/artifacts/must-gather/must-gather.log oc --insecure-skip-tls-verify adm must-gather --dest-dir /tmp/artifacts/must-gather
+          mkdir -p ${ARTIFACT_DIR}/must-gather
+          queue ${ARTIFACT_DIR}/must-gather/must-gather.log oc --insecure-skip-tls-verify adm must-gather --dest-dir ${ARTIFACT_DIR}/must-gather
 
           echo "Gathering audit logs..."
-          mkdir -p /tmp/artifacts/audit-logs
-          queue /tmp/artifacts/audit-logs/must-gather.log oc --insecure-skip-tls-verify adm must-gather --dest-dir /tmp/artifacts/audit-logs -- /usr/bin/gather_audit_logs
+          mkdir -p ${ARTIFACT_DIR}/audit-logs
+          queue ${ARTIFACT_DIR}/audit-logs/must-gather.log oc --insecure-skip-tls-verify adm must-gather --dest-dir ${ARTIFACT_DIR}/audit-logs -- /usr/bin/gather_audit_logs
 
           echo "Waiting for logs ..."
           wait
 
+          # This is a temporary conversion of cluster operator status to JSON matching the upgrade - may be moved to code in the future
+          mkdir -p ${ARTIFACT_DIR}/junit
+          curl -sL https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 >/tmp/jq && chmod ug+x /tmp/jq
+          <${ARTIFACT_DIR}/clusteroperators.json /tmp/jq -r 'def one(condition; t): t as $t | first([.[] | select(condition)] | map(.type=t)[]) // null; def msg: "Operator \(.type) (\(.reason)): \(.message)"; def xmlfailure: if .failure then "<failure message=\"\(.failure | @html)\">\(.failure | @html)</failure>" else "" end; def xmltest: "<testcase name=\"\(.name | @html)\">\( xmlfailure )</testcase>"; def withconditions: map({name: "operator conditions \(.metadata.name)"} + ((.status.conditions // [{type:"Available",status: "False",message:"operator is not reporting conditions"}]) | (one(.type=="Available" and .status!="True"; "unavailable") // one(.type=="Degraded" and .status=="True"; "degraded") // one(.type=="Progressing" and .status=="True"; "progressing") // null) | if . then {failure: .|msg} else null end)); .items | withconditions | "<testsuite name=\"Operator results\" tests=\"\( length )\" failures=\"\( [.[] | select(.failure)] | length )\">\n\( [.[] | xmltest] | join("\n"))\n</testsuite>"' >${ARTIFACT_DIR}/junit/junit_install_status.xml
+
           # This is an experimental wiring of autogenerated failure detection.
           echo "Detect known failures from symptoms (experimental) ..."
-          curl -f https://gist.githubusercontent.com/smarterclayton/03b50c8f9b6351b2d9903d7fb35b342f/raw/symptom.sh 2>/dev/null | bash -s /tmp/artifacts > /tmp/artifacts/junit/junit_symptoms.xml
+          curl -f https://gist.githubusercontent.com/smarterclayton/03b50c8f9b6351b2d9903d7fb35b342f/raw/symptom.sh 2>/dev/null | bash -s ${ARTIFACT_DIR} > ${ARTIFACT_DIR}/junit/junit_symptoms.xml
 
           for artifact in must-gather audit-logs ; do
-            tar -czC /tmp/artifacts/${artifact} -f /tmp/artifacts/${artifact}.tar.gz . &&
-            rm -rf /tmp/artifacts/${artifact}
+            tar -czC ${ARTIFACT_DIR}/${artifact} -f ${ARTIFACT_DIR}/${artifact}.tar.gz . &&
+            rm -rf ${ARTIFACT_DIR}/${artifact}
           done
 
           echo "Deprovisioning cluster ..."
-          openshift-install --dir /tmp/artifacts/installer destroy cluster
+          openshift-install --dir ${ARTIFACT_DIR}/installer destroy cluster
         }
 
         trap 'teardown' EXIT

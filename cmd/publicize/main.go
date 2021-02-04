@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +22,8 @@ import (
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/pjutil"
+
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 type Config struct {
@@ -96,7 +97,7 @@ func (o *options) Validate() error {
 		return err
 	}
 
-	bytes, err := ioutil.ReadFile(o.configPath)
+	bytes, err := gzip.ReadFileMaybeGZIP(o.configPath)
 	if err != nil {
 		return fmt.Errorf("Couldn't read publicize configuration file: %v", o.configPath)
 	}
@@ -125,7 +126,7 @@ func (o *options) getConfigWatchAndUpdate() (func(ctx context.Context), error) {
 	}
 
 	eventFunc := func() error {
-		bytes, err := ioutil.ReadFile(o.configPath)
+		bytes, err := gzip.ReadFileMaybeGZIP(o.configPath)
 		if err != nil {
 			return fmt.Errorf("Couldn't read publicize configuration file %s: %w", o.configPath, err)
 		}

@@ -20,6 +20,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 type options struct {
@@ -56,7 +57,7 @@ func generateMetadata(registryPath string) (api.RegistryMetadata, error) {
 			}
 			ownersPath := filepath.Join(filepath.Dir(path), "OWNERS")
 			// all step registry components are required to have an owners file in the same directory as the component
-			owners, err := ioutil.ReadFile(ownersPath)
+			owners, err := gzip.ReadFileMaybeGZIP(ownersPath)
 			if err != nil {
 				return fmt.Errorf("failed to read OWNERS file for component %s at %s: %w", info.Name(), ownersPath, err)
 			}

@@ -22,6 +22,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/promotion"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 type gitHubClient interface {
@@ -92,7 +93,7 @@ func main() {
 		os.Exit(1)
 	}()
 
-	b, err := ioutil.ReadFile(o.peribolosConfig)
+	b, err := gzip.ReadFileMaybeGZIP(o.peribolosConfig)
 	if err != nil {
 		logger.WithError(err).Fatal("could not read peribolos configuration file")
 	}

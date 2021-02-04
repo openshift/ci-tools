@@ -7,7 +7,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/ghodss/yaml"
@@ -26,6 +25,7 @@ import (
 	userV1 "github.com/openshift/client-go/user/clientset/versioned/typed/user/v1"
 
 	"github.com/openshift/ci-tools/pkg/util"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 var (
@@ -102,7 +102,7 @@ func main() {
 
 	logger := logrus.WithField("group", o.group)
 
-	b, err := ioutil.ReadFile(o.peribolosConfig)
+	b, err := gzip.ReadFileMaybeGZIP(o.peribolosConfig)
 	if err != nil {
 		logger.WithError(err).Fatal("could not read peribolos configuration file")
 	}

@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 // CloudProvider define cloud providers
@@ -163,7 +164,7 @@ func (config *Config) MatchingPathRegEx(path string) bool {
 // LoadConfig loads config from a file
 func LoadConfig(configPath string) (*Config, error) {
 	config := &Config{}
-	data, err := ioutil.ReadFile(configPath)
+	data, err := gzip.ReadFileMaybeGZIP(configPath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to read the config file %q", configPath)
 	}

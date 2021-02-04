@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,6 +26,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 const (
@@ -307,7 +307,7 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 		go func(path string) {
 			defer sem.Release(1)
 
-			data, err := ioutil.ReadFile(path)
+			data, err := gzip.ReadFileMaybeGZIP(path)
 			if err != nil {
 				objChan <- fmt.Errorf("failed to read file %q: %w", path, err)
 				return

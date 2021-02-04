@@ -11,6 +11,8 @@ import (
 	"k8s.io/test-infra/prow/config/org"
 	"k8s.io/test-infra/prow/logrusutil"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 type options struct {
@@ -41,7 +43,7 @@ func main() {
 
 	o := parseOptions()
 
-	raw, err := ioutil.ReadFile(o.config)
+	raw, err := gzip.ReadFileMaybeGZIP(o.config)
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not read --config-path file")
 	}

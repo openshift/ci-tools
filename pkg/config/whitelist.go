@@ -4,12 +4,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/ghodss/yaml"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 // WhitelistConfig holds a list of repositories mapped by organization
@@ -44,7 +45,7 @@ func (o *WhitelistOptions) Validate() error {
 			return fmt.Errorf("The file that specified in --whitelist-file is a directory: %v", o.whitelistFile)
 		}
 
-		bytes, err := ioutil.ReadFile(o.whitelistFile)
+		bytes, err := gzip.ReadFileMaybeGZIP(o.whitelistFile)
 		if err != nil {
 			return fmt.Errorf("Couldn't read whitelist configuration file: %v", o.whitelistFile)
 		}

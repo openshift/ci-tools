@@ -21,6 +21,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/bitwarden"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 // CoreOS / OpenShift
@@ -109,7 +110,7 @@ func (o *options) completeOptions(secrets sets.String) error {
 		secrets.Insert(o.bwPassword)
 	}
 
-	cfgBytes, err := ioutil.ReadFile(o.configPath)
+	cfgBytes, err := gzip.ReadFileMaybeGZIP(o.configPath)
 	if err != nil {
 		return err
 	}
@@ -119,7 +120,7 @@ func (o *options) completeOptions(secrets sets.String) error {
 	}
 
 	if o.bootstrapConfigPath != "" {
-		cfgBytes, err = ioutil.ReadFile(o.bootstrapConfigPath)
+		cfgBytes, err = gzip.ReadFileMaybeGZIP(o.bootstrapConfigPath)
 		if err != nil {
 			return err
 		}

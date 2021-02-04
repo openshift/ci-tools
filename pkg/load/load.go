@@ -23,6 +23,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 	"github.com/openshift/ci-tools/pkg/validation"
 )
 
@@ -124,7 +125,7 @@ func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api
 
 	switch {
 	case len(path) > 0:
-		data, err := ioutil.ReadFile(path)
+		data, err := gzip.ReadFileMaybeGZIP(path)
 		if err != nil {
 			return nil, fmt.Errorf("--config error: %w", err)
 		}
@@ -135,7 +136,7 @@ func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api
 		}
 		raw = configSpecEnv
 	case len(unresolvedPath) > 0:
-		data, err := ioutil.ReadFile(unresolvedPath)
+		data, err := gzip.ReadFileMaybeGZIP(unresolvedPath)
 		if err != nil {
 			return nil, fmt.Errorf("--unresolved-config error: %w", err)
 		}
@@ -274,7 +275,7 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 			if filepath.Ext(info.Name()) == ".md" || info.Name() == "OWNERS" {
 				return nil
 			}
-			raw, err := ioutil.ReadFile(path)
+			raw, err := gzip.ReadFileMaybeGZIP(path)
 			if err != nil {
 				return err
 			}
@@ -354,7 +355,7 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 				if !flat && observer.Observer.Commands != fmt.Sprintf("%s%s", prefix, CommandsSuffix) {
 					return fmt.Errorf("observer %s has invalid command file path; command should be set to %s", observer.Observer.Name, fmt.Sprintf("%s%s", prefix, CommandsSuffix))
 				}
-				command, err := ioutil.ReadFile(filepath.Join(dir, observer.Observer.Commands))
+				command, err := gzip.ReadFileMaybeGZIP(filepath.Join(dir, observer.Observer.Commands))
 				if err != nil {
 					return err
 				}
@@ -365,7 +366,7 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 			} else if strings.HasSuffix(path, CommandsSuffix) {
 				// ignore
 			} else if filepath.Base(path) == config.ConfigVersionFileName {
-				if version, err := ioutil.ReadFile(path); err == nil {
+				if version, err := gzip.ReadFileMaybeGZIP(path); err == nil {
 					logrus.WithField("version", string(version)).Info("Resolved configuration version")
 				}
 			} else {
@@ -394,7 +395,7 @@ func loadReference(bytes []byte, baseDir, prefix string, flat bool) (string, str
 	if !flat && step.Reference.Commands != fmt.Sprintf("%s%s", prefix, CommandsSuffix) {
 		return "", "", api.LiteralTestStep{}, fmt.Errorf("reference %s has invalid command file path; command should be set to %s", step.Reference.As, fmt.Sprintf("%s%s", prefix, CommandsSuffix))
 	}
-	command, err := ioutil.ReadFile(filepath.Join(baseDir, step.Reference.Commands))
+	command, err := gzip.ReadFileMaybeGZIP(filepath.Join(baseDir, step.Reference.Commands))
 	if err != nil {
 		return "", "", api.LiteralTestStep{}, err
 	}

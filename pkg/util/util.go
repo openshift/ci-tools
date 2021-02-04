@@ -49,3 +49,14 @@ func RemoveIf[T any](s []T, p func(T) bool) []T {
 	}
 	return s[:i]
 }
+
+// PopCount returns the number of "true" argument values.
+func PopCount[T comparable](xs ...T) (ret uint) {
+	var z T
+	for _, x := range xs {
+		if x != z {
+			ret += 1
+		}
+	}
+	return
+}

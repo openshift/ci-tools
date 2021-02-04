@@ -132,7 +132,7 @@ The following commits are valid:
 				{SHA: "456789abc", Commit: github.GitCommit{Message: "UPSTREAM: 2: whoa"}},
 				{SHA: "789abcdef", Commit: github.GitCommit{Message: "UPSTREAM: 3: whoa"}},
 				{SHA: "abcdefghi", Commit: github.GitCommit{Message: "UPSTREAM: <carry>: whoa"}},
-				{SHA: "defghijkl", Commit: github.GitCommit{Message: "UPSTREAM: 4: whoa"}},
+				{SHA: "defghijkl", Commit: github.GitCommit{Message: "UPSTREAM: 4: whoa\nmore\ndata\nto\nbe\nskipped"}},
 			},
 			prs: map[orgrepopr]*github.PullRequest{
 				{org: "upstream", repo: "repo", pr: 1}: {Merged: true},

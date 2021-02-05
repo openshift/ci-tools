@@ -492,7 +492,8 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 		cioperatorapi.ClusterProfileOpenStackPpc64le,
 		cioperatorapi.ClusterProfileVSphere,
 		cioperatorapi.ClusterProfileKubevirt,
-		cioperatorapi.ClusterProfileAWSCPaaS:
+		cioperatorapi.ClusterProfileAWSCPaaS,
+		cioperatorapi.ClusterProfileOSDEphemeral:
 	default:
 		ret.VolumeSource.Projected.Sources = append(ret.VolumeSource.Projected.Sources, corev1.VolumeProjection{
 			ConfigMap: &corev1.ConfigMapProjection{

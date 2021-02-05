@@ -988,6 +988,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "kubevirt-quota-slice"
 	case ClusterProfileAWSCPaaS:
 		return "aws-cpaas-quota-slice"
+	case ClusterProfileOSDEphemeral:
+		return "osd-ephemeral"
 	default:
 		return ""
 	}

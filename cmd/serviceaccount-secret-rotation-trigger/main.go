@@ -120,9 +120,10 @@ func cleanNamespace(ctx context.Context, l *logrus.Entry, client ctrlruntimeclie
 		}
 		item := item
 		eg.Go(func() error {
+			old := item.DeepCopy()
 			item.Annotations[serviceaccountsecretrefresher.TTLAnnotationKey] = time.Now().Add(24 * time.Hour).Format(time.RFC3339)
-			if err := client.Update(ctx, &item); err != nil {
-				return fmt.Errorf("failed to update secret %s/%s: %w", item.Namespace, item.Name, err)
+			if err := client.Patch(ctx, &item, ctrlruntimeclient.MergeFrom(old)); err != nil {
+				return fmt.Errorf("failed to patch secret %s/%s: %w", item.Namespace, item.Name, err)
 			}
 			l.WithField("secret", fmt.Sprintf("%s/%s", item.Namespace, item.Name)).Info("Set TTL annotation on secret")
 			return nil
@@ -141,9 +142,10 @@ func cleanNamespace(ctx context.Context, l *logrus.Entry, client ctrlruntimeclie
 	for _, item := range serviceAccountList.Items {
 		item := item
 		eg.Go(func() error {
+			old := item.DeepCopy()
 			item.ImagePullSecrets = nil
 			item.Secrets = nil
-			if err := client.Update(ctx, &item); err != nil {
+			if err := client.Patch(ctx, &item, ctrlruntimeclient.MergeFrom(old)); err != nil {
 				return fmt.Errorf("failed to update serviceaccount %s/%s: %w", item.Namespace, item.Name, err)
 			}
 			l.WithField("ServiceAccount", fmt.Sprintf("%s/%s", item.Namespace, item.Name)).Info("Removed secrets from SA to trigger re-creation")

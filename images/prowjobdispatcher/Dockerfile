@@ -7,4 +7,4 @@ RUN dnf install -y git && \
     dnf clean all && \
     rm -rf /var/cache/dnf
 
-ENTRYPOINT ["/usr/bin/prowjobdispatcher"]
+ENTRYPOINT ["/usr/bin/prow-job-dispatcher"]

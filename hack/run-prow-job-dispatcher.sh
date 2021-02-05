@@ -12,6 +12,8 @@ oc --context app.ci get secret -n prow-monitoring prometheus-auth-credentials -o
 
 prom_username=$(oc --context app.ci get secret -n prow-monitoring prometheus-auth-credentials -o yaml | yq -r '.data.username' | base64 -d)
 
+oc --context app.ci get secret -n ci github-credentials-openshift-bot -o yaml | yq -r '.data.oauth' | base64 -d > /tmp/token
+
 go build  -v -o /tmp/prow-job-dispatcher ./cmd/prow-job-dispatcher
 /tmp/prow-job-dispatcher \
   --prometheus-username=${prom_username} \
@@ -21,5 +23,7 @@ go build  -v -o /tmp/prow-job-dispatcher ./cmd/prow-job-dispatcher
   --create-pr=true \
   --target-dir="$(go env GOPATH)/src/github.com/openshift/release" \
   --github-token-path=/tmp/token \
-  --git-name=${USER} \
+  --github-login=openshift-bot \
+  --git-name=openshift-bot \
   --git-email=openshift-bot@redhat.com \
+  --create-pr=true \

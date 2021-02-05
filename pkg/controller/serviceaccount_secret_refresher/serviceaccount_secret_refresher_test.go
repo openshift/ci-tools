@@ -51,7 +51,7 @@ func TestReconcile(t *testing.T) {
 			expectedTokenSecretName:    "new-token-secret",
 		},
 		{
-			name: "secrets are rotated but not old enough to be claned",
+			name: "secrets are rotated but not old enough to be cleaned",
 			objects: []runtime.Object{
 				sa.DeepCopy(),
 				secretForSA(sa, corev1.SecretTypeDockercfg, func(s *corev1.Secret) {
@@ -116,6 +116,27 @@ func TestReconcile(t *testing.T) {
 			expectedNumTokenSecret:     1,
 			expectedPullSecretName:     "pull-secret",
 			expectedTokenSecretName:    "token-secret",
+		},
+		{
+			name: "young secrets are rotated and deleted because of ttl annotation",
+			objects: []runtime.Object{
+				sa.DeepCopy(),
+				secretForSA(sa, corev1.SecretTypeDockercfg, func(s *corev1.Secret) {
+					s.Name = "pull-secret"
+					s.CreationTimestamp = metav1.Now()
+					s.Annotations = map[string]string{"serviaccount-secret-rotator.openshift.io/delete-after": time.Time{}.Format(time.RFC3339)}
+				}),
+				secretForSA(sa, corev1.SecretTypeServiceAccountToken, func(s *corev1.Secret) {
+					s.Name = "token-secret"
+					s.CreationTimestamp = metav1.Now()
+					s.Annotations = map[string]string{"serviaccount-secret-rotator.openshift.io/delete-after": time.Time{}.Format(time.RFC3339)}
+				}),
+			},
+			removeOldSecrets:           true,
+			expectedNumImagePullSecret: 1,
+			expectedNumTokenSecret:     1,
+			expectedPullSecretName:     "new-pull-secret",
+			expectedTokenSecretName:    "new-token-secret",
 		},
 	}
 

@@ -9,7 +9,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -21,7 +20,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-const ControllerName = "serviceaccount_secret_refresher"
+const (
+	ControllerName = "serviceaccount_secret_refresher"
+
+	TTLAnnotationKey = "serviaccount-secret-rotator.openshift.io/delete-after"
+)
 
 func AddToManager(clusterName string, mgr manager.Manager, enabledNamespaces sets.String, removeOldSecrets bool) error {
 	r := &reconciler{
@@ -107,34 +110,37 @@ func (r *reconciler) reconcile(ctx context.Context, l *logrus.Entry, req reconci
 	var imagePullSecretsToKeep []corev1.LocalObjectReference
 	var requeueAfter time.Duration
 	for _, pullSecretRef := range sa.ImagePullSecrets {
-		creationTimestamp, err := r.creationTimestampSecret(ctx, req.Namespace, pullSecretRef.Name)
+		l := l.WithField("imagepullsecretname", pullSecretRef.Name)
+		secret, err := r.creationTimestampSecret(ctx, req.Namespace, pullSecretRef.Name)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check image pull secret creationTimestamp: %w", err)
 		}
-		if isObjectCurrent(*creationTimestamp) {
+		if deleteObjectIn := objectExpiredIn(l, secret, thirtyDays); deleteObjectIn != 0 {
+			l.WithField("secret", secret.Name).Infof("DeleteObjectIn: %s", deleteObjectIn.String())
 			imagePullSecretsToKeep = append(imagePullSecretsToKeep, pullSecretRef)
-			if newRequeueAfter := -time.Since(creationTimestamp.Time.Add(thirtyDays)); requeueAfter == 0 || newRequeueAfter < requeueAfter {
-				requeueAfter = newRequeueAfter
+			if requeueAfter == 0 || deleteObjectIn < requeueAfter {
+				requeueAfter = deleteObjectIn
 			}
 			continue
 		}
-		l.WithField("imagepullsecretname", pullSecretRef.Name).Info("Not keeping image pull secret")
+		l.Info("Not keeping image pull secret")
 	}
 
 	var tokenSecretsToKeep []corev1.ObjectReference
 	for _, tokenSecretRef := range sa.Secrets {
-		creationTimestamp, err := r.creationTimestampSecret(ctx, req.Namespace, tokenSecretRef.Name)
+		l := l.WithField("tokensecretname", tokenSecretRef.Name)
+		secret, err := r.creationTimestampSecret(ctx, req.Namespace, tokenSecretRef.Name)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check if secret should be kept: %w", err)
 		}
-		if isObjectCurrent(*creationTimestamp) {
+		if deleteObjectIn := objectExpiredIn(l, secret, thirtyDays); deleteObjectIn != 0 {
 			tokenSecretsToKeep = append(tokenSecretsToKeep, tokenSecretRef)
-			if newRequeueAfter := -time.Since(creationTimestamp.Time.Add(thirtyDays)); requeueAfter == 0 || newRequeueAfter < requeueAfter {
-				requeueAfter = newRequeueAfter
+			if requeueAfter == 0 || deleteObjectIn < requeueAfter {
+				requeueAfter = deleteObjectIn
 			}
 			continue
 		}
-		l.WithField("tokensecretname", tokenSecretRef.Name).Info("Not keeping token secret")
+		l.Info("Not keeping token secret")
 	}
 
 	dockerSecretDiffCount, tokenSecretDiffCount := len(imagePullSecretsToKeep)-len(sa.ImagePullSecrets), len(tokenSecretsToKeep)-len(sa.Secrets)
@@ -171,9 +177,9 @@ func (r *reconciler) reconcile(ctx context.Context, l *logrus.Entry, req reconci
 		if secret.Annotations[corev1.ServiceAccountUIDKey] != string(sa.UID) {
 			continue
 		}
-		if secret.CreationTimestamp.After(time.Now().Add(-2 * thirtyDays)) {
-			if newRequeueAfter := -time.Since(secret.CreationTimestamp.Time.Add(2 * thirtyDays)); requeueAfter == 0 || newRequeueAfter < requeueAfter {
-				requeueAfter = newRequeueAfter
+		if deleteObjectIn := objectExpiredIn(l, &secret, 2*thirtyDays); deleteObjectIn != 0 {
+			if requeueAfter == 0 || deleteObjectIn < requeueAfter {
+				requeueAfter = deleteObjectIn
 			}
 			continue
 		}
@@ -187,19 +193,39 @@ func (r *reconciler) reconcile(ctx context.Context, l *logrus.Entry, req reconci
 	return &reconcile.Result{RequeueAfter: requeueAfter}, nil
 }
 
-func (r *reconciler) creationTimestampSecret(ctx context.Context, namespace, name string) (*metav1.Time, error) {
+func (r *reconciler) creationTimestampSecret(ctx context.Context, namespace, name string) (*corev1.Secret, error) {
 	secret := &corev1.Secret{}
 	if err := r.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, secret); err != nil {
 		if apierrors.IsNotFound(err) {
-			return &metav1.Time{}, nil
+			return &corev1.Secret{}, nil
 		}
 
 		return nil, fmt.Errorf("failed to get secret %s/%s: %w", namespace, name, err)
 	}
 
-	return &secret.CreationTimestamp, nil
+	return secret, nil
 }
 
-func isObjectCurrent(t metav1.Time) bool {
-	return t.Time.After(time.Now().Add(-thirtyDays))
+func objectExpiredIn(log *logrus.Entry, o ctrlruntimeclient.Object, ttl time.Duration) (deleteAfter time.Duration) {
+	if val, exists := o.GetAnnotations()[TTLAnnotationKey]; exists {
+		deleteAddAnnotationTimestamp, err := time.Parse(time.RFC3339, val)
+		if err != nil {
+			// No point in returning this as retrying won't help. If someone changes the value, that
+			// will trigger us
+			log.WithError(err).Errorf("Failed to parse %s annotation value", TTLAnnotationKey)
+		} else {
+			deleteAfter = time.Until(deleteAddAnnotationTimestamp)
+		}
+	}
+
+	if expirationDuration := time.Until(o.GetCreationTimestamp().Time.Add(ttl)); deleteAfter == 0 || expirationDuration < deleteAfter {
+		deleteAfter = expirationDuration
+	}
+
+	// We can't travel back in time to delete it at the right time so simplify the API by always returning 0 for "Expired"
+	if deleteAfter < 0 {
+		deleteAfter = 0
+	}
+
+	return deleteAfter
 }

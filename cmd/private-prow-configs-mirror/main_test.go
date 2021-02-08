@@ -11,6 +11,7 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/plugins"
+	utilpointer "k8s.io/utils/pointer"
 )
 
 var orgRepos = orgReposWithOfficialImages{
@@ -323,24 +324,24 @@ func TestInjectPrivatePlankDefaultDecorationConfigs(t *testing.T) {
 		{
 			id: "no changes expected",
 			defaultDecorationConfigs: map[string]*prowapi.DecorationConfig{
-				"openshift":              {GCSCredentialsSecret: "gcs_secret", SkipCloning: pBool(true)},
-				"openshift/anotherRepo1": {GCSCredentialsSecret: "gcs_secret2", SkipCloning: pBool(false)},
+				"openshift":              {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret"), SkipCloning: pBool(true)},
+				"openshift/anotherRepo1": {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret2"), SkipCloning: pBool(false)},
 			},
 			expected: map[string]*prowapi.DecorationConfig{
-				"openshift":              {GCSCredentialsSecret: "gcs_secret", SkipCloning: pBool(true)},
-				"openshift/anotherRepo1": {GCSCredentialsSecret: "gcs_secret2", SkipCloning: pBool(false)},
+				"openshift":              {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret"), SkipCloning: pBool(true)},
+				"openshift/anotherRepo1": {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret2"), SkipCloning: pBool(false)},
 			},
 		},
 		{
 			id: "changes expected",
 			defaultDecorationConfigs: map[string]*prowapi.DecorationConfig{
-				"openshift":           {GCSCredentialsSecret: "gcs_secret", SkipCloning: pBool(true)},
-				"openshift/testRepo1": {GCSCredentialsSecret: "gcs_secret2", SkipCloning: pBool(false)},
+				"openshift":           {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret"), SkipCloning: pBool(true)},
+				"openshift/testRepo1": {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret2"), SkipCloning: pBool(false)},
 			},
 			expected: map[string]*prowapi.DecorationConfig{
-				"openshift":                {GCSCredentialsSecret: "gcs_secret", SkipCloning: pBool(true)},
-				"openshift/testRepo1":      {GCSCredentialsSecret: "gcs_secret2", SkipCloning: pBool(false)},
-				"openshift-priv/testRepo1": {GCSCredentialsSecret: "gcs_secret2", SkipCloning: pBool(false)},
+				"openshift":                {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret"), SkipCloning: pBool(true)},
+				"openshift/testRepo1":      {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret2"), SkipCloning: pBool(false)},
+				"openshift-priv/testRepo1": {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret2"), SkipCloning: pBool(false)},
 			},
 		},
 	}

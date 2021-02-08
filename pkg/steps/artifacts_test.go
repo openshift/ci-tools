@@ -706,7 +706,7 @@ func TestAddPodUtils(t *testing.T) {
 			Bucket:       "bucket",
 			PathStrategy: prowv1.PathStrategyExplicit,
 		},
-		GCSCredentialsSecret: "gce-sa-credentials-gcs-publisher",
+		GCSCredentialsSecret: func() *string { s := "gce-sa-credentials-gcs-publisher"; return &s }(),
 	}, "rawspec"); err != nil {
 		t.Errorf("failed to decorate: %v", err)
 	}

@@ -4,9 +4,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -30,11 +30,11 @@ import (
 )
 
 const (
-	githubOrg    = "openshift"
-	githubRepo   = "release"
-	githubLogin  = "openshift-bot"
-	matchTitle   = "Automate prow job dispatcher"
-	remoteBranch = "auto-prow-job-dispatcher"
+	githubOrg      = "openshift"
+	githubRepo     = "release"
+	githubLogin    = "openshift-bot"
+	matchTitle     = "Automate prow job dispatcher"
+	upstreamBranch = "master"
 )
 
 type options struct {
@@ -94,7 +94,6 @@ func (o *options) validate() error {
 		return fmt.Errorf("--prometheus-days-before must be between 1 and 15")
 	}
 	if o.createPR {
-		logrus.Info("The tool will create a pull request")
 		if o.githubLogin == "" {
 			return fmt.Errorf("--github-login cannot be empty string")
 		}
@@ -350,56 +349,21 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 	return utilerrors.NewAggregate(errs)
 }
 
-func runAndCommitIfNeeded(stdout, stderr io.Writer, author, cmd string, args []string) (bool, error) {
-	fullCommand := fmt.Sprintf("%s %s", filepath.Base(cmd), strings.Join(args, " "))
-
-	if cmd != "" {
-		logrus.Infof("Running: %s", fullCommand)
-		if err := bumper.Call(stdout, stderr, cmd, args...); err != nil {
-			return false, fmt.Errorf("failed to run %s: %w", fullCommand, err)
-		}
-	}
-
-	changed, err := bumper.HasChanges()
-	if err != nil {
-		return false, fmt.Errorf("error occurred when checking changes: %w", err)
-	}
-
-	if !changed {
-		logrus.WithField("command", fullCommand).Info("No changes to commit")
-		return false, nil
-	}
-
-	gitCmd := "git"
-	if err := bumper.Call(stdout, stderr, gitCmd, []string{"add", "."}...); err != nil {
-		return false, fmt.Errorf("failed to 'git add .': %w", err)
-	}
-
-	commitMsg := fullCommand
-	if cmd == "" {
-		commitMsg = "Dispatch Prow jobs"
-	}
-	commitArgs := []string{"commit", "-m", commitMsg, "--author", author}
-	if err := bumper.Call(stdout, stderr, gitCmd, commitArgs...); err != nil {
-		return false, fmt.Errorf("fail to %s %s: %w", gitCmd, strings.Join(commitArgs, " "), err)
-	}
-
-	return true, nil
-}
-
 func main() {
 	o := gatherOptions()
 	if err := o.validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to complete options.")
 	}
 
-	sa := &secret.Agent{}
-	paths := []string{o.PRCreationOptions.GitHubOptions.TokenPath}
-	if o.createPR {
-		paths = append(paths, o.PrometheusOptions.PrometheusPasswordPath)
+	if err := o.PRCreationOptions.Finalize(); err != nil {
+		logrus.WithError(err).Fatal("Failed to finalize PR creation options")
 	}
-	if err := sa.Start(paths); err != nil {
-		logrus.WithError(err).Fatal("Failed to start secrets agent")
+
+	sa := &secret.Agent{}
+	if o.PrometheusOptions.PrometheusPasswordPath != "" {
+		if err := sa.Start([]string{o.PrometheusOptions.PrometheusPasswordPath}); err != nil {
+			logrus.WithError(err).Fatal("Failed to start secrets agent")
+		}
 	}
 
 	promClient, err := o.PrometheusOptions.NewPrometheusClient(sa.GetSecret)
@@ -424,6 +388,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to load config from %q", o.configPath)
 	}
+	logrus.Info("Dispatching ...")
 	if err := dispatchJobs(context.TODO(), o.prowJobConfigDir, o.maxConcurrency, config, jobVolumes); err != nil {
 		logrus.WithError(err).Fatal("Failed to dispatch")
 	}
@@ -441,56 +406,18 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to change to root dir")
 	}
 
-	steps := []struct {
-		command   string
-		arguments []string
-	}{
-		{
-			// start with git commands without running any tools
-			command: "",
-		},
-		{
-			command:   "/usr/bin/sanitize-prow-jobs",
-			arguments: []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"},
-		},
-	}
+	command := "/usr/bin/sanitize-prow-jobs"
+	arguments := []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"}
+	fullCommand := fmt.Sprintf("%s %s", filepath.Base(command), strings.Join(arguments, " "))
+	logrus.WithField("fullCommand", fullCommand).Infof("Running the command ...")
 
-	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: sa}
-	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: sa}
-	author := fmt.Sprintf("%s <%s>", o.GitAuthorOptions.GitName, o.GitAuthorOptions.GitEmail)
-	commitsCounter := 0
-
-	for _, step := range steps {
-		committed, err := runAndCommitIfNeeded(stdout, stderr, author, step.command, step.arguments)
-		if err != nil {
-			logrus.WithError(err).Fatal("failed to run command and commit the changes")
-		}
-
-		if committed {
-			commitsCounter++
-		}
-	}
-	if commitsCounter == 0 {
-		logrus.Info("no new commits, existing ...")
-		os.Exit(0)
-	}
-
-	if err := bumper.GitPush(
-		fmt.Sprintf("https://%s:%s@github.com/%s/%s.git",
-			o.githubLogin,
-			string(sa.GetTokenGenerator(o.PRCreationOptions.GitHubOptions.TokenPath)()),
-			o.githubLogin,
-			githubRepo),
-		remoteBranch,
-		stdout,
-		stderr,
-		"",
-	); err != nil {
-		logrus.WithError(err).Fatal("Failed to push changes.")
+	combinedOutput, err := exec.Command(command, arguments...).CombinedOutput()
+	if err != nil {
+		logrus.WithError(err).WithField("combinedOutput", string(combinedOutput)).Fatal("failed to run the command")
 	}
 
 	title := fmt.Sprintf("%s at %s", matchTitle, time.Now().Format(time.RFC1123))
-	if err := o.PRCreationOptions.UpsertPR(o.targetDir, githubOrg, githubRepo, remoteBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle)); err != nil {
+	if err := o.PRCreationOptions.UpsertPR(o.targetDir, githubOrg, githubRepo, upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle)); err != nil {
 		logrus.WithError(err).Fatalf("failed to upsert PR")
 	}
 }

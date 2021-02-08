@@ -317,21 +317,12 @@ func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperator
 		template = "cluster-launch-e2e-openshift-ansible"
 		clusterProfile = conf.ClusterProfile
 		needsReleaseRpms = true
-	} else if conf := test.OpenshiftAnsible40ClusterTestConfiguration; conf != nil {
-		template = "cluster-scaleup-e2e-40"
-		clusterProfile = conf.ClusterProfile
-		needsReleaseRpms = true
-		needsLeaseServer = true
 	} else if conf := test.OpenshiftInstallerClusterTestConfiguration; conf != nil {
 		if !conf.Upgrade {
 			template = "cluster-launch-installer-e2e"
 		}
 		clusterProfile = conf.ClusterProfile
 		needsLeaseServer = true
-	} else if conf := test.OpenshiftInstallerSrcClusterTestConfiguration; conf != nil {
-		template = "cluster-launch-installer-src"
-		needsLeaseServer = true
-		clusterProfile = conf.ClusterProfile
 	} else if conf := test.OpenshiftInstallerUPIClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-installer-upi-e2e"
 		needsLeaseServer = true
@@ -387,14 +378,7 @@ func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperator
 			Value: repoPath,
 		})
 	}
-	if conf := test.OpenshiftAnsible40ClusterTestConfiguration; conf != nil {
-		container.Env = append(
-			container.Env,
-			corev1.EnvVar{
-				Name:  "RPM_REPO_CRIO_DIR",
-				Value: fmt.Sprintf("%s-rhel-7", release)},
-		)
-	}
+
 	return podSpec
 }
 

@@ -17,13 +17,12 @@ import (
 )
 
 const (
-	openshiftInstallerSRCTemplateName             = "openshift_installer_src"
 	openshiftInstallerCustomTestImageTemplateName = "openshift_installer_custom_test_image"
 	OpenshiftInstallerUPITemplateName             = "openshift_installer_upi"
 	OpenShiftInstallerTemplateName                = "openshift_installer"
 )
 
-var validTemplateMigrations = sets.NewString(openshiftInstallerSRCTemplateName, openshiftInstallerCustomTestImageTemplateName, OpenshiftInstallerUPITemplateName, OpenShiftInstallerTemplateName)
+var validTemplateMigrations = sets.NewString(openshiftInstallerCustomTestImageTemplateName, OpenshiftInstallerUPITemplateName, OpenShiftInstallerTemplateName)
 
 type options struct {
 	config.ConfirmableOptions
@@ -77,9 +76,6 @@ func main() {
 		allowedBranches := o.templateMigrationAllowedBranches.StringSet()
 		allowedOrgs := o.templateMigrationAllowedOrgs.StringSet()
 		allowedClusterProfiles := o.templateMigrationAllowedClusterProfiles.StringSet()
-		if sets.NewString(o.enabledTemplateMigrations.Strings()...).Has(openshiftInstallerSRCTemplateName) && migratedCount <= o.templateMigrationCeiling {
-			migratedCount += migrateOpenshiftInstallerSRCTemplates(&output, allowedBranches, allowedOrgs, allowedClusterProfiles)
-		}
 		if sets.NewString(o.enabledTemplateMigrations.Strings()...).Has(openshiftInstallerCustomTestImageTemplateName) && migratedCount <= o.templateMigrationCeiling {
 			migratedCount += migrateOpenshiftInstallerCustomTestImageTemplates(&output, allowedBranches, allowedOrgs, allowedClusterProfiles)
 		}
@@ -155,47 +151,6 @@ func migrateOpenShiftInstallerTemplates(
 		test.Commands = ""
 		configuration.Configuration.Tests[idx] = test
 		migratedCount++
-	}
-
-	return migratedCount
-}
-
-func migrateOpenshiftInstallerSRCTemplates(
-	configuration *config.DataWithInfo,
-	allowedBranches sets.String,
-	allowedOrgs sets.String,
-	allowedCloudproviders sets.String,
-) (migratedCount int) {
-	if (len(allowedBranches) != 0 && !allowedBranches.Has(configuration.Info.Branch)) || (len(allowedOrgs) != 0 && !allowedOrgs.Has(configuration.Info.Org)) {
-		return 0
-	}
-
-	for idx, test := range configuration.Configuration.Tests {
-		if test.OpenshiftInstallerSrcClusterTestConfiguration == nil ||
-			(len(allowedCloudproviders) != 0 && !allowedCloudproviders.Has(string(test.OpenshiftInstallerSrcClusterTestConfiguration.ClusterProfile))) {
-			continue
-		}
-
-		clusterProfile := test.OpenshiftInstallerSrcClusterTestConfiguration.ClusterProfile
-		test.OpenshiftInstallerSrcClusterTestConfiguration = nil
-		test.MultiStageTestConfiguration = &api.MultiStageTestConfiguration{
-			ClusterProfile: clusterProfile,
-			Test: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{
-				As:       "test",
-				From:     string(api.PipelineImageStreamTagReferenceSource),
-				Commands: test.Commands,
-				Cli:      api.LatestReleaseName,
-				Resources: api.ResourceRequirements{
-					Requests: api.ResourceList{"cpu": "100m"},
-				},
-			}}},
-			Workflow: utilpointer.StringPtr(ipiWorkflowForClusterProfile(clusterProfile)),
-		}
-		test.Commands = ""
-
-		configuration.Configuration.Tests[idx] = test
-		migratedCount++
-
 	}
 
 	return migratedCount

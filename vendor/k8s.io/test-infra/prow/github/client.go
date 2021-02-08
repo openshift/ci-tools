@@ -123,6 +123,7 @@ type PullRequestClient interface {
 	UpdatePullRequest(org, repo string, number int, title, body *string, open *bool, branch *string, canModify *bool) error
 	GetPullRequestChanges(org, repo string, number int) ([]PullRequestChange, error)
 	ListPullRequestComments(org, repo string, number int) ([]ReviewComment, error)
+	CreatePullRequestReviewComment(org, repo string, number int, rc ReviewComment) error
 	ListReviews(org, repo string, number int) ([]Review, error)
 	ClosePR(org, repo string, number int) error
 	ReopenPR(org, repo string, number int) error
@@ -931,7 +932,7 @@ func (c *client) doRequest(method, path, accept, org string, body interface{}) (
 	}
 	req, err := http.NewRequest(method, path, buf)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed creating new request: %w", err)
 	}
 	if header := c.authHeader(); len(header) > 0 {
 		req.Header.Set("Authorization", header)
@@ -2063,7 +2064,6 @@ func (c *client) ListReviews(org, repo string, number int) ([]Review, error) {
 func (c *client) CreateStatus(org, repo, SHA string, s Status) error {
 	durationLogger := c.log("CreateStatus", org, repo, SHA, s)
 	defer durationLogger()
-
 	_, err := c.request(&request{
 		method:      http.MethodPost,
 		path:        fmt.Sprintf("/repos/%s/%s/statuses/%s", org, repo, SHA),
@@ -3582,7 +3582,8 @@ func (c *client) EnsureFork(forkingUser, org, repo string) (string, error) {
 	if err != nil {
 		return repo, fmt.Errorf("could not fetch all existing repos: %v", err)
 	}
-	if !repoExists(fork, repos) {
+	// if the repo does not exist, or it does, but is not a fork of the repo we want
+	if forkedRepo := getFork(fork, repos); forkedRepo == nil || forkedRepo.Parent.FullName != fmt.Sprintf("%s/%s", org, repo) {
 		if name, err := c.CreateFork(org, repo); err != nil {
 			return repo, fmt.Errorf("cannot fork %s/%s: %v", org, repo, err)
 		} else {
@@ -3615,7 +3616,7 @@ func (c *client) waitForRepo(owner, name string) error {
 				continue
 			}
 			ghErr = ""
-			if repoExists(owner+"/"+name, []Repo{repo.Repo}) {
+			if forkedRepo := getFork(owner+"/"+name, []Repo{repo.Repo}); forkedRepo != nil {
 				return nil
 			}
 		case <-after:
@@ -3624,16 +3625,16 @@ func (c *client) waitForRepo(owner, name string) error {
 	}
 }
 
-func repoExists(repo string, repos []Repo) bool {
+func getFork(repo string, repos []Repo) *Repo {
 	for _, r := range repos {
 		if !r.Fork {
 			continue
 		}
 		if r.FullName == repo {
-			return true
+			return &r
 		}
 	}
-	return false
+	return nil
 }
 
 // ListRepoTeams gets a list of all the teams with access to a repository
@@ -4213,4 +4214,29 @@ func (c *client) GetDirectory(org, repo, dirpath, commit string) ([]DirectoryCon
 	}
 
 	return res, nil
+}
+
+// CreatePullRequestReviewComment creates a review comment on a PR.
+//
+// See also: https://docs.github.com/en/rest/reference/pulls#create-a-review-comment-for-a-pull-request
+func (c *client) CreatePullRequestReviewComment(org, repo string, number int, rc ReviewComment) error {
+	c.log("CreatePullRequestReviewComment", org, repo, number, rc)
+
+	// TODO: remove custom Accept headers when their respective API fully launches.
+	acceptHeaders := []string{
+		// https://developer.github.com/changes/2016-05-12-reactions-api-preview/
+		"application/vnd.github.squirrel-girl-preview",
+		// https://developer.github.com/changes/2019-10-03-multi-line-comments/
+		"application/vnd.github.comfort-fade-preview+json",
+	}
+
+	_, err := c.request(&request{
+		method:      http.MethodPost,
+		accept:      strings.Join(acceptHeaders, ", "),
+		path:        fmt.Sprintf("/repos/%s/%s/pulls/%d/comments", org, repo, number),
+		org:         org,
+		requestBody: &rc,
+		exitCodes:   []int{201},
+	}, nil)
+	return err
 }

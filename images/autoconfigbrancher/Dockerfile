@@ -9,6 +9,7 @@ ADD private-prow-configs-mirror /usr/bin/private-prow-configs-mirror
 ADD sanitize-prow-jobs /usr/bin/sanitize-prow-jobs
 ADD determinize-prow-config /usr/bin/determinize-prow-config
 ADD template-deprecator /usr/bin/template-deprecator
+ADD registry-replacer /usr/bin/registry-replacer
 
 RUN dnf install -y git && \
     dnf clean all && \

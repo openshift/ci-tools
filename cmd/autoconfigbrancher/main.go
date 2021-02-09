@@ -138,6 +138,20 @@ func main() {
 		arguments []string
 	}{
 		{
+			command: "/usr/bin/registry-replacer",
+			arguments: []string{
+				"--github-token-path", "/etc/github/oauth",
+				"--github-endpoint", "http://ghproxy",
+				"--config-dir", "./ci-operator/config",
+				"--prune-unused-replacements",
+				"--prune-ocp-builder-replacements",
+				"--ensure-correct-promotion-dockerfile",
+				"--current-release-minor=8",
+				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/origin-aggregated-logging",
+				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/console",
+			},
+		},
+		{
 			command: "/usr/bin/config-brancher",
 			arguments: func() []string {
 				args := []string{"--config-dir", "./ci-operator/config", "--current-release", o.CurrentRelease}

@@ -622,11 +622,7 @@ func getUnusedBWItems(config secretbootstrap.Config, bwClient bitwarden.Client, 
 
 	unused := make(map[string]*comparable)
 	for bwName, item := range bwComparableItemsByName {
-		if bwAllowUnused.Has(bwName) {
-			logrus.WithField("bw_item", bwName).Info("Unused item allowed by arguments")
-			continue
-		}
-
+		l := logrus.WithField("bw_item", bwName)
 		if item.revisionTime.After(allowUnusedAfter) {
 			logrus.WithFields(logrus.Fields{
 				"bw_item":   bwName,
@@ -637,6 +633,11 @@ func getUnusedBWItems(config secretbootstrap.Config, bwClient bitwarden.Client, 
 		}
 
 		if _, ok := cfgComparableItemsByName[bwName]; !ok {
+			if bwAllowUnused.Has(bwName) {
+				l.Info("Unused item allowed by arguments")
+				continue
+			}
+
 			unused[bwName] = item
 			continue
 		}
@@ -646,6 +647,11 @@ func getUnusedBWItems(config secretbootstrap.Config, bwClient bitwarden.Client, 
 			if _, ok := unused[bwName]; !ok {
 				unused[bwName] = &comparable{}
 			}
+
+			if bwAllowUnused.Has(bwName) {
+				l.WithField("fields", strings.Join(diffFields.List(), ",")).Info("Unused fields from item are allowed by arguments")
+				continue
+			}
 			unused[bwName].fields = diffFields
 		}
 
@@ -654,6 +660,12 @@ func getUnusedBWItems(config secretbootstrap.Config, bwClient bitwarden.Client, 
 			if _, ok := unused[bwName]; !ok {
 				unused[bwName] = &comparable{}
 			}
+
+			if bwAllowUnused.Has(bwName) {
+				l.WithField("attachments", strings.Join(diffAttachments.List(), ",")).Info("Unused attachments from item are allowed by arguments")
+				continue
+			}
+
 			unused[bwName].attachments = diffAttachments
 		}
 
@@ -661,6 +673,12 @@ func getUnusedBWItems(config secretbootstrap.Config, bwClient bitwarden.Client, 
 			if _, ok := unused[bwName]; !ok {
 				unused[bwName] = &comparable{}
 			}
+
+			if bwAllowUnused.Has(bwName) {
+				l.Info("Unused password fields from item is allowed by arguments")
+				continue
+			}
+
 			unused[bwName].hasPassword = true
 		}
 	}

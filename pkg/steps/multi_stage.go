@@ -230,7 +230,7 @@ func (s *multiStageTestStep) setupRBAC(ctx context.Context) error {
 		ObjectMeta: m,
 		Rules: []rbacapi.PolicyRule{{
 			APIGroups: []string{"rbac.authorization.k8s.io"},
-			Resources: []string{"rolebindings"},
+			Resources: []string{"rolebindings", "roles"},
 			Verbs:     []string{"create", "list"},
 		}, {
 			APIGroups:     []string{""},

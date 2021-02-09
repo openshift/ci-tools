@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 	"github.com/openshift/ci-tools/pkg/validation"
 )
 
@@ -31,7 +32,7 @@ type Prowgen struct {
 }
 
 func readCiOperatorConfig(configFilePath string, info Info) (*cioperatorapi.ReleaseBuildConfiguration, error) {
-	data, err := ioutil.ReadFile(configFilePath)
+	data, err := gzip.ReadFileMaybeGZIP(configFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read ci-operator config (%w)", err)
 	}

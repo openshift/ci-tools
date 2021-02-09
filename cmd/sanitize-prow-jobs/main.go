@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/dispatcher"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 type options struct {
@@ -62,7 +63,7 @@ func determinizeJobs(prowJobConfigDir string, config *dispatcher.Config) error {
 		go func(path string) {
 			defer wg.Done()
 
-			data, err := ioutil.ReadFile(path)
+			data, err := gzip.ReadFileMaybeGZIP(path)
 			if err != nil {
 				errChan <- fmt.Errorf("failed to read file %q: %w", path, err)
 				return

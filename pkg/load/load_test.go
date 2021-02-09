@@ -1,6 +1,7 @@
 package load
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -540,6 +541,7 @@ func TestConfig(t *testing.T) {
 		asFile        bool
 		asEnv         bool
 		expected      *api.ReleaseBuildConfiguration
+		isGzipped     bool
 		expectedError bool
 	}{
 		{
@@ -547,6 +549,14 @@ func TestConfig(t *testing.T) {
 			config:        rawConfig,
 			asFile:        true,
 			expected:      parsedConfig,
+			expectedError: false,
+		},
+		{
+			name:          "loading config from gzipped file works",
+			config:        rawConfig,
+			asFile:        true,
+			expected:      parsedConfig,
+			isGzipped:     true,
 			expectedError: false,
 		},
 		{
@@ -587,8 +597,16 @@ func TestConfig(t *testing.T) {
 				}()
 				path = temp.Name()
 
-				if err := ioutil.WriteFile(path, []byte(testCase.config), 0664); err != nil {
-					t.Fatalf("%s: failed to populate temp config file: %v", testCase.name, err)
+				if testCase.isGzipped {
+					w := gzip.NewWriter(temp)
+					if _, err := w.Write([]byte(testCase.config)); err != nil {
+						t.Fatalf("%s: failed to populate temp config file with gzipped data: %v", testCase.name, err)
+					}
+					w.Close()
+				} else {
+					if err := ioutil.WriteFile(path, []byte(testCase.config), 0664); err != nil {
+						t.Fatalf("%s: failed to populate temp config file: %v", testCase.name, err)
+					}
 				}
 			}
 			if testCase.asEnv {

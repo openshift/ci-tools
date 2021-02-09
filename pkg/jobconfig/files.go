@@ -17,6 +17,7 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 const (
@@ -192,7 +193,7 @@ func mergeConfigs(dest, part *prowconfig.JobConfig) {
 
 // readFromFile reads Prow job config from a YAML file
 func readFromFile(path string) (*prowconfig.JobConfig, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := gzip.ReadFileMaybeGZIP(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read Prow job config (%w)", err)
 	}

@@ -24,6 +24,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 type options struct {
@@ -214,7 +215,7 @@ func main() {
 		if info.IsDir() || filepath.Ext(path) != ".json" {
 			return nil
 		}
-		data, err := ioutil.ReadFile(path)
+		data, err := gzip.ReadFileMaybeGZIP(path)
 		if err != nil {
 			return fmt.Errorf("could not read release controller config at %s: %w", path, err)
 		}
@@ -251,7 +252,7 @@ func main() {
 	// read the list of jobs from the allow list along with its release-type
 	var allowList map[string]string
 	if o.jobsAllowListFile != "" {
-		data, err := ioutil.ReadFile(o.jobsAllowListFile)
+		data, err := gzip.ReadFileMaybeGZIP(o.jobsAllowListFile)
 		if err != nil {
 			logrus.WithError(err).Fatalf("could not read allow-list at %s", o.jobsAllowListFile)
 		}
@@ -368,7 +369,7 @@ func main() {
 	}
 
 	groupFile := path.Join(o.testGridConfigDir, "groups.yaml")
-	data, err := ioutil.ReadFile(groupFile)
+	data, err := gzip.ReadFileMaybeGZIP(groupFile)
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not read TestGrid group config")
 	}

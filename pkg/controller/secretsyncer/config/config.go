@@ -3,10 +3,11 @@ package config
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"strings"
 
 	"github.com/ghodss/yaml"
+
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 // Configuration defines the action for the secret mirror
@@ -167,7 +168,7 @@ func Load(configLocation string) (c *Configuration, err error) {
 }
 
 func yamlToConfig(path string, c interface{}) error {
-	data, err := ioutil.ReadFile(path)
+	data, err := gzip.ReadFileMaybeGZIP(path)
 	if err != nil {
 		return fmt.Errorf("error opening configuration file: %w", err)
 	}

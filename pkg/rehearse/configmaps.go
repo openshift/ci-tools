@@ -3,7 +3,6 @@ package rehearse
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -11,7 +10,7 @@ import (
 	"github.com/mattn/go-zglob"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -24,6 +23,7 @@ import (
 	"k8s.io/test-infra/prow/plugins/updateconfig"
 
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 const (
@@ -119,7 +119,7 @@ type osFileGetter struct {
 }
 
 func (g osFileGetter) GetFile(filename string) ([]byte, error) {
-	return ioutil.ReadFile(filepath.Join(g.root, filename))
+	return gzip.ReadFileMaybeGZIP(filepath.Join(g.root, filename))
 }
 
 func (c *CMManager) createCM(name string, data []updateconfig.ConfigMapUpdate) error {

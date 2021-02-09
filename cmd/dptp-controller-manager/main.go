@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"regexp"
 	"runtime"
 	"strings"
@@ -42,6 +41,7 @@ import (
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/util"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 const (
@@ -470,7 +470,7 @@ func main() {
 			targetClusters[cluster] = manager
 		}
 		secretSyncerConfigAgent := &secretsyncerconfig.Agent{}
-		rawConfig, err := ioutil.ReadFile(opts.secretSyncerConfigOptions.secretBoostrapConfigFile)
+		rawConfig, err := gzip.ReadFileMaybeGZIP(opts.secretSyncerConfigOptions.secretBoostrapConfigFile)
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to read ci-secret-boostrap config")
 		}

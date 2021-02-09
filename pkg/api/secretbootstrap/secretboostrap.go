@@ -3,11 +3,12 @@ package secretbootstrap
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 
 	corev1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 type AttributeType string
@@ -62,7 +63,7 @@ type SecretConfig struct {
 
 //LoadConfigFromFile renders a Config object loaded from the given file
 func LoadConfigFromFile(file string, config *Config) error {
-	bytes, err := ioutil.ReadFile(file)
+	bytes, err := gzip.ReadFileMaybeGZIP(file)
 	if err != nil {
 		return err
 	}

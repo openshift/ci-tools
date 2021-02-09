@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"sort"
@@ -24,6 +23,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/backporter"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 var (
@@ -59,7 +59,7 @@ func gatherOptions() (options, error) {
 func getAllTargetVersions(configFile string) ([]string, error) {
 	// Get the versions from the plugins.yaml file to populate the Target Versions dropdown
 	// for the CreateClone functionality
-	b, err := ioutil.ReadFile(configFile)
+	b, err := gzip.ReadFileMaybeGZIP(configFile)
 	if err != nil {
 		return nil, err
 	}

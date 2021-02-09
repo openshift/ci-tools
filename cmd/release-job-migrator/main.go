@@ -23,6 +23,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 	configlib "github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 type GeneratorConfig struct {
@@ -373,7 +374,7 @@ func run(o options) error {
 		if !strings.HasSuffix(path, "-periodics.yaml") {
 			return nil
 		}
-		raw, err := ioutil.ReadFile(path)
+		raw, err := gzip.ReadFileMaybeGZIP(path)
 		if err != nil {
 			return fmt.Errorf("failed to read file %s: %w", info.Name(), err)
 		}
@@ -387,7 +388,7 @@ func run(o options) error {
 		return fmt.Errorf("failed to load periodic job configs: %w", err)
 	}
 
-	rawConfig, err := ioutil.ReadFile(o.config)
+	rawConfig, err := gzip.ReadFileMaybeGZIP(o.config)
 	if err != nil {
 		return fmt.Errorf("failed to read config file %s: %w", o.config, err)
 	}
@@ -572,7 +573,7 @@ func run(o options) error {
 			}
 			return nil
 		}
-		raw, err := ioutil.ReadFile(path)
+		raw, err := gzip.ReadFileMaybeGZIP(path)
 		if err != nil {
 			return fmt.Errorf("failed to read file %s: %w", info.Name(), err)
 		}
@@ -594,7 +595,7 @@ func run(o options) error {
 		fmt.Println("No non-generated release-controller jobs detected.")
 		return nil
 	}
-	raw, err := ioutil.ReadFile(o.testgrid)
+	raw, err := gzip.ReadFileMaybeGZIP(o.testgrid)
 	if err != nil {
 		return fmt.Errorf("failed to read file %s: %w", o.testgrid, err)
 	}

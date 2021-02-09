@@ -13,6 +13,7 @@ import (
 	"k8s.io/test-infra/prow/config"
 
 	"github.com/openshift/ci-tools/pkg/prowgen"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 const (
@@ -276,7 +277,7 @@ func (a *allowlist) Insert(job config.JobBase, template string) {
 func loadAllowlist(allowlistPath string) (Allowlist, error) {
 	var allowlist allowlist
 
-	raw, err := ioutil.ReadFile(allowlistPath)
+	raw, err := gzip.ReadFileMaybeGZIP(allowlistPath)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}

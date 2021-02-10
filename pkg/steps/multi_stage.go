@@ -244,14 +244,23 @@ func (s *multiStageTestStep) setupRBAC(ctx context.Context) error {
 		}},
 	}
 	subj := []rbacapi.Subject{{Kind: "ServiceAccount", Name: s.name}}
-	binding := &rbacapi.RoleBinding{
-		ObjectMeta: m,
-		RoleRef:    rbacapi.RoleRef{Kind: "Role", Name: s.name},
-		Subjects:   subj,
+	bindings := []rbacapi.RoleBinding{
+		{
+			ObjectMeta: m,
+			RoleRef:    rbacapi.RoleRef{Kind: "Role", Name: s.name},
+			Subjects:   subj,
+		},
+		{
+			ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: "test-runner-view-binding", Labels: labels},
+			RoleRef:    rbacapi.RoleRef{Kind: "ClusterRole", Name: "view"},
+			Subjects:   subj,
+		},
 	}
-	if err := util.CreateRBACs(ctx, sa, role, binding, s.client, 1*time.Minute, 5*time.Minute); err != nil {
+
+	if err := util.CreateRBACs(ctx, sa, role, bindings, s.client, 1*time.Minute, 5*time.Minute); err != nil {
 		return err
 	}
+
 	return nil
 }
 

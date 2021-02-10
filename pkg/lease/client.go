@@ -55,11 +55,11 @@ type Client interface {
 }
 
 // NewClient creates a client that leases resources with the specified owner.
-func NewClient(owner, url, username, passwordFile string, retries int, acquireTimeout time.Duration) (Client, error) {
+func NewClient(owner, url, username string, passwordGetter func() []byte, retries int, acquireTimeout time.Duration) (Client, error) {
 	randId = func() string {
 		return strconv.Itoa(rand.Int())
 	}
-	c, err := boskos.NewClient(owner, url, username, passwordFile)
+	c, err := boskos.NewClientWithPasswordGetter(owner, url, username, passwordGetter)
 	if err != nil {
 		return nil, err
 	}

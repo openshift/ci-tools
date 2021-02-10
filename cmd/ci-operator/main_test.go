@@ -27,6 +27,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func init() {
@@ -433,6 +434,102 @@ func TestBuildPartialGraph(t *testing.T) {
 			}
 			if err.Error() != tc.expectedErrorMsg {
 				t.Errorf("expected error message %q, got %q", tc.expectedErrorMsg, err.Error())
+			}
+		})
+	}
+}
+
+func TestLoadLeaseCredentials(t *testing.T) {
+	dir, err := ioutil.TempDir("", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	leaseServerPasswordFile := filepath.Join(dir, "leaseServerPasswordFile")
+	if err := ioutil.WriteFile(leaseServerPasswordFile, []byte("secret"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	leaseServerCredentialsFile := filepath.Join(dir, "leaseServerCredentialsFile")
+	if err := ioutil.WriteFile(leaseServerCredentialsFile, []byte("ci-new:secret-new"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	leaseServerCredentialsInvalidFile := filepath.Join(dir, "leaseServerCredentialsInvalidFile")
+	if err := ioutil.WriteFile(leaseServerCredentialsInvalidFile, []byte("no-colon"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	testCases := []struct {
+		name                       string
+		leaseServerUsername        string
+		leaseServerPasswordFile    string
+		leaseServerCredentialsFile string
+		expectedUsername           string
+		passwordGetterVerify       func(func() []byte) error
+		expectedErr                error
+	}{
+		{
+			name:                    "username and password file",
+			leaseServerUsername:     "ci",
+			leaseServerPasswordFile: leaseServerPasswordFile,
+			expectedUsername:        "ci",
+			passwordGetterVerify: func(passwordGetter func() []byte) error {
+				p := string(passwordGetter())
+				if diff := cmp.Diff("secret", p); diff != "" {
+					return fmt.Errorf("actual does not match expected, diff: %s", diff)
+				}
+				return nil
+			},
+		},
+		{
+			name:                       "username and password file and credential file",
+			leaseServerUsername:        "ci",
+			leaseServerPasswordFile:    leaseServerPasswordFile,
+			leaseServerCredentialsFile: leaseServerCredentialsFile,
+			expectedUsername:           "ci-new",
+			passwordGetterVerify: func(passwordGetter func() []byte) error {
+				p := string(passwordGetter())
+				if diff := cmp.Diff("secret-new", p); diff != "" {
+					return fmt.Errorf("actual does not match expected, diff: %s", diff)
+				}
+				return nil
+			},
+		},
+		{
+			name:                       "only credential file",
+			leaseServerCredentialsFile: leaseServerCredentialsFile,
+			expectedUsername:           "ci-new",
+			passwordGetterVerify: func(passwordGetter func() []byte) error {
+				p := string(passwordGetter())
+				if diff := cmp.Diff("secret-new", p); diff != "" {
+					return fmt.Errorf("actual does not match expected, diff: %s", diff)
+				}
+				return nil
+			},
+		},
+		{
+			name:                       "wrong credential file",
+			leaseServerCredentialsFile: leaseServerCredentialsInvalidFile,
+			expectedErr:                fmt.Errorf("got invalid content of lease server credentials file which must be of the form '<username>:<passwrod>'"),
+		},
+	}
+
+	for _, tc := range testCases {
+
+		t.Run(tc.name, func(t *testing.T) {
+			username, passwordGetter, err := loadLeaseCredentials(tc.leaseServerUsername, tc.leaseServerPasswordFile, tc.leaseServerCredentialsFile)
+			if diff := cmp.Diff(tc.expectedUsername, username); diff != "" {
+				t.Errorf("actual does not match expected, diff: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("actualError does not match expectedError, diff: %s", diff)
+			}
+			if tc.passwordGetterVerify != nil {
+				if err := tc.passwordGetterVerify(passwordGetter); err != nil {
+					t.Errorf("unexpcected error: %v", err)
+				}
 			}
 		})
 	}

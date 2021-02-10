@@ -177,47 +177,25 @@ func getImageMirrorTarget(config api.PromotionConfiguration, tags map[string]str
 	imageMirror := map[string]string{}
 	if len(config.Name) > 0 {
 		for dst, src := range tags {
-			dockerImageReference := findDockerImageReference(pipeline, src)
-			if dockerImageReference == "" {
+			digest := findDockerImageDigest(pipeline, src)
+			if digest == "" {
 				continue
 			}
-			dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
-			imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), config.Namespace, config.Name, dst)
+			imageMirror[fmt.Sprintf("%s@%s", pipeline.Status.PublicDockerImageRepository, digest)] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), config.Namespace, config.Name, dst)
 		}
 	} else {
 		for dst, src := range tags {
-			dockerImageReference := findDockerImageReference(pipeline, src)
-			if dockerImageReference == "" {
+			digest := findDockerImageDigest(pipeline, src)
+			if digest == "" {
 				continue
 			}
-			dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
-			imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), config.Namespace, dst, config.Tag)
+			imageMirror[fmt.Sprintf("%s@%s", pipeline.Status.PublicDockerImageRepository, digest)] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), config.Namespace, dst, config.Tag)
 		}
 	}
 	if len(imageMirror) == 0 {
 		return nil
 	}
 	return imageMirror
-}
-
-func getPublicImageReference(dockerImageReference, publicDockerImageRepository string) string {
-	if !strings.Contains(dockerImageReference, ":5000") {
-		return dockerImageReference
-	}
-	splits := strings.Split(publicDockerImageRepository, "/")
-	if len(splits) < 2 {
-		// This should never happen
-		log.Println(fmt.Sprintf("Failed to get hostname from publicDockerImageRepository: %s.", publicDockerImageRepository))
-		return dockerImageReference
-	}
-	publicHost := splits[0]
-	splits = strings.Split(dockerImageReference, "/")
-	if len(splits) < 2 {
-		// This should never happen
-		log.Println(fmt.Sprintf("Failed to get hostname from dockerImageReference: %s.", dockerImageReference))
-		return dockerImageReference
-	}
-	return strings.Replace(dockerImageReference, splits[0], publicHost, 1)
 }
 
 func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *coreapi.Pod {
@@ -289,9 +267,9 @@ const bashRetryFn = `retry() {
   return 0
 }`
 
-// findDockerImageReference returns DockerImageReference, the string that can be used to pull this image,
+// findDockerImageDigest returns the digest of the image,
 // to a tag if it exists in the ImageStream's Spec
-func findDockerImageReference(is *imagev1.ImageStream, tag string) string {
+func findDockerImageDigest(is *imagev1.ImageStream, tag string) string {
 	for _, t := range is.Status.Tags {
 		if t.Tag != tag {
 			continue
@@ -299,7 +277,7 @@ func findDockerImageReference(is *imagev1.ImageStream, tag string) string {
 		if len(t.Items) == 0 {
 			return ""
 		}
-		return t.Items[0].DockerImageReference
+		return t.Items[0].Image
 	}
 	return ""
 }

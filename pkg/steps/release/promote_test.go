@@ -249,12 +249,14 @@ func TestGetImageMirror(t *testing.T) {
 			},
 			pipeline: &imageapi.ImageStream{
 				Status: imageapi.ImageStreamStatus{
+					PublicDockerImageRepository: "registry.svc.ci.openshift.org/ci-op-y2n8rsh3/pipeline",
 					Tags: []imageapi.NamedTagEventList{
 						{
 							Tag: "b",
 							Items: []imageapi.TagEvent{
 								{
 									DockerImageReference: "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+									Image:                "sha256:bbb",
 								},
 							},
 						},
@@ -263,13 +265,14 @@ func TestGetImageMirror(t *testing.T) {
 							Items: []imageapi.TagEvent{
 								{
 									DockerImageReference: "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+									Image:                "sha256:ddd",
 								},
 							},
 						},
 					},
 				},
 			},
-			expected: map[string]string{"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb": "registry.ci.openshift.org/ci/a:latest", "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd": "registry.ci.openshift.org/ci/c:latest"},
+			expected: map[string]string{"registry.svc.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb": "registry.ci.openshift.org/ci/a:latest", "registry.svc.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd": "registry.ci.openshift.org/ci/c:latest"},
 		},
 		{
 			name: "basic case: config.Name",
@@ -285,12 +288,14 @@ func TestGetImageMirror(t *testing.T) {
 			},
 			pipeline: &imageapi.ImageStream{
 				Status: imageapi.ImageStreamStatus{
+					PublicDockerImageRepository: "registry.build02.ci.openshift.org/ci-op-q1ix6b8x/pipeline",
 					Tags: []imageapi.NamedTagEventList{
 						{
 							Tag: "b",
 							Items: []imageapi.TagEvent{
 								{
-									DockerImageReference: "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+									DockerImageReference: "image-registry.openshift-image-registry.svc:5000/ci-op-q1ix6b8x/pipeline@sha256:bbb",
+									Image:                "sha256:bbb",
 								},
 							},
 						},
@@ -298,14 +303,52 @@ func TestGetImageMirror(t *testing.T) {
 							Tag: "d",
 							Items: []imageapi.TagEvent{
 								{
-									DockerImageReference: "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+									DockerImageReference: "image-registry.openshift-image-registry.svc:5000/ci-op-q1ix6b8x/pipeline@sha256:ddd",
+									Image:                "sha256:ddd",
 								},
 							},
 						},
 					},
 				},
 			},
-			expected: map[string]string{"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb": "registry.ci.openshift.org/ci/name:a", "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd": "registry.ci.openshift.org/ci/name:c"},
+			expected: map[string]string{"registry.build02.ci.openshift.org/ci-op-q1ix6b8x/pipeline@sha256:bbb": "registry.ci.openshift.org/ci/name:a", "registry.build02.ci.openshift.org/ci-op-q1ix6b8x/pipeline@sha256:ddd": "registry.ci.openshift.org/ci/name:c"},
+		},
+		{
+			name: "promote machine-os-content",
+			config: api.PromotionConfiguration{
+				Namespace: "ocp",
+				Name:      "4.7",
+				Tag:       "does-not-matter",
+			},
+			tags: map[string]string{
+				"machine-os-content": "machine-os-content",
+			},
+			pipeline: &imageapi.ImageStream{
+				Status: imageapi.ImageStreamStatus{
+					PublicDockerImageRepository: "registry.build01.ci.openshift.org/ci-op-9qkmyvrz/pipeline",
+					Tags: []imageapi.NamedTagEventList{
+						{
+							Tag: "machine-os-content",
+							Items: []imageapi.TagEvent{
+								{
+									DockerImageReference: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:a32077727aa2ef96a1e2371dbcc53ba06f3d9727e836b72be0f0dd4513937e1e",
+									Image:                "sha256:a32077727aa2ef96a1e2371dbcc53ba06f3d9727e836b72be0f0dd4513937e1e",
+								},
+							},
+						},
+						{
+							Tag: "ocp-4.5-upi-installer",
+							Items: []imageapi.TagEvent{
+								{
+									DockerImageReference: "registry.ci.openshift.org/ocp/4.5@sha256:f5a9664ee7828336c02e0531cec0e238b794a72f36ce6350b8d7d56d5413a86f",
+									Image:                "sha256:dbbacecc49b088458781c16f3775f2a2ec7521079034a7ba499c8b0bb7f86875",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: map[string]string{"registry.build01.ci.openshift.org/ci-op-9qkmyvrz/pipeline@sha256:a32077727aa2ef96a1e2371dbcc53ba06f3d9727e836b72be0f0dd4513937e1e": "registry.ci.openshift.org/ocp/4.7:machine-os-content"},
 		},
 	}
 
@@ -313,30 +356,6 @@ func TestGetImageMirror(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := getImageMirrorTarget(testCase.config, testCase.tags, testCase.pipeline), testCase.expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect ImageMirror mapping: %v", testCase.name, diff.ObjectDiff(actual, expected))
-			}
-		})
-	}
-}
-
-func TestGetPublicImageReference(t *testing.T) {
-	var testCases = []struct {
-		name                        string
-		dockerImageReference        string
-		publicDockerImageRepository string
-		expected                    string
-	}{
-		{
-			name:                        "basic case",
-			dockerImageReference:        "docker-registry.default.svc:5000/ci-op-bgqwwknr/pipeline@sha256:d8385fb539f471d4f41da131366b559bb90eeeeca2edd265e10d7c2aa052a1af",
-			publicDockerImageRepository: "registry.svc.ci.openshift.org/ci-op-bgqwwknr/pipeline",
-			expected:                    "registry.svc.ci.openshift.org/ci-op-bgqwwknr/pipeline@sha256:d8385fb539f471d4f41da131366b559bb90eeeeca2edd265e10d7c2aa052a1af",
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := getPublicImageReference(testCase.dockerImageReference, testCase.publicDockerImageRepository), testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect public image reference: %v", testCase.name, diff.ObjectDiff(actual, expected))
 			}
 		})
 	}

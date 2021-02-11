@@ -399,7 +399,7 @@ func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperator
 }
 
 func addLeaseClient(s *corev1.PodSpec) {
-	s.Containers[0].Args = append(s.Containers[0].Args, "--lease-server-password-file=/etc/boskos/password")
+	s.Containers[0].Args = append(s.Containers[0].Args, "--lease-server-credentials-file=/etc/boskos/credentials")
 	s.Containers[0].VolumeMounts = append(s.Containers[0].VolumeMounts, corev1.VolumeMount{
 		Name:      "boskos",
 		MountPath: "/etc/boskos",
@@ -410,7 +410,7 @@ func addLeaseClient(s *corev1.PodSpec) {
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
 				SecretName: "boskos-credentials",
-				Items:      []corev1.KeyToPath{{Key: "password", Path: "password"}},
+				Items:      []corev1.KeyToPath{{Key: "credentials", Path: "credentials"}},
 			},
 		},
 	})

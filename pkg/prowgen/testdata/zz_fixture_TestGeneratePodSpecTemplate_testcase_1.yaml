@@ -7,7 +7,7 @@ containers:
   - --target=test
   - --secret-dir=/usr/local/test-cluster-profile
   - --template=/usr/local/test
-  - --lease-server-password-file=/etc/boskos/password
+  - --lease-server-credentials-file=/etc/boskos/credentials
   command:
   - ci-operator
   env:
@@ -60,6 +60,6 @@ volumes:
 - name: boskos
   secret:
     items:
-    - key: password
-      path: password
+    - key: credentials
+      path: credentials
     secretName: boskos-credentials

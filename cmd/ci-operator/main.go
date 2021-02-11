@@ -61,6 +61,7 @@ import (
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api/nsttl"
 	"github.com/openshift/ci-tools/pkg/defaults"
 	"github.com/openshift/ci-tools/pkg/interrupt"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -153,13 +154,6 @@ map.
 `
 
 const (
-	// annotationIdleCleanupDurationTTL is the annotation for requesting namespace cleanup after all pods complete
-	annotationIdleCleanupDurationTTL = "ci.openshift.io/ttl.soft"
-	// annotationCleanupDurationTTL is the annotation for requesting namespace cleanup after the namespace has been active
-	annotationCleanupDurationTTL = "ci.openshift.io/ttl.hard"
-	// annotationNamespaceLastActive contains time.RFC3339 timestamp at which the namespace was last in active use. We
-	// update this every ten minutes.
-	annotationNamespaceLastActive = "ci.openshift.io/active"
 	// leaseServerUsername is the default lease server username in api.ci
 	leaseServerUsername = "ci"
 	leaseAcquireTimeout = 120 * time.Minute
@@ -753,7 +747,7 @@ func (o *options) resolveInputs(steps []api.Step) error {
 	// after the graph is created but before it is run down into the run step.
 	o.jobSpec.SetNamespace(o.namespace)
 
-	//If we can resolve the field, use it. If not, don't.
+	// If we can resolve the field, use it. If not, don't.
 	if client, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{}); err != nil {
 		log.Printf("could not get route client for cluster config: %v", err)
 	} else {
@@ -894,19 +888,19 @@ func (o *options) initializeNamespace() error {
 		if o.idleCleanupDurationSet {
 			log.Printf("Setting a soft TTL of %s for the namespace\n", o.idleCleanupDuration.String())
 		}
-		updates[annotationIdleCleanupDurationTTL] = o.idleCleanupDuration.String()
+		updates[nsttl.AnnotationIdleCleanupDurationTTL] = o.idleCleanupDuration.String()
 	}
 
 	if o.cleanupDuration > 0 {
 		if o.cleanupDurationSet {
 			log.Printf("Setting a hard TTL of %s for the namespace\n", o.cleanupDuration.String())
 		}
-		updates[annotationCleanupDurationTTL] = o.cleanupDuration.String()
+		updates[nsttl.AnnotationCleanupDurationTTL] = o.cleanupDuration.String()
 	}
 
 	// This label makes sure that the namespace is active, and the value will be updated
 	// if the namespace will be reused.
-	updates[annotationNamespaceLastActive] = time.Now().Format(time.RFC3339)
+	updates[nsttl.AnnotationNamespaceLastActive] = time.Now().Format(time.RFC3339)
 
 	if len(updates) > 0 {
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -921,11 +915,11 @@ func (o *options) initializeNamespace() error {
 			for key, value := range updates {
 				// allow specific annotations to be skipped if they are already set and the user didn't ask
 				switch key {
-				case annotationCleanupDurationTTL:
+				case nsttl.AnnotationCleanupDurationTTL:
 					if !o.cleanupDurationSet && len(ns.Annotations[key]) != 0 {
 						continue
 					}
-				case annotationIdleCleanupDurationTTL:
+				case nsttl.AnnotationIdleCleanupDurationTTL:
 					if !o.idleCleanupDurationSet && len(ns.Annotations[key]) != 0 {
 						continue
 					}
@@ -989,9 +983,9 @@ func (o *options) initializeNamespace() error {
 				if ns.Annotations == nil {
 					ns.Annotations = map[string]string{}
 				}
-				ns.Annotations[annotationNamespaceLastActive] = time.Now().Format(time.RFC3339)
+				ns.Annotations[nsttl.AnnotationNamespaceLastActive] = time.Now().Format(time.RFC3339)
 				if err := client.Patch(ctx, ns, ctrlruntimeclient.MergeFrom(originalNS)); err != nil {
-					log.Printf("warning: Failed to patch the %s namespace to update the %s annotation: %v", o.namespace, annotationNamespaceLastActive, err)
+					log.Printf("warning: Failed to patch the %s namespace to update the %s annotation: %v", o.namespace, nsttl.AnnotationNamespaceLastActive, err)
 				}
 			}
 		}

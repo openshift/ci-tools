@@ -34,7 +34,9 @@ spec:
   namespace: default
   pod_spec:
     containers:
-    - command:
+    - args:
+      - --input-hash=BUNDLE_IMAGEgit@example.com/org/bundle.gitCLUSTER_TYPEawsOCP_VERSION4.5OO_CHANNELchannel1OO_INDEXgit@example.com/org/index.gitOO_INSTALL_NAMESPACEnamespace2OO_PACKAGEpackage1OO_TARGET_NAMESPACESnamespace1
+      command:
       - ./cmd/ipi-deprovision/ipi-deprovision.sh
       env:
       - name: HOME

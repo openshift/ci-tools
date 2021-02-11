@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -223,6 +224,18 @@ func main() {
 	if o.targetNamespaces != "" {
 		envVars[steps.OOTargetNamespaces] = o.targetNamespaces
 	}
+	var keys []string
+	for key := range envVars {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	input := strings.Builder{}
+	input.WriteString("--input-hash=")
+	for _, key := range keys {
+		input.WriteString(key)
+		input.WriteString(envVars[key])
+	}
+	prowjob.Spec.PodSpec.Containers[0].Args = append(prowjob.Spec.PodSpec.Containers[0].Args, input.String())
 	prowjob.Spec.PodSpec.Containers[0].Env = append(prowjob.Spec.PodSpec.Containers[0].Env, decorate.KubeEnv(envVars)...)
 
 	// If the dry-run flag is provided, we're going to display the job config YAML and exit

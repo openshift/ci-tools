@@ -80,20 +80,12 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 		if config.Post == nil {
 			config.Post = workflow.Post
 		}
-		if config.Environment == nil {
-			config.Environment = make(api.TestEnvironment, len(workflow.Environment))
-			for k, v := range workflow.Environment {
-				config.Environment[k] = v
-			}
-		}
-		if config.Dependencies == nil {
-			config.Dependencies = make(api.TestDependencies, len(workflow.Dependencies))
-			for k, v := range workflow.Dependencies {
-				config.Dependencies[k] = v
-			}
-		}
-		if config.Leases == nil {
-			config.Leases = append(config.Leases, workflow.Leases...)
+		mergeEnvironments(&config.Environment, workflow.Environment)
+		mergeDependencies(&config.Dependencies, workflow.Dependencies)
+		if l, err := mergeLeases(workflow.Leases, config.Leases); err != nil {
+			resolveErrors = append(resolveErrors, err)
+		} else {
+			config.Leases = l
 		}
 		if config.AllowSkipOnSuccess == nil {
 			config.AllowSkipOnSuccess = workflow.AllowSkipOnSuccess
@@ -145,6 +137,61 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 		return api.MultiStageTestConfigurationLiteral{}, utilerrors.NewAggregate(resolveErrors)
 	}
 	return expandedFlow, nil
+}
+
+// mergeEnvironments joins two environment maps.
+// Elements in `dst` are overwritten by those in `src` if they target the same
+// variable.
+func mergeEnvironments(dst *api.TestEnvironment, src api.TestEnvironment) {
+	mergeMaps((*map[string]string)(dst), src)
+}
+
+// mergeDependencies joins to dependency maps.
+// Elements in `dst` are overwritten by those in `src` if they target the same
+// variable.
+func mergeDependencies(dst *api.TestDependencies, src api.TestDependencies) {
+	mergeMaps((*map[string]string)(dst), src)
+}
+
+func mergeMaps(dst *map[string]string, src map[string]string) {
+	if src == nil {
+		return
+	}
+	if *dst == nil {
+		*dst = make(map[string]string, len(src))
+		for k, v := range src {
+			(*dst)[k] = v
+		}
+		return
+	}
+	for k, v := range src {
+		if _, ok := (*dst)[k]; !ok {
+			(*dst)[k] = v
+		}
+	}
+}
+
+// mergeLeases joins two lease lists, checking for duplicates.
+func mergeLeases(dst, src []api.StepLease) ([]api.StepLease, error) {
+	seen := make(map[string]*api.StepLease)
+	var dup []string
+	for i := range dst {
+		seen[dst[i].Env] = &dst[i]
+	}
+	for i := range src {
+		if p, ok := seen[src[i].Env]; ok {
+			if *p != src[i] {
+				dup = append(dup, src[i].Env)
+			}
+			continue
+		}
+		dst = append(dst, src[i])
+		seen[src[i].Env] = &src[i]
+	}
+	if dup != nil {
+		return nil, fmt.Errorf("cannot override workflow environment variable for lease(s): %v", dup)
+	}
+	return dst, nil
 }
 
 type stack struct {

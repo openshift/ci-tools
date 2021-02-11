@@ -2,6 +2,7 @@ package registry
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestResolve(t *testing.T) {
@@ -715,12 +717,14 @@ func TestResolve(t *testing.T) {
 
 func TestResolveParameters(t *testing.T) {
 	workflow := "workflow"
+	testMergeWorkflow := "test merge workflow"
 	parent := "parent"
 	grandParent := "grand-parent"
 	grandGrandParent := "grand-grand-parent"
 	invalidEnv := "invalid-env"
 	notChanged := "not changed"
 	changed := "changed"
+	mergeRef := "merge ref"
 	defaultGrandGrand := "grand grand parent"
 	defaultGrand := "grand parent"
 	defaultParent := "parent"
@@ -735,6 +739,20 @@ func TestResolveParameters(t *testing.T) {
 			Test:         []api.TestStep{{Chain: &grandGrandParent}},
 			Environment:  api.TestEnvironment{"CHANGED": "workflow"},
 			Dependencies: api.TestDependencies{"CHANGED": "workflow"},
+		},
+		testMergeWorkflow: api.MultiStageTestConfiguration{
+			Test: []api.TestStep{
+				{Chain: &grandGrandParent},
+				{Reference: &mergeRef},
+			},
+			Environment: api.TestEnvironment{
+				"CHANGED":   "workflow",
+				"FROM_TEST": "from workflow, will be overwritten",
+			},
+			Dependencies: api.TestDependencies{
+				"CHANGED":   "workflow",
+				"FROM_TEST": "from_workflow, will be overwritten",
+			},
 		},
 	}
 	chains := ChainByName{
@@ -781,6 +799,13 @@ func TestResolveParameters(t *testing.T) {
 			Environment: []api.StepParameter{{Name: "CHANGED"}},
 			Dependencies: []api.StepDependency{
 				{Env: "CHANGED", Name: defaultNotChanged},
+			},
+		},
+		mergeRef: api.LiteralTestStep{
+			As:          mergeRef,
+			Environment: []api.StepParameter{{Name: "FROM_TEST"}},
+			Dependencies: []api.StepDependency{
+				{Env: "FROM_TEST", Name: "from test, will be overwritten"},
 			},
 		},
 	}
@@ -886,6 +911,23 @@ func TestResolveParameters(t *testing.T) {
 			{{Env: "CHANGED", Name: defaultTest}},
 		},
 	}, {
+		name: "test and workflow are merged",
+		test: api.MultiStageTestConfiguration{
+			Workflow:     &testMergeWorkflow,
+			Environment:  api.TestEnvironment{"FROM_TEST": defaultTest},
+			Dependencies: api.TestDependencies{"FROM_TEST": defaultTest},
+		},
+		expectedParams: [][]api.StepParameter{
+			{{Name: "NOT_CHANGED", Default: &defaultNotChanged}},
+			{{Name: "CHANGED", Default: &defaultWorkflow}},
+			{{Name: "FROM_TEST", Default: &defaultTest}},
+		},
+		expectedDeps: [][]api.StepDependency{
+			{{Env: "NOT_CHANGED", Name: defaultNotChanged}},
+			{{Env: "CHANGED", Name: defaultWorkflow}},
+			{{Env: "FROM_TEST", Name: defaultTest}},
+		},
+	}, {
 		name: "invalid chain parameter",
 		test: api.MultiStageTestConfiguration{
 			Test: []api.TestStep{{Chain: &invalidEnv}},
@@ -963,7 +1005,9 @@ func TestResolveLeases(t *testing.T) {
 	}
 	workflows := WorkflowByName{
 		workflow0: {
-			Leases: []api.StepLease{{ResourceType: "from_workflow"}},
+			Leases: []api.StepLease{
+				{ResourceType: "from_workflow", Env: "FROM_WORKFLOW"},
+			},
 		},
 	}
 	for _, tc := range []struct {
@@ -978,9 +1022,34 @@ func TestResolveLeases(t *testing.T) {
 		},
 		expected: []api.StepLease{{ResourceType: "from_test"}},
 	}, {
-		name:     "from workflow",
-		test:     api.MultiStageTestConfiguration{Workflow: &workflow0},
-		expected: []api.StepLease{{ResourceType: "from_workflow"}},
+		name: "from workflow",
+		test: api.MultiStageTestConfiguration{Workflow: &workflow0},
+		expected: []api.StepLease{
+			{ResourceType: "from_workflow", Env: "FROM_WORKFLOW"},
+		},
+	}, {
+		name: "test merged with workflow",
+		test: api.MultiStageTestConfiguration{
+			Workflow: &workflow0,
+			Leases: []api.StepLease{
+				{ResourceType: "from_step", Env: "FROM_STEP"},
+			},
+		},
+		expected: []api.StepLease{
+			{ResourceType: "from_workflow", Env: "FROM_WORKFLOW"},
+			{ResourceType: "from_step", Env: "FROM_STEP"},
+		},
+	}, {
+		name: "test cannot change workflow's variable name",
+		test: api.MultiStageTestConfiguration{
+			Workflow: &workflow0,
+			Leases: []api.StepLease{
+				{ResourceType: "different_from_workflow", Env: "FROM_WORKFLOW"},
+			},
+		},
+		expectedErr: utilerrors.NewAggregate([]error{
+			fmt.Errorf(`cannot override workflow environment variable for lease(s): [FROM_WORKFLOW]`),
+		}),
 	}, {
 		name: "chain is deferred to test execution",
 		test: api.MultiStageTestConfiguration{
@@ -1003,7 +1072,7 @@ func TestResolveLeases(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			ret, err := NewResolver(refs, chains, workflows, ObserverByName{}).Resolve("test", tc.test)
-			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
+			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}
 			if diff := cmp.Diff(tc.expected, ret.Leases); diff != "" {

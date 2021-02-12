@@ -9,18 +9,24 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/hashicorp/go-version"
 	"github.com/sirupsen/logrus"
 
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/logrusutil"
 
 	templateapi "github.com/openshift/api/template/v1"
 	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
+
+	"github.com/openshift/ci-tools/pkg/api/nsttl"
 )
 
 type command string
@@ -65,7 +71,7 @@ func (n *nullableStringFlag) Set(val string) error {
 }
 
 func gatherOptions() *options {
-	// nonempy dryRun is a safe default (empty means not a dry run)
+	// nonempty dryRun is a safe default (empty means not a dry run)
 	opt := &options{user: &nullableStringFlag{}, dryRun: dryAuto}
 
 	var confirm bool
@@ -134,11 +140,12 @@ func (c commandExecutor) runAndCheck(cmd *exec.Cmd, action string) ([]byte, erro
 
 	if output, err = cmd.Output(); err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
-			logrus.Errorf("%s: failed to %s\n%s", pretty, action, exitError.Stderr)
+			logrus.Infof("%s: failed to %s\n%s", pretty, action, exitError.Stderr)
+			output = exitError.Stderr
 		} else {
 			logrus.WithError(err).Errorf("%s: failed to execute", pretty)
 		}
-		return nil, fmt.Errorf("failed to %s config", action)
+		return output, fmt.Errorf("failed to %s config", action)
 	}
 
 	logrus.Infof("%s: OK", pretty)
@@ -156,7 +163,7 @@ type configApplier struct {
 }
 
 func makeOcApply(kubeConfig, context, path, user string, dry dryRunMethod) *exec.Cmd {
-	cmd := makeOcCommand(ocApply, kubeConfig, context, path, user)
+	cmd := makeOcCommand(ocApply, kubeConfig, context, path, user, "-o", "name")
 	switch dry {
 	case dryAuto:
 		logrus.Warn("BUG: Automated dryrun detection should be performed earlier; Using server-side validation")
@@ -173,14 +180,125 @@ func makeOcApply(kubeConfig, context, path, user string, dry dryRunMethod) *exec
 	return cmd
 }
 
-func (c *configApplier) asGenericManifest() error {
-	cmd := makeOcApply(c.kubeConfig, c.context, c.path, c.user, c.dry)
-	out, err := c.runAndCheck(cmd, "apply")
-	logrus.WithField("output", string(out)).Info("Ran apply command")
-	return err
+var namespaceNotFound = regexp.MustCompile(`Error from server \(NotFound\): namespaces "(.*)" not found`)
+
+func inferMissingNamespaces(applyOutput []byte) sets.String {
+	var ret sets.String
+	for _, line := range strings.Split(string(applyOutput), "\n") {
+		line := strings.TrimSpace(line)
+		if matches := namespaceNotFound.FindStringSubmatch(line); len(matches) == 2 {
+			if ret == nil {
+				ret = sets.NewString()
+			}
+			ret.Insert(matches[1])
+		}
+	}
+	return ret
 }
 
-func (c configApplier) asTemplate(params []templateapi.Parameter) error {
+type namespaceActions struct {
+	Created sets.String
+	Assumed sets.String
+}
+
+func extractNamespaces(applyOutput []byte) sets.String {
+	var namespaces sets.String
+	for _, line := range strings.Split(string(applyOutput), "\n") {
+		line := strings.TrimSpace(line)
+		if strings.HasPrefix(line, "namespace/") {
+			if namespaces == nil {
+				namespaces = sets.NewString()
+			}
+			namespaces.Insert(strings.TrimPrefix(line, "namespace/"))
+		}
+	}
+	return namespaces
+}
+
+func (c *configApplier) doWithRetry(do func() ([]byte, error)) (namespaceActions, error) {
+	var namespaces namespaceActions
+
+	// This function analyses the output of oc apply and searches for messages that
+	// indicate that the apply failed because a namespace was missing. When running
+	// in server-side dry-runs, these failures may be bogus because such namespaces
+	// would be created in an earlier or current manifest. The function compensates
+	// this by creating these missing namespaces and retrying the failed oc apply.
+	// These namespaces are created annotated for ci-ns-ttl-controller to reap it
+	// so unmerged PRs do not clutter the cluster. The annotations are cleaned up
+	// by the `oc apply` run by applyconfig in non-dry mode after merge.
+	compensate := func(out []byte) bool {
+		if c.dry != dryServer {
+			return false
+		}
+		logrus.Info("Running in server-side dry run mode, attempting to recover previous failure by providing missing namespaces")
+		missingNamespaces := inferMissingNamespaces(out)
+		if len(missingNamespaces) == 0 {
+			logrus.Error("Previous failure was not caused by missing namespaces, cannot recover")
+			return false
+		}
+		for ns := range missingNamespaces {
+			logrus.WithField("missing-namespace", ns).Infof("Temporarily creating missing namespace")
+			namespace := v1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Namespace",
+					APIVersion: "v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        ns,
+					Annotations: map[string]string{nsttl.AnnotationCleanupDurationTTL: (time.Hour).String()},
+				},
+			}
+			rawNs, err := json.Marshal(namespace)
+			if err != nil {
+				logrus.WithField("missing-namespace", ns).WithError(err).Errorf("failed to prepare provisional namespace")
+				return false
+			}
+			// We *must* create the namespace via marshaling and `oc apply` and NOT e.g.
+			// via oc create / oc annotate. Otherwise, the TTL annotations would not be
+			// cleaned up when the manifests are actually applied post-merge to the
+			// cluster and NS TTL controller would reap the production namespace.
+			ocApplyCmd := makeOcApply(c.kubeConfig, c.context, "-", c.user, dryNone)
+			ocApplyCmd.Stdin = bytes.NewBuffer(rawNs)
+			if out, err := c.runAndCheck(ocApplyCmd, "apply"); err != nil {
+				logrus.WithField("missing-namespace", ns).WithField("output", out).WithError(err).Errorf("Failed to create provisional namespace")
+				return false
+			}
+			if namespaces.Assumed == nil {
+				namespaces.Assumed = sets.NewString()
+			}
+			namespaces.Assumed.Insert(ns)
+		}
+		return true
+	}
+
+	out, err := do()
+	for err != nil {
+		if retry := compensate(out); !retry {
+			logrus.WithField("output", string(out)).Errorf("Apply command failed (not recoverable)")
+			return namespaces, err
+		}
+		out, err = do()
+	}
+
+	if namespaces.Created == nil {
+		namespaces.Created = sets.NewString()
+	}
+
+	namespaces.Created = namespaces.Created.Union(extractNamespaces(out))
+	return namespaces, nil
+}
+
+func (c *configApplier) asGenericManifest() (namespaceActions, error) {
+	do := func() ([]byte, error) {
+		cmd := makeOcApply(c.kubeConfig, c.context, c.path, c.user, c.dry)
+		out, err := c.runAndCheck(cmd, "apply")
+		return out, err
+	}
+
+	return c.doWithRetry(do)
+}
+
+func (c configApplier) asTemplate(params []templateapi.Parameter) (namespaceActions, error) {
 	var args []string
 	for _, param := range params {
 		if len(param.Generate) > 0 {
@@ -197,14 +315,16 @@ func (c configApplier) asTemplate(params []templateapi.Parameter) error {
 	var processed []byte
 	var err error
 	if processed, err = c.runAndCheck(ocProcessCmd, "process"); err != nil {
-		return err
+		return namespaceActions{}, err
 	}
 
-	ocApplyCmd := makeOcApply(c.kubeConfig, c.context, "-", c.user, c.dry)
-	ocApplyCmd.Stdin = bytes.NewBuffer(processed)
-	out, err := c.runAndCheck(ocApplyCmd, "apply")
-	logrus.WithField("output", string(out)).Info("Ran apply command")
-	return err
+	do := func() ([]byte, error) {
+		ocApplyCmd := makeOcApply(c.kubeConfig, c.context, "-", c.user, c.dry)
+		ocApplyCmd.Stdin = bytes.NewBuffer(processed)
+		out, err := c.runAndCheck(ocApplyCmd, "apply")
+		return out, err
+	}
+	return c.doWithRetry(do)
 }
 
 // isTemplate return true when the content of the stream is an OpenShift template,
@@ -229,12 +349,12 @@ func isTemplate(input io.Reader) ([]templateapi.Parameter, bool) {
 	return nil, false
 }
 
-func apply(kubeConfig, context, path, user string, dry dryRunMethod) error {
+func apply(kubeConfig, context, path, user string, dry dryRunMethod) (namespaceActions, error) {
 	do := configApplier{kubeConfig: kubeConfig, context: context, path: path, user: user, dry: dry, executor: &commandExecutor{}}
 
 	file, err := os.Open(path)
 	if err != nil {
-		return err
+		return namespaceActions{}, err
 	}
 	defer file.Close()
 
@@ -245,7 +365,7 @@ func apply(kubeConfig, context, path, user string, dry dryRunMethod) error {
 	return do.asGenericManifest()
 }
 
-func applyConfig(rootDir string, o *options) error {
+func applyConfig(rootDir string, o *options, createdNamespaces sets.String) (sets.String, error) {
 	failures := false
 	if err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -265,8 +385,10 @@ func applyConfig(rootDir string, o *options) error {
 			}
 			if targetFileInfo.IsDir() {
 				logrus.Infof("replace the symlink folder %s with the target %s", path, target)
-				if err := applyConfig(target, o); err != nil {
+				if namespaces, err := applyConfig(target, o, createdNamespaces); err != nil {
 					failures = true
+				} else {
+					createdNamespaces = createdNamespaces.Union(namespaces)
 				}
 				return nil
 			}
@@ -276,22 +398,44 @@ func applyConfig(rootDir string, o *options) error {
 			return err
 		}
 
-		if err := apply(o.kubeConfig, o.context, path, o.user.val, o.dryRun); err != nil {
+		namespaces, err := apply(o.kubeConfig, o.context, path, o.user.val, o.dryRun)
+		if err != nil {
 			failures = true
+			return nil
+		}
+
+		// Bookkeep which namespaces are created over time even if we run in dry-run
+		// mode. In server side dry-mode, applyConfig recovers failures caused by
+		// missing namespaces by actually creating them - this implements an
+		// *assumption* that these namespaces would be created by earlier or current
+		// apply command.
+		createdNamespaces = createdNamespaces.Union(namespaces.Created)
+		if len(namespaces.Assumed) > 0 {
+			var assumedNames []string
+			for ns := range namespaces.Assumed {
+				assumedNames = append(assumedNames, ns)
+			}
+			logrus.WithField("path", path).WithField("assumed-namespaces", strings.Join(assumedNames, ", ")).Info("Apply was successful only under namespace creation assumption")
+			if missing := namespaces.Assumed.Difference(createdNamespaces); len(missing) > 0 {
+				for ns := range missing {
+					logrus.WithField("path", path).WithField("namespace", ns).Error("Step passed assuming a namespace was previously created but it was not")
+				}
+				failures = true
+			}
 		}
 
 		return nil
 	}); err != nil {
 		// should not happen
 		logrus.WithError(err).Errorf("failed to walk directory '%s'", rootDir)
-		return err
+		return createdNamespaces, err
 	}
 
 	if failures {
-		return fmt.Errorf("failed to apply config")
+		return createdNamespaces, fmt.Errorf("failed to apply config")
 	}
 
-	return nil
+	return createdNamespaces, nil
 }
 
 func fileFilter(info os.FileInfo, path string) (bool, error) {
@@ -412,11 +556,14 @@ func main() {
 	}
 
 	var hadErr bool
+	createdNamespaces := sets.NewString()
 	for _, dir := range o.directories.Strings() {
-		if err := applyConfig(dir, o); err != nil {
+		namespaces, err := applyConfig(dir, o, createdNamespaces)
+		if err != nil {
 			hadErr = true
 			logrus.WithError(err).Error("There were failures while applying config")
 		}
+		createdNamespaces = createdNamespaces.Union(namespaces)
 	}
 
 	if hadErr {

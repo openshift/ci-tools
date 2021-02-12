@@ -251,10 +251,6 @@ tests:
   commands: TEST_SUITE=openshift/conformance/serial run-tests
   openshift_installer:
     cluster_profile: aws
-- as: e2e-conformance-k8s
-  commands: test/extended/conformance-k8s.sh
-  openshift_installer_src:
-    cluster_profile: aws
 - as: launch-aws
   commands: sleep 7200 & wait
   openshift_installer:
@@ -496,12 +492,6 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 		As:       "e2e-aws-serial",
 		Commands: `TEST_SUITE=openshift/conformance/serial run-tests`,
 		OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
-			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "aws"},
-		},
-	}, {
-		As:       "e2e-conformance-k8s",
-		Commands: `test/extended/conformance-k8s.sh`,
-		OpenshiftInstallerSrcClusterTestConfiguration: &api.OpenshiftInstallerSrcClusterTestConfiguration{
 			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "aws"},
 		},
 	}, {

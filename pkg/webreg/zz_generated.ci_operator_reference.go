@@ -602,8 +602,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  termination_grace_period_seconds: 0\n" +
 	"        openshift_ansible:\n" +
 	"            cluster_profile: ' '\n" +
-	"        openshift_ansible_40:\n" +
-	"            cluster_profile: ' '\n" +
 	"        openshift_ansible_custom:\n" +
 	"            cluster_profile: ' '\n" +
 	"        openshift_ansible_src:\n" +
@@ -615,8 +613,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # From defines the imagestreamtag that will be used to run the\n" +
 	"            # provided test command. e.g. stable:console-test\n" +
 	"            from: ' '\n" +
-	"        openshift_installer_src:\n" +
-	"            cluster_profile: ' '\n" +
 	"        openshift_installer_upi:\n" +
 	"            cluster_profile: ' '\n" +
 	"        openshift_installer_upi_src:\n" +
@@ -1214,8 +1210,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              termination_grace_period_seconds: 0\n" +
 	"      openshift_ansible:\n" +
 	"        cluster_profile: ' '\n" +
-	"      openshift_ansible_40:\n" +
-	"        cluster_profile: ' '\n" +
 	"      openshift_ansible_custom:\n" +
 	"        cluster_profile: ' '\n" +
 	"      openshift_ansible_src:\n" +
@@ -1227,8 +1221,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # From defines the imagestreamtag that will be used to run the\n" +
 	"        # provided test command. e.g. stable:console-test\n" +
 	"        from: ' '\n" +
-	"      openshift_installer_src:\n" +
-	"        cluster_profile: ' '\n" +
 	"      openshift_installer_upi:\n" +
 	"        cluster_profile: ' '\n" +
 	"      openshift_installer_upi_src:\n" +

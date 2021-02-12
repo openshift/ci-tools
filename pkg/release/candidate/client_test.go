@@ -20,31 +20,24 @@ func TestServiceHost(t *testing.T) {
 		{
 			product:      api.ReleaseProductOKD,
 			architecture: api.ReleaseArchitectureAMD64,
-			output:       "https://origin-release.svc.ci.openshift.org/api/v1/releasestream",
+			output:       "https://amd64.origin.releases.ci.openshift.org/api/v1/releasestream",
 		},
 		{
 
 			product:      api.ReleaseProductOCP,
 			architecture: api.ReleaseArchitectureAMD64,
-			output:       "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream",
+			output:       "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream",
 		},
 		{
-
-			product:      api.ReleaseProductOCP,
-			architecture: api.ReleaseArchitectureAMD64,
-			output:       "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream",
-		},
-		{
-
 			product:      api.ReleaseProductOCP,
 			architecture: api.ReleaseArchitecturePPC64le,
-			output:       "https://openshift-release-ppc64le.svc.ci.openshift.org/api/v1/releasestream",
+			output:       "https://ppc64le.ocp.releases.ci.openshift.org/api/v1/releasestream",
 		},
 		{
 
 			product:      api.ReleaseProductOCP,
 			architecture: api.ReleaseArchitectureS390x,
-			output:       "https://openshift-release-s390x.svc.ci.openshift.org/api/v1/releasestream",
+			output:       "https://s390x.ocp.releases.ci.openshift.org/api/v1/releasestream",
 		},
 	}
 
@@ -67,7 +60,7 @@ func TestEndpoint(t *testing.T) {
 				Stream:       api.ReleaseStreamOKD,
 				Version:      "4.4",
 			},
-			output: "https://origin-release.svc.ci.openshift.org/api/v1/releasestream/4.4.0-0.okd/latest",
+			output: "https://amd64.origin.releases.ci.openshift.org/api/v1/releasestream/4.4.0-0.okd/latest",
 		},
 		{
 			input: api.Candidate{
@@ -76,7 +69,7 @@ func TestEndpoint(t *testing.T) {
 				Stream:       api.ReleaseStreamCI,
 				Version:      "4.5",
 			},
-			output: "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream/4.5.0-0.ci/latest",
+			output: "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.5.0-0.ci/latest",
 		},
 		{
 			input: api.Candidate{
@@ -85,7 +78,7 @@ func TestEndpoint(t *testing.T) {
 				Stream:       api.ReleaseStreamNightly,
 				Version:      "4.6",
 			},
-			output: "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream/4.6.0-0.nightly/latest",
+			output: "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.6.0-0.nightly/latest",
 		},
 		{
 			input: api.Candidate{
@@ -94,7 +87,7 @@ func TestEndpoint(t *testing.T) {
 				Stream:       api.ReleaseStreamCI,
 				Version:      "4.7",
 			},
-			output: "https://openshift-release-ppc64le.svc.ci.openshift.org/api/v1/releasestream/4.7.0-0.ci-ppc64le/latest",
+			output: "https://ppc64le.ocp.releases.ci.openshift.org/api/v1/releasestream/4.7.0-0.ci-ppc64le/latest",
 		},
 		{
 			input: api.Candidate{
@@ -103,7 +96,7 @@ func TestEndpoint(t *testing.T) {
 				Stream:       api.ReleaseStreamNightly,
 				Version:      "4.8",
 			},
-			output: "https://openshift-release-s390x.svc.ci.openshift.org/api/v1/releasestream/4.8.0-0.nightly-s390x/latest",
+			output: "https://s390x.ocp.releases.ci.openshift.org/api/v1/releasestream/4.8.0-0.nightly-s390x/latest",
 		},
 	}
 

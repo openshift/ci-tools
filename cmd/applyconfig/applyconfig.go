@@ -180,7 +180,7 @@ func makeOcApply(kubeConfig, context, path, user string, dry dryRunMethod) *exec
 	return cmd
 }
 
-var namespaceNotFound = regexp.MustCompile(`Error from server \(NotFound\): namespaces "(.*)" not found`)
+var namespaceNotFound = regexp.MustCompile(`Error from server \(NotFound\):.*namespaces "(.*)" not found.*`)
 
 func inferMissingNamespaces(applyOutput []byte) sets.String {
 	var ret sets.String

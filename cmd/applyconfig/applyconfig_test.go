@@ -190,6 +190,11 @@ Error from server (NotFound): namespaces "this-is-missing-too" not found
 `),
 			expected: sets.NewString("this-is-missing", "this-is-missing-too"),
 		},
+		{
+			description:   "Message with multiple error levels",
+			ocApplyOutput: []byte(`Error from server (NotFound): error when creating "clusters/app.ci/prometheus-access/managed-services/admin_rbac.yaml": namespaces "managed-services" not found`),
+			expected:      sets.NewString("managed-services"),
+		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.description, func(t *testing.T) {

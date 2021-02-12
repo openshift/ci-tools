@@ -12,7 +12,6 @@ const (
 	// ServiceDomain is the domain under which services are
 	// routed for the current service cluster.
 	ServiceDomainCI    = "ci.openshift.org"
-	ServiceDomainAPICI = "svc.ci.openshift.org"
 	ServiceDomainAPPCI = "apps.ci.l2s4.p1.openshiftapps.com"
 
 	ServiceDomainAPICIRegistry = "registry.svc.ci.openshift.org"
@@ -22,13 +21,12 @@ const (
 type Service string
 
 const (
-	ServiceBoskos          Service = "boskos-ci"
-	ServiceRegistry        Service = "registry"
-	ServiceRPMs            Service = "artifacts-rpms-openshift-origin-ci-rpms"
-	ServiceProw            Service = "prow"
-	ServiceConfig          Service = "config"
-	ServiceGCSWeb          Service = "gcsweb-ci"
-	ServiceSecretMirroring Service = "secret-mirroring"
+	ServiceBoskos   Service = "boskos-ci"
+	ServiceRegistry Service = "registry"
+	ServiceRPMs     Service = "artifacts-rpms-openshift-origin-ci-rpms"
+	ServiceProw     Service = "prow"
+	ServiceConfig   Service = "config"
+	ServiceGCSWeb   Service = "gcsweb-ci"
 )
 
 // URLForService returns the URL for the service including scheme

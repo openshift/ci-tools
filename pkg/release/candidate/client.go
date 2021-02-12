@@ -13,17 +13,16 @@ import (
 	"github.com/openshift/ci-tools/pkg/release"
 )
 
-func ServiceHost(product api.ReleaseProduct, arch api.ReleaseArchitecture) string {
-	var prefix string
-	switch product {
+func ServiceHost(releaseProduct api.ReleaseProduct, arch api.ReleaseArchitecture) string {
+	var product string
+	switch releaseProduct {
 	case api.ReleaseProductOCP:
-		prefix = "openshift-"
+		product = "ocp"
 	case api.ReleaseProductOKD:
-		prefix = "origin-"
+		product = "origin"
 	}
 
-	postfix := architecture(arch)
-	return fmt.Sprintf("https://%srelease%s.%s/api/v1/releasestream", prefix, postfix, api.ServiceDomainAPICI)
+	return fmt.Sprintf("https://%s.%s.releases.%s/api/v1/releasestream", arch, product, api.ServiceDomainCI)
 }
 
 func architecture(architecture api.ReleaseArchitecture) string {

@@ -96,7 +96,7 @@ func setupReleaseImageStream(ctx context.Context, namespace string, client ctrlr
 		},
 	}
 
-	roleBinding := &rbacapi.RoleBinding{
+	roleBindings := []rbacapi.RoleBinding{{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ci-operator-image",
 			Namespace: namespace,
@@ -106,8 +106,8 @@ func setupReleaseImageStream(ctx context.Context, namespace string, client ctrlr
 			Kind: "Role",
 			Name: "ci-operator-image",
 		},
-	}
-	if err := util.CreateRBACs(ctx, sa, role, roleBinding, client, 1*time.Minute, 5*time.Minute); err != nil {
+	}}
+	if err := util.CreateRBACs(ctx, sa, role, roleBindings, client, 1*time.Minute, 5*time.Minute); err != nil {
 		return "", err
 	}
 

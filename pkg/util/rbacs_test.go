@@ -106,7 +106,7 @@ func TestCreateRBACs(t *testing.T) {
 				}()
 			}
 
-			if err := CreateRBACs(context.TODO(), tc.sa, tc.role, tc.roleBinding, client, 1*time.Millisecond, 100*time.Millisecond); err != nil {
+			if err := CreateRBACs(context.TODO(), tc.sa, tc.role, []rbacapi.RoleBinding{*tc.roleBinding}, client, 1*time.Millisecond, 100*time.Millisecond); err != nil {
 				if !reflect.DeepEqual(err.Error(), tc.expectedError) {
 					t.Fatalf("Expected: %v\nGot: %v", tc.expectedError, err.Error())
 				}

@@ -14,10 +14,10 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
-// CreateRBACs creates the given service account, role, and role binding. In addition, it waits until the service account will be updated with an image pull secret.
+// CreateRBACs creates the given service account, role, and role bindings. In addition, it waits until the service account will be updated with an image pull secret.
 // Because the DockerCfgController controller needs some time to create the corresponding secrets we need to wait until this happens, otherwise, the pod that
 // will use this service account will fail to start since there are no credentials to pull any images.
-func CreateRBACs(ctx context.Context, sa *coreapi.ServiceAccount, role *rbacapi.Role, roleBinding *rbacapi.RoleBinding, client ctrlruntimeclient.Client, retryDuration, timeout time.Duration) error {
+func CreateRBACs(ctx context.Context, sa *coreapi.ServiceAccount, role *rbacapi.Role, roleBindings []rbacapi.RoleBinding, client ctrlruntimeclient.Client, retryDuration, timeout time.Duration) error {
 	skipPoll := false
 
 	err := client.Create(ctx, sa)
@@ -32,8 +32,10 @@ func CreateRBACs(ctx context.Context, sa *coreapi.ServiceAccount, role *rbacapi.
 	if err := client.Create(ctx, role); err != nil && !kerrors.IsAlreadyExists(err) {
 		return results.ForReason("creating_roles").WithError(err).Errorf("could not create role '%s'", role.Name)
 	}
-	if err := client.Create(ctx, roleBinding); err != nil && !kerrors.IsAlreadyExists(err) {
-		return results.ForReason("binding_roles").WithError(err).Errorf("could not create role binding '%s'", roleBinding.Name)
+	for _, roleBinding := range roleBindings {
+		if err := client.Create(ctx, &roleBinding); err != nil && !kerrors.IsAlreadyExists(err) {
+			return results.ForReason("binding_roles").WithError(err).Errorf("could not create role binding '%s'", roleBinding.Name)
+		}
 	}
 
 	if skipPoll {

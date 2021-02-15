@@ -1,0 +1,69 @@
+base_images:
+  os:
+    name: centos
+    namespace: openshift
+    tag: '7'
+resources:
+  '*':
+    requests:
+      cpu: 100m
+      memory: 8M
+tag_specification:
+  namespace: ocp
+  name: "4.5"
+tests:
+  - as: with-observer
+    steps:
+      cluster_profile: aws
+      pre:
+        - as: create-kubeconfig
+          commands: |
+            echo "kubeconfig" > "${SHARED_DIR}/kubeconfig"
+            sleep 20
+          from: os
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+      post:
+        - as: wait-for-output
+          commands: |
+            set -o xtrace
+            for (( i = 0; i < 30; i++ )); do
+              # N.b: this is the original mount, from which $SHARED_DIR is
+              # copied at the start of the test.  Only this directory is updated
+              # by the Kubelet.
+              if [[ -s "/var/run/secrets/ci.openshift.io/multi-stage/cancelled" ]]; then
+                break
+              fi
+              sleep 1
+            done
+          from: os
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+        - as: check-output
+          commands: |
+            set -o xtrace
+            if [[ "$( cat "${SHARED_DIR}/output" )" != "waited" ]]; then
+              echo "Observer did not wait for the KUBECONFIG!"
+              exit 1
+            fi
+
+            if [[ "$( cat "${SHARED_DIR}/cancelled" )" != "cancelled" ]]; then
+              echo "Observer was not cancelled!"
+              exit 1
+            fi
+          from: os
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+      observers:
+        enable:
+          - observer
+zz_generated_metadata:
+  branch: master
+  org: test
+  repo: test

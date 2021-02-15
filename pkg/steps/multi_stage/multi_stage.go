@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -91,7 +92,9 @@ type multiStageTestStep struct {
 	env             api.TestEnvironment
 	client          kubernetes.PodClient
 	jobSpec         *api.JobSpec
+	observers       []api.Observer
 	pre, test, post []api.LiteralTestStep
+	subLock         *sync.Mutex
 	subTests        []*junit.TestCase
 	subSteps        []api.CIOperatorStepDetailInfo
 	flags           stepFlag
@@ -138,12 +141,14 @@ func newMultiStageTestStep(
 		env:          ms.Environment,
 		client:       client,
 		jobSpec:      jobSpec,
+		observers:    ms.Observers,
 		pre:          ms.Pre,
 		test:         ms.Test,
 		post:         ms.Post,
 		flags:        flags,
 		leases:       leases,
 		clusterClaim: testConfig.ClusterClaim,
+		subLock:      &sync.Mutex{},
 	}
 }
 
@@ -194,16 +199,26 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 		return err
 	}
 	var errs []error
+	observers, err := s.generateObservers(s.observers, secretVolumes, secretVolumeMounts)
+	if err != nil {
+		// if we can't even generate the Pods there's no reason to run the job
+		return err
+	}
+	observerContext, cancel := context.WithCancel(ctx)
+	observerDone := make(chan struct{})
+	go s.runObservers(observerContext, ctx, observers, observerDone)
 	s.flags |= shortCircuit
 	if err := s.runSteps(ctx, "pre", s.pre, env, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q pre steps failed: %w", s.name, err))
 	} else if err := s.runSteps(ctx, "test", s.test, env, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q test steps failed: %w", s.name, err))
 	}
+	cancel() // signal to observers that we're tearing down
 	s.flags &= ^shortCircuit
 	if err := s.runSteps(context.Background(), "post", s.post, env, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q post steps failed: %w", s.name, err))
 	}
+	<-observerDone // wait for the observers to finish so we get their jUnit
 	return utilerrors.NewAggregate(errs)
 }
 

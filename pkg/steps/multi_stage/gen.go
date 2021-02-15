@@ -25,6 +25,26 @@ const (
 	vpnContainerName  = "vpn-client"
 )
 
+func (s *multiStageTestStep) generateObservers(
+	observers []api.Observer,
+	secretVolumes []coreapi.Volume,
+	secretVolumeMounts []coreapi.VolumeMount,
+) ([]coreapi.Pod, error) {
+	var adapted []api.LiteralTestStep
+	for _, observer := range observers {
+		// observers are just like steps, so we can adapt one to the other
+		adapted = append(adapted, api.LiteralTestStep{
+			As:          observer.Name,
+			From:        observer.From,
+			FromImage:   observer.FromImage,
+			Commands:    observer.Commands,
+			Resources:   observer.Resources,
+		})
+	}
+	pods, _, err := s.generatePods(adapted, nil, secretVolumes, secretVolumeMounts)
+	return pods, err
+}
+
 func (s *multiStageTestStep) generatePods(
 	steps []api.LiteralTestStep,
 	env []coreapi.EnvVar,

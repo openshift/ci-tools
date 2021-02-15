@@ -2,8 +2,10 @@ package multi_stage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -113,6 +115,38 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, be
 	return utilerrors.NewAggregate(errs)
 }
 
+func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []coreapi.Pod, done chan<- struct{}) {
+	wg := sync.WaitGroup{}
+	wg.Add(len(pods))
+	errs := make(chan error, len(pods))
+	for _, pod := range pods {
+		go func(p coreapi.Pod) {
+			<-ctx.Done()
+			logrus.Info("Signalling observers to terminate...")
+			if err := s.client.Delete(context.Background(), &p); err != nil {
+				logrus.WithError(err).Warn("failed to trigger observer to stop")
+			}
+		}(pod)
+		go func(p coreapi.Pod) {
+			err := s.runPod(textCtx, &p, base_steps.NewTestCaseNotifier(base_steps.NopNotifier))
+			if ctx.Err() == nil {
+				// when the observer is cancelled, we get an error here that we need to ignore, as it's not an error
+				// for the Pod to be deleted when it's cancelled, it's just expected
+				errs <- err
+			}
+			wg.Done()
+		}(pod)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+			logrus.WithError(err).Warn("observer failed")
+		}
+	}
+	done <- struct{}{}
+}
+
 func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *base_steps.TestCaseNotifier) error {
 	start := time.Now()
 	logrus.Infof("Running step %s.", pod.Name)
@@ -131,6 +165,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 		verb = "failed"
 	}
 	logrus.Infof("Step %s %s after %s.", pod.Name, verb, duration.Truncate(time.Second))
+	s.subLock.Lock()
 	s.subSteps = append(s.subSteps, api.CIOperatorStepDetailInfo{
 		StepName:    pod.Name,
 		Description: fmt.Sprintf("Run pod %s", pod.Name),
@@ -141,6 +176,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 		Manifests:   client.Objects(),
 	})
 	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)
+	s.subLock.Unlock()
 	if err != nil {
 		linksText := strings.Builder{}
 		linksText.WriteString(fmt.Sprintf("Link to step on registry info site: https://steps.ci.openshift.org/reference/%s", strings.TrimPrefix(pod.Name, s.name+"-")))

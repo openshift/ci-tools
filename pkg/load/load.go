@@ -247,7 +247,7 @@ func literalConfigFromResolver(raw []byte, address string) (*api.ReleaseBuildCon
 	}
 	resolvedConfig := &api.ReleaseBuildConfiguration{}
 	if err = json.Unmarshal(resolved, resolvedConfig); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal resolved config: invalid configuration: %w\n", err)
+		return nil, fmt.Errorf("failed to unmarshal resolved config: invalid configuration: %w\nvalue:\n%s", err, string(resolved))
 	}
 	return resolvedConfig, nil
 }

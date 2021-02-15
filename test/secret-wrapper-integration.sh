@@ -2,12 +2,13 @@
 set -euo pipefail
 
 dir=$(mktemp -d)
-trap 'rm -r "${dir}"' EXIT
+#trap 'rm -r "${dir}"' EXIT
 export SHARED_DIR=${dir}/shared
 export TMPDIR=${dir}/tmp
 export NAMESPACE=test
 export JOB_NAME_SAFE=test
 ERR=${dir}/err.log
+OUT=${dir}/out.log
 SECRET='{"kind":"Secret","apiVersion":"v1","metadata":{"name":"test","creationTimestamp":null},"data":{"test0.txt":"dGVzdDAK"},"type":"Opaque"}'
 
 fail() {
@@ -156,12 +157,25 @@ test_signal() {
     fi
 }
 
+test_upload_on_interrupt() {
+    echo '[INFO] Verifying secret data is uploaded when created after interrupted'
+    local pid
+    secret-wrapper --dry-run bash -c 'trap "echo cleanup > ${SHARED_DIR}/file" EXIT; sleep 30' > "${OUT}" 2> "${ERR}" &
+    pid=$!
+    kill -s SIGTERM "${pid}"
+    if wait "$pid"; then
+        fail "[ERROR] secret-wrapper did not fail as expected:"
+    fi
+    SECRET='{"kind":"Secret","apiVersion":"v1","metadata":{"name":"test","creationTimestamp":null},"data":{"file":"Y2xlYW51cAo=","test0.txt":"dGVzdDAK"},"type":"Opaque"}' check_output "$(cat "${OUT}")"
+}
+
 mkdir "${SHARED_DIR}"
 test_mkdir
 test_shared_dir
 test_copy_dir
 test_home_dir
 test_copy_kubeconfig
+test_upload_on_interrupt
 echo '[INFO] Running `secret-wrapper true`...'
 if ! out=$(secret-wrapper --dry-run true 2> "${ERR}"); then
     fail "[ERROR] secret-wrapper failed:"

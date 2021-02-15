@@ -131,9 +131,33 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		observerMap: map[string]api.Observer{
-			"yes":   {Name: "yes"},
-			"no":    {Name: "no"},
-			"other": {Name: "other"},
+			"yes": {
+				Name:     "yes",
+				From:     "src",
+				Commands: "exit",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			},
+			"no": {
+				Name:     "no",
+				From:     "src",
+				Commands: "exit",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			},
+			"other": {
+				Name:     "other",
+				From:     "src",
+				Commands: "exit",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
 			ClusterProfile: api.ClusterProfileAWS,
@@ -147,7 +171,25 @@ func TestResolve(t *testing.T) {
 				},
 				Observers: []string{"no", "other"},
 			}},
-			Observers: []api.Observer{{Name: "other"}, {Name: "yes"}},
+			Observers: []api.Observer{
+				{
+					Name:     "other",
+					From:     "src",
+					Commands: "exit",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+				}, {
+					Name:     "yes",
+					From:     "src",
+					Commands: "exit",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+				},
+			},
 		},
 	}, {
 		name: "Test with broken observer",

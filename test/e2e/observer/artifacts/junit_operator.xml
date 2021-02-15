@@ -1,0 +1,9 @@
+<testsuites>
+  <testsuite name="operator" tests="5" skipped="0" failures="0" time="whatever">
+    <testcase name="All images are built and tagged into stable" time="whatever"></testcase>
+    <testcase name="Create the release image &#34;latest&#34; containing all images built by this job" time="whatever"></testcase>
+    <testcase name="Find all of the input images from ocp/4.5:${component} and tag them into the output image stream" time="whatever"></testcase>
+    <testcase name="Find the input image os and tag it into the pipeline" time="whatever"></testcase>
+    <testcase name="Run multi-stage test with-observer - with-observer-create-kubeconfig container test" time="whatever"></testcase>
+  </testsuite>
+</testsuites>

@@ -2,10 +2,12 @@ package steps
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	coreapi "k8s.io/api/core/v1"
@@ -65,7 +67,9 @@ type multiStageTestStep struct {
 	client                   PodClient
 	artifactDir              string
 	jobSpec                  *api.JobSpec
+	observers                []api.Observer
 	pre, test, post          []api.LiteralTestStep
+	subLock                  *sync.Mutex
 	subTests                 []*junit.TestCase
 	subSteps                 []api.CIOperatorStepDetailInfo
 	allowSkipOnSuccess       *bool
@@ -110,6 +114,7 @@ func newMultiStageTestStep(
 		client:                   client,
 		artifactDir:              artifactDir,
 		jobSpec:                  jobSpec,
+		observers:                ms.Observers,
 		pre:                      ms.Pre,
 		test:                     ms.Test,
 		post:                     ms.Post,
@@ -117,6 +122,7 @@ func newMultiStageTestStep(
 		allowBestEffortPostSteps: ms.AllowBestEffortPostSteps,
 		leases:                   leases,
 		artifactsViaPodUtils:     artifactsViaPodUtils,
+		subLock:                  &sync.Mutex{},
 	}
 }
 
@@ -149,14 +155,25 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 		return fmt.Errorf("failed to create RBAC objects: %w", err)
 	}
 	var errs []error
+	observers, err := s.generateObservers(s.observers)
+	if err != nil {
+		// if we can't even generate the Pods there's no reason to run the job
+		return err
+	}
+	observerContext, cancel := context.WithCancel(ctx)
+	observerDone := make(chan struct{})
+	go s.runObservers(observerContext, ctx, observers, observerDone)
+
 	if err := s.runSteps(ctx, s.pre, env, true, false); err != nil {
 		errs = append(errs, fmt.Errorf("%q pre steps failed: %w", s.name, err))
 	} else if err := s.runSteps(ctx, s.test, env, true, len(errs) != 0); err != nil {
 		errs = append(errs, fmt.Errorf("%q test steps failed: %w", s.name, err))
 	}
+	cancel() // signal to observers that we're tearing down
 	if err := s.runSteps(context.Background(), s.post, env, false, len(errs) != 0); err != nil {
 		errs = append(errs, fmt.Errorf("%q post steps failed: %w", s.name, err))
 	}
+	<-observerDone // wait for the observers to finish so we get their jUnit
 	return utilerrors.NewAggregate(errs)
 }
 
@@ -364,6 +381,23 @@ func (s *multiStageTestStep) runSteps(
 		break
 	}
 	return utilerrors.NewAggregate(errs)
+}
+
+func (s *multiStageTestStep) generateObservers(observers []api.Observer) ([]coreapi.Pod, error) {
+	var adapted []api.LiteralTestStep
+	for _, observer := range observers {
+		// observers are just like steps, so we can adapt one to the other
+		adapted = append(adapted, api.LiteralTestStep{
+			As:          observer.Name,
+			From:        observer.From,
+			FromImage:   observer.FromImage,
+			Commands:    observer.Commands,
+			ArtifactDir: api.DefaultArtifacts,
+			Resources:   observer.Resources,
+		})
+	}
+	pods, _, err := s.generatePods(adapted, nil, false)
+	return pods, err
 }
 
 const multiStageTestStepContainerName = "test"
@@ -645,18 +679,8 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 	namePrefix := s.name + "-"
 	var errs []error
 	for _, pod := range pods {
-		var notifier ContainerNotifier = NopNotifier
-		for _, c := range pod.Spec.Containers {
-			if c.Name == "artifacts" {
-				container := pod.Spec.Containers[0].Name
-				dir := filepath.Join(s.artifactDir, strings.TrimPrefix(pod.Name, namePrefix))
-				artifacts := NewArtifactWorker(s.client, dir, s.jobSpec.Namespace())
-				artifacts.CollectFromPod(pod.Name, []string{container}, nil)
-				notifier = artifacts
-				break
-			}
-		}
-		err := s.runPod(ctx, &pod, NewTestCaseNotifier(notifier))
+		notifier := s.attachTestCaseNotifier(namePrefix, pod)
+		err := s.runPod(ctx, &pod, notifier)
 		if err != nil {
 			if isBestEffort(pod.Name) {
 				log.Println(fmt.Sprintf("Pod %s is running in best-effort mode, ignoring the failure...", pod.Name))
@@ -671,6 +695,55 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 	return utilerrors.NewAggregate(errs)
 }
 
+func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []coreapi.Pod, done chan<- struct{}) {
+	namePrefix := s.name + "-" + "observer" + "-"
+	wg := sync.WaitGroup{}
+	wg.Add(len(pods))
+	errs := make(chan error, len(pods))
+	for _, pod := range pods {
+		notifier := s.attachTestCaseNotifier(namePrefix, pod)
+		go func(p coreapi.Pod) {
+			<-ctx.Done()
+			log.Println("Signalling observers to terminate...")
+			if err := s.client.Delete(context.Background(), &p); err != nil {
+				log.Println(fmt.Sprintf("warning: failed to trigger observer to stop: %v", err))
+			}
+		}(pod)
+		go func(p coreapi.Pod) {
+			err := s.runPod(textCtx, &p, notifier)
+			if ctx.Err() == nil {
+				// when the observer is cancelled, we get an error here that we need to ignore, as it's not an error
+				// for the Pod to be deleted when it's cancelled, it's just expected
+				errs <- err
+			}
+			wg.Done()
+		}(pod)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+			log.Println(fmt.Sprintf("warning: observer failed: %v", err))
+		}
+	}
+	done <- struct{}{}
+}
+
+func (s *multiStageTestStep) attachTestCaseNotifier(namePrefix string, pod coreapi.Pod) *TestCaseNotifier {
+	var notifier ContainerNotifier = NopNotifier
+	for _, c := range pod.Spec.Containers {
+		if c.Name == "artifacts" {
+			container := pod.Spec.Containers[0].Name
+			dir := filepath.Join(s.artifactDir, strings.TrimPrefix(pod.Name, namePrefix))
+			artifacts := NewArtifactWorker(s.client, dir, s.jobSpec.Namespace())
+			artifacts.CollectFromPod(pod.Name, []string{container}, nil)
+			notifier = artifacts
+			break
+		}
+	}
+	return NewTestCaseNotifier(notifier)
+}
+
 func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *TestCaseNotifier) error {
 	start := time.Now()
 	client := s.client.WithNewLoggingClient()
@@ -683,6 +756,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	}
 	finished := time.Now()
 	duration := finished.Sub(start)
+	s.subLock.Lock()
 	s.subSteps = append(s.subSteps, api.CIOperatorStepDetailInfo{
 		StepName:    pod.Name,
 		Description: fmt.Sprintf("Run pod %s", pod.Name),
@@ -693,6 +767,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 		Manifests:   client.Objects(),
 	})
 	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)
+	s.subLock.Unlock()
 	if err != nil {
 		linksText := strings.Builder{}
 		linksText.WriteString(fmt.Sprintf("Link to step on registry info site: https://steps.ci.openshift.org/reference/%s", strings.TrimPrefix(pod.Name, s.name+"-")))

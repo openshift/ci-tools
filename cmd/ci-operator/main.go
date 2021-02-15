@@ -857,32 +857,12 @@ func (o *options) initializeNamespace() error {
 		return errors.New("timed out waiting for RBAC")
 	}
 
-	pullStart := time.Now()
-	var imagePullSecretsMinted bool
-	for i := 0; i < 30; i++ {
-		imagePullSecretsMinted = true
-		serviceAccounts := map[string]*coreapi.ServiceAccount{
-			"builder": {},
-			"default": {},
-		}
-		for name := range serviceAccounts {
-			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: o.namespace, Name: name}, serviceAccounts[name]); err != nil && !kerrors.IsNotFound(err) {
-				return fmt.Errorf("failed to fetch service account %s: %w", name, err)
-			}
-			imagePullSecretsMinted = imagePullSecretsMinted && len(serviceAccounts[name].ImagePullSecrets) > 0
-		}
-		if imagePullSecretsMinted {
-			break
-		}
-		log.Printf("[%d/30] Image pull secrets in namespace not yet ready, sleeping for a second...\n", i)
-		time.Sleep(time.Second)
-	}
-	log.Printf("Spent %v waiting for image pull secrets to initialize in the new namespace.\n", time.Since(pullStart))
-	if !imagePullSecretsMinted {
-		log.Println("ERROR: timed out waiting for image pull secrets")
-		return errors.New("timed out waiting for image pull secrets")
-	}
-
+	// Annotate the namespace for cleanup by external tooling (ci-ns-ttl-controller)
+	// Unfortunately we cannot set the annotations right away when we create a project
+	// because that API does not support it (historical limitation).
+	//
+	// We can also only annotate the project *after* the SSAR check above, which
+	// means that if SSAR fails, the project will *not* be annotated for cleanup.
 	updates := map[string]string{}
 	if o.idleCleanupDuration > 0 {
 		if o.idleCleanupDurationSet {
@@ -936,6 +916,32 @@ func (o *options) initializeNamespace() error {
 		}); err != nil {
 			return fmt.Errorf("could not update namespace to add TTLs and active annotations: %w", err)
 		}
+	}
+
+	pullStart := time.Now()
+	var imagePullSecretsMinted bool
+	for i := 0; i < 30; i++ {
+		imagePullSecretsMinted = true
+		serviceAccounts := map[string]*coreapi.ServiceAccount{
+			"builder": {},
+			"default": {},
+		}
+		for name := range serviceAccounts {
+			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: o.namespace, Name: name}, serviceAccounts[name]); err != nil && !kerrors.IsNotFound(err) {
+				return fmt.Errorf("failed to fetch service account %s: %w", name, err)
+			}
+			imagePullSecretsMinted = imagePullSecretsMinted && len(serviceAccounts[name].ImagePullSecrets) > 0
+		}
+		if imagePullSecretsMinted {
+			break
+		}
+		log.Printf("[%d/30] Image pull secrets in namespace not yet ready, sleeping for a second...\n", i)
+		time.Sleep(time.Second)
+	}
+	log.Printf("Spent %v waiting for image pull secrets to initialize in the new namespace.\n", time.Since(pullStart))
+	if !imagePullSecretsMinted {
+		log.Println("ERROR: timed out waiting for image pull secrets")
+		return errors.New("timed out waiting for image pull secrets")
 	}
 
 	if o.givePrAuthorAccessToNamespace {

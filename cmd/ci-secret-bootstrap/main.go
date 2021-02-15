@@ -644,41 +644,39 @@ func getUnusedBWItems(config secretbootstrap.Config, bwClient bitwarden.Client, 
 
 		diffFields := item.fields.Difference(cfgComparableItemsByName[bwName].fields)
 		if diffFields.Len() > 0 {
-			if _, ok := unused[bwName]; !ok {
-				unused[bwName] = &comparable{}
-			}
-
 			if bwAllowUnused.Has(bwName) {
 				l.WithField("fields", strings.Join(diffFields.List(), ",")).Info("Unused fields from item are allowed by arguments")
 				continue
+			}
+
+			if _, ok := unused[bwName]; !ok {
+				unused[bwName] = &comparable{}
 			}
 			unused[bwName].fields = diffFields
 		}
 
 		diffAttachments := item.attachments.Difference(cfgComparableItemsByName[bwName].attachments)
 		if diffAttachments.Len() > 0 {
-			if _, ok := unused[bwName]; !ok {
-				unused[bwName] = &comparable{}
-			}
-
 			if bwAllowUnused.Has(bwName) {
 				l.WithField("attachments", strings.Join(diffAttachments.List(), ",")).Info("Unused attachments from item are allowed by arguments")
 				continue
 			}
 
+			if _, ok := unused[bwName]; !ok {
+				unused[bwName] = &comparable{}
+			}
 			unused[bwName].attachments = diffAttachments
 		}
 
 		if item.hasPassword && !cfgComparableItemsByName[bwName].hasPassword {
-			if _, ok := unused[bwName]; !ok {
-				unused[bwName] = &comparable{}
-			}
-
 			if bwAllowUnused.Has(bwName) {
 				l.Info("Unused password fields from item is allowed by arguments")
 				continue
 			}
 
+			if _, ok := unused[bwName]; !ok {
+				unused[bwName] = &comparable{}
+			}
 			unused[bwName].hasPassword = true
 		}
 	}

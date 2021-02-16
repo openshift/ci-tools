@@ -446,11 +446,6 @@ func TestLoadLeaseCredentials(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	leaseServerPasswordFile := filepath.Join(dir, "leaseServerPasswordFile")
-	if err := ioutil.WriteFile(leaseServerPasswordFile, []byte("secret"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
 	leaseServerCredentialsFile := filepath.Join(dir, "leaseServerCredentialsFile")
 	if err := ioutil.WriteFile(leaseServerCredentialsFile, []byte("ci-new:secret-new"), 0644); err != nil {
 		t.Fatal(err)
@@ -463,42 +458,13 @@ func TestLoadLeaseCredentials(t *testing.T) {
 
 	testCases := []struct {
 		name                       string
-		leaseServerUsername        string
-		leaseServerPasswordFile    string
 		leaseServerCredentialsFile string
 		expectedUsername           string
 		passwordGetterVerify       func(func() []byte) error
 		expectedErr                error
 	}{
 		{
-			name:                    "username and password file",
-			leaseServerUsername:     "ci",
-			leaseServerPasswordFile: leaseServerPasswordFile,
-			expectedUsername:        "ci",
-			passwordGetterVerify: func(passwordGetter func() []byte) error {
-				p := string(passwordGetter())
-				if diff := cmp.Diff("secret", p); diff != "" {
-					return fmt.Errorf("actual does not match expected, diff: %s", diff)
-				}
-				return nil
-			},
-		},
-		{
-			name:                       "username and password file and credential file",
-			leaseServerUsername:        "ci",
-			leaseServerPasswordFile:    leaseServerPasswordFile,
-			leaseServerCredentialsFile: leaseServerCredentialsFile,
-			expectedUsername:           "ci-new",
-			passwordGetterVerify: func(passwordGetter func() []byte) error {
-				p := string(passwordGetter())
-				if diff := cmp.Diff("secret-new", p); diff != "" {
-					return fmt.Errorf("actual does not match expected, diff: %s", diff)
-				}
-				return nil
-			},
-		},
-		{
-			name:                       "only credential file",
+			name:                       "valid credential file",
 			leaseServerCredentialsFile: leaseServerCredentialsFile,
 			expectedUsername:           "ci-new",
 			passwordGetterVerify: func(passwordGetter func() []byte) error {
@@ -519,7 +485,7 @@ func TestLoadLeaseCredentials(t *testing.T) {
 	for _, tc := range testCases {
 
 		t.Run(tc.name, func(t *testing.T) {
-			username, passwordGetter, err := loadLeaseCredentials(tc.leaseServerUsername, tc.leaseServerPasswordFile, tc.leaseServerCredentialsFile)
+			username, passwordGetter, err := loadLeaseCredentials(tc.leaseServerCredentialsFile)
 			if diff := cmp.Diff(tc.expectedUsername, username); diff != "" {
 				t.Errorf("actual does not match expected, diff: %s", diff)
 			}

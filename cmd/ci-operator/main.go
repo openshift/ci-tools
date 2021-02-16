@@ -154,8 +154,6 @@ map.
 `
 
 const (
-	// leaseServerUsername is the default lease server username in api.ci
-	leaseServerUsername = "ci"
 	leaseAcquireTimeout = 120 * time.Minute
 
 	// where Prow wants us to put artifacts
@@ -278,8 +276,6 @@ type options struct {
 	clusterConfig              *rest.Config
 	consoleHost                string
 	leaseServer                string
-	leaseServerUsername        string
-	leaseServerPasswordFile    string
 	leaseServerCredentialsFile string
 	leaseAcquireTimeout        time.Duration
 	leaseClient                lease.Client
@@ -325,9 +321,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	// what we will run
 	flag.StringVar(&opt.leaseServer, "lease-server", leaseServerAddress, "Address of the server that manages leases. Required if any test is configured to acquire a lease.")
-	flag.StringVar(&opt.leaseServerUsername, "lease-server-username", leaseServerUsername, "Username used to access the lease server")
-	flag.StringVar(&opt.leaseServerPasswordFile, "lease-server-password-file", "", "The path to password file used to access the lease server")
-	flag.StringVar(&opt.leaseServerCredentialsFile, "lease-server-credentials-file", "", "The path to credentials file used to access the lease server. The content is of the form <username>:<password>. If set, it overrides --lease-server-username and lease-server-password-file")
+	flag.StringVar(&opt.leaseServerCredentialsFile, "lease-server-credentials-file", "", "The path to credentials file used to access the lease server. The content is of the form <username>:<password>.")
 	flag.DurationVar(&opt.leaseAcquireTimeout, "lease-acquire-timeout", leaseAcquireTimeout, "Maximum amount of time to wait for lease acquisition")
 	flag.StringVar(&opt.registryPath, "registry", "", "Path to the step registry directory")
 	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable or the configresolver will be used.")
@@ -571,7 +565,7 @@ func (o *options) Run() []error {
 		log.Printf("Ran for %s", time.Since(start).Truncate(time.Second))
 	}()
 	var leaseClient *lease.Client
-	if o.leaseServer != "" && ((o.leaseServerUsername != "" && o.leaseServerPasswordFile != "") || o.leaseServerCredentialsFile != "") {
+	if o.leaseServer != "" && o.leaseServerCredentialsFile != "" {
 		leaseClient = &o.leaseClient
 	}
 	// load the graph from the configuration
@@ -1386,32 +1380,26 @@ func (o *options) saveNamespaceArtifacts() {
 	}
 }
 
-func loadLeaseCredentials(leaseServerUsername, leaseServerPasswordFile, leaseServerCredentialsFile string) (string, func() []byte, error) {
+func loadLeaseCredentials(leaseServerCredentialsFile string) (string, func() []byte, error) {
 	sa := &secret.Agent{}
-	if leaseServerCredentialsFile != "" {
-		if err := sa.Start([]string{leaseServerCredentialsFile}); err != nil {
-			return "", nil, fmt.Errorf("failed to start secret agent on file %s: %s", leaseServerCredentialsFile, string(sa.Censor([]byte(err.Error()))))
-		}
-		splits := strings.Split(string(sa.GetSecret(leaseServerCredentialsFile)), ":")
-		if len(splits) != 2 {
-			return "", nil, fmt.Errorf("got invalid content of lease server credentials file which must be of the form '<username>:<passwrod>'")
-		}
-		username := splits[0]
-		passwordGetter := func() []byte {
-			return []byte(splits[1])
-		}
-		return username, passwordGetter, nil
+	if err := sa.Start([]string{leaseServerCredentialsFile}); err != nil {
+		return "", nil, fmt.Errorf("failed to start secret agent on file %s: %s", leaseServerCredentialsFile, string(sa.Censor([]byte(err.Error()))))
 	}
-	if err := sa.Start([]string{leaseServerPasswordFile}); err != nil {
-		return "", nil, fmt.Errorf("failed to start secret agent on file %s: %s", leaseServerPasswordFile, string(sa.Censor([]byte(err.Error()))))
+	splits := strings.Split(string(sa.GetSecret(leaseServerCredentialsFile)), ":")
+	if len(splits) != 2 {
+		return "", nil, fmt.Errorf("got invalid content of lease server credentials file which must be of the form '<username>:<passwrod>'")
 	}
-	return leaseServerUsername, sa.GetTokenGenerator(leaseServerPasswordFile), nil
+	username := splits[0]
+	passwordGetter := func() []byte {
+		return []byte(splits[1])
+	}
+	return username, passwordGetter, nil
 }
 
 func (o *options) initializeLeaseClient() error {
 	var err error
 	owner := o.namespace + "-" + o.jobSpec.JobNameHash()
-	username, passwordGetter, err := loadLeaseCredentials(o.leaseServerUsername, o.leaseServerPasswordFile, o.leaseServerCredentialsFile)
+	username, passwordGetter, err := loadLeaseCredentials(o.leaseServerCredentialsFile)
 	if err != nil {
 		return fmt.Errorf("failed to load lease credentials: %w", err)
 	}

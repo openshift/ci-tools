@@ -215,6 +215,10 @@ type BoskosOptions struct {
 // Boskos begins the boskos server and makes sure it is ready to serve
 // before returning the port it is serving on.
 func Boskos(opt BoskosOptions) *Accessory {
+	credentialsFile := os.Getenv("BOSKOS_CREDENTIALS_FILE")
+	if credentialsFile == "" {
+		credentialsFile = "/dev/null"
+	}
 	return &Accessory{
 		command: "boskos",
 		args: flags(map[string]string{
@@ -224,9 +228,9 @@ func Boskos(opt BoskosOptions) *Accessory {
 		}),
 		flags: func(port string) []string {
 			return flags(map[string]string{
-				"lease-server":               "http://127.0.0.1:" + port,
-				"lease-server-password-file": "/dev/null",
-				"lease-acquire-timeout":      "2s",
+				"lease-server":                  "http://127.0.0.1:" + port,
+				"lease-server-credentials-file": credentialsFile,
+				"lease-acquire-timeout":         "2s",
 			})
 		},
 	}

@@ -45,6 +45,7 @@ type options struct {
 	gracePeriod time.Duration
 	username    string
 	password    string
+	passwdFile  string
 }
 
 func gatherOptions() (options, error) {
@@ -55,6 +56,7 @@ func gatherOptions() (options, error) {
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
 	fs.StringVar(&o.username, "username", "", "Username to trust for clients.")
 	fs.StringVar(&o.password, "password-file", "", "File holding the password for clients.")
+	fs.StringVar(&o.passwdFile, "passwd-file", "", "Authenticate against a file. Each line of the file is with the form `<username>:<password>`. This will override --username and --password-file")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)
 	}
@@ -66,11 +68,11 @@ func validateOptions(o options) error {
 	if err != nil {
 		return fmt.Errorf("invalid --log-level: %w", err)
 	}
-	if o.username == "" {
-		return errors.New("--username is required")
+	if (o.username == "") != (o.password == "") {
+		return errors.New("--username and --password-file must be specified together")
 	}
-	if o.password == "" {
-		return errors.New("--password-file is required")
+	if (o.username == "") && (o.passwdFile == "") {
+		return errors.New("--username or --htpasswd-file must be specified")
 	}
 	return nil
 }
@@ -110,15 +112,24 @@ func withErrorRate(request *results.Request) {
 	errorRate.With(labels).Inc()
 }
 
-func handleCIOperatorResult(username string, password func() []byte) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
+type validator interface {
+	Validate(username, password string) bool
+}
+
+func loginHandler(validator validator, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, pass, ok := r.BasicAuth()
-		if !ok || user != username || pass != string(password()) {
-			w.WriteHeader(http.StatusUnauthorized)
-			fmt.Fprint(w, "Unauthorized")
+		if !ok || !validator.Validate(user, pass) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func handleCIOperatorResult() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
 
 		bytes, err := ioutil.ReadAll(r.Body)
 		if err != nil {
@@ -165,7 +176,13 @@ func main() {
 	}
 
 	http.HandleFunc("/", http.NotFound)
-	http.HandleFunc("/result", handleCIOperatorResult(o.username, secretAgent.GetTokenGenerator(o.password)))
+
+	validator := &multi{delegates: []validator{
+		&passwdFile{file: o.passwdFile},
+		&literal{username: o.username, password: secretAgent.GetTokenGenerator(o.password)}},
+	}
+
+	http.Handle("/result", loginHandler(validator, handleCIOperatorResult()))
 	metrics.ExposeMetrics("result-aggregator", prowConfig.PushGateway{}, flagutil.DefaultMetricsPort)
 
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)

@@ -16,6 +16,7 @@ import (
 	prowConfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
+	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
 	"k8s.io/test-infra/prow/simplifypath"
@@ -202,6 +203,7 @@ func l(fragment string, children ...simplifypath.Node) simplifypath.Node {
 }
 
 func main() {
+	logrusutil.ComponentInit()
 	o, err := gatherOptions()
 	if err != nil {
 		logrus.WithError(err).Fatal("failed go gather options")

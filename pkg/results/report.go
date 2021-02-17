@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -21,9 +22,10 @@ const (
 
 // Options holds the configuration options for connecting to the remote aggregation server
 type Options struct {
-	address  string
-	username string
-	password string
+	address     string
+	username    string
+	password    string
+	credentials string
 }
 
 // Bind adds flags for the options
@@ -31,6 +33,7 @@ func (o *Options) Bind(flag *flag.FlagSet) {
 	flag.StringVar(&o.address, "report-address", reportAddress, "Address of the aggregate reporting server.")
 	flag.StringVar(&o.username, "report-username", "", "Username for the aggregate reporting server.")
 	flag.StringVar(&o.password, "report-password-file", "", "File holding the password for the aggregate reporting server.")
+	flag.StringVar(&o.credentials, "report-credentials-file", "", "File holding the <username>:<password> for the aggregate reporting server.")
 }
 
 // Validate ensures that options are set correctly
@@ -48,22 +51,42 @@ func (o *Options) Validate() error {
 	return nil
 }
 
+func getUsernameAndPassword(username, password, credentials string) (string, string, error) {
+	if credentials != "" {
+		raw, err := ioutil.ReadFile(credentials)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to read credentials file %q: %w", credentials, err)
+		}
+		splits := strings.Split(string(raw), ":")
+		if len(splits) != 2 {
+			return "", "", fmt.Errorf("got invalid content of report credentials file which must be of the form '<username>:<passwrod>'")
+		}
+		return strings.TrimSpace(splits[0]), strings.Trim(splits[1], "\n "), nil
+	}
+	raw, err := ioutil.ReadFile(password)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read password file %q: %w", password, err)
+	}
+	return username, string(raw), nil
+}
+
 // Client returns an HTTP or HTTPs client, based on the options
 func (o *Options) Reporter(spec *api.JobSpec, consoleHost string) (Reporter, error) {
-	if o.address == "" || o.password == "" {
+	if o.address == "" || (o.password == "" && o.credentials == "") {
 		return &noopReporter{}, nil
 	}
-	raw, err := ioutil.ReadFile(o.password)
+	username, password, err := getUsernameAndPassword(o.username, o.password, o.credentials)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file %q: %w", o.password, err)
+		return nil, fmt.Errorf("failed to get username and password: %w", err)
 	}
+
 	return &reporter{
 		spec:        spec,
 		address:     o.address,
 		consoleHost: consoleHost,
 		client:      &http.Client{},
-		username:    o.username,
-		password:    string(raw),
+		username:    username,
+		password:    password,
 	}, nil
 }
 

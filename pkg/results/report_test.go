@@ -3,17 +3,24 @@ package results
 import (
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestOptions_Validate(t *testing.T) {
@@ -146,4 +153,89 @@ func TestOptions_Reporter(t *testing.T) {
 	// neither of these should not fail
 	reporter.Report(nil)
 	reporter.Report(ForReason("foo").ForError(errors.New("oops")))
+}
+
+func TestGetUsernameAndPassword(t *testing.T) {
+	dir, err := ioutil.TempDir("", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.RemoveAll(dir); err != nil {
+			t.Errorf("failed to remove the temp dir: %s", dir)
+		}
+	}()
+
+	password := filepath.Join(dir, "password")
+	if err := ioutil.WriteFile(password, []byte(`secret`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	credentials := filepath.Join(dir, "credentials")
+	if err := ioutil.WriteFile(credentials, []byte(` a :b
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	credentialsWrongFormat := filepath.Join(dir, "credentialsWrongFormat")
+	if err := ioutil.WriteFile(credentialsWrongFormat, []byte(`some
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var testCases = []struct {
+		name                               string
+		username, password, credentials    string
+		expectedUsername, expectedPassword string
+		expectedError                      error
+	}{
+		{
+			name:          "no input: password file",
+			expectedError: fmt.Errorf("failed to read password file \"\": %w", &os.PathError{Op: "open", Err: syscall.Errno(0x02)}),
+		},
+		{
+			name:          "no input: credentials file",
+			credentials:   "file-not-exist",
+			expectedError: fmt.Errorf("failed to read credentials file \"file-not-exist\": %w", &os.PathError{Op: "open", Path: "file-not-exist", Err: syscall.Errno(0x02)}),
+		},
+		{
+			name:          "credentials file with wrong format",
+			credentials:   credentialsWrongFormat,
+			expectedError: fmt.Errorf("got invalid content of report credentials file which must be of the form '<username>:<passwrod>'"),
+		},
+		{
+			name:             "username and password only",
+			username:         "u",
+			password:         password,
+			expectedUsername: "u",
+			expectedPassword: "secret",
+		},
+		{
+			name:             "credentials file only",
+			credentials:      credentials,
+			expectedUsername: "a",
+			expectedPassword: "b",
+		},
+		{
+			name:             "username and password and credentials file",
+			credentials:      credentials,
+			username:         "u",
+			password:         password,
+			expectedUsername: "a",
+			expectedPassword: "b",
+		},
+	}
+	for _, tc := range testCases {
+
+		actualUsername, actualPassword, actualError := getUsernameAndPassword(tc.username, tc.password, tc.credentials)
+		if diff := cmp.Diff(tc.expectedUsername, actualUsername); diff != "" {
+			t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+		}
+		if diff := cmp.Diff(tc.expectedPassword, actualPassword); diff != "" {
+			t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+		}
+		if diff := cmp.Diff(tc.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
+			t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+		}
+	}
 }

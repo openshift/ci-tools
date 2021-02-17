@@ -120,9 +120,15 @@ func responseFor(message string) []slack.Block {
 			Type: slack.MBTSection,
 			Text: &slack.TextBlockObject{
 				Type: slack.PlainTextType,
-				Text: "Sorry, I don't know how to help with that.",
+				Text: "Sorry, I don't know how to help with that. Here are all the things I know how to do:",
 			},
 		})
+		for _, interaction := range interactions {
+			blocks = append(blocks, &slack.DividerBlock{
+				Type: slack.MBTDivider,
+			})
+			blocks = append(blocks, block(string(interaction.identifier), interaction.description, interaction.buttonText))
+		}
 	} else {
 		blocks = append([]slack.Block{&slack.SectionBlock{
 			Type: slack.MBTSection,

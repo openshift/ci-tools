@@ -1,4 +1,82 @@
 - text:
-    text: Sorry, I don't know how to help with that.
+    text: 'Sorry, I don''t know how to help with that. Here are all the things I know how to do:'
     type: plain_text
+  type: section
+- type: divider
+- accessory:
+    text:
+      text: File a Bug
+      type: plain_text
+    type: button
+    value: bug
+  text:
+    text: |-
+      *File a Bug*
+      Record a defect in the test infrastructure, providing a reproducer where possible.
+    type: mrkdwn
+  type: section
+- type: divider
+- accessory:
+    text:
+      text: Request a Consultation
+      type: plain_text
+    type: button
+    value: consultation
+  text:
+    text: |-
+      *Request a Consultation*
+      Ask for input from the Test Platform team to aid in achieving some goal.
+    type: mrkdwn
+  type: section
+- type: divider
+- accessory:
+    text:
+      text: Describe an Enhancement
+      type: plain_text
+    type: button
+    value: enhancement
+  text:
+    text: |-
+      *Describe an Enhancement*
+      Explain how a new feature or infrastructure component could improve your productivity.
+    type: mrkdwn
+  type: section
+- type: divider
+- accessory:
+    text:
+      text: Ask a Question
+      type: plain_text
+    type: button
+    value: helpdesk
+  text:
+    text: |-
+      *Ask a Question*
+      Request clarification on best practices for using the test infrastructure.
+    type: mrkdwn
+  type: section
+- type: divider
+- accessory:
+    text:
+      text: Track an Incident
+      type: plain_text
+    type: button
+    value: incident
+  text:
+    text: |-
+      *Track an Incident*
+      File a tracking issue for an ongoing operational incident with the test infrastructure.
+    type: mrkdwn
+  type: section
+- type: divider
+- accessory:
+    text:
+      text: Report an Outage
+      type: plain_text
+    type: button
+    value: triage
+  text:
+    text: |-
+      *Report an Outage*
+      Contact the on-call Test Platform engineer to alert them of an outage.
+    type: mrkdwn
   type: section

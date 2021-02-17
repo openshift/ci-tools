@@ -64,15 +64,7 @@ func newCiOperatorCommand(t *T) CiOperatorCommand {
 		ctx = c
 		t.Cleanup(cancel) // this does not really matter but govet is upset
 	}
-	var artifactDir string
-	if dir, set := os.LookupEnv("ARTIFACT_DIR"); set {
-		artifactDir = filepath.Join(dir, strings.NewReplacer("/", "_", "\\", "_", ":", "_").Replace(t.Name()))
-		if err := os.MkdirAll(artifactDir, 0755); err != nil {
-			t.Fatalf("could not create artifact dir for ci-operator: %v", err)
-		}
-	} else {
-		artifactDir = t.TempDir()
-	}
+	artifactDir := ArtifactDir(t)
 	t.Cleanup(func() {
 		if walkErr := filepath.Walk(artifactDir, func(path string, info os.FileInfo, err error) error {
 			if info.IsDir() {

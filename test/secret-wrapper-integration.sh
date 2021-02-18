@@ -46,6 +46,40 @@ test_shared_dir() {
     diff <(echo "$v") <(echo "${TMPDIR}"/secret)
 }
 
+test_home_dir() {
+    echo '[INFO] Verifying HOME is set correctly when original is not set'
+    if ! v=$(unset HOME; secret-wrapper --dry-run bash -c 'echo >&3 "${HOME}"' \
+        3>&1 > /dev/null 2> "${ERR}")
+    then
+        fail '[ERROR] secret-wrapper failed'
+    fi
+    diff <(echo "$v") <(echo "/alabama")
+
+    echo '[INFO] Verifying HOME is set correctly when original is not writeable'
+    if ! v=$(HOME=nowhere secret-wrapper --dry-run bash -c 'echo >&3 "${HOME}"' \
+        3>&1 > /dev/null 2> "${ERR}")
+    then
+        fail '[ERROR] secret-wrapper failed'
+    fi
+    diff <(echo "$v") <(echo "/alabama")
+
+    echo '[INFO] Verifying that setting HOME does not change the rest of the env'
+    if ! v=$(unset HOME; WHOA=yes secret-wrapper --dry-run bash -c 'echo >&3 "${WHOA}"' \
+        3>&1 > /dev/null 2> "${ERR}")
+    then
+        fail '[ERROR] secret-wrapper failed'
+    fi
+    diff <(echo "$v") <(echo "yes")
+
+    echo '[INFO] Verifying HOME is untouched when original is writeable'
+    if ! v=$(HOME=/tmp secret-wrapper --dry-run bash -c 'echo >&3 "${HOME}"' \
+        3>&1 > /dev/null 2> "${ERR}")
+    then
+        fail '[ERROR] secret-wrapper failed'
+    fi
+    diff <(echo "$v") <(echo "/tmp")
+}
+
 test_copy_dir() {
     local data_dir=..2020_03_09_17_18_45.291041453
     echo '[INFO] Verifying SHARED_DIR is copied correctly'
@@ -88,6 +122,7 @@ mkdir "${SHARED_DIR}"
 test_mkdir
 test_shared_dir
 test_copy_dir
+test_home_dir
 echo '[INFO] Running `secret-wrapper true`...'
 if ! out=$(secret-wrapper --dry-run true 2> "${ERR}"); then
     fail "[ERROR] secret-wrapper failed:"

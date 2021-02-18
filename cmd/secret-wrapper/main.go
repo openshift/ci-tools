@@ -172,6 +172,7 @@ func execCmd(argv []string) error {
 	proc := exec.Command(argv[0], argv[1:]...)
 	proc.Stdout = os.Stdout
 	proc.Stderr = os.Stderr
+	manageHome(proc)
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -190,6 +191,28 @@ func execCmd(argv []string) error {
 		}
 	}()
 	return proc.Run()
+}
+
+// manageHome provides a writeable home so kubectl discovery can be cached
+func manageHome(proc *exec.Cmd) {
+	home, set := os.LookupEnv("HOME")
+	needHome := !set
+	if set {
+		if err := syscall.Access(home, syscall.O_RDWR); err != nil {
+			// $HOME is set but not writeable
+			needHome = true
+		}
+	}
+	if needHome {
+		if proc.Env == nil {
+			// the command inherits the environment if it's nil,
+			// explicitly set it so when we change it, we add to
+			// the inherited set instead of overwriting
+			proc.Env = os.Environ()
+		}
+		// the last of any duplicate keys is used for env
+		proc.Env = append(proc.Env, "HOME=/alabama")
+	}
 }
 
 func createSecret(client coreclientset.SecretInterface, name, dir string, dry bool) error {

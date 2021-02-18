@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -78,6 +79,22 @@ func CompareWithFixture(t *T, golden, output string) {
 	if diffStr != "" {
 		t.Errorf("got diff between expected and actual result: \n%s\n\nIf this is expected, re-run the test with `UPDATE=true go test ./...` to update the fixtures.", diffStr)
 	}
+}
+
+// ArtifactDir determines where artifacts should for for a test case.
+func ArtifactDir(t *T) string {
+	var baseDir string
+	if dir, set := os.LookupEnv("ARTIFACT_DIR"); set {
+		baseDir = dir
+	} else {
+		baseDir = os.TempDir()
+	}
+	artifactDir := filepath.Join(baseDir, strings.NewReplacer("/", "_", "\\", "_", ":", "_").Replace(t.Name()))
+	if err := os.MkdirAll(artifactDir, 0755); err != nil {
+		t.Fatalf("could not create artifact dir for ci-operator: %v", err)
+	}
+	t.Logf("Saving artifacts to %s.", artifactDir)
+	return artifactDir
 }
 
 // LocalPullSecretFlag formats a flag to provide access to the local registry for
@@ -151,8 +168,8 @@ func (a *Accessory) Run(t *T, parentCtx context.Context) {
 		"health-port": a.healthPort,
 	})...)...)
 	t.Logf("running: %v", cmd.Args)
-	tmpDir := t.TempDir()
-	logFile, err := os.Create(filepath.Join(tmpDir, fmt.Sprintf("%s.log", a.command)))
+	artifactDir := ArtifactDir(t)
+	logFile, err := os.Create(filepath.Join(artifactDir, fmt.Sprintf("%s.log", a.command)))
 	if err != nil {
 		t.Fatalf("could not create log file: %v", err)
 	}

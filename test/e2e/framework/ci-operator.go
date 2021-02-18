@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -64,15 +63,7 @@ func newCiOperatorCommand(t *T) CiOperatorCommand {
 		ctx = c
 		t.Cleanup(cancel) // this does not really matter but govet is upset
 	}
-	var artifactDir string
-	if dir, set := os.LookupEnv("ARTIFACT_DIR"); set {
-		artifactDir = filepath.Join(dir, strings.NewReplacer("/", "_", "\\", "_", ":", "_").Replace(t.Name()))
-		if err := os.MkdirAll(artifactDir, 0755); err != nil {
-			t.Fatalf("could not create artifact dir for ci-operator: %v", err)
-		}
-	} else {
-		artifactDir = t.TempDir()
-	}
+	artifactDir := ArtifactDir(t)
 	t.Cleanup(func() {
 		if walkErr := filepath.Walk(artifactDir, func(path string, info os.FileInfo, err error) error {
 			if info.IsDir() {
@@ -116,10 +107,10 @@ func (c *CiOperatorCommand) Run() ([]byte, error) {
 			c.t.Errorf("failed to close logfile: %v", err)
 		}
 	}()
-	log := bytes.Buffer{}
-	tee := io.TeeReader(&log, logFile)
-	c.cmd.Stdout = &log
-	c.cmd.Stderr = &log
+	outputBuffer := bytes.Buffer{}
+	log := io.MultiWriter(logFile, &outputBuffer)
+	c.cmd.Stdout = log
+	c.cmd.Stderr = log
 	if err := c.cmd.Start(); err != nil {
 		c.t.Fatalf("could not start ci-operator command: %v", err)
 	}
@@ -144,12 +135,9 @@ func (c *CiOperatorCommand) Run() ([]byte, error) {
 		// we're not doing cleanup, so signal we're done anyway
 		c.cleanupDone <- struct{}{}
 	}
-	// TODO(skuznets): stream this output?
 	err = c.cmd.Wait()
-	output, readErr := ioutil.ReadAll(tee)
-	if readErr != nil {
-		c.t.Logf("could not read `ci-operator` log: %v", readErr)
-	}
+
+	output := outputBuffer.Bytes()
 	c.t.Logf("ci-operator output:\n%v", string(output))
 	return output, err
 }

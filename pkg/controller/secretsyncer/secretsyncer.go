@@ -188,6 +188,19 @@ func (r *reconciler) mirrorSecret(ctx context.Context, log *logrus.Entry, cluste
 		}
 		data[k] = source.Data[k]
 	}
+
+	if err := c.Get(ctx, types.NamespacedName{Name: to.Namespace}, &corev1.Namespace{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to check if namespace %s exists: %w", to.Namespace, err)
+		}
+		if err := c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
+			Name:   to.Namespace,
+			Labels: map[string]string{api.DPTPRequesterLabel: ControllerName},
+		}}); err != nil && !apierrors.IsAlreadyExists(err) {
+			return fmt.Errorf("failed to create namespace %s: %w", to.Namespace, err)
+		}
+	}
+
 	secret, mutateFn := secret(
 		types.NamespacedName{Namespace: to.Namespace, Name: to.Name},
 		data,

@@ -2232,7 +2232,7 @@ func (c *client) GetSingleCommit(org, repo, SHA string) (RepositoryCommit, error
 //
 // See https://developer.github.com/v3/repos/branches/#list-branches
 func (c *client) GetBranches(org, repo string, onlyProtected bool) ([]Branch, error) {
-	durationLogger := c.log("GetBranches", org, repo)
+	durationLogger := c.log("GetBranches", org, repo, onlyProtected)
 	defer durationLogger()
 
 	var branches []Branch
@@ -4110,6 +4110,7 @@ func (c *client) ListCheckRuns(org, repo, ref string) (*CheckRunList, error) {
 
 	var checkRunList CheckRunList
 	_, err := c.request(&request{
+		accept:    "application/vnd.github.antiope-preview+json",
 		method:    http.MethodGet,
 		path:      fmt.Sprintf("/repos/%s/%s/commits/%s/check-runs", org, repo, ref),
 		org:       org,

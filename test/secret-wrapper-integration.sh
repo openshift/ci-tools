@@ -80,6 +80,44 @@ test_home_dir() {
     diff <(echo "$v") <(echo "/tmp")
 }
 
+test_copy_kubeconfig() {
+    echo '[INFO] Verifying KUBECONFIG is not set when original is not set'
+    if ! v=$(unset KUBECONFIG; secret-wrapper --dry-run bash -c 'echo >&3 "${KUBECONFIG}"' \
+        3>&1 > /dev/null 2> "${ERR}")
+    then
+        fail '[ERROR] secret-wrapper failed'
+    fi
+    diff <(echo "$v") <(echo "")
+
+    echo '[INFO] Verifying KUBECONFIG is set correctly when original is set'
+    if ! v=$(KUBECONFIG=a secret-wrapper --dry-run bash -c 'echo >&3 "${KUBECONFIG}"' \
+        3>&1 > /dev/null 2> "${ERR}")
+    then
+        fail '[ERROR] secret-wrapper failed'
+    fi
+    if [[ "${v}" == "a" ]]; then
+      echo "\$KUBECONFIG was not changed!"
+      return 1
+    fi
+
+    echo '[INFO] Verifying that setting HOME does not change the rest of the env'
+    if ! v=$(KUBECONFIG=a WHOA=yes secret-wrapper --dry-run bash -c 'echo >&3 "${WHOA}"' \
+        3>&1 > /dev/null 2> "${ERR}")
+    then
+        fail '[ERROR] secret-wrapper failed'
+    fi
+    diff <(echo "$v") <(echo "yes")
+
+    echo '[INFO] Verifying KUBECONFIG is populated when possible'
+    ( sleep 5 & echo "test" > "/tmp/.kubeconfig" ) &
+    if ! v=$(KUBECONFIG="/tmp/.kubeconfig" secret-wrapper --dry-run bash -c 'for (( i = 0; i < 10; i++ )); do if [[ -f "${KUBECONFIG}" ]]; then cat "${KUBECONFIG}" >&3; break; fi; sleep 1; done' \
+        3>&1 > /dev/null 2> "${ERR}")
+    then
+        fail '[ERROR] secret-wrapper failed'
+    fi
+    diff <(echo "$v") <(echo "test")
+}
+
 test_copy_dir() {
     local data_dir=..2020_03_09_17_18_45.291041453
     echo '[INFO] Verifying SHARED_DIR is copied correctly'
@@ -123,6 +161,7 @@ test_mkdir
 test_shared_dir
 test_copy_dir
 test_home_dir
+test_copy_kubeconfig
 echo '[INFO] Running `secret-wrapper true`...'
 if ! out=$(secret-wrapper --dry-run true 2> "${ERR}"); then
     fail "[ERROR] secret-wrapper failed:"

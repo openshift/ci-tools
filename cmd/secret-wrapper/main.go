@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -172,7 +173,16 @@ func execCmd(argv []string) error {
 	proc := exec.Command(argv[0], argv[1:]...)
 	proc.Stdout = os.Stdout
 	proc.Stderr = os.Stderr
+	if proc.Env == nil {
+		// the command inherits the environment if it's nil,
+		// explicitly set it so when we change it, we add to
+		// the inherited set instead of overwriting
+		proc.Env = os.Environ()
+	}
 	manageHome(proc)
+	if err := manageKubeconfig(proc); err != nil {
+		return err
+	}
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -204,15 +214,49 @@ func manageHome(proc *exec.Cmd) {
 		}
 	}
 	if needHome {
-		if proc.Env == nil {
-			// the command inherits the environment if it's nil,
-			// explicitly set it so when we change it, we add to
-			// the inherited set instead of overwriting
-			proc.Env = os.Environ()
-		}
 		// the last of any duplicate keys is used for env
 		proc.Env = append(proc.Env, "HOME=/alabama")
 	}
+}
+
+// manageKubeconfig provides a unique writeable kubeconfig so users can for example set a namespace,
+// but changes are not propagated to subsequent steps to limit the amount of possible mistakes
+func manageKubeconfig(proc *exec.Cmd) error {
+	if original, set := os.LookupEnv("KUBECONFIG"); set {
+		writableCopy, err := ioutil.TempFile("", "kubeconfig-*")
+		if err != nil {
+			return fmt.Errorf("could not create unique, writeable $KUBECONFIG copy: %w", err)
+		}
+		proc.Env = append(proc.Env, fmt.Sprintf("KUBECONFIG=%s", writableCopy.Name()))
+		// the source KUBECONFIG may begin to exist if it does not exist at the start, so poll for it
+		go func() {
+			if err := wait.PollImmediateInfinite(time.Second, func() (done bool, err error) {
+				if _, err := os.Stat(original); err != nil {
+					if os.IsNotExist(err) {
+						return false, nil
+					}
+					return false, err
+				}
+				source, err := os.Open(original)
+				if err != nil {
+					return true, err
+				}
+				if _, err := io.Copy(writableCopy, source); err != nil {
+					return true, err
+				}
+				if err := writableCopy.Close(); err != nil {
+					return true, err
+				}
+				if err := source.Close(); err != nil {
+					return true, err
+				}
+				return true, nil
+			}); err != nil {
+				logrus.WithError(err).Warn("could not populate unique, writeable $KUBECONFIG copy: %w", err)
+			}
+		}()
+	}
+	return nil
 }
 
 func createSecret(client coreclientset.SecretInterface, name, dir string, dry bool) error {

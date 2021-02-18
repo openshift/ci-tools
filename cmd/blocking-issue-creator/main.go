@@ -88,7 +88,7 @@ func main() {
 		}
 
 		var branchTokens []string
-		for branch := range branches {
+		for _, branch := range branches.List() {
 			branchTokens = append(branchTokens, fmt.Sprintf("branch:%s", branch))
 		}
 		title := fmt.Sprintf("Future Release Branches Frozen For Merging | %s", strings.Join(branchTokens, " "))

@@ -22,8 +22,9 @@ import (
 
 type options struct {
 	promotion.FutureOptions
-	username  string
-	tokenPath string
+	username          string
+	tokenPath         string
+	ghGraphqlEndpoint string
 }
 
 func (o *options) Validate() error {
@@ -44,6 +45,7 @@ func gatherOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.username, "username", "", "Username to use when communicating with GitHub.")
 	fs.StringVar(&o.tokenPath, "token-path", "", "Path to token to use when communicating with GitHub.")
+	fs.StringVar(&o.ghGraphqlEndpoint, "github-graphql-endpoint", "https://api.github.com/graphql", "GH GraphQL endpoint URL")
 	o.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
@@ -61,7 +63,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not read token.")
 	}
-	client := githubql.NewClient(oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(&oauth2.Token{AccessToken: strings.TrimSpace(string(rawToken))})))
+	client := githubql.NewEnterpriseClient(o.ghGraphqlEndpoint, oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(&oauth2.Token{AccessToken: strings.TrimSpace(string(rawToken))})))
 
 	failed := false
 	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {

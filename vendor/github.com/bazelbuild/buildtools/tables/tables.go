@@ -1,18 +1,19 @@
 /*
-Copyright 2016 Google Inc. All Rights Reserved.
+Copyright 2016 Google LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+    https://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 */
+
 // Tables about what Buildifier can and cannot edit.
 // Perhaps eventually this will be
 // derived from the BUILD encyclopedia.
@@ -153,20 +154,9 @@ var SortableBlacklist = map[string]bool{
 	"genrule.srcs": true,
 }
 
-// SortableWhitelist records specific rule arguments that are guaranteed
-// to be reorderable, because bazel re-sorts the list itself after reading the BUILD file.
-var SortableWhitelist = map[string]bool{
-	"cc_inc_library.hdrs":      true,
-	"cc_library.hdrs":          true,
-	"java_library.srcs":        true,
-	"java_library.resources":   true,
-	"java_binary.srcs":         true,
-	"java_binary.resources":    true,
-	"java_test.srcs":           true,
-	"java_test.resources":      true,
-	"java_library.constraints": true,
-	"java_import.constraints":  true,
-}
+// SortableWhitelist records specific rule arguments that are guaranteed to be reorderable
+// (format: "rule_name.attribute_name").
+var SortableWhitelist = map[string]bool{}
 
 // NamePriority maps an argument name to its sorting priority.
 //
@@ -199,9 +189,6 @@ var NamePriority = map[string]int{
 	"implementation": 5,
 	"implements":     6,
 	"alwayslink":     7,
-	// default condition in a dictionary literal passed to select should be
-	// the last one by convention.
-	"//conditions:default": 50,
 }
 
 var StripLabelLeadingSlashes = false

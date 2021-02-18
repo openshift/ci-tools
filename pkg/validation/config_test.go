@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"k8s.io/utils/diff"
+	utilpointer "k8s.io/utils/pointer"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -365,6 +366,32 @@ func TestValidateImages(t *testing.T) {
 			},
 			output: []error{
 				errors.New("images[1]: duplicate image name 'same-thing' (previously seen in images[0])"),
+			},
+		},
+		{
+			name: "Dockerfile literal is mutually exclusive with context_dir",
+			input: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					DockerfileLiteral: utilpointer.StringPtr("FROM foo"),
+					ContextDir:        "foo",
+				},
+				To: "amsterdam",
+			}},
+			output: []error{
+				errors.New("images[0]: dockerfile_literal is mutually exclusive with context_dir and dockerfile_path"),
+			},
+		},
+		{
+			name: "Dockerfile literal is mutually exclusive with dockerfile_path",
+			input: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					DockerfileLiteral: utilpointer.StringPtr("FROM foo"),
+					DockerfilePath:    "foo",
+				},
+				To: "amsterdam",
+			}},
+			output: []error{
+				errors.New("images[0]: dockerfile_literal is mutually exclusive with context_dir and dockerfile_path"),
 			},
 		},
 	}

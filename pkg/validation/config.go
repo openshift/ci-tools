@@ -144,6 +144,9 @@ func validateImages(fieldRoot string, input []api.ProjectDirectoryImageBuildStep
 		if image.To == api.PipelineImageStreamTagReferenceIndexImage {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, api.PipelineImageStreamTagReferenceIndexImage))
 		}
+		if image.DockerfileLiteral != nil && (image.ContextDir != "" || image.DockerfilePath != "") {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: dockerfile_literal is mutually exclusive with context_dir and dockerfile_path", fieldRootN))
+		}
 	}
 	return validationErrors
 }

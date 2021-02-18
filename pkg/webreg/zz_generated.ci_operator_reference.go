@@ -39,6 +39,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # ContextDir is the directory in the project\n" +
 	"        # from which this build should be run.\n" +
 	"        context_dir: ' '\n" +
+	"        # DockerfileLiteral can be used to provide an inline Dockerfile.\n" +
+	"        # Mutually exclusive with DockerfilePath.\n" +
+	"        dockerfile_literal: \"\"\n" +
 	"        # DockerfilePath is the path to a Dockerfile in the\n" +
 	"        # project to run relative to the context_dir.\n" +
 	"        dockerfile_path: ' '\n" +
@@ -75,6 +78,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"    - # ContextDir is the directory in the project\n" +
 	"      # from which this build should be run.\n" +
 	"      context_dir: ' '\n" +
+	"      # DockerfileLiteral can be used to provide an inline Dockerfile.\n" +
+	"      # Mutually exclusive with DockerfilePath.\n" +
+	"      dockerfile_literal: \"\"\n" +
 	"      # DockerfilePath is the path to a Dockerfile in the\n" +
 	"      # project to run relative to the context_dir.\n" +
 	"      dockerfile_path: ' '\n" +
@@ -190,6 +196,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # ContextDir is the directory in the project\n" +
 	"        # from which this build should be run.\n" +
 	"        context_dir: ' '\n" +
+	"        # DockerfileLiteral can be used to provide an inline Dockerfile.\n" +
+	"        # Mutually exclusive with DockerfilePath.\n" +
+	"        dockerfile_literal: \"\"\n" +
 	"        # DockerfilePath is the path to a Dockerfile in the\n" +
 	"        # project to run relative to the context_dir.\n" +
 	"        dockerfile_path: ' '\n" +
@@ -217,6 +226,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # ContextDir is the directory in the project\n" +
 	"        # from which this build should be run.\n" +
 	"        context_dir: ' '\n" +
+	"        # DockerfileLiteral can be used to provide an inline Dockerfile.\n" +
+	"        # Mutually exclusive with DockerfilePath.\n" +
+	"        dockerfile_literal: \"\"\n" +
 	"        # DockerfilePath is the path to a Dockerfile in the\n" +
 	"        # project to run relative to the context_dir.\n" +
 	"        dockerfile_path: ' '\n" +

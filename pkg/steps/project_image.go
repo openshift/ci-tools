@@ -92,8 +92,9 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 	build := buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
-			Type:   buildapi.BuildSourceImage,
-			Images: images,
+			Type:       buildapi.BuildSourceImage,
+			Dockerfile: s.config.DockerfileLiteral,
+			Images:     images,
 		},
 		s.config.DockerfilePath,
 		s.resources,

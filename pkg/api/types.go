@@ -1215,6 +1215,10 @@ type ProjectDirectoryImageBuildInputs struct {
 	// project to run relative to the context_dir.
 	DockerfilePath string `json:"dockerfile_path,omitempty"`
 
+	// DockerfileLiteral can be used to  provide an inline Dockerfile.
+	// Mutually exclusive with DockerfilePath.
+	DockerfileLiteral *string `json:"dockerfile_literal,omitempty"`
+
 	// Inputs is a map of tag reference name to image input changes
 	// that will populate the build context for the Dockerfile or
 	// alter the input image for a multi-stage build.

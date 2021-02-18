@@ -45,6 +45,7 @@ func (s *gitSourceStep) run(ctx context.Context) error {
 
 		return handleBuild(ctx, s.buildClient, buildFromSource(s.jobSpec, "", api.PipelineImageStreamTagReferenceRoot, buildapi.BuildSource{
 			Type:         buildapi.BuildSourceGit,
+			Dockerfile:   s.config.DockerfileLiteral,
 			ContextDir:   s.config.ContextDir,
 			SourceSecret: getSourceSecretFromName(secretName),
 			Git: &buildapi.GitBuildSource{

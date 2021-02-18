@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/semaphore"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -40,6 +42,7 @@ type options struct {
 	githubUserName                               string
 	selfApprove                                  bool
 	ensureCorrectPromotionDockerfile             bool
+	maxConcurrency                               int
 	ocpBuildDataRepoDir                          string
 	currentRelease                               ocpbuilddata.MajorMinor
 	pruneUnusedReplacements                      bool
@@ -57,6 +60,7 @@ func gatherOptions() (*options, error) {
 	flag.BoolVar(&o.selfApprove, "self-approve", false, "If the bot should self-approve its PR.")
 	flag.BoolVar(&o.ensureCorrectPromotionDockerfile, "ensure-correct-promotion-dockerfile", false, "If Dockerfiles used for promotion should get updated to match whats in the ocp-build-data repo")
 	flag.Var(o.ensureCorrectPromotionDockerfileIngoredRepos, "ensure-correct-promotion-dockerfile-ignored-repos", "Repos that are being ignored when ensuring the correct promotion dockerfile in org/repo notation. Can be passed multiple times.")
+	flag.IntVar(&o.maxConcurrency, "concurrency", 500, "Maximum number of concurrent in-flight goroutines to handle files.")
 	flag.StringVar(&o.ocpBuildDataRepoDir, "ocp-build-data-repo-dir", "../ocp-build-data", "The directory in which the ocp-build-data repository is")
 	flag.StringVar(&o.currentRelease.Minor, "current-release-minor", "6", "The minor version of the current release that is getting forwarded to from the master branch")
 	flag.BoolVar(&o.pruneUnusedReplacements, "prune-unused-replacements", false, "If replacements that match nothing should get pruned from the config")
@@ -93,6 +97,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to gather options")
 	}
+	logrus.WithField("maxConcurrency", opts.maxConcurrency).Info("set up the max concurrency")
 
 	// Already create the client here if needed to make sure we fail asap if there is an issue
 	var githubClient pgithub.Client
@@ -130,13 +135,16 @@ func main() {
 
 	var errs []error
 	errLock := &sync.Mutex{}
-	wg := sync.WaitGroup{}
+	sem := semaphore.NewWeighted(int64(opts.maxConcurrency))
+	ctx := context.TODO()
 	if err := config.OperateOnCIOperatorConfigDir(
 		opts.configDir,
 		func(config *api.ReleaseBuildConfiguration, info *config.Info) error {
-			wg.Add(1)
+			if err := sem.Acquire(ctx, 1); err != nil {
+				return fmt.Errorf("failed to acquire semaphore: %w", err)
+			}
 			go func(filename string) {
-				defer wg.Done()
+				defer sem.Release(1)
 				if err := replacer(
 					github.FileGetterFactory,
 					func(data []byte) error {
@@ -160,7 +168,9 @@ func main() {
 	); err != nil {
 		logrus.WithError(err).Fatal("Failed to operate on ci-operator-config")
 	}
-	wg.Wait()
+	if err := sem.Acquire(ctx, int64(opts.maxConcurrency)); err != nil {
+		logrus.WithError(err).Fatal("failed to acquire semaphore while wating all workers to finish")
+	}
 	if err := utilerrors.NewAggregate(errs); err != nil {
 		logrus.WithError(err).Fatal("Encountered errors")
 	}

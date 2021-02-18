@@ -17,8 +17,7 @@ periodics:
     - args:
       - --gcs-upload-secret=/secrets/gcs/service-account.json
       - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-      - --report-password-file=/etc/report/password.txt
-      - --report-username=ci
+      - --report-credentials-file=/etc/report/credentials
       - --secret-dir=/usr/local/e2e-aws-nightly-cluster-profile
       - --target=e2e-aws-nightly
       - --template=/usr/local/e2e-aws-nightly
@@ -88,8 +87,7 @@ periodics:
     - args:
       - --gcs-upload-secret=/secrets/gcs/service-account.json
       - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-      - --report-password-file=/etc/report/password.txt
-      - --report-username=ci
+      - --report-credentials-file=/etc/report/credentials
       - --secret-dir=/usr/local/e2e-aws-nightly-interval-cluster-profile
       - --target=e2e-aws-nightly-interval
       - --template=/usr/local/e2e-aws-nightly-interval
@@ -159,8 +157,7 @@ periodics:
     - args:
       - --gcs-upload-secret=/secrets/gcs/service-account.json
       - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-      - --report-password-file=/etc/report/password.txt
-      - --report-username=ci
+      - --report-credentials-file=/etc/report/credentials
       - --secret-dir=/usr/local/e2e-nightly-cluster-profile
       - --target=e2e-nightly
       - --template=/usr/local/e2e-nightly

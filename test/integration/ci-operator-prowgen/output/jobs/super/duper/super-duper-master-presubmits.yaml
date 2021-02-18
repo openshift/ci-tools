@@ -18,8 +18,7 @@ presubmits:
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --report-password-file=/etc/report/password.txt
-        - --report-username=ci
+        - --report-credentials-file=/etc/report/credentials
         - --target=ci-index
         command:
         - ci-operator
@@ -66,8 +65,7 @@ presubmits:
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --report-password-file=/etc/report/password.txt
-        - --report-username=ci
+        - --report-credentials-file=/etc/report/credentials
         - --secret-dir=/usr/local/e2e-cluster-profile
         - --target=e2e
         - --template=/usr/local/e2e
@@ -144,8 +142,7 @@ presubmits:
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --report-password-file=/etc/report/password.txt
-        - --report-username=ci
+        - --report-credentials-file=/etc/report/credentials
         - --target=[images]
         - --target=[release:latest]
         command:
@@ -203,8 +200,7 @@ presubmits:
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --report-password-file=/etc/report/password.txt
-        - --report-username=ci
+        - --report-credentials-file=/etc/report/credentials
         - --target=lint
         command:
         - ci-operator
@@ -251,8 +247,7 @@ presubmits:
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --report-password-file=/etc/report/password.txt
-        - --report-username=ci
+        - --report-credentials-file=/etc/report/credentials
         - --secret-dir=/secrets/ci-pull-credentials
         - --target=steps
         command:
@@ -306,8 +301,7 @@ presubmits:
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --report-password-file=/etc/report/password.txt
-        - --report-username=ci
+        - --report-credentials-file=/etc/report/credentials
         - --target=unit
         command:
         - ci-operator
@@ -356,8 +350,7 @@ presubmits:
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --report-password-file=/etc/report/password.txt
-        - --report-username=ci
+        - --report-credentials-file=/etc/report/credentials
         - --target=[images]
         - --target=[release:latest]
         - --variant=variant
@@ -408,8 +401,7 @@ presubmits:
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --report-password-file=/etc/report/password.txt
-        - --report-username=ci
+        - --report-credentials-file=/etc/report/credentials
         - --target=unit
         - --variant=variant
         command:

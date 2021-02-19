@@ -88,15 +88,13 @@ func main() {
 		}
 
 		var branchTokens []string
+		body := fmt.Sprintf("The following branches are being fast-forwarded from the current development branch (%s) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n", repoInfo.Branch)
 		for _, branch := range branches.List() {
+			body += fmt.Sprintf(" - `%s`\n", branch)
 			branchTokens = append(branchTokens, fmt.Sprintf("branch:%s", branch))
 		}
-		title := fmt.Sprintf("Future Release Branches Frozen For Merging | %s", strings.Join(branchTokens, " "))
-		body := fmt.Sprintf("The following branches are being fast-forwarded from the current development branch (%s) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n", repoInfo.Branch)
-		for branch := range branches {
-			body += fmt.Sprintf(" - `%s`\n", branch)
-		}
 		body += "\nContact the [Test Platform](https://coreos.slack.com/messages/CBN38N3MW) or [Automated Release](https://coreos.slack.com/messages/CB95J6R4N) teams for more information."
+		title := fmt.Sprintf("Future Release Branches Frozen For Merging | %s", strings.Join(branchTokens, " "))
 
 		// check to see if there's a blocker issue we already created so we can just edit it
 		var blockerQuery struct {

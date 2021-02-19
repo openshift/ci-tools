@@ -12,6 +12,7 @@ function cleanup() {
 }
 
 trap cleanup EXIT
+trap cleanup INT
 
 while true; do
     if [[ -f "${KUBECONFIG}" ]]; then
@@ -23,4 +24,5 @@ while true; do
 done
 
 echo -n "waited" > "${SHARED_DIR}/output"
-sleep 360
+sleep 360 &
+wait

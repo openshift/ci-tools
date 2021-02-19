@@ -240,6 +240,7 @@ func (s *multiStageTestStep) Provides() api.ParameterMap {
 func (s *multiStageTestStep) SubTests() []*junit.TestCase { return s.subTests }
 
 func (s *multiStageTestStep) setupRBAC(ctx context.Context) error {
+	log.Printf("Creating multi-stage RBAC for %q", s.name)
 	labels := map[string]string{MultiStageTestLabel: s.name}
 	m := meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.name, Labels: labels}
 	sa := &coreapi.ServiceAccount{ObjectMeta: m}

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 dir=$(mktemp -d)
-#trap 'rm -r "${dir}"' EXIT
+trap 'rm -r "${dir}"' EXIT
 export SHARED_DIR=${dir}/shared
 export TMPDIR=${dir}/tmp
 export NAMESPACE=test
@@ -162,11 +162,13 @@ test_upload_on_interrupt() {
     local pid
     secret-wrapper --dry-run bash -c 'trap "echo cleanup > ${SHARED_DIR}/file" EXIT; sleep 30' > "${OUT}" 2> "${ERR}" &
     pid=$!
+    sleep 1
     kill -s SIGTERM "${pid}"
     if wait "$pid"; then
         fail "[ERROR] secret-wrapper did not fail as expected:"
     fi
     SECRET='{"kind":"Secret","apiVersion":"v1","metadata":{"name":"test","creationTimestamp":null},"data":{"file":"Y2xlYW51cAo=","test0.txt":"dGVzdDAK"},"type":"Opaque"}' check_output "$(cat "${OUT}")"
+    rm "${TMPDIR}/secret/file"
 }
 
 mkdir "${SHARED_DIR}"

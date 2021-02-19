@@ -97,6 +97,13 @@ func TestMultiStage(t *testing.T) {
 			success: false,
 			output:  []string{`could not run steps: step best-effort-failure failed`},
 		},
+		{
+			name:    "step name explicitly uses an imagestream name",
+			args:    []string{"--unresolved-config=names.yaml", "--target=os"},
+			env:     []string{defaultJobSpec},
+			success: true,
+			output:  []string{`Pod os-test succeeded after`},
+		},
 	}
 
 	for _, testCase := range testCases {

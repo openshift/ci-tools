@@ -403,10 +403,6 @@ func (o *options) Complete() error {
 	jobSpec.BaseNamespace = o.baseNamespace
 	o.jobSpec = jobSpec
 
-	if err := o.resultsOptions.Validate(); err != nil {
-		return fmt.Errorf("invalid result reporting options: %w", err)
-	}
-
 	info := o.getResolverInfo(jobSpec)
 
 	if o.unresolvedConfigPath != "" && o.configSpecPath != "" {

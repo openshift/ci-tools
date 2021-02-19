@@ -274,7 +274,7 @@ func (s *multiStageTestStep) setupRBAC(ctx context.Context) error {
 		},
 	}
 
-	if err := util.CreateRBACs(ctx, sa, role, bindings, s.client, 1*time.Minute, 5*time.Minute); err != nil {
+	if err := util.CreateRBACs(ctx, sa, role, bindings, s.client, 1*time.Second, 1*time.Minute); err != nil {
 		return err
 	}
 

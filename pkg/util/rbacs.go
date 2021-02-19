@@ -42,7 +42,7 @@ func CreateRBACs(ctx context.Context, sa *coreapi.ServiceAccount, role *rbacapi.
 		return nil
 	}
 
-	if err := wait.Poll(retryDuration, timeout, func() (bool, error) {
+	if err := wait.PollImmediate(retryDuration, timeout, func() (bool, error) {
 		actualSA := &coreapi.ServiceAccount{}
 		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{
 			Namespace: sa.Namespace,

@@ -166,7 +166,7 @@ func main() {
 	}
 
 	source := fmt.Sprintf("%s:%s", o.githubLogin, remoteBranch)
-	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, description, matchTitle, source, "master", true, labelsToAdd); err != nil {
+	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, description, source, "master", remoteBranch, true, labelsToAdd); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 }

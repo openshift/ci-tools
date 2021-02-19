@@ -188,6 +188,17 @@ func TestValidate(t *testing.T) {
 				}}}}},
 			expected: utilerrors.NewAggregate([]error{fmt.Errorf("secret[0] in secretConfig[0] with kubernetes.io/dockerconfigjson type have no key named .dockerconfigjson")}),
 		},
+		{
+			name: "credentials cannot be an attribute",
+			config: &Config{Secrets: []SecretConfig{{
+				From: map[string]BitWardenContext{
+					"some-key": {
+						Attribute: "credentials",
+					},
+				},
+			}}},
+			expected: utilerrors.NewAggregate([]error{fmt.Errorf("config[0].from[some-key].attribute: only the 'password' is supported, not credentials")}),
+		},
 	}
 
 	for _, tc := range testCases {

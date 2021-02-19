@@ -95,7 +95,12 @@ func (c *Config) Validate() error {
 	var errs []error
 	for i, secretConfig := range c.Secrets {
 		var foundKey bool
-		for key := range secretConfig.From {
+		for key, bwContext := range secretConfig.From {
+			switch bwContext.Attribute {
+			case AttributeTypePassword, "":
+			default:
+				errs = append(errs, fmt.Errorf("config[%d].from[%s].attribute: only the '%s' is supported, not %s", i, key, AttributeTypePassword, bwContext.Attribute))
+			}
 			if key == corev1.DockerConfigJsonKey {
 				foundKey = true
 			}

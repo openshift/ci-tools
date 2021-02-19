@@ -472,7 +472,7 @@ func TestCompleteOptions(t *testing.T) {
 				kubeConfigPath: kubeConfigPath,
 			},
 			expectedConfig: defaultConfig,
-			expectedError:  fmt.Errorf("config[0].from[key-name-2].attribute: only the 'password' is supported, not not-password"),
+			expectedError:  fmt.Errorf("failed to validate the config: config[0].from[key-name-2].attribute: only the 'password' is supported, not not-password"),
 		},
 		{
 			name: "group is resolved",

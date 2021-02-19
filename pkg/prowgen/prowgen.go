@@ -252,8 +252,7 @@ func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secre
 	ret.Containers[0].Args = append([]string{
 		"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 		"--gcs-upload-secret=/secrets/gcs/service-account.json",
-		"--report-username=ci",
-		"--report-password-file=/etc/report/password.txt",
+		"--report-credentials-file=/etc/report/credentials",
 	}, additionalArgs...)
 	if customArtifactDir {
 		ret.Containers[0].Args = append(ret.Containers[0].Args, "--upload-via-pod-utils=false")

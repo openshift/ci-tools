@@ -1,0 +1,27 @@
+base_images:
+  os:
+    name: centos
+    namespace: openshift
+    tag: '7'
+resources:
+  '*':
+    limits:
+      cpu: 500m
+    requests:
+      cpu: 10m
+tests:
+  - as: os
+    steps:
+      test:
+        - as: test
+          commands: exit 0
+          from: pipeline:os
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+
+zz_generated_metadata:
+  branch: master
+  org: test
+  repo: test

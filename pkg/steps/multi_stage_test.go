@@ -75,6 +75,15 @@ func TestRequires(t *testing.T) {
 			api.InternalImageLink(
 				api.PipelineImageStreamTagReferenceSource),
 		},
+	}, {
+		name: "step needs pipeline image explicitly, should have InternalImageLink",
+		steps: api.MultiStageTestConfigurationLiteral{
+			Test: []api.LiteralTestStep{{From: "pipeline:src"}},
+		},
+		req: []api.StepLink{
+			api.InternalImageLink(
+				api.PipelineImageStreamTagReferenceSource),
+		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			step := MultiStageTestStep(api.TestStepConfiguration{

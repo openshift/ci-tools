@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"syscall"
 	"testing"
@@ -22,43 +21,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
-
-func TestOptions_Validate(t *testing.T) {
-	var testCases = []struct {
-		name     string
-		options  Options
-		expected error
-	}{
-		{
-			name: "nothing set is valid",
-		},
-		{
-			name:    "only address set is valid",
-			options: Options{address: "dotcom.com"},
-		},
-		{
-			name: "everything set is valid",
-			options: Options{
-				address:  "dotcom.com",
-				username: "super",
-				password: "secrets.txt",
-			},
-		},
-		{
-			name: "subset is not valid",
-			options: Options{
-				address:  "dotcom.com",
-				password: "secrets.txt",
-			},
-			expected: errors.New("--report-{username|password-file} must be set together or not at all"),
-		},
-	}
-	for _, testCase := range testCases {
-		if actual, expected := testCase.options.Validate(), testCase.expected; !reflect.DeepEqual(actual, expected) {
-			t.Errorf("%s: got incorrect error from validate: expected %q got %q", testCase.name, expected, actual)
-		}
-	}
-}
 
 func TestReporter_Report(t *testing.T) {
 	var testCases = []struct {
@@ -185,14 +147,10 @@ func TestGetUsernameAndPassword(t *testing.T) {
 
 	var testCases = []struct {
 		name                               string
-		username, password, credentials    string
+		credentials                        string
 		expectedUsername, expectedPassword string
 		expectedError                      error
 	}{
-		{
-			name:          "no input: password file",
-			expectedError: fmt.Errorf("failed to read password file \"\": %w", &os.PathError{Op: "open", Err: syscall.Errno(0x02)}),
-		},
 		{
 			name:          "no input: credentials file",
 			credentials:   "file-not-exist",
@@ -204,30 +162,15 @@ func TestGetUsernameAndPassword(t *testing.T) {
 			expectedError: fmt.Errorf("got invalid content of report credentials file which must be of the form '<username>:<passwrod>'"),
 		},
 		{
-			name:             "username and password only",
-			username:         "u",
-			password:         password,
-			expectedUsername: "u",
-			expectedPassword: "secret",
-		},
-		{
 			name:             "credentials file only",
 			credentials:      credentials,
-			expectedUsername: "a",
-			expectedPassword: "b",
-		},
-		{
-			name:             "username and password and credentials file",
-			credentials:      credentials,
-			username:         "u",
-			password:         password,
 			expectedUsername: "a",
 			expectedPassword: "b",
 		},
 	}
 	for _, tc := range testCases {
 
-		actualUsername, actualPassword, actualError := getUsernameAndPassword(tc.username, tc.password, tc.credentials)
+		actualUsername, actualPassword, actualError := getUsernameAndPassword(tc.credentials)
 		if diff := cmp.Diff(tc.expectedUsername, actualUsername); diff != "" {
 			t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 		}

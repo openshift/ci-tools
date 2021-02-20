@@ -15,7 +15,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	prowConfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
@@ -43,8 +42,6 @@ type options struct {
 	logLevel    string
 	address     string
 	gracePeriod time.Duration
-	username    string
-	password    string
 	passwdFile  string
 }
 
@@ -54,9 +51,7 @@ func gatherOptions() (options, error) {
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.address, "address", ":8080", "Address to run server on")
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
-	fs.StringVar(&o.username, "username", "", "Username to trust for clients.")
-	fs.StringVar(&o.password, "password-file", "", "File holding the password for clients.")
-	fs.StringVar(&o.passwdFile, "passwd-file", "", "Authenticate against a file. Each line of the file is with the form `<username>:<password>`. This will override --username and --password-file")
+	fs.StringVar(&o.passwdFile, "passwd-file", "", "Authenticate against a file. Each line of the file is with the form `<username>:<password>`.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)
 	}
@@ -68,11 +63,8 @@ func validateOptions(o options) error {
 	if err != nil {
 		return fmt.Errorf("invalid --log-level: %w", err)
 	}
-	if (o.username == "") != (o.password == "") {
-		return errors.New("--username and --password-file must be specified together")
-	}
-	if (o.username == "") && (o.passwdFile == "") {
-		return errors.New("--username or --htpasswd-file must be specified")
+	if o.passwdFile == "" {
+		return errors.New("--passwd-file must be specified")
 	}
 	return nil
 }
@@ -170,17 +162,9 @@ func main() {
 	logrusutil.ComponentInit()
 	health := pjutil.NewHealth()
 
-	secretAgent := secret.Agent{}
-	if err := secretAgent.Start([]string{o.password}); err != nil {
-		log.WithError(err).Fatal("Could not load secrets.")
-	}
-
 	http.HandleFunc("/", http.NotFound)
 
-	validator := &multi{delegates: []validator{
-		&passwdFile{file: o.passwdFile},
-		&literal{username: o.username, password: secretAgent.GetTokenGenerator(o.password)}},
-	}
+	validator := &multi{delegates: []validator{&passwdFile{file: o.passwdFile}}}
 
 	http.Handle("/result", loginHandler(validator, handleCIOperatorResult()))
 	metrics.ExposeMetrics("result-aggregator", prowConfig.PushGateway{}, flagutil.DefaultMetricsPort)

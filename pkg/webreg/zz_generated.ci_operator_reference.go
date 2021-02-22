@@ -384,6 +384,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Post steps always run, even if previous steps fail.\n" +
 	"            post:\n" +
 	"                - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
+	"                  # DEPRECATED: set Timeout instead.\n" +
 	"                  active_deadline_seconds: 0\n" +
 	"                  # ArtifactDir is the directory from which artifacts will be extracted\n" +
 	"                  # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
@@ -432,6 +433,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
+	"                  # SIGKILL when aborting a Step.\n" +
+	"                  grace_period: 0s\n" +
 	"                  # Leases lists resources that should be acquired for the test.\n" +
 	"                  leases:\n" +
 	"                    - # Env is the environment variable that will contain the resource name.\n" +
@@ -457,10 +461,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    requests:\n" +
 	"                        \"\": \"\"\n" +
 	"                  # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
+	"                  # DEPRECATED: set GracePeriod instead.\n" +
 	"                  termination_grace_period_seconds: 0\n" +
+	"                  # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
+	"                  timeout: 0s\n" +
 	"            # Pre is the array of test steps run to set up the environment for the test.\n" +
 	"            pre:\n" +
 	"                - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
+	"                  # DEPRECATED: set Timeout instead.\n" +
 	"                  active_deadline_seconds: 0\n" +
 	"                  # ArtifactDir is the directory from which artifacts will be extracted\n" +
 	"                  # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
@@ -509,6 +517,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
+	"                  # SIGKILL when aborting a Step.\n" +
+	"                  grace_period: 0s\n" +
 	"                  # Leases lists resources that should be acquired for the test.\n" +
 	"                  leases:\n" +
 	"                    - # Env is the environment variable that will contain the resource name.\n" +
@@ -534,10 +545,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    requests:\n" +
 	"                        \"\": \"\"\n" +
 	"                  # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
+	"                  # DEPRECATED: set GracePeriod instead.\n" +
 	"                  termination_grace_period_seconds: 0\n" +
+	"                  # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
+	"                  timeout: 0s\n" +
 	"            # Test is the array of test steps that define the actual test.\n" +
 	"            test:\n" +
 	"                - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
+	"                  # DEPRECATED: set Timeout instead.\n" +
 	"                  active_deadline_seconds: 0\n" +
 	"                  # ArtifactDir is the directory from which artifacts will be extracted\n" +
 	"                  # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
@@ -586,6 +601,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
+	"                  # SIGKILL when aborting a Step.\n" +
+	"                  grace_period: 0s\n" +
 	"                  # Leases lists resources that should be acquired for the test.\n" +
 	"                  leases:\n" +
 	"                    - # Env is the environment variable that will contain the resource name.\n" +
@@ -611,7 +629,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    requests:\n" +
 	"                        \"\": \"\"\n" +
 	"                  # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
+	"                  # DEPRECATED: set GracePeriod instead.\n" +
 	"                  termination_grace_period_seconds: 0\n" +
+	"                  # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
+	"                  timeout: 0s\n" +
 	"        openshift_ansible:\n" +
 	"            cluster_profile: ' '\n" +
 	"        openshift_ansible_custom:\n" +
@@ -716,6 +737,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  grace_period: 0s\n" +
 	"                  leases:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
@@ -736,6 +758,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                        # LiteralTestStep is a full test step definition.\n" +
 	"                        \"\": \"\"\n" +
 	"                  termination_grace_period_seconds: 0\n" +
+	"                  timeout: 0s\n" +
 	"            # Pre is the array of test steps run to set up the environment for the test.\n" +
 	"            pre:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
@@ -770,6 +793,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  grace_period: 0s\n" +
 	"                  leases:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
@@ -790,6 +814,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                        # LiteralTestStep is a full test step definition.\n" +
 	"                        \"\": \"\"\n" +
 	"                  termination_grace_period_seconds: 0\n" +
+	"                  timeout: 0s\n" +
 	"            # Test is the array of test steps that define the actual test.\n" +
 	"            test:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
@@ -824,6 +849,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  grace_period: 0s\n" +
 	"                  leases:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
@@ -844,6 +870,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                        # LiteralTestStep is a full test step definition.\n" +
 	"                        \"\": \"\"\n" +
 	"                  termination_grace_period_seconds: 0\n" +
+	"                  timeout: 0s\n" +
 	"            # Workflow is the name of the workflow to be used for this configuration. For fields defined in both\n" +
 	"            # the config and the workflow, the fields from the config will override what is set in Workflow.\n" +
 	"            workflow: \"\"\n" +
@@ -992,6 +1019,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Post steps always run, even if previous steps fail.\n" +
 	"        post:\n" +
 	"            - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
+	"              # DEPRECATED: set Timeout instead.\n" +
 	"              active_deadline_seconds: 0\n" +
 	"              # ArtifactDir is the directory from which artifacts will be extracted\n" +
 	"              # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
@@ -1040,6 +1068,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
+	"              # SIGKILL when aborting a Step.\n" +
+	"              grace_period: 0s\n" +
 	"              # Leases lists resources that should be acquired for the test.\n" +
 	"              leases:\n" +
 	"                - # Env is the environment variable that will contain the resource name.\n" +
@@ -1065,10 +1096,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                requests:\n" +
 	"                    \"\": \"\"\n" +
 	"              # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
+	"              # DEPRECATED: set GracePeriod instead.\n" +
 	"              termination_grace_period_seconds: 0\n" +
+	"              # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
+	"              timeout: 0s\n" +
 	"        # Pre is the array of test steps run to set up the environment for the test.\n" +
 	"        pre:\n" +
 	"            - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
+	"              # DEPRECATED: set Timeout instead.\n" +
 	"              active_deadline_seconds: 0\n" +
 	"              # ArtifactDir is the directory from which artifacts will be extracted\n" +
 	"              # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
@@ -1117,6 +1152,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
+	"              # SIGKILL when aborting a Step.\n" +
+	"              grace_period: 0s\n" +
 	"              # Leases lists resources that should be acquired for the test.\n" +
 	"              leases:\n" +
 	"                - # Env is the environment variable that will contain the resource name.\n" +
@@ -1142,10 +1180,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                requests:\n" +
 	"                    \"\": \"\"\n" +
 	"              # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
+	"              # DEPRECATED: set GracePeriod instead.\n" +
 	"              termination_grace_period_seconds: 0\n" +
+	"              # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
+	"              timeout: 0s\n" +
 	"        # Test is the array of test steps that define the actual test.\n" +
 	"        test:\n" +
 	"            - # ActiveDeadlineSeconds is passed directly through to the step's Pod.\n" +
+	"              # DEPRECATED: set Timeout instead.\n" +
 	"              active_deadline_seconds: 0\n" +
 	"              # ArtifactDir is the directory from which artifacts will be extracted\n" +
 	"              # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
@@ -1194,6 +1236,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
+	"              # SIGKILL when aborting a Step.\n" +
+	"              grace_period: 0s\n" +
 	"              # Leases lists resources that should be acquired for the test.\n" +
 	"              leases:\n" +
 	"                - # Env is the environment variable that will contain the resource name.\n" +
@@ -1219,7 +1264,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                requests:\n" +
 	"                    \"\": \"\"\n" +
 	"              # TerminationGracePeriodSeconds is passed directly through to the step's Pod.\n" +
+	"              # DEPRECATED: set GracePeriod instead.\n" +
 	"              termination_grace_period_seconds: 0\n" +
+	"              # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
+	"              timeout: 0s\n" +
 	"      openshift_ansible:\n" +
 	"        cluster_profile: ' '\n" +
 	"      openshift_ansible_custom:\n" +
@@ -1324,6 +1372,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              grace_period: 0s\n" +
 	"              leases:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
@@ -1344,6 +1393,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    \"\": \"\"\n" +
 	"              termination_grace_period_seconds: 0\n" +
+	"              timeout: 0s\n" +
 	"        # Pre is the array of test steps run to set up the environment for the test.\n" +
 	"        pre:\n" +
 	"            # LiteralTestStep is a full test step definition.\n" +
@@ -1378,6 +1428,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              grace_period: 0s\n" +
 	"              leases:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
@@ -1398,6 +1449,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    \"\": \"\"\n" +
 	"              termination_grace_period_seconds: 0\n" +
+	"              timeout: 0s\n" +
 	"        # Test is the array of test steps that define the actual test.\n" +
 	"        test:\n" +
 	"            # LiteralTestStep is a full test step definition.\n" +
@@ -1432,6 +1484,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              grace_period: 0s\n" +
 	"              leases:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
@@ -1452,6 +1505,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    \"\": \"\"\n" +
 	"              termination_grace_period_seconds: 0\n" +
+	"              timeout: 0s\n" +
 	"        # Workflow is the name of the workflow to be used for this configuration. For fields defined in both\n" +
 	"        # the config and the workflow, the fields from the config will override what is set in Workflow.\n" +
 	"        workflow: \"\"\n" +

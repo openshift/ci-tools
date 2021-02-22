@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/repoowners"
 )
 
@@ -618,6 +619,7 @@ type LiteralTestStep struct {
 	// Commands is the command(s) that will be run inside the image.
 	Commands string `json:"commands,omitempty"`
 	// ActiveDeadlineSeconds is passed directly through to the step's Pod.
+	// DEPRECATED: set Timeout instead.
 	ActiveDeadlineSeconds *int64 `json:"active_deadline_seconds,omitempty"`
 	// ArtifactDir is the directory from which artifacts will be extracted
 	// when the command finishes. Defaults to "/tmp/artifacts"
@@ -625,7 +627,13 @@ type LiteralTestStep struct {
 	// Resources defines the resource requirements for the step.
 	Resources ResourceRequirements `json:"resources"`
 	// TerminationGracePeriodSeconds is passed directly through to the step's Pod.
+	// DEPRECATED: set GracePeriod instead.
 	TerminationGracePeriodSeconds *int64 `json:"termination_grace_period_seconds,omitempty"`
+	// Timeout is how long the we will wait before aborting a job with SIGINT.
+	Timeout *prowv1.Duration `json:"timeout,omitempty"`
+	// GracePeriod is how long the we will wait after sending SIGINT to send
+	// SIGKILL when aborting a Step.
+	GracePeriod *prowv1.Duration `json:"grace_period,omitempty"`
 	// Credentials defines the credentials we'll mount into this step.
 	Credentials []CredentialReference `json:"credentials,omitempty"`
 	// Environment lists parameters that should be set by the test.

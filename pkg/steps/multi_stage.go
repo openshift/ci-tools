@@ -14,6 +14,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/entrypoint"
 	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -407,6 +408,15 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		artifactDir := step.ArtifactDir
 		if s.artifactsViaPodUtils {
 			artifactDir = fmt.Sprintf("%s/%s", s.name, step.As)
+			gracePeriod := 30 * time.Second
+			if step.TerminationGracePeriodSeconds != nil {
+				gracePeriod = time.Duration(*step.TerminationGracePeriodSeconds) * time.Second
+			}
+			// We want upload to have some time to do what it needs to do, so set
+			// the grace period for the process to be just shy of that, assuming
+			// an 80/20 distribution of work.
+			gracePeriod = (gracePeriod * 4) / 5
+			s.jobSpec.DecorationConfig.GracePeriod = &v1.Duration{Duration: gracePeriod}
 		}
 		pod, err := generateBasePod(s.jobSpec, name, multiStageTestStepContainerName, []string{"/bin/bash", "-c", CommandPrefix + step.Commands}, image, resources, artifactDir, s.artifactsViaPodUtils, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec())
 		if err != nil {

@@ -2,8 +2,8 @@ ref:
   as: timeout
   from: os
   commands: timeout-commands.sh
-  active_deadline_seconds: 120
-  termination_grace_period_seconds: 10
+  timeout: 120s
+  grace_period: 10s
   resources:
     requests:
       cpu: 10m

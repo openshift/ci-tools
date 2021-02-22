@@ -14,7 +14,6 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/entrypoint"
 	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -406,17 +405,29 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			bestEffort.Insert(name)
 		}
 		artifactDir := step.ArtifactDir
+		var activeDeadlineSeconds, terminationGracePeriodSeconds *int64
+		p := func(i int64) *int64 {
+			return &i
+		}
 		if s.artifactsViaPodUtils {
 			artifactDir = fmt.Sprintf("%s/%s", s.name, step.As)
-			gracePeriod := 30 * time.Second
-			if step.TerminationGracePeriodSeconds != nil {
-				gracePeriod = time.Duration(*step.TerminationGracePeriodSeconds) * time.Second
+			s.jobSpec.DecorationConfig.Timeout = step.Timeout
+			s.jobSpec.DecorationConfig.GracePeriod = step.GracePeriod
+			gracePeriod := entrypoint.DefaultGracePeriod
+			if step.GracePeriod != nil {
+				gracePeriod = step.GracePeriod.Duration
 			}
 			// We want upload to have some time to do what it needs to do, so set
-			// the grace period for the process to be just shy of that, assuming
-			// an 80/20 distribution of work.
-			gracePeriod = (gracePeriod * 4) / 5
-			s.jobSpec.DecorationConfig.GracePeriod = &v1.Duration{Duration: gracePeriod}
+			// the grace period for the Pod to be just larger than the grace period
+			// for the process, assuming an 80/20 distribution of work.
+			terminationGracePeriodSeconds = p(int64(gracePeriod.Seconds() * 5 / 4))
+		} else {
+			if step.Timeout != nil {
+				activeDeadlineSeconds = p(int64(step.Timeout.Seconds()))
+			}
+			if step.GracePeriod != nil {
+				terminationGracePeriodSeconds = p(int64(step.GracePeriod.Seconds()))
+			}
 		}
 		pod, err := generateBasePod(s.jobSpec, name, multiStageTestStepContainerName, []string{"/bin/bash", "-c", CommandPrefix + step.Commands}, image, resources, artifactDir, s.artifactsViaPodUtils, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec())
 		if err != nil {
@@ -426,9 +437,9 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		delete(pod.Labels, ProwJobIdLabel)
 		pod.Annotations[annotationSaveContainerLogs] = "true"
 		pod.Labels[MultiStageTestLabel] = s.name
-		pod.Spec.ActiveDeadlineSeconds = step.ActiveDeadlineSeconds
+		pod.Spec.ActiveDeadlineSeconds = activeDeadlineSeconds
 		pod.Spec.ServiceAccountName = s.name
-		pod.Spec.TerminationGracePeriodSeconds = step.TerminationGracePeriodSeconds
+		pod.Spec.TerminationGracePeriodSeconds = terminationGracePeriodSeconds
 		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{Name: homeVolumeName, VolumeSource: coreapi.VolumeSource{EmptyDir: &coreapi.EmptyDirVolumeSource{}}})
 		for idx := range pod.Spec.Containers {
 			if pod.Spec.Containers[idx].Name != multiStageTestStepContainerName {

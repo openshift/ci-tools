@@ -67,7 +67,11 @@ func TestMultiStage(t *testing.T) {
 			args:    []string{"--unresolved-config=config.yaml", "--target=timeout"},
 			env:     []string{defaultJobSpec},
 			success: false,
-			output:  []string{`"timeout" pod "timeout-timeout" exceeded the configured timeout activeDeadlineSeconds=120`},
+			output: []string{
+				`Process did not finish before 2m0s timeout`,
+				`Process gracefully exited before 10s grace period`,
+				`Container test in pod timeout-timeout failed`,
+			},
 		},
 		{
 			name:    "step with dependencies",

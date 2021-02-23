@@ -62,6 +62,7 @@ type options struct {
 	testgrid            string
 	ignoreReleaseString string
 	ignoreReleases      []string
+	ignoreUnresolved    bool
 }
 
 func gatherOptions() (options, error) {
@@ -73,6 +74,7 @@ func gatherOptions() (options, error) {
 	fs.StringVar(&o.jobDir, "jobs", "", "Path to ci-operator jobs")
 	fs.StringVar(&o.testgrid, "testgrid-allowlist", "", "Path to testgrid allowlist")
 	fs.StringVar(&o.ignoreReleaseString, "ignore-release", "", "Comma separated list of release versions (i.e. 4.X) to ignore")
+	fs.BoolVar(&o.ignoreUnresolved, "ignore-unresolved", false, "If set, do not automatically migrate jobs with UNRESOLVED_CONFIG to generated")
 	return o, fs.Parse(os.Args[1:])
 }
 
@@ -445,6 +447,9 @@ func run(o options) error {
 			}
 			var conf testConfig
 			if isUnresolved {
+				if o.ignoreUnresolved {
+					continue
+				}
 				target := ""
 				for _, arg := range periodic.Spec.Containers[0].Args {
 					if strings.Split(arg, "=")[0] == "--target" {

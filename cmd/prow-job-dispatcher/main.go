@@ -278,7 +278,7 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 			switch o := o.(type) {
 			case configResult:
 				if !config.MatchingPathRegEx(o.path) {
-					results[o.cluster] = append(results[o.cluster], fmt.Sprintf(".*%s$", o.filename))
+					results[o.cluster] = append(results[o.cluster], fmt.Sprintf(".*/%s$", o.filename))
 				}
 			case error:
 				errs = append(errs, o)

@@ -23,8 +23,6 @@
       - |-
         #!/bin/bash
         set -eu
-        if [[ -e ${KUBECONFIG:-} ]]; then WRITEABLE_KUBECONFIG_LOCATION=$(mktemp) && cp $KUBECONFIG $WRITEABLE_KUBECONFIG_LOCATION && export KUBECONFIG=$WRITEABLE_KUBECONFIG_LOCATION && unset WRITEABLE_KUBECONFIG_LOCATION; fi
-        if ! [[ -w ${HOME:-} ]]; then export HOME=/alabama; fi
         command0
       env:
       - name: BUILD_ID

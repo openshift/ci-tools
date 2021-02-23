@@ -1,11 +1,11 @@
 package dispatcher
 
 import (
+	"fmt"
 	"io/ioutil"
 	"regexp"
+	"sort"
 	"strings"
-
-	"github.com/pkg/errors"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	prowconfig "k8s.io/test-infra/prow/config"
@@ -66,9 +66,9 @@ type Group struct {
 }
 
 // GetClusterForJob returns a cluster for a prow job
-func (config *Config) GetClusterForJob(jobBase prowconfig.JobBase, path string) ClusterName {
-	cluster, _ := config.DetermineClusterForJob(jobBase, path)
-	return cluster
+func (config *Config) GetClusterForJob(jobBase prowconfig.JobBase, path string) (ClusterName, error) {
+	cluster, _, err := config.DetermineClusterForJob(jobBase, path)
+	return cluster, err
 }
 
 func isApplyConfigJob(jobBase prowconfig.JobBase) bool {
@@ -84,27 +84,31 @@ func isApplyConfigJob(jobBase prowconfig.JobBase) bool {
 }
 
 // DetermineClusterForJob return the cluster for a prow job and if it can be relocated to a cluster in build farm
-func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path string) (_ ClusterName, mayBeRelocated bool) {
+func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path string) (clusterName ClusterName, mayBeRelocated bool, _ error) {
 	if jobBase.Agent != "kubernetes" && jobBase.Agent != "" {
-		return "", false
+		return "", false, nil
 	}
 	if strings.Contains(jobBase.Name, "vsphere") && !isApplyConfigJob(jobBase) {
-		return ClusterVSphere, false
+		return ClusterVSphere, false, nil
 	}
-	if isSSHBastionJob(jobBase) {
-		return config.SSHBastion, false
+	if isSSHBastionJob(jobBase) && config.SSHBastion != "" {
+		return config.SSHBastion, false, nil
 	}
+	var matches []string
 	for cluster, group := range config.Groups {
 		for _, job := range group.Jobs {
 			if jobBase.Name == job {
-				return cluster, false
+				clusterName = cluster
 			}
 		}
 	}
 	for cluster, group := range config.Groups {
 		for _, re := range group.PathREs {
 			if re.MatchString(path) {
-				return cluster, false
+				if clusterName == "" {
+					clusterName = cluster
+				}
+				matches = append(matches, re.String())
 			}
 		}
 	}
@@ -112,20 +116,36 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 		for cluster, group := range v {
 			for _, job := range group.Jobs {
 				if jobBase.Name == job {
-					return cluster, true
+					if clusterName == "" {
+						clusterName = cluster
+						mayBeRelocated = true
+					}
 				}
 			}
 		}
 		for cluster, group := range v {
 			for _, re := range group.PathREs {
 				if re.MatchString(path) {
-					return cluster, true
+					if clusterName == "" {
+						clusterName = cluster
+						mayBeRelocated = true
+					}
+					matches = append(matches, re.String())
 				}
 			}
 		}
 	}
+	//sort for tests
+	sort.Strings(matches)
+	if len(matches) > 1 {
+		return "", false, fmt.Errorf("path %s matches more than 1 regex: %s", path, matches)
+	}
 
-	return config.Default, true
+	if clusterName == "" {
+		clusterName = config.Default
+		mayBeRelocated = true
+	}
+	return clusterName, mayBeRelocated, nil
 }
 
 func isSSHBastionJob(base prowconfig.JobBase) bool {
@@ -166,11 +186,11 @@ func LoadConfig(configPath string) (*Config, error) {
 	config := &Config{}
 	data, err := gzip.ReadFileMaybeGZIP(configPath)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to read the config file %q", configPath)
+		return nil, fmt.Errorf("failed to read the config file %q: %w", configPath, err)
 	}
 	err = yaml.Unmarshal(data, config)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to unmarshal the config %q", string(data))
+		return nil, fmt.Errorf("failed to unmarshal the config %q: %w", string(data), err)
 	}
 
 	var errs []error
@@ -179,7 +199,7 @@ func LoadConfig(configPath string) (*Config, error) {
 		for i, p := range group.Paths {
 			re, err := regexp.Compile(p)
 			if err != nil {
-				errs = append(errs, errors.Wrapf(err, "failed to compile regex config.Groups[%s].Paths[%d] from %q", cluster, i, p))
+				errs = append(errs, fmt.Errorf("failed to compile regex config.Groups[%s].Paths[%d] from %q: %w", cluster, i, p, err))
 				continue
 			}
 			pathREs = append(pathREs, re)
@@ -194,7 +214,7 @@ func LoadConfig(configPath string) (*Config, error) {
 			for i, p := range group.Paths {
 				re, err := regexp.Compile(p)
 				if err != nil {
-					errs = append(errs, errors.Wrapf(err, "failed to compile regex config.BuildFarm[%s][%s].Paths[%d] from %q", cloudProvider, cluster, i, p))
+					errs = append(errs, fmt.Errorf("failed to compile regex config.BuildFarm[%s][%s].Paths[%d] from %q: %w", cloudProvider, cluster, i, p, err))
 					continue
 				}
 				pathREs = append(pathREs, re)
@@ -208,6 +228,38 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, utilerrors.NewAggregate(errs)
 	}
 	return config, nil
+}
+
+// Validate checks if the config is valid
+func (config *Config) Validate() error {
+	if config.Default == "" {
+		return fmt.Errorf("the default cluster must be set in the config")
+	}
+	records := map[string]int{}
+	for _, group := range config.Groups {
+		for _, job := range group.Jobs {
+			records[job] = records[job] + 1
+		}
+	}
+	for _, v := range config.BuildFarm {
+		for _, group := range v {
+			for _, job := range group.Jobs {
+				records[job]++
+			}
+		}
+	}
+	var matches []string
+	for k, v := range records {
+		if v > 1 {
+			matches = append(matches, k)
+		}
+	}
+	//sort for tests
+	sort.Strings(matches)
+	if len(matches) > 1 {
+		return fmt.Errorf("there are job names occurring more than once: %s", matches)
+	}
+	return nil
 }
 
 // SaveConfig saves config to a file

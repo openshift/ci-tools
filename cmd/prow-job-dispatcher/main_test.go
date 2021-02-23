@@ -15,6 +15,7 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	"github.com/openshift/ci-tools/pkg/dispatcher"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestValidate(t *testing.T) {
@@ -176,13 +177,14 @@ func TestDispatchJobs(t *testing.T) {
 
 func TestDispatchJobConfig(t *testing.T) {
 	testCases := []struct {
-		name       string
-		cv         *clusterVolume
-		jc         *prowconfig.JobConfig
-		path       string
-		config     *dispatcher.Config
-		jobVolumes map[string]float64
-		expected   string
+		name        string
+		cv          *clusterVolume
+		jc          *prowconfig.JobConfig
+		path        string
+		config      *dispatcher.Config
+		jobVolumes  map[string]float64
+		expected    string
+		expectedErr error
 	}{
 		{
 			name: "basic case: non e2e job chooses build01",
@@ -270,9 +272,12 @@ func TestDispatchJobConfig(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := tc.cv.dispatchJobConfig(tc.jc, tc.path, tc.config, tc.jobVolumes)
-			if !reflect.DeepEqual(tc.expected, actual) {
-				t.Errorf("%s: actual differs from expected:\n%s", t.Name(), cmp.Diff(tc.expected, actual))
+			actual, actualErr := tc.cv.dispatchJobConfig(tc.jc, tc.path, tc.config, tc.jobVolumes)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			}
+			if diff := cmp.Diff(tc.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
 		})
 	}

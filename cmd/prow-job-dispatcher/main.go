@@ -170,7 +170,7 @@ type clusterVolume struct {
 // findClusterForJobConfig finds a cluster running on a preferred cloud provider for the jobs in a Prow job config.
 // The chosen cluster will be the one with minimal workload with the given cloud provider.
 // If the cluster provider is empty string, it will choose the one with minimal workload across all cloud providers.
-func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowconfig.JobConfig, path string, config *dispatcher.Config, jobVolumes map[string]float64) string {
+func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowconfig.JobConfig, path string, config *dispatcher.Config, jobVolumes map[string]float64) (string, error) {
 	//no cluster in the build farm is from the targeting cloud provider
 	if _, ok := cv.clusterVolumeMap[cloudProvider]; !ok {
 		cloudProvider = ""
@@ -191,45 +191,57 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 		}
 	}
 
+	var errs []error
 	for k := range jc.PresubmitsStatic {
 		for _, job := range jc.PresubmitsStatic[k] {
-			cv.addToVolume(rCloudProvider, cluster, job.JobBase, path, config, jobVolumes)
+			if err := cv.addToVolume(rCloudProvider, cluster, job.JobBase, path, config, jobVolumes); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
 
 	for k := range jc.PostsubmitsStatic {
 		for _, job := range jc.PostsubmitsStatic[k] {
-			cv.addToVolume(rCloudProvider, cluster, job.JobBase, path, config, jobVolumes)
+			if err := cv.addToVolume(rCloudProvider, cluster, job.JobBase, path, config, jobVolumes); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
 	for _, job := range jc.Periodics {
-		cv.addToVolume(rCloudProvider, cluster, job.JobBase, path, config, jobVolumes)
+		if err := cv.addToVolume(rCloudProvider, cluster, job.JobBase, path, config, jobVolumes); err != nil {
+			errs = append(errs, err)
+		}
 	}
 
 	cv.mutex.Unlock()
-	return cluster
+	return cluster, utilerrors.NewAggregate(errs)
 }
 
-func (cv *clusterVolume) addToVolume(cloudProvider, cluster string, jobBase prowconfig.JobBase, path string, config *dispatcher.Config, jobVolumes map[string]float64) {
-	determinedCluster, canBeRelocated := config.DetermineClusterForJob(jobBase, path)
+func (cv *clusterVolume) addToVolume(cloudProvider, cluster string, jobBase prowconfig.JobBase, path string, config *dispatcher.Config, jobVolumes map[string]float64) error {
+	determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path)
+	if err != nil {
+		return fmt.Errorf("failed to determine cluster for the job %s in path %q: %w", jobBase.Name, path, err)
+	}
 	if cluster == string(determinedCluster) || canBeRelocated {
 		cv.clusterVolumeMap[cloudProvider][cluster] = cv.clusterVolumeMap[cloudProvider][cluster] + jobVolumes[jobBase.Name]
 	} else if determinedCloudProvider := config.IsInBuildFarm(determinedCluster); determinedCloudProvider != "" {
 		cv.clusterVolumeMap[string(determinedCloudProvider)][string(determinedCluster)] = cv.clusterVolumeMap[string(determinedCloudProvider)][string(determinedCluster)] + jobVolumes[jobBase.Name]
 	}
+	return nil
 }
 
 // dispatchJobConfig dispatches the jobs defined in a Prow jon config
-func (cv *clusterVolume) dispatchJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, jobVolumes map[string]float64) string {
+func (cv *clusterVolume) dispatchJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, jobVolumes map[string]float64) (string, error) {
 	cloudProvidersForE2ETests := getCloudProvidersForE2ETests(jc)
-	var cluster string
+	var cloudProvider, cluster string
+	var err error
 	if cloudProvidersForE2ETests.Len() == 1 {
-		cloudProvider, _ := cloudProvidersForE2ETests.PopAny()
-		cluster = cv.findClusterForJobConfig(cloudProvider, jc, path, config, jobVolumes)
-	} else {
-		cluster = cv.findClusterForJobConfig("", jc, path, config, jobVolumes)
+		cloudProvider, _ = cloudProvidersForE2ETests.PopAny()
 	}
-	return cluster
+	if cluster, err = cv.findClusterForJobConfig(cloudProvider, jc, path, config, jobVolumes); err != nil {
+		return "", fmt.Errorf("fail to find cluster for job config: %w", err)
+	}
+	return cluster, nil
 }
 
 type configResult struct {
@@ -319,7 +331,10 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 				return
 			}
 
-			cluster := cv.dispatchJobConfig(jobConfig, path, config, jobVolumes)
+			cluster, err := cv.dispatchJobConfig(jobConfig, path, config, jobVolumes)
+			if err != nil {
+				objChan <- fmt.Errorf("failed to dispatch job config %q: %w", path, err)
+			}
 			objChan <- configResult{cluster: cluster, path: path, filename: info.Name()}
 		}(path)
 

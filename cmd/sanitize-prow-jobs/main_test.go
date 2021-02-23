@@ -22,7 +22,9 @@ func TestDefaultJobConfig(t *testing.T) {
 	}
 
 	config := &dispatcher.Config{Default: "api.ci"}
-	defaultJobConfig(jc, "", config)
+	if err := defaultJobConfig(jc, "", config); err != nil {
+		t.Errorf("failed default job config: %v", err)
+	}
 
 	for k := range jc.PresubmitsStatic {
 		for _, j := range jc.PresubmitsStatic[k] {

@@ -51,7 +51,7 @@ func determinizeJobs(prowJobConfigDir string, config *dispatcher.Config) error {
 	wg := sync.WaitGroup{}
 	if err := filepath.Walk(prowJobConfigDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			errChan <- fmt.Errorf("Failed to walk file/directory '%s'", path)
+			errChan <- fmt.Errorf("failed to walk file/directory '%s'", path)
 			return nil
 		}
 
@@ -75,7 +75,9 @@ func determinizeJobs(prowJobConfigDir string, config *dispatcher.Config) error {
 				return
 			}
 
-			defaultJobConfig(jobConfig, path, config)
+			if err := defaultJobConfig(jobConfig, path, config); err != nil {
+				errChan <- fmt.Errorf("failed to default job config %q: %w", path, err)
+			}
 
 			serialized, err := yaml.Marshal(jobConfig)
 			if err != nil {
@@ -101,20 +103,33 @@ func determinizeJobs(prowJobConfigDir string, config *dispatcher.Config) error {
 	return utilerrors.NewAggregate(errs)
 }
 
-func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.Config) {
+func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.Config) error {
 	for k := range jc.PresubmitsStatic {
 		for idx := range jc.PresubmitsStatic[k] {
-			jc.PresubmitsStatic[k][idx].JobBase.Cluster = string(config.GetClusterForJob(jc.PresubmitsStatic[k][idx].JobBase, path))
+			cluster, err := config.GetClusterForJob(jc.PresubmitsStatic[k][idx].JobBase, path)
+			if err != nil {
+				return err
+			}
+			jc.PresubmitsStatic[k][idx].JobBase.Cluster = string(cluster)
 		}
 	}
 	for k := range jc.PostsubmitsStatic {
 		for idx := range jc.PostsubmitsStatic[k] {
-			jc.PostsubmitsStatic[k][idx].JobBase.Cluster = string(config.GetClusterForJob(jc.PostsubmitsStatic[k][idx].JobBase, path))
+			cluster, err := config.GetClusterForJob(jc.PostsubmitsStatic[k][idx].JobBase, path)
+			if err != nil {
+				return err
+			}
+			jc.PostsubmitsStatic[k][idx].JobBase.Cluster = string(cluster)
 		}
 	}
 	for idx := range jc.Periodics {
-		jc.Periodics[idx].JobBase.Cluster = string(config.GetClusterForJob(jc.Periodics[idx].JobBase, path))
+		cluster, err := config.GetClusterForJob(jc.Periodics[idx].JobBase, path)
+		if err != nil {
+			return err
+		}
+		jc.Periodics[idx].JobBase.Cluster = string(cluster)
 	}
+	return nil
 }
 
 func main() {
@@ -139,6 +154,9 @@ func main() {
 	config, err := dispatcher.LoadConfig(opt.configPath)
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to load config from %q", opt.configPath)
+	}
+	if err := config.Validate(); err != nil {
+		logrus.WithError(err).Fatal("Failed to validate the config")
 	}
 	if err := determinizeJobs(opt.prowJobConfigDir, config); err != nil {
 		logrus.WithError(err).Fatal("Failed to determinize")

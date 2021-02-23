@@ -618,17 +618,11 @@ type LiteralTestStep struct {
 	FromImage *ImageStreamTagReference `json:"from_image,omitempty"`
 	// Commands is the command(s) that will be run inside the image.
 	Commands string `json:"commands,omitempty"`
-	// ActiveDeadlineSeconds is passed directly through to the step's Pod.
-	// DEPRECATED: set Timeout instead.
-	ActiveDeadlineSeconds *int64 `json:"active_deadline_seconds,omitempty"`
 	// ArtifactDir is the directory from which artifacts will be extracted
 	// when the command finishes. Defaults to "/tmp/artifacts"
 	ArtifactDir string `json:"artifact_dir,omitempty"`
 	// Resources defines the resource requirements for the step.
 	Resources ResourceRequirements `json:"resources"`
-	// TerminationGracePeriodSeconds is passed directly through to the step's Pod.
-	// DEPRECATED: set GracePeriod instead.
-	TerminationGracePeriodSeconds *int64 `json:"termination_grace_period_seconds,omitempty"`
 	// Timeout is how long the we will wait before aborting a job with SIGINT.
 	Timeout *prowv1.Duration `json:"timeout,omitempty"`
 	// GracePeriod is how long the we will wait after sending SIGINT to send

@@ -255,17 +255,17 @@ const templateDefinitions = `
   </tr>
   </thead>
   <tbody>
-  {{ if .ActiveDeadlineSeconds }}
+  {{ if .Timeout }}
     <tr>
-      <td>Step timeout<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/timeouts/#step-timeout">?</a>]</sup></td>
-      <td>{{ .ActiveDeadlineSeconds }} seconds</td>
+      <td>Step timeout<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/timeouts/#step-registry-test-process-timeouts">?</a>]</sup></td>
+      <td>{{ .Timeout.String }}</td>
       <td>Limits the execution time of the step.</td>
     </tr>
   {{ end }}
-  {{ if .TerminationGracePeriodSeconds }}
+  {{ if .GracePeriod }}
     <tr>
-      <td>Termination grace period<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/timeouts/#step-timeout">?</a>]</sup></td>
-      <td>{{ .TerminationGracePeriodSeconds }} seconds</td>
+      <td>Termination grace period<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/timeouts/#step-registry-test-process-timeouts">?</a>]</sup></td>
+      <td>{{ .GracePeriod.String }}</td>
       <td>Period of time until SIGKILL signal is sent to the test pod (after SIGTERM signal is sent).</td>
     </tr>
   {{ end }}
@@ -1242,20 +1242,20 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 	}{
 		Reference: api.RegistryReference{
 			LiteralTestStep: api.LiteralTestStep{
-				As:                            name,
-				Commands:                      refs[name].Commands,
-				From:                          refs[name].From,
-				FromImage:                     refs[name].FromImage,
-				Dependencies:                  refs[name].Dependencies,
-				Environment:                   refs[name].Environment,
-				Leases:                        refs[name].Leases,
-				ActiveDeadlineSeconds:         refs[name].ActiveDeadlineSeconds,
-				TerminationGracePeriodSeconds: refs[name].TerminationGracePeriodSeconds,
-				Resources:                     refs[name].Resources,
-				OptionalOnSuccess:             refs[name].OptionalOnSuccess,
-				BestEffort:                    refs[name].BestEffort,
-				ReadonlySharedDir:             refs[name].ReadonlySharedDir,
-				Cli:                           refs[name].Cli,
+				As:                name,
+				Commands:          refs[name].Commands,
+				From:              refs[name].From,
+				FromImage:         refs[name].FromImage,
+				Dependencies:      refs[name].Dependencies,
+				Environment:       refs[name].Environment,
+				Leases:            refs[name].Leases,
+				Timeout:           refs[name].Timeout,
+				GracePeriod:       refs[name].GracePeriod,
+				Resources:         refs[name].Resources,
+				OptionalOnSuccess: refs[name].OptionalOnSuccess,
+				BestEffort:        refs[name].BestEffort,
+				ReadonlySharedDir: refs[name].ReadonlySharedDir,
+				Cli:               refs[name].Cli,
 			},
 			Documentation: docs[name],
 		},

@@ -12,13 +12,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config"
 	"sigs.k8s.io/yaml"
 
@@ -393,12 +391,6 @@ func loadReference(bytes []byte, baseDir, prefix string, flat bool) (string, str
 	err := yaml.UnmarshalStrict(bytes, &step)
 	if err != nil {
 		return "", "", api.LiteralTestStep{}, err
-	}
-	if step.Reference.LiteralTestStep.Timeout == nil && step.Reference.LiteralTestStep.ActiveDeadlineSeconds != nil {
-		step.Reference.LiteralTestStep.Timeout = &prowv1.Duration{Duration: time.Duration(*step.Reference.LiteralTestStep.ActiveDeadlineSeconds) * time.Second}
-	}
-	if step.Reference.LiteralTestStep.GracePeriod == nil && step.Reference.LiteralTestStep.TerminationGracePeriodSeconds != nil {
-		step.Reference.LiteralTestStep.GracePeriod = &prowv1.Duration{Duration: time.Duration(*step.Reference.LiteralTestStep.TerminationGracePeriodSeconds) * time.Second}
 	}
 	if !flat && step.Reference.Commands != fmt.Sprintf("%s%s", prefix, CommandsSuffix) {
 		return "", "", api.LiteralTestStep{}, fmt.Errorf("reference %s has invalid command file path; command should be set to %s", step.Reference.As, fmt.Sprintf("%s%s", prefix, CommandsSuffix))

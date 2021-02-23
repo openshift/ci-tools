@@ -1,0 +1,10 @@
+The following jobs have been replaced:
+release-openshift-ocp-installer-e2e-aws-4.7 -> periodic-ci-openshift-release-master-ocp-4.7-e2e-aws
+release-openshift-okd-installer-e2e-aws-4.7 -> periodic-ci-openshift-release-master-okd-4.7-e2e-aws
+release-openshift-origin-installer-e2e-aws-4.6 -> periodic-ci-openshift-release-master-origin-4.6-e2e-aws
+release-openshift-origin-installer-e2e-aws-4.7 -> periodic-ci-openshift-release-master-origin-4.7-e2e-aws
+
+The following tests do not have entries in the generator config:
+[e2e-aws-compact e2e-gcp e2e-gcp-upgrade]
+
+Please run `make update` to regenerate job configs using the updated ci-operator configs.

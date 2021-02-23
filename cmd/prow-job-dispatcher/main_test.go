@@ -158,8 +158,8 @@ func TestDispatchJobs(t *testing.T) {
 				"pull-ci-openshift-cluster-etcd-operator-master-unit": 6,
 			},
 			expectedBuildFarm: map[dispatcher.CloudProvider]dispatcher.JobGroups{
-				"aws": {"build01": {Paths: []string{".*ci-tools-presubmits.yaml$"}}},
-				"gcp": {"build02": {Paths: []string{".*cluster-api-provider-gcp-presubmits.yaml$", ".*cluster-etcd-operator-master-presubmits.yaml$", ".*wildfly-operator-presubmits.yaml$"}}},
+				"aws": {"build01": {Paths: []string{".*/ci-tools-presubmits.yaml$"}}},
+				"gcp": {"build02": {Paths: []string{".*/cluster-api-provider-gcp-presubmits.yaml$", ".*/cluster-etcd-operator-master-presubmits.yaml$", ".*/wildfly-operator-presubmits.yaml$"}}},
 			},
 		},
 	}

@@ -230,43 +230,6 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 	}
 }
 
-func TestGeneratePodReadonly(t *testing.T) {
-	config := api.ReleaseBuildConfiguration{
-		Tests: []api.TestStepConfiguration{{
-			As: "test",
-			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-				Test: []api.LiteralTestStep{{
-					As:                "step0",
-					From:              "src",
-					Commands:          "command0",
-					ReadonlySharedDir: true,
-				}},
-			},
-		}},
-	}
-	jobSpec := api.JobSpec{
-		JobSpec: prowdapi.JobSpec{
-			Job:       "job",
-			BuildID:   "build id",
-			ProwJobID: "prow job id",
-			Refs: &prowapi.Refs{
-				Org:     "org",
-				Repo:    "repo",
-				BaseRef: "base ref",
-				BaseSHA: "base sha",
-			},
-			Type: "postsubmit",
-		},
-	}
-	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, "artifact_dir", &jobSpec, nil, false)
-	ret, _, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, nil, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	testhelper.CompareWithFixture(t, ret)
-}
-
 func TestGeneratePodBestEffort(t *testing.T) {
 	yes := true
 	no := false

@@ -7,7 +7,6 @@ ref:
     env: LEASE0
   - resource_type: gcp-quota-slice
     env: LEASE1
-  readonly_shared_dir: true
   resources:
     requests:
       cpu: 100m

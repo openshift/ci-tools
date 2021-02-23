@@ -299,13 +299,6 @@ const templateDefinitions = `
       <td>This step's failure will not cause whole job to fail if the step is run in <span style="font-family:monospace">post</span> phase.</td>
     </tr>
   {{ end }}
-  {{ if .ReadonlySharedDir }}
-    <tr>
-      <td>Read-only shared directory<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#sharing-data-between-steps">?</a>]</sup></td>
-      <td>{{ .ReadonlySharedDir }}</td>
-      <td>This step's writes to the <span style="font-family:monospace">$SHARED_DIR</span> directory are not propagated to following steps.</td>
-    </tr>
-  {{ end }}
   {{ if .Cli }}
     <tr>
       <td>Inject <span style="font-family:monospace">oc</span> CLI<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#sharing-data-between-steps">?</a>]</sup></td>
@@ -1254,7 +1247,6 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 				Resources:         refs[name].Resources,
 				OptionalOnSuccess: refs[name].OptionalOnSuccess,
 				BestEffort:        refs[name].BestEffort,
-				ReadonlySharedDir: refs[name].ReadonlySharedDir,
 				Cli:               refs[name].Cli,
 			},
 			Documentation: docs[name],

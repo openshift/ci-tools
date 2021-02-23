@@ -2,7 +2,6 @@ ref:
   as: check-leases
   commands: check-leases-commands.sh
   from: os
-  readonly_shared_dir: true
   resources:
     requests:
       cpu: 100m

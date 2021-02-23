@@ -23,8 +23,6 @@
       - |-
         #!/bin/bash
         set -eu
-        if [[ -e ${KUBECONFIG:-} ]]; then WRITEABLE_KUBECONFIG_LOCATION=$(mktemp) && cp $KUBECONFIG $WRITEABLE_KUBECONFIG_LOCATION && export KUBECONFIG=$WRITEABLE_KUBECONFIG_LOCATION && unset WRITEABLE_KUBECONFIG_LOCATION; fi
-        if ! [[ -w ${HOME:-} ]]; then export HOME=/alabama; fi
         command0
       command:
       - /tmp/secret-wrapper/secret-wrapper
@@ -140,8 +138,6 @@
       - |-
         #!/bin/bash
         set -eu
-        if [[ -e ${KUBECONFIG:-} ]]; then WRITEABLE_KUBECONFIG_LOCATION=$(mktemp) && cp $KUBECONFIG $WRITEABLE_KUBECONFIG_LOCATION && export KUBECONFIG=$WRITEABLE_KUBECONFIG_LOCATION && unset WRITEABLE_KUBECONFIG_LOCATION; fi
-        if ! [[ -w ${HOME:-} ]]; then export HOME=/alabama; fi
         command1
       command:
       - /tmp/secret-wrapper/secret-wrapper
@@ -273,8 +269,6 @@
       - |-
         #!/bin/bash
         set -eu
-        if [[ -e ${KUBECONFIG:-} ]]; then WRITEABLE_KUBECONFIG_LOCATION=$(mktemp) && cp $KUBECONFIG $WRITEABLE_KUBECONFIG_LOCATION && export KUBECONFIG=$WRITEABLE_KUBECONFIG_LOCATION && unset WRITEABLE_KUBECONFIG_LOCATION; fi
-        if ! [[ -w ${HOME:-} ]]; then export HOME=/alabama; fi
         command2
       command:
       - /tmp/secret-wrapper/secret-wrapper

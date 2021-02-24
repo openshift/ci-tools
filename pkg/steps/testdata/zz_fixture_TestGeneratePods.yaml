@@ -25,7 +25,7 @@
         set -eu
         command0
       command:
-      - /tmp/secret-wrapper/secret-wrapper
+      - /tmp/entrypoint-wrapper/entrypoint-wrapper
       env:
       - name: BUILD_ID
         value: build id
@@ -80,32 +80,32 @@
       volumeMounts:
       - mountPath: /alabama
         name: home
-      - mountPath: /tmp/secret-wrapper
-        name: secret-wrapper
+      - mountPath: /tmp/entrypoint-wrapper
+        name: entrypoint-wrapper
       - mountPath: /var/run/secrets/ci.openshift.io/cluster-profile
         name: cluster-profile
       - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
         name: test
     initContainers:
     - args:
-      - /bin/secret-wrapper
-      - /tmp/secret-wrapper/secret-wrapper
+      - /bin/entrypoint-wrapper
+      - /tmp/entrypoint-wrapper/entrypoint-wrapper
       command:
       - cp
-      image: registry.ci.openshift.org/ci/secret-wrapper:latest
-      name: cp-secret-wrapper
+      image: registry.ci.openshift.org/ci/entrypoint-wrapper:latest
+      name: cp-entrypoint-wrapper
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
-      - mountPath: /tmp/secret-wrapper
-        name: secret-wrapper
+      - mountPath: /tmp/entrypoint-wrapper
+        name: entrypoint-wrapper
     restartPolicy: Never
     serviceAccountName: test
     volumes:
     - emptyDir: {}
       name: home
     - emptyDir: {}
-      name: secret-wrapper
+      name: entrypoint-wrapper
     - name: cluster-profile
       secret:
         secretName: test-cluster-profile
@@ -140,7 +140,7 @@
         set -eu
         command1
       command:
-      - /tmp/secret-wrapper/secret-wrapper
+      - /tmp/entrypoint-wrapper/entrypoint-wrapper
       env:
       - name: BUILD_ID
         value: build id
@@ -199,8 +199,8 @@
         name: artifacts
       - mountPath: /alabama
         name: home
-      - mountPath: /tmp/secret-wrapper
-        name: secret-wrapper
+      - mountPath: /tmp/entrypoint-wrapper
+        name: entrypoint-wrapper
       - mountPath: /var/run/secrets/ci.openshift.io/cluster-profile
         name: cluster-profile
       - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
@@ -217,17 +217,17 @@
         name: artifacts
     initContainers:
     - args:
-      - /bin/secret-wrapper
-      - /tmp/secret-wrapper/secret-wrapper
+      - /bin/entrypoint-wrapper
+      - /tmp/entrypoint-wrapper/entrypoint-wrapper
       command:
       - cp
-      image: registry.ci.openshift.org/ci/secret-wrapper:latest
-      name: cp-secret-wrapper
+      image: registry.ci.openshift.org/ci/entrypoint-wrapper:latest
+      name: cp-entrypoint-wrapper
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
-      - mountPath: /tmp/secret-wrapper
-        name: secret-wrapper
+      - mountPath: /tmp/entrypoint-wrapper
+        name: entrypoint-wrapper
     restartPolicy: Never
     serviceAccountName: test
     volumes:
@@ -236,7 +236,7 @@
     - emptyDir: {}
       name: home
     - emptyDir: {}
-      name: secret-wrapper
+      name: entrypoint-wrapper
     - name: cluster-profile
       secret:
         secretName: test-cluster-profile
@@ -271,7 +271,7 @@
         set -eu
         command2
       command:
-      - /tmp/secret-wrapper/secret-wrapper
+      - /tmp/entrypoint-wrapper/entrypoint-wrapper
       env:
       - name: BUILD_ID
         value: build id
@@ -326,32 +326,32 @@
       volumeMounts:
       - mountPath: /alabama
         name: home
-      - mountPath: /tmp/secret-wrapper
-        name: secret-wrapper
+      - mountPath: /tmp/entrypoint-wrapper
+        name: entrypoint-wrapper
       - mountPath: /var/run/secrets/ci.openshift.io/cluster-profile
         name: cluster-profile
       - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
         name: test
     initContainers:
     - args:
-      - /bin/secret-wrapper
-      - /tmp/secret-wrapper/secret-wrapper
+      - /bin/entrypoint-wrapper
+      - /tmp/entrypoint-wrapper/entrypoint-wrapper
       command:
       - cp
-      image: registry.ci.openshift.org/ci/secret-wrapper:latest
-      name: cp-secret-wrapper
+      image: registry.ci.openshift.org/ci/entrypoint-wrapper:latest
+      name: cp-entrypoint-wrapper
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
-      - mountPath: /tmp/secret-wrapper
-        name: secret-wrapper
+      - mountPath: /tmp/entrypoint-wrapper
+        name: entrypoint-wrapper
     restartPolicy: Never
     serviceAccountName: test
     volumes:
     - emptyDir: {}
       name: home
     - emptyDir: {}
-      name: secret-wrapper
+      name: entrypoint-wrapper
     - name: cluster-profile
       secret:
         secretName: test-cluster-profile

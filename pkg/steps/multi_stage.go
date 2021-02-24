@@ -496,9 +496,9 @@ func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]cor
 }
 
 func addSecretWrapper(pod *coreapi.Pod) {
-	volume := "secret-wrapper"
-	dir := "/tmp/secret-wrapper"
-	bin := filepath.Join(dir, "secret-wrapper")
+	volume := "entrypoint-wrapper"
+	dir := "/tmp/entrypoint-wrapper"
+	bin := filepath.Join(dir, "entrypoint-wrapper")
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
 		Name: volume,
 		VolumeSource: coreapi.VolumeSource{
@@ -507,10 +507,10 @@ func addSecretWrapper(pod *coreapi.Pod) {
 	})
 	mount := coreapi.VolumeMount{Name: volume, MountPath: dir}
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, coreapi.Container{
-		Image:                    fmt.Sprintf("%s/ci/secret-wrapper:latest", ciRegistry),
-		Name:                     "cp-secret-wrapper",
+		Image:                    fmt.Sprintf("%s/ci/entrypoint-wrapper:latest", ciRegistry),
+		Name:                     "cp-entrypoint-wrapper",
 		Command:                  []string{"cp"},
-		Args:                     []string{"/bin/secret-wrapper", bin},
+		Args:                     []string{"/bin/entrypoint-wrapper", bin},
 		VolumeMounts:             []coreapi.VolumeMount{mount},
 		TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
 	})

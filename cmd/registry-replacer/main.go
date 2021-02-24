@@ -491,7 +491,7 @@ func extractReplacementCandidatesFromDockerfile(dockerfile []byte) (sets.String,
 	// copied from https://github.com/openshift/builder/blob/1205194b1d67f2b68c163add5ae17e4b81962ec3/pkg/build/builder/common.go#L472-L497
 	// only difference: We collect the replacement source values rather than doing the replacements
 	names := make(map[string]string)
-	stages, err := imagebuilder.NewStages(node, imagebuilder.NewBuilder(nil))
+	stages, err := imagebuilder.NewStages(node, imagebuilder.NewBuilder(make(map[string]string)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct imagebuilder stages: %w", err)
 	}

@@ -225,11 +225,6 @@ func (o *options) validateCompletedOptions() error {
 					}
 				}
 			} else if bwContext.BWItem != "" {
-				switch bwContext.Attribute {
-				case secretbootstrap.AttributeTypePassword, "":
-				default:
-					return fmt.Errorf("config[%d].from[%s].attribute: only the '%s' is supported, not %s", i, key, secretbootstrap.AttributeTypePassword, bwContext.Attribute)
-				}
 				nonEmptyFields := 0
 				if bwContext.Field != "" {
 					nonEmptyFields++

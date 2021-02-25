@@ -436,47 +436,13 @@ func validateLiteralTestStep(context context, stage testStage, step api.LiteralT
 	} else {
 		context.seen.Insert(step.As)
 	}
-	if len(step.From) == 0 && step.FromImage == nil {
-		ret = append(ret, fmt.Errorf("%s: `from` or `from_image` is required", context.fieldRoot))
-	} else if len(step.From) != 0 && step.FromImage != nil {
-		ret = append(ret, fmt.Errorf("%s: `from` and `from_image` cannot be set together", context.fieldRoot))
-	} else if step.FromImage != nil {
-		if step.FromImage.Namespace == "" {
-			ret = append(ret, fmt.Errorf("%s.from_image: `namespace` is required", context.fieldRoot))
-		}
-		if step.FromImage.Name == "" {
-			ret = append(ret, fmt.Errorf("%s.from_image: `name` is required", context.fieldRoot))
-		}
-		if step.FromImage.Tag == "" {
-			ret = append(ret, fmt.Errorf("%s.from_image: `tag` is required", context.fieldRoot))
-		}
-	} else {
-		imageParts := strings.Split(step.From, ":")
-		if len(imageParts) > 2 {
-			ret = append(ret, fmt.Errorf("%s.from: '%s' is not a valid imagestream reference", context.fieldRoot, step.From))
-		}
-		for i, obj := range imageParts {
-			if len(validation.IsDNS1123Subdomain(obj)) != 0 {
-				ret = append(ret, fmt.Errorf("%s.from: '%s' is not a valid Kubernetes object name", context.fieldRoot, obj))
-			} else if i == 0 && len(imageParts) == 2 {
-				switch obj {
-				case api.PipelineImageStream, api.ReleaseStreamFor(api.LatestReleaseName), api.ReleaseStreamFor(api.InitialReleaseName), api.ReleaseImageStream:
-				default:
-					releaseName := api.ReleaseNameFrom(obj)
-					if !context.releases.Has(releaseName) {
-						ret = append(ret, fmt.Errorf("%s.from: unknown imagestream '%s'", context.fieldRoot, imageParts[0]))
-					}
-
-				}
-			}
-		}
-	}
+	ret = append(ret, validateFromAndFromImage(context.fieldRoot, step.From, step.FromImage, context.releases)...)
 	if len(step.Commands) == 0 {
 		ret = append(ret, fmt.Errorf("%s: `commands` is required", context.fieldRoot))
 	}
 	ret = append(ret, validateResourceRequirements(context.fieldRoot+".resources", step.Resources)...)
 	ret = append(ret, validateCredentials(context.fieldRoot, step.Credentials)...)
-	if err := validateParameters(&context, step.Environment); err != nil {
+	if err := validateParameters(context, step.Environment); err != nil {
 		ret = append(ret, err)
 	}
 	ret = append(ret, validateDependencies(context.fieldRoot, step.Dependencies)...)
@@ -487,7 +453,46 @@ func validateLiteralTestStep(context context, stage testStage, step api.LiteralT
 			ret = append(ret, fmt.Errorf("%s: `optional_on_success` is only allowed for Post steps", context.fieldRoot))
 		}
 	}
-	return
+	return ret
+}
+
+func validateFromAndFromImage(fieldRoot, from string, fromImage *api.ImageStreamTagReference, releases sets.String) []error {
+	var ret []error
+	if len(from) == 0 && fromImage == nil {
+		ret = append(ret, fmt.Errorf("%s: `from` or `from_image` is required", fieldRoot))
+	} else if len(from) != 0 && fromImage != nil {
+		ret = append(ret, fmt.Errorf("%s: `from` and `from_image` cannot be set together", fieldRoot))
+	} else if fromImage != nil {
+		if fromImage.Namespace == "" {
+			ret = append(ret, fmt.Errorf("%s.from_image: `namespace` is required", fieldRoot))
+		}
+		if fromImage.Name == "" {
+			ret = append(ret, fmt.Errorf("%s.from_image: `name` is required", fieldRoot))
+		}
+		if fromImage.Tag == "" {
+			ret = append(ret, fmt.Errorf("%s.from_image: `tag` is required", fieldRoot))
+		}
+	} else {
+		imageParts := strings.Split(from, ":")
+		if len(imageParts) > 2 {
+			ret = append(ret, fmt.Errorf("%s.from: '%s' is not a valid imagestream reference", fieldRoot, from))
+		}
+		for i, obj := range imageParts {
+			if len(validation.IsDNS1123Subdomain(obj)) != 0 {
+				ret = append(ret, fmt.Errorf("%s.from: '%s' is not a valid Kubernetes object name", fieldRoot, obj))
+			} else if i == 0 && len(imageParts) == 2 {
+				switch obj {
+				case api.PipelineImageStream, api.ReleaseStreamFor(api.LatestReleaseName), api.ReleaseStreamFor(api.InitialReleaseName), api.ReleaseImageStream:
+				default:
+					releaseName := api.ReleaseNameFrom(obj)
+					if !releases.Has(releaseName) {
+						ret = append(ret, fmt.Errorf("%s.from: unknown imagestream '%s'", fieldRoot, imageParts[0]))
+					}
+				}
+			}
+		}
+	}
+	return ret
 }
 
 func validateCredentials(fieldRoot string, credentials []api.CredentialReference) []error {
@@ -535,7 +540,7 @@ func validateCredentials(fieldRoot string, credentials []api.CredentialReference
 	return errs
 }
 
-func validateParameters(context *context, params []api.StepParameter) error {
+func validateParameters(context context, params []api.StepParameter) error {
 	var missing []string
 	for _, param := range params {
 		if param.Default != nil {

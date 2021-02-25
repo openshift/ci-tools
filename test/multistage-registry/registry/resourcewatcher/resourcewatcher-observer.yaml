@@ -5,5 +5,9 @@ observer:
     name: resourcewatcher
     namespace: ocp
     tag: latest
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
   documentation: |-
     The resourceatcher observer runs in parallel with the test execution and watches resources.

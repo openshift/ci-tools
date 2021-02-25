@@ -66,7 +66,6 @@ type multiStageTestStep struct {
 	allowSkipOnSuccess       *bool
 	allowBestEffortPostSteps *bool
 	leases                   []api.StepLease
-	artifactsViaPodUtils     bool
 }
 
 func MultiStageTestStep(
@@ -77,9 +76,8 @@ func MultiStageTestStep(
 	artifactDir string,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
-	artifactsViaPodUtils bool,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, client, artifactDir, jobSpec, leases, artifactsViaPodUtils)
+	return newMultiStageTestStep(testConfig, config, params, client, artifactDir, jobSpec, leases)
 }
 
 func newMultiStageTestStep(
@@ -90,7 +88,6 @@ func newMultiStageTestStep(
 	artifactDir string,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
-	artifactsViaPodUtils bool,
 ) *multiStageTestStep {
 	if artifactDir != "" {
 		artifactDir = filepath.Join(artifactDir, testConfig.As)
@@ -111,7 +108,6 @@ func newMultiStageTestStep(
 		allowSkipOnSuccess:       ms.AllowSkipOnSuccess,
 		allowBestEffortPostSteps: ms.AllowBestEffortPostSteps,
 		leases:                   leases,
-		artifactsViaPodUtils:     artifactsViaPodUtils,
 	}
 }
 
@@ -399,32 +395,21 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		if step.BestEffort != nil && *step.BestEffort {
 			bestEffort.Insert(name)
 		}
-		artifactDir := step.ArtifactDir
-		var activeDeadlineSeconds, terminationGracePeriodSeconds *int64
 		p := func(i int64) *int64 {
 			return &i
 		}
-		if s.artifactsViaPodUtils {
-			artifactDir = fmt.Sprintf("%s/%s", s.name, step.As)
-			s.jobSpec.DecorationConfig.Timeout = step.Timeout
-			s.jobSpec.DecorationConfig.GracePeriod = step.GracePeriod
-			gracePeriod := entrypoint.DefaultGracePeriod
-			if step.GracePeriod != nil {
-				gracePeriod = step.GracePeriod.Duration
-			}
-			// We want upload to have some time to do what it needs to do, so set
-			// the grace period for the Pod to be just larger than the grace period
-			// for the process, assuming an 80/20 distribution of work.
-			terminationGracePeriodSeconds = p(int64(gracePeriod.Seconds() * 5 / 4))
-		} else {
-			if step.Timeout != nil {
-				activeDeadlineSeconds = p(int64(step.Timeout.Seconds()))
-			}
-			if step.GracePeriod != nil {
-				terminationGracePeriodSeconds = p(int64(step.GracePeriod.Seconds()))
-			}
+		artifactDir := fmt.Sprintf("%s/%s", s.name, step.As)
+		s.jobSpec.DecorationConfig.Timeout = step.Timeout
+		s.jobSpec.DecorationConfig.GracePeriod = step.GracePeriod
+		gracePeriod := entrypoint.DefaultGracePeriod
+		if step.GracePeriod != nil {
+			gracePeriod = step.GracePeriod.Duration
 		}
-		pod, err := generateBasePod(s.jobSpec, name, multiStageTestStepContainerName, []string{"/bin/bash", "-c", CommandPrefix + step.Commands}, image, resources, artifactDir, s.artifactsViaPodUtils, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec())
+		// We want upload to have some time to do what it needs to do, so set
+		// the grace period for the Pod to be just larger than the grace period
+		// for the process, assuming an 80/20 distribution of work.
+		terminationGracePeriodSeconds := p(int64(gracePeriod.Seconds() * 5 / 4))
+		pod, err := generateBasePod(s.jobSpec, name, multiStageTestStepContainerName, []string{"/bin/bash", "-c", CommandPrefix + step.Commands}, image, resources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec())
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -432,7 +417,6 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		delete(pod.Labels, ProwJobIdLabel)
 		pod.Annotations[annotationSaveContainerLogs] = "true"
 		pod.Labels[MultiStageTestLabel] = s.name
-		pod.Spec.ActiveDeadlineSeconds = activeDeadlineSeconds
 		pod.Spec.ServiceAccountName = s.name
 		pod.Spec.TerminationGracePeriodSeconds = terminationGracePeriodSeconds
 		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{Name: homeVolumeName, VolumeSource: coreapi.VolumeSource{EmptyDir: &coreapi.EmptyDirVolumeSource{}}})
@@ -469,7 +453,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			}...)
 		}
 		if step.Cli != "" {
-			errs = append(errs, addCliInjector(step.Cli, pod, s.artifactsViaPodUtils))
+			errs = append(errs, addCliInjector(step.Cli, pod))
 		}
 		addSecret(s.name, pod)
 		addCredentials(step.Credentials, pod)
@@ -604,7 +588,7 @@ func injectPath(initial []string) []string {
 	return args
 }
 
-func addCliInjector(release string, pod *coreapi.Pod, artifactsViaPodUtils bool) error {
+func addCliInjector(release string, pod *coreapi.Pod) error {
 	volumeName := "cli"
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
 		Name: volumeName,
@@ -624,25 +608,21 @@ func addCliInjector(release string, pod *coreapi.Pod, artifactsViaPodUtils bool)
 	})
 	container := &pod.Spec.Containers[0]
 
-	if artifactsViaPodUtils {
-		for i, env := range container.Env {
-			if env.Name != entrypoint.JSONConfigEnvVar {
-				continue
-			}
-			var options entrypoint.Options
-			if err := yaml.Unmarshal([]byte(env.Value), &options); err != nil {
-				return err
-			}
-			options.Args = injectPath(options.Args)
-			encoded, err := entrypoint.Encode(options)
-			if err != nil {
-				return err
-			}
-			container.Env[i].Value = encoded
-			break
+	for i, env := range container.Env {
+		if env.Name != entrypoint.JSONConfigEnvVar {
+			continue
 		}
-	} else {
-		container.Args = injectPath(container.Args)
+		var options entrypoint.Options
+		if err := yaml.Unmarshal([]byte(env.Value), &options); err != nil {
+			return err
+		}
+		options.Args = injectPath(options.Args)
+		encoded, err := entrypoint.Encode(options)
+		if err != nil {
+			return err
+		}
+		container.Env[i].Value = encoded
+		break
 	}
 	container.VolumeMounts = append(container.VolumeMounts, coreapi.VolumeMount{
 		Name:      volumeName,

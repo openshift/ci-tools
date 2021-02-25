@@ -45,13 +45,12 @@ import (
 // inject the images from a known historic release for the purposes of building
 // branches of those releases.
 type assembleReleaseStep struct {
-	config               *api.ReleaseTagConfiguration
-	name                 string
-	resources            api.ResourceConfiguration
-	client               steps.PodClient
-	artifactDir          string
-	jobSpec              *api.JobSpec
-	artifactsViaPodUtils bool
+	config      *api.ReleaseTagConfiguration
+	name        string
+	resources   api.ResourceConfiguration
+	client      steps.PodClient
+	artifactDir string
+	jobSpec     *api.JobSpec
 }
 
 func (s *assembleReleaseStep) Inputs() (api.InputDefinition, error) {
@@ -209,7 +208,6 @@ oc registry login
 oc adm release new --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q --name %q
 oc adm release extract --from=%q --to=${ARTIFACT_DIR}/release-payload-%s
 `, s.jobSpec.Namespace(), streamName, cvo, destination, version, destination, s.name),
-		ArtifactsViaPodUtils: s.artifactsViaPodUtils,
 	}
 
 	// set an explicit default for release-latest resources, but allow customization if necessary
@@ -262,14 +260,13 @@ func (s *assembleReleaseStep) Objects() []ctrlruntimeclient.Object {
 // and the operators defined in the release configuration.
 func AssembleReleaseStep(name string, config *api.ReleaseTagConfiguration, resources api.ResourceConfiguration,
 	client steps.PodClient,
-	artifactDir string, jobSpec *api.JobSpec, artifactsViaPodUtils bool) api.Step {
+	artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &assembleReleaseStep{
-		config:               config,
-		name:                 name,
-		resources:            resources,
-		client:               client,
-		artifactDir:          artifactDir,
-		jobSpec:              jobSpec,
-		artifactsViaPodUtils: artifactsViaPodUtils,
+		config:      config,
+		name:        name,
+		resources:   resources,
+		client:      client,
+		artifactDir: artifactDir,
+		jobSpec:     jobSpec,
 	}
 }

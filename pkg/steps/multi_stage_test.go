@@ -3,9 +3,6 @@ package steps
 import (
 	"context"
 	"errors"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -88,7 +85,7 @@ func TestRequires(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			step := MultiStageTestStep(api.TestStepConfiguration{
 				MultiStageTestConfigurationLiteral: &tc.steps,
-			}, &tc.config, api.NewDeferredParameters(nil), nil, "", nil, nil, false)
+			}, &tc.config, api.NewDeferredParameters(nil), nil, "", nil, nil)
 			ret := step.Requires()
 			if len(ret) == len(tc.req) {
 				matches := true
@@ -139,10 +136,18 @@ func TestGeneratePods(t *testing.T) {
 				BaseSHA: "base sha",
 			},
 			Type: "postsubmit",
+			DecorationConfig: &prowapi.DecorationConfig{
+				Timeout:     &prowapi.Duration{Duration: time.Minute},
+				GracePeriod: &prowapi.Duration{Duration: time.Second},
+				UtilityImages: &prowapi.UtilityImages{
+					Sidecar:    "sidecar",
+					Entrypoint: "entrypoint",
+				},
+			},
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, "artifact_dir", &jobSpec, nil, false)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, "artifact_dir", &jobSpec, nil)
 	env := []coreapi.EnvVar{
 		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
 		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
@@ -203,6 +208,14 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 					BuildID:   "build_id",
 					ProwJobID: "prow_job_id",
 					Type:      prowapi.PeriodicJob,
+					DecorationConfig: &prowapi.DecorationConfig{
+						Timeout:     &prowapi.Duration{Duration: time.Minute},
+						GracePeriod: &prowapi.Duration{Duration: time.Second},
+						UtilityImages: &prowapi.UtilityImages{
+							Sidecar:    "sidecar",
+							Entrypoint: "entrypoint",
+						},
+					},
 				},
 			}
 			jobSpec.SetNamespace("ns")
@@ -212,7 +225,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 					Test:        test,
 					Environment: tc.env,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, nil, "", &jobSpec, nil, false)
+			}, &api.ReleaseBuildConfiguration{}, nil, nil, "", &jobSpec, nil)
 			pods, _, err := step.(*multiStageTestStep).generatePods(test, nil, false)
 			if err != nil {
 				t.Fatal(err)
@@ -269,10 +282,18 @@ func TestGeneratePodBestEffort(t *testing.T) {
 				BaseSHA: "base sha",
 			},
 			Type: "postsubmit",
+			DecorationConfig: &prowapi.DecorationConfig{
+				Timeout:     &prowapi.Duration{Duration: time.Minute},
+				GracePeriod: &prowapi.Duration{Duration: time.Second},
+				UtilityImages: &prowapi.UtilityImages{
+					Sidecar:    "sidecar",
+					Entrypoint: "entrypoint",
+				},
+			},
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, "artifact_dir", &jobSpec, nil, false)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, "artifact_dir", &jobSpec, nil)
 	_, isBestEffort, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Post, nil, false)
 	if err != nil {
 		t.Fatal(err)
@@ -380,6 +401,14 @@ func TestRun(t *testing.T) {
 					BuildID:   "build_id",
 					ProwJobID: "prow_job_id",
 					Type:      prowapi.PeriodicJob,
+					DecorationConfig: &prowapi.DecorationConfig{
+						Timeout:     &prowapi.Duration{Duration: time.Minute},
+						GracePeriod: &prowapi.Duration{Duration: time.Second},
+						UtilityImages: &prowapi.UtilityImages{
+							Sidecar:    "sidecar",
+							Entrypoint: "entrypoint",
+						},
+					},
 				},
 			}
 			jobSpec.SetNamespace("ns")
@@ -391,7 +420,7 @@ func TestRun(t *testing.T) {
 					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: &yes}},
 					AllowSkipOnSuccess: &yes,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: crclient}, "", &jobSpec, nil, false)
+			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: crclient}, "", &jobSpec, nil)
 			if err := step.Run(context.Background()); (err != nil) != (tc.failures != nil) {
 				t.Errorf("expected error: %t, got error: %v", (tc.failures != nil), err)
 			}
@@ -413,54 +442,6 @@ func TestRun(t *testing.T) {
 				t.Errorf("did not execute correct pods: %s, actual: %v, expected: %v", diff, names, tc.expected)
 			}
 		})
-	}
-}
-
-func TestArtifacts(t *testing.T) {
-	intervalLock.Lock()
-	interval = time.Nanosecond
-	intervalLock.Unlock()
-	defer func() {
-		intervalLock.Lock()
-		interval = time.Second
-		intervalLock.Unlock()
-	}()
-
-	tmp, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmp)
-	ns := "namespace"
-	jobSpec := api.JobSpec{
-		JobSpec: prowdapi.JobSpec{
-			Job:       "job",
-			BuildID:   "build_id",
-			ProwJobID: "prow_job_id",
-			Type:      prowapi.PeriodicJob,
-		},
-	}
-	jobSpec.SetNamespace(ns)
-	testName := "test"
-	sa := &coreapi.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "test", GenerateName: "", Namespace: "namespace", Labels: map[string]string{"ci.openshift.io/multi-stage-test": "test"}}}
-	step := MultiStageTestStep(api.TestStepConfiguration{
-		As: testName,
-		MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-			Test: []api.LiteralTestStep{
-				{As: "test0", ArtifactDir: "/path/to/artifacts"},
-				{As: "test1", ArtifactDir: "/path/to/artifacts"},
-			},
-		},
-	}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: &fakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(sa.DeepCopyObject()))}}, tmp, &jobSpec, nil, false)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := step.Run(ctx); err != nil {
-		t.Fatal(err)
-	}
-	for _, x := range []string{"test0", "test1"} {
-		if _, err := os.Stat(filepath.Join(tmp, testName, x)); err != nil {
-			t.Fatalf("error verifying output directory %q exists: %v", x, err)
-		}
 	}
 }
 
@@ -519,6 +500,14 @@ func TestJUnit(t *testing.T) {
 					BuildID:   "build_id",
 					ProwJobID: "prow_job_id",
 					Type:      prowapi.PeriodicJob,
+					DecorationConfig: &prowapi.DecorationConfig{
+						Timeout:     &prowapi.Duration{Duration: time.Minute},
+						GracePeriod: &prowapi.Duration{Duration: time.Second},
+						UtilityImages: &prowapi.UtilityImages{
+							Sidecar:    "sidecar",
+							Entrypoint: "entrypoint",
+						},
+					},
 				},
 			}
 			jobSpec.SetNamespace("test-namespace")
@@ -529,7 +518,7 @@ func TestJUnit(t *testing.T) {
 					Test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
 					Post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: client}, "/dev/null", &jobSpec, nil, false)
+			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: client}, "/dev/null", &jobSpec, nil)
 			if err := step.Run(context.Background()); tc.failures == nil && err != nil {
 				t.Error(err)
 				return

@@ -986,7 +986,7 @@ func TestFromConfig(t *testing.T) {
 			for k, v := range tc.params {
 				params.Add(k, func() (string, error) { return v, nil })
 			}
-			steps, post, err := fromConfig(&tc.config, &jobSpec, tc.templates, tc.paramFiles, "", tc.promote, client, buildClient, templateClient, podClient, leaseClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, false)
+			steps, post, err := fromConfig(&tc.config, &jobSpec, tc.templates, tc.paramFiles, "", tc.promote, client, buildClient, templateClient, podClient, leaseClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params)
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}

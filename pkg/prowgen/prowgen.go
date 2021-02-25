@@ -152,7 +152,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			element.Secrets = append(element.Secrets, element.Secret)
 		}
 		if element.ContainerTestConfiguration != nil {
-			podSpec = generateCiOperatorPodSpec(info, element.Secrets, []string{element.As}, element.ArtifactDir != cioperatorapi.DefaultArtifacts)
+			podSpec = generateCiOperatorPodSpec(info, element.Secrets, []string{element.As})
 		} else if element.MultiStageTestConfiguration != nil {
 			podSpec = generatePodSpecMultiStage(info, &element, configSpec.Releases != nil)
 		} else {
@@ -199,12 +199,12 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		if promotion.PromotesOfficialImages(configSpec) {
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
-		podSpec := generateCiOperatorPodSpec(info, nil, presubmitTargets, false)
+		podSpec := generateCiOperatorPodSpec(info, nil, presubmitTargets)
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning))
 
 		if configSpec.PromotionConfiguration != nil {
 
-			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets.List(), false, []string{"--promote"}...)
+			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets.List(), []string{"--promote"}...)
 			podSpec.Containers[0].Args = append(podSpec.Containers[0].Args,
 				fmt.Sprintf("--image-mirror-push-secret=%s", filepath.Join(cioperatorapi.RegistryPushCredentialsCICentralSecretMountPath, corev1.DockerConfigJsonKey)))
 			podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{
@@ -229,7 +229,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	}
 
 	if configSpec.Operator != nil {
-		podSpec := generateCiOperatorPodSpec(info, nil, []string{"ci-index"}, false)
+		podSpec := generateCiOperatorPodSpec(info, nil, []string{"ci-index"})
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("ci-index", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning))
 	}
 
@@ -240,7 +240,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	}
 }
 
-func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret, targets []string, customArtifactDir bool, additionalArgs ...string) *corev1.PodSpec {
+func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret, targets []string, additionalArgs ...string) *corev1.PodSpec {
 	for _, arg := range additionalArgs {
 		if !strings.HasPrefix(arg, "--") {
 			panic(fmt.Sprintf("all args to ci-operator must be in the form --flag=value, not %s", arg))
@@ -254,9 +254,6 @@ func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secre
 		"--gcs-upload-secret=/secrets/gcs/service-account.json",
 		"--report-credentials-file=/etc/report/credentials",
 	}, additionalArgs...)
-	if customArtifactDir {
-		ret.Containers[0].Args = append(ret.Containers[0].Args, "--upload-via-pod-utils=false")
-	}
 	for _, target := range targets {
 		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--target=%s", target))
 	}
@@ -287,7 +284,7 @@ func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepCo
 			Name: "ci-pull-credentials",
 		})
 	}
-	podSpec := generateCiOperatorPodSpec(info, secrets, []string{test.As}, test.ArtifactDir != cioperatorapi.DefaultArtifacts)
+	podSpec := generateCiOperatorPodSpec(info, secrets, []string{test.As})
 	if profile == "" {
 		return podSpec
 	}
@@ -339,7 +336,7 @@ func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperator
 	clusterType := clusterProfile.ClusterType()
 	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
 	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
-	podSpec := generateCiOperatorPodSpec(info, test.Secrets, []string{test.As}, test.ArtifactDir != cioperatorapi.DefaultArtifacts)
+	podSpec := generateCiOperatorPodSpec(info, test.Secrets, []string{test.As})
 	clusterProfileVolume := generateClusterProfileVolume(clusterProfile, clusterType)
 	if len(template) > 0 {
 		podSpec.Volumes = append(podSpec.Volumes, generateConfigMapVolume("job-definition", []string{fmt.Sprintf("prow-job-%s", template)}))

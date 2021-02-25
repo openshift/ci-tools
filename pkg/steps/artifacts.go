@@ -366,27 +366,6 @@ func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.
 	return nil
 }
 
-func addArtifacts(pod *coreapi.Pod, artifactDir string) {
-	for i := range pod.Spec.Containers {
-		pod.Spec.Containers[i].VolumeMounts = append(pod.Spec.Containers[i].VolumeMounts, coreapi.VolumeMount{
-			Name:      "artifacts",
-			MountPath: artifactDir,
-		})
-		pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env, coreapi.EnvVar{Name: artifactEnv, Value: artifactDir})
-	}
-	addArtifactsContainer(pod)
-}
-
-func addArtifactsContainer(pod *coreapi.Pod) {
-	pod.Spec.Containers = append(pod.Spec.Containers, artifactsContainer())
-	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
-		Name: "artifacts",
-		VolumeSource: coreapi.VolumeSource{
-			EmptyDir: &coreapi.EmptyDirVolumeSource{},
-		},
-	})
-}
-
 func artifactsContainer() coreapi.Container {
 	return coreapi.Container{
 		Name:  "artifacts",

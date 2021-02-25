@@ -18,12 +18,7 @@
   spec:
     containers:
     - args:
-      - /bin/bash
-      - -c
-      - |-
-        #!/bin/bash
-        set -eu
-        command0
+      - /tools/entrypoint
       command:
       - /tmp/entrypoint-wrapper/entrypoint-wrapper
       env:
@@ -34,7 +29,7 @@
       - name: JOB_NAME
         value: job
       - name: JOB_SPEC
-        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base sha"}}'
+        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base sha"},"decoration_config":{"utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
       - name: JOB_TYPE
         value: postsubmit
       - name: OPENSHIFT_CI
@@ -51,6 +46,10 @@
         value: repo
       - name: REPO_OWNER
         value: org
+      - name: ENTRYPOINT_OPTIONS
+        value: '{"timeout":0,"grace_period":0,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand0"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
+      - name: ARTIFACT_DIR
+        value: /logs/artifacts
       - name: NAMESPACE
         value: namespace
       - name: JOB_NAME_SAFE
@@ -78,6 +77,10 @@
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
+      - mountPath: /logs
+        name: logs
+      - mountPath: /tools
+        name: tools
       - mountPath: /alabama
         name: home
       - mountPath: /tmp/entrypoint-wrapper
@@ -86,7 +89,30 @@
         name: cluster-profile
       - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
         name: test
+    - command:
+      - /sidecar
+      env:
+      - name: JOB_SPEC
+      - name: SIDECAR_OPTIONS
+        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step0","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand0"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true}'
+      image: sidecar
+      name: sidecar
+      resources: {}
+      volumeMounts:
+      - mountPath: /logs
+        name: logs
     initContainers:
+    - args:
+      - /entrypoint
+      - /tools/entrypoint
+      command:
+      - /bin/cp
+      image: entrypoint
+      name: place-entrypoint
+      resources: {}
+      volumeMounts:
+      - mountPath: /tools
+        name: tools
     - args:
       - /bin/entrypoint-wrapper
       - /tmp/entrypoint-wrapper/entrypoint-wrapper
@@ -101,7 +127,12 @@
         name: entrypoint-wrapper
     restartPolicy: Never
     serviceAccountName: test
+    terminationGracePeriodSeconds: 18
     volumes:
+    - emptyDir: {}
+      name: logs
+    - emptyDir: {}
+      name: tools
     - emptyDir: {}
       name: home
     - emptyDir: {}
@@ -133,12 +164,7 @@
   spec:
     containers:
     - args:
-      - /bin/bash
-      - -c
-      - |-
-        #!/bin/bash
-        set -eu
-        command1
+      - /tools/entrypoint
       command:
       - /tmp/entrypoint-wrapper/entrypoint-wrapper
       env:
@@ -149,7 +175,7 @@
       - name: JOB_NAME
         value: job
       - name: JOB_SPEC
-        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base sha"}}'
+        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base sha"},"decoration_config":{"utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
       - name: JOB_TYPE
         value: postsubmit
       - name: OPENSHIFT_CI
@@ -166,8 +192,10 @@
         value: repo
       - name: REPO_OWNER
         value: org
+      - name: ENTRYPOINT_OPTIONS
+        value: '{"timeout":0,"grace_period":0,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand1"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
       - name: ARTIFACT_DIR
-        value: /artifact/dir
+        value: /logs/artifacts
       - name: NAMESPACE
         value: namespace
       - name: JOB_NAME_SAFE
@@ -195,8 +223,10 @@
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
-      - mountPath: /artifact/dir
-        name: artifacts
+      - mountPath: /logs
+        name: logs
+      - mountPath: /tools
+        name: tools
       - mountPath: /alabama
         name: home
       - mountPath: /tmp/entrypoint-wrapper
@@ -206,16 +236,29 @@
       - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
         name: test
     - command:
-      - /bin/sh
-      - -c
-      - "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep 5 & wait\ndone\n"
-      image: quay.io/prometheus/busybox:latest
-      name: artifacts
+      - /sidecar
+      env:
+      - name: JOB_SPEC
+      - name: SIDECAR_OPTIONS
+        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step1","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand1"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true}'
+      image: sidecar
+      name: sidecar
       resources: {}
       volumeMounts:
-      - mountPath: /tmp/artifacts
-        name: artifacts
+      - mountPath: /logs
+        name: logs
     initContainers:
+    - args:
+      - /entrypoint
+      - /tools/entrypoint
+      command:
+      - /bin/cp
+      image: entrypoint
+      name: place-entrypoint
+      resources: {}
+      volumeMounts:
+      - mountPath: /tools
+        name: tools
     - args:
       - /bin/entrypoint-wrapper
       - /tmp/entrypoint-wrapper/entrypoint-wrapper
@@ -230,9 +273,12 @@
         name: entrypoint-wrapper
     restartPolicy: Never
     serviceAccountName: test
+    terminationGracePeriodSeconds: 18
     volumes:
     - emptyDir: {}
-      name: artifacts
+      name: logs
+    - emptyDir: {}
+      name: tools
     - emptyDir: {}
       name: home
     - emptyDir: {}
@@ -264,12 +310,7 @@
   spec:
     containers:
     - args:
-      - /bin/bash
-      - -c
-      - |-
-        #!/bin/bash
-        set -eu
-        command2
+      - /tools/entrypoint
       command:
       - /tmp/entrypoint-wrapper/entrypoint-wrapper
       env:
@@ -280,7 +321,7 @@
       - name: JOB_NAME
         value: job
       - name: JOB_SPEC
-        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base sha"}}'
+        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base sha"},"decoration_config":{"utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
       - name: JOB_TYPE
         value: postsubmit
       - name: OPENSHIFT_CI
@@ -297,6 +338,10 @@
         value: repo
       - name: REPO_OWNER
         value: org
+      - name: ENTRYPOINT_OPTIONS
+        value: '{"timeout":0,"grace_period":0,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand2"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
+      - name: ARTIFACT_DIR
+        value: /logs/artifacts
       - name: NAMESPACE
         value: namespace
       - name: JOB_NAME_SAFE
@@ -324,6 +369,10 @@
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
+      - mountPath: /logs
+        name: logs
+      - mountPath: /tools
+        name: tools
       - mountPath: /alabama
         name: home
       - mountPath: /tmp/entrypoint-wrapper
@@ -332,7 +381,30 @@
         name: cluster-profile
       - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
         name: test
+    - command:
+      - /sidecar
+      env:
+      - name: JOB_SPEC
+      - name: SIDECAR_OPTIONS
+        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step2","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand2"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true}'
+      image: sidecar
+      name: sidecar
+      resources: {}
+      volumeMounts:
+      - mountPath: /logs
+        name: logs
     initContainers:
+    - args:
+      - /entrypoint
+      - /tools/entrypoint
+      command:
+      - /bin/cp
+      image: entrypoint
+      name: place-entrypoint
+      resources: {}
+      volumeMounts:
+      - mountPath: /tools
+        name: tools
     - args:
       - /bin/entrypoint-wrapper
       - /tmp/entrypoint-wrapper/entrypoint-wrapper
@@ -347,7 +419,12 @@
         name: entrypoint-wrapper
     restartPolicy: Never
     serviceAccountName: test
+    terminationGracePeriodSeconds: 18
     volumes:
+    - emptyDir: {}
+      name: logs
+    - emptyDir: {}
+      name: tools
     - emptyDir: {}
       name: home
     - emptyDir: {}

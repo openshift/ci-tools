@@ -230,7 +230,7 @@ func main() {
 			var dashboardType string
 			switch {
 			case job.Upgrade:
-				dashboardType = "generic-informing"
+				dashboardType = "informing"
 			case job.Optional:
 				if existing == "generic-informing" || existing == "blocking" {
 					continue
@@ -285,7 +285,12 @@ func main() {
 		name := p.Name
 		calculateDays := len(p.Cron) > 0 || len(p.Interval) > 0
 		var dashboardType string
-		label := allowList[name]
+
+		label, ok := allowList[name]
+		if len(label) == 0 && ok {
+			// if the allow list has an empty label for the type, exclude it from dashboards
+			continue
+		}
 		switch label {
 		case "informing", "blocking", "broken", "generic-informing":
 			dashboardType = label
@@ -294,12 +299,24 @@ func main() {
 				calculateDays = false
 			}
 		default:
-			label, ok := configuredJobs[name]
-			if !ok {
+			if label, ok := configuredJobs[name]; ok {
+				dashboardType = label
+				calculateDays = false
+				break
+			}
+			switch {
+			case strings.HasPrefix(name, "release-openshift-"),
+				strings.HasPrefix(name, "promote-release-openshift-"),
+				strings.HasPrefix(name, "periodic-ci-openshift-release-master-ci-"),
+				strings.HasPrefix(name, "periodic-ci-openshift-release-master-okd-"),
+				strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"):
+				// the standard release periodics should always appear in testgrid
+				dashboardType = "informing"
+				calculateDays = true
+			default:
+				// unknown labels or non standard jobs do not appear in testgrid
 				continue
 			}
-			dashboardType = label
-			calculateDays = false
 		}
 
 		var current *dashboard
@@ -309,7 +326,13 @@ func main() {
 		default:
 			var stream string
 			switch {
-			case strings.Contains(name, "-ocp-") || strings.Contains(name, "-origin-"):
+			case
+				// these will be removable once most / all jobs are generated periodics and are for legacy release-* only
+				strings.Contains(name, "-ocp-"),
+				strings.Contains(name, "-origin-"),
+				// these prefixes control whether a job is ocp or okd going forward
+				strings.HasPrefix(name, "periodic-ci-openshift-release-master-ci-"),
+				strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"):
 				stream = "ocp"
 			case strings.Contains(name, "-okd-"):
 				stream = "okd"
@@ -320,18 +343,20 @@ func main() {
 				logrus.Warningf("unrecognized release type in job: %s", name)
 				continue
 			}
+
 			version := p.Labels["job-release"]
 			if len(version) == 0 {
 				m := reVersion.FindStringSubmatch(name)
 				if len(m) == 0 {
-					logrus.Warningf("release is not in -X.Y- form: %s", name)
-					continue
+					logrus.Warningf("release is not in -X.Y- form and will go into the generic informing dashboard: %s", name)
+					current = genericDashboardFor("informing")
+					break
 				}
 				version = m[1]
 			}
-
 			current = dashboardFor(stream, version, dashboardType)
 		}
+
 		if existing, ok := dashboards[current.Name]; ok {
 			current = existing
 		} else {

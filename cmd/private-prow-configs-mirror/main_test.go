@@ -11,6 +11,7 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/plugins"
+	prowplugins "k8s.io/test-infra/prow/plugins"
 	utilpointer "k8s.io/utils/pointer"
 )
 
@@ -600,43 +601,43 @@ func TestInjectPrivateBugzillaPlugin(t *testing.T) {
 func TestInjectPrivatePlugins(t *testing.T) {
 	testCases := []struct {
 		id       string
-		plugins  map[string][]string
-		expected map[string][]string
+		plugins  map[string]prowplugins.OrgPlugins
+		expected map[string]prowplugins.OrgPlugins
 	}{
 		{
 			id:       "no changes expected",
-			plugins:  map[string][]string{"openshift/anotherRepo1": {"approve", "lgtm", "cat", "dog"}},
-			expected: map[string][]string{"openshift/anotherRepo1": {"approve", "lgtm", "cat", "dog"}},
+			plugins:  map[string]prowplugins.OrgPlugins{"openshift/anotherRepo1": {Plugins: []string{"approve", "lgtm", "cat", "dog"}}},
+			expected: map[string]prowplugins.OrgPlugins{"openshift/anotherRepo1": {Plugins: []string{"approve", "lgtm", "cat", "dog"}}},
 		},
 		{
 			id: "changes expected",
-			plugins: map[string][]string{
-				"openshift/testRepo1": {"approve", "lgtm", "cat", "dog"},
+			plugins: map[string]prowplugins.OrgPlugins{
+				"openshift/testRepo1": {Plugins: []string{"approve", "lgtm", "cat", "dog"}},
 			},
-			expected: map[string][]string{
-				"openshift-priv/testRepo1": {"approve", "cat", "dog", "lgtm"},
-				"openshift/testRepo1":      {"approve", "lgtm", "cat", "dog"},
+			expected: map[string]prowplugins.OrgPlugins{
+				"openshift-priv/testRepo1": {Plugins: []string{"approve", "cat", "dog", "lgtm"}},
+				"openshift/testRepo1":      {Plugins: []string{"approve", "lgtm", "cat", "dog"}},
 			},
 		},
 		{
 			id: "changes expected, multiple org/repos",
-			plugins: map[string][]string{
-				"openshift":           {"lgtm", "cat", "dog", "hold"},
-				"testshift":           {"lgtm", "milestone", "label", "hold"},
-				"openshift/testRepo1": {"approve"},
-				"testshift/testRepo3": {"approve", "trigger"},
+			plugins: map[string]prowplugins.OrgPlugins{
+				"openshift":           {Plugins: []string{"lgtm", "cat", "dog", "hold"}},
+				"testshift":           {Plugins: []string{"lgtm", "milestone", "label", "hold"}},
+				"openshift/testRepo1": {Plugins: []string{"approve"}},
+				"testshift/testRepo3": {Plugins: []string{"approve", "trigger"}},
 			},
-			expected: map[string][]string{
-				"openshift":           {"lgtm", "cat", "dog", "hold"},
-				"testshift":           {"lgtm", "milestone", "label", "hold"},
-				"openshift/testRepo1": {"approve"},
-				"testshift/testRepo3": {"approve", "trigger"},
+			expected: map[string]prowplugins.OrgPlugins{
+				"openshift":           {Plugins: []string{"lgtm", "cat", "dog", "hold"}},
+				"testshift":           {Plugins: []string{"lgtm", "milestone", "label", "hold"}},
+				"openshift/testRepo1": {Plugins: []string{"approve"}},
+				"testshift/testRepo3": {Plugins: []string{"approve", "trigger"}},
 
-				"openshift-priv":           {"hold", "lgtm"},
-				"openshift-priv/testRepo1": {"approve", "cat", "dog"},
-				"openshift-priv/testRepo2": {"cat", "dog"},
-				"openshift-priv/testRepo3": {"approve", "label", "milestone", "trigger"},
-				"openshift-priv/testRepo4": {"label", "milestone"},
+				"openshift-priv":           {Plugins: []string{"hold", "lgtm"}},
+				"openshift-priv/testRepo1": {Plugins: []string{"approve", "cat", "dog"}},
+				"openshift-priv/testRepo2": {Plugins: []string{"cat", "dog"}},
+				"openshift-priv/testRepo3": {Plugins: []string{"approve", "label", "milestone", "trigger"}},
+				"openshift-priv/testRepo4": {Plugins: []string{"label", "milestone"}},
 			},
 		},
 	}

@@ -251,3 +251,67 @@ func TestUpdateBaseImages(t *testing.T) {
 		})
 	}
 }
+
+func TestMetadataFromJobInfo(t *testing.T) {
+	testCases := []struct {
+		name            string
+		job             jobInfo
+		expectedVariant string
+		expectedErr     bool
+	}{{
+		name: "Non-upgrade CI",
+		job: jobInfo{
+			Product: "origin",
+			Version: "4.7",
+		},
+		expectedVariant: "ci-4.7",
+	}, {
+		name: "Non-upgrade nightly with toStream",
+		job: jobInfo{
+			Product:  "origin",
+			ToStream: "nightly",
+			Version:  "4.7",
+		},
+		expectedVariant: "nightly-4.7",
+	}, {
+		name: "Upgrade with no specified fromStream",
+		job: jobInfo{
+			Product:     "origin",
+			Version:     "4.7",
+			FromVersion: "4.6",
+			Upgrade:     true,
+		},
+		expectedVariant: "ci-4.7-upgrade-from-stable-4.6",
+	}, {
+		name: "Upgrade with specified fromStream",
+		job: jobInfo{
+			Product:     "origin",
+			Version:     "4.7",
+			FromVersion: "4.6",
+			FromStream:  "nightly",
+			Upgrade:     true,
+		},
+		expectedVariant: "ci-4.7-upgrade-from-nightly-4.6",
+	}, {
+		name: "Invalid product",
+		job: jobInfo{
+			Product: "bad",
+			Version: "4.6",
+		},
+		expectedErr: true,
+	}}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			metadata, err := metadataFromJobInfo(testCase.job)
+			if err != nil {
+				if !testCase.expectedErr {
+					t.Errorf("Got unexpected error: %s", err)
+				}
+			} else {
+				if metadata.Variant != testCase.expectedVariant {
+					t.Errorf("Expected %s, got %s", testCase.expectedVariant, metadata.Variant)
+				}
+			}
+		})
+	}
+}

@@ -39,3 +39,8 @@ tests:
   steps:
     cluster_profile: aws
     workflow: openshift-e2e-aws-proxy
+zz_generated_metadata:
+  branch: master
+  org: openshift
+  repo: release
+  variant: nightly-4.7

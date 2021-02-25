@@ -11,10 +11,10 @@ periodics:
     repo: release
   labels:
     ci-operator.openshift.io/prowgen-controlled: "true"
-    ci-operator.openshift.io/variant: ocp-4.7
+    ci-operator.openshift.io/variant: nightly-4.7
     job-release: "4.7"
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
-  name: periodic-ci-openshift-release-master-ocp-4.7-e2e-aws-proxy
+  name: periodic-ci-openshift-release-master-nightly-4.7-e2e-aws-proxy
   spec:
     containers:
     - args:
@@ -25,7 +25,7 @@ periodics:
       - --secret-dir=/secrets/ci-pull-credentials
       - --secret-dir=/usr/local/e2e-aws-proxy-cluster-profile
       - --target=e2e-aws-proxy
-      - --variant=ocp-4.7
+      - --variant=nightly-4.7
       command:
       - ci-operator
       image: ci-operator:latest
@@ -83,10 +83,10 @@ periodics:
     repo: release
   labels:
     ci-operator.openshift.io/prowgen-controlled: "true"
-    ci-operator.openshift.io/variant: ocp-4.7
+    ci-operator.openshift.io/variant: nightly-4.7
     job-release: "4.7"
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
-  name: periodic-ci-openshift-release-master-ocp-4.7-e2e-metal-ipi-ovn-dualstack
+  name: periodic-ci-openshift-release-master-nightly-4.7-e2e-metal-ipi-ovn-dualstack
   spec:
     containers:
     - args:
@@ -97,7 +97,7 @@ periodics:
       - --secret-dir=/secrets/ci-pull-credentials
       - --secret-dir=/usr/local/e2e-metal-ipi-ovn-dualstack-cluster-profile
       - --target=e2e-metal-ipi-ovn-dualstack
-      - --variant=ocp-4.7
+      - --variant=nightly-4.7
       command:
       - ci-operator
       image: ci-operator:latest

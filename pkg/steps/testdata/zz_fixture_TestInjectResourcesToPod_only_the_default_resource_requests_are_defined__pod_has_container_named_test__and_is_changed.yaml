@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  name: test-pod
+spec:
+  containers:
+  - name: test
+    resources:
+      limits:
+        memory: 10Gi
+      requests:
+        cpu: "3"
+        memory: 8Gi
+status: {}

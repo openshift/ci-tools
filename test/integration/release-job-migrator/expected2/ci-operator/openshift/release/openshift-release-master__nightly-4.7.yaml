@@ -47,6 +47,7 @@ tests:
     cluster_profile: aws
     workflow: openshift-e2e-aws
 zz_generated_metadata:
-  branch: ""
-  org: ""
-  repo: ""
+  branch: master
+  org: openshift
+  repo: release
+  variant: nightly-4.7

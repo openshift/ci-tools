@@ -1,10 +1,10 @@
 releases:
   initial:
-    prerelease:
+    candidate:
       product: ocp
-      version_bounds:
-        lower: 4.6.0-0
-        upper: 4.7.0-0
+      relative: 1
+      stream: ci
+      version: "4.7"
   latest:
     candidate:
       product: ocp
@@ -16,17 +16,13 @@ resources:
       cpu: 100m
       memory: 200Mi
 tests:
-- as: e2e-aws-upgrade-rollback
-  cron: '@yearly'
+- as: e2e-aws
+  interval: 48h
   steps:
     cluster_profile: aws
-    env:
-      DELETE_MC: "false"
-      TEST_OPTIONS: abort-at=99
-      TEST_TYPE: upgrade
-    workflow: openshift-upgrade-aws
+    workflow: openshift-e2e-aws
 zz_generated_metadata:
   branch: master
   org: openshift
   repo: release
-  variant: origin-4.6-to-4.7
+  variant: ci-4.7

@@ -14,14 +14,14 @@
       "upgrade":{
         "upgrade":true,
         "optional":true,
-        "prowJob":{"name":"periodic-ci-openshift-release-master-origin-4.7-e2e-gcp-upgrade"}
+        "prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.7-e2e-gcp-upgrade"}
       }
     },
     "periodic":{
       "upgrade-gcp":{
         "interval":"6h",
         "upgrade":true,
-        "prowJob":{"name":"periodic-ci-openshift-release-master-origin-4.7-e2e-gcp-upgrade"}
+        "prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.7-e2e-gcp-upgrade"}
       },
       "upgrade-gcp-minor":{
         "interval":"6h",

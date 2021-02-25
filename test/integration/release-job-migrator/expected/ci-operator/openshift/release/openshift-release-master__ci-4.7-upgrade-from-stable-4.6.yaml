@@ -3,26 +3,30 @@ releases:
     prerelease:
       product: ocp
       version_bounds:
-        lower: 4.5.0-0
-        upper: 4.6.0-0
+        lower: 4.6.0-0
+        upper: 4.7.0-0
   latest:
     candidate:
       product: ocp
       stream: ci
-      version: "4.6"
+      version: "4.7"
 resources:
   '*':
     requests:
       cpu: 100m
       memory: 200Mi
 tests:
-- as: e2e-aws-upgrade
+- as: e2e-aws-upgrade-rollback
   cron: '@yearly'
   steps:
     cluster_profile: aws
-    workflow: openshift-upgrade-aws-hosted-loki
+    env:
+      DELETE_MC: "false"
+      TEST_OPTIONS: abort-at=99
+      TEST_TYPE: upgrade
+    workflow: openshift-upgrade-aws
 zz_generated_metadata:
   branch: master
   org: openshift
   repo: release
-  variant: origin-4.5-stable-to-4.6-ci
+  variant: ci-4.7-upgrade-from-stable-4.6

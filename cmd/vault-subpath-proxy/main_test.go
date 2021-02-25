@@ -24,6 +24,12 @@ const (
 )
 
 func TestProxy(t *testing.T) {
+	if _, err := exec.LookPath("vault"); err != nil {
+		if _, runningInCi := os.LookupEnv("CI"); runningInCi {
+			t.Fatalf("could not find vault in path: %v", err)
+		}
+		t.Skip("could not find vault in path")
+	}
 	if os.Getenv("CI") != "" {
 		// We need a writeable home
 		os.Setenv("HOME", "/tmp")

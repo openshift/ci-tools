@@ -355,8 +355,10 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to complete options.")
 	}
 
-	if err := o.PRCreationOptions.Finalize(); err != nil {
-		logrus.WithError(err).Fatal("Failed to finalize PR creation options")
+	if o.createPR {
+		if err := o.PRCreationOptions.Finalize(); err != nil {
+			logrus.WithError(err).Fatal("Failed to finalize PR creation options")
+		}
 	}
 
 	sa := &secret.Agent{}

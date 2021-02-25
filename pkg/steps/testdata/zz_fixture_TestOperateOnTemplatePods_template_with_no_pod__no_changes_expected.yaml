@@ -1,0 +1,6 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  creationTimestamp: null
+  name: test-template
+objects: null

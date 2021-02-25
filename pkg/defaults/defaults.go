@@ -51,7 +51,6 @@ func FromConfig(
 	requiredTargets []string,
 	cloneAuthConfig *steps.CloneAuthConfig,
 	pullSecret, pushSecret *coreapi.Secret,
-	artifactsViaPodUtils bool,
 ) ([]api.Step, []api.Step, error) {
 	crclient, err := ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
 	if err != nil {
@@ -76,7 +75,7 @@ func FromConfig(
 	}
 
 	podClient := steps.NewPodClient(client, clusterConfig, coreGetter.RESTClient())
-	return fromConfig(config, jobSpec, templates, paramFile, artifactDir, promote, client, buildClient, templateClient, podClient, leaseClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), artifactsViaPodUtils)
+	return fromConfig(config, jobSpec, templates, paramFile, artifactDir, promote, client, buildClient, templateClient, podClient, leaseClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil))
 }
 
 func fromConfig(
@@ -95,7 +94,6 @@ func fromConfig(
 	cloneAuthConfig *steps.CloneAuthConfig,
 	pullSecret, pushSecret *coreapi.Secret,
 	params *api.DeferredParameters,
-	artifactsViaPodUtils bool,
 ) ([]api.Step, []api.Step, error) {
 	requiredNames := sets.NewString()
 	for _, target := range requiredTargets {
@@ -115,7 +113,7 @@ func fromConfig(
 	}
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, artifactDir, jobSpec, inputImages, testStep, artifactsViaPodUtils)
+			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, artifactDir, jobSpec, inputImages, testStep)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -152,7 +150,7 @@ func fromConfig(
 				}
 				log.Printf("Resolved release %s to %s", resolveConfig.Name, value)
 			}
-			step := releasesteps.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, artifactDir, jobSpec, pullSecret, artifactsViaPodUtils)
+			step := releasesteps.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, artifactDir, jobSpec, pullSecret)
 			buildSteps = append(buildSteps, step)
 			addProvidesForStep(step, params)
 			continue
@@ -209,9 +207,9 @@ func fromConfig(
 						return nil, nil, results.ForReason("reading_release").ForError(fmt.Errorf("failed to read input release pullSpec %s: %w", name, err))
 					}
 					log.Printf("Resolved release %s to %s", name, pullSpec)
-					releaseStep = releasesteps.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, artifactDir, jobSpec, pullSecret, artifactsViaPodUtils)
+					releaseStep = releasesteps.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, artifactDir, jobSpec, pullSecret)
 				} else {
-					releaseStep = releasesteps.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, artifactDir, jobSpec, artifactsViaPodUtils)
+					releaseStep = releasesteps.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, artifactDir, jobSpec)
 				}
 				overridableSteps = append(overridableSteps, releaseStep)
 				addProvidesForStep(releaseStep, params)
@@ -296,9 +294,8 @@ func stepForTest(
 	jobSpec *api.JobSpec,
 	inputImages inputImageSet,
 	c *api.TestStepConfiguration,
-	artifactsViaPodUtils bool,
 ) ([]api.Step, error) {
-	if c.ArtifactDir != "" && c.ArtifactDir != api.DefaultArtifacts && artifactsViaPodUtils {
+	if c.ArtifactDir != "" && c.ArtifactDir != api.DefaultArtifacts {
 		return nil, errors.New("custom artifacts directories are not allowed when uploading via pod-utilities; output artifacts to $ARTIFACT_DIR")
 	}
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
@@ -306,7 +303,7 @@ func stepForTest(
 		if len(leases) != 0 {
 			params = api.NewDeferredParameters(params)
 		}
-		step := steps.MultiStageTestStep(*c, config, params, podClient, artifactDir, jobSpec, leases, artifactsViaPodUtils)
+		step := steps.MultiStageTestStep(*c, config, params, podClient, artifactDir, jobSpec, leases)
 		if len(leases) != 0 {
 			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
 			addProvidesForStep(step, params)
@@ -330,7 +327,7 @@ func stepForTest(
 		addProvidesForStep(step, params)
 		return []api.Step{step}, nil
 	}
-	return []api.Step{steps.TestStep(*c, config.Resources, podClient, artifactDir, jobSpec, artifactsViaPodUtils)}, nil
+	return []api.Step{steps.TestStep(*c, config.Resources, podClient, artifactDir, jobSpec)}, nil
 }
 
 // stepsForStepImages creates steps that import images referenced in test steps.

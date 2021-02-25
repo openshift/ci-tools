@@ -1,3 +1,7 @@
+- emptyDir: {}
+  name: logs
+- emptyDir: {}
+  name: tools
 - emptyDir:
     medium: Memory
     sizeLimit: 1Gi

@@ -1,2 +1,6 @@
+- mountPath: /logs
+  name: logs
+- mountPath: /tools
+  name: tools
 - mountPath: /tmp/volume
   name: memory-backed

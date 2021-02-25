@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"path/filepath"
 
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -41,15 +40,14 @@ type PodStepConfiguration struct {
 	// SkipLogs instructs the step to omit informational logs, such as when the pod is
 	// part of a larger step like release creation where displaying pod specific info
 	// is confusing to an end user. Failure logs are still printed.
-	SkipLogs             bool
-	As                   string
-	From                 api.ImageStreamTagReference
-	Commands             string
-	ArtifactDir          string
-	ServiceAccountName   string
-	Secrets              []*api.Secret
-	MemoryBackedVolume   *api.MemoryBackedVolume
-	ArtifactsViaPodUtils bool
+	SkipLogs           bool
+	As                 string
+	From               api.ImageStreamTagReference
+	Commands           string
+	ArtifactDir        string
+	ServiceAccountName string
+	Secrets            []*api.Secret
+	MemoryBackedVolume *api.MemoryBackedVolume
 }
 
 type podStep struct {
@@ -92,14 +90,7 @@ func (s *podStep) run(ctx context.Context) error {
 		return fmt.Errorf("pod step was invalid: %w", err)
 	}
 
-	// when the test container terminates and artifact directory has been set, grab everything under the directory
-	var notifier ContainerNotifier = NopNotifier
-	if s.gatherArtifacts() {
-		artifacts := NewArtifactWorker(s.client, filepath.Join(s.artifactDir, s.config.As), s.jobSpec.Namespace())
-		artifacts.CollectFromPod(pod.Name, []string{s.name}, nil)
-		notifier = artifacts
-	}
-	testCaseNotifier := NewTestCaseNotifier(notifier)
+	testCaseNotifier := NewTestCaseNotifier(NopNotifier)
 
 	if owner := s.jobSpec.Owner(); owner != nil {
 		pod.OwnerReferences = append(pod.OwnerReferences, *owner)
@@ -132,10 +123,6 @@ func (s *podStep) SubTests() []*junit.TestCase {
 	return s.subTests
 }
 
-func (s *podStep) gatherArtifacts() bool {
-	return len(s.config.ArtifactDir) > 0 && len(s.artifactDir) > 0 && !s.config.ArtifactsViaPodUtils
-}
-
 func (s *podStep) Requires() []api.StepLink {
 	if s.config.From.Name == api.PipelineImageStream {
 		return []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference(s.config.From.Tag))}
@@ -161,17 +148,16 @@ func (s *podStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client PodClient, artifactDir string, jobSpec *api.JobSpec, artifactsViaPodUtils bool) api.Step {
+func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return PodStep(
 		"test",
 		PodStepConfiguration{
-			As:                   config.As,
-			From:                 api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
-			Commands:             config.Commands,
-			ArtifactDir:          config.ArtifactDir,
-			Secrets:              config.Secrets,
-			MemoryBackedVolume:   config.ContainerTestConfiguration.MemoryBackedVolume,
-			ArtifactsViaPodUtils: artifactsViaPodUtils,
+			As:                 config.As,
+			From:               api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
+			Commands:           config.Commands,
+			ArtifactDir:        config.ArtifactDir,
+			Secrets:            config.Secrets,
+			MemoryBackedVolume: config.ContainerTestConfiguration.MemoryBackedVolume,
 		},
 		resources,
 		client,
@@ -199,7 +185,6 @@ func generateBasePod(
 	image string,
 	containerResources coreapi.ResourceRequirements,
 	artifactDir string,
-	artifactsViaPodUtils bool,
 	decorationConfig *v1.DecorationConfig,
 	rawJobSpec string,
 ) (*coreapi.Pod, error) {
@@ -233,28 +218,21 @@ func generateBasePod(
 		},
 	}
 	if artifactDir != "" {
-		if artifactsViaPodUtils {
-			// When using the old-school artifacts upload, we can be declarative as to
-			// where the artifacts exist. In the pod-utils approach, we instead declare
-			// what the subdirectory should be for the upload. The subdirectory allows
-			// us to upload to where the old-school approach would have put things.
-			artifactDir = fmt.Sprintf("artifacts/%s", artifactDir)
-			if err := addPodUtils(pod, artifactDir, decorationConfig, rawJobSpec); err != nil {
-				return nil, fmt.Errorf("failed to decorate pod: %w", err)
-			}
-		} else {
-			addArtifacts(pod, artifactDir)
+		// When using the old-school artifacts upload, we can be declarative as to
+		// where the artifacts exist. In the pod-utils approach, we instead declare
+		// what the subdirectory should be for the upload. The subdirectory allows
+		// us to upload to where the old-school approach would have put things.
+		artifactDir = fmt.Sprintf("artifacts/%s", artifactDir)
+		if err := addPodUtils(pod, artifactDir, decorationConfig, rawJobSpec); err != nil {
+			return nil, fmt.Errorf("failed to decorate pod: %w", err)
 		}
 	}
 	return pod, nil
 }
 
 func (s *podStep) generatePodForStep(image string, containerResources coreapi.ResourceRequirements) (*coreapi.Pod, error) {
-	artifactDir := s.config.ArtifactDir
-	if s.config.ArtifactsViaPodUtils {
-		artifactDir = s.name
-	}
-	pod, err := generateBasePod(s.jobSpec, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.config.ArtifactsViaPodUtils, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec())
+	artifactDir := s.name
+	pod, err := generateBasePod(s.jobSpec, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec())
 	if err != nil {
 		return nil, err
 	}

@@ -20,12 +20,7 @@ metadata:
 spec:
   containers:
   - command:
-    - /bin/bash
-    - -c
-    - |-
-      #!/bin/bash
-      set -eu
-      launch-tests
+    - /tools/entrypoint
     env:
     - name: BUILD_ID
       value: test-build-id
@@ -34,7 +29,7 @@ spec:
     - name: JOB_NAME
       value: very-cool-prow-job
     - name: JOB_SPEC
-      value: '{"type":"presubmit","job":"very-cool-prow-job","buildid":"test-build-id","prowjobid":"prow-job-id","refs":{"org":"org","repo":"repo","base_ref":"base-ref","base_sha":"base-sha","pulls":[{"number":123,"author":"","sha":"72532003f9e01e89f455187dd92c275204bc9781"}]}}'
+      value: '{"type":"presubmit","job":"very-cool-prow-job","buildid":"test-build-id","prowjobid":"prow-job-id","refs":{"org":"org","repo":"repo","base_ref":"base-ref","base_sha":"base-sha","pulls":[{"number":123,"author":"","sha":"72532003f9e01e89f455187dd92c275204bc9781"}]},"decoration_config":{"timeout":"1m0s","grace_period":"1s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
     - name: JOB_TYPE
       value: presubmit
     - name: OPENSHIFT_CI
@@ -55,10 +50,48 @@ spec:
       value: repo
     - name: REPO_OWNER
       value: org
+    - name: ENTRYPOINT_OPTIONS
+      value: '{"timeout":60000000000,"grace_period":1000000000,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset -eu\nlaunch-tests"],"container_name":"StepName","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
+    - name: ARTIFACT_DIR
+      value: /logs/artifacts
     image: somename:sometag
     name: StepName
     resources: {}
     terminationMessagePolicy: FallbackToLogsOnError
+    volumeMounts:
+    - mountPath: /logs
+      name: logs
+    - mountPath: /tools
+      name: tools
+  - command:
+    - /sidecar
+    env:
+    - name: JOB_SPEC
+    - name: SIDECAR_OPTIONS
+      value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/StepName","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset -eu\nlaunch-tests"],"container_name":"StepName","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true}'
+    image: sidecar
+    name: sidecar
+    resources: {}
+    volumeMounts:
+    - mountPath: /logs
+      name: logs
+  initContainers:
+  - args:
+    - /entrypoint
+    - /tools/entrypoint
+    command:
+    - /bin/cp
+    image: entrypoint
+    name: place-entrypoint
+    resources: {}
+    volumeMounts:
+    - mountPath: /tools
+      name: tools
   restartPolicy: Never
+  volumes:
+  - emptyDir: {}
+    name: logs
+  - emptyDir: {}
+    name: tools
 status:
   phase: Succeeded

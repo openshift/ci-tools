@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -48,6 +49,14 @@ func preparePodStep(namespace string) (*podStep, stepExpectation) {
 				Pulls:   []prowapi.Pull{{Number: 123, SHA: "72532003f9e01e89f455187dd92c275204bc9781"}},
 				BaseRef: "base-ref",
 				BaseSHA: "base-sha",
+			},
+			DecorationConfig: &prowapi.DecorationConfig{
+				Timeout:     &prowapi.Duration{Duration: time.Minute},
+				GracePeriod: &prowapi.Duration{Duration: time.Second},
+				UtilityImages: &prowapi.UtilityImages{
+					Sidecar:    "sidecar",
+					Entrypoint: "entrypoint",
+				},
 			},
 		},
 	}
@@ -228,6 +237,14 @@ func expectedPodStepTemplate() *podStep {
 				BuildID:   "podStep.jobSpec.BuildId",
 				ProwJobID: "podStep.jobSpec.ProwJobID",
 				Type:      "periodic",
+				DecorationConfig: &prowapi.DecorationConfig{
+					Timeout:     &prowapi.Duration{Duration: time.Minute},
+					GracePeriod: &prowapi.Duration{Duration: time.Second},
+					UtilityImages: &prowapi.UtilityImages{
+						Sidecar:    "sidecar",
+						Entrypoint: "entrypoint",
+					},
+				},
 			},
 		},
 		name: "podStep.name",

@@ -3,7 +3,6 @@ containers:
   - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
   - --gcs-upload-secret=/secrets/gcs/service-account.json
   - --report-credentials-file=/etc/report/credentials
-  - --upload-via-pod-utils=false
   - --target=test
   - --secret-dir=/secrets/ci-pull-credentials
   - --secret-dir=/usr/local/test-cluster-profile

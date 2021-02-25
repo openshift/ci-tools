@@ -12,7 +12,6 @@ periodics:
   spec:
     containers:
     - args:
-      - --artifact-dir=$(ARTIFACTS)
       - --secret-dir=/usr/local/e2e-cluster-profile
       - --target=CHANGED
       - --template=/usr/local/e2e

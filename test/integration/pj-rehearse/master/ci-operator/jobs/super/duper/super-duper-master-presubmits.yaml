@@ -13,7 +13,6 @@ presubmits:
     spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --target=cmd
         command:
@@ -41,7 +40,6 @@ presubmits:
     spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --secret-dir=/usr/local/e2e-aws-cluster-profile
         - --target=e2e-aws
@@ -96,7 +94,6 @@ presubmits:
     spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --branch=master
         - --give-pr-author-access-to-namespace=true
         - --org=super
@@ -126,7 +123,6 @@ presubmits:
     spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --target=integration
         command:
@@ -154,7 +150,6 @@ presubmits:
     spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --secret-dir=/usr/local/e2e-aws-cluster-profile
         - --target=e2e-aws
@@ -206,7 +201,6 @@ presubmits:
     spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --secret-dir=/usr/local/e2e-aws-cluster-profile
         - --target=e2e-aws
@@ -258,7 +252,6 @@ presubmits:
     spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --target=unit
         command:

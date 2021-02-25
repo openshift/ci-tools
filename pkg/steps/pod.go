@@ -50,12 +50,11 @@ type PodStepConfiguration struct {
 }
 
 type podStep struct {
-	name        string
-	config      PodStepConfiguration
-	resources   api.ResourceConfiguration
-	client      PodClient
-	artifactDir string
-	jobSpec     *api.JobSpec
+	name      string
+	config    PodStepConfiguration
+	resources api.ResourceConfiguration
+	client    PodClient
+	jobSpec   *api.JobSpec
 
 	subTests []*junit.TestCase
 }
@@ -88,7 +87,6 @@ func (s *podStep) run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("pod step was invalid: %w", err)
 	}
-
 	testCaseNotifier := NewTestCaseNotifier(NopNotifier)
 
 	if owner := s.jobSpec.Owner(); owner != nil {
@@ -147,7 +145,7 @@ func (s *podStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client PodClient, jobSpec *api.JobSpec) api.Step {
 	return PodStep(
 		"test",
 		PodStepConfiguration{
@@ -159,19 +157,17 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 		},
 		resources,
 		client,
-		artifactDir,
 		jobSpec,
 	)
 }
 
-func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, client PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, client PodClient, jobSpec *api.JobSpec) api.Step {
 	return &podStep{
-		name:        name,
-		config:      config,
-		resources:   resources,
-		client:      client,
-		artifactDir: artifactDir,
-		jobSpec:     jobSpec,
+		name:      name,
+		config:    config,
+		resources: resources,
+		client:    client,
+		jobSpec:   jobSpec,
 	}
 }
 
@@ -215,15 +211,9 @@ func generateBasePod(
 			},
 		},
 	}
-	if artifactDir != "" {
-		// When using the old-school artifacts upload, we can be declarative as to
-		// where the artifacts exist. In the pod-utils approach, we instead declare
-		// what the subdirectory should be for the upload. The subdirectory allows
-		// us to upload to where the old-school approach would have put things.
-		artifactDir = fmt.Sprintf("artifacts/%s", artifactDir)
-		if err := addPodUtils(pod, artifactDir, decorationConfig, rawJobSpec); err != nil {
-			return nil, fmt.Errorf("failed to decorate pod: %w", err)
-		}
+	artifactDir = fmt.Sprintf("artifacts/%s", artifactDir)
+	if err := addPodUtils(pod, artifactDir, decorationConfig, rawJobSpec); err != nil {
+		return nil, fmt.Errorf("failed to decorate pod: %w", err)
 	}
 	return pod, nil
 }

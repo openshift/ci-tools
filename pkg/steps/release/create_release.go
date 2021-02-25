@@ -45,12 +45,11 @@ import (
 // inject the images from a known historic release for the purposes of building
 // branches of those releases.
 type assembleReleaseStep struct {
-	config      *api.ReleaseTagConfiguration
-	name        string
-	resources   api.ResourceConfiguration
-	client      steps.PodClient
-	artifactDir string
-	jobSpec     *api.JobSpec
+	config    *api.ReleaseTagConfiguration
+	name      string
+	resources api.ResourceConfiguration
+	client    steps.PodClient
+	jobSpec   *api.JobSpec
 }
 
 func (s *assembleReleaseStep) Inputs() (api.InputDefinition, error) {
@@ -221,7 +220,7 @@ oc adm release extract --from=%q --to=${ARTIFACT_DIR}/release-payload-%s
 		resources = copied
 	}
 
-	step := steps.PodStep("release", podConfig, resources, s.client, s.artifactDir, s.jobSpec)
+	step := steps.PodStep("release", podConfig, resources, s.client, s.jobSpec)
 
 	return results.ForReason("creating_release").ForError(step.Run(ctx))
 }
@@ -258,14 +257,12 @@ func (s *assembleReleaseStep) Objects() []ctrlruntimeclient.Object {
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
 func AssembleReleaseStep(name string, config *api.ReleaseTagConfiguration, resources api.ResourceConfiguration,
-	client steps.PodClient,
-	artifactDir string, jobSpec *api.JobSpec) api.Step {
+	client steps.PodClient, jobSpec *api.JobSpec) api.Step {
 	return &assembleReleaseStep{
-		config:      config,
-		name:        name,
-		resources:   resources,
-		client:      client,
-		artifactDir: artifactDir,
-		jobSpec:     jobSpec,
+		config:    config,
+		name:      name,
+		resources: resources,
+		client:    client,
+		jobSpec:   jobSpec,
 	}
 }

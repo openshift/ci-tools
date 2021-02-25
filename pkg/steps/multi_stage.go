@@ -58,7 +58,6 @@ type multiStageTestStep struct {
 	params                   api.Parameters
 	env                      api.TestEnvironment
 	client                   PodClient
-	artifactDir              string
 	jobSpec                  *api.JobSpec
 	pre, test, post          []api.LiteralTestStep
 	subTests                 []*junit.TestCase
@@ -73,11 +72,10 @@ func MultiStageTestStep(
 	config *api.ReleaseBuildConfiguration,
 	params api.Parameters,
 	client PodClient,
-	artifactDir string,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, client, artifactDir, jobSpec, leases)
+	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases)
 }
 
 func newMultiStageTestStep(
@@ -85,13 +83,9 @@ func newMultiStageTestStep(
 	config *api.ReleaseBuildConfiguration,
 	params api.Parameters,
 	client PodClient,
-	artifactDir string,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
 ) *multiStageTestStep {
-	if artifactDir != "" {
-		artifactDir = filepath.Join(artifactDir, testConfig.As)
-	}
 	ms := testConfig.MultiStageTestConfigurationLiteral
 	return &multiStageTestStep{
 		name:                     testConfig.As,
@@ -100,7 +94,6 @@ func newMultiStageTestStep(
 		params:                   params,
 		env:                      ms.Environment,
 		client:                   client,
-		artifactDir:              artifactDir,
 		jobSpec:                  jobSpec,
 		pre:                      ms.Pre,
 		test:                     ms.Test,
@@ -636,21 +629,9 @@ func addCliInjector(release string, pod *coreapi.Pod) error {
 }
 
 func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, shortCircuit bool, isBestEffort func(string) bool) error {
-	namePrefix := s.name + "-"
 	var errs []error
 	for _, pod := range pods {
-		var notifier ContainerNotifier = NopNotifier
-		for _, c := range pod.Spec.Containers {
-			if c.Name == "artifacts" {
-				container := pod.Spec.Containers[0].Name
-				dir := filepath.Join(s.artifactDir, strings.TrimPrefix(pod.Name, namePrefix))
-				artifacts := NewArtifactWorker(s.client, dir, s.jobSpec.Namespace())
-				artifacts.CollectFromPod(pod.Name, []string{container}, nil)
-				notifier = artifacts
-				break
-			}
-		}
-		err := s.runPod(ctx, &pod, NewTestCaseNotifier(notifier))
+		err := s.runPod(ctx, &pod, NewTestCaseNotifier(NopNotifier))
 		if err != nil {
 			if isBestEffort(pod.Name) {
 				log.Println(fmt.Sprintf("Pod %s is running in best-effort mode, ignoring the failure...", pod.Name))

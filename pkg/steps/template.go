@@ -52,13 +52,12 @@ const (
 )
 
 type templateExecutionStep struct {
-	template    *templateapi.Template
-	resources   api.ResourceConfiguration
-	params      api.Parameters
-	podClient   PodClient
-	client      TemplateClient
-	artifactDir string
-	jobSpec     *api.JobSpec
+	template  *templateapi.Template
+	resources api.ResourceConfiguration
+	params    api.Parameters
+	podClient PodClient
+	client    TemplateClient
+	jobSpec   *api.JobSpec
 
 	subTests []*junit.TestCase
 }
@@ -106,7 +105,7 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 		}
 	}
 
-	operateOnTemplatePods(s.template, s.artifactDir, s.resources)
+	operateOnTemplatePods(s.template, s.resources)
 	injectLabelsToTemplate(s.jobSpec, s.template)
 
 	// TODO: enforce single namespace behavior
@@ -122,8 +121,6 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 	if owner := s.jobSpec.Owner(); owner != nil {
 		instance.OwnerReferences = append(instance.OwnerReferences, *owner)
 	}
-
-	var notifier ContainerNotifier = NopNotifier
 
 	go func() {
 		<-ctx.Done()
@@ -146,8 +143,9 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 	}
 
 	// now that the pods have been resolved by the template, add them to the artifact map
-	if len(s.artifactDir) > 0 {
-		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.template.Name), s.jobSpec.Namespace())
+	var notifier ContainerNotifier = NopNotifier
+	if artifactDir, artifactsRequested := api.Artifacts(); artifactsRequested {
+		artifacts := NewArtifactWorker(s.podClient, filepath.Join(artifactDir, s.template.Name), s.jobSpec.Namespace())
 		for _, ref := range instance.Status.Objects {
 			switch {
 			case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
@@ -230,12 +228,10 @@ func injectResourcesToPod(pod *coreapi.Pod, templateName string, resources api.R
 	return nil
 }
 
-func operateOnTemplatePods(template *templateapi.Template, artifactDir string, resources api.ResourceConfiguration) {
+func operateOnTemplatePods(template *templateapi.Template, resources api.ResourceConfiguration) {
 	for index, object := range template.Objects {
 		if pod := getPodFromObject(object); pod != nil {
-			if len(artifactDir) > 0 {
-				addArtifactsToPod(pod)
-			}
+			addArtifactsToPod(pod)
 
 			if resources != nil && !hasTestContainerWithResources(pod) {
 				if err := injectResourcesToPod(pod, template.Name, resources); err != nil {
@@ -281,15 +277,14 @@ func (s *templateExecutionStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec, resources api.ResourceConfiguration) api.Step {
+func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, templateClient TemplateClient, jobSpec *api.JobSpec, resources api.ResourceConfiguration) api.Step {
 	return &templateExecutionStep{
-		template:    template,
-		resources:   resources,
-		params:      params,
-		podClient:   podClient,
-		client:      templateClient,
-		artifactDir: artifactDir,
-		jobSpec:     jobSpec,
+		template:  template,
+		resources: resources,
+		params:    params,
+		podClient: podClient,
+		client:    templateClient,
+		jobSpec:   jobSpec,
 	}
 }
 

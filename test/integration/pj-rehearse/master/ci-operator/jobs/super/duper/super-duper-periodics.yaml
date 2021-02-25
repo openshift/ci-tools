@@ -8,7 +8,6 @@ periodics:
   spec:
     containers:
     - args:
-      - --artifact-dir=$(ARTIFACTS)
       - --git-ref=super/duper@master
       - --secret-dir=/usr/local/e2e-cluster-profile
       - --target=e2e

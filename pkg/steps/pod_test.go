@@ -19,7 +19,6 @@ import (
 func preparePodStep(namespace string) (*podStep, stepExpectation) {
 	stepName := "StepName"
 	podName := "TestName"
-	var artifactDir string
 	var resources api.ResourceConfiguration
 
 	config := PodStepConfiguration{
@@ -62,7 +61,7 @@ func preparePodStep(namespace string) (*podStep, stepExpectation) {
 	jobSpec.SetNamespace(namespace)
 
 	client := &podClient{loggingclient.New(fakectrlruntimeclient.NewFakeClient()), nil, nil}
-	ps := PodStep(stepName, config, resources, client, artifactDir, jobSpec)
+	ps := PodStep(stepName, config, resources, client, jobSpec)
 
 	specification := stepExpectation{
 		name:     podName,
@@ -167,7 +166,6 @@ func TestGetPodObjectMounts(t *testing.T) {
 						MountPath: "/usr/local/secrets",
 					},
 				}
-				expectedPodStepTemplate.artifactDir = "/tmp/artifacts"
 			},
 		},
 		{
@@ -183,7 +181,6 @@ func TestGetPodObjectMounts(t *testing.T) {
 						MountPath: "/usr/local/secrets2",
 					},
 				}
-				expectedPodStepTemplate.artifactDir = "/tmp/artifacts"
 			},
 		},
 		{
@@ -197,7 +194,6 @@ func TestGetPodObjectMounts(t *testing.T) {
 						Name: "another-secret",
 					},
 				}
-				expectedPodStepTemplate.artifactDir = "/tmp/artifacts"
 			},
 		},
 		{

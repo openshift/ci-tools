@@ -16,7 +16,6 @@ periodics:
     containers:
     - args:
       - --give-pr-author-access-to-namespace=true
-      - --artifact-dir=$(ARTIFACTS)
       - --target=e2e-aws-nightly
       - --secret-dir=/usr/local/e2e-aws-nightly-cluster-profile
       - --template=/usr/local/e2e-aws-nightly
@@ -75,7 +74,6 @@ periodics:
     containers:
     - args:
       - --give-pr-author-access-to-namespace=true
-      - --artifact-dir=$(ARTIFACTS)
       - --target=e2e-azure-nightly
       - --secret-dir=/usr/local/e2e-azure-nightly-cluster-profile
       - --template=/usr/local/e2e-azure-nightly

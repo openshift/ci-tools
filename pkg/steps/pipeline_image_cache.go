@@ -21,12 +21,11 @@ RUN ["/bin/bash", "-c", %s]`, api.PipelineImageStream, from, strconv.Quote(fmt.S
 }
 
 type pipelineImageCacheStep struct {
-	config      api.PipelineImageCacheStepConfiguration
-	resources   api.ResourceConfiguration
-	client      BuildClient
-	artifactDir string
-	jobSpec     *api.JobSpec
-	pullSecret  *coreapi.Secret
+	config     api.PipelineImageCacheStepConfiguration
+	resources  api.ResourceConfiguration
+	client     BuildClient
+	jobSpec    *api.JobSpec
+	pullSecret *coreapi.Secret
 }
 
 func (s *pipelineImageCacheStep) Inputs() (api.InputDefinition, error) {
@@ -50,7 +49,7 @@ func (s *pipelineImageCacheStep) run(ctx context.Context) error {
 		"",
 		s.resources,
 		s.pullSecret,
-	), s.artifactDir)
+	))
 }
 
 func (s *pipelineImageCacheStep) Requires() []api.StepLink {
@@ -80,13 +79,12 @@ func (s *pipelineImageCacheStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, client BuildClient, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, client BuildClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &pipelineImageCacheStep{
-		config:      config,
-		resources:   resources,
-		client:      client,
-		artifactDir: artifactDir,
-		jobSpec:     jobSpec,
-		pullSecret:  pullSecret,
+		config:     config,
+		resources:  resources,
+		client:     client,
+		jobSpec:    jobSpec,
+		pullSecret: pullSecret,
 	}
 }

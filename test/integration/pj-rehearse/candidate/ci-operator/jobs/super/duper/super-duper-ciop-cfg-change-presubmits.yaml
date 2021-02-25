@@ -19,7 +19,6 @@ presubmits:
     spec:
       containers:
       - args:
-        - --artifact-dir=$(CHANGED)
         - --give-pr-author-access-to-namespace=true
         - --target=custom
         command:
@@ -50,7 +49,6 @@ presubmits:
     spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --branch=ciop-cfg-change
         - --give-pr-author-access-to-namespace=true
         - --org=super

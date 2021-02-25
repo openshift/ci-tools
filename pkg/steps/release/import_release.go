@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"sort"
 	"strings"
@@ -50,12 +49,11 @@ type importReleaseStep struct {
 	// pullSpec is the fully-resolved pull spec of the release payload image we are importing
 	pullSpec string
 	// append determines if we wait for other processes to create images first
-	append      bool
-	resources   api.ResourceConfiguration
-	client      steps.PodClient
-	artifactDir string
-	jobSpec     *api.JobSpec
-	pullSecret  *coreapi.Secret
+	append     bool
+	resources  api.ResourceConfiguration
+	client     steps.PodClient
+	jobSpec    *api.JobSpec
+	pullSecret *coreapi.Secret
 }
 
 func (s *importReleaseStep) Inputs() (api.InputDefinition, error) {
@@ -146,15 +144,6 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 
 	// override anything in stable with the contents of the release image
 	// TODO: should we allow underride for things we built in pipeline?
-	artifactDir := s.artifactDir
-	if len(artifactDir) == 0 {
-		var err error
-		artifactDir, err = ioutil.TempDir("", "payload-images")
-		if err != nil {
-			return fmt.Errorf("unable to create temporary artifact dir for payload extraction")
-		}
-	}
-
 	// get the CLI image from the payload (since we need it to run oc adm release extract)
 	target := fmt.Sprintf("release-images-%s", s.name)
 	targetCLI := fmt.Sprintf("%s-cli", target)
@@ -258,7 +247,7 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 		copied[podConfig.As] = api.ResourceRequirements{Requests: api.ResourceList{"cpu": "50m", "memory": "400Mi"}}
 		resources = copied
 	}
-	step := steps.PodStep("release", podConfig, resources, s.client, artifactDir, s.jobSpec)
+	step := steps.PodStep("release", podConfig, resources, s.client, s.jobSpec)
 	if err := step.Run(ctx); err != nil {
 		return err
 	}
@@ -439,15 +428,14 @@ func (s *importReleaseStep) Objects() []ctrlruntimeclient.Object {
 // ImportReleaseStep imports an existing update payload image
 func ImportReleaseStep(name, pullSpec string, append bool, resources api.ResourceConfiguration,
 	client steps.PodClient,
-	artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+	jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &importReleaseStep{
-		name:        name,
-		pullSpec:    pullSpec,
-		append:      append,
-		resources:   resources,
-		client:      client,
-		artifactDir: artifactDir,
-		jobSpec:     jobSpec,
-		pullSecret:  pullSecret,
+		name:       name,
+		pullSpec:   pullSpec,
+		append:     append,
+		resources:  resources,
+		client:     client,
+		jobSpec:    jobSpec,
+		pullSecret: pullSecret,
 	}
 }

@@ -18,12 +18,11 @@ import (
 )
 
 type projectDirectoryImageBuildStep struct {
-	config      api.ProjectDirectoryImageBuildStepConfiguration
-	resources   api.ResourceConfiguration
-	client      BuildClient
-	jobSpec     *api.JobSpec
-	artifactDir string
-	pullSecret  *coreapi.Secret
+	config     api.ProjectDirectoryImageBuildStepConfiguration
+	resources  api.ResourceConfiguration
+	client     BuildClient
+	jobSpec    *api.JobSpec
+	pullSecret *coreapi.Secret
 }
 
 func (s *projectDirectoryImageBuildStep) Inputs() (api.InputDefinition, error) {
@@ -100,7 +99,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 		s.resources,
 		s.pullSecret,
 	)
-	return handleBuild(ctx, s.client, build, s.artifactDir)
+	return handleBuild(ctx, s.client, build)
 }
 
 func getWorkingDir(client ctrlruntimeclient.Client, source, namespace string) (string, error) {
@@ -160,13 +159,12 @@ func (s *projectDirectoryImageBuildStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &projectDirectoryImageBuildStep{
-		config:      config,
-		resources:   resources,
-		client:      buildClient,
-		artifactDir: artifactDir,
-		jobSpec:     jobSpec,
-		pullSecret:  pullSecret,
+		config:     config,
+		resources:  resources,
+		client:     buildClient,
+		jobSpec:    jobSpec,
+		pullSecret: pullSecret,
 	}
 }

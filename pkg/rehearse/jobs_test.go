@@ -1111,22 +1111,22 @@ func TestRemoveConfigResolverFlags(t *testing.T) {
 		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
 	}, {
 		description:  "no resolver flags",
-		input:        []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
-		expectedArgs: []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
+		input:        []string{"--target=target"},
+		expectedArgs: []string{"--target=target"},
 	}, {
 		description:  "mixed resolver and non-resolver flags",
-		input:        []string{"--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org=openshift", "--target=target", "--repo=origin", "--branch=master", "--variant=v2"},
-		expectedArgs: []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
+		input:        []string{"--resolver-address=http://ci-operator-resolver", "--org=openshift", "--target=target", "--repo=origin", "--branch=master", "--variant=v2"},
+		expectedArgs: []string{"--target=target"},
 		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
 	}, {
 		description:  "spaces in between flag and value",
-		input:        []string{"--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--target=target", "--repo", "origin", "--branch", "master", "--variant=v2"},
-		expectedArgs: []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
+		input:        []string{"--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--target=target", "--repo", "origin", "--branch", "master", "--variant=v2"},
+		expectedArgs: []string{"--target=target"},
 		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
 	}, {
 		description:  "reporting flags",
-		input:        []string{"--report-password-file=/etc/report/password.txt", "--report-username=ci", "--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--target=target", "--repo", "origin", "--branch", "master", "--variant=v2"},
-		expectedArgs: []string{"--report-password-file=/etc/report/password.txt", "--report-username=ci", "--artifact-dir=$(ARTIFACTS)", "--target=target"},
+		input:        []string{"--report-password-file=/etc/report/password.txt", "--report-username=ci", "--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--target=target", "--repo", "origin", "--branch", "master", "--variant=v2"},
+		expectedArgs: []string{"--report-password-file=/etc/report/password.txt", "--report-username=ci", "--target=target"},
 		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
 	}}
 	for _, testCase := range testCases {

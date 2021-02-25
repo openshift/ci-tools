@@ -31,6 +31,7 @@ import (
 
 	buildapi "github.com/openshift/api/build/v1"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 )
@@ -695,7 +696,11 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 // from downloadArtifacts and gatherContainerLogsOutput and munges them in conjunction with the build
 // api logging capabilities; also, without needing to inject an artifacts container, some of the complexities
 // around download/copy from the artifacts container's volume mount and multiple pods are avoided.
-func gatherSuccessfulBuildLog(buildClient BuildClient, artifactDir, namespace, buildName string) error {
+func gatherSuccessfulBuildLog(buildClient BuildClient, namespace, buildName string) error {
+	artifactDir, set := api.Artifacts()
+	if !set {
+		return nil
+	}
 	// adding a subdir to the artifactDir path similar to downloadArtifacts adding the container-logs subdir
 	dir := filepath.Join(artifactDir, "build-logs")
 	if err := os.MkdirAll(dir, 0750); err != nil {

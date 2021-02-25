@@ -312,16 +312,16 @@ func injectPrivateBugzillaPlugin(bugzillaPlugins plugins.Bugzilla, orgRepos orgR
 	}
 }
 
-func injectPrivatePlugins(plugins map[string][]string, orgRepos orgReposWithOfficialImages) {
+func injectPrivatePlugins(prowPlugins plugins.Plugins, orgRepos orgReposWithOfficialImages) {
 	privateRepoPlugins := make(map[string][]string)
 	for org, repos := range orgRepos {
 
 		for repo := range repos {
 			values := sets.NewString()
-			values.Insert(plugins[org]...)
+			values.Insert(prowPlugins[org].Plugins...)
 
-			if repoValues, ok := plugins[fmt.Sprintf("%s/%s", org, repo)]; ok {
-				values.Insert(repoValues...)
+			if repoValues, ok := prowPlugins[fmt.Sprintf("%s/%s", org, repo)]; ok {
+				values.Insert(repoValues.Plugins...)
 			}
 			privateRepoPlugins[privateOrgRepo(repo)] = values.List()
 		}
@@ -335,13 +335,13 @@ func injectPrivatePlugins(plugins map[string][]string, orgRepos orgReposWithOffi
 
 		if len(repoLevelPlugins.List()) > 0 {
 			logrus.WithFields(logrus.Fields{"repo": repo, "value": repoLevelPlugins.List()}).Info("Generating repo")
-			plugins[repo] = repoLevelPlugins.List()
+			prowPlugins[repo] = plugins.OrgPlugins{Plugins: repoLevelPlugins.List()}
 		}
 	}
 
 	if len(commonPlugins.List()) > 0 {
 		logrus.WithField("value", commonPlugins.List()).Info("Generating openshift-priv org.")
-		plugins[openshiftPrivOrg] = commonPlugins.List()
+		prowPlugins[openshiftPrivOrg] = plugins.OrgPlugins{Plugins: commonPlugins.List()}
 	}
 }
 
@@ -442,7 +442,7 @@ func main() {
 }
 
 func cleanStalePluginConfigs(config *plugins.Configuration) *plugins.Configuration {
-	cleanedPlugins := map[string][]string{}
+	cleanedPlugins := make(map[string]plugins.OrgPlugins)
 	for orgOrRepo, val := range config.Plugins {
 		if strings.HasPrefix(orgOrRepo, openshiftPrivOrg) {
 			continue

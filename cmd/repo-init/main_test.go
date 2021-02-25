@@ -126,9 +126,9 @@ func TestEditPluginConfig(t *testing.T) {
 				Branch: "branch",
 			},
 			pluginConfig: &plugins.Configuration{
-				Plugins: map[string][]string{
-					"openshift":        {"foo"},
-					"openshift/origin": {"bar"},
+				Plugins: map[string]plugins.OrgPlugins{
+					"openshift":        {Plugins: []string{"foo"}},
+					"openshift/origin": {Plugins: []string{"bar"}},
 				},
 				ExternalPlugins: map[string][]plugins.ExternalPlugin{
 					"openshift": {{Endpoint: "oops"}},
@@ -137,10 +137,10 @@ func TestEditPluginConfig(t *testing.T) {
 				Lgtm:    []plugins.Lgtm{},
 			},
 			expected: &plugins.Configuration{
-				Plugins: map[string][]string{
-					"openshift":        {"foo"},
-					"openshift/origin": {"bar"},
-					"org/repo":         {"foo", "bar"},
+				Plugins: map[string]plugins.OrgPlugins{
+					"openshift":        {Plugins: []string{"foo"}},
+					"openshift/origin": {Plugins: []string{"bar"}},
+					"org/repo":         {Plugins: []string{"foo", "bar"}},
 				},
 				ExternalPlugins: map[string][]plugins.ExternalPlugin{
 					"openshift": {{Endpoint: "oops"}},
@@ -165,10 +165,10 @@ func TestEditPluginConfig(t *testing.T) {
 				Branch: "branch",
 			},
 			pluginConfig: &plugins.Configuration{
-				Plugins: map[string][]string{
-					"openshift":        {"foo"},
-					"openshift/origin": {"bar"},
-					"org":              {"other"},
+				Plugins: map[string]plugins.OrgPlugins{
+					"openshift":        {Plugins: []string{"foo"}},
+					"openshift/origin": {Plugins: []string{"bar"}},
+					"org":              {Plugins: []string{"other"}},
 				},
 				ExternalPlugins: map[string][]plugins.ExternalPlugin{
 					"openshift": {{Endpoint: "oops"}},
@@ -177,11 +177,11 @@ func TestEditPluginConfig(t *testing.T) {
 				Lgtm:    []plugins.Lgtm{},
 			},
 			expected: &plugins.Configuration{
-				Plugins: map[string][]string{
-					"openshift":        {"foo"},
-					"openshift/origin": {"bar"},
-					"org":              {"other"},
-					"org/repo":         {"bar"},
+				Plugins: map[string]plugins.OrgPlugins{
+					"openshift":        {Plugins: []string{"foo"}},
+					"openshift/origin": {Plugins: []string{"bar"}},
+					"org":              {Plugins: []string{"other"}},
+					"org/repo":         {Plugins: []string{"bar"}},
 				},
 				ExternalPlugins: map[string][]plugins.ExternalPlugin{
 					"openshift": {{Endpoint: "oops"}},
@@ -206,11 +206,11 @@ func TestEditPluginConfig(t *testing.T) {
 				Branch: "branch",
 			},
 			pluginConfig: &plugins.Configuration{
-				Plugins: map[string][]string{
-					"openshift":                          {"foo"},
-					"openshift/cluster-version-operator": {"bar"},
-					"org":                                {"other"},
-					"org/repo":                           {"something"},
+				Plugins: map[string]plugins.OrgPlugins{
+					"openshift":                          {Plugins: []string{"foo"}},
+					"openshift/cluster-version-operator": {Plugins: []string{"bar"}},
+					"org":                                {Plugins: []string{"other"}},
+					"org/repo":                           {Plugins: []string{"something"}},
 				},
 				ExternalPlugins: map[string][]plugins.ExternalPlugin{
 					"openshift": {{Endpoint: "oops"}},
@@ -219,11 +219,11 @@ func TestEditPluginConfig(t *testing.T) {
 				Lgtm:    []plugins.Lgtm{},
 			},
 			expected: &plugins.Configuration{
-				Plugins: map[string][]string{
-					"openshift":                          {"foo"},
-					"openshift/cluster-version-operator": {"bar"},
-					"org":                                {"other"},
-					"org/repo":                           {"something"},
+				Plugins: map[string]plugins.OrgPlugins{
+					"openshift":                          {Plugins: []string{"foo"}},
+					"openshift/cluster-version-operator": {Plugins: []string{"bar"}},
+					"org":                                {Plugins: []string{"other"}},
+					"org/repo":                           {Plugins: []string{"something"}},
 				},
 				ExternalPlugins: map[string][]plugins.ExternalPlugin{
 					"openshift": {{Endpoint: "oops"}},
@@ -248,9 +248,9 @@ func TestEditPluginConfig(t *testing.T) {
 				Branch: "branch",
 			},
 			pluginConfig: &plugins.Configuration{
-				Plugins: map[string][]string{
-					"openshift":        {"foo"},
-					"openshift/origin": {"bar"},
+				Plugins: map[string]plugins.OrgPlugins{
+					"openshift":        {Plugins: []string{"foo"}},
+					"openshift/origin": {Plugins: []string{"bar"}},
 				},
 				ExternalPlugins: map[string][]plugins.ExternalPlugin{
 					"openshift": {{Endpoint: "oops"}},
@@ -260,10 +260,10 @@ func TestEditPluginConfig(t *testing.T) {
 				Lgtm:    []plugins.Lgtm{},
 			},
 			expected: &plugins.Configuration{
-				Plugins: map[string][]string{
-					"openshift":        {"foo"},
-					"openshift/origin": {"bar"},
-					"org/repo":         {"foo", "bar"},
+				Plugins: map[string]plugins.OrgPlugins{
+					"openshift":        {Plugins: []string{"foo"}},
+					"openshift/origin": {Plugins: []string{"bar"}},
+					"org/repo":         {Plugins: []string{"foo", "bar"}},
 				},
 				ExternalPlugins: map[string][]plugins.ExternalPlugin{
 					"openshift": {{Endpoint: "oops"}},

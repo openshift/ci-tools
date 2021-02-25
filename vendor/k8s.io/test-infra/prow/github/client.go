@@ -145,6 +145,7 @@ type CommitClient interface {
 	ListCheckRuns(org, repo, ref string) (*CheckRunList, error)
 	GetRef(org, repo, ref string) (string, error)
 	DeleteRef(org, repo, ref string) error
+	ListFileCommits(org, repo, path string) ([]RepositoryCommit, error)
 }
 
 // RepositoryClient interface for repository related API actions
@@ -1922,7 +1923,7 @@ func (c *client) CreatePullRequest(org, repo, title, body, head, base string, ca
 		exitCodes:   []int{201},
 	}, &resp)
 	if err != nil {
-		return 0, fmt.Errorf("failed to create pull request against %s/%s#%s from %s: %v", org, repo, head, base, err)
+		return 0, fmt.Errorf("failed to create pull request against %s/%s#%s from head %s: %v", org, repo, base, head, err)
 	}
 	return resp.Num, nil
 }
@@ -2967,6 +2968,35 @@ func (c *client) DeleteRef(org, repo, ref string) error {
 		exitCodes: []int{204},
 	}, nil)
 	return err
+}
+
+// ListFileCommits returns the commits for this file path.
+//
+// See https://developer.github.com/v3/repos/#list-commits
+func (c *client) ListFileCommits(org, repo, filePath string) ([]RepositoryCommit, error) {
+	durationLogger := c.log("ListFileCommits", org, repo, filePath)
+	defer durationLogger()
+
+	var commits []RepositoryCommit
+	err := c.readPaginatedResultsWithValues(
+		fmt.Sprintf("/repos/%s/%s/commits", org, repo),
+		url.Values{
+			"path":     []string{filePath},
+			"per_page": []string{"100"},
+		},
+		acceptNone,
+		org,
+		func() interface{} { // newObj
+			return &[]RepositoryCommit{}
+		},
+		func(obj interface{}) {
+			commits = append(commits, *(obj.(*[]RepositoryCommit))...)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return commits, nil
 }
 
 // FindIssues uses the GitHub search API to find issues which match a particular query.

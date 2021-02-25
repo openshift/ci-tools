@@ -440,10 +440,10 @@ func editPluginConfig(pluginConfig *plugins.Configuration, config initConfig) {
 		fmt.Println(`
 No prior Prow plugin configuration was found for this organization or repository.
 Ensure that webhooks are set up for Prow to watch GitHub state.`)
-		pluginConfig.Plugins[orgRepo] = append(pluginConfig.Plugins["openshift"], pluginConfig.Plugins["openshift/origin"]...)
+		pluginConfig.Plugins[orgRepo] = plugins.OrgPlugins{Plugins: append(pluginConfig.Plugins["openshift"].Plugins, pluginConfig.Plugins["openshift/origin"].Plugins...)}
 	case orgRegistered && !repoRegistered:
 		// we just need the repo-specific bits
-		pluginConfig.Plugins[orgRepo] = pluginConfig.Plugins["openshift/origin"]
+		pluginConfig.Plugins[orgRepo] = plugins.OrgPlugins{Plugins: pluginConfig.Plugins["openshift/origin"].Plugins}
 	}
 
 	_, orgRegisteredExternal := pluginConfig.ExternalPlugins[config.Org]

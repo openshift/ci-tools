@@ -314,10 +314,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        from: ' '\n" +
 	"        to: ' '\n" +
 	"      test_step:\n" +
-	"        # ArtifactDir is an optional directory that contains the\n" +
-	"        # artifacts to upload. If unset, this will default to\n" +
-	"        # \"/tmp/artifacts\".\n" +
-	"        artifact_dir: ' '\n" +
 	"        # As is the name of the test.\n" +
 	"        as: ' '\n" +
 	"        # Commands are the shell commands to run in\n" +
@@ -925,11 +921,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# The images launched as pods but have no explicit access to\n" +
 	"# the cluster they are running on.\n" +
 	"tests:\n" +
-	"    - # ArtifactDir is an optional directory that contains the\n" +
-	"      # artifacts to upload. If unset, this will default to\n" +
-	"      # \"/tmp/artifacts\".\n" +
-	"      artifact_dir: ' '\n" +
-	"      # As is the name of the test.\n" +
+	"    - # As is the name of the test.\n" +
 	"      as: ' '\n" +
 	"      # Commands are the shell commands to run in\n" +
 	"      # the repository root to execute tests.\n" +

@@ -24,28 +24,23 @@ tag_specification:
   namespace: ocp
 test_binary_build_commands: make test-install
 tests:
-- artifact_dir: /tmp/artifacts
-  as: e2e-aws
+- as: e2e-aws
   steps:
     cluster_profile: aws
     workflow: openshift-e2e-aws
-- artifact_dir: /tmp/artifacts
-  as: unit
+- as: unit
   commands: unit
   container:
     from: src
-- artifact_dir: /tmp/artifacts
-  as: cmd
+- as: cmd
   commands: make test-cmd
   container:
     from: bin
-- artifact_dir: /tmp/artifacts
-  as: race
+- as: race
   commands: race
   container:
     from: test-bin
-- artifact_dir: /tmp/artifacts
-  as: e2e
+- as: e2e
   steps:
     cluster_profile: aws
     test:

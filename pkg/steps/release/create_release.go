@@ -200,7 +200,6 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 			Tag:  "cli",
 		},
 		ServiceAccountName: "ci-operator",
-		ArtifactDir:        "/tmp/artifacts",
 		Commands: fmt.Sprintf(`
 set -xeuo pipefail
 export HOME=/tmp

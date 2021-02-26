@@ -243,7 +243,6 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 			Tag:  "cli",
 		},
 		ServiceAccountName: "ci-operator",
-		ArtifactDir:        "/tmp/artifacts",
 		Secrets:            secrets,
 		Commands:           commands,
 	}

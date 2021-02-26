@@ -30,7 +30,6 @@ func preparePodStep(namespace string) (*podStep, stepExpectation) {
 			As:   "FromName",
 		},
 		Commands:           "launch-tests",
-		ArtifactDir:        artifactDir,
 		ServiceAccountName: "",
 	}
 
@@ -169,7 +168,6 @@ func TestGetPodObjectMounts(t *testing.T) {
 					},
 				}
 				expectedPodStepTemplate.artifactDir = "/tmp/artifacts"
-				expectedPodStepTemplate.config.ArtifactDir = "/tmp/artifacts"
 			},
 		},
 		{
@@ -186,7 +184,6 @@ func TestGetPodObjectMounts(t *testing.T) {
 					},
 				}
 				expectedPodStepTemplate.artifactDir = "/tmp/artifacts"
-				expectedPodStepTemplate.config.ArtifactDir = "/tmp/artifacts"
 			},
 		},
 		{
@@ -201,7 +198,6 @@ func TestGetPodObjectMounts(t *testing.T) {
 					},
 				}
 				expectedPodStepTemplate.artifactDir = "/tmp/artifacts"
-				expectedPodStepTemplate.config.ArtifactDir = "/tmp/artifacts"
 			},
 		},
 		{

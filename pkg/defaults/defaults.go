@@ -1,7 +1,6 @@
 package defaults
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -295,9 +294,6 @@ func stepForTest(
 	inputImages inputImageSet,
 	c *api.TestStepConfiguration,
 ) ([]api.Step, error) {
-	if c.ArtifactDir != "" && c.ArtifactDir != api.DefaultArtifacts {
-		return nil, errors.New("custom artifacts directories are not allowed when uploading via pod-utilities; output artifacts to $ARTIFACT_DIR")
-	}
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
 		leases := leasesForTest(test)
 		if len(leases) != 0 {

@@ -108,9 +108,8 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
-				As:          "test",
-				Commands:    "commands",
-				ArtifactDir: "/tmp/artifacts",
+				As:       "test",
+				Commands: "commands",
 				OpenshiftAnsibleClusterTestConfiguration: &ciop.OpenshiftAnsibleClusterTestConfiguration{
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
 				},
@@ -120,9 +119,8 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
-				As:          "test",
-				Commands:    "commands",
-				ArtifactDir: "/tmp/artifacts",
+				As:       "test",
+				Commands: "commands",
 				OpenshiftInstallerClusterTestConfiguration: &ciop.OpenshiftInstallerClusterTestConfiguration{
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "aws"},
 				},
@@ -132,9 +130,8 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
-				As:          "test",
-				Commands:    "commands",
-				ArtifactDir: "/tmp/artifacts",
+				As:       "test",
+				Commands: "commands",
 				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
 					From:                     "pipeline:kubevirt-test",
@@ -145,9 +142,8 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
-				As:          "test",
-				Commands:    "commands",
-				ArtifactDir: "/tmp/artifacts",
+				As:       "test",
+				Commands: "commands",
 				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
 					From:                     "pipeline:kubevirt-test",
@@ -158,9 +154,8 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
-				As:          "test",
-				Commands:    "commands",
-				ArtifactDir: "/tmp/artifacts",
+				As:       "test",
+				Commands: "commands",
 				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
 					From:                     "pipeline:kubevirt-test",
@@ -171,9 +166,8 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
-				As:          "test",
-				Commands:    "commands",
-				ArtifactDir: "/tmp/artifacts",
+				As:       "test",
+				Commands: "commands",
 				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
 					From:                     "pipeline:kubevirt-test",

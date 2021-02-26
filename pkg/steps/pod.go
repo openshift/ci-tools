@@ -44,7 +44,6 @@ type PodStepConfiguration struct {
 	As                 string
 	From               api.ImageStreamTagReference
 	Commands           string
-	ArtifactDir        string
 	ServiceAccountName string
 	Secrets            []*api.Secret
 	MemoryBackedVolume *api.MemoryBackedVolume
@@ -155,7 +154,6 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 			As:                 config.As,
 			From:               api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
 			Commands:           config.Commands,
-			ArtifactDir:        config.ArtifactDir,
 			Secrets:            config.Secrets,
 			MemoryBackedVolume: config.ContainerTestConfiguration.MemoryBackedVolume,
 		},

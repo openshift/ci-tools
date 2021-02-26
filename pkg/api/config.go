@@ -25,7 +25,6 @@ func (config *ReleaseBuildConfiguration) Default() {
 		defLeases(s.Leases)
 	}
 	defTest := func(t *TestStepConfiguration) {
-		defArtifacts(&t.ArtifactDir)
 		if s := t.MultiStageTestConfigurationLiteral; s != nil {
 			defLeases(s.Leases)
 			for i := range s.Pre {

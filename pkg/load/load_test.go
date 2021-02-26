@@ -199,30 +199,26 @@ build_root:
     namespace: ci
     tag: master
 tests:
-- artifact_dir: /tmp/artifacts
-  as: cmd
+- as: cmd
   commands: TMPDIR=/tmp/volume ARTIFACT_DIR=/tmp/artifacts JUNIT_REPORT=1
     KUBERNETES_SERVICE_HOST= make test-cmd -k
   container:
     from: bin
     memory_backed_volume:
       size: 4Gi
-- artifact_dir: /tmp/artifacts
-  as: unit
+- as: unit
   commands: ARTIFACT_DIR=/tmp/artifacts JUNIT_REPORT=1 TEST_KUBE=true KUBERNETES_SERVICE_HOST=
     hack/test-go.sh
   container:
     from: src
-- artifact_dir: /tmp/artifacts
-  as: integration
+- as: integration
   commands: GOMAXPROCS=8 TMPDIR=/tmp/volume ARTIFACT_DIR=/tmp/artifacts JUNIT_REPORT=1
     KUBERNETES_SERVICE_HOST= make test-integration
   container:
     from: bin
     memory_backed_volume:
       size: 4Gi
-- artifact_dir: /tmp/artifacts
-  as: verify
+- as: verify
   commands: ARTIFACT_DIR=/tmp/artifacts JUNIT_REPORT=1 KUBERNETES_SERVICE_HOST= make
     verify -k
   container:
@@ -425,9 +421,8 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 		"verify":      {Limits: map[string]string{"memory": "12Gi"}, Requests: map[string]string{"cpu": "3", "memory": "8Gi"}},
 	},
 	Tests: []api.TestStepConfiguration{{
-		As:          "cmd",
-		ArtifactDir: "/tmp/artifacts",
-		Commands:    `TMPDIR=/tmp/volume ARTIFACT_DIR=/tmp/artifacts JUNIT_REPORT=1 KUBERNETES_SERVICE_HOST= make test-cmd -k`,
+		As:       "cmd",
+		Commands: `TMPDIR=/tmp/volume ARTIFACT_DIR=/tmp/artifacts JUNIT_REPORT=1 KUBERNETES_SERVICE_HOST= make test-cmd -k`,
 		ContainerTestConfiguration: &api.ContainerTestConfiguration{
 			From: "bin",
 			MemoryBackedVolume: &api.MemoryBackedVolume{
@@ -435,16 +430,14 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 			},
 		},
 	}, {
-		As:          "unit",
-		ArtifactDir: "/tmp/artifacts",
-		Commands:    `ARTIFACT_DIR=/tmp/artifacts JUNIT_REPORT=1 TEST_KUBE=true KUBERNETES_SERVICE_HOST= hack/test-go.sh`,
+		As:       "unit",
+		Commands: `ARTIFACT_DIR=/tmp/artifacts JUNIT_REPORT=1 TEST_KUBE=true KUBERNETES_SERVICE_HOST= hack/test-go.sh`,
 		ContainerTestConfiguration: &api.ContainerTestConfiguration{
 			From: "src",
 		},
 	}, {
-		As:          "integration",
-		ArtifactDir: "/tmp/artifacts",
-		Commands:    `GOMAXPROCS=8 TMPDIR=/tmp/volume ARTIFACT_DIR=/tmp/artifacts JUNIT_REPORT=1 KUBERNETES_SERVICE_HOST= make test-integration`,
+		As:       "integration",
+		Commands: `GOMAXPROCS=8 TMPDIR=/tmp/volume ARTIFACT_DIR=/tmp/artifacts JUNIT_REPORT=1 KUBERNETES_SERVICE_HOST= make test-integration`,
 		ContainerTestConfiguration: &api.ContainerTestConfiguration{
 			From: "bin",
 			MemoryBackedVolume: &api.MemoryBackedVolume{
@@ -452,9 +445,8 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 			},
 		},
 	}, {
-		As:          "verify",
-		ArtifactDir: "/tmp/artifacts",
-		Commands:    `ARTIFACT_DIR=/tmp/artifacts JUNIT_REPORT=1 KUBERNETES_SERVICE_HOST= make verify -k`,
+		As:       "verify",
+		Commands: `ARTIFACT_DIR=/tmp/artifacts JUNIT_REPORT=1 KUBERNETES_SERVICE_HOST= make verify -k`,
 		ContainerTestConfiguration: &api.ContainerTestConfiguration{
 			From: "bin",
 		},

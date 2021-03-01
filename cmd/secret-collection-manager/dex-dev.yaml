@@ -1,0 +1,43 @@
+# DEPRECATED: use config.yaml.dist and config.dev.yaml examples in the repository root.
+# TODO: keep this until all references are updated.
+
+# The base path of dex and the external name of the OpenID Connect service.
+# This is the canonical URL that all clients MUST use to refer to dex. If a
+# path is provided, dex's HTTP service will listen at a non-root URL.
+issuer: http://127.0.0.1:5556/dex
+
+# The storage configuration determines where dex stores its state. Supported
+# options include SQL flavors and Kubernetes third party resources.
+#
+# See the documentation (https://dexidp.io/docs/storage/) for further information.
+storage:
+  type: sqlite3
+  config:
+    file: /tmp/dex.db
+
+
+# Configuration for the HTTP endpoints.
+web:
+  http: 0.0.0.0:5556
+
+# Instead of reading from an external storage, use this list of clients.
+#
+# If this option isn't chosen clients may be added through the gRPC API.
+staticClients:
+- id:  oauth2-proxy
+  redirectURIs:
+  - 'http://127.0.0.1:4180/oauth2/callback'
+  name: oauth2-proxy
+  secret: proxy
+enablePasswordDB: true
+
+# A static list of passwords to login the end user. By identifying here, dex
+# won't look in its underlying storage for passwords.
+#
+# If this option isn't chosen users may be added through the gRPC API.
+staticPasswords:
+- email: "admin@example.com"
+  # bcrypt hash of the string "password"
+  hash: "$2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W"
+  username: "admin"
+  userID: "08a8684b-db88-4b73-90a9-3cd1661f5466"

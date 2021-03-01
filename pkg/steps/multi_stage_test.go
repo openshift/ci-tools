@@ -113,10 +113,9 @@ func TestGeneratePods(t *testing.T) {
 				Test: []api.LiteralTestStep{{
 					As: "step0", From: "src", Commands: "command0",
 				}, {
-					As:          "step1",
-					From:        "image1",
-					Commands:    "command1",
-					ArtifactDir: "/artifact/dir",
+					As:       "step1",
+					From:     "image1",
+					Commands: "command1",
 				}, {
 					As: "step2", From: "stable-initial:installer", Commands: "command2",
 				}},

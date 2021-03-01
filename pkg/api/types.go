@@ -614,9 +614,6 @@ type LiteralTestStep struct {
 	FromImage *ImageStreamTagReference `json:"from_image,omitempty"`
 	// Commands is the command(s) that will be run inside the image.
 	Commands string `json:"commands,omitempty"`
-	// ArtifactDir is the directory from which artifacts will be extracted
-	// when the command finishes. Defaults to "/tmp/artifacts"
-	ArtifactDir string `json:"artifact_dir,omitempty"`
 	// Resources defines the resource requirements for the step.
 	Resources ResourceRequirements `json:"resources"`
 	// Timeout is how long the we will wait before aborting a job with SIGINT.

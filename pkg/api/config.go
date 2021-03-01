@@ -4,15 +4,8 @@ import (
 	"strings"
 )
 
-const DefaultArtifacts = "/tmp/artifacts"
-
 // Default sets default values after loading but before validation
 func (config *ReleaseBuildConfiguration) Default() {
-	defArtifacts := func(p *string) {
-		if *p == "" {
-			*p = DefaultArtifacts
-		}
-	}
 	defLeases := func(l []StepLease) {
 		for i := range l {
 			if l[i].Count == 0 {
@@ -21,7 +14,6 @@ func (config *ReleaseBuildConfiguration) Default() {
 		}
 	}
 	def := func(s *LiteralTestStep) {
-		defArtifacts(&s.ArtifactDir)
 		defLeases(s.Leases)
 	}
 	defTest := func(t *TestStepConfiguration) {

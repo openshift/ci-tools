@@ -379,10 +379,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"            # Post steps always run, even if previous steps fail.\n" +
 	"            post:\n" +
-	"                - # ArtifactDir is the directory from which artifacts will be extracted\n" +
-	"                  # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
-	"                  artifact_dir: ' '\n" +
-	"                  # As is the name of the LiteralTestStep.\n" +
+	"                - # As is the name of the LiteralTestStep.\n" +
 	"                  as: ' '\n" +
 	"                  # BestEffort defines if this step should cause the job to fail when the\n" +
 	"                  # step fails. This only applies when AllowBestEffortPostSteps flag is set\n" +
@@ -457,10 +454,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  timeout: 0s\n" +
 	"            # Pre is the array of test steps run to set up the environment for the test.\n" +
 	"            pre:\n" +
-	"                - # ArtifactDir is the directory from which artifacts will be extracted\n" +
-	"                  # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
-	"                  artifact_dir: ' '\n" +
-	"                  # As is the name of the LiteralTestStep.\n" +
+	"                - # As is the name of the LiteralTestStep.\n" +
 	"                  as: ' '\n" +
 	"                  # BestEffort defines if this step should cause the job to fail when the\n" +
 	"                  # step fails. This only applies when AllowBestEffortPostSteps flag is set\n" +
@@ -535,10 +529,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  timeout: 0s\n" +
 	"            # Test is the array of test steps that define the actual test.\n" +
 	"            test:\n" +
-	"                - # ArtifactDir is the directory from which artifacts will be extracted\n" +
-	"                  # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
-	"                  artifact_dir: ' '\n" +
-	"                  # As is the name of the LiteralTestStep.\n" +
+	"                - # As is the name of the LiteralTestStep.\n" +
 	"                  as: ' '\n" +
 	"                  # BestEffort defines if this step should cause the job to fail when the\n" +
 	"                  # step fails. This only applies when AllowBestEffortPostSteps flag is set\n" +
@@ -684,8 +675,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # execution if previous Pre and Test steps passed.\n" +
 	"            post:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
-	"                - artifact_dir: ' '\n" +
-	"                  as: ' '\n" +
+	"                - as: ' '\n" +
 	"                  best_effort: false\n" +
 	"                  # Chain is the name of a step chain reference.\n" +
 	"                  chain: \"\"\n" +
@@ -738,8 +728,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Pre is the array of test steps run to set up the environment for the test.\n" +
 	"            pre:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
-	"                - artifact_dir: ' '\n" +
-	"                  as: ' '\n" +
+	"                - as: ' '\n" +
 	"                  best_effort: false\n" +
 	"                  # Chain is the name of a step chain reference.\n" +
 	"                  chain: \"\"\n" +
@@ -792,8 +781,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Test is the array of test steps that define the actual test.\n" +
 	"            test:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
-	"                - artifact_dir: ' '\n" +
-	"                  as: ' '\n" +
+	"                - as: ' '\n" +
 	"                  best_effort: false\n" +
 	"                  # Chain is the name of a step chain reference.\n" +
 	"                  chain: \"\"\n" +
@@ -986,10 +974,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"        # Post steps always run, even if previous steps fail.\n" +
 	"        post:\n" +
-	"            - # ArtifactDir is the directory from which artifacts will be extracted\n" +
-	"              # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
-	"              artifact_dir: ' '\n" +
-	"              # As is the name of the LiteralTestStep.\n" +
+	"            - # As is the name of the LiteralTestStep.\n" +
 	"              as: ' '\n" +
 	"              # BestEffort defines if this step should cause the job to fail when the\n" +
 	"              # step fails. This only applies when AllowBestEffortPostSteps flag is set\n" +
@@ -1064,10 +1049,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              timeout: 0s\n" +
 	"        # Pre is the array of test steps run to set up the environment for the test.\n" +
 	"        pre:\n" +
-	"            - # ArtifactDir is the directory from which artifacts will be extracted\n" +
-	"              # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
-	"              artifact_dir: ' '\n" +
-	"              # As is the name of the LiteralTestStep.\n" +
+	"            - # As is the name of the LiteralTestStep.\n" +
 	"              as: ' '\n" +
 	"              # BestEffort defines if this step should cause the job to fail when the\n" +
 	"              # step fails. This only applies when AllowBestEffortPostSteps flag is set\n" +
@@ -1142,10 +1124,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              timeout: 0s\n" +
 	"        # Test is the array of test steps that define the actual test.\n" +
 	"        test:\n" +
-	"            - # ArtifactDir is the directory from which artifacts will be extracted\n" +
-	"              # when the command finishes. Defaults to \"/tmp/artifacts\"\n" +
-	"              artifact_dir: ' '\n" +
-	"              # As is the name of the LiteralTestStep.\n" +
+	"            - # As is the name of the LiteralTestStep.\n" +
 	"              as: ' '\n" +
 	"              # BestEffort defines if this step should cause the job to fail when the\n" +
 	"              # step fails. This only applies when AllowBestEffortPostSteps flag is set\n" +
@@ -1291,8 +1270,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # execution if previous Pre and Test steps passed.\n" +
 	"        post:\n" +
 	"            # LiteralTestStep is a full test step definition.\n" +
-	"            - artifact_dir: ' '\n" +
-	"              as: ' '\n" +
+	"            - as: ' '\n" +
 	"              best_effort: false\n" +
 	"              # Chain is the name of a step chain reference.\n" +
 	"              chain: \"\"\n" +
@@ -1345,8 +1323,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Pre is the array of test steps run to set up the environment for the test.\n" +
 	"        pre:\n" +
 	"            # LiteralTestStep is a full test step definition.\n" +
-	"            - artifact_dir: ' '\n" +
-	"              as: ' '\n" +
+	"            - as: ' '\n" +
 	"              best_effort: false\n" +
 	"              # Chain is the name of a step chain reference.\n" +
 	"              chain: \"\"\n" +
@@ -1399,8 +1376,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Test is the array of test steps that define the actual test.\n" +
 	"        test:\n" +
 	"            # LiteralTestStep is a full test step definition.\n" +
-	"            - artifact_dir: ' '\n" +
-	"              as: ' '\n" +
+	"            - as: ' '\n" +
 	"              best_effort: false\n" +
 	"              # Chain is the name of a step chain reference.\n" +
 	"              chain: \"\"\n" +

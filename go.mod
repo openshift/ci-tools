@@ -51,11 +51,9 @@ require (
 	github.com/prometheus/client_golang v1.7.1
 	github.com/prometheus/common v0.10.0
 	github.com/satori/go.uuid v1.2.0
-	github.com/shurcooL/githubv4 v0.0.0-20191102174205-af46314aec7b
 	github.com/sirupsen/logrus v1.6.0
 	github.com/slack-go/slack v0.7.3
 	github.com/spf13/afero v1.4.1
-	golang.org/x/oauth2 v0.0.0-20200902213428-5d25da1a8d43
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 	google.golang.org/api v0.32.0
 	gopkg.in/fsnotify.v1 v1.4.7

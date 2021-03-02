@@ -2,17 +2,20 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/julienschmidt/httprouter"
 	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
 
 	"github.com/openshift/ci-tools/pkg/vaultclient"
@@ -28,35 +31,41 @@ type option struct {
 	vaultToken    string
 }
 
-func parseOptions() *option {
+func parseOptions() (*option, error) {
 	o := &option{}
 	flag.StringVar(&o.kvStorePrefix, "kv-store-prefix", "secret/self-managed", "Vault KV folder under which all policies will get created")
 	flag.StringVar(&o.listenAddr, "listen-addr", "127.0.0.1:8080", "The address to listen on")
 	flag.StringVar(&o.vaultAddr, "vault-addr", "http://127.0.0.1:8300", "The address under which vault should be reached")
-	flag.StringVar(&o.vaultToken, "vault-token", "jpuxZFWWFW7vM882GGX2aWOE", "The privileged token to use when communicating with vault, must be able to CRUD policies")
+	flag.StringVar(&o.vaultToken, "vault-token", "", "The privileged token to use when communicating with vault, must be able to CRUD policies")
 	flag.Parse()
-	return o
+	if o.vaultToken == "" {
+		return nil, errors.New("--vault-token is required")
+	}
+	return o, nil
 }
 
 func main() {
 	logrusutil.ComponentInit()
-	o := parseOptions()
+	o, err := parseOptions()
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to get options")
+	}
 
 	privilegedVaultClient, err := vaultclient.New(o.vaultAddr, o.vaultToken)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct vault client")
 	}
 
-	if err := server(privilegedVaultClient, o.kvStorePrefix, o.listenAddr).ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logrus.WithError(err).Fatal("failed to listen and serve")
-	}
-
+	interrupts.ListenAndServe(server(privilegedVaultClient, o.kvStorePrefix, o.listenAddr), 5*time.Second)
+	interrupts.WaitForGracefulShutdown()
 }
 
 func server(privilegedVaultClient *vaultclient.VaultClient, kvStorePrefix, listenAddr string) *http.Server {
 	manager := &secretCollectionManager{
 		privilegedVaultClient: privilegedVaultClient,
 		kvStorePrefix:         kvStorePrefix,
+		kvMetadataPrefix:      vaultclient.InsertMetadataIntoPath(kvStorePrefix),
+		kvDataPrefix:          vaultclient.InsertDataIntoPath(kvStorePrefix),
 	}
 
 	return &http.Server{Addr: listenAddr, Handler: manager.mux()}
@@ -84,6 +93,8 @@ func loggingWrapper(upstream func(l *logrus.Entry, user string, w http.ResponseW
 type secretCollectionManager struct {
 	privilegedVaultClient *vaultclient.VaultClient
 	kvStorePrefix         string
+	kvMetadataPrefix      string
+	kvDataPrefix          string
 	groupCache            idNameCache
 	userCache             idNameCache
 }
@@ -226,12 +237,9 @@ func (m *secretCollectionManager) createSecretCollection(_ *logrus.Entry, userNa
 	if err != nil {
 		return fmt.Errorf("failed to get user %s: %w", userName, err)
 	}
-	kvPathSplit := strings.Split(m.kvStorePrefix, "/")
-	metadataPrefix := strings.Join(append([]string{kvPathSplit[0], "metadata"}, kvPathSplit[1:]...), "/")
-	dataPrefix := strings.Join(append([]string{kvPathSplit[0], "data"}, kvPathSplit[1:]...), "/")
 	policy := managedVaultPolicy{Path: map[string]managedVaultPolicyCapabiltyList{
-		metadataPrefix + "/" + secretCollectionName + "/*": {Capabilities: []string{"list"}},
-		dataPrefix + "/" + secretCollectionName + "/*":     {Capabilities: []string{"create", "update", "read"}},
+		m.kvMetadataPrefix + "/" + secretCollectionName + "/*": {Capabilities: []string{"list"}},
+		m.kvDataPrefix + "/" + secretCollectionName + "/*":     {Capabilities: []string{"create", "update", "read"}},
 	}}
 	serializedPolicy, err := json.Marshal(policy)
 	if err != nil {
@@ -388,16 +396,12 @@ func (m *secretCollectionManager) getCollectionsFromGroupName(groupName string) 
 		return nil, fmt.Errorf("policy %s didn't have two but %d paths", group.Policies[0], n)
 	}
 
-	kvPathSplit := strings.Split(m.kvStorePrefix, "/")
-	metadataPrefix := strings.Join(append([]string{kvPathSplit[0], "metadata"}, kvPathSplit[1:]...), "/")
-	dataPrefix := strings.Join(append([]string{kvPathSplit[0], "data"}, kvPathSplit[1:]...), "/")
-
 	var collection secretCollection
 	for path := range policyData.Path {
-		if !strings.HasPrefix(path, metadataPrefix) && !strings.HasPrefix(path, dataPrefix) {
-			return nil, fmt.Errorf("path %s in policy %s neither had the metadata(%s) nor the data(%s) prefix", path, group.Policies[0], metadataPrefix, dataPrefix)
+		if !strings.HasPrefix(path, m.kvMetadataPrefix) && !strings.HasPrefix(path, m.kvDataPrefix) {
+			return nil, fmt.Errorf("path %s in policy %s neither had the metadata(%s) nor the data(%s) prefix", path, group.Policies[0], m.kvDataPrefix, m.kvDataPrefix)
 		}
-		collection.Name = strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(path, metadataPrefix+"/"), dataPrefix+"/"), "/*")
+		collection.Name = strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(path, m.kvMetadataPrefix+"/"), m.kvDataPrefix+"/"), "/*")
 		collection.Path = strings.Join([]string{m.kvStorePrefix, collection.Name}, "/")
 	}
 

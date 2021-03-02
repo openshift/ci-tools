@@ -51,7 +51,7 @@ func (v *VaultClient) GetUserFromAliasName(userName string) (*Entity, error) {
 
 func (v *VaultClient) ListKV(path string) ([]string, error) {
 	var keyResponse keyResponse
-	if err := v.listInto(insertMetadataIntoPath(path), &keyResponse); err != nil {
+	if err := v.listInto(InsertMetadataIntoPath(path), &keyResponse); err != nil {
 		return nil, err
 	}
 	return keyResponse.Keys, nil
@@ -59,15 +59,17 @@ func (v *VaultClient) ListKV(path string) ([]string, error) {
 
 func (v *VaultClient) GetKV(path string) (*KVData, error) {
 	var response KVData
-	return &response, v.readInto(insertDataIntoPath(path), &response)
+	return &response, v.readInto(InsertDataIntoPath(path), &response)
 }
 
 func (v *VaultClient) UpsertKV(path string, data map[string]string) error {
-	_, err := v.Logical().Write(insertDataIntoPath(path), map[string]interface{}{"data": data})
+	_, err := v.Logical().Write(InsertDataIntoPath(path), map[string]interface{}{"data": data})
 	return err
 }
 
-func insertMetadataIntoPath(path string) string {
+// InsertMetadataIntoPath inserts '/metadata' as second element into a given
+// path (which itself might have only one element(
+func InsertMetadataIntoPath(path string) string {
 	i := strings.Index(path, "/")
 	if i < 0 {
 		return path + "/metadata"
@@ -75,7 +77,9 @@ func insertMetadataIntoPath(path string) string {
 	return path[:i] + "/metadata" + path[i:]
 }
 
-func insertDataIntoPath(path string) string {
+// InsertDataIntoPath inserts '/data' as second element into a given
+// path (which itself might have only one element(
+func InsertDataIntoPath(path string) string {
 	i := strings.Index(path, "/")
 	if i < 0 {
 		return path + "/data"

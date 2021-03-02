@@ -16,25 +16,25 @@ func TestMetadataDataInsertion(t *testing.T) {
 			name: "Metadata, single element",
 			in:   "secret",
 			want: "secret/metadata",
-			fn:   insertMetadataIntoPath,
+			fn:   InsertMetadataIntoPath,
 		},
 		{
 			name: "Metadata, multi element",
 			in:   "secret/and/some/nesting",
 			want: "secret/metadata/and/some/nesting",
-			fn:   insertMetadataIntoPath,
+			fn:   InsertMetadataIntoPath,
 		},
 		{
 			name: "Data, single element",
 			in:   "secret",
 			want: "secret/data",
-			fn:   insertDataIntoPath,
+			fn:   InsertDataIntoPath,
 		},
 		{
 			name: "Data, multi element",
 			in:   "secret/and/some/nesting",
 			want: "secret/data/and/some/nesting",
-			fn:   insertDataIntoPath,
+			fn:   InsertDataIntoPath,
 		},
 	}
 

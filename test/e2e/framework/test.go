@@ -7,58 +7,12 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-// T allows us to provide a similar UX to the testing.T while
-// doing so in a multi-threaded context. The Go unit testing
-// framework only allows the top-level goroutine to call FailNow
-// so it's important to provide this interface to all the routines
-// that want to be able to control the test execution flow.
-type T struct {
-	*testing.T
-	ctx context.Context
-
-	errors chan error
-	fatals chan error
-}
-
-// the testing.T logger is not threadsafe...
-func (t *T) Log(args ...interface{}) {
-	t.T.Log(args...)
-}
-
-// the testing.T logger is not threadsafe...
-func (t *T) Logf(format string, args ...interface{}) {
-	t.T.Logf(format, args...)
-}
-
-func (t *T) Errorf(format string, args ...interface{}) {
-	t.errors <- fmt.Errorf(format, args...)
-}
-
-func (t *T) Fatalf(format string, args ...interface{}) {
-	t.fatals <- fmt.Errorf(format, args...)
-}
-
-func (t *T) Fatal(args ...interface{}) {
-	t.fatals <- fmt.Errorf(fmt.Sprintln(args...))
-}
-
-// Wait receives data from producer threads and forwards it
-// to the delegate; this call is blocking.
-func (t *T) Wait() {
-	t.T.Helper()
-	for {
-		select {
-		case <-t.ctx.Done():
-			return
-		case err := <-t.errors:
-			t.T.Error(err)
-		case fatal := <-t.fatals:
-			t.T.Fatal(fatal)
-		}
-	}
-}
+// Alias this for compatibility
+type T = testhelper.T
 
 // we want to ensure that everything runs in parallel and that users of this framework
 // do not need to explicitly remember to call the top-level testing.T method, so we do
@@ -98,13 +52,8 @@ func Run(top *testing.T, name string, f TestFunc, accessories ...*Accessory) {
 	top.Run(name, func(mid *testing.T) {
 		mid.Parallel()
 		ctx, cancel := context.WithCancel(context.Background())
-		bottom := T{
-			T:      mid,
-			ctx:    ctx,
-			errors: make(chan error, 10),
-			fatals: make(chan error, 10),
-		}
-		cmd := newCiOperatorCommand(&bottom)
+		bottom := testhelper.NewT(ctx, mid)
+		cmd := newCiOperatorCommand(bottom)
 		testDone, cleanupDone := make(chan struct{}), make(chan struct{})
 		defer func() {
 			// signal to the command that we no longer need to be waiting to
@@ -121,18 +70,18 @@ func Run(top *testing.T, name string, f TestFunc, accessories ...*Accessory) {
 		for _, accessory := range accessories {
 			// binding the accessory to ctx ensures its lifetime is only
 			// as long as the test we are running in this specific case
-			accessory.Run(&bottom, ctx)
+			accessory.Run(bottom, ctx)
 			cmd.AddArgs(accessory.Flags()...)
 			go func(a *Accessory) {
 				defer wg.Done()
-				a.Ready(&bottom)
+				a.Ready(bottom)
 			}(accessory)
 		}
 		wg.Wait()
 
 		go func() {
 			defer func() { cancel() }() // stop waiting for errors
-			f(&bottom, &cmd)
+			f(bottom, &cmd)
 		}()
 
 		bottom.Wait()

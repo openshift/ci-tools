@@ -102,8 +102,10 @@ func NewAccessory(command string, args []string, portFlags, clientPortFlags Port
 	return &Accessory{
 		command: command,
 		args:    args,
-		flags:   portFlags,
 		env:     env,
+
+		flags:       portFlags,
+		clientFlags: clientPortFlags,
 	}
 }
 
@@ -114,8 +116,8 @@ type Accessory struct {
 	port       string
 	healthPort string
 
-	clientFlags PortFlags
 	flags       PortFlags
+	clientFlags PortFlags
 }
 
 // Run begins the accessory process. This call is not blocking.

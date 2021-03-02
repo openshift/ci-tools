@@ -98,17 +98,19 @@ func (t *T) Wait() {
 
 type PortFlags func(port, healthPort string) []string
 
-func NewAccessory(command string, args []string, portFlags, clientPortFlags PortFlags) *Accessory {
+func NewAccessory(command string, args []string, portFlags, clientPortFlags PortFlags, env ...string) *Accessory {
 	return &Accessory{
 		command: command,
 		args:    args,
 		flags:   portFlags,
+		env:     env,
 	}
 }
 
 type Accessory struct {
 	command    string
 	args       []string
+	env        []string
 	port       string
 	healthPort string
 
@@ -127,6 +129,7 @@ func (a *Accessory) Run(t *T, parentCtx context.Context) {
 		<-cleanupCtx.Done()
 	})
 	cmd := exec.CommandContext(ctx, a.command, append(a.args, a.flags(a.port, a.healthPort)...)...)
+	cmd.Env = append(cmd.Env, a.env...)
 	t.Logf("running: %v", cmd.Args)
 	artifactDir := ArtifactDir(t)
 	logFile, err := os.Create(filepath.Join(artifactDir, fmt.Sprintf("%s.log", a.command)))

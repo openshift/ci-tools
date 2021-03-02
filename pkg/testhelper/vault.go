@@ -20,10 +20,6 @@ func Vault(ctx context.Context, t *T) string {
 		return "" // Unreachable code
 	}
 
-	// Vault writes the .vault-token file in there, do not mess with users home
-	// and make sure that this is always writeable.
-	os.Setenv("HOME", t.TempDir())
-
 	var vaultListenPort string
 	vault := NewAccessory("vault", []string{"server", "-dev", fmt.Sprintf("-dev-root-token-id=%s", VaultTestingRootToken)},
 		func(port, _ string) []string {
@@ -31,6 +27,9 @@ func Vault(ctx context.Context, t *T) string {
 			return []string{fmt.Sprintf("--dev-listen-address=127.0.0.1:%s", vaultListenPort)}
 		},
 		nil,
+		// Vault writes the .vault-token file in there, do not mess with users home
+		// and make sure that this is always writeable.
+		fmt.Sprintf("HOME=%s", t.TempDir()),
 	)
 	vault.Run(t, ctx)
 	vault.Ready(t, func(o *ReadyOptions) { o.ReadyURL = fmt.Sprintf("http://127.0.0.1:%s/v1/sys/health", vaultListenPort) })

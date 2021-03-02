@@ -6,48 +6,25 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"os/exec"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/hashicorp/vault/api"
-	"github.com/sirupsen/logrus"
 
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-
+	"github.com/openshift/ci-tools/pkg/testhelper"
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
 const (
 	vaultTestingToken = "jpuxZFWWFW7vM882GGX2aWOE"
-	vaultAddr         = "127.0.0.1:8302"
-	managerListenAddr = "127.0.0.1:8080"
 )
 
-func TestSecretCollectionManager(t *testing.T) {
-	if _, err := exec.LookPath("vault"); err != nil {
-		if _, runningInCi := os.LookupEnv("CI"); runningInCi {
-			t.Fatalf("could not find vault in path: %v", err)
-		}
-		t.Skip("could not find vault in path")
-	}
-	if os.Getenv("CI") != "" {
-		// We need a writeable home
-		os.Setenv("HOME", "/tmp")
-	}
-	logrus.SetLevel(logrus.TraceLevel)
-
-	vaultCancel, vaultDone, err := startVault(t)
-	if err != nil {
-		t.Fatalf("failed to start vault: %v", err)
-	}
-	t.Cleanup(func() {
-		vaultCancel()
-		<-vaultDone
-	})
+func TestSecretCollectionManager(tt *testing.T) {
+	tt.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	t := testhelper.NewT(ctx, tt)
+	vaultAddr := testhelper.Vault(ctx, t)
 
 	client, err := vaultclient.New("http://"+vaultAddr, vaultTestingToken)
 	if err != nil {
@@ -90,8 +67,7 @@ func TestSecretCollectionManager(t *testing.T) {
 		}
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	managerListenAddr := "127.0.0.1:" + testhelper.GetFreePort(t)
 	server := server(client, "secret/self-managed", managerListenAddr)
 	go func() {
 		if err := server.ListenAndServe(); err != nil && ctx.Err() == nil {
@@ -100,9 +76,7 @@ func TestSecretCollectionManager(t *testing.T) {
 		}
 	}()
 
-	if err := waitForServiceReady(ctx, t, fmt.Sprintf("http://%s/healthz", managerListenAddr)); err != nil {
-		t.Fatalf("failed to wait for secret collection manager to become ready: %v", err)
-	}
+	testhelper.WaitForHTTP200(fmt.Sprintf("http://%s/healthz", managerListenAddr), "secret-collection-manager", t)
 	t.Cleanup(func() {
 		if err := server.Close(); err != nil {
 			t.Errorf("failed to close server: %v", err)
@@ -305,67 +279,4 @@ func mustNewRequest(method, url string) *http.Request {
 		panic(err)
 	}
 	return request
-}
-
-func startVault(t *testing.T) (cancel context.CancelFunc, done chan struct{}, err error) {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	cmd := exec.CommandContext(ctx, "vault",
-		"server",
-		"-dev",
-		"--dev-listen-address="+vaultAddr,
-		fmt.Sprintf("-dev-root-token-id=%s", vaultTestingToken),
-	)
-
-	done = make(chan struct{})
-	gotReady := make(chan struct{})
-	go func() {
-		defer close(done)
-		out, err := cmd.CombinedOutput()
-		if err != nil && !isChannelClosed(gotReady) {
-			t.Errorf("vault command failed: err: %v, out:\n%s\n", err, string(out))
-		}
-	}()
-
-	if err := waitForServiceReady(ctx, t, fmt.Sprintf("http://%s/v1/sys/health", vaultAddr)); err != nil {
-		cancel()
-		// Let the other goroutine print the log
-		<-done
-		return nil, nil, errors.New("timed out waiting for vault to get ready")
-	}
-
-	close(gotReady)
-	return cancel, done, nil
-}
-
-func isChannelClosed(ch chan struct{}) bool {
-	select {
-	case <-ch:
-		return true
-	default:
-		return false
-	}
-}
-
-func waitForServiceReady(ctx context.Context, t *testing.T, address string) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	var errs []error
-	for ctx.Err() == nil {
-		request, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
-		if err != nil {
-			t.Fatalf("failed to construct http request for vaulth healthcheck: %v", err)
-		}
-		response, err := http.DefaultClient.Do(request)
-		if response != nil && response.Body != nil {
-			response.Body.Close()
-		}
-		if err == nil && response.StatusCode == http.StatusOK {
-			return nil
-		}
-		errs = append(errs, err)
-	}
-
-	return fmt.Errorf("reached thirty second time out, errors when healthchecking: %w", utilerrors.NewAggregate(errs))
 }

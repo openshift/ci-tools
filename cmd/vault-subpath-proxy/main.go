@@ -59,14 +59,17 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to create server")
 	}
+	listenFunc := server.ListenAndServe
 	if opts.tlsCertFile != "" {
 		reloader, err := newKeypairReloader(opts.tlsCertFile, opts.tlsKeyFile)
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to load tls cert and key")
 		}
 		server.TLSConfig = &tls.Config{GetCertificate: reloader.getCertificateFunc}
+		listenFunc = func() error { return server.ListenAndServeTLS("", "") }
+
 	}
-	if err := server.ListenAndServe(); err != http.ErrServerClosed {
+	if err := listenFunc(); err != http.ErrServerClosed {
 		logrus.WithError(err).Fatal("faield to listen and serve")
 	}
 }

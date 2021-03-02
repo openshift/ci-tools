@@ -146,7 +146,7 @@ race-install:
 #   make integration SUITE=multi-stage
 integration:
 	# legacy, so we don't break them
-	test/secret-wrapper-integration.sh
+	test/entrypoint-wrapper-integration.sh
 	hack/test-integration.sh $(SUITE)
 .PHONY: integration
 

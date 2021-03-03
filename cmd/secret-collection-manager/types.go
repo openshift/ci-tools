@@ -1,10 +1,10 @@
 package main
 
 type managedVaultPolicy struct {
-	Path map[string]managedVaultPolicyCapabiltyList `json:"path,omitempty"`
+	Path map[string]managedVaultPolicyCapabilityList `json:"path,omitempty"`
 }
 
-type managedVaultPolicyCapabiltyList struct {
+type managedVaultPolicyCapabilityList struct {
 	Capabilities []string `json:"capabilities,omitempty"`
 }
 
@@ -14,6 +14,6 @@ type secretCollection struct {
 	Members []string `json:"members,omitempty"`
 }
 
-type secretColectionUpdateBody struct {
+type secretCollectionUpdateBody struct {
 	Members []string `json:"members,omitempty"`
 }

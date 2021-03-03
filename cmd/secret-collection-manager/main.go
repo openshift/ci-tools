@@ -156,7 +156,7 @@ func (m *secretCollectionManager) updateSecretCollectionMembersHandler(l *logrus
 	collections, err := m.getCollectionsForUser(l, user)
 	if err != nil {
 		l.WithError(err).Error("failed to get secret collections for user")
-		http.Error(w, fmt.Sprintf("failed to check if user is allowed to change secret collection. RequestID: %s", l.Data["UID"]), 501)
+		http.Error(w, fmt.Sprintf("failed to check if user is allowed to change secret collection. RequestID: %s", l.Data["UID"]), http.StatusInternalServerError)
 		return
 	}
 
@@ -173,7 +173,7 @@ func (m *secretCollectionManager) updateSecretCollectionMembersHandler(l *logrus
 		return
 	}
 
-	var body secretColectionUpdateBody
+	var body secretCollectionUpdateBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		l.WithError(err).Debug("failed to decode request body")
 		http.Error(w, fmt.Sprintf(`failed to decode request body: %v, expected format: {"members": ["all", "desired", "members"]}`, err), http.StatusBadRequest)
@@ -237,7 +237,7 @@ func (m *secretCollectionManager) createSecretCollection(_ *logrus.Entry, userNa
 	if err != nil {
 		return fmt.Errorf("failed to get user %s: %w", userName, err)
 	}
-	policy := managedVaultPolicy{Path: map[string]managedVaultPolicyCapabiltyList{
+	policy := managedVaultPolicy{Path: map[string]managedVaultPolicyCapabilityList{
 		m.kvMetadataPrefix + "/" + secretCollectionName + "/*": {Capabilities: []string{"list"}},
 		m.kvDataPrefix + "/" + secretCollectionName + "/*":     {Capabilities: []string{"create", "update", "read"}},
 	}}
@@ -246,7 +246,6 @@ func (m *secretCollectionManager) createSecretCollection(_ *logrus.Entry, userNa
 		return fmt.Errorf("failed to serialize policy for %s: %w", secretCollectionName, err)
 	}
 	if err := m.privilegedVaultClient.Sys().PutPolicy(prefixedName(secretCollectionName), string(serializedPolicy)); err != nil {
-		println(string(serializedPolicy))
 		return fmt.Errorf("failed to create policy %s: %w", prefixedName(secretCollectionName), err)
 	}
 
@@ -307,10 +306,9 @@ func (m *secretCollectionManager) getCollectionsForUser(_ *logrus.Entry, userNam
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve name for group id %s: %w", groupID, err)
 		}
-		if !strings.HasPrefix(name, objectPrefix) {
-			continue
+		if strings.HasPrefix(name, objectPrefix) {
+			groupNames = append(groupNames, name)
 		}
-		groupNames = append(groupNames, name)
 	}
 
 	var collections []secretCollection
@@ -401,7 +399,7 @@ func (m *secretCollectionManager) getCollectionsFromGroupName(groupName string) 
 		if !strings.HasPrefix(path, m.kvMetadataPrefix) && !strings.HasPrefix(path, m.kvDataPrefix) {
 			return nil, fmt.Errorf("path %s in policy %s neither had the metadata(%s) nor the data(%s) prefix", path, group.Policies[0], m.kvDataPrefix, m.kvDataPrefix)
 		}
-		collection.Name = strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(path, m.kvMetadataPrefix+"/"), m.kvDataPrefix+"/"), "/*")
+		collection.Name = m.collectionNameFromPolicyPath(path)
 		collection.Path = strings.Join([]string{m.kvStorePrefix, collection.Name}, "/")
 	}
 
@@ -416,4 +414,9 @@ func (m *secretCollectionManager) getCollectionsFromGroupName(groupName string) 
 
 	collection.Members = memberNames
 	return &collection, nil
+}
+
+// collectionNameFromPolicyPath strips the metadata/data prefix and the /* suffix from a policy path
+func (m *secretCollectionManager) collectionNameFromPolicyPath(policyPath string) string {
+	return strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(policyPath, m.kvMetadataPrefix+"/"), m.kvDataPrefix+"/"), "/*")
 }

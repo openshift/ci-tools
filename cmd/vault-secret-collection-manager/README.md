@@ -1,4 +1,4 @@
-# Secret collection manager
+# Vault secret collection manager
 
 A webservice that allows to manage secret collections in Vault. A secret collection is
 a named kv store path in Vault to which members of the secret collection have access.

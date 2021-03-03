@@ -1,4 +1,6 @@
 default: api.ci
+kvm:
+  - build02
 groups:
   "api.ci":
     paths:

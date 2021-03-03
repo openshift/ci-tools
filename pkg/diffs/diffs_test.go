@@ -188,6 +188,7 @@ func TestGetChangedPresubmits(t *testing.T) {
 				Agent:   "kubernetes",
 				Cluster: "api.ci",
 				Name:    "test-base-presubmit",
+				Labels:  map[string]string{"pj-rehearse.openshift.io/source-type": "changedPresubmit"},
 				Spec: &v1.PodSpec{
 					Containers: []v1.Container{{
 						Command: []string{"ci-operator"},
@@ -417,8 +418,9 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 			Branches: []string{baseCiopConfig.Branch},
 		},
 		JobBase: prowconfig.JobBase{
-			Name:  baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "test"),
-			Agent: string(pjapi.KubernetesAgent),
+			Name:   baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "test"),
+			Labels: map[string]string{"pj-rehearse.openshift.io/source-type": "changedCiopConfigs"},
+			Agent:  string(pjapi.KubernetesAgent),
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{{
 					Env: []v1.EnvVar{{
@@ -813,6 +815,7 @@ func TestGetChangedPeriodics(t *testing.T) {
 			JobBase: prowconfig.JobBase{
 				Agent:   "kubernetes",
 				Cluster: "api.ci",
+				Labels:  map[string]string{"pj-rehearse.openshift.io/source-type": "changedPeriodic"},
 				Name:    "test-base-periodic",
 				Spec: &v1.PodSpec{
 					Containers: []v1.Container{{

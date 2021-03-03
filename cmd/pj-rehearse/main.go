@@ -5,9 +5,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -297,21 +297,23 @@ func rehearseMain() error {
 		}
 	}
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
+	toRehearse := config.Presubmits{}
 
 	changedPeriodics := diffs.GetChangedPeriodics(masterConfig.Prow, prConfig.Prow, logger)
-	toRehearse := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
+	changedPresubmits := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
+	toRehearse.AddAll(changedPresubmits, config.ChangedPresubmit)
 
-	presubmitsWithChangedCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigData, affectedJobs, logger)
-	toRehearse.AddAll(presubmitsWithChangedCiopConfigs)
+	presubmitsForCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigData, affectedJobs, logger)
+	toRehearse.AddAll(presubmitsForCiopConfigs, config.ChangedCiopConfigs)
 
-	presubmitsWithChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(rehearsalTemplates.ProductionNames, toRehearse, prConfig.Prow.JobConfig.PresubmitsStatic, loggers)
-	toRehearse.AddAll(presubmitsWithChangedTemplates)
+	presubmitsForClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, rehearsalClusterProfiles.ProductionNames, logger)
+	toRehearse.AddAll(presubmitsForClusterProfiles, config.ChangedClusterProfiles)
 
-	toRehearseClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, rehearsalClusterProfiles.ProductionNames, logger)
-	toRehearse.AddAll(toRehearseClusterProfiles)
+	randomJobsForChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(rehearsalTemplates.ProductionNames, toRehearse, prConfig.Prow.JobConfig.PresubmitsStatic, loggers)
+	toRehearse.AddAll(randomJobsForChangedTemplates, config.RandomJobsForChangedTemplates)
 
-	presubmitsWithChangedRegistry := rehearse.AddRandomJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, filepath.Join(o.releaseRepoPath, config.CiopConfigInRepoPath), loggers)
-	toRehearse.AddAll(presubmitsWithChangedRegistry)
+	randomJobsForChangedRegistry := rehearse.AddRandomJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, filepath.Join(o.releaseRepoPath, config.CiopConfigInRepoPath), loggers)
+	toRehearse.AddAll(randomJobsForChangedRegistry, config.RandomJobsForChangedRegistry)
 
 	resolver := registry.NewResolver(refs, chains, workflows, observers)
 	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, resolver, prNumber, loggers, rehearsalTemplates.Names, rehearsalClusterProfiles.Names, jobSpec.Refs)
@@ -339,11 +341,8 @@ func rehearseMain() error {
 			"rehearsal-threshold": o.rehearsalLimit,
 			"rehearsal-jobs":      rehearsals,
 		}
-		logger.WithFields(jobCountFields).Info("Would rehearse too many jobs, randomly selecting a subset")
-		rand.Shuffle(len(presubmitsToRehearse), func(i, j int) {
-			presubmitsToRehearse[i], presubmitsToRehearse[j] = presubmitsToRehearse[j], presubmitsToRehearse[i]
-		})
-		presubmitsToRehearse = presubmitsToRehearse[0:o.rehearsalLimit]
+		logger.WithFields(jobCountFields).Info("Would rehearse too many jobs, selecting a subset")
+		presubmitsToRehearse = determineSubsetToRehearse(presubmitsToRehearse, o.rehearsalLimit)
 	}
 
 	if prConfig.Prow.JobConfig.PresubmitsStatic == nil {
@@ -571,4 +570,42 @@ func ensureImageStreamTags(ctx context.Context, client ctrlruntimeclient.Client,
 	}
 
 	return g.Wait()
+}
+
+// determineSubsetToRehearse determines in a sophisticated way which subset of jobs should be chosen to be rehearsed.
+// First, it will create a list of the jobs mapped by the source type and calculates the maximum allowed jobs for each
+// source type. If there are jobs from a specific source type that are under the max allowed number, it will fill the gap
+// from the other not chosen jobs until it reaches the rehearsal limit.
+func determineSubsetToRehearse(presubmitsToRehearse []*prowconfig.Presubmit, rehearsalLimit int) []*prowconfig.Presubmit {
+	if len(presubmitsToRehearse) <= rehearsalLimit {
+		return presubmitsToRehearse
+	}
+
+	presubmitsBySourceType := make(map[config.SourceType][]*prowconfig.Presubmit)
+	for _, p := range presubmitsToRehearse {
+		sourceType := config.GetSourceType(p.Labels)
+		presubmitsBySourceType[sourceType] = append(presubmitsBySourceType[sourceType], p)
+	}
+
+	maxJobsPerSourceType := rehearsalLimit / len(presubmitsBySourceType)
+	toRehearse := []*prowconfig.Presubmit{}
+	dropped := []*prowconfig.Presubmit{}
+
+	for _, jobs := range presubmitsBySourceType {
+		if len(jobs) > maxJobsPerSourceType {
+			toRehearse = append(toRehearse, jobs[:maxJobsPerSourceType]...)
+			dropped = append(dropped, jobs[maxJobsPerSourceType:]...)
+		}
+	}
+
+	// There are two ways that we will hit this check. First, jobs from a specific resource are less than the
+	// maximum allowed, we will end up having less rehearsals than the limit. Second, summary of the maximum allowed jobs
+	// from each source can be lower than the rehearse limit  due to the rounding inherent in integer division.
+	// In both cases, we fill up the gap from the jobs that we didn't pick earlier.
+	if len(toRehearse) <= rehearsalLimit {
+		sort.Slice(dropped, func(a, b int) bool { return dropped[a].Name < dropped[b].Name })
+		toRehearse = append(toRehearse, dropped[:rehearsalLimit-len(toRehearse)]...)
+	}
+
+	return toRehearse
 }

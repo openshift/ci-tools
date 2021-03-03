@@ -103,7 +103,7 @@ func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, log
 			if len(reasons) > 0 {
 				selectionFields := logrus.Fields{LogRepo: repo, LogJobName: job.Name, LogReasons: strings.Join(reasons, ",")}
 				logger.WithFields(selectionFields).Info(ChosenJob)
-				ret.Add(repo, job)
+				ret.Add(repo, job, config.ChangedPresubmit)
 			}
 		}
 	}
@@ -183,7 +183,7 @@ func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs conf
 
 			selectionFields := logrus.Fields{LogRepo: orgRepo, LogJobName: job.Name, LogReasons: "ci-operator config changed"}
 			logger.WithFields(selectionFields).Info(ChosenJob)
-			ret.Add(orgRepo, job)
+			ret.Add(orgRepo, job, config.ChangedCiopConfigs)
 		}
 	}
 
@@ -223,7 +223,7 @@ func GetPresubmitsForClusterProfiles(prowConfig *prowconfig.Config, profiles set
 			if matches(&job) {
 				selectionFields := logrus.Fields{LogRepo: repo, LogJobName: job.Name, LogReasons: "cluster profile changed"}
 				logger.WithFields(selectionFields).Info(ChosenJob)
-				ret.Add(repo, job)
+				ret.Add(repo, job, config.ChangedClusterProfiles)
 			}
 		}
 	}
@@ -263,7 +263,7 @@ func GetChangedPeriodics(prowMasterConfig, prowPRConfig *prowconfig.Config, logg
 		if len(reasons) > 0 {
 			selectionFields := logrus.Fields{LogJobName: name, LogReasons: reasons}
 			logger.WithFields(selectionFields).Info(ChosenJob)
-			changed.Add(job)
+			changed.Add(job, config.ChangedPeriodic)
 		}
 	}
 

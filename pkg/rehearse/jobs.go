@@ -179,7 +179,7 @@ func filterPresubmits(changedPresubmits map[string][]prowconfig.Presubmit, logge
 				continue
 			}
 
-			presubmits.Add(repo, job)
+			presubmits.Add(repo, job, config.GetSourceType(job.Labels))
 		}
 	}
 	return presubmits

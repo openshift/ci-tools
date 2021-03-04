@@ -6,46 +6,27 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
-	"os/exec"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/hashicorp/vault/api"
 	"github.com/sirupsen/logrus"
 
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 const (
 	vaultTestingToken = "jpuxZFWWFW7vM882GGX2aWOE"
-	vaultTestingPort  = 8300
 )
 
-func TestProxy(t *testing.T) {
-	if _, err := exec.LookPath("vault"); err != nil {
-		if _, runningInCi := os.LookupEnv("CI"); runningInCi {
-			t.Fatalf("could not find vault in path: %v", err)
-		}
-		t.Skip("could not find vault in path")
-	}
-	if os.Getenv("CI") != "" {
-		// We need a writeable home
-		os.Setenv("HOME", "/tmp")
-	}
+func TestProxy(tt *testing.T) {
 	logrus.SetLevel(logrus.TraceLevel)
 
-	vaultCancel, vaultDone, err := startVault(t)
-	if err != nil {
-		t.Fatalf("failed to start vault: %v", err)
-	}
-	t.Cleanup(func() {
-		vaultCancel()
-		<-vaultDone
-	})
+	ctx, cancel := context.WithCancel(context.Background())
+	t := testhelper.NewT(ctx, tt)
+	vaultAddr := testhelper.Vault(ctx, t)
 
-	vaultClient, err := api.NewClient(&api.Config{Address: "http://127.0.0.1:8300"})
+	vaultClient, err := api.NewClient(&api.Config{Address: "http://" + vaultAddr})
 	if err != nil {
 		t.Fatalf("failed to construct vault client: %v", err)
 	}
@@ -79,13 +60,14 @@ path "secret/metadata/team-1/*" {
 	if err != nil {
 		t.Errorf("failed to create token with team-1 policy: %v", err)
 	}
-	proxyServer, err := createProxyServer("http://127.0.0.1:8300", "127.0.0.1:8400", "secret")
+	proxyServer, err := createProxyServer("http://"+vaultAddr, "127.0.0.1:8400", "secret")
 	if err != nil {
 		t.Fatalf("failed to create proxy server: %v", err)
 	}
 
 	go func() {
 		if err := proxyServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			cancel()
 			t.Errorf("proxy server failed to listen: %v", err)
 		}
 	}()
@@ -94,11 +76,9 @@ path "secret/metadata/team-1/*" {
 			t.Errorf("failed to close proxy: %v", err)
 		}
 	})
-	if err := waitForVaultReady(context.Background(), t, 8400); err != nil {
-		t.Fatalf("failed waiting for vault proxy to be ready: %v", err)
-	}
+	testhelper.WaitForHTTP200("http://127.0.0.1:8400/v1/sys/health", "vault-subpath-proxy", t)
 
-	rootDirect, err := vaultClientFor("http://127.0.0.1:8300", vaultTestingToken, "root")
+	rootDirect, err := vaultClientFor("http://"+vaultAddr, vaultTestingToken, "root")
 	if err != nil {
 		t.Fatalf("failed to construct rootDirect client: %v", err)
 	}
@@ -106,7 +86,7 @@ path "secret/metadata/team-1/*" {
 	if err != nil {
 		t.Fatalf("failed to construct rootProxy client: %v", err)
 	}
-	team1Direct, err := vaultClientFor("http://127.0.0.1:8300", team1TokenResponse.Auth.ClientToken, "team-1")
+	team1Direct, err := vaultClientFor("http://"+vaultAddr, team1TokenResponse.Auth.ClientToken, "team-1")
 	if err != nil {
 		t.Fatalf("failed to construct team1Direct client: %v", err)
 	}
@@ -227,67 +207,4 @@ func writeKV(client *api.Client, path string, data map[string]string) error {
 	}
 
 	return nil
-}
-
-func startVault(t *testing.T) (cancel context.CancelFunc, done chan struct{}, err error) {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	cmd := exec.CommandContext(ctx, "vault",
-		"server",
-		"-dev",
-		fmt.Sprintf("--dev-listen-address=127.0.0.1:%d", vaultTestingPort),
-		fmt.Sprintf("-dev-root-token-id=%s", vaultTestingToken),
-	)
-
-	done = make(chan struct{})
-	gotReady := make(chan struct{})
-	go func() {
-		defer close(done)
-		out, err := cmd.CombinedOutput()
-		if err != nil && !isChannelClosed(gotReady) {
-			t.Errorf("vault command failed: err: %v, out:\n%s\n", err, string(out))
-		}
-	}()
-
-	if err := waitForVaultReady(ctx, t, vaultTestingPort); err != nil {
-		cancel()
-		// Let the other goroutine print the log
-		<-done
-		return nil, nil, errors.New("timed out waiting for vault to get ready")
-	}
-
-	close(gotReady)
-	return cancel, done, nil
-}
-
-func isChannelClosed(ch chan struct{}) bool {
-	select {
-	case <-ch:
-		return true
-	default:
-		return false
-	}
-}
-
-func waitForVaultReady(ctx context.Context, t *testing.T, targetPort int) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	var errs []error
-	for ctx.Err() == nil {
-		request, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/v1/sys/health", targetPort), nil)
-		if err != nil {
-			t.Fatalf("failed to construct http request for vaulth healthcheck: %v", err)
-		}
-		response, err := http.DefaultClient.Do(request)
-		if response != nil && response.Body != nil {
-			response.Body.Close()
-		}
-		if err == nil && response.StatusCode == http.StatusOK {
-			return nil
-		}
-		errs = append(errs, err)
-	}
-
-	return fmt.Errorf("reached thirty second time out, errors when healthchecking: %w", utilerrors.NewAggregate(errs))
 }

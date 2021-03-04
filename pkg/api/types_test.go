@@ -207,16 +207,32 @@ func TestBundleName(t *testing.T) {
 }
 
 func TestIsBundleImage(t *testing.T) {
-	if !IsBundleImage("ci-bundle0") {
-		t.Errorf("Expected true, got false for `ci-bundle0`")
+	config := ReleaseBuildConfiguration{
+		Operator: &OperatorStepConfiguration{
+			Bundles: []Bundle{{As: "my-bundle"}},
+		},
 	}
-	if !IsBundleImage("ci-bundle1") {
-		t.Errorf("Expected true, got false for `ci-bundle1`")
-	}
-	if !IsBundleImage(BundleName(0)) {
-		t.Errorf("Expected true, got false for func BundleName(0)")
-	}
-	if !IsBundleImage(BundleName(1)) {
-		t.Errorf("Expected true, got false for func BundleName(1)")
+	testCases := []struct {
+		name     string
+		expected bool
+	}{{
+		name:     BundleName(0),
+		expected: true,
+	}, {
+		name:     BundleName(1),
+		expected: true,
+	}, {
+		name:     "my-bundle",
+		expected: true,
+	}, {
+		name:     "not-a-bundle",
+		expected: false,
+	}}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if config.IsBundleImage(testCase.name) != testCase.expected {
+				t.Errorf("Expected %t, got %t", testCase.expected, config.IsBundleImage(testCase.name))
+			}
+		})
 	}
 }

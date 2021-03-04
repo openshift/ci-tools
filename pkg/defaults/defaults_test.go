@@ -515,6 +515,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 				IndexGeneratorStepConfiguration: &api.IndexGeneratorStepConfiguration{
 					To:            "ci-index-gen",
 					OperatorIndex: []string{"ci-bundle0"},
+					UpdateGraph:   api.IndexUpdateSemver,
 				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
@@ -529,6 +530,75 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
 					To: "ci-bundle0",
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						ContextDir:     "manifests/olm",
+						DockerfilePath: "bundle.Dockerfile",
+					},
+				},
+			}, {
+				SourceStepConfiguration: &api.SourceStepConfiguration{
+					From:           "root",
+					To:             "src",
+					ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
+					ClonerefsPath:  "/clonerefs",
+				},
+			}},
+		},
+		{
+			name: "including an named operator bundle creates the bundle-sub and the named index-gen and index images",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+					},
+				},
+				Operator: &api.OperatorStepConfiguration{
+					Bundles: []api.Bundle{{
+						As:             "my-bundle",
+						ContextDir:     "manifests/olm",
+						DockerfilePath: "bundle.Dockerfile",
+					}},
+					Substitutions: []api.PullSpecSubstitution{{
+						PullSpec: "quay.io/origin/oc",
+						With:     "pipeline:oc",
+					}},
+				},
+			},
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
+				},
+				BaseNamespace: "base-1",
+			},
+			output: []api.StepConfiguration{{
+				BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
+					Substitutions: []api.PullSpecSubstitution{{
+						PullSpec: "quay.io/origin/oc",
+						With:     "pipeline:oc",
+					}},
+				},
+			}, {
+				IndexGeneratorStepConfiguration: &api.IndexGeneratorStepConfiguration{
+					To:            "ci-index-my-bundle-gen",
+					OperatorIndex: []string{"my-bundle"},
+					UpdateGraph:   api.IndexUpdateSemver,
+				},
+			}, {
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+					BaseImage: api.ImageStreamTagReference{Namespace: "base-1", Name: "repo-test-base", Tag: "manual"},
+					To:        "root",
+				},
+			}, {
+				ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
+					To:                               "ci-index-my-bundle",
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{DockerfilePath: "index.Dockerfile"},
+				},
+			}, {
+				ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
+					To: "my-bundle",
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						ContextDir:     "manifests/olm",
 						DockerfilePath: "bundle.Dockerfile",

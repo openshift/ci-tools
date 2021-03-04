@@ -412,7 +412,7 @@ func TestBuildPartialGraph(t *testing.T) {
 						},
 						To: api.PipelineImageStreamTagReference("oc-bin-image"),
 					},
-					api.ResourceConfiguration{}, nil, nil, nil,
+					&api.ReleaseBuildConfiguration{}, api.ResourceConfiguration{}, nil, nil, nil,
 				),
 				steps.OutputImageTagStep(api.OutputImageTagStepConfiguration{From: api.PipelineImageStreamTagReference("oc-bin-image")}, nil, nil),
 				steps.ImagesReadyStep(steps.OutputImageTagStep(api.OutputImageTagStepConfiguration{From: api.PipelineImageStreamTagReference("oc-bin-image")}, nil, nil).Creates()),

@@ -63,7 +63,7 @@ lint:
 #
 # Example:
 #   make test
-test:
+test: cmd/vault-secret-collection-manager/index.js
 	TESTFLAGS="$(TESTFLAGS)" hack/test-go.sh
 .PHONY: test
 
@@ -79,8 +79,7 @@ clean:
 #
 # Example:
 #   make format
-format:
-	@touch cmd/vault-secret-collection-manager/index.js
+format: cmd/vault-secret-collection-manager/index.js
 	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )
 .PHONY: format
 

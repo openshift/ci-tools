@@ -80,6 +80,7 @@ clean:
 # Example:
 #   make format
 format:
+	@touch cmd/vault-secret-collection-manager/index.js
 	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )
 .PHONY: format
 

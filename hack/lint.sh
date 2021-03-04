@@ -10,7 +10,7 @@ if [[ $HOME = '/' ]]; then
 fi
 
 # We embedd this so it must exist for compilation to succeed, but it's not checked in
-if [[ -z ${CI:-}]]; then touch cmd/vault-secret-collection-manager/index.js; fi
+if [[ -n ${CI:-} ]]; then touch cmd/vault-secret-collection-manager/index.js; fi
 
 # The thing has a -skip-{dirs,files} directive which is ignored by half the linters. Why is life so hard.
 targets="$(find . -maxdepth 1 -type d|egrep -v 'git|_output|hack|vendor|^\.$'|sed -E 's/(.*)/\1\/\.\.\./g'|tr '\n' ' ')"

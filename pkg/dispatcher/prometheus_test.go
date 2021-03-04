@@ -3,7 +3,6 @@ package dispatcher
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
@@ -12,6 +11,8 @@ import (
 	"github.com/prometheus/common/model"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 type prometheusAPIForTest struct {
@@ -79,20 +80,13 @@ func TestGetJobVolumesFromPrometheus(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := GetJobVolumesFromPrometheus(tc.ctx, &prometheusAPIForTest{tc.queryFunc}, time.Now())
-			if !reflect.DeepEqual(tc.expected, actual) {
-				t.Errorf("%s: actual differs from expected:\n%s", t.Name(), cmp.Diff(tc.expected, actual))
+			actual, actualError := GetJobVolumesFromPrometheus(tc.ctx, &prometheusAPIForTest{tc.queryFunc}, time.Now())
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
-			equalError(t, tc.expectedError, err)
+			if diff := cmp.Diff(tc.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			}
 		})
-	}
-}
-
-func equalError(t *testing.T, expected, actual error) {
-	if (expected == nil) != (actual == nil) {
-		t.Errorf("%s: expecting error \"%v\", got \"%v\"", t.Name(), expected, actual)
-	}
-	if expected != nil && actual != nil && expected.Error() != actual.Error() {
-		t.Errorf("%s: expecting error msg %q, got %q", t.Name(), expected.Error(), actual.Error())
 	}
 }

@@ -3,7 +3,6 @@ groups:
   "api.ci":
     paths:
       - ".*-postsubmits.yaml$"
-      - ".*openshift/release/.*-periodics.yaml$"
       - ".*-periodics.yaml$"
     jobs:
       - pull-ci-openshift-release-master-build01-dry

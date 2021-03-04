@@ -299,9 +299,8 @@ type options struct {
 	pushSecretPath string
 	pushSecret     *coreapi.Secret
 
-	uploadSecretPath  string
-	uploadSecret      *coreapi.Secret
-	uploadViaPodUtils bool
+	uploadSecretPath string
+	uploadSecret     *coreapi.Secret
 
 	cloneAuthConfig *steps.CloneAuthConfig
 
@@ -361,12 +360,9 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.branch, "branch", "", "Branch of the project (used by configresolver)")
 	flag.StringVar(&opt.variant, "variant", "", "Variant of the project's ci-operator config (used by configresolver)")
 
-	flag.String("kubeconfig", "", "Legecay flag kept for compatibility reasons. Doesn't do anything.")
-
 	flag.StringVar(&opt.pullSecretPath, "image-import-pull-secret", "", "A set of dockercfg credentials used to import images for the tag_specification.")
 	flag.StringVar(&opt.pushSecretPath, "image-mirror-push-secret", "", "A set of dockercfg credentials used to mirror images for the promotion.")
 	flag.StringVar(&opt.uploadSecretPath, "gcs-upload-secret", "", "GCS credentials used to upload logs and artifacts.")
-	flag.BoolVar(&opt.uploadViaPodUtils, "upload-via-pod-utils", true, "DEPRECATED")
 
 	opt.resultsOptions.Bind(flag)
 	return opt

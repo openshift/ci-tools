@@ -299,9 +299,11 @@ func (m *secretCollectionManager) listSecretCollections(l *logrus.Entry, user st
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+
 	sort.Slice(collections, func(i, j int) bool {
 		return collections[i].Name < collections[j].Name
 	})
+
 	serialized, err := json.Marshal(collections)
 	if err != nil {
 		l.WithError(err).Error("failed to serialize")

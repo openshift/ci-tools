@@ -469,6 +469,21 @@ func TestGenerateJobs(t *testing.T) {
 				Repo:   "repository",
 				Branch: "branch",
 			}},
+		}, {
+			id: "kvm label",
+			config: &ciop.ReleaseBuildConfiguration{
+				Resources: map[string]ciop.ResourceRequirements{
+					"*": {Requests: ciop.ResourceList{"devices.kubevirt.io/kvm": "1"}},
+				},
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
 		},
 	}
 

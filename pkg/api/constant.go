@@ -13,4 +13,6 @@ const (
 
 	// DPTPRequesterLabel is the label on a Kubernates CR whose value indicates the automated tool that requests the CR
 	DPTPRequesterLabel = "dptp.openshift.io/requester"
+
+	KVMDeviceLabel = "devices.kubevirt.io/kvm"
 )

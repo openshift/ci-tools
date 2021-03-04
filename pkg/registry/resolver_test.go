@@ -369,8 +369,8 @@ func TestResolve(t *testing.T) {
 				},
 			},
 		},
-		expectedErr:           errors.New(`test/test: chain/install-fips: no step declares parameter "NON_EXISTENT"`),
-		expectedValidationErr: errors.New(`chain/install-fips: no step declares parameter "NON_EXISTENT"`),
+		expectedErr:           errors.New(`test/test: chain/install-fips: parameter "NON_EXISTENT" is overridden in [chain/install-fips] but not declared in any step`),
+		expectedValidationErr: errors.New(`chain/install-fips: parameter "NON_EXISTENT" is overridden in [chain/install-fips] but not declared in any step`),
 	}, {
 		name: "Test with nested chains",
 		config: api.MultiStageTestConfiguration{
@@ -696,8 +696,8 @@ func TestResolve(t *testing.T) {
 				},
 			},
 		},
-		expectedErr:           errors.New(`test/test: workflow/ipi-aws: no step declares parameter "NOT_THE_STEP_ENV"`),
-		expectedValidationErr: errors.New(`workflow/ipi-aws: no step declares parameter "NOT_THE_STEP_ENV"`),
+		expectedErr:           errors.New(`test/test: workflow/ipi-aws: parameter "NOT_THE_STEP_ENV" is overridden in [test/test] but not declared in any step`),
+		expectedValidationErr: errors.New(`workflow/ipi-aws: parameter "NOT_THE_STEP_ENV" is overridden in [workflow/ipi-aws] but not declared in any step`),
 	}} {
 		t.Run(testCase.name, func(t *testing.T) {
 			err := Validate(testCase.stepMap, testCase.chainMap, testCase.workflowMap, testCase.observerMap)
@@ -932,21 +932,21 @@ func TestResolveParameters(t *testing.T) {
 		test: api.MultiStageTestConfiguration{
 			Test: []api.TestStep{{Chain: &invalidEnv}},
 		},
-		err: errors.New(`test/test: chain/invalid-env: no step declares parameter "NOT_DECLARED"`),
+		err: errors.New(`test/test: chain/invalid-env: parameter "NOT_DECLARED" is overridden in [chain/invalid-env] but not declared in any step`),
 	}, {
 		name: "invalid test parameter",
 		test: api.MultiStageTestConfiguration{
 			Test:        []api.TestStep{{Reference: &notChanged}},
 			Environment: api.TestEnvironment{"NOT_DECLARED": "not declared"},
 		},
-		err: errors.New(`test/test: no step declares parameter "NOT_DECLARED"`),
+		err: errors.New(`test/test: parameter "NOT_DECLARED" is overridden in [test/test] but not declared in any step`),
 	}, {
 		name: "invalid test dep",
 		test: api.MultiStageTestConfiguration{
 			Test:         []api.TestStep{{Reference: &notChanged}},
 			Dependencies: api.TestDependencies{"NOT_DECLARED": "not declared"},
 		},
-		err: errors.New(`test/test: no step declares dependency "NOT_DECLARED"`),
+		err: errors.New(`test/test: dependency "NOT_DECLARED" is overridden in [test/test] but not declared in any step`),
 	}, {
 		name: "unresolved test",
 		test: api.MultiStageTestConfiguration{

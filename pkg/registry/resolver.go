@@ -36,7 +36,7 @@ func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 				ret = append(ret, err...)
 			}
 		}
-		ret = append(ret, stack.records[0].checkUnused(&stack)...)
+		ret = append(ret, stack.checkUnused(&stack.records[0])...)
 	}
 	return utilerrors.NewAggregate(ret)
 }
@@ -114,7 +114,7 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 	post, errs := r.process(config.Post, sets.NewString(), stack)
 	expandedFlow.Post = append(expandedFlow.Post, post...)
 	resolveErrors = append(resolveErrors, errs...)
-	resolveErrors = append(resolveErrors, stack.records[0].checkUnused(&stack)...)
+	resolveErrors = append(resolveErrors, stack.checkUnused(&stack.records[0])...)
 
 	observerNames := sets.NewString()
 	for _, step := range append(pre, append(test, post...)...) {
@@ -220,7 +220,7 @@ func (r *registry) processChain(step *api.TestStep, seen sets.String, stack stac
 	stack.push(rec)
 	defer stack.pop()
 	ret, err := r.process(chain.Steps, seen, stack)
-	err = append(err, rec.checkUnused(&stack)...)
+	err = append(err, stack.checkUnused(&rec)...)
 	return ret, err
 }
 

@@ -75,6 +75,34 @@ func (s *stack) resolveDep(env string) string {
 	return ""
 }
 
+func (s *stack) checkUnused(r *stackRecord) (ret []error) {
+	for u := range r.unusedEnv {
+		var l []string
+		for _, sr := range s.records {
+			for _, e := range sr.env {
+				if e.Name == u {
+					l = append(l, sr.name)
+					break
+				}
+			}
+		}
+		ret = append(ret, s.errorf("parameter %q is overridden in %v but not declared in any step", u, l))
+	}
+	for u := range r.unusedDeps {
+		var l []string
+		for _, sr := range s.records {
+			for _, d := range sr.deps {
+				if d.Env == u {
+					l = append(l, sr.name)
+					break
+				}
+			}
+		}
+		ret = append(ret, s.errorf("dependency %q is overridden in %v but not declared in any step", u, l))
+	}
+	return
+}
+
 type stackRecord struct {
 	name       string
 	env        []api.StepParameter
@@ -106,14 +134,4 @@ func stackRecordForTest(name string, env api.TestEnvironment, deps api.TestDepen
 		dependencies = append(dependencies, api.StepDependency{Name: v, Env: k})
 	}
 	return stackRecordForStep(name, params, dependencies)
-}
-
-func (r *stackRecord) checkUnused(s *stack) (ret []error) {
-	for u := range r.unusedEnv {
-		ret = append(ret, s.errorf("no step declares parameter %q", u))
-	}
-	for u := range r.unusedDeps {
-		ret = append(ret, s.errorf("no step declares dependency %q", u))
-	}
-	return
 }

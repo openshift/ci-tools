@@ -1,5 +1,7 @@
 # Vault secret collection manager
 
+## Description
+
 A webservice that allows to manage secret collections in Vault. A secret collection is
 a named kv store path in Vault to which members of the secret collection have access.
 
@@ -25,3 +27,10 @@ Endpoints:
 * `GET /secretcollection`: Returns a list of all secret collections for the current user
 * `PUT /secretcollection/:name`: Creates a new secret collection using the provided `name`. The secret collection must not exist yet.
 * `PATCH /secretcollection/:name`: Changes the members of an existing secret colltion. The requesting user must be a member of the collection.
+
+## Development
+
+* Use `docker-compose` to start, vault, an oauth2 proxy and a dex instance as an IDP: `cd cmd/vault-secret-collection-manager && docker-compose up`
+* If you change the typescript, you need to recompile it via `make md/vault-secret-collection-manager/index.js`
+* Run the secret-collection-manager via `go run ./cmd/vault-secret-collection-manager  -vault-token=jpuxZFWWFW7vM882GGX2aWOE`
+* Visit http://127.0.0.1:4180 and login via `admin` and `password`

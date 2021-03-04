@@ -120,12 +120,15 @@ install:
 	go install ./cmd/...
 .PHONY: install
 
+cmd/vault-secret-collection-manager/index.js: cmd/vault-secret-collection-manager/index.ts
+	tsc cmd/vault-secret-collection-manager/index.ts
+
 # Install Go binaries to $GOPATH/bin.
 # Set version and name variables.
 #
 # Example:
 #   make production-install
-production-install:
+production-install: cmd/vault-secret-collection-manager/index.js
 	hack/install.sh
 .PHONY: production-install
 

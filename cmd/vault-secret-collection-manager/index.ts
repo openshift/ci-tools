@@ -7,6 +7,9 @@ interface secretCollection {
 const secretCollections: secretCollection[] = JSON.parse(document.getElementById('secretcollections').innerHTML);
 
 function renderCollectionTable(data: secretCollection[]) {
+  if (data === null) {
+    return;
+  }
   const newTableBody = document.createElement("tbody") as HTMLTableSectionElement;
   newTableBody.id = "secretCollectionTableBody";
   for (let secretCollection of data){

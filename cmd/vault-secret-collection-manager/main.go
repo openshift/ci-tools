@@ -309,11 +309,6 @@ func (m *secretCollectionManager) listSecretCollections(l *logrus.Entry, user st
 		return
 	}
 
-	if len(collections) == 0 {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	sort.Slice(collections, func(i, j int) bool {
 		return collections[i].Name < collections[j].Name
 	})

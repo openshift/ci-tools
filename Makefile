@@ -137,7 +137,7 @@ production-install: cmd/vault-secret-collection-manager/index.js
 #
 # Example:
 #   make production-install
-race-install:
+race-install: cmd/vault-secret-collection-manager/index.js
 	hack/install.sh race
 
 # Run integration tests.

@@ -13,6 +13,7 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	utilpointer "k8s.io/utils/pointer"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
@@ -234,8 +235,20 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	}
 
 	if configSpec.Operator != nil {
-		podSpec := generateCiOperatorPodSpec(info, nil, []string{"ci-index"})
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("ci-index", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning))
+		containsUnnamedBundle := false
+		for _, bundle := range configSpec.Operator.Bundles {
+			if bundle.As == "" {
+				containsUnnamedBundle = true
+				continue
+			}
+			indexName := api.IndexName(bundle.As)
+			podSpec := generateCiOperatorPodSpec(info, nil, []string{indexName})
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(indexName, info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning))
+		}
+		if containsUnnamedBundle {
+			podSpec := generateCiOperatorPodSpec(info, nil, []string{string(api.PipelineImageStreamTagReferenceIndexImage)})
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(string(api.PipelineImageStreamTagReferenceIndexImage), info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning))
+		}
 	}
 
 	return &prowconfig.JobConfig{

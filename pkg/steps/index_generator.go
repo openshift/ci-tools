@@ -93,7 +93,12 @@ func (s *indexGeneratorStep) indexGenDockerfile() (string, error) {
 		}
 		bundles = append(bundles, fullSpec)
 	}
-	dockerCommands = append(dockerCommands, fmt.Sprintf(`RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "%s", "--out-dockerfile", "%s", "--generate"]`, strings.Join(bundles, ","), IndexDockerfileName))
+	opmCommand := fmt.Sprintf(`RUN ["opm", "index", "add", "--mode", "%s", "--bundles", "%s", "--out-dockerfile", "%s", "--generate"`, s.config.UpdateGraph, strings.Join(bundles, ","), IndexDockerfileName)
+	if s.config.BaseIndex != "" {
+		opmCommand = fmt.Sprintf(`%s, "--from-index", "%s"`, opmCommand, s.config.BaseIndex)
+	}
+	opmCommand = fmt.Sprintf("%s]", opmCommand)
+	dockerCommands = append(dockerCommands, opmCommand)
 	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("WORKDIR %s", IndexDataDirectory))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("COPY --from=builder %s %s", IndexDockerfileName, IndexDockerfileName))

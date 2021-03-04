@@ -16,6 +16,10 @@ resources:
       cpu: 10m
 operator:
   bundles:
+  - as: named-bundle
+    context_dir: "test/manifests"
+    dockerfile_path: "bundle.Dockerfile"
+    base_index: registry.redhat.io/redhat/redhat-operator-index:v4.7
   - context_dir: "test/manifests"
     dockerfile_path: "bundle.Dockerfile"
   substitutions:

@@ -60,6 +60,17 @@ func TestValidateTests(t *testing.T) {
 			expectedValid: false,
 		},
 		{
+			id: `ReleaseBuildConfiguration{Tests: {As: "ci-index-my-bundle"}}`,
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "ci-index-my-bundle",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+				},
+			},
+			expectedValid: false,
+		},
+		{
 			id: "No test type",
 			tests: []api.TestStepConfiguration{
 				{

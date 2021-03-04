@@ -5,6 +5,7 @@ package simple
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -254,24 +255,43 @@ func TestLiteralDynamicRelease(t *testing.T) {
 }
 
 func TestOptionalOperators(t *testing.T) {
-	framework.Run(t, "optional operators", func(t *framework.T, cmd *framework.CiOperatorCommand) {
-		cmd.AddArgs(
-			"--config=optional-operators.yaml",
-			framework.LocalPullSecretFlag(t),
-			framework.RemotePullSecretFlag(t),
-			"--target=[images]",
-			"--target=ci-index",
-		)
-		cmd.AddEnv(`JOB_SPEC={"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"886f493b3b7db24450e80d41a6d4c801b3b49881","pulls":[]},"decoration_config":{"timeout":"4h0m0s","grace_period":"30m0s","utility_images":{"clonerefs":"registry.ci.openshift.org/ci/clonerefs:latest","initupload":"registry.ci.openshift.org/ci/initupload:latest","entrypoint":"registry.ci.openshift.org/ci/entrypoint:latest","sidecar":"registry.ci.openshift.org/ci/sidecar:latest"},"resources":{"clonerefs":{"limits":{"memory":"3Gi"},"requests":{"cpu":"100m","memory":"500Mi"}},"initupload":{"limits":{"memory":"200Mi"},"requests":{"cpu":"100m","memory":"50Mi"}},"place_entrypoint":{"limits":{"memory":"100Mi"},"requests":{"cpu":"100m","memory":"25Mi"}},"sidecar":{"limits":{"memory":"2Gi"},"requests":{"cpu":"100m","memory":"250Mi"}}},"gcs_configuration":{"bucket":"origin-ci-test","path_strategy":"single","default_org":"openshift","default_repo":"origin","mediaTypes":{"log":"text/plain"}},"gcs_credentials_secret":"gce-sa-credentials-gcs-publisher"}}`)
-		cmd.AddEnv(framework.KubernetesClientEnv(t)...)
-		output, err := cmd.Run()
-		if err != nil {
-			t.Fatalf("explicit var: didn't expect an error from ci-operator: %v; output:\n%v", err, string(output))
-		}
-		for _, line := range []string{"Build src-bundle succeeded after", "Build ci-bundle0 succeeded after", "Build ci-index-gen succeeded after", "Build ci-index succeeded after"} {
-			if !bytes.Contains(output, []byte(line)) {
-				t.Errorf("optional operators: could not find line %q in output; output:\n%v", line, string(output))
+	testCases := []struct {
+		name       string
+		indexName  string
+		bundleName string
+	}{{
+		name:       "unnamed bundle",
+		indexName:  "ci-index",
+		bundleName: "ci-bundle0",
+	}, {
+		name:       "named bunlde",
+		indexName:  "ci-index-named-bundle",
+		bundleName: "named-bundle",
+	}}
+	for _, testCase := range testCases {
+		framework.Run(t, fmt.Sprintf("optional operators %s", testCase.name), func(t *framework.T, cmd *framework.CiOperatorCommand) {
+			cmd.AddArgs(
+				"--config=optional-operators.yaml",
+				framework.LocalPullSecretFlag(t),
+				framework.RemotePullSecretFlag(t),
+				"--target=[images]",
+				fmt.Sprintf("--target=%s", testCase.indexName),
+			)
+			cmd.AddEnv(`JOB_SPEC={"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"886f493b3b7db24450e80d41a6d4c801b3b49881","pulls":[]},"decoration_config":{"timeout":"4h0m0s","grace_period":"30m0s","utility_images":{"clonerefs":"registry.ci.openshift.org/ci/clonerefs:latest","initupload":"registry.ci.openshift.org/ci/initupload:latest","entrypoint":"registry.ci.openshift.org/ci/entrypoint:latest","sidecar":"registry.ci.openshift.org/ci/sidecar:latest"},"resources":{"clonerefs":{"limits":{"memory":"3Gi"},"requests":{"cpu":"100m","memory":"500Mi"}},"initupload":{"limits":{"memory":"200Mi"},"requests":{"cpu":"100m","memory":"50Mi"}},"place_entrypoint":{"limits":{"memory":"100Mi"},"requests":{"cpu":"100m","memory":"25Mi"}},"sidecar":{"limits":{"memory":"2Gi"},"requests":{"cpu":"100m","memory":"250Mi"}}},"gcs_configuration":{"bucket":"origin-ci-test","path_strategy":"single","default_org":"openshift","default_repo":"origin","mediaTypes":{"log":"text/plain"}},"gcs_credentials_secret":"gce-sa-credentials-gcs-publisher"}}`)
+			cmd.AddEnv(framework.KubernetesClientEnv(t)...)
+			output, err := cmd.Run()
+			if err != nil {
+				t.Fatalf("explicit var: didn't expect an error from ci-operator: %v; output:\n%v", err, string(output))
 			}
-		}
-	})
+			for _, line := range []string{
+				"Build src-bundle succeeded after",
+				fmt.Sprintf("Build %s succeeded after", testCase.bundleName),
+				fmt.Sprintf("Build %s-gen succeeded after", testCase.indexName),
+				fmt.Sprintf("Build %s succeeded after", testCase.indexName)} {
+				if !bytes.Contains(output, []byte(line)) {
+					t.Errorf("optional operators: could not find line %q in output; output:\n%v", line, string(output))
+				}
+			}
+		})
+	}
 }

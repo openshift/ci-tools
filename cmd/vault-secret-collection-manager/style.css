@@ -10,6 +10,11 @@ tr {
   border-top: 1px solid #a4a4a4;
 }
 
+tr:hover {
+  color: #212529;
+  background-color: rgba(0, 0, 0, 0.075);
+}
+
 td, th {
     text-align: left;
     padding: 8px;

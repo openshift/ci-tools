@@ -2,6 +2,7 @@ package stepgraph
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -22,6 +23,9 @@ const (
 	priority = 6
 )
 
+//go:embed static/template.html
+var staticTemplateHTML []byte
+
 // Lens is the implementation of a JUnit-rendering Spyglass lens.
 type Lens struct{}
 
@@ -37,11 +41,7 @@ func (lens Lens) Config() lenses.LensConfig {
 var tmpl *template.Template
 
 func init() {
-	data, err := staticTemplateHtmlBytes()
-	if err != nil {
-		panic(fmt.Sprintf("failed to gzunip template: %v", err))
-	}
-	tmpl = template.Must(template.New("template").Parse(string(data)))
+	tmpl = template.Must(template.New("template").Parse(string(staticTemplateHTML)))
 }
 
 // Header renders the content of <head> from template.html.

@@ -326,10 +326,12 @@ func (m *secretCollectionManager) listSecretCollections(l *logrus.Entry, user st
 		if err := indexTemplate.Execute(w, string(serialized)); err != nil {
 			l.WithError(err).Error("failed to execute template response")
 		}
-	} else {
+	} else if len(collections) > 0 {
 		if _, err := w.Write(serialized); err != nil {
 			l.WithError(err).Error("failed to write response")
 		}
+	} else {
+		w.WriteHeader(http.StatusOK)
 	}
 }
 

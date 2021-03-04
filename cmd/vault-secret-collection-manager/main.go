@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -135,6 +136,9 @@ func (c *idNameCache) set(name, id string) {
 
 func (m *secretCollectionManager) mux() *httprouter.Router {
 	router := httprouter.New()
+	router.GET("/", redirectHandler("/secretcollection?ui=true"))
+	router.GET("/style.css", staticFileHandler(styleCSS, "text/css"))
+	router.GET("/index.js", staticFileHandler(indexJS, "text/javascript"))
 	router.GET("/healthz", healthHandler)
 	router.GET("/secretcollection", userWrapper(loggingWrapper(m.listSecretCollections)))
 	router.PUT("/secretcollection/:name", userWrapper(loggingWrapper(m.createSecretCollectionHandler)))
@@ -144,6 +148,19 @@ func (m *secretCollectionManager) mux() *httprouter.Router {
 
 func healthHandler(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	w.WriteHeader(http.StatusOK)
+}
+
+func staticFileHandler(content []byte, mimeType string) httprouter.Handle {
+	return func(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
+		w.Header().Add("Content-Type", mimeType)
+		w.Write(content)
+	}
+}
+
+func redirectHandler(target string) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+		http.Redirect(w, r, target, http.StatusFound)
+	}
 }
 
 func (m *secretCollectionManager) updateSecretCollectionMembersHandler(l *logrus.Entry, user string, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
@@ -282,6 +299,9 @@ func (m *secretCollectionManager) listSecretCollections(l *logrus.Entry, user st
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+	sort.Slice(collections, func(i, j int) bool {
+		return collections[i].Name < collections[j].Name
+	})
 	serialized, err := json.Marshal(collections)
 	if err != nil {
 		l.WithError(err).Error("failed to serialize")
@@ -289,8 +309,14 @@ func (m *secretCollectionManager) listSecretCollections(l *logrus.Entry, user st
 		return
 	}
 
-	if _, err := w.Write(serialized); err != nil {
-		l.WithError(err).Error("failed to write response")
+	if r.URL.Query().Get("ui") == "true" {
+		if err := indexTemplate.Execute(w, string(serialized)); err != nil {
+			l.WithError(err).Error("failed to execute template response")
+		}
+	} else {
+		if _, err := w.Write(serialized); err != nil {
+			l.WithError(err).Error("failed to write response")
+		}
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -199,7 +200,7 @@ func (m *secretCollectionManager) updateSecretCollectionMembersHandler(l *logrus
 
 	if err := m.updateSecretCollectionMembers(l, name, body.Members); err != nil {
 		logrus.WithError(err).Error("failed to update secret collection members")
-		http.Error(w, fmt.Sprintf("error updating secret collection members. RequestID: %s", l.Data["UID"]), 501)
+		http.Error(w, fmt.Sprintf("error updating secret collection members. RequestID: %s", l.Data["UID"]), 500)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -224,10 +225,23 @@ func (m *secretCollectionManager) updateSecretCollectionMembers(_ *logrus.Entry,
 	return m.privilegedVaultClient.UpdateGroupMembers(prefixedName(collectionName), updatedMemberIDs)
 }
 
+var alphaNumericRegex = func() *regexp.Regexp {
+	compiled, err := regexp.Compile("^[a-z0-9-]+$")
+	if err != nil {
+		panic(err)
+	}
+	return compiled
+}()
+
 func (m *secretCollectionManager) createSecretCollectionHandler(l *logrus.Entry, user string, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	name := params.ByName("name")
 	if name == "" {
 		http.Error(w, "name url parameter must not be empty", 400)
+		return
+	}
+
+	if !alphaNumericRegex.MatchString(name) {
+		http.Error(w, fmt.Sprintf("name %q does not match regex '^[a-z0-9-]+$'", name), 400)
 		return
 	}
 
@@ -236,7 +250,7 @@ func (m *secretCollectionManager) createSecretCollectionHandler(l *logrus.Entry,
 	if _, err := m.privilegedVaultClient.GetGroupByName(prefixedName(name)); !vaultclient.IsNotFound(err) {
 		if err != nil {
 			l.WithError(err).WithField("group_name", prefixedName(name)).Error("failed to get group")
-			http.Error(w, fmt.Sprintf("failed to get group. RequestID: %s", l.Data["UID"]), 501)
+			http.Error(w, fmt.Sprintf("failed to get group. RequestID: %s", l.Data["UID"]), 500)
 			return
 		}
 		http.Error(w, fmt.Sprintf("secret collection %q already exists", name), http.StatusConflict)
@@ -245,7 +259,7 @@ func (m *secretCollectionManager) createSecretCollectionHandler(l *logrus.Entry,
 
 	if err := m.createSecretCollection(l, user, name); err != nil {
 		logrus.WithError(err).Error("failed to create secret collection")
-		http.Error(w, fmt.Sprintf("failed to create secret collection. RequestID: %s", l.Data["UID"]), 501)
+		http.Error(w, fmt.Sprintf("failed to create secret collection. RequestID: %s", l.Data["UID"]), 500)
 	}
 }
 
@@ -291,7 +305,7 @@ func (m *secretCollectionManager) listSecretCollections(l *logrus.Entry, user st
 	collections, err := m.getCollectionsForUser(l, user)
 	if err != nil {
 		l.WithError(err).Error("failed to get collections")
-		http.Error(w, fmt.Sprintf("failed to get secret collections. RequestID: %s", l.Data["UID"]), 501)
+		http.Error(w, fmt.Sprintf("failed to get secret collections. RequestID: %s", l.Data["UID"]), 500)
 		return
 	}
 
@@ -307,7 +321,7 @@ func (m *secretCollectionManager) listSecretCollections(l *logrus.Entry, user st
 	serialized, err := json.Marshal(collections)
 	if err != nil {
 		l.WithError(err).Error("failed to serialize")
-		http.Error(w, fmt.Sprintf("failed to serialize. RequestID: %s", l.Data["UID"]), 501)
+		http.Error(w, fmt.Sprintf("failed to serialize. RequestID: %s", l.Data["UID"]), 500)
 		return
 	}
 

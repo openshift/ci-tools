@@ -30,11 +30,15 @@ function createSecretCollection(){
     if (response.ok) {
       fetchAndRenderSecretCollections();
       (document.getElementById("createCollection") as HTMLDivElement).classList.add("hidden");
-    // TODO: Error handling
-    } else {};
+    } else {
+      return response.text();
+    };
+  })
+  .then(function (errMsg: string){
+    displayCreateSecretCollectionError(errMsg)  ;
   })
   .catch(function (error) {
-    console.log("Error: " + error);
+    displayCreateSecretCollectionError(error);
   });
 };
 
@@ -50,11 +54,30 @@ function fetchAndRenderSecretCollections() {
   });
 }
 
+function displayCreateSecretCollectionError(msg: string) {
+  let div = document.getElementById("createCollectionError") as HTMLDivElement;
+  div.innerHTML = `Failed to create secret colltion: ${msg}`;
+  div.classList.remove("hidden");
+}
+
+function clearCreateSecretCollectionError(){
+  let div = document.getElementById("createCollectionError") as HTMLDivElement;
+  div.innerHTML = ""
+  div.classList.add("hidden");
+}
+
 document.getElementById("newCollectionButton")?.addEventListener("click", (e: Event) => {
+  clearCreateSecretCollectionError();
   document.getElementById("createCollection")?.classList.remove("hidden");
 })
 document.getElementById("abortCreateCollectionButton")?.addEventListener("click", (e: Event) => {
   document.getElementById("createCollection")?.classList.add("hidden");
+})
+document.addEventListener("keydown", event => {
+  // esc
+  if (event.keyCode == 27) {
+    (document.getElementById("createCollection") as HTMLDivElement).classList.add("hidden");
+  };
 })
 
 document.getElementById("createCollectionButton").addEventListener("click", (e: Event) => createSecretCollection());

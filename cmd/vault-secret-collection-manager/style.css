@@ -84,3 +84,11 @@ body {
 .hidden {
   display: none;
 }
+
+.error {
+  padding-top: 5px;
+  padding-bottom: 5px;
+  background: #F44336;
+  color: #fff;
+  animation: .2s opac forwards;
+}

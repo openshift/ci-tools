@@ -239,7 +239,7 @@ func (m *secretCollectionManager) createSecretCollectionHandler(l *logrus.Entry,
 			http.Error(w, fmt.Sprintf("failed to get group. RequestID: %s", l.Data["UID"]), 501)
 			return
 		}
-		http.Error(w, "secret collection already exists", http.StatusConflict)
+		http.Error(w, fmt.Sprintf("secret collection %q already exists", name), http.StatusConflict)
 		return
 	}
 

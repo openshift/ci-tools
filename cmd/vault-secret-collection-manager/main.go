@@ -154,7 +154,9 @@ func healthHandler(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) 
 func staticFileHandler(content []byte, mimeType string) httprouter.Handle {
 	return func(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 		w.Header().Add("Content-Type", mimeType)
-		w.Write(content)
+		if _, err := w.Write(content); err != nil {
+			logrus.WithError(err).Error("failed to write response")
+		}
 	}
 }
 

@@ -442,11 +442,15 @@ func NewArtifactWorker(podClient PodClient, artifactDir, namespace string) *Arti
 
 func (w *ArtifactWorker) run() {
 	for podName := range w.podsToDownload {
+		logger := logrus.WithField("pod", podName)
+		logger.Trace("Processing Pod to download artifacts.")
 		if err := w.downloadArtifacts(podName, w.hasArtifacts.Has(podName)); err != nil {
+			logger.WithError(err).Trace("Error downloading artifacts.")
 			log.Printf("error: %v", err)
 		}
 		// indicate we are done with this pod by removing the map entry
 		w.lock.Lock()
+		logger.Trace("Removing Pod from download queue.")
 		if val, ok := w.remaining[podName]; ok && val.done != nil {
 			close(w.remaining[podName].done)
 		}
@@ -456,19 +460,24 @@ func (w *ArtifactWorker) run() {
 }
 
 func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) error {
+	logger := logrus.WithFields(logrus.Fields{"pod": podName, "hasArtifacts": hasArtifacts, "dir": w.dir})
+	logger.Trace("Downloading artifacts for Pod.")
 	if err := os.MkdirAll(w.dir, 0750); err != nil {
 		return fmt.Errorf("unable to create artifact directory %s: %w", w.dir, err)
 	}
+	logger.Trace("Downloading container logs for Pod.")
 	if err := gatherContainerLogsOutput(w.podClient, filepath.Join(w.dir, "container-logs"), w.namespace, podName); err != nil {
 		log.Printf("error: unable to gather container logs: %v", err)
 	}
 
 	// only pods with an artifacts container should be gathered
 	if !hasArtifacts {
+		logger.Trace("Only logs, not artifacts requested.")
 		return nil
 	}
 
 	defer func() {
+		logger.Trace("Signalling to artifacts container in Pod to shut down.")
 		// signal to artifacts container to gracefully shut down
 		err := removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"})
 		if err == nil || strings.Contains(err.Error(), `unable to upgrade connection: container not found ("artifacts")`) {
@@ -477,10 +486,12 @@ func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) er
 		log.Printf("error: unable to signal to artifacts container to terminate in pod %s, %v", podName, err)
 	}()
 
+	logger.Trace("Waiting for artifacts container to finish.")
 	if err := waitForContainer(w.podClient, w.namespace, podName, "artifacts"); err != nil {
 		return fmt.Errorf("artifacts container for pod %s unready: %w", podName, err)
 	}
 
+	logger.Trace("Copying artifacts from Pod.")
 	if err := copyArtifacts(w.podClient, w.dir, w.namespace, podName, "artifacts", []string{"/tmp/artifacts"}); err != nil {
 		return fmt.Errorf("unable to retrieve artifacts from pod %s: %w", podName, err)
 	}
@@ -649,6 +660,8 @@ func hasMountsArtifactsVolume(pod *coreapi.Pod) bool {
 }
 
 func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podName string) error {
+	logger := logrus.WithFields(logrus.Fields{"pod": podName, "namespace": namespace, "artifactDir": artifactDir})
+	logger.Trace("Gathering container logs.")
 	var validationErrors []error
 	pod := &coreapi.Pod{}
 	if err := podClient.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: podName}, pod); err != nil {
@@ -659,6 +672,7 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 	}
 
 	if pod.Annotations[annotationSaveContainerLogs] != "true" {
+		logger.Trace("Container logs not requested.")
 		return nil
 	}
 
@@ -666,9 +680,13 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 		return fmt.Errorf("unable to create directory %s: %w", artifactDir, err)
 	}
 
+	logger.Trace("Getting container statuses....")
 	statuses := getContainerStatuses(pod)
 	for _, status := range statuses {
+		logger = logger.WithField("container", status.Name)
+		logger.Trace("Processing container.")
 		if status.State.Terminated != nil {
+			logger.Trace("Container is terminated.")
 			file, err := os.Create(fmt.Sprintf("%s/%s.log.gz", artifactDir, status.Name))
 			if err != nil {
 				validationErrors = append(validationErrors, fmt.Errorf("cannot create file: %w", err))
@@ -677,6 +695,7 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 			defer file.Close()
 
 			w := gzip.NewWriter(file)
+			logger.Trace("Fetching container logs.")
 			if s, err := podClient.GetLogs(namespace, podName, &coreapi.PodLogOptions{Container: status.Name}).Stream(context.TODO()); err == nil {
 				if _, err := io.Copy(w, s); err != nil {
 					validationErrors = append(validationErrors, fmt.Errorf("error: Unable to copy log output from pod container %s: %w", status.Name, err))

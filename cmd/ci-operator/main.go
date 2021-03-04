@@ -183,6 +183,9 @@ func main() {
 		if err := flag.CommandLine.Set("v", "10"); err != nil {
 			logrus.WithError(err).Error("Failed to set flag -v=10")
 		}
+		logrus.SetLevel(logrus.TraceLevel)
+		logrus.SetFormatter(&logrus.JSONFormatter{})
+		logrus.SetReportCaller(true)
 	}
 	if opt.help {
 		fmt.Print(usage)
@@ -342,7 +345,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.promote, "promote", false, "When all other targets complete, publish the set of images built by this job into the release configuration.")
 
 	// output control
-	flag.StringVar(&opt.artifactDir, "artifact-dir", "", "DEPRECATED.")
+	flag.StringVar(&opt.artifactDir, "artifact-dir", "", "DEPRECATED. Does nothing, set $ARTIFACTS instead.")
 	flag.StringVar(&opt.writeParams, "write-params", "", "If set write an env-compatible file with the output of the job.")
 
 	// experimental flags

@@ -104,6 +104,7 @@ var (
 
 	configWithBuildFarmWithJobs = Config{
 		Default: "api.ci",
+		KVM:     []ClusterName{ClusterBuild02},
 		BuildFarm: map[CloudProvider]JobGroups{
 			CloudAWS: {
 				ClusterBuild01: {
@@ -391,6 +392,15 @@ func TestDetermineClusterForJob(t *testing.T) {
 			},
 			expected:               "api.ci",
 			expectedCanBeRelocated: true,
+		},
+		{
+			name:   "pull-ci-openshift-os-master-unit",
+			config: &configWithBuildFarmWithJobs,
+			jobBase: config.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-os-master-unit",
+				Labels: map[string]string{"devices.kubevirt.io/kvm": "1"},
+			},
+			expected:               "build02",
+			expectedCanBeRelocated: false,
 		},
 	}
 	for _, tc := range testCases {

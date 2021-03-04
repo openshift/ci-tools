@@ -11,6 +11,7 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
@@ -29,8 +30,10 @@ const (
 type Config struct {
 	// the cluster cluster name if no other condition matches
 	Default ClusterName `json:"default"`
-	// the cluster cluster name for ssh bastion jobs
+	// the cluster name for ssh bastion jobs
 	SSHBastion ClusterName `json:"sshBastion"`
+	// the cluster names for kvm jobs
+	KVM []ClusterName `json:"kvm"`
 	// Groups maps a group of jobs to a cluster
 	Groups JobGroups `json:"groups"`
 	// BuildFarm maps groups of jobs to a cloud provider, like GCP
@@ -94,6 +97,14 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 	if isSSHBastionJob(jobBase) && config.SSHBastion != "" {
 		return config.SSHBastion, false, nil
 	}
+	if jobBase.Labels != nil {
+		if _, ok := jobBase.Labels[api.KVMDeviceLabel]; ok && len(config.KVM) > 0 {
+			// Any deterministic distribution is fine for now.
+			// We could implement more effective distribution when we understand more about the jobs.
+			return config.KVM[len(jobBase.Name)%len(config.KVM)], false, nil
+		}
+	}
+
 	var matches []string
 	for cluster, group := range config.Groups {
 		for _, job := range group.Jobs {

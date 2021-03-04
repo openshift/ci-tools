@@ -227,7 +227,7 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{},
-		expectedErr: errors.New("test: invalid step reference: generic-unit-test"),
+		expectedErr: errors.New("test/test: invalid step reference: generic-unit-test"),
 	}, {
 		name: "Test with chain and reference",
 		config: api.MultiStageTestConfiguration{
@@ -343,7 +343,7 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{},
-		expectedErr: errors.New("test: invalid step reference: install-fips"),
+		expectedErr: errors.New("test/test: invalid step reference: install-fips"),
 	}, {
 		name: "Test with chain and reference, invalid parameter",
 		config: api.MultiStageTestConfiguration{
@@ -369,8 +369,8 @@ func TestResolve(t *testing.T) {
 				},
 			},
 		},
-		expectedErr:           errors.New(`test: install-fips: no step declares parameter "NON_EXISTENT"`),
-		expectedValidationErr: errors.New(`install-fips: no step declares parameter "NON_EXISTENT"`),
+		expectedErr:           errors.New(`test/test: chain/install-fips: no step declares parameter "NON_EXISTENT"`),
+		expectedValidationErr: errors.New(`chain/install-fips: no step declares parameter "NON_EXISTENT"`),
 	}, {
 		name: "Test with nested chains",
 		config: api.MultiStageTestConfiguration{
@@ -490,8 +490,8 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes:           api.MultiStageTestConfigurationLiteral{},
-		expectedErr:           errors.New("test: nested-chains: duplicate name: ipi-setup"),
-		expectedValidationErr: errors.New("nested-chains: duplicate name: ipi-setup"),
+		expectedErr:           errors.New("test/test: chain/nested-chains: duplicate name: ipi-setup"),
+		expectedValidationErr: errors.New("chain/nested-chains: duplicate name: ipi-setup"),
 	}, {
 		name: "Full AWS Workflow",
 		config: api.MultiStageTestConfiguration{
@@ -696,8 +696,8 @@ func TestResolve(t *testing.T) {
 				},
 			},
 		},
-		expectedErr:           errors.New(`test: ipi-aws: no step declares parameter "NOT_THE_STEP_ENV"`),
-		expectedValidationErr: errors.New(`ipi-aws: no step declares parameter "NOT_THE_STEP_ENV"`),
+		expectedErr:           errors.New(`test/test: workflow/ipi-aws: no step declares parameter "NOT_THE_STEP_ENV"`),
+		expectedValidationErr: errors.New(`workflow/ipi-aws: no step declares parameter "NOT_THE_STEP_ENV"`),
 	}} {
 		t.Run(testCase.name, func(t *testing.T) {
 			err := Validate(testCase.stepMap, testCase.chainMap, testCase.workflowMap, testCase.observerMap)
@@ -932,21 +932,21 @@ func TestResolveParameters(t *testing.T) {
 		test: api.MultiStageTestConfiguration{
 			Test: []api.TestStep{{Chain: &invalidEnv}},
 		},
-		err: errors.New(`test: invalid-env: no step declares parameter "NOT_DECLARED"`),
+		err: errors.New(`test/test: chain/invalid-env: no step declares parameter "NOT_DECLARED"`),
 	}, {
 		name: "invalid test parameter",
 		test: api.MultiStageTestConfiguration{
 			Test:        []api.TestStep{{Reference: &notChanged}},
 			Environment: api.TestEnvironment{"NOT_DECLARED": "not declared"},
 		},
-		err: errors.New(`test: no step declares parameter "NOT_DECLARED"`),
+		err: errors.New(`test/test: no step declares parameter "NOT_DECLARED"`),
 	}, {
 		name: "invalid test dep",
 		test: api.MultiStageTestConfiguration{
 			Test:         []api.TestStep{{Reference: &notChanged}},
 			Dependencies: api.TestDependencies{"NOT_DECLARED": "not declared"},
 		},
-		err: errors.New(`test: no step declares dependency "NOT_DECLARED"`),
+		err: errors.New(`test/test: no step declares dependency "NOT_DECLARED"`),
 	}, {
 		name: "unresolved test",
 		test: api.MultiStageTestConfiguration{
@@ -957,7 +957,7 @@ func TestResolveParameters(t *testing.T) {
 				},
 			}},
 		},
-		err: errors.New("test: step: unresolved parameter: UNRESOLVED"),
+		err: errors.New("test/test: step/step: unresolved parameter: UNRESOLVED"),
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			ret, err := NewResolver(refs, chains, workflows, observers).Resolve("test", tc.test)

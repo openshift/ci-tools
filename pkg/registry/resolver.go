@@ -101,7 +101,7 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 	}
 	stack := stackForTest(name, config.Environment, config.Dependencies)
 	if config.Workflow != nil {
-		stack.push(stackRecordForTest(*config.Workflow, nil, nil))
+		stack.push(stackRecordForTest("workflow/"+*config.Workflow, nil, nil))
 	}
 	pre, errs := r.process(config.Pre, sets.NewString(), stack)
 	expandedFlow.Pre = append(expandedFlow.Pre, pre...)
@@ -216,7 +216,7 @@ func (r *registry) processChain(step *api.TestStep, seen sets.String, stack stac
 	if !ok {
 		return nil, []error{stack.errorf("unknown step chain: %s", name)}
 	}
-	rec := stackRecordForStep(name, chain.Environment, nil)
+	rec := stackRecordForStep("chain/"+name, chain.Environment, nil)
 	stack.push(rec)
 	defer stack.pop()
 	ret, err := r.process(chain.Steps, seen, stack)
@@ -247,7 +247,7 @@ func (r *registry) processStep(step *api.TestStep, seen sets.String, stack stack
 			if v := stack.resolve(e.Name); v != nil {
 				e.Default = v
 			} else if e.Default == nil && !stack.partial {
-				errs = append(errs, stack.errorf("%s: unresolved parameter: %s", ret.As, e.Name))
+				errs = append(errs, stack.errorf("step/%s: unresolved parameter: %s", ret.As, e.Name))
 			}
 			env = append(env, e)
 		}

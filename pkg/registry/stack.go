@@ -20,13 +20,13 @@ func stackForChain() stack {
 
 func stackForWorkflow(name string, env api.TestEnvironment, deps api.TestDependencies) stack {
 	return stack{
-		records: []stackRecord{stackRecordForTest(name, env, deps)},
+		records: []stackRecord{stackRecordForTest("workflow/"+name, env, deps)},
 		partial: true,
 	}
 }
 
 func stackForTest(name string, env api.TestEnvironment, deps api.TestDependencies) stack {
-	return stack{records: []stackRecord{stackRecordForTest(name, env, deps)}}
+	return stack{records: []stackRecord{stackRecordForTest("test/"+name, env, deps)}}
 }
 
 func (s *stack) push(r stackRecord) {

@@ -20,6 +20,7 @@ const (
 )
 
 func TestProxy(tt *testing.T) {
+	tt.Parallel()
 	logrus.SetLevel(logrus.TraceLevel)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -60,7 +61,8 @@ path "secret/metadata/team-1/*" {
 	if err != nil {
 		t.Errorf("failed to create token with team-1 policy: %v", err)
 	}
-	proxyServer, err := createProxyServer("http://"+vaultAddr, "127.0.0.1:8400", "secret")
+	proxyServerPort := testhelper.GetFreePort(t)
+	proxyServer, err := createProxyServer("http://"+vaultAddr, "127.0.0.1:"+proxyServerPort, "secret")
 	if err != nil {
 		t.Fatalf("failed to create proxy server: %v", err)
 	}
@@ -76,13 +78,13 @@ path "secret/metadata/team-1/*" {
 			t.Errorf("failed to close proxy: %v", err)
 		}
 	})
-	testhelper.WaitForHTTP200("http://127.0.0.1:8400/v1/sys/health", "vault-subpath-proxy", t)
+	testhelper.WaitForHTTP200("http://127.0.0.1:"+proxyServerPort+"/v1/sys/health", "vault-subpath-proxy", t)
 
 	rootDirect, err := vaultClientFor("http://"+vaultAddr, vaultTestingToken, "root")
 	if err != nil {
 		t.Fatalf("failed to construct rootDirect client: %v", err)
 	}
-	rootProxy, err := vaultClientFor("http://127.0.0.1:8400", vaultTestingToken, "root")
+	rootProxy, err := vaultClientFor("http://127.0.0.1:"+proxyServerPort, vaultTestingToken, "root")
 	if err != nil {
 		t.Fatalf("failed to construct rootProxy client: %v", err)
 	}
@@ -90,7 +92,7 @@ path "secret/metadata/team-1/*" {
 	if err != nil {
 		t.Fatalf("failed to construct team1Direct client: %v", err)
 	}
-	team1Proxy, err := vaultClientFor("http://127.0.0.1:8400", team1TokenResponse.Auth.ClientToken, "team-1")
+	team1Proxy, err := vaultClientFor("http://127.0.0.1:"+proxyServerPort, team1TokenResponse.Auth.ClientToken, "team-1")
 	if err != nil {
 		t.Fatalf("failed to construct team1Proxy client: %v", err)
 	}

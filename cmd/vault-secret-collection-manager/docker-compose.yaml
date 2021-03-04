@@ -1,0 +1,41 @@
+version: "3.9"
+
+services:
+  dex:
+    image: ghcr.io/dexidp/dex:v2.27.0
+    volumes:
+    - .:/config
+    command: serve /config/dex-dev.yaml
+    network_mode: host
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.0.1
+    command: --provider oidc --provider-display-name "My OIDC Provider" --client-id oauth2-proxy --client-secret proxy --redirect-url http://127.0.0.1:4180/oauth2/callback --oidc-issuer-url http://127.0.0.1:5556/dex --cookie-secure=false --cookie-secret=G-f-WrT81XwL6Omm3nhuJw== --email-domain=* --upstream http://127.0.0.1:8080
+    network_mode: host
+  vault:
+    image: vault:1.6.2
+    network_mode: host
+    command: server -dev --dev-listen-address=127.0.0.1:8300 -dev-root-token-id=jpuxZFWWFW7vM882GGX2aWOE
+  vault_settings:
+    image: vault:1.6.2
+    depends_on:
+    - vault
+    restart: "no"
+    network_mode: host
+    environment:
+    - VAULT_ADDR=http://127.0.0.1:8300
+    - VAULT_TOKEN=jpuxZFWWFW7vM882GGX2aWOE
+    command:
+    - /bin/sh
+    - -c
+    - |
+      set -euxo pipefail
+      apk add jq
+      # Need a second backend to be able to test
+      # the interaction with aliases
+      vault auth enable userpass
+      # User must exist
+      vault write auth/userpass/users/admin password=false
+      vault write identity/entity name=admin policies=default
+      vault write identity/entity-alias name=admin \
+        canonical_id="$$(vault read --format=json identity/entity/name/admin|jq -r '.data.id')" \
+        mount_accessor="$$(vault auth list -format=json | jq -r '.["userpass/"].accessor')"

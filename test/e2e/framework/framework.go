@@ -142,7 +142,13 @@ func Boskos(opt BoskosOptions) *Accessory {
 			"in_memory": "true",
 			"log-level": "debug",
 		}),
-		func(port string) []string {
+		func(port, healthPort string) []string {
+			return flags(map[string]string{
+				"port":        port,
+				"health-port": healthPort,
+			})
+		},
+		func(port, _ string) []string {
 			return flags(map[string]string{
 				"lease-server":                  "http://127.0.0.1:" + port,
 				"lease-server-credentials-file": credentialsFile,
@@ -172,8 +178,16 @@ func ConfigResolver(opt ConfigResolverOptions) *Accessory {
 			"log-level":     "debug",
 			"cycle":         "2m",
 		}),
-		func(port string) []string {
-			return []string{flag("resolver-address", "http://127.0.0.1:"+port)}
+		func(port, healthPort string) []string {
+			return flags(map[string]string{
+				"port":        port,
+				"health-port": healthPort,
+			})
+		},
+		func(port, healthPort string) []string {
+			return flags(map[string]string{
+				"resolver-address": "http://127.0.0.1:" + port,
+			})
 		},
 	)
 }

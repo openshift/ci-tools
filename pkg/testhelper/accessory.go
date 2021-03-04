@@ -96,28 +96,33 @@ func (t *T) Wait() {
 	}
 }
 
-type PortFlags func(port string) []string
+type PortFlags func(port, healthPort string) []string
 
-func NewAccessory(command string, args []string, portFlags PortFlags) *Accessory {
+func NewAccessory(command string, args []string, portFlags, clientPortFlags PortFlags, env ...string) *Accessory {
 	return &Accessory{
 		command: command,
 		args:    args,
-		flags:   portFlags,
+		env:     env,
+
+		flags:       portFlags,
+		clientFlags: clientPortFlags,
 	}
 }
 
 type Accessory struct {
 	command    string
 	args       []string
+	env        []string
 	port       string
 	healthPort string
 
-	flags PortFlags
+	flags       PortFlags
+	clientFlags PortFlags
 }
 
 // Run begins the accessory process. This call is not blocking.
 func (a *Accessory) Run(t *T, parentCtx context.Context) {
-	a.port, a.healthPort = getFreePort(t), getFreePort(t)
+	a.port, a.healthPort = GetFreePort(t), GetFreePort(t)
 	ctx, cancel := context.WithCancel(parentCtx)
 	cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
 	t.Cleanup(func() {
@@ -125,10 +130,8 @@ func (a *Accessory) Run(t *T, parentCtx context.Context) {
 		cancel()
 		<-cleanupCtx.Done()
 	})
-	cmd := exec.CommandContext(ctx, a.command, append(a.args, flags(map[string]string{
-		"port":        a.port,
-		"health-port": a.healthPort,
-	})...)...)
+	cmd := exec.CommandContext(ctx, a.command, append(a.args, a.flags(a.port, a.healthPort)...)...)
+	cmd.Env = append(cmd.Env, a.env...)
 	t.Logf("running: %v", cmd.Args)
 	artifactDir := ArtifactDir(t)
 	logFile, err := os.Create(filepath.Join(artifactDir, fmt.Sprintf("%s.log", a.command)))
@@ -155,10 +158,54 @@ func (a *Accessory) Run(t *T, parentCtx context.Context) {
 	}()
 }
 
+type ReadyOptions struct {
+	// ReadyURL is the url to GET to check for readyness. Defaults to
+	// http://127.0.0.1:${HEALTH_PORT}/healthz/ready
+	ReadyURL string
+}
+
+type ReadyOption func(*ReadyOptions)
+
 // Ready returns when the accessory process is ready to serve data.
-func (a *Accessory) Ready(t *T) {
+func (a *Accessory) Ready(t *T, o ...ReadyOption) {
+	opts := ReadyOptions{ReadyURL: fmt.Sprintf("http://127.0.0.1:%s/healthz/ready", a.healthPort)}
+	for _, o := range o {
+		o(&opts)
+	}
+	WaitForHTTP200(opts.ReadyURL, a.command, t)
+}
+
+var _ TestingTInterface = &testing.T{}
+var _ TestingTInterface = &T{}
+
+// TestingTInterface contains the methods that are implemented by both our T and testing.T
+type TestingTInterface interface {
+	Cleanup(f func())
+	Deadline() (deadline time.Time, ok bool)
+	Error(args ...interface{})
+	Errorf(format string, args ...interface{})
+	Fail()
+	FailNow()
+	Failed() bool
+	Fatal(args ...interface{})
+	Fatalf(format string, args ...interface{})
+	Helper()
+	Log(args ...interface{})
+	Logf(format string, args ...interface{})
+	Name() string
+	Parallel()
+	Skip(args ...interface{})
+	SkipNow()
+	Skipf(format string, args ...interface{})
+	Skipped() bool
+	TempDir() string
+}
+
+// WaitForHTTP200 waits 30 seconds for the provided addr to return a http/200. If that doesn't
+// happen, it will call t.Fatalf
+func WaitForHTTP200(addr, command string, t TestingTInterface) {
 	if waitErr := wait.PollImmediate(1*time.Second, 30*time.Second, func() (done bool, err error) {
-		resp, getErr := http.Get(fmt.Sprintf("http://127.0.0.1:%s/healthz/ready", a.healthPort))
+		resp, getErr := http.Get(addr)
 		defer func() {
 			if resp == nil || resp.Body == nil {
 				return
@@ -168,28 +215,31 @@ func (a *Accessory) Ready(t *T) {
 			}
 		}()
 		if resp != nil {
-			t.Logf("`%s` readiness probe: %v", a.command, resp.StatusCode)
+			t.Logf("`%s` readiness probe: %v", command, resp.StatusCode)
 		}
 		if getErr != nil {
-			t.Logf("`%s` readiness probe error: %v:", a.command, getErr)
+			t.Logf("`%s` readiness probe error: %v:", command, getErr)
 		}
 		return (resp != nil && resp.StatusCode == http.StatusOK) && getErr == nil, nil
 	}); waitErr != nil {
-		t.Fatalf("could not wait for `%s` to be healthy: %v", a.command, waitErr)
+		t.Fatalf("could not wait for `%s` to be healthy: %v", command, waitErr)
 	}
 }
 
-// Flags exposes the port on which we are serving content and
-// any other flags that are needed for the ci-operator to consume
+// ClientFlags exposes the port on which we are serving content and
+// any other flags that are needed clients to consume
 // this accessory.
-func (a *Accessory) Flags() []string {
-	return a.flags(a.port)
+func (a *Accessory) ClientFlags() []string {
+	if a.clientFlags == nil {
+		return nil
+	}
+	return a.clientFlags(a.port, a.healthPort)
 }
 
 var ports = sync.Map{}
 
-// getFreePort asks the kernel for a free open port that is ready to use.
-func getFreePort(t *T) string {
+// GetFreePort asks the kernel for a free open port that is ready to use.
+func GetFreePort(t TestingTInterface) string {
 	for {
 		addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
 		if err != nil {
@@ -211,16 +261,4 @@ func getFreePort(t *T) string {
 			return port
 		}
 	}
-}
-
-func flags(data map[string]string) []string {
-	var out []string
-	for key, value := range data {
-		out = append(out, flag(key, value))
-	}
-	return out
-}
-
-func flag(flag, value string) string {
-	return fmt.Sprintf("--%s=%s", flag, value)
 }

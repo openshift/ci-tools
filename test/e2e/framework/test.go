@@ -71,7 +71,7 @@ func Run(top *testing.T, name string, f TestFunc, accessories ...*Accessory) {
 			// binding the accessory to ctx ensures its lifetime is only
 			// as long as the test we are running in this specific case
 			accessory.Run(bottom, ctx)
-			cmd.AddArgs(accessory.Flags()...)
+			cmd.AddArgs(accessory.ClientFlags()...)
 			go func(a *Accessory) {
 				defer wg.Done()
 				a.Ready(bottom)

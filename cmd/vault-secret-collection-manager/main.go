@@ -13,12 +13,12 @@ import (
 	"time"
 
 	"github.com/julienschmidt/httprouter"
-	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
+	"k8s.io/test-infra/prow/version"
 
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
@@ -47,7 +47,9 @@ func parseOptions() (*option, error) {
 }
 
 func main() {
+	version.Name = "vault-secret-collection-manager"
 	logrusutil.ComponentInit()
+	logrus.SetLevel(logrus.DebugLevel)
 	o, err := parseOptions()
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to get options")
@@ -73,22 +75,16 @@ func server(privilegedVaultClient *vaultclient.VaultClient, kvStorePrefix, liste
 	return &http.Server{Addr: listenAddr, Handler: manager.mux()}
 }
 
-func userWrapper(upstream func(user string, w http.ResponseWriter, r *http.Request, params httprouter.Params)) httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+func userWrapper(upstream func(l *logrus.Entry, user string, w http.ResponseWriter, r *http.Request, params httprouter.Params)) func(*logrus.Entry, http.ResponseWriter, *http.Request, httprouter.Params) {
+	return func(l *logrus.Entry, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 		user := strings.Split(r.Header.Get("X-Forwarded-Email"), "@")[0]
 		if user == "" {
 			http.Error(w, "No user passed", 400)
 			logrus.WithField("X-Forwarded-Email", r.Header.Get("X-Forwarded-Email")).Error("Got request with empty user")
 			return
 		}
-
-		upstream(user, w, r, params)
-	}
-}
-
-func loggingWrapper(upstream func(l *logrus.Entry, user string, w http.ResponseWriter, r *http.Request, params httprouter.Params)) func(string, http.ResponseWriter, *http.Request, httprouter.Params) {
-	return func(user string, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
-		upstream(logrus.WithField("UID", uuid.NewV1().String()).WithField("user", user), user, w, r, params)
+		*l = *l.WithField("user", user)
+		upstream(l, user, w, r, params)
 	}
 }
 
@@ -137,13 +133,13 @@ func (c *idNameCache) set(name, id string) {
 
 func (m *secretCollectionManager) mux() *httprouter.Router {
 	router := httprouter.New()
-	router.GET("/", redirectHandler("/secretcollection?ui=true"))
-	router.GET("/style.css", staticFileHandler(styleCSS, "text/css"))
-	router.GET("/index.js", staticFileHandler(indexJS, "text/javascript"))
-	router.GET("/healthz", healthHandler)
-	router.GET("/secretcollection", userWrapper(loggingWrapper(m.listSecretCollections)))
-	router.PUT("/secretcollection/:name", userWrapper(loggingWrapper(m.createSecretCollectionHandler)))
-	router.PATCH("/secretcollection/:name", userWrapper(loggingWrapper(m.updateSecretCollectionMembersHandler)))
+	router.GET("/", simpleLoggingWrapper(redirectHandler("/secretcollection?ui=true")))
+	router.GET("/style.css", simpleLoggingWrapper(staticFileHandler(styleCSS, "text/css")))
+	router.GET("/index.js", simpleLoggingWrapper(staticFileHandler(indexJS, "text/javascript")))
+	router.GET("/healthz", simpleLoggingWrapper(healthHandler))
+	router.GET("/secretcollection", loggingWrapper(userWrapper(m.listSecretCollections)))
+	router.PUT("/secretcollection/:name", loggingWrapper(userWrapper(m.createSecretCollectionHandler)))
+	router.PATCH("/secretcollection/:name", loggingWrapper(userWrapper(m.updateSecretCollectionMembersHandler)))
 	return router
 }
 

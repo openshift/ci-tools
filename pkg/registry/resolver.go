@@ -12,6 +12,8 @@ import (
 
 type Resolver interface {
 	Resolve(name string, config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error)
+	ResolveWorkflow(name string) (api.MultiStageTestConfigurationLiteral, error)
+	ResolveChain(name string) (api.RegistryChain, error)
 }
 
 type ReferenceByName map[string]api.LiteralTestStep
@@ -65,46 +67,65 @@ func NewResolver(stepsByName ReferenceByName, chainsByName ChainByName, workflow
 }
 
 func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error) {
-	var resolveErrors []error
 	var overridden [][]api.TestStep
 	if config.Workflow != nil {
-		workflow, ok := r.workflowsByName[*config.Workflow]
-		if !ok {
-			return api.MultiStageTestConfigurationLiteral{}, fmt.Errorf("no workflow named %s", *config.Workflow)
-		}
-		if config.ClusterProfile == "" {
-			config.ClusterProfile = workflow.ClusterProfile
-		}
-		if config.Pre == nil {
-			config.Pre = workflow.Pre
-		} else {
-			overridden = append(overridden, workflow.Pre)
-		}
-		if config.Test == nil {
-			config.Test = workflow.Test
-		} else {
-			overridden = append(overridden, workflow.Test)
-		}
-		if config.Post == nil {
-			config.Post = workflow.Post
-		} else {
-			overridden = append(overridden, workflow.Post)
-		}
-		config.Environment = mergeEnvironments(workflow.Environment, config.Environment)
-		config.Dependencies = mergeDependencies(workflow.Dependencies, config.Dependencies)
-		config.DependencyOverrides = mergeDependencyOverrides(workflow.DependencyOverrides, config.DependencyOverrides)
-		if l, err := mergeLeases(workflow.Leases, config.Leases); err != nil {
-			resolveErrors = append(resolveErrors, err)
-		} else {
-			config.Leases = l
-		}
-		if config.AllowSkipOnSuccess == nil {
-			config.AllowSkipOnSuccess = workflow.AllowSkipOnSuccess
-		}
-		if config.AllowBestEffortPostSteps == nil {
-			config.AllowBestEffortPostSteps = workflow.AllowBestEffortPostSteps
+		var errs []error
+		overridden, errs = r.mergeWorkflow(&config)
+		if errs != nil {
+			return api.MultiStageTestConfigurationLiteral{}, utilerrors.NewAggregate(errs)
 		}
 	}
+	return r.resolveTest(config, stackForTest(name, config.Environment, config.Dependencies), overridden)
+}
+
+func (r *registry) mergeWorkflow(config *api.MultiStageTestConfiguration) ([][]api.TestStep, []error) {
+	var overridden [][]api.TestStep
+	workflow, ok := r.workflowsByName[*config.Workflow]
+	if !ok {
+		return nil, []error{fmt.Errorf("no workflow named %s", *config.Workflow)}
+	}
+	var errs []error
+	if config.ClusterProfile == "" {
+		config.ClusterProfile = workflow.ClusterProfile
+	}
+	if config.Pre == nil {
+		config.Pre = workflow.Pre
+	} else {
+		overridden = append(overridden, workflow.Pre)
+	}
+	if config.Test == nil {
+		config.Test = workflow.Test
+	} else {
+		overridden = append(overridden, workflow.Test)
+	}
+	if config.Post == nil {
+		config.Post = workflow.Post
+	} else {
+		overridden = append(overridden, workflow.Post)
+	}
+	config.Environment = mergeEnvironments(workflow.Environment, config.Environment)
+	config.Dependencies = mergeDependencies(workflow.Dependencies, config.Dependencies)
+	config.DependencyOverrides = mergeDependencyOverrides(workflow.DependencyOverrides, config.DependencyOverrides)
+	if l, err := mergeLeases(workflow.Leases, config.Leases); err != nil {
+		errs = append(errs, err)
+	} else {
+		config.Leases = l
+	}
+	if config.AllowSkipOnSuccess == nil {
+		config.AllowSkipOnSuccess = workflow.AllowSkipOnSuccess
+	}
+	if config.AllowBestEffortPostSteps == nil {
+		config.AllowBestEffortPostSteps = workflow.AllowBestEffortPostSteps
+	}
+	return overridden, errs
+}
+
+func (r *registry) resolveTest(
+	config api.MultiStageTestConfiguration,
+	stack stack,
+	overridden [][]api.TestStep,
+) (api.MultiStageTestConfigurationLiteral, error) {
+	var resolveErrors []error
 	expandedFlow := api.MultiStageTestConfigurationLiteral{
 		ClusterProfile:           config.ClusterProfile,
 		AllowSkipOnSuccess:       config.AllowSkipOnSuccess,
@@ -112,7 +133,6 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 		Leases:                   config.Leases,
 		DependencyOverrides:      config.DependencyOverrides,
 	}
-	stack := stackForTest(name, config.Environment, config.Dependencies)
 	if config.Workflow != nil {
 		stack.push(stackRecordForTest("workflow/"+*config.Workflow, nil, nil))
 	}
@@ -149,6 +169,29 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 		return api.MultiStageTestConfigurationLiteral{}, utilerrors.NewAggregate(resolveErrors)
 	}
 	return expandedFlow, nil
+}
+
+func (r *registry) ResolveWorkflow(name string) (api.MultiStageTestConfigurationLiteral, error) {
+	workflow, ok := r.workflowsByName[name]
+	if !ok {
+		return api.MultiStageTestConfigurationLiteral{}, fmt.Errorf("no workflow named %s", name)
+	}
+	stack := stackForWorkflow(name, workflow.Environment, workflow.Dependencies)
+	ret, err := r.resolveTest(workflow, stack, nil)
+	return ret, err
+}
+
+func (r *registry) ResolveChain(name string) (api.RegistryChain, error) {
+	steps, err := r.processChain(name, sets.NewString(), stack{})
+	if err != nil {
+		return api.RegistryChain{}, utilerrors.NewAggregate(err)
+	}
+	ret := api.RegistryChain{}
+	for _, x := range steps {
+		unique := x
+		ret.Steps = append(ret.Steps, api.TestStep{LiteralTestStep: &unique})
+	}
+	return ret, nil
 }
 
 // mergeEnvironments joins two environment maps.
@@ -214,7 +257,7 @@ func mergeLeases(dst, src []api.StepLease) ([]api.StepLease, error) {
 func (r *registry) process(steps []api.TestStep, seen sets.String, stack stack) (ret []api.LiteralTestStep, errs []error) {
 	for _, step := range steps {
 		if step.Chain != nil {
-			steps, err := r.processChain(&step, seen, stack)
+			steps, err := r.processChain(*step.Chain, seen, stack)
 			errs = append(errs, err...)
 			ret = append(ret, steps...)
 		} else {
@@ -228,8 +271,7 @@ func (r *registry) process(steps []api.TestStep, seen sets.String, stack stack) 
 	return
 }
 
-func (r *registry) processChain(step *api.TestStep, seen sets.String, stack stack) ([]api.LiteralTestStep, []error) {
-	name := *step.Chain
+func (r *registry) processChain(name string, seen sets.String, stack stack) ([]api.LiteralTestStep, []error) {
 	chain, ok := r.chainsByName[name]
 	if !ok {
 		return nil, []error{stack.errorf("unknown step chain: %s", name)}

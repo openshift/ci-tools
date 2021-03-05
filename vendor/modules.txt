@@ -219,10 +219,6 @@ github.com/getlantern/deepcopy
 # github.com/ghodss/yaml v1.0.0
 ## explicit
 github.com/ghodss/yaml
-# github.com/go-bindata/go-bindata/v3 v3.1.3
-## explicit
-github.com/go-bindata/go-bindata/v3
-github.com/go-bindata/go-bindata/v3/go-bindata
 # github.com/go-logr/logr v0.3.0
 github.com/go-logr/logr
 # github.com/gobuffalo/flect v0.2.0
@@ -339,9 +335,6 @@ github.com/julienschmidt/httprouter
 # github.com/kataras/tablewriter v0.0.0-20180708051242-e063d29b7c23
 ## explicit
 github.com/kataras/tablewriter
-# github.com/kisielk/errcheck v1.2.0
-github.com/kisielk/errcheck
-github.com/kisielk/errcheck/internal/errcheck
 # github.com/konsorten/go-windows-terminal-sequences v1.0.3
 github.com/konsorten/go-windows-terminal-sequences
 # github.com/magiconair/properties v1.8.4

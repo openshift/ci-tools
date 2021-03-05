@@ -53,10 +53,9 @@ func TestGetPodFromObject(t *testing.T) {
 
 func TestOperateOnTemplatePods(t *testing.T) {
 	testCases := []struct {
-		testID       string
-		artifactsDir string
-		resources    api.ResourceConfiguration
-		template     *templateapi.Template
+		testID    string
+		resources api.ResourceConfiguration
+		template  *templateapi.Template
 	}{
 		{
 			testID: "template with no pod, no changes expected",
@@ -111,8 +110,7 @@ func TestOperateOnTemplatePods(t *testing.T) {
 			},
 		},
 		{
-			testID:       "template with pod with artifacts Volume/VolumeMount and artifacts dir defined, changes expected",
-			artifactsDir: "/path/to/artifacts",
+			testID: "template with pod with artifacts Volume/VolumeMount, changes expected",
 			template: &templateapi.Template{
 				TypeMeta:   meta.TypeMeta{Kind: "Template", APIVersion: "template.openshift.io/v1"},
 				ObjectMeta: meta.ObjectMeta{Name: "test-template"},
@@ -237,7 +235,7 @@ func TestOperateOnTemplatePods(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.testID, func(t *testing.T) {
-			operateOnTemplatePods(tc.template, tc.artifactsDir, tc.resources)
+			operateOnTemplatePods(tc.template, tc.resources)
 			testhelper.CompareWithFixture(t, tc.template)
 		})
 	}

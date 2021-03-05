@@ -18,7 +18,6 @@ type gitSourceStep struct {
 	config          api.ProjectDirectoryImageBuildInputs
 	resources       api.ResourceConfiguration
 	buildClient     BuildClient
-	artifactDir     string
 	jobSpec         *api.JobSpec
 	cloneAuthConfig *CloneAuthConfig
 	pullSecret      *coreapi.Secret
@@ -52,7 +51,7 @@ func (s *gitSourceStep) run(ctx context.Context) error {
 				URI: cloneURI,
 				Ref: refs.BaseRef,
 			},
-		}, s.config.DockerfilePath, s.resources, s.pullSecret), s.artifactDir)
+		}, s.config.DockerfilePath, s.resources, s.pullSecret))
 	}
 
 	return fmt.Errorf("nothing to build source image from, no refs")
@@ -100,12 +99,11 @@ func determineRefsWorkdir(refs *prowapi.Refs, extraRefs []prowapi.Refs) *prowapi
 }
 
 // GitSourceStep returns gitSourceStep that holds all the required information to create a build from a git source.
-func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.ResourceConfiguration, buildClient BuildClient, artifactDir string, jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) api.Step {
+func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.ResourceConfiguration, buildClient BuildClient, jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) api.Step {
 	return &gitSourceStep{
 		config:          config,
 		resources:       resources,
 		buildClient:     buildClient,
-		artifactDir:     artifactDir,
 		jobSpec:         jobSpec,
 		cloneAuthConfig: cloneAuthConfig,
 		pullSecret:      pullSecret,

@@ -15,7 +15,6 @@ presubmits:
     spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --target=[images]
         - --target=[release:latest] # This option should be removed in the output, because promotion stanza is no longer present

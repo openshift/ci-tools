@@ -146,7 +146,6 @@ type sourceStep struct {
 	config          api.SourceStepConfiguration
 	resources       api.ResourceConfiguration
 	client          BuildClient
-	artifactDir     string
 	jobSpec         *api.JobSpec
 	cloneAuthConfig *CloneAuthConfig
 	pullSecret      *corev1.Secret
@@ -168,7 +167,7 @@ func (s *sourceStep) run(ctx context.Context) error {
 		return fmt.Errorf("could not resolve clonerefs source: %w", err)
 	}
 
-	return handleBuild(ctx, s.client, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret), s.artifactDir)
+	return handleBuild(ctx, s.client, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret))
 }
 
 func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef corev1.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret) *buildapi.Build {
@@ -349,7 +348,7 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 	return true
 }
 
-func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.Build, artifactDir string) error {
+func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.Build) error {
 	if err := buildClient.Create(ctx, build); err != nil {
 		if !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create build %s: %w", build.Name, err)
@@ -381,8 +380,8 @@ func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.B
 		}
 	}
 	err := waitForBuildOrTimeout(ctx, buildClient, build.Namespace, build.Name)
-	if err == nil && len(artifactDir) > 0 {
-		if err := gatherSuccessfulBuildLog(buildClient, artifactDir, build.Namespace, build.Name); err != nil {
+	if err == nil {
+		if err := gatherSuccessfulBuildLog(buildClient, build.Namespace, build.Name); err != nil {
 			// log error but do not fail successful build
 			log.Printf("problem gathering successful build %s logs into artifacts: %v", build.Name, err)
 		}
@@ -583,12 +582,11 @@ func (s *sourceStep) Objects() []ctrlruntimeclient.Object {
 }
 
 func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient,
-	artifactDir string, jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret) api.Step {
+	jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret) api.Step {
 	return &sourceStep{
 		config:          config,
 		resources:       resources,
 		client:          buildClient,
-		artifactDir:     artifactDir,
 		jobSpec:         jobSpec,
 		cloneAuthConfig: cloneAuthConfig,
 		pullSecret:      pullSecret,

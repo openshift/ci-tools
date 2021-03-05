@@ -155,9 +155,6 @@ map.
 
 const (
 	leaseAcquireTimeout = 120 * time.Minute
-
-	// where Prow wants us to put artifacts
-	artifactsEnv = "ARTIFACTS"
 )
 
 var (
@@ -186,6 +183,9 @@ func main() {
 		if err := flag.CommandLine.Set("v", "10"); err != nil {
 			logrus.WithError(err).Error("Failed to set flag -v=10")
 		}
+		logrus.SetLevel(logrus.TraceLevel)
+		logrus.SetFormatter(&logrus.JSONFormatter{})
+		logrus.SetReportCaller(true)
 	}
 	if opt.help {
 		fmt.Print(usage)
@@ -345,7 +345,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.promote, "promote", false, "When all other targets complete, publish the set of images built by this job into the release configuration.")
 
 	// output control
-	flag.StringVar(&opt.artifactDir, "artifact-dir", "", "If set grab artifacts from test and template jobs. Defaults to $ARTIFACTS if set.")
+	flag.StringVar(&opt.artifactDir, "artifact-dir", "", "DEPRECATED. Does nothing, set $ARTIFACTS instead.")
 	flag.StringVar(&opt.writeParams, "write-params", "", "If set write an env-compatible file with the output of the job.")
 
 	// experimental flags
@@ -369,14 +369,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 }
 
 func (o *options) Complete() error {
-	if o.artifactDir == "" {
-		// user did not set an artifact dir, but we can default to the Prow dir if set
-		artifactDir, ok := os.LookupEnv(artifactsEnv)
-		if ok {
-			o.artifactDir = artifactDir
-		}
-	}
-
 	jobSpec, err := api.ResolveSpecFromEnv()
 	if err != nil {
 		if len(o.gitRef) == 0 {
@@ -561,7 +553,7 @@ func (o *options) Run() []error {
 		leaseClient = &o.leaseClient
 	}
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -1097,13 +1089,14 @@ type prowResultMetadata struct {
 }
 
 func (o *options) writeMetadataJSON() error {
-	if len(o.artifactDir) == 0 {
+	artifactDir, set := api.Artifacts()
+	if !set {
 		return nil
 	}
 
-	metadataJSONPath := filepath.Join(o.artifactDir, "metadata.json")
+	metadataJSONPath := filepath.Join(artifactDir, "metadata.json")
 
-	customProwMetadataFile, err := o.findCustomMetadataFile()
+	customProwMetadataFile, err := o.findCustomMetadataFile(artifactDir)
 
 	if err != nil {
 		log.Printf("Error finding custom prow metadata file: %v", err)
@@ -1140,10 +1133,10 @@ func (o *options) writeMetadataJSON() error {
 	return nil
 }
 
-func (o *options) findCustomMetadataFile() (customProwMetadataFile string, err error) {
+func (o *options) findCustomMetadataFile(artifactDir string) (customProwMetadataFile string, err error) {
 	// Try to find the custom prow metadata file. We assume that there's only one. If there's more than one,
 	// we'll just use the first one that we find.
-	err = filepath.Walk(o.artifactDir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(artifactDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -1276,7 +1269,11 @@ func (o *options) writeFailingJUnit(errs []error) {
 }
 
 func (o *options) writeJUnit(suites *junit.TestSuites, name string) error {
-	if len(o.artifactDir) == 0 || suites == nil {
+	artifactDir, set := api.Artifacts()
+	if !set {
+		return nil
+	}
+	if len(artifactDir) == 0 || suites == nil {
 		return nil
 	}
 	suites.Suites[0].Name = name
@@ -1290,7 +1287,7 @@ func (o *options) writeJUnit(suites *junit.TestSuites, name string) error {
 	if err != nil {
 		return fmt.Errorf("could not marshal jUnit XML: %w", err)
 	}
-	return ioutil.WriteFile(filepath.Join(o.artifactDir, fmt.Sprintf("junit_%s.xml", name)), out, 0640)
+	return ioutil.WriteFile(filepath.Join(artifactDir, fmt.Sprintf("junit_%s.xml", name)), out, 0640)
 }
 
 // oneWayEncoding can be used to encode hex to a 62-character set (0 and 1 are duplicates) for use in
@@ -1318,11 +1315,12 @@ func inputHash(inputs api.InputDefinition) string {
 // saveNamespaceArtifacts is a best effort attempt to save ci-operator namespace artifacts to disk
 // for review later.
 func (o *options) saveNamespaceArtifacts() {
-	if len(o.artifactDir) == 0 {
+	artifactDir, set := api.Artifacts()
+	if !set {
 		return
 	}
 
-	namespaceDir := filepath.Join(o.artifactDir, "build-resources")
+	namespaceDir := filepath.Join(artifactDir, "build-resources")
 	if err := os.Mkdir(namespaceDir, 0777); err != nil {
 		log.Printf("Unable to create build-resources directory: %v", err)
 		return

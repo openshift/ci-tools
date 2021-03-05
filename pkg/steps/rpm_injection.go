@@ -20,12 +20,11 @@ RUN echo $'[built]\nname = Built RPMs\nbaseurl = http://%s/\ngpgcheck = 0\nenabl
 }
 
 type rpmImageInjectionStep struct {
-	config      api.RPMImageInjectionStepConfiguration
-	resources   api.ResourceConfiguration
-	client      BuildClient
-	artifactDir string
-	jobSpec     *api.JobSpec
-	pullSecret  *coreapi.Secret
+	config     api.RPMImageInjectionStepConfiguration
+	resources  api.ResourceConfiguration
+	client     BuildClient
+	jobSpec    *api.JobSpec
+	pullSecret *coreapi.Secret
 }
 
 func (s *rpmImageInjectionStep) Inputs() (api.InputDefinition, error) {
@@ -54,7 +53,7 @@ func (s *rpmImageInjectionStep) run(ctx context.Context) error {
 		"",
 		s.resources,
 		s.pullSecret,
-	), s.artifactDir)
+	))
 }
 
 func (s *rpmImageInjectionStep) Requires() []api.StepLink {
@@ -79,13 +78,12 @@ func (s *rpmImageInjectionStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &rpmImageInjectionStep{
-		config:      config,
-		resources:   resources,
-		client:      buildClient,
-		artifactDir: artifactDir,
-		jobSpec:     jobSpec,
-		pullSecret:  pullSecret,
+		config:     config,
+		resources:  resources,
+		client:     buildClient,
+		jobSpec:    jobSpec,
+		pullSecret: pullSecret,
 	}
 }

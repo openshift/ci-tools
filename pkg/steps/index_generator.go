@@ -21,7 +21,6 @@ type indexGeneratorStep struct {
 	resources          api.ResourceConfiguration
 	client             BuildClient
 	jobSpec            *api.JobSpec
-	artifactDir        string
 	pullSecret         *coreapi.Secret
 }
 
@@ -73,7 +72,7 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 		s.resources,
 		s.pullSecret,
 	)
-	err = handleBuild(ctx, s.client, build, s.artifactDir)
+	err = handleBuild(ctx, s.client, build)
 	if err != nil && strings.Contains(err.Error(), "error checking provided apis") {
 		return results.ForReason("generating_index").WithError(err).Errorf("failed to generate operator index due to invalid bundle info: %v", err)
 	}
@@ -129,13 +128,12 @@ func (s *indexGeneratorStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func IndexGeneratorStep(config api.IndexGeneratorStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func IndexGeneratorStep(config api.IndexGeneratorStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &indexGeneratorStep{
 		config:             config,
 		releaseBuildConfig: releaseBuildConfig,
 		resources:          resources,
 		client:             buildClient,
-		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,
 		pullSecret:         pullSecret,
 	}

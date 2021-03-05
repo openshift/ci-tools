@@ -107,14 +107,16 @@ func verifyMetadata(jobSpec *api.JobSpec, namespace string, customMetadata map[s
 		return fmt.Errorf("Unable to create temporary directory: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
+	if err := os.Setenv("ARTIFACTS", tempDir); err != nil {
+		return err
+	}
 
 	metadataFile := filepath.Join(tempDir, "metadata.json")
 
 	// Verify without custom metadata
 	o := &options{
-		artifactDir: tempDir,
-		jobSpec:     jobSpec,
-		namespace:   namespace,
+		jobSpec:   jobSpec,
+		namespace: namespace,
 	}
 
 	if err := o.writeMetadataJSON(); err != nil {
@@ -401,7 +403,7 @@ func TestBuildPartialGraph(t *testing.T) {
 					loggingclient.New(fakectrlruntimeclient.NewFakeClient(&imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{Name: ":"}})),
 					nil,
 				),
-				steps.SourceStep(api.SourceStepConfiguration{From: api.PipelineImageStreamTagReferenceRoot, To: api.PipelineImageStreamTagReferenceSource}, api.ResourceConfiguration{}, nil, "", &api.JobSpec{}, nil, nil),
+				steps.SourceStep(api.SourceStepConfiguration{From: api.PipelineImageStreamTagReferenceRoot, To: api.PipelineImageStreamTagReferenceSource}, api.ResourceConfiguration{}, nil, &api.JobSpec{}, nil, nil),
 				steps.ProjectDirectoryImageBuildStep(
 					api.ProjectDirectoryImageBuildStepConfiguration{
 						From: api.PipelineImageStreamTagReferenceSource,
@@ -410,7 +412,7 @@ func TestBuildPartialGraph(t *testing.T) {
 						},
 						To: api.PipelineImageStreamTagReference("oc-bin-image"),
 					},
-					api.ResourceConfiguration{}, nil, "", nil, nil,
+					api.ResourceConfiguration{}, nil, nil, nil,
 				),
 				steps.OutputImageTagStep(api.OutputImageTagStepConfiguration{From: api.PipelineImageStreamTagReference("oc-bin-image")}, nil, nil),
 				steps.ImagesReadyStep(steps.OutputImageTagStep(api.OutputImageTagStepConfiguration{From: api.PipelineImageStreamTagReference("oc-bin-image")}, nil, nil).Creates()),

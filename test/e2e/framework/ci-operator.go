@@ -5,6 +5,7 @@ package framework
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"math/rand"
 	"os"
@@ -84,10 +85,10 @@ func newCiOperatorCommand(t *T) CiOperatorCommand {
 	})
 	cmd := exec.CommandContext(ctx, "ci-operator",
 		"--input-hash="+strconv.Itoa(rand.Int()), // we need unique namespaces
-		"--artifact-dir="+artifactDir,
 		GCSPushCredentialsFlag(t),
 	)
 	cmd.Env = append(cmd.Env, KubernetesClientEnv(t)...)
+	cmd.Env = append(cmd.Env, fmt.Sprintf("ARTIFACTS=%s", artifactDir))
 	return CiOperatorCommand{
 		cmd:         cmd,
 		artifactDir: artifactDir,

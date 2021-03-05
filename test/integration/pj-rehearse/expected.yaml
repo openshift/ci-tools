@@ -190,7 +190,6 @@
     pod_spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --secret-dir=/usr/local/e2e-cluster-profile
         - --target=CHANGED
         - --template=/usr/local/e2e
@@ -722,7 +721,6 @@
     pod_spec:
       containers:
       - args:
-        - --artifact-dir=$(CHANGED)
         - --give-pr-author-access-to-namespace=true
         - --target=custom
         command:
@@ -831,7 +829,6 @@
     pod_spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --target=[images]
         command:
@@ -937,7 +934,6 @@
     pod_spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --secret-dir=/usr/local/test-profile-cluster-profile
         - --target=test-profile
@@ -1066,7 +1062,6 @@
     pod_spec:
       containers:
       - args:
-        - --artifact-dir=$(CHANGED)
         - --give-pr-author-access-to-namespace=true
         - --target=cmd
         command:
@@ -1172,7 +1167,6 @@
     pod_spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --secret-dir=/usr/local/e2e-aws-cluster-profile
         - --target=e2e-aws
@@ -1257,218 +1251,6 @@
   kind: ProwJob
   metadata:
     annotations:
-      prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-integration
-    creationTimestamp: null
-    labels:
-      ci.openshift.org/rehearse: "1234"
-      created-by-prow: "true"
-      pj-rehearse.openshift.io/can-be-rehearsed: "true"
-      pj-rehearse.openshift.io/source-type: changedPresubmit
-      prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-integration
-      prow.k8s.io/refs.org: openshift
-      prow.k8s.io/refs.pull: "1234"
-      prow.k8s.io/refs.repo: release
-      prow.k8s.io/type: presubmit
-    name: test-prowjob
-    namespace: test-namespace
-    resourceVersion: "1"
-  spec:
-    agent: kubernetes
-    cluster: default
-    context: ci/rehearse/super/duper/master/integration
-    decoration_config:
-      gcs_configuration:
-        bucket: origin-ci-test
-        default_org: openshift
-        default_repo: origin
-        path_strategy: single
-      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
-      grace_period: 15s
-      skip_cloning: true
-      timeout: 4h0m0s
-      utility_images:
-        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
-        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
-        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
-        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
-    extra_refs:
-    - base_ref: master
-      org: super
-      repo: duper
-      workdir: true
-    job: rehearse-1234-pull-ci-super-duper-master-integration
-    namespace: test-namespace
-    pod_spec:
-      containers:
-      - args:
-        - --artifact-dir=$(changed)
-        - --give-pr-author-access-to-namespace=true
-        - --target=integration
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          value: |
-            base_images:
-              base:
-                name: origin-v4.0
-                namespace: openshift
-                tag: base
-            build_root:
-              image_stream_tag:
-                name: release
-                namespace: openshift
-                tag: golang-1.10
-            images:
-            - from: base
-              to: test-image
-            resources:
-              '*':
-                limits:
-                  cpu: 500Mi
-                requests:
-                  cpu: 10Mi
-            tag_specification:
-              name: origin-v4.0
-              namespace: openshift
-            zz_generated_metadata:
-              branch: master
-              org: super
-              repo: duper
-        image: ci-operator:latest
-        imagePullPolicy: Always
-        name: ""
-        resources:
-          limits:
-            cpu: 500m
-          requests:
-            cpu: 10m
-      serviceAccountName: ci-operator
-    refs:
-      base_ref: master
-      base_sha: test_sha
-      org: openshift
-      pulls:
-      - author: petr-muller
-        number: 1234
-        sha: test_sha
-      repo: release
-    report: true
-    rerun_command: /test pj-rehearse
-    type: presubmit
-  status:
-    startTime: 2020-06-22T22:25:00Z
-    state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
-    annotations:
-      prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-cmd
-    creationTimestamp: null
-    labels:
-      ci.openshift.org/rehearse: "1234"
-      created-by-prow: "true"
-      pj-rehearse.openshift.io/can-be-rehearsed: "true"
-      pj-rehearse.openshift.io/source-type: changedPresubmit
-      prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-cmd
-      prow.k8s.io/refs.org: openshift
-      prow.k8s.io/refs.pull: "1234"
-      prow.k8s.io/refs.repo: release
-      prow.k8s.io/type: presubmit
-    name: test-prowjob
-    namespace: test-namespace
-    resourceVersion: "1"
-  spec:
-    agent: kubernetes
-    cluster: default
-    context: ci/rehearse/super/trooper/master/cmd
-    decoration_config:
-      gcs_configuration:
-        bucket: origin-ci-test
-        default_org: openshift
-        default_repo: origin
-        path_strategy: single
-      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
-      grace_period: 15s
-      skip_cloning: true
-      timeout: 4h0m0s
-      utility_images:
-        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
-        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
-        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
-        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
-    extra_refs:
-    - base_ref: master
-      org: super
-      repo: trooper
-      workdir: true
-    job: rehearse-1234-pull-ci-super-trooper-master-cmd
-    namespace: test-namespace
-    pod_spec:
-      containers:
-      - args:
-        - --artifact-dir=$(changed)
-        - --give-pr-author-access-to-namespace=true
-        - --target=cmd
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          value: |
-            base_images:
-              base:
-                name: origin-v4.0
-                namespace: openshift
-                tag: base
-            build_root:
-              image_stream_tag:
-                name: release
-                namespace: openshift
-                tag: golang-1.10
-            images:
-            - from: base
-              to: test-image
-            resources:
-              '*':
-                limits:
-                  cpu: 500Mi
-                requests:
-                  cpu: 10Mi
-            tag_specification:
-              name: origin-v4.0
-              namespace: openshift
-            zz_generated_metadata:
-              branch: master
-              org: super
-              repo: trooper
-        image: ci-operator:latest
-        imagePullPolicy: Always
-        name: ""
-        resources:
-          limits:
-            cpu: 500m
-          requests:
-            cpu: 10m
-      serviceAccountName: ci-operator
-    refs:
-      base_ref: master
-      base_sha: test_sha
-      org: openshift
-      pulls:
-      - author: petr-muller
-        number: 1234
-        sha: test_sha
-      repo: release
-    report: true
-    rerun_command: /test pj-rehearse
-    type: presubmit
-  status:
-    startTime: 2020-06-22T22:25:00Z
-    state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
-    annotations:
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-e2e-aws
     creationTimestamp: null
     labels:
@@ -1513,7 +1295,6 @@
     pod_spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --secret-dir=/usr/local/e2e-aws-cluster-profile
         - --target=e2e-aws
@@ -1643,7 +1424,6 @@
     pod_spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --secret-dir=/usr/local/multistage-cluster-profile
         - --target=multistage
@@ -1809,7 +1589,6 @@
     pod_spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --secret-dir=/usr/local/multistage5-cluster-profile
         - --target=multistage5
@@ -1938,7 +1717,6 @@
     pod_spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --target=unit
         command:

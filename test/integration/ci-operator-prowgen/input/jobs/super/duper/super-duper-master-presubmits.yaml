@@ -16,7 +16,6 @@ presubmits:
     spec:
       containers:
       - args:
-        - --artifact-dir=$(ARTIFACTS)
         - --target=[images]
         command:
         - ci-operator
@@ -69,7 +68,6 @@ presubmits:
     spec:
       containers:
       - args:
-          - --artifact-dir=$(ARTIFACTS)
           - --target=[images]
         command:
           - ci-operator

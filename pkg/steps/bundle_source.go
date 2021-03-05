@@ -22,7 +22,6 @@ type bundleSourceStep struct {
 	resources          api.ResourceConfiguration
 	client             BuildClient
 	jobSpec            *api.JobSpec
-	artifactDir        string
 	pullSecret         *coreapi.Secret
 }
 
@@ -68,7 +67,7 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 		s.resources,
 		s.pullSecret,
 	)
-	return handleBuild(ctx, s.client, build, s.artifactDir)
+	return handleBuild(ctx, s.client, build)
 }
 
 func replaceCommand(pullSpec, with string) string {
@@ -124,13 +123,12 @@ func (s *bundleSourceStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", api.PipelineImageStreamTagReferenceBundleSource)
 }
 
-func BundleSourceStep(config api.BundleSourceStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, client BuildClient, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func BundleSourceStep(config api.BundleSourceStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, client BuildClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &bundleSourceStep{
 		config:             config,
 		releaseBuildConfig: releaseBuildConfig,
 		resources:          resources,
 		client:             client,
-		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,
 		pullSecret:         pullSecret,
 	}

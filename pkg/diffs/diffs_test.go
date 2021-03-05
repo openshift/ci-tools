@@ -192,7 +192,7 @@ func TestGetChangedPresubmits(t *testing.T) {
 				Spec: &v1.PodSpec{
 					Containers: []v1.Container{{
 						Command: []string{"ci-operator"},
-						Args:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=images"},
+						Args:    []string{"--target=images"},
 					}},
 				},
 			},
@@ -820,7 +820,7 @@ func TestGetChangedPeriodics(t *testing.T) {
 				Spec: &v1.PodSpec{
 					Containers: []v1.Container{{
 						Command: []string{"ci-operator"},
-						Args:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=images"},
+						Args:    []string{"--target=images"},
 					}},
 				},
 			},

@@ -133,6 +133,9 @@ func (c *idNameCache) set(name, id string) {
 
 func (m *secretCollectionManager) mux() *httprouter.Router {
 	router := httprouter.New()
+	// Do not redirect something like POST secretcollection/ where someone tried to
+	// create a nameless secret collection to secretcollection
+	router.RedirectTrailingSlash = false
 	router.GET("/", simpleLoggingWrapper(redirectHandler("/secretcollection?ui=true")))
 	router.GET("/style.css", simpleLoggingWrapper(staticFileHandler(styleCSS, "text/css")))
 	router.GET("/index.js", simpleLoggingWrapper(staticFileHandler(indexJS, "text/javascript")))
@@ -140,6 +143,7 @@ func (m *secretCollectionManager) mux() *httprouter.Router {
 	router.GET("/secretcollection", loggingWrapper(userWrapper(m.listSecretCollections)))
 	router.PUT("/secretcollection/:name", loggingWrapper(userWrapper(m.createSecretCollectionHandler)))
 	router.PATCH("/secretcollection/:name", loggingWrapper(userWrapper(m.updateSecretCollectionMembersHandler)))
+	router.DELETE("/secretcollection/:name", loggingWrapper(userWrapper(m.deleteCollectionHandler)))
 	return router
 }
 
@@ -162,6 +166,62 @@ func redirectHandler(target string) httprouter.Handle {
 	}
 }
 
+func (m *secretCollectionManager) isUserMemberInSecretCollection(l *logrus.Entry, user, collectionName string) (bool, error) {
+	collections, err := m.getCollectionsForUser(l, user)
+	if err != nil {
+		return false, fmt.Errorf("failed to get sceret collections for user %s: %w", user, err)
+	}
+
+	for _, collection := range collections {
+		if collection.Name == collectionName {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (m *secretCollectionManager) deleteCollectionHandler(l *logrus.Entry, user string, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	name := params.ByName("name")
+	if name == "" {
+		http.Error(w, "name url parameter must not be empty", 400)
+		return
+	}
+
+	isMember, err := m.isUserMemberInSecretCollection(l, user, name)
+	if err != nil {
+		l.WithError(err).Error("failed to check if user is member for secret collection")
+		http.Error(w, fmt.Sprintf("failed to check if user is allowed to delete secret collection. RequestID: %s", l.Data["UID"]), http.StatusInternalServerError)
+		return
+	}
+	if !isMember {
+		http.Error(w, fmt.Sprintf("secret collection not found. RequestID: %s", l.Data["UID"]), 404)
+		return
+	}
+
+	if err := m.deleteCollection(name); err != nil {
+		l.WithError(err).Error("Failed to delete colection")
+		http.Error(w, fmt.Sprintf("failed to delete secret collection. RequestID: %s", l.Data["UID"]), 500)
+	}
+}
+
+func (m *secretCollectionManager) deleteCollection(name string) error {
+	// First delete the data, then the group to be sure that users retain access until all
+	// data is deleted.
+	path := m.kvStorePrefix + "/" + prefixedName(name)
+	allItems, err := m.privilegedVaultClient.ListKVRecursively(path)
+	if err != nil {
+		return fmt.Errorf("failed to list items below %s: %w", path, err)
+	}
+	for _, item := range allItems {
+		if err := m.privilegedVaultClient.DestroyKVIrreversibly(item); err != nil {
+			return fmt.Errorf("failed to delete secret at %s: %w", item, err)
+		}
+	}
+
+	return m.privilegedVaultClient.DeleteGroupByName(prefixedName(name))
+}
+
 func (m *secretCollectionManager) updateSecretCollectionMembersHandler(l *logrus.Entry, user string, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	name := params.ByName("name")
 	if name == "" {
@@ -169,22 +229,13 @@ func (m *secretCollectionManager) updateSecretCollectionMembersHandler(l *logrus
 		return
 	}
 
-	collections, err := m.getCollectionsForUser(l, user)
+	isMember, err := m.isUserMemberInSecretCollection(l, user, name)
 	if err != nil {
-		l.WithError(err).Error("failed to get secret collections for user")
+		l.WithError(err).Error("failed to check if user is member for secret collection")
 		http.Error(w, fmt.Sprintf("failed to check if user is allowed to change secret collection. RequestID: %s", l.Data["UID"]), http.StatusInternalServerError)
 		return
 	}
-
-	var found bool
-	for _, collection := range collections {
-		if collection.Name == name {
-			found = true
-			break
-		}
-	}
-	if !found {
-		l.Warn("User tried to update secret collection they don't have access to/that doesn't exist")
+	if !isMember {
 		http.Error(w, fmt.Sprintf("secret collection not found. RequestID: %s", l.Data["UID"]), 404)
 		return
 	}

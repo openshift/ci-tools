@@ -57,6 +57,34 @@ func (v *VaultClient) ListKV(path string) ([]string, error) {
 	return keyResponse.Keys, nil
 }
 
+func (v *VaultClient) ListKVRecursively(path string) ([]string, error) {
+	paths := []string{path}
+	var result []string
+	for _, path := range paths {
+		children, err := v.ListKV(path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list %s: %w", path, err)
+		}
+		for _, child := range children {
+			if strings.HasSuffix(child, "/") {
+				// staticcheck complains `this result of append is never used, except maybe in other appends` but
+				// we do use it in the initial range.
+				// nolint: staticcheck
+				paths = append(paths, child)
+			} else {
+				result = append(result, strings.Join([]string{path, child}, "/"))
+			}
+		}
+	}
+
+	return result, nil
+}
+
+func (v *VaultClient) DestroyKVIrreversibly(path string) error {
+	_, err := v.Logical().Delete(InsertMetadataIntoPath(path))
+	return err
+}
+
 func (v *VaultClient) GetKV(path string) (*KVData, error) {
 	var response KVData
 	return &response, v.readInto(InsertDataIntoPath(path), &response)
@@ -146,6 +174,11 @@ func (v *VaultClient) GetGroupByID(groupID string) (*Group, error) {
 func (v *VaultClient) UpdateGroupMembers(groupName string, newMemberIDs []string) error {
 	data := map[string]interface{}{"member_entity_ids": newMemberIDs}
 	_, err := v.Logical().Write(fmt.Sprintf("identity/group/name/%s", groupName), data)
+	return err
+}
+
+func (v *VaultClient) DeleteGroupByName(name string) error {
+	_, err := v.Logical().Delete(fmt.Sprintf("identity/group/name/%s", name))
 	return err
 }
 

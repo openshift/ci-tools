@@ -174,6 +174,27 @@ func TestSecretCollectionManager(tt *testing.T) {
 			}},
 			expectedVaultPolicies: []string{"default", "secret-collection-manager-managed-mine-alone", "root"},
 		},
+		{
+			name:               "User is not a collection member, 404",
+			user:               "user-2",
+			request:            mustNewRequest(http.MethodDelete, fmt.Sprintf("http://%s/secretcollection/mine-alone", managerListenAddr)),
+			expectedStatusCode: 404,
+			expectedVaultGroups: []vaultclient.Group{{
+				Name:            "secret-collection-manager-managed-mine-alone",
+				Policies:        []string{"secret-collection-manager-managed-mine-alone"},
+				MemberEntityIDs: []string{"entity-0"},
+				Metadata:        map[string]string{"created-by-secret-collection-manager": "true"},
+				ModifyIndex:     1,
+			}},
+			expectedVaultPolicies: []string{"default", "secret-collection-manager-managed-mine-alone", "root"},
+		},
+		{
+			name:                  "Collection member successfully deletes it",
+			user:                  "user-1",
+			request:               mustNewRequest(http.MethodDelete, fmt.Sprintf("http://%s/secretcollection/mine-alone", managerListenAddr)),
+			expectedStatusCode:    200,
+			expectedVaultPolicies: []string{"default", "secret-collection-manager-managed-mine-alone", "root"},
+		},
 	}
 
 	// These tests mutate state in vault, so they need to be executed serially
@@ -193,8 +214,13 @@ func TestSecretCollectionManager(tt *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to read response body: %v", err)
 			}
-			if diff := cmp.Diff(tc.expectedBody, string(bodyData)); diff != "" {
-				t.Errorf("expected body differs from actual: %s", diff)
+
+			// Do not check response body on errors, it contains an unpredictable UUID and we do not care a lot
+			// about stability of error bodies anyways, as we mostly communicate through the status.
+			if response.StatusCode < 300 {
+				if diff := cmp.Diff(tc.expectedBody, string(bodyData)); diff != "" {
+					t.Errorf("expected body differs from actual: %s", diff)
+				}
 			}
 
 			groups, err := client.GetAllGroups()

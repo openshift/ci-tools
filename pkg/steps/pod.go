@@ -2,6 +2,7 @@ package steps
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log"
 
@@ -228,9 +229,22 @@ func generateBasePod(
 	return pod, nil
 }
 
+func generateCommandFromScript(command string) []string {
+	// In order to honor shebangs in a shell script ("i.e. #!/bin/bash"), the script needs to be executed from a file by the shell. Shebangs are ignored when
+	// provided directly in an argument to the shell. To do this, we:
+	// 1. base64 encode the command to prevent escaping issues
+	// 2. echo the encoded command to the base64 utility (which seems to exist on all linux systems)
+	// 3. write the output to a file with a `.sh` file extension
+	// 4. mark the file as executable
+	// 5. execute the script
+	base64Command := base64.StdEncoding.EncodeToString([]byte(command))
+	fullCommand := fmt.Sprintf("echo %s | base64 -d > ci-operator-script.sh; chmod +x ci-operator-script.sh; ./ci-operator-script.sh", base64Command)
+	return []string{"/bin/sh", "-c", fullCommand}
+}
+
 func (s *podStep) generatePodForStep(image string, containerResources coreapi.ResourceRequirements) (*coreapi.Pod, error) {
 	artifactDir := s.name
-	pod, err := generateBasePod(s.jobSpec, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec())
+	pod, err := generateBasePod(s.jobSpec, s.config.As, s.name, generateCommandFromScript(s.config.Commands), image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec())
 	if err != nil {
 		return nil, err
 	}

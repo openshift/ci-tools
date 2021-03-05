@@ -41,8 +41,6 @@ const (
 	CliMountPath = "/cli"
 	// CliEnv if the env we use to expose the path to the cli
 	CliEnv = "CLI_DIR"
-	// CommandPrefix is the prefix we add to a user's commands
-	CommandPrefix = "#!/bin/bash\nset -eu\n"
 )
 
 var envForProfile = []string{
@@ -409,7 +407,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		// the grace period for the Pod to be just larger than the grace period
 		// for the process, assuming an 80/20 distribution of work.
 		terminationGracePeriodSeconds := p(int64(gracePeriod.Seconds() * 5 / 4))
-		pod, err := generateBasePod(s.jobSpec, name, multiStageTestStepContainerName, []string{"/bin/bash", "-c", CommandPrefix + step.Commands}, image, resources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec())
+		pod, err := generateBasePod(s.jobSpec, name, multiStageTestStepContainerName, generateCommandFromScript(step.Commands), image, resources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec())
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -579,8 +577,8 @@ func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
 func injectPath(initial []string) []string {
 	var args []string
 	for _, arg := range initial {
-		if strings.HasPrefix(arg, CommandPrefix) {
-			args = append(args, fmt.Sprintf("%s%s\n%s", CommandPrefix, `export PATH="${PATH}:${CLI_DIR}"`, strings.TrimPrefix(arg, CommandPrefix)))
+		if strings.HasPrefix(arg, "echo") {
+			args = append(args, fmt.Sprintf("%s;%s", `export PATH="${PATH}:${CLI_DIR}"`, arg))
 		} else {
 			args = append(args, arg)
 		}

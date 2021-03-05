@@ -47,7 +47,7 @@
       - name: REPO_OWNER
         value: org
       - name: ENTRYPOINT_OPTIONS
-        value: '{"timeout":0,"grace_period":0,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand0"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
+        value: '{"timeout":0,"grace_period":0,"artifact_dir":"/logs/artifacts","args":["/bin/sh","-c","echo Y29tbWFuZDA= | base64 -d \u003e ci-operator-script.sh; chmod +x ci-operator-script.sh; ./ci-operator-script.sh"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
       - name: ARTIFACT_DIR
         value: /logs/artifacts
       - name: NAMESPACE
@@ -94,7 +94,7 @@
       env:
       - name: JOB_SPEC
       - name: SIDECAR_OPTIONS
-        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step0","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand0"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true}'
+        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step0","dry_run":false},"entries":[{"args":["/bin/sh","-c","echo Y29tbWFuZDA= | base64 -d \u003e ci-operator-script.sh; chmod +x ci-operator-script.sh; ./ci-operator-script.sh"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true}'
       image: sidecar
       name: sidecar
       resources: {}
@@ -193,7 +193,7 @@
       - name: REPO_OWNER
         value: org
       - name: ENTRYPOINT_OPTIONS
-        value: '{"timeout":0,"grace_period":0,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand1"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
+        value: '{"timeout":0,"grace_period":0,"artifact_dir":"/logs/artifacts","args":["/bin/sh","-c","echo Y29tbWFuZDE= | base64 -d \u003e ci-operator-script.sh; chmod +x ci-operator-script.sh; ./ci-operator-script.sh"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
       - name: ARTIFACT_DIR
         value: /logs/artifacts
       - name: NAMESPACE
@@ -240,7 +240,7 @@
       env:
       - name: JOB_SPEC
       - name: SIDECAR_OPTIONS
-        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step1","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand1"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true}'
+        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step1","dry_run":false},"entries":[{"args":["/bin/sh","-c","echo Y29tbWFuZDE= | base64 -d \u003e ci-operator-script.sh; chmod +x ci-operator-script.sh; ./ci-operator-script.sh"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true}'
       image: sidecar
       name: sidecar
       resources: {}
@@ -339,7 +339,7 @@
       - name: REPO_OWNER
         value: org
       - name: ENTRYPOINT_OPTIONS
-        value: '{"timeout":0,"grace_period":0,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand2"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
+        value: '{"timeout":0,"grace_period":0,"artifact_dir":"/logs/artifacts","args":["/bin/sh","-c","echo Y29tbWFuZDI= | base64 -d \u003e ci-operator-script.sh; chmod +x ci-operator-script.sh; ./ci-operator-script.sh"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
       - name: ARTIFACT_DIR
         value: /logs/artifacts
       - name: NAMESPACE
@@ -386,7 +386,7 @@
       env:
       - name: JOB_SPEC
       - name: SIDECAR_OPTIONS
-        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step2","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand2"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true}'
+        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step2","dry_run":false},"entries":[{"args":["/bin/sh","-c","echo Y29tbWFuZDI= | base64 -d \u003e ci-operator-script.sh; chmod +x ci-operator-script.sh; ./ci-operator-script.sh"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true}'
       image: sidecar
       name: sidecar
       resources: {}

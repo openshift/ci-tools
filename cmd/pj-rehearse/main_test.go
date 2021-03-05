@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	prowconfig "k8s.io/test-infra/prow/config"
 	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -21,6 +23,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
+	"github.com/openshift/ci-tools/pkg/config"
 )
 
 func init() {
@@ -156,4 +159,132 @@ type creatingClientWithCallBack struct {
 func (c *creatingClientWithCallBack) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
 	c.callback()
 	return c.Client.Create(ctx, obj, opts...)
+}
+
+func TestDetermineSubsetToRehearse(t *testing.T) {
+	allowUnexported := cmp.AllowUnexported(prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{}, prowconfig.Presubmit{})
+
+	testCases := []struct {
+		id                   string
+		presubmitsToRehearse []*prowconfig.Presubmit
+		rehearsalLimit       int
+		expected             []*prowconfig.Presubmit
+	}{
+		{
+			id: "under the limit - no changes expected",
+			presubmitsToRehearse: []*prowconfig.Presubmit{
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-1", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-2", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-3", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+			},
+			rehearsalLimit: 5,
+			expected: []*prowconfig.Presubmit{
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-1", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-2", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-3", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+			},
+		},
+		{
+			id: "equal with the limit - no changes expected",
+			presubmitsToRehearse: []*prowconfig.Presubmit{
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-1", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-2", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-3", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+			},
+			rehearsalLimit: 3,
+			expected: []*prowconfig.Presubmit{
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-1", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-2", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-3", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+			},
+		},
+		{
+			id: "over the limit (one source)- changes expected",
+			presubmitsToRehearse: []*prowconfig.Presubmit{
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-1", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-2", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-3", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-4", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-5", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-6", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-7", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-8", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-9", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-10", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+			},
+			rehearsalLimit: 5,
+			expected: []*prowconfig.Presubmit{
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-1", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-2", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-3", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-4", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-5", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+			},
+		},
+		{
+			id: "over the limit (multiple sources)- changes expected",
+			presubmitsToRehearse: []*prowconfig.Presubmit{
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-1", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-2", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-3", Labels: map[string]string{config.SourceTypeLabel: "changedPeriodic"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-4", Labels: map[string]string{config.SourceTypeLabel: "changedPeriodic"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-5", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedTemplates"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-6", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedTemplates"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-7", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedTemplates"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-8", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedTemplates"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-9", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedRegistry"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-10", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedRegistry"}}},
+			},
+			rehearsalLimit: 5,
+			expected: []*prowconfig.Presubmit{
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-1", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-10", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedRegistry"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-3", Labels: map[string]string{config.SourceTypeLabel: "changedPeriodic"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-5", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedTemplates"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-9", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedRegistry"}}},
+			},
+		},
+		{
+			id: "summary of the maximum allowed jobs per source is lower that the rehearse limit (rounding inherent in integer division)",
+			presubmitsToRehearse: []*prowconfig.Presubmit{
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-1", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-2", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-3", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-4", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-5", Labels: map[string]string{config.SourceTypeLabel: "changedPeriodic"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-6", Labels: map[string]string{config.SourceTypeLabel: "changedPeriodic"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-7", Labels: map[string]string{config.SourceTypeLabel: "changedPeriodic"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-8", Labels: map[string]string{config.SourceTypeLabel: "changedPeriodic"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-9", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedTemplates"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-10", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedTemplates"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-11", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedTemplates"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-12", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedTemplates"}}},
+			},
+			rehearsalLimit: 10,
+			expected: []*prowconfig.Presubmit{
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-1", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-10", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedTemplates"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-11", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedTemplates"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-12", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedTemplates"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-2", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-3", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-5", Labels: map[string]string{config.SourceTypeLabel: "changedPeriodic"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-6", Labels: map[string]string{config.SourceTypeLabel: "changedPeriodic"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-7", Labels: map[string]string{config.SourceTypeLabel: "changedPeriodic"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-9", Labels: map[string]string{config.SourceTypeLabel: "randomJobsForChangedTemplates"}}},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.id, func(t *testing.T) {
+			actual := determineSubsetToRehearse(tc.presubmitsToRehearse, tc.rehearsalLimit)
+			sort.Slice(actual, func(a, b int) bool { return actual[a].Name < actual[b].Name })
+
+			if diff := cmp.Diff(actual, tc.expected, allowUnexported); diff != "" {
+				t.Errorf("Presubmit list differs from expected: %s", diff)
+			}
+
+		})
+	}
 }

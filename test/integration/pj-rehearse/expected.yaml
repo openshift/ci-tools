@@ -153,6 +153,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedPeriodic
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-e2e
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -283,6 +284,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedPeriodic
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-no-ciop
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -355,6 +357,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedPeriodic
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-periodic-with-unresolved
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -492,6 +495,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedPeriodic
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-periodic-with-unresolved
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -676,6 +680,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedCiopConfigs
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-custom
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -788,6 +793,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedCiopConfigs
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-images
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -893,6 +899,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedClusterProfiles
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-cluster-profile-test-profile
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -1021,6 +1028,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedPresubmit
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-cmd
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -1126,6 +1134,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedPresubmit
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-e2e-aws
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -1254,6 +1263,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedPresubmit
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-integration
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -1359,6 +1369,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedPresubmit
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-cmd
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -1464,6 +1475,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedPresubmit
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-e2e-aws
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -1593,6 +1605,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: randomJobsForChangedRegistry
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -1758,6 +1771,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedPresubmit
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage5
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -1886,6 +1900,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedCiopConfigs
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-unit
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"

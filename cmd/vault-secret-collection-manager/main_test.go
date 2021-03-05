@@ -118,6 +118,14 @@ func TestSecretCollectionManager(tt *testing.T) {
 			expectedVaultPolicies: []string{"default", "root"},
 		},
 		{
+			name:                  "User 1 creates a colletion with an invalid name",
+			user:                  "user-1",
+			request:               mustNewRequest(http.MethodPut, fmt.Sprintf("http://%s/secretcollection/name%%20withIllegalComponents", managerListenAddr)),
+			expectedStatusCode:    400,
+			expectedVaultPolicies: []string{"default", "root"},
+			expectedBody:          "name \"name withIllegalComponents\" does not match regex '^[a-z0-9-]+$'\n",
+		},
+		{
 			name:               "User 1 creates collection",
 			user:               "user-1",
 			request:            mustNewRequest(http.MethodPut, fmt.Sprintf("http://%s/secretcollection/mine-alone", managerListenAddr)),

@@ -1,0 +1,94 @@
+table {
+    background: #fff;
+    border-radius: 2px;
+    box-shadow: 0 0 4px #e0e0e0;
+    border-collapse: collapse;
+    width: 100%;
+}
+
+tr {
+  border-top: 1px solid #a4a4a4;
+}
+
+tr:hover {
+  color: #212529;
+  background-color: rgba(0, 0, 0, 0.075);
+}
+
+td, th {
+    text-align: left;
+    padding: 8px;
+}
+
+th {
+    color: #333;
+}
+
+button {
+  border: none;
+  display: inline-block;
+  padding: 8px 16px;
+  vertical-align: middle;
+  overflow: hidden;
+  text-decoration: none;
+  text-align: center;
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 14px;
+  background-color: #009688;
+}
+
+button:hover {
+  color: #000!important;
+  background-color: #9e9e9e!important;
+}
+
+body {
+    line-height: 1.4;
+    background: #f4f4f4;
+    color: #444;
+    font-family: 'Roboto', sans-serif !important;
+    font-size: 16px !important;
+}
+
+.right-aligned {
+  position: absolute;
+  right: 8px;
+  padding: 10px;
+}
+
+.create-dialog {
+  position: fixed;
+  z-index: 1;
+  padding-top: 100px;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(0,0,0,0.4);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.create-dialog-content {
+  margin-left: auto;
+  margin-right: auto;
+  background-color: #fefefe;
+  width: 50%;
+  padding: 20px;
+  text-align: center;
+}
+
+.hidden {
+  display: none;
+}
+
+.error {
+  padding-top: 5px;
+  padding-bottom: 5px;
+  background: #F44336;
+  color: #fff;
+  animation: .2s opac forwards;
+}

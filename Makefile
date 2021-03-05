@@ -63,7 +63,7 @@ lint:
 #
 # Example:
 #   make test
-test:
+test: cmd/vault-secret-collection-manager/index.js
 	TESTFLAGS="$(TESTFLAGS)" hack/test-go.sh
 .PHONY: test
 
@@ -79,7 +79,7 @@ clean:
 #
 # Example:
 #   make format
-format:
+format: cmd/vault-secret-collection-manager/index.js
 	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )
 .PHONY: format
 
@@ -120,12 +120,15 @@ install:
 	go install ./cmd/...
 .PHONY: install
 
+cmd/vault-secret-collection-manager/index.js: cmd/vault-secret-collection-manager/index.ts
+	tsc cmd/vault-secret-collection-manager/index.ts
+
 # Install Go binaries to $GOPATH/bin.
 # Set version and name variables.
 #
 # Example:
 #   make production-install
-production-install:
+production-install: cmd/vault-secret-collection-manager/index.js
 	hack/install.sh
 .PHONY: production-install
 
@@ -134,7 +137,7 @@ production-install:
 #
 # Example:
 #   make production-install
-race-install:
+race-install: cmd/vault-secret-collection-manager/index.js
 	hack/install.sh race
 
 # Run integration tests.
@@ -207,6 +210,13 @@ pr-deploy-backporter:
 	oc  --context app.ci --as system:admin get configmap plugins -n ci -o json | eval $(kubeExport) | oc  --context app.ci --as system:admin create -f - -n ci-tools-$(PULL_REQUEST)
 	oc  --context app.ci --as system:admin get secret bugzilla-credentials-openshift-bugzilla-robot -n ci -o json | eval $(kubeExport) | oc  --context app.ci --as system:admin create -f - -n ci-tools-$(PULL_REQUEST)
 	echo "server is at https://$$( oc  --context app.ci --as system:admin get route bp-server -n ci-tools-$(PULL_REQUEST) -o jsonpath={.spec.host} )"
+.PHONY: pr-deploy-backporter
+
+pr-deploy-vault-secret-manager:
+	$(eval USER=$(shell curl --fail -Ss https://api.github.com/repos/openshift/ci-tools/pulls/$(PULL_REQUEST)|jq -r .head.user.login))
+	$(eval BRANCH=$(shell curl --fail -Ss https://api.github.com/repos/openshift/ci-tools/pulls/$(PULL_REQUEST)|jq -r .head.ref))
+	oc --context app.ci --as system:admin process -p USER=$(USER) -p BRANCH=$(BRANCH) -p PULL_REQUEST=$(PULL_REQUEST) -f hack/pr-deploy-vault-secret-manager.yaml | oc  --context app.ci --as system:admin apply -f -
+	echo "server is at https://$$( oc  --context app.ci --as system:admin get route vault-secret-collection-manager -n ci-tools-$(PULL_REQUEST) -o jsonpath={.spec.host} )"
 .PHONY: pr-deploy-backporter
 
 check-breaking-changes:

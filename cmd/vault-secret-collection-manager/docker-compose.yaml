@@ -9,6 +9,7 @@ services:
     network_mode: host
   oauth2-proxy:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.0.1
+    entrypoint: ["/bin/sh", "-c", "set -e && cd /tmp && until wget http://127.0.0.1:5556/dex/.well-known/openid-configuration; do sleep 1; done && cd - && exec /bin/oauth2-proxy $$@"]
     command: --provider oidc --provider-display-name "My OIDC Provider" --client-id oauth2-proxy --client-secret proxy --redirect-url http://127.0.0.1:4180/oauth2/callback --oidc-issuer-url http://127.0.0.1:5556/dex --cookie-secure=false --cookie-secret=G-f-WrT81XwL6Omm3nhuJw== --email-domain=* --upstream http://127.0.0.1:8080
     network_mode: host
   vault:

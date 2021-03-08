@@ -70,6 +70,15 @@ type fieldGenerator struct {
 	Cmd  string `json:"cmd,omitempty"`
 }
 
+// client is a subset of the Bitwarden client to allow different targets.
+type client interface {
+	SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error
+	SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) error
+	SetPassword(itemName string, password []byte) error
+	UpdateNotesOnItem(itemName string, notes string) error
+	Logout() ([]byte, error)
+}
+
 func parseOptions() options {
 	var o options
 	flag.CommandLine.BoolVar(&o.dryRun, "dry-run", true, "Deprecated, equivalent to --target file")
@@ -257,9 +266,8 @@ func setDefaultsOnCreate(item *bitwarden.Item) error {
 	return nil
 }
 
-func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
+func updateSecrets(bwItems []bitWardenItem, client client) error {
 	var errs []error
-	bwClient.OnCreate(setDefaultsOnCreate)
 	for _, bwItem := range bwItems {
 		logger := logrus.WithField("item", bwItem.ItemName)
 		for _, field := range bwItem.Fields {
@@ -275,7 +283,7 @@ func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 				errs = append(errs, errors.New(msg))
 				continue
 			}
-			if err := bwClient.SetFieldOnItem(bwItem.ItemName, field.Name, out); err != nil {
+			if err := client.SetFieldOnItem(bwItem.ItemName, field.Name, out); err != nil {
 				msg := "failed to upload field"
 				logger.WithError(err).Error(msg)
 				errs = append(errs, errors.New(msg))
@@ -295,7 +303,7 @@ func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 				errs = append(errs, errors.New(msg))
 				continue
 			}
-			if err := bwClient.SetAttachmentOnItem(bwItem.ItemName, attachment.Name, out); err != nil {
+			if err := client.SetAttachmentOnItem(bwItem.ItemName, attachment.Name, out); err != nil {
 				msg := "failed to upload attachment"
 				logger.WithError(err).Error(msg)
 				errs = append(errs, errors.New(msg))
@@ -313,7 +321,7 @@ func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 				logger.WithError(err).Error(msg)
 				errs = append(errs, errors.New(msg))
 			} else {
-				if err := bwClient.SetPassword(bwItem.ItemName, out); err != nil {
+				if err := client.SetPassword(bwItem.ItemName, out); err != nil {
 					msg := "failed to upload password"
 					logger.WithError(err).Error(msg)
 					errs = append(errs, errors.New(msg))
@@ -329,7 +337,7 @@ func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 				"notes": bwItem.Notes,
 			})
 			logger.Info("adding notes")
-			if err := bwClient.UpdateNotesOnItem(bwItem.ItemName, bwItem.Notes); err != nil {
+			if err := client.UpdateNotesOnItem(bwItem.ItemName, bwItem.Notes); err != nil {
 				msg := "failed to update notes"
 				logger.WithError(err).Error(msg)
 				errs = append(errs, errors.New(msg))
@@ -371,7 +379,7 @@ func main() {
 		return
 	}
 
-	var client bitwarden.Client
+	var client client
 	logrus.RegisterExitHandler(func() {
 		if client == nil {
 			return
@@ -401,13 +409,14 @@ func main() {
 			logrus.WithError(err).Fatal("failed to create dry-run mode client")
 		}
 	case targetBitwarden:
-		var err error
-		client, err = bitwarden.NewClient(o.bwUser, o.bwPassword, func(s string) {
+		bw, err := bitwarden.NewClient(o.bwUser, o.bwPassword, func(s string) {
 			secrets.Insert(s)
 		})
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to create Bitwarden client")
 		}
+		bw.OnCreate(setDefaultsOnCreate)
+		client = bw
 	default:
 		panic("invalid target")
 	}

@@ -1,13 +1,40 @@
 # CI-Secret-Generator
 
-This tool aims to automate the process of deployment of secrets to Bitwarden while also providing a platform to document the commands used to generate these secrets. 
+This tool automates the process of deployment of secrets while also providing a
+platform to document the commands used to generate them.
 
-## Args and config.yaml
+## Target
 
-The tool expects a configuration like the one below which specifies the mapping between the `itemName`+`attributeName`/`attachmentName`/`fieldName` and the command used to generate the secret.
-The output of the command is stored into Bitwarden as the contents of the field/attachment/password.
+Different output targets are supported, which can be specified with the
+`--target` command-line option.
 
-`password` is the only valid name which is accepted for an attribute
+### `validate`
+
+Verifies that the configuration is well-formed in respect to itself and the
+[`ci-secret-bootstrap`](../ci-secret-bootstrap) configuration, which has to be
+specified with the `--bootstrap-config` parameter.
+
+### `file`
+
+Executes the input commands and writes debug output to a local file.  A
+temporary file is used unless the `--output-file` parameter is specified.
+
+### `bitwarden`
+
+Currently the secret back end used in production.  Secrets are stored in
+field/attachment/password elements in Bitwarden depending on their size
+requirements.
+
+For attributes, `password` is the only valid name which is accepted.
+
+## Arguments and `config.yaml`
+
+The tool expects a configuration like the one below which specifies the mapping
+between the `itemName`+`attributeName`/`attachmentName`/`fieldName` and the
+command used to generate the content of the item.
+
+The output of the command is stored into the secret back end as the contents of
+the field/attachment/password.
 
 ```yaml
 - item_name: first_item
@@ -23,14 +50,17 @@ The output of the command is stored into Bitwarden as the contents of the field/
     cmd: echo -n field2_contents
 ```
 
-The above configuration tells the tool to use the following data to
-create two Bitwarden entries - 'first_item' and 'second_item'
+The above configuration tells the tool to use the following data to create two
+entries - 'first_item' and 'second_item'.
 
-* `field1` of `first_item` would be `secret`, and the `password` of `first_item` would be `new_password` in Bitwarden with item-name `first_item`,
+* `field1` of `first_item` will be `secret`, and the `password` of `first_item`
+  will be `new_password` with item-name `first_item`,
 
-* `field2` of `second_item`, would be `field2_contents` in Bitwarden with item-name `second_item`
+* `field2` of `second_item` will be `field2_contents` with item-name
+  `second_item`
 
-Parameters can be passed in to decrease repetition in the configuration file by adding the `params` dictionary in the configuration file.  E.g.:
+Parameters can be passed in to decrease repetition in the configuration file by
+adding a `params` dictionary to the entry:
 
 ```yaml
 - item_name: item$(cluster)$(env)
@@ -45,7 +75,12 @@ Parameters can be passed in to decrease repetition in the configuration file by 
       - prod
       - staging
 ```
-This would create four items with item names `itembuild01prod`, `itembuild02prod`, `itembuild01staging`, and `itembuild02staging`, and the corresponding `field1` which would contain the output of the corresponding `echo`, where the `$(paramname)` would be replaced with the values of the corresponding `paramname`.
+
+This will create four items with item names `itembuild01prod`,
+`itembuild02prod`, `itembuild01staging`, and `itembuild02staging`, and the
+corresponding `field1` which will contain the output of the corresponding
+`echo`, where the `$(paramname)` will be replaced with the values of the
+corresponding `paramname`.
 
 ## Run
 

@@ -30,17 +30,26 @@ const defaultBwOrganization = "05ac4fbe-11d1-44df-bb29-a772017c6631"
 // OpenShift TestPlatform (CI)
 var defaultBwCollections = []string{"0247722f-3ab3-4fd4-a01d-a983013f3159"}
 
+const (
+	targetValidate  = "validate"
+	targetFile      = "file"
+	targetBitwarden = "bitwarden"
+)
+
 type options struct {
 	logLevel            string
 	configPath          string
 	bootstrapConfigPath string
-	outputFile          string
-	bwUser              string
-	dryRun              bool
-	validate            bool
-	validateOnly        bool
-	bwPasswordPath      string
-	maxConcurrency      int
+	target              string
+	// `file` target
+	outputFile string
+	// `bitwarden` target
+	bwUser         string
+	bwPasswordPath string
+	dryRun         bool
+	validate       bool
+	validateOnly   bool
+	maxConcurrency int
 
 	config          []bitWardenItem
 	bootstrapConfig secretbootstrap.Config
@@ -63,12 +72,14 @@ type fieldGenerator struct {
 
 func parseOptions() options {
 	var o options
-	flag.CommandLine.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with bw command")
+	flag.CommandLine.BoolVar(&o.dryRun, "dry-run", true, "Deprecated, equivalent to --target file")
 	flag.CommandLine.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
 	flag.CommandLine.StringVar(&o.bootstrapConfigPath, "bootstrap-config", "", "Path to the config file used for bootstrapping cluster secrets after using this tool.")
 	flag.CommandLine.BoolVar(&o.validate, "validate", true, "Validate that the items created from this tool are used in bootstrapping")
-	flag.CommandLine.BoolVar(&o.validateOnly, "validate-only", false, "If the tool should exit after the validation")
-	flag.CommandLine.StringVar(&o.outputFile, "output-file", "", "output file for dry-run mode")
+	flag.CommandLine.BoolVar(&o.validateOnly, "validate-only", false, "Deprecated, equivalent to --target validate")
+	// TODO make `file` the default
+	flag.CommandLine.StringVar(&o.target, "target", "", fmt.Sprintf("Secret back end where secrets are created (options: %q, %q, %q)", targetValidate, targetFile, targetBitwarden))
+	flag.CommandLine.StringVar(&o.outputFile, "output-file", "", `output file when target is "file"`)
 	flag.CommandLine.StringVar(&o.bwUser, "bw-user", "", "Username to access BitWarden.")
 	flag.CommandLine.StringVar(&o.bwPasswordPath, "bw-password-path", "", "Path to a password file to access BitWarden.")
 	flag.CommandLine.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
@@ -85,13 +96,31 @@ func (o *options) validateOptions() error {
 		return fmt.Errorf("invalid log level specified: %w", err)
 	}
 	logrus.SetLevel(level)
-	if !(o.validateOnly || o.dryRun) {
+	// TODO for backwards compatibility, remove
+	if o.validateOnly {
+		if o.target != "" {
+			return errors.New("--validate-only and --target are mutually exclusive")
+		}
+		o.target = targetValidate
+	} else if !o.dryRun {
+		if o.target != "" {
+			return errors.New("--dry-run=false and --target are mutually exclusive")
+		}
+		o.target = targetBitwarden
+	} else if o.target == "" {
+		o.target = targetFile
+	}
+	switch o.target {
+	case targetBitwarden:
 		if o.bwUser == "" {
 			return errors.New("--bw-user is empty")
 		}
 		if o.bwPasswordPath == "" {
 			return errors.New("--bw-password-path is empty")
 		}
+	case targetValidate, targetFile:
+	default:
+		return fmt.Errorf("invalid target: %s", o.target)
 	}
 	if o.configPath == "" {
 		return errors.New("--config is empty")
@@ -323,6 +352,7 @@ func main() {
 	if err := o.completeOptions(secrets); err != nil {
 		logrus.WithError(err).Fatal("failed to complete options.")
 	}
+	logrus.Infof("Starting secret generation with target %q", o.target)
 	processedBwItems, err := processBwParameters(o.config)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to parse parameters.")
@@ -337,19 +367,22 @@ func main() {
 			logrus.Fatal("Failed to validate secret entries.")
 		}
 	}
-	if o.validateOnly {
-		logrus.Info("Validation succeeded and --validate-only is set, exiting")
+	if o.target == targetValidate {
 		return
 	}
 
 	var client bitwarden.Client
 	logrus.RegisterExitHandler(func() {
+		if client == nil {
+			return
+		}
 		if _, err := client.Logout(); err != nil {
 			logrus.WithError(err).Error("failed to logout.")
 		}
 	})
 	defer logrus.Exit(0)
-	if o.dryRun {
+	switch o.target {
+	case targetFile:
 		var f *os.File
 		if o.outputFile == "" {
 			f, err = ioutil.TempFile("", "ci-secret-generator")
@@ -367,7 +400,7 @@ func main() {
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to create dry-run mode client")
 		}
-	} else {
+	case targetBitwarden:
 		var err error
 		client, err = bitwarden.NewClient(o.bwUser, o.bwPassword, func(s string) {
 			secrets.Insert(s)
@@ -375,6 +408,8 @@ func main() {
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to create Bitwarden client")
 		}
+	default:
+		panic("invalid target")
 	}
 
 	// Upload the output to bitwarden

@@ -68,6 +68,10 @@ func AddToManager(mgr manager.Manager,
 
 	buildClusters := sets.String{}
 	for buildClusterName, buildClusterManager := range buildClusterManagers {
+		if buildClusterName == "api.ci" {
+			log.Debug("distribution to api.ci is disabled")
+			continue
+		}
 		buildClusters.Insert(buildClusterName)
 		r.buildClusterClients[buildClusterName] = imagestreamtagwrapper.MustNew(buildClusterManager.GetClient(), buildClusterManager.GetCache())
 	}

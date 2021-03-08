@@ -83,7 +83,7 @@ func (o *options) validateOptions() error {
 		return fmt.Errorf("invalid log level specified: %w", err)
 	}
 	logrus.SetLevel(level)
-	if !o.validateOnly {
+	if !(o.validateOnly || o.dryRun) {
 		if o.bwUser == "" {
 			return errors.New("--bw-user is empty")
 		}
@@ -101,7 +101,7 @@ func (o *options) validateOptions() error {
 }
 
 func (o *options) completeOptions(secrets sets.String) error {
-	if !o.validateOnly {
+	if o.bwPasswordPath != "" {
 		pwBytes, err := ioutil.ReadFile(o.bwPasswordPath)
 		if err != nil {
 			return err
@@ -327,14 +327,12 @@ func main() {
 	}
 
 	bitWardenContexts := bitwardenContextsFor(processedBwItems)
-	if err := validateContexts(bitWardenContexts, o.bootstrapConfig); err != nil {
-		for _, err := range err.Errors() {
-			logrus.WithError(err).Error("Invalid entry")
-		}
-		if o.validate {
+	if o.validate {
+		if err := validateContexts(bitWardenContexts, o.bootstrapConfig); err != nil {
+			for _, err := range err.Errors() {
+				logrus.WithError(err).Error("Invalid entry")
+			}
 			logrus.Fatal("Failed to validate secret entries.")
-		} else {
-			logrus.Warn("Failed to validate secret entries.")
 		}
 	}
 	if o.validateOnly {

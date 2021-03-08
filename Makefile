@@ -121,7 +121,7 @@ install:
 .PHONY: install
 
 cmd/vault-secret-collection-manager/index.js: cmd/vault-secret-collection-manager/index.ts
-	tsc cmd/vault-secret-collection-manager/index.ts
+	tsc --lib ES2015,dom cmd/vault-secret-collection-manager/index.ts
 
 # Install Go binaries to $GOPATH/bin.
 # Set version and name variables.
@@ -216,6 +216,7 @@ pr-deploy-vault-secret-manager:
 	$(eval USER=$(shell curl --fail -Ss https://api.github.com/repos/openshift/ci-tools/pulls/$(PULL_REQUEST)|jq -r .head.user.login))
 	$(eval BRANCH=$(shell curl --fail -Ss https://api.github.com/repos/openshift/ci-tools/pulls/$(PULL_REQUEST)|jq -r .head.ref))
 	oc --context app.ci --as system:admin process -p USER=$(USER) -p BRANCH=$(BRANCH) -p PULL_REQUEST=$(PULL_REQUEST) -f hack/pr-deploy-vault-secret-manager.yaml | oc  --context app.ci --as system:admin apply -f -
+	kubectl patch  -n vault rolebinding registry-viewer --type=json --patch='[{"op":"replace", "path":"/subjects/1/namespace", "value":"ci-tools-$(PULL_REQUEST)"}]'
 	echo "server is at https://$$( oc  --context app.ci --as system:admin get route vault-secret-collection-manager -n ci-tools-$(PULL_REQUEST) -o jsonpath={.spec.host} )"
 .PHONY: pr-deploy-backporter
 

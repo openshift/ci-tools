@@ -1,33 +1,42 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head><title>Secret Collection Management</title></head>
-  <body>
-    <link rel="stylesheet" href="style.css">
-    <script type="application/json" id="secretcollections">
+
+<head>
+  <title>Secret Collection Management</title>
+</head>
+
+<body>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="style.css">
+  <script type="application/json" id="secretcollections">
       {{ . }}
     </script>
-    <table style="width:100%" id="secretcollectionTable">
-      <tr>
-        <thead>
-          <th>Name</th>
-          <th>Path</th>
-          <th>Members</th>
-        </thead>
-        <tbody id="secretCollectionTableBody"></tbody>
-      </tr>
-    </table>
-    <button type="button" class="right-aligned" id="newCollectionButton">New Collection</button>
-    <div id="createCollection" class="create-dialog hidden">
-      <div id="createCollectionError" class="create-dialog-content error hidden"></div>
-      <div id="createCollectionContent" class="create-dialog-content">
-        <div id="createCollectionInput">
-          <label for="name">Name:</label>
-          <input type="text" id="name" name="name"><br><br>
-          <input type="submit" id="abortCreateCollectionButton" value="Cancel">
-          <input type="submit" id="createCollectionButton" value="Submit">
-        </div>
+  <table style="width:100%" id="secretcollectionTable">
+    <tr>
+      <thead>
+        <th>Name</th>
+        <th>Path</th>
+        <th>Members</th>
+        <th></th>
+      </thead>
+      <tbody id="secretCollectionTableBody"></tbody>
+    </tr>
+  </table>
+  <button type="button" class="new-collection-button  right-aligned" id="newCollectionButton">New Collection</button>
+  <div id="modalContainer" class="create-dialog hidden">
+    <div id="modalError" class="create-dialog-content error hidden"></div>
+    <div id="modalContent" class="create-dialog-content">
+      <div id="createCollectionInput" class="hidden">
+        <label for="name">Name:</label>
+        <input type="text" id="newSecretCollectionName" name="name"><br><br>
+        <button type="button" id="abortCreateCollectionButton" class="grey-button">Cancel</button>
+        <button type="button" id="createCollectionButton" class="green-button">Submit</button>
+      </div>
+      <div id="deleteConfirmation" class="hidden">
       </div>
     </div>
-    <script src="index.js"></script>
-  </body>
+  </div>
+  <script src="index.js"></script>
+</body>
+
 </html>

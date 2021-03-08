@@ -24,19 +24,34 @@ th {
     color: #333;
 }
 
+.new-collection-button {
+  background-color: #009688;
+}
+
+.grey-button {
+  background: #616161;
+}
+
+.red-button {
+  background: #F44336;
+}
+
+.green-button {
+  background: #4CAF50;
+}
+
 button {
   border: none;
-  display: inline-block;
-  padding: 8px 16px;
-  vertical-align: middle;
   overflow: hidden;
   text-decoration: none;
   text-align: center;
-  color: #fff;
-  cursor: pointer;
   white-space: nowrap;
   font-size: 14px;
-  background-color: #009688;
+  padding: 8px 16px;
+  cursor: pointer;
+  color: #fff;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 button:hover {

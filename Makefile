@@ -121,7 +121,7 @@ install:
 .PHONY: install
 
 cmd/vault-secret-collection-manager/index.js: cmd/vault-secret-collection-manager/index.ts
-	tsc cmd/vault-secret-collection-manager/index.ts
+	tsc --lib ES2015,dom cmd/vault-secret-collection-manager/index.ts
 
 # Install Go binaries to $GOPATH/bin.
 # Set version and name variables.

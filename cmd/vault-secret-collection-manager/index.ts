@@ -106,7 +106,7 @@ function fetchAndRenderSecretCollections() {
 }
 
 function createSecretCollection() {
-  const input = document.getElementById('name') as HTMLInputElement;
+  const input = document.getElementById('newSecretCollectionName') as HTMLInputElement;
   const name = input.value;
   input.value = '';
   fetch(`${window.location.protocol}//${window.location.host}/secretcollection/${name}`, { method: 'PUT' })
@@ -124,8 +124,9 @@ function createSecretCollection() {
 }
 
 document.getElementById('newCollectionButton')?.addEventListener('click', () => {
-  document.getElementById('createCollectionInput').classList.remove('hidden');
+  document.getElementById('createCollectionInput')?.classList.remove('hidden');
   showModal();
+  document.getElementById('newSecretCollectionName')?.focus();
 });
 
 document.getElementById('abortCreateCollectionButton')?.addEventListener('click', () => hideModal());

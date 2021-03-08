@@ -53,6 +53,7 @@ require (
 	github.com/sirupsen/logrus v1.6.0
 	github.com/slack-go/slack v0.7.3
 	github.com/spf13/afero v1.4.1
+	go.uber.org/zap v1.15.0
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 	google.golang.org/api v0.32.0
 	gopkg.in/fsnotify.v1 v1.4.7

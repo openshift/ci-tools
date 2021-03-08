@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"sort"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
+	"github.com/openshift/ci-tools/pkg/testhelper"
+	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
 func TestProcessBwParameters(t *testing.T) {
@@ -390,5 +393,105 @@ func TestBitwardenContextsFor(t *testing.T) {
 		if diff := cmp.Diff(testCase.out, bitwardenContextsFor(testCase.in)); diff != "" {
 			t.Errorf("got incorrect output: %v", diff)
 		}
+	}
+}
+
+func TestVault(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	vault, err := vaultclient.New("http://"+testhelper.Vault(ctx, testhelper.NewT(ctx, t)), testhelper.VaultTestingRootToken)
+	if err != nil {
+		t.Fatalf("failed to create Vault client: %v", err)
+	}
+	client := newVaultClient(vault, "secret/prefix/")
+	for _, tc := range []struct {
+		name     string
+		config   []bitWardenItem
+		expected map[string]string
+	}{{
+		name: "single item",
+		config: []bitWardenItem{{
+			ItemName: "single_item",
+			Attachments: []fieldGenerator{{
+				Name: "name",
+				Cmd:  "printf 'name content'",
+			}},
+		}},
+		expected: map[string]string{
+			"secret/prefix/single_item/name": "name content",
+		},
+	}, {
+		name: "multiple items with the same name",
+		config: []bitWardenItem{{
+			ItemName: "multiple_items",
+			Attachments: []fieldGenerator{{
+				Name: "name0",
+				Cmd:  "printf 'name0 content'",
+			}, {
+				Name: "name1",
+				Cmd:  "printf 'name1 content'",
+			}},
+		}},
+		expected: map[string]string{
+			"secret/prefix/multiple_items/name0": "name0 content",
+			"secret/prefix/multiple_items/name1": "name1 content",
+		},
+	}, {
+		name: "multiple items with the different names and types",
+		config: []bitWardenItem{{
+			ItemName: "attachment",
+			Attachments: []fieldGenerator{{
+				Name: "name",
+				Cmd:  "printf 'attachment content'",
+			}},
+		}, {
+			ItemName: "field",
+			Fields: []fieldGenerator{{
+				Name: "name",
+				Cmd:  "printf 'field content'",
+			}},
+		}, {
+			ItemName: "password",
+			Password: "printf 'password content'",
+		}, {
+			ItemName: "notes",
+			Notes:    "notes content",
+		}},
+		expected: map[string]string{
+			"secret/prefix/attachment/name":   "attachment content",
+			"secret/prefix/field/name":        "field content",
+			"secret/prefix/password/password": "password content",
+			"secret/prefix/notes/notes":       "notes content",
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				for k := range tc.expected {
+					if err := vault.DestroyKVIrreversibly(k); err != nil {
+						t.Errorf("failed to delete key %q: %v", k, err)
+					}
+				}
+			}()
+			if err := updateSecrets(tc.config, client); err != nil {
+				t.Errorf("failed to update secrets: %v", err)
+			}
+			list, err := vault.ListKV("secret")
+			if err != nil {
+				t.Errorf("failed to list Vault contents: %v", err)
+			}
+			if diff := cmp.Diff(list, []string{"prefix/"}); diff != "" {
+				t.Errorf("unexpected secret list: %s", diff)
+			}
+			for k, v := range tc.expected {
+				secret, err := vault.GetKV(k)
+				if err != nil {
+					t.Errorf("failed to get key %q: %v", k, err)
+				}
+				expected := map[string]string{"content": v}
+				if diff := cmp.Diff(secret.Data, expected); diff != "" {
+					t.Errorf("unexpected secret content: %s", diff)
+				}
+			}
+		})
 	}
 }

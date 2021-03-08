@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/bitwarden"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
+	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
 // CoreOS / OpenShift
@@ -34,6 +36,7 @@ const (
 	targetValidate  = "validate"
 	targetFile      = "file"
 	targetBitwarden = "bitwarden"
+	targetVault     = "vault"
 )
 
 type options struct {
@@ -46,6 +49,10 @@ type options struct {
 	// `bitwarden` target
 	bwUser         string
 	bwPasswordPath string
+	// `vault` target
+	vaultServer    string
+	vaultToken     string
+	vaultPrefix    string
 	dryRun         bool
 	validate       bool
 	validateOnly   bool
@@ -79,6 +86,41 @@ type client interface {
 	Logout() ([]byte, error)
 }
 
+// vaultClient is an adapter for the old Bitwarden client to target Vault.
+// All item types are instead created in a directory hierarchy, as Vault is a
+// simple key/value store.
+type vaultClient struct {
+	vaultclient.VaultClient
+	prefix string
+}
+
+func newVaultClient(c *vaultclient.VaultClient, prefix string) client {
+	return &vaultClient{VaultClient: *c, prefix: prefix}
+}
+
+func (c *vaultClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {
+	return c.setItem(itemName, fieldName, string(fieldValue))
+}
+
+func (c *vaultClient) SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) error {
+	return c.setItem(itemName, attachmentName, string(fileContents))
+}
+
+func (c *vaultClient) SetPassword(itemName string, password []byte) error {
+	return c.setItem(itemName, "password", string(password))
+}
+
+func (c *vaultClient) UpdateNotesOnItem(itemName string, notes string) error {
+	return c.setItem(itemName, "notes", notes)
+}
+
+func (*vaultClient) Logout() ([]byte, error) { return nil, nil }
+
+func (c *vaultClient) setItem(path, field string, content string) error {
+	path = c.prefix + filepath.Join(path, field)
+	return c.UpsertKV(path, map[string]string{"content": content})
+}
+
 func parseOptions() options {
 	var o options
 	flag.CommandLine.BoolVar(&o.dryRun, "dry-run", true, "Deprecated, equivalent to --target file")
@@ -87,10 +129,13 @@ func parseOptions() options {
 	flag.CommandLine.BoolVar(&o.validate, "validate", true, "Validate that the items created from this tool are used in bootstrapping")
 	flag.CommandLine.BoolVar(&o.validateOnly, "validate-only", false, "Deprecated, equivalent to --target validate")
 	// TODO make `file` the default
-	flag.CommandLine.StringVar(&o.target, "target", "", fmt.Sprintf("Secret back end where secrets are created (options: %q, %q, %q)", targetValidate, targetFile, targetBitwarden))
+	flag.CommandLine.StringVar(&o.target, "target", "", fmt.Sprintf("Secret back end where secrets are created (options: %q, %q, %q, %q)", targetValidate, targetFile, targetBitwarden, targetVault))
 	flag.CommandLine.StringVar(&o.outputFile, "output-file", "", `output file when target is "file"`)
 	flag.CommandLine.StringVar(&o.bwUser, "bw-user", "", "Username to access BitWarden.")
 	flag.CommandLine.StringVar(&o.bwPasswordPath, "bw-password-path", "", "Path to a password file to access BitWarden.")
+	flag.CommandLine.StringVar(&o.vaultServer, "vault-addr", "", "Address of the Vault server")
+	flag.CommandLine.StringVar(&o.vaultPrefix, "vault-prefix", "", "Prefix for Vault keys, will be prepended to each item's name")
+	flag.CommandLine.StringVar(&o.vaultToken, "vault-token", "", "Path to a file containing the Vault token to use for authentication")
 	flag.CommandLine.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	flag.CommandLine.IntVar(&o.maxConcurrency, "concurrency", 1, "Maximum number of concurrent in-flight goroutines to BitWarden.")
 	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
@@ -126,6 +171,16 @@ func (o *options) validateOptions() error {
 		}
 		if o.bwPasswordPath == "" {
 			return errors.New("--bw-password-path is empty")
+		}
+	case targetVault:
+		if o.vaultServer == "" {
+			return errors.New("--vault-server is empty")
+		}
+		if o.vaultToken == "" {
+			return errors.New("--vault-token is empty")
+		}
+		if o.vaultPrefix == "" {
+			return errors.New("--vault-prefix is empty")
 		}
 	case targetValidate, targetFile:
 	default:
@@ -417,6 +472,16 @@ func main() {
 		}
 		bw.OnCreate(setDefaultsOnCreate)
 		client = bw
+	case targetVault:
+		token, err := ioutil.ReadFile(o.vaultToken)
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to read Vault token")
+		}
+		vault, err := vaultclient.New(o.vaultServer, strings.TrimSpace(string(token)))
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to create Vault client")
+		}
+		client = newVaultClient(vault, o.vaultPrefix)
 	default:
 		panic("invalid target")
 	}

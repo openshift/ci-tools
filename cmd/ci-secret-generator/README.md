@@ -27,6 +27,20 @@ requirements.
 
 For attributes, `password` is the only valid name which is accepted.
 
+### `vault`
+
+Secrets are stored in a subspace of a Vault key/value store.  Because there are
+no size limitations, all field types are stored in the same way.
+
+The location where each item is stored is determined as follows in shell
+notation, where `prefix` is the value specified on the command line
+(`--vault-prefix`) and `item_name` and `name` are the values in the
+configuration file:
+
+```sh
+${prefix}${item_name}/${name}
+```
+
 ## Arguments and `config.yaml`
 
 The tool expects a configuration like the one below which specifies the mapping

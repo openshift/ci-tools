@@ -160,9 +160,50 @@ func TestReplacer(t *testing.T) {
 						},
 					},
 				}},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "ocp",
+					Tag:       "4.8",
+				},
 			},
 			pruneOCPBuilderReplacementsEnabled: true,
 			expectWrite:                        true,
+		},
+		{
+			name: "OCP builder pruning skips when ocp promotion is disabled",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						Inputs: map[string]api.ImageBuildInputs{
+							"root": {As: []string{"ocp/builder:something"}},
+						},
+					},
+				}},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "ocp",
+					Tag:       "4.8",
+					Disabled:  true,
+				},
+			},
+			pruneOCPBuilderReplacementsEnabled: true,
+			expectWrite:                        false,
+		},
+		{
+			name: "OCP builder pruning skips config which does not promote to ocp",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						Inputs: map[string]api.ImageBuildInputs{
+							"root": {As: []string{"ocp/builder:something"}},
+						},
+					},
+				}},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "notocp",
+					Tag:       "4.8",
+				},
+			},
+			pruneOCPBuilderReplacementsEnabled: true,
+			expectWrite:                        false,
 		},
 		{
 			name: "Dockerfile gets fixed up",
@@ -635,8 +676,17 @@ func TestPruneOCPBuilderReplacements(t *testing.T) {
 						},
 					}},
 				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "ocp",
+					Tag:       "4.8",
+				},
 			},
-			expected: &api.ReleaseBuildConfiguration{},
+			expected: &api.ReleaseBuildConfiguration{
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "ocp",
+					Tag:       "4.8",
+				},
+			},
 		},
 		{
 			name: "OCP builder that directly references api.ci is left",

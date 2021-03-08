@@ -532,6 +532,21 @@ func pruneOCPBuilderReplacements(config *api.ReleaseBuildConfiguration) error {
 		if orgRepoTag.org != "ocp" || orgRepoTag.repo != "builder" {
 			return true, nil
 		}
+
+		// If a config does not promote to ocp, it is not a configuration we want to hold
+		// accountable to this rule. It could be a variant defined solely for testing something
+		// exotic.
+		promotesToOCP := false
+		for _, promotedTag := range release.PromotedTags(config) {
+			if promotedTag.Namespace == "ocp" {
+				promotesToOCP = true
+				break
+			}
+		}
+		if !promotesToOCP {
+			return true, nil
+		}
+
 		imagestreamTagReference, imageStreamTagReferenceExists := config.BaseImages[imageKey]
 		if !imageStreamTagReferenceExists {
 			return false, nil

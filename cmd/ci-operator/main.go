@@ -177,11 +177,10 @@ func main() {
 		logrus.WithError(err).Fatal("failed to parse flags")
 	}
 	if opt.verbose {
-		if err := flag.CommandLine.Set("alsologtostderr", "true"); err != nil {
-			logrus.WithError(err).Error("failed to set flags -alsologtostderr=true")
-		}
-		if err := flag.CommandLine.Set("v", "10"); err != nil {
-			logrus.WithError(err).Error("Failed to set flag -v=10")
+		fs := flag.NewFlagSet("", flag.ExitOnError)
+		klog.InitFlags(fs)
+		if err := fs.Parse([]string{"-alsologtostderr", "true", "-v", "10"}); err != nil {
+			logrus.WithError(err).Fatal("failed to parse klog flags")
 		}
 		logrus.SetLevel(logrus.TraceLevel)
 		logrus.SetFormatter(&logrus.JSONFormatter{})

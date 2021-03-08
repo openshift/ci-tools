@@ -180,11 +180,8 @@ func main() {
 		logrus.WithError(err).Fatal("failed to parse flags")
 	}
 	if opt.verbose {
-		fs := flag.NewFlagSet("", flag.ExitOnError)
-		klog.InitFlags(fs)
-		if err := fs.Parse([]string{"-alsologtostderr", "true", "-v", "10"}); err != nil {
-			logrus.WithError(err).Fatal("failed to parse klog flags")
-		}
+		klog.V(10)
+		klog.LogToStderr(true)
 		controllerruntime.SetLogger(zap.New(zap.UseDevMode(true), zap.Level(zapcore.DebugLevel)))
 		logrus.SetLevel(logrus.TraceLevel)
 		logrus.SetFormatter(&logrus.JSONFormatter{})

@@ -34,6 +34,7 @@ type options struct {
 	logLevel            string
 	configPath          string
 	bootstrapConfigPath string
+	outputFile          string
 	bwUser              string
 	dryRun              bool
 	validate            bool
@@ -67,6 +68,7 @@ func parseOptions() options {
 	flag.CommandLine.StringVar(&o.bootstrapConfigPath, "bootstrap-config", "", "Path to the config file used for bootstrapping cluster secrets after using this tool.")
 	flag.CommandLine.BoolVar(&o.validate, "validate", true, "Validate that the items created from this tool are used in bootstrapping")
 	flag.CommandLine.BoolVar(&o.validateOnly, "validate-only", false, "If the tool should exit after the validation")
+	flag.CommandLine.StringVar(&o.outputFile, "output-file", "", "output file for dry-run mode")
 	flag.CommandLine.StringVar(&o.bwUser, "bw-user", "", "Username to access BitWarden.")
 	flag.CommandLine.StringVar(&o.bwPasswordPath, "bw-password-path", "", "Path to a password file to access BitWarden.")
 	flag.CommandLine.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
@@ -83,7 +85,7 @@ func (o *options) validateOptions() error {
 		return fmt.Errorf("invalid log level specified: %w", err)
 	}
 	logrus.SetLevel(level)
-	if !o.validateOnly {
+	if !(o.validateOnly || o.dryRun) {
 		if o.bwUser == "" {
 			return errors.New("--bw-user is empty")
 		}
@@ -101,7 +103,7 @@ func (o *options) validateOptions() error {
 }
 
 func (o *options) completeOptions(secrets sets.String) error {
-	if !o.validateOnly {
+	if o.bwPasswordPath != "" {
 		pwBytes, err := ioutil.ReadFile(o.bwPasswordPath)
 		if err != nil {
 			return err
@@ -327,14 +329,12 @@ func main() {
 	}
 
 	bitWardenContexts := bitwardenContextsFor(processedBwItems)
-	if err := validateContexts(bitWardenContexts, o.bootstrapConfig); err != nil {
-		for _, err := range err.Errors() {
-			logrus.WithError(err).Error("Invalid entry")
-		}
-		if o.validate {
+	if o.validate {
+		if err := validateContexts(bitWardenContexts, o.bootstrapConfig); err != nil {
+			for _, err := range err.Errors() {
+				logrus.WithError(err).Error("Invalid entry")
+			}
 			logrus.Fatal("Failed to validate secret entries.")
-		} else {
-			logrus.Warn("Failed to validate secret entries.")
 		}
 	}
 	if o.validateOnly {
@@ -350,22 +350,30 @@ func main() {
 	})
 	defer logrus.Exit(0)
 	if o.dryRun {
-		tmpFile, err := ioutil.TempFile("", "ci-secret-generator")
-		if err != nil {
-			logrus.WithError(err).Fatal("failed to create tempfile")
+		var f *os.File
+		if o.outputFile == "" {
+			f, err = ioutil.TempFile("", "ci-secret-generator")
+			if err != nil {
+				logrus.WithError(err).Fatal("failed to create tempfile")
+			}
+			logrus.Infof("Writing secrets to %s", f.Name())
+		} else {
+			f, err = os.OpenFile(o.outputFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
+			if err != nil {
+				logrus.WithError(err).Fatalf("failed to open output file %q", o.outputFile)
+			}
 		}
-		client, err = bitwarden.NewDryRunClient(tmpFile)
+		client, err = bitwarden.NewDryRunClient(f)
 		if err != nil {
-			logrus.WithError(err).Fatal("failed to create dryRun client")
+			logrus.WithError(err).Fatal("failed to create dry-run mode client")
 		}
-		logrus.Infof("Dry-Run enabled, writing secrets to %s", tmpFile.Name())
 	} else {
 		var err error
 		client, err = bitwarden.NewClient(o.bwUser, o.bwPassword, func(s string) {
 			secrets.Insert(s)
 		})
 		if err != nil {
-			logrus.WithError(err).Fatal("failed to get Bitwarden client.")
+			logrus.WithError(err).Fatal("failed to create Bitwarden client")
 		}
 	}
 

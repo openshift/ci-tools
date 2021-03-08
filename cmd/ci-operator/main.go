@@ -25,6 +25,7 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
+	"go.uber.org/zap/zapcore"
 
 	appsv1 "k8s.io/api/apps/v1"
 	authapi "k8s.io/api/authorization/v1"
@@ -47,8 +48,10 @@ import (
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	"k8s.io/test-infra/prow/version"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	buildv1 "github.com/openshift/api/build/v1"
 	imageapi "github.com/openshift/api/image/v1"
@@ -182,6 +185,7 @@ func main() {
 		if err := fs.Parse([]string{"-alsologtostderr", "true", "-v", "10"}); err != nil {
 			logrus.WithError(err).Fatal("failed to parse klog flags")
 		}
+		controllerruntime.SetLogger(zap.New(zap.UseDevMode(true), zap.Level(zapcore.DebugLevel)))
 		logrus.SetLevel(logrus.TraceLevel)
 		logrus.SetFormatter(&logrus.JSONFormatter{})
 		logrus.SetReportCaller(true)

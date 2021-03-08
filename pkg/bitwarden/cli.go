@@ -458,29 +458,35 @@ func (d *dryRunCliClient) GetAllItems() []Item {
 func (d *dryRunCliClient) GetAttachmentOnItem(_, _ string) ([]byte, error) {
 	return nil, nil
 }
+
 func (d *dryRunCliClient) GetPassword(_ string) ([]byte, error) {
 	return nil, nil
 }
+
 func (d *dryRunCliClient) Logout() ([]byte, error) {
-	_ = d.file.Close()
-	return nil, nil
+	return nil, d.file.Close()
 }
+
 func (d *dryRunCliClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {
-	fmt.Fprintf(d.file, "ItemName: %s\n\tField: \n\t\t %s: %s\n", itemName, fieldName, string(fieldValue))
-	return nil
+	_, err := fmt.Fprintf(d.file, "ItemName: %s\n\tField: \n\t\t %s: %s\n", itemName, fieldName, string(fieldValue))
+	return err
 }
+
 func (d *dryRunCliClient) SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) error {
-	fmt.Fprintf(d.file, "ItemName: %s\n\tAttachment: \n\t\t %s: %s\n", itemName, attachmentName, string(fileContents))
-	return nil
+	_, err := fmt.Fprintf(d.file, "ItemName: %s\n\tAttachment: \n\t\t %s: %s\n", itemName, attachmentName, string(fileContents))
+	return err
 }
+
 func (d *dryRunCliClient) SetPassword(itemName string, password []byte) error {
-	fmt.Fprintf(d.file, "ItemName: %s\n\tAttribute: \n\t\t Password: %s\n", itemName, string(password))
-	return nil
+	_, err := fmt.Fprintf(d.file, "ItemName: %s\n\tAttribute: \n\t\t Password: %s\n", itemName, string(password))
+	return err
 }
+
 func (d *dryRunCliClient) UpdateNotesOnItem(itemName, notes string) error {
-	fmt.Fprintf(d.file, "ItemName: %s\n\tNotes: %s\n", itemName, notes)
-	return nil
+	_, err := fmt.Fprintf(d.file, "ItemName: %s\n\tNotes: %s\n", itemName, notes)
+	return err
 }
+
 func (d *dryRunCliClient) OnCreate(func(*Item) error) {}
 
 func newDryRunClient(file *os.File) (Client, error) {

@@ -116,12 +116,12 @@ validate-vendor:
 #
 # Example:
 #   make install
-install:
+install: cmd/vault-secret-collection-manager/index.js
 	go install ./cmd/...
 .PHONY: install
 
 cmd/vault-secret-collection-manager/index.js: cmd/vault-secret-collection-manager/index.ts
-	tsc --lib ES2015,dom cmd/vault-secret-collection-manager/index.ts
+	hack/compile-typescript.sh
 
 # Install Go binaries to $GOPATH/bin.
 # Set version and name variables.

@@ -16,8 +16,11 @@ import (
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
+	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/version"
 
 	"github.com/openshift/ci-tools/pkg/vaultclient"
@@ -31,6 +34,7 @@ type option struct {
 	listenAddr    string
 	vaultAddr     string
 	vaultToken    string
+	flagutil.InstrumentationOptions
 }
 
 func parseOptions() (*option, error) {
@@ -39,11 +43,17 @@ func parseOptions() (*option, error) {
 	flag.StringVar(&o.listenAddr, "listen-addr", "127.0.0.1:8080", "The address to listen on")
 	flag.StringVar(&o.vaultAddr, "vault-addr", "http://127.0.0.1:8300", "The address under which vault should be reached")
 	flag.StringVar(&o.vaultToken, "vault-token", "", "The privileged token to use when communicating with vault, must be able to CRUD policies")
+	o.InstrumentationOptions.AddFlags(flag.CommandLine)
 	flag.Parse()
+
+	var errs []error
 	if o.vaultToken == "" {
-		return nil, errors.New("--vault-token is required")
+		errs = append(errs, errors.New("--vault-token is required"))
 	}
-	return o, nil
+	if err := o.InstrumentationOptions.Validate(false); err != nil {
+		errs = append(errs, err)
+	}
+	return o, utilerrors.NewAggregate(errs)
 }
 
 func main() {
@@ -59,6 +69,8 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct vault client")
 	}
+
+	metrics.ExposeMetrics(version.Name, config.PushGateway{}, o.MetricsPort)
 
 	interrupts.ListenAndServe(server(privilegedVaultClient, o.kvStorePrefix, o.listenAddr), 5*time.Second)
 	interrupts.WaitForGracefulShutdown()
@@ -131,8 +143,8 @@ func (c *idNameCache) set(name, id string) {
 	c.ids[id] = name
 }
 
-func (m *secretCollectionManager) mux() *httprouter.Router {
-	router := httprouter.New()
+func (m *secretCollectionManager) mux() *instrumentationWrapper {
+	router := newInstrumentedRouter()
 	// Do not redirect something like POST secretcollection/ where someone tried to
 	// create a nameless secret collection to secretcollection
 	router.RedirectTrailingSlash = false

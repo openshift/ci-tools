@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -30,6 +31,8 @@ import (
 const (
 	// MultiStageTestLabel is the label we use to mark a pod as part of a multi-stage test
 	MultiStageTestLabel = "ci.openshift.io/multi-stage-test"
+	// SkipCensoringLabel is the label we use to mark a secret as not needing to be censored
+	SkipCensoringLabel = "ci.openshift.io/skip-censoring"
 	// ClusterProfileMountPath is where we mount the cluster profile in a pod
 	ClusterProfileMountPath = "/var/run/secrets/ci.openshift.io/cluster-profile"
 	// SecretMountPath is where we mount the shared dir secret
@@ -124,7 +127,7 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := s.createSecret(ctx); err != nil {
+	if err := s.createSharedDirSecret(ctx); err != nil {
 		return fmt.Errorf("failed to create secret: %w", err)
 	}
 	if err := s.createCredentials(); err != nil {
@@ -133,13 +136,17 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	if err := s.setupRBAC(ctx); err != nil {
 		return fmt.Errorf("failed to create RBAC objects: %w", err)
 	}
+	secretVolumes, secretVolumeMounts, err := secretsForCensoring(s.client, s.jobSpec.Namespace(), ctx)
+	if err != nil {
+		return err
+	}
 	var errs []error
-	if err := s.runSteps(ctx, s.pre, env, true, false); err != nil {
+	if err := s.runSteps(ctx, s.pre, env, true, false, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q pre steps failed: %w", s.name, err))
-	} else if err := s.runSteps(ctx, s.test, env, true, len(errs) != 0); err != nil {
+	} else if err := s.runSteps(ctx, s.test, env, true, len(errs) != 0, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q test steps failed: %w", s.name, err))
 	}
-	if err := s.runSteps(context.Background(), s.post, env, false, len(errs) != 0); err != nil {
+	if err := s.runSteps(context.Background(), s.post, env, false, len(errs) != 0, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q post steps failed: %w", s.name, err))
 	}
 	return utilerrors.NewAggregate(errs)
@@ -279,11 +286,15 @@ func (s *multiStageTestStep) environment(ctx context.Context) ([]coreapi.EnvVar,
 	return ret, nil
 }
 
-func (s *multiStageTestStep) createSecret(ctx context.Context) error {
-	log.Printf("Creating multi-stage test secret %q", s.name)
-	secret := &coreapi.Secret{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.name}}
+func (s *multiStageTestStep) createSharedDirSecret(ctx context.Context) error {
+	log.Printf("Creating multi-stage test shared directory %q", s.name)
+	secret := &coreapi.Secret{ObjectMeta: meta.ObjectMeta{
+		Namespace: s.jobSpec.Namespace(),
+		Name:      s.name,
+		Labels:    map[string]string{SkipCensoringLabel: "true"},
+	}}
 	if err := s.client.Delete(ctx, secret); err != nil && !kerrors.IsNotFound(err) {
-		return fmt.Errorf("cannot delete secret %q: %w", s.name, err)
+		return fmt.Errorf("cannot delete shared directory %q: %w", s.name, err)
 	}
 	return s.client.Create(ctx, secret)
 }
@@ -329,8 +340,10 @@ func (s *multiStageTestStep) runSteps(
 	env []coreapi.EnvVar,
 	shortCircuit bool,
 	hasPrevErrs bool,
+	secretVolumes []coreapi.Volume,
+	secretVolumeMounts []coreapi.VolumeMount,
 ) error {
-	pods, isBestEffort, err := s.generatePods(steps, env, hasPrevErrs)
+	pods, isBestEffort, err := s.generatePods(steps, env, hasPrevErrs, secretVolumes, secretVolumeMounts)
 	if err != nil {
 		return err
 	}
@@ -354,7 +367,7 @@ func (s *multiStageTestStep) runSteps(
 const multiStageTestStepContainerName = "test"
 
 func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []coreapi.EnvVar,
-	hasPrevErrs bool) ([]coreapi.Pod, func(string) bool, error) {
+	hasPrevErrs bool, secretVolumes []coreapi.Volume, secretVolumeMounts []coreapi.VolumeMount) ([]coreapi.Pod, func(string) bool, error) {
 	bestEffort := sets.NewString()
 	isBestEffort := func(podName string) bool {
 		if s.allowBestEffortPostSteps == nil || !*s.allowBestEffortPostSteps {
@@ -407,7 +420,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		// the grace period for the Pod to be just larger than the grace period
 		// for the process, assuming an 80/20 distribution of work.
 		terminationGracePeriodSeconds := p(int64(gracePeriod.Seconds() * 5 / 4))
-		pod, err := generateBasePod(s.jobSpec, name, multiStageTestStepContainerName, []string{"/bin/bash", "-c", CommandPrefix + step.Commands}, image, resources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec())
+		pod, err := generateBasePod(s.jobSpec, name, multiStageTestStepContainerName, []string{"/bin/bash", "-c", CommandPrefix + step.Commands}, image, resources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -418,6 +431,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		pod.Spec.ServiceAccountName = s.name
 		pod.Spec.TerminationGracePeriodSeconds = terminationGracePeriodSeconds
 		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{Name: homeVolumeName, VolumeSource: coreapi.VolumeSource{EmptyDir: &coreapi.EmptyDirVolumeSource{}}})
+		pod.Spec.Volumes = append(pod.Spec.Volumes, secretVolumes...)
 		for idx := range pod.Spec.Containers {
 			if pod.Spec.Containers[idx].Name != multiStageTestStepContainerName {
 				continue
@@ -453,11 +467,42 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		if step.Cli != "" {
 			errs = append(errs, addCliInjector(step.Cli, pod))
 		}
-		addSecret(s.name, pod)
+		addSharedDirSecret(s.name, pod)
 		addCredentials(step.Credentials, pod)
 		ret = append(ret, *pod)
 	}
 	return ret, isBestEffort, utilerrors.NewAggregate(errs)
+}
+
+// secretsForCensoring returns the secret volumes and mounts that will allow sidecar to censor
+// their content from uploads. This is the full secret list in our namespace, except for the ones
+// we created to store shared directory content.
+func secretsForCensoring(client PodClient, namespace string, ctx context.Context) ([]coreapi.Volume, []coreapi.VolumeMount, error) {
+	secretList := coreapi.SecretList{}
+	if err := client.List(ctx, &secretList, ctrlruntimeclient.InNamespace(namespace)); err != nil {
+		return nil, nil, fmt.Errorf("could not list secrets to determine content to censor: %w", err)
+	}
+	var secretVolumes []coreapi.Volume
+	var secretVolumeMounts []coreapi.VolumeMount
+	for _, secret := range secretList.Items {
+		if _, skip := secret.ObjectMeta.Labels[SkipCensoringLabel]; skip {
+			continue
+		}
+		volumeName := fmt.Sprintf("censor-%s", secret.Name)
+		secretVolumes = append(secretVolumes, coreapi.Volume{
+			Name: volumeName,
+			VolumeSource: coreapi.VolumeSource{
+				Secret: &coreapi.SecretVolumeSource{
+					SecretName: secret.Name,
+				},
+			},
+		})
+		secretVolumeMounts = append(secretVolumeMounts, coreapi.VolumeMount{
+			Name:      volumeName,
+			MountPath: path.Join("/secrets", secret.Name),
+		})
+	}
+	return secretVolumes, secretVolumeMounts, nil
 }
 
 func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]coreapi.EnvVar, []error) {
@@ -517,7 +562,7 @@ func (s *multiStageTestStep) generateParams(env []api.StepParameter) []coreapi.E
 	return ret
 }
 
-func addSecret(secret string, pod *coreapi.Pod) {
+func addSharedDirSecret(secret string, pod *coreapi.Pod) {
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
 		Name: secret,
 		VolumeSource: coreapi.VolumeSource{

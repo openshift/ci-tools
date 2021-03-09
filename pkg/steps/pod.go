@@ -181,6 +181,7 @@ func generateBasePod(
 	artifactDir string,
 	decorationConfig *v1.DecorationConfig,
 	rawJobSpec string,
+	secretsToCensor []coreapi.VolumeMount,
 ) (*coreapi.Pod, error) {
 	envMap, err := downwardapi.EnvForSpec(jobSpec.JobSpec)
 	envMap[openshiftCIEnv] = "true"
@@ -212,24 +213,29 @@ func generateBasePod(
 		},
 	}
 	artifactDir = fmt.Sprintf("artifacts/%s", artifactDir)
-	if err := addPodUtils(pod, artifactDir, decorationConfig, rawJobSpec); err != nil {
+	if err := addPodUtils(pod, artifactDir, decorationConfig, rawJobSpec, secretsToCensor); err != nil {
 		return nil, fmt.Errorf("failed to decorate pod: %w", err)
 	}
 	return pod, nil
 }
 
 func (s *podStep) generatePodForStep(image string, containerResources coreapi.ResourceRequirements) (*coreapi.Pod, error) {
+	var secretVolumes []coreapi.Volume
+	var secretVolumeMounts []coreapi.VolumeMount
+	for i, secret := range s.config.Secrets {
+		secretVolumeMounts = append(secretVolumeMounts, getSecretVolumeMountFromSecret(secret.MountPath, i)...)
+		secretVolumes = append(secretVolumes, getVolumeFromSecret(secret.Name, i)...)
+	}
+
 	artifactDir := s.name
-	pod, err := generateBasePod(s.jobSpec, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec())
+	pod, err := generateBasePod(s.jobSpec, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts)
 	if err != nil {
 		return nil, err
 	}
 	pod.Spec.ServiceAccountName = s.config.ServiceAccountName
 	container := &pod.Spec.Containers[0]
-	for i, secret := range s.config.Secrets {
-		container.VolumeMounts = append(container.VolumeMounts, getSecretVolumeMountFromSecret(secret.MountPath, i)...)
-		pod.Spec.Volumes = append(pod.Spec.Volumes, getVolumeFromSecret(secret.Name, i)...)
-	}
+	container.VolumeMounts = append(container.VolumeMounts, secretVolumeMounts...)
+	pod.Spec.Volumes = append(pod.Spec.Volumes, secretVolumes...)
 
 	if v := s.config.MemoryBackedVolume; v != nil {
 		size, err := resource.ParseQuantity(v.Size)

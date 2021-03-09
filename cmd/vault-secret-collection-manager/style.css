@@ -10,6 +10,17 @@ tr {
   border-top: 1px solid #a4a4a4;
 }
 
+.user-edit-table {
+  border: None;
+  box-shadow: None;
+  border-radius: 0%;
+  background-color: unset !important;
+  color: unset !important;
+  width: 50%;
+  margin: auto;
+  text-align: center;
+}
+
 tr:hover {
   color: #212529;
   background-color: rgba(0, 0, 0, 0.075);
@@ -22,6 +33,10 @@ td, th {
 
 th {
     color: #333;
+}
+
+select {
+  width: 75%;
 }
 
 .new-collection-button {

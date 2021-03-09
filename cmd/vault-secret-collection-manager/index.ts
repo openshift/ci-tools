@@ -29,6 +29,90 @@ function showModal() {
   document.getElementById('modalContainer')?.classList.remove('hidden');
 }
 
+function editMembersEventHandler(collection: secretCollection) {
+  return function () {
+    fetch(`${window.location.protocol}//${window.location.host}/users`)
+      .then(async (response) => {
+        let body = await response.text();
+        if (!response.ok) {
+          throw (body);
+        }
+
+        let allUsers: string[] = [];
+        if (body !== '') {
+          allUsers = JSON.parse(body);
+        }
+
+        let currentMembersSelect = document.getElementById("currentMembersSelection") as HTMLSelectElement;
+        for (const existingMember of Array.from(collection.members)) {
+          let existingMemberOption = document.createElement('option') as HTMLOptionElement;
+          currentMembersSelect.appendChild(optionWithValue(existingMember));
+        }
+
+        let allMembersSelect = document.getElementById('allUsersSelection') as HTMLSelectElement;
+        for (const user of Array.from(allUsers)) {
+          if (collection.members.includes(user)) {
+            continue;
+          }
+          let newUserOption = document.createElement('option') as HTMLOptionElement;
+          allMembersSelect.appendChild(optionWithValue(user));
+        }
+
+        let removeMemberButton = document.getElementById('removeMemberButton') as HTMLButtonElement;
+        removeMemberButton.addEventListener('click', () => {
+          moveSelectedOptions(currentMembersSelect, allMembersSelect);
+        });
+
+        let addMemberButton = document.getElementById('addMemberButton') as HTMLButtonElement;
+        addMemberButton.addEventListener('click', () => {
+          moveSelectedOptions(allMembersSelect, currentMembersSelect);
+        });
+
+        let selectionModal = document.getElementById('memberSelectionModal') as HTMLDivElement;
+        selectionModal.classList.remove('hidden');
+        showModal();
+      })
+      .catch((error) => {
+        displayCreateSecretCollectionError('fetch users', error)
+      })
+
+  }
+}
+
+function moveSelectedOptions(source: HTMLSelectElement, target: HTMLSelectElement): void {
+  for (let optionRaw of Array.from(source.children)) {
+    let option = optionRaw as HTMLOptionElement;
+    if (!option.selected) {
+      continue;
+    }
+    target.appendChild(option.cloneNode(true));
+    source.removeChild(option);
+  }
+}
+
+function optionWithValue(value: string): HTMLOptionElement {
+  let option = document.createElement('option') as HTMLOptionElement;
+  option.value = value;
+  option.innerHTML = value;
+  return option;
+}
+
+// getSelectValues is a helper to get all values that are selected
+function getSelectValues(select: HTMLSelectElement): string[] {
+  let result: string[] = [];
+  var options = select && select.options;
+  var opt;
+
+  for (var i = 0, iLen = options.length; i < iLen; i++) {
+    opt = options[i];
+
+    if (opt.selected) {
+      result.push(opt.value);
+    }
+  }
+  return result;
+}
+
 function deleteColectionEventHandler(collectionName: string) {
   return function () {
     const deleteConfirmation = document.getElementById('deleteConfirmation') as HTMLDivElement;
@@ -80,10 +164,23 @@ function renderCollectionTable(data: secretCollection[]) {
     row.insertCell().innerHTML = secretCollection.name;
     row.insertCell().innerHTML = secretCollection.path;
     row.insertCell().innerHTML = secretCollection.members.toString();
-    const deleteCell = row.insertCell();
-    deleteCell.innerHTML = '<button class="red-button"><i class="fa fa-trash"></i> Delete</button>';
+
+    const buttonCell = row.insertCell();
+    let editMembersButton = document.createElement('button') as HTMLButtonElement;
+    editMembersButton.classList.add('green-button');
+    editMembersButton.innerHTML = 'Edit Members';
+    const editMembersHandler = editMembersEventHandler(secretCollection);
+    editMembersButton.addEventListener('click', () => editMembersHandler());
+    buttonCell.appendChild(editMembersButton);
+    buttonCell.innerHTML
+    buttonCell.append(' ');
+
+    let deleteButton = document.createElement('button') as HTMLButtonElement;
+    deleteButton.classList.add('red-button');
+    deleteButton.innerHTML = '<i class="fa fa-trash"></i> Delete';
     const deleteHandler = deleteColectionEventHandler(secretCollection.name);
-    deleteCell.addEventListener('click', () => deleteHandler());
+    deleteButton.addEventListener('click', () => deleteHandler());
+    buttonCell.appendChild(deleteButton);
   }
 
   const oldTableBody = document.getElementById('secretCollectionTableBody') as HTMLTableSectionElement;

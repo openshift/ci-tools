@@ -154,7 +154,7 @@ func (m *secretCollectionManager) mux() *instrumentationWrapper {
 	router.GET("/healthz", simpleLoggingWrapper(healthHandler))
 	router.GET("/secretcollection", loggingWrapper(userWrapper(m.listSecretCollections)))
 	router.PUT("/secretcollection/:name", loggingWrapper(userWrapper(m.createSecretCollectionHandler)))
-	router.PATCH("/secretcollection/:name", loggingWrapper(userWrapper(m.updateSecretCollectionMembersHandler)))
+	router.PUT("/secretcollection/:name/members", loggingWrapper(userWrapper(m.updateSecretCollectionMembersHandler)))
 	router.DELETE("/secretcollection/:name", loggingWrapper(userWrapper(m.deleteCollectionHandler)))
 	router.GET("/users", loggingWrapper(userWrapper(m.usersHandler)))
 	return router
@@ -257,6 +257,11 @@ func (m *secretCollectionManager) updateSecretCollectionMembersHandler(l *logrus
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		l.WithError(err).Debug("failed to decode request body")
 		http.Error(w, fmt.Sprintf(`failed to decode request body: %v, expected format: {"members": ["all", "desired", "members"]}`, err), http.StatusBadRequest)
+		return
+	}
+
+	if len(body.Members) == 0 {
+		http.Error(w, "There must be at least one member", http.StatusBadRequest)
 		return
 	}
 

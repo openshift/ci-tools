@@ -68,6 +68,23 @@ function editMembersEventHandler(collection: secretCollection) {
           moveSelectedOptions(allMembersSelect, currentMembersSelect);
         });
 
+        document.getElementById('updateMemberSubmitButton')?.addEventListener('click', () => {
+          const newValues = getSelectValues(document.getElementById('currentMembersSelection') as HTMLSelectElement);
+          const body = JSON.stringify({ members: newValues });
+          fetch(`${window.location.protocol}//${window.location.host}/secretcollection/${collection.name}/members`, { method: 'PUT', body: body })
+            .then(async (response) => {
+              if (!response.ok) {
+                const responseText = await response.text();
+                throw responseText;
+              }
+              fetchAndRenderSecretCollections();
+              hideModal();
+            })
+            .catch((error) => {
+              displayCreateSecretCollectionError('update members', error);
+            });
+        })
+
         let selectionModal = document.getElementById('memberSelectionModal') as HTMLDivElement;
         selectionModal.classList.remove('hidden');
         showModal();
@@ -100,15 +117,9 @@ function optionWithValue(value: string): HTMLOptionElement {
 // getSelectValues is a helper to get all values that are selected
 function getSelectValues(select: HTMLSelectElement): string[] {
   let result: string[] = [];
-  var options = select && select.options;
-  var opt;
-
-  for (var i = 0, iLen = options.length; i < iLen; i++) {
-    opt = options[i];
-
-    if (opt.selected) {
-      result.push(opt.value);
-    }
+  for (let childRaw of Array.from(select.children)) {
+    const child = childRaw as HTMLOptionElement;
+    result.push(child.value);
   }
   return result;
 }
@@ -227,6 +238,7 @@ document.getElementById('newCollectionButton')?.addEventListener('click', () => 
 });
 
 document.getElementById('abortCreateCollectionButton')?.addEventListener('click', () => hideModal());
+document.getElementById('updateMemberCancelButton')?.addEventListener('click', () => hideModal());
 
 document.addEventListener('keydown', (event) => {
   const escKeyCode = 27;
@@ -239,6 +251,7 @@ document.addEventListener('keydown', (event) => {
 });
 
 document.getElementById('createCollectionButton').addEventListener('click', () => createSecretCollection());
+
 
 const secretCollections: secretCollection[] = JSON.parse(document.getElementById('secretcollections').innerHTML);
 renderCollectionTable(secretCollections);

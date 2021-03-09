@@ -264,6 +264,11 @@ type Size struct {
 type Blockade struct {
 	// Repos are either of the form org/repos or just org.
 	Repos []string `json:"repos,omitempty"`
+	// BranchRegexp is the regular expression for branches that the the blockade applies to.
+	// If BranchRegexp is not specified, the blockade applies to all branches by default.
+	// Compiles into BranchRe during config load.
+	BranchRegexp *string        `json:"branchregexp,omitempty"`
+	BranchRe     *regexp.Regexp `json:"-"`
 	// BlockRegexps are regular expressions matching the file paths to block.
 	BlockRegexps []string `json:"blockregexps,omitempty"`
 	// ExceptionRegexps are regular expressions matching the file paths that are exceptions to the BlockRegexps.
@@ -832,10 +837,12 @@ func OldToNewPlugins(oldPlugins map[string][]string) Plugins {
 
 type pluginsWithoutUnmarshaler Plugins
 
+var warnTriggerDeprecatedConfig time.Time
+
 func (p *Plugins) UnmarshalJSON(d []byte) error {
 	var oldPlugins map[string][]string
 	if err := yaml.Unmarshal(d, &oldPlugins); err == nil {
-		logrus.Warn("plugins declaration uses a deprecated config style, please migrate it")
+		logrusutil.ThrottledWarnf(&warnTriggerDeprecatedConfig, time.Hour, "plugins declaration uses a deprecated config style, see https://github.com/kubernetes/test-infra/issues/20631#issuecomment-787693609 for a migration guide")
 		*p = OldToNewPlugins(oldPlugins)
 		return nil
 	}
@@ -1160,6 +1167,17 @@ func compileRegexpsAndDurations(pc *Configuration) error {
 		return err
 	}
 	pc.CherryPickUnapproved.BranchRe = branchRe
+
+	for i := range pc.Blockades {
+		if pc.Blockades[i].BranchRegexp == nil {
+			continue
+		}
+		branchRe, err := regexp.Compile(*pc.Blockades[i].BranchRegexp)
+		if err != nil {
+			return fmt.Errorf("failed to compile blockade branchregexp: %q, error: %v", *pc.Blockades[i].BranchRegexp, err)
+		}
+		pc.Blockades[i].BranchRe = branchRe
+	}
 
 	commentRe, err := regexp.Compile(pc.Heart.CommentRegexp)
 	if err != nil {

@@ -182,10 +182,21 @@ func main() {
 	if opt.verbose {
 		fs := flag.NewFlagSet("", flag.ExitOnError)
 		klog.InitFlags(fs)
-		if err := fs.Parse([]string{"-alsologtostderr", "true", "-v", "10"}); err != nil {
+		if err := fs.Set("alsologtostderr", "true"); err != nil {
+			logrus.WithError(err).Fatal("could not set klog alsologtostderr")
+		}
+		if err := fs.Set("v", "10"); err != nil {
+			logrus.WithError(err).Fatal("could not set klog v")
+		}
+		if err := fs.Parse([]string{}); err != nil {
 			logrus.WithError(err).Fatal("failed to parse klog flags")
 		}
-		controllerruntime.SetLogger(zap.New(zap.UseDevMode(true), zap.Level(zapcore.DebugLevel)))
+
+		controllerruntime.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{
+			Development: true,
+			DestWriter:  os.Stdout,
+			Level:       zapcore.DebugLevel,
+		})))
 		logrus.SetLevel(logrus.TraceLevel)
 		logrus.SetFormatter(&logrus.JSONFormatter{})
 		logrus.SetReportCaller(true)

@@ -92,11 +92,14 @@ func PodUtilsContainerNames() sets.String {
 // User-provided extraLabels and extraAnnotations values will take precedence over auto-provided values.
 func LabelsAndAnnotationsForSpec(spec prowapi.ProwJobSpec, extraLabels, extraAnnotations map[string]string) (map[string]string, map[string]string) {
 	jobNameForLabel := spec.Job
+	log := logrus.WithFields(logrus.Fields{
+		"job": spec.Job,
+		"id":  extraLabels[kube.ProwBuildIDLabel],
+	})
 	if len(jobNameForLabel) > validation.LabelValueMaxLength {
 		// TODO(fejta): consider truncating middle rather than end.
 		jobNameForLabel = strings.TrimRight(spec.Job[:validation.LabelValueMaxLength], ".-")
-		logrus.WithFields(logrus.Fields{
-			"job":       spec.Job,
+		log.WithFields(logrus.Fields{
 			"key":       kube.ProwJobAnnotation,
 			"value":     spec.Job,
 			"truncated": jobNameForLabel,
@@ -128,7 +131,7 @@ func LabelsAndAnnotationsForSpec(spec prowapi.ProwJobSpec, extraLabels, extraAnn
 				labels[key] = base
 				continue
 			}
-			logrus.WithFields(logrus.Fields{
+			log.WithFields(logrus.Fields{
 				"key":    key,
 				"value":  value,
 				"errors": errs,
@@ -702,10 +705,24 @@ func decorate(spec *coreapi.PodSpec, pj *prowapi.ProwJob, rawEnv map[string]stri
 		spec.Containers[i].Env = append(container.Env, KubeEnv(rawEnv)...)
 	}
 
+	secretVolumes := sets.NewString()
+	for _, volume := range spec.Volumes {
+		if volume.VolumeSource.Secret != nil {
+			secretVolumes.Insert(volume.Name)
+		}
+	}
+	containsSecretData := func(volumeName string) bool {
+		if censor := pj.Spec.DecorationConfig.CensorSecrets; censor == nil || !*censor {
+			return false
+		}
+		return secretVolumes.Has(volumeName)
+	}
+
 	const (
 		previous = ""
 		exitZero = false
 	)
+	var secretVolumeMounts []coreapi.VolumeMount
 	var wrappers []wrapper.Options
 
 	for i, container := range spec.Containers {
@@ -717,10 +734,15 @@ func decorate(spec *coreapi.PodSpec, pj *prowapi.ProwJob, rawEnv map[string]stri
 		if err != nil {
 			return fmt.Errorf("wrap container: %v", err)
 		}
+		for _, volumeMount := range spec.Containers[i].VolumeMounts {
+			if containsSecretData(volumeMount.Name) {
+				secretVolumeMounts = append(secretVolumeMounts, volumeMount)
+			}
+		}
 		wrappers = append(wrappers, *wrapperOptions)
 	}
 
-	sidecar, err := Sidecar(pj.Spec.DecorationConfig, blobStorageOptions, blobStorageMounts, logMount, outputMount, encodedJobSpec, !RequirePassingEntries, !IgnoreInterrupts, wrappers...)
+	sidecar, err := Sidecar(pj.Spec.DecorationConfig, blobStorageOptions, blobStorageMounts, logMount, outputMount, encodedJobSpec, !RequirePassingEntries, !IgnoreInterrupts, secretVolumeMounts, wrappers...)
 	if err != nil {
 		return fmt.Errorf("create sidecar: %v", err)
 	}
@@ -775,19 +797,25 @@ const (
 	IgnoreInterrupts = true
 )
 
-func Sidecar(config *prowapi.DecorationConfig, gcsOptions gcsupload.Options, blobStorageMounts []coreapi.VolumeMount, logMount coreapi.VolumeMount, outputMount *coreapi.VolumeMount, encodedJobSpec string, requirePassingEntries, ignoreInterrupts bool, wrappers ...wrapper.Options) (*coreapi.Container, error) {
+func Sidecar(config *prowapi.DecorationConfig, gcsOptions gcsupload.Options, blobStorageMounts []coreapi.VolumeMount, logMount coreapi.VolumeMount, outputMount *coreapi.VolumeMount, encodedJobSpec string, requirePassingEntries, ignoreInterrupts bool, secretVolumeMounts []coreapi.VolumeMount, wrappers ...wrapper.Options) (*coreapi.Container, error) {
+	var secretVolumePaths []string
+	for _, volumeMount := range secretVolumeMounts {
+		secretVolumePaths = append(secretVolumePaths, volumeMount.MountPath)
+	}
 	gcsOptions.Items = append(gcsOptions.Items, artifactsDir(logMount))
 	sidecarConfigEnv, err := sidecar.Encode(sidecar.Options{
-		GcsOptions:       &gcsOptions,
-		Entries:          wrappers,
-		EntryError:       requirePassingEntries,
-		IgnoreInterrupts: ignoreInterrupts,
+		GcsOptions:        &gcsOptions,
+		Entries:           wrappers,
+		EntryError:        requirePassingEntries,
+		IgnoreInterrupts:  ignoreInterrupts,
+		SecretDirectories: secretVolumePaths,
 	})
 	if err != nil {
 		return nil, err
 	}
 	mounts := []coreapi.VolumeMount{logMount}
 	mounts = append(mounts, blobStorageMounts...)
+	mounts = append(mounts, secretVolumeMounts...)
 	if outputMount != nil {
 		mounts = append(mounts, *outputMount)
 	}

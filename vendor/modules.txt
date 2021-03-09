@@ -533,6 +533,8 @@ go.uber.org/zap/internal/bufferpool
 go.uber.org/zap/internal/color
 go.uber.org/zap/internal/exit
 go.uber.org/zap/zapcore
+# go4.org v0.0.0-20201209231011-d4a079459e60
+go4.org/bytereplacer
 # gocloud.dev v0.19.0
 gocloud.dev/aws
 gocloud.dev/blob
@@ -1088,7 +1090,7 @@ k8s.io/klog/v2
 k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/kubernetes v1.14.7
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20210225065724-cfbfc5924248
+# k8s.io/test-infra v0.0.0-20210309020659-6971aa789f39
 ## explicit
 k8s.io/test-infra/experiment/autobumper/bumper
 k8s.io/test-infra/experiment/image-bumper/bumper
@@ -1196,6 +1198,7 @@ k8s.io/test-infra/prow/pod-utils/downwardapi
 k8s.io/test-infra/prow/pod-utils/gcs
 k8s.io/test-infra/prow/pod-utils/wrapper
 k8s.io/test-infra/prow/repoowners
+k8s.io/test-infra/prow/secretutil
 k8s.io/test-infra/prow/sidecar
 k8s.io/test-infra/prow/simplifypath
 k8s.io/test-infra/prow/slack
@@ -1226,7 +1229,7 @@ knative.dev/pkg/kmp
 sigs.k8s.io/boskos/client
 sigs.k8s.io/boskos/common
 sigs.k8s.io/boskos/storage
-# sigs.k8s.io/controller-runtime v0.8.2-0.20210127230507-a763c9a36c6f
+# sigs.k8s.io/controller-runtime v0.8.3-0.20210301154926-12660d4f2255
 ## explicit
 sigs.k8s.io/controller-runtime
 sigs.k8s.io/controller-runtime/pkg/builder

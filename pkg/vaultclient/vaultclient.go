@@ -166,6 +166,11 @@ func (v *VaultClient) GetAllGroups() ([]Group, error) {
 	return result, nil
 }
 
+func (v *VaultClient) ListIdentities() ([]string, error) {
+	var response keyResponse
+	return response.Keys, v.listInto("identity/entity/id", &response)
+}
+
 func (v *VaultClient) GetGroupByID(groupID string) (*Group, error) {
 	var group Group
 	return &group, v.readInto(fmt.Sprintf("identity/group/id/%s", groupID), &group)

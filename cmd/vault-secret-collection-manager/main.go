@@ -156,6 +156,7 @@ func (m *secretCollectionManager) mux() *instrumentationWrapper {
 	router.PUT("/secretcollection/:name", loggingWrapper(userWrapper(m.createSecretCollectionHandler)))
 	router.PATCH("/secretcollection/:name", loggingWrapper(userWrapper(m.updateSecretCollectionMembersHandler)))
 	router.DELETE("/secretcollection/:name", loggingWrapper(userWrapper(m.deleteCollectionHandler)))
+	router.GET("/users", loggingWrapper(userWrapper(m.usersHandler)))
 	return router
 }
 
@@ -464,10 +465,14 @@ func (m *secretCollectionManager) userAliasByIDCached(id string) (string, error)
 	// An alias is only unique per auth backend, so we need to require entities
 	// to have exactly one or introduce filtering by auth backend.
 	if n := len(entity.Aliases); n != 1 {
-		return "", fmt.Errorf("entity %s doesn't have exactly one but %d aliases", id, n)
+		return "", notExactlyOneEntityForUserError{fmt.Errorf("entity %s doesn't have exactly one but %d aliases", id, n)}
 	}
 	m.userCache.set(entity.Aliases[0].Name, entity.ID)
 	return entity.Aliases[0].Name, nil
+}
+
+type notExactlyOneEntityForUserError struct {
+	error
 }
 
 func (m *secretCollectionManager) getCollectionsFromGroupName(groupName string) (*secretCollection, error) {
@@ -519,4 +524,38 @@ func (m *secretCollectionManager) getCollectionsFromGroupName(groupName string) 
 // collectionNameFromPolicyPath strips the metadata/data prefix and the /* suffix from a policy path
 func (m *secretCollectionManager) collectionNameFromPolicyPath(policyPath string) string {
 	return strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(policyPath, m.kvMetadataPrefix+"/"), m.kvDataPrefix+"/"), "/*")
+}
+
+func (m *secretCollectionManager) usersHandler(l *logrus.Entry, _ string, w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	entities, err := m.privilegedVaultClient.ListIdentities()
+	if err != nil {
+		l.WithError(err).Error("Failed to list identities")
+		http.Error(w, fmt.Sprintf("failed to list users. RequestID: %s", l.Data["UID"]), 500)
+		return
+	}
+
+	var userNames []string
+	for _, entity := range entities {
+		name, err := m.userAliasByIDCached(entity)
+		if err != nil && !errors.Is(err, notExactlyOneEntityForUserError{}) {
+			l.WithError(err).WithField("userID", entity).Error("Failed to resolve username for id")
+		}
+		if name != "" {
+			userNames = append(userNames, name)
+		}
+	}
+
+	var serialized []byte
+	if len(userNames) > 0 {
+		var err error
+		serialized, err = json.Marshal(userNames)
+		if err != nil {
+			l.WithError(err).Error("Failed to serialize usernames")
+			http.Error(w, fmt.Sprintf("failed to list users. RequestID: %s", l.Data["UID"]), 500)
+			return
+		}
+	}
+	if _, err := w.Write(serialized); err != nil {
+		l.WithError(err).Error("failed to write response")
+	}
 }

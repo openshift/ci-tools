@@ -118,6 +118,14 @@ func TestSecretCollectionManager(tt *testing.T) {
 			expectedVaultPolicies: []string{"default", "root"},
 		},
 		{
+			name:                  "Listing users returns all users",
+			user:                  "user-1",
+			request:               mustNewRequest(http.MethodGet, fmt.Sprintf("http://%s/users", managerListenAddr)),
+			expectedStatusCode:    200,
+			expectedBody:          `["user-1","user-2"]`,
+			expectedVaultPolicies: []string{"default", "root"},
+		},
+		{
 			name:                  "User 1 creates a colletion with an invalid name",
 			user:                  "user-1",
 			request:               mustNewRequest(http.MethodPut, fmt.Sprintf("http://%s/secretcollection/name%%20withIllegalComponents", managerListenAddr)),

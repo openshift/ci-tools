@@ -23,6 +23,22 @@ function hideModal() {
   for (const child of Array.from(modalContent.children)) {
     child.classList.add('hidden');
   }
+
+  const currentMembersSelect = document.getElementById('currentMembersSelection') as HTMLSelectElement;
+  for (const child of Array.from(currentMembersSelect.children)) {
+    currentMembersSelect.removeChild(child);
+  }
+
+  const allUsersSelect = document.getElementById('allUsersSelection') as HTMLSelectElement;
+  for (const child of Array.from(allUsersSelect.children)) {
+    allUsersSelect.removeChild(child);
+  }
+
+  // We must detach edit member event handler, as it is scoped to a collection. It is not possible to loop over them,
+  // so we remove _all_ event handlers on this layer: https://stackoverflow.com/a/35855487
+  let updateMembersSubmitButton = document.getElementById('updateMemberSubmitButton') as HTMLButtonElement;
+  updateMembersSubmitButton.parentElement.innerHTML = updateMembersSubmitButton.parentElement.innerHTML;
+  document.getElementById('updateMemberCancelButton')?.addEventListener('click', () => hideModal());
 }
 
 function showModal() {

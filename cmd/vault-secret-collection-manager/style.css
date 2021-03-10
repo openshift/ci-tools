@@ -39,7 +39,7 @@ select {
   width: 75%;
 }
 
-.new-collection-button {
+.teal-button {
   background-color: #009688;
 }
 
@@ -55,6 +55,10 @@ select {
   background: #4CAF50;
 }
 
+.blue-button {
+  background: #008CBA;;
+}
+
 button {
   border: none;
   overflow: hidden;
@@ -67,6 +71,10 @@ button {
   color: #fff;
   display: inline-block;
   vertical-align: middle;
+}
+
+.small-button {
+  font-size: 12px;
 }
 
 button:hover {

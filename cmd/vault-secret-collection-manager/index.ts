@@ -194,12 +194,11 @@ function renderCollectionTable(data: secretCollection[]) {
 
     const buttonCell = row.insertCell();
     let editMembersButton = document.createElement('button') as HTMLButtonElement;
-    editMembersButton.classList.add('green-button');
+    editMembersButton.classList.add('blue-button');
     editMembersButton.innerHTML = 'Edit Members';
     const editMembersHandler = editMembersEventHandler(secretCollection);
     editMembersButton.addEventListener('click', () => editMembersHandler());
     buttonCell.appendChild(editMembersButton);
-    buttonCell.innerHTML
     buttonCell.append(' ');
 
     let deleteButton = document.createElement('button') as HTMLButtonElement;

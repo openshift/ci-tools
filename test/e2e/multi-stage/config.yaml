@@ -3,6 +3,10 @@ base_images:
     name: centos
     namespace: openshift
     tag: '7'
+  alpine:
+    name: alpine
+    namespace: ci
+    tag: '3.10'
 resources:
   '*':
     limits:
@@ -10,6 +14,19 @@ resources:
     requests:
       cpu: 10m
 tests:
+  - as: run-as-script
+    steps:
+      test:
+        - as: success
+          commands: |
+            #!/bin/sh
+            echo "success"
+          from: alpine
+          run_as_script: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
   - as: without-references
     steps:
       test:

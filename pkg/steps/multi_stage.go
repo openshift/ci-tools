@@ -46,6 +46,8 @@ const (
 	CliEnv = "CLI_DIR"
 	// CommandPrefix is the prefix we add to a user's commands
 	CommandPrefix = "#!/bin/bash\nset -eu\n"
+	// CommandScriptMountPath is where we mount the command script
+	CommandScriptMountPath = "/var/run/configmaps/ci.openshift.io/multi-stage"
 )
 
 var envForProfile = []string{
@@ -131,6 +133,9 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	}
 	if err := s.createCredentials(); err != nil {
 		return fmt.Errorf("failed to create credentials: %w", err)
+	}
+	if err := s.createCommandConfigMaps(ctx); err != nil {
+		return fmt.Errorf("failed to create command configmap: %w", err)
 	}
 	if err := s.setupRBAC(ctx); err != nil {
 		return fmt.Errorf("failed to create RBAC objects: %w", err)
@@ -333,6 +338,36 @@ func (s *multiStageTestStep) createCredentials() error {
 	return nil
 }
 
+func (s *multiStageTestStep) createCommandConfigMaps(ctx context.Context) error {
+	log.Printf("Creating multi-stage test commands configmap for %q", s.name)
+	data := make(map[string]string)
+	for _, step := range append(s.pre, append(s.test, s.post...)...) {
+		data[step.As] = step.Commands
+	}
+	name := commandConfigMapForTest(s.name)
+	yes := true
+	commands := &coreapi.ConfigMap{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      name,
+			Namespace: s.jobSpec.Namespace(),
+		},
+		Data:      data,
+		Immutable: &yes,
+	}
+	// delete old command configmap if it exists
+	if err := s.client.Delete(ctx, commands); err != nil && !kerrors.IsNotFound(err) {
+		return fmt.Errorf("could not delete command configmap %s: %w", name, err)
+	}
+	if err := s.client.Create(ctx, commands); err != nil {
+		return fmt.Errorf("could not create command configmap %s: %w", name, err)
+	}
+	return nil
+}
+
+func commandConfigMapForTest(testName string) string {
+	return fmt.Sprintf("%s-commands", testName)
+}
+
 func (s *multiStageTestStep) runSteps(
 	ctx context.Context,
 	steps []api.LiteralTestStep,
@@ -432,7 +467,13 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		// the grace period for the Pod to be just larger than the grace period
 		// for the process, assuming an 80/20 distribution of work.
 		terminationGracePeriodSeconds := p(int64(gracePeriod.Seconds() * 5 / 4))
-		pod, err := generateBasePod(s.jobSpec, name, multiStageTestStepContainerName, []string{"/bin/bash", "-c", CommandPrefix + step.Commands}, image, resources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts)
+		var commands []string
+		if step.RunAsScript != nil && *step.RunAsScript {
+			commands = []string{fmt.Sprintf("%s/%s", CommandScriptMountPath, step.As)}
+		} else {
+			commands = []string{"/bin/bash", "-c", CommandPrefix + step.Commands}
+		}
+		pod, err := generateBasePod(s.jobSpec, name, multiStageTestStepContainerName, commands, image, resources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -481,6 +522,9 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		}
 		addSharedDirSecret(s.name, pod)
 		addCredentials(step.Credentials, pod)
+		if step.RunAsScript != nil && *step.RunAsScript {
+			addCommandScript(commandConfigMapForTest(s.name), pod)
+		}
 		ret = append(ret, *pod)
 	}
 	return ret, isBestEffort, utilerrors.NewAggregate(errs)
@@ -629,6 +673,28 @@ func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
 		Name:  ClusterProfileMountEnv,
 		Value: ClusterProfileMountPath,
 	}}...)
+}
+
+func addCommandScript(name string, pod *coreapi.Pod) {
+	volumeName := "commands-script"
+	// 0777 in decimal is 511
+	mode := int32(511)
+	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+		Name: volumeName,
+		VolumeSource: coreapi.VolumeSource{
+			ConfigMap: &coreapi.ConfigMapVolumeSource{
+				LocalObjectReference: coreapi.LocalObjectReference{
+					Name: name,
+				},
+				DefaultMode: &mode,
+			},
+		},
+	})
+	container := &pod.Spec.Containers[0]
+	container.VolumeMounts = append(container.VolumeMounts, coreapi.VolumeMount{
+		Name:      volumeName,
+		MountPath: CommandScriptMountPath,
+	})
 }
 
 func addCliInjector(release string, pod *coreapi.Pod) {

@@ -662,6 +662,9 @@ type LiteralTestStep struct {
 	Cli string `json:"cli,omitempty"`
 	// Observers are the observers that should be running
 	Observers []string `json:"observers,omitempty"`
+	// RunAsScript defines if this step should be executed as a script mounted
+	// in the test container instead of being executed directly via bash
+	RunAsScript *bool `json:"run_as_script,omitempty"`
 }
 
 // StepParameter is a variable set by the test, with an optional default.

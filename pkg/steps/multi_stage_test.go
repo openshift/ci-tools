@@ -105,6 +105,7 @@ func TestRequires(t *testing.T) {
 }
 
 func TestGeneratePods(t *testing.T) {
+	yes := true
 	config := api.ReleaseBuildConfiguration{
 		Tests: []api.TestStepConfiguration{{
 			As: "test",
@@ -117,7 +118,7 @@ func TestGeneratePods(t *testing.T) {
 					From:     "image1",
 					Commands: "command1",
 				}, {
-					As: "step2", From: "stable-initial:installer", Commands: "command2",
+					As: "step2", From: "stable-initial:installer", Commands: "command2", RunAsScript: &yes,
 				}},
 			},
 		}},

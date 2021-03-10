@@ -208,7 +208,7 @@ func main() {
 
 	// Add flag values to inject as ENV var entries in the prowjob configuration
 	envVars := map[string]string{
-		"BUNDLE_IMAGE":  o.bundleImageRef,
+		steps.OOBundle:  o.bundleImageRef,
 		"OCP_VERSION":   o.ocpVersion,
 		"CLUSTER_TYPE":  "aws",
 		steps.OOIndex:   o.indexImageRef,

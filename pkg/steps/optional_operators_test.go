@@ -33,11 +33,13 @@ func TestResolveOptionalOperator(t *testing.T) {
 				"OO_INDEX":   "le index",
 				"OO_PACKAGE": "le package",
 				"OO_CHANNEL": "le channel",
+				"OO_BUNDLE":  "le bundle",
 			},
 			expectedOO: &optionalOperator{
 				Index:   "le index",
 				Package: "le package",
 				Channel: "le channel",
+				Bundle:  "le bundle",
 			},
 		},
 		{
@@ -46,6 +48,7 @@ func TestResolveOptionalOperator(t *testing.T) {
 				"OO_INDEX":             "le index",
 				"OO_PACKAGE":           "le package",
 				"OO_CHANNEL":           "le channel",
+				"OO_BUNDLE":            "le bundle",
 				"OO_INSTALL_NAMESPACE": "le namespace",
 				"OO_TARGET_NAMESPACES": "un,deux,trois",
 			},
@@ -53,6 +56,7 @@ func TestResolveOptionalOperator(t *testing.T) {
 				Index:            "le index",
 				Package:          "le package",
 				Channel:          "le channel",
+				Bundle:           "le bundle",
 				Namespace:        "le namespace",
 				TargetNamespaces: []string{"un", "deux", "trois"},
 			},
@@ -62,6 +66,7 @@ func TestResolveOptionalOperator(t *testing.T) {
 			params: fakeParams{
 				"OO_PACKAGE":           "le package",
 				"OO_CHANNEL":           "le channel",
+				"OO_BUNDLE":            "le bundle",
 				"OO_INSTALL_NAMESPACE": "le namespace",
 				"OO_TARGET_NAMESPACES": "un,deux,trois",
 			},
@@ -72,6 +77,7 @@ func TestResolveOptionalOperator(t *testing.T) {
 			params: fakeParams{
 				"OO_INDEX":             "le index",
 				"OO_CHANNEL":           "le channel",
+				"OO_BUNDLE":            "le bundle",
 				"OO_INSTALL_NAMESPACE": "le namespace",
 				"OO_TARGET_NAMESPACES": "un,deux,trois",
 			},
@@ -79,6 +85,17 @@ func TestResolveOptionalOperator(t *testing.T) {
 		},
 		{
 			description: "missing channel -> error",
+			params: fakeParams{
+				"OO_INDEX":             "le index",
+				"OO_PACKAGE":           "le package",
+				"OO_BUNDLE":            "le bundle",
+				"OO_INSTALL_NAMESPACE": "le namespace",
+				"OO_TARGET_NAMESPACES": "un,deux,trois",
+			},
+			expectError: true,
+		},
+		{
+			description: "missing bundle -> error",
 			params: fakeParams{
 				"OO_INDEX":             "le index",
 				"OO_PACKAGE":           "le package",
@@ -115,11 +132,13 @@ func TestAsEnv(t *testing.T) {
 				Index:   "INDEX",
 				Package: "PACKAGE",
 				Channel: "CHANNEL",
+				Bundle:  "BUNDLE",
 			},
 			expected: []coreapi.EnvVar{
 				{Name: "OO_INDEX", Value: "INDEX"},
 				{Name: "OO_PACKAGE", Value: "PACKAGE"},
 				{Name: "OO_CHANNEL", Value: "CHANNEL"},
+				{Name: "OO_BUNDLE", Value: "BUNDLE"},
 			},
 		},
 		{
@@ -128,12 +147,14 @@ func TestAsEnv(t *testing.T) {
 				Index:     "INDEX",
 				Package:   "PACKAGE",
 				Channel:   "CHANNEL",
+				Bundle:    "BUNDLE",
 				Namespace: "NAMESPACE",
 			},
 			expected: []coreapi.EnvVar{
 				{Name: "OO_INDEX", Value: "INDEX"},
 				{Name: "OO_PACKAGE", Value: "PACKAGE"},
 				{Name: "OO_CHANNEL", Value: "CHANNEL"},
+				{Name: "OO_BUNDLE", Value: "BUNDLE"},
 				{Name: "OO_INSTALL_NAMESPACE", Value: "NAMESPACE"},
 			},
 		},
@@ -143,12 +164,14 @@ func TestAsEnv(t *testing.T) {
 				Index:            "INDEX",
 				Package:          "PACKAGE",
 				Channel:          "CHANNEL",
+				Bundle:           "BUNDLE",
 				TargetNamespaces: []string{"NS1", "NS2"},
 			},
 			expected: []coreapi.EnvVar{
 				{Name: "OO_INDEX", Value: "INDEX"},
 				{Name: "OO_PACKAGE", Value: "PACKAGE"},
 				{Name: "OO_CHANNEL", Value: "CHANNEL"},
+				{Name: "OO_BUNDLE", Value: "BUNDLE"},
 				{Name: "OO_TARGET_NAMESPACES", Value: "NS1,NS2"},
 			},
 		},

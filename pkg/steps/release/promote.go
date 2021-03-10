@@ -7,14 +7,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	coreapi "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/util/retry"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -22,7 +18,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
 // promotionStep will tag a full release suite
@@ -49,13 +44,6 @@ func (s *promotionStep) Inputs() (api.InputDefinition, error) {
 
 func (*promotionStep) Validate() error { return nil }
 
-var promotionRetry = wait.Backoff{
-	Steps:    20,
-	Duration: 10 * time.Millisecond,
-	Factor:   1.2,
-	Jitter:   0.1,
-}
-
 func (s *promotionStep) Run(ctx context.Context) error {
 	return results.ForReason("promoting_images").ForError(s.run(ctx))
 }
@@ -76,96 +64,14 @@ func (s *promotionStep) run(ctx context.Context) error {
 		return fmt.Errorf("could not resolve pipeline imagestream: %w", err)
 	}
 
-	if s.pushSecret != nil {
-		imageMirrorTarget := getImageMirrorTarget(s.config, tags, pipeline)
-		if len(imageMirrorTarget) == 0 {
-			log.Println("Nothing to promote, skipping...")
-			return nil
-		}
-
-		if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace())); err != nil {
-			return fmt.Errorf("unable to run promotion pod: %w", err)
-		}
+	imageMirrorTarget := getImageMirrorTarget(s.config, tags, pipeline)
+	if len(imageMirrorTarget) == 0 {
+		log.Println("Nothing to promote, skipping...")
 		return nil
 	}
 
-	if len(s.config.Name) > 0 {
-		return retry.RetryOnConflict(promotionRetry, func() error {
-			is := &imagev1.ImageStream{}
-			err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.config.Namespace, Name: s.config.Name}, is)
-			if errors.IsNotFound(err) {
-				is.Namespace = s.config.Namespace
-				is.Name = s.config.Name
-				if err := s.client.Create(ctx, is); err != nil {
-					return fmt.Errorf("could not retrieve target imagestream: %w", err)
-				}
-			}
-
-			for dst, src := range tags {
-				if valid, _ := utils.FindStatusTag(pipeline, src); valid != nil {
-					is.Spec.Tags = append(is.Spec.Tags, imagev1.TagReference{
-						Name: dst,
-						From: valid,
-					})
-				}
-			}
-
-			if err := s.client.Update(ctx, is); err != nil {
-				if errors.IsConflict(err) {
-					return err
-				}
-				return fmt.Errorf("could not promote image streams: %w", err)
-			}
-			return nil
-		})
-	}
-
-	for dst, src := range tags {
-		valid, _ := utils.FindStatusTag(pipeline, src)
-		if valid == nil {
-			continue
-		}
-
-		err := retry.RetryOnConflict(promotionRetry, func() error {
-			err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.config.Namespace, Name: dst}, &imagev1.ImageStream{})
-			if errors.IsNotFound(err) {
-				err = s.client.Create(ctx, &imagev1.ImageStream{
-					ObjectMeta: meta.ObjectMeta{
-						Name:      dst,
-						Namespace: s.config.Namespace,
-					},
-					Spec: imagev1.ImageStreamSpec{
-						LookupPolicy: imagev1.ImageLookupPolicy{
-							Local: true,
-						},
-					},
-				})
-			}
-			if err != nil {
-				return fmt.Errorf("could not ensure target imagestream: %w", err)
-			}
-
-			ist := &imagev1.ImageStreamTag{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      fmt.Sprintf("%s:%s", dst, s.config.Tag),
-					Namespace: s.config.Namespace,
-				},
-				Tag: &imagev1.TagReference{
-					Name: s.config.Tag,
-					From: valid,
-				},
-			}
-			if err := s.client.Update(ctx, ist); err != nil {
-				if errors.IsConflict(err) {
-					return err
-				}
-				return fmt.Errorf("could not promote imagestreamtag %s: %w", dst, err)
-			}
-			return nil
-		})
-		if err != nil {
-			return err
-		}
+	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace())); err != nil {
+		return fmt.Errorf("unable to run promotion pod: %w", err)
 	}
 	return nil
 }

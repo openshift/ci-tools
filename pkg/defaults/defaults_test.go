@@ -649,7 +649,7 @@ func TestFromConfig(t *testing.T) {
 	var leaseClient *lease.Client
 	var requiredTargets []string
 	var cloneAuthConfig *steps.CloneAuthConfig
-	var pullSecret, pushSecret *coreapi.Secret
+	pullSecret, pushSecret := &coreapi.Secret{}, &coreapi.Secret{}
 	for _, tc := range []struct {
 		name           string
 		config         api.ReleaseBuildConfiguration

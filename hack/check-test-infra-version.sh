@@ -23,10 +23,16 @@ function determine_vendored_commit() {
 
 ci_tools_vendored_commit="$( determine_vendored_commit . )"
 release_controller_vendored_commit="$( determine_vendored_commit ./../release-controller )"
+ci_chat_bot_vendored_commit="$( determine_vendored_commit ./../ci-chat-bot )"
 
 pushd ./../../kubernetes/test-infra
 if ! git merge-base --is-ancestor "${ci_tools_vendored_commit}" "${release_controller_vendored_commit}"; then
 	echo "[FATAL] The release-controller repo vendors test-infra at ${release_controller_vendored_commit}, which is older than the ci-tools vendor at ${ci_tools_vendored_commit}"
+	exit 1
+fi
+
+if ! git merge-base --is-ancestor "${ci_tools_vendored_commit}" "${ci_chat_bot_vendored_commit}"; then
+	echo "[FATAL] The ci-chat-bot repo vendors test-infra at ${ci_chat_bot_vendored_commit}, which is older than the ci-tools vendor at ${ci_tools_vendored_commit}"
 	exit 1
 fi
 popd

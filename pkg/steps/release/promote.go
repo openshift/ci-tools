@@ -23,7 +23,7 @@ import (
 // promotionStep will tag a full release suite
 // of images out to the configured namespace.
 type promotionStep struct {
-	config         api.PromotionConfiguration
+	configuration  *api.ReleaseBuildConfiguration
 	images         []api.ProjectDirectoryImageBuildStepConfiguration
 	requiredImages sets.String
 	jobSpec        *api.JobSpec
@@ -49,13 +49,13 @@ func (s *promotionStep) Run(ctx context.Context) error {
 }
 
 func (s *promotionStep) run(ctx context.Context) error {
-	tags, names := PromotedTagsWithRequiredImages(s.config, s.images, s.requiredImages)
+	tags, names := PromotedTagsWithRequiredImages(s.configuration, s.requiredImages)
 	if len(names) == 0 {
 		log.Println("Nothing to promote, skipping...")
 		return nil
 	}
 
-	log.Printf("Promoting tags to %s: %s", targetName(s.config), strings.Join(names.List(), ", "))
+	log.Printf("Promoting tags to %s: %s", targetName(*s.configuration.PromotionConfiguration), strings.Join(names.List(), ", "))
 	pipeline := &imagev1.ImageStream{}
 	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{
 		Namespace: s.jobSpec.Namespace(),
@@ -230,11 +230,8 @@ func toPromote(config api.PromotionConfiguration, images []api.ProjectDirectoryI
 
 // PromotedTags returns the tags that are being promoted for the given ReleaseBuildConfiguration
 func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStreamTagReference {
-	if configuration == nil || configuration.PromotionConfiguration == nil {
-		return nil
-	}
 	var tags []api.ImageStreamTagReference
-	mapping, _ := PromotedTagsWithRequiredImages(*configuration.PromotionConfiguration, configuration.Images, sets.NewString())
+	mapping, _ := PromotedTagsWithRequiredImages(configuration, sets.NewString())
 	for _, dest := range mapping {
 		tags = append(tags, dest)
 	}
@@ -243,22 +240,25 @@ func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStrea
 
 // PromotedTagsWithRequiredImages returns the tags that are being promoted for the given ReleaseBuildConfiguration
 // accounting for the list of required images
-func PromotedTagsWithRequiredImages(configuration api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String) (map[string]api.ImageStreamTagReference, sets.String) {
-	tags, names := toPromote(configuration, images, requiredImages)
+func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration, requiredImages sets.String) (map[string]api.ImageStreamTagReference, sets.String) {
+	if configuration == nil || configuration.PromotionConfiguration == nil {
+		return nil, nil
+	}
+	tags, names := toPromote(*configuration.PromotionConfiguration, configuration.Images, requiredImages)
 	promotedTags := map[string]api.ImageStreamTagReference{}
 	for src, dst := range tags {
 		var tag api.ImageStreamTagReference
-		if configuration.Name != "" {
+		if configuration.PromotionConfiguration.Name != "" {
 			tag = api.ImageStreamTagReference{
-				Namespace: configuration.Namespace,
-				Name:      configuration.Name,
+				Namespace: configuration.PromotionConfiguration.Namespace,
+				Name:      configuration.PromotionConfiguration.Name,
 				Tag:       dst,
 			}
 		} else { // promotion.Tag must be set
 			tag = api.ImageStreamTagReference{
-				Namespace: configuration.Namespace,
+				Namespace: configuration.PromotionConfiguration.Namespace,
 				Name:      dst,
-				Tag:       configuration.Tag,
+				Tag:       configuration.PromotionConfiguration.Tag,
 			}
 		}
 		promotedTags[src] = tag
@@ -281,7 +281,7 @@ func (s *promotionStep) Provides() api.ParameterMap {
 func (s *promotionStep) Name() string { return "[promotion]" }
 
 func (s *promotionStep) Description() string {
-	return fmt.Sprintf("Promote built images into the release image stream %s", targetName(s.config))
+	return fmt.Sprintf("Promote built images into the release image stream %s", targetName(*s.configuration.PromotionConfiguration))
 }
 
 func (s *promotionStep) Objects() []ctrlruntimeclient.Object {
@@ -290,10 +290,9 @@ func (s *promotionStep) Objects() []ctrlruntimeclient.Object {
 
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skipped.
-func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, jobSpec *api.JobSpec, client steps.PodClient, pushSecret *coreapi.Secret) api.Step {
+func PromotionStep(configuration *api.ReleaseBuildConfiguration, requiredImages sets.String, jobSpec *api.JobSpec, client steps.PodClient, pushSecret *coreapi.Secret) api.Step {
 	return &promotionStep{
-		config:         config,
-		images:         images,
+		configuration:  configuration,
 		requiredImages: requiredImages,
 		jobSpec:        jobSpec,
 		client:         client,

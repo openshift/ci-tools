@@ -1,6 +1,7 @@
 package defaults
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -268,6 +269,9 @@ func fromConfig(
 	addProvidesForStep(step, params)
 
 	if promote {
+		if pushSecret == nil {
+			return nil, nil, errors.New("--image-mirror-push-secret is required for promoting images")
+		}
 		cfg, err := promotionDefaults(config)
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not determine promotion defaults: %w", err)

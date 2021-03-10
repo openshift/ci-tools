@@ -186,6 +186,27 @@ func TestPromotedTags(t *testing.T) {
 				Tag:       "fred",
 			}},
 		},
+		{
+			name: "promotion set and binaries built, means binaries promoted",
+			input: &api.ReleaseBuildConfiguration{
+				Images:              []api.ProjectDirectoryImageBuildStepConfiguration{},
+				BinaryBuildCommands: "something",
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "roger",
+					Tag:       "fred",
+				},
+				Metadata: api.Metadata{
+					Org:    "org",
+					Repo:   "repo",
+					Branch: "branch",
+				},
+			},
+			expected: []api.ImageStreamTagReference{{
+				Namespace: "build-cache",
+				Name:      "org-repo",
+				Tag:       "branch",
+			}},
+		},
 	}
 
 	for _, testCase := range testCases {

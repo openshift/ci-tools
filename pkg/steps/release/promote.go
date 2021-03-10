@@ -24,7 +24,6 @@ import (
 // of images out to the configured namespace.
 type promotionStep struct {
 	configuration  *api.ReleaseBuildConfiguration
-	images         []api.ProjectDirectoryImageBuildStepConfiguration
 	requiredImages sets.String
 	jobSpec        *api.JobSpec
 	client         steps.PodClient
@@ -262,6 +261,14 @@ func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration
 			}
 		}
 		promotedTags[src] = tag
+	}
+	// always promote the binary build if one exists
+	if configuration.BinaryBuildCommands != "" {
+		promotedTags[string(api.PipelineImageStreamTagReferenceBinaries)] = api.ImageStreamTagReference{
+			Namespace: "build-cache",
+			Name:      fmt.Sprintf("%s-%s", configuration.Metadata.Org, configuration.Metadata.Repo),
+			Tag:       configuration.Metadata.Branch,
+		}
 	}
 	return promotedTags, names
 }

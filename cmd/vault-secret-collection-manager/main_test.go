@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -197,8 +198,38 @@ func TestSecretCollectionManager(tt *testing.T) {
 			expectedVaultPolicies: []string{"default", "secret-collection-manager-managed-mine-alone", "root"},
 		},
 		{
-			name:                  "Collection member successfully deletes it",
-			user:                  "user-1",
+			name:               "Request to remove all members from a collection, 400",
+			user:               "user-1",
+			request:            mustNewRequest(http.MethodPut, fmt.Sprintf("http://%s/secretcollection/mine-alone/members", managerListenAddr), []byte(`{}`)...),
+			expectedStatusCode: 400,
+			expectedVaultGroups: []vaultclient.Group{{
+				Name:            "secret-collection-manager-managed-mine-alone",
+				Policies:        []string{"secret-collection-manager-managed-mine-alone"},
+				MemberEntityIDs: []string{"entity-0"},
+				Metadata:        map[string]string{"created-by-secret-collection-manager": "true"},
+				ModifyIndex:     1,
+			}},
+			expectedVaultPolicies: []string{"default", "secret-collection-manager-managed-mine-alone", "root"},
+		},
+		{
+			name: "Add a new collection member",
+			user: "user-1",
+			request: mustNewRequest(http.MethodPut, fmt.Sprintf("http://%s/secretcollection/mine-alone/members", managerListenAddr),
+				[]byte(`{"members":["user-1","user-2"]}`)...,
+			),
+			expectedStatusCode: 200,
+			expectedVaultGroups: []vaultclient.Group{{
+				Name:            "secret-collection-manager-managed-mine-alone",
+				Policies:        []string{"secret-collection-manager-managed-mine-alone"},
+				MemberEntityIDs: []string{"entity-0", "entity-1"},
+				Metadata:        map[string]string{"created-by-secret-collection-manager": "true"},
+				ModifyIndex:     2,
+			}},
+			expectedVaultPolicies: []string{"default", "secret-collection-manager-managed-mine-alone", "root"},
+		},
+		{
+			name:                  "New collection member successfully deletes it",
+			user:                  "user-2",
 			request:               mustNewRequest(http.MethodDelete, fmt.Sprintf("http://%s/secretcollection/mine-alone", managerListenAddr)),
 			expectedStatusCode:    200,
 			expectedVaultPolicies: []string{"default", "secret-collection-manager-managed-mine-alone", "root"},
@@ -315,8 +346,8 @@ func checkIs403(err error, action string, expectSuccess bool, t *testing.T) {
 
 var emptyVaultAlias = &vaultclient.Alias{}
 
-func mustNewRequest(method, url string) *http.Request {
-	request, err := http.NewRequest(method, url, nil)
+func mustNewRequest(method, url string, body ...byte) *http.Request {
+	request, err := http.NewRequest(method, url, bytes.NewBuffer(body))
 	if err != nil {
 		panic(err)
 	}

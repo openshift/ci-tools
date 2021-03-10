@@ -552,6 +552,7 @@ func (m *secretCollectionManager) usersHandler(l *logrus.Entry, _ string, w http
 
 	var serialized []byte
 	if len(userNames) > 0 {
+		sort.Strings(userNames)
 		var err error
 		serialized, err = json.Marshal(userNames)
 		if err != nil {

@@ -130,7 +130,7 @@ function optionWithValue(value: string): HTMLOptionElement {
   return option;
 }
 
-// getSelectValues is a helper to get all values that are selected
+// getSelectValues is a helper to get all options in a select
 function getSelectValues(select: HTMLSelectElement): string[] {
   let result: string[] = [];
   for (let childRaw of Array.from(select.children)) {

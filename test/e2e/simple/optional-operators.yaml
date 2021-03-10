@@ -3,6 +3,10 @@ base_images:
     name: centos
     namespace: openshift
     tag: '7'
+  operator-index-46:
+    name: redhat-operator-index
+    namespace: ci
+    tag: 'v4.6'
 build_root:
   image_stream_tag:
     name: release
@@ -19,15 +23,15 @@ operator:
   - as: named-bundle
     context_dir: "test/manifests"
     dockerfile_path: "bundle.Dockerfile"
-    base_index: registry.redhat.io/redhat/redhat-operator-index:v4.7
+    base_index: operator-index-46
   - context_dir: "test/manifests"
     dockerfile_path: "bundle.Dockerfile"
   substitutions:
-  - pullspec: quay.io/openshift/origin-metering-reporting-operator:4.5
+  - pullspec: quay.io/openshift/origin-metering-reporting-operator:4.6
     with: metering-reporting-operator # another `images:` list item
-  - pullspec: quay.io/openshift/origin-oauth-proxy:4.5
+  - pullspec: quay.io/openshift/origin-oauth-proxy:4.6
     with: oauth-proxy # OCP component
-  - pullspec: quay.io/openshift/origin-hive:4.5
+  - pullspec: quay.io/openshift/origin-hive:4.6
     with: metering-hive # operand image, must be present in `stable` imagestream
 tag_specification:
   namespace: ocp

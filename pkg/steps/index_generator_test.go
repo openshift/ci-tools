@@ -33,6 +33,11 @@ func TestIndexGenDockerfile(t *testing.T) {
 					Items: []apiimagev1.TagEvent{{
 						Image: "ci-bundle1",
 					}},
+				}, {
+					Tag: "the-index",
+					Items: []apiimagev1.TagEvent{{
+						Image: "the-index",
+					}},
 				}},
 			},
 		})
@@ -90,7 +95,7 @@ COPY --from=builder /database/ database`,
 		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
-RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate", "--from-index", "the-index"]
+RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate", "--from-index", "some-reg/target-namespace/pipeline@the-index"]
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile

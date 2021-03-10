@@ -93,9 +93,17 @@ func (s *indexGeneratorStep) indexGenDockerfile() (string, error) {
 		}
 		bundles = append(bundles, fullSpec)
 	}
-	opmCommand := fmt.Sprintf(`RUN ["opm", "index", "add", "--mode", "%s", "--bundles", "%s", "--out-dockerfile", "%s", "--generate"`, s.config.UpdateGraph, strings.Join(bundles, ","), IndexDockerfileName)
+	baseIndex := ""
 	if s.config.BaseIndex != "" {
-		opmCommand = fmt.Sprintf(`%s, "--from-index", "%s"`, opmCommand, s.config.BaseIndex)
+		fullSpec, err := utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.PipelineImageStream, s.config.BaseIndex)()
+		if err != nil {
+			return "", fmt.Errorf("failed to get image digest for bundle `%s`: %w", s.config.BaseIndex, err)
+		}
+		baseIndex = fullSpec
+	}
+	opmCommand := fmt.Sprintf(`RUN ["opm", "index", "add", "--mode", "%s", "--bundles", "%s", "--out-dockerfile", "%s", "--generate"`, s.config.UpdateGraph, strings.Join(bundles, ","), IndexDockerfileName)
+	if baseIndex != "" {
+		opmCommand = fmt.Sprintf(`%s, "--from-index", "%s"`, opmCommand, baseIndex)
 	}
 	opmCommand = fmt.Sprintf("%s]", opmCommand)
 	dockerCommands = append(dockerCommands, opmCommand)
@@ -110,6 +118,10 @@ func (s *indexGeneratorStep) Requires() []api.StepLink {
 	var links []api.StepLink
 	for _, bundle := range s.config.OperatorIndex {
 		imageStream, name, _ := s.releaseBuildConfig.DependencyParts(api.StepDependency{Name: bundle})
+		links = append(links, api.LinkForImage(imageStream, name))
+	}
+	if s.config.BaseIndex != "" {
+		imageStream, name, _ := s.releaseBuildConfig.DependencyParts(api.StepDependency{Name: s.config.BaseIndex})
 		links = append(links, api.LinkForImage(imageStream, name))
 	}
 	return links

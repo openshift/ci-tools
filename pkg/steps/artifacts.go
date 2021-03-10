@@ -343,7 +343,7 @@ func removeFile(podClient PodClient, ns, name, containerName string, paths []str
 	return nil
 }
 
-func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.DecorationConfig, rawJobSpec string) error {
+func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.DecorationConfig, rawJobSpec string, secretsToCensor []coreapi.VolumeMount) error {
 	logMount, logVolume := decorate.LogMountAndVolume()
 	toolsMount, toolsVolume := decorate.ToolsMountAndVolume()
 	blobStorageVolumes, blobStorageMounts, blobStorageOptions := decorate.BlobStorageOptions(*decorationConfig, false)
@@ -356,7 +356,7 @@ func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.
 	}
 	pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, coreapi.EnvVar{Name: artifactEnv, Value: logMount.MountPath + "/artifacts"})
 
-	sidecar, err := decorate.Sidecar(decorationConfig, blobStorageOptions, blobStorageMounts, logMount, nil, rawJobSpec, !decorate.RequirePassingEntries, decorate.IgnoreInterrupts, nil, *wrapperOptions)
+	sidecar, err := decorate.Sidecar(decorationConfig, blobStorageOptions, blobStorageMounts, logMount, nil, rawJobSpec, !decorate.RequirePassingEntries, decorate.IgnoreInterrupts, secretsToCensor, *wrapperOptions)
 	if err != nil {
 		return fmt.Errorf("could not create sidecar: %w", err)
 	}

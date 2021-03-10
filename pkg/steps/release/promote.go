@@ -49,7 +49,7 @@ func (s *promotionStep) Run(ctx context.Context) error {
 }
 
 func (s *promotionStep) run(ctx context.Context) error {
-	tags, names := toPromote(s.config, s.images, s.requiredImages)
+	tags, names := PromotedTagsWithRequiredImages(s.config, s.images, s.requiredImages)
 	if len(names) == 0 {
 		log.Println("Nothing to promote, skipping...")
 		return nil
@@ -64,7 +64,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 		return fmt.Errorf("could not resolve pipeline imagestream: %w", err)
 	}
 
-	imageMirrorTarget := getImageMirrorTarget(s.config, tags, pipeline)
+	imageMirrorTarget := getImageMirrorTarget(tags, pipeline)
 	if len(imageMirrorTarget) == 0 {
 		log.Println("Nothing to promote, skipping...")
 		return nil
@@ -76,29 +76,18 @@ func (s *promotionStep) run(ctx context.Context) error {
 	return nil
 }
 
-func getImageMirrorTarget(config api.PromotionConfiguration, tags map[string]string, pipeline *imagev1.ImageStream) map[string]string {
+func getImageMirrorTarget(tags map[string]api.ImageStreamTagReference, pipeline *imagev1.ImageStream) map[string]string {
 	if pipeline == nil {
 		return nil
 	}
 	imageMirror := map[string]string{}
-	if len(config.Name) > 0 {
-		for dst, src := range tags {
-			dockerImageReference := findDockerImageReference(pipeline, src)
-			if dockerImageReference == "" {
-				continue
-			}
-			dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
-			imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), config.Namespace, config.Name, dst)
+	for src, dst := range tags {
+		dockerImageReference := findDockerImageReference(pipeline, src)
+		if dockerImageReference == "" {
+			continue
 		}
-	} else {
-		for dst, src := range tags {
-			dockerImageReference := findDockerImageReference(pipeline, src)
-			if dockerImageReference == "" {
-				continue
-			}
-			dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
-			imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), config.Namespace, dst, config.Tag)
-		}
+		dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
+		imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), dst.Namespace, dst.Name, dst.Tag)
 	}
 	if len(imageMirror) == 0 {
 		return nil
@@ -241,29 +230,40 @@ func toPromote(config api.PromotionConfiguration, images []api.ProjectDirectoryI
 
 // PromotedTags returns the tags that are being promoted for the given ReleaseBuildConfiguration
 func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStreamTagReference {
-	if configuration.PromotionConfiguration == nil {
+	if configuration == nil || configuration.PromotionConfiguration == nil {
 		return nil
 	}
-	tags, _ := toPromote(*configuration.PromotionConfiguration, configuration.Images, sets.NewString())
-	var promotedTags []api.ImageStreamTagReference
-	for dst := range tags {
+	var tags []api.ImageStreamTagReference
+	mapping, _ := PromotedTagsWithRequiredImages(*configuration.PromotionConfiguration, configuration.Images, sets.NewString())
+	for _, dest := range mapping {
+		tags = append(tags, dest)
+	}
+	return tags
+}
+
+// PromotedTagsWithRequiredImages returns the tags that are being promoted for the given ReleaseBuildConfiguration
+// accounting for the list of required images
+func PromotedTagsWithRequiredImages(configuration api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String) (map[string]api.ImageStreamTagReference, sets.String) {
+	tags, names := toPromote(configuration, images, requiredImages)
+	promotedTags := map[string]api.ImageStreamTagReference{}
+	for src, dst := range tags {
 		var tag api.ImageStreamTagReference
-		if configuration.PromotionConfiguration.Name != "" {
+		if configuration.Name != "" {
 			tag = api.ImageStreamTagReference{
-				Namespace: configuration.PromotionConfiguration.Namespace,
-				Name:      configuration.PromotionConfiguration.Name,
+				Namespace: configuration.Namespace,
+				Name:      configuration.Name,
 				Tag:       dst,
 			}
 		} else { // promotion.Tag must be set
 			tag = api.ImageStreamTagReference{
-				Namespace: configuration.PromotionConfiguration.Namespace,
+				Namespace: configuration.Namespace,
 				Name:      dst,
-				Tag:       configuration.PromotionConfiguration.Tag,
+				Tag:       configuration.Tag,
 			}
 		}
-		promotedTags = append(promotedTags, tag)
+		promotedTags[src] = tag
 	}
-	return promotedTags
+	return promotedTags, names
 }
 
 func (s *promotionStep) Requires() []api.StepLink {

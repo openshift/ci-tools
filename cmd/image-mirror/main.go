@@ -111,15 +111,15 @@ func main() {
 	logrus.Info("Process ended gracefully")
 }
 
-func handleMirrorImages(mirrors map[string]string) error {
+func handleMirrorImages(mirrors []pair) error {
 	file, err := ioutil.TempFile("", "mirror-image-")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
 	//defer os.Remove(file.Name())
 	var sb strings.Builder
-	for k, v := range mirrors {
-		sb.WriteString(fmt.Sprintf("%s=%s\n", k, v))
+	for _, p := range mirrors {
+		sb.WriteString(fmt.Sprintf("%s=%s\n", p.source, p.target))
 	}
 	if err := ioutil.WriteFile(file.Name(), []byte(sb.String()), 0644); err != nil {
 		return fmt.Errorf("failed to write file %q: %w", file.Name(), err)
@@ -128,8 +128,13 @@ func handleMirrorImages(mirrors map[string]string) error {
 	return nil
 }
 
-func mirrorImages(cxt context.Context, clients map[string]ctrlruntimeclient.Client) (map[string]string, error) {
-	mirror := map[string]string{}
+type pair struct {
+	source string
+	target string
+}
+
+func mirrorImages(cxt context.Context, clients map[string]ctrlruntimeclient.Client) ([]pair, error) {
+	var mirror []pair
 	apiCIClient := clients[apiCIContextName]
 	srcImagestreams := &imageapi.ImageStreamList{}
 	//logrus.SetLevel(logrus.DebugLevel)
@@ -155,7 +160,9 @@ func mirrorImages(cxt context.Context, clients map[string]ctrlruntimeclient.Clie
 					logrus.WithField("srcTag.Tag", srcTag.Tag).Warn("failed to get digest")
 					continue
 				}
-				mirror[fmt.Sprintf("%s@%s", srcIS.Status.PublicDockerImageRepository, digest)] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), srcIS.Namespace, srcIS.Name, srcTag.Tag)
+				mirror = append(mirror, pair{source: fmt.Sprintf("%s@%s", srcIS.Status.PublicDockerImageRepository, digest),
+					target: fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), srcIS.Namespace, srcIS.Name, srcTag.Tag),
+				})
 			}
 		}
 
@@ -213,6 +220,8 @@ func needToMirror(tag *imageapi.NamedTagEventList, srcIS *imageapi.ImageStream, 
 			for _, dstTag := range dstIS.Status.Tags {
 				if tag.Tag == dstTag.Tag {
 					foundTag = true
+				} else {
+					continue
 				}
 				if len(dstTag.Items) == 0 {
 					log.Debug("tag's items on app.ci is empty")

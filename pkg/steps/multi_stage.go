@@ -14,6 +14,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/entrypoint"
 	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -392,12 +393,16 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			return &i
 		}
 		artifactDir := fmt.Sprintf("%s/%s", s.name, step.As)
-		s.jobSpec.DecorationConfig.Timeout = step.Timeout
-		s.jobSpec.DecorationConfig.GracePeriod = step.GracePeriod
+		timeout := entrypoint.DefaultTimeout
+		if step.Timeout != nil {
+			timeout = step.Timeout.Duration
+		}
+		s.jobSpec.DecorationConfig.Timeout = &prowapi.Duration{Duration: timeout}
 		gracePeriod := entrypoint.DefaultGracePeriod
 		if step.GracePeriod != nil {
 			gracePeriod = step.GracePeriod.Duration
 		}
+		s.jobSpec.DecorationConfig.GracePeriod = &prowapi.Duration{Duration: gracePeriod}
 		// We want upload to have some time to do what it needs to do, so set
 		// the grace period for the Pod to be just larger than the grace period
 		// for the process, assuming an 80/20 distribution of work.

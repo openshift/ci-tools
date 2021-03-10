@@ -517,6 +517,11 @@ func (o *options) Complete() error {
 		clusterConfig.Impersonate = rest.ImpersonationConfig{UserName: o.impersonateUser}
 	}
 
+	if o.verbose {
+		clusterConfig.ContentType = "application/json"
+		clusterConfig.AcceptContentTypes = "application/json"
+	}
+
 	o.clusterConfig = clusterConfig
 
 	if o.pullSecretPath != "" {

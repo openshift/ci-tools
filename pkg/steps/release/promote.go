@@ -63,7 +63,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 		return fmt.Errorf("could not resolve pipeline imagestream: %w", err)
 	}
 
-	imageMirrorTarget := getImageMirrorTarget(tags, pipeline)
+	imageMirrorTarget := getImageMirrorTarget(tags, pipeline, registryDomain(s.configuration.PromotionConfiguration))
 	if len(imageMirrorTarget) == 0 {
 		log.Println("Nothing to promote, skipping...")
 		return nil
@@ -75,7 +75,16 @@ func (s *promotionStep) run(ctx context.Context) error {
 	return nil
 }
 
-func getImageMirrorTarget(tags map[string]api.ImageStreamTagReference, pipeline *imagev1.ImageStream) map[string]string {
+// registryDomain determines the domain of the registry we promote to
+func registryDomain(configuration *api.PromotionConfiguration) string {
+	registry := api.DomainForService(api.ServiceRegistry)
+	if configuration.RegistryOverride != "" {
+		registry = configuration.RegistryOverride
+	}
+	return registry
+}
+
+func getImageMirrorTarget(tags map[string]api.ImageStreamTagReference, pipeline *imagev1.ImageStream, registry string) map[string]string {
 	if pipeline == nil {
 		return nil
 	}
@@ -86,7 +95,7 @@ func getImageMirrorTarget(tags map[string]api.ImageStreamTagReference, pipeline 
 			continue
 		}
 		dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
-		imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s", api.DomainForService(api.ServiceRegistry), dst.ISTagName())
+		imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s", registry, dst.ISTagName())
 	}
 	if len(imageMirror) == 0 {
 		return nil

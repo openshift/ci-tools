@@ -407,6 +407,12 @@ type PromotionConfiguration struct {
 	// never concurrently, and you want to have promotion config
 	// in the ci-operator configuration files all the time.
 	Disabled bool `json:"disabled,omitempty"`
+
+	// RegistryOverride is an override for the registry domain to
+	// which we will mirror images. This is an advanced option and
+	// should *not* be used in common test workflows. The CI chat
+	// bot uses this option to facilitate image sharing.
+	RegistryOverride string `json:"registry_override,omitempty"`
 }
 
 // StepConfiguration holds one step configuration.

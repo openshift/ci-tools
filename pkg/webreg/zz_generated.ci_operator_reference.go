@@ -145,6 +145,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"    # Namespace identifies the namespace to which the built\n" +
 	"    # artifacts will be published to.\n" +
 	"    namespace: ' '\n" +
+	"    # RegistryOverride is an override for the registry domain to\n" +
+	"    # which we will mirror images. This is an advanced option and\n" +
+	"    # should *not* be used in common test workflows. The CI chat\n" +
+	"    # bot uses this option to facilitate image sharing.\n" +
+	"    registry_override: ' '\n" +
 	"    # Tag is the ImageStreamTag tagged in for each\n" +
 	"    # build image's ImageStream.\n" +
 	"    tag: ' '\n" +

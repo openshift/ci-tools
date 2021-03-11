@@ -53,9 +53,7 @@ type options struct {
 	vaultServer    string
 	vaultToken     string
 	vaultPrefix    string
-	dryRun         bool
 	validate       bool
-	validateOnly   bool
 	maxConcurrency int
 
 	config          []bitWardenItem
@@ -123,13 +121,10 @@ func (c *vaultClient) setItem(path, field string, content string) error {
 
 func parseOptions() options {
 	var o options
-	flag.CommandLine.BoolVar(&o.dryRun, "dry-run", true, "Deprecated, equivalent to --target file")
 	flag.CommandLine.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
 	flag.CommandLine.StringVar(&o.bootstrapConfigPath, "bootstrap-config", "", "Path to the config file used for bootstrapping cluster secrets after using this tool.")
 	flag.CommandLine.BoolVar(&o.validate, "validate", true, "Validate that the items created from this tool are used in bootstrapping")
-	flag.CommandLine.BoolVar(&o.validateOnly, "validate-only", false, "Deprecated, equivalent to --target validate")
-	// TODO make `file` the default
-	flag.CommandLine.StringVar(&o.target, "target", "", fmt.Sprintf("Secret back end where secrets are created (options: %q, %q, %q, %q)", targetValidate, targetFile, targetBitwarden, targetVault))
+	flag.CommandLine.StringVar(&o.target, "target", "file", fmt.Sprintf("Secret back end where secrets are created (options: %q, %q, %q, %q)", targetValidate, targetFile, targetBitwarden, targetVault))
 	flag.CommandLine.StringVar(&o.outputFile, "output-file", "", `output file when target is "file"`)
 	flag.CommandLine.StringVar(&o.bwUser, "bw-user", "", "Username to access BitWarden.")
 	flag.CommandLine.StringVar(&o.bwPasswordPath, "bw-password-path", "", "Path to a password file to access BitWarden.")
@@ -150,20 +145,6 @@ func (o *options) validateOptions() error {
 		return fmt.Errorf("invalid log level specified: %w", err)
 	}
 	logrus.SetLevel(level)
-	// TODO for backwards compatibility, remove
-	if o.validateOnly {
-		if o.target != "" {
-			return errors.New("--validate-only and --target are mutually exclusive")
-		}
-		o.target = targetValidate
-	} else if !o.dryRun {
-		if o.target != "" {
-			return errors.New("--dry-run=false and --target are mutually exclusive")
-		}
-		o.target = targetBitwarden
-	} else if o.target == "" {
-		o.target = targetFile
-	}
 	switch o.target {
 	case targetBitwarden:
 		if o.bwUser == "" {

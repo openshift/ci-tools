@@ -204,7 +204,7 @@ func (c podClient) WithNewLoggingClient() PodClient {
 
 // Allow tests to accelerate time
 var intervalLock = &sync.RWMutex{}
-var interval = time.Second
+var interval = 10 * time.Second
 
 func waitForContainer(podClient PodClient, ns, name, containerName string) error {
 	logrus.WithFields(logrus.Fields{

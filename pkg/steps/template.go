@@ -453,7 +453,7 @@ func waitForPodDeletion(podClient ctrlruntimeclient.Client, namespace, name stri
 			return nil
 		}
 		log.Printf("Waiting for pod %s to be deleted ... (%ds/%d)", name, i, timeout)
-		time.Sleep(2 * time.Second)
+		time.Sleep(10 * time.Second)
 	}
 
 	return fmt.Errorf("waited for pod %s deletion for %ds, was not deleted", name, timeout)
@@ -556,7 +556,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient PodClient, nam
 	}
 	done := ctx.Done()
 
-	podCheckTicker := time.NewTicker(5 * time.Second)
+	podCheckTicker := time.NewTicker(10 * time.Second)
 	defer podCheckTicker.Stop()
 	podStartTimeout := 15 * time.Minute
 	var podSeenRunning bool

@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	deadlock "github.com/sasha-s/go-deadlock"
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
@@ -417,7 +418,7 @@ type ArtifactWorker struct {
 	// when writing into it.
 	podsToDownload chan string
 
-	lock         sync.Mutex
+	lock         deadlock.Mutex
 	remaining    podWaitRecord
 	required     podContainersMap
 	hasArtifacts sets.String

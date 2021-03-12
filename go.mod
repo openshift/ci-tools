@@ -44,11 +44,13 @@ require (
 	github.com/openshift/imagebuilder v1.1.1
 	github.com/openshift/library-go v0.0.0-20200127110935-527e40ed17d9
 	github.com/openshift/openshift-apiserver v0.0.0-alpha.0
+	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/polyfloyd/go-errorlint v0.0.0-20200429095719-920be198a950
 	github.com/prometheus/client_golang v1.7.1
 	github.com/prometheus/common v0.10.0
+	github.com/sasha-s/go-deadlock v0.2.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.6.0
 	github.com/slack-go/slack v0.7.3

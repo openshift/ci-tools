@@ -255,20 +255,21 @@ func TestLiteralDynamicRelease(t *testing.T) {
 }
 
 func TestOptionalOperators(t *testing.T) {
-	testCases := []struct {
+	var testCases = []struct {
 		name       string
 		indexName  string
 		bundleName string
 	}{{
 		name:       "unnamed bundle",
 		indexName:  "ci-index",
-		bundleName: "ci-bundle0",
+		bundleName: "ci-bundle1",
 	}, {
 		name:       "named bunlde",
 		indexName:  "ci-index-named-bundle",
 		bundleName: "named-bundle",
 	}}
 	for _, testCase := range testCases {
+		testCase := testCase
 		framework.Run(t, fmt.Sprintf("optional operators %s", testCase.name), func(t *framework.T, cmd *framework.CiOperatorCommand) {
 			cmd.AddArgs(
 				"--config=optional-operators.yaml",

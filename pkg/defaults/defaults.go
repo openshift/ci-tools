@@ -10,7 +10,7 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -69,12 +69,12 @@ func FromConfig(
 	}
 	templateClient := steps.NewTemplateClient(client, templateGetter.RESTClient())
 
-	coreGetter, err := coreclientset.NewForConfig(clusterConfig)
+	kubeClient, err := kubernetes.NewForConfig(clusterConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not get core client for cluster config: %w", err)
 	}
 
-	podClient := steps.NewPodClient(client, clusterConfig, coreGetter.RESTClient())
+	podClient := steps.NewPodClient(client, clusterConfig, kubeClient.CoreV1().RESTClient(), kubeClient)
 	return fromConfig(config, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil))
 }
 

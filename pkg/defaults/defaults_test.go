@@ -14,6 +14,7 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
@@ -645,7 +646,7 @@ func TestFromConfig(t *testing.T) {
 	}
 	buildClient := steps.NewBuildClient(client, nil)
 	var templateClient steps.TemplateClient
-	podClient := steps.NewPodClient(client, nil, nil)
+	podClient := steps.NewPodClient(client, nil, nil, fake.NewSimpleClientset())
 	var leaseClient *lease.Client
 	var requiredTargets []string
 	var cloneAuthConfig *steps.CloneAuthConfig

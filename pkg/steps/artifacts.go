@@ -179,12 +179,12 @@ type PodClient interface {
 	RealClient() kubernetes.Interface
 }
 
-func NewPodClient(ctrlclient loggingclient.LoggingClient, config *rest.Config, client rest.Interface) PodClient {
+func NewPodClient(ctrlclient loggingclient.LoggingClient, config *rest.Config, client rest.Interface, kubeClient kubernetes.Interface) PodClient {
 	return &podClient{
 		LoggingClient: ctrlclient,
 		config:        config,
 		client:        client,
-		realClient:    kubernetes.NewForConfigOrDie(config),
+		realClient:    kubeClient,
 	}
 }
 

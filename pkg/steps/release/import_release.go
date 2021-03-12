@@ -220,7 +220,7 @@ oc adm release extract --from=%q --file=image-references > ${ARTIFACT_DIR}/%s
 if oc get configmap release-%s; then
 	oc delete configmap release-%s
 fi
-oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
+oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s -o yaml|cat - <(echo immutable: true)|oc create -f -
 `, pullSpec, target, target, target, target, target, target)
 
 	// run adm release extract and grab the raw image-references from the payload

@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 
 	coreapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -39,11 +41,12 @@ func SecretFromDir(path string) (*coreapi.Secret, error) {
 	return ret, nil
 }
 
-// UpdateSecret adds new values to an existing secret.
+// UpsertImmutableSecret adds new values to an existing secret.
 // New values are added, existing values are overwritten. The secret will be
-// created if it doesn't already exist.
-func UpdateSecret(ctx context.Context, client ctrlruntimeclient.Client, secret *coreapi.Secret) (created bool, err error) {
-	err = client.Create(ctx, secret)
+// created if it doesn't already exist. Updating an existing secret happens by re-creating it.
+func UpsertImmutableSecret(ctx context.Context, client ctrlruntimeclient.Client, secret *coreapi.Secret) (created bool, err error) {
+	secret.Immutable = utilpointer.BoolPtr(true)
+	err = client.Create(ctx, secret.DeepCopy())
 	if err == nil {
 		return true, nil
 	}
@@ -54,11 +57,13 @@ func UpdateSecret(ctx context.Context, client ctrlruntimeclient.Client, secret *
 	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: secret.Name}, existing); err != nil {
 		return false, err
 	}
-	if l := len(secret.Data); l != 0 && existing.Data == nil {
-		existing.Data = make(map[string][]byte, l)
+	if equality.Semantic.DeepEqual(secret.Data, existing.Data) {
+		return false, nil
 	}
-	for k, v := range secret.Data {
-		existing.Data[k] = v
+	if err := client.Delete(ctx, existing); err != nil {
+		return false, fmt.Errorf("delete failed: %w", err)
 	}
-	return false, client.Update(ctx, existing)
+
+	// Recreate counts as "Update"
+	return false, client.Create(ctx, secret)
 }

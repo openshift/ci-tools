@@ -48,6 +48,7 @@ import (
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	"k8s.io/test-infra/prow/version"
+	utilpointer "k8s.io/utils/pointer"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -963,6 +964,7 @@ func (o *options) initializeNamespace() error {
 
 	for _, secret := range []*coreapi.Secret{o.pullSecret, o.pushSecret, o.uploadSecret} {
 		if secret != nil {
+			secret.Immutable = utilpointer.BoolPtr(true)
 			if err := client.Create(ctx, secret); err != nil && !kerrors.IsAlreadyExists(err) {
 				return fmt.Errorf("couldn't create secret %s: %w", secret.Name, err)
 			}
@@ -1025,13 +1027,14 @@ func (o *options) initializeNamespace() error {
 	}
 
 	if o.cloneAuthConfig != nil && o.cloneAuthConfig.Secret != nil {
+		o.cloneAuthConfig.Secret.Immutable = utilpointer.BoolPtr(true)
 		if err := client.Create(ctx, o.cloneAuthConfig.Secret); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("couldn't create secret %s for %s authentication: %w", o.cloneAuthConfig.Secret.Name, o.cloneAuthConfig.Type, err)
 		}
 	}
 
 	for _, secret := range o.secrets {
-		created, err := util.UpdateSecret(ctx, client, secret)
+		created, err := util.UpsertImmutableSecret(ctx, client, secret)
 		if err != nil {
 			return fmt.Errorf("could not update secret %s: %w", secret.Name, err)
 		}

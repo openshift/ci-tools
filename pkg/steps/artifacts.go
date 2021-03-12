@@ -270,6 +270,15 @@ func waitForContainer(podClient PodClient, ns, name, containerName string) error
 
 	waitTimeout, _ := watchwait.ContextWithOptionalTimeout(ctx, 300*5*time.Second /*weird, but this is what it was*/)
 	_, err := watchwait.UntilWithSync(waitTimeout, lw, &corev1.Pod{}, podExistsPrecondition, waitForContainerStatus)
+
+	// TODO this looks like an attempt to have an informer.  Even with a punch through, this client would then miss external
+	//  modifications, so it's notion of current state is flawed.
+	// there is a side-effect based client, which appears to cache state based on a GET request and is apparently used
+	// as a side-cache by other parts of this system. While there are no tests catching this today, removing such side-effects
+	// to create an externally verifiable system is outside the scope of this PR.  I might recommend using an existing
+	// informer to drive such decisions, but this will place the current state into the client
+	_ = podClient.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &corev1.Pod{})
+
 	return err
 }
 

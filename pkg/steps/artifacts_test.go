@@ -15,6 +15,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -493,6 +495,7 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 type fakePodClient struct {
 	*fakePodExecutor
 	namespace, name string
+	fakeKubeClient  *fake.Clientset
 }
 
 func (f *fakePodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
@@ -507,6 +510,10 @@ func (f *fakePodClient) Exec(namespace, name string, opts *coreapi.PodExecOption
 
 func (*fakePodClient) GetLogs(string, string, *coreapi.PodLogOptions) *rest.Request {
 	return rest.NewRequestWithClient(nil, "", rest.ClientContentConfig{}, nil)
+}
+
+func (f *fakePodClient) RealClient() kubernetes.Interface {
+	return f.fakeKubeClient
 }
 
 func (f *fakePodClient) WithNewLoggingClient() PodClient {
@@ -545,34 +552,33 @@ func TestArtifactWorker(t *testing.T) {
 			t.Errorf("couldn't clean up tmpdir: %v", err)
 		}
 	}()
-	pod := "pod"
-	podClient := &fakePodClient{
-		fakePodExecutor: &fakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(
-			&coreapi.Pod{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      pod,
-					Namespace: "namespace",
-				},
-				Status: coreapi.PodStatus{
-					ContainerStatuses: []coreapi.ContainerStatus{
-						{
-							Name: "artifacts",
-							State: coreapi.ContainerState{
-								Running: &coreapi.ContainerStateRunning{},
-							},
-						},
+	actualPod := &coreapi.Pod{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "pod",
+			Namespace: "namespace",
+		},
+		Status: coreapi.PodStatus{
+			ContainerStatuses: []coreapi.ContainerStatus{
+				{
+					Name: "artifacts",
+					State: coreapi.ContainerState{
+						Running: &coreapi.ContainerStateRunning{},
 					},
 				},
-			})),
+			},
 		},
-		namespace: "namespace",
-		name:      pod,
+	}
+	podClient := &fakePodClient{
+		fakePodExecutor: &fakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(actualPod))},
+		namespace:       actualPod.Namespace,
+		name:            actualPod.Name,
+		fakeKubeClient:  fake.NewSimpleClientset(actualPod),
 	}
 	w := NewArtifactWorker(podClient, tmp, "namespace")
-	w.CollectFromPod(pod, []string{"container"}, nil)
-	w.Complete(pod)
+	w.CollectFromPod(actualPod.Name, []string{"container"}, nil)
+	w.Complete(actualPod.Name)
 	select {
-	case <-w.Done(pod):
+	case <-w.Done(actualPod.Name):
 	case <-time.After(time.Second):
 		t.Fatal("timeout waiting for artifact worker to finish")
 	}

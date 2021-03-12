@@ -6,6 +6,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes/fake"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -60,7 +61,7 @@ func preparePodStep(namespace string) (*podStep, stepExpectation) {
 	}
 	jobSpec.SetNamespace(namespace)
 
-	client := &podClient{loggingclient.New(fakectrlruntimeclient.NewFakeClient()), nil, nil}
+	client := &podClient{loggingclient.New(fakectrlruntimeclient.NewFakeClient()), nil, nil, fake.NewSimpleClientset()}
 	ps := PodStep(stepName, config, resources, client, jobSpec)
 
 	specification := stepExpectation{

@@ -31,6 +31,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	releasesteps "github.com/openshift/ci-tools/pkg/steps/release"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+	"github.com/openshift/ci-tools/pkg/watchingclient"
 )
 
 type inputImageSet map[api.InputImageTagStepConfiguration]struct{}
@@ -55,6 +56,10 @@ func FromConfig(
 	crclient, err := ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to construct client: %w", err)
+	}
+	crclient, err = watchingclient.New(crclient, clusterConfig, &coreapi.Pod{})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to construct watching client: %w", err)
 	}
 	client := loggingclient.New(crclient)
 	buildGetter, err := buildclientset.NewForConfig(clusterConfig)

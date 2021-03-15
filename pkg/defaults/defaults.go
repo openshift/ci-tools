@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
 	templateapi "github.com/openshift/api/template/v1"
@@ -31,6 +30,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	releasesteps "github.com/openshift/ci-tools/pkg/steps/release"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+	"github.com/openshift/ci-tools/pkg/util/watchingclient"
 )
 
 type inputImageSet map[api.InputImageTagStepConfiguration]struct{}
@@ -52,7 +52,7 @@ func FromConfig(
 	cloneAuthConfig *steps.CloneAuthConfig,
 	pullSecret, pushSecret *coreapi.Secret,
 ) ([]api.Step, []api.Step, error) {
-	crclient, err := ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
+	crclient, err := watchingclient.New(clusterConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to construct client: %w", err)
 	}

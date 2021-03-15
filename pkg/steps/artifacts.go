@@ -18,13 +18,19 @@ import (
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/remotecommand"
+	toolswatch "k8s.io/client-go/tools/watch"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -202,10 +208,6 @@ func (c podClient) WithNewLoggingClient() PodClient {
 	}
 }
 
-// Allow tests to accelerate time
-var intervalLock = &sync.RWMutex{}
-var interval = 10 * time.Second
-
 func waitForContainer(podClient PodClient, ns, name, containerName string) error {
 	logrus.WithFields(logrus.Fields{
 		"namespace": ns,
@@ -213,27 +215,57 @@ func waitForContainer(podClient PodClient, ns, name, containerName string) error
 		"container": containerName,
 	}).Trace("Waiting for container to be running.")
 
-	intervalLock.RLock()
-	i := interval
-	intervalLock.RUnlock()
-	return wait.PollImmediate(i, 300*i, func() (bool, error) {
-		pod := &coreapi.Pod{}
-		if err := podClient.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, pod); err != nil {
-			logrus.WithError(err).Errorf("Waiting for container %s in pod %s in namespace %s", containerName, name, ns)
+	ctx := context.TODO()
+
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (object runtime.Object, e error) {
+			options.FieldSelector = fields.OneTermEqualSelector("metadata.name", name).String()
+			res := &corev1.PodList{}
+			return res, podClient.List(ctx, res, &ctrlruntimeclient.ListOptions{Namespace: ns, Raw: &options})
+		},
+		WatchFunc: func(options metav1.ListOptions) (i watch.Interface, e error) {
+			opts := &ctrlruntimeclient.ListOptions{Namespace: ns, FieldSelector: fields.OneTermEqualSelector("metadata.name", name)}
+			return podClient.Watch(ctx, &corev1.PodList{}, opts)
+		},
+	}
+
+	// pods in this call here are always expected to exist in advance
+	var podExistsPrecondition toolswatch.PreconditionFunc
+
+	waitForContainerStatus := func(event watch.Event) (bool, error) {
+		if event.Type == watch.Deleted {
+			return false, fmt.Errorf("pod/%v ns/%v was deleted", name, ns)
+		}
+		// the outer library will handle errors, we have no pod data to review in this case
+		if event.Type != watch.Added && event.Type != watch.Modified {
 			return false, nil
 		}
-
-		for _, container := range pod.Status.ContainerStatuses {
-			if container.Name == containerName {
-				if container.State.Running != nil || container.State.Terminated != nil {
-					return true, nil
+		switch pod := event.Object.(type) {
+		case *corev1.Pod:
+			for _, container := range pod.Status.ContainerStatuses {
+				if container.Name == containerName {
+					if container.State.Running != nil || container.State.Terminated != nil {
+						return true, nil
+					}
+					break
 				}
-				break
 			}
+		default:
+			return false, fmt.Errorf("pod/%v ns/%v got an event that did not contain a pod: %v", name, ns, event.Object)
 		}
-
 		return false, nil
-	})
+	}
+
+	waitTimeout, cancel := toolswatch.ContextWithOptionalTimeout(ctx, 300*5*time.Second /*weird, but this is what it was*/)
+	defer cancel()
+	_, err := toolswatch.UntilWithSync(waitTimeout, lw, &corev1.Pod{}, podExistsPrecondition, waitForContainerStatus)
+
+	// Hack to make sure this ends up in the logging client
+	if err := podClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &corev1.Pod{}); err != nil {
+		logrus.WithError(err).Warn("faild to get pod after finishing watch")
+	}
+
+	return err
 }
 
 func copyArtifacts(podClient PodClient, into, ns, name, containerName string, paths []string) error {

@@ -9,11 +9,12 @@ import (
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
+	"github.com/openshift/ci-tools/pkg/util/watchingclient"
+	fakectrlruntimeclient "github.com/openshift/ci-tools/pkg/util/watchingclient/fake"
 )
 
 func preparePodStep(namespace string) (*podStep, stepExpectation) {
@@ -257,7 +258,7 @@ func expectedPodStepTemplate() *podStep {
 var _ ctrlruntimeclient.Client = &podStatusChangingClient{}
 
 type podStatusChangingClient struct {
-	ctrlruntimeclient.Client
+	watchingclient.Client
 	dest corev1.PodPhase
 }
 

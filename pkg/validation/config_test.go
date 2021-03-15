@@ -86,46 +86,50 @@ func TestValidateBuildRoot(t *testing.T) {
 	}
 }
 
-func TestValidateBaseImages(t *testing.T) {
+func TestValidateImageStreamTagReferenceMap(t *testing.T) {
 	for _, tc := range []struct {
 		id            string
 		baseImages    map[string]api.ImageStreamTagReference
 		expectedValid bool
 	}{
 		{
-			id: "base images",
-			baseImages: map[string]api.ImageStreamTagReference{"test": {},
-				"test2": {Tag: "test2"}, "test3": {},
+			id: "valid",
+			baseImages: map[string]api.ImageStreamTagReference{
+				"test": {Tag: "test"}, "test2": {Tag: "test2"},
+			},
+			expectedValid: true,
+		},
+		{
+			id: "missing tag",
+			baseImages: map[string]api.ImageStreamTagReference{
+				"test": {Tag: "test"}, "test2": {},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "cannot be bundle source",
+			baseImages: map[string]api.ImageStreamTagReference{
+				string(api.PipelineImageStreamTagReferenceBundleSource): {Tag: "bundle-src"},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "cannot be bundle prefixed",
+			baseImages: map[string]api.ImageStreamTagReference{
+				api.BundleName(0): {Tag: "bundle"},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "cannot be index prefixed",
+			baseImages: map[string]api.ImageStreamTagReference{
+				api.IndexName("test"): {Tag: "index"},
 			},
 			expectedValid: false,
 		},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			if errs := validateImageStreamTagReferenceMap("base_images", tc.baseImages); len(errs) > 0 && tc.expectedValid {
-				t.Errorf("expected to be valid, got: %v", errs)
-			} else if !tc.expectedValid && len(errs) == 0 {
-				t.Error("expected to be invalid, but returned valid")
-			}
-		})
-	}
-}
-
-func TestValidateBaseRpmImages(t *testing.T) {
-	for _, tc := range []struct {
-		id            string
-		baseRpmImages map[string]api.ImageStreamTagReference
-		expectedValid bool
-	}{
-		{
-			id: "base rpm images",
-			baseRpmImages: map[string]api.ImageStreamTagReference{"test": {},
-				"test2": {Tag: "test2"}, "test3": {},
-			},
-			expectedValid: false,
-		},
-	} {
-		t.Run(tc.id, func(t *testing.T) {
-			if errs := validateImageStreamTagReferenceMap("base_rpm_images", tc.baseRpmImages); len(errs) > 0 && tc.expectedValid {
 				t.Errorf("expected to be valid, got: %v", errs)
 			} else if !tc.expectedValid && len(errs) == 0 {
 				t.Error("expected to be invalid, but returned valid")
@@ -347,7 +351,7 @@ func TestValidateImages(t *testing.T) {
 			To: "ci-index-gen",
 		}},
 		output: []error{
-			errors.New("images[0]: `to` cannot be ci-index-gen"),
+			errors.New("images[0]: `to` cannot begin with ci-index"),
 		},
 	}, {
 		name: "`to` cannot be ci-index",
@@ -355,7 +359,7 @@ func TestValidateImages(t *testing.T) {
 			To: "ci-index",
 		}},
 		output: []error{
-			errors.New("images[0]: `to` cannot be ci-index"),
+			errors.New("images[0]: `to` cannot begin with ci-index"),
 		},
 	},
 		{
@@ -409,6 +413,14 @@ func TestValidateImages(t *testing.T) {
 func TestValidateOperator(t *testing.T) {
 	var goodStepLink = api.AllStepsLink()
 	var badStepLink api.StepLink
+	var config = &api.ReleaseBuildConfiguration{
+		InputConfiguration: api.InputConfiguration{
+			BaseImages: map[string]api.ImageStreamTagReference{
+				"a-base-image": {},
+			},
+		},
+		Images: []api.ProjectDirectoryImageBuildStepConfiguration{{To: "an-image"}, {To: "my-image"}},
+	}
 	var testCases = []struct {
 		name           string
 		input          *api.OperatorStepConfiguration
@@ -418,6 +430,13 @@ func TestValidateOperator(t *testing.T) {
 		{
 			name: "everything is good",
 			input: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					As:             "my-bundle",
+					DockerfilePath: "./dockerfile",
+					ContextDir:     ".",
+					BaseIndex:      "an-index",
+					UpdateGraph:    "replaces",
+				}},
 				Substitutions: []api.PullSpecSubstitution{
 					{
 						PullSpec: "original",
@@ -446,7 +465,7 @@ func TestValidateOperator(t *testing.T) {
 			},
 		},
 		{
-			name: "everything is good",
+			name: "bad step link",
 			input: &api.OperatorStepConfiguration{
 				Substitutions: []api.PullSpecSubstitution{
 					{
@@ -460,13 +479,85 @@ func TestValidateOperator(t *testing.T) {
 				errors.New("operator.substitute[0].with: could not resolve 'substitute' to an image involved in the config"),
 			},
 		},
+		{
+			name: "bundle set without conflict",
+			input: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					As: "no conflict",
+				}},
+			},
+			withResolvesTo: goodStepLink,
+		},
+		{
+			name: "bundle set with image conflict",
+			input: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					As: "my-image",
+				}},
+			},
+			withResolvesTo: goodStepLink,
+			output: []error{
+				errors.New("operator.bundles[0].as: bundle name `my-image` matches image defined in `images`"),
+			},
+		},
+		{
+			name: "bundle set with base_image conflict",
+			input: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					As: "a-base-image",
+				}},
+			},
+			withResolvesTo: goodStepLink,
+			output: []error{
+				errors.New("operator.bundles[0].as: bundle name `a-base-image` matches a base image"),
+			},
+		},
+		{
+			name: "bundle set with update_graph but not base_index set",
+			input: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					As:          "valid bundle",
+					UpdateGraph: "replaces",
+				}},
+			},
+			withResolvesTo: goodStepLink,
+			output: []error{
+				errors.New("operator.bundles[0].update_graph: update_graph requires base_index to be set"),
+			},
+		},
+		{
+			name: "bundle set with base_index but not as set",
+			input: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					BaseIndex: "an-index",
+				}},
+			},
+			withResolvesTo: goodStepLink,
+			output: []error{
+				errors.New("operator.bundles[0].base_index: base_index requires as to be set"),
+			},
+		},
+		{
+			name: "invalid update_graph",
+			input: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					As:          "valid bundle",
+					BaseIndex:   "an-index",
+					UpdateGraph: "hello",
+				}},
+			},
+			withResolvesTo: goodStepLink,
+			output: []error{
+				errors.New("operator.bundles[0].update_graph: update_graph must be semver, semver-skippatch, or replaces"),
+			},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			linkFunc := func(string) api.StepLink {
 				return testCase.withResolvesTo
 			}
-			if actual, expected := validateOperator("operator", testCase.input, linkFunc), testCase.output; !reflect.DeepEqual(actual, expected) {
+			if actual, expected := validateOperator("operator", testCase.input, linkFunc, config), testCase.output; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
 					return x.Error() == y.Error()
 				})))
@@ -516,19 +607,24 @@ func TestReleaseBuildConfiguration_validateTestStepDependencies(t *testing.T) {
 					Bundles: []api.Bundle{{
 						DockerfilePath: "bundle.Dockerfile",
 						ContextDir:     "manifests",
+					}, {
+						As:             "my-bundle",
+						DockerfilePath: "bundle.Dockerfile",
+						ContextDir:     "manifests",
 					}},
 				},
 				Tests: []api.TestStepConfiguration{
 					{MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
 						Pre: []api.TestStep{
 							{LiteralTestStep: &api.LiteralTestStep{Dependencies: []api.StepDependency{{Name: "src"}, {Name: "bin"}, {Name: "installer"}, {Name: "pipeline:ci-index"}}}},
+							{LiteralTestStep: &api.LiteralTestStep{Dependencies: []api.StepDependency{{Name: "pipeline:my-bundle"}}}},
 							{LiteralTestStep: &api.LiteralTestStep{Dependencies: []api.StepDependency{{Name: "stable:installer"}, {Name: "stable-initial:installer"}}}},
 						},
 						Test: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{Dependencies: []api.StepDependency{{Name: "pipeline:bin"}}}}},
 						Post: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{Dependencies: []api.StepDependency{{Name: "image"}}}}},
 					}},
 					{MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-						Pre:  []api.LiteralTestStep{{Dependencies: []api.StepDependency{{Name: "stable-custom:cli"}, {Name: "ci-index"}}}},
+						Pre:  []api.LiteralTestStep{{Dependencies: []api.StepDependency{{Name: "stable-custom:cli"}, {Name: "ci-index-my-bundle"}}}},
 						Test: []api.LiteralTestStep{{Dependencies: []api.StepDependency{{Name: "release:custom"}, {Name: "release:initial"}}}},
 						Post: []api.LiteralTestStep{{Dependencies: []api.StepDependency{{Name: "pipeline:image"}}}},
 					}},
@@ -551,7 +647,9 @@ func TestReleaseBuildConfiguration_validateTestStepDependencies(t *testing.T) {
 						Post: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{Dependencies: []api.StepDependency{{Name: "pipeline:image"}}}}},
 					}},
 					{MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-						Pre:  []api.LiteralTestStep{{Dependencies: []api.StepDependency{{Name: "release:custom"}, {Name: "pipeline:ci-index"}}}},
+						Pre: []api.LiteralTestStep{
+							{Dependencies: []api.StepDependency{{Name: "release:custom"}, {Name: "pipeline:ci-index"}}},
+							{Dependencies: []api.StepDependency{{Name: "pipeline:ci-index-my-bundle"}}}},
 						Test: []api.LiteralTestStep{{Dependencies: []api.StepDependency{{Name: "pipeline:root"}}}},
 						Post: []api.LiteralTestStep{{Dependencies: []api.StepDependency{{Name: "pipeline:rpms"}}}},
 					}},
@@ -564,9 +662,10 @@ func TestReleaseBuildConfiguration_validateTestStepDependencies(t *testing.T) {
 				errors.New(`tests[0].steps.pre[1].dependencies[1]: cannot determine source for dependency "totally-invalid:cli" - ensure the correct ImageStream name was provided`),
 				errors.New(`tests[0].steps.test[0].dependencies[0]: cannot determine source for dependency "pipeline:bin" - this dependency requires built binaries, which are not configured`),
 				errors.New(`tests[0].steps.test[1].dependencies[0]: cannot determine source for dependency "pipeline:test-bin" - this dependency requires built test binaries, which are not configured`),
-				errors.New(`tests[0].steps.post[0].dependencies[0]: cannot determine source for dependency "pipeline:image" - no base image import or project image build is configured to provide this dependency`),
+				errors.New(`tests[0].steps.post[0].dependencies[0]: cannot determine source for dependency "pipeline:image" - no base image import, project image build, or bundle image build is configured to provide this dependency`),
 				errors.New(`tests[1].literal_steps.pre[0].dependencies[0]: cannot determine source for dependency "release:custom" - this dependency requires a "custom" release, which is not configured`),
 				errors.New(`tests[1].literal_steps.pre[0].dependencies[1]: cannot determine source for dependency "pipeline:ci-index" - this dependency requires an operator bundle configuration, which is not configured`),
+				errors.New(`tests[1].literal_steps.pre[1].dependencies[0]: cannot determine source for dependency "pipeline:ci-index-my-bundle" - this dependency requires an operator bundle configuration, which is not configured`),
 				errors.New(`tests[1].literal_steps.test[0].dependencies[0]: cannot determine source for dependency "pipeline:root" - this dependency requires a build root, which is not configured`),
 				errors.New(`tests[1].literal_steps.post[0].dependencies[0]: cannot determine source for dependency "pipeline:rpms" - this dependency requires built RPMs, which are not configured`),
 			},

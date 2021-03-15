@@ -141,7 +141,7 @@ func (config ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
 		string(PipelineImageStreamTagReferenceIndexImage):
 		return true
 	}
-	return IsBundleImage(name)
+	return config.IsBundleImage(name)
 }
 
 // ResourceConfiguration defines resource overrides for jobs run
@@ -1136,10 +1136,28 @@ type OperatorStepConfiguration struct {
 	Substitutions []PullSpecSubstitution `json:"substitutions,omitempty"`
 }
 
-// Bundle contains the data needed to build a bundle from the bundle source image
+// IndexUpdate specifies the update mode for an operator being added to an index
+type IndexUpdate string
+
+const (
+	IndexUpdateSemver          = "semver"
+	IndexUpdateReplaces        = "replaces"
+	IndexUpdateSemverSkippatch = "semver-skippatch"
+)
+
+// Bundle contains the data needed to build a bundle from the bundle source image and update an index to include the new bundle
 type Bundle struct {
+	// As defines the name for this bundle. If not set, a name will be automatically generated for the bundle.
+	As string `json:"as,omitempty"`
+	// DockerfilePath defines where the dockerfile for build the bundle exists relative to the contextdir
 	DockerfilePath string `json:"dockerfile_path,omitempty"`
-	ContextDir     string `json:"context_dir,omitempty"`
+	// ContextDir defines the source directory to build the bundle from relative to the repository root
+	ContextDir string `json:"context_dir,omitempty"`
+	// BaseIndex defines what index image to use as a base when adding the bundle to an index
+	BaseIndex string `json:"base_index,omitempty"`
+	// UpdateGraph defines the update mode to use when adding the bundle to the base index.
+	// Can be: semver (default), semver-skippatch, or replaces
+	UpdateGraph IndexUpdate `json:"update_graph,omitempty"`
 }
 
 // IndexGeneratorStepConfiguration describes a step that creates an index database and
@@ -1151,6 +1169,12 @@ type IndexGeneratorStepConfiguration struct {
 	// OperatorIndex is a list of the names of the bundle images that the
 	// index will contain in its database.
 	OperatorIndex []string `json:"operator_index,omitempty"`
+
+	// BaseIndex is the index image to add the bundle(s) to. If unset, a new index is created
+	BaseIndex string `json:"base_index,omitempty"`
+
+	// UpdateGraph defines the mode to us when updating the index graph
+	UpdateGraph IndexUpdate `json:"update_graph,omitempty"`
 }
 
 // PipelineImageStreamTagReferenceIndexImageGenerator is the name of the index image generator built by ci-operator
@@ -1158,6 +1182,18 @@ const PipelineImageStreamTagReferenceIndexImageGenerator PipelineImageStreamTagR
 
 // PipelineImageStreamTagReferenceIndexImage is the name of the index image built by ci-operator
 const PipelineImageStreamTagReferenceIndexImage PipelineImageStreamTagReference = "ci-index"
+
+func IsIndexImage(imageName string) bool {
+	return strings.HasPrefix(imageName, string(PipelineImageStreamTagReferenceIndexImage))
+}
+
+func IndexName(bundleName string) string {
+	return fmt.Sprintf("%s-%s", PipelineImageStreamTagReferenceIndexImage, bundleName)
+}
+
+func IndexGeneratorName(indexName PipelineImageStreamTagReference) PipelineImageStreamTagReference {
+	return PipelineImageStreamTagReference(fmt.Sprintf("%s-gen", indexName))
+}
 
 // BundleSourceStepConfiguration describes a step that performs a set of
 // substitutions on all yaml files in the `src` image so that the
@@ -1172,11 +1208,22 @@ type BundleSourceStepConfiguration struct {
 // PipelineImageStreamTagReferenceBundleSourceName is the name of the bundle source image built by the CI
 const PipelineImageStreamTagReferenceBundleSource PipelineImageStreamTagReference = "src-bundle"
 
-// BundlePrefix is the prefix used by ci-operator for bundle images
+// BundlePrefix is the prefix used by ci-operator for bundle images without an explicitly configured name
 const BundlePrefix = "ci-bundle"
 
-func IsBundleImage(imageName string) bool {
-	return strings.HasPrefix(imageName, BundlePrefix)
+func (config ReleaseBuildConfiguration) IsBundleImage(imageName string) bool {
+	if config.Operator == nil {
+		return false
+	}
+	if strings.HasPrefix(imageName, BundlePrefix) {
+		return true
+	}
+	for _, bundle := range config.Operator.Bundles {
+		if imageName == bundle.As {
+			return true
+		}
+	}
+	return false
 }
 
 func BundleName(index int) string {

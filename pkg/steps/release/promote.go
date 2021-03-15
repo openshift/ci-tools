@@ -264,13 +264,21 @@ func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration
 	}
 	// always promote the binary build if one exists
 	if configuration.BinaryBuildCommands != "" {
-		promotedTags[string(api.PipelineImageStreamTagReferenceBinaries)] = api.ImageStreamTagReference{
-			Namespace: "build-cache",
-			Name:      fmt.Sprintf("%s-%s", configuration.Metadata.Org, configuration.Metadata.Repo),
-			Tag:       configuration.Metadata.Branch,
-		}
+		promotedTags[string(api.PipelineImageStreamTagReferenceBinaries)] = BuildCacheFor(configuration.Metadata)
 	}
 	return promotedTags, names
+}
+
+func BuildCacheFor(metadata api.Metadata) api.ImageStreamTagReference {
+	tag := metadata.Branch
+	if metadata.Variant != "" {
+		tag = fmt.Sprintf("%s-%s", tag, metadata.Variant)
+	}
+	return api.ImageStreamTagReference{
+		Namespace: "build-cache",
+		Name:      fmt.Sprintf("%s-%s", metadata.Org, metadata.Repo),
+		Tag:       tag,
+	}
 }
 
 func (s *promotionStep) Requires() []api.StepLink {

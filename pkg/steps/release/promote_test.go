@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/diff"
@@ -267,6 +268,44 @@ func TestPromotedTags(t *testing.T) {
 				t.Errorf("%s: got incorrect promoted tags: %v", testCase.name, diff.ObjectDiff(actual, expected))
 			}
 		})
+	}
+}
+
+func TestBuildCacheFor(t *testing.T) {
+	var testCases = []struct {
+		input  api.Metadata
+		output api.ImageStreamTagReference
+	}{
+		{
+			input: api.Metadata{
+				Org:    "org",
+				Repo:   "repo",
+				Branch: "branch",
+			},
+			output: api.ImageStreamTagReference{
+				Namespace: "build-cache",
+				Name:      "org-repo",
+				Tag:       "branch",
+			},
+		},
+		{
+			input: api.Metadata{
+				Org:     "org",
+				Repo:    "repo",
+				Branch:  "branch",
+				Variant: "variant",
+			},
+			output: api.ImageStreamTagReference{
+				Namespace: "build-cache",
+				Name:      "org-repo",
+				Tag:       "branch-variant",
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		if diff := cmp.Diff(testCase.output, BuildCacheFor(testCase.input)); diff != "" {
+			t.Errorf("got incorrect ist for build cache: %v", diff)
+		}
 	}
 }
 

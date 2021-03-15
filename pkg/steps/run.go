@@ -56,7 +56,7 @@ func Run(ctx context.Context, graph []*api.StepNode) (*junit.TestSuites, []api.C
 			stepDetails = append(stepDetails, out.stepDetails)
 			if out.err != nil {
 				testCase.FailureOutput = &junit.FailureOutput{Output: out.err.Error()}
-				if out.err != context.Canceled {
+				if !errors.Is(out.err, context.Canceled) {
 					executionErrors = append(executionErrors, results.ForReason("step_failed").WithError(out.err).Errorf("step %s failed: %v", out.node.Step.Name(), out.err))
 				}
 			} else {

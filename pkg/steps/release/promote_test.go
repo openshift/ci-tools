@@ -186,6 +186,27 @@ func TestPromotedTags(t *testing.T) {
 				Tag:       "fred",
 			}},
 		},
+		{
+			name: "promotion set and binaries built, means binaries promoted",
+			input: &api.ReleaseBuildConfiguration{
+				Images:              []api.ProjectDirectoryImageBuildStepConfiguration{},
+				BinaryBuildCommands: "something",
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "roger",
+					Tag:       "fred",
+				},
+				Metadata: api.Metadata{
+					Org:    "org",
+					Repo:   "repo",
+					Branch: "branch",
+				},
+			},
+			expected: []api.ImageStreamTagReference{{
+				Namespace: "build-cache",
+				Name:      "org-repo",
+				Tag:       "branch",
+			}},
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -224,8 +245,7 @@ func TestGetPromotionPod(t *testing.T) {
 func TestGetImageMirror(t *testing.T) {
 	var testCases = []struct {
 		name     string
-		config   api.PromotionConfiguration
-		tags     map[string]string
+		tags     map[string]api.ImageStreamTagReference
 		pipeline *imageapi.ImageStream
 		expected map[string]string
 	}{
@@ -237,15 +257,18 @@ func TestGetImageMirror(t *testing.T) {
 			pipeline: &imageapi.ImageStream{},
 		},
 		{
-			name: "basic case: empty config.Name",
-			config: api.PromotionConfiguration{
-				Namespace: "ci",
-				Tag:       "latest",
-			},
-			tags: map[string]string{
-				"a": "b",
-				"c": "d",
-				"x": "y",
+			name: "basic case",
+			tags: map[string]api.ImageStreamTagReference{
+				"b": {
+					Namespace: "ci",
+					Name:      "a",
+					Tag:       "latest",
+				},
+				"d": {
+					Namespace: "ci",
+					Name:      "c",
+					Tag:       "latest",
+				},
 			},
 			pipeline: &imageapi.ImageStream{
 				Status: imageapi.ImageStreamStatus{
@@ -269,49 +292,16 @@ func TestGetImageMirror(t *testing.T) {
 					},
 				},
 			},
-			expected: map[string]string{"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb": "registry.ci.openshift.org/ci/a:latest", "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd": "registry.ci.openshift.org/ci/c:latest"},
-		},
-		{
-			name: "basic case: config.Name",
-			config: api.PromotionConfiguration{
-				Namespace: "ci",
-				Name:      "name",
-				Tag:       "latest",
+			expected: map[string]string{
+				"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb": "registry.ci.openshift.org/ci/a:latest",
+				"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd": "registry.ci.openshift.org/ci/c:latest",
 			},
-			tags: map[string]string{
-				"a": "b",
-				"c": "d",
-				"x": "y",
-			},
-			pipeline: &imageapi.ImageStream{
-				Status: imageapi.ImageStreamStatus{
-					Tags: []imageapi.NamedTagEventList{
-						{
-							Tag: "b",
-							Items: []imageapi.TagEvent{
-								{
-									DockerImageReference: "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
-								},
-							},
-						},
-						{
-							Tag: "d",
-							Items: []imageapi.TagEvent{
-								{
-									DockerImageReference: "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd",
-								},
-							},
-						},
-					},
-				},
-			},
-			expected: map[string]string{"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb": "registry.ci.openshift.org/ci/name:a", "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd": "registry.ci.openshift.org/ci/name:c"},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := getImageMirrorTarget(testCase.config, testCase.tags, testCase.pipeline), testCase.expected; !reflect.DeepEqual(actual, expected) {
+			if actual, expected := getImageMirrorTarget(testCase.tags, testCase.pipeline), testCase.expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect ImageMirror mapping: %v", testCase.name, diff.ObjectDiff(actual, expected))
 			}
 		})

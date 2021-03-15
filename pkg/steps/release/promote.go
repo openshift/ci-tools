@@ -23,8 +23,7 @@ import (
 // promotionStep will tag a full release suite
 // of images out to the configured namespace.
 type promotionStep struct {
-	config         api.PromotionConfiguration
-	images         []api.ProjectDirectoryImageBuildStepConfiguration
+	configuration  *api.ReleaseBuildConfiguration
 	requiredImages sets.String
 	jobSpec        *api.JobSpec
 	client         steps.PodClient
@@ -49,13 +48,13 @@ func (s *promotionStep) Run(ctx context.Context) error {
 }
 
 func (s *promotionStep) run(ctx context.Context) error {
-	tags, names := toPromote(s.config, s.images, s.requiredImages)
+	tags, names := PromotedTagsWithRequiredImages(s.configuration, s.requiredImages)
 	if len(names) == 0 {
 		log.Println("Nothing to promote, skipping...")
 		return nil
 	}
 
-	log.Printf("Promoting tags to %s: %s", targetName(s.config), strings.Join(names.List(), ", "))
+	log.Printf("Promoting tags to %s: %s", targetName(*s.configuration.PromotionConfiguration), strings.Join(names.List(), ", "))
 	pipeline := &imagev1.ImageStream{}
 	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{
 		Namespace: s.jobSpec.Namespace(),
@@ -64,7 +63,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 		return fmt.Errorf("could not resolve pipeline imagestream: %w", err)
 	}
 
-	imageMirrorTarget := getImageMirrorTarget(s.config, tags, pipeline)
+	imageMirrorTarget := getImageMirrorTarget(tags, pipeline)
 	if len(imageMirrorTarget) == 0 {
 		log.Println("Nothing to promote, skipping...")
 		return nil
@@ -76,29 +75,18 @@ func (s *promotionStep) run(ctx context.Context) error {
 	return nil
 }
 
-func getImageMirrorTarget(config api.PromotionConfiguration, tags map[string]string, pipeline *imagev1.ImageStream) map[string]string {
+func getImageMirrorTarget(tags map[string]api.ImageStreamTagReference, pipeline *imagev1.ImageStream) map[string]string {
 	if pipeline == nil {
 		return nil
 	}
 	imageMirror := map[string]string{}
-	if len(config.Name) > 0 {
-		for dst, src := range tags {
-			dockerImageReference := findDockerImageReference(pipeline, src)
-			if dockerImageReference == "" {
-				continue
-			}
-			dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
-			imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), config.Namespace, config.Name, dst)
+	for src, dst := range tags {
+		dockerImageReference := findDockerImageReference(pipeline, src)
+		if dockerImageReference == "" {
+			continue
 		}
-	} else {
-		for dst, src := range tags {
-			dockerImageReference := findDockerImageReference(pipeline, src)
-			if dockerImageReference == "" {
-				continue
-			}
-			dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
-			imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), config.Namespace, dst, config.Tag)
-		}
+		dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
+		imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), dst.Namespace, dst.Name, dst.Tag)
 	}
 	if len(imageMirror) == 0 {
 		return nil
@@ -241,12 +229,23 @@ func toPromote(config api.PromotionConfiguration, images []api.ProjectDirectoryI
 
 // PromotedTags returns the tags that are being promoted for the given ReleaseBuildConfiguration
 func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStreamTagReference {
-	if configuration.PromotionConfiguration == nil {
-		return nil
+	var tags []api.ImageStreamTagReference
+	mapping, _ := PromotedTagsWithRequiredImages(configuration, sets.NewString())
+	for _, dest := range mapping {
+		tags = append(tags, dest)
 	}
-	tags, _ := toPromote(*configuration.PromotionConfiguration, configuration.Images, sets.NewString())
-	var promotedTags []api.ImageStreamTagReference
-	for dst := range tags {
+	return tags
+}
+
+// PromotedTagsWithRequiredImages returns the tags that are being promoted for the given ReleaseBuildConfiguration
+// accounting for the list of required images
+func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration, requiredImages sets.String) (map[string]api.ImageStreamTagReference, sets.String) {
+	if configuration == nil || configuration.PromotionConfiguration == nil {
+		return nil, nil
+	}
+	tags, names := toPromote(*configuration.PromotionConfiguration, configuration.Images, requiredImages)
+	promotedTags := map[string]api.ImageStreamTagReference{}
+	for src, dst := range tags {
 		var tag api.ImageStreamTagReference
 		if configuration.PromotionConfiguration.Name != "" {
 			tag = api.ImageStreamTagReference{
@@ -261,9 +260,17 @@ func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStrea
 				Tag:       configuration.PromotionConfiguration.Tag,
 			}
 		}
-		promotedTags = append(promotedTags, tag)
+		promotedTags[src] = tag
 	}
-	return promotedTags
+	// always promote the binary build if one exists
+	if configuration.BinaryBuildCommands != "" {
+		promotedTags[string(api.PipelineImageStreamTagReferenceBinaries)] = api.ImageStreamTagReference{
+			Namespace: "build-cache",
+			Name:      fmt.Sprintf("%s-%s", configuration.Metadata.Org, configuration.Metadata.Repo),
+			Tag:       configuration.Metadata.Branch,
+		}
+	}
+	return promotedTags, names
 }
 
 func (s *promotionStep) Requires() []api.StepLink {
@@ -281,7 +288,7 @@ func (s *promotionStep) Provides() api.ParameterMap {
 func (s *promotionStep) Name() string { return "[promotion]" }
 
 func (s *promotionStep) Description() string {
-	return fmt.Sprintf("Promote built images into the release image stream %s", targetName(s.config))
+	return fmt.Sprintf("Promote built images into the release image stream %s", targetName(*s.configuration.PromotionConfiguration))
 }
 
 func (s *promotionStep) Objects() []ctrlruntimeclient.Object {
@@ -290,10 +297,9 @@ func (s *promotionStep) Objects() []ctrlruntimeclient.Object {
 
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skipped.
-func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, jobSpec *api.JobSpec, client steps.PodClient, pushSecret *coreapi.Secret) api.Step {
+func PromotionStep(configuration *api.ReleaseBuildConfiguration, requiredImages sets.String, jobSpec *api.JobSpec, client steps.PodClient, pushSecret *coreapi.Secret) api.Step {
 	return &promotionStep{
-		config:         config,
-		images:         images,
+		configuration:  configuration,
 		requiredImages: requiredImages,
 		jobSpec:        jobSpec,
 		client:         client,

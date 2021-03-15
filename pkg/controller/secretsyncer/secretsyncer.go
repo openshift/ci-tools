@@ -125,7 +125,11 @@ func (r *reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	log := r.log.WithField("request", request.String())
 	err := r.reconcile(ctx, log, request)
 	if err != nil {
-		log.WithError(err).Error("Reconciliation failed")
+		if apierrors.IsConflict(err) {
+			log.WithError(err).Trace("Reconciliation failed because of conflicts only")
+		} else {
+			log.WithError(err).Error("Reconciliation failed")
+		}
 	} else {
 		log.Trace("Finished reconciliation successfully")
 	}
@@ -162,6 +166,7 @@ func (r *reconciler) reconcile(ctx context.Context, log *logrus.Entry, encodedRe
 	}
 
 	var mirrorErrors []error
+	var conflictErrors []error
 	for _, mirrorConfig := range r.config().Secrets {
 		if mirrorConfig.From.Namespace != sourceSecretName.Namespace || mirrorConfig.From.Name != sourceSecretName.Name || (mirrorConfig.To.Cluster != nil && *mirrorConfig.To.Cluster != cluster) {
 			continue
@@ -169,10 +174,20 @@ func (r *reconciler) reconcile(ctx context.Context, log *logrus.Entry, encodedRe
 
 		// TODO: Ideally we would would create one reconcile.Request per target. This here means
 		// that if a single target is broken, it will send all targets into exponential backoff.
-		mirrorErrors = append(mirrorErrors, r.mirrorSecret(ctx, log, cluster, client, source, mirrorConfig.To.SecretLocation))
+		if err := r.mirrorSecret(ctx, log, cluster, client, source, mirrorConfig.To.SecretLocation); err != nil {
+			if apierrors.IsConflict(err) {
+				conflictErrors = append(conflictErrors, err)
+			} else {
+				mirrorErrors = append(mirrorErrors, err)
+			}
+		}
 	}
 
-	return utilerrors.NewAggregate(mirrorErrors)
+	// If we *only* hit conflict errors return a "representative" sample of them to pass a IsConflict check
+	if len(conflictErrors) > 0 && len(mirrorErrors) == 0 {
+		return conflictErrors[0]
+	}
+	return utilerrors.NewAggregate(append(mirrorErrors, conflictErrors...))
 }
 
 func (r *reconciler) mirrorSecret(ctx context.Context, log *logrus.Entry, cluster string, c ctrlruntimeclient.Client, source *corev1.Secret, to config.SecretLocation) error {

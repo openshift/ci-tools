@@ -23,10 +23,121 @@ function hideModal() {
   for (const child of Array.from(modalContent.children)) {
     child.classList.add('hidden');
   }
+
+  const currentMembersSelect = document.getElementById('currentMembersSelection') as HTMLSelectElement;
+  for (const child of Array.from(currentMembersSelect.children)) {
+    currentMembersSelect.removeChild(child);
+  }
+
+  const allUsersSelect = document.getElementById('allUsersSelection') as HTMLSelectElement;
+  for (const child of Array.from(allUsersSelect.children)) {
+    allUsersSelect.removeChild(child);
+  }
+
+  // We must detach edit member event handler, as it is scoped to a collection. It is not possible to loop over them,
+  // so we remove _all_ event handlers on this layer: https://stackoverflow.com/a/35855487
+  let updateMembersSubmitButton = document.getElementById('updateMemberSubmitButton') as HTMLButtonElement;
+  updateMembersSubmitButton.parentElement.innerHTML = updateMembersSubmitButton.parentElement.innerHTML;
+  document.getElementById('updateMemberCancelButton')?.addEventListener('click', () => hideModal());
 }
 
 function showModal() {
   document.getElementById('modalContainer')?.classList.remove('hidden');
+}
+
+function editMembersEventHandler(collection: secretCollection) {
+  return function () {
+    fetch(`${window.location.protocol}//${window.location.host}/users`)
+      .then(async (response) => {
+        let body = await response.text();
+        if (!response.ok) {
+          throw (body);
+        }
+
+        let allUsers: string[] = [];
+        if (body !== '') {
+          allUsers = JSON.parse(body);
+        }
+
+        let currentMembersSelect = document.getElementById("currentMembersSelection") as HTMLSelectElement;
+        for (const existingMember of Array.from(collection.members)) {
+          let existingMemberOption = document.createElement('option') as HTMLOptionElement;
+          currentMembersSelect.appendChild(optionWithValue(existingMember));
+        }
+
+        let allMembersSelect = document.getElementById('allUsersSelection') as HTMLSelectElement;
+        for (const user of Array.from(allUsers)) {
+          if (collection.members.includes(user)) {
+            continue;
+          }
+          let newUserOption = document.createElement('option') as HTMLOptionElement;
+          allMembersSelect.appendChild(optionWithValue(user));
+        }
+
+        let removeMemberButton = document.getElementById('removeMemberButton') as HTMLButtonElement;
+        removeMemberButton.addEventListener('click', () => {
+          moveSelectedOptions(currentMembersSelect, allMembersSelect);
+        });
+
+        let addMemberButton = document.getElementById('addMemberButton') as HTMLButtonElement;
+        addMemberButton.addEventListener('click', () => {
+          moveSelectedOptions(allMembersSelect, currentMembersSelect);
+        });
+
+        document.getElementById('updateMemberSubmitButton')?.addEventListener('click', () => {
+          const newValues = getSelectValues(document.getElementById('currentMembersSelection') as HTMLSelectElement);
+          const body = JSON.stringify({ members: newValues });
+          fetch(`${window.location.protocol}//${window.location.host}/secretcollection/${collection.name}/members`, { method: 'PUT', body: body })
+            .then(async (response) => {
+              if (!response.ok) {
+                const responseText = await response.text();
+                throw responseText;
+              }
+              fetchAndRenderSecretCollections();
+              hideModal();
+            })
+            .catch((error) => {
+              displayCreateSecretCollectionError('update members', error);
+            });
+        })
+
+        let selectionModal = document.getElementById('memberSelectionModal') as HTMLDivElement;
+        selectionModal.classList.remove('hidden');
+        showModal();
+      })
+      .catch((error) => {
+        displayCreateSecretCollectionError('fetch users', error)
+      })
+
+  }
+}
+
+function moveSelectedOptions(source: HTMLSelectElement, target: HTMLSelectElement): void {
+  for (let optionRaw of Array.from(source.children)) {
+    let option = optionRaw as HTMLOptionElement;
+    if (!option.selected) {
+      continue;
+    }
+    target.appendChild(option.cloneNode(true));
+    source.removeChild(option);
+  }
+}
+
+function optionWithValue(value: string): HTMLOptionElement {
+  let option = document.createElement('option') as HTMLOptionElement;
+  option.value = value;
+  option.innerHTML = value;
+  return option;
+}
+
+// getSelectValues is a helper to get all options in a select
+function getSelectValues(select: HTMLSelectElement): string[] {
+  let result: string[] = [];
+  for (let childRaw of Array.from(select.children)) {
+    const child = childRaw as HTMLOptionElement;
+    result.push(child.value);
+  }
+  return result;
 }
 
 function deleteColectionEventHandler(collectionName: string) {
@@ -80,10 +191,22 @@ function renderCollectionTable(data: secretCollection[]) {
     row.insertCell().innerHTML = secretCollection.name;
     row.insertCell().innerHTML = secretCollection.path;
     row.insertCell().innerHTML = secretCollection.members.toString();
-    const deleteCell = row.insertCell();
-    deleteCell.innerHTML = '<button class="red-button"><i class="fa fa-trash"></i> Delete</button>';
+
+    const buttonCell = row.insertCell();
+    let editMembersButton = document.createElement('button') as HTMLButtonElement;
+    editMembersButton.classList.add('blue-button');
+    editMembersButton.innerHTML = 'Edit Members';
+    const editMembersHandler = editMembersEventHandler(secretCollection);
+    editMembersButton.addEventListener('click', () => editMembersHandler());
+    buttonCell.appendChild(editMembersButton);
+    buttonCell.append(' ');
+
+    let deleteButton = document.createElement('button') as HTMLButtonElement;
+    deleteButton.classList.add('red-button');
+    deleteButton.innerHTML = '<i class="fa fa-trash"></i> Delete';
     const deleteHandler = deleteColectionEventHandler(secretCollection.name);
-    deleteCell.addEventListener('click', () => deleteHandler());
+    deleteButton.addEventListener('click', () => deleteHandler());
+    buttonCell.appendChild(deleteButton);
   }
 
   const oldTableBody = document.getElementById('secretCollectionTableBody') as HTMLTableSectionElement;
@@ -130,6 +253,7 @@ document.getElementById('newCollectionButton')?.addEventListener('click', () => 
 });
 
 document.getElementById('abortCreateCollectionButton')?.addEventListener('click', () => hideModal());
+document.getElementById('updateMemberCancelButton')?.addEventListener('click', () => hideModal());
 
 document.addEventListener('keydown', (event) => {
   const escKeyCode = 27;
@@ -142,6 +266,7 @@ document.addEventListener('keydown', (event) => {
 });
 
 document.getElementById('createCollectionButton').addEventListener('click', () => createSecretCollection());
+
 
 const secretCollections: secretCollection[] = JSON.parse(document.getElementById('secretcollections').innerHTML);
 renderCollectionTable(secretCollections);

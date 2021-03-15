@@ -34,9 +34,11 @@ services:
       # Need a second backend to be able to test
       # the interaction with aliases
       vault auth enable userpass
-      # User must exist
-      vault write auth/userpass/users/admin password=false
-      vault write identity/entity name=admin policies=default
-      vault write identity/entity-alias name=admin \
-        canonical_id="$$(vault read --format=json identity/entity/name/admin|jq -r '.data.id')" \
-        mount_accessor="$$(vault auth list -format=json | jq -r '.["userpass/"].accessor')"
+      # Create some users, they must pre-exist
+      for user in admin another-user third-user; do
+        vault write auth/userpass/users/$$user password=false
+        vault write identity/entity name=$$user policies=default
+        vault write identity/entity-alias name=$$user \
+          canonical_id="$$(vault read --format=json identity/entity/name/$$user|jq -r '.data.id')" \
+          mount_accessor="$$(vault auth list -format=json | jq -r '.["userpass/"].accessor')"
+      done

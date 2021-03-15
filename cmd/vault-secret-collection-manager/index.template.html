@@ -22,7 +22,7 @@
       <tbody id="secretCollectionTableBody"></tbody>
     </tr>
   </table>
-  <button type="button" class="new-collection-button  right-aligned" id="newCollectionButton">New Collection</button>
+  <button type="button" class="teal-button right-aligned" id="newCollectionButton">New Collection</button>
   <div id="modalContainer" class="create-dialog hidden">
     <div id="modalError" class="create-dialog-content error hidden"></div>
     <div id="modalContent" class="create-dialog-content">
@@ -33,6 +33,30 @@
         <button type="button" id="createCollectionButton" class="green-button">Submit</button>
       </div>
       <div id="deleteConfirmation" class="hidden">
+      </div>
+      <div id="memberSelectionModal" class="hidden">
+        <table class="user-edit-table">
+          <thead>
+            <tr class="user-edit-table">
+              <th class="user-edit-table">Current Members</th>
+              <th class="user-edit-table">All Users</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="user-edit-table">
+              <td class="user-edit-table"><select name="CurrentMembers" id="currentMembersSelection" multiple></select></td>
+              <td class="user-edit-table"><select name="ALlUsers" id="allUsersSelection" multiple></select></td>
+            </tr>
+            <tr class="user-edit-table">
+              <td class="user-edit-table"><button type="button" id="removeMemberButton" class="blue-button small-button">Remove</button></td>
+              <td class="user-edit-table"><button type="button" id="addMemberButton" class="blue-button small-button">Add</button></td>
+            </tr>
+            <tr class="user-edit-table">
+              <td class="user-edit-table"><button type="button" id="updateMemberCancelButton" class="grey-button">Cancel</button></td>
+              <td class="user-edit-table"><button type="button" id="updateMemberSubmitButton" class="green-button">Submit</button></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>

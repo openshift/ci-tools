@@ -10,6 +10,17 @@ tr {
   border-top: 1px solid #a4a4a4;
 }
 
+.user-edit-table {
+  border: None;
+  box-shadow: None;
+  border-radius: 0%;
+  background-color: unset !important;
+  color: unset !important;
+  width: 50%;
+  margin: auto;
+  text-align: center;
+}
+
 tr:hover {
   color: #212529;
   background-color: rgba(0, 0, 0, 0.075);
@@ -24,7 +35,11 @@ th {
     color: #333;
 }
 
-.new-collection-button {
+select {
+  width: 75%;
+}
+
+.teal-button {
   background-color: #009688;
 }
 
@@ -40,6 +55,10 @@ th {
   background: #4CAF50;
 }
 
+.blue-button {
+  background: #008CBA;;
+}
+
 button {
   border: none;
   overflow: hidden;
@@ -52,6 +71,10 @@ button {
   color: #fff;
   display: inline-block;
   vertical-align: middle;
+}
+
+.small-button {
+  font-size: 12px;
 }
 
 button:hover {

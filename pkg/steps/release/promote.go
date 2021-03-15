@@ -245,7 +245,7 @@ func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration
 	}
 	tags, names := toPromote(*configuration.PromotionConfiguration, configuration.Images, requiredImages)
 	promotedTags := map[string]api.ImageStreamTagReference{}
-	for src, dst := range tags {
+	for dst, src := range tags {
 		var tag api.ImageStreamTagReference
 		if configuration.PromotionConfiguration.Name != "" {
 			tag = api.ImageStreamTagReference{

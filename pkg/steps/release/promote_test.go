@@ -201,6 +201,44 @@ func TestPromotedTags(t *testing.T) {
 			}},
 		},
 		{
+			name: "promoted additional image with rename",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("foo")},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "roger",
+					Tag:       "fred",
+					AdditionalImages: map[string]string{
+						"output": "src",
+					},
+				},
+			},
+			expected: []api.ImageStreamTagReference{{
+				Namespace: "roger",
+				Name:      "foo",
+				Tag:       "fred",
+			}, {
+				Namespace: "roger",
+				Name:      "output",
+				Tag:       "fred",
+			}},
+		},
+		{
+			name: "disabled image",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("foo")},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace:      "roger",
+					Tag:            "fred",
+					ExcludedImages: []string{"foo"},
+				},
+			},
+			expected: nil,
+		},
+		{
 			name: "promotion set and binaries built, means binaries promoted",
 			input: &api.ReleaseBuildConfiguration{
 				Images:              []api.ProjectDirectoryImageBuildStepConfiguration{},

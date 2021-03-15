@@ -234,11 +234,15 @@ func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStrea
 	for _, dest := range mapping {
 		tags = append(tags, dest)
 	}
+	sort.Slice(tags, func(i, j int) bool {
+		return tags[i].ISTagName() < tags[j].ISTagName()
+	})
 	return tags
 }
 
 // PromotedTagsWithRequiredImages returns the tags that are being promoted for the given ReleaseBuildConfiguration
-// accounting for the list of required images
+// accounting for the list of required images. Promoted tags are mapped by the source tag in the pipeline ImageStream
+// we will promote to the output.
 func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration, requiredImages sets.String) (map[string]api.ImageStreamTagReference, sets.String) {
 	if configuration == nil || configuration.PromotionConfiguration == nil || configuration.PromotionConfiguration.Disabled {
 		return nil, nil

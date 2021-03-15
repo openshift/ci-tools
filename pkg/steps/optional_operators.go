@@ -14,6 +14,8 @@ const (
 	OOPackage = "OO_PACKAGE"
 	//OOChannel is a text placeholder
 	OOChannel = "OO_CHANNEL"
+	//OOBundle is a text placeholder
+	OOBundle = "OO_BUNDLE"
 	//OOInstallNamespace is a text placeholder
 	OOInstallNamespace = "OO_INSTALL_NAMESPACE"
 	//OOTargetNamespaces is a text placeholder
@@ -29,6 +31,8 @@ type optionalOperator struct {
 	Package string
 	// Channel is name of the operator channel to track
 	Channel string
+	// Bundle is the operator bundle to be tested
+	Bundle string
 	// Namespace is the name of the namespace into which the operator and catalog
 	// will be installed (optional)
 	Namespace string
@@ -53,6 +57,7 @@ func resolveOptionalOperator(parameters getter) (*optionalOperator, error) {
 		OOIndex:   &oo.Index,
 		OOPackage: &oo.Package,
 		OOChannel: &oo.Channel,
+		OOBundle:  &oo.Bundle,
 	}
 
 	for param, valuePointer := range required {
@@ -72,7 +77,7 @@ func resolveOptionalOperator(parameters getter) (*optionalOperator, error) {
 		oo.TargetNamespaces = strings.Split(targetNamespaces, ",")
 	}
 
-	if oo.Index != "" || oo.Package != "" || oo.Channel != "" || oo.Namespace != "" || len(oo.TargetNamespaces) > 0 {
+	if oo.Index != "" || oo.Package != "" || oo.Channel != "" || oo.Bundle != "" || oo.Namespace != "" || len(oo.TargetNamespaces) > 0 {
 		for param, value := range required {
 			if *value == "" {
 				return nil, fmt.Errorf("at least one of optional operator parameters OO_* is set, but not the required parameter %s", param)
@@ -80,7 +85,7 @@ func resolveOptionalOperator(parameters getter) (*optionalOperator, error) {
 		}
 	}
 
-	if oo.Index == "" && oo.Package == "" && oo.Channel == "" {
+	if oo.Index == "" && oo.Package == "" && oo.Channel == "" && oo.Bundle == "" {
 		return nil, nil
 	}
 
@@ -94,6 +99,7 @@ func (oo *optionalOperator) asEnv() []coreapi.EnvVar {
 		{Name: OOIndex, Value: oo.Index},
 		{Name: OOPackage, Value: oo.Package},
 		{Name: OOChannel, Value: oo.Channel},
+		{Name: OOBundle, Value: oo.Bundle},
 	}
 
 	if oo.Namespace != "" {

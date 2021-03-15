@@ -170,6 +170,20 @@ func TestPromotedTags(t *testing.T) {
 			}},
 		},
 		{
+			name: "promoted image but disabled promotion means no output tags",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("foo")},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "roger",
+					Name:      "fred",
+					Disabled:  true,
+				},
+			},
+			expected: nil,
+		},
+		{
 			name: "promoted image by tag means output tags",
 			input: &api.ReleaseBuildConfiguration{
 				Images: []api.ProjectDirectoryImageBuildStepConfiguration{

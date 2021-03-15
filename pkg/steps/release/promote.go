@@ -240,7 +240,7 @@ func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStrea
 // PromotedTagsWithRequiredImages returns the tags that are being promoted for the given ReleaseBuildConfiguration
 // accounting for the list of required images
 func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration, requiredImages sets.String) (map[string]api.ImageStreamTagReference, sets.String) {
-	if configuration == nil || configuration.PromotionConfiguration == nil {
+	if configuration == nil || configuration.PromotionConfiguration == nil || configuration.PromotionConfiguration.Disabled {
 		return nil, nil
 	}
 	tags, names := toPromote(*configuration.PromotionConfiguration, configuration.Images, requiredImages)

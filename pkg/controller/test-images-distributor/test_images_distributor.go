@@ -245,8 +245,16 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 	if err != nil {
 		return fmt.Errorf("failed to check if imageStreamTag %s on cluster %s is current: %w", decoded.String(), cluster, err)
 	}
-	if isCurrent {
-		log.Debug("ImageStreamTag is current")
+
+	targetImageStream := &imagev1.ImageStream{}
+	if err := client.Get(ctx, isName, targetImageStream); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to get imageStream %s from target cluster %s: %w", isName.String(), cluster, err)
+		}
+	}
+	needReImport := needReImport(sourceImageStream, targetImageStream, imageTag)
+	if !needReImport && isCurrent {
+		log.WithField("needReImport", needReImport).WithField("isCurrent", isCurrent).Debug("ImageStreamTag is skipped")
 		return nil
 	}
 	if err := controllerutil.EnsureImagePullSecret(ctx, decoded.Namespace, client, log); err != nil {
@@ -294,6 +302,28 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 
 	log.Debug("Imported successfully")
 	return nil
+}
+
+// needReImport returns true if and only if the source is a local reference and the target points to an api.ci image
+func needReImport(source, target *imagev1.ImageStream, tag string) bool {
+	sourceDockerImageReference := getDockerImageReference(source, tag)
+	targetDockerImageReference := getDockerImageReference(target, tag)
+	return strings.HasPrefix(sourceDockerImageReference, "image-registry.openshift-image-registry.svc:5000") && strings.HasPrefix(targetDockerImageReference, api.ServiceDomainAPICIRegistry)
+}
+
+func getDockerImageReference(stream *imagev1.ImageStream, tagName string) string {
+	if stream == nil {
+		return ""
+	}
+	for _, tag := range stream.Status.Tags {
+		if tag.Tag == tagName {
+			if len(tag.Items) == 0 {
+				return ""
+			}
+			return tag.Items[0].DockerImageReference
+		}
+	}
+	return ""
 }
 
 func (r *reconciler) isImageStreamTagCurrent(

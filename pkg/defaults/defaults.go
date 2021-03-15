@@ -272,10 +272,11 @@ func fromConfig(
 		if pushSecret == nil {
 			return nil, nil, errors.New("--image-mirror-push-secret is required for promoting images")
 		}
-		if config.PromotionConfiguration == nil {
-			return nil, nil, fmt.Errorf("cannot promote images, no promotion configuration defined")
+		cfg, err := promotionDefaults(config)
+		if err != nil {
+			return nil, nil, fmt.Errorf("could not determine promotion defaults: %w", err)
 		}
-		postSteps = append(postSteps, releasesteps.PromotionStep(config, requiredNames, jobSpec, podClient, pushSecret))
+		postSteps = append(postSteps, releasesteps.PromotionStep(*cfg, config.Images, requiredNames, jobSpec, podClient, pushSecret))
 	}
 
 	return append(overridableSteps, buildSteps...), postSteps, nil
@@ -377,6 +378,14 @@ func checkForFullyQualifiedStep(step api.Step, params *api.DeferredParameters) (
 		params.Add(name, fn)
 	}
 	return step, false
+}
+
+func promotionDefaults(configSpec *api.ReleaseBuildConfiguration) (*api.PromotionConfiguration, error) {
+	config := configSpec.PromotionConfiguration
+	if config == nil {
+		return nil, fmt.Errorf("cannot promote images, no promotion or release tag configuration defined")
+	}
+	return config, nil
 }
 
 // leasesForTest aggregates all the lease configurations in a test.

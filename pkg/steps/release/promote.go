@@ -86,7 +86,7 @@ func getImageMirrorTarget(tags map[string]api.ImageStreamTagReference, pipeline 
 			continue
 		}
 		dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
-		imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), dst.Namespace, dst.Name, dst.Tag)
+		imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s", api.DomainForService(api.ServiceRegistry), dst.ISTagName())
 	}
 	if len(imageMirror) == 0 {
 		return nil

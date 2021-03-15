@@ -43,7 +43,7 @@ func (s *outputImageTagStep) run(ctx context.Context) error {
 	if string(s.config.From) == s.config.To.Tag && toNamespace == s.jobSpec.Namespace() && s.config.To.Name == api.StableImageStream {
 		log.Printf("Tagging %s into %s", s.config.From, s.config.To.Name)
 	} else {
-		log.Printf("Tagging %s into %s/%s:%s", s.config.From, toNamespace, s.config.To.Name, s.config.To.Tag)
+		log.Printf("Tagging %s into %s", s.config.From, s.config.To.ISTagName())
 	}
 	from := &imagev1.ImageStreamTag{}
 	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{

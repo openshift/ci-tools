@@ -647,7 +647,7 @@ func updateDockerfilesToMatchOCPBuildData(
 		if !ok {
 			continue
 		}
-		stringifiedPromotionTarget := fmt.Sprintf("registry.ci.openshift.org/%s/%s:%s", promotionTarget.Namespace, promotionTarget.Name, image.To)
+		stringifiedPromotionTarget := fmt.Sprintf("registry.ci.openshift.org/%s", promotionTarget.ISTagName())
 		dockerfilePath, ok := promotionTargetToDockerfileMapping[stringifiedPromotionTarget]
 		if !ok {
 			logrus.WithField("promotiontarget", stringifiedPromotionTarget).Info("Ignoring promotion target for which we have no ocp-build-data config")

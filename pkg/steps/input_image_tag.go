@@ -48,7 +48,7 @@ func (s *inputImageTagStep) Inputs() (api.InputDefinition, error) {
 		return nil, fmt.Errorf("could not resolve base image: %w", err)
 	}
 
-	log.Printf("Resolved %s/%s:%s to %s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, from.Image.Name)
+	log.Printf("Resolved %s to %s", s.config.BaseImage.ISTagName(), from.Image.Name)
 	s.imageName = from.Image.Name
 	return api.InputDefinition{from.Image.Name}, nil
 }
@@ -60,7 +60,7 @@ func (s *inputImageTagStep) Run(ctx context.Context) error {
 }
 
 func (s *inputImageTagStep) run(ctx context.Context) error {
-	log.Printf("Tagging %s/%s:%s into %s:%s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, api.PipelineImageStream, s.config.To)
+	log.Printf("Tagging %s into %s:%s", s.config.BaseImage.ISTagName(), api.PipelineImageStream, s.config.To)
 
 	if _, err := s.Inputs(); err != nil {
 		return fmt.Errorf("could not resolve inputs for image tag step: %w", err)

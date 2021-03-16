@@ -9,12 +9,15 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+
+	"github.com/openshift/ci-tools/pkg/util/watchingclient"
 )
 
 type LoggingClient interface {
-	ctrlruntimeclient.Client
+	watchingclient.Client
 	// Object contains the latest revision of each object the client has
 	// seen. Calling this will reset the cache.
 	Objects() []ctrlruntimeclient.Object
@@ -23,7 +26,7 @@ type LoggingClient interface {
 	New() LoggingClient
 }
 
-func New(upstream ctrlruntimeclient.Client) LoggingClient {
+func New(upstream watchingclient.Client) LoggingClient {
 	return &loggingClient{
 		upstream: upstream,
 		logTo:    map[string]map[string]ctrlruntimeclient.Object{},
@@ -32,7 +35,7 @@ func New(upstream ctrlruntimeclient.Client) LoggingClient {
 
 type loggingClient struct {
 	lock     sync.Mutex
-	upstream ctrlruntimeclient.Client
+	upstream watchingclient.Client
 	logTo    map[string]map[string]ctrlruntimeclient.Object
 }
 
@@ -91,6 +94,10 @@ func (lc *loggingClient) Patch(ctx context.Context, obj ctrlruntimeclient.Object
 
 func (lc *loggingClient) DeleteAllOf(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.DeleteAllOfOption) error {
 	return lc.upstream.DeleteAllOf(ctx, obj, opts...)
+}
+
+func (lc *loggingClient) Watch(ctx context.Context, obj ctrlruntimeclient.ObjectList, opts ...ctrlruntimeclient.ListOption) (watch.Interface, error) {
+	return lc.upstream.Watch(ctx, obj, opts...)
 }
 
 func (lc *loggingClient) logObject(obj ctrlruntimeclient.Object) {

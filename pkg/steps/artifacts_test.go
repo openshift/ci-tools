@@ -18,11 +18,11 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
+	fakectrlruntimeclient "github.com/openshift/ci-tools/pkg/util/watchingclient/fake"
 )
 
 var testArtifactsContainer = coreapi.Container{

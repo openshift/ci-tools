@@ -18,7 +18,6 @@ import (
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	"k8s.io/utils/diff"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	imageapi "github.com/openshift/api/image/v1"
 	templateapi "github.com/openshift/api/template/v1"
@@ -29,6 +28,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+	fakectrlruntimeclient "github.com/openshift/ci-tools/pkg/util/watchingclient/fake"
 )
 
 func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration {
@@ -672,7 +672,7 @@ func TestFromConfig(t *testing.T) {
 			Body:       ioutil.NopCloser(bytes.NewBuffer([]byte(content))),
 		}, nil
 	})
-	client := loggingclient.New(ctrlruntimeclient.NewFakeClient())
+	client := loggingclient.New(fakectrlruntimeclient.NewFakeClient())
 	if err := imageapi.AddToScheme(scheme.Scheme); err != nil {
 		t.Fatal(err)
 	}

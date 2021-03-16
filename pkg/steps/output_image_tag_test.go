@@ -12,13 +12,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
+	fakectrlruntimeclient "github.com/openshift/ci-tools/pkg/util/watchingclient/fake"
 )
 
 func init() {

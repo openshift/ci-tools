@@ -6,12 +6,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	apiimagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
+	fakectrlruntimeclient "github.com/openshift/ci-tools/pkg/util/watchingclient/fake"
 )
 
 func TestIndexGenDockerfile(t *testing.T) {

@@ -56,7 +56,7 @@ func validateConfiguration(config *api.ReleaseBuildConfiguration, org, repo stri
 			imageStream, name, _ := config.DependencyParts(api.StepDependency{Name: image})
 			return api.LinkForImage(imageStream, name)
 		}
-		validationErrors = append(validationErrors, validateOperator("operator", config.Operator, linkForImage, config)...)
+		validationErrors = append(validationErrors, validateOperator("operator", config.Operator, linkForImage)...)
 	}
 
 	if config.InputConfiguration.BaseImages != nil {
@@ -135,11 +135,14 @@ func validateImages(fieldRoot string, input []api.ProjectDirectoryImageBuildStep
 		if image.To == api.PipelineImageStreamTagReferenceBundleSource {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, api.PipelineImageStreamTagReferenceBundleSource))
 		}
-		if strings.HasPrefix(string(image.To), api.BundlePrefix) {
+		if api.IsBundleImage(string(image.To)) {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot begin with `%s`", fieldRootN, api.BundlePrefix))
 		}
-		if strings.HasPrefix(string(image.To), string(api.PipelineImageStreamTagReferenceIndexImage)) {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot begin with %s", fieldRootN, api.PipelineImageStreamTagReferenceIndexImage))
+		if image.To == api.PipelineImageStreamTagReferenceIndexImageGenerator {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, api.PipelineImageStreamTagReferenceIndexImageGenerator))
+		}
+		if image.To == api.PipelineImageStreamTagReferenceIndexImage {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, api.PipelineImageStreamTagReferenceIndexImage))
 		}
 		if image.DockerfileLiteral != nil && (image.ContextDir != "" || image.DockerfilePath != "") {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: dockerfile_literal is mutually exclusive with context_dir and dockerfile_path", fieldRootN))
@@ -148,30 +151,8 @@ func validateImages(fieldRoot string, input []api.ProjectDirectoryImageBuildStep
 	return validationErrors
 }
 
-func validateOperator(fieldRoot string, input *api.OperatorStepConfiguration, linkForImage func(string) api.StepLink, config *api.ReleaseBuildConfiguration) []error {
+func validateOperator(fieldRoot string, input *api.OperatorStepConfiguration, linkForImage func(string) api.StepLink) []error {
 	var validationErrors []error
-	for num, bundle := range input.Bundles {
-		fieldRootN := fmt.Sprintf("%s.bundles[%d]", fieldRoot, num)
-		if bundle.As != "" {
-			if config.IsBaseImage(bundle.As) {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.as: bundle name `%s` matches a base image", fieldRootN, bundle.As))
-			}
-			if config.BuildsImage(bundle.As) {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.as: bundle name `%s` matches image defined in `images`", fieldRootN, bundle.As))
-			}
-		}
-		if bundle.As == "" && bundle.BaseIndex != "" {
-			validationErrors = append(validationErrors, fmt.Errorf("%s.base_index: base_index requires as to be set", fieldRootN))
-		}
-		if bundle.UpdateGraph != "" {
-			if bundle.BaseIndex == "" {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.update_graph: update_graph requires base_index to be set", fieldRootN))
-			}
-			if bundle.UpdateGraph != api.IndexUpdateSemver && bundle.UpdateGraph != api.IndexUpdateSemverSkippatch && bundle.UpdateGraph != api.IndexUpdateReplaces {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.update_graph: update_graph must be %s, %s, or %s", fieldRootN, api.IndexUpdateSemver, api.IndexUpdateSemverSkippatch, api.IndexUpdateReplaces))
-			}
-		}
-	}
 	for num, sub := range input.Substitutions {
 		fieldRootN := fmt.Sprintf("%s.substitute[%d]", fieldRoot, num)
 		if sub.PullSpec == "" {
@@ -203,15 +184,6 @@ func validateImageStreamTagReferenceMap(fieldRoot string, input map[string]api.I
 	for k, v := range input {
 		if k == "root" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.%s can't be named 'root'", fieldRoot, k))
-		}
-		if k == string(api.PipelineImageStreamTagReferenceBundleSource) {
-			validationErrors = append(validationErrors, fmt.Errorf("%s.%s: cannot be named %s", fieldRoot, k, api.PipelineImageStreamTagReferenceBundleSource))
-		}
-		if strings.HasPrefix(k, api.BundlePrefix) {
-			validationErrors = append(validationErrors, fmt.Errorf("%s.%s: cannot begin with `%s`", fieldRoot, k, api.BundlePrefix))
-		}
-		if strings.HasPrefix(k, string(api.PipelineImageStreamTagReferenceIndexImage)) {
-			validationErrors = append(validationErrors, fmt.Errorf("%s.%s: cannot begin with %s", fieldRoot, k, api.PipelineImageStreamTagReferenceIndexImage))
 		}
 		validationErrors = append(validationErrors, validateImageStreamTagReference(fmt.Sprintf("%s.%s", fieldRoot, k), v)...)
 	}

@@ -18,12 +18,11 @@ import (
 )
 
 type projectDirectoryImageBuildStep struct {
-	config             api.ProjectDirectoryImageBuildStepConfiguration
-	releaseBuildConfig *api.ReleaseBuildConfiguration
-	resources          api.ResourceConfiguration
-	client             BuildClient
-	jobSpec            *api.JobSpec
-	pullSecret         *coreapi.Secret
+	config     api.ProjectDirectoryImageBuildStepConfiguration
+	resources  api.ResourceConfiguration
+	client     BuildClient
+	jobSpec    *api.JobSpec
+	pullSecret *coreapi.Secret
 }
 
 func (s *projectDirectoryImageBuildStep) Inputs() (api.InputDefinition, error) {
@@ -37,9 +36,10 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context) error {
 }
 
 func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
+
 	images := buildInputsFromStep(s.config.Inputs)
 	// If image being built is an operator bundle, use the bundle source instead of original source
-	if s.releaseBuildConfig.IsBundleImage(string(s.config.To)) {
+	if api.IsBundleImage(string(s.config.To)) {
 		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceBundleSource)
 		workingDir, err := getWorkingDir(s.client, source, s.jobSpec.Namespace())
 		if err != nil {
@@ -55,8 +55,8 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 				DestinationDir: ".",
 			}},
 		})
-	} else if api.IsIndexImage(string(s.config.To)) {
-		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.IndexGeneratorName(s.config.To))
+	} else if s.config.To == api.PipelineImageStreamTagReferenceIndexImage {
+		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceIndexImageGenerator)
 		workingDir, err := getWorkingDir(s.client, source, s.jobSpec.Namespace())
 		if err != nil {
 			return fmt.Errorf("failed to get workingDir: %w", err)
@@ -124,11 +124,11 @@ func (s *projectDirectoryImageBuildStep) Requires() []api.StepLink {
 	if len(s.config.From) > 0 {
 		links = append(links, api.InternalImageLink(s.config.From))
 	}
-	if s.releaseBuildConfig.IsBundleImage(string(s.config.To)) {
+	if api.IsBundleImage(string(s.config.To)) {
 		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReferenceBundleSource))
 	}
-	if api.IsIndexImage(string(s.config.To)) {
-		links = append(links, api.InternalImageLink(api.IndexGeneratorName(s.config.To)))
+	if s.config.To == api.PipelineImageStreamTagReferenceIndexImage {
+		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReferenceIndexImageGenerator))
 	}
 	for name := range s.config.Inputs {
 		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReference(name), api.StepLinkWithUnsatisfiableErrorMessage(fmt.Sprintf("%q is neither an imported nor a built image", name))))
@@ -159,13 +159,12 @@ func (s *projectDirectoryImageBuildStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &projectDirectoryImageBuildStep{
-		config:             config,
-		releaseBuildConfig: releaseBuildConfig,
-		resources:          resources,
-		client:             buildClient,
-		jobSpec:            jobSpec,
-		pullSecret:         pullSecret,
+		config:     config,
+		resources:  resources,
+		client:     buildClient,
+		jobSpec:    jobSpec,
+		pullSecret: pullSecret,
 	}
 }

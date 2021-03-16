@@ -224,7 +224,11 @@ func waitForContainer(podClient PodClient, ns, name, containerName string) error
 			return res, podClient.List(ctx, res, &ctrlruntimeclient.ListOptions{Namespace: ns, Raw: &options})
 		},
 		WatchFunc: func(options metav1.ListOptions) (i watch.Interface, e error) {
-			opts := &ctrlruntimeclient.ListOptions{Namespace: ns, FieldSelector: fields.OneTermEqualSelector("metadata.name", name)}
+			opts := &ctrlruntimeclient.ListOptions{
+				Namespace:     ns,
+				FieldSelector: fields.OneTermEqualSelector("metadata.name", name),
+				Raw:           &options,
+			}
 			return podClient.Watch(ctx, &corev1.PodList{}, opts)
 		},
 	}

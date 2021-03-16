@@ -628,6 +628,8 @@ type LiteralTestStep struct {
 	// Dependencies lists images which must be available before the test runs
 	// and the environment variables which are used to expose their pull specs.
 	Dependencies []StepDependency `json:"dependencies,omitempty"`
+	// DnsConfig for step's Pod.
+	DNSConfig StepDNSConfig `json:"dnsConfig,omitempty"`
 	// Leases lists resources that should be acquired for the test.
 	Leases []StepLease `json:"leases,omitempty"`
 	// OptionalOnSuccess defines if this step should be skipped as long
@@ -674,6 +676,13 @@ type StepDependency struct {
 	Name string `json:"name"`
 	// Env is the environment variable that the image's pull spec is exposed with
 	Env string `json:"env"`
+}
+
+// StepDNSConfig defines a resource that needs to be acquired prior to execution.
+// Used to expose to the step via the specificed search list
+type StepDNSConfig struct {
+	// Searches is a list of DNS search domains for host-name lookup
+	Searches []string `json:"searches,omitempty"`
 }
 
 // StepLease defines a resource that needs to be acquired prior to execution.
@@ -729,6 +738,8 @@ type MultiStageTestConfiguration struct {
 	Environment TestEnvironment `json:"env,omitempty"`
 	// Dependencies holds override values for dependency parameters.
 	Dependencies TestDependencies `json:"dependencies,omitempty"`
+	// DnsConfig for step's Pod.
+	DNSConfig StepDNSConfig `json:"dnsConfig,omitempty"`
 	// Leases lists resources that should be acquired for the test.
 	Leases []StepLease `json:"leases,omitempty"`
 	// AllowSkipOnSuccess defines if any steps can be skipped when
@@ -760,6 +771,8 @@ type MultiStageTestConfigurationLiteral struct {
 	Environment TestEnvironment `json:"env,omitempty"`
 	// Dependencies holds override values for dependency parameters.
 	Dependencies TestDependencies `json:"dependencies,omitempty"`
+	// DnsConfig for step's Pod.
+	DNSConfig StepDNSConfig `json:"dnsConfig,omitempty"`
 	// Leases lists resources that should be acquired for the test.
 	Leases []StepLease `json:"leases,omitempty"`
 	// AllowSkipOnSuccess defines if any steps can be skipped when

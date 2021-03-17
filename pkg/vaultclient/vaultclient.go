@@ -87,7 +87,10 @@ func (v *VaultClient) DestroyKVIrreversibly(path string) error {
 
 func (v *VaultClient) GetKV(path string) (*KVData, error) {
 	var response KVData
-	return &response, v.readInto(InsertDataIntoPath(path), &response)
+	if err := v.readInto(InsertDataIntoPath(path), &response); err != nil {
+		return nil, fmt.Errorf("failed to get item at path %q: %w", path, err)
+	}
+	return &response, nil
 }
 
 func (v *VaultClient) UpsertKV(path string, data map[string]string) error {

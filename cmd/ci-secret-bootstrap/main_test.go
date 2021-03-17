@@ -25,6 +25,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/bitwarden"
+	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
 func TestParseOptions(t *testing.T) {
@@ -97,7 +98,7 @@ func TestValidateOptions(t *testing.T) {
 				bwPasswordPath: "/tmp/bw-password",
 				configPath:     "/tmp/config",
 			},
-			expected: fmt.Errorf("--bw-user is empty"),
+			expected: fmt.Errorf("[--bw-user and --bw-password-path must be specified together, must specify credentials for exactly one of vault or bitwarden, got credentials for: []]"),
 		},
 		{
 			name: "empty bw user password path",
@@ -106,7 +107,7 @@ func TestValidateOptions(t *testing.T) {
 				bwUser:     "username",
 				configPath: "/tmp/config",
 			},
-			expected: fmt.Errorf("--bw-password-path is empty"),
+			expected: fmt.Errorf("[--bw-user and --bw-password-path must be specified together, must specify credentials for exactly one of vault or bitwarden, got credentials for: []]"),
 		},
 		{
 			name: "empty config path",
@@ -115,7 +116,7 @@ func TestValidateOptions(t *testing.T) {
 				bwUser:         "username",
 				bwPasswordPath: "/tmp/bw-password",
 			},
-			expected: fmt.Errorf("--config is empty"),
+			expected: fmt.Errorf("--config is required"),
 		},
 	}
 	for _, tc := range testCases {
@@ -1372,7 +1373,7 @@ func TestConstructSecrets(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, actualError := constructSecrets(context.TODO(), tc.config, tc.bwClient, 10)
+			actual, actualError := constructSecrets(context.TODO(), tc.config, &bitwardenSecretStoreClient{tc.bwClient}, 10)
 			equalError(t, tc.expectedError, actualError)
 			if actualError != nil {
 				return
@@ -2171,7 +2172,7 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 					}
 				}
 			}
-			actual, err := constructDockerConfigJSON(tc.bwClient, tc.dockerConfigJSONData)
+			actual, err := constructDockerConfigJSON(&bitwardenSecretStoreClient{tc.bwClient}, tc.dockerConfigJSONData)
 			if tc.expectedError != "" && err != nil {
 				if !reflect.DeepEqual(err.Error(), tc.expectedError) {
 					t.Fatal(cmp.Diff(err.Error(), tc.expectedError))
@@ -2193,30 +2194,30 @@ func TestGetUnusedBWItems(t *testing.T) {
 	dayBefore := threshold.AddDate(0, 0, -1)
 
 	testCases := []struct {
-		id           string
-		config       secretbootstrap.Config
-		bwClient     bitwarden.Client
-		bwAllowItems sets.String
-		expectedErr  string
+		id                   string
+		config               secretbootstrap.Config
+		bwItems              []bitwarden.Item
+		bwAllowItems         sets.String
+		expectedBitwardenErr string
+		expectedVaultErr     string
 	}{
 		{
 			id:           "all used, no unused items expected",
 			bwAllowItems: sets.NewString(),
-			bwClient: bitwarden.NewFakeClient(
-				[]bitwarden.Item{
-					{
-						ID:          "1",
-						Name:        "item-name-1",
-						Fields:      []bitwarden.Field{{Name: "field-name-1"}},
-						Attachments: []bitwarden.Attachment{{FileName: "attachment-name-1"}},
-					},
-					{
-						ID:          "2",
-						Name:        "item-name-2",
-						Fields:      []bitwarden.Field{{Name: "field-name-2"}},
-						Attachments: []bitwarden.Attachment{{FileName: "attachment-name-2"}},
-					},
-				}, nil),
+			bwItems: []bitwarden.Item{
+				{
+					ID:          "1",
+					Name:        "item-name-1",
+					Fields:      []bitwarden.Field{{Name: "field-name-1"}},
+					Attachments: []bitwarden.Attachment{{FileName: "attachment-name-1"}},
+				},
+				{
+					ID:          "2",
+					Name:        "item-name-2",
+					Fields:      []bitwarden.Field{{Name: "field-name-2"}},
+					Attachments: []bitwarden.Attachment{{FileName: "attachment-name-2"}},
+				},
+			},
 			config: secretbootstrap.Config{
 				Secrets: []secretbootstrap.SecretConfig{
 					{
@@ -2233,21 +2234,20 @@ func TestGetUnusedBWItems(t *testing.T) {
 		{
 			id:           "partly used, unused items expected",
 			bwAllowItems: sets.NewString(),
-			bwClient: bitwarden.NewFakeClient(
-				[]bitwarden.Item{
-					{
-						ID:          "1",
-						Name:        "item-name-1",
-						Fields:      []bitwarden.Field{{Name: "field-name-1"}},
-						Attachments: []bitwarden.Attachment{{FileName: "attachment-name-1"}},
-					},
-					{
-						ID:          "2",
-						Name:        "item-name-2",
-						Fields:      []bitwarden.Field{{Name: "field-name-2"}},
-						Attachments: []bitwarden.Attachment{{FileName: "attachment-name-2"}},
-					},
-				}, nil),
+			bwItems: []bitwarden.Item{
+				{
+					ID:          "1",
+					Name:        "item-name-1",
+					Fields:      []bitwarden.Field{{Name: "field-name-1"}},
+					Attachments: []bitwarden.Attachment{{FileName: "attachment-name-1"}},
+				},
+				{
+					ID:          "2",
+					Name:        "item-name-2",
+					Fields:      []bitwarden.Field{{Name: "field-name-2"}},
+					Attachments: []bitwarden.Attachment{{FileName: "attachment-name-2"}},
+				},
+			},
 			config: secretbootstrap.Config{
 				Secrets: []secretbootstrap.SecretConfig{
 					{
@@ -2258,32 +2258,32 @@ func TestGetUnusedBWItems(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: "[Unused bw item: 'item-name-1' with  Attachments: 'attachment-name-1', Unused bw item: 'item-name-2' with Fields: 'field-name-2']",
+			expectedBitwardenErr: "[Unused bw item: 'item-name-1' with  Attachments: 'attachment-name-1', Unused bw item: 'item-name-2' with Fields: 'field-name-2']",
+			expectedVaultErr:     "[Unused bw item: 'item-name-1' with  SuperfluousFields: [attachment-name-1], Unused bw item: 'item-name-2' with  SuperfluousFields: [field-name-2]]",
 		},
 		{
 			id:           "partly used with docker json config, unused items expected",
 			bwAllowItems: sets.NewString(),
-			bwClient: bitwarden.NewFakeClient(
-				[]bitwarden.Item{
-					{
-						ID:          "1",
-						Name:        "item-name-1",
-						Fields:      []bitwarden.Field{{Name: "field-name-1"}},
-						Attachments: []bitwarden.Attachment{{FileName: "attachment-name-1"}},
-					},
-					{
-						ID:          "2",
-						Name:        "item-name-2",
-						Fields:      []bitwarden.Field{{Name: "field-name-2"}},
-						Attachments: []bitwarden.Attachment{{FileName: "attachment-name-2"}},
-					},
-					{
-						ID:          "3",
-						Name:        "item-name-3",
-						Fields:      []bitwarden.Field{{Name: "registry-url"}, {Name: "email"}},
-						Attachments: []bitwarden.Attachment{{FileName: "auth"}},
-					},
-				}, nil),
+			bwItems: []bitwarden.Item{
+				{
+					ID:          "1",
+					Name:        "item-name-1",
+					Fields:      []bitwarden.Field{{Name: "field-name-1"}},
+					Attachments: []bitwarden.Attachment{{FileName: "attachment-name-1"}},
+				},
+				{
+					ID:          "2",
+					Name:        "item-name-2",
+					Fields:      []bitwarden.Field{{Name: "field-name-2"}},
+					Attachments: []bitwarden.Attachment{{FileName: "attachment-name-2"}},
+				},
+				{
+					ID:          "3",
+					Name:        "item-name-3",
+					Fields:      []bitwarden.Field{{Name: "registry-url"}, {Name: "email"}},
+					Attachments: []bitwarden.Attachment{{FileName: "auth"}},
+				},
+			},
 			config: secretbootstrap.Config{
 				Secrets: []secretbootstrap.SecretConfig{
 					{
@@ -2295,32 +2295,32 @@ func TestGetUnusedBWItems(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: "[Unused bw item: 'item-name-1' with  Attachments: 'attachment-name-1', Unused bw item: 'item-name-2' with Fields: 'field-name-2', Unused bw item: 'item-name-3' with Fields: 'email' Attachments: 'auth']",
+			expectedBitwardenErr: "[Unused bw item: 'item-name-1' with  Attachments: 'attachment-name-1', Unused bw item: 'item-name-2' with Fields: 'field-name-2', Unused bw item: 'item-name-3' with Fields: 'email' Attachments: 'auth']",
+			expectedVaultErr:     "[Unused bw item: 'item-name-1' with  SuperfluousFields: [attachment-name-1], Unused bw item: 'item-name-2' with  SuperfluousFields: [field-name-2], Unused bw item: 'item-name-3' with  SuperfluousFields: [auth email]]",
 		},
 		{
 			id:           "partly used with an allow list, no unused items expected",
 			bwAllowItems: sets.NewString([]string{"item-name-2"}...),
-			bwClient: bitwarden.NewFakeClient(
-				[]bitwarden.Item{
-					{
-						ID:          "1",
-						Name:        "item-name-1",
-						Fields:      []bitwarden.Field{{Name: "field-name-1"}},
-						Attachments: []bitwarden.Attachment{{FileName: "attachment-name-1"}},
-					},
-					{
-						ID:          "2",
-						Name:        "item-name-2",
-						Fields:      []bitwarden.Field{{Name: "field-name-2"}},
-						Attachments: []bitwarden.Attachment{{FileName: "attachment-name-2"}},
-					},
-					{
-						ID:          "3",
-						Name:        "item-name-3",
-						Fields:      []bitwarden.Field{{Name: "registry-url"}},
-						Attachments: []bitwarden.Attachment{{FileName: "auth"}},
-					},
-				}, nil),
+			bwItems: []bitwarden.Item{
+				{
+					ID:          "1",
+					Name:        "item-name-1",
+					Fields:      []bitwarden.Field{{Name: "field-name-1"}},
+					Attachments: []bitwarden.Attachment{{FileName: "attachment-name-1"}},
+				},
+				{
+					ID:          "2",
+					Name:        "item-name-2",
+					Fields:      []bitwarden.Field{{Name: "field-name-2"}},
+					Attachments: []bitwarden.Attachment{{FileName: "attachment-name-2"}},
+				},
+				{
+					ID:          "3",
+					Name:        "item-name-3",
+					Fields:      []bitwarden.Field{{Name: "registry-url"}},
+					Attachments: []bitwarden.Attachment{{FileName: "auth"}},
+				},
+			},
 			config: secretbootstrap.Config{
 				Secrets: []secretbootstrap.SecretConfig{
 					{
@@ -2335,43 +2335,96 @@ func TestGetUnusedBWItems(t *testing.T) {
 		},
 		{
 			id: "unused item last modified after threshold is not reported",
-			bwClient: bitwarden.NewFakeClient(
-				[]bitwarden.Item{
-					{
-						ID:           "1",
-						Name:         "item-name-1",
-						Fields:       []bitwarden.Field{{Name: "field-name-1", Value: "value-1"}},
-						RevisionTime: &dayAfter,
-					},
-				}, nil),
+			bwItems: []bitwarden.Item{
+				{
+					ID:           "1",
+					Name:         "item-name-1",
+					Fields:       []bitwarden.Field{{Name: "field-name-1", Value: "value-1"}},
+					RevisionTime: &dayAfter,
+				},
+			},
 		},
 		{
 			id: "unused item last modified before threshold is reported",
-			bwClient: bitwarden.NewFakeClient(
-				[]bitwarden.Item{
-					{
-						ID:           "1",
-						Name:         "item-name-1",
-						Fields:       []bitwarden.Field{{Name: "field-name-1", Value: "value-1"}},
-						RevisionTime: &dayBefore,
-					},
-				}, nil),
-			expectedErr: "Unused bw item: 'item-name-1' with Fields: 'field-name-1'",
+			bwItems: []bitwarden.Item{
+				{
+					ID:           "1",
+					Name:         "item-name-1",
+					Fields:       []bitwarden.Field{{Name: "field-name-1", Value: "value-1"}},
+					RevisionTime: &dayBefore,
+				},
+			},
+			expectedBitwardenErr: "Unused bw item: 'item-name-1'",
+			expectedVaultErr:     "Unused bw item: 'item-name-1'",
 		},
+	}
+
+	type clientTestCase struct {
+		name          string
+		client        secretStoreClient
+		expectedError string
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.id, func(t *testing.T) {
-			actualErr := getUnusedBWItems(tc.config, tc.bwClient, tc.bwAllowItems, threshold)
-			if actualErr == nil && tc.expectedErr != "" {
-				t.Fatalf("Expected error '%s' but got nil", tc.expectedErr)
-			}
+			for _, clientTestCase := range []clientTestCase{
+				{name: "bitwarden", client: &bitwardenSecretStoreClient{bitwarden.NewFakeClient(tc.bwItems, nil)}, expectedError: tc.expectedBitwardenErr},
+				{name: "vault", client: vaultClientFromBitwardenItems(tc.bwItems), expectedError: tc.expectedVaultErr},
+			} {
+				t.Run(clientTestCase.name, func(t *testing.T) {
+					var actualErrMsg string
+					actualErr := getUnusedBWItems(tc.config, clientTestCase.client, tc.bwAllowItems, threshold)
+					if actualErr != nil {
+						actualErrMsg = actualErr.Error()
+					}
 
-			if actualErr != nil {
-				if !reflect.DeepEqual(actualErr.Error(), tc.expectedErr) {
-					t.Fatal(cmp.Diff(actualErr.Error(), tc.expectedErr))
-				}
+					if actualErrMsg != clientTestCase.expectedError {
+						t.Errorf("expected error: %s\ngot error: %s", clientTestCase.expectedError, actualErr)
+					}
+				})
 			}
 		})
 	}
+}
+
+func vaultClientFromBitwardenItems(items []bitwarden.Item) *vaultSecretStoreWrapper {
+	data := make(map[string]*vaultclient.KVData, len(items))
+	for _, item := range items {
+		kvItem := &vaultclient.KVData{Data: map[string]string{}}
+		for _, field := range item.Fields {
+			kvItem.Data[field.Name] = "some-data"
+		}
+		for _, attachment := range item.Attachments {
+			kvItem.Data[attachment.FileName] = "some-data"
+		}
+		if item.Login != nil && item.Login.Password != "" {
+			kvItem.Data["password"] = item.Login.Password
+		}
+		if item.RevisionTime != nil {
+			kvItem.Metadata.CreatedTime = *item.RevisionTime
+		}
+		data[item.Name] = kvItem
+	}
+
+	return &vaultSecretStoreWrapper{upstream: &fakeVaultClient{items: data}}
+}
+
+type fakeVaultClient struct {
+	items map[string]*vaultclient.KVData
+}
+
+func (f *fakeVaultClient) GetKV(path string) (*vaultclient.KVData, error) {
+	if item, ok := f.items[path]; ok {
+		return item, nil
+	}
+
+	return nil, fmt.Errorf("no data at path %s", path)
+}
+
+func (f *fakeVaultClient) ListKVRecursively(_ string) ([]string, error) {
+	var result []string
+	for key := range f.items {
+		result = append(result, key)
+	}
+	return result, nil
 }

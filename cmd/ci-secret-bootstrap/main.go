@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -36,6 +37,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/bitwarden"
 	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
 	"github.com/openshift/ci-tools/pkg/util"
+	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
 type options struct {
@@ -51,6 +53,10 @@ type options struct {
 	logLevel        string
 	impersonateUser string
 	bwPassword      string
+	vaultToken      string
+	vaultTokenFile  string
+	vaultAddr       string
+	vaultPrefix     string
 
 	maxConcurrency int
 
@@ -79,6 +85,9 @@ func parseOptions() options {
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
 	fs.StringVar(&o.bwUser, "bw-user", "", "Username to access BitWarden.")
 	fs.StringVar(&o.bwPasswordPath, "bw-password-path", "", "Path to a password file to access BitWarden.")
+	fs.StringVar(&o.vaultAddr, "vault-addr", "", "Address of the vault endpoint. Defaults to the VAULT_ADDR env var if unset. Mutually exclusive with --bw-user and --bw-password-path.")
+	fs.StringVar(&o.vaultTokenFile, "vault-token-file", "", "Token file to use when interacting with Vault, defaults to the VAULT_TOKEN env var if unset. Mutually exclusive with --bw-user and --bw-password-path.")
+	fs.StringVar(&o.vaultPrefix, "vault-prefix", "", "Prefix under which to operate in Vault. Mandatory when using vault.")
 	fs.StringVar(&o.cluster, "cluster", "", "If set, only provision secrets for this cluster")
 	fs.BoolVar(&o.force, "force", false, "If true, update the secrets even if existing one differs from Bitwarden items instead of existing with error. Default false.")
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
@@ -87,37 +96,65 @@ func parseOptions() options {
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: %q", os.Args[1:])
 	}
+	if o.vaultAddr == "" {
+		o.vaultAddr = os.Getenv("VAULT_ADDR")
+	}
+	o.vaultToken = os.Getenv("VAULT_TOKEN")
 	return o
 }
 
 func (o *options) validateOptions() error {
+	var errs []error
 	level, err := logrus.ParseLevel(o.logLevel)
 	if err != nil {
-		return fmt.Errorf("invalid log level specified: %w", err)
+		errs = append(errs, fmt.Errorf("invalid log level specified: %w", err))
 	}
 	logrus.SetLevel(level)
-	if o.bwUser == "" {
-		return fmt.Errorf("--bw-user is empty")
+
+	var credentialsProviderConfigured []string
+	if (o.bwUser == "") != (o.bwPasswordPath == "") {
+		errs = append(errs, fmt.Errorf("--bw-user and --bw-password-path must be specified together"))
+	} else if o.bwUser != "" {
+		credentialsProviderConfigured = append(credentialsProviderConfigured, "bitwarden")
 	}
-	if o.bwPasswordPath == "" {
-		return fmt.Errorf("--bw-password-path is empty")
+
+	if vals := sets.NewString(o.vaultAddr, o.vaultTokenFile, o.vaultPrefix); len(vals) != 1 && ((len(vals) != 3) || vals.Has("")) {
+		errs = append(errs, fmt.Errorf("--vault-addr, --vault-token and --vault-prefix must be specified together"))
+	} else if len(vals) == 3 {
+		credentialsProviderConfigured = append(credentialsProviderConfigured, "vault")
+	}
+
+	if len(credentialsProviderConfigured) != 1 {
+		errs = append(errs, fmt.Errorf("must specify credentials for exactly one of vault or bitwarden, got credentials for: %v", credentialsProviderConfigured))
 	}
 	if o.configPath == "" {
-		return fmt.Errorf("--config is empty")
+		errs = append(errs, errors.New("--config is required"))
 	}
 	if len(o.bwAllowUnused.Strings()) > 0 && !o.validateBWItemsUsage {
-		return fmt.Errorf("--bw-allow-unused must be specified with --validate-bitwarden-items-usage")
+		errs = append(errs, errors.New("--bw-allow-unused must be specified with --validate-bitwarden-items-usage"))
 	}
-	return nil
+	return utilerrors.NewAggregate(errs)
 }
 
 func (o *options) completeOptions(secrets *sets.String) error {
-	bytes, err := ioutil.ReadFile(o.bwPasswordPath)
-	if err != nil {
-		return err
+	if o.bwPasswordPath != "" {
+		bytes, err := ioutil.ReadFile(o.bwPasswordPath)
+		if err != nil {
+			return err
+		}
+		o.bwPassword = strings.TrimSpace(string(bytes))
+		secrets.Insert(o.bwPassword)
 	}
-	o.bwPassword = strings.TrimSpace(string(bytes))
-	secrets.Insert(o.bwPassword)
+	if o.vaultTokenFile != "" {
+		raw, err := ioutil.ReadFile(o.vaultTokenFile)
+		if err != nil {
+			return err
+		}
+		o.vaultToken = strings.TrimSpace(string(raw))
+	}
+	if o.vaultToken != "" {
+		secrets.Insert(o.vaultToken)
+	}
 
 	kubeConfigs, _, err := util.LoadKubeConfigs(o.kubeConfigPath, nil)
 	if err != nil {
@@ -266,7 +303,7 @@ func (o *options) validateCompletedOptions() error {
 	return nil
 }
 
-func constructDockerConfigJSON(bwClient bitwarden.Client, dockerConfigJSONData []secretbootstrap.DockerConfigJSONData) ([]byte, error) {
+func constructDockerConfigJSON(bwClient secretStoreClient, dockerConfigJSONData []secretbootstrap.DockerConfigJSONData) ([]byte, error) {
 	auths := make(map[string]secretbootstrap.DockerAuth)
 
 	for _, data := range dockerConfigJSONData {
@@ -310,7 +347,29 @@ func constructDockerConfigJSON(bwClient bitwarden.Client, dockerConfigJSONData [
 	return b, nil
 }
 
-func constructSecrets(ctx context.Context, config secretbootstrap.Config, bwClient bitwarden.Client, maxConcurrency int) (map[string][]*coreapi.Secret, error) {
+type secretStoreClient interface {
+	GetFieldOnItem(itemName, fieldName string) ([]byte, error)
+	GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error)
+	GetPassword(itemName string) ([]byte, error)
+	GetInUseInformationForAllItems() (map[string]secretUsageComparer, error)
+}
+
+type bitwardenSecretStoreClient struct {
+	bitwarden.Client
+}
+
+func (bw *bitwardenSecretStoreClient) GetInUseInformationForAllItems() (map[string]secretUsageComparer, error) {
+	allItems := bw.Client.GetAllItems()
+
+	result := map[string]secretUsageComparer{}
+	for idx, item := range allItems {
+		result[item.Name] = &bitwardenSecretUsageComparer{item: allItems[idx]}
+	}
+
+	return result, nil
+}
+
+func constructSecrets(ctx context.Context, config secretbootstrap.Config, bwClient secretStoreClient, maxConcurrency int) (map[string][]*coreapi.Secret, error) {
 	sem := semaphore.NewWeighted(int64(maxConcurrency))
 	secretsMap := map[string][]*coreapi.Secret{}
 	secretsMapLock := &sync.Mutex{}
@@ -506,10 +565,10 @@ func writeSecretsToFile(secrets []*coreapi.Secret, w io.Writer) error {
 }
 
 type comparable struct {
-	fields       sets.String
-	attachments  sets.String
-	hasPassword  bool
-	revisionTime time.Time
+	fields            sets.String
+	attachments       sets.String
+	hasPassword       bool
+	superfluousFields sets.String
 }
 
 func (c *comparable) string() string {
@@ -527,44 +586,11 @@ func (c *comparable) string() string {
 	if c.hasPassword {
 		ret += " Login: 'password'"
 	}
-	return ret
-}
 
-func constructBWItemsByName(items []bitwarden.Item) map[string]*comparable {
-	bwComparableItemsByName := make(map[string]*comparable)
-	for _, item := range items {
-		comparableItem := &comparable{}
-
-		if len(item.Fields) > 0 {
-			fields := sets.NewString()
-			for _, item := range item.Fields {
-				fields.Insert(item.Name)
-			}
-
-			comparableItem.fields = fields
-		}
-
-		if len(item.Attachments) > 0 {
-			attachments := sets.NewString()
-			for _, attachment := range item.Attachments {
-				attachments.Insert(attachment.FileName)
-			}
-
-			comparableItem.attachments = attachments
-		}
-
-		if item.Login != nil && item.Login.Password != "" {
-			comparableItem.hasPassword = true
-		}
-
-		if item.RevisionTime != nil {
-			comparableItem.revisionTime = *item.RevisionTime
-		}
-
-		bwComparableItemsByName[item.Name] = comparableItem
+	if len(c.superfluousFields) > 0 {
+		ret += fmt.Sprintf(" SuperfluousFields: %v", c.superfluousFields.List())
 	}
-
-	return bwComparableItemsByName
+	return ret
 }
 
 func constructConfigItemsByName(config secretbootstrap.Config) map[string]*comparable {
@@ -580,8 +606,8 @@ func constructConfigItemsByName(config secretbootstrap.Config) map[string]*compa
 						attachments: sets.NewString(),
 					}
 				}
-				item.attachments.Insert(bwContext.Attachment)
-				item.fields.Insert(bwContext.Field)
+				item.attachments = insertIfNotEmpty(item.attachments, bwContext.Attachment)
+				item.fields = insertIfNotEmpty(item.fields, bwContext.Field)
 
 				if bwContext.Attribute == secretbootstrap.AttributeTypePassword {
 					item.hasPassword = true
@@ -598,9 +624,9 @@ func constructConfigItemsByName(config secretbootstrap.Config) map[string]*compa
 							attachments: sets.NewString(),
 						}
 					}
-					item.fields.Insert(context.RegistryURLBitwardenField)
-					item.fields.Insert(context.EmailBitwardenField)
-					item.attachments.Insert(context.AuthBitwardenAttachment)
+
+					item.fields = insertIfNotEmpty(item.fields, context.RegistryURLBitwardenField, context.RegistryURLBitwardenField, context.EmailBitwardenField)
+					item.attachments = insertIfNotEmpty(item.attachments, context.AuthBitwardenAttachment)
 
 					cfgComparableItemsByName[context.BWItem] = item
 				}
@@ -611,74 +637,145 @@ func constructConfigItemsByName(config secretbootstrap.Config) map[string]*compa
 	return cfgComparableItemsByName
 }
 
-func getUnusedBWItems(config secretbootstrap.Config, bwClient bitwarden.Client, bwAllowUnused sets.String, allowUnusedAfter time.Time) error {
-	bwComparableItemsByName := constructBWItemsByName(bwClient.GetAllItems())
+func insertIfNotEmpty(s sets.String, items ...string) sets.String {
+	for _, item := range items {
+		if item != "" {
+			s.Insert(item)
+		}
+	}
+	return s
+}
+
+type secretUsageComparer interface {
+	LastChanged() time.Time
+	UnusedFields(inUse sets.String) (Difference sets.String)
+	UnusedAttachments(inUse sets.String) (Difference sets.String)
+	HasPassword() bool
+	SuperfluousFields() sets.String
+}
+
+type bitwardenSecretUsageComparer struct {
+	item bitwarden.Item
+}
+
+func (bwc *bitwardenSecretUsageComparer) LastChanged() time.Time {
+	if bwc.item.RevisionTime != nil {
+		return *bwc.item.RevisionTime
+	}
+	return time.Time{}
+}
+
+func (bwc *bitwardenSecretUsageComparer) UnusedFields(inUse sets.String) (difference sets.String) {
+	allFields := sets.String{}
+	for _, field := range bwc.item.Fields {
+		allFields.Insert(field.Name)
+	}
+	return allFields.Difference(inUse)
+}
+
+func (bwc *bitwardenSecretUsageComparer) UnusedAttachments(inUse sets.String) (difference sets.String) {
+	allAttachments := sets.String{}
+	for _, attachment := range bwc.item.Attachments {
+		allAttachments.Insert(attachment.FileName)
+	}
+	return allAttachments.Difference(inUse)
+}
+
+func (bwc *bitwardenSecretUsageComparer) SuperfluousFields() sets.String {
+	return nil
+}
+
+func (bwc *bitwardenSecretUsageComparer) HasPassword() bool {
+	return bwc.item.Login != nil && bwc.item.Login.Password != ""
+}
+
+func getUnusedBWItems(config secretbootstrap.Config, bwClient secretStoreClient, bwAllowUnused sets.String, allowUnusedAfter time.Time) error {
+	allSecretStoreItems, err := bwClient.GetInUseInformationForAllItems()
+	if err != nil {
+		return fmt.Errorf("failed to get in-use information from secret store: %w", err)
+	}
 	cfgComparableItemsByName := constructConfigItemsByName(config)
 
 	unused := make(map[string]*comparable)
-	for bwName, item := range bwComparableItemsByName {
-		l := logrus.WithField("bw_item", bwName)
-		if item.revisionTime.After(allowUnusedAfter) {
+	for itemName, item := range allSecretStoreItems {
+		l := logrus.WithField("bw_item", itemName)
+		if item.LastChanged().After(allowUnusedAfter) {
 			logrus.WithFields(logrus.Fields{
-				"bw_item":   bwName,
+				"bw_item":   itemName,
 				"threshold": allowUnusedAfter,
-				"modified":  item.revisionTime,
+				"modified":  item.LastChanged(),
 			}).Info("Unused item last modified after threshold")
 			continue
 		}
 
-		if _, ok := cfgComparableItemsByName[bwName]; !ok {
-			if bwAllowUnused.Has(bwName) {
+		if _, ok := cfgComparableItemsByName[itemName]; !ok {
+			if bwAllowUnused.Has(itemName) {
 				l.Info("Unused item allowed by arguments")
 				continue
 			}
 
-			unused[bwName] = item
+			unused[itemName] = &comparable{}
 			continue
 		}
 
-		diffFields := item.fields.Difference(cfgComparableItemsByName[bwName].fields)
+		diffFields := item.UnusedFields(cfgComparableItemsByName[itemName].fields)
 		if diffFields.Len() > 0 {
-			if bwAllowUnused.Has(bwName) {
+			if bwAllowUnused.Has(itemName) {
 				l.WithField("fields", strings.Join(diffFields.List(), ",")).Info("Unused fields from item are allowed by arguments")
 				continue
 			}
 
-			if _, ok := unused[bwName]; !ok {
-				unused[bwName] = &comparable{}
+			if _, ok := unused[itemName]; !ok {
+				unused[itemName] = &comparable{}
 			}
-			unused[bwName].fields = diffFields
+			unused[itemName].fields = diffFields
 		}
 
-		diffAttachments := item.attachments.Difference(cfgComparableItemsByName[bwName].attachments)
+		diffAttachments := item.UnusedAttachments(cfgComparableItemsByName[itemName].attachments)
 		if diffAttachments.Len() > 0 {
-			if bwAllowUnused.Has(bwName) {
+			if bwAllowUnused.Has(itemName) {
 				l.WithField("attachments", strings.Join(diffAttachments.List(), ",")).Info("Unused attachments from item are allowed by arguments")
 				continue
 			}
 
-			if _, ok := unused[bwName]; !ok {
-				unused[bwName] = &comparable{}
+			if _, ok := unused[itemName]; !ok {
+				unused[itemName] = &comparable{}
 			}
-			unused[bwName].attachments = diffAttachments
+			unused[itemName].attachments = diffAttachments
 		}
 
-		if item.hasPassword && !cfgComparableItemsByName[bwName].hasPassword {
-			if bwAllowUnused.Has(bwName) {
+		if item.HasPassword() && !cfgComparableItemsByName[itemName].hasPassword {
+			if bwAllowUnused.Has(itemName) {
 				l.Info("Unused password fields from item is allowed by arguments")
 				continue
 			}
 
-			if _, ok := unused[bwName]; !ok {
-				unused[bwName] = &comparable{}
+			if _, ok := unused[itemName]; !ok {
+				unused[itemName] = &comparable{}
 			}
-			unused[bwName].hasPassword = true
+			unused[itemName].hasPassword = true
+		}
+
+		if superfluousFields := item.SuperfluousFields(); len(superfluousFields) > 0 {
+			if bwAllowUnused.Has(itemName) {
+				l.WithField("superfluousFields", superfluousFields).Info("Superfluous fields from item are allowed by arguments")
+				continue
+			}
+
+			if _, ok := unused[itemName]; !ok {
+				unused[itemName] = &comparable{}
+			}
+			unused[itemName].superfluousFields = superfluousFields
 		}
 	}
 
 	var errs []error
 	for name, item := range unused {
-		errs = append(errs, fmt.Errorf("Unused bw item: '%s' with %s", name, item.string()))
+		err := fmt.Sprintf("Unused bw item: '%s'", name)
+		if s := item.string(); s != "" {
+			err += fmt.Sprintf(" with %s", s)
+		}
+		errs = append(errs, errors.New(err))
 	}
 
 	sort.Slice(errs, func(i, j int) bool {
@@ -711,29 +808,43 @@ func main() {
 	if err := o.completeOptions(&secrets); err != nil {
 		logrus.WithError(err).Fatal("Failed to complete options.")
 	}
-	bwClient, err := bitwarden.NewClient(o.bwUser, o.bwPassword, func(s string) {
-		secrets.Insert(s)
-	})
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to get Bitwarden client.")
-	}
-	logrus.RegisterExitHandler(func() {
-		if _, err := bwClient.Logout(); err != nil {
-			logrus.WithError(err).Fatal("Failed to logout.")
+
+	var secretStoreClient secretStoreClient
+	if o.bwUser != "" {
+		bwClient, err := bitwarden.NewClient(o.bwUser, o.bwPassword, func(s string) {
+			secrets.Insert(s)
+		})
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to get Bitwarden client.")
 		}
-	})
-	defer logrus.Exit(0)
+		secretStoreClient = &bitwardenSecretStoreClient{bwClient}
+		logrus.RegisterExitHandler(func() {
+			if _, err := bwClient.Logout(); err != nil {
+				logrus.WithError(err).Fatal("Failed to logout.")
+			}
+		})
+		defer logrus.Exit(0)
+	} else {
+		vaultClient, err := vaultclient.New(o.vaultAddr, o.vaultToken)
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to construct vault client")
+		}
+		secretStoreClient = &vaultSecretStoreWrapper{
+			upstream: vaultClient,
+			prefix:   o.vaultPrefix,
+		}
+	}
 	ctx := context.TODO()
 	var errs []error
 	// errors returned by constructSecrets will be handled once the rest of the secrets have been uploaded
-	secretsMap, err := constructSecrets(ctx, o.config, bwClient, o.maxConcurrency)
+	secretsMap, err := constructSecrets(ctx, o.config, secretStoreClient, o.maxConcurrency)
 	if err != nil {
 		errs = append(errs, err)
 	}
 
 	if o.validateBWItemsUsage {
 		unusedGracePeriod := time.Now().AddDate(0, 0, -allowUnusedDays)
-		err := getUnusedBWItems(o.config, bwClient, o.bwAllowUnused.StringSet(), unusedGracePeriod)
+		err := getUnusedBWItems(o.config, secretStoreClient, o.bwAllowUnused.StringSet(), unusedGracePeriod)
 		if err != nil {
 			errs = append(errs, err)
 		}

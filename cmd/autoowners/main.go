@@ -19,6 +19,8 @@ import (
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/labels"
+	"k8s.io/test-infra/prow/plugins"
+	"k8s.io/test-infra/prow/plugins/ownersconfig"
 	"k8s.io/test-infra/prow/repoowners"
 )
 
@@ -161,10 +163,10 @@ type FileGetter interface {
 	GetFile(org, repo, filepath, commit string) ([]byte, error)
 }
 
-func getOwnersHTTP(fg FileGetter, orgRepo orgRepo) (httpResult, error) {
+func getOwnersHTTP(fg FileGetter, orgRepo orgRepo, filenames ownersconfig.Filenames) (httpResult, error) {
 	var httpResult httpResult
 
-	for _, filename := range []string{"OWNERS", "OWNERS_ALIASES"} {
+	for _, filename := range []string{filenames.Owners, filenames.OwnersAliases} {
 		data, err := fg.GetFile(orgRepo.Organization, orgRepo.Repository, filename, "")
 		if err != nil {
 			if _, nf := err.(*github.FileNotFound); nf {
@@ -176,7 +178,7 @@ func getOwnersHTTP(fg FileGetter, orgRepo orgRepo) (httpResult, error) {
 		}
 
 		switch filename {
-		case "OWNERS":
+		case filenames.Owners:
 			httpResult.ownersFileExists = true
 			simple, err := repoowners.LoadSimpleConfig(data)
 			if err != nil {
@@ -192,7 +194,7 @@ func getOwnersHTTP(fg FileGetter, orgRepo orgRepo) (httpResult, error) {
 				}
 				httpResult.fullConfig = full
 			}
-		case "OWNERS_ALIASES":
+		case filenames.OwnersAliases:
 			aliases, err := repoowners.ParseAliasesConfig(data)
 			if err != nil {
 				logrus.WithError(err).Error("Unable to parse aliases config.")
@@ -246,7 +248,7 @@ func writeOwners(orgRepo orgRepo, httpResult httpResult, cleaner ownersCleaner) 
 	return nil
 }
 
-func pullOwners(gc github.Client, configRootDir string, blocklist blocklist, configSubDirs []string, githubOrg string, githubRepo string) error {
+func pullOwners(gc github.Client, configRootDir string, blocklist blocklist, configSubDirs []string, githubOrg string, githubRepo string, pc plugins.Configuration) error {
 	orgRepos, err := loadRepos(configRootDir, blocklist, configSubDirs, githubOrg, githubRepo)
 	if err != nil {
 		return err
@@ -259,7 +261,7 @@ func pullOwners(gc github.Client, configRootDir string, blocklist blocklist, con
 
 	for _, orgRepo := range orgRepos {
 		logrus.WithField("orgRepo", orgRepo.repoString()).Info("handling repo ...")
-		httpResult, err := getOwnersHTTP(gc, orgRepo)
+		httpResult, err := getOwnersHTTP(gc, orgRepo, pc.OwnersFilenames(orgRepo.Organization, orgRepo.Repository))
 		if err != nil {
 			// TODO we might need to handle errors from `yaml.Unmarshal` if OWNERS is not a valid yaml file
 			return err
@@ -293,6 +295,7 @@ type options struct {
 	blockedOrgs        flagutil.Strings
 	debugMode          bool
 	selfApprove        bool
+	pluginsConfigFile  string
 	flagutil.GitHubOptions
 }
 
@@ -315,6 +318,7 @@ func parseOptions() options {
 	fs.Var(&o.blockedOrgs, "ignore-org", "The orgs for which syncing OWNERS file is disabled.")
 	fs.BoolVar(&o.debugMode, "debug-mode", false, "Enable the DEBUG level of logs if true.")
 	fs.BoolVar(&o.selfApprove, "self-approve", false, "Self-approve the PR by adding the `approved` and `lgtm` labels. Requires write permissions on the repo.")
+	fs.StringVar(&o.pluginsConfigFile, "plugins-config-file", "", "Plugin config file location. Needed to properly respect custom owners file names")
 	o.AddFlags(fs)
 	o.AllowAnonymous = true
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -408,6 +412,15 @@ func main() {
 		logrus.WithError(err).Fatalf("Error starting secrets agent.")
 	}
 
+	pc := plugins.Configuration{}
+	if o.pluginsConfigFile != "" {
+		agent := plugins.ConfigAgent{}
+		if err := agent.Load(o.pluginsConfigFile, false); err != nil {
+			logrus.WithError(err).Fatal("failed to load plugin config file")
+		}
+		pc = *(agent.Config())
+	}
+
 	gc, err := o.GitHubOptions.GitHubClient(secretAgent, o.dryRun)
 	if err != nil {
 		logrus.WithError(err).Fatal("error getting GitHub client")
@@ -426,7 +439,7 @@ func main() {
 	var blocked blocklist
 	blocked.directories = sets.NewString(o.blockedRepos.Strings()...)
 	blocked.orgs = sets.NewString(o.blockedOrgs.Strings()...)
-	if err := pullOwners(gc, configRootDirectory, blocked, configSubDirectories, o.githubOrg, o.githubRepo); err != nil {
+	if err := pullOwners(gc, configRootDirectory, blocked, configSubDirectories, o.githubOrg, o.githubRepo, pc); err != nil {
 		logrus.WithError(err).Fatal("Error occurred when walking through the target dir.")
 	}
 

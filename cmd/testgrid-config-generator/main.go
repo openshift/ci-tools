@@ -283,7 +283,6 @@ func main() {
 
 	for _, p := range jobConfig.Periodics {
 		name := p.Name
-		calculateDays := len(p.Cron) > 0 || len(p.Interval) > 0
 		var dashboardType string
 
 		label, ok := allowList[name]
@@ -296,12 +295,10 @@ func main() {
 			dashboardType = label
 			if label == "informing" && configuredJobs[p.Name] == "blocking" {
 				dashboardType = "blocking"
-				calculateDays = false
 			}
 		default:
 			if label, ok := configuredJobs[name]; ok {
 				dashboardType = label
-				calculateDays = false
 				break
 			}
 			switch {
@@ -312,7 +309,6 @@ func main() {
 				strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"):
 				// the standard release periodics should always appear in testgrid
 				dashboardType = "informing"
-				calculateDays = true
 			default:
 				// unknown labels or non standard jobs do not appear in testgrid
 				continue
@@ -364,20 +360,18 @@ func main() {
 		}
 
 		daysOfResults := int32(0)
-		if calculateDays {
-			// for infrequently run jobs (at 12h or 24h intervals) we'd prefer to have more history than just the default
-			// 7-10 days (specified by the default testgrid config), so try to set number of days of results so that we
-			// see at least 100 entries, capping out at 2 months (60 days).
-			desiredResults := 100
-			if len(p.Interval) > 0 {
-				if interval, err := time.ParseDuration(p.Interval); err == nil && interval > 0 && interval < (14*24*time.Hour) {
-					daysOfResults = int32(math.Round(float64(time.Duration(desiredResults)*interval) / float64(24*time.Hour)))
-					if daysOfResults < 7 {
-						daysOfResults = 0
-					}
-					if daysOfResults > 60 {
-						daysOfResults = 60
-					}
+		// for infrequently run jobs (at 12h or 24h intervals) we'd prefer to have more history than just the default
+		// 7-10 days (specified by the default testgrid config), so try to set number of days of results so that we
+		// see at least 100 entries, capping out at 2 months (60 days).
+		desiredResults := 100
+		if len(p.Interval) > 0 {
+			if interval, err := time.ParseDuration(p.Interval); err == nil && interval > 0 && interval < (14*24*time.Hour) {
+				daysOfResults = int32(math.Round(float64(time.Duration(desiredResults)*interval) / float64(24*time.Hour)))
+				if daysOfResults < 7 {
+					daysOfResults = 0
+				}
+				if daysOfResults > 60 {
+					daysOfResults = 60
 				}
 			}
 		}

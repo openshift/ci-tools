@@ -209,7 +209,7 @@ func TestBundleName(t *testing.T) {
 func TestIsBundleImage(t *testing.T) {
 	config := ReleaseBuildConfiguration{
 		Operator: &OperatorStepConfiguration{
-			Bundles: []Bundle{{As: "my-bundle"}},
+			Bundles: []Bundle{{As: "my-bundle"}, {As: ""}},
 		},
 	}
 	testCases := []struct {
@@ -226,6 +226,9 @@ func TestIsBundleImage(t *testing.T) {
 		expected: true,
 	}, {
 		name:     "not-a-bundle",
+		expected: false,
+	}, {
+		name:     "",
 		expected: false,
 	}}
 	for _, testCase := range testCases {

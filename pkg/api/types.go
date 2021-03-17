@@ -136,9 +136,10 @@ func (config ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
 		string(PipelineImageStreamTagReferenceBinaries),
 		string(PipelineImageStreamTagReferenceTestBinaries),
 		string(PipelineImageStreamTagReferenceRPMs),
-		string(PipelineImageStreamTagReferenceBundleSource),
-		string(PipelineImageStreamTagReferenceIndexImageGenerator),
-		string(PipelineImageStreamTagReferenceIndexImage):
+		string(PipelineImageStreamTagReferenceBundleSource):
+		return true
+	}
+	if IsIndexImage(name) {
 		return true
 	}
 	return config.IsBundleImage(name)
@@ -1219,7 +1220,7 @@ func (config ReleaseBuildConfiguration) IsBundleImage(imageName string) bool {
 		return true
 	}
 	for _, bundle := range config.Operator.Bundles {
-		if imageName == bundle.As {
+		if bundle.As != "" && imageName == bundle.As {
 			return true
 		}
 	}

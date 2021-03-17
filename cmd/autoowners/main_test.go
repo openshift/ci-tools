@@ -5,15 +5,19 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/plugins/ownersconfig"
 	"k8s.io/test-infra/prow/repoowners"
 )
 
 func assertEqual(t *testing.T, actual, expected interface{}) {
+	t.Helper()
 	if !reflect.DeepEqual(actual, expected) {
-		t.Errorf("actual differs from expected:\n%s", diff.ObjectReflectDiff(expected, actual))
+		t.Errorf("actual differs from expected:\n%s", cmp.Diff(expected, actual, cmp.AllowUnexported(httpResult{})))
 	}
 }
 
@@ -204,10 +208,12 @@ func TestListUpdatedDirectoriesFromGitStatusOutput(t *testing.T) {
 }
 
 type fakeFileGetter struct {
-	owners    []byte
-	aliases   []byte
-	someError error
-	notFound  error
+	owners              []byte
+	customOwners        []byte
+	aliases             []byte
+	customOwnersAliases []byte
+	someError           error
+	notFound            error
 }
 
 func (fg fakeFileGetter) GetFile(org, repo, filepath, commit string) ([]byte, error) {
@@ -259,6 +265,13 @@ func (fg fakeFileGetter) GetFile(org, repo, filepath, commit string) ([]byte, er
 			return nil, fg.someError
 		}
 	}
+
+	if filepath == "CUSTOM_OWNERS" {
+		return fg.customOwners, nil
+	}
+	if filepath == "CUSTOM_OWNERS_ALIASES" {
+		return fg.customOwnersAliases, nil
+	}
 	return nil, nil
 }
 
@@ -274,6 +287,16 @@ aliases:
   - aaa1
   - aaa2
 `)
+	fakeCustomOwners := []byte(`---
+approvers:
+- approver-from-custom-approvers-filename
+- approvers-from-custom-approvers-filename-team
+`)
+	fakeCustomAliases := []byte(`---
+aliases:
+  approvers-from-custom-approvers-filename-team:
+  - teammember-from-custom-approvers-aliases-filename
+`)
 	someError := fmt.Errorf("some error")
 	notFound := &github.FileNotFound{}
 
@@ -281,14 +304,17 @@ aliases:
 	ra["team-a"] = sets.NewString("aaa1", "aaa2")
 
 	fakeFileGetter := fakeFileGetter{
-		owners:    fakeOwners,
-		aliases:   fakeOwnersAliases,
-		someError: someError,
-		notFound:  notFound,
+		owners:              fakeOwners,
+		customOwners:        fakeCustomOwners,
+		aliases:             fakeOwnersAliases,
+		customOwnersAliases: fakeCustomAliases,
+		someError:           someError,
+		notFound:            notFound,
 	}
 	testCases := []struct {
 		description        string
 		given              orgRepo
+		filenames          *ownersconfig.Filenames
 		expectedHTTPResult httpResult
 		expectedError      error
 	}{
@@ -370,11 +396,27 @@ aliases:
 			},
 			expectedError: someError,
 		},
+		{
+			description: "from custom filename",
+			filenames:   &ownersconfig.Filenames{Owners: "CUSTOM_OWNERS", OwnersAliases: "CUSTOM_OWNERS_ALIASES"},
+			expectedHTTPResult: httpResult{
+				simpleConfig: SimpleConfig{
+					Config: repoowners.Config{
+						Approvers: []string{"approver-from-custom-approvers-filename", "approvers-from-custom-approvers-filename-team"},
+					},
+				},
+				repoAliases:      repoowners.RepoAliases{"approvers-from-custom-approvers-filename-team": sets.NewString("teammember-from-custom-approvers-aliases-filename")},
+				ownersFileExists: true,
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			actual, err := getOwnersHTTP(fakeFileGetter, tc.given)
+			if tc.filenames == nil {
+				tc.filenames = &ownersconfig.FakeFilenames
+			}
+			actual, err := getOwnersHTTP(fakeFileGetter, tc.given, *tc.filenames)
 			assertEqual(t, actual, tc.expectedHTTPResult)
 			assertEqual(t, err, tc.expectedError)
 		})

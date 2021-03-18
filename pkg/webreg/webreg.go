@@ -1171,7 +1171,7 @@ func syntaxBash(source string) (string, error) {
 
 func fromImage(name string, reference *api.ImageStreamTagReference) string {
 	if reference != nil {
-		return fmt.Sprintf("%s/%s:%s", reference.Namespace, reference.Name, reference.Tag)
+		return reference.ISTagName()
 	}
 	return name
 }

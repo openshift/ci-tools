@@ -80,7 +80,7 @@ func validateTags(seen tagSet) []error {
 			}
 			formatted = append(formatted, identifier)
 		}
-		dupes = append(dupes, fmt.Errorf("output tag %s/%s:%s is promoted from more than one place: %v", tag.Namespace, tag.Name, tag.Tag, strings.Join(formatted, ", ")))
+		dupes = append(dupes, fmt.Errorf("output tag %s is promoted from more than one place: %v", tag.ISTagName(), strings.Join(formatted, ", ")))
 	}
 	return dupes
 }

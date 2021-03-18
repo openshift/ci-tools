@@ -343,6 +343,10 @@ type ImageStreamTagReference struct {
 	As string `json:"as,omitempty"`
 }
 
+func (i *ImageStreamTagReference) ISTagName() string {
+	return fmt.Sprintf("%s/%s:%s", i.Namespace, i.Name, i.Tag)
+}
+
 // ReleaseTagConfiguration describes how a release is
 // assembled from release artifacts. A release image stream is a
 // single stream with multiple tags (openshift/origin-v3.9:control-plane),

@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/diff"
@@ -170,6 +172,20 @@ func TestPromotedTags(t *testing.T) {
 			}},
 		},
 		{
+			name: "promoted image but disabled promotion means no output tags",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("foo")},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "roger",
+					Name:      "fred",
+					Disabled:  true,
+				},
+			},
+			expected: nil,
+		},
+		{
 			name: "promoted image by tag means output tags",
 			input: &api.ReleaseBuildConfiguration{
 				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
@@ -186,6 +202,65 @@ func TestPromotedTags(t *testing.T) {
 				Tag:       "fred",
 			}},
 		},
+		{
+			name: "promoted additional image with rename",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("foo")},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "roger",
+					Tag:       "fred",
+					AdditionalImages: map[string]string{
+						"output": "src",
+					},
+				},
+			},
+			expected: []api.ImageStreamTagReference{{
+				Namespace: "roger",
+				Name:      "foo",
+				Tag:       "fred",
+			}, {
+				Namespace: "roger",
+				Name:      "output",
+				Tag:       "fred",
+			}},
+		},
+		{
+			name: "disabled image",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("foo")},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace:      "roger",
+					Tag:            "fred",
+					ExcludedImages: []string{"foo"},
+				},
+			},
+			expected: nil,
+		},
+		{
+			name: "promotion set and binaries built, means binaries promoted",
+			input: &api.ReleaseBuildConfiguration{
+				Images:              []api.ProjectDirectoryImageBuildStepConfiguration{},
+				BinaryBuildCommands: "something",
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "roger",
+					Tag:       "fred",
+				},
+				Metadata: api.Metadata{
+					Org:    "org",
+					Repo:   "repo",
+					Branch: "branch",
+				},
+			},
+			expected: []api.ImageStreamTagReference{{
+				Namespace: "build-cache",
+				Name:      "org-repo",
+				Tag:       "branch",
+			}},
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -194,6 +269,211 @@ func TestPromotedTags(t *testing.T) {
 				t.Errorf("%s: got incorrect promoted tags: %v", testCase.name, diff.ObjectDiff(actual, expected))
 			}
 		})
+	}
+}
+
+func TestPromotedTagsWithRequiredImages(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		input    *api.ReleaseBuildConfiguration
+		images   sets.String
+		expected map[string]api.ImageStreamTagReference
+		names    sets.String
+	}{
+		{
+			name:  "no promotion, no output",
+			input: &api.ReleaseBuildConfiguration{},
+		},
+		{
+			name: "promoted image means output tags",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("foo")},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "roger",
+					Name:      "fred",
+				},
+			},
+			expected: map[string]api.ImageStreamTagReference{"foo": {
+				Namespace: "roger",
+				Name:      "fred",
+				Tag:       "foo",
+			}},
+		},
+		{
+			name: "optional image is ignored means output tags",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("foo")},
+					{To: api.PipelineImageStreamTagReference("bar"), Optional: true},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "roger",
+					Name:      "fred",
+				},
+			},
+			expected: map[string]api.ImageStreamTagReference{"foo": {
+				Namespace: "roger",
+				Name:      "fred",
+				Tag:       "foo",
+			}},
+		},
+		{
+			name: "optional image that's required means output tags",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("foo"), Optional: true},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "roger",
+					Name:      "fred",
+				},
+			},
+			images: sets.NewString("foo"),
+			expected: map[string]api.ImageStreamTagReference{"foo": {
+				Namespace: "roger",
+				Name:      "fred",
+				Tag:       "foo",
+			}},
+		},
+		{
+			name: "promoted image but disabled promotion means no output tags",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("foo")},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "roger",
+					Name:      "fred",
+					Disabled:  true,
+				},
+			},
+			expected: nil,
+		},
+		{
+			name: "promoted image by tag means output tags",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("foo")},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "roger",
+					Tag:       "fred",
+				},
+			},
+			expected: map[string]api.ImageStreamTagReference{"foo": {
+				Namespace: "roger",
+				Name:      "foo",
+				Tag:       "fred",
+			}},
+		},
+		{
+			name: "promoted additional image with rename",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("foo")},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "roger",
+					Tag:       "fred",
+					AdditionalImages: map[string]string{
+						"output": "src",
+					},
+				},
+			},
+			expected: map[string]api.ImageStreamTagReference{"foo": {
+				Namespace: "roger",
+				Name:      "foo",
+				Tag:       "fred",
+			}, "src": {
+				Namespace: "roger",
+				Name:      "output",
+				Tag:       "fred",
+			}},
+		},
+		{
+			name: "disabled image",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("foo")},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace:      "roger",
+					Tag:            "fred",
+					ExcludedImages: []string{"foo"},
+				},
+			},
+			expected: map[string]api.ImageStreamTagReference{},
+		},
+		{
+			name: "promotion set and binaries built, means binaries promoted",
+			input: &api.ReleaseBuildConfiguration{
+				Images:              []api.ProjectDirectoryImageBuildStepConfiguration{},
+				BinaryBuildCommands: "something",
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "roger",
+					Tag:       "fred",
+				},
+				Metadata: api.Metadata{
+					Org:    "org",
+					Repo:   "repo",
+					Branch: "branch",
+				},
+			},
+			expected: map[string]api.ImageStreamTagReference{"bin": {
+				Namespace: "build-cache",
+				Name:      "org-repo",
+				Tag:       "branch",
+			}},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mapping, _ := PromotedTagsWithRequiredImages(testCase.input, testCase.images)
+			if actual, expected := mapping, testCase.expected; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect promoted tags: %v", testCase.name, diff.ObjectDiff(actual, expected))
+			}
+		})
+	}
+}
+
+func TestBuildCacheFor(t *testing.T) {
+	var testCases = []struct {
+		input  api.Metadata
+		output api.ImageStreamTagReference
+	}{
+		{
+			input: api.Metadata{
+				Org:    "org",
+				Repo:   "repo",
+				Branch: "branch",
+			},
+			output: api.ImageStreamTagReference{
+				Namespace: "build-cache",
+				Name:      "org-repo",
+				Tag:       "branch",
+			},
+		},
+		{
+			input: api.Metadata{
+				Org:     "org",
+				Repo:    "repo",
+				Branch:  "branch",
+				Variant: "variant",
+			},
+			output: api.ImageStreamTagReference{
+				Namespace: "build-cache",
+				Name:      "org-repo",
+				Tag:       "branch-variant",
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		if diff := cmp.Diff(testCase.output, BuildCacheFor(testCase.input)); diff != "" {
+			t.Errorf("got incorrect ist for build cache: %v", diff)
+		}
 	}
 }
 
@@ -224,8 +504,7 @@ func TestGetPromotionPod(t *testing.T) {
 func TestGetImageMirror(t *testing.T) {
 	var testCases = []struct {
 		name     string
-		config   api.PromotionConfiguration
-		tags     map[string]string
+		tags     map[string]api.ImageStreamTagReference
 		pipeline *imageapi.ImageStream
 		expected map[string]string
 	}{
@@ -237,15 +516,18 @@ func TestGetImageMirror(t *testing.T) {
 			pipeline: &imageapi.ImageStream{},
 		},
 		{
-			name: "basic case: empty config.Name",
-			config: api.PromotionConfiguration{
-				Namespace: "ci",
-				Tag:       "latest",
-			},
-			tags: map[string]string{
-				"a": "b",
-				"c": "d",
-				"x": "y",
+			name: "basic case",
+			tags: map[string]api.ImageStreamTagReference{
+				"b": {
+					Namespace: "ci",
+					Name:      "a",
+					Tag:       "latest",
+				},
+				"d": {
+					Namespace: "ci",
+					Name:      "c",
+					Tag:       "latest",
+				},
 			},
 			pipeline: &imageapi.ImageStream{
 				Status: imageapi.ImageStreamStatus{
@@ -269,49 +551,16 @@ func TestGetImageMirror(t *testing.T) {
 					},
 				},
 			},
-			expected: map[string]string{"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb": "registry.ci.openshift.org/ci/a:latest", "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd": "registry.ci.openshift.org/ci/c:latest"},
-		},
-		{
-			name: "basic case: config.Name",
-			config: api.PromotionConfiguration{
-				Namespace: "ci",
-				Name:      "name",
-				Tag:       "latest",
+			expected: map[string]string{
+				"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb": "registry.ci.openshift.org/ci/a:latest",
+				"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd": "registry.ci.openshift.org/ci/c:latest",
 			},
-			tags: map[string]string{
-				"a": "b",
-				"c": "d",
-				"x": "y",
-			},
-			pipeline: &imageapi.ImageStream{
-				Status: imageapi.ImageStreamStatus{
-					Tags: []imageapi.NamedTagEventList{
-						{
-							Tag: "b",
-							Items: []imageapi.TagEvent{
-								{
-									DockerImageReference: "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
-								},
-							},
-						},
-						{
-							Tag: "d",
-							Items: []imageapi.TagEvent{
-								{
-									DockerImageReference: "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd",
-								},
-							},
-						},
-					},
-				},
-			},
-			expected: map[string]string{"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb": "registry.ci.openshift.org/ci/name:a", "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd": "registry.ci.openshift.org/ci/name:c"},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := getImageMirrorTarget(testCase.config, testCase.tags, testCase.pipeline), testCase.expected; !reflect.DeepEqual(actual, expected) {
+			if actual, expected := getImageMirrorTarget(testCase.tags, testCase.pipeline), testCase.expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect ImageMirror mapping: %v", testCase.name, diff.ObjectDiff(actual, expected))
 			}
 		})

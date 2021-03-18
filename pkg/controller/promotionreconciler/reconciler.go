@@ -231,7 +231,7 @@ const configIndexName = "release-build-config-by-image-stream-tag"
 func configIndexFn(in cioperatorapi.ReleaseBuildConfiguration) []string {
 	var result []string
 	for _, istRef := range release.PromotedTags(&in) {
-		result = append(result, fmt.Sprintf("%s/%s:%s", istRef.Namespace, istRef.Name, istRef.Tag))
+		result = append(result, istRef.ISTagName())
 	}
 	return result
 }

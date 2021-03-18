@@ -110,8 +110,17 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"operator:\n" +
 	"    # Bundles define a dockerfile and build context to build a bundle\n" +
 	"    bundles:\n" +
-	"        - context_dir: ' '\n" +
+	"        - # As defines the name for this bundle. If not set, a name will be automatically generated for the bundle.\n" +
+	"          as: ' '\n" +
+	"          # BaseIndex defines what index image to use as a base when adding the bundle to an index\n" +
+	"          base_index: ' '\n" +
+	"          # ContextDir defines the source directory to build the bundle from relative to the repository root\n" +
+	"          context_dir: ' '\n" +
+	"          # DockerfilePath defines where the dockerfile for build the bundle exists relative to the contextdir\n" +
 	"          dockerfile_path: ' '\n" +
+	"          # UpdateGraph defines the update mode to use when adding the bundle to the base index.\n" +
+	"          # Can be: semver (default), semver-skippatch, or replaces\n" +
+	"          update_graph: ' '\n" +
 	"    # Substitutions describes the pullspecs in the operator manifests that must be subsituted\n" +
 	"    # with the pull specs of the images in the CI registry\n" +
 	"    substitutions:\n" +
@@ -160,11 +169,15 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              # With is the string that the PullSpec is being replaced by\n" +
 	"              with: ' '\n" +
 	"      index_generator_step:\n" +
+	"        # BaseIndex is the index image to add the bundle(s) to. If unset, a new index is created\n" +
+	"        base_index: ' '\n" +
 	"        # OperatorIndex is a list of the names of the bundle images that the\n" +
 	"        # index will contain in its database.\n" +
 	"        operator_index:\n" +
 	"            - \"\"\n" +
 	"        to: ' '\n" +
+	"        # UpdateGraph defines the mode to us when updating the index graph\n" +
+	"        update_graph: ' '\n" +
 	"      input_image_tag_step:\n" +
 	"        base_image:\n" +
 	"            # As is an optional string to use as the intermediate name for this reference.\n" +

@@ -173,7 +173,7 @@ func fromConfig(
 		} else if rawStep.IndexGeneratorStepConfiguration != nil {
 			step = steps.IndexGeneratorStep(*rawStep.IndexGeneratorStepConfiguration, config, config.Resources, buildClient, jobSpec, pullSecret)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
-			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, jobSpec, pullSecret)
+			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config, config.Resources, buildClient, jobSpec, pullSecret)
 		} else if rawStep.ProjectDirectoryImageBuildInputs != nil {
 			step = steps.GitSourceStep(*rawStep.ProjectDirectoryImageBuildInputs, config.Resources, buildClient, jobSpec, cloneAuthConfig, pullSecret)
 		} else if rawStep.RPMImageInjectionStepConfiguration != nil {
@@ -530,9 +530,48 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 			Substitutions: config.Operator.Substitutions,
 		}})
 		// Build bundles
+		// First build named bundles and corresponding indices
+		// store list of indices for unnamed bundles
+		var unnamedBundles []int
+		for index, bundleConfig := range config.Operator.Bundles {
+			if bundleConfig.As == "" {
+				unnamedBundles = append(unnamedBundles, index)
+				continue
+			}
+			bundle := &api.ProjectDirectoryImageBuildStepConfiguration{
+				To: api.PipelineImageStreamTagReference(bundleConfig.As),
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					ContextDir:     bundleConfig.ContextDir,
+					DockerfilePath: bundleConfig.DockerfilePath,
+				},
+			}
+			buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: bundle})
+			// Build index generator
+			indexName := api.PipelineImageStreamTagReference(api.IndexName(bundleConfig.As))
+			updateGraph := bundleConfig.UpdateGraph
+			if updateGraph == "" {
+				updateGraph = api.IndexUpdateSemver
+			}
+			buildSteps = append(buildSteps, api.StepConfiguration{IndexGeneratorStepConfiguration: &api.IndexGeneratorStepConfiguration{
+				To:            api.IndexGeneratorName(indexName),
+				OperatorIndex: []string{bundleConfig.As},
+				BaseIndex:     bundleConfig.BaseIndex,
+				UpdateGraph:   updateGraph,
+			}})
+			// Build the index
+			index := &api.ProjectDirectoryImageBuildStepConfiguration{
+				To: indexName,
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					DockerfilePath: steps.IndexDockerfileName,
+				},
+			}
+			buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: index})
+		}
+		// Build non-named bundles following old naming system
 		var bundles []string
-		for index, bundle := range config.Operator.Bundles {
-			bundleName := api.BundleName(index)
+		for _, bundleIndex := range unnamedBundles {
+			bundle := config.Operator.Bundles[bundleIndex]
+			bundleName := api.BundleName(bundleIndex)
 			bundles = append(bundles, bundleName)
 			image := &api.ProjectDirectoryImageBuildStepConfiguration{
 				To: api.PipelineImageStreamTagReference(bundleName),
@@ -543,19 +582,22 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 			}
 			buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
 		}
-		// Build index generator
-		buildSteps = append(buildSteps, api.StepConfiguration{IndexGeneratorStepConfiguration: &api.IndexGeneratorStepConfiguration{
-			To:            api.PipelineImageStreamTagReferenceIndexImageGenerator,
-			OperatorIndex: bundles,
-		}})
-		// Build the index
-		image := &api.ProjectDirectoryImageBuildStepConfiguration{
-			To: api.PipelineImageStreamTagReferenceIndexImage,
-			ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
-				DockerfilePath: steps.IndexDockerfileName,
-			},
+		if len(bundles) > 0 {
+			// Build index generator
+			buildSteps = append(buildSteps, api.StepConfiguration{IndexGeneratorStepConfiguration: &api.IndexGeneratorStepConfiguration{
+				To:            api.PipelineImageStreamTagReferenceIndexImageGenerator,
+				OperatorIndex: bundles,
+				UpdateGraph:   api.IndexUpdateSemver,
+			}})
+			// Build the index
+			image := &api.ProjectDirectoryImageBuildStepConfiguration{
+				To: api.PipelineImageStreamTagReferenceIndexImage,
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					DockerfilePath: steps.IndexDockerfileName,
+				},
+			}
+			buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
 		}
-		buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
 	}
 
 	for i := range config.Tests {

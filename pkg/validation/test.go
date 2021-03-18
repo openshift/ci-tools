@@ -59,8 +59,8 @@ func validateTestStepConfiguration(fieldRoot string, input []api.TestStepConfigu
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: is required", fieldRootN))
 		} else if test.As == "images" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: should not be called 'images' because it gets confused with '[images]' target", fieldRootN))
-		} else if test.As == "ci-index" {
-			validationErrors = append(validationErrors, fmt.Errorf("%s.as: should not be called 'ci-index' because it gets confused with 'ci-index' target", fieldRootN))
+		} else if strings.HasPrefix(test.As, string(api.PipelineImageStreamTagReferenceIndexImage)) {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.as: should begin with 'ci-index' because it gets confused with 'ci-index' and `ci-index-...` targets", fieldRootN))
 		} else if len(validation.IsDNS1123Subdomain(test.As)) != 0 {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: '%s' is not a valid Kubernetes object name", fieldRootN, test.As))
 		}
@@ -187,9 +187,27 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 							errs = append(errs, validationError("this dependency requires an operator bundle configuration, which is not configured"))
 						}
 					default:
-						// this could be a base image, or a project image
-						if !config.IsBaseImage(name) && !config.BuildsImage(name) {
-							errs = append(errs, validationError("no base image import or project image build is configured to provide this dependency"))
+						// this could be a named index image
+						if api.IsIndexImage(name) {
+							if config.Operator != nil {
+								foundBundle := false
+								for _, bundle := range config.Operator.Bundles {
+									if api.IndexName(bundle.As) == name {
+										foundBundle = true
+										break
+									}
+								}
+								if !foundBundle {
+									errs = append(errs, validationError(fmt.Sprintf("this dependency requires an operator bundle named %s, which is not configured", strings.TrimPrefix(name, string(api.PipelineImageStreamTagReferenceIndexImage)))))
+								}
+							} else {
+								errs = append(errs, validationError("this dependency requires an operator bundle configuration, which is not configured"))
+							}
+							break
+						}
+						// this could be a base image, a project image, or a bundle image
+						if !config.IsBaseImage(name) && !config.BuildsImage(name) && !config.IsBundleImage(name) {
+							errs = append(errs, validationError("no base image import, project image build, or bundle image build is configured to provide this dependency"))
 						}
 					}
 				}

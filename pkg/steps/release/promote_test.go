@@ -560,8 +560,34 @@ func TestGetImageMirror(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := getImageMirrorTarget(testCase.tags, testCase.pipeline), testCase.expected; !reflect.DeepEqual(actual, expected) {
+			if actual, expected := getImageMirrorTarget(testCase.tags, testCase.pipeline, "registry.ci.openshift.org"), testCase.expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect ImageMirror mapping: %v", testCase.name, diff.ObjectDiff(actual, expected))
+			}
+		})
+	}
+}
+
+func TestRegistryDomain(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		config   *api.PromotionConfiguration
+		expected string
+	}{
+		{
+			name:     "default",
+			config:   &api.PromotionConfiguration{},
+			expected: "registry.ci.openshift.org",
+		},
+		{
+			name:     "override",
+			config:   &api.PromotionConfiguration{RegistryOverride: "whoa.com.biz"},
+			expected: "whoa.com.biz",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if diff := cmp.Diff(testCase.expected, registryDomain(testCase.config)); diff != "" {
+				t.Errorf("%s: got incorrect registry domain: %v", testCase.name, diff)
 			}
 		})
 	}

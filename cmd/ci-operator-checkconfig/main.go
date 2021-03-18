@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -40,6 +41,9 @@ func main() {
 		}
 		for _, tag := range release.PromotedTags(configuration) {
 			seen[tag] = append(seen[tag], repoInfo)
+		}
+		if configuration.PromotionConfiguration != nil && configuration.PromotionConfiguration.RegistryOverride != "" {
+			return errors.New("setting promotion.registry_override is not allowed")
 		}
 		return nil
 	}); err != nil {

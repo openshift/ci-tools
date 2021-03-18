@@ -167,7 +167,9 @@ func (s *multiStageTestStep) SubSteps() []api.CIOperatorStepDetailInfo {
 func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 	var needsReleaseImage, needsReleasePayload bool
 	for _, step := range append(append(s.pre, s.test...), s.post...) {
-		if step.From != "" {
+		if link, ok := step.FromImageTag(); ok {
+			ret = append(ret, api.InternalImageLink(link))
+		} else {
 			dependency := api.StepDependency{Name: step.From}
 			imageStream, name, explicit := s.config.DependencyParts(dependency)
 			if explicit {
@@ -177,10 +179,6 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 				// it's likely coming from an imported release we need to wait for
 				needsReleaseImage = true
 			}
-		}
-
-		if link, ok := step.FromImageTag(); ok {
-			ret = append(ret, api.InternalImageLink(link))
 		}
 
 		for _, dependency := range step.Dependencies {

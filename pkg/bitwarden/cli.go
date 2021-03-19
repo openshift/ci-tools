@@ -22,15 +22,15 @@ type cliClient struct {
 	session    string
 	savedItems []Item
 	run        func(args ...string) ([]byte, error)
-	addSecret  func(s string)
+	addSecrets func(s ...string)
 
 	// onCreate is called before secrets are created by client methods, allowing
 	// user code to default/validate created items
 	onCreate func(*Item) error
 }
 
-func newCliClient(username, password string, addSecret func(s string)) (Client, error) {
-	return newCliClientWithRun(username, password, addSecret, func(args ...string) ([]byte, error) {
+func newCliClient(username, password string, addSecrets func(s ...string)) (Client, error) {
+	return newCliClientWithRun(username, password, addSecrets, func(args ...string) ([]byte, error) {
 		// bw-password is protected, session in args is not
 		logger := logrus.WithField("args", args)
 		logger.Debug("running bitwarden command ...")
@@ -75,12 +75,12 @@ func newCliClient(username, password string, addSecret func(s string)) (Client, 
 	})
 }
 
-func newCliClientWithRun(username, password string, addSecret func(s string), run func(args ...string) (bytes []byte, err error)) (Client, error) {
+func newCliClientWithRun(username, password string, addSecrets func(s ...string), run func(args ...string) (bytes []byte, err error)) (Client, error) {
 	client := cliClient{
-		username:  username,
-		password:  password,
-		run:       run,
-		addSecret: addSecret,
+		username:   username,
+		password:   password,
+		run:        run,
+		addSecrets: addSecrets,
 	}
 	return &client, client.loginAndListItems()
 }
@@ -113,7 +113,7 @@ func (c *cliClient) loginAndListItems() error {
 		raw := r.Data.Raw
 		if raw != "" {
 			c.session = raw
-			c.addSecret(c.session)
+			c.addSecrets(c.session)
 			var items []Item
 			out, err := c.runWithSession("list", "items")
 			if err != nil {

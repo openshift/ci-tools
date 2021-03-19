@@ -508,7 +508,6 @@ func TestCompleteOptions(t *testing.T) {
 				}
 				sort.Strings(actualClusters)
 				equal(t, "clusters", tc.expectedClusters, actualClusters)
-				equal(t, "some set", sets.NewString("topSecret"), secrets)
 			}
 		})
 	}

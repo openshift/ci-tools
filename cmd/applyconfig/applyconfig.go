@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/hashicorp/go-version"
@@ -21,12 +20,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/flagutil"
-	"k8s.io/test-infra/prow/logrusutil"
 
 	templateapi "github.com/openshift/api/template/v1"
 	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
 
 	"github.com/openshift/ci-tools/pkg/api/nsttl"
+	"github.com/openshift/ci-tools/pkg/secrets"
 )
 
 type command string
@@ -307,7 +306,7 @@ func (c configApplier) asTemplate(params []templateapi.Parameter) (namespaceActi
 		envValue := os.Getenv(param.Name)
 		if len(envValue) > 0 {
 			args = append(args, []string{"-p", fmt.Sprintf("%s=%s", param.Name, envValue)}...)
-			secrets.addSecrets(envValue)
+			censor.AddSecrets(envValue)
 		}
 	}
 	ocProcessCmd := makeOcCommand(ocProcess, c.kubeConfig, c.context, c.path, c.user, args...)
@@ -459,30 +458,13 @@ func fileFilter(info os.FileInfo, path string) (bool, error) {
 	return false, nil
 }
 
-type secretGetter struct {
-	sync.RWMutex
-	secrets sets.String
-}
-
-func (g *secretGetter) addSecrets(newSecrets ...string) {
-	g.Lock()
-	defer g.Unlock()
-	g.secrets.Insert(newSecrets...)
-}
-
-func (g *secretGetter) getSecrets() sets.String {
-	g.RLock()
-	defer g.RUnlock()
-	return g.secrets
-}
-
 var (
-	secrets *secretGetter
+	censor secrets.DynamicCensor
 )
 
 func init() {
-	secrets = &secretGetter{secrets: sets.NewString()}
-	logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, secrets.getSecrets))
+	censor = secrets.NewDynamicCensor()
+	logrus.SetFormatter(censor.Formatter(logrus.StandardLogger().Formatter))
 }
 
 type ocVersionOutput struct {

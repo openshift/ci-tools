@@ -27,6 +27,8 @@ spec:
     - name: io.openshift.build.namespace
     - name: io.openshift.build.source-context-dir
     - name: io.openshift.build.source-location
+    - name: io.openshift.ci.from.root
+      value: imagedigest
     - name: vcs-ref
     - name: vcs-type
     - name: vcs-url

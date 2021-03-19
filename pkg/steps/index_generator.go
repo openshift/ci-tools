@@ -47,8 +47,13 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	fromTag := api.PipelineImageStreamTagReferenceSource
+	fromDigest, err := resolvePipelineImageStreamTagReference(ctx, s.client, fromTag, s.jobSpec)
+	if err != nil {
+		return err
+	}
 	build := buildFromSource(
-		s.jobSpec, api.PipelineImageStreamTagReferenceSource, s.config.To,
+		s.jobSpec, fromTag, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
@@ -68,6 +73,7 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 				Secret: coreapi.LocalObjectReference{Name: s.pullSecret.Name},
 			}},
 		},
+		fromDigest,
 		"",
 		s.resources,
 		s.pullSecret,

@@ -264,7 +264,7 @@ func TestOptionalOperators(t *testing.T) {
 		indexName:  "ci-index",
 		bundleName: "ci-bundle1",
 	}, {
-		name:       "named bunlde",
+		name:       "named bundle",
 		indexName:  "ci-index-named-bundle",
 		bundleName: "named-bundle",
 	}}

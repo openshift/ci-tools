@@ -40,12 +40,17 @@ func (s *pipelineImageCacheStep) Run(ctx context.Context) error {
 
 func (s *pipelineImageCacheStep) run(ctx context.Context) error {
 	dockerfile := rawCommandDockerfile(s.config.From, s.config.Commands)
+	fromDigest, err := resolvePipelineImageStreamTagReference(ctx, s.client, s.config.From, s.jobSpec)
+	if err != nil {
+		return err
+	}
 	return handleBuild(ctx, s.client, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
 		},
+		fromDigest,
 		"",
 		s.resources,
 		s.pullSecret,

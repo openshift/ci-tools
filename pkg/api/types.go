@@ -629,7 +629,7 @@ type LiteralTestStep struct {
 	// and the environment variables which are used to expose their pull specs.
 	Dependencies []StepDependency `json:"dependencies,omitempty"`
 	// DnsConfig for step's Pod.
-	DNSConfig StepDNSConfig `json:"dnsConfig,omitempty"`
+	DNSConfig *StepDNSConfig `json:"dnsConfig,omitempty"`
 	// Leases lists resources that should be acquired for the test.
 	Leases []StepLease `json:"leases,omitempty"`
 	// OptionalOnSuccess defines if this step should be skipped as long
@@ -739,7 +739,7 @@ type MultiStageTestConfiguration struct {
 	// Dependencies holds override values for dependency parameters.
 	Dependencies TestDependencies `json:"dependencies,omitempty"`
 	// DnsConfig for step's Pod.
-	DNSConfig StepDNSConfig `json:"dnsConfig,omitempty"`
+	DNSConfig *StepDNSConfig `json:"dnsConfig,omitempty"`
 	// Leases lists resources that should be acquired for the test.
 	Leases []StepLease `json:"leases,omitempty"`
 	// AllowSkipOnSuccess defines if any steps can be skipped when
@@ -772,7 +772,7 @@ type MultiStageTestConfigurationLiteral struct {
 	// Dependencies holds override values for dependency parameters.
 	Dependencies TestDependencies `json:"dependencies,omitempty"`
 	// DnsConfig for step's Pod.
-	DNSConfig StepDNSConfig `json:"dnsConfig,omitempty"`
+	DNSConfig *StepDNSConfig `json:"dnsConfig,omitempty"`
 	// Leases lists resources that should be acquired for the test.
 	Leases []StepLease `json:"leases,omitempty"`
 	// AllowSkipOnSuccess defines if any steps can be skipped when

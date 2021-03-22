@@ -11,6 +11,7 @@ import (
 	"k8s.io/utils/diff"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestValidateTests(t *testing.T) {
@@ -997,8 +998,7 @@ func TestValidateDNSConfig(t *testing.T) {
 		output []error
 	}{
 		{
-			name:  "no searches",
-			input: nil,
+			name: "no searches",
 		},
 		{
 			name: "valid searches",
@@ -1016,13 +1016,11 @@ func TestValidateDNSConfig(t *testing.T) {
 			},
 		},
 	}
-
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := validateDNSConfig("root", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
-					return x.Error() == y.Error()
-				})))
+			err := validateDNSConfig("root", testCase.input)
+			if diff := cmp.Diff(err, testCase.output, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("actualError does not match expectedError, diff: %s", diff)
 			}
 		})
 	}

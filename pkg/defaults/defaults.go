@@ -1,6 +1,8 @@
 package defaults
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -9,11 +11,15 @@ import (
 	"strings"
 
 	coreapi "k8s.io/api/core/v1"
+	kapierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/api/image/docker10"
+	imagev1 "github.com/openshift/api/image/v1"
 	templateapi "github.com/openshift/api/template/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
@@ -41,6 +47,7 @@ type inputImageSet map[api.InputImageTagStepConfiguration]struct{}
 // build, including defaulted steps, generated steps and
 // all raw steps that the user provided.
 func FromConfig(
+	ctx context.Context,
 	config *api.ReleaseBuildConfiguration,
 	jobSpec *api.JobSpec,
 	templates []*templateapi.Template,
@@ -75,10 +82,11 @@ func FromConfig(
 	}
 
 	podClient := steps.NewPodClient(client, clusterConfig, coreGetter.RESTClient())
-	return fromConfig(config, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil))
+	return fromConfig(ctx, config, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil))
 }
 
 func fromConfig(
+	ctx context.Context,
 	config *api.ReleaseBuildConfiguration,
 	jobSpec *api.JobSpec,
 	templates []*templateapi.Template,
@@ -107,7 +115,8 @@ func fromConfig(
 	var overridableSteps, buildSteps, postSteps []api.Step
 	var imageStepLinks []api.StepLink
 	var hasReleaseStep bool
-	rawSteps, err := stepConfigsForBuild(config, jobSpec, ioutil.ReadFile)
+	resolver := rootImageResolver(client, ctx)
+	rawSteps, err := stepConfigsForBuild(config, jobSpec, ioutil.ReadFile, resolver)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get stepConfigsForBuild: %w", err)
 	}
@@ -397,9 +406,51 @@ func leasesForTest(s *api.MultiStageTestConfigurationLiteral) (ret []api.StepLea
 	return
 }
 
-type readFile func(string) ([]byte, error)
+// rootImageResolver creates a resolver for the root image import step. We attempt to resolve the root image and
+// the build cache. If we are able to successfully determine that the build cache is up-to-date, we import it as
+// the root image.
+func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context) func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
+	return func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
+		log.Printf("Determining if build cache %s can be used in place of root %s\n", cache.ISTagName(), root.ISTagName())
+		cacheTag := &imagev1.ImageStreamTag{}
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: cache.Namespace, Name: fmt.Sprintf("%s:%s", cache.Name, cache.Tag)}, cacheTag); err != nil {
+			if kapierrors.IsNotFound(err) {
+				log.Printf("Build cache %s not found, falling back to %s\n", cache.ISTagName(), root.ISTagName())
+				// no build cache, use the normal root
+				return root, nil
+			}
+			return nil, fmt.Errorf("could not resolve build cache image stream tag %s: %w", cache.ISTagName(), err)
+		}
+		log.Printf("Resolved build cache %s to %s\n", cache.ISTagName(), cacheTag.Name)
+		metadata := &docker10.DockerImage{}
+		if len(cacheTag.Image.DockerImageMetadata.Raw) == 0 {
+			return nil, fmt.Errorf("could not fetch Docker image metadata build cache %s", cache.ISTagName())
+		}
+		if err := json.Unmarshal(cacheTag.Image.DockerImageMetadata.Raw, metadata); err != nil {
+			return nil, fmt.Errorf("malformed Docker image metadata on build cache %s: %w", cache.ISTagName(), err)
+		}
+		prior := metadata.Config.Labels[api.ImageVersionLabel(api.PipelineImageStreamTagReferenceRoot)]
+		log.Printf("Build cache %s is based on root image at %s\n", cache.ISTagName(), prior)
 
-func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.JobSpec, readFile readFile) ([]api.StepConfiguration, error) {
+		rootTag := &imagev1.ImageStreamTag{}
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: root.Namespace, Name: fmt.Sprintf("%s:%s", root.Name, root.Tag)}, rootTag); err != nil {
+			return nil, fmt.Errorf("could not resolve build root image stream tag %s: %w", root.ISTagName(), err)
+		}
+		log.Printf("Resolved root image %s to %s\n", root.ISTagName(), rootTag.Name)
+		current := rootTag.Name
+		if prior == current {
+			log.Printf("Using build cache %s as root image.\n", cache.ISTagName())
+			return cache, nil
+		}
+		log.Printf("Using default image %s as root image.\n", root.ISTagName())
+		return root, nil
+	}
+}
+
+type readFile func(string) ([]byte, error)
+type resolveRoot func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error)
+
+func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.JobSpec, readFile readFile, resolveRoot resolveRoot) ([]api.StepConfiguration, error) {
 	var buildSteps []api.StepConfiguration
 
 	if config.InputConfiguration.BaseImages == nil {
@@ -428,6 +479,14 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 			target.ImageStreamTagReference = istTagRef
 		}
 		if isTagRef := target.ImageStreamTagReference; isTagRef != nil {
+			if config.InputConfiguration.BuildRootImage.UseBuildCache {
+				cache := api.BuildCacheFor(config.Metadata)
+				root, err := resolveRoot(isTagRef, &cache)
+				if err != nil {
+					return nil, fmt.Errorf("could not resolve build root: %w", err)
+				}
+				isTagRef = root
+			}
 			buildSteps = append(buildSteps, api.StepConfiguration{
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: *isTagRef,

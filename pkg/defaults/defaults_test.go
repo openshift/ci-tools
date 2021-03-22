@@ -38,12 +38,16 @@ func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration
 }
 
 func TestStepConfigsForBuild(t *testing.T) {
+	noopResolver := func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
+		return root, nil
+	}
 	var testCases = []struct {
 		name     string
 		input    *api.ReleaseBuildConfiguration
 		jobSpec  *api.JobSpec
 		output   []api.StepConfiguration
 		readFile readFile
+		resolver resolveRoot
 	}{
 		{
 			name: "minimal information provided",
@@ -66,6 +70,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
+			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -77,6 +82,48 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Namespace: "root-ns",
 						Name:      "root-name",
 						Tag:       "manual",
+					},
+					To: api.PipelineImageStreamTagReferenceRoot,
+				},
+			}},
+		},
+		{
+			name: "minimal information provided with build cache in use",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+						UseBuildCache:           true,
+					},
+				},
+				Metadata: api.Metadata{
+					Org:    "org",
+					Repo:   "repo",
+					Branch: "branch",
+				},
+			},
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
+				},
+			},
+			resolver: func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
+				return cache, nil
+			},
+			output: []api.StepConfiguration{{
+				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+					From: api.PipelineImageStreamTagReferenceRoot,
+					To:   api.PipelineImageStreamTagReferenceSource,
+				}),
+			}, {
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+					BaseImage: api.ImageStreamTagReference{
+						Namespace: "build-cache",
+						Name:      "org-repo",
+						Tag:       "branch",
 					},
 					To: api.PipelineImageStreamTagReferenceRoot,
 				},
@@ -99,6 +146,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
+			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -146,6 +194,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
+			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -191,6 +240,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
+			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -245,6 +295,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
+			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -294,6 +345,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
+			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -348,6 +400,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
+			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -404,6 +457,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
+			resolver: noopResolver,
 			output: []api.StepConfiguration{
 				{
 					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
@@ -468,6 +522,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
+			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -530,6 +585,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
+			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
 					Substitutions: []api.PullSpecSubstitution{{
@@ -606,6 +662,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
+			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
 					Substitutions: []api.PullSpecSubstitution{{
@@ -654,7 +711,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			rawSteps, err := stepConfigsForBuild(testCase.input, testCase.jobSpec, testCase.readFile)
+			rawSteps, err := stepConfigsForBuild(testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver)
 			if err != nil {
 				t.Fatalf("failed to get stepConfigsForBuild: %v", err)
 			}
@@ -1093,7 +1150,7 @@ func TestFromConfig(t *testing.T) {
 			for k, v := range tc.params {
 				params.Add(k, func() (string, error) { return v, nil })
 			}
-			steps, post, err := fromConfig(&tc.config, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params)
+			steps, post, err := fromConfig(context.Background(), &tc.config, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params)
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}

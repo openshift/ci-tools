@@ -108,3 +108,19 @@ func LogFieldsFor(metadata Metadata) logrus.Fields {
 		"variant": metadata.Variant,
 	}
 }
+
+func BuildCacheFor(metadata Metadata) ImageStreamTagReference {
+	tag := metadata.Branch
+	if metadata.Variant != "" {
+		tag = fmt.Sprintf("%s-%s", tag, metadata.Variant)
+	}
+	return ImageStreamTagReference{
+		Namespace: "build-cache",
+		Name:      fmt.Sprintf("%s-%s", metadata.Org, metadata.Repo),
+		Tag:       tag,
+	}
+}
+
+func ImageVersionLabel(fromTag PipelineImageStreamTagReference) string {
+	return fmt.Sprintf("io.openshift.ci.from.%s", fromTag)
+}

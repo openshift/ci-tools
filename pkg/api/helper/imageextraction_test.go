@@ -46,6 +46,9 @@ func TestTestInputImageStreamTagsFromResolvedConfigReturnsAllImageStreamTags(t *
 					numberInsertedElements--
 				}
 			}
+			if cfg.InputConfiguration.BuildRootImage != nil && cfg.InputConfiguration.BuildRootImage.UseBuildCache {
+				numberInsertedElements++
+			}
 
 			res, err := TestInputImageStreamTagsFromResolvedConfig(cfg)
 			if err != nil {

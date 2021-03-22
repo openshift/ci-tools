@@ -568,12 +568,17 @@ func (o *options) Run() []error {
 	defer func() {
 		log.Printf("Ran for %s", time.Since(start).Truncate(time.Second))
 	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	handler := func(s os.Signal) {
+		log.Printf("error: Process interrupted with signal %s, cancelling execution...", s)
+		cancel()
+	}
 	var leaseClient *lease.Client
 	if o.leaseServer != "" && o.leaseServerCredentialsFile != "" {
 		leaseClient = &o.leaseClient
 	}
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret)
+	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -613,11 +618,6 @@ func (o *options) Run() []error {
 	// exist prior to execution
 	if err := o.initializeNamespace(); err != nil {
 		return []error{results.ForReason("initializing_namespace").WithError(err).Errorf("could not initialize namespace: %v", err)}
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	handler := func(s os.Signal) {
-		log.Printf("error: Process interrupted with signal %s, cancelling execution...", s)
-		cancel()
 	}
 
 	return interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() []error {

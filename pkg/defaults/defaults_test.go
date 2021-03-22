@@ -50,7 +50,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
 					BuildRootImage: &api.BuildRootImageConfiguration{
-						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
+						},
 					},
 				},
 			},
@@ -61,7 +65,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Repo: "repo",
 					},
 				},
-				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -71,8 +74,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
-						Namespace: "base-1",
-						Name:      "repo-test-base",
+						Namespace: "root-ns",
+						Name:      "root-name",
 						Tag:       "manual",
 					},
 					To: api.PipelineImageStreamTagReferenceRoot,
@@ -95,7 +98,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Repo: "repo",
 					},
 				},
-				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -127,7 +129,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
 					BuildRootImage: &api.BuildRootImageConfiguration{
-						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
+						},
 					},
 				},
 				BinaryBuildCommands: "hi",
@@ -139,7 +145,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Repo: "repo",
 					},
 				},
-				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -149,8 +154,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
-						Namespace: "base-1",
-						Name:      "repo-test-base",
+						Namespace: "root-ns",
+						Name:      "root-name",
 						Tag:       "manual",
 					},
 					To: api.PipelineImageStreamTagReferenceRoot,
@@ -168,7 +173,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
 					BuildRootImage: &api.BuildRootImageConfiguration{
-						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
+						},
 					},
 				},
 				BinaryBuildCommands: "hi",
@@ -181,7 +190,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Repo: "repo",
 					},
 				},
-				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -191,8 +199,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
-						Namespace: "base-1",
-						Name:      "repo-test-base",
+						Namespace: "root-ns",
+						Name:      "root-name",
 						Tag:       "manual",
 					},
 					To: api.PipelineImageStreamTagReferenceRoot,
@@ -220,7 +228,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
 					BuildRootImage: &api.BuildRootImageConfiguration{
-						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
+						},
 					},
 				},
 				RpmBuildCommands: "hello",
@@ -232,7 +244,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Repo: "repo",
 					},
 				},
-				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -242,8 +253,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
-						Namespace: "base-1",
-						Name:      "repo-test-base",
+						Namespace: "root-ns",
+						Name:      "root-name",
 						Tag:       "manual",
 					},
 					To: api.PipelineImageStreamTagReferenceRoot,
@@ -265,7 +276,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
 					BuildRootImage: &api.BuildRootImageConfiguration{
-						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
+						},
 					},
 				},
 				RpmBuildLocation: "testing",
@@ -278,7 +293,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Repo: "repo",
 					},
 				},
-				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -288,8 +302,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
-						Namespace: "base-1",
-						Name:      "repo-test-base",
+						Namespace: "root-ns",
+						Name:      "root-name",
 						Tag:       "manual",
 					},
 					To: api.PipelineImageStreamTagReferenceRoot,
@@ -311,7 +325,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
 					BuildRootImage: &api.BuildRootImageConfiguration{
-						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
+						},
 					},
 					BaseImages: map[string]api.ImageStreamTagReference{
 						"name": {
@@ -329,7 +347,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Repo: "repo",
 					},
 				},
-				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -339,8 +356,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
-						Namespace: "base-1",
-						Name:      "repo-test-base",
+						Namespace: "root-ns",
+						Name:      "root-name",
 						Tag:       "manual",
 					},
 					To: api.PipelineImageStreamTagReferenceRoot,
@@ -362,7 +379,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
 					BuildRootImage: &api.BuildRootImageConfiguration{
-						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
+						},
 					},
 					ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
 						Namespace: "test",
@@ -382,14 +403,13 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Repo: "repo",
 					},
 				},
-				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{
 				{
 					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 						BaseImage: api.ImageStreamTagReference{
-							Namespace: "base-1",
-							Name:      "repo-test-base",
+							Namespace: "root-ns",
+							Name:      "root-name",
 							Tag:       "manual",
 						},
 						To: api.PipelineImageStreamTagReferenceRoot,
@@ -425,7 +445,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
 					BuildRootImage: &api.BuildRootImageConfiguration{
-						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
+						},
 					},
 					BaseRPMImages: map[string]api.ImageStreamTagReference{
 						"name": {
@@ -443,7 +467,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Repo: "repo",
 					},
 				},
-				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -453,8 +476,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
-						Namespace: "base-1",
-						Name:      "repo-test-base",
+						Namespace: "root-ns",
+						Name:      "root-name",
 						Tag:       "manual",
 					},
 					To: api.PipelineImageStreamTagReferenceRoot,
@@ -481,7 +504,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
 					BuildRootImage: &api.BuildRootImageConfiguration{
-						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
+						},
 					},
 				},
 				Operator: &api.OperatorStepConfiguration{
@@ -502,7 +529,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Repo: "repo",
 					},
 				},
-				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
@@ -519,8 +545,12 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-					BaseImage: api.ImageStreamTagReference{Namespace: "base-1", Name: "repo-test-base", Tag: "manual"},
-					To:        "root",
+					BaseImage: api.ImageStreamTagReference{
+						Namespace: "root-ns",
+						Name:      "root-name",
+						Tag:       "manual",
+					},
+					To: "root",
 				},
 			}, {
 				ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
@@ -549,7 +579,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
 					BuildRootImage: &api.BuildRootImageConfiguration{
-						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
+						},
 					},
 				},
 				Operator: &api.OperatorStepConfiguration{
@@ -571,7 +605,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Repo: "repo",
 					},
 				},
-				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
@@ -588,8 +621,12 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-					BaseImage: api.ImageStreamTagReference{Namespace: "base-1", Name: "repo-test-base", Tag: "manual"},
-					To:        "root",
+					BaseImage: api.ImageStreamTagReference{
+						Namespace: "root-ns",
+						Name:      "root-name",
+						Tag:       "manual",
+					},
+					To: "root",
 				},
 			}, {
 				ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{

@@ -427,6 +427,24 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				Tag:       "branch",
 			}},
 		},
+		{
+			name: "promotion set and binaries built, build cache disabled means no binaries promoted",
+			input: &api.ReleaseBuildConfiguration{
+				Images:              []api.ProjectDirectoryImageBuildStepConfiguration{},
+				BinaryBuildCommands: "something",
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace:         "roger",
+					Tag:               "fred",
+					DisableBuildCache: true,
+				},
+				Metadata: api.Metadata{
+					Org:    "org",
+					Repo:   "repo",
+					Branch: "branch",
+				},
+			},
+			expected: map[string]api.ImageStreamTagReference{},
+		},
 	}
 
 	for _, testCase := range testCases {

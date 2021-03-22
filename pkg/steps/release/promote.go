@@ -275,8 +275,8 @@ func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration
 		}
 		promotedTags[src] = tag
 	}
-	// always promote the binary build if one exists
-	if configuration.BinaryBuildCommands != "" {
+	// promote the binary build if one exists and this isn't disabled
+	if configuration.BinaryBuildCommands != "" && !configuration.PromotionConfiguration.DisableBuildCache {
 		promotedTags[string(api.PipelineImageStreamTagReferenceBinaries)] = BuildCacheFor(configuration.Metadata)
 	}
 	return promotedTags, names

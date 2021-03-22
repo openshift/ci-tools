@@ -414,6 +414,12 @@ type PromotionConfiguration struct {
 	// should *not* be used in common test workflows. The CI chat
 	// bot uses this option to facilitate image sharing.
 	RegistryOverride string `json:"registry_override,omitempty"`
+
+	// DisableBuildCache stops us from uploading the build cache.
+	// This is useful (only) for CI chat bot invocations where
+	// promotion does not imply output artifacts are being created
+	// for posterity.
+	DisableBuildCache bool `json:"disable_build_cache,omitempty"`
 }
 
 // StepConfiguration holds one step configuration.

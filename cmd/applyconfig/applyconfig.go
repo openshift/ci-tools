@@ -20,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/flagutil"
+	"k8s.io/test-infra/prow/logrusutil"
 
 	templateapi "github.com/openshift/api/template/v1"
 	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
@@ -159,6 +160,7 @@ type configApplier struct {
 	path       string
 	user       string
 	dry        dryRunMethod
+	censor     *secrets.DynamicCensor
 }
 
 func makeOcApply(kubeConfig, context, path, user string, dry dryRunMethod) *exec.Cmd {
@@ -306,7 +308,7 @@ func (c configApplier) asTemplate(params []templateapi.Parameter) (namespaceActi
 		envValue := os.Getenv(param.Name)
 		if len(envValue) > 0 {
 			args = append(args, []string{"-p", fmt.Sprintf("%s=%s", param.Name, envValue)}...)
-			censor.AddSecrets(envValue)
+			c.censor.AddSecrets(envValue)
 		}
 	}
 	ocProcessCmd := makeOcCommand(ocProcess, c.kubeConfig, c.context, c.path, c.user, args...)
@@ -348,8 +350,16 @@ func isTemplate(input io.Reader) ([]templateapi.Parameter, bool) {
 	return nil, false
 }
 
-func apply(kubeConfig, context, path, user string, dry dryRunMethod) (namespaceActions, error) {
-	do := configApplier{kubeConfig: kubeConfig, context: context, path: path, user: user, dry: dry, executor: &commandExecutor{}}
+func apply(kubeConfig, context, path, user string, dry dryRunMethod, censor *secrets.DynamicCensor) (namespaceActions, error) {
+	do := configApplier{
+		kubeConfig: kubeConfig,
+		context:    context,
+		path:       path,
+		user:       user,
+		dry:        dry,
+		executor:   &commandExecutor{},
+		censor:     censor,
+	}
 
 	file, err := os.Open(path)
 	if err != nil {
@@ -364,7 +374,7 @@ func apply(kubeConfig, context, path, user string, dry dryRunMethod) (namespaceA
 	return do.asGenericManifest()
 }
 
-func applyConfig(rootDir string, o *options, createdNamespaces sets.String) (sets.String, error) {
+func applyConfig(rootDir string, o *options, createdNamespaces sets.String, censor *secrets.DynamicCensor) (sets.String, error) {
 	failures := false
 	if err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -384,7 +394,7 @@ func applyConfig(rootDir string, o *options, createdNamespaces sets.String) (set
 			}
 			if targetFileInfo.IsDir() {
 				logrus.Infof("replace the symlink folder %s with the target %s", path, target)
-				if namespaces, err := applyConfig(target, o, createdNamespaces); err != nil {
+				if namespaces, err := applyConfig(target, o, createdNamespaces, censor); err != nil {
 					failures = true
 				} else {
 					createdNamespaces = createdNamespaces.Union(namespaces)
@@ -397,7 +407,7 @@ func applyConfig(rootDir string, o *options, createdNamespaces sets.String) (set
 			return err
 		}
 
-		namespaces, err := apply(o.kubeConfig, o.context, path, o.user.val, o.dryRun)
+		namespaces, err := apply(o.kubeConfig, o.context, path, o.user.val, o.dryRun, censor)
 		if err != nil {
 			failures = true
 			return nil
@@ -456,15 +466,6 @@ func fileFilter(info os.FileInfo, path string) (bool, error) {
 	}
 
 	return false, nil
-}
-
-var (
-	censor secrets.DynamicCensor
-)
-
-func init() {
-	censor = secrets.NewDynamicCensor()
-	logrus.SetFormatter(censor.Formatter(logrus.StandardLogger().Formatter))
 }
 
 type ocVersionOutput struct {
@@ -527,6 +528,7 @@ func detectDryRunMethod(kubeconfig, context, username string) dryRunMethod {
 }
 
 func main() {
+	logrusutil.ComponentInit()
 	o := gatherOptions()
 
 	if !o.user.beenSet {
@@ -536,11 +538,12 @@ func main() {
 	if o.dryRun == dryAuto {
 		o.dryRun = detectDryRunMethod(o.kubeConfig, o.context, o.user.val)
 	}
-
+	censor := secrets.NewDynamicCensor()
+	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
 	var hadErr bool
 	createdNamespaces := sets.NewString()
 	for _, dir := range o.directories.Strings() {
-		namespaces, err := applyConfig(dir, o, createdNamespaces)
+		namespaces, err := applyConfig(dir, o, createdNamespaces, &censor)
 		if err != nil {
 			hadErr = true
 			logrus.WithError(err).Error("There were failures while applying config")

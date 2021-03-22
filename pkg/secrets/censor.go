@@ -3,10 +3,8 @@ package secrets
 import (
 	"sync"
 
-	"github.com/sirupsen/logrus"
-
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/test-infra/prow/logrusutil"
+	"k8s.io/test-infra/prow/secretutil"
 )
 
 // DynamicCensor keeps a list of censored secrets that is dynamically updated.
@@ -15,12 +13,14 @@ import (
 // secrets is internally synchronized.
 type DynamicCensor struct {
 	sync.RWMutex
+	*secretutil.ReloadingCensorer
 	secrets sets.String
 }
 
 func NewDynamicCensor() DynamicCensor {
 	return DynamicCensor{
-		secrets: sets.NewString(),
+		ReloadingCensorer: secretutil.NewCensorer(),
+		secrets:           sets.NewString(),
 	}
 }
 
@@ -29,11 +29,5 @@ func (c *DynamicCensor) AddSecrets(s ...string) {
 	c.Lock()
 	defer c.Unlock()
 	c.secrets.Insert(s...)
-}
-
-// Formatter creates a new formatter to be used to filter output.
-func (c *DynamicCensor) Formatter(f logrus.Formatter) logrus.Formatter {
-	return logrusutil.NewCensoringFormatter(f, func() sets.String {
-		return c.secrets
-	})
+	c.ReloadingCensorer.Refresh(c.secrets.List()...)
 }

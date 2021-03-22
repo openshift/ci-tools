@@ -16,6 +16,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	templateapi "github.com/openshift/api/template/v1"
+
+	"github.com/openshift/ci-tools/pkg/secrets"
 )
 
 func TestMakeOcCommand(t *testing.T) {
@@ -449,7 +451,9 @@ func TestAsTemplate(t *testing.T) {
 				responses = append(responses, response{err: err})
 			}
 			executor := &mockExecutor{t: t, responses: responses}
+			censor := secrets.NewDynamicCensor()
 			tc.applier.executor = executor
+			tc.applier.censor = &censor
 			namespaces, err := tc.applier.asTemplate(tc.params)
 			if err != nil && !tc.expectedError {
 				t.Errorf("returned unexpected error: %v", err)

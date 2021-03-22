@@ -45,8 +45,13 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	fromTag := api.PipelineImageStreamTagReferenceSource
+	fromDigest, err := resolvePipelineImageStreamTagReference(ctx, s.client, fromTag, s.jobSpec)
+	if err != nil {
+		return err
+	}
 	build := buildFromSource(
-		s.jobSpec, api.PipelineImageStreamTagReferenceSource, api.PipelineImageStreamTagReferenceBundleSource,
+		s.jobSpec, fromTag, api.PipelineImageStreamTagReferenceBundleSource,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
@@ -63,6 +68,7 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 				},
 			},
 		},
+		fromDigest,
 		"",
 		s.resources,
 		s.pullSecret,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
 
 	coreapi "k8s.io/api/core/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,42 +39,22 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context) error {
 
 func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 	images := buildInputsFromStep(s.config.Inputs)
+	sourceTag := s.config.From
+	var contextDir string
 	// If image being built is an operator bundle, use the bundle source instead of original source
 	if s.releaseBuildConfig.IsBundleImage(string(s.config.To)) {
-		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceBundleSource)
-		workingDir, err := getWorkingDir(s.client, source, s.jobSpec.Namespace())
-		if err != nil {
-			return fmt.Errorf("failed to get workingDir: %w", err)
-		}
-		images = append(images, buildapi.ImageSource{
-			From: coreapi.ObjectReference{
-				Kind: "ImageStreamTag",
-				Name: source,
-			},
-			Paths: []buildapi.ImageSourcePath{{
-				SourcePath:     fmt.Sprintf("%s/%s/.", workingDir, s.config.ContextDir),
-				DestinationDir: ".",
-			}},
-		})
+		sourceTag = api.PipelineImageStreamTagReferenceBundleSource
+		contextDir = s.config.ContextDir
 	} else if api.IsIndexImage(string(s.config.To)) {
-		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.IndexGeneratorName(s.config.To))
-		workingDir, err := getWorkingDir(s.client, source, s.jobSpec.Namespace())
-		if err != nil {
-			return fmt.Errorf("failed to get workingDir: %w", err)
-		}
-		images = append(images, buildapi.ImageSource{
-			From: coreapi.ObjectReference{
-				Kind: "ImageStreamTag",
-				Name: source,
-			},
-			Paths: []buildapi.ImageSourcePath{{
-				SourcePath:     fmt.Sprintf("%s/.", workingDir),
-				DestinationDir: ".",
-			}},
-		})
+		sourceTag = api.IndexGeneratorName(s.config.To)
 	} else if _, ok := s.config.Inputs["src"]; !ok {
-		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
-		workingDir, err := getWorkingDir(s.client, source, s.jobSpec.Namespace())
+		sourceTag = api.PipelineImageStreamTagReferenceSource
+		contextDir = s.config.ContextDir
+	}
+	if sourceTag != s.config.From {
+		// if we are changing the source, we need to make sure it's mounted in
+		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, sourceTag)
+		baseDir, err := getWorkingDir(s.client, source, s.jobSpec.Namespace())
 		if err != nil {
 			return fmt.Errorf("failed to get workingDir: %w", err)
 		}
@@ -83,10 +64,14 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 				Name: source,
 			},
 			Paths: []buildapi.ImageSourcePath{{
-				SourcePath:     fmt.Sprintf("%s/%s/.", workingDir, s.config.ContextDir),
+				SourcePath:     fmt.Sprintf("%s/.", path.Join(baseDir, contextDir)),
 				DestinationDir: ".",
 			}},
 		})
+	}
+	fromDigest, err := resolvePipelineImageStreamTagReference(ctx, s.client, sourceTag, s.jobSpec)
+	if err != nil {
+		return err
 	}
 	build := buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
@@ -95,6 +80,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 			Dockerfile: s.config.DockerfileLiteral,
 			Images:     images,
 		},
+		fromDigest,
 		s.config.DockerfilePath,
 		s.resources,
 		s.pullSecret,

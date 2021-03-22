@@ -5,6 +5,7 @@ dir=$(mktemp -d)
 trap 'rm -r "${dir}"' EXIT
 export SHARED_DIR=${dir}/shared
 export TMPDIR=${dir}/tmp
+export CLI_DIR="/cli-dir"
 export NAMESPACE=test
 export JOB_NAME_SAFE=test
 ERR=${dir}/err.log
@@ -44,6 +45,16 @@ test_shared_dir() {
         fail '[ERROR] entrypoint-wrapper failed'
     fi
     diff <(echo "$v") <(echo "${TMPDIR}"/secret)
+}
+
+test_cli_dir() {
+    echo '[INFO] Verifying PATH is set correctly when CLI_DIR is set'
+    if ! v=$(entrypoint-wrapper --dry-run bash -c 'echo >&3 "${PATH}"' \
+        3>&1 > /dev/null 2> "${ERR}")
+    then
+        fail '[ERROR] entrypoint-wrapper failed'
+    fi
+    diff <(echo "$v") <(echo "${PATH}:${CLI_DIR}")
 }
 
 test_home_dir() {
@@ -159,6 +170,7 @@ test_signal() {
 mkdir "${SHARED_DIR}"
 test_mkdir
 test_shared_dir
+test_cli_dir
 test_copy_dir
 test_home_dir
 test_copy_kubeconfig

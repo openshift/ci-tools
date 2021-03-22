@@ -28,6 +28,7 @@ import (
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 
+	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
@@ -180,6 +181,7 @@ func execCmd(argv []string) error {
 		proc.Env = os.Environ()
 	}
 	manageHome(proc)
+	manageCLI(proc)
 	if err := manageKubeconfig(proc); err != nil {
 		return err
 	}
@@ -201,6 +203,14 @@ func execCmd(argv []string) error {
 		}
 	}()
 	return proc.Run()
+}
+
+// manageCLI configures the PATH to include a CLI_DIR if one was provided
+func manageCLI(proc *exec.Cmd) {
+	cliDir, set := os.LookupEnv(steps.CliEnv)
+	if set {
+		proc.Env = append(proc.Env, fmt.Sprintf("PATH=%s:%s", os.Getenv("PATH"), cliDir))
+	}
 }
 
 // manageHome provides a writeable home so kubectl discovery can be cached

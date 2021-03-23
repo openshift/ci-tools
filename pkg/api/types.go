@@ -332,6 +332,11 @@ type BuildRootImageConfiguration struct {
 	ProjectImageBuild       *ProjectDirectoryImageBuildInputs `json:"project_image,omitempty"`
 	// If the BuildRoot images pullspec should be read from a file in the repository (BuildRootImageFileName).
 	FromRepository bool `json:"from_repository,omitempty"`
+
+	// UseBuildCache enables the import and use of the prior `bin` image
+	// as a build cache, if the underlying build root has not changed since
+	// the previous cache was published.
+	UseBuildCache bool `json:"use_build_cache,omitempty"`
 }
 
 // ImageStreamTagReference identifies an ImageStreamTag

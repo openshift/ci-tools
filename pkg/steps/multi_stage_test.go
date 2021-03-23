@@ -120,7 +120,16 @@ func TestGeneratePods(t *testing.T) {
 					As: "step2", From: "stable-initial:installer", Commands: "command2",
 				}},
 			},
-		}},
+		}, {
+			As: "test",
+			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+				ClusterProfile: api.ClusterProfileAWS,
+				DNSConfig: &api.StepDNSConfig{
+					Searches: []string{"my.dns.search1", "my.dns.search2"},
+				},
+			},
+		},
+		},
 	}
 
 	jobSpec := api.JobSpec{

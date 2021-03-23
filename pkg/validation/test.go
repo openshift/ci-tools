@@ -589,6 +589,17 @@ func validateDependencies(fieldRoot string, dependencies []api.StepDependency) [
 	return errs
 }
 
+func validateDNSConfig(fieldRoot string, searches []api.StepDNSConfig) (ret []error) {
+	var errs []error
+	for i, search := range searches {
+		if search.Searches[i] == "" {
+			errs = append(errs, fmt.Errorf("%s.searches[%d] must be set", fieldRoot, i))
+		}
+	}
+
+	return errs
+}
+
 func validateLeases(context context, leases []api.StepLease) (ret []error) {
 	for i, l := range leases {
 		if l.ResourceType == "" {

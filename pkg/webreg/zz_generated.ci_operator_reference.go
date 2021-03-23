@@ -370,6 +370,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Dependencies holds override values for dependency parameters.\n" +
 	"            dependencies:\n" +
 	"                \"\": \"\"\n" +
+	"            # DnsConfig for step's Pod.\n" +
+	"            dnsConfig:\n" +
+	"                # Searches is a list of DNS search domains for host-name lookup\n" +
+	"                searches:\n" +
+	"                    - \"\"\n" +
 	"            # Environment has the values of parameters for the steps.\n" +
 	"            env:\n" +
 	"                \"\": \"\"\n" +
@@ -424,6 +429,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      env: ' '\n" +
 	"                      # Name is the tag or stream:tag that this dependency references\n" +
 	"                      name: ' '\n" +
+	"                  # DnsConfig for step's Pod.\n" +
+	"                  dnsConfig:\n" +
+	"                    # Searches is a list of DNS search domains for host-name lookup\n" +
+	"                    searches:\n" +
+	"                        - \"\"\n" +
 	"                  # Environment lists parameters that should be set by the test.\n" +
 	"                  env:\n" +
 	"                    - # Default if not set, optional, makes the parameter not required if set.\n" +
@@ -499,6 +509,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      env: ' '\n" +
 	"                      # Name is the tag or stream:tag that this dependency references\n" +
 	"                      name: ' '\n" +
+	"                  # DnsConfig for step's Pod.\n" +
+	"                  dnsConfig:\n" +
+	"                    # Searches is a list of DNS search domains for host-name lookup\n" +
+	"                    searches:\n" +
+	"                        - \"\"\n" +
 	"                  # Environment lists parameters that should be set by the test.\n" +
 	"                  env:\n" +
 	"                    - # Default if not set, optional, makes the parameter not required if set.\n" +
@@ -574,6 +589,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      env: ' '\n" +
 	"                      # Name is the tag or stream:tag that this dependency references\n" +
 	"                      name: ' '\n" +
+	"                  # DnsConfig for step's Pod.\n" +
+	"                  dnsConfig:\n" +
+	"                    # Searches is a list of DNS search domains for host-name lookup\n" +
+	"                    searches:\n" +
+	"                        - \"\"\n" +
 	"                  # Environment lists parameters that should be set by the test.\n" +
 	"                  env:\n" +
 	"                    - # Default if not set, optional, makes the parameter not required if set.\n" +
@@ -671,6 +691,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Dependencies holds override values for dependency parameters.\n" +
 	"            dependencies:\n" +
 	"                \"\": \"\"\n" +
+	"            # DnsConfig for step's Pod.\n" +
+	"            dnsConfig:\n" +
+	"                # Searches is a list of DNS search domains for host-name lookup\n" +
+	"                searches:\n" +
+	"                    - \"\"\n" +
 	"            # Environment has the values of parameters for the steps.\n" +
 	"            env:\n" +
 	"                \"\": \"\"\n" +
@@ -710,6 +735,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
 	"                      name: ' '\n" +
+	"                  dnsConfig:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    searches:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        - \"\"\n" +
 	"                  env:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - default: \"\"\n" +
@@ -763,6 +793,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
 	"                      name: ' '\n" +
+	"                  dnsConfig:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    searches:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        - \"\"\n" +
 	"                  env:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - default: \"\"\n" +
@@ -816,6 +851,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
 	"                      name: ' '\n" +
+	"                  dnsConfig:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    searches:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        - \"\"\n" +
 	"                  env:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - default: \"\"\n" +
@@ -965,6 +1005,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Dependencies holds override values for dependency parameters.\n" +
 	"        dependencies:\n" +
 	"            \"\": \"\"\n" +
+	"        # DnsConfig for step's Pod.\n" +
+	"        dnsConfig:\n" +
+	"            # Searches is a list of DNS search domains for host-name lookup\n" +
+	"            searches:\n" +
+	"                - \"\"\n" +
 	"        # Environment has the values of parameters for the steps.\n" +
 	"        env:\n" +
 	"            \"\": \"\"\n" +
@@ -1019,6 +1064,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  env: ' '\n" +
 	"                  # Name is the tag or stream:tag that this dependency references\n" +
 	"                  name: ' '\n" +
+	"              # DnsConfig for step's Pod.\n" +
+	"              dnsConfig:\n" +
+	"                # Searches is a list of DNS search domains for host-name lookup\n" +
+	"                searches:\n" +
+	"                    - \"\"\n" +
 	"              # Environment lists parameters that should be set by the test.\n" +
 	"              env:\n" +
 	"                - # Default if not set, optional, makes the parameter not required if set.\n" +
@@ -1094,6 +1144,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  env: ' '\n" +
 	"                  # Name is the tag or stream:tag that this dependency references\n" +
 	"                  name: ' '\n" +
+	"              # DnsConfig for step's Pod.\n" +
+	"              dnsConfig:\n" +
+	"                # Searches is a list of DNS search domains for host-name lookup\n" +
+	"                searches:\n" +
+	"                    - \"\"\n" +
 	"              # Environment lists parameters that should be set by the test.\n" +
 	"              env:\n" +
 	"                - # Default if not set, optional, makes the parameter not required if set.\n" +
@@ -1169,6 +1224,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  env: ' '\n" +
 	"                  # Name is the tag or stream:tag that this dependency references\n" +
 	"                  name: ' '\n" +
+	"              # DnsConfig for step's Pod.\n" +
+	"              dnsConfig:\n" +
+	"                # Searches is a list of DNS search domains for host-name lookup\n" +
+	"                searches:\n" +
+	"                    - \"\"\n" +
 	"              # Environment lists parameters that should be set by the test.\n" +
 	"              env:\n" +
 	"                - # Default if not set, optional, makes the parameter not required if set.\n" +
@@ -1266,6 +1326,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Dependencies holds override values for dependency parameters.\n" +
 	"        dependencies:\n" +
 	"            \"\": \"\"\n" +
+	"        # DnsConfig for step's Pod.\n" +
+	"        dnsConfig:\n" +
+	"            # Searches is a list of DNS search domains for host-name lookup\n" +
+	"            searches:\n" +
+	"                - \"\"\n" +
 	"        # Environment has the values of parameters for the steps.\n" +
 	"        env:\n" +
 	"            \"\": \"\"\n" +
@@ -1305,6 +1370,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
 	"                  name: ' '\n" +
+	"              dnsConfig:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                searches:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - \"\"\n" +
 	"              env:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - default: \"\"\n" +
@@ -1358,6 +1428,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
 	"                  name: ' '\n" +
+	"              dnsConfig:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                searches:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - \"\"\n" +
 	"              env:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - default: \"\"\n" +
@@ -1411,6 +1486,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
 	"                  name: ' '\n" +
+	"              dnsConfig:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                searches:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - \"\"\n" +
 	"              env:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - default: \"\"\n" +

@@ -442,6 +442,12 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		pod.Labels[MultiStageTestLabel] = s.name
 		pod.Spec.ServiceAccountName = s.name
 		pod.Spec.TerminationGracePeriodSeconds = terminationGracePeriodSeconds
+		if step.DNSConfig != nil {
+			if pod.Spec.DNSConfig == nil {
+				pod.Spec.DNSConfig = &coreapi.PodDNSConfig{}
+			}
+			pod.Spec.DNSConfig.Searches = append(pod.Spec.DNSConfig.Searches, step.DNSConfig.Searches...)
+		}
 		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{Name: homeVolumeName, VolumeSource: coreapi.VolumeSource{EmptyDir: &coreapi.EmptyDirVolumeSource{}}})
 		pod.Spec.Volumes = append(pod.Spec.Volumes, secretVolumes...)
 		for idx := range pod.Spec.Containers {

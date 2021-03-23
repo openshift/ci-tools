@@ -215,10 +215,10 @@ func TestLoginAndListItems(t *testing.T) {
 				responses: tc.responses,
 			}
 			client := cliClient{
-				username:  tc.username,
-				password:  tc.password,
-				run:       e.Run,
-				addSecret: func(s string) {},
+				username:   tc.username,
+				password:   tc.password,
+				run:        e.Run,
+				addSecrets: func(...string) {},
 			}
 			actualError := client.loginAndListItems()
 

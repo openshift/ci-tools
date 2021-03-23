@@ -36,6 +36,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/bitwarden"
 	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
+	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
@@ -136,14 +137,14 @@ func (o *options) validateOptions() error {
 	return utilerrors.NewAggregate(errs)
 }
 
-func (o *options) completeOptions(secrets *sets.String) error {
+func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 	if o.bwPasswordPath != "" {
 		bytes, err := ioutil.ReadFile(o.bwPasswordPath)
 		if err != nil {
 			return err
 		}
 		o.bwPassword = strings.TrimSpace(string(bytes))
-		secrets.Insert(o.bwPassword)
+		censor.AddSecrets(o.bwPassword)
 	}
 	if o.vaultTokenFile != "" {
 		raw, err := ioutil.ReadFile(o.vaultTokenFile)
@@ -153,7 +154,7 @@ func (o *options) completeOptions(secrets *sets.String) error {
 		o.vaultToken = strings.TrimSpace(string(raw))
 	}
 	if o.vaultToken != "" {
-		secrets.Insert(o.vaultToken)
+		censor.AddSecrets(o.vaultToken)
 	}
 
 	kubeConfigs, _, err := util.LoadKubeConfigs(o.kubeConfigPath, nil)
@@ -786,6 +787,7 @@ func getUnusedBWItems(config secretbootstrap.Config, bwClient secretStoreClient,
 }
 
 func main() {
+	logrusutil.ComponentInit()
 	o := parseOptions()
 	if o.validateOnly {
 		var config secretbootstrap.Config
@@ -798,22 +800,18 @@ func main() {
 		logrus.Infof("the config file %s has been validated", o.configPath)
 		return
 	}
-	secrets := sets.NewString()
-	logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, func() sets.String {
-		return secrets
-	}))
+	censor := secrets.NewDynamicCensor()
+	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
 	if err := o.validateOptions(); err != nil {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
-	if err := o.completeOptions(&secrets); err != nil {
+	if err := o.completeOptions(&censor); err != nil {
 		logrus.WithError(err).Fatal("Failed to complete options.")
 	}
 
 	var secretStoreClient secretStoreClient
 	if o.bwUser != "" {
-		bwClient, err := bitwarden.NewClient(o.bwUser, o.bwPassword, func(s string) {
-			secrets.Insert(s)
-		})
+		bwClient, err := bitwarden.NewClient(o.bwUser, o.bwPassword, censor.AddSecrets)
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to get Bitwarden client.")
 		}

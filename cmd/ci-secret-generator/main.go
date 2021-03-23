@@ -21,6 +21,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/bitwarden"
+	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
@@ -102,14 +103,14 @@ func (o *options) validateOptions() error {
 	return nil
 }
 
-func (o *options) completeOptions(secrets sets.String) error {
+func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 	if o.bwPasswordPath != "" {
 		pwBytes, err := ioutil.ReadFile(o.bwPasswordPath)
 		if err != nil {
 			return err
 		}
 		o.bwPassword = strings.TrimSpace(string(pwBytes))
-		secrets.Insert(o.bwPassword)
+		censor.AddSecrets(o.bwPassword)
 	}
 
 	cfgBytes, err := gzip.ReadFileMaybeGZIP(o.configPath)
@@ -311,16 +312,15 @@ func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 }
 
 func main() {
+	logrusutil.ComponentInit()
 	// CLI tool which does the secret generation and uploading to bitwarden
 	o := parseOptions()
-	secrets := sets.NewString()
-	logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, func() sets.String {
-		return secrets
-	}))
+	censor := secrets.NewDynamicCensor()
+	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
 	if err := o.validateOptions(); err != nil {
 		logrus.WithError(err).Fatal("invalid arguments.")
 	}
-	if err := o.completeOptions(secrets); err != nil {
+	if err := o.completeOptions(&censor); err != nil {
 		logrus.WithError(err).Fatal("failed to complete options.")
 	}
 	processedBwItems, err := processBwParameters(o.config)
@@ -344,8 +344,10 @@ func main() {
 
 	var client bitwarden.Client
 	logrus.RegisterExitHandler(func() {
-		if _, err := client.Logout(); err != nil {
-			logrus.WithError(err).Error("failed to logout.")
+		if client != nil {
+			if _, err := client.Logout(); err != nil {
+				logrus.WithError(err).Error("failed to logout.")
+			}
 		}
 	})
 	defer logrus.Exit(0)
@@ -369,9 +371,7 @@ func main() {
 		}
 	} else {
 		var err error
-		client, err = bitwarden.NewClient(o.bwUser, o.bwPassword, func(s string) {
-			secrets.Insert(s)
-		})
+		client, err = bitwarden.NewClient(o.bwUser, o.bwPassword, censor.AddSecrets)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to create Bitwarden client")
 		}

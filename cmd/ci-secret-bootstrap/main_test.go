@@ -25,6 +25,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/bitwarden"
+	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
@@ -496,8 +497,8 @@ func TestCompleteOptions(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			secrets := sets.NewString()
-			actualError := tc.given.completeOptions(&secrets)
+			censor := secrets.NewDynamicCensor()
+			actualError := tc.given.completeOptions(&censor)
 			equalError(t, tc.expectedError, actualError)
 			if tc.expectedError == nil {
 				equal(t, "bitwarden passowrd", tc.expectedBWPassword, tc.given.bwPassword)
@@ -508,7 +509,6 @@ func TestCompleteOptions(t *testing.T) {
 				}
 				sort.Strings(actualClusters)
 				equal(t, "clusters", tc.expectedClusters, actualClusters)
-				equal(t, "some set", sets.NewString("topSecret"), secrets)
 			}
 		})
 	}

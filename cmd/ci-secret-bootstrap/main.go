@@ -787,6 +787,7 @@ func getUnusedBWItems(config secretbootstrap.Config, bwClient secretStoreClient,
 }
 
 func main() {
+	logrusutil.ComponentInit()
 	o := parseOptions()
 	if o.validateOnly {
 		var config secretbootstrap.Config

@@ -312,6 +312,7 @@ func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 }
 
 func main() {
+	logrusutil.ComponentInit()
 	// CLI tool which does the secret generation and uploading to bitwarden
 	o := parseOptions()
 	censor := secrets.NewDynamicCensor()

@@ -108,6 +108,13 @@ func TestMultiStage(t *testing.T) {
 			success: true,
 			output:  []string{`Pod os-test succeeded after`},
 		},
+		{
+			name:    "step with run_as_script in alpine image",
+			args:    []string{"--unresolved-config=config.yaml", "--target=run-as-script"},
+			env:     []string{defaultJobSpec},
+			success: true,
+			output:  []string{`run-as-script-success succeeded`},
+		},
 	}
 
 	for _, testCase := range testCases {

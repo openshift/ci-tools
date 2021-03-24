@@ -135,7 +135,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *cor
 		images = append(images, fmt.Sprintf("%s=%s", k, imageMirrorTarget[k]))
 	}
 	command := []string{"/bin/sh", "-c"}
-	args := []string{fmt.Sprintf("oc image mirror\n--registry-config=%s\n--continue-on-error=true\n--max-per-registry=20\n%s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(images, "\n"))}
+	args := []string{fmt.Sprintf("oc image mirror --registry-config=%s --continue-on-error=true --max-per-registry=20 %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(images, " "))}
 	return &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      "promotion",

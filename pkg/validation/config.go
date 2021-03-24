@@ -34,7 +34,7 @@ func validateConfiguration(config *api.ReleaseBuildConfiguration, org, repo stri
 	var validationErrors []error
 
 	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config, org, repo)...)
-	validationErrors = append(validationErrors, validateBuildRootImageConfiguration("build_root", config.InputConfiguration.BuildRootImage, len(config.Images) > 0))
+	validationErrors = append(validationErrors, validateBuildRootImageConfiguration("build_root", config.InputConfiguration.BuildRootImage, len(config.Images) > 0)...)
 	releases := sets.NewString()
 	for name := range releases {
 		releases.Insert(name)
@@ -96,27 +96,44 @@ func validateConfiguration(config *api.ReleaseBuildConfiguration, org, repo stri
 	}
 }
 
-func validateBuildRootImageConfiguration(fieldRoot string, input *api.BuildRootImageConfiguration, hasImages bool) error {
+func validateBuildRootImageConfiguration(fieldRoot string, input *api.BuildRootImageConfiguration, hasImages bool) []error {
 	if input == nil {
 		if hasImages {
-			return errors.New("when 'images' are specified 'build_root' is required and must have image_stream_tag, project_image or from_repository set")
+			return []error{errors.New("when 'images' are specified 'build_root' is required and must have image_stream_tag, project_image or from_repository set")}
 		}
 		return nil
 	}
 
 	if input.ProjectImageBuild != nil && input.ImageStreamTagReference != nil {
-		return fmt.Errorf("%s: image_stream_tag and project_image are mutually exclusive", fieldRoot)
+		return []error{fmt.Errorf("%s: image_stream_tag and project_image are mutually exclusive", fieldRoot)}
 	}
 	if input.ProjectImageBuild != nil && input.FromRepository {
-		return fmt.Errorf("%s: project_image and from_repository are mutually exclusive", fieldRoot)
+		return []error{fmt.Errorf("%s: project_image and from_repository are mutually exclusive", fieldRoot)}
 	}
 	if input.FromRepository && input.ImageStreamTagReference != nil {
-		return fmt.Errorf("%s: from_repository and image_stream_tag are mutually exclusive", fieldRoot)
+		return []error{fmt.Errorf("%s: from_repository and image_stream_tag are mutually exclusive", fieldRoot)}
 	}
 	if input.ProjectImageBuild == nil && input.ImageStreamTagReference == nil && !input.FromRepository {
-		return fmt.Errorf("%s: you have to specify one of project_image, image_stream_tag or from_repository", fieldRoot)
+		return []error{fmt.Errorf("%s: you have to specify one of project_image, image_stream_tag or from_repository", fieldRoot)}
+	}
+	if input.ImageStreamTagReference != nil {
+		return validateBuildRootImageStreamTag(fmt.Sprintf("%s.image_stream_tag", fieldRoot), *input.ImageStreamTagReference)
 	}
 	return nil
+}
+
+func validateBuildRootImageStreamTag(fieldRoot string, buildRoot api.ImageStreamTagReference) []error {
+	var validationErrors []error
+	if len(buildRoot.Namespace) == 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("%s.namespace: value required but not provided", fieldRoot))
+	}
+	if len(buildRoot.Name) == 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("%s.name: value required but not provided", fieldRoot))
+	}
+	if len(buildRoot.Tag) == 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("%s.tag: value required but not provided", fieldRoot))
+	}
+	return validationErrors
 }
 
 func validateImages(fieldRoot string, input []api.ProjectDirectoryImageBuildStepConfiguration) []error {

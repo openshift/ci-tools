@@ -428,9 +428,15 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 			target.ImageStreamTagReference = istTagRef
 		}
 		if isTagRef := target.ImageStreamTagReference; isTagRef != nil {
-			buildSteps = append(buildSteps, createStepConfigForTagRefImage(*isTagRef, jobSpec))
+			buildSteps = append(buildSteps, api.StepConfiguration{
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+					BaseImage: *isTagRef,
+					To:        api.PipelineImageStreamTagReferenceRoot,
+				}})
 		} else if gitSourceRef := target.ProjectImageBuild; gitSourceRef != nil {
-			buildSteps = append(buildSteps, createStepConfigForGitSource(*gitSourceRef))
+			buildSteps = append(buildSteps, api.StepConfiguration{
+				ProjectDirectoryImageBuildInputs: gitSourceRef,
+			})
 		}
 	}
 
@@ -623,34 +629,6 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 	buildSteps = append(buildSteps, config.RawSteps...)
 
 	return buildSteps, nil
-}
-
-func createStepConfigForTagRefImage(target api.ImageStreamTagReference, jobSpec *api.JobSpec) api.StepConfiguration {
-	if target.Namespace == "" {
-		target.Namespace = jobSpec.BaseNamespace
-	}
-	if target.Name == "" {
-		if jobSpec.Refs != nil {
-			target.Name = fmt.Sprintf("%s-test-base", jobSpec.Refs.Repo)
-		} else {
-			target.Name = "test-base"
-		}
-	}
-
-	return api.StepConfiguration{
-		InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-			BaseImage: target,
-			To:        api.PipelineImageStreamTagReferenceRoot,
-		}}
-}
-
-func createStepConfigForGitSource(target api.ProjectDirectoryImageBuildInputs) api.StepConfiguration {
-	return api.StepConfiguration{
-		ProjectDirectoryImageBuildInputs: &api.ProjectDirectoryImageBuildInputs{
-			DockerfilePath: target.DockerfilePath,
-			ContextDir:     target.ContextDir,
-		},
-	}
 }
 
 func paramsHasAllParametersAsInput(p api.Parameters, params map[string]func() (string, error)) (map[string]string, bool) {

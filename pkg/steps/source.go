@@ -314,7 +314,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 	}
 	if len(fromTag) > 0 {
 		build.Spec.Output.ImageLabels = append(build.Spec.Output.ImageLabels, buildapi.ImageLabel{
-			Name:  fmt.Sprintf("io.openshift.ci.from.%s", fromTag),
+			Name:  api.ImageVersionLabel(fromTag),
 			Value: fromTagDigest,
 		})
 	}

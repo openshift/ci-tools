@@ -489,7 +489,7 @@ func TestBuildCacheFor(t *testing.T) {
 		},
 	}
 	for _, testCase := range testCases {
-		if diff := cmp.Diff(testCase.output, BuildCacheFor(testCase.input)); diff != "" {
+		if diff := cmp.Diff(testCase.output, api.BuildCacheFor(testCase.input)); diff != "" {
 			t.Errorf("got incorrect ist for build cache: %v", diff)
 		}
 	}

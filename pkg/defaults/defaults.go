@@ -31,10 +31,12 @@ import (
 	"github.com/openshift/ci-tools/pkg/release/official"
 	"github.com/openshift/ci-tools/pkg/release/prerelease"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	releasesteps "github.com/openshift/ci-tools/pkg/steps/release"
+	"github.com/openshift/ci-tools/pkg/steps/secretrecordingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"github.com/openshift/ci-tools/pkg/util/watchingclient"
 )
@@ -58,8 +60,10 @@ func FromConfig(
 	requiredTargets []string,
 	cloneAuthConfig *steps.CloneAuthConfig,
 	pullSecret, pushSecret *coreapi.Secret,
+	censor *secrets.DynamicCensor,
 ) ([]api.Step, []api.Step, error) {
 	crclient, err := watchingclient.New(clusterConfig)
+	crclient = secretrecordingclient.Wrap(crclient, censor)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to construct client: %w", err)
 	}

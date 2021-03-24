@@ -124,7 +124,6 @@ func getPublicImageReference(dockerImageReference, publicDockerImageRepository s
 }
 
 func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *coreapi.Pod {
-	var ocCommands []string
 	keys := make([]string, 0, len(imageMirrorTarget))
 	for k := range imageMirrorTarget {
 		keys = append(keys, k)
@@ -135,9 +134,8 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *cor
 	for _, k := range keys {
 		images = append(images, fmt.Sprintf("%s=%s", k, imageMirrorTarget[k]))
 	}
-	ocCommands = append(ocCommands, fmt.Sprintf("retry oc image mirror --registry-config=%s --continue-on-error=true --max-per-registry=20 %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(images, " ")))
 	command := []string{"/bin/sh", "-c"}
-	args := []string{"set -e\n" + bashRetryFn + "\n" + strings.Join(ocCommands, "\n")}
+	args := []string{fmt.Sprintf("oc image mirror\n--registry-config=%s\n--continue-on-error=true\n--max-per-registry=20\n%s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(images, "\n"))}
 	return &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      "promotion",
@@ -171,26 +169,6 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *cor
 		},
 	}
 }
-
-const bashRetryFn = `retry() {
-  retries=3
-
-  count=0
-  delay=1
-  until "$@"; do
-    rc=$?
-    count=$(( count + 1 ))
-    if [ $count -lt "$retries" ]; then
-      echo "Retry $count/$retries exited $rc, retrying in $delay seconds..." >/dev/stderr
-      sleep $delay
-    else
-      echo "Retry $count/$retries exited $rc, no more retries left." >/dev/stderr
-      return $rc
-    fi
-    delay=$(( delay * 3 ))
-  done
-  return 0
-}`
 
 // findDockerImageReference returns DockerImageReference, the string that can be used to pull this image,
 // to a tag if it exists in the ImageStream's Spec

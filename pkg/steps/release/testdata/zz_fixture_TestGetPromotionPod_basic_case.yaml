@@ -6,27 +6,12 @@ spec:
   containers:
   - args:
     - |-
-      set -e
-      retry() {
-        retries=3
-
-        count=0
-        delay=1
-        until "$@"; do
-          rc=$?
-          count=$(( count + 1 ))
-          if [ $count -lt "$retries" ]; then
-            echo "Retry $count/$retries exited $rc, retrying in $delay seconds..." >/dev/stderr
-            sleep $delay
-          else
-            echo "Retry $count/$retries exited $rc, no more retries left." >/dev/stderr
-            return $rc
-          fi
-          delay=$(( delay * 3 ))
-        done
-        return 0
-      }
-      retry oc image mirror --registry-config=/etc/push-secret/.dockerconfigjson --continue-on-error=true --max-per-registry=20 docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62=registy.ci.openshift.org/ci/applyconfig:latest docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb=registy.ci.openshift.org/ci/bin:latest
+      oc image mirror
+      --registry-config=/etc/push-secret/.dockerconfigjson
+      --continue-on-error=true
+      --max-per-registry=20
+      docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62=registy.ci.openshift.org/ci/applyconfig:latest
+      docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb=registy.ci.openshift.org/ci/bin:latest
     command:
     - /bin/sh
     - -c

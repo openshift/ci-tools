@@ -3,9 +3,7 @@ package secrets
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -55,25 +53,21 @@ func (o *CLIOptions) Validate() []error {
 
 func (o *CLIOptions) Complete(censor *DynamicCensor) error {
 	if o.BwPasswordPath != "" {
-		bytes, err := ioutil.ReadFile(o.BwPasswordPath)
-		if err != nil {
+		var err error
+		if o.BwPassword, err = ReadFromFile(o.BwPasswordPath, censor); err != nil {
 			return err
 		}
-		o.BwPassword = strings.TrimSpace(string(bytes))
-		censor.AddSecrets(o.BwPassword)
 	}
 	if o.VaultAddr == "" {
 		o.VaultAddr = os.Getenv("VAULT_ADDR")
 	}
-	o.VaultToken = os.Getenv("VAULT_TOKEN")
+	o.VaultToken = ReadFromEnv("VAULT_TOKEN", censor)
 	if o.VaultTokenFile != "" {
-		raw, err := ioutil.ReadFile(o.VaultTokenFile)
-		if err != nil {
+		var err error
+		if o.VaultToken, err = ReadFromFile(o.VaultTokenFile, censor); err != nil {
 			return err
 		}
-		o.VaultToken = strings.TrimSpace(string(raw))
 	}
-	censor.AddSecrets(o.VaultToken)
 	return nil
 }
 

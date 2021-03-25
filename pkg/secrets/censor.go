@@ -1,6 +1,9 @@
 package secrets
 
 import (
+	"io/ioutil"
+	"os"
+	"strings"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -30,4 +33,24 @@ func (c *DynamicCensor) AddSecrets(s ...string) {
 	defer c.Unlock()
 	c.secrets.Insert(s...)
 	c.ReloadingCensorer.Refresh(c.secrets.List()...)
+}
+
+// ReadFromEnv loads an environment variable and adds it to the censor list.
+func ReadFromEnv(name string, censor *DynamicCensor) string {
+	ret := os.Getenv(name)
+	if ret != "" {
+		censor.AddSecrets(ret)
+	}
+	return ret
+}
+
+// ReadFromFile loads content from a file and adds it to the censor list.
+func ReadFromFile(path string, censor *DynamicCensor) (string, error) {
+	bytes, err := ioutil.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	ret := strings.TrimSpace(string(bytes))
+	censor.AddSecrets(ret)
+	return ret, nil
 }

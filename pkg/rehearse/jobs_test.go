@@ -341,6 +341,30 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 		Reporter:     prowconfig.Reporter{Context: "ci/prow/test"},
 		Brancher:     prowconfig.Brancher{Branches: []string{"^branch$"}},
 	}
+	yes := true
+	otherPresubmit := &prowconfig.Presubmit{
+		JobBase: prowconfig.JobBase{
+			Agent: "kubernetes",
+			Name:  "pull-ci-org-repo-branch-test",
+			Spec: &v1.PodSpec{
+				Containers: []v1.Container{{
+					Command: []string{"ci-operator"},
+					Args:    []string{"arg1", "arg2"},
+				}},
+			},
+			UtilityConfig: prowconfig.UtilityConfig{
+				Decorate:       &yes,
+				PathAlias:      "pathalias",
+				CloneURI:       "cloneuri",
+				SkipSubmodules: true,
+				CloneDepth:     10,
+				SkipFetchHead:  true,
+			},
+		},
+		RerunCommand: "/test test",
+		Reporter:     prowconfig.Reporter{Context: "ci/prow/test"},
+		Brancher:     prowconfig.Brancher{Branches: []string{"^branch$"}},
+	}
 	hiddenPresubmit := &prowconfig.Presubmit{}
 	if err := deepcopy.Copy(hiddenPresubmit, sourcePresubmit); err != nil {
 		t.Fatalf("deepcopy failed: %v", err)
@@ -356,6 +380,11 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 			testID:   "job that belong to different org/repo than refs",
 			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo"},
 			original: sourcePresubmit,
+		},
+		{
+			testID:   "job that belong to different org/repo than refs with custom config",
+			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo"},
+			original: otherPresubmit,
 		},
 		{
 			testID:   "job that belong to the same org/repo with refs",

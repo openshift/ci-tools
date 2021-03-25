@@ -118,10 +118,14 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 					// config, like path_alias, then remove them from the config so we
 					// don't use them in the future for any other refs
 					rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, *pjutil.CompletePrimaryRefs(pjapi.Refs{
-						Org:     jobOrg,
-						Repo:    jobRepo,
-						BaseRef: branch,
-						WorkDir: true,
+						Org:            jobOrg,
+						Repo:           jobRepo,
+						BaseRef:        branch,
+						WorkDir:        true,
+						PathAlias:      rehearsal.PathAlias,
+						CloneURI:       rehearsal.CloneURI,
+						SkipSubmodules: rehearsal.SkipSubmodules,
+						CloneDepth:     rehearsal.CloneDepth,
 					}, source.JobBase))
 					rehearsal.PathAlias = ""
 					rehearsal.CloneURI = ""

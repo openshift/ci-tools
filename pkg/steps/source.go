@@ -298,7 +298,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 						From:                    from,
 						ForcePull:               true,
 						NoCache:                 true,
-						Env:                     []corev1.EnvVar{{Name: "BUILD_LOGLEVEL", Value: "0"}}, // this mirrors the default and is done for documentary purposes
+						Env:                     []corev1.EnvVar{{Name: "BUILD_LOGLEVEL", Value: "6"}}, // we want more logs for debugging
 						ImageOptimizationPolicy: &layer,
 					},
 				},

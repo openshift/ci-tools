@@ -1,0 +1,32 @@
+agent: kubernetes
+always_run: false
+branches:
+- ^branch$
+context: ci/rehearse/org/repo/branch/test
+decorate: true
+extra_refs:
+- base_ref: branch
+  clone_depth: 10
+  clone_uri: cloneuri
+  org: org
+  path_alias: pathalias
+  repo: repo
+  skip_fetch_head: true
+  skip_submodules: true
+  workdir: true
+labels:
+  ci.openshift.org/rehearse: "123"
+name: rehearse-123-pull-ci-org-repo-branch-test
+optional: true
+rerun_command: /test pj-rehearse
+skip_fetch_head: true
+spec:
+  containers:
+  - args:
+    - arg1
+    - arg2
+    command:
+    - ci-operator
+    name: ""
+    resources: {}
+trigger: '(?m)^/test (?:.*? )?pj-rehearse(?: .*?)?$'

@@ -37,6 +37,60 @@ tag_specification:
   namespace: ocp
   name: "4.6"
 tests:
+- as: verify-db-unnamed
+  literal_steps:
+    test:
+    - as: verify
+      from: pipeline:ci-index
+      run_as_script: true
+      commands: |
+        #!/bin/sh
+        set -o nounset
+        set -o errexit
+        set -o pipefail
+        # need a writable directory for grpcurl binary and for index database during test; $HOME is always writable
+        cd $HOME
+        cp /database/index.db index.db
+        opm registry serve --database index.db &
+        OPM_PID=$!
+        trap 'kill -9 $OPM_PID' EXIT
+        wget -O - https://github.com/fullstorydev/grpcurl/releases/download/v1.8.0/grpcurl_1.8.0_linux_x86_64.tar.gz | tar xz grpcurl
+        chmod +x grpcurl
+        # grpcurl exits with 66 on bundle not found; should get error on fresh index
+        ./grpcurl -plaintext -d '{"pkgName":"kubevirt-hyperconverged","channelName":"stable","csvName":"kubevirt-hyperconverged-operator.v2.5.2"}' localhost:50051 api.Registry/GetBundle && rc=$? || rc=$?
+        if [ $rc -eq 0 ]; then
+          exit 1
+        fi
+        ./grpcurl -plaintext -d '{"pkgName":"metering-ocp","channelName":"test-channel","csvName":"metering-operator.v4.6.0"}' localhost:50051 api.Registry/GetBundle
+      resources:
+        requests:
+          cpu: 100m
+          memory: 100Mi
+- as: verify-db-named
+  literal_steps:
+    test:
+    - as: verify
+      from: pipeline:ci-index-named-bundle
+      run_as_script: true
+      commands: |
+        #!/bin/sh
+        set -o nounset
+        set -o errexit
+        set -o pipefail
+        # need a writable directory for grpcurl binary and for index database during test; $HOME is always writable
+        cd $HOME
+        cp /database/index.db index.db
+        opm registry serve --database index.db &
+        OPM_PID=$!
+        trap 'kill -9 $OPM_PID' EXIT
+        wget -O - https://github.com/fullstorydev/grpcurl/releases/download/v1.8.0/grpcurl_1.8.0_linux_x86_64.tar.gz | tar xz grpcurl
+        # grpcurl exits with 66 on bundle not found; try to get one bundle from base index and the bundle built by ci-operator
+        ./grpcurl -plaintext -d '{"pkgName":"kubevirt-hyperconverged","channelName":"stable","csvName":"kubevirt-hyperconverged-operator.v2.5.2"}' localhost:50051 api.Registry/GetBundle
+        ./grpcurl -plaintext -d '{"pkgName":"metering-ocp","channelName":"test-channel","csvName":"metering-operator.v4.6.0"}' localhost:50051 api.Registry/GetBundle
+      resources:
+        requests:
+          cpu: 100m
+          memory: 100Mi
 - as: success
   literal_steps:
     test:

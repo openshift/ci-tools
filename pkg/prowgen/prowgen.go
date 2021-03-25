@@ -459,9 +459,11 @@ func generatePeriodicForTest(name string, info *ProwgenInfo, podSpec *corev1.Pod
 }
 
 func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterType string) corev1.Volume {
-	// CPaaS AWS is `aws` for all other purposes except for determining
+	// AWS-2 and CPaaS AWS is `aws` for all other purposes except for determining
 	// which Secret should be provided to jobs
 	if profile == cioperatorapi.ClusterProfileAWSCPaaS {
+		clusterType = string(profile)
+	} else if profile == cioperatorapi.ClusterProfileAWS2 {
 		clusterType = string(profile)
 	}
 	ret := corev1.Volume{
@@ -491,7 +493,8 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 		cioperatorapi.ClusterProfileVSphere,
 		cioperatorapi.ClusterProfileKubevirt,
 		cioperatorapi.ClusterProfileAWSCPaaS,
-		cioperatorapi.ClusterProfileOSDEphemeral:
+		cioperatorapi.ClusterProfileOSDEphemeral,
+		cioperatorapi.ClusterProfileAWS2:
 	default:
 		ret.VolumeSource.Projected.Sources = append(ret.VolumeSource.Projected.Sources, corev1.VolumeProjection{
 			ConfigMap: &corev1.ConfigMapProjection{

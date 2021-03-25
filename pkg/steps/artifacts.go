@@ -768,7 +768,7 @@ func gatherSuccessfulBuildLog(buildClient BuildClient, namespace, buildName stri
 	defer file.Close()
 	w := gzip.NewWriter(file)
 	defer w.Close()
-	if rc, err := buildClient.Logs(namespace, buildName, &buildapi.BuildLogOptions{}); err == nil {
+	if rc, err := buildClient.Logs(namespace, buildName, &buildapi.BuildLogOptions{Timestamps: true}); err == nil {
 		defer rc.Close()
 		if _, err := io.Copy(w, rc); err != nil {
 			return fmt.Errorf("error: Unable to copy log output from pod container %s: %w", buildName, err)

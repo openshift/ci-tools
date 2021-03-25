@@ -883,6 +883,7 @@ const (
 	ClusterProfileKubevirt           ClusterProfile = "kubevirt"
 	ClusterProfileAWSCPaaS           ClusterProfile = "aws-cpaas"
 	ClusterProfileOSDEphemeral       ClusterProfile = "osd-ephemeral"
+	ClusterProfileAWS2               ClusterProfile = "aws-2"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -915,6 +916,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileKubevirt,
 		ClusterProfileAWSCPaaS,
 		ClusterProfileOSDEphemeral,
+		ClusterProfileAWS2,
 	}
 }
 
@@ -927,7 +929,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSCentos,
 		ClusterProfileAWSCentos40,
 		ClusterProfileAWSGluster,
-		ClusterProfileAWSCPaaS:
+		ClusterProfileAWSCPaaS,
+		ClusterProfileAWS2:
 		return "aws"
 	case
 		ClusterProfileAzure4,
@@ -1018,6 +1021,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-cpaas-quota-slice"
 	case ClusterProfileOSDEphemeral:
 		return "osd-ephemeral-quota-slice"
+	case ClusterProfileAWS2:
+		return "aws-2-quota-slice"
 	default:
 		return ""
 	}

@@ -89,6 +89,15 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 				},
 			},
 		},
+		{
+			description: "aws-2 cluster profile",
+			test: &ciop.TestStepConfiguration{
+				As: "test",
+				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+					ClusterProfile: ciop.ClusterProfileAWS2,
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {

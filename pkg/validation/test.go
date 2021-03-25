@@ -289,6 +289,7 @@ func validateClusterProfile(fieldRoot string, p api.ClusterProfile) []error {
 		api.ClusterProfileVSphere,
 		api.ClusterProfileKubevirt,
 		api.ClusterProfileAWSCPaaS,
+		api.ClusterProfileAWS2,
 		api.ClusterProfileOSDEphemeral:
 		return nil
 	}

@@ -1,4 +1,4 @@
-package main
+package secrets
 
 import (
 	"fmt"
@@ -10,25 +10,32 @@ import (
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
-var _ secretStoreClient = &vaultSecretStoreWrapper{}
-
-type vaultClient interface {
+type VaultClient interface {
 	GetKV(path string) (*vaultclient.KVData, error)
 	ListKVRecursively(path string) ([]string, error)
 }
 
-type vaultSecretStoreWrapper struct {
-	upstream vaultClient
+type vaultClient struct {
+	upstream VaultClient
 	prefix   string
+	censor   *DynamicCensor
 }
 
-func (w *vaultSecretStoreWrapper) pathFor(item string) string {
-	return w.prefix + "/" + item
+func NewVaultClient(upstream VaultClient, prefix string, censor *DynamicCensor) Client {
+	return &vaultClient{
+		upstream: upstream,
+		prefix:   prefix,
+		censor:   censor,
+	}
 }
 
-func (w *vaultSecretStoreWrapper) getKeyAtPath(path, key string) ([]byte, error) {
-	path = w.pathFor(path)
-	response, err := w.upstream.GetKV(path)
+func (c *vaultClient) pathFor(item string) string {
+	return c.prefix + "/" + item
+}
+
+func (c *vaultClient) getKeyAtPath(path, key string) ([]byte, error) {
+	path = c.pathFor(path)
+	response, err := c.upstream.GetKV(path)
 	if err != nil {
 		return nil, err
 	}
@@ -40,26 +47,34 @@ func (w *vaultSecretStoreWrapper) getKeyAtPath(path, key string) ([]byte, error)
 	return []byte(val), nil
 }
 
-func (w *vaultSecretStoreWrapper) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
-	return w.getKeyAtPath(itemName, fieldName)
+func (c *vaultClient) getSecretAtPath(path, key string) ([]byte, error) {
+	ret, err := c.getKeyAtPath(path, key)
+	if err == nil {
+		c.censor.AddSecrets(string(ret))
+	}
+	return ret, err
 }
 
-func (w *vaultSecretStoreWrapper) GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error) {
-	return w.getKeyAtPath(itemName, attachmentName)
+func (c *vaultClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
+	return c.getSecretAtPath(itemName, fieldName)
 }
 
-func (w *vaultSecretStoreWrapper) GetPassword(itemName string) ([]byte, error) {
-	return w.getKeyAtPath(itemName, "password")
+func (c *vaultClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error) {
+	return c.getSecretAtPath(itemName, attachmentName)
 }
 
-func (w *vaultSecretStoreWrapper) GetInUseInformationForAllItems() (map[string]secretUsageComparer, error) {
-	allKeys, err := w.upstream.ListKVRecursively(w.prefix)
+func (c *vaultClient) GetPassword(itemName string) ([]byte, error) {
+	return c.getSecretAtPath(itemName, "password")
+}
+
+func (c *vaultClient) GetInUseInformationForAllItems() (map[string]SecretUsageComparer, error) {
+	allKeys, err := c.upstream.ListKVRecursively(c.prefix)
 	if err != nil {
 		return nil, err
 	}
-	result := make(map[string]secretUsageComparer, len(allKeys))
+	result := make(map[string]SecretUsageComparer, len(allKeys))
 	for _, key := range allKeys {
-		kvData, err := w.upstream.GetKV(key)
+		kvData, err := c.upstream.GetKV(key)
 		if err != nil {
 			return nil, err
 		}
@@ -67,11 +82,13 @@ func (w *vaultSecretStoreWrapper) GetInUseInformationForAllItems() (map[string]s
 		for key := range kvData.Data {
 			comparer.allFields.Insert(key)
 		}
-		result[strings.TrimPrefix(key, w.prefix)] = &comparer
+		result[strings.TrimPrefix(key, c.prefix)] = &comparer
 	}
 
 	return result, nil
 }
+
+func (c *vaultClient) Logout() ([]byte, error) { return nil, nil }
 
 type vaultSecretUsageComparer struct {
 	item        vaultclient.KVData

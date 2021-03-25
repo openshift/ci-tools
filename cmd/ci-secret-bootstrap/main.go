@@ -34,30 +34,23 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
-	"github.com/openshift/ci-tools/pkg/bitwarden"
 	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/util"
-	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
 type options struct {
+	secrets secrets.CLIOptions
+
 	dryRun               bool
 	force                bool
 	validateBWItemsUsage bool
 
 	kubeConfigPath  string
 	configPath      string
-	bwUser          string
-	bwPasswordPath  string
 	cluster         string
 	logLevel        string
 	impersonateUser string
-	bwPassword      string
-	vaultToken      string
-	vaultTokenFile  string
-	vaultAddr       string
-	vaultPrefix     string
 
 	maxConcurrency int
 
@@ -74,7 +67,7 @@ const (
 	allowUnusedDays = 7
 )
 
-func parseOptions() options {
+func parseOptions() (options, error) {
 	var o options
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	o.bwAllowUnused = flagutil.NewStrings()
@@ -84,24 +77,16 @@ func parseOptions() options {
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with oc command")
 	fs.StringVar(&o.kubeConfigPath, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests.")
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
-	fs.StringVar(&o.bwUser, "bw-user", "", "Username to access BitWarden.")
-	fs.StringVar(&o.bwPasswordPath, "bw-password-path", "", "Path to a password file to access BitWarden.")
-	fs.StringVar(&o.vaultAddr, "vault-addr", "", "Address of the vault endpoint. Defaults to the VAULT_ADDR env var if unset. Mutually exclusive with --bw-user and --bw-password-path.")
-	fs.StringVar(&o.vaultTokenFile, "vault-token-file", "", "Token file to use when interacting with Vault, defaults to the VAULT_TOKEN env var if unset. Mutually exclusive with --bw-user and --bw-password-path.")
-	fs.StringVar(&o.vaultPrefix, "vault-prefix", "", "Prefix under which to operate in Vault. Mandatory when using vault.")
 	fs.StringVar(&o.cluster, "cluster", "", "If set, only provision secrets for this cluster")
 	fs.BoolVar(&o.force, "force", false, "If true, update the secrets even if existing one differs from Bitwarden items instead of existing with error. Default false.")
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	fs.StringVar(&o.impersonateUser, "as", "", "Username to impersonate")
 	fs.IntVar(&o.maxConcurrency, "concurrency", 0, "Maximum number of concurrent in-flight goroutines to BitWarden.")
+	o.secrets.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
-		logrus.WithError(err).Errorf("cannot parse args: %q", os.Args[1:])
+		return options{}, err
 	}
-	if o.vaultAddr == "" {
-		o.vaultAddr = os.Getenv("VAULT_ADDR")
-	}
-	o.vaultToken = os.Getenv("VAULT_TOKEN")
-	return o
+	return o, nil
 }
 
 func (o *options) validateOptions() error {
@@ -111,23 +96,7 @@ func (o *options) validateOptions() error {
 		errs = append(errs, fmt.Errorf("invalid log level specified: %w", err))
 	}
 	logrus.SetLevel(level)
-
-	var credentialsProviderConfigured []string
-	if (o.bwUser == "") != (o.bwPasswordPath == "") {
-		errs = append(errs, fmt.Errorf("--bw-user and --bw-password-path must be specified together"))
-	} else if o.bwUser != "" {
-		credentialsProviderConfigured = append(credentialsProviderConfigured, "bitwarden")
-	}
-
-	if vals := sets.NewString(o.vaultAddr, o.vaultTokenFile, o.vaultPrefix); len(vals) != 1 && ((len(vals) != 3) || vals.Has("")) {
-		errs = append(errs, fmt.Errorf("--vault-addr, --vault-token and --vault-prefix must be specified together"))
-	} else if len(vals) == 3 {
-		credentialsProviderConfigured = append(credentialsProviderConfigured, "vault")
-	}
-
-	if len(credentialsProviderConfigured) != 1 {
-		errs = append(errs, fmt.Errorf("must specify credentials for exactly one of vault or bitwarden, got credentials for: %v", credentialsProviderConfigured))
-	}
+	errs = append(errs, o.secrets.Validate()...)
 	if o.configPath == "" {
 		errs = append(errs, errors.New("--config is required"))
 	}
@@ -138,23 +107,8 @@ func (o *options) validateOptions() error {
 }
 
 func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
-	if o.bwPasswordPath != "" {
-		bytes, err := ioutil.ReadFile(o.bwPasswordPath)
-		if err != nil {
-			return err
-		}
-		o.bwPassword = strings.TrimSpace(string(bytes))
-		censor.AddSecrets(o.bwPassword)
-	}
-	if o.vaultTokenFile != "" {
-		raw, err := ioutil.ReadFile(o.vaultTokenFile)
-		if err != nil {
-			return err
-		}
-		o.vaultToken = strings.TrimSpace(string(raw))
-	}
-	if o.vaultToken != "" {
-		censor.AddSecrets(o.vaultToken)
+	if err := o.secrets.Complete(censor); err != nil {
+		return err
 	}
 
 	kubeConfigs, _, err := util.LoadKubeConfigs(o.kubeConfigPath, nil)
@@ -215,9 +169,6 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 func (o *options) validateCompletedOptions() error {
 	if err := o.config.Validate(); err != nil {
 		return fmt.Errorf("failed to validate the config: %w", err)
-	}
-	if o.bwPassword == "" {
-		return fmt.Errorf("--bw-password-file was empty")
 	}
 	if len(o.config.Secrets) == 0 {
 		msg := "no secrets found to sync"
@@ -304,7 +255,7 @@ func (o *options) validateCompletedOptions() error {
 	return nil
 }
 
-func constructDockerConfigJSON(bwClient secretStoreClient, dockerConfigJSONData []secretbootstrap.DockerConfigJSONData) ([]byte, error) {
+func constructDockerConfigJSON(client secrets.Client, dockerConfigJSONData []secretbootstrap.DockerConfigJSONData) ([]byte, error) {
 	auths := make(map[string]secretbootstrap.DockerAuth)
 
 	for _, data := range dockerConfigJSONData {
@@ -312,21 +263,21 @@ func constructDockerConfigJSON(bwClient secretStoreClient, dockerConfigJSONData 
 
 		registryURL := data.RegistryURL
 		if registryURL == "" {
-			registryURLBitwardenField, err := bwClient.GetFieldOnItem(data.BWItem, data.RegistryURLBitwardenField)
+			registryURLBitwardenField, err := client.GetFieldOnItem(data.BWItem, data.RegistryURLBitwardenField)
 			if err != nil {
 				return nil, fmt.Errorf("couldn't get the entry name from bw item %s: %w", data.BWItem, err)
 			}
 			registryURL = string(registryURLBitwardenField)
 		}
 
-		authBWAttachmentValue, err := bwClient.GetAttachmentOnItem(data.BWItem, data.AuthBitwardenAttachment)
+		authBWAttachmentValue, err := client.GetAttachmentOnItem(data.BWItem, data.AuthBitwardenAttachment)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't get attachment '%s' from bw item %s: %w", data.AuthBitwardenAttachment, data.BWItem, err)
 		}
 		authData.Auth = string(bytes.TrimSpace(authBWAttachmentValue))
 
 		if data.EmailBitwardenField != "" {
-			emailValue, err := bwClient.GetFieldOnItem(data.BWItem, data.EmailBitwardenField)
+			emailValue, err := client.GetFieldOnItem(data.BWItem, data.EmailBitwardenField)
 			if err != nil {
 				return nil, fmt.Errorf("couldn't get email field '%s' from bw item %s: %w", data.EmailBitwardenField, data.BWItem, err)
 			}
@@ -348,29 +299,7 @@ func constructDockerConfigJSON(bwClient secretStoreClient, dockerConfigJSONData 
 	return b, nil
 }
 
-type secretStoreClient interface {
-	GetFieldOnItem(itemName, fieldName string) ([]byte, error)
-	GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error)
-	GetPassword(itemName string) ([]byte, error)
-	GetInUseInformationForAllItems() (map[string]secretUsageComparer, error)
-}
-
-type bitwardenSecretStoreClient struct {
-	bitwarden.Client
-}
-
-func (bw *bitwardenSecretStoreClient) GetInUseInformationForAllItems() (map[string]secretUsageComparer, error) {
-	allItems := bw.Client.GetAllItems()
-
-	result := map[string]secretUsageComparer{}
-	for idx, item := range allItems {
-		result[item.Name] = &bitwardenSecretUsageComparer{item: allItems[idx]}
-	}
-
-	return result, nil
-}
-
-func constructSecrets(ctx context.Context, config secretbootstrap.Config, bwClient secretStoreClient, maxConcurrency int) (map[string][]*coreapi.Secret, error) {
+func constructSecrets(ctx context.Context, config secretbootstrap.Config, client secrets.Client, maxConcurrency int) (map[string][]*coreapi.Secret, error) {
 	sem := semaphore.NewWeighted(int64(maxConcurrency))
 	secretsMap := map[string][]*coreapi.Secret{}
 	secretsMapLock := &sync.Mutex{}
@@ -409,15 +338,15 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, bwClie
 					var value []byte
 					var err error
 					if bwContext.Field != "" {
-						value, err = bwClient.GetFieldOnItem(bwContext.BWItem, bwContext.Field)
+						value, err = client.GetFieldOnItem(bwContext.BWItem, bwContext.Field)
 					} else if bwContext.Attachment != "" {
-						value, err = bwClient.GetAttachmentOnItem(bwContext.BWItem, bwContext.Attachment)
+						value, err = client.GetAttachmentOnItem(bwContext.BWItem, bwContext.Attachment)
 					} else if len(bwContext.DockerConfigJSONData) > 0 {
-						value, err = constructDockerConfigJSON(bwClient, bwContext.DockerConfigJSONData)
+						value, err = constructDockerConfigJSON(client, bwContext.DockerConfigJSONData)
 					} else {
 						switch bwContext.Attribute {
 						case secretbootstrap.AttributeTypePassword:
-							value, err = bwClient.GetPassword(bwContext.BWItem)
+							value, err = client.GetPassword(bwContext.BWItem)
 						default:
 							// should never happen since we have validated the config
 							errChan <- fmt.Errorf("[%s] invalid attribute: only the '%s' is supported, not %s", key, secretbootstrap.AttributeTypePassword, bwContext.Attribute)
@@ -647,51 +576,8 @@ func insertIfNotEmpty(s sets.String, items ...string) sets.String {
 	return s
 }
 
-type secretUsageComparer interface {
-	LastChanged() time.Time
-	UnusedFields(inUse sets.String) (Difference sets.String)
-	UnusedAttachments(inUse sets.String) (Difference sets.String)
-	HasPassword() bool
-	SuperfluousFields() sets.String
-}
-
-type bitwardenSecretUsageComparer struct {
-	item bitwarden.Item
-}
-
-func (bwc *bitwardenSecretUsageComparer) LastChanged() time.Time {
-	if bwc.item.RevisionTime != nil {
-		return *bwc.item.RevisionTime
-	}
-	return time.Time{}
-}
-
-func (bwc *bitwardenSecretUsageComparer) UnusedFields(inUse sets.String) (difference sets.String) {
-	allFields := sets.String{}
-	for _, field := range bwc.item.Fields {
-		allFields.Insert(field.Name)
-	}
-	return allFields.Difference(inUse)
-}
-
-func (bwc *bitwardenSecretUsageComparer) UnusedAttachments(inUse sets.String) (difference sets.String) {
-	allAttachments := sets.String{}
-	for _, attachment := range bwc.item.Attachments {
-		allAttachments.Insert(attachment.FileName)
-	}
-	return allAttachments.Difference(inUse)
-}
-
-func (bwc *bitwardenSecretUsageComparer) SuperfluousFields() sets.String {
-	return nil
-}
-
-func (bwc *bitwardenSecretUsageComparer) HasPassword() bool {
-	return bwc.item.Login != nil && bwc.item.Login.Password != ""
-}
-
-func getUnusedBWItems(config secretbootstrap.Config, bwClient secretStoreClient, bwAllowUnused sets.String, allowUnusedAfter time.Time) error {
-	allSecretStoreItems, err := bwClient.GetInUseInformationForAllItems()
+func getUnusedBWItems(config secretbootstrap.Config, client secrets.Client, bwAllowUnused sets.String, allowUnusedAfter time.Time) error {
+	allSecretStoreItems, err := client.GetInUseInformationForAllItems()
 	if err != nil {
 		return fmt.Errorf("failed to get in-use information from secret store: %w", err)
 	}
@@ -788,7 +674,10 @@ func getUnusedBWItems(config secretbootstrap.Config, bwClient secretStoreClient,
 
 func main() {
 	logrusutil.ComponentInit()
-	o := parseOptions()
+	o, err := parseOptions()
+	if err != nil {
+		logrus.WithError(err).Fatalf("cannot parse args: %q", os.Args[1:])
+	}
 	if o.validateOnly {
 		var config secretbootstrap.Config
 		if err := secretbootstrap.LoadConfigFromFile(o.configPath, &config); err != nil {
@@ -800,49 +689,35 @@ func main() {
 		logrus.Infof("the config file %s has been validated", o.configPath)
 		return
 	}
-	censor := secrets.NewDynamicCensor()
-	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
 	if err := o.validateOptions(); err != nil {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
+	censor := secrets.NewDynamicCensor()
+	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
 	if err := o.completeOptions(&censor); err != nil {
 		logrus.WithError(err).Fatal("Failed to complete options.")
 	}
-
-	var secretStoreClient secretStoreClient
-	if o.bwUser != "" {
-		bwClient, err := bitwarden.NewClient(o.bwUser, o.bwPassword, censor.AddSecrets)
-		if err != nil {
-			logrus.WithError(err).Fatal("Failed to get Bitwarden client.")
-		}
-		secretStoreClient = &bitwardenSecretStoreClient{bwClient}
-		logrus.RegisterExitHandler(func() {
-			if _, err := bwClient.Logout(); err != nil {
-				logrus.WithError(err).Fatal("Failed to logout.")
-			}
-		})
-		defer logrus.Exit(0)
-	} else {
-		vaultClient, err := vaultclient.New(o.vaultAddr, o.vaultToken)
-		if err != nil {
-			logrus.WithError(err).Fatal("failed to construct vault client")
-		}
-		secretStoreClient = &vaultSecretStoreWrapper{
-			upstream: vaultClient,
-			prefix:   o.vaultPrefix,
-		}
+	client, err := o.secrets.NewClient(&censor)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create client.")
 	}
+	logrus.RegisterExitHandler(func() {
+		if _, err := client.Logout(); err != nil {
+			logrus.WithError(err).Fatal("Failed to logout.")
+		}
+	})
+	defer logrus.Exit(0)
 	ctx := context.TODO()
 	var errs []error
 	// errors returned by constructSecrets will be handled once the rest of the secrets have been uploaded
-	secretsMap, err := constructSecrets(ctx, o.config, secretStoreClient, o.maxConcurrency)
+	secretsMap, err := constructSecrets(ctx, o.config, client, o.maxConcurrency)
 	if err != nil {
 		errs = append(errs, err)
 	}
 
 	if o.validateBWItemsUsage {
 		unusedGracePeriod := time.Now().AddDate(0, 0, -allowUnusedDays)
-		err := getUnusedBWItems(o.config, secretStoreClient, o.bwAllowUnused.StringSet(), unusedGracePeriod)
+		err := getUnusedBWItems(o.config, client, o.bwAllowUnused.StringSet(), unusedGracePeriod)
 		if err != nil {
 			errs = append(errs, err)
 		}

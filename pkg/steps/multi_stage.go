@@ -367,6 +367,11 @@ func (s *multiStageTestStep) runSteps(
 				}
 				if err := s.client.Delete(cleanupCtx, &pod); err != nil && !kerrors.IsNotFound(err) {
 					errs = append(errs, fmt.Errorf("failed to delete pod %s with label %s=%s: %w", pod.Name, MultiStageTestLabel, s.name, err))
+					continue
+				}
+				if err := waitForPodDeletion(s.client, s.jobSpec.Namespace(), pod.Name, pod.UID); err != nil {
+					errs = append(errs, fmt.Errorf("failed waiting for pod %s with label %s=%s to be deleted: %w", pod.Name, MultiStageTestLabel, s.name, err))
+					continue
 				}
 			}
 		}

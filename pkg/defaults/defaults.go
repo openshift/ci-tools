@@ -421,7 +421,7 @@ func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context) 
 			}
 			return nil, fmt.Errorf("could not resolve build cache image stream tag %s: %w", cache.ISTagName(), err)
 		}
-		log.Printf("Resolved build cache %s to %s\n", cache.ISTagName(), cacheTag.Name)
+		log.Printf("Resolved build cache %s to %s\n", cache.ISTagName(), cacheTag.Image.Name)
 		metadata := &docker10.DockerImage{}
 		if len(cacheTag.Image.DockerImageMetadata.Raw) == 0 {
 			return nil, fmt.Errorf("could not fetch Docker image metadata build cache %s", cache.ISTagName())
@@ -436,8 +436,8 @@ func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context) 
 		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: root.Namespace, Name: fmt.Sprintf("%s:%s", root.Name, root.Tag)}, rootTag); err != nil {
 			return nil, fmt.Errorf("could not resolve build root image stream tag %s: %w", root.ISTagName(), err)
 		}
-		log.Printf("Resolved root image %s to %s\n", root.ISTagName(), rootTag.Name)
-		current := rootTag.Name
+		log.Printf("Resolved root image %s to %s\n", root.ISTagName(), rootTag.Image.Name)
+		current := rootTag.Image.Name
 		if prior == current {
 			log.Printf("Using build cache %s as root image.\n", cache.ISTagName())
 			return cache, nil

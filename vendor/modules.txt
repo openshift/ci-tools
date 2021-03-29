@@ -465,6 +465,7 @@ github.com/shurcooL/graphql/internal/jsonutil
 ## explicit
 github.com/sirupsen/logrus
 github.com/sirupsen/logrus/hooks/test
+github.com/sirupsen/logrus/hooks/writer
 # github.com/slack-go/slack v0.7.3
 ## explicit
 github.com/slack-go/slack

@@ -279,7 +279,10 @@ func setupLogger() (*secrets.DynamicCensor, io.Closer, error) {
 	if !set {
 		return &censor, nil, nil
 	}
-	verboseFile, err := os.Open(filepath.Join(artifactDir, "ci-operator.log"))
+	if err := os.MkdirAll(artifactDir, 0777); err != nil {
+		return nil, nil, err
+	}
+	verboseFile, err := os.Create(filepath.Join(artifactDir, "ci-operator.log"))
 	if err != nil {
 		return nil, nil, err
 	}

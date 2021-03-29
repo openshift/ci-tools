@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -13,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
+	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
 const (
@@ -80,26 +82,26 @@ path "secret/metadata/team-1/*" {
 	})
 	testhelper.WaitForHTTP200("http://127.0.0.1:"+proxyServerPort+"/v1/sys/health", "vault-subpath-proxy", t)
 
-	rootDirect, err := vaultClientFor("http://"+vaultAddr, vaultTestingToken, "root")
+	rootDirect, err := vaultclient.New("http://"+vaultAddr, vaultTestingToken)
 	if err != nil {
 		t.Fatalf("failed to construct rootDirect client: %v", err)
 	}
-	rootProxy, err := vaultClientFor("http://127.0.0.1:"+proxyServerPort, vaultTestingToken, "root")
+	rootProxy, err := vaultclient.New("http://127.0.0.1:"+proxyServerPort, vaultTestingToken)
 	if err != nil {
 		t.Fatalf("failed to construct rootProxy client: %v", err)
 	}
-	team1Direct, err := vaultClientFor("http://"+vaultAddr, team1TokenResponse.Auth.ClientToken, "team-1")
+	team1Direct, err := vaultclient.New("http://"+vaultAddr, team1TokenResponse.Auth.ClientToken)
 	if err != nil {
 		t.Fatalf("failed to construct team1Direct client: %v", err)
 	}
-	team1Proxy, err := vaultClientFor("http://127.0.0.1:"+proxyServerPort, team1TokenResponse.Auth.ClientToken, "team-1")
+	team1Proxy, err := vaultclient.New("http://127.0.0.1:"+proxyServerPort, team1TokenResponse.Auth.ClientToken)
 	if err != nil {
 		t.Fatalf("failed to construct team1Proxy client: %v", err)
 	}
 
 	type clientTestCase struct {
 		clientName         string
-		client             *api.Client
+		client             *vaultclient.VaultClient
 		expectedStatusCode int
 		expectedKeys       []interface{}
 	}
@@ -147,9 +149,7 @@ path "secret/metadata/team-1/*" {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.path, func(t *testing.T) {
-			t.Parallel()
 			for _, clientTestCase := range tc.clientTestCases {
 				clientTestCase := clientTestCase
 				t.Run(fmt.Sprintf("%s: %d - %v", clientTestCase.clientName, clientTestCase.expectedStatusCode, clientTestCase.expectedKeys), func(t *testing.T) {
@@ -182,16 +182,66 @@ path "secret/metadata/team-1/*" {
 		})
 	}
 
-}
-
-func vaultClientFor(url, token, userAgent string) (*api.Client, error) {
-	client, err := api.NewClient(&api.Config{Address: url})
-	if err != nil {
-		return nil, fmt.Errorf("failed to construct client: %w", err)
+	kvKeyValidationTestCases := []struct {
+		name               string
+		data               map[string]string
+		expectedStatusCode int
+		expectedErrors     []string
+	}{
+		{
+			name:               "Slash in key name is refused",
+			data:               map[string]string{"invalid/key": "data"},
+			expectedStatusCode: 400,
+			expectedErrors:     []string{"key invalid/key is invalid: [a lowercase RFC 1123 label must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?')]"},
+		},
+		{
+			name: "All letters key is allowed",
+			data: map[string]string{"key": "data"},
+		},
+		{
+			name:               "Namespace key with invalid value is refused",
+			data:               map[string]string{"secretsync/target-namespace": "invalid/value"},
+			expectedStatusCode: 400,
+			expectedErrors:     []string{"value of key secretsync/target-namespace is invalid: [a lowercase RFC 1123 label must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?')]"},
+		},
+		{
+			name: "Namespace key with valid value is allowed",
+			data: map[string]string{"secretsync/target-namespace": "some-namespace"},
+		},
+		{
+			name:               "Name key with invalid value is refused",
+			data:               map[string]string{"secretsync/target-name": "invalid/value"},
+			expectedStatusCode: 400,
+			expectedErrors:     []string{"value of key secretsync/target-name is invalid: [a lowercase RFC 1123 label must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?')]"},
+		},
+		{
+			name: "Name key with valid value is allowed",
+			data: map[string]string{"secretsync/target-name": "some-name"},
+		},
 	}
-	client.SetToken(token)
-	client.SetHeaders(http.Header{"user-agent": []string{userAgent}})
-	return client, nil
+	for i, tc := range kvKeyValidationTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+
+			var actualStatusCode int
+			var actualErrors []string
+			err := rootProxy.UpsertKV("secret/kv-key-validation-tests/"+strconv.Itoa(i), tc.data)
+			if err != nil {
+				responseErr, ok := err.(*api.ResponseError)
+				if !ok {
+					t.Fatalf("got an error back that was not a response error but a %T", err)
+				}
+				actualStatusCode = responseErr.StatusCode
+				actualErrors = responseErr.Errors
+			}
+			if actualStatusCode != tc.expectedStatusCode {
+				t.Errorf("expected status code %d, got %d", tc.expectedStatusCode, actualStatusCode)
+			}
+			if diff := cmp.Diff(actualErrors, tc.expectedErrors); diff != "" {
+				t.Errorf("actual errors differ from expected: %s", diff)
+			}
+		})
+	}
+
 }
 
 func writeKV(client *api.Client, path string, data map[string]string) error {

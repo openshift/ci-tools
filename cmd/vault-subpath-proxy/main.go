@@ -50,6 +50,7 @@ func gatherOptions() (*options, error) {
 func main() {
 	version.Name = "vault-subpath-proxy"
 	logrusutil.ComponentInit()
+	logrus.SetLevel(logrus.DebugLevel)
 	opts, err := gatherOptions()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get opts")
@@ -85,6 +86,7 @@ func createProxyServer(vaultAddr string, listenAddr string, kvMountPath string) 
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(vaultURL)
+	proxy.Transport = &kvKeyValidator{kvMountPath: kvMountPath, upstream: http.DefaultTransport}
 	injector := &kvSubPathInjector{
 		upstream:    retryablehttp.NewClient().StandardClient().Transport,
 		kvMountPath: kvMountPath,

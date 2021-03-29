@@ -76,8 +76,9 @@ func LoadConfigFromFile(file string, config *Config) error {
 
 // Config is what we version in our repository
 type Config struct {
-	ClusterGroups map[string][]string `json:"cluster_groups,omitempty"`
-	Secrets       []SecretConfig      `json:"secret_configs"`
+	ClusterGroups             map[string][]string `json:"cluster_groups,omitempty"`
+	Secrets                   []SecretConfig      `json:"secret_configs"`
+	UserSecretsTargetClusters []string            `json:"user_secrets_target_clusters,omitempty"`
 }
 
 type configWithoutUnmarshaler Config

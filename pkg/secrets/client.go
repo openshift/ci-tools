@@ -4,6 +4,7 @@ import (
 	"os"
 	"time"
 
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/bitwarden"
@@ -14,6 +15,7 @@ type ReadOnlyClient interface {
 	GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error)
 	GetPassword(itemName string) ([]byte, error)
 	GetInUseInformationForAllItems() (map[string]SecretUsageComparer, error)
+	GetUserSecrets() (map[types.NamespacedName]map[string]string, error)
 	Logout() ([]byte, error)
 }
 
@@ -47,5 +49,10 @@ func NewDryRunClient(output *os.File) (Client, error) {
 }
 
 func (*dryRunClient) GetInUseInformationForAllItems() (map[string]SecretUsageComparer, error) {
+	return nil, nil
+}
+
+func (*dryRunClient) GetUserSecrets() (map[types.NamespacedName]map[string]string, error) {
+	// This functionality doesn't exist for bitwarden, so it is implemented as a no-op.
 	return nil, nil
 }

@@ -22,8 +22,9 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubejson "k8s.io/apimachinery/pkg/runtime/serializer/json"
+	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -34,6 +35,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
+	vaultapi "github.com/openshift/ci-tools/pkg/api/vault"
 	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/util"
@@ -134,7 +136,6 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 		for j, secretContext := range secretConfig.To {
 			if o.cluster != "" && o.cluster != secretContext.Cluster {
 				logrus.WithFields(logrus.Fields{"target-cluster": o.cluster, "secret-cluster": secretContext.Cluster}).Debug("Skipping provisioniong of secret for cluster that does not match the one configured via --cluster")
-
 				continue
 			}
 			to = append(to, secretContext)
@@ -301,7 +302,7 @@ func constructDockerConfigJSON(client secrets.ReadOnlyClient, dockerConfigJSONDa
 
 func constructSecrets(ctx context.Context, config secretbootstrap.Config, client secrets.ReadOnlyClient, maxConcurrency int) (map[string][]*coreapi.Secret, error) {
 	sem := semaphore.NewWeighted(int64(maxConcurrency))
-	secretsMap := map[string][]*coreapi.Secret{}
+	secretsByClusterAndName := map[string]map[types.NamespacedName]coreapi.Secret{}
 	secretsMapLock := &sync.Mutex{}
 
 	var potentialErrors int
@@ -315,26 +316,32 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, client
 		idx := idx
 		secretConfigWG.Add(1)
 
-		go func(secretConfig secretbootstrap.SecretConfig) {
+		cfg := cfg
+		go func() {
 			defer secretConfigWG.Done()
 
 			data := make(map[string][]byte)
-			dataLock := &sync.Mutex{}
 			var keys []string
-			for key := range secretConfig.From {
+			for key := range cfg.From {
 				keys = append(keys, key)
 			}
 			sort.Strings(keys)
 
+			keyWg := sync.WaitGroup{}
+			dataLock := &sync.Mutex{}
+			keyWg.Add(len(keys))
 			for _, key := range keys {
 				if err := sem.Acquire(ctx, 1); err != nil {
 					errChan <- fmt.Errorf("failed to acquire semaphore for key %s: %w", key, err)
+					keyWg.Done()
 					continue
 				}
 
-				go func(key string) {
+				key := key
+				go func() {
 					defer sem.Release(1)
-					bwContext := secretConfig.From[key]
+					defer keyWg.Done()
+					bwContext := cfg.From[key]
 					var value []byte
 					var err error
 					if bwContext.Field != "" {
@@ -360,28 +367,38 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, client
 					dataLock.Lock()
 					data[key] = value
 					dataLock.Unlock()
-				}(key)
-			}
 
-			for _, secretContext := range secretConfig.To {
+				}()
+			}
+			// We copy the data map to not have multiple secrets with the same inner data map. This implies
+			// that we need to wait for that map to be fully populated.
+			keyWg.Wait()
+
+			for _, secretContext := range cfg.To {
 				if secretContext.Type == "" {
 					secretContext.Type = coreapi.SecretTypeOpaque
 				}
-				secret := &coreapi.Secret{
-					TypeMeta: meta.TypeMeta{Kind: "Secret", APIVersion: "v1"},
-					Data:     data,
-					ObjectMeta: meta.ObjectMeta{
+				secret := coreapi.Secret{
+					ObjectMeta: metav1.ObjectMeta{
 						Name:      secretContext.Name,
 						Namespace: secretContext.Namespace,
 						Labels:    map[string]string{api.DPTPRequesterLabel: "ci-secret-bootstrap"},
 					},
 					Type: secretContext.Type,
 				}
+				secret.Data = make(map[string][]byte, len(data))
+				for k, v := range data {
+					secret.Data[k] = v
+				}
 				secretsMapLock.Lock()
-				secretsMap[secretContext.Cluster] = append(secretsMap[secretContext.Cluster], secret)
+				if _, ok := secretsByClusterAndName[secretContext.Cluster]; !ok {
+					secretsByClusterAndName[secretContext.Cluster] = map[types.NamespacedName]coreapi.Secret{}
+				}
+				secretsByClusterAndName[secretContext.Cluster][types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}] = secret
 				secretsMapLock.Unlock()
 			}
-		}(cfg)
+
+		}()
 	}
 	secretConfigWG.Wait()
 	if err := sem.Acquire(ctx, int64(maxConcurrency)); err != nil {
@@ -392,9 +409,61 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, client
 	for err := range errChan {
 		errs = append(errs, err)
 	}
+
+	var err error
+	secretsByClusterAndName, err = fetchUserSecrets(secretsByClusterAndName, client, config.UserSecretsTargetClusters)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	result := map[string][]*coreapi.Secret{}
+	for cluster, secretMap := range secretsByClusterAndName {
+		for _, secret := range secretMap {
+			result[cluster] = append(result[cluster], secret.DeepCopy())
+		}
+	}
+
 	sort.Slice(errs, func(i, j int) bool {
 		return errs[i] != nil && errs[j] != nil && errs[i].Error() < errs[j].Error()
 	})
+	return result, utilerrors.NewAggregate(errs)
+}
+
+func fetchUserSecrets(secretsMap map[string]map[types.NamespacedName]coreapi.Secret, secretStoreClient secrets.ReadOnlyClient, targetClusters []string) (map[string]map[types.NamespacedName]coreapi.Secret, error) {
+	userSecrets, err := secretStoreClient.GetUserSecrets()
+	if err != nil || len(userSecrets) == 0 {
+		return secretsMap, err
+	}
+
+	var errs []error
+	for secretName, secretKeys := range userSecrets {
+		for _, cluster := range targetClusters {
+			if _, ok := secretsMap[cluster]; !ok {
+				secretsMap[cluster] = map[types.NamespacedName]coreapi.Secret{}
+			}
+			entry, alreadyExists := secretsMap[cluster][secretName]
+			if !alreadyExists {
+				entry = coreapi.Secret{
+					ObjectMeta: metav1.ObjectMeta{Namespace: secretName.Namespace, Name: secretName.Name, Labels: map[string]string{api.DPTPRequesterLabel: "ci-secret-bootstrap"}},
+					Data:       map[string][]byte{},
+					Type:       coreapi.SecretTypeOpaque,
+				}
+			}
+			if entry.Type != coreapi.SecretTypeOpaque {
+				errs = append(errs, fmt.Errorf("secret %s in cluster %s has ci-secret-bootstrap config as non-opaque type and is targeted by user sync from key %s", secretName.String(), cluster, secretKeys[vaultapi.VaultSourceKey]))
+				continue
+			}
+			for vaultKey, vaultValue := range secretKeys {
+				if _, alreadyExists := entry.Data[vaultKey]; alreadyExists {
+					errs = append(errs, fmt.Errorf("key %s in secret %s in cluster %s is targeted by ci-secret-bootstrap config and by vault item in path %s", vaultKey, secretName.String(), cluster, secretKeys[vaultapi.VaultSourceKey]))
+					continue
+				}
+				entry.Data[vaultKey] = []byte(vaultValue)
+			}
+			secretsMap[cluster][secretName] = entry
+		}
+	}
+
 	return secretsMap, utilerrors.NewAggregate(errs)
 }
 
@@ -408,7 +477,7 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 
 			secretClient := secretsGetters[cluster].Secrets(secret.Namespace)
 
-			existingSecret, err := secretClient.Get(context.TODO(), secret.Name, meta.GetOptions{})
+			existingSecret, err := secretClient.Get(context.TODO(), secret.Name, metav1.GetOptions{})
 			if err != nil && !kerrors.IsNotFound(err) {
 				errs = append(errs, fmt.Errorf("error reading secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 			}
@@ -419,7 +488,7 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 						errs = append(errs, fmt.Errorf("cannot change secret type from %q to %q (immutable field): %s:%s/%s", existingSecret.Type, secret.Type, cluster, secret.Namespace, secret.Name))
 						continue
 					}
-					if err := secretClient.Delete(context.TODO(), secret.Name, meta.DeleteOptions{}); err != nil {
+					if err := secretClient.Delete(context.TODO(), secret.Name, metav1.DeleteOptions{}); err != nil {
 						errs = append(errs, fmt.Errorf("error deleting secret: %w", err))
 						continue
 					}
@@ -438,7 +507,7 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 						errs = append(errs, fmt.Errorf("secret %s:%s/%s needs updating in place, use --force to do so", cluster, secret.Namespace, secret.Name))
 						continue
 					}
-					if _, err := secretClient.Update(context.TODO(), secret, meta.UpdateOptions{}); err != nil {
+					if _, err := secretClient.Update(context.TODO(), secret, metav1.UpdateOptions{}); err != nil {
 						errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 						continue
 					}
@@ -447,7 +516,7 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 			}
 
 			if kerrors.IsNotFound(err) || shouldCreate {
-				if _, err := secretClient.Create(context.TODO(), secret, meta.CreateOptions{}); err != nil {
+				if _, err := secretClient.Create(context.TODO(), secret, metav1.CreateOptions{}); err != nil {
 					errs = append(errs, fmt.Errorf("error creating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 					continue
 				}
@@ -707,6 +776,7 @@ func main() {
 		}
 	})
 	defer logrus.Exit(0)
+
 	ctx := context.TODO()
 	var errs []error
 	// errors returned by constructSecrets will be handled once the rest of the secrets have been uploaded

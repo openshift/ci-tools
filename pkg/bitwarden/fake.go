@@ -18,9 +18,10 @@ func (f fakeClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
 					return []byte(field.Value), nil
 				}
 			}
+			return nil, fmt.Errorf("failed to find field %s in item %s", fieldName, itemName)
 		}
 	}
-	return nil, fmt.Errorf("failed to find field %s in item %s", fieldName, itemName)
+	return nil, fmt.Errorf("no item %s found", itemName)
 }
 
 func (f fakeClient) GetAllItems() []Item {

@@ -3,6 +3,7 @@ package secrets
 import (
 	"time"
 
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/bitwarden"
@@ -32,6 +33,11 @@ func (bw *bitwardenClient) GetInUseInformationForAllItems() (map[string]SecretUs
 	}
 
 	return result, nil
+}
+
+func (*bitwardenClient) GetUserSecrets() (map[types.NamespacedName]map[string]string, error) {
+	// This functionality doesn't exist for bitwarden, so it is implemented as a no-op.
+	return nil, nil
 }
 
 type bitwardenSecretUsageComparer struct {

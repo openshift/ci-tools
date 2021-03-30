@@ -632,7 +632,7 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 			for _, job := range presubmits {
 				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", step.Name())}
 				loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
-				selectedPresubmits.Add(repo, job, config.RandomJobsForChangedRegistry)
+				selectedPresubmits.Add(repo, job, config.ChangedRegistryContent)
 				selectedNames.Insert(job.Name)
 			}
 		}
@@ -640,7 +640,7 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 			for _, job := range presubmits {
 				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", step.Name())}
 				loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
-				selectedPeriodics.Add(job, config.RandomJobsForChangedRegistry)
+				selectedPeriodics.Add(job, config.ChangedRegistryContent)
 				selectedNames.Insert(job.Name)
 			}
 		}

@@ -304,16 +304,16 @@ func rehearseMain() error {
 	toRehearse.AddAll(changedPresubmits, config.ChangedPresubmit)
 
 	presubmitsForCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigData, affectedJobs, logger)
-	toRehearse.AddAll(presubmitsForCiopConfigs, config.ChangedCiopConfigs)
+	toRehearse.AddAll(presubmitsForCiopConfigs, config.ChangedCiopConfig)
 
 	presubmitsForClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, rehearsalClusterProfiles.ProductionNames, logger)
-	toRehearse.AddAll(presubmitsForClusterProfiles, config.ChangedClusterProfiles)
+	toRehearse.AddAll(presubmitsForClusterProfiles, config.ChangedClusterProfile)
 
 	randomJobsForChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(rehearsalTemplates.ProductionNames, toRehearse, prConfig.Prow.JobConfig.PresubmitsStatic, loggers)
-	toRehearse.AddAll(randomJobsForChangedTemplates, config.RandomJobsForChangedTemplates)
+	toRehearse.AddAll(randomJobsForChangedTemplates, config.ChangedTemplate)
 
 	presubmitsForRegistry, periodicsForRegistry := rehearse.SelectJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, prConfig.Prow.JobConfig.Periodics, prConfig.CiOperator, loggers)
-	toRehearse.AddAll(presubmitsForRegistry, config.RandomJobsForChangedRegistry)
+	toRehearse.AddAll(presubmitsForRegistry, config.ChangedRegistryContent)
 
 	resolver := registry.NewResolver(refs, chains, workflows, observers)
 	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, resolver, prNumber, loggers, rehearsalTemplates.Names, rehearsalClusterProfiles.Names, jobSpec.Refs)

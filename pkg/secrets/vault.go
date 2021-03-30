@@ -56,6 +56,22 @@ func (c *vaultClient) getSecretAtPath(path, key string) ([]byte, error) {
 	return ret, err
 }
 
+func (c *vaultClient) setItemAtPath(path, field string, content string) error {
+	path = c.pathFor(path)
+	var data map[string]string
+	if current, err := c.upstream.GetKV(path); err != nil {
+		if !vaultclient.IsNotFound(err) {
+			return err
+		}
+		data = map[string]string{field: content}
+	} else {
+		data = current.Data
+		data[field] = content
+	}
+	c.censor.AddSecrets(content)
+	return c.upstream.UpsertKV(path, data)
+}
+
 func (c *vaultClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
 	return c.getSecretAtPath(itemName, fieldName)
 }
@@ -90,23 +106,19 @@ func (c *vaultClient) GetInUseInformationForAllItems() (map[string]SecretUsageCo
 }
 
 func (c *vaultClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {
-	// TODO
-	return nil
+	return c.setItemAtPath(itemName, fieldName, string(fieldValue))
 }
 
 func (c *vaultClient) SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) error {
-	// TODO
-	return nil
+	return c.setItemAtPath(itemName, attachmentName, string(fileContents))
 }
 
 func (c *vaultClient) SetPassword(itemName string, password []byte) error {
-	// TODO
-	return nil
+	return c.setItemAtPath(itemName, "password", string(password))
 }
 
 func (c *vaultClient) UpdateNotesOnItem(itemName string, notes string) error {
-	// TODO
-	return nil
+	return c.setItemAtPath(itemName, "notes", notes)
 }
 
 func (c *vaultClient) Logout() ([]byte, error) { return nil, nil }

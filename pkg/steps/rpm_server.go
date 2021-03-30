@@ -3,7 +3,6 @@ package steps
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"path"
@@ -336,7 +335,7 @@ func waitForRouteReachable(ctx context.Context, client ctrlruntimeclient.Client,
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			log.Printf("Waiting for route to become available: %v", err)
+			logrus.WithError(err).Warn("Failed while waiting for route to become available.", err)
 			select {
 			case <-done:
 				return ctx.Err()
@@ -346,7 +345,7 @@ func waitForRouteReachable(ctx context.Context, client ctrlruntimeclient.Client,
 		}
 		resp.Body.Close()
 		if resp.StatusCode >= 400 {
-			log.Printf("Waiting for route to become available: %d", resp.StatusCode)
+			logrus.Infof("Waiting for route to become available: %d", resp.StatusCode)
 			select {
 			case <-done:
 				return ctx.Err()
@@ -354,7 +353,7 @@ func waitForRouteReachable(ctx context.Context, client ctrlruntimeclient.Client,
 				continue
 			}
 		}
-		log.Printf("RPMs being served at %s", u)
+		logrus.Infof("RPMs being served at %s", u)
 		return nil
 	}
 }

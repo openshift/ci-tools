@@ -60,7 +60,7 @@ func TestMultiStage(t *testing.T) {
 			args:    []string{"--unresolved-config=config.yaml", "--target=skip-on-success"},
 			env:     []string{defaultJobSpec},
 			success: true,
-			output:  []string{`Skipping optional step "skip-on-success-skip-on-success-post-step"`},
+			output:  []string{`Skipping optional step skip-on-success-skip-on-success-post-step`},
 		},
 		{
 			name:    "step with timeout",

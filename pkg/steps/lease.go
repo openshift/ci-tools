@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sort"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -107,14 +108,14 @@ func (s *leaseStep) Run(ctx context.Context) error {
 }
 
 func (s *leaseStep) run(ctx context.Context) error {
-	log.Printf("Acquiring leases for %q", s.Name())
+	logrus.Infof("Acquiring leases for %s", s.Name())
 	client := *s.client
 	ctx, cancel := context.WithCancel(ctx)
 	if err := acquireLeases(client, ctx, cancel, s.leases); err != nil {
 		return err
 	}
 	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
-	log.Printf("Releasing leases for %q", s.Name())
+	logrus.Infof("Releasing leases for %s", s.Name())
 	releaseErr := results.ForReason("releasing_lease").ForError(releaseLeases(client, s.leases))
 
 	// we want a sensible output error for reporting, so we bubble up these individually
@@ -145,7 +146,7 @@ func acquireLeases(
 	var errs []error
 	for _, i := range sorted {
 		l := &leases[i]
-		log.Printf("Acquiring %d lease(s) for %q", l.Count, l.ResourceType)
+		logrus.Infof("Acquiring %d lease(s) for %s", l.Count, l.ResourceType)
 		names, err := client.Acquire(l.ResourceType, l.Count, ctx, cancel)
 		if err != nil {
 			if err == lease.ErrNotFound {
@@ -154,7 +155,7 @@ func acquireLeases(
 			errs = append(errs, results.ForReason(results.Reason("acquiring_lease:"+l.ResourceType)).WithError(err).Errorf("failed to acquire lease: %v", err))
 			break
 		}
-		log.Printf("Acquired lease(s) for %q: %v", l.ResourceType, names)
+		logrus.Infof("Acquired lease(s) for %s: %v", l.ResourceType, names)
 		l.resources = names
 	}
 	if errs != nil {
@@ -172,7 +173,7 @@ func releaseLeases(client lease.Client, leases []stepLease) error {
 			if r == "" {
 				continue
 			}
-			log.Printf("Releasing lease for %q: %v", l.ResourceType, r)
+			logrus.Infof("Releasing lease for %s: %v", l.ResourceType, r)
 			if err := client.Release(r); err != nil {
 				errs = append(errs, err)
 			}
@@ -184,8 +185,8 @@ func releaseLeases(client lease.Client, leases []stepLease) error {
 func printResourceMetrics(client lease.Client, rtype string) {
 	m, err := client.Metrics(rtype)
 	if err != nil {
-		log.Printf("warning: Could not get resource metrics: %v", err)
+		logrus.WithError(err).Warn("Could not get resource metrics.")
 		return
 	}
-	log.Printf("error: Failed to acquire resource, current capacity: %d free, %d leased", m.Free, m.Leased)
+	logrus.Errorf("error: Failed to acquire resource, current capacity: %d free, %d leased", m.Free, m.Leased)
 }

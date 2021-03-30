@@ -3,11 +3,12 @@ package steps
 import (
 	"context"
 	"fmt"
-	"log"
 	"path"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
@@ -291,7 +292,7 @@ func (s *multiStageTestStep) environment(ctx context.Context) ([]coreapi.EnvVar,
 }
 
 func (s *multiStageTestStep) createSharedDirSecret(ctx context.Context) error {
-	log.Printf("Creating multi-stage test shared directory %q", s.name)
+	logrus.Infof("Creating multi-stage test shared directory %q", s.name)
 	secret := &coreapi.Secret{ObjectMeta: meta.ObjectMeta{
 		Namespace: s.jobSpec.Namespace(),
 		Name:      s.name,
@@ -304,7 +305,7 @@ func (s *multiStageTestStep) createSharedDirSecret(ctx context.Context) error {
 }
 
 func (s *multiStageTestStep) createCredentials() error {
-	log.Printf("Creating multi-stage test credentials for %q", s.name)
+	logrus.Infof("Creating multi-stage test credentials for %q", s.name)
 	toCreate := map[string]*coreapi.Secret{}
 	for _, step := range append(s.pre, append(s.test, s.post...)...) {
 		for _, credential := range step.Credentials {
@@ -339,7 +340,7 @@ func (s *multiStageTestStep) createCredentials() error {
 }
 
 func (s *multiStageTestStep) createCommandConfigMaps(ctx context.Context) error {
-	log.Printf("Creating multi-stage test commands configmap for %q", s.name)
+	logrus.Infof("Creating multi-stage test commands configmap for %q", s.name)
 	data := make(map[string]string)
 	for _, step := range append(s.pre, append(s.test, s.post...)...) {
 		data[step.As] = step.Commands
@@ -387,7 +388,7 @@ func (s *multiStageTestStep) runSteps(
 	}
 	select {
 	case <-ctx.Done():
-		log.Printf("cleanup: Deleting pods with label %s=%s", MultiStageTestLabel, s.name)
+		logrus.Infof("cleanup: Deleting pods with label %s=%s", MultiStageTestLabel, s.name)
 
 		// Simplify to DeleteAllOf when https://bugzilla.redhat.com/show_bug.cgi?id=1937523 is fixed across production.
 		podList := &coreapi.PodList{}
@@ -435,7 +436,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		if s.allowSkipOnSuccess != nil && *s.allowSkipOnSuccess &&
 			step.OptionalOnSuccess != nil && *step.OptionalOnSuccess &&
 			!hasPrevErrs {
-			log.Println(fmt.Sprintf("Skipping optional step %q", name))
+			logrus.Infof(fmt.Sprintf("Skipping optional step %s", name))
 			continue
 		}
 		image := step.From
@@ -746,7 +747,7 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 		err := s.runPod(ctx, &pod, NewTestCaseNotifier(NopNotifier))
 		if err != nil {
 			if isBestEffort(pod.Name) {
-				log.Println(fmt.Sprintf("Pod %s is running in best-effort mode, ignoring the failure...", pod.Name))
+				logrus.Infof("Pod %s is running in best-effort mode, ignoring the failure...", pod.Name)
 				continue
 			}
 			errs = append(errs, err)
@@ -762,7 +763,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	start := time.Now()
 	client := s.client.WithNewLoggingClient()
 	if _, err := createOrRestartPod(client, pod); err != nil {
-		return fmt.Errorf("failed to create or restart %q pod: %w", pod.Name, err)
+		return fmt.Errorf("failed to create or restart %s pod: %w", pod.Name, err)
 	}
 	newPod, err := waitForPodCompletion(ctx, client, pod.Namespace, pod.Name, notifier, false)
 	if newPod != nil {

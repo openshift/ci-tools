@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -74,7 +75,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 
 	streamName := api.ReleaseStreamFor(s.name)
 
-	log.Printf("Importing release image %s", s.name)
+	logrus.Infof("Importing release image %s.", s.name)
 
 	// create the stable image stream with lookup policy so we have a place to put our imported images
 	err = s.client.Create(ctx, &imagev1.ImageStream{
@@ -127,7 +128,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 			}
 			if kerrors.IsForbidden(err) {
 				// the ci-operator expects to have POST /imagestreamimports in the namespace of the job
-				log.Printf("warning: Unable to lock %s to an image digest pull spec, you don't have permission to access the necessary API.", utils.ReleaseImageEnv(s.name))
+				logrus.Warnf("Unable to lock %s to an image digest pull spec, you don't have permission to access the necessary API.", utils.ReleaseImageEnv(s.name))
 				return false, nil
 			}
 			return false, err
@@ -332,7 +333,7 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 		}
 		if updates {
 			if err = s.client.Update(ctx, stable); err != nil {
-				log.Printf("error requesting re-import of failed release image stream: %v", err)
+				logrus.WithError(err).Error("Failed requesting re-import of failed release image stream.")
 			}
 			return false, nil
 		}
@@ -357,7 +358,7 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 		return fmt.Errorf("the following tags from the release could not be imported to %s after five minutes:\n%s", streamName, strings.Join(tagImportErrorMessages, "\n"))
 	}
 
-	log.Printf("Imported release %s created at %s with %d images to tag release:%s", releaseIS.Name, releaseIS.CreationTimestamp, len(releaseIS.Spec.Tags), s.name)
+	logrus.Infof("Imported release %s created at %s with %d images to tag release:%s", releaseIS.Name, releaseIS.CreationTimestamp, len(releaseIS.Spec.Tags), s.name)
 	return nil
 }
 

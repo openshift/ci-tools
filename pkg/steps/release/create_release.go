@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
@@ -155,7 +156,7 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 		_, cliExists = util.ResolvePullSpec(stable, "cli", true)
 		ret := cvoExists && cliExists
 		if !ret {
-			log.Printf("waiting for importing cluster-version-operator and cli ...")
+			logrus.Infof("Waiting to import cluster-version-operator and cli ...")
 		}
 		return ret, nil
 	}, importCtx.Done()); err != nil {
@@ -163,12 +164,12 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 			if !cliExists {
 				return results.ForReason("missing_cli").WithError(err).Errorf("no 'cli' image was tagged into the %s stream, that image is required for building a release", streamName)
 			}
-			log.Printf("No %s release image necessary, %s image stream does not include a cluster-version-operator image", s.name, streamName)
+			logrus.Infof("No %s release image necessary, %s image stream does not include a cluster-version-operator image", s.name, streamName)
 			return nil
 		} else if kerrors.IsNotFound(err) {
 			// if a user sets IMAGE_FORMAT=... we skip importing the image stream contents, which prevents us from
 			// generating a release image.
-			log.Printf("No %s release image can be generated when the %s image stream was skipped", s.name, streamName)
+			logrus.Infof("No %s release image can be generated when the %s image stream was skipped", s.name, streamName)
 			return nil
 		}
 		return results.ForReason("missing_release").WithError(err).Errorf("could not resolve imagestream %s: %v", streamName, err)
@@ -190,7 +191,7 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 	version := fmt.Sprintf("%s.test-%s-%s", prefix, now.Format("2006-01-02-150405"), s.jobSpec.Namespace())
 
 	destination := fmt.Sprintf("%s:%s", releaseImageStreamRepo, s.name)
-	log.Printf("Create release image %s", destination)
+	logrus.Infof("Creating release image %s.", destination)
 	podConfig := steps.PodStepConfiguration{
 		SkipLogs: true,
 		As:       fmt.Sprintf("release-%s", s.name),

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"reflect"
 	"strings"
@@ -1099,12 +1098,11 @@ type fakeExecutor struct {
 }
 
 func (e *fakeExecutor) RunIgnoringFiles(args ...string) ([]byte, error) {
-
 	key := strings.Join(args, " ")
 	slashIndex := strings.Index(key, "/")
 	if slashIndex != -1 {
 		if err := ioutil.WriteFile(key[slashIndex:], []byte("attachment_contents"), 0644); err != nil {
-			log.Fatalf("failed to create temporary file attachment: %v", err)
+			return nil, fmt.Errorf("failed to create temporary file attachment: %v", err)
 		}
 		key = key[:slashIndex]
 		e.records = append(e.records, args[:len(args)-1])

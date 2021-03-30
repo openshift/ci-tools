@@ -6,9 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	kapierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -148,7 +149,7 @@ func fromConfig(
 				if err != nil {
 					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to get %q parameter: %w", env, err))
 				}
-				log.Printf("Using explicitly provided pull-spec for release %s (%s)", resolveConfig.Name, value)
+				logrus.Infof("Using explicitly provided pull-spec for release %s (%s)", resolveConfig.Name, value)
 			} else {
 				switch {
 				case resolveConfig.Candidate != nil:
@@ -161,7 +162,7 @@ func fromConfig(
 				if err != nil {
 					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to resolve release %s: %w", resolveConfig.Name, err))
 				}
-				log.Printf("Resolved release %s to %s", resolveConfig.Name, value)
+				logrus.Infof("Resolved release %s to %s", resolveConfig.Name, value)
 			}
 			step := releasesteps.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, jobSpec, pullSecret)
 			buildSteps = append(buildSteps, step)
@@ -219,7 +220,7 @@ func fromConfig(
 					if err != nil {
 						return nil, nil, results.ForReason("reading_release").ForError(fmt.Errorf("failed to read input release pullSpec %s: %w", name, err))
 					}
-					log.Printf("Resolved release %s to %s", name, pullSpec)
+					logrus.Infof("Resolved release %s to %s", name, pullSpec)
 					releaseStep = releasesteps.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, jobSpec, pullSecret)
 				} else {
 					releaseStep = releasesteps.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, jobSpec)
@@ -230,7 +231,7 @@ func fromConfig(
 		}
 		step, ok := checkForFullyQualifiedStep(step, params)
 		if ok {
-			log.Printf("Task %s is satisfied by environment variables and will be skipped", step.Name())
+			logrus.Infof("Task %s is satisfied by environment variables and will be skipped", step.Name())
 		} else {
 			imageStepLinks = append(imageStepLinks, stepLinks...)
 		}
@@ -415,17 +416,17 @@ func leasesForTest(s *api.MultiStageTestConfigurationLiteral) (ret []api.StepLea
 // the root image.
 func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context) func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
 	return func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
-		log.Printf("Determining if build cache %s can be used in place of root %s\n", cache.ISTagName(), root.ISTagName())
+		logrus.Debugf("Determining if build cache %s can be used in place of root %s\n", cache.ISTagName(), root.ISTagName())
 		cacheTag := &imagev1.ImageStreamTag{}
 		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: cache.Namespace, Name: fmt.Sprintf("%s:%s", cache.Name, cache.Tag)}, cacheTag); err != nil {
 			if kapierrors.IsNotFound(err) {
-				log.Printf("Build cache %s not found, falling back to %s\n", cache.ISTagName(), root.ISTagName())
+				logrus.Debugf("Build cache %s not found, falling back to %s\n", cache.ISTagName(), root.ISTagName())
 				// no build cache, use the normal root
 				return root, nil
 			}
 			return nil, fmt.Errorf("could not resolve build cache image stream tag %s: %w", cache.ISTagName(), err)
 		}
-		log.Printf("Resolved build cache %s to %s\n", cache.ISTagName(), cacheTag.Image.Name)
+		logrus.Debugf("Resolved build cache %s to %s\n", cache.ISTagName(), cacheTag.Image.Name)
 		metadata := &docker10.DockerImage{}
 		if len(cacheTag.Image.DockerImageMetadata.Raw) == 0 {
 			return nil, fmt.Errorf("could not fetch Docker image metadata build cache %s", cache.ISTagName())
@@ -434,19 +435,19 @@ func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context) 
 			return nil, fmt.Errorf("malformed Docker image metadata on build cache %s: %w", cache.ISTagName(), err)
 		}
 		prior := metadata.Config.Labels[api.ImageVersionLabel(api.PipelineImageStreamTagReferenceRoot)]
-		log.Printf("Build cache %s is based on root image at %s\n", cache.ISTagName(), prior)
+		logrus.Debugf("Build cache %s is based on root image at %s\n", cache.ISTagName(), prior)
 
 		rootTag := &imagev1.ImageStreamTag{}
 		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: root.Namespace, Name: fmt.Sprintf("%s:%s", root.Name, root.Tag)}, rootTag); err != nil {
 			return nil, fmt.Errorf("could not resolve build root image stream tag %s: %w", root.ISTagName(), err)
 		}
-		log.Printf("Resolved root image %s to %s\n", root.ISTagName(), rootTag.Image.Name)
+		logrus.Debugf("Resolved root image %s to %s\n", root.ISTagName(), rootTag.Image.Name)
 		current := rootTag.Image.Name
 		if prior == current {
-			log.Printf("Using build cache %s as root image.\n", cache.ISTagName())
+			logrus.Debugf("Using build cache %s as root image.\n", cache.ISTagName())
 			return cache, nil
 		}
-		log.Printf("Using default image %s as root image.\n", root.ISTagName())
+		logrus.Debugf("Using default image %s as root image.\n", root.ISTagName())
 		return root, nil
 	}
 }

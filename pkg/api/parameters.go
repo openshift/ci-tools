@@ -2,9 +2,10 @@ package api
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"sync"
+
+	"github.com/sirupsen/logrus"
 )
 
 // Parameters allows a step to read values set by other steps.
@@ -82,11 +83,11 @@ func (p *DeferredParameters) Set(name, value string) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	if _, ok := p.fns[name]; ok {
-		log.Printf("warning: ignoring parameter %q, already set", name)
+		logrus.Warnf("Ignoring dynamic parameter %q, already set", name)
 		return
 	}
 	if _, ok := p.values[name]; ok {
-		log.Printf("warning: ignoring parameter %q, already set", name)
+		logrus.Warnf("Ignoring parameter %q, already set", name)
 		return
 	}
 	p.values[name] = value
@@ -96,7 +97,7 @@ func (p *DeferredParameters) Add(name string, fn func() (string, error)) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	if _, ok := p.fns[name]; ok {
-		log.Printf("warning: overriding parameter %q", name)
+		logrus.Warnf("Overriding parameter %q", name)
 	}
 	p.fns[name] = fn
 }

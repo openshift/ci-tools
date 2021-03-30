@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -33,7 +34,7 @@ func (s *writeParametersStep) Run(_ context.Context) error {
 }
 
 func (s *writeParametersStep) run() error {
-	log.Printf("Writing parameters to %s", s.paramFile)
+	logrus.Infof("Writing parameters to %s", s.paramFile)
 	var params []string
 
 	values, err := s.params.Map()

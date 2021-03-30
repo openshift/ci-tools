@@ -5,8 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/release"
@@ -39,7 +40,7 @@ func resolvePullSpec(client release.HTTPClient, endpoint string, bounds api.Vers
 	q := req.URL.Query()
 	q.Add("in", bounds.Query())
 	req.URL.RawQuery = q.Encode()
-	log.Println("INFO: Requesting a release from ", req.URL.String())
+	logrus.Debugf("Requesting a release from %s", req.URL.String())
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to request latest release: %w", err)

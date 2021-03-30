@@ -3,8 +3,9 @@ package steps
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -48,7 +49,7 @@ func (s *inputImageTagStep) Inputs() (api.InputDefinition, error) {
 		return nil, fmt.Errorf("could not resolve base image: %w", err)
 	}
 
-	log.Printf("Resolved %s to %s", s.config.BaseImage.ISTagName(), from.Image.Name)
+	logrus.Infof("Resolved %s to %s.", s.config.BaseImage.ISTagName(), from.Image.Name)
 	s.imageName = from.Image.Name
 	return api.InputDefinition{from.Image.Name}, nil
 }
@@ -60,7 +61,7 @@ func (s *inputImageTagStep) Run(ctx context.Context) error {
 }
 
 func (s *inputImageTagStep) run(ctx context.Context) error {
-	log.Printf("Tagging %s into %s:%s", s.config.BaseImage.ISTagName(), api.PipelineImageStream, s.config.To)
+	logrus.Infof("Tagging %s into %s:%s.", s.config.BaseImage.ISTagName(), api.PipelineImageStream, s.config.To)
 
 	if _, err := s.Inputs(); err != nil {
 		return fmt.Errorf("could not resolve inputs for image tag step: %w", err)
@@ -97,11 +98,11 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 		}
 		_, exists := util.ResolvePullSpec(pipeline, string(s.config.To), true)
 		if !exists {
-			log.Printf("waiting for importing %s ...", ist.ObjectMeta.Name)
+			logrus.Infof("Waiting to import %s ...", ist.ObjectMeta.Name)
 		}
 		return exists, nil
 	}, importCtx.Done()); err != nil {
-		log.Printf("could not resolve tag %s in imagestream %s: %v", s.config.To, api.PipelineImageStream, err)
+		logrus.WithError(err).Errorf("Could not resolve tag %s in imagestream %s.", s.config.To, api.PipelineImageStream)
 		return err
 	}
 	return nil

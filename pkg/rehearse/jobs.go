@@ -536,7 +536,7 @@ type periodicsByRepo map[string][]prowconfig.Periodic
 // selectJobsForRegistryStep returns a sample from all jobs affected by the provided registry node.
 func selectJobsForRegistryStep(
 	node registry.Node,
-	configs config.DataByFilename,
+	configs []*config.DataWithInfo,
 	allPresubmits presubmitsByRepo,
 	allPeriodics []prowconfig.Periodic,
 	seenTests []*api.MultiStageTestConfiguration,
@@ -544,17 +544,9 @@ func selectJobsForRegistryStep(
 	selectedPresubmits := make(map[string][]prowconfig.Presubmit)
 	selectedPeriodics := make(map[string][]prowconfig.Periodic)
 
-	// TODO(muller): Get rid of this hot loop sort
-	// get sorted list of configs keys to make the function deterministic
-	var keys []string
-	for k := range configs {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		ciopConfig := configs[key]
-		tests := ciopConfig.Configuration.Tests
-		orgRepo := fmt.Sprintf("%s/%s", ciopConfig.Info.Org, ciopConfig.Info.Repo)
+	for _, cfg := range configs {
+		tests := cfg.Configuration.Tests
+		orgRepo := fmt.Sprintf("%s/%s", cfg.Info.Org, cfg.Info.Repo)
 		repoPresubmits := allPresubmits[orgRepo]
 		for _, test := range tests {
 			if test.MultiStageTestConfiguration == nil {
@@ -577,7 +569,7 @@ func selectJobsForRegistryStep(
 			case test.Postsubmit:
 				continue // We do not handle postsubmits
 			case test.Cron != nil || test.Interval != nil:
-				jobName := ciopConfig.Info.JobName(jobconfig.PeriodicPrefix, test.As)
+				jobName := cfg.Info.JobName(jobconfig.PeriodicPrefix, test.As)
 				periodic, err := getPeriodicByName(allPeriodics, jobName)
 				if err != nil {
 					// TODO(muller): Log warning
@@ -589,7 +581,7 @@ func selectJobsForRegistryStep(
 				}
 
 			default: // Everything else is a presubmit
-				jobName := ciopConfig.Info.JobName(jobconfig.PresubmitPrefix, test.As)
+				jobName := cfg.Info.JobName(jobconfig.PresubmitPrefix, test.As)
 				// TODO: Better index to avoid constant walkthroughs?
 				presubmit, err := getPresubmitByName(repoPresubmits, jobName)
 				if err != nil {
@@ -656,16 +648,26 @@ func getAllAncestors(changed []registry.Node) []registry.Node {
 
 func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presubmitsByRepo, allPeriodics []prowconfig.Periodic, configPath string, loggers Loggers) (config.Presubmits, config.Periodics) {
 	// TODO(muller): Improve logging in this method
-	// TODO(muller): Get rid of this (and of the error, too)
-	configsByFilename, err := config.LoadDataByFilename(configPath)
-	if err != nil {
-		loggers.Debug.Errorf("Failed to load config by filename in SelectJobsForChangedRegistry: %v", err)
-	}
-	// TODO(muller): Get rid of this name override
-	regSteps = append(regSteps, getAllAncestors(regSteps)...)
-
+	// TODO(muller): Get rid of reading the config here, it should be read at least once already (get rid of the error, too)
 	selectedPresubmits := config.Presubmits{}
 	selectedPeriodics := config.Periodics{}
+	var configs []*config.DataWithInfo
+	if err := config.OperateOnCIOperatorConfigDir(configPath, func(cfg *api.ReleaseBuildConfiguration, info *config.Info) error {
+		configs = append(configs, &config.DataWithInfo{Configuration: *cfg, Info: *info})
+		return nil
+	}); err != nil {
+		loggers.Debug.Errorf("Failed to load config by filename in SelectJobsForChangedRegistry: %v", err)
+		return selectedPresubmits, selectedPeriodics
+	}
+	// Sort the configs by filename, we need determinism
+	// The order is INTENTIONALLY reversed to cheaply increase the chance of hitting
+	// a useful rehearsal (prefer higher OCP versions)
+	sort.Slice(configs, func(i, j int) bool {
+		return configs[i].Info.Filename > configs[j].Info.Filename
+	})
+
+	// TODO(muller): Get rid of this name override
+	regSteps = append(regSteps, getAllAncestors(regSteps)...)
 
 	// TODO(muller): Simplify the sorting
 	// sort steps to make it deterministic
@@ -679,7 +681,8 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 		var added bool
 		var presubmits presubmitsByRepo
 		var periodics periodicsByRepo
-		presubmits, periodics, addedConfigs, err = selectJobsForRegistryStep(step, configsByFilename, allPresubmits, allPeriodics, addedConfigs)
+		var err error
+		presubmits, periodics, addedConfigs, err = selectJobsForRegistryStep(step, configs, allPresubmits, allPeriodics, addedConfigs)
 		// TODO(muller): Get rid of this error
 		if err != nil {
 			loggers.Debug.Errorf("Error getting presubmits in SelectJobsForChangedRegistry: %v", err)

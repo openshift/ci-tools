@@ -312,7 +312,7 @@ func rehearseMain() error {
 	randomJobsForChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(rehearsalTemplates.ProductionNames, toRehearse, prConfig.Prow.JobConfig.PresubmitsStatic, loggers)
 	toRehearse.AddAll(randomJobsForChangedTemplates, config.RandomJobsForChangedTemplates)
 
-	presubmitsForRegistry, periodicsForRegistry := rehearse.SelectJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, prConfig.Prow.JobConfig.Periodics, filepath.Join(o.releaseRepoPath, config.CiopConfigInRepoPath), loggers)
+	presubmitsForRegistry, periodicsForRegistry := rehearse.SelectJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, prConfig.Prow.JobConfig.Periodics, prConfig.CiOperator, loggers)
 	toRehearse.AddAll(presubmitsForRegistry, config.RandomJobsForChangedRegistry)
 
 	resolver := registry.NewResolver(refs, chains, workflows, observers)

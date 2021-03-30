@@ -589,28 +589,22 @@ func getAllAncestors(changed []registry.Node) []registry.Node {
 	return ancestors
 }
 
-func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presubmitsByRepo, allPeriodics []prowconfig.Periodic, configPath string, loggers Loggers) (config.Presubmits, config.Periodics) {
+func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presubmitsByRepo, allPeriodics []prowconfig.Periodic, ciopConfigs config.DataByFilename, loggers Loggers) (config.Presubmits, config.Periodics) {
 	// TODO(muller): Improve logging in this method
-	// TODO(muller): Get rid of reading the config here, it should be read at least once already (get rid of the error, too)
-	selectedPresubmits := config.Presubmits{}
-	selectedPeriodics := config.Periodics{}
-	var configs []*config.DataWithInfo
-	if err := config.OperateOnCIOperatorConfigDir(configPath, func(cfg *api.ReleaseBuildConfiguration, info *config.Info) error {
-		configs = append(configs, &config.DataWithInfo{Configuration: *cfg, Info: *info})
-		return nil
-	}); err != nil {
-		loggers.Debug.Errorf("Failed to load config by filename in SelectJobsForChangedRegistry: %v", err)
-		return selectedPresubmits, selectedPeriodics
+	// We need a sorted index of ci-operator configs for deterministic behavior
+	var sortedConfigs []*config.DataWithInfo
+	for idx := range ciopConfigs {
+		cfg := ciopConfigs[idx]
+		sortedConfigs = append(sortedConfigs, &cfg)
 	}
-	// Sort the configs by filename, we need determinism
 	// The order is INTENTIONALLY reversed to cheaply increase the chance of hitting
 	// a useful rehearsal (prefer higher OCP versions)
-	sort.Slice(configs, func(i, j int) bool {
-		return configs[i].Info.Filename > configs[j].Info.Filename
+	sort.Slice(sortedConfigs, func(i, j int) bool {
+		return sortedConfigs[i].Info.Filename > sortedConfigs[j].Info.Filename
 	})
 
 	regSteps = append(regSteps, getAllAncestors(regSteps)...)
-	// sort steps to make it deterministic
+	// sort steps to make iteration over them deterministic
 	sort.Slice(regSteps, func(i, j int) bool {
 		if regSteps[i].Name() == regSteps[j].Name() {
 			return regSteps[i].Type() < regSteps[j].Type()
@@ -629,9 +623,11 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 		periodicsIndex[job.Name] = job
 	}
 
+	selectedPresubmits := config.Presubmits{}
+	selectedPeriodics := config.Periodics{}
 	selectedNames := sets.NewString()
 	for _, step := range regSteps {
-		presubmits, periodics := selectJobsForRegistryStep(step, configs, presubmitIndex, periodicsIndex, selectedNames)
+		presubmits, periodics := selectJobsForRegistryStep(step, sortedConfigs, presubmitIndex, periodicsIndex, selectedNames)
 		for repo, presubmits := range presubmits {
 			for _, job := range presubmits {
 				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", step.Name())}

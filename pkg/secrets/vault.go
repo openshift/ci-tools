@@ -13,6 +13,7 @@ import (
 type VaultClient interface {
 	GetKV(path string) (*vaultclient.KVData, error)
 	ListKVRecursively(path string) ([]string, error)
+	UpsertKV(path string, data map[string]string) error
 }
 
 type vaultClient struct {
@@ -86,6 +87,26 @@ func (c *vaultClient) GetInUseInformationForAllItems() (map[string]SecretUsageCo
 	}
 
 	return result, nil
+}
+
+func (c *vaultClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {
+	// TODO
+	return nil
+}
+
+func (c *vaultClient) SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) error {
+	// TODO
+	return nil
+}
+
+func (c *vaultClient) SetPassword(itemName string, password []byte) error {
+	// TODO
+	return nil
+}
+
+func (c *vaultClient) UpdateNotesOnItem(itemName string, notes string) error {
+	// TODO
+	return nil
 }
 
 func (c *vaultClient) Logout() ([]byte, error) { return nil, nil }

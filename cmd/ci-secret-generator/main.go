@@ -15,37 +15,28 @@ import (
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/logrusutil"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
-	"github.com/openshift/ci-tools/pkg/bitwarden"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
-// CoreOS / OpenShift
-const defaultBwOrganization = "05ac4fbe-11d1-44df-bb29-a772017c6631"
-
-// OpenShift TestPlatform (CI)
-var defaultBwCollections = []string{"0247722f-3ab3-4fd4-a01d-a983013f3159"}
-
 type options struct {
+	secrets secrets.CLIOptions
+
 	logLevel            string
 	configPath          string
 	bootstrapConfigPath string
 	outputFile          string
-	bwUser              string
 	dryRun              bool
 	validate            bool
 	validateOnly        bool
-	bwPasswordPath      string
 	maxConcurrency      int
 
 	config          []bitWardenItem
 	bootstrapConfig secretbootstrap.Config
-	bwPassword      string
 }
 
 type bitWardenItem struct {
@@ -64,17 +55,21 @@ type fieldGenerator struct {
 
 func parseOptions() options {
 	var o options
-	flag.CommandLine.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with bw command")
-	flag.CommandLine.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
-	flag.CommandLine.StringVar(&o.bootstrapConfigPath, "bootstrap-config", "", "Path to the config file used for bootstrapping cluster secrets after using this tool.")
-	flag.CommandLine.BoolVar(&o.validate, "validate", true, "Validate that the items created from this tool are used in bootstrapping")
-	flag.CommandLine.BoolVar(&o.validateOnly, "validate-only", false, "If the tool should exit after the validation")
-	flag.CommandLine.StringVar(&o.outputFile, "output-file", "", "output file for dry-run mode")
-	flag.CommandLine.StringVar(&o.bwUser, "bw-user", "", "Username to access BitWarden.")
-	flag.CommandLine.StringVar(&o.bwPasswordPath, "bw-password-path", "", "Path to a password file to access BitWarden.")
-	flag.CommandLine.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
-	flag.CommandLine.IntVar(&o.maxConcurrency, "concurrency", 1, "Maximum number of concurrent in-flight goroutines to BitWarden.")
-	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
+	// CoreOS / OpenShift
+	o.secrets.BwDefaultOrganization = "05ac4fbe-11d1-44df-bb29-a772017c6631"
+	// OpenShift TestPlatform (CI)
+	o.secrets.BwDefaultCollections = []string{"0247722f-3ab3-4fd4-a01d-a983013f3159"}
+	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with bw command")
+	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
+	fs.StringVar(&o.bootstrapConfigPath, "bootstrap-config", "", "Path to the config file used for bootstrapping cluster secrets after using this tool.")
+	fs.BoolVar(&o.validate, "validate", true, "Validate that the items created from this tool are used in bootstrapping")
+	fs.BoolVar(&o.validateOnly, "validate-only", false, "If the tool should exit after the validation")
+	fs.StringVar(&o.outputFile, "output-file", "", "output file for dry-run mode")
+	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
+	fs.IntVar(&o.maxConcurrency, "concurrency", 1, "Maximum number of concurrent in-flight goroutines to BitWarden.")
+	o.secrets.Bind(fs)
+	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: %q", os.Args[1:])
 	}
 	return o
@@ -86,12 +81,9 @@ func (o *options) validateOptions() error {
 		return fmt.Errorf("invalid log level specified: %w", err)
 	}
 	logrus.SetLevel(level)
-	if !(o.validateOnly || o.dryRun) {
-		if o.bwUser == "" {
-			return errors.New("--bw-user is empty")
-		}
-		if o.bwPasswordPath == "" {
-			return errors.New("--bw-password-path is empty")
+	if !o.dryRun {
+		if err := o.secrets.Validate(); err != nil {
+			return utilerrors.NewAggregate(err)
 		}
 	}
 	if o.configPath == "" {
@@ -104,15 +96,9 @@ func (o *options) validateOptions() error {
 }
 
 func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
-	if o.bwPasswordPath != "" {
-		pwBytes, err := ioutil.ReadFile(o.bwPasswordPath)
-		if err != nil {
-			return err
-		}
-		o.bwPassword = strings.TrimSpace(string(pwBytes))
-		censor.AddSecrets(o.bwPassword)
+	if err := o.secrets.Complete(censor); err != nil {
+		return err
 	}
-
 	cfgBytes, err := gzip.ReadFileMaybeGZIP(o.configPath)
 	if err != nil {
 		return err
@@ -220,18 +206,8 @@ func processBwParameters(bwItems []bitWardenItem) ([]bitWardenItem, error) {
 	return processedBwItems, utilerrors.NewAggregate(errs)
 }
 
-func setDefaultsOnCreate(item *bitwarden.Item) error {
-	item.Organization = defaultBwOrganization
-	collections := sets.NewString(item.Collections...)
-	collections.Insert(defaultBwCollections...)
-	item.Collections = collections.List()
-
-	return nil
-}
-
-func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
+func updateSecrets(bwItems []bitWardenItem, client secrets.Client) error {
 	var errs []error
-	bwClient.OnCreate(setDefaultsOnCreate)
 	for _, bwItem := range bwItems {
 		logger := logrus.WithField("item", bwItem.ItemName)
 		for _, field := range bwItem.Fields {
@@ -247,7 +223,7 @@ func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 				errs = append(errs, errors.New(msg))
 				continue
 			}
-			if err := bwClient.SetFieldOnItem(bwItem.ItemName, field.Name, out); err != nil {
+			if err := client.SetFieldOnItem(bwItem.ItemName, field.Name, out); err != nil {
 				msg := "failed to upload field"
 				logger.WithError(err).Error(msg)
 				errs = append(errs, errors.New(msg))
@@ -267,7 +243,7 @@ func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 				errs = append(errs, errors.New(msg))
 				continue
 			}
-			if err := bwClient.SetAttachmentOnItem(bwItem.ItemName, attachment.Name, out); err != nil {
+			if err := client.SetAttachmentOnItem(bwItem.ItemName, attachment.Name, out); err != nil {
 				msg := "failed to upload attachment"
 				logger.WithError(err).Error(msg)
 				errs = append(errs, errors.New(msg))
@@ -285,7 +261,7 @@ func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 				logger.WithError(err).Error(msg)
 				errs = append(errs, errors.New(msg))
 			} else {
-				if err := bwClient.SetPassword(bwItem.ItemName, out); err != nil {
+				if err := client.SetPassword(bwItem.ItemName, out); err != nil {
 					msg := "failed to upload password"
 					logger.WithError(err).Error(msg)
 					errs = append(errs, errors.New(msg))
@@ -301,7 +277,7 @@ func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 				"notes": bwItem.Notes,
 			})
 			logger.Info("adding notes")
-			if err := bwClient.UpdateNotesOnItem(bwItem.ItemName, bwItem.Notes); err != nil {
+			if err := client.UpdateNotesOnItem(bwItem.ItemName, bwItem.Notes); err != nil {
 				msg := "failed to update notes"
 				logger.WithError(err).Error(msg)
 				errs = append(errs, errors.New(msg))
@@ -342,7 +318,7 @@ func main() {
 		return
 	}
 
-	var client bitwarden.Client
+	var client secrets.Client
 	logrus.RegisterExitHandler(func() {
 		if client != nil {
 			if _, err := client.Logout(); err != nil {
@@ -365,13 +341,12 @@ func main() {
 				logrus.WithError(err).Fatalf("failed to open output file %q", o.outputFile)
 			}
 		}
-		client, err = bitwarden.NewDryRunClient(f)
+		client, err = secrets.NewDryRunClient(f)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to create dry-run mode client")
 		}
 	} else {
-		var err error
-		client, err = bitwarden.NewClient(o.bwUser, o.bwPassword, censor.AddSecrets)
+		client, err = o.secrets.NewClient(&censor)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to create Bitwarden client")
 		}

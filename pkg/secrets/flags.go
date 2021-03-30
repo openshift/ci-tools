@@ -18,8 +18,10 @@ type CLIOptions struct {
 	VaultAddr      string
 	VaultPrefix    string
 
-	BwPassword string
-	VaultToken string
+	BwDefaultOrganization string
+	BwDefaultCollections  []string
+	BwPassword            string
+	VaultToken            string
 }
 
 func (o *CLIOptions) Bind(fs *flag.FlagSet) {
@@ -71,11 +73,24 @@ func (o *CLIOptions) Complete(censor *DynamicCensor) error {
 	return nil
 }
 
+func (o *CLIOptions) NewReadOnlyClient(censor *DynamicCensor) (ReadOnlyClient, error) {
+	return o.NewClient(censor)
+}
+
 func (o *CLIOptions) NewClient(censor *DynamicCensor) (Client, error) {
 	if o.BwUser != "" {
 		c, err := bitwarden.NewClient(o.BwUser, o.BwPassword, censor.AddSecrets)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to get Bitwarden client: %w", err)
+		}
+		if o.BwDefaultOrganization != "" || len(o.BwDefaultCollections) != 0 {
+			c.OnCreate(func(item *bitwarden.Item) error {
+				item.Organization = o.BwDefaultOrganization
+				collections := sets.NewString(item.Collections...)
+				collections.Insert(o.BwDefaultCollections...)
+				item.Collections = collections.List()
+				return nil
+			})
 		}
 		return NewBitwardenClient(c), nil
 	} else {

@@ -25,6 +25,7 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus/hooks/writer"
 	"go.uber.org/zap/zapcore"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -46,6 +47,7 @@ import (
 	"k8s.io/klog/v2"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config/secret"
+	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	"k8s.io/test-infra/prow/version"
 	utilpointer "k8s.io/utils/pointer"
@@ -72,6 +74,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/validation"
@@ -172,11 +175,23 @@ var (
 const CustomProwMetadata = "custom-prow-metadata.json"
 
 func main() {
+	censor, closer, err := setupLogger()
+	if err != nil {
+		logrus.WithError(err).Fatal("Could not set up logging.")
+	}
+	if closer != nil {
+		defer func() {
+			if err := closer.Close(); err != nil {
+				logrus.WithError(err).Warn("Could not close ci-operator log file.")
+			}
+		}()
+	}
 	// "i just doin't want spam"
 	klog.LogToStderr(false)
 	log.Printf("%s version %s", version.Name, version.Version)
 	flagSet := flag.NewFlagSet("", flag.ExitOnError)
 	opt := bindOptions(flagSet)
+	opt.censor = censor
 	if err := flagSet.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("failed to parse flags")
 	}
@@ -241,6 +256,41 @@ func main() {
 		os.Exit(1)
 	}
 	opt.Report()
+}
+
+// setupLogger sets up logrus to print all logs to a file and user-friendly logs to stdout
+func setupLogger() (*secrets.DynamicCensor, io.Closer, error) {
+	logrusutil.ComponentInit()
+	logrus.SetLevel(logrus.TraceLevel)
+	censor := secrets.NewDynamicCensor()
+	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
+	logrus.SetOutput(ioutil.Discard)
+	logrus.AddHook(&writer.Hook{
+		Writer: os.Stdout,
+		LogLevels: []logrus.Level{
+			logrus.InfoLevel,
+			logrus.WarnLevel,
+			logrus.ErrorLevel,
+			logrus.FatalLevel,
+			logrus.PanicLevel,
+		},
+	})
+	artifactDir, set := api.Artifacts()
+	if !set {
+		return &censor, nil, nil
+	}
+	if err := os.MkdirAll(artifactDir, 0777); err != nil {
+		return nil, nil, err
+	}
+	verboseFile, err := os.Create(filepath.Join(artifactDir, "ci-operator.log"))
+	if err != nil {
+		return nil, nil, err
+	}
+	logrus.AddHook(&writer.Hook{
+		Writer:    verboseFile,
+		LogLevels: logrus.AllLevels,
+	})
+	return &censor, verboseFile, nil
 }
 
 type stringSlice struct {
@@ -320,6 +370,8 @@ type options struct {
 	cloneAuthConfig *steps.CloneAuthConfig
 
 	resultsOptions results.Options
+
+	censor *secrets.DynamicCensor
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -578,7 +630,7 @@ func (o *options) Run() []error {
 		leaseClient = &o.leaseClient
 	}
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret)
+	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}

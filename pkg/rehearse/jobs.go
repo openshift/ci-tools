@@ -508,7 +508,7 @@ func AddRandomJobsForChangedTemplates(templates sets.String, toBeRehearsed confi
 	return rehearsals
 }
 
-func getPresubmitByJobName(presubmits []prowconfig.Presubmit, name string) (prowconfig.Presubmit, error) {
+func getPresubmitByName(presubmits []prowconfig.Presubmit, name string) (prowconfig.Presubmit, error) {
 	for _, presubmit := range presubmits {
 		if presubmit.Name == name {
 			return presubmit, nil
@@ -517,8 +517,21 @@ func getPresubmitByJobName(presubmits []prowconfig.Presubmit, name string) (prow
 	return prowconfig.Presubmit{}, fmt.Errorf("could not find presubmit with name: %s", name)
 }
 
-func getPresubmitsForRegistryStep(node registry.Node, configs config.DataByFilename, prConfigPresubmits map[string][]prowconfig.Presubmit, addedConfigs []*api.MultiStageTestConfiguration) (map[string][]prowconfig.Presubmit, []*api.MultiStageTestConfiguration, error) {
-	toTest := make(map[string][]prowconfig.Presubmit)
+func getPeriodicByName(periodics []prowconfig.Periodic, name string) (prowconfig.Periodic, error) {
+	for _, periodic := range periodics {
+		if periodic.Name == name {
+			return periodic, nil
+		}
+	}
+	return prowconfig.Periodic{}, fmt.Errorf("could not find periodic with name: %s", name)
+}
+
+// TODO(muller): Improve types in this signature
+func selectJobsForRegistryStep(node registry.Node, configs config.DataByFilename, prConfigPresubmits map[string][]prowconfig.Presubmit, allPeriodics []prowconfig.Periodic, addedConfigs []*api.MultiStageTestConfiguration) (map[string][]prowconfig.Presubmit, map[string][]prowconfig.Periodic, []*api.MultiStageTestConfiguration, error) {
+	selectedPresubmits := make(map[string][]prowconfig.Presubmit)
+	selectedPeriodics := make(map[string][]prowconfig.Periodic)
+
+	// TODO(muller): Get rid of this hot loop sort
 	// get sorted list of configs keys to make the function deterministic
 	var keys []string
 	for k := range configs {
@@ -536,6 +549,7 @@ func getPresubmitsForRegistryStep(node registry.Node, configs config.DataByFilen
 			}
 			skip := false
 			for _, added := range addedConfigs {
+				// TODO(muller): Avoid DeepEqual in this check
 				if reflect.DeepEqual(test.MultiStageTestConfiguration, added) {
 					skip = true
 					break
@@ -544,49 +558,64 @@ func getPresubmitsForRegistryStep(node registry.Node, configs config.DataByFilen
 			if skip {
 				continue
 			}
-			jobName := ciopConfig.Info.JobName(jobconfig.PresubmitPrefix, test.As)
+
+			var selectJob func()
+			switch {
+			case test.Postsubmit:
+				// We do not handle postsubmits
+				continue
+			case test.Cron != nil || test.Interval != nil:
+				jobName := ciopConfig.Info.JobName(jobconfig.PeriodicPrefix, test.As)
+				periodic, err := getPeriodicByName(allPeriodics, jobName)
+				if err != nil {
+					// TODO(muller): Log warning
+					continue
+				}
+				selectJob = func() {
+					addedConfigs = append(addedConfigs, test.MultiStageTestConfiguration)
+					selectedPeriodics[orgRepo] = append(selectedPeriodics[orgRepo], periodic)
+				}
+
+			default: // Everything else is a presubmit
+				jobName := ciopConfig.Info.JobName(jobconfig.PresubmitPrefix, test.As)
+				// TODO: Better index to avoid constant walkthroughs?
+				presubmit, err := getPresubmitByName(repoPresubmits, jobName)
+				if err != nil {
+					// TODO(muller): Log warning?
+					continue
+				}
+				selectJob = func() {
+					addedConfigs = append(addedConfigs, test.MultiStageTestConfiguration)
+					selectedPresubmits[orgRepo] = append(selectedPresubmits[orgRepo], presubmit)
+				}
+			}
+
 			// TODO: Handle workflows with overridden fields.
 			// Workflows can have overridden fields and thus may have overridden the field that made the workflow an ancestor.
 			// This should be handled to reduce the number of rehearsals being done, but requires much more information than
 			// the graph alone provides.
-			if test.MultiStageTestConfiguration.Workflow != nil && node.Type() == registry.Workflow && node.Name() == *test.MultiStageTestConfiguration.Workflow {
-				presubmit, err := getPresubmitByJobName(repoPresubmits, jobName)
-				if err != nil {
-					return toTest, addedConfigs, err
+
+			if node.Type() == registry.Workflow {
+				if test.MultiStageTestConfiguration.Workflow != nil && node.Name() == *test.MultiStageTestConfiguration.Workflow {
+					selectJob()
 				}
-				addedConfigs = append(addedConfigs, test.MultiStageTestConfiguration)
-				toTest[orgRepo] = append(toTest[orgRepo], presubmit)
-				// continue to check other tests
 				continue
 			}
 			testSteps := append(test.MultiStageTestConfiguration.Pre, append(test.MultiStageTestConfiguration.Test, test.MultiStageTestConfiguration.Post...)...)
 			for _, testStep := range testSteps {
-				if testStep.Reference != nil && node.Type() == registry.Reference && node.Name() == *testStep.Reference {
-					presubmit, err := getPresubmitByJobName(repoPresubmits, jobName)
-					if err != nil {
-						return toTest, addedConfigs, err
-					}
-					addedConfigs = append(addedConfigs, test.MultiStageTestConfiguration)
-					toTest[orgRepo] = append(toTest[orgRepo], presubmit)
-					// found step; break
-					break
-				}
-				if testStep.Chain != nil && node.Type() == registry.Chain && node.Name() == *testStep.Chain {
-					presubmit, err := getPresubmitByJobName(repoPresubmits, jobName)
-					if err != nil {
-						return toTest, addedConfigs, err
-					}
-					addedConfigs = append(addedConfigs, test.MultiStageTestConfiguration)
-					toTest[orgRepo] = append(toTest[orgRepo], presubmit)
-					// found step; break
+				hasRef := testStep.Reference != nil && node.Type() == registry.Reference && node.Name() == *testStep.Reference
+				hasChain := testStep.Chain != nil && node.Type() == registry.Chain && node.Name() == *testStep.Chain
+				if hasRef || hasChain {
+					selectJob()
 					break
 				}
 			}
 		}
 	}
-	return toTest, addedConfigs, nil
+	return selectedPresubmits, selectedPeriodics, addedConfigs, nil
 }
 
+// TODO(muller): We could just use inline Less() and sort.Slice?
 // sorting functions for []registry.Node
 type nodeArr []registry.Node
 
@@ -613,41 +642,67 @@ func getAllAncestors(changed []registry.Node) []registry.Node {
 	return ancestors
 }
 
-func AddRandomJobsForChangedRegistry(regSteps []registry.Node, prConfigPresubmits map[string][]prowconfig.Presubmit, configPath string, loggers Loggers) config.Presubmits {
+func SelectJobsForChangedRegistry(regSteps []registry.Node, prConfigPresubmits map[string][]prowconfig.Presubmit, prConfigPeriodics []prowconfig.Periodic, configPath string, loggers Loggers) (config.Presubmits, config.Periodics) {
+	// TODO(muller): Improve logging in this method
+	// TODO(muller): Get rid of this (and of the error, too)
 	configsByFilename, err := config.LoadDataByFilename(configPath)
 	if err != nil {
-		loggers.Debug.Errorf("Failed to load config by filename in AddRandomJobsForChangedRegistry: %v", err)
+		loggers.Debug.Errorf("Failed to load config by filename in SelectJobsForChangedRegistry: %v", err)
 	}
+	// TODO(muller): Get rid of this name override
 	regSteps = append(regSteps, getAllAncestors(regSteps)...)
-	rehearsals := make(config.Presubmits)
+
+	selectedPresubmits := config.Presubmits{}
+	selectedPeriodics := config.Periodics{}
+
+	// TODO(muller): Simplify the sorting
 	// sort steps to make it deterministic
 	sort.Sort(nodeArr(regSteps))
+
+	// TODO(muller): Better describe this
 	// make list to store MultiStageTestConfigurations that we've already added to the test list
 	var addedConfigs []*api.MultiStageTestConfiguration
 	for _, step := range regSteps {
-		// only add one job per step
+		// TODO(muller): Rework this so that the selection happens one method down
 		var added bool
-		var presubmitsMap map[string][]prowconfig.Presubmit
-		presubmitsMap, addedConfigs, err = getPresubmitsForRegistryStep(step, configsByFilename, prConfigPresubmits, addedConfigs)
+		var presubmits map[string][]prowconfig.Presubmit
+		var periodics map[string][]prowconfig.Periodic
+		presubmits, periodics, addedConfigs, err = selectJobsForRegistryStep(step, configsByFilename, prConfigPresubmits, prConfigPeriodics, addedConfigs)
+		// TODO(muller): Get rid of this error
 		if err != nil {
-			loggers.Debug.Errorf("Error getting presubmits in AddRandomJobsForChangedRegistry: %v", err)
+			loggers.Debug.Errorf("Error getting presubmits in SelectJobsForChangedRegistry: %v", err)
 		}
-		if len(presubmitsMap) == 0 {
+		if len(presubmits) == 0 {
 			// if the code reaches this point, then no config contains the step or the step has already been tested
 			loggers.Debug.Warnf("No config found containing step: %+v", step)
 		}
-		for repo, presubmits := range presubmitsMap {
+		if len(periodics) == 0 {
+			// if the code reaches this point, then no config contains the step or the step has already been tested
+			loggers.Debug.Warnf("No config found containing step: %+v", step)
+		}
+		for repo, presubmits := range presubmits {
 			for _, job := range presubmits {
 				if !added {
 					selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", step.Name())}
 					loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
-					rehearsals[repo] = append(rehearsals[repo], job)
+					selectedPresubmits[repo] = append(selectedPresubmits[repo], job)
 					added = true
 				}
 			}
 		}
+		for repo, presubmits := range periodics {
+			for _, job := range presubmits {
+				if !added {
+					selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", step.Name())}
+					loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
+					selectedPeriodics[job.Name] = job
+					added = true
+				}
+			}
+		}
+
 	}
-	return rehearsals
+	return selectedPresubmits, selectedPeriodics
 }
 
 func getClusterTypes(jobs map[string][]prowconfig.Presubmit) []string {

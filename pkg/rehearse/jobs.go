@@ -525,28 +525,30 @@ func getPeriodicByName(periodics []prowconfig.Periodic, name string) (prowconfig
 	return prowconfig.Periodic{}, fmt.Errorf("could not find periodic with name: %s", name)
 }
 
-type presubmitsByRepo map[string][]prowconfig.Presubmit
-
 // Generic Prow periodics are not related to a repo, but in OpenShift CI many of them
 // are generated from ci-operator config which are. Code using this type is expected
 // to only work with the generated, repo-connected periodics
 type periodicsByRepo map[string][]prowconfig.Periodic
+type presubmitsByRepo map[string][]prowconfig.Presubmit
+
+type periodicsByName map[string]prowconfig.Periodic
+type presubmitsByName map[string]prowconfig.Presubmit
 
 // selectJobsForRegistryStep returns a sample from all jobs affected by the provided registry node.
 func selectJobsForRegistryStep(
 	node registry.Node,
 	configs []*config.DataWithInfo,
-	allPresubmits presubmitsByRepo,
-	allPeriodics []prowconfig.Periodic,
+	allPresubmits presubmitsByName,
+	allPeriodics periodicsByName,
 	skipJobs sets.String,
-) (presubmitsByRepo, periodicsByRepo, error) {
+) (presubmitsByRepo, periodicsByRepo) {
 	selectedPresubmits := make(map[string][]prowconfig.Presubmit)
 	selectedPeriodics := make(map[string][]prowconfig.Periodic)
 
 	for _, cfg := range configs {
+		// TODO(muller): USeless var
 		tests := cfg.Configuration.Tests
 		orgRepo := fmt.Sprintf("%s/%s", cfg.Info.Org, cfg.Info.Repo)
-		repoPresubmits := allPresubmits[orgRepo]
 		for _, test := range tests {
 			if test.MultiStageTestConfiguration == nil {
 				continue
@@ -559,27 +561,21 @@ func selectJobsForRegistryStep(
 				continue // We do not handle postsubmits
 			case test.Cron != nil || test.Interval != nil:
 				jobName = cfg.Info.JobName(jobconfig.PeriodicPrefix, test.As)
-				periodic, err := getPeriodicByName(allPeriodics, jobName)
-				if err != nil {
-					// TODO(muller): Log warning
+				if periodic, ok := allPeriodics[jobName]; ok {
+					selectJob = func() { selectedPeriodics[orgRepo] = append(selectedPeriodics[orgRepo], periodic) }
+				} else {
+					// TODO(muller): Improve logging
 					continue
 				}
-				selectJob = func() {
-					selectedPeriodics[orgRepo] = append(selectedPeriodics[orgRepo], periodic)
-				}
-
 			default: // Everything else is a presubmit
 				jobName = cfg.Info.JobName(jobconfig.PresubmitPrefix, test.As)
-				// TODO: Better index to avoid constant walkthroughs?
-				presubmit, err := getPresubmitByName(repoPresubmits, jobName)
-				if err != nil {
-					// TODO(muller): Log warning?
+				if presubmit, ok := allPresubmits[jobName]; ok {
+					selectJob = func() { selectedPresubmits[orgRepo] = append(selectedPresubmits[orgRepo], presubmit) }
+				} else {
 					continue
 				}
-				selectJob = func() {
-					selectedPresubmits[orgRepo] = append(selectedPresubmits[orgRepo], presubmit)
-				}
 			}
+
 			if skipJobs.Has(jobName) {
 				continue
 			}
@@ -591,6 +587,7 @@ func selectJobsForRegistryStep(
 			if node.Type() == registry.Workflow {
 				if test.MultiStageTestConfiguration.Workflow != nil && node.Name() == *test.MultiStageTestConfiguration.Workflow {
 					selectJob()
+					return selectedPresubmits, selectedPeriodics
 				}
 				continue
 			}
@@ -600,12 +597,12 @@ func selectJobsForRegistryStep(
 				hasChain := testStep.Chain != nil && node.Type() == registry.Chain && node.Name() == *testStep.Chain
 				if hasRef || hasChain {
 					selectJob()
-					break
+					return selectedPresubmits, selectedPeriodics
 				}
 			}
 		}
 	}
-	return selectedPresubmits, selectedPeriodics, nil
+	return selectedPresubmits, selectedPeriodics
 }
 
 // getAllAncestors takes a graph of changed steps and finds all ancestors of
@@ -649,20 +646,24 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 		return regSteps[i].Name() < regSteps[j].Name()
 	})
 
-	// TODO(muller): Better describe this
-	// make list to store MultiStageTestConfigurations that we've already added to the test list
+	presubmitIndex := presubmitsByName{}
+	for _, jobs := range allPresubmits {
+		for _, job := range jobs {
+			presubmitIndex[job.Name] = job
+		}
+	}
+	periodicsIndex := periodicsByName{}
+	for _, job := range allPeriodics {
+		periodicsIndex[job.Name] = job
+	}
+
 	selectedNames := sets.NewString()
 	for _, step := range regSteps {
-		// TODO(muller): Rework this so that the selection happens one method down
 		var added bool
 		var presubmits presubmitsByRepo
 		var periodics periodicsByRepo
-		var err error
-		presubmits, periodics, err = selectJobsForRegistryStep(step, configs, allPresubmits, allPeriodics, selectedNames)
-		// TODO(muller): Get rid of this error
-		if err != nil {
-			loggers.Debug.Errorf("Error getting presubmits in SelectJobsForChangedRegistry: %v", err)
-		}
+		presubmits, periodics = selectJobsForRegistryStep(step, configs, presubmitIndex, periodicsIndex, selectedNames)
+		// TODO(muller): Get rid of the duplicity
 		if len(presubmits) == 0 {
 			// if the code reaches this point, then no config contains the step or the step has already been tested
 			loggers.Debug.Warnf("No config found containing step: %+v", step)

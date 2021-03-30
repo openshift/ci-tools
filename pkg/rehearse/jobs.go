@@ -507,24 +507,6 @@ func AddRandomJobsForChangedTemplates(templates sets.String, toBeRehearsed confi
 	return rehearsals
 }
 
-func getPresubmitByName(presubmits []prowconfig.Presubmit, name string) (prowconfig.Presubmit, error) {
-	for _, presubmit := range presubmits {
-		if presubmit.Name == name {
-			return presubmit, nil
-		}
-	}
-	return prowconfig.Presubmit{}, fmt.Errorf("could not find presubmit with name: %s", name)
-}
-
-func getPeriodicByName(periodics []prowconfig.Periodic, name string) (prowconfig.Periodic, error) {
-	for _, periodic := range periodics {
-		if periodic.Name == name {
-			return periodic, nil
-		}
-	}
-	return prowconfig.Periodic{}, fmt.Errorf("could not find periodic with name: %s", name)
-}
-
 // Generic Prow periodics are not related to a repo, but in OpenShift CI many of them
 // are generated from ci-operator config which are. Code using this type is expected
 // to only work with the generated, repo-connected periodics
@@ -535,21 +517,13 @@ type periodicsByName map[string]prowconfig.Periodic
 type presubmitsByName map[string]prowconfig.Presubmit
 
 // selectJobsForRegistryStep returns a sample from all jobs affected by the provided registry node.
-func selectJobsForRegistryStep(
-	node registry.Node,
-	configs []*config.DataWithInfo,
-	allPresubmits presubmitsByName,
-	allPeriodics periodicsByName,
-	skipJobs sets.String,
-) (presubmitsByRepo, periodicsByRepo) {
+func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInfo, allPresubmits presubmitsByName, allPeriodics periodicsByName, skipJobs sets.String) (presubmitsByRepo, periodicsByRepo) {
 	selectedPresubmits := make(map[string][]prowconfig.Presubmit)
 	selectedPeriodics := make(map[string][]prowconfig.Periodic)
 
 	for _, cfg := range configs {
-		// TODO(muller): USeless var
-		tests := cfg.Configuration.Tests
 		orgRepo := fmt.Sprintf("%s/%s", cfg.Info.Org, cfg.Info.Repo)
-		for _, test := range tests {
+		for _, test := range cfg.Configuration.Tests {
 			if test.MultiStageTestConfiguration == nil {
 				continue
 			}
@@ -635,9 +609,7 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 		return configs[i].Info.Filename > configs[j].Info.Filename
 	})
 
-	// TODO(muller): Get rid of this name override
 	regSteps = append(regSteps, getAllAncestors(regSteps)...)
-
 	// sort steps to make it deterministic
 	sort.Slice(regSteps, func(i, j int) bool {
 		if regSteps[i].Name() == regSteps[j].Name() {
@@ -659,42 +631,23 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 
 	selectedNames := sets.NewString()
 	for _, step := range regSteps {
-		var added bool
-		var presubmits presubmitsByRepo
-		var periodics periodicsByRepo
-		presubmits, periodics = selectJobsForRegistryStep(step, configs, presubmitIndex, periodicsIndex, selectedNames)
-		// TODO(muller): Get rid of the duplicity
-		if len(presubmits) == 0 {
-			// if the code reaches this point, then no config contains the step or the step has already been tested
-			loggers.Debug.Warnf("No config found containing step: %+v", step)
-		}
-		if len(periodics) == 0 {
-			// if the code reaches this point, then no config contains the step or the step has already been tested
-			loggers.Debug.Warnf("No config found containing step: %+v", step)
-		}
+		presubmits, periodics := selectJobsForRegistryStep(step, configs, presubmitIndex, periodicsIndex, selectedNames)
 		for repo, presubmits := range presubmits {
 			for _, job := range presubmits {
-				if !added {
-					selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", step.Name())}
-					loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
-					selectedPresubmits[repo] = append(selectedPresubmits[repo], job)
-					added = true
-					selectedNames.Insert(job.Name)
-				}
+				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", step.Name())}
+				loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
+				selectedPresubmits[repo] = append(selectedPresubmits[repo], job)
+				selectedNames.Insert(job.Name)
 			}
 		}
 		for repo, presubmits := range periodics {
 			for _, job := range presubmits {
-				if !added {
-					selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", step.Name())}
-					loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
-					selectedPeriodics[job.Name] = job
-					added = true
-					selectedNames.Insert(job.Name)
-				}
+				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", step.Name())}
+				loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
+				selectedPeriodics[job.Name] = job
+				selectedNames.Insert(job.Name)
 			}
 		}
-
 	}
 	return selectedPresubmits, selectedPeriodics
 }

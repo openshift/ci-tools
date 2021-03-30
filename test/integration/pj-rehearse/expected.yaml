@@ -1544,6 +1544,336 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage2
+    creationTimestamp: null
+    labels:
+      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.org/rehearse: "1234"
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedRegistryContent
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage2
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: test-prowjob
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/super/trooper/master/multistage2
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      skip_cloning: true
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: trooper
+      workdir: true
+    job: rehearse-1234-pull-ci-super-trooper-master-multistage2
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --give-pr-author-access-to-namespace=true
+        - --secret-dir=/usr/local/multistage2-cluster-profile
+        - --target=multistage2
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          value: |
+            base_images:
+              base:
+                name: origin-v4.0
+                namespace: openshift
+                tag: base
+            build_root:
+              image_stream_tag:
+                name: release
+                namespace: openshift
+                tag: golang-1.10
+            images:
+            - from: base
+              to: test-image
+            resources:
+              '*':
+                limits:
+                  cpu: 500Mi
+                requests:
+                  cpu: 10Mi
+            tag_specification:
+              name: origin-v4.0
+              namespace: openshift
+            tests:
+            - as: multistage2
+              literal_steps:
+                cluster_profile: ""
+                post:
+                - as: ipi-deprovision-must-gather
+                  commands: |
+                    gather
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-deprovision-deprovision
+                  commands: |
+                    openshift-cluster destroy
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                pre:
+                - as: ipi-install-rbac
+                  commands: |
+                    setup-rbac-2
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-install-install
+                  commands: |
+                    openshift-cluster install --newFlag
+                  env:
+                  - default: test parameter default
+                    name: TEST_PARAMETER
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                test:
+                - as: e2e
+                  commands: make integration
+                  from: my-image
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+            zz_generated_metadata:
+              branch: master
+              org: super
+              repo: trooper
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /usr/local/multistage2-cluster-profile
+          name: cluster-profile
+      serviceAccountName: ci-operator
+      volumes:
+      - name: cluster-profile
+        projected:
+          sources:
+          - secret:
+              name: cluster-secrets-
+          - configMap:
+              name: cluster-profile-
+    refs:
+      base_ref: master
+      base_sha: test_sha
+      org: openshift
+      pulls:
+      - author: petr-muller
+        number: 1234
+        sha: test_sha
+      repo: release
+    report: true
+    rerun_command: /test pj-rehearse
+    type: presubmit
+  status:
+    startTime: 2020-06-22T22:25:00Z
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage3
+    creationTimestamp: null
+    labels:
+      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.org/rehearse: "1234"
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedRegistryContent
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage3
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: test-prowjob
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/super/trooper/master/multistage3
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      skip_cloning: true
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: trooper
+      workdir: true
+    job: rehearse-1234-pull-ci-super-trooper-master-multistage3
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --give-pr-author-access-to-namespace=true
+        - --secret-dir=/usr/local/multistage3-cluster-profile
+        - --target=multistage3
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          value: |
+            base_images:
+              base:
+                name: origin-v4.0
+                namespace: openshift
+                tag: base
+            build_root:
+              image_stream_tag:
+                name: release
+                namespace: openshift
+                tag: golang-1.10
+            images:
+            - from: base
+              to: test-image
+            resources:
+              '*':
+                limits:
+                  cpu: 500Mi
+                requests:
+                  cpu: 10Mi
+            tag_specification:
+              name: origin-v4.0
+              namespace: openshift
+            tests:
+            - as: multistage3
+              literal_steps:
+                cluster_profile: azure4
+                post:
+                - as: ipi-deprovision-must-gather
+                  commands: |
+                    gather
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-deprovision-deprovision
+                  commands: |
+                    openshift-cluster destroy
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                pre:
+                - as: ipi-install-rbac
+                  commands: |
+                    setup-rbac-2
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-install-install
+                  commands: |
+                    openshift-cluster install --newFlag
+                  env:
+                  - default: test parameter default
+                    name: TEST_PARAMETER
+                  from: installer
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                test:
+                - as: e2e
+                  commands: make integration
+                  from: my-image
+                  resources:
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+            zz_generated_metadata:
+              branch: master
+              org: super
+              repo: trooper
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /usr/local/multistage3-cluster-profile
+          name: cluster-profile
+      serviceAccountName: ci-operator
+      volumes:
+      - name: cluster-profile
+        projected:
+          sources:
+          - secret:
+              name: cluster-secrets-
+          - configMap:
+              name: cluster-profile-
+    refs:
+      base_ref: master
+      base_sha: test_sha
+      org: openshift
+      pulls:
+      - author: petr-muller
+        number: 1234
+        sha: test_sha
+      repo: release
+    report: true
+    rerun_command: /test pj-rehearse
+    type: presubmit
+  status:
+    startTime: 2020-06-22T22:25:00Z
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage5
     creationTimestamp: null
     labels:

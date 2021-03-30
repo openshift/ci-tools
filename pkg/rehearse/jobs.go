@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -539,8 +538,8 @@ func selectJobsForRegistryStep(
 	configs []*config.DataWithInfo,
 	allPresubmits presubmitsByRepo,
 	allPeriodics []prowconfig.Periodic,
-	seenTests []*api.MultiStageTestConfiguration,
-) (presubmitsByRepo, periodicsByRepo, []*api.MultiStageTestConfiguration, error) {
+	skipJobs sets.String,
+) (presubmitsByRepo, periodicsByRepo, error) {
 	selectedPresubmits := make(map[string][]prowconfig.Presubmit)
 	selectedPeriodics := make(map[string][]prowconfig.Periodic)
 
@@ -552,36 +551,25 @@ func selectJobsForRegistryStep(
 			if test.MultiStageTestConfiguration == nil {
 				continue
 			}
-			skip := false
-			for _, added := range seenTests {
-				// TODO(muller): Avoid DeepEqual in this check
-				if reflect.DeepEqual(test.MultiStageTestConfiguration, added) {
-					skip = true
-					break
-				}
-			}
-			if skip {
-				continue
-			}
 
 			var selectJob func()
+			var jobName string
 			switch {
 			case test.Postsubmit:
 				continue // We do not handle postsubmits
 			case test.Cron != nil || test.Interval != nil:
-				jobName := cfg.Info.JobName(jobconfig.PeriodicPrefix, test.As)
+				jobName = cfg.Info.JobName(jobconfig.PeriodicPrefix, test.As)
 				periodic, err := getPeriodicByName(allPeriodics, jobName)
 				if err != nil {
 					// TODO(muller): Log warning
 					continue
 				}
 				selectJob = func() {
-					seenTests = append(seenTests, test.MultiStageTestConfiguration)
 					selectedPeriodics[orgRepo] = append(selectedPeriodics[orgRepo], periodic)
 				}
 
 			default: // Everything else is a presubmit
-				jobName := cfg.Info.JobName(jobconfig.PresubmitPrefix, test.As)
+				jobName = cfg.Info.JobName(jobconfig.PresubmitPrefix, test.As)
 				// TODO: Better index to avoid constant walkthroughs?
 				presubmit, err := getPresubmitByName(repoPresubmits, jobName)
 				if err != nil {
@@ -589,16 +577,17 @@ func selectJobsForRegistryStep(
 					continue
 				}
 				selectJob = func() {
-					seenTests = append(seenTests, test.MultiStageTestConfiguration)
 					selectedPresubmits[orgRepo] = append(selectedPresubmits[orgRepo], presubmit)
 				}
+			}
+			if skipJobs.Has(jobName) {
+				continue
 			}
 
 			// TODO: Handle workflows with overridden fields.
 			// Workflows can have overridden fields and thus may have overridden the field that made the workflow an ancestor.
 			// This should be handled to reduce the number of rehearsals being done, but requires much more information than
 			// the graph alone provides.
-
 			if node.Type() == registry.Workflow {
 				if test.MultiStageTestConfiguration.Workflow != nil && node.Name() == *test.MultiStageTestConfiguration.Workflow {
 					selectJob()
@@ -616,7 +605,7 @@ func selectJobsForRegistryStep(
 			}
 		}
 	}
-	return selectedPresubmits, selectedPeriodics, seenTests, nil
+	return selectedPresubmits, selectedPeriodics, nil
 }
 
 // getAllAncestors takes a graph of changed steps and finds all ancestors of
@@ -662,14 +651,14 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 
 	// TODO(muller): Better describe this
 	// make list to store MultiStageTestConfigurations that we've already added to the test list
-	var addedConfigs []*api.MultiStageTestConfiguration
+	selectedNames := sets.NewString()
 	for _, step := range regSteps {
 		// TODO(muller): Rework this so that the selection happens one method down
 		var added bool
 		var presubmits presubmitsByRepo
 		var periodics periodicsByRepo
 		var err error
-		presubmits, periodics, addedConfigs, err = selectJobsForRegistryStep(step, configs, allPresubmits, allPeriodics, addedConfigs)
+		presubmits, periodics, err = selectJobsForRegistryStep(step, configs, allPresubmits, allPeriodics, selectedNames)
 		// TODO(muller): Get rid of this error
 		if err != nil {
 			loggers.Debug.Errorf("Error getting presubmits in SelectJobsForChangedRegistry: %v", err)
@@ -689,6 +678,7 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 					loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
 					selectedPresubmits[repo] = append(selectedPresubmits[repo], job)
 					added = true
+					selectedNames.Insert(job.Name)
 				}
 			}
 		}
@@ -699,6 +689,7 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 					loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
 					selectedPeriodics[job.Name] = job
 					added = true
+					selectedNames.Insert(job.Name)
 				}
 			}
 		}

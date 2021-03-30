@@ -37,19 +37,15 @@ func TestParseOptions(t *testing.T) {
 	}{
 		{
 			name:  "basic case",
-			given: []string{"cmd", "--dry-run=false", "--bw-user=username", "--bw-password-path=/tmp/bw-password", "--config=/tmp/config"},
+			given: []string{"cmd", "--dry-run=false", "--config=/tmp/config"},
 			expected: options{
-				bwUser:         "username",
-				bwPasswordPath: "/tmp/bw-password",
-				configPath:     "/tmp/config",
+				configPath: "/tmp/config",
 			},
 		},
 		{
 			name:  "with kubeconfig",
-			given: []string{"cmd", "--dry-run=false", "--bw-user=username", "--bw-password-path=/tmp/bw-password", "--config=/tmp/config", "--kubeconfig=/tmp/kubeconfig"},
+			given: []string{"cmd", "--dry-run=false", "--config=/tmp/config", "--kubeconfig=/tmp/kubeconfig"},
 			expected: options{
-				bwUser:         "username",
-				bwPasswordPath: "/tmp/bw-password",
 				configPath:     "/tmp/config",
 				kubeConfigPath: "/tmp/kubeconfig",
 			},
@@ -60,15 +56,12 @@ func TestParseOptions(t *testing.T) {
 			oldArgs := os.Args
 			defer func() { os.Args = oldArgs }()
 			os.Args = tc.given
-			actual := parseOptions()
+			actual, err := parseOptions()
+			if err != nil {
+				t.Fatal(err)
+			}
 			if actual.dryRun != tc.expected.dryRun {
 				t.Errorf("%q: (dryRun) actual differs from expected:\n%s", tc.name, cmp.Diff(actual.dryRun, tc.expected.dryRun))
-			}
-			if actual.bwUser != tc.expected.bwUser {
-				t.Errorf("%q: (bwUser) actual differs from expected:\n%s", tc.name, cmp.Diff(actual.bwUser, tc.expected.bwUser))
-			}
-			if actual.bwPasswordPath != tc.expected.bwPasswordPath {
-				t.Errorf("%q: (bwPasswordPath) actual differs from expected:\n%s", tc.name, cmp.Diff(actual.bwPasswordPath, tc.expected.bwPasswordPath))
 			}
 			if actual.kubeConfigPath != tc.expected.kubeConfigPath {
 				t.Errorf("%q: (kubeConfigPath) actual differs from expected:\n%s", tc.name, cmp.Diff(actual.kubeConfigPath, tc.expected.kubeConfigPath))
@@ -86,18 +79,22 @@ func TestValidateOptions(t *testing.T) {
 		{
 			name: "basic case",
 			given: options{
-				logLevel:       "info",
-				bwUser:         "username",
-				bwPasswordPath: "/tmp/bw-password",
-				configPath:     "/tmp/config",
+				logLevel:   "info",
+				configPath: "/tmp/config",
+				secrets: secrets.CLIOptions{
+					BwUser:         "username",
+					BwPasswordPath: "/tmp/bw-password",
+				},
 			},
 		},
 		{
 			name: "empty bw user",
 			given: options{
-				logLevel:       "info",
-				bwPasswordPath: "/tmp/bw-password",
-				configPath:     "/tmp/config",
+				logLevel:   "info",
+				configPath: "/tmp/config",
+				secrets: secrets.CLIOptions{
+					BwPasswordPath: "/tmp/bw-password",
+				},
 			},
 			expected: fmt.Errorf("[--bw-user and --bw-password-path must be specified together, must specify credentials for exactly one of vault or bitwarden, got credentials for: []]"),
 		},
@@ -105,17 +102,21 @@ func TestValidateOptions(t *testing.T) {
 			name: "empty bw user password path",
 			given: options{
 				logLevel:   "info",
-				bwUser:     "username",
 				configPath: "/tmp/config",
+				secrets: secrets.CLIOptions{
+					BwUser: "username",
+				},
 			},
 			expected: fmt.Errorf("[--bw-user and --bw-password-path must be specified together, must specify credentials for exactly one of vault or bitwarden, got credentials for: []]"),
 		},
 		{
 			name: "empty config path",
 			given: options{
-				logLevel:       "info",
-				bwUser:         "username",
-				bwPasswordPath: "/tmp/bw-password",
+				logLevel: "info",
+				secrets: secrets.CLIOptions{
+					BwUser:         "username",
+					BwPasswordPath: "/tmp/bw-password",
+				},
 			},
 			expected: fmt.Errorf("--config is required"),
 		},
@@ -429,8 +430,6 @@ func TestCompleteOptions(t *testing.T) {
 			name: "basic case",
 			given: options{
 				logLevel:       "info",
-				bwUser:         "username",
-				bwPasswordPath: bwPasswordPath,
 				configPath:     configPath,
 				kubeConfigPath: kubeConfigPath,
 			},
@@ -442,8 +441,6 @@ func TestCompleteOptions(t *testing.T) {
 			name: "missing context in kubeconfig",
 			given: options{
 				logLevel:       "info",
-				bwUser:         "username",
-				bwPasswordPath: bwPasswordPath,
 				configPath:     configWithTypoPath,
 				kubeConfigPath: kubeConfigPath,
 			},
@@ -454,8 +451,6 @@ func TestCompleteOptions(t *testing.T) {
 			name: "only configured cluster is used",
 			given: options{
 				logLevel:       "info",
-				bwUser:         "username",
-				bwPasswordPath: bwPasswordPath,
 				configPath:     configPath,
 				kubeConfigPath: kubeConfigPath,
 				cluster:        "build01",
@@ -468,8 +463,6 @@ func TestCompleteOptions(t *testing.T) {
 			name: "attribute is not password",
 			given: options{
 				logLevel:       "info",
-				bwUser:         "username",
-				bwPasswordPath: bwPasswordPath,
 				configPath:     configWithNonPasswordAttributePath,
 				kubeConfigPath: kubeConfigPath,
 			},
@@ -480,8 +473,6 @@ func TestCompleteOptions(t *testing.T) {
 			name: "group is resolved",
 			given: options{
 				logLevel:       "info",
-				bwUser:         "username",
-				bwPasswordPath: bwPasswordPath,
 				configPath:     configWithGroupsPath,
 				kubeConfigPath: kubeConfigPath,
 			},
@@ -501,7 +492,6 @@ func TestCompleteOptions(t *testing.T) {
 			actualError := tc.given.completeOptions(&censor)
 			equalError(t, tc.expectedError, actualError)
 			if tc.expectedError == nil {
-				equal(t, "bitwarden passowrd", tc.expectedBWPassword, tc.given.bwPassword)
 				equal(t, "config", tc.expectedConfig, tc.given.config)
 				var actualClusters []string
 				for k := range tc.given.secretsGetters {
@@ -524,9 +514,8 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "basic case",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
-				config:     defaultConfig,
+				logLevel: "info",
+				config:   defaultConfig,
 			},
 			kubeConfigs: map[string]rest.Config{
 				"default": configDefault,
@@ -534,25 +523,19 @@ func TestValidateCompletedOptions(t *testing.T) {
 			},
 		},
 		{
-			name:     "empty bw password",
-			given:    options{bwPasswordPath: "/tmp/password"},
-			expected: fmt.Errorf("--bw-password-file was empty"),
-		},
-		{
 			name:     "empty config",
-			given:    options{bwPassword: "topSecret"},
+			given:    options{},
 			expected: fmt.Errorf("no secrets found to sync"),
 		},
 		{
 			name:     "empty config with cluster filter",
-			given:    options{bwPassword: "topSecret", cluster: "cluster"},
+			given:    options{cluster: "cluster"},
 			expected: fmt.Errorf("no secrets found to sync for --cluster=cluster"),
 		},
 		{
 			name: "empty to",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
+				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
@@ -571,8 +554,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "empty from",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
+				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{{}},
 				},
@@ -582,8 +564,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "empty key",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
+				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
@@ -609,8 +590,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "empty bw item",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
+				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
@@ -635,8 +615,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "empty field and empty attachment",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
+				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
@@ -661,8 +640,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "non-empty field and non-empty attachment",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
+				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
@@ -689,8 +667,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "empty cluster",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
+				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
@@ -715,8 +692,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "empty namespace",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
+				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
@@ -741,8 +717,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "empty name",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
+				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
@@ -767,8 +742,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "conflicting secrets in same TO",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
+				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
@@ -810,8 +784,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "conflicting secrets in different TOs",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
+				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
@@ -866,8 +839,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "happy dockerconfigJSON configuration",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
+				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
@@ -905,8 +877,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "happy dockerconfigJSON configuration: use RegistryURL",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
+				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
@@ -944,8 +915,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "sad dockerconfigJSON configuration: cannot set both RegistryURL and RegistryURLBitwardenField",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
+				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
@@ -979,8 +949,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "sad dockerconfigJSON configuration",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
+				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
@@ -1016,8 +985,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "sad dockerconfigJSON configuration: cannot determine registry URL",
 			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
+				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
@@ -1373,7 +1341,7 @@ func TestConstructSecrets(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, actualError := constructSecrets(context.TODO(), tc.config, &bitwardenSecretStoreClient{tc.bwClient}, 10)
+			actual, actualError := constructSecrets(context.TODO(), tc.config, secrets.NewBitwardenClient(tc.bwClient), 10)
 			equalError(t, tc.expectedError, actualError)
 			if actualError != nil {
 				return
@@ -1907,6 +1875,7 @@ metadata:
 }
 
 func equalError(t *testing.T, expected, actual error) {
+	t.Helper()
 	if expected != nil && actual == nil || expected == nil && actual != nil {
 		t.Errorf("expecting error \"%v\", got \"%v\"", expected, actual)
 	}
@@ -2172,7 +2141,7 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 					}
 				}
 			}
-			actual, err := constructDockerConfigJSON(&bitwardenSecretStoreClient{tc.bwClient}, tc.dockerConfigJSONData)
+			actual, err := constructDockerConfigJSON(secrets.NewBitwardenClient(tc.bwClient), tc.dockerConfigJSONData)
 			if tc.expectedError != "" && err != nil {
 				if !reflect.DeepEqual(err.Error(), tc.expectedError) {
 					t.Fatal(cmp.Diff(err.Error(), tc.expectedError))
@@ -2361,16 +2330,21 @@ func TestGetUnusedBWItems(t *testing.T) {
 
 	type clientTestCase struct {
 		name          string
-		client        secretStoreClient
+		client        secrets.Client
 		expectedError string
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.id, func(t *testing.T) {
-			for _, clientTestCase := range []clientTestCase{
-				{name: "bitwarden", client: &bitwardenSecretStoreClient{bitwarden.NewFakeClient(tc.bwItems, nil)}, expectedError: tc.expectedBitwardenErr},
-				{name: "vault", client: vaultClientFromBitwardenItems(tc.bwItems), expectedError: tc.expectedVaultErr},
-			} {
+			for _, clientTestCase := range []clientTestCase{{
+				name:          "bitwarden",
+				client:        secrets.NewBitwardenClient(bitwarden.NewFakeClient(tc.bwItems, nil)),
+				expectedError: tc.expectedBitwardenErr,
+			}, {
+				name:          "vault",
+				client:        vaultClientFromBitwardenItems(tc.bwItems),
+				expectedError: tc.expectedVaultErr,
+			}} {
 				t.Run(clientTestCase.name, func(t *testing.T) {
 					var actualErrMsg string
 					actualErr := getUnusedBWItems(tc.config, clientTestCase.client, tc.bwAllowItems, threshold)
@@ -2387,7 +2361,7 @@ func TestGetUnusedBWItems(t *testing.T) {
 	}
 }
 
-func vaultClientFromBitwardenItems(items []bitwarden.Item) *vaultSecretStoreWrapper {
+func vaultClientFromBitwardenItems(items []bitwarden.Item) secrets.Client {
 	data := make(map[string]*vaultclient.KVData, len(items))
 	for _, item := range items {
 		kvItem := &vaultclient.KVData{Data: map[string]string{}}
@@ -2405,8 +2379,8 @@ func vaultClientFromBitwardenItems(items []bitwarden.Item) *vaultSecretStoreWrap
 		}
 		data[item.Name] = kvItem
 	}
-
-	return &vaultSecretStoreWrapper{upstream: &fakeVaultClient{items: data}}
+	censor := secrets.NewDynamicCensor()
+	return secrets.NewVaultClient(&fakeVaultClient{items: data}, "prefix", &censor)
 }
 
 type fakeVaultClient struct {

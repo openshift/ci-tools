@@ -619,23 +619,6 @@ func selectJobsForRegistryStep(
 	return selectedPresubmits, selectedPeriodics, seenTests, nil
 }
 
-// TODO(muller): We could just use inline Less() and sort.Slice?
-// sorting functions for []registry.Node
-type nodeArr []registry.Node
-
-func (s nodeArr) Len() int {
-	return len(s)
-}
-func (s nodeArr) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-func (s nodeArr) Less(i, j int) bool {
-	if s[i].Name() == s[j].Name() {
-		return s[i].Type() < s[j].Type()
-	}
-	return s[i].Name() < s[j].Name()
-}
-
 // getAllAncestors takes a graph of changed steps and finds all ancestors of
 // the existing steps in changed
 func getAllAncestors(changed []registry.Node) []registry.Node {
@@ -669,9 +652,13 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 	// TODO(muller): Get rid of this name override
 	regSteps = append(regSteps, getAllAncestors(regSteps)...)
 
-	// TODO(muller): Simplify the sorting
 	// sort steps to make it deterministic
-	sort.Sort(nodeArr(regSteps))
+	sort.Slice(regSteps, func(i, j int) bool {
+		if regSteps[i].Name() == regSteps[j].Name() {
+			return regSteps[i].Type() < regSteps[j].Type()
+		}
+		return regSteps[i].Name() < regSteps[j].Name()
+	})
 
 	// TODO(muller): Better describe this
 	// make list to store MultiStageTestConfigurations that we've already added to the test list

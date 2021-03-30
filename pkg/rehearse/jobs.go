@@ -526,8 +526,21 @@ func getPeriodicByName(periodics []prowconfig.Periodic, name string) (prowconfig
 	return prowconfig.Periodic{}, fmt.Errorf("could not find periodic with name: %s", name)
 }
 
-// TODO(muller): Improve types in this signature
-func selectJobsForRegistryStep(node registry.Node, configs config.DataByFilename, prConfigPresubmits map[string][]prowconfig.Presubmit, allPeriodics []prowconfig.Periodic, addedConfigs []*api.MultiStageTestConfiguration) (map[string][]prowconfig.Presubmit, map[string][]prowconfig.Periodic, []*api.MultiStageTestConfiguration, error) {
+type presubmitsByRepo map[string][]prowconfig.Presubmit
+
+// Generic Prow periodics are not related to a repo, but in OpenShift CI many of them
+// are generated from ci-operator config which are. Code using this type is expected
+// to only work with the generated, repo-connected periodics
+type periodicsByRepo map[string][]prowconfig.Periodic
+
+// selectJobsForRegistryStep returns a sample from all jobs affected by the provided registry node.
+func selectJobsForRegistryStep(
+	node registry.Node,
+	configs config.DataByFilename,
+	allPresubmits presubmitsByRepo,
+	allPeriodics []prowconfig.Periodic,
+	seenTests []*api.MultiStageTestConfiguration,
+) (presubmitsByRepo, periodicsByRepo, []*api.MultiStageTestConfiguration, error) {
 	selectedPresubmits := make(map[string][]prowconfig.Presubmit)
 	selectedPeriodics := make(map[string][]prowconfig.Periodic)
 
@@ -542,13 +555,13 @@ func selectJobsForRegistryStep(node registry.Node, configs config.DataByFilename
 		ciopConfig := configs[key]
 		tests := ciopConfig.Configuration.Tests
 		orgRepo := fmt.Sprintf("%s/%s", ciopConfig.Info.Org, ciopConfig.Info.Repo)
-		repoPresubmits := prConfigPresubmits[orgRepo]
+		repoPresubmits := allPresubmits[orgRepo]
 		for _, test := range tests {
 			if test.MultiStageTestConfiguration == nil {
 				continue
 			}
 			skip := false
-			for _, added := range addedConfigs {
+			for _, added := range seenTests {
 				// TODO(muller): Avoid DeepEqual in this check
 				if reflect.DeepEqual(test.MultiStageTestConfiguration, added) {
 					skip = true
@@ -562,8 +575,7 @@ func selectJobsForRegistryStep(node registry.Node, configs config.DataByFilename
 			var selectJob func()
 			switch {
 			case test.Postsubmit:
-				// We do not handle postsubmits
-				continue
+				continue // We do not handle postsubmits
 			case test.Cron != nil || test.Interval != nil:
 				jobName := ciopConfig.Info.JobName(jobconfig.PeriodicPrefix, test.As)
 				periodic, err := getPeriodicByName(allPeriodics, jobName)
@@ -572,7 +584,7 @@ func selectJobsForRegistryStep(node registry.Node, configs config.DataByFilename
 					continue
 				}
 				selectJob = func() {
-					addedConfigs = append(addedConfigs, test.MultiStageTestConfiguration)
+					seenTests = append(seenTests, test.MultiStageTestConfiguration)
 					selectedPeriodics[orgRepo] = append(selectedPeriodics[orgRepo], periodic)
 				}
 
@@ -585,7 +597,7 @@ func selectJobsForRegistryStep(node registry.Node, configs config.DataByFilename
 					continue
 				}
 				selectJob = func() {
-					addedConfigs = append(addedConfigs, test.MultiStageTestConfiguration)
+					seenTests = append(seenTests, test.MultiStageTestConfiguration)
 					selectedPresubmits[orgRepo] = append(selectedPresubmits[orgRepo], presubmit)
 				}
 			}
@@ -612,7 +624,7 @@ func selectJobsForRegistryStep(node registry.Node, configs config.DataByFilename
 			}
 		}
 	}
-	return selectedPresubmits, selectedPeriodics, addedConfigs, nil
+	return selectedPresubmits, selectedPeriodics, seenTests, nil
 }
 
 // TODO(muller): We could just use inline Less() and sort.Slice?
@@ -642,7 +654,7 @@ func getAllAncestors(changed []registry.Node) []registry.Node {
 	return ancestors
 }
 
-func SelectJobsForChangedRegistry(regSteps []registry.Node, prConfigPresubmits map[string][]prowconfig.Presubmit, prConfigPeriodics []prowconfig.Periodic, configPath string, loggers Loggers) (config.Presubmits, config.Periodics) {
+func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presubmitsByRepo, allPeriodics []prowconfig.Periodic, configPath string, loggers Loggers) (config.Presubmits, config.Periodics) {
 	// TODO(muller): Improve logging in this method
 	// TODO(muller): Get rid of this (and of the error, too)
 	configsByFilename, err := config.LoadDataByFilename(configPath)
@@ -665,9 +677,9 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, prConfigPresubmits m
 	for _, step := range regSteps {
 		// TODO(muller): Rework this so that the selection happens one method down
 		var added bool
-		var presubmits map[string][]prowconfig.Presubmit
-		var periodics map[string][]prowconfig.Periodic
-		presubmits, periodics, addedConfigs, err = selectJobsForRegistryStep(step, configsByFilename, prConfigPresubmits, prConfigPeriodics, addedConfigs)
+		var presubmits presubmitsByRepo
+		var periodics periodicsByRepo
+		presubmits, periodics, addedConfigs, err = selectJobsForRegistryStep(step, configsByFilename, allPresubmits, allPeriodics, addedConfigs)
 		// TODO(muller): Get rid of this error
 		if err != nil {
 			loggers.Debug.Errorf("Error getting presubmits in SelectJobsForChangedRegistry: %v", err)

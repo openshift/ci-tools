@@ -237,7 +237,7 @@ func rehearseMain() error {
 		for _, step := range changedRegistrySteps {
 			names = append(names, step.Name())
 		}
-		logger.Infof("found %d changed registry steps: %s", len(changedRegistrySteps), strings.Join(names, ", "))
+		logger.Infof("Found %d changed registry steps: %s", len(changedRegistrySteps), strings.Join(names, ", "))
 	}
 
 	var rehearsalTemplates rehearse.ConfigMaps

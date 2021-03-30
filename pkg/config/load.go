@@ -100,6 +100,16 @@ func InfoFromPath(configFilePath string) (*Info, error) {
 	}, nil
 }
 
+func (i *Info) LogFields() logrus.Fields {
+	return logrus.Fields{
+		"org":         i.Org,
+		"repo":        i.Repo,
+		"branch":      i.Branch,
+		"variant":     i.Variant,
+		"source-file": i.Basename(),
+	}
+}
+
 func isConfigFile(path string, info os.FileInfo) bool {
 	extension := filepath.Ext(path)
 	return !info.IsDir() && (extension == ".yaml" || extension == ".yml")
@@ -147,12 +157,7 @@ func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*ci
 }
 
 func LoggerForInfo(info Info) *logrus.Entry {
-	return logrus.WithFields(logrus.Fields{
-		"org":         info.Org,
-		"repo":        info.Repo,
-		"branch":      info.Branch,
-		"source-file": info.Basename(),
-	})
+	return logrus.WithFields(info.LogFields())
 }
 
 // DataWithInfo wraps a CI Operator configuration and metadata for it

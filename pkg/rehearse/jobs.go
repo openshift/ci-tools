@@ -517,17 +517,20 @@ type periodicsByName map[string]prowconfig.Periodic
 type presubmitsByName map[string]prowconfig.Presubmit
 
 // selectJobsForRegistryStep returns a sample from all jobs affected by the provided registry node.
-func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInfo, allPresubmits presubmitsByName, allPeriodics periodicsByName, skipJobs sets.String) (presubmitsByRepo, periodicsByRepo) {
+func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInfo, allPresubmits presubmitsByName, allPeriodics periodicsByName, skipJobs sets.String, loggers Loggers) (presubmitsByRepo, periodicsByRepo) {
 	selectedPresubmits := make(map[string][]prowconfig.Presubmit)
 	selectedPeriodics := make(map[string][]prowconfig.Periodic)
 
+	nodeLogger := loggers.Debug.WithFields(registry.FieldsForNode(node))
+	nodeLogger.Debug("Searching for jobs affected by changed node")
 	for _, cfg := range configs {
+		cfgLogger := nodeLogger.WithFields(cfg.Info.LogFields())
 		orgRepo := fmt.Sprintf("%s/%s", cfg.Info.Org, cfg.Info.Repo)
 		for _, test := range cfg.Configuration.Tests {
+			testLogger := cfgLogger.WithField("tests-item", test.As)
 			if test.MultiStageTestConfiguration == nil {
 				continue
 			}
-
 			var selectJob func()
 			var jobName string
 			switch {
@@ -536,26 +539,34 @@ func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInf
 			case test.Cron != nil || test.Interval != nil:
 				jobName = cfg.Info.JobName(jobconfig.PeriodicPrefix, test.As)
 				if periodic, ok := allPeriodics[jobName]; ok {
-					selectJob = func() { selectedPeriodics[orgRepo] = append(selectedPeriodics[orgRepo], periodic) }
+					selectJob = func() {
+						testLogger.WithField("job-name", jobName).Debug("Periodic job uses the node: selecting for rehearse")
+						selectedPeriodics[orgRepo] = append(selectedPeriodics[orgRepo], periodic)
+					}
 				} else {
-					// TODO(muller): Improve logging
+					testLogger.WithField("job-name", jobName).Debug("Could not find a periodic job for test")
 					continue
 				}
 			default: // Everything else is a presubmit
 				jobName = cfg.Info.JobName(jobconfig.PresubmitPrefix, test.As)
 				if presubmit, ok := allPresubmits[jobName]; ok {
-					selectJob = func() { selectedPresubmits[orgRepo] = append(selectedPresubmits[orgRepo], presubmit) }
+					selectJob = func() {
+						testLogger.WithField("job-name", jobName).Debug("Presubmit job uses the node: selecting for rehearse")
+						selectedPresubmits[orgRepo] = append(selectedPresubmits[orgRepo], presubmit)
+					}
 				} else {
+					testLogger.WithField("job-name", jobName).Debug("Could not find a presubmit job for test")
 					continue
 				}
 			}
 
 			if skipJobs.Has(jobName) {
+				testLogger.WithField("job-name", jobName).Debug("Already saw this job, skipping")
 				continue
 			}
 
-			// TODO: Handle workflows with overridden fields.
-			// Workflows can have overridden fields and thus may have overridden the field that made the workflow an ancestor.
+			// TODO: Handle workflows with overridden logFields.
+			// Workflows can have overridden logFields and thus may have overridden the field that made the workflow an ancestor.
 			// This should be handled to reduce the number of rehearsals being done, but requires much more information than
 			// the graph alone provides.
 			if node.Type() == registry.Workflow {
@@ -576,6 +587,7 @@ func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInf
 			}
 		}
 	}
+	loggers.Debug.WithField("node-name", node.Name()).Debug("Found no jobs using node")
 	return selectedPresubmits, selectedPeriodics
 }
 
@@ -590,7 +602,6 @@ func getAllAncestors(changed []registry.Node) []registry.Node {
 }
 
 func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presubmitsByRepo, allPeriodics []prowconfig.Periodic, ciopConfigs config.DataByFilename, loggers Loggers) (config.Presubmits, config.Periodics) {
-	// TODO(muller): Improve logging in this method
 	// We need a sorted index of ci-operator configs for deterministic behavior
 	var sortedConfigs []*config.DataWithInfo
 	for idx := range ciopConfigs {
@@ -627,17 +638,17 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 	selectedPeriodics := config.Periodics{}
 	selectedNames := sets.NewString()
 	for _, step := range regSteps {
-		presubmits, periodics := selectJobsForRegistryStep(step, sortedConfigs, presubmitIndex, periodicsIndex, selectedNames)
-		for repo, presubmits := range presubmits {
-			for _, job := range presubmits {
+		presubmits, periodics := selectJobsForRegistryStep(step, sortedConfigs, presubmitIndex, periodicsIndex, selectedNames, loggers)
+		for repo, jobs := range presubmits {
+			for _, job := range jobs {
 				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", step.Name())}
 				loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
 				selectedPresubmits.Add(repo, job, config.ChangedRegistryContent)
 				selectedNames.Insert(job.Name)
 			}
 		}
-		for repo, presubmits := range periodics {
-			for _, job := range presubmits {
+		for repo, jobs := range periodics {
+			for _, job := range jobs {
 				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", step.Name())}
 				loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
 				selectedPeriodics.Add(job, config.ChangedRegistryContent)

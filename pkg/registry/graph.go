@@ -3,6 +3,8 @@ package registry
 import (
 	"fmt"
 
+	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -14,6 +16,8 @@ const (
 	Chain
 	Reference
 )
+
+var nodeTypes = [3]string{Workflow: "workflow", Reference: "reference", Chain: "chain"}
 
 // Node is an interface that allows a user to identify ancestors and descendants of a step registry element
 type Node interface {
@@ -175,6 +179,13 @@ func (n *chainNode) addChainChild(child *chainNode) {
 func (n *chainNode) addReferenceChild(child *referenceNode) {
 	n.referenceChildren.insert(child)
 	child.chainParents.insert(n)
+}
+
+func FieldsForNode(n Node) logrus.Fields {
+	return logrus.Fields{
+		"node-name": n.Name(),
+		"node-type": nodeTypes[n.Type()],
+	}
 }
 
 func newNodeWithName(name string) nodeWithName {

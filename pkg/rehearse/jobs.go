@@ -591,14 +591,32 @@ func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInf
 	return selectedPresubmits, selectedPeriodics
 }
 
-// getAllAncestors takes a graph of changed steps and finds all ancestors of
-// the existing steps in changed
-func getAllAncestors(changed []registry.Node) []registry.Node {
-	var ancestors []registry.Node
+// getAffectedNodes returns a sorted list of all nodes affected by a seed list
+// of changed nodes. Affected node is either a directly changed node or any of
+// its ancestors. Each node is present at most once.
+func getAffectedNodes(changed []registry.Node) []registry.Node {
+	all := changed
 	for _, node := range changed {
-		ancestors = append(ancestors, node.Ancestors()...)
+		all = append(all, node.Ancestors()...)
 	}
-	return ancestors
+
+	var worklist []registry.Node
+	seen := sets.NewString()
+	keyFunc := func(node registry.Node) string { return fmt.Sprintf("type=%d name=%s", node.Type(), node.Name()) }
+	for _, node := range all {
+		key := keyFunc(node)
+		if !seen.Has(key) {
+			seen.Insert(key)
+			worklist = append(worklist, node)
+		}
+	}
+	sort.Slice(worklist, func(i, j int) bool {
+		if worklist[i].Name() == worklist[j].Name() {
+			return worklist[i].Type() < worklist[j].Type()
+		}
+		return worklist[i].Name() < worklist[j].Name()
+	})
+	return worklist
 }
 
 func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presubmitsByRepo, allPeriodics []prowconfig.Periodic, ciopConfigs config.DataByFilename, loggers Loggers) (config.Presubmits, config.Periodics) {
@@ -614,14 +632,7 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 		return sortedConfigs[i].Info.Filename > sortedConfigs[j].Info.Filename
 	})
 
-	regSteps = append(regSteps, getAllAncestors(regSteps)...)
-	// sort steps to make iteration over them deterministic
-	sort.Slice(regSteps, func(i, j int) bool {
-		if regSteps[i].Name() == regSteps[j].Name() {
-			return regSteps[i].Type() < regSteps[j].Type()
-		}
-		return regSteps[i].Name() < regSteps[j].Name()
-	})
+	stepWorklist := getAffectedNodes(regSteps)
 
 	presubmitIndex := presubmitsByName{}
 	for _, jobs := range allPresubmits {
@@ -637,7 +648,7 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 	selectedPresubmits := config.Presubmits{}
 	selectedPeriodics := config.Periodics{}
 	selectedNames := sets.NewString()
-	for _, step := range regSteps {
+	for _, step := range stepWorklist {
 		presubmits, periodics := selectJobsForRegistryStep(step, sortedConfigs, presubmitIndex, periodicsIndex, selectedNames, loggers)
 		for repo, jobs := range presubmits {
 			for _, job := range jobs {

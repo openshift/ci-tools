@@ -696,20 +696,15 @@ func (o *options) Run() []error {
 	}
 
 	graph := calculateGraph(nodes)
-	if o.artifactDir != "" {
-		defer func() {
-			serializedGraph, err := json.Marshal(graph)
-			if err != nil {
-				logrus.WithError(err).Error("Failed to marshal graph")
-				return
-			}
+	defer func() {
+		serializedGraph, err := json.Marshal(graph)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to marshal graph")
+			return
+		}
 
-			dest := filepath.Join(o.artifactDir, api.CIOperatorStepGraphJSONFilename)
-			if err := ioutil.WriteFile(dest, serializedGraph, 0644); err != nil {
-				logrus.WithError(err).Error("Failed to write serialized step graph")
-			}
-		}()
-	}
+		_ = api.SaveArtifact(o.censor, api.CIOperatorStepGraphJSONFilename, serializedGraph)
+	}()
 
 	if err := validateGraph(nodes); err != nil {
 		return err

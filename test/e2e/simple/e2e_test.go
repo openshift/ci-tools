@@ -3,7 +3,6 @@
 package simple
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -52,11 +51,7 @@ func TestSimpleExitCodes(t *testing.T) {
 			if testCase.success != (err == nil) {
 				t.Fatalf("%s: didn't expect an error from ci-operator: %v; output:\n%v", testCase.name, err, string(output))
 			}
-			for _, line := range testCase.output {
-				if !bytes.Contains(output, []byte(line)) {
-					t.Errorf("%s: could not find line %q in output; output:\n%v", testCase.name, line, string(output))
-				}
-			}
+			cmd.VerboseOutputContains(t, testCase.name, testCase.output...)
 		})
 	}
 }
@@ -138,16 +133,7 @@ func TestDynamicReleases(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s: ci-operator didn't exit as expected: %v; output:\n%v", testCase.name, err, string(output))
 			}
-			for _, line := range []string{`Resolved release ` + testCase.release + ` to`, `Imported release.*to tag release:` + testCase.release} {
-				matcher, err := regexp.Compile(line)
-				if err != nil {
-					t.Errorf("%s: could not compile regex %q: %v", testCase.name, line, err)
-					continue
-				}
-				if !matcher.Match(output) {
-					t.Errorf("%s: could not find line %q in output; output:\n%v", testCase.name, line, string(output))
-				}
-			}
+			cmd.VerboseOutputContains(t, testCase.name, `Resolved release `+testCase.release+` to`, `to tag release:`+testCase.release)
 		})
 	}
 }
@@ -240,16 +226,7 @@ func TestLiteralDynamicRelease(t *testing.T) {
 			if err != nil {
 				t.Fatalf("explicit var: didn't expect an error from ci-operator: %v; output:\n%v", err, string(output))
 			}
-			for _, line := range []string{`Using explicitly provided pull-spec for release latest`, `Imported release.*to tag release:latest`} {
-				matcher, err := regexp.Compile(line)
-				if err != nil {
-					t.Errorf("explicit var: could not compile regex %q: %v", line, err)
-					continue
-				}
-				if !matcher.Match(output) {
-					t.Errorf("explicit var: could not find line %q in output; output:\n%v", line, string(output))
-				}
-			}
+			cmd.VerboseOutputContains(t, testCase.name, `Using explicitly provided pull-spec for release latest`, `to tag release:latest`)
 		})
 	}
 }
@@ -286,15 +263,10 @@ func TestOptionalOperators(t *testing.T) {
 			if err != nil {
 				t.Fatalf("explicit var: didn't expect an error from ci-operator: %v; output:\n%v", err, string(output))
 			}
-			for _, line := range []string{
-				"Build src-bundle succeeded after",
+			cmd.VerboseOutputContains(t, testCase.name, "Build src-bundle succeeded after",
 				fmt.Sprintf("Build %s succeeded after", testCase.bundleName),
 				fmt.Sprintf("Build %s-gen succeeded after", testCase.indexName),
-				fmt.Sprintf("Build %s succeeded after", testCase.indexName)} {
-				if !bytes.Contains(output, []byte(line)) {
-					t.Errorf("optional operators: could not find line %q in output; output:\n%v", line, string(output))
-				}
-			}
+				fmt.Sprintf("Build %s succeeded after", testCase.indexName))
 		})
 	}
 }

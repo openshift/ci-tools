@@ -3,7 +3,6 @@
 package lease
 
 import (
-	"bytes"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -24,11 +23,7 @@ func TestLeasesWithoutBoskos(t *testing.T) {
 		if err == nil {
 			t.Fatalf("without boskos: expected an error from ci-operator: %v; output:\n%v", err, string(output))
 		}
-		for _, line := range []string{"a lease client was required but none was provided, add the --lease-... arguments"} {
-			if !bytes.Contains(output, []byte(line)) {
-				t.Errorf("without boskos: could not find line %q in output; output:\n%v", line, string(output))
-			}
-		}
+		cmd.VerboseOutputContains(t, "without boskos", "a lease client was required but none was provided, add the --lease-... arguments")
 	})
 }
 
@@ -146,11 +141,7 @@ func TestLeases(t *testing.T) {
 			if testCase.success != (err == nil) {
 				t.Fatalf("%s: didn't expect an error from ci-operator: %v; output:\n%v", testCase.name, err, string(output))
 			}
-			for _, line := range testCase.output {
-				if !bytes.Contains(output, []byte(line)) {
-					t.Errorf("%s: could not find line %q in output; output:\n%v", testCase.name, line, string(output))
-				}
-			}
+			cmd.VerboseOutputContains(t, testCase.name, testCase.output...)
 		}, framework.Boskos(framework.BoskosOptions{ConfigPath: "boskos.yaml"}))
 	}
 }

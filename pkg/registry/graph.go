@@ -21,14 +21,14 @@ type Node interface {
 	Name() string
 	// Type returns the type of the registry element a Node refers to
 	Type() Type
-	// AncestorNames returns a set of strings containing the names of all of the node's ancestors
+	// Ancestors returns a set of strings containing the names of all of the node's ancestors
 	Ancestors() []Node
-	// DescendantNames returns a set of strings containing the names of all of the node's descendants
+	// Descendants returns a set of strings containing the names of all of the node's descendants
 	Descendants() []Node
-	// ParentNames returns a set of strings containing the names of all the node's parents
+	// Parents returns a set of strings containing the names of all the node's parents
 	Parents() []Node
-	// ChildrenNames returns a set of strings containing the names of all the node's children
-	Childrens() []Node
+	// Children returns a set of strings containing the names of all the node's children
+	Children() []Node
 }
 
 // NodeByName provides a mapping from node name to the Node interface
@@ -124,7 +124,7 @@ func (n *nodeWithParents) Parents() []Node {
 
 func (*workflowNode) Parents() []Node { return []Node{} }
 
-func (n *nodeWithChildren) Childrens() []Node {
+func (n *nodeWithChildren) Children() []Node {
 	var children []Node
 	for child := range n.referenceChildren {
 		children = append(children, child)
@@ -135,7 +135,7 @@ func (n *nodeWithChildren) Childrens() []Node {
 	return children
 }
 
-func (*referenceNode) Childrens() []Node { return []Node{} }
+func (*referenceNode) Children() []Node { return []Node{} }
 
 func (n *nodeWithParents) Ancestors() []Node {
 	ancestors := n.Parents()
@@ -148,7 +148,7 @@ func (n *nodeWithParents) Ancestors() []Node {
 func (*workflowNode) Ancestors() []Node { return []Node{} }
 
 func (n *nodeWithChildren) Descendants() []Node {
-	descendants := n.Childrens()
+	descendants := n.Children()
 	for child := range n.chainChildren {
 		descendants = append(descendants, child.Descendants()...)
 	}

@@ -3,11 +3,12 @@ package lease
 import (
 	"context"
 	"fmt"
-	"log"
 	"math/rand"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	boskos "sigs.k8s.io/boskos/client"
@@ -124,7 +125,7 @@ func (c *client) Heartbeat() error {
 			c.leases[name].updateFailures = 0
 			continue
 		}
-		log.Printf("warning: failed to update lease %q: %v", name, err)
+		logrus.WithError(err).Warnf("Failed to update lease %q", name)
 		if lease.updateFailures != c.retries {
 			c.leases[name].updateFailures++
 			continue

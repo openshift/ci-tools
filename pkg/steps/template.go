@@ -6,12 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -73,7 +74,7 @@ func (s *templateExecutionStep) Run(ctx context.Context) error {
 }
 
 func (s *templateExecutionStep) run(ctx context.Context) error {
-	log.Printf("Executing template %s", s.template.Name)
+	logrus.Infof("Executing template %s", s.template.Name)
 
 	if len(s.template.Objects) == 0 {
 		return fmt.Errorf("template %s has no objects", s.template.Name)
@@ -124,19 +125,19 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 
 	go func() {
 		<-ctx.Done()
-		log.Printf("cleanup: Deleting template %s", s.template.Name)
+		logrus.Infof("cleanup: Deleting template %s", s.template.Name)
 		if err := s.client.Delete(cleanupCtx, &templateapi.TemplateInstance{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.template.Name}}, ctrlruntimeclient.PropagationPolicy(meta.DeletePropagationForeground)); err != nil && !kerrors.IsNotFound(err) {
-			log.Printf("error: Could not delete template instance: %v", err)
+			logrus.WithError(err).Error("Could not delete template instance.")
 		}
 	}()
 
-	log.Printf("Creating or restarting template instance")
+	logrus.Infof("Creating or restarting template instance")
 	_, err := createOrRestartTemplateInstance(s.client, instance)
 	if err != nil {
 		return fmt.Errorf("could not create or restart template instance: %w", err)
 	}
 
-	log.Printf("Waiting for template instance to be ready")
+	logrus.Infof("Waiting for template instance to be ready")
 	instance, err = waitForTemplateInstanceReady(ctrlruntimeclient.NewNamespacedClient(s.client, s.jobSpec.Namespace()), s.template.Name)
 	if err != nil {
 		return fmt.Errorf("could not wait for template instance to be ready: %w", err)
@@ -162,7 +163,7 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			log.Printf("Running pod %s", ref.Ref.Name)
+			logrus.Infof("Running pod %s", ref.Ref.Name)
 		}
 	}
 
@@ -235,7 +236,7 @@ func operateOnTemplatePods(template *templateapi.Template, resources api.Resourc
 
 			if resources != nil && !hasTestContainerWithResources(pod) {
 				if err := injectResourcesToPod(pod, template.Name, resources); err != nil {
-					log.Printf("couldn't inject resources to pod: %v", err)
+					logrus.WithError(err).Warn("Couldn't inject resources to pod.")
 				}
 			}
 
@@ -342,7 +343,7 @@ func createOrRestartTemplateInstance(client ctrlruntimeclient.Client, instance *
 		if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: instance.Name}, instance); err != nil {
 			return nil, fmt.Errorf("unable to retrieve pod: %w", err)
 		}
-		log.Printf("Waiting for running template %s to finish", instance.Name)
+		logrus.Infof("Waiting for running template %s to finish", instance.Name)
 	}
 	return instance, nil
 }
@@ -351,7 +352,7 @@ func waitForCompletedTemplateInstanceDeletion(client ctrlruntimeclient.Client, n
 	instance := &templateapi.TemplateInstance{}
 	err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, instance)
 	if kerrors.IsNotFound(err) {
-		log.Printf("Template instance %s already deleted, do not need to wait any longer", name)
+		logrus.Infof("Template instance %s already deleted, do not need to wait any longer", name)
 		return nil
 	}
 
@@ -364,7 +365,7 @@ func waitForCompletedTemplateInstanceDeletion(client ctrlruntimeclient.Client, n
 	}}
 	err = client.Delete(context.TODO(), instance, opts)
 	if kerrors.IsNotFound(err) {
-		log.Printf("After initial existence check, a delete of template %s and instance %s received a not found error ",
+		logrus.Infof("After initial existence check, a delete of template %s and instance %s received a not found error ",
 			name, string(instance.UID))
 		return nil
 	}
@@ -385,10 +386,10 @@ func waitForCompletedTemplateInstanceDeletion(client ctrlruntimeclient.Client, n
 		}
 		if i == 1800 {
 			data, _ := json.MarshalIndent(instance.Status, "", "  ")
-			log.Printf("Template instance %s has not completed deletion after 30 minutes, possible error in controller:\n%s", name, string(data))
+			logrus.Infof("Template instance %s has not completed deletion after 30 minutes, possible error in controller:\n%s", name, string(data))
 		}
 
-		log.Printf("Waiting for template instance %s to be deleted ...", name)
+		logrus.Infof("Waiting for template instance %s to be deleted ...", name)
 		time.Sleep(2 * time.Second)
 	}
 
@@ -410,9 +411,9 @@ func createOrRestartPod(podClient ctrlruntimeclient.Client, pod *coreapi.Pod) (*
 		return nil, fmt.Errorf("unable to delete completed pod: %w", err)
 	}
 	if pod.Spec.ActiveDeadlineSeconds == nil {
-		log.Printf("Executing pod %q running image %q", pod.Name, pod.Spec.Containers[0].Image)
+		logrus.Infof("Executing pod %q running image %q", pod.Name, pod.Spec.Containers[0].Image)
 	} else {
-		log.Printf("Executing pod %q with activeDeadlineSeconds=%d", pod.Name, *pod.Spec.ActiveDeadlineSeconds)
+		logrus.Infof("Executing pod %q with activeDeadlineSeconds=%d", pod.Name, *pod.Spec.ActiveDeadlineSeconds)
 	}
 	// creating a pod in close proximity to namespace creation can result in forbidden errors due to
 	// initializing secrets or policy - use a short backoff to mitigate flakes
@@ -420,7 +421,7 @@ func createOrRestartPod(podClient ctrlruntimeclient.Client, pod *coreapi.Pod) (*
 		err := podClient.Create(context.TODO(), pod)
 		if err != nil {
 			if kerrors.IsForbidden(err) {
-				log.Printf("Unable to create pod %s, may be temporary: %v", name, err)
+				logrus.WithError(err).Warnf("Unable to create pod %s, may be temporary.", name)
 				return false, nil
 			}
 			if !kerrors.IsAlreadyExists(err) {
@@ -452,7 +453,7 @@ func waitForPodDeletion(podClient ctrlruntimeclient.Client, namespace, name stri
 		if pod.UID != uid {
 			return nil
 		}
-		log.Printf("Waiting for pod %s to be deleted ... (%ds/%d)", name, i, timeout)
+		logrus.Infof("Waiting for pod %s to be deleted ... (%ds/%d)", name, i, timeout)
 		time.Sleep(10 * time.Second)
 	}
 
@@ -534,7 +535,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient PodClient, nam
 	if err := podClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, pod); err != nil {
 		if kerrors.IsNotFound(err) {
 			notifier.Complete(name)
-			log.Printf("error: could not wait for pod '%s': it is no longer present on the cluster"+
+			logrus.Infof("error: could not wait for pod '%s': it is no longer present on the cluster"+
 				" (usually a result of a race or resource pressure. re-running the job should help)", name)
 			return nil, fmt.Errorf("pod was deleted while ci-operator step was waiting for it")
 		}
@@ -547,7 +548,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient PodClient, nam
 	podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
 	if podJobIsOK(pod) {
 		if !skipLogs {
-			log.Printf("Pod %s already succeeded in %s", pod.Name, podDuration(pod).Truncate(time.Second))
+			logrus.Infof("Pod %s already succeeded in %s", pod.Name, podDuration(pod).Truncate(time.Second))
 		}
 		return pod, nil
 	}
@@ -570,7 +571,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient PodClient, nam
 				if kerrors.IsNotFound(err) {
 					return pod, appendLogToError(fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", ")), podMessages(pod))
 				}
-				log.Printf("warning: failed to get pod %s: %v", name, err)
+				logrus.WithError(err).Warnf("Failed to get pod %s.", name)
 				continue
 			}
 
@@ -579,7 +580,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient PodClient, nam
 					podSeenRunning = true
 				} else if time.Since(pod.CreationTimestamp.Time) > podStartTimeout {
 					message := fmt.Sprintf("pod didn't start running within %s: %s\n%s", podStartTimeout, getReasonsForUnreadyContainers(pod), getEventsForPod(ctx, pod, podClient))
-					log.Print(message)
+					logrus.Infof(message)
 					notifier.Complete(name)
 					return pod, errors.New(message)
 				}
@@ -587,7 +588,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient PodClient, nam
 			podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
 			if podJobIsOK(pod) {
 				if !skipLogs {
-					log.Printf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
+					logrus.Infof("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
 				}
 				return pod, nil
 			}
@@ -782,7 +783,7 @@ func podLogNewFailedContainers(podClient PodClient, pod *coreapi.Pod, completed 
 
 		if s.ExitCode == 0 {
 			if !skipLogs {
-				log.Printf("Container %s in pod %s completed successfully", status.Name, pod.Name)
+				logrus.Infof("Container %s in pod %s completed successfully", status.Name, pod.Name)
 			}
 			continue
 		}
@@ -791,14 +792,14 @@ func podLogNewFailedContainers(podClient PodClient, pod *coreapi.Pod, completed 
 			Container: status.Name,
 		}).Stream(context.TODO()); err == nil {
 			if _, err := io.Copy(os.Stdout, s); err != nil {
-				log.Printf("error: Unable to copy log output from failed pod container %s: %v", status.Name, err)
+				logrus.WithError(err).Warnf("Unable to copy log output from failed pod container %s.", status.Name)
 			}
 			s.Close()
 		} else {
-			log.Printf("error: Unable to retrieve logs from failed pod container %s: %v", status.Name, err)
+			logrus.WithError(err).Warnf("error: Unable to retrieve logs from failed pod container %s.", status.Name)
 		}
 
-		log.Printf("Container %s in pod %s failed, exit code %d, reason %s", status.Name, pod.Name, status.State.Terminated.ExitCode, status.State.Terminated.Reason)
+		logrus.Infof("Container %s in pod %s failed, exit code %d, reason %s", status.Name, pod.Name, status.State.Terminated.ExitCode, status.State.Terminated.Reason)
 	}
 	// Workaround for https://github.com/kubernetes/kubernetes/issues/88611
 	// Pods may be terminated with DeadlineExceeded with spec.ActiveDeadlineSeconds is set.

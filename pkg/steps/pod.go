@@ -3,7 +3,8 @@ package steps
 import (
 	"context"
 	"fmt"
-	"log"
+
+	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -71,7 +72,7 @@ func (s *podStep) Run(ctx context.Context) error {
 
 func (s *podStep) run(ctx context.Context) error {
 	if !s.config.SkipLogs {
-		log.Printf("Executing %s %s", s.name, s.config.As)
+		logrus.Infof("Executing %s %s", s.name, s.config.As)
 	}
 	containerResources, err := resourcesFor(s.resources.RequirementsForStep(s.config.As))
 	if err != nil {
@@ -95,9 +96,9 @@ func (s *podStep) run(ctx context.Context) error {
 
 	go func() {
 		<-ctx.Done()
-		log.Printf("cleanup: Deleting %s pod %s", s.name, s.config.As)
+		logrus.Infof("cleanup: Deleting %s pod %s", s.name, s.config.As)
 		if err := s.client.Delete(cleanupCtx, &coreapi.Pod{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.config.As}}); err != nil && !kerrors.IsNotFound(err) {
-			log.Printf("error: Could not delete %s pod: %v", s.name, err)
+			logrus.WithError(err).Warnf("Could not delete %s pod.", s.name)
 		}
 	}()
 

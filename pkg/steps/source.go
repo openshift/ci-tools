@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -261,7 +262,7 @@ func resolvePipelineImageStreamTagReference(ctx context.Context, client loggingc
 }
 
 func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, fromTagDigest, dockerfilePath string, resources api.ResourceConfiguration, pullSecret *corev1.Secret) *buildapi.Build {
-	log.Printf("Building %s", toTag)
+	logrus.Infof("Building %s", toTag)
 	buildResources, err := resourcesFor(resources.RequirementsForStep(string(toTag)))
 	if err != nil {
 		panic(fmt.Errorf("unable to parse resource requirement for build %s: %w", toTag, err))
@@ -379,7 +380,7 @@ func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.B
 
 		if isBuildPhaseTerminated(b.Status.Phase) &&
 			(isInfraReason(b.Status.Reason) || hintsAtInfraReason(b.Status.LogSnippet)) {
-			log.Printf("Build %s previously failed from an infrastructure error (%s), retrying...\n", b.Name, b.Status.Reason)
+			logrus.Infof("Build %s previously failed from an infrastructure error (%s), retrying...", b.Name, b.Status.Reason)
 			zero := int64(0)
 			foreground := metav1.DeletePropagationForeground
 			opts := metav1.DeleteOptions{
@@ -402,7 +403,7 @@ func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.B
 	if err == nil {
 		if err := gatherSuccessfulBuildLog(buildClient, build.Namespace, build.Name); err != nil {
 			// log error but do not fail successful build
-			log.Printf("problem gathering successful build %s logs into artifacts: %v", build.Name, err)
+			logrus.WithError(err).Warnf("Failed gathering successful build %s logs into artifacts.", build.Name)
 		}
 	}
 	// this will still be the err from waitForBuild
@@ -485,11 +486,11 @@ func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespa
 		return fmt.Errorf("could not get build: %w", err)
 	}
 	if isOK(build) {
-		log.Printf("Build %s already succeeded in %s", build.Name, buildDuration(build))
+		logrus.Infof("Build %s already succeeded in %s", build.Name, buildDuration(build))
 		return nil
 	}
 	if isFailed(build) {
-		log.Printf("Build %s failed, printing logs:", build.Name)
+		logrus.Infof("Build %s failed, printing logs:", build.Name)
 		printBuildLogs(buildClient, build.Namespace, build.Name)
 		return appendLogToError(fmt.Errorf("the build %s failed with reason %s: %s", build.Name, build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 	}
@@ -501,15 +502,15 @@ func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespa
 			return ctx.Err()
 		case <-ticker.C:
 			if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, build); err != nil {
-				log.Printf("Failed to get build %s: %v", name, err)
+				logrus.WithError(err).Warnf("Failed to get build %s.", name)
 				continue
 			}
 			if isOK(build) {
-				log.Printf("Build %s succeeded after %s", build.Name, buildDuration(build).Truncate(time.Second))
+				logrus.Infof("Build %s succeeded after %s", build.Name, buildDuration(build).Truncate(time.Second))
 				return nil
 			}
 			if isFailed(build) {
-				log.Printf("Build %s failed, printing logs:", build.Name)
+				logrus.Infof("Build %s failed, printing logs:", build.Name)
 				printBuildLogs(buildClient, build.Namespace, build.Name)
 				return appendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 			}
@@ -544,10 +545,10 @@ func printBuildLogs(buildClient BuildClient, namespace, name string) {
 	}); err == nil {
 		defer s.Close()
 		if _, err := io.Copy(os.Stdout, s); err != nil {
-			log.Printf("error: Unable to copy log output from failed build: %v", err)
+			logrus.WithError(err).Warn("Unable to copy log output from failed build.")
 		}
 	} else {
-		log.Printf("error: Unable to retrieve logs from failed build: %v", err)
+		logrus.WithError(err).Warn("Unable to retrieve logs from failed build")
 	}
 }
 
@@ -666,7 +667,7 @@ func getEventsForPod(ctx context.Context, pod *corev1.Pod, client ctrlruntimecli
 		FieldSelector: fields.OneTermEqualSelector("involvedObject.uid", string(pod.GetUID())),
 	}
 	if err := client.List(ctx, events, listOpts); err != nil {
-		log.Printf("Could not fetch events: %v", err)
+		logrus.WithError(err).Warn("Could not fetch events.")
 		return ""
 	}
 	builder := &strings.Builder{}

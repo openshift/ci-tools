@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -177,7 +176,7 @@ func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, err
 	if info.Variant != "" {
 		identifier = fmt.Sprintf("%s [%s]", identifier, info.Variant)
 	}
-	log.Printf("Loading configuration from %s for %s", info.Address, identifier)
+	logrus.Infof("Loading configuration from %s for %s", info.Address, identifier)
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/config", info.Address), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request for configresolver: %w", err)
@@ -199,7 +198,7 @@ func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, err
 	if resp.StatusCode != http.StatusOK {
 		var responseBody string
 		if data, err := ioutil.ReadAll(resp.Body); err != nil {
-			log.Printf("Failed to read response body from configresolver: %v\n", err)
+			logrus.WithError(err).Warn("Failed to read response body from configresolver.")
 		} else {
 			responseBody = string(data)
 		}
@@ -235,7 +234,7 @@ func literalConfigFromResolver(raw []byte, address string) (*api.ReleaseBuildCon
 	if resp.StatusCode != http.StatusOK {
 		var responseBody string
 		if data, err := ioutil.ReadAll(resp.Body); err != nil {
-			log.Printf("Failed to read response body from configresolver: %v\n", err)
+			logrus.WithError(err).Warn("Failed to read response body from configresolver.")
 		} else {
 			responseBody = string(data)
 		}

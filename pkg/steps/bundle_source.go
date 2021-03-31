@@ -3,8 +3,9 @@ package steps
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -102,7 +103,7 @@ func (s *bundleSourceStep) Requires() []api.StepLink {
 		if link := api.LinkForImage(imageStream, name); link != nil {
 			links = append(links, link)
 		} else {
-			log.Printf("warning: unable to resolve image '%s' to be substituted for '%s'", sub.With, sub.PullSpec)
+			logrus.Warnf("Unable to resolve image '%s' to be substituted for '%s'.", sub.With, sub.PullSpec)
 		}
 
 	}

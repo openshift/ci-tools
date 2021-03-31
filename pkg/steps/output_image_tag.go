@@ -3,7 +3,8 @@ package steps
 import (
 	"context"
 	"fmt"
-	"log"
+
+	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -41,9 +42,9 @@ func (s *outputImageTagStep) Run(ctx context.Context) error {
 func (s *outputImageTagStep) run(ctx context.Context) error {
 	toNamespace := s.namespace()
 	if string(s.config.From) == s.config.To.Tag && toNamespace == s.jobSpec.Namespace() && s.config.To.Name == api.StableImageStream {
-		log.Printf("Tagging %s into %s", s.config.From, s.config.To.Name)
+		logrus.Infof("Tagging %s into %s", s.config.From, s.config.To.Name)
 	} else {
-		log.Printf("Tagging %s into %s", s.config.From, s.config.To.ISTagName())
+		logrus.Infof("Tagging %s into %s", s.config.From, s.config.To.ISTagName())
 	}
 	from := &imagev1.ImageStreamTag{}
 	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{

@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -352,7 +351,7 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 	// indicate why the step took a long amount of time. Conversely, if we just got a small
 	// number of files this is just noise and can be omitted to not distract from other steps.
 	if size > 1*1000*1000 {
-		log.Printf("Copied %0.2fMB of artifacts from %s to %s", float64(size)/1000000, name, into)
+		logrus.Debugf("Copied %0.2fMB of artifacts from %s to %s", float64(size)/1000000, name, into)
 	}
 
 	return nil
@@ -482,7 +481,6 @@ func (w *ArtifactWorker) run() {
 		logger.Trace("Processing Pod to download artifacts.")
 		if err := w.downloadArtifacts(podName, w.hasArtifacts.Has(podName)); err != nil {
 			logger.WithError(err).Trace("Error downloading artifacts.")
-			log.Printf("error: %v", err)
 		}
 		// indicate we are done with this pod by removing the map entry
 		w.lock.Lock()
@@ -503,7 +501,7 @@ func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) er
 	}
 	logger.Trace("Downloading container logs for Pod.")
 	if err := gatherContainerLogsOutput(w.podClient, filepath.Join(w.dir, "container-logs"), w.namespace, podName); err != nil {
-		log.Printf("error: unable to gather container logs: %v", err)
+		logrus.WithError(err).Warn("Unable to gather container logs.")
 	}
 
 	// only pods with an artifacts container should be gathered
@@ -519,7 +517,7 @@ func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) er
 		if err == nil || strings.Contains(err.Error(), `unable to upgrade connection: container not found ("artifacts")`) {
 			return
 		}
-		log.Printf("error: unable to signal to artifacts container to terminate in pod %s, %v", podName, err)
+		logrus.WithError(err).Warnf("Unable to signal to artifacts container to terminate in pod %s.", podName)
 	}()
 
 	logger.Trace("Waiting for artifacts container to finish.")

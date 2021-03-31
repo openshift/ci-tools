@@ -3,10 +3,11 @@ package release
 import (
 	"context"
 	"fmt"
-	"log"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,11 +51,11 @@ func (s *promotionStep) Run(ctx context.Context) error {
 func (s *promotionStep) run(ctx context.Context) error {
 	tags, names := PromotedTagsWithRequiredImages(s.configuration, s.requiredImages)
 	if len(names) == 0 {
-		log.Println("Nothing to promote, skipping...")
+		logrus.Info("Nothing to promote, skipping...")
 		return nil
 	}
 
-	log.Printf("Promoting tags to %s: %s", targetName(*s.configuration.PromotionConfiguration), strings.Join(names.List(), ", "))
+	logrus.Infof("Promoting tags to %s: %s", targetName(*s.configuration.PromotionConfiguration), strings.Join(names.List(), ", "))
 	pipeline := &imagev1.ImageStream{}
 	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{
 		Namespace: s.jobSpec.Namespace(),
@@ -65,7 +66,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 
 	imageMirrorTarget := getImageMirrorTarget(tags, pipeline, registryDomain(s.configuration.PromotionConfiguration))
 	if len(imageMirrorTarget) == 0 {
-		log.Println("Nothing to promote, skipping...")
+		logrus.Info("Nothing to promote, skipping...")
 		return nil
 	}
 
@@ -110,14 +111,14 @@ func getPublicImageReference(dockerImageReference, publicDockerImageRepository s
 	splits := strings.Split(publicDockerImageRepository, "/")
 	if len(splits) < 2 {
 		// This should never happen
-		log.Println(fmt.Sprintf("Failed to get hostname from publicDockerImageRepository: %s.", publicDockerImageRepository))
+		logrus.Warnf("Failed to get hostname from publicDockerImageRepository: %s.", publicDockerImageRepository)
 		return dockerImageReference
 	}
 	publicHost := splits[0]
 	splits = strings.Split(dockerImageReference, "/")
 	if len(splits) < 2 {
 		// This should never happen
-		log.Println(fmt.Sprintf("Failed to get hostname from dockerImageReference: %s.", dockerImageReference))
+		logrus.Warnf("Failed to get hostname from dockerImageReference: %s.", dockerImageReference)
 		return dockerImageReference
 	}
 	return strings.Replace(dockerImageReference, splits[0], publicHost, 1)

@@ -3,8 +3,9 @@ package release
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,7 +40,7 @@ func (s *stableImagesTagStep) Run(ctx context.Context) error {
 }
 
 func (s *stableImagesTagStep) run(ctx context.Context) error {
-	log.Printf("Will output images to %s:%s", api.StableImageStream, api.ComponentFormatReplacement)
+	logrus.Infof("Will output images to %s:%s", api.StableImageStream, api.ComponentFormatReplacement)
 
 	newIS := &imagev1.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
@@ -110,9 +111,9 @@ func (s *releaseImagesTagStep) Run(ctx context.Context) error {
 
 func (s *releaseImagesTagStep) run(ctx context.Context) error {
 	if format, err := s.imageFormat(); err == nil {
-		log.Printf("Tagged shared images from %s, images will be pullable from %s", sourceName(s.config), format)
+		logrus.Infof("Tagged shared images from %s, images will be pullable from %s", sourceName(s.config), format)
 	} else {
-		log.Printf("Tagged shared images from %s", sourceName(s.config))
+		logrus.Infof("Tagged shared images from %s", sourceName(s.config))
 	}
 
 	is := &imagev1.ImageStream{}

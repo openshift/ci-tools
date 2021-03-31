@@ -2,8 +2,6 @@ package prowgen
 
 import (
 	"fmt"
-	"io/ioutil"
-	"log"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -496,7 +494,6 @@ func TestGenerateJobs(t *testing.T) {
 		},
 	}
 
-	log.SetOutput(ioutil.Discard)
 	for _, tc := range tests {
 		t.Run(tc.id, func(t *testing.T) {
 			jobConfig := GenerateJobs(tc.config, tc.repoInfo)

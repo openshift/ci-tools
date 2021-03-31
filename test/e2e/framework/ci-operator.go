@@ -100,7 +100,7 @@ func newCiOperatorCommand(t *T) CiOperatorCommand {
 func (c *CiOperatorCommand) Run() ([]byte, error) {
 	c.t.Logf("running: %v", c.cmd.Args)
 
-	logFile, err := os.Create(filepath.Join(c.artifactDir, "ci-operator.log"))
+	logFile, err := os.Create(filepath.Join(c.artifactDir, "ci-operator.output.log"))
 	if err != nil {
 		c.t.Fatalf("could not create log file: %v", err)
 	}

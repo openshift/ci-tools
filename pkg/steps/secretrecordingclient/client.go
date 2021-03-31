@@ -104,7 +104,7 @@ func (c *client) record(obj ctrlruntimeclient.Object) {
 }
 
 func (c *client) recordSecret(secret *v1.Secret) {
-	_, isServiceAccountCredential := secret.Labels["kubernetes.io/service-account.name"]
+	isServiceAccountCredential := secret.Type == v1.SecretTypeServiceAccountToken
 	var values []string
 	for key, value := range secret.Data {
 		if isServiceAccountCredential && key == "namespace" {

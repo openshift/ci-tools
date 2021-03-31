@@ -24,6 +24,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -114,9 +115,11 @@ func verifyMetadata(jobSpec *api.JobSpec, namespace string, customMetadata map[s
 	metadataFile := filepath.Join(tempDir, "metadata.json")
 
 	// Verify without custom metadata
+	c := secrets.NewDynamicCensor()
 	o := &options{
 		jobSpec:   jobSpec,
 		namespace: namespace,
+		censor:    &c,
 	}
 
 	if err := o.writeMetadataJSON(); err != nil {

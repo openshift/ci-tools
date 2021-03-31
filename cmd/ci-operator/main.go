@@ -25,7 +25,6 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 	"go.uber.org/zap/zapcore"
-
 	appsv1 "k8s.io/api/apps/v1"
 	authapi "k8s.io/api/authorization/v1"
 	coreapi "k8s.io/api/core/v1"
@@ -1196,13 +1195,15 @@ type prowResultMetadata struct {
 	Metadata      map[string]string `json:"metadata"`
 }
 
+const metadataJSONfile = "metadata.json"
+
 func (o *options) writeMetadataJSON() error {
 	artifactDir, set := api.Artifacts()
 	if !set {
 		return nil
 	}
 
-	metadataJSONPath := filepath.Join(artifactDir, "metadata.json")
+	metadataJSONPath := filepath.Join(artifactDir, metadataJSONfile)
 
 	customProwMetadataFile, err := o.findCustomMetadataFile(artifactDir)
 
@@ -1230,7 +1231,7 @@ func (o *options) writeMetadataJSON() error {
 	}
 
 	data, _ := json.MarshalIndent(m, "", "")
-	err = ioutil.WriteFile(metadataJSONPath, data, 0640)
+	err = api.SaveArtifact(o.censor, metadataJSONfile, data)
 
 	if err != nil {
 		return err
@@ -1377,11 +1378,7 @@ func (o *options) writeFailingJUnit(errs []error) {
 }
 
 func (o *options) writeJUnit(suites *junit.TestSuites, name string) error {
-	artifactDir, set := api.Artifacts()
-	if !set {
-		return nil
-	}
-	if len(artifactDir) == 0 || suites == nil {
+	if suites == nil {
 		return nil
 	}
 	suites.Suites[0].Name = name
@@ -1395,7 +1392,7 @@ func (o *options) writeJUnit(suites *junit.TestSuites, name string) error {
 	if err != nil {
 		return fmt.Errorf("could not marshal jUnit XML: %w", err)
 	}
-	return ioutil.WriteFile(filepath.Join(artifactDir, fmt.Sprintf("junit_%s.xml", name)), out, 0640)
+	return api.SaveArtifact(o.censor, fmt.Sprintf("junit_%s.xml", name), out)
 }
 
 // oneWayEncoding can be used to encode hex to a 62-character set (0 and 1 are duplicates) for use in
@@ -1423,39 +1420,23 @@ func inputHash(inputs api.InputDefinition) string {
 // saveNamespaceArtifacts is a best effort attempt to save ci-operator namespace artifacts to disk
 // for review later.
 func (o *options) saveNamespaceArtifacts() {
-	artifactDir, set := api.Artifacts()
-	if !set {
-		return
-	}
-
-	namespaceDir := filepath.Join(artifactDir, "build-resources")
-	if err := os.Mkdir(namespaceDir, 0777); err != nil {
-		logrus.WithError(err).Warn("Unable to create build-resources directory.")
-		return
-	}
-
+	namespaceDir := "build-resources"
 	if kubeClient, err := coreclientset.NewForConfig(o.clusterConfig); err == nil {
 		pods, _ := kubeClient.Pods(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ := json.MarshalIndent(pods, "", "  ")
 		path := filepath.Join(namespaceDir, "pods.json")
-		if err := ioutil.WriteFile(path, data, 0644); err != nil {
-			logrus.WithError(err).Errorf("Failed to write %s", path)
-		}
+		_ = api.SaveArtifact(o.censor, path, data)
 		events, _ := kubeClient.Events(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ = json.MarshalIndent(events, "", "  ")
 		path = filepath.Join(namespaceDir, "events.json")
-		if err := ioutil.WriteFile(path, data, 0644); err != nil {
-			logrus.WithError(err).Errorf("Failed to write %s", path)
-		}
+		_ = api.SaveArtifact(o.censor, path, data)
 	}
 
 	if buildClient, err := buildclientset.NewForConfig(o.clusterConfig); err == nil {
 		builds, _ := buildClient.Builds(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ := json.MarshalIndent(builds, "", "  ")
 		path := filepath.Join(namespaceDir, "builds.json")
-		if err := ioutil.WriteFile(path, data, 0644); err != nil {
-			logrus.WithError(err).Errorf("Failed to write %s", path)
-		}
+		_ = api.SaveArtifact(o.censor, path, data)
 	}
 
 	if client, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{}); err == nil {
@@ -1463,18 +1444,14 @@ func (o *options) saveNamespaceArtifacts() {
 		_ = client.List(context.TODO(), imagestreams, ctrlruntimeclient.InNamespace(o.namespace))
 		data, _ := json.MarshalIndent(imagestreams, "", "  ")
 		path := filepath.Join(namespaceDir, "imagestreams.json")
-		if err := ioutil.WriteFile(path, data, 0644); err != nil {
-			logrus.WithError(err).Errorf("Failed to write %s", path)
-		}
+		_ = api.SaveArtifact(o.censor, path, data)
 	}
 
 	if templateClient, err := templateclientset.NewForConfig(o.clusterConfig); err == nil {
 		templateInstances, _ := templateClient.TemplateInstances(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ := json.MarshalIndent(templateInstances, "", "  ")
 		path := filepath.Join(namespaceDir, "templateinstances.json")
-		if err := ioutil.WriteFile(path, data, 0644); err != nil {
-			logrus.WithError(err).Errorf("Failed to write %s", path)
-		}
+		_ = api.SaveArtifact(o.censor, path, data)
 	}
 }
 

@@ -24,7 +24,6 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
-	"github.com/sirupsen/logrus/hooks/writer"
 	"go.uber.org/zap/zapcore"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -268,9 +267,15 @@ func setupLogger() (*secrets.DynamicCensor, io.Closer, error) {
 	censor := secrets.NewDynamicCensor()
 	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
 	logrus.SetOutput(ioutil.Discard)
-	logrus.AddHook(&writer.Hook{
-		Writer: os.Stdout,
-		LogLevels: []logrus.Level{
+	logrus.AddHook(&formattingHook{
+		formatter: logrusutil.NewFormatterWithCensor(&logrus.TextFormatter{
+			ForceColors:     true,
+			DisableQuote:    true,
+			FullTimestamp:   true,
+			TimestampFormat: time.RFC3339,
+		}, &censor),
+		writer: os.Stdout,
+		logLevels: []logrus.Level{
 			logrus.InfoLevel,
 			logrus.WarnLevel,
 			logrus.ErrorLevel,
@@ -289,11 +294,31 @@ func setupLogger() (*secrets.DynamicCensor, io.Closer, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	logrus.AddHook(&writer.Hook{
-		Writer:    verboseFile,
-		LogLevels: logrus.AllLevels,
+	logrus.AddHook(&formattingHook{
+		formatter: logrusutil.NewFormatterWithCensor(&logrus.JSONFormatter{}, &censor),
+		writer:    verboseFile,
+		logLevels: logrus.AllLevels,
 	})
 	return &censor, verboseFile, nil
+}
+
+type formattingHook struct {
+	formatter logrus.Formatter
+	writer    io.Writer
+	logLevels []logrus.Level
+}
+
+func (hook *formattingHook) Fire(entry *logrus.Entry) error {
+	line, err := hook.formatter.Format(entry)
+	if err != nil {
+		return err
+	}
+	_, err = hook.writer.Write(line)
+	return err
+}
+
+func (hook *formattingHook) Levels() []logrus.Level {
+	return hook.logLevels
 }
 
 type stringSlice struct {

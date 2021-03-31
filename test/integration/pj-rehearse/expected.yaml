@@ -679,7 +679,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-      pj-rehearse.openshift.io/source-type: changedCiopConfigs
+      pj-rehearse.openshift.io/source-type: changedCiopConfig
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-custom
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -791,7 +791,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-      pj-rehearse.openshift.io/source-type: changedCiopConfigs
+      pj-rehearse.openshift.io/source-type: changedCiopConfig
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-images
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -896,7 +896,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-      pj-rehearse.openshift.io/source-type: changedClusterProfiles
+      pj-rehearse.openshift.io/source-type: changedClusterProfile
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-cluster-profile-test-profile
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -1386,7 +1386,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-      pj-rehearse.openshift.io/source-type: randomJobsForChangedRegistry
+      pj-rehearse.openshift.io/source-type: changedRegistryContent
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -1679,7 +1679,7 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-      pj-rehearse.openshift.io/source-type: changedCiopConfigs
+      pj-rehearse.openshift.io/source-type: changedCiopConfig
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-unit
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"

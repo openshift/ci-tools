@@ -7,13 +7,13 @@ import (
 var (
 	SourceTypeLabel string = "pj-rehearse.openshift.io/source-type"
 
-	ChangedPresubmit              SourceType = "changedPresubmit"
-	ChangedPeriodic               SourceType = "changedPeriodic"
-	ChangedCiopConfigs            SourceType = "changedCiopConfigs"
-	ChangedClusterProfiles        SourceType = "changedClusterProfiles"
-	RandomJobsForChangedTemplates SourceType = "randomJobsForChangedTemplates"
-	RandomJobsForChangedRegistry  SourceType = "randomJobsForChangedRegistry"
-	Unknown                       SourceType = "unknownSource"
+	ChangedPresubmit       SourceType = "changedPresubmit"
+	ChangedPeriodic        SourceType = "changedPeriodic"
+	ChangedCiopConfig      SourceType = "changedCiopConfig"
+	ChangedClusterProfile  SourceType = "changedClusterProfile"
+	ChangedTemplate        SourceType = "changedTemplate"
+	ChangedRegistryContent SourceType = "changedRegistryContent"
+	Unknown                SourceType = "unknownSource"
 )
 
 type SourceType string
@@ -29,14 +29,14 @@ func GetSourceType(labels map[string]string) SourceType {
 		return ChangedPresubmit
 	case "changedPeriodic":
 		return ChangedPeriodic
-	case "changedCiopConfigs":
-		return ChangedCiopConfigs
-	case "changedClusterProfiles":
-		return ChangedClusterProfiles
-	case "randomJobsForChangedTemplates":
-		return RandomJobsForChangedTemplates
-	case "randomJobsForChangedRegistry":
-		return RandomJobsForChangedRegistry
+	case "changedCiopConfig":
+		return ChangedCiopConfig
+	case "changedClusterProfile":
+		return ChangedClusterProfile
+	case "changedTemplate":
+		return ChangedTemplate
+	case "changedRegistryContent":
+		return ChangedRegistryContent
 	default:
 		return Unknown
 	}

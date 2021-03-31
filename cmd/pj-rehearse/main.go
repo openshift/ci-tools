@@ -237,7 +237,7 @@ func rehearseMain() error {
 		for _, step := range changedRegistrySteps {
 			names = append(names, step.Name())
 		}
-		logger.Infof("found %d changed registry steps: %s", len(changedRegistrySteps), strings.Join(names, ", "))
+		logger.Infof("Found %d changed registry steps: %s", len(changedRegistrySteps), strings.Join(names, ", "))
 	}
 
 	var rehearsalTemplates rehearse.ConfigMaps
@@ -304,16 +304,16 @@ func rehearseMain() error {
 	toRehearse.AddAll(changedPresubmits, config.ChangedPresubmit)
 
 	presubmitsForCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigData, affectedJobs, logger)
-	toRehearse.AddAll(presubmitsForCiopConfigs, config.ChangedCiopConfigs)
+	toRehearse.AddAll(presubmitsForCiopConfigs, config.ChangedCiopConfig)
 
 	presubmitsForClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, rehearsalClusterProfiles.ProductionNames, logger)
-	toRehearse.AddAll(presubmitsForClusterProfiles, config.ChangedClusterProfiles)
+	toRehearse.AddAll(presubmitsForClusterProfiles, config.ChangedClusterProfile)
 
 	randomJobsForChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(rehearsalTemplates.ProductionNames, toRehearse, prConfig.Prow.JobConfig.PresubmitsStatic, loggers)
-	toRehearse.AddAll(randomJobsForChangedTemplates, config.RandomJobsForChangedTemplates)
+	toRehearse.AddAll(randomJobsForChangedTemplates, config.ChangedTemplate)
 
-	randomJobsForChangedRegistry := rehearse.AddRandomJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, filepath.Join(o.releaseRepoPath, config.CiopConfigInRepoPath), loggers)
-	toRehearse.AddAll(randomJobsForChangedRegistry, config.RandomJobsForChangedRegistry)
+	presubmitsForRegistry, periodicsForRegistry := rehearse.SelectJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, prConfig.Prow.JobConfig.Periodics, prConfig.CiOperator, loggers)
+	toRehearse.AddAll(presubmitsForRegistry, config.ChangedRegistryContent)
 
 	resolver := registry.NewResolver(refs, chains, workflows, observers)
 	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, resolver, prNumber, loggers, rehearsalTemplates.Names, rehearsalClusterProfiles.Names, jobSpec.Refs)
@@ -321,17 +321,22 @@ func rehearseMain() error {
 	if err != nil {
 		return err
 	}
-	periodicImageStreamTags, periodicsToRehearse, err := jobConfigurer.ConfigurePeriodicRehearsals(changedPeriodics)
-	if err != nil {
-		return err
-	}
-	apihelper.MergeImageStreamTagMaps(imagestreamtags, periodicImageStreamTags)
 
-	periodicPresubmits, err := jobConfigurer.ConvertPeriodicsToPresubmits(periodicsToRehearse)
-	if err != nil {
-		return err
+	periodics := []config.Periodics{changedPeriodics, periodicsForRegistry}
+	for idx := range periodics {
+		periodicImageStreamTags, periodicsToRehearse, err := jobConfigurer.ConfigurePeriodicRehearsals(periodics[idx])
+		// TODO(muller): Save this and emit better errors
+		if err != nil {
+			return err
+		}
+		apihelper.MergeImageStreamTagMaps(imagestreamtags, periodicImageStreamTags)
+
+		periodicPresubmits, err := jobConfigurer.ConvertPeriodicsToPresubmits(periodicsToRehearse)
+		if err != nil {
+			return err
+		}
+		presubmitsToRehearse = append(presubmitsToRehearse, periodicPresubmits...)
 	}
-	presubmitsToRehearse = append(presubmitsToRehearse, periodicPresubmits...)
 
 	if rehearsals := len(presubmitsToRehearse); rehearsals == 0 {
 		logger.Info("no jobs to rehearse have been found")

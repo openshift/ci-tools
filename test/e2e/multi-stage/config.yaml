@@ -27,6 +27,20 @@ tests:
             requests:
               cpu: 100m
               memory: 200Mi
+  - as: with-credentials
+    steps:
+      test:
+        - as: consume
+          commands: test -f /auth/kubeconfig
+          from: os
+          credentials:
+          - mount_path: /auth
+            name: ci-operator
+            namespace: test-credentials
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
   - as: without-references
     steps:
       test:

@@ -62,6 +62,7 @@ func FromConfig(
 	cloneAuthConfig *steps.CloneAuthConfig,
 	pullSecret, pushSecret *coreapi.Secret,
 	censor *secrets.DynamicCensor,
+	hiveKubeconfig *rest.Config,
 ) ([]api.Step, []api.Step, error) {
 	crclient, err := watchingclient.New(clusterConfig)
 	crclient = secretrecordingclient.Wrap(crclient, censor)
@@ -87,7 +88,16 @@ func FromConfig(
 	}
 
 	podClient := steps.NewPodClient(client, clusterConfig, coreGetter.RESTClient())
-	return fromConfig(ctx, config, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil))
+
+	var hiveClient ctrlruntimeclient.Client
+	if hiveKubeconfig != nil {
+		hiveClient, err = ctrlruntimeclient.New(hiveKubeconfig, ctrlruntimeclient.Options{})
+		if err != nil {
+			return nil, nil, fmt.Errorf("could not get Hive client for Hive kube config: %w", err)
+		}
+	}
+
+	return fromConfig(ctx, config, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil))
 }
 
 func fromConfig(
@@ -102,6 +112,7 @@ func fromConfig(
 	templateClient steps.TemplateClient,
 	podClient steps.PodClient,
 	leaseClient *lease.Client,
+	hiveClient ctrlruntimeclient.Client,
 	httpClient release.HTTPClient,
 	requiredTargets []string,
 	cloneAuthConfig *steps.CloneAuthConfig,
@@ -127,6 +138,13 @@ func fromConfig(
 	}
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
+			if testStep.ClusterClaim != nil {
+				if hiveClient == nil {
+					return nil, nil, fmt.Errorf("cannot claim a cluster without providing a Hive kubeconfig")
+				}
+				clusterClaimStep := steps.ClusterClaimStep(testStep.ClusterClaim, hiveClient, client, jobSpec)
+				buildSteps = append(buildSteps, clusterClaimStep)
+			}
 			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, jobSpec, inputImages, testStep)
 			if err != nil {
 				return nil, nil, err

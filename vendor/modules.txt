@@ -373,9 +373,10 @@ github.com/opencontainers/image-spec/specs-go/v1
 # github.com/opencontainers/runc v1.0.0-rc9
 github.com/opencontainers/runc/libcontainer/system
 github.com/opencontainers/runc/libcontainer/user
-# github.com/openshift/api v0.0.0-20200521101457-60c476765272 => github.com/openshift/api v0.0.0-20201120165435-072a4cd8ca42
+# github.com/openshift/api v0.0.0-20210216211028-bb81baaf35cd => github.com/openshift/api v0.0.0-20201120165435-072a4cd8ca42
 ## explicit
 github.com/openshift/api/build/v1
+github.com/openshift/api/config/v1
 github.com/openshift/api/image
 github.com/openshift/api/image/docker10
 github.com/openshift/api/image/dockerpre012
@@ -399,6 +400,18 @@ github.com/openshift/client-go/template/clientset/versioned/scheme
 github.com/openshift/client-go/template/clientset/versioned/typed/template/v1
 github.com/openshift/client-go/user/clientset/versioned/scheme
 github.com/openshift/client-go/user/clientset/versioned/typed/user/v1
+# github.com/openshift/hive/apis v0.0.0-20210331235223-7ce8ff441ae4
+## explicit
+github.com/openshift/hive/apis/hive/v1
+github.com/openshift/hive/apis/hive/v1/agent
+github.com/openshift/hive/apis/hive/v1/aws
+github.com/openshift/hive/apis/hive/v1/azure
+github.com/openshift/hive/apis/hive/v1/baremetal
+github.com/openshift/hive/apis/hive/v1/gcp
+github.com/openshift/hive/apis/hive/v1/openstack
+github.com/openshift/hive/apis/hive/v1/ovirt
+github.com/openshift/hive/apis/hive/v1/vsphere
+github.com/openshift/hive/apis/scheme
 # github.com/openshift/imagebuilder v1.1.1
 ## explicit
 github.com/openshift/imagebuilder

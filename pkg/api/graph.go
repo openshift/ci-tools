@@ -560,3 +560,25 @@ func LinkForImage(imageStream, tag string) StepLink {
 		return nil
 	}
 }
+
+// ClusterClaimLink determines what dependent link is required
+// for a job to claim a cluster
+func ClusterClaimLink() StepLink {
+	return &clusterClaimLink{}
+}
+
+type clusterClaimLink struct {
+}
+
+func (_ *clusterClaimLink) UnsatisfiableError() string {
+	return ""
+}
+
+func (_ *clusterClaimLink) SatisfiedBy(other StepLink) bool {
+	switch other.(type) {
+	case *clusterClaimLink:
+		return true
+	default:
+		return false
+	}
+}

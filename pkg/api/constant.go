@@ -20,6 +20,18 @@ const (
 
 	KVMDeviceLabel = "devices.kubevirt.io/kvm"
 	ClusterLabel   = "ci-operator.openshift.io/cluster"
+
+	// HiveCluster is the cluster where Hive is deployed
+	HiveCluster = ClusterAPPCI
+
+	// HiveAdminKubeconfigSecret is the name of the secret in ci-op-<hash> namespace that stores the Admin's kubeconfig for the ephemeral cluster provisioned by Hive.
+	HiveAdminKubeconfigSecret = "hive-admin-kubeconfig"
+	// HiveAdminKubeconfigSecretKey is the key to the kubeconfig in the secret HiveAdminKubeconfigSecret
+	HiveAdminKubeconfigSecretKey = "kubeconfig"
+	// HiveAdminPasswordSecret the name of the secret in ci-op-<hash> namespace that stores the password for the user "kubeadmin" for the ephemeral cluster provisioned by Hive.
+	HiveAdminPasswordSecret = "hive-admin-password"
+	// HiveAdminPasswordSecretKey is the key to the password in the secret HiveAdminKubeconfigSecret
+	HiveAdminPasswordSecretKey = "password"
 )
 
 var (

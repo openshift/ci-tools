@@ -316,6 +316,19 @@ func searchForTestDuplicates(tests []api.TestStepConfiguration) []error {
 
 func validateTestConfigurationType(fieldRoot string, test api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
 	var validationErrors []error
+	clusterCount := 0
+	if claim := test.ClusterClaim; claim != nil {
+		clusterCount++
+		if claim.Version == "" {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.cluster_claim.version cannot be empty when cluster_claim is not nil", fieldRoot))
+		}
+		if claim.Cloud == "" {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.cluster_claim.cloud cannot be empty when cluster_claim is not nil", fieldRoot))
+		}
+		if claim.Owner == "" {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.cluster_claim.owner cannot be empty when cluster_claim is not nil", fieldRoot))
+		}
+	}
 	typeCount := 0
 	if testConfig := test.ContainerTestConfiguration; testConfig != nil {
 		typeCount++
@@ -331,33 +344,40 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 	var needsReleaseRpms bool
 	if testConfig := test.OpenshiftAnsibleClusterTestConfiguration; testConfig != nil {
 		typeCount++
+		clusterCount++
 		needsReleaseRpms = true
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftAnsibleSrcClusterTestConfiguration; testConfig != nil {
 		typeCount++
+		clusterCount++
 		needsReleaseRpms = true
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftAnsibleCustomClusterTestConfiguration; testConfig != nil {
 		typeCount++
+		clusterCount++
 		needsReleaseRpms = true
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerClusterTestConfiguration; testConfig != nil {
 		typeCount++
+		clusterCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerUPIClusterTestConfiguration; testConfig != nil {
 		typeCount++
+		clusterCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerUPISrcClusterTestConfiguration; testConfig != nil {
 		typeCount++
+		clusterCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration; testConfig != nil {
 		typeCount++
+		clusterCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.MultiStageTestConfiguration; testConfig != nil {
@@ -366,6 +386,7 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 		}
 		typeCount++
 		if testConfig.ClusterProfile != "" {
+			clusterCount++
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
 		context := newContext(fieldRoot, testConfig.Environment, releases)
@@ -378,6 +399,7 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 		typeCount++
 		context := newContext(fieldRoot, testConfig.Environment, releases)
 		if testConfig.ClusterProfile != "" {
+			clusterCount++
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
 		validationErrors = append(validationErrors, validateLeases(context.forField(".leases"), testConfig.Leases)...)
@@ -399,6 +421,9 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 		}
 	} else if typeCount > 1 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s has more than one type", fieldRoot))
+	}
+	if clusterCount > 1 {
+		validationErrors = append(validationErrors, fmt.Errorf("%s installs more than cluster, probably it defined both cluster_claim and cluster_profile", fieldRoot))
 	}
 
 	return validationErrors

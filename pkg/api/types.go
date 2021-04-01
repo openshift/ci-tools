@@ -514,6 +514,9 @@ type TestStepConfiguration struct {
 	// Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit
 	Postsubmit bool `json:"postsubmit,omitempty"`
 
+	// ClusterClaim claims an OpenShift cluster and exposes environment variable ${KUBECONFIG} to the test container
+	ClusterClaim *ClusterClaim `json:"cluster_claim,omitempty"`
+
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty"`
 	MultiStageTestConfiguration                               *MultiStageTestConfiguration                               `json:"steps,omitempty"`
@@ -525,6 +528,32 @@ type TestStepConfiguration struct {
 	OpenshiftInstallerUPIClusterTestConfiguration             *OpenshiftInstallerUPIClusterTestConfiguration             `json:"openshift_installer_upi,omitempty"`
 	OpenshiftInstallerUPISrcClusterTestConfiguration          *OpenshiftInstallerUPISrcClusterTestConfiguration          `json:"openshift_installer_upi_src,omitempty"`
 	OpenshiftInstallerCustomTestImageClusterTestConfiguration *OpenshiftInstallerCustomTestImageClusterTestConfiguration `json:"openshift_installer_custom_test_image,omitempty"`
+}
+
+// Cloud is the name of a cloud provider, e.g., aws cluster topology, etc.
+type Cloud string
+
+const (
+	CloudAWS Cloud = "aws"
+)
+
+// ClusterClaim claims an OpenShift cluster for the job.
+type ClusterClaim struct {
+	// Product is the name of the product being released.
+	// Defaults to ocp.
+	Product ReleaseProduct `json:"product,omitempty"`
+	// Version is the version of the product
+	Version string `json:"version"`
+	// Architecture is the architecture for the product.
+	// Defaults to amd64.
+	Architecture ReleaseArchitecture `json:"architecture,omitempty"`
+	// Cloud is the cloud where the product is installed, e.g., aws.
+	Cloud Cloud `json:"cloud"`
+	// Owner is the owner of cloud account used to install the product, e.g., dpp.
+	Owner string `json:"owner"`
+	// Timeout is how long ci-operator will wait for the cluster to be ready.
+	// Defaults to 1h.
+	Timeout *prowv1.Duration `json:"timeout,omitempty"`
 }
 
 // RegistryReferenceConfig is the struct that step references are unmarshalled into.

@@ -166,8 +166,19 @@ message TestGroup {
   // flaky status.
   bool enable_flaky_status = 23;
 
+  // disable_merged_status will restores deprecated behavior of
+  // splitting multiple foo rows into foo [2], etc rather a single
+  // potentially flaky row.
+  bool disable_merged_status = 57;
+
   // deprecated - always set to true
   bool use_kubernetes_client = 24;
+
+  // When use_kubernetes_client is on testgrid expects these results
+  // to come from prow, which should include a prowjob.json and podinfo.json
+  // to help debugging. If you do not expect these files to exist, you
+  // can optionally disable this analysis.
+  bool disable_prowjob_analysis = 58;
 
   // deprecated - always set to true
   bool is_external = 25;
@@ -308,6 +319,8 @@ message TestGroup {
       // JUnit results, parsed from GCS buckets.
       JUnitConfig junit_config = 2;
     }
+
+    reserved 4; // Private source
   }
 
   // Configuration type of the result source.
@@ -340,6 +353,10 @@ message TestGroup {
   // Specify a property that will be read into state in the user_property field.
   // These can be substituted into LinkTemplates.
   string user_property = 56;
+
+  // disable_merged_status 57
+
+  // disable_prowjob_analysis 58
 }
 
 message JUnitConfig {}
@@ -429,6 +446,10 @@ message AutoBugOptions {
   // Requires 'file_individual' to be true and `max_allowed_individual_bugs` to
   // not be empty.
   DefaultTestMetadata default_test_metadata = 9;
+
+  // [BETA] If True, query the test metadata API to get issue-routing metadata.
+  // Enables routing issues using structured test failures.
+  bool advanced_test_metadata = 11;
 }
 
 message HotlistIdFromSource {
@@ -660,7 +681,7 @@ message Configuration {
 }
 
 // A grouping of configuration options for the flakiness analysis tool.
-// Later configuration options could include the ability to choose different kinds of 
+// Later configuration options could include the ability to choose different kinds of
 // flakiness and choosing if and who to email a copy of the flakiness report.
 message HealthAnalysisOptions {
   // Defaults to false; flakiness analysis is opt-in
@@ -670,6 +691,22 @@ message HealthAnalysisOptions {
   // i.e. flakiness will be analyzed for the previous N days starting from Now,
   // and it will be compared to the calculated N days before that for trend analysis.
   int32 days_of_analysis = 2;
+
+  // When to send healthiness emails out, uses cron string format.
+  string email_schedule = 3;
+
+  // A comma-separated list of healthiness email recipients.
+  string email_recipients = 4;
+
+  // A compilable regex string for grouping tests by name.
+  // Works the same as the group-by-regex-mask option of base_options:
+  // go/testgrid/users/dashboard_guide#grouping-tests
+  // An empty string means no grouping.
+  // e.g. test name: "//path/to/test - env", regex: ` - \w+`
+  // The regex will match " - env" in the above test name and give a group of:
+  // //path/to/test  <- Group Name
+  //     - env       <- Group Member
+  string grouping_regex = 5;
 }
 
 // The DefaultConfiguration Proto is deprecated, and will be deleted after Nov 1, 2019

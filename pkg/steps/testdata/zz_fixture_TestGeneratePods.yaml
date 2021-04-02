@@ -94,7 +94,7 @@
       env:
       - name: JOB_SPEC
       - name: SIDECAR_OPTIONS
-        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step0","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand0"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"secret_directories":["/secret"]}'
+        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step0","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand0"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"censoring_options":{"secret_directories":["/secret"]}}'
       image: sidecar
       name: sidecar
       resources: {}
@@ -245,7 +245,7 @@
       env:
       - name: JOB_SPEC
       - name: SIDECAR_OPTIONS
-        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step1","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand1"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"secret_directories":["/secret"]}'
+        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step1","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand1"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"censoring_options":{"secret_directories":["/secret"]}}'
       image: sidecar
       name: sidecar
       resources: {}
@@ -398,7 +398,7 @@
       env:
       - name: JOB_SPEC
       - name: SIDECAR_OPTIONS
-        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step2","dry_run":false},"entries":[{"args":["/var/run/configmaps/ci.openshift.io/multi-stage/step2"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"secret_directories":["/secret"]}'
+        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step2","dry_run":false},"entries":[{"args":["/var/run/configmaps/ci.openshift.io/multi-stage/step2"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"censoring_options":{"secret_directories":["/secret"]}}'
       image: sidecar
       name: sidecar
       resources: {}

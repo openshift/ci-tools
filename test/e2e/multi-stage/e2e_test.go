@@ -3,7 +3,6 @@
 package multi_stage
 
 import (
-	"bytes"
 	"io/ioutil"
 	"testing"
 
@@ -126,11 +125,7 @@ func TestMultiStage(t *testing.T) {
 			if testCase.success != (err == nil) {
 				t.Fatalf("%s: didn't expect an error from ci-operator: %v; output:\n%v", testCase.name, err, string(output))
 			}
-			for _, line := range testCase.output {
-				if !bytes.Contains(output, []byte(line)) {
-					t.Errorf("%s: could not find line %q in output; output:\n%v", testCase.name, line, string(output))
-				}
-			}
+			cmd.VerboseOutputContains(t, testCase.name, testCase.output...)
 		}, framework.ConfigResolver(framework.ConfigResolverOptions{
 			ConfigPath:     "configs",
 			RegistryPath:   "registry",

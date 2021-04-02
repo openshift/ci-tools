@@ -125,6 +125,7 @@ func (s *multiStageTestStep) Run(ctx context.Context) error {
 }
 
 func (s *multiStageTestStep) run(ctx context.Context) error {
+	logrus.Infof("Running multi-stage test %s", s.name)
 	env, err := s.environment(ctx)
 	if err != nil {
 		return err
@@ -292,7 +293,7 @@ func (s *multiStageTestStep) environment(ctx context.Context) ([]coreapi.EnvVar,
 }
 
 func (s *multiStageTestStep) createSharedDirSecret(ctx context.Context) error {
-	logrus.Infof("Creating multi-stage test shared directory %q", s.name)
+	logrus.Debugf("Creating multi-stage test shared directory %q", s.name)
 	secret := &coreapi.Secret{ObjectMeta: meta.ObjectMeta{
 		Namespace: s.jobSpec.Namespace(),
 		Name:      s.name,
@@ -305,7 +306,7 @@ func (s *multiStageTestStep) createSharedDirSecret(ctx context.Context) error {
 }
 
 func (s *multiStageTestStep) createCredentials() error {
-	logrus.Infof("Creating multi-stage test credentials for %q", s.name)
+	logrus.Debugf("Creating multi-stage test credentials for %q", s.name)
 	toCreate := map[string]*coreapi.Secret{}
 	for _, step := range append(s.pre, append(s.test, s.post...)...) {
 		for _, credential := range step.Credentials {
@@ -340,7 +341,7 @@ func (s *multiStageTestStep) createCredentials() error {
 }
 
 func (s *multiStageTestStep) createCommandConfigMaps(ctx context.Context) error {
-	logrus.Infof("Creating multi-stage test commands configmap for %q", s.name)
+	logrus.Debugf("Creating multi-stage test commands configmap for %q", s.name)
 	data := make(map[string]string)
 	for _, step := range append(s.pre, append(s.test, s.post...)...) {
 		data[step.As] = step.Commands
@@ -761,6 +762,7 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 
 func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *TestCaseNotifier) error {
 	start := time.Now()
+	logrus.Infof("Running step %s.", pod.Name)
 	client := s.client.WithNewLoggingClient()
 	if _, err := createOrRestartPod(client, pod); err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %w", pod.Name, err)
@@ -771,6 +773,11 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	}
 	finished := time.Now()
 	duration := finished.Sub(start)
+	verb := "succeeded"
+	if err != nil {
+		verb = "failed"
+	}
+	logrus.Infof("Step %s %s after %s.", pod.Name, verb, duration.String())
 	s.subSteps = append(s.subSteps, api.CIOperatorStepDetailInfo{
 		StepName:    pod.Name,
 		Description: fmt.Sprintf("Run pod %s", pod.Name),

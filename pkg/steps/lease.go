@@ -108,14 +108,14 @@ func (s *leaseStep) Run(ctx context.Context) error {
 }
 
 func (s *leaseStep) run(ctx context.Context) error {
-	logrus.Infof("Acquiring leases for %s", s.Name())
+	logrus.Infof("Acquiring leases for test %s", s.Name())
 	client := *s.client
 	ctx, cancel := context.WithCancel(ctx)
 	if err := acquireLeases(client, ctx, cancel, s.leases); err != nil {
 		return err
 	}
 	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
-	logrus.Infof("Releasing leases for %s", s.Name())
+	logrus.Infof("Releasing leases for test %s", s.Name())
 	releaseErr := results.ForReason("releasing_lease").ForError(releaseLeases(client, s.leases))
 
 	// we want a sensible output error for reporting, so we bubble up these individually
@@ -146,7 +146,7 @@ func acquireLeases(
 	var errs []error
 	for _, i := range sorted {
 		l := &leases[i]
-		logrus.Infof("Acquiring %d lease(s) for %s", l.Count, l.ResourceType)
+		logrus.Debugf("Acquiring %d lease(s) for %s", l.Count, l.ResourceType)
 		names, err := client.Acquire(l.ResourceType, l.Count, ctx, cancel)
 		if err != nil {
 			if err == lease.ErrNotFound {
@@ -155,7 +155,7 @@ func acquireLeases(
 			errs = append(errs, results.ForReason(results.Reason("acquiring_lease:"+l.ResourceType)).WithError(err).Errorf("failed to acquire lease: %v", err))
 			break
 		}
-		logrus.Infof("Acquired lease(s) for %s: %v", l.ResourceType, names)
+		logrus.Debugf("Acquired lease(s) for %s: %v", l.ResourceType, names)
 		l.resources = names
 	}
 	if errs != nil {
@@ -173,7 +173,7 @@ func releaseLeases(client lease.Client, leases []stepLease) error {
 			if r == "" {
 				continue
 			}
-			logrus.Infof("Releasing lease for %s: %v", l.ResourceType, r)
+			logrus.Debugf("Releasing lease for %s: %v", l.ResourceType, r)
 			if err := client.Release(r); err != nil {
 				errs = append(errs, err)
 			}

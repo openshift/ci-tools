@@ -49,7 +49,7 @@ func (s *inputImageTagStep) Inputs() (api.InputDefinition, error) {
 		return nil, fmt.Errorf("could not resolve base image: %w", err)
 	}
 
-	logrus.Infof("Resolved %s to %s.", s.config.BaseImage.ISTagName(), from.Image.Name)
+	logrus.Debugf("Resolved %s to %s.", s.config.BaseImage.ISTagName(), from.Image.Name)
 	s.imageName = from.Image.Name
 	return api.InputDefinition{from.Image.Name}, nil
 }
@@ -98,7 +98,7 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 		}
 		_, exists := util.ResolvePullSpec(pipeline, string(s.config.To), true)
 		if !exists {
-			logrus.Infof("Waiting to import %s ...", ist.ObjectMeta.Name)
+			logrus.Debugf("Waiting to import %s ...", ist.ObjectMeta.Name)
 		}
 		return exists, nil
 	}, importCtx.Done()); err != nil {

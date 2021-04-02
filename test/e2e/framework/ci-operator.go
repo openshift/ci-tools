@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -99,7 +100,7 @@ func newCiOperatorCommand(t *T) CiOperatorCommand {
 func (c *CiOperatorCommand) Run() ([]byte, error) {
 	c.t.Logf("running: %v", c.cmd.Args)
 
-	logFile, err := os.Create(filepath.Join(c.artifactDir, "ci-operator.log"))
+	logFile, err := os.Create(filepath.Join(c.artifactDir, "ci-operator.output.log"))
 	if err != nil {
 		c.t.Fatalf("could not create log file: %v", err)
 	}
@@ -141,4 +142,17 @@ func (c *CiOperatorCommand) Run() ([]byte, error) {
 	output := outputBuffer.Bytes()
 	c.t.Logf("ci-operator output:\n%v", string(output))
 	return output, err
+}
+
+func (c *CiOperatorCommand) VerboseOutputContains(t *T, name string, fragments ...string) {
+	verboseOutput, err := ioutil.ReadFile(filepath.Join(c.artifactDir, "ci-operator.log"))
+	if err != nil {
+		t.Errorf("could not open ci-operator log for checking output: %v", err)
+		return
+	}
+	for _, item := range fragments {
+		if !bytes.Contains(verboseOutput, []byte(item)) {
+			t.Errorf("%s: could not find line %q in output; output:\n%v", name, item, string(verboseOutput))
+		}
+	}
 }

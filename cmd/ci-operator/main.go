@@ -250,7 +250,12 @@ func main() {
 		for _, err := range errs {
 			message.WriteString(fmt.Sprintf("\n  * %s", err.Error()))
 		}
-		logrus.Errorf("error: some steps failed:%s", message.String())
+		logrus.Error("Some steps failed:")
+		for _, line := range strings.Split(message.String(), "\n") {
+			if strings.TrimSpace(line) != "" {
+				logrus.Error(line)
+			}
+		}
 		opt.Report(defaulted...)
 		os.Exit(1)
 	}
@@ -844,7 +849,7 @@ func (o *options) initializeNamespace() error {
 	client = ctrlruntimeclient.NewNamespacedClient(client, o.namespace)
 	ctx := context.Background()
 
-	logrus.Infof("Creating namespace %s", o.namespace)
+	logrus.Debugf("Creating namespace %s", o.namespace)
 	authTimeout := 15 * time.Second
 	initBeginning := time.Now()
 	for {
@@ -896,10 +901,10 @@ func (o *options) initializeNamespace() error {
 			selfSubjectAccessReviewSucceeded = true
 			break
 		}
-		logrus.Infof("[%d/30] RBAC in namespace not yet ready, sleeping for a second...", i)
+		logrus.Debugf("[%d/30] RBAC in namespace not yet ready, sleeping for a second...", i)
 		time.Sleep(time.Second)
 	}
-	logrus.Infof("Spent %v waiting for RBAC to initialize in the new namespace.", time.Since(ssarStart))
+	logrus.Debugf("Spent %v waiting for RBAC to initialize in the new namespace.", time.Since(ssarStart))
 	if !selfSubjectAccessReviewSucceeded {
 		logrus.Error("Timed out waiting for RBAC to initialize in the test namespace.")
 		return errors.New("timed out waiting for RBAC")
@@ -914,14 +919,14 @@ func (o *options) initializeNamespace() error {
 	updates := map[string]string{}
 	if o.idleCleanupDuration > 0 {
 		if o.idleCleanupDurationSet {
-			logrus.Infof("Setting a soft TTL of %s for the namespace", o.idleCleanupDuration.String())
+			logrus.Debugf("Setting a soft TTL of %s for the namespace", o.idleCleanupDuration.String())
 		}
 		updates[nsttl.AnnotationIdleCleanupDurationTTL] = o.idleCleanupDuration.String()
 	}
 
 	if o.cleanupDuration > 0 {
 		if o.cleanupDurationSet {
-			logrus.Infof("Setting a hard TTL of %s for the namespace", o.cleanupDuration.String())
+			logrus.Debugf("Setting a hard TTL of %s for the namespace", o.cleanupDuration.String())
 		}
 		updates[nsttl.AnnotationCleanupDurationTTL] = o.cleanupDuration.String()
 	}
@@ -983,10 +988,10 @@ func (o *options) initializeNamespace() error {
 		if imagePullSecretsMinted {
 			break
 		}
-		logrus.Infof("[%d/30] Image pull secrets in namespace not yet ready, sleeping for a second...", i)
+		logrus.Debugf("[%d/30] Image pull secrets in namespace not yet ready, sleeping for a second...", i)
 		time.Sleep(time.Second)
 	}
-	logrus.Infof("Spent %v waiting for image pull secrets to initialize in the new namespace.", time.Since(pullStart))
+	logrus.Debugf("Spent %v waiting for image pull secrets to initialize in the new namespace.", time.Since(pullStart))
 	if !imagePullSecretsMinted {
 		logrus.Error("Timed out waiting for image pull secrets in the test namespace.")
 		return errors.New("timed out waiting for image pull secrets")
@@ -995,7 +1000,7 @@ func (o *options) initializeNamespace() error {
 	if o.givePrAuthorAccessToNamespace {
 		// Generate rolebinding for all the PR Authors.
 		for _, author := range o.authors {
-			logrus.Infof("Creating rolebinding for user %s in namespace %s", author, o.namespace)
+			logrus.Debugf("Creating rolebinding for user %s in namespace %s", author, o.namespace)
 			if err := client.Create(ctx, &rbacapi.RoleBinding{
 				ObjectMeta: meta.ObjectMeta{
 					Name:      "ci-op-author-access",
@@ -1046,7 +1051,7 @@ func (o *options) initializeNamespace() error {
 		}
 	}()
 
-	logrus.Info("Setting up pipeline ImageStream for the test")
+	logrus.Debugf("Setting up pipeline ImageStream for the test")
 
 	// create the image stream or read it to get its uid
 	is := &imageapi.ImageStream{
@@ -1089,9 +1094,9 @@ func (o *options) initializeNamespace() error {
 			return fmt.Errorf("could not update secret %s: %w", secret.Name, err)
 		}
 		if created {
-			logrus.Infof("Created secret %s", secret.Name)
+			logrus.Debugf("Created secret %s", secret.Name)
 		} else {
-			logrus.Infof("Updated secret %s", secret.Name)
+			logrus.Debugf("Updated secret %s", secret.Name)
 		}
 	}
 
@@ -1100,7 +1105,7 @@ func (o *options) initializeNamespace() error {
 		if _, err := crcontrollerutil.CreateOrUpdate(ctx, client, pdb, mutateFn); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("failed to create pdb for label key %s: %w", pdbLabelKey, err)
 		}
-		logrus.Infof("Created PDB for pods with %s label", pdbLabelKey)
+		logrus.Debugf("Created PDB for pods with %s label", pdbLabelKey)
 	}
 
 	return nil

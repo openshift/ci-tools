@@ -49,7 +49,7 @@ func main() {
 	logrusutil.ComponentInit()
 
 	configAgent := &config.Agent{}
-	if err := configAgent.Start(o.configPath, o.jobConfigPath); err != nil {
+	if err := configAgent.Start(o.configPath, o.jobConfigPath, []string{}); err != nil {
 		logrus.WithError(err).Fatal("Error starting config agent.")
 	}
 

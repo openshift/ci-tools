@@ -196,7 +196,7 @@ func main() {
 		os.Exit(1)
 	}()
 
-	config, err := prowconfig.Load(o.prowConfigPath, o.jobConfigPath)
+	config, err := prowconfig.Load(o.prowConfigPath, o.jobConfigPath, []string{})
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to read Prow configuration")
 	}

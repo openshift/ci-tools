@@ -80,7 +80,7 @@ func main() {
 	}
 	pluginCfg := agent.Config().ConfigUpdater
 
-	prowCfg, err := prowconfig.Load(opt.prowConfigPath, opt.prowJobConfigDir)
+	prowCfg, err := prowconfig.Load(opt.prowConfigPath, opt.prowJobConfigDir, []string{})
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to load Prow configuration")
 	}

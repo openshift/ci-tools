@@ -425,7 +425,7 @@ func main() {
 	injectPrivateMergeType(prowConfig.Tide.MergeType, orgRepos)
 	setPrivateReposTideQueries(prowConfig.Tide.Queries, orgRepos)
 	injectPrivatePRStatusBaseURLs(prowConfig.Tide.PRStatusBaseURLs, orgRepos)
-	injectPrivatePlankDefaultDecorationConfigs(prowConfig.Plank.DefaultDecorationConfigs, orgRepos)
+	injectPrivatePlankDefaultDecorationConfigs(prowConfig.Plank.DefaultDecorationConfigsMap, orgRepos)
 	injectPrivateJobURLPrefixConfig(prowConfig.Plank.JobURLPrefixConfig, orgRepos)
 	injectPrivateApprovePlugin(pluginsConfig.Approve, orgRepos)
 	injectPrivateLGTMPlugin(pluginsConfig.Lgtm, orgRepos)

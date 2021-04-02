@@ -588,7 +588,7 @@ func Test_getJobArtifactsURL(t *testing.T) {
 		ProwConfig: prowconfig.ProwConfig{
 			Plank: config.Plank{
 				Controller: prowconfig.Controller{},
-				DefaultDecorationConfigs: map[string]*pjapi.DecorationConfig{
+				DefaultDecorationConfigsMap: map[string]*pjapi.DecorationConfig{
 					fmt.Sprintf("%s/%s", org, repo): {GCSConfiguration: &pjapi.GCSConfiguration{Bucket: bucket}},
 				},
 			},
@@ -596,6 +596,9 @@ func Test_getJobArtifactsURL(t *testing.T) {
 				Spyglass: prowconfig.Spyglass{GCSBrowserPrefix: browserPrefix},
 			},
 		},
+	}
+	if err := prowConfig.ProwConfig.Plank.FinalizeDefaultDecorationConfigs(); err != nil {
+		t.Fatalf("could not finalize config: %v", err)
 	}
 	type args struct {
 		prowJob *pjapi.ProwJob

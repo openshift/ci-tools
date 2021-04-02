@@ -10,6 +10,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/spyglass/api"
 	"k8s.io/test-infra/prow/spyglass/lenses"
 	"sigs.k8s.io/yaml"
@@ -45,7 +46,7 @@ func init() {
 }
 
 // Header renders the content of <head> from template.html.
-func (lens Lens) Header(artifacts []api.Artifact, _ string, config json.RawMessage) string {
+func (lens Lens) Header(artifacts []api.Artifact, _ string, config json.RawMessage, spyglassConfig config.Spyglass) string {
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, "header", nil); err != nil {
 		return fmt.Sprintf("<!-- FAILED EXECUTING HEADER TEMPLATE: %v -->", err)
@@ -54,12 +55,12 @@ func (lens Lens) Header(artifacts []api.Artifact, _ string, config json.RawMessa
 }
 
 // Callback does nothing.
-func (lens Lens) Callback(artifacts []api.Artifact, resourceDir string, data string, config json.RawMessage) string {
+func (lens Lens) Callback(artifacts []api.Artifact, resourceDir string, data string, config json.RawMessage, spyglassConfig config.Spyglass) string {
 	return ""
 }
 
 // Body renders the <body>
-func (lens Lens) Body(artifacts []api.Artifact, resourceDir string, data string, config json.RawMessage) string {
+func (lens Lens) Body(artifacts []api.Artifact, resourceDir string, data string, config json.RawMessage, spyglassConfig config.Spyglass) string {
 	if len(artifacts) != 1 {
 		logrus.WithField("artifacts_count", len(artifacts)).Error("Expected exactly one artifact")
 		return ""

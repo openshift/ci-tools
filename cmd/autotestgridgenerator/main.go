@@ -10,7 +10,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/test-infra/experiment/autobumper/bumper"
+	"k8s.io/test-infra/prow/cmd/generic-autobumper/bumper"
 
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
 )

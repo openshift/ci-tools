@@ -108,11 +108,9 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 		{
 			description: "cluster-claim",
 			test: &ciop.TestStepConfiguration{
-				As:           "test",
-				ClusterClaim: &ciop.ClusterClaim{},
-				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
-					ClusterProfile: ciop.ClusterProfileAWS,
-				},
+				As:                          "test",
+				ClusterClaim:                &ciop.ClusterClaim{},
+				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{},
 			},
 		},
 	}

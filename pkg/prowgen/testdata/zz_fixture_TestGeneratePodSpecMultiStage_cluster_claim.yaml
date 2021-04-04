@@ -3,10 +3,9 @@ containers:
   - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
   - --gcs-upload-secret=/secrets/gcs/service-account.json
   - --report-credentials-file=/etc/report/credentials
+  - --hive-kubeconfig=/secrets/app.ci-hive-credentials/kubeconfig
   - --target=test
   - --secret-dir=/secrets/ci-pull-credentials
-  - --secret-dir=/usr/local/test-cluster-profile
-  - --lease-server-credentials-file=/etc/boskos/credentials
   command:
   - ci-operator
   image: ci-operator:latest
@@ -28,10 +27,8 @@ containers:
   - mountPath: /secrets/ci-pull-credentials
     name: ci-pull-credentials
     readOnly: true
-  - mountPath: /usr/local/test-cluster-profile
-    name: cluster-profile
-  - mountPath: /etc/boskos
-    name: boskos
+  - mountPath: /secrets/app.ci-hive-credentials
+    name: app-ci-hive-credentials
     readOnly: true
 serviceAccountName: ci-operator
 volumes:
@@ -44,14 +41,6 @@ volumes:
 - name: ci-pull-credentials
   secret:
     secretName: ci-pull-credentials
-- name: cluster-profile
-  projected:
-    sources:
-    - secret:
-        name: cluster-secrets-aws
-- name: boskos
+- name: app-ci-hive-credentials
   secret:
-    items:
-    - key: credentials
-      path: credentials
-    secretName: boskos-credentials
+    secretName: app.ci-hive-credentials

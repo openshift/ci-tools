@@ -32,6 +32,11 @@ const (
 	HiveAdminPasswordSecret = "hive-admin-password"
 	// HiveAdminPasswordSecretKey is the key to the password in the secret HiveAdminKubeconfigSecret
 	HiveAdminPasswordSecretKey = "password"
+
+	// HiveControlPlaneKubeconfigSecret is the name of the secret that stores kubeconfig to contact the cluster where Hive is deployed
+	HiveControlPlaneKubeconfigSecret = "app.ci-hive-credentials"
+	// HiveControlPlaneKubeconfigSecretArg is the flag to ci-operator
+	HiveControlPlaneKubeconfigSecretArg = "--hive-kubeconfig=/secrets/app.ci-hive-credentials/kubeconfig"
 )
 
 var (

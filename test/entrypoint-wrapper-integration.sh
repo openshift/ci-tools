@@ -9,7 +9,7 @@ export CLI_DIR="/cli-dir"
 export NAMESPACE=test
 export JOB_NAME_SAFE=test
 ERR=${dir}/err.log
-SECRET='{"kind":"Secret","apiVersion":"v1","metadata":{"name":"test","creationTimestamp":null},"data":{"test0.txt":"dGVzdDAK"},"type":"Opaque"}'
+SECRET='{"kind":"Secret","apiVersion":"v1","metadata":{"name":"test","creationTimestamp":null,"labels":{"ci.openshift.io/skip-censoring":"true"}},"data":{"test0.txt":"dGVzdDAK"},"type":"Opaque"}'
 
 fail() {
     echo "$1"

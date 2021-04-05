@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	// reportAddress is the default result aggregator address in api.ci
+	// reportAddress is the default result aggregator address in app.ci
 	reportAddress = "https://result-aggregator-ci.apps.ci.l2s4.p1.openshiftapps.com"
 )
 
@@ -125,7 +125,7 @@ func (r *reporter) Report(err error) {
 		reportMsg = fmt.Sprintf("Reporting job state '%s' with reason '%s'", request.State, request.Reason)
 	}
 
-	logrus.Infof(reportMsg)
+	logrus.Debugf(reportMsg)
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/result", r.address), bytes.NewReader(data))
 	if err != nil {
 		logrus.Tracef("could not create report request: %v", err)

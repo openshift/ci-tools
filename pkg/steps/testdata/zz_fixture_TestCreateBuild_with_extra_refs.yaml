@@ -61,7 +61,7 @@ spec:
     dockerStrategy:
       env:
       - name: BUILD_LOGLEVEL
-        value: "6"
+        value: "0"
       - name: CLONEREFS_OPTIONS
         value: '{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}]},{"org":"org","repo":"other","base_ref":"master","base_sha":"masterSHA"}],"fail":true}'
       forcePull: true

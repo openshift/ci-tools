@@ -281,6 +281,10 @@ func createSecret(client coreclientset.SecretInterface, name, dir string, dry bo
 		return fmt.Errorf("failed to generate secret: %w", err)
 	}
 	secret.Name = name
+	if secret.Labels == nil {
+		secret.Labels = map[string]string{}
+	}
+	secret.Labels[steps.SkipCensoringLabel] = "true"
 	if dry {
 		err := encoder.Encode(secret, os.Stdout)
 		if err != nil {

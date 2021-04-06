@@ -741,23 +741,59 @@ func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClie
 	return utilerrors.NewAggregate(errs)
 }
 
+func validateBWItems(client secrets.ReadOnlyClient, secretConfigs []secretbootstrap.SecretConfig) error {
+	var errs []error
+
+	for _, config := range secretConfigs {
+		for _, item := range config.From {
+
+			if item.DockerConfigJSONData != nil {
+				for _, data := range item.DockerConfigJSONData {
+					if !client.HasItem(data.BWItem) {
+						errs = append(errs, fmt.Errorf("item %s doesn't exist", data.BWItem))
+						break
+					}
+					if _, err := client.GetAttachmentOnItem(data.BWItem, data.AuthBitwardenAttachment); err != nil {
+						errs = append(errs, fmt.Errorf("attachment %s in item %s doesn't exist", data.AuthBitwardenAttachment, data.BWItem))
+					}
+				}
+			} else {
+				if !client.HasItem(item.BWItem) {
+					errs = append(errs, fmt.Errorf("item %s doesn't exist", item.BWItem))
+					continue
+				}
+
+				if item.Field != "" {
+					if _, err := client.GetFieldOnItem(item.BWItem, item.Field); err != nil {
+						errs = append(errs, fmt.Errorf("field %s in item %s doesn't exist", item.Field, item.BWItem))
+					}
+				}
+
+				if item.Attachment != "" {
+					if _, err := client.GetAttachmentOnItem(item.BWItem, item.Attachment); err != nil {
+						errs = append(errs, fmt.Errorf("attachment %s in item %s doesn't exist", item.Attachment, item.BWItem))
+					}
+				}
+
+				if item.Attribute == secretbootstrap.AttributeTypePassword {
+					if _, err := client.GetPassword(item.BWItem); err != nil {
+						errs = append(errs, fmt.Errorf("password in item %s doesn't exist", item.BWItem))
+					}
+				}
+			}
+		}
+	}
+
+	return utilerrors.NewAggregate(errs)
+}
+
 func main() {
 	logrusutil.ComponentInit()
 	o, err := parseOptions()
 	if err != nil {
 		logrus.WithError(err).Fatalf("cannot parse args: %q", os.Args[1:])
 	}
-	if o.validateOnly {
-		var config secretbootstrap.Config
-		if err := secretbootstrap.LoadConfigFromFile(o.configPath, &config); err != nil {
-			logrus.WithError(err).Fatalf("failed to load config from file: %s", o.configPath)
-		}
-		if err := config.Validate(); err != nil {
-			logrus.WithError(err).Fatal("failed to validate the config")
-		}
-		logrus.Infof("the config file %s has been validated", o.configPath)
-		return
-	}
+
 	if err := o.validateOptions(); err != nil {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
@@ -776,6 +812,23 @@ func main() {
 		}
 	})
 	defer logrus.Exit(0)
+
+	if o.validateOnly {
+		var config secretbootstrap.Config
+		if err := secretbootstrap.LoadConfigFromFile(o.configPath, &config); err != nil {
+			logrus.WithError(err).Fatalf("failed to load config from file: %s", o.configPath)
+		}
+		if err := config.Validate(); err != nil {
+			logrus.WithError(err).Fatal("failed to validate the config")
+		}
+
+		if err := validateBWItems(client, o.config.Secrets); err != nil {
+			logrus.WithError(err).Fatal("failed to validate items")
+		}
+
+		logrus.Infof("the config file %s has been validated", o.configPath)
+		return
+	}
 
 	ctx := context.TODO()
 	var errs []error

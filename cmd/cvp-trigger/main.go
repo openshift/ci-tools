@@ -196,7 +196,7 @@ func main() {
 		os.Exit(1)
 	}()
 
-	config, err := prowconfig.Load(o.prowConfigPath, o.jobConfigPath)
+	config, err := prowconfig.Load(o.prowConfigPath, o.jobConfigPath, []string{})
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to read Prow configuration")
 	}
@@ -325,10 +325,11 @@ func getJobArtifactsURL(prowJob *pjapi.ProwJob, config *prowconfig.Config) strin
 		identifier = fmt.Sprintf("%s/%s", prowJob.Spec.ExtraRefs[0].Org, prowJob.Spec.ExtraRefs[0].Repo)
 	}
 	spec := downwardapi.NewJobSpec(prowJob.Spec, prowJob.Status.BuildID, prowJob.Name)
-	jobBasePath, _, _ := gcsupload.PathsForJob(config.Plank.GetDefaultDecorationConfigs(identifier).GCSConfiguration, &spec, "")
+	gcsConfig := config.Plank.GuessDefaultDecorationConfig(identifier, prowJob.Spec.Cluster).GCSConfiguration
+	jobBasePath, _, _ := gcsupload.PathsForJob(gcsConfig, &spec, "")
 	return fmt.Sprintf("%s%s/%s",
 		config.Deck.Spyglass.GCSBrowserPrefix,
-		config.Plank.GetDefaultDecorationConfigs(identifier).GCSConfiguration.Bucket,
+		gcsConfig.Bucket,
 		jobBasePath,
 	)
 }

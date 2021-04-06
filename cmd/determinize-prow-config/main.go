@@ -61,7 +61,7 @@ func main() {
 func updateProwConfig(configDir string) error {
 	configPath := path.Join(configDir, config.ProwConfigFile)
 	agent := prowconfig.Agent{}
-	if err := agent.Start(configPath, ""); err != nil {
+	if err := agent.Start(configPath, "", []string{}); err != nil {
 		return fmt.Errorf("could not load Prow configuration: %w", err)
 	}
 

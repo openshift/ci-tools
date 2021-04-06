@@ -122,7 +122,7 @@ func main() {
 	logrus.SetLevel(level)
 
 	configAgent := &config.Agent{}
-	if err := configAgent.Start(o.prowConfigPath, o.prowJobConfigPath); err != nil {
+	if err := configAgent.Start(o.prowConfigPath, o.prowJobConfigPath, []string{}); err != nil {
 		logrus.WithError(err).Fatal("Error starting Prow config agent.")
 	}
 

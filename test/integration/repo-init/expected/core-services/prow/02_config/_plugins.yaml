@@ -115,7 +115,7 @@ lgtm:
   review_acts_as_lgtm: true
 override: {}
 owners:
-  labels_blacklist:
+  labels_denylist:
   - approved
   - lgtm
 plugins:

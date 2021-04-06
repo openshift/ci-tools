@@ -324,7 +324,7 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to construct ci-operator config agent")
 	}
 	configAgent := &config.Agent{}
-	if err := configAgent.Start(opts.configPath, opts.jobConfigPath); err != nil {
+	if err := configAgent.Start(opts.configPath, opts.jobConfigPath, []string{}); err != nil {
 		logrus.WithError(err).Fatal("Failed to start config agent")
 	}
 

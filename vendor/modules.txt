@@ -25,13 +25,14 @@ github.com/Azure/go-autorest/autorest/date
 github.com/Azure/go-autorest/logger
 # github.com/Azure/go-autorest/tracing v0.6.0
 github.com/Azure/go-autorest/tracing
-# github.com/GoogleCloudPlatform/testgrid v0.0.30
+# github.com/GoogleCloudPlatform/testgrid v0.0.56
 ## explicit
 github.com/GoogleCloudPlatform/testgrid/config
 github.com/GoogleCloudPlatform/testgrid/metadata
 github.com/GoogleCloudPlatform/testgrid/metadata/junit
 github.com/GoogleCloudPlatform/testgrid/pb/config
 github.com/GoogleCloudPlatform/testgrid/pb/custom_evaluator
+github.com/GoogleCloudPlatform/testgrid/pb/state
 github.com/GoogleCloudPlatform/testgrid/pb/test_status
 github.com/GoogleCloudPlatform/testgrid/util/gcs
 # github.com/Microsoft/go-winio v0.4.15-0.20190919025122-fc70bd9a86b5
@@ -1091,9 +1092,8 @@ k8s.io/klog/v2
 k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/kubernetes v1.14.7
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20210309020659-6971aa789f39
+# k8s.io/test-infra v0.0.0-20210402123012-e7f321167701
 ## explicit
-k8s.io/test-infra/experiment/autobumper/bumper
 k8s.io/test-infra/experiment/image-bumper/bumper
 k8s.io/test-infra/ghproxy/ghcache
 k8s.io/test-infra/ghproxy/ghmetrics
@@ -1106,6 +1106,7 @@ k8s.io/test-infra/prow/client/clientset/versioned
 k8s.io/test-infra/prow/client/clientset/versioned/scheme
 k8s.io/test-infra/prow/client/clientset/versioned/typed/prowjobs/v1
 k8s.io/test-infra/prow/clonerefs
+k8s.io/test-infra/prow/cmd/generic-autobumper/bumper
 k8s.io/test-infra/prow/commentpruner
 k8s.io/test-infra/prow/config
 k8s.io/test-infra/prow/config/org

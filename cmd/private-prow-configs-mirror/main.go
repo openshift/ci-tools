@@ -371,7 +371,7 @@ func getAllConfigs(releaseRepoPath string) (*config.ReleaseRepoConfig, error) {
 
 	prowConfigPath := filepath.Join(releaseRepoPath, config.ConfigInRepoPath)
 	prowJobConfigPath := filepath.Join(releaseRepoPath, config.JobConfigInRepoPath)
-	c.Prow, err = prowconfig.Load(prowConfigPath, prowJobConfigPath)
+	c.Prow, err = prowconfig.Load(prowConfigPath, prowJobConfigPath, []string{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load Prow configuration from release repo: %w", err)
 	}
@@ -425,7 +425,7 @@ func main() {
 	injectPrivateMergeType(prowConfig.Tide.MergeType, orgRepos)
 	setPrivateReposTideQueries(prowConfig.Tide.Queries, orgRepos)
 	injectPrivatePRStatusBaseURLs(prowConfig.Tide.PRStatusBaseURLs, orgRepos)
-	injectPrivatePlankDefaultDecorationConfigs(prowConfig.Plank.DefaultDecorationConfigs, orgRepos)
+	injectPrivatePlankDefaultDecorationConfigs(prowConfig.Plank.DefaultDecorationConfigsMap, orgRepos)
 	injectPrivateJobURLPrefixConfig(prowConfig.Plank.JobURLPrefixConfig, orgRepos)
 	injectPrivateApprovePlugin(pluginsConfig.Approve, orgRepos)
 	injectPrivateLGTMPlugin(pluginsConfig.Lgtm, orgRepos)

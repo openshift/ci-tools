@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -91,13 +92,13 @@ var (
 		Default: "api.ci",
 		BuildFarm: map[dispatcher.CloudProvider]dispatcher.JobGroups{
 			dispatcher.CloudAWS: {
-				dispatcher.ClusterBuild01: {},
+				api.ClusterBuild01: {},
 			},
 			dispatcher.CloudGCP: {
-				dispatcher.ClusterBuild02: {},
+				api.ClusterBuild02: {},
 			},
 		},
-		Groups: map[dispatcher.ClusterName]dispatcher.Group{
+		Groups: map[api.Cluster]dispatcher.Group{
 			"api.ci": {
 				Paths: []string{
 					".*-postsubmits.yaml$",

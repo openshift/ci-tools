@@ -492,6 +492,19 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			}},
 		},
+		{
+			id: "cluster label",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", Cluster: "build01", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
 	}
 
 	for _, tc := range tests {

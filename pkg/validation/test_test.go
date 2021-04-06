@@ -1198,6 +1198,43 @@ func TestValidateTestConfigurationType(t *testing.T) {
 				fmt.Errorf("test.cluster_claim.cloud cannot be empty when cluster_claim is not nil"),
 				fmt.Errorf("test.cluster_claim.owner cannot be empty when cluster_claim is not nil")},
 		},
+		{
+			name: "valid cluster",
+			test: api.TestStepConfiguration{
+				Cluster: api.ClusterBuild01,
+				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+					Test: []api.TestStep{
+						{
+							LiteralTestStep: &api.LiteralTestStep{
+								As:        "e2e-aws-test",
+								Commands:  "oc get node",
+								From:      "cli",
+								Resources: api.ResourceRequirements{Requests: api.ResourceList{"cpu": "1"}},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "invalid cluster",
+			test: api.TestStepConfiguration{
+				Cluster: "bar",
+				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+					Test: []api.TestStep{
+						{
+							LiteralTestStep: &api.LiteralTestStep{
+								As:        "e2e-aws-test",
+								Commands:  "oc get node",
+								From:      "cli",
+								Resources: api.ResourceRequirements{Requests: api.ResourceList{"cpu": "1"}},
+							},
+						},
+					},
+				},
+			},
+			expected: []error{fmt.Errorf("test.cluster is not a vailid cluster: bar")},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			actual := validateTestConfigurationType("test", tc.test, nil, nil, false)

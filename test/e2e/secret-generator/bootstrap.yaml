@@ -1,0 +1,34 @@
+cluster_groups:
+  build_farm:
+  - api.ci
+  - app.ci
+  - build01
+  - build02
+  - vsphere
+secret_configs:
+- from:
+    sa.config-updater.api.ci.config:
+      attachment: sa.config-updater.api.ci.config
+      bw_item: build_farm
+    sa.config-updater.app.ci.config:
+      attachment: sa.config-updater.app.ci.config
+      bw_item: build_farm
+    sa.config-updater.build01.config:
+      field: sa.config-updater.build01.config
+      bw_item: build_farm
+    sa.config-updater.build02.config:
+      field: sa.config-updater.build02.config
+      bw_item: build_farm
+  to:
+  - cluster_groups:
+    - build_farm
+    name: build-farm-credentials
+    namespace: ci
+- from:
+    bw_password:
+      attribute: password
+      bw_item: password
+  to:
+  - cluster: app.ci
+    name: password
+    namespace: ci

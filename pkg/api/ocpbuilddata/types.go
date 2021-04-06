@@ -85,6 +85,7 @@ type OCPImageConfigFrom struct {
 type OCPImageConfigFromStream struct {
 	Stream string `json:"stream"`
 	Member string `json:"member"`
+	Image  string `json:"image"`
 }
 
 func (icfs OCPImageConfigFromStream) validate() error {
@@ -184,6 +185,13 @@ func LoadImageConfigs(ocpBuildDataDir string, majorMinor MajorMinor) ([]OCPImage
 	configsUnverified, err := gatherAllOCPImageConfigs(ocpBuildDataDir, majorMinor)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read all image configs: %w", err)
+	}
+
+	// TODO: Should we support this?
+	for configKey, configValue := range configsUnverified {
+		if configValue.From.Image != "" {
+			delete(configsUnverified, configKey)
+		}
 	}
 	streamMap, err := readStreamMap(ocpBuildDataDir, majorMinor)
 	if err != nil {

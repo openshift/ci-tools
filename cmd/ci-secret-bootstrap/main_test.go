@@ -2402,3 +2402,7 @@ func (f *fakeVaultClient) ListKVRecursively(_ string) ([]string, error) {
 	}
 	return result, nil
 }
+
+func (f *fakeVaultClient) UpsertKV(_ string, _ map[string]string) error {
+	return nil
+}

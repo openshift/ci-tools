@@ -255,7 +255,7 @@ func (o *options) validateCompletedOptions() error {
 	return nil
 }
 
-func constructDockerConfigJSON(client secrets.Client, dockerConfigJSONData []secretbootstrap.DockerConfigJSONData) ([]byte, error) {
+func constructDockerConfigJSON(client secrets.ReadOnlyClient, dockerConfigJSONData []secretbootstrap.DockerConfigJSONData) ([]byte, error) {
 	auths := make(map[string]secretbootstrap.DockerAuth)
 
 	for _, data := range dockerConfigJSONData {
@@ -299,7 +299,7 @@ func constructDockerConfigJSON(client secrets.Client, dockerConfigJSONData []sec
 	return b, nil
 }
 
-func constructSecrets(ctx context.Context, config secretbootstrap.Config, client secrets.Client, maxConcurrency int) (map[string][]*coreapi.Secret, error) {
+func constructSecrets(ctx context.Context, config secretbootstrap.Config, client secrets.ReadOnlyClient, maxConcurrency int) (map[string][]*coreapi.Secret, error) {
 	sem := semaphore.NewWeighted(int64(maxConcurrency))
 	secretsMap := map[string][]*coreapi.Secret{}
 	secretsMapLock := &sync.Mutex{}
@@ -576,7 +576,7 @@ func insertIfNotEmpty(s sets.String, items ...string) sets.String {
 	return s
 }
 
-func getUnusedBWItems(config secretbootstrap.Config, client secrets.Client, bwAllowUnused sets.String, allowUnusedAfter time.Time) error {
+func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClient, bwAllowUnused sets.String, allowUnusedAfter time.Time) error {
 	allSecretStoreItems, err := client.GetInUseInformationForAllItems()
 	if err != nil {
 		return fmt.Errorf("failed to get in-use information from secret store: %w", err)
@@ -697,7 +697,7 @@ func main() {
 	if err := o.completeOptions(&censor); err != nil {
 		logrus.WithError(err).Fatal("Failed to complete options.")
 	}
-	client, err := o.secrets.NewClient(&censor)
+	client, err := o.secrets.NewReadOnlyClient(&censor)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create client.")
 	}

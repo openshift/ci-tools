@@ -9,12 +9,20 @@ import (
 	"github.com/openshift/ci-tools/pkg/bitwarden"
 )
 
-type Client interface {
+type ReadOnlyClient interface {
 	GetFieldOnItem(itemName, fieldName string) ([]byte, error)
 	GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error)
 	GetPassword(itemName string) ([]byte, error)
 	GetInUseInformationForAllItems() (map[string]SecretUsageComparer, error)
 	Logout() ([]byte, error)
+}
+
+type Client interface {
+	ReadOnlyClient
+	SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error
+	SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) error
+	SetPassword(itemName string, password []byte) error
+	UpdateNotesOnItem(itemName string, notes string) error
 }
 
 type dryRunClient struct {

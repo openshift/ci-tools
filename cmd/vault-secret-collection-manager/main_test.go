@@ -17,17 +17,13 @@ import (
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
-const (
-	vaultTestingToken = "jpuxZFWWFW7vM882GGX2aWOE"
-)
-
 func TestSecretCollectionManager(tt *testing.T) {
 	tt.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	t := testhelper.NewT(ctx, tt)
 	vaultAddr := testhelper.Vault(ctx, t)
 
-	client, err := vaultclient.New("http://"+vaultAddr, vaultTestingToken)
+	client, err := vaultclient.New("http://"+vaultAddr, testhelper.VaultTestingRootToken)
 	if err != nil {
 		t.Fatalf("failed to construct vault client: %v", err)
 	}

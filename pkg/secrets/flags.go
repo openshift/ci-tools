@@ -71,12 +71,23 @@ func (o *CLIOptions) Complete(censor *DynamicCensor) error {
 	return nil
 }
 
+func (o *CLIOptions) NewReadOnlyClient(censor *DynamicCensor) (ReadOnlyClient, error) {
+	return o.NewClient(censor)
+}
+
 func (o *CLIOptions) NewClient(censor *DynamicCensor) (Client, error) {
 	if o.BwUser != "" {
 		c, err := bitwarden.NewClient(o.BwUser, o.BwPassword, censor.AddSecrets)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to get Bitwarden client: %w", err)
 		}
+		c.OnCreate(func(item *bitwarden.Item) error {
+			item.Organization = bwOrganization
+			collections := sets.NewString(item.Collections...)
+			collections.Insert(bwCollection)
+			item.Collections = collections.List()
+			return nil
+		})
 		return NewBitwardenClient(c), nil
 	} else {
 		c, err := vaultclient.New(o.VaultAddr, o.VaultToken)

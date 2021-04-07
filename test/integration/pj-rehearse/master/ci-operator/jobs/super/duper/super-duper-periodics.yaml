@@ -57,7 +57,6 @@ periodics:
       - --no-ci-op-args
       command:
       - no-ci-op
-      env:
       image: ci-operator:latest
       imagePullPolicy: Always
       name: ""

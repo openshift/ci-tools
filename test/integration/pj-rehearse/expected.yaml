@@ -829,7 +829,9 @@
     pod_spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --report-credentials-file=/etc/report/credentials
         - --target=[images]
         command:
         - ci-operator
@@ -870,7 +872,24 @@
         resources:
           requests:
             cpu: 10m
+        volumeMounts:
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
       serviceAccountName: ci-operator
+      volumes:
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
     refs:
       base_ref: master
       base_sha: test_sha
@@ -1424,8 +1443,9 @@
     pod_spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
-        - --secret-dir=/usr/local/multistage-cluster-profile
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --report-credentials-file=/etc/report/credentials
         - --target=multistage
         command:
         - ci-operator
@@ -1514,17 +1534,23 @@
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /usr/local/multistage-cluster-profile
-          name: cluster-profile
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
       serviceAccountName: ci-operator
       volumes:
-      - name: cluster-profile
-        projected:
-          sources:
-          - secret:
-              name: cluster-secrets-
-          - configMap:
-              name: cluster-profile-
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
     refs:
       base_ref: master
       base_sha: test_sha
@@ -1589,8 +1615,9 @@
     pod_spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
-        - --secret-dir=/usr/local/multistage5-cluster-profile
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --report-credentials-file=/etc/report/credentials
         - --target=multistage5
         command:
         - ci-operator
@@ -1642,17 +1669,23 @@
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /usr/local/multistage5-cluster-profile
-          name: cluster-profile
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
       serviceAccountName: ci-operator
       volumes:
-      - name: cluster-profile
-        projected:
-          sources:
-          - secret:
-              name: cluster-secrets-
-          - configMap:
-              name: cluster-profile-
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
     refs:
       base_ref: master
       base_sha: test_sha
@@ -1717,7 +1750,9 @@
     pod_spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --report-credentials-file=/etc/report/credentials
         - --target=unit
         command:
         - ci-operator
@@ -1761,7 +1796,24 @@
         resources:
           requests:
             cpu: 10m
+        volumeMounts:
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
       serviceAccountName: ci-operator
+      volumes:
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
     refs:
       base_ref: master
       base_sha: test_sha

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -14,6 +15,11 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api/vault"
 )
+
+// https://github.com/openshift/ci-tools/blob/7af2e075f381ecae1562d1406bad2c86a23e72a3/vendor/k8s.io/api/core/v1/types.go#L5748-L5749
+const secretKeyValidationRegexString = `^[a-zA-Z0-9\.\-_]+$`
+
+var secretKeyValidationRegex = regexp.MustCompile(secretKeyValidationRegexString)
 
 type kvKeyValidator struct {
 	kvMountPath string
@@ -51,8 +57,8 @@ func (k *kvKeyValidator) RoundTrip(r *http.Request) (*http.Response, error) {
 			}
 			continue
 		}
-		if keyErrs := validation.IsDNS1123Label(key); len(keyErrs) > 0 {
-			errs = append(errs, fmt.Sprintf("key %s is invalid: %v", key, keyErrs))
+		if !secretKeyValidationRegex.MatchString(key) {
+			errs = append(errs, fmt.Sprintf("key %s is invalid: must match regex %s", key, secretKeyValidationRegexString))
 		}
 	}
 

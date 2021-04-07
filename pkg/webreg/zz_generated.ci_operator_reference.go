@@ -334,6 +334,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      test_step:\n" +
 	"        # As is the name of the test.\n" +
 	"        as: ' '\n" +
+	"        # Cluster specifies the name of the cluster where the test runs.\n" +
+	"        cluster: ' '\n" +
 	"        # ClusterClaim claims an OpenShift cluster and exposes environment variable ${KUBECONFIG} to the test container\n" +
 	"        cluster_claim:\n" +
 	"            # Architecture is the architecture for the product.\n" +
@@ -998,6 +1000,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"tests:\n" +
 	"    - # As is the name of the test.\n" +
 	"      as: ' '\n" +
+	"      # Cluster specifies the name of the cluster where the test runs.\n" +
+	"      cluster: ' '\n" +
 	"      # ClusterClaim claims an OpenShift cluster and exposes environment variable ${KUBECONFIG} to the test container\n" +
 	"      cluster_claim:\n" +
 	"        # Architecture is the architecture for the product.\n" +

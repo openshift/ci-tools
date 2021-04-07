@@ -16,13 +16,14 @@ import (
 	"k8s.io/test-infra/prow/config"
 	prowconfig "k8s.io/test-infra/prow/config"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 var (
 	c = Config{
 		Default: "api.ci",
-		Groups: map[ClusterName]Group{
+		Groups: map[api.Cluster]Group{
 			"api.ci": {
 				Paths: []string{
 					".*-postsubmits.yaml$",
@@ -60,13 +61,13 @@ var (
 		Default: "api.ci",
 		BuildFarm: map[CloudProvider]JobGroups{
 			CloudAWS: {
-				ClusterBuild01: {},
+				api.ClusterBuild01: {},
 			},
 			CloudGCP: {
-				ClusterBuild02: {},
+				api.ClusterBuild02: {},
 			},
 		},
-		Groups: map[ClusterName]Group{
+		Groups: map[api.Cluster]Group{
 			"api.ci": {
 				Paths: []string{
 					".*-postsubmits.yaml$",
@@ -104,10 +105,10 @@ var (
 
 	configWithBuildFarmWithJobs = Config{
 		Default: "api.ci",
-		KVM:     []ClusterName{ClusterBuild02},
+		KVM:     []api.Cluster{api.ClusterBuild02},
 		BuildFarm: map[CloudProvider]JobGroups{
 			CloudAWS: {
-				ClusterBuild01: {
+				api.ClusterBuild01: {
 					Paths: []string{
 						".*some-build-farm-presubmits.yaml$",
 					},
@@ -117,10 +118,10 @@ var (
 				},
 			},
 			CloudGCP: {
-				ClusterBuild02: {},
+				api.ClusterBuild02: {},
 			},
 		},
-		Groups: map[ClusterName]Group{
+		Groups: map[api.Cluster]Group{
 			"api.ci": {
 				Paths: []string{
 					".*-postsubmits.yaml$",
@@ -214,7 +215,7 @@ func TestGetClusterForJob(t *testing.T) {
 		config      *Config
 		jobBase     prowconfig.JobBase
 		path        string
-		expected    ClusterName
+		expected    api.Cluster
 		expectedErr error
 	}{
 		{
@@ -250,14 +251,14 @@ func TestGetClusterForJob(t *testing.T) {
 				Default: "api.ci",
 				BuildFarm: map[CloudProvider]JobGroups{
 					CloudAWS: {
-						ClusterBuild01: {
+						api.ClusterBuild01: {
 							PathREs: []*regexp.Regexp{
 								regexp.MustCompile(".*infra-periodics.yaml$"),
 							},
 						},
 					},
 					CloudGCP: {
-						ClusterBuild02: {
+						api.ClusterBuild02: {
 							PathREs: []*regexp.Regexp{
 								regexp.MustCompile(".*/openshift-openshift-azure-infra-periodics.yaml$"),
 							},
@@ -276,7 +277,7 @@ func TestGetClusterForJob(t *testing.T) {
 				Default: "api.ci",
 				BuildFarm: map[CloudProvider]JobGroups{
 					CloudGCP: {
-						ClusterBuild02: {
+						api.ClusterBuild02: {
 							PathREs: []*regexp.Regexp{
 								regexp.MustCompile(".*kubevirt-kubevirt-ssp-operator-master-presubmits.yaml$"),
 								regexp.MustCompile(".*kubevirt-ssp-operator-master-presubmits.yaml$"),
@@ -296,7 +297,7 @@ func TestGetClusterForJob(t *testing.T) {
 				Default: "api.ci",
 				BuildFarm: map[CloudProvider]JobGroups{
 					CloudGCP: {
-						ClusterBuild02: {
+						api.ClusterBuild02: {
 							PathREs: []*regexp.Regexp{
 								regexp.MustCompile(".*/kubevirt-kubevirt-ssp-operator-master-presubmits.yaml$"),
 								regexp.MustCompile(".*/kubevirt-ssp-operator-master-presubmits.yaml$"),
@@ -307,7 +308,7 @@ func TestGetClusterForJob(t *testing.T) {
 			},
 			jobBase:  config.JobBase{Agent: "kubernetes", Name: "some-job"},
 			path:     "ci-operator/jobs/kubevirt/kubevirt-ssp-operator/kubevirt-kubevirt-ssp-operator-master-presubmits.yaml",
-			expected: ClusterBuild02,
+			expected: api.ClusterBuild02,
 		},
 	}
 	for _, tc := range testCases {
@@ -329,7 +330,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 		config                 *Config
 		jobBase                prowconfig.JobBase
 		path                   string
-		expected               ClusterName
+		expected               api.Cluster
 		expectedCanBeRelocated bool
 		expectedErr            error
 	}{
@@ -402,6 +403,15 @@ func TestDetermineClusterForJob(t *testing.T) {
 			expected:               "build02",
 			expectedCanBeRelocated: false,
 		},
+		{
+			name:   "a job with cluster label",
+			config: &configWithBuildFarmWithJobs,
+			jobBase: config.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-os-master-unit",
+				Labels: map[string]string{"ci-operator.openshift.io/cluster": "b01"},
+			},
+			expected:               "b01",
+			expectedCanBeRelocated: false,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -423,19 +433,19 @@ func TestIsInBuildFarm(t *testing.T) {
 	testCases := []struct {
 		name        string
 		config      *Config
-		clusterName ClusterName
+		clusterName api.Cluster
 		expected    CloudProvider
 	}{
 		{
 			name:        "build01",
 			config:      &configWithBuildFarm,
-			clusterName: ClusterBuild01,
+			clusterName: api.ClusterBuild01,
 			expected:    "aws",
 		},
 		{
 			name:        "app.ci",
 			config:      &configWithBuildFarm,
-			clusterName: ClusterAPPCI,
+			clusterName: api.ClusterAPPCI,
 			expected:    "",
 		},
 	}
@@ -527,17 +537,17 @@ func TestValidate(t *testing.T) {
 				Default: "api.ci",
 				BuildFarm: map[CloudProvider]JobGroups{
 					CloudAWS: {
-						ClusterBuild01: {
+						api.ClusterBuild01: {
 							Jobs: []string{"a", "b"},
 						},
 					},
 					CloudGCP: {
-						ClusterBuild02: {
+						api.ClusterBuild02: {
 							Jobs: []string{"c", "b"},
 						},
 					},
 				},
-				Groups: map[ClusterName]Group{ClusterAPICI: {
+				Groups: map[api.Cluster]Group{api.ClusterAPICI: {
 					Jobs: []string{"c", "d"},
 				}},
 			},

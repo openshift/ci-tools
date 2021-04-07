@@ -479,6 +479,17 @@ type PipelineImageCacheStepConfiguration struct {
 	Commands string `json:"commands"`
 }
 
+// Cluster is the name of a cluster in CI build farm.
+type Cluster string
+
+const (
+	ClusterAPICI   Cluster = "api.ci"
+	ClusterAPPCI   Cluster = "app.ci"
+	ClusterBuild01 Cluster = "build01"
+	ClusterBuild02 Cluster = "build02"
+	ClusterVSphere Cluster = "vsphere"
+)
+
 // TestStepConfiguration describes a step that runs a
 // command in one of the previously built images and then
 // gathers artifacts from that step.
@@ -488,6 +499,9 @@ type TestStepConfiguration struct {
 	// Commands are the shell commands to run in
 	// the repository root to execute tests.
 	Commands string `json:"commands,omitempty"`
+
+	// Cluster specifies the name of the cluster where the test runs.
+	Cluster Cluster `json:"cluster,omitempty"`
 
 	// Secret is an optional secret object which
 	// will be mounted inside the test container.

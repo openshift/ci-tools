@@ -184,6 +184,9 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			if requestingKVM {
 				presubmit.Labels[cioperatorapi.KVMDeviceLabel] = v
 			}
+			if element.Cluster != "" {
+				presubmit.Labels[cioperatorapi.ClusterLabel] = string(element.Cluster)
+			}
 			presubmits[orgrepo] = append(presubmits[orgrepo], presubmit)
 		}
 	}

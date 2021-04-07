@@ -29,34 +29,19 @@ const (
 // Config is the configuration file of this tools, which defines the cluster parameter for each Prow job, i.e., where it runs
 type Config struct {
 	// the cluster cluster name if no other condition matches
-	Default ClusterName `json:"default"`
+	Default api.Cluster `json:"default"`
 	// the cluster name for ssh bastion jobs
-	SSHBastion ClusterName `json:"sshBastion"`
+	SSHBastion api.Cluster `json:"sshBastion"`
 	// the cluster names for kvm jobs
-	KVM []ClusterName `json:"kvm"`
+	KVM []api.Cluster `json:"kvm"`
 	// Groups maps a group of jobs to a cluster
 	Groups JobGroups `json:"groups"`
 	// BuildFarm maps groups of jobs to a cloud provider, like GCP
 	BuildFarm map[CloudProvider]JobGroups `json:"buildFarm,omitempty"`
 }
 
-// ClusterName is the name of a cluster
-type ClusterName string
-
-const (
-	// ClusterAPICI is the cluster api.ci which will be deprecated soon
-	ClusterAPICI ClusterName = "api.ci"
-	// ClusterAPPCI is the cluster app.ci which runs Prow
-	ClusterAPPCI ClusterName = "app.ci"
-	// ClusterBuild01 is the cluster build01 in the build farm
-	ClusterBuild01 ClusterName = "build01"
-	// ClusterBuild02 is the cluster build02 in the build farm
-	ClusterBuild02 ClusterName = "build02"
-	ClusterVSphere ClusterName = "vsphere"
-)
-
 // JobGroups maps a group of jobs to a cluster
-type JobGroups = map[ClusterName]Group
+type JobGroups = map[api.Cluster]Group
 
 //Group is a group of jobs
 type Group struct {
@@ -69,7 +54,7 @@ type Group struct {
 }
 
 // GetClusterForJob returns a cluster for a prow job
-func (config *Config) GetClusterForJob(jobBase prowconfig.JobBase, path string) (ClusterName, error) {
+func (config *Config) GetClusterForJob(jobBase prowconfig.JobBase, path string) (api.Cluster, error) {
 	cluster, _, err := config.DetermineClusterForJob(jobBase, path)
 	return cluster, err
 }
@@ -87,12 +72,12 @@ func isApplyConfigJob(jobBase prowconfig.JobBase) bool {
 }
 
 // DetermineClusterForJob return the cluster for a prow job and if it can be relocated to a cluster in build farm
-func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path string) (clusterName ClusterName, mayBeRelocated bool, _ error) {
+func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path string) (clusterName api.Cluster, mayBeRelocated bool, _ error) {
 	if jobBase.Agent != "kubernetes" && jobBase.Agent != "" {
 		return "", false, nil
 	}
 	if strings.Contains(jobBase.Name, "vsphere") && !isApplyConfigJob(jobBase) {
-		return ClusterVSphere, false, nil
+		return api.ClusterVSphere, false, nil
 	}
 	if isSSHBastionJob(jobBase) && config.SSHBastion != "" {
 		return config.SSHBastion, false, nil
@@ -102,6 +87,9 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 			// Any deterministic distribution is fine for now.
 			// We could implement more effective distribution when we understand more about the jobs.
 			return config.KVM[len(jobBase.Name)%len(config.KVM)], false, nil
+		}
+		if cluster, ok := jobBase.Labels[api.ClusterLabel]; ok {
+			return api.Cluster(cluster), false, nil
 		}
 	}
 
@@ -169,7 +157,7 @@ func isSSHBastionJob(base prowconfig.JobBase) bool {
 }
 
 // IsInBuildFarm returns the cloudProvider if the cluster is in the build farm; empty string otherwise.
-func (config *Config) IsInBuildFarm(clusterName ClusterName) CloudProvider {
+func (config *Config) IsInBuildFarm(clusterName api.Cluster) CloudProvider {
 	for cloudProvider, v := range config.BuildFarm {
 		for cluster := range v {
 			if cluster == clusterName {

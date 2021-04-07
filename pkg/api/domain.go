@@ -6,9 +6,6 @@ import (
 )
 
 const (
-	ClusterNameAPICI = "api.ci"
-	ClusterNameAPPCI = "app.ci"
-
 	// ServiceDomain is the domain under which services are
 	// routed for the current service cluster.
 	ServiceDomainCI    = "ci.openshift.org"
@@ -56,7 +53,7 @@ func PublicDomainForImage(ClusterName, potentiallyPrivate string) (string, error
 		return "", err
 	}
 	svcDomainAndPort := "image-registry.openshift-image-registry.svc:5000"
-	if ClusterName == ClusterNameAPICI {
+	if ClusterName == string(ClusterAPICI) {
 		svcDomainAndPort = "docker-registry.default.svc:5000"
 	}
 
@@ -65,9 +62,9 @@ func PublicDomainForImage(ClusterName, potentiallyPrivate string) (string, error
 
 func domainForClusterName(ClusterName string) (string, error) {
 	switch ClusterName {
-	case ClusterNameAPICI:
+	case string(ClusterAPICI):
 		return ServiceDomainAPICIRegistry, nil
-	case ClusterNameAPPCI:
+	case string(ClusterAPPCI):
 		return ServiceDomainAPPCIRegistry, nil
 	}
 	return "", fmt.Errorf("failed to get the domain for cluster %s", ClusterName)

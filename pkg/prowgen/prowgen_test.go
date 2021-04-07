@@ -194,15 +194,17 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 	tests := []struct {
 		description string
 
-		test       string
-		repoInfo   *ProwgenInfo
-		jobRelease string
-		clone      bool
-	}{{
-		description: "presubmit for standard test",
-		test:        "testname",
-		repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-	},
+		test          string
+		repoInfo      *ProwgenInfo
+		jobRelease    string
+		clone         bool
+		skipRehearsal bool
+	}{
+		{
+			description: "presubmit for standard test",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+		},
 		{
 			description: "presubmit for a test in a variant config",
 			test:        "testname",
@@ -221,11 +223,17 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			jobRelease:  "4.6",
 			clone:       true,
 		},
+		{
+			description:   "presubmit for skip rehearsal",
+			test:          "testname",
+			repoInfo:      &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			skipRehearsal: true,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
 			// podSpec tested in generatePodSpec
-			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, nil, nil, tc.jobRelease, !tc.clone))
+			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, nil, nil, tc.jobRelease, !tc.clone, !tc.skipRehearsal))
 		})
 	}
 }
@@ -347,6 +355,18 @@ func TestGenerateJobs(t *testing.T) {
 				Tests: []ciop.TestStepConfiguration{
 					{As: "derTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}},
 					{As: "leTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}}},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		}, {
+			id: "two tests and empty Images with one test skip rehearsal",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "derTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}},
+					{As: "leTest", SkipRehearsal: true, ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}}},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "organization",

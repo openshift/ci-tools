@@ -1,0 +1,11 @@
+presubmits:
+  organization/repository:
+  - always_run: false
+    labels:
+      ci-operator.openshift.io/prowgen-controlled: newly-generated
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    name: pull-ci-organization-repository-branch-derTest
+  - always_run: false
+    labels:
+      ci-operator.openshift.io/prowgen-controlled: newly-generated
+    name: pull-ci-organization-repository-branch-leTest

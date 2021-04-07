@@ -485,9 +485,16 @@ type PipelineImageCacheStepConfiguration struct {
 type TestStepConfiguration struct {
 	// As is the name of the test.
 	As string `json:"as"`
+
 	// Commands are the shell commands to run in
 	// the repository root to execute tests.
 	Commands string `json:"commands,omitempty"`
+
+	// SkipRehearsal indicates that the "can-be-rehearsed"
+	// label is to be omitted. This only applies to presubmit
+	// jobs. Postsubmit jobs will never be rehearsed. Periodic
+	// jobs will always be rehearsed.
+	SkipRehearsal bool `json:"skip_rehearsal,omitempty"`
 
 	// Secret is an optional secret object which
 	// will be mounted inside the test container.

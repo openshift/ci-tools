@@ -4,14 +4,13 @@ metadata:
   creationTimestamp: null
   labels:
     OPENSHIFT_CI: "true"
-    build-id: buildId
-    ci.openshift.io/refs.branch: master
-    ci.openshift.io/refs.org: org
-    ci.openshift.io/refs.repo: repo
+    ci.openshift.io/metadata.branch: ""
+    ci.openshift.io/metadata.org: ""
+    ci.openshift.io/metadata.repo: ""
+    ci.openshift.io/metadata.target: ""
+    ci.openshift.io/metadata.variant: ""
     created-by-ci: "true"
     creates: src
-    job: job
-    prow.k8s.io/id: prowJobId
   name: src
   namespace: namespace
 spec:

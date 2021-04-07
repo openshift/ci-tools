@@ -25,6 +25,9 @@ type JobSpec struct {
 
 	// if set, any new artifacts will be a child of this object
 	owner *meta.OwnerReference
+
+	Metadata Metadata
+	Target   string
 }
 
 // Namespace returns the namespace of the job. Must not be evaluated

@@ -174,6 +174,7 @@ func PodStep(name string, config PodStepConfiguration, resources api.ResourceCon
 
 func generateBasePod(
 	jobSpec *api.JobSpec,
+	baseLabels map[string]string,
 	name string,
 	containerName string,
 	command []string,
@@ -193,7 +194,7 @@ func generateBasePod(
 		ObjectMeta: meta.ObjectMeta{
 			Namespace: jobSpec.Namespace(),
 			Name:      name,
-			Labels:    defaultPodLabels(jobSpec),
+			Labels:    labelsFor(jobSpec, baseLabels),
 			Annotations: map[string]string{
 				JobSpecAnnotation:                     jobSpec.RawSpec(),
 				annotationContainersForSubTestResults: containerName,
@@ -229,7 +230,7 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	}
 
 	artifactDir := s.name
-	pod, err := generateBasePod(s.jobSpec, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts)
+	pod, err := generateBasePod(s.jobSpec, map[string]string{}, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts)
 	if err != nil {
 		return nil, err
 	}

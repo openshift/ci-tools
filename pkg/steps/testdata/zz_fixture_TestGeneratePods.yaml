@@ -6,13 +6,14 @@
     creationTimestamp: null
     labels:
       OPENSHIFT_CI: "true"
-      build-id: build id
+      ci.openshift.io/metadata.branch: base_ref
+      ci.openshift.io/metadata.org: org
+      ci.openshift.io/metadata.repo: repo
+      ci.openshift.io/metadata.step: step0
+      ci.openshift.io/metadata.target: target
+      ci.openshift.io/metadata.variant: variant
       ci.openshift.io/multi-stage-test: test
-      ci.openshift.io/refs.branch: base ref
-      ci.openshift.io/refs.org: org
-      ci.openshift.io/refs.repo: repo
       created-by-ci: "true"
-      job: job
     name: test-step0
     namespace: namespace
   spec:
@@ -157,13 +158,14 @@
     creationTimestamp: null
     labels:
       OPENSHIFT_CI: "true"
-      build-id: build id
+      ci.openshift.io/metadata.branch: base_ref
+      ci.openshift.io/metadata.org: org
+      ci.openshift.io/metadata.repo: repo
+      ci.openshift.io/metadata.step: step1
+      ci.openshift.io/metadata.target: target
+      ci.openshift.io/metadata.variant: variant
       ci.openshift.io/multi-stage-test: test
-      ci.openshift.io/refs.branch: base ref
-      ci.openshift.io/refs.org: org
-      ci.openshift.io/refs.repo: repo
       created-by-ci: "true"
-      job: job
     name: test-step1
     namespace: namespace
   spec:
@@ -308,13 +310,14 @@
     creationTimestamp: null
     labels:
       OPENSHIFT_CI: "true"
-      build-id: build id
+      ci.openshift.io/metadata.branch: base_ref
+      ci.openshift.io/metadata.org: org
+      ci.openshift.io/metadata.repo: repo
+      ci.openshift.io/metadata.step: step2
+      ci.openshift.io/metadata.target: target
+      ci.openshift.io/metadata.variant: variant
       ci.openshift.io/multi-stage-test: test
-      ci.openshift.io/refs.branch: base ref
-      ci.openshift.io/refs.org: org
-      ci.openshift.io/refs.repo: repo
       created-by-ci: "true"
-      job: job
     name: test-step2
     namespace: namespace
   spec:

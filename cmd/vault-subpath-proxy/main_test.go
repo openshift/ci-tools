@@ -192,7 +192,11 @@ path "secret/metadata/team-1/*" {
 			name:               "Slash in key name is refused",
 			data:               map[string]string{"invalid/key": "data"},
 			expectedStatusCode: 400,
-			expectedErrors:     []string{"key invalid/key is invalid: [a lowercase RFC 1123 label must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?')]"},
+			expectedErrors:     []string{`key invalid/key is invalid: must match regex ^[a-zA-Z0-9\.\-_]+$`},
+		},
+		{
+			name: "Name with dots is allowed",
+			data: map[string]string{"sa.ci-chat-bot.api.ci.config": "data"},
 		},
 		{
 			name: "All letters key is allowed",

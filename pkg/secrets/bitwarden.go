@@ -8,6 +8,13 @@ import (
 	"github.com/openshift/ci-tools/pkg/bitwarden"
 )
 
+const (
+	// CoreOS / OpenShift
+	bwOrganization = "05ac4fbe-11d1-44df-bb29-a772017c6631"
+	// OpenShift TestPlatform (CI)
+	bwCollection = "0247722f-3ab3-4fd4-a01d-a983013f3159"
+)
+
 type bitwardenClient struct {
 	bitwarden.Client
 }

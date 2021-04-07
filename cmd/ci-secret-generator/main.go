@@ -55,10 +55,6 @@ type fieldGenerator struct {
 
 func parseOptions() options {
 	var o options
-	// CoreOS / OpenShift
-	o.secrets.BwDefaultOrganization = "05ac4fbe-11d1-44df-bb29-a772017c6631"
-	// OpenShift TestPlatform (CI)
-	o.secrets.BwDefaultCollections = []string{"0247722f-3ab3-4fd4-a01d-a983013f3159"}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with bw command")
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")

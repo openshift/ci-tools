@@ -5,8 +5,11 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/types"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/openshift/ci-tools/pkg/api/vault"
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
@@ -99,7 +102,7 @@ func (c *vaultClient) GetInUseInformationForAllItems() (map[string]SecretUsageCo
 		for key := range kvData.Data {
 			comparer.allFields.Insert(key)
 		}
-		result[strings.TrimPrefix(key, c.prefix)] = &comparer
+		result[strings.TrimPrefix(key, c.prefix+"/")] = &comparer
 	}
 
 	return result, nil
@@ -122,6 +125,40 @@ func (c *vaultClient) UpdateNotesOnItem(itemName string, notes string) error {
 }
 
 func (c *vaultClient) Logout() ([]byte, error) { return nil, nil }
+
+func (c *vaultClient) GetUserSecrets() (map[types.NamespacedName]map[string]string, error) {
+	allItems, err := c.upstream.ListKVRecursively(c.prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	result := map[types.NamespacedName]map[string]string{}
+	var errs []error
+	for _, path := range allItems {
+		item, err := c.upstream.GetKV(path)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if item.Data[vault.SecretSyncTargetNamepaceKey] == "" || item.Data[vault.SecretSyncTargetNameKey] == "" {
+			continue
+		}
+		nn := types.NamespacedName{Namespace: item.Data[vault.SecretSyncTargetNamepaceKey], Name: item.Data[vault.SecretSyncTargetNameKey]}
+		if val, ok := result[nn]; ok {
+			errs = append(errs, fmt.Errorf("both the %s and the %s vault item point to the %s secret", val[vault.VaultSourceKey], path, nn.String()))
+			continue
+		}
+		result[nn] = map[string]string{vault.VaultSourceKey: path}
+		for k, v := range item.Data {
+			if k == vault.SecretSyncTargetNamepaceKey || k == vault.SecretSyncTargetNameKey {
+				continue
+			}
+			result[nn][k] = v
+		}
+	}
+
+	return result, utilerrors.NewAggregate(errs)
+}
 
 type vaultSecretUsageComparer struct {
 	item        vaultclient.KVData

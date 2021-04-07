@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/bitwarden"
 	"github.com/openshift/ci-tools/pkg/secrets"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
@@ -1024,105 +1026,106 @@ func TestValidateCompletedOptions(t *testing.T) {
 
 func TestConstructSecrets(t *testing.T) {
 	testCases := []struct {
-		name          string
-		config        secretbootstrap.Config
-		bwClient      bitwarden.Client
-		expected      map[string][]*coreapi.Secret
-		expectedError error
+		name    string
+		config  secretbootstrap.Config
+		bwItems []bitwarden.Item
+		// id -> content
+		attachments          map[string]string
+		expected             map[string][]*coreapi.Secret
+		expectedBitwardenErr string
+		expectedVaultErr     string
 	}{
 		{
 			name:   "basic case",
 			config: defaultConfig,
-			bwClient: bitwarden.NewFakeClient(
-				[]bitwarden.Item{
-					{
-						ID:   "1",
-						Name: "item-name-1",
-						Fields: []bitwarden.Field{
-							{
-								Name:  "field-name-1",
-								Value: "value1",
-							},
-							{
-								Name:  "field-name-2",
-								Value: "value2",
-							},
+			bwItems: []bitwarden.Item{
+				{
+					ID:   "1",
+					Name: "item-name-1",
+					Fields: []bitwarden.Field{
+						{
+							Name:  "field-name-1",
+							Value: "value1",
 						},
-						Attachments: []bitwarden.Attachment{
-							{
-								ID:       "a-id-1-1",
-								FileName: "attachment-name-1",
-							},
-							{
-								ID:       "a-id-1-2",
-								FileName: "attachment-name-2",
-							},
+						{
+							Name:  "field-name-2",
+							Value: "value2",
 						},
 					},
-					{
-						ID:   "2",
-						Name: "item-name-2",
-						Fields: []bitwarden.Field{
-							{
-								Name:  "field-name-1",
-								Value: "value3",
-							},
-							{
-								Name:  "field-name-2",
-								Value: "value2",
-							},
+					Attachments: []bitwarden.Attachment{
+						{
+							ID:       "a-id-1-1",
+							FileName: "attachment-name-1",
 						},
-						Attachments: []bitwarden.Attachment{
-							{
-								ID:       "a-id-2-1",
-								FileName: "attachment-name-1",
-							},
-							{
-								ID:       "a-id-2-2",
-								FileName: "attachment-name-2",
-							},
-						},
-					},
-					{
-						ID:   "3",
-						Name: "item-name-3",
-						Login: &bitwarden.Login{
-							Password: "yyy",
-						},
-						Fields: []bitwarden.Field{
-							{
-								Name:  "field-name-1",
-								Value: "value1",
-							},
-						},
-						Attachments: []bitwarden.Attachment{
-							{
-								ID:       "a-id-3-1",
-								FileName: "attachment-name-1",
-							},
-							{
-								ID:       "a-id-3-2",
-								FileName: "attachment-name-2",
-							},
-						},
-					},
-					{
-						ID:   "a",
-						Name: "quay.io",
-						Fields: []bitwarden.Field{
-							{
-								Name:  "Pull Credentials",
-								Value: "123",
-							},
+						{
+							ID:       "a-id-1-2",
+							FileName: "attachment-name-2",
 						},
 					},
 				},
-				map[string]string{
-					"a-id-1-1": "attachment-name-1-1-value",
-					"a-id-2-1": "attachment-name-2-1-value",
-					"a-id-3-2": "attachment-name-3-2-value",
+				{
+					ID:   "2",
+					Name: "item-name-2",
+					Fields: []bitwarden.Field{
+						{
+							Name:  "field-name-1",
+							Value: "value3",
+						},
+						{
+							Name:  "field-name-2",
+							Value: "value2",
+						},
+					},
+					Attachments: []bitwarden.Attachment{
+						{
+							ID:       "a-id-2-1",
+							FileName: "attachment-name-1",
+						},
+						{
+							ID:       "a-id-2-2",
+							FileName: "attachment-name-2",
+						},
+					},
 				},
-			),
+				{
+					ID:   "3",
+					Name: "item-name-3",
+					Login: &bitwarden.Login{
+						Password: "yyy",
+					},
+					Fields: []bitwarden.Field{
+						{
+							Name:  "field-name-1",
+							Value: "value1",
+						},
+					},
+					Attachments: []bitwarden.Attachment{
+						{
+							ID:       "a-id-3-1",
+							FileName: "attachment-name-1",
+						},
+						{
+							ID:       "a-id-3-2",
+							FileName: "attachment-name-2",
+						},
+					},
+				},
+				{
+					ID:   "a",
+					Name: "quay.io",
+					Fields: []bitwarden.Field{
+						{
+							Name:  "Pull Credentials",
+							Value: "123",
+						},
+					},
+				},
+			},
+			attachments: map[string]string{
+				"a-id-1-1": "attachment-name-1-1-value",
+				"a-id-2-1": "attachment-name-2-1-value",
+				"a-id-3-2": "attachment-name-3-2-value",
+			},
 			expected: map[string][]*coreapi.Secret{
 				"default": {
 					{
@@ -1179,186 +1182,321 @@ func TestConstructSecrets(t *testing.T) {
 			},
 		},
 		{
-			name:   "error: no such a field",
+			name:   "error: no such field",
 			config: defaultConfig,
-			bwClient: bitwarden.NewFakeClient(
-				[]bitwarden.Item{
-					{
-						ID:   "1",
-						Name: "item-name-1",
-						Fields: []bitwarden.Field{
-							{
-								Name:  "field-name-2",
-								Value: "value2",
-							},
-						},
-						Attachments: []bitwarden.Attachment{
-							{
-								ID:       "a-id-1-1",
-								FileName: "attachment-name-1",
-							},
-							{
-								ID:       "a-id-1-2",
-								FileName: "attachment-name-2",
-							},
+			bwItems: []bitwarden.Item{
+				{
+					ID:   "1",
+					Name: "item-name-1",
+					Fields: []bitwarden.Field{
+						{
+							Name:  "field-name-2",
+							Value: "value2",
 						},
 					},
-					{
-						ID:   "2",
-						Name: "item-name-2",
-						Fields: []bitwarden.Field{
-							{
-								Name:  "field-name-1",
-								Value: "value3",
-							},
-							{
-								Name:  "field-name-2",
-								Value: "value2",
-							},
+					Attachments: []bitwarden.Attachment{
+						{
+							ID:       "a-id-1-1",
+							FileName: "attachment-name-1",
 						},
-						Attachments: []bitwarden.Attachment{
-							{
-								ID:       "a-id-2-1",
-								FileName: "attachment-name-1",
-							},
-							{
-								ID:       "a-id-2-2",
-								FileName: "attachment-name-2",
-							},
-						},
-					},
-					{
-						ID:   "3",
-						Name: "item-name-3",
-						Login: &bitwarden.Login{
-							Password: "yyy",
-						},
-						Fields: []bitwarden.Field{
-							{
-								Name:  "field-name-1",
-								Value: "value1",
-							},
-						},
-						Attachments: []bitwarden.Attachment{
-							{
-								ID:       "a-id-3-1",
-								FileName: "attachment-name-1",
-							},
-							{
-								ID:       "a-id-3-2",
-								FileName: "attachment-name-2",
-							},
+						{
+							ID:       "a-id-1-2",
+							FileName: "attachment-name-2",
 						},
 					},
 				},
-				map[string]string{
-					"a-id-1-1": "attachment-name-1-1-value",
-					"a-id-2-1": "attachment-name-2-1-value",
-					"a-id-3-2": "attachment-name-3-2-value",
+				{
+					ID:   "2",
+					Name: "item-name-2",
+					Fields: []bitwarden.Field{
+						{
+							Name:  "field-name-1",
+							Value: "value3",
+						},
+						{
+							Name:  "field-name-2",
+							Value: "value2",
+						},
+					},
+					Attachments: []bitwarden.Attachment{
+						{
+							ID:       "a-id-2-1",
+							FileName: "attachment-name-1",
+						},
+						{
+							ID:       "a-id-2-2",
+							FileName: "attachment-name-2",
+						},
+					},
 				},
-			),
-			expectedError: errors.New(`[config.0."key-name-1": failed to find field field-name-1 in item item-name-1, config.1.".dockerconfigjson": failed to find field Pull Credentials in item quay.io]`),
+				{
+					ID:   "3",
+					Name: "item-name-3",
+					Login: &bitwarden.Login{
+						Password: "yyy",
+					},
+					Fields: []bitwarden.Field{
+						{
+							Name:  "field-name-1",
+							Value: "value1",
+						},
+					},
+					Attachments: []bitwarden.Attachment{
+						{
+							ID:       "a-id-3-1",
+							FileName: "attachment-name-1",
+						},
+						{
+							ID:       "a-id-3-2",
+							FileName: "attachment-name-2",
+						},
+					},
+				},
+			},
+			attachments: map[string]string{
+				"a-id-1-1": "attachment-name-1-1-value",
+				"a-id-2-1": "attachment-name-2-1-value",
+				"a-id-3-2": "attachment-name-3-2-value",
+			},
+			expectedBitwardenErr: `[config.0."key-name-1": failed to find field field-name-1 in item item-name-1, config.1.".dockerconfigjson": no item quay.io found]`,
+			expectedVaultErr:     `[config.0."key-name-1": item at path "prefix/item-name-1" has no key "field-name-1", config.1.".dockerconfigjson": no data at path prefix/quay.io]`,
 		},
 		{
-			name:   "error: no such an attachment",
+			name:   "error: no such attachment",
 			config: defaultConfig,
-			bwClient: bitwarden.NewFakeClient(
-				[]bitwarden.Item{
-					{
-						ID:    "1",
-						Name:  "item-name-1",
-						Login: &bitwarden.Login{Password: "abc"},
-						Fields: []bitwarden.Field{
-							{
-								Name:  "field-name-1",
-								Value: "value1",
-							},
-							{
-								Name:  "field-name-2",
-								Value: "value2",
-							},
+			bwItems: []bitwarden.Item{
+				{
+					ID:    "1",
+					Name:  "item-name-1",
+					Login: &bitwarden.Login{Password: "abc"},
+					Fields: []bitwarden.Field{
+						{
+							Name:  "field-name-1",
+							Value: "value1",
 						},
-						Attachments: []bitwarden.Attachment{
-							{
-								ID:       "a-id-1-1",
-								FileName: "attachment-name-1",
-							},
-							{
-								ID:       "a-id-1-2",
-								FileName: "attachment-name-2",
-							},
+						{
+							Name:  "field-name-2",
+							Value: "value2",
 						},
 					},
-					{
-						ID:   "2",
-						Name: "item-name-2",
-						Fields: []bitwarden.Field{
-							{
-								Name:  "field-name-1",
-								Value: "value3",
-							},
-							{
-								Name:  "field-name-2",
-								Value: "value2",
-							},
+					Attachments: []bitwarden.Attachment{
+						{
+							ID:       "a-id-1-1",
+							FileName: "attachment-name-1",
 						},
-						Attachments: []bitwarden.Attachment{
-							{
-								ID:       "a-id-2-2",
-								FileName: "attachment-name-2",
-							},
-						},
-					},
-					{
-						ID:   "3",
-						Name: "item-name-3",
-						Fields: []bitwarden.Field{
-							{
-								Name:  "field-name-1",
-								Value: "value1",
-							},
-						},
-						Attachments: []bitwarden.Attachment{
-							{
-								ID:       "a-id-3-1",
-								FileName: "attachment-name-1",
-							},
-							{
-								ID:       "a-id-3-2",
-								FileName: "attachment-name-2",
-							},
+						{
+							ID:       "a-id-1-2",
+							FileName: "attachment-name-2",
 						},
 					},
 				},
-				map[string]string{
-					"a-id-1-1": "attachment-name-1-1-value",
-					"a-id-3-2": "attachment-name-3-2-value",
+				{
+					ID:   "2",
+					Name: "item-name-2",
+					Fields: []bitwarden.Field{
+						{
+							Name:  "field-name-1",
+							Value: "value3",
+						},
+						{
+							Name:  "field-name-2",
+							Value: "value2",
+						},
+					},
+					Attachments: []bitwarden.Attachment{
+						{
+							ID:       "a-id-2-2",
+							FileName: "attachment-name-2",
+						},
+					},
 				},
-			),
-			expectedError: errors.New(`[config.0."key-name-5": failed to find attachment attachment-name-1 in item item-name-2, config.0."key-name-7": failed to find password in item item-name-3, config.1.".dockerconfigjson": failed to find field Pull Credentials in item quay.io]`),
+				{
+					ID:   "3",
+					Name: "item-name-3",
+					Fields: []bitwarden.Field{
+						{
+							Name:  "field-name-1",
+							Value: "value1",
+						},
+					},
+					Attachments: []bitwarden.Attachment{
+						{
+							ID:       "a-id-3-1",
+							FileName: "attachment-name-1",
+						},
+						{
+							ID:       "a-id-3-2",
+							FileName: "attachment-name-2",
+						},
+					},
+				},
+			},
+			attachments: map[string]string{
+				"a-id-1-1": "attachment-name-1-1-value",
+				"a-id-3-2": "attachment-name-3-2-value",
+			},
+			expectedBitwardenErr: `[config.0."key-name-5": failed to find attachment attachment-name-1 in item item-name-2, config.0."key-name-7": failed to find password in item item-name-3, config.1.".dockerconfigjson": no item quay.io found]`,
+			expectedVaultErr:     `[config.0."key-name-5": item at path "prefix/item-name-2" has no key "attachment-name-1", config.0."key-name-7": item at path "prefix/item-name-3" has no key "password", config.1.".dockerconfigjson": no data at path prefix/quay.io]`,
+		},
+		{
+			name: "Usersecret, simple happy case",
+			bwItems: []bitwarden.Item{{Name: "my/vault/secret", Fields: bwFieldsFromMap(map[string]string{
+				"secretsync/target-namespace": "some-namespace",
+				"secretsync/target-name":      "some-name",
+				"some-data-key":               "a-secret",
+			})}},
+			config: secretbootstrap.Config{UserSecretsTargetClusters: []string{"a", "b"}},
+			expected: map[string][]*coreapi.Secret{
+				"a": {{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+					Type:       coreapi.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"some-data-key":                []byte("a-secret"),
+						"secretsync-vault-source-path": []byte("prefix/my/vault/secret"),
+					},
+				}},
+				"b": {{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+					Type:       coreapi.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"some-data-key":                []byte("a-secret"),
+						"secretsync-vault-source-path": []byte("prefix/my/vault/secret"),
+					},
+				}},
+			},
+		},
+		{
+			name: "Secret gets combined from user- and dptp secret ",
+			bwItems: []bitwarden.Item{
+				{Name: "my/vault/secret", Fields: bwFieldsFromMap(map[string]string{
+					"secretsync/target-namespace": "some-namespace",
+					"secretsync/target-name":      "some-name",
+					"some-data-key":               "a-secret",
+				})},
+				{Name: "dptp-item", Fields: []bitwarden.Field{{Name: "dptp-key", Value: "dptp-secret"}}},
+			},
+			config: secretbootstrap.Config{
+				UserSecretsTargetClusters: []string{"a", "b"},
+				Secrets: []secretbootstrap.SecretConfig{{
+					From: map[string]secretbootstrap.BitWardenContext{"dptp-key": {BWItem: "dptp-item", Field: "dptp-key"}},
+					To: []secretbootstrap.SecretContext{
+						{Cluster: "a", Namespace: "some-namespace", Name: "some-name"},
+						{Cluster: "b", Namespace: "some-namespace", Name: "some-name"},
+					},
+				}},
+			},
+			expected: map[string][]*coreapi.Secret{
+				"a": {{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+					Type:       coreapi.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"dptp-key":                     []byte("dptp-secret"),
+						"some-data-key":                []byte("a-secret"),
+						"secretsync-vault-source-path": []byte("prefix/my/vault/secret"),
+					},
+				}},
+				"b": {{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+					Type:       coreapi.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"dptp-key":                     []byte("dptp-secret"),
+						"some-data-key":                []byte("a-secret"),
+						"secretsync-vault-source-path": []byte("prefix/my/vault/secret"),
+					},
+				}},
+			},
+		},
+		{
+			name: "Usersecret would override dptp key, error",
+			bwItems: []bitwarden.Item{
+				{Name: "my/vault/secret", Fields: bwFieldsFromMap(map[string]string{
+					"secretsync/target-namespace": "some-namespace",
+					"secretsync/target-name":      "some-name",
+					"dptp-key":                    "user-value",
+				})},
+				{Name: "dptp-item", Fields: []bitwarden.Field{{Name: "dptp-key", Value: "dptp-secret"}}},
+			},
+			config: secretbootstrap.Config{
+				UserSecretsTargetClusters: []string{"a", "b"},
+				Secrets: []secretbootstrap.SecretConfig{{
+					From: map[string]secretbootstrap.BitWardenContext{"dptp-key": {BWItem: "dptp-item", Field: "dptp-key"}},
+					To: []secretbootstrap.SecretContext{
+						{Cluster: "a", Namespace: "some-namespace", Name: "some-name"},
+						{Cluster: "b", Namespace: "some-namespace", Name: "some-name"},
+					},
+				}},
+			},
+			expectedVaultErr: `[key dptp-key in secret some-namespace/some-name in cluster a is targeted by ci-secret-bootstrap config and by vault item in path prefix/my/vault/secret, key dptp-key in secret some-namespace/some-name in cluster b is targeted by ci-secret-bootstrap config and by vault item in path prefix/my/vault/secret]`,
+		},
+		{
+			name: "dptp secret isn't of opaque type, error",
+			bwItems: []bitwarden.Item{
+				{Name: "my/vault/secret", Fields: bwFieldsFromMap(map[string]string{
+					"secretsync/target-namespace": "some-namespace",
+					"secretsync/target-name":      "some-name",
+					"dptp-key":                    "user-value",
+				})},
+				{Name: "dptp-item", Fields: []bitwarden.Field{{Name: "dptp-key", Value: "dptp-secret"}}},
+			},
+			config: secretbootstrap.Config{
+				UserSecretsTargetClusters: []string{"a", "b"},
+				Secrets: []secretbootstrap.SecretConfig{{
+					From: map[string]secretbootstrap.BitWardenContext{"dptp-key": {BWItem: "dptp-item", Field: "dptp-key"}},
+					To: []secretbootstrap.SecretContext{
+						{Cluster: "a", Namespace: "some-namespace", Name: "some-name", Type: coreapi.SecretTypeBasicAuth},
+						{Cluster: "b", Namespace: "some-namespace", Name: "some-name", Type: coreapi.SecretTypeBasicAuth},
+					},
+				}},
+			},
+			expectedVaultErr: `[secret some-namespace/some-name in cluster a has ci-secret-bootstrap config as non-opaque type and is targeted by user sync from key prefix/my/vault/secret, secret some-namespace/some-name in cluster b has ci-secret-bootstrap config as non-opaque type and is targeted by user sync from key prefix/my/vault/secret]`,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, actualError := constructSecrets(context.TODO(), tc.config, secrets.NewBitwardenClient(tc.bwClient), 10)
-			equalError(t, tc.expectedError, actualError)
-			if actualError != nil {
-				return
-			}
-			for key := range actual {
-				sort.Slice(actual[key], func(i, j int) bool {
-					return actual[key][i].Name < actual[key][j].Name
+			for _, clientTestCase := range []clientTestCase{
+				{name: "bitwarden", client: secrets.NewBitwardenClient(bitwarden.NewFakeClient(tc.bwItems, tc.attachments)), expectedError: tc.expectedBitwardenErr},
+				{name: "vault", client: vaultClientFromBitwardenItems(tc.bwItems, tc.attachments), expectedError: tc.expectedVaultErr},
+			} {
+				t.Run(clientTestCase.name, func(t *testing.T) {
+					if len(tc.config.UserSecretsTargetClusters) != 0 && clientTestCase.name == "bitwarden" {
+						t.Skip("Bitwarden doesn't implement a user secret sync functionality")
+					}
+					var actualErrorMsg string
+					actual, actualError := constructSecrets(context.TODO(), tc.config, clientTestCase.client, 10)
+					if actualError != nil {
+						actualErrorMsg = actualError.Error()
+					}
+					if actualErrorMsg != clientTestCase.expectedError {
+						t.Fatalf("expected error message %s, got %s", clientTestCase.expectedError, actualErrorMsg)
+					}
+					if actualError != nil {
+						return
+					}
+					for key := range actual {
+						sort.Slice(actual[key], func(i, j int) bool {
+							return actual[key][i].Name < actual[key][j].Name
+						})
+					}
+					for key := range tc.expected {
+						sort.Slice(tc.expected[key], func(i, j int) bool {
+							return tc.expected[key][i].Name < tc.expected[key][j].Name
+						})
+					}
+					equal(t, "secrets", tc.expected, actual)
+
 				})
 			}
-			for key := range tc.expected {
-				sort.Slice(tc.expected[key], func(i, j int) bool {
-					return tc.expected[key][i].Name < tc.expected[key][j].Name
-				})
-			}
-			equal(t, "secrets", tc.expected, actual)
 		})
 	}
+}
+
+func bwFieldsFromMap(m map[string]string) []bitwarden.Field {
+	var res []bitwarden.Field
+	for k, v := range m {
+		res = append(res, bitwarden.Field{Name: k, Value: v})
+	}
+	return res
 }
 
 func TestUpdateSecrets(t *testing.T) {
@@ -1885,8 +2023,8 @@ func equalError(t *testing.T, expected, actual error) {
 }
 
 func equal(t *testing.T, what string, expected, actual interface{}) {
-	if !reflect.DeepEqual(expected, actual) {
-		t.Errorf("%s differs from expected:\n%s", what, cmp.Diff(expected, actual))
+	if diff := cmp.Diff(expected, actual, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+		t.Errorf("%s differs from expected:\n%s", what, diff)
 	}
 }
 
@@ -2328,12 +2466,6 @@ func TestGetUnusedBWItems(t *testing.T) {
 		},
 	}
 
-	type clientTestCase struct {
-		name          string
-		client        secrets.Client
-		expectedError string
-	}
-
 	for _, tc := range testCases {
 		t.Run(tc.id, func(t *testing.T) {
 			for _, clientTestCase := range []clientTestCase{{
@@ -2342,7 +2474,7 @@ func TestGetUnusedBWItems(t *testing.T) {
 				expectedError: tc.expectedBitwardenErr,
 			}, {
 				name:          "vault",
-				client:        vaultClientFromBitwardenItems(tc.bwItems),
+				client:        vaultClientFromBitwardenItems(tc.bwItems, nil),
 				expectedError: tc.expectedVaultErr,
 			}} {
 				t.Run(clientTestCase.name, func(t *testing.T) {
@@ -2361,15 +2493,26 @@ func TestGetUnusedBWItems(t *testing.T) {
 	}
 }
 
-func vaultClientFromBitwardenItems(items []bitwarden.Item) secrets.Client {
+type clientTestCase struct {
+	name          string
+	client        secrets.Client
+	expectedError string
+}
+
+func vaultClientFromBitwardenItems(items []bitwarden.Item, attachments map[string]string) secrets.Client {
+	const prefix = "prefix"
 	data := make(map[string]*vaultclient.KVData, len(items))
 	for _, item := range items {
 		kvItem := &vaultclient.KVData{Data: map[string]string{}}
 		for _, field := range item.Fields {
-			kvItem.Data[field.Name] = "some-data"
+			kvItem.Data[field.Name] = field.Value
 		}
 		for _, attachment := range item.Attachments {
-			kvItem.Data[attachment.FileName] = "some-data"
+			attachmentContent := "some-data"
+			if val, ok := attachments[attachment.ID]; ok {
+				attachmentContent = val
+			}
+			kvItem.Data[attachment.FileName] = attachmentContent
 		}
 		if item.Login != nil && item.Login.Password != "" {
 			kvItem.Data["password"] = item.Login.Password
@@ -2377,10 +2520,10 @@ func vaultClientFromBitwardenItems(items []bitwarden.Item) secrets.Client {
 		if item.RevisionTime != nil {
 			kvItem.Metadata.CreatedTime = *item.RevisionTime
 		}
-		data[item.Name] = kvItem
+		data[prefix+"/"+item.Name] = kvItem
 	}
 	censor := secrets.NewDynamicCensor()
-	return secrets.NewVaultClient(&fakeVaultClient{items: data}, "prefix", &censor)
+	return secrets.NewVaultClient(&fakeVaultClient{items: data}, prefix, &censor)
 }
 
 type fakeVaultClient struct {
@@ -2395,9 +2538,12 @@ func (f *fakeVaultClient) GetKV(path string) (*vaultclient.KVData, error) {
 	return nil, fmt.Errorf("no data at path %s", path)
 }
 
-func (f *fakeVaultClient) ListKVRecursively(_ string) ([]string, error) {
+func (f *fakeVaultClient) ListKVRecursively(prefix string) ([]string, error) {
 	var result []string
 	for key := range f.items {
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
 		result = append(result, key)
 	}
 	return result, nil

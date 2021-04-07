@@ -2,12 +2,15 @@ package validation
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/utils/diff"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -1107,6 +1110,99 @@ func TestValidateLeases(t *testing.T) {
 			err := validateTestConfigurationType("test", test, nil, nil, true)
 			if diff := diff.ObjectReflectDiff(tc.err, err); diff != "<no diffs>" {
 				t.Errorf("unexpected error: %s", diff)
+			}
+		})
+	}
+}
+
+func TestValidateTestConfigurationType(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		test     api.TestStepConfiguration
+		expected []error
+	}{
+		{
+			name: "valid claim",
+			test: api.TestStepConfiguration{
+				ClusterClaim: &api.ClusterClaim{
+					Product:      api.ReleaseProductOCP,
+					Version:      "4.6.0",
+					Architecture: api.ReleaseArchitectureAMD64,
+					Cloud:        api.CloudAWS,
+					Owner:        "dpp",
+					Timeout:      &prowv1.Duration{Duration: time.Hour},
+				},
+				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+					Test: []api.TestStep{
+						{
+							LiteralTestStep: &api.LiteralTestStep{
+								As:        "e2e-aws-test",
+								Commands:  "oc get node",
+								From:      "cli",
+								Resources: api.ResourceRequirements{Requests: api.ResourceList{"cpu": "1"}},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "claim and cluster_profile",
+			test: api.TestStepConfiguration{
+				ClusterClaim: &api.ClusterClaim{
+					Product:      api.ReleaseProductOCP,
+					Version:      "4.6.0",
+					Architecture: api.ReleaseArchitectureAMD64,
+					Cloud:        api.CloudAWS,
+					Owner:        "dpp",
+					Timeout:      &prowv1.Duration{Duration: time.Hour},
+				},
+				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+					ClusterProfile: api.ClusterProfileAWS,
+					Test: []api.TestStep{
+						{
+							LiteralTestStep: &api.LiteralTestStep{
+								As:        "e2e-aws-test",
+								Commands:  "oc get node",
+								From:      "cli",
+								Resources: api.ResourceRequirements{Requests: api.ResourceList{"cpu": "1"}},
+							},
+						},
+					},
+				},
+			},
+			expected: []error{fmt.Errorf("test installs more than cluster, probably it defined both cluster_claim and cluster_profile")},
+		},
+		{
+			name: "claim missing fields",
+			test: api.TestStepConfiguration{
+				ClusterClaim: &api.ClusterClaim{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureAMD64,
+					Timeout:      &prowv1.Duration{Duration: time.Hour},
+				},
+				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+					Test: []api.TestStep{
+						{
+							LiteralTestStep: &api.LiteralTestStep{
+								As:        "e2e-aws-test",
+								Commands:  "oc get node",
+								From:      "cli",
+								Resources: api.ResourceRequirements{Requests: api.ResourceList{"cpu": "1"}},
+							},
+						},
+					},
+				},
+			},
+			expected: []error{fmt.Errorf("test.cluster_claim.version cannot be empty when cluster_claim is not nil"),
+				fmt.Errorf("test.cluster_claim.cloud cannot be empty when cluster_claim is not nil"),
+				fmt.Errorf("test.cluster_claim.owner cannot be empty when cluster_claim is not nil")},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := validateTestConfigurationType("test", tc.test, nil, nil, false)
+			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("expected differs from actual: %s", diff)
 			}
 		})
 	}

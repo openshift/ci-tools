@@ -2,6 +2,9 @@ package api
 
 import (
 	"strings"
+	"time"
+
+	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 )
 
 // Default sets default values after loading but before validation
@@ -16,7 +19,22 @@ func (config *ReleaseBuildConfiguration) Default() {
 	def := func(s *LiteralTestStep) {
 		defLeases(s.Leases)
 	}
+	defClusterClaim := func(c *ClusterClaim) {
+		if c == nil {
+			return
+		}
+		if c.Product == "" {
+			c.Product = ReleaseProductOCP
+		}
+		if c.Architecture == "" {
+			c.Architecture = ReleaseArchitectureAMD64
+		}
+		if c.Timeout == nil {
+			c.Timeout = &prowv1.Duration{Duration: time.Hour}
+		}
+	}
 	defTest := func(t *TestStepConfiguration) {
+		defClusterClaim(t.ClusterClaim)
 		if s := t.MultiStageTestConfigurationLiteral; s != nil {
 			defLeases(s.Leases)
 			for i := range s.Pre {

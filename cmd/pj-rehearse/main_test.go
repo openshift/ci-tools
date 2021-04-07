@@ -87,8 +87,8 @@ func TestEnsureImageStreamTags(t *testing.T) {
 			},
 		},
 		{
-			name:          "Api.ci cluster imports are skipped",
-			targetCluster: utilpointer.StringPtr("api.ci"),
+			name:          "app.ci cluster imports are skipped",
+			targetCluster: utilpointer.StringPtr("app.ci"),
 		},
 	}
 

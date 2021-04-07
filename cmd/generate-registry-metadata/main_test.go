@@ -28,6 +28,11 @@ func TestGenerateMetadata(t *testing.T) {
 		name:    "Registry",
 		regPath: "../../test/multistage-registry/registry",
 		expectedMetadata: api.RegistryMetadata{
+
+			"ipi-changed-workflow.yaml": {
+				Path:   "ipi-changed/ipi-changed-workflow.yaml",
+				Owners: owners1,
+			},
 			"ipi-deprovision-chain.yaml": {
 				Path:   "ipi/deprovision/ipi-deprovision-chain.yaml",
 				Owners: owners2,

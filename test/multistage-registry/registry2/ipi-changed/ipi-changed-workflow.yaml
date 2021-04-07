@@ -1,0 +1,12 @@
+workflow:
+  as: ipi-changed
+  steps:
+    pre:
+    - chain: ipi-install
+    post:
+    - chain: ipi-deprovision
+    observers:
+      disable:
+      - resourcewatcher
+  documentation: |-
+    All your documentation are belong to us.

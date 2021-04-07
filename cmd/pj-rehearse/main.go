@@ -298,8 +298,10 @@ func rehearseMain() error {
 	}
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
 	toRehearse := config.Presubmits{}
+	periodicsToRehearse := config.Periodics{}
 
 	changedPeriodics := diffs.GetChangedPeriodics(masterConfig.Prow, prConfig.Prow, logger)
+	periodicsToRehearse.AddAll(changedPeriodics)
 	changedPresubmits := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
 	toRehearse.AddAll(changedPresubmits, config.ChangedPresubmit)
 
@@ -314,6 +316,7 @@ func rehearseMain() error {
 
 	presubmitsForRegistry, periodicsForRegistry := rehearse.SelectJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, prConfig.Prow.JobConfig.Periodics, prConfig.CiOperator, loggers)
 	toRehearse.AddAll(presubmitsForRegistry, config.ChangedRegistryContent)
+	periodicsToRehearse.AddAll(periodicsForRegistry)
 
 	resolver := registry.NewResolver(refs, chains, workflows, observers)
 	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, resolver, prNumber, loggers, rehearsalTemplates.Names, rehearsalClusterProfiles.Names, jobSpec.Refs)
@@ -322,21 +325,17 @@ func rehearseMain() error {
 		return err
 	}
 
-	periodics := []config.Periodics{changedPeriodics, periodicsForRegistry}
-	for idx := range periodics {
-		periodicImageStreamTags, periodicsToRehearse, err := jobConfigurer.ConfigurePeriodicRehearsals(periodics[idx])
-		// TODO(muller): Save this and emit better errors
-		if err != nil {
-			return err
-		}
-		apihelper.MergeImageStreamTagMaps(imagestreamtags, periodicImageStreamTags)
-
-		periodicPresubmits, err := jobConfigurer.ConvertPeriodicsToPresubmits(periodicsToRehearse)
-		if err != nil {
-			return err
-		}
-		presubmitsToRehearse = append(presubmitsToRehearse, periodicPresubmits...)
+	periodicImageStreamTags, periodics, err := jobConfigurer.ConfigurePeriodicRehearsals(periodicsToRehearse)
+	if err != nil {
+		return err
 	}
+	apihelper.MergeImageStreamTagMaps(imagestreamtags, periodicImageStreamTags)
+
+	periodicPresubmits, err := jobConfigurer.ConvertPeriodicsToPresubmits(periodics)
+	if err != nil {
+		return err
+	}
+	presubmitsToRehearse = append(presubmitsToRehearse, periodicPresubmits...)
 
 	if rehearsals := len(presubmitsToRehearse); rehearsals == 0 {
 		logger.Info("no jobs to rehearse have been found")

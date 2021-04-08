@@ -3,7 +3,6 @@ package secrets
 import (
 	"flag"
 	"fmt"
-	"os"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -22,12 +21,17 @@ type CLIOptions struct {
 	VaultToken string
 }
 
-func (o *CLIOptions) Bind(fs *flag.FlagSet) {
+func (o *CLIOptions) Bind(fs *flag.FlagSet, getenv func(string) string, censor *DynamicCensor) {
 	fs.StringVar(&o.BwUser, "bw-user", "", "Username to access BitWarden.")
 	fs.StringVar(&o.BwPasswordPath, "bw-password-path", "", "Path to a password file to access BitWarden.")
 	fs.StringVar(&o.VaultAddr, "vault-addr", "", "Address of the vault endpoint. Defaults to the VAULT_ADDR env var if unset. Mutually exclusive with --bw-user and --bw-password-path.")
 	fs.StringVar(&o.VaultTokenFile, "vault-token-file", "", "Token file to use when interacting with Vault, defaults to the VAULT_TOKEN env var if unset. Mutually exclusive with --bw-user and --bw-password-path.")
 	fs.StringVar(&o.VaultPrefix, "vault-prefix", "", "Prefix under which to operate in Vault. Mandatory when using vault.")
+	o.VaultAddr = getenv("VAULT_ADDR")
+	if v := getenv("VAULT_TOKEN"); v != "" {
+		censor.AddSecrets(v)
+		o.VaultToken = v
+	}
 }
 
 func (o *CLIOptions) Validate() []error {
@@ -38,11 +42,16 @@ func (o *CLIOptions) Validate() []error {
 	} else if o.BwUser != "" {
 		credentialsProviderConfigured = append(credentialsProviderConfigured, "bitwarden")
 	}
-
-	if vals := sets.NewString(o.VaultAddr, o.VaultTokenFile, o.VaultPrefix); len(vals) != 1 && ((len(vals) != 3) || vals.Has("")) {
-		errs = append(errs, fmt.Errorf("--vault-addr, --vault-token and --vault-prefix must be specified together"))
-	} else if len(vals) == 3 {
+	b2i := func(b bool) int {
+		if b {
+			return 1
+		}
+		return 0
+	}
+	if n := b2i(o.VaultAddr != "") + b2i(o.VaultToken != "" || o.VaultTokenFile != "") + b2i(o.VaultPrefix != ""); n == 3 {
 		credentialsProviderConfigured = append(credentialsProviderConfigured, "vault")
+	} else if n != 0 {
+		errs = append(errs, fmt.Errorf("--vault-addr, --vault-token and --vault-prefix must be specified together"))
 	}
 
 	if len(credentialsProviderConfigured) != 1 {
@@ -58,10 +67,6 @@ func (o *CLIOptions) Complete(censor *DynamicCensor) error {
 			return err
 		}
 	}
-	if o.VaultAddr == "" {
-		o.VaultAddr = os.Getenv("VAULT_ADDR")
-	}
-	o.VaultToken = ReadFromEnv("VAULT_TOKEN", censor)
 	if o.VaultTokenFile != "" {
 		var err error
 		if o.VaultToken, err = ReadFromFile(o.VaultTokenFile, censor); err != nil {

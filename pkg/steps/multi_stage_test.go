@@ -134,6 +134,13 @@ func TestGeneratePods(t *testing.T) {
 	}
 
 	jobSpec := api.JobSpec{
+		Metadata: api.Metadata{
+			Org:     "org",
+			Repo:    "repo",
+			Branch:  "base ref",
+			Variant: "variant",
+		},
+		Target: "target",
 		JobSpec: prowdapi.JobSpec{
 			Job:       "job",
 			BuildID:   "build id",

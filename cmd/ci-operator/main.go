@@ -484,7 +484,12 @@ func (o *options) Complete() error {
 		jobSpec.Refs = spec.Refs
 	}
 	jobSpec.BaseNamespace = o.baseNamespace
+	target := "all"
+	if len(o.targets.values) > 0 {
+		target = o.targets.values[0]
+	}
 	o.jobSpec = jobSpec
+	o.jobSpec.Target = target
 
 	info := o.getResolverInfo(jobSpec)
 
@@ -503,6 +508,7 @@ func (o *options) Complete() error {
 		o.jobSpec.Refs.PathAlias = *config.CanonicalGoRepository
 	}
 	o.configSpec = config
+	o.jobSpec.Metadata = config.Metadata
 	if err := validation.IsValidResolvedConfiguration(o.configSpec); err != nil {
 		return results.ForReason("validating_config").ForError(err)
 	}

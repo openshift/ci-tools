@@ -37,6 +37,13 @@ func preparePodStep(namespace string) (*podStep, stepExpectation) {
 	jobName := "very-cool-prow-job"
 	pjID := "prow-job-id"
 	jobSpec := &api.JobSpec{
+		Metadata: api.Metadata{
+			Org:     "org",
+			Repo:    "repo",
+			Branch:  "base-ref",
+			Variant: "variant",
+		},
+		Target: "target",
 		JobSpec: downwardapi.JobSpec{
 			Job:       jobName,
 			BuildID:   buildID,

@@ -7,13 +7,12 @@ metadata:
   creationTimestamp: null
   labels:
     OPENSHIFT_CI: "true"
-    build-id: test-build-id
-    ci.openshift.io/refs.branch: base-ref
-    ci.openshift.io/refs.org: org
-    ci.openshift.io/refs.repo: repo
+    ci.openshift.io/metadata.branch: base-ref
+    ci.openshift.io/metadata.org: org
+    ci.openshift.io/metadata.repo: repo
+    ci.openshift.io/metadata.target: target
+    ci.openshift.io/metadata.variant: variant
     created-by-ci: "true"
-    job: very-cool-prow-job
-    prow.k8s.io/id: prow-job-id
   name: TestName
   namespace: TestNamespace
   resourceVersion: "1"

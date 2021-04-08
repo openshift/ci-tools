@@ -480,7 +480,8 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		} else {
 			commands = []string{"/bin/bash", "-c", CommandPrefix + step.Commands}
 		}
-		pod, err := generateBasePod(s.jobSpec, name, multiStageTestStepContainerName, commands, image, resources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts)
+		labels := map[string]string{LabelMetadataStep: step.As}
+		pod, err := generateBasePod(s.jobSpec, labels, name, multiStageTestStepContainerName, commands, image, resources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts)
 		if err != nil {
 			errs = append(errs, err)
 			continue

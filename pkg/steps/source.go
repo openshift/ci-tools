@@ -33,8 +33,6 @@ import (
 
 const (
 	CiAnnotationPrefix = "ci.openshift.io"
-	JobLabel           = "job"
-	BuildIdLabel       = "build-id"
 	CreatesLabel       = "creates"
 	CreatedByCILabel   = "created-by-ci"
 
@@ -108,40 +106,63 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, workingDir st
 	return strings.Join(dockerCommands, "\n")
 }
 
-func defaultPodLabels(jobSpec *api.JobSpec) map[string]string {
-	if refs := jobSpec.JobSpec.Refs; refs != nil {
-		return trimLabels(map[string]string{
-			JobLabel:         jobSpec.Job,
-			BuildIdLabel:     jobSpec.BuildID,
-			ProwJobIdLabel:   jobSpec.ProwJobID,
-			CreatedByCILabel: "true",
-			openshiftCIEnv:   "true",
-			RefsOrgLabel:     refs.Org,
-			RefsRepoLabel:    refs.Repo,
-			RefsBranchLabel:  refs.BaseRef,
-		})
-	}
+const (
+	LabelMetadataOrg     = "ci.openshift.io/metadata.org"
+	LabelMetadataRepo    = "ci.openshift.io/metadata.repo"
+	LabelMetadataBranch  = "ci.openshift.io/metadata.branch"
+	LabelMetadataVariant = "ci.openshift.io/metadata.variant"
+	LabelMetadataTarget  = "ci.openshift.io/metadata.target"
+	LabelMetadataStep    = "ci.openshift.io/metadata.step"
+)
 
-	if extraRefs := jobSpec.JobSpec.ExtraRefs; len(extraRefs) > 0 {
-		return trimLabels(map[string]string{
-			JobLabel:         jobSpec.Job,
-			BuildIdLabel:     jobSpec.BuildID,
-			ProwJobIdLabel:   jobSpec.ProwJobID,
-			CreatedByCILabel: "true",
-			openshiftCIEnv:   "true",
-			RefsOrgLabel:     extraRefs[0].Org,
-			RefsRepoLabel:    extraRefs[0].Repo,
-			RefsBranchLabel:  extraRefs[0].BaseRef,
-		})
-	}
+func labelsFor(spec *api.JobSpec, base map[string]string) map[string]string {
+	base[LabelMetadataOrg] = spec.Metadata.Org
+	base[LabelMetadataRepo] = spec.Metadata.Repo
+	base[LabelMetadataBranch] = spec.Metadata.Branch
+	base[LabelMetadataVariant] = spec.Metadata.Variant
+	base[LabelMetadataTarget] = spec.Target
+	base[CreatedByCILabel] = "true"
+	base[openshiftCIEnv] = "true"
+	return mungeLabels(trimLabels(base))
+}
 
-	return trimLabels(map[string]string{
-		JobLabel:         jobSpec.Job,
-		BuildIdLabel:     jobSpec.BuildID,
-		ProwJobIdLabel:   jobSpec.ProwJobID,
-		CreatedByCILabel: "true",
-		openshiftCIEnv:   "true",
-	})
+func isAlpha(b uint8) bool {
+	return ('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z') || ('0' <= b && b <= '9')
+}
+
+func isAlphaOrOthers(b uint8) bool {
+	return isAlpha(b) || b == '.' || b == '_' || b == '-'
+}
+
+// mungeLabels ensures that label values don't contain invalid characters
+func mungeLabels(labels map[string]string) map[string]string {
+	output := map[string]string{}
+	for key, value := range labels {
+		if len(value) == 0 {
+			output[key] = value
+			continue
+		}
+		munged := strings.Builder{}
+		if isAlpha(value[0]) {
+			munged.WriteByte(value[0])
+		}
+
+		for i := 1; i < len(value)-1; i++ {
+			b := value[i]
+			if isAlphaOrOthers(b) {
+				munged.WriteByte(b)
+			} else {
+				munged.WriteString("_")
+			}
+		}
+
+		if len(value) > 1 && isAlpha(value[len(value)-1]) {
+			munged.WriteByte(value[len(value)-1])
+		}
+
+		output[key] = munged.String()
+	}
+	return output
 }
 
 type sourceStep struct {
@@ -277,8 +298,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 	}
 
 	layer := buildapi.ImageOptimizationSkipLayers
-	labels := defaultPodLabels(jobSpec)
-	labels[CreatesLabel] = string(toTag)
+	labels := labelsFor(jobSpec, map[string]string{CreatesLabel: string(toTag)})
 	build := &buildapi.Build{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      string(toTag),

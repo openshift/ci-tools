@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"errors"
+	"path"
 	"reflect"
 	"testing"
 	"time"
@@ -613,5 +614,97 @@ func TestAddCredentials(t *testing.T) {
 				t.Errorf("%s: got incorrect Pod: %s", testCase.name, cmp.Diff(testCase.pod, testCase.expected))
 			}
 		})
+	}
+}
+
+func TestSecretsForCensoring(t *testing.T) {
+	// this ends up returning based on alphanumeric sort of names, so name things accordingly
+	client := loggingclient.New(
+		fakectrlruntimeclient.NewFakeClient(
+			&coreapi.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "target-namespace",
+					Name:      "1first",
+				},
+			},
+			&coreapi.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "target-namespace",
+					Name:      "2second",
+				},
+			},
+			&coreapi.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "target-namespace",
+					Name:      "3third",
+				},
+			},
+			&coreapi.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "target-namespace",
+					Name:      "4skipped",
+					Labels:    map[string]string{"ci.openshift.io/skip-censoring": "true"},
+				},
+			},
+			&coreapi.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace:   "target-namespace",
+					Name:        "5sa-secret",
+					Annotations: map[string]string{"kubernetes.io/service-account.name": "foo"},
+				},
+			},
+		),
+	)
+
+	volumes, mounts, err := secretsForCensoring(client, "target-namespace", context.Background())
+	if err != nil {
+		t.Fatalf("got error when listing secrets: %v", err)
+	}
+	expectedVolumes := []coreapi.Volume{
+		{
+			Name: "censor-0",
+			VolumeSource: coreapi.VolumeSource{
+				Secret: &coreapi.SecretVolumeSource{
+					SecretName: "1first",
+				},
+			},
+		},
+		{
+			Name: "censor-1",
+			VolumeSource: coreapi.VolumeSource{
+				Secret: &coreapi.SecretVolumeSource{
+					SecretName: "2second",
+				},
+			},
+		},
+		{
+			Name: "censor-2",
+			VolumeSource: coreapi.VolumeSource{
+				Secret: &coreapi.SecretVolumeSource{
+					SecretName: "3third",
+				},
+			},
+		},
+	}
+	if diff := cmp.Diff(volumes, expectedVolumes); diff != "" {
+		t.Errorf("got incorrect volumes: %v", diff)
+	}
+
+	expectedMounts := []coreapi.VolumeMount{
+		{
+			Name:      "censor-0",
+			MountPath: path.Join("/secrets", "1first"),
+		},
+		{
+			Name:      "censor-1",
+			MountPath: path.Join("/secrets", "2second"),
+		},
+		{
+			Name:      "censor-2",
+			MountPath: path.Join("/secrets", "3third"),
+		},
+	}
+	if diff := cmp.Diff(mounts, expectedMounts); diff != "" {
+		t.Errorf("got incorrect mounts: %v", diff)
 	}
 }

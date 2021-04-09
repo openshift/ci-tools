@@ -95,7 +95,7 @@ func main() {
 		GitHubToken:         string(sa.GetTokenGenerator(o.GitHubOptions.TokenPath)()),
 		GitName:             o.gitName,
 		GitEmail:            o.gitEmail,
-		IncludedConfigPaths: []string{"clusters/", "cluster/ci/config/prow/", "core-services/prow", "ci-operator/", "hack/"},
+		IncludedConfigPaths: []string{"Makefile", "clusters/", "cluster/ci/config/prow/", "core-services/prow", "ci-operator/", "hack/"},
 		ExtraFiles:          extraFiles,
 		TargetVersion:       "latest",
 		RemoteName:          fmt.Sprintf("https://github.com/%s/%s.git", o.githubLogin, githubRepo),

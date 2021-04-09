@@ -104,11 +104,20 @@ func (c *client) record(obj ctrlruntimeclient.Object) {
 }
 
 func (c *client) recordSecret(secret *v1.Secret) {
+	_, isServiceAccountCredential := secret.Labels["kubernetes.io/service-account.name"]
 	var values []string
-	for _, value := range secret.Data {
+	for key, value := range secret.Data {
+		if isServiceAccountCredential && key == "namespace" {
+			// this will in no case be a useful thing to censor
+			continue
+		}
 		values = append(values, string(value))
 	}
-	for _, value := range secret.StringData {
+	for key, value := range secret.StringData {
+		if isServiceAccountCredential && key == "namespace" {
+			// this will in no case be a useful thing to censor
+			continue
+		}
 		values = append(values, value)
 	}
 	for _, key := range []string{"openshift.io/token-secret.value", "kubectl.kubernetes.io/last-applied-configuration"} {

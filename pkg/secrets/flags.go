@@ -1,6 +1,7 @@
 package secrets
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 
@@ -16,6 +17,7 @@ type CLIOptions struct {
 	VaultTokenFile string
 	VaultAddr      string
 	VaultPrefix    string
+	VaultRole      string
 
 	BwPassword string
 	VaultToken string
@@ -27,6 +29,7 @@ func (o *CLIOptions) Bind(fs *flag.FlagSet, getenv func(string) string, censor *
 	fs.StringVar(&o.VaultAddr, "vault-addr", "", "Address of the vault endpoint. Defaults to the VAULT_ADDR env var if unset. Mutually exclusive with --bw-user and --bw-password-path.")
 	fs.StringVar(&o.VaultTokenFile, "vault-token-file", "", "Token file to use when interacting with Vault, defaults to the VAULT_TOKEN env var if unset. Mutually exclusive with --bw-user and --bw-password-path.")
 	fs.StringVar(&o.VaultPrefix, "vault-prefix", "", "Prefix under which to operate in Vault. Mandatory when using vault.")
+	fs.StringVar(&o.VaultRole, "vault-role", "", "The vault role to use for Kubernetes auth. When passed and no token is passed, login via Kubernetes auth will be attempted.")
 	o.VaultAddr = getenv("VAULT_ADDR")
 	if v := getenv("VAULT_TOKEN"); v != "" {
 		censor.AddSecrets(v)
@@ -42,16 +45,12 @@ func (o *CLIOptions) Validate() []error {
 	} else if o.BwUser != "" {
 		credentialsProviderConfigured = append(credentialsProviderConfigured, "bitwarden")
 	}
-	b2i := func(b bool) int {
-		if b {
-			return 1
+	if o.VaultAddr != "" || o.VaultToken != "" || o.VaultTokenFile != "" || o.VaultPrefix != "" {
+		if o.VaultAddr == "" || (o.VaultToken == "" && o.VaultTokenFile == "" && o.VaultRole == "") || o.VaultPrefix == "" {
+			errs = append(errs, errors.New("--vault-addr, one of --vault-token, the VAULT_TOKEN env var or --vault-role and --vault-prefix must be specified together"))
+		} else {
+			credentialsProviderConfigured = append(credentialsProviderConfigured, "vault")
 		}
-		return 0
-	}
-	if n := b2i(o.VaultAddr != "") + b2i(o.VaultToken != "" || o.VaultTokenFile != "") + b2i(o.VaultPrefix != ""); n == 3 {
-		credentialsProviderConfigured = append(credentialsProviderConfigured, "vault")
-	} else if n != 0 {
-		errs = append(errs, fmt.Errorf("--vault-addr, --vault-token and --vault-prefix must be specified together"))
 	}
 
 	if len(credentialsProviderConfigured) != 1 {
@@ -95,7 +94,13 @@ func (o *CLIOptions) NewClient(censor *DynamicCensor) (Client, error) {
 		})
 		return NewBitwardenClient(c), nil
 	} else {
-		c, err := vaultclient.New(o.VaultAddr, o.VaultToken)
+		var c *vaultclient.VaultClient
+		var err error
+		if o.VaultRole != "" {
+			c, err = vaultclient.NewFromKubernetesAuth(o.VaultAddr, o.VaultRole)
+		} else {
+			c, err = vaultclient.New(o.VaultAddr, o.VaultToken)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("Failed to construct vault client: %w", err)
 		}

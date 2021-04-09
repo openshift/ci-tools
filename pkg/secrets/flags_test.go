@@ -88,6 +88,14 @@ func TestValidateOptions(t *testing.T) {
 			},
 		},
 		{
+			name: "Vault kubernetes auth",
+			given: CLIOptions{
+				VaultAddr:   "vault addr",
+				VaultRole:   "vault role",
+				VaultPrefix: "Vault prefix",
+			},
+		},
+		{
 			name: "empty bw user",
 			given: CLIOptions{
 				BwPasswordPath: "/tmp/bw-password",
@@ -114,7 +122,7 @@ func TestValidateOptions(t *testing.T) {
 				VaultPrefix: "vault prefix",
 			},
 			expected: []error{
-				fmt.Errorf("--vault-addr, --vault-token and --vault-prefix must be specified together"),
+				fmt.Errorf("--vault-addr, one of --vault-token, the VAULT_TOKEN env var or --vault-role and --vault-prefix must be specified together"),
 				fmt.Errorf("must specify credentials for exactly one of vault or bitwarden, got credentials for: []"),
 			},
 		},
@@ -125,7 +133,7 @@ func TestValidateOptions(t *testing.T) {
 				VaultPrefix: "vault prefix",
 			},
 			expected: []error{
-				fmt.Errorf("--vault-addr, --vault-token and --vault-prefix must be specified together"),
+				fmt.Errorf("--vault-addr, one of --vault-token, the VAULT_TOKEN env var or --vault-role and --vault-prefix must be specified together"),
 				fmt.Errorf("must specify credentials for exactly one of vault or bitwarden, got credentials for: []"),
 			},
 		},
@@ -136,7 +144,7 @@ func TestValidateOptions(t *testing.T) {
 				VaultToken: "vault token",
 			},
 			expected: []error{
-				fmt.Errorf("--vault-addr, --vault-token and --vault-prefix must be specified together"),
+				fmt.Errorf("--vault-addr, one of --vault-token, the VAULT_TOKEN env var or --vault-role and --vault-prefix must be specified together"),
 				fmt.Errorf("must specify credentials for exactly one of vault or bitwarden, got credentials for: []"),
 			},
 		},

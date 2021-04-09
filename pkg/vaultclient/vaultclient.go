@@ -22,7 +22,7 @@ func NewFromKubernetesAuth(addr, role string) (*VaultClient, error) {
 	}
 	resp, err := client.Logical().Write("auth/kubernetes/login", map[string]interface{}{
 		"role": role,
-		"jwt":  serviceAccountToken,
+		"jwt":  string(serviceAccountToken),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to log into vault: %w", err)

@@ -4,11 +4,32 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strings"
 
 	"github.com/hashicorp/vault/api"
 )
+
+func NewFromKubernetesAuth(addr, role string) (*VaultClient, error) {
+	serviceAccountToken, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/token")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read serviceAccountToken from /var/run/secrets/kubernetes.io/serviceaccount/token: %w", err)
+	}
+	client, err := api.NewClient(&api.Config{Address: addr})
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct client: %w", err)
+	}
+	resp, err := client.Logical().Write("auth/kubernetes/login", map[string]interface{}{
+		"role": role,
+		"jwt":  serviceAccountToken,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to log into vault: %w", err)
+	}
+	client.SetToken(resp.Auth.ClientToken)
+	return &VaultClient{client}, nil
+}
 
 func New(addr, token string) (*VaultClient, error) {
 	client, err := api.NewClient(&api.Config{Address: addr})

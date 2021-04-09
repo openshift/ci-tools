@@ -53,12 +53,13 @@ func TestParseOptions(t *testing.T) {
 			},
 		},
 	}
+	censor := secrets.NewDynamicCensor()
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			oldArgs := os.Args
 			defer func() { os.Args = oldArgs }()
 			os.Args = tc.given
-			actual, err := parseOptions()
+			actual, err := parseOptions(&censor)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -69,7 +69,7 @@ const (
 	allowUnusedDays = 7
 )
 
-func parseOptions() (options, error) {
+func parseOptions(censor *secrets.DynamicCensor) (options, error) {
 	var o options
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	o.bwAllowUnused = flagutil.NewStrings()
@@ -84,7 +84,7 @@ func parseOptions() (options, error) {
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	fs.StringVar(&o.impersonateUser, "as", "", "Username to impersonate")
 	fs.IntVar(&o.maxConcurrency, "concurrency", 0, "Maximum number of concurrent in-flight goroutines to BitWarden.")
-	o.secrets.Bind(fs)
+	o.secrets.Bind(fs, os.Getenv, censor)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return options{}, err
 	}
@@ -743,7 +743,9 @@ func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClie
 
 func main() {
 	logrusutil.ComponentInit()
-	o, err := parseOptions()
+	censor := secrets.NewDynamicCensor()
+	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
+	o, err := parseOptions(&censor)
 	if err != nil {
 		logrus.WithError(err).Fatalf("cannot parse args: %q", os.Args[1:])
 	}
@@ -761,8 +763,6 @@ func main() {
 	if err := o.validateOptions(); err != nil {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
-	censor := secrets.NewDynamicCensor()
-	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
 	if err := o.completeOptions(&censor); err != nil {
 		logrus.WithError(err).Fatal("Failed to complete options.")
 	}

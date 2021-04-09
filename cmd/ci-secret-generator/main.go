@@ -53,7 +53,7 @@ type fieldGenerator struct {
 	Cmd  string `json:"cmd,omitempty"`
 }
 
-func parseOptions() options {
+func parseOptions(censor *secrets.DynamicCensor) options {
 	var o options
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with bw command")
@@ -64,7 +64,7 @@ func parseOptions() options {
 	fs.StringVar(&o.outputFile, "output-file", "", "output file for dry-run mode")
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	fs.IntVar(&o.maxConcurrency, "concurrency", 1, "Maximum number of concurrent in-flight goroutines to BitWarden.")
-	o.secrets.Bind(fs)
+	o.secrets.Bind(fs, os.Getenv, censor)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: %q", os.Args[1:])
 	}
@@ -286,9 +286,9 @@ func updateSecrets(bwItems []bitWardenItem, client secrets.Client) error {
 func main() {
 	logrusutil.ComponentInit()
 	// CLI tool which does the secret generation and uploading to bitwarden
-	o := parseOptions()
 	censor := secrets.NewDynamicCensor()
 	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
+	o := parseOptions(&censor)
 	if err := o.validateOptions(); err != nil {
 		logrus.WithError(err).Fatal("invalid arguments.")
 	}

@@ -1,0 +1,7 @@
+postsubmits:
+  organization/repository:
+  - labels:
+      ci-operator.openshift.io/cluster: build01
+      ci-operator.openshift.io/prowgen-controlled: newly-generated
+    max_concurrency: 1
+    name: branch-ci-organization-repository-branch-unit

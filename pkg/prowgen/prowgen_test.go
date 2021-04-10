@@ -334,6 +334,10 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 	}
 }
 
+var (
+	cron = "0 0 * * *"
+)
+
 func TestGenerateJobs(t *testing.T) {
 	tests := []struct {
 		id       string
@@ -493,10 +497,36 @@ func TestGenerateJobs(t *testing.T) {
 			}},
 		},
 		{
-			id: "cluster label",
+			id: "cluster label for presubmit",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
 					{As: "unit", Cluster: "build01", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id: "cluster label for periodic",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", Cron: &cron, Cluster: "build01", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id: "cluster label for postsubmit",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", Postsubmit: true, Cluster: "build01", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
 				},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{

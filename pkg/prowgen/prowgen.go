@@ -173,10 +173,17 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			if element.Interval != nil {
 				interval = *element.Interval
 			}
-			periodics = append(periodics, *generatePeriodicForTest(element.As, info, podSpec, true, cron, interval, configSpec.CanonicalGoRepository, jobRelease, skipCloning))
+			periodic := generatePeriodicForTest(element.As, info, podSpec, true, cron, interval, configSpec.CanonicalGoRepository, jobRelease, skipCloning)
+			if element.Cluster != "" {
+				periodic.Labels[cioperatorapi.ClusterLabel] = string(element.Cluster)
+			}
+			periodics = append(periodics, *periodic)
 		} else if element.Postsubmit {
 			postsubmit := generatePostsubmitForTest(element.As, info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning)
 			postsubmit.MaxConcurrency = 1
+			if element.Cluster != "" {
+				postsubmit.Labels[cioperatorapi.ClusterLabel] = string(element.Cluster)
+			}
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
 		} else {
 			presubmit := *generatePresubmitForTest(element.As, info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning)

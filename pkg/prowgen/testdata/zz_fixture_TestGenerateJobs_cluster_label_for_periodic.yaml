@@ -1,0 +1,48 @@
+periodics:
+- agent: kubernetes
+  cron: 0 0 * * *
+  decorate: true
+  decoration_config:
+    skip_cloning: true
+  extra_refs:
+  - base_ref: branch
+    org: organization
+    repo: repository
+  labels:
+    ci-operator.openshift.io/cluster: build01
+    ci-operator.openshift.io/prowgen-controlled: newly-generated
+    pj-rehearse.openshift.io/can-be-rehearsed: "true"
+  name: periodic-ci-organization-repository-branch-unit
+  spec:
+    containers:
+    - args:
+      - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+      - --gcs-upload-secret=/secrets/gcs/service-account.json
+      - --report-credentials-file=/etc/report/credentials
+      - --target=unit
+      command:
+      - ci-operator
+      image: ci-operator:latest
+      imagePullPolicy: Always
+      name: ""
+      resources:
+        requests:
+          cpu: 10m
+      volumeMounts:
+      - mountPath: /etc/pull-secret
+        name: pull-secret
+        readOnly: true
+      - mountPath: /etc/report
+        name: result-aggregator
+        readOnly: true
+      - mountPath: /secrets/gcs
+        name: gcs-credentials
+        readOnly: true
+    serviceAccountName: ci-operator
+    volumes:
+    - name: pull-secret
+      secret:
+        secretName: registry-pull-credentials
+    - name: result-aggregator
+      secret:
+        secretName: result-aggregator

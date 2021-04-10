@@ -62,6 +62,13 @@ func TestMultiStage(t *testing.T) {
 			output:  []string{`Skipping optional step skip-on-success-skip-on-success-post-step`},
 		},
 		{
+			name:    "step with credentials",
+			args:    []string{"--unresolved-config=config.yaml", "--target=with-credentials"},
+			env:     []string{depsJobSpec},
+			success: true,
+			output:  []string{`Container test in pod with-credentials-consume completed successfully`},
+		},
+		{
 			name:    "step with timeout",
 			args:    []string{"--unresolved-config=config.yaml", "--target=timeout"},
 			env:     []string{defaultJobSpec},

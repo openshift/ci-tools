@@ -69,7 +69,7 @@ func preparePodStep(namespace string) (*podStep, stepExpectation) {
 	jobSpec.SetNamespace(namespace)
 
 	client := &podClient{loggingclient.New(fakectrlruntimeclient.NewFakeClient()), nil, nil}
-	ps := PodStep(stepName, config, resources, client, jobSpec)
+	ps := PodStep(stepName, config, resources, client, jobSpec, nil)
 
 	specification := stepExpectation{
 		name:     podName,
@@ -210,6 +210,12 @@ func TestGetPodObjectMounts(t *testing.T) {
 				expectedPodStepTemplate.config.MemoryBackedVolume = &api.MemoryBackedVolume{Size: "1Gi"}
 			},
 		},
+		{
+			name: "with cluster claim",
+			podStep: func(expectedPodStepTemplate *podStep) {
+				expectedPodStepTemplate.clusterClaim = &api.ClusterClaim{}
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -224,6 +230,9 @@ func TestGetPodObjectMounts(t *testing.T) {
 
 			testhelper.CompareWithFixture(t, pod.Spec.Volumes, testhelper.WithPrefix("volumes"))
 			testhelper.CompareWithFixture(t, pod.Spec.Containers[0].VolumeMounts, testhelper.WithPrefix("mounts"))
+			if podStepTemplate.clusterClaim != nil {
+				testhelper.CompareWithFixture(t, pod.Spec.Containers[0].Env, testhelper.WithPrefix("env"))
+			}
 		})
 	}
 

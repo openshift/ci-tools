@@ -1,0 +1,22 @@
+- name: BUILD_ID
+  value: podStep.jobSpec.BuildId
+- name: CI
+  value: "true"
+- name: JOB_NAME
+  value: podStep.jobSpec.Job
+- name: JOB_SPEC
+  value: '{"type":"periodic","job":"podStep.jobSpec.Job","buildid":"podStep.jobSpec.BuildId","prowjobid":"podStep.jobSpec.ProwJobID","decoration_config":{"timeout":"1m0s","grace_period":"1s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
+- name: JOB_TYPE
+  value: periodic
+- name: OPENSHIFT_CI
+  value: "true"
+- name: PROW_JOB_ID
+  value: podStep.jobSpec.ProwJobID
+- name: ENTRYPOINT_OPTIONS
+  value: '{"timeout":60000000000,"grace_period":1000000000,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset -eu\npodStep.config.Command"],"container_name":"podStep.name","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
+- name: ARTIFACT_DIR
+  value: /logs/artifacts
+- name: KUBECONFIG
+  value: /usr/test-secrets/hive-admin-kubeconfig/kubeconfig
+- name: KUBEADMIN_PASSWORD_FILE
+  value: /usr/test-secrets/hive-admin-password/password

@@ -152,7 +152,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 		ObjectMeta: meta.ObjectMeta{
 			Name:      targetCLI,
 			Namespace: s.jobSpec.Namespace(),
-			Labels:    map[string]string{releaseLabel: s.name},
+			Labels:    map[string]string{Label: s.name},
 		},
 		Spec: coreapi.PodSpec{
 			RestartPolicy: coreapi.RestartPolicyNever,
@@ -233,7 +233,7 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 			Name: streamName,
 			Tag:  "cli",
 		},
-		Labels:             map[string]string{releaseLabel: s.name},
+		Labels:             map[string]string{Label: s.name},
 		ServiceAccountName: "ci-operator",
 		Secrets:            secrets,
 		Commands:           commands,

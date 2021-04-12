@@ -1,0 +1,158 @@
+table {
+    background: #fff;
+    border-radius: 2px;
+    box-shadow: 0 0 4px #e0e0e0;
+    border-collapse: collapse;
+    width: 100%;
+}
+
+tr {
+  border-top: 1px solid #a4a4a4;
+}
+
+tr:hover {
+  color: #212529;
+  background-color: rgba(0, 0, 0, 0.075);
+}
+
+td, th {
+    text-align: left;
+    padding: 8px;
+}
+
+th {
+    color: #333;
+}
+
+select {
+  width: 75%;
+}
+
+.teal-button {
+  background-color: #009688;
+}
+
+.grey-button {
+  background: #616161;
+}
+
+.red-button {
+  background: #F44336;
+}
+
+.green-button {
+  background: #4CAF50;
+}
+
+.blue-button {
+  background: #008CBA;;
+}
+
+button {
+  border: none;
+  overflow: hidden;
+  text-decoration: none;
+  text-align: center;
+  white-space: nowrap;
+  font-size: 14px;
+  padding: 8px 16px;
+  cursor: pointer;
+  color: #fff;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.small-button {
+  font-size: 12px;
+}
+
+button:hover {
+  color: #000!important;
+  background-color: #9e9e9e!important;
+}
+
+body {
+    line-height: 1.4;
+    background: #F5F5F5;
+    color: #444;
+    font-family: 'Roboto', sans-serif !important;
+    font-size: 16px !important;
+}
+
+/* https://www.w3.org/WAI/tutorials/forms/labels/ */
+.visuallyhidden {
+    border: 0;
+    clip: rect(0 0 0 0);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    width: 1px;
+}
+
+canvas {
+    border:  1px dotted #ccc;
+}
+
+.hidden {
+    display: none;
+}
+
+#text-explain {
+    display: inline-block;
+    font-size: 0.75em;
+    margin-bottom: 1em;
+}
+
+.tooltip {
+    position: absolute;
+    display: inline-block;
+    padding: 10px;
+    font-family: 'Open Sans' sans-serif;
+    color: #000;
+    background-color: #fff;
+    border: 1px solid #999;
+    border-radius: 2px;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 100;
+}
+
+.navigation {
+    display: flex;
+    justify-content: space-between;
+
+    list-style: none;
+    margin: 0;
+    background: #0066CC;
+}
+
+.options {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+
+    list-style: none;
+    margin: 0;
+    background: #0066CC;
+}
+
+.navigation div.content {
+    text-decoration: none;
+    display: block;
+    padding: 1em;
+    color: white;
+}
+
+.options div:hover {
+    background: #004080;
+}
+
+#infoBox {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: left;
+}

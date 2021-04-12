@@ -35,6 +35,10 @@ const (
 	// one request. We also use this to approximate the maximum number of samples we should be asking any one
 	// Prometheus server for at once from many requests.
 	MaxSamplesPerRequest = 11000
+
+	prowjobsCachePrefix = "prowjobs"
+	podsCachePrefix     = "pods"
+	stepsCachePrefix    = "steps"
 )
 
 // queriesByMetric returns a mapping of Prometheus query by metric name for all queries we want to execute
@@ -46,17 +50,17 @@ func queriesByMetric() map[string]string {
 		labels   []string
 	}{
 		{
-			prefix:   "prowjobs",
+			prefix:   prowjobsCachePrefix,
 			selector: `{` + string(ProwLabelNameCreated) + `="true",` + string(ProwLabelNameJob) + `!="",` + string(LabelNameRehearsal) + `=""}`,
 			labels:   []string{string(ProwLabelNameCreated), string(ProwLabelNameContext), string(ProwLabelNameOrg), string(ProwLabelNameRepo), string(ProwLabelNameBranch), string(ProwLabelNameJob), string(ProwLabelNameType)},
 		},
 		{
-			prefix:   "pods",
+			prefix:   podsCachePrefix,
 			selector: `{` + string(LabelNameCreated) + `="true",` + string(LabelNameStep) + `=""}`,
 			labels:   []string{string(LabelNameOrg), string(LabelNameRepo), string(LabelNameBranch), string(LabelNameVariant), string(LabelNameTarget), string(LabelNameBuild), string(LabelNameRelease), string(LabelNameApp)},
 		},
 		{
-			prefix:   "steps",
+			prefix:   stepsCachePrefix,
 			selector: `{` + string(LabelNameCreated) + `="true",` + string(LabelNameStep) + `!=""}`,
 			labels:   []string{string(LabelNameOrg), string(LabelNameRepo), string(LabelNameBranch), string(LabelNameVariant), string(LabelNameTarget), string(LabelNameStep)},
 		},

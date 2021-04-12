@@ -134,9 +134,9 @@ func main() {
 	case "producer":
 		mainProduce(opts, cache)
 	case "consumer.ui":
-		// TODO
+		mainUI(opts, cache)
 	case "consumer.admission":
-		mainAdmission(opts)
+		mainAdmission(opts, cache)
 	}
 	interrupts.WaitForGracefulShutdown()
 }
@@ -176,7 +176,12 @@ func mainProduce(opts *options, cache cache) {
 	go produce(clients, cache)
 }
 
-func mainAdmission(opts *options) {
+func mainUI(opts *options, cache cache) {
+	cpuLoaders, memoryLoaders := loaders(cache)
+	go serveUI(cpuLoaders, memoryLoaders, opts.uiPort)
+}
+
+func mainAdmission(opts *options, cache cache) {
 	restConfig, err := rest.InClusterConfig()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to load in-cluster config.")
@@ -185,5 +190,15 @@ func mainAdmission(opts *options) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct client.")
 	}
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client)
+
+	cpuLoaders, memoryLoaders := loaders(cache)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, cpuLoaders, memoryLoaders)
+}
+
+func loaders(cache cache) (cpu, memory []*cacheReloader) {
+	for _, prefix := range []string{prowjobsCachePrefix, podsCachePrefix, stepsCachePrefix} {
+		cpu = append(cpu, newReloader(prefix+"/"+MetricNameCPUUsage, cache))
+		memory = append(memory, newReloader(prefix+"/"+MetricNameMemoryWorkingSet, cache))
+	}
+	return cpu, memory
 }

@@ -19,13 +19,15 @@ import (
 	buildv1 "github.com/openshift/api/build/v1"
 	buildclientv1 "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 
+	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 	"github.com/openshift/ci-tools/pkg/steps"
 )
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface) {
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, cpu, memory []*cacheReloader) {
 	logger := logrus.WithField("component", "admission")
 	logger.Info("Initializing admission webhook server.")
 	health := pjutil.NewHealthOnPort(healthPort)
+	resources := newResourceServer(cpu, memory, health)
 	health.ServeReady()
 	decoder, err := admission.NewDecoder(scheme.Scheme)
 	if err != nil {
@@ -35,7 +37,7 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 		Port:    port,
 		CertDir: certDir,
 	}
-	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder}})
+	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources}})
 	logger.Info("Serving admission webhooks.")
 	if err := server.StartStandalone(interrupts.Context(), nil); err != nil {
 		logrus.WithError(err).Fatal("Failed to serve webhooks.")
@@ -43,9 +45,10 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 }
 
 type podMutator struct {
-	logger  *logrus.Entry
-	client  buildclientv1.BuildV1Interface
-	decoder *admission.Decoder
+	logger    *logrus.Entry
+	client    buildclientv1.BuildV1Interface
+	resources *resourceServer
+	decoder   *admission.Decoder
 }
 
 func (m *podMutator) Handle(ctx context.Context, req admission.Request) admission.Response {
@@ -68,7 +71,8 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		logger.WithError(err).Error("Could not get Build for Pod.")
 		return admission.Allowed("Could not get Build for Pod, ignoring.")
 	}
-	mutatePod(pod, build)
+	mutatePodLabels(pod, build)
+	mutatePodResources(pod, m.resources)
 
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
@@ -87,15 +91,58 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 	return response
 }
 
-func mutatePod(pod *corev1.Pod, build *buildv1.Build) {
+func mutatePodLabels(pod *corev1.Pod, build *buildv1.Build) {
 	if pod.Labels == nil {
 		pod.Labels = map[string]string{}
 	}
-	for _, label := range []string{steps.LabelMetadataOrg, steps.LabelMetadataRepo, steps.LabelMetadataBranch, steps.LabelMetadataVariant, steps.LabelMetadataTarget, steps.LabelMetadataStep} {
+	for _, label := range []string{steps.LabelMetadataOrg, steps.LabelMetadataRepo, steps.LabelMetadataBranch, steps.LabelMetadataVariant, steps.LabelMetadataTarget} {
 		buildValue, buildHas := build.Labels[label]
 		_, podHas := pod.Labels[label]
 		if buildHas && !podHas {
 			pod.Labels[label] = buildValue
+		}
+	}
+}
+
+// useOursIfLarger updates fields in theirs when ours are larger
+func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements) {
+	for _, item := range []*corev1.ResourceRequirements{allOfOurs, allOfTheirs} {
+		if item.Requests == nil {
+			item.Requests = corev1.ResourceList{}
+		}
+		if item.Limits == nil {
+			item.Limits = corev1.ResourceList{}
+		}
+	}
+	for _, pair := range []struct {
+		ours, theirs *corev1.ResourceList
+	}{
+		{ours: &allOfOurs.Requests, theirs: &allOfTheirs.Requests},
+		{ours: &allOfOurs.Limits, theirs: &allOfTheirs.Limits},
+	} {
+		for _, field := range []corev1.ResourceName{corev1.ResourceCPU, corev1.ResourceMemory} {
+			our := (*pair.ours)[field]
+			their := (*pair.theirs)[field]
+			if our.Cmp(their) == 1 {
+				(*pair.theirs)[field] = our
+			}
+		}
+	}
+}
+
+func mutatePodResources(pod *corev1.Pod, server *resourceServer) {
+	for i := range pod.Spec.InitContainers {
+		meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, pod.Spec.InitContainers[i].Name)
+		resources, recommendationExists := server.recommendedRequestFor(meta)
+		if recommendationExists {
+			useOursIfLarger(&resources, &pod.Spec.InitContainers[i].Resources)
+		}
+	}
+	for i := range pod.Spec.Containers {
+		meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, pod.Spec.Containers[i].Name)
+		resources, recommendationExists := server.recommendedRequestFor(meta)
+		if recommendationExists {
+			useOursIfLarger(&resources, &pod.Spec.Containers[i].Resources)
 		}
 	}
 }

@@ -13,10 +13,14 @@ import (
 	"github.com/sirupsen/logrus"
 
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/kube"
+
+	buildv1 "github.com/openshift/api/build/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/steps/release"
 )
 
 const (
@@ -197,6 +201,42 @@ func syntheticContextFromJob(meta api.Metadata, metric model.Metric) string {
 		return ""
 	}
 	return strings.TrimPrefix(string(job), namePrefix)
+}
+
+func MetadataFor(labels map[string]string, pod, container string) FullMetadata {
+	metric := labelsToMetric(labels)
+	metric[LabelNamePod] = model.LabelValue(pod)
+	metric[LabelNameContainer] = model.LabelValue(container)
+	return metadataFromMetric(metric)
+}
+
+func labelsToMetric(labels map[string]string) model.Metric {
+	mapping := map[string]model.LabelName{
+		kube.CreatedByProw:         ProwLabelNameCreated,
+		kube.ContextAnnotation:     ProwLabelNameContext,
+		kube.ProwJobAnnotation:     ProwLabelNameJob,
+		kube.ProwJobTypeLabel:      ProwLabelNameType,
+		kube.OrgLabel:              ProwLabelNameOrg,
+		kube.RepoLabel:             ProwLabelNameRepo,
+		kube.BaseRefLabel:          ProwLabelNameBranch,
+		steps.LabelMetadataOrg:     LabelNameOrg,
+		steps.LabelMetadataRepo:    LabelNameRepo,
+		steps.LabelMetadataBranch:  LabelNameBranch,
+		steps.LabelMetadataVariant: LabelNameVariant,
+		steps.LabelMetadataTarget:  LabelNameTarget,
+		steps.LabelMetadataStep:    LabelNameStep,
+		buildv1.BuildLabel:         LabelNameBuild,
+		release.Label:              LabelNameRelease,
+		steps.AppLabel:             LabelNameApp,
+	}
+	output := model.Metric{}
+	for key, value := range labels {
+		mapped, recorded := mapping[key]
+		if recorded {
+			output[mapped] = model.LabelValue(value)
+		}
+	}
+	return output
 }
 
 func UncoveredRanges(r TimeRange, coverage []TimeRange) []TimeRange {

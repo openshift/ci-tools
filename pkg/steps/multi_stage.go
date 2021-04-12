@@ -72,6 +72,7 @@ type multiStageTestStep struct {
 	allowSkipOnSuccess       *bool
 	allowBestEffortPostSteps *bool
 	leases                   []api.StepLease
+	clusterClaim             *api.ClusterClaim
 }
 
 func MultiStageTestStep(
@@ -108,6 +109,7 @@ func newMultiStageTestStep(
 		allowSkipOnSuccess:       ms.AllowSkipOnSuccess,
 		allowBestEffortPostSteps: ms.AllowBestEffortPostSteps,
 		leases:                   leases,
+		clusterClaim:             testConfig.ClusterClaim,
 	}
 }
 
@@ -211,6 +213,9 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 	}
 	if needsReleaseImage && !needsReleasePayload {
 		ret = append(ret, api.ReleaseImagesLink(api.LatestReleaseName))
+	}
+	if s.clusterClaim != nil {
+		ret = append(ret, api.ClusterClaimLink())
 	}
 	return
 }
@@ -525,6 +530,21 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		if owner := s.jobSpec.Owner(); owner != nil {
 			pod.OwnerReferences = append(pod.OwnerReferences, *owner)
 		}
+		if s.profile != "" && s.clusterClaim != nil {
+			//should never happen
+			errs = append(errs, fmt.Errorf("cannot set both cluster_profile and cluster_claim in a test"))
+		}
+		if s.clusterClaim != nil {
+			clusterClaimEnv, clusterClaimMount, err := getClusterClaimPodParams(secretVolumeMounts)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to get cluster claim pod params: %w", err))
+			} else {
+				container.Env = append(container.Env, clusterClaimEnv...)
+				// The volumes are there already because sidecar container uses them.
+				// We mount them here to the test container.
+				container.VolumeMounts = append(container.VolumeMounts, clusterClaimMount...)
+			}
+		}
 		if s.profile != "" {
 			addProfile(s.profileSecretName(), s.profile, pod)
 			container.Env = append(container.Env, []coreapi.EnvVar{
@@ -573,10 +593,14 @@ func secretsForCensoring(client loggingclient.LoggingClient, namespace string, c
 		})
 		secretVolumeMounts = append(secretVolumeMounts, coreapi.VolumeMount{
 			Name:      volumeName,
-			MountPath: path.Join("/secrets", secret.Name),
+			MountPath: getMountPath(secret.Name),
 		})
 	}
 	return secretVolumes, secretVolumeMounts, nil
+}
+
+func getMountPath(secretName string) string {
+	return path.Join("/secrets", secretName)
 }
 
 func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]coreapi.EnvVar, []error) {
@@ -807,4 +831,37 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 		return fmt.Errorf("%q pod %q %s: %w\n%s", s.name, pod.Name, status, err, linksText.String())
 	}
 	return nil
+}
+
+func getClusterClaimPodParams(secretVolumeMounts []coreapi.VolumeMount) ([]coreapi.EnvVar, []coreapi.VolumeMount, error) {
+	var retEnv []coreapi.EnvVar
+	var retMount []coreapi.VolumeMount
+	var errs []error
+
+	for _, secretName := range []string{api.HiveAdminKubeconfigSecret, api.HiveAdminPasswordSecret} {
+		mountPath := getMountPath(secretName)
+		var foundMountPath bool
+		for _, secretVolumeMount := range secretVolumeMounts {
+			if secretVolumeMount.MountPath == mountPath {
+				foundMountPath = true
+				retMount = append(retMount, secretVolumeMount)
+				if secretName == api.HiveAdminKubeconfigSecret {
+					retEnv = append(retEnv, coreapi.EnvVar{Name: "KUBECONFIG", Value: filepath.Join(secretVolumeMount.MountPath, api.HiveAdminKubeconfigSecretKey)})
+				}
+				if secretName == api.HiveAdminPasswordSecret {
+					retEnv = append(retEnv, coreapi.EnvVar{Name: "KUBEADMIN_PASSWORD_FILE", Value: filepath.Join(secretVolumeMount.MountPath, api.HiveAdminPasswordSecretKey)})
+				}
+				break
+			}
+		}
+		if !foundMountPath {
+			//should never happen
+			errs = append(errs, fmt.Errorf("failed to find foundMountPath %s to create secret %s", mountPath, secretName))
+		}
+	}
+
+	if len(errs) > 0 {
+		return nil, nil, utilerrors.NewAggregate(errs)
+	}
+	return retEnv, retMount, nil
 }

@@ -162,7 +162,6 @@ var (
 		cleanRVAndTypeMeta(xCopy)
 		cleanRVAndTypeMeta(yCopy)
 		return cmp.Diff(xCopy, yCopy) == ""
-
 	})
 )
 

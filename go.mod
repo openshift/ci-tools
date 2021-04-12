@@ -38,9 +38,10 @@ require (
 	github.com/kataras/tablewriter v0.0.0-20180708051242-e063d29b7c23
 	github.com/mattn/go-zglob v0.0.2
 	github.com/montanaflynn/stats v0.6.3
-	github.com/openshift/api v0.0.0-20200521101457-60c476765272
+	github.com/openshift/api v0.0.0-20210216211028-bb81baaf35cd
 	github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0
 	github.com/openshift/client-go v3.9.0+incompatible
+	github.com/openshift/hive/apis v0.0.0-20210331235223-7ce8ff441ae4
 	github.com/openshift/imagebuilder v1.1.1
 	github.com/openshift/library-go v0.0.0-20200127110935-527e40ed17d9
 	github.com/openshift/openshift-apiserver v0.0.0-alpha.0

@@ -63,6 +63,7 @@ import (
 	projectclientset "github.com/openshift/client-go/project/clientset/versioned"
 	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/nsttl"
@@ -400,6 +401,9 @@ type options struct {
 	resultsOptions results.Options
 
 	censor *secrets.DynamicCensor
+
+	hiveKubeconfigPath string
+	hiveKubeconfig     *rest.Config
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -458,6 +462,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.pullSecretPath, "image-import-pull-secret", "", "A set of dockercfg credentials used to import images for the tag_specification.")
 	flag.StringVar(&opt.pushSecretPath, "image-mirror-push-secret", "", "A set of dockercfg credentials used to mirror images for the promotion.")
 	flag.StringVar(&opt.uploadSecretPath, "gcs-upload-secret", "", "GCS credentials used to upload logs and artifacts.")
+
+	flag.StringVar(&opt.hiveKubeconfigPath, "hive-kubeconfig", "", "Path to the kubeconfig file to use for requests to Hive.")
 
 	opt.resultsOptions.Bind(flag)
 	return opt
@@ -627,6 +633,20 @@ func (o *options) Complete() error {
 			return fmt.Errorf("could not get upload secret %s from path %s: %w", api.GCSUploadCredentialsSecret, o.uploadSecretPath, err)
 		}
 	}
+
+	if o.hiveKubeconfigPath != "" {
+		kubeConfigs, _, err := util.LoadKubeConfigs(o.hiveKubeconfigPath, nil)
+		if err != nil {
+			return fmt.Errorf("could not load Hive kube config from path %s: %w", o.hiveKubeconfigPath, err)
+		}
+		if len(kubeConfigs) != 1 {
+			return fmt.Errorf("found %d contexts in Hive kube config %s: must be %s only", len(kubeConfigs), o.hiveKubeconfigPath, string(api.HiveCluster))
+		}
+		for k := range kubeConfigs {
+			o.hiveKubeconfig = kubeConfigs[k]
+			break
+		}
+	}
 	return nil
 }
 
@@ -664,7 +684,7 @@ func (o *options) Run() []error {
 		leaseClient = &o.leaseClient
 	}
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor)
+	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -1911,6 +1931,9 @@ func addSchemes() error {
 	}
 	if err := templateapi.AddToScheme(scheme.Scheme); err != nil {
 		return fmt.Errorf("failed to add templatev1 to scheme: %w", err)
+	}
+	if err := hivev1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add hivev1 to scheme: %w", err)
 	}
 	return nil
 }

@@ -150,6 +150,15 @@ func (c *cliClient) GetAllItems() []Item {
 	return c.savedItems
 }
 
+func (c *cliClient) HasItem(itemName string) bool {
+	for _, item := range c.savedItems {
+		if itemName == item.Name {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *cliClient) GetAttachmentOnItem(itemName, attachmentName string) (bytes []byte, retErr error) {
 	file, err := ioutil.TempFile("", "attachmentName")
 	if err != nil {
@@ -453,6 +462,10 @@ func (d *dryRunCliClient) GetFieldOnItem(_, _ string) ([]byte, error) {
 
 func (d *dryRunCliClient) GetAllItems() []Item {
 	return nil
+}
+
+func (d *dryRunCliClient) HasItem(itemName string) bool {
+	return false
 }
 
 func (d *dryRunCliClient) GetAttachmentOnItem(_, _ string) ([]byte, error) {

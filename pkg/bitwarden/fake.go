@@ -27,16 +27,6 @@ func (f fakeClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
 func (f fakeClient) GetAllItems() []Item {
 	return f.items
 }
-
-func (f fakeClient) HasItem(itemName string) bool {
-	for _, item := range f.items {
-		if itemName == item.Name {
-			return true
-		}
-	}
-	return false
-}
-
 func (f fakeClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error) {
 	for _, item := range f.items {
 		if itemName == item.Name {

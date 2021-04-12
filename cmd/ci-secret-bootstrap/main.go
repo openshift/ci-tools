@@ -113,25 +113,20 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 		return err
 	}
 
+	kubeConfigs, _, err := util.LoadKubeConfigs(o.kubeConfigPath, nil)
+	if err != nil {
+		// We will bail out later on if we don't have the have the right kubeconfigs
+		logrus.WithError(err).Warn("Encountered errors while loading kubeconfigs")
+	}
+	if o.impersonateUser != "" {
+		for _, kubeConfig := range kubeConfigs {
+			kubeConfig.Impersonate = rest.ImpersonationConfig{UserName: o.impersonateUser}
+		}
+	}
+
 	var config secretbootstrap.Config
 	if err := secretbootstrap.LoadConfigFromFile(o.configPath, &config); err != nil {
 		return err
-	}
-
-	var kubeConfigs map[string]*rest.Config
-	if !o.validateOnly {
-		var err error
-		kubeConfigs, _, err = util.LoadKubeConfigs(o.kubeConfigPath, nil)
-		if err != nil {
-			// We will bail out later on if we don't have the have the right kubeconfigs
-			logrus.WithError(err).Warn("Encountered errors while loading kubeconfigs")
-		}
-		if o.impersonateUser != "" {
-			for _, kubeConfig := range kubeConfigs {
-				kubeConfig.Impersonate = rest.ImpersonationConfig{UserName: o.impersonateUser}
-			}
-		}
-
 	}
 
 	o.secretsGetters = map[string]coreclientset.SecretsGetter{}
@@ -145,18 +140,16 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 			}
 			to = append(to, secretContext)
 
-			if !o.validateOnly {
-				if o.secretsGetters[secretContext.Cluster] == nil {
-					kc, ok := kubeConfigs[secretContext.Cluster]
-					if !ok {
-						return fmt.Errorf("config[%d].to[%d]: failed to find cluster context %q in the kubeconfig", i, j, secretContext.Cluster)
-					}
-					client, err := coreclientset.NewForConfig(kc)
-					if err != nil {
-						return err
-					}
-					o.secretsGetters[secretContext.Cluster] = client
+			if o.secretsGetters[secretContext.Cluster] == nil {
+				kc, ok := kubeConfigs[secretContext.Cluster]
+				if !ok {
+					return fmt.Errorf("config[%d].to[%d]: failed to find cluster context %q in the kubeconfig", i, j, secretContext.Cluster)
 				}
+				client, err := coreclientset.NewForConfig(kc)
+				if err != nil {
+					return err
+				}
+				o.secretsGetters[secretContext.Cluster] = client
 			}
 		}
 
@@ -748,52 +741,6 @@ func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClie
 	return utilerrors.NewAggregate(errs)
 }
 
-func validateBWItems(client secrets.ReadOnlyClient, secretConfigs []secretbootstrap.SecretConfig) error {
-	var errs []error
-
-	for _, config := range secretConfigs {
-		for _, item := range config.From {
-
-			if item.DockerConfigJSONData != nil {
-				for _, data := range item.DockerConfigJSONData {
-					if !client.HasItem(data.BWItem) {
-						errs = append(errs, fmt.Errorf("item %s doesn't exist", data.BWItem))
-						break
-					}
-					if _, err := client.GetAttachmentOnItem(data.BWItem, data.AuthBitwardenAttachment); err != nil {
-						errs = append(errs, fmt.Errorf("attachment %s in item %s doesn't exist", data.AuthBitwardenAttachment, data.BWItem))
-					}
-				}
-			} else {
-				if !client.HasItem(item.BWItem) {
-					errs = append(errs, fmt.Errorf("item %s doesn't exist", item.BWItem))
-					continue
-				}
-
-				if item.Field != "" {
-					if _, err := client.GetFieldOnItem(item.BWItem, item.Field); err != nil {
-						errs = append(errs, fmt.Errorf("field %s in item %s doesn't exist", item.Field, item.BWItem))
-					}
-				}
-
-				if item.Attachment != "" {
-					if _, err := client.GetAttachmentOnItem(item.BWItem, item.Attachment); err != nil {
-						errs = append(errs, fmt.Errorf("attachment %s in item %s doesn't exist", item.Attachment, item.BWItem))
-					}
-				}
-
-				if item.Attribute == secretbootstrap.AttributeTypePassword {
-					if _, err := client.GetPassword(item.BWItem); err != nil {
-						errs = append(errs, fmt.Errorf("password in item %s doesn't exist", item.BWItem))
-					}
-				}
-			}
-		}
-	}
-
-	return utilerrors.NewAggregate(errs)
-}
-
 func main() {
 	logrusutil.ComponentInit()
 	censor := secrets.NewDynamicCensor()
@@ -802,7 +749,17 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatalf("cannot parse args: %q", os.Args[1:])
 	}
-
+	if o.validateOnly {
+		var config secretbootstrap.Config
+		if err := secretbootstrap.LoadConfigFromFile(o.configPath, &config); err != nil {
+			logrus.WithError(err).Fatalf("failed to load config from file: %s", o.configPath)
+		}
+		if err := config.Validate(); err != nil {
+			logrus.WithError(err).Fatal("failed to validate the config")
+		}
+		logrus.Infof("the config file %s has been validated", o.configPath)
+		return
+	}
 	if err := o.validateOptions(); err != nil {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
@@ -819,23 +776,6 @@ func main() {
 		}
 	})
 	defer logrus.Exit(0)
-
-	if o.validateOnly {
-		var config secretbootstrap.Config
-		if err := secretbootstrap.LoadConfigFromFile(o.configPath, &config); err != nil {
-			logrus.WithError(err).Fatalf("failed to load config from file: %s", o.configPath)
-		}
-		if err := config.Validate(); err != nil {
-			logrus.WithError(err).Fatal("failed to validate the config")
-		}
-
-		if err := validateBWItems(client, o.config.Secrets); err != nil {
-			logrus.WithError(err).Fatal("failed to validate items")
-		}
-
-		logrus.Infof("the config file %s has been validated", o.configPath)
-		return
-	}
 
 	ctx := context.TODO()
 	var errs []error

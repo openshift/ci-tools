@@ -10,10 +10,13 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/afero"
 
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/plugins"
@@ -23,7 +26,8 @@ import (
 )
 
 type options struct {
-	prowConfigDir string
+	prowConfigDir            string
+	shardedProwConfigBaseDir string
 }
 
 func (o *options) Validate() error {
@@ -37,6 +41,7 @@ func gatherOptions() options {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.prowConfigDir, "prow-config-dir", "", "Path to the Prow configuration directory.")
+	fs.StringVar(&o.shardedProwConfigBaseDir, "sharded-prow-config-base-dir", "", "Basedir for the sharded prow config. If set, org and repo-specific config will get removed from the main prow config and written out in an org/repo tree below the base dir.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
@@ -49,7 +54,7 @@ func main() {
 		logrus.WithError(err).Fatal("invalid options")
 	}
 
-	if err := updateProwConfig(o.prowConfigDir); err != nil {
+	if err := updateProwConfig(o.prowConfigDir, o.shardedProwConfigBaseDir); err != nil {
 		logrus.WithError(err).Fatal("could not update Prow configuration")
 	}
 
@@ -58,10 +63,14 @@ func main() {
 	}
 }
 
-func updateProwConfig(configDir string) error {
+func updateProwConfig(configDir, shardingBaseDir string) error {
 	configPath := path.Join(configDir, config.ProwConfigFile)
 	agent := prowconfig.Agent{}
-	if err := agent.Start(configPath, "", []string{}); err != nil {
+	var additionalConfigs []string
+	if shardingBaseDir != "" {
+		additionalConfigs = append(additionalConfigs, shardingBaseDir)
+	}
+	if err := agent.Start(configPath, "", additionalConfigs); err != nil {
 		return fmt.Errorf("could not load Prow configuration: %w", err)
 	}
 
@@ -70,6 +79,14 @@ func updateProwConfig(configDir string) error {
 	config.Tide.Queries, err = deduplicateTideQueries(config.Tide.Queries)
 	if err != nil {
 		return fmt.Errorf("failed to deduplicate Tide queries: %w", err)
+	}
+
+	if shardingBaseDir != "" {
+		pc, err := shardProwConfig(&config.ProwConfig, afero.NewBasePathFs(afero.NewOsFs(), shardingBaseDir))
+		if err != nil {
+			return fmt.Errorf("failed to shard the prow config: %w", err)
+		}
+		config.ProwConfig = *pc
 	}
 
 	data, err := yaml.Marshal(config)
@@ -180,4 +197,55 @@ func updatePluginConfig(configDir string) error {
 	}
 
 	return ioutil.WriteFile(configPath, data, 0644)
+}
+
+// prowConfigWithPointers mimics the upstream prowConfig but has pointer fields only
+// in order to avoid serializing empty structs.
+type prowConfigWithPointers struct {
+	BranchProtection *prowconfig.BranchProtection `json:"branch-protection,omitempty"`
+}
+
+func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.ProwConfig, error) {
+	for org, orgConfig := range pc.BranchProtection.Orgs {
+		for repo, repoConfig := range orgConfig.Repos {
+			cfg := prowConfigWithPointers{BranchProtection: &prowconfig.BranchProtection{
+				Orgs: map[string]prowconfig.Org{org: {Repos: map[string]prowconfig.Repo{repo: repoConfig}}},
+			}}
+			if err := mkdirAndWrite(target, filepath.Join(org, repo, config.SupplementalProwConfigFileName), cfg); err != nil {
+				return nil, fmt.Errorf("failed to write config for repo %s/%s: %w", org, repo, err)
+			}
+			delete(pc.BranchProtection.Orgs[org].Repos, repo)
+		}
+
+		if isPolicySet(orgConfig.Policy) {
+			cfg := prowConfigWithPointers{BranchProtection: &prowconfig.BranchProtection{
+				Orgs: map[string]prowconfig.Org{org: orgConfig},
+			}}
+			if err := mkdirAndWrite(target, filepath.Join(org, config.SupplementalProwConfigFileName), cfg); err != nil {
+				return nil, fmt.Errorf("failed to write config for org %s: %w", org, err)
+			}
+		}
+		delete(pc.BranchProtection.Orgs, org)
+	}
+
+	return pc, nil
+}
+
+func mkdirAndWrite(fs afero.Fs, path string, content interface{}) error {
+	dir := filepath.Dir(path)
+	if err := fs.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to make dir %s: %w", dir, err)
+	}
+	serialized, err := yaml.Marshal(content)
+	if err != nil {
+		return fmt.Errorf("failed to serialize: %w", err)
+	}
+	if err := afero.WriteFile(fs, path, serialized, 0644); err != nil {
+		return fmt.Errorf("failed to write to %s: %w", path, err)
+	}
+	return nil
+}
+
+func isPolicySet(p prowconfig.Policy) bool {
+	return !apiequality.Semantic.DeepEqual(p, prowconfig.Policy{})
 }

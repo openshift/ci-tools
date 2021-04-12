@@ -113,20 +113,25 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 		return err
 	}
 
-	kubeConfigs, _, err := util.LoadKubeConfigs(o.kubeConfigPath, nil)
-	if err != nil {
-		// We will bail out later on if we don't have the have the right kubeconfigs
-		logrus.WithError(err).Warn("Encountered errors while loading kubeconfigs")
-	}
-	if o.impersonateUser != "" {
-		for _, kubeConfig := range kubeConfigs {
-			kubeConfig.Impersonate = rest.ImpersonationConfig{UserName: o.impersonateUser}
-		}
-	}
-
 	var config secretbootstrap.Config
 	if err := secretbootstrap.LoadConfigFromFile(o.configPath, &config); err != nil {
 		return err
+	}
+
+	var kubeConfigs map[string]*rest.Config
+	if !o.validateOnly {
+		var err error
+		kubeConfigs, _, err = util.LoadKubeConfigs(o.kubeConfigPath, nil)
+		if err != nil {
+			// We will bail out later on if we don't have the have the right kubeconfigs
+			logrus.WithError(err).Warn("Encountered errors while loading kubeconfigs")
+		}
+		if o.impersonateUser != "" {
+			for _, kubeConfig := range kubeConfigs {
+				kubeConfig.Impersonate = rest.ImpersonationConfig{UserName: o.impersonateUser}
+			}
+		}
+
 	}
 
 	o.secretsGetters = map[string]coreclientset.SecretsGetter{}
@@ -140,16 +145,18 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 			}
 			to = append(to, secretContext)
 
-			if o.secretsGetters[secretContext.Cluster] == nil {
-				kc, ok := kubeConfigs[secretContext.Cluster]
-				if !ok {
-					return fmt.Errorf("config[%d].to[%d]: failed to find cluster context %q in the kubeconfig", i, j, secretContext.Cluster)
+			if !o.validateOnly {
+				if o.secretsGetters[secretContext.Cluster] == nil {
+					kc, ok := kubeConfigs[secretContext.Cluster]
+					if !ok {
+						return fmt.Errorf("config[%d].to[%d]: failed to find cluster context %q in the kubeconfig", i, j, secretContext.Cluster)
+					}
+					client, err := coreclientset.NewForConfig(kc)
+					if err != nil {
+						return err
+					}
+					o.secretsGetters[secretContext.Cluster] = client
 				}
-				client, err := coreclientset.NewForConfig(kc)
-				if err != nil {
-					return err
-				}
-				o.secretsGetters[secretContext.Cluster] = client
 			}
 		}
 

@@ -248,7 +248,7 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 		copied[podConfig.As] = api.ResourceRequirements{Requests: api.ResourceList{"cpu": "50m", "memory": "400Mi"}}
 		resources = copied
 	}
-	step := steps.PodStep("release", podConfig, resources, s.client, s.jobSpec)
+	step := steps.PodStep("release", podConfig, resources, s.client, s.jobSpec, nil)
 	if err := step.Run(ctx); err != nil {
 		return err
 	}

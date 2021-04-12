@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/sirupsen/logrus"
 
@@ -58,6 +59,8 @@ type podStep struct {
 	jobSpec   *api.JobSpec
 
 	subTests []*junit.TestCase
+
+	clusterClaim *api.ClusterClaim
 }
 
 func (s *podStep) Inputs() (api.InputDefinition, error) {
@@ -121,11 +124,16 @@ func (s *podStep) SubTests() []*junit.TestCase {
 	return s.subTests
 }
 
-func (s *podStep) Requires() []api.StepLink {
-	if s.config.From.Name == api.PipelineImageStream {
-		return []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference(s.config.From.Tag))}
+func (s *podStep) Requires() (ret []api.StepLink) {
+	if s.clusterClaim != nil {
+		ret = append(ret, api.ClusterClaimLink())
 	}
-	return []api.StepLink{api.ImagesReadyLink()}
+	if s.config.From.Name == api.PipelineImageStream {
+		ret = append(ret, api.InternalImageLink(api.PipelineImageStreamTagReference(s.config.From.Tag)))
+		return
+	}
+	ret = append(ret, api.ImagesReadyLink())
+	return
 }
 
 func (s *podStep) Creates() []api.StepLink {
@@ -159,16 +167,18 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 		resources,
 		client,
 		jobSpec,
+		config.ClusterClaim,
 	)
 }
 
-func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, client PodClient, jobSpec *api.JobSpec) api.Step {
+func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, client PodClient, jobSpec *api.JobSpec, clusterClaim *api.ClusterClaim) api.Step {
 	return &podStep{
-		name:      name,
-		config:    config,
-		resources: resources,
-		client:    client,
-		jobSpec:   jobSpec,
+		name:         name,
+		config:       config,
+		resources:    resources,
+		client:       client,
+		jobSpec:      jobSpec,
+		clusterClaim: clusterClaim,
 	}
 }
 
@@ -228,6 +238,38 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 		secretVolumeMounts = append(secretVolumeMounts, getSecretVolumeMountFromSecret(secret.MountPath, i)...)
 		secretVolumes = append(secretVolumes, getVolumeFromSecret(secret.Name, i)...)
 	}
+	if s.clusterClaim != nil {
+		secretVolumeMounts = append(secretVolumeMounts, []coreapi.VolumeMount{
+			{
+				Name:      api.HiveAdminKubeconfigSecret,
+				ReadOnly:  true,
+				MountPath: filepath.Join(testSecretDefaultPath, api.HiveAdminKubeconfigSecret),
+			},
+			{
+				Name:      api.HiveAdminPasswordSecret,
+				ReadOnly:  true,
+				MountPath: filepath.Join(testSecretDefaultPath, api.HiveAdminPasswordSecret),
+			},
+		}...)
+		secretVolumes = append(secretVolumes, []coreapi.Volume{
+			{
+				Name: api.HiveAdminKubeconfigSecret,
+				VolumeSource: coreapi.VolumeSource{
+					Secret: &coreapi.SecretVolumeSource{
+						SecretName: api.HiveAdminKubeconfigSecret,
+					},
+				},
+			},
+			{
+				Name: api.HiveAdminPasswordSecret,
+				VolumeSource: coreapi.VolumeSource{
+					Secret: &coreapi.SecretVolumeSource{
+						SecretName: api.HiveAdminPasswordSecret,
+					},
+				},
+			},
+		}...)
+	}
 
 	artifactDir := s.name
 	pod, err := generateBasePod(s.jobSpec, map[string]string{}, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts)
@@ -237,6 +279,12 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	pod.Spec.ServiceAccountName = s.config.ServiceAccountName
 	container := &pod.Spec.Containers[0]
 	container.VolumeMounts = append(container.VolumeMounts, secretVolumeMounts...)
+	if s.clusterClaim != nil {
+		container.Env = append(container.Env, []coreapi.EnvVar{
+			{Name: "KUBECONFIG", Value: filepath.Join(filepath.Join(testSecretDefaultPath, api.HiveAdminKubeconfigSecret), api.HiveAdminKubeconfigSecretKey)},
+			{Name: "KUBEADMIN_PASSWORD_FILE", Value: filepath.Join(filepath.Join(testSecretDefaultPath, api.HiveAdminPasswordSecret), api.HiveAdminPasswordSecretKey)},
+		}...)
+	}
 	pod.Spec.Volumes = append(pod.Spec.Volumes, secretVolumes...)
 
 	if v := s.config.MemoryBackedVolume; v != nil {

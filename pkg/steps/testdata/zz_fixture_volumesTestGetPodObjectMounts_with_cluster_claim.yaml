@@ -1,0 +1,10 @@
+- emptyDir: {}
+  name: logs
+- emptyDir: {}
+  name: tools
+- name: hive-admin-kubeconfig
+  secret:
+    secretName: hive-admin-kubeconfig
+- name: hive-admin-password
+  secret:
+    secretName: hive-admin-password

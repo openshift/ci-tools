@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
@@ -118,6 +119,7 @@ func TestClusterClaimStepRun(t *testing.T) {
 				},
 				hiveClient: bcc(fakectrlruntimeclient.NewClientBuilder().WithObjects(aClusterPool()).Build(), func(client *clusterClaimStatusSettingClient) {
 					client.namespace = "ci-ocp-4.7.0-amd64-aws-us-east-1-ccx23"
+					client.conditionStatus = corev1.ConditionTrue
 				}),
 				client: loggingclient.New(fakewatchingclient.NewFakeClient()),
 			},
@@ -188,6 +190,32 @@ func TestClusterClaimStepRun(t *testing.T) {
 				return nil
 			},
 		},
+		{
+			name: "timeout",
+			s: &clusterClaimStep{
+				clusterClaim: &api.ClusterClaim{
+					Product:      api.ReleaseProductOCP,
+					Version:      "4.7.0",
+					Architecture: api.ReleaseArchitectureAMD64,
+					Cloud:        api.CloudAWS,
+					Owner:        "dpp",
+					Timeout:      &prowv1.Duration{Duration: time.Second},
+				},
+				hiveClient: bcc(fakectrlruntimeclient.NewClientBuilder().WithObjects(aClusterPool()).Build(), func(client *clusterClaimStatusSettingClient) {
+					client.namespace = "ci-ocp-4.7.0-amd64-aws-us-east-1-ccx23"
+					client.conditionStatus = corev1.ConditionFalse
+				}),
+				client: loggingclient.New(fakewatchingclient.NewFakeClient()),
+				jobSpec: &api.JobSpec{
+					JobSpec: downwardapi.JobSpec{
+						ProwJobID: "c2a971b7-947b-11eb-9747-0a580a820213",
+						BuildID:   "1378330119495487488",
+						Job:       "pull-ci-openshift-console-master-images",
+					},
+				},
+			},
+			expected: fmt.Errorf("failed to wait for created cluster claim to become running: %w", wait.ErrWaitTimeout),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -220,7 +248,8 @@ func bcc(upstream ctrlruntimeclient.Client, opts ...func(*clusterClaimStatusSett
 
 type clusterClaimStatusSettingClient struct {
 	ctrlruntimeclient.Client
-	namespace string
+	namespace       string
+	conditionStatus corev1.ConditionStatus
 }
 
 func (client *clusterClaimStatusSettingClient) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
@@ -229,7 +258,7 @@ func (client *clusterClaimStatusSettingClient) Create(ctx context.Context, obj c
 		asserted.Status.Conditions = []hivev1.ClusterClaimCondition{
 			{
 				Type:   hivev1.ClusterRunningCondition,
-				Status: corev1.ConditionTrue,
+				Status: client.conditionStatus,
 			},
 		}
 		for _, obj := range []ctrlruntimeclient.Object{aClusterDeployment(), aKubeconfigSecret(), aPasswordSecret()} {

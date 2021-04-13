@@ -215,7 +215,7 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 		ret = append(ret, api.ReleaseImagesLink(api.LatestReleaseName))
 	}
 	if s.clusterClaim != nil {
-		ret = append(ret, api.ClusterClaimLink())
+		ret = append(ret, api.ClusterClaimLink(s.name))
 	}
 	return
 }

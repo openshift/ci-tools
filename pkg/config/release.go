@@ -23,6 +23,8 @@ const (
 	ConfigInRepoPath = "core-services/prow/02_config/_config.yaml"
 	// ProwConfigFile is the filename where Prow config lives
 	ProwConfigFile = "_config.yaml"
+	// SupplementalProwConfigFileName is the name of supplemental prow config files.
+	SupplementalProwConfigFileName = "_prowconfig.yaml"
 	// PluginConfigFile is the filename where plugins live
 	PluginConfigFile = "_plugins.yaml"
 	// PluginConfigInRepoPath is the prow plugin config path from release repo

@@ -17,6 +17,7 @@ type ReadOnlyClient interface {
 	GetInUseInformationForAllItems() (map[string]SecretUsageComparer, error)
 	GetUserSecrets() (map[types.NamespacedName]map[string]string, error)
 	Logout() ([]byte, error)
+	HasItem(itemname string) bool
 }
 
 type Client interface {

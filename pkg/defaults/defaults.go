@@ -139,9 +139,6 @@ func fromConfig(
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			if testStep.ClusterClaim != nil {
-				if hiveClient == nil {
-					return nil, nil, fmt.Errorf("cannot claim a cluster without providing a Hive kubeconfig")
-				}
 				clusterClaimStep := steps.ClusterClaimStep(testStep.ClusterClaim, hiveClient, client, jobSpec)
 				buildSteps = append(buildSteps, clusterClaimStep)
 			}

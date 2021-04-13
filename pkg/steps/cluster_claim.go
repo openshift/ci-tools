@@ -2,6 +2,7 @@ package steps
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -34,7 +35,14 @@ func (s clusterClaimStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (s *clusterClaimStep) Validate() error { return nil }
+var NoHiveClientErr = errors.New("step claims a cluster without providing a Hive client")
+
+func (s *clusterClaimStep) Validate() error {
+	if s.hiveClient == nil {
+		return NoHiveClientErr
+	}
+	return nil
+}
 
 func (s *clusterClaimStep) Run(ctx context.Context) error {
 	return results.ForReason("cluster_claim").ForError(s.run(ctx))
@@ -50,7 +58,9 @@ func (s *clusterClaimStep) Description() string {
 
 func (s *clusterClaimStep) Requires() []api.StepLink { return nil }
 
-func (s *clusterClaimStep) Creates() []api.StepLink { return []api.StepLink{api.ClusterClaimLink()} }
+func (s *clusterClaimStep) Creates() []api.StepLink {
+	return []api.StepLink{api.ClusterClaimLink(s.Name())}
+}
 
 func (s *clusterClaimStep) Provides() api.ParameterMap { return nil }
 

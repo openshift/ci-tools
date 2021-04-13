@@ -1724,6 +1724,15 @@ func validateGraph(nodes []*api.StepNode) []error {
 	if noLeaseClient {
 		errs = append(errs, errors.New("a lease client was required but none was provided, add the --lease-... arguments"))
 	}
+	var noHiveClient bool
+	for _, err := range errs {
+		if errors.Is(err, steps.NoHiveClientErr) {
+			noHiveClient = true
+		}
+	}
+	if noHiveClient {
+		errs = append(errs, errors.New("a Hive client was required but none was provided, add the --hive-kubeconfig argument"))
+	}
 	return errs
 }
 

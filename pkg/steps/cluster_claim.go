@@ -113,7 +113,7 @@ func (s *clusterClaimStep) run(ctx context.Context) error {
 		}
 		// https://github.com/openshift/hive/blob/a535d29c4d2dc4f7f9bf3f30098c69d9334bee2e/apis/hive/v1/clusterclaim_types.go#L18-L22
 		for _, condition := range claim.Status.Conditions {
-			if condition.Type == hivev1.ClusterRunningCondition {
+			if condition.Type == hivev1.ClusterRunningCondition && condition.Status == corev1.ConditionTrue {
 				return true, nil
 			}
 		}

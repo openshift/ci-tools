@@ -25,6 +25,7 @@ import (
 )
 
 type clusterClaimStep struct {
+	as           string
 	clusterClaim *api.ClusterClaim
 	hiveClient   ctrlruntimeclient.Client
 	client       loggingclient.LoggingClient
@@ -49,7 +50,7 @@ func (s *clusterClaimStep) Run(ctx context.Context) error {
 }
 
 func (s *clusterClaimStep) Name() string {
-	return fmt.Sprintf("cluster_claim:%s_%s_%s_%s_%s", s.clusterClaim.Product, s.clusterClaim.Version, s.clusterClaim.Architecture, s.clusterClaim.Cloud, s.clusterClaim.Owner)
+	return fmt.Sprintf("cluster_claim_%s:%s_%s_%s_%s_%s", s.as, s.clusterClaim.Product, s.clusterClaim.Version, s.clusterClaim.Architecture, s.clusterClaim.Cloud, s.clusterClaim.Owner)
 }
 
 func (s *clusterClaimStep) Description() string {
@@ -59,7 +60,7 @@ func (s *clusterClaimStep) Description() string {
 func (s *clusterClaimStep) Requires() []api.StepLink { return nil }
 
 func (s *clusterClaimStep) Creates() []api.StepLink {
-	return []api.StepLink{api.ClusterClaimLink(s.Name())}
+	return []api.StepLink{api.ClusterClaimLink(s.as)}
 }
 
 func (s *clusterClaimStep) Provides() api.ParameterMap { return nil }
@@ -179,8 +180,9 @@ func mutate(secret *corev1.Secret, name, namespace string) (*corev1.Secret, erro
 	}, nil
 }
 
-func ClusterClaimStep(clusterClaim *api.ClusterClaim, hiveClient ctrlruntimeclient.Client, client loggingclient.LoggingClient, jobSpec *api.JobSpec) api.Step {
+func ClusterClaimStep(as string, clusterClaim *api.ClusterClaim, hiveClient ctrlruntimeclient.Client, client loggingclient.LoggingClient, jobSpec *api.JobSpec) api.Step {
 	ret := clusterClaimStep{
+		as:           as,
 		clusterClaim: clusterClaim,
 		hiveClient:   hiveClient,
 		client:       client,

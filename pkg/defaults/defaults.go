@@ -139,7 +139,7 @@ func fromConfig(
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			if testStep.ClusterClaim != nil {
-				clusterClaimStep := steps.ClusterClaimStep(testStep.ClusterClaim, hiveClient, client, jobSpec)
+				clusterClaimStep := steps.ClusterClaimStep(testStep.As, testStep.ClusterClaim, hiveClient, client, jobSpec)
 				buildSteps = append(buildSteps, clusterClaimStep)
 			}
 			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, jobSpec, inputImages, testStep)

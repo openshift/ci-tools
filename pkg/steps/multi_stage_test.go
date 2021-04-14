@@ -33,10 +33,11 @@ var _ SubStepReporter = &multiStageTestStep{}
 
 func TestRequires(t *testing.T) {
 	for _, tc := range []struct {
-		name   string
-		config api.ReleaseBuildConfiguration
-		steps  api.MultiStageTestConfigurationLiteral
-		req    []api.StepLink
+		name         string
+		config       api.ReleaseBuildConfiguration
+		steps        api.MultiStageTestConfigurationLiteral
+		clusterClaim *api.ClusterClaim
+		req          []api.StepLink
 	}{{
 		name: "step has a cluster profile and requires a release image, should not have ReleaseImagesLink",
 		steps: api.MultiStageTestConfigurationLiteral{
@@ -84,9 +85,21 @@ func TestRequires(t *testing.T) {
 			api.InternalImageLink(
 				api.PipelineImageStreamTagReferenceSource),
 		},
+	}, {
+		name: "step claims a cluster",
+		steps: api.MultiStageTestConfigurationLiteral{
+			Test: []api.LiteralTestStep{{From: "pipeline:src"}},
+		},
+		req: []api.StepLink{
+			api.InternalImageLink(api.PipelineImageStreamTagReferenceSource),
+			api.ClusterClaimLink("some-e2e"),
+		},
+		clusterClaim: &api.ClusterClaim{},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			step := MultiStageTestStep(api.TestStepConfiguration{
+				As:                                 "some-e2e",
+				ClusterClaim:                       tc.clusterClaim,
 				MultiStageTestConfigurationLiteral: &tc.steps,
 			}, &tc.config, api.NewDeferredParameters(nil), nil, nil, nil)
 			ret := step.Requires()

@@ -1063,12 +1063,22 @@ func TestFromConfig(t *testing.T) {
 		name: "multi-stage test with a cluster claim",
 		config: api.ReleaseBuildConfiguration{
 			Tests: []api.TestStepConfiguration{{
-				As:                                 "test",
+				As:                                 "e2e",
 				ClusterClaim:                       &api.ClusterClaim{},
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{},
 			}},
 		},
-		expectedSteps: []string{"cluster_claim:____", "test", "[output-images]", "[images]"},
+		expectedSteps: []string{"cluster_claim_e2e:____", "e2e", "[output-images]", "[images]"},
+	}, {
+		name: "container test with a claim",
+		config: api.ReleaseBuildConfiguration{
+			Tests: []api.TestStepConfiguration{{
+				As:                         "e2e",
+				ClusterClaim:               &api.ClusterClaim{},
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{},
+			}},
+		},
+		expectedSteps: []string{"cluster_claim_e2e:____", "e2e", "[output-images]", "[images]"},
 	}, {
 		name: "lease test",
 		config: api.ReleaseBuildConfiguration{

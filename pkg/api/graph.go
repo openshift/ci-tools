@@ -233,6 +233,7 @@ func Comparer() cmp.Option {
 		internalImageStreamLink{},
 		internalImageStreamTagLink{},
 		externalImageLink{},
+		clusterClaimLink{},
 	)
 }
 

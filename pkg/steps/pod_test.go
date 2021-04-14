@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	corev1 "k8s.io/api/core/v1"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
@@ -283,4 +285,48 @@ func (ps *podStatusChangingClient) Create(ctx context.Context, o ctrlruntimeclie
 		pod.Status.Phase = ps.dest
 	}
 	return ps.Client.Create(ctx, o, opts...)
+}
+
+func TestTestStepAndRequires(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   api.TestStepConfiguration
+		expected []api.StepLink
+	}{
+		{
+			name: "step without claim",
+			config: api.TestStepConfiguration{
+				As:                         "some",
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "cli"},
+			},
+			expected: []api.StepLink{api.InternalImageLink("cli")},
+		},
+		{
+			name: "step claim",
+			config: api.TestStepConfiguration{
+				As:                         "some",
+				ClusterClaim:               &api.ClusterClaim{},
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "cli"},
+			},
+			expected: []api.StepLink{api.ClusterClaimLink("some"), api.InternalImageLink("cli")},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := TestStep(tc.config, nil, nil, nil).Requires()
+			if len(actual) == len(tc.expected) {
+				matches := true
+				for i := range actual {
+					if !actual[i].SatisfiedBy(tc.expected[i]) {
+						matches = false
+						break
+					}
+				}
+				if matches {
+					return
+				}
+			}
+			t.Errorf("incorrect requirements: %s", cmp.Diff(actual, tc.expected, api.Comparer()))
+		})
+	}
 }

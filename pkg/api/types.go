@@ -914,6 +914,7 @@ const (
 	ClusterProfileGCPLoggingJournald ClusterProfile = "gcp-logging-journald"
 	ClusterProfileGCPLoggingJSONFile ClusterProfile = "gcp-logging-json-file"
 	ClusterProfileGCPLoggingCRIO     ClusterProfile = "gcp-logging-crio"
+	ClusterProfileGCP2               ClusterProfile = "gcp-openshift-gce-devel-ci-2"
 	ClusterProfileLibvirtPpc64le     ClusterProfile = "libvirt-ppc64le"
 	ClusterProfileLibvirtS390x       ClusterProfile = "libvirt-s390x"
 	ClusterProfileOpenStack          ClusterProfile = "openstack"
@@ -960,6 +961,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSCPaaS,
 		ClusterProfileOSDEphemeral,
 		ClusterProfileAWS2,
+		ClusterProfileGCP2,
 	}
 }
 
@@ -987,7 +989,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileGCPLogging,
 		ClusterProfileGCPLoggingJournald,
 		ClusterProfileGCPLoggingJSONFile,
-		ClusterProfileGCPLoggingCRIO:
+		ClusterProfileGCPLoggingCRIO,
+		ClusterProfileGCP2:
 		return "gcp"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le"
@@ -1038,7 +1041,8 @@ func (p ClusterProfile) LeaseType() string {
 		ClusterProfileGCPLogging,
 		ClusterProfileGCPLoggingJournald,
 		ClusterProfileGCPLoggingJSONFile,
-		ClusterProfileGCPLoggingCRIO:
+		ClusterProfileGCPLoggingCRIO,
+		ClusterProfileGCP2:
 		return "gcp-quota-slice"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le-quota-slice"

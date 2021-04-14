@@ -88,9 +88,9 @@ func FromConfig(
 
 	podClient := steps.NewPodClient(client, clusterConfig, coreGetter.RESTClient())
 
-	var hiveClient ctrlruntimeclient.Client
+	var hiveClient ctrlruntimeclient.WithWatch
 	if hiveKubeconfig != nil {
-		hiveClient, err = ctrlruntimeclient.New(hiveKubeconfig, ctrlruntimeclient.Options{})
+		hiveClient, err = ctrlruntimeclient.NewWithWatch(hiveKubeconfig, ctrlruntimeclient.Options{})
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not get Hive client for Hive kube config: %w", err)
 		}
@@ -111,7 +111,7 @@ func fromConfig(
 	templateClient steps.TemplateClient,
 	podClient steps.PodClient,
 	leaseClient *lease.Client,
-	hiveClient ctrlruntimeclient.Client,
+	hiveClient ctrlruntimeclient.WithWatch,
 	httpClient release.HTTPClient,
 	requiredTargets []string,
 	cloneAuthConfig *steps.CloneAuthConfig,
@@ -320,7 +320,7 @@ func stepForTest(
 	leaseClient *lease.Client,
 	templateClient steps.TemplateClient,
 	client loggingclient.LoggingClient,
-	hiveClient ctrlruntimeclient.Client,
+	hiveClient ctrlruntimeclient.WithWatch,
 	jobSpec *api.JobSpec,
 	inputImages inputImageSet,
 	c *api.TestStepConfiguration,

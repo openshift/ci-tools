@@ -2,6 +2,7 @@ package steps
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -11,7 +12,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
@@ -93,18 +93,19 @@ func init() {
 
 func TestClusterClaimStepAcquireCluster(t *testing.T) {
 	testCases := []struct {
-		name         string
-		clusterClaim api.ClusterClaim
-		jobSpec      *api.JobSpec
-		hiveClient   ctrlruntimeclient.Client
-		client       loggingclient.LoggingClient
-		expected     error
-		expectClaim  bool
-		verifyFunc   func(client ctrlruntimeclient.Client) error
+		name          string
+		clusterClaim  *api.ClusterClaim
+		jobSpec       *api.JobSpec
+		hiveClient    ctrlruntimeclient.WithWatch
+		client        loggingclient.LoggingClient
+		waitForClaim  func(client ctrlruntimeclient.WithWatch, ns, name string, claim *hivev1.ClusterClaim, timeout time.Duration) error
+		expected      *hivev1.ClusterClaim
+		expectedError error
+		verifyFunc    func(client ctrlruntimeclient.Client) error
 	}{
 		{
 			name: "happy path",
-			clusterClaim: api.ClusterClaim{
+			clusterClaim: &api.ClusterClaim{
 				Product:      api.ReleaseProductOCP,
 				Version:      "4.7.0",
 				Architecture: api.ReleaseArchitectureAMD64,
@@ -119,12 +120,39 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 					Job:       "pull-ci-openshift-console-master-images",
 				},
 			},
-			hiveClient: bcc(fakectrlruntimeclient.NewClientBuilder().WithObjects(aClusterPool()).Build(), func(client *clusterClaimStatusSettingClient) {
+			hiveClient: bcc(fakectrlruntimeclient.NewFakeClient(aClusterPool()), func(client *clusterClaimStatusSettingClient) {
 				client.namespace = "ci-ocp-4.7.0-amd64-aws-us-east-1-ccx23"
 				client.conditionStatus = corev1.ConditionTrue
 			}),
-			client:      loggingclient.New(fakectrlruntimeclient.NewFakeClient()),
-			expectClaim: true,
+			client: loggingclient.New(fakectrlruntimeclient.NewFakeClient()),
+			waitForClaim: func(client ctrlruntimeclient.WithWatch, ns, name string, claim *hivev1.ClusterClaim, timeout time.Duration) error {
+				return client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, claim)
+			},
+			expected: &hivev1.ClusterClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "c2a971b7-947b-11eb-9747-0a580a820213",
+					Namespace: "ci-cluster-pool",
+					Labels: map[string]string{
+						"prow.k8s.io/build-id": "1378330119495487488",
+						"prow.k8s.io/job":      "pull-ci-openshift-console-master-images",
+					},
+				},
+				Spec: hivev1.ClusterClaimSpec{
+					ClusterPoolName: "ci-ocp-4.7.0-amd64-aws-us-east-1",
+					Namespace:       "ci-ocp-4.7.0-amd64-aws-us-east-1-ccx23",
+					Lifetime: &metav1.Duration{
+						Duration: 4 * time.Hour,
+					},
+				},
+				Status: hivev1.ClusterClaimStatus{
+					Conditions: []hivev1.ClusterClaimCondition{
+						{
+							Type:   hivev1.ClusterRunningCondition,
+							Status: corev1.ConditionTrue,
+						},
+					},
+				},
+			},
 			verifyFunc: func(client ctrlruntimeclient.Client) error {
 				ctx := context.TODO()
 				actualSecret := &corev1.Secret{}
@@ -167,7 +195,7 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 		},
 		{
 			name: "no matching pools",
-			clusterClaim: api.ClusterClaim{
+			clusterClaim: &api.ClusterClaim{
 				Product:      api.ReleaseProductOCP,
 				Version:      "4.6.0",
 				Architecture: api.ReleaseArchitectureAMD64,
@@ -175,10 +203,10 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 				Owner:        "dpp",
 				Timeout:      &prowv1.Duration{Duration: time.Hour},
 			},
-			hiveClient: fakectrlruntimeclient.NewClientBuilder().WithObjects(aClusterPool()).Build(),
-			client:     loggingclient.New(fakectrlruntimeclient.NewFakeClient()),
-			jobSpec:    &api.JobSpec{},
-			expected:   fmt.Errorf("failed to find a cluster pool providing the cluster: map[architecture:amd64 cloud:aws owner:dpp product:ocp version:4.6.0]"),
+			hiveClient:    bcc(fakectrlruntimeclient.NewFakeClient(aClusterPool())),
+			client:        loggingclient.New(fakectrlruntimeclient.NewFakeClient()),
+			jobSpec:       &api.JobSpec{},
+			expectedError: fmt.Errorf("failed to find a cluster pool providing the cluster: map[architecture:amd64 cloud:aws owner:dpp product:ocp version:4.6.0]"),
 			verifyFunc: func(client ctrlruntimeclient.Client) error {
 				ctx := context.TODO()
 				actualSecret := &corev1.Secret{}
@@ -193,7 +221,7 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 		},
 		{
 			name: "timeout",
-			clusterClaim: api.ClusterClaim{
+			clusterClaim: &api.ClusterClaim{
 				Product:      api.ReleaseProductOCP,
 				Version:      "4.7.0",
 				Architecture: api.ReleaseArchitectureAMD64,
@@ -201,7 +229,7 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 				Owner:        "dpp",
 				Timeout:      &prowv1.Duration{Duration: time.Second},
 			},
-			hiveClient: bcc(fakectrlruntimeclient.NewClientBuilder().WithObjects(aClusterPool()).Build(), func(client *clusterClaimStatusSettingClient) {
+			hiveClient: bcc(fakectrlruntimeclient.NewFakeClient(aClusterPool()), func(client *clusterClaimStatusSettingClient) {
 				client.namespace = "ci-ocp-4.7.0-amd64-aws-us-east-1-ccx23"
 				client.conditionStatus = corev1.ConditionFalse
 			}),
@@ -213,24 +241,54 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 					Job:       "pull-ci-openshift-console-master-images",
 				},
 			},
-			expected:    fmt.Errorf("failed to wait for created cluster claim to become running: %w", wait.ErrWaitTimeout),
-			expectClaim: true,
+			waitForClaim: func(client ctrlruntimeclient.WithWatch, ns, name string, claim *hivev1.ClusterClaim, timeout time.Duration) error {
+				return errors.New("some error")
+			},
+			expected: &hivev1.ClusterClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "c2a971b7-947b-11eb-9747-0a580a820213",
+					Namespace: "ci-cluster-pool",
+					Labels: map[string]string{
+						"prow.k8s.io/build-id": "1378330119495487488",
+						"prow.k8s.io/job":      "pull-ci-openshift-console-master-images",
+					},
+				},
+				Spec: hivev1.ClusterClaimSpec{
+					ClusterPoolName: "ci-ocp-4.7.0-amd64-aws-us-east-1",
+					Namespace:       "ci-ocp-4.7.0-amd64-aws-us-east-1-ccx23",
+					Lifetime: &metav1.Duration{
+						Duration: 4 * time.Hour,
+					},
+				},
+				Status: hivev1.ClusterClaimStatus{
+					Conditions: []hivev1.ClusterClaimCondition{
+						{
+							Type:   hivev1.ClusterRunningCondition,
+							Status: corev1.ConditionFalse,
+						},
+					},
+				},
+			},
+			expectedError: fmt.Errorf("failed to wait for created cluster claim to become ready: %w", errors.New("some error")),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			s := clusterClaimStep{
+				clusterClaim: tc.clusterClaim,
+				client:       tc.client,
+				hiveClient:   tc.hiveClient,
+				jobSpec:      tc.jobSpec,
+			}
 			if tc.jobSpec != nil {
 				tc.jobSpec.SetNamespace("ci-op-test")
 			}
-			claim, actual := acquireCluster(context.TODO(), tc.clusterClaim, tc.hiveClient, tc.client, *tc.jobSpec)
-			if tc.expectClaim && claim == nil {
-				t.Errorf("%s: claim should not be nil", tc.name)
+			actual, actualError := s.acquireCluster(context.TODO(), tc.waitForClaim)
+			if diff := cmp.Diff(tc.expected, actual, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
-			if !tc.expectClaim && claim != nil {
-				t.Errorf("%s: got claim when nil claim was expected", tc.name)
-			}
-			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+			if diff := cmp.Diff(tc.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
 			if tc.verifyFunc != nil {
@@ -242,9 +300,9 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 	}
 }
 
-func bcc(upstream ctrlruntimeclient.Client, opts ...func(*clusterClaimStatusSettingClient)) ctrlruntimeclient.Client {
+func bcc(upstream ctrlruntimeclient.WithWatch, opts ...func(*clusterClaimStatusSettingClient)) ctrlruntimeclient.WithWatch {
 	c := &clusterClaimStatusSettingClient{
-		Client: upstream,
+		WithWatch: upstream,
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -253,7 +311,7 @@ func bcc(upstream ctrlruntimeclient.Client, opts ...func(*clusterClaimStatusSett
 }
 
 type clusterClaimStatusSettingClient struct {
-	ctrlruntimeclient.Client
+	ctrlruntimeclient.WithWatch
 	namespace       string
 	conditionStatus corev1.ConditionStatus
 }
@@ -268,10 +326,10 @@ func (client *clusterClaimStatusSettingClient) Create(ctx context.Context, obj c
 			},
 		}
 		for _, obj := range []ctrlruntimeclient.Object{aClusterDeployment(), aKubeconfigSecret(), aPasswordSecret()} {
-			if err := client.Client.Create(ctx, obj); err != nil {
+			if err := client.WithWatch.Create(ctx, obj); err != nil {
 				return err
 			}
 		}
 	}
-	return client.Client.Create(ctx, obj, opts...)
+	return client.WithWatch.Create(ctx, obj, opts...)
 }

@@ -1063,12 +1063,18 @@ func TestFromConfig(t *testing.T) {
 		name: "multi-stage test with a cluster claim",
 		config: api.ReleaseBuildConfiguration{
 			Tests: []api.TestStepConfiguration{{
-				As:                                 "e2e",
-				ClusterClaim:                       &api.ClusterClaim{},
+				As: "fast-as-heck-aws",
+				ClusterClaim: &api.ClusterClaim{
+					Product:      api.ReleaseProductOCP,
+					Version:      "4.7",
+					Architecture: api.ReleaseArchitectureAMD64,
+					Cloud:        api.CloudAWS,
+					Owner:        "dpp",
+				},
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{},
 			}},
 		},
-		expectedSteps: []string{"cluster_claim_e2e:____", "e2e", "[output-images]", "[images]"},
+		expectedSteps: []string{"cluster-pool:fast-as-heck-aws:ocp-4.7-amd64-aws-dpp", "fast-as-heck-aws", "[output-images]", "[images]"},
 	}, {
 		name: "container test with a claim",
 		config: api.ReleaseBuildConfiguration{
@@ -1078,7 +1084,7 @@ func TestFromConfig(t *testing.T) {
 				ContainerTestConfiguration: &api.ContainerTestConfiguration{},
 			}},
 		},
-		expectedSteps: []string{"cluster_claim_e2e:____", "e2e", "[output-images]", "[images]"},
+		expectedSteps: []string{"cluster-pool:e2e:----", "e2e", "[output-images]", "[images]"},
 	}, {
 		name: "lease test",
 		config: api.ReleaseBuildConfiguration{

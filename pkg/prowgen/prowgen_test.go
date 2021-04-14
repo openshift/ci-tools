@@ -96,6 +96,15 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 				},
 			},
 		},
+		{
+			description: "gcp-2 cluster profile",
+			test: &ciop.TestStepConfiguration{
+				As: "test",
+				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+					ClusterProfile: ciop.ClusterProfileGCP2,
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {

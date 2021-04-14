@@ -155,7 +155,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		if element.ContainerTestConfiguration != nil {
 			podSpec = generateCiOperatorPodSpec(info, element.Secrets, []string{element.As})
 		} else if element.MultiStageTestConfiguration != nil {
-			podSpec = generatePodSpecMultiStage(info, &element, configSpec.Releases != nil)
+			podSpec = generatePodSpecMultiStage(info, &element, configSpec.Releases != nil || element.ClusterClaim != nil)
 		} else {
 			var release string
 			if c := configSpec.ReleaseTagConfiguration; c != nil {

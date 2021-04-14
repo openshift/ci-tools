@@ -50,7 +50,7 @@ func (s *clusterClaimStep) Run(ctx context.Context) error {
 }
 
 func (s *clusterClaimStep) Name() string {
-	return fmt.Sprintf("cluster_claim_%s:%s_%s_%s_%s_%s", s.as, s.clusterClaim.Product, s.clusterClaim.Version, s.clusterClaim.Architecture, s.clusterClaim.Cloud, s.clusterClaim.Owner)
+	return fmt.Sprintf("cluster-pool:%s:%s-%s-%s-%s-%s", s.as, s.clusterClaim.Product, s.clusterClaim.Version, s.clusterClaim.Architecture, s.clusterClaim.Cloud, s.clusterClaim.Owner)
 }
 
 func (s *clusterClaimStep) Description() string {
@@ -116,7 +116,7 @@ func (s *clusterClaimStep) run(ctx context.Context) error {
 	if err := s.hiveClient.Create(ctx, claim); err != nil {
 		return fmt.Errorf("failed to created cluster claim %s in namespace %s: %w", claim.Name, claim.Namespace, err)
 	}
-	logrus.WithField("claim.Name", claim.Name).WithField("claim.Namespace", claim.Namespace).Info("waiting for the claimed cluster to be ready ...")
+	logrus.Info("Waiting for the claimed cluster to be ready.")
 	claim = &hivev1.ClusterClaim{}
 	if err := wait.Poll(15*time.Second, s.clusterClaim.Timeout.Duration, func() (bool, error) {
 		if err := s.hiveClient.Get(ctx, ctrlruntimeclient.ObjectKey{Name: claimName, Namespace: claimNamespace}, claim); err != nil {
@@ -124,6 +124,9 @@ func (s *clusterClaimStep) run(ctx context.Context) error {
 		}
 		// https://github.com/openshift/hive/blob/a535d29c4d2dc4f7f9bf3f30098c69d9334bee2e/apis/hive/v1/clusterclaim_types.go#L18-L22
 		for _, condition := range claim.Status.Conditions {
+			logrus.WithField("claim.Name", claim.Name).WithField("claim.Namespace", claim.Namespace).
+				WithField("condition.Type", condition.Type).WithField("condition.Status", condition.Status).
+				Debug("Checking the claim's status.")
 			if condition.Type == hivev1.ClusterRunningCondition && condition.Status == corev1.ConditionTrue {
 				return true, nil
 			}
@@ -132,6 +135,7 @@ func (s *clusterClaimStep) run(ctx context.Context) error {
 	}); err != nil {
 		return fmt.Errorf("failed to wait for created cluster claim to become running: %w", err)
 	}
+	logrus.Info("The claimed cluster is ready.")
 	clusterDeploymentName := claim.Spec.Namespace
 	clusterDeploymentNamespace := claim.Spec.Namespace
 	clusterDeployment := &hivev1.ClusterDeployment{}

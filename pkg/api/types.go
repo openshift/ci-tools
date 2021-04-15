@@ -1041,9 +1041,10 @@ func (p ClusterProfile) LeaseType() string {
 		ClusterProfileGCPLogging,
 		ClusterProfileGCPLoggingJournald,
 		ClusterProfileGCPLoggingJSONFile,
-		ClusterProfileGCPLoggingCRIO,
-		ClusterProfileGCP2:
+		ClusterProfileGCPLoggingCRIO:
 		return "gcp-quota-slice"
+	case ClusterProfileGCP2:
+		return "gcp-openshift-gce-devel-ci-2-quota-slice"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le-quota-slice"
 	case ClusterProfileLibvirtS390x:

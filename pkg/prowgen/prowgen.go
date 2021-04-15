@@ -75,14 +75,15 @@ func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret) *corev1
 	}
 
 	for _, secret := range secrets {
+		name := strings.ReplaceAll(secret.Name, ".", "-")
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      secret.Name,
+			Name:      name,
 			MountPath: fmt.Sprintf("/secrets/%s", secret.Name),
 			ReadOnly:  true,
 		})
 
 		volumes = append(volumes, corev1.Volume{
-			Name: secret.Name,
+			Name: name,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{SecretName: secret.Name},
 			},
@@ -153,7 +154,13 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			element.Secrets = append(element.Secrets, element.Secret)
 		}
 		if element.ContainerTestConfiguration != nil {
-			podSpec = generateCiOperatorPodSpec(info, element.Secrets, []string{element.As})
+			var additionalArgs []string
+			secrets := element.Secrets
+			if element.ClusterClaim != nil {
+				additionalArgs = []string{cioperatorapi.HiveControlPlaneKubeconfigSecretArg}
+				secrets = append(secrets, &api.Secret{Name: api.HiveControlPlaneKubeconfigSecret})
+			}
+			podSpec = generateCiOperatorPodSpec(info, secrets, []string{element.As}, additionalArgs...)
 		} else if element.MultiStageTestConfiguration != nil {
 			podSpec = generatePodSpecMultiStage(info, &element, configSpec.Releases != nil || element.ClusterClaim != nil)
 		} else {
@@ -289,6 +296,9 @@ func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secre
 		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--oauth-token-path=%s", filepath.Join(oauthTokenPath, oauthKey)))
 	}
 	for _, secret := range secrets {
+		if secret.Name == api.HiveControlPlaneKubeconfigSecret {
+			continue
+		}
 		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--secret-dir=/secrets/%s", secret.Name))
 	}
 
@@ -312,7 +322,12 @@ func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepCo
 			Name: "ci-pull-credentials",
 		})
 	}
-	podSpec := generateCiOperatorPodSpec(info, secrets, []string{test.As})
+	var additionalArgs []string
+	if test.ClusterClaim != nil {
+		additionalArgs = []string{cioperatorapi.HiveControlPlaneKubeconfigSecretArg}
+		secrets = append(secrets, &api.Secret{Name: api.HiveControlPlaneKubeconfigSecret})
+	}
+	podSpec := generateCiOperatorPodSpec(info, secrets, []string{test.As}, additionalArgs...)
 	if profile == "" {
 		return podSpec
 	}

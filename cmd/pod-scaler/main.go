@@ -1,0 +1,146 @@
+package main
+
+import (
+	"errors"
+	"flag"
+	"fmt"
+
+	"cloud.google.com/go/storage"
+	prometheusclient "github.com/prometheus/client_golang/api"
+	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/api/option"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/transport"
+	"k8s.io/test-infra/prow/interrupts"
+
+	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
+
+	"github.com/openshift/ci-tools/pkg/util"
+)
+
+type options struct {
+	mode string
+	producerOptions
+	consumerOptions
+
+	loglevel string
+
+	cacheDir           string
+	cacheBucket        string
+	gcsCredentialsFile string
+}
+
+type producerOptions struct {
+	kubeconfig string
+}
+
+type consumerOptions struct {
+	port   int
+	uiPort int
+}
+
+func bindOptions(fs *flag.FlagSet) *options {
+	o := options{producerOptions: producerOptions{}}
+	fs.StringVar(&o.mode, "mode", "", "Which mode to run in.")
+	fs.StringVar(&o.kubeconfig, "kubeconfig", "", "Path to a ~/.kube/config to use for querying Prometheuses. Each context will be considered a cluster to query.")
+	fs.IntVar(&o.port, "port", 0, "Port to serve requirements on.")
+	fs.IntVar(&o.uiPort, "ui-port", 0, "Port to serve frontend on.")
+	fs.StringVar(&o.loglevel, "loglevel", "debug", "Logging level.")
+	fs.StringVar(&o.cacheDir, "cache-dir", "", "Local directory holding cache data (for development mode).")
+	fs.StringVar(&o.cacheBucket, "cache-bucket", "", "GCS bucket name holding cached Prometheus data.")
+	fs.StringVar(&o.gcsCredentialsFile, "gcs-credentials-file", "", "File where GCS credentials are stored.")
+	return &o
+}
+
+func (o *options) validate() error {
+	switch o.mode {
+	case "producer":
+		if o.kubeconfig == "" {
+			return errors.New("--kubeconfig is required")
+		}
+	case "consumer":
+		if o.port == 0 {
+			return errors.New("--port is required")
+		}
+		if o.uiPort == 0 {
+			return errors.New("--ui-port is required")
+		}
+	default:
+		return errors.New("--mode must be either \"producer\" or \"consumer\"")
+	}
+	if o.cacheDir == "" {
+		if o.cacheBucket == "" {
+			return errors.New("--cache-bucket is required")
+		}
+		if o.gcsCredentialsFile == "" {
+			return errors.New("--gcs-credentials-file is required")
+		}
+	}
+	if level, err := logrus.ParseLevel(o.loglevel); err != nil {
+		return fmt.Errorf("--loglevel invalid: %w", err)
+	} else {
+		logrus.SetLevel(level)
+	}
+	return nil
+}
+
+func main() {
+	opts := bindOptions(flag.CommandLine)
+	flag.Parse()
+	if err := opts.validate(); err != nil {
+		logrus.WithError(err).Fatal("Failed to validate flags")
+	}
+
+	var cache cache
+	if opts.cacheDir != "" {
+		cache = &localCache{dir: opts.cacheDir}
+	} else {
+		gcsClient, err := storage.NewClient(interrupts.Context(), option.WithCredentialsFile(opts.gcsCredentialsFile))
+		if err != nil {
+			logrus.WithError(err).Fatal("Could not initialize GCS client.")
+		}
+		bucket := gcsClient.Bucket(opts.cacheBucket)
+		cache = &bucketCache{bucket: bucket}
+	}
+
+	switch opts.mode {
+	case "producer":
+		mainProduce(opts, cache)
+	case "consumer":
+		// TODO
+	}
+	interrupts.WaitForGracefulShutdown()
+}
+
+func mainProduce(opts *options, cache cache) {
+	kubeconfigs, _, err := util.LoadKubeConfigs(opts.kubeconfig, nil)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to load kubeconfigs")
+	}
+
+	clients := map[string]prometheusapi.API{}
+	for cluster, config := range kubeconfigs {
+		logger := logrus.WithField("cluster", cluster)
+		client, err := routeclientset.NewForConfig(config)
+		if err != nil {
+			logger.WithError(err).Fatal("Failed to construct client.")
+		}
+		route, err := client.Routes("openshift-monitoring").Get(interrupts.Context(), "prometheus-k8s", metav1.GetOptions{})
+		if err != nil {
+			logger.WithError(err).Fatal("Failed to get Prometheus route.")
+		}
+		promClient, err := prometheusclient.NewClient(prometheusclient.Config{
+			Address:      "https://" + route.Spec.Host,
+			RoundTripper: transport.NewBearerAuthRoundTripper(config.BearerToken, prometheusclient.DefaultRoundTripper),
+		})
+		if err != nil {
+			logger.WithError(err).Fatal("Failed to get Prometheus client.")
+		}
+		clients[cluster] = prometheusapi.NewAPI(promClient)
+		logger.Debugf("Loaded Prometheus client.")
+	}
+
+	go produce(clients, cache)
+}

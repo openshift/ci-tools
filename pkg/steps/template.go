@@ -45,9 +45,12 @@ func init() {
 }
 
 const (
-	RefsOrgLabel    = "ci.openshift.io/refs.org"
-	RefsRepoLabel   = "ci.openshift.io/refs.repo"
-	RefsBranchLabel = "ci.openshift.io/refs.branch"
+	RefsOrgLabel            = "ci.openshift.io/refs.org"
+	RefsRepoLabel           = "ci.openshift.io/refs.repo"
+	RefsBranchLabel         = "ci.openshift.io/refs.branch"
+	RefsVariantLabel        = "ci.openshift.io/refs.variant"
+	JobNameLabel            = "ci.openshift.io/job"
+	MultiStageStepNameLabel = "ci.openshift.io/step"
 
 	TestContainerName = "test"
 )

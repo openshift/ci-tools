@@ -260,12 +260,13 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 	tests := []struct {
 		description string
 
-		test       string
-		repoInfo   *ProwgenInfo
-		jobRelease string
-		clone      bool
-		cron       string
-		interval   string
+		test              string
+		repoInfo          *ProwgenInfo
+		jobRelease        string
+		clone             bool
+		cron              string
+		interval          string
+		releaseController bool
 	}{
 		{
 			description: "periodic for standard test",
@@ -301,11 +302,18 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 			clone:       true,
 			cron:        "@yearly",
 		},
+		{
+			description:       "release controller job",
+			test:              "testname",
+			repoInfo:          &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			jobRelease:        "4.6",
+			releaseController: true,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
 			// podSpec tested in generatePodSpec
-			testhelper.CompareWithFixture(t, generatePeriodicForTest(tc.test, tc.repoInfo, nil, true, tc.cron, tc.interval, nil, tc.jobRelease, !tc.clone))
+			testhelper.CompareWithFixture(t, generatePeriodicForTest(tc.test, tc.repoInfo, nil, true, tc.cron, tc.interval, tc.releaseController, nil, tc.jobRelease, !tc.clone))
 		})
 	}
 }

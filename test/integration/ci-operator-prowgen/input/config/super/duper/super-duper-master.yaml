@@ -78,6 +78,11 @@ tests:
           requests:
             cpu: 100m
             memory: 200Mi
+- as: informer
+  commands: make unit
+  container:
+    from: src
+  release_controller: true
 zz_generated_metadata:
   branch: master
   org: super

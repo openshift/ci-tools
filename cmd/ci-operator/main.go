@@ -536,6 +536,10 @@ func (o *options) Complete() error {
 		logrus.Info("No source defined")
 	}
 	for _, ref := range refs {
+		if ref.BaseSHA == "" {
+			logrus.Debugf("Resolved SHA missing for %s in https://github.com/%s/%s: adding synthetic input to avoid false cache hit", ref.BaseRef, ref.Org, ref.Repo)
+			o.extraInputHash.values = append(o.extraInputHash.values, time.Now().String())
+		}
 		logrus.Info(summarizeRef(ref))
 
 		for _, pull := range ref.Pulls {
@@ -1767,6 +1771,9 @@ func summarizeRef(refs prowapi.Refs) string {
 			pulls = append(pulls, fmt.Sprintf("#%d %s @%s", pull.Number, shorten(pull.SHA, 8), pull.Author))
 		}
 		return fmt.Sprintf("Resolved source https://github.com/%s/%s to %s@%s, merging: %s", refs.Org, refs.Repo, refs.BaseRef, shorten(refs.BaseSHA, 8), strings.Join(pulls, ", "))
+	}
+	if refs.BaseSHA == "" {
+		return fmt.Sprintf("Resolved SHA missing for %s in https://github.com/%s/%s (will prevent caching)", refs.BaseRef, refs.Org, refs.Repo)
 	}
 	return fmt.Sprintf("Resolved source https://github.com/%s/%s to %s@%s", refs.Org, refs.Repo, refs.BaseRef, shorten(refs.BaseSHA, 8))
 }

@@ -650,6 +650,16 @@ func (o *options) Complete() error {
 	return nil
 }
 
+func excludeContextCancelledErrors(errs []error) []error {
+	var ret []error
+	for _, err := range errs {
+		if !errors.Is(err, context.Canceled) {
+			ret = append(ret, err)
+		}
+	}
+	return ret
+}
+
 func (o *options) Report(errs ...error) {
 	if len(errs) > 0 {
 		o.writeFailingJUnit(errs)
@@ -661,10 +671,12 @@ func (o *options) Report(errs ...error) {
 		return
 	}
 
-	for _, err := range errs {
+	errorToReport := excludeContextCancelledErrors(errs)
+	for _, err := range errorToReport {
 		reporter.Report(err)
 	}
-	if len(errs) == 0 {
+
+	if len(errorToReport) == 0 {
 		reporter.Report(nil)
 	}
 }

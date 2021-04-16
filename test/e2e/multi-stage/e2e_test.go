@@ -4,7 +4,10 @@ package multi_stage
 
 import (
 	"io/ioutil"
+	"strings"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/util/uuid"
 
 	"github.com/openshift/ci-tools/test/e2e/framework"
 )
@@ -20,11 +23,12 @@ func TestMultiStage(t *testing.T) {
 		t.Fatalf("failed to read config file: %v", err)
 	}
 	var testCases = []struct {
-		name    string
-		args    []string
-		env     []string
-		success bool
-		output  []string
+		name     string
+		args     []string
+		env      []string
+		success  bool
+		needHive bool
+		output   []string
 	}{
 		{
 			name:    "fetching full config from resolver",
@@ -121,12 +125,25 @@ func TestMultiStage(t *testing.T) {
 			success: true,
 			output:  []string{`run-as-script-success succeeded`},
 		},
+		{
+			name:     "e2e-claim",
+			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-claim"},
+			needHive: true,
+			success:  true,
+			output:   []string{`e2e-claim-claim-step succeeded`},
+		},
 	}
 
 	for _, testCase := range testCases {
 		testCase := testCase
 		framework.Run(t, testCase.name, func(t *framework.T, cmd *framework.CiOperatorCommand) {
 			cmd.AddArgs(testCase.args...)
+			if testCase.needHive {
+				cmd.AddArgs(framework.HiveKubeconfigFlag(t))
+				// The job name will be used as claim name and e2e tests from different PRs make make claims from the same namespace.
+				// The job name should be unique.
+				testCase.env = []string{strings.Replace(defaultJobSpec, "uuid", string(uuid.NewUUID()), 1)}
+			}
 			cmd.AddEnv(testCase.env...)
 			output, err := cmd.Run()
 			if testCase.success != (err == nil) {

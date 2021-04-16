@@ -94,6 +94,16 @@ func RemotePullSecretFlag(t *T) string {
 	return flag("secret-dir", value)
 }
 
+// HiveKubeconfigFlag formats a flag to provide access to remote Hive for
+// ci-operator, failing if the required env is not present to supply it.
+func HiveKubeconfigFlag(t *T) string {
+	value, set := os.LookupEnv("HIVE_KUBECONFIG")
+	if !set {
+		t.Fatal("required environment HIVE_KUBECONFIG is not set")
+	}
+	return flag("hive-kubeconfig", value)
+}
+
 // GCSPushCredentialsFlag formats a flag to provide access to push to GCS for
 // ci-operator, failing if the required env is not present to supply it.
 func GCSPushCredentialsFlag(t *T) string {

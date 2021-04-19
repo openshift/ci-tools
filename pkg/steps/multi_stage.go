@@ -680,14 +680,15 @@ func addSharedDirSecret(secret string, pod *coreapi.Pod) {
 func addCredentials(credentials []api.CredentialReference, pod *coreapi.Pod) {
 	for _, credential := range credentials {
 		name := fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)
+		volumeName := fmt.Sprintf("%s-%s", credential.Namespace, strings.ReplaceAll(credential.Name, ".", "-"))
 		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
-			Name: name,
+			Name: volumeName,
 			VolumeSource: coreapi.VolumeSource{
 				Secret: &coreapi.SecretVolumeSource{SecretName: name},
 			},
 		})
 		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
-			Name:      name,
+			Name:      volumeName,
 			MountPath: credential.MountPath,
 		})
 	}

@@ -620,6 +620,24 @@ func TestAddCredentials(t *testing.T) {
 				},
 			}},
 		},
+		{
+			name: "dots in volume name are replaced",
+			credentials: []api.CredentialReference{
+				{Namespace: "ns", Name: "app.ci-hive-credentials", MountPath: "/tmp"},
+			},
+			pod: coreapi.Pod{Spec: coreapi.PodSpec{
+				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{}}},
+				Volumes:    []coreapi.Volume{},
+			}},
+			expected: coreapi.Pod{Spec: coreapi.PodSpec{
+				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{
+					{Name: "ns-app-ci-hive-credentials", MountPath: "/tmp"},
+				}}},
+				Volumes: []coreapi.Volume{
+					{Name: "ns-app-ci-hive-credentials", VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "ns-app.ci-hive-credentials"}}},
+				},
+			}},
+		},
 	}
 
 	for _, testCase := range testCases {

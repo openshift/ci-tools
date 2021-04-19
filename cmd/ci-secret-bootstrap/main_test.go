@@ -1408,6 +1408,47 @@ func TestConstructSecrets(t *testing.T) {
 			},
 		},
 		{
+			name: "Secret gets base64-decoded when requested",
+			bwItems: []bitwarden.Item{
+				{Name: "item", Fields: []bitwarden.Field{{Name: "key", Value: "dmFsdWUx"}}},
+			},
+			config: secretbootstrap.Config{
+				UserSecretsTargetClusters: []string{"a", "b"},
+				Secrets: []secretbootstrap.SecretConfig{{
+					From: map[string]secretbootstrap.BitWardenContext{"secret-key": {BWItem: "item", Field: "key", Base64Decode: true}},
+					To: []secretbootstrap.SecretContext{
+						{Cluster: "a", Namespace: "some-namespace", Name: "some-name"},
+					},
+				}},
+			},
+			expected: map[string][]*coreapi.Secret{
+				"a": {{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+					Type:       coreapi.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"secret-key": []byte("value1"),
+					},
+				}},
+			},
+		},
+		{
+			name: "Secret fails when base64 decoding is requsted on invalid data",
+			bwItems: []bitwarden.Item{
+				{Name: "item", Fields: []bitwarden.Field{{Name: "key", Value: "value"}}},
+			},
+			config: secretbootstrap.Config{
+				UserSecretsTargetClusters: []string{"a", "b"},
+				Secrets: []secretbootstrap.SecretConfig{{
+					From: map[string]secretbootstrap.BitWardenContext{"secret-key": {BWItem: "item", Field: "key", Base64Decode: true}},
+					To: []secretbootstrap.SecretContext{
+						{Cluster: "a", Namespace: "some-namespace", Name: "some-name"},
+					},
+				}},
+			},
+			expectedBitwardenErr: `failed to base64-decode config.0."secret-key": illegal base64 data at input byte 4`,
+			expectedVaultErr:     `failed to base64-decode config.0."secret-key": illegal base64 data at input byte 4`,
+		},
+		{
 			name: "Usersecret would override dptp key, error",
 			bwItems: []bitwarden.Item{
 				{Name: "my/vault/secret", Fields: bwFieldsFromMap(map[string]string{
@@ -1485,7 +1526,6 @@ func TestConstructSecrets(t *testing.T) {
 						})
 					}
 					equal(t, "secrets", tc.expected, actual)
-
 				})
 			}
 		})
@@ -2024,6 +2064,7 @@ func equalError(t *testing.T, expected, actual error) {
 }
 
 func equal(t *testing.T, what string, expected, actual interface{}) {
+	t.Helper()
 	if diff := cmp.Diff(expected, actual, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 		t.Errorf("%s differs from expected:\n%s", what, diff)
 	}

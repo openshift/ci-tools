@@ -23,6 +23,9 @@ type BitWardenContext struct {
 	Attachment           string                 `json:"attachment,omitempty"`
 	Attribute            AttributeType          `json:"attribute,omitempty"`
 	DockerConfigJSONData []DockerConfigJSONData `json:"dockerconfigJSON,omitempty"`
+	// If the secret should be base64 decoded before uploading to kube. Encoding
+	// it is useful to be able to store binary data.
+	Base64Decode bool `json:"base64_decode,omitempty"`
 }
 
 type DockerConfigJSONData struct {

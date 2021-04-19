@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -370,6 +371,14 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, client
 					if err != nil {
 						errChan <- fmt.Errorf("config.%d.\"%s\": %w", idx, key, err)
 						return
+					}
+					if cfg.From[key].Base64Decode {
+						decoded := make([]byte, base64.StdEncoding.DecodedLen(len(value)))
+						if _, err := base64.StdEncoding.Decode(decoded, value); err != nil {
+							errChan <- fmt.Errorf(`failed to base64-decode config.%d."%s": %w`, idx, key, err)
+							return
+						}
+						value = decoded
 					}
 					dataLock.Lock()
 					data[key] = value

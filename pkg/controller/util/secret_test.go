@@ -67,7 +67,7 @@ func TestEnsureImagePullSecret(t *testing.T) {
 					Type: "kubernetes.io/dockerconfigjson",
 				}
 
-				if diff := cmp.Diff(expectedSecret, actualSecret, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedSecret, actualSecret, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				return nil
@@ -92,7 +92,7 @@ func TestEnsureImagePullSecret(t *testing.T) {
 					Type: "kubernetes.io/dockerconfigjson",
 				}
 
-				if diff := cmp.Diff(expectedSecret, actualSecret, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedSecret, actualSecret, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				return nil

@@ -2024,7 +2024,7 @@ func equalError(t *testing.T, expected, actual error) {
 }
 
 func equal(t *testing.T, what string, expected, actual interface{}) {
-	if diff := cmp.Diff(expected, actual, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+	if diff := cmp.Diff(expected, actual, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 		t.Errorf("%s differs from expected:\n%s", what, diff)
 	}
 }

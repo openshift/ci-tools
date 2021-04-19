@@ -285,7 +285,7 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 				}
-				if diff := cmp.Diff(expectedImageStreamTag, actualImageStreamTag, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedImageStreamTag, actualImageStreamTag, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 
@@ -302,7 +302,7 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 				}
-				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 
@@ -321,7 +321,7 @@ func TestReconcile(t *testing.T) {
 						Finalizers: []string{"dptp.openshift.io/registry-syncer"},
 					},
 				}
-				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 
@@ -338,7 +338,7 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 				}
-				if diff := cmp.Diff(expectedNamespace, actualNamespace, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedNamespace, actualNamespace, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				return nil
@@ -380,7 +380,7 @@ func TestReconcile(t *testing.T) {
 				}
 				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
 				expectedImageStreamTag.Image.CreationTimestamp = actualImageStreamTag.Image.CreationTimestamp
-				if diff := cmp.Diff(expectedImageStreamTag, actualImageStreamTag, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedImageStreamTag, actualImageStreamTag, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				return nil
@@ -431,7 +431,7 @@ func TestReconcile(t *testing.T) {
 					}
 					//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
 					expectedImageStreamTag.Image.CreationTimestamp = actualImageStreamTag.Image.CreationTimestamp
-					if diff := cmp.Diff(expectedImageStreamTag, actualImageStreamTag, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+					if diff := cmp.Diff(expectedImageStreamTag, actualImageStreamTag, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 						return fmt.Errorf("actual does not match expected, diff: %s", diff)
 					}
 				}
@@ -469,7 +469,7 @@ func TestReconcile(t *testing.T) {
 				}
 				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
 				expectedImageStream.DeletionTimestamp = actualImageStream.DeletionTimestamp
-				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				actualImageStream = &imagev1.ImageStream{}
@@ -510,7 +510,7 @@ func TestReconcile(t *testing.T) {
 				}
 				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
 				expectedImageStream.DeletionTimestamp = actualImageStream.DeletionTimestamp
-				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				actualImageStream = &imagev1.ImageStream{}
@@ -550,7 +550,7 @@ func TestReconcile(t *testing.T) {
 				}
 				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
 				expectedImageStream.DeletionTimestamp = actualImageStream.DeletionTimestamp
-				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 
@@ -573,7 +573,7 @@ func TestReconcile(t *testing.T) {
 				}
 				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
 				expectedImageStream.DeletionTimestamp = actualImageStream.DeletionTimestamp
-				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				return nil
@@ -603,7 +603,7 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 				}
-				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				for _, client := range []ctrlruntimeclient.Client{apiCIClient, appCIClient} {
@@ -1045,7 +1045,7 @@ func TestEnsureImageStreamTag(t *testing.T) {
 				}
 				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
 				expectedImageStreamTag.Image.CreationTimestamp = actualImageStreamTag.Image.CreationTimestamp
-				if diff := cmp.Diff(expectedImageStreamTag, actualImageStreamTag, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedImageStreamTag, actualImageStreamTag, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				return nil

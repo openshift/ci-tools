@@ -140,7 +140,7 @@ func TestClusterClaimStepRun(t *testing.T) {
 					},
 					Immutable: &immutable,
 				}
-				if diff := cmp.Diff(expectedSecret, actualSecret, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedSecret, actualSecret, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				actualSecret = &corev1.Secret{}
@@ -157,7 +157,7 @@ func TestClusterClaimStepRun(t *testing.T) {
 					},
 					Immutable: &immutable,
 				}
-				if diff := cmp.Diff(expectedSecret, actualSecret, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedSecret, actualSecret, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				return nil

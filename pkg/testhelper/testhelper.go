@@ -154,9 +154,9 @@ var (
 		return x.Error() == y.Error()
 	})
 
-	// RuntimObjectIgnoreRvTypeMeta compares two kubernetes objects, ignoring their resource
+	// RuntimeObjectIgnoreRvTypeMeta compares two kubernetes objects, ignoring their resource
 	// version and TypeMeta. It is what you want 99% of the time.
-	RuntimObjectIgnoreRvTypeMeta = cmp.Comparer(func(x, y runtime.Object) bool {
+	RuntimeObjectIgnoreRvTypeMeta = cmp.Comparer(func(x, y runtime.Object) bool {
 		xCopy := x.DeepCopyObject()
 		yCopy := y.DeepCopyObject()
 		cleanRVAndTypeMeta(xCopy)

@@ -113,6 +113,15 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{},
 			},
 		},
+		{
+			description: "hypershift cluster profile",
+			test: &ciop.TestStepConfiguration{
+				As: "test",
+				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+					ClusterProfile: ciop.ClusterProfileHyperShift,
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {

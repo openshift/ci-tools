@@ -34,6 +34,7 @@ type option struct {
 	listenAddr    string
 	vaultAddr     string
 	vaultToken    string
+	vaultRole     string
 	flagutil.InstrumentationOptions
 }
 
@@ -43,12 +44,13 @@ func parseOptions() (*option, error) {
 	flag.StringVar(&o.listenAddr, "listen-addr", "127.0.0.1:8080", "The address to listen on")
 	flag.StringVar(&o.vaultAddr, "vault-addr", "http://127.0.0.1:8300", "The address under which vault should be reached")
 	flag.StringVar(&o.vaultToken, "vault-token", "", "The privileged token to use when communicating with vault, must be able to CRUD policies")
+	flag.StringVar(&o.vaultRole, "vault-role", "", "The vault role to use, must be able to CRUD policies. Will be used for kubernetes service account auth.")
 	o.InstrumentationOptions.AddFlags(flag.CommandLine)
 	flag.Parse()
 
 	var errs []error
-	if o.vaultToken == "" {
-		errs = append(errs, errors.New("--vault-token is required"))
+	if o.vaultToken == "" && o.vaultRole == "" {
+		errs = append(errs, errors.New("--vault-token or --vault-role is required"))
 	}
 	if err := o.InstrumentationOptions.Validate(false); err != nil {
 		errs = append(errs, err)
@@ -65,7 +67,12 @@ func main() {
 		logrus.WithError(err).Fatal("failed to get options")
 	}
 
-	privilegedVaultClient, err := vaultclient.New(o.vaultAddr, o.vaultToken)
+	var privilegedVaultClient *vaultclient.VaultClient
+	if o.vaultRole != "" {
+		privilegedVaultClient, err = vaultclient.NewFromKubernetesAuth(o.vaultAddr, o.vaultRole)
+	} else {
+		privilegedVaultClient, err = vaultclient.New(o.vaultAddr, o.vaultToken)
+	}
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct vault client")
 	}

@@ -9,16 +9,15 @@ import (
 	"github.com/kataras/tablewriter"
 	"github.com/sirupsen/logrus"
 
-	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/flagutil"
+	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 
 	"github.com/openshift/ci-tools/pkg/deprecatetemplates"
 )
 
 type options struct {
-	prowJobConfigDir     string
-	prowConfigPath       string
+	config               configflagutil.ConfigOptions
 	prowPluginConfigPath string
 	allowlistPath        string
 	prune                bool
@@ -31,10 +30,9 @@ type options struct {
 }
 
 func bindOptions(fs *flag.FlagSet) *options {
-	opt := &options{}
+	opt := &options{config: configflagutil.ConfigOptions{ConfigPathFlagName: "prow-config-path", JobConfigPathFlagName: "prow-jobs-dir"}}
+	opt.config.AddFlags(fs)
 
-	fs.StringVar(&opt.prowJobConfigDir, "prow-jobs-dir", "", "Path to a root of directory structure with Prow job config files (ci-operator/jobs in openshift/release)")
-	fs.StringVar(&opt.prowConfigPath, "prow-config-path", "", "Path to the Prow configuration file")
 	fs.StringVar(&opt.prowPluginConfigPath, "prow-plugin-config-path", "", "Path to the Prow plugin configuration file")
 	fs.StringVar(&opt.allowlistPath, "allowlist-path", "", "Path to template deprecation allowlist")
 	fs.Var(&opt.blockNewJobs, "block-new-jobs", "If set, new jobs will be added to this blocker instead of to the 'unknown blocker' list. Can be set multiple times and can have either JIRA or JIRA:description form")
@@ -48,14 +46,16 @@ func bindOptions(fs *flag.FlagSet) *options {
 
 func (o *options) validate() error {
 	for param, value := range map[string]string{
-		"--prow-jobs-dir":           o.prowJobConfigDir,
-		"--prow-config-path":        o.prowConfigPath,
 		"--prow-plugin-config-path": o.prowPluginConfigPath,
 		"--allowlist-path":          o.allowlistPath,
 	} {
 		if value == "" {
 			return fmt.Errorf("mandatory argument %s was not set", param)
 		}
+	}
+
+	if err := o.config.Validate(false); err != nil {
+		return err
 	}
 
 	return nil
@@ -80,10 +80,11 @@ func main() {
 	}
 	pluginCfg := agent.Config().ConfigUpdater
 
-	prowCfg, err := prowconfig.Load(opt.prowConfigPath, opt.prowJobConfigDir, []string{})
+	configAgent, err := opt.config.ConfigAgent()
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to load Prow configuration")
 	}
+	prowCfg := configAgent.Config()
 
 	newJobBlockers := deprecatetemplates.JiraHints{}
 	for _, value := range opt.blockNewJobs.Strings() {

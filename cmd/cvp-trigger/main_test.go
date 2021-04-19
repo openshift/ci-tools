@@ -14,6 +14,7 @@ import (
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config"
 	prowconfig "k8s.io/test-infra/prow/config"
+	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 )
 
 type fakeJobResult struct {
@@ -169,21 +170,6 @@ func Test_options_validate(t *testing.T) {
 			name: "missing prow config path",
 			fields: fields{
 				jobConfigPath:  "/also/not/empty",
-				jobName:        "some-job",
-				bundleImageRef: "master",
-				indexImageRef:  "latest",
-				ocpVersion:     "4.5",
-				outputPath:     "/output/path",
-				packageName:    "foo",
-				channel:        "bar",
-				dryRun:         false,
-			},
-			wantErr: true,
-		},
-		{
-			name: "missing job config path",
-			fields: fields{
-				prowConfigPath: "/not/empty",
 				jobName:        "some-job",
 				bundleImageRef: "master",
 				indexImageRef:  "latest",
@@ -383,14 +369,16 @@ func Test_options_validate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			o := options{
-				bundleImageRef:      tt.fields.bundleImageRef,
-				channel:             tt.fields.channel,
-				indexImageRef:       tt.fields.indexImageRef,
-				jobConfigPath:       tt.fields.jobConfigPath,
+				bundleImageRef: tt.fields.bundleImageRef,
+				channel:        tt.fields.channel,
+				indexImageRef:  tt.fields.indexImageRef,
+				prowconfig: configflagutil.ConfigOptions{
+					ConfigPath:    tt.fields.prowConfigPath,
+					JobConfigPath: tt.fields.jobConfigPath,
+				},
 				jobName:             tt.fields.jobName,
 				ocpVersion:          tt.fields.ocpVersion,
 				operatorPackageName: tt.fields.packageName,
-				prowConfigPath:      tt.fields.prowConfigPath,
 				outputPath:          tt.fields.outputPath,
 				dryRun:              tt.fields.dryRun,
 			}

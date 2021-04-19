@@ -17,9 +17,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/rest"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
+	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/pjutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -62,8 +62,7 @@ type options struct {
 	leaderElectionNamespace              string
 	ciOperatorconfigPath                 string
 	stepConfigPath                       string
-	configPath                           string
-	jobConfigPath                        string
+	prowconfig                           configflagutil.ConfigOptions
 	kubeconfig                           string
 	leaderElectionSuffix                 string
 	enabledControllers                   flagutil.Strings
@@ -123,6 +122,7 @@ func newOpts() (*options, error) {
 	opts.addDefaults()
 	opts.GitHubOptions.AddFlags(flag.CommandLine)
 	opts.GitHubOptions.AllowAnonymous = true
+	opts.prowconfig.AddFlags(flag.CommandLine)
 	flag.StringVar(&opts.leaderElectionNamespace, "leader-election-namespace", "ci", "The namespace to use for leaderelection")
 	// Controller-Runtimes root package imports the package that sets this flag
 	kubeconfigFlagDescription := "The kubeconfig to use. All contexts in it will be considered a build cluster. If it does not have a context named 'app.ci', loading in-cluster config will be attempted."
@@ -135,8 +135,6 @@ func newOpts() (*options, error) {
 	}
 	flag.StringVar(&opts.ciOperatorconfigPath, "ci-operator-config-path", "", "Path to the ci operator config")
 	flag.StringVar(&opts.stepConfigPath, "step-config-path", "", "Path to the registries step configuration")
-	flag.StringVar(&opts.configPath, "config-path", "", "Path to the prow config")
-	flag.StringVar(&opts.jobConfigPath, "job-config-path", "", "Path to the job config")
 	flag.StringVar(&opts.leaderElectionSuffix, "leader-election-suffix", "", "Suffix for the leader election lock. Useful for local testing. If set, --dry-run must be set as well")
 	flag.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", allControllers.List(), opts.enabledControllers.Strings()))
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamTagsRaw, "testImagesDistributorOptions.additional-image-stream-tag", "An imagestreamtag that will be distributed even if no test explicitly references it. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
@@ -163,11 +161,8 @@ func newOpts() (*options, error) {
 	if opts.ciOperatorconfigPath == "" {
 		errs = append(errs, errors.New("--ci-operations-config-path must be set"))
 	}
-	if opts.configPath == "" {
-		errs = append(errs, errors.New("--config-path must be set"))
-	}
-	if opts.jobConfigPath == "" {
-		errs = append(errs, errors.New("--job-config-path must be set"))
+	if err := opts.prowconfig.Validate(false); err != nil {
+		errs = append(errs, err)
 	}
 	if vals := opts.enabledControllers.Strings(); len(vals) > 0 {
 		opts.enabledControllersSet = sets.NewString(vals...)
@@ -323,8 +318,8 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct ci-operator config agent")
 	}
-	configAgent := &config.Agent{}
-	if err := configAgent.Start(opts.configPath, opts.jobConfigPath, []string{}); err != nil {
+	configAgent, err := opts.prowconfig.ConfigAgent()
+	if err != nil {
 		logrus.WithError(err).Fatal("Failed to start config agent")
 	}
 

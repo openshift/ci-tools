@@ -371,7 +371,7 @@ func getAllConfigs(releaseRepoPath string) (*config.ReleaseRepoConfig, error) {
 
 	prowConfigPath := filepath.Join(releaseRepoPath, config.ConfigInRepoPath)
 	prowJobConfigPath := filepath.Join(releaseRepoPath, config.JobConfigInRepoPath)
-	c.Prow, err = prowconfig.Load(prowConfigPath, prowJobConfigPath, []string{})
+	c.Prow, err = prowconfig.Load(prowConfigPath, prowJobConfigPath, nil, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load Prow configuration from release repo: %w", err)
 	}

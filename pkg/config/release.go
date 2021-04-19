@@ -129,7 +129,7 @@ func GetAllConfigs(releaseRepoPath string, logger *logrus.Entry) *ReleaseRepoCon
 
 	prowConfigPath := filepath.Join(releaseRepoPath, ConfigInRepoPath)
 	prowJobConfigPath := filepath.Join(releaseRepoPath, JobConfigInRepoPath)
-	config.Prow, err = prowconfig.Load(prowConfigPath, prowJobConfigPath, []string{})
+	config.Prow, err = prowconfig.Load(prowConfigPath, prowJobConfigPath, nil, "")
 	if err != nil {
 		logger.WithError(err).Warn("failed to load Prow configuration from release repo")
 	}

@@ -19,6 +19,7 @@ import (
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	pjclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	prowconfig "k8s.io/test-infra/prow/config"
+	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/gcsupload"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/pjutil"
@@ -51,12 +52,11 @@ type options struct {
 	channel             string
 	indexImageRef       string
 	installNamespace    string
-	jobConfigPath       string
 	jobName             string
+	prowconfig          configflagutil.ConfigOptions
 	ocpVersion          string
 	operatorPackageName string
 	outputPath          string
-	prowConfigPath      string
 	releaseImageRef     string
 	targetNamespaces    string
 	dryRun              bool
@@ -84,16 +84,17 @@ var o options
 
 // gatherOptions binds flag entries to entries in the options struct
 func (o *options) gatherOptions() {
+	o.prowconfig.ConfigPathFlagName = prowConfigPathOption
+	o.prowconfig.JobConfigPathFlagName = jobConfigPathOption
+	o.prowconfig.AddFlags(fs)
 	fs.StringVar(&o.bundleImageRef, bundleImageRefOption, "", "URL for the bundle image")
 	fs.StringVar(&o.channel, channelOption, "", "The channel to test")
 	fs.StringVar(&o.indexImageRef, indexImageRefOption, "", "URL for the index image")
 	fs.StringVar(&o.installNamespace, installNamespaceOption, "", "namespace into which the operator and catalog will be installed. If empty, a new namespace will be created.")
-	fs.StringVar(&o.jobConfigPath, jobConfigPathOption, "", "Path to the Prow job config directory")
 	fs.StringVar(&o.jobName, jobNameOption, "", "Name of the Periodic job to manually trigger")
 	fs.StringVar(&o.ocpVersion, ocpVersionOption, "", "Version of OCP to use. Version must be 4.x or higher")
 	fs.StringVar(&o.outputPath, outputFilePathOption, "", "File to store JSON returned from job submission")
 	fs.StringVar(&o.operatorPackageName, operatorPackageNameOptions, "", "Operator package name to test")
-	fs.StringVar(&o.prowConfigPath, prowConfigPathOption, "", "Path to the Prow config file")
 	fs.StringVar(&o.releaseImageRef, releaseImageRefOption, "", "Pull spec of a specific release payload image used for OCP deployment.")
 	fs.StringVar(&o.targetNamespaces, targetNamespacesOption, "", "A comma-separated list of namespaces the operator will target. If empty, all namespaces are targeted")
 	fs.BoolVar(&o.dryRun, "dry-run", false, "Executes a dry-run, displaying the job YAML without submitting the job to Prow")
@@ -115,13 +116,13 @@ func (o options) validateOptions() error {
 	if o.indexImageRef == "" {
 		return fmt.Errorf("required parameter %s was not provided", indexImageRefOption)
 	}
-
-	if o.jobConfigPath == "" {
-		return fmt.Errorf("required parameter %s was not provided", jobConfigPathOption)
+	if err := o.prowconfig.Validate(false); err != nil {
+		return err
 	}
-	exists, _ := afs.Exists(o.jobConfigPath)
+
+	exists, _ := afs.Exists(o.prowconfig.JobConfigPath)
 	if !exists {
-		return fmt.Errorf("validating job config path %s failed, does not exist", o.jobConfigPath)
+		return fmt.Errorf("validating job config path %s failed, does not exist", o.prowconfig.JobConfigPath)
 	}
 
 	if o.jobName == "" {
@@ -139,12 +140,9 @@ func (o options) validateOptions() error {
 		return fmt.Errorf("required parameter %s was not provided", operatorPackageNameOptions)
 	}
 
-	if o.prowConfigPath == "" {
-		return fmt.Errorf("required parameter %s was not provided", prowConfigPathOption)
-	}
-	exists, _ = afs.Exists(o.prowConfigPath)
+	exists, _ = afs.Exists(o.prowconfig.ConfigPath)
 	if !exists {
-		return fmt.Errorf("validating prow config path %s failed, does not exist", o.prowConfigPath)
+		return fmt.Errorf("validating prow config path %s failed, does not exist", o.prowconfig.ConfigPath)
 	}
 
 	if !o.dryRun {
@@ -196,10 +194,11 @@ func main() {
 		os.Exit(1)
 	}()
 
-	config, err := prowconfig.Load(o.prowConfigPath, o.jobConfigPath, []string{})
+	configAgent, err := o.prowconfig.ConfigAgent()
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to read Prow configuration")
 	}
+	config := configAgent.Config()
 	prowjob, err := getPeriodicJob(o.jobName, config)
 
 	if err != nil {

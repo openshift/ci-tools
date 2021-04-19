@@ -21,6 +21,7 @@ import (
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
+	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/metrics"
@@ -42,8 +43,7 @@ type options struct {
 	instrumentationOptions prowflagutil.InstrumentationOptions
 	jiraOptions            prowflagutil.JiraOptions
 
-	prowConfigPath    string
-	prowJobConfigPath string
+	prowconfig configflagutil.ConfigOptions
 
 	slackTokenPath         string
 	slackSigningSecretPath string
@@ -63,15 +63,7 @@ func (o *options) Validate() error {
 		return fmt.Errorf("--slack-signing-secret-path is required")
 	}
 
-	if o.prowConfigPath == "" {
-		return fmt.Errorf("--prow-config-path is required")
-	}
-
-	if o.prowJobConfigPath == "" {
-		return fmt.Errorf("--prow-job-config-path is required")
-	}
-
-	for _, group := range []flagutil.OptionGroup{&o.instrumentationOptions, &o.jiraOptions} {
+	for _, group := range []flagutil.OptionGroup{&o.instrumentationOptions, &o.jiraOptions, &o.prowconfig} {
 		if err := group.Validate(false); err != nil {
 			return err
 		}
@@ -86,12 +78,12 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.DurationVar(&o.gracePeriod, "grace-period", 180*time.Second, "On shutdown, try to handle remaining events for the specified duration. ")
-	for _, group := range []flagutil.OptionGroup{&o.instrumentationOptions, &o.jiraOptions} {
+
+	o.prowconfig.ConfigPathFlagName = "prow-config-path"
+	o.prowconfig.JobConfigPathFlagName = "prow-job-config-path"
+	for _, group := range []flagutil.OptionGroup{&o.instrumentationOptions, &o.jiraOptions, &o.prowconfig} {
 		group.AddFlags(fs)
 	}
-
-	fs.StringVar(&o.prowConfigPath, "prow-config-path", "", "Path to Prow configuration.")
-	fs.StringVar(&o.prowJobConfigPath, "prow-job-config-path", "", "Path to Prow job configs.")
 
 	fs.StringVar(&o.slackTokenPath, "slack-token-path", "", "Path to the file containing the Slack token to use.")
 	fs.StringVar(&o.slackSigningSecretPath, "slack-signing-secret-path", "", "Path to the file containing the Slack signing secret to use.")
@@ -121,8 +113,8 @@ func main() {
 	level, _ := logrus.ParseLevel(o.logLevel)
 	logrus.SetLevel(level)
 
-	configAgent := &config.Agent{}
-	if err := configAgent.Start(o.prowConfigPath, o.prowJobConfigPath, []string{}); err != nil {
+	configAgent, err := o.prowconfig.ConfigAgent()
+	if err != nil {
 		logrus.WithError(err).Fatal("Error starting Prow config agent.")
 	}
 

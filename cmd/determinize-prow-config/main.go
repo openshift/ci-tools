@@ -70,7 +70,7 @@ func updateProwConfig(configDir, shardingBaseDir string) error {
 	if shardingBaseDir != "" {
 		additionalConfigs = append(additionalConfigs, shardingBaseDir)
 	}
-	if err := agent.Start(configPath, "", additionalConfigs); err != nil {
+	if err := agent.Start(configPath, "", additionalConfigs, ""); err != nil {
 		return fmt.Errorf("could not load Prow configuration: %w", err)
 	}
 

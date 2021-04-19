@@ -9,9 +9,9 @@ import (
 
 	"k8s.io/test-infra/pkg/flagutil"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/deck/jobs"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
+	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/io"
 	"k8s.io/test-infra/prow/logrusutil"
@@ -23,8 +23,7 @@ import (
 )
 
 type options struct {
-	configPath    string
-	jobConfigPath string
+	config configflagutil.ConfigOptions
 
 	storage prowflagutil.StorageClientOptions
 }
@@ -32,10 +31,8 @@ type options struct {
 func gatherOptions() options {
 	o := options{}
 	fs := flag.CommandLine
-	fs.StringVar(&o.configPath, "config-path", "", "Path to config.yaml.")
-	fs.StringVar(&o.jobConfigPath, "job-config-path", "", "Path to prow job configs.")
 
-	for _, group := range []flagutil.OptionGroup{&o.storage} {
+	for _, group := range []flagutil.OptionGroup{&o.storage, &o.config} {
 		group.AddFlags(fs)
 	}
 	flag.Parse()
@@ -48,8 +45,8 @@ func main() {
 	o := gatherOptions()
 	logrusutil.ComponentInit()
 
-	configAgent := &config.Agent{}
-	if err := configAgent.Start(o.configPath, o.jobConfigPath, []string{}); err != nil {
+	configAgent, err := o.config.ConfigAgent()
+	if err != nil {
 		logrus.WithError(err).Fatal("Error starting config agent.")
 	}
 

@@ -355,7 +355,7 @@ func fetchOrDefaultWithPrompt(msg, def string) string {
 func updateProwConfig(config initConfig, releaseRepo string) error {
 	configPath := path.Join(releaseRepo, ciopconfig.ConfigInRepoPath)
 	agent := prowconfig.Agent{}
-	if err := agent.Start(configPath, "", []string{}); err != nil {
+	if err := agent.Start(configPath, "", nil, ""); err != nil {
 		return fmt.Errorf("could not load Prow configuration: %w", err)
 	}
 

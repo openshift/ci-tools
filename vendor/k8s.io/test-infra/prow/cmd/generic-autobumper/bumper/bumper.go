@@ -136,6 +136,8 @@ type Gerrit struct {
 	AutobumpPRIdentifier string `yaml:"autobumpPRIdentifier"`
 	// Gerrit CR Author. Only Required if using gerrit
 	Author string `yaml:"author"`
+	// Email account associated with gerrit author. Only required if using gerrit.
+	Email string `yaml:"email"`
 	// The path to the Gerrit httpcookie file. Only Required if using gerrit
 	CookieFile string `yaml:"cookieFile"`
 	// The path to the hosted Gerrit repo
@@ -369,15 +371,51 @@ func Run(o *Options) error {
 			return fmt.Errorf("failed to create the PR: %w", err)
 		}
 	} else {
-		changeId, err := getChangeId(o.Gerrit.Author, o.Gerrit.AutobumpPRIdentifier)
+		if err := Call(stdout, stderr, gitCmd, "config", "http.cookiefile", o.Gerrit.CookieFile); err != nil {
+			return fmt.Errorf("unable to load cookiefile: %v", err)
+		}
+		if err := Call(stdout, stderr, gitCmd, "config", "user.name", o.Gerrit.Author); err != nil {
+			return fmt.Errorf("unable to set username: %v", err)
+		}
+		if err := Call(stdout, stderr, gitCmd, "config", "user.email", o.Gerrit.Email); err != nil {
+			return fmt.Errorf("unable to set password: %v", err)
+		}
+		if err := Call(stdout, stderr, gitCmd, "remote", "add", "upstream", o.Gerrit.HostRepo); err != nil {
+			return fmt.Errorf("unable to add upstream remote: %v", err)
+		}
+
+		changeId, err := getChangeId(o.Gerrit.Author, o.Gerrit.AutobumpPRIdentifier, "")
 		if err != nil {
 			return fmt.Errorf("Failed to create CR: %w", err)
 		}
-		msg := makeGerritCommit(o.Prefixes, versions, o.Gerrit.AutobumpPRIdentifier, changeId)
-		// TODO(mpherman): Add reviewers to CreateCR
-		if err := createCR(msg, "master", changeId, o.Gerrit.HostRepo, o.Gerrit.CookieFile, nil, nil, stdout, stderr); err != nil {
-			return fmt.Errorf("Failled to create the CR: %w", err)
+
+		err = gerritCommitandPush(o.Prefixes, versions, o.Gerrit.AutobumpPRIdentifier, changeId, nil, nil, stdout, stderr)
+		// If failed to push because a closed PR already exists with this change ID (the PR was abandoned). Hash the ID again and try one more time.
+		if err != nil && strings.Contains(err.Error(), "failed to push some refs") && strings.Contains(err.Error(), "closed") {
+			logrus.Warn("Error pushing CR due to already used ChangeID. PR may have been abandoned. Trying again with new ChangeID.")
+			changeId, subErr := getChangeId(o.Gerrit.Author, o.Gerrit.AutobumpPRIdentifier, changeId)
+			if subErr != nil {
+				return subErr
+
+			}
+			if err := Call(stdout, stderr, gitCmd, "reset", "HEAD^"); err != nil {
+				return fmt.Errorf("unable to call git reset: %v", err)
+			}
+			err = gerritCommitandPush(o.Prefixes, versions, o.Gerrit.AutobumpPRIdentifier, changeId, nil, nil, stdout, stderr)
 		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func gerritCommitandPush(prefixes []Prefix, versions map[string][]string, autobumpId, changeId string, reviewers, cc []string, stdout, stderr io.Writer) error {
+	msg := makeGerritCommit(prefixes, versions, autobumpId, changeId)
+
+	// TODO(mpherman): Add reviewers to CreateCR
+	if err := createCR(msg, "master", changeId, reviewers, cc, stdout, stderr); err != nil {
+		return fmt.Errorf("Failled to create the CR: %w", err)
 	}
 	return nil
 }
@@ -486,6 +524,7 @@ type imageBumper interface {
 	UpdateFile(tagPicker func(imageHost, imageName, currentTag string) (string, error), path string, imageFilter *regexp.Regexp) error
 	GetReplacements() map[string]string
 	AddToCache(image, newTag string)
+	TagExists(imageHost, imageName, currentTag string) (bool, error)
 }
 
 func updateReferences(imageBumperCli imageBumper, filterRegexp *regexp.Regexp, o *Options) (map[string]string, error) {
@@ -558,8 +597,17 @@ func upstreamImageVersionResolver(
 		imageFullPath := imageHost + "/" + imageName + ":" + currentTag
 		for prefix, version := range upstreamVersions {
 			if strings.HasPrefix(imageFullPath, prefix) {
-				imageBumperCli.AddToCache(imageFullPath, version)
-				return version, nil
+				exists, err := imageBumperCli.TagExists(imageHost, imageName, version)
+				if err != nil {
+					return "", err
+				}
+				if exists {
+					imageBumperCli.AddToCache(imageFullPath, version)
+					return version, nil
+				} else {
+					imageBumperCli.AddToCache(imageFullPath, currentTag)
+					return "", fmt.Errorf("Unable to bump to %s, image tag %s does not exist for %s", imageFullPath, version, imageName)
+				}
 			}
 		}
 		return currentTag, nil
@@ -724,7 +772,7 @@ func MakeGitCommit(remote, remoteBranch, name, email string, prefixes []Prefix, 
 }
 
 func makeGerritCommit(prefixes []Prefix, versions map[string][]string, commitTag, changeId string) string {
-	return fmt.Sprintf("[%s] %s \n\nChange-Id: %s", commitTag, makeCommitSummary(prefixes, versions), changeId)
+	return fmt.Sprintf("%s\n\n[%s]\n\nChange-Id: %s", makeCommitSummary(prefixes, versions), commitTag, changeId)
 }
 
 // GitCommitAndPush runs a sequence of git commands to commit.
@@ -977,12 +1025,12 @@ func getDiff(prevCommit string) (string, error) {
 	return diffBuf.String(), nil
 }
 
-func GerritNoOpChange(changeID, hostRepo string) (bool, error) {
+func gerritNoOpChange(changeID string) (bool, error) {
 	var garbageBuf bytes.Buffer
 	var outBuf bytes.Buffer
 	// Fetch current pending CRs
 	if err := Call(&garbageBuf, &garbageBuf, gitCmd, "fetch", "upstream", "+refs/changes/*:refs/remotes/upstream/changes/*"); err != nil {
-		return false, fmt.Errorf("unable to fetch upstream changes: %v", err)
+		return false, fmt.Errorf("unable to fetch upstream changes: %v -- \nOUTPUT: %s", err, garbageBuf.String())
 	}
 	// Get PR with same ChangeID for this bump
 	if err := Call(&outBuf, &garbageBuf, gitCmd, "log", "--all", fmt.Sprintf("--grep=Change-Id: %s", changeID), "-1", "--format=%H"); err != nil {
@@ -1004,14 +1052,8 @@ func GerritNoOpChange(changeID, hostRepo string) (bool, error) {
 
 }
 
-func createCR(msg, branch, changeID, hostRepo, cookieFile string, reviewers, cc []string, stdout, stderr io.Writer) error {
-	if err := Call(stdout, stderr, gitCmd, "config", "http.cookiefile", cookieFile); err != nil {
-		return fmt.Errorf("unable to load cookiefile: %v", err)
-	}
-	if err := Call(stdout, stderr, gitCmd, "remote", "add", "upstream", hostRepo); err != nil {
-		return fmt.Errorf("unable to add upstream remote: %v", err)
-	}
-	noOp, err := GerritNoOpChange(changeID, hostRepo)
+func createCR(msg, branch, changeID string, reviewers, cc []string, stdout, stderr io.Writer) error {
+	noOp, err := gerritNoOpChange(changeID)
 	if err != nil {
 		return fmt.Errorf("error diffing previous bump: %v", err)
 	}
@@ -1024,7 +1066,7 @@ func createCR(msg, branch, changeID, hostRepo, cookieFile string, reviewers, cc 
 	if err := Call(stdout, stderr, gitCmd, "commit", "-a", "-v", "-m", msg); err != nil {
 		return fmt.Errorf("unable to commit: %v", err)
 	}
-	if err := Call(stdout, stderr, gitCmd, "push", "origin", pushRef); err != nil {
+	if err := Call(stdout, stderr, gitCmd, "push", "upstream", pushRef); err != nil {
 		return fmt.Errorf("unable to push: %v", err)
 	}
 	return nil
@@ -1047,18 +1089,22 @@ func getLastBumpCommit(gerritAuthor, commitTag string) (string, error) {
 // robot with a given string in the commit message (This string will be added to all autobump commit messages)
 // if there is no commit by the robot with this commit tag, we assume that the job has never run, or that the robot/commit tag has changed
 // in either case, the deterministic ID is generated by just hashing a string of the author + commit tag
-func getChangeId(gerritAuthor, commitTag string) (string, error) {
-	lastBumpCommit, err := getLastBumpCommit(gerritAuthor, commitTag)
+func getChangeId(gerritAuthor, commitTag, startingID string) (string, error) {
 	var id string
-	if err != nil {
-		return "", fmt.Errorf("Error getting change Id: %w", err)
-	}
-	if lastBumpCommit != "" {
-		id = "I" + gitHash(lastBumpCommit)
+	if startingID == "" {
+		lastBumpCommit, err := getLastBumpCommit(gerritAuthor, commitTag)
+		if err != nil {
+			return "", fmt.Errorf("Error getting change Id: %w", err)
+		}
+		if lastBumpCommit != "" {
+			id = "I" + gitHash(lastBumpCommit)
+		} else {
+			// If it is the first time the autobumper has run a commit will not exist with the tag
+			// create a deterministic tag by hashing the tag itself instead of the last commit.
+			id = "I" + gitHash(gerritAuthor+commitTag)
+		}
 	} else {
-		// If it is the first time the autobumper has run a commit will not exist with the tag
-		// create a deterministic tag by hashing the tag itself instead of the last commit.
-		id = "I" + gitHash(gerritAuthor+commitTag)
+		id = gitHash(startingID)
 	}
 	gitLog, err := getFullLog()
 	if err != nil {

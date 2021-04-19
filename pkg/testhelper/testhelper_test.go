@@ -132,7 +132,7 @@ func TestCompareRuntimObjectIgnoreRvTypeMeta(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			diff := cmp.Diff(tc.x, tc.y, RuntimObjectIgnoreRvTypeMeta)
+			diff := cmp.Diff(tc.x, tc.y, RuntimeObjectIgnoreRvTypeMeta)
 			if diff == "" != tc.expectEquality {
 				t.Errorf("expectEquality: %t, got diff: %s", tc.expectEquality, diff)
 			}

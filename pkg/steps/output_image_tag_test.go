@@ -145,7 +145,7 @@ func TestOutputImageStep(t *testing.T) {
 				t.Errorf("Failed to get ImageStreamTag '%s/%s' after step execution: %v", tt.expectedImageStreamTag.Namespace, tt.expectedImageStreamTag, err)
 			}
 
-			if diff := cmp.Diff(tt.expectedImageStreamTag, targetImageStreamTag, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+			if diff := cmp.Diff(tt.expectedImageStreamTag, targetImageStreamTag, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 				t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", diff)
 			}
 		})

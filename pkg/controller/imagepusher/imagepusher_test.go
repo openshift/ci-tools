@@ -168,7 +168,7 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 				}
-				if diff := cmp.Diff(expectedImageStreamImport, actualImageStreamImport, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedImageStreamImport, actualImageStreamImport, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 
@@ -183,7 +183,7 @@ func TestReconcile(t *testing.T) {
 						Labels:    map[string]string{"dptp.openshift.io/requester": "image_pusher"},
 					},
 				}
-				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 
@@ -199,7 +199,7 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 				}
-				if diff := cmp.Diff(expectedNamespace, actualNamespace, testhelper.RuntimObjectIgnoreRvTypeMeta); diff != "" {
+				if diff := cmp.Diff(expectedNamespace, actualNamespace, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				return nil

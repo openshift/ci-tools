@@ -28,13 +28,13 @@ func (f fakeClient) GetAllItems() []Item {
 	return f.items
 }
 
-func (f fakeClient) HasItem(itemName string) bool {
+func (f fakeClient) HasItem(itemName string) (bool, error) {
 	for _, item := range f.items {
 		if itemName == item.Name {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 func (f fakeClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error) {

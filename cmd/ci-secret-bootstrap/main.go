@@ -765,7 +765,12 @@ func validateBWItems(client secrets.ReadOnlyClient, secretConfigs []secretbootst
 
 			if item.DockerConfigJSONData != nil {
 				for _, data := range item.DockerConfigJSONData {
-					if !client.HasItem(data.BWItem) {
+					hasItem, err := client.HasItem(data.BWItem)
+					if err != nil {
+						errs = append(errs, fmt.Errorf("failed to check if item %s exists: %w", data.BWItem, err))
+						continue
+					}
+					if !hasItem {
 						errs = append(errs, fmt.Errorf("item %s doesn't exist", data.BWItem))
 						break
 					}
@@ -774,7 +779,12 @@ func validateBWItems(client secrets.ReadOnlyClient, secretConfigs []secretbootst
 					}
 				}
 			} else {
-				if !client.HasItem(item.BWItem) {
+				hasItem, err := client.HasItem(item.BWItem)
+				if err != nil {
+					errs = append(errs, fmt.Errorf("failed to check if item %s exists: %w", item.BWItem, err))
+					continue
+				}
+				if !hasItem {
 					errs = append(errs, fmt.Errorf("item %s doesn't exist", item.BWItem))
 					continue
 				}

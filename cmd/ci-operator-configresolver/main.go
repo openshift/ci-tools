@@ -29,8 +29,6 @@ import (
 type options struct {
 	configPath             string
 	registryPath           string
-	prowPath               string
-	jobPath                string
 	logLevel               string
 	address                string
 	port                   int
@@ -51,8 +49,6 @@ func gatherOptions() (options, error) {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.configPath, "config", "", "Path to config dirs")
 	fs.StringVar(&o.registryPath, "registry", "", "Path to registry dirs")
-	fs.StringVar(&o.prowPath, "prow-config", "", "Path to prow config")
-	fs.StringVar(&o.jobPath, "jobs", "", "Path to job config dir")
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.address, "address", ":8080", "DEPRECATED: Address to run server on")
 	fs.StringVar(&o.uiAddress, "ui-address", ":8082", "DEPRECATED: Address to run the registry UI on")
@@ -91,15 +87,6 @@ func validateOptions(o options) error {
 			return fmt.Errorf("--registry points to a nonexistent directory: %w", err)
 		}
 		return fmt.Errorf("Error getting stat info for --registry directory: %w", err)
-	}
-	if o.prowPath == "" {
-		return fmt.Errorf("--prow-config is required")
-	}
-	if _, err := os.Stat(o.prowPath); err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("--prow-config points to a nonexistent file: %w", err)
-		}
-		return fmt.Errorf("Error getting stat info for --prow-config file: %w", err)
 	}
 	if o.validateOnly && o.flatRegistry {
 		return errors.New("--validate-only and --flat-registry flags cannot be set simultaneously")

@@ -53,7 +53,6 @@ function os::integration::configresolver::start() {
     os::log::info "Starting the config resolver..."
     ci-operator-configresolver --config "${config}"       \
                                --registry "${registry}"   \
-                               --prow-config "${prow}"    \
                                "${flat:+--flat-registry}" \
                                --log-level debug          \
                                --cycle 2m >"${LOG_DIR}/configresolver.log" 2>&1 &

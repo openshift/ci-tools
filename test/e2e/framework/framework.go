@@ -160,10 +160,9 @@ func Boskos(opt BoskosOptions) *Accessory {
 
 // ConfigResolverOptions are options for running the config server
 type ConfigResolverOptions struct {
-	ConfigPath     string
-	RegistryPath   string
-	ProwConfigPath string
-	FlatRegistry   bool
+	ConfigPath   string
+	RegistryPath string
+	FlatRegistry bool
 }
 
 // ConfigResolver begins the configresolver server and makes sure it is ready
@@ -173,7 +172,6 @@ func ConfigResolver(opt ConfigResolverOptions) *Accessory {
 		flags(map[string]string{
 			"config":        opt.ConfigPath,
 			"registry":      opt.RegistryPath,
-			"prow-config":   opt.ProwConfigPath,
 			"flat-registry": strconv.FormatBool(opt.FlatRegistry),
 			"log-level":     "debug",
 			"cycle":         "2m",

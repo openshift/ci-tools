@@ -4,12 +4,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 
 	"cloud.google.com/go/storage"
 	prometheusclient "github.com/prometheus/client_golang/api"
 	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/option"
+	"gopkg.in/fsnotify.v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/transport"
@@ -57,8 +59,9 @@ func bindOptions(fs *flag.FlagSet) *options {
 func (o *options) validate() error {
 	switch o.mode {
 	case "producer":
-		if o.kubeconfig == "" {
-			return errors.New("--kubeconfig is required")
+		_, kubeconfigSet := os.LookupEnv("KUBECONFIG")
+		if o.kubeconfig == "" && !kubeconfigSet {
+			return errors.New("--kubeconfig or $KUBECONFIG is required")
 		}
 	case "consumer":
 		if o.port == 0 {
@@ -115,7 +118,11 @@ func main() {
 }
 
 func mainProduce(opts *options, cache cache) {
-	kubeconfigs, _, err := util.LoadKubeConfigs(opts.kubeconfig, nil)
+	kubeconfigChangedCallBack := func(e fsnotify.Event) {
+		logrus.WithField("event", e.String()).Fatal("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
+	}
+
+	kubeconfigs, _, err := util.LoadKubeConfigs(opts.kubeconfig, kubeconfigChangedCallBack)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to load kubeconfigs")
 	}

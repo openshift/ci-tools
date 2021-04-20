@@ -155,7 +155,6 @@ objects:
           args:
           - -config=/etc/configs
           - -registry=/etc/registry
-          - -prow-config=/etc/config/config.yaml
           - -flat-registry
           - -log-level=debug
           - -cycle=2m
@@ -182,9 +181,6 @@ objects:
           - name: configs
             mountPath: /etc/configs
             readOnly: true
-          - name: config
-            mountPath: /etc/config
-            readonly: true
           resources:
             requests:
               memory: "2Gi"
@@ -196,6 +192,3 @@ objects:
         - name: configs
           configMap:
             name: ci-operator-master-configs
-        - name: config
-          configMap:
-            name: config

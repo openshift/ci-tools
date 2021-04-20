@@ -134,10 +134,9 @@ func TestMultiStage(t *testing.T) {
 			}
 			cmd.VerboseOutputContains(t, testCase.name, testCase.output...)
 		}, framework.ConfigResolver(framework.ConfigResolverOptions{
-			ConfigPath:     "configs",
-			RegistryPath:   "registry",
-			ProwConfigPath: "./../../integration/ci-operator-configresolver/config.yaml",
-			FlatRegistry:   true,
+			ConfigPath:   "configs",
+			RegistryPath: "registry",
+			FlatRegistry: true,
 		}))
 	}
 }

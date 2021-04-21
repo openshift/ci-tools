@@ -518,6 +518,7 @@ func TestOwnersCleanerFactory(t *testing.T) {
 type loadRepoTestData struct {
 	TestDirectory string
 	ConfigSubDirs []string
+	ExtraDirs     []string
 	GitHubOrg     string
 	GitHubRepo    string
 	Blocklist     blocklist
@@ -588,9 +589,28 @@ func TestLoadRepos(t *testing.T) {
 				},
 			},
 		},
+		{
+			TestDirectory: "testdata/test3/ci-operator",
+			ConfigSubDirs: []string{"jobs"},
+			ExtraDirs:     []string{"testdata/test3/core-services/prow/02_config"},
+			GitHubOrg:     "kubevirt",
+			GitHubRepo:    "project-infra",
+			ExpectedRepos: []orgRepo{
+				{
+					Directories:  []string{"testdata/test3/ci-operator/jobs/kubevirt/hostpath-provisioner"},
+					Organization: "kubevirt",
+					Repository:   "hostpath-provisioner",
+				},
+				{
+					Directories:  []string{"testdata/test3/ci-operator/jobs/kubevirt/kubevirt", "testdata/test3/core-services/prow/02_config/kubevirt/kubevirt"},
+					Organization: "kubevirt",
+					Repository:   "kubevirt",
+				},
+			},
+		},
 	}
 	for _, data := range loadRepoTestData {
-		repos, err := loadRepos(data.TestDirectory, data.Blocklist, data.ConfigSubDirs, data.GitHubOrg, data.GitHubRepo)
+		repos, err := loadRepos(data.TestDirectory, data.Blocklist, data.ConfigSubDirs, data.ExtraDirs, data.GitHubOrg, data.GitHubRepo)
 		if err != nil {
 			t.Fatalf("%s: failed to load repos: %v", data.TestDirectory, err)
 		}

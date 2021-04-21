@@ -228,7 +228,7 @@ func (m *secretCollectionManager) deleteCollectionHandler(l *logrus.Entry, user 
 func (m *secretCollectionManager) deleteCollection(name string) error {
 	// First delete the data, then the group to be sure that users retain access until all
 	// data is deleted.
-	path := m.kvStorePrefix + "/" + prefixedName(name)
+	path := m.kvStorePrefix + "/" + name
 	allItems, err := m.privilegedVaultClient.ListKVRecursively(path)
 	if err != nil {
 		return fmt.Errorf("failed to list items below %s: %w", path, err)

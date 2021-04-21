@@ -1,0 +1,7 @@
+Patches: null
+allowed: true
+status:
+  code: 200
+  metadata: {}
+  reason: Not a Pod implementing a Build.
+uid: ""

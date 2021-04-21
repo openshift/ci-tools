@@ -1,0 +1,22 @@
+Patches:
+- op: add
+  path: /metadata/labels/ci.openshift.io~1metadata.branch
+  value: branch
+- op: add
+  path: /metadata/labels/ci.openshift.io~1metadata.org
+  value: org
+- op: add
+  path: /metadata/labels/ci.openshift.io~1metadata.repo
+  value: repo
+- op: add
+  path: /metadata/labels/ci.openshift.io~1metadata.step
+  value: step
+- op: add
+  path: /metadata/labels/ci.openshift.io~1metadata.target
+  value: target
+- op: add
+  path: /metadata/labels/ci.openshift.io~1metadata.variant
+  value: variant
+allowed: true
+patchType: JSONPatch
+uid: ""

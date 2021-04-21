@@ -57,6 +57,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 		},
 		fromDigest,
 		s.config.DockerfilePath,
+		s.config.CustomBuildStrategy,
 		s.resources,
 		s.pullSecret,
 	)

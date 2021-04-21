@@ -75,6 +75,7 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 		},
 		fromDigest,
 		"",
+		false,
 		s.resources,
 		s.pullSecret,
 	)

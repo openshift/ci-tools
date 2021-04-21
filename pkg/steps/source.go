@@ -265,7 +265,7 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 		panic(fmt.Errorf("couldn't create JSON spec for clonerefs: %w", err))
 	}
 
-	build := buildFromSource(jobSpec, config.From, config.To, buildSource, fromDigest, "", resources, pullSecret)
+	build := buildFromSource(jobSpec, config.From, config.To, buildSource, fromDigest, "", false, resources, pullSecret)
 	build.Spec.CommonSpec.Strategy.DockerStrategy.Env = append(
 		build.Spec.CommonSpec.Strategy.DockerStrategy.Env,
 		corev1.EnvVar{Name: clonerefs.JSONConfigEnvVar, Value: optionsJSON},
@@ -282,7 +282,7 @@ func resolvePipelineImageStreamTagReference(ctx context.Context, client loggingc
 	return ist.Image.Name, nil
 }
 
-func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, fromTagDigest, dockerfilePath string, resources api.ResourceConfiguration, pullSecret *corev1.Secret) *buildapi.Build {
+func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, fromTagDigest, dockerfilePath string, customStrategyBuild bool, resources api.ResourceConfiguration, pullSecret *corev1.Secret) *buildapi.Build {
 	logrus.Infof("Building %s", toTag)
 	buildResources, err := resourcesFor(resources.RequirementsForStep(string(toTag)))
 	if err != nil {
@@ -298,6 +298,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 	}
 
 	layer := buildapi.ImageOptimizationSkipLayers
+
 	labels := labelsFor(jobSpec, map[string]string{CreatesLabel: string(toTag)})
 	build := &buildapi.Build{
 		ObjectMeta: metav1.ObjectMeta{
@@ -333,6 +334,19 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 			},
 		},
 	}
+
+	if customStrategyBuild {
+		build.Spec.CommonSpec.Strategy = buildapi.BuildStrategy{
+			Type: buildapi.CustomBuildStrategyType,
+			CustomStrategy: &buildapi.CustomBuildStrategy{
+				ForcePull:          true,
+				Env:                []corev1.EnvVar{{Name: "BUILD_LOGLEVEL", Value: "0"}},
+				From:               *from,
+				ExposeDockerSocket: true,
+			},
+		}
+	}
+
 	if len(fromTag) > 0 {
 		build.Spec.Output.ImageLabels = append(build.Spec.Output.ImageLabels, buildapi.ImageLabel{
 			Name:  api.ImageVersionLabel(fromTag),

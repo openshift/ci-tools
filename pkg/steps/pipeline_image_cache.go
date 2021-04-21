@@ -52,6 +52,7 @@ func (s *pipelineImageCacheStep) run(ctx context.Context) error {
 		},
 		fromDigest,
 		"",
+		false,
 		s.resources,
 		s.pullSecret,
 	))

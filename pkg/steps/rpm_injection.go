@@ -56,6 +56,7 @@ func (s *rpmImageInjectionStep) run(ctx context.Context) error {
 		},
 		fromDigest,
 		"",
+		false,
 		s.resources,
 		s.pullSecret,
 	))

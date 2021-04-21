@@ -71,6 +71,7 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 		},
 		fromDigest,
 		"",
+		false,
 		s.resources,
 		s.pullSecret,
 	)

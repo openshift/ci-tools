@@ -1359,6 +1359,11 @@ type ProjectDirectoryImageBuildInputs struct {
 	// that will populate the build context for the Dockerfile or
 	// alter the input image for a multi-stage build.
 	Inputs map[string]ImageBuildInputs `json:"inputs,omitempty"`
+
+	// CustomBuildStrategy indicates that the image should be executed as
+	// a custom build strategy insttead of a Docker Build Strategy (default).
+	// The image must support the Custom Build API and emit an OCI Container.
+	CustomBuildStrategy bool `json:"custom_build_strategy,omitempty"`
 }
 
 // PullSpecSubstitution contains a name of a pullspec that needs to

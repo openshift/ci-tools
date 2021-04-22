@@ -125,9 +125,6 @@ func (s *podStep) SubTests() []*junit.TestCase {
 }
 
 func (s *podStep) Requires() (ret []api.StepLink) {
-	if s.clusterClaim != nil {
-		ret = append(ret, api.ClusterClaimLink(s.config.As))
-	}
 	if s.config.From.Name == api.PipelineImageStream {
 		ret = append(ret, api.InternalImageLink(api.PipelineImageStreamTagReference(s.config.From.Tag)))
 		return

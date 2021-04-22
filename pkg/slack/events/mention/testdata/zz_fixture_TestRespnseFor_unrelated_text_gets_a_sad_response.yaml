@@ -1,5 +1,6 @@
 - text:
-    text: 'Sorry, I don''t know how to help with that. Here are all the things I know how to do:'
+    text: 'Sorry, I don''t know how to help with that. Here are all the things I know
+      how to do:'
     type: plain_text
   type: section
 - type: divider

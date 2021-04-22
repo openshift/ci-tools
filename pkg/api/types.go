@@ -1359,6 +1359,18 @@ type ProjectDirectoryImageBuildInputs struct {
 	// that will populate the build context for the Dockerfile or
 	// alter the input image for a multi-stage build.
 	Inputs map[string]ImageBuildInputs `json:"inputs,omitempty"`
+
+	// BuildArgs contains build arguments that will be resolved in the Dockerfile.
+	// See https://docs.docker.com/engine/reference/builder/#/arg for more details.
+	BuildArgs []BuildArg `json:"build_args,omitempty"`
+}
+
+type BuildArg struct {
+	// Name of the build arg.
+	Name string `json:"name,omitempty"`
+
+	// Value of the build arg.
+	Value string `json:"value,omitempty"`
 }
 
 // PullSpecSubstitution contains a name of a pullspec that needs to

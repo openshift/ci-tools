@@ -31,7 +31,7 @@ func (s *projectDirectoryImageBuildStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (*projectDirectoryImageBuildStep) Validate() error { return nil }
+func (s *projectDirectoryImageBuildStep) Validate() error { return nil }
 
 func (s *projectDirectoryImageBuildStep) Run(ctx context.Context) error {
 	return results.ForReason("building_project_image").ForError(s.run(ctx))
@@ -59,6 +59,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 		s.config.DockerfilePath,
 		s.resources,
 		s.pullSecret,
+		s.config.BuildArgs,
 	)
 	return handleBuild(ctx, s.client, build)
 }

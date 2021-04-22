@@ -77,6 +77,7 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 		"",
 		s.resources,
 		s.pullSecret,
+		nil,
 	)
 	err = handleBuild(ctx, s.client, build)
 	if err != nil && strings.Contains(err.Error(), "error checking provided apis") {

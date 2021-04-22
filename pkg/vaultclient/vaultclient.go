@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"strings"
 
 	"github.com/hashicorp/vault/api"
@@ -134,7 +135,17 @@ func (v *VaultClient) GetKV(path string) (*KVData, error) {
 }
 
 func (v *VaultClient) UpsertKV(path string, data map[string]string) error {
-	_, err := v.Logical().Write(InsertDataIntoPath(path), map[string]interface{}{"data": data})
+	// Get it first to avoid creating a new revision when the content didn't change
+	currentData, err := v.GetKV(path)
+	if err != nil {
+		if !IsNotFound(err) {
+			return err
+		}
+	}
+	if currentData != nil && reflect.DeepEqual(currentData.Data, data) {
+		return nil
+	}
+	_, err = v.Logical().Write(InsertDataIntoPath(path), map[string]interface{}{"data": data})
 	return err
 }
 

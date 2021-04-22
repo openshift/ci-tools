@@ -87,13 +87,19 @@ func (v *VaultClient) ListKVRecursively(path string) ([]string, error) {
 			return nil, fmt.Errorf("failed to list %s: %w", path, err)
 		}
 		for _, child := range children {
+			// strings.Join doesn't deal with the case of "element ends with separator"
+			if !strings.HasSuffix(path, "/") {
+				child = "/" + child
+			}
+			child = path + child
 			if strings.HasSuffix(child, "/") {
-				// staticcheck complains `this result of append is never used, except maybe in other appends` but
-				// we do use it in the initial range.
-				// nolint: staticcheck
-				paths = append(paths, child)
+				grandchildren, err := v.ListKVRecursively(child)
+				if err != nil {
+					return nil, err
+				}
+				result = append(result, grandchildren...)
 			} else {
-				result = append(result, strings.Join([]string{path, child}, "/"))
+				result = append(result, child)
 			}
 		}
 	}

@@ -307,6 +307,7 @@ func TestSecretCollectionManager(tt *testing.T) {
 					}
 					data := map[string]string{"foo": "bar"}
 					checkIs403(client.UpsertKV(scenario.path+"/my-secret", data), "upsert secret", scenario.expectSuccess, t)
+
 					retrieved, err := client.GetKV(scenario.path + "/my-secret")
 					checkIs403(err, "retrieve secret", scenario.expectSuccess, t)
 					if err == nil {
@@ -318,7 +319,18 @@ func TestSecretCollectionManager(tt *testing.T) {
 				})
 			}
 		})
+
 	}
+	t.Run("Everything was deleted", func(t *testing.T) {
+		results, err := client.ListKVRecursively("secret/self-managed/mine-alone")
+		if err != nil {
+			t.Fatalf("failed to list recuresively: %v", err)
+		}
+		if len(results) > 0 {
+			t.Errorf("expected kv store to be empty, but found %v", results)
+		}
+	})
+
 }
 
 func checkIs403(err error, action string, expectSuccess bool, t *testing.T) {

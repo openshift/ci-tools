@@ -86,6 +86,12 @@ func TestSecretCollectionManager(tt *testing.T) {
 		expectSuccess bool
 	}
 
+	type dataCheckScenario struct {
+		user         string
+		path         string
+		expectedData map[string]string
+	}
+
 	testCases := []struct {
 		name                  string
 		user                  string
@@ -94,6 +100,7 @@ func TestSecretCollectionManager(tt *testing.T) {
 		expectedBody          string
 		expectedVaultGroups   []vaultclient.Group
 		expectedVaultPolicies []string
+		dataCheckScenario     []dataCheckScenario
 		permCheckScenarios    []permCheckScenario
 	}{
 		{
@@ -143,6 +150,7 @@ func TestSecretCollectionManager(tt *testing.T) {
 				ModifyIndex:     1,
 			}},
 			expectedVaultPolicies: []string{"default", "secret-collection-manager-managed-mine-alone", "root"},
+			dataCheckScenario:     []dataCheckScenario{{"user-1", "secret/self-managed/mine-alone/index", map[string]string{".": "."}}},
 			permCheckScenarios: []permCheckScenario{
 				{"user-1", "secret/self-managed/mine-alone", true},
 				{"user-2", "secret/self-managed/mine-alone", false},
@@ -287,19 +295,32 @@ func TestSecretCollectionManager(tt *testing.T) {
 				t.Errorf("expected vault policies differ from actual: %s", diff)
 			}
 
+			for _, scenario := range tc.dataCheckScenario {
+				scenario := scenario
+				t.Run(fmt.Sprintf("path: %s, user: %s, data: %v", scenario.path, scenario.user, scenario.expectedData), func(t *testing.T) {
+					t.Parallel()
+					client, err := vaultclient.NewFromUserPass("http://"+vaultAddr, scenario.user, "password")
+					if err != nil {
+						t.Fatalf("failed to construct vault client: %v", err)
+					}
+					result, err := client.GetKV(scenario.path)
+					if err != nil {
+						t.Fatalf("failed to get %s: %v", scenario.path, err)
+					}
+					if diff := cmp.Diff(result.Data, scenario.expectedData); diff != "" {
+						t.Errorf("actual data differs from expected: %s", diff)
+					}
+				})
+			}
+
 			for _, scenario := range tc.permCheckScenarios {
 				permCheckScenario := scenario
 				t.Run(fmt.Sprintf("path: %s, user: %s, expectSuccess: %t", permCheckScenario.path, permCheckScenario.user, permCheckScenario.expectSuccess), func(t *testing.T) {
 					t.Parallel()
-					client, err := vaultclient.New("http://"+vaultAddr, "")
+					client, err := vaultclient.NewFromUserPass("http://"+vaultAddr, scenario.user, "password")
 					if err != nil {
 						t.Fatalf("failed to construct vault client: %v", err)
 					}
-					response, err := client.Logical().Write(fmt.Sprintf("auth/userpass/login/%s", scenario.user), map[string]interface{}{"password": "password"})
-					if err != nil {
-						t.Fatalf("failed to log into vault: %v", err)
-					}
-					client.SetToken(response.Auth.ClientToken)
 					initialResult, err := client.ListKV(scenario.path)
 					checkIs403(err, "initial list", scenario.expectSuccess, t)
 					if err == nil && len(initialResult) != 0 {

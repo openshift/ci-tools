@@ -31,6 +31,19 @@ func NewFromKubernetesAuth(addr, role string) (*VaultClient, error) {
 	return &VaultClient{client}, nil
 }
 
+func NewFromUserPass(addr, user, pass string) (*VaultClient, error) {
+	client, err := api.NewClient(&api.Config{Address: addr})
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Logical().Write(fmt.Sprintf("auth/userpass/login/%s", user), map[string]interface{}{"password": pass})
+	if err != nil {
+		return nil, fmt.Errorf("failed to login: %w", err)
+	}
+	client.SetToken(resp.Auth.ClientToken)
+	return &VaultClient{client}, nil
+}
+
 func New(addr, token string) (*VaultClient, error) {
 	client, err := api.NewClient(&api.Config{Address: addr})
 	if err != nil {

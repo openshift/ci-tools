@@ -64,7 +64,7 @@ require (
 	k8s.io/apimachinery v0.20.2
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
 	k8s.io/klog/v2 v2.4.0
-	k8s.io/test-infra v0.0.0-20210420183833-0512a33e0336
+	k8s.io/test-infra v0.0.0-20210422095526-28747eb818b8
 	k8s.io/utils v0.0.0-20210111153108-fddb29f9d009
 	sigs.k8s.io/boskos v0.0.0-20210210143059-9ac98d864d2a
 	sigs.k8s.io/controller-runtime v0.8.3-0.20210301154926-12660d4f2255

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"sort"
 	"testing"
 
@@ -399,8 +398,7 @@ func TestBitwardenContextsFor(t *testing.T) {
 
 func TestVault(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-	vault, err := vaultclient.New("http://"+testhelper.Vault(ctx, testhelper.NewT(ctx, t)), testhelper.VaultTestingRootToken)
+	vault, err := vaultclient.New("http://"+testhelper.Vault(t), testhelper.VaultTestingRootToken)
 	if err != nil {
 		t.Fatalf("failed to create Vault client: %v", err)
 	}

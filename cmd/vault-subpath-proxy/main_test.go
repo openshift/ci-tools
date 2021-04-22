@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,23 +16,16 @@ import (
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
-const (
-	vaultTestingToken = "jpuxZFWWFW7vM882GGX2aWOE"
-)
-
-func TestProxy(tt *testing.T) {
-	tt.Parallel()
+func TestProxy(t *testing.T) {
 	logrus.SetLevel(logrus.TraceLevel)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t := testhelper.NewT(ctx, tt)
-	vaultAddr := testhelper.Vault(ctx, t)
+	vaultAddr := testhelper.Vault(t)
 
 	vaultClient, err := api.NewClient(&api.Config{Address: "http://" + vaultAddr})
 	if err != nil {
 		t.Fatalf("failed to construct vault client: %v", err)
 	}
-	vaultClient.SetToken(vaultTestingToken)
+	vaultClient.SetToken(testhelper.VaultTestingRootToken)
 
 	team1Policy := `
 path "secret/data/team-1/*" {
@@ -71,7 +63,6 @@ path "secret/metadata/team-1/*" {
 
 	go func() {
 		if err := proxyServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			cancel()
 			t.Errorf("proxy server failed to listen: %v", err)
 		}
 	}()
@@ -82,11 +73,11 @@ path "secret/metadata/team-1/*" {
 	})
 	testhelper.WaitForHTTP200("http://127.0.0.1:"+proxyServerPort+"/v1/sys/health", "vault-subpath-proxy", t)
 
-	rootDirect, err := vaultclient.New("http://"+vaultAddr, vaultTestingToken)
+	rootDirect, err := vaultclient.New("http://"+vaultAddr, testhelper.VaultTestingRootToken)
 	if err != nil {
 		t.Fatalf("failed to construct rootDirect client: %v", err)
 	}
-	rootProxy, err := vaultclient.New("http://127.0.0.1:"+proxyServerPort, vaultTestingToken)
+	rootProxy, err := vaultclient.New("http://127.0.0.1:"+proxyServerPort, testhelper.VaultTestingRootToken)
 	if err != nil {
 		t.Fatalf("failed to construct rootProxy client: %v", err)
 	}

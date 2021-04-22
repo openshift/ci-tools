@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -17,11 +16,9 @@ import (
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
-func TestSecretCollectionManager(tt *testing.T) {
-	tt.Parallel()
-	ctx, cancel := context.WithCancel(context.Background())
-	t := testhelper.NewT(ctx, tt)
-	vaultAddr := testhelper.Vault(ctx, t)
+func TestSecretCollectionManager(t *testing.T) {
+	t.Parallel()
+	vaultAddr := testhelper.Vault(t)
 
 	client, err := vaultclient.New("http://"+vaultAddr, testhelper.VaultTestingRootToken)
 	if err != nil {
@@ -67,8 +64,7 @@ func TestSecretCollectionManager(tt *testing.T) {
 	managerListenAddr := "127.0.0.1:" + testhelper.GetFreePort(t)
 	server := server(client, "secret/self-managed", managerListenAddr)
 	go func() {
-		if err := server.ListenAndServe(); err != nil && ctx.Err() == nil {
-			cancel()
+		if err := server.ListenAndServe(); err != http.ErrServerClosed {
 			t.Errorf("failed to start secret-collection-manager: %v", err)
 		}
 	}()

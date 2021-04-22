@@ -1,7 +1,6 @@
 package vaultclient
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -54,10 +53,7 @@ func TestMetadataDataInsertion(t *testing.T) {
 
 func TestListKVRecursively(t *testing.T) {
 	t.Parallel()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	tt := testhelper.NewT(ctx, t)
-	vaultAddr := testhelper.Vault(ctx, tt)
+	vaultAddr := testhelper.Vault(t)
 
 	client, err := New("http://"+vaultAddr, testhelper.VaultTestingRootToken)
 	if err != nil {

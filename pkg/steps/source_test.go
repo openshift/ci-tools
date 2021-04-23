@@ -10,6 +10,8 @@ import (
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
+	buildapi "github.com/openshift/api/build/v1"
+
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -325,5 +327,44 @@ func TestMungeLabels(t *testing.T) {
 		if diff := cmp.Diff(testCase.output, mungeLabels(testCase.input)); diff != "" {
 			t.Errorf("case %d: got incorrect output: %v", i, diff)
 		}
+	}
+}
+
+func TestBuildFromSource(t *testing.T) {
+	var testCases = []struct {
+		name                          string
+		jobSpec                       *api.JobSpec
+		fromTag, toTag                api.PipelineImageStreamTagReference
+		source                        buildapi.BuildSource
+		fromTagDigest, dockerfilePath string
+		resources                     api.ResourceConfiguration
+		pullSecret                    *coreapi.Secret
+		buildArgs                     []api.BuildArg
+	}{
+		{
+			name: "build args",
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Job:       "job",
+					BuildID:   "buildId",
+					ProwJobID: "prowJobId",
+					Refs: &prowapi.Refs{
+						Org:     "org",
+						Repo:    "repo",
+						BaseRef: "master",
+						BaseSHA: "masterSHA",
+						Pulls: []prowapi.Pull{{
+							Number: 1,
+							SHA:    "pullSHA",
+						}},
+					},
+				},
+			},
+			buildArgs: []api.BuildArg{{Name: "TAGS", Value: "release"}},
+		},
+	}
+	for _, testCase := range testCases {
+		actual := buildFromSource(testCase.jobSpec, testCase.fromTag, testCase.toTag, testCase.source, testCase.fromTagDigest, testCase.dockerfilePath, testCase.resources, testCase.pullSecret, testCase.buildArgs)
+		testhelper.CompareWithFixture(t, actual)
 	}
 }

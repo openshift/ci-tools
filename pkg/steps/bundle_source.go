@@ -73,6 +73,7 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 		"",
 		s.resources,
 		s.pullSecret,
+		nil,
 	)
 	return handleBuild(ctx, s.client, build)
 }

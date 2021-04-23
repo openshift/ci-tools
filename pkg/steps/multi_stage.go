@@ -804,7 +804,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	if err != nil {
 		verb = "failed"
 	}
-	logrus.Infof("Step %s %s after %s.", pod.Name, verb, duration.String())
+	logrus.Infof("Step %s %s after %s.", pod.Name, verb, duration.Truncate(time.Second))
 	s.subSteps = append(s.subSteps, api.CIOperatorStepDetailInfo{
 		StepName:    pod.Name,
 		Description: fmt.Sprintf("Run pod %s", pod.Name),

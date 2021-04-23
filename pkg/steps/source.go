@@ -356,8 +356,25 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 
 func toEnv(args []api.BuildArg) []corev1.EnvVar {
 	var ret []corev1.EnvVar
-	for _, arg := range args {
-		ret = append(ret, corev1.EnvVar{Name: arg.Name, Value: arg.Value})
+	for i, arg := range args {
+		if arg.ValueFrom == nil {
+			ret = append(ret, corev1.EnvVar{Name: arg.Name, Value: arg.Value})
+			continue
+		}
+		name, err := arg.ValueFrom.NamespacedName()
+		if err != nil {
+			// Should never happen since we have already copied the secrets in the test namespace in ProjectDirectoryImageBuildStep
+			logrus.WithError(err).Fatalf("build_args[%d]: failed to determine the namespaced name", i)
+		}
+		if valueFrom := arg.ValueFrom; valueFrom != nil {
+			ret = append(ret, corev1.EnvVar{Name: arg.Name, ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: name,
+					},
+					Key: valueFrom.Key,
+				}}})
+		}
 	}
 	return ret
 }

@@ -342,7 +342,7 @@ func TestBuildFromSource(t *testing.T) {
 		buildArgs                     []api.BuildArg
 	}{
 		{
-			name: "build args",
+			name: "build args: value",
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
 					Job:       "job",
@@ -362,9 +362,36 @@ func TestBuildFromSource(t *testing.T) {
 			},
 			buildArgs: []api.BuildArg{{Name: "TAGS", Value: "release"}},
 		},
+		{
+			name: "build args: valueFrom",
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Job:       "job",
+					BuildID:   "buildId",
+					ProwJobID: "prowJobId",
+					Refs: &prowapi.Refs{
+						Org:     "org",
+						Repo:    "repo",
+						BaseRef: "master",
+						BaseSHA: "masterSHA",
+						Pulls: []prowapi.Pull{{
+							Number: 1,
+							SHA:    "pullSHA",
+						}},
+					},
+				},
+			},
+			buildArgs: []api.BuildArg{{Name: "image-token", ValueFrom: &api.SecretKeySelector{
+				Namespace: "test-credentials",
+				Name:      "installer-token",
+				Key:       "token",
+			}}},
+		},
 	}
 	for _, testCase := range testCases {
-		actual := buildFromSource(testCase.jobSpec, testCase.fromTag, testCase.toTag, testCase.source, testCase.fromTagDigest, testCase.dockerfilePath, testCase.resources, testCase.pullSecret, testCase.buildArgs)
-		testhelper.CompareWithFixture(t, actual)
+		t.Run(testCase.name, func(t *testing.T) {
+			actual := buildFromSource(testCase.jobSpec, testCase.fromTag, testCase.toTag, testCase.source, testCase.fromTagDigest, testCase.dockerfilePath, testCase.resources, testCase.pullSecret, testCase.buildArgs)
+			testhelper.CompareWithFixture(t, actual)
+		})
 	}
 }

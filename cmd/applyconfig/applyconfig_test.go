@@ -14,6 +14,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/test-infra/prow/flagutil"
 
 	templateapi "github.com/openshift/api/template/v1"
 
@@ -590,10 +591,12 @@ func (fs *fileStat) Sys() interface{}   { panic("not implemented") }
 
 func TestFileFilter(t *testing.T) {
 	testCases := []struct {
-		name       string
-		file       *fileStat
-		expectSkip bool
-		expectErr  error
+		name        string
+		file        *fileStat
+		path        string
+		ignoreFiles flagutil.Strings
+		expectSkip  bool
+		expectErr   error
 	}{
 		{
 			name:       "dir is skipped",
@@ -619,10 +622,17 @@ func TestFileFilter(t *testing.T) {
 			name: "yaml is not skipped",
 			file: &fileStat{name: "manifest.yaml"},
 		},
+		{
+			name:        "ignored files are skipped",
+			file:        &fileStat{name: "cert-manager.yaml"},
+			path:        "clusters/build-clusters/common/cert-manager.yaml",
+			ignoreFiles: flagutil.NewStrings("clusters/build-clusters/common/cert-manager.yaml"),
+			expectSkip:  true,
+		},
 	}
 
 	for _, tc := range testCases {
-		skip, err := fileFilter(tc.file, "")
+		skip, err := fileFilter(tc.file, tc.path, tc.ignoreFiles)
 		if err != tc.expectErr {
 			t.Errorf("expect err: %v, got err: %v", tc.expectErr, err)
 		}

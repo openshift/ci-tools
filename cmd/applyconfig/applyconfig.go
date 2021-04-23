@@ -35,6 +35,7 @@ type dryRunMethod string
 type options struct {
 	user        *nullableStringFlag
 	directories flagutil.Strings
+	ignoreFiles flagutil.Strings
 	context     string
 	kubeConfig  string
 	dryRun      dryRunMethod
@@ -78,6 +79,7 @@ func gatherOptions() *options {
 	flag.BoolVar(&confirm, "confirm", false, "Set to true to make applyconfig commit the config to the cluster")
 	flag.Var(opt.user, "as", "Username to impersonate while applying the config")
 	flag.Var(&opt.directories, "config-dir", "Directory with config to apply. Can be repeated multiple times.")
+	flag.Var(&opt.ignoreFiles, "ignore-file", "File to ignore. Can be repeated multiple times.")
 	flag.StringVar(&opt.context, "context", "", "Context name to use while applying the config")
 	flag.StringVar(&opt.kubeConfig, "kubeconfig", "", "Path to the kubeconfig file to apply the config")
 
@@ -403,7 +405,7 @@ func applyConfig(rootDir string, o *options, createdNamespaces sets.String, cens
 			}
 		}
 
-		if skip, err := fileFilter(info, path); skip || err != nil {
+		if skip, err := fileFilter(info, path, o.ignoreFiles); skip || err != nil {
 			return err
 		}
 
@@ -447,7 +449,7 @@ func applyConfig(rootDir string, o *options, createdNamespaces sets.String, cens
 	return createdNamespaces, nil
 }
 
-func fileFilter(info os.FileInfo, path string) (bool, error) {
+func fileFilter(info os.FileInfo, path string, ignoreFiles flagutil.Strings) (bool, error) {
 	if info.IsDir() {
 		if strings.HasPrefix(info.Name(), "_") {
 			logrus.Infof("Skipping directory: %s", path)
@@ -462,6 +464,10 @@ func fileFilter(info os.FileInfo, path string) (bool, error) {
 	}
 
 	if strings.HasPrefix(info.Name(), "_") {
+		return true, nil
+	}
+
+	if ignoreFiles.StringSet().Has(path) {
 		return true, nil
 	}
 

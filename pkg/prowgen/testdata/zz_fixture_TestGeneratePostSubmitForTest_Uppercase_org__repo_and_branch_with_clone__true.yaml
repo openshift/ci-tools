@@ -4,4 +4,5 @@ branches:
 decorate: true
 labels:
   ci-operator.openshift.io/prowgen-controlled: newly-generated
-name: 'branch-ci-Organization-Repository-Branch-Uppercase org, repo and branch with clone: true'
+name: 'branch-ci-Organization-Repository-Branch-Uppercase org, repo and branch with
+  clone: true'

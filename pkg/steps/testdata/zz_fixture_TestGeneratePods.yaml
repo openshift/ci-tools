@@ -30,7 +30,9 @@
       - name: JOB_NAME
         value: job
       - name: JOB_SPEC
-        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base sha"},"decoration_config":{"timeout":"2h0m0s","grace_period":"15s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
+        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow
+          job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base
+          sha"},"decoration_config":{"timeout":"2h0m0s","grace_period":"15s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
       - name: JOB_TYPE
         value: postsubmit
       - name: OPENSHIFT_CI
@@ -48,7 +50,8 @@
       - name: REPO_OWNER
         value: org
       - name: ENTRYPOINT_OPTIONS
-        value: '{"timeout":7200000000000,"grace_period":15000000000,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand0"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
+        value: '{"timeout":7200000000000,"grace_period":15000000000,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset
+          -eu\ncommand0"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
       - name: ARTIFACT_DIR
         value: /logs/artifacts
       - name: NAMESPACE
@@ -95,7 +98,8 @@
       env:
       - name: JOB_SPEC
       - name: SIDECAR_OPTIONS
-        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step0","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand0"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"censoring_options":{"secret_directories":["/secret"]}}'
+        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step0","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset
+          -eu\ncommand0"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"censoring_options":{"secret_directories":["/secret"]}}'
       image: sidecar
       name: sidecar
       resources: {}
@@ -182,7 +186,9 @@
       - name: JOB_NAME
         value: job
       - name: JOB_SPEC
-        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base sha"},"decoration_config":{"timeout":"2h0m0s","grace_period":"15s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
+        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow
+          job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base
+          sha"},"decoration_config":{"timeout":"2h0m0s","grace_period":"15s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
       - name: JOB_TYPE
         value: postsubmit
       - name: OPENSHIFT_CI
@@ -200,7 +206,8 @@
       - name: REPO_OWNER
         value: org
       - name: ENTRYPOINT_OPTIONS
-        value: '{"timeout":7200000000000,"grace_period":15000000000,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand1"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
+        value: '{"timeout":7200000000000,"grace_period":15000000000,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset
+          -eu\ncommand1"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
       - name: ARTIFACT_DIR
         value: /logs/artifacts
       - name: NAMESPACE
@@ -247,7 +254,8 @@
       env:
       - name: JOB_SPEC
       - name: SIDECAR_OPTIONS
-        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step1","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset -eu\ncommand1"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"censoring_options":{"secret_directories":["/secret"]}}'
+        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/step1","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset
+          -eu\ncommand1"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"censoring_options":{"secret_directories":["/secret"]}}'
       image: sidecar
       name: sidecar
       resources: {}
@@ -334,7 +342,9 @@
       - name: JOB_NAME
         value: job
       - name: JOB_SPEC
-        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base sha"},"decoration_config":{"timeout":"2h0m0s","grace_period":"15s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
+        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow
+          job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base
+          sha"},"decoration_config":{"timeout":"2h0m0s","grace_period":"15s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
       - name: JOB_TYPE
         value: postsubmit
       - name: OPENSHIFT_CI

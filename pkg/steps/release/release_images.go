@@ -20,7 +20,10 @@ import (
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
-const releaseConfigAnnotation = "release.openshift.io/config"
+const (
+	releaseConfigAnnotation = "release.openshift.io/config"
+	releaseLabel            = "ci.openshift.io/release"
+)
 
 // stableImagesTagStep is used when no release configuration is necessary
 type stableImagesTagStep struct {

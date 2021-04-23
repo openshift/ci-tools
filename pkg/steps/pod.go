@@ -46,6 +46,7 @@ type PodStepConfiguration struct {
 	As                 string
 	From               api.ImageStreamTagReference
 	Commands           string
+	Labels             map[string]string
 	ServiceAccountName string
 	Secrets            []*api.Secret
 	MemoryBackedVolume *api.MemoryBackedVolume
@@ -272,7 +273,7 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	}
 
 	artifactDir := s.name
-	pod, err := generateBasePod(s.jobSpec, map[string]string{}, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts)
+	pod, err := generateBasePod(s.jobSpec, s.config.Labels, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts)
 	if err != nil {
 		return nil, err
 	}

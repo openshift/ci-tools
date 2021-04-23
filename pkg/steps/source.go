@@ -116,6 +116,9 @@ const (
 )
 
 func labelsFor(spec *api.JobSpec, base map[string]string) map[string]string {
+	if base == nil {
+		base = map[string]string{}
+	}
 	base[LabelMetadataOrg] = spec.Metadata.Org
 	base[LabelMetadataRepo] = spec.Metadata.Repo
 	base[LabelMetadataBranch] = spec.Metadata.Branch

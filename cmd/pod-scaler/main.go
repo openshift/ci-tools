@@ -93,8 +93,11 @@ func (o *options) validate() error {
 }
 
 func main() {
-	opts := bindOptions(flag.CommandLine)
-	flag.Parse()
+	flagSet := flag.NewFlagSet("", flag.ExitOnError)
+	opts := bindOptions(flagSet)
+	if err := flagSet.Parse(os.Args[1:]); err != nil {
+		logrus.WithError(err).Fatal("failed to parse flags")
+	}
 	if err := opts.validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to validate flags")
 	}

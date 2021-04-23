@@ -14,9 +14,11 @@ import (
 	"gopkg.in/fsnotify.v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 	"k8s.io/test-infra/prow/interrupts"
 
+	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 
 	"github.com/openshift/ci-tools/pkg/util"
@@ -47,7 +49,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	o := options{producerOptions: producerOptions{}}
 	fs.StringVar(&o.mode, "mode", "", "Which mode to run in.")
 	fs.StringVar(&o.kubeconfig, "kubeconfig", "", "Path to a ~/.kube/config to use for querying Prometheuses. Each context will be considered a cluster to query.")
-	fs.IntVar(&o.port, "port", 0, "Port to serve requirements on.")
+	fs.IntVar(&o.port, "port", 0, "Port to serve admission webhooks on.")
 	fs.IntVar(&o.uiPort, "ui-port", 0, "Port to serve frontend on.")
 	fs.StringVar(&o.loglevel, "loglevel", "debug", "Logging level.")
 	fs.StringVar(&o.cacheDir, "cache-dir", "", "Local directory holding cache data (for development mode).")
@@ -63,15 +65,16 @@ func (o *options) validate() error {
 		if o.kubeconfig == "" && !kubeconfigSet {
 			return errors.New("--kubeconfig or $KUBECONFIG is required")
 		}
-	case "consumer":
-		if o.port == 0 {
-			return errors.New("--port is required")
-		}
+	case "consumer.ui":
 		if o.uiPort == 0 {
 			return errors.New("--ui-port is required")
 		}
+	case "consumer.admission":
+		if o.port == 0 {
+			return errors.New("--port is required")
+		}
 	default:
-		return errors.New("--mode must be either \"producer\" or \"consumer\"")
+		return errors.New("--mode must be either \"producer\", \"consumer.ui\", or \"consumer.admission\"")
 	}
 	if o.cacheDir == "" {
 		if o.cacheBucket == "" {
@@ -111,8 +114,10 @@ func main() {
 	switch opts.mode {
 	case "producer":
 		mainProduce(opts, cache)
-	case "consumer":
+	case "consumer.ui":
 		// TODO
+	case "consumer.admission":
+		mainAdmission(opts)
 	}
 	interrupts.WaitForGracefulShutdown()
 }
@@ -150,4 +155,16 @@ func mainProduce(opts *options, cache cache) {
 	}
 
 	go produce(clients, cache)
+}
+
+func mainAdmission(opts *options) {
+	restConfig, err := rest.InClusterConfig()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to load in-cluster config.")
+	}
+	client, err := buildclientset.NewForConfig(restConfig)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to construct client.")
+	}
+	go admit(opts.port, client)
 }

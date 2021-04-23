@@ -13,6 +13,16 @@ import (
 )
 
 const (
+	ProwLabelNameCreated model.LabelName = "label_created_by_prow"
+	ProwLabelNameContext model.LabelName = "label_prow_k8s_io_context"
+	ProwLabelNameJob     model.LabelName = "label_prow_k8s_io_job"
+	ProwLabelNameType    model.LabelName = "label_prow_k8s_io_type"
+	ProwLabelNameOrg     model.LabelName = "label_prow_k8s_io_refs_org"
+	ProwLabelNameRepo    model.LabelName = "label_prow_k8s_io_refs_repo"
+	ProwLabelNameBranch  model.LabelName = "label_prow_k8s_io_refs_base_ref"
+
+	LabelNameRehearsal model.LabelName = "label_ci_openshift_org_rehearse"
+	LabelNameCreated   model.LabelName = "label_created_by_ci"
 	LabelNameOrg       model.LabelName = "label_ci_openshift_io_metadata_org"
 	LabelNameRepo      model.LabelName = "label_ci_openshift_io_metadata_repo"
 	LabelNameBranch    model.LabelName = "label_ci_openshift_io_metadata_branch"
@@ -21,14 +31,17 @@ const (
 	LabelNameStep      model.LabelName = "label_ci_openshift_io_metadata_step"
 	LabelNamePod       model.LabelName = "pod"
 	LabelNameContainer model.LabelName = "container"
+	LabelNameBuild     model.LabelName = "label_openshift_io_build_name"
+	LabelNameRelease   model.LabelName = "label_ci_openshift_io_release"
+	LabelNameApp       model.LabelName = "label_app"
 )
 
 // CachedQuery stores digested data for a query across clusters, as well as indices
 // for the data to access it by the fully specific set of labels as well as a smaller
 // set that uses the step for context only.
 type CachedQuery struct {
-	// Metric is the metric we queried from Prometheus to get this data.
-	Metric string `json:"metric"`
+	// Query is the query we executed against Prometheus to get this data.
+	Query string `json:"query"`
 	// RangesByCluster stores time ranges for which we've succeeded in getting this
 	// data fromm Prometheus servers on the clusters we're querying.
 	RangesByCluster map[string][]TimeRange `json:"ranges_by_cluster"`
@@ -41,9 +54,6 @@ type CachedQuery struct {
 	// The list of fingerprints is guaranteed to be unique for any set of labels
 	// and will never contain more than fifty items.
 	DataByMetaData map[FullMetadata][]model.Fingerprint `json:"data_by_meta_data"`
-	// DataByStep indexes the metric data by multi-stage step.
-	// The list of fingerprints for any identifier is guaranteed to be unique.
-	DataByStep map[StepMetadata][]model.Fingerprint `json:"data_by_step"`
 }
 
 // TimeRange describes a range of time, inclusive.

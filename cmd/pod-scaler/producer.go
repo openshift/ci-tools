@@ -11,22 +11,23 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/openhistogram/circonusllhist"
+	"github.com/openshift/ci-tools/pkg/steps"
 	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
+	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/interrupts"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
 const (
 	MetricNameCPUUsage         = `container_cpu_usage_seconds_total`
-	MetricCPUUsage             = `rate(` + MetricNameCPUUsage + containerFilter + `[3m])`
 	MetricNameMemoryWorkingSet = `container_memory_working_set_bytes`
-	MetricMemoryWorkingSet     = MetricNameMemoryWorkingSet + containerFilter
 
 	containerFilter = `{container!="POD",container!=""}`
 
@@ -36,14 +37,45 @@ const (
 	MaxSamplesPerRequest = 11000
 )
 
+// queriesByMetric returns a mapping of Prometheus query by metric name for all queries we want to execute
+func queriesByMetric() map[string]string {
+	queries := map[string]string{}
+	for _, info := range []struct {
+		prefix   string
+		selector string
+		labels   []string
+	}{
+		{
+			prefix:   "prowjobs",
+			selector: `{` + string(ProwLabelNameCreated) + `="true",` + string(ProwLabelNameJob) + `!="",` + string(LabelNameRehearsal) + `=""}`,
+			labels:   []string{string(ProwLabelNameCreated), string(ProwLabelNameContext), string(ProwLabelNameOrg), string(ProwLabelNameRepo), string(ProwLabelNameBranch), string(ProwLabelNameJob), string(ProwLabelNameType)},
+		},
+		{
+			prefix:   "pods",
+			selector: `{` + string(LabelNameCreated) + `="true",` + string(LabelNameStep) + `=""}`,
+			labels:   []string{string(LabelNameOrg), string(LabelNameRepo), string(LabelNameBranch), string(LabelNameVariant), string(LabelNameTarget), string(LabelNameBuild), string(LabelNameRelease), string(LabelNameApp)},
+		},
+		{
+			prefix:   "steps",
+			selector: `{` + string(LabelNameCreated) + `="true",` + string(LabelNameStep) + `!=""}`,
+			labels:   []string{string(LabelNameOrg), string(LabelNameRepo), string(LabelNameBranch), string(LabelNameVariant), string(LabelNameTarget), string(LabelNameStep)},
+		},
+	} {
+		for name, metric := range map[string]string{
+			MetricNameCPUUsage:         `rate(` + MetricNameCPUUsage + containerFilter + `[3m])`,
+			MetricNameMemoryWorkingSet: MetricNameMemoryWorkingSet + containerFilter,
+		} {
+			queries[fmt.Sprintf("%s/%s", info.prefix, name)] = queryFor(metric, info.selector, info.labels)
+		}
+	}
+	return queries
+}
+
 func produce(clients map[string]prometheusapi.API, dataCache cache) {
 	interrupts.TickLiteral(func() {
-		for name, metric := range map[string]string{
-			MetricNameCPUUsage:         MetricCPUUsage,
-			MetricNameMemoryWorkingSet: MetricMemoryWorkingSet,
-		} {
+		for name, query := range queriesByMetric() {
 			name := name
-			metric := metric
+			query := query
 			logger := logrus.WithField("metric", name)
 			cache, err := loadCache(dataCache, name, logger)
 			if errors.Is(err, storage.ErrObjectNotExist) {
@@ -52,11 +84,10 @@ func produce(clients map[string]prometheusapi.API, dataCache cache) {
 					ranges[cluster] = []TimeRange{}
 				}
 				cache = &CachedQuery{
-					Metric:          metric,
+					Query:           query,
 					RangesByCluster: ranges,
 					Data:            map[model.Fingerprint]*circonusllhist.Histogram{},
 					DataByMetaData:  map[FullMetadata][]model.Fingerprint{},
-					DataByStep:      map[StepMetadata][]model.Fingerprint{},
 				}
 			}
 			now := time.Now()
@@ -80,7 +111,7 @@ func produce(clients map[string]prometheusapi.API, dataCache cache) {
 					// there's also no chance that Prometheus will be able to handle any real concurrent
 					// request volume, so don't even bother trying to request more samples at once than
 					// a fifth of the maximum samples it can technically provide in one request
-					sync: semaphore.NewWeighted(MaxSamplesPerRequest / 5),
+					sync: semaphore.NewWeighted(MaxSamplesPerRequest / 15),
 					wg:   &sync.WaitGroup{},
 				}
 				wg.Add(1)
@@ -102,25 +133,20 @@ func produce(clients map[string]prometheusapi.API, dataCache cache) {
 }
 
 // queryFor applies our filtering and left joins to a metric to get data we can use
-func queryFor(metric string) string {
-	return `sum by (namespace,pod,container) (` + metric + `) * on(namespace,pod) 
+func queryFor(metric, selector string, labels []string) string {
+	return `sum by (
+    namespace,
+    pod,
+    container
+  ) (` + metric + `)
+  * on(namespace,pod) 
   group_left(
-    ` + string(LabelNameOrg) + `,
-    ` + string(LabelNameRepo) + `,
-    ` + string(LabelNameBranch) + `,
-    ` + string(LabelNameVariant) + `,
-    ` + string(LabelNameTarget) + `,
-    ` + string(LabelNameStep) + `
+    ` + strings.Join(labels, ",\n    ") + `
   ) max by (
     namespace,
     pod,
-    ` + string(LabelNameOrg) + `,
-    ` + string(LabelNameRepo) + `,
-    ` + string(LabelNameBranch) + `,
-    ` + string(LabelNameVariant) + `,
-    ` + string(LabelNameTarget) + `,
-    ` + string(LabelNameStep) + `
-  ) (kube_pod_labels{` + string(LabelNameOrg) + `!="",label_created_by_ci="true"})`
+    ` + strings.Join(labels, ",\n    ") + `
+  ) (kube_pod_labels` + selector + `)`
 }
 
 func rangeFrom(r prometheusapi.Range) TimeRange {
@@ -242,9 +268,9 @@ func (q *querier) executeOverRange(ctx context.Context, c *clusterMetadata, r pr
 	queryStart := time.Now()
 	logger.Debug("Querying Prometheus.")
 	q.lock.RLock()
-	metric := q.data.Metric
+	query := q.data.Query
 	q.lock.RUnlock()
-	result, warnings, err := c.client.QueryRange(ctx, queryFor(metric), r)
+	result, warnings, err := c.client.QueryRange(ctx, query, r)
 	logger.Debugf("Queried Prometheus API in %s.", time.Since(queryStart).Round(time.Second))
 	if err != nil {
 		apiError := &prometheusapi.Error{}
@@ -306,6 +332,21 @@ func (q *CachedQuery) record(clusterName string, r TimeRange, matrix model.Matri
 	for _, stream := range matrix {
 		fingerprint := stream.Metric.Fingerprint()
 		meta := metadataFromMetric(stream.Metric)
+		if strings.HasPrefix(meta.Target, fmt.Sprintf("pull-ci-%s-%s", meta.Org, meta.Repo)) || strings.HasPrefix(meta.Target, fmt.Sprintf("branch-ci-%s-%s", meta.Org, meta.Repo)) {
+			// TODO(skuznets): remove this once these time out (June 2021)
+			// This is ignoring data from old Prow control plane versions that did not label context or branch.
+			continue
+		}
+		if strings.HasPrefix(meta.Pod, "release-") && meta.Target != "" {
+			// TODO(skuznets): remove this once these time out (June 2021)
+			// This is hacking to fix data from old CI Operator versions that did not label releases.
+			meta.Target = ""
+		}
+		if strings.HasSuffix(meta.Pod, "-build") && meta.Org == "" {
+			// TODO(skuznets): remove this once these time out (June 2021)
+			// This is hacking to fix data from old build farm versions that did not label Build Pods.
+			continue
+		}
 		// Metrics are unique in our dataset, so if we've already seen this metric/fingerprint,
 		// we're guaranteed to already have recorded it in the indices, and we just need to add
 		// the new data. This case will occur if one metric/fingerprint shows up in more than
@@ -327,9 +368,6 @@ func (q *CachedQuery) record(clusterName string, r TimeRange, matrix model.Matri
 		q.Data[fingerprint] = hist
 		if !seen {
 			q.DataByMetaData[meta] = append(q.DataByMetaData[meta], fingerprint)
-			if meta.Step != "" {
-				q.DataByStep[meta.StepMetadata()] = append(q.DataByStep[meta.StepMetadata()], fingerprint)
-			}
 		}
 	}
 }
@@ -351,36 +389,92 @@ func (q *CachedQuery) prune() {
 		for _, item := range toRemove {
 			delete(q.Data, item)
 		}
-		if meta.Step != "" {
-			stepValues := q.DataByStep[meta.StepMetadata()]
-			var filtered []model.Fingerprint
-			for _, value := range stepValues {
-				matches := false
-				for _, item := range toRemove {
-					matches = matches || (value == item)
-				}
-				if !matches {
-					filtered = append(filtered, value)
-				}
-			}
-			q.DataByStep[meta.StepMetadata()] = filtered
-		}
 	}
 }
 
 func metadataFromMetric(metric model.Metric) FullMetadata {
-	return FullMetadata{
+	rawMeta := FullMetadata{
 		Metadata: api.Metadata{
-			Org:     string(metric[LabelNameOrg]),
-			Repo:    string(metric[LabelNameRepo]),
-			Branch:  string(metric[LabelNameBranch]),
+			Org:     oneOf(metric, LabelNameOrg, ProwLabelNameOrg),
+			Repo:    oneOf(metric, LabelNameRepo, ProwLabelNameRepo),
+			Branch:  oneOf(metric, LabelNameBranch, ProwLabelNameBranch),
 			Variant: string(metric[LabelNameVariant]),
 		},
-		Target:    string(metric[LabelNameTarget]),
+		Target:    oneOf(metric, LabelNameTarget, ProwLabelNameContext),
 		Step:      string(metric[LabelNameStep]),
 		Pod:       string(metric[LabelNamePod]),
 		Container: string(metric[LabelNameContainer]),
 	}
+	// we know RPM repos, release Pods and Build Pods do not differ by target, so
+	// we can remove those fields when we know we're looking at one of those
+	_, buildPod := metric[LabelNameBuild]
+	_, releasePod := metric[LabelNameRelease]
+	value, set := metric[LabelNameApp]
+	rpmRepoPod := set && value == model.LabelValue(steps.RPMRepoName)
+	if buildPod || releasePod || rpmRepoPod {
+		rawMeta.Target = ""
+	}
+	// RPM repo Pods are generated for a Deployment, so the name is random and not relevant
+	if rpmRepoPod {
+		rawMeta.Pod = ""
+	}
+	// we know the name for ProwJobs is not important
+	if _, prowJob := metric[ProwLabelNameCreated]; prowJob {
+		rawMeta.Pod = ""
+		if rawMeta.Target == "" {
+			// periodic and postsubmit jobs do not have a context, but we can try to
+			// extract a useful name for the job by processing the full name, with the
+			// caveat that labels have a finite length limit and the most specific data
+			// is in the suffix of the job name, so we will alias jobs here whose names
+			// are too long
+			rawMeta.Target = syntheticContextFromJob(rawMeta.Metadata, metric)
+		}
+	}
+	return rawMeta
+}
+
+func oneOf(metric model.Metric, labels ...model.LabelName) string {
+	for _, label := range labels {
+		if value, set := metric[label]; set {
+			return string(value)
+		}
+	}
+	return ""
+}
+
+func syntheticContextFromJob(meta api.Metadata, metric model.Metric) string {
+	job, jobLabeled := metric[ProwLabelNameJob]
+	if !jobLabeled {
+		// this should not happen, but if it does, we can't deduce a job name
+		return ""
+	}
+	jobType, typeLabeled := metric[ProwLabelNameType]
+	if !typeLabeled {
+		// this should not happen, but if it does, we can't deduce a job name
+		return ""
+	}
+	if prowv1.ProwJobType(jobType) == prowv1.PeriodicJob && meta.Repo == "" {
+		// this periodic has no repo associated with it, no use to strip any prefix
+		return string(job)
+	}
+	var prefix string
+	switch prowv1.ProwJobType(jobType) {
+	case prowv1.PresubmitJob, prowv1.BatchJob:
+		prefix = jobconfig.PresubmitPrefix
+	case prowv1.PostsubmitJob:
+		prefix = jobconfig.PostsubmitPrefix
+	case prowv1.PeriodicJob:
+		prefix = jobconfig.PeriodicPrefix
+	default:
+		// this should not happen, but if it does, we can't deduce a job name
+		return ""
+	}
+	namePrefix := meta.JobName(prefix, "")
+	if len(namePrefix) >= len(job) {
+		// the job label truncated away any useful information we would have had
+		return ""
+	}
+	return strings.TrimPrefix(string(job), namePrefix)
 }
 
 // uncoveredRanges determines the largest subset ranges of r that are not covered by

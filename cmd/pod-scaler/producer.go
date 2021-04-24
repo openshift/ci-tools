@@ -11,7 +11,6 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/openhistogram/circonusllhist"
-	"github.com/openshift/ci-tools/pkg/steps"
 	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/sirupsen/logrus"
@@ -23,6 +22,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/steps"
 )
 
 const (

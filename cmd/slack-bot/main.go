@@ -16,7 +16,6 @@ import (
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 	"google.golang.org/api/option"
-	"k8s.io/test-infra/prow/pjutil/pprof"
 
 	"k8s.io/test-infra/pkg/flagutil"
 	"k8s.io/test-infra/prow/config"
@@ -27,6 +26,7 @@ import (
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
+	"k8s.io/test-infra/prow/pjutil/pprof"
 	"k8s.io/test-infra/prow/simplifypath"
 
 	"github.com/openshift/ci-tools/pkg/jira"

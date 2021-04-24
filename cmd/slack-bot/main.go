@@ -16,6 +16,7 @@ import (
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 	"google.golang.org/api/option"
+	"k8s.io/test-infra/prow/pjutil/pprof"
 
 	"k8s.io/test-infra/pkg/flagutil"
 	"k8s.io/test-infra/prow/config"
@@ -148,7 +149,7 @@ func main() {
 		),
 	))
 	handler := metrics.TraceHandler(simplifier, promMetrics.HTTPRequestDuration, promMetrics.HTTPResponseSize)
-	pjutil.ServePProf(o.instrumentationOptions.PProfPort)
+	pprof.Instrument(o.instrumentationOptions)
 
 	health := pjutil.NewHealth()
 

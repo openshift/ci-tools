@@ -12,6 +12,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"gopkg.in/fsnotify.v1"
+	"k8s.io/test-infra/prow/pjutil/pprof"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -21,7 +22,6 @@ import (
 	"k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/logrusutil"
-	"k8s.io/test-infra/prow/pjutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -377,7 +377,7 @@ func main() {
 	if err := prowv1.AddToScheme(mgr.GetScheme()); err != nil {
 		logrus.WithError(err).Fatal("Failed to add prowv1 to scheme")
 	}
-	pjutil.ServePProf(flagutil.DefaultPProfPort)
+	pprof.Serve(flagutil.DefaultPProfPort)
 
 	for cluster, buildClusterMgr := range allManagers {
 		if cluster == appCIContextName {

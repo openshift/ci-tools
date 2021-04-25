@@ -250,7 +250,11 @@ func (a *Accessory) ClientFlags() []string {
 	return a.clientFlags(a.port, a.healthPort)
 }
 
-var ports = sync.Map{}
+var ports sync.Map
+
+func init() {
+	ports = sync.Map{}
+}
 
 // GetFreePort asks the kernel for a free open port that is ready to use.
 func GetFreePort(t TestingTInterface) string {

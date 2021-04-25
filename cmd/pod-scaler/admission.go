@@ -4,13 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	prowConfig "k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
+	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
+	"k8s.io/test-infra/prow/simplifypath"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -20,15 +26,36 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 )
 
+// l keeps the tree legible
+func l(fragment string, children ...simplifypath.Node) simplifypath.Node {
+	return simplifypath.L(fragment, children...)
+}
+
+var (
+	admissionMetrics = metrics.NewMetrics("pod_scaler_admission")
+)
+
 func admit(port int, client buildclientv1.BuildV1Interface) {
 	logger := logrus.WithField("component", "admission")
+	logger.Info("Initializing admission webhook server.")
 	health := pjutil.NewHealth()
 	health.ServeReady()
-	httpServer := webhook.Server{Port: port}
-	httpServer.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client}})
-	if err := httpServer.StartStandalone(interrupts.Context(), nil); err != nil {
-		logrus.WithError(err).Error("Failed to serve admission webhooks.")
+	mutator, err := admission.StandaloneWebhook(&webhook.Admission{Handler: &podMutator{logger: logger, client: client}}, admission.StandaloneOptions{
+		MetricsPath: "/pods",
+	})
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create pod mutator.")
 	}
+	metrics.ExposeMetrics("pod_scaler_admission", prowConfig.PushGateway{}, flagutil.DefaultMetricsPort)
+	simplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root
+		l("pods"),
+	))
+	handler := metrics.TraceHandler(simplifier, admissionMetrics.HTTPRequestDuration, admissionMetrics.HTTPResponseSize)
+	mux := http.NewServeMux()
+	mux.Handle("/pods", handler(mutator))
+	httpServer := &http.Server{Addr: ":" + strconv.Itoa(port), Handler: mux}
+	logger.Info("Serving admission webhooks.")
+	interrupts.ListenAndServe(httpServer, 5*time.Second)
 }
 
 type podMutator struct {

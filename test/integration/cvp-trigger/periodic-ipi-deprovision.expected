@@ -2,11 +2,16 @@ apiVersion: prow.k8s.io/v1
 kind: ProwJob
 metadata:
   annotations:
+    prow.k8s.io/context: ""
     prow.k8s.io/job: periodic-ipi-deprovision
   creationTimestamp: null
   labels:
     created-by-prow: "true"
+    prow.k8s.io/context: ""
     prow.k8s.io/job: periodic-ipi-deprovision
+    prow.k8s.io/refs.base_ref: master
+    prow.k8s.io/refs.org: openshift
+    prow.k8s.io/refs.repo: ci-tools
     prow.k8s.io/type: periodic
   name: test-prowjob
 spec:

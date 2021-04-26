@@ -16,7 +16,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
+	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
+	pprofutil "k8s.io/test-infra/prow/pjutil/pprof"
 
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
@@ -28,6 +30,8 @@ type options struct {
 	mode string
 	producerOptions
 	consumerOptions
+
+	instrumentationOptions prowflagutil.InstrumentationOptions
 
 	loglevel string
 
@@ -47,6 +51,7 @@ type consumerOptions struct {
 
 func bindOptions(fs *flag.FlagSet) *options {
 	o := options{producerOptions: producerOptions{}}
+	o.instrumentationOptions.AddFlags(fs)
 	fs.StringVar(&o.mode, "mode", "", "Which mode to run in.")
 	fs.StringVar(&o.kubeconfig, "kubeconfig", "", "Path to a ~/.kube/config to use for querying Prometheuses. Each context will be considered a cluster to query.")
 	fs.IntVar(&o.port, "port", 0, "Port to serve admission webhooks on.")
@@ -89,7 +94,8 @@ func (o *options) validate() error {
 	} else {
 		logrus.SetLevel(level)
 	}
-	return nil
+
+	return o.instrumentationOptions.Validate(false)
 }
 
 func main() {
@@ -101,6 +107,8 @@ func main() {
 	if err := opts.validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to validate flags")
 	}
+
+	pprofutil.Instrument(opts.instrumentationOptions)
 
 	var cache cache
 	if opts.cacheDir != "" {
@@ -169,5 +177,5 @@ func mainAdmission(opts *options) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct client.")
 	}
-	go admit(opts.port, client)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, client)
 }

@@ -31,7 +31,7 @@ const (
 	PeriodicPrefix      = "periodic"
 )
 
-// DataWithInfo describes the metadata for a Prow job configuration file
+// Info describes the metadata for a Prow job configuration file
 type Info struct {
 	Org    string
 	Repo   string

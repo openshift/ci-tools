@@ -35,10 +35,10 @@ var (
 	admissionMetrics = metrics.NewMetrics("pod_scaler_admission")
 )
 
-func admit(port int, client buildclientv1.BuildV1Interface) {
+func admit(port, healthPort int, client buildclientv1.BuildV1Interface) {
 	logger := logrus.WithField("component", "admission")
 	logger.Info("Initializing admission webhook server.")
-	health := pjutil.NewHealth()
+	health := pjutil.NewHealthOnPort(healthPort)
 	health.ServeReady()
 	mutator, err := admission.StandaloneWebhook(&webhook.Admission{Handler: &podMutator{logger: logger, client: client}}, admission.StandaloneOptions{
 		MetricsPath: "/pods",

@@ -197,7 +197,9 @@ func mutate(secret *corev1.Secret, name, namespace string) (*corev1.Secret, erro
 }
 
 func releaseCluster(ctx context.Context, hiveClient ctrlruntimeclient.Client, clusterClaim *hivev1.ClusterClaim) error {
+	logrus.Info("Deleting cluster claim.")
 	if err := hiveClient.Delete(ctx, clusterClaim); err != nil {
+		logrus.WithField("claim.Name", clusterClaim.Name).WithField("claim.Namespace", clusterClaim.Namespace).Debug("Failed to delete cluster claim.")
 		return fmt.Errorf("failed to delete cluster claim %s in namespace %s: %w", clusterClaim.Name, clusterClaim.Namespace, err)
 	}
 	return nil

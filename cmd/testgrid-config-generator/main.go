@@ -104,7 +104,7 @@ func dashboardTabFor(name, description string) *config.DashboardTab {
 		Description:      description,
 		TestGroupName:    name,
 		BaseOptions:      "width=10&exclude-filter-by-regex=Monitor%5Cscluster&exclude-filter-by-regex=%5Eoperator.Run%20template.*container%20test%24",
-		OpenTestTemplate: &config.LinkTemplate{Url: fmt.Sprintf("%s/view/gcs/<gcs_prefix>/<changelist>", api.URLForService(api.ServiceProw))},
+		OpenTestTemplate: &config.LinkTemplate{Url: fmt.Sprintf("%s/view/gs/<gcs_prefix>/<changelist>", api.URLForService(api.ServiceProw))},
 		FileBugTemplate: &config.LinkTemplate{
 			Url: "https://bugzilla.redhat.com/enter_bug.cgi",
 			Options: []*config.LinkOptionsTemplate{

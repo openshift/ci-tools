@@ -555,7 +555,7 @@ func ValidateLiteralTestStep(validationArgs Args, step api.LiteralTestStep) (ret
 	if len(step.Commands) == 0 {
 		ret = append(ret, fmt.Errorf("%s: `commands` is required", context.fieldRoot))
 	} else {
-		ret = append(ret, validateCommands(step, context.fieldRoot)...)
+		ret = append(ret, validateCommands(step)...)
 	}
 
 	if step.BestEffort != nil && *step.BestEffort && step.Timeout == nil {
@@ -578,7 +578,7 @@ func ValidateLiteralTestStep(validationArgs Args, step api.LiteralTestStep) (ret
 	return
 }
 
-func validateCommands(test api.LiteralTestStep, fieldRootN string) []error {
+func validateCommands(test api.LiteralTestStep) []error {
 	var validationErrors []error
 
 	var commands = test.Commands

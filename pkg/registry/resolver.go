@@ -209,7 +209,7 @@ func (r *registry) process(validationArgs validation.Args, steps []api.TestStep,
 			errs = append(errs, err...)
 			if err == nil {
 				if validationArgs.ShouldValidate() {
-					errs = append(validation.ValidateLiteralTestStep(validationArgs, step))
+					errs = append(errs, validation.ValidateLiteralTestStep(validationArgs, step)...)
 				}
 				ret = append(ret, step)
 			}

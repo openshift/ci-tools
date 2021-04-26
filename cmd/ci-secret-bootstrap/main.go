@@ -36,6 +36,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
+	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 	vaultapi "github.com/openshift/ci-tools/pkg/api/vault"
 	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
 	"github.com/openshift/ci-tools/pkg/secrets"
@@ -49,17 +50,20 @@ type options struct {
 	force                bool
 	validateBWItemsUsage bool
 
-	kubeConfigPath  string
-	configPath      string
-	cluster         string
-	logLevel        string
-	impersonateUser string
+	kubeConfigPath      string
+	configPath          string
+	generatorConfigPath string
+	cluster             string
+	logLevel            string
+	impersonateUser     string
 
 	maxConcurrency int
 
-	secretsGetters map[string]coreclientset.SecretsGetter
-	config         secretbootstrap.Config
-	bwAllowUnused  flagutil.Strings
+	secretsGetters  map[string]coreclientset.SecretsGetter
+	config          secretbootstrap.Config
+	generatorConfig secretgenerator.Config
+
+	bwAllowUnused flagutil.Strings
 
 	validateOnly bool
 }
@@ -80,6 +84,7 @@ func parseOptions(censor *secrets.DynamicCensor) (options, error) {
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with oc command")
 	fs.StringVar(&o.kubeConfigPath, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests.")
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
+	fs.StringVar(&o.generatorConfigPath, "generator-config", "", "Path to the secret-generator config file.")
 	fs.StringVar(&o.cluster, "cluster", "", "If set, only provision secrets for this cluster")
 	fs.BoolVar(&o.force, "force", false, "If true, update the secrets even if existing one differs from Bitwarden items instead of existing with error. Default false.")
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
@@ -117,6 +122,14 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 	var config secretbootstrap.Config
 	if err := secretbootstrap.LoadConfigFromFile(o.configPath, &config); err != nil {
 		return err
+	}
+
+	if o.generatorConfigPath != "" {
+		var err error
+		o.generatorConfig, err = secretgenerator.LoadConfigFromPath(o.generatorConfigPath)
+		if err != nil {
+			return err
+		}
 	}
 
 	var kubeConfigs map[string]*rest.Config
@@ -757,11 +770,12 @@ func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClie
 	return utilerrors.NewAggregate(errs)
 }
 
-func validateBWItems(client secrets.ReadOnlyClient, secretConfigs []secretbootstrap.SecretConfig) error {
+func (o *options) validateBWItems(client secrets.ReadOnlyClient) error {
 	var errs []error
 
-	for _, config := range secretConfigs {
+	for _, config := range o.config.Secrets {
 		for _, item := range config.From {
+			logger := logrus.WithField("item", item.BWItem)
 
 			if item.DockerConfigJSONData != nil {
 				for _, data := range item.DockerConfigJSONData {
@@ -785,25 +799,41 @@ func validateBWItems(client secrets.ReadOnlyClient, secretConfigs []secretbootst
 					continue
 				}
 				if !hasItem {
-					errs = append(errs, fmt.Errorf("item %s doesn't exist", item.BWItem))
-					continue
+					if o.generatorConfig.IsItemGenerated(item.BWItem) {
+						logrus.Warn("Item doesn't exist but it will be generated")
+					} else {
+						errs = append(errs, fmt.Errorf("item %s doesn't exist", item.BWItem))
+						continue
+					}
 				}
 
 				if item.Field != "" {
 					if _, err := client.GetFieldOnItem(item.BWItem, item.Field); err != nil {
-						errs = append(errs, fmt.Errorf("field %s in item %s doesn't exist", item.Field, item.BWItem))
+						if o.generatorConfig.IsFieldGenerated(item.BWItem, item.Field) {
+							logger.WithField("field", item.Field).Warn("Field doesn't exist but it will be generated")
+						} else {
+							errs = append(errs, fmt.Errorf("field %s in item %s doesn't exist", item.Field, item.BWItem))
+						}
 					}
 				}
 
 				if item.Attachment != "" {
 					if _, err := client.GetAttachmentOnItem(item.BWItem, item.Attachment); err != nil {
-						errs = append(errs, fmt.Errorf("attachment %s in item %s doesn't exist", item.Attachment, item.BWItem))
+						if o.generatorConfig.IsFieldGenerated(item.BWItem, item.Attachment) {
+							logger.WithField("attachment", item.Attachment).Warn("Attachment doesn't exist but it will be generated")
+						} else {
+							errs = append(errs, fmt.Errorf("attachment %s in item %s doesn't exist", item.Attachment, item.BWItem))
+						}
 					}
 				}
 
 				if item.Attribute == secretbootstrap.AttributeTypePassword {
 					if _, err := client.GetPassword(item.BWItem); err != nil {
-						errs = append(errs, fmt.Errorf("password in item %s doesn't exist", item.BWItem))
+						if o.generatorConfig.IsFieldGenerated(item.BWItem, string(item.Attribute)) {
+							logger.WithField("attribute", item.Attribute).Warn("Attribute doesn't exist but it will be generated")
+						} else {
+							errs = append(errs, fmt.Errorf("password in item %s doesn't exist", item.BWItem))
+						}
 					}
 				}
 			}
@@ -848,7 +878,7 @@ func main() {
 			logrus.WithError(err).Fatal("failed to validate the config")
 		}
 
-		if err := validateBWItems(client, o.config.Secrets); err != nil {
+		if err := o.validateBWItems(client); err != nil {
 			logrus.WithError(err).Fatal("failed to validate items")
 		}
 

@@ -3,8 +3,10 @@ package registry
 import (
 	"errors"
 	"fmt"
+	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -25,6 +27,8 @@ func TestResolve(t *testing.T) {
 	nonExistentEnv := "NON_EXISTENT"
 	stepEnv := "STEP_ENV"
 	yes := true
+	defaultDuration := &prowv1.Duration{Duration: 1 * time.Minute}
+	trueRef := &[]bool{true}[0]
 	for _, testCase := range []struct {
 		name                  string
 		config                api.MultiStageTestConfiguration
@@ -699,9 +703,50 @@ func TestResolve(t *testing.T) {
 		expectedErr:           errors.New(`test/test: workflow/ipi-aws: parameter "NOT_THE_STEP_ENV" is overridden in [test/test] but not declared in any step`),
 		expectedValidationErr: errors.New(`workflow/ipi-aws: parameter "NOT_THE_STEP_ENV" is overridden in [workflow/ipi-aws] but not declared in any step`),
 	}, {
+		name: "Workflow with trap command with grace_period",
+		config: api.MultiStageTestConfiguration{
+			ClusterProfile: api.ClusterProfileAWS,
+			Workflow:       &awsWorkflow,
+		},
+		workflowMap: WorkflowByName{
+			awsWorkflow: {
+				ClusterProfile: api.ClusterProfileAWS,
+				Pre: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:          "trapper-keeper",
+						From:        "installer",
+						Commands:    `trap "echo Aw Snap!" SIGINT SIGTERM`,
+						GracePeriod: defaultDuration,
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						},
+						Environment: []api.StepParameter{
+							{Name: "STEP_ENV", Default: &stepEnv},
+						}},
+				}},
+			},
+		},
+		expectedRes: api.MultiStageTestConfigurationLiteral{
+			ClusterProfile: api.ClusterProfileAWS,
+			Pre: []api.LiteralTestStep{{
+				As:          "trapper-keeper",
+				From:        "installer",
+				Commands:    `trap "echo Aw Snap!" SIGINT SIGTERM`,
+				GracePeriod: defaultDuration,
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+				Environment: []api.StepParameter{
+					{Name: "STEP_ENV", Default: &stepEnv},
+				},
+			}},
+		},
+	}, {
 		name: "Workflow with trap command without grace_period",
 		config: api.MultiStageTestConfiguration{
-			ClusterProfile: api.ClusterProfileGCPCRIO,
+			ClusterProfile: api.ClusterProfileAWS,
 			Workflow:       &awsWorkflow,
 		},
 		workflowMap: WorkflowByName{
@@ -711,7 +756,7 @@ func TestResolve(t *testing.T) {
 					LiteralTestStep: &api.LiteralTestStep{
 						As:       "trapper-keeper",
 						From:     "installer",
-						Commands: "trap \"\" SIGINT",
+						Commands: `trap "echo Aw Snap!" SIGINT SIGTERM`,
 						Resources: api.ResourceRequirements{
 							Requests: api.ResourceList{"cpu": "1000m"},
 							Limits:   api.ResourceList{"memory": "2Gi"},
@@ -723,6 +768,49 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedErr: errors.New("test `trapper-keeper` has `commands` containing `trap` command, but test step is missing grace_period"),
+	}, {
+		name: "Workflow with best effort with timeout",
+		config: api.MultiStageTestConfiguration{
+			ClusterProfile: api.ClusterProfileAWS,
+			Workflow:       &awsWorkflow,
+		},
+		workflowMap: WorkflowByName{
+			awsWorkflow: {
+				ClusterProfile: api.ClusterProfileAWS,
+				Pre: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:         "best-effort",
+						From:       "installer",
+						Commands:   `openshift-cluster install`,
+						BestEffort: trueRef,
+						Timeout:    defaultDuration,
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						},
+						Environment: []api.StepParameter{
+							{Name: "STEP_ENV", Default: &stepEnv},
+						}},
+				}},
+			},
+		},
+		expectedRes: api.MultiStageTestConfigurationLiteral{
+			ClusterProfile: api.ClusterProfileAWS,
+			Pre: []api.LiteralTestStep{{
+				As:         "best-effort",
+				From:       "installer",
+				Commands:   `openshift-cluster install`,
+				BestEffort: trueRef,
+				Timeout:    defaultDuration,
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+				Environment: []api.StepParameter{
+					{Name: "STEP_ENV", Default: &stepEnv},
+				},
+			}},
+		},
 	}, {
 		name: "Workflow with best effort without timeout",
 		config: api.MultiStageTestConfiguration{
@@ -737,7 +825,7 @@ func TestResolve(t *testing.T) {
 						As:         "best-effort",
 						From:       "installer",
 						Commands:   "openshift-cluster install",
-						BestEffort: &[]bool{true}[0],
+						BestEffort: trueRef,
 						Resources: api.ResourceRequirements{
 							Requests: api.ResourceList{"cpu": "1000m"},
 							Limits:   api.ResourceList{"memory": "2Gi"},

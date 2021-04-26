@@ -1,7 +1,6 @@
 package validation
 
 import (
-	"bufio"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -64,9 +63,7 @@ func NewValidationArgs(context Context, testStage TestStage) Args {
 }
 
 func NoOpValidationArgs() Args {
-	return Args{
-		context: nil,
-	}
+	return Args{}
 }
 
 func (v *Args) ShouldValidate() bool {
@@ -581,15 +578,9 @@ func ValidateLiteralTestStep(validationArgs Args, step api.LiteralTestStep) (ret
 func validateCommands(test api.LiteralTestStep) []error {
 	var validationErrors []error
 
-	var commands = test.Commands
-	scanner := bufio.NewScanner(strings.NewReader(commands))
-
 	hasTrapCommand := false
-	for scanner.Scan() {
-		if trapPattern.MatchString(scanner.Text()) {
-			hasTrapCommand = true
-			break
-		}
+	if trapPattern.MatchString(test.Commands) {
+		hasTrapCommand = true
 	}
 
 	if hasTrapCommand && test.GracePeriod == nil {

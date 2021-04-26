@@ -47,6 +47,8 @@ type producerOptions struct {
 type consumerOptions struct {
 	port   int
 	uiPort int
+
+	certDir string
 }
 
 func bindOptions(fs *flag.FlagSet) *options {
@@ -56,6 +58,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.StringVar(&o.kubeconfig, "kubeconfig", "", "Path to a ~/.kube/config to use for querying Prometheuses. Each context will be considered a cluster to query.")
 	fs.IntVar(&o.port, "port", 0, "Port to serve admission webhooks on.")
 	fs.IntVar(&o.uiPort, "ui-port", 0, "Port to serve frontend on.")
+	fs.StringVar(&o.certDir, "serving-cert-dir", "", "Path to directory with serving certificate and key for the admission webhook server.")
 	fs.StringVar(&o.loglevel, "loglevel", "debug", "Logging level.")
 	fs.StringVar(&o.cacheDir, "cache-dir", "", "Local directory holding cache data (for development mode).")
 	fs.StringVar(&o.cacheBucket, "cache-bucket", "", "GCS bucket name holding cached Prometheus data.")
@@ -77,6 +80,9 @@ func (o *options) validate() error {
 	case "consumer.admission":
 		if o.port == 0 {
 			return errors.New("--port is required")
+		}
+		if o.certDir == "" {
+			return errors.New("--serving-cert-dir is required")
 		}
 	default:
 		return errors.New("--mode must be either \"producer\", \"consumer.ui\", or \"consumer.admission\"")
@@ -177,5 +183,5 @@ func mainAdmission(opts *options) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct client.")
 	}
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, client)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client)
 }

@@ -1,8 +1,10 @@
 package validation
 
 import (
+	"bufio"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,15 +17,17 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
-type testStage uint8
+type TestStage uint8
 
 const (
-	testStagePre testStage = iota
-	testStageTest
-	testStagePost
+	TestStagePre TestStage = iota
+	TestStageTest
+	TestStagePost
 )
 
-type context struct {
+var trapPattern = regexp.MustCompile(`^\s*trap\s*['"]?\w*['"]?\s*\w*`)
+
+type Context struct {
 	fieldRoot  string
 	env        api.TestEnvironment
 	seen       sets.String
@@ -31,8 +35,8 @@ type context struct {
 	releases   sets.String
 }
 
-func newContext(fieldRoot string, env api.TestEnvironment, releases sets.String) context {
-	return context{
+func NewContext(fieldRoot string, env api.TestEnvironment, releases sets.String) Context {
+	return Context{
 		fieldRoot:  fieldRoot,
 		env:        env,
 		seen:       sets.NewString(),
@@ -41,10 +45,32 @@ func newContext(fieldRoot string, env api.TestEnvironment, releases sets.String)
 	}
 }
 
-func (c *context) forField(name string) context {
+func (c *Context) forField(name string) Context {
 	ret := *c
 	ret.fieldRoot = c.fieldRoot + name
 	return ret
+}
+
+type Args struct {
+	context   *Context
+	testStage TestStage
+}
+
+func NewValidationArgs(context Context, testStage TestStage) Args {
+	return Args{
+		context:   &context,
+		testStage: testStage,
+	}
+}
+
+func NoOpValidationArgs() Args {
+	return Args{
+		context: nil,
+	}
+}
+
+func (v *Args) ShouldValidate() bool {
+	return v.context != nil
 }
 
 func validateTestStepConfiguration(fieldRoot string, input []api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
@@ -394,28 +420,32 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 			clusterCount++
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
-		context := newContext(fieldRoot, testConfig.Environment, releases)
+		context := NewContext(fieldRoot, testConfig.Environment, releases)
 		validationErrors = append(validationErrors, validateLeases(context.forField(".leases"), testConfig.Leases)...)
-		validationErrors = append(validationErrors, validateTestSteps(context.forField(".pre"), testStagePre, testConfig.Pre)...)
-		validationErrors = append(validationErrors, validateTestSteps(context.forField(".test"), testStageTest, testConfig.Test)...)
-		validationErrors = append(validationErrors, validateTestSteps(context.forField(".post"), testStagePost, testConfig.Post)...)
+		validationErrors = append(validationErrors, validateTestSteps(context.forField(".pre"), TestStagePre, testConfig.Pre)...)
+		validationErrors = append(validationErrors, validateTestSteps(context.forField(".test"), TestStageTest, testConfig.Test)...)
+		validationErrors = append(validationErrors, validateTestSteps(context.forField(".post"), TestStagePost, testConfig.Post)...)
 	}
 	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
 		typeCount++
-		context := newContext(fieldRoot, testConfig.Environment, releases)
+		context := NewContext(fieldRoot, testConfig.Environment, releases)
 		if testConfig.ClusterProfile != "" {
 			clusterCount++
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
 		validationErrors = append(validationErrors, validateLeases(context.forField(".leases"), testConfig.Leases)...)
+
 		for i, s := range testConfig.Pre {
-			validationErrors = append(validationErrors, validateLiteralTestStep(context.forField(fmt.Sprintf(".pre[%d]", i)), testStagePre, s)...)
+			var validationArgs = NewValidationArgs(context.forField(fmt.Sprintf(".pre[%d]", i)), TestStagePre)
+			validationErrors = append(validationErrors, ValidateLiteralTestStep(validationArgs, s)...)
 		}
 		for i, s := range testConfig.Test {
-			validationErrors = append(validationErrors, validateLiteralTestStep(context.forField(fmt.Sprintf(".test[%d]", i)), testStageTest, s)...)
+			var validationArgs = NewValidationArgs(context.forField(fmt.Sprintf(".test[%d]", i)), TestStageTest)
+			validationErrors = append(validationErrors, ValidateLiteralTestStep(validationArgs, s)...)
 		}
 		for i, s := range testConfig.Post {
-			validationErrors = append(validationErrors, validateLiteralTestStep(context.forField(fmt.Sprintf(".post[%d]", i)), testStagePost, s)...)
+			var validationArgs = NewValidationArgs(context.forField(fmt.Sprintf(".post[%d]", i)), TestStagePost)
+			validationErrors = append(validationErrors, ValidateLiteralTestStep(validationArgs, s)...)
 		}
 	}
 	if typeCount == 0 {
@@ -434,18 +464,19 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 	return validationErrors
 }
 
-func validateTestSteps(context context, stage testStage, steps []api.TestStep) (ret []error) {
+func validateTestSteps(context Context, stage TestStage, steps []api.TestStep) (ret []error) {
 	for i, s := range steps {
 		contextI := context.forField(fmt.Sprintf("[%d]", i))
 		ret = append(ret, validateTestStep(&contextI, s)...)
 		if s.LiteralTestStep != nil {
-			ret = append(ret, validateLiteralTestStep(contextI, stage, *s.LiteralTestStep)...)
+			var validationArgs = NewValidationArgs(contextI, stage)
+			ret = append(ret, ValidateLiteralTestStep(validationArgs, *s.LiteralTestStep)...)
 		}
 	}
 	return
 }
 
-func validateTestStep(context *context, step api.TestStep) (ret []error) {
+func validateTestStep(context *Context, step api.TestStep) (ret []error) {
 	if (step.LiteralTestStep != nil && step.Reference != nil) ||
 		(step.LiteralTestStep != nil && step.Chain != nil) ||
 		(step.Reference != nil && step.Chain != nil) {
@@ -477,7 +508,8 @@ func validateTestStep(context *context, step api.TestStep) (ret []error) {
 	return
 }
 
-func validateLiteralTestStep(context context, stage testStage, step api.LiteralTestStep) (ret []error) {
+func ValidateLiteralTestStep(validationArgs Args, step api.LiteralTestStep) (ret []error) {
+	var context = *validationArgs.context
 	if len(step.As) == 0 {
 		ret = append(ret, fmt.Errorf("%s: `as` is required", context.fieldRoot))
 	} else if context.seen.Has(step.As) {
@@ -522,7 +554,14 @@ func validateLiteralTestStep(context context, stage testStage, step api.LiteralT
 	}
 	if len(step.Commands) == 0 {
 		ret = append(ret, fmt.Errorf("%s: `commands` is required", context.fieldRoot))
+	} else {
+		ret = append(ret, validateCommands(step, context.fieldRoot)...)
 	}
+
+	if step.BestEffort != nil && *step.BestEffort && step.Timeout == nil {
+		ret = append(ret, fmt.Errorf("test %s contains best_effort without timeout", step.As))
+	}
+
 	ret = append(ret, validateResourceRequirements(context.fieldRoot+".resources", step.Resources)...)
 	ret = append(ret, validateCredentials(context.fieldRoot, step.Credentials)...)
 	if err := validateParameters(&context, step.Environment); err != nil {
@@ -530,13 +569,34 @@ func validateLiteralTestStep(context context, stage testStage, step api.LiteralT
 	}
 	ret = append(ret, validateDependencies(context.fieldRoot, step.Dependencies)...)
 	ret = append(ret, validateLeases(context.forField(".leases"), step.Leases)...)
-	switch stage {
-	case testStagePre, testStageTest:
+	switch validationArgs.testStage {
+	case TestStagePre, TestStageTest:
 		if step.OptionalOnSuccess != nil {
 			ret = append(ret, fmt.Errorf("%s: `optional_on_success` is only allowed for Post steps", context.fieldRoot))
 		}
 	}
 	return
+}
+
+func validateCommands(test api.LiteralTestStep, fieldRootN string) []error {
+	var validationErrors []error
+
+	var commands = test.Commands
+	scanner := bufio.NewScanner(strings.NewReader(commands))
+
+	hasTrapCommand := false
+	for scanner.Scan() {
+		if trapPattern.MatchString(scanner.Text()) {
+			hasTrapCommand = true
+			break
+		}
+	}
+
+	if hasTrapCommand && test.GracePeriod == nil {
+		validationErrors = append(validationErrors, fmt.Errorf("test `%s` has `commands` containing `trap` command, but test step is missing grace_period", test.As))
+	}
+
+	return validationErrors
 }
 
 func validateCredentials(fieldRoot string, credentials []api.CredentialReference) []error {
@@ -584,7 +644,7 @@ func validateCredentials(fieldRoot string, credentials []api.CredentialReference
 	return errs
 }
 
-func validateParameters(context *context, params []api.StepParameter) error {
+func validateParameters(context *Context, params []api.StepParameter) error {
 	var missing []string
 	for _, param := range params {
 		if param.Default != nil {
@@ -631,7 +691,7 @@ func validateDNSConfig(fieldRoot string, searches []api.StepDNSConfig) (ret []er
 	return errs
 }
 
-func validateLeases(context context, leases []api.StepLease) (ret []error) {
+func validateLeases(context Context, leases []api.StepLease) (ret []error) {
 	for i, l := range leases {
 		if l.ResourceType == "" {
 			ret = append(ret, fmt.Errorf("%s[%d]: 'resource_type' cannot be empty", context.fieldRoot, i))

@@ -121,7 +121,15 @@ func TestInlineCiopConfig(t *testing.T) {
 			{
 				As: "test1",
 				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
-					Pre: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{As: "test1-from-unresolved"}}},
+					Pre: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{
+						As:       "test1-from-unresolved",
+						From:     "installer",
+						Commands: "openshift-cluster install",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						},
+					}}},
 				},
 			},
 			{
@@ -138,7 +146,13 @@ func TestInlineCiopConfig(t *testing.T) {
 			{
 				As: "test1",
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-					Pre: []api.LiteralTestStep{{As: "test1-from-unresolved"}},
+					Pre: []api.LiteralTestStep{{As: "test1-from-unresolved",
+						From:     "installer",
+						Commands: "openshift-cluster install",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}}},
 				},
 			},
 		},

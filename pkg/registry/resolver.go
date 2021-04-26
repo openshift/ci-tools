@@ -2,7 +2,7 @@ package registry
 
 import (
 	"fmt"
-
+	"github.com/openshift/ci-tools/pkg/validation"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -24,15 +24,17 @@ type ObserverByName map[string]api.Observer
 func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName, observersByName ObserverByName) error {
 	reg := registry{stepsByName, chainsByName, workflowsByName, observersByName}
 	var ret []error
+	var validationArgs = validation.NoOpValidationArgs()
+
 	for k := range chainsByName {
-		if _, err := reg.process([]api.TestStep{{Chain: &k}}, sets.NewString(), stackForChain()); err != nil {
+		if _, err := reg.process(validationArgs, []api.TestStep{{Chain: &k}}, sets.NewString(), stackForChain()); err != nil {
 			ret = append(ret, err...)
 		}
 	}
 	for k, v := range workflowsByName {
 		stack := stackForWorkflow(k, v.Environment, v.Dependencies)
 		for _, s := range [][]api.TestStep{v.Pre, v.Test, v.Post} {
-			if _, err := reg.process(s, sets.NewString(), stack); err != nil {
+			if _, err := reg.process(validationArgs, s, sets.NewString(), stack); err != nil {
 				ret = append(ret, err...)
 			}
 		}
@@ -103,15 +105,18 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 	if config.Workflow != nil {
 		stack.push(stackRecordForTest("workflow/"+*config.Workflow, nil, nil))
 	}
-	pre, errs := r.process(config.Pre, sets.NewString(), stack)
+	releases := sets.NewString()
+	context := validation.NewContext("", config.Environment, releases)
+
+	pre, errs := r.process(validation.NewValidationArgs(context, validation.TestStagePre), config.Pre, sets.NewString(), stack)
 	expandedFlow.Pre = append(expandedFlow.Pre, pre...)
 	resolveErrors = append(resolveErrors, errs...)
 
-	test, errs := r.process(config.Test, sets.NewString(), stack)
+	test, errs := r.process(validation.NewValidationArgs(context, validation.TestStageTest), config.Test, sets.NewString(), stack)
 	expandedFlow.Test = append(expandedFlow.Test, test...)
 	resolveErrors = append(resolveErrors, errs...)
 
-	post, errs := r.process(config.Post, sets.NewString(), stack)
+	post, errs := r.process(validation.NewValidationArgs(context, validation.TestStagePost), config.Post, sets.NewString(), stack)
 	expandedFlow.Post = append(expandedFlow.Post, post...)
 	resolveErrors = append(resolveErrors, errs...)
 	resolveErrors = append(resolveErrors, stack.checkUnused(&stack.records[0])...)
@@ -193,16 +198,19 @@ func mergeLeases(dst, src []api.StepLease) ([]api.StepLease, error) {
 	return dst, nil
 }
 
-func (r *registry) process(steps []api.TestStep, seen sets.String, stack stack) (ret []api.LiteralTestStep, errs []error) {
+func (r *registry) process(validationArgs validation.Args, steps []api.TestStep, seen sets.String, stack stack) (ret []api.LiteralTestStep, errs []error) {
 	for _, step := range steps {
 		if step.Chain != nil {
-			steps, err := r.processChain(&step, seen, stack)
+			steps, err := r.processChain(validationArgs, &step, seen, stack)
 			errs = append(errs, err...)
 			ret = append(ret, steps...)
 		} else {
 			step, err := r.processStep(&step, seen, stack)
 			errs = append(errs, err...)
 			if err == nil {
+				if validationArgs.ShouldValidate() {
+					errs = append(validation.ValidateLiteralTestStep(validationArgs, step))
+				}
 				ret = append(ret, step)
 			}
 		}
@@ -210,7 +218,7 @@ func (r *registry) process(steps []api.TestStep, seen sets.String, stack stack) 
 	return
 }
 
-func (r *registry) processChain(step *api.TestStep, seen sets.String, stack stack) ([]api.LiteralTestStep, []error) {
+func (r *registry) processChain(validationArgs validation.Args, step *api.TestStep, seen sets.String, stack stack) ([]api.LiteralTestStep, []error) {
 	name := *step.Chain
 	chain, ok := r.chainsByName[name]
 	if !ok {
@@ -219,7 +227,7 @@ func (r *registry) processChain(step *api.TestStep, seen sets.String, stack stac
 	rec := stackRecordForStep("chain/"+name, chain.Environment, nil)
 	stack.push(rec)
 	defer stack.pop()
-	ret, err := r.process(chain.Steps, seen, stack)
+	ret, err := r.process(validationArgs, chain.Steps, seen, stack)
 	err = append(err, stack.checkUnused(&rec)...)
 	return ret, err
 }

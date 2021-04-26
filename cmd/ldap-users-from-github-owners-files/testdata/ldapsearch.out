@@ -1,0 +1,8 @@
+dn: uid=steve-ldap,ou=users,dc=redhat,dc=com
+rhatSocialURL: Github->https://github.com/stevekuznetsov
+uid: steve-ldap
+
+dn: uid=alvaro-ldap,ou=users,dc=redhat,dc=com
+rhatSocialURL: Github->https://github.com/alvaroaleman
+uid: alvaro-ldap
+

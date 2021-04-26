@@ -276,7 +276,9 @@ func GetFreePort(t TestingTInterface) string {
 		port := strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
 		if _, previouslyAllocated := ports.LoadOrStore(port, nil); !previouslyAllocated {
 			// we've never seen this before, we can use it
+			t.Logf("found a never-before-seen port, returning: %s", port)
 			return port
 		}
+		t.Logf("found a previously-seen port, retrying: %s", port)
 	}
 }

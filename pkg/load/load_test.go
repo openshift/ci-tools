@@ -3,8 +3,6 @@ package load
 import (
 	"compress/gzip"
 	"encoding/json"
-	"github.com/ghodss/yaml"
-	"github.com/google/go-cmp/cmp"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +11,9 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/ghodss/yaml"
+	"github.com/google/go-cmp/cmp"
 
 	"k8s.io/apimachinery/pkg/util/diff"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"

@@ -19,6 +19,7 @@ import (
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
 	pprofutil "k8s.io/test-infra/prow/pjutil/pprof"
+	"k8s.io/test-infra/prow/version"
 
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
@@ -105,6 +106,7 @@ func (o *options) validate() error {
 }
 
 func main() {
+	logrus.Infof("%s version %s", version.Name, version.Version)
 	flagSet := flag.NewFlagSet("", flag.ExitOnError)
 	opts := bindOptions(flagSet)
 	if err := flagSet.Parse(os.Args[1:]); err != nil {

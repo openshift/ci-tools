@@ -9,6 +9,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/pjutil"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -25,11 +26,15 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 	logger.Info("Initializing admission webhook server.")
 	health := pjutil.NewHealthOnPort(healthPort)
 	health.ServeReady()
+	decoder, err := admission.NewDecoder(scheme.Scheme)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create decoder from scheme.")
+	}
 	server := webhook.Server{
 		Port:    port,
 		CertDir: certDir,
 	}
-	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client}})
+	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder}})
 	logger.Info("Serving admission webhooks.")
 	if err := server.StartStandalone(interrupts.Context(), nil); err != nil {
 		logrus.WithError(err).Fatal("Failed to serve webhooks.")
@@ -47,14 +52,16 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 
 	err := m.decoder.Decode(req, pod)
 	if err != nil {
+		logrus.WithError(err).Error("Failed to decode raw object as Pod.")
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 	buildName, isBuildPod := pod.Labels[buildv1.BuildLabel]
 	if !isBuildPod {
+		logrus.Trace("Allowing Pod, it is not implementing a Build.")
 		return admission.Allowed("Not a Pod implementing a Build.")
 	}
 	logger := m.logger.WithField("build", buildName)
-	logger.Debug("Handling labels on Pod created for a Build.")
+	logger.Trace("Handling labels on Pod created for a Build.")
 	build, err := m.client.Builds(pod.Namespace).Get(ctx, buildName, metav1.GetOptions{})
 	if err != nil {
 		logger.WithError(err).Error("Could not get Build for Pod.")
@@ -64,6 +71,7 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
+		logger.WithError(err).Error("Could not marshal mutated Pod.")
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
@@ -81,10 +89,4 @@ func mutatePod(pod *corev1.Pod, build *buildv1.Build) {
 			pod.Labels[label] = buildValue
 		}
 	}
-}
-
-//nolint:unparam
-func (m *podMutator) InjectDecoder(d *admission.Decoder) error {
-	m.decoder = d
-	return nil
 }

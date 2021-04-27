@@ -993,59 +993,62 @@ func (o *options) initializeNamespace() error {
 	//
 	// We can also only annotate the project *after* the SSAR check above, which
 	// means that if SSAR fails, the project will *not* be annotated for cleanup.
-	updates := map[string]string{}
+	annotationUpdates := map[string]string{}
 	if o.idleCleanupDuration > 0 {
 		if o.idleCleanupDurationSet {
 			logrus.Debugf("Setting a soft TTL of %s for the namespace", o.idleCleanupDuration.String())
 		}
-		updates[nsttl.AnnotationIdleCleanupDurationTTL] = o.idleCleanupDuration.String()
+		annotationUpdates[nsttl.AnnotationIdleCleanupDurationTTL] = o.idleCleanupDuration.String()
 	}
 
 	if o.cleanupDuration > 0 {
 		if o.cleanupDurationSet {
 			logrus.Debugf("Setting a hard TTL of %s for the namespace", o.cleanupDuration.String())
 		}
-		updates[nsttl.AnnotationCleanupDurationTTL] = o.cleanupDuration.String()
+		annotationUpdates[nsttl.AnnotationCleanupDurationTTL] = o.cleanupDuration.String()
 	}
 
 	// This label makes sure that the namespace is active, and the value will be updated
 	// if the namespace will be reused.
-	updates[nsttl.AnnotationNamespaceLastActive] = time.Now().Format(time.RFC3339)
+	annotationUpdates[nsttl.AnnotationNamespaceLastActive] = time.Now().Format(time.RFC3339)
 
-	if len(updates) > 0 {
-		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			ns := &coreapi.Namespace{}
-			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: o.namespace}, ns); err != nil {
-				return err
-			}
-
-			if ns.Annotations == nil {
-				ns.Annotations = make(map[string]string)
-			}
-			for key, value := range updates {
-				// allow specific annotations to be skipped if they are already set and the user didn't ask
-				switch key {
-				case nsttl.AnnotationCleanupDurationTTL:
-					if !o.cleanupDurationSet && len(ns.Annotations[key]) != 0 {
-						continue
-					}
-				case nsttl.AnnotationIdleCleanupDurationTTL:
-					if !o.idleCleanupDurationSet && len(ns.Annotations[key]) != 0 {
-						continue
-					}
-				}
-				ns.ObjectMeta.Annotations[key] = value
-			}
-
-			updateErr := client.Update(ctx, ns)
-			if kerrors.IsForbidden(updateErr) {
-				logrus.WithError(err).Warn("Could not add annotations because you do not have permission to update the namespace.")
-				return nil
-			}
-			return updateErr
-		}); err != nil {
-			return fmt.Errorf("could not update namespace to add TTLs and active annotations: %w", err)
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		ns := &coreapi.Namespace{}
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: o.namespace}, ns); err != nil {
+			return err
 		}
+
+		if ns.Labels == nil {
+			ns.Labels = map[string]string{}
+		}
+		ns.Labels[api.AutoScalePodsLabel] = "true"
+
+		if ns.Annotations == nil {
+			ns.Annotations = make(map[string]string)
+		}
+		for key, value := range annotationUpdates {
+			// allow specific annotations to be skipped if they are already set and the user didn't ask
+			switch key {
+			case nsttl.AnnotationCleanupDurationTTL:
+				if !o.cleanupDurationSet && len(ns.Annotations[key]) != 0 {
+					continue
+				}
+			case nsttl.AnnotationIdleCleanupDurationTTL:
+				if !o.idleCleanupDurationSet && len(ns.Annotations[key]) != 0 {
+					continue
+				}
+			}
+			ns.ObjectMeta.Annotations[key] = value
+		}
+
+		updateErr := client.Update(ctx, ns)
+		if kerrors.IsForbidden(updateErr) {
+			logrus.WithError(err).Warn("Could not edit namespace because you do not have permission to update the namespace.")
+			return nil
+		}
+		return updateErr
+	}); err != nil {
+		return fmt.Errorf("could not update namespace to add labels, TTLs and active annotations: %w", err)
 	}
 
 	pullStart := time.Now()

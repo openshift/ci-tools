@@ -37,6 +37,8 @@ const (
 	HiveControlPlaneKubeconfigSecret = "app.ci-hive-credentials"
 	// HiveControlPlaneKubeconfigSecretArg is the flag to ci-operator
 	HiveControlPlaneKubeconfigSecretArg = "--hive-kubeconfig=/secrets/app.ci-hive-credentials/kubeconfig"
+
+	AutoScalePodsLabel = "ci.openshift.io/scale-pods"
 )
 
 var (

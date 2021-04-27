@@ -491,6 +491,8 @@ func TestValidateTestSteps(t *testing.T) {
 	myReference := "my-reference"
 	asReference := "as"
 	yes := true
+	defaultDuration := &prowv1.Duration{Duration: 1 * time.Minute}
+	trueRef := &[]bool{true}[0]
 	for _, tc := range []struct {
 		name     string
 		steps    []api.TestStep
@@ -770,6 +772,63 @@ func TestValidateTestSteps(t *testing.T) {
 		errs: []error{
 			errors.New("test[0]: `as` is required"),
 			errors.New("test[1]: `as` is required"),
+		},
+	}, {
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:          "trapper-keeper",
+				From:        "installer",
+				Commands:    `trap "echo Aw Snap!" SIGINT SIGTERM`,
+				GracePeriod: defaultDuration,
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				}},
+		}},
+	}, {
+		name: "Workflow with trap command without grace_period",
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:       "trapper-keeper",
+				From:     "installer",
+				Commands: `trap "echo Aw Snap!" SIGINT SIGTERM`,
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				}},
+		}},
+		errs: []error{
+			errors.New("test `trapper-keeper` has `commands` containing `trap` command, but test step is missing grace_period"),
+		},
+	}, {
+		name: "Workflow with best effort with timeout",
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:         "best-effort",
+				From:       "installer",
+				Commands:   `openshift-cluster install`,
+				BestEffort: trueRef,
+				Timeout:    defaultDuration,
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				}},
+		}},
+	}, {
+		name: "Workflow with best effort without timeout",
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:         "best-effort",
+				From:       "installer",
+				Commands:   "openshift-cluster install",
+				BestEffort: trueRef,
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				}},
+		}},
+		errs: []error{
+			errors.New("test best-effort contains best_effort without timeout"),
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {

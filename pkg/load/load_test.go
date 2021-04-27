@@ -3,6 +3,8 @@ package load
 import (
 	"compress/gzip"
 	"encoding/json"
+	"github.com/ghodss/yaml"
+	"github.com/google/go-cmp/cmp"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -11,9 +13,6 @@ import (
 	"reflect"
 	"sort"
 	"testing"
-
-	"github.com/ghodss/yaml"
-	"github.com/google/go-cmp/cmp"
 
 	"k8s.io/apimachinery/pkg/util/diff"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -848,6 +847,22 @@ func TestRegistry(t *testing.T) {
 		}, {
 			name:          "Read registry where ref has an extra, invalid field",
 			registryDir:   "../../test/multistage-registry/invalid-field",
+			flatRegistry:  false,
+			references:    nil,
+			chains:        nil,
+			workflows:     nil,
+			expectedError: true,
+		}, {
+			name:          "Read registry where ref has command containing trap without grace period specified",
+			registryDir:   "../../test/multistage-registry/trap-without-grace-period",
+			flatRegistry:  false,
+			references:    nil,
+			chains:        nil,
+			workflows:     nil,
+			expectedError: true,
+		}, {
+			name:          "Read registry where ref has best effort defined without timeout",
+			registryDir:   "../../test/multistage-registry/best-effort-without-timeout",
 			flatRegistry:  false,
 			references:    nil,
 			chains:        nil,

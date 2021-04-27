@@ -1,0 +1,1 @@
+trap "echo uh oh" SIGINT SIGTERM

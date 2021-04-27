@@ -644,8 +644,8 @@ func (client *imageImportStatusSettingClient) Create(ctx context.Context, obj ct
 	return client.Client.Create(ctx, obj, opts...)
 }
 
-// indexConfigsByTestInputImageStramTag must be an agents.IndexFn
-var _ agents.IndexFn = indexConfigsByTestInputImageStramTag(nil)
+// indexConfigsByTestInputImageStreamTag must be an agents.IndexFn
+var _ agents.IndexFn = indexConfigsByTestInputImageStreamTag(nil)
 
 func TestTestImageStramTagImportHandlerRoundTrips(t *testing.T) {
 	const cluster, namespace, name = "cluster", "namespace", "name"

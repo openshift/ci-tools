@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -76,6 +77,20 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct vault client")
 	}
+
+	healthMux := http.NewServeMux()
+	healthMux.HandleFunc("/healthz/ready", func(w http.ResponseWriter, r *http.Request) {
+		if privilegedVaultClient.IsCredentialExpired() {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "Vault credential expired")
+		}
+		fmt.Fprintf(w, "OK")
+	})
+	healthServer := &http.Server{
+		Addr:    ":" + strconv.Itoa(o.InstrumentationOptions.HealthPort),
+		Handler: healthMux,
+	}
+	interrupts.ListenAndServe(healthServer, 0)
 
 	metrics.ExposeMetrics(version.Name, config.PushGateway{}, o.MetricsPort)
 

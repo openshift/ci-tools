@@ -145,6 +145,6 @@ func (r *reporter) Report(err error) {
 	}()
 	if resp != nil && resp.StatusCode != http.StatusOK {
 		body, _ := ioutil.ReadAll(resp.Body)
-		logrus.Tracef("response for report was not 200: %v", body)
+		logrus.Tracef("response for report was not 200: %v", string(body))
 	}
 }

@@ -492,7 +492,6 @@ func TestValidateTestSteps(t *testing.T) {
 	asReference := "as"
 	yes := true
 	defaultDuration := &prowv1.Duration{Duration: 1 * time.Minute}
-	trueRef := &[]bool{true}[0]
 	for _, tc := range []struct {
 		name     string
 		steps    []api.TestStep
@@ -807,7 +806,7 @@ func TestValidateTestSteps(t *testing.T) {
 				As:         "best-effort",
 				From:       "installer",
 				Commands:   `openshift-cluster install`,
-				BestEffort: trueRef,
+				BestEffort: &yes,
 				Timeout:    defaultDuration,
 				Resources: api.ResourceRequirements{
 					Requests: api.ResourceList{"cpu": "1000m"},
@@ -821,7 +820,7 @@ func TestValidateTestSteps(t *testing.T) {
 				As:         "best-effort",
 				From:       "installer",
 				Commands:   "openshift-cluster install",
-				BestEffort: trueRef,
+				BestEffort: &yes,
 				Resources: api.ResourceRequirements{
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
@@ -832,11 +831,11 @@ func TestValidateTestSteps(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			context := NewContext("test", nil, tc.releases)
+			context := newContext("test", nil, tc.releases)
 			if tc.seen != nil {
 				context.seen = tc.seen
 			}
-			ret := validateTestSteps(context, TestStageTest, tc.steps)
+			ret := validateTestSteps(context, testStageTest, tc.steps)
 			if len(ret) > 0 && len(tc.errs) == 0 {
 				t.Fatalf("Unexpected error %v", ret)
 			}
@@ -872,11 +871,11 @@ func TestValidatePostSteps(t *testing.T) {
 		}},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			context := NewContext("test", nil, tc.releases)
+			context := newContext("test", nil, tc.releases)
 			if tc.seen != nil {
 				context.seen = tc.seen
 			}
-			ret := validateTestSteps(context, TestStagePost, tc.steps)
+			ret := validateTestSteps(context, testStagePost, tc.steps)
 			if !errListMessagesEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
 			}
@@ -908,18 +907,16 @@ func TestValidateParameters(t *testing.T) {
 		err:    []error{errors.New("test: unresolved parameter(s): [TEST1]")},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ValidateLiteralTestStep(
-				NewValidationArgs(NewContext("test", tc.env, tc.releases), TestStageTest),
-				api.LiteralTestStep{
-					As:       "as",
-					From:     "from",
-					Commands: "commands",
-					Resources: api.ResourceRequirements{
-						Requests: api.ResourceList{"cpu": "1"},
-						Limits:   api.ResourceList{"memory": "1m"},
-					},
-					Environment: tc.params,
-				})
+			err := validateLiteralTestStep(newContext("test", tc.env, tc.releases), testStageTest, api.LiteralTestStep{
+				As:       "as",
+				From:     "from",
+				Commands: "commands",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1"},
+					Limits:   api.ResourceList{"memory": "1m"},
+				},
+				Environment: tc.params,
+			})
 			if diff := diff.ObjectReflectDiff(err, tc.err); diff != "<no diffs>" {
 				t.Errorf("incorrect error: %s", diff)
 			}

@@ -10,7 +10,6 @@ import (
 	"gopkg.in/robfig/cron.v2"
 
 	"k8s.io/apimachinery/pkg/api/resource"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
 
@@ -57,14 +56,14 @@ func (c *context) forField(name string) context {
 	return ret
 }
 
-var trapPattern = regexp.MustCompile(`^\s*trap\s*['"]?\w*['"]?\s*\w*`)
+var trapPattern = regexp.MustCompile(`(^|\W)\s*trap\s*['"]?\w*['"]?\s*\w*`)
 
 // IsValidReference validates the contents of a registry reference.
 // Checks that are context-dependent (whether all parameters are set in a parent
 // component, the image references exist in the test configuration, etc.) are
 // not performed.
-func IsValidReference(step api.LiteralTestStep) error {
-	return utilerrors.NewAggregate(validateLiteralTestStep(context{fieldRoot: step.As}, testStageUnknown, step))
+func IsValidReference(step api.LiteralTestStep) []error {
+	return validateLiteralTestStep(context{fieldRoot: step.As}, testStageUnknown, step)
 }
 
 func validateTestStepConfiguration(fieldRoot string, input []api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
@@ -572,12 +571,7 @@ func validateLiteralTestStep(context context, stage testStage, step api.LiteralT
 func validateCommands(test api.LiteralTestStep) []error {
 	var validationErrors []error
 
-	hasTrapCommand := false
-	if trapPattern.MatchString(test.Commands) {
-		hasTrapCommand = true
-	}
-
-	if hasTrapCommand && test.GracePeriod == nil {
+	if trapPattern.MatchString(test.Commands) && test.GracePeriod == nil {
 		validationErrors = append(validationErrors, fmt.Errorf("test `%s` has `commands` containing `trap` command, but test step is missing grace_period", test.As))
 	}
 
@@ -683,10 +677,12 @@ func validateLeases(context context, leases []api.StepLease) (ret []error) {
 		}
 		if l.Env == "" {
 			ret = append(ret, fmt.Errorf("%s[%d]: 'env' cannot be empty", context.fieldRoot, i))
-		} else if context.leasesSeen.Has(l.Env) {
-			ret = append(ret, fmt.Errorf("%s[%d]: duplicate environment variable: %s", context.fieldRoot, i, l.Env))
-		} else {
-			context.leasesSeen.Insert(l.Env)
+		} else if context.leasesSeen != nil {
+			if context.leasesSeen.Has(l.Env) {
+				ret = append(ret, fmt.Errorf("%s[%d]: duplicate environment variable: %s", context.fieldRoot, i, l.Env))
+			} else {
+				context.leasesSeen.Insert(l.Env)
+			}
 		}
 	}
 	return

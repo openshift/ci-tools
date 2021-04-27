@@ -1,1 +1,1 @@
-trap "echo uh oh" SIGINT SIGTERM
+trap "echo uh oh" EXIT

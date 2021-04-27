@@ -525,6 +525,12 @@ type TestStepConfiguration struct {
 	// create a periodic job instead of a presubmit
 	Interval *string `json:"interval,omitempty"`
 
+	// ReleaseController configures prowgen to create a periodic that
+	// does not get run by prow and instead is run by release-controller.
+	// The job must be configured as a verification or periodic job in a
+	// release-controller config file when this field is set to `true`.
+	ReleaseController bool `json:"release_controller,omitempty"`
+
 	// Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit
 	Postsubmit bool `json:"postsubmit,omitempty"`
 

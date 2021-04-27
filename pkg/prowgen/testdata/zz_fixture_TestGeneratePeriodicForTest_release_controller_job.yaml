@@ -1,0 +1,15 @@
+agent: kubernetes
+cron: '@yearly'
+decorate: true
+decoration_config:
+  skip_cloning: true
+extra_refs:
+- base_ref: branch
+  org: org
+  repo: repo
+labels:
+  ci-operator.openshift.io/prowgen-controlled: newly-generated
+  ci-operator.openshift.io/release-controller: "true"
+  job-release: "4.6"
+  pj-rehearse.openshift.io/can-be-rehearsed: "true"
+name: periodic-ci-org-repo-branch-testname

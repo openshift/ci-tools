@@ -3,10 +3,8 @@ package registry
 import (
 	"errors"
 	"fmt"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -27,8 +25,6 @@ func TestResolve(t *testing.T) {
 	nonExistentEnv := "NON_EXISTENT"
 	stepEnv := "STEP_ENV"
 	yes := true
-	defaultDuration := &prowv1.Duration{Duration: 1 * time.Minute}
-	trueRef := &[]bool{true}[0]
 	for _, testCase := range []struct {
 		name                  string
 		config                api.MultiStageTestConfiguration
@@ -702,141 +698,6 @@ func TestResolve(t *testing.T) {
 		},
 		expectedErr:           errors.New(`test/test: workflow/ipi-aws: parameter "NOT_THE_STEP_ENV" is overridden in [test/test] but not declared in any step`),
 		expectedValidationErr: errors.New(`workflow/ipi-aws: parameter "NOT_THE_STEP_ENV" is overridden in [workflow/ipi-aws] but not declared in any step`),
-	}, {
-		name: "Workflow with trap command with grace_period",
-		config: api.MultiStageTestConfiguration{
-			ClusterProfile: api.ClusterProfileAWS,
-			Workflow:       &awsWorkflow,
-		},
-		workflowMap: WorkflowByName{
-			awsWorkflow: {
-				ClusterProfile: api.ClusterProfileAWS,
-				Pre: []api.TestStep{{
-					LiteralTestStep: &api.LiteralTestStep{
-						As:          "trapper-keeper",
-						From:        "installer",
-						Commands:    `trap "echo Aw Snap!" SIGINT SIGTERM`,
-						GracePeriod: defaultDuration,
-						Resources: api.ResourceRequirements{
-							Requests: api.ResourceList{"cpu": "1000m"},
-							Limits:   api.ResourceList{"memory": "2Gi"},
-						},
-						Environment: []api.StepParameter{
-							{Name: "STEP_ENV", Default: &stepEnv},
-						}},
-				}},
-			},
-		},
-		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfile: api.ClusterProfileAWS,
-			Pre: []api.LiteralTestStep{{
-				As:          "trapper-keeper",
-				From:        "installer",
-				Commands:    `trap "echo Aw Snap!" SIGINT SIGTERM`,
-				GracePeriod: defaultDuration,
-				Resources: api.ResourceRequirements{
-					Requests: api.ResourceList{"cpu": "1000m"},
-					Limits:   api.ResourceList{"memory": "2Gi"},
-				},
-				Environment: []api.StepParameter{
-					{Name: "STEP_ENV", Default: &stepEnv},
-				},
-			}},
-		},
-	}, {
-		name: "Workflow with trap command without grace_period",
-		config: api.MultiStageTestConfiguration{
-			ClusterProfile: api.ClusterProfileAWS,
-			Workflow:       &awsWorkflow,
-		},
-		workflowMap: WorkflowByName{
-			awsWorkflow: {
-				ClusterProfile: api.ClusterProfileAWS,
-				Pre: []api.TestStep{{
-					LiteralTestStep: &api.LiteralTestStep{
-						As:       "trapper-keeper",
-						From:     "installer",
-						Commands: `trap "echo Aw Snap!" SIGINT SIGTERM`,
-						Resources: api.ResourceRequirements{
-							Requests: api.ResourceList{"cpu": "1000m"},
-							Limits:   api.ResourceList{"memory": "2Gi"},
-						},
-						Environment: []api.StepParameter{
-							{Name: "STEP_ENV", Default: &stepEnv},
-						}},
-				}},
-			},
-		},
-		expectedErr: errors.New("test `trapper-keeper` has `commands` containing `trap` command, but test step is missing grace_period"),
-	}, {
-		name: "Workflow with best effort with timeout",
-		config: api.MultiStageTestConfiguration{
-			ClusterProfile: api.ClusterProfileAWS,
-			Workflow:       &awsWorkflow,
-		},
-		workflowMap: WorkflowByName{
-			awsWorkflow: {
-				ClusterProfile: api.ClusterProfileAWS,
-				Pre: []api.TestStep{{
-					LiteralTestStep: &api.LiteralTestStep{
-						As:         "best-effort",
-						From:       "installer",
-						Commands:   `openshift-cluster install`,
-						BestEffort: trueRef,
-						Timeout:    defaultDuration,
-						Resources: api.ResourceRequirements{
-							Requests: api.ResourceList{"cpu": "1000m"},
-							Limits:   api.ResourceList{"memory": "2Gi"},
-						},
-						Environment: []api.StepParameter{
-							{Name: "STEP_ENV", Default: &stepEnv},
-						}},
-				}},
-			},
-		},
-		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfile: api.ClusterProfileAWS,
-			Pre: []api.LiteralTestStep{{
-				As:         "best-effort",
-				From:       "installer",
-				Commands:   `openshift-cluster install`,
-				BestEffort: trueRef,
-				Timeout:    defaultDuration,
-				Resources: api.ResourceRequirements{
-					Requests: api.ResourceList{"cpu": "1000m"},
-					Limits:   api.ResourceList{"memory": "2Gi"},
-				},
-				Environment: []api.StepParameter{
-					{Name: "STEP_ENV", Default: &stepEnv},
-				},
-			}},
-		},
-	}, {
-		name: "Workflow with best effort without timeout",
-		config: api.MultiStageTestConfiguration{
-			ClusterProfile: api.ClusterProfileGCPCRIO,
-			Workflow:       &awsWorkflow,
-		},
-		workflowMap: WorkflowByName{
-			awsWorkflow: {
-				ClusterProfile: api.ClusterProfileAWS,
-				Pre: []api.TestStep{{
-					LiteralTestStep: &api.LiteralTestStep{
-						As:         "best-effort",
-						From:       "installer",
-						Commands:   "openshift-cluster install",
-						BestEffort: trueRef,
-						Resources: api.ResourceRequirements{
-							Requests: api.ResourceList{"cpu": "1000m"},
-							Limits:   api.ResourceList{"memory": "2Gi"},
-						},
-						Environment: []api.StepParameter{
-							{Name: "STEP_ENV", Default: &stepEnv},
-						}},
-				}},
-			},
-		},
-		expectedErr: errors.New("test best-effort contains best_effort without timeout"),
 	}} {
 		t.Run(testCase.name, func(t *testing.T) {
 			err := Validate(testCase.stepMap, testCase.chainMap, testCase.workflowMap, testCase.observerMap)
@@ -917,18 +778,7 @@ func TestResolveParameters(t *testing.T) {
 			},
 		},
 		invalidEnv: {
-			Steps: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{
-				As:       invalidEnv,
-				From:     "installer",
-				Commands: "openshift-cluster install",
-				Environment: []api.StepParameter{
-					{Name: "NOT_CHANGED", Default: &defaultNotChanged},
-				},
-				Resources: api.ResourceRequirements{
-					Requests: api.ResourceList{"cpu": "1000m"},
-					Limits:   api.ResourceList{"memory": "2Gi"},
-				},
-			}}},
+			Steps: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{}}},
 			Environment: []api.StepParameter{
 				{Name: "NOT_DECLARED", Default: &defaultNotDeclared},
 			},
@@ -936,15 +786,9 @@ func TestResolveParameters(t *testing.T) {
 	}
 	refs := ReferenceByName{
 		notChanged: api.LiteralTestStep{
-			As:       notChanged,
-			From:     "installer",
-			Commands: "openshift-cluster install",
+			As: notChanged,
 			Environment: []api.StepParameter{
 				{Name: "NOT_CHANGED", Default: &defaultNotChanged},
-			},
-			Resources: api.ResourceRequirements{
-				Requests: api.ResourceList{"cpu": "1000m"},
-				Limits:   api.ResourceList{"memory": "2Gi"},
 			},
 			Dependencies: []api.StepDependency{
 				{Env: "NOT_CHANGED", Name: defaultNotChanged},
@@ -952,26 +796,14 @@ func TestResolveParameters(t *testing.T) {
 		},
 		changed: api.LiteralTestStep{
 			As:          changed,
-			From:        "installer",
-			Commands:    "openshift-cluster install",
 			Environment: []api.StepParameter{{Name: "CHANGED"}},
-			Resources: api.ResourceRequirements{
-				Requests: api.ResourceList{"cpu": "1000m"},
-				Limits:   api.ResourceList{"memory": "2Gi"},
-			},
 			Dependencies: []api.StepDependency{
 				{Env: "CHANGED", Name: defaultNotChanged},
 			},
 		},
 		mergeRef: api.LiteralTestStep{
 			As:          mergeRef,
-			From:        "installer",
-			Commands:    "openshift-cluster install",
 			Environment: []api.StepParameter{{Name: "FROM_TEST"}},
-			Resources: api.ResourceRequirements{
-				Requests: api.ResourceList{"cpu": "1000m"},
-				Limits:   api.ResourceList{"memory": "2Gi"},
-			},
 			Dependencies: []api.StepDependency{
 				{Env: "FROM_TEST", Name: "from test, will be overwritten"},
 			},
@@ -987,15 +819,7 @@ func TestResolveParameters(t *testing.T) {
 	}{{
 		name: "leaf, no parameters",
 		test: api.MultiStageTestConfiguration{
-			Test: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{
-				As:       "leaf-no-params",
-				From:     "installer",
-				Commands: "openshift cluster install",
-				Resources: api.ResourceRequirements{
-					Requests: api.ResourceList{"cpu": "1000m"},
-					Limits:   api.ResourceList{"memory": "2Gi"},
-				},
-			}}},
+			Test: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{}}},
 		},
 		expectedParams: [][]api.StepParameter{nil},
 		expectedDeps:   [][]api.StepDependency{nil},
@@ -1004,13 +828,6 @@ func TestResolveParameters(t *testing.T) {
 		test: api.MultiStageTestConfiguration{
 			Test: []api.TestStep{{
 				LiteralTestStep: &api.LiteralTestStep{
-					As:       "leaf-empty-default",
-					From:     "installer",
-					Commands: "openshift cluster install",
-					Resources: api.ResourceRequirements{
-						Requests: api.ResourceList{"cpu": "1000m"},
-						Limits:   api.ResourceList{"memory": "2Gi"},
-					},
 					Environment: []api.StepParameter{
 						{Name: "TEST", Default: &defaultEmpty},
 					},
@@ -1026,13 +843,6 @@ func TestResolveParameters(t *testing.T) {
 		test: api.MultiStageTestConfiguration{
 			Test: []api.TestStep{{
 				LiteralTestStep: &api.LiteralTestStep{
-					As:       "leaf-parameters-deps",
-					From:     "installer",
-					Commands: "openshift cluster install",
-					Resources: api.ResourceRequirements{
-						Requests: api.ResourceList{"cpu": "1000m"},
-						Limits:   api.ResourceList{"memory": "2Gi"},
-					},
 					Environment: []api.StepParameter{
 						{Name: "TEST", Default: &defaultStr},
 					},
@@ -1185,22 +995,8 @@ func TestResolveLeases(t *testing.T) {
 	ref0 := "ref0"
 	chain0 := "chain0"
 	workflow0 := "workflow0"
-	defaultNotChanged := "not changed"
 	refs := ReferenceByName{
-		ref0: {
-			As:       "step-deferred",
-			From:     "installer",
-			Commands: "openshift-cluster install",
-			Environment: []api.StepParameter{
-				{Name: "NOT_CHANGED", Default: &defaultNotChanged},
-			},
-			Resources: api.ResourceRequirements{
-				Requests: api.ResourceList{"cpu": "1000m"},
-				Limits:   api.ResourceList{"memory": "2Gi"},
-			},
-			Leases: []api.StepLease{{
-				Env:          "env",
-				ResourceType: "from_ref"}}},
+		ref0: {Leases: []api.StepLease{{ResourceType: "from_ref"}}},
 	}
 	chains := ChainByName{
 		chain0: {
@@ -1269,19 +1065,7 @@ func TestResolveLeases(t *testing.T) {
 		test: api.MultiStageTestConfiguration{
 			Pre: []api.TestStep{{
 				LiteralTestStep: &api.LiteralTestStep{
-					As:       "step-deferred",
-					From:     "installer",
-					Commands: "openshift-cluster install",
-					Environment: []api.StepParameter{
-						{Name: "NOT_CHANGED", Default: &defaultNotChanged},
-					},
-					Resources: api.ResourceRequirements{
-						Requests: api.ResourceList{"cpu": "1000m"},
-						Limits:   api.ResourceList{"memory": "2Gi"},
-					},
-					Leases: []api.StepLease{{
-						Env:          "env",
-						ResourceType: "from_step"}},
+					Leases: []api.StepLease{{ResourceType: "from_step"}},
 				},
 			}},
 		},

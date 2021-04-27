@@ -61,7 +61,7 @@ func resolvePullSpec(client release.HTTPClient, endpoint string, release api.Rel
 		return "", "", fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 	if len(response.Nodes) == 0 {
-		return "", "", errors.New("failed to request latest release: server returned empty list of releases (despite status code 200)")
+		return "", "", fmt.Errorf("failed to request latest release from %s: server returned empty list of releases (despite status code 200)", req.URL.String())
 	}
 	pullspec, version := latestPullSpecAndVersion(response.Nodes)
 	return pullspec, version, nil

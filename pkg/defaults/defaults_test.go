@@ -761,7 +761,7 @@ func (e environmentOverride) Get(name string) (string, error) {
 func TestFromConfig(t *testing.T) {
 	ns := "ns"
 	httpClient := release.NewFakeHTTPClient(func(req *http.Request) (*http.Response, error) {
-		content := `{"nodes": [{"version": "version", "payload": "payload"}]}`
+		content := `{"nodes": [{"version": "4.1.0", "payload": "payload"}]}`
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewBuffer([]byte(content))),
@@ -995,7 +995,7 @@ func TestFromConfig(t *testing.T) {
 		config: api.ReleaseBuildConfiguration{
 			InputConfiguration: api.InputConfiguration{
 				Releases: map[string]api.UnresolvedRelease{
-					"release": {Release: &api.Release{Version: "version"}},
+					"release": {Release: &api.Release{Version: "4.1.0"}},
 				},
 			},
 		},
@@ -1008,7 +1008,7 @@ func TestFromConfig(t *testing.T) {
 		config: api.ReleaseBuildConfiguration{
 			InputConfiguration: api.InputConfiguration{
 				Releases: map[string]api.UnresolvedRelease{
-					"release": {Release: &api.Release{Version: "version"}},
+					"release": {Release: &api.Release{Version: "4.1.0"}},
 				},
 			},
 		},

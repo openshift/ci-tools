@@ -10,7 +10,6 @@ import (
 	"gopkg.in/robfig/cron.v2"
 
 	"k8s.io/apimachinery/pkg/api/resource"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
 
@@ -57,14 +56,14 @@ func (c *context) forField(name string) context {
 	return ret
 }
 
-var trapPattern = regexp.MustCompile(`^\s*trap\s*['"]?\w*['"]?\s*\w*`)
+var trapPattern = regexp.MustCompile(`(^|\W)\s*trap\s*['"]?\w*['"]?\s*\w*`)
 
 // IsValidReference validates the contents of a registry reference.
 // Checks that are context-dependent (whether all parameters are set in a parent
 // component, the image references exist in the test configuration, etc.) are
 // not performed.
-func IsValidReference(step api.LiteralTestStep) error {
-	return utilerrors.NewAggregate(validateLiteralTestStep(context{fieldRoot: step.As}, testStageUnknown, step))
+func IsValidReference(step api.LiteralTestStep) []error {
+	return validateLiteralTestStep(context{fieldRoot: step.As}, testStageUnknown, step)
 }
 
 func validateTestStepConfiguration(fieldRoot string, input []api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {

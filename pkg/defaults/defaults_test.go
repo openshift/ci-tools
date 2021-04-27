@@ -1074,7 +1074,7 @@ func TestFromConfig(t *testing.T) {
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{},
 			}},
 		},
-		expectedSteps: []string{"cluster-pool:fast-as-heck-aws:ocp-4.7-amd64-aws-dpp", "fast-as-heck-aws", "[output-images]", "[images]"},
+		expectedSteps: []string{"fast-as-heck-aws", "[output-images]", "[images]"},
 	}, {
 		name: "container test with a claim",
 		config: api.ReleaseBuildConfiguration{
@@ -1084,7 +1084,7 @@ func TestFromConfig(t *testing.T) {
 				ContainerTestConfiguration: &api.ContainerTestConfiguration{},
 			}},
 		},
-		expectedSteps: []string{"cluster-pool:e2e:----", "e2e", "[output-images]", "[images]"},
+		expectedSteps: []string{"e2e", "[output-images]", "[images]"},
 	}, {
 		name: "lease test",
 		config: api.ReleaseBuildConfiguration{

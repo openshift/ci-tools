@@ -492,7 +492,6 @@ func TestValidateTestSteps(t *testing.T) {
 	asReference := "as"
 	yes := true
 	defaultDuration := &prowv1.Duration{Duration: 1 * time.Minute}
-	trueRef := &[]bool{true}[0]
 	for _, tc := range []struct {
 		name     string
 		steps    []api.TestStep
@@ -807,7 +806,7 @@ func TestValidateTestSteps(t *testing.T) {
 				As:         "best-effort",
 				From:       "installer",
 				Commands:   `openshift-cluster install`,
-				BestEffort: trueRef,
+				BestEffort: &yes,
 				Timeout:    defaultDuration,
 				Resources: api.ResourceRequirements{
 					Requests: api.ResourceList{"cpu": "1000m"},
@@ -821,7 +820,7 @@ func TestValidateTestSteps(t *testing.T) {
 				As:         "best-effort",
 				From:       "installer",
 				Commands:   "openshift-cluster install",
-				BestEffort: trueRef,
+				BestEffort: &yes,
 				Resources: api.ResourceRequirements{
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},

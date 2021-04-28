@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 
@@ -12,14 +14,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/test-infra/prow/interrupts"
+	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/pjutil"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/yaml"
 
 	buildv1 "github.com/openshift/api/build/v1"
 	buildclientv1 "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
+	"github.com/openshift/ci-tools/pkg/rehearse"
 	"github.com/openshift/ci-tools/pkg/steps"
 )
 
@@ -71,6 +77,10 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		logger.WithError(err).Error("Could not get Build for Pod.")
 		return admission.Allowed("Could not get Build for Pod, ignoring.")
 	}
+	if err := mutatePodMetadata(pod); err != nil {
+		logger.WithError(err).Error("Failed to handle rehearsal Pod.")
+		return admission.Allowed("Failed to handle rehearsal Pod, ignoring.")
+	}
 	mutatePodLabels(pod, build)
 	mutatePodResources(pod, m.resources)
 
@@ -89,6 +99,40 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		return response.Patches[i].Path < response.Patches[j].Path
 	})
 	return response
+}
+
+// mutatePodMetadata updates metadata labels for Pods created by Prow for rehearsals,
+// where default metadata points to the release repo instead of the repo under test.
+// We can fix this by updating to use the values from the configuration that the job
+// ends up running with.
+func mutatePodMetadata(pod *corev1.Pod) error {
+	if _, isRehearsal := pod.ObjectMeta.Labels[rehearse.Label]; !isRehearsal {
+		return nil
+	}
+	var rawConfig string
+	for _, container := range pod.Spec.Containers {
+		if container.Name != "test" {
+			continue
+		}
+		for _, value := range container.Env {
+			if value.Name != "CONFIG_SPEC" {
+				continue
+			}
+			rawConfig = value.Value
+		}
+	}
+	if rawConfig == "" {
+		return errors.New("could not find configuration in rehearsal Pod's env")
+	}
+	var config api.ReleaseBuildConfiguration
+	if err := yaml.Unmarshal([]byte(rawConfig), &config); err != nil {
+		return fmt.Errorf("could not unmarshal configuration from rehearsal pod: %w", err)
+	}
+	pod.ObjectMeta.Labels[kube.ContextAnnotation] = pod.ObjectMeta.Labels[rehearse.LabelContext]
+	pod.ObjectMeta.Labels[kube.OrgLabel] = config.Metadata.Org
+	pod.ObjectMeta.Labels[kube.RepoLabel] = config.Metadata.Repo
+	pod.ObjectMeta.Labels[kube.BaseRefLabel] = config.Metadata.Branch
+	return nil
 }
 
 func mutatePodLabels(pod *corev1.Pod, build *buildv1.Build) {

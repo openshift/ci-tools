@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 
@@ -15,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/test-infra/prow/kube"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	buildv1 "github.com/openshift/api/build/v1"
@@ -22,6 +24,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
+	"github.com/openshift/ci-tools/pkg/rehearse"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -146,6 +149,75 @@ func TestMutatePods(t *testing.T) {
 				return response.Patches[i].Path < response.Patches[j].Path
 			})
 			testhelper.CompareWithFixture(t, response)
+		})
+	}
+}
+
+func TestMutatePodMetadata(t *testing.T) {
+	var testCases = []struct {
+		name          string
+		pod           *corev1.Pod
+		expected      *corev1.Pod
+		expectedError bool
+	}{
+		{
+			name:     "not a rehearsal Pod",
+			pod:      &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{}}},
+			expected: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{}}},
+		},
+		{
+			name:          "rehearsal Pod with no config",
+			pod:           &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{rehearse.Label: "1"}}},
+			expectedError: true,
+		},
+		{
+			name: "rehearsal Pod with malformed config",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{rehearse.Label: "1"}},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Env: []corev1.EnvVar{{Name: "CONFIG_SPEC", Value: "nothing"}}}}},
+			},
+			expectedError: true,
+		},
+		{
+			name: "rehearsal Pod with config",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{rehearse.Label: "1", rehearse.LabelContext: "context"}},
+				Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Env: []corev1.EnvVar{{Name: "CONFIG_SPEC", Value: `zz_generated_metadata:
+  org: org
+  repo: repo
+  branch: branch`}}}}},
+			},
+			expected: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
+					rehearse.Label: "1", rehearse.LabelContext: "context",
+					kube.ContextAnnotation: "context",
+					kube.OrgLabel:          "org",
+					kube.RepoLabel:         "repo",
+					kube.BaseRefLabel:      "branch",
+				}},
+				Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Env: []corev1.EnvVar{{Name: "CONFIG_SPEC", Value: `zz_generated_metadata:
+  org: org
+  repo: repo
+  branch: branch`}}}}},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := mutatePodMetadata(testCase.pod)
+			if testCase.expectedError && err == nil {
+				t.Errorf("%s: expected error but got none", testCase.name)
+			}
+			if !testCase.expectedError && err != nil {
+				t.Errorf("%s: expected no error but got one: %v", testCase.name, err)
+			}
+			if testCase.expectedError {
+				return
+			}
+			if diff := cmp.Diff(testCase.pod, testCase.expected); diff != "" {
+				t.Errorf("%s: got incorrect pod after mutation: %v", testCase.name, diff)
+			}
 		})
 	}
 }
@@ -337,6 +409,14 @@ func TestMutatePodResources(t *testing.T) {
 			original := testCase.pod.DeepCopy()
 			mutatePodResources(testCase.pod, testCase.server)
 			diff := cmp.Diff(original, testCase.pod)
+			// In some cases, cmp.Diff decides to use non-breaking spaces, and it's not
+			// particularly deterministic about this. We don't care.
+			diff = strings.Map(func(r rune) rune {
+				if r == '\u00a0' {
+					return '\u0020'
+				}
+				return r
+			}, diff)
 			testhelper.CompareWithFixture(t, diff)
 		})
 	}
@@ -575,5 +655,38 @@ func TestReconcileLimits(t *testing.T) {
 				t.Errorf("%s: got incorrect resources after limit reconciliation: %v", testCase.name, diff)
 			}
 		})
+	}
+}
+
+func TestRehearsalMetadata(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "d316d4cc-a437-11eb-b35f-0a580a800e92", Labels: map[string]string{
+			rehearse.Label:              "1",
+			rehearse.LabelContext:       "context",
+			"created-by-prow":           "true",
+			"prow.k8s.io/refs.org":      "org",
+			"prow.k8s.io/refs.repo":     "repo",
+			"prow.k8s.io/refs.base_ref": "branch",
+			"prow.k8s.io/context":       "rehearse-context",
+		}},
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Env: []corev1.EnvVar{{Name: "CONFIG_SPEC", Value: `zz_generated_metadata:
+  org: ORG
+  repo: REPO
+  branch: BRANCH`}}}}},
+	}
+	meta := pod_scaler.FullMetadata{
+		Metadata: api.Metadata{
+			Org:    "ORG",
+			Repo:   "REPO",
+			Branch: "BRANCH",
+		},
+		Target:    "context",
+		Container: "test",
+	}
+	if err := mutatePodMetadata(pod); err != nil {
+		t.Fatalf("failed to mutate metadata: %v", err)
+	}
+	if diff := cmp.Diff(pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, "test"), meta); diff != "" {
+		t.Errorf("rehearsal job: got incorrect metadata: %v", diff)
 	}
 }

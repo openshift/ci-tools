@@ -571,12 +571,7 @@ func validateLiteralTestStep(context context, stage testStage, step api.LiteralT
 func validateCommands(test api.LiteralTestStep) []error {
 	var validationErrors []error
 
-	hasTrapCommand := false
-	if trapPattern.MatchString(test.Commands) {
-		hasTrapCommand = true
-	}
-
-	if hasTrapCommand && test.GracePeriod == nil {
+	if trapPattern.MatchString(test.Commands) && test.GracePeriod == nil {
 		validationErrors = append(validationErrors, fmt.Errorf("test `%s` has `commands` containing `trap` command, but test step is missing grace_period", test.As))
 	}
 

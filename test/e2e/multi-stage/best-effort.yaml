@@ -25,6 +25,7 @@ tests:
         - as: failure
           commands: exit 1
           best_effort: true
+          timeout: 10m
           from: os
           resources:
             requests:
@@ -45,6 +46,7 @@ tests:
         - as: failure
           commands: exit 1
           best_effort: false
+          timeout: 10m
           from: os
           resources:
             requests:

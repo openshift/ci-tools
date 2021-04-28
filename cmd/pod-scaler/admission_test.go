@@ -509,3 +509,71 @@ func TestUseOursIfLarger(t *testing.T) {
 		})
 	}
 }
+
+func TestReconcileLimits(t *testing.T) {
+	var testCases = []struct {
+		name            string
+		input, expected corev1.ResourceRequirements
+	}{
+		{
+			name: "nothing to do",
+		},
+		{
+			name: "remove CPU limits",
+			input: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(200, resource.DecimalSI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{},
+			},
+		},
+		{
+			name: "increase low memory limits",
+			input: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(4e10, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+		},
+		{
+			name: "do nothing for adequate memory limits",
+			input: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(4e10, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(4e10, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			reconcileLimits(&testCase.input)
+			if diff := cmp.Diff(testCase.input, testCase.expected); diff != "" {
+				t.Errorf("%s: got incorrect resources after limit reconciliation: %v", testCase.name, diff)
+			}
+		})
+	}
+}

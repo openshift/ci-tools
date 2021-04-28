@@ -130,12 +130,34 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements) {
 	}
 }
 
+// reconcileLimits ensures that container resource limits do not set anything for CPU (as we
+// are fairly certain this is never a useful thing to do) and that the limits are >=200% of
+// requests (which they may not be any longer if we've changed requests)
+func reconcileLimits(resources *corev1.ResourceRequirements) {
+	if resources.Limits == nil {
+		return
+	}
+	delete(resources.Limits, corev1.ResourceCPU)
+	// Mote: doing math on Quantities is not easy, since they may contain values that overflow
+	// normal integers. Doing math on inf.Dec is possible, but there does not exist any way to
+	// convert back from an inf.Dec to a resource.Quantity. So, while we would want to have a
+	// limit threshold like 120% or similar, we use 200% as that's what is trivially easy to
+	// accomplish with the math we can do on resource.Quantity.
+	minimumLimit := resources.Requests[corev1.ResourceMemory]
+	minimumLimit.Add(minimumLimit)
+	currentLimit := resources.Limits[corev1.ResourceMemory]
+	if currentLimit.Cmp(minimumLimit) == -1 {
+		resources.Limits[corev1.ResourceMemory] = minimumLimit
+	}
+}
+
 func mutatePodResources(pod *corev1.Pod, server *resourceServer) {
 	for i := range pod.Spec.InitContainers {
 		meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, pod.Spec.InitContainers[i].Name)
 		resources, recommendationExists := server.recommendedRequestFor(meta)
 		if recommendationExists {
 			useOursIfLarger(&resources, &pod.Spec.InitContainers[i].Resources)
+			reconcileLimits(&pod.Spec.InitContainers[i].Resources)
 		}
 	}
 	for i := range pod.Spec.Containers {
@@ -143,6 +165,7 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer) {
 		resources, recommendationExists := server.recommendedRequestFor(meta)
 		if recommendationExists {
 			useOursIfLarger(&resources, &pod.Spec.Containers[i].Resources)
+			reconcileLimits(&pod.Spec.Containers[i].Resources)
 		}
 	}
 }

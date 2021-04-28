@@ -1,0 +1,64 @@
+- attachments:
+  - cmd: echo -n Attachment1-dev
+    name: Attachment1-dev
+  fields:
+  - cmd: echo -n Field1-dev
+    name: Field1-dev
+  item_name: Item1-dev
+  notes: Note1-dev
+  params:
+    Env:
+    - dev
+    - prod
+    FieldNum:
+    - "1"
+    - "2"
+  password: echo -n password1-dev
+- attachments:
+  - cmd: echo -n Attachment1-prod
+    name: Attachment1-prod
+  fields:
+  - cmd: echo -n Field1-prod
+    name: Field1-prod
+  item_name: Item1-prod
+  notes: Note1-prod
+  params:
+    Env:
+    - dev
+    - prod
+    FieldNum:
+    - "1"
+    - "2"
+  password: echo -n password1-prod
+- attachments:
+  - cmd: echo -n Attachment2-dev
+    name: Attachment2-dev
+  fields:
+  - cmd: echo -n Field2-dev
+    name: Field2-dev
+  item_name: Item2-dev
+  notes: Note2-dev
+  params:
+    Env:
+    - dev
+    - prod
+    FieldNum:
+    - "1"
+    - "2"
+  password: echo -n password2-dev
+- attachments:
+  - cmd: echo -n Attachment2-prod
+    name: Attachment2-prod
+  fields:
+  - cmd: echo -n Field2-prod
+    name: Field2-prod
+  item_name: Item2-prod
+  notes: Note2-prod
+  params:
+    Env:
+    - dev
+    - prod
+    FieldNum:
+    - "1"
+    - "2"
+  password: echo -n password2-prod

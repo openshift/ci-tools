@@ -9,9 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
-	"strings"
 
-	"github.com/getlantern/deepcopy"
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -19,6 +17,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
+	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
@@ -35,22 +34,8 @@ type options struct {
 	validateOnly        bool
 	maxConcurrency      int
 
-	config          []bitWardenItem
+	config          secretgenerator.Config
 	bootstrapConfig secretbootstrap.Config
-}
-
-type bitWardenItem struct {
-	ItemName    string              `json:"item_name"`
-	Fields      []fieldGenerator    `json:"fields,omitempty"`
-	Attachments []fieldGenerator    `json:"attachments,omitempty"`
-	Password    string              `json:"password,omitempty"`
-	Notes       string              `json:"notes"`
-	Params      map[string][]string `json:"params,omitempty"`
-}
-
-type fieldGenerator struct {
-	Name string `json:"name,omitempty"`
-	Cmd  string `json:"cmd,omitempty"`
 }
 
 func parseOptions(censor *secrets.DynamicCensor) options {
@@ -95,17 +80,15 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 	if err := o.secrets.Complete(censor); err != nil {
 		return err
 	}
-	cfgBytes, err := gzip.ReadFileMaybeGZIP(o.configPath)
+
+	var err error
+	o.config, err = secretgenerator.LoadConfigFromPath(o.configPath)
 	if err != nil {
 		return err
 	}
 
-	if err := yaml.Unmarshal(cfgBytes, &o.config); err != nil {
-		return err
-	}
-
 	if o.bootstrapConfigPath != "" {
-		cfgBytes, err = gzip.ReadFileMaybeGZIP(o.bootstrapConfigPath)
+		cfgBytes, err := gzip.ReadFileMaybeGZIP(o.bootstrapConfigPath)
 		if err != nil {
 			return err
 		}
@@ -122,25 +105,24 @@ func cmdEmptyErr(itemIndex, entryIndex int, entry string) error {
 }
 
 func (o *options) validateConfig() error {
-
-	for i, bwItem := range o.config {
-		if bwItem.ItemName == "" {
+	for i, item := range o.config {
+		if item.ItemName == "" {
 			return fmt.Errorf("config[%d].itemName: empty key is not allowed", i)
 		}
 
-		for fieldIndex, field := range bwItem.Fields {
+		for fieldIndex, field := range item.Fields {
 			if field.Name != "" && field.Cmd == "" {
 				return cmdEmptyErr(i, fieldIndex, "fields")
 			}
 		}
-		for attachmentIndex, attachment := range bwItem.Fields {
+		for attachmentIndex, attachment := range item.Fields {
 			if attachment.Name != "" && attachment.Cmd == "" {
 				return cmdEmptyErr(i, attachmentIndex, "attachments")
 			}
 		}
-		for paramName, params := range bwItem.Params {
+		for paramName, params := range item.Params {
 			if len(params) == 0 {
-				return fmt.Errorf("at least one argument required for param: %s, itemName: %s", paramName, bwItem.ItemName)
+				return fmt.Errorf("at least one argument required for param: %s, itemName: %s", paramName, item.ItemName)
 			}
 		}
 	}
@@ -161,50 +143,9 @@ func executeCommand(command string) ([]byte, error) {
 	return out, nil
 }
 
-func replaceParameter(paramName, param, template string) string {
-	return strings.ReplaceAll(template, fmt.Sprintf("$(%s)", paramName), param)
-}
-
-func processBwParameters(bwItems []bitWardenItem) ([]bitWardenItem, error) {
+func updateSecrets(config secretgenerator.Config, client secrets.Client) error {
 	var errs []error
-	var processedBwItems []bitWardenItem
-	for _, bwItemWithParams := range bwItems {
-		bwItemsProcessingHolder := []bitWardenItem{bwItemWithParams}
-		for paramName, params := range bwItemWithParams.Params {
-			bwItemsProcessed := []bitWardenItem{}
-			for _, qItem := range bwItemsProcessingHolder {
-				for _, param := range params {
-					argItem := bitWardenItem{}
-					err := deepcopy.Copy(&argItem, &qItem)
-					if err != nil {
-						errs = append(errs, fmt.Errorf("error copying bitWardenItem %v: %w", bwItemWithParams, err))
-					}
-					argItem.ItemName = replaceParameter(paramName, param, argItem.ItemName)
-					for i, field := range argItem.Fields {
-						argItem.Fields[i].Name = replaceParameter(paramName, param, field.Name)
-						argItem.Fields[i].Cmd = replaceParameter(paramName, param, field.Cmd)
-					}
-					for i, attachment := range argItem.Attachments {
-						argItem.Attachments[i].Name = replaceParameter(paramName, param, attachment.Name)
-						argItem.Attachments[i].Cmd = replaceParameter(paramName, param, attachment.Cmd)
-					}
-					argItem.Password = replaceParameter(paramName, param, argItem.Password)
-					argItem.Notes = replaceParameter(paramName, param, argItem.Notes)
-					bwItemsProcessed = append(bwItemsProcessed, argItem)
-				}
-			}
-			bwItemsProcessingHolder = bwItemsProcessed
-		}
-		if len(errs) == 0 {
-			processedBwItems = append(processedBwItems, bwItemsProcessingHolder...)
-		}
-	}
-	return processedBwItems, utilerrors.NewAggregate(errs)
-}
-
-func updateSecrets(bwItems []bitWardenItem, client secrets.Client) error {
-	var errs []error
-	for _, bwItem := range bwItems {
+	for _, bwItem := range config {
 		logger := logrus.WithField("item", bwItem.ItemName)
 		for _, field := range bwItem.Fields {
 			logger = logger.WithFields(logrus.Fields{
@@ -295,12 +236,8 @@ func main() {
 	if err := o.completeOptions(&censor); err != nil {
 		logrus.WithError(err).Fatal("failed to complete options.")
 	}
-	processedBwItems, err := processBwParameters(o.config)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to parse parameters.")
-	}
 
-	bitWardenContexts := bitwardenContextsFor(processedBwItems)
+	bitWardenContexts := bitwardenContextsFor(o.config)
 	if o.validate {
 		if err := validateContexts(bitWardenContexts, o.bootstrapConfig); err != nil {
 			for _, err := range err.Errors() {
@@ -324,6 +261,7 @@ func main() {
 	})
 	defer logrus.Exit(0)
 	if o.dryRun {
+		var err error
 		var f *os.File
 		if o.outputFile == "" {
 			f, err = ioutil.TempFile("", "ci-secret-generator")
@@ -342,6 +280,7 @@ func main() {
 			logrus.WithError(err).Fatal("failed to create dry-run mode client")
 		}
 	} else {
+		var err error
 		client, err = o.secrets.NewClient(&censor)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to create Bitwarden client")
@@ -349,13 +288,13 @@ func main() {
 	}
 
 	// Upload the output to bitwarden
-	if err := updateSecrets(processedBwItems, client); err != nil {
+	if err := updateSecrets(o.config, client); err != nil {
 		logrus.WithError(err).Fatal("Failed to update secrets.")
 	}
 	logrus.Info("Updated secrets.")
 }
 
-func bitwardenContextsFor(items []bitWardenItem) []secretbootstrap.BitWardenContext {
+func bitwardenContextsFor(items secretgenerator.Config) []secretbootstrap.BitWardenContext {
 	var bitWardenContexts []secretbootstrap.BitWardenContext
 	for _, bwItem := range items {
 		for _, field := range bwItem.Fields {

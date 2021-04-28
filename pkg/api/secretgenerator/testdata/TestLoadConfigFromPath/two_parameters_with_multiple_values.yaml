@@ -1,0 +1,16 @@
+- item_name: Item$(FieldNum)-$(Env)
+  fields:
+  - name: Field$(FieldNum)-$(Env)
+    cmd: echo -n Field$(FieldNum)-$(Env)
+  attachments:
+  - name: Attachment$(FieldNum)-$(Env)
+    cmd: echo -n Attachment$(FieldNum)-$(Env)
+  password: echo -n password$(FieldNum)-$(Env)
+  notes: Note$(FieldNum)-$(Env)
+  params:
+    FieldNum: 
+    - "1"
+    - "2"
+    Env:
+    - dev
+    - prod

@@ -3,6 +3,7 @@ package validation
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,14 +16,22 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
+// testStage is the point in a multi-stage test where a step is located.
+// `Unknown` is used when validation occurs at a point where that cannot be
+// determined (e.g. when validating references, which can be used in different
+// contexts).
 type testStage uint8
 
 const (
-	testStagePre testStage = iota
+	testStageUnknown testStage = iota
+	testStagePre
 	testStageTest
 	testStagePost
 )
 
+// context contains the information from parent components.
+// All but `fieldRoot` can be nil if the validation being performed in
+// context-independent.
 type context struct {
 	fieldRoot  string
 	env        api.TestEnvironment
@@ -45,6 +54,16 @@ func (c *context) forField(name string) context {
 	ret := *c
 	ret.fieldRoot = c.fieldRoot + name
 	return ret
+}
+
+var trapPattern = regexp.MustCompile(`(^|\W)\s*trap\s*['"]?\w*['"]?\s*\w*`)
+
+// IsValidReference validates the contents of a registry reference.
+// Checks that are context-dependent (whether all parameters are set in a parent
+// component, the image references exist in the test configuration, etc.) are
+// not performed.
+func IsValidReference(step api.LiteralTestStep) []error {
+	return validateLiteralTestStep(context{fieldRoot: step.As}, testStageUnknown, step)
 }
 
 func validateTestStepConfiguration(fieldRoot string, input []api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
@@ -486,10 +505,12 @@ func validateTestStep(context *context, step api.TestStep) (ret []error) {
 func validateLiteralTestStep(context context, stage testStage, step api.LiteralTestStep) (ret []error) {
 	if len(step.As) == 0 {
 		ret = append(ret, fmt.Errorf("%s: `as` is required", context.fieldRoot))
-	} else if context.seen.Has(step.As) {
-		ret = append(ret, fmt.Errorf("%s: duplicated name %q", context.fieldRoot, step.As))
-	} else {
-		context.seen.Insert(step.As)
+	} else if context.seen != nil {
+		if context.seen.Has(step.As) {
+			ret = append(ret, fmt.Errorf("%s: duplicated name %q", context.fieldRoot, step.As))
+		} else {
+			context.seen.Insert(step.As)
+		}
 	}
 	if len(step.From) == 0 && step.FromImage == nil {
 		ret = append(ret, fmt.Errorf("%s: `from` or `from_image` is required", context.fieldRoot))
@@ -521,18 +542,26 @@ func validateLiteralTestStep(context context, stage testStage, step api.LiteralT
 					if !context.releases.Has(releaseName) {
 						ret = append(ret, fmt.Errorf("%s.from: unknown imagestream '%s'", context.fieldRoot, imageParts[0]))
 					}
-
 				}
 			}
 		}
 	}
 	if len(step.Commands) == 0 {
 		ret = append(ret, fmt.Errorf("%s: `commands` is required", context.fieldRoot))
+	} else {
+		ret = append(ret, validateCommands(step)...)
 	}
+
+	if step.BestEffort != nil && *step.BestEffort && step.Timeout == nil {
+		ret = append(ret, fmt.Errorf("test %s contains best_effort without timeout", step.As))
+	}
+
 	ret = append(ret, validateResourceRequirements(context.fieldRoot+".resources", step.Resources)...)
 	ret = append(ret, validateCredentials(context.fieldRoot, step.Credentials)...)
-	if err := validateParameters(&context, step.Environment); err != nil {
-		ret = append(ret, err)
+	if context.env != nil {
+		if err := validateParameters(&context, step.Environment); err != nil {
+			ret = append(ret, err)
+		}
 	}
 	ret = append(ret, validateDependencies(context.fieldRoot, step.Dependencies)...)
 	ret = append(ret, validateLeases(context.forField(".leases"), step.Leases)...)
@@ -543,6 +572,16 @@ func validateLiteralTestStep(context context, stage testStage, step api.LiteralT
 		}
 	}
 	return
+}
+
+func validateCommands(test api.LiteralTestStep) []error {
+	var validationErrors []error
+
+	if trapPattern.MatchString(test.Commands) && test.GracePeriod == nil {
+		validationErrors = append(validationErrors, fmt.Errorf("test `%s` has `commands` containing `trap` command, but test step is missing grace_period", test.As))
+	}
+
+	return validationErrors
 }
 
 func validateCredentials(fieldRoot string, credentials []api.CredentialReference) []error {
@@ -644,10 +683,12 @@ func validateLeases(context context, leases []api.StepLease) (ret []error) {
 		}
 		if l.Env == "" {
 			ret = append(ret, fmt.Errorf("%s[%d]: 'env' cannot be empty", context.fieldRoot, i))
-		} else if context.leasesSeen.Has(l.Env) {
-			ret = append(ret, fmt.Errorf("%s[%d]: duplicate environment variable: %s", context.fieldRoot, i, l.Env))
-		} else {
-			context.leasesSeen.Insert(l.Env)
+		} else if context.leasesSeen != nil {
+			if context.leasesSeen.Has(l.Env) {
+				ret = append(ret, fmt.Errorf("%s[%d]: duplicate environment variable: %s", context.fieldRoot, i, l.Env))
+			} else {
+				context.leasesSeen.Insert(l.Env)
+			}
 		}
 	}
 	return

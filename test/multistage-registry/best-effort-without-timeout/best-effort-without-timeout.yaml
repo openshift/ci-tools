@@ -1,0 +1,11 @@
+ref:
+  as: best-effort-without-timeout
+  from: installer
+  commands: best-effort-without-timeout.sh
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+  env:
+    - name: TEST_PARAMETER
+      default: test parameter default

@@ -382,7 +382,20 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 		return nil, nil, nil, nil, nil, nil, err
 	}
 	err = registry.Validate(references, chains, workflows, observers)
-	return references, chains, workflows, documentation, metadata, observers, err
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, err
+	}
+	// validate the integrity of each reference
+	var validationErrors []error
+	for _, r := range references {
+		if err := validation.IsValidReference(r); err != nil {
+			validationErrors = append(validationErrors, err...)
+		}
+	}
+	if len(validationErrors) > 0 {
+		return nil, nil, nil, nil, nil, nil, utilerrors.NewAggregate(validationErrors)
+	}
+	return references, chains, workflows, documentation, metadata, observers, nil
 }
 
 func loadReference(bytes []byte, baseDir, prefix string, flat bool) (string, string, api.LiteralTestStep, error) {

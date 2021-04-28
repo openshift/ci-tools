@@ -853,6 +853,22 @@ func TestRegistry(t *testing.T) {
 			chains:        nil,
 			workflows:     nil,
 			expectedError: true,
+		}, {
+			name:          "Read registry where ref has command containing trap without grace period specified",
+			registryDir:   "../../test/multistage-registry/trap-without-grace-period",
+			flatRegistry:  false,
+			references:    nil,
+			chains:        nil,
+			workflows:     nil,
+			expectedError: true,
+		}, {
+			name:          "Read registry where ref has best effort defined without timeout",
+			registryDir:   "../../test/multistage-registry/best-effort-without-timeout",
+			flatRegistry:  false,
+			references:    nil,
+			chains:        nil,
+			workflows:     nil,
+			expectedError: true,
 		}}
 	)
 

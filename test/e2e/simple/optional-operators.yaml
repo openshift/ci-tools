@@ -43,6 +43,7 @@ tests:
     - as: verify
       from: pipeline:ci-index
       run_as_script: true
+      grace_period: 10s
       commands: |
         #!/bin/sh
         set -o nounset
@@ -72,6 +73,7 @@ tests:
     - as: verify
       from: pipeline:ci-index-named-bundle
       run_as_script: true
+      grace_period: 10s
       commands: |
         #!/bin/sh
         set -o nounset

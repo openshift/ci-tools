@@ -436,7 +436,7 @@ type registryResolver interface {
 
 func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent, client ctrlruntimeclient.Client, resolver registryResolver, additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces sets.String) (objectFilter, error) {
 	const indexName = "config-by-test-input-imagestreamtag"
-	if err := ca.AddIndex(indexName, indexConfigsByTestInputImageStramTag(resolver)); err != nil {
+	if err := ca.AddIndex(indexName, indexConfigsByTestInputImageStreamTag(resolver)); err != nil {
 		return nil, fmt.Errorf("failed to add %s index to configAgent: %w", indexName, err)
 	}
 	l = logrus.WithField("subcomponent", "test-input-image-stream-tag-filter")
@@ -503,7 +503,7 @@ func imageStreamNameFromImageStreamTagName(nn types.NamespacedName) (types.Names
 	return types.NamespacedName{Namespace: nn.Namespace, Name: colonSplit[0]}, nil
 }
 
-func indexConfigsByTestInputImageStramTag(resolver registryResolver) agents.IndexFn {
+func indexConfigsByTestInputImageStreamTag(resolver registryResolver) agents.IndexFn {
 	return func(cfg api.ReleaseBuildConfiguration) []string {
 
 		log := logrus.WithFields(logrus.Fields{"org": cfg.Metadata.Org, "repo": cfg.Metadata.Repo, "branch": cfg.Metadata.Branch})

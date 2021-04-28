@@ -320,7 +320,7 @@ func makeTestingPresubmit(name, context, branch string) *prowconfig.Presubmit {
 		JobBase: prowconfig.JobBase{
 			Agent:  "kubernetes",
 			Name:   name,
-			Labels: map[string]string{rehearseLabel: "123", jobconfig.CanBeRehearsedLabel: "true"},
+			Labels: map[string]string{Label: "123", jobconfig.CanBeRehearsedLabel: "true"},
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{{
 					Command: []string{"ci-operator"},
@@ -445,7 +445,7 @@ func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, or
 				"prow.k8s.io/refs.repo": refs.Repo,
 				"prow.k8s.io/type":      "presubmit",
 				"prow.k8s.io/refs.pull": strconv.Itoa(refs.Pulls[0].Number),
-				rehearseLabel:           strconv.Itoa(refs.Pulls[0].Number),
+				Label:                   strconv.Itoa(refs.Pulls[0].Number),
 			},
 			Annotations: map[string]string{"prow.k8s.io/job": jobName},
 		},

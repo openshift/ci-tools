@@ -37,7 +37,11 @@ import (
 )
 
 const (
-	rehearseLabel                = "ci.openshift.org/rehearse"
+	// Label is the label key for the pull request we are rehearsing for
+	Label = "ci.openshift.io/rehearse"
+	// LabelContext exposes the context the job would have had running normally
+	LabelContext = "ci.openshift.io/rehearse.context"
+
 	defaultRehearsalRerunCommand = "/test pj-rehearse"
 	defaultRehearsalTrigger      = `(?m)^/test (?:.*? )?pj-rehearse(?: .*?)?$`
 	logRehearsalJob              = "rehearsal-job"
@@ -151,7 +155,8 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	if rehearsal.Labels == nil {
 		rehearsal.Labels = make(map[string]string, 1)
 	}
-	rehearsal.Labels[rehearseLabel] = strconv.Itoa(prNumber)
+	rehearsal.Labels[Label] = strconv.Itoa(prNumber)
+	rehearsal.Labels[LabelContext] = shortName
 
 	return &rehearsal, nil
 }
@@ -838,7 +843,7 @@ func (e *Executor) ExecuteJobs() (bool, error) {
 		return true, fmt.Errorf("failed to submit all rehearsal jobs")
 	}
 
-	selector := ctrlruntimeclient.MatchingLabels{rehearseLabel: strconv.Itoa(e.prNumber)}
+	selector := ctrlruntimeclient.MatchingLabels{Label: strconv.Itoa(e.prNumber)}
 
 	names := sets.NewString()
 	for _, job := range pjs {

@@ -391,7 +391,7 @@ func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.
 	}
 	pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, coreapi.EnvVar{Name: artifactEnv, Value: logMount.MountPath + "/artifacts"})
 
-	sidecar, err := decorate.Sidecar(decorationConfig, blobStorageOptions, blobStorageMounts, logMount, nil, rawJobSpec, !decorate.RequirePassingEntries, decorate.IgnoreInterrupts, secretsToCensor, *wrapperOptions)
+	sidecar, err := decorate.Sidecar(decorationConfig, blobStorageOptions, blobStorageMounts, logMount, nil, rawJobSpec, !decorate.RequirePassingEntries, true, secretsToCensor, *wrapperOptions)
 	if err != nil {
 		return fmt.Errorf("could not create sidecar: %w", err)
 	}

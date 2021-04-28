@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/afero"
 
 	"k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/github"
 	utilpointer "k8s.io/utils/pointer"
 )
 
@@ -86,7 +87,7 @@ func TestShardProwConfig(t *testing.T) {
 		expectedShardFiles map[string]string
 	}{
 		{
-			name: "Org and repo config get written out",
+			name: "Org and repo branchprotection config get written out",
 			in: &config.ProwConfig{
 				BranchProtection: config.BranchProtection{
 					Orgs: map[string]config.Org{
@@ -120,7 +121,7 @@ func TestShardProwConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "Empty org config is not serialized",
+			name: "Empty org branchprotection config is not serialized",
 			in: &config.ProwConfig{
 				BranchProtection: config.BranchProtection{
 					Orgs: map[string]config.Org{
@@ -141,6 +142,32 @@ func TestShardProwConfig(t *testing.T) {
 					"      repos:",
 					"        release:",
 					"          protect: false",
+					"",
+				}, "\n"),
+			},
+		},
+		{
+			name: "Org and repo mergemethod config gets written out",
+			in: &config.ProwConfig{
+				Tide: config.Tide{
+					MergeType: map[string]github.PullRequestMergeType{
+						"openshift":         github.MergeSquash,
+						"openshift/release": github.MergeRebase,
+					},
+				},
+			},
+
+			expectedShardFiles: map[string]string{
+				"openshift/_prowconfig.yaml": strings.Join([]string{
+					"tide:",
+					"  merge_method:",
+					"    openshift: squash",
+					"",
+				}, "\n"),
+				"openshift/release/_prowconfig.yaml": strings.Join([]string{
+					"tide:",
+					"  merge_method:",
+					"    openshift/release: rebase",
 					"",
 				}, "\n"),
 			},
@@ -179,6 +206,7 @@ func TestShardProwConfig(t *testing.T) {
 			if diff := cmp.Diff(tc.expectedShardFiles, shardedConfigFiles); diff != "" {
 				t.Errorf("actual sharded config differs from expected:\n%s", diff)
 			}
+
 		})
 	}
 }

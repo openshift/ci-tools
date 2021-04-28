@@ -7,10 +7,9 @@ import (
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	controllerruntime "sigs.k8s.io/controller-runtime"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	crclient "sigs.k8s.io/controller-runtime/pkg/client"
+	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
@@ -47,7 +46,7 @@ func (s *outputImageTagStep) run(ctx context.Context) error {
 		logrus.Infof("Tagging %s into %s", s.config.From, s.config.To.ISTagName())
 	}
 	from := &imagev1.ImageStreamTag{}
-	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{
+	if err := s.client.Get(ctx, crclient.ObjectKey{
 		Namespace: s.jobSpec.Namespace(),
 		Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From),
 	}, from); err != nil {
@@ -61,11 +60,11 @@ func (s *outputImageTagStep) run(ctx context.Context) error {
 		},
 	}
 
-	_, err := controllerruntime.CreateOrUpdate(ctx, s.client, ist, func() error {
+	_, err := crcontrollerutil.CreateOrPatch(ctx, s.client, ist, func() error {
 		ist.Tag = desired.Tag
 		return nil
 	})
-	if err != nil && !errors.IsConflict(err) && !errors.IsAlreadyExists(err) {
+	if err != nil {
 		return fmt.Errorf("could not upsert output imagestreamtag: %w", err)
 	}
 	return nil
@@ -117,7 +116,7 @@ func (s *outputImageTagStep) Description() string {
 	return fmt.Sprintf("Tag the image %s into the stable image stream", s.config.From)
 }
 
-func (s *outputImageTagStep) Objects() []ctrlruntimeclient.Object {
+func (s *outputImageTagStep) Objects() []crclient.Object {
 	return s.client.Objects()
 }
 

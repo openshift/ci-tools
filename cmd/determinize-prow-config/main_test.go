@@ -17,6 +17,7 @@ import (
 
 	"k8s.io/test-infra/prow/config"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
+	"k8s.io/test-infra/prow/github"
 	utilpointer "k8s.io/utils/pointer"
 	"sigs.k8s.io/yaml"
 )
@@ -150,78 +151,78 @@ func TestShardProwConfig(t *testing.T) {
 				}, "\n"),
 			},
 		},
-		//	{
-		//		name: "Org and repo mergemethod config gets written out",
-		//		in: &config.ProwConfig{
-		//			Tide: config.Tide{
-		//				MergeType: map[string]github.PullRequestMergeType{
-		//					"openshift":         github.MergeSquash,
-		//					"openshift/release": github.MergeRebase,
-		//				},
-		//			},
-		//		},
+		{
+			name: "Org and repo mergemethod config gets written out",
+			in: &config.ProwConfig{
+				Tide: config.Tide{
+					MergeType: map[string]github.PullRequestMergeType{
+						"openshift":         github.MergeSquash,
+						"openshift/release": github.MergeRebase,
+					},
+				},
+			},
 
-		//		expectedShardFiles: map[string]string{
-		//			"openshift/_prowconfig.yaml": strings.Join([]string{
-		//				"tide:",
-		//				"  merge_method:",
-		//				"    openshift: squash",
-		//				"",
-		//			}, "\n"),
-		//			"openshift/release/_prowconfig.yaml": strings.Join([]string{
-		//				"tide:",
-		//				"  merge_method:",
-		//				"    openshift/release: rebase",
-		//				"",
-		//			}, "\n"),
-		//		},
-		//	},
-		//		{
-		//			name: "Org and repo branchprotection and mergemethod config gets written out",
-		//			in: &config.ProwConfig{
-		//				BranchProtection: config.BranchProtection{
-		//					Orgs: map[string]config.Org{
-		//						"openshift": {
-		//							Policy: config.Policy{Protect: utilpointer.BoolPtr(false)},
-		//							Repos: map[string]config.Repo{
-		//								"release": {Policy: config.Policy{Protect: utilpointer.BoolPtr(false)}},
-		//							},
-		//						},
-		//					},
-		//				},
-		//				Tide: config.Tide{
-		//					MergeType: map[string]github.PullRequestMergeType{
-		//						"openshift":         github.MergeSquash,
-		//						"openshift/release": github.MergeRebase,
-		//					},
-		//				},
-		//			},
-		//
-		//			expectedShardFiles: map[string]string{
-		//				"openshift/_prowconfig.yaml": strings.Join([]string{
-		//					"branch-protection:",
-		//					"  orgs:",
-		//					"    openshift:",
-		//					"      protect: false",
-		//					"tide:",
-		//					"  merge_method:",
-		//					"    openshift: squash",
-		//					"",
-		//				}, "\n"),
-		//				"openshift/release/_prowconfig.yaml": strings.Join([]string{
-		//					"branch-protection:",
-		//					"  orgs:",
-		//					"    openshift:",
-		//					"      repos:",
-		//					"        release:",
-		//					"          protect: false",
-		//					"tide:",
-		//					"  merge_method:",
-		//					"    openshift/release: rebase",
-		//					"",
-		//				}, "\n"),
-		//			},
-		//		},
+			expectedShardFiles: map[string]string{
+				"openshift/_prowconfig.yaml": strings.Join([]string{
+					"tide:",
+					"  merge_method:",
+					"    openshift: squash",
+					"",
+				}, "\n"),
+				"openshift/release/_prowconfig.yaml": strings.Join([]string{
+					"tide:",
+					"  merge_method:",
+					"    openshift/release: rebase",
+					"",
+				}, "\n"),
+			},
+		},
+		{
+			name: "Org and repo branchprotection and mergemethod config gets written out",
+			in: &config.ProwConfig{
+				BranchProtection: config.BranchProtection{
+					Orgs: map[string]config.Org{
+						"openshift": {
+							Policy: config.Policy{Protect: utilpointer.BoolPtr(false)},
+							Repos: map[string]config.Repo{
+								"release": {Policy: config.Policy{Protect: utilpointer.BoolPtr(false)}},
+							},
+						},
+					},
+				},
+				Tide: config.Tide{
+					MergeType: map[string]github.PullRequestMergeType{
+						"openshift":         github.MergeSquash,
+						"openshift/release": github.MergeRebase,
+					},
+				},
+			},
+
+			expectedShardFiles: map[string]string{
+				"openshift/_prowconfig.yaml": strings.Join([]string{
+					"branch-protection:",
+					"  orgs:",
+					"    openshift:",
+					"      protect: false",
+					"tide:",
+					"  merge_method:",
+					"    openshift: squash",
+					"",
+				}, "\n"),
+				"openshift/release/_prowconfig.yaml": strings.Join([]string{
+					"branch-protection:",
+					"  orgs:",
+					"    openshift:",
+					"      repos:",
+					"        release:",
+					"          protect: false",
+					"tide:",
+					"  merge_method:",
+					"    openshift/release: rebase",
+					"",
+				}, "\n"),
+			},
+		},
 	}
 
 	for _, tc := range testCases {

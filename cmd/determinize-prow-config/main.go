@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
@@ -235,21 +236,21 @@ func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.Pr
 		delete(pc.BranchProtection.Orgs, org)
 	}
 
-	//	for orgOrgRepoString, mergeMethod := range pc.Tide.MergeType {
-	//		var orgRepo prowconfig.OrgRepo
-	//		if idx := strings.Index(orgOrgRepoString, "/"); idx != -1 {
-	//			orgRepo.Org = orgOrgRepoString[:idx]
-	//			orgRepo.Repo = orgOrgRepoString[idx+1:]
-	//		} else {
-	//			orgRepo.Org = orgOrgRepoString
-	//		}
-	//
-	//		if configsByOrgRepo[orgRepo] == nil {
-	//			configsByOrgRepo[orgRepo] = &prowConfigWithPointers{}
-	//		}
-	//		configsByOrgRepo[orgRepo].Tide = &tideConfig{MergeType: map[string]github.PullRequestMergeType{orgOrgRepoString: mergeMethod}}
-	//		delete(pc.Tide.MergeType, orgOrgRepoString)
-	//	}
+	for orgOrgRepoString, mergeMethod := range pc.Tide.MergeType {
+		var orgRepo prowconfig.OrgRepo
+		if idx := strings.Index(orgOrgRepoString, "/"); idx != -1 {
+			orgRepo.Org = orgOrgRepoString[:idx]
+			orgRepo.Repo = orgOrgRepoString[idx+1:]
+		} else {
+			orgRepo.Org = orgOrgRepoString
+		}
+
+		if configsByOrgRepo[orgRepo] == nil {
+			configsByOrgRepo[orgRepo] = &prowConfigWithPointers{}
+		}
+		configsByOrgRepo[orgRepo].Tide = &tideConfig{MergeType: map[string]github.PullRequestMergeType{orgOrgRepoString: mergeMethod}}
+		delete(pc.Tide.MergeType, orgOrgRepoString)
+	}
 
 	for orgOrRepo, cfg := range configsByOrgRepo {
 		if err := mkdirAndWrite(target, filepath.Join(orgOrRepo.Org, orgOrRepo.Repo, config.SupplementalProwConfigFileName), cfg); err != nil {

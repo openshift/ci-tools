@@ -72,10 +72,12 @@ func (s *outputImageTagStep) run(ctx context.Context) error {
 			ist.Tag = desired.Tag
 			return nil
 		})
-		if err != nil {
-			if errors.IsConflict(err) {
-				return false, nil
-			}
+		switch {
+		case err != nil && errors.IsConflict(err):
+			return false, nil
+		case err != nil && errors.IsAlreadyExists(err):
+			return true, nil
+		case err != nil:
 			return false, err
 		}
 		return true, nil

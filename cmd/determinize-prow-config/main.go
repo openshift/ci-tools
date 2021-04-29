@@ -72,7 +72,7 @@ func updateProwConfig(configDir, shardingBaseDir string) error {
 	if shardingBaseDir != "" {
 		additionalConfigs = append(additionalConfigs, shardingBaseDir)
 	}
-	if err := agent.Start(configPath, "", additionalConfigs, ""); err != nil {
+	if err := agent.Start(configPath, "", additionalConfigs, "_prowconfig.yaml"); err != nil {
 		return fmt.Errorf("could not load Prow configuration: %w", err)
 	}
 
@@ -239,7 +239,7 @@ func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.Pr
 	for orgOrgRepoString, mergeMethod := range pc.Tide.MergeType {
 		var orgRepo prowconfig.OrgRepo
 		if idx := strings.Index(orgOrgRepoString, "/"); idx != -1 {
-			orgRepo.Org = orgOrgRepoString[:idx+1]
+			orgRepo.Org = orgOrgRepoString[:idx]
 			orgRepo.Repo = orgOrgRepoString[idx+1:]
 		} else {
 			orgRepo.Org = orgOrgRepoString

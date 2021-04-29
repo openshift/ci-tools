@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -12,7 +11,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/test-infra/prow/kube"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -106,19 +104,14 @@ func acquireCluster(ctx context.Context, clusterClaim api.ClusterClaim, hiveClie
 	clusterPool := clusterPools.Items[0]
 	claimName := jobSpec.ProwJobID
 	claimNamespace := clusterPool.Namespace
-	// https://github.com/kubernetes/test-infra/blob/d14589b797fae426bb70cea4843fa46be50c6739/prow/pod-utils/decorate/podspec.go#L99-L101
-	jobNameForLabel := jobSpec.Job
-	if len(jobNameForLabel) > validation.LabelValueMaxLength {
-		jobNameForLabel = strings.TrimRight(jobSpec.Job[:validation.LabelValueMaxLength], ".-")
-	}
 	claim := &hivev1.ClusterClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      claimName,
 			Namespace: claimNamespace,
-			Labels: map[string]string{
-				kube.ProwJobAnnotation: jobNameForLabel,
+			Labels: trimLabels(map[string]string{
+				kube.ProwJobAnnotation: jobSpec.Job,
 				kube.ProwBuildIDLabel:  jobSpec.BuildID,
-			},
+			}),
 		},
 		Spec: hivev1.ClusterClaimSpec{
 			ClusterPoolName: clusterPool.Name,

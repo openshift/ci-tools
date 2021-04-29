@@ -18,6 +18,7 @@ import (
 	"k8s.io/client-go/transport"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
+	"k8s.io/test-infra/prow/logrusutil"
 	pprofutil "k8s.io/test-infra/prow/pjutil/pprof"
 	"k8s.io/test-infra/prow/version"
 
@@ -106,6 +107,7 @@ func (o *options) validate() error {
 }
 
 func main() {
+	logrusutil.ComponentInit()
 	logrus.Infof("%s version %s", version.Name, version.Version)
 	flagSet := flag.NewFlagSet("", flag.ExitOnError)
 	opts := bindOptions(flagSet)

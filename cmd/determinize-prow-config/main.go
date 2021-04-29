@@ -12,7 +12,6 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
@@ -20,7 +19,6 @@ import (
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/plugins"
 	"sigs.k8s.io/yaml"
 
@@ -205,57 +203,29 @@ func updatePluginConfig(configDir string) error {
 // in order to avoid serializing empty structs.
 type prowConfigWithPointers struct {
 	BranchProtection *prowconfig.BranchProtection `json:"branch-protection,omitempty"`
-	Tide             *tideConfig                  `json:"tide,omitempty"`
-}
-
-type tideConfig struct {
-	MergeType map[string]github.PullRequestMergeType `json:"merge_method,omitempty"`
 }
 
 func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.ProwConfig, error) {
-	configsByOrgRepo := map[prowconfig.OrgRepo]*prowConfigWithPointers{}
 	for org, orgConfig := range pc.BranchProtection.Orgs {
 		for repo, repoConfig := range orgConfig.Repos {
-			if configsByOrgRepo[prowconfig.OrgRepo{Org: org, Repo: repo}] == nil {
-				configsByOrgRepo[prowconfig.OrgRepo{Org: org, Repo: repo}] = &prowConfigWithPointers{}
-			}
-			configsByOrgRepo[prowconfig.OrgRepo{Org: org, Repo: repo}].BranchProtection = &prowconfig.BranchProtection{
+			cfg := prowConfigWithPointers{BranchProtection: &prowconfig.BranchProtection{
 				Orgs: map[string]prowconfig.Org{org: {Repos: map[string]prowconfig.Repo{repo: repoConfig}}},
+			}}
+			if err := mkdirAndWrite(target, filepath.Join(org, repo, config.SupplementalProwConfigFileName), cfg); err != nil {
+				return nil, fmt.Errorf("failed to write config for repo %s/%s: %w", org, repo, err)
 			}
 			delete(pc.BranchProtection.Orgs[org].Repos, repo)
 		}
 
 		if isPolicySet(orgConfig.Policy) {
-			if configsByOrgRepo[prowconfig.OrgRepo{Org: org}] == nil {
-				configsByOrgRepo[prowconfig.OrgRepo{Org: org}] = &prowConfigWithPointers{}
-			}
-			configsByOrgRepo[prowconfig.OrgRepo{Org: org}].BranchProtection = &prowconfig.BranchProtection{
+			cfg := prowConfigWithPointers{BranchProtection: &prowconfig.BranchProtection{
 				Orgs: map[string]prowconfig.Org{org: orgConfig},
+			}}
+			if err := mkdirAndWrite(target, filepath.Join(org, config.SupplementalProwConfigFileName), cfg); err != nil {
+				return nil, fmt.Errorf("failed to write config for org %s: %w", org, err)
 			}
 		}
 		delete(pc.BranchProtection.Orgs, org)
-	}
-
-	for orgOrgRepoString, mergeMethod := range pc.Tide.MergeType {
-		var orgRepo prowconfig.OrgRepo
-		if idx := strings.Index(orgOrgRepoString, "/"); idx != -1 {
-			orgRepo.Org = orgOrgRepoString[:idx+1]
-			orgRepo.Repo = orgOrgRepoString[idx+1:]
-		} else {
-			orgRepo.Org = orgOrgRepoString
-		}
-
-		if configsByOrgRepo[orgRepo] == nil {
-			configsByOrgRepo[orgRepo] = &prowConfigWithPointers{}
-		}
-		configsByOrgRepo[orgRepo].Tide = &tideConfig{MergeType: map[string]github.PullRequestMergeType{orgOrgRepoString: mergeMethod}}
-		delete(pc.Tide.MergeType, orgOrgRepoString)
-	}
-
-	for orgOrRepo, cfg := range configsByOrgRepo {
-		if err := mkdirAndWrite(target, filepath.Join(orgOrRepo.Org, orgOrRepo.Repo, config.SupplementalProwConfigFileName), cfg); err != nil {
-			return nil, err
-		}
 	}
 
 	return pc, nil

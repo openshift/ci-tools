@@ -466,7 +466,9 @@ func fetchUserSecrets(secretsMap map[string]map[types.NamespacedName]coreapi.Sec
 
 	var errs []error
 	for secretName, secretKeys := range userSecrets {
+		logger := logrus.WithField("secret", secretName.String())
 		for _, cluster := range targetClusters {
+			logger = logger.WithField("cluster", cluster)
 			if _, ok := secretsMap[cluster]; !ok {
 				secretsMap[cluster] = map[types.NamespacedName]coreapi.Secret{}
 			}
@@ -488,6 +490,7 @@ func fetchUserSecrets(secretsMap map[string]map[types.NamespacedName]coreapi.Sec
 					continue
 				}
 				entry.Data[vaultKey] = []byte(vaultValue)
+				logger.WithField("key", vaultKey).Debug("Populating key from Vault data.")
 			}
 			secretsMap[cluster][secretName] = entry
 		}

@@ -3,11 +3,14 @@ package steps
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -60,13 +63,26 @@ func (s *outputImageTagStep) run(ctx context.Context) error {
 		},
 	}
 
-	_, err := crcontrollerutil.CreateOrPatch(ctx, s.client, ist, func() error {
-		ist.Tag = desired.Tag
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("could not upsert output imagestreamtag: %w", err)
+	// Retry on conflicts with exponential backoff to avoid thundering. Note that `Patch` is
+	// not supposed return a conflict so in theory we should not need it but we do:
+	// > Clayton Coleman  6 hours ago
+	// > i think we may have found a bug in kube, which is exciting
+	if waitErr := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Factor: 2, Duration: time.Second}, func() (bool, error) {
+		_, err := crcontrollerutil.CreateOrPatch(ctx, s.client, ist, func() error {
+			ist.Tag = desired.Tag
+			return nil
+		})
+		if err != nil {
+			if errors.IsConflict(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		return true, nil
+	}); waitErr != nil {
+		return fmt.Errorf("could not upsert output imagestreamtag: %w", waitErr)
 	}
+
 	return nil
 }
 

@@ -63,7 +63,7 @@ func (s *clusterClaimStep) run(ctx context.Context) error {
 	}
 	clusterClaim, err := acquireCluster(ctx, *s.clusterClaim, s.hiveClient, s.client, *s.jobSpec)
 	if err != nil {
-		return err
+		return results.ForReason("acquiring_cluster_claim").ForError(err)
 	}
 
 	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))

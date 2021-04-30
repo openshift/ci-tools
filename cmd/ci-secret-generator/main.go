@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -325,12 +326,13 @@ func validateContexts(contexts []secretbootstrap.BitWardenContext, config secret
 		var found bool
 		for _, secret := range config.Secrets {
 			for _, haystack := range secret.From {
+				haystack.BWItem = strings.TrimPrefix(haystack.BWItem, config.VaultDPTPPRefix+"/")
 				if reflect.DeepEqual(needle, haystack) {
 					found = true
 				}
 				for _, dc := range haystack.DockerConfigJSONData {
 					ctx := secretbootstrap.BitWardenContext{
-						BWItem:     dc.BWItem,
+						BWItem:     strings.TrimPrefix(dc.BWItem, config.VaultDPTPPRefix+"/"),
 						Attachment: dc.AuthBitwardenAttachment,
 					}
 					if reflect.DeepEqual(needle, ctx) {

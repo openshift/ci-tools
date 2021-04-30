@@ -155,7 +155,7 @@ func acquireLeases(
 			errs = append(errs, results.ForReason(results.Reason("acquiring_lease:"+l.ResourceType)).WithError(err).Errorf("failed to acquire lease: %v", err))
 			break
 		}
-		logrus.Debugf("Acquired lease(s) for %s: %v", l.ResourceType, names)
+		logrus.Infof("Acquired %d lease(s) for %s: %v", l.Count, l.ResourceType, names)
 		l.resources = names
 	}
 	if errs != nil {

@@ -119,8 +119,7 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 		return err
 	}
 
-	var config secretbootstrap.Config
-	if err := secretbootstrap.LoadConfigFromFile(o.configPath, &config); err != nil {
+	if err := secretbootstrap.LoadConfigFromFile(o.configPath, &o.config); err != nil {
 		return err
 	}
 
@@ -149,7 +148,8 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 	}
 
 	o.secretsGetters = map[string]coreclientset.SecretsGetter{}
-	for i, secretConfig := range config.Secrets {
+	var filteredSecrets []secretbootstrap.SecretConfig
+	for i, secretConfig := range o.config.Secrets {
 		var to []secretbootstrap.SecretContext
 
 		for j, secretContext := range secretConfig.To {
@@ -176,9 +176,10 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 
 		if len(to) > 0 {
 			secretConfig.To = to
-			o.config.Secrets = append(o.config.Secrets, secretConfig)
+			filteredSecrets = append(filteredSecrets, secretConfig)
 		}
 	}
+	o.config.Secrets = filteredSecrets
 
 	if o.maxConcurrency == 0 {
 		o.maxConcurrency = runtime.GOMAXPROCS(0)
@@ -191,13 +192,6 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 func (o *options) validateCompletedOptions() error {
 	if err := o.config.Validate(); err != nil {
 		return fmt.Errorf("failed to validate the config: %w", err)
-	}
-	if len(o.config.Secrets) == 0 {
-		msg := "no secrets found to sync"
-		if o.cluster != "" {
-			msg = msg + " for --cluster=" + o.cluster
-		}
-		return fmt.Errorf(msg)
 	}
 	toMap := map[string]map[string]string{}
 	for i, secretConfig := range o.config.Secrets {
@@ -459,6 +453,11 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, client
 }
 
 func fetchUserSecrets(secretsMap map[string]map[types.NamespacedName]coreapi.Secret, secretStoreClient secrets.ReadOnlyClient, targetClusters []string) (map[string]map[types.NamespacedName]coreapi.Secret, error) {
+	if len(targetClusters) == 0 {
+		logrus.Warn("No target clusters for user secrets configured, skipping...")
+		return secretsMap, nil
+	}
+
 	userSecrets, err := secretStoreClient.GetUserSecrets()
 	if err != nil || len(userSecrets) == 0 {
 		return secretsMap, err

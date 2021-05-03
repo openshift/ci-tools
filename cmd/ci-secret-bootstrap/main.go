@@ -459,8 +459,13 @@ func fetchUserSecrets(secretsMap map[string]map[types.NamespacedName]coreapi.Sec
 	}
 
 	userSecrets, err := secretStoreClient.GetUserSecrets()
-	if err != nil || len(userSecrets) == 0 {
+	if err != nil {
 		return secretsMap, err
+	}
+
+	if len(userSecrets) == 0 {
+		logrus.Warn("No user secrets found")
+		return secretsMap, nil
 	}
 
 	var errs []error
@@ -502,9 +507,11 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 	var errs []error
 	shouldCreate := false
 	for cluster, secrets := range secretsMap {
+		logger := logrus.WithField("cluster", cluster)
+		logger.Debug("Syncing secrets for cluster")
 		for _, secret := range secrets {
-			logger := logrus.WithFields(logrus.Fields{"cluster": cluster, "namespace": secret.Namespace, "name": secret.Name, "type": secret.Type})
-			logrus.Debugf("handling secret")
+			logger := logger.WithFields(logrus.Fields{"namespace": secret.Namespace, "name": secret.Name, "type": secret.Type})
+			logger.Debug("handling secret")
 
 			secretClient := secretsGetters[cluster].Secrets(secret.Namespace)
 
@@ -542,7 +549,7 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 						errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 						continue
 					}
-					logger.Debugf("secret updated")
+					logger.Debug("secret updated")
 				}
 			}
 
@@ -551,7 +558,7 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 					errs = append(errs, fmt.Errorf("error creating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 					continue
 				}
-				logger.Debugf("secret created")
+				logger.Debug("secret created")
 			}
 		}
 	}
@@ -685,6 +692,7 @@ func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClie
 
 	unused := make(map[string]*comparable)
 	for itemName, item := range allSecretStoreItems {
+		itemName := strings.TrimPrefix(itemName, config.VaultDPTPPRefix+"/")
 		l := logrus.WithField("bw_item", itemName)
 		if item.LastChanged().After(allowUnusedAfter) {
 			logrus.WithFields(logrus.Fields{
@@ -858,38 +866,43 @@ func main() {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
 	if err := o.completeOptions(&censor); err != nil {
-		logrus.WithError(err).Fatal("Failed to complete options.")
+		logrus.WithError(err).Error("Failed to complete options.")
 	}
 	client, err := o.secrets.NewReadOnlyClient(&censor)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create client.")
 	}
-	logrus.RegisterExitHandler(func() {
+
+	if errs := reconcileSecrets(o, client); len(errs) > 0 {
+		logrus.WithError(utilerrors.NewAggregate(errs)).Fatalf("errors while updating secrets")
+	}
+}
+
+func reconcileSecrets(o options, client secrets.ReadOnlyClient) (errs []error) {
+	defer func() {
 		if _, err := client.Logout(); err != nil {
-			logrus.WithError(err).Fatal("Failed to logout.")
+			errs = append(errs, fmt.Errorf("failed to logout: %w", err))
 		}
-	})
-	defer logrus.Exit(0)
+	}()
 
 	if o.validateOnly {
 		var config secretbootstrap.Config
 		if err := secretbootstrap.LoadConfigFromFile(o.configPath, &config); err != nil {
-			logrus.WithError(err).Fatalf("failed to load config from file: %s", o.configPath)
+			return append(errs, fmt.Errorf("failed to load config from file: %s", o.configPath))
 		}
 		if err := config.Validate(); err != nil {
-			logrus.WithError(err).Fatal("failed to validate the config")
+			return append(errs, fmt.Errorf("failed to validate the config: %w", err))
 		}
 
 		if err := o.validateBWItems(client); err != nil {
-			logrus.WithError(err).Fatal("failed to validate items")
+			return append(errs, fmt.Errorf("failed to validate items: %w", err))
 		}
 
 		logrus.Infof("the config file %s has been validated", o.configPath)
-		return
+		return nil
 	}
 
 	ctx := context.TODO()
-	var errs []error
 	// errors returned by constructSecrets will be handled once the rest of the secrets have been uploaded
 	secretsMap, err := constructSecrets(ctx, o.config, client, o.maxConcurrency)
 	if err != nil {
@@ -916,7 +929,5 @@ func main() {
 		logrus.Info("Updated secrets.")
 	}
 
-	if len(errs) > 0 {
-		logrus.WithError(utilerrors.NewAggregate(errs)).Fatalf("errors while updating secrets")
-	}
+	return errs
 }

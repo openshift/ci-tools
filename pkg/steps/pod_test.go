@@ -301,15 +301,6 @@ func TestTestStepAndRequires(t *testing.T) {
 			},
 			expected: []api.StepLink{api.InternalImageLink("cli")},
 		},
-		{
-			name: "step claim",
-			config: api.TestStepConfiguration{
-				As:                         "some",
-				ClusterClaim:               &api.ClusterClaim{},
-				ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "cli"},
-			},
-			expected: []api.StepLink{api.ClusterClaimLink("some"), api.InternalImageLink("cli")},
-		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

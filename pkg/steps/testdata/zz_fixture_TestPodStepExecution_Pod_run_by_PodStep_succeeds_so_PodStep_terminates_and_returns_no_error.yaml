@@ -50,7 +50,8 @@ spec:
     - name: REPO_OWNER
       value: org
     - name: ENTRYPOINT_OPTIONS
-      value: '{"timeout":60000000000,"grace_period":1000000000,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset -eu\nlaunch-tests"],"container_name":"StepName","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
+      value: '{"timeout":60000000000,"grace_period":1000000000,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset
+        -eu\nlaunch-tests"],"container_name":"StepName","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
     - name: ARTIFACT_DIR
       value: /logs/artifacts
     image: somename:sometag
@@ -67,7 +68,8 @@ spec:
     env:
     - name: JOB_SPEC
     - name: SIDECAR_OPTIONS
-      value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/StepName","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset -eu\nlaunch-tests"],"container_name":"StepName","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"censoring_options":{}}'
+      value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/StepName","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset
+        -eu\nlaunch-tests"],"container_name":"StepName","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"censoring_options":{}}'
     image: sidecar
     name: sidecar
     resources: {}

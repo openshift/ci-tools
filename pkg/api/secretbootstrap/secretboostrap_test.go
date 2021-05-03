@@ -69,6 +69,60 @@ func TestResolving(t *testing.T) {
 			config:        Config{Secrets: []SecretConfig{{To: []SecretContext{{ClusterGroups: []string{"a"}}}}}},
 			expectedError: "item secrets.0.to.0 references inexistent cluster_group a",
 		},
+		{
+			name: "DPTP prefix gets added to normal BW items",
+			config: Config{
+				VaultDPTPPRefix: "prefix",
+				Secrets: []SecretConfig{{
+					From: map[string]BitWardenContext{"...": {BWItem: "foo", Field: "bar"}},
+					To: []SecretContext{{
+						Cluster:   "foo",
+						Namespace: "namspace",
+						Name:      "name",
+						Type:      corev1.SecretTypeBasicAuth,
+					}},
+				}},
+			},
+			expectedConfig: Config{
+				VaultDPTPPRefix: "prefix",
+				Secrets: []SecretConfig{{
+					From: map[string]BitWardenContext{"...": {BWItem: "prefix/foo", Field: "bar"}},
+					To: []SecretContext{{
+						Cluster:   "foo",
+						Namespace: "namspace",
+						Name:      "name",
+						Type:      corev1.SecretTypeBasicAuth,
+					}},
+				}},
+			},
+		},
+		{
+			name: "DPTP prefix gets added to dockerconfigjson BW items",
+			config: Config{
+				VaultDPTPPRefix: "prefix",
+				Secrets: []SecretConfig{{
+					From: map[string]BitWardenContext{"...": {DockerConfigJSONData: []DockerConfigJSONData{{BWItem: "foo", AuthBitwardenAttachment: "bar"}}}},
+					To: []SecretContext{{
+						Cluster:   "foo",
+						Namespace: "namspace",
+						Name:      "name",
+						Type:      corev1.SecretTypeBasicAuth,
+					}},
+				}},
+			},
+			expectedConfig: Config{
+				VaultDPTPPRefix: "prefix",
+				Secrets: []SecretConfig{{
+					From: map[string]BitWardenContext{"...": {DockerConfigJSONData: []DockerConfigJSONData{{BWItem: "prefix/foo", AuthBitwardenAttachment: "bar"}}}},
+					To: []SecretContext{{
+						Cluster:   "foo",
+						Namespace: "namspace",
+						Name:      "name",
+						Type:      corev1.SecretTypeBasicAuth,
+					}},
+				}},
+			},
+		},
 	}
 
 	for _, tc := range testCases {

@@ -776,7 +776,7 @@ func (e environmentOverride) Get(name string) (string, error) {
 func TestFromConfig(t *testing.T) {
 	ns := "ns"
 	httpClient := release.NewFakeHTTPClient(func(req *http.Request) (*http.Response, error) {
-		content := `{"nodes": [{"version": "version", "payload": "payload"}]}`
+		content := `{"nodes": [{"version": "4.1.0", "payload": "payload"}]}`
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewBuffer([]byte(content))),
@@ -1010,7 +1010,7 @@ func TestFromConfig(t *testing.T) {
 		config: api.ReleaseBuildConfiguration{
 			InputConfiguration: api.InputConfiguration{
 				Releases: map[string]api.UnresolvedRelease{
-					"release": {Release: &api.Release{Version: "version"}},
+					"release": {Release: &api.Release{Version: "4.1.0"}},
 				},
 			},
 		},
@@ -1023,7 +1023,7 @@ func TestFromConfig(t *testing.T) {
 		config: api.ReleaseBuildConfiguration{
 			InputConfiguration: api.InputConfiguration{
 				Releases: map[string]api.UnresolvedRelease{
-					"release": {Release: &api.Release{Version: "version"}},
+					"release": {Release: &api.Release{Version: "4.1.0"}},
 				},
 			},
 		},
@@ -1089,7 +1089,7 @@ func TestFromConfig(t *testing.T) {
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{},
 			}},
 		},
-		expectedSteps: []string{"cluster-pool:fast-as-heck-aws:ocp-4.7-amd64-aws-dpp", "fast-as-heck-aws", "[output-images]", "[images]"},
+		expectedSteps: []string{"fast-as-heck-aws", "[output-images]", "[images]"},
 	}, {
 		name: "container test with a claim",
 		config: api.ReleaseBuildConfiguration{
@@ -1099,7 +1099,7 @@ func TestFromConfig(t *testing.T) {
 				ContainerTestConfiguration: &api.ContainerTestConfiguration{},
 			}},
 		},
-		expectedSteps: []string{"cluster-pool:e2e:----", "e2e", "[output-images]", "[images]"},
+		expectedSteps: []string{"e2e", "[output-images]", "[images]"},
 	}, {
 		name: "lease test",
 		config: api.ReleaseBuildConfiguration{

@@ -21,7 +21,7 @@ import (
 )
 
 // ArtifactDir determines where artifacts should for for a test case.
-func ArtifactDir(t *T) string {
+func ArtifactDir(t TestingTInterface) string {
 	var baseDir string
 	if dir, set := os.LookupEnv("ARTIFACT_DIR"); set {
 		baseDir = dir
@@ -120,8 +120,21 @@ type Accessory struct {
 	clientFlags PortFlags
 }
 
-// Run begins the accessory process. This call is not blocking.
-func (a *Accessory) Run(t *T, parentCtx context.Context) {
+// run begins the accessory process. Only test/e2e/framework.Run
+// is allowed to call this as it required additional synchronization or your
+// tests might pass incorrectly.
+func (a *Accessory) RunFromFrameworkRunner(t *T, parentCtx context.Context) {
+	a.run(parentCtx, t, t.Fatalf)
+}
+
+// run begins the accessory process. this call is not blocking.
+// Because testing.T does not allow to call Fatalf in a distinct
+// goroutine, this will use Errorf instead.
+func (a *Accessory) Run(t *testing.T) {
+	a.run(context.Background(), t, t.Errorf)
+}
+
+func (a *Accessory) run(parentCtx context.Context, t TestingTInterface, failfunc func(format string, args ...interface{})) {
 	a.port, a.healthPort = GetFreePort(t), GetFreePort(t)
 	ctx, cancel := context.WithCancel(parentCtx)
 	cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
@@ -136,7 +149,7 @@ func (a *Accessory) Run(t *T, parentCtx context.Context) {
 	artifactDir := ArtifactDir(t)
 	logFile, err := os.Create(filepath.Join(artifactDir, fmt.Sprintf("%s.log", a.command)))
 	if err != nil {
-		t.Fatalf("could not create log file: %v", err)
+		failfunc("could not create log file: %v", err)
 	}
 	log := bytes.Buffer{}
 	tee := io.TeeReader(&log, logFile)
@@ -153,9 +166,10 @@ func (a *Accessory) Run(t *T, parentCtx context.Context) {
 		if err != nil && ctx.Err() == nil {
 			// we care about errors in the process that did not result from the
 			// context expiring and us killing it
-			t.Fatalf("`%s` failed: %v logs:\n%v", a.command, err, string(data))
+			failfunc("`%s` failed: %v logs:\n%v", a.command, err, string(data))
 		}
 	}()
+
 }
 
 type ReadyOptions struct {
@@ -167,7 +181,7 @@ type ReadyOptions struct {
 type ReadyOption func(*ReadyOptions)
 
 // Ready returns when the accessory process is ready to serve data.
-func (a *Accessory) Ready(t *T, o ...ReadyOption) {
+func (a *Accessory) Ready(t TestingTInterface, o ...ReadyOption) {
 	opts := ReadyOptions{ReadyURL: fmt.Sprintf("http://127.0.0.1:%s/healthz/ready", a.healthPort)}
 	for _, o := range o {
 		o(&opts)
@@ -236,7 +250,11 @@ func (a *Accessory) ClientFlags() []string {
 	return a.clientFlags(a.port, a.healthPort)
 }
 
-var ports = sync.Map{}
+var ports sync.Map
+
+func init() {
+	ports = sync.Map{}
+}
 
 // GetFreePort asks the kernel for a free open port that is ready to use.
 func GetFreePort(t TestingTInterface) string {
@@ -258,7 +276,9 @@ func GetFreePort(t TestingTInterface) string {
 		port := strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
 		if _, previouslyAllocated := ports.LoadOrStore(port, nil); !previouslyAllocated {
 			// we've never seen this before, we can use it
+			t.Logf("found a never-before-seen port, returning: %s", port)
 			return port
 		}
+		t.Logf("found a previously-seen port, retrying: %s", port)
 	}
 }

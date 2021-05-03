@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/sirupsen/logrus"
+
 	coreapi "k8s.io/api/core/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -16,6 +18,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type projectDirectoryImageBuildStep struct {
@@ -23,6 +26,7 @@ type projectDirectoryImageBuildStep struct {
 	releaseBuildConfig *api.ReleaseBuildConfiguration
 	resources          api.ResourceConfiguration
 	client             BuildClient
+	secretClient       ctrlruntimeclient.Client
 	jobSpec            *api.JobSpec
 	pullSecret         *coreapi.Secret
 }
@@ -31,7 +35,7 @@ func (s *projectDirectoryImageBuildStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (*projectDirectoryImageBuildStep) Validate() error { return nil }
+func (s *projectDirectoryImageBuildStep) Validate() error { return nil }
 
 func (s *projectDirectoryImageBuildStep) Run(ctx context.Context) error {
 	return results.ForReason("building_project_image").ForError(s.run(ctx))
@@ -48,6 +52,9 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if err := s.createSecrets(ctx); err != nil {
+		return err
+	}
 	build := buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
@@ -59,8 +66,28 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 		s.config.DockerfilePath,
 		s.resources,
 		s.pullSecret,
+		s.config.BuildArgs,
 	)
 	return handleBuild(ctx, s.client, build)
+}
+
+func (s *projectDirectoryImageBuildStep) createSecrets(ctx context.Context) error {
+	logrus.Debugf("Creating test secrets used in build args for %q", s.Name())
+	if s.secretClient == nil {
+		return fmt.Errorf("cannot create secrets with a nil secret client")
+	}
+	toCreate := map[string]ctrlruntimeclient.ObjectKey{}
+	for i, args := range s.config.BuildArgs {
+		if args.ValueFrom != nil {
+			name, err := args.ValueFrom.NamespacedName()
+			if err != nil {
+				return fmt.Errorf("build_args[%d] failed to determine the namespaced name: %w", i, err)
+			}
+			toCreate[name] = ctrlruntimeclient.ObjectKey{Namespace: args.ValueFrom.Namespace, Name: args.ValueFrom.Name}
+		}
+	}
+
+	return util.CopySecretsIntoJobNamespace(ctx, s.secretClient, s.jobSpec, toCreate)
 }
 
 type workingDir func(tag string) (string, error)
@@ -160,11 +187,12 @@ func (s *projectDirectoryImageBuildStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, secretClient ctrlruntimeclient.Client, buildClient BuildClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:             config,
 		releaseBuildConfig: releaseBuildConfig,
 		resources:          resources,
+		secretClient:       secretClient,
 		client:             buildClient,
 		jobSpec:            jobSpec,
 		pullSecret:         pullSecret,

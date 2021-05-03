@@ -21,17 +21,19 @@ import (
 )
 
 const (
-	CanBeRehearsedLabel = "pj-rehearse.openshift.io/can-be-rehearsed"
-	CanBeRehearsedValue = "true"
-	SSHBastionLabel     = "dptp.openshift.io/ssh-bastion"
-	ProwJobLabelVariant = "ci-operator.openshift.io/variant"
-	JobReleaseKey       = "job-release"
-	PresubmitPrefix     = "pull"
-	PostsubmitPrefix    = "branch"
-	PeriodicPrefix      = "periodic"
+	CanBeRehearsedLabel    = "pj-rehearse.openshift.io/can-be-rehearsed"
+	CanBeRehearsedValue    = "true"
+	SSHBastionLabel        = "dptp.openshift.io/ssh-bastion"
+	ProwJobLabelVariant    = "ci-operator.openshift.io/variant"
+	ReleaseControllerLabel = "ci-operator.openshift.io/release-controller"
+	ReleaseControllerValue = "true"
+	JobReleaseKey          = "job-release"
+	PresubmitPrefix        = "pull"
+	PostsubmitPrefix       = "branch"
+	PeriodicPrefix         = "periodic"
 )
 
-// DataWithInfo describes the metadata for a Prow job configuration file
+// Info describes the metadata for a Prow job configuration file
 type Info struct {
 	Org    string
 	Repo   string

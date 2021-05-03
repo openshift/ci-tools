@@ -54,7 +54,7 @@ func (orgRepo orgRepo) repoString() string {
 	return fmt.Sprintf("%s/%s", orgRepo.Organization, orgRepo.Repository)
 }
 
-func loadRepos(configRootDir string, blocked blocklist, configSubDirs []string, githubOrg string, githubRepo string) ([]orgRepo, error) {
+func loadRepos(configRootDir string, blocked blocklist, configSubDirs, extraDirs []string, githubOrg string, githubRepo string) ([]orgRepo, error) {
 	var orgRepos []orgRepo
 	configSubDirectories := make([]string, 0, len(configSubDirs))
 	for _, sourceSubDir := range configSubDirs {
@@ -87,9 +87,12 @@ func loadRepos(configRootDir string, blocked blocklist, configSubDirs []string, 
 			if org == githubOrg && repo == githubRepo {
 				continue
 			}
-			repoConfigDirs := make([]string, 0, len(configSubDirectories))
+			var repoConfigDirs []string
 			for _, sourceSubDir := range configSubDirectories {
 				repoConfigDirs = append(repoConfigDirs, filepath.Join(sourceSubDir, org, repo))
+			}
+			for _, extraDir := range extraDirs {
+				repoConfigDirs = append(repoConfigDirs, filepath.Join(extraDir, org, repo))
 			}
 			var dirs []string
 			for _, d := range repoConfigDirs {
@@ -248,8 +251,8 @@ func writeOwners(orgRepo orgRepo, httpResult httpResult, cleaner ownersCleaner) 
 	return nil
 }
 
-func pullOwners(gc github.Client, configRootDir string, blocklist blocklist, configSubDirs []string, githubOrg string, githubRepo string, pc plugins.Configuration) error {
-	orgRepos, err := loadRepos(configRootDir, blocklist, configSubDirs, githubOrg, githubRepo)
+func pullOwners(gc github.Client, configRootDir string, blocklist blocklist, configSubDirs, extraDirs []string, githubOrg string, githubRepo string, pc plugins.Configuration) error {
+	orgRepos, err := loadRepos(configRootDir, blocklist, configSubDirs, extraDirs, githubOrg, githubRepo)
 	if err != nil {
 		return err
 	}
@@ -291,6 +294,7 @@ type options struct {
 	targetDir          string
 	targetSubDirectory string
 	configSubDirs      flagutil.Strings
+	extraDirs          flagutil.Strings
 	blockedRepos       flagutil.Strings
 	blockedOrgs        flagutil.Strings
 	debugMode          bool
@@ -314,6 +318,7 @@ func parseOptions() options {
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
 	fs.StringVar(&o.targetSubDirectory, "target-subdir", targetSubDirectory, "The sub-directory of the target repo where the configurations are stored.")
 	fs.Var(&o.configSubDirs, "config-subdir", "The sub-directory where configuration is stored. (Default list of directories: "+configSubDirs+")")
+	fs.Var(&o.extraDirs, "extra-config-dir", "The directory path from the repo root where extra configuration is stored.")
 	fs.Var(&o.blockedRepos, "ignore-repo", "The repo for which syncing OWNERS file is disabled.")
 	fs.Var(&o.blockedOrgs, "ignore-org", "The orgs for which syncing OWNERS file is disabled.")
 	fs.BoolVar(&o.debugMode, "debug-mode", false, "Enable the DEBUG level of logs if true.")
@@ -439,7 +444,7 @@ func main() {
 	var blocked blocklist
 	blocked.directories = sets.NewString(o.blockedRepos.Strings()...)
 	blocked.orgs = sets.NewString(o.blockedOrgs.Strings()...)
-	if err := pullOwners(gc, configRootDirectory, blocked, configSubDirectories, o.githubOrg, o.githubRepo, pc); err != nil {
+	if err := pullOwners(gc, configRootDirectory, blocked, configSubDirectories, o.extraDirs.Strings(), o.githubOrg, o.githubRepo, pc); err != nil {
 		logrus.WithError(err).Fatal("Error occurred when walking through the target dir.")
 	}
 

@@ -199,6 +199,7 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 			Name: streamName,
 			Tag:  "cli",
 		},
+		Labels:             map[string]string{releaseLabel: s.name},
 		ServiceAccountName: "ci-operator",
 		Commands: fmt.Sprintf(`
 set -xeuo pipefail

@@ -7,4 +7,5 @@ decoration_config:
 labels:
   ci-operator.openshift.io/prowgen-controlled: newly-generated
   job-release: "4.6"
-name: branch-ci-organization-repository-branch-Lowercase org repo and branch with release
+name: branch-ci-organization-repository-branch-Lowercase org repo and branch with
+  release

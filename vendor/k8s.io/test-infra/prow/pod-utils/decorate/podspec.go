@@ -91,30 +91,45 @@ func PodUtilsContainerNames() sets.String {
 //
 // User-provided extraLabels and extraAnnotations values will take precedence over auto-provided values.
 func LabelsAndAnnotationsForSpec(spec prowapi.ProwJobSpec, extraLabels, extraAnnotations map[string]string) (map[string]string, map[string]string) {
-	jobNameForLabel := spec.Job
 	log := logrus.WithFields(logrus.Fields{
 		"job": spec.Job,
 		"id":  extraLabels[kube.ProwBuildIDLabel],
 	})
-	if len(jobNameForLabel) > validation.LabelValueMaxLength {
-		// TODO(fejta): consider truncating middle rather than end.
-		jobNameForLabel = strings.TrimRight(spec.Job[:validation.LabelValueMaxLength], ".-")
-		log.WithFields(logrus.Fields{
-			"key":       kube.ProwJobAnnotation,
-			"value":     spec.Job,
-			"truncated": jobNameForLabel,
-		}).Info("Cannot use full job name, will truncate.")
-	}
 	labels := map[string]string{
-		kube.CreatedByProw:     "true",
-		kube.ProwJobTypeLabel:  string(spec.Type),
-		kube.ProwJobAnnotation: jobNameForLabel,
+		kube.CreatedByProw:    "true",
+		kube.ProwJobTypeLabel: string(spec.Type),
 	}
-	if spec.Type != prowapi.PeriodicJob && spec.Refs != nil {
-		labels[kube.OrgLabel] = spec.Refs.Org
-		labels[kube.RepoLabel] = spec.Refs.Repo
-		if len(spec.Refs.Pulls) > 0 {
-			labels[kube.PullLabel] = strconv.Itoa(spec.Refs.Pulls[0].Number)
+	annotations := map[string]string{}
+	for key, value := range map[string]string{
+		kube.ProwJobAnnotation: spec.Job,
+		kube.ContextAnnotation: spec.Context,
+	} {
+		maybeTruncated := value
+		if len(value) > validation.LabelValueMaxLength {
+			// TODO(fejta): consider truncating middle rather than end.
+			maybeTruncated = strings.TrimRight(value[:validation.LabelValueMaxLength], ".-")
+			log.WithFields(logrus.Fields{
+				"key":            key,
+				"value":          value,
+				"maybeTruncated": maybeTruncated,
+			}).Info("Cannot use full value, will truncate.")
+		}
+		labels[key] = maybeTruncated
+		annotations[key] = value
+	}
+
+	var refs *prowapi.Refs
+	if spec.Refs != nil {
+		refs = spec.Refs
+	} else if len(spec.ExtraRefs) > 0 {
+		refs = &spec.ExtraRefs[0]
+	}
+	if refs != nil {
+		labels[kube.OrgLabel] = refs.Org
+		labels[kube.RepoLabel] = refs.Repo
+		labels[kube.BaseRefLabel] = refs.BaseRef
+		if len(refs.Pulls) > 0 {
+			labels[kube.PullLabel] = strconv.Itoa(refs.Pulls[0].Number)
 		}
 	}
 
@@ -140,9 +155,6 @@ func LabelsAndAnnotationsForSpec(spec prowapi.ProwJobSpec, extraLabels, extraAnn
 		}
 	}
 
-	annotations := map[string]string{
-		kube.ProwJobAnnotation: spec.Job,
-	}
 	for k, v := range extraAnnotations {
 		annotations[k] = v
 	}
@@ -379,9 +391,7 @@ func CloneRefs(pj prowapi.ProwJob, codeMount, logMount coreapi.VolumeMount) (*co
 	if pj.Spec.Refs != nil {
 		refs = append(refs, *pj.Spec.Refs)
 	}
-	for _, r := range pj.Spec.ExtraRefs {
-		refs = append(refs, r)
-	}
+	refs = append(refs, pj.Spec.ExtraRefs...)
 	if len(refs) == 0 { // nothing to clone
 		return nil, nil, nil, nil
 	}
@@ -742,7 +752,9 @@ func decorate(spec *coreapi.PodSpec, pj *prowapi.ProwJob, rawEnv map[string]stri
 		wrappers = append(wrappers, *wrapperOptions)
 	}
 
-	sidecar, err := Sidecar(pj.Spec.DecorationConfig, blobStorageOptions, blobStorageMounts, logMount, outputMount, encodedJobSpec, !RequirePassingEntries, !IgnoreInterrupts, secretVolumeMounts, wrappers...)
+	ignoreInterrupts := pj.Spec.DecorationConfig.UploadIgnoresInterrupts != nil && *pj.Spec.DecorationConfig.UploadIgnoresInterrupts
+
+	sidecar, err := Sidecar(pj.Spec.DecorationConfig, blobStorageOptions, blobStorageMounts, logMount, outputMount, encodedJobSpec, !RequirePassingEntries, ignoreInterrupts, secretVolumeMounts, wrappers...)
 	if err != nil {
 		return fmt.Errorf("create sidecar: %v", err)
 	}
@@ -793,8 +805,6 @@ func DetermineWorkDir(baseDir string, refs []prowapi.Refs) string {
 const (
 	// RequirePassingEntries causes sidecar to return an error if any entry fails. Otherwise it exits cleanly so long as it can complete.
 	RequirePassingEntries = true
-	// IgnoreInterrupts causes sidecar to ignore interrupts and hope that the test process exits cleanly before starting an upload.
-	IgnoreInterrupts = true
 )
 
 func Sidecar(config *prowapi.DecorationConfig, gcsOptions gcsupload.Options, blobStorageMounts []coreapi.VolumeMount, logMount coreapi.VolumeMount, outputMount *coreapi.VolumeMount, encodedJobSpec string, requirePassingEntries, ignoreInterrupts bool, secretVolumeMounts []coreapi.VolumeMount, wrappers ...wrapper.Options) (*coreapi.Container, error) {

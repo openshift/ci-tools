@@ -147,14 +147,18 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/periodic-ci-super-duper-e2e
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-e2e
     creationTimestamp: null
     labels:
-      ci.openshift.org/rehearse: "1234"
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: ""
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedPeriodic
+      prow.k8s.io/context: periodic-ci-super-duper-e2e
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-e2e
+      prow.k8s.io/refs.base_ref: master
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
@@ -277,14 +281,18 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/periodic-ci-super-duper-no-ciop
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-no-ciop
     creationTimestamp: null
     labels:
-      ci.openshift.org/rehearse: "1234"
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: ""
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedPeriodic
+      prow.k8s.io/context: periodic-ci-super-duper-no-ciop
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-no-ciop
+      prow.k8s.io/refs.base_ref: master
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
@@ -350,14 +358,18 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/periodic-ci-super-duper-periodic-with-unresolved-config
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-periodic-with-unresolved-config
     creationTimestamp: null
     labels:
-      ci.openshift.org/rehearse: "1234"
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: ""
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedPeriodic
+      prow.k8s.io/context: periodic-ci-super-duper-periodic-with-unresolved-co
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-periodic-with-unresolved
+      prow.k8s.io/refs.base_ref: master
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
@@ -488,14 +500,18 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/periodic-ci-super-duper-periodic-with-unresolved-config-no-target
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-periodic-with-unresolved-config-no-target
     creationTimestamp: null
     labels:
-      ci.openshift.org/rehearse: "1234"
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: ""
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedPeriodic
+      prow.k8s.io/context: periodic-ci-super-duper-periodic-with-unresolved-co
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-periodic-with-unresolved
+      prow.k8s.io/refs.base_ref: master
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
@@ -673,15 +689,19 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/periodic-ci-super-trooper-master-changed-and-uses-changed-workflow
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-trooper-master-changed-and-uses-changed-workflow
     creationTimestamp: null
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
-      ci.openshift.org/rehearse: "1234"
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: ""
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedPeriodic
+      prow.k8s.io/context: periodic-ci-super-trooper-master-changed-and-uses-c
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-trooper-master-changed-and-uses
+      prow.k8s.io/refs.base_ref: master
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
@@ -847,14 +867,18 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/super/duper/ciop-cfg-change/custom
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-custom
     creationTimestamp: null
     labels:
-      ci.openshift.org/rehearse: "1234"
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: custom
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedCiopConfig
+      prow.k8s.io/context: custom
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-custom
+      prow.k8s.io/refs.base_ref: master
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
@@ -958,15 +982,19 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/super/duper/ciop-cfg-change/images
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-images
     creationTimestamp: null
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
-      ci.openshift.org/rehearse: "1234"
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: images
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedCiopConfig
+      prow.k8s.io/context: images
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-images
+      prow.k8s.io/refs.base_ref: master
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
@@ -1083,14 +1111,18 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/super/duper/cluster-profile/test-profile
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-cluster-profile-test-profile
     creationTimestamp: null
     labels:
-      ci.openshift.org/rehearse: "1234"
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: test-profile
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedClusterProfile
+      prow.k8s.io/context: test-profile
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-cluster-profile-test-profile
+      prow.k8s.io/refs.base_ref: master
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
@@ -1211,14 +1243,18 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/super/duper/master/cmd
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-cmd
     creationTimestamp: null
     labels:
-      ci.openshift.org/rehearse: "1234"
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: cmd
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedPresubmit
+      prow.k8s.io/context: cmd
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-cmd
+      prow.k8s.io/refs.base_ref: master
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
@@ -1316,14 +1352,18 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/super/duper/master/e2e-aws
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-e2e-aws
     creationTimestamp: null
     labels:
-      ci.openshift.org/rehearse: "1234"
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: e2e-aws
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedPresubmit
+      prow.k8s.io/context: e2e-aws
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-e2e-aws
+      prow.k8s.io/refs.base_ref: master
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
@@ -1444,14 +1484,18 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/super/trooper/master/e2e-aws
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-e2e-aws
     creationTimestamp: null
     labels:
-      ci.openshift.org/rehearse: "1234"
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: e2e-aws
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedPresubmit
+      prow.k8s.io/context: e2e-aws
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-e2e-aws
+      prow.k8s.io/refs.base_ref: master
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
@@ -1572,15 +1616,19 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/super/trooper/master/multistage
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage
     creationTimestamp: null
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
-      ci.openshift.org/rehearse: "1234"
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: multistage
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedRegistryContent
+      prow.k8s.io/context: multistage
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage
+      prow.k8s.io/refs.base_ref: master
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
@@ -1744,15 +1792,19 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/super/trooper/master/multistage5
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage5
     creationTimestamp: null
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
-      ci.openshift.org/rehearse: "1234"
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: multistage5
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedPresubmit
+      prow.k8s.io/context: multistage5
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage5
+      prow.k8s.io/refs.base_ref: master
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
@@ -1879,15 +1931,19 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/super/trooper/master/unit
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-unit
     creationTimestamp: null
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
-      ci.openshift.org/rehearse: "1234"
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: unit
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedCiopConfig
+      prow.k8s.io/context: unit
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-unit
+      prow.k8s.io/refs.base_ref: master
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release

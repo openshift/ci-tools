@@ -54,7 +54,7 @@ type Client interface {
 	UpdateNotesOnItem(itemName string, notes string) error
 
 	OnCreate(func(*Item) error)
-	HasItem(itemName string) bool
+	HasItem(itemName string) (bool, error)
 }
 
 // NewClient generates a BitWarden client

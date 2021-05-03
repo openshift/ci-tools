@@ -449,28 +449,8 @@ func TestReconcile(t *testing.T) {
 
 			verify: func(apiCIClient ctrlruntimeclient.Client, appCIClient ctrlruntimeclient.Client) error {
 				actualImageStream := &imagev1.ImageStream{}
-				if err := appCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); err != nil {
-					return err
-				}
-				expectedImageStream := &imagev1.ImageStream{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "ci",
-						Name:      "applyconfig",
-						Annotations: map[string]string{
-							"release.openshift.io-something": "copied",
-							"something":                      "not-copied",
-						},
-						ResourceVersion:   "1",
-						DeletionTimestamp: &now,
-					},
-				}
-				if actualImageStream.DeletionTimestamp == nil {
-					t.Errorf("actualImageStream.DeletionTimestamp is nil")
-				}
-				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
-				expectedImageStream.DeletionTimestamp = actualImageStream.DeletionTimestamp
-				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
-					return fmt.Errorf("actual does not match expected, diff: %s", diff)
+				if err := appCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); !apierrors.IsNotFound(err) {
+					return fmt.Errorf("expected NotFound error did not occur and the actual error is: %v", err)
 				}
 				actualImageStream = &imagev1.ImageStream{}
 				if err := apiCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); !apierrors.IsNotFound(err) {
@@ -490,28 +470,8 @@ func TestReconcile(t *testing.T) {
 
 			verify: func(apiCIClient ctrlruntimeclient.Client, appCIClient ctrlruntimeclient.Client) error {
 				actualImageStream := &imagev1.ImageStream{}
-				if err := apiCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); err != nil {
-					return err
-				}
-				expectedImageStream := &imagev1.ImageStream{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "ci",
-						Name:      "applyconfig",
-						Annotations: map[string]string{
-							"release.openshift.io-something": "copied",
-							"something":                      "not-copied",
-						},
-						DeletionTimestamp: &now,
-						ResourceVersion:   "1",
-					},
-				}
-				if actualImageStream.DeletionTimestamp == nil {
-					t.Errorf("actualImageStream.DeletionTimestamp is nil")
-				}
-				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
-				expectedImageStream.DeletionTimestamp = actualImageStream.DeletionTimestamp
-				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
-					return fmt.Errorf("actual does not match expected, diff: %s", diff)
+				if err := apiCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); !apierrors.IsNotFound(err) {
+					return fmt.Errorf("expected NotFound error did not occur and the actual error is: %v", err)
 				}
 				actualImageStream = &imagev1.ImageStream{}
 				if err := appCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); !apierrors.IsNotFound(err) {
@@ -531,50 +491,12 @@ func TestReconcile(t *testing.T) {
 
 			verify: func(apiCIClient ctrlruntimeclient.Client, appCIClient ctrlruntimeclient.Client) error {
 				actualImageStream := &imagev1.ImageStream{}
-				if err := apiCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); err != nil {
-					return err
+				if err := apiCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); !apierrors.IsNotFound(err) {
+					return fmt.Errorf("expected NotFound error did not occur and the actual error is: %v", err)
 				}
-				expectedImageStream := &imagev1.ImageStream{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "ci",
-						Name:      "applyconfig",
-						Annotations: map[string]string{
-							"release.openshift.io-something": "copied",
-							"something":                      "not-copied",
-						},
-						DeletionTimestamp: &now,
-					},
-				}
-				if actualImageStream.DeletionTimestamp == nil {
-					t.Errorf("actualImageStream.DeletionTimestamp is nil")
-				}
-				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
-				expectedImageStream.DeletionTimestamp = actualImageStream.DeletionTimestamp
-				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
-					return fmt.Errorf("actual does not match expected, diff: %s", diff)
-				}
-
 				actualImageStream = &imagev1.ImageStream{}
-				if err := appCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); err != nil {
-					return err
-				}
-				expectedImageStream = &imagev1.ImageStream{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "ci",
-						Name:      "applyconfig",
-						Annotations: map[string]string{
-							"release.openshift.io-something": "copied",
-						},
-						DeletionTimestamp: &now,
-					},
-				}
-				if actualImageStream.DeletionTimestamp == nil {
-					t.Errorf("actualImageStream.DeletionTimestamp is nil")
-				}
-				//ignoring DeletionTimestamp: because it is changed when returning from fakeclient
-				expectedImageStream.DeletionTimestamp = actualImageStream.DeletionTimestamp
-				if diff := cmp.Diff(expectedImageStream, actualImageStream, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
-					return fmt.Errorf("actual does not match expected, diff: %s", diff)
+				if err := appCIClient.Get(ctx, types.NamespacedName{Name: "applyconfig", Namespace: "ci"}, actualImageStream); !apierrors.IsNotFound(err) {
+					return fmt.Errorf("expected NotFound error did not occur and the actual error is: %v", err)
 				}
 				return nil
 			},

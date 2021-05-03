@@ -75,10 +75,16 @@ func (c *vaultClient) setItemAtPath(path, field string, content string) error {
 	return c.upstream.UpsertKV(path, data)
 }
 
-func (c *vaultClient) HasItem(itemName string) bool {
+func (c *vaultClient) HasItem(itemName string) (bool, error) {
 	path := c.pathFor(itemName)
 	_, err := c.upstream.GetKV(path)
-	return !vaultclient.IsNotFound(err)
+	if err != nil {
+		if vaultclient.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func (c *vaultClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {

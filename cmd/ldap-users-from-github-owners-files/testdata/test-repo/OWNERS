@@ -1,0 +1,3 @@
+approvers:
+- droslean # Needs dereferencing through OWNERS_ALIASES but also needs to be a valid github openshift user to pass the invalid-owners check.
+- stevekuznetsov # Doesn't need dereferncing

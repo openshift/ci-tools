@@ -36,6 +36,21 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        namespace: ' '\n" +
 	"        tag: ' '\n" +
 	"    project_image:\n" +
+	"        # BuildArgs contains build arguments that will be resolved in the Dockerfile.\n" +
+	"        # See https://docs.docker.com/engine/reference/builder/#/arg for more details.\n" +
+	"        build_args:\n" +
+	"            - # Name of the build arg.\n" +
+	"              name: ' '\n" +
+	"              # ValueFrom specifies the value of the build Arg is taken from a key of a secret. Cannot be set if Value is set.\n" +
+	"              secret_key_ref:\n" +
+	"                # Name is the key of the secret to take the value from\n" +
+	"                key: ' '\n" +
+	"                # Name is the name of the secret\n" +
+	"                name: ' '\n" +
+	"                # Namespace is the namespace of the secret\n" +
+	"                namespace: ' '\n" +
+	"              # Value of the build arg. Cannot be set if ValueFrom is set.\n" +
+	"              value: ' '\n" +
 	"        # ContextDir is the directory in the project\n" +
 	"        # from which this build should be run.\n" +
 	"        context_dir: ' '\n" +
@@ -75,7 +90,22 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# process. The name of each image is its \"to\" value\n" +
 	"# and can be used to build only a specific image.\n" +
 	"images:\n" +
-	"    - # ContextDir is the directory in the project\n" +
+	"    - # BuildArgs contains build arguments that will be resolved in the Dockerfile.\n" +
+	"      # See https://docs.docker.com/engine/reference/builder/#/arg for more details.\n" +
+	"      build_args:\n" +
+	"        - # Name of the build arg.\n" +
+	"          name: ' '\n" +
+	"          # ValueFrom specifies the value of the build Arg is taken from a key of a secret. Cannot be set if Value is set.\n" +
+	"          secret_key_ref:\n" +
+	"            # Name is the key of the secret to take the value from\n" +
+	"            key: ' '\n" +
+	"            # Name is the name of the secret\n" +
+	"            name: ' '\n" +
+	"            # Namespace is the namespace of the secret\n" +
+	"            namespace: ' '\n" +
+	"          # Value of the build arg. Cannot be set if ValueFrom is set.\n" +
+	"          value: ' '\n" +
+	"      # ContextDir is the directory in the project\n" +
 	"      # from which this build should be run.\n" +
 	"      context_dir: ' '\n" +
 	"      # DockerfileLiteral can be used to provide an inline Dockerfile.\n" +
@@ -211,6 +241,21 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        from: ' '\n" +
 	"        to: ' '\n" +
 	"      project_directory_image_build_inputs:\n" +
+	"        # BuildArgs contains build arguments that will be resolved in the Dockerfile.\n" +
+	"        # See https://docs.docker.com/engine/reference/builder/#/arg for more details.\n" +
+	"        build_args:\n" +
+	"            - # Name of the build arg.\n" +
+	"              name: ' '\n" +
+	"              # ValueFrom specifies the value of the build Arg is taken from a key of a secret. Cannot be set if Value is set.\n" +
+	"              secret_key_ref:\n" +
+	"                # Name is the key of the secret to take the value from\n" +
+	"                key: ' '\n" +
+	"                # Name is the name of the secret\n" +
+	"                name: ' '\n" +
+	"                # Namespace is the namespace of the secret\n" +
+	"                namespace: ' '\n" +
+	"              # Value of the build arg. Cannot be set if ValueFrom is set.\n" +
+	"              value: ' '\n" +
 	"        # ContextDir is the directory in the project\n" +
 	"        # from which this build should be run.\n" +
 	"        context_dir: ' '\n" +
@@ -241,6 +286,21 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      # SourcePath is a file or directory in the source image to copy from.\n" +
 	"                      source_path: ' '\n" +
 	"      project_directory_image_build_step:\n" +
+	"        # BuildArgs contains build arguments that will be resolved in the Dockerfile.\n" +
+	"        # See https://docs.docker.com/engine/reference/builder/#/arg for more details.\n" +
+	"        build_args:\n" +
+	"            - # Name of the build arg.\n" +
+	"              name: ' '\n" +
+	"              # ValueFrom specifies the value of the build Arg is taken from a key of a secret. Cannot be set if Value is set.\n" +
+	"              secret_key_ref:\n" +
+	"                # Name is the key of the secret to take the value from\n" +
+	"                key: ' '\n" +
+	"                # Name is the name of the secret\n" +
+	"                name: ' '\n" +
+	"                # Namespace is the namespace of the secret\n" +
+	"                namespace: ' '\n" +
+	"              # Value of the build arg. Cannot be set if ValueFrom is set.\n" +
+	"              value: ' '\n" +
 	"        # ContextDir is the directory in the project\n" +
 	"        # from which this build should be run.\n" +
 	"        context_dir: ' '\n" +

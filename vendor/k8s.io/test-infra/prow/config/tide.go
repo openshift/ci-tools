@@ -26,6 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/github"
@@ -103,6 +104,11 @@ type Tide struct {
 	// allowing it to be a template.
 	TargetURL string `json:"target_url,omitempty"`
 
+	// TargetURLs is a map from "*", <org>, or <org/repo> to the URL for the tide status contexts.
+	// The most specific key that matches will be used.
+	// This field is mutually exclusive with TargetURL.
+	TargetURLs map[string]string `json:"target_urls,omitempty"`
+
 	// PRStatusBaseURL is the base URL for the PR status page.
 	// This is used to link to a merge requirements overview
 	// in the tide status context.
@@ -164,6 +170,24 @@ type Tide struct {
 	PrioritizeExistingBatchesMap map[string]bool `json:"prioritize_existing_batches,omitempty"`
 }
 
+func (t *Tide) mergeFrom(additional *Tide) error {
+	if t.MergeType == nil {
+		t.MergeType = additional.MergeType
+		return nil
+	}
+
+	var errs []error
+	for orgOrRepo, mergeMethod := range additional.MergeType {
+		if _, alreadyConfigured := t.MergeType[orgOrRepo]; alreadyConfigured {
+			errs = append(errs, fmt.Errorf("config for org or repo %s passed more than once", orgOrRepo))
+			continue
+		}
+		t.MergeType[orgOrRepo] = mergeMethod
+	}
+
+	return utilerrors.NewAggregate(errs)
+}
+
 func (t *Tide) PrioritizeExistingBatches(repo OrgRepo) bool {
 	if val, set := t.PrioritizeExistingBatchesMap[repo.String()]; set {
 		return val
@@ -217,11 +241,23 @@ func (t *Tide) MergeCommitTemplate(repo OrgRepo) TideMergeCommitTemplate {
 func (t *Tide) GetPRStatusBaseURL(repo OrgRepo) string {
 	if byOrgRepo, ok := t.PRStatusBaseURLs[repo.String()]; ok {
 		return byOrgRepo
-	} else if byOrg, ok := t.PRStatusBaseURLs[repo.Org]; ok {
+	}
+	if byOrg, ok := t.PRStatusBaseURLs[repo.Org]; ok {
 		return byOrg
 	}
 
 	return t.PRStatusBaseURLs["*"]
+}
+
+func (t *Tide) GetTargetURL(repo OrgRepo) string {
+	if byOrgRepo, ok := t.TargetURLs[repo.String()]; ok {
+		return byOrgRepo
+	}
+	if byOrg, ok := t.TargetURLs[repo.Org]; ok {
+		return byOrg
+	}
+
+	return t.TargetURLs["*"]
 }
 
 // TideQuery is turned into a GitHub search query. See the docs for details:

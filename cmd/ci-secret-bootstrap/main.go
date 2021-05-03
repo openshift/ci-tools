@@ -36,6 +36,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
+	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 	vaultapi "github.com/openshift/ci-tools/pkg/api/vault"
 	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
 	"github.com/openshift/ci-tools/pkg/secrets"
@@ -49,17 +50,20 @@ type options struct {
 	force                bool
 	validateBWItemsUsage bool
 
-	kubeConfigPath  string
-	configPath      string
-	cluster         string
-	logLevel        string
-	impersonateUser string
+	kubeConfigPath      string
+	configPath          string
+	generatorConfigPath string
+	cluster             string
+	logLevel            string
+	impersonateUser     string
 
 	maxConcurrency int
 
-	secretsGetters map[string]coreclientset.SecretsGetter
-	config         secretbootstrap.Config
-	bwAllowUnused  flagutil.Strings
+	secretsGetters  map[string]coreclientset.SecretsGetter
+	config          secretbootstrap.Config
+	generatorConfig secretgenerator.Config
+
+	bwAllowUnused flagutil.Strings
 
 	validateOnly bool
 }
@@ -80,6 +84,7 @@ func parseOptions(censor *secrets.DynamicCensor) (options, error) {
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with oc command")
 	fs.StringVar(&o.kubeConfigPath, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests.")
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
+	fs.StringVar(&o.generatorConfigPath, "generator-config", "", "Path to the secret-generator config file.")
 	fs.StringVar(&o.cluster, "cluster", "", "If set, only provision secrets for this cluster")
 	fs.BoolVar(&o.force, "force", false, "If true, update the secrets even if existing one differs from Bitwarden items instead of existing with error. Default false.")
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
@@ -114,9 +119,16 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 		return err
 	}
 
-	var config secretbootstrap.Config
-	if err := secretbootstrap.LoadConfigFromFile(o.configPath, &config); err != nil {
+	if err := secretbootstrap.LoadConfigFromFile(o.configPath, &o.config); err != nil {
 		return err
+	}
+
+	if o.generatorConfigPath != "" {
+		var err error
+		o.generatorConfig, err = secretgenerator.LoadConfigFromPath(o.generatorConfigPath)
+		if err != nil {
+			return err
+		}
 	}
 
 	var kubeConfigs map[string]*rest.Config
@@ -136,7 +148,8 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 	}
 
 	o.secretsGetters = map[string]coreclientset.SecretsGetter{}
-	for i, secretConfig := range config.Secrets {
+	var filteredSecrets []secretbootstrap.SecretConfig
+	for i, secretConfig := range o.config.Secrets {
 		var to []secretbootstrap.SecretContext
 
 		for j, secretContext := range secretConfig.To {
@@ -163,9 +176,10 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 
 		if len(to) > 0 {
 			secretConfig.To = to
-			o.config.Secrets = append(o.config.Secrets, secretConfig)
+			filteredSecrets = append(filteredSecrets, secretConfig)
 		}
 	}
+	o.config.Secrets = filteredSecrets
 
 	if o.maxConcurrency == 0 {
 		o.maxConcurrency = runtime.GOMAXPROCS(0)
@@ -178,13 +192,6 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 func (o *options) validateCompletedOptions() error {
 	if err := o.config.Validate(); err != nil {
 		return fmt.Errorf("failed to validate the config: %w", err)
-	}
-	if len(o.config.Secrets) == 0 {
-		msg := "no secrets found to sync"
-		if o.cluster != "" {
-			msg = msg + " for --cluster=" + o.cluster
-		}
-		return fmt.Errorf(msg)
 	}
 	toMap := map[string]map[string]string{}
 	for i, secretConfig := range o.config.Secrets {
@@ -373,8 +380,8 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, client
 						return
 					}
 					if cfg.From[key].Base64Decode {
-						decoded := make([]byte, base64.StdEncoding.DecodedLen(len(value)))
-						if _, err := base64.StdEncoding.Decode(decoded, value); err != nil {
+						decoded, err := base64.StdEncoding.DecodeString(string(value))
+						if err != nil {
 							errChan <- fmt.Errorf(`failed to base64-decode config.%d."%s": %w`, idx, key, err)
 							return
 						}
@@ -446,6 +453,11 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, client
 }
 
 func fetchUserSecrets(secretsMap map[string]map[types.NamespacedName]coreapi.Secret, secretStoreClient secrets.ReadOnlyClient, targetClusters []string) (map[string]map[types.NamespacedName]coreapi.Secret, error) {
+	if len(targetClusters) == 0 {
+		logrus.Warn("No target clusters for user secrets configured, skipping...")
+		return secretsMap, nil
+	}
+
 	userSecrets, err := secretStoreClient.GetUserSecrets()
 	if err != nil || len(userSecrets) == 0 {
 		return secretsMap, err
@@ -453,7 +465,9 @@ func fetchUserSecrets(secretsMap map[string]map[types.NamespacedName]coreapi.Sec
 
 	var errs []error
 	for secretName, secretKeys := range userSecrets {
+		logger := logrus.WithField("secret", secretName.String())
 		for _, cluster := range targetClusters {
+			logger = logger.WithField("cluster", cluster)
 			if _, ok := secretsMap[cluster]; !ok {
 				secretsMap[cluster] = map[types.NamespacedName]coreapi.Secret{}
 			}
@@ -475,6 +489,7 @@ func fetchUserSecrets(secretsMap map[string]map[types.NamespacedName]coreapi.Sec
 					continue
 				}
 				entry.Data[vaultKey] = []byte(vaultValue)
+				logger.WithField("key", vaultKey).Debug("Populating key from Vault data.")
 			}
 			secretsMap[cluster][secretName] = entry
 		}
@@ -757,15 +772,21 @@ func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClie
 	return utilerrors.NewAggregate(errs)
 }
 
-func validateBWItems(client secrets.ReadOnlyClient, secretConfigs []secretbootstrap.SecretConfig) error {
+func (o *options) validateBWItems(client secrets.ReadOnlyClient) error {
 	var errs []error
 
-	for _, config := range secretConfigs {
+	for _, config := range o.config.Secrets {
 		for _, item := range config.From {
+			logger := logrus.WithField("item", item.BWItem)
 
 			if item.DockerConfigJSONData != nil {
 				for _, data := range item.DockerConfigJSONData {
-					if !client.HasItem(data.BWItem) {
+					hasItem, err := client.HasItem(data.BWItem)
+					if err != nil {
+						errs = append(errs, fmt.Errorf("failed to check if item %s exists: %w", data.BWItem, err))
+						continue
+					}
+					if !hasItem {
 						errs = append(errs, fmt.Errorf("item %s doesn't exist", data.BWItem))
 						break
 					}
@@ -774,26 +795,47 @@ func validateBWItems(client secrets.ReadOnlyClient, secretConfigs []secretbootst
 					}
 				}
 			} else {
-				if !client.HasItem(item.BWItem) {
-					errs = append(errs, fmt.Errorf("item %s doesn't exist", item.BWItem))
+				hasItem, err := client.HasItem(item.BWItem)
+				if err != nil {
+					errs = append(errs, fmt.Errorf("failed to check if item %s exists: %w", item.BWItem, err))
 					continue
+				}
+				if !hasItem {
+					if o.generatorConfig.IsItemGenerated(item.BWItem) {
+						logrus.Warn("Item doesn't exist but it will be generated")
+					} else {
+						errs = append(errs, fmt.Errorf("item %s doesn't exist", item.BWItem))
+						continue
+					}
 				}
 
 				if item.Field != "" {
 					if _, err := client.GetFieldOnItem(item.BWItem, item.Field); err != nil {
-						errs = append(errs, fmt.Errorf("field %s in item %s doesn't exist", item.Field, item.BWItem))
+						if o.generatorConfig.IsFieldGenerated(item.BWItem, item.Field) {
+							logger.WithField("field", item.Field).Warn("Field doesn't exist but it will be generated")
+						} else {
+							errs = append(errs, fmt.Errorf("field %s in item %s doesn't exist", item.Field, item.BWItem))
+						}
 					}
 				}
 
 				if item.Attachment != "" {
 					if _, err := client.GetAttachmentOnItem(item.BWItem, item.Attachment); err != nil {
-						errs = append(errs, fmt.Errorf("attachment %s in item %s doesn't exist", item.Attachment, item.BWItem))
+						if o.generatorConfig.IsFieldGenerated(item.BWItem, item.Attachment) {
+							logger.WithField("attachment", item.Attachment).Warn("Attachment doesn't exist but it will be generated")
+						} else {
+							errs = append(errs, fmt.Errorf("attachment %s in item %s doesn't exist", item.Attachment, item.BWItem))
+						}
 					}
 				}
 
 				if item.Attribute == secretbootstrap.AttributeTypePassword {
 					if _, err := client.GetPassword(item.BWItem); err != nil {
-						errs = append(errs, fmt.Errorf("password in item %s doesn't exist", item.BWItem))
+						if o.generatorConfig.IsFieldGenerated(item.BWItem, string(item.Attribute)) {
+							logger.WithField("attribute", item.Attribute).Warn("Attribute doesn't exist but it will be generated")
+						} else {
+							errs = append(errs, fmt.Errorf("password in item %s doesn't exist", item.BWItem))
+						}
 					}
 				}
 			}
@@ -838,7 +880,7 @@ func main() {
 			logrus.WithError(err).Fatal("failed to validate the config")
 		}
 
-		if err := validateBWItems(client, o.config.Secrets); err != nil {
+		if err := o.validateBWItems(client); err != nil {
 			logrus.WithError(err).Fatal("failed to validate items")
 		}
 

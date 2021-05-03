@@ -6,29 +6,74 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/hashicorp/vault/api"
+	"github.com/sirupsen/logrus"
 )
 
-func NewFromKubernetesAuth(addr, role string) (*VaultClient, error) {
+func getKuberntesAuthToken(client *VaultClient, role string) (string, time.Duration, error) {
+
+	// Clone the client before resetting the token
+	var err error
+	client.Client, err = client.Client.Clone()
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to clone client: %w", err)
+	}
+	client.SetToken("")
+
 	serviceAccountToken, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/token")
 	if err != nil {
-		return nil, fmt.Errorf("failed to read serviceAccountToken from /var/run/secrets/kubernetes.io/serviceaccount/token: %w", err)
-	}
-	client, err := api.NewClient(&api.Config{Address: addr})
-	if err != nil {
-		return nil, fmt.Errorf("failed to construct client: %w", err)
+		return "", 0, fmt.Errorf("failed to read serviceAccountToken from /var/run/secrets/kubernetes.io/serviceaccount/token: %w", err)
 	}
 	resp, err := client.Logical().Write("auth/kubernetes/login", map[string]interface{}{
 		"role": role,
 		"jwt":  string(serviceAccountToken),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to log into vault: %w", err)
+		return "", 0, fmt.Errorf("failed to log into vault: %w", err)
+	}
+
+	ttl, err := resp.TokenTTL()
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to get ttl from token: %w", err)
+	}
+
+	return resp.Auth.ClientToken, ttl, nil
+}
+
+func NewFromKubernetesAuth(addr, role string) (*VaultClient, error) {
+	upstreamClient, err := api.NewClient(&api.Config{Address: addr})
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct client: %w", err)
+	}
+	client := &VaultClient{Client: upstreamClient}
+	token, ttl, err := getKuberntesAuthToken(client, role)
+	if err != nil {
+		return nil, err
+	}
+	client.SetToken(token)
+	go client.refreshTokenWhenNeeded(ttl, func(client *VaultClient) (string, time.Duration, error) {
+		return getKuberntesAuthToken(client, role)
+	})
+
+	return client, nil
+}
+
+func NewFromUserPass(addr, user, pass string) (*VaultClient, error) {
+	client, err := api.NewClient(&api.Config{Address: addr})
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Logical().Write(fmt.Sprintf("auth/userpass/login/%s", user), map[string]interface{}{"password": pass})
+	if err != nil {
+		return nil, fmt.Errorf("failed to login: %w", err)
 	}
 	client.SetToken(resp.Auth.ClientToken)
-	return &VaultClient{client}, nil
+	return &VaultClient{Client: client}, nil
 }
 
 func New(addr, token string) (*VaultClient, error) {
@@ -37,11 +82,51 @@ func New(addr, token string) (*VaultClient, error) {
 		return nil, err
 	}
 	client.SetToken(token)
-	return &VaultClient{client}, nil
+	return &VaultClient{Client: client}, nil
 }
 
 type VaultClient struct {
 	*api.Client
+	isCredentialExpired     bool
+	isCredentialExpiredLock sync.Mutex
+}
+
+func (v *VaultClient) IsCredentialExpired() bool {
+	v.isCredentialExpiredLock.Lock()
+	defer v.isCredentialExpiredLock.Unlock()
+	return v.isCredentialExpired
+}
+
+func (v *VaultClient) refreshTokenWhenNeeded(ttl time.Duration, refreshFn func(*VaultClient) (string, time.Duration, error)) {
+	var newToken string
+	var err error
+	for {
+		time.Sleep(ttl / 2)
+
+		expiry := time.Now().Add(ttl / 2)
+		try := 1
+		for {
+			if time.Now().After(expiry) {
+				v.isCredentialExpiredLock.Lock()
+				v.isCredentialExpired = true
+				v.isCredentialExpiredLock.Unlock()
+			}
+
+			newToken, ttl, err = refreshFn(v)
+			if err != nil {
+				logrus.WithError(err).WithField("try", try).Error("failed to refresh vault token")
+				try++
+				time.Sleep(2 * time.Second)
+				continue
+			}
+
+			v.SetToken(newToken)
+			v.isCredentialExpiredLock.Lock()
+			v.isCredentialExpired = false
+			v.isCredentialExpiredLock.Unlock()
+			break
+		}
+	}
 }
 
 func (v *VaultClient) GetUserFromAliasName(userName string) (*Entity, error) {
@@ -87,13 +172,19 @@ func (v *VaultClient) ListKVRecursively(path string) ([]string, error) {
 			return nil, fmt.Errorf("failed to list %s: %w", path, err)
 		}
 		for _, child := range children {
+			// strings.Join doesn't deal with the case of "element ends with separator"
+			if !strings.HasSuffix(path, "/") {
+				child = "/" + child
+			}
+			child = path + child
 			if strings.HasSuffix(child, "/") {
-				// staticcheck complains `this result of append is never used, except maybe in other appends` but
-				// we do use it in the initial range.
-				// nolint: staticcheck
-				paths = append(paths, child)
+				grandchildren, err := v.ListKVRecursively(child)
+				if err != nil {
+					return nil, err
+				}
+				result = append(result, grandchildren...)
 			} else {
-				result = append(result, strings.Join([]string{path, child}, "/"))
+				result = append(result, child)
 			}
 		}
 	}
@@ -115,7 +206,17 @@ func (v *VaultClient) GetKV(path string) (*KVData, error) {
 }
 
 func (v *VaultClient) UpsertKV(path string, data map[string]string) error {
-	_, err := v.Logical().Write(InsertDataIntoPath(path), map[string]interface{}{"data": data})
+	// Get it first to avoid creating a new revision when the content didn't change
+	currentData, err := v.GetKV(path)
+	if err != nil {
+		if !IsNotFound(err) {
+			return err
+		}
+	}
+	if currentData != nil && reflect.DeepEqual(currentData.Data, data) {
+		return nil
+	}
+	_, err = v.Logical().Write(InsertDataIntoPath(path), map[string]interface{}{"data": data})
 	return err
 }
 

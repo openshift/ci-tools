@@ -171,7 +171,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			podSpec = generatePodSpecTemplate(info, release, &element)
 		}
 
-		if element.Cron != nil || element.Interval != nil {
+		if element.Cron != nil || element.Interval != nil || element.ReleaseController {
 			cron := ""
 			if element.Cron != nil {
 				cron = *element.Cron
@@ -180,7 +180,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			if element.Interval != nil {
 				interval = *element.Interval
 			}
-			periodic := generatePeriodicForTest(element.As, info, podSpec, true, cron, interval, configSpec.CanonicalGoRepository, jobRelease, skipCloning)
+			periodic := generatePeriodicForTest(element.As, info, podSpec, true, cron, interval, element.ReleaseController, configSpec.CanonicalGoRepository, jobRelease, skipCloning)
 			if element.Cluster != "" {
 				periodic.Labels[cioperatorapi.ClusterLabel] = string(element.Cluster)
 			}
@@ -462,7 +462,7 @@ func generatePostsubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.P
 	}
 }
 
-func generatePeriodicForTest(name string, info *ProwgenInfo, podSpec *corev1.PodSpec, rehearsable bool, cron string, interval string, pathAlias *string, jobRelease string, skipCloning bool) *prowconfig.Periodic {
+func generatePeriodicForTest(name string, info *ProwgenInfo, podSpec *corev1.PodSpec, rehearsable bool, cron string, interval string, releaseController bool, pathAlias *string, jobRelease string, skipCloning bool) *prowconfig.Periodic {
 	base := generateJobBase(name, jc.PeriodicPrefix, info, podSpec, rehearsable, nil, jobRelease, skipCloning)
 	// periodics are not associated with a repo per se, but we can add in an
 	// extra ref so that periodics which want to access the repo tha they are
@@ -476,6 +476,11 @@ func generatePeriodicForTest(name string, info *ProwgenInfo, podSpec *corev1.Pod
 		ref.PathAlias = *pathAlias
 	}
 	base.ExtraRefs = append([]prowv1.Refs{ref}, base.ExtraRefs...)
+	if releaseController {
+		interval = ""
+		cron = "@yearly"
+		base.Labels[jc.ReleaseControllerLabel] = jc.ReleaseControllerValue
+	}
 	return &prowconfig.Periodic{
 		JobBase:  base,
 		Cron:     cron,

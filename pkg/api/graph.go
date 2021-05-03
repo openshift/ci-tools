@@ -233,7 +233,6 @@ func Comparer() cmp.Option {
 		internalImageStreamLink{},
 		internalImageStreamTagLink{},
 		externalImageLink{},
-		clusterClaimLink{},
 	)
 }
 
@@ -559,28 +558,5 @@ func LinkForImage(imageStream, tag string) StepLink {
 	default:
 		// we have no idea what the user's configured
 		return nil
-	}
-}
-
-// ClusterClaimLink determines what dependent link is required
-// for a job to claim a cluster where name is the identifier to the link, such as the test name
-func ClusterClaimLink(name string) StepLink {
-	return &clusterClaimLink{name: name}
-}
-
-type clusterClaimLink struct {
-	name string
-}
-
-func (_ *clusterClaimLink) UnsatisfiableError() string {
-	return ""
-}
-
-func (l *clusterClaimLink) SatisfiedBy(other StepLink) bool {
-	switch link := other.(type) {
-	case *clusterClaimLink:
-		return l.name == link.name
-	default:
-		return false
 	}
 }

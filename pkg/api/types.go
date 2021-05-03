@@ -530,6 +530,12 @@ type TestStepConfiguration struct {
 	// create a periodic job instead of a presubmit
 	Interval *string `json:"interval,omitempty"`
 
+	// ReleaseController configures prowgen to create a periodic that
+	// does not get run by prow and instead is run by release-controller.
+	// The job must be configured as a verification or periodic job in a
+	// release-controller config file when this field is set to `true`.
+	ReleaseController bool `json:"release_controller,omitempty"`
+
 	// Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit
 	Postsubmit bool `json:"postsubmit,omitempty"`
 
@@ -1364,6 +1370,45 @@ type ProjectDirectoryImageBuildInputs struct {
 	// that will populate the build context for the Dockerfile or
 	// alter the input image for a multi-stage build.
 	Inputs map[string]ImageBuildInputs `json:"inputs,omitempty"`
+
+	// BuildArgs contains build arguments that will be resolved in the Dockerfile.
+	// See https://docs.docker.com/engine/reference/builder/#/arg for more details.
+	BuildArgs []BuildArg `json:"build_args,omitempty"`
+}
+
+type BuildArg struct {
+	// Name of the build arg.
+	Name string `json:"name,omitempty"`
+
+	// Value of the build arg. Cannot be set if ValueFrom is set.
+	Value string `json:"value,omitempty"`
+
+	// ValueFrom specifies the value of the build Arg is taken from a key of a secret. Cannot be set if Value is set.
+	ValueFrom *SecretKeySelector `json:"secret_key_ref,omitempty"`
+}
+
+// SecretKeySelector selects a key of a Secret.
+type SecretKeySelector struct {
+	// Namespace is the namespace of the secret
+	Namespace string `json:"namespace"`
+	// Name is the name of the secret
+	Name string `json:"name"`
+	// Name is the key of the secret to take the value from
+	Key string `json:"key"`
+}
+
+// NamespacedName represents the namespaced name
+func (arg *SecretKeySelector) NamespacedName() (string, error) {
+	if arg.Namespace == "" {
+		return "", fmt.Errorf("namespace must be set")
+	}
+	if arg.Name == "" {
+		return "", fmt.Errorf("name must be set")
+	}
+	if arg.Key == "" {
+		return "", fmt.Errorf("key must be set")
+	}
+	return fmt.Sprintf("%s-%s", arg.Namespace, arg.Name), nil
 }
 
 // PullSpecSubstitution contains a name of a pullspec that needs to

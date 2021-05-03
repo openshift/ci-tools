@@ -15,7 +15,8 @@ extra_refs:
   skip_submodules: true
   workdir: true
 labels:
-  ci.openshift.org/rehearse: "123"
+  ci.openshift.io/rehearse: "123"
+  ci.openshift.io/rehearse.context: test
 name: rehearse-123-pull-ci-org-repo-branch-test
 optional: true
 rerun_command: /test pj-rehearse

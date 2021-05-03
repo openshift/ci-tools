@@ -150,13 +150,13 @@ func (c *cliClient) GetAllItems() []Item {
 	return c.savedItems
 }
 
-func (c *cliClient) HasItem(itemName string) bool {
+func (c *cliClient) HasItem(itemName string) (bool, error) {
 	for _, item := range c.savedItems {
 		if itemName == item.Name {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 func (c *cliClient) GetAttachmentOnItem(itemName, attachmentName string) (bytes []byte, retErr error) {
@@ -464,8 +464,8 @@ func (d *dryRunCliClient) GetAllItems() []Item {
 	return nil
 }
 
-func (d *dryRunCliClient) HasItem(itemName string) bool {
-	return false
+func (d *dryRunCliClient) HasItem(itemName string) (bool, error) {
+	return false, nil
 }
 
 func (d *dryRunCliClient) GetAttachmentOnItem(_, _ string) ([]byte, error) {

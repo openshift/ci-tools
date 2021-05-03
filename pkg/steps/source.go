@@ -116,6 +116,9 @@ const (
 )
 
 func labelsFor(spec *api.JobSpec, base map[string]string) map[string]string {
+	if base == nil {
+		base = map[string]string{}
+	}
 	base[LabelMetadataOrg] = spec.Metadata.Org
 	base[LabelMetadataRepo] = spec.Metadata.Repo
 	base[LabelMetadataBranch] = spec.Metadata.Branch
@@ -265,7 +268,7 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 		panic(fmt.Errorf("couldn't create JSON spec for clonerefs: %w", err))
 	}
 
-	build := buildFromSource(jobSpec, config.From, config.To, buildSource, fromDigest, "", resources, pullSecret)
+	build := buildFromSource(jobSpec, config.From, config.To, buildSource, fromDigest, "", resources, pullSecret, nil)
 	build.Spec.CommonSpec.Strategy.DockerStrategy.Env = append(
 		build.Spec.CommonSpec.Strategy.DockerStrategy.Env,
 		corev1.EnvVar{Name: clonerefs.JSONConfigEnvVar, Value: optionsJSON},
@@ -282,7 +285,7 @@ func resolvePipelineImageStreamTagReference(ctx context.Context, client loggingc
 	return ist.Image.Name, nil
 }
 
-func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, fromTagDigest, dockerfilePath string, resources api.ResourceConfiguration, pullSecret *corev1.Secret) *buildapi.Build {
+func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, fromTagDigest, dockerfilePath string, resources api.ResourceConfiguration, pullSecret *corev1.Secret, buildArgs []api.BuildArg) *buildapi.Build {
 	logrus.Infof("Building %s", toTag)
 	buildResources, err := resourcesFor(resources.RequirementsForStep(string(toTag)))
 	if err != nil {
@@ -321,6 +324,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 						NoCache:                 true,
 						Env:                     []corev1.EnvVar{{Name: "BUILD_LOGLEVEL", Value: "0"}}, // this mirrors the default and is done for documentary purposes
 						ImageOptimizationPolicy: &layer,
+						BuildArgs:               toEnv(buildArgs),
 					},
 				},
 				Output: buildapi.BuildOutput{
@@ -348,6 +352,31 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 
 	addLabelsToBuild(jobSpec.Refs, build, source.ContextDir)
 	return build
+}
+
+func toEnv(args []api.BuildArg) []corev1.EnvVar {
+	var ret []corev1.EnvVar
+	for i, arg := range args {
+		if arg.ValueFrom == nil {
+			ret = append(ret, corev1.EnvVar{Name: arg.Name, Value: arg.Value})
+			continue
+		}
+		name, err := arg.ValueFrom.NamespacedName()
+		if err != nil {
+			// Should never happen since we have already copied the secrets in the test namespace in ProjectDirectoryImageBuildStep
+			logrus.WithError(err).Fatalf("build_args[%d]: failed to determine the namespaced name", i)
+		}
+		if valueFrom := arg.ValueFrom; valueFrom != nil {
+			ret = append(ret, corev1.EnvVar{Name: arg.Name, ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: name,
+					},
+					Key: valueFrom.Key,
+				}}})
+		}
+	}
+	return ret
 }
 
 func buildInputsFromStep(inputs map[string]api.ImageBuildInputs) []buildapi.ImageSource {

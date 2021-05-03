@@ -138,11 +138,7 @@ func fromConfig(
 	}
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			if testStep.ClusterClaim != nil {
-				clusterClaimStep := steps.ClusterClaimStep(testStep.As, testStep.ClusterClaim, hiveClient, client, jobSpec)
-				buildSteps = append(buildSteps, clusterClaimStep)
-			}
-			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, jobSpec, inputImages, testStep)
+			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -202,7 +198,7 @@ func fromConfig(
 		} else if rawStep.IndexGeneratorStepConfiguration != nil {
 			step = steps.IndexGeneratorStep(*rawStep.IndexGeneratorStepConfiguration, config, config.Resources, buildClient, jobSpec, pullSecret)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
-			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config, config.Resources, buildClient, jobSpec, pullSecret)
+			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config, config.Resources, podClient, buildClient, jobSpec, pullSecret)
 		} else if rawStep.ProjectDirectoryImageBuildInputs != nil {
 			step = steps.GitSourceStep(*rawStep.ProjectDirectoryImageBuildInputs, config.Resources, buildClient, jobSpec, cloneAuthConfig, pullSecret)
 		} else if rawStep.RPMImageInjectionStepConfiguration != nil {
@@ -321,6 +317,7 @@ func stepForTest(
 	leaseClient *lease.Client,
 	templateClient steps.TemplateClient,
 	client loggingclient.LoggingClient,
+	hiveClient ctrlruntimeclient.Client,
 	jobSpec *api.JobSpec,
 	inputImages inputImageSet,
 	c *api.TestStepConfiguration,
@@ -334,6 +331,9 @@ func stepForTest(
 		if len(leases) != 0 {
 			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
 			addProvidesForStep(step, params)
+		}
+		if c.ClusterClaim != nil {
+			step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step)
 		}
 		return append([]api.Step{step}, stepsForStepImages(client, jobSpec, inputImages, test)...), nil
 	}
@@ -354,7 +354,11 @@ func stepForTest(
 		addProvidesForStep(step, params)
 		return []api.Step{step}, nil
 	}
-	return []api.Step{steps.TestStep(*c, config.Resources, podClient, jobSpec)}, nil
+	step := steps.TestStep(*c, config.Resources, podClient, jobSpec)
+	if c.ClusterClaim != nil {
+		step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step)
+	}
+	return []api.Step{step}, nil
 }
 
 // stepsForStepImages creates steps that import images referenced in test steps.

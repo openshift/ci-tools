@@ -19,7 +19,11 @@ objects:
     - command:
       - /bin/sh
       - -c
-      - "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep 5 & wait\ndone\n"
+      - "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch
+        /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif
+        [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate
+        after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep
+        5 & wait\ndone\n"
       image: quay.io/prometheus/busybox:latest
       name: artifacts
       resources: {}

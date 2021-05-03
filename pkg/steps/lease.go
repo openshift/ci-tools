@@ -118,8 +118,11 @@ func (s *leaseStep) run(ctx context.Context) error {
 	logrus.Infof("Releasing leases for test %s", s.Name())
 	releaseErr := results.ForReason("releasing_lease").ForError(releaseLeases(client, s.leases))
 
-	// we want a sensible output error for reporting, so we bubble up these individually
-	//if we can, as this is the only step that can have multiple errors
+	return aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr)
+}
+
+func aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr error) error {
+	// we want a sensible output error for reporting, so we bubble up these individually if we can
 	if wrappedErr != nil && releaseErr == nil {
 		return wrappedErr
 	} else if wrappedErr == nil && releaseErr != nil {
@@ -155,7 +158,7 @@ func acquireLeases(
 			errs = append(errs, results.ForReason(results.Reason("acquiring_lease:"+l.ResourceType)).WithError(err).Errorf("failed to acquire lease: %v", err))
 			break
 		}
-		logrus.Debugf("Acquired lease(s) for %s: %v", l.ResourceType, names)
+		logrus.Infof("Acquired %d lease(s) for %s: %v", l.Count, l.ResourceType, names)
 		l.resources = names
 	}
 	if errs != nil {

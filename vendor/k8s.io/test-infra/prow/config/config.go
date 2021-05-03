@@ -111,17 +111,15 @@ type JobConfig struct {
 // ProwConfig is config for all prow controllers
 type ProwConfig struct {
 	// The git sha from which this config was generated
-	ConfigVersionSHA string           `json:"config_version_sha,omitempty"`
-	Tide             Tide             `json:"tide,omitempty"`
-	Plank            Plank            `json:"plank,omitempty"`
-	Sinker           Sinker           `json:"sinker,omitempty"`
-	Deck             Deck             `json:"deck,omitempty"`
-	BranchProtection BranchProtection `json:"branch-protection"`
-	Gerrit           Gerrit           `json:"gerrit"`
-	GitHubReporter   GitHubReporter   `json:"github_reporter"`
-	Horologium       Horologium       `json:"horologium"`
-	// Deprecated: this option will be removed in May 2020.
-	SlackReporter        *SlackReporter       `json:"slack_reporter,omitempty"`
+	ConfigVersionSHA     string               `json:"config_version_sha,omitempty"`
+	Tide                 Tide                 `json:"tide,omitempty"`
+	Plank                Plank                `json:"plank,omitempty"`
+	Sinker               Sinker               `json:"sinker,omitempty"`
+	Deck                 Deck                 `json:"deck,omitempty"`
+	BranchProtection     BranchProtection     `json:"branch-protection"`
+	Gerrit               Gerrit               `json:"gerrit"`
+	GitHubReporter       GitHubReporter       `json:"github_reporter"`
+	Horologium           Horologium           `json:"horologium"`
 	SlackReporterConfigs SlackReporterConfigs `json:"slack_reporter_configs,omitempty"`
 	InRepoConfig         InRepoConfig         `json:"in_repo_config"`
 
@@ -838,10 +836,6 @@ type Deck struct {
 	Branding *Branding `json:"branding,omitempty"`
 	// GoogleAnalytics, if specified, include a Google Analytics tracking code on each page.
 	GoogleAnalytics string `json:"google_analytics,omitempty"`
-	// Deprecated: RerunAuthConfig specifies who is able to trigger job reruns if that feature is enabled.
-	// The permissions here apply to all jobs.
-	// This option will be removed in favor of RerunAuthConfigs in July 2020.
-	RerunAuthConfig *prowapi.RerunAuthConfig `json:"rerun_auth_config,omitempty"`
 	// RerunAuthConfigs is a map of configs that specify who is able to trigger job reruns. The field
 	// accepts a key of: `org/repo`, `org` or `*` (wildcard) to define what GitHub org (or repo) a particular
 	// config applies to and a value of: `RerunAuthConfig` struct to define the users/groups authorized to rerun jobs.
@@ -866,17 +860,6 @@ func (d *Deck) Validate() error {
 		return fmt.Errorf("deck.skip_storage_path_validation is enabled despite deck.additional_allowed_buckets being configured: %v", d.AdditionalAllowedBuckets)
 	}
 
-	// TODO(@clarketm): Remove "rerun_auth_config" validation in July 2020
-	if d.RerunAuthConfig != nil {
-		logrus.Warning("rerun_auth_config will be deprecated in July 2020, and it will be replaced with rerun_auth_configs['*'].")
-
-		if d.RerunAuthConfigs != nil {
-			return errors.New("rerun_auth_config and rerun_auth_configs['*'] are mutually exclusive")
-		}
-
-		d.RerunAuthConfigs = RerunAuthConfigs{"*": *d.RerunAuthConfig}
-	}
-
 	// Note: The RerunAuthConfigs logic isn't deprecated, only the above RerunAuthConfig stuff is
 	if d.RerunAuthConfigs != nil {
 		for k, config := range d.RerunAuthConfigs {
@@ -887,6 +870,28 @@ func (d *Deck) Validate() error {
 	}
 
 	return nil
+}
+
+type notAllowedBucketError struct {
+	err error
+}
+
+func (ne notAllowedBucketError) Error() string {
+	return fmt.Sprintf("bucket not in allowed list; you may allow it by including it in `deck.additional_allowed_buckets`: %s", ne.err.Error())
+}
+
+func (notAllowedBucketError) Is(err error) bool {
+	_, ok := err.(notAllowedBucketError)
+	return ok
+}
+
+// NotAllowedBucketError wraps an error and return a notAllowedBucketError error
+func NotAllowedBucketError(err error) error {
+	return &notAllowedBucketError{err: err}
+}
+
+func IsNotAllowedBucketError(err error) bool {
+	return errors.Is(err, notAllowedBucketError{})
 }
 
 // ValidateStorageBucket validates a storage bucket (unless the `Deck.SkipStoragePathValidation` field is true).
@@ -900,7 +905,7 @@ func (c *Config) ValidateStorageBucket(bucketName string) error {
 	}
 
 	if !c.Deck.AllKnownStorageBuckets.Has(bucketName) {
-		return fmt.Errorf("bucket %q not in allowed list (%v); you may allow it by including it in `deck.additional_allowed_buckets`", bucketName, c.Deck.AllKnownStorageBuckets.List())
+		return NotAllowedBucketError(fmt.Errorf("bucket %q not in allowed list (%v)", bucketName, c.Deck.AllKnownStorageBuckets.List()))
 	}
 	return nil
 }
@@ -918,29 +923,36 @@ func calculateStorageBuckets(c *Config) sets.String {
 	knownBuckets := sets.NewString(c.Deck.AdditionalAllowedBuckets...)
 	for _, dc := range c.Plank.DefaultDecorationConfigs {
 		if dc.Config != nil && dc.Config.GCSConfiguration != nil && dc.Config.GCSConfiguration.Bucket != "" {
-			knownBuckets.Insert(dc.Config.GCSConfiguration.Bucket)
+			knownBuckets.Insert(stripProviderPrefixFromBucket(dc.Config.GCSConfiguration.Bucket))
 		}
 	}
 	for _, j := range c.Periodics {
 		if j.DecorationConfig != nil && j.DecorationConfig.GCSConfiguration != nil {
-			knownBuckets.Insert(j.DecorationConfig.GCSConfiguration.Bucket)
+			knownBuckets.Insert(stripProviderPrefixFromBucket(j.DecorationConfig.GCSConfiguration.Bucket))
 		}
 	}
 	for _, jobs := range c.PresubmitsStatic {
 		for _, j := range jobs {
 			if j.DecorationConfig != nil && j.DecorationConfig.GCSConfiguration != nil {
-				knownBuckets.Insert(j.DecorationConfig.GCSConfiguration.Bucket)
+				knownBuckets.Insert(stripProviderPrefixFromBucket(j.DecorationConfig.GCSConfiguration.Bucket))
 			}
 		}
 	}
 	for _, jobs := range c.PostsubmitsStatic {
 		for _, j := range jobs {
 			if j.DecorationConfig != nil && j.DecorationConfig.GCSConfiguration != nil {
-				knownBuckets.Insert(j.DecorationConfig.GCSConfiguration.Bucket)
+				knownBuckets.Insert(stripProviderPrefixFromBucket(j.DecorationConfig.GCSConfiguration.Bucket))
 			}
 		}
 	}
 	return knownBuckets
+}
+
+func stripProviderPrefixFromBucket(bucket string) string {
+	if split := strings.Split(bucket, "://"); len(split) == 2 {
+		return split[1]
+	}
+	return bucket
 }
 
 // ExternalAgentLog ensures an external agent like Jenkins can expose
@@ -1079,14 +1091,14 @@ func (cfg *SlackReporter) DefaultAndValidate() error {
 }
 
 // Load loads and parses the config at path.
-func Load(prowConfig, jobConfig string, supplementalProwConfigDirs []string, supplementalProwConfigsFileName string, additionals ...func(*Config) error) (c *Config, err error) {
+func Load(prowConfig, jobConfig string, supplementalProwConfigDirs []string, supplementalProwConfigsFileNameSuffix string, additionals ...func(*Config) error) (c *Config, err error) {
 	// we never want config loading to take down the prow components
 	defer func() {
 		if r := recover(); r != nil {
 			c, err = nil, fmt.Errorf("panic loading config: %v\n%s", r, string(debug.Stack()))
 		}
 	}()
-	c, err = loadConfig(prowConfig, jobConfig, supplementalProwConfigDirs, supplementalProwConfigsFileName)
+	c, err = loadConfig(prowConfig, jobConfig, supplementalProwConfigDirs, supplementalProwConfigsFileNameSuffix)
 	if err != nil {
 		return nil, err
 	}
@@ -1175,7 +1187,7 @@ func ReadJobConfig(jobConfig string) (JobConfig, error) {
 }
 
 // loadConfig loads one or multiple config files and returns a config object.
-func loadConfig(prowConfig, jobConfig string, additionalProwConfigDirs []string, supplementalProwConfigsFileName string) (*Config, error) {
+func loadConfig(prowConfig, jobConfig string, additionalProwConfigDirs []string, supplementalProwConfigsFileNameSuffix string) (*Config, error) {
 	stat, err := os.Stat(prowConfig)
 	if err != nil {
 		return nil, err
@@ -1208,7 +1220,7 @@ func loadConfig(prowConfig, jobConfig string, additionalProwConfigDirs []string,
 				return nil
 			}
 
-			if info.IsDir() || (filepath.Base(path) != supplementalProwConfigsFileName) {
+			if info.IsDir() || !strings.HasSuffix(path, supplementalProwConfigsFileNameSuffix) {
 				return nil
 			}
 
@@ -1255,7 +1267,8 @@ func loadConfig(prowConfig, jobConfig string, additionalProwConfigDirs []string,
 		nc.InRepoConfig.AllowedClusters = map[string][]string{}
 	}
 
-	if len(nc.InRepoConfig.AllowedClusters["*"]) == 0 {
+	// Respect `"*": []`, which disabled default global cluster
+	if nc.InRepoConfig.AllowedClusters["*"] == nil {
 		nc.InRepoConfig.AllowedClusters["*"] = []string{kube.DefaultClusterAlias}
 	}
 
@@ -1313,8 +1326,7 @@ func yamlToConfig(path string, nc interface{}) error {
 		}
 	}
 
-	var fix func(*Periodic)
-	fix = func(job *Periodic) {
+	fix := func(job *Periodic) {
 		job.SourcePath = path
 	}
 	for i := range jc.Periodics {
@@ -1536,17 +1548,6 @@ func (c *Config) validateComponentConfig() error {
 		if len(validationErrs) > 0 {
 			return utilerrors.NewAggregate(validationErrs)
 		}
-	}
-
-	// TODO(@clarketm): Remove in May 2020
-	if c.SlackReporter != nil {
-		logrus.Warning("slack_reporter will be deprecated on May 2020, and it will be replaced with slack_reporter_configs['*'].")
-
-		if c.SlackReporterConfigs != nil {
-			return errors.New("slack_reporter and slack_reporter_configs['*'] are mutually exclusive")
-		}
-
-		c.SlackReporterConfigs = SlackReporterConfigs{"*": *c.SlackReporter}
 	}
 
 	if c.SlackReporterConfigs != nil {
@@ -1940,6 +1941,17 @@ func parseProwConfig(c *Config) error {
 	}
 	if c.Tide.MaxGoroutines <= 0 {
 		return fmt.Errorf("tide has invalid max_goroutines (%d), it needs to be a positive number", c.Tide.MaxGoroutines)
+	}
+
+	if len(c.Tide.TargetURLs) > 0 && c.Tide.TargetURL != "" {
+		return fmt.Errorf("tide.target_url and tide.target_urls are mutually exclusive")
+	}
+
+	if c.Tide.TargetURLs == nil {
+		c.Tide.TargetURLs = map[string]string{}
+	}
+	if c.Tide.TargetURL != "" {
+		c.Tide.TargetURLs["*"] = c.Tide.TargetURL
 	}
 
 	if c.Tide.PRStatusBaseURLs == nil {
@@ -2511,11 +2523,23 @@ func StringsToOrgRepos(vs []string) []OrgRepo {
 // defaulting.
 // If you extend this, please also extend HasConfigFor accordingly.
 func (pc *ProwConfig) mergeFrom(additional *ProwConfig) error {
-	emptyReference := &ProwConfig{BranchProtection: additional.BranchProtection}
-	if diff := cmp.Diff(additional, emptyReference); diff != "" {
-		return fmt.Errorf("only 'branch-protection' may be set via additional config, all other fields have no merging logic yet. Diff: %s", diff)
+	emptyReference := &ProwConfig{
+		BranchProtection: additional.BranchProtection,
+		Tide:             Tide{MergeType: additional.Tide.MergeType},
 	}
-	return pc.BranchProtection.merge(&additional.BranchProtection)
+
+	var errs []error
+	if diff := cmp.Diff(additional, emptyReference); diff != "" {
+		errs = append(errs, fmt.Errorf("only 'branch-protection' and 'tide.merge_method' may be set via additional config, all other fields have no merging logic yet. Diff: %s", diff))
+	}
+	if err := pc.BranchProtection.merge(&additional.BranchProtection); err != nil {
+		errs = append(errs, fmt.Errorf("failed to merge branch protection config: %w", err))
+	}
+	if err := pc.Tide.mergeFrom(&additional.Tide); err != nil {
+		errs = append(errs, fmt.Errorf("failed to merge tide config: %w", err))
+	}
+
+	return utilerrors.NewAggregate(errs)
 }
 
 // ContextDescriptionWithBaseSha is used by the GitHub reporting to store the baseSHA of a context
@@ -2586,6 +2610,14 @@ func (pc *ProwConfig) HasConfigFor() (global bool, orgs sets.String, repos sets.
 		}
 	}
 
+	for orgOrRepo := range pc.Tide.MergeType {
+		if strings.Contains(orgOrRepo, "/") {
+			repos.Insert(orgOrRepo)
+		} else {
+			orgs.Insert(orgOrRepo)
+		}
+	}
+
 	return global, orgs, repos
 }
 
@@ -2593,6 +2625,9 @@ func (pc *ProwConfig) hasGlobalConfig() bool {
 	if pc.BranchProtection.ProtectTested != nil || pc.BranchProtection.AllowDisabledPolicies != nil || pc.BranchProtection.AllowDisabledJobPolicies != nil || isPolicySet(pc.BranchProtection.Policy) {
 		return true
 	}
-	emptyReference := &ProwConfig{BranchProtection: pc.BranchProtection}
+	emptyReference := &ProwConfig{
+		BranchProtection: pc.BranchProtection,
+		Tide:             Tide{MergeType: pc.Tide.MergeType},
+	}
 	return cmp.Diff(pc, emptyReference) != ""
 }

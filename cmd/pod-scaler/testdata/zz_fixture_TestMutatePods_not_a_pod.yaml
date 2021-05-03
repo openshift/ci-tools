@@ -1,0 +1,7 @@
+Patches: null
+allowed: false
+status:
+  code: 400
+  message: unable to decode /v1, Kind=Secret into *v1.Pod
+  metadata: {}
+uid: ""

@@ -64,21 +64,18 @@ type SecretConfig struct {
 	To   []SecretContext             `json:"to"`
 }
 
-//LoadConfigFromFile renders a Config object loaded from the given file
+// LoadConfigFromFile renders a Config object loaded from the given file
 func LoadConfigFromFile(file string, config *Config) error {
 	bytes, err := gzip.ReadFileMaybeGZIP(file)
 	if err != nil {
 		return err
 	}
-	err = yaml.UnmarshalStrict(bytes, config)
-	if err != nil {
-		return err
-	}
-	return nil
+	return yaml.UnmarshalStrict(bytes, config)
 }
 
 // Config is what we version in our repository
 type Config struct {
+	VaultDPTPPRefix           string              `json:"vault_dptp_prefix,omitempty"`
 	ClusterGroups             map[string][]string `json:"cluster_groups,omitempty"`
 	Secrets                   []SecretConfig      `json:"secret_configs"`
 	UserSecretsTargetClusters []string            `json:"user_secrets_target_clusters,omitempty"`
@@ -154,6 +151,23 @@ func (c *Config) resolve() error {
 		}
 
 		c.Secrets[idx].To = newTo
+
+		if c.VaultDPTPPRefix != "" {
+			for fromKey, fromValue := range secret.From {
+				if fromValue.BWItem != "" {
+					fromValue.BWItem = c.VaultDPTPPRefix + "/" + fromValue.BWItem
+				}
+				for dockerCFGIdx, dockerCFGVal := range fromValue.DockerConfigJSONData {
+					if dockerCFGVal.BWItem != "" {
+						dockerCFGVal.BWItem = c.VaultDPTPPRefix + "/" + dockerCFGVal.BWItem
+						fromValue.DockerConfigJSONData[dockerCFGIdx] = dockerCFGVal
+					}
+				}
+
+				secret.From[fromKey] = fromValue
+			}
+		}
+
 	}
 
 	return utilerrors.NewAggregate(errs)

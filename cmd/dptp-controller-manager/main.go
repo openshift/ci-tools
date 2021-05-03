@@ -21,7 +21,7 @@ import (
 	"k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/logrusutil"
-	"k8s.io/test-infra/prow/pjutil"
+	"k8s.io/test-infra/prow/pjutil/pprof"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -377,7 +377,7 @@ func main() {
 	if err := prowv1.AddToScheme(mgr.GetScheme()); err != nil {
 		logrus.WithError(err).Fatal("Failed to add prowv1 to scheme")
 	}
-	pjutil.ServePProf(flagutil.DefaultPProfPort)
+	pprof.Serve(flagutil.DefaultPProfPort)
 
 	for cluster, buildClusterMgr := range allManagers {
 		if cluster == appCIContextName {
@@ -410,7 +410,7 @@ func main() {
 		// Also we have to keep in mind that we might end up multiple budgets per period, because the client-side
 		// reset is not synchronized with the github reset and we may get upgraded in which case we lose the bucket
 		// state.
-		gitHubClient.Throttle(300, 300)
+		gitHubClient.Throttle(600, 300)
 		promotionreconcilerOptions := promotionreconciler.Options{
 			DryRun:                opts.dryRun,
 			CIOperatorConfigAgent: ciOPConfigAgent,

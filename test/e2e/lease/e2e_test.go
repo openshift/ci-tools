@@ -58,7 +58,6 @@ func TestLeases(t *testing.T) {
 			success: true,
 			output: []string{
 				`Acquiring 1 lease(s) for aws-quota-slice`,
-				`Acquired lease(s) for aws-quota-slice`,
 				`Releasing leases for test success`,
 				`Releasing lease for aws-quota-slice`,
 			},
@@ -80,9 +79,7 @@ func TestLeases(t *testing.T) {
 			success: true,
 			output: []string{
 				`Acquiring 1 lease(s) for aws-quota-slice`,
-				`Acquired lease(s) for aws-quota-slice`,
 				`Acquiring 1 lease(s) for gcp-quota-slice`,
-				`Acquired lease(s) for gcp-quota-slice`,
 				`Releasing leases for test configurable-leases`,
 				`Releasing lease for aws-quota-slice`,
 				`Releasing lease for gcp-quota-slice`,
@@ -95,9 +92,7 @@ func TestLeases(t *testing.T) {
 			success: true,
 			output: []string{
 				`Acquiring 1 lease(s) for aws-quota-slice`,
-				`Acquired lease(s) for aws-quota-slice`,
 				`Acquiring 1 lease(s) for gcp-quota-slice`,
-				`Acquired lease(s) for gcp-quota-slice`,
 				`Releasing leases for test configurable-leases-registry`,
 				`Releasing lease for aws-quota-slice`,
 				`Releasing lease for gcp-quota-slice`,
@@ -110,9 +105,7 @@ func TestLeases(t *testing.T) {
 			success: true,
 			output: []string{
 				`Acquiring 3 lease(s) for aws-quota-slice`,
-				`Acquired lease(s) for aws-quota-slice`,
 				`Acquiring 5 lease(s) for gcp-quota-slice`,
-				`Acquired lease(s) for gcp-quota-slice`,
 				`Releasing leases for test configurable-leases-count`,
 				`Releasing lease for aws-quota-slice`,
 				`Releasing lease for gcp-quota-slice`,

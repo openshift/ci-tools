@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -76,6 +77,20 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct vault client")
 	}
+
+	healthMux := http.NewServeMux()
+	healthMux.HandleFunc("/healthz/ready", func(w http.ResponseWriter, r *http.Request) {
+		if privilegedVaultClient.IsCredentialExpired() {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "Vault credential expired")
+		}
+		fmt.Fprintf(w, "OK")
+	})
+	healthServer := &http.Server{
+		Addr:    ":" + strconv.Itoa(o.InstrumentationOptions.HealthPort),
+		Handler: healthMux,
+	}
+	interrupts.ListenAndServe(healthServer, 0)
 
 	metrics.ExposeMetrics(version.Name, config.PushGateway{}, o.MetricsPort)
 
@@ -228,7 +243,7 @@ func (m *secretCollectionManager) deleteCollectionHandler(l *logrus.Entry, user 
 func (m *secretCollectionManager) deleteCollection(name string) error {
 	// First delete the data, then the group to be sure that users retain access until all
 	// data is deleted.
-	path := m.kvStorePrefix + "/" + prefixedName(name)
+	path := m.kvStorePrefix + "/" + name
 	allItems, err := m.privilegedVaultClient.ListKVRecursively(path)
 	if err != nil {
 		return fmt.Errorf("failed to list items below %s: %w", path, err)
@@ -366,6 +381,12 @@ func (m *secretCollectionManager) createSecretCollection(_ *logrus.Entry, userNa
 	}
 	if err := m.privilegedVaultClient.Put("identity/group", serializedGroup); err != nil {
 		return fmt.Errorf("failed to create group %s: %w", prefixedName(secretCollectionName), err)
+	}
+
+	// Create an empty file so ppl see the secret collection in the vault UI.
+	indexFileLocation := strings.Replace(m.kvDataPrefix, "/data", "", 1) + "/" + secretCollectionName + "/index"
+	if err := m.privilegedVaultClient.UpsertKV(indexFileLocation, map[string]string{".": "."}); err != nil {
+		return fmt.Errorf("failed to create %s: %w", indexFileLocation, err)
 	}
 
 	return nil

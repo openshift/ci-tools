@@ -1,0 +1,26 @@
+- attachments:
+  - cmd: echo -n Attachment1
+    name: Attachment1
+  fields:
+  - cmd: echo -n Field1
+    name: Field1
+  item_name: Item1
+  notes: Note1
+  params:
+    FieldNum:
+    - "1"
+    - "2"
+  password: echo -n password1
+- attachments:
+  - cmd: echo -n Attachment2
+    name: Attachment2
+  fields:
+  - cmd: echo -n Field2
+    name: Field2
+  item_name: Item2
+  notes: Note2
+  params:
+    FieldNum:
+    - "1"
+    - "2"
+  password: echo -n password2

@@ -99,6 +99,12 @@ func validateTestStepConfiguration(fieldRoot string, input []api.TestStepConfigu
 		if test.Cron != nil && test.Interval != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` and `cron` cannot both be set", fieldRootN))
 		}
+		if test.Cron != nil && test.ReleaseController {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron` cannot be set for release controller jobs", fieldRootN))
+		}
+		if test.Interval != nil && test.ReleaseController {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` cannot be set for release controller jobs", fieldRootN))
+		}
 
 		if test.Interval != nil {
 			if _, err := time.ParseDuration(*test.Interval); err != nil {

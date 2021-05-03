@@ -26,6 +26,7 @@ import (
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
+	"k8s.io/test-infra/prow/pjutil/pprof"
 	"k8s.io/test-infra/prow/simplifypath"
 
 	"github.com/openshift/ci-tools/pkg/jira"
@@ -148,7 +149,7 @@ func main() {
 		),
 	))
 	handler := metrics.TraceHandler(simplifier, promMetrics.HTTPRequestDuration, promMetrics.HTTPResponseSize)
-	pjutil.ServePProf(o.instrumentationOptions.PProfPort)
+	pprof.Instrument(o.instrumentationOptions)
 
 	health := pjutil.NewHealth()
 

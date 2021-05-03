@@ -4,7 +4,6 @@ package secret_generator
 
 import (
 	"bytes"
-	"context"
 	"os/exec"
 	"testing"
 
@@ -13,8 +12,7 @@ import (
 
 func TestGeneratorBootstrap(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-	addr := "http://" + testhelper.Vault(ctx, testhelper.NewT(ctx, t))
+	addr := "http://" + testhelper.Vault(t)
 	cmd := func(cmd string, args ...string) *exec.Cmd {
 		ret := exec.Command(cmd, append(
 			args,

@@ -10,8 +10,11 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 // SecretFromDir creates a secret with the contents of files in a directory.
@@ -66,4 +69,28 @@ func UpsertImmutableSecret(ctx context.Context, client ctrlruntimeclient.Client,
 
 	// Recreate counts as "Update"
 	return false, client.Create(ctx, secret)
+}
+
+// CopySecretsIntoJobNamespace copies the source secrets to the namespace where the job runs
+func CopySecretsIntoJobNamespace(ctx context.Context, client ctrlruntimeclient.Client, jobSpec *api.JobSpec, secrets map[string]ctrlruntimeclient.ObjectKey) error {
+	for name, secretKey := range secrets {
+		src := &coreapi.Secret{}
+		if err := client.Get(ctx, secretKey, src); err != nil {
+			return fmt.Errorf("could not read source secret %s in namespace %s: %w", secretKey.Name, secretKey.Namespace, err)
+		}
+		dst := &coreapi.Secret{
+			TypeMeta: src.TypeMeta,
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: jobSpec.Namespace(),
+			},
+			Type:       src.Type,
+			Data:       src.Data,
+			StringData: src.StringData,
+		}
+		if err := client.Create(ctx, dst); err != nil && !kerrors.IsAlreadyExists(err) {
+			return fmt.Errorf("could not create destination secert %s in namespace %s: %w", name, jobSpec.Namespace(), err)
+		}
+	}
+	return nil
 }

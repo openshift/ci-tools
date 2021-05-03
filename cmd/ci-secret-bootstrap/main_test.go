@@ -481,6 +481,7 @@ func TestCompleteOptions(t *testing.T) {
 			},
 			expectedBWPassword: "topSecret",
 			expectedConfig: secretbootstrap.Config{
+				ClusterGroups: map[string][]string{"group-a": {"default"}},
 				Secrets: []secretbootstrap.SecretConfig{{
 					From: map[string]secretbootstrap.BitWardenContext{"key-name-1": {BWItem: "item-name-1", Field: "field-name-1"}},
 					To:   []secretbootstrap.SecretContext{{Cluster: "default", Namespace: "ns", Name: "name"}},
@@ -524,16 +525,6 @@ func TestValidateCompletedOptions(t *testing.T) {
 				"default": configDefault,
 				"build01": configBuild01,
 			},
-		},
-		{
-			name:     "empty config",
-			given:    options{},
-			expected: fmt.Errorf("no secrets found to sync"),
-		},
-		{
-			name:     "empty config with cluster filter",
-			given:    options{cluster: "cluster"},
-			expected: fmt.Errorf("no secrets found to sync for --cluster=cluster"),
 		},
 		{
 			name: "empty to",

@@ -448,6 +448,32 @@ func TestValidateTests(t *testing.T) {
 			expectedValid: false,
 		},
 		{
+			id: "cron and releaseInforming together are invalid",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Cron:                       &cronString,
+					ReleaseController:          true,
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "interval and releaseInforming together are invalid",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					ReleaseController:          true,
+					Interval:                   &intervalString,
+				},
+			},
+			expectedValid: false,
+		},
+		{
 			id: "invalid cron",
 			tests: []api.TestStepConfiguration{
 				{

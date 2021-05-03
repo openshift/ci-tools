@@ -369,6 +369,7 @@ func stepsForStepImages(
 			config := api.InputImageTagStepConfiguration{
 				BaseImage: *subStep.FromImage,
 				To:        link,
+				Source:    fmt.Sprintf(api.ImageStreamSourceTest, subStep.As),
 			}
 			if _, ok := inputImages[config]; ok {
 				continue
@@ -511,6 +512,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: *isTagRef,
 					To:        api.PipelineImageStreamTagReferenceRoot,
+					Source:    api.ImageStreamSourceRoot,
 				}})
 		} else if gitSourceRef := target.ProjectImageBuild; gitSourceRef != nil {
 			buildSteps = append(buildSteps, api.StepConfiguration{
@@ -579,6 +581,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 			BaseImage: defaultImageFromReleaseTag(baseImage, config.ReleaseTagConfiguration),
 			To:        api.PipelineImageStreamTagReference(alias),
+			Source:    api.ImageStreamSourceBase,
 		}})
 	}
 
@@ -587,6 +590,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 			BaseImage: defaultImageFromReleaseTag(target, config.ReleaseTagConfiguration),
 			To:        intermediateTag,
+			Source:    api.ImageStreamSourceBaseRpm,
 		}})
 
 		buildSteps = append(buildSteps, api.StepConfiguration{RPMImageInjectionStepConfiguration: &api.RPMImageInjectionStepConfiguration{

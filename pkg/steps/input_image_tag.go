@@ -49,9 +49,11 @@ func (s *inputImageTagStep) Inputs() (api.InputDefinition, error) {
 		return nil, fmt.Errorf("could not resolve base image: %w", err)
 	}
 
-	//TODO: Maybe here?
-	logrus.Debug("Yeah yeah yeah")
-	logrus.Debugf("Resolved %s to %s. (%s)", s.config.BaseImage.ISTagName(), from.Image.Name)
+	if s.config.Source != "" {
+		logrus.Debugf("Resolved %s (%s) to %s.", s.config.BaseImage.ISTagName(), s.config.Source, from.Image.Name)
+	} else {
+		logrus.Debugf("Resolved %s to %s.", s.config.BaseImage.ISTagName(), from.Image.Name)
+	}
 	s.imageName = from.Image.Name
 	return api.InputDefinition{from.Image.Name}, nil
 }

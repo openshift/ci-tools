@@ -84,7 +84,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Name:      "root-name",
 						Tag:       "manual",
 					},
-					To: api.PipelineImageStreamTagReferenceRoot,
+					To:     api.PipelineImageStreamTagReferenceRoot,
+					Source: string(api.PipelineImageStreamTagReferenceRoot),
 				},
 			}},
 		},
@@ -126,7 +127,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Name:      "org-repo",
 						Tag:       "branch",
 					},
-					To: api.PipelineImageStreamTagReferenceRoot,
+					To:     api.PipelineImageStreamTagReferenceRoot,
+					Source: string(api.PipelineImageStreamTagReferenceRoot),
 				},
 			}},
 		},
@@ -160,7 +162,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Name:      "stream-name",
 						Tag:       "stream-tag",
 					},
-					To: api.PipelineImageStreamTagReferenceRoot,
+					To:     api.PipelineImageStreamTagReferenceRoot,
+					Source: string(api.PipelineImageStreamTagReferenceRoot),
 				},
 			}},
 			readFile: func(filename string) ([]byte, error) {
@@ -208,7 +211,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Name:      "root-name",
 						Tag:       "manual",
 					},
-					To: api.PipelineImageStreamTagReferenceRoot,
+					To:     api.PipelineImageStreamTagReferenceRoot,
+					Source: string(api.PipelineImageStreamTagReferenceRoot),
 				},
 			}, {
 				PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
@@ -254,7 +258,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Name:      "root-name",
 						Tag:       "manual",
 					},
-					To: api.PipelineImageStreamTagReferenceRoot,
+					To:     api.PipelineImageStreamTagReferenceRoot,
+					Source: string(api.PipelineImageStreamTagReferenceRoot),
 				},
 			}, {
 				PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
@@ -309,7 +314,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Name:      "root-name",
 						Tag:       "manual",
 					},
-					To: api.PipelineImageStreamTagReferenceRoot,
+					To:     api.PipelineImageStreamTagReferenceRoot,
+					Source: string(api.PipelineImageStreamTagReferenceRoot),
 				},
 			}, {
 				PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
@@ -359,7 +365,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Name:      "root-name",
 						Tag:       "manual",
 					},
-					To: api.PipelineImageStreamTagReferenceRoot,
+					To:     api.PipelineImageStreamTagReferenceRoot,
+					Source: string(api.PipelineImageStreamTagReferenceRoot),
 				},
 			}, {
 				PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
@@ -414,7 +421,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Name:      "root-name",
 						Tag:       "manual",
 					},
-					To: api.PipelineImageStreamTagReferenceRoot,
+					To:     api.PipelineImageStreamTagReferenceRoot,
+					Source: string(api.PipelineImageStreamTagReferenceRoot),
 				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
@@ -424,7 +432,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Tag:       "tag",
 						As:        "name",
 					},
-					To: api.PipelineImageStreamTagReference("name"),
+					To:     api.PipelineImageStreamTagReference("name"),
+					Source: "base_image",
 				},
 			}},
 		},
@@ -467,7 +476,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 							Name:      "root-name",
 							Tag:       "manual",
 						},
-						To: api.PipelineImageStreamTagReferenceRoot,
+						To:     api.PipelineImageStreamTagReferenceRoot,
+						Source: string(api.PipelineImageStreamTagReferenceRoot),
 					},
 				},
 				{
@@ -484,7 +494,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 							Tag:       "tag",
 							As:        "name",
 						},
-						To: api.PipelineImageStreamTagReference("name"),
+						To:     api.PipelineImageStreamTagReference("name"),
+						Source: "base_image",
 					},
 				},
 				{
@@ -536,7 +547,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Name:      "root-name",
 						Tag:       "manual",
 					},
-					To: api.PipelineImageStreamTagReferenceRoot,
+					To:     api.PipelineImageStreamTagReferenceRoot,
+					Source: string(api.PipelineImageStreamTagReferenceRoot),
 				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
@@ -546,7 +558,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Tag:       "tag",
 						As:        "name",
 					},
-					To: api.PipelineImageStreamTagReference("name-without-rpms"),
+					To:     api.PipelineImageStreamTagReference("name-without-rpms"),
+					Source: "base_rpm_image",
 				},
 			}, {
 				RPMImageInjectionStepConfiguration: &api.RPMImageInjectionStepConfiguration{
@@ -607,7 +620,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Name:      "root-name",
 						Tag:       "manual",
 					},
-					To: "root",
+					To:     api.PipelineImageStreamTagReferenceRoot,
+					Source: string(api.PipelineImageStreamTagReferenceRoot),
 				},
 			}, {
 				ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
@@ -684,7 +698,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Name:      "root-name",
 						Tag:       "manual",
 					},
-					To: "root",
+					To:     api.PipelineImageStreamTagReferenceRoot,
+					Source: string(api.PipelineImageStreamTagReferenceRoot),
 				},
 			}, {
 				ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{

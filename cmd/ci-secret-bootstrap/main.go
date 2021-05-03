@@ -684,7 +684,7 @@ func insertIfNotEmpty(s sets.String, items ...string) sets.String {
 }
 
 func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClient, bwAllowUnused sets.String, allowUnusedAfter time.Time) error {
-	allSecretStoreItems, err := client.GetInUseInformationForAllItems()
+	allSecretStoreItems, err := client.GetInUseInformationForAllItems(config.VaultDPTPPRefix)
 	if err != nil {
 		return fmt.Errorf("failed to get in-use information from secret store: %w", err)
 	}
@@ -692,7 +692,6 @@ func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClie
 
 	unused := make(map[string]*comparable)
 	for itemName, item := range allSecretStoreItems {
-		itemName := strings.TrimPrefix(itemName, config.VaultDPTPPRefix+"/")
 		l := logrus.WithField("bw_item", itemName)
 		if item.LastChanged().After(allowUnusedAfter) {
 			logrus.WithFields(logrus.Fields{

@@ -99,8 +99,12 @@ func (c *vaultClient) GetPassword(itemName string) ([]byte, error) {
 	return c.getSecretAtPath(itemName, "password")
 }
 
-func (c *vaultClient) GetInUseInformationForAllItems() (map[string]SecretUsageComparer, error) {
-	allKeys, err := c.upstream.ListKVRecursively(c.prefix)
+func (c *vaultClient) GetInUseInformationForAllItems(optionalSubPath string) (map[string]SecretUsageComparer, error) {
+	prefix := c.prefix
+	if optionalSubPath != "" {
+		prefix = prefix + "/" + optionalSubPath
+	}
+	allKeys, err := c.upstream.ListKVRecursively(prefix)
 	if err != nil {
 		return nil, err
 	}

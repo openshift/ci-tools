@@ -10,7 +10,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/test-infra/prow/kube"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -70,15 +69,7 @@ func (s *clusterClaimStep) run(ctx context.Context) error {
 	logrus.Infof("Releasing cluster claims for test %s", s.Name())
 	releaseErr := results.ForReason("releasing_cluster_claim").ForError(releaseCluster(ctx, s.hiveClient, clusterClaim))
 
-	// we want a sensible output error for reporting, so we bubble up these individually
-	//if we can, as this is the only step that can have multiple errors
-	if wrappedErr != nil && releaseErr == nil {
-		return wrappedErr
-	} else if wrappedErr == nil && releaseErr != nil {
-		return releaseErr
-	} else {
-		return utilerrors.NewAggregate([]error{wrappedErr, releaseErr})
-	}
+	return aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr)
 }
 
 func acquireCluster(ctx context.Context, clusterClaim api.ClusterClaim, hiveClient ctrlruntimeclient.Client, client loggingclient.LoggingClient, jobSpec api.JobSpec) (*hivev1.ClusterClaim, error) {

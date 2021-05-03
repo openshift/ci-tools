@@ -2,6 +2,7 @@ package validation
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -396,6 +397,92 @@ func TestValidateImages(t *testing.T) {
 			}},
 			output: []error{
 				errors.New("images[0]: dockerfile_literal is mutually exclusive with context_dir and dockerfile_path"),
+			},
+		},
+		{
+			name: "check build args: name must be set",
+			input: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					DockerfilePath: "foo",
+					BuildArgs: []api.BuildArg{
+						{
+							ValueFrom: &api.SecretKeySelector{
+								Namespace: "ns",
+								Name:      "some",
+								Key:       "key",
+							},
+						},
+					},
+				},
+				To: "amsterdam",
+			}},
+			output: []error{
+				fmt.Errorf("images[0].build_args[0]: name must be set"),
+			},
+		},
+		{
+			name: "check build args: value is mutually exclusive with value_from",
+			input: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					DockerfilePath: "foo",
+					BuildArgs: []api.BuildArg{
+						{
+							Name:  "a",
+							Value: "b",
+							ValueFrom: &api.SecretKeySelector{
+								Namespace: "ns",
+								Name:      "some",
+								Key:       "key",
+							},
+						},
+					},
+				},
+				To: "amsterdam",
+			}},
+			output: []error{
+				fmt.Errorf("images[0].build_args[0]: value is mutually exclusive with value_from"),
+			},
+		},
+		{
+			name: "check build args: namespace must be set",
+			input: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					DockerfilePath: "foo",
+					BuildArgs: []api.BuildArg{
+						{
+							Name: "a",
+							ValueFrom: &api.SecretKeySelector{
+								Name: "some",
+								Key:  "key",
+							},
+						},
+					},
+				},
+				To: "amsterdam",
+			}},
+			output: []error{
+				fmt.Errorf("images[0].build_args[0]: failed to determine the namespaced name: %w", fmt.Errorf("namespace must be set")),
+			},
+		},
+		{
+			name: "check build args: name must be set",
+			input: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					DockerfilePath: "foo",
+					BuildArgs: []api.BuildArg{
+						{
+							ValueFrom: &api.SecretKeySelector{
+								Namespace: "ns",
+								Name:      "some",
+								Key:       "key",
+							},
+						},
+					},
+				},
+				To: "amsterdam",
+			}},
+			output: []error{
+				fmt.Errorf("images[0].build_args[0]: name must be set"),
 			},
 		},
 	}

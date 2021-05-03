@@ -136,7 +136,7 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	if err := s.createSharedDirSecret(ctx); err != nil {
 		return fmt.Errorf("failed to create secret: %w", err)
 	}
-	if err := s.createCredentials(); err != nil {
+	if err := s.createCredentials(ctx); err != nil {
 		return fmt.Errorf("failed to create credentials: %w", err)
 	}
 	if err := s.createCommandConfigMaps(ctx); err != nil {
@@ -308,39 +308,20 @@ func (s *multiStageTestStep) createSharedDirSecret(ctx context.Context) error {
 	return s.client.Create(ctx, secret)
 }
 
-func (s *multiStageTestStep) createCredentials() error {
+func (s *multiStageTestStep) createCredentials(ctx context.Context) error {
 	logrus.Debugf("Creating multi-stage test credentials for %q", s.name)
-	toCreate := map[string]*coreapi.Secret{}
+	toCreate := map[string]ctrlruntimeclient.ObjectKey{}
 	for _, step := range append(s.pre, append(s.test, s.post...)...) {
 		for _, credential := range step.Credentials {
 			// we don't want secrets imported from separate namespaces to collide
 			// but we want to keep them generally recognizable for debugging, and the
 			// chance we get a second-level collision (ns-a, name) and (ns, a-name) is
 			// small, so we can get away with this string prefixing
-			name := fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)
-			raw := &coreapi.Secret{}
-			if err := s.client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: credential.Namespace, Name: credential.Name}, raw); err != nil {
-				return fmt.Errorf("could not read source credential: %w", err)
-			}
-			toCreate[name] = &coreapi.Secret{
-				TypeMeta: raw.TypeMeta,
-				ObjectMeta: meta.ObjectMeta{
-					Name:      name,
-					Namespace: s.jobSpec.Namespace(),
-				},
-				Type:       raw.Type,
-				Data:       raw.Data,
-				StringData: raw.StringData,
-			}
+			toCreate[fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)] = ctrlruntimeclient.ObjectKey{Namespace: credential.Namespace, Name: credential.Name}
 		}
 	}
 
-	for name := range toCreate {
-		if err := s.client.Create(context.TODO(), toCreate[name]); err != nil && !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not create source credential: %w", err)
-		}
-	}
-	return nil
+	return util.CopySecretsIntoJobNamespace(ctx, s.client, s.jobSpec, toCreate)
 }
 
 func (s *multiStageTestStep) createCommandConfigMaps(ctx context.Context) error {

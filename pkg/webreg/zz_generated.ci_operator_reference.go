@@ -220,6 +220,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            name: ' '\n" +
 	"            namespace: ' '\n" +
 	"            tag: ' '\n" +
+	"        # The Source denotes what caused this image to get loaded. In the event\n" +
+	"        # that the image was loaded as a result of a test step, the source will\n" +
+	"        # contain the name of the test.\n" +
+	"        source: ' '\n" +
 	"        to: ' '\n" +
 	"      output_image_tag_step:\n" +
 	"        from: ' '\n" +

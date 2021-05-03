@@ -14,7 +14,7 @@ type ReadOnlyClient interface {
 	GetFieldOnItem(itemName, fieldName string) ([]byte, error)
 	GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error)
 	GetPassword(itemName string) ([]byte, error)
-	GetInUseInformationForAllItems() (map[string]SecretUsageComparer, error)
+	GetInUseInformationForAllItems(optionalPrefix string) (map[string]SecretUsageComparer, error)
 	GetUserSecrets() (map[types.NamespacedName]map[string]string, error)
 	Logout() ([]byte, error)
 	HasItem(itemname string) (bool, error)
@@ -49,7 +49,7 @@ func NewDryRunClient(output *os.File) (Client, error) {
 	return &dryRunClient{Client: c}, nil
 }
 
-func (*dryRunClient) GetInUseInformationForAllItems() (map[string]SecretUsageComparer, error) {
+func (*dryRunClient) GetInUseInformationForAllItems(_ string) (map[string]SecretUsageComparer, error) {
 	return nil, nil
 }
 

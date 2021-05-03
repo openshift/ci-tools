@@ -24,7 +24,7 @@ func NewBitwardenClient(bw bitwarden.Client) Client {
 	return &bitwardenClient{Client: bw}
 }
 
-func (bw *bitwardenClient) GetInUseInformationForAllItems() (map[string]SecretUsageComparer, error) {
+func (bw *bitwardenClient) GetInUseInformationForAllItems(_ string) (map[string]SecretUsageComparer, error) {
 	allItems := bw.GetAllItems()
 
 	result := map[string]SecretUsageComparer{}

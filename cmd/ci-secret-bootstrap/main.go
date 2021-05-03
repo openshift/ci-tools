@@ -684,7 +684,7 @@ func insertIfNotEmpty(s sets.String, items ...string) sets.String {
 }
 
 func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClient, bwAllowUnused sets.String, allowUnusedAfter time.Time) error {
-	allSecretStoreItems, err := client.GetInUseInformationForAllItems()
+	allSecretStoreItems, err := client.GetInUseInformationForAllItems(config.VaultDPTPPRefix)
 	if err != nil {
 		return fmt.Errorf("failed to get in-use information from secret store: %w", err)
 	}

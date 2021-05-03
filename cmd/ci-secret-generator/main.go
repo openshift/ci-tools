@@ -252,47 +252,55 @@ func main() {
 		return
 	}
 
+	if errs := generateSecrets(o, &censor); len(errs) > 0 {
+		logrus.WithError(utilerrors.NewAggregate(errs)).Fatal("Failed to update secrets.")
+	}
+	logrus.Info("Updated secrets.")
+}
+
+func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 	var client secrets.Client
-	logrus.RegisterExitHandler(func() {
+	defer func() {
 		if client != nil {
 			if _, err := client.Logout(); err != nil {
-				logrus.WithError(err).Error("failed to logout.")
+				errs = append(errs, fmt.Errorf("failed to logout: %w", err))
 			}
 		}
-	})
-	defer logrus.Exit(0)
+	}()
+
 	if o.dryRun {
 		var err error
 		var f *os.File
 		if o.outputFile == "" {
 			f, err = ioutil.TempFile("", "ci-secret-generator")
 			if err != nil {
-				logrus.WithError(err).Fatal("failed to create tempfile")
+				return append(errs, fmt.Errorf("failed to create tempfile: %w", err))
 			}
 			logrus.Infof("Writing secrets to %s", f.Name())
 		} else {
 			f, err = os.OpenFile(o.outputFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
 			if err != nil {
-				logrus.WithError(err).Fatalf("failed to open output file %q", o.outputFile)
+				return append(errs, fmt.Errorf("failed to open output file %q: %w", o.outputFile, err))
 			}
 		}
 		client, err = secrets.NewDryRunClient(f)
 		if err != nil {
-			logrus.WithError(err).Fatal("failed to create dry-run mode client")
+			return append(errs, fmt.Errorf("failed to create dry-run mode client: %w", err))
 		}
 	} else {
 		var err error
-		client, err = o.secrets.NewClient(&censor)
+		client, err = o.secrets.NewClient(censor)
 		if err != nil {
-			logrus.WithError(err).Fatal("failed to create Bitwarden client")
+			return append(errs, fmt.Errorf("failed to create Bitwarden client: %w", err))
 		}
 	}
 
 	// Upload the output to bitwarden
 	if err := updateSecrets(o.config, client); err != nil {
-		logrus.WithError(err).Fatal("Failed to update secrets.")
+		errs = append(errs, fmt.Errorf("failed to update secrets: %w", err))
 	}
-	logrus.Info("Updated secrets.")
+
+	return errs
 }
 
 func bitwardenContextsFor(items secretgenerator.Config) []secretbootstrap.BitWardenContext {

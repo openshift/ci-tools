@@ -452,6 +452,11 @@ type StepConfiguration struct {
 type InputImageTagStepConfiguration struct {
 	BaseImage ImageStreamTagReference         `json:"base_image"`
 	To        PipelineImageStreamTagReference `json:"to,omitempty"`
+
+	// The Source denotes what caused this image to get loaded. In the event
+	// that the image was loaded as a result of a test step, the source will
+	// contain the name of the test.
+	Source string `json:"source,omitempty"`
 }
 
 // OutputImageTagStepConfiguration describes a step that
@@ -1488,4 +1493,9 @@ const (
 	ReleaseImageStream = "release"
 
 	ComponentFormatReplacement = "${component}"
+
+	ImageStreamSourceRoot    = "root"
+	ImageStreamSourceBase    = "base_image"
+	ImageStreamSourceBaseRpm = "base_rpm_image"
+	ImageStreamSourceTest    = `test step "%s"`
 )

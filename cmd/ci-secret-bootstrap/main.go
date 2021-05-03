@@ -685,6 +685,7 @@ func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClie
 
 	unused := make(map[string]*comparable)
 	for itemName, item := range allSecretStoreItems {
+		itemName := strings.TrimPrefix(itemName, config.VaultDPTPPRefix+"/")
 		l := logrus.WithField("bw_item", itemName)
 		if item.LastChanged().After(allowUnusedAfter) {
 			logrus.WithFields(logrus.Fields{

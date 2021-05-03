@@ -2497,6 +2497,25 @@ func TestGetUnusedBWItems(t *testing.T) {
 			expectedBitwardenErr: "Unused bw item: 'item-name-1'",
 			expectedVaultErr:     "Unused bw item: 'item-name-1'",
 		},
+		{
+			id: "Unused item check prepends vault dptp prefix if present",
+			bwItems: []bitwarden.Item{
+				{
+					Name:   "prefix/item-name-1",
+					Fields: []bitwarden.Field{{Name: "field-name-1", Value: "value-1"}},
+				},
+			},
+			config: secretbootstrap.Config{
+				VaultDPTPPRefix: "prefix",
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.BitWardenContext{
+							"1": {BWItem: "item-name-1", Field: "field-name-1"},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {

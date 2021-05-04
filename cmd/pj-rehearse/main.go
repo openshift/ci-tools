@@ -592,14 +592,15 @@ func determineSubsetToRehearse(presubmitsToRehearse []*prowconfig.Presubmit, reh
 	}
 
 	maxJobsPerSourceType := rehearsalLimit / len(presubmitsBySourceType)
-	toRehearse := []*prowconfig.Presubmit{}
-	dropped := []*prowconfig.Presubmit{}
+	var toRehearse []*prowconfig.Presubmit
+	var dropped []*prowconfig.Presubmit
 
 	for _, jobs := range presubmitsBySourceType {
 		if len(jobs) > maxJobsPerSourceType {
-			toRehearse = append(toRehearse, jobs[:maxJobsPerSourceType]...)
 			dropped = append(dropped, jobs[maxJobsPerSourceType:]...)
+			jobs = jobs[:maxJobsPerSourceType]
 		}
+		toRehearse = append(toRehearse, jobs...)
 	}
 
 	// There are two ways that we will hit this check. First, jobs from a specific resource are less than the

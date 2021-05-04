@@ -274,6 +274,20 @@ func TestDetermineSubsetToRehearse(t *testing.T) {
 				{JobBase: prowconfig.JobBase{Name: "rehearsal-9", Labels: map[string]string{config.SourceTypeLabel: "changedTemplate"}}},
 			},
 		},
+		{
+			id: "all sources are represented even when initial sets are skewed",
+			presubmitsToRehearse: []*prowconfig.Presubmit{
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-1", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-2", Labels: map[string]string{config.SourceTypeLabel: "changedPeriodic"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-3", Labels: map[string]string{config.SourceTypeLabel: "changedPeriodic"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-4", Labels: map[string]string{config.SourceTypeLabel: "changedPeriodic"}}},
+			},
+			rehearsalLimit: 2,
+			expected: []*prowconfig.Presubmit{
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-1", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				{JobBase: prowconfig.JobBase{Name: "rehearsal-2", Labels: map[string]string{config.SourceTypeLabel: "changedPeriodic"}}},
+			},
+		},
 	}
 
 	for _, tc := range testCases {

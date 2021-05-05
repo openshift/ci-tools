@@ -1329,3 +1329,40 @@ func TestUsesConfigMap(t *testing.T) {
 		})
 	}
 }
+
+func TestContextFor(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		input  *prowconfig.Presubmit
+		output string
+	}{
+		{
+			name:   "presubmit without prefix",
+			input:  &prowconfig.Presubmit{Reporter: prowconfig.Reporter{Context: "something"}},
+			output: "something",
+		},
+		{
+			name:   "presubmit with prowgen prefix",
+			input:  &prowconfig.Presubmit{Reporter: prowconfig.Reporter{Context: "ci/prow/something"}},
+			output: "something",
+		},
+		{
+			name:   "presubmit with custom prefix",
+			input:  &prowconfig.Presubmit{Reporter: prowconfig.Reporter{Context: "ci/something"}},
+			output: "something",
+		},
+		{
+			name:   "periodic",
+			input:  &prowconfig.Presubmit{JobBase: prowconfig.JobBase{Name: "something"}},
+			output: "something",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if diff := cmp.Diff(testCase.output, contextFor(testCase.input)); diff != "" {
+				t.Errorf("%s: got incorrect context: %v", testCase.name, diff)
+			}
+		})
+	}
+}

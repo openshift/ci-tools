@@ -19,6 +19,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
@@ -99,7 +100,7 @@ func acquireCluster(ctx context.Context, clusterClaim api.ClusterClaim, hiveClie
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      claimName,
 			Namespace: claimNamespace,
-			Labels: trimLabels(map[string]string{
+			Labels: utils.SanitizeLabels(map[string]string{
 				kube.ProwJobAnnotation: jobSpec.Job,
 				kube.ProwBuildIDLabel:  jobSpec.BuildID,
 			}),

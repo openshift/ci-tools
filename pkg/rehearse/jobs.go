@@ -34,6 +34,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/diffs"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/registry"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
 const (
@@ -141,24 +142,33 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 		ghContext += branch + "/"
 	}
 
-	shortName := strings.TrimPrefix(source.Context, "ci/prow/")
-	if len(shortName) > 0 {
-		ghContext += shortName
-	} else {
-		ghContext += source.Name
-	}
-	rehearsal.Context = fmt.Sprintf("ci/rehearse/%s", ghContext)
+	shortName := contextFor(source)
+	rehearsal.Context = fmt.Sprintf("ci/rehearse/%s%s", ghContext, shortName)
 
 	rehearsal.RerunCommand = defaultRehearsalRerunCommand
 	rehearsal.Trigger = defaultRehearsalTrigger
 	rehearsal.Optional = true
 	if rehearsal.Labels == nil {
-		rehearsal.Labels = make(map[string]string, 1)
+		rehearsal.Labels = map[string]string{}
 	}
 	rehearsal.Labels[Label] = strconv.Itoa(prNumber)
 	rehearsal.Labels[LabelContext] = shortName
+	rehearsal.Labels = utils.SanitizeLabels(rehearsal.Labels)
 
 	return &rehearsal, nil
+}
+
+// contextFor returns the shortest context we can use to identify this job
+func contextFor(source *prowconfig.Presubmit) string {
+	if source.Context != "" {
+		// an informal convention is to add categories to a context with prefixed, slash-delimited tokens
+		return source.Context[strings.LastIndex(source.Context, "/")+1:]
+	} else {
+		// while Prow presubmits *must* have a context set, the rehearsal tool coerces periodics into
+		// the presubmit type before processing, so we may not have one
+		return source.Name
+	}
+
 }
 
 func filterPresubmits(changedPresubmits map[string][]prowconfig.Presubmit, logger logrus.FieldLogger) config.Presubmits {

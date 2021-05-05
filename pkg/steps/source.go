@@ -126,46 +126,7 @@ func labelsFor(spec *api.JobSpec, base map[string]string) map[string]string {
 	base[LabelMetadataTarget] = spec.Target
 	base[CreatedByCILabel] = "true"
 	base[openshiftCIEnv] = "true"
-	return mungeLabels(trimLabels(base))
-}
-
-func isAlpha(b uint8) bool {
-	return ('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z') || ('0' <= b && b <= '9')
-}
-
-func isAlphaOrOthers(b uint8) bool {
-	return isAlpha(b) || b == '.' || b == '_' || b == '-'
-}
-
-// mungeLabels ensures that label values don't contain invalid characters
-func mungeLabels(labels map[string]string) map[string]string {
-	output := map[string]string{}
-	for key, value := range labels {
-		if len(value) == 0 {
-			output[key] = value
-			continue
-		}
-		munged := strings.Builder{}
-		if isAlpha(value[0]) {
-			munged.WriteByte(value[0])
-		}
-
-		for i := 1; i < len(value)-1; i++ {
-			b := value[i]
-			if isAlphaOrOthers(b) {
-				munged.WriteByte(b)
-			} else {
-				munged.WriteString("_")
-			}
-		}
-
-		if len(value) > 1 && isAlpha(value[len(value)-1]) {
-			munged.WriteByte(value[len(value)-1])
-		}
-
-		output[key] = munged.String()
-	}
-	return output
+	return utils.SanitizeLabels(base)
 }
 
 type sourceStep struct {
@@ -660,17 +621,6 @@ func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfig
 		cloneAuthConfig: cloneAuthConfig,
 		pullSecret:      pullSecret,
 	}
-}
-
-// trimLabels ensures that all label values are less than 64 characters
-// in length and thus valid.
-func trimLabels(labels map[string]string) map[string]string {
-	for k, v := range labels {
-		if len(v) > 63 {
-			labels[k] = v[:60] + "XXX"
-		}
-	}
-	return labels
 }
 
 func getSourceSecretFromName(secretName string) *corev1.LocalObjectReference {

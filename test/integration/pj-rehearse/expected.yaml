@@ -152,7 +152,7 @@
     creationTimestamp: null
     labels:
       ci.openshift.io/rehearse: "1234"
-      ci.openshift.io/rehearse.context: ""
+      ci.openshift.io/rehearse.context: periodic-ci-super-duper-e2e
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedPeriodic
@@ -286,7 +286,7 @@
     creationTimestamp: null
     labels:
       ci.openshift.io/rehearse: "1234"
-      ci.openshift.io/rehearse.context: ""
+      ci.openshift.io/rehearse.context: periodic-ci-super-duper-no-ciop
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedPeriodic
@@ -363,7 +363,7 @@
     creationTimestamp: null
     labels:
       ci.openshift.io/rehearse: "1234"
-      ci.openshift.io/rehearse.context: ""
+      ci.openshift.io/rehearse.context: periodic-ci-super-duper-periodic-with-unresolved-config
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedPeriodic
@@ -505,7 +505,7 @@
     creationTimestamp: null
     labels:
       ci.openshift.io/rehearse: "1234"
-      ci.openshift.io/rehearse.context: ""
+      ci.openshift.io/rehearse.context: periodic-ci-super-duper-periodic-with-unresolved-config-no-tXXX
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedPeriodic
@@ -695,7 +695,7 @@
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
       ci.openshift.io/rehearse: "1234"
-      ci.openshift.io/rehearse.context: ""
+      ci.openshift.io/rehearse.context: periodic-ci-super-trooper-master-changed-and-uses-changed-woXXX
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedPeriodic

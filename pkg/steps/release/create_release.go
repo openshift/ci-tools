@@ -188,7 +188,7 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 		prefix = releaseConfig.Name
 	}
 	now := time.Now().UTC().Truncate(time.Second)
-	version := fmt.Sprintf("%s.test-%s-%s", prefix, now.Format("2006-01-02-150405"), s.jobSpec.Namespace())
+	version := fmt.Sprintf("%s.test-%s-%s-%s", prefix, now.Format("2006-01-02-150405"), s.jobSpec.Namespace(), s.name)
 
 	destination := fmt.Sprintf("%s:%s", releaseImageStreamRepo, s.name)
 	logrus.Infof("Creating release image %s.", destination)

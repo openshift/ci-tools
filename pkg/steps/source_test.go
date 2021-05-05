@@ -3,8 +3,6 @@ package steps
 import (
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -293,40 +291,6 @@ func TestCreateBuild(t *testing.T) {
 			actual := createBuild(testCase.config, testCase.jobSpec, testCase.clonerefsRef, testCase.resources, testCase.cloneAuthConfig, testCase.pullSecret, "imagedigest")
 			testhelper.CompareWithFixture(t, actual)
 		})
-	}
-}
-
-func TestMungeLabels(t *testing.T) {
-	var testCases = []struct {
-		input, output map[string]string
-	}{
-		{
-			input:  map[string]string{},
-			output: map[string]string{},
-		},
-		{
-			input: map[string]string{
-				"a": "b",
-				"b": "[b",
-				"c": "b!",
-				"d": "|b!",
-				"e": "|b:b-b!",
-				"f": "",
-			},
-			output: map[string]string{
-				"a": "b",
-				"b": "b",
-				"c": "b",
-				"d": "b",
-				"e": "b_b-b",
-				"f": "",
-			},
-		},
-	}
-	for i, testCase := range testCases {
-		if diff := cmp.Diff(testCase.output, mungeLabels(testCase.input)); diff != "" {
-			t.Errorf("case %d: got incorrect output: %v", i, diff)
-		}
 	}
 }
 

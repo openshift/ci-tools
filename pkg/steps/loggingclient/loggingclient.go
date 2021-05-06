@@ -12,12 +12,10 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
-
-	"github.com/openshift/ci-tools/pkg/util/watchingclient"
 )
 
 type LoggingClient interface {
-	watchingclient.Client
+	ctrlruntimeclient.WithWatch
 	// Object contains the latest revision of each object the client has
 	// seen. Calling this will reset the cache.
 	Objects() []ctrlruntimeclient.Object
@@ -26,7 +24,7 @@ type LoggingClient interface {
 	New() LoggingClient
 }
 
-func New(upstream watchingclient.Client) LoggingClient {
+func New(upstream ctrlruntimeclient.WithWatch) LoggingClient {
 	return &loggingClient{
 		upstream: upstream,
 		logTo:    map[string]map[string]ctrlruntimeclient.Object{},
@@ -35,7 +33,7 @@ func New(upstream watchingclient.Client) LoggingClient {
 
 type loggingClient struct {
 	lock     sync.Mutex
-	upstream watchingclient.Client
+	upstream ctrlruntimeclient.WithWatch
 	logTo    map[string]map[string]ctrlruntimeclient.Object
 }
 

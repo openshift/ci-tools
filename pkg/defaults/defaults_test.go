@@ -29,7 +29,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
-	fakewatchingclient "github.com/openshift/ci-tools/pkg/util/watchingclient/fake"
 )
 
 func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration {
@@ -767,7 +766,7 @@ func TestFromConfig(t *testing.T) {
 			Body:       ioutil.NopCloser(bytes.NewBuffer([]byte(content))),
 		}, nil
 	})
-	client := loggingclient.New(fakewatchingclient.NewFakeClient())
+	client := loggingclient.New(fakectrlruntimeclient.NewFakeClient())
 	if err := imageapi.AddToScheme(scheme.Scheme); err != nil {
 		t.Fatal(err)
 	}

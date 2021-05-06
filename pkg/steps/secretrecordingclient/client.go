@@ -10,13 +10,12 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/secrets"
-	"github.com/openshift/ci-tools/pkg/util/watchingclient"
 )
 
 // Wrap wraps the upstream client, allowing us to intercept any secrets it might interact with.
 // This allows us to keep an up-to-date view of all of the secret data we may have come into contact
 // with while executing, and ensure that we censor all of that data before outputting it.
-func Wrap(upstream watchingclient.Client, censor *secrets.DynamicCensor) watchingclient.Client {
+func Wrap(upstream ctrlruntimeclient.WithWatch, censor *secrets.DynamicCensor) ctrlruntimeclient.WithWatch {
 	return &client{
 		upstream: upstream,
 		censor:   censor,
@@ -25,7 +24,7 @@ func Wrap(upstream watchingclient.Client, censor *secrets.DynamicCensor) watchin
 
 // client updates the censor when it interacts with secrets on the cluster
 type client struct {
-	upstream watchingclient.Client
+	upstream ctrlruntimeclient.WithWatch
 	censor   *secrets.DynamicCensor
 }
 

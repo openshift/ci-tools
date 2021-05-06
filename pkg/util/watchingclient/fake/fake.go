@@ -2,8 +2,6 @@ package fake
 
 import (
 	"context"
-	"errors"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -13,11 +11,11 @@ import (
 )
 
 type fakewathingclient struct {
-	ctrlruntimeclient.Client
+	ctrlruntimeclient.WithWatch
 }
 
 func (f *fakewathingclient) Watch(ctx context.Context, obj ctrlruntimeclient.ObjectList, opts ...ctrlruntimeclient.ListOption) (watch.Interface, error) {
-	return nil, errors.New("not implemented")
+	return f.WithWatch.Watch(ctx, obj, opts...)
 }
 
 func NewFakeClient(obj ...runtime.Object) watchingclient.Client {

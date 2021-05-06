@@ -11,12 +11,11 @@ import (
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
-	"github.com/openshift/ci-tools/pkg/util/watchingclient"
-	fakectrlruntimeclient "github.com/openshift/ci-tools/pkg/util/watchingclient/fake"
 )
 
 func preparePodStep(namespace string) (*podStep, stepExpectation) {
@@ -116,7 +115,7 @@ func TestPodStepExecution(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.purpose, func(t *testing.T) {
 			ps, _ := preparePodStep(namespace)
-			ps.client = &podClient{LoggingClient: loggingclient.New(&podStatusChangingClient{Client: fakectrlruntimeclient.NewFakeClient(), dest: tc.podStatus})}
+			ps.client = &podClient{LoggingClient: loggingclient.New(&podStatusChangingClient{WithWatch: fakectrlruntimeclient.NewFakeClient(), dest: tc.podStatus})}
 
 			executionExpectation := executionExpectation{
 				prerun: doneExpectation{
@@ -276,7 +275,7 @@ func expectedPodStepTemplate() *podStep {
 var _ ctrlruntimeclient.Client = &podStatusChangingClient{}
 
 type podStatusChangingClient struct {
-	watchingclient.Client
+	ctrlruntimeclient.WithWatch
 	dest corev1.PodPhase
 }
 
@@ -284,7 +283,7 @@ func (ps *podStatusChangingClient) Create(ctx context.Context, o ctrlruntimeclie
 	if pod, ok := o.(*corev1.Pod); ok {
 		pod.Status.Phase = ps.dest
 	}
-	return ps.Client.Create(ctx, o, opts...)
+	return ps.WithWatch.Create(ctx, o, opts...)
 }
 
 func TestTestStepAndRequires(t *testing.T) {

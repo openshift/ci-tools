@@ -23,7 +23,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
-	fakewatchingclient "github.com/openshift/ci-tools/pkg/util/watchingclient/fake"
 )
 
 func aClusterPool() *hivev1.ClusterPool {
@@ -123,7 +122,7 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 				client.namespace = "ci-ocp-4.7.0-amd64-aws-us-east-1-ccx23"
 				client.conditionStatus = corev1.ConditionTrue
 			}),
-			client: loggingclient.New(fakewatchingclient.NewFakeClient()),
+			client: loggingclient.New(fakectrlruntimeclient.NewFakeClient()),
 			verifyFunc: func(client ctrlruntimeclient.Client) error {
 				ctx := context.TODO()
 				actualSecret := &corev1.Secret{}
@@ -175,7 +174,7 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 				Timeout:      &prowv1.Duration{Duration: time.Hour},
 			},
 			hiveClient: fakectrlruntimeclient.NewClientBuilder().WithObjects(aClusterPool()).Build(),
-			client:     loggingclient.New(fakewatchingclient.NewFakeClient()),
+			client:     loggingclient.New(fakectrlruntimeclient.NewFakeClient()),
 			jobSpec:    &api.JobSpec{},
 			expected:   fmt.Errorf("failed to find a cluster pool providing the cluster: map[architecture:amd64 cloud:aws owner:dpp product:ocp version:4.6.0]"),
 			verifyFunc: func(client ctrlruntimeclient.Client) error {
@@ -204,7 +203,7 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 				client.namespace = "ci-ocp-4.7.0-amd64-aws-us-east-1-ccx23"
 				client.conditionStatus = corev1.ConditionFalse
 			}),
-			client: loggingclient.New(fakewatchingclient.NewFakeClient()),
+			client: loggingclient.New(fakectrlruntimeclient.NewFakeClient()),
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
 					ProwJobID: "c2a971b7-947b-11eb-9747-0a580a820213",

@@ -39,7 +39,6 @@ import (
 	releasesteps "github.com/openshift/ci-tools/pkg/steps/release"
 	"github.com/openshift/ci-tools/pkg/steps/secretrecordingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
-	"github.com/openshift/ci-tools/pkg/util/watchingclient"
 )
 
 type inputImageSet map[api.InputImageTagStepConfiguration]struct{}
@@ -64,7 +63,7 @@ func FromConfig(
 	censor *secrets.DynamicCensor,
 	hiveKubeconfig *rest.Config,
 ) ([]api.Step, []api.Step, error) {
-	crclient, err := watchingclient.New(clusterConfig)
+	crclient, err := ctrlruntimeclient.NewWithWatch(clusterConfig, ctrlruntimeclient.Options{})
 	crclient = secretrecordingclient.Wrap(crclient, censor)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to construct client: %w", err)

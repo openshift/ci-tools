@@ -21,11 +21,11 @@ import (
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowdapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
-	fakectrlruntimeclient "github.com/openshift/ci-tools/pkg/util/watchingclient/fake"
 )
 
 // the multiStageTestStep implements the subStepReporter interface

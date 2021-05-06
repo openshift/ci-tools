@@ -755,6 +755,8 @@ type StepDependency struct {
 // StepDNSConfig defines a resource that needs to be acquired prior to execution.
 // Used to expose to the step via the specificed search list
 type StepDNSConfig struct {
+	// Nameservers is a list of IP addresses that will be used as DNS servers for the Pod
+	Nameservers []string `json:"nameservers,omitempty"`
 	// Searches is a list of DNS search domains for host-name lookup
 	Searches []string `json:"searches,omitempty"`
 }

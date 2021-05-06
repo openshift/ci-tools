@@ -451,6 +451,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                \"\": \"\"\n" +
 	"            # DnsConfig for step's Pod.\n" +
 	"            dnsConfig:\n" +
+	"                # Nameservers is a list of IP addresses that will be used as DNS servers for the Pod\n" +
+	"                nameservers:\n" +
+	"                    - \"\"\n" +
 	"                # Searches is a list of DNS search domains for host-name lookup\n" +
 	"                searches:\n" +
 	"                    - \"\"\n" +
@@ -510,6 +513,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      name: ' '\n" +
 	"                  # DnsConfig for step's Pod.\n" +
 	"                  dnsConfig:\n" +
+	"                    # Nameservers is a list of IP addresses that will be used as DNS servers for the Pod\n" +
+	"                    nameservers:\n" +
+	"                        - \"\"\n" +
 	"                    # Searches is a list of DNS search domains for host-name lookup\n" +
 	"                    searches:\n" +
 	"                        - \"\"\n" +
@@ -593,6 +599,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      name: ' '\n" +
 	"                  # DnsConfig for step's Pod.\n" +
 	"                  dnsConfig:\n" +
+	"                    # Nameservers is a list of IP addresses that will be used as DNS servers for the Pod\n" +
+	"                    nameservers:\n" +
+	"                        - \"\"\n" +
 	"                    # Searches is a list of DNS search domains for host-name lookup\n" +
 	"                    searches:\n" +
 	"                        - \"\"\n" +
@@ -676,6 +685,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      name: ' '\n" +
 	"                  # DnsConfig for step's Pod.\n" +
 	"                  dnsConfig:\n" +
+	"                    # Nameservers is a list of IP addresses that will be used as DNS servers for the Pod\n" +
+	"                    nameservers:\n" +
+	"                        - \"\"\n" +
 	"                    # Searches is a list of DNS search domains for host-name lookup\n" +
 	"                    searches:\n" +
 	"                        - \"\"\n" +
@@ -781,6 +793,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                \"\": \"\"\n" +
 	"            # DnsConfig for step's Pod.\n" +
 	"            dnsConfig:\n" +
+	"                # Nameservers is a list of IP addresses that will be used as DNS servers for the Pod\n" +
+	"                nameservers:\n" +
+	"                    - \"\"\n" +
 	"                # Searches is a list of DNS search domains for host-name lookup\n" +
 	"                searches:\n" +
 	"                    - \"\"\n" +
@@ -825,6 +840,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      name: ' '\n" +
 	"                  dnsConfig:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    nameservers:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        - \"\"\n" +
 	"                    searches:\n" +
 	"                        # LiteralTestStep is a full test step definition.\n" +
 	"                        - \"\"\n" +
@@ -884,6 +902,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      name: ' '\n" +
 	"                  dnsConfig:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    nameservers:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        - \"\"\n" +
 	"                    searches:\n" +
 	"                        # LiteralTestStep is a full test step definition.\n" +
 	"                        - \"\"\n" +
@@ -943,6 +964,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      name: ' '\n" +
 	"                  dnsConfig:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    nameservers:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        - \"\"\n" +
 	"                    searches:\n" +
 	"                        # LiteralTestStep is a full test step definition.\n" +
 	"                        - \"\"\n" +
@@ -1117,6 +1141,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            \"\": \"\"\n" +
 	"        # DnsConfig for step's Pod.\n" +
 	"        dnsConfig:\n" +
+	"            # Nameservers is a list of IP addresses that will be used as DNS servers for the Pod\n" +
+	"            nameservers:\n" +
+	"                - \"\"\n" +
 	"            # Searches is a list of DNS search domains for host-name lookup\n" +
 	"            searches:\n" +
 	"                - \"\"\n" +
@@ -1176,6 +1203,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  name: ' '\n" +
 	"              # DnsConfig for step's Pod.\n" +
 	"              dnsConfig:\n" +
+	"                # Nameservers is a list of IP addresses that will be used as DNS servers for the Pod\n" +
+	"                nameservers:\n" +
+	"                    - \"\"\n" +
 	"                # Searches is a list of DNS search domains for host-name lookup\n" +
 	"                searches:\n" +
 	"                    - \"\"\n" +
@@ -1259,6 +1289,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  name: ' '\n" +
 	"              # DnsConfig for step's Pod.\n" +
 	"              dnsConfig:\n" +
+	"                # Nameservers is a list of IP addresses that will be used as DNS servers for the Pod\n" +
+	"                nameservers:\n" +
+	"                    - \"\"\n" +
 	"                # Searches is a list of DNS search domains for host-name lookup\n" +
 	"                searches:\n" +
 	"                    - \"\"\n" +
@@ -1342,6 +1375,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  name: ' '\n" +
 	"              # DnsConfig for step's Pod.\n" +
 	"              dnsConfig:\n" +
+	"                # Nameservers is a list of IP addresses that will be used as DNS servers for the Pod\n" +
+	"                nameservers:\n" +
+	"                    - \"\"\n" +
 	"                # Searches is a list of DNS search domains for host-name lookup\n" +
 	"                searches:\n" +
 	"                    - \"\"\n" +
@@ -1447,6 +1483,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            \"\": \"\"\n" +
 	"        # DnsConfig for step's Pod.\n" +
 	"        dnsConfig:\n" +
+	"            # Nameservers is a list of IP addresses that will be used as DNS servers for the Pod\n" +
+	"            nameservers:\n" +
+	"                - \"\"\n" +
 	"            # Searches is a list of DNS search domains for host-name lookup\n" +
 	"            searches:\n" +
 	"                - \"\"\n" +
@@ -1491,6 +1530,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  name: ' '\n" +
 	"              dnsConfig:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
+	"                nameservers:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - \"\"\n" +
 	"                searches:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - \"\"\n" +
@@ -1550,6 +1592,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  name: ' '\n" +
 	"              dnsConfig:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
+	"                nameservers:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - \"\"\n" +
 	"                searches:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - \"\"\n" +
@@ -1609,6 +1654,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  name: ' '\n" +
 	"              dnsConfig:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
+	"                nameservers:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - \"\"\n" +
 	"                searches:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - \"\"\n" +

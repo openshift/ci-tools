@@ -1101,15 +1101,14 @@ func TestValidateDNSConfig(t *testing.T) {
 		{
 			name: "valid searches",
 			input: []api.StepDNSConfig{
-				{Searches: []string{"search1", "search2"}},
-			},
+				{Nameservers: []string{"nameserver1", "nameserver2"}, Searches: []string{"search1", "search2"}}},
 		},
 		{
 			name: "invalid searches",
 			input: []api.StepDNSConfig{
-				{Searches: []string{"", ""}},
-			},
+				{Nameservers: []string{"", ""}, Searches: []string{"", ""}}},
 			output: []error{
+				errors.New("root.nameservers[0] must be set"),
 				errors.New("root.searches[0] must be set"),
 			},
 		},

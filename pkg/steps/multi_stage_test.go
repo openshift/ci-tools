@@ -132,7 +132,8 @@ func TestGeneratePods(t *testing.T) {
 			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
 				ClusterProfile: api.ClusterProfileAWS,
 				DNSConfig: &api.StepDNSConfig{
-					Searches: []string{"my.dns.search1", "my.dns.search2"},
+					Nameservers: []string{"nameserver1", "nameserver2"},
+					Searches:    []string{"my.dns.search1", "my.dns.search2"},
 				},
 			},
 		},

@@ -665,10 +665,10 @@ func validateDependencies(fieldRoot string, dependencies []api.StepDependency) [
 	return errs
 }
 
-func validateDNSConfig(fieldRoot string, searches []api.StepDNSConfig) (ret []error) {
+func validateDNSConfig(fieldRoot string, dnsConfig []api.StepDNSConfig) (ret []error) {
 	var errs []error
-	for i, search := range searches {
-		if search.Searches[i] == "" {
+	for i, dnsconfig := range dnsConfig {
+		if dnsconfig.Searches[i] == "" {
 			errs = append(errs, fmt.Errorf("%s.searches[%d] must be set", fieldRoot, i))
 		}
 	}

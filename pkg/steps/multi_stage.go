@@ -16,6 +16,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/validation"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/entrypoint"
 	utilpointer "k8s.io/utils/pointer"
@@ -658,7 +659,7 @@ func addSharedDirSecret(secret string, pod *coreapi.Pod) {
 func addCredentials(credentials []api.CredentialReference, pod *coreapi.Pod) {
 	for _, credential := range credentials {
 		name := fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)
-		volumeName := fmt.Sprintf("%s-%s", credential.Namespace, strings.ReplaceAll(credential.Name, ".", "-"))
+		volumeName := volumeName(credential.Namespace, credential.Name)
 		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
 			Name: volumeName,
 			VolumeSource: coreapi.VolumeSource{
@@ -670,6 +671,23 @@ func addCredentials(credentials []api.CredentialReference, pod *coreapi.Pod) {
 			MountPath: credential.MountPath,
 		})
 	}
+}
+
+func volumeName(ns, name string) string {
+	return strings.ReplaceAll(fmt.Sprintf("%s-%s", ns, name), ".", "-")
+}
+
+// ValidateSecretInStep validates a secret used in a step
+func ValidateSecretInStep(ns, name string) error {
+	// only secrets in test-credentials namespace can be used in a step
+	if ns != "test-credentials" {
+		return nil
+	}
+	volumeName := volumeName(ns, name)
+	if valueErrs := validation.IsDNS1123Label(volumeName); len(valueErrs) > 0 {
+		return fmt.Errorf("volumeName %s: %v", volumeName, valueErrs)
+	}
+	return nil
 }
 
 func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {

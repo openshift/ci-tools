@@ -67,14 +67,13 @@ func (s *clusterClaimStep) run(ctx context.Context) error {
 		// always attempt to delete claim if one exists
 		var releaseErr error
 		if clusterClaim != nil {
-			releaseErr = results.ForReason("releasing_cluster_claim").ForError(releaseCluster(ctx, s.hiveClient, clusterClaim))
+			releaseErr = results.ForReason("releasing_cluster_claim").ForError(releaseCluster(ctx, s.hiveClient, clusterClaim, s.Name()))
 		}
 		return aggregateWrappedErrorAndReleaseError(acquireErr, releaseErr)
 	}
 
 	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
-	logrus.Infof("Releasing cluster claims for test %s", s.Name())
-	releaseErr := results.ForReason("releasing_cluster_claim").ForError(releaseCluster(ctx, s.hiveClient, clusterClaim))
+	releaseErr := results.ForReason("releasing_cluster_claim").ForError(releaseCluster(ctx, s.hiveClient, clusterClaim, s.Name()))
 
 	return aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr)
 }
@@ -187,7 +186,8 @@ func mutate(secret *corev1.Secret, name, namespace string) (*corev1.Secret, erro
 	}, nil
 }
 
-func releaseCluster(ctx context.Context, hiveClient ctrlruntimeclient.Client, clusterClaim *hivev1.ClusterClaim) error {
+func releaseCluster(ctx context.Context, hiveClient ctrlruntimeclient.Client, clusterClaim *hivev1.ClusterClaim, testName string) error {
+	logrus.Infof("Releasing cluster claims for test %s", testName)
 	logrus.WithField("clusterClaim.Namespace", clusterClaim.Namespace).WithField("clusterClaim.Name", clusterClaim.Name).Debug("Deleting cluster claim.")
 	if err := hiveClient.Delete(ctx, clusterClaim); err != nil {
 		logrus.WithField("clusterClaim.Name", clusterClaim.Name).WithField("clusterClaim.Namespace", clusterClaim.Namespace).Debug("Failed to delete cluster claim.")

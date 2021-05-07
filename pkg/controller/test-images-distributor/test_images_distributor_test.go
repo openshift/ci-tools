@@ -711,7 +711,7 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 			name: "imagestreamtag is referenced by config",
 			config: api.ReleaseBuildConfiguration{RawSteps: []api.StepConfiguration{{
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-					BaseImage: api.ImageStreamTagReference{Namespace: namespace, Name: streamName, Tag: tagName},
+					InputImage: api.InputImage{BaseImage: api.ImageStreamTagReference{Namespace: namespace, Name: streamName, Tag: tagName}},
 				},
 			}}},
 			expectedResult: true,

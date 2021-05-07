@@ -668,9 +668,6 @@ func validateDependencies(fieldRoot string, dependencies []api.StepDependency) [
 func validateDNSConfig(fieldRoot string, dnsConfig []api.StepDNSConfig) (ret []error) {
 	var errs []error
 	for i, dnsconfig := range dnsConfig {
-		if dnsconfig.Nameservers[i] == "" {
-			errs = append(errs, fmt.Errorf("%s.nameservers[%d] must be set", fieldRoot, i))
-		}
 		if dnsconfig.Searches[i] == "" {
 			errs = append(errs, fmt.Errorf("%s.searches[%d] must be set", fieldRoot, i))
 		}

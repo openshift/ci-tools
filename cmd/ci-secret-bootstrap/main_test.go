@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -1951,95 +1950,6 @@ func TestUpdateSecrets(t *testing.T) {
 			actualSecretsOnBuild01, err := fkcBuild01.CoreV1().Secrets("").List(context.TODO(), metav1.ListOptions{})
 			equalError(t, nil, err)
 			equal(t, "secrets in build01 cluster", tc.expectedSecretsOnBuild01, actualSecretsOnBuild01.Items)
-		})
-	}
-}
-
-func TestWriteSecrets(t *testing.T) {
-	testCases := []struct {
-		name          string
-		secrets       []*coreapi.Secret
-		w             *bytes.Buffer
-		expected      string
-		expectedError error
-	}{
-		{
-			name: "basic case",
-			secrets: []*coreapi.Secret{
-				{
-					TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"},
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "prod-secret-1",
-						Namespace: "namespace-1",
-						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
-					},
-					Data: map[string][]byte{
-						"key-name-1": []byte("value1"),
-						"key-name-2": []byte("value2"),
-						"key-name-3": []byte("attachment-name-1-1-value"),
-						"key-name-4": []byte("value3"),
-						"key-name-5": []byte("attachment-name-2-1-value"),
-						"key-name-6": []byte("attachment-name-3-2-value"),
-					},
-				},
-				{
-					TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"},
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "prod-secret-2",
-						Namespace: "namespace-2",
-						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
-					},
-					Data: map[string][]byte{
-						"key-name-1": []byte("value1"),
-						"key-name-2": []byte("value2"),
-						"key-name-3": []byte("attachment-name-1-1-value"),
-						"key-name-4": []byte("value3"),
-						"key-name-5": []byte("attachment-name-2-1-value"),
-						"key-name-6": []byte("attachment-name-3-2-value"),
-					},
-				},
-			},
-			w: &bytes.Buffer{},
-			expected: `apiVersion: v1
-data:
-  key-name-1: dmFsdWUx
-  key-name-2: dmFsdWUy
-  key-name-3: YXR0YWNobWVudC1uYW1lLTEtMS12YWx1ZQ==
-  key-name-4: dmFsdWUz
-  key-name-5: YXR0YWNobWVudC1uYW1lLTItMS12YWx1ZQ==
-  key-name-6: YXR0YWNobWVudC1uYW1lLTMtMi12YWx1ZQ==
-kind: Secret
-metadata:
-  creationTimestamp: null
-  labels:
-    dptp.openshift.io/requester: ci-secret-bootstrap
-  name: prod-secret-1
-  namespace: namespace-1
----
-apiVersion: v1
-data:
-  key-name-1: dmFsdWUx
-  key-name-2: dmFsdWUy
-  key-name-3: YXR0YWNobWVudC1uYW1lLTEtMS12YWx1ZQ==
-  key-name-4: dmFsdWUz
-  key-name-5: YXR0YWNobWVudC1uYW1lLTItMS12YWx1ZQ==
-  key-name-6: YXR0YWNobWVudC1uYW1lLTMtMi12YWx1ZQ==
-kind: Secret
-metadata:
-  creationTimestamp: null
-  labels:
-    dptp.openshift.io/requester: ci-secret-bootstrap
-  name: prod-secret-2
-  namespace: namespace-2
----
-`,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			actualError := writeSecretsToFile(tc.secrets, tc.w)
-			equalError(t, tc.expectedError, actualError)
-			equal(t, "result", tc.expected, tc.w.String())
 		})
 	}
 }

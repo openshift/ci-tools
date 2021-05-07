@@ -8,7 +8,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"runtime"
@@ -17,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 
@@ -24,11 +24,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kubejson "k8s.io/apimachinery/pkg/runtime/serializer/json"
+	kuberuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/kubernetes/scheme"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/test-infra/prow/flagutil"
@@ -56,6 +55,7 @@ type options struct {
 	cluster             string
 	logLevel            string
 	impersonateUser     string
+	dryLogOutput        string
 
 	maxConcurrency int
 
@@ -82,6 +82,7 @@ func parseOptions(censor *secrets.DynamicCensor) (options, error) {
 	fs.Var(&o.bwAllowUnused, "bw-allow-unused", "One or more bitwarden items that will be ignored when the --validate-bitwarden-items-usage is specified")
 	fs.BoolVar(&o.validateBWItemsUsage, "validate-bitwarden-items-usage", false, fmt.Sprintf("If set, the tool only validates if all attachments and custom fields that exist in BitWarden and were last modified before %d days ago are being used in the given config.", allowUnusedDays))
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with oc command")
+	fs.StringVar(&o.dryLogOutput, "dry-log-output", "", "Path to a file that will be created when running with dry run. If it's empty a temporary file will be created")
 	fs.StringVar(&o.kubeConfigPath, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests.")
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
 	fs.StringVar(&o.generatorConfigPath, "generator-config", "", "Path to the secret-generator config file.")
@@ -110,6 +111,10 @@ func (o *options) validateOptions() error {
 	}
 	if len(o.bwAllowUnused.Strings()) > 0 && !o.validateBWItemsUsage {
 		errs = append(errs, errors.New("--bw-allow-unused must be specified with --validate-bitwarden-items-usage"))
+	}
+
+	if o.dryLogOutput != "" && !o.dryRun {
+		errs = append(errs, errors.New("--dry-log-output must be specified only with --dry-run"))
 	}
 	return utilerrors.NewAggregate(errs)
 }
@@ -565,39 +570,35 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 	return utilerrors.NewAggregate(errs)
 }
 
-func writeSecrets(secretsMap map[string][]*coreapi.Secret) error {
-	var tmpFiles []*os.File
-	defer func() {
-		for _, tf := range tmpFiles {
-			tf.Close()
-		}
-	}()
+func writeSecrets(secretsMap map[string][]*coreapi.Secret, dryLogOutput string) error {
+	objects := make(map[string][]kuberuntime.Object)
 
 	for cluster, secrets := range secretsMap {
-		tmpFile, err := ioutil.TempFile("", fmt.Sprintf("%s_*.yaml", cluster))
+		var s []kuberuntime.Object
+		for _, secret := range secrets {
+			s = append(s, secret.DeepCopyObject())
+		}
+		objects[cluster] = s
+	}
+
+	data, err := yaml.Marshal(objects)
+	if err != nil {
+		return fmt.Errorf("couldn't marshal objects: %w", err)
+	}
+
+	if dryLogOutput == "" {
+		tmpFile, err := ioutil.TempFile("", "*_secrets.yaml")
 		if err != nil {
 			return fmt.Errorf("failed to create tempfile: %w", err)
 		}
-		tmpFiles = append(tmpFiles, tmpFile)
-
-		logrus.Infof("Writing secrets from cluster %s to %s", cluster, tmpFile.Name())
-		if err := writeSecretsToFile(secrets, tmpFile); err != nil {
-			return fmt.Errorf("error while writing secrets for cluster %s to file %s: %w", cluster, tmpFile.Name(), err)
-		}
+		defer tmpFile.Close()
+		dryLogOutput = tmpFile.Name()
 	}
-	return nil
-}
 
-func writeSecretsToFile(secrets []*coreapi.Secret, w io.Writer) error {
-	serializerOptions := kubejson.SerializerOptions{Yaml: true, Pretty: true, Strict: true}
-	serializer := kubejson.NewSerializerWithOptions(kubejson.DefaultMetaFactory, scheme.Scheme, scheme.Scheme, serializerOptions)
-
-	for _, secret := range secrets {
-		if err := serializer.Encode(secret, w); err != nil {
-			return err
-		}
-		fmt.Fprintf(w, "---\n")
+	if err := ioutil.WriteFile(dryLogOutput, data, 0755); err != nil {
+		return fmt.Errorf("couldn't write to file: %w", err)
 	}
+
 	return nil
 }
 
@@ -918,7 +919,7 @@ func reconcileSecrets(o options, client secrets.ReadOnlyClient) (errs []error) {
 
 	if o.dryRun {
 		logrus.Infof("Running in dry-run mode")
-		if err := writeSecrets(secretsMap); err != nil {
+		if err := writeSecrets(secretsMap, o.dryLogOutput); err != nil {
 			errs = append(errs, fmt.Errorf("failed to write secrets on dry run: %w", err))
 		}
 	} else {

@@ -99,6 +99,7 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 		hiveClient   ctrlruntimeclient.Client
 		client       loggingclient.LoggingClient
 		expected     error
+		expectClaim  bool
 		verifyFunc   func(client ctrlruntimeclient.Client) error
 	}{
 		{
@@ -122,7 +123,8 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 				client.namespace = "ci-ocp-4.7.0-amd64-aws-us-east-1-ccx23"
 				client.conditionStatus = corev1.ConditionTrue
 			}),
-			client: loggingclient.New(fakectrlruntimeclient.NewFakeClient()),
+			client:      loggingclient.New(fakectrlruntimeclient.NewFakeClient()),
+			expectClaim: true,
 			verifyFunc: func(client ctrlruntimeclient.Client) error {
 				ctx := context.TODO()
 				actualSecret := &corev1.Secret{}
@@ -211,7 +213,8 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 					Job:       "pull-ci-openshift-console-master-images",
 				},
 			},
-			expected: fmt.Errorf("failed to wait for created cluster claim to become running: %w", wait.ErrWaitTimeout),
+			expected:    fmt.Errorf("failed to wait for created cluster claim to become running: %w", wait.ErrWaitTimeout),
+			expectClaim: true,
 		},
 	}
 
@@ -220,7 +223,13 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 			if tc.jobSpec != nil {
 				tc.jobSpec.SetNamespace("ci-op-test")
 			}
-			_, actual := acquireCluster(context.TODO(), tc.clusterClaim, tc.hiveClient, tc.client, *tc.jobSpec)
+			claim, actual := acquireCluster(context.TODO(), tc.clusterClaim, tc.hiveClient, tc.client, *tc.jobSpec)
+			if tc.expectClaim && claim == nil {
+				t.Errorf("%s: claim should not be nil", tc.name)
+			}
+			if !tc.expectClaim && claim != nil {
+				t.Errorf("%s: got claim when nil claim was expected", tc.name)
+			}
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}

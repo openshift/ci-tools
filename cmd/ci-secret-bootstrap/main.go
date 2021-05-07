@@ -505,7 +505,6 @@ func fetchUserSecrets(secretsMap map[string]map[types.NamespacedName]coreapi.Sec
 
 func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secretsMap map[string][]*coreapi.Secret, force bool) error {
 	var errs []error
-	shouldCreate := false
 	for cluster, secrets := range secretsMap {
 		logger := logrus.WithField("cluster", cluster)
 		logger.Debug("Syncing secrets for cluster")
@@ -518,8 +517,10 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 			existingSecret, err := secretClient.Get(context.TODO(), secret.Name, metav1.GetOptions{})
 			if err != nil && !kerrors.IsNotFound(err) {
 				errs = append(errs, fmt.Errorf("error reading secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
+				continue
 			}
 
+			shouldCreate := false
 			if err == nil {
 				if secret.Type != existingSecret.Type {
 					if !force {

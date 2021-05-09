@@ -164,7 +164,7 @@ const (
 )
 
 var (
-	// leaseServerAddress is the default lease server in api.ci
+	// leaseServerAddress is the default lease server in app.ci
 	leaseServerAddress = api.URLForService(api.ServiceBoskos)
 	// configResolverAddress is the default configresolver address in app.ci
 	configResolverAddress = api.URLForService(api.ServiceConfig)

@@ -11,7 +11,6 @@ const (
 	ServiceDomainCI    = "ci.openshift.org"
 	ServiceDomainAPPCI = "apps.ci.l2s4.p1.openshiftapps.com"
 
-	ServiceDomainAPICIRegistry = "registry.svc.ci.openshift.org"
 	ServiceDomainAPPCIRegistry = "registry.ci.openshift.org"
 )
 
@@ -52,18 +51,11 @@ func PublicDomainForImage(ClusterName, potentiallyPrivate string) (string, error
 	if err != nil {
 		return "", err
 	}
-	svcDomainAndPort := "image-registry.openshift-image-registry.svc:5000"
-	if ClusterName == string(ClusterAPICI) {
-		svcDomainAndPort = "docker-registry.default.svc:5000"
-	}
-
-	return strings.ReplaceAll(potentiallyPrivate, svcDomainAndPort, d), nil
+	return strings.ReplaceAll(potentiallyPrivate, "image-registry.openshift-image-registry.svc:5000", d), nil
 }
 
 func domainForClusterName(ClusterName string) (string, error) {
 	switch ClusterName {
-	case string(ClusterAPICI):
-		return ServiceDomainAPICIRegistry, nil
 	case string(ClusterAPPCI):
 		return ServiceDomainAPPCIRegistry, nil
 	}

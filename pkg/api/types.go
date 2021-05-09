@@ -483,7 +483,6 @@ type PipelineImageCacheStepConfiguration struct {
 type Cluster string
 
 const (
-	ClusterAPICI   Cluster = "api.ci"
 	ClusterAPPCI   Cluster = "app.ci"
 	ClusterBuild01 Cluster = "build01"
 	ClusterBuild02 Cluster = "build02"

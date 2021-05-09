@@ -60,18 +60,7 @@ func TestPublicDomainForImage(t *testing.T) {
 			potentiallyPrivate: "image-registry.openshift-image-registry.svc:5000/ci/applyconfig@sha256:bf08a76268b29f056cfab7a105c8473b359d1154fbbe3091fe6052ad6d0427cd",
 			expected:           "registry.ci.openshift.org/ci/applyconfig@sha256:bf08a76268b29f056cfab7a105c8473b359d1154fbbe3091fe6052ad6d0427cd",
 		},
-		{
-			name:               "api.ci with svc dns",
-			clusterName:        "api.ci",
-			potentiallyPrivate: "docker-registry.default.svc:5000/ci/applyconfig@sha256:bf08a76268b29f056cfab7a105c8473b359d1154fbbe3091fe6052ad6d0427cd",
-			expected:           "registry.svc.ci.openshift.org/ci/applyconfig@sha256:bf08a76268b29f056cfab7a105c8473b359d1154fbbe3091fe6052ad6d0427cd",
-		},
-		{
-			name:               "api.ci with public domain",
-			clusterName:        "api.ci",
-			potentiallyPrivate: "gcr.io/k8s-prow/tide@sha256:5245b7747c44d560aab27bc07dbaaf50bbb55f71d0973f85b09c79b8d8b93c97",
-			expected:           "gcr.io/k8s-prow/tide@sha256:5245b7747c44d560aab27bc07dbaaf50bbb55f71d0973f85b09c79b8d8b93c97",
-		},
+
 		{
 			name:               "app.ci with public domain",
 			clusterName:        "app.ci",

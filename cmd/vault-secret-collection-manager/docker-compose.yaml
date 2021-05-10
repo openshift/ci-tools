@@ -35,7 +35,7 @@ services:
       # the interaction with aliases
       vault auth enable userpass
       # Create some users, they must pre-exist
-      for user in admin another-user third-user; do
+      for user in another-user third-user; do
         vault write auth/userpass/users/$$user password=false
         vault write identity/entity name=$$user policies=default
         vault write identity/entity-alias name=$$user \

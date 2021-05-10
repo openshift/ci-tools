@@ -36,6 +36,8 @@ type option struct {
 	vaultAddr     string
 	vaultToken    string
 	vaultRole     string
+
+	authBackendType string
 	flagutil.InstrumentationOptions
 }
 
@@ -46,6 +48,7 @@ func parseOptions() (*option, error) {
 	flag.StringVar(&o.vaultAddr, "vault-addr", "http://127.0.0.1:8300", "The address under which vault should be reached")
 	flag.StringVar(&o.vaultToken, "vault-token", "", "The privileged token to use when communicating with vault, must be able to CRUD policies")
 	flag.StringVar(&o.vaultRole, "vault-role", "", "The vault role to use, must be able to CRUD policies. Will be used for kubernetes service account auth.")
+	flag.StringVar(&o.authBackendType, "auth-backend-type", "oidc", "The backend type used for user authentication.")
 	o.InstrumentationOptions.AddFlags(flag.CommandLine)
 	flag.Parse()
 
@@ -94,16 +97,17 @@ func main() {
 
 	metrics.ExposeMetrics(version.Name, config.PushGateway{}, o.MetricsPort)
 
-	interrupts.ListenAndServe(server(privilegedVaultClient, o.kvStorePrefix, o.listenAddr), 5*time.Second)
+	interrupts.ListenAndServe(server(privilegedVaultClient, o.authBackendType, o.kvStorePrefix, o.listenAddr), 5*time.Second)
 	interrupts.WaitForGracefulShutdown()
 }
 
-func server(privilegedVaultClient *vaultclient.VaultClient, kvStorePrefix, listenAddr string) *http.Server {
+func server(privilegedVaultClient *vaultclient.VaultClient, authBackendType, kvStorePrefix, listenAddr string) *http.Server {
 	manager := &secretCollectionManager{
-		privilegedVaultClient: privilegedVaultClient,
-		kvStorePrefix:         kvStorePrefix,
-		kvMetadataPrefix:      vaultclient.InsertMetadataIntoPath(kvStorePrefix),
-		kvDataPrefix:          vaultclient.InsertDataIntoPath(kvStorePrefix),
+		privilegedVaultClient:   privilegedVaultClient,
+		kvStorePrefix:           kvStorePrefix,
+		kvMetadataPrefix:        vaultclient.InsertMetadataIntoPath(kvStorePrefix),
+		kvDataPrefix:            vaultclient.InsertDataIntoPath(kvStorePrefix),
+		authAccessorBackendType: authBackendType,
 	}
 
 	return &http.Server{Addr: listenAddr, Handler: manager.mux()}
@@ -129,6 +133,10 @@ type secretCollectionManager struct {
 	kvDataPrefix          string
 	groupCache            idNameCache
 	userCache             idNameCache
+
+	authAccessorBackendType   string
+	authAccessorBackendID     string
+	authAccessorBackendIDLock sync.RWMutex
 }
 
 // idNameCache allows to get the id or the name, using
@@ -314,13 +322,7 @@ func (m *secretCollectionManager) updateSecretCollectionMembers(_ *logrus.Entry,
 	return m.privilegedVaultClient.UpdateGroupMembers(prefixedName(collectionName), updatedMemberIDs)
 }
 
-var alphaNumericRegex = func() *regexp.Regexp {
-	compiled, err := regexp.Compile("^[a-z0-9-]+$")
-	if err != nil {
-		panic(err)
-	}
-	return compiled
-}()
+var alphaNumericRegex = regexp.MustCompile("^[a-z0-9-]+$")
 
 func (m *secretCollectionManager) createSecretCollectionHandler(l *logrus.Entry, user string, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	name := params.ByName("name")
@@ -428,10 +430,66 @@ func (m *secretCollectionManager) listSecretCollections(l *logrus.Entry, user st
 	}
 }
 
-func (m *secretCollectionManager) getCollectionsForUser(_ *logrus.Entry, userName string) ([]secretCollection, error) {
+func (m *secretCollectionManager) getAuthBackendAccessorID() (string, error) {
+	var id string
+	m.authAccessorBackendIDLock.RLock()
+	id = m.authAccessorBackendID
+	m.authAccessorBackendIDLock.RUnlock()
+	if id != "" {
+		return id, nil
+	}
+
+	m.authAccessorBackendIDLock.Lock()
+	defer m.authAccessorBackendIDLock.Unlock()
+	if m.authAccessorBackendID != "" {
+		return m.authAccessorBackendID, nil
+	}
+
+	authMounts, err := m.privilegedVaultClient.ListAuthMounts()
+	if err != nil {
+		return "", fmt.Errorf("failed to list auth mounts: %w", err)
+	}
+	for _, authMount := range authMounts {
+		if authMount.Type == m.authAccessorBackendType {
+			m.authAccessorBackendID = authMount.Accessor
+			break
+		}
+	}
+	if m.authAccessorBackendID == "" {
+		return "", fmt.Errorf("couldn't find auth mount for type %s", m.authAccessorBackendType)
+	}
+
+	return m.authAccessorBackendID, nil
+}
+
+func (m *secretCollectionManager) createUser(userName string) (*vaultclient.Entity, error) {
+	authBackendAccessorId, err := m.getAuthBackendAccessorID()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get auth backend accessor: %w", err)
+	}
+	user, err := m.privilegedVaultClient.CreateIdentity(userName, []string{"default"})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create identity for %s: %w", userName, err)
+	}
+	if err := m.privilegedVaultClient.CreateIdentityAlias(userName, user.ID, authBackendAccessorId); err != nil {
+		return nil, fmt.Errorf("failed to create alias for user %s: %w", userName, err)
+	}
+
+	return user, nil
+}
+
+// getCollectionsForUser returns all collections for a given user. It will also create the user if it doesn't exist yet.
+func (m *secretCollectionManager) getCollectionsForUser(l *logrus.Entry, userName string) ([]secretCollection, error) {
 	user, err := m.userByAliasCached(userName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user %s: %w", userName, err)
+		if !vaultclient.IsNotFound(err) {
+			return nil, fmt.Errorf("failed to get user %s: %w", userName, err)
+		}
+		user, err = m.createUser(userName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create user %s: %w", userName, err)
+		}
+		l.Info("Created user in Vault")
 	}
 
 	var groupNames []string

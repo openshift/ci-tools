@@ -48,21 +48,10 @@ func TestSecretCollectionManager(t *testing.T) {
 		if _, err := client.Logical().Write(fmt.Sprintf("/auth/userpass/users/%s", user), map[string]interface{}{"password": "password"}); err != nil {
 			t.Fatalf("failed to create userpass user %s: %v", user, err)
 		}
-		identity, err := client.CreateIdentity(user, []string{"default"})
-		if err != nil {
-			t.Fatalf("failed to create identity for user %s: %v", user, err)
-		}
-		if _, err := client.Logical().Write("identity/entity-alias", map[string]interface{}{
-			"name":           user,
-			"canonical_id":   identity.ID,
-			"mount_accessor": mountAccessor,
-		}); err != nil {
-			t.Fatalf("failed to create identity alias for user %s in mount_accessor %s: %v", user, mountAccessor, err)
-		}
 	}
 
 	managerListenAddr := "127.0.0.1:" + testhelper.GetFreePort(t)
-	server := server(client, "secret/self-managed", managerListenAddr)
+	server := server(client, "userpass", "secret/self-managed", managerListenAddr)
 	go func() {
 		if err := server.ListenAndServe(); err != http.ErrServerClosed {
 			t.Errorf("failed to start secret-collection-manager: %v", err)

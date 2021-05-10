@@ -55,7 +55,7 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		logrus.WithError(err).Error("Failed to decode raw object as Pod.")
 		return admission.Errored(http.StatusBadRequest, err)
 	}
-	buildName, isBuildPod := pod.Labels[buildv1.BuildLabel]
+	buildName, isBuildPod := pod.Annotations[buildv1.BuildLabel]
 	if !isBuildPod {
 		logrus.Trace("Allowing Pod, it is not implementing a Build.")
 		return admission.Allowed("Not a Pod implementing a Build.")

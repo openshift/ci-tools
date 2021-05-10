@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/openshift/ci-tools/pkg/api/vault"
+	"github.com/openshift/ci-tools/pkg/steps"
 )
 
 // https://github.com/openshift/ci-tools/blob/7af2e075f381ecae1562d1406bad2c86a23e72a3/vendor/k8s.io/api/core/v1/types.go#L5748-L5749
@@ -60,6 +61,10 @@ func (k *kvKeyValidator) RoundTrip(r *http.Request) (*http.Response, error) {
 		if !secretKeyValidationRegex.MatchString(key) {
 			errs = append(errs, fmt.Sprintf("key %s is invalid: must match regex %s", key, secretKeyValidationRegexString))
 		}
+	}
+
+	if err := steps.ValidateSecretInStep(body.Data[vault.SecretSyncTargetNamepaceKey], body.Data[vault.SecretSyncTargetNameKey]); err != nil {
+		errs = append(errs, fmt.Sprintf("secret %s in namespace %s cannot be used in a step: %s", body.Data[vault.SecretSyncTargetNameKey], body.Data[vault.SecretSyncTargetNamepaceKey], err.Error()))
 	}
 
 	if len(errs) > 0 {

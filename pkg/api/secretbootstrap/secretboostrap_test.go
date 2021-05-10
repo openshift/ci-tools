@@ -253,6 +253,19 @@ func TestValidate(t *testing.T) {
 			}}},
 			expected: utilerrors.NewAggregate([]error{fmt.Errorf("config[0].from[some-key].attribute: only the 'password' is supported, not credentials")}),
 		},
+		{
+			name: "long name",
+			config: &Config{Secrets: []SecretConfig{{
+				From: map[string]BitWardenContext{
+					"some": {},
+				},
+				To: []SecretContext{{
+					Cluster:   "cl",
+					Namespace: "test-credentials",
+					Name:      "very-very-very-very-very-very-very-very-very-long",
+				}}}}},
+			expected: utilerrors.NewAggregate([]error{fmt.Errorf("secret[0] in secretConfig[0] cannot be used in a step: volumeName test-credentials-very-very-very-very-very-very-very-very-very-long: [must be no more than 63 characters]")}),
+		},
 	}
 
 	for _, tc := range testCases {

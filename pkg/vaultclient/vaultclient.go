@@ -135,6 +135,10 @@ func (v *VaultClient) GetUserFromAliasName(userName string) (*Entity, error) {
 		return nil, fmt.Errorf("failed to list aliases: %w", err)
 	}
 
+	if rawAliases == nil || rawAliases.Data == nil {
+		return nil, &api.ResponseError{StatusCode: http.StatusNotFound, Errors: []string{fmt.Sprintf("no user alias named %s found", userName)}}
+	}
+
 	var aliases aliasListData
 	if err := dataInto(rawAliases.Data, &aliases); err != nil {
 		return nil, err
@@ -259,6 +263,11 @@ func (v *VaultClient) GetUserByID(id string) (*Entity, error) {
 	return &entity, v.readInto(fmt.Sprintf("identity/entity/id/%s", id), &entity)
 }
 
+func (v *VaultClient) GetUserByName(name string) (*Entity, error) {
+	var entity Entity
+	return &entity, v.readInto(fmt.Sprintf("identity/entity/name/%s", name), &entity)
+}
+
 func (v *VaultClient) GetGroupNames() ([]string, error) {
 	var result keyResponse
 	if err := v.listInto("identity/group/name", &result); err != nil {
@@ -319,7 +328,24 @@ func (v *VaultClient) ListAuthMounts() (MountListResponse, error) {
 
 func (v *VaultClient) CreateIdentity(name string, policies []string) (*Entity, error) {
 	var entity *Entity
-	return entity, v.writeInto("identity/entity", map[string]interface{}{"name": name, "policies": policies}, &entity)
+	err := v.writeInto("identity/entity", map[string]interface{}{"name": name, "policies": policies}, &entity)
+	// Vault returns a 204 if the identity already exists, but Logical.Write() swallows 2XX status codes so we have to infer
+	// this from "There is no body" which in all other calls means 404. Just do a Get to make this look like an upsert for
+	// consumers.
+	if IsNotFound(err) {
+		return v.GetUserByName(name)
+	}
+
+	return entity, err
+}
+
+func (v *VaultClient) CreateIdentityAlias(aliasName string, userID string, mountAccessor string) error {
+	_, err := v.Logical().Write("identity/entity-alias", map[string]interface{}{
+		"name":           aliasName,
+		"canonical_id":   userID,
+		"mount_accessor": mountAccessor,
+	})
+	return err
 }
 
 func (v *VaultClient) listInto(path string, target interface{}) error {

@@ -44,7 +44,6 @@ import (
 
 type options struct {
 	dryRun            bool
-	local             bool
 	debugLogPath      string
 	prowjobKubeconfig string
 
@@ -61,7 +60,6 @@ func gatherOptions() (options, error) {
 	fs := flag.CommandLine
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow")
-	fs.BoolVar(&o.local, "local", false, "Whether this is a local execution or part of a CI job")
 
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
@@ -131,16 +129,9 @@ func rehearseMain() error {
 	}
 
 	var jobSpec *pjdwapi.JobSpec
-	if o.local {
-		if jobSpec, err = config.NewLocalJobSpec(o.releaseRepoPath); err != nil {
-			logrus.WithError(err).Error("could not create local JobSpec")
-			return fmt.Errorf(misconfigurationOutput)
-		}
-	} else {
-		if jobSpec, err = pjdwapi.ResolveSpecFromEnv(); err != nil {
-			logrus.WithError(err).Error("could not read JOB_SPEC")
-			return fmt.Errorf(misconfigurationOutput)
-		}
+	if jobSpec, err = pjdwapi.ResolveSpecFromEnv(); err != nil {
+		logrus.WithError(err).Error("could not read JOB_SPEC")
+		return fmt.Errorf(misconfigurationOutput)
 	}
 
 	prFields := logrus.Fields{prowgithub.OrgLogField: jobSpec.Refs.Org, prowgithub.RepoLogField: jobSpec.Refs.Repo}
@@ -153,9 +144,6 @@ func rehearseMain() error {
 		return nil
 	}
 
-	if o.local {
-		jobSpec.Refs.Pulls[0].Number = int(time.Now().Unix())
-	}
 	org, repo, prNumber := jobSpec.Refs.Org, jobSpec.Refs.Repo, jobSpec.Refs.Pulls[0].Number
 	logger.Infof("Rehearsing Prow jobs for configuration PR %s/%s#%d", org, repo, prNumber)
 
@@ -273,10 +261,6 @@ func rehearseMain() error {
 	}
 	if len(rehearsalClusterProfiles.Paths) != 0 {
 		logger.WithField("profiles", rehearsalClusterProfiles.Paths).Info("cluster profiles changed")
-	}
-
-	if o.local {
-		prConfig.Prow.ProwJobNamespace = config.StagingNamespace
 	}
 
 	pjclient, err := rehearse.NewProwJobClient(prowJobConfig, o.dryRun)

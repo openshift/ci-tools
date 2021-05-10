@@ -26,7 +26,6 @@ import (
 
 type options struct {
 	dryRun bool
-	local  bool
 	limit  int
 
 	releaseRepoPath string
@@ -38,7 +37,6 @@ func gatherOptions() (options, error) {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit jobs to Prow")
-	fs.BoolVar(&o.local, "local", false, "Whether this is a local execution or part of a CI job")
 	fs.IntVar(&o.limit, "limit", 30, "Maximum number of jobs to trigger.")
 
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
@@ -78,14 +76,8 @@ func main() {
 	}
 
 	var jobSpec *pjdwapi.JobSpec
-	if o.local {
-		if jobSpec, err = config.NewLocalJobSpec(o.releaseRepoPath); err != nil {
-			logrus.WithError(err).Fatal("could not create local JobSpec")
-		}
-	} else {
-		if jobSpec, err = pjdwapi.ResolveSpecFromEnv(); err != nil {
-			logrus.WithError(err).Fatal("could not read JOB_SPEC")
-		}
+	if jobSpec, err = pjdwapi.ResolveSpecFromEnv(); err != nil {
+		logrus.WithError(err).Fatal("could not read JOB_SPEC")
 	}
 
 	prFields := logrus.Fields{prowgithub.OrgLogField: jobSpec.Refs.Org, prowgithub.RepoLogField: jobSpec.Refs.Repo}
@@ -114,9 +106,6 @@ func main() {
 	changedImagesPostsubmits := diffs.GetImagesPostsubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigs)
 
 	namespace := prConfig.Prow.ProwJobNamespace
-	if o.local {
-		namespace = config.StagingNamespace
-	}
 
 	var pjclient ctrlruntimeclient.Client
 	if o.dryRun {

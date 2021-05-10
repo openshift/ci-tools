@@ -59,7 +59,7 @@ type options struct {
 
 	maxConcurrency int
 
-	secretsGetters  map[string]coreclientset.SecretsGetter
+	secretsGetters  map[string]Getter
 	config          secretbootstrap.Config
 	generatorConfig secretgenerator.Config
 
@@ -147,7 +147,7 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 
 	}
 
-	o.secretsGetters = map[string]coreclientset.SecretsGetter{}
+	o.secretsGetters = map[string]Getter{}
 	var filteredSecrets []secretbootstrap.SecretConfig
 	for i, secretConfig := range o.config.Secrets {
 		var to []secretbootstrap.SecretContext
@@ -503,7 +503,12 @@ func fetchUserSecrets(secretsMap map[string]map[types.NamespacedName]coreapi.Sec
 	return secretsMap, utilerrors.NewAggregate(errs)
 }
 
-func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secretsMap map[string][]*coreapi.Secret, force bool) error {
+type Getter interface {
+	coreclientset.SecretsGetter
+	coreclientset.NamespacesGetter
+}
+
+func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.Secret, force bool) error {
 	var errs []error
 	for cluster, secrets := range secretsMap {
 		logger := logrus.WithField("cluster", cluster)
@@ -512,7 +517,19 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 			logger := logger.WithFields(logrus.Fields{"namespace": secret.Namespace, "name": secret.Name, "type": secret.Type})
 			logger.Debug("handling secret")
 
-			secretClient := secretsGetters[cluster].Secrets(secret.Namespace)
+			nsClient := getters[cluster].Namespaces()
+			if _, err := nsClient.Get(context.TODO(), secret.Namespace, metav1.GetOptions{}); err != nil {
+				if !kerrors.IsNotFound(err) {
+					errs = append(errs, fmt.Errorf("failed to check if namespace %s exists: %w", secret.Namespace, err))
+					continue
+				}
+				if _, err := nsClient.Create(context.TODO(), &coreapi.Namespace{ObjectMeta: metav1.ObjectMeta{Name: secret.Namespace}}, metav1.CreateOptions{}); err != nil && !kerrors.IsAlreadyExists(err) {
+					errs = append(errs, fmt.Errorf("failed to create namespace %s: %w", secret.Namespace, err))
+					continue
+				}
+			}
+
+			secretClient := getters[cluster].Secrets(secret.Namespace)
 
 			existingSecret, err := secretClient.Get(context.TODO(), secret.Name, metav1.GetOptions{})
 			if err != nil && !kerrors.IsNotFound(err) {

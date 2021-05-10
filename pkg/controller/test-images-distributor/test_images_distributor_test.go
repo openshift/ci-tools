@@ -599,7 +599,7 @@ func TestReconcile(t *testing.T) {
 			logrus.SetLevel(logrus.TraceLevel)
 			r := &reconciler{
 				log:                 log,
-				registryClusterName: "api.ci",
+				registryClusterName: "app.ci",
 				registryClient:      tc.registryClient,
 				buildClusterClients: tc.buildClusterClients,
 				forbiddenRegistries: sets.NewString("default-route-openshift-image-registry.apps.build01.ci.devcluster.openshift.com",
@@ -767,111 +767,4 @@ type noOpRegistryResolver struct{}
 
 func (noOpRegistryResolver) ResolveConfig(cfg api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error) {
 	return cfg, nil
-}
-
-func TestNeedReImport(t *testing.T) {
-	for _, tc := range []struct {
-		name           string
-		source, target *imagev1.ImageStream
-		tag            string
-		expected       bool
-	}{
-		{
-			name: "empty input: no need reimport",
-		},
-		{
-			name:   "src stream has no such a tag",
-			source: &imagev1.ImageStream{},
-		},
-		{
-			name: "src streamtag is not local",
-			tag:  "t",
-			source: &imagev1.ImageStream{
-				Status: imagev1.ImageStreamStatus{
-					Tags: []imagev1.NamedTagEventList{
-						{
-							Tag: "t",
-							Items: []imagev1.TagEvent{
-								{
-									DockerImageReference: "docker.io/test/test:latest",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "src streamtag is local and target points to api.ci",
-			tag:  "t",
-			source: &imagev1.ImageStream{
-				Status: imagev1.ImageStreamStatus{
-					Tags: []imagev1.NamedTagEventList{
-						{
-							Tag: "t",
-							Items: []imagev1.TagEvent{
-								{
-									DockerImageReference: "image-registry.openshift-image-registry.svc:5000/ocp/4.1@sha256:a7c164b3862582a3eada88a8dd90e8f9277fe23c1134238ff7cd455b754891c5",
-								},
-							},
-						},
-					},
-				},
-			},
-			target: &imagev1.ImageStream{
-				Status: imagev1.ImageStreamStatus{
-					Tags: []imagev1.NamedTagEventList{
-						{
-							Tag: "t",
-							Items: []imagev1.TagEvent{
-								{
-									DockerImageReference: "registry.svc.ci.openshift.org/ocp/4.1@sha256:a7c164b3862582a3eada88a8dd90e8f9277fe23c1134238ff7cd455b754891c5",
-								},
-							},
-						},
-					},
-				},
-			},
-			expected: true,
-		},
-		{
-			name: "src streamtag is local and target points to app.ci",
-			tag:  "t",
-			source: &imagev1.ImageStream{
-				Status: imagev1.ImageStreamStatus{
-					Tags: []imagev1.NamedTagEventList{
-						{
-							Tag: "t",
-							Items: []imagev1.TagEvent{
-								{
-									DockerImageReference: "image-registry.openshift-image-registry.svc:5000/ocp/4.1@sha256:a7c164b3862582a3eada88a8dd90e8f9277fe23c1134238ff7cd455b754891c5",
-								},
-							},
-						},
-					},
-				},
-			},
-			target: &imagev1.ImageStream{
-				Status: imagev1.ImageStreamStatus{
-					Tags: []imagev1.NamedTagEventList{
-						{
-							Tag: "t",
-							Items: []imagev1.TagEvent{
-								{
-									DockerImageReference: "registry.ci.openshift.org/ocp/4.1@sha256:a7c164b3862582a3eada88a8dd90e8f9277fe23c1134238ff7cd455b754891c5",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			actual := needReImport(tc.source, tc.target, tc.tag)
-			if diff := cmp.Diff(tc.expected, actual); diff != "" {
-				t.Errorf("expected differs from actual: %s", diff)
-			}
-		})
-	}
 }

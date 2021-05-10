@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -25,37 +24,25 @@ import (
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/yaml"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
-	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
-	"github.com/openshift/ci-tools/pkg/controller/imagepusher"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
-	"github.com/openshift/ci-tools/pkg/controller/registrysyncer"
-	"github.com/openshift/ci-tools/pkg/controller/secretsyncer"
-	secretsyncerconfig "github.com/openshift/ci-tools/pkg/controller/secretsyncer/config"
 	serviceaccountsecretrefresher "github.com/openshift/ci-tools/pkg/controller/serviceaccount_secret_refresher"
 	testimagesdistributor "github.com/openshift/ci-tools/pkg/controller/test-images-distributor"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/util"
-	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 const (
-	apiCIContextName = "api.ci"
 	appCIContextName = "app.ci"
 )
 
 var allControllers = sets.NewString(
 	promotionreconciler.ControllerName,
 	testimagesdistributor.ControllerName,
-	secretsyncer.ControllerName,
-	registrysyncer.ControllerName,
 	serviceaccountsecretrefresher.ControllerName,
-	imagepusher.ControllerName,
 )
 
 type options struct {
@@ -71,15 +58,13 @@ type options struct {
 	dryRun                               bool
 	blockProfileRate                     time.Duration
 	testImagesDistributorOptions         testImagesDistributorOptions
-	secretSyncerConfigOptions            secretSyncerConfigOptions
-	registrySyncerOptions                registrySyncerOptions
 	serviceAccountSecretRefresherOptions serviceAccountSecretRefresherOptions
 	imagePusherOptions                   imagePusherOptions
 	*flagutil.GitHubOptions
 }
 
 func (o *options) addDefaults() {
-	o.enabledControllers = flagutil.NewStrings(promotionreconciler.ControllerName, testimagesdistributor.ControllerName, secretsyncer.ControllerName)
+	o.enabledControllers = flagutil.NewStrings(promotionreconciler.ControllerName, testimagesdistributor.ControllerName)
 }
 
 type testImagesDistributorOptions struct {
@@ -93,23 +78,9 @@ type testImagesDistributorOptions struct {
 	forbiddenRegistries                sets.String
 }
 
-type registrySyncerOptions struct {
-	imageStreamPrefixesRaw    flagutil.Strings
-	imageStreamPrefixes       sets.String
-	deniedImageStreamsRaw     flagutil.Strings
-	deniedImageStreams        sets.String
-	dontImportFromAPICI       flagutil.Strings
-	dontImportFromAPICIParsed []*regexp.Regexp
-}
-
 type imagePusherOptions struct {
 	imageStreamsRaw flagutil.Strings
 	imageStreams    sets.String
-}
-
-type secretSyncerConfigOptions struct {
-	configFile               string
-	secretBoostrapConfigFile string
 }
 
 type serviceAccountSecretRefresherOptions struct {
@@ -140,12 +111,7 @@ func newOpts() (*options, error) {
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamTagsRaw, "testImagesDistributorOptions.additional-image-stream-tag", "An imagestreamtag that will be distributed even if no test explicitly references it. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamsRaw, "testImagesDistributorOptions.additional-image-stream", "An imagestream that will be distributed even if no test explicitly references it. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw, "testImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
-	flag.Var(&opts.registrySyncerOptions.imageStreamPrefixesRaw, "registrySyncerOptions.image-stream-prefix", "An imagestream prefix that will be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
-	flag.Var(&opts.registrySyncerOptions.deniedImageStreamsRaw, "registrySyncerOptions.denied-image-stream", "An imagestream that will NOT be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
-	flag.Var(&opts.registrySyncerOptions.dontImportFromAPICI, "registrySyncerOptions.dont-import-from-api-ci", "A regex for an imagestreamtag, imagestreamtags that match this will only be synced from app.ci to api.ci but not the other way round. Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.forbiddenRegistriesRaw, "testImagesDistributorOptions.forbidden-registry", "The hostname of an image registry from which there is no synchronization of its images. Can be passed multiple times.")
-	flag.StringVar(&opts.secretSyncerConfigOptions.configFile, "secretSyncerConfigOptions.config", "", "The config file for the secret syncer controller")
-	flag.StringVar(&opts.secretSyncerConfigOptions.secretBoostrapConfigFile, "secretSyncerConfigOptions.secretBoostrapConfigFile", "", "The config file for ci-secret-boostrap")
 	flag.DurationVar(&opts.blockProfileRate, "block-profile-rate", time.Duration(0), "The block profile rate. Set to non-zero to enable.")
 	flag.StringVar(&opts.registryClusterName, "registry-cluster-name", "api.ci", "the cluster name on which the CI central registry is running")
 	flag.Var(&opts.serviceAccountSecretRefresherOptions.enabledNamespaces, "serviceAccountRefresherOptions.enabled-namespace", "A namespace for which the serviceaccount_secret_refresher should be enabled. Can be passed multiple times.")
@@ -182,38 +148,12 @@ func newOpts() (*options, error) {
 	opts.testImagesDistributorOptions.additionalImageStreamNamespaces = completeSet(opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw)
 	opts.testImagesDistributorOptions.forbiddenRegistries = completeSet(opts.testImagesDistributorOptions.forbiddenRegistriesRaw)
 
-	imageStreamPrefixes, isErrors := completeImageStream("registrySyncerOptions.image-stream-prefix", opts.registrySyncerOptions.imageStreamPrefixesRaw)
-	errs = append(errs, isErrors...)
-	opts.registrySyncerOptions.imageStreamPrefixes = imageStreamPrefixes
-
-	deniedImageStreams, isErrors := completeImageStream("registrySyncerOptions.denied-image-stream", opts.registrySyncerOptions.deniedImageStreamsRaw)
-	errs = append(errs, isErrors...)
-	opts.registrySyncerOptions.deniedImageStreams = deniedImageStreams
-
 	imagePusherImageStreams, isErrors := completeImageStream("uniRegistrySyncerOptions.image-stream", opts.imagePusherOptions.imageStreamsRaw)
 	errs = append(errs, isErrors...)
 	opts.imagePusherOptions.imageStreams = imagePusherImageStreams
 
-	for _, rawRegex := range opts.registrySyncerOptions.dontImportFromAPICI.StringSet().List() {
-		parsedRegex, err := regexp.Compile(rawRegex)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("--registrySyncerOptions.dont-import-from-api-ci=%s is not a valid regexp: %w", rawRegex, err))
-			continue
-		}
-		opts.registrySyncerOptions.dontImportFromAPICIParsed = append(opts.registrySyncerOptions.dontImportFromAPICIParsed, parsedRegex)
-	}
-
 	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) && opts.stepConfigPath == "" {
 		errs = append(errs, fmt.Errorf("--step-config-path is required when the %s controller is enabled", testimagesdistributor.ControllerName))
-	}
-
-	if opts.enabledControllersSet.Has(secretsyncer.ControllerName) {
-		if opts.secretSyncerConfigOptions.configFile == "" {
-			errs = append(errs, fmt.Errorf("--secretSyncerConfigOptions.config is required when the %s controller is enabled", secretsyncer.ControllerName))
-		}
-		if opts.secretSyncerConfigOptions.secretBoostrapConfigFile == "" {
-			errs = append(errs, fmt.Errorf("--secretSyncerConfigOptions.secretBoostrapConfigFile is required when the %s controller is enabled", secretsyncer.ControllerName))
-		}
 	}
 
 	if opts.enabledControllersSet.Has(serviceaccountsecretrefresher.ControllerName) {
@@ -423,9 +363,7 @@ func main() {
 		}
 	}
 
-	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) ||
-		opts.enabledControllersSet.Has(registrysyncer.ControllerName) ||
-		opts.enabledControllersSet.Has(imagepusher.ControllerName) {
+	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) {
 		if err := controllerutil.RegisterMetrics(); err != nil {
 			logrus.WithError(err).Fatal("failed to register metrics")
 		}
@@ -450,63 +388,6 @@ func main() {
 			opts.testImagesDistributorOptions.forbiddenRegistries,
 		); err != nil {
 			logrus.WithError(err).Fatal("failed to add testimagesdistributor")
-		}
-	}
-
-	if opts.enabledControllersSet.Has(secretsyncer.ControllerName) {
-		// TODO (hongkliu): change this to app.ci when we are ready
-		// to let users maintain the source secrets on app.ci
-		referenceClusterName := apiCIContextName
-		targetClusters := map[string]controllerruntime.Manager{}
-		for cluster, manager := range allManagers {
-			if cluster == referenceClusterName {
-				continue
-			}
-			targetClusters[cluster] = manager
-		}
-		secretSyncerConfigAgent := &secretsyncerconfig.Agent{}
-		rawConfig, err := gzip.ReadFileMaybeGZIP(opts.secretSyncerConfigOptions.secretBoostrapConfigFile)
-		if err != nil {
-			logrus.WithError(err).Fatal("Failed to read ci-secret-boostrap config")
-		}
-		secretBootstrapConfig := secretbootstrap.Config{}
-		if err := yaml.Unmarshal(rawConfig, &secretBootstrapConfig); err != nil {
-			logrus.WithError(err).Fatal("Failed to unmarshal ci-secret-boostrap config")
-		}
-		configChangeEnqueuer, err := secretsyncer.AddToManager(mgr, referenceClusterName, allManagers[referenceClusterName], targetClusters, secretSyncerConfigAgent.Config, secretBootstrapConfig)
-		if err != nil {
-			logrus.WithError(err).Fatal("failed to add secret syncer controller")
-		}
-		if err := secretSyncerConfigAgent.Start(opts.secretSyncerConfigOptions.configFile, configChangeEnqueuer); err != nil {
-			logrus.WithError(err).Fatal("failed to start secretSyncerConfigAgent")
-		}
-	}
-
-	if opts.enabledControllersSet.Has(registrysyncer.ControllerName) {
-		if _, hasApiCI := kubeconfigs[apiCIContextName]; !hasApiCI {
-			logrus.Fatalf("--kubeconfig must include a context named `%s`", apiCIContextName)
-		}
-		if err := registrysyncer.AddToManager(
-			mgr,
-			map[string]manager.Manager{apiCIContextName: allManagers[apiCIContextName], appCIContextName: allManagers[appCIContextName]},
-			opts.registrySyncerOptions.imageStreamPrefixes,
-			opts.registrySyncerOptions.deniedImageStreams,
-			opts.registrySyncerOptions.dontImportFromAPICIParsed,
-		); err != nil {
-			logrus.WithError(err).Fatal("failed to add registrysyncer")
-		}
-	}
-
-	if opts.enabledControllersSet.Has(imagepusher.ControllerName) {
-		if _, hasApiCI := kubeconfigs[apiCIContextName]; !hasApiCI {
-			logrus.Fatalf("--kubeconfig must include a context named `%s`", apiCIContextName)
-		}
-		if err := imagepusher.AddToManager(
-			allManagers[appCIContextName],
-			allManagers[apiCIContextName],
-			opts.imagePusherOptions.imageStreams,
-		); err != nil {
-			logrus.WithError(err).Fatal("failed to add registrysyncer")
 		}
 	}
 

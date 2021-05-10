@@ -43,7 +43,6 @@ const (
 
 var (
 	ValidClusterNames = sets.NewString(
-		string(ClusterAPICI),
 		string(ClusterAPPCI),
 		string(ClusterBuild01),
 		string(ClusterBuild02),

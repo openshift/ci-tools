@@ -547,7 +547,7 @@ func TestValidate(t *testing.T) {
 						},
 					},
 				},
-				Groups: map[api.Cluster]Group{api.ClusterAPICI: {
+				Groups: map[api.Cluster]Group{"api.ci": {
 					Jobs: []string{"c", "d"},
 				}},
 			},

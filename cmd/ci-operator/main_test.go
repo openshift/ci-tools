@@ -403,7 +403,7 @@ func TestBuildPartialGraph(t *testing.T) {
 			name: "Missing input image results in human-readable error",
 			input: []api.Step{
 				steps.InputImageTagStep(
-					api.InputImageTagStepConfiguration{To: api.PipelineImageStreamTagReferenceRoot},
+					&api.InputImageTagStepConfiguration{InputImage: api.InputImage{To: api.PipelineImageStreamTagReferenceRoot}},
 					loggingclient.New(fakectrlruntimeclient.NewFakeClient(&imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{Name: ":"}})),
 					nil,
 				),

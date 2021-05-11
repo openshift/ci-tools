@@ -27,8 +27,10 @@ func TestInputImageTagStep(t *testing.T) {
 	}
 
 	config := api.InputImageTagStepConfiguration{
-		To:        "TO",
-		BaseImage: baseImage,
+		InputImage: api.InputImage{
+			To:        "TO",
+			BaseImage: baseImage,
+		},
 	}
 
 	client := loggingclient.New(fakectrlruntimeclient.NewFakeClient(
@@ -66,7 +68,7 @@ func TestInputImageTagStep(t *testing.T) {
 	// Make a step instance
 	jobspec := &api.JobSpec{}
 	jobspec.SetNamespace("target-namespace")
-	iits := InputImageTagStep(config, client, jobspec)
+	iits := InputImageTagStep(&config, client, jobspec)
 
 	// Set up expectations for the step methods
 	specification := stepExpectation{

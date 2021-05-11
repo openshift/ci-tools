@@ -120,7 +120,7 @@ func acquireCluster(ctx context.Context, clusterClaim api.ClusterClaim, hiveClie
 	}
 	logrus.Info("Waiting for the claimed cluster to be ready.")
 	claim = &hivev1.ClusterClaim{}
-	if err := wait.Poll(15*time.Second, clusterClaim.Timeout.Duration, func() (bool, error) {
+	if err := wait.PollImmediate(15*time.Second, clusterClaim.Timeout.Duration, func() (bool, error) {
 		if err := hiveClient.Get(ctx, ctrlruntimeclient.ObjectKey{Name: claimName, Namespace: claimNamespace}, claim); err != nil {
 			return false, fmt.Errorf("failed to get cluster claim %s in namespace %s: %w", claim.Name, claim.Namespace, err)
 		}

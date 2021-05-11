@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ghodss/yaml"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestOverlay(t *testing.T) {
@@ -235,6 +236,107 @@ func TestIsBundleImage(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			if config.IsBundleImage(testCase.name) != testCase.expected {
 				t.Errorf("Expected %t, got %t", testCase.expected, config.IsBundleImage(testCase.name))
+			}
+		})
+	}
+}
+
+func TestInputImageTagStepConfiguration(t *testing.T) {
+	baseImage := ImageStreamTagReference{
+		Name:      "image",
+		Namespace: "ns",
+		Tag:       "tag",
+	}
+
+	otherImage := ImageStreamTagReference{
+		Name:      "image2",
+		Namespace: "ns",
+		Tag:       "tag",
+	}
+
+	baseConfig := InputImageTagStepConfiguration{
+		InputImage: InputImage{
+			To:        "TO",
+			BaseImage: baseImage,
+		},
+	}
+
+	testCases := []struct {
+		name                     string
+		config                   InputImageTagStepConfiguration
+		sources                  []ImageStreamSource
+		inputImage               *InputImage
+		matches                  bool
+		expectedFormattedSources string
+	}{{
+		name:   "test step sources",
+		config: baseConfig,
+		sources: []ImageStreamSource{
+			{
+				SourceType: ImageStreamSourceTest,
+				Name:       "test1",
+			},
+			{
+				SourceType: ImageStreamSourceTest,
+				Name:       "test2",
+			},
+		},
+	}, {
+		name:   "test inputImage matches",
+		config: baseConfig,
+		inputImage: &InputImage{
+			To:        "TO",
+			BaseImage: baseImage,
+		},
+		matches: true,
+	}, {
+		name:   "test inputImage doesn't match",
+		config: baseConfig,
+		inputImage: &InputImage{
+			To:        "TO",
+			BaseImage: otherImage,
+		},
+		matches: false,
+	}, {
+		name:   "test output formatted sources",
+		config: baseConfig,
+		sources: []ImageStreamSource{
+			{
+				SourceType: ImageStreamSourceRoot,
+			},
+			{
+				SourceType: ImageStreamSourceBase,
+			},
+			{
+				SourceType: ImageStreamSourceBaseRpm,
+			},
+			{
+				SourceType: ImageStreamSourceTest,
+				Name:       "test1",
+			},
+			{
+				SourceType: ImageStreamSourceTest,
+				Name:       "test2",
+			},
+		},
+		expectedFormattedSources: "root,base_image,base_rpm_image,test steps: test1,test2",
+	}}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			testCase.config.AddSources(testCase.sources...)
+
+			if diff := cmp.Diff(testCase.sources, testCase.config.Sources); diff != "" {
+				t.Errorf("Unexpected sources: %v", diff)
+			}
+			if testCase.inputImage != nil {
+				if testCase.config.Matches(*testCase.inputImage) != testCase.matches {
+					t.Errorf("Expected matches to be %t but was %t", testCase.matches, !testCase.matches)
+				}
+			}
+			if testCase.expectedFormattedSources != "" {
+				if diff := cmp.Diff(testCase.expectedFormattedSources, testCase.config.FormattedSources()); diff != "" {
+					t.Errorf("Unexpected formatted sources : %v", diff)
+				}
 			}
 		})
 	}

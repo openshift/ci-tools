@@ -41,7 +41,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
-type inputImageSet map[api.InputImageTagStepConfiguration]struct{}
+type inputImageSet map[api.InputImage]struct{}
 
 // FromConfig interprets the human-friendly fields in
 // the release build configuration and generates steps for
@@ -130,14 +130,17 @@ func fromConfig(
 	var overridableSteps, buildSteps, postSteps []api.Step
 	var imageStepLinks []api.StepLink
 	var hasReleaseStep bool
+	// A pointer to a slice of pointers is weird, but necessary. Since the slice mutates inside of the other functions,
+	// we need to pass the pointer - otherwise we will lose the updates after leaving the function scope.
+	imageConfigs := &[]*api.InputImageTagStepConfiguration{}
 	resolver := rootImageResolver(client, ctx)
-	rawSteps, err := stepConfigsForBuild(config, jobSpec, ioutil.ReadFile, resolver)
+	rawSteps, err := stepConfigsForBuild(config, jobSpec, ioutil.ReadFile, resolver, imageConfigs)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get stepConfigsForBuild: %w", err)
 	}
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep)
+			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, imageConfigs)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -183,11 +186,12 @@ func fromConfig(
 		var stepLinks []api.StepLink
 		if rawStep.InputImageTagStepConfiguration != nil {
 			conf := *rawStep.InputImageTagStepConfiguration
-			if _, ok := inputImages[conf]; ok {
+			if _, ok := inputImages[conf.InputImage]; ok {
 				continue
 			}
-			step = steps.InputImageTagStep(conf, client, jobSpec)
-			inputImages[conf] = struct{}{}
+
+			step = steps.InputImageTagStep(&conf, client, jobSpec)
+			inputImages[conf.InputImage] = struct{}{}
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
 			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, jobSpec, pullSecret)
 		} else if rawStep.SourceStepConfiguration != nil {
@@ -320,6 +324,7 @@ func stepForTest(
 	jobSpec *api.JobSpec,
 	inputImages inputImageSet,
 	c *api.TestStepConfiguration,
+	imageConfigs *[]*api.InputImageTagStepConfiguration,
 ) ([]api.Step, error) {
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
 		leases := leasesForTest(test)
@@ -334,7 +339,8 @@ func stepForTest(
 		if c.ClusterClaim != nil {
 			step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step)
 		}
-		return append([]api.Step{step}, stepsForStepImages(client, jobSpec, inputImages, test)...), nil
+		newSteps := stepsForStepImages(client, jobSpec, inputImages, test, imageConfigs)
+		return append([]api.Step{step}, newSteps...), nil
 	}
 	if test := c.OpenshiftInstallerClusterTestConfiguration; test != nil {
 		if !test.Upgrade {
@@ -366,18 +372,36 @@ func stepsForStepImages(
 	jobSpec *api.JobSpec,
 	inputImages inputImageSet,
 	test *api.MultiStageTestConfigurationLiteral,
+	imageConfigs *[]*api.InputImageTagStepConfiguration,
 ) (ret []api.Step) {
 	for _, subStep := range append(append(test.Pre, test.Test...), test.Post...) {
 		if link, ok := subStep.FromImageTag(); ok {
+			source := api.ImageStreamSource{SourceType: api.ImageStreamSourceTest, Name: subStep.As}
+
 			config := api.InputImageTagStepConfiguration{
-				BaseImage: *subStep.FromImage,
-				To:        link,
+				InputImage: api.InputImage{
+					BaseImage: *subStep.FromImage,
+					To:        link,
+				},
+				Sources: []api.ImageStreamSource{source},
 			}
-			if _, ok := inputImages[config]; ok {
-				continue
+			// Determine if there are any other steps with the same BaseImage/To.
+			if _, ok := inputImages[config.InputImage]; ok {
+				for _, existingImageConfig := range *imageConfigs {
+					// If the existing step is an image tag step and it has the same image, then add the current step as a
+					// source of that same image
+					if existingImageConfig.Matches(config.InputImage) {
+						existingImageConfig.AddSources(source)
+					}
+				}
+			} else {
+				// This image doesn't already exist, so add it.
+				inputImages[config.InputImage] = struct{}{}
+
+				step := steps.InputImageTagStep(&config, client, jobSpec)
+				ret = append(ret, step)
+				*imageConfigs = append(*imageConfigs, &config)
 			}
-			inputImages[config] = struct{}{}
-			ret = append(ret, steps.InputImageTagStep(config, client, jobSpec))
 		}
 	}
 	return
@@ -473,7 +497,12 @@ func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context) 
 type readFile func(string) ([]byte, error)
 type resolveRoot func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error)
 
-func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.JobSpec, readFile readFile, resolveRoot resolveRoot) ([]api.StepConfiguration, error) {
+func stepConfigsForBuild(
+	config *api.ReleaseBuildConfiguration,
+	jobSpec *api.JobSpec,
+	readFile readFile,
+	resolveRoot resolveRoot,
+	imageConfigs *[]*api.InputImageTagStepConfiguration) ([]api.StepConfiguration, error) {
 	var buildSteps []api.StepConfiguration
 
 	if config.InputConfiguration.BaseImages == nil {
@@ -510,11 +539,17 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 				}
 				isTagRef = root
 			}
-			buildSteps = append(buildSteps, api.StepConfiguration{
-				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+			config := api.InputImageTagStepConfiguration{
+				InputImage: api.InputImage{
 					BaseImage: *isTagRef,
 					To:        api.PipelineImageStreamTagReferenceRoot,
-				}})
+				},
+				Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceRoot}},
+			}
+			buildSteps = append(buildSteps, api.StepConfiguration{
+				InputImageTagStepConfiguration: &config,
+			})
+			*imageConfigs = append(*imageConfigs, &config)
 		} else if gitSourceRef := target.ProjectImageBuild; gitSourceRef != nil {
 			buildSteps = append(buildSteps, api.StepConfiguration{
 				ProjectDirectoryImageBuildInputs: gitSourceRef,
@@ -579,18 +614,29 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 	}
 
 	for alias, baseImage := range config.BaseImages {
-		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-			BaseImage: defaultImageFromReleaseTag(baseImage, config.ReleaseTagConfiguration),
-			To:        api.PipelineImageStreamTagReference(alias),
-		}})
+		config := api.InputImageTagStepConfiguration{
+			InputImage: api.InputImage{
+				BaseImage: defaultImageFromReleaseTag(baseImage, config.ReleaseTagConfiguration),
+				To:        api.PipelineImageStreamTagReference(alias),
+			},
+			Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBase}},
+		}
+		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &config})
+
+		*imageConfigs = append(*imageConfigs, &config)
 	}
 
 	for alias, target := range config.InputConfiguration.BaseRPMImages {
 		intermediateTag := api.PipelineImageStreamTagReference(fmt.Sprintf("%s-without-rpms", alias))
-		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-			BaseImage: defaultImageFromReleaseTag(target, config.ReleaseTagConfiguration),
-			To:        intermediateTag,
-		}})
+		config := api.InputImageTagStepConfiguration{
+			InputImage: api.InputImage{
+				BaseImage: defaultImageFromReleaseTag(target, config.ReleaseTagConfiguration),
+				To:        intermediateTag,
+			},
+			Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBaseRpm}},
+		}
+		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &config})
+		*imageConfigs = append(*imageConfigs, &config)
 
 		buildSteps = append(buildSteps, api.StepConfiguration{RPMImageInjectionStepConfiguration: &api.RPMImageInjectionStepConfiguration{
 			From: intermediateTag,

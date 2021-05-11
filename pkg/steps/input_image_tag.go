@@ -30,7 +30,7 @@ var (
 // in the pipeline ImageStream that resolves to
 // the base image
 type inputImageTagStep struct {
-	config  api.InputImageTagStepConfiguration
+	config  *api.InputImageTagStepConfiguration
 	client  loggingclient.LoggingClient
 	jobSpec *api.JobSpec
 
@@ -49,7 +49,11 @@ func (s *inputImageTagStep) Inputs() (api.InputDefinition, error) {
 		return nil, fmt.Errorf("could not resolve base image: %w", err)
 	}
 
-	logrus.Debugf("Resolved %s to %s.", s.config.BaseImage.ISTagName(), from.Image.Name)
+	if len(s.config.Sources) > 0 {
+		logrus.Debugf("Resolved %s (%s) to %s.", s.config.BaseImage.ISTagName(), s.config.FormattedSources(), from.Image.Name)
+	} else {
+		logrus.Debugf("Resolved %s to %s.", s.config.BaseImage.ISTagName(), from.Image.Name)
+	}
 	s.imageName = from.Image.Name
 	return api.InputDefinition{from.Image.Name}, nil
 }
@@ -133,7 +137,10 @@ func (s *inputImageTagStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func InputImageTagStep(config api.InputImageTagStepConfiguration, client loggingclient.LoggingClient, jobSpec *api.JobSpec) api.Step {
+func InputImageTagStep(
+	config *api.InputImageTagStepConfiguration,
+	client loggingclient.LoggingClient,
+	jobSpec *api.JobSpec) api.Step {
 	// when source and destination client are the same, we don't need to use external imports
 	return &inputImageTagStep{
 		config:  config,

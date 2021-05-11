@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/repoowners"
 )
@@ -450,8 +451,56 @@ type StepConfiguration struct {
 // if no explicit output tag is provided, the name
 // of the image is used as the tag.
 type InputImageTagStepConfiguration struct {
+	InputImage `json:",inline"`
+	Sources    []ImageStreamSource `json:"-"`
+}
+
+func (config InputImageTagStepConfiguration) Matches(other InputImage) bool {
+	return config.InputImage == other
+}
+
+func (config InputImageTagStepConfiguration) FormattedSources() string {
+	var formattedSources []string
+	tests := sets.String{}
+	for _, source := range config.Sources {
+		switch source.SourceType {
+		case ImageStreamSourceTest:
+			tests.Insert(source.Name)
+		default:
+			formattedSources = append(formattedSources, string(source.SourceType))
+		}
+	}
+
+	if len(tests) > 0 {
+		formattedSources = append(formattedSources, fmt.Sprintf("test steps: %s", strings.Join(tests.List(), ",")))
+
+	}
+
+	return strings.Join(formattedSources, ",")
+
+}
+
+func (config *InputImageTagStepConfiguration) AddSources(sources ...ImageStreamSource) {
+	config.Sources = append(config.Sources, sources...)
+}
+
+type InputImage struct {
 	BaseImage ImageStreamTagReference         `json:"base_image"`
 	To        PipelineImageStreamTagReference `json:"to,omitempty"`
+}
+
+type ImageStreamSourceType string
+
+const (
+	ImageStreamSourceRoot    ImageStreamSourceType = "root"
+	ImageStreamSourceBase    ImageStreamSourceType = "base_image"
+	ImageStreamSourceBaseRpm ImageStreamSourceType = "base_rpm_image"
+	ImageStreamSourceTest    ImageStreamSourceType = "test step"
+)
+
+type ImageStreamSource struct {
+	SourceType ImageStreamSourceType
+	Name       string
 }
 
 // OutputImageTagStepConfiguration describes a step that

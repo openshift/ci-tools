@@ -213,6 +213,10 @@ path "secret/metadata/team-1/*" {
 			name: "Name key with valid value is allowed",
 			data: map[string]string{"secretsync/target-name": "some-name"},
 		},
+		{
+			name: "Target cluster key is allowed",
+			data: map[string]string{"secretsync/target-clusters": "whatever"},
+		},
 	}
 	for i, tc := range kvKeyValidationTestCases {
 		t.Run(tc.name, func(t *testing.T) {

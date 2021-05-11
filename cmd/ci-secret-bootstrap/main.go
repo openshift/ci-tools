@@ -471,7 +471,11 @@ func fetchUserSecrets(secretsMap map[string]map[types.NamespacedName]coreapi.Sec
 	var errs []error
 	for secretName, secretKeys := range userSecrets {
 		logger := logrus.WithField("secret", secretName.String())
-		for _, cluster := range targetClusters {
+		allowedClusters := sets.NewString(targetClusters...)
+		if secretKeys[vaultapi.SecretSyncTargetClusterKey] != "" {
+			allowedClusters = allowedClusters.Intersection(sets.NewString(strings.Split(secretKeys[vaultapi.SecretSyncTargetClusterKey], ",")...))
+		}
+		for _, cluster := range allowedClusters.List() {
 			logger = logger.WithField("cluster", cluster)
 			if _, ok := secretsMap[cluster]; !ok {
 				secretsMap[cluster] = map[types.NamespacedName]coreapi.Secret{}
@@ -489,6 +493,9 @@ func fetchUserSecrets(secretsMap map[string]map[types.NamespacedName]coreapi.Sec
 				continue
 			}
 			for vaultKey, vaultValue := range secretKeys {
+				if vaultKey == vaultapi.SecretSyncTargetClusterKey {
+					continue
+				}
 				if _, alreadyExists := entry.Data[vaultKey]; alreadyExists {
 					errs = append(errs, fmt.Errorf("key %s in secret %s in cluster %s is targeted by ci-secret-bootstrap config and by vault item in path %s", vaultKey, secretName.String(), cluster, secretKeys[vaultapi.VaultSourceKey]))
 					continue

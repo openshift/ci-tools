@@ -58,6 +58,9 @@ func (k *kvKeyValidator) RoundTrip(r *http.Request) (*http.Response, error) {
 			}
 			continue
 		}
+		if key == vault.SecretSyncTargetClusterKey {
+			continue
+		}
 		if !secretKeyValidationRegex.MatchString(key) {
 			errs = append(errs, fmt.Sprintf("key %s is invalid: must match regex %s", key, secretKeyValidationRegexString))
 		}

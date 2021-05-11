@@ -191,6 +191,8 @@ const chainPage = `
 <h3 id="dependencies" title="Dependencies of steps involved in this chain"><a href="#dependencies">Dependencies</a></h3>
 {{ $depTable := "chain" }}
 {{ template "dependencyTable" .Chain.As }}
+<h3 id="environment" title="Environmental variables exposed through this chain"><a href="#environment">Environment</a></h3>
+{{ template "refEnvironment" .Chain.As }}
 <h3 id="graph" title="Visual representation of steps run by this chain"><a href="#graph">Step Graph</a></h3>
 {{ chainGraph .Chain.As }}
 <h3 id="github"><a href="#github">GitHub Link:</a></h3>{{ githubLink .Metadata.Path }}
@@ -216,6 +218,8 @@ const workflowJobPage = `
 <h3 id="dependencies" title="Dependencies of this {{ toLower $type }}"><a href="#dependencies">Dependencies</a></h3>
 {{ $depTable := "workflow" }}
 {{ template "dependencyTable" .Workflow.As }}
+<h3 id="environment" title="Environmental variables exposed through this workflow"><a href="#environment">Environment</a></h3>
+{{ template "refEnvironment" .Workflow.As }}
 <h3 id="graph" title="Visual representation of steps run by this {{ toLower $type }}"><a href="#graph">Step Graph</a></h3>
 {{ workflowGraph .Workflow.As .Workflow.Type }}
 {{ if eq $type "Workflow" }}
@@ -351,6 +355,44 @@ const templateDefinitions = `
   </tbody>
   </table>
   {{ end }}
+{{ end }}
+
+{{ define "refEnvironment" }}
+	{{ $data := getEnvironment . }}
+    {{ if eq 0 ( len ($data.Items)) }}
+      <p>This {{ $data.Type }} exposes no environmental variables except the <a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#available-environment-variables">defaults</a>.</p>
+    {{ else }}
+        <p>In addition to the <a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#available-environment-variables">default</a> environment, the following variables are exposed through this {{ $data.Type }}</p>
+        <table class="table">
+        <thead>
+        <tr>
+         <th title="Environmental variable" class="info">Variable Name</th>
+         <th title="Content value" class="info">Variable Content</th>
+		 <th title="Required By Steps" class="info">Exposed By Steps</th>
+        </tr>
+       </thead>
+       <tbody>
+       {{ range $name, $env := $data.Items }}
+       <tr>
+         <td style="font-family:monospace">{{ $name }}</td>
+		 <td>
+		   {{ $env.Documentation }}
+		   {{ if $env.Default }}
+		   {{ if gt (len $env.Default) 0 }}
+			 (default: <span style="font-family:monospace">{{ $env.Default }}</span>)
+		   {{ end }}
+		   {{ end }}
+		 </td>
+		 <td>
+             {{ range $i, $step := $env.Steps }}
+               <a href="/reference/{{ $step }}">{{ $step }}</a>
+             {{ end }}
+         </td>
+       </tr>
+       {{ end  }}
+       </tbody>
+       </table>
+    {{ end }}
 {{ end }}
 
 {{ define "stepEnvironment" }}
@@ -688,6 +730,9 @@ func getBaseTemplate() (*template.Template, error) {
 			"workflowGraph":   func(_, _ string) string { return "" },
 			"chainGraph":      func(string) string { return "" },
 			"getDependencies": func(string) dependencyData { return dependencyData{} },
+			"getEnvironment": func(string) environmentData {
+				return environmentData{}
+			},
 
 			"testStepNameAndType": getTestStepNameAndType,
 			"noescape": func(str string) template.HTML {
@@ -827,6 +872,81 @@ func setWorkflowGraph(t *template.Template, chains registry.ChainByName, workflo
 		})
 }
 
+type environmentLine struct {
+	Documentation string
+	Default       *string
+	Steps         []string
+}
+
+type environmentData struct {
+	Items map[string]environmentLine
+	Type  string
+}
+
+func getEnvironmentDataItems(worklist []api.TestStep, registryRefs registry.ReferenceByName, registryChains registry.ChainByName) map[string]environmentLine {
+	var data map[string]environmentLine
+
+	add := func(name, documentation, step string, defaultVal *string) {
+		if data == nil {
+			data = map[string]environmentLine{}
+		}
+
+		if _, ok := data[name]; !ok {
+			data[name] = environmentLine{
+				Documentation: documentation,
+				Default:       defaultVal,
+			}
+		}
+
+		line := data[name]
+		line.Steps = append(line.Steps, step)
+		data[name] = line
+	}
+
+	chainWorklist := sets.NewString()
+	seenChains := sets.NewString()
+	dispatch := func(step api.TestStep) {
+		switch {
+		case step.Reference != nil:
+			ref, ok := registryRefs[*step.Reference]
+			if !ok {
+				logrus.WithField("step-name", *step.Reference).Error("failed to resolve step environment, step not found in registry")
+				return
+			}
+			for _, env := range ref.Environment {
+				add(env.Name, env.Documentation, ref.As, env.Default)
+			}
+		case step.Chain != nil:
+			if !seenChains.Has(*step.Chain) {
+				chainWorklist.Insert(*step.Chain)
+			}
+		case step.LiteralTestStep != nil:
+			for _, env := range step.Environment {
+				add(env.Name, env.Documentation, step.As, env.Default)
+			}
+		}
+	}
+
+	for _, step := range worklist {
+		dispatch(step)
+	}
+
+	for len(chainWorklist) > 0 {
+		name, _ := chainWorklist.PopAny()
+		seenChains.Insert(name)
+		chain, ok := registryChains[name]
+		if !ok {
+			logrus.WithField("chain-name", name).Error("failed to resolve chain environment, chain not found in registry")
+			continue
+		}
+		for _, item := range chain.Steps {
+			dispatch(item)
+		}
+	}
+
+	return data
+}
+
 type dependencyLine struct {
 	Steps    []string
 	Override bool
@@ -947,6 +1067,51 @@ func setChainDependencies(t *template.Template, refs registry.ReferenceByName, c
 				}
 
 				ret.Items = getDependencyDataItems(chain.Steps, refs, chains, nil)
+				return ret
+			},
+		})
+}
+
+func setChainEnvironment(t *template.Template, refs registry.ReferenceByName, chains registry.ChainByName) *template.Template {
+	return t.Funcs(
+		template.FuncMap{
+			"getEnvironment": func(as string) environmentData {
+				ret := environmentData{
+					Type: "chain",
+				}
+
+				chain, ok := chains[as]
+				if !ok {
+					logrus.WithField("chain-name", as).Error("failed to resolve chain steps: step not found in registry")
+					return ret
+				}
+
+				ret.Items = getEnvironmentDataItems(chain.Steps, refs, chains)
+				return ret
+			},
+		})
+}
+
+func setWorkflowEnvironment(t *template.Template, refs registry.ReferenceByName, chains registry.ChainByName, workflows registry.WorkflowByName) *template.Template {
+	return t.Funcs(
+		template.FuncMap{
+			"getEnvironment": func(as string) environmentData {
+				ret := environmentData{
+					Type: "workflow",
+				}
+
+				workflow, ok := workflows[as]
+				if !ok {
+					logrus.WithField("workflow-name", as).Error("failed to resolve workflow steps: workflow not found in registry")
+					return ret
+				}
+
+				var worklist []api.TestStep
+				for _, steps := range [][]api.TestStep{workflow.Pre, workflow.Test, workflow.Post} {
+					worklist = append(worklist, steps...)
+				}
+
+				ret.Items = getEnvironmentDataItems(worklist, refs, chains)
 				return ret
 			},
 		})
@@ -1271,6 +1436,7 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 	page = setDocs(page, docs)
 	page = setChainGraph(page, chains)
 	page = setChainDependencies(page, refs, chains)
+	page = setChainEnvironment(page, refs, chains)
 	if page, err = page.Parse(chainPage); err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
 		return
@@ -1315,6 +1481,7 @@ func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *htt
 	page = setWorkflowGraph(page, chains, workflows)
 	page = setChainGraph(page, chains)
 	page = setWorkflowDependencies(page, refs, chains, workflows)
+	page = setWorkflowEnvironment(page, refs, chains, workflows)
 
 	if page, err = page.Parse(workflowJobPage); err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)

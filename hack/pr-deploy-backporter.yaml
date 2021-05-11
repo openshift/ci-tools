@@ -85,7 +85,7 @@ objects:
         name: "output:bp-binaries"
     source:
       dockerfile: |
-        FROM registry.svc.ci.openshift.org/openshift/release:golang-1.13
+        FROM registry.ci.openshift.org/openshift/release:golang-1.13
 
         COPY . .
         RUN go install ./cmd/bugzilla-backporter/...

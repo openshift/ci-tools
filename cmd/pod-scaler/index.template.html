@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <title>Resource Usage</title>
+</head>
+
+<body>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="style.css">
+  <script type="application/json" id="indexData">
+    {{ . }}
+  </script>
+  <div class="navigation">
+    <div class="options">
+      <div id="query_steps" class="content">Query Steps Globally</div>
+      <div id="query_meta_step" class="content">Query Step in a Job</div>
+      <div id="query_meta_pod" class="content">Query Workloads</div>
+    </div>
+    <div class="content">CI Resource Usage</div>
+  </div>
+  <div class="navigation">
+    <div class="options">
+      <label for="orgInput" class="visuallyhidden">Org</label><input id="orgInput" name="org" placeholder="Org" list="orgOptions" /><datalist id="orgOptions"></datalist>
+      <label for="repoInput" class="visuallyhidden">Repo</label><input id="repoInput" name="repo" placeholder="Repo" list="repoOptions" /><datalist id="repoOptions"></datalist>
+      <label for="branchInput" class="visuallyhidden">Branch</label><input id="branchInput" name="branch" placeholder="Branch" list="branchOptions" /><datalist id="branchOptions"></datalist>
+      <label for="variantInput" class="visuallyhidden">Variant</label><input id="variantInput" name="variant" placeholder="Variant" list="variantOptions" /><datalist id="variantOptions"></datalist>
+      <label for="targetInput" class="visuallyhidden">Target</label><input id="targetInput" name="target" placeholder="Target" list="targetOptions" /><datalist id="targetOptions"></datalist>
+      <label for="stepInput" class="visuallyhidden">Step</label><input id="stepInput" name="step" placeholder="Step" list="stepOptions" /><datalist id="stepOptions"></datalist>
+      <label for="podInput" class="visuallyhidden">Pod</label><input id="podInput" name="pod" placeholder="Pod" list="podOptions" /><datalist id="podOptions"></datalist>
+      <label for="containerInput" class="visuallyhidden">Container</label><input id="containerInput" name="container" placeholder="Container" list="containerOptions" /><datalist id="containerOptions"></datalist>
+    </div>
+    <button id="loadButton" type="button" class="grey-button">Load</button>
+  </div>
+  <div id="data"></div>
+  <div id="tooltip" class="tooltip"></div>
+  <div id="infoBox" class="hidden">
+    <div id="info" style="width: 50%;">
+      <h2>How To Read These Charts</h2>
+      <p>
+        These charts are histogram heatmaps, presenting distributions of resource usage for all executions of the CI container that have been indexed. Each vertical slice is a histogram, so a block represents the amount of time (number of samples) that the specific execution of the CI container spent using that much of the resource. Colors represent relative density - the yellower a block, the higher the corresponding bar in the histogram would be. The left-most vertical slice is the aggregate distribution, which contains all of the data presented and is used to calculate the resource request recommendation. Note that the histograms used for storing distributions use an adaptive bucket size which varies with the logarithm of the values stored. As a result, the Y axis in the heatmaps are logarithmic, not linear, or smaller buckets would be almost invisible.
+      </p>
+      <h2>How Data is Stored</h2>
+      <p>
+        In order to provide an estimate of resource usage for containers in a CI job, this server analyzes metrics from previous executions of similar containers. Aggregate statistics are used to provide resource request recommendations by digesting prior metrics. It is assumed that, for a sufficiently similar container, resource usage will not vary much across executions - we expect this to be true for <i>e.g.</i> all executions of unit tests for some branch on a repository. This assumption allows for samples from all executions to be treated as one dataset with a single underlying distribution, so that aggregation can be done on the larger dataset to yield higher-fidelity signal. The overall size of the raw data, however, quickly grows unmanageable. In order to operate efficiently on this dataset we therefore store compressed histograms for each execution trace. This allows us to reduce the data footprint while continuing to allow for dataset merging and aggregation. The <a href="https://www.circonus.com/2018/11/the-problem-with-percentiles-aggregation-brings-aggravation/">Circonus log-linear histogram</a> is used as it's performant, accurate, efficient and open-source.
+      </p>
+    </div>
+  </div>
+  <script src="https://d3js.org/d3.v6.min.js"></script>
+  <script src="circllhist.js"></script>
+  <script src="index.js" defer></script>
+</body>
+
+</html>

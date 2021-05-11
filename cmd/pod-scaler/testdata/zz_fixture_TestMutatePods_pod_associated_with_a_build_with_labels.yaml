@@ -9,14 +9,20 @@ Patches:
   path: /metadata/labels/ci.openshift.io~1metadata.repo
   value: repo
 - op: add
-  path: /metadata/labels/ci.openshift.io~1metadata.step
-  value: step
-- op: add
   path: /metadata/labels/ci.openshift.io~1metadata.target
   value: target
 - op: add
   path: /metadata/labels/ci.openshift.io~1metadata.variant
   value: variant
+- op: add
+  path: /spec/containers/0/resources
+  value:
+    requests:
+      cpu: "100"
+      memory: 19531250Ki
+- op: add
+  path: /spec/containers/1/resources
+  value: {}
 allowed: true
 patchType: JSONPatch
 uid: ""

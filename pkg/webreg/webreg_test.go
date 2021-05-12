@@ -158,7 +158,156 @@ func TestGetDependencyDataItems(t *testing.T) {
 
 	for i := range testCases {
 		t.Run(testCases[i].description, func(t *testing.T) {
+			t.Parallel()
 			data := getDependencyDataItems(testCases[i].inputSteps, registrySteps, registryChains, testCases[i].overrides)
+			if diff := cmp.Diff(testCases[i].expected, data); diff != "" {
+				t.Errorf("%s: data differs from expected:\n%s", testCases[i].description, diff)
+			}
+		})
+	}
+}
+
+func TestGetEnvironmentDataItems(t *testing.T) {
+	defaultVal := "default"
+
+	stepWithoutVars := api.TestStep{
+		LiteralTestStep: &api.LiteralTestStep{
+			As: "step-without-vars",
+		},
+	}
+
+	step1 := api.TestStep{
+		LiteralTestStep: &api.LiteralTestStep{
+			As: "step-1",
+			Environment: []api.StepParameter{
+				{
+					Name:          "var1",
+					Documentation: "var1 documentation",
+					Default:       &defaultVal,
+				},
+			},
+		},
+	}
+
+	step2 := api.TestStep{
+		LiteralTestStep: &api.LiteralTestStep{
+			As: "step-2",
+			Environment: []api.StepParameter{
+				{
+					Name:          "var2",
+					Documentation: "var2 documentation",
+				},
+			},
+		},
+	}
+
+	step3 := api.TestStep{
+		LiteralTestStep: &api.LiteralTestStep{
+			As: "step-3",
+			Environment: []api.StepParameter{
+				{
+					Name:          "var2",
+					Documentation: "var2 documentation",
+				},
+			},
+		},
+	}
+
+	registrySteps := registry.ReferenceByName{
+		stepWithoutVars.As: *stepWithoutVars.LiteralTestStep,
+		step1.As:           *step1.LiteralTestStep,
+		step2.As:           *step2.LiteralTestStep,
+		step3.As:           *step3.LiteralTestStep,
+	}
+
+	stepPtr := func(name string) *api.LiteralTestStep {
+		if step, ok := registrySteps[name]; !ok {
+			t.Fatalf("TEST BUG: step '%s' not in test registry", name)
+			return nil
+		} else {
+			return &step
+		}
+	}
+
+	registryChains := registry.ChainByName{
+		"chain-with-step-1": api.RegistryChain{
+			As:    "chain-with-step-1",
+			Steps: []api.TestStep{{LiteralTestStep: stepPtr("step-1")}},
+		},
+		"chain-with-step1-and-step-2": api.RegistryChain{
+			As:    "chain-with-step-1",
+			Steps: []api.TestStep{{LiteralTestStep: stepPtr("step-1")}, {LiteralTestStep: stepPtr("step-2")}},
+		},
+		"chain-with-step1-and-step-2-and-step-3": api.RegistryChain{
+			As:    "chain-with-step-1",
+			Steps: []api.TestStep{{LiteralTestStep: stepPtr("step-1")}, {LiteralTestStep: stepPtr("step-2")}, {LiteralTestStep: stepPtr("step-3")}},
+		},
+	}
+
+	testCases := []struct {
+		description string
+		inputSteps  []api.TestStep
+
+		expected map[string]environmentLine
+	}{
+		{
+			description: "no input, no data",
+			expected:    map[string]environmentLine{},
+		},
+		{
+			description: "Chain with single step without vars, no data",
+			inputSteps:  []api.TestStep{stepWithoutVars},
+			expected:    map[string]environmentLine{},
+		},
+		{
+			description: "Chain with single step with value",
+			inputSteps:  []api.TestStep{{LiteralTestStep: stepPtr("step-1")}},
+			expected: map[string]environmentLine{
+				"var1": {
+					Documentation: "var1 documentation",
+					Default:       &defaultVal,
+					Steps:         []string{"step-1"},
+				},
+			},
+		},
+		{
+			description: "Chain with two steps with value",
+			inputSteps:  []api.TestStep{{LiteralTestStep: stepPtr("step-1")}, {LiteralTestStep: stepPtr("step-2")}},
+			expected: map[string]environmentLine{
+				"var1": {
+					Documentation: "var1 documentation",
+					Default:       &defaultVal,
+					Steps:         []string{"step-1"},
+				},
+				"var2": {
+					Documentation: "var2 documentation",
+					Steps:         []string{"step-2"},
+				},
+			},
+		},
+		{
+			description: "Chain with three steps with two steps having same value",
+			inputSteps:  []api.TestStep{{LiteralTestStep: stepPtr("step-1")}, {LiteralTestStep: stepPtr("step-2")}, {LiteralTestStep: stepPtr("step-3")}},
+			expected: map[string]environmentLine{
+				"var1": {
+					Documentation: "var1 documentation",
+					Default:       &defaultVal,
+					Steps:         []string{"step-1"},
+				},
+				"var2": {
+					Documentation: "var2 documentation",
+					Steps:         []string{"step-2", "step-3"},
+				},
+			},
+		},
+	}
+
+	t.Parallel()
+
+	for i := range testCases {
+		t.Run(testCases[i].description, func(t *testing.T) {
+			t.Parallel()
+			data := getEnvironmentDataItems(testCases[i].inputSteps, registrySteps, registryChains)
 			if diff := cmp.Diff(testCases[i].expected, data); diff != "" {
 				t.Errorf("%s: data differs from expected:\n%s", testCases[i].description, diff)
 			}

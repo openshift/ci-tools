@@ -482,6 +482,9 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			}
 			pod.Spec.DNSConfig.Nameservers = append(pod.Spec.DNSConfig.Nameservers, step.DNSConfig.Nameservers...)
 			pod.Spec.DNSConfig.Searches = append(pod.Spec.DNSConfig.Searches, step.DNSConfig.Searches...)
+			if len(pod.Spec.DNSConfig.Nameservers) > 0 {
+				pod.Spec.DNSPolicy = coreapi.DNSNone
+			}
 		}
 		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{Name: homeVolumeName, VolumeSource: coreapi.VolumeSource{EmptyDir: &coreapi.EmptyDirVolumeSource{}}})
 		pod.Spec.Volumes = append(pod.Spec.Volumes, secretVolumes...)

@@ -1358,6 +1358,54 @@ func TestConstructSecrets(t *testing.T) {
 			},
 		},
 		{
+			name: "Usersecret only for one cluster",
+			bwItems: []bitwarden.Item{{Name: "my/vault/secret", Fields: bwFieldsFromMap(map[string]string{
+				"secretsync/target-namespace": "some-namespace",
+				"secretsync/target-name":      "some-name",
+				"secretsync/target-clusters":  "a",
+				"some-data-key":               "a-secret",
+			})}},
+			config: secretbootstrap.Config{UserSecretsTargetClusters: []string{"a", "b"}},
+			expected: map[string][]*coreapi.Secret{
+				"a": {{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+					Type:       coreapi.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"some-data-key":                []byte("a-secret"),
+						"secretsync-vault-source-path": []byte("prefix/my/vault/secret"),
+					},
+				}},
+			},
+		},
+		{
+			name: "Usersecret for multiple but not all clusters",
+			bwItems: []bitwarden.Item{{Name: "my/vault/secret", Fields: bwFieldsFromMap(map[string]string{
+				"secretsync/target-namespace": "some-namespace",
+				"secretsync/target-name":      "some-name",
+				"secretsync/target-clusters":  "a,b",
+				"some-data-key":               "a-secret",
+			})}},
+			config: secretbootstrap.Config{UserSecretsTargetClusters: []string{"a", "b", "c", "d"}},
+			expected: map[string][]*coreapi.Secret{
+				"a": {{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+					Type:       coreapi.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"some-data-key":                []byte("a-secret"),
+						"secretsync-vault-source-path": []byte("prefix/my/vault/secret"),
+					},
+				}},
+				"b": {{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+					Type:       coreapi.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"some-data-key":                []byte("a-secret"),
+						"secretsync-vault-source-path": []byte("prefix/my/vault/secret"),
+					},
+				}},
+			},
+		},
+		{
 			name: "Secret gets combined from user- and dptp secret ",
 			bwItems: []bitwarden.Item{
 				{Name: "my/vault/secret", Fields: bwFieldsFromMap(map[string]string{

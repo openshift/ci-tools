@@ -527,13 +527,14 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 				// We mount them here to the test container.
 				container.VolumeMounts = append(container.VolumeMounts, clusterClaimMount...)
 			}
-		}
-		if s.profile != "" {
-			addProfile(s.profileSecretName(), s.profile, pod)
+		} else {
 			container.Env = append(container.Env, []coreapi.EnvVar{
 				{Name: "KUBECONFIG", Value: filepath.Join(SecretMountPath, "kubeconfig")},
 				{Name: "KUBEADMIN_PASSWORD_FILE", Value: filepath.Join(SecretMountPath, "kubeadmin-password")},
 			}...)
+		}
+		if s.profile != "" {
+			addProfile(s.profileSecretName(), s.profile, pod)
 		}
 		if step.Cli != "" {
 			addCliInjector(step.Cli, pod)

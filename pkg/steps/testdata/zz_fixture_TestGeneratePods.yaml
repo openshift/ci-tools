@@ -66,14 +66,14 @@
         value: release:latest
       - name: LEASED_RESOURCE
         value: uuid
-      - name: CLUSTER_TYPE
-        value: aws
-      - name: CLUSTER_PROFILE_DIR
-        value: /var/run/secrets/ci.openshift.io/cluster-profile
       - name: KUBECONFIG
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig
       - name: KUBEADMIN_PASSWORD_FILE
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeadmin-password
+      - name: CLUSTER_TYPE
+        value: aws
+      - name: CLUSTER_PROFILE_DIR
+        value: /var/run/secrets/ci.openshift.io/cluster-profile
       - name: SHARED_DIR
         value: /var/run/secrets/ci.openshift.io/multi-stage
       image: pipeline:src
@@ -222,14 +222,14 @@
         value: release:latest
       - name: LEASED_RESOURCE
         value: uuid
-      - name: CLUSTER_TYPE
-        value: aws
-      - name: CLUSTER_PROFILE_DIR
-        value: /var/run/secrets/ci.openshift.io/cluster-profile
       - name: KUBECONFIG
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig
       - name: KUBEADMIN_PASSWORD_FILE
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeadmin-password
+      - name: CLUSTER_TYPE
+        value: aws
+      - name: CLUSTER_PROFILE_DIR
+        value: /var/run/secrets/ci.openshift.io/cluster-profile
       - name: SHARED_DIR
         value: /var/run/secrets/ci.openshift.io/multi-stage
       image: stable:image1
@@ -377,14 +377,14 @@
         value: release:latest
       - name: LEASED_RESOURCE
         value: uuid
-      - name: CLUSTER_TYPE
-        value: aws
-      - name: CLUSTER_PROFILE_DIR
-        value: /var/run/secrets/ci.openshift.io/cluster-profile
       - name: KUBECONFIG
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig
       - name: KUBEADMIN_PASSWORD_FILE
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeadmin-password
+      - name: CLUSTER_TYPE
+        value: aws
+      - name: CLUSTER_PROFILE_DIR
+        value: /var/run/secrets/ci.openshift.io/cluster-profile
       - name: SHARED_DIR
         value: /var/run/secrets/ci.openshift.io/multi-stage
       image: stable-initial:installer
@@ -538,14 +538,14 @@
         value: release:latest
       - name: LEASED_RESOURCE
         value: uuid
-      - name: CLUSTER_TYPE
-        value: aws
-      - name: CLUSTER_PROFILE_DIR
-        value: /var/run/secrets/ci.openshift.io/cluster-profile
       - name: KUBECONFIG
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig
       - name: KUBEADMIN_PASSWORD_FILE
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeadmin-password
+      - name: CLUSTER_TYPE
+        value: aws
+      - name: CLUSTER_PROFILE_DIR
+        value: /var/run/secrets/ci.openshift.io/cluster-profile
       - name: SHARED_DIR
         value: /var/run/secrets/ci.openshift.io/multi-stage
       image: pipeline:src

@@ -193,7 +193,7 @@ func execCmd(argv []string) error {
 		for {
 			select {
 			case <-ctx.Done():
-				break
+				return
 			case s := <-sig:
 				fmt.Fprintf(os.Stderr, "received signal %d, forwarding\n", s)
 				if err := proc.Process.Signal(s); err != nil {

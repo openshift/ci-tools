@@ -277,7 +277,7 @@ func getResolvedConfigForTest(ciopConfig config.DataWithInfo, resolver registry.
 // target clusters where the rehearsals will execute).
 func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename, resolver registry.Resolver, metadata api.Metadata, testname string, loggers Loggers) (apihelper.ImageStreamTagMap, error) {
 	allImageStreamTags := apihelper.ImageStreamTagMap{}
-	if container.Command == nil || container.Command[0] != "ci-operator" {
+	if len(container.Command) < 1 || container.Command[0] != "ci-operator" {
 		return allImageStreamTags, nil
 	}
 

@@ -49,10 +49,7 @@ func TestReplaceCommand(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skipf("skipping test on %s OS", runtime.GOOS)
 	}
-	temp, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("Failed to create temporary directory for unit test: %v", err)
-	}
+	temp := t.TempDir()
 	if err := exec.Command("cp", "-a", "testdata/4.6", temp).Run(); err != nil {
 		t.Fatalf("Failed to copy testdata to tempdir: %v", err)
 	}

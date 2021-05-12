@@ -66,7 +66,7 @@ require (
 	k8s.io/test-infra v0.0.0-20210504134511-af1ac03335dc
 	k8s.io/utils v0.0.0-20210111153108-fddb29f9d009
 	sigs.k8s.io/boskos v0.0.0-20210210143059-9ac98d864d2a
-	sigs.k8s.io/controller-runtime v0.9.0-beta.1.0.20210505192915-d63cfdebd1a0
+	sigs.k8s.io/controller-runtime v0.9.0-beta.1.0.20210512131817-ce2f0c92d77e
 	sigs.k8s.io/controller-tools v0.3.0
 	sigs.k8s.io/yaml v1.2.0
 )

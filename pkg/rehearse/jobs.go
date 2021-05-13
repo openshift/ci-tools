@@ -155,6 +155,9 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	rehearsal.Labels[LabelContext] = shortName
 	rehearsal.Labels = utils.SanitizeLabels(rehearsal.Labels)
 
+	// rehearsals should not report anything via Slack etc
+	rehearsal.ReporterConfig = nil
+
 	return &rehearsal, nil
 }
 

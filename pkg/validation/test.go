@@ -307,6 +307,7 @@ func validateClusterProfile(fieldRoot string, p api.ClusterProfile) []error {
 		api.ClusterProfileLibvirtPpc64le,
 		api.ClusterProfileLibvirtS390x,
 		api.ClusterProfileOpenStack,
+		api.ClusterProfileOpenStackKuryr,
 		api.ClusterProfileOpenStackOsuosl,
 		api.ClusterProfileOpenStackVexxhost,
 		api.ClusterProfileOpenStackPpc64le,

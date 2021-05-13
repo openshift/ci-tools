@@ -974,6 +974,7 @@ const (
 	ClusterProfileLibvirtPpc64le     ClusterProfile = "libvirt-ppc64le"
 	ClusterProfileLibvirtS390x       ClusterProfile = "libvirt-s390x"
 	ClusterProfileOpenStack          ClusterProfile = "openstack"
+	ClusterProfileOpenStackKuryr     ClusterProfile = "openstack-kuryr"
 	ClusterProfileOpenStackOsuosl    ClusterProfile = "openstack-osuosl"
 	ClusterProfileOpenStackVexxhost  ClusterProfile = "openstack-vexxhost"
 	ClusterProfileOpenStackPpc64le   ClusterProfile = "openstack-ppc64le"
@@ -1008,6 +1009,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileLibvirtPpc64le,
 		ClusterProfileLibvirtS390x,
 		ClusterProfileOpenStack,
+		ClusterProfileOpenStackKuryr,
 		ClusterProfileOpenStackOsuosl,
 		ClusterProfileOpenStackVexxhost,
 		ClusterProfileOpenStackPpc64le,
@@ -1056,6 +1058,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "libvirt-s390x"
 	case ClusterProfileOpenStack:
 		return "openstack"
+	case ClusterProfileOpenStackKuryr:
+		return "openstack-kuryr"
 	case ClusterProfileOpenStackOsuosl:
 		return "openstack-osuosl"
 	case ClusterProfileOpenStackVexxhost:
@@ -1111,6 +1115,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "libvirt-s390x-quota-slice"
 	case ClusterProfileOpenStack:
 		return "openstack-quota-slice"
+	case ClusterProfileOpenStackKuryr:
+		return "openstack-kuryr-quota-slice"
 	case ClusterProfileOpenStackOsuosl:
 		return "openstack-osuosl-quota-slice"
 	case ClusterProfileOpenStackVexxhost:

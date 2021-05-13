@@ -424,29 +424,31 @@ and the repository exists.
 	}
 
 	for _, tc := range testCases {
-		if err := tc.privateGitRepo(); err != nil {
-			t.Fatalf("test id: %s: %v", tc.id, err)
-		}
+		t.Run(tc.id, func(t *testing.T) {
+			if err := tc.privateGitRepo(); err != nil {
+				t.Fatal(err)
+			}
 
-		if err := tc.publicGitRepo(); err != nil {
-			t.Fatalf("test id: %s: %v", tc.id, err)
-		}
+			if err := tc.publicGitRepo(); err != nil {
+				t.Fatal(err)
+			}
 
-		headCommitRef, err := s.mergeAndPushToRemote(privateOrg, privateRepo, publicOrg, publicRepo, tc.remoteResolver, tc.branch, false)
-		if err != nil && tc.errExpectedMsg == "" {
-			t.Fatalf("test id: %s\nerror not expected: %v", tc.id, err)
-		}
+			headCommitRef, err := s.mergeAndPushToRemote(privateOrg, privateRepo, publicOrg, publicRepo, tc.remoteResolver, tc.branch, false)
+			if err != nil && tc.errExpectedMsg == "" {
+				t.Fatalf("error not expected: %v", err)
+			}
 
-		if err != nil && !strings.HasPrefix(err.Error(), tc.errExpectedMsg) {
-			t.Fatal(cmp.Diff(err.Error(), tc.errExpectedMsg))
-		}
+			if err != nil && !strings.HasPrefix(err.Error(), tc.errExpectedMsg) {
+				t.Fatal(cmp.Diff(err.Error(), tc.errExpectedMsg))
+			}
 
-		if err == nil && len(headCommitRef) != 40 {
-			t.Fatalf("expected a head commit ref to be 40 chars long: %s", headCommitRef)
-		}
+			if err == nil && len(headCommitRef) != 40 {
+				t.Fatalf("expected a head commit ref to be 40 chars long: %s", headCommitRef)
+			}
 
-		if err := localgit.Clean(); err != nil {
-			t.Fatalf("couldn't clean temporary folders: %v", err)
-		}
+			if err := localgit.Clean(); err != nil {
+				t.Fatalf("couldn't clean temporary folders: %v", err)
+			}
+		})
 	}
 }

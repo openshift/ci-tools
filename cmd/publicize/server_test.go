@@ -3,10 +3,14 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"path"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
@@ -174,7 +178,42 @@ func TestCheckPrerequisites(t *testing.T) {
 func TestMergeAndPushToRemote(t *testing.T) {
 	publicOrg, publicRepo := "openshift", "test"
 	privateOrg, privateRepo := "openshift-priv", "test"
-
+	fixedTime := time.Now()
+	fixedTimeUnix := fixedTime.Unix()
+	makeRepo := func(localgit *localgit.LocalGit, org, repo string, init func() error) error {
+		if err := localgit.MakeFakeRepo(org, repo); err != nil {
+			return fmt.Errorf("couldn't create fake repo for %s/%s: %v", org, repo, err)
+		}
+		// The test relies on the repository created by MakeFakeRepo generating
+		// the same history across calls, which can only happen if time remains
+		// constant, as it is part of the Git commit hash.  We amend the initial
+		// file and commit with fixed dates to guarantee identical commits.
+		path := filepath.Join(localgit.Dir, org, repo)
+		initial := filepath.Join(path, "initial")
+		if err := os.Chtimes(initial, fixedTime, fixedTime); err != nil {
+			return err
+		}
+		cmd := exec.Command("git", "add", initial)
+		cmd.Dir = path
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to amend fake repository file at %q: %w, output:\n%s", path, err, out)
+		}
+		cmd = exec.Command("git", "commit", "--quiet", "--amend", "--reset-author", "--no-edit")
+		cmd.Dir = path
+		cmd.Env = append(
+			os.Environ(),
+			fmt.Sprintf("GIT_AUTHOR_DATE=%d", fixedTimeUnix),
+			fmt.Sprintf("GIT_COMMITTER_DATE=%d", fixedTimeUnix))
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to amend fake repository at %q: %w, output:\n%s", path, err, out)
+		}
+		if init != nil {
+			if err := init(); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	localgit, gc, err := localgit.NewV2()
 	if err != nil {
 		t.Fatalf("couldn't create localgit: %v", err)
@@ -200,18 +239,6 @@ func TestMergeAndPushToRemote(t *testing.T) {
 			remoteResolver: func() (string, error) {
 				return path.Join(localgit.Dir, privateOrg, privateRepo), nil
 			},
-			privateGitRepo: func() error {
-				if err := localgit.MakeFakeRepo(privateOrg, privateRepo); err != nil {
-					return fmt.Errorf("couldn't create fake repo: %v", err)
-				}
-				return nil
-			},
-			publicGitRepo: func() error {
-				if err := localgit.MakeFakeRepo(publicOrg, publicRepo); err != nil {
-					return fmt.Errorf("couldn't create fake repo: %v", err)
-				}
-				return nil
-			},
 			errExpectedMsg: "couldn't checkout to branch whatever: error checking out \"whatever\": exit status 1 error: pathspec 'whatever' did not match any file(s) known to git",
 		},
 		{
@@ -219,18 +246,6 @@ func TestMergeAndPushToRemote(t *testing.T) {
 			branch: "refs/heads/master",
 			remoteResolver: func() (string, error) {
 				return path.Join(localgit.Dir, "wrongOrg", "wrongRepo"), nil
-			},
-			privateGitRepo: func() error {
-				if err := localgit.MakeFakeRepo(privateOrg, privateRepo); err != nil {
-					return fmt.Errorf("couldn't create fake repo: %v", err)
-				}
-				return nil
-			},
-			publicGitRepo: func() error {
-				if err := localgit.MakeFakeRepo(publicOrg, publicRepo); err != nil {
-					return fmt.Errorf("couldn't create fake repo: %v", err)
-				}
-				return nil
 			},
 			errExpectedMsg: fmt.Sprintf(`couldn't fetch from the downstream repository: error fetching refs/heads/master from %s/wrongOrg/wrongRepo: exit status 128 fatal: '%s/wrongOrg/wrongRepo' does not appear to be a git repository
 fatal: Could not read from remote repository.
@@ -245,18 +260,6 @@ and the repository exists.
 			remoteResolver: func() (string, error) {
 				return path.Join(localgit.Dir, privateOrg, privateRepo), nil
 			},
-			privateGitRepo: func() error {
-				if err := localgit.MakeFakeRepo(privateOrg, privateRepo); err != nil {
-					return fmt.Errorf("couldn't create fake repo: %v", err)
-				}
-				return nil
-			},
-			publicGitRepo: func() error {
-				if err := localgit.MakeFakeRepo(publicOrg, publicRepo); err != nil {
-					return fmt.Errorf("couldn't create fake repo: %v", err)
-				}
-				return nil
-			},
 		},
 		{
 			id:     "one commit to publicize, no error expected",
@@ -265,19 +268,9 @@ and the repository exists.
 				return path.Join(localgit.Dir, privateOrg, privateRepo), nil
 			},
 			privateGitRepo: func() error {
-				if err := localgit.MakeFakeRepo(privateOrg, privateRepo); err != nil {
-					return fmt.Errorf("couldn't create fake repo: %v", err)
-				}
-
 				filesToCommit := map[string][]byte{"test-file": []byte("TEST")}
 				if err := localgit.AddCommit(privateOrg, privateRepo, filesToCommit); err != nil {
 					return fmt.Errorf("couldn't add commit: %v", err)
-				}
-				return nil
-			},
-			publicGitRepo: func() error {
-				if err := localgit.MakeFakeRepo(publicOrg, publicRepo); err != nil {
-					return fmt.Errorf("couldn't create fake repo: %v", err)
 				}
 				return nil
 			},
@@ -289,10 +282,6 @@ and the repository exists.
 				return path.Join(localgit.Dir, privateOrg, privateRepo), nil
 			},
 			privateGitRepo: func() error {
-				if err := localgit.MakeFakeRepo(privateOrg, privateRepo); err != nil {
-					return fmt.Errorf("couldn't create fake repo: %v", err)
-				}
-
 				filesToCommit := map[string][]byte{
 					"test-file":  []byte("TEST"),
 					"test-file2": []byte("TEST"),
@@ -300,12 +289,6 @@ and the repository exists.
 				}
 				if err := localgit.AddCommit(privateOrg, privateRepo, filesToCommit); err != nil {
 					return fmt.Errorf("couldn't add commit: %v", err)
-				}
-				return nil
-			},
-			publicGitRepo: func() error {
-				if err := localgit.MakeFakeRepo(publicOrg, publicRepo); err != nil {
-					return fmt.Errorf("couldn't create fake repo: %v", err)
 				}
 				return nil
 			},
@@ -317,10 +300,6 @@ and the repository exists.
 				return path.Join(localgit.Dir, privateOrg, privateRepo), nil
 			},
 			privateGitRepo: func() error {
-				if err := localgit.MakeFakeRepo(privateOrg, privateRepo); err != nil {
-					return fmt.Errorf("couldn't create fake repo: %v", err)
-				}
-
 				filesToCommit := map[string][]byte{
 					"test-file":  []byte("TEST"),
 					"test-file2": []byte("TEST"),
@@ -332,10 +311,6 @@ and the repository exists.
 				return nil
 			},
 			publicGitRepo: func() error {
-				if err := localgit.MakeFakeRepo(publicOrg, publicRepo); err != nil {
-					return fmt.Errorf("couldn't create fake repo: %v", err)
-				}
-
 				filesToCommit := map[string][]byte{
 					"test-file4": []byte("TEST"),
 					"test-file5": []byte("TEST"),
@@ -354,10 +329,6 @@ and the repository exists.
 				return path.Join(localgit.Dir, privateOrg, privateRepo), nil
 			},
 			privateGitRepo: func() error {
-				if err := localgit.MakeFakeRepo(privateOrg, privateRepo); err != nil {
-					return fmt.Errorf("couldn't create fake repo: %v", err)
-				}
-
 				filesToCommit := map[string][]byte{"test-file": []byte("CONFLICT")}
 				if err := localgit.AddCommit(privateOrg, privateRepo, filesToCommit); err != nil {
 					return fmt.Errorf("couldn't add commit: %v", err)
@@ -365,10 +336,6 @@ and the repository exists.
 				return nil
 			},
 			publicGitRepo: func() error {
-				if err := localgit.MakeFakeRepo(publicOrg, publicRepo); err != nil {
-					return fmt.Errorf("couldn't create fake repo: %v", err)
-				}
-
 				filesToCommit := map[string][]byte{"test-file": []byte("TEST")}
 				if err := localgit.AddCommit(publicOrg, publicRepo, filesToCommit); err != nil {
 					return fmt.Errorf("couldn't add commit: %v", err)
@@ -384,10 +351,6 @@ and the repository exists.
 				return path.Join(localgit.Dir, privateOrg, privateRepo), nil
 			},
 			privateGitRepo: func() error {
-				if err := localgit.MakeFakeRepo(privateOrg, privateRepo); err != nil {
-					return fmt.Errorf("couldn't create fake repo: %v", err)
-				}
-
 				filesToCommit := map[string][]byte{
 					"test-file":  []byte("CONFLICT"),
 					"test-file2": []byte("TEST"),
@@ -399,10 +362,6 @@ and the repository exists.
 				return nil
 			},
 			publicGitRepo: func() error {
-				if err := localgit.MakeFakeRepo(publicOrg, publicRepo); err != nil {
-					return fmt.Errorf("couldn't create fake repo: %v", err)
-				}
-
 				filesToCommit := map[string][]byte{
 					"test-file":  []byte("TEST"),
 					"test-file5": []byte("TEST"),
@@ -424,29 +383,29 @@ and the repository exists.
 	}
 
 	for _, tc := range testCases {
-		if err := tc.privateGitRepo(); err != nil {
-			t.Fatalf("test id: %s: %v", tc.id, err)
-		}
+		t.Run(tc.id, func(t *testing.T) {
+			if err := makeRepo(localgit, privateOrg, privateRepo, tc.privateGitRepo); err != nil {
+				t.Fatalf("couldn't create private fake repo: %v", err)
+			}
+			if err := makeRepo(localgit, publicOrg, publicRepo, tc.publicGitRepo); err != nil {
+				t.Fatalf("couldn't create public fake repo: %v", err)
+			}
+			headCommitRef, err := s.mergeAndPushToRemote(privateOrg, privateRepo, publicOrg, publicRepo, tc.remoteResolver, tc.branch, false)
+			if err != nil && tc.errExpectedMsg == "" {
+				t.Fatalf("error not expected: %v", err)
+			}
 
-		if err := tc.publicGitRepo(); err != nil {
-			t.Fatalf("test id: %s: %v", tc.id, err)
-		}
+			if err != nil && !strings.HasPrefix(err.Error(), tc.errExpectedMsg) {
+				t.Fatal(cmp.Diff(err.Error(), tc.errExpectedMsg))
+			}
 
-		headCommitRef, err := s.mergeAndPushToRemote(privateOrg, privateRepo, publicOrg, publicRepo, tc.remoteResolver, tc.branch, false)
-		if err != nil && tc.errExpectedMsg == "" {
-			t.Fatalf("test id: %s\nerror not expected: %v", tc.id, err)
-		}
+			if err == nil && len(headCommitRef) != 40 {
+				t.Fatalf("expected a head commit ref to be 40 chars long: %s", headCommitRef)
+			}
 
-		if err != nil && !strings.HasPrefix(err.Error(), tc.errExpectedMsg) {
-			t.Fatal(cmp.Diff(err.Error(), tc.errExpectedMsg))
-		}
-
-		if err == nil && len(headCommitRef) != 40 {
-			t.Fatalf("expected a head commit ref to be 40 chars long: %s", headCommitRef)
-		}
-
-		if err := localgit.Clean(); err != nil {
-			t.Fatalf("couldn't clean temporary folders: %v", err)
-		}
+			if err := localgit.Clean(); err != nil {
+				t.Fatalf("couldn't clean temporary folders: %v", err)
+			}
+		})
 	}
 }

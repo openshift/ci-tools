@@ -3,10 +3,14 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"path"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
@@ -174,9 +178,34 @@ func TestCheckPrerequisites(t *testing.T) {
 func TestMergeAndPushToRemote(t *testing.T) {
 	publicOrg, publicRepo := "openshift", "test"
 	privateOrg, privateRepo := "openshift-priv", "test"
+	fixedTime := time.Now()
+	fixedTimeUnix := fixedTime.Unix()
 	makeRepo := func(localgit *localgit.LocalGit, org, repo string, init func() error) error {
 		if err := localgit.MakeFakeRepo(org, repo); err != nil {
 			return fmt.Errorf("couldn't create fake repo for %s/%s: %v", org, repo, err)
+		}
+		// The test relies on the repository created by MakeFakeRepo generating
+		// the same history across calls, which can only happen if time remains
+		// constant, as it is part of the Git commit hash.  We amend the initial
+		// file and commit with fixed dates to guarantee identical commits.
+		path := filepath.Join(localgit.Dir, org, repo)
+		initial := filepath.Join(path, "initial")
+		if err := os.Chtimes(initial, fixedTime, fixedTime); err != nil {
+			return err
+		}
+		cmd := exec.Command("git", "add", initial)
+		cmd.Dir = path
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to amend fake repository file at %q: %w, output:\n%s", path, err, out)
+		}
+		cmd = exec.Command("git", "commit", "--quiet", "--amend", "--reset-author", "--no-edit")
+		cmd.Dir = path
+		cmd.Env = append(
+			os.Environ(),
+			fmt.Sprintf("GIT_AUTHOR_DATE=%d", fixedTimeUnix),
+			fmt.Sprintf("GIT_COMMITTER_DATE=%d", fixedTimeUnix))
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to amend fake repository at %q: %w, output:\n%s", path, err, out)
 		}
 		if init != nil {
 			if err := init(); err != nil {

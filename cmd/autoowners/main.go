@@ -13,6 +13,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/cmd/generic-autobumper/bumper"
 	"k8s.io/test-infra/prow/config/secret"
@@ -55,67 +56,74 @@ func (orgRepo orgRepo) repoString() string {
 }
 
 func loadRepos(configRootDir string, blocked blocklist, configSubDirs, extraDirs []string, githubOrg string, githubRepo string) ([]orgRepo, error) {
-	var orgRepos []orgRepo
-	configSubDirectories := make([]string, 0, len(configSubDirs))
+	orgRepos := map[string]*orgRepo{}
+	configSubDirectories := make([]string, 0, len(configSubDirs)+len(extraDirs))
 	for _, sourceSubDir := range configSubDirs {
 		configSubDirectories = append(configSubDirectories, filepath.Join(configRootDir, sourceSubDir))
 	}
 
-	orgDirs, err := ioutil.ReadDir(configSubDirectories[0])
-	if err != nil {
-		return nil, err
-	}
-	for _, orgDir := range orgDirs {
-		if !orgDir.IsDir() {
-			continue
-		}
-		logrus.WithField("orgDir.Name()", orgDir.Name()).Debug("loading orgDir ...")
-		org := filepath.Base(orgDir.Name())
-		if blocked.orgs.Has(org) {
-			logrus.WithField("org", org).Info("org is on organization blocklist, skipping")
-			continue
-		}
-		repoDirs, err := ioutil.ReadDir(filepath.Join(configSubDirectories[0], orgDir.Name()))
+	for _, subdirectory := range append(configSubDirectories, extraDirs...) {
+		orgDirs, err := ioutil.ReadDir(subdirectory)
 		if err != nil {
 			return nil, err
 		}
-		for _, repoDir := range repoDirs {
-			if !repoDir.IsDir() {
+		for _, orgDir := range orgDirs {
+			if !orgDir.IsDir() {
 				continue
 			}
-			repo := repoDir.Name()
-			if org == githubOrg && repo == githubRepo {
+			logrus.WithField("orgDir.Name()", orgDir.Name()).Debug("loading orgDir ...")
+			org := filepath.Base(orgDir.Name())
+			if blocked.orgs.Has(org) {
+				logrus.WithField("org", org).Info("org is on organization blocklist, skipping")
 				continue
 			}
-			var repoConfigDirs []string
-			for _, sourceSubDir := range configSubDirectories {
-				repoConfigDirs = append(repoConfigDirs, filepath.Join(sourceSubDir, org, repo))
+			repoDirs, err := ioutil.ReadDir(filepath.Join(subdirectory, orgDir.Name()))
+			if err != nil {
+				return nil, err
 			}
-			for _, extraDir := range extraDirs {
-				repoConfigDirs = append(repoConfigDirs, filepath.Join(extraDir, org, repo))
-			}
-			var dirs []string
-			for _, d := range repoConfigDirs {
-				fileInfo, err := os.Stat(d)
-				logrus.WithField("err", err).Debug("os.Stat(d): checking error ...")
-				if !os.IsNotExist(err) && fileInfo.IsDir() {
-					logrus.WithField("d", d).WithField("blocked-directories", blocked.directories).
-						Debug("trying to determine if the directory is in the repo blocklist")
-					if blocked.directories.Has(d) {
-						logrus.WithField("repository", d).Info("repository is on repository blocklist, skipping")
-						continue
-					}
-					dirs = append(dirs, d)
+			for _, repoDir := range repoDirs {
+				if !repoDir.IsDir() {
+					continue
 				}
+				repo := repoDir.Name()
+				if org == githubOrg && repo == githubRepo {
+					continue
+				}
+				var repoConfigDirs []string
+				for _, sourceSubDir := range configSubDirectories {
+					repoConfigDirs = append(repoConfigDirs, filepath.Join(sourceSubDir, org, repo))
+				}
+				for _, extraDir := range extraDirs {
+					repoConfigDirs = append(repoConfigDirs, filepath.Join(extraDir, org, repo))
+				}
+				var dirs []string
+				for _, d := range repoConfigDirs {
+					fileInfo, err := os.Stat(d)
+					logrus.WithField("err", err).Debug("os.Stat(d): checking error ...")
+					if !os.IsNotExist(err) && fileInfo.IsDir() {
+						logrus.WithField("d", d).WithField("blocked-directories", blocked.directories).
+							Debug("trying to determine if the directory is in the repo blocklist")
+						if blocked.directories.Has(d) {
+							logrus.WithField("repository", d).Info("repository is on repository blocklist, skipping")
+							continue
+						}
+						dirs = append(dirs, d)
+					}
+				}
+				if _, found := orgRepos[org+"/"+repo]; !found {
+					orgRepos[org+"/"+repo] = &orgRepo{Organization: org, Repository: repo}
+				}
+				orgRepos[org+"/"+repo].Directories = append(orgRepos[org+"/"+repo].Directories, dirs...)
 			}
-			orgRepos = append(orgRepos, orgRepo{
-				Directories:  dirs,
-				Organization: org,
-				Repository:   repo,
-			})
 		}
 	}
-	return orgRepos, err
+
+	var result []orgRepo
+	for _, orgRepo := range orgRepos {
+		orgRepo.Directories = sets.NewString(orgRepo.Directories...).List()
+		result = append(result, *orgRepo)
+	}
+	return result, nil
 }
 
 type httpResult struct {
@@ -262,12 +270,14 @@ func pullOwners(gc github.Client, configRootDir string, blocklist blocklist, con
 		return fmt.Errorf("failed to construct owners cleaner: %w", err)
 	}
 
+	var errs []error
 	for _, orgRepo := range orgRepos {
 		logrus.WithField("orgRepo", orgRepo.repoString()).Info("handling repo ...")
 		httpResult, err := getOwnersHTTP(gc, orgRepo, pc.OwnersFilenames(orgRepo.Organization, orgRepo.Repository))
 		if err != nil {
 			// TODO we might need to handle errors from `yaml.Unmarshal` if OWNERS is not a valid yaml file
-			return err
+			errs = append(errs, err)
+			continue
 		}
 		if !httpResult.ownersFileExists {
 			logrus.WithField("orgRepo", fmt.Sprintf("%s/%s", orgRepo.Organization, orgRepo.Repository)).
@@ -275,11 +285,11 @@ func pullOwners(gc github.Client, configRootDir string, blocklist blocklist, con
 			continue
 		}
 		if err := writeOwners(orgRepo, httpResult, cleaner); err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
 
-	return nil
+	return utilerrors.NewAggregate(errs)
 }
 
 type options struct {
@@ -413,7 +423,7 @@ func main() {
 	}
 
 	secretAgent := &secret.Agent{}
-	if err := secretAgent.Start([]string{o.GitHubOptions.TokenPath}); err != nil {
+	if err := secretAgent.Start(nil); err != nil {
 		logrus.WithError(err).Fatalf("Error starting secrets agent.")
 	}
 
@@ -430,6 +440,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("error getting GitHub client")
 	}
+	gc.SetMax404Retries(0)
 
 	logrus.Infof("Changing working directory to '%s' ...", o.targetDir)
 	if err := os.Chdir(o.targetDir); err != nil {

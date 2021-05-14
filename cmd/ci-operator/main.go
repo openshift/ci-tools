@@ -34,6 +34,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -404,6 +405,8 @@ type options struct {
 
 	hiveKubeconfigPath string
 	hiveKubeconfig     *rest.Config
+
+	multiStageParamOverrides stringSlice
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -464,6 +467,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.uploadSecretPath, "gcs-upload-secret", "", "GCS credentials used to upload logs and artifacts.")
 
 	flag.StringVar(&opt.hiveKubeconfigPath, "hive-kubeconfig", "", "Path to the kubeconfig file to use for requests to Hive.")
+
+	flag.Var(&opt.multiStageParamOverrides, "multi-stage-param", "A repeatable option where one or more environment parameters can be passed down to the multi-stage steps. This parameter should be in the format NAME=VAL. e.g --multi-stage-param PARAM1=VAL1 --multi-stage-param PARAM2=VAL2.")
 
 	opt.resultsOptions.Bind(flag)
 	return opt
@@ -651,6 +656,48 @@ func (o *options) Complete() error {
 			break
 		}
 	}
+
+	if err := overrideMultiStageParams(o); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func overrideMultiStageParams(o *options) error {
+	// see if there are any passed-in multi-stage parameters.
+	if len(o.multiStageParamOverrides.values) == 0 {
+		return nil
+	}
+	var validationErrors []error
+	multiStageParams := make(map[string]string)
+	for _, param := range o.multiStageParamOverrides.values {
+		paramNameAndVal := strings.Split(param, "=")
+		if len(paramNameAndVal) == 2 {
+			multiStageParams[strings.TrimSpace(paramNameAndVal[0])] = strings.TrimSpace(paramNameAndVal[1])
+		} else {
+			validationErrors = append(validationErrors, fmt.Errorf("could not parse multi-stage-param: %s is not in the format key=value", param))
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		return utilerrors.NewAggregate(validationErrors)
+	}
+
+	// for any multi-stage tests, go ahead and inject the passed-in parameters. Note that parameters explicitly passed
+	// in to ci-operator will take precedence.
+	for _, test := range o.configSpec.Tests {
+		if test.MultiStageTestConfigurationLiteral != nil {
+			if test.MultiStageTestConfigurationLiteral.Environment == nil {
+				test.MultiStageTestConfigurationLiteral.Environment = make(api.TestEnvironment)
+			}
+
+			for paramName, paramVal := range multiStageParams {
+				test.MultiStageTestConfigurationLiteral.Environment[paramName] = paramVal
+			}
+		}
+	}
+
 	return nil
 }
 

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -608,12 +609,33 @@ func TestLoadRepos(t *testing.T) {
 				},
 			},
 		},
+		{
+			TestDirectory: "testdata/test4/ci-operator",
+			ConfigSubDirs: []string{"jobs"},
+			ExtraDirs:     []string{"testdata/test4/core-services/prow/02_config"},
+			GitHubOrg:     "kubevirt",
+			GitHubRepo:    "project-infra",
+			ExpectedRepos: []orgRepo{
+				{
+					Directories:  []string{"testdata/test4/core-services/prow/02_config/kubevirt/kubevirt"},
+					Organization: "kubevirt",
+					Repository:   "kubevirt",
+				},
+			},
+		},
 	}
 	for _, data := range loadRepoTestData {
 		repos, err := loadRepos(data.TestDirectory, data.Blocklist, data.ConfigSubDirs, data.ExtraDirs, data.GitHubOrg, data.GitHubRepo)
 		if err != nil {
 			t.Fatalf("%s: failed to load repos: %v", data.TestDirectory, err)
 		}
-		assertEqual(t, repos, data.ExpectedRepos)
+		if diff := cmp.Diff(repos, data.ExpectedRepos, cmp.AllowUnexported(httpResult{}),
+			cmpopts.SortSlices(func(a, b orgRepo) bool {
+				return fmt.Sprintf("%+v", a) < fmt.Sprintf("%+v", b)
+			}),
+			cmpopts.SortSlices(func(a, b string) bool { return a < b }),
+		); diff != "" {
+			t.Errorf("expected differs from actual: %s", diff)
+		}
 	}
 }

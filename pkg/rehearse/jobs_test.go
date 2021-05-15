@@ -385,6 +385,12 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 	}
 	hiddenPresubmit.Hidden = true
 
+	reportingPresubmit := &prowconfig.Presubmit{}
+	if err := deepcopy.Copy(reportingPresubmit, sourcePresubmit); err != nil {
+		t.Fatalf("deepcopy failed: %v", err)
+	}
+	reportingPresubmit.ReporterConfig = &pjapi.ReporterConfig{Slack: &pjapi.SlackReporterConfig{}}
+
 	testCases := []struct {
 		testID   string
 		refs     *pjapi.Refs
@@ -414,6 +420,11 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 			testID:   "job that belong to the same org but different repo than refs",
 			refs:     &pjapi.Refs{Org: "org", Repo: "anotherRepo"},
 			original: sourcePresubmit,
+		},
+		{
+			testID:   "reporting configuration is stripped from rehearsals to avoid polluting",
+			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo"},
+			original: reportingPresubmit,
 		},
 	}
 

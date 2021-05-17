@@ -172,11 +172,13 @@ CLUSTER ?= build01
 # Dependencies required to execute the E2E tests outside of the CI environment.
 local-e2e: \
 	$(TMPDIR)/.ci-operator-kubeconfig \
+	$(TMPDIR)/hive-kubeconfig \
 	$(TMPDIR)/local-secret/.dockerconfigjson \
 	$(TMPDIR)/remote-secret/.dockerconfigjson \
 	$(TMPDIR)/gcs/service-account.json \
 	$(TMPDIR)/boskos
 	$(eval export KUBECONFIG=$(TMPDIR)/.ci-operator-kubeconfig)
+	$(eval export HIVE_KUBECONFIG=$(TMPDIR)/hive-kubeconfig)
 	$(eval export LOCAL_REGISTRY_SECRET_DIR=$(TMPDIR)/local-secret)
 	$(eval export REMOTE_REGISTRY_SECRET_DIR=$(TMPDIR)/remote-secret)
 	$(eval export GCS_CREDENTIALS_FILE=$(TMPDIR)/gcs/service-account.json)
@@ -249,6 +251,9 @@ validate-registry-metadata:
 
 $(TMPDIR)/.ci-operator-kubeconfig:
 	oc --context $(CLUSTER) --as system:admin --namespace ci serviceaccounts create-kubeconfig ci-operator > $(TMPDIR)/.ci-operator-kubeconfig
+
+$(TMPDIR)/hive-kubeconfig:
+	oc --context $(CLUSTER) --as system:admin --namespace test-credentials get secret app.ci-hive-credentials -o 'jsonpath={.data.kubeconfig}' | base64 --decode > "$@"
 
 $(TMPDIR)/local-secret/.dockerconfigjson:
 	mkdir -p $(TMPDIR)/local-secret

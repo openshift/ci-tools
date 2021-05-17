@@ -81,45 +81,13 @@ func TestValidateOptions(t *testing.T) {
 		expected error
 	}{
 		{
-			name: "basic case",
-			given: options{
-				logLevel:   "info",
-				configPath: "/tmp/config",
-				secrets: secrets.CLIOptions{
-					BwUser:         "username",
-					BwPasswordPath: "/tmp/bw-password",
-				},
-			},
-		},
-		{
-			name: "empty bw user",
-			given: options{
-				logLevel:   "info",
-				configPath: "/tmp/config",
-				secrets: secrets.CLIOptions{
-					BwPasswordPath: "/tmp/bw-password",
-				},
-			},
-			expected: fmt.Errorf("[--bw-user and --bw-password-path must be specified together, must specify credentials for exactly one of vault or bitwarden, got credentials for: []]"),
-		},
-		{
-			name: "empty bw user password path",
-			given: options{
-				logLevel:   "info",
-				configPath: "/tmp/config",
-				secrets: secrets.CLIOptions{
-					BwUser: "username",
-				},
-			},
-			expected: fmt.Errorf("[--bw-user and --bw-password-path must be specified together, must specify credentials for exactly one of vault or bitwarden, got credentials for: []]"),
-		},
-		{
 			name: "empty config path",
 			given: options{
 				logLevel: "info",
 				secrets: secrets.CLIOptions{
-					BwUser:         "username",
-					BwPasswordPath: "/tmp/bw-password",
+					VaultAddr:      "https://vault.test",
+					VaultPrefix:    "prefix",
+					VaultTokenFile: "/tmp/vault-token",
 				},
 			},
 			expected: fmt.Errorf("--config is required"),

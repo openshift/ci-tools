@@ -104,7 +104,7 @@ func (o *options) validateOptions() error {
 		errs = append(errs, fmt.Errorf("invalid log level specified: %w", err))
 	}
 	logrus.SetLevel(level)
-	errs = append(errs, o.secrets.Validate()...)
+	errs = append(errs, o.secrets.Validate())
 	if o.configPath == "" {
 		errs = append(errs, errors.New("--config is required"))
 	}

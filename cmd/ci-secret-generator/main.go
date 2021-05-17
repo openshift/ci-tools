@@ -65,7 +65,7 @@ func (o *options) validateOptions() error {
 	logrus.SetLevel(level)
 	if !o.dryRun {
 		if err := o.secrets.Validate(); err != nil {
-			return utilerrors.NewAggregate(err)
+			return err
 		}
 	}
 	if o.configPath == "" {

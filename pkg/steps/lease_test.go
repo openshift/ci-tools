@@ -149,12 +149,12 @@ func TestError(t *testing.T) {
 	}{{
 		name:            "first acquire fails",
 		failures:        sets.NewString("acquire owner rtype0 free leased random"),
-		expectedReasons: []string{"utilizing_lease:acquiring_lease:rtype0"},
+		expectedReasons: []string{"utilizing_lease:acquiring_lease"},
 		expected:        []string{"acquire owner rtype0 free leased random"},
 	}, {
 		name:            "second acquire fails",
 		failures:        sets.NewString("acquire owner rtype1 free leased random"),
-		expectedReasons: []string{"utilizing_lease:acquiring_lease:rtype1"},
+		expectedReasons: []string{"utilizing_lease:acquiring_lease"},
 		expected: []string{
 			"acquire owner rtype0 free leased random",
 			"acquire owner rtype1 free leased random",

@@ -2,7 +2,10 @@ package results
 
 import (
 	"errors"
+	"fmt"
 	"testing"
+
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -52,4 +55,118 @@ func TestComplexError(t *testing.T) {
 
 	err := run()
 	testhelper.Diff(t, "reason for top-level error", FullReason(err), "higher_level_thing:root_thing")
+}
+
+func TestReasons(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		err      error
+		expected []string
+	}{{
+		name: "regular error",
+		err:  errors.New("regular"),
+	}, {
+		name: "single reason",
+		err: &Error{
+			reason:  "reason",
+			message: "msg",
+			wrapped: errors.New("error"),
+		},
+		expected: []string{"reason"},
+	}, {
+		name: "child reason",
+		err: fmt.Errorf("wrapped: %w", &Error{
+			reason:  "reason",
+			message: "msg",
+			wrapped: errors.New("error"),
+		}),
+		expected: []string{"reason"},
+	}, {
+		name: "reason aggregate",
+		err: utilerrors.NewAggregate([]error{
+			&Error{reason: "reason0", message: "msg0"},
+			&Error{reason: "reason1", message: "msg1"},
+			&Error{reason: "reason2", message: "msg2"},
+		}),
+		expected: []string{"reason0", "reason1", "reason2"},
+	}, {
+		name: "reason with aggregate",
+		err: &Error{
+			reason:  "reason",
+			message: "msg",
+			wrapped: utilerrors.NewAggregate([]error{
+				errors.New("aggregate0"),
+				errors.New("aggregate1"),
+				errors.New("aggregate2"),
+			}),
+		},
+		expected: []string{"reason"},
+	}, {
+		name: "reasons with intermediate errors",
+		err: &Error{
+			reason:  "top_reason",
+			message: "top msg",
+			wrapped: fmt.Errorf(
+				"intermediate0: %w",
+				fmt.Errorf(
+					"intermediate1: %w",
+					&Error{
+						reason:  "bottom_reason",
+						message: "bottom msg",
+						wrapped: errors.New("bottom err"),
+					},
+				),
+			),
+		},
+		expected: []string{"top_reason:bottom_reason"},
+	}, {
+		name: "error tree",
+		err: fmt.Errorf("root: %w", &Error{
+			reason:  "top_reason",
+			message: "top msg",
+			wrapped: utilerrors.NewAggregate([]error{
+				errors.New("regular0"),
+				utilerrors.NewAggregate([]error{
+					errors.New("regular1"),
+					errors.New("regular2"),
+				}),
+				&Error{
+					reason:  "middle_reason0",
+					message: "middle msg0",
+					wrapped: utilerrors.NewAggregate([]error{
+						&Error{
+							reason:  "bottom_reason0",
+							message: "bottom msg0",
+							wrapped: errors.New("bottom err0"),
+						},
+						&Error{
+							reason:  "bottom_reason1",
+							message: "bottom msg0",
+							wrapped: errors.New("bottom err1"),
+						},
+					}),
+				},
+				&Error{
+					reason:  "middle_reason1",
+					message: "middle msg1",
+					wrapped: utilerrors.NewAggregate([]error{
+						&Error{
+							reason:  "bottom_reason2",
+							message: "bottom msg2",
+							wrapped: errors.New("bottom err2"),
+						},
+					}),
+				},
+			}),
+		}),
+		expected: []string{
+			"top_reason:middle_reason0:bottom_reason0",
+			"top_reason:middle_reason0:bottom_reason1",
+			"top_reason:middle_reason1:bottom_reason2",
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			testhelper.Diff(t, "reasons", Reasons(tc.err), tc.expected)
+		})
+	}
 }

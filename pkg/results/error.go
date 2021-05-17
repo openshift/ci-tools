@@ -52,6 +52,32 @@ func FullReason(err error) string {
 	return reasonedError.FullReason()
 }
 
+// Reasons provides the chains of error reasons.
+// Each item in the return value is a single chain divided by colons.  Aggregate
+// errors — those whose type provides an `Errors` method returning a list of
+// errors — are recursively expanded, generating a separate chain for each
+// child.
+func Reasons(errs ...error) (ret []string) {
+	for _, err := range errs {
+		switch err := err.(type) {
+		case *Error:
+			children := Reasons(err.Unwrap())
+			if len(children) == 0 {
+				ret = append(ret, string(err.reason))
+				break
+			}
+			for _, r := range children {
+				ret = append(ret, fmt.Sprintf("%s:%s", err.reason, r))
+			}
+		case interface{ Errors() []error }:
+			ret = append(ret, Reasons(err.Errors()...)...)
+		case interface{ Unwrap() error }:
+			ret = append(ret, Reasons(err.Unwrap())...)
+		}
+	}
+	return
+}
+
 // BuilderWithReason starts the builder chain
 type BuilderWithReason struct {
 	Error

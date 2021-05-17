@@ -21,7 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
@@ -1591,6 +1590,32 @@ func TestUpdateSecrets(t *testing.T) {
 		expectedSecretsOnBuild01 []coreapi.Secret
 	}{
 		{
+			name: "namespace is created when it does not exist",
+			secretsMap: map[string][]*coreapi.Secret{
+				"default": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "prod-secret-1",
+							Namespace: "create-this-namespace",
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
+						},
+						Data: map[string][]byte{"secret": []byte("value")},
+					},
+				},
+			},
+			force: true,
+			expectedSecretsOnDefault: []coreapi.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "prod-secret-1",
+						Namespace: "create-this-namespace",
+						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
+					},
+					Data: map[string][]byte{"secret": []byte("value")},
+				},
+			},
+		},
+		{
 			name: "basic case with force",
 			existSecretsOnDefault: []runtime.Object{
 				&coreapi.Secret{
@@ -1984,7 +2009,7 @@ func TestUpdateSecrets(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fkcDefault := fake.NewSimpleClientset(tc.existSecretsOnDefault...)
 			fkcBuild01 := fake.NewSimpleClientset(tc.existSecretsOnBuild01...)
-			clients := map[string]coreclientset.SecretsGetter{
+			clients := map[string]Getter{
 				"default": fkcDefault.CoreV1(),
 				"build01": fkcBuild01.CoreV1(),
 			}

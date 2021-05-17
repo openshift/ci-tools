@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -17,6 +18,61 @@ type VaultClient interface {
 	GetKV(path string) (*vaultclient.KVData, error)
 	ListKVRecursively(path string) ([]string, error)
 	UpsertKV(path string, data map[string]string) error
+}
+
+type dryRunClient struct {
+	file *os.File
+}
+
+func (d dryRunClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {
+	_, err := fmt.Fprintf(d.file, "ItemName: %s\n\tField: \n\t\t %s: %s\n", itemName, fieldName, string(fieldValue))
+	return err
+}
+
+func (d dryRunClient) SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) error {
+	_, err := fmt.Fprintf(d.file, "ItemName: %s\n\tAttachment: \n\t\t %s: %s\n", itemName, attachmentName, string(fileContents))
+	return err
+}
+
+func (d dryRunClient) SetPassword(itemName string, password []byte) error {
+	_, err := fmt.Fprintf(d.file, "ItemName: %s\n\tAttribute: \n\t\t Password: %s\n", itemName, string(password))
+	return err
+}
+
+func (d dryRunClient) UpdateNotesOnItem(itemName, notes string) error {
+	_, err := fmt.Fprintf(d.file, "ItemName: %s\n\tNotes: %s\n", itemName, notes)
+	return err
+}
+
+func (d dryRunClient) GetAttachmentOnItem(_, _ string) ([]byte, error) {
+	return nil, nil
+}
+func (d dryRunClient) GetFieldOnItem(_, _ string) ([]byte, error) {
+	return nil, nil
+}
+
+func (d dryRunClient) GetInUseInformationForAllItems(_ string) (map[string]SecretUsageComparer, error) {
+	return nil, nil
+}
+func (d dryRunClient) GetPassword(_ string) ([]byte, error) {
+	return nil, nil
+}
+func (d dryRunClient) GetUserSecrets() (map[types.NamespacedName]map[string]string, error) {
+	return nil, nil
+}
+
+func (d dryRunClient) HasItem(itemname string) (bool, error) {
+	return false, nil
+}
+
+func (d dryRunClient) Logout() ([]byte, error) {
+	return nil, nil
+}
+
+func NewDryRunClient(outputFile *os.File) Client {
+	return dryRunClient{
+		file: outputFile,
+	}
 }
 
 type vaultClient struct {

@@ -283,10 +283,7 @@ func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 				return append(errs, fmt.Errorf("failed to open output file %q: %w", o.outputFile, err))
 			}
 		}
-		client, err = secrets.NewDryRunClient(f)
-		if err != nil {
-			return append(errs, fmt.Errorf("failed to create dry-run mode client: %w", err))
-		}
+		client = secrets.NewDryRunClient(f)
 	} else {
 		var err error
 		client, err = o.secrets.NewClient(censor)

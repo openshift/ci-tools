@@ -152,7 +152,7 @@ func (c *CiOperatorCommand) VerboseOutputContains(t *T, name string, fragments .
 	}
 	for _, item := range fragments {
 		if !bytes.Contains(verboseOutput, []byte(item)) {
-			t.Errorf("%s: could not find line %q in output; output:\n%v", name, item, string(verboseOutput))
+			t.Errorf("%s: could not find line in output\nline: %s\noutput:\n%v", name, item, string(verboseOutput))
 		}
 	}
 }

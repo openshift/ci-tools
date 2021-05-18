@@ -33,25 +33,6 @@ func (e *Error) Is(target error) bool {
 	return is
 }
 
-// FullReason provides the chain of error reasons, divided by colons
-func (e *Error) FullReason() string {
-	reasonedError := &Error{}
-	if !errors.As(e.wrapped, &reasonedError) {
-		return string(e.reason)
-	}
-	return fmt.Sprintf("%s:%s", e.reason, reasonedError.FullReason())
-}
-
-// FullReason attempts to get the full reason from an error, or uses
-// unknown when it's not something we can do
-func FullReason(err error) string {
-	reasonedError := &Error{}
-	if !errors.As(err, &reasonedError) {
-		return string(ReasonUnknown)
-	}
-	return reasonedError.FullReason()
-}
-
 // Reasons provides the chains of error reasons.
 // Each item in the return value is a single chain divided by colons.  Aggregate
 // errors — those whose type provides an `Errors` method returning a list of

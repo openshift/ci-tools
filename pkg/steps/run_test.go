@@ -300,11 +300,17 @@ func TestStepsRun(t *testing.T) {
 
 			var expectedErrorsString []string
 			for _, e := range tc.errExpected {
-				expectedErrorsString = append(expectedErrorsString, fmt.Sprintf("%s: %s", e.(*results.Error).FullReason(), e.Error()))
+				s := e.Error()
+				for _, r := range results.Reasons(e) {
+					expectedErrorsString = append(expectedErrorsString, fmt.Sprintf("%s: %s", r, s))
+				}
 			}
 			var actualErrorsString []string
 			for _, e := range errs {
-				actualErrorsString = append(actualErrorsString, fmt.Sprintf("%s: %s", e.(*results.Error).FullReason(), e.Error()))
+				s := e.Error()
+				for _, r := range results.Reasons(e) {
+					actualErrorsString = append(actualErrorsString, fmt.Sprintf("%s: %s", r, s))
+				}
 			}
 			sort.Strings(expectedErrorsString)
 			sort.Strings(actualErrorsString)

@@ -12,15 +12,15 @@ import (
 
 func TestError(t *testing.T) {
 	base := errors.New("failure")
-	testhelper.Diff(t, "reason for base error", FullReason(base), "unknown")
+	testhelper.Diff(t, "reasons for base error", Reasons(base), []string(nil))
 	initial := ForReason("oops").WithError(base).Errorf("couldn't do it")
-	testhelper.Diff(t, "reason for initial error", FullReason(initial), "oops")
+	testhelper.Diff(t, "reasons for initial error", Reasons(initial), []string{"oops"})
 	second := ForReason("whoopsie").WithError(initial).Errorf("couldn't do it")
-	testhelper.Diff(t, "reason for second error", FullReason(second), "whoopsie:oops")
+	testhelper.Diff(t, "reasons for second error", Reasons(second), []string{"whoopsie:oops"})
 	third := ForReason("argh").WithError(second).Errorf("couldn't do it")
-	testhelper.Diff(t, "reason for third error", FullReason(third), "argh:whoopsie:oops")
+	testhelper.Diff(t, "reasons for third error", Reasons(third), []string{"argh:whoopsie:oops"})
 	simple := ForReason("simple").ForError(base)
-	testhelper.Diff(t, "reason for simple error", FullReason(simple), "simple")
+	testhelper.Diff(t, "reasons for simple error", Reasons(simple), []string{"simple"})
 
 	none := ForReason("fake").ForError(nil)
 	if none != nil {
@@ -32,9 +32,9 @@ func TestError(t *testing.T) {
 		t.Errorf("expected a wrapped nil error to be nil, got %v", alsoNone)
 	}
 	withDefault := DefaultReason(base)
-	testhelper.Diff(t, "reason for defaulted error", FullReason(withDefault), "unknown")
+	testhelper.Diff(t, "reasons for defaulted error", Reasons(withDefault), []string{"unknown"})
 	unchanged := DefaultReason(initial)
-	testhelper.Diff(t, "reason for unchanged error", FullReason(unchanged), "oops")
+	testhelper.Diff(t, "reasons for unchanged error", Reasons(unchanged), []string{"oops"})
 }
 
 func TestComplexError(t *testing.T) {
@@ -54,7 +54,7 @@ func TestComplexError(t *testing.T) {
 	}
 
 	err := run()
-	testhelper.Diff(t, "reason for top-level error", FullReason(err), "higher_level_thing:root_thing")
+	testhelper.Diff(t, "reasons for top-level error", Reasons(err), []string{"higher_level_thing:root_thing"})
 }
 
 func TestReasons(t *testing.T) {

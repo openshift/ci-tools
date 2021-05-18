@@ -155,7 +155,7 @@ func acquireLeases(
 			if err == lease.ErrNotFound {
 				printResourceMetrics(client, l.ResourceType)
 			}
-			errs = append(errs, results.ForReason(results.Reason("acquiring_lease:"+l.ResourceType)).WithError(err).Errorf("failed to acquire lease: %v", err))
+			errs = append(errs, results.ForReason(results.Reason("acquiring_lease")).WithError(err).Errorf("failed to acquire lease for %q: %v", l.ResourceType, err))
 			break
 		}
 		logrus.Infof("Acquired %d lease(s) for %s: %v", l.Count, l.ResourceType, names)

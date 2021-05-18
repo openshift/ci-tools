@@ -173,3 +173,10 @@ func cleanRVAndTypeMeta(r runtime.Object) {
 		typeObject.SetGroupVersionKind(schema.GroupVersionKind{})
 	}
 }
+
+func Diff(t *testing.T, name string, x, y interface{}, opts ...cmp.Option) {
+	t.Helper()
+	if diff := cmp.Diff(x, y, opts...); diff != "" {
+		t.Errorf("unexpected %s: %s", name, diff)
+	}
+}

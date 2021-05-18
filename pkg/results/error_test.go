@@ -3,30 +3,21 @@ package results
 import (
 	"errors"
 	"testing"
+
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestError(t *testing.T) {
 	base := errors.New("failure")
-	if actual, expected := FullReason(base), "unknown"; actual != expected {
-		t.Errorf("got incorrect reason for base error; expected %s, got %v", expected, actual)
-	}
+	testhelper.Diff(t, "reason for base error", FullReason(base), "unknown")
 	initial := ForReason("oops").WithError(base).Errorf("couldn't do it")
-	if actual, expected := FullReason(initial), "oops"; actual != expected {
-		t.Errorf("got incorrect reason for initial error; expected %s, got %v", expected, actual)
-	}
+	testhelper.Diff(t, "reason for initial error", FullReason(initial), "oops")
 	second := ForReason("whoopsie").WithError(initial).Errorf("couldn't do it")
-	if actual, expected := FullReason(second), "whoopsie:oops"; actual != expected {
-		t.Errorf("got incorrect reason for second error; expected %s, got %v", expected, actual)
-	}
+	testhelper.Diff(t, "reason for second error", FullReason(second), "whoopsie:oops")
 	third := ForReason("argh").WithError(second).Errorf("couldn't do it")
-	if actual, expected := FullReason(third), "argh:whoopsie:oops"; actual != expected {
-		t.Errorf("got incorrect reason for third error; expected %s, got %v", expected, actual)
-	}
-
+	testhelper.Diff(t, "reason for third error", FullReason(third), "argh:whoopsie:oops")
 	simple := ForReason("simple").ForError(base)
-	if actual, expected := FullReason(simple), "simple"; actual != expected {
-		t.Errorf("got incorrect reason for simple error; expected %s, got %v", expected, actual)
-	}
+	testhelper.Diff(t, "reason for simple error", FullReason(simple), "simple")
 
 	none := ForReason("fake").ForError(nil)
 	if none != nil {
@@ -38,13 +29,9 @@ func TestError(t *testing.T) {
 		t.Errorf("expected a wrapped nil error to be nil, got %v", alsoNone)
 	}
 	withDefault := DefaultReason(base)
-	if actual, expected := FullReason(withDefault), "unknown"; actual != expected {
-		t.Errorf("got incorrect reason for defaulted error; expected %s, got %v", expected, actual)
-	}
+	testhelper.Diff(t, "reason for defaulted error", FullReason(withDefault), "unknown")
 	unchanged := DefaultReason(initial)
-	if actual, expected := FullReason(unchanged), "oops"; actual != expected {
-		t.Errorf("got incorrect reason for unchanged error; expected %s, got %v", expected, actual)
-	}
+	testhelper.Diff(t, "reason for unchanged error", FullReason(unchanged), "oops")
 }
 
 func TestComplexError(t *testing.T) {
@@ -64,7 +51,5 @@ func TestComplexError(t *testing.T) {
 	}
 
 	err := run()
-	if actual, expected := FullReason(err), "higher_level_thing:root_thing"; actual != expected {
-		t.Errorf("got incorrect reason for top-level error; expected %s, got %v", expected, actual)
-	}
+	testhelper.Diff(t, "reason for top-level error", FullReason(err), "higher_level_thing:root_thing")
 }

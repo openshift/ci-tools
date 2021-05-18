@@ -387,9 +387,7 @@ func TestErrWroteJUnit(t *testing.T) {
 	if !errors.Is(defaulted, &errWroteJUnit{}) {
 		t.Error("expected the top-level error to still expose that we wrote jUnit")
 	}
-	if results.FullReason(defaulted) != "something" {
-		t.Errorf(`expected full reason for error to be "something", but got %q"`, results.FullReason(defaulted))
-	}
+	testhelper.Diff(t, "full reason", results.FullReason(defaulted), "something")
 }
 
 func TestBuildPartialGraph(t *testing.T) {

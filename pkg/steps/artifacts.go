@@ -207,6 +207,55 @@ func (c podClient) WithNewLoggingClient() PodClient {
 	}
 }
 
+type evaluator func(obj runtime.Object) (bool, error)
+
+// waitForConditionOnObject uses a watch to wait for a condition to be true on an object.
+// When the condition is satisfied or the timeout expires, the object is returned along
+// with any errors encountered.
+func waitForConditionOnObject(ctx context.Context, client ctrlruntimeclient.WithWatch, identifier ctrlruntimeclient.ObjectKey, list ctrlruntimeclient.ObjectList, into ctrlruntimeclient.Object, evaluate evaluator, timeout time.Duration) error {
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (object runtime.Object, e error) {
+			options.FieldSelector = fields.OneTermEqualSelector("metadata.name", identifier.Name).String()
+			res := list
+			return res, client.List(ctx, res, &ctrlruntimeclient.ListOptions{Namespace: identifier.Namespace, Raw: &options})
+		},
+		WatchFunc: func(options metav1.ListOptions) (i watch.Interface, e error) {
+			opts := &ctrlruntimeclient.ListOptions{
+				Namespace:     identifier.Namespace,
+				FieldSelector: fields.OneTermEqualSelector("metadata.name", identifier.Name),
+				Raw:           &options,
+			}
+			res := list
+			return client.Watch(ctx, res, opts)
+		},
+	}
+
+	// objects in this call here are always expected to exist in advance
+	var existsPrecondition toolswatch.PreconditionFunc
+
+	waitForObjectStatus := func(event watch.Event) (bool, error) {
+		if event.Type == watch.Deleted {
+			return false, fmt.Errorf("%s was deleted", identifier.String())
+		}
+		// the outer library will handle errors, we have no pod data to review in this case
+		if event.Type != watch.Added && event.Type != watch.Modified {
+			return false, nil
+		}
+		return evaluate(event.Object)
+	}
+
+	waitTimeout, cancel := toolswatch.ContextWithOptionalTimeout(ctx, timeout)
+	defer cancel()
+	_, syncErr := toolswatch.UntilWithSync(waitTimeout, lw, into, existsPrecondition, waitForObjectStatus)
+
+	// Hack to make sure this ends up in the logging client
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: identifier.Namespace, Name: identifier.Name}, into); err != nil {
+		logrus.WithError(err).Warn("failed to get object after finishing watch")
+	}
+
+	return syncErr
+}
+
 func waitForContainer(podClient PodClient, ns, name, containerName string) error {
 	logrus.WithFields(logrus.Fields{
 		"namespace": ns,
@@ -216,34 +265,8 @@ func waitForContainer(podClient PodClient, ns, name, containerName string) error
 
 	ctx := context.TODO()
 
-	lw := &cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (object runtime.Object, e error) {
-			options.FieldSelector = fields.OneTermEqualSelector("metadata.name", name).String()
-			res := &corev1.PodList{}
-			return res, podClient.List(ctx, res, &ctrlruntimeclient.ListOptions{Namespace: ns, Raw: &options})
-		},
-		WatchFunc: func(options metav1.ListOptions) (i watch.Interface, e error) {
-			opts := &ctrlruntimeclient.ListOptions{
-				Namespace:     ns,
-				FieldSelector: fields.OneTermEqualSelector("metadata.name", name),
-				Raw:           &options,
-			}
-			return podClient.Watch(ctx, &corev1.PodList{}, opts)
-		},
-	}
-
-	// pods in this call here are always expected to exist in advance
-	var podExistsPrecondition toolswatch.PreconditionFunc
-
-	waitForContainerStatus := func(event watch.Event) (bool, error) {
-		if event.Type == watch.Deleted {
-			return false, fmt.Errorf("pod/%v ns/%v was deleted", name, ns)
-		}
-		// the outer library will handle errors, we have no pod data to review in this case
-		if event.Type != watch.Added && event.Type != watch.Modified {
-			return false, nil
-		}
-		switch pod := event.Object.(type) {
+	evaluatorFunc := func(obj runtime.Object) (bool, error) {
+		switch pod := obj.(type) {
 		case *corev1.Pod:
 			for _, container := range pod.Status.ContainerStatuses {
 				if container.Name == containerName {
@@ -254,21 +277,12 @@ func waitForContainer(podClient PodClient, ns, name, containerName string) error
 				}
 			}
 		default:
-			return false, fmt.Errorf("pod/%v ns/%v got an event that did not contain a pod: %v", name, ns, event.Object)
+			return false, fmt.Errorf("pod/%v ns/%v got an event that did not contain a pod: %v", name, ns, obj)
 		}
 		return false, nil
 	}
 
-	waitTimeout, cancel := toolswatch.ContextWithOptionalTimeout(ctx, 300*5*time.Second /*weird, but this is what it was*/)
-	defer cancel()
-	_, err := toolswatch.UntilWithSync(waitTimeout, lw, &corev1.Pod{}, podExistsPrecondition, waitForContainerStatus)
-
-	// Hack to make sure this ends up in the logging client
-	if err := podClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &corev1.Pod{}); err != nil {
-		logrus.WithError(err).Warn("faild to get pod after finishing watch")
-	}
-
-	return err
+	return waitForConditionOnObject(ctx, podClient, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &corev1.PodList{}, &corev1.Pod{}, evaluatorFunc, 300*5*time.Second)
 }
 
 func copyArtifacts(podClient PodClient, into, ns, name, containerName string, paths []string) error {

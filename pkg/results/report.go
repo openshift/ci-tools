@@ -107,13 +107,22 @@ func (r *reporter) Report(err error) {
 	if err != nil {
 		state = StateFailed
 	}
-	request := Request{
-		JobName: r.spec.Job,
-		Type:    string(r.spec.Type),
-		Cluster: r.consoleHost,
-		State:   state,
-		Reason:  FullReason(err),
+	reasons := Reasons(err)
+	if len(reasons) == 0 {
+		reasons = []string{string(ReasonUnknown)}
 	}
+	for _, reason := range reasons {
+		r.report(Request{
+			JobName: r.spec.Job,
+			Type:    string(r.spec.Type),
+			Cluster: r.consoleHost,
+			State:   state,
+			Reason:  reason,
+		})
+	}
+}
+
+func (r *reporter) report(request Request) {
 	data, err := json.Marshal(request)
 	if err != nil {
 		logrus.Tracef("could not marshal request: %v", err)
@@ -121,7 +130,7 @@ func (r *reporter) Report(err error) {
 	}
 
 	reportMsg := fmt.Sprintf("Reporting job state '%s'", request.State)
-	if state != StateSucceeded {
+	if request.State != StateSucceeded {
 		reportMsg = fmt.Sprintf("Reporting job state '%s' with reason '%s'", request.State, request.Reason)
 	}
 

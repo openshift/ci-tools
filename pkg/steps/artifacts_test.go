@@ -802,7 +802,7 @@ func TestWaitForConditionOnObject(t *testing.T) {
 					errChan <- err
 				}
 			}()
-			actual := waitForConditionOnObject(context.TODO(), tc.client, ctrlruntimeclient.ObjectKey{Name: podName, Namespace: ns}, &coreapi.PodList{}, &coreapi.Pod{}, evaluateFunc, 30*time.Millisecond)
+			actual := waitForConditionOnObject(context.TODO(), tc.client, ctrlruntimeclient.ObjectKey{Name: podName, Namespace: ns}, &coreapi.PodList{}, &coreapi.Pod{}, evaluateFunc, 300*time.Millisecond)
 			close(errChan)
 			<-readingDone
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {

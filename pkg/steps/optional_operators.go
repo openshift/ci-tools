@@ -8,17 +8,17 @@ import (
 )
 
 const (
-	//OOIndex is a text placeholder
+	// OOIndex is a text placeholder
 	OOIndex = "OO_INDEX"
-	//OOPackage is a text placeholder
+	// OOPackage is a text placeholder
 	OOPackage = "OO_PACKAGE"
-	//OOChannel is a text placeholder
+	// OOChannel is a text placeholder
 	OOChannel = "OO_CHANNEL"
-	//OOBundle is a text placeholder
+	// OOBundle is a text placeholder
 	OOBundle = "OO_BUNDLE"
-	//OOInstallNamespace is a text placeholder
+	// OOInstallNamespace is a text placeholder
 	OOInstallNamespace = "OO_INSTALL_NAMESPACE"
-	//OOTargetNamespaces is a text placeholder
+	// OOTargetNamespaces is a text placeholder
 	OOTargetNamespaces = "OO_TARGET_NAMESPACES"
 )
 
@@ -52,6 +52,10 @@ type getter interface {
 func resolveOptionalOperator(parameters getter) (*optionalOperator, error) {
 	var err error
 	var oo optionalOperator
+
+	if parameters == nil {
+		return nil, nil
+	}
 
 	required := map[string]*string{
 		OOIndex:   &oo.Index,

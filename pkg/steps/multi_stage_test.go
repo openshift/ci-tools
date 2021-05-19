@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path"
 	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -780,6 +781,88 @@ func TestGetClusterClaimPodParams(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			}
+		})
+	}
+}
+
+type fakeStepParams map[string]string
+
+func (f fakeStepParams) Has(key string) bool {
+	_, ok := f[key]
+	return ok
+}
+
+func (f fakeStepParams) HasInput(_ string) bool {
+	panic("This should not be used")
+}
+
+func (f fakeStepParams) Get(key string) (string, error) {
+	return f[key], nil
+}
+
+func TestEnvironment(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		params    api.Parameters
+		leases    []api.StepLease
+		expected  []coreapi.EnvVar
+		expectErr bool
+	}{
+		{
+			name:     "leases are exposed in environment",
+			params:   fakeStepParams{"LEASE_ONE": "ONE", "LEASE_TWO": "TWO"},
+			leases:   []api.StepLease{{Env: "LEASE_ONE"}, {Env: "LEASE_TWO"}},
+			expected: []coreapi.EnvVar{{Name: "LEASE_ONE", Value: "ONE"}, {Name: "LEASE_TWO", Value: "TWO"}},
+		},
+		{
+			name: "OO variables are exposed in environment",
+			params: fakeStepParams{
+				"OO_INDEX":             "le index",
+				"OO_BUNDLE":            "le bundle",
+				"OO_PACKAGE":           "le package",
+				"OO_CHANNEL":           "le channel",
+				"OO_INSTALL_NAMESPACE": "le namespace d'install",
+				"OO_TARGET_NAMESPACES": "les namespaces",
+			},
+			expected: []coreapi.EnvVar{
+				{Name: "OO_INDEX", Value: "le index"},
+				{Name: "OO_PACKAGE", Value: "le package"},
+				{Name: "OO_CHANNEL", Value: "le channel"},
+				{Name: "OO_BUNDLE", Value: "le bundle"},
+				{Name: "OO_INSTALL_NAMESPACE", Value: "le namespace d'install"},
+				{Name: "OO_TARGET_NAMESPACES", Value: "les namespaces"},
+			},
+		},
+		{
+			name: "arbitrary variables are not exposed in environment",
+			params: fakeStepParams{
+				"OO_IMSMART":     "nope",
+				"IM_A_POWERUSER": "nope you are not",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &multiStageTestStep{
+				params: tc.params,
+				leases: tc.leases,
+			}
+			got, err := s.environment(context.TODO())
+			if (err != nil) != tc.expectErr {
+				t.Errorf("environment() error = %v, wantErr %v", err, tc.expectErr)
+				return
+			}
+			sort.Slice(tc.expected, func(i, j int) bool {
+				return tc.expected[i].Name < tc.expected[j].Name
+			})
+			sort.Slice(got, func(i, j int) bool {
+				return got[i].Name < got[j].Name
+			})
+			if diff := cmp.Diff(tc.expected, got); diff != "" {
+				t.Errorf("%s: result differs from expected:\n %s", tc.name, diff)
 			}
 		})
 	}

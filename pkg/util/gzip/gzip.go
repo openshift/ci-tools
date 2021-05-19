@@ -3,6 +3,7 @@ package gzip
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/base64"
 	"io/ioutil"
 )
 
@@ -13,15 +14,32 @@ func ReadFileMaybeGZIP(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// check if file contains gzip header: http://www.zlib.org/rfc-gzip.html
-	if !bytes.HasPrefix(b, []byte("\x1F\x8B")) {
+	return ReadBytesMaybeGZIP(b)
+}
+
+func ReadBytesMaybeGZIP(data []byte) ([]byte, error) {
+	// check if data contains gzip header: http://www.zlib.org/rfc-gzip.html
+	if !bytes.HasPrefix(data, []byte("\x1F\x8B")) {
 		// go ahead and return the contents if not gzipped
-		return b, nil
+		return data, nil
 	}
 	// otherwise decode
-	gzipReader, err := gzip.NewReader(bytes.NewBuffer(b))
+	gzipReader, err := gzip.NewReader(bytes.NewBuffer(data))
 	if err != nil {
 		return nil, err
 	}
 	return ioutil.ReadAll(gzipReader)
+}
+
+func CompressStringAndBase64(data string) (string, error) {
+	buf := new(bytes.Buffer)
+	writer, err := gzip.NewWriterLevel(buf, gzip.BestCompression)
+	if err != nil {
+		return "", err
+	}
+	if _, err := writer.Write([]byte(data)); err != nil {
+		return "", err
+	}
+	writer.Close()
+	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }

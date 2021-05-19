@@ -36,6 +36,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/testhelper"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 const testingRegistry = "../../test/multistage-registry/registry"
@@ -157,9 +158,13 @@ func TestInlineCiopConfig(t *testing.T) {
 			},
 		},
 	}
-	test1ConfigContentFromUnresolved, err := yaml.Marshal(&test1ConfigFromUnresolved)
+	uncompressedTest1ConfigContentFromUnresolved, err := yaml.Marshal(&test1ConfigFromUnresolved)
 	if err != nil {
-		t.Fatal("Failed to marshal ci-operator config")
+		t.Fatalf("Failed to marshal ci-operator config: %v", err)
+	}
+	test1ConfigContentFromUnresolved, err := gzip.CompressStringAndBase64(string(uncompressedTest1ConfigContentFromUnresolved))
+	if err != nil {
+		t.Fatalf("Failed to compress config: %v", err)
 	}
 
 	resolvedConfig := api.ReleaseBuildConfiguration{
@@ -174,15 +179,23 @@ func TestInlineCiopConfig(t *testing.T) {
 	}
 
 	testCiopConfigTest1 := api.ReleaseBuildConfiguration{Tests: []api.TestStepConfiguration{resolvedConfig.Tests[0]}}
-	testCiopConfigContentTest1, err := yaml.Marshal(&testCiopConfigTest1)
+	uncompressedTestCiopConfigContentTest1, err := yaml.Marshal(&testCiopConfigTest1)
 	if err != nil {
-		t.Fatal("Failed to marshal ci-operator config")
+		t.Fatalf("Failed to marshal ci-operator config: %v", err)
+	}
+	testCiopConfigContentTest1, err := gzip.CompressStringAndBase64(string(uncompressedTestCiopConfigContentTest1))
+	if err != nil {
+		t.Fatalf("Failed to compress config: %v", err)
 	}
 
 	testCiopConfigTest2 := api.ReleaseBuildConfiguration{Tests: []api.TestStepConfiguration{resolvedConfig.Tests[1]}}
-	testCiopConfigContentTest2, err := yaml.Marshal(&testCiopConfigTest2)
+	uncompressedTestCiopConfigContentTest2, err := yaml.Marshal(&testCiopConfigTest2)
 	if err != nil {
 		t.Fatal("Failed to marshal ci-operator config")
+	}
+	testCiopConfigContentTest2, err := gzip.CompressStringAndBase64(string(uncompressedTestCiopConfigContentTest2))
+	if err != nil {
+		t.Fatalf("Failed to compress config: %v", err)
 	}
 
 	standardMetadata := api.Metadata{Org: "targetOrg", Repo: "targetRepo", Branch: "master"}
@@ -243,21 +256,21 @@ func TestInlineCiopConfig(t *testing.T) {
 			description:               "ci-operator job -> adds CONFIG_SPEC with resolved config for the given test (test1)",
 			testname:                  "test1",
 			metadata:                  standardMetadata,
-			expectedEnv:               []v1.EnvVar{{Name: "CONFIG_SPEC", Value: string(testCiopConfigContentTest1)}},
+			expectedEnv:               []v1.EnvVar{{Name: "CONFIG_SPEC", Value: testCiopConfigContentTest1}},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		},
 		{
 			description: "ci-operator job -> adds CONFIG_SPEC with resolved config for the given test (test2)",
 			testname:    "test2",
 			metadata:    standardMetadata,
-			expectedEnv: []v1.EnvVar{{Name: "CONFIG_SPEC", Value: string(testCiopConfigContentTest2)}},
+			expectedEnv: []v1.EnvVar{{Name: "CONFIG_SPEC", Value: testCiopConfigContentTest2}},
 		},
 		{
 			description: "ci-operator job with UNRESOLVED_CONFIG -> adds CONFIG_SPEC with resolved config for the given test (test1)",
 			testname:    "test1",
 			metadata:    standardMetadata,
 			sourceEnv:   []v1.EnvVar{{Name: "UNRESOLVED_CONFIG", Value: string(unresolvedConfigContent)}},
-			expectedEnv: []v1.EnvVar{{Name: "CONFIG_SPEC", Value: string(test1ConfigContentFromUnresolved)}},
+			expectedEnv: []v1.EnvVar{{Name: "CONFIG_SPEC", Value: test1ConfigContentFromUnresolved}},
 		},
 		{
 			description:   "Incomplete metadata -> error",
@@ -648,6 +661,14 @@ func TestExecuteJobsPositive(t *testing.T) {
 	anotherTargetOrg := "anotherOrg"
 	anotherTargetRepo := "anotherRepo"
 	testCiopConfigs := generateTestConfigFiles()
+	job1Cfg, err := gzip.CompressStringAndBase64(testingCiOpCfgJob1YAML)
+	if err != nil {
+		t.Fatalf("Failed to compress config: %v", err)
+	}
+	job2Cfg, err := gzip.CompressStringAndBase64(testingCiOpCfgJob2YAML)
+	if err != nil {
+		t.Fatalf("Failed to compress config: %v", err)
+	}
 
 	testCases := []struct {
 		description               string
@@ -665,11 +686,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					testRefs, targetOrg, targetRepo, "master", testingCiOpCfgJob1YAML).Spec,
+					testRefs, targetOrg, targetRepo, "master", job1Cfg).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job2"),
-					testRefs, targetOrg, targetRepo, "master", testingCiOpCfgJob2YAML).Spec,
+					testRefs, targetOrg, targetRepo, "master", job2Cfg).Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		}, {
@@ -682,11 +703,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					testRefs, targetOrg, targetRepo, "master", testingCiOpCfgJob1YAML).Spec,
+					testRefs, targetOrg, targetRepo, "master", job1Cfg).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "not-master", "job2"),
-					testRefs, targetOrg, targetRepo, "not-master", testingCiOpCfgJob2YAML).Spec,
+					testRefs, targetOrg, targetRepo, "not-master", job2Cfg).Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		},
@@ -700,11 +721,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					testRefs, targetOrg, targetRepo, "master", testingCiOpCfgJob1YAML).Spec,
+					testRefs, targetOrg, targetRepo, "master", job1Cfg).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
 					fmt.Sprintf(rehearseJobContextTemplate, anotherTargetOrgRepo, "master", "job2"),
-					testRefs, anotherTargetOrg, anotherTargetRepo, "master", testingCiOpCfgJob2YAML).Spec,
+					testRefs, anotherTargetOrg, anotherTargetRepo, "master", job2Cfg).Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		}, {

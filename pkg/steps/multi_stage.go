@@ -192,6 +192,13 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 		}
 
 		for _, dependency := range step.Dependencies {
+			// if a fully-qualified pull spec was provided to the ci-operator for this dependency, then we don't need to
+			// create a step link since we won't do anything with this dependency other than passing the pull spec straight
+			// through in the environment variable.
+			if dependency.PullSpec != "" {
+				continue
+			}
+
 			// we validate that the link will exist at config load time
 			// so we can safely ignore the case where !ok
 			imageStream, name, _ := s.config.DependencyParts(dependency)
@@ -593,11 +600,19 @@ func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]cor
 	var env []coreapi.EnvVar
 	var errs []error
 	for _, dependency := range step.Dependencies {
-		imageStream, name, _ := s.config.DependencyParts(dependency)
-		ref, err := utils.ImageDigestFor(s.client, s.jobSpec.Namespace, imageStream, name)()
-		if err != nil {
-			errs = append(errs, fmt.Errorf("could not determine image pull spec for image %s on step %s", dependency.Name, step.As))
-			continue
+		var ref string
+		// if a fully-qualified pull spec was provided, then just use that. It'll be up to the job to use that pull spec
+		// correctly as it could possibly point to an external registry that ci-operator will itself not have access to.
+		if dependency.PullSpec != "" {
+			ref = dependency.PullSpec
+		} else {
+			imageStream, name, _ := s.config.DependencyParts(dependency)
+			depRef, err := utils.ImageDigestFor(s.client, s.jobSpec.Namespace, imageStream, name)()
+			if err != nil {
+				errs = append(errs, fmt.Errorf("could not determine image pull spec for image %s on step %s", dependency.Name, step.As))
+				continue
+			}
+			ref = depRef
 		}
 		env = append(env, coreapi.EnvVar{
 			Name: dependency.Env, Value: ref,

@@ -551,7 +551,7 @@ func TestMultiStageParams(t *testing.T) {
 		expectedErrs   []string
 	}{
 		{
-			id:          "MultiStageTestConfigurationLiteral with valid params",
+			id:          "Add params",
 			inputParams: stringSlice{[]string{"PARAM1=VAL1", "PARAM2=VAL2"}},
 			testConfig: []api.TestStepConfiguration{
 				{
@@ -569,7 +569,7 @@ func TestMultiStageParams(t *testing.T) {
 			},
 		},
 		{
-			id:          "Override test param",
+			id:          "Override existing param",
 			inputParams: stringSlice{[]string{"PARAM1=NEWVAL", "PARAM2=VAL2"}},
 			testConfig: []api.TestStepConfiguration{
 				{
@@ -630,6 +630,135 @@ func TestMultiStageParams(t *testing.T) {
 
 			if errs == nil {
 				if diff := cmp.Diff(tc.expectedParams, actualParams); diff != "" {
+					t.Errorf("actual does not match expected, diff: %s", diff)
+				}
+			}
+
+			var expectedErr error
+			if len(tc.expectedErrs) > 0 {
+				var errorsList []error
+				for _, err := range tc.expectedErrs {
+					errorsList = append(errorsList, errors.New(err))
+				}
+				expectedErr = utilerrors.NewAggregate(errorsList)
+			}
+			if diff := cmp.Diff(errs, expectedErr, testhelper.EquateErrorMessage); diff != "" {
+				t.Fatal(diff)
+			}
+		})
+	}
+}
+
+func TestDependencyOverrides(t *testing.T) {
+	testCases := []struct {
+		id           string
+		inputParams  stringSlice
+		expectedDeps map[string]string
+		testConfig   []api.TestStepConfiguration
+		expectedErrs []string
+	}{
+		{
+			id:          "Override dependency",
+			inputParams: stringSlice{[]string{"OO_INDEX=registry.mystuff.com:5000/pushed/myimage"}},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Test: []api.LiteralTestStep{
+							{
+								As: "step1",
+								Dependencies: []api.StepDependency{
+									{
+										Name: "ci-index",
+										Env:  "OO_INDEX",
+									},
+									{
+										Name: "cool-image",
+										Env:  "OTHER_THING",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedDeps: map[string]string{
+				"OO_INDEX":    "registry.mystuff.com:5000/pushed/myimage",
+				"OTHER_THING": "cool-image",
+			},
+		},
+		{
+			id:          "No matching dependency for override, dependencies untouched",
+			inputParams: stringSlice{[]string{"NOT_FOUND=NOT_UPDATES"}},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Test: []api.LiteralTestStep{
+							{
+								As: "step1",
+								Dependencies: []api.StepDependency{
+									{
+										Name: "ci-index",
+										Env:  "OO_INDEX",
+									},
+									{
+										Name: "cool-image",
+										Env:  "OTHER_THING",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedDeps: map[string]string{
+				"OO_INDEX":    "ci-index",
+				"OTHER_THING": "cool-image",
+			},
+		},
+		{
+			id:          "invalid params",
+			inputParams: stringSlice{[]string{"NOT_GOOD", "ALSO_NOT_GOOD"}},
+			expectedErrs: []string{
+				"could not parse dependency-override-param: NOT_GOOD is not in the format key=value",
+				"could not parse dependency-override-param: ALSO_NOT_GOOD is not in the format key=value",
+			},
+		},
+	}
+
+	t.Parallel()
+
+	for _, tc := range testCases {
+		t.Run(tc.id, func(t *testing.T) {
+			t.Parallel()
+
+			configSpec := api.ReleaseBuildConfiguration{
+				Tests: tc.testConfig,
+			}
+
+			o := &options{
+				dependencyOverrides: tc.inputParams,
+				configSpec:          &configSpec,
+			}
+
+			errs := overrideTestStepDependencyParams(o)
+			actualDeps := make(map[string]string)
+
+			for _, test := range o.configSpec.Tests {
+				if test.MultiStageTestConfigurationLiteral != nil {
+					for _, step := range test.MultiStageTestConfigurationLiteral.Test {
+						for _, dependency := range step.Dependencies {
+							if dependency.PullSpec != "" {
+								actualDeps[dependency.Env] = dependency.PullSpec
+							} else {
+								actualDeps[dependency.Env] = dependency.Name
+							}
+						}
+					}
+				}
+			}
+
+			if errs == nil {
+				if diff := cmp.Diff(tc.expectedDeps, actualDeps); diff != "" {
 					t.Errorf("actual does not match expected, diff: %s", diff)
 				}
 			}

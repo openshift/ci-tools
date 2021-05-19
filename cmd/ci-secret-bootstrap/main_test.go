@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/hashicorp/vault/api"
 
 	coreapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,6 +25,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
+	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 	"github.com/openshift/ci-tools/pkg/bitwarden"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -1250,7 +1252,12 @@ func TestConstructSecrets(t *testing.T) {
 				"a-id-3-2": "attachment-name-3-2-value",
 			},
 			expectedBitwardenErr: `[config.0."key-name-1": failed to find field field-name-1 in item item-name-1, config.1.".dockerconfigjson": no item quay.io found]`,
-			expectedVaultErr:     `[config.0."key-name-1": item at path "prefix/item-name-1" has no key "field-name-1", config.1.".dockerconfigjson": no data at path prefix/quay.io]`,
+			expectedVaultErr: `[config.0."key-name-1": item at path "prefix/item-name-1" has no key "field-name-1", config.1.".dockerconfigjson": Error making API request.
+
+URL: GET fakeVaultClient.GetKV
+Code: 404. Errors:
+
+* no data at path prefix/quay.io]`,
 		},
 		{
 			name:   "error: no such attachment",
@@ -1327,7 +1334,12 @@ func TestConstructSecrets(t *testing.T) {
 				"a-id-3-2": "attachment-name-3-2-value",
 			},
 			expectedBitwardenErr: `[config.0."key-name-5": failed to find attachment attachment-name-1 in item item-name-2, config.0."key-name-7": failed to find password in item item-name-3, config.1.".dockerconfigjson": no item quay.io found]`,
-			expectedVaultErr:     `[config.0."key-name-5": item at path "prefix/item-name-2" has no key "attachment-name-1", config.0."key-name-7": item at path "prefix/item-name-3" has no key "password", config.1.".dockerconfigjson": no data at path prefix/quay.io]`,
+			expectedVaultErr: `[config.0."key-name-5": item at path "prefix/item-name-2" has no key "attachment-name-1", config.0."key-name-7": item at path "prefix/item-name-3" has no key "password", config.1.".dockerconfigjson": Error making API request.
+
+URL: GET fakeVaultClient.GetKV
+Code: 404. Errors:
+
+* no data at path prefix/quay.io]`,
 		},
 		{
 			name: "Usersecret, simple happy case",
@@ -2632,6 +2644,84 @@ func vaultClientFromBitwardenItems(items []bitwarden.Item, attachments map[strin
 	return secrets.NewVaultClient(&fakeVaultClient{items: data}, prefix, &censor)
 }
 
+func TestValidateBWItems(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		name         string
+		cfg          secretbootstrap.Config
+		generatorCfg secretgenerator.Config
+		items        map[string]*vaultclient.KVData
+
+		expectedErrorMsg string
+	}{
+		{
+			name:  "Item exists, no error",
+			cfg:   secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "foo", Field: "bar"}}}}},
+			items: map[string]*vaultclient.KVData{"/foo": {Data: map[string]string{"bar": "some-value"}}},
+		},
+		{
+			name: "Item doesn't exist,error",
+			cfg:  secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "foo", Field: "bar"}}}}},
+
+			expectedErrorMsg: "item foo doesn't exist",
+		},
+		{
+			name:         "Item doesn't exist but is in generator config, success",
+			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "foo", Field: "bar"}}}}},
+			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "bar"}}}},
+		},
+		{
+			name:         "Prefix, item doesn't exist but is in generator config, success",
+			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "dptp/foo", Field: "bar"}}}}, VaultDPTPPRefix: "dptp"},
+			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "bar"}}}},
+		},
+		{
+			name:         "Item doesn't exist, generator only generates different field on item, error",
+			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "foo", Field: "bar"}}}}},
+			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "baz"}}}},
+
+			expectedErrorMsg: "field bar in item foo doesn't exist",
+		},
+		{
+			name:         "Prefix, item doesn't exist, generator only generates different field on item, error",
+			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "dptp/foo", Field: "bar"}}}}, VaultDPTPPRefix: "dptp"},
+			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "baz"}}}},
+
+			expectedErrorMsg: "field bar in item dptp/foo doesn't exist",
+		},
+		{
+			name:         "Item exists, field doesn't but is in generator config, success",
+			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "foo", Field: "bar"}}}}},
+			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "bar"}}}},
+			items:        map[string]*vaultclient.KVData{"/foo": {Data: map[string]string{"baz": "some-value"}}},
+		},
+		{
+			name:         "prefix Item exists, field doesn't but is in generator config, success",
+			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "dptp/foo", Field: "bar"}}}}, VaultDPTPPRefix: "dptp"},
+			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "bar"}}}},
+			items:        map[string]*vaultclient.KVData{"/foo": {Data: map[string]string{"baz": "some-value"}}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			o := &options{
+				config:          tc.cfg,
+				generatorConfig: tc.generatorCfg,
+			}
+			censor := secrets.NewDynamicCensor()
+			var errMsg string
+			err := o.validateBWItems(secrets.NewVaultClient(&fakeVaultClient{items: tc.items}, "", &censor))
+			if err != nil {
+				errMsg = err.Error()
+			}
+			if tc.expectedErrorMsg != errMsg {
+				t.Fatalf("actual error %v differs from expected %s", err, tc.expectedErrorMsg)
+			}
+		})
+	}
+}
+
 type fakeVaultClient struct {
 	items map[string]*vaultclient.KVData
 }
@@ -2641,7 +2731,11 @@ func (f *fakeVaultClient) GetKV(path string) (*vaultclient.KVData, error) {
 		return item, nil
 	}
 
-	return nil, fmt.Errorf("no data at path %s", path)
+	return nil, &api.ResponseError{
+		HTTPMethod: "GET",
+		StatusCode: 404,
+		URL:        "fakeVaultClient.GetKV",
+		Errors:     []string{"no data at path " + path}}
 }
 
 func (f *fakeVaultClient) ListKVRecursively(prefix string) ([]string, error) {

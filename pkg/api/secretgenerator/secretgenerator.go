@@ -59,11 +59,8 @@ func (c Config) itemsByName() map[string][]SecretItem {
 }
 
 func (c Config) IsItemGenerated(name string) bool {
-	byName := c.itemsByName()
-	if _, ok := byName[name]; ok {
-		return true
-	}
-	return false
+	_, ok := c.itemsByName()[name]
+	return ok
 }
 
 func (c Config) IsFieldGenerated(name, component string) bool {

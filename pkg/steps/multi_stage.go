@@ -275,6 +275,13 @@ func (s *multiStageTestStep) environment(ctx context.Context) ([]coreapi.EnvVar,
 		}
 		ret = append(ret, coreapi.EnvVar{Name: l.Env, Value: val})
 	}
+
+	if optionalOperator, err := resolveOptionalOperator(s.params); err != nil {
+		return nil, err
+	} else if optionalOperator != nil {
+		ret = append(ret, optionalOperator.asEnv()...)
+	}
+
 	if s.profile != "" {
 		secret := s.profileSecretName()
 		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: secret}, &coreapi.Secret{}); err != nil {
@@ -286,11 +293,6 @@ func (s *multiStageTestStep) environment(ctx context.Context) ([]coreapi.EnvVar,
 				return nil, err
 			}
 			ret = append(ret, coreapi.EnvVar{Name: e, Value: val})
-		}
-		if optionalOperator, err := resolveOptionalOperator(s.params); err != nil {
-			return nil, err
-		} else if optionalOperator != nil {
-			ret = append(ret, optionalOperator.asEnv()...)
 		}
 	}
 	return ret, nil
@@ -514,7 +516,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			pod.OwnerReferences = append(pod.OwnerReferences, *owner)
 		}
 		if s.profile != "" && s.clusterClaim != nil {
-			//should never happen
+			// should never happen
 			errs = append(errs, fmt.Errorf("cannot set both cluster_profile and cluster_claim in a test"))
 		}
 		if s.clusterClaim != nil {
@@ -857,7 +859,7 @@ func getClusterClaimPodParams(secretVolumeMounts []coreapi.VolumeMount) ([]corea
 			}
 		}
 		if !foundMountPath {
-			//should never happen
+			// should never happen
 			errs = append(errs, fmt.Errorf("failed to find foundMountPath %s to create secret %s", mountPath, secretName))
 		}
 	}

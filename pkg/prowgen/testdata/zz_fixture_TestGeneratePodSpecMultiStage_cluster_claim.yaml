@@ -3,7 +3,7 @@ containers:
   - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
   - --gcs-upload-secret=/secrets/gcs/service-account.json
   - --report-credentials-file=/etc/report/credentials
-  - --hive-kubeconfig=/secrets/app.ci-hive-credentials/kubeconfig
+  - --hive-kubeconfig=/secrets/hive-hive-credentials/kubeconfig
   - --target=test
   - --secret-dir=/secrets/ci-pull-credentials
   command:
@@ -27,8 +27,8 @@ containers:
   - mountPath: /secrets/ci-pull-credentials
     name: ci-pull-credentials
     readOnly: true
-  - mountPath: /secrets/app.ci-hive-credentials
-    name: app-ci-hive-credentials
+  - mountPath: /secrets/hive-hive-credentials
+    name: hive-hive-credentials
     readOnly: true
 serviceAccountName: ci-operator
 volumes:
@@ -41,6 +41,6 @@ volumes:
 - name: ci-pull-credentials
   secret:
     secretName: ci-pull-credentials
-- name: app-ci-hive-credentials
+- name: hive-hive-credentials
   secret:
-    secretName: app.ci-hive-credentials
+    secretName: hive-hive-credentials

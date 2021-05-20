@@ -34,9 +34,9 @@ const (
 	HiveAdminPasswordSecretKey = "password"
 
 	// HiveControlPlaneKubeconfigSecret is the name of the secret that stores kubeconfig to contact the cluster where Hive is deployed
-	HiveControlPlaneKubeconfigSecret = "app.ci-hive-credentials"
+	HiveControlPlaneKubeconfigSecret = "hive-hive-credentials"
 	// HiveControlPlaneKubeconfigSecretArg is the flag to ci-operator
-	HiveControlPlaneKubeconfigSecretArg = "--hive-kubeconfig=/secrets/app.ci-hive-credentials/kubeconfig"
+	HiveControlPlaneKubeconfigSecretArg = "--hive-kubeconfig=/secrets/hive-hive-credentials/kubeconfig"
 
 	AutoScalePodsLabel = "ci.openshift.io/scale-pods"
 )

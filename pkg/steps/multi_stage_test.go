@@ -610,7 +610,7 @@ func TestAddCredentials(t *testing.T) {
 		{
 			name: "dots in volume name are replaced",
 			credentials: []api.CredentialReference{
-				{Namespace: "ns", Name: "app.ci-hive-credentials", MountPath: "/tmp"},
+				{Namespace: "ns", Name: "hive-hive-credentials", MountPath: "/tmp"},
 			},
 			pod: coreapi.Pod{Spec: coreapi.PodSpec{
 				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{}}},
@@ -618,10 +618,10 @@ func TestAddCredentials(t *testing.T) {
 			}},
 			expected: coreapi.Pod{Spec: coreapi.PodSpec{
 				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{
-					{Name: "ns-app-ci-hive-credentials", MountPath: "/tmp"},
+					{Name: "ns-hive-hive-credentials", MountPath: "/tmp"},
 				}}},
 				Volumes: []coreapi.Volume{
-					{Name: "ns-app-ci-hive-credentials", VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "ns-app.ci-hive-credentials"}}},
+					{Name: "ns-hive-hive-credentials", VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "ns-hive-hive-credentials"}}},
 				},
 			}},
 		},

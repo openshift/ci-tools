@@ -13,7 +13,7 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -35,6 +35,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 const (
@@ -350,7 +351,11 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename
 		return nil, err
 	}
 	apihelper.MergeImageStreamTagMaps(allImageStreamTags, imageStreamTags)
-	container.Env = append(envs, v1.EnvVar{Name: "CONFIG_SPEC", Value: ciOpConfigContent})
+	compressedConfig, err := gzip.CompressStringAndBase64(ciOpConfigContent)
+	if err != nil {
+		return nil, err
+	}
+	container.Env = append(envs, v1.EnvVar{Name: "CONFIG_SPEC", Value: compressedConfig})
 	return allImageStreamTags, nil
 }
 

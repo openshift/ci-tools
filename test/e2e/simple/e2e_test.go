@@ -56,6 +56,53 @@ func TestSimpleExitCodes(t *testing.T) {
 	}
 }
 
+func TestCompressed(t *testing.T) {
+	var testCases = []struct {
+		name    string
+		args    []string
+		success bool
+		output  []string
+	}{
+		{
+			name:    "success on one successful target",
+			args:    []string{"--target=success"},
+			success: true,
+			output:  []string{"Container test in pod success completed successfully"},
+		},
+		{
+			name:    "failure on one successful and one failed target",
+			args:    []string{"--target=success", "--target=failure"},
+			success: false,
+			output:  []string{"Container test in pod success completed successfully", "Container test in pod failure failed, exit code 1, reason Error"},
+		},
+		{
+			name:    "failure on one failed target",
+			args:    []string{"--target=failure"},
+			success: false,
+			output:  []string{"Container test in pod failure failed, exit code 1, reason Error"},
+		},
+	}
+
+	configFile, err := ioutil.ReadFile("compressedConfig.txt")
+	if err != nil {
+		t.Fatalf("Failed to read compressed config file: %v", err)
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		framework.Run(t, testCase.name, func(t *framework.T, cmd *framework.CiOperatorCommand) {
+			cmd.AddArgs(testCase.args...)
+			cmd.AddEnv(fmt.Sprintf("CONFIG_SPEC=%s", string(configFile)))
+			cmd.AddEnv(`JOB_SPEC={"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master-ci-operator-e2e-compressed","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[]},"decoration_config":{"timeout":"4h0m0s","grace_period":"30m0s","utility_images":{"clonerefs":"registry.ci.openshift.org/ci/clonerefs:latest","initupload":"registry.ci.openshift.org/ci/initupload:latest","entrypoint":"registry.ci.openshift.org/ci/entrypoint:latest","sidecar":"registry.ci.openshift.org/ci/sidecar:latest"},"resources":{"clonerefs":{"limits":{"memory":"3Gi"},"requests":{"cpu":"100m","memory":"500Mi"}},"initupload":{"limits":{"memory":"200Mi"},"requests":{"cpu":"100m","memory":"50Mi"}},"place_entrypoint":{"limits":{"memory":"100Mi"},"requests":{"cpu":"100m","memory":"25Mi"}},"sidecar":{"limits":{"memory":"2Gi"},"requests":{"cpu":"100m","memory":"250Mi"}}},"gcs_configuration":{"bucket":"origin-ci-test","path_strategy":"single","default_org":"openshift","default_repo":"origin","mediaTypes":{"log":"text/plain"}},"gcs_credentials_secret":"gce-sa-credentials-gcs-publisher"}}`)
+			output, err := cmd.Run()
+			if testCase.success != (err == nil) {
+				t.Fatalf("%s: didn't expect an error from ci-operator: %v; output:\n%v", testCase.name, err, string(output))
+			}
+			cmd.VerboseOutputContains(t, testCase.name, testCase.output...)
+		})
+	}
+}
+
 var timeRegex = regexp.MustCompile(`time=".*"`)
 
 func TestTemplate(t *testing.T) {

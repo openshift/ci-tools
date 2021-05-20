@@ -2,6 +2,7 @@ package load
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -133,7 +134,16 @@ func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api
 		if len(configSpecEnv) == 0 {
 			return nil, errors.New("CONFIG_SPEC environment variable cannot be set to an empty string")
 		}
-		raw = configSpecEnv
+		// if being run by pj-rehearse, config spec may be base64 and gzipped
+		if decoded, err := base64.StdEncoding.DecodeString(configSpecEnv); err != nil {
+			raw = configSpecEnv
+		} else {
+			data, err := gzip.ReadBytesMaybeGZIP(decoded)
+			if err != nil {
+				return nil, fmt.Errorf("--config error: %w", err)
+			}
+			raw = string(data)
+		}
 	case len(unresolvedPath) > 0:
 		data, err := gzip.ReadFileMaybeGZIP(unresolvedPath)
 		if err != nil {

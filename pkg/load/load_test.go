@@ -20,6 +20,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/registry"
+	utilgzip "github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 const rawConfig = `tag_specification:
@@ -522,6 +523,7 @@ func TestConfig(t *testing.T) {
 		config        string
 		asFile        bool
 		asEnv         bool
+		compressEnv   bool
 		expected      *api.ReleaseBuildConfiguration
 		isGzipped     bool
 		expectedError bool
@@ -545,6 +547,14 @@ func TestConfig(t *testing.T) {
 			name:          "loading config from env works",
 			config:        rawConfig,
 			asEnv:         true,
+			expected:      parsedConfig,
+			expectedError: false,
+		},
+		{
+			name:          "loading config from compressed env works",
+			config:        rawConfig,
+			asEnv:         true,
+			compressEnv:   true,
 			expected:      parsedConfig,
 			expectedError: false,
 		},
@@ -592,7 +602,15 @@ func TestConfig(t *testing.T) {
 				}
 			}
 			if testCase.asEnv {
-				if err := os.Setenv("CONFIG_SPEC", testCase.config); err != nil {
+				config := testCase.config
+				if testCase.compressEnv {
+					var err error
+					config, err = utilgzip.CompressStringAndBase64(config)
+					if err != nil {
+						t.Fatalf("Failed to compress config: %v", err)
+					}
+				}
+				if err := os.Setenv("CONFIG_SPEC", config); err != nil {
 					t.Fatalf("%s: failed to populate env var: %v", testCase.name, err)
 				}
 			}

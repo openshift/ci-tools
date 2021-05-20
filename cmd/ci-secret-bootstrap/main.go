@@ -833,7 +833,7 @@ func (o *options) validateBWItems(client secrets.ReadOnlyClient) error {
 					continue
 				}
 				if !hasItem {
-					if o.generatorConfig.IsItemGenerated(item.BWItem) {
+					if o.generatorConfig.IsItemGenerated(stripDPTPPrefixFromItem(item.BWItem, &o.config)) {
 						logrus.Warn("Item doesn't exist but it will be generated")
 					} else {
 						errs = append(errs, fmt.Errorf("item %s doesn't exist", item.BWItem))
@@ -843,7 +843,7 @@ func (o *options) validateBWItems(client secrets.ReadOnlyClient) error {
 
 				if item.Field != "" {
 					if _, err := client.GetFieldOnItem(item.BWItem, item.Field); err != nil {
-						if o.generatorConfig.IsFieldGenerated(item.BWItem, item.Field) {
+						if o.generatorConfig.IsFieldGenerated(stripDPTPPrefixFromItem(item.BWItem, &o.config), item.Field) {
 							logger.WithField("field", item.Field).Warn("Field doesn't exist but it will be generated")
 						} else {
 							errs = append(errs, fmt.Errorf("field %s in item %s doesn't exist", item.Field, item.BWItem))
@@ -853,7 +853,7 @@ func (o *options) validateBWItems(client secrets.ReadOnlyClient) error {
 
 				if item.Attachment != "" {
 					if _, err := client.GetAttachmentOnItem(item.BWItem, item.Attachment); err != nil {
-						if o.generatorConfig.IsFieldGenerated(item.BWItem, item.Attachment) {
+						if o.generatorConfig.IsFieldGenerated(stripDPTPPrefixFromItem(item.BWItem, &o.config), item.Attachment) {
 							logger.WithField("attachment", item.Attachment).Warn("Attachment doesn't exist but it will be generated")
 						} else {
 							errs = append(errs, fmt.Errorf("attachment %s in item %s doesn't exist", item.Attachment, item.BWItem))
@@ -863,7 +863,7 @@ func (o *options) validateBWItems(client secrets.ReadOnlyClient) error {
 
 				if item.Attribute == secretbootstrap.AttributeTypePassword {
 					if _, err := client.GetPassword(item.BWItem); err != nil {
-						if o.generatorConfig.IsFieldGenerated(item.BWItem, string(item.Attribute)) {
+						if o.generatorConfig.IsFieldGenerated(stripDPTPPrefixFromItem(item.BWItem, &o.config), string(item.Attribute)) {
 							logger.WithField("attribute", item.Attribute).Warn("Attribute doesn't exist but it will be generated")
 						} else {
 							errs = append(errs, fmt.Errorf("password in item %s doesn't exist", item.BWItem))
@@ -875,6 +875,15 @@ func (o *options) validateBWItems(client secrets.ReadOnlyClient) error {
 	}
 
 	return utilerrors.NewAggregate(errs)
+}
+
+// stripDPTPPrefixFromItem strips the dptp prefix from an item name. It is needed when
+// interacting with the secret generator config, because the secret generator gets the full
+// dptp prefix as cli arg (kv/dptp) whereas the ci-secret-bootstrapper which needs to interact with
+// both dptp and user secrets only gets the store path as cli prefix (kv) and prepends all item
+// names with the dptp prefix from the config during deserialization.
+func stripDPTPPrefixFromItem(itemName string, cfg *secretbootstrap.Config) string {
+	return strings.TrimPrefix(itemName, cfg.VaultDPTPPRefix+"/")
 }
 
 func main() {

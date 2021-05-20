@@ -253,7 +253,7 @@ $(TMPDIR)/.ci-operator-kubeconfig:
 	oc --context $(CLUSTER) --as system:admin --namespace ci serviceaccounts create-kubeconfig ci-operator > $(TMPDIR)/.ci-operator-kubeconfig
 
 $(TMPDIR)/hive-kubeconfig:
-	oc --context $(CLUSTER) --as system:admin --namespace test-credentials get secret app.ci-hive-credentials -o 'jsonpath={.data.kubeconfig}' | base64 --decode > "$@"
+	oc --context $(CLUSTER) --as system:admin --namespace test-credentials get secret hive-hive-credentials -o 'jsonpath={.data.kubeconfig}' | base64 --decode > "$@"
 
 $(TMPDIR)/local-secret/.dockerconfigjson:
 	mkdir -p $(TMPDIR)/local-secret

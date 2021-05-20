@@ -79,7 +79,9 @@ func main() {
 	}
 
 	failed := false
-	client.Throttle(300, 300)
+	if err := client.Throttle(300, 300); err != nil {
+		logrus.WithError(err).Fatal("failed to throttle")
+	}
 
 	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		logger := config.LoggerForInfo(*repoInfo)

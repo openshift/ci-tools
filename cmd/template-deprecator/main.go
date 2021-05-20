@@ -11,20 +11,20 @@ import (
 
 	"k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
-	prowplugins "k8s.io/test-infra/prow/plugins"
+	pluginflagutil "k8s.io/test-infra/prow/flagutil/plugins"
 
 	"github.com/openshift/ci-tools/pkg/deprecatetemplates"
 )
 
 type options struct {
-	config               configflagutil.ConfigOptions
-	prowPluginConfigPath string
-	allowlistPath        string
-	prune                bool
-	printStats           bool
-	hideTotals           bool
-	blockNewJobs         flagutil.Strings
-	checks               bool
+	config        configflagutil.ConfigOptions
+	plugins       pluginflagutil.PluginOptions
+	allowlistPath string
+	prune         bool
+	printStats    bool
+	hideTotals    bool
+	blockNewJobs  flagutil.Strings
+	checks        bool
 
 	help bool
 }
@@ -32,8 +32,8 @@ type options struct {
 func bindOptions(fs *flag.FlagSet) *options {
 	opt := &options{config: configflagutil.ConfigOptions{ConfigPathFlagName: "prow-config-path", JobConfigPathFlagName: "prow-jobs-dir"}}
 	opt.config.AddFlags(fs)
+	opt.plugins.AddFlags(fs)
 
-	fs.StringVar(&opt.prowPluginConfigPath, "prow-plugin-config-path", "", "Path to the Prow plugin configuration file")
 	fs.StringVar(&opt.allowlistPath, "allowlist-path", "", "Path to template deprecation allowlist")
 	fs.Var(&opt.blockNewJobs, "block-new-jobs", "If set, new jobs will be added to this blocker instead of to the 'unknown blocker' list. Can be set multiple times and can have either JIRA or JIRA:description form")
 	fs.BoolVar(&opt.prune, "prune", false, "If set, remove from allowlist all jobs that either no longer exist or no longer use a template")
@@ -46,8 +46,8 @@ func bindOptions(fs *flag.FlagSet) *options {
 
 func (o *options) validate() error {
 	for param, value := range map[string]string{
-		"--prow-plugin-config-path": o.prowPluginConfigPath,
-		"--allowlist-path":          o.allowlistPath,
+		"--plugin-config":  o.plugins.PluginConfigPath,
+		"--allowlist-path": o.allowlistPath,
 	} {
 		if value == "" {
 			return fmt.Errorf("mandatory argument %s was not set", param)
@@ -74,8 +74,8 @@ func main() {
 		logrus.WithError(err).Fatal("Invalid parameters")
 	}
 
-	agent := prowplugins.ConfigAgent{}
-	if err := agent.Load(opt.prowPluginConfigPath, true); err != nil {
+	agent, err := opt.plugins.PluginAgent()
+	if err != nil {
 		logrus.WithError(err).Fatal("Failed to read Prow plugin configuration")
 	}
 	pluginCfg := agent.Config().ConfigUpdater

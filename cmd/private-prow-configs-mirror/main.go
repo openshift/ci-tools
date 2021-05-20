@@ -76,7 +76,7 @@ func (o *options) validate() error {
 
 func loadProwPlugins(pluginsPath string) (*plugins.Configuration, error) {
 	agent := plugins.ConfigAgent{}
-	if err := agent.Load(pluginsPath, false); err != nil {
+	if err := agent.Load(pluginsPath, []string{filepath.Dir(config.PluginConfigFile)}, "_pluginconfig.yaml", false); err != nil {
 		return nil, err
 	}
 	return agent.Config(), nil

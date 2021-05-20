@@ -17,22 +17,22 @@ allowlist="${workdir}/allowlist.yaml"
 os::test::junit::declare_suite_start "integration/template-deprecator"
 
 # this invocation will generate a new allowlist
-os::cmd::expect_success "template-deprecator --prow-jobs-dir ${inputs}/jobs --prow-config-path ${inputs}/config.yaml --prow-plugin-config-path ${inputs}/plugins.yaml --allowlist-path ${allowlist}"
+os::cmd::expect_success "template-deprecator --prow-jobs-dir ${inputs}/jobs --prow-config-path ${inputs}/config.yaml --plugin-config ${inputs}/plugins.yaml --allowlist-path ${allowlist}"
 os::integration::compare "${allowlist}" "${suite_dir}/expected/allowlist.yaml"
 
 # this invocation will grow an existing allowlist
 cp "${inputs}/partial-allowlist.yaml" "${allowlist}"
-os::cmd::expect_success "template-deprecator --prow-jobs-dir ${inputs}/jobs --prow-config-path ${inputs}/config.yaml --prow-plugin-config-path ${inputs}/plugins.yaml --allowlist-path ${allowlist}"
+os::cmd::expect_success "template-deprecator --prow-jobs-dir ${inputs}/jobs --prow-config-path ${inputs}/config.yaml --plugin-config ${inputs}/plugins.yaml --allowlist-path ${allowlist}"
 os::integration::compare "${allowlist}" "${suite_dir}/expected/allowlist.yaml"
 
 # this invocation will respect the blockers already present in allowlist
 cp "${inputs}/blockered-allowlist.yaml" "${allowlist}"
-os::cmd::expect_success "template-deprecator --prow-jobs-dir ${inputs}/jobs --prow-config-path ${inputs}/config.yaml --prow-plugin-config-path ${inputs}/plugins.yaml --allowlist-path ${allowlist}"
+os::cmd::expect_success "template-deprecator --prow-jobs-dir ${inputs}/jobs --prow-config-path ${inputs}/config.yaml --plugin-config ${inputs}/plugins.yaml --allowlist-path ${allowlist}"
 os::integration::compare "${allowlist}" "${suite_dir}/expected/blockered-allowlist.yaml"
 
 # this invocation should prune old jobs from the allowlist
 cp "${inputs}/to-be-pruned-allowlist.yaml" "${allowlist}"
-os::cmd::expect_success "template-deprecator --prune=true --prow-jobs-dir ${inputs}/jobs --prow-config-path ${inputs}/config.yaml --prow-plugin-config-path ${inputs}/plugins.yaml --allowlist-path ${allowlist}"
+os::cmd::expect_success "template-deprecator --prune=true --prow-jobs-dir ${inputs}/jobs --prow-config-path ${inputs}/config.yaml --plugin-config ${inputs}/plugins.yaml --allowlist-path ${allowlist}"
 os::integration::compare "${allowlist}" "${suite_dir}/expected/blockered-allowlist.yaml"
 
 os::test::junit::declare_suite_end

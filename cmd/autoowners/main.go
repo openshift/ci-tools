@@ -18,6 +18,7 @@ import (
 	"k8s.io/test-infra/prow/cmd/generic-autobumper/bumper"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
+	pluginflagutil "k8s.io/test-infra/prow/flagutil/plugins"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/labels"
 	"k8s.io/test-infra/prow/plugins"
@@ -309,7 +310,7 @@ type options struct {
 	blockedOrgs        flagutil.Strings
 	debugMode          bool
 	selfApprove        bool
-	pluginsConfigFile  string
+	plugins            pluginflagutil.PluginOptions
 	flagutil.GitHubOptions
 }
 
@@ -333,9 +334,9 @@ func parseOptions() options {
 	fs.Var(&o.blockedOrgs, "ignore-org", "The orgs for which syncing OWNERS file is disabled.")
 	fs.BoolVar(&o.debugMode, "debug-mode", false, "Enable the DEBUG level of logs if true.")
 	fs.BoolVar(&o.selfApprove, "self-approve", false, "Self-approve the PR by adding the `approved` and `lgtm` labels. Requires write permissions on the repo.")
-	fs.StringVar(&o.pluginsConfigFile, "plugins-config-file", "", "Plugin config file location. Needed to properly respect custom owners file names")
 	o.AddFlags(fs)
 	o.AllowAnonymous = true
+	o.plugins.AddFlags(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: '%s'", os.Args[1:])
 	}
@@ -428,9 +429,9 @@ func main() {
 	}
 
 	pc := plugins.Configuration{}
-	if o.pluginsConfigFile != "" {
-		agent := plugins.ConfigAgent{}
-		if err := agent.Load(o.pluginsConfigFile, false); err != nil {
+	if o.plugins.PluginConfigPath != "" {
+		agent, err := o.plugins.PluginAgent()
+		if err != nil {
 			logrus.WithError(err).Fatal("failed to load plugin config file")
 		}
 		pc = *(agent.Config())
@@ -476,7 +477,7 @@ func main() {
 	title := getTitle(matchTitle, time.Now().Format(time.RFC1123))
 	if err := bumper.GitCommitSignoffAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin,
 		string(secretAgent.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, o.githubRepo),
-		remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr, o.gitSignoff); err != nil {
+		remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr, o.gitSignoff, o.dryRun); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 
@@ -486,7 +487,7 @@ func main() {
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
 	if err := bumper.UpdatePullRequestWithLabels(gc, o.githubOrg, o.githubRepo, title,
-		getBody(directories, o.assign), o.githubLogin+":"+remoteBranch, "master", remoteBranch, true, labelsToAdd); err != nil {
+		getBody(directories, o.assign), o.githubLogin+":"+remoteBranch, "master", remoteBranch, true, labelsToAdd, o.dryRun); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 }

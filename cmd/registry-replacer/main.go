@@ -415,6 +415,7 @@ func upsertPR(gc pgithub.Client, dir, githubUsername string, token []byte, selfA
 		"Registry-replacer autocommit",
 		stdout,
 		stderr,
+		false,
 	); err != nil {
 		return fmt.Errorf("failed to push changes: %w", err)
 	}
@@ -446,6 +447,7 @@ func upsertPR(gc pgithub.Client, dir, githubUsername string, token []byte, selfA
 		targetBranch,
 		true,
 		labelsToAdd,
+		false,
 	); err != nil {
 		return fmt.Errorf("failed to create PR: %w", err)
 	}

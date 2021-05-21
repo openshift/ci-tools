@@ -28,8 +28,9 @@ import (
 )
 
 type options struct {
-	prowConfigDir            string
-	shardedProwConfigBaseDir string
+	prowConfigDir              string
+	shardedProwConfigBaseDir   string
+	shardedPluginConfigBaseDir string
 }
 
 func (o *options) Validate() error {
@@ -44,6 +45,7 @@ func gatherOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.prowConfigDir, "prow-config-dir", "", "Path to the Prow configuration directory.")
 	fs.StringVar(&o.shardedProwConfigBaseDir, "sharded-prow-config-base-dir", "", "Basedir for the sharded prow config. If set, org and repo-specific config will get removed from the main prow config and written out in an org/repo tree below the base dir.")
+	fs.StringVar(&o.shardedPluginConfigBaseDir, "sharded-plugin-config-base-dir", "", "Basedir for the sharded plugin config. If set, the plugin config will get sharded")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
@@ -60,7 +62,7 @@ func main() {
 		logrus.WithError(err).Fatal("could not update Prow configuration")
 	}
 
-	if err := updatePluginConfig(o.prowConfigDir); err != nil {
+	if err := updatePluginConfig(o.prowConfigDir, o.shardedPluginConfigBaseDir); err != nil {
 		logrus.WithError(err).Fatal("could not update Prow plugin configuration")
 	}
 }
@@ -187,13 +189,21 @@ func deduplicateTideQueries(queries prowconfig.TideQueries) (prowconfig.TideQuer
 	return m.queries()
 }
 
-func updatePluginConfig(configDir string) error {
+func updatePluginConfig(configDir, shardingBaseDir string) error {
 	configPath := path.Join(configDir, config.PluginConfigFile)
 	agent := plugins.ConfigAgent{}
 	if err := agent.Load(configPath, []string{filepath.Dir(config.PluginConfigFile)}, "_pluginconfig.yaml", false); err != nil {
 		return fmt.Errorf("could not load Prow plugin configuration: %w", err)
 	}
-	data, err := yaml.Marshal(agent.Config())
+	cfg := agent.Config()
+	if shardingBaseDir != "" {
+		pc, err := shardPluginConfig(cfg, afero.NewBasePathFs(afero.NewOsFs(), shardingBaseDir))
+		if err != nil {
+			return fmt.Errorf("failed to shard plugin config: %w", err)
+		}
+		cfg = pc
+	}
+	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("could not marshal Prow plugin configuration: %w", err)
 	}
@@ -256,6 +266,24 @@ func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.Pr
 		if err := mkdirAndWrite(target, filepath.Join(orgOrRepo.Org, orgOrRepo.Repo, config.SupplementalProwConfigFileName), cfg); err != nil {
 			return nil, err
 		}
+	}
+
+	return pc, nil
+}
+
+type pluginsConfigWithPointers struct {
+	Plugins plugins.Plugins `json:"plugins,omitempty"`
+}
+
+func shardPluginConfig(pc *plugins.Configuration, target afero.Fs) (*plugins.Configuration, error) {
+	for orgOrRepo, cfg := range pc.Plugins {
+		file := pluginsConfigWithPointers{
+			Plugins: plugins.Plugins{orgOrRepo: cfg},
+		}
+		if err := mkdirAndWrite(target, filepath.Join(orgOrRepo, config.SupplementalPluginConfigFileName), file); err != nil {
+			return nil, err
+		}
+		delete(pc.Plugins, orgOrRepo)
 	}
 
 	return pc, nil

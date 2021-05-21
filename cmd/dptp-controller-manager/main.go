@@ -350,7 +350,9 @@ func main() {
 		// Also we have to keep in mind that we might end up multiple budgets per period, because the client-side
 		// reset is not synchronized with the github reset and we may get upgraded in which case we lose the bucket
 		// state.
-		gitHubClient.Throttle(600, 300)
+		if err := gitHubClient.Throttle(600, 300); err != nil {
+			logrus.WithError(err).Fatal("Failed to throttle")
+		}
 		promotionreconcilerOptions := promotionreconciler.Options{
 			DryRun:                opts.dryRun,
 			CIOperatorConfigAgent: ciOPConfigAgent,

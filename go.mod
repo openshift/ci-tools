@@ -28,7 +28,7 @@ require (
 	github.com/getlantern/deepcopy v0.0.0-20160317154340-7f45deb8130a
 	github.com/ghodss/yaml v1.0.0
 	github.com/google/go-cmp v0.5.2
-	github.com/google/gofuzz v1.1.0
+	github.com/google/gofuzz v1.2.1-0.20210504230335-f78f29fc09ea
 	github.com/hashicorp/go-retryablehttp v0.6.6
 	github.com/hashicorp/go-version v1.2.1
 	github.com/hashicorp/vault/api v1.0.4
@@ -63,7 +63,7 @@ require (
 	k8s.io/apimachinery v0.21.0
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
 	k8s.io/klog/v2 v2.8.0
-	k8s.io/test-infra v0.0.0-20210504134511-af1ac03335dc
+	k8s.io/test-infra v0.0.0-20210520185236-f6cc68bf9185
 	k8s.io/utils v0.0.0-20210111153108-fddb29f9d009
 	sigs.k8s.io/boskos v0.0.0-20210210143059-9ac98d864d2a
 	sigs.k8s.io/controller-runtime v0.9.0-beta.1.0.20210512131817-ce2f0c92d77e

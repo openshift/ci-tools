@@ -190,7 +190,7 @@ func deduplicateTideQueries(queries prowconfig.TideQueries) (prowconfig.TideQuer
 func updatePluginConfig(configDir string) error {
 	configPath := path.Join(configDir, config.PluginConfigFile)
 	agent := plugins.ConfigAgent{}
-	if err := agent.Load(configPath, false); err != nil {
+	if err := agent.Load(configPath, []string{filepath.Dir(config.PluginConfigFile)}, "_pluginconfig.yaml", false); err != nil {
 		return fmt.Errorf("could not load Prow plugin configuration: %w", err)
 	}
 	data, err := yaml.Marshal(agent.Config())

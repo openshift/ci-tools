@@ -145,6 +145,7 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		prTitle+"\n\n"+prArgs.prBody,
 		stdout,
 		stderr,
+		false,
 	); err != nil {
 		return fmt.Errorf("failed to push changes: %w", err)
 	}
@@ -166,6 +167,7 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		sourceBranchName,
 		true,
 		labelsToAdd,
+		false,
 	); err != nil {
 		return fmt.Errorf("failed to upsert PR: %w", err)
 	}

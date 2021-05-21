@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -415,7 +416,7 @@ func updatePluginConfig(config initConfig, releaseRepo string) error {
 Updating Prow plugin configuration ...`)
 	configPath := path.Join(releaseRepo, ciopconfig.PluginConfigInRepoPath)
 	agent := plugins.ConfigAgent{}
-	if err := agent.Load(configPath, false); err != nil {
+	if err := agent.Load(configPath, []string{filepath.Dir(ciopconfig.PluginConfigFile)}, "_pluginconfig.yaml", false); err != nil {
 		return fmt.Errorf("could not load Prow plugin configuration: %w", err)
 	}
 

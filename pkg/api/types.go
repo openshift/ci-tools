@@ -798,6 +798,8 @@ type StepDependency struct {
 	Name string `json:"name"`
 	// Env is the environment variable that the image's pull spec is exposed with
 	Env string `json:"env"`
+	// PullSpec allows the ci-operator user to pass in an external pull-spec that should be used when resolving the dependency
+	PullSpec string `json:"-"`
 }
 
 // StepDNSConfig defines a resource that needs to be acquired prior to execution.

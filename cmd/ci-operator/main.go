@@ -407,6 +407,7 @@ type options struct {
 	hiveKubeconfig     *rest.Config
 
 	multiStageParamOverrides stringSlice
+	dependencyOverrides      stringSlice
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -469,6 +470,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.hiveKubeconfigPath, "hive-kubeconfig", "", "Path to the kubeconfig file to use for requests to Hive.")
 
 	flag.Var(&opt.multiStageParamOverrides, "multi-stage-param", "A repeatable option where one or more environment parameters can be passed down to the multi-stage steps. This parameter should be in the format NAME=VAL. e.g --multi-stage-param PARAM1=VAL1 --multi-stage-param PARAM2=VAL2.")
+	flag.Var(&opt.dependencyOverrides, "dependency-override-param", "A repeatable option used to override dependencies with external pull specs. This parameter should be in the format ENVVARNAME=PULLSPEC, e.g. --dependency-override-param=OO_INDEX=registry.mydomain.com:5000/pushed/myimage. This would override the value for the OO_INDEX environment variable for any tests/steps that currently have that dependency configured.")
 
 	opt.resultsOptions.Bind(flag)
 	return opt
@@ -661,7 +663,26 @@ func (o *options) Complete() error {
 		return err
 	}
 
-	return nil
+	return overrideTestStepDependencyParams(o)
+}
+
+func parseKeyValParams(input []string, paramType string) (map[string]string, error) {
+	var validationErrors []error
+	params := make(map[string]string)
+	for _, param := range input {
+		paramNameAndVal := strings.Split(param, "=")
+		if len(paramNameAndVal) == 2 {
+			params[strings.TrimSpace(paramNameAndVal[0])] = strings.TrimSpace(paramNameAndVal[1])
+		} else {
+			validationErrors = append(validationErrors, fmt.Errorf("could not parse %s: %s is not in the format key=value", paramType, param))
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		return nil, utilerrors.NewAggregate(validationErrors)
+	}
+
+	return params, nil
 }
 
 func overrideMultiStageParams(o *options) error {
@@ -669,19 +690,11 @@ func overrideMultiStageParams(o *options) error {
 	if len(o.multiStageParamOverrides.values) == 0 {
 		return nil
 	}
-	var validationErrors []error
-	multiStageParams := make(map[string]string)
-	for _, param := range o.multiStageParamOverrides.values {
-		paramNameAndVal := strings.Split(param, "=")
-		if len(paramNameAndVal) == 2 {
-			multiStageParams[strings.TrimSpace(paramNameAndVal[0])] = strings.TrimSpace(paramNameAndVal[1])
-		} else {
-			validationErrors = append(validationErrors, fmt.Errorf("could not parse multi-stage-param: %s is not in the format key=value", param))
-		}
-	}
 
-	if len(validationErrors) > 0 {
-		return utilerrors.NewAggregate(validationErrors)
+	multiStageParams, err := parseKeyValParams(o.multiStageParamOverrides.values, "multi-stage-param")
+
+	if err != nil {
+		return err
 	}
 
 	// for any multi-stage tests, go ahead and inject the passed-in parameters. Note that parameters explicitly passed
@@ -699,6 +712,42 @@ func overrideMultiStageParams(o *options) error {
 	}
 
 	return nil
+}
+
+func overrideTestStepDependencyParams(o *options) error {
+	if len(o.dependencyOverrides.values) == 0 {
+		return nil
+	}
+	dependencyOverrideParams, err := parseKeyValParams(o.dependencyOverrides.values, "dependency-override-param")
+
+	if err != nil {
+		return err
+	}
+
+	for paramName, paramVal := range dependencyOverrideParams {
+		for _, test := range o.configSpec.Tests {
+			if test.MultiStageTestConfigurationLiteral != nil {
+				overrideTestStepDependency(paramName, paramVal, &test.MultiStageTestConfigurationLiteral.Pre)
+				overrideTestStepDependency(paramName, paramVal, &test.MultiStageTestConfigurationLiteral.Test)
+				overrideTestStepDependency(paramName, paramVal, &test.MultiStageTestConfigurationLiteral.Post)
+			}
+		}
+	}
+
+	return nil
+}
+
+func overrideTestStepDependency(name string, value string, steps *[]api.LiteralTestStep) {
+	for stepI, step := range *steps {
+		if len(step.Dependencies) > 0 {
+			for depI, dependency := range step.Dependencies {
+				if strings.EqualFold(dependency.Env, name) {
+					steps := *steps
+					steps[stepI].Dependencies[depI].PullSpec = value
+				}
+			}
+		}
+	}
 }
 
 func excludeContextCancelledErrors(errs []error) []error {

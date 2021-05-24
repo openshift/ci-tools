@@ -306,9 +306,11 @@ func TestInputImageTagStepConfiguration(t *testing.T) {
 			},
 			{
 				SourceType: ImageStreamSourceBase,
+				Name:       "os",
 			},
 			{
 				SourceType: ImageStreamSourceBaseRpm,
+				Name:       "rpms",
 			},
 			{
 				SourceType: ImageStreamSourceTest,
@@ -319,7 +321,7 @@ func TestInputImageTagStepConfiguration(t *testing.T) {
 				Name:       "test2",
 			},
 		},
-		expectedFormattedSources: "root,base_image,base_rpm_image,test steps: test1,test2",
+		expectedFormattedSources: "root|base_image: os|base_rpm_image: rpms|test steps: test1,test2",
 	}}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

@@ -619,7 +619,7 @@ func stepConfigsForBuild(
 				BaseImage: defaultImageFromReleaseTag(baseImage, config.ReleaseTagConfiguration),
 				To:        api.PipelineImageStreamTagReference(alias),
 			},
-			Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBase}},
+			Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBase, Name: alias}},
 		}
 		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &config})
 
@@ -633,7 +633,7 @@ func stepConfigsForBuild(
 				BaseImage: defaultImageFromReleaseTag(target, config.ReleaseTagConfiguration),
 				To:        intermediateTag,
 			},
-			Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBaseRpm}},
+			Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBaseRpm, Name: alias}},
 		}
 		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &config})
 		*imageConfigs = append(*imageConfigs, &config)

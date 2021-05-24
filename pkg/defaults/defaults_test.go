@@ -450,7 +450,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 						},
 						To: api.PipelineImageStreamTagReference("name"),
 					},
-					Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBase}},
+					Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBase, Name: "name"}},
 				},
 			}},
 		},
@@ -516,7 +516,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 							},
 							To: api.PipelineImageStreamTagReference("name"),
 						},
-						Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBase}},
+						Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBase, Name: "name"}},
 					},
 				},
 				{
@@ -584,7 +584,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 						},
 						To: api.PipelineImageStreamTagReference("name-without-rpms"),
 					},
-					Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBaseRpm}},
+					Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBaseRpm, Name: "name"}},
 				},
 			}, {
 				RPMImageInjectionStepConfiguration: &api.RPMImageInjectionStepConfiguration{

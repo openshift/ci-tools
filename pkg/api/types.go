@@ -467,7 +467,11 @@ func (config InputImageTagStepConfiguration) FormattedSources() string {
 		case ImageStreamSourceTest:
 			tests.Insert(source.Name)
 		default:
-			formattedSources = append(formattedSources, string(source.SourceType))
+			item := string(source.SourceType)
+			if source.Name != "" {
+				item += ": " + source.Name
+			}
+			formattedSources = append(formattedSources, item)
 		}
 	}
 
@@ -476,7 +480,7 @@ func (config InputImageTagStepConfiguration) FormattedSources() string {
 
 	}
 
-	return strings.Join(formattedSources, ",")
+	return strings.Join(formattedSources, "|")
 
 }
 

@@ -25,6 +25,9 @@ const (
 	ProwConfigFile = "_config.yaml"
 	// SupplementalProwConfigFileName is the name of supplemental prow config files.
 	SupplementalProwConfigFileName = "_prowconfig.yaml"
+	// SupplementalPluginConfigFileName is the name of supplemental  plugin config
+	// files.
+	SupplementalPluginConfigFileName = "_pluginconfig.yaml"
 	// PluginConfigFile is the filename where plugins live
 	PluginConfigFile = "_plugins.yaml"
 	// PluginConfigInRepoPath is the prow plugin config path from release repo

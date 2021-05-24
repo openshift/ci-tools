@@ -824,6 +824,7 @@ func TestEnvironment(t *testing.T) {
 				"OO_PACKAGE":           "le package",
 				"OO_CHANNEL":           "le channel",
 				"OO_INSTALL_NAMESPACE": "le namespace d'install",
+				"OO_PYXIS_URL":         "le url",
 				"OO_TARGET_NAMESPACES": "les namespaces",
 			},
 			expected: []coreapi.EnvVar{

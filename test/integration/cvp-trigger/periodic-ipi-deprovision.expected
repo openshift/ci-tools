@@ -40,7 +40,7 @@ spec:
   pod_spec:
     containers:
     - args:
-      - --input-hash=CLUSTER_TYPEawsOCP_VERSION4.5OO_BUNDLEgit@example.com/org/bundle.gitOO_CHANNELchannel1OO_INDEXgit@example.com/org/index.gitOO_INSTALL_NAMESPACEnamespace2OO_PACKAGEpackage1OO_TARGET_NAMESPACESnamespace1
+      - --input-hash=CLUSTER_TYPEawsOCP_VERSION4.5OO_BUNDLEgit@example.com/org/bundle.gitOO_CHANNELchannel1OO_INDEXgit@example.com/org/index.gitOO_INSTALL_NAMESPACEnamespace2OO_PACKAGEpackage1OO_PYXIS_URLOO_TARGET_NAMESPACESnamespace1
       command:
       - ./cmd/ipi-deprovision/ipi-deprovision.sh
       env:
@@ -66,6 +66,7 @@ spec:
         value: namespace2
       - name: OO_PACKAGE
         value: package1
+      - name: OO_PYXIS_URL
       - name: OO_TARGET_NAMESPACES
         value: namespace1
       image: registry.svc.ci.openshift.org/ci/ipi-deprovision:latest

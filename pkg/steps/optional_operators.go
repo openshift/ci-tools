@@ -16,6 +16,8 @@ const (
 	OOChannel = "OO_CHANNEL"
 	// OOBundle is a text placeholder
 	OOBundle = "OO_BUNDLE"
+	// OOPyxisUrl is a text placeholder
+	OOPyxisUrl = "OO_PYXIS_URL"
 	// OOInstallNamespace is a text placeholder
 	OOInstallNamespace = "OO_INSTALL_NAMESPACE"
 	// OOTargetNamespaces is a text placeholder
@@ -33,6 +35,8 @@ type optionalOperator struct {
 	Channel string
 	// Bundle is the operator bundle to be tested
 	Bundle string
+	// PyxisUrl is the ISV partner project ID (optional)
+	PyxisUrl string
 	// Namespace is the name of the namespace into which the operator and catalog
 	// will be installed (optional)
 	Namespace string

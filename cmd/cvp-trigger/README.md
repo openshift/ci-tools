@@ -70,6 +70,8 @@ CVP Trigger must load the configuration for the
 - `OO_CHANNEL`: Required. The name of the operator channel to track.
 - `OO_INSTALL_NAMESPACE`: Optional. The namespace into which the operator and
    catalog will be installed. If empty, a new namespace will be created.
+- `OO_PYXIS_URL`: Optional. URL that contains specific cvp product package name for specific ISV
+   with unique pid. 
 - `OO_TARGET_NAMESPACES`: Optional. A comma-separated list of namespaces the
    operator will target. If empty, all namespaces will be targeted.
    If no OperatorGroup exists in `$OO_INSTALL_NAMESPACE`, a new one will be

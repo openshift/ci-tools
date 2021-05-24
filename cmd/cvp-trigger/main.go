@@ -45,6 +45,7 @@ const (
 	prowConfigPathOption       = "prow-config-path"
 	releaseImageRefOption      = "release-image-ref"
 	targetNamespacesOption     = "target-namespaces"
+	pyxisUrlOption             = "pyxis-url"
 )
 
 type options struct {
@@ -59,6 +60,7 @@ type options struct {
 	outputPath          string
 	releaseImageRef     string
 	targetNamespaces    string
+	pyxisUrl            string
 	dryRun              bool
 }
 
@@ -97,6 +99,7 @@ func (o *options) gatherOptions() {
 	fs.StringVar(&o.operatorPackageName, operatorPackageNameOptions, "", "Operator package name to test")
 	fs.StringVar(&o.releaseImageRef, releaseImageRefOption, "", "Pull spec of a specific release payload image used for OCP deployment.")
 	fs.StringVar(&o.targetNamespaces, targetNamespacesOption, "", "A comma-separated list of namespaces the operator will target. If empty, all namespaces are targeted")
+	fs.StringVar(&o.pyxisUrl, pyxisUrlOption, "", "Represents cvp product package name for specific ISV")
 	fs.BoolVar(&o.dryRun, "dry-run", false, "Executes a dry-run, displaying the job YAML without submitting the job to Prow")
 }
 
@@ -207,18 +210,22 @@ func main() {
 
 	// Add flag values to inject as ENV var entries in the prowjob configuration
 	envVars := map[string]string{
-		steps.OOBundle:  o.bundleImageRef,
-		"OCP_VERSION":   o.ocpVersion,
-		"CLUSTER_TYPE":  "aws",
-		steps.OOIndex:   o.indexImageRef,
-		steps.OOPackage: o.operatorPackageName,
-		steps.OOChannel: o.channel,
+		steps.OOBundle:   o.bundleImageRef,
+		"OCP_VERSION":    o.ocpVersion,
+		"CLUSTER_TYPE":   "aws",
+		steps.OOIndex:    o.indexImageRef,
+		steps.OOPackage:  o.operatorPackageName,
+		steps.OOChannel:  o.channel,
+		steps.OOPyxisUrl: o.pyxisUrl,
 	}
 	if o.releaseImageRef != "" {
 		envVars[utils.ReleaseImageEnv(api.LatestReleaseName)] = o.releaseImageRef
 	}
 	if o.installNamespace != "" {
 		envVars[steps.OOInstallNamespace] = o.installNamespace
+	}
+	if o.pyxisUrl != "" {
+		envVars[steps.OOPyxisUrl] = o.pyxisUrl
 	}
 	if o.targetNamespaces != "" {
 		envVars[steps.OOTargetNamespaces] = o.targetNamespaces

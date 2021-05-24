@@ -203,7 +203,7 @@ func main() {
 			command: "/usr/bin/template-deprecator",
 			arguments: []string{
 				"--prow-config-path", "./core-services/prow/02_config/_config.yaml",
-				"--prow-plugin-config-path", "./core-services/prow/02_config/_plugins.yaml",
+				"--plugin-config", "./core-services/prow/02_config/_plugins.yaml",
 				"--prow-jobs-dir", "./ci-operator/jobs",
 				"--allowlist-path", "./core-services/template-deprecation/_allowlist.yaml",
 				"--prune=true",

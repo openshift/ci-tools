@@ -354,6 +354,7 @@ func TestBuildFromSource(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
+			testCase.jobSpec.SetNamespace("test-namespace")
 			actual := buildFromSource(testCase.jobSpec, testCase.fromTag, testCase.toTag, testCase.source, testCase.fromTagDigest, testCase.dockerfilePath, testCase.resources, testCase.pullSecret, testCase.buildArgs)
 			testhelper.CompareWithFixture(t, actual)
 		})

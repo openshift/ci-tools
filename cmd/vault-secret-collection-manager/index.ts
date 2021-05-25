@@ -29,9 +29,9 @@ function hideModal() {
     currentMembersSelect.removeChild(child);
   }
 
-  const allUsersSelect = document.getElementById('allUsersSelection') as HTMLSelectElement;
-  for (const child of Array.from(allUsersSelect.children)) {
-    allUsersSelect.removeChild(child);
+  const allUsersDataList = document.getElementById('all-members') as HTMLDataListElement;
+  for (const child of Array.from(allUsersDataList.children)) {
+    allUsersDataList.removeChild(child);
   }
 
   // We must detach edit member event handler, as it is scoped to a collection. It is not possible to loop over them,
@@ -65,23 +65,24 @@ function editMembersEventHandler(collection: secretCollection) {
           currentMembersSelect.appendChild(optionWithValue(existingMember));
         }
 
-        let allMembersSelect = document.getElementById('allUsersSelection') as HTMLSelectElement;
+        let allMembersDatalist = document.getElementById('all-members') as HTMLDataListElement;
         for (const user of Array.from(allUsers)) {
           if (collection.members.includes(user)) {
             continue;
           }
-          let newUserOption = document.createElement('option') as HTMLOptionElement;
-          allMembersSelect.appendChild(optionWithValue(user));
+          allMembersDatalist.appendChild(optionWithValue(user));
         }
 
         let removeMemberButton = document.getElementById('removeMemberButton') as HTMLButtonElement;
         removeMemberButton.addEventListener('click', () => {
-          moveSelectedOptions(currentMembersSelect, allMembersSelect);
+          moveSelectedOptions(currentMembersSelect, allMembersDatalist, '');
         });
 
         let addMemberButton = document.getElementById('addMemberButton') as HTMLButtonElement;
         addMemberButton.addEventListener('click', () => {
-          moveSelectedOptions(allMembersSelect, currentMembersSelect);
+          const allUsersInput = document.getElementById('allUsersInput') as HTMLInputElement;
+          moveSelectedOptions(allMembersDatalist, currentMembersSelect, allUsersInput.value);
+          allUsersInput.value = '';
         });
 
         document.getElementById('updateMemberSubmitButton')?.addEventListener('click', () => {
@@ -112,10 +113,10 @@ function editMembersEventHandler(collection: secretCollection) {
   }
 }
 
-function moveSelectedOptions(source: HTMLSelectElement, target: HTMLSelectElement): void {
+function moveSelectedOptions(source: HTMLSelectElement | HTMLDataListElement, target: HTMLSelectElement | HTMLDataListElement, elementName: string): void {
   for (let optionRaw of Array.from(source.children)) {
     let option = optionRaw as HTMLOptionElement;
-    if (!option.selected) {
+    if (!option.selected && (elementName === '' || option.value !== elementName )) {
       continue;
     }
     target.appendChild(option.cloneNode(true));

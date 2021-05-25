@@ -42,11 +42,13 @@ func (s *inputImageTagStep) Inputs() (api.InputDefinition, error) {
 		return api.InputDefinition{s.imageName}, nil
 	}
 	from := imagev1.ImageStreamTag{}
+	namespace := s.config.BaseImage.Namespace
+	name := fmt.Sprintf("%s:%s", s.config.BaseImage.Name, s.config.BaseImage.Tag)
 	if err := s.client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{
-		Namespace: s.config.BaseImage.Namespace,
-		Name:      fmt.Sprintf("%s:%s", s.config.BaseImage.Name, s.config.BaseImage.Tag),
+		Namespace: namespace,
+		Name:      name,
 	}, &from); err != nil {
-		return nil, fmt.Errorf("could not resolve base image: %w", err)
+		return nil, fmt.Errorf("could not resolve base image from %s/%s: %w", namespace, name, err)
 	}
 
 	if len(s.config.Sources) > 0 {

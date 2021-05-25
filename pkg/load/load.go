@@ -84,6 +84,10 @@ func fromPath(path string) (filenameToConfig, error) {
 
 	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
 		if info == nil || err != nil {
+			// file may not exist due to race condition between the reload and k8s removing deleted/moved symlinks in a confimap directory; ignore it
+			if os.IsNotExist(err) {
+				return nil
+			}
 			return err
 		}
 		if strings.HasPrefix(info.Name(), "..") {
@@ -278,6 +282,10 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 			return nil
 		}
 		if err != nil {
+			// file may not exist due to race condition between the reload and k8s removing deleted/moved symlinks in a confimap directory; ignore it
+			if os.IsNotExist(err) {
+				return nil
+			}
 			return err
 		}
 		if info != nil && !info.IsDir() {

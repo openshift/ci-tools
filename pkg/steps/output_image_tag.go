@@ -49,11 +49,13 @@ func (s *outputImageTagStep) run(ctx context.Context) error {
 		logrus.Infof("Tagging %s into %s", s.config.From, s.config.To.ISTagName())
 	}
 	from := &imagev1.ImageStreamTag{}
+	namespace := s.jobSpec.Namespace()
+	name := fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From)
 	if err := s.client.Get(ctx, crclient.ObjectKey{
-		Namespace: s.jobSpec.Namespace(),
-		Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From),
+		Namespace: namespace,
+		Name:      name,
 	}, from); err != nil {
-		return fmt.Errorf("could not resolve base image: %w", err)
+		return fmt.Errorf("could not resolve base image from %s/%s: %w", namespace, name, err)
 	}
 	desired := s.imageStreamTag(from.Image.Name)
 	ist := &imagev1.ImageStreamTag{

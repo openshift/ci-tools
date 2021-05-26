@@ -1,7 +1,7 @@
 ref:
-  as: trap-without-graceperiod
+  as: trap-without-grace-period
   from: installer
-  commands: best-effort-without-timeout.sh
+  commands: trap-without-grace-period-commands.sh
   resources:
     requests:
       cpu: 1000m

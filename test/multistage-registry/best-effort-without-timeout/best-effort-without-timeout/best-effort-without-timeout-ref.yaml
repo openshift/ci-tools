@@ -1,7 +1,8 @@
 ref:
   as: best-effort-without-timeout
   from: installer
-  commands: best-effort-without-timeout.sh
+  best_effort: true
+  commands: best-effort-without-timeout-commands.sh
   resources:
     requests:
       cpu: 1000m

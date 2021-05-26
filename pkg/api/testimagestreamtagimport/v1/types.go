@@ -21,7 +21,7 @@ type TestImageStreamTagImport struct {
 // creating multiple objects for the same import.
 func (t *TestImageStreamTagImport) SetDeterministicName() {
 	t.Name = fmt.Sprintf("%s-%s-%s", t.Spec.ClusterName, t.Spec.Namespace, strings.ReplaceAll(t.Spec.Name, ":", "."))
-	t.SetImageStreamLabels()
+	t.WithImageStreamLabels()
 }
 
 const (
@@ -29,14 +29,15 @@ const (
 	LabelKeyImageStreamName      = "imagestream-name"
 )
 
-// SetImageStreamLabels sets namespace and name labels so we can easily
+// WithImageStreamLabels sets namespace and name labels so we can easily
 // filter for specific imports
-func (t *TestImageStreamTagImport) SetImageStreamLabels() {
+func (t *TestImageStreamTagImport) WithImageStreamLabels() *TestImageStreamTagImport {
 	if t.Labels == nil {
 		t.Labels = map[string]string{}
 	}
 	t.Labels[LabelKeyImageStreamNamespace] = t.Spec.Namespace
 	t.Labels[LabelKeyImageStreamName] = t.Spec.Name
+	return t
 }
 
 type TestImageStreamTagImportSpec struct {

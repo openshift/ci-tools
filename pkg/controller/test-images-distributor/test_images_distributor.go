@@ -74,6 +74,19 @@ func AddToManager(mgr manager.Manager,
 		}
 		buildClusters.Insert(buildClusterName)
 		r.buildClusterClients[buildClusterName] = imagestreamtagwrapper.MustNew(buildClusterManager.GetClient(), buildClusterManager.GetCache())
+
+		if buildClusterName == string(api.ClusterAPPCI) {
+			// We have a distinct handler for testimagestreamtagimports in app.ci because those have .spec.cluster set, whereas
+			// we derive this from their location in the build clusters, as ci-operator doesn't know the name of the cluster it
+			// runs in.
+			continue
+		}
+		if err := c.Watch(
+			source.NewKindWithCache(&testimagestreamtagimportv1.TestImageStreamTagImport{}, buildClusterManager.GetCache()),
+			testImageStreamTagImportHandlerForNamedCluster(buildClusterName),
+		); err != nil {
+			return fmt.Errorf("failed to watch testimagestreamtagimports in cluster %s: %w", buildClusterName, err)
+		}
 	}
 
 	// TODO: Watch buildCluster ImageStreams as well. For now we assume no one will tamper with them.
@@ -93,7 +106,7 @@ func AddToManager(mgr manager.Manager,
 		appCIClient = imagestreamtagwrapper.MustNew(mgr.GetClient(), mgr.GetCache())
 	}
 
-	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent, appCIClient, resolver, additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces)
+	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent, appCIClient, resolver, additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces, r.buildClusterClients)
 	if err != nil {
 		return fmt.Errorf("failed to get filter for ImageStreamTags: %w", err)
 	}
@@ -106,6 +119,20 @@ func AddToManager(mgr manager.Manager,
 
 	r.log.Info("Successfully added reconciler to manager")
 	return nil
+}
+
+func testImageStreamTagImportHandlerForNamedCluster(clusterName string) handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(func(o ctrlruntimeclient.Object) []reconcile.Request {
+		testimagestreamtagimport, ok := o.(*testimagestreamtagimportv1.TestImageStreamTagImport)
+		if !ok {
+			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not an ImageStream")
+			return nil
+		}
+		return []reconcile.Request{{NamespacedName: types.NamespacedName{
+			Namespace: clusterName + clusterAndNamespaceDelimiter + testimagestreamtagimport.Spec.Namespace,
+			Name:      testimagestreamtagimport.Spec.Name,
+		}}}
+	})
 }
 
 func testImageStreamTagImportHandler() handler.EventHandler {
@@ -411,12 +438,22 @@ type registryResolver interface {
 	ResolveConfig(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error)
 }
 
-func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent, client ctrlruntimeclient.Client, resolver registryResolver, additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces sets.String) (objectFilter, error) {
+func testInputImageStreamTagFilterFactory(
+	l *logrus.Entry,
+	ca agents.ConfigAgent,
+	client ctrlruntimeclient.Client,
+	resolver registryResolver,
+	additionalImageStreamTags,
+	additionalImageStreams,
+	additionalImageStreamNamespaces sets.String,
+	buildClusterClients map[string]ctrlruntimeclient.Client,
+) (objectFilter, error) {
 	const indexName = "config-by-test-input-imagestreamtag"
 	if err := ca.AddIndex(indexName, indexConfigsByTestInputImageStreamTag(resolver)); err != nil {
 		return nil, fmt.Errorf("failed to add %s index to configAgent: %w", indexName, err)
 	}
 	l = logrus.WithField("subcomponent", "test-input-image-stream-tag-filter")
+	buildClusterClients["app.ci"] = client
 	return func(nn types.NamespacedName) bool {
 		if additionalImageStreamTags.Has(nn.String()) {
 			return true
@@ -450,20 +487,25 @@ func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent
 		}
 
 		// We have to consider testimagestreamtagimports to cover the case of:
-		// * rehearsal is created, references outdated/inexistent streamtag
-		// * rehearsal fails
+		// * rehearsal/ci-operator job is created, references outdated/inexistent streamtag
+		// * rehearsal/ci-operator job fails
 		// * streamtag gets fixed up
-		// * rehearsal is re-executed
+		// * rehearsal/ci-operator job  is re-executed
 		// * If we don't re-consider the list here every time, we won't distribute
 		//   the fixed up version of the streamtag
 		// Because we don't know for which cluster the request is, this results in
 		// us importing it into all clusters which is an acceptable trade-off.
 		imports := &testimagestreamtagimportv1.TestImageStreamTagImportList{}
-		if err := client.List(context.TODO(), imports); err != nil {
-			l.WithError(err).Error("Failed to list testimagestreamtagimport")
+		labels := ctrlruntimeclient.MatchingLabels{
+			testimagestreamtagimportv1.LabelKeyImageStreamNamespace: nn.Namespace,
+			testimagestreamtagimportv1.LabelKeyImageStreamName:      nn.Name,
 		}
-		for _, imp := range imports.Items {
-			if imp.Spec.Name == nn.Name && imp.Spec.Namespace == nn.Namespace {
+		for _, client := range buildClusterClients {
+			if err := client.List(context.TODO(), imports, labels); err != nil {
+				l.WithError(err).Error("Failed to list testimagestreamtagimport")
+				continue
+			}
+			if len(imports.Items) > 0 {
 				return true
 			}
 		}

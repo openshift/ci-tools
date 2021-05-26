@@ -824,7 +824,7 @@ func ensureImageStreamTag(ctx context.Context, client ctrlruntimeclient.Client, 
 			Name:      isTagRef.Name + ":" + isTagRef.Tag,
 		},
 	}
-	istImport.SetImageStreamLabels()
+	istImport.WithImageStreamLabels()
 
 	// Conflicts are expected
 	if err := client.Create(ctx, istImport); err != nil && !kapierrors.IsConflict(err) {

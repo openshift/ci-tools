@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -24,11 +25,13 @@ import (
 	templateapi "github.com/openshift/api/template/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/release"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration {
@@ -758,7 +761,9 @@ func TestStepConfigsForBuild(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			var imageConfigs []*api.InputImageTagStepConfiguration
 
-			rawSteps, err := stepConfigsForBuild(testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, &imageConfigs)
+			client := fakectrlruntimeclient.NewFakeClient()
+
+			rawSteps, err := stepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, &imageConfigs, time.Nanosecond)
 			if err != nil {
 				t.Fatalf("failed to get stepConfigsForBuild: %v", err)
 			}
@@ -766,6 +771,44 @@ func TestStepConfigsForBuild(t *testing.T) {
 			expected := sortStepConfig(testCase.output)
 			if diff := cmp.Diff(actual, expected); diff != "" {
 				t.Errorf("actual differs from expected: %s", diff)
+			}
+
+			if testCase.input.InputConfiguration.BuildRootImage.FromRepository {
+				imports := &testimagestreamtagimportv1.TestImageStreamTagImportList{}
+				if err := client.List(context.Background(), imports); err != nil {
+					t.Errorf("failed to list testimageimports: %v", err)
+				}
+				if n := len(imports.Items); n != 1 {
+					t.Fatalf("expected to find exactly one testimageimport, got %d", n)
+				}
+
+				var importNS, importName, importTag string
+				for _, step := range testCase.output {
+					if step.InputImageTagStepConfiguration != nil {
+						importNS = step.InputImageTagStepConfiguration.InputImage.BaseImage.Namespace
+						importName = step.InputImageTagStepConfiguration.InputImage.BaseImage.Name
+						importTag = step.InputImageTagStepConfiguration.InputImage.BaseImage.Tag
+						break
+					}
+				}
+
+				expected := &testimagestreamtagimportv1.TestImageStreamTagImport{
+					ObjectMeta: meta.ObjectMeta{
+						Namespace: "ci",
+						Name:      importName + "-" + importTag,
+						Labels: map[string]string{
+							"imagestream-namespace": importNS,
+							"imagestream-name":      importName + ":" + importTag,
+						},
+					},
+					Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
+						Namespace: importNS,
+						Name:      importName + ":" + importTag,
+					},
+				}
+				if diff := cmp.Diff(&imports.Items[0], expected, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
+					t.Errorf("actual import differs from expected: %s", diff)
+				}
 			}
 
 		})

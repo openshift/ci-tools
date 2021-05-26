@@ -26,7 +26,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
-	"github.com/openshift/ci-tools/pkg/bitwarden"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	"github.com/openshift/ci-tools/pkg/vaultclient"
@@ -81,45 +80,13 @@ func TestValidateOptions(t *testing.T) {
 		expected error
 	}{
 		{
-			name: "basic case",
-			given: options{
-				logLevel:   "info",
-				configPath: "/tmp/config",
-				secrets: secrets.CLIOptions{
-					BwUser:         "username",
-					BwPasswordPath: "/tmp/bw-password",
-				},
-			},
-		},
-		{
-			name: "empty bw user",
-			given: options{
-				logLevel:   "info",
-				configPath: "/tmp/config",
-				secrets: secrets.CLIOptions{
-					BwPasswordPath: "/tmp/bw-password",
-				},
-			},
-			expected: fmt.Errorf("[--bw-user and --bw-password-path must be specified together, must specify credentials for exactly one of vault or bitwarden, got credentials for: []]"),
-		},
-		{
-			name: "empty bw user password path",
-			given: options{
-				logLevel:   "info",
-				configPath: "/tmp/config",
-				secrets: secrets.CLIOptions{
-					BwUser: "username",
-				},
-			},
-			expected: fmt.Errorf("[--bw-user and --bw-password-path must be specified together, must specify credentials for exactly one of vault or bitwarden, got credentials for: []]"),
-		},
-		{
 			name: "empty config path",
 			given: options{
 				logLevel: "info",
 				secrets: secrets.CLIOptions{
-					BwUser:         "username",
-					BwPasswordPath: "/tmp/bw-password",
+					VaultAddr:      "https://vault.test",
+					VaultPrefix:    "prefix",
+					VaultTokenFile: "/tmp/vault-token",
 				},
 			},
 			expected: fmt.Errorf("--config is required"),
@@ -145,19 +112,16 @@ secret_configs:
       field: field-name-2
     key-name-3:
       bw_item: item-name-1
-      attachment: attachment-name-1
+      field: field-name-3
     key-name-4:
       bw_item: item-name-2
       field: field-name-1
     key-name-5:
       bw_item: item-name-2
-      attachment: attachment-name-1
+      field: field-name-2
     key-name-6:
       bw_item: item-name-3
-      attachment: attachment-name-2
-    key-name-7:
-      bw_item: item-name-3
-      attribute: password
+      field: field-name-1
   to:
     - cluster: default
       namespace: namespace-1
@@ -168,7 +132,7 @@ secret_configs:
 - from:
     .dockerconfigjson:
       bw_item: quay.io
-      field: Pull Credentials
+      field: pull-credentials
   to:
     - cluster: default
       namespace: ci
@@ -293,24 +257,20 @@ var (
 						Field:  "field-name-2",
 					},
 					"key-name-3": {
-						BWItem:     "item-name-1",
-						Attachment: "attachment-name-1",
+						BWItem: "item-name-1",
+						Field:  "field-name-3",
 					},
 					"key-name-4": {
 						BWItem: "item-name-2",
 						Field:  "field-name-1",
 					},
 					"key-name-5": {
-						BWItem:     "item-name-2",
-						Attachment: "attachment-name-1",
+						BWItem: "item-name-2",
+						Field:  "field-name-2",
 					},
 					"key-name-6": {
-						BWItem:     "item-name-3",
-						Attachment: "attachment-name-2",
-					},
-					"key-name-7": {
-						BWItem:    "item-name-3",
-						Attribute: "password",
+						BWItem: "item-name-3",
+						Field:  "field-name-1",
 					},
 				},
 				To: []secretbootstrap.SecretContext{
@@ -330,7 +290,7 @@ var (
 				From: map[string]secretbootstrap.BitWardenContext{
 					".dockerconfigjson": {
 						BWItem: "quay.io",
-						Field:  "Pull Credentials",
+						Field:  "pull-credentials",
 					},
 				},
 				To: []secretbootstrap.SecretContext{
@@ -357,24 +317,20 @@ var (
 						Field:  "field-name-2",
 					},
 					"key-name-3": {
-						BWItem:     "item-name-1",
-						Attachment: "attachment-name-1",
+						BWItem: "item-name-1",
+						Field:  "field-name-3",
 					},
 					"key-name-4": {
 						BWItem: "item-name-2",
 						Field:  "field-name-1",
 					},
 					"key-name-5": {
-						BWItem:     "item-name-2",
-						Attachment: "attachment-name-1",
+						BWItem: "item-name-2",
+						Field:  "field-name-2",
 					},
 					"key-name-6": {
-						BWItem:     "item-name-3",
-						Attachment: "attachment-name-2",
-					},
-					"key-name-7": {
-						BWItem:    "item-name-3",
-						Attribute: "password",
+						BWItem: "item-name-3",
+						Field:  "field-name-1",
 					},
 				},
 				To: []secretbootstrap.SecretContext{
@@ -423,12 +379,11 @@ func TestCompleteOptions(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name               string
-		given              options
-		expectedError      error
-		expectedBWPassword string
-		expectedConfig     secretbootstrap.Config
-		expectedClusters   []string
+		name             string
+		given            options
+		expectedError    error
+		expectedConfig   secretbootstrap.Config
+		expectedClusters []string
 	}{
 		{
 			name: "basic case",
@@ -437,9 +392,8 @@ func TestCompleteOptions(t *testing.T) {
 				configPath:     configPath,
 				kubeConfigPath: kubeConfigPath,
 			},
-			expectedBWPassword: "topSecret",
-			expectedConfig:     defaultConfig,
-			expectedClusters:   []string{"build01", "default"},
+			expectedConfig:   defaultConfig,
+			expectedClusters: []string{"build01", "default"},
 		},
 		{
 			name: "missing context in kubeconfig",
@@ -459,9 +413,8 @@ func TestCompleteOptions(t *testing.T) {
 				kubeConfigPath: kubeConfigPath,
 				cluster:        "build01",
 			},
-			expectedBWPassword: "topSecret",
-			expectedConfig:     defaultConfigWithoutDefaultCluster,
-			expectedClusters:   []string{"build01"},
+			expectedConfig:   defaultConfigWithoutDefaultCluster,
+			expectedClusters: []string{"build01"},
 		},
 		{
 			name: "attribute is not password",
@@ -480,7 +433,6 @@ func TestCompleteOptions(t *testing.T) {
 				configPath:     configWithGroupsPath,
 				kubeConfigPath: kubeConfigPath,
 			},
-			expectedBWPassword: "topSecret",
 			expectedConfig: secretbootstrap.Config{
 				ClusterGroups: map[string][]string{"group-a": {"default"}},
 				Secrets: []secretbootstrap.SecretConfig{{
@@ -1019,105 +971,43 @@ func TestValidateCompletedOptions(t *testing.T) {
 
 func TestConstructSecrets(t *testing.T) {
 	testCases := []struct {
-		name    string
-		config  secretbootstrap.Config
-		bwItems []bitwarden.Item
-		// id -> content
-		attachments          map[string]string
-		expected             map[string][]*coreapi.Secret
-		expectedBitwardenErr string
-		expectedVaultErr     string
+		name          string
+		config        secretbootstrap.Config
+		items         map[string]vaultclient.KVData
+		expected      map[string][]*coreapi.Secret
+		expectedError string
 	}{
 		{
 			name:   "basic case",
 			config: defaultConfig,
-			bwItems: []bitwarden.Item{
-				{
-					ID:   "1",
-					Name: "item-name-1",
-					Fields: []bitwarden.Field{
-						{
-							Name:  "field-name-1",
-							Value: "value1",
-						},
-						{
-							Name:  "field-name-2",
-							Value: "value2",
-						},
-					},
-					Attachments: []bitwarden.Attachment{
-						{
-							ID:       "a-id-1-1",
-							FileName: "attachment-name-1",
-						},
-						{
-							ID:       "a-id-1-2",
-							FileName: "attachment-name-2",
-						},
+			items: map[string]vaultclient.KVData{
+				"item-name-1": {
+					Data: map[string]string{
+						"field-name-1": "value1",
+						"field-name-2": "value2",
+						"field-name-3": "value3",
+						"field-name-4": "value4",
 					},
 				},
-				{
-					ID:   "2",
-					Name: "item-name-2",
-					Fields: []bitwarden.Field{
-						{
-							Name:  "field-name-1",
-							Value: "value3",
-						},
-						{
-							Name:  "field-name-2",
-							Value: "value2",
-						},
-					},
-					Attachments: []bitwarden.Attachment{
-						{
-							ID:       "a-id-2-1",
-							FileName: "attachment-name-1",
-						},
-						{
-							ID:       "a-id-2-2",
-							FileName: "attachment-name-2",
-						},
+				"item-name-2": {
+					Data: map[string]string{
+						"field-name-1": "value1",
+						"field-name-2": "value2",
+						"field-name-3": "value3",
+						"field-name-4": "value4",
 					},
 				},
-				{
-					ID:   "3",
-					Name: "item-name-3",
-					Login: &bitwarden.Login{
-						Password: "yyy",
-					},
-					Fields: []bitwarden.Field{
-						{
-							Name:  "field-name-1",
-							Value: "value1",
-						},
-					},
-					Attachments: []bitwarden.Attachment{
-						{
-							ID:       "a-id-3-1",
-							FileName: "attachment-name-1",
-						},
-						{
-							ID:       "a-id-3-2",
-							FileName: "attachment-name-2",
-						},
+
+				"item-name-3": {
+					Data: map[string]string{
+						"field-name-1": "value1",
 					},
 				},
-				{
-					ID:   "a",
-					Name: "quay.io",
-					Fields: []bitwarden.Field{
-						{
-							Name:  "Pull Credentials",
-							Value: "123",
-						},
+				"quay.io": {
+					Data: map[string]string{
+						"pull-credentials": "pullToken",
 					},
 				},
-			},
-			attachments: map[string]string{
-				"a-id-1-1": "attachment-name-1-1-value",
-				"a-id-2-1": "attachment-name-2-1-value",
-				"a-id-3-2": "attachment-name-3-2-value",
 			},
 			expected: map[string][]*coreapi.Secret{
 				"default": {
@@ -1131,11 +1021,10 @@ func TestConstructSecrets(t *testing.T) {
 						Data: map[string][]byte{
 							"key-name-1": []byte("value1"),
 							"key-name-2": []byte("value2"),
-							"key-name-3": []byte("attachment-name-1-1-value"),
-							"key-name-4": []byte("value3"),
-							"key-name-5": []byte("attachment-name-2-1-value"),
-							"key-name-6": []byte("attachment-name-3-2-value"),
-							"key-name-7": []byte("yyy"),
+							"key-name-3": []byte("value3"),
+							"key-name-4": []byte("value1"),
+							"key-name-5": []byte("value2"),
+							"key-name-6": []byte("value1"),
 						},
 						Type: "Opaque",
 					},
@@ -1147,7 +1036,7 @@ func TestConstructSecrets(t *testing.T) {
 							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 						},
 						Data: map[string][]byte{
-							".dockerconfigjson": []byte("123"),
+							".dockerconfigjson": []byte("pullToken"),
 						},
 						Type: "kubernetes.io/dockerconfigjson",
 					},
@@ -1163,11 +1052,10 @@ func TestConstructSecrets(t *testing.T) {
 						Data: map[string][]byte{
 							"key-name-1": []byte("value1"),
 							"key-name-2": []byte("value2"),
-							"key-name-3": []byte("attachment-name-1-1-value"),
-							"key-name-4": []byte("value3"),
-							"key-name-5": []byte("attachment-name-2-1-value"),
-							"key-name-6": []byte("attachment-name-3-2-value"),
-							"key-name-7": []byte("yyy"),
+							"key-name-3": []byte("value3"),
+							"key-name-4": []byte("value1"),
+							"key-name-5": []byte("value2"),
+							"key-name-6": []byte("value1"),
 						},
 						Type: "Opaque",
 					},
@@ -1177,164 +1065,30 @@ func TestConstructSecrets(t *testing.T) {
 		{
 			name:   "error: no such field",
 			config: defaultConfig,
-			bwItems: []bitwarden.Item{
-				{
-					ID:   "1",
-					Name: "item-name-1",
-					Fields: []bitwarden.Field{
-						{
-							Name:  "field-name-2",
-							Value: "value2",
-						},
-					},
-					Attachments: []bitwarden.Attachment{
-						{
-							ID:       "a-id-1-1",
-							FileName: "attachment-name-1",
-						},
-						{
-							ID:       "a-id-1-2",
-							FileName: "attachment-name-2",
-						},
+			items: map[string]vaultclient.KVData{
+				"item-name-1": {
+					Data: map[string]string{
+						"field-name-2": "value2",
+						"field-name-3": "value3",
+						"field-name-4": "value4",
 					},
 				},
-				{
-					ID:   "2",
-					Name: "item-name-2",
-					Fields: []bitwarden.Field{
-						{
-							Name:  "field-name-1",
-							Value: "value3",
-						},
-						{
-							Name:  "field-name-2",
-							Value: "value2",
-						},
-					},
-					Attachments: []bitwarden.Attachment{
-						{
-							ID:       "a-id-2-1",
-							FileName: "attachment-name-1",
-						},
-						{
-							ID:       "a-id-2-2",
-							FileName: "attachment-name-2",
-						},
+				"item-name-2": {
+					Data: map[string]string{
+						"field-name-1": "value1",
+						"field-name-2": "value2",
+						"field-name-3": "value3",
+						"field-name-4": "value4",
 					},
 				},
-				{
-					ID:   "3",
-					Name: "item-name-3",
-					Login: &bitwarden.Login{
-						Password: "yyy",
-					},
-					Fields: []bitwarden.Field{
-						{
-							Name:  "field-name-1",
-							Value: "value1",
-						},
-					},
-					Attachments: []bitwarden.Attachment{
-						{
-							ID:       "a-id-3-1",
-							FileName: "attachment-name-1",
-						},
-						{
-							ID:       "a-id-3-2",
-							FileName: "attachment-name-2",
-						},
-					},
-				},
-			},
-			attachments: map[string]string{
-				"a-id-1-1": "attachment-name-1-1-value",
-				"a-id-2-1": "attachment-name-2-1-value",
-				"a-id-3-2": "attachment-name-3-2-value",
-			},
-			expectedBitwardenErr: `[config.0."key-name-1": failed to find field field-name-1 in item item-name-1, config.1.".dockerconfigjson": no item quay.io found]`,
-			expectedVaultErr: `[config.0."key-name-1": item at path "prefix/item-name-1" has no key "field-name-1", config.1.".dockerconfigjson": Error making API request.
 
-URL: GET fakeVaultClient.GetKV
-Code: 404. Errors:
-
-* no data at path prefix/quay.io]`,
-		},
-		{
-			name:   "error: no such attachment",
-			config: defaultConfig,
-			bwItems: []bitwarden.Item{
-				{
-					ID:    "1",
-					Name:  "item-name-1",
-					Login: &bitwarden.Login{Password: "abc"},
-					Fields: []bitwarden.Field{
-						{
-							Name:  "field-name-1",
-							Value: "value1",
-						},
-						{
-							Name:  "field-name-2",
-							Value: "value2",
-						},
-					},
-					Attachments: []bitwarden.Attachment{
-						{
-							ID:       "a-id-1-1",
-							FileName: "attachment-name-1",
-						},
-						{
-							ID:       "a-id-1-2",
-							FileName: "attachment-name-2",
-						},
-					},
-				},
-				{
-					ID:   "2",
-					Name: "item-name-2",
-					Fields: []bitwarden.Field{
-						{
-							Name:  "field-name-1",
-							Value: "value3",
-						},
-						{
-							Name:  "field-name-2",
-							Value: "value2",
-						},
-					},
-					Attachments: []bitwarden.Attachment{
-						{
-							ID:       "a-id-2-2",
-							FileName: "attachment-name-2",
-						},
-					},
-				},
-				{
-					ID:   "3",
-					Name: "item-name-3",
-					Fields: []bitwarden.Field{
-						{
-							Name:  "field-name-1",
-							Value: "value1",
-						},
-					},
-					Attachments: []bitwarden.Attachment{
-						{
-							ID:       "a-id-3-1",
-							FileName: "attachment-name-1",
-						},
-						{
-							ID:       "a-id-3-2",
-							FileName: "attachment-name-2",
-						},
+				"item-name-3": {
+					Data: map[string]string{
+						"field-name-1": "value1",
 					},
 				},
 			},
-			attachments: map[string]string{
-				"a-id-1-1": "attachment-name-1-1-value",
-				"a-id-3-2": "attachment-name-3-2-value",
-			},
-			expectedBitwardenErr: `[config.0."key-name-5": failed to find attachment attachment-name-1 in item item-name-2, config.0."key-name-7": failed to find password in item item-name-3, config.1.".dockerconfigjson": no item quay.io found]`,
-			expectedVaultErr: `[config.0."key-name-5": item at path "prefix/item-name-2" has no key "attachment-name-1", config.0."key-name-7": item at path "prefix/item-name-3" has no key "password", config.1.".dockerconfigjson": Error making API request.
+			expectedError: `[config.0."key-name-1": item at path "prefix/item-name-1" has no key "field-name-1", config.1.".dockerconfigjson": Error making API request.
 
 URL: GET fakeVaultClient.GetKV
 Code: 404. Errors:
@@ -1343,11 +1097,15 @@ Code: 404. Errors:
 		},
 		{
 			name: "Usersecret, simple happy case",
-			bwItems: []bitwarden.Item{{Name: "my/vault/secret", Fields: bwFieldsFromMap(map[string]string{
-				"secretsync/target-namespace": "some-namespace",
-				"secretsync/target-name":      "some-name",
-				"some-data-key":               "a-secret",
-			})}},
+			items: map[string]vaultclient.KVData{
+				"my/vault/secret": {
+					Data: map[string]string{
+						"secretsync/target-namespace": "some-namespace",
+						"secretsync/target-name":      "some-name",
+						"some-data-key":               "a-secret",
+					},
+				},
+			},
 			config: secretbootstrap.Config{UserSecretsTargetClusters: []string{"a", "b"}},
 			expected: map[string][]*coreapi.Secret{
 				"a": {{
@@ -1370,12 +1128,16 @@ Code: 404. Errors:
 		},
 		{
 			name: "Usersecret only for one cluster",
-			bwItems: []bitwarden.Item{{Name: "my/vault/secret", Fields: bwFieldsFromMap(map[string]string{
-				"secretsync/target-namespace": "some-namespace",
-				"secretsync/target-name":      "some-name",
-				"secretsync/target-clusters":  "a",
-				"some-data-key":               "a-secret",
-			})}},
+			items: map[string]vaultclient.KVData{
+				"my/vault/secret": {
+					Data: map[string]string{
+						"secretsync/target-namespace": "some-namespace",
+						"secretsync/target-name":      "some-name",
+						"secretsync/target-clusters":  "a",
+						"some-data-key":               "a-secret",
+					},
+				},
+			},
 			config: secretbootstrap.Config{UserSecretsTargetClusters: []string{"a", "b"}},
 			expected: map[string][]*coreapi.Secret{
 				"a": {{
@@ -1390,12 +1152,16 @@ Code: 404. Errors:
 		},
 		{
 			name: "Usersecret for multiple but not all clusters",
-			bwItems: []bitwarden.Item{{Name: "my/vault/secret", Fields: bwFieldsFromMap(map[string]string{
-				"secretsync/target-namespace": "some-namespace",
-				"secretsync/target-name":      "some-name",
-				"secretsync/target-clusters":  "a,b",
-				"some-data-key":               "a-secret",
-			})}},
+			items: map[string]vaultclient.KVData{
+				"my/vault/secret": {
+					Data: map[string]string{
+						"secretsync/target-namespace": "some-namespace",
+						"secretsync/target-name":      "some-name",
+						"secretsync/target-clusters":  "a,b",
+						"some-data-key":               "a-secret",
+					},
+				},
+			},
 			config: secretbootstrap.Config{UserSecretsTargetClusters: []string{"a", "b", "c", "d"}},
 			expected: map[string][]*coreapi.Secret{
 				"a": {{
@@ -1418,13 +1184,19 @@ Code: 404. Errors:
 		},
 		{
 			name: "Secret gets combined from user- and dptp secret ",
-			bwItems: []bitwarden.Item{
-				{Name: "my/vault/secret", Fields: bwFieldsFromMap(map[string]string{
-					"secretsync/target-namespace": "some-namespace",
-					"secretsync/target-name":      "some-name",
-					"some-data-key":               "a-secret",
-				})},
-				{Name: "dptp-item", Fields: []bitwarden.Field{{Name: "dptp-key", Value: "dptp-secret"}}},
+			items: map[string]vaultclient.KVData{
+				"my/vault/secret": {
+					Data: map[string]string{
+						"secretsync/target-namespace": "some-namespace",
+						"secretsync/target-name":      "some-name",
+						"some-data-key":               "a-secret",
+					},
+				},
+				"dptp-item": {
+					Data: map[string]string{
+						"dptp-key": "dptp-secret",
+					},
+				},
 			},
 			config: secretbootstrap.Config{
 				UserSecretsTargetClusters: []string{"a", "b"},
@@ -1459,8 +1231,12 @@ Code: 404. Errors:
 		},
 		{
 			name: "Secret gets base64-decoded when requested",
-			bwItems: []bitwarden.Item{
-				{Name: "item", Fields: []bitwarden.Field{{Name: "key", Value: "dmFsdWUx"}}},
+			items: map[string]vaultclient.KVData{
+				"item": {
+					Data: map[string]string{
+						"key": "dmFsdWUx",
+					},
+				},
 			},
 			config: secretbootstrap.Config{
 				UserSecretsTargetClusters: []string{"a", "b"},
@@ -1483,8 +1259,12 @@ Code: 404. Errors:
 		},
 		{
 			name: "Secret fails when base64 decoding is requsted on invalid data",
-			bwItems: []bitwarden.Item{
-				{Name: "item", Fields: []bitwarden.Field{{Name: "key", Value: "value"}}},
+			items: map[string]vaultclient.KVData{
+				"item": {
+					Data: map[string]string{
+						"key": "value",
+					},
+				},
 			},
 			config: secretbootstrap.Config{
 				UserSecretsTargetClusters: []string{"a", "b"},
@@ -1495,18 +1275,23 @@ Code: 404. Errors:
 					},
 				}},
 			},
-			expectedBitwardenErr: `failed to base64-decode config.0."secret-key": illegal base64 data at input byte 4`,
-			expectedVaultErr:     `failed to base64-decode config.0."secret-key": illegal base64 data at input byte 4`,
+			expectedError: `failed to base64-decode config.0."secret-key": illegal base64 data at input byte 4`,
 		},
 		{
 			name: "Usersecret would override dptp key, error",
-			bwItems: []bitwarden.Item{
-				{Name: "my/vault/secret", Fields: bwFieldsFromMap(map[string]string{
-					"secretsync/target-namespace": "some-namespace",
-					"secretsync/target-name":      "some-name",
-					"dptp-key":                    "user-value",
-				})},
-				{Name: "dptp-item", Fields: []bitwarden.Field{{Name: "dptp-key", Value: "dptp-secret"}}},
+			items: map[string]vaultclient.KVData{
+				"my/vault/secret": {
+					Data: map[string]string{
+						"secretsync/target-namespace": "some-namespace",
+						"secretsync/target-name":      "some-name",
+						"dptp-key":                    "user-value",
+					},
+				},
+				"dptp-item": {
+					Data: map[string]string{
+						"dptp-key": "dptp-secret",
+					},
+				},
 			},
 			config: secretbootstrap.Config{
 				UserSecretsTargetClusters: []string{"a", "b"},
@@ -1518,17 +1303,23 @@ Code: 404. Errors:
 					},
 				}},
 			},
-			expectedVaultErr: `[key dptp-key in secret some-namespace/some-name in cluster a is targeted by ci-secret-bootstrap config and by vault item in path prefix/my/vault/secret, key dptp-key in secret some-namespace/some-name in cluster b is targeted by ci-secret-bootstrap config and by vault item in path prefix/my/vault/secret]`,
+			expectedError: `[key dptp-key in secret some-namespace/some-name in cluster a is targeted by ci-secret-bootstrap config and by vault item in path prefix/my/vault/secret, key dptp-key in secret some-namespace/some-name in cluster b is targeted by ci-secret-bootstrap config and by vault item in path prefix/my/vault/secret]`,
 		},
 		{
 			name: "dptp secret isn't of opaque type, error",
-			bwItems: []bitwarden.Item{
-				{Name: "my/vault/secret", Fields: bwFieldsFromMap(map[string]string{
-					"secretsync/target-namespace": "some-namespace",
-					"secretsync/target-name":      "some-name",
-					"dptp-key":                    "user-value",
-				})},
-				{Name: "dptp-item", Fields: []bitwarden.Field{{Name: "dptp-key", Value: "dptp-secret"}}},
+			items: map[string]vaultclient.KVData{
+				"my/vault/secret": {
+					Data: map[string]string{
+						"secretsync/target-namespace": "some-namespace",
+						"secretsync/target-name":      "some-name",
+						"dptp-key":                    "user-value",
+					},
+				},
+				"dptp-item": {
+					Data: map[string]string{
+						"dptp-key": "dptp-secret",
+					},
+				},
 			},
 			config: secretbootstrap.Config{
 				UserSecretsTargetClusters: []string{"a", "b"},
@@ -1540,54 +1331,40 @@ Code: 404. Errors:
 					},
 				}},
 			},
-			expectedVaultErr: `[secret some-namespace/some-name in cluster a has ci-secret-bootstrap config as non-opaque type and is targeted by user sync from key prefix/my/vault/secret, secret some-namespace/some-name in cluster b has ci-secret-bootstrap config as non-opaque type and is targeted by user sync from key prefix/my/vault/secret]`,
+			expectedError: `[secret some-namespace/some-name in cluster a has ci-secret-bootstrap config as non-opaque type and is targeted by user sync from key prefix/my/vault/secret, secret some-namespace/some-name in cluster b has ci-secret-bootstrap config as non-opaque type and is targeted by user sync from key prefix/my/vault/secret]`,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			for _, clientTestCase := range []clientTestCase{
-				{name: "bitwarden", client: secrets.NewBitwardenClient(bitwarden.NewFakeClient(tc.bwItems, tc.attachments)), expectedError: tc.expectedBitwardenErr},
-				{name: "vault", client: vaultClientFromBitwardenItems(tc.bwItems, tc.attachments), expectedError: tc.expectedVaultErr},
-			} {
-				t.Run(clientTestCase.name, func(t *testing.T) {
-					if len(tc.config.UserSecretsTargetClusters) != 0 && clientTestCase.name == "bitwarden" {
-						t.Skip("Bitwarden doesn't implement a user secret sync functionality")
-					}
-					var actualErrorMsg string
-					actual, actualError := constructSecrets(context.TODO(), tc.config, clientTestCase.client, 10)
-					if actualError != nil {
-						actualErrorMsg = actualError.Error()
-					}
-					if actualErrorMsg != clientTestCase.expectedError {
-						t.Fatalf("expected error message %s, got %s", clientTestCase.expectedError, actualErrorMsg)
-					}
-					if actualError != nil {
-						return
-					}
-					for key := range actual {
-						sort.Slice(actual[key], func(i, j int) bool {
-							return actual[key][i].Name < actual[key][j].Name
-						})
-					}
-					for key := range tc.expected {
-						sort.Slice(tc.expected[key], func(i, j int) bool {
-							return tc.expected[key][i].Name < tc.expected[key][j].Name
-						})
-					}
-					equal(t, "secrets", tc.expected, actual)
-				})
-			}
+			t.Run(tc.name, func(t *testing.T) {
+				client := vaultClientFromTestItems(tc.items)
+
+				var actualErrorMsg string
+				actual, actualError := constructSecrets(context.TODO(), tc.config, client, 10)
+				if actualError != nil {
+					actualErrorMsg = actualError.Error()
+				}
+				if actualErrorMsg != tc.expectedError {
+					t.Fatalf("expected error message %s, got %s", tc.expectedError, actualErrorMsg)
+				}
+				if actualError != nil {
+					return
+				}
+				for key := range actual {
+					sort.Slice(actual[key], func(i, j int) bool {
+						return actual[key][i].Name < actual[key][j].Name
+					})
+				}
+				for key := range tc.expected {
+					sort.Slice(tc.expected[key], func(i, j int) bool {
+						return tc.expected[key][i].Name < tc.expected[key][j].Name
+					})
+				}
+				equal(t, "secrets", tc.expected, actual)
+			})
 		})
 	}
-}
-
-func bwFieldsFromMap(m map[string]string) []bitwarden.Field {
-	var res []bitwarden.Field
-	for k, v := range m {
-		res = append(res, bitwarden.Field{Name: k, Value: v})
-	}
-	return res
 }
 
 func TestUpdateSecrets(t *testing.T) {
@@ -2147,28 +1924,15 @@ func equal(t *testing.T, what string, expected, actual interface{}) {
 }
 
 func TestConstructDockerConfigJSON(t *testing.T) {
-	type attachment struct {
-		bwItem   string
-		filename string
-		contents []byte
-	}
 	testCases := []struct {
 		id                   string
-		bwClient             bitwarden.Client
+		items                map[string]vaultclient.KVData
 		dockerConfigJSONData []secretbootstrap.DockerConfigJSONData
-		attachments          []attachment
 		expectedJSON         []byte
 		expectedError        string
 	}{
 		{
 			id: "happy case",
-			attachments: []attachment{
-				{
-					bwItem:   "item-name-1",
-					filename: "auth",
-					contents: []byte("c2VydmljZWFjY291bnQ6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklrRndTekF0YjBaNGJXMUZURXRHTVMwMFVEa3djbEEwUTJWQlRUZERNMGRXUkZwdmJGOVllaTFEUW5NaWZRLmV5SnBjM01pT2lKcmRXSmxjbTVsZEdWekwzTmxjblpwWTJWaFkyTnZkVzUwSWl3aWEzVmlaWEp1WlhSbGN5NXBieTl6WlhKMmFXTmxZV05qYjNWdWRDOXVZVzFsYzNCaFkyVWlPaUpoYkhaaGNtOHRkR1Z6ZENJc0ltdDFZbVZ5Ym1WMFpYTXVhVzh2YzJWeWRtbGpaV0ZqWTI5MWJuUXZjMlZqY21WMExtNWhiV1VpT2lKa1pXWmhkV3gwTFhSdmEyVnVMV1EwT1d4aUlpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WlhKMmFXTmxMV0ZqWTI5MWJuUXVibUZ0WlNJNkltUmxabUYxYkhRaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNTFhV1FpT2lJM05tVTRZMlpsTmkxbU1HWXhMVFF5WlRNdFlqUm1NQzFoTXpjM1pUbGhOemxrWWpRaUxDSnpkV0lpT2lKemVYTjBaVzA2YzJWeWRtbGpaV0ZqWTI5MWJuUTZZV3gyWVhKdkxYUmxjM1E2WkdWbVlYVnNkQ0o5LnMyajh6X2JfT3NMOHY5UGlLR1NUQmFuZDE0MHExMHc3VTlMdU9JWmZlUG1SeF9OMHdKRkZPcVN0MGNjdmtVaUVGV0x5QWNSU2k2cUt3T1FSVzE2MVUzSU52UEY4Q0pDZ2d2R3JHUnMzeHp6N3hjSmgzTWRpcXhzWGViTmNmQmlmWWxXUTU2U1RTZDlUeUh1RkN6c1poNXBlSHVzS3hOa2hJRTNyWHp5ZHNoMkhCaTZMYTlYZ1l4R1VjM0x3NWh4RnB5bXFyajFJNzExbWZLcUV2bUN0a0J4blJtMlhIZmFKalNVRkswWWdoY0lMbkhuWGhMOEx2MUl0bnU4SzlvWFRfWVZIQWY1R3hlaERjZ3FBMmw1NUZyYkJMTGVfNi1DV2V2N2RQZU5PbFlaWE5xbEtkUG5KbW9BREdsOEktTlhKN2x5ZXl2a2hfZ3JkanhXdVVqQ3lQUQ=="),
-				},
-			},
 			dockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 				{
 					BWItem:                    "item-name-1",
@@ -2177,40 +1941,19 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 					EmailBitwardenField:       "email",
 				},
 			},
-			bwClient: bitwarden.NewFakeClient(
-				[]bitwarden.Item{
-					{
-						ID:   "1",
-						Name: "item-name-1",
-						Attachments: []bitwarden.Attachment{
-							{
-								ID:       "12345678",
-								FileName: "auth",
-							},
-						},
-						Fields: []bitwarden.Field{
-							{
-								Name:  "registryURL",
-								Value: "quay.io",
-							},
-							{
-								Name:  "email",
-								Value: "test@test.com",
-							},
-						},
+			items: map[string]vaultclient.KVData{
+				"item-name-1": {
+					Data: map[string]string{
+						"auth":        "c2VydmljZWFjY291bnQ6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklrRndTekF0YjBaNGJXMUZURXRHTVMwMFVEa3djbEEwUTJWQlRUZERNMGRXUkZwdmJGOVllaTFEUW5NaWZRLmV5SnBjM01pT2lKcmRXSmxjbTVsZEdWekwzTmxjblpwWTJWaFkyTnZkVzUwSWl3aWEzVmlaWEp1WlhSbGN5NXBieTl6WlhKMmFXTmxZV05qYjNWdWRDOXVZVzFsYzNCaFkyVWlPaUpoYkhaaGNtOHRkR1Z6ZENJc0ltdDFZbVZ5Ym1WMFpYTXVhVzh2YzJWeWRtbGpaV0ZqWTI5MWJuUXZjMlZqY21WMExtNWhiV1VpT2lKa1pXWmhkV3gwTFhSdmEyVnVMV1EwT1d4aUlpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WlhKMmFXTmxMV0ZqWTI5MWJuUXVibUZ0WlNJNkltUmxabUYxYkhRaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNTFhV1FpT2lJM05tVTRZMlpsTmkxbU1HWXhMVFF5WlRNdFlqUm1NQzFoTXpjM1pUbGhOemxrWWpRaUxDSnpkV0lpT2lKemVYTjBaVzA2YzJWeWRtbGpaV0ZqWTI5MWJuUTZZV3gyWVhKdkxYUmxjM1E2WkdWbVlYVnNkQ0o5LnMyajh6X2JfT3NMOHY5UGlLR1NUQmFuZDE0MHExMHc3VTlMdU9JWmZlUG1SeF9OMHdKRkZPcVN0MGNjdmtVaUVGV0x5QWNSU2k2cUt3T1FSVzE2MVUzSU52UEY4Q0pDZ2d2R3JHUnMzeHp6N3hjSmgzTWRpcXhzWGViTmNmQmlmWWxXUTU2U1RTZDlUeUh1RkN6c1poNXBlSHVzS3hOa2hJRTNyWHp5ZHNoMkhCaTZMYTlYZ1l4R1VjM0x3NWh4RnB5bXFyajFJNzExbWZLcUV2bUN0a0J4blJtMlhIZmFKalNVRkswWWdoY0lMbkhuWGhMOEx2MUl0bnU4SzlvWFRfWVZIQWY1R3hlaERjZ3FBMmw1NUZyYkJMTGVfNi1DV2V2N2RQZU5PbFlaWE5xbEtkUG5KbW9BREdsOEktTlhKN2x5ZXl2a2hfZ3JkanhXdVVqQ3lQUQ==",
+						"registryURL": "quay.io",
+						"email":       "test@test.com",
 					},
-				}, make(map[string]string)),
+				},
+			},
 			expectedJSON: []byte(`{"auths":{"quay.io":{"auth":"c2VydmljZWFjY291bnQ6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklrRndTekF0YjBaNGJXMUZURXRHTVMwMFVEa3djbEEwUTJWQlRUZERNMGRXUkZwdmJGOVllaTFEUW5NaWZRLmV5SnBjM01pT2lKcmRXSmxjbTVsZEdWekwzTmxjblpwWTJWaFkyTnZkVzUwSWl3aWEzVmlaWEp1WlhSbGN5NXBieTl6WlhKMmFXTmxZV05qYjNWdWRDOXVZVzFsYzNCaFkyVWlPaUpoYkhaaGNtOHRkR1Z6ZENJc0ltdDFZbVZ5Ym1WMFpYTXVhVzh2YzJWeWRtbGpaV0ZqWTI5MWJuUXZjMlZqY21WMExtNWhiV1VpT2lKa1pXWmhkV3gwTFhSdmEyVnVMV1EwT1d4aUlpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WlhKMmFXTmxMV0ZqWTI5MWJuUXVibUZ0WlNJNkltUmxabUYxYkhRaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNTFhV1FpT2lJM05tVTRZMlpsTmkxbU1HWXhMVFF5WlRNdFlqUm1NQzFoTXpjM1pUbGhOemxrWWpRaUxDSnpkV0lpT2lKemVYTjBaVzA2YzJWeWRtbGpaV0ZqWTI5MWJuUTZZV3gyWVhKdkxYUmxjM1E2WkdWbVlYVnNkQ0o5LnMyajh6X2JfT3NMOHY5UGlLR1NUQmFuZDE0MHExMHc3VTlMdU9JWmZlUG1SeF9OMHdKRkZPcVN0MGNjdmtVaUVGV0x5QWNSU2k2cUt3T1FSVzE2MVUzSU52UEY4Q0pDZ2d2R3JHUnMzeHp6N3hjSmgzTWRpcXhzWGViTmNmQmlmWWxXUTU2U1RTZDlUeUh1RkN6c1poNXBlSHVzS3hOa2hJRTNyWHp5ZHNoMkhCaTZMYTlYZ1l4R1VjM0x3NWh4RnB5bXFyajFJNzExbWZLcUV2bUN0a0J4blJtMlhIZmFKalNVRkswWWdoY0lMbkhuWGhMOEx2MUl0bnU4SzlvWFRfWVZIQWY1R3hlaERjZ3FBMmw1NUZyYkJMTGVfNi1DV2V2N2RQZU5PbFlaWE5xbEtkUG5KbW9BREdsOEktTlhKN2x5ZXl2a2hfZ3JkanhXdVVqQ3lQUQ==","email":"test@test.com"}}}`),
 		},
 		{
 			id: "invalid conents, parsing fails",
-			attachments: []attachment{
-				{
-					bwItem:   "item-name-1",
-					filename: "auth",
-					contents: []byte("123456789"),
-				},
-			},
 			dockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 				{
 					BWItem:                    "item-name-1",
@@ -2219,41 +1962,20 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 					EmailBitwardenField:       "email",
 				},
 			},
-			bwClient: bitwarden.NewFakeClient(
-				[]bitwarden.Item{
-					{
-						ID:   "1",
-						Name: "item-name-1",
-						Attachments: []bitwarden.Attachment{
-							{
-								ID:       "12345678",
-								FileName: "auth",
-							},
-						},
-						Fields: []bitwarden.Field{
-							{
-								Name:  "registryURL",
-								Value: "quay.io",
-							},
-							{
-								Name:  "email",
-								Value: "test@test.com",
-							},
-						},
+			items: map[string]vaultclient.KVData{
+				"item-name-1": {
+					Data: map[string]string{
+						"auth":        "123456789",
+						"registryURL": "quay.io",
+						"email":       "test@test.com",
 					},
-				}, make(map[string]string)),
+				},
+			},
 			expectedJSON:  []byte(`{"auths":{"quay.io":{"auth":"123456789","email":"test@test.com"}}}`),
 			expectedError: "the constructed dockerconfigJSON doesn't parse: illegal base64 data at input byte 8",
 		},
 		{
 			id: "RegistryURL overrides RegistryURLBitwardenField",
-			attachments: []attachment{
-				{
-					bwItem:   "item-name-1",
-					filename: "auth",
-					contents: []byte("c2VydmljZWFjY291bnQ6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklrRndTekF0YjBaNGJXMUZURXRHTVMwMFVEa3djbEEwUTJWQlRUZERNMGRXUkZwdmJGOVllaTFEUW5NaWZRLmV5SnBjM01pT2lKcmRXSmxjbTVsZEdWekwzTmxjblpwWTJWaFkyTnZkVzUwSWl3aWEzVmlaWEp1WlhSbGN5NXBieTl6WlhKMmFXTmxZV05qYjNWdWRDOXVZVzFsYzNCaFkyVWlPaUpoYkhaaGNtOHRkR1Z6ZENJc0ltdDFZbVZ5Ym1WMFpYTXVhVzh2YzJWeWRtbGpaV0ZqWTI5MWJuUXZjMlZqY21WMExtNWhiV1VpT2lKa1pXWmhkV3gwTFhSdmEyVnVMV1EwT1d4aUlpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WlhKMmFXTmxMV0ZqWTI5MWJuUXVibUZ0WlNJNkltUmxabUYxYkhRaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNTFhV1FpT2lJM05tVTRZMlpsTmkxbU1HWXhMVFF5WlRNdFlqUm1NQzFoTXpjM1pUbGhOemxrWWpRaUxDSnpkV0lpT2lKemVYTjBaVzA2YzJWeWRtbGpaV0ZqWTI5MWJuUTZZV3gyWVhKdkxYUmxjM1E2WkdWbVlYVnNkQ0o5LnMyajh6X2JfT3NMOHY5UGlLR1NUQmFuZDE0MHExMHc3VTlMdU9JWmZlUG1SeF9OMHdKRkZPcVN0MGNjdmtVaUVGV0x5QWNSU2k2cUt3T1FSVzE2MVUzSU52UEY4Q0pDZ2d2R3JHUnMzeHp6N3hjSmgzTWRpcXhzWGViTmNmQmlmWWxXUTU2U1RTZDlUeUh1RkN6c1poNXBlSHVzS3hOa2hJRTNyWHp5ZHNoMkhCaTZMYTlYZ1l4R1VjM0x3NWh4RnB5bXFyajFJNzExbWZLcUV2bUN0a0J4blJtMlhIZmFKalNVRkswWWdoY0lMbkhuWGhMOEx2MUl0bnU4SzlvWFRfWVZIQWY1R3hlaERjZ3FBMmw1NUZyYkJMTGVfNi1DV2V2N2RQZU5PbFlaWE5xbEtkUG5KbW9BREdsOEktTlhKN2x5ZXl2a2hfZ3JkanhXdVVqQ3lQUQ=="),
-				},
-			},
 			dockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 				{
 					BWItem:                    "item-name-1",
@@ -2263,45 +1985,19 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 					RegistryURL:               "cool-url",
 				},
 			},
-			bwClient: bitwarden.NewFakeClient(
-				[]bitwarden.Item{
-					{
-						ID:   "1",
-						Name: "item-name-1",
-						Attachments: []bitwarden.Attachment{
-							{
-								ID:       "12345678",
-								FileName: "auth",
-							},
-						},
-						Fields: []bitwarden.Field{
-							{
-								Name:  "registryURL",
-								Value: "quay.io",
-							},
-							{
-								Name:  "email",
-								Value: "test@test.com",
-							},
-						},
+			items: map[string]vaultclient.KVData{
+				"item-name-1": {
+					Data: map[string]string{
+						"auth":        "c2VydmljZWFjY291bnQ6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklrRndTekF0YjBaNGJXMUZURXRHTVMwMFVEa3djbEEwUTJWQlRUZERNMGRXUkZwdmJGOVllaTFEUW5NaWZRLmV5SnBjM01pT2lKcmRXSmxjbTVsZEdWekwzTmxjblpwWTJWaFkyTnZkVzUwSWl3aWEzVmlaWEp1WlhSbGN5NXBieTl6WlhKMmFXTmxZV05qYjNWdWRDOXVZVzFsYzNCaFkyVWlPaUpoYkhaaGNtOHRkR1Z6ZENJc0ltdDFZbVZ5Ym1WMFpYTXVhVzh2YzJWeWRtbGpaV0ZqWTI5MWJuUXZjMlZqY21WMExtNWhiV1VpT2lKa1pXWmhkV3gwTFhSdmEyVnVMV1EwT1d4aUlpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WlhKMmFXTmxMV0ZqWTI5MWJuUXVibUZ0WlNJNkltUmxabUYxYkhRaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNTFhV1FpT2lJM05tVTRZMlpsTmkxbU1HWXhMVFF5WlRNdFlqUm1NQzFoTXpjM1pUbGhOemxrWWpRaUxDSnpkV0lpT2lKemVYTjBaVzA2YzJWeWRtbGpaV0ZqWTI5MWJuUTZZV3gyWVhKdkxYUmxjM1E2WkdWbVlYVnNkQ0o5LnMyajh6X2JfT3NMOHY5UGlLR1NUQmFuZDE0MHExMHc3VTlMdU9JWmZlUG1SeF9OMHdKRkZPcVN0MGNjdmtVaUVGV0x5QWNSU2k2cUt3T1FSVzE2MVUzSU52UEY4Q0pDZ2d2R3JHUnMzeHp6N3hjSmgzTWRpcXhzWGViTmNmQmlmWWxXUTU2U1RTZDlUeUh1RkN6c1poNXBlSHVzS3hOa2hJRTNyWHp5ZHNoMkhCaTZMYTlYZ1l4R1VjM0x3NWh4RnB5bXFyajFJNzExbWZLcUV2bUN0a0J4blJtMlhIZmFKalNVRkswWWdoY0lMbkhuWGhMOEx2MUl0bnU4SzlvWFRfWVZIQWY1R3hlaERjZ3FBMmw1NUZyYkJMTGVfNi1DV2V2N2RQZU5PbFlaWE5xbEtkUG5KbW9BREdsOEktTlhKN2x5ZXl2a2hfZ3JkanhXdVVqQ3lQUQ==",
+						"registryURL": "quay.io",
+						"email":       "test@test.com",
 					},
-				}, make(map[string]string)),
+				},
+			},
 			expectedJSON: []byte(`{"auths":{"cool-url":{"auth":"c2VydmljZWFjY291bnQ6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklrRndTekF0YjBaNGJXMUZURXRHTVMwMFVEa3djbEEwUTJWQlRUZERNMGRXUkZwdmJGOVllaTFEUW5NaWZRLmV5SnBjM01pT2lKcmRXSmxjbTVsZEdWekwzTmxjblpwWTJWaFkyTnZkVzUwSWl3aWEzVmlaWEp1WlhSbGN5NXBieTl6WlhKMmFXTmxZV05qYjNWdWRDOXVZVzFsYzNCaFkyVWlPaUpoYkhaaGNtOHRkR1Z6ZENJc0ltdDFZbVZ5Ym1WMFpYTXVhVzh2YzJWeWRtbGpaV0ZqWTI5MWJuUXZjMlZqY21WMExtNWhiV1VpT2lKa1pXWmhkV3gwTFhSdmEyVnVMV1EwT1d4aUlpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WlhKMmFXTmxMV0ZqWTI5MWJuUXVibUZ0WlNJNkltUmxabUYxYkhRaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNTFhV1FpT2lJM05tVTRZMlpsTmkxbU1HWXhMVFF5WlRNdFlqUm1NQzFoTXpjM1pUbGhOemxrWWpRaUxDSnpkV0lpT2lKemVYTjBaVzA2YzJWeWRtbGpaV0ZqWTI5MWJuUTZZV3gyWVhKdkxYUmxjM1E2WkdWbVlYVnNkQ0o5LnMyajh6X2JfT3NMOHY5UGlLR1NUQmFuZDE0MHExMHc3VTlMdU9JWmZlUG1SeF9OMHdKRkZPcVN0MGNjdmtVaUVGV0x5QWNSU2k2cUt3T1FSVzE2MVUzSU52UEY4Q0pDZ2d2R3JHUnMzeHp6N3hjSmgzTWRpcXhzWGViTmNmQmlmWWxXUTU2U1RTZDlUeUh1RkN6c1poNXBlSHVzS3hOa2hJRTNyWHp5ZHNoMkhCaTZMYTlYZ1l4R1VjM0x3NWh4RnB5bXFyajFJNzExbWZLcUV2bUN0a0J4blJtMlhIZmFKalNVRkswWWdoY0lMbkhuWGhMOEx2MUl0bnU4SzlvWFRfWVZIQWY1R3hlaERjZ3FBMmw1NUZyYkJMTGVfNi1DV2V2N2RQZU5PbFlaWE5xbEtkUG5KbW9BREdsOEktTlhKN2x5ZXl2a2hfZ3JkanhXdVVqQ3lQUQ==","email":"test@test.com"}}}`),
 		},
 		{
 			id: "happy multiple case",
-			attachments: []attachment{
-				{
-					bwItem:   "item-name-1",
-					filename: "auth",
-					contents: []byte("c2VydmljZWFjY291bnQ6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklrRndTekF0YjBaNGJXMUZURXRHTVMwMFVEa3djbEEwUTJWQlRUZERNMGRXUkZwdmJGOVllaTFEUW5NaWZRLmV5SnBjM01pT2lKcmRXSmxjbTVsZEdWekwzTmxjblpwWTJWaFkyTnZkVzUwSWl3aWEzVmlaWEp1WlhSbGN5NXBieTl6WlhKMmFXTmxZV05qYjNWdWRDOXVZVzFsYzNCaFkyVWlPaUpoYkhaaGNtOHRkR1Z6ZENJc0ltdDFZbVZ5Ym1WMFpYTXVhVzh2YzJWeWRtbGpaV0ZqWTI5MWJuUXZjMlZqY21WMExtNWhiV1VpT2lKa1pXWmhkV3gwTFhSdmEyVnVMV1EwT1d4aUlpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WlhKMmFXTmxMV0ZqWTI5MWJuUXVibUZ0WlNJNkltUmxabUYxYkhRaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNTFhV1FpT2lJM05tVTRZMlpsTmkxbU1HWXhMVFF5WlRNdFlqUm1NQzFoTXpjM1pUbGhOemxrWWpRaUxDSnpkV0lpT2lKemVYTjBaVzA2YzJWeWRtbGpaV0ZqWTI5MWJuUTZZV3gyWVhKdkxYUmxjM1E2WkdWbVlYVnNkQ0o5LnMyajh6X2JfT3NMOHY5UGlLR1NUQmFuZDE0MHExMHc3VTlMdU9JWmZlUG1SeF9OMHdKRkZPcVN0MGNjdmtVaUVGV0x5QWNSU2k2cUt3T1FSVzE2MVUzSU52UEY4Q0pDZ2d2R3JHUnMzeHp6N3hjSmgzTWRpcXhzWGViTmNmQmlmWWxXUTU2U1RTZDlUeUh1RkN6c1poNXBlSHVzS3hOa2hJRTNyWHp5ZHNoMkhCaTZMYTlYZ1l4R1VjM0x3NWh4RnB5bXFyajFJNzExbWZLcUV2bUN0a0J4blJtMlhIZmFKalNVRkswWWdoY0lMbkhuWGhMOEx2MUl0bnU4SzlvWFRfWVZIQWY1R3hlaERjZ3FBMmw1NUZyYkJMTGVfNi1DV2V2N2RQZU5PbFlaWE5xbEtkUG5KbW9BREdsOEktTlhKN2x5ZXl2a2hfZ3JkanhXdVVqQ3lQUQ=="),
-				},
-				{
-					bwItem:   "item-name-2",
-					filename: "auth",
-					contents: []byte("c2VydmljZWFjY291bnQ6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklrRndTekF0YjBaNGJXMUZURXRHTVMwMFVEa3djbEEwUTJWQlRUZERNMGRXUkZwdmJGOVllaTFEUW5NaWZRLmV5SnBjM01pT2lKcmRXSmxjbTVsZEdWekwzTmxjblpwWTJWaFkyTnZkVzUwSWl3aWEzVmlaWEp1WlhSbGN5NXBieTl6WlhKMmFXTmxZV05qYjNWdWRDOXVZVzFsYzNCaFkyVWlPaUpoYkhaaGNtOHRkR1Z6ZENJc0ltdDFZbVZ5Ym1WMFpYTXVhVzh2YzJWeWRtbGpaV0ZqWTI5MWJuUXZjMlZqY21WMExtNWhiV1VpT2lKa1pXWmhkV3gwTFhSdmEyVnVMV1EwT1d4aUlpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WlhKMmFXTmxMV0ZqWTI5MWJuUXVibUZ0WlNJNkltUmxabUYxYkhRaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNTFhV1FpT2lJM05tVTRZMlpsTmkxbU1HWXhMVFF5WlRNdFlqUm1NQzFoTXpjM1pUbGhOemxrWWpRaUxDSnpkV0lpT2lKemVYTjBaVzA2YzJWeWRtbGpaV0ZqWTI5MWJuUTZZV3gyWVhKdkxYUmxjM1E2WkdWbVlYVnNkQ0o5LnMyajh6X2JfT3NMOHY5UGlLR1NUQmFuZDE0MHExMHc3VTlMdU9JWmZlUG1SeF9OMHdKRkZPcVN0MGNjdmtVaUVGV0x5QWNSU2k2cUt3T1FSVzE2MVUzSU52UEY4Q0pDZ2d2R3JHUnMzeHp6N3hjSmgzTWRpcXhzWGViTmNmQmlmWWxXUTU2U1RTZDlUeUh1RkN6c1poNXBlSHVzS3hOa2hJRTNyWHp5ZHNoMkhCaTZMYTlYZ1l4R1VjM0x3NWh4RnB5bXFyajFJNzExbWZLcUV2bUN0a0J4blJtMlhIZmFKalNVRkswWWdoY0lMbkhuWGhMOEx2MUl0bnU4SzlvWFRfWVZIQWY1R3hlaERjZ3FBMmw1NUZyYkJMTGVfNi1DV2V2N2RQZU5PbFlaWE5xbEtkUG5KbW9BREdsOEktTlhKN2x5ZXl2a2hfZ3JkanhXdVVqQ3lQUQ=="),
-				},
-			},
 			dockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 				{
 					BWItem:                    "item-name-1",
@@ -2316,45 +2012,22 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 					EmailBitwardenField:       "email",
 				},
 			},
-			bwClient: bitwarden.NewFakeClient(
-				[]bitwarden.Item{
-					{
-						ID:   "1",
-						Name: "item-name-1",
-						Fields: []bitwarden.Field{
-							{
-								Name:  "registryURL",
-								Value: "quay.io",
-							},
-							{
-								Name:  "auth",
-								Value: "123456789",
-							},
-							{
-								Name:  "email",
-								Value: "test@test.com",
-							},
-						},
+			items: map[string]vaultclient.KVData{
+				"item-name-1": {
+					Data: map[string]string{
+						"auth":        "c2VydmljZWFjY291bnQ6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklrRndTekF0YjBaNGJXMUZURXRHTVMwMFVEa3djbEEwUTJWQlRUZERNMGRXUkZwdmJGOVllaTFEUW5NaWZRLmV5SnBjM01pT2lKcmRXSmxjbTVsZEdWekwzTmxjblpwWTJWaFkyTnZkVzUwSWl3aWEzVmlaWEp1WlhSbGN5NXBieTl6WlhKMmFXTmxZV05qYjNWdWRDOXVZVzFsYzNCaFkyVWlPaUpoYkhaaGNtOHRkR1Z6ZENJc0ltdDFZbVZ5Ym1WMFpYTXVhVzh2YzJWeWRtbGpaV0ZqWTI5MWJuUXZjMlZqY21WMExtNWhiV1VpT2lKa1pXWmhkV3gwTFhSdmEyVnVMV1EwT1d4aUlpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WlhKMmFXTmxMV0ZqWTI5MWJuUXVibUZ0WlNJNkltUmxabUYxYkhRaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNTFhV1FpT2lJM05tVTRZMlpsTmkxbU1HWXhMVFF5WlRNdFlqUm1NQzFoTXpjM1pUbGhOemxrWWpRaUxDSnpkV0lpT2lKemVYTjBaVzA2YzJWeWRtbGpaV0ZqWTI5MWJuUTZZV3gyWVhKdkxYUmxjM1E2WkdWbVlYVnNkQ0o5LnMyajh6X2JfT3NMOHY5UGlLR1NUQmFuZDE0MHExMHc3VTlMdU9JWmZlUG1SeF9OMHdKRkZPcVN0MGNjdmtVaUVGV0x5QWNSU2k2cUt3T1FSVzE2MVUzSU52UEY4Q0pDZ2d2R3JHUnMzeHp6N3hjSmgzTWRpcXhzWGViTmNmQmlmWWxXUTU2U1RTZDlUeUh1RkN6c1poNXBlSHVzS3hOa2hJRTNyWHp5ZHNoMkhCaTZMYTlYZ1l4R1VjM0x3NWh4RnB5bXFyajFJNzExbWZLcUV2bUN0a0J4blJtMlhIZmFKalNVRkswWWdoY0lMbkhuWGhMOEx2MUl0bnU4SzlvWFRfWVZIQWY1R3hlaERjZ3FBMmw1NUZyYkJMTGVfNi1DV2V2N2RQZU5PbFlaWE5xbEtkUG5KbW9BREdsOEktTlhKN2x5ZXl2a2hfZ3JkanhXdVVqQ3lQUQ==",
+						"registryURL": "quay.io",
+						"email":       "test@test.com",
 					},
-					{
-						ID:   "2",
-						Name: "item-name-2",
-						Fields: []bitwarden.Field{
-							{
-								Name:  "registryURL",
-								Value: "cloud.redhat.com",
-							},
-							{
-								Name:  "auth",
-								Value: "987654321",
-							},
-							{
-								Name:  "email",
-								Value: "foo@bar.com",
-							},
-						},
+				},
+				"item-name-2": {
+					Data: map[string]string{
+						"auth":        "c2VydmljZWFjY291bnQ6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklrRndTekF0YjBaNGJXMUZURXRHTVMwMFVEa3djbEEwUTJWQlRUZERNMGRXUkZwdmJGOVllaTFEUW5NaWZRLmV5SnBjM01pT2lKcmRXSmxjbTVsZEdWekwzTmxjblpwWTJWaFkyTnZkVzUwSWl3aWEzVmlaWEp1WlhSbGN5NXBieTl6WlhKMmFXTmxZV05qYjNWdWRDOXVZVzFsYzNCaFkyVWlPaUpoYkhaaGNtOHRkR1Z6ZENJc0ltdDFZbVZ5Ym1WMFpYTXVhVzh2YzJWeWRtbGpaV0ZqWTI5MWJuUXZjMlZqY21WMExtNWhiV1VpT2lKa1pXWmhkV3gwTFhSdmEyVnVMV1EwT1d4aUlpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WlhKMmFXTmxMV0ZqWTI5MWJuUXVibUZ0WlNJNkltUmxabUYxYkhRaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNTFhV1FpT2lJM05tVTRZMlpsTmkxbU1HWXhMVFF5WlRNdFlqUm1NQzFoTXpjM1pUbGhOemxrWWpRaUxDSnpkV0lpT2lKemVYTjBaVzA2YzJWeWRtbGpaV0ZqWTI5MWJuUTZZV3gyWVhKdkxYUmxjM1E2WkdWbVlYVnNkQ0o5LnMyajh6X2JfT3NMOHY5UGlLR1NUQmFuZDE0MHExMHc3VTlMdU9JWmZlUG1SeF9OMHdKRkZPcVN0MGNjdmtVaUVGV0x5QWNSU2k2cUt3T1FSVzE2MVUzSU52UEY4Q0pDZ2d2R3JHUnMzeHp6N3hjSmgzTWRpcXhzWGViTmNmQmlmWWxXUTU2U1RTZDlUeUh1RkN6c1poNXBlSHVzS3hOa2hJRTNyWHp5ZHNoMkhCaTZMYTlYZ1l4R1VjM0x3NWh4RnB5bXFyajFJNzExbWZLcUV2bUN0a0J4blJtMlhIZmFKalNVRkswWWdoY0lMbkhuWGhMOEx2MUl0bnU4SzlvWFRfWVZIQWY1R3hlaERjZ3FBMmw1NUZyYkJMTGVfNi1DV2V2N2RQZU5PbFlaWE5xbEtkUG5KbW9BREdsOEktTlhKN2x5ZXl2a2hfZ3JkanhXdVVqQ3lQUQ==",
+						"registryURL": "cloud.redhat.com",
+						"email":       "foo@bar.com",
 					},
-				}, make(map[string]string)),
+				},
+			},
 			expectedJSON: []byte(`{"auths":{"cloud.redhat.com":{"auth":"c2VydmljZWFjY291bnQ6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklrRndTekF0YjBaNGJXMUZURXRHTVMwMFVEa3djbEEwUTJWQlRUZERNMGRXUkZwdmJGOVllaTFEUW5NaWZRLmV5SnBjM01pT2lKcmRXSmxjbTVsZEdWekwzTmxjblpwWTJWaFkyTnZkVzUwSWl3aWEzVmlaWEp1WlhSbGN5NXBieTl6WlhKMmFXTmxZV05qYjNWdWRDOXVZVzFsYzNCaFkyVWlPaUpoYkhaaGNtOHRkR1Z6ZENJc0ltdDFZbVZ5Ym1WMFpYTXVhVzh2YzJWeWRtbGpaV0ZqWTI5MWJuUXZjMlZqY21WMExtNWhiV1VpT2lKa1pXWmhkV3gwTFhSdmEyVnVMV1EwT1d4aUlpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WlhKMmFXTmxMV0ZqWTI5MWJuUXVibUZ0WlNJNkltUmxabUYxYkhRaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNTFhV1FpT2lJM05tVTRZMlpsTmkxbU1HWXhMVFF5WlRNdFlqUm1NQzFoTXpjM1pUbGhOemxrWWpRaUxDSnpkV0lpT2lKemVYTjBaVzA2YzJWeWRtbGpaV0ZqWTI5MWJuUTZZV3gyWVhKdkxYUmxjM1E2WkdWbVlYVnNkQ0o5LnMyajh6X2JfT3NMOHY5UGlLR1NUQmFuZDE0MHExMHc3VTlMdU9JWmZlUG1SeF9OMHdKRkZPcVN0MGNjdmtVaUVGV0x5QWNSU2k2cUt3T1FSVzE2MVUzSU52UEY4Q0pDZ2d2R3JHUnMzeHp6N3hjSmgzTWRpcXhzWGViTmNmQmlmWWxXUTU2U1RTZDlUeUh1RkN6c1poNXBlSHVzS3hOa2hJRTNyWHp5ZHNoMkhCaTZMYTlYZ1l4R1VjM0x3NWh4RnB5bXFyajFJNzExbWZLcUV2bUN0a0J4blJtMlhIZmFKalNVRkswWWdoY0lMbkhuWGhMOEx2MUl0bnU4SzlvWFRfWVZIQWY1R3hlaERjZ3FBMmw1NUZyYkJMTGVfNi1DV2V2N2RQZU5PbFlaWE5xbEtkUG5KbW9BREdsOEktTlhKN2x5ZXl2a2hfZ3JkanhXdVVqQ3lQUQ==","email":"foo@bar.com"},"quay.io":{"auth":"c2VydmljZWFjY291bnQ6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklrRndTekF0YjBaNGJXMUZURXRHTVMwMFVEa3djbEEwUTJWQlRUZERNMGRXUkZwdmJGOVllaTFEUW5NaWZRLmV5SnBjM01pT2lKcmRXSmxjbTVsZEdWekwzTmxjblpwWTJWaFkyTnZkVzUwSWl3aWEzVmlaWEp1WlhSbGN5NXBieTl6WlhKMmFXTmxZV05qYjNWdWRDOXVZVzFsYzNCaFkyVWlPaUpoYkhaaGNtOHRkR1Z6ZENJc0ltdDFZbVZ5Ym1WMFpYTXVhVzh2YzJWeWRtbGpaV0ZqWTI5MWJuUXZjMlZqY21WMExtNWhiV1VpT2lKa1pXWmhkV3gwTFhSdmEyVnVMV1EwT1d4aUlpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WlhKMmFXTmxMV0ZqWTI5MWJuUXVibUZ0WlNJNkltUmxabUYxYkhRaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNTFhV1FpT2lJM05tVTRZMlpsTmkxbU1HWXhMVFF5WlRNdFlqUm1NQzFoTXpjM1pUbGhOemxrWWpRaUxDSnpkV0lpT2lKemVYTjBaVzA2YzJWeWRtbGpaV0ZqWTI5MWJuUTZZV3gyWVhKdkxYUmxjM1E2WkdWbVlYVnNkQ0o5LnMyajh6X2JfT3NMOHY5UGlLR1NUQmFuZDE0MHExMHc3VTlMdU9JWmZlUG1SeF9OMHdKRkZPcVN0MGNjdmtVaUVGV0x5QWNSU2k2cUt3T1FSVzE2MVUzSU52UEY4Q0pDZ2d2R3JHUnMzeHp6N3hjSmgzTWRpcXhzWGViTmNmQmlmWWxXUTU2U1RTZDlUeUh1RkN6c1poNXBlSHVzS3hOa2hJRTNyWHp5ZHNoMkhCaTZMYTlYZ1l4R1VjM0x3NWh4RnB5bXFyajFJNzExbWZLcUV2bUN0a0J4blJtMlhIZmFKalNVRkswWWdoY0lMbkhuWGhMOEx2MUl0bnU4SzlvWFRfWVZIQWY1R3hlaERjZ3FBMmw1NUZyYkJMTGVfNi1DV2V2N2RQZU5PbFlaWE5xbEtkUG5KbW9BREdsOEktTlhKN2x5ZXl2a2hfZ3JkanhXdVVqQ3lQUQ==","email":"test@test.com"}}}`),
 		},
 		{
@@ -2367,37 +2040,22 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 					EmailBitwardenField:       "email",
 				},
 			},
-			bwClient: bitwarden.NewFakeClient(
-				[]bitwarden.Item{
-					{
-						ID:   "1",
-						Name: "item-name-1",
-						Fields: []bitwarden.Field{
-							{
-								Name:  "registryURL",
-								Value: "quay.io",
-							},
-							{
-								Name:  "email",
-								Value: "test@test.com",
-							},
-						},
+			items: map[string]vaultclient.KVData{
+				"item-name-1": {
+					Data: map[string]string{
+						"registryURL": "quay.io",
+						"email":       "test@test.com",
 					},
-				}, nil),
-			expectedError: "couldn't get attachment 'auth' from bw item item-name-1: failed to find attachment auth in item item-name-1",
+				},
+			},
+			expectedError: `couldn't get attachment 'auth' from bw item item-name-1: item at path "prefix/item-name-1" has no key "auth"`,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.id, func(t *testing.T) {
-			if len(tc.attachments) > 0 {
-				for _, attachment := range tc.attachments {
-					if err := tc.bwClient.SetAttachmentOnItem(attachment.bwItem, attachment.filename, attachment.contents); err != nil {
-						t.Fatalf("couldn't create attachments: %v", err)
-					}
-				}
-			}
-			actual, err := constructDockerConfigJSON(secrets.NewBitwardenClient(tc.bwClient), tc.dockerConfigJSONData)
+			client := vaultClientFromTestItems(tc.items)
+			actual, err := constructDockerConfigJSON(client, tc.dockerConfigJSONData)
 			if tc.expectedError != "" && err != nil {
 				if !reflect.DeepEqual(err.Error(), tc.expectedError) {
 					t.Fatal(cmp.Diff(err.Error(), tc.expectedError))
@@ -2419,28 +2077,27 @@ func TestGetUnusedBWItems(t *testing.T) {
 	dayBefore := threshold.AddDate(0, 0, -1)
 
 	testCases := []struct {
-		id                   string
-		config               secretbootstrap.Config
-		bwItems              []bitwarden.Item
-		bwAllowItems         sets.String
-		expectedBitwardenErr string
-		expectedVaultErr     string
+		id            string
+		config        secretbootstrap.Config
+		items         map[string]vaultclient.KVData
+		bwAllowItems  sets.String
+		expectedError string
 	}{
 		{
 			id:           "all used, no unused items expected",
 			bwAllowItems: sets.NewString(),
-			bwItems: []bitwarden.Item{
-				{
-					ID:          "1",
-					Name:        "item-name-1",
-					Fields:      []bitwarden.Field{{Name: "field-name-1"}},
-					Attachments: []bitwarden.Attachment{{FileName: "attachment-name-1"}},
+			items: map[string]vaultclient.KVData{
+				"item-name-1": {
+					Data: map[string]string{
+						"field-name-1": "testdata",
+						"field-name-2": "testdata",
+					},
 				},
-				{
-					ID:          "2",
-					Name:        "item-name-2",
-					Fields:      []bitwarden.Field{{Name: "field-name-2"}},
-					Attachments: []bitwarden.Attachment{{FileName: "attachment-name-2"}},
+				"item-name-2": {
+					Data: map[string]string{
+						"field-name-1": "testdata",
+						"field-name-2": "testdata",
+					},
 				},
 			},
 			config: secretbootstrap.Config{
@@ -2448,9 +2105,9 @@ func TestGetUnusedBWItems(t *testing.T) {
 					{
 						From: map[string]secretbootstrap.BitWardenContext{
 							"1": {BWItem: "item-name-1", Field: "field-name-1"},
-							"2": {BWItem: "item-name-2", Field: "field-name-2"},
-							"3": {BWItem: "item-name-1", Attachment: "attachment-name-1"},
-							"4": {BWItem: "item-name-2", Attachment: "attachment-name-2"},
+							"2": {BWItem: "item-name-1", Field: "field-name-2"},
+							"3": {BWItem: "item-name-2", Field: "field-name-1"},
+							"4": {BWItem: "item-name-2", Field: "field-name-2"},
 						},
 					},
 				},
@@ -2459,18 +2116,18 @@ func TestGetUnusedBWItems(t *testing.T) {
 		{
 			id:           "partly used, unused items expected",
 			bwAllowItems: sets.NewString(),
-			bwItems: []bitwarden.Item{
-				{
-					ID:          "1",
-					Name:        "item-name-1",
-					Fields:      []bitwarden.Field{{Name: "field-name-1"}},
-					Attachments: []bitwarden.Attachment{{FileName: "attachment-name-1"}},
+			items: map[string]vaultclient.KVData{
+				"item-name-1": {
+					Data: map[string]string{
+						"field-name-1": "testdata",
+						"field-name-2": "testdata",
+					},
 				},
-				{
-					ID:          "2",
-					Name:        "item-name-2",
-					Fields:      []bitwarden.Field{{Name: "field-name-2"}},
-					Attachments: []bitwarden.Attachment{{FileName: "attachment-name-2"}},
+				"item-name-2": {
+					Data: map[string]string{
+						"field-name-1": "testdata",
+						"field-name-2": "testdata",
+					},
 				},
 			},
 			config: secretbootstrap.Config{
@@ -2478,35 +2135,35 @@ func TestGetUnusedBWItems(t *testing.T) {
 					{
 						From: map[string]secretbootstrap.BitWardenContext{
 							"1": {BWItem: "item-name-1", Field: "field-name-1"},
-							"2": {BWItem: "item-name-2", Attachment: "attachment-name-2"},
+							"2": {BWItem: "item-name-2", Field: "field-name-1"},
 						},
 					},
 				},
 			},
-			expectedBitwardenErr: "[Unused bw item: 'item-name-1' with  Attachments: 'attachment-name-1', Unused bw item: 'item-name-2' with Fields: 'field-name-2']",
-			expectedVaultErr:     "[Unused bw item: 'item-name-1' with  SuperfluousFields: [attachment-name-1], Unused bw item: 'item-name-2' with  SuperfluousFields: [field-name-2]]",
+			expectedError: "[Unused bw item: 'item-name-1' with  SuperfluousFields: [field-name-2], Unused bw item: 'item-name-2' with  SuperfluousFields: [field-name-2]]",
 		},
 		{
 			id:           "partly used with docker json config, unused items expected",
 			bwAllowItems: sets.NewString(),
-			bwItems: []bitwarden.Item{
-				{
-					ID:          "1",
-					Name:        "item-name-1",
-					Fields:      []bitwarden.Field{{Name: "field-name-1"}},
-					Attachments: []bitwarden.Attachment{{FileName: "attachment-name-1"}},
+			items: map[string]vaultclient.KVData{
+				"item-name-1": {
+					Data: map[string]string{
+						"field-name-1": "testdata",
+						"field-name-2": "testdata",
+					},
 				},
-				{
-					ID:          "2",
-					Name:        "item-name-2",
-					Fields:      []bitwarden.Field{{Name: "field-name-2"}},
-					Attachments: []bitwarden.Attachment{{FileName: "attachment-name-2"}},
+				"item-name-2": {
+					Data: map[string]string{
+						"field-name-1": "testdata",
+						"field-name-2": "testdata",
+					},
 				},
-				{
-					ID:          "3",
-					Name:        "item-name-3",
-					Fields:      []bitwarden.Field{{Name: "registry-url"}, {Name: "email"}},
-					Attachments: []bitwarden.Attachment{{FileName: "auth"}},
+				"item-name-3": {
+					Data: map[string]string{
+						"registry-url": "test.com",
+						"email":        "test@test.com",
+						"auth":         "authToken",
+					},
 				},
 			},
 			config: secretbootstrap.Config{
@@ -2514,36 +2171,35 @@ func TestGetUnusedBWItems(t *testing.T) {
 					{
 						From: map[string]secretbootstrap.BitWardenContext{
 							"1": {BWItem: "item-name-1", Field: "field-name-1"},
-							"2": {BWItem: "item-name-2", Attachment: "attachment-name-2"},
+							"2": {BWItem: "item-name-2", Field: "field-name-1"},
 							"3": {DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{{BWItem: "item-name-3", RegistryURLBitwardenField: "registry-url"}}},
 						},
 					},
 				},
 			},
-			expectedBitwardenErr: "[Unused bw item: 'item-name-1' with  Attachments: 'attachment-name-1', Unused bw item: 'item-name-2' with Fields: 'field-name-2', Unused bw item: 'item-name-3' with Fields: 'email' Attachments: 'auth']",
-			expectedVaultErr:     "[Unused bw item: 'item-name-1' with  SuperfluousFields: [attachment-name-1], Unused bw item: 'item-name-2' with  SuperfluousFields: [field-name-2], Unused bw item: 'item-name-3' with  SuperfluousFields: [auth email]]",
+			expectedError: "[Unused bw item: 'item-name-1' with  SuperfluousFields: [field-name-2], Unused bw item: 'item-name-2' with  SuperfluousFields: [field-name-2], Unused bw item: 'item-name-3' with  SuperfluousFields: [auth email]]",
 		},
 		{
 			id:           "partly used with an allow list, no unused items expected",
 			bwAllowItems: sets.NewString([]string{"item-name-2"}...),
-			bwItems: []bitwarden.Item{
-				{
-					ID:          "1",
-					Name:        "item-name-1",
-					Fields:      []bitwarden.Field{{Name: "field-name-1"}},
-					Attachments: []bitwarden.Attachment{{FileName: "attachment-name-1"}},
+			items: map[string]vaultclient.KVData{
+				"item-name-1": {
+					Data: map[string]string{
+						"field-name-1": "testdata",
+					},
 				},
-				{
-					ID:          "2",
-					Name:        "item-name-2",
-					Fields:      []bitwarden.Field{{Name: "field-name-2"}},
-					Attachments: []bitwarden.Attachment{{FileName: "attachment-name-2"}},
+				"item-name-2": {
+					Data: map[string]string{
+						"unused-1": "testdata",
+						"unused-2": "testdata",
+						"unused-3": "testdata",
+					},
 				},
-				{
-					ID:          "3",
-					Name:        "item-name-3",
-					Fields:      []bitwarden.Field{{Name: "registry-url"}},
-					Attachments: []bitwarden.Attachment{{FileName: "auth"}},
+				"item-name-3": {
+					Data: map[string]string{
+						"registry-url": "test.com",
+						"auth":         "authToken",
+					},
 				},
 			},
 			config: secretbootstrap.Config{
@@ -2551,7 +2207,7 @@ func TestGetUnusedBWItems(t *testing.T) {
 					{
 						From: map[string]secretbootstrap.BitWardenContext{
 							"1": {BWItem: "item-name-1", Field: "field-name-1"},
-							"2": {BWItem: "item-name-1", Attachment: "attachment-name-1"},
+							"2": {BWItem: "item-name-1", Field: "field-name-1"},
 							"3": {DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{{BWItem: "item-name-3", RegistryURLBitwardenField: "registry-url", AuthBitwardenAttachment: "auth"}}},
 						},
 					},
@@ -2560,86 +2216,61 @@ func TestGetUnusedBWItems(t *testing.T) {
 		},
 		{
 			id: "unused item last modified after threshold is not reported",
-			bwItems: []bitwarden.Item{
-				{
-					ID:           "1",
-					Name:         "item-name-1",
-					Fields:       []bitwarden.Field{{Name: "field-name-1", Value: "value-1"}},
-					RevisionTime: &dayAfter,
+			items: map[string]vaultclient.KVData{
+				"item-name-1": {
+					Metadata: vaultclient.KVMetadata{CreatedTime: dayAfter},
+					Data: map[string]string{
+						"field-name-1": "testdata",
+					},
 				},
 			},
 		},
 		{
 			id: "unused item last modified before threshold is reported",
-			bwItems: []bitwarden.Item{
-				{
-					ID:           "1",
-					Name:         "item-name-1",
-					Fields:       []bitwarden.Field{{Name: "field-name-1", Value: "value-1"}},
-					RevisionTime: &dayBefore,
+			items: map[string]vaultclient.KVData{
+				"item-name-1": {
+					Metadata: vaultclient.KVMetadata{CreatedTime: dayBefore},
+					Data: map[string]string{
+						"field-name-1": "testdata",
+					},
 				},
 			},
-			expectedBitwardenErr: "Unused bw item: 'item-name-1'",
-			expectedVaultErr:     "Unused bw item: 'item-name-1'",
+			expectedError: "Unused bw item: 'item-name-1'",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.id, func(t *testing.T) {
-			for _, clientTestCase := range []clientTestCase{{
-				name:          "bitwarden",
-				client:        secrets.NewBitwardenClient(bitwarden.NewFakeClient(tc.bwItems, nil)),
-				expectedError: tc.expectedBitwardenErr,
-			}, {
-				name:          "vault",
-				client:        vaultClientFromBitwardenItems(tc.bwItems, nil),
-				expectedError: tc.expectedVaultErr,
-			}} {
-				t.Run(clientTestCase.name, func(t *testing.T) {
-					var actualErrMsg string
-					actualErr := getUnusedBWItems(tc.config, clientTestCase.client, tc.bwAllowItems, threshold)
-					if actualErr != nil {
-						actualErrMsg = actualErr.Error()
-					}
-
-					if actualErrMsg != clientTestCase.expectedError {
-						t.Errorf("expected error: %s\ngot error: %s", clientTestCase.expectedError, actualErr)
-					}
-				})
+			client := vaultClientFromTestItems(tc.items)
+			var actualErrMsg string
+			actualErr := getUnusedBWItems(tc.config, client, tc.bwAllowItems, threshold)
+			if actualErr != nil {
+				actualErrMsg = actualErr.Error()
 			}
+
+			if actualErrMsg != tc.expectedError {
+				t.Errorf("expected error: %s\ngot error: %s", tc.expectedError, actualErr)
+			}
+
 		})
 	}
 }
 
-type clientTestCase struct {
-	name          string
-	client        secrets.Client
-	expectedError string
-}
-
-func vaultClientFromBitwardenItems(items []bitwarden.Item, attachments map[string]string) secrets.Client {
+func vaultClientFromTestItems(items map[string]vaultclient.KVData) secrets.Client {
 	const prefix = "prefix"
 	data := make(map[string]*vaultclient.KVData, len(items))
-	for _, item := range items {
+
+	for name, item := range items {
 		kvItem := &vaultclient.KVData{Data: map[string]string{}}
-		for _, field := range item.Fields {
-			kvItem.Data[field.Name] = field.Value
+
+		for k, v := range item.Data {
+			kvItem.Data[k] = v
 		}
-		for _, attachment := range item.Attachments {
-			attachmentContent := "some-data"
-			if val, ok := attachments[attachment.ID]; ok {
-				attachmentContent = val
-			}
-			kvItem.Data[attachment.FileName] = attachmentContent
-		}
-		if item.Login != nil && item.Login.Password != "" {
-			kvItem.Data["password"] = item.Login.Password
-		}
-		if item.RevisionTime != nil {
-			kvItem.Metadata.CreatedTime = *item.RevisionTime
-		}
-		data[prefix+"/"+item.Name] = kvItem
+
+		kvItem.Metadata.CreatedTime = item.Metadata.CreatedTime
+		data[prefix+"/"+name] = kvItem
 	}
+
 	censor := secrets.NewDynamicCensor()
 	return secrets.NewVaultClient(&fakeVaultClient{items: data}, prefix, &censor)
 }

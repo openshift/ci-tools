@@ -21,17 +21,6 @@ func TestParseOptions(t *testing.T) {
 		expected CLIOptions
 	}{
 		{
-			name: "basic case",
-			given: []string{
-				"--bw-user=username",
-				"--bw-password-path=/tmp/bw-password",
-			},
-			expected: CLIOptions{
-				BwUser:         "username",
-				BwPasswordPath: "/tmp/bw-password",
-			},
-		},
-		{
 			name:     "vault address from environment",
 			env:      map[string]string{"VAULT_ADDR": "vault address"},
 			expected: CLIOptions{VaultAddr: "vault address"},
@@ -62,15 +51,8 @@ func TestValidateOptions(t *testing.T) {
 	testCases := []struct {
 		name     string
 		given    CLIOptions
-		expected []error
+		expected error
 	}{
-		{
-			name: "basic case",
-			given: CLIOptions{
-				BwUser:         "username",
-				BwPasswordPath: "/tmp/bw-password",
-			},
-		},
 		{
 			name: "vault basic case",
 			given: CLIOptions{
@@ -96,35 +78,12 @@ func TestValidateOptions(t *testing.T) {
 			},
 		},
 		{
-			name: "empty bw user",
-			given: CLIOptions{
-				BwPasswordPath: "/tmp/bw-password",
-			},
-			expected: []error{
-				fmt.Errorf("--bw-user and --bw-password-path must be specified together"),
-				fmt.Errorf("must specify credentials for exactly one of vault or bitwarden, got credentials for: []"),
-			},
-		},
-		{
-			name: "empty bw user password path",
-			given: CLIOptions{
-				BwUser: "username",
-			},
-			expected: []error{
-				fmt.Errorf("--bw-user and --bw-password-path must be specified together"),
-				fmt.Errorf("must specify credentials for exactly one of vault or bitwarden, got credentials for: []"),
-			},
-		},
-		{
 			name: "empty vault address",
 			given: CLIOptions{
 				VaultToken:  "vault token",
 				VaultPrefix: "vault prefix",
 			},
-			expected: []error{
-				fmt.Errorf("--vault-addr, one of --vault-token, the VAULT_TOKEN env var or --vault-role and --vault-prefix must be specified together"),
-				fmt.Errorf("must specify credentials for exactly one of vault or bitwarden, got credentials for: []"),
-			},
+			expected: fmt.Errorf("--vault-addr, one of --vault-token, the VAULT_TOKEN env var or --vault-role and --vault-prefix must be specified together"),
 		},
 		{
 			name: "empty vault token",
@@ -132,10 +91,7 @@ func TestValidateOptions(t *testing.T) {
 				VaultAddr:   "vault adrr",
 				VaultPrefix: "vault prefix",
 			},
-			expected: []error{
-				fmt.Errorf("--vault-addr, one of --vault-token, the VAULT_TOKEN env var or --vault-role and --vault-prefix must be specified together"),
-				fmt.Errorf("must specify credentials for exactly one of vault or bitwarden, got credentials for: []"),
-			},
+			expected: fmt.Errorf("--vault-addr, one of --vault-token, the VAULT_TOKEN env var or --vault-role and --vault-prefix must be specified together"),
 		},
 		{
 			name: "empty vault prefix",
@@ -143,10 +99,7 @@ func TestValidateOptions(t *testing.T) {
 				VaultAddr:  "vault adrr",
 				VaultToken: "vault token",
 			},
-			expected: []error{
-				fmt.Errorf("--vault-addr, one of --vault-token, the VAULT_TOKEN env var or --vault-role and --vault-prefix must be specified together"),
-				fmt.Errorf("must specify credentials for exactly one of vault or bitwarden, got credentials for: []"),
-			},
+			expected: fmt.Errorf("--vault-addr, one of --vault-token, the VAULT_TOKEN env var or --vault-role and --vault-prefix must be specified together"),
 		},
 	}
 	for _, tc := range testCases {
@@ -159,7 +112,6 @@ func TestValidateOptions(t *testing.T) {
 	}
 }
 
-//
 func TestCompleteOptions(t *testing.T) {
 	dir, err := ioutil.TempDir("", "test")
 	if err != nil {
@@ -171,23 +123,22 @@ func TestCompleteOptions(t *testing.T) {
 		}
 	}()
 
-	bwPasswordPath := filepath.Join(dir, "bwPasswordPath")
-	if err := ioutil.WriteFile(bwPasswordPath, []byte("topSecret"), 0755); err != nil {
+	vaultPasswordPath := filepath.Join(dir, "vaultPasswordPath")
+	if err := ioutil.WriteFile(vaultPasswordPath, []byte("topSecret"), 0755); err != nil {
 		t.Errorf("Failed to remove temp dir")
 	}
 	testCases := []struct {
-		name               string
-		given              CLIOptions
-		expectedError      error
-		expectedBWPassword string
+		name          string
+		given         CLIOptions
+		expectedError error
+		expectedToken string
 	}{
 		{
 			name: "basic case",
 			given: CLIOptions{
-				BwUser:         "username",
-				BwPasswordPath: bwPasswordPath,
+				VaultTokenFile: vaultPasswordPath,
 			},
-			expectedBWPassword: "topSecret",
+			expectedToken: "topSecret",
 		},
 	}
 	for _, tc := range testCases {
@@ -197,7 +148,7 @@ func TestCompleteOptions(t *testing.T) {
 			if diff := cmp.Diff(actualError, tc.expectedError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("unexpected error: %s", diff)
 			}
-			if diff := cmp.Diff(tc.given.BwPassword, tc.expectedBWPassword, testhelper.EquateErrorMessage); diff != "" {
+			if diff := cmp.Diff(tc.given.VaultToken, tc.expectedToken, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("unexpected Bitwarden password: %s", diff)
 			}
 		})

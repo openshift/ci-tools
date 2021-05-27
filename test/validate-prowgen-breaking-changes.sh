@@ -30,8 +30,9 @@ for org in openshift redhat-operator-ecosystem; do
     echo "Running Prowgen in $org/release does not result in changes, no followups needed"
   fi
 
-  if [[ -d "${clonedir}/core-services/prow/02_config" ]]; then
-    determinize-prow-config --prow-config-dir "${clonedir}/core-services/prow/02_config"
+  CONFIG="${clonedir}/core-services/prow/02_config"
+  if [[ -d "${CONFIG}" ]]; then
+    determinize-prow-config --prow-config-dir "${CONFIG}" --sharded-plugin-config-base-dir "${CONFIG}"
     out="$(git status --porcelain)"
     if [[ -n "$out" ]]; then
       echo "ERROR: Changes in $org/release:"

@@ -20,6 +20,7 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
@@ -2382,4 +2383,473 @@ func (f *fakeVaultClient) ListKVRecursively(prefix string) ([]string, error) {
 
 func (f *fakeVaultClient) UpsertKV(_ string, _ map[string]string) error {
 	return nil
+}
+
+func TestIntegration(t *testing.T) {
+	testCases := []struct {
+		id              string
+		initialData     map[string][]coreapi.Secret
+		force           bool
+		config          secretbootstrap.Config
+		secretGetters   map[string]Getter
+		vaultData       map[string]map[string][]byte
+		expectedSecrets map[string][]coreapi.Secret
+		expectedErrors  bool
+		expectedError   error
+	}{
+		{
+			id:    "Successfully create secret from config",
+			force: true,
+			config: secretbootstrap.Config{
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.BitWardenContext{
+							"key-name-1": {
+								BWItem: "item-name-1",
+								Field:  "field-name-1",
+							},
+						},
+						To: []secretbootstrap.SecretContext{
+							{
+								Cluster:   "cluster-1",
+								Namespace: "namespace-1",
+								Name:      "prod-secret-1",
+							},
+						},
+					},
+				},
+			},
+			secretGetters: map[string]Getter{
+				"cluster-1": fake.NewSimpleClientset().CoreV1(),
+			},
+			vaultData: map[string]map[string][]byte{"item-name-1": {"field-name-1": []byte("secret-data")}},
+			expectedSecrets: map[string][]coreapi.Secret{
+				"cluster-1": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "prod-secret-1", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data:       map[string][]byte{"key-name-1": []byte("secret-data")},
+						Type:       coreapi.SecretTypeOpaque,
+					},
+				},
+			},
+		},
+		{
+			id:    "Successfully creating secret from config in multiple clusters",
+			force: true,
+			config: secretbootstrap.Config{
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.BitWardenContext{
+							"key-name-1": {
+								BWItem: "item-name-1",
+								Field:  "field-name-1",
+							},
+						},
+						To: []secretbootstrap.SecretContext{
+							{
+								Cluster:   "cluster-1",
+								Namespace: "namespace-1",
+								Name:      "prod-secret-1",
+							},
+							{
+								Cluster:   "cluster-2",
+								Namespace: "namespace-1",
+								Name:      "prod-secret-1",
+							},
+						},
+					},
+				},
+			},
+			secretGetters: map[string]Getter{
+				"cluster-1": fake.NewSimpleClientset().CoreV1(),
+				"cluster-2": fake.NewSimpleClientset().CoreV1(),
+			},
+			vaultData: map[string]map[string][]byte{"item-name-1": {"field-name-1": []byte("secret-data")}},
+			expectedSecrets: map[string][]coreapi.Secret{
+				"cluster-1": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "prod-secret-1", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data:       map[string][]byte{"key-name-1": []byte("secret-data")},
+						Type:       coreapi.SecretTypeOpaque,
+					},
+				},
+				"cluster-2": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "prod-secret-1", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data:       map[string][]byte{"key-name-1": []byte("secret-data")},
+						Type:       coreapi.SecretTypeOpaque,
+					},
+				},
+			},
+		},
+		{
+			id:    "Successfully create secret from config and vault user secret",
+			force: true,
+			config: secretbootstrap.Config{
+				UserSecretsTargetClusters: []string{"cluster-1"},
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.BitWardenContext{
+							"key-name-1": {
+								BWItem: "item-name-1",
+								Field:  "field-name-1",
+							},
+						},
+						To: []secretbootstrap.SecretContext{
+							{
+								Cluster:   "cluster-1",
+								Namespace: "namespace-1",
+								Name:      "prod-secret-1",
+							},
+						},
+					},
+				},
+			},
+			secretGetters: map[string]Getter{
+				"cluster-1": fake.NewSimpleClientset().CoreV1(),
+			},
+			vaultData: map[string]map[string][]byte{
+				"item-name-1": {"field-name-1": []byte("secret-data")},
+				"user-item-1": {
+					"some-data-key":               []byte("a-secret"),
+					"secretsync/target-namespace": []byte("namespace-1"),
+					"secretsync/target-name":      []byte("some-name"),
+				},
+			},
+			expectedSecrets: map[string][]coreapi.Secret{
+				"cluster-1": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "prod-secret-1", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data:       map[string][]byte{"key-name-1": []byte("secret-data")},
+						Type:       coreapi.SecretTypeOpaque,
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data: map[string][]byte{
+							"some-data-key":                []byte("a-secret"),
+							"secretsync-vault-source-path": []byte("secret/user-item-1"),
+						},
+						Type: coreapi.SecretTypeOpaque,
+					},
+				},
+			},
+		},
+		{
+			id:    "Successfully create secret from config and vault user secret in multiple clusters",
+			force: true,
+			config: secretbootstrap.Config{
+				UserSecretsTargetClusters: []string{"cluster-1", "cluster-2"},
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.BitWardenContext{
+							"key-name-1": {
+								BWItem: "item-name-1",
+								Field:  "field-name-1",
+							},
+						},
+						To: []secretbootstrap.SecretContext{
+							{
+								Cluster:   "cluster-1",
+								Namespace: "namespace-1",
+								Name:      "prod-secret-1",
+							},
+						},
+					},
+				},
+			},
+			secretGetters: map[string]Getter{
+				"cluster-1": fake.NewSimpleClientset().CoreV1(),
+				"cluster-2": fake.NewSimpleClientset().CoreV1(),
+			},
+			vaultData: map[string]map[string][]byte{
+				"item-name-1": {"field-name-1": []byte("secret-data")},
+				"user-item-1": {
+					"some-data-key":               []byte("a-secret"),
+					"secretsync/target-namespace": []byte("namespace-1"),
+					"secretsync/target-name":      []byte("some-name"),
+				},
+			},
+			expectedSecrets: map[string][]coreapi.Secret{
+				"cluster-1": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "prod-secret-1", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data:       map[string][]byte{"key-name-1": []byte("secret-data")},
+						Type:       coreapi.SecretTypeOpaque,
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data: map[string][]byte{
+							"some-data-key":                []byte("a-secret"),
+							"secretsync-vault-source-path": []byte("secret/user-item-1"),
+						},
+						Type: coreapi.SecretTypeOpaque,
+					},
+				},
+				"cluster-2": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data: map[string][]byte{
+							"some-data-key":                []byte("a-secret"),
+							"secretsync-vault-source-path": []byte("secret/user-item-1"),
+						},
+						Type: coreapi.SecretTypeOpaque,
+					},
+				},
+			},
+		},
+		{
+			id:    "Successfully create secret from config and vault user secret in multiple selected clusters",
+			force: true,
+			config: secretbootstrap.Config{
+				UserSecretsTargetClusters: []string{"cluster-1", "cluster-2", "cluster-3"},
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.BitWardenContext{
+							"key-name-1": {
+								BWItem: "item-name-1",
+								Field:  "field-name-1",
+							},
+						},
+						To: []secretbootstrap.SecretContext{
+							{
+								Cluster:   "cluster-1",
+								Namespace: "namespace-1",
+								Name:      "prod-secret-1",
+							},
+						},
+					},
+				},
+			},
+			secretGetters: map[string]Getter{
+				"cluster-1": fake.NewSimpleClientset().CoreV1(),
+				"cluster-2": fake.NewSimpleClientset().CoreV1(),
+				"cluster-3": fake.NewSimpleClientset().CoreV1(),
+			},
+
+			vaultData: map[string]map[string][]byte{
+				"item-name-1": {"field-name-1": []byte("secret-data")},
+				"user-item-1": {
+					"some-data-key":               []byte("a-secret"),
+					"secretsync/target-namespace": []byte("namespace-1"),
+					"secretsync/target-name":      []byte("some-name"),
+					"secretsync/target-clusters":  []byte("cluster-1,cluster-3"),
+				},
+			},
+			expectedSecrets: map[string][]coreapi.Secret{
+				"cluster-1": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "prod-secret-1", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data:       map[string][]byte{"key-name-1": []byte("secret-data")},
+						Type:       coreapi.SecretTypeOpaque,
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data: map[string][]byte{
+							"some-data-key":                []byte("a-secret"),
+							"secretsync-vault-source-path": []byte("secret/user-item-1"),
+						},
+						Type: coreapi.SecretTypeOpaque,
+					},
+				},
+				"cluster-3": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data: map[string][]byte{
+							"some-data-key":                []byte("a-secret"),
+							"secretsync-vault-source-path": []byte("secret/user-item-1"),
+						},
+						Type: coreapi.SecretTypeOpaque,
+					},
+				},
+			},
+		},
+		{
+			id: "fails to find secret in vault, error is expected",
+			config: secretbootstrap.Config{
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.BitWardenContext{
+							"key-name-1": {
+								BWItem: "item-name-1",
+								Field:  "field-name-1",
+							},
+						},
+						To: []secretbootstrap.SecretContext{
+							{
+								Cluster:   "cluster-1",
+								Namespace: "namespace-1",
+								Name:      "prod-secret-1",
+							},
+						},
+					},
+				},
+			},
+			secretGetters: map[string]Getter{
+				"cluster-1": fake.NewSimpleClientset().CoreV1(),
+			},
+			vaultData: map[string]map[string][]byte{
+				"no-one-wants-me": {"field-name-1": []byte("secret-data")},
+			},
+			expectedError: utilerrors.NewAggregate([]error{errors.New("config.0.\"key-name-1\": failed to get item at path \"secret/item-name-1\": Error making API request.\n\nURL:  \nCode: 404. Errors:\n\n")}),
+		},
+		{
+			id: "fails to update secret from config and vault user secret",
+			config: secretbootstrap.Config{
+				UserSecretsTargetClusters: []string{"cluster-1", "cluster-2"},
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.BitWardenContext{
+							"key-name-1": {
+								BWItem: "item-name-1",
+								Field:  "field-name-1",
+							},
+						},
+						To: []secretbootstrap.SecretContext{
+							{
+								Cluster:   "cluster-1",
+								Namespace: "namespace-1",
+								Name:      "prod-secret-1",
+							},
+						},
+					},
+				},
+			},
+			secretGetters: map[string]Getter{
+				"cluster-1": fake.NewSimpleClientset(
+					[]runtime.Object{
+						&coreapi.Secret{
+							Type: coreapi.SecretTypeOpaque,
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "prod-secret-1",
+								Namespace: "namespace-1",
+							},
+							Data: map[string][]byte{
+								"key-name-1": []byte("update-me"),
+							},
+						},
+					}...,
+				).CoreV1(),
+				"cluster-2": fake.NewSimpleClientset().CoreV1(),
+			},
+			vaultData: map[string]map[string][]byte{
+				"item-name-1": {"field-name-1": []byte("secret-data")},
+				"user-item-1": {
+					"some-data-key":               []byte("a-secret"),
+					"secretsync/target-namespace": []byte("namespace-1"),
+					"secretsync/target-name":      []byte("some-name"),
+				},
+			},
+			expectedError: utilerrors.NewAggregate([]error{errors.New("failed to update secrets: secret cluster-1:namespace-1/prod-secret-1 needs updating in place, use --force to do so")}),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.id, func(t *testing.T) {
+			vaultAddr := testhelper.Vault(t)
+
+			o := options{
+				maxConcurrency: 1,
+				force:          tc.force,
+				config:         tc.config,
+				secretsGetters: tc.secretGetters,
+				secrets: secrets.CLIOptions{
+					VaultPrefix: "secret",
+					VaultAddr:   "http://" + vaultAddr,
+					VaultToken:  testhelper.VaultTestingRootToken,
+				},
+			}
+
+			censor := secrets.NewDynamicCensor()
+			c, err := o.secrets.NewClient(&censor)
+			if err != nil {
+				t.Fatalf("Failed to create client: %v", err)
+			}
+
+			for item, data := range tc.vaultData {
+				for name, value := range data {
+					if err := c.SetFieldOnItem(item, name, value); err != nil {
+						t.Fatalf("couldn't populate vault item %s: %v", item, err)
+					}
+				}
+			}
+
+			readOnlyClient, err := o.secrets.NewReadOnlyClient(&censor)
+			if err != nil {
+				t.Fatal("Failed to create a read only client.")
+			}
+
+			actualSecretsByCluster := make(map[string][]coreapi.Secret)
+
+			// Create Case
+			errs := reconcileSecrets(o, readOnlyClient)
+			if tc.expectedError != nil {
+				if len(errs) == 0 {
+					t.Fatal("expected errors but got nothing")
+				}
+				if diff := cmp.Diff(utilerrors.NewAggregate(errs).Error(), tc.expectedError.Error()); diff != "" {
+					t.Fatal(diff)
+				}
+			} else {
+				if len(errs) > 0 {
+					t.Fatalf("errors weren't expected but got: %v", utilerrors.NewAggregate(errs))
+				}
+
+				for cluster, secretGetter := range tc.secretGetters {
+					actualSecrets, err := secretGetter.Secrets("").List(context.Background(), metav1.ListOptions{})
+					if err != nil {
+						t.Fatal(err)
+					}
+					if len(actualSecrets.Items) > 0 {
+						actualSecretsByCluster[cluster] = append(actualSecretsByCluster[cluster], actualSecrets.Items...)
+					}
+				}
+
+				if diff := cmp.Diff(actualSecretsByCluster, tc.expectedSecrets); diff != "" {
+					t.Fatal(diff)
+				}
+			}
+
+			// Update Case
+			for cluster, secrets := range actualSecretsByCluster {
+				for _, s := range secrets {
+
+					for key := range s.Data {
+						s.Data[key] = []byte("old-value")
+					}
+					if _, err := tc.secretGetters[cluster].Secrets(s.Namespace).Update(context.Background(), &s, metav1.UpdateOptions{}); err != nil {
+						t.Fatalf("coudln't update secret: %v", err)
+					}
+				}
+			}
+
+			errs = reconcileSecrets(o, readOnlyClient)
+			if tc.expectedError != nil {
+				if len(errs) == 0 {
+					t.Fatal("expected errors but got nothing")
+				}
+				if diff := cmp.Diff(utilerrors.NewAggregate(errs).Error(), tc.expectedError.Error()); diff != "" {
+					t.Fatal(diff)
+				}
+			} else {
+				if len(errs) > 0 {
+					t.Fatalf("errors weren't expected but got: %v", utilerrors.NewAggregate(errs))
+				}
+
+				actualUpdatedSecretsByCluster := make(map[string][]coreapi.Secret)
+				for cluster, secretGetter := range tc.secretGetters {
+					actualSecrets, err := secretGetter.Secrets("").List(context.Background(), metav1.ListOptions{})
+					if err != nil {
+						t.Fatal(err)
+					}
+					if len(actualSecrets.Items) > 0 {
+						actualUpdatedSecretsByCluster[cluster] = append(actualUpdatedSecretsByCluster[cluster], actualSecrets.Items...)
+					}
+				}
+
+				if diff := cmp.Diff(actualUpdatedSecretsByCluster, tc.expectedSecrets); diff != "" {
+					t.Fatal(diff)
+				}
+			}
+		})
+	}
 }

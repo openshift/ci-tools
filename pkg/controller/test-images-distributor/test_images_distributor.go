@@ -171,7 +171,6 @@ type reconciler struct {
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	log := r.log.WithField("request", req.String())
-	log.Info("Starting reconciliation")
 	err := r.reconcile(ctx, req, log)
 	if err != nil && !apierrors.IsConflict(err) {
 		log.WithError(err).Error("Reconciliation failed")
@@ -187,8 +186,9 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		return fmt.Errorf("failed to decode request %s: %w", req, err)
 	}
 
-	// Propagate the cluster field back up
-	*log = *log.WithField("cluster", cluster)
+	// Propagate the cluster, namespace and name fields back up
+	*log = *log.WithField("cluster", cluster).WithField("namespace", decoded.Namespace).WithField("name", decoded.Name)
+	log.Info("Starting reconciliation")
 
 	// Fail asap if we cannot reconcile this
 	client, ok := r.buildClusterClients[cluster]

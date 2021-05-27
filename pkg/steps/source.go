@@ -224,6 +224,13 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 		}
 	}
 
+	// hack to work around a build subsystem string-escaping bug w.r.t. escaping in env vars
+	for i := range optionsSpec.GitRefs {
+		for j := range optionsSpec.GitRefs[i].Pulls {
+			optionsSpec.GitRefs[i].Pulls[j].Title = ""
+		}
+	}
+
 	optionsJSON, err := clonerefs.Encode(optionsSpec)
 	if err != nil {
 		panic(fmt.Errorf("couldn't create JSON spec for clonerefs: %w", err))

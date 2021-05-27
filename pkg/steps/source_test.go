@@ -58,6 +58,39 @@ func TestCreateBuild(t *testing.T) {
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
 		},
 		{
+			name: "title in pull gets squashed",
+			config: api.SourceStepConfiguration{
+				From: api.PipelineImageStreamTagReferenceRoot,
+				To:   api.PipelineImageStreamTagReferenceSource,
+				ClonerefsImage: api.ImageStreamTagReference{
+					Namespace: "ci",
+					Name:      "clonerefs",
+					Tag:       "latest",
+				},
+				ClonerefsPath: "/clonerefs",
+			},
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Job:       "job",
+					BuildID:   "buildId",
+					ProwJobID: "prowJobId",
+					Refs: &prowapi.Refs{
+						Org:     "org",
+						Repo:    "repo",
+						BaseRef: "master",
+						BaseSHA: "masterSHA",
+						Pulls: []prowapi.Pull{{
+							Number: 1,
+							SHA:    "pullSHA",
+							Title:  "Revert \"something bad!\"",
+						}},
+					},
+				},
+			},
+			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
+			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
+		},
+		{
 			name: "with a pull secret",
 			config: api.SourceStepConfiguration{
 				From: api.PipelineImageStreamTagReferenceRoot,

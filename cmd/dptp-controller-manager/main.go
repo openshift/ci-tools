@@ -30,6 +30,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
 	serviceaccountsecretrefresher "github.com/openshift/ci-tools/pkg/controller/serviceaccount_secret_refresher"
 	testimagesdistributor "github.com/openshift/ci-tools/pkg/controller/test-images-distributor"
+	"github.com/openshift/ci-tools/pkg/controller/testimagestreamimportcleaner"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/util"
@@ -43,6 +44,7 @@ var allControllers = sets.NewString(
 	promotionreconciler.ControllerName,
 	testimagesdistributor.ControllerName,
 	serviceaccountsecretrefresher.ControllerName,
+	testimagestreamimportcleaner.ControllerName,
 )
 
 type options struct {
@@ -398,6 +400,12 @@ func main() {
 			if err := serviceaccountsecretrefresher.AddToManager(clusterName, clusterMgr, opts.serviceAccountSecretRefresherOptions.enabledNamespaces.StringSet(), opts.serviceAccountSecretRefresherOptions.removeOldSecrets); err != nil {
 				logrus.WithError(err).Fatalf("Failed to add the %s controller to the %s cluster", serviceaccountsecretrefresher.ControllerName, clusterName)
 			}
+		}
+	}
+
+	if opts.enabledControllersSet.Has(testimagestreamimportcleaner.ControllerName) {
+		if err := testimagestreamimportcleaner.AddToManager(mgr, allManagers); err != nil {
+			logrus.WithError(err).Fatal("Failed to construct the testimagestreamimportcleaner controller")
 		}
 	}
 

@@ -45,8 +45,17 @@ func getKuberntesAuthToken(client *VaultClient, role string) (string, time.Durat
 	return resp.Auth.ClientToken, ttl, nil
 }
 
+func newUpstreamClient(addr string) (*api.Client, error) {
+	// We have to account for Vault going down and a replacement coming up, resulting
+	// in downtime as there can only be one active replica at a time. The retry is
+	// hardcoded to be try * 1-1.5 seconds
+	// (https://github.com/openshift/ci-tools/blob/a8ec09b266c37c67de78d2fdb6422119e47f503b/vendor/github.com/hashicorp/vault/api/client.go#L789-L790)
+	// so our eight retries result in between 36 and 54 seconds of waiting.
+	return api.NewClient(&api.Config{MaxRetries: 8, Address: addr})
+}
+
 func NewFromKubernetesAuth(addr, role string) (*VaultClient, error) {
-	upstreamClient, err := api.NewClient(&api.Config{Address: addr})
+	upstreamClient, err := newUpstreamClient(addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct client: %w", err)
 	}
@@ -64,7 +73,7 @@ func NewFromKubernetesAuth(addr, role string) (*VaultClient, error) {
 }
 
 func NewFromUserPass(addr, user, pass string) (*VaultClient, error) {
-	client, err := api.NewClient(&api.Config{Address: addr})
+	client, err := newUpstreamClient(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +86,7 @@ func NewFromUserPass(addr, user, pass string) (*VaultClient, error) {
 }
 
 func New(addr, token string) (*VaultClient, error) {
-	client, err := api.NewClient(&api.Config{Address: addr})
+	client, err := newUpstreamClient(addr)
 	if err != nil {
 		return nil, err
 	}

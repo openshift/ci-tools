@@ -169,30 +169,56 @@ func (v *VaultClient) ListKV(path string) ([]string, error) {
 
 func (v *VaultClient) ListKVRecursively(path string) ([]string, error) {
 	paths := []string{path}
+
 	var result []string
+	var errs []error
+	var lock sync.Mutex
+	var wg sync.WaitGroup
+
 	for _, path := range paths {
-		children, err := v.ListKV(path)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list %s: %w", path, err)
-		}
-		for _, child := range children {
-			// strings.Join doesn't deal with the case of "element ends with separator"
-			if !strings.HasSuffix(path, "/") {
-				child = "/" + child
+		path := path
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			children, err := v.ListKV(path)
+			if err != nil {
+				lock.Lock()
+				errs = append(errs, fmt.Errorf("failed to list %s: %w", path, err))
+				lock.Unlock()
+				return
 			}
-			child = path + child
-			if strings.HasSuffix(child, "/") {
-				grandchildren, err := v.ListKVRecursively(child)
-				if err != nil {
-					return nil, err
-				}
-				result = append(result, grandchildren...)
-			} else {
-				result = append(result, child)
+			for _, child := range children {
+				child := child
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					// strings.Join doesn't deal with the case of "element ends with separator"
+					if !strings.HasSuffix(path, "/") {
+						child = "/" + child
+					}
+					child = path + child
+					if strings.HasSuffix(child, "/") {
+						grandchildren, err := v.ListKVRecursively(child)
+						if err != nil {
+							lock.Lock()
+							errs = append(errs, err)
+							lock.Unlock()
+							return
+						}
+						lock.Lock()
+						result = append(result, grandchildren...)
+						lock.Unlock()
+					} else {
+						lock.Lock()
+						result = append(result, child)
+						lock.Unlock()
+					}
+				}()
 			}
-		}
+		}()
 	}
 
+	wg.Wait()
 	return result, nil
 }
 

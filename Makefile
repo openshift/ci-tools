@@ -117,7 +117,7 @@ validate-vendor:
 # Example:
 #   make install
 install: cmd/vault-secret-collection-manager/index.js
-	go install ./cmd/...
+	go install -v ./cmd/...
 .PHONY: install
 
 cmd/vault-secret-collection-manager/index.js: cmd/vault-secret-collection-manager/index.ts

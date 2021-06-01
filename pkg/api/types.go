@@ -768,6 +768,9 @@ type LiteralTestStep struct {
 	// Cli is the (optional) name of the release from which the `oc` binary
 	// will be injected into this step.
 	Cli string `json:"cli,omitempty"`
+	// ClusterClaimCLI defines if this step should inject the `oc` binary for
+	// the cluster claimed by this step. Requires test to define a cluster claim.
+	ClusterClaimCLI *bool `json:"cluster_claim_cli,omitempty"`
 	// Observers are the observers that should be running
 	Observers []string `json:"observers,omitempty"`
 	// RunAsScript defines if this step should be executed as a script mounted

@@ -33,20 +33,22 @@ const (
 // All but `fieldRoot` can be nil if the validation being performed in
 // context-independent.
 type context struct {
-	fieldRoot  string
-	env        api.TestEnvironment
-	seen       sets.String
-	leasesSeen sets.String
-	releases   sets.String
+	fieldRoot       string
+	env             api.TestEnvironment
+	seen            sets.String
+	leasesSeen      sets.String
+	releases        sets.String
+	hasClusterClaim bool
 }
 
-func newContext(fieldRoot string, env api.TestEnvironment, releases sets.String) context {
+func newContext(fieldRoot string, env api.TestEnvironment, releases sets.String, hasClusterClaim bool) context {
 	return context{
-		fieldRoot:  fieldRoot,
-		env:        env,
-		seen:       sets.NewString(),
-		leasesSeen: sets.NewString(),
-		releases:   releases,
+		fieldRoot:       fieldRoot,
+		env:             env,
+		seen:            sets.NewString(),
+		leasesSeen:      sets.NewString(),
+		releases:        releases,
+		hasClusterClaim: hasClusterClaim,
 	}
 }
 
@@ -345,7 +347,9 @@ func searchForTestDuplicates(tests []api.TestStepConfiguration) []error {
 func validateTestConfigurationType(fieldRoot string, test api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
 	var validationErrors []error
 	clusterCount := 0
+	var hasClusterClaim bool
 	if claim := test.ClusterClaim; claim != nil {
+		hasClusterClaim = true
 		clusterCount++
 		if claim.Version == "" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.cluster_claim.version cannot be empty when cluster_claim is not nil", fieldRoot))
@@ -420,7 +424,7 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 			clusterCount++
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
-		context := newContext(fieldRoot, testConfig.Environment, releases)
+		context := newContext(fieldRoot, testConfig.Environment, releases, hasClusterClaim)
 		validationErrors = append(validationErrors, validateLeases(context.forField(".leases"), testConfig.Leases)...)
 		validationErrors = append(validationErrors, validateTestSteps(context.forField(".pre"), testStagePre, testConfig.Pre)...)
 		validationErrors = append(validationErrors, validateTestSteps(context.forField(".test"), testStageTest, testConfig.Test)...)
@@ -428,7 +432,7 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 	}
 	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
 		typeCount++
-		context := newContext(fieldRoot, testConfig.Environment, releases)
+		context := newContext(fieldRoot, testConfig.Environment, releases, hasClusterClaim)
 		if testConfig.ClusterProfile != "" {
 			clusterCount++
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
@@ -546,6 +550,14 @@ func validateLiteralTestStep(context context, stage testStage, step api.LiteralT
 				}
 			}
 		}
+	}
+	if step.Cli != "" {
+		if step.Cli != api.LatestReleaseName && step.Cli != api.InitialReleaseName && !context.releases.Has(step.Cli) {
+			ret = append(ret, fmt.Errorf("%s.cli: unknown release '%s'", context.fieldRoot, step.Cli))
+		}
+	}
+	if step.ClusterClaimCLI != nil && *step.ClusterClaimCLI && !context.hasClusterClaim {
+		ret = append(ret, fmt.Errorf("%s: `cluster_claim_cli` requires a cluster claim to be configured for the test", context.fieldRoot))
 	}
 	if len(step.Commands) == 0 {
 		ret = append(ret, fmt.Errorf("%s: `commands` is required", context.fieldRoot))

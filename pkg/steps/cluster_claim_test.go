@@ -58,6 +58,9 @@ func aClusterDeployment() *hivev1.ClusterDeployment {
 				},
 			},
 		},
+		Status: hivev1.ClusterDeploymentStatus{
+			CLIImage: &[]string{"quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:725f4165c9a3327bea15daf342adc6542f308be829e66d3b4d43abd9ad2f9bef"}[0],
+		},
 	}
 }
 

@@ -113,78 +113,134 @@ func TestRequires(t *testing.T) {
 
 func TestGeneratePods(t *testing.T) {
 	yes := true
-	config := api.ReleaseBuildConfiguration{
-		Tests: []api.TestStepConfiguration{{
-			As: "test",
-			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-				ClusterProfile: api.ClusterProfileAWS,
-				Test: []api.LiteralTestStep{{
-					As: "step0", From: "src", Commands: "command0",
-				}, {
-					As:       "step1",
-					From:     "image1",
-					Commands: "command1",
-				}, {
-					As: "step2", From: "stable-initial:installer", Commands: "command2", RunAsScript: &yes,
-				}, {
-					As: "step3", From: "src", Commands: "command3", DNSConfig: &api.StepDNSConfig{
-						Nameservers: []string{"nameserver1", "nameserver2"},
-						Searches:    []string{"my.dns.search1", "my.dns.search2"},
-					},
+	for _, tc := range []struct {
+		name         string
+		config       api.ReleaseBuildConfiguration
+		params       map[string]func() (string, error)
+		secretMounts []coreapi.VolumeMount
+	}{{
+		name: "simple",
+		config: api.ReleaseBuildConfiguration{
+			Tests: []api.TestStepConfiguration{{
+				As: "test",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					ClusterProfile: api.ClusterProfileAWS,
+					Test: []api.LiteralTestStep{{
+						As: "step0", From: "src", Commands: "command0",
+					}, {
+						As:       "step1",
+						From:     "image1",
+						Commands: "command1",
+					}, {
+						As: "step2", From: "stable-initial:installer", Commands: "command2", RunAsScript: &yes,
+					}, {
+						As: "step3", From: "src", Commands: "command3", DNSConfig: &api.StepDNSConfig{
+							Nameservers: []string{"nameserver1", "nameserver2"},
+							Searches:    []string{"my.dns.search1", "my.dns.search2"},
+						},
+					}},
 				}},
+			},
+		},
+	}, {
+		name: "cluster_claim with CLI injected",
+		config: api.ReleaseBuildConfiguration{
+			Tests: []api.TestStepConfiguration{{
+				As: "test",
+				ClusterClaim: &api.ClusterClaim{
+					Product:      "ocp",
+					Version:      "4.7",
+					Architecture: api.ReleaseArchitectureAMD64,
+					Cloud:        "aws",
+					Owner:        "dpp",
+					Timeout:      &prowapi.Duration{Duration: time.Hour},
+				},
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Test: []api.LiteralTestStep{{
+						As: "step0", From: "src", Commands: "command0", ClusterClaimCLI: &yes,
+					}},
+				},
 			}},
 		},
-	}
-
-	jobSpec := api.JobSpec{
-		Metadata: api.Metadata{
-			Org:     "org",
-			Repo:    "repo",
-			Branch:  "base ref",
-			Variant: "variant",
+		params: map[string]func() (string, error){
+			ClusterClaimCLIParam: func() (string, error) { return "pullspec", nil },
 		},
-		Target: "target",
-		JobSpec: prowdapi.JobSpec{
-			Job:       "job",
-			BuildID:   "build id",
-			ProwJobID: "prow job id",
-			Refs: &prowapi.Refs{
-				Org:     "org",
-				Repo:    "repo",
-				BaseRef: "base ref",
-				BaseSHA: "base sha",
-			},
-			Type: "postsubmit",
-			DecorationConfig: &prowapi.DecorationConfig{
-				Timeout:     &prowapi.Duration{Duration: time.Minute},
-				GracePeriod: &prowapi.Duration{Duration: time.Second},
-				UtilityImages: &prowapi.UtilityImages{
-					Sidecar:    "sidecar",
-					Entrypoint: "entrypoint",
+		secretMounts: []coreapi.VolumeMount{{
+			MountPath: "/secrets/hive-admin-kubeconfig",
+		}, {
+			MountPath: "/secrets/hive-admin-password",
+		}},
+	}, {
+		name: "Inject CLI",
+		config: api.ReleaseBuildConfiguration{
+			Tests: []api.TestStepConfiguration{{
+				As: "test",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					ClusterProfile: api.ClusterProfileAWS,
+					Test: []api.LiteralTestStep{{
+						As: "step0", From: "src", Commands: "command0", Cli: "latest",
+					}},
 				},
-			},
+			}},
 		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			jobSpec := api.JobSpec{
+				Metadata: api.Metadata{
+					Org:     "org",
+					Repo:    "repo",
+					Branch:  "base ref",
+					Variant: "variant",
+				},
+				Target: "target",
+				JobSpec: prowdapi.JobSpec{
+					Job:       "job",
+					BuildID:   "build id",
+					ProwJobID: "prow job id",
+					Refs: &prowapi.Refs{
+						Org:     "org",
+						Repo:    "repo",
+						BaseRef: "base ref",
+						BaseSHA: "base sha",
+					},
+					Type: "postsubmit",
+					DecorationConfig: &prowapi.DecorationConfig{
+						Timeout:     &prowapi.Duration{Duration: time.Minute},
+						GracePeriod: &prowapi.Duration{Duration: time.Second},
+						UtilityImages: &prowapi.UtilityImages{
+							Sidecar:    "sidecar",
+							Entrypoint: "entrypoint",
+						},
+					},
+				},
+			}
+			jobSpec.SetNamespace("namespace")
+			params := api.NewDeferredParameters(nil)
+			for key, value := range tc.params {
+				params.Add(key, value)
+			}
+			step := newMultiStageTestStep(tc.config.Tests[0], &tc.config, params, nil, &jobSpec, nil)
+			env := []coreapi.EnvVar{
+				{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
+				{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
+				{Name: "LEASED_RESOURCE", Value: "uuid"},
+			}
+			secretVolumes := []coreapi.Volume{{
+				Name:         "secret",
+				VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "k8-secret"}},
+			}}
+			secretVolumeMounts := []coreapi.VolumeMount{{
+				Name:      "secret",
+				MountPath: "/secret",
+			}}
+			secretVolumeMounts = append(secretVolumeMounts, tc.secretMounts...)
+			ret, _, err := step.generatePods(tc.config.Tests[0].MultiStageTestConfigurationLiteral.Test, env, false, secretVolumes, secretVolumeMounts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			testhelper.CompareWithFixture(t, ret)
+		})
 	}
-	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil)
-	env := []coreapi.EnvVar{
-		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
-		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
-		{Name: "LEASED_RESOURCE", Value: "uuid"},
-	}
-	secretVolumes := []coreapi.Volume{{
-		Name:         "secret",
-		VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "k8-secret"}},
-	}}
-	secretVolumeMounts := []coreapi.VolumeMount{{
-		Name:      "secret",
-		MountPath: "/secret",
-	}}
-	ret, _, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, env, false, secretVolumes, secretVolumeMounts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	testhelper.CompareWithFixture(t, ret)
 }
 
 func TestGeneratePodsEnvironment(t *testing.T) {

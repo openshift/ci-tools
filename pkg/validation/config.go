@@ -36,7 +36,7 @@ func validateConfiguration(config *api.ReleaseBuildConfiguration, org, repo stri
 	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config, org, repo)...)
 	validationErrors = append(validationErrors, validateBuildRootImageConfiguration("build_root", config.InputConfiguration.BuildRootImage, len(config.Images) > 0)...)
 	releases := sets.NewString()
-	for name := range releases {
+	for name := range config.Releases {
 		releases.Insert(name)
 	}
 	validationErrors = append(validationErrors, validateTestStepConfiguration("tests", config.Tests, config.ReleaseTagConfiguration, releases, resolved)...)

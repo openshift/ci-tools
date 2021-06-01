@@ -24,17 +24,20 @@ import (
 )
 
 type clusterClaimStep struct {
-	as           string
-	clusterClaim *api.ClusterClaim
-	hiveClient   ctrlruntimeclient.WithWatch
-	client       loggingclient.LoggingClient
-	jobSpec      *api.JobSpec
-	wrapped      api.Step
+	as              string
+	clusterClaim    *api.ClusterClaim
+	hiveClient      ctrlruntimeclient.WithWatch
+	client          loggingclient.LoggingClient
+	jobSpec         *api.JobSpec
+	wrapped         api.Step
+	clusterClaimCLI string
 }
 
 func (s clusterClaimStep) Inputs() (api.InputDefinition, error) {
 	return s.wrapped.Inputs()
 }
+
+const ClusterClaimCLIParam = "cluster-claim-cli"
 
 var NoHiveClientErr = errors.New("step claims a cluster without providing a Hive client")
 
@@ -50,7 +53,16 @@ func (s *clusterClaimStep) Description() string                 { return s.wrapp
 func (s *clusterClaimStep) Requires() []api.StepLink            { return s.wrapped.Requires() }
 func (s *clusterClaimStep) Creates() []api.StepLink             { return s.wrapped.Creates() }
 func (s *clusterClaimStep) Objects() []ctrlruntimeclient.Object { return s.wrapped.Objects() }
-func (s *clusterClaimStep) Provides() api.ParameterMap          { return s.wrapped.Provides() }
+func (s *clusterClaimStep) Provides() api.ParameterMap {
+	parameters := s.wrapped.Provides()
+	if parameters == nil {
+		parameters = api.ParameterMap{}
+	}
+	parameters[ClusterClaimCLIParam] = func() (string, error) { //nolint:unparam
+		return s.clusterClaimCLI, nil
+	}
+	return parameters
+}
 
 func (s *clusterClaimStep) Run(ctx context.Context) error {
 	return results.ForReason("utilizing_cluster_claim").ForError(s.run(ctx))
@@ -156,6 +168,7 @@ func (s *clusterClaimStep) acquireCluster(ctx context.Context, waitForClaim func
 	if clusterDeployment.Spec.ClusterMetadata == nil {
 		return claim, fmt.Errorf("got nil cluster metadata from cluster deployment %s in namespace %s", claim.Spec.Namespace, claim.Spec.Namespace)
 	}
+	s.clusterClaimCLI = *clusterDeployment.Status.CLIImage
 
 	for src, dst := range map[string]string{clusterDeployment.Spec.ClusterMetadata.AdminKubeconfigSecretRef.Name: api.HiveAdminKubeconfigSecret, clusterDeployment.Spec.ClusterMetadata.AdminPasswordSecretRef.Name: api.HiveAdminPasswordSecret} {
 		srcSecret := &corev1.Secret{}

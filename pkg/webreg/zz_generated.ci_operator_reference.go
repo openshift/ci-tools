@@ -494,6 +494,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"                  # will be injected into this step.\n" +
 	"                  cli: ' '\n" +
+	"                  # ClusterClaimCLI defines if this step should inject the `oc` binary for\n" +
+	"                  # the cluster claimed by this step. Requires test to define a cluster claim.\n" +
+	"                  cluster_claim_cli: false\n" +
 	"                  # Commands is the command(s) that will be run inside the image.\n" +
 	"                  commands: ' '\n" +
 	"                  # Credentials defines the credentials we'll mount into this step.\n" +
@@ -580,6 +583,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"                  # will be injected into this step.\n" +
 	"                  cli: ' '\n" +
+	"                  # ClusterClaimCLI defines if this step should inject the `oc` binary for\n" +
+	"                  # the cluster claimed by this step. Requires test to define a cluster claim.\n" +
+	"                  cluster_claim_cli: false\n" +
 	"                  # Commands is the command(s) that will be run inside the image.\n" +
 	"                  commands: ' '\n" +
 	"                  # Credentials defines the credentials we'll mount into this step.\n" +
@@ -666,6 +672,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"                  # will be injected into this step.\n" +
 	"                  cli: ' '\n" +
+	"                  # ClusterClaimCLI defines if this step should inject the `oc` binary for\n" +
+	"                  # the cluster claimed by this step. Requires test to define a cluster claim.\n" +
+	"                  cluster_claim_cli: false\n" +
 	"                  # Commands is the command(s) that will be run inside the image.\n" +
 	"                  commands: ' '\n" +
 	"                  # Credentials defines the credentials we'll mount into this step.\n" +
@@ -828,6 +837,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"                  # will be injected into this step.\n" +
 	"                  cli: ' '\n" +
+	"                  cluster_claim_cli: false\n" +
 	"                  commands: ' '\n" +
 	"                  credentials:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
@@ -890,6 +900,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"                  # will be injected into this step.\n" +
 	"                  cli: ' '\n" +
+	"                  cluster_claim_cli: false\n" +
 	"                  commands: ' '\n" +
 	"                  credentials:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
@@ -952,6 +963,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"                  # will be injected into this step.\n" +
 	"                  cli: ' '\n" +
+	"                  cluster_claim_cli: false\n" +
 	"                  commands: ' '\n" +
 	"                  credentials:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
@@ -1184,6 +1196,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"              # will be injected into this step.\n" +
 	"              cli: ' '\n" +
+	"              # ClusterClaimCLI defines if this step should inject the `oc` binary for\n" +
+	"              # the cluster claimed by this step. Requires test to define a cluster claim.\n" +
+	"              cluster_claim_cli: false\n" +
 	"              # Commands is the command(s) that will be run inside the image.\n" +
 	"              commands: ' '\n" +
 	"              # Credentials defines the credentials we'll mount into this step.\n" +
@@ -1270,6 +1285,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"              # will be injected into this step.\n" +
 	"              cli: ' '\n" +
+	"              # ClusterClaimCLI defines if this step should inject the `oc` binary for\n" +
+	"              # the cluster claimed by this step. Requires test to define a cluster claim.\n" +
+	"              cluster_claim_cli: false\n" +
 	"              # Commands is the command(s) that will be run inside the image.\n" +
 	"              commands: ' '\n" +
 	"              # Credentials defines the credentials we'll mount into this step.\n" +
@@ -1356,6 +1374,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"              # will be injected into this step.\n" +
 	"              cli: ' '\n" +
+	"              # ClusterClaimCLI defines if this step should inject the `oc` binary for\n" +
+	"              # the cluster claimed by this step. Requires test to define a cluster claim.\n" +
+	"              cluster_claim_cli: false\n" +
 	"              # Commands is the command(s) that will be run inside the image.\n" +
 	"              commands: ' '\n" +
 	"              # Credentials defines the credentials we'll mount into this step.\n" +
@@ -1518,6 +1539,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"              # will be injected into this step.\n" +
 	"              cli: ' '\n" +
+	"              cluster_claim_cli: false\n" +
 	"              commands: ' '\n" +
 	"              credentials:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
@@ -1580,6 +1602,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"              # will be injected into this step.\n" +
 	"              cli: ' '\n" +
+	"              cluster_claim_cli: false\n" +
 	"              commands: ' '\n" +
 	"              credentials:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
@@ -1642,6 +1665,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              # Cli is the (optional) name of the release from which the `oc` binary\n" +
 	"              # will be injected into this step.\n" +
 	"              cli: ' '\n" +
+	"              cluster_claim_cli: false\n" +
 	"              commands: ' '\n" +
 	"              credentials:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +

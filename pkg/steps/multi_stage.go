@@ -546,7 +546,11 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			addProfile(s.profileSecretName(), s.profile, pod)
 		}
 		if step.Cli != "" {
-			addCliInjector(step.Cli, pod)
+			addCliInjector(step.Cli, "", pod)
+		}
+		if step.ClusterClaimCLI != nil && *step.ClusterClaimCLI {
+			pullSpec, _ := s.params.Get(ClusterClaimCLIParam)
+			addCliInjector(step.Cli, pullSpec, pod)
 		}
 		addSharedDirSecret(s.name, pod)
 		addCredentials(step.Credentials, pod)
@@ -758,7 +762,7 @@ func addCommandScript(name string, pod *coreapi.Pod) {
 	})
 }
 
-func addCliInjector(release string, pod *coreapi.Pod) {
+func addCliInjector(release, pullSpec string, pod *coreapi.Pod) {
 	volumeName := "cli"
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
 		Name: volumeName,
@@ -766,9 +770,15 @@ func addCliInjector(release string, pod *coreapi.Pod) {
 			EmptyDir: &coreapi.EmptyDirVolumeSource{},
 		},
 	})
+	var image string
+	if pullSpec != "" {
+		image = pullSpec
+	} else {
+		image = fmt.Sprintf("%s:cli", api.ReleaseStreamFor(release))
+	}
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, coreapi.Container{
 		Name:    "inject-cli",
-		Image:   fmt.Sprintf("%s:cli", api.ReleaseStreamFor(release)),
+		Image:   image,
 		Command: []string{"/bin/cp"},
 		Args:    []string{"/usr/bin/oc", CliMountPath},
 		VolumeMounts: []coreapi.VolumeMount{{

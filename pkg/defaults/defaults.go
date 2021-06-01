@@ -332,7 +332,7 @@ func stepForTest(
 ) ([]api.Step, error) {
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
 		leases := leasesForTest(test)
-		if len(leases) != 0 {
+		if len(leases) != 0 || c.ClusterClaim != nil {
 			params = api.NewDeferredParameters(params)
 		}
 		step := steps.MultiStageTestStep(*c, config, params, podClient, jobSpec, leases)
@@ -342,6 +342,7 @@ func stepForTest(
 		}
 		if c.ClusterClaim != nil {
 			step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step)
+			addProvidesForStep(step, params)
 		}
 		newSteps := stepsForStepImages(client, jobSpec, inputImages, test, imageConfigs)
 		return append([]api.Step{step}, newSteps...), nil

@@ -519,11 +519,12 @@ func TestValidateTestSteps(t *testing.T) {
 	yes := true
 	defaultDuration := &prowv1.Duration{Duration: 1 * time.Minute}
 	for _, tc := range []struct {
-		name     string
-		steps    []api.TestStep
-		seen     sets.String
-		errs     []error
-		releases sets.String
+		name            string
+		steps           []api.TestStep
+		seen            sets.String
+		errs            []error
+		releases        sets.String
+		hasClusterClaim bool
 	}{{
 		name: "valid step",
 		steps: []api.TestStep{{
@@ -855,9 +856,86 @@ func TestValidateTestSteps(t *testing.T) {
 		errs: []error{
 			errors.New("test best-effort contains best_effort without timeout"),
 		},
+	}, {
+		name: "ClusterClaimCLI without cluster claim",
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:              "claim-cli",
+				From:            "base",
+				Commands:        "openshift-cluster install",
+				ClusterClaimCLI: &yes,
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				}},
+		}},
+		errs: []error{
+			errors.New("test[0]: `cluster_claim_cli` requires a cluster claim to be configured for the test"),
+		},
+	}, {
+		name: "ClusterClaimCLI with cluster claim",
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:              "claim-cli",
+				From:            "base",
+				Commands:        "openshift-cluster install",
+				ClusterClaimCLI: &yes,
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				}},
+		}},
+		hasClusterClaim: true,
+		errs:            []error{},
+	}, {
+		name: "CLI from latest",
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:       "claim-cli",
+				From:     "base",
+				Commands: "openshift-cluster install",
+				Cli:      "latest",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				}},
+		}},
+		errs: []error{},
+	}, {
+		name: "CLI from custom release",
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:       "claim-cli",
+				From:     "base",
+				Commands: "openshift-cluster install",
+				Cli:      "custom",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				}},
+		}},
+		releases: sets.NewString("custom"),
+		errs:     []error{},
+	}, {
+		name: "CLI from non-existent release",
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:       "claim-cli",
+				From:     "base",
+				Commands: "openshift-cluster install",
+				Cli:      "non-existent",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				}},
+		}},
+		releases: sets.NewString("custom"),
+		errs: []error{
+			errors.New("test[0].cli: unknown release 'non-existent'"),
+		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			context := newContext("test", nil, tc.releases)
+			context := newContext("test", nil, tc.releases, tc.hasClusterClaim)
 			if tc.seen != nil {
 				context.seen = tc.seen
 			}
@@ -879,11 +957,12 @@ func TestValidatePostSteps(t *testing.T) {
 	}
 	yes := true
 	for _, tc := range []struct {
-		name     string
-		steps    []api.TestStep
-		seen     sets.String
-		errs     []error
-		releases sets.String
+		name            string
+		steps           []api.TestStep
+		seen            sets.String
+		errs            []error
+		releases        sets.String
+		hasClusterClaim bool
 	}{{
 		name: "Valid Post steps",
 
@@ -897,7 +976,7 @@ func TestValidatePostSteps(t *testing.T) {
 		}},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			context := newContext("test", nil, tc.releases)
+			context := newContext("test", nil, tc.releases, tc.hasClusterClaim)
 			if tc.seen != nil {
 				context.seen = tc.seen
 			}
@@ -912,11 +991,12 @@ func TestValidatePostSteps(t *testing.T) {
 func TestValidateParameters(t *testing.T) {
 	defaultStr := "default"
 	for _, tc := range []struct {
-		name     string
-		params   []api.StepParameter
-		env      api.TestEnvironment
-		err      []error
-		releases sets.String
+		name            string
+		params          []api.StepParameter
+		env             api.TestEnvironment
+		err             []error
+		releases        sets.String
+		hasClusterClaim bool
 	}{{
 		name: "no parameters",
 	}, {
@@ -933,7 +1013,7 @@ func TestValidateParameters(t *testing.T) {
 		err:    []error{errors.New("test: unresolved parameter(s): [TEST1]")},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateLiteralTestStep(newContext("test", tc.env, tc.releases), testStageTest, api.LiteralTestStep{
+			err := validateLiteralTestStep(newContext("test", tc.env, tc.releases, tc.hasClusterClaim), testStageTest, api.LiteralTestStep{
 				As:       "as",
 				From:     "from",
 				Commands: "commands",

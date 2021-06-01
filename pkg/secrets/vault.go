@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -165,18 +166,31 @@ func (c *vaultClient) GetInUseInformationForAllItems(optionalSubPath string) (ma
 		return nil, err
 	}
 	result := make(map[string]SecretUsageComparer, len(allKeys))
+	var errs []error
+	var lock sync.Mutex
+	var wg sync.WaitGroup
+
 	for _, key := range allKeys {
-		kvData, err := c.upstream.GetKV(key)
-		if err != nil {
-			return nil, err
-		}
-		comparer := vaultSecretUsageComparer{item: *kvData, allFields: sets.String{}, inUseFields: sets.String{}}
-		for key := range kvData.Data {
-			comparer.allFields.Insert(key)
-		}
-		result[strings.TrimPrefix(key, c.prefix+"/")] = &comparer
+		wg.Add(1)
+		key := key
+		go func() {
+			defer wg.Done()
+			kvData, err := c.upstream.GetKV(key)
+			lock.Lock()
+			defer lock.Unlock()
+			if err != nil {
+				errs = append(errs, err)
+				return
+			}
+			comparer := vaultSecretUsageComparer{item: *kvData, allFields: sets.String{}, inUseFields: sets.String{}}
+			for key := range kvData.Data {
+				comparer.allFields.Insert(key)
+			}
+			result[strings.TrimPrefix(key, c.prefix+"/")] = &comparer
+		}()
 	}
 
+	wg.Wait()
 	return result, nil
 }
 
@@ -206,28 +220,40 @@ func (c *vaultClient) GetUserSecrets() (map[types.NamespacedName]map[string]stri
 
 	result := map[types.NamespacedName]map[string]string{}
 	var errs []error
+	var lock sync.Mutex
+	var wg sync.WaitGroup
+
 	for _, path := range allItems {
-		item, err := c.upstream.GetKV(path)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		if item.Data[vault.SecretSyncTargetNamepaceKey] == "" || item.Data[vault.SecretSyncTargetNameKey] == "" {
-			continue
-		}
-		nn := types.NamespacedName{Namespace: item.Data[vault.SecretSyncTargetNamepaceKey], Name: item.Data[vault.SecretSyncTargetNameKey]}
-		if val, ok := result[nn]; ok {
-			errs = append(errs, fmt.Errorf("both the %s and the %s vault item point to the %s secret", val[vault.VaultSourceKey], path, nn.String()))
-			continue
-		}
-		result[nn] = map[string]string{vault.VaultSourceKey: path}
-		for k, v := range item.Data {
-			if k == vault.SecretSyncTargetNamepaceKey || k == vault.SecretSyncTargetNameKey {
-				continue
+		path := path
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			item, err := c.upstream.GetKV(path)
+			lock.Lock()
+			defer lock.Unlock()
+
+			if err != nil {
+				errs = append(errs, err)
+				return
 			}
-			result[nn][k] = v
-		}
+			if item.Data[vault.SecretSyncTargetNamepaceKey] == "" || item.Data[vault.SecretSyncTargetNameKey] == "" {
+				return
+			}
+			nn := types.NamespacedName{Namespace: item.Data[vault.SecretSyncTargetNamepaceKey], Name: item.Data[vault.SecretSyncTargetNameKey]}
+			if val, ok := result[nn]; ok {
+				errs = append(errs, fmt.Errorf("both the %s and the %s vault item point to the %s secret", val[vault.VaultSourceKey], path, nn.String()))
+				return
+			}
+			result[nn] = map[string]string{vault.VaultSourceKey: path}
+			for k, v := range item.Data {
+				if k == vault.SecretSyncTargetNamepaceKey || k == vault.SecretSyncTargetNameKey {
+					continue
+				}
+				result[nn][k] = v
+			}
+		}()
 	}
+	wg.Wait()
 
 	return result, utilerrors.NewAggregate(errs)
 }

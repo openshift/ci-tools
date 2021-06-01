@@ -11,14 +11,12 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/semaphore"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -57,8 +55,6 @@ type options struct {
 	logLevel            string
 	impersonateUser     string
 
-	maxConcurrency int
-
 	secretsGetters  map[string]Getter
 	config          secretbootstrap.Config
 	generatorConfig secretgenerator.Config
@@ -89,7 +85,6 @@ func parseOptions(censor *secrets.DynamicCensor) (options, error) {
 	fs.BoolVar(&o.force, "force", false, "If true, update the secrets even if existing one differs from Bitwarden items instead of existing with error. Default false.")
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	fs.StringVar(&o.impersonateUser, "as", "", "Username to impersonate")
-	fs.IntVar(&o.maxConcurrency, "concurrency", 0, "Maximum number of concurrent in-flight goroutines to BitWarden.")
 	o.secrets.Bind(fs, os.Getenv, censor)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return options{}, err
@@ -180,11 +175,6 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 		}
 	}
 	o.config.Secrets = filteredSecrets
-
-	if o.maxConcurrency == 0 {
-		o.maxConcurrency = runtime.GOMAXPROCS(0)
-	}
-	logrus.Infof("The max concurrency is %d", o.maxConcurrency)
 
 	return o.validateCompletedOptions()
 }
@@ -315,8 +305,7 @@ func constructDockerConfigJSON(client secrets.ReadOnlyClient, dockerConfigJSONDa
 	return b, nil
 }
 
-func constructSecrets(ctx context.Context, config secretbootstrap.Config, client secrets.ReadOnlyClient, maxConcurrency int) (map[string][]*coreapi.Secret, error) {
-	sem := semaphore.NewWeighted(int64(maxConcurrency))
+func constructSecrets(config secretbootstrap.Config, client secrets.ReadOnlyClient) (map[string][]*coreapi.Secret, error) {
 	secretsByClusterAndName := map[string]map[types.NamespacedName]coreapi.Secret{}
 	secretsMapLock := &sync.Mutex{}
 
@@ -346,15 +335,9 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, client
 			dataLock := &sync.Mutex{}
 			keyWg.Add(len(keys))
 			for _, key := range keys {
-				if err := sem.Acquire(ctx, 1); err != nil {
-					errChan <- fmt.Errorf("failed to acquire semaphore for key %s: %w", key, err)
-					keyWg.Done()
-					continue
-				}
 
 				key := key
 				go func() {
-					defer sem.Release(1)
 					defer keyWg.Done()
 					bwContext := cfg.From[key]
 					var value []byte
@@ -424,9 +407,6 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, client
 		}()
 	}
 	secretConfigWG.Wait()
-	if err := sem.Acquire(ctx, int64(maxConcurrency)); err != nil {
-		errChan <- fmt.Errorf("failed to acquire semaphore while wating all workers to finish: %w", err)
-	}
 	close(errChan)
 	var errs []error
 	for err := range errChan {
@@ -935,9 +915,8 @@ func reconcileSecrets(o options, client secrets.ReadOnlyClient) (errs []error) {
 		return nil
 	}
 
-	ctx := context.TODO()
 	// errors returned by constructSecrets will be handled once the rest of the secrets have been uploaded
-	secretsMap, err := constructSecrets(ctx, o.config, client, o.maxConcurrency)
+	secretsMap, err := constructSecrets(o.config, client)
 	if err != nil {
 		errs = append(errs, err)
 	}

@@ -5,6 +5,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -76,7 +78,7 @@ func TestListKVRecursively(t *testing.T) {
 	}
 	expected := []string{"secret/item", "secret/nested/item", "secret/self-managed/mine-alone/my-secret"}
 
-	if diff := cmp.Diff(result, expected); diff != "" {
+	if diff := cmp.Diff(sets.NewString(result...).List(), expected); diff != "" {
 		t.Errorf("actual resutl differs from expected: %v", diff)
 	}
 }

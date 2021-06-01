@@ -1342,7 +1342,7 @@ Code: 404. Errors:
 				client := vaultClientFromTestItems(tc.items)
 
 				var actualErrorMsg string
-				actual, actualError := constructSecrets(context.TODO(), tc.config, client, 10)
+				actual, actualError := constructSecrets(tc.config, client)
 				if actualError != nil {
 					actualErrorMsg = actualError.Error()
 				}
@@ -2748,7 +2748,6 @@ func TestIntegration(t *testing.T) {
 			vaultAddr := testhelper.Vault(t)
 
 			o := options{
-				maxConcurrency: 1,
 				force:          tc.force,
 				config:         tc.config,
 				secretsGetters: tc.secretGetters,

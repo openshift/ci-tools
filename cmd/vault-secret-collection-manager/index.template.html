@@ -45,7 +45,10 @@
           <tbody>
             <tr class="user-edit-table">
               <td class="user-edit-table"><select name="CurrentMembers" id="currentMembersSelection" multiple></select></td>
-              <td class="user-edit-table"><select name="ALlUsers" id="allUsersSelection" multiple></select></td>
+              <td class="user-edit-table">
+                <datalist id="all-members"></datalist>
+                <input list="all-members" id="allUsersInput">
+              </td>
             </tr>
             <tr class="user-edit-table">
               <td class="user-edit-table"><button type="button" id="removeMemberButton" class="blue-button small-button">Remove</button></td>

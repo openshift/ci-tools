@@ -413,30 +413,6 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 		Filename: "org-repo-branch.yaml",
 	}
 
-	basePresubmitWithCiop := prowconfig.Presubmit{
-		Brancher: prowconfig.Brancher{
-			Branches: []string{baseCiopConfig.Branch},
-		},
-		JobBase: prowconfig.JobBase{
-			Name:   baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "test"),
-			Labels: map[string]string{"pj-rehearse.openshift.io/source-type": "changedCiopConfigs"},
-			Agent:  string(pjapi.KubernetesAgent),
-			Spec: &v1.PodSpec{
-				Containers: []v1.Container{{
-					Env: []v1.EnvVar{{
-						ValueFrom: &v1.EnvVarSource{
-							ConfigMapKeyRef: &v1.ConfigMapKeySelector{
-								LocalObjectReference: v1.LocalObjectReference{
-									Name: baseCiopConfig.ConfigMapName(),
-								},
-							},
-						},
-					}},
-				}},
-			},
-		},
-	}
-
 	affectedJobs := map[string]sets.String{
 		"org-repo-branch.yaml": {
 			"testjob": sets.Empty{},
@@ -444,130 +420,116 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 	}
 
 	testCases := []struct {
-		description string
-		prow        *prowconfig.Config
-		ciop        config.DataByFilename
-		expected    config.Presubmits
-	}{{
-		description: "return a presubmit using one of the input ciop configs",
-		prow: &prowconfig.Config{
-			JobConfig: prowconfig.JobConfig{
-				PresubmitsStatic: map[string][]prowconfig.Presubmit{
-					"org/repo": {
-						func() prowconfig.Presubmit {
-							ret := prowconfig.Presubmit{}
-							if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
-								t.Fatal(err)
-							}
-							ret.Name = baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "testjob")
-							ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
-							return ret
-						}(),
-					}},
+		description        string
+		prow               *prowconfig.Config
+		ciop               config.DataByFilename
+		expectedPresubmits config.Presubmits
+		expectedPeriodics  config.Periodics
+	}{
+		{
+			description: "return a presubmit using one of the input ciop configs",
+			prow: &prowconfig.Config{
+				JobConfig: prowconfig.JobConfig{
+					PresubmitsStatic: map[string][]prowconfig.Presubmit{
+						"org/repo": {
+							prowconfig.Presubmit{
+								JobBase: prowconfig.JobBase{
+									Name:   baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "testjob"),
+									Labels: map[string]string{"pj-rehearse.openshift.io/source-type": "changedCiopConfigs"},
+									Agent:  string(pjapi.KubernetesAgent),
+								},
+							},
+						},
+					},
+				},
+			},
+			ciop: config.DataByFilename{baseCiopConfig.Filename: {Info: baseCiopConfig}},
+			expectedPresubmits: config.Presubmits{
+				"org/repo": {
+					prowconfig.Presubmit{
+						JobBase: prowconfig.JobBase{
+							Name:   baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "testjob"),
+							Labels: map[string]string{"pj-rehearse.openshift.io/source-type": "changedCiopConfigs"},
+							Agent:  string(pjapi.KubernetesAgent),
+						},
+					},
+				},
 			},
 		},
-		ciop: config.DataByFilename{baseCiopConfig.Filename: {Info: baseCiopConfig}},
-		expected: config.Presubmits{"org/repo": {
-			func() prowconfig.Presubmit {
-				ret := prowconfig.Presubmit{}
-				if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
-					t.Fatal(err)
-				}
-				ret.Name = baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "testjob")
-				ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
-				return ret
-			}(),
-		}},
-	}, {
-		description: "return a presubmit using one of the input ciop configs, with additional env vars",
-		prow: &prowconfig.Config{
-			JobConfig: prowconfig.JobConfig{
-				PresubmitsStatic: map[string][]prowconfig.Presubmit{
-					"org/repo": {
-						func() prowconfig.Presubmit {
-							ret := prowconfig.Presubmit{}
-							if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
-								t.Fatal(err)
-							}
-							ret.Name = baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "testjob")
-							moreEnvVars := []v1.EnvVar{{
-								Name:  "SOMETHING",
-								Value: "value of SOMETHING",
-							}}
-							ret.Spec.Containers[0].Env = append(moreEnvVars, ret.Spec.Containers[0].Env...)
-							ret.Spec.Containers[0].Env[len(moreEnvVars)].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
-							return ret
-						}(),
-					}},
+		{
+			description: "do not return a presubmit using a ciop config not present in input",
+			prow: &prowconfig.Config{
+				JobConfig: prowconfig.JobConfig{
+					PresubmitsStatic: map[string][]prowconfig.Presubmit{
+						"org/repo": {
+							prowconfig.Presubmit{
+								JobBase: prowconfig.JobBase{
+									Name:   baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "testjob"),
+									Labels: map[string]string{"pj-rehearse.openshift.io/source-type": "changedCiopConfigs"},
+									Agent:  string(pjapi.KubernetesAgent),
+								},
+							},
+						}},
+				},
+			},
+			ciop: config.DataByFilename{},
+		},
+		{
+			description: "handle jenkins presubmits",
+			prow: &prowconfig.Config{
+				JobConfig: prowconfig.JobConfig{
+					PresubmitsStatic: map[string][]prowconfig.Presubmit{
+						"org/repo": {
+							prowconfig.Presubmit{
+								JobBase: prowconfig.JobBase{
+									Name:   baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "testjob"),
+									Labels: map[string]string{"pj-rehearse.openshift.io/source-type": "changedCiopConfigs"},
+									Agent:  string(pjapi.JenkinsAgent),
+								},
+							},
+						},
+					},
+				},
+			},
+			ciop: config.DataByFilename{},
+		},
+		{
+			description: "return a periodic using one of the input ciop configs",
+			prow: &prowconfig.Config{
+				JobConfig: prowconfig.JobConfig{
+					Periodics: []prowconfig.Periodic{
+						{
+							JobBase: prowconfig.JobBase{
+								Name:   baseCiopConfig.JobName(jobconfig.PeriodicPrefix, "testjob"),
+								Labels: map[string]string{"pj-rehearse.openshift.io/source-type": "changedCiopConfigs"},
+								Agent:  string(pjapi.KubernetesAgent),
+							},
+						},
+					},
+				},
+			},
+			ciop: config.DataByFilename{baseCiopConfig.Filename: {Info: baseCiopConfig}},
+			expectedPeriodics: config.Periodics{
+				baseCiopConfig.JobName(jobconfig.PeriodicPrefix, "testjob"): {
+					JobBase: prowconfig.JobBase{
+						Name:   baseCiopConfig.JobName(jobconfig.PeriodicPrefix, "testjob"),
+						Labels: map[string]string{"pj-rehearse.openshift.io/source-type": "changedCiopConfigs"},
+						Agent:  string(pjapi.KubernetesAgent),
+					},
+				},
 			},
 		},
-		ciop: config.DataByFilename{baseCiopConfig.Filename: {Info: baseCiopConfig}},
-		expected: config.Presubmits{"org/repo": {
-			func() prowconfig.Presubmit {
-				ret := prowconfig.Presubmit{}
-				if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
-					t.Fatal(err)
-				}
-				ret.Name = baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "testjob")
-				moreEnvVars := []v1.EnvVar{{
-					Name:  "SOMETHING",
-					Value: "value of SOMETHING",
-				}}
-				ret.Spec.Containers[0].Env = append(moreEnvVars, ret.Spec.Containers[0].Env...)
-				ret.Spec.Containers[0].Env[len(moreEnvVars)].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
-				return ret
-			}(),
-		}},
-	}, {
-		description: "do not return a presubmit using a ciop config not present in input",
-		prow: &prowconfig.Config{
-			JobConfig: prowconfig.JobConfig{
-				PresubmitsStatic: map[string][]prowconfig.Presubmit{
-					"org/repo": {
-						func() prowconfig.Presubmit {
-							ret := prowconfig.Presubmit{}
-							if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
-								t.Fatal(err)
-							}
-							ret.Name = baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "testjob")
-							ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
-							return ret
-						}(),
-					}},
-			},
-		},
-		ciop:     config.DataByFilename{},
-		expected: config.Presubmits{},
-	}, {
-		description: "handle jenkins presubmits",
-		prow: &prowconfig.Config{
-			JobConfig: prowconfig.JobConfig{
-				PresubmitsStatic: map[string][]prowconfig.Presubmit{
-					"org/repo": {
-						func() prowconfig.Presubmit {
-							ret := prowconfig.Presubmit{}
-							if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
-								t.Fatal(err)
-							}
-							ret.Name = baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "testjob")
-							ret.Agent = string(pjapi.JenkinsAgent)
-							ret.Spec.Containers[0].Env = []v1.EnvVar{}
-							return ret
-						}(),
-					}},
-			},
-		},
-		ciop:     config.DataByFilename{},
-		expected: config.Presubmits{},
-	},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			presubmits := GetPresubmitsForCiopConfigs(tc.prow, tc.ciop, affectedJobs, logrus.WithField("test", tc.description))
+			presubmits, periodics := GetJobsForCiopConfigs(tc.prow, tc.ciop, affectedJobs, logrus.WithField("test", tc.description))
 
-			if !reflect.DeepEqual(tc.expected, presubmits) {
-				t.Errorf("Returned presubmits differ from expected:\n%s", cmp.Diff(tc.expected, presubmits, ignoreUnexported))
+			if diff := cmp.Diff(tc.expectedPresubmits, presubmits, ignoreUnexported); diff != "" {
+				t.Errorf("Returned presubmits differ from expected:\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedPeriodics, periodics, ignoreUnexported); diff != "" {
+				t.Errorf("Returned periodics differ from expected:\n%s", diff)
 			}
 		})
 	}

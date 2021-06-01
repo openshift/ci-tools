@@ -289,8 +289,9 @@ func rehearseMain() error {
 	changedPresubmits := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
 	toRehearse.AddAll(changedPresubmits, config.ChangedPresubmit)
 
-	presubmitsForCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigData, affectedJobs, logger)
+	presubmitsForCiopConfigs, periodicsForCiopConfigs := diffs.GetJobsForCiopConfigs(prConfig.Prow, changedCiopConfigData, affectedJobs, logger)
 	toRehearse.AddAll(presubmitsForCiopConfigs, config.ChangedCiopConfig)
+	periodicsToRehearse.AddAll(periodicsForCiopConfigs)
 
 	presubmitsForClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, rehearsalClusterProfiles.ProductionNames, logger)
 	toRehearse.AddAll(presubmitsForClusterProfiles, config.ChangedClusterProfile)

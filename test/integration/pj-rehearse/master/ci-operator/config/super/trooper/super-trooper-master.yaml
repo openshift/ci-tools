@@ -85,6 +85,12 @@ tests:
           cpu: 1000m
           memory: 2Gi
     workflow: ipi
+- as: changed-periodic
+  cron: '@yearly'
+  steps:
+    env:
+      TEST_PARAMETER: thiswillchange
+    workflow: ipi
 zz_generated_metadata:
   branch: master
   org: super

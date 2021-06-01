@@ -648,6 +648,7 @@ func (client *imageImportStatusSettingClient) Create(ctx context.Context, obj ct
 var _ agents.IndexFn = indexConfigsByTestInputImageStreamTag(nil)
 
 func TestTestImageStramTagImportHandlerRoundTrips(t *testing.T) {
+	t.Parallel()
 	const cluster, namespace, name = "cluster", "namespace", "name"
 	obj := &testimagestreamtagimportv1.TestImageStreamTagImport{
 		Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
@@ -687,6 +688,7 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 		name                            string
 		config                          api.ReleaseBuildConfiguration
 		client                          ctrlruntimeclient.Client
+		buildClusterClients             map[string]ctrlruntimeclient.Client
 		additionalImageStreamTags       sets.String
 		additionalImageStreams          sets.String
 		additionalImageStreamNamespaces sets.String
@@ -725,10 +727,20 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 		},
 		{
 			name: "imagestreamtag is referenced by imagestreatag import",
-			client: fakeclient.NewFakeClient(&testimagestreamtagimportv1.TestImageStreamTagImport{Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
+			client: fakeclient.NewFakeClient((&testimagestreamtagimportv1.TestImageStreamTagImport{Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
 				Namespace: namespace,
 				Name:      streamName + ":" + tagName,
-			}}),
+			}}).WithImageStreamLabels()),
+			expectedResult: true,
+		},
+		{
+			name: "imagestreamtag is referenced by imagestreatag import in a buildcluster",
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"build01": fakeclient.NewFakeClient((&testimagestreamtagimportv1.TestImageStreamTagImport{
+				Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
+					Namespace: namespace,
+					Name:      streamName + ":" + tagName,
+				}}).WithImageStreamLabels()),
+			},
 			expectedResult: true,
 		},
 		{
@@ -741,6 +753,9 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 			if tc.client == nil {
 				tc.client = fakeclient.NewFakeClient()
 			}
+			if tc.buildClusterClients == nil {
+				tc.buildClusterClients = map[string]ctrlruntimeclient.Client{}
+			}
 			configAgent := agents.NewFakeConfigAgent(map[string]map[string][]api.ReleaseBuildConfiguration{"": {"": []api.ReleaseBuildConfiguration{tc.config}}})
 			filter, err := testInputImageStreamTagFilterFactory(
 				logrus.NewEntry(logrus.New()),
@@ -750,6 +765,7 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 				tc.additionalImageStreamTags,
 				tc.additionalImageStreams,
 				tc.additionalImageStreamNamespaces,
+				tc.buildClusterClients,
 			)
 			if err != nil {
 				t.Fatalf("failed to construct filter: %v", err)

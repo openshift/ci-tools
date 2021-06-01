@@ -8,12 +8,15 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	kapierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -26,6 +29,7 @@ import (
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/release"
 	"github.com/openshift/ci-tools/pkg/release/candidate"
@@ -134,7 +138,7 @@ func fromConfig(
 	// we need to pass the pointer - otherwise we will lose the updates after leaving the function scope.
 	imageConfigs := &[]*api.InputImageTagStepConfiguration{}
 	resolver := rootImageResolver(client, ctx)
-	rawSteps, err := stepConfigsForBuild(config, jobSpec, ioutil.ReadFile, resolver, imageConfigs)
+	rawSteps, err := stepConfigsForBuild(ctx, client, config, jobSpec, ioutil.ReadFile, resolver, imageConfigs, time.Second)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get stepConfigsForBuild: %w", err)
 	}
@@ -498,11 +502,15 @@ type readFile func(string) ([]byte, error)
 type resolveRoot func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error)
 
 func stepConfigsForBuild(
+	ctx context.Context,
+	client ctrlruntimeclient.Client,
 	config *api.ReleaseBuildConfiguration,
 	jobSpec *api.JobSpec,
 	readFile readFile,
 	resolveRoot resolveRoot,
-	imageConfigs *[]*api.InputImageTagStepConfiguration) ([]api.StepConfiguration, error) {
+	imageConfigs *[]*api.InputImageTagStepConfiguration,
+	second time.Duration,
+) ([]api.StepConfiguration, error) {
 	var buildSteps []api.StepConfiguration
 
 	if config.InputConfiguration.BaseImages == nil {
@@ -529,6 +537,7 @@ func stepConfigsForBuild(
 				return nil, fmt.Errorf("failed to read buildRootImageStream from repository: %w", err)
 			}
 			target.ImageStreamTagReference = istTagRef
+			ensureImageStreamTag(ctx, client, istTagRef, second)
 		}
 		if isTagRef := target.ImageStreamTagReference; isTagRef != nil {
 			if config.InputConfiguration.BuildRootImage.UseBuildCache {
@@ -802,4 +811,35 @@ func buildRootImageStreamFromRepository(readFile readFile) (*api.ImageStreamTagR
 		return nil, fmt.Errorf("failed to unmarshal %s: %w", api.CIOperatorInrepoConfigFileName, err)
 	}
 	return &config.BuildRootImage, nil
+}
+
+func ensureImageStreamTag(ctx context.Context, client ctrlruntimeclient.Client, isTagRef *api.ImageStreamTagReference, second time.Duration) {
+	istImport := &testimagestreamtagimportv1.TestImageStreamTagImport{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      isTagRef.Name + "-" + isTagRef.Tag,
+			Namespace: "ci",
+		},
+		Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
+			Namespace: isTagRef.Namespace,
+			Name:      isTagRef.Name + ":" + isTagRef.Tag,
+		},
+	}
+	istImport.WithImageStreamLabels()
+
+	// Conflicts are expected
+	if err := client.Create(ctx, istImport); err != nil && !kapierrors.IsConflict(err) {
+		logrus.WithError(err).Warnf("Failed to create imagestreamtagimport for root %s", istImport.Name)
+	}
+
+	if err := wait.PollImmediate(5*second, 30*second, func() (bool, error) {
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(istImport), &imagev1.ImageStreamTag{}); err != nil {
+			if kapierrors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, fmt.Errorf("get failed: %w", err)
+		}
+		return true, nil
+	}); err != nil {
+		logrus.WithError(err).Warnf("Waiting for imagestreamtag %s failed", ctrlruntimeclient.ObjectKeyFromObject(istImport))
+	}
 }

@@ -19,7 +19,7 @@ replace (
 
 require (
 	cloud.google.com/go/storage v1.12.0
-	github.com/GoogleCloudPlatform/testgrid v0.0.58
+	github.com/GoogleCloudPlatform/testgrid v0.0.68
 	github.com/alecthomas/chroma v0.8.2-0.20201103103104-ab61726cdb54
 	github.com/andygrunwald/go-jira v1.13.0
 	github.com/blang/semver v3.5.1+incompatible
@@ -63,7 +63,7 @@ require (
 	k8s.io/apimachinery v0.21.0
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
 	k8s.io/klog/v2 v2.8.0
-	k8s.io/test-infra v0.0.0-20210520185236-f6cc68bf9185
+	k8s.io/test-infra v0.0.0-20210601123226-ea6aa4eb2942
 	k8s.io/utils v0.0.0-20210111153108-fddb29f9d009
 	sigs.k8s.io/boskos v0.0.0-20210210143059-9ac98d864d2a
 	sigs.k8s.io/controller-runtime v0.9.0-beta.1.0.20210512131817-ce2f0c92d77e

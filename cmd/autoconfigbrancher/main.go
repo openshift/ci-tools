@@ -26,6 +26,8 @@ const (
 	githubTeam   = "openshift/openshift-team-developer-productivity-test-platform"
 	matchTitle   = "Automate config brancher"
 	remoteBranch = "auto-config-brancher"
+
+	prowConfigDir = "./core-services/prow/02_config/"
 )
 
 type options struct {
@@ -192,8 +194,12 @@ func main() {
 			}(),
 		},
 		{
-			command:   "/usr/bin/determinize-prow-config",
-			arguments: []string{"--prow-config-dir", "./core-services/prow/02_config/"},
+			command: "/usr/bin/determinize-prow-config",
+			arguments: []string{
+				fmt.Sprintf("--prow-config-dir=%s", prowConfigDir),
+				fmt.Sprintf("--sharded-prow-config-base-dir=%s", prowConfigDir),
+				fmt.Sprintf("--sharded-plugin-config-base-dir=%s", prowConfigDir),
+			},
 		},
 		{
 			command:   "/usr/bin/sanitize-prow-jobs",

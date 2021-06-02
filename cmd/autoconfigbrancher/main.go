@@ -26,6 +26,8 @@ const (
 	githubTeam   = "openshift/openshift-team-developer-productivity-test-platform"
 	matchTitle   = "Automate config brancher"
 	remoteBranch = "auto-config-brancher"
+
+	prowConfigDir = "./core-services/prow/02_config/"
 )
 
 type options struct {
@@ -181,19 +183,24 @@ func main() {
 			command:   "/usr/bin/ci-operator-prowgen",
 			arguments: []string{"--from-dir", o.ConfigDir, "--to-dir", "./ci-operator/jobs"},
 		},
+		// TODO(petr-muller): Enable this after we fix DPTP-2256
+		// {
+		// 	command: "/usr/bin/private-prow-configs-mirror",
+		// 	arguments: func() []string {
+		// 		args := []string{"--release-repo-path", "."}
+		// 		if o.whitelist != "" {
+		// 			args = append(args, []string{"--whitelist-file", o.whitelist}...)
+		// 		}
+		// 		return args
+		// 	}(),
+		// },
 		{
-			command: "/usr/bin/private-prow-configs-mirror",
-			arguments: func() []string {
-				args := []string{"--release-repo-path", "."}
-				if o.whitelist != "" {
-					args = append(args, []string{"--whitelist-file", o.whitelist}...)
-				}
-				return args
-			}(),
-		},
-		{
-			command:   "/usr/bin/determinize-prow-config",
-			arguments: []string{"--prow-config-dir", "./core-services/prow/02_config/"},
+			command: "/usr/bin/determinize-prow-config",
+			arguments: []string{
+				fmt.Sprintf("--prow-config-dir=%s", prowConfigDir),
+				fmt.Sprintf("--sharded-prow-config-base-dir=%s", prowConfigDir),
+				fmt.Sprintf("--sharded-plugin-config-base-dir=%s", prowConfigDir),
+			},
 		},
 		{
 			command:   "/usr/bin/sanitize-prow-jobs",

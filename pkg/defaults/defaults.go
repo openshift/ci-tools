@@ -15,6 +15,7 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	kapierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -827,12 +828,13 @@ func ensureImageStreamTag(ctx context.Context, client ctrlruntimeclient.Client, 
 	istImport.WithImageStreamLabels()
 
 	// Conflicts are expected
-	if err := client.Create(ctx, istImport); err != nil && !kapierrors.IsConflict(err) {
-		logrus.WithError(err).Warnf("Failed to create imagestreamtagimport for root %s", istImport.Name)
+	if err := client.Create(ctx, istImport); err != nil && !kapierrors.IsAlreadyExists(err) {
+		logrus.WithError(err).Warnf("Failed to create imagestreamtagimport for root %s", isTagRef.ISTagName())
 	}
 
+	name := types.NamespacedName{Namespace: isTagRef.Namespace, Name: isTagRef.Name + ":" + isTagRef.Tag}
 	if err := wait.PollImmediate(5*second, 30*second, func() (bool, error) {
-		if err := client.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(istImport), &imagev1.ImageStreamTag{}); err != nil {
+		if err := client.Get(ctx, name, &imagev1.ImageStreamTag{}); err != nil {
 			if kapierrors.IsNotFound(err) {
 				return false, nil
 			}
@@ -840,6 +842,6 @@ func ensureImageStreamTag(ctx context.Context, client ctrlruntimeclient.Client, 
 		}
 		return true, nil
 	}); err != nil {
-		logrus.WithError(err).Warnf("Waiting for imagestreamtag %s failed", ctrlruntimeclient.ObjectKeyFromObject(istImport))
+		logrus.WithError(err).Warnf("Waiting for imagestreamtag %s failed", isTagRef.ISTagName())
 	}
 }

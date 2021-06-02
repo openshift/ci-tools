@@ -183,16 +183,17 @@ func main() {
 			command:   "/usr/bin/ci-operator-prowgen",
 			arguments: []string{"--from-dir", o.ConfigDir, "--to-dir", "./ci-operator/jobs"},
 		},
-		{
-			command: "/usr/bin/private-prow-configs-mirror",
-			arguments: func() []string {
-				args := []string{"--release-repo-path", "."}
-				if o.whitelist != "" {
-					args = append(args, []string{"--whitelist-file", o.whitelist}...)
-				}
-				return args
-			}(),
-		},
+		// TODO(petr-muller): Enable this after we fix DPTP-2256
+		// {
+		// 	command: "/usr/bin/private-prow-configs-mirror",
+		// 	arguments: func() []string {
+		// 		args := []string{"--release-repo-path", "."}
+		// 		if o.whitelist != "" {
+		// 			args = append(args, []string{"--whitelist-file", o.whitelist}...)
+		// 		}
+		// 		return args
+		// 	}(),
+		// },
 		{
 			command: "/usr/bin/determinize-prow-config",
 			arguments: []string{

@@ -41,15 +41,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        build_args:\n" +
 	"            - # Name of the build arg.\n" +
 	"              name: ' '\n" +
-	"              # ValueFrom specifies the value of the build Arg is taken from a key of a secret. Cannot be set if Value is set.\n" +
-	"              secret_key_ref:\n" +
-	"                # Name is the key of the secret to take the value from\n" +
-	"                key: ' '\n" +
-	"                # Name is the name of the secret\n" +
-	"                name: ' '\n" +
-	"                # Namespace is the namespace of the secret\n" +
-	"                namespace: ' '\n" +
-	"              # Value of the build arg. Cannot be set if ValueFrom is set.\n" +
+	"              # Value of the build arg.\n" +
 	"              value: ' '\n" +
 	"        # ContextDir is the directory in the project\n" +
 	"        # from which this build should be run.\n" +
@@ -95,15 +87,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      build_args:\n" +
 	"        - # Name of the build arg.\n" +
 	"          name: ' '\n" +
-	"          # ValueFrom specifies the value of the build Arg is taken from a key of a secret. Cannot be set if Value is set.\n" +
-	"          secret_key_ref:\n" +
-	"            # Name is the key of the secret to take the value from\n" +
-	"            key: ' '\n" +
-	"            # Name is the name of the secret\n" +
-	"            name: ' '\n" +
-	"            # Namespace is the namespace of the secret\n" +
-	"            namespace: ' '\n" +
-	"          # Value of the build arg. Cannot be set if ValueFrom is set.\n" +
+	"          # Value of the build arg.\n" +
 	"          value: ' '\n" +
 	"      # ContextDir is the directory in the project\n" +
 	"      # from which this build should be run.\n" +
@@ -246,15 +230,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        build_args:\n" +
 	"            - # Name of the build arg.\n" +
 	"              name: ' '\n" +
-	"              # ValueFrom specifies the value of the build Arg is taken from a key of a secret. Cannot be set if Value is set.\n" +
-	"              secret_key_ref:\n" +
-	"                # Name is the key of the secret to take the value from\n" +
-	"                key: ' '\n" +
-	"                # Name is the name of the secret\n" +
-	"                name: ' '\n" +
-	"                # Namespace is the namespace of the secret\n" +
-	"                namespace: ' '\n" +
-	"              # Value of the build arg. Cannot be set if ValueFrom is set.\n" +
+	"              # Value of the build arg.\n" +
 	"              value: ' '\n" +
 	"        # ContextDir is the directory in the project\n" +
 	"        # from which this build should be run.\n" +
@@ -291,15 +267,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        build_args:\n" +
 	"            - # Name of the build arg.\n" +
 	"              name: ' '\n" +
-	"              # ValueFrom specifies the value of the build Arg is taken from a key of a secret. Cannot be set if Value is set.\n" +
-	"              secret_key_ref:\n" +
-	"                # Name is the key of the secret to take the value from\n" +
-	"                key: ' '\n" +
-	"                # Name is the name of the secret\n" +
-	"                name: ' '\n" +
-	"                # Namespace is the namespace of the secret\n" +
-	"                namespace: ' '\n" +
-	"              # Value of the build arg. Cannot be set if ValueFrom is set.\n" +
+	"              # Value of the build arg.\n" +
 	"              value: ' '\n" +
 	"        # ContextDir is the directory in the project\n" +
 	"        # from which this build should be run.\n" +

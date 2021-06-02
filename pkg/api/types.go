@@ -1437,35 +1437,8 @@ type BuildArg struct {
 	// Name of the build arg.
 	Name string `json:"name,omitempty"`
 
-	// Value of the build arg. Cannot be set if ValueFrom is set.
+	// Value of the build arg.
 	Value string `json:"value,omitempty"`
-
-	// ValueFrom specifies the value of the build Arg is taken from a key of a secret. Cannot be set if Value is set.
-	ValueFrom *SecretKeySelector `json:"secret_key_ref,omitempty"`
-}
-
-// SecretKeySelector selects a key of a Secret.
-type SecretKeySelector struct {
-	// Namespace is the namespace of the secret
-	Namespace string `json:"namespace"`
-	// Name is the name of the secret
-	Name string `json:"name"`
-	// Name is the key of the secret to take the value from
-	Key string `json:"key"`
-}
-
-// NamespacedName represents the namespaced name
-func (arg *SecretKeySelector) NamespacedName() (string, error) {
-	if arg.Namespace == "" {
-		return "", fmt.Errorf("namespace must be set")
-	}
-	if arg.Name == "" {
-		return "", fmt.Errorf("name must be set")
-	}
-	if arg.Key == "" {
-		return "", fmt.Errorf("key must be set")
-	}
-	return fmt.Sprintf("%s-%s", arg.Namespace, arg.Name), nil
 }
 
 // PullSpecSubstitution contains a name of a pullspec that needs to

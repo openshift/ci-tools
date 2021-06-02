@@ -161,19 +161,6 @@ func validateImages(fieldRoot string, input []api.ProjectDirectoryImageBuildStep
 		if image.DockerfileLiteral != nil && (image.ContextDir != "" || image.DockerfilePath != "") {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: dockerfile_literal is mutually exclusive with context_dir and dockerfile_path", fieldRootN))
 		}
-		for i, args := range image.BuildArgs {
-			if args.Name == "" {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.build_args[%d]: name must be set", fieldRootN, i))
-			}
-			if args.Value != "" && args.ValueFrom != nil {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.build_args[%d]: value is mutually exclusive with value_from", fieldRootN, i))
-			}
-			if args.ValueFrom != nil {
-				if _, err := args.ValueFrom.NamespacedName(); err != nil {
-					validationErrors = append(validationErrors, fmt.Errorf("%s.build_args[%d]: failed to determine the namespaced name: %w", fieldRootN, i, err))
-				}
-			}
-		}
 	}
 	return validationErrors
 }

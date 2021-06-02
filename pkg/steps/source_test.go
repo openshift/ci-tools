@@ -339,7 +339,7 @@ func TestBuildFromSource(t *testing.T) {
 		buildArgs                     []api.BuildArg
 	}{
 		{
-			name: "build args: value",
+			name: "build args",
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
 					Job:       "job",
@@ -358,31 +358,6 @@ func TestBuildFromSource(t *testing.T) {
 				},
 			},
 			buildArgs: []api.BuildArg{{Name: "TAGS", Value: "release"}},
-		},
-		{
-			name: "build args: valueFrom",
-			jobSpec: &api.JobSpec{
-				JobSpec: downwardapi.JobSpec{
-					Job:       "job",
-					BuildID:   "buildId",
-					ProwJobID: "prowJobId",
-					Refs: &prowapi.Refs{
-						Org:     "org",
-						Repo:    "repo",
-						BaseRef: "master",
-						BaseSHA: "masterSHA",
-						Pulls: []prowapi.Pull{{
-							Number: 1,
-							SHA:    "pullSHA",
-						}},
-					},
-				},
-			},
-			buildArgs: []api.BuildArg{{Name: "image-token", ValueFrom: &api.SecretKeySelector{
-				Namespace: "test-credentials",
-				Name:      "installer-token",
-				Key:       "token",
-			}}},
 		},
 	}
 	for _, testCase := range testCases {

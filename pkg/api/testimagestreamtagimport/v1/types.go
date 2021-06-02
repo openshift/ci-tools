@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -25,8 +27,8 @@ func (t *TestImageStreamTagImport) SetDeterministicName() {
 }
 
 const (
-	LabelKeyImageStreamNamespace = "imagestream-namespace"
-	LabelKeyImageStreamName      = "imagestream-name"
+	LabelKeyImageStreamTagNamespace = "imagestreamtag-namespace"
+	LabelKeyImageStreamTagName      = "imagestreamtag-name"
 )
 
 // WithImageStreamLabels sets namespace and name labels so we can easily
@@ -35,9 +37,19 @@ func (t *TestImageStreamTagImport) WithImageStreamLabels() *TestImageStreamTagIm
 	if t.Labels == nil {
 		t.Labels = map[string]string{}
 	}
-	t.Labels[LabelKeyImageStreamNamespace] = t.Spec.Namespace
-	t.Labels[LabelKeyImageStreamName] = t.Spec.Name
+	for k, v := range LabelsForImageStreamTag(t.Spec.Namespace, t.Spec.Name) {
+		t.Labels[k] = v
+	}
 	return t
+}
+
+// LabelsForImageStreamTag returns the labels by which testimagestreamtagimports
+// for a given imagestreamtag can be selected.
+func LabelsForImageStreamTag(namespace, name string) map[string]string {
+	return utils.SanitizeLabels(map[string]string{
+		LabelKeyImageStreamTagNamespace: namespace,
+		LabelKeyImageStreamTagName:      name,
+	})
 }
 
 type TestImageStreamTagImportSpec struct {

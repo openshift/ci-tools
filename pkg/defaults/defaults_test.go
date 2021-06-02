@@ -34,6 +34,12 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
+func init() {
+	if err := imageapi.AddToScheme(scheme.Scheme); err != nil {
+		panic(fmt.Sprintf("failed to register imagev1 scheme: %v", err))
+	}
+}
+
 func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration {
 	cfg.ClonerefsImage = api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"}
 	cfg.ClonerefsPath = "/clonerefs"
@@ -797,8 +803,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Namespace: "ci",
 						Name:      importName + "-" + importTag,
 						Labels: map[string]string{
-							"imagestream-namespace": importNS,
-							"imagestream-name":      importName + ":" + importTag,
+							"imagestreamtag-namespace": importNS,
+							"imagestreamtag-name":      importName + "_" + importTag,
 						},
 					},
 					Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{

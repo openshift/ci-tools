@@ -726,7 +726,7 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			name: "imagestreamtag is referenced by imagestreatag import",
+			name: "imagestreamtag is referenced by imagestreamtag import",
 			client: fakeclient.NewFakeClient((&testimagestreamtagimportv1.TestImageStreamTagImport{Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
 				Namespace: namespace,
 				Name:      streamName + ":" + tagName,

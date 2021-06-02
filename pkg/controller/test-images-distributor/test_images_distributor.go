@@ -496,10 +496,7 @@ func testInputImageStreamTagFilterFactory(
 		// Because we don't know for which cluster the request is, this results in
 		// us importing it into all clusters which is an acceptable trade-off.
 		imports := &testimagestreamtagimportv1.TestImageStreamTagImportList{}
-		labels := ctrlruntimeclient.MatchingLabels{
-			testimagestreamtagimportv1.LabelKeyImageStreamNamespace: nn.Namespace,
-			testimagestreamtagimportv1.LabelKeyImageStreamName:      nn.Name,
-		}
+		labels := ctrlruntimeclient.MatchingLabels(testimagestreamtagimportv1.LabelsForImageStreamTag(nn.Namespace, nn.Name))
 		for _, client := range buildClusterClients {
 			if err := client.List(context.TODO(), imports, labels); err != nil {
 				l.WithError(err).Error("Failed to list testimagestreamtagimport")

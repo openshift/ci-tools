@@ -47,9 +47,10 @@ func (o *PRCreationOptions) Finalize() error {
 
 // PrOptions allows optional parameters to upsertPR
 type PrOptions struct {
-	prBody     string
-	matchTitle string
-	prAssignee string
+	prBody         string
+	matchTitle     string
+	prAssignee     string
+	skipPRCreation bool
 }
 
 // PrOption is the type for Optional Parameters
@@ -73,6 +74,14 @@ func MatchTitle(matchTitle string) PrOption {
 func PrAssignee(assignee string) PrOption {
 	return func(args *PrOptions) {
 		args.prAssignee = assignee
+	}
+}
+
+// SkipPRCreation skips the actual pr creation after
+// committing and pushing
+func SkipPRCreation() PrOption {
+	return func(args *PrOptions) {
+		args.skipPRCreation = true
 	}
 }
 
@@ -136,6 +145,9 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 	if err := bumper.Call(stdout, stderr, "git", "config", "--local", "user.name", username); err != nil {
 		return fmt.Errorf("failed to configure email address: %w", err)
 	}
+	if err := bumper.Call(stdout, stderr, "git", "config", "--local", "commit.gpgsign", "false"); err != nil {
+		return fmt.Errorf("failed to configure disabling gpg signing: %w", err)
+	}
 
 	if err := bumper.GitCommitAndPush(
 		fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", username, string(token), username, repo),
@@ -148,6 +160,12 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		false,
 	); err != nil {
 		return fmt.Errorf("failed to push changes: %w", err)
+	}
+	l.WithField("branch", fmt.Sprintf("https://github.com/%s/%s/tree/%s", username, repo, sourceBranchName)).Info("Comitted and pushed")
+
+	if prArgs.skipPRCreation {
+		l.Info("SkipPRCreation is set, not creating a PR")
+		return nil
 	}
 
 	var labelsToAdd []string

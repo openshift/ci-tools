@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"k8s.io/test-infra/prow/config/secret"
-	"k8s.io/test-infra/prow/git"
+	git "k8s.io/test-infra/prow/git/v2"
 
 	"github.com/google/go-cmp/cmp"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
@@ -65,7 +65,8 @@ func main() {
 
 	process := process(
 		func(info *config.Info) bool { return info.Org == "openshift" },
-		gc.Clone,
+		github.FileGetterFactory,
+		git.ClientFactoryFrom(gc).ClientFor,
 		o.cloneCeiling,
 		func(localSourceDir, org, repo, targetBranch string) error {
 			return o.PRCreationOptions.UpsertPR(localSourceDir, org, repo, targetBranch, "Upserting .ci-operator.yaml", prcreation.SkipPRCreation(),
@@ -105,7 +106,8 @@ func main() {
 
 func process(
 	filter func(*config.Info) bool,
-	clone func(org, repo string) (*git.Repo, error),
+	repoFileGetter func(org, repo, branch string, _ ...github.Opt) github.FileGetter,
+	clone func(org, repo string) (git.RepoClient, error),
 	cloneCeiling int,
 	createPr func(localSourceDir, org, repo, targetBranch string) error,
 ) func(cfg *cioperatorapi.ReleaseBuildConfiguration, metadata *config.Info) error {
@@ -126,14 +128,14 @@ func process(
 			return nil
 		}
 
-		data, err := github.FileGetterFactory(metadata.Org, metadata.Repo, metadata.Branch)(cioperatorapi.CIOperatorInrepoConfigFileName)
+		data, err := repoFileGetter(metadata.Org, metadata.Repo, metadata.Branch)(cioperatorapi.CIOperatorInrepoConfigFileName)
 		if err != nil {
-			return fmt.Errorf("failed to get %s/%s#%s:%s: %w", metadata.Org, metadata.Repo, metadata.Branch, cioperatorapi.CIOperatorInrepoConfigFileName)
+			return fmt.Errorf("failed to get %s/%s#%s:%s: %w", metadata.Org, metadata.Repo, metadata.Branch, cioperatorapi.CIOperatorInrepoConfigFileName, err)
 		}
 
 		var inrepoconfig cioperatorapi.CIOperatorInrepoConfig
 		if err := yaml.Unmarshal(data, &inrepoconfig); err != nil {
-			return fmt.Errorf("failed to unmarshal %s/%s#%s:%s: %w", metadata.Org, metadata.Repo, metadata.Branch, cioperatorapi.CIOperatorInrepoConfigFileName)
+			return fmt.Errorf("failed to unmarshal %s/%s#%s:%s: %w", metadata.Org, metadata.Repo, metadata.Branch, cioperatorapi.CIOperatorInrepoConfigFileName, err)
 		}
 
 		expected := cioperatorapi.CIOperatorInrepoConfig{
@@ -162,7 +164,7 @@ func process(
 
 		repo, err := clone(metadata.Org, metadata.Repo)
 		if err != nil {
-			return fmt.Errorf("failed to clone %s/%s: %w", metadata.Org, metadata.Repo)
+			return fmt.Errorf("failed to clone %s/%s: %w", metadata.Org, metadata.Repo, err)
 		}
 		defer func() {
 			if err := repo.Clean(); err != nil {

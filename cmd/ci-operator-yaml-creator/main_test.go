@@ -4,10 +4,11 @@ import (
 	"io/ioutil"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"k8s.io/test-infra/prow/git/localgit"
 	"sigs.k8s.io/yaml"
 
-	"github.com/google/go-cmp/cmp"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/github"

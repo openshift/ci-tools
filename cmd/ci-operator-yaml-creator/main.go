@@ -9,20 +9,20 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
-	"sigs.k8s.io/yaml"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/config/secret"
 	git "k8s.io/test-infra/prow/git/v2"
+	"sigs.k8s.io/yaml"
 
-	"github.com/google/go-cmp/cmp"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/ocpbuilddata"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/github"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
-	"github.com/sirupsen/logrus"
 )
 
 type opts struct {

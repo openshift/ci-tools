@@ -443,7 +443,8 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 					},
 				},
 			},
-			ciop: config.DataByFilename{baseCiopConfig.Filename: {Info: baseCiopConfig}},
+			ciop:              config.DataByFilename{baseCiopConfig.Filename: {Info: baseCiopConfig}},
+			expectedPeriodics: config.Periodics{},
 			expectedPresubmits: config.Presubmits{
 				"org/repo": {
 					prowconfig.Presubmit{
@@ -472,7 +473,9 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 						}},
 				},
 			},
-			ciop: config.DataByFilename{},
+			ciop:               config.DataByFilename{},
+			expectedPresubmits: config.Presubmits{},
+			expectedPeriodics:  config.Periodics{},
 		},
 		{
 			description: "handle jenkins presubmits",
@@ -491,7 +494,9 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 					},
 				},
 			},
-			ciop: config.DataByFilename{},
+			ciop:               config.DataByFilename{},
+			expectedPresubmits: config.Presubmits{},
+			expectedPeriodics:  config.Periodics{},
 		},
 		{
 			description: "return a periodic using one of the input ciop configs",
@@ -508,7 +513,8 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 					},
 				},
 			},
-			ciop: config.DataByFilename{baseCiopConfig.Filename: {Info: baseCiopConfig}},
+			ciop:               config.DataByFilename{baseCiopConfig.Filename: {Info: baseCiopConfig}},
+			expectedPresubmits: config.Presubmits{},
 			expectedPeriodics: config.Periodics{
 				baseCiopConfig.JobName(jobconfig.PeriodicPrefix, "testjob"): {
 					JobBase: prowconfig.JobBase{

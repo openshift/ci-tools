@@ -162,8 +162,8 @@ func GetImagesPostsubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfi
 }
 
 func GetJobsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.DataByFilename, affectedJobs map[string]sets.String, logger *logrus.Entry) (config.Presubmits, config.Periodics) {
-	var presubmits config.Presubmits
-	var periodics config.Periodics
+	presubmits := config.Presubmits{}
+	periodics := config.Periodics{}
 
 	skip := func(job prowconfig.JobBase, prefix string, cfgFile string) bool {
 		if job.Agent != string(pjapi.KubernetesAgent) {
@@ -192,9 +192,6 @@ func GetJobsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.Dat
 
 			selectionFields := logrus.Fields{LogRepo: orgRepo, LogJobName: job.Name, LogReasons: "ci-operator config changed"}
 			logger.WithFields(selectionFields).Info(ChosenJob)
-			if presubmits == nil {
-				presubmits = config.Presubmits{}
-			}
 			presubmits.Add(orgRepo, job, config.ChangedCiopConfig)
 		}
 		for _, job := range prowConfig.JobConfig.Periodics {
@@ -204,9 +201,6 @@ func GetJobsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.Dat
 
 			selectionFields := logrus.Fields{LogRepo: orgRepo, LogJobName: job.Name, LogReasons: "ci-operator config changed"}
 			logger.WithFields(selectionFields).Info(ChosenJob)
-			if periodics == nil {
-				periodics = config.Periodics{}
-			}
 			periodics.Add(job, config.ChangedCiopConfig)
 		}
 

@@ -25,7 +25,7 @@ func TestProcessing(t *testing.T) {
 		name        string
 		inputModify func(*processInput)
 
-		// Must only be set when a PR is expcted
+		// Must only be set when a PR is expected
 		expectedUpdatedCiOperatorYaml cioperatorapi.CIOperatorInrepoConfig
 	}{
 

@@ -161,7 +161,7 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 	); err != nil {
 		return fmt.Errorf("failed to push changes: %w", err)
 	}
-	l.WithField("branch", fmt.Sprintf("https://github.com/%s/%s/tree/%s", username, repo, sourceBranchName)).Info("Comitted and pushed")
+	l.WithField("branch", fmt.Sprintf("https://github.com/%s/%s/tree/%s", username, repo, sourceBranchName)).Info("Committed and pushed")
 
 	if prArgs.skipPRCreation {
 		l.Info("SkipPRCreation is set, not creating a PR")

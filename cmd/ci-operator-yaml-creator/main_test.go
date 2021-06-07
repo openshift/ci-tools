@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io/fs"
 	"io/ioutil"
 	"testing"
 
@@ -28,6 +29,7 @@ func TestProcessing(t *testing.T) {
 
 		// Must only be set when a PR is expected
 		expectedUpdatedCiOperatorYaml cioperatorapi.CIOperatorInrepoConfig
+		expectedUpdatedReleaseRepoCfg string
 	}{
 
 		{
@@ -59,7 +61,7 @@ func TestProcessing(t *testing.T) {
 			},
 		},
 		{
-			name: ".ci-operator.yaml already correct, nothing to do",
+			name: ".ci-operator.yaml already correct, build_root.from_repository gets set to true",
 			inputModify: func(p *processInput) {
 				p.ciOperatorYaml = `
 build_root_image:
@@ -68,6 +70,13 @@ build_root_image:
   tag: tag
 `
 			},
+			expectedUpdatedReleaseRepoCfg: `build_root:
+  from_repository: true
+zz_generated_metadata:
+  branch: ""
+  org: ""
+  repo: ""
+`,
 		},
 	}
 
@@ -83,7 +92,7 @@ build_root_image:
 						Namespace: "namespace", Name: "name", Tag: "tag",
 					}},
 				}},
-				metadata: &config.Info{Metadata: cioperatorapi.Metadata{Org: "org", Repo: "repo", Branch: "master"}},
+				metadata: &config.Info{Filename: "ci-operator-config.yaml", Metadata: cioperatorapi.Metadata{Org: "org", Repo: "repo", Branch: "master"}},
 			}
 
 			if tc.inputModify != nil {
@@ -122,6 +131,15 @@ build_root_image:
 				}
 			}
 
+			var updatedReleaseRepoConfig string
+			writeFile := func(filename string, data []byte, _ fs.FileMode) error {
+				if filename != input.metadata.Filename {
+					t.Errorf("expected %s as filename when updating the release repo config, but was %s", input.metadata.Filename, filename)
+				}
+				updatedReleaseRepoConfig = string(data)
+				return nil
+			}
+
 			var updatedCIOperatorYaml cioperatorapi.CIOperatorInrepoConfig
 			createPr := func(localSourceDir, org, repo, targetBranch string) error {
 				if org != input.metadata.Org {
@@ -143,12 +161,15 @@ build_root_image:
 				return nil
 			}
 
-			if err := process(input.filter, repoFileGetter, clients.ClientFor, 99, createPr)(input.cfg, input.metadata); err != nil {
+			if err := process(input.filter, repoFileGetter, writeFile, clients.ClientFor, 99, createPr)(input.cfg, input.metadata); err != nil {
 				t.Fatalf("process failed: %v", err)
 			}
 
 			if diff := cmp.Diff(tc.expectedUpdatedCiOperatorYaml, updatedCIOperatorYaml); diff != "" {
 				t.Errorf("expected updated .ci-operator.yaml differs from actual: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedUpdatedReleaseRepoCfg, updatedReleaseRepoConfig); diff != "" {
+				t.Errorf("expected updated release repo config differs from actual: %s", diff)
 			}
 
 		})

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"path/filepath"
 	"sync"
@@ -109,6 +110,7 @@ channel in the CoreOS Slack.`))
 	process := process(
 		filter,
 		github.FileGetterFactory,
+		ioutil.WriteFile,
 		git.ClientFactoryFrom(gc).ClientFor,
 		o.pushCeiling,
 		func(localSourceDir, org, repo, targetBranch string) error {
@@ -154,6 +156,7 @@ channel in the CoreOS Slack.`))
 func process(
 	filter func(*config.Info) bool,
 	repoFileGetter func(org, repo, branch string, _ ...github.Opt) github.FileGetter,
+	writeFile func(filename string, data []byte, perm fs.FileMode) error,
 	clone func(org, repo string) (git.RepoClient, error),
 	pushCeiling int,
 	createPr func(localSourceDir, org, repo, targetBranch string) error,
@@ -189,10 +192,20 @@ func process(
 			BuildRootImage: *cfg.BuildRootImage.ImageStreamTagReference,
 		}
 
+		l := logrus.WithFields(logrus.Fields{"org": metadata.Org, "repo": metadata.Repo, "branch": metadata.Branch})
 		if diff := cmp.Diff(inrepoconfig, expected); diff == "" {
+			cfg.BuildRootImage.ImageStreamTagReference = nil
+			cfg.BuildRootImage.FromRepository = true
+			serialized, err := yaml.Marshal(cfg)
+			if err != nil {
+				return fmt.Errorf("failed to marshal config after enabling build_root.from_repository: %w", err)
+			}
+			if err := writeFile(metadata.Filename, serialized, 0644); err != nil {
+				return fmt.Errorf("failed to write %s after setting build_root.from_repository: true: %w", metadata.Filename, err)
+			}
+			l.WithField("file", metadata.Filename).Info("Enabled buiild_root.from_repository")
 			return nil
 		}
-		l := logrus.WithFields(logrus.Fields{"org": metadata.Org, "repo": metadata.Repo, "branch": metadata.Branch})
 		l.Info(".ci-operator.yaml needs updating")
 
 		expectedSerialized, err := yaml.Marshal(expected)

@@ -591,6 +591,107 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/periodic-ci-super-trooper-master-changed-periodic
+      prow.k8s.io/job: rehearse-1234-periodic-ci-super-trooper-master-changed-periodic
+    creationTimestamp: null
+    labels:
+      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: periodic-ci-super-trooper-master-changed-periodic
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedCiopConfig
+      prow.k8s.io/context: periodic-ci-super-trooper-master-changed-periodic
+      prow.k8s.io/job: rehearse-1234-periodic-ci-super-trooper-master-changed-periodic
+      prow.k8s.io/refs.base_ref: master
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: test-prowjob
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/periodic-ci-super-trooper-master-changed-periodic
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      skip_cloning: true
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: trooper
+      workdir: true
+    job: rehearse-1234-periodic-ci-super-trooper-master-changed-periodic
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --report-credentials-file=/etc/report/credentials
+        - --target=changed-periodic
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          value: H4sIAAAAAAAC/8RUTWvbQBC961cMuRgKG5TQXvbUHNKeAiX1XYyl8XphvzozcnDojy8rycYOwaWX9LS7b96+efOQdoNCnY/oSGwDUI91BUgYyUJm73wy+8+37QmVgn0tFUqy81udCorOTrebzejD0HHOWoUm6U6UCWNXSWfiTIHqjb8LuxwwOXN3e9c2R7MGtpzj0hRAswUlUTPVGybJI/fzVKtPq7lv8NGrzHuAvowWvrTtk58Apl8jyZvyXa0quk4K9X7re1SfU6W8F9C7U+gsagDFQr/D5GgwhdjnwfcNQM85WVh9PRByOKyaalOJMXSiVBY7fRhFibvCeesDWbi5mfCSRWfGrO+LNwMVznsvPicTR1HjUHfEx7FyjJgGsfB7QQAuCHOsPoliCCf0ItAjdBnYWWhtG8/ASDHzwcL9d3/F6tn+itVTrmaJBAYS5Xz4MPeF6W3iSzvDG+yveBfSsUwkc/8fwj66XNZ/Cnm5A8YkevkW0C1cSvujIwMDbXEMakF3Xl5Qlo/9JDv/MuvHn+vux8Pzw9Pj+vH5Q3J4fe0cJWJUGrpIigMqTu8dY+p3FiLWKRuAzM6CjGU6MJX6qnDO9fwnAAD//8MYT3wrBQAA
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
+    refs:
+      base_ref: master
+      base_sha: test_sha
+      org: openshift
+      pulls:
+      - author: petr-muller
+        number: 1234
+        sha: test_sha
+      repo: release
+    report: true
+    rerun_command: /test pj-rehearse
+    type: presubmit
+  status:
+    startTime: 2020-06-22T22:25:00Z
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
       prow.k8s.io/context: ci/rehearse/super/duper/ciop-cfg-change/custom
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-custom
     creationTimestamp: null

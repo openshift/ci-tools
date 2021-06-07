@@ -161,33 +161,52 @@ func GetImagesPostsubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfi
 	return ret
 }
 
-func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.DataByFilename, affectedJobs map[string]sets.String, logger *logrus.Entry) config.Presubmits {
-	ret := config.Presubmits{}
+func GetJobsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.DataByFilename, affectedJobs map[string]sets.String, logger *logrus.Entry) (config.Presubmits, config.Periodics) {
+	presubmits := config.Presubmits{}
+	periodics := config.Periodics{}
+
+	skip := func(job prowconfig.JobBase, prefix string, cfgFile string) bool {
+		if job.Agent != string(pjapi.KubernetesAgent) {
+			return true
+		}
+		if !strings.HasPrefix(job.Name, prefix) {
+			return true
+		}
+		testName := strings.TrimPrefix(job.Name, prefix)
+
+		affectedJob, ok := affectedJobs[cfgFile]
+		if ok && !affectedJob.Has(testName) {
+			return true
+		}
+		return false
+
+	}
 
 	for _, data := range ciopConfigs {
 		orgRepo := fmt.Sprintf("%s/%s", data.Info.Org, data.Info.Repo)
-		jobNamePrefix := data.Info.JobName(jobconfig.PresubmitPrefix, "")
+		cfgFile := data.Info.Basename()
 		for _, job := range prowConfig.JobConfig.PresubmitsStatic[orgRepo] {
-			if job.Agent != string(pjapi.KubernetesAgent) {
-				continue
-			}
-			if !strings.HasPrefix(job.Name, jobNamePrefix) {
-				continue
-			}
-			testName := strings.TrimPrefix(job.Name, jobNamePrefix)
-
-			affectedJob, ok := affectedJobs[data.Info.Basename()]
-			if ok && !affectedJob.Has(testName) {
+			if skip(job.JobBase, data.Info.JobName(jobconfig.PresubmitPrefix, ""), cfgFile) {
 				continue
 			}
 
 			selectionFields := logrus.Fields{LogRepo: orgRepo, LogJobName: job.Name, LogReasons: "ci-operator config changed"}
 			logger.WithFields(selectionFields).Info(ChosenJob)
-			ret.Add(orgRepo, job, config.ChangedCiopConfig)
+			presubmits.Add(orgRepo, job, config.ChangedCiopConfig)
 		}
+		for _, job := range prowConfig.JobConfig.Periodics {
+			if skip(job.JobBase, data.Info.JobName(jobconfig.PeriodicPrefix, ""), cfgFile) {
+				continue
+			}
+
+			selectionFields := logrus.Fields{LogRepo: orgRepo, LogJobName: job.Name, LogReasons: "ci-operator config changed"}
+			logger.WithFields(selectionFields).Info(ChosenJob)
+			periodics.Add(job, config.ChangedCiopConfig)
+		}
+
 	}
 
-	return ret
+	return presubmits, periodics
 }
 
 func getTestsByName(tests []cioperatorapi.TestStepConfiguration) map[string]cioperatorapi.TestStepConfiguration {

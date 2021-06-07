@@ -86,9 +86,9 @@ type Periodics map[string]prowconfig.Periodic
 // The method assumes two jobs with a matching name are identical,
 // so if a periodic with a given name already exists, it
 // is overridden.
-func (p Periodics) AddAll(jobs Periodics) {
-	for name, periodic := range jobs {
-		p[name] = periodic
+func (p Periodics) AddAll(jobs Periodics, sourceType SourceType) {
+	for _, job := range jobs {
+		p.Add(job, sourceType)
 	}
 }
 
@@ -97,6 +97,9 @@ func (p Periodics) AddAll(jobs Periodics) {
 // so if a periodic with a given name already exists, it
 // is overridden.
 func (p Periodics) Add(job prowconfig.Periodic, sourceType SourceType) {
+	if _, ok := p[job.Name]; ok {
+		return
+	}
 	if len(job.Labels) == 0 {
 		job.Labels = make(map[string]string)
 	}

@@ -91,6 +91,85 @@ func TestPresubmitsAddAll(t *testing.T) {
 	}
 }
 
+func TestPeriodicsAddAll(t *testing.T) {
+	allowUnexported := cmp.AllowUnexported(prowconfig.Periodic{})
+
+	testCases := []struct {
+		description string
+		added       Periodics
+		original    Periodics
+		expected    Periodics
+	}{
+		{
+			description: "merge empty structure into empty structure",
+		},
+		{
+			description: "merge empty structure into non-empty structure",
+			added:       Periodics{},
+			original:    Periodics{"job": prowconfig.Periodic{JobBase: prowconfig.JobBase{Name: "job"}}},
+			expected:    Periodics{"job": prowconfig.Periodic{JobBase: prowconfig.JobBase{Name: "job"}}},
+		},
+		{
+			description: "merge non-empty structure into empty structure",
+			added:       Periodics{"job": prowconfig.Periodic{JobBase: prowconfig.JobBase{Name: "job"}}},
+			original:    Periodics{},
+			expected: Periodics{
+				"job": prowconfig.Periodic{
+					JobBase: prowconfig.JobBase{
+						Name:   "job",
+						Labels: map[string]string{"pj-rehearse.openshift.io/source-type": "changedPresubmit"},
+					},
+				},
+			},
+		},
+		{
+			description: "merge different jobs for a single repo, result should have both",
+			added:       Periodics{"added-job": prowconfig.Periodic{JobBase: prowconfig.JobBase{Name: "added-job"}}},
+			original:    Periodics{"original-job": prowconfig.Periodic{JobBase: prowconfig.JobBase{Name: "original-job"}}},
+			expected: Periodics{
+				"added-job": prowconfig.Periodic{
+					JobBase: prowconfig.JobBase{
+						Name:   "added-job",
+						Labels: map[string]string{"pj-rehearse.openshift.io/source-type": "changedPresubmit"},
+					},
+				},
+				"original-job": prowconfig.Periodic{JobBase: prowconfig.JobBase{Name: "original-job"}},
+			},
+		},
+		{
+			description: "merge jobs with same name for a single repo, result has the one originally in original",
+			added: Periodics{
+				"same-job": prowconfig.Periodic{
+					JobBase:  prowconfig.JobBase{Name: "same-job"},
+					Interval: "added interval",
+				},
+			},
+			original: Periodics{
+				"same-job": prowconfig.Periodic{
+					JobBase:  prowconfig.JobBase{Name: "same-job"},
+					Interval: "original interval",
+				},
+			},
+			expected: Periodics{
+				"same-job": prowconfig.Periodic{
+					JobBase:  prowconfig.JobBase{Name: "same-job"},
+					Interval: "original interval",
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			tc.original.AddAll(tc.added, ChangedPresubmit)
+
+			if diff := cmp.Diff(tc.original, tc.expected, allowUnexported); diff != "" {
+				t.Errorf("Periodics differ from expected after AddAll:\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestPresubmitsAdd(t *testing.T) {
 	allowUnexported := cmp.AllowUnexported(prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{}, prowconfig.Presubmit{})
 

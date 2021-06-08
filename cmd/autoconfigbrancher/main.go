@@ -140,6 +140,19 @@ func main() {
 		arguments []string
 	}{
 		{
+			// Will check if repos that are part of the OCP payload
+			// have an up-to-date .ci-operator.yaml and if yes, update
+			// their config to set .build_root.from_repository: true
+			command: "/usr/bin/ci-operator-yaml-creator",
+			arguments: []string{
+				"--github-token-path", "/etc/github/oauth",
+				"--github-endpoint", "http://ghproxy",
+				"--ci-operator-config-dir=ci-operator/config",
+				// Only update o/release
+				"--create-prs=false",
+			},
+		},
+		{
 			command: "/usr/bin/registry-replacer",
 			arguments: []string{
 				"--github-token-path", "/etc/github/oauth",

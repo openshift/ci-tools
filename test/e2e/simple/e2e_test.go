@@ -232,7 +232,7 @@ func TestLiteralDynamicRelease(t *testing.T) {
 				type info struct {
 					PullSpec string `json:"pullSpec"`
 				}
-				req, err := http.NewRequest(http.MethodGet, "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream/4.5.0-0.nightly/latest?rel=1", nil)
+				req, err := http.NewRequest(http.MethodGet, "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.5.0-0.nightly/latest?rel=1", nil)
 				if err != nil {
 					t.Fatalf("could not create request for Cincinnati: %v", err)
 				}

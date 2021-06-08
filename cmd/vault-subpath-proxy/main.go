@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,9 +21,13 @@ import (
 	"github.com/hashicorp/vault/api"
 	"github.com/hashicorp/vault/sdk/helper/consts"
 	"github.com/sirupsen/logrus"
+	"gopkg.in/fsnotify.v1"
 
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/version"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type options struct {
@@ -31,6 +36,7 @@ type options struct {
 	listenAddr  string
 	tlsCertFile string
 	tlsKeyFile  string
+	kubeconfig  string
 }
 
 func gatherOptions() (*options, error) {
@@ -40,6 +46,7 @@ func gatherOptions() (*options, error) {
 	flag.StringVar(&o.listenAddr, "listen-addr", "127.0.0.1:8400", "The address the proxy shall listen on")
 	flag.StringVar(&o.tlsCertFile, "tls-cert-file", "", "Path to a tls cert file. If set, will server over tls. Requires --tls-key-file")
 	flag.StringVar(&o.tlsKeyFile, "tls-key-file", "", "Path to a tls key file. If set, will server over tls. Requires --tls-cert-file")
+	flag.StringVar(&o.kubeconfig, "kubeconfig", "", "Path to a kubeconfig. If set, secrets will get synced into all clusters in there")
 	flag.Parse()
 	if (o.tlsCertFile == "") != (o.tlsKeyFile == "") {
 		return nil, errors.New("--tls-cert-file and --tls-key-file must be passed together")
@@ -56,7 +63,15 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to get opts")
 	}
 
-	server, err := createProxyServer(opts.vaultAddr, opts.listenAddr, opts.kvMountPath)
+	var clientGetter func() map[string]ctrlruntimeclient.Client
+	if os.Getenv("KUBECONFIG") != "" || opts.kubeconfig != "" {
+		clientGetter, err = startLoadingKubeconfigs(opts.kubeconfig)
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to load kubeconfigs")
+		}
+	}
+
+	server, err := createProxyServer(opts.vaultAddr, opts.listenAddr, opts.kvMountPath, clientGetter)
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to create server")
 	}
@@ -75,7 +90,7 @@ func main() {
 	}
 }
 
-func createProxyServer(vaultAddr string, listenAddr string, kvMountPath string) (*http.Server, error) {
+func createProxyServer(vaultAddr string, listenAddr string, kvMountPath string, clients func() map[string]ctrlruntimeclient.Client) (*http.Server, error) {
 	vaultClient, err := api.NewClient(&api.Config{Address: vaultAddr})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create vault client: %w", err)
@@ -86,7 +101,7 @@ func createProxyServer(vaultAddr string, listenAddr string, kvMountPath string) 
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(vaultURL)
-	proxy.Transport = &kvKeyValidator{kvMountPath: kvMountPath, upstream: http.DefaultTransport}
+	proxy.Transport = &kvUpdateTransport{kvMountPath: kvMountPath, upstream: http.DefaultTransport, kubeClients: clients}
 	injector := &kvSubPathInjector{
 		upstream:    retryablehttp.NewClient().StandardClient().Transport,
 		kvMountPath: kvMountPath,
@@ -265,4 +280,47 @@ func (kpr *keypairReloader) getCertificateFunc(_ *tls.ClientHelloInfo) (*tls.Cer
 	kpr.certMu.RLock()
 	defer kpr.certMu.RUnlock()
 	return kpr.cert, nil
+}
+
+func startLoadingKubeconfigs(explicitPath string) (func() map[string]ctrlruntimeclient.Client, error) {
+	clients := map[string]ctrlruntimeclient.Client{}
+	clientsLock := sync.RWMutex{}
+
+	clients, err := loadKubeconfigs(explicitPath, func(fsnotify.Event) {
+		newClients, err := loadKubeconfigs(explicitPath, nil)
+		if err != nil {
+			logrus.WithError(err).Error("failed to reload kubeconfigs after fsnotify event")
+			return
+		}
+		clientsLock.Lock()
+		clients = newClients
+		clientsLock.Unlock()
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to load kubeconfigs: %w", err)
+	}
+
+	return func() map[string]ctrlruntimeclient.Client {
+		clientsLock.RLock()
+		defer clientsLock.RUnlock()
+		return clients
+	}, nil
+}
+
+func loadKubeconfigs(explicitPath string, callBack func(fsnotify.Event)) (map[string]ctrlruntimeclient.Client, error) {
+	kubeconfigs, _, err := util.LoadKubeConfigs(explicitPath, callBack)
+	if err != nil {
+		return nil, err
+	}
+
+	clients := map[string]ctrlruntimeclient.Client{}
+	for cluster, config := range kubeconfigs {
+		client, err := ctrlruntimeclient.New(config, ctrlruntimeclient.Options{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to construct client for cluster %s: %w", cluster, err)
+		}
+		clients[cluster] = client
+	}
+
+	return clients, nil
 }

@@ -2,16 +2,23 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/client-go/util/retry"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/ci-tools/pkg/api/vault"
 	"github.com/openshift/ci-tools/pkg/steps"
@@ -22,12 +29,16 @@ const secretKeyValidationRegexString = `^[a-zA-Z0-9\.\-_]+$`
 
 var secretKeyValidationRegex = regexp.MustCompile(secretKeyValidationRegexString)
 
-type kvKeyValidator struct {
+type kvUpdateTransport struct {
 	kvMountPath string
 	upstream    http.RoundTripper
+	kubeClients func() map[string]ctrlruntimeclient.Client
+	// If enabled, the roundtripper will wait for secret
+	// sync to complete. Should only be enabled in tests.
+	synchronousSecretSync bool
 }
 
-func (k *kvKeyValidator) RoundTrip(r *http.Request) (*http.Response, error) {
+func (k *kvUpdateTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	l := logrus.WithFields(logrus.Fields{
 		"method": r.Method,
 		"path":   r.URL.Path,
@@ -75,7 +86,75 @@ func (k *kvKeyValidator) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 
 	r.Body = io.NopCloser(bytes.NewBuffer(requestBodyBytes))
-	return k.upstream.RoundTrip(r)
+	response, err := k.upstream.RoundTrip(r)
+	if err != nil {
+		return response, err
+	}
+
+	if k.synchronousSecretSync {
+		k.syncSecret(body.Data)
+	} else {
+		go k.syncSecret(body.Data)
+	}
+	return response, nil
+}
+
+func (k *kvUpdateTransport) syncSecret(data map[string]string) {
+	if k.kubeClients == nil || data[vault.SecretSyncTargetNamepaceKey] == "" || data[vault.SecretSyncTargetNameKey] == "" {
+		return
+	}
+	// This is part of a long-running server, so give a gracious timeout
+	// to prevent stuck goroutines
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	for cluster, client := range k.kubeClients() {
+		if data[vault.SecretSyncTargetClusterKey] != "" && data[vault.SecretSyncTargetClusterKey] != cluster {
+			continue
+		}
+		secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Namespace: data[vault.SecretSyncTargetNamepaceKey],
+			Name:      data[vault.SecretSyncTargetNameKey],
+		}}
+
+		// The returned error is always nil, but we have to keep this signature to be able to pass this to CreateOrUpdate
+		// nolint:unparam
+		mutateFn := func() error {
+			if secret.Data == nil {
+				secret.Data = map[string][]byte{}
+			}
+			for k, v := range data {
+				if k == vault.SecretSyncTargetNamepaceKey || k == vault.SecretSyncTargetNameKey || k == vault.SecretSyncTargetClusterKey {
+					continue
+				}
+				secret.Data[k] = []byte(v)
+			}
+
+			return nil
+		}
+
+		var result crcontrollerutil.OperationResult
+		var err error
+		if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+			result, err = crcontrollerutil.CreateOrUpdate(ctx, client, secret, mutateFn)
+			return err
+		}); err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"cluster":   cluster,
+				"namespace": secret.Namespace,
+				"name":      secret.Name,
+			}).Error("failed to upsert secret")
+			continue
+		}
+		if result != crcontrollerutil.OperationResultNone {
+			logrus.WithFields(logrus.Fields{
+				"cluster":   cluster,
+				"namespace": secret.Namespace,
+				"name":      secret.Name,
+				"operation": result,
+			}).Debug("Upserted secret")
+		}
+	}
 }
 
 func newResponse(statusCode int, req *http.Request, errs ...string) *http.Response {

@@ -30,24 +30,11 @@ func (d dryRunClient) SetFieldOnItem(itemName, fieldName string, fieldValue []by
 	return err
 }
 
-func (d dryRunClient) SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) error {
-	_, err := fmt.Fprintf(d.file, "ItemName: %s\n\tAttachment: \n\t\t %s: %s\n", itemName, attachmentName, string(fileContents))
-	return err
-}
-
-func (d dryRunClient) SetPassword(itemName string, password []byte) error {
-	_, err := fmt.Fprintf(d.file, "ItemName: %s\n\tAttribute: \n\t\t Password: %s\n", itemName, string(password))
-	return err
-}
-
 func (d dryRunClient) UpdateNotesOnItem(itemName, notes string) error {
 	_, err := fmt.Fprintf(d.file, "ItemName: %s\n\tNotes: %s\n", itemName, notes)
 	return err
 }
 
-func (d dryRunClient) GetAttachmentOnItem(_, _ string) ([]byte, error) {
-	return nil, nil
-}
 func (d dryRunClient) GetFieldOnItem(_, _ string) ([]byte, error) {
 	return nil, nil
 }
@@ -55,19 +42,13 @@ func (d dryRunClient) GetFieldOnItem(_, _ string) ([]byte, error) {
 func (d dryRunClient) GetInUseInformationForAllItems(_ string) (map[string]SecretUsageComparer, error) {
 	return nil, nil
 }
-func (d dryRunClient) GetPassword(_ string) ([]byte, error) {
-	return nil, nil
-}
+
 func (d dryRunClient) GetUserSecrets() (map[types.NamespacedName]map[string]string, error) {
 	return nil, nil
 }
 
 func (d dryRunClient) HasItem(itemname string) (bool, error) {
 	return false, nil
-}
-
-func (d dryRunClient) Logout() ([]byte, error) {
-	return nil, nil
 }
 
 func NewDryRunClient(outputFile *os.File) Client {
@@ -148,14 +129,6 @@ func (c *vaultClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error)
 	return c.getSecretAtPath(itemName, fieldName)
 }
 
-func (c *vaultClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error) {
-	return c.getSecretAtPath(itemName, attachmentName)
-}
-
-func (c *vaultClient) GetPassword(itemName string) ([]byte, error) {
-	return c.getSecretAtPath(itemName, "password")
-}
-
 func (c *vaultClient) GetInUseInformationForAllItems(optionalSubPath string) (map[string]SecretUsageComparer, error) {
 	prefix := c.prefix
 	if optionalSubPath != "" {
@@ -198,19 +171,9 @@ func (c *vaultClient) SetFieldOnItem(itemName, fieldName string, fieldValue []by
 	return c.setItemAtPath(itemName, fieldName, string(fieldValue))
 }
 
-func (c *vaultClient) SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) error {
-	return c.setItemAtPath(itemName, attachmentName, string(fileContents))
-}
-
-func (c *vaultClient) SetPassword(itemName string, password []byte) error {
-	return c.setItemAtPath(itemName, "password", string(password))
-}
-
 func (c *vaultClient) UpdateNotesOnItem(itemName string, notes string) error {
 	return c.setItemAtPath(itemName, "notes", notes)
 }
-
-func (c *vaultClient) Logout() ([]byte, error) { return nil, nil }
 
 func (c *vaultClient) GetUserSecrets() (map[types.NamespacedName]map[string]string, error) {
 	allItems, err := c.upstream.ListKVRecursively(c.prefix)
@@ -275,18 +238,6 @@ func (v *vaultSecretUsageComparer) markInUse(fields sets.String) (absent sets.St
 
 func (v *vaultSecretUsageComparer) UnusedFields(inUse sets.String) (Difference sets.String) {
 	return v.markInUse(inUse)
-}
-
-func (v *vaultSecretUsageComparer) UnusedAttachments(inUse sets.String) (Difference sets.String) {
-	return v.markInUse(inUse)
-}
-
-func (v *vaultSecretUsageComparer) HasPassword() bool {
-	if v.allFields.Has("password") {
-		v.inUseFields.Insert("password")
-		return true
-	}
-	return false
 }
 
 func (v *vaultSecretUsageComparer) SuperfluousFields() sets.String {

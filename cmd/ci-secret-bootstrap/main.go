@@ -44,9 +44,9 @@ import (
 type options struct {
 	secrets secrets.CLIOptions
 
-	dryRun               bool
-	force                bool
-	validateBWItemsUsage bool
+	dryRun             bool
+	force              bool
+	validateItemsUsage bool
 
 	kubeConfigPath      string
 	configPath          string
@@ -59,7 +59,7 @@ type options struct {
 	config          secretbootstrap.Config
 	generatorConfig secretgenerator.Config
 
-	bwAllowUnused flagutil.Strings
+	allowUnused flagutil.Strings
 
 	validateOnly bool
 }
@@ -73,10 +73,10 @@ const (
 func parseOptions(censor *secrets.DynamicCensor) (options, error) {
 	var o options
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	o.bwAllowUnused = flagutil.NewStrings()
+	o.allowUnused = flagutil.NewStrings()
 	fs.BoolVar(&o.validateOnly, "validate-only", false, "If set, the tool exists after validating its config file.")
-	fs.Var(&o.bwAllowUnused, "bw-allow-unused", "One or more bitwarden items that will be ignored when the --validate-bitwarden-items-usage is specified")
-	fs.BoolVar(&o.validateBWItemsUsage, "validate-bitwarden-items-usage", false, fmt.Sprintf("If set, the tool only validates if all attachments and custom fields that exist in BitWarden and were last modified before %d days ago are being used in the given config.", allowUnusedDays))
+	fs.Var(&o.allowUnused, "bw-allow-unused", "One or more items that will be ignored when the --validate-items-usage is specified")
+	fs.BoolVar(&o.validateItemsUsage, "validate-bitwarden-items-usage", false, fmt.Sprintf("If set, the tool only validates if all fields that exist in Vault and were last modified before %d days ago are being used in the given config.", allowUnusedDays))
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with oc command")
 	fs.StringVar(&o.kubeConfigPath, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests.")
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
@@ -103,8 +103,8 @@ func (o *options) validateOptions() error {
 	if o.configPath == "" {
 		errs = append(errs, errors.New("--config is required"))
 	}
-	if len(o.bwAllowUnused.Strings()) > 0 && !o.validateBWItemsUsage {
-		errs = append(errs, errors.New("--bw-allow-unused must be specified with --validate-bitwarden-items-usage"))
+	if len(o.allowUnused.Strings()) > 0 && !o.validateItemsUsage {
+		errs = append(errs, errors.New("--bw-allow-unused must be specified with --validate-items-usage"))
 	}
 	return utilerrors.NewAggregate(errs)
 }
@@ -191,50 +191,35 @@ func (o *options) validateCompletedOptions() error {
 		if len(secretConfig.To) == 0 {
 			return fmt.Errorf("config[%d].to is empty", i)
 		}
-		for key, bwContext := range secretConfig.From {
+		for key, itemContext := range secretConfig.From {
 			if key == "" {
 				return fmt.Errorf("config[%d].from: empty key is not allowed", i)
 			}
 
-			if bwContext.BWItem == "" && len(bwContext.DockerConfigJSONData) == 0 {
+			if itemContext.Item == "" && len(itemContext.DockerConfigJSONData) == 0 {
 				return fmt.Errorf("config[%d].from[%s]: empty value is not allowed", i, key)
 			}
 
-			if bwContext.BWItem != "" && len(bwContext.DockerConfigJSONData) > 0 {
+			if itemContext.Item != "" && len(itemContext.DockerConfigJSONData) > 0 {
 				return fmt.Errorf("config[%d].from[%s]: both bitwarden dockerconfigJSON items are not allowed.", i, key)
 			}
 
-			if len(bwContext.DockerConfigJSONData) > 0 {
-				for _, data := range bwContext.DockerConfigJSONData {
-					if data.BWItem == "" {
-						return fmt.Errorf("config[%d].from[%s]: bw_item is missing", i, key)
+			if len(itemContext.DockerConfigJSONData) > 0 {
+				for _, data := range itemContext.DockerConfigJSONData {
+					if data.Item == "" {
+						return fmt.Errorf("config[%d].from[%s]: item is missing", i, key)
 					}
-					if data.RegistryURLBitwardenField == "" && data.RegistryURL == "" {
-						return fmt.Errorf("config[%d].from[%s]: either registry_url_bw_field or registry_url must be set", i, key)
+					if data.RegistryURL == "" {
+						return fmt.Errorf("config[%d].from[%s]: registry_url must be set", i, key)
 					}
-					if data.RegistryURLBitwardenField != "" && data.RegistryURL != "" {
-						return fmt.Errorf("config[%d].from[%s]: registry_url_bw_field and registry_url are mutualy exclusive", i, key)
-					}
-					if data.AuthBitwardenAttachment == "" {
-						return fmt.Errorf("config[%d].from[%s]: auth_bw_attachment is missing", i, key)
+
+					if data.AuthField == "" {
+						return fmt.Errorf("config[%d].from[%s]: auth_field is missing", i, key)
 					}
 				}
-			} else if bwContext.BWItem != "" {
-				nonEmptyFields := 0
-				if bwContext.Field != "" {
-					nonEmptyFields++
-				}
-				if bwContext.Attachment != "" {
-					nonEmptyFields++
-				}
-				if bwContext.Attribute != "" {
-					nonEmptyFields++
-				}
-				if nonEmptyFields == 0 {
-					return fmt.Errorf("config[%d].from[%s]: one of [field, attachment, attribute] must be set", i, key)
-				}
-				if nonEmptyFields > 1 {
-					return fmt.Errorf("config[%d].from[%s]: cannot use more than one in [field, attachment, attribute]", i, key)
+			} else if itemContext.Item != "" {
+				if itemContext.Field == "" {
+					return fmt.Errorf("config[%d].from[%s]: field must be set", i, key)
 				}
 			}
 		}
@@ -267,30 +252,21 @@ func constructDockerConfigJSON(client secrets.ReadOnlyClient, dockerConfigJSONDa
 	for _, data := range dockerConfigJSONData {
 		authData := secretbootstrap.DockerAuth{}
 
-		registryURL := data.RegistryURL
-		if registryURL == "" {
-			registryURLBitwardenField, err := client.GetFieldOnItem(data.BWItem, data.RegistryURLBitwardenField)
-			if err != nil {
-				return nil, fmt.Errorf("couldn't get the entry name from bw item %s: %w", data.BWItem, err)
-			}
-			registryURL = string(registryURLBitwardenField)
-		}
-
-		authBWAttachmentValue, err := client.GetAttachmentOnItem(data.BWItem, data.AuthBitwardenAttachment)
+		authBWAttachmentValue, err := client.GetFieldOnItem(data.Item, data.AuthField)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't get attachment '%s' from bw item %s: %w", data.AuthBitwardenAttachment, data.BWItem, err)
+			return nil, fmt.Errorf("couldn't get auth field '%s' from item %s: %w", data.AuthField, data.Item, err)
 		}
 		authData.Auth = string(bytes.TrimSpace(authBWAttachmentValue))
 
-		if data.EmailBitwardenField != "" {
-			emailValue, err := client.GetFieldOnItem(data.BWItem, data.EmailBitwardenField)
+		if data.EmailField != "" {
+			emailValue, err := client.GetFieldOnItem(data.Item, data.EmailField)
 			if err != nil {
-				return nil, fmt.Errorf("couldn't get email field '%s' from bw item %s: %w", data.EmailBitwardenField, data.BWItem, err)
+				return nil, fmt.Errorf("couldn't get email field '%s' from item %s: %w", data.EmailField, data.Item, err)
 			}
 			authData.Email = string(emailValue)
 		}
 
-		auths[registryURL] = authData
+		auths[data.RegistryURL] = authData
 	}
 
 	b, err := json.Marshal(&secretbootstrap.DockerConfigJSON{Auths: auths})
@@ -339,24 +315,13 @@ func constructSecrets(config secretbootstrap.Config, client secrets.ReadOnlyClie
 				key := key
 				go func() {
 					defer keyWg.Done()
-					bwContext := cfg.From[key]
+					itemContext := cfg.From[key]
 					var value []byte
 					var err error
-					if bwContext.Field != "" {
-						value, err = client.GetFieldOnItem(bwContext.BWItem, bwContext.Field)
-					} else if bwContext.Attachment != "" {
-						value, err = client.GetAttachmentOnItem(bwContext.BWItem, bwContext.Attachment)
-					} else if len(bwContext.DockerConfigJSONData) > 0 {
-						value, err = constructDockerConfigJSON(client, bwContext.DockerConfigJSONData)
-					} else {
-						switch bwContext.Attribute {
-						case secretbootstrap.AttributeTypePassword:
-							value, err = client.GetPassword(bwContext.BWItem)
-						default:
-							// should never happen since we have validated the config
-							errChan <- fmt.Errorf("[%s] invalid attribute: only the '%s' is supported, not %s", key, secretbootstrap.AttributeTypePassword, bwContext.Attribute)
-							return
-						}
+					if itemContext.Field != "" {
+						value, err = client.GetFieldOnItem(itemContext.Item, itemContext.Field)
+					} else if len(itemContext.DockerConfigJSONData) > 0 {
+						value, err = constructDockerConfigJSON(client, itemContext.DockerConfigJSONData)
 					}
 					if err != nil {
 						errChan <- fmt.Errorf("config.%d.\"%s\": %w", idx, key, err)
@@ -607,8 +572,6 @@ func writeSecretsToFile(secrets []*coreapi.Secret, w io.Writer) error {
 
 type comparable struct {
 	fields            sets.String
-	attachments       sets.String
-	hasPassword       bool
 	superfluousFields sets.String
 }
 
@@ -617,15 +580,6 @@ func (c *comparable) string() string {
 
 	if c.fields.Len() > 0 {
 		ret += fmt.Sprintf("Fields: '%s'", strings.Join(c.fields.List(), ", "))
-	}
-
-	if c.attachments.Len() > 0 {
-		ret += fmt.Sprintf(" Attachments: '%s'", strings.Join(c.attachments.List(), ", "))
-
-	}
-
-	if c.hasPassword {
-		ret += " Login: 'password'"
 	}
 
 	if len(c.superfluousFields) > 0 {
@@ -638,38 +592,30 @@ func constructConfigItemsByName(config secretbootstrap.Config) map[string]*compa
 	cfgComparableItemsByName := make(map[string]*comparable)
 
 	for _, cfg := range config.Secrets {
-		for _, bwContext := range cfg.From {
-			if bwContext.BWItem != "" {
-				item, ok := cfgComparableItemsByName[bwContext.BWItem]
+		for _, itemContext := range cfg.From {
+			if itemContext.Item != "" {
+				item, ok := cfgComparableItemsByName[itemContext.Item]
 				if !ok {
 					item = &comparable{
-						fields:      sets.NewString(),
-						attachments: sets.NewString(),
+						fields: sets.NewString(),
 					}
 				}
-				item.attachments = insertIfNotEmpty(item.attachments, bwContext.Attachment)
-				item.fields = insertIfNotEmpty(item.fields, bwContext.Field)
-
-				if bwContext.Attribute == secretbootstrap.AttributeTypePassword {
-					item.hasPassword = true
-				}
-				cfgComparableItemsByName[bwContext.BWItem] = item
+				item.fields = insertIfNotEmpty(item.fields, itemContext.Field)
+				cfgComparableItemsByName[itemContext.Item] = item
 			}
 
-			if len(bwContext.DockerConfigJSONData) > 0 {
-				for _, context := range bwContext.DockerConfigJSONData {
-					item, ok := cfgComparableItemsByName[context.BWItem]
+			if len(itemContext.DockerConfigJSONData) > 0 {
+				for _, context := range itemContext.DockerConfigJSONData {
+					item, ok := cfgComparableItemsByName[context.Item]
 					if !ok {
 						item = &comparable{
-							fields:      sets.NewString(),
-							attachments: sets.NewString(),
+							fields: sets.NewString(),
 						}
 					}
 
-					item.fields = insertIfNotEmpty(item.fields, context.RegistryURLBitwardenField, context.RegistryURLBitwardenField, context.EmailBitwardenField)
-					item.attachments = insertIfNotEmpty(item.attachments, context.AuthBitwardenAttachment)
+					item.fields = insertIfNotEmpty(item.fields, context.AuthField, context.EmailField)
 
-					cfgComparableItemsByName[context.BWItem] = item
+					cfgComparableItemsByName[context.Item] = item
 				}
 			}
 		}
@@ -687,7 +633,7 @@ func insertIfNotEmpty(s sets.String, items ...string) sets.String {
 	return s
 }
 
-func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClient, bwAllowUnused sets.String, allowUnusedAfter time.Time) error {
+func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient, allowUnused sets.String, allowUnusedAfter time.Time) error {
 	allSecretStoreItems, err := client.GetInUseInformationForAllItems(config.VaultDPTPPRefix)
 	if err != nil {
 		return fmt.Errorf("failed to get in-use information from secret store: %w", err)
@@ -696,10 +642,10 @@ func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClie
 
 	unused := make(map[string]*comparable)
 	for itemName, item := range allSecretStoreItems {
-		l := logrus.WithField("bw_item", itemName)
+		l := logrus.WithField("item", itemName)
 		if item.LastChanged().After(allowUnusedAfter) {
 			logrus.WithFields(logrus.Fields{
-				"bw_item":   itemName,
+				"item":      itemName,
 				"threshold": allowUnusedAfter,
 				"modified":  item.LastChanged(),
 			}).Info("Unused item last modified after threshold")
@@ -707,7 +653,7 @@ func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClie
 		}
 
 		if _, ok := cfgComparableItemsByName[itemName]; !ok {
-			if bwAllowUnused.Has(itemName) {
+			if allowUnused.Has(itemName) {
 				l.Info("Unused item allowed by arguments")
 				continue
 			}
@@ -718,7 +664,7 @@ func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClie
 
 		diffFields := item.UnusedFields(cfgComparableItemsByName[itemName].fields)
 		if diffFields.Len() > 0 {
-			if bwAllowUnused.Has(itemName) {
+			if allowUnused.Has(itemName) {
 				l.WithField("fields", strings.Join(diffFields.List(), ",")).Info("Unused fields from item are allowed by arguments")
 				continue
 			}
@@ -729,33 +675,8 @@ func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClie
 			unused[itemName].fields = diffFields
 		}
 
-		diffAttachments := item.UnusedAttachments(cfgComparableItemsByName[itemName].attachments)
-		if diffAttachments.Len() > 0 {
-			if bwAllowUnused.Has(itemName) {
-				l.WithField("attachments", strings.Join(diffAttachments.List(), ",")).Info("Unused attachments from item are allowed by arguments")
-				continue
-			}
-
-			if _, ok := unused[itemName]; !ok {
-				unused[itemName] = &comparable{}
-			}
-			unused[itemName].attachments = diffAttachments
-		}
-
-		if item.HasPassword() && !cfgComparableItemsByName[itemName].hasPassword {
-			if bwAllowUnused.Has(itemName) {
-				l.Info("Unused password fields from item is allowed by arguments")
-				continue
-			}
-
-			if _, ok := unused[itemName]; !ok {
-				unused[itemName] = &comparable{}
-			}
-			unused[itemName].hasPassword = true
-		}
-
 		if superfluousFields := item.SuperfluousFields(); len(superfluousFields) > 0 {
-			if bwAllowUnused.Has(itemName) {
+			if allowUnused.Has(itemName) {
 				l.WithField("superfluousFields", superfluousFields).Info("Superfluous fields from item are allowed by arguments")
 				continue
 			}
@@ -769,7 +690,7 @@ func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClie
 
 	var errs []error
 	for name, item := range unused {
-		err := fmt.Sprintf("Unused bw item: '%s'", name)
+		err := fmt.Sprintf("Unused item: '%s'", name)
 		if s := item.string(); s != "" {
 			err += fmt.Sprintf(" with %s", s)
 		}
@@ -783,69 +704,49 @@ func getUnusedBWItems(config secretbootstrap.Config, client secrets.ReadOnlyClie
 	return utilerrors.NewAggregate(errs)
 }
 
-func (o *options) validateBWItems(client secrets.ReadOnlyClient) error {
+func (o *options) validateItems(client secrets.ReadOnlyClient) error {
 	var errs []error
 
 	for _, config := range o.config.Secrets {
 		for _, item := range config.From {
-			logger := logrus.WithField("item", item.BWItem)
+			logger := logrus.WithField("item", item.Item)
 
 			if item.DockerConfigJSONData != nil {
 				for _, data := range item.DockerConfigJSONData {
-					hasItem, err := client.HasItem(data.BWItem)
+					hasItem, err := client.HasItem(data.Item)
 					if err != nil {
-						errs = append(errs, fmt.Errorf("failed to check if item %s exists: %w", data.BWItem, err))
+						errs = append(errs, fmt.Errorf("failed to check if item %s exists: %w", data.Item, err))
 						continue
 					}
 					if !hasItem {
-						errs = append(errs, fmt.Errorf("item %s doesn't exist", data.BWItem))
+						errs = append(errs, fmt.Errorf("item %s doesn't exist", data.Item))
 						break
 					}
-					if _, err := client.GetAttachmentOnItem(data.BWItem, data.AuthBitwardenAttachment); err != nil {
-						errs = append(errs, fmt.Errorf("attachment %s in item %s doesn't exist", data.AuthBitwardenAttachment, data.BWItem))
+					if _, err := client.GetFieldOnItem(data.Item, data.AuthField); err != nil {
+						errs = append(errs, fmt.Errorf("field %s in item %s doesn't exist", data.AuthField, data.Item))
 					}
 				}
 			} else {
-				hasItem, err := client.HasItem(item.BWItem)
+				hasItem, err := client.HasItem(item.Item)
 				if err != nil {
-					errs = append(errs, fmt.Errorf("failed to check if item %s exists: %w", item.BWItem, err))
+					errs = append(errs, fmt.Errorf("failed to check if item %s exists: %w", item.Item, err))
 					continue
 				}
 				if !hasItem {
-					if o.generatorConfig.IsItemGenerated(stripDPTPPrefixFromItem(item.BWItem, &o.config)) {
+					if o.generatorConfig.IsItemGenerated(stripDPTPPrefixFromItem(item.Item, &o.config)) {
 						logrus.Warn("Item doesn't exist but it will be generated")
 					} else {
-						errs = append(errs, fmt.Errorf("item %s doesn't exist", item.BWItem))
+						errs = append(errs, fmt.Errorf("item %s doesn't exist", item.Item))
 						continue
 					}
 				}
 
 				if item.Field != "" {
-					if _, err := client.GetFieldOnItem(item.BWItem, item.Field); err != nil {
-						if o.generatorConfig.IsFieldGenerated(stripDPTPPrefixFromItem(item.BWItem, &o.config), item.Field) {
+					if _, err := client.GetFieldOnItem(item.Item, item.Field); err != nil {
+						if o.generatorConfig.IsFieldGenerated(stripDPTPPrefixFromItem(item.Item, &o.config), item.Field) {
 							logger.WithField("field", item.Field).Warn("Field doesn't exist but it will be generated")
 						} else {
-							errs = append(errs, fmt.Errorf("field %s in item %s doesn't exist", item.Field, item.BWItem))
-						}
-					}
-				}
-
-				if item.Attachment != "" {
-					if _, err := client.GetAttachmentOnItem(item.BWItem, item.Attachment); err != nil {
-						if o.generatorConfig.IsFieldGenerated(stripDPTPPrefixFromItem(item.BWItem, &o.config), item.Attachment) {
-							logger.WithField("attachment", item.Attachment).Warn("Attachment doesn't exist but it will be generated")
-						} else {
-							errs = append(errs, fmt.Errorf("attachment %s in item %s doesn't exist", item.Attachment, item.BWItem))
-						}
-					}
-				}
-
-				if item.Attribute == secretbootstrap.AttributeTypePassword {
-					if _, err := client.GetPassword(item.BWItem); err != nil {
-						if o.generatorConfig.IsFieldGenerated(stripDPTPPrefixFromItem(item.BWItem, &o.config), string(item.Attribute)) {
-							logger.WithField("attribute", item.Attribute).Warn("Attribute doesn't exist but it will be generated")
-						} else {
-							errs = append(errs, fmt.Errorf("password in item %s doesn't exist", item.BWItem))
+							errs = append(errs, fmt.Errorf("field %s in item %s doesn't exist", item.Field, item.Item))
 						}
 					}
 				}
@@ -891,12 +792,6 @@ func main() {
 }
 
 func reconcileSecrets(o options, client secrets.ReadOnlyClient) (errs []error) {
-	defer func() {
-		if _, err := client.Logout(); err != nil {
-			errs = append(errs, fmt.Errorf("failed to logout: %w", err))
-		}
-	}()
-
 	if o.validateOnly {
 		var config secretbootstrap.Config
 		if err := secretbootstrap.LoadConfigFromFile(o.configPath, &config); err != nil {
@@ -906,7 +801,7 @@ func reconcileSecrets(o options, client secrets.ReadOnlyClient) (errs []error) {
 			return append(errs, fmt.Errorf("failed to validate the config: %w", err))
 		}
 
-		if err := o.validateBWItems(client); err != nil {
+		if err := o.validateItems(client); err != nil {
 			return append(errs, fmt.Errorf("failed to validate items: %w", err))
 		}
 
@@ -920,9 +815,9 @@ func reconcileSecrets(o options, client secrets.ReadOnlyClient) (errs []error) {
 		errs = append(errs, err)
 	}
 
-	if o.validateBWItemsUsage {
+	if o.validateItemsUsage {
 		unusedGracePeriod := time.Now().AddDate(0, 0, -allowUnusedDays)
-		err := getUnusedBWItems(o.config, client, o.bwAllowUnused.StringSet(), unusedGracePeriod)
+		err := getUnusedItems(o.config, client, o.allowUnused.StringSet(), unusedGracePeriod)
 		if err != nil {
 			errs = append(errs, err)
 		}

@@ -18,7 +18,8 @@ const (
 	AttributeTypePassword AttributeType = "password"
 )
 
-type BitWardenContext struct {
+type ItemContext struct {
+	Item                 string                 `json:"item"`
 	BWItem               string                 `json:"bw_item"`
 	Field                string                 `json:"field,omitempty"`
 	Attachment           string                 `json:"attachment,omitempty"`
@@ -30,11 +31,13 @@ type BitWardenContext struct {
 }
 
 type DockerConfigJSONData struct {
-	BWItem                    string `json:"bw_item"`
-	RegistryURL               string `json:"registry_url"`
-	RegistryURLBitwardenField string `json:"registry_url_bw_field"`
-	AuthBitwardenAttachment   string `json:"auth_bw_attachment"`
-	EmailBitwardenField       string `json:"email_bw_field,omitempty"`
+	Item                    string `json:"item"`
+	RegistryURL             string `json:"registry_url"`
+	AuthField               string `json:"auth_field"`
+	EmailField              string `json:"email_field,omitempty"`
+	AuthBitwardenAttachment string `json:"auth_bw_attachment"`
+	EmailBitwardenField     string `json:"email_bw_field,omitempty"`
+	BWItem                  string `json:"bw_item"`
 }
 
 type DockerConfigJSON struct {
@@ -61,8 +64,8 @@ func (sc SecretContext) String() string {
 }
 
 type SecretConfig struct {
-	From map[string]BitWardenContext `json:"from"`
-	To   []SecretContext             `json:"to"`
+	From map[string]ItemContext `json:"from"`
+	To   []SecretContext        `json:"to"`
 }
 
 // LoadConfigFromFile renders a Config object loaded from the given file
@@ -89,6 +92,41 @@ func (c *Config) UnmarshalJSON(d []byte) error {
 	if err := json.Unmarshal(d, &target); err != nil {
 		return err
 	}
+
+	for i, secretConfig := range target.Secrets {
+		for key, item := range secretConfig.From {
+			if item.Item == "" {
+				item.Item = item.BWItem
+				item.BWItem = ""
+			}
+
+			if item.Field == "" {
+				if item.Attachment != "" {
+					item.Field = item.Attachment
+					item.Attachment = ""
+				} else if item.Attribute != "" {
+					item.Attribute = ""
+					item.Field = "password"
+				}
+			}
+
+			if item.DockerConfigJSONData != nil {
+				for i, dockerJSONData := range item.DockerConfigJSONData {
+					if dockerJSONData.Item == "" {
+						item.DockerConfigJSONData[i].Item = dockerJSONData.BWItem
+					}
+					if dockerJSONData.EmailBitwardenField != "" {
+						item.DockerConfigJSONData[i].EmailField = dockerJSONData.EmailBitwardenField
+					}
+					if dockerJSONData.AuthBitwardenAttachment != "" {
+						item.DockerConfigJSONData[i].AuthField = dockerJSONData.AuthBitwardenAttachment
+					}
+				}
+			}
+			target.Secrets[i].From[key] = item
+		}
+	}
+
 	*c = Config(target)
 	return c.resolve()
 }
@@ -97,12 +135,7 @@ func (c *Config) Validate() error {
 	var errs []error
 	for i, secretConfig := range c.Secrets {
 		var foundKey bool
-		for key, bwContext := range secretConfig.From {
-			switch bwContext.Attribute {
-			case AttributeTypePassword, "":
-			default:
-				errs = append(errs, fmt.Errorf("config[%d].from[%s].attribute: only the '%s' is supported, not %s", i, key, AttributeTypePassword, bwContext.Attribute))
-			}
+		for key := range secretConfig.From {
 			if key == corev1.DockerConfigJsonKey {
 				foundKey = true
 			}
@@ -158,12 +191,12 @@ func (c *Config) resolve() error {
 
 		if c.VaultDPTPPRefix != "" {
 			for fromKey, fromValue := range secret.From {
-				if fromValue.BWItem != "" {
-					fromValue.BWItem = c.VaultDPTPPRefix + "/" + fromValue.BWItem
+				if fromValue.Item != "" {
+					fromValue.Item = c.VaultDPTPPRefix + "/" + fromValue.Item
 				}
 				for dockerCFGIdx, dockerCFGVal := range fromValue.DockerConfigJSONData {
-					if dockerCFGVal.BWItem != "" {
-						dockerCFGVal.BWItem = c.VaultDPTPPRefix + "/" + dockerCFGVal.BWItem
+					if dockerCFGVal.Item != "" {
+						dockerCFGVal.Item = c.VaultDPTPPRefix + "/" + dockerCFGVal.Item
 						fromValue.DockerConfigJSONData[dockerCFGIdx] = dockerCFGVal
 					}
 				}

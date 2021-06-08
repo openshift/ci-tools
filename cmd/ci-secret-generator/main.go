@@ -15,12 +15,10 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/test-infra/prow/logrusutil"
-	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 	"github.com/openshift/ci-tools/pkg/secrets"
-	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 type options struct {
@@ -89,15 +87,11 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 	}
 
 	if o.bootstrapConfigPath != "" {
-		cfgBytes, err := gzip.ReadFileMaybeGZIP(o.bootstrapConfigPath)
-		if err != nil {
-			return err
-		}
-
-		if err := yaml.Unmarshal(cfgBytes, &o.bootstrapConfig); err != nil {
-			return err
+		if err := secretbootstrap.LoadConfigFromFile(o.bootstrapConfigPath, &o.bootstrapConfig); err != nil {
+			return fmt.Errorf("couldn't load the bootstrap config: %w", err)
 		}
 	}
+
 	return o.validateConfig()
 }
 
@@ -181,7 +175,7 @@ func updateSecrets(config secretgenerator.Config, client secrets.Client) error {
 				errs = append(errs, errors.New(msg))
 				continue
 			}
-			if err := client.SetAttachmentOnItem(bwItem.ItemName, attachment.Name, out); err != nil {
+			if err := client.SetFieldOnItem(bwItem.ItemName, attachment.Name, out); err != nil {
 				msg := "failed to upload attachment"
 				logger.WithError(err).Error(msg)
 				errs = append(errs, errors.New(msg))
@@ -199,7 +193,7 @@ func updateSecrets(config secretgenerator.Config, client secrets.Client) error {
 				logger.WithError(err).Error(msg)
 				errs = append(errs, errors.New(msg))
 			} else {
-				if err := client.SetPassword(bwItem.ItemName, out); err != nil {
+				if err := client.SetFieldOnItem(bwItem.ItemName, "password", out); err != nil {
 					msg := "failed to upload password"
 					logger.WithError(err).Error(msg)
 					errs = append(errs, errors.New(msg))
@@ -238,9 +232,9 @@ func main() {
 		logrus.WithError(err).Fatal("failed to complete options.")
 	}
 
-	bitWardenContexts := bitwardenContextsFor(o.config)
+	itemContextsFromConfig := itemContextsFromConfig(o.config)
 	if o.validate {
-		if err := validateContexts(bitWardenContexts, o.bootstrapConfig); err != nil {
+		if err := validateContexts(itemContextsFromConfig, o.bootstrapConfig); err != nil {
 			for _, err := range err.Errors() {
 				logrus.WithError(err).Error("Invalid entry")
 			}
@@ -260,13 +254,6 @@ func main() {
 
 func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 	var client secrets.Client
-	defer func() {
-		if client != nil {
-			if _, err := client.Logout(); err != nil {
-				errs = append(errs, fmt.Errorf("failed to logout: %w", err))
-			}
-		}
-	}()
 
 	if o.dryRun {
 		var err error
@@ -300,45 +287,45 @@ func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 	return errs
 }
 
-func bitwardenContextsFor(items secretgenerator.Config) []secretbootstrap.BitWardenContext {
-	var bitWardenContexts []secretbootstrap.BitWardenContext
-	for _, bwItem := range items {
-		for _, field := range bwItem.Fields {
-			bitWardenContexts = append(bitWardenContexts, secretbootstrap.BitWardenContext{
-				BWItem: bwItem.ItemName,
-				Field:  field.Name,
+func itemContextsFromConfig(items secretgenerator.Config) []secretbootstrap.ItemContext {
+	var itemContexts []secretbootstrap.ItemContext
+	for _, item := range items {
+		for _, field := range item.Fields {
+			itemContexts = append(itemContexts, secretbootstrap.ItemContext{
+				Item:  item.ItemName,
+				Field: field.Name,
 			})
 		}
-		for _, attachment := range bwItem.Attachments {
-			bitWardenContexts = append(bitWardenContexts, secretbootstrap.BitWardenContext{
-				BWItem:     bwItem.ItemName,
-				Attachment: attachment.Name,
+		for _, attachment := range item.Attachments {
+			itemContexts = append(itemContexts, secretbootstrap.ItemContext{
+				Item:  item.ItemName,
+				Field: attachment.Name,
 			})
 		}
-		if bwItem.Password != "" {
-			bitWardenContexts = append(bitWardenContexts, secretbootstrap.BitWardenContext{
-				BWItem:    bwItem.ItemName,
-				Attribute: secretbootstrap.AttributeTypePassword,
+		if item.Password != "" {
+			itemContexts = append(itemContexts, secretbootstrap.ItemContext{
+				Item:  item.ItemName,
+				Field: string(secretbootstrap.AttributeTypePassword),
 			})
 		}
 	}
-	return bitWardenContexts
+	return itemContexts
 }
 
-func validateContexts(contexts []secretbootstrap.BitWardenContext, config secretbootstrap.Config) utilerrors.Aggregate {
+func validateContexts(contexts []secretbootstrap.ItemContext, config secretbootstrap.Config) utilerrors.Aggregate {
 	var errs []error
 	for _, needle := range contexts {
 		var found bool
 		for _, secret := range config.Secrets {
 			for _, haystack := range secret.From {
-				haystack.BWItem = strings.TrimPrefix(haystack.BWItem, config.VaultDPTPPRefix+"/")
+				haystack.Item = strings.TrimPrefix(haystack.Item, config.VaultDPTPPRefix+"/")
 				if reflect.DeepEqual(needle, haystack) {
 					found = true
 				}
 				for _, dc := range haystack.DockerConfigJSONData {
-					ctx := secretbootstrap.BitWardenContext{
-						BWItem:     strings.TrimPrefix(dc.BWItem, config.VaultDPTPPRefix+"/"),
-						Attachment: dc.AuthBitwardenAttachment,
+					ctx := secretbootstrap.ItemContext{
+						Item:  strings.TrimPrefix(dc.Item, config.VaultDPTPPRefix+"/"),
+						Field: dc.AuthField,
 					}
 					if reflect.DeepEqual(needle, ctx) {
 						found = true

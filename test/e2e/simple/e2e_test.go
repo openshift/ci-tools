@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"testing"
 
 	"github.com/openshift/ci-tools/test/e2e/framework"
@@ -260,6 +261,11 @@ func TestLiteralDynamicRelease(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		framework.Run(t, testCase.name, func(t *framework.T, cmd *framework.CiOperatorCommand) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("test paniced, stacktrace:\n%s", string(debug.Stack()))
+				}
+			}()
 			cmd.AddArgs(
 				"--config=dynamic-releases.yaml",
 				framework.LocalPullSecretFlag(t),

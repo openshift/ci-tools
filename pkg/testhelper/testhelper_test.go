@@ -128,6 +128,21 @@ func TestCompareRuntimObjectIgnoreRvTypeMeta(t *testing.T) {
 			x:    &testimagestreamtagimportv1.TestImageStreamTagImport{TypeMeta: metav1.TypeMeta{Kind: "Pod"}},
 			y:    &testimagestreamtagimportv1.TestImageStreamTagImport{ObjectMeta: metav1.ObjectMeta{Name: "other"}},
 		},
+		{
+			name: "Lists with items with different type meta and rv, equal",
+			x: &testimagestreamtagimportv1.TestImageStreamTagImportList{Items: []testimagestreamtagimportv1.TestImageStreamTagImport{
+				{TypeMeta: metav1.TypeMeta{Kind: "Secret"}, ObjectMeta: metav1.ObjectMeta{ResourceVersion: "1"}},
+			}},
+			y:              &testimagestreamtagimportv1.TestImageStreamTagImportList{Items: []testimagestreamtagimportv1.TestImageStreamTagImport{{}}},
+			expectEquality: true,
+		},
+		{
+			name: "Lists with different items, not equal",
+			x: &testimagestreamtagimportv1.TestImageStreamTagImportList{Items: []testimagestreamtagimportv1.TestImageStreamTagImport{
+				{Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{ClusterName: "foo"}},
+			}},
+			y: &testimagestreamtagimportv1.TestImageStreamTagImportList{Items: []testimagestreamtagimportv1.TestImageStreamTagImport{{}}},
+		},
 	}
 
 	for _, tc := range tests {

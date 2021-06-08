@@ -581,7 +581,7 @@ func TestCachedQuery_Record(t *testing.T) {
 			"cluster": {},
 			"CLUSTER": {},
 		},
-		Data:           map[model.Fingerprint]*circonusllhist.Histogram{},
+		Data:           map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{},
 		DataByMetaData: map[FullMetadata][]model.Fingerprint{},
 	}
 
@@ -597,19 +597,20 @@ func TestCachedQuery_Record(t *testing.T) {
 		},
 	}}, logger)
 
-	expectedHist := circonusllhist.New()
+	expectedInner := circonusllhist.New()
 	for _, value := range []float64{1, 2, 3} {
-		if err := expectedHist.RecordValue(value); err != nil {
+		if err := expectedInner.RecordValue(value); err != nil {
 			t.Errorf("failed to insert value into histogram, this should never happen: %v", err)
 		}
 	}
+	expectedHist := circonusllhist.NewHistogramWithoutLookups(expectedInner)
 	expected := CachedQuery{
 		Query: "whatever",
 		RangesByCluster: map[string][]TimeRange{
 			"cluster": {{Start: year(1), End: year(20)}},
 			"CLUSTER": {},
 		},
-		Data: map[model.Fingerprint]*circonusllhist.Histogram{
+		Data: map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{
 			metrics[0].metric.Fingerprint(): expectedHist,
 		},
 		DataByMetaData: map[FullMetadata][]model.Fingerprint{
@@ -636,7 +637,7 @@ func TestCachedQuery_Record(t *testing.T) {
 			"cluster": {{Start: year(1), End: year(20)}},
 			"CLUSTER": {{Start: year(1), End: year(20)}},
 		},
-		Data: map[model.Fingerprint]*circonusllhist.Histogram{
+		Data: map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{
 			metrics[0].metric.Fingerprint(): expectedHist,
 			metrics[1].metric.Fingerprint(): expectedHist,
 		},
@@ -659,19 +660,20 @@ func TestCachedQuery_Record(t *testing.T) {
 		},
 	}}, logger)
 
-	biggerHist := circonusllhist.New()
+	biggerInner := circonusllhist.New()
 	for _, value := range []float64{1, 2, 3, 4, 5, 6} {
-		if err := biggerHist.RecordValue(value); err != nil {
+		if err := biggerInner.RecordValue(value); err != nil {
 			t.Errorf("failed to insert value into histogram, this should never happen: %v", err)
 		}
 	}
+	biggerHist := circonusllhist.NewHistogramWithoutLookups(biggerInner)
 	expected = CachedQuery{
 		Query: "whatever",
 		RangesByCluster: map[string][]TimeRange{
 			"cluster": {{Start: year(1), End: year(20)}},
 			"CLUSTER": {{Start: year(1), End: year(25)}},
 		},
-		Data: map[model.Fingerprint]*circonusllhist.Histogram{
+		Data: map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{
 			metrics[0].metric.Fingerprint(): expectedHist,
 			metrics[1].metric.Fingerprint(): biggerHist,
 		},
@@ -694,19 +696,20 @@ func TestCachedQuery_Record(t *testing.T) {
 		},
 	}}, logger)
 
-	otherHist := circonusllhist.New()
+	otherInner := circonusllhist.New()
 	for _, value := range []float64{7, 8, 9} {
-		if err := otherHist.RecordValue(value); err != nil {
+		if err := otherInner.RecordValue(value); err != nil {
 			t.Errorf("failed to insert value into histogram, this should never happen: %v", err)
 		}
 	}
+	otherHist := circonusllhist.NewHistogramWithoutLookups(otherInner)
 	expected = CachedQuery{
 		Query: "whatever",
 		RangesByCluster: map[string][]TimeRange{
 			"cluster": {{Start: year(1), End: year(20)}},
 			"CLUSTER": {{Start: year(1), End: year(25)}, {Start: year(30), End: year(35)}},
 		},
-		Data: map[model.Fingerprint]*circonusllhist.Histogram{
+		Data: map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{
 			metrics[0].metric.Fingerprint(): expectedHist,
 			metrics[1].metric.Fingerprint(): biggerHist,
 			metrics[2].metric.Fingerprint(): otherHist,
@@ -721,13 +724,13 @@ func TestCachedQuery_Record(t *testing.T) {
 	}
 }
 
-var dataComparer = cmp.Comparer(func(a, b *circonusllhist.Histogram) bool {
-	return a.Equals(b)
+var dataComparer = cmp.Comparer(func(a, b *circonusllhist.HistogramWithoutLookups) bool {
+	return a.Histogram().Equals(b.Histogram())
 })
 
 func TestCachedQuery_Prune(t *testing.T) {
 	q := CachedQuery{
-		Data: map[model.Fingerprint]*circonusllhist.Histogram{},
+		Data: map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{},
 		DataByMetaData: map[FullMetadata][]model.Fingerprint{
 			{Step: "1"}:      {1},
 			{Step: "2"}:      {2},
@@ -740,12 +743,12 @@ func TestCachedQuery_Prune(t *testing.T) {
 	}
 
 	for i := 1; i < 156; i++ {
-		q.Data[model.Fingerprint(i)] = circonusllhist.New()
+		q.Data[model.Fingerprint(i)] = circonusllhist.NewHistogramWithoutLookups(circonusllhist.New(circonusllhist.NoLookup()))
 	}
 	q.prune()
 
 	expected := CachedQuery{
-		Data: map[model.Fingerprint]*circonusllhist.Histogram{},
+		Data: map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{},
 		DataByMetaData: map[FullMetadata][]model.Fingerprint{
 			{Step: "1"}:      {1},
 			{Step: "2"}:      {2},
@@ -758,11 +761,11 @@ func TestCachedQuery_Prune(t *testing.T) {
 	}
 
 	for i := 1; i < 56; i++ {
-		expected.Data[model.Fingerprint(i)] = circonusllhist.New()
+		expected.Data[model.Fingerprint(i)] = circonusllhist.NewHistogramWithoutLookups(circonusllhist.New(circonusllhist.NoLookup()))
 	}
 
 	for i := 106; i < 156; i++ {
-		expected.Data[model.Fingerprint(i)] = circonusllhist.New()
+		expected.Data[model.Fingerprint(i)] = circonusllhist.NewHistogramWithoutLookups(circonusllhist.New(circonusllhist.NoLookup()))
 	}
 
 	if diff := cmp.Diff(expected, q, dataComparer); diff != "" {

@@ -1207,8 +1207,8 @@ github.com/opencontainers/selinux v1.2.2/go.mod h1:+BLncwf63G4dgOzykXAxcmnFlUaOl
 github.com/opencontainers/selinux v1.3.1/go.mod h1:yTcKuYAh6R95iDpefGLQaPaRwJFwyzAJufJyiTt7s0g=
 github.com/opencontainers/selinux v1.3.2/go.mod h1:yTcKuYAh6R95iDpefGLQaPaRwJFwyzAJufJyiTt7s0g=
 github.com/opencontainers/selinux v1.3.3/go.mod h1:yTcKuYAh6R95iDpefGLQaPaRwJFwyzAJufJyiTt7s0g=
-github.com/openhistogram/circonusllhist v0.2.1 h1:x3U4T8CL+RyLq+PNqZ4g9WMCEYuZ3qlD7m+zkIQ6QYI=
-github.com/openhistogram/circonusllhist v0.2.1/go.mod h1:PfeYJ/RW2+Jfv3wTz0upbY2TRour/LLqIm2K2Kw5zg0=
+github.com/openhistogram/circonusllhist v0.3.1-0.20210608220433-1bd1bfa6c998 h1:F1GNv2rjPATFJAjWPDoS8vlqeO3X9laSpUepXgvhTZo=
+github.com/openhistogram/circonusllhist v0.3.1-0.20210608220433-1bd1bfa6c998/go.mod h1:PfeYJ/RW2+Jfv3wTz0upbY2TRour/LLqIm2K2Kw5zg0=
 github.com/openshift/api v0.0.0-20201120165435-072a4cd8ca42 h1:meFswbseUxIkrfb2+g91gHbPwh+16Kj/8E1AiR1jv6A=
 github.com/openshift/api v0.0.0-20201120165435-072a4cd8ca42/go.mod h1:RDvBcRQMGLa3aNuDuejVBbTEQj/2i14NXdpOLqbNBvM=
 github.com/openshift/build-machinery-go v0.0.0-20200424080330-082bf86082cc/go.mod h1:1CkcsT3aVebzRBzVTSbiKSkJMsC/CASqxesfqEMfJEc=

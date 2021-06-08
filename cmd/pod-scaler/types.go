@@ -49,7 +49,7 @@ type CachedQuery struct {
 	// We digest data into log-linear histograms to allow for aggregation while
 	// saving enormous amounts of space and incurring only minimal accuracy loss:
 	// https://www.circonus.com/2018/11/the-problem-with-percentiles-aggregation-brings-aggravation/
-	Data map[model.Fingerprint]*circonusllhist.Histogram `json:"data"`
+	Data map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups `json:"data"`
 	// DataByMetaData indexes the metric data by the full set of labels.
 	// The list of fingerprints is guaranteed to be unique for any set of labels
 	// and will never contain more than fifty items.

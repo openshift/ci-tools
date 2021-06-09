@@ -185,8 +185,14 @@ func mainProduce(opts *options, cache cache) {
 		if err != nil {
 			logger.WithError(err).Fatal("Failed to get Prometheus route.")
 		}
+		var addr string
+		if route.Spec.TLS != nil {
+			addr = "https://" + route.Spec.Host
+		} else {
+			addr = "http://" + route.Spec.Host
+		}
 		promClient, err := prometheusclient.NewClient(prometheusclient.Config{
-			Address:      "https://" + route.Spec.Host,
+			Address:      addr,
 			RoundTripper: transport.NewBearerAuthRoundTripper(config.BearerToken, prometheusclient.DefaultRoundTripper),
 		})
 		if err != nil {

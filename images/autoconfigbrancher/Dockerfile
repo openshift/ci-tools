@@ -10,6 +10,7 @@ ADD sanitize-prow-jobs /usr/bin/sanitize-prow-jobs
 ADD determinize-prow-config /usr/bin/determinize-prow-config
 ADD template-deprecator /usr/bin/template-deprecator
 ADD registry-replacer /usr/bin/registry-replacer
+ADD ci-operator-yaml-creator /usr/bin/ci-operator-yaml-creator
 
 RUN dnf install -y git && \
     dnf clean all && \

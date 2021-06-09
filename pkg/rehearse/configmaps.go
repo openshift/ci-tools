@@ -3,7 +3,7 @@ package rehearse
 import (
 	"context"
 	"fmt"
-	"os"
+	"io/fs"
 	"path/filepath"
 	"strconv"
 
@@ -143,7 +143,7 @@ func (c *CMManager) createCM(name string, data []updateconfig.ConfigMapUpdate) e
 
 func genChanges(root string, patterns sets.String) ([]prowgithub.PullRequestChange, error) {
 	var ret []prowgithub.PullRequestChange
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(root, func(path string, info fs.DirEntry, err error) error {
 		if err != nil || info.IsDir() {
 			return err
 		}

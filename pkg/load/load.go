@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -82,7 +83,7 @@ func fromPath(path string) (filenameToConfig, error) {
 	lock := &sync.Mutex{}
 	errGroup := &errgroup.Group{}
 
-	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(path, func(path string, info fs.DirEntry, err error) error {
 		if info == nil || err != nil {
 			// file may not exist due to race condition between the reload and k8s removing deleted/moved symlinks in a confimap directory; ignore it
 			if os.IsNotExist(err) {
@@ -274,7 +275,7 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 	observers := registry.ObserverByName{}
 	documentation := map[string]string{}
 	metadata := api.RegistryMetadata{}
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(root, func(path string, info fs.DirEntry, err error) error {
 		if info != nil && strings.HasPrefix(info.Name(), "..") {
 			if info.IsDir() {
 				return filepath.SkipDir

@@ -27,7 +27,7 @@ require (
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/getlantern/deepcopy v0.0.0-20160317154340-7f45deb8130a
 	github.com/ghodss/yaml v1.0.0
-	github.com/google/go-cmp v0.5.2
+	github.com/google/go-cmp v0.5.5
 	github.com/google/gofuzz v1.2.1-0.20210504230335-f78f29fc09ea
 	github.com/hashicorp/go-retryablehttp v0.6.6
 	github.com/hashicorp/go-version v1.2.1
@@ -48,25 +48,25 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/polyfloyd/go-errorlint v0.0.0-20200429095719-920be198a950
-	github.com/prometheus/client_golang v1.9.0
-	github.com/prometheus/common v0.15.0
+	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/common v0.26.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.7.0
 	github.com/slack-go/slack v0.7.3
 	github.com/spf13/afero v1.4.1
-	go.uber.org/zap v1.16.0
-	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
+	go.uber.org/zap v1.17.0
+	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	google.golang.org/api v0.32.0
 	gopkg.in/fsnotify.v1 v1.4.7
 	gopkg.in/robfig/cron.v2 v2.0.0-20150107220207-be2e0b0deed5
-	k8s.io/api v0.21.0
-	k8s.io/apimachinery v0.21.0
+	k8s.io/api v0.21.1
+	k8s.io/apimachinery v0.21.1
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
 	k8s.io/klog/v2 v2.8.0
-	k8s.io/test-infra v0.0.0-20210601123226-ea6aa4eb2942
-	k8s.io/utils v0.0.0-20210111153108-fddb29f9d009
+	k8s.io/test-infra v0.0.0-20210609143947-88674ef045c6
+	k8s.io/utils v0.0.0-20210527160623-6fdb442a123b
 	sigs.k8s.io/boskos v0.0.0-20210210143059-9ac98d864d2a
-	sigs.k8s.io/controller-runtime v0.9.0-beta.1.0.20210512131817-ce2f0c92d77e
+	sigs.k8s.io/controller-runtime v0.9.0
 	sigs.k8s.io/controller-tools v0.3.0
 	sigs.k8s.io/yaml v1.2.0
 )

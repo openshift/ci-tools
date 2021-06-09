@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"cloud.google.com/go/storage"
 	"github.com/openhistogram/circonusllhist"
 	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
@@ -78,7 +77,7 @@ func produce(clients map[string]prometheusapi.API, dataCache cache) {
 			query := query
 			logger := logrus.WithField("metric", name)
 			cache, err := loadCache(dataCache, name, logger)
-			if errors.Is(err, storage.ErrObjectNotExist) {
+			if errors.Is(err, notExist{}) {
 				ranges := map[string][]TimeRange{}
 				for cluster := range clients {
 					ranges[cluster] = []TimeRange{}

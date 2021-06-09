@@ -85,7 +85,11 @@ func (l *localCache) load(_ context.Context, name string) (io.ReadCloser, error)
 }
 
 func (l *localCache) store(_ context.Context, name string) (io.WriteCloser, error) {
-	return os.Create(path.Join(l.dir, name))
+	cachePath := path.Join(l.dir, name)
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0777); err != nil {
+		return nil, err
+	}
+	return os.Create(cachePath)
 }
 
 func (l *localCache) lastUpdated(_ context.Context, name string) (time.Time, error) {

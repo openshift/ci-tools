@@ -2,6 +2,7 @@ package jira
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/andygrunwald/go-jira"
 	"github.com/sirupsen/logrus"
@@ -38,7 +39,14 @@ type jiraAdapter struct {
 }
 
 func (a *jiraAdapter) FindUser(property string) ([]jira.User, *jira.Response, error) {
-	return a.delegate.User.Find(property) // ignore tweaks
+	// the JIRA API does not work as documented, and we can therefore not use the jira.Client.User.Find function here.
+	// That function supplies a query parameter to the search endpoint which will result in a 400 as you are required to pass the
+	// username parameter and this parameter behaves as the query parameter should.
+	req, _ := a.delegate.NewRequest("GET", fmt.Sprintf("rest/api/2/user/search?username=%s", url.QueryEscape(property)), nil)
+	var users []jira.User
+	response, err := a.delegate.Do(req, &users)
+
+	return users, response, err
 }
 
 func (a *jiraAdapter) CreateIssue(issue *jira.Issue) (*jira.Issue, *jira.Response, error) {

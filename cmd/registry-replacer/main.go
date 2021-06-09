@@ -33,6 +33,8 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/ocpbuilddata"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/github"
+	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/steps/release"
 )
 
@@ -47,7 +49,10 @@ type options struct {
 	currentRelease                               ocpbuilddata.MajorMinor
 	pruneUnusedReplacements                      bool
 	pruneOCPBuilderReplacements                  bool
+	pruneUnusedBaseImages                        bool
+	applyReplacements                            bool
 	ensureCorrectPromotionDockerfileIngoredRepos *flagutil.Strings
+	registryPath                                 string
 	flagutil.GitHubOptions
 }
 
@@ -63,8 +68,11 @@ func gatherOptions() (*options, error) {
 	flag.IntVar(&o.maxConcurrency, "concurrency", 500, "Maximum number of concurrent in-flight goroutines to handle files.")
 	flag.StringVar(&o.ocpBuildDataRepoDir, "ocp-build-data-repo-dir", "../ocp-build-data", "The directory in which the ocp-build-data repository is")
 	flag.StringVar(&o.currentRelease.Minor, "current-release-minor", "6", "The minor version of the current release that is getting forwarded to from the master branch")
-	flag.BoolVar(&o.pruneUnusedReplacements, "prune-unused-replacements", false, "If replacements that match nothing should get pruned from the config")
+	flag.BoolVar(&o.pruneUnusedReplacements, "prune-unused-replacements", false, "If replacements that match nothing should get pruned from the config. Note that if --apply-replacements is set to false pruning will not take place.")
+	flag.BoolVar(&o.pruneUnusedBaseImages, "prune-unused-base-images", false, "If base images that match nothing should get pruned from the config")
+	flag.BoolVar(&o.applyReplacements, "apply-replacements", true, "If we should apply Dockerfile image replacements. You will probably always leave this as the default, and it's mostly used by tests that validate that base image pruning doesn't botch things. Note: If not applying replacements we will also skip unused replacement pruning.")
 	flag.BoolVar(&o.pruneOCPBuilderReplacements, "prune-ocp-builder-replacements", false, "If all replacements that target the ocp/builder imagestream should be removed")
+	flag.StringVar(&o.registryPath, "registry", "", "Path to the step registry directory")
 	flag.Parse()
 
 	var errs []error
@@ -133,6 +141,11 @@ func main() {
 		}
 	}
 
+	resolver, err := loadResolver(opts.registryPath)
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to load resolver")
+	}
+
 	var errs []error
 	errLock := &sync.Mutex{}
 	sem := semaphore.NewWeighted(int64(opts.maxConcurrency))
@@ -152,11 +165,16 @@ func main() {
 					},
 					opts.pruneUnusedReplacements,
 					opts.pruneOCPBuilderReplacements,
+					opts.pruneUnusedBaseImages,
+					opts.applyReplacements,
 					opts.ensureCorrectPromotionDockerfile,
 					sets.NewString(opts.ensureCorrectPromotionDockerfileIngoredRepos.Strings()...),
 					promotionTargetToDockerfileMapping,
 					opts.currentRelease,
 					credentials,
+					func(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error) {
+						return registry.ResolveConfig(resolver, config)
+					},
 				)(config, info); err != nil {
 					errLock.Lock()
 					errs = append(errs, err)
@@ -184,6 +202,17 @@ func main() {
 	}
 }
 
+func loadResolver(path string) (registry.Resolver, error) {
+	if path == "" {
+		return nil, nil
+	}
+	refs, chains, workflows, _, _, observers, err := load.Registry(path, false)
+	if err != nil {
+		return nil, err
+	}
+	return registry.NewResolver(refs, chains, workflows, observers), nil
+}
+
 type usernameToken struct {
 	username string
 	token    string
@@ -197,11 +226,14 @@ func replacer(
 	writer func([]byte) error,
 	pruneUnusedReplacementsEnabled bool,
 	pruneOCPBuilderReplacementsEnabled bool,
+	pruneUnusedBaseImagesEnabled bool,
+	applyReplacements bool,
 	ensureCorrectPromotionDockerfile bool,
 	ensureCorrectPromotionDockerfileIgnoredrepos sets.String,
 	promotionTargetToDockerfileMapping map[string]dockerfileLocation,
 	majorMinor ocpbuilddata.MajorMinor,
 	credentials *usernameToken,
+	configResolver func(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error),
 ) func(*api.ReleaseBuildConfiguration, *config.Info) error {
 	return func(config *api.ReleaseBuildConfiguration, info *config.Info) error {
 		if len(config.Images) == 0 {
@@ -227,70 +259,86 @@ func replacer(
 		}
 		allReplacementCandidates := sets.String{}
 
-		// We have to skip pruning if we only get empty dockerfiles because it might mean
-		// that we do not have the appropriate permissions.
-		var hasNonEmptyDockerfile bool
+		if applyReplacements {
+			// We have to skip pruning if we only get empty dockerfiles because it might mean
+			// that we do not have the appropriate permissions.
+			var hasNonEmptyDockerfile bool
 
-		for idx, image := range config.Images {
-			var dockerfile []byte
-			if image.DockerfileLiteral != nil {
-				dockerfile = []byte(*image.DockerfileLiteral)
-			} else {
-				dockerFilePath := "Dockerfile"
-				if image.DockerfilePath != "" {
-					dockerFilePath = image.DockerfilePath
+			for idx, image := range config.Images {
+				var dockerfile []byte
+				if image.DockerfileLiteral != nil {
+					dockerfile = []byte(*image.DockerfileLiteral)
+				} else {
+					dockerFilePath := "Dockerfile"
+					if image.DockerfilePath != "" {
+						dockerFilePath = image.DockerfilePath
+					}
+
+					var err error
+					dockerfile, err = getter(filepath.Join(image.ContextDir, dockerFilePath))
+					if err != nil {
+						return fmt.Errorf("failed to get dockerfile %s: %w", image.DockerfilePath, err)
+					}
 				}
 
-				var err error
-				dockerfile, err = getter(filepath.Join(image.ContextDir, dockerFilePath))
+				hasNonEmptyDockerfile = hasNonEmptyDockerfile || len(dockerfile) > 0
+
+				dockerfile, err = applyReplacementsToDockerfile(dockerfile, &image)
 				if err != nil {
-					return fmt.Errorf("failed to get dockerfile %s: %w", image.DockerfilePath, err)
+					return fmt.Errorf("failed to apply replacements to Dockerfile: %w", err)
 				}
-			}
 
-			hasNonEmptyDockerfile = hasNonEmptyDockerfile || len(dockerfile) > 0
-
-			dockerfile, err = applyReplacementsToDockerfile(dockerfile, &image)
-			if err != nil {
-				return fmt.Errorf("failed to apply replacements to Dockerfile: %w", err)
-			}
-
-			foundTags, err := ensureReplacement(&config.Images[idx], dockerfile)
-			if err != nil {
-				return fmt.Errorf("failed to ensure replacements: %w", err)
-			}
-			for _, foundTag := range foundTags {
-				if config.BaseImages == nil {
-					config.BaseImages = map[string]api.ImageStreamTagReference{}
+				foundTags, err := ensureReplacement(&config.Images[idx], dockerfile)
+				if err != nil {
+					return fmt.Errorf("failed to ensure replacements: %w", err)
 				}
-				if _, exists := config.BaseImages[foundTag.String()]; exists {
-					continue
+				for _, foundTag := range foundTags {
+					if config.BaseImages == nil {
+						config.BaseImages = map[string]api.ImageStreamTagReference{}
+					}
+					if _, exists := config.BaseImages[foundTag.String()]; exists {
+						continue
+					}
+					config.BaseImages[foundTag.String()] = api.ImageStreamTagReference{
+						Namespace: foundTag.org,
+						Name:      foundTag.repo,
+						Tag:       foundTag.tag,
+					}
 				}
-				config.BaseImages[foundTag.String()] = api.ImageStreamTagReference{
-					Namespace: foundTag.org,
-					Name:      foundTag.repo,
-					Tag:       foundTag.tag,
+
+				replacementCandidates, err := extractReplacementCandidatesFromDockerfile(dockerfile)
+				if err != nil {
+					return fmt.Errorf("failed to extract source images from dockerfile: %w", err)
 				}
+				allReplacementCandidates.Insert(replacementCandidates.UnsortedList()...)
 			}
 
-			replacementCandidates, err := extractReplacementCandidatesFromDockerfile(dockerfile)
-			if err != nil {
-				return fmt.Errorf("failed to extract source images from dockerfile: %w", err)
+			if pruneUnusedReplacementsEnabled && hasNonEmptyDockerfile {
+				if err := pruneUnusedReplacements(config, allReplacementCandidates); err != nil {
+					return fmt.Errorf("failed to prune unused replacements: %w", err)
+				}
+			} else if pruneUnusedReplacementsEnabled {
+				logrus.WithField("org", info.Org).WithField("repo", info.Repo).WithField("branch", info.Branch).Info("Not purging unused replacements because we got an empty dockerfile")
 			}
-			allReplacementCandidates.Insert(replacementCandidates.UnsortedList()...)
-		}
-
-		if pruneUnusedReplacementsEnabled && hasNonEmptyDockerfile {
-			if err := pruneUnusedReplacements(config, allReplacementCandidates); err != nil {
-				return fmt.Errorf("failed to prune unused replacements: %w", err)
-			}
-		} else if pruneUnusedReplacementsEnabled {
-			logrus.WithField("org", info.Org).WithField("repo", info.Repo).WithField("branch", info.Branch).Info("Not purging unused replacements because we got an empty dockerfile")
 		}
 
 		if pruneOCPBuilderReplacementsEnabled {
 			if err := pruneOCPBuilderReplacements(config); err != nil {
 				return fmt.Errorf("failed to prune ocp builder replacements: %w", err)
+			}
+		}
+
+		if pruneUnusedBaseImagesEnabled {
+			// to prune base images we'll need the fully-resolved config.
+			resolvedConfig, err := configResolver(*config)
+			if err != nil {
+				// TODO this should stop execution rather than just logging an error, but since we want a smooth transition with
+				// the new registry-replacer enhancements we'll add that in later, after this has been rolled out.
+				logrus.WithError(err).Error("failed to resolve config. This means that base image pruning will not function as expected and will therefore be skipped")
+			} else {
+				if err := pruneUnusedBaseImages(config, &resolvedConfig); err != nil {
+					return fmt.Errorf("failed to prune unused base images: %w", err)
+				}
 			}
 		}
 
@@ -604,6 +652,139 @@ func pruneReplacements(config *api.ReleaseBuildConfiguration, filter asDirective
 	config.Images = prunedImages
 
 	return utilerrors.NewAggregate(errs)
+}
+
+// pruneUnusedBaseImages uses the fully-resolved config to make sure an image is not used directly in  the config, or within any of the tests.
+// If it is not, then we prune it.
+func pruneUnusedBaseImages(config *api.ReleaseBuildConfiguration, resolvedConfig *api.ReleaseBuildConfiguration) error {
+	usedBaseImages := sets.NewString()
+
+	getOperatorImages(config, usedBaseImages)
+	for _, step := range resolvedConfig.RawSteps {
+		switch {
+		case step.BundleSourceStepConfiguration != nil:
+			getBundleSourceImages(config, &usedBaseImages, step.BundleSourceStepConfiguration)
+		case step.IndexGeneratorStepConfiguration != nil && step.IndexGeneratorStepConfiguration.BaseIndex != "":
+			_, name, _ := config.DependencyParts(api.StepDependency{Name: step.IndexGeneratorStepConfiguration.BaseIndex}, nil)
+			usedBaseImages.Insert(name)
+		case step.OutputImageTagStepConfiguration != nil:
+			usedBaseImages.Insert(string(step.OutputImageTagStepConfiguration.From))
+		case step.PipelineImageCacheStepConfiguration != nil:
+			usedBaseImages.Insert(string(step.PipelineImageCacheStepConfiguration.From))
+		case step.RPMImageInjectionStepConfiguration != nil:
+			usedBaseImages.Insert(string(step.RPMImageInjectionStepConfiguration.From))
+		case step.SourceStepConfiguration != nil:
+			usedBaseImages.Insert(string(step.SourceStepConfiguration.From))
+		case step.TestStepConfiguration != nil:
+			getTestStepImages(resolvedConfig, &usedBaseImages, step.TestStepConfiguration)
+		case step.ProjectDirectoryImageBuildStepConfiguration != nil || step.ProjectDirectoryImageBuildInputs != nil ||
+			step.ReleaseImagesTagStepConfiguration != nil || step.ResolvedReleaseImagesStepConfiguration != nil || step.RPMServeStepConfiguration != nil:
+			// no op
+		default:
+			return fmt.Errorf("unsupported step configuration provided when pruning base images")
+		}
+	}
+
+	for _, test := range resolvedConfig.Tests {
+		getTestStepImages(resolvedConfig, &usedBaseImages, &test)
+	}
+
+	for _, image := range resolvedConfig.Images {
+		usedBaseImages.Insert(string(image.From))
+		for input := range image.Inputs {
+			usedBaseImages.Insert(input)
+		}
+	}
+
+	pruneImage := func(images *map[string]api.ImageStreamTagReference, sourceImage string) error {
+		var keep bool
+		for candidate := range usedBaseImages {
+			orgRepoTag, err := orgRepoTagFromPullString(candidate)
+			if err != nil {
+				return fmt.Errorf("failed to parse string %s as pullspec: %w", candidate, err)
+			}
+
+			// consider it a match if either the orgRepoTag matches, or the sourceImage matches directly. Depending on
+			// where the image was sourced from it might be in pull string format, or it might just be the image name.
+			keep = orgRepoTag.String() == sourceImage || candidate == sourceImage
+
+			if keep {
+				break
+			}
+		}
+		if !keep {
+			delete(*images, sourceImage)
+		}
+
+		return nil
+	}
+
+	for sourceImage := range config.BaseImages {
+		if err := pruneImage(&config.BaseImages, sourceImage); err != nil {
+			return err
+		}
+	}
+
+	for sourceImage := range config.BaseRPMImages {
+		if err := pruneImage(&config.BaseRPMImages, sourceImage); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func getOperatorImages(config *api.ReleaseBuildConfiguration, usedBaseImages sets.String) {
+	if config.Operator != nil {
+		for _, substitution := range config.Operator.Substitutions {
+			_, name, _ := config.DependencyParts(api.StepDependency{Name: substitution.With}, nil)
+			usedBaseImages.Insert(name)
+		}
+		for _, bundle := range config.Operator.Bundles {
+			_, name, _ := config.DependencyParts(api.StepDependency{Name: bundle.BaseIndex}, nil)
+			usedBaseImages.Insert(name)
+		}
+	}
+}
+
+func getBundleSourceImages(config *api.ReleaseBuildConfiguration, images *sets.String, step *api.BundleSourceStepConfiguration) {
+	for _, substitution := range step.Substitutions {
+		_, name, _ := config.DependencyParts(api.StepDependency{Name: substitution.With}, nil)
+		images.Insert(name)
+	}
+}
+
+func getTestStepImages(config *api.ReleaseBuildConfiguration, images *sets.String, step *api.TestStepConfiguration) {
+	if step.MultiStageTestConfigurationLiteral != nil {
+		getTestImages(config, images, step.MultiStageTestConfigurationLiteral.Pre)
+		getTestImages(config, images, step.MultiStageTestConfigurationLiteral.Test)
+		getTestImages(config, images, step.MultiStageTestConfigurationLiteral.Post)
+	} else if step.ContainerTestConfiguration != nil {
+		images.Insert(string(step.ContainerTestConfiguration.From))
+	}
+}
+
+func getTestImages(config *api.ReleaseBuildConfiguration, images *sets.String, steps []api.LiteralTestStep) {
+	for _, step := range steps {
+		if step.From != "" {
+			_, name, _ := config.DependencyParts(api.StepDependency{Name: step.From}, nil)
+			images.Insert(name)
+		}
+		if step.FromImage != nil {
+			images.Insert(step.FromImage.ISTagName())
+		}
+
+		// see if we have any pipeline dependency images that also need to be included.
+		for _, dependency := range step.Dependencies {
+			if dependency.Name == "" {
+				continue
+			}
+			_, name, explicit := config.DependencyParts(dependency, nil)
+			if explicit {
+				images.Insert(name)
+			}
+		}
+	}
 }
 
 type dockerfileLocation struct {

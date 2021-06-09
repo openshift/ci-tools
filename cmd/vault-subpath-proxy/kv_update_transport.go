@@ -109,7 +109,7 @@ func (k *kvUpdateTransport) syncSecret(data map[string]string) {
 	defer cancel()
 
 	for cluster, client := range k.kubeClients() {
-		if data[vault.SecretSyncTargetClusterKey] != "" && data[vault.SecretSyncTargetClusterKey] != cluster {
+		if !vault.TargetsCluster(cluster, data) {
 			continue
 		}
 		secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{

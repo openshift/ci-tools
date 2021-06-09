@@ -451,11 +451,10 @@ func fetchUserSecrets(secretsMap map[string]map[types.NamespacedName]coreapi.Sec
 	var errs []error
 	for secretName, secretKeys := range userSecrets {
 		logger := logrus.WithField("secret", secretName.String())
-		allowedClusters := sets.NewString(targetClusters...)
-		if secretKeys[vaultapi.SecretSyncTargetClusterKey] != "" {
-			allowedClusters = allowedClusters.Intersection(sets.NewString(strings.Split(secretKeys[vaultapi.SecretSyncTargetClusterKey], ",")...))
-		}
-		for _, cluster := range allowedClusters.List() {
+		for _, cluster := range targetClusters {
+			if !vaultapi.TargetsCluster(cluster, secretKeys) {
+				continue
+			}
 			logger = logger.WithField("cluster", cluster)
 			if _, ok := secretsMap[cluster]; !ok {
 				secretsMap[cluster] = map[types.NamespacedName]coreapi.Secret{}

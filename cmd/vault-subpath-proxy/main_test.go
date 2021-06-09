@@ -1,16 +1,24 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httputil"
 	"strconv"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/hashicorp/vault/api"
 	"github.com/sirupsen/logrus"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	"github.com/openshift/ci-tools/pkg/vaultclient"
@@ -56,7 +64,7 @@ path "secret/metadata/team-1/*" {
 		t.Errorf("failed to create token with team-1 policy: %v", err)
 	}
 	proxyServerPort := testhelper.GetFreePort(t)
-	proxyServer, err := createProxyServer("http://"+vaultAddr, "127.0.0.1:"+proxyServerPort, "secret")
+	proxyServer, err := createProxyServer("http://"+vaultAddr, "127.0.0.1:"+proxyServerPort, "secret", nil)
 	if err != nil {
 		t.Fatalf("failed to create proxy server: %v", err)
 	}
@@ -178,6 +186,9 @@ path "secret/metadata/team-1/*" {
 		data               map[string]string
 		expectedStatusCode int
 		expectedErrors     []string
+
+		clusters        map[string]ctrlruntimeclient.Client
+		expectedSecrets map[string]*corev1.SecretList
 	}{
 		{
 			name:               "Slash in key name is refused",
@@ -217,9 +228,71 @@ path "secret/metadata/team-1/*" {
 			name: "Target cluster key is allowed",
 			data: map[string]string{"secretsync/target-clusters": "whatever"},
 		},
+		{
+			name: "Secret gets synced into multiple clusters, create in one, update in the other",
+			data: map[string]string{
+				"secretsync/target-namespace": "default",
+				"secretsync/target-name":      "secret",
+				"some-secret":                 "some-value",
+			},
+			clusters: map[string]ctrlruntimeclient.Client{
+				"a": fakectrlruntimeclient.NewFakeClient(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}}),
+				"b": fakectrlruntimeclient.NewFakeClient(),
+			},
+			expectedSecrets: map[string]*corev1.SecretList{
+				"a": {Items: []corev1.Secret{
+					{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{"some-secret": []byte("some-value")}}},
+				},
+				"b": {Items: []corev1.Secret{
+					{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{"some-secret": []byte("some-value")}}},
+				},
+			},
+		},
+		{
+			name: "Secret gets synced into multiple clusters, secret targets only one and gets only synced into that one",
+			data: map[string]string{
+				"secretsync/target-namespace": "default",
+				"secretsync/target-name":      "secret",
+				"secretsync/target-clusters":  "a",
+				"some-secret":                 "some-value",
+			},
+			clusters: map[string]ctrlruntimeclient.Client{
+				"a": fakectrlruntimeclient.NewFakeClient(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}}),
+				"b": fakectrlruntimeclient.NewFakeClient(),
+			},
+			expectedSecrets: map[string]*corev1.SecretList{
+				"a": {Items: []corev1.Secret{
+					{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{"some-secret": []byte("some-value")}}},
+				},
+			},
+		},
+		{
+			name: "Secret sync retains pre-existing keys",
+			data: map[string]string{
+				"secretsync/target-namespace": "default",
+				"secretsync/target-name":      "secret",
+				"secretsync/target-clusters":  "a",
+				"some-secret":                 "some-value",
+			},
+			clusters: map[string]ctrlruntimeclient.Client{
+				"a": fakectrlruntimeclient.NewFakeClient(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{"pre-existing": []byte("value")}}),
+			},
+			expectedSecrets: map[string]*corev1.SecretList{
+				"a": {Items: []corev1.Secret{
+					{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{
+						"some-secret":  []byte("some-value"),
+						"pre-existing": []byte("value"),
+					}}},
+				},
+			},
+		},
 	}
+
+	kvUpdateTransport := proxyServer.Handler.(*httputil.ReverseProxy).Transport.(*kvUpdateTransport)
+	kvUpdateTransport.synchronousSecretSync = true
 	for i, tc := range kvKeyValidationTestCases {
 		t.Run(tc.name, func(t *testing.T) {
+			kvUpdateTransport.kubeClients = func() map[string]ctrlruntimeclient.Client { return tc.clusters }
 
 			var actualStatusCode int
 			var actualErrors []string
@@ -237,6 +310,20 @@ path "secret/metadata/team-1/*" {
 			}
 			if diff := cmp.Diff(actualErrors, tc.expectedErrors); diff != "" {
 				t.Errorf("actual errors differ from expected: %s", diff)
+			}
+
+			actualSecrets := map[string]*corev1.SecretList{}
+			for clusterName, client := range kvUpdateTransport.kubeClients() {
+				secrets := &corev1.SecretList{}
+				if err := client.List(context.Background(), secrets); err != nil {
+					t.Errorf("failed to list secrets for cluster %s: %v", clusterName, err)
+				}
+				if len(secrets.Items) > 0 {
+					actualSecrets[clusterName] = secrets
+				}
+			}
+			if diff := cmp.Diff(tc.expectedSecrets, actualSecrets, testhelper.RuntimeObjectIgnoreRvTypeMeta, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("expected secrets differ from actual: %s", diff)
 			}
 		})
 	}

@@ -1,6 +1,7 @@
 package testhelper
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pmezard/go-difflib/difflib"
 
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -171,6 +173,17 @@ func cleanRVAndTypeMeta(r runtime.Object) {
 	}
 	if typeObject, ok := r.(interface{ SetGroupVersionKind(schema.GroupVersionKind) }); ok {
 		typeObject.SetGroupVersionKind(schema.GroupVersionKind{})
+	}
+	if _, isList := r.(metav1.ListInterface); isList {
+		objects, err := apimeta.ExtractList(r)
+		// ExtractList only errors if the list is not a list, so this
+		// should never error.
+		if err != nil {
+			panic(fmt.Sprintf("extract list failed: %v", err))
+		}
+		for _, item := range objects {
+			cleanRVAndTypeMeta(item)
+		}
 	}
 }
 

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path"
@@ -110,7 +111,7 @@ func (i *Info) LogFields() logrus.Fields {
 	}
 }
 
-func isConfigFile(path string, info os.FileInfo) bool {
+func isConfigFile(path string, info fs.DirEntry) bool {
 	extension := filepath.Ext(path)
 	return !info.IsDir() && (extension == ".yaml" || extension == ".yml")
 }
@@ -142,7 +143,7 @@ func OperateOnCIOperatorConfigDir(configDir string, callback func(*cioperatorapi
 }
 
 func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
-	return filepath.Walk(filepath.Join(configDir, subDir), func(path string, info os.FileInfo, err error) error {
+	return filepath.WalkDir(filepath.Join(configDir, subDir), func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			logrus.WithField("source-file", path).WithError(err).Error("Failed to walk CI Operator configuration dir")
 			return err

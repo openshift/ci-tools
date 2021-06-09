@@ -86,7 +86,7 @@ func produce(clients map[string]prometheusapi.API, dataCache cache) {
 				cache = &CachedQuery{
 					Query:           query,
 					RangesByCluster: ranges,
-					Data:            map[model.Fingerprint]*circonusllhist.Histogram{},
+					Data:            map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{},
 					DataByMetaData:  map[FullMetadata][]model.Fingerprint{},
 				}
 			}
@@ -354,10 +354,10 @@ func (q *CachedQuery) record(clusterName string, r TimeRange, matrix model.Matri
 		seen := false
 		var hist *circonusllhist.Histogram
 		if existing, exists := q.Data[fingerprint]; exists {
-			hist = existing
+			hist = existing.Histogram()
 			seen = true
 		} else {
-			hist = circonusllhist.New()
+			hist = circonusllhist.New(circonusllhist.NoLookup())
 		}
 		for _, value := range stream.Values {
 			err := hist.RecordValue(float64(value.Value))
@@ -365,7 +365,7 @@ func (q *CachedQuery) record(clusterName string, r TimeRange, matrix model.Matri
 				logger.WithError(err).Warn("Failed to insert data into histogram. This should never happen.")
 			}
 		}
-		q.Data[fingerprint] = hist
+		q.Data[fingerprint] = circonusllhist.NewHistogramWithoutLookups(hist)
 		if !seen {
 			q.DataByMetaData[meta] = append(q.DataByMetaData[meta], fingerprint)
 		}

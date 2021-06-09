@@ -371,7 +371,7 @@ github.com/opencontainers/image-spec/specs-go/v1
 # github.com/opencontainers/runc v1.0.0-rc9
 github.com/opencontainers/runc/libcontainer/system
 github.com/opencontainers/runc/libcontainer/user
-# github.com/openhistogram/circonusllhist v0.2.1
+# github.com/openhistogram/circonusllhist v0.3.1-0.20210608220433-1bd1bfa6c998
 ## explicit
 github.com/openhistogram/circonusllhist
 # github.com/openshift/api v0.0.0-20210216211028-bb81baaf35cd => github.com/openshift/api v0.0.0-20201120165435-072a4cd8ca42

@@ -89,6 +89,9 @@ func produce(clients map[string]prometheusapi.API, dataCache cache) {
 					Data:            map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{},
 					DataByMetaData:  map[FullMetadata][]model.Fingerprint{},
 				}
+			} else if err != nil {
+				logrus.WithError(err).Error("Failed to load data from storage.")
+				return
 			}
 			now := time.Now()
 			q := querier{

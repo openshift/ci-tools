@@ -110,7 +110,7 @@ the rehearsed jobs themselves are invalid.`
 
 func loadConfigUpdaterCfg(releaseRepoPath string) (ret prowplugins.ConfigUpdater, err error) {
 	agent := prowplugins.ConfigAgent{}
-	if err = agent.Load(filepath.Join(releaseRepoPath, config.PluginConfigInRepoPath), []string{filepath.Dir(config.PluginConfigFile)}, "_pluginconfig.yaml", true); err == nil {
+	if err = agent.Load(filepath.Join(releaseRepoPath, config.PluginConfigInRepoPath), []string{filepath.Join(releaseRepoPath, filepath.Dir(config.PluginConfigInRepoPath))}, "_pluginconfig.yaml", true); err == nil {
 		ret = agent.Config().ConfigUpdater
 	}
 	return

@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -205,23 +206,28 @@ func main() {
 		logrus.WithField("job-name", o.jobName).Fatal(err)
 	}
 
-	// Add flag values to inject as ENV var entries in the prowjob configuration
-	envVars := map[string]string{
+	params := map[string]string{
 		steps.OOBundle:  o.bundleImageRef,
-		"OCP_VERSION":   o.ocpVersion,
-		"CLUSTER_TYPE":  "aws",
+		steps.OOChannel: o.channel,
 		steps.OOIndex:   o.indexImageRef,
 		steps.OOPackage: o.operatorPackageName,
-		steps.OOChannel: o.channel,
-	}
-	if o.releaseImageRef != "" {
-		envVars[utils.ReleaseImageEnv(api.LatestReleaseName)] = o.releaseImageRef
 	}
 	if o.installNamespace != "" {
-		envVars[steps.OOInstallNamespace] = o.installNamespace
+		params[steps.OOInstallNamespace] = o.installNamespace
 	}
 	if o.targetNamespaces != "" {
-		envVars[steps.OOTargetNamespaces] = o.targetNamespaces
+		params[steps.OOTargetNamespaces] = o.targetNamespaces
+	}
+
+	appendMultiStageParams(prowjob.Spec.PodSpec, params)
+
+	// Add flag values to inject as ENV var entries in the prowjob configuration
+	envVars := params
+	envVars["OCP_VERSION"] = o.ocpVersion
+	envVars["CLUSTER_TYPE"] = "aws"
+
+	if o.releaseImageRef != "" {
+		envVars[utils.ReleaseImageEnv(api.LatestReleaseName)] = o.releaseImageRef
 	}
 	var keys []string
 	for key := range envVars {
@@ -349,4 +355,20 @@ func writeResultOutput(prowjobResult jobResult, outputPath string) error {
 	}
 
 	return nil
+}
+
+// appendMultiStageParams passes all of the OO_ params to ci-operator as multi-stage-params.
+// TODO: After all of the CVP changes required to accept the multi-stage-params have been made, we need to go back and
+// remove the OO_ env params from here.
+func appendMultiStageParams(podSpec *v1.PodSpec, params map[string]string) {
+	// for execution purposes, the order isn't super important, but in order to allow for consistent test verification we need
+	// to sort the params.
+	keys := make([]string, 0, len(params))
+	for key := range params {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		podSpec.Containers[0].Args = append(podSpec.Containers[0].Args, fmt.Sprintf("--multi-stage-param=%s=%s", key, params[key]))
+	}
 }

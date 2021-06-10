@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -48,7 +49,11 @@ var _ cache = &bucketCache{}
 
 func (b *bucketCache) load(ctx context.Context, name string) (io.ReadCloser, error) {
 	handle := b.bucket.Object(name)
-	return handle.NewReader(ctx)
+	rc, err := handle.NewReader(ctx)
+	if errors.Is(err, storage.ErrObjectNotExist) {
+		err = notExist{wrapped: err}
+	}
+	return rc, err
 }
 
 func (b *bucketCache) store(ctx context.Context, name string) (io.WriteCloser, error) {
@@ -72,11 +77,19 @@ type localCache struct {
 var _ cache = &localCache{}
 
 func (l *localCache) load(_ context.Context, name string) (io.ReadCloser, error) {
-	return os.Open(path.Join(l.dir, name))
+	rc, err := os.Open(path.Join(l.dir, name))
+	if os.IsNotExist(err) {
+		err = notExist{wrapped: err}
+	}
+	return rc, err
 }
 
 func (l *localCache) store(_ context.Context, name string) (io.WriteCloser, error) {
-	return os.Create(path.Join(l.dir, name))
+	cachePath := path.Join(l.dir, name)
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0777); err != nil {
+		return nil, err
+	}
+	return os.Create(cachePath)
 }
 
 func (l *localCache) lastUpdated(_ context.Context, name string) (time.Time, error) {
@@ -85,6 +98,24 @@ func (l *localCache) lastUpdated(_ context.Context, name string) (time.Time, err
 		return time.Time{}, fmt.Errorf("could not query cache for attributes: %w", err)
 	}
 	return info.ModTime(), nil
+}
+
+// notExist closes over the different ways in which storage libraries may expose a nonexistent file
+type notExist struct {
+	wrapped error
+}
+
+func (e notExist) Error() string {
+	return e.wrapped.Error()
+}
+
+func (e notExist) Is(err error) bool {
+	_, ok := err.(notExist)
+	return ok // we don't care what we're wrapping, all notExist are equivalent
+}
+
+func (e notExist) Unwrap() error {
+	return e.wrapped
 }
 
 // loadCache loads cached query data from the given storage loader.
@@ -119,7 +150,7 @@ func loadFrom(loader loader, metricName string) ([]byte, error) {
 	defer func() { cancel() }()
 	reader, err := loader.load(ctx, metricName+".json")
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
-		return nil, fmt.Errorf("could not read cached data: %w", err)
+		return nil, err
 	}
 	data, readErr := ioutil.ReadAll(reader)
 	if err := reader.Close(); err != nil {

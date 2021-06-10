@@ -7,7 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/fs"
 	"io/ioutil"
 	"log"
 	"os"
@@ -47,7 +46,7 @@ func gatherOptions() (options, error) {
 
 func generateMetadata(registryPath string) (api.RegistryMetadata, error) {
 	metadata := make(map[string]api.RegistryInfo)
-	if err := filepath.WalkDir(registryPath, func(path string, info fs.DirEntry, err error) error {
+	if err := filepath.Walk(registryPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

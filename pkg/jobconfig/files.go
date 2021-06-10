@@ -2,7 +2,6 @@ package jobconfig
 
 import (
 	"fmt"
-	"io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -119,7 +118,7 @@ func OperateOnJobConfigDir(configDir string, callback func(*prowconfig.JobConfig
 }
 
 func OperateOnJobConfigSubdir(configDir, subDir string, callback func(*prowconfig.JobConfig, *Info) error) error {
-	if err := filepath.WalkDir(filepath.Join(configDir, subDir), func(path string, info fs.DirEntry, err error) error {
+	if err := filepath.Walk(filepath.Join(configDir, subDir), func(path string, info os.FileInfo, err error) error {
 		logger := logrus.WithField("source-file", path)
 		if err != nil {
 			logger.WithError(err).Error("Failed to walk file/directory")

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -379,7 +378,7 @@ func updateBaseImages(newImages, ciOpImages, replacementImages map[string]api.Im
 func run(o options) error {
 	// key: filename
 	jobs := make(map[string]prowconfig.JobConfig)
-	if err := filepath.WalkDir(o.jobDir, func(path string, info fs.DirEntry, err error) error {
+	if err := filepath.Walk(o.jobDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -585,7 +584,7 @@ func run(o options) error {
 	}
 
 	// update release-controller configs
-	if err := filepath.WalkDir(o.rcConfigDir, func(path string, info fs.DirEntry, err error) error {
+	if err := filepath.Walk(o.rcConfigDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

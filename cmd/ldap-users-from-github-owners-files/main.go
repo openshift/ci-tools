@@ -61,7 +61,7 @@ func getAllSecretUsers(repoBaseDir, repoSubDir string, mapping map[string]string
 	var errs []error
 	l := sync.Mutex{}
 	wg := sync.WaitGroup{}
-	_ = filepath.WalkDir(repoBaseDir+"/"+repoSubDir, func(path string, info fs.DirEntry, err error) error {
+	_ = filepath.Walk(repoBaseDir+"/"+repoSubDir, func(path string, info fs.FileInfo, err error) error {
 		if filepath.Base(path) != "OWNERS" {
 			return nil
 		}

@@ -11,7 +11,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/fs"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -1392,7 +1391,7 @@ func (o *options) writeMetadataJSON() error {
 func (o *options) findCustomMetadataFile(artifactDir string) (customProwMetadataFile string, err error) {
 	// Try to find the custom prow metadata file. We assume that there's only one. If there's more than one,
 	// we'll just use the first one that we find.
-	err = filepath.WalkDir(artifactDir, func(path string, info fs.DirEntry, err error) error {
+	err = filepath.Walk(artifactDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}

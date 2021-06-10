@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -50,7 +49,7 @@ func determinizeJobs(prowJobConfigDir string, config *dispatcher.Config) error {
 	}()
 
 	wg := sync.WaitGroup{}
-	if err := filepath.WalkDir(prowJobConfigDir, func(path string, info fs.DirEntry, err error) error {
+	if err := filepath.Walk(prowJobConfigDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			errChan <- fmt.Errorf("failed to walk file/directory '%s'", path)
 			return nil

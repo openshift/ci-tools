@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/fs"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -327,7 +327,7 @@ func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor MajorMinor) (ma
 	errGroup := &errgroup.Group{}
 
 	path := filepath.Join(ocpBuildDataDir, "images")
-	if err := filepath.WalkDir(path, func(path string, info fs.DirEntry, err error) error {
+	if err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

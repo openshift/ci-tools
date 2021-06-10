@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/fs"
 	"io/ioutil"
 	"math"
 	"os"
@@ -209,7 +208,7 @@ func main() {
 
 	// find the default type for jobs referenced by the release controllers
 	configuredJobs := make(map[string]string)
-	if err := filepath.WalkDir(o.releaseConfigDir, func(path string, info fs.DirEntry, err error) error {
+	if err := filepath.Walk(o.releaseConfigDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

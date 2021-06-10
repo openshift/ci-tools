@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -303,7 +302,7 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 		close(readingDone)
 	}()
 
-	if err := filepath.WalkDir(prowJobConfigDir, func(path string, info fs.DirEntry, err error) error {
+	if err := filepath.Walk(prowJobConfigDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			objChan <- fmt.Errorf("failed to walk file/directory '%s'", path)
 			return nil

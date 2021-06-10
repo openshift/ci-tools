@@ -18,6 +18,8 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/spf13/afero"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/interrupts"
@@ -26,6 +28,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	ciopconfig "github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/prowconfigsharding"
 )
 
 type options struct {
@@ -423,6 +426,11 @@ Updating Prow plugin configuration ...`)
 
 	pluginConfig := agent.Config()
 	editPluginConfig(pluginConfig, config)
+
+	pluginConfig, err := prowconfigsharding.WriteShardedPluginConfig(pluginConfig, afero.NewBasePathFs(afero.NewOsFs(), filepath.Join(releaseRepo, "core-services/prow/02_config")))
+	if err != nil {
+		return fmt.Errorf("failed to write plugin config shards: %w", err)
+	}
 
 	data, err := yaml.Marshal(pluginConfig)
 	if err != nil {

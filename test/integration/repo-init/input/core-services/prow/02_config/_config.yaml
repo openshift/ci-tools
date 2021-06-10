@@ -1,8 +1,50 @@
+branch-protection: {}
+deck:
+  spyglass:
+    gcs_browser_prefixes:
+      '*': ""
+    size_limit: 100000000
+  tide_update_period: 10s
+default_job_timeout: 24h0m0s
+gerrit:
+  ratelimit: 5
+  tick_interval: 1m0s
+github:
+  link_url: https://github.com
+github_reporter:
+  job_types_to_report:
+  - presubmit
+  - postsubmit
+horologium: {}
+in_repo_config:
+  allowed_clusters:
+    '*':
+    - default
+log_level: info
+managed_webhooks:
+  auto_accept_invitation: false
+  respect_legacy_global_token: false
+plank:
+  max_goroutines: 20
+  pod_pending_timeout: 10m0s
+  pod_running_timeout: 48h0m0s
+  pod_unscheduled_timeout: 5m0s
+pod_namespace: default
+prowjob_namespace: default
+push_gateway:
+  interval: 1m0s
+  serve_metrics: false
+sinker:
+  max_pod_age: 24h0m0s
+  max_prowjob_age: 168h0m0s
+  resync_period: 1h0m0s
+  terminated_pod_ttl: 24h0m0s
+status_error_link: https://github.com/kubernetes/test-infra/issues
 tide:
+  context_options: {}
+  max_goroutines: 20
   queries:
-  - repos:
-    - openshift/cluster-version-operator
-    includedBranches:
+  - includedBranches:
     - release-4.0
     - release-4.1
     - release-4.2
@@ -21,10 +63,9 @@ tide:
     - do-not-merge/work-in-progress
     - do-not-merge/invalid-owners-file
     - bugzilla/invalid-bug
-  - repos:
-    - openshift/ci-tools
+    repos:
     - openshift/cluster-version-operator
-    excludedBranches:
+  - excludedBranches:
     - release-4.0
     - release-4.1
     - release-4.2
@@ -41,3 +82,8 @@ tide:
     - do-not-merge/work-in-progress
     - do-not-merge/invalid-owners-file
     - bugzilla/invalid-bug
+    repos:
+    - openshift/ci-tools
+    - openshift/cluster-version-operator
+  status_update_period: 1m0s
+  sync_period: 1m0s

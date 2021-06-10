@@ -1,0 +1,29 @@
+plugins:
+  openshift:
+    plugins:
+    - assign
+    - blunderbuss
+    - blockade
+    - bugzilla
+    - cat
+    - dog
+    - heart
+    - golint
+    - goose
+    - help
+    - hold
+    - label
+    - lgtm
+    - lifecycle
+    - override
+    - pony
+    - retitle
+    - shrug
+    - sigmention
+    - size
+    - skip
+    - trigger
+    - verify-owners
+    - owners-label
+    - wip
+    - yuks

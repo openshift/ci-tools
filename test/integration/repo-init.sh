@@ -4,6 +4,7 @@ source "$(dirname "${BASH_SOURCE}")/../../hack/lib/init.sh"
 function cleanup() {
     os::test::junit::reconcile_output
     os::cleanup::processes
+    rm -rf ${tempdir}
 }
 trap "cleanup" EXIT
 

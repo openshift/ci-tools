@@ -145,7 +145,7 @@ func main() {
 			// their config to set .build_root.from_repository: true
 			command: "/usr/bin/ci-operator-yaml-creator",
 			arguments: []string{
-				"--max-concurrency", "1",
+				"--max-concurrency", "10",
 				"--github-token-path", "/etc/github/oauth",
 				"--github-endpoint", "http://ghproxy",
 				"--ci-operator-config-dir=ci-operator/config",

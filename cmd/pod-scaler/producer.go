@@ -90,7 +90,7 @@ func produce(clients map[string]prometheusapi.API, dataCache cache) {
 				}
 			} else if err != nil {
 				logrus.WithError(err).Error("Failed to load data from storage.")
-				return
+				continue
 			}
 			now := time.Now()
 			q := querier{
@@ -124,12 +124,10 @@ func produce(clients map[string]prometheusapi.API, dataCache cache) {
 					}
 				}()
 			}
-			go func() { // don't associate this with the context as we want to flush when interrupted
-				wg.Wait()
-				if err := storeCache(dataCache, name, cache, logger); err != nil {
-					logger.WithError(err).Error("Failed to write cached data.")
-				}
-			}()
+			wg.Wait()
+			if err := storeCache(dataCache, name, cache, logger); err != nil {
+				logger.WithError(err).Error("Failed to write cached data.")
+			}
 		}
 	}, 3*time.Hour)
 }

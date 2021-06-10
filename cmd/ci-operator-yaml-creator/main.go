@@ -123,7 +123,11 @@ channel in the CoreOS Slack.`))
 	sema := semaphore.NewWeighted(o.maxConcurrency)
 	ctx := context.Background()
 
-	err = config.OperateOnCIOperatorConfigDir(o.ciOperatorConfigDir, func(cfg *cioperatorapi.ReleaseBuildConfiguration, metadata *config.Info) error {
+	abs, err := filepath.Abs(o.ciOperatorConfigDir)
+	if err != nil {
+		logrus.WithError(err).Fatalf("failed to determine absolute filepath of %s", o.ciOperatorConfigDir)
+	}
+	err = config.OperateOnCIOperatorConfigDir(abs, func(cfg *cioperatorapi.ReleaseBuildConfiguration, metadata *config.Info) error {
 		if err := sema.Acquire(ctx, 1); err != nil {
 			return fmt.Errorf("failed to acquire semaphore: %w", err)
 		}

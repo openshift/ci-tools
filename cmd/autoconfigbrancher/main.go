@@ -147,7 +147,7 @@ func main() {
 			arguments: []string{
 				"--github-token-path", "/etc/github/oauth",
 				"--github-endpoint", "http://ghproxy",
-				"--ci-operator-config-dir=ci-operator/config",
+				"--ci-operator-config-dir=./ci-operator/config",
 				// Only update o/release
 				"--create-prs=false",
 			},

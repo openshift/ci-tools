@@ -11,28 +11,70 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
+// configContext contains data structures used for validations across fields.
+type configContext struct {
+	field fieldPath
+	// Shared reference to a map containing pipeline image tags seen so far.
+	// All derivative contexts will point to the same map.
+	pipelineImages map[api.PipelineImageStreamTagReference]string
+}
+
+// newConfigContext creates a top-level, empty context.
+func newConfigContext() *configContext {
+	return &configContext{
+		pipelineImages: make(map[api.PipelineImageStreamTagReference]string),
+	}
+}
+
+func (c *configContext) errorf(format string, args ...interface{}) error {
+	return c.field.errorf(format, args...)
+}
+
+func (c *configContext) addField(name string) *configContext {
+	ret := *c
+	ret.field = ret.field.addField(name)
+	return &ret
+}
+
+func (c *configContext) addIndex(i int) *configContext {
+	ret := *c
+	ret.field = ret.field.addIndex(i)
+	return &ret
+}
+
+// addPipelineImage verifies that a pipeline image tag has not been seen.
+// An error containing the name of the original field is returned if the tag has
+// already been seen in the same configuration.
+func (c *configContext) addPipelineImage(name api.PipelineImageStreamTagReference) error {
+	previous, seen := c.pipelineImages[name]
+	if seen {
+		return c.errorf("duplicate image name '%s' (previously defined by field '%s')", string(name), previous)
+	}
+	c.pipelineImages[name] = string(c.field)
+	return nil
+}
+
 // ValidateAtRuntime validates all the configuration's values without knowledge of config
 // repo structure
 func IsValidRuntimeConfiguration(config *api.ReleaseBuildConfiguration) error {
-	return validateConfiguration(config, "", "", false)
+	return validateConfiguration(newConfigContext(), config, "", "", false)
 }
 
 // ValidateResolved behaves as ValidateAtRuntime and also validates that all
 // test steps are fully resolved.
 func IsValidResolvedConfiguration(config *api.ReleaseBuildConfiguration) error {
 	config.Default()
-	return validateConfiguration(config, "", "", true)
+	return validateConfiguration(newConfigContext(), config, "", "", true)
 }
 
 // Validate validates all the configuration's values.
 func IsValidConfiguration(config *api.ReleaseBuildConfiguration, org, repo string) error {
 	config.Default()
-	return validateConfiguration(config, org, repo, false)
+	return validateConfiguration(newConfigContext(), config, org, repo, false)
 }
 
-func validateConfiguration(config *api.ReleaseBuildConfiguration, org, repo string, resolved bool) error {
+func validateConfiguration(ctx *configContext, config *api.ReleaseBuildConfiguration, org, repo string, resolved bool) error {
 	var validationErrors []error
-
 	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config, org, repo)...)
 	validationErrors = append(validationErrors, validateBuildRootImageConfiguration("build_root", config.InputConfiguration.BuildRootImage, len(config.Images) > 0)...)
 	releases := sets.NewString()
@@ -44,11 +86,6 @@ func validateConfiguration(config *api.ReleaseBuildConfiguration, org, repo stri
 	// this validation brings together a large amount of data from separate
 	// parts of the configuration, so it's written as a standalone method
 	validationErrors = append(validationErrors, validateTestStepDependencies(config)...)
-
-	if config.Images != nil {
-		validationErrors = append(validationErrors, validateImages("images", config.Images)...)
-	}
-
 	if config.Operator != nil {
 		// validateOperator needs a method that maps `substitute.with` values to image links
 		// to validate the value is meaningful in the context of the configuration
@@ -56,7 +93,7 @@ func validateConfiguration(config *api.ReleaseBuildConfiguration, org, repo stri
 			imageStream, name, _ := config.DependencyParts(api.StepDependency{Name: image}, nil)
 			return api.LinkForImage(imageStream, name)
 		}
-		validationErrors = append(validationErrors, validateOperator("operator", config.Operator, linkForImage, config)...)
+		validationErrors = append(validationErrors, validateOperator(ctx.addField("operator"), config.Operator, linkForImage)...)
 	}
 
 	if config.InputConfiguration.BaseImages != nil {
@@ -78,7 +115,7 @@ func validateConfiguration(config *api.ReleaseBuildConfiguration, org, repo stri
 	}
 
 	validationErrors = append(validationErrors, validateReleases("releases", config.Releases, config.ReleaseTagConfiguration != nil)...)
-
+	validationErrors = append(validationErrors, validateImages(ctx.addField("images"), config.Images)...)
 	var lines []string
 	for _, err := range validationErrors {
 		if err == nil {
@@ -136,19 +173,17 @@ func validateBuildRootImageStreamTag(fieldRoot string, buildRoot api.ImageStream
 	return validationErrors
 }
 
-func validateImages(fieldRoot string, input []api.ProjectDirectoryImageBuildStepConfiguration) []error {
+func validateImages(ctx *configContext, images []api.ProjectDirectoryImageBuildStepConfiguration) []error {
 	var validationErrors []error
-	seenNames := map[api.PipelineImageStreamTagReference]int{}
-	for num, image := range input {
-		fieldRootN := fmt.Sprintf("%s[%d]", fieldRoot, num)
+	for num, image := range images {
+		fieldRootN := fmt.Sprintf("%s[%d]", ctx.field, num)
+		ctxN := ctx.addIndex(num)
 		if image.To == "" {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` must be set", fieldRootN))
+			validationErrors = append(validationErrors, ctxN.errorf("`to` must be set"))
 		}
-		if idx, seen := seenNames[image.To]; seen {
-			fieldRootIdx := fmt.Sprintf("%s[%d]", fieldRoot, idx)
-			validationErrors = append(validationErrors, fmt.Errorf("%s: duplicate image name '%s' (previously seen in %s)", fieldRootN, string(image.To), fieldRootIdx))
+		if err := ctxN.addPipelineImage(image.To); err != nil {
+			validationErrors = append(validationErrors, err)
 		}
-		seenNames[image.To] = num
 		if image.To == api.PipelineImageStreamTagReferenceBundleSource {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, api.PipelineImageStreamTagReferenceBundleSource))
 		}
@@ -159,47 +194,55 @@ func validateImages(fieldRoot string, input []api.ProjectDirectoryImageBuildStep
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot begin with %s", fieldRootN, api.PipelineImageStreamTagReferenceIndexImage))
 		}
 		if image.DockerfileLiteral != nil && (image.ContextDir != "" || image.DockerfilePath != "") {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: dockerfile_literal is mutually exclusive with context_dir and dockerfile_path", fieldRootN))
+			validationErrors = append(validationErrors, ctxN.errorf("dockerfile_literal is mutually exclusive with context_dir and dockerfile_path"))
 		}
 	}
 	return validationErrors
 }
 
-func validateOperator(fieldRoot string, input *api.OperatorStepConfiguration, linkForImage func(string) api.StepLink, config *api.ReleaseBuildConfiguration) []error {
+func validateOperator(ctx *configContext, input *api.OperatorStepConfiguration, linkForImage func(string) api.StepLink) []error {
 	var validationErrors []error
+	if err := ctx.addPipelineImage(api.PipelineImageStreamTagReferenceBundleSource); err != nil {
+		validationErrors = append(validationErrors, err)
+	}
 	for num, bundle := range input.Bundles {
-		fieldRootN := fmt.Sprintf("%s.bundles[%d]", fieldRoot, num)
-		if bundle.As != "" {
-			if config.IsBaseImage(bundle.As) {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.as: bundle name `%s` matches a base image", fieldRootN, bundle.As))
-			}
-			if config.BuildsImage(bundle.As) {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.as: bundle name `%s` matches image defined in `images`", fieldRootN, bundle.As))
-			}
+		ctxN := ctx.addField("bundles").addIndex(num)
+		ctxImage := ctxN
+		imageName := bundle.As
+		if imageName == "" {
+			imageName = api.BundleName(num)
+		} else {
+			ctxImage = ctxN.addField("as")
+		}
+		if err := ctxImage.addPipelineImage(api.PipelineImageStreamTagReference(imageName)); err != nil {
+			validationErrors = append(validationErrors, err)
+		}
+		if err := ctxImage.addPipelineImage(api.PipelineImageStreamTagReference(api.IndexName(imageName))); err != nil {
+			validationErrors = append(validationErrors, err)
 		}
 		if bundle.As == "" && bundle.BaseIndex != "" {
-			validationErrors = append(validationErrors, fmt.Errorf("%s.base_index: base_index requires as to be set", fieldRootN))
+			validationErrors = append(validationErrors, ctxN.addField("base_index").errorf("base_index requires as to be set"))
 		}
 		if bundle.UpdateGraph != "" {
 			if bundle.BaseIndex == "" {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.update_graph: update_graph requires base_index to be set", fieldRootN))
+				validationErrors = append(validationErrors, ctxN.addField("update_graph").errorf("update_graph requires base_index to be set"))
 			}
 			if bundle.UpdateGraph != api.IndexUpdateSemver && bundle.UpdateGraph != api.IndexUpdateSemverSkippatch && bundle.UpdateGraph != api.IndexUpdateReplaces {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.update_graph: update_graph must be %s, %s, or %s", fieldRootN, api.IndexUpdateSemver, api.IndexUpdateSemverSkippatch, api.IndexUpdateReplaces))
+				validationErrors = append(validationErrors, ctxN.addField("update_graph").errorf("update_graph must be %s, %s, or %s", api.IndexUpdateSemver, api.IndexUpdateSemverSkippatch, api.IndexUpdateReplaces))
 			}
 		}
 	}
 	for num, sub := range input.Substitutions {
-		fieldRootN := fmt.Sprintf("%s.substitute[%d]", fieldRoot, num)
+		ctxN := ctx.addField("substitute").addIndex(num)
 		if sub.PullSpec == "" {
-			validationErrors = append(validationErrors, fmt.Errorf("%s.pullspec: must be set", fieldRootN))
+			validationErrors = append(validationErrors, ctxN.addField("pullspec").errorf("must be set"))
 		}
 		if sub.With == "" {
-			validationErrors = append(validationErrors, fmt.Errorf("%s.with: must be set", fieldRootN))
+			validationErrors = append(validationErrors, ctxN.addField("with").errorf("must be set"))
 		}
 
 		if link := linkForImage(sub.With); link == nil {
-			validationErrors = append(validationErrors, fmt.Errorf("%s.with: could not resolve '%s' to an image involved in the config", fieldRootN, sub.With))
+			validationErrors = append(validationErrors, ctxN.addField("with").errorf("could not resolve '%s' to an image involved in the config", sub.With))
 		}
 	}
 	return validationErrors

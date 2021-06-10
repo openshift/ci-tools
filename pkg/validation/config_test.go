@@ -11,6 +11,7 @@ import (
 	utilpointer "k8s.io/utils/pointer"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestValidateBuildRoot(t *testing.T) {
@@ -369,7 +370,7 @@ func TestValidateImages(t *testing.T) {
 				{To: "same-thing"},
 			},
 			output: []error{
-				errors.New("images[1]: duplicate image name 'same-thing' (previously seen in images[0])"),
+				errors.New("images[1]: duplicate image name 'same-thing' (previously defined by field 'images[0]')"),
 			},
 		},
 		{
@@ -401,7 +402,10 @@ func TestValidateImages(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := validateImages("images", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+			config := &api.ReleaseBuildConfiguration{
+				Images: testCase.input,
+			}
+			if actual, expected := validateImages(newConfigContext().addField("images"), config.Images), testCase.output; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
 					return x.Error() == y.Error()
 				})))
@@ -497,7 +501,7 @@ func TestValidateOperator(t *testing.T) {
 			},
 			withResolvesTo: goodStepLink,
 			output: []error{
-				errors.New("operator.bundles[0].as: bundle name `my-image` matches image defined in `images`"),
+				errors.New("operator.bundles[0].as: duplicate image name 'my-image' (previously defined by field 'images')"),
 			},
 		},
 		{
@@ -509,7 +513,7 @@ func TestValidateOperator(t *testing.T) {
 			},
 			withResolvesTo: goodStepLink,
 			output: []error{
-				errors.New("operator.bundles[0].as: bundle name `a-base-image` matches a base image"),
+				errors.New("operator.bundles[0].as: duplicate image name 'a-base-image' (previously defined by field 'base_images')"),
 			},
 		},
 		{
@@ -557,7 +561,18 @@ func TestValidateOperator(t *testing.T) {
 			linkFunc := func(string) api.StepLink {
 				return testCase.withResolvesTo
 			}
-			if actual, expected := validateOperator("operator", testCase.input, linkFunc, config), testCase.output; !reflect.DeepEqual(actual, expected) {
+			ctx := newConfigContext()
+			for x := range config.InputConfiguration.BaseImages {
+				if err := ctx.addField("base_images").addPipelineImage(api.PipelineImageStreamTagReference(x)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, x := range config.Images {
+				if err := ctx.addField("images").addPipelineImage(x.To); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if actual, expected := validateOperator(ctx.addField("operator"), testCase.input, linkFunc), testCase.output; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
 					return x.Error() == y.Error()
 				})))
@@ -830,6 +845,85 @@ func TestReleaseBuildConfiguration_DependencyParts(t *testing.T) {
 			if actualTag != testCase.expectedTag {
 				t.Errorf("%s: did not correctly determine ImageTag wanted %s, got %s", testCase.name, testCase.expectedTag, actualTag)
 			}
+		})
+	}
+}
+
+func TestPipelineImages(t *testing.T) {
+	root := api.BuildRootImageConfiguration{FromRepository: true}
+	input := api.InputConfiguration{BuildRootImage: &root}
+	resources := api.ResourceConfiguration{
+		"*": api.ResourceRequirements{
+			Requests: api.ResourceList{"cpu": "1"},
+		},
+	}
+	makeImages := func(names ...api.PipelineImageStreamTagReference) (ret []api.ProjectDirectoryImageBuildStepConfiguration) {
+		for _, x := range names {
+			ret = append(ret, api.ProjectDirectoryImageBuildStepConfiguration{
+				To: x,
+			})
+		}
+		return
+	}
+	for _, tc := range []struct {
+		name     string
+		conf     api.ReleaseBuildConfiguration
+		expected error
+	}{{
+		name: "bundle",
+		conf: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
+			Images:             makeImages("bundle"),
+			Operator: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{As: "bundle"}},
+			},
+			Resources: resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'bundle' (previously defined by field 'operator.bundles[0].as')`),
+	}, {
+		name: "unnamed bundle",
+		conf: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
+			Images:             makeImages("ci-bundle0"),
+			Operator: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{}},
+			},
+			Resources: resources,
+		},
+		expected: errors.New(`configuration has 2 errors:
+
+  * images[0]: duplicate image name 'ci-bundle0' (previously defined by field 'operator.bundles[0]')
+` + "  * images[0]: `to` cannot begin with `ci-bundle`\n"),
+	}, {
+		name: "bundle index",
+		conf: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
+			Images:             makeImages("ci-index-bundle"),
+			Operator: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{As: "bundle"}},
+			},
+			Resources: resources,
+		},
+		expected: errors.New(`configuration has 2 errors:
+
+  * images[0]: duplicate image name 'ci-index-bundle' (previously defined by field 'operator.bundles[0].as')
+` + "  * images[0]: `to` cannot begin with ci-index\n"),
+	}, {
+		name: "bundle source",
+		conf: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
+			Images:             makeImages("src-bundle"),
+			Operator:           &api.OperatorStepConfiguration{},
+			Resources:          resources,
+		},
+		expected: errors.New(`configuration has 2 errors:
+
+  * images[0]: duplicate image name 'src-bundle' (previously defined by field 'operator')
+` + "  * images[0]: `to` cannot be src-bundle\n"),
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := IsValidConfiguration(&tc.conf, "TODO", "TODO")
+			testhelper.Diff(t, "error", err, tc.expected, testhelper.EquateErrorMessage)
 		})
 	}
 }

@@ -7,14 +7,18 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 
+	k8sv1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config"
 	prowconfig "k8s.io/test-infra/prow/config"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
+
+	"github.com/openshift/ci-tools/pkg/steps"
 )
 
 type fakeJobResult struct {
@@ -641,6 +645,42 @@ func Test_getJobArtifactsURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := getJobArtifactsURL(tt.args.prowJob, tt.args.config); got != tt.want {
 				t.Errorf("getJobArtifactsURL() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAppendMultiStageParams(t *testing.T) {
+	multiStageParamString := "--multi-stage-param=%s=%s"
+	tests := []struct {
+		name         string
+		params       map[string]string
+		expectedArgs []string
+	}{
+		{
+			name: "Multi stage params are added",
+			params: map[string]string{
+				steps.OOBundle:  "bundle",
+				steps.OOChannel: "channel",
+				steps.OOIndex:   "index",
+				steps.OOPackage: "package",
+			},
+			expectedArgs: []string{
+				fmt.Sprintf(multiStageParamString, steps.OOBundle, "bundle"),
+				fmt.Sprintf(multiStageParamString, steps.OOChannel, "channel"),
+				fmt.Sprintf(multiStageParamString, steps.OOIndex, "index"),
+				fmt.Sprintf(multiStageParamString, steps.OOPackage, "package"),
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := k8sv1.PodSpec{
+				Containers: []k8sv1.Container{{}},
+			}
+			appendMultiStageParams(&spec, tc.params)
+			if diff := cmp.Diff(tc.expectedArgs, spec.Containers[0].Args); diff != "" {
+				t.Errorf("actual does not match expected, diff: %s", diff)
 			}
 		})
 	}

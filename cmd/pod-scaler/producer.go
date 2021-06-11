@@ -70,8 +70,18 @@ func queriesByMetric() map[string]string {
 	return queries
 }
 
-func produce(clients map[string]prometheusapi.API, dataCache cache, ignoreLatest time.Duration) {
-	interrupts.TickLiteral(func() {
+func produce(clients map[string]prometheusapi.API, dataCache cache, ignoreLatest time.Duration, once bool) {
+	var execute func(func())
+	if once {
+		execute = func(f func()) {
+			f()
+		}
+	} else {
+		execute = func(f func()) {
+			interrupts.TickLiteral(f, 3*time.Hour)
+		}
+	}
+	execute(func() {
 		for name, query := range queriesByMetric() {
 			name := name
 			query := query
@@ -129,7 +139,7 @@ func produce(clients map[string]prometheusapi.API, dataCache cache, ignoreLatest
 				logger.WithError(err).Error("Failed to write cached data.")
 			}
 		}
-	}, 3*time.Hour)
+	})
 }
 
 // queryFor applies our filtering and left joins to a metric to get data we can use

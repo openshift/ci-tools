@@ -45,8 +45,8 @@ type options struct {
 }
 
 type producerOptions struct {
-	kubeconfig string
-
+	kubeconfig   string
+	once         bool
 	ignoreLatest time.Duration
 }
 
@@ -63,6 +63,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.StringVar(&o.mode, "mode", "", "Which mode to run in.")
 	fs.StringVar(&o.kubeconfig, "kubeconfig", "", "Path to a ~/.kube/config to use for querying Prometheuses. Each context will be considered a cluster to query.")
 	fs.DurationVar(&o.ignoreLatest, "ignore-latest", 0, "Duration of latest time series to ignore when querying Prometheus. For instance, 1h will ignore the latest hour of data.")
+	fs.BoolVar(&o.once, "produce-once", false, "Query Prometheus and refresh cached data only once before exiting.")
 	fs.IntVar(&o.port, "port", 0, "Port to serve admission webhooks on.")
 	fs.IntVar(&o.uiPort, "ui-port", 0, "Port to serve frontend on.")
 	fs.StringVar(&o.certDir, "serving-cert-dir", "", "Path to directory with serving certificate and key for the admission webhook server.")
@@ -205,7 +206,7 @@ func mainProduce(opts *options, cache cache) {
 		logger.Debugf("Loaded Prometheus client.")
 	}
 
-	go produce(clients, cache, opts.ignoreLatest)
+	go produce(clients, cache, opts.ignoreLatest, opts.once)
 }
 
 func mainAdmission(opts *options) {

@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/prowconfigsharding"
 )
 
 type options struct {
@@ -197,7 +198,7 @@ func updatePluginConfig(configDir, shardingBaseDir string) error {
 	}
 	cfg := agent.Config()
 	if shardingBaseDir != "" {
-		pc, err := shardPluginConfig(cfg, afero.NewBasePathFs(afero.NewOsFs(), shardingBaseDir))
+		pc, err := prowconfigsharding.WriteShardedPluginConfig(cfg, afero.NewBasePathFs(afero.NewOsFs(), shardingBaseDir))
 		if err != nil {
 			return fmt.Errorf("failed to shard plugin config: %w", err)
 		}
@@ -263,45 +264,12 @@ func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.Pr
 	}
 
 	for orgOrRepo, cfg := range configsByOrgRepo {
-		if err := mkdirAndWrite(target, filepath.Join(orgOrRepo.Org, orgOrRepo.Repo, config.SupplementalProwConfigFileName), cfg); err != nil {
+		if err := prowconfigsharding.MkdirAndWrite(target, filepath.Join(orgOrRepo.Org, orgOrRepo.Repo, config.SupplementalProwConfigFileName), cfg); err != nil {
 			return nil, err
 		}
 	}
 
 	return pc, nil
-}
-
-type pluginsConfigWithPointers struct {
-	Plugins plugins.Plugins `json:"plugins,omitempty"`
-}
-
-func shardPluginConfig(pc *plugins.Configuration, target afero.Fs) (*plugins.Configuration, error) {
-	for orgOrRepo, cfg := range pc.Plugins {
-		file := pluginsConfigWithPointers{
-			Plugins: plugins.Plugins{orgOrRepo: cfg},
-		}
-		if err := mkdirAndWrite(target, filepath.Join(orgOrRepo, config.SupplementalPluginConfigFileName), file); err != nil {
-			return nil, err
-		}
-		delete(pc.Plugins, orgOrRepo)
-	}
-
-	return pc, nil
-}
-
-func mkdirAndWrite(fs afero.Fs, path string, content interface{}) error {
-	dir := filepath.Dir(path)
-	if err := fs.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to make dir %s: %w", dir, err)
-	}
-	serialized, err := yaml.Marshal(content)
-	if err != nil {
-		return fmt.Errorf("failed to serialize: %w", err)
-	}
-	if err := afero.WriteFile(fs, path, serialized, 0644); err != nil {
-		return fmt.Errorf("failed to write to %s: %w", path, err)
-	}
-	return nil
 }
 
 func isPolicySet(p prowconfig.Policy) bool {

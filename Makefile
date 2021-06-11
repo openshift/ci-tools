@@ -112,12 +112,15 @@ validate-vendor:
 	test -z "$$(git status -s ./vendor/ go.mod go.sum | grep -v vendor/modules.txt)"
 .PHONY: validate-vendor
 
+# Use verbosity by default, allow users to opt out
+VERBOSE := $(if $(QUIET),,-v )
+
 # Install Go binaries to $GOPATH/bin.
 #
 # Example:
 #   make install
 install: cmd/vault-secret-collection-manager/index.js
-	go install -v ./cmd/...
+	go install $(VERBOSE)./cmd/...
 .PHONY: install
 
 cmd/vault-secret-collection-manager/index.js: cmd/vault-secret-collection-manager/index.ts

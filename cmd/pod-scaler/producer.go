@@ -70,7 +70,7 @@ func queriesByMetric() map[string]string {
 	return queries
 }
 
-func produce(clients map[string]prometheusapi.API, dataCache cache) {
+func produce(clients map[string]prometheusapi.API, dataCache cache, ignoreLatest time.Duration) {
 	interrupts.TickLiteral(func() {
 		for name, query := range queriesByMetric() {
 			name := name
@@ -92,7 +92,7 @@ func produce(clients map[string]prometheusapi.API, dataCache cache) {
 				logrus.WithError(err).Error("Failed to load data from storage.")
 				continue
 			}
-			now := time.Now()
+			until := time.Now().Add(-ignoreLatest)
 			q := querier{
 				lock: &sync.RWMutex{},
 				data: cache,
@@ -119,7 +119,7 @@ func produce(clients map[string]prometheusapi.API, dataCache cache) {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					if err := q.execute(interrupts.Context(), metadata, now); err != nil {
+					if err := q.execute(interrupts.Context(), metadata, until); err != nil {
 						metadata.logger.WithError(err).Error("Failed to query Prometheus.")
 					}
 				}()

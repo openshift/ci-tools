@@ -106,7 +106,7 @@ func (s *podStep) run(ctx context.Context) error {
 		}
 	}()
 
-	pod, err = createOrRestartPod(s.client, pod)
+	pod, err = createOrRestartPod(ctx, s.client, pod)
 	if err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %w", s.name, err)
 	}
@@ -355,7 +355,7 @@ func getSecretVolumeMountFromSecret(secretMountPath string, secretIndex int) []c
 // This pod will not be able to gather artifacts, nor will it report log messages
 // unless it fails.
 func RunPod(ctx context.Context, podClient PodClient, pod *coreapi.Pod) (*coreapi.Pod, error) {
-	pod, err := createOrRestartPod(podClient, pod)
+	pod, err := createOrRestartPod(ctx, podClient, pod)
 	if err != nil {
 		return pod, err
 	}

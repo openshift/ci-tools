@@ -1,18 +1,17 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"sync"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/semaphore"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/config/secret"
@@ -30,7 +29,6 @@ type opts struct {
 	prcreation.PRCreationOptions
 	ocpBuildDataDir     string
 	ciOperatorConfigDir string
-	maxConcurrency      int64
 	pushCeiling         int
 	createPRs           bool
 }
@@ -40,7 +38,7 @@ func getOpts() (*opts, error) {
 	o.PRCreationOptions.AddFlags(flag.CommandLine)
 	flag.StringVar(&o.ciOperatorConfigDir, "ci-operator-config-dir", "", "Basepath of the ci-operator config")
 	flag.StringVar(&o.ocpBuildDataDir, "ocp-build-data-dir", "../ocp-build-data", "Basepath of the ocp build data config")
-	flag.Int64Var(&o.maxConcurrency, "max-concurrency", 4, "The max concurrency")
+	_ = flag.Int64("max-concurrency", 4, "Legacy flag that does nothing, the tool can not run concurrently")
 	flag.IntVar(&o.pushCeiling, "push-ceiling", 1, "Max number of repos to push an updated .ci-operator.yaml to. Set to 0 for unlimited.")
 	flag.BoolVar(&o.createPRs, "create-prs", false, "If the tool should create PRs after pushing")
 	flag.Parse()
@@ -118,35 +116,21 @@ channel in the CoreOS Slack.`))
 		},
 	)
 
-	var lock sync.Mutex
 	var errs []error
-	sema := semaphore.NewWeighted(o.maxConcurrency)
-	ctx := context.Background()
 
 	abs, err := filepath.Abs(o.ciOperatorConfigDir)
 	if err != nil {
 		logrus.WithError(err).Fatalf("failed to determine absolute filepath of %s", o.ciOperatorConfigDir)
 	}
 	err = config.OperateOnCIOperatorConfigDir(abs, func(cfg *cioperatorapi.ReleaseBuildConfiguration, metadata *config.Info) error {
-		if err := sema.Acquire(ctx, 1); err != nil {
-			return fmt.Errorf("failed to acquire semaphore: %w", err)
+		if err := process(cfg, metadata); err != nil {
+			errs = append(errs, err)
 		}
-		go func() {
-			defer sema.Release(1)
-			if err := process(cfg, metadata); err != nil {
-				lock.Lock()
-				errs = append(errs, err)
-				lock.Unlock()
-			}
-		}()
 
 		return nil
 	})
 	if err != nil {
 		errs = append(errs, err)
-	}
-	if err := sema.Acquire(ctx, o.maxConcurrency); err != nil {
-		logrus.WithError(err).Fatal("failed to wait for walking to finish")
 	}
 
 	for _, err := range errs {
@@ -231,6 +215,11 @@ func process(
 			return fmt.Errorf("failed to clone %s/%s: %w", metadata.Org, metadata.Repo, err)
 		}
 		defer func() {
+			// Creating a PR changes the working dir, if we don't chdir to a valid dir
+			// first, the next clone will fail with a "shell-init: error retrieving current directory: getcwd: cannot access parent directories: No such file or directory"
+			if err := os.Chdir("/"); err != nil {
+				l.WithError(err).Error("failed to chdir to /")
+			}
 			if err := repo.Clean(); err != nil {
 				l.WithError(err).Error("failed to clean local repo")
 			}

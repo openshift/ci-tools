@@ -46,6 +46,14 @@ const (
 	prowConfigPathOption       = "prow-config-path"
 	releaseImageRefOption      = "release-image-ref"
 	targetNamespacesOption     = "target-namespaces"
+
+	BundleImage      = "BUNDLE_IMAGE"
+	Channel          = "CHANNEL"
+	IndexImage       = "INDEX_IMAGE"
+	InstallNamespace = "INSTALL_NAMESPACE"
+	Package          = "PACKAGE"
+	TargetNamespaces = "TARGET_NAMESPACES"
+	PyxisUrl = "PYXIS_URL"
 )
 
 type options struct {
@@ -60,6 +68,7 @@ type options struct {
 	outputPath          string
 	releaseImageRef     string
 	targetNamespaces    string
+	pyxisUrl            string
 	dryRun              bool
 }
 
@@ -98,6 +107,7 @@ func (o *options) gatherOptions() {
 	fs.StringVar(&o.operatorPackageName, operatorPackageNameOptions, "", "Operator package name to test")
 	fs.StringVar(&o.releaseImageRef, releaseImageRefOption, "", "Pull spec of a specific release payload image used for OCP deployment.")
 	fs.StringVar(&o.targetNamespaces, targetNamespacesOption, "", "A comma-separated list of namespaces the operator will target. If empty, all namespaces are targeted")
+	fs.StringVar(&o.pyxisUrl, PyxisUrl, "", "Represents cvp product package name for specific ISV")
 	fs.BoolVar(&o.dryRun, "dry-run", false, "Executes a dry-run, displaying the job YAML without submitting the job to Prow")
 }
 
@@ -214,6 +224,9 @@ func main() {
 	}
 	if o.installNamespace != "" {
 		params[steps.OOInstallNamespace] = o.installNamespace
+	}
+	if o.pyxisUrl != "" {
+		params[PyxisUrl] = o.pyxisUrl
 	}
 	if o.targetNamespaces != "" {
 		params[steps.OOTargetNamespaces] = o.targetNamespaces

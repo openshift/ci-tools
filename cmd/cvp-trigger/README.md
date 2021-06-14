@@ -72,6 +72,8 @@ CVP Trigger must load the configuration for the
    catalog will be installed. If empty, a new namespace will be created.
 - `OO_TARGET_NAMESPACES`: Optional. A comma-separated list of namespaces the
    operator will target. If empty, all namespaces will be targeted.
+- `PYXIS_URL`: Optional. URL that contains specific cvp product package name for specific ISV
+   with unique pid.
    If no OperatorGroup exists in `$OO_INSTALL_NAMESPACE`, a new one will be
    created with its target namespaces set to `$OO_TARGET_NAMESPACES`, otherwise
    the existing OperatorGroup's target namespace set will be replaced. The special

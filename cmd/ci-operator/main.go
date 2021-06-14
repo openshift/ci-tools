@@ -253,11 +253,7 @@ func main() {
 			message.WriteString(fmt.Sprintf("\n  * %s", err.Error()))
 		}
 		logrus.Error("Some steps failed:")
-		for _, line := range strings.Split(message.String(), "\n") {
-			if strings.TrimSpace(line) != "" {
-				logrus.Error(line)
-			}
-		}
+		logrus.Error(message.String())
 		opt.Report(defaulted...)
 		os.Exit(1)
 	}

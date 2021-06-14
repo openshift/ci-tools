@@ -798,11 +798,11 @@ func podLogNewFailedContainers(podClient PodClient, pod *coreapi.Pod, completed 
 			if _, err := io.Copy(logs, s); err != nil {
 				logrus.WithError(err).Warnf("Unable to copy log output from failed pod container %s.", status.Name)
 			}
-			s.Close()
-			logrus.Infof("Logs for container %s in pod %s:", status.Name, pod.Name)
-			for _, line := range strings.Split(logs.String(), "\n") {
-				logrus.Info(line)
+			if err := s.Close(); err != nil {
+				logrus.WithError(err).Warnf("Unable to close log output from failed pod container %s.", status.Name)
 			}
+			logrus.Infof("Logs for container %s in pod %s:", status.Name, pod.Name)
+			logrus.Info(logs.String())
 		} else {
 			logrus.WithError(err).Warnf("error: Unable to retrieve logs from failed pod container %s.", status.Name)
 		}

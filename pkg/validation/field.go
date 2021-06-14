@@ -21,6 +21,13 @@ func (f fieldPath) addIndex(i int) fieldPath {
 	return fieldPath(fmt.Sprintf("%s[%d]", f, i))
 }
 
+func (f fieldPath) addKey(k string) fieldPath {
+	if f == "" {
+		panic("no previous field name")
+	}
+	return fieldPath(fmt.Sprintf("%s[%s]", f, k))
+}
+
 func (f fieldPath) errorf(format string, args ...interface{}) error {
 	args = append([]interface{}{f}, args...)
 	return fmt.Errorf("%s: "+format, args...)

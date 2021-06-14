@@ -42,6 +42,12 @@ func (c *configContext) addIndex(i int) *configContext {
 	return &ret
 }
 
+func (c *configContext) addKey(k string) *configContext {
+	ret := *c
+	ret.field = ret.field.addKey(k)
+	return &ret
+}
+
 // addPipelineImage verifies that a pipeline image tag has not been seen.
 // An error containing the name of the original field is returned if the tag has
 // already been seen in the same configuration.
@@ -75,8 +81,17 @@ func IsValidConfiguration(config *api.ReleaseBuildConfiguration, org, repo strin
 
 func validateConfiguration(ctx *configContext, config *api.ReleaseBuildConfiguration, org, repo string, resolved bool) error {
 	var validationErrors []error
+	if config.BinaryBuildCommands != "" {
+		ctx.pipelineImages[api.PipelineImageStreamTagReferenceBinaries] = "binary_build_commands"
+	}
+	if config.TestBinaryBuildCommands != "" {
+		ctx.pipelineImages[api.PipelineImageStreamTagReferenceTestBinaries] = "test_binary_build_commands"
+	}
+	if config.RpmBuildCommands != "" {
+		ctx.pipelineImages[api.PipelineImageStreamTagReferenceRPMs] = "rpm_build_commands"
+	}
 	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config, org, repo)...)
-	validationErrors = append(validationErrors, validateBuildRootImageConfiguration("build_root", config.InputConfiguration.BuildRootImage, len(config.Images) > 0)...)
+	validationErrors = append(validationErrors, validateBuildRootImageConfiguration(ctx.addField("build_root"), config.InputConfiguration.BuildRootImage, len(config.Images) > 0)...)
 	releases := sets.NewString()
 	for name := range releases {
 		releases.Insert(name)
@@ -95,15 +110,8 @@ func validateConfiguration(ctx *configContext, config *api.ReleaseBuildConfigura
 		}
 		validationErrors = append(validationErrors, validateOperator(ctx.addField("operator"), config.Operator, linkForImage)...)
 	}
-
-	if config.InputConfiguration.BaseImages != nil {
-		validationErrors = append(validationErrors, validateImageStreamTagReferenceMap("base_images", config.InputConfiguration.BaseImages)...)
-	}
-
-	if config.InputConfiguration.BaseRPMImages != nil {
-		validationErrors = append(validationErrors, validateImageStreamTagReferenceMap("base_rpm_images", config.InputConfiguration.BaseRPMImages)...)
-	}
-
+	validationErrors = append(validationErrors, validateBaseImages(ctx.addField("base_images"), config.InputConfiguration.BaseImages)...)
+	validationErrors = append(validationErrors, validateBaseRPMImages(ctx.addField("base_rpm_images"), config.InputConfiguration.BaseRPMImages)...)
 	// Validate tag_specification
 	if config.InputConfiguration.ReleaseTagConfiguration != nil {
 		validationErrors = append(validationErrors, validateReleaseTagConfiguration("tag_specification", *config.InputConfiguration.ReleaseTagConfiguration)...)
@@ -133,7 +141,7 @@ func validateConfiguration(ctx *configContext, config *api.ReleaseBuildConfigura
 	}
 }
 
-func validateBuildRootImageConfiguration(fieldRoot string, input *api.BuildRootImageConfiguration, hasImages bool) []error {
+func validateBuildRootImageConfiguration(ctx *configContext, input *api.BuildRootImageConfiguration, hasImages bool) (ret []error) {
 	if input == nil {
 		if hasImages {
 			return []error{errors.New("when 'images' are specified 'build_root' is required and must have image_stream_tag, project_image or from_repository set")}
@@ -142,33 +150,32 @@ func validateBuildRootImageConfiguration(fieldRoot string, input *api.BuildRootI
 	}
 
 	if input.ProjectImageBuild != nil && input.ImageStreamTagReference != nil {
-		return []error{fmt.Errorf("%s: image_stream_tag and project_image are mutually exclusive", fieldRoot)}
+		ret = append(ret, ctx.errorf("image_stream_tag and project_image are mutually exclusive"))
+	} else if input.ProjectImageBuild != nil && input.FromRepository {
+		ret = append(ret, ctx.errorf("project_image and from_repository are mutually exclusive"))
+	} else if input.FromRepository && input.ImageStreamTagReference != nil {
+		ret = append(ret, ctx.errorf("from_repository and image_stream_tag are mutually exclusive"))
+	} else if input.ProjectImageBuild == nil && input.ImageStreamTagReference == nil && !input.FromRepository {
+		ret = append(ret, ctx.errorf("you have to specify one of project_image, image_stream_tag or from_repository"))
+	} else if input.ImageStreamTagReference != nil {
+		ret = append(ret, validateBuildRootImageStreamTag(ctx.addField("image_stream_tag"), *input.ImageStreamTagReference)...)
 	}
-	if input.ProjectImageBuild != nil && input.FromRepository {
-		return []error{fmt.Errorf("%s: project_image and from_repository are mutually exclusive", fieldRoot)}
+	if err := ctx.addPipelineImage(api.PipelineImageStreamTagReferenceRoot); err != nil {
+		ret = append(ret, err)
 	}
-	if input.FromRepository && input.ImageStreamTagReference != nil {
-		return []error{fmt.Errorf("%s: from_repository and image_stream_tag are mutually exclusive", fieldRoot)}
-	}
-	if input.ProjectImageBuild == nil && input.ImageStreamTagReference == nil && !input.FromRepository {
-		return []error{fmt.Errorf("%s: you have to specify one of project_image, image_stream_tag or from_repository", fieldRoot)}
-	}
-	if input.ImageStreamTagReference != nil {
-		return validateBuildRootImageStreamTag(fmt.Sprintf("%s.image_stream_tag", fieldRoot), *input.ImageStreamTagReference)
-	}
-	return nil
+	return
 }
 
-func validateBuildRootImageStreamTag(fieldRoot string, buildRoot api.ImageStreamTagReference) []error {
+func validateBuildRootImageStreamTag(ctx *configContext, buildRoot api.ImageStreamTagReference) []error {
 	var validationErrors []error
 	if len(buildRoot.Namespace) == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s.namespace: value required but not provided", fieldRoot))
+		validationErrors = append(validationErrors, ctx.addField("namespace").errorf("value required but not provided"))
 	}
 	if len(buildRoot.Name) == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s.name: value required but not provided", fieldRoot))
+		validationErrors = append(validationErrors, ctx.addField("name").errorf("value required but not provided"))
 	}
 	if len(buildRoot.Tag) == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s.tag: value required but not provided", fieldRoot))
+		validationErrors = append(validationErrors, ctx.addField("tag").errorf("value required but not provided"))
 	}
 	return validationErrors
 }
@@ -236,6 +243,30 @@ func validateOperator(ctx *configContext, input *api.OperatorStepConfiguration, 
 		}
 	}
 	return validationErrors
+}
+
+func validateBaseImages(ctx *configContext, images map[string]api.ImageStreamTagReference) []error {
+	ret := validateImageStreamTagReferenceMap("base_images", images)
+	for name := range images {
+		if err := ctx.addKey(name).addPipelineImage(api.PipelineImageStreamTagReference(name)); err != nil {
+			ret = append(ret, err)
+		}
+	}
+	return ret
+}
+
+func validateBaseRPMImages(ctx *configContext, images map[string]api.ImageStreamTagReference) []error {
+	ret := validateImageStreamTagReferenceMap("base_rpm_images", images)
+	for name := range images {
+		ctxN := ctx.addKey(name)
+		if err := ctxN.addPipelineImage(api.PipelineImageStreamTagReference(fmt.Sprintf("%s-without-rpms", name))); err != nil {
+			ret = append(ret, err)
+		}
+		if err := ctxN.addPipelineImage(api.PipelineImageStreamTagReference(name)); err != nil {
+			ret = append(ret, err)
+		}
+	}
+	return ret
 }
 
 func validateImageStreamTagReference(fieldRoot string, input api.ImageStreamTagReference) []error {

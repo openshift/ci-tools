@@ -78,7 +78,7 @@ func TestValidateBuildRoot(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := validateBuildRootImageConfiguration("build_root", tc.buildRootImageConfig, tc.hasImages); (err != nil) && tc.expectedValid {
+			if err := validateBuildRootImageConfiguration(newConfigContext().addField("build_root"), tc.buildRootImageConfig, tc.hasImages); (err != nil) && tc.expectedValid {
 				t.Errorf("expected to be valid, got: %v", err)
 			} else if !tc.expectedValid && err == nil {
 				t.Error("expected to be invalid, but returned valid")
@@ -781,6 +781,40 @@ func TestPipelineImages(t *testing.T) {
 		conf     api.ReleaseBuildConfiguration
 		expected error
 	}{{
+		name: "all pipeline images are unique",
+		conf: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
+			Images:             makeImages("to0", "to1"),
+			Resources:          resources,
+		},
+	}, {
+		name: "binary_build_commands",
+		conf: api.ReleaseBuildConfiguration{
+			BinaryBuildCommands: "binary build commands",
+			InputConfiguration:  input,
+			Images:              makeImages("bin"),
+			Resources:           resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'bin' (previously defined by field 'binary_build_commands')`),
+	}, {
+		name: "test_binary_build_commands",
+		conf: api.ReleaseBuildConfiguration{
+			TestBinaryBuildCommands: "test_binary build commands",
+			InputConfiguration:      input,
+			Images:                  makeImages("test-bin"),
+			Resources:               resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'test-bin' (previously defined by field 'test_binary_build_commands')`),
+	}, {
+		name: "rpm_build_commands",
+		conf: api.ReleaseBuildConfiguration{
+			RpmBuildCommands:   "rpm build commands",
+			InputConfiguration: input,
+			Images:             makeImages("rpms"),
+			Resources:          resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'rpms' (previously defined by field 'rpm_build_commands')`),
+	}, {
 		name: "bundle",
 		conf: api.ReleaseBuildConfiguration{
 			InputConfiguration: input,
@@ -822,6 +856,67 @@ func TestPipelineImages(t *testing.T) {
 			Resources:          resources,
 		},
 		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'src-bundle' (previously defined by field 'operator')`),
+	}, {
+		name: "base_rpm_images",
+		conf: api.ReleaseBuildConfiguration{
+			Images: makeImages("base-rpm-image"),
+			InputConfiguration: api.InputConfiguration{
+				BuildRootImage: &root,
+				BaseRPMImages: map[string]api.ImageStreamTagReference{
+					"base-rpm-image": {Tag: "tag"},
+				},
+			},
+			RpmBuildCommands: "rpm build commands",
+			Resources:        resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'base-rpm-image' (previously defined by field 'base_rpm_images[base-rpm-image]')`),
+	}, {
+		name: "base_rpm_images without-rpms",
+		conf: api.ReleaseBuildConfiguration{
+			Images: makeImages("base-rpm-image-without-rpms"),
+			InputConfiguration: api.InputConfiguration{
+				BuildRootImage: &root,
+				BaseRPMImages: map[string]api.ImageStreamTagReference{
+					"base-rpm-image": {Tag: "tag"},
+				},
+			},
+			RpmBuildCommands: "rpm build commands",
+			Resources:        resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'base-rpm-image-without-rpms' (previously defined by field 'base_rpm_images[base-rpm-image]')`),
+	}, {
+		name: "base_images",
+		conf: api.ReleaseBuildConfiguration{
+			Images: makeImages("base-image"),
+			InputConfiguration: api.InputConfiguration{
+				BuildRootImage: &root,
+				BaseImages: map[string]api.ImageStreamTagReference{
+					"base-image": {Tag: "tag"},
+				},
+			},
+			Resources: resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'base-image' (previously defined by field 'base_images[base-image]')`),
+	}, {
+		name: "images",
+		conf: api.ReleaseBuildConfiguration{
+			Images:             makeImages("duplicated", "duplicated"),
+			InputConfiguration: input,
+			Resources:          resources,
+		},
+		expected: errors.New(`invalid configuration: images[1]: duplicate image name 'duplicated' (previously defined by field 'images[0]')`),
+	}, {
+		name: "build_root.project_image_build",
+		conf: api.ReleaseBuildConfiguration{
+			Images: makeImages("root"),
+			InputConfiguration: api.InputConfiguration{
+				BuildRootImage: &api.BuildRootImageConfiguration{
+					ProjectImageBuild: &api.ProjectDirectoryImageBuildInputs{},
+				},
+			},
+			Resources: resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'root' (previously defined by field 'build_root')`),
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := IsValidConfiguration(&tc.conf, "TODO", "TODO")

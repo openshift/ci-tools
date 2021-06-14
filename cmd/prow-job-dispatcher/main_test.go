@@ -90,7 +90,7 @@ func TestValidate(t *testing.T) {
 var (
 	c = dispatcher.Config{
 		Default: "api.ci",
-		BuildFarm: map[dispatcher.CloudProvider]dispatcher.JobGroups{
+		BuildFarm: map[dispatcher.CloudProvider]map[api.Cluster]dispatcher.Filenames{
 			dispatcher.CloudAWS: {
 				api.ClusterBuild01: {},
 			},
@@ -143,7 +143,7 @@ func TestDispatchJobs(t *testing.T) {
 		config            *dispatcher.Config
 		jobVolumes        map[string]float64
 		expected          error
-		expectedBuildFarm map[dispatcher.CloudProvider]dispatcher.JobGroups
+		expectedBuildFarm map[dispatcher.CloudProvider]map[api.Cluster]dispatcher.Filenames
 	}{
 		{
 			name:     "nil config",
@@ -159,9 +159,9 @@ func TestDispatchJobs(t *testing.T) {
 				"pull-ci-openshift-ci-tools-master-e2e":               12,
 				"pull-ci-openshift-cluster-etcd-operator-master-unit": 6,
 			},
-			expectedBuildFarm: map[dispatcher.CloudProvider]dispatcher.JobGroups{
-				"aws": {"build01": {Paths: []string{".*/ci-tools-presubmits.yaml$"}}},
-				"gcp": {"build02": {Paths: []string{".*/cluster-api-provider-gcp-presubmits.yaml$", ".*/cluster-etcd-operator-master-presubmits.yaml$", ".*/wildfly-operator-presubmits.yaml$"}}},
+			expectedBuildFarm: map[dispatcher.CloudProvider]map[api.Cluster]dispatcher.Filenames{
+				"aws": {"build01": {FilenamesRaw: []string{"ci-tools-presubmits.yaml"}}},
+				"gcp": {"build02": {FilenamesRaw: []string{"cluster-api-provider-gcp-presubmits.yaml", "cluster-etcd-operator-master-presubmits.yaml", "wildfly-operator-presubmits.yaml"}}},
 			},
 		},
 	}

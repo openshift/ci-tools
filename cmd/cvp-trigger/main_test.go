@@ -17,8 +17,6 @@ import (
 	"k8s.io/test-infra/prow/config"
 	prowconfig "k8s.io/test-infra/prow/config"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
-
-	"github.com/openshift/ci-tools/pkg/steps"
 )
 
 type fakeJobResult struct {
@@ -660,16 +658,16 @@ func TestAppendMultiStageParams(t *testing.T) {
 		{
 			name: "Multi stage params are added",
 			params: map[string]string{
-				steps.OOBundle:  "bundle",
-				steps.OOChannel: "channel",
-				steps.OOIndex:   "index",
-				steps.OOPackage: "package",
+				BundleImage: "bundle",
+				Channel:     "channel",
+				IndexImage:  "index",
+				Package:     "package",
 			},
 			expectedArgs: []string{
-				fmt.Sprintf(multiStageParamString, steps.OOBundle, "bundle"),
-				fmt.Sprintf(multiStageParamString, steps.OOChannel, "channel"),
-				fmt.Sprintf(multiStageParamString, steps.OOIndex, "index"),
-				fmt.Sprintf(multiStageParamString, steps.OOPackage, "package"),
+				fmt.Sprintf(multiStageParamString, BundleImage, "bundle"),
+				fmt.Sprintf(multiStageParamString, Channel, "channel"),
+				fmt.Sprintf(multiStageParamString, IndexImage, "index"),
+				fmt.Sprintf(multiStageParamString, Package, "package"),
 			},
 		},
 	}

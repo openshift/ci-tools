@@ -1448,7 +1448,15 @@ func (o *options) parseCustomMetadata(customProwMetadataFile string) (customMeta
 		}
 	}
 
-	return customMetadata, err
+	censoredMetadata := map[string]string{}
+	for key, value := range customMetadata {
+		rawKey, rawValue := []byte(key), []byte(value)
+		o.censor.Censor(&rawKey)
+		o.censor.Censor(&rawValue)
+		censoredMetadata[string(rawKey)] = string(rawValue)
+	}
+
+	return censoredMetadata, err
 }
 
 // errWroteJUnit indicates that this error is covered by existing JUnit output and writing
@@ -1529,6 +1537,7 @@ func (o *options) writeJUnit(suites *junit.TestSuites, name string) error {
 		return suites.Suites[i].Name < suites.Suites[j].Name
 	})
 	for i := range suites.Suites {
+		junit.CensorTestSuite(o.censor, suites.Suites[i])
 		sortSuite(suites.Suites[i])
 	}
 	out, err := xml.MarshalIndent(suites, "", "  ")

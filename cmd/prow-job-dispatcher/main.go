@@ -291,7 +291,7 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 			switch o := o.(type) {
 			case configResult:
 				if !config.MatchingPathRegEx(o.path) {
-					results[o.cluster] = append(results[o.cluster], fmt.Sprintf(".*/%s$", o.filename))
+					results[o.cluster] = append(results[o.cluster], o.filename)
 				}
 			case error:
 				errs = append(errs, o)
@@ -358,7 +358,7 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 
 	for cloudProvider, jobGroups := range config.BuildFarm {
 		for cluster := range jobGroups {
-			config.BuildFarm[cloudProvider][cluster] = dispatcher.Group{Paths: results[string(cluster)]}
+			config.BuildFarm[cloudProvider][cluster] = dispatcher.Filenames{FilenamesRaw: results[string(cluster)]}
 		}
 	}
 

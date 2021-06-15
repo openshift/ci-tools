@@ -418,7 +418,7 @@ func (s *multiStageTestStep) runSteps(
 					errs = append(errs, fmt.Errorf("failed to delete pod %s with label %s=%s: %w", pod.Name, MultiStageTestLabel, s.name, err))
 					continue
 				}
-				if err := waitForPodDeletion(s.client, s.jobSpec.Namespace(), pod.Name, pod.UID); err != nil {
+				if err := waitForPodDeletion(cleanupCtx, s.client, s.jobSpec.Namespace(), pod.Name, pod.UID); err != nil {
 					errs = append(errs, fmt.Errorf("failed waiting for pod %s with label %s=%s to be deleted: %w", pod.Name, MultiStageTestLabel, s.name, err))
 					continue
 				}
@@ -828,7 +828,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	start := time.Now()
 	logrus.Infof("Running step %s.", pod.Name)
 	client := s.client.WithNewLoggingClient()
-	if _, err := createOrRestartPod(client, pod); err != nil {
+	if _, err := createOrRestartPod(ctx, client, pod); err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %w", pod.Name, err)
 	}
 	newPod, err := waitForPodCompletion(ctx, client, pod.Namespace, pod.Name, notifier, false)

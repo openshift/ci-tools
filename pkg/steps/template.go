@@ -135,7 +135,7 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 	}()
 
 	logrus.Debugf("Creating or restarting template instance")
-	_, err := createOrRestartTemplateInstance(s.client, instance)
+	_, err := createOrRestartTemplateInstance(ctx, s.client, instance)
 	if err != nil {
 		return fmt.Errorf("could not create or restart template instance: %w", err)
 	}
@@ -333,17 +333,17 @@ func waitForTemplateInstanceReady(client ctrlruntimeclient.Client, name string) 
 	return instance, err
 }
 
-func createOrRestartTemplateInstance(client ctrlruntimeclient.Client, instance *templateapi.TemplateInstance) (*templateapi.TemplateInstance, error) {
+func createOrRestartTemplateInstance(ctx context.Context, client ctrlruntimeclient.Client, instance *templateapi.TemplateInstance) (*templateapi.TemplateInstance, error) {
 	namespace, name := instance.Namespace, instance.Name
-	if err := waitForCompletedTemplateInstanceDeletion(client, namespace, name); err != nil {
+	if err := waitForCompletedTemplateInstanceDeletion(ctx, client, namespace, name); err != nil {
 		return nil, fmt.Errorf("unable to delete completed template instance: %w", err)
 	}
-	err := client.Create(context.TODO(), instance)
+	err := client.Create(ctx, instance)
 	if err != nil && !kerrors.IsAlreadyExists(err) {
 		return nil, fmt.Errorf("unable to create template instance: %w", err)
 	}
 	if err != nil {
-		if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: instance.Name}, instance); err != nil {
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: instance.Name}, instance); err != nil {
 			return nil, fmt.Errorf("unable to retrieve pod: %w", err)
 		}
 		logrus.Infof("Waiting for running template %s to finish", instance.Name)
@@ -351,9 +351,9 @@ func createOrRestartTemplateInstance(client ctrlruntimeclient.Client, instance *
 	return instance, nil
 }
 
-func waitForCompletedTemplateInstanceDeletion(client ctrlruntimeclient.Client, namespace, name string) error {
+func waitForCompletedTemplateInstanceDeletion(ctx context.Context, client ctrlruntimeclient.Client, namespace, name string) error {
 	instance := &templateapi.TemplateInstance{}
-	err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, instance)
+	err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, instance)
 	if kerrors.IsNotFound(err) {
 		logrus.Debugf("Template instance %s already deleted, do not need to wait any longer", name)
 		return nil
@@ -366,7 +366,7 @@ func waitForCompletedTemplateInstanceDeletion(client ctrlruntimeclient.Client, n
 		PropagationPolicy: &policy,
 		Preconditions:     &meta.Preconditions{UID: &uid},
 	}}
-	err = client.Delete(context.TODO(), instance, opts)
+	err = client.Delete(ctx, instance, opts)
 	if kerrors.IsNotFound(err) {
 		logrus.Infof("After initial existence check, a delete of template %s and instance %s received a not found error ",
 			name, string(instance.UID))
@@ -377,7 +377,7 @@ func waitForCompletedTemplateInstanceDeletion(client ctrlruntimeclient.Client, n
 	}
 
 	for i := 0; ; i++ {
-		err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, instance)
+		err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, instance)
 		if kerrors.IsNotFound(err) {
 			break
 		}
@@ -400,7 +400,7 @@ func waitForCompletedTemplateInstanceDeletion(client ctrlruntimeclient.Client, n
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			if err := waitForPodDeletion(client, namespace, ref.Ref.Name, ref.Ref.UID); err != nil {
+			if err := waitForPodDeletion(ctx, client, namespace, ref.Ref.Name, ref.Ref.UID); err != nil {
 				return err
 			}
 		}
@@ -408,9 +408,9 @@ func waitForCompletedTemplateInstanceDeletion(client ctrlruntimeclient.Client, n
 	return nil
 }
 
-func createOrRestartPod(podClient ctrlruntimeclient.Client, pod *coreapi.Pod) (*coreapi.Pod, error) {
+func createOrRestartPod(ctx context.Context, podClient ctrlruntimeclient.Client, pod *coreapi.Pod) (*coreapi.Pod, error) {
 	namespace, name := pod.Namespace, pod.Name
-	if err := waitForCompletedPodDeletion(podClient, namespace, name); err != nil {
+	if err := waitForCompletedPodDeletion(ctx, podClient, namespace, name); err != nil {
 		return nil, fmt.Errorf("unable to delete completed pod: %w", err)
 	}
 	if pod.Spec.ActiveDeadlineSeconds == nil {
@@ -421,7 +421,7 @@ func createOrRestartPod(podClient ctrlruntimeclient.Client, pod *coreapi.Pod) (*
 	// creating a pod in close proximity to namespace creation can result in forbidden errors due to
 	// initializing secrets or policy - use a short backoff to mitigate flakes
 	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Factor: 2, Duration: time.Second}, func() (bool, error) {
-		err := podClient.Create(context.TODO(), pod)
+		err := podClient.Create(ctx, pod)
 		if err != nil {
 			if kerrors.IsForbidden(err) {
 				logrus.WithError(err).Warnf("Unable to create pod %s, may be temporary.", name)
@@ -431,7 +431,7 @@ func createOrRestartPod(podClient ctrlruntimeclient.Client, pod *coreapi.Pod) (*
 				return false, err
 			}
 
-			if err := podClient.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, pod); err != nil {
+			if err := podClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, pod); err != nil {
 				return false, err
 			}
 		}
@@ -442,30 +442,27 @@ func createOrRestartPod(podClient ctrlruntimeclient.Client, pod *coreapi.Pod) (*
 	return pod, nil
 }
 
-func waitForPodDeletion(podClient ctrlruntimeclient.Client, namespace, name string, uid types.UID) error {
-	timeout := 600
-	for i := 0; i < timeout; i += 2 {
+func waitForPodDeletion(ctx context.Context, podClient ctrlruntimeclient.Client, namespace, name string, uid types.UID) error {
+	return wait.ExponentialBackoffWithContext(ctx, wait.Backoff{Duration: 2 * time.Second, Factor: 2, Steps: 10}, func() (done bool, err error) {
 		pod := &coreapi.Pod{}
-		err := podClient.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, pod)
+		err = podClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, pod)
 		if kerrors.IsNotFound(err) {
-			return nil
+			return true, nil
 		}
 		if err != nil {
-			return fmt.Errorf("could not retrieve deleting pod: %w", err)
+			return true, fmt.Errorf("could not retrieve deleting pod: %w", err)
 		}
 		if pod.UID != uid {
-			return nil
+			return true, nil
 		}
-		logrus.Debugf("Waiting for pod %s to be deleted ... (%ds/%d)", name, i, timeout)
-		time.Sleep(10 * time.Second)
-	}
-
-	return fmt.Errorf("waited for pod %s deletion for %ds, was not deleted", name, timeout)
+		logrus.Debugf("Waiting for pod %s to be deleted ...", name)
+		return false, nil
+	})
 }
 
-func waitForCompletedPodDeletion(podClient ctrlruntimeclient.Client, namespace, name string) error {
+func waitForCompletedPodDeletion(ctx context.Context, podClient ctrlruntimeclient.Client, namespace, name string) error {
 	pod := &coreapi.Pod{}
-	if err := podClient.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, pod); kerrors.IsNotFound(err) {
+	if err := podClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, pod); kerrors.IsNotFound(err) {
 		return nil
 	}
 	// running pods are left to run, we just wait for them to finish
@@ -475,7 +472,7 @@ func waitForCompletedPodDeletion(podClient ctrlruntimeclient.Client, namespace, 
 
 	// delete the pod we expect, otherwise another user has relaunched this pod
 	uid := pod.UID
-	err := podClient.Delete(context.TODO(), pod, ctrlruntimeclient.Preconditions(meta.Preconditions{UID: &uid}))
+	err := podClient.Delete(ctx, pod, ctrlruntimeclient.Preconditions(meta.Preconditions{UID: &uid}))
 	if kerrors.IsNotFound(err) {
 		return nil
 	}
@@ -483,7 +480,7 @@ func waitForCompletedPodDeletion(podClient ctrlruntimeclient.Client, namespace, 
 		return fmt.Errorf("could not delete completed pod: %w", err)
 	}
 
-	return waitForPodDeletion(podClient, namespace, name, uid)
+	return waitForPodDeletion(ctx, podClient, namespace, name, uid)
 }
 
 func waitForPodCompletion(ctx context.Context, podClient PodClient, namespace, name string, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, error) {

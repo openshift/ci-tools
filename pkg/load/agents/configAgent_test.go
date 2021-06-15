@@ -1,6 +1,8 @@
 package agents
 
 import (
+	"encoding/json"
+	"sort"
 	"sync"
 	"testing"
 
@@ -354,5 +356,184 @@ func TestConfigAgent_GetMatchingConfig(t *testing.T) {
 		if diff := cmp.Diff(actual, testCase.expected); diff != "" {
 			t.Errorf("%s: got incorrect config: %v", testCase.name, diff)
 		}
+	}
+}
+
+func TestBuildIndexDelta(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		name     string
+		oldIndex configIndex
+		newIndex configIndex
+
+		expected []IndexDelta
+	}{
+		{
+			name: "No changes in differently-ordered config",
+			oldIndex: map[string][]*api.ReleaseBuildConfiguration{"": {
+				{Metadata: api.Metadata{Org: "bar"}, RpmBuildLocation: "/bar"},
+				{Metadata: api.Metadata{Org: "foo"}, RpmBuildLocation: "/foo"},
+			}},
+			newIndex: map[string][]*api.ReleaseBuildConfiguration{"": {
+				{Metadata: api.Metadata{Org: "foo"}, RpmBuildLocation: "/foo"},
+				{Metadata: api.Metadata{Org: "bar"}, RpmBuildLocation: "/bar"},
+			}},
+		},
+		{
+			name: "Config is removed",
+			oldIndex: map[string][]*api.ReleaseBuildConfiguration{
+				"1": {
+					{Metadata: api.Metadata{Org: "bar"}, RpmBuildLocation: "/bar"},
+					{Metadata: api.Metadata{Org: "removed"}, RpmBuildLocation: "/removed"},
+					{Metadata: api.Metadata{Org: "foo"}, RpmBuildLocation: "/foo"},
+				},
+				"2": {
+					{Metadata: api.Metadata{Org: "bar-2"}, RpmBuildLocation: "/bar"},
+					{Metadata: api.Metadata{Org: "removed-2"}, RpmBuildLocation: "/removed-2"},
+					{Metadata: api.Metadata{Org: "foo-2"}, RpmBuildLocation: "/foo"},
+				},
+				"3": {
+					{Metadata: api.Metadata{Org: "removed-3"}, RpmBuildLocation: "/removed-3"},
+				},
+			},
+			newIndex: map[string][]*api.ReleaseBuildConfiguration{
+				"1": {
+					{Metadata: api.Metadata{Org: "bar"}, RpmBuildLocation: "/bar"},
+					{Metadata: api.Metadata{Org: "foo"}, RpmBuildLocation: "/foo"},
+				},
+				"2": {
+					{Metadata: api.Metadata{Org: "bar-2"}, RpmBuildLocation: "/bar"},
+					{Metadata: api.Metadata{Org: "foo-2"}, RpmBuildLocation: "/foo"},
+				},
+			},
+			expected: []IndexDelta{
+				{
+					IndexKey: "1",
+					Removed:  []*api.ReleaseBuildConfiguration{{Metadata: api.Metadata{Org: "removed"}, RpmBuildLocation: "/removed"}},
+				},
+				{
+					IndexKey: "2",
+					Removed:  []*api.ReleaseBuildConfiguration{{Metadata: api.Metadata{Org: "removed-2"}, RpmBuildLocation: "/removed-2"}},
+				},
+				{
+					IndexKey: "3",
+					Removed:  []*api.ReleaseBuildConfiguration{{Metadata: api.Metadata{Org: "removed-3"}, RpmBuildLocation: "/removed-3"}},
+				},
+			},
+		},
+		{
+			name: "Config is added",
+			oldIndex: map[string][]*api.ReleaseBuildConfiguration{
+				"1": {
+					{Metadata: api.Metadata{Org: "bar"}, RpmBuildLocation: "/bar"},
+					{Metadata: api.Metadata{Org: "foo"}, RpmBuildLocation: "/foo"},
+				},
+				"2": {
+					{Metadata: api.Metadata{Org: "bar-2"}, RpmBuildLocation: "/bar"},
+					{Metadata: api.Metadata{Org: "foo-2"}, RpmBuildLocation: "/foo"},
+				},
+			},
+			newIndex: map[string][]*api.ReleaseBuildConfiguration{
+				"1": {
+					{Metadata: api.Metadata{Org: "bar"}, RpmBuildLocation: "/bar"},
+					{Metadata: api.Metadata{Org: "added"}, RpmBuildLocation: "/added"},
+					{Metadata: api.Metadata{Org: "foo"}, RpmBuildLocation: "/foo"},
+				},
+				"2": {
+					{Metadata: api.Metadata{Org: "bar-2"}, RpmBuildLocation: "/bar"},
+					{Metadata: api.Metadata{Org: "added-2"}, RpmBuildLocation: "/added-2"},
+					{Metadata: api.Metadata{Org: "foo-2"}, RpmBuildLocation: "/foo"},
+				},
+				"3": {
+					{Metadata: api.Metadata{Org: "added-3"}, RpmBuildLocation: "/added-3"},
+				},
+			},
+			expected: []IndexDelta{
+				{
+					IndexKey: "1",
+					Added:    []*api.ReleaseBuildConfiguration{{Metadata: api.Metadata{Org: "added"}, RpmBuildLocation: "/added"}},
+				},
+				{
+					IndexKey: "2",
+					Added:    []*api.ReleaseBuildConfiguration{{Metadata: api.Metadata{Org: "added-2"}, RpmBuildLocation: "/added-2"}},
+				},
+				{
+					IndexKey: "3",
+					Added:    []*api.ReleaseBuildConfiguration{{Metadata: api.Metadata{Org: "added-3"}, RpmBuildLocation: "/added-3"}},
+				},
+			},
+		},
+		{
+			name: "Config is changed",
+			oldIndex: map[string][]*api.ReleaseBuildConfiguration{
+				"1": {
+					{Metadata: api.Metadata{Org: "bar"}, RpmBuildLocation: "/bar"},
+					{Metadata: api.Metadata{Org: "to-be-updated"}, RpmBuildLocation: "/initial"},
+					{Metadata: api.Metadata{Org: "foo"}, RpmBuildLocation: "/foo"},
+				},
+				"2": {
+					{Metadata: api.Metadata{Org: "bar-2"}, RpmBuildLocation: "/bar"},
+					{Metadata: api.Metadata{Org: "to-be-updated-2"}, RpmBuildLocation: "/initial"},
+					{Metadata: api.Metadata{Org: "foo-2"}, RpmBuildLocation: "/foo"},
+				},
+			},
+			newIndex: map[string][]*api.ReleaseBuildConfiguration{
+				"1": {
+					{Metadata: api.Metadata{Org: "bar"}, RpmBuildLocation: "/bar"},
+					{Metadata: api.Metadata{Org: "foo"}, RpmBuildLocation: "/foo"},
+					{Metadata: api.Metadata{Org: "to-be-updated"}, RpmBuildLocation: "/updated"},
+				},
+				"2": {
+					{Metadata: api.Metadata{Org: "bar-2"}, RpmBuildLocation: "/bar"},
+					{Metadata: api.Metadata{Org: "foo-2"}, RpmBuildLocation: "/foo"},
+					{Metadata: api.Metadata{Org: "to-be-updated-2"}, RpmBuildLocation: "/updated"},
+				},
+			},
+			expected: []IndexDelta{
+				{
+					IndexKey: "1",
+					Added: []*api.ReleaseBuildConfiguration{
+						{Metadata: api.Metadata{Org: "to-be-updated"}, RpmBuildLocation: "/updated"},
+					},
+					Removed: []*api.ReleaseBuildConfiguration{
+						{Metadata: api.Metadata{Org: "to-be-updated"}, RpmBuildLocation: "/initial"},
+					},
+				},
+				{
+					IndexKey: "2",
+					Added: []*api.ReleaseBuildConfiguration{
+						{Metadata: api.Metadata{Org: "to-be-updated-2"}, RpmBuildLocation: "/updated"},
+					},
+					Removed: []*api.ReleaseBuildConfiguration{
+						{Metadata: api.Metadata{Org: "to-be-updated-2"}, RpmBuildLocation: "/initial"},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+
+			actual := buildIndexDelta(tc.oldIndex, tc.newIndex)
+
+			// The index constructions uses a lot of maps, so it
+			// will output an unordered list of elements.
+			sort.Slice(actual, func(i, j int) bool {
+				iSerialized, err := json.Marshal(actual[i])
+				if err != nil {
+					t.Fatalf("failed to serialize element: %v", err)
+				}
+				jSerialized, err := json.Marshal(actual[j])
+				if err != nil {
+					t.Fatalf("failed to serialize element: %v", err)
+				}
+				return string(iSerialized) < string(jSerialized)
+			})
+
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("expected delta differs from actual: %s", diff)
+			}
+		})
 	}
 }

@@ -16,6 +16,7 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -117,8 +118,43 @@ func AddToManager(mgr manager.Manager,
 		return fmt.Errorf("failed to create watch for ImageStreams: %w", err)
 	}
 
+	configChangeChannel, err := configAgent.SubscribeToIndexChanges(indexName)
+	if err != nil {
+		return fmt.Errorf("failed to subscribe to index changes for index %s: %w", indexName, err)
+	}
+	if err := c.Watch(sourceForConfigChangeChannel(buildClusters, configChangeChannel), &handler.EnqueueRequestForObject{}); err != nil {
+		return fmt.Errorf("failed to subscribe for config change changes: %w", err)
+	}
+
 	r.log.Info("Successfully added reconciler to manager")
 	return nil
+}
+
+func sourceForConfigChangeChannel(buildClusterNames sets.String, changes <-chan agents.IndexDelta) *source.Channel {
+	sourceChannel := make(chan event.GenericEvent)
+	channelSource := &source.Channel{Source: sourceChannel}
+
+	go func() {
+		for delta := range changes {
+			// We only care about new additions
+			if len(delta.Added) == 0 {
+				continue
+			}
+			slashSplit := strings.Split(delta.IndexKey, "/")
+			if len(slashSplit) != 2 {
+				logrus.Errorf("BUG: got an index delta event with a key that is not a valid namespace/name identifier: %s", delta.IndexKey)
+				continue
+			}
+			for _, buildClusterName := range buildClusterNames.List() {
+				sourceChannel <- event.GenericEvent{Object: &testimagestreamtagimportv1.TestImageStreamTagImport{ObjectMeta: metav1.ObjectMeta{
+					Namespace: buildClusterName + clusterAndNamespaceDelimiter + slashSplit[0],
+					Name:      slashSplit[1],
+				}}}
+			}
+		}
+	}()
+
+	return channelSource
 }
 
 func testImageStreamTagImportHandlerForNamedCluster(clusterName string) handler.EventHandler {
@@ -438,6 +474,8 @@ type registryResolver interface {
 	ResolveConfig(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error)
 }
 
+const indexName = "config-by-test-input-imagestreamtag"
+
 func testInputImageStreamTagFilterFactory(
 	l *logrus.Entry,
 	ca agents.ConfigAgent,
@@ -448,7 +486,6 @@ func testInputImageStreamTagFilterFactory(
 	additionalImageStreamNamespaces sets.String,
 	buildClusterClients map[string]ctrlruntimeclient.Client,
 ) (objectFilter, error) {
-	const indexName = "config-by-test-input-imagestreamtag"
 	if err := ca.AddIndex(indexName, indexConfigsByTestInputImageStreamTag(resolver)); err != nil {
 		return nil, fmt.Errorf("failed to add %s index to configAgent: %w", indexName, err)
 	}

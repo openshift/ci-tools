@@ -38,6 +38,8 @@ const (
 
 	configSubDirs      = "jobs,config,templates"
 	targetSubDirectory = "ci-operator"
+
+	defaultBaseBranch = "master"
 )
 
 type SimpleConfig = repoowners.SimpleConfig
@@ -310,6 +312,7 @@ type options struct {
 	blockedOrgs        flagutil.Strings
 	debugMode          bool
 	selfApprove        bool
+	prBaseBranch       string
 	plugins            pluginflagutil.PluginOptions
 	flagutil.GitHubOptions
 }
@@ -334,6 +337,7 @@ func parseOptions() options {
 	fs.Var(&o.blockedOrgs, "ignore-org", "The orgs for which syncing OWNERS file is disabled.")
 	fs.BoolVar(&o.debugMode, "debug-mode", false, "Enable the DEBUG level of logs if true.")
 	fs.BoolVar(&o.selfApprove, "self-approve", false, "Self-approve the PR by adding the `approved` and `lgtm` labels. Requires write permissions on the repo.")
+	fs.StringVar(&o.prBaseBranch, "pr-base-branch", defaultBaseBranch, "The base branch to use for the pull request.")
 	o.AddFlags(fs)
 	o.AllowAnonymous = true
 	o.plugins.AddFlags(fs)
@@ -487,7 +491,7 @@ func main() {
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
 	if err := bumper.UpdatePullRequestWithLabels(gc, o.githubOrg, o.githubRepo, title,
-		getBody(directories, o.assign), o.githubLogin+":"+remoteBranch, "master", remoteBranch, true, labelsToAdd, o.dryRun); err != nil {
+		getBody(directories, o.assign), o.githubLogin+":"+remoteBranch, o.prBaseBranch, remoteBranch, true, labelsToAdd, o.dryRun); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 }

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -24,7 +23,6 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -785,82 +783,4 @@ type noOpRegistryResolver struct{}
 
 func (noOpRegistryResolver) ResolveConfig(cfg api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error) {
 	return cfg, nil
-}
-
-func TestSourceForConfigChangeChannel(t *testing.T) {
-	t.Parallel()
-
-	type requestWithCluster struct {
-		cluster string
-		request types.NamespacedName
-	}
-
-	buildClusters := sets.NewString("build01", "build02")
-	testCases := []struct {
-		name   string
-		change agents.IndexDelta
-
-		expected []requestWithCluster
-	}{
-		{
-			name:   "Config was added, we trigger an event per cluster",
-			change: agents.IndexDelta{IndexKey: "namespace/name:tag", Added: []*api.ReleaseBuildConfiguration{{}}},
-
-			expected: []requestWithCluster{
-				{cluster: "build01", request: types.NamespacedName{Namespace: "namespace", Name: "name:tag"}},
-				{cluster: "build02", request: types.NamespacedName{Namespace: "namespace", Name: "name:tag"}},
-			},
-		},
-		{
-			name:   "Config was removed, we don't trigger an event",
-			change: agents.IndexDelta{IndexKey: "namespace/name:tag", Removed: []*api.ReleaseBuildConfiguration{{}}},
-		},
-	}
-
-	for _, tc := range testCases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			changeChannel := make(chan agents.IndexDelta)
-
-			source := sourceForConfigChangeChannel(buildClusters, changeChannel)
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			queue := &hijackingQueue{}
-
-			if err := source.InjectStopChannel(ctx.Done()); err != nil {
-				t.Fatalf("failed to inject stop channel into source: %v", err)
-			}
-			if err := source.Start(ctx, &handler.EnqueueRequestForObject{}, queue); err != nil {
-				t.Fatalf("failed to start source: %v", err)
-			}
-			changeChannel <- tc.change
-			close(changeChannel)
-
-			// The source copies the data from the input channel to the workqueue asynchronously
-			// and there is no way for us to properly synchronize that so instead we just wait.
-			// We can not poll because for negative testcases (expect no request) that would instanly
-			// succeed and later events won't make the test fail correctly.
-			time.Sleep(10 * time.Second)
-			queue.lock.Lock()
-			if len(queue.received) != len(tc.expected) {
-				t.Errorf("expected to get %d events, got %d", len(tc.expected), len(queue.received))
-			}
-
-			var actual []requestWithCluster
-			for _, request := range queue.received {
-				cluster, namespacedName, err := decodeRequest(request)
-				if err != nil {
-					t.Errorf("failed to decode request %s: %v", request, err)
-					continue
-				}
-				actual = append(actual, requestWithCluster{cluster: cluster, request: namespacedName})
-			}
-			if diff := cmp.Diff(tc.expected, actual, cmp.AllowUnexported(requestWithCluster{})); diff != "" {
-				t.Errorf("expected requests differ from actual: %s", diff)
-			}
-
-		})
-	}
 }

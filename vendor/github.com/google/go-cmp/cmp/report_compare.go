@@ -65,7 +65,7 @@ func (opts formatOptions) WithTypeMode(t typeMode) formatOptions {
 }
 func (opts formatOptions) WithVerbosity(level int) formatOptions {
 	opts.VerbosityLevel = level
-	opts.LimitVerbosity = true
+	opts.LimitVerbosity = false
 	return opts
 }
 func (opts formatOptions) verbosity() uint {

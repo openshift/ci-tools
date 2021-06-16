@@ -337,6 +337,84 @@ func TestReplacer(t *testing.T) {
 			credentials:                        &usernameToken{username: "some-user", token: "some-token"},
 			epectedOpts:                        github.Opts{BasicAuthUser: "some-user", BasicAuthPassword: "some-token"},
 		},
+		{
+			name: "Unused base images are pruned",
+			config: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BaseImages: map[string]api.ImageStreamTagReference{
+						"old_image": {
+							Name:      "old_image",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
+						"other_old_image": {
+							Name:      "other_old_image",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
+						"fresh_image": {
+							Name:      "fresh_image",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
+					},
+				},
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						Inputs: map[string]api.ImageBuildInputs{
+							"image": {As: []string{"org/image"}},
+						},
+					},
+					To: "cool_image",
+				}},
+				Tests: []api.TestStepConfiguration{{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Test: []api.LiteralTestStep{{
+							From: "fresh_image",
+						}},
+					}},
+				},
+				Metadata: api.Metadata{Branch: "master"},
+			},
+			files:                          map[string][]byte{"Dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/image as image")},
+			pruneUnusedReplacementsEnabled: true,
+			expectWrite:                    true,
+		},
+		{
+			name: "Test has dependency so base image not pruned",
+			config: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BaseImages: map[string]api.ImageStreamTagReference{
+						"fresh_image": {
+							Name:      "fresh_image",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
+					},
+				},
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						Inputs: map[string]api.ImageBuildInputs{
+							"image": {As: []string{"registry.svc.ci.openshift.org/org/image"}},
+						},
+					},
+					To: "cool_image",
+				}},
+				Tests: []api.TestStepConfiguration{{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Test: []api.LiteralTestStep{{
+							Dependencies: []api.StepDependency{
+								{Name: "pipeline:fresh_image"},
+							},
+						}},
+					}},
+				},
+				Metadata: api.Metadata{Branch: "master"},
+			},
+			files:                          map[string][]byte{"Dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/image as image")},
+			pruneUnusedReplacementsEnabled: true,
+			expectWrite:                    false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -356,6 +434,9 @@ func TestReplacer(t *testing.T) {
 				tc.promotionTargetToDockerfileMapping,
 				majorMinor,
 				nil,
+				func(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error) {
+					return *tc.config, nil
+				},
 			)(tc.config, &config.Info{}); err != nil {
 				t.Errorf("replacer failed: %v", err)
 			}

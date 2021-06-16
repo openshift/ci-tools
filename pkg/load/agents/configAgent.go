@@ -2,6 +2,7 @@ package agents
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
 	"sync"
 	"time"
@@ -13,6 +14,12 @@ import (
 	"github.com/openshift/ci-tools/pkg/load"
 )
 
+type IndexDelta struct {
+	IndexKey string
+	Added    []*api.ReleaseBuildConfiguration
+	Removed  []*api.ReleaseBuildConfiguration
+}
+
 // ConfigAgent is an interface that can load configs from disk into
 // memory and retrieve them when provided with a config.Info.
 type ConfigAgent interface {
@@ -23,20 +30,22 @@ type ConfigAgent interface {
 	GetGeneration() int
 	AddIndex(indexName string, indexFunc IndexFn) error
 	GetFromIndex(indexName string, indexKey string) ([]*api.ReleaseBuildConfiguration, error)
+	SubscribeToIndexChanges(indexName string) (<-chan IndexDelta, error)
 }
 
 // IndexFn can be used to add indexes to the ConfigAgent
 type IndexFn func(api.ReleaseBuildConfiguration) []string
 
 type configAgent struct {
-	lock         *sync.RWMutex
-	configs      load.ByOrgRepo
-	configPath   string
-	generation   int
-	errorMetrics *prometheus.CounterVec
-	indexFuncs   map[string]IndexFn
-	indexes      map[string]configIndex
-	reloadConfig func() error
+	lock             *sync.RWMutex
+	configs          load.ByOrgRepo
+	configPath       string
+	generation       int
+	errorMetrics     *prometheus.CounterVec
+	indexFuncs       map[string]IndexFn
+	indexes          map[string]configIndex
+	indexSubscribers map[string][]chan IndexDelta
+	reloadConfig     func() error
 }
 
 type configIndex map[string][]*api.ReleaseBuildConfiguration
@@ -188,6 +197,22 @@ func (a *configAgent) AddIndex(indexName string, indexFunc IndexFn) error {
 	return nil
 }
 
+func (a *configAgent) SubscribeToIndexChanges(indexName string) (<-chan IndexDelta, error) {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+
+	if _, found := a.indexes[indexName]; !found {
+		return nil, fmt.Errorf("index %s does not exist", indexName)
+	}
+
+	if a.indexSubscribers == nil {
+		a.indexSubscribers = map[string][]chan IndexDelta{}
+	}
+	newChan := make(chan IndexDelta)
+	a.indexSubscribers[indexName] = append(a.indexSubscribers[indexName], newChan)
+	return newChan, nil
+}
+
 // loadFilenameToConfig generates a new filenameToConfig map.
 func (a *configAgent) loadFilenameToConfig() error {
 	logrus.Debug("Reloading configs")
@@ -213,6 +238,8 @@ func (a *configAgent) loadFilenameToConfig() error {
 }
 
 func (a *configAgent) buildIndexes() {
+	oldIndexes := a.indexes
+
 	a.indexes = map[string]configIndex{}
 	for indexName, indexFunc := range a.indexFuncs {
 		// Make sure the index always exists even if empty, otherwise we return a confusing
@@ -239,5 +266,89 @@ func (a *configAgent) buildIndexes() {
 				}
 			}
 		}
+
+		// Building the diff is expensive, so cache it in case we have multiple
+		// subscribers.
+		var changes []IndexDelta
+		for _, channel := range a.indexSubscribers[indexName] {
+			if changes == nil {
+				changes = buildIndexDelta(oldIndexes[indexName], a.indexes[indexName])
+			}
+
+			// This might block, so do it in a new goroutine
+			channel := channel
+			go func() {
+				for _, change := range changes {
+					channel <- change
+				}
+			}()
+		}
 	}
+}
+
+// configByFilenameFromIndex constructs a map indexKey -> Metadata -> config for the config
+// in the provided index. It uses the fact that Metadata is unique per config to speed up
+// looking up specific values in an index.
+func configByFilenameFromIndex(index configIndex) map[string]map[api.Metadata]*api.ReleaseBuildConfiguration {
+	result := make(map[string]map[api.Metadata]*api.ReleaseBuildConfiguration, len(index))
+	for indexKey, indexValues := range index {
+		if _, ok := result[indexKey]; !ok {
+			result[indexKey] = make(map[api.Metadata]*api.ReleaseBuildConfiguration, len(indexValues))
+		}
+		for idx, config := range indexValues {
+			result[indexKey][config.Metadata] = indexValues[idx]
+		}
+	}
+
+	return result
+}
+
+func buildIndexDelta(oldIndex, newIndex configIndex) []IndexDelta {
+	changesByKey := map[string]*IndexDelta{}
+
+	oldIndexesMappedByMetadata := configByFilenameFromIndex(oldIndex)
+	newIndexedMappedByMetadata := configByFilenameFromIndex(newIndex)
+
+	alreadyProcessed := map[string]map[api.Metadata]struct{}{}
+
+	for indexKey, configMap := range oldIndexesMappedByMetadata {
+		alreadyProcessed[indexKey] = map[api.Metadata]struct{}{}
+		for key, value := range configMap {
+			alreadyProcessed[indexKey][key] = struct{}{}
+			if reflect.DeepEqual(newIndexedMappedByMetadata[indexKey][key], value) {
+				continue
+			}
+			if changesByKey[indexKey] == nil {
+				changesByKey[indexKey] = &IndexDelta{IndexKey: indexKey}
+			}
+			changesByKey[indexKey].Removed = append(changesByKey[indexKey].Removed, configMap[key])
+			if newValue := newIndexedMappedByMetadata[indexKey][key]; newValue != nil {
+				changesByKey[indexKey].Added = append(changesByKey[indexKey].Added, newValue)
+			}
+		}
+	}
+	for indexKey, configMap := range newIndexedMappedByMetadata {
+		for key, value := range configMap {
+			if _, ok := alreadyProcessed[indexKey][key]; ok {
+				continue
+			}
+			if reflect.DeepEqual(oldIndexesMappedByMetadata[indexKey][key], value) {
+				continue
+			}
+			if changesByKey[indexKey] == nil {
+				changesByKey[indexKey] = &IndexDelta{IndexKey: indexKey}
+			}
+			changesByKey[indexKey].Added = append(changesByKey[indexKey].Added, configMap[key])
+			if oldValue := oldIndexesMappedByMetadata[indexKey][key]; oldValue != nil {
+				changesByKey[indexKey].Removed = append(changesByKey[indexKey].Removed, oldValue)
+			}
+		}
+	}
+
+	var result []IndexDelta
+	for _, value := range changesByKey {
+		result = append(result, *value)
+	}
+
+	return result
 }

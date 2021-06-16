@@ -416,6 +416,7 @@ func mergePresubmits(old, new *prowconfig.Presubmit) prowconfig.Presubmit {
 
 	merged.AlwaysRun = old.AlwaysRun
 	merged.RunIfChanged = old.RunIfChanged
+	merged.SkipIfOnlyChanged = old.SkipIfOnlyChanged
 	merged.Optional = old.Optional
 	merged.MaxConcurrency = old.MaxConcurrency
 	merged.SkipReport = old.SkipReport

@@ -84,3 +84,12 @@ presubmits:
             cpu: 10m
       serviceAccountName: ci-operator
     trigger: '(?m)^/test (?:.*? )?images(?: .*?)?$'
+  - agent: jenkins
+    name: pull-ci-super-duper-skippy
+    always_run: false
+    context: ci/openshift-jenkins/skippy
+    labels:
+      master: ci.openshift.redhat.com
+    rerun_command: /test skippy
+    skip_if_only_changed: changes
+    trigger: ((?m)^/test( all| skippy),?(\s+|$))

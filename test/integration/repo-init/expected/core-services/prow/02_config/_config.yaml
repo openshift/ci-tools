@@ -44,28 +44,6 @@ tide:
   context_options: {}
   max_goroutines: 20
   queries:
-  - includedBranches:
-    - openshift-4.1
-    - release-4.0
-    - release-4.1
-    - release-4.2
-    - release-4.3
-    - release-4.4
-    labels:
-    - approved
-    - bugzilla/valid-bug
-    - cherry-pick-approved
-    - lgtm
-    missingLabels:
-    - bugzilla/invalid-bug
-    - do-not-merge/blocked-paths
-    - do-not-merge/hold
-    - do-not-merge/invalid-owners-file
-    - do-not-merge/work-in-progress
-    - needs-rebase
-    repos:
-    - openshift/cluster-version-operator
-    - org/repo
   - excludedBranches:
     - openshift-4.1
     - release-4.0
@@ -89,5 +67,27 @@ tide:
     - org/repo
     - org/other
     - org/third
+  - includedBranches:
+    - openshift-4.1
+    - release-4.0
+    - release-4.1
+    - release-4.2
+    - release-4.3
+    - release-4.4
+    labels:
+    - approved
+    - bugzilla/valid-bug
+    - cherry-pick-approved
+    - lgtm
+    missingLabels:
+    - bugzilla/invalid-bug
+    - do-not-merge/blocked-paths
+    - do-not-merge/hold
+    - do-not-merge/invalid-owners-file
+    - do-not-merge/work-in-progress
+    - needs-rebase
+    repos:
+    - openshift/cluster-version-operator
+    - org/repo
   status_update_period: 1m0s
   sync_period: 1m0s

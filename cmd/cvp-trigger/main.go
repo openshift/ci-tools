@@ -53,6 +53,7 @@ const (
 	InstallNamespace = "INSTALL_NAMESPACE"
 	Package          = "PACKAGE"
 	TargetNamespaces = "TARGET_NAMESPACES"
+	PyxisUrl         = "PYXIS_URL"
 )
 
 type options struct {
@@ -67,6 +68,7 @@ type options struct {
 	outputPath          string
 	releaseImageRef     string
 	targetNamespaces    string
+	pyxisUrl            string
 	dryRun              bool
 }
 
@@ -105,6 +107,7 @@ func (o *options) gatherOptions() {
 	fs.StringVar(&o.operatorPackageName, operatorPackageNameOptions, "", "Operator package name to test")
 	fs.StringVar(&o.releaseImageRef, releaseImageRefOption, "", "Pull spec of a specific release payload image used for OCP deployment.")
 	fs.StringVar(&o.targetNamespaces, targetNamespacesOption, "", "A comma-separated list of namespaces the operator will target. If empty, all namespaces are targeted")
+	fs.StringVar(&o.pyxisUrl, PyxisUrl, "", "URL that contains specific cvp product package name for specific ISV with unique pid")
 	fs.BoolVar(&o.dryRun, "dry-run", false, "Executes a dry-run, displaying the job YAML without submitting the job to Prow")
 }
 
@@ -222,6 +225,9 @@ func main() {
 	}
 	if o.installNamespace != "" {
 		params[InstallNamespace] = o.installNamespace
+	}
+	if o.pyxisUrl != "" {
+		params[PyxisUrl] = o.pyxisUrl
 	}
 	if o.targetNamespaces != "" {
 		params[TargetNamespaces] = o.targetNamespaces

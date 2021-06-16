@@ -417,6 +417,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Dependencies holds override values for dependency parameters.\n" +
 	"            dependencies:\n" +
 	"                \"\": \"\"\n" +
+	"            # DependencyOverrides allows a step to override a dependency with a fully-qualified pullspec. This will probably only ever\n" +
+	"            # be used with rehearsals. Otherwise, the overrides should be passed in as parameters to ci-operator.\n" +
+	"            dependency_overrides:\n" +
+	"                \"\": \"\"\n" +
 	"            # DnsConfig for step's Pod.\n" +
 	"            dnsConfig:\n" +
 	"                # Nameservers is a list of IP addresses that will be used as DNS servers for the Pod\n" +
@@ -758,6 +762,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            cluster_profile: ' '\n" +
 	"            # Dependencies holds override values for dependency parameters.\n" +
 	"            dependencies:\n" +
+	"                \"\": \"\"\n" +
+	"            # DependencyOverrides allows a step to override a dependency with a fully-qualified pullspec. This will probably only ever\n" +
+	"            # be used with rehearsals. Otherwise, the overrides should be passed in as parameters to ci-operator.\n" +
+	"            dependency_overrides:\n" +
 	"                \"\": \"\"\n" +
 	"            # DnsConfig for step's Pod.\n" +
 	"            dnsConfig:\n" +
@@ -1107,6 +1115,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Dependencies holds override values for dependency parameters.\n" +
 	"        dependencies:\n" +
 	"            \"\": \"\"\n" +
+	"        # DependencyOverrides allows a step to override a dependency with a fully-qualified pullspec. This will probably only ever\n" +
+	"        # be used with rehearsals. Otherwise, the overrides should be passed in as parameters to ci-operator.\n" +
+	"        dependency_overrides:\n" +
+	"            \"\": \"\"\n" +
 	"        # DnsConfig for step's Pod.\n" +
 	"        dnsConfig:\n" +
 	"            # Nameservers is a list of IP addresses that will be used as DNS servers for the Pod\n" +
@@ -1448,6 +1460,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        cluster_profile: ' '\n" +
 	"        # Dependencies holds override values for dependency parameters.\n" +
 	"        dependencies:\n" +
+	"            \"\": \"\"\n" +
+	"        # DependencyOverrides allows a step to override a dependency with a fully-qualified pullspec. This will probably only ever\n" +
+	"        # be used with rehearsals. Otherwise, the overrides should be passed in as parameters to ci-operator.\n" +
+	"        dependency_overrides:\n" +
 	"            \"\": \"\"\n" +
 	"        # DnsConfig for step's Pod.\n" +
 	"        dnsConfig:\n" +

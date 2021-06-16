@@ -723,11 +723,75 @@ func TestDependencyOverrides(t *testing.T) {
 				"could not parse dependency-override-param: ALSO_NOT_GOOD is not in the format key=value",
 			},
 		},
+		{
+			id: "Override dependency using test-level dependency override",
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						DependencyOverrides: map[string]string{
+							"OO_INDEX": "registry.mystuff.com:5000/pushed/myimage",
+						},
+						Test: []api.LiteralTestStep{
+							{
+								As: "step1",
+								Dependencies: []api.StepDependency{
+									{
+										Name: "ci-index",
+										Env:  "OO_INDEX",
+									},
+									{
+										Name: "cool-image",
+										Env:  "OTHER_THING",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedDeps: map[string]string{
+				"OO_INDEX":    "registry.mystuff.com:5000/pushed/myimage",
+				"OTHER_THING": "cool-image",
+			},
+		},
+		{
+			id:          "Input param dependency takes precedence",
+			inputParams: stringSlice{[]string{"OO_INDEX=registry.mystuff.com:5000/pushed/myimage"}},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						DependencyOverrides: map[string]string{
+							"OO_INDEX": "registry.mystuff.com:5000/pushed/myimage2",
+						},
+						Test: []api.LiteralTestStep{
+							{
+								As: "step1",
+								Dependencies: []api.StepDependency{
+									{
+										Name: "ci-index",
+										Env:  "OO_INDEX",
+									},
+									{
+										Name: "cool-image",
+										Env:  "OTHER_THING",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedDeps: map[string]string{
+				"OO_INDEX":    "registry.mystuff.com:5000/pushed/myimage",
+				"OTHER_THING": "cool-image",
+			},
+		},
 	}
 
 	t.Parallel()
 
-	for _, tc := range testCases {
+	for i := range testCases {
+		tc := testCases[i]
 		t.Run(tc.id, func(t *testing.T) {
 			t.Parallel()
 

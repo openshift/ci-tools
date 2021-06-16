@@ -98,6 +98,7 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 		AllowSkipOnSuccess:       config.AllowSkipOnSuccess,
 		AllowBestEffortPostSteps: config.AllowBestEffortPostSteps,
 		Leases:                   config.Leases,
+		DependencyOverrides:      config.DependencyOverrides,
 	}
 	stack := stackForTest(name, config.Environment, config.Dependencies)
 	if config.Workflow != nil {

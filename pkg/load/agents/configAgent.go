@@ -205,6 +205,9 @@ func (a *configAgent) SubscribeToIndexChanges(indexName string) (<-chan IndexDel
 		return nil, fmt.Errorf("index %s does not exist", indexName)
 	}
 
+	if a.indexSubscribers == nil {
+		a.indexSubscribers = map[string][]chan IndexDelta{}
+	}
 	newChan := make(chan IndexDelta)
 	a.indexSubscribers[indexName] = append(a.indexSubscribers[indexName], newChan)
 	return newChan, nil

@@ -61,6 +61,12 @@ func TestProcessing(t *testing.T) {
 			},
 		},
 		{
+			name: "Variant is set, nothing to do",
+			inputModify: func(p *processInput) {
+				p.metadata.Variant = "OKD"
+			},
+		},
+		{
 			name: ".ci-operator.yaml already correct, build_root.from_repository gets set to true",
 			inputModify: func(p *processInput) {
 				p.ciOperatorYaml = `

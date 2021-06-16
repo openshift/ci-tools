@@ -283,12 +283,6 @@ func (s *multiStageTestStep) environment(ctx context.Context) ([]coreapi.EnvVar,
 		ret = append(ret, coreapi.EnvVar{Name: l.Env, Value: val})
 	}
 
-	if optionalOperator, err := resolveOptionalOperator(s.params); err != nil {
-		return nil, err
-	} else if optionalOperator != nil {
-		ret = append(ret, optionalOperator.asEnv()...)
-	}
-
 	if s.profile != "" {
 		secret := s.profileSecretName()
 		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: secret}, &coreapi.Secret{}); err != nil {

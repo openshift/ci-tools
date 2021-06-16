@@ -817,25 +817,6 @@ func TestEnvironment(t *testing.T) {
 			expected: []coreapi.EnvVar{{Name: "LEASE_ONE", Value: "ONE"}, {Name: "LEASE_TWO", Value: "TWO"}},
 		},
 		{
-			name: "OO variables are exposed in environment",
-			params: fakeStepParams{
-				"OO_INDEX":             "le index",
-				"OO_BUNDLE":            "le bundle",
-				"OO_PACKAGE":           "le package",
-				"OO_CHANNEL":           "le channel",
-				"OO_INSTALL_NAMESPACE": "le namespace d'install",
-				"OO_TARGET_NAMESPACES": "les namespaces",
-			},
-			expected: []coreapi.EnvVar{
-				{Name: "OO_INDEX", Value: "le index"},
-				{Name: "OO_PACKAGE", Value: "le package"},
-				{Name: "OO_CHANNEL", Value: "le channel"},
-				{Name: "OO_BUNDLE", Value: "le bundle"},
-				{Name: "OO_INSTALL_NAMESPACE", Value: "le namespace d'install"},
-				{Name: "OO_TARGET_NAMESPACES", Value: "les namespaces"},
-			},
-		},
-		{
 			name: "arbitrary variables are not exposed in environment",
 			params: fakeStepParams{
 				"OO_IMSMART":     "nope",

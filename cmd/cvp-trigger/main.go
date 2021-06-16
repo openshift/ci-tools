@@ -216,31 +216,44 @@ func main() {
 		logrus.WithField("job-name", o.jobName).Fatal(err)
 	}
 
+	// build up the multi-stage parameters to pass to the ci-operator.
 	params := map[string]string{
-		steps.OOBundle:  o.bundleImageRef,
-		steps.OOChannel: o.channel,
-		steps.OOIndex:   o.indexImageRef,
-		steps.OOPackage: o.operatorPackageName,
+		BundleImage: o.bundleImageRef,
+		Channel:     o.channel,
+		IndexImage:  o.indexImageRef,
+		Package:     o.operatorPackageName,
 	}
 	if o.installNamespace != "" {
-		params[steps.OOInstallNamespace] = o.installNamespace
+		params[InstallNamespace] = o.installNamespace
 	}
 	if o.pyxisUrl != "" {
 		params[PyxisUrl] = o.pyxisUrl
 	}
 	if o.targetNamespaces != "" {
-		params[steps.OOTargetNamespaces] = o.targetNamespaces
+		params[TargetNamespaces] = o.targetNamespaces
 	}
 
 	appendMultiStageParams(prowjob.Spec.PodSpec, params)
 
 	// Add flag values to inject as ENV var entries in the prowjob configuration
-	envVars := params
-	envVars["OCP_VERSION"] = o.ocpVersion
-	envVars["CLUSTER_TYPE"] = "aws"
-
+	// TODO: After all of the CVP changes required to accept the multi-stage-params have been made, we need to go back and
+	// remove these OO_ env params.
+	envVars := map[string]string{
+		steps.OOBundle:  o.bundleImageRef,
+		"OCP_VERSION":   o.ocpVersion,
+		"CLUSTER_TYPE":  "aws",
+		steps.OOIndex:   o.indexImageRef,
+		steps.OOPackage: o.operatorPackageName,
+		steps.OOChannel: o.channel,
+	}
 	if o.releaseImageRef != "" {
 		envVars[utils.ReleaseImageEnv(api.LatestReleaseName)] = o.releaseImageRef
+	}
+	if o.installNamespace != "" {
+		envVars[steps.OOInstallNamespace] = o.installNamespace
+	}
+	if o.targetNamespaces != "" {
+		envVars[steps.OOTargetNamespaces] = o.targetNamespaces
 	}
 	var keys []string
 	for key := range envVars {
@@ -371,8 +384,6 @@ func writeResultOutput(prowjobResult jobResult, outputPath string) error {
 }
 
 // appendMultiStageParams passes all of the OO_ params to ci-operator as multi-stage-params.
-// TODO: After all of the CVP changes required to accept the multi-stage-params have been made, we need to go back and
-// remove the OO_ env params from here.
 func appendMultiStageParams(podSpec *v1.PodSpec, params map[string]string) {
 	// for execution purposes, the order isn't super important, but in order to allow for consistent test verification we need
 	// to sort the params.

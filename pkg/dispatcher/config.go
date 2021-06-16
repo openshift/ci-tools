@@ -3,11 +3,13 @@ package dispatcher
 import (
 	"fmt"
 	"io/ioutil"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"sigs.k8s.io/yaml"
 
@@ -37,7 +39,12 @@ type Config struct {
 	// Groups maps a group of jobs to a cluster
 	Groups JobGroups `json:"groups"`
 	// BuildFarm maps groups of jobs to a cloud provider, like GCP
-	BuildFarm map[CloudProvider]JobGroups `json:"buildFarm,omitempty"`
+	BuildFarm map[CloudProvider]map[api.Cluster]Filenames `json:"buildFarm,omitempty"`
+}
+
+type Filenames struct {
+	FilenamesRaw []string    `json:"filenames,omitempty"`
+	Filenames    sets.String `json:"-"`
 }
 
 // JobGroups maps a group of jobs to a cluster
@@ -112,25 +119,14 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 		}
 	}
 	for _, v := range config.BuildFarm {
-		for cluster, group := range v {
-			for _, job := range group.Jobs {
-				if jobBase.Name == job {
-					if clusterName == "" {
-						clusterName = cluster
-						mayBeRelocated = true
-					}
+		for cluster, filenames := range v {
+			filename := filepath.Base(path)
+			if filenames.Filenames.Has(filename) {
+				if clusterName == "" {
+					clusterName = cluster
+					mayBeRelocated = true
 				}
-			}
-		}
-		for cluster, group := range v {
-			for _, re := range group.PathREs {
-				if re.MatchString(path) {
-					if clusterName == "" {
-						clusterName = cluster
-						mayBeRelocated = true
-					}
-					matches = append(matches, re.String())
-				}
+				matches = append(matches, filename)
 			}
 		}
 	}
@@ -208,18 +204,12 @@ func LoadConfig(configPath string) (*Config, error) {
 	}
 
 	for cloudProvider := range config.BuildFarm {
-		for cluster, group := range config.BuildFarm[cloudProvider] {
-			var pathREs []*regexp.Regexp
-			for i, p := range group.Paths {
-				re, err := regexp.Compile(p)
-				if err != nil {
-					errs = append(errs, fmt.Errorf("failed to compile regex config.BuildFarm[%s][%s].Paths[%d] from %q: %w", cloudProvider, cluster, i, p, err))
-					continue
-				}
-				pathREs = append(pathREs, re)
+		for cluster, filenames := range config.BuildFarm[cloudProvider] {
+			filenames.Filenames = sets.NewString()
+			for _, f := range filenames.FilenamesRaw {
+				filenames.Filenames.Insert(f)
 			}
-			group.PathREs = pathREs
-			config.BuildFarm[cloudProvider][cluster] = group
+			config.BuildFarm[cloudProvider][cluster] = filenames
 		}
 	}
 
@@ -238,13 +228,6 @@ func (config *Config) Validate() error {
 	for _, group := range config.Groups {
 		for _, job := range group.Jobs {
 			records[job] = records[job] + 1
-		}
-	}
-	for _, v := range config.BuildFarm {
-		for _, group := range v {
-			for _, job := range group.Jobs {
-				records[job]++
-			}
 		}
 	}
 	var matches []string

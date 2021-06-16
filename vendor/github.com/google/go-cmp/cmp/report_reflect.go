@@ -352,7 +352,7 @@ func formatMapKey(v reflect.Value, disambiguate bool, ptrs *pointerReferences) s
 	opts.AvoidStringer = disambiguate
 	opts.QualifiedNames = disambiguate
 	opts.VerbosityLevel = maxVerbosityPreset
-	opts.LimitVerbosity = true
+	opts.LimitVerbosity = false
 	s := opts.FormatValue(v, reflect.Map, ptrs).String()
 	return strings.TrimSpace(s)
 }

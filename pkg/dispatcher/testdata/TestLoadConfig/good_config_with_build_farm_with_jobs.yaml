@@ -24,7 +24,7 @@ groups:
 buildFarm:
   aws:
     build01:
-      paths:
-        - ".*some-build-farm-presubmits.yaml$"
+      filenames:
+        - "some-build-farm-presubmits.yaml"
   gcp: 
     build02: {}

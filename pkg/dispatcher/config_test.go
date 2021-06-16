@@ -13,6 +13,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/config"
 	prowconfig "k8s.io/test-infra/prow/config"
 
@@ -59,7 +60,7 @@ var (
 
 	configWithBuildFarm = Config{
 		Default: "api.ci",
-		BuildFarm: map[CloudProvider]JobGroups{
+		BuildFarm: map[CloudProvider]map[api.Cluster]Filenames{
 			CloudAWS: {
 				api.ClusterBuild01: {},
 			},
@@ -106,15 +107,13 @@ var (
 	configWithBuildFarmWithJobs = Config{
 		Default: "api.ci",
 		KVM:     []api.Cluster{api.ClusterBuild02},
-		BuildFarm: map[CloudProvider]JobGroups{
+		BuildFarm: map[CloudProvider]map[api.Cluster]Filenames{
 			CloudAWS: {
 				api.ClusterBuild01: {
-					Paths: []string{
-						".*some-build-farm-presubmits.yaml$",
+					FilenamesRaw: []string{
+						"some-build-farm-presubmits.yaml",
 					},
-					PathREs: []*regexp.Regexp{
-						regexp.MustCompile(".*some-build-farm-presubmits.yaml$"),
-					},
+					Filenames: sets.NewString("some-build-farm-presubmits.yaml"),
 				},
 			},
 			CloudGCP: {
@@ -249,19 +248,15 @@ func TestGetClusterForJob(t *testing.T) {
 			name: "error: PR 15918",
 			config: &Config{
 				Default: "api.ci",
-				BuildFarm: map[CloudProvider]JobGroups{
-					CloudAWS: {
-						api.ClusterBuild01: {
-							PathREs: []*regexp.Regexp{
-								regexp.MustCompile(".*infra-periodics.yaml$"),
-							},
+				Groups: map[api.Cluster]Group{
+					api.ClusterBuild01: {
+						PathREs: []*regexp.Regexp{
+							regexp.MustCompile(".*infra-periodics.yaml$"),
 						},
 					},
-					CloudGCP: {
-						api.ClusterBuild02: {
-							PathREs: []*regexp.Regexp{
-								regexp.MustCompile(".*/openshift-openshift-azure-infra-periodics.yaml$"),
-							},
+					api.ClusterBuild02: {
+						PathREs: []*regexp.Regexp{
+							regexp.MustCompile(".*/openshift-openshift-azure-infra-periodics.yaml$"),
 						},
 					},
 				},
@@ -275,13 +270,11 @@ func TestGetClusterForJob(t *testing.T) {
 			name: "error: PR 1722",
 			config: &Config{
 				Default: "api.ci",
-				BuildFarm: map[CloudProvider]JobGroups{
-					CloudGCP: {
-						api.ClusterBuild02: {
-							PathREs: []*regexp.Regexp{
-								regexp.MustCompile(".*kubevirt-kubevirt-ssp-operator-master-presubmits.yaml$"),
-								regexp.MustCompile(".*kubevirt-ssp-operator-master-presubmits.yaml$"),
-							},
+				Groups: map[api.Cluster]Group{
+					api.ClusterBuild02: {
+						PathREs: []*regexp.Regexp{
+							regexp.MustCompile(".*kubevirt-kubevirt-ssp-operator-master-presubmits.yaml$"),
+							regexp.MustCompile(".*kubevirt-ssp-operator-master-presubmits.yaml$"),
 						},
 					},
 				},
@@ -295,13 +288,11 @@ func TestGetClusterForJob(t *testing.T) {
 			name: "fix: PR 1722",
 			config: &Config{
 				Default: "api.ci",
-				BuildFarm: map[CloudProvider]JobGroups{
-					CloudGCP: {
-						api.ClusterBuild02: {
-							PathREs: []*regexp.Regexp{
-								regexp.MustCompile(".*/kubevirt-kubevirt-ssp-operator-master-presubmits.yaml$"),
-								regexp.MustCompile(".*/kubevirt-ssp-operator-master-presubmits.yaml$"),
-							},
+				Groups: map[api.Cluster]Group{
+					api.ClusterBuild02: {
+						PathREs: []*regexp.Regexp{
+							regexp.MustCompile(".*/kubevirt-kubevirt-ssp-operator-master-presubmits.yaml$"),
+							regexp.MustCompile(".*/kubevirt-ssp-operator-master-presubmits.yaml$"),
 						},
 					},
 				},
@@ -535,20 +526,12 @@ func TestValidate(t *testing.T) {
 			name: "basic case",
 			config: &Config{
 				Default: "api.ci",
-				BuildFarm: map[CloudProvider]JobGroups{
-					CloudAWS: {
-						api.ClusterBuild01: {
-							Jobs: []string{"a", "b"},
-						},
-					},
-					CloudGCP: {
-						api.ClusterBuild02: {
-							Jobs: []string{"c", "b"},
-						},
-					},
-				},
 				Groups: map[api.Cluster]Group{"api.ci": {
 					Jobs: []string{"c", "d"},
+				}, "app.ci": {
+					Jobs: []string{"b", "c"},
+				}, "build01": {
+					Jobs: []string{"a", "b"},
 				}},
 			},
 			expected: fmt.Errorf("there are job names occurring more than once: [b c]"),

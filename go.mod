@@ -8,6 +8,10 @@ replace (
 	github.com/containerd/containerd => github.com/containerd/containerd v0.2.10-0.20180716142608-408d13de2fbb
 
 	github.com/docker/docker => github.com/openshift/moby-moby v1.4.2-0.20190308215630-da810a85109d
+
+	// Forked version that disables diff trimming
+	github.com/google/go-cmp => github.com/alvaroaleman/go-cmp v0.5.7-0.20210615160450-f8688cd5aaa0
+
 	github.com/moby/buildkit => github.com/dmcgowan/buildkit v0.0.0-20170731200553-da2b9dc7dab9
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20201120165435-072a4cd8ca42
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20200521150516-05eb9880269c
@@ -63,7 +67,7 @@ require (
 	k8s.io/apimachinery v0.21.1
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
 	k8s.io/klog/v2 v2.8.0
-	k8s.io/test-infra v0.0.0-20210609143947-88674ef045c6
+	k8s.io/test-infra v0.0.0-20210615161601-c973edd1ac0b
 	k8s.io/utils v0.0.0-20210527160623-6fdb442a123b
 	sigs.k8s.io/boskos v0.0.0-20210210143059-9ac98d864d2a
 	sigs.k8s.io/controller-runtime v0.9.0

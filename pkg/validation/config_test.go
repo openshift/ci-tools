@@ -749,6 +749,7 @@ func TestReleaseBuildConfiguration_DependencyParts(t *testing.T) {
 	var testCases = []struct {
 		name           string
 		config         *api.ReleaseBuildConfiguration
+		claimRelease   *api.ClaimRelease
 		dependency     api.StepDependency
 		expectedStream string
 		expectedTag    string
@@ -781,6 +782,15 @@ func TestReleaseBuildConfiguration_DependencyParts(t *testing.T) {
 			explicit:       true,
 		},
 		{
+			name:           "explicit, long-form for stable, overridden by cluster claim via latest release name",
+			config:         &api.ReleaseBuildConfiguration{},
+			claimRelease:   &api.ClaimRelease{ReleaseName: "latest-e2e", OverrideName: "latest"},
+			dependency:     api.StepDependency{Name: "stable:installer"},
+			expectedStream: "stable-latest-e2e",
+			expectedTag:    "installer",
+			explicit:       true,
+		},
+		{
 			name:           "explicit, long-form for something crazy",
 			config:         &api.ReleaseBuildConfiguration{},
 			dependency:     api.StepDependency{Name: "whoa:really"},
@@ -792,7 +802,7 @@ func TestReleaseBuildConfiguration_DependencyParts(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			actualStream, actualTag, explicit := testCase.config.DependencyParts(testCase.dependency)
+			actualStream, actualTag, explicit := testCase.config.DependencyParts(testCase.dependency, testCase.claimRelease)
 			if explicit != testCase.explicit {
 				t.Errorf("%s: did not correctly determine if ImageStream was explicit (should be %v)", testCase.name, testCase.explicit)
 			}

@@ -75,13 +75,20 @@ func (config *ReleaseBuildConfiguration) ImageStreamFor(image string) (string, b
 }
 
 // DependencyParts returns the imageStream and tag name from a user-provided
-// reference to an image in the test namespace
-func (config *ReleaseBuildConfiguration) DependencyParts(dependency StepDependency) (string, string, bool) {
+// reference to an image in the test namespace. If a ClaimRelease is provided
+// that overrides the detected stream, the override name will be returned.
+func (config *ReleaseBuildConfiguration) DependencyParts(dependency StepDependency, claimRelease *ClaimRelease) (stream string, name string, explicit bool) {
 	if !strings.Contains(dependency.Name, ":") {
-		stream, explicit := config.ImageStreamFor(dependency.Name)
-		return stream, dependency.Name, explicit
+		stream, explicit = config.ImageStreamFor(dependency.Name)
+		name = dependency.Name
 	} else {
 		parts := strings.Split(dependency.Name, ":")
-		return parts[0], parts[1], true
+		stream = parts[0]
+		name = parts[1]
+		explicit = true
 	}
+	if claimRelease != nil && ReleaseStreamFor(claimRelease.OverrideName) == stream {
+		stream = ReleaseStreamFor(claimRelease.ReleaseName)
+	}
+	return stream, name, explicit
 }

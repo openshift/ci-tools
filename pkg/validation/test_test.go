@@ -861,7 +861,8 @@ func TestValidateTestSteps(t *testing.T) {
 			if tc.seen != nil {
 				context.seen = tc.seen
 			}
-			ret := validateTestSteps(context, testStageTest, tc.steps)
+			// TODO: add test with cluster claim releases
+			ret := validateTestSteps(context, testStageTest, tc.steps, nil)
 			if len(ret) > 0 && len(tc.errs) == 0 {
 				t.Fatalf("Unexpected error %v", ret)
 			}
@@ -901,7 +902,7 @@ func TestValidatePostSteps(t *testing.T) {
 			if tc.seen != nil {
 				context.seen = tc.seen
 			}
-			ret := validateTestSteps(context, testStagePost, tc.steps)
+			ret := validateTestSteps(context, testStagePost, tc.steps, nil)
 			if !errListMessagesEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
 			}
@@ -942,7 +943,7 @@ func TestValidateParameters(t *testing.T) {
 					Limits:   api.ResourceList{"memory": "1m"},
 				},
 				Environment: tc.params,
-			})
+			}, nil)
 			if diff := diff.ObjectReflectDiff(err, tc.err); diff != "<no diffs>" {
 				t.Errorf("incorrect error: %s", diff)
 			}

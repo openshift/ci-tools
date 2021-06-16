@@ -1,8 +1,8 @@
-base_images:
-  cli:
-    name: "4.8"
-    namespace: ocp
-    tag: cli
+releases:
+  latest:
+    release:
+      channel: stable
+      version: "4.6"
 resources:
   '*':
     limits:
@@ -10,6 +10,48 @@ resources:
     requests:
       cpu: 10m
 tests:
+  - as: e2e-claim-override-latest
+    cluster_claim:
+      as: latest
+      architecture: amd64
+      cloud: aws
+      owner: fake
+      product: ocp
+      timeout: 3m # a claim from a fake pool should become ready very soon
+      version: "4.7"
+    steps:
+      test:
+        - as: claim-step
+          commands: |
+            set -x
+            cmp "${KUBECONFIG}" /secrets/hive-admin-kubeconfig/kubeconfig
+            oc config view
+          from: cli
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+  - as: e2e-claim-as-custom
+    cluster_claim:
+      as: custom
+      architecture: amd64
+      cloud: aws
+      owner: fake
+      product: ocp
+      timeout: 3m # a claim from a fake pool should become ready very soon
+      version: "4.7"
+    steps:
+      test:
+        - as: claim-step
+          commands: |
+            set -x
+            cmp "${KUBECONFIG}" /secrets/hive-admin-kubeconfig/kubeconfig
+            oc config view
+          from: stable-custom:cli
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
   - as: e2e-claim
     cluster_claim:
       architecture: amd64

@@ -149,7 +149,7 @@ func (s *clusterClaimStep) acquireCluster(ctx context.Context, waitForClaim func
 		return claim, fmt.Errorf("failed to wait for created cluster claim to become ready: %w", err)
 	}
 	claim = into
-	logrus.Info("The claimed cluster is ready after %s.", time.Now().Sub(claimStart).Truncate(time.Second))
+	logrus.Infof("The claimed cluster is ready after %s.", time.Since(claimStart).Truncate(time.Second))
 	clusterDeployment := &hivev1.ClusterDeployment{}
 	if err := s.hiveClient.Get(ctx, ctrlruntimeclient.ObjectKey{Name: claim.Spec.Namespace, Namespace: claim.Spec.Namespace}, clusterDeployment); err != nil {
 		return claim, fmt.Errorf("failed to get cluster deployment %s in namespace %s: %w", claim.Spec.Namespace, claim.Spec.Namespace, err)

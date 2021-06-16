@@ -114,20 +114,6 @@ func TestValidateImageStreamTagReferenceMap(t *testing.T) {
 			},
 			expectedValid: false,
 		},
-		{
-			id: "cannot be bundle prefixed",
-			baseImages: map[string]api.ImageStreamTagReference{
-				api.BundleName(0): {Tag: "bundle"},
-			},
-			expectedValid: false,
-		},
-		{
-			id: "cannot be index prefixed",
-			baseImages: map[string]api.ImageStreamTagReference{
-				api.IndexName("test"): {Tag: "index"},
-			},
-			expectedValid: false,
-		},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			if errs := validateImageStreamTagReferenceMap("base_images", tc.baseImages); len(errs) > 0 && tc.expectedValid {
@@ -330,38 +316,6 @@ func TestValidateImages(t *testing.T) {
 		output: []error{
 			errors.New("images[0]: `to` must be set"),
 		},
-	}, {
-		name: "`to` cannot be src-bundle",
-		input: []api.ProjectDirectoryImageBuildStepConfiguration{{
-			To: "src-bundle",
-		}},
-		output: []error{
-			errors.New("images[0]: `to` cannot be src-bundle"),
-		},
-	}, {
-		name: "`to` cannot start with ci-bundle",
-		input: []api.ProjectDirectoryImageBuildStepConfiguration{{
-			To: "ci-bundle0",
-		}},
-		output: []error{
-			errors.New("images[0]: `to` cannot begin with `ci-bundle`"),
-		},
-	}, {
-		name: "`to` cannot be ci-index-gen",
-		input: []api.ProjectDirectoryImageBuildStepConfiguration{{
-			To: "ci-index-gen",
-		}},
-		output: []error{
-			errors.New("images[0]: `to` cannot begin with ci-index"),
-		},
-	}, {
-		name: "`to` cannot be ci-index",
-		input: []api.ProjectDirectoryImageBuildStepConfiguration{{
-			To: "ci-index",
-		}},
-		output: []error{
-			errors.New("images[0]: `to` cannot begin with ci-index"),
-		},
 	},
 		{
 			name: "two items cannot have identical `to`",
@@ -417,14 +371,6 @@ func TestValidateImages(t *testing.T) {
 func TestValidateOperator(t *testing.T) {
 	var goodStepLink = api.AllStepsLink()
 	var badStepLink api.StepLink
-	var config = &api.ReleaseBuildConfiguration{
-		InputConfiguration: api.InputConfiguration{
-			BaseImages: map[string]api.ImageStreamTagReference{
-				"a-base-image": {},
-			},
-		},
-		Images: []api.ProjectDirectoryImageBuildStepConfiguration{{To: "an-image"}, {To: "my-image"}},
-	}
 	var testCases = []struct {
 		name           string
 		input          *api.OperatorStepConfiguration
@@ -493,30 +439,6 @@ func TestValidateOperator(t *testing.T) {
 			withResolvesTo: goodStepLink,
 		},
 		{
-			name: "bundle set with image conflict",
-			input: &api.OperatorStepConfiguration{
-				Bundles: []api.Bundle{{
-					As: "my-image",
-				}},
-			},
-			withResolvesTo: goodStepLink,
-			output: []error{
-				errors.New("operator.bundles[0].as: duplicate image name 'my-image' (previously defined by field 'images')"),
-			},
-		},
-		{
-			name: "bundle set with base_image conflict",
-			input: &api.OperatorStepConfiguration{
-				Bundles: []api.Bundle{{
-					As: "a-base-image",
-				}},
-			},
-			withResolvesTo: goodStepLink,
-			output: []error{
-				errors.New("operator.bundles[0].as: duplicate image name 'a-base-image' (previously defined by field 'base_images')"),
-			},
-		},
-		{
 			name: "bundle set with update_graph but not base_index set",
 			input: &api.OperatorStepConfiguration{
 				Bundles: []api.Bundle{{
@@ -561,18 +483,7 @@ func TestValidateOperator(t *testing.T) {
 			linkFunc := func(string) api.StepLink {
 				return testCase.withResolvesTo
 			}
-			ctx := newConfigContext()
-			for x := range config.InputConfiguration.BaseImages {
-				if err := ctx.addField("base_images").addPipelineImage(api.PipelineImageStreamTagReference(x)); err != nil {
-					t.Fatal(err)
-				}
-			}
-			for _, x := range config.Images {
-				if err := ctx.addField("images").addPipelineImage(x.To); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if actual, expected := validateOperator(ctx.addField("operator"), testCase.input, linkFunc), testCase.output; !reflect.DeepEqual(actual, expected) {
+			if actual, expected := validateOperator(newConfigContext().addField("operator"), testCase.input, linkFunc), testCase.output; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
 					return x.Error() == y.Error()
 				})))
@@ -890,10 +801,7 @@ func TestPipelineImages(t *testing.T) {
 			},
 			Resources: resources,
 		},
-		expected: errors.New(`configuration has 2 errors:
-
-  * images[0]: duplicate image name 'ci-bundle0' (previously defined by field 'operator.bundles[0]')
-` + "  * images[0]: `to` cannot begin with `ci-bundle`\n"),
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'ci-bundle0' (previously defined by field 'operator.bundles[0]')`),
 	}, {
 		name: "bundle index",
 		conf: api.ReleaseBuildConfiguration{
@@ -904,10 +812,7 @@ func TestPipelineImages(t *testing.T) {
 			},
 			Resources: resources,
 		},
-		expected: errors.New(`configuration has 2 errors:
-
-  * images[0]: duplicate image name 'ci-index-bundle' (previously defined by field 'operator.bundles[0].as')
-` + "  * images[0]: `to` cannot begin with ci-index\n"),
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'ci-index-bundle' (previously defined by field 'operator.bundles[0].as')`),
 	}, {
 		name: "bundle source",
 		conf: api.ReleaseBuildConfiguration{
@@ -916,10 +821,7 @@ func TestPipelineImages(t *testing.T) {
 			Operator:           &api.OperatorStepConfiguration{},
 			Resources:          resources,
 		},
-		expected: errors.New(`configuration has 2 errors:
-
-  * images[0]: duplicate image name 'src-bundle' (previously defined by field 'operator')
-` + "  * images[0]: `to` cannot be src-bundle\n"),
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'src-bundle' (previously defined by field 'operator')`),
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := IsValidConfiguration(&tc.conf, "TODO", "TODO")

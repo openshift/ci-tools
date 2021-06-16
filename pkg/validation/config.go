@@ -176,22 +176,12 @@ func validateBuildRootImageStreamTag(fieldRoot string, buildRoot api.ImageStream
 func validateImages(ctx *configContext, images []api.ProjectDirectoryImageBuildStepConfiguration) []error {
 	var validationErrors []error
 	for num, image := range images {
-		fieldRootN := fmt.Sprintf("%s[%d]", ctx.field, num)
 		ctxN := ctx.addIndex(num)
 		if image.To == "" {
 			validationErrors = append(validationErrors, ctxN.errorf("`to` must be set"))
 		}
 		if err := ctxN.addPipelineImage(image.To); err != nil {
 			validationErrors = append(validationErrors, err)
-		}
-		if image.To == api.PipelineImageStreamTagReferenceBundleSource {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, api.PipelineImageStreamTagReferenceBundleSource))
-		}
-		if strings.HasPrefix(string(image.To), api.BundlePrefix) {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot begin with `%s`", fieldRootN, api.BundlePrefix))
-		}
-		if strings.HasPrefix(string(image.To), string(api.PipelineImageStreamTagReferenceIndexImage)) {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot begin with %s", fieldRootN, api.PipelineImageStreamTagReferenceIndexImage))
 		}
 		if image.DockerfileLiteral != nil && (image.ContextDir != "" || image.DockerfilePath != "") {
 			validationErrors = append(validationErrors, ctxN.errorf("dockerfile_literal is mutually exclusive with context_dir and dockerfile_path"))

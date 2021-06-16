@@ -712,21 +712,30 @@ func overrideMultiStageParams(o *options) error {
 }
 
 func overrideTestStepDependencyParams(o *options) error {
-	if len(o.dependencyOverrides.values) == 0 {
-		return nil
-	}
 	dependencyOverrideParams, err := parseKeyValParams(o.dependencyOverrides.values, "dependency-override-param")
 
 	if err != nil {
 		return err
 	}
 
-	for paramName, paramVal := range dependencyOverrideParams {
+	// first see if there are any dependency overrides at the test level. This should really only happen with rehearsals.
+	for _, test := range o.configSpec.Tests {
+		if test.MultiStageTestConfigurationLiteral != nil {
+			for dependencyName, pullspec := range test.MultiStageTestConfigurationLiteral.DependencyOverrides {
+				overrideTestStepDependency(dependencyName, pullspec, &test.MultiStageTestConfigurationLiteral.Pre)
+				overrideTestStepDependency(dependencyName, pullspec, &test.MultiStageTestConfigurationLiteral.Test)
+				overrideTestStepDependency(dependencyName, pullspec, &test.MultiStageTestConfigurationLiteral.Post)
+			}
+		}
+	}
+
+	// dependency overrides specified as params to ci-operator always take precedence.
+	for dependencyName, pullspec := range dependencyOverrideParams {
 		for _, test := range o.configSpec.Tests {
 			if test.MultiStageTestConfigurationLiteral != nil {
-				overrideTestStepDependency(paramName, paramVal, &test.MultiStageTestConfigurationLiteral.Pre)
-				overrideTestStepDependency(paramName, paramVal, &test.MultiStageTestConfigurationLiteral.Test)
-				overrideTestStepDependency(paramName, paramVal, &test.MultiStageTestConfigurationLiteral.Post)
+				overrideTestStepDependency(dependencyName, pullspec, &test.MultiStageTestConfigurationLiteral.Pre)
+				overrideTestStepDependency(dependencyName, pullspec, &test.MultiStageTestConfigurationLiteral.Test)
+				overrideTestStepDependency(dependencyName, pullspec, &test.MultiStageTestConfigurationLiteral.Post)
 			}
 		}
 	}
@@ -736,12 +745,10 @@ func overrideTestStepDependencyParams(o *options) error {
 
 func overrideTestStepDependency(name string, value string, steps *[]api.LiteralTestStep) {
 	for stepI, step := range *steps {
-		if len(step.Dependencies) > 0 {
-			for depI, dependency := range step.Dependencies {
-				if strings.EqualFold(dependency.Env, name) {
-					steps := *steps
-					steps[stepI].Dependencies[depI].PullSpec = value
-				}
+		for depI, dependency := range step.Dependencies {
+			if strings.EqualFold(dependency.Env, name) {
+				steps := *steps
+				steps[stepI].Dependencies[depI].PullSpec = value
 			}
 		}
 	}

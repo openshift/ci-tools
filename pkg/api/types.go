@@ -882,7 +882,11 @@ type MultiStageTestConfiguration struct {
 	AllowBestEffortPostSteps *bool `json:"allow_best_effort_post_steps,omitempty"`
 	// Observers are the observers that should be running
 	Observers *Observers `json:"observers,omitempty"`
+	// DependencyOverrides allows a step to override a dependency with a fully-qualified pullspec. This will probably only ever
+	// be used with rehearsals. Otherwise, the overrides should be passed in as parameters to ci-operator.
+	DependencyOverrides DependencyOverrides `json:"dependency_overrides,omitempty"`
 }
+type DependencyOverrides map[string]string
 
 // MultiStageTestConfigurationLiteral is a form of the MultiStageTestConfiguration that does not include
 // references. It is the type that MultiStageTestConfigurations are converted to when parsed by the
@@ -915,6 +919,9 @@ type MultiStageTestConfigurationLiteral struct {
 	AllowBestEffortPostSteps *bool `json:"allow_best_effort_post_steps,omitempty"`
 	// Observers are the observers that need to be run
 	Observers []Observer `json:"observers,omitempty"`
+	// DependencyOverrides allows a step to override a dependency with a fully-qualified pullspec. This will probably only ever
+	// be used with rehearsals. Otherwise, the overrides should be passed in as parameters to ci-operator.
+	DependencyOverrides DependencyOverrides `json:"dependency_overrides,omitempty"`
 }
 
 // TestEnvironment has the values of parameters for multi-stage tests.

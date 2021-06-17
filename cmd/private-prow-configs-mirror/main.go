@@ -13,6 +13,7 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/afero"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -24,6 +25,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/promotion"
+	"github.com/openshift/ci-tools/pkg/prowconfigsharding"
 )
 
 const (
@@ -92,6 +94,10 @@ func updateProwConfig(configFile string, config prowconfig.ProwConfig) error {
 }
 
 func updateProwPlugins(pluginsFile string, config *plugins.Configuration) error {
+	config, err := prowconfigsharding.WriteShardedPluginConfig(config, afero.NewBasePathFs(afero.NewOsFs(), filepath.Dir(pluginsFile)))
+	if err != nil {
+		return fmt.Errorf("failed to write plugin config shards: %w", err)
+	}
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("could not marshal Prow configuration: %w", err)

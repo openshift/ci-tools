@@ -519,11 +519,12 @@ func TestValidateTestSteps(t *testing.T) {
 	yes := true
 	defaultDuration := &prowv1.Duration{Duration: 1 * time.Minute}
 	for _, tc := range []struct {
-		name     string
-		steps    []api.TestStep
-		seen     sets.String
-		errs     []error
-		releases sets.String
+		name         string
+		steps        []api.TestStep
+		seen         sets.String
+		errs         []error
+		releases     sets.String
+		clusterClaim api.ClaimRelease
 	}{{
 		name: "valid step",
 		steps: []api.TestStep{{
@@ -855,14 +856,23 @@ func TestValidateTestSteps(t *testing.T) {
 		errs: []error{
 			errors.New("test best-effort contains best_effort without timeout"),
 		},
+	}, {
+		name: "cluster claim release",
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:        "as",
+				From:      "stable-myclaim:base",
+				Commands:  "commands",
+				Resources: resources},
+		}},
+		clusterClaim: api.ClaimRelease{ReleaseName: "myclaim-as", OverrideName: "myclaim"},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			context := newContext("test", nil, tc.releases)
 			if tc.seen != nil {
 				context.seen = tc.seen
 			}
-			// TODO: add test with cluster claim releases
-			ret := validateTestSteps(context, testStageTest, tc.steps, nil)
+			ret := validateTestSteps(context, testStageTest, tc.steps, &tc.clusterClaim)
 			if len(ret) > 0 && len(tc.errs) == 0 {
 				t.Fatalf("Unexpected error %v", ret)
 			}

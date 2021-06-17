@@ -75,8 +75,13 @@ func (config *ReleaseBuildConfiguration) ImageStreamFor(image string) (string, b
 }
 
 // DependencyParts returns the imageStream and tag name from a user-provided
-// reference to an image in the test namespace. If a ClaimRelease is provided
-// that overrides the detected stream, the override name will be returned.
+// reference to an image in the test namespace. In situations where a user
+// defines a cluster claim and wants to import the cluster claim's release, the
+// user may provide a release name that conflicts with a release defined at the
+// global config level (e.g. the `latest` release, or `stable` imagestream). To
+// prevent conflicts, the name of the imagestream is modified based on the test
+// name. ClaimRelease is used in this function to identify whether to override
+// the imagestream provided by the user to use the cluster claim's imagestream.
 func (config *ReleaseBuildConfiguration) DependencyParts(dependency StepDependency, claimRelease *ClaimRelease) (stream string, name string, explicit bool) {
 	if !strings.Contains(dependency.Name, ":") {
 		stream, explicit = config.ImageStreamFor(dependency.Name)

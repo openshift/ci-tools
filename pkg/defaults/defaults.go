@@ -867,27 +867,10 @@ func ensureImageStreamTag(ctx context.Context, client ctrlruntimeclient.Client, 
 }
 
 func getClusterPoolPullSpec(ctx context.Context, claim *api.ClusterClaim, hiveClient ctrlruntimeclient.WithWatch) (string, error) {
-	// TODO: the clusterpool list/get code is copied from pkg/steps/multi_stage.go; should probably be refactored/DRYed
-	clusterPools := &hivev1.ClusterPoolList{}
-	listOption := ctrlruntimeclient.MatchingLabels{
-		"product":      string(claim.Product),
-		"version":      claim.Version,
-		"architecture": string(claim.Architecture),
-		"cloud":        string(claim.Cloud),
-		"owner":        claim.Owner,
+	clusterPool, err := utils.ClusterPoolFromClaim(ctx, claim, hiveClient)
+	if err != nil {
+		return "", err
 	}
-	if err := hiveClient.List(ctx, clusterPools, listOption); err != nil {
-		return "", fmt.Errorf("failed to list cluster pools with list option %v: %w", listOption, err)
-	}
-
-	l := len(clusterPools.Items)
-	if l == 0 {
-		return "", fmt.Errorf("failed to find a cluster pool providing the cluster: %v", listOption)
-	} else if l > 1 {
-		return "", fmt.Errorf("find %d cluster pools providing the cluster (%v): should be only one", len(clusterPools.Items), listOption)
-	}
-
-	clusterPool := clusterPools.Items[0]
 
 	clusterImageSet := &hivev1.ClusterImageSet{}
 	if err := hiveClient.Get(ctx, types.NamespacedName{Name: clusterPool.Spec.ImageSetRef.Name}, clusterImageSet); err != nil {

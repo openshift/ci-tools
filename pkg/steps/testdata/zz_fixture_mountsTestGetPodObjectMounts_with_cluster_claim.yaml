@@ -2,9 +2,9 @@
   name: logs
 - mountPath: /tools
   name: tools
-- mountPath: /usr/test-secrets/hive-admin-kubeconfig
-  name: hive-admin-kubeconfig
+- mountPath: /usr/test-secrets/podStep-config-As-hive-admin-kubeconfig
+  name: podStep-config-As-hive-admin-kubeconfig
   readOnly: true
-- mountPath: /usr/test-secrets/hive-admin-password
-  name: hive-admin-password
+- mountPath: /usr/test-secrets/podStep-config-As-hive-admin-password
+  name: podStep-config-As-hive-admin-password
   readOnly: true

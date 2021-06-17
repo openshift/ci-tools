@@ -239,30 +239,30 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	if s.clusterClaim != nil {
 		secretVolumeMounts = append(secretVolumeMounts, []coreapi.VolumeMount{
 			{
-				Name:      api.HiveAdminKubeconfigSecret,
+				Name:      namePerTest(api.HiveAdminKubeconfigSecret, s.config.As),
 				ReadOnly:  true,
-				MountPath: filepath.Join(testSecretDefaultPath, api.HiveAdminKubeconfigSecret),
+				MountPath: filepath.Join(testSecretDefaultPath, namePerTest(api.HiveAdminKubeconfigSecret, s.config.As)),
 			},
 			{
-				Name:      api.HiveAdminPasswordSecret,
+				Name:      namePerTest(api.HiveAdminPasswordSecret, s.config.As),
 				ReadOnly:  true,
-				MountPath: filepath.Join(testSecretDefaultPath, api.HiveAdminPasswordSecret),
+				MountPath: filepath.Join(testSecretDefaultPath, namePerTest(api.HiveAdminPasswordSecret, s.config.As)),
 			},
 		}...)
 		secretVolumes = append(secretVolumes, []coreapi.Volume{
 			{
-				Name: api.HiveAdminKubeconfigSecret,
+				Name: namePerTest(api.HiveAdminKubeconfigSecret, s.config.As),
 				VolumeSource: coreapi.VolumeSource{
 					Secret: &coreapi.SecretVolumeSource{
-						SecretName: api.HiveAdminKubeconfigSecret,
+						SecretName: namePerTest(api.HiveAdminKubeconfigSecret, s.config.As),
 					},
 				},
 			},
 			{
-				Name: api.HiveAdminPasswordSecret,
+				Name: namePerTest(api.HiveAdminPasswordSecret, s.config.As),
 				VolumeSource: coreapi.VolumeSource{
 					Secret: &coreapi.SecretVolumeSource{
-						SecretName: api.HiveAdminPasswordSecret,
+						SecretName: namePerTest(api.HiveAdminPasswordSecret, s.config.As),
 					},
 				},
 			},
@@ -279,8 +279,8 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	container.VolumeMounts = append(container.VolumeMounts, secretVolumeMounts...)
 	if s.clusterClaim != nil {
 		container.Env = append(container.Env, []coreapi.EnvVar{
-			{Name: "KUBECONFIG", Value: filepath.Join(filepath.Join(testSecretDefaultPath, api.HiveAdminKubeconfigSecret), api.HiveAdminKubeconfigSecretKey)},
-			{Name: "KUBEADMIN_PASSWORD_FILE", Value: filepath.Join(filepath.Join(testSecretDefaultPath, api.HiveAdminPasswordSecret), api.HiveAdminPasswordSecretKey)},
+			{Name: "KUBECONFIG", Value: filepath.Join(filepath.Join(testSecretDefaultPath, namePerTest(api.HiveAdminKubeconfigSecret, s.config.As)), api.HiveAdminKubeconfigSecretKey)},
+			{Name: "KUBEADMIN_PASSWORD_FILE", Value: filepath.Join(filepath.Join(testSecretDefaultPath, namePerTest(api.HiveAdminPasswordSecret, s.config.As)), api.HiveAdminPasswordSecretKey)},
 		}...)
 	}
 	pod.Spec.Volumes = append(pod.Spec.Volumes, secretVolumes...)

@@ -156,13 +156,13 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 			verifyFunc: func(client ctrlruntimeclient.Client) error {
 				ctx := context.TODO()
 				actualSecret := &corev1.Secret{}
-				if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "hive-admin-kubeconfig", Namespace: "ci-op-test"}, actualSecret); err != nil {
+				if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "as-hive-admin-kubeconfig", Namespace: "ci-op-test"}, actualSecret); err != nil {
 					return err
 				}
 				immutable := true
 				expectedSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "hive-admin-kubeconfig",
+						Name:      "as-hive-admin-kubeconfig",
 						Namespace: "ci-op-test",
 					},
 					Data: map[string][]byte{
@@ -174,12 +174,12 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 					return fmt.Errorf("actual does not match expected, diff: %s", diff)
 				}
 				actualSecret = &corev1.Secret{}
-				if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "hive-admin-password", Namespace: "ci-op-test"}, actualSecret); err != nil {
+				if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "as-hive-admin-password", Namespace: "ci-op-test"}, actualSecret); err != nil {
 					return err
 				}
 				expectedSecret = &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "hive-admin-password",
+						Name:      "as-hive-admin-password",
 						Namespace: "ci-op-test",
 					},
 					Data: map[string][]byte{
@@ -276,6 +276,7 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := clusterClaimStep{
+				as:           "as",
 				clusterClaim: tc.clusterClaim,
 				client:       tc.client,
 				hiveClient:   tc.hiveClient,

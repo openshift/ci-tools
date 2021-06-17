@@ -2,9 +2,9 @@
   name: logs
 - emptyDir: {}
   name: tools
-- name: hive-admin-kubeconfig
+- name: podStep-config-As-hive-admin-kubeconfig
   secret:
-    secretName: hive-admin-kubeconfig
-- name: hive-admin-password
+    secretName: podStep-config-As-hive-admin-kubeconfig
+- name: podStep-config-As-hive-admin-password
   secret:
-    secretName: hive-admin-password
+    secretName: podStep-config-As-hive-admin-password

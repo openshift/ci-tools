@@ -741,38 +741,38 @@ func TestGetClusterClaimPodParams(t *testing.T) {
 			name: "basic case",
 			secretVolumeMounts: []coreapi.VolumeMount{
 				{
-					Name:      "censor-hive-admin-kubeconfig",
-					MountPath: "/secrets/hive-admin-kubeconfig",
+					Name:      "censor-as-hive-admin-kubeconfig",
+					MountPath: "/secrets/as-hive-admin-kubeconfig",
 				},
 				{
-					Name:      "censor-hive-admin-password",
-					MountPath: "/secrets/hive-admin-password",
+					Name:      "censor-as-hive-admin-password",
+					MountPath: "/secrets/as-hive-admin-password",
 				},
 			},
 			expectedEnv: []coreapi.EnvVar{
-				{Name: "KUBECONFIG", Value: "/secrets/hive-admin-kubeconfig/kubeconfig"},
-				{Name: "KUBEADMIN_PASSWORD_FILE", Value: "/secrets/hive-admin-password/password"},
+				{Name: "KUBECONFIG", Value: "/secrets/as-hive-admin-kubeconfig/kubeconfig"},
+				{Name: "KUBEADMIN_PASSWORD_FILE", Value: "/secrets/as-hive-admin-password/password"},
 			},
 			expectedMount: []coreapi.VolumeMount{
-				{Name: "censor-hive-admin-kubeconfig", MountPath: "/secrets/hive-admin-kubeconfig"},
-				{Name: "censor-hive-admin-password", MountPath: "/secrets/hive-admin-password"},
+				{Name: "censor-as-hive-admin-kubeconfig", MountPath: "/secrets/as-hive-admin-kubeconfig"},
+				{Name: "censor-as-hive-admin-password", MountPath: "/secrets/as-hive-admin-password"},
 			},
 		},
 		{
 			name: "missing a secretVolumeMount",
 			secretVolumeMounts: []coreapi.VolumeMount{
 				{
-					Name:      "censor-hive-admin-kubeconfig",
-					MountPath: "/secrets/hive-admin-kubeconfig",
+					Name:      "censor-as-hive-admin-kubeconfig",
+					MountPath: "/secrets/as-hive-admin-kubeconfig",
 				},
 			},
-			expectedError: utilerrors.NewAggregate([]error{fmt.Errorf("failed to find foundMountPath /secrets/hive-admin-password to create secret hive-admin-password")}),
+			expectedError: utilerrors.NewAggregate([]error{fmt.Errorf("failed to find foundMountPath /secrets/as-hive-admin-password to create secret as-hive-admin-password")}),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualEnv, actualMount, actualError := getClusterClaimPodParams(tc.secretVolumeMounts)
+			actualEnv, actualMount, actualError := getClusterClaimPodParams(tc.secretVolumeMounts, "as")
 			if diff := cmp.Diff(tc.expectedEnv, actualEnv); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}

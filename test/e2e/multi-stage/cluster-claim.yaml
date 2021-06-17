@@ -23,7 +23,7 @@ tests:
         - as: claim-step
           commands: |
             set -x
-            cmp "${KUBECONFIG}" /secrets/hive-admin-kubeconfig/kubeconfig
+            cmp "${KUBECONFIG}" /secrets/e2e-claim-hive-admin-kubeconfig/kubeconfig
             oc config view
           from: cli
           resources:

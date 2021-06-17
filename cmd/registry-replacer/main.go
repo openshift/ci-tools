@@ -33,7 +33,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/ocpbuilddata"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/github"
-	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/steps/release"
 )
 
@@ -49,7 +48,6 @@ type options struct {
 	pruneUnusedReplacements                      bool
 	pruneOCPBuilderReplacements                  bool
 	ensureCorrectPromotionDockerfileIngoredRepos *flagutil.Strings
-	registryPath                                 string
 	flagutil.GitHubOptions
 }
 
@@ -67,7 +65,6 @@ func gatherOptions() (*options, error) {
 	flag.StringVar(&o.currentRelease.Minor, "current-release-minor", "6", "The minor version of the current release that is getting forwarded to from the master branch")
 	flag.BoolVar(&o.pruneUnusedReplacements, "prune-unused-replacements", false, "If replacements that match nothing should get pruned from the config")
 	flag.BoolVar(&o.pruneOCPBuilderReplacements, "prune-ocp-builder-replacements", false, "If all replacements that target the ocp/builder imagestream should be removed")
-	flag.StringVar(&o.registryPath, "registry", "", "Path to the step registry directory")
 	flag.Parse()
 
 	var errs []error
@@ -136,11 +133,6 @@ func main() {
 		}
 	}
 
-	agent, err := agents.NewRegistryAgent(opts.registryPath)
-	if err != nil {
-		logrus.WithError(err).Fatal("failed to create RegistryAgent")
-	}
-
 	var errs []error
 	errLock := &sync.Mutex{}
 	sem := semaphore.NewWeighted(int64(opts.maxConcurrency))
@@ -165,7 +157,6 @@ func main() {
 					promotionTargetToDockerfileMapping,
 					opts.currentRelease,
 					credentials,
-					agent.ResolveConfig,
 				)(config, info); err != nil {
 					errLock.Lock()
 					errs = append(errs, err)
@@ -209,8 +200,8 @@ func replacer(
 	ensureCorrectPromotionDockerfile bool,
 	ensureCorrectPromotionDockerfileIgnoredrepos sets.String,
 	promotionTargetToDockerfileMapping map[string]dockerfileLocation,
-	majorMinor ocpbuilddata.MajorMinor, credentials *usernameToken,
-	configResolver func(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error),
+	majorMinor ocpbuilddata.MajorMinor,
+	credentials *usernameToken,
 ) func(*api.ReleaseBuildConfiguration, *config.Info) error {
 	return func(config *api.ReleaseBuildConfiguration, info *config.Info) error {
 		if len(config.Images) == 0 {
@@ -286,18 +277,6 @@ func replacer(
 		if pruneUnusedReplacementsEnabled && hasNonEmptyDockerfile {
 			if err := pruneUnusedReplacements(config, allReplacementCandidates); err != nil {
 				return fmt.Errorf("failed to prune unused replacements: %w", err)
-			}
-
-			// to prune base images we'll need the fully-resolved config.
-			resolvedConfig, err := configResolver(*config)
-			if err != nil {
-				// TODO this should stop execution rather than just logging an error, but since we want a smooth transition with
-				// the new registry-replacer enhancements we'll add that in later, after this has been rolled out.
-				logrus.WithError(err).Error("failed to resolve config. This means that base image pruning will not function as expected and will therefore be skipped")
-			} else {
-				if err := pruneUnusedBaseImages(config, &resolvedConfig); err != nil {
-					return fmt.Errorf("failed to prune unused base images: %w", err)
-				}
 			}
 		} else if pruneUnusedReplacementsEnabled {
 			logrus.WithField("org", info.Org).WithField("repo", info.Repo).WithField("branch", info.Branch).Info("Not purging unused replacements because we got an empty dockerfile")
@@ -619,108 +598,6 @@ func pruneReplacements(config *api.ReleaseBuildConfiguration, filter asDirective
 	config.Images = prunedImages
 
 	return utilerrors.NewAggregate(errs)
-}
-
-// pruneUnusedBaseImages uses the fully-resolved config to make sure an image is not used directly in  the config, or within any of the tests.
-// If it is not, then we prune it.
-func pruneUnusedBaseImages(config *api.ReleaseBuildConfiguration, resolvedConfig *api.ReleaseBuildConfiguration) error {
-	usedBaseImages := sets.NewString()
-	for _, step := range resolvedConfig.RawSteps {
-		switch {
-		case step.BundleSourceStepConfiguration != nil:
-			getBundleSourceImages(&usedBaseImages, step.BundleSourceStepConfiguration)
-		case step.OutputImageTagStepConfiguration != nil:
-			usedBaseImages.Insert(string(step.OutputImageTagStepConfiguration.From))
-		case step.PipelineImageCacheStepConfiguration != nil:
-			usedBaseImages.Insert(string(step.PipelineImageCacheStepConfiguration.From))
-		case step.RPMImageInjectionStepConfiguration != nil:
-			usedBaseImages.Insert(string(step.RPMImageInjectionStepConfiguration.From))
-		case step.SourceStepConfiguration != nil:
-			usedBaseImages.Insert(string(step.SourceStepConfiguration.From))
-		case step.TestStepConfiguration != nil:
-			getTestStepImages(&usedBaseImages, step.TestStepConfiguration)
-		case step.IndexGeneratorStepConfiguration != nil || step.ProjectDirectoryImageBuildStepConfiguration != nil || step.ProjectDirectoryImageBuildInputs != nil ||
-			step.ReleaseImagesTagStepConfiguration != nil || step.ResolvedReleaseImagesStepConfiguration != nil || step.RPMServeStepConfiguration != nil:
-			// no op
-		default:
-			return fmt.Errorf("unsupported step configuration provided when pruning base images")
-		}
-	}
-
-	for _, test := range resolvedConfig.Tests {
-		getTestStepImages(&usedBaseImages, &test)
-	}
-
-	for _, image := range resolvedConfig.Images {
-		usedBaseImages.Insert(string(image.From))
-		for input := range image.Inputs {
-			usedBaseImages.Insert(input)
-		}
-	}
-
-	for sourceImage := range config.BaseImages {
-		var keep bool
-		for _, candidate := range usedBaseImages.List() {
-			orgRepoTag, err := orgRepoTagFromPullString(candidate)
-			if err != nil {
-				return fmt.Errorf("failed to parse string %s as pullspec: %w", candidate, err)
-			}
-
-			// consider it a match if either the orgRepoTag matches, or the sourceImage matches directly. Depending on
-			// where the image was sourced from it might be in pull string format, or it might just be the image name.
-			keep = orgRepoTag.String() == sourceImage || candidate == sourceImage
-
-			if keep {
-				break
-			}
-		}
-		if !keep {
-			delete(config.BaseImages, sourceImage)
-		}
-	}
-
-	return nil
-}
-
-func getBundleSourceImages(images *sets.String, step *api.BundleSourceStepConfiguration) {
-	for _, substitution := range step.Substitutions {
-		images.Insert(substitution.With)
-	}
-}
-
-func getTestStepImages(images *sets.String, step *api.TestStepConfiguration) {
-	if step.MultiStageTestConfigurationLiteral == nil {
-		return
-	}
-	getTestImages(images, step.MultiStageTestConfigurationLiteral.Pre)
-	getTestImages(images, step.MultiStageTestConfigurationLiteral.Test)
-	getTestImages(images, step.MultiStageTestConfigurationLiteral.Post)
-}
-
-var pipelineDependencyRegex = regexp.MustCompile(fmt.Sprintf(`(%s:)([\w.\-]+)`, api.PipelineImageStream))
-
-func getTestImages(images *sets.String, steps []api.LiteralTestStep) {
-	for _, step := range steps {
-		if step.From != "" {
-			images.Insert(step.From)
-		}
-		if step.FromImage != nil {
-			images.Insert(step.FromImage.ISTagName())
-		}
-
-		// see if we have any pipeline dependency images that also need to be included.
-		for _, dependency := range step.Dependencies {
-			if dependency.Name == "" {
-				continue
-			}
-			// see if the dependency matches pipeline:<image-name>
-			matches := pipelineDependencyRegex.FindStringSubmatch(dependency.Name)
-			if len(matches) == 3 {
-				//matches will contain [full string, pipeline:, <image-name>]
-				images.Insert(matches[2])
-			}
-		}
-	}
 }
 
 type dockerfileLocation struct {

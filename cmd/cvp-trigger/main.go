@@ -28,7 +28,6 @@ import (
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"github.com/openshift/ci-tools/pkg/util"
 )
@@ -230,24 +229,12 @@ func main() {
 	appendMultiStageParams(prowjob.Spec.PodSpec, params)
 
 	// Add flag values to inject as ENV var entries in the prowjob configuration
-	// TODO: After all of the CVP changes required to accept the multi-stage-params have been made, we need to go back and
-	// remove these OO_ env params.
 	envVars := map[string]string{
-		steps.OOBundle:  o.bundleImageRef,
-		"OCP_VERSION":   o.ocpVersion,
-		"CLUSTER_TYPE":  "aws",
-		steps.OOIndex:   o.indexImageRef,
-		steps.OOPackage: o.operatorPackageName,
-		steps.OOChannel: o.channel,
+		"CLUSTER_TYPE": "aws",
+		"OCP_VERSION":  o.ocpVersion,
 	}
 	if o.releaseImageRef != "" {
 		envVars[utils.ReleaseImageEnv(api.LatestReleaseName)] = o.releaseImageRef
-	}
-	if o.installNamespace != "" {
-		envVars[steps.OOInstallNamespace] = o.installNamespace
-	}
-	if o.targetNamespaces != "" {
-		envVars[steps.OOTargetNamespaces] = o.targetNamespaces
 	}
 	var keys []string
 	for key := range envVars {

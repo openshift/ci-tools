@@ -30,19 +30,20 @@ const (
 )
 
 // context contains the information from parent components.
-// All but `fieldRoot` can be nil if the validation being performed in
+// All but `field` can be nil if the validation being performed in
 // context-independent.
 type context struct {
-	fieldRoot  string
+	field      fieldPath
 	env        api.TestEnvironment
 	seen       sets.String
 	leasesSeen sets.String
 	releases   sets.String
 }
 
-func newContext(fieldRoot string, env api.TestEnvironment, releases sets.String) context {
-	return context{
-		fieldRoot:  fieldRoot,
+// newContext creates a top-level context.
+func newContext(field fieldPath, env api.TestEnvironment, releases sets.String) *context {
+	return &context{
+		field:      field,
 		env:        env,
 		seen:       sets.NewString(),
 		leasesSeen: sets.NewString(),
@@ -50,10 +51,18 @@ func newContext(fieldRoot string, env api.TestEnvironment, releases sets.String)
 	}
 }
 
-func (c *context) forField(name string) context {
-	ret := *c
-	ret.fieldRoot = c.fieldRoot + name
-	return ret
+func (c context) addField(name string) *context {
+	c.field = c.field.addField(name)
+	return &c
+}
+
+func (c context) addIndex(i int) *context {
+	c.field = c.field.addIndex(i)
+	return &c
+}
+
+func (c *context) errorf(format string, args ...interface{}) error {
+	return c.field.errorf(format, args...)
 }
 
 var trapPattern = regexp.MustCompile(`(^|\W)\s*trap\s*['"]?\w*['"]?\s*\w*`)
@@ -63,7 +72,7 @@ var trapPattern = regexp.MustCompile(`(^|\W)\s*trap\s*['"]?\w*['"]?\s*\w*`)
 // component, the image references exist in the test configuration, etc.) are
 // not performed.
 func IsValidReference(step api.LiteralTestStep) []error {
-	return validateLiteralTestStep(context{fieldRoot: step.As}, testStageUnknown, step)
+	return validateLiteralTestStep(&context{field: fieldPath(step.As)}, testStageUnknown, step)
 }
 
 func validateTestStepConfiguration(fieldRoot string, input []api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
@@ -421,28 +430,28 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 			clusterCount++
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
-		context := newContext(fieldRoot, testConfig.Environment, releases)
-		validationErrors = append(validationErrors, validateLeases(context.forField(".leases"), testConfig.Leases)...)
-		validationErrors = append(validationErrors, validateTestSteps(context.forField(".pre"), testStagePre, testConfig.Pre)...)
-		validationErrors = append(validationErrors, validateTestSteps(context.forField(".test"), testStageTest, testConfig.Test)...)
-		validationErrors = append(validationErrors, validateTestSteps(context.forField(".post"), testStagePost, testConfig.Post)...)
+		context := newContext(fieldPath(fieldRoot), testConfig.Environment, releases)
+		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
+		validationErrors = append(validationErrors, validateTestSteps(context.addField("pre"), testStagePre, testConfig.Pre)...)
+		validationErrors = append(validationErrors, validateTestSteps(context.addField("test"), testStageTest, testConfig.Test)...)
+		validationErrors = append(validationErrors, validateTestSteps(context.addField("post"), testStagePost, testConfig.Post)...)
 	}
 	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
 		typeCount++
-		context := newContext(fieldRoot, testConfig.Environment, releases)
+		context := newContext(fieldPath(fieldRoot), testConfig.Environment, releases)
 		if testConfig.ClusterProfile != "" {
 			clusterCount++
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
-		validationErrors = append(validationErrors, validateLeases(context.forField(".leases"), testConfig.Leases)...)
+		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
 		for i, s := range testConfig.Pre {
-			validationErrors = append(validationErrors, validateLiteralTestStep(context.forField(fmt.Sprintf(".pre[%d]", i)), testStagePre, s)...)
+			validationErrors = append(validationErrors, validateLiteralTestStep(context.addField("pre").addIndex(i), testStagePre, s)...)
 		}
 		for i, s := range testConfig.Test {
-			validationErrors = append(validationErrors, validateLiteralTestStep(context.forField(fmt.Sprintf(".test[%d]", i)), testStageTest, s)...)
+			validationErrors = append(validationErrors, validateLiteralTestStep(context.addField("test").addIndex(i), testStageTest, s)...)
 		}
 		for i, s := range testConfig.Post {
-			validationErrors = append(validationErrors, validateLiteralTestStep(context.forField(fmt.Sprintf(".post[%d]", i)), testStagePost, s)...)
+			validationErrors = append(validationErrors, validateLiteralTestStep(context.addField("post").addIndex(i), testStagePost, s)...)
 		}
 	}
 	if typeCount == 0 {
@@ -461,10 +470,10 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 	return validationErrors
 }
 
-func validateTestSteps(context context, stage testStage, steps []api.TestStep) (ret []error) {
+func validateTestSteps(context *context, stage testStage, steps []api.TestStep) (ret []error) {
 	for i, s := range steps {
-		contextI := context.forField(fmt.Sprintf("[%d]", i))
-		ret = append(ret, validateTestStep(&contextI, s)...)
+		contextI := context.addIndex(i)
+		ret = append(ret, validateTestStep(contextI, s)...)
 		if s.LiteralTestStep != nil {
 			ret = append(ret, validateLiteralTestStep(contextI, stage, *s.LiteralTestStep)...)
 		}
@@ -476,27 +485,27 @@ func validateTestStep(context *context, step api.TestStep) (ret []error) {
 	if (step.LiteralTestStep != nil && step.Reference != nil) ||
 		(step.LiteralTestStep != nil && step.Chain != nil) ||
 		(step.Reference != nil && step.Chain != nil) {
-		ret = append(ret, fmt.Errorf("%s: only one of `ref`, `chain`, or a literal test step can be set", context.fieldRoot))
+		ret = append(ret, context.errorf("only one of `ref`, `chain`, or a literal test step can be set"))
 		return
 	}
 	if step.LiteralTestStep == nil && step.Reference == nil && step.Chain == nil {
-		ret = append(ret, fmt.Errorf("%s: a reference, chain, or literal test step is required", context.fieldRoot))
+		ret = append(ret, context.errorf("a reference, chain, or literal test step is required"))
 		return
 	}
 	if step.Reference != nil {
 		if len(*step.Reference) == 0 {
-			ret = append(ret, fmt.Errorf("%s.ref: length cannot be 0", context.fieldRoot))
+			ret = append(ret, context.addField("ref").errorf("length cannot be 0"))
 		} else if context.seen.Has(*step.Reference) {
-			ret = append(ret, fmt.Errorf("%s.ref: duplicated name %q", context.fieldRoot, *step.Reference))
+			ret = append(ret, context.addField("ref").errorf("duplicated name %q", *step.Reference))
 		} else {
 			context.seen.Insert(*step.Reference)
 		}
 	}
 	if step.Chain != nil {
 		if len(*step.Chain) == 0 {
-			ret = append(ret, fmt.Errorf("%s.chain: length cannot be 0", context.fieldRoot))
+			ret = append(ret, context.addField("chain").errorf("length cannot be 0"))
 		} else if context.seen.Has(*step.Chain) {
-			ret = append(ret, fmt.Errorf("%s.chain: duplicated name %q", context.fieldRoot, *step.Chain))
+			ret = append(ret, context.addField("chain").errorf("duplicated name %q", *step.Chain))
 		} else {
 			context.seen.Insert(*step.Chain)
 		}
@@ -504,52 +513,52 @@ func validateTestStep(context *context, step api.TestStep) (ret []error) {
 	return
 }
 
-func validateLiteralTestStep(context context, stage testStage, step api.LiteralTestStep) (ret []error) {
+func validateLiteralTestStep(context *context, stage testStage, step api.LiteralTestStep) (ret []error) {
 	if len(step.As) == 0 {
-		ret = append(ret, fmt.Errorf("%s: `as` is required", context.fieldRoot))
+		ret = append(ret, context.errorf("`as` is required"))
 	} else if context.seen != nil {
 		if context.seen.Has(step.As) {
-			ret = append(ret, fmt.Errorf("%s: duplicated name %q", context.fieldRoot, step.As))
+			ret = append(ret, context.errorf("duplicated name %q", step.As))
 		} else {
 			context.seen.Insert(step.As)
 		}
 	}
 	if len(step.From) == 0 && step.FromImage == nil {
-		ret = append(ret, fmt.Errorf("%s: `from` or `from_image` is required", context.fieldRoot))
+		ret = append(ret, context.errorf("`from` or `from_image` is required"))
 	} else if len(step.From) != 0 && step.FromImage != nil {
-		ret = append(ret, fmt.Errorf("%s: `from` and `from_image` cannot be set together", context.fieldRoot))
+		ret = append(ret, context.errorf("`from` and `from_image` cannot be set together"))
 	} else if step.FromImage != nil {
 		if step.FromImage.Namespace == "" {
-			ret = append(ret, fmt.Errorf("%s.from_image: `namespace` is required", context.fieldRoot))
+			ret = append(ret, context.addField("from_image").errorf("`namespace` is required"))
 		}
 		if step.FromImage.Name == "" {
-			ret = append(ret, fmt.Errorf("%s.from_image: `name` is required", context.fieldRoot))
+			ret = append(ret, context.addField("from_image").errorf("`name` is required"))
 		}
 		if step.FromImage.Tag == "" {
-			ret = append(ret, fmt.Errorf("%s.from_image: `tag` is required", context.fieldRoot))
+			ret = append(ret, context.addField("from_image").errorf("`tag` is required"))
 		}
 	} else {
 		imageParts := strings.Split(step.From, ":")
 		if len(imageParts) > 2 {
-			ret = append(ret, fmt.Errorf("%s.from: '%s' is not a valid imagestream reference", context.fieldRoot, step.From))
+			ret = append(ret, context.addField("from").errorf("'%s' is not a valid imagestream reference", step.From))
 		}
 		for i, obj := range imageParts {
 			if len(validation.IsDNS1123Subdomain(obj)) != 0 {
-				ret = append(ret, fmt.Errorf("%s.from: '%s' is not a valid Kubernetes object name", context.fieldRoot, obj))
+				ret = append(ret, context.addField("from").errorf("'%s' is not a valid Kubernetes object name", obj))
 			} else if i == 0 && len(imageParts) == 2 {
 				switch obj {
 				case api.PipelineImageStream, api.ReleaseStreamFor(api.LatestReleaseName), api.ReleaseStreamFor(api.InitialReleaseName), api.ReleaseImageStream:
 				default:
 					releaseName := api.ReleaseNameFrom(obj)
 					if !context.releases.Has(releaseName) {
-						ret = append(ret, fmt.Errorf("%s.from: unknown imagestream '%s'", context.fieldRoot, imageParts[0]))
+						ret = append(ret, context.addField("from").errorf("unknown imagestream '%s'", imageParts[0]))
 					}
 				}
 			}
 		}
 	}
 	if len(step.Commands) == 0 {
-		ret = append(ret, fmt.Errorf("%s: `commands` is required", context.fieldRoot))
+		ret = append(ret, context.errorf("`commands` is required"))
 	} else {
 		ret = append(ret, validateCommands(step)...)
 	}
@@ -558,19 +567,19 @@ func validateLiteralTestStep(context context, stage testStage, step api.LiteralT
 		ret = append(ret, fmt.Errorf("test %s contains best_effort without timeout", step.As))
 	}
 
-	ret = append(ret, validateResourceRequirements(context.fieldRoot+".resources", step.Resources)...)
-	ret = append(ret, validateCredentials(context.fieldRoot, step.Credentials)...)
+	ret = append(ret, validateResourceRequirements(string(context.field)+".resources", step.Resources)...)
+	ret = append(ret, validateCredentials(string(context.field), step.Credentials)...)
 	if context.env != nil {
-		if err := validateParameters(&context, step.Environment); err != nil {
+		if err := validateParameters(context, step.Environment); err != nil {
 			ret = append(ret, err)
 		}
 	}
-	ret = append(ret, validateDependencies(context.fieldRoot, step.Dependencies)...)
-	ret = append(ret, validateLeases(context.forField(".leases"), step.Leases)...)
+	ret = append(ret, validateDependencies(string(context.field), step.Dependencies)...)
+	ret = append(ret, validateLeases(context.addField("leases"), step.Leases)...)
 	switch stage {
 	case testStagePre, testStageTest:
 		if step.OptionalOnSuccess != nil {
-			ret = append(ret, fmt.Errorf("%s: `optional_on_success` is only allowed for Post steps", context.fieldRoot))
+			ret = append(ret, context.errorf("`optional_on_success` is only allowed for Post steps"))
 		}
 	}
 	return
@@ -642,7 +651,7 @@ func validateParameters(context *context, params []api.StepParameter) error {
 		}
 	}
 	if missing != nil {
-		return fmt.Errorf("%s: unresolved parameter(s): %s", context.fieldRoot, missing)
+		return context.errorf("unresolved parameter(s): %s", missing)
 	}
 	return nil
 }
@@ -678,16 +687,16 @@ func validateDNSConfig(fieldRoot string, dnsConfig []api.StepDNSConfig) (ret []e
 	return errs
 }
 
-func validateLeases(context context, leases []api.StepLease) (ret []error) {
+func validateLeases(context *context, leases []api.StepLease) (ret []error) {
 	for i, l := range leases {
 		if l.ResourceType == "" {
-			ret = append(ret, fmt.Errorf("%s[%d]: 'resource_type' cannot be empty", context.fieldRoot, i))
+			ret = append(ret, context.addIndex(i).errorf("'resource_type' cannot be empty"))
 		}
 		if l.Env == "" {
-			ret = append(ret, fmt.Errorf("%s[%d]: 'env' cannot be empty", context.fieldRoot, i))
+			ret = append(ret, context.addIndex(i).errorf("'env' cannot be empty"))
 		} else if context.leasesSeen != nil {
 			if context.leasesSeen.Has(l.Env) {
-				ret = append(ret, fmt.Errorf("%s[%d]: duplicate environment variable: %s", context.fieldRoot, i, l.Env))
+				ret = append(ret, context.addIndex(i).errorf("duplicate environment variable: %s", l.Env))
 			} else {
 				context.leasesSeen.Insert(l.Env)
 			}

@@ -159,7 +159,6 @@ func main() {
 				"--github-token-path", "/etc/github/oauth",
 				"--github-endpoint", "http://ghproxy",
 				"--config-dir", "./ci-operator/config",
-				"--registry", "./ci-operator/step-registry",
 				"--prune-unused-replacements",
 				"--prune-ocp-builder-replacements",
 				"--ensure-correct-promotion-dockerfile",

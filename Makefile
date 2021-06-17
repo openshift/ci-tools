@@ -151,9 +151,13 @@ race-install: cmd/vault-secret-collection-manager/index.js
 #   make integration
 #   make integration SUITE=multi-stage
 integration:
-	# legacy, so we don't break them
-	test/entrypoint-wrapper-integration.sh
-	hack/test-integration.sh $(SUITE)
+	@set -e; \
+		if [[ -n $$OPENSHIFT_CI ]]; then count=25; else count=1; fi && \
+		for try in $$(seq $$count); do \
+			echo "Try $$try" && \
+			test/entrypoint-wrapper-integration.sh && \
+			hack/test-integration.sh $(SUITE) ; \
+		done
 .PHONY: integration
 
 TMPDIR ?= /tmp

@@ -160,6 +160,94 @@ func TestShardProwConfig(t *testing.T) {
 				}, "\n"),
 			},
 		},
+		{
+			name: "Tide queries get sharded",
+			in: &config.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+				{Orgs: []string{"openshift", "openshift-priv"}, Repos: []string{"kube-reporting/ghostunnel", "kube-reporting/presto"}, Labels: []string{"lgtm", "approved", "bugzilla/valid-bug"}},
+				{Orgs: []string{"codeready-toolchain", "integr8ly"}, Repos: []string{"containers/buildah", "containers/common"}, Labels: []string{"lgtm", "approved"}},
+				{Orgs: []string{"integr8ly"}, Author: "openshift-bot"},
+				{Repos: []string{"openshift/release"}, Author: "openshift-bot"},
+			}}},
+			expectedShardFiles: map[string]string{
+				"codeready-toolchain/_prowconfig.yaml": `tide:
+  queries:
+  - labels:
+    - lgtm
+    - approved
+    orgs:
+    - codeready-toolchain
+`,
+				"containers/buildah/_prowconfig.yaml": `tide:
+  queries:
+  - labels:
+    - lgtm
+    - approved
+    repos:
+    - containers/buildah
+`,
+				"containers/common/_prowconfig.yaml": `tide:
+  queries:
+  - labels:
+    - lgtm
+    - approved
+    repos:
+    - containers/common
+`,
+				"integr8ly/_prowconfig.yaml": `tide:
+  queries:
+  - labels:
+    - lgtm
+    - approved
+    orgs:
+    - integr8ly
+  - author: openshift-bot
+    orgs:
+    - integr8ly
+`,
+				"kube-reporting/ghostunnel/_prowconfig.yaml": `tide:
+  queries:
+  - labels:
+    - lgtm
+    - approved
+    - bugzilla/valid-bug
+    repos:
+    - kube-reporting/ghostunnel
+`,
+				"kube-reporting/presto/_prowconfig.yaml": `tide:
+  queries:
+  - labels:
+    - lgtm
+    - approved
+    - bugzilla/valid-bug
+    repos:
+    - kube-reporting/presto
+`,
+				"openshift-priv/_prowconfig.yaml": `tide:
+  queries:
+  - labels:
+    - lgtm
+    - approved
+    - bugzilla/valid-bug
+    orgs:
+    - openshift-priv
+`,
+				"openshift/_prowconfig.yaml": `tide:
+  queries:
+  - labels:
+    - lgtm
+    - approved
+    - bugzilla/valid-bug
+    orgs:
+    - openshift
+`,
+				"openshift/release/_prowconfig.yaml": `tide:
+  queries:
+  - author: openshift-bot
+    repos:
+    - openshift/release
+`,
+			},
+		},
 	}
 
 	for _, tc := range testCases {

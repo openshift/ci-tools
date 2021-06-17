@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -125,6 +126,7 @@ type prowConfigWithPointers struct {
 
 type tideConfig struct {
 	MergeType map[string]github.PullRequestMergeType `json:"merge_method,omitempty"`
+	Queries   prowconfig.TideQueries                 `json:"queries,omitempty"`
 }
 
 func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.ProwConfig, error) {
@@ -167,6 +169,45 @@ func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.Pr
 		delete(pc.Tide.MergeType, orgOrgRepoString)
 	}
 
+	for _, query := range pc.Tide.Queries {
+		for _, org := range query.Orgs {
+			if configsByOrgRepo[prowconfig.OrgRepo{Org: org}] == nil {
+				configsByOrgRepo[prowconfig.OrgRepo{Org: org}] = &prowConfigWithPointers{}
+			}
+			if configsByOrgRepo[prowconfig.OrgRepo{Org: org}].Tide == nil {
+				configsByOrgRepo[prowconfig.OrgRepo{Org: org}].Tide = &tideConfig{}
+			}
+			queryCopy, err := deepCopyTideQuery(&query)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deepcopy tide query %+v: %w", query, err)
+			}
+			queryCopy.Orgs = []string{org}
+			queryCopy.Repos = nil
+			configsByOrgRepo[prowconfig.OrgRepo{Org: org}].Tide.Queries = append(configsByOrgRepo[prowconfig.OrgRepo{Org: org}].Tide.Queries, *queryCopy)
+		}
+		for _, repo := range query.Repos {
+			slashSplit := strings.Split(repo, "/")
+			if len(slashSplit) != 2 {
+				return nil, fmt.Errorf("repo '%s' in query %+v is not a valid repo specification", repo, query)
+			}
+			orgRepo := prowconfig.OrgRepo{Org: slashSplit[0], Repo: slashSplit[1]}
+			if configsByOrgRepo[orgRepo] == nil {
+				configsByOrgRepo[orgRepo] = &prowConfigWithPointers{}
+			}
+			if configsByOrgRepo[orgRepo].Tide == nil {
+				configsByOrgRepo[orgRepo].Tide = &tideConfig{}
+			}
+			queryCopy, err := deepCopyTideQuery(&query)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deepcopy tide query %+v: %w", query, err)
+			}
+			queryCopy.Orgs = nil
+			queryCopy.Repos = []string{repo}
+			configsByOrgRepo[orgRepo].Tide.Queries = append(configsByOrgRepo[orgRepo].Tide.Queries, *queryCopy)
+		}
+	}
+	pc.Tide.Queries = nil
+
 	for orgOrRepo, cfg := range configsByOrgRepo {
 		if err := prowconfigsharding.MkdirAndWrite(target, filepath.Join(orgOrRepo.Org, orgOrRepo.Repo, config.SupplementalProwConfigFileName), cfg); err != nil {
 			return nil, err
@@ -174,6 +215,19 @@ func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.Pr
 	}
 
 	return pc, nil
+}
+
+func deepCopyTideQuery(q *prowconfig.TideQuery) (*prowconfig.TideQuery, error) {
+	serialized, err := json.Marshal(q)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marhsal: %w", err)
+	}
+	var result prowconfig.TideQuery
+	if err := json.Unmarshal(serialized, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	return &result, nil
 }
 
 func isPolicySet(p prowconfig.Policy) bool {

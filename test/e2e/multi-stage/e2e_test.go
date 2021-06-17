@@ -130,14 +130,7 @@ func TestMultiStage(t *testing.T) {
 			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-claim"},
 			needHive: true,
 			success:  true,
-			output:   []string{`Imported release 4.6.32`, `to tag release:latest`, `e2e-claim-claim-step succeeded`},
-		},
-		{
-			name:     "e2e-claim-override-latest",
-			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-claim-override-latest"},
-			needHive: true,
-			success:  true,
-			output:   []string{`Imported release 4.7.17`, `to tag release:latest-e2e-claim-override-latest`, `e2e-claim-override-latest-claim-step succeeded`},
+			output:   []string{`Imported release 4.7.17`, `to tag release:latest-e2e-claim`, `e2e-claim-claim-step succeeded`},
 		},
 		{
 			name:     "e2e-claim-as-custom",

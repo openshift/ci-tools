@@ -612,7 +612,8 @@ const (
 
 // ClusterClaim claims an OpenShift cluster for the job.
 type ClusterClaim struct {
-	// As is the name to use when importing the cluster claim release payload
+	// As is the name to use when importing the cluster claim release payload.
+	// If unset, claim release will be imported as `latest`.
 	As string `json:"as,omitempty"`
 	// Product is the name of the product being released.
 	// Defaults to ocp.
@@ -637,12 +638,15 @@ type ClaimRelease struct {
 }
 
 func (c *ClusterClaim) ClaimRelease(testName string) *ClaimRelease {
-	if c == nil || c.As == "" {
-		return nil
+	var as string
+	if c.As == "" {
+		as = LatestReleaseName
+	} else {
+		as = c.As
 	}
 	return &ClaimRelease{
-		ReleaseName:  fmt.Sprintf("%s-%s", c.As, testName),
-		OverrideName: c.As,
+		ReleaseName:  fmt.Sprintf("%s-%s", as, testName),
+		OverrideName: as,
 	}
 }
 

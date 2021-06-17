@@ -1,8 +1,12 @@
 releases:
-  latest:
+  latest:   # include `latest` as a release to verify that `latest` is automatically overridden when using claims
     release:
       channel: stable
       version: "4.6"
+  custom:   # include `custom` to make sure named claim imports are properly overridden
+    release:
+      channel: stable
+      version: "4.5"
 resources:
   '*':
     limits:
@@ -10,9 +14,8 @@ resources:
     requests:
       cpu: 10m
 tests:
-  - as: e2e-claim-override-latest
+  - as: e2e-claim
     cluster_claim:
-      as: latest
       architecture: amd64
       cloud: aws
       owner: fake
@@ -24,7 +27,7 @@ tests:
         - as: claim-step
           commands: |
             set -x
-            cmp "${KUBECONFIG}" /secrets/hive-admin-kubeconfig/kubeconfig
+            cmp "${KUBECONFIG}" /secrets/e2e-claim-hive-admin-kubeconfig/kubeconfig
             oc config view
           from: cli
           resources:
@@ -45,29 +48,9 @@ tests:
         - as: claim-step
           commands: |
             set -x
-            cmp "${KUBECONFIG}" /secrets/hive-admin-kubeconfig/kubeconfig
+            cmp "${KUBECONFIG}" /secrets/e2e-claim-as-custom-hive-admin-kubeconfig/kubeconfig
             oc config view
           from: stable-custom:cli
-          resources:
-            requests:
-              cpu: 100m
-              memory: 200Mi
-  - as: e2e-claim
-    cluster_claim:
-      architecture: amd64
-      cloud: aws
-      owner: fake
-      product: ocp
-      timeout: 3m # a claim from a fake pool should become ready very soon
-      version: "4.7"
-    steps:
-      test:
-        - as: claim-step
-          commands: |
-            set -x
-            cmp "${KUBECONFIG}" /secrets/e2e-claim-hive-admin-kubeconfig/kubeconfig
-            oc config view
-          from: cli
           resources:
             requests:
               cpu: 100m

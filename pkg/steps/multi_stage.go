@@ -225,7 +225,7 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 	}
 	if needsReleaseImage && !needsReleasePayload {
 		releaseName := api.LatestReleaseName
-		if s.clusterClaim != nil && s.clusterClaim.As == api.LatestReleaseName {
+		if claimRelease != nil && claimRelease.OverrideName == api.LatestReleaseName {
 			releaseName = claimRelease.ReleaseName
 		}
 		ret = append(ret, api.ReleaseImagesLink(releaseName))

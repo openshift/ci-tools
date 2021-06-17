@@ -351,17 +351,15 @@ func stepForTest(
 		}
 		if c.ClusterClaim != nil {
 			step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step)
-			if c.ClusterClaim.As != "" {
-				pullSpec, err := getClusterPoolPullSpec(ctx, c.ClusterClaim, hiveClient)
-				if err != nil {
-					return nil, hasReleaseStep, err
-				}
-				hasReleaseStep = true
-				claimRelease := c.ClusterClaim.ClaimRelease(c.As)
-				importStep := releasesteps.ImportReleaseStep(claimRelease.ReleaseName, pullSpec, false, config.Resources, podClient, jobSpec, pullSecret)
-				testSteps = append(testSteps, importStep)
-				addProvidesForStep(step, params)
+			pullSpec, err := getClusterPoolPullSpec(ctx, c.ClusterClaim, hiveClient)
+			if err != nil {
+				return nil, hasReleaseStep, err
 			}
+			hasReleaseStep = true
+			claimRelease := c.ClusterClaim.ClaimRelease(c.As)
+			importStep := releasesteps.ImportReleaseStep(claimRelease.ReleaseName, pullSpec, false, config.Resources, podClient, jobSpec, pullSecret)
+			testSteps = append(testSteps, importStep)
+			addProvidesForStep(step, params)
 		}
 		testSteps = append(testSteps, step)
 		newSteps := stepsForStepImages(client, jobSpec, inputImages, test, imageConfigs)

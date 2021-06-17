@@ -369,7 +369,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Architecture is the architecture for the product.\n" +
 	"            # Defaults to amd64.\n" +
 	"            architecture: ' '\n" +
-	"            # As is the name to use when importing the cluster claim release payload\n" +
+	"            # As is the name to use when importing the cluster claim release payload.\n" +
+	"            # If unset, claim release will be imported as `latest`.\n" +
 	"            as: ' '\n" +
 	"            # Cloud is the cloud where the product is installed, e.g., aws.\n" +
 	"            cloud: ' '\n" +
@@ -1069,7 +1070,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Architecture is the architecture for the product.\n" +
 	"        # Defaults to amd64.\n" +
 	"        architecture: ' '\n" +
-	"        # As is the name to use when importing the cluster claim release payload\n" +
+	"        # As is the name to use when importing the cluster claim release payload.\n" +
+	"        # If unset, claim release will be imported as `latest`.\n" +
 	"        as: ' '\n" +
 	"        # Cloud is the cloud where the product is installed, e.g., aws.\n" +
 	"        cloud: ' '\n" +

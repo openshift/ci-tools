@@ -13,22 +13,64 @@ import (
 )
 
 type pluginsConfigWithPointers struct {
-	Plugins plugins.Plugins `json:"plugins,omitempty"`
+	Plugins  *plugins.Plugins  `json:"plugins,omitempty"`
+	Bugzilla *plugins.Bugzilla `json:"bugzilla,omitempty"`
 }
 
 // WriteShardedPluginConfig shards the plugin config and then writes it into
 // the provided target.
 func WriteShardedPluginConfig(pc *plugins.Configuration, target afero.Fs) (*plugins.Configuration, error) {
+	fileList := make(map[string]pluginsConfigWithPointers)
 	for orgOrRepo, cfg := range pc.Plugins {
 		file := pluginsConfigWithPointers{
-			Plugins: plugins.Plugins{orgOrRepo: cfg},
+			Plugins: &plugins.Plugins{orgOrRepo: cfg},
 		}
-		if err := MkdirAndWrite(target, filepath.Join(orgOrRepo, config.SupplementalPluginConfigFileName), file); err != nil {
-			return nil, err
-		}
+		fileList[filepath.Join(orgOrRepo, config.SupplementalPluginConfigFileName)] = file
 		delete(pc.Plugins, orgOrRepo)
 	}
-
+	for org, orgConfig := range pc.Bugzilla.Orgs {
+		if orgConfig.Default != nil {
+			path := filepath.Join(org, config.SupplementalPluginConfigFileName)
+			if _, ok := fileList[path]; !ok {
+				fileList[path] = pluginsConfigWithPointers{}
+			}
+			newOrgConfig := plugins.Bugzilla{
+				Orgs: map[string]plugins.BugzillaOrgOptions{
+					org: {
+						Default: orgConfig.Default,
+					},
+				},
+			}
+			updatedConfig := fileList[path]
+			updatedConfig.Bugzilla = &newOrgConfig
+			fileList[path] = updatedConfig
+		}
+		for repo, repoConfig := range orgConfig.Repos {
+			path := filepath.Join(org, repo, config.SupplementalPluginConfigFileName)
+			if _, ok := fileList[path]; !ok {
+				fileList[path] = pluginsConfigWithPointers{}
+			}
+			newRepoConfig := plugins.Bugzilla{
+				Orgs: map[string]plugins.BugzillaOrgOptions{
+					org: {
+						Repos: map[string]plugins.BugzillaRepoOptions{
+							repo: repoConfig,
+						},
+					},
+				},
+			}
+			updatedConfig := fileList[path]
+			updatedConfig.Bugzilla = &newRepoConfig
+			fileList[path] = updatedConfig
+		}
+		delete(pc.Bugzilla.Orgs, org)
+	}
+	pc.Bugzilla.Orgs = nil
+	for path, file := range fileList {
+		if err := MkdirAndWrite(target, path, file); err != nil {
+			return nil, err
+		}
+	}
 	return pc, nil
 }
 

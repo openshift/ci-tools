@@ -20,6 +20,9 @@ import (
 
 func TestShardPluginConfig(t *testing.T) {
 	t.Parallel()
+	targetRelease46 := "4.6.0"
+	targetRelease47 := "4.7.0"
+	targetRelease48 := "4.8.0"
 	testCases := []struct {
 		name string
 		in   *plugins.Configuration
@@ -31,18 +34,71 @@ func TestShardPluginConfig(t *testing.T) {
 			name: "Plugin config gets sharded",
 			in: &plugins.Configuration{
 				Plugins: plugins.Plugins{
-					"openshift":         plugins.OrgPlugins{Plugins: []string{"foo"}},
-					"openshift/release": plugins.OrgPlugins{Plugins: []string{"bar"}},
+					"openshift":          plugins.OrgPlugins{Plugins: []string{"foo"}},
+					"openshift/release":  plugins.OrgPlugins{Plugins: []string{"bar"}},
+					"openshift/release2": plugins.OrgPlugins{Plugins: []string{"zim"}},
+				},
+				Bugzilla: plugins.Bugzilla{
+					Default: map[string]plugins.BugzillaBranchOptions{
+						"master": {TargetRelease: &targetRelease48},
+					},
+					Orgs: map[string]plugins.BugzillaOrgOptions{
+						"openshift": {
+							Default: map[string]plugins.BugzillaBranchOptions{
+								"release-4.6": {TargetRelease: &targetRelease46},
+							},
+							Repos: map[string]plugins.BugzillaRepoOptions{
+								"release": {
+									Branches: map[string]plugins.BugzillaBranchOptions{
+										"release-4.8": {TargetRelease: &targetRelease48},
+									},
+								},
+								"release3": {
+									Branches: map[string]plugins.BugzillaBranchOptions{
+										"release-4.7": {TargetRelease: &targetRelease47},
+									},
+								},
+							},
+						},
+						"openshift-priv": {
+							Default: map[string]plugins.BugzillaBranchOptions{
+								"release-4.7": {TargetRelease: &targetRelease47},
+							},
+							Repos: map[string]plugins.BugzillaRepoOptions{
+								"release": {
+									Branches: map[string]plugins.BugzillaBranchOptions{
+										"release-4.6": {TargetRelease: &targetRelease46},
+									},
+								},
+								"release2": {
+									Branches: map[string]plugins.BugzillaBranchOptions{
+										"release-4.8": {TargetRelease: &targetRelease48},
+									},
+								},
+							},
+						},
+					},
 				},
 				Cat: plugins.Cat{KeyPath: "/etc/raw"},
 			},
 
 			expectedConfig: &plugins.Configuration{
 				Plugins: plugins.Plugins{},
-				Cat:     plugins.Cat{KeyPath: "/etc/raw"},
+				Bugzilla: plugins.Bugzilla{
+					Default: map[string]plugins.BugzillaBranchOptions{
+						"master": {TargetRelease: &targetRelease48},
+					},
+				},
+				Cat: plugins.Cat{KeyPath: "/etc/raw"},
 			},
 			expectedShardFiles: map[string]string{
 				"openshift/_pluginconfig.yaml": strings.Join([]string{
+					"bugzilla:",
+					"  orgs:",
+					"    openshift:",
+					"      default:",
+					"        release-4.6:",
+					"          target_release: 4.6.0",
 					"plugins:",
 					"  openshift:",
 					"    plugins:",
@@ -50,10 +106,67 @@ func TestShardPluginConfig(t *testing.T) {
 					"",
 				}, "\n"),
 				"openshift/release/_pluginconfig.yaml": strings.Join([]string{
+					"bugzilla:",
+					"  orgs:",
+					"    openshift:",
+					"      repos:",
+					"        release:",
+					"          branches:",
+					"            release-4.8:",
+					"              target_release: 4.8.0",
 					"plugins:",
 					"  openshift/release:",
 					"    plugins:",
 					"    - bar",
+					"",
+				}, "\n"),
+				"openshift/release2/_pluginconfig.yaml": strings.Join([]string{
+					"plugins:",
+					"  openshift/release2:",
+					"    plugins:",
+					"    - zim",
+					"",
+				}, "\n"),
+				"openshift/release3/_pluginconfig.yaml": strings.Join([]string{
+					"bugzilla:",
+					"  orgs:",
+					"    openshift:",
+					"      repos:",
+					"        release3:",
+					"          branches:",
+					"            release-4.7:",
+					"              target_release: 4.7.0",
+					"",
+				}, "\n"),
+				"openshift-priv/_pluginconfig.yaml": strings.Join([]string{
+					"bugzilla:",
+					"  orgs:",
+					"    openshift-priv:",
+					"      default:",
+					"        release-4.7:",
+					"          target_release: 4.7.0",
+					"",
+				}, "\n"),
+				"openshift-priv/release/_pluginconfig.yaml": strings.Join([]string{
+					"bugzilla:",
+					"  orgs:",
+					"    openshift-priv:",
+					"      repos:",
+					"        release:",
+					"          branches:",
+					"            release-4.6:",
+					"              target_release: 4.6.0",
+					"",
+				}, "\n"),
+				"openshift-priv/release2/_pluginconfig.yaml": strings.Join([]string{
+					"bugzilla:",
+					"  orgs:",
+					"    openshift-priv:",
+					"      repos:",
+					"        release2:",
+					"          branches:",
+					"            release-4.8:",
+					"              target_release: 4.8.0",
 					"",
 				}, "\n"),
 			},

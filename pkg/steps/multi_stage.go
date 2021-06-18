@@ -540,7 +540,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			errs = append(errs, fmt.Errorf("cannot set both cluster_profile and cluster_claim in a test"))
 		}
 		if s.clusterClaim != nil {
-			clusterClaimEnv, clusterClaimMount, err := getClusterClaimPodParams(secretVolumeMounts)
+			clusterClaimEnv, clusterClaimMount, err := getClusterClaimPodParams(secretVolumeMounts, s.name)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("failed to get cluster claim pod params: %w", err))
 			} else {
@@ -865,13 +865,13 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	return nil
 }
 
-func getClusterClaimPodParams(secretVolumeMounts []coreapi.VolumeMount) ([]coreapi.EnvVar, []coreapi.VolumeMount, error) {
+func getClusterClaimPodParams(secretVolumeMounts []coreapi.VolumeMount, testName string) ([]coreapi.EnvVar, []coreapi.VolumeMount, error) {
 	var retEnv []coreapi.EnvVar
 	var retMount []coreapi.VolumeMount
 	var errs []error
 
 	for _, secretName := range []string{api.HiveAdminKubeconfigSecret, api.HiveAdminPasswordSecret} {
-		mountPath := getMountPath(secretName)
+		mountPath := getMountPath(namePerTest(secretName, testName))
 		var foundMountPath bool
 		for _, secretVolumeMount := range secretVolumeMounts {
 			if secretVolumeMount.MountPath == mountPath {
@@ -888,7 +888,7 @@ func getClusterClaimPodParams(secretVolumeMounts []coreapi.VolumeMount) ([]corea
 		}
 		if !foundMountPath {
 			// should never happen
-			errs = append(errs, fmt.Errorf("failed to find foundMountPath %s to create secret %s", mountPath, secretName))
+			errs = append(errs, fmt.Errorf("failed to find foundMountPath %s to create secret %s", mountPath, namePerTest(secretName, testName)))
 		}
 	}
 

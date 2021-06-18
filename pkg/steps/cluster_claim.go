@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -164,7 +165,7 @@ func (s *clusterClaimStep) acquireCluster(ctx context.Context, waitForClaim func
 			return claim, fmt.Errorf("failed to get secret %s in namespace %s: %w", clusterDeployment.Spec.ClusterMetadata.AdminKubeconfigSecretRef.Name, claim.Spec.Namespace, err)
 		}
 		dstNS := s.jobSpec.Namespace()
-		dstSecret, err := getHiveSecret(srcSecret, dst, dstNS)
+		dstSecret, err := getHiveSecret(srcSecret, dst, dstNS, s.as)
 		if err != nil {
 			return claim, fmt.Errorf("failed to mutate secret: %w", err)
 		}
@@ -175,7 +176,11 @@ func (s *clusterClaimStep) acquireCluster(ctx context.Context, waitForClaim func
 	return claim, nil
 }
 
-func getHiveSecret(src *corev1.Secret, name, namespace string) (*corev1.Secret, error) {
+func namePerTest(name, testName string) string {
+	return strings.ReplaceAll(utils.Trim63(fmt.Sprintf("%s-%s", testName, name)), ".", "-")
+}
+
+func getHiveSecret(src *corev1.Secret, name, namespace, testName string) (*corev1.Secret, error) {
 	var key string
 	if name == api.HiveAdminKubeconfigSecret {
 		key = api.HiveAdminKubeconfigSecretKey
@@ -189,7 +194,7 @@ func getHiveSecret(src *corev1.Secret, name, namespace string) (*corev1.Secret, 
 		return nil, fmt.Errorf("failed to find key %s in secret %s in namespace %s", key, src.Name, src.Namespace)
 	}
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		ObjectMeta: metav1.ObjectMeta{Name: namePerTest(name, testName), Namespace: namespace},
 		Data:       map[string][]byte{key: src.Data[key]},
 		Type:       src.Type,
 	}, nil

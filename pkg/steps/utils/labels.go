@@ -50,9 +50,15 @@ func mungeLabels(labels map[string]string) map[string]string {
 // in length and thus valid.
 func trimLabels(labels map[string]string) map[string]string {
 	for k, v := range labels {
-		if len(v) > 63 {
-			labels[k] = v[:60] + "XXX"
-		}
+		labels[k] = Trim63(v)
 	}
 	return labels
+}
+
+// Trim63 ensure that the value is less than 64 characters in length
+func Trim63(value string) string {
+	if len(value) > 63 {
+		return value[:60] + "XXX"
+	}
+	return value
 }

@@ -540,6 +540,7 @@ const (
 	ClusterBuild01 Cluster = "build01"
 	ClusterBuild02 Cluster = "build02"
 	ClusterVSphere Cluster = "vsphere"
+	ClusterHive    Cluster = "hive"
 )
 
 // TestStepConfiguration describes a step that runs a

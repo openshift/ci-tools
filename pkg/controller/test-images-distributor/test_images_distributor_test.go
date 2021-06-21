@@ -799,6 +799,7 @@ func TestSourceForConfigChangeChannel(t *testing.T) {
 	testCases := []struct {
 		name   string
 		change agents.IndexDelta
+		client ctrlruntimeclient.Client
 
 		expected []requestWithCluster
 	}{
@@ -815,6 +816,18 @@ func TestSourceForConfigChangeChannel(t *testing.T) {
 			name:   "Config was removed, we don't trigger an event",
 			change: agents.IndexDelta{IndexKey: "namespace/name:tag", Removed: []*api.ReleaseBuildConfiguration{{}}},
 		},
+		{
+			name:   "Config for imagestream was added, we trigger an event per cluster and tag",
+			change: agents.IndexDelta{IndexKey: "imagestream_namespace/name", Added: []*api.ReleaseBuildConfiguration{{}}},
+			client: fakeclient.NewFakeClient(&imagev1.ImageStream{ObjectMeta: metav1.ObjectMeta{Namespace: "namespace", Name: "name"}, Status: imagev1.ImageStreamStatus{Tags: []imagev1.NamedTagEventList{{Tag: "foo"}, {Tag: "bar"}}}}),
+
+			expected: []requestWithCluster{
+				{cluster: "build01", request: types.NamespacedName{Namespace: "namespace", Name: "name:foo"}},
+				{cluster: "build01", request: types.NamespacedName{Namespace: "namespace", Name: "name:bar"}},
+				{cluster: "build02", request: types.NamespacedName{Namespace: "namespace", Name: "name:foo"}},
+				{cluster: "build02", request: types.NamespacedName{Namespace: "namespace", Name: "name:bar"}},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -822,9 +835,13 @@ func TestSourceForConfigChangeChannel(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
+			if tc.client == nil {
+				tc.client = fakeclient.NewFakeClient()
+			}
+
 			changeChannel := make(chan agents.IndexDelta)
 
-			source := sourceForConfigChangeChannel(buildClusters, changeChannel)
+			source := sourceForConfigChangeChannel(buildClusters, tc.client, changeChannel)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			queue := &hijackingQueue{}

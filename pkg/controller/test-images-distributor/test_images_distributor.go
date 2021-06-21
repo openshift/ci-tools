@@ -122,7 +122,7 @@ func AddToManager(mgr manager.Manager,
 	if err != nil {
 		return fmt.Errorf("failed to subscribe to index changes for index %s: %w", indexName, err)
 	}
-	if err := c.Watch(sourceForConfigChangeChannel(buildClusters, configChangeChannel), &handler.EnqueueRequestForObject{}); err != nil {
+	if err := c.Watch(sourceForConfigChangeChannel(buildClusters, appCIClient, configChangeChannel), &handler.EnqueueRequestForObject{}); err != nil {
 		return fmt.Errorf("failed to subscribe for config change changes: %w", err)
 	}
 
@@ -130,7 +130,7 @@ func AddToManager(mgr manager.Manager,
 	return nil
 }
 
-func sourceForConfigChangeChannel(buildClusterNames sets.String, changes <-chan agents.IndexDelta) *source.Channel {
+func sourceForConfigChangeChannel(buildClusterNames sets.String, registryClient ctrlruntimeclient.Client, changes <-chan agents.IndexDelta) *source.Channel {
 	sourceChannel := make(chan event.GenericEvent)
 	channelSource := &source.Channel{Source: sourceChannel}
 
@@ -145,11 +145,33 @@ func sourceForConfigChangeChannel(buildClusterNames sets.String, changes <-chan 
 				logrus.Errorf("BUG: got an index delta event with a key that is not a valid namespace/name identifier: %s", delta.IndexKey)
 				continue
 			}
+			namespace, name := slashSplit[0], slashSplit[1]
+			var result []types.NamespacedName
+
+			// Index holds both imagestreams and imagestreamtags, the former denoted by an imagestream_ prefix.
+			// This is needed because ReleaseTagConfigurations reference a whole imagestream rather than
+			// individual imagestreamtags.
+			if strings.HasPrefix(delta.IndexKey, "imagestream_") {
+				namespace = strings.TrimPrefix(namespace, "imagestream_")
+				var imagestream imagev1.ImageStream
+				if err := registryClient.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: name}, &imagestream); err != nil {
+					logrus.WithError(err).WithField("name", namespace+"/"+name).Error("Failed to get imagestream")
+					continue
+				}
+				for _, tag := range imagestream.Status.Tags {
+					result = append(result, types.NamespacedName{Namespace: namespace, Name: name + ":" + tag.Tag})
+				}
+
+			} else {
+				result = []types.NamespacedName{{Namespace: namespace, Name: name}}
+			}
 			for _, buildClusterName := range buildClusterNames.List() {
-				sourceChannel <- event.GenericEvent{Object: &testimagestreamtagimportv1.TestImageStreamTagImport{ObjectMeta: metav1.ObjectMeta{
-					Namespace: buildClusterName + clusterAndNamespaceDelimiter + slashSplit[0],
-					Name:      slashSplit[1],
-				}}}
+				for _, result := range result {
+					sourceChannel <- event.GenericEvent{Object: &testimagestreamtagimportv1.TestImageStreamTagImport{ObjectMeta: metav1.ObjectMeta{
+						Namespace: buildClusterName + clusterAndNamespaceDelimiter + result.Namespace,
+						Name:      result.Name,
+					}}}
+				}
 			}
 		}
 	}()
@@ -583,7 +605,7 @@ func indexConfigsByTestInputImageStreamTag(resolver registryResolver) agents.Ind
 }
 
 func indexKeyForImageStream(namespace, name string) string {
-	return "imagestream_" + namespace + name
+	return "imagestream_" + namespace + "/" + name
 }
 
 func upsertObject(ctx context.Context, c ctrlruntimeclient.Client, obj ctrlruntimeclient.Object, mutateFn crcontrollerutil.MutateFn, log *logrus.Entry) error {

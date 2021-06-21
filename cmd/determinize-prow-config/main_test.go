@@ -6,13 +6,11 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	fuzz "github.com/google/gofuzz"
 	"github.com/spf13/afero"
 
 	"k8s.io/test-infra/prow/config"
@@ -21,67 +19,6 @@ import (
 	utilpointer "k8s.io/utils/pointer"
 	"sigs.k8s.io/yaml"
 )
-
-// TestDeduplicateTideQueriesDoesntLoseData simply uses deduplicateTideQueries
-// on a single fuzzed tidequery, which should never result in any change as
-// there is nothing that could be deduplicated. This is mostly to ensure we
-// don't forget to change our code when new fields get added to the type.
-func TestDeduplicateTideQueriesDoesntLoseData(t *testing.T) {
-	for i := 0; i < 100; i++ {
-		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			query := config.TideQuery{}
-			fuzz.New().Fuzz(&query)
-			result, err := deduplicateTideQueries(config.TideQueries{query})
-			if err != nil {
-				t.Fatalf("error: %v", err)
-			}
-
-			if diff := cmp.Diff(result[0], query); diff != "" {
-				t.Errorf("result differs from initial query: %s", diff)
-			}
-		})
-	}
-}
-
-func TestDeduplicateTideQueries(t *testing.T) {
-	testCases := []struct {
-		name     string
-		in       config.TideQueries
-		expected config.TideQueries
-	}{
-		{
-			name: "No overlap",
-			in: config.TideQueries{
-				{Orgs: []string{"openshift"}, Labels: []string{"merge-me"}},
-				{Orgs: []string{"openshift-priv"}, Labels: []string{"merge-me-differently"}},
-			},
-			expected: config.TideQueries{
-				{Orgs: []string{"openshift"}, Labels: []string{"merge-me"}},
-				{Orgs: []string{"openshift-priv"}, Labels: []string{"merge-me-differently"}},
-			},
-		},
-		{
-			name: "Queries get deduplicated",
-			in: config.TideQueries{
-				{Orgs: []string{"openshift"}, Labels: []string{"merge-me"}},
-				{Orgs: []string{"openshift-priv"}, Labels: []string{"merge-me"}},
-			},
-			expected: config.TideQueries{{Orgs: []string{"openshift", "openshift-priv"}, Labels: []string{"merge-me"}}},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := deduplicateTideQueries(tc.in)
-			if err != nil {
-				t.Fatalf("failed: %v", err)
-			}
-			if diff := cmp.Diff(result, tc.expected); diff != "" {
-				t.Errorf("Result differs from expected: %v", diff)
-			}
-		})
-	}
-}
 
 func TestShardProwConfig(t *testing.T) {
 	testCases := []struct {
@@ -221,6 +158,94 @@ func TestShardProwConfig(t *testing.T) {
 					"    openshift/release: rebase",
 					"",
 				}, "\n"),
+			},
+		},
+		{
+			name: "Tide queries get sharded",
+			in: &config.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+				{Orgs: []string{"openshift", "openshift-priv"}, Repos: []string{"kube-reporting/ghostunnel", "kube-reporting/presto"}, Labels: []string{"lgtm", "approved", "bugzilla/valid-bug"}},
+				{Orgs: []string{"codeready-toolchain", "integr8ly"}, Repos: []string{"containers/buildah", "containers/common"}, Labels: []string{"lgtm", "approved"}},
+				{Orgs: []string{"integr8ly"}, Author: "openshift-bot"},
+				{Repos: []string{"openshift/release"}, Author: "openshift-bot"},
+			}}},
+			expectedShardFiles: map[string]string{
+				"codeready-toolchain/_prowconfig.yaml": `tide:
+  queries:
+  - labels:
+    - lgtm
+    - approved
+    orgs:
+    - codeready-toolchain
+`,
+				"containers/buildah/_prowconfig.yaml": `tide:
+  queries:
+  - labels:
+    - lgtm
+    - approved
+    repos:
+    - containers/buildah
+`,
+				"containers/common/_prowconfig.yaml": `tide:
+  queries:
+  - labels:
+    - lgtm
+    - approved
+    repos:
+    - containers/common
+`,
+				"integr8ly/_prowconfig.yaml": `tide:
+  queries:
+  - labels:
+    - lgtm
+    - approved
+    orgs:
+    - integr8ly
+  - author: openshift-bot
+    orgs:
+    - integr8ly
+`,
+				"kube-reporting/ghostunnel/_prowconfig.yaml": `tide:
+  queries:
+  - labels:
+    - lgtm
+    - approved
+    - bugzilla/valid-bug
+    repos:
+    - kube-reporting/ghostunnel
+`,
+				"kube-reporting/presto/_prowconfig.yaml": `tide:
+  queries:
+  - labels:
+    - lgtm
+    - approved
+    - bugzilla/valid-bug
+    repos:
+    - kube-reporting/presto
+`,
+				"openshift-priv/_prowconfig.yaml": `tide:
+  queries:
+  - labels:
+    - lgtm
+    - approved
+    - bugzilla/valid-bug
+    orgs:
+    - openshift-priv
+`,
+				"openshift/_prowconfig.yaml": `tide:
+  queries:
+  - labels:
+    - lgtm
+    - approved
+    - bugzilla/valid-bug
+    orgs:
+    - openshift
+`,
+				"openshift/release/_prowconfig.yaml": `tide:
+  queries:
+  - author: openshift-bot
+    repos:
+    - openshift/release
+`,
 			},
 		},
 	}

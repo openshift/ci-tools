@@ -11,14 +11,12 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/plugins"
@@ -80,11 +78,6 @@ func updateProwConfig(configDir, shardingBaseDir string) error {
 	}
 
 	config := agent.Config()
-	var err error
-	config.Tide.Queries, err = deduplicateTideQueries(config.Tide.Queries)
-	if err != nil {
-		return fmt.Errorf("failed to deduplicate Tide queries: %w", err)
-	}
 
 	if shardingBaseDir != "" {
 		pc, err := shardProwConfig(&config.ProwConfig, afero.NewBasePathFs(afero.NewOsFs(), shardingBaseDir))
@@ -100,94 +93,6 @@ func updateProwConfig(configDir, shardingBaseDir string) error {
 	}
 
 	return ioutil.WriteFile(configPath, data, 0644)
-}
-
-type tideQueryConfig struct {
-	Author                 string
-	ExcludedBranches       []string
-	IncludedBranches       []string
-	Labels                 []string
-	MissingLabels          []string
-	Milestone              string
-	ReviewApprovedRequired bool
-}
-
-type tideQueryTarget struct {
-	Orgs          []string
-	Repos         []string
-	ExcludedRepos []string
-}
-
-// tideQueryMap is a map[tideQueryConfig]*tideQueryTarget. Because slices are not comparable, they
-// or structs containing them are not allowed as map keys. We sidestep this by using a json serialization
-// of the object as key instead. This is horribly inefficient, but will never be able to beat the
-// inefficiency of our Python validation scripts.
-type tideQueryMap map[string]*tideQueryTarget
-
-func (tm tideQueryMap) queries() (prowconfig.TideQueries, error) {
-	var result prowconfig.TideQueries
-	for k, v := range tm {
-		var queryConfig tideQueryConfig
-		if err := json.Unmarshal([]byte(k), &queryConfig); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal %q: %w", k, err)
-		}
-		result = append(result, prowconfig.TideQuery{
-			Orgs:                   v.Orgs,
-			Repos:                  v.Repos,
-			ExcludedRepos:          v.ExcludedRepos,
-			Author:                 queryConfig.Author,
-			ExcludedBranches:       queryConfig.ExcludedBranches,
-			IncludedBranches:       queryConfig.IncludedBranches,
-			Labels:                 queryConfig.Labels,
-			MissingLabels:          queryConfig.MissingLabels,
-			Milestone:              queryConfig.Milestone,
-			ReviewApprovedRequired: queryConfig.ReviewApprovedRequired,
-		})
-
-	}
-	var errs []error
-	sort.SliceStable(result, func(i, j int) bool {
-		iSerialized, err := json.Marshal(result[i])
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to marshal %+v: %w", result[i], err))
-		}
-		jSerialized, err := json.Marshal(result[j])
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to marshal %+v: %w", result[j], err))
-		}
-		return string(iSerialized) < string(jSerialized)
-	})
-
-	return result, utilerrors.NewAggregate(errs)
-}
-
-func deduplicateTideQueries(queries prowconfig.TideQueries) (prowconfig.TideQueries, error) {
-	m := tideQueryMap{}
-	for _, query := range queries {
-		key := tideQueryConfig{
-			Author:                 query.Author,
-			ExcludedBranches:       query.ExcludedBranches,
-			IncludedBranches:       query.IncludedBranches,
-			Labels:                 query.Labels,
-			MissingLabels:          query.MissingLabels,
-			Milestone:              query.Milestone,
-			ReviewApprovedRequired: query.ReviewApprovedRequired,
-		}
-		keyRaw, err := json.Marshal(key)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal %+v: %w", key, err)
-		}
-		val, ok := m[string(keyRaw)]
-		if !ok {
-			val = &tideQueryTarget{}
-			m[string(keyRaw)] = val
-		}
-		val.Orgs = append(val.Orgs, query.Orgs...)
-		val.Repos = append(val.Repos, query.Repos...)
-		val.ExcludedRepos = append(val.ExcludedRepos, query.ExcludedRepos...)
-	}
-
-	return m.queries()
 }
 
 func updatePluginConfig(configDir, shardingBaseDir string) error {
@@ -221,6 +126,7 @@ type prowConfigWithPointers struct {
 
 type tideConfig struct {
 	MergeType map[string]github.PullRequestMergeType `json:"merge_method,omitempty"`
+	Queries   prowconfig.TideQueries                 `json:"queries,omitempty"`
 }
 
 func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.ProwConfig, error) {
@@ -263,6 +169,45 @@ func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.Pr
 		delete(pc.Tide.MergeType, orgOrgRepoString)
 	}
 
+	for _, query := range pc.Tide.Queries {
+		for _, org := range query.Orgs {
+			if configsByOrgRepo[prowconfig.OrgRepo{Org: org}] == nil {
+				configsByOrgRepo[prowconfig.OrgRepo{Org: org}] = &prowConfigWithPointers{}
+			}
+			if configsByOrgRepo[prowconfig.OrgRepo{Org: org}].Tide == nil {
+				configsByOrgRepo[prowconfig.OrgRepo{Org: org}].Tide = &tideConfig{}
+			}
+			queryCopy, err := deepCopyTideQuery(&query)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deepcopy tide query %+v: %w", query, err)
+			}
+			queryCopy.Orgs = []string{org}
+			queryCopy.Repos = nil
+			configsByOrgRepo[prowconfig.OrgRepo{Org: org}].Tide.Queries = append(configsByOrgRepo[prowconfig.OrgRepo{Org: org}].Tide.Queries, *queryCopy)
+		}
+		for _, repo := range query.Repos {
+			slashSplit := strings.Split(repo, "/")
+			if len(slashSplit) != 2 {
+				return nil, fmt.Errorf("repo '%s' in query %+v is not a valid repo specification", repo, query)
+			}
+			orgRepo := prowconfig.OrgRepo{Org: slashSplit[0], Repo: slashSplit[1]}
+			if configsByOrgRepo[orgRepo] == nil {
+				configsByOrgRepo[orgRepo] = &prowConfigWithPointers{}
+			}
+			if configsByOrgRepo[orgRepo].Tide == nil {
+				configsByOrgRepo[orgRepo].Tide = &tideConfig{}
+			}
+			queryCopy, err := deepCopyTideQuery(&query)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deepcopy tide query %+v: %w", query, err)
+			}
+			queryCopy.Orgs = nil
+			queryCopy.Repos = []string{repo}
+			configsByOrgRepo[orgRepo].Tide.Queries = append(configsByOrgRepo[orgRepo].Tide.Queries, *queryCopy)
+		}
+	}
+	pc.Tide.Queries = nil
+
 	for orgOrRepo, cfg := range configsByOrgRepo {
 		if err := prowconfigsharding.MkdirAndWrite(target, filepath.Join(orgOrRepo.Org, orgOrRepo.Repo, config.SupplementalProwConfigFileName), cfg); err != nil {
 			return nil, err
@@ -270,6 +215,19 @@ func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.Pr
 	}
 
 	return pc, nil
+}
+
+func deepCopyTideQuery(q *prowconfig.TideQuery) (*prowconfig.TideQuery, error) {
+	serialized, err := json.Marshal(q)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marhsal: %w", err)
+	}
+	var result prowconfig.TideQuery
+	if err := json.Unmarshal(serialized, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	return &result, nil
 }
 
 func isPolicySet(p prowconfig.Policy) bool {

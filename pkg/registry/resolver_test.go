@@ -753,6 +753,9 @@ func TestResolveParameters(t *testing.T) {
 				"CHANGED":   "workflow",
 				"FROM_TEST": "from_workflow, will be overwritten",
 			},
+			DependencyOverrides: api.DependencyOverrides{
+				"FROM_WORKFLOW": defaultWorkflow,
+			},
 		},
 	}
 	chains := ChainByName{
@@ -811,11 +814,12 @@ func TestResolveParameters(t *testing.T) {
 	}
 	observers := ObserverByName{}
 	for _, tc := range []struct {
-		name           string
-		test           api.MultiStageTestConfiguration
-		expectedParams [][]api.StepParameter
-		expectedDeps   [][]api.StepDependency
-		err            error
+		name                 string
+		test                 api.MultiStageTestConfiguration
+		expectedParams       [][]api.StepParameter
+		expectedDeps         [][]api.StepDependency
+		expectedDepOverrides api.DependencyOverrides
+		err                  error
 	}{{
 		name: "leaf, no parameters",
 		test: api.MultiStageTestConfiguration{
@@ -913,9 +917,10 @@ func TestResolveParameters(t *testing.T) {
 	}, {
 		name: "test and workflow are merged",
 		test: api.MultiStageTestConfiguration{
-			Workflow:     &testMergeWorkflow,
-			Environment:  api.TestEnvironment{"FROM_TEST": defaultTest},
-			Dependencies: api.TestDependencies{"FROM_TEST": defaultTest},
+			Workflow:            &testMergeWorkflow,
+			Environment:         api.TestEnvironment{"FROM_TEST": defaultTest},
+			Dependencies:        api.TestDependencies{"FROM_TEST": defaultTest},
+			DependencyOverrides: api.DependencyOverrides{"ADDED": defaultTest},
 		},
 		expectedParams: [][]api.StepParameter{
 			{{Name: "NOT_CHANGED", Default: &defaultNotChanged}},
@@ -926,6 +931,10 @@ func TestResolveParameters(t *testing.T) {
 			{{Env: "NOT_CHANGED", Name: defaultNotChanged}},
 			{{Env: "CHANGED", Name: defaultWorkflow}},
 			{{Env: "FROM_TEST", Name: defaultTest}},
+		},
+		expectedDepOverrides: api.DependencyOverrides{
+			"FROM_WORKFLOW": defaultWorkflow,
+			"ADDED":         defaultTest,
 		},
 	}, {
 		name: "invalid chain parameter",
@@ -984,6 +993,10 @@ func TestResolveParameters(t *testing.T) {
 					deps = append(deps, s.Dependencies)
 				}
 				if diff := cmp.Diff(deps, tc.expectedDeps); diff != "" {
+					t.Error(diff)
+				}
+				depOverrides := ret.DependencyOverrides
+				if diff := cmp.Diff(depOverrides, tc.expectedDepOverrides); diff != "" {
 					t.Error(diff)
 				}
 			}

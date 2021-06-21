@@ -81,6 +81,7 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 		}
 		mergeEnvironments(&config.Environment, workflow.Environment)
 		mergeDependencies(&config.Dependencies, workflow.Dependencies)
+		mergeDependencyOverrides(&config.DependencyOverrides, workflow.DependencyOverrides)
 		if l, err := mergeLeases(workflow.Leases, config.Leases); err != nil {
 			resolveErrors = append(resolveErrors, err)
 		} else {
@@ -150,6 +151,13 @@ func mergeEnvironments(dst *api.TestEnvironment, src api.TestEnvironment) {
 // Elements in `dst` are overwritten by those in `src` if they target the same
 // variable.
 func mergeDependencies(dst *api.TestDependencies, src api.TestDependencies) {
+	mergeMaps((*map[string]string)(dst), src)
+}
+
+// mergeDependencyOverrides joins two dependency_override maps.
+// Elements in `dst` are overwritten by those in `src` if they target the same
+// variable.
+func mergeDependencyOverrides(dst *api.DependencyOverrides, src api.DependencyOverrides) {
 	mergeMaps((*map[string]string)(dst), src)
 }
 

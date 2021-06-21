@@ -232,14 +232,20 @@ func replacer(
 		var hasNonEmptyDockerfile bool
 
 		for idx, image := range config.Images {
-			dockerFilePath := "Dockerfile"
-			if image.DockerfilePath != "" {
-				dockerFilePath = image.DockerfilePath
-			}
+			var dockerfile []byte
+			if image.DockerfileLiteral != nil {
+				dockerfile = []byte(*image.DockerfileLiteral)
+			} else {
+				dockerFilePath := "Dockerfile"
+				if image.DockerfilePath != "" {
+					dockerFilePath = image.DockerfilePath
+				}
 
-			dockerfile, err := getter(filepath.Join(image.ContextDir, dockerFilePath))
-			if err != nil {
-				return fmt.Errorf("failed to get dockerfile %s: %w", image.DockerfilePath, err)
+				var err error
+				dockerfile, err = getter(filepath.Join(image.ContextDir, dockerFilePath))
+				if err != nil {
+					return fmt.Errorf("failed to get dockerfile %s: %w", image.DockerfilePath, err)
+				}
 			}
 
 			hasNonEmptyDockerfile = hasNonEmptyDockerfile || len(dockerfile) > 0

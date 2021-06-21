@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	utilpointer "k8s.io/utils/pointer"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/ocpbuilddata"
@@ -43,6 +44,13 @@ func TestReplacer(t *testing.T) {
 				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{}},
 			},
 			files:       map[string][]byte{"Dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/repo:tag")},
+			expectWrite: true,
+		},
+		{
+			name: "Use dockerfile_literal if present",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{DockerfileLiteral: utilpointer.String("FROM registry.svc.ci.openshift.org/org/repo:tag")}}},
+			},
 			expectWrite: true,
 		},
 		{

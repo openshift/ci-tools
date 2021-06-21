@@ -1,0 +1,16 @@
+base_images:
+  org_repo_tag:
+    name: repo
+    namespace: org
+    tag: tag
+images:
+- dockerfile_literal: FROM registry.svc.ci.openshift.org/org/repo:tag
+  inputs:
+    org_repo_tag:
+      as:
+      - registry.svc.ci.openshift.org/org/repo:tag
+  to: ""
+zz_generated_metadata:
+  branch: ""
+  org: ""
+  repo: ""

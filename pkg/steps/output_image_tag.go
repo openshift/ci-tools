@@ -104,11 +104,12 @@ func (s *outputImageTagStep) Requires() []api.StepLink {
 	}
 }
 
-func (s *outputImageTagStep) Creates() []api.StepLink {
+func (s *outputImageTagStep) Creates() (ret []api.StepLink) {
+	ret = append(ret, api.ExternalImageLink(s.config.To))
 	if len(s.config.To.As) > 0 {
-		return []api.StepLink{api.ExternalImageLink(s.config.To), api.InternalImageLink(api.PipelineImageStreamTagReference(s.config.To.As))}
+		ret = append(ret, api.InternalImageLink(api.PipelineImageStreamTagReference(s.config.To.As)))
 	}
-	return []api.StepLink{api.ExternalImageLink(s.config.To)}
+	return
 }
 
 func (s *outputImageTagStep) Provides() api.ParameterMap {

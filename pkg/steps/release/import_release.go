@@ -34,7 +34,7 @@ import (
 // used by tests that invoke the installer.
 //
 // Since release images describe a set of images, when we import a release
-// image, we treat it's contents as inputs we must expand into the `stable-<name>`
+// image, we treat its contents as inputs we must expand into the `stable-<name>`
 // image stream. This is because our test scenarios need access not
 // just to the release image, but also to the images in that release image
 // like installer, cli, or tests. To make it easy for a CI job to install from

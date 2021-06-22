@@ -1,3 +1,12 @@
+approve:
+- commandHelpLink: ""
+  repos:
+  - org/repo
+  require_self_approval: false
+lgtm:
+- repos:
+  - org/repo
+  review_acts_as_lgtm: true
 plugins:
   org/repo:
     plugins:

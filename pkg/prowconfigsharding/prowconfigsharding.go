@@ -13,26 +13,28 @@ import (
 )
 
 type pluginsConfigWithPointers struct {
-	Plugins  *plugins.Plugins  `json:"plugins,omitempty"`
-	Bugzilla *plugins.Bugzilla `json:"bugzilla,omitempty"`
+	Plugins  *plugins.Plugins   `json:"plugins,omitempty"`
+	Bugzilla *plugins.Bugzilla  `json:"bugzilla,omitempty"`
+	Approve  []*plugins.Approve `json:"approve,omitempty"`
+	Lgtm     []plugins.Lgtm     `json:"lgtm,omitempty"`
 }
 
 // WriteShardedPluginConfig shards the plugin config and then writes it into
 // the provided target.
 func WriteShardedPluginConfig(pc *plugins.Configuration, target afero.Fs) (*plugins.Configuration, error) {
-	fileList := make(map[string]pluginsConfigWithPointers)
+	fileList := make(map[string]*pluginsConfigWithPointers)
 	for orgOrRepo, cfg := range pc.Plugins {
 		file := pluginsConfigWithPointers{
 			Plugins: &plugins.Plugins{orgOrRepo: cfg},
 		}
-		fileList[filepath.Join(orgOrRepo, config.SupplementalPluginConfigFileName)] = file
+		fileList[filepath.Join(orgOrRepo, config.SupplementalPluginConfigFileName)] = &file
 		delete(pc.Plugins, orgOrRepo)
 	}
 	for org, orgConfig := range pc.Bugzilla.Orgs {
 		if orgConfig.Default != nil {
 			path := filepath.Join(org, config.SupplementalPluginConfigFileName)
 			if _, ok := fileList[path]; !ok {
-				fileList[path] = pluginsConfigWithPointers{}
+				fileList[path] = &pluginsConfigWithPointers{}
 			}
 			newOrgConfig := plugins.Bugzilla{
 				Orgs: map[string]plugins.BugzillaOrgOptions{
@@ -41,14 +43,12 @@ func WriteShardedPluginConfig(pc *plugins.Configuration, target afero.Fs) (*plug
 					},
 				},
 			}
-			updatedConfig := fileList[path]
-			updatedConfig.Bugzilla = &newOrgConfig
-			fileList[path] = updatedConfig
+			fileList[path].Bugzilla = &newOrgConfig
 		}
 		for repo, repoConfig := range orgConfig.Repos {
 			path := filepath.Join(org, repo, config.SupplementalPluginConfigFileName)
 			if _, ok := fileList[path]; !ok {
-				fileList[path] = pluginsConfigWithPointers{}
+				fileList[path] = &pluginsConfigWithPointers{}
 			}
 			newRepoConfig := plugins.Bugzilla{
 				Orgs: map[string]plugins.BugzillaOrgOptions{
@@ -59,18 +59,46 @@ func WriteShardedPluginConfig(pc *plugins.Configuration, target afero.Fs) (*plug
 					},
 				},
 			}
-			updatedConfig := fileList[path]
-			updatedConfig.Bugzilla = &newRepoConfig
-			fileList[path] = updatedConfig
+			fileList[path].Bugzilla = &newRepoConfig
 		}
 		delete(pc.Bugzilla.Orgs, org)
 	}
 	pc.Bugzilla.Orgs = nil
+
+	for _, approve := range pc.Approve {
+		for _, orgOrRepo := range approve.Repos {
+			path := filepath.Join(orgOrRepo, config.SupplementalPluginConfigFileName)
+			if _, ok := fileList[path]; !ok {
+				fileList[path] = &pluginsConfigWithPointers{}
+			}
+
+			newApproveCfg := approve
+			newApproveCfg.Repos = []string{orgOrRepo}
+
+			fileList[path].Approve = []*plugins.Approve{&newApproveCfg}
+		}
+	}
+	pc.Approve = nil
+
+	for _, lgtm := range pc.Lgtm {
+		for _, orgOrRepo := range lgtm.Repos {
+			path := filepath.Join(orgOrRepo, config.SupplementalPluginConfigFileName)
+			if _, ok := fileList[path]; !ok {
+				fileList[path] = &pluginsConfigWithPointers{}
+			}
+			lgtmCopy := lgtm
+			lgtmCopy.Repos = []string{orgOrRepo}
+			fileList[path].Lgtm = append(fileList[path].Lgtm, lgtmCopy)
+		}
+	}
+	pc.Lgtm = nil
+
 	for path, file := range fileList {
 		if err := MkdirAndWrite(target, path, file); err != nil {
 			return nil, err
 		}
 	}
+
 	return pc, nil
 }
 

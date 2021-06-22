@@ -94,6 +94,10 @@ func TestShardPluginConfig(t *testing.T) {
 					},
 				},
 				Cat: plugins.Cat{KeyPath: "/etc/raw"},
+				Lgtm: []plugins.Lgtm{
+					{Repos: []string{"openshift"}, ReviewActsAsLgtm: true},
+					{Repos: []string{"openshift-priv/release"}, ReviewActsAsLgtm: true},
+				},
 			},
 
 			expectedConfig: &plugins.Configuration{
@@ -118,6 +122,10 @@ func TestShardPluginConfig(t *testing.T) {
 					"      default:",
 					"        release-4.6:",
 					"          target_release: 4.6.0",
+					"lgtm:",
+					"- repos:",
+					"  - openshift",
+					"  review_acts_as_lgtm: true",
 					"plugins:",
 					"  openshift:",
 					"    plugins:",
@@ -185,6 +193,10 @@ func TestShardPluginConfig(t *testing.T) {
 					"          branches:",
 					"            release-4.6:",
 					"              target_release: 4.6.0",
+					"lgtm:",
+					"- repos:",
+					"  - openshift-priv/release",
+					"  review_acts_as_lgtm: true",
 					"",
 				}, "\n"),
 				"openshift-priv/release2/_pluginconfig.yaml": strings.Join([]string{

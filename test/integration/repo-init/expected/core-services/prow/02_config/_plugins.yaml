@@ -1,21 +1,3 @@
-approve:
-- commandHelpLink: ""
-  lgtm_acts_as_approve: true
-  repos:
-  - openshift
-  require_self_approval: false
-- commandHelpLink: ""
-  repos:
-  - org/repo
-  require_self_approval: false
-- commandHelpLink: ""
-  repos:
-  - org/other
-  require_self_approval: false
-- commandHelpLink: ""
-  repos:
-  - org/third
-  require_self_approval: false
 blunderbuss:
   request_count: 2
 bugzilla: {}
@@ -101,19 +83,6 @@ help:
   help_guidelines_url: https://git.k8s.io/community/contributors/guide/help-wanted.md
 label:
   additional_labels: null
-lgtm:
-- repos:
-  - openshift
-  review_acts_as_lgtm: true
-- repos:
-  - org/repo
-  review_acts_as_lgtm: true
-- repos:
-  - org/other
-  review_acts_as_lgtm: true
-- repos:
-  - org/third
-  review_acts_as_lgtm: true
 override: {}
 owners:
   labels_denylist:

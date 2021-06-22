@@ -199,6 +199,7 @@ local-e2e: \
 #   make update-integration
 #   make update-integration SUITE=multi-stage
 update-integration:
+	go run ./cmd/determinize-prow-config -prow-config-dir test/integration/repo-init/expected/core-services/prow/02_config -sharded-plugin-config-base-dir test/integration/repo-init/expected/core-services/prow/02_config
 	UPDATE=true make integration
 .PHONY: update-integration
 

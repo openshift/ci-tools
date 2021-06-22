@@ -13,8 +13,9 @@ import (
 )
 
 type pluginsConfigWithPointers struct {
-	Plugins  *plugins.Plugins  `json:"plugins,omitempty"`
-	Bugzilla *plugins.Bugzilla `json:"bugzilla,omitempty"`
+	Plugins  *plugins.Plugins   `json:"plugins,omitempty"`
+	Bugzilla *plugins.Bugzilla  `json:"bugzilla,omitempty"`
+	Approve  []*plugins.Approve `json:"approve,omitempty"`
 }
 
 // WriteShardedPluginConfig shards the plugin config and then writes it into
@@ -65,6 +66,24 @@ func WriteShardedPluginConfig(pc *plugins.Configuration, target afero.Fs) (*plug
 		}
 		delete(pc.Bugzilla.Orgs, org)
 	}
+
+	for _, approve := range pc.Approve {
+		for _, orgOrRepo := range approve.Repos {
+			path := filepath.Join(orgOrRepo, config.SupplementalPluginConfigFileName)
+			if _, ok := fileList[path]; !ok {
+				fileList[path] = pluginsConfigWithPointers{}
+			}
+			updatedConfig := fileList[path]
+
+			newApproveCfg := approve
+			newApproveCfg.Repos = []string{orgOrRepo}
+
+			updatedConfig.Approve = []*plugins.Approve{&newApproveCfg}
+			fileList[path] = updatedConfig
+		}
+	}
+
+	pc.Approve = nil
 	pc.Bugzilla.Orgs = nil
 	for path, file := range fileList {
 		if err := MkdirAndWrite(target, path, file); err != nil {

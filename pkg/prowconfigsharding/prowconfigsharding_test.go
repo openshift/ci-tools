@@ -33,6 +33,20 @@ func TestShardPluginConfig(t *testing.T) {
 		{
 			name: "Plugin config gets sharded",
 			in: &plugins.Configuration{
+				Approve: []plugins.Approve{
+					{
+						IssueRequired: true,
+						Repos:         []string{"openshift"},
+					},
+					{
+						LgtmActsAsApprove: true,
+						Repos:             []string{"openshift/release"},
+					},
+					{
+						LgtmActsAsApprove: true,
+						Repos:             []string{"openshift/release2"},
+					},
+				},
 				Plugins: plugins.Plugins{
 					"openshift":          plugins.OrgPlugins{Plugins: []string{"foo"}},
 					"openshift/release":  plugins.OrgPlugins{Plugins: []string{"bar"}},
@@ -93,6 +107,11 @@ func TestShardPluginConfig(t *testing.T) {
 			},
 			expectedShardFiles: map[string]string{
 				"openshift/_pluginconfig.yaml": strings.Join([]string{
+					"approve:",
+					"- commandHelpLink: \"\"",
+					"  issue_required: true",
+					"  repos:",
+					"  - openshift",
 					"bugzilla:",
 					"  orgs:",
 					"    openshift:",
@@ -106,6 +125,11 @@ func TestShardPluginConfig(t *testing.T) {
 					"",
 				}, "\n"),
 				"openshift/release/_pluginconfig.yaml": strings.Join([]string{
+					"approve:",
+					"- commandHelpLink: \"\"",
+					"  lgtm_acts_as_approve: true",
+					"  repos:",
+					"  - openshift/release",
 					"bugzilla:",
 					"  orgs:",
 					"    openshift:",
@@ -121,6 +145,11 @@ func TestShardPluginConfig(t *testing.T) {
 					"",
 				}, "\n"),
 				"openshift/release2/_pluginconfig.yaml": strings.Join([]string{
+					"approve:",
+					"- commandHelpLink: \"\"",
+					"  lgtm_acts_as_approve: true",
+					"  repos:",
+					"  - openshift/release2",
 					"plugins:",
 					"  openshift/release2:",
 					"    plugins:",
@@ -208,7 +237,7 @@ func TestShardPluginConfig(t *testing.T) {
 				shardedConfigFiles[path] = string(data)
 				return nil
 			}); err != nil {
-				t.Errorf("waking the fs failed: %v", err)
+				t.Errorf("walking the fs failed: %v", err)
 			}
 
 			if diff := cmp.Diff(tc.expectedShardFiles, shardedConfigFiles); diff != "" {
@@ -253,7 +282,7 @@ func TestShardPluginConfig(t *testing.T) {
 				"--plugin-config=" + filepath.Join(tempDir, "_plugins.yaml"),
 				"--supplemental-plugin-config-dir=" + tempDir,
 			}); err != nil {
-				t.Fatalf("faield to parse flags")
+				t.Fatalf("failed to parse flags")
 			}
 
 			pluginAgent, err := opts.PluginAgent()

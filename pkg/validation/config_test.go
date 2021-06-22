@@ -749,6 +749,7 @@ func TestReleaseBuildConfiguration_DependencyParts(t *testing.T) {
 	var testCases = []struct {
 		name           string
 		config         *api.ReleaseBuildConfiguration
+		claimRelease   *api.ClaimRelease
 		dependency     api.StepDependency
 		expectedStream string
 		expectedTag    string
@@ -781,6 +782,15 @@ func TestReleaseBuildConfiguration_DependencyParts(t *testing.T) {
 			explicit:       true,
 		},
 		{
+			name:           "explicit, long-form for stable, overridden by cluster claim",
+			config:         &api.ReleaseBuildConfiguration{},
+			claimRelease:   &api.ClaimRelease{ReleaseName: "latest-e2e", OverrideName: "latest"},
+			dependency:     api.StepDependency{Name: "stable:installer"},
+			expectedStream: "stable-latest-e2e",
+			expectedTag:    "installer",
+			explicit:       true,
+		},
+		{
 			name:           "explicit, long-form for something crazy",
 			config:         &api.ReleaseBuildConfiguration{},
 			dependency:     api.StepDependency{Name: "whoa:really"},
@@ -788,11 +798,29 @@ func TestReleaseBuildConfiguration_DependencyParts(t *testing.T) {
 			expectedTag:    "really",
 			explicit:       true,
 		},
+		{
+			name:           "explicit, long-form for custom release, overridden by cluster claim",
+			config:         &api.ReleaseBuildConfiguration{},
+			claimRelease:   &api.ClaimRelease{ReleaseName: "whoa-e2e", OverrideName: "whoa"},
+			dependency:     api.StepDependency{Name: "stable-whoa:really"},
+			expectedStream: "stable-whoa-e2e",
+			expectedTag:    "really",
+			explicit:       true,
+		},
+		{
+			name:           "explicit, long-form for custom release, with cluster claim that does not override imagestream",
+			config:         &api.ReleaseBuildConfiguration{},
+			claimRelease:   &api.ClaimRelease{ReleaseName: "latest-e2e", OverrideName: "latest"},
+			dependency:     api.StepDependency{Name: "stable-whoa:really"},
+			expectedStream: "stable-whoa",
+			expectedTag:    "really",
+			explicit:       true,
+		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			actualStream, actualTag, explicit := testCase.config.DependencyParts(testCase.dependency)
+			actualStream, actualTag, explicit := testCase.config.DependencyParts(testCase.dependency, testCase.claimRelease)
 			if explicit != testCase.explicit {
 				t.Errorf("%s: did not correctly determine if ImageStream was explicit (should be %v)", testCase.name, testCase.explicit)
 			}

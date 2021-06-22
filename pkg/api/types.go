@@ -612,6 +612,9 @@ const (
 
 // ClusterClaim claims an OpenShift cluster for the job.
 type ClusterClaim struct {
+	// As is the name to use when importing the cluster claim release payload.
+	// If unset, claim release will be imported as `latest`.
+	As string `json:"as,omitempty"`
 	// Product is the name of the product being released.
 	// Defaults to ocp.
 	Product ReleaseProduct `json:"product,omitempty"`
@@ -627,6 +630,24 @@ type ClusterClaim struct {
 	// Timeout is how long ci-operator will wait for the cluster to be ready.
 	// Defaults to 1h.
 	Timeout *prowv1.Duration `json:"timeout,omitempty"`
+}
+
+type ClaimRelease struct {
+	ReleaseName  string
+	OverrideName string
+}
+
+func (c *ClusterClaim) ClaimRelease(testName string) *ClaimRelease {
+	var as string
+	if c.As == "" {
+		as = LatestReleaseName
+	} else {
+		as = c.As
+	}
+	return &ClaimRelease{
+		ReleaseName:  fmt.Sprintf("%s-%s", as, testName),
+		OverrideName: as,
+	}
 }
 
 // RegistryReferenceConfig is the struct that step references are unmarshalled into.

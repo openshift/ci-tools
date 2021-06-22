@@ -72,7 +72,7 @@ var trapPattern = regexp.MustCompile(`(^|\W)\s*trap\s*['"]?\w*['"]?\s*\w*`)
 // component, the image references exist in the test configuration, etc.) are
 // not performed.
 func IsValidReference(step api.LiteralTestStep) []error {
-	return validateLiteralTestStep(&context{field: fieldPath(step.As)}, testStageUnknown, step)
+	return validateLiteralTestStep(&context{field: fieldPath(step.As)}, testStageUnknown, step, nil)
 }
 
 func validateTestStepConfiguration(fieldRoot string, input []api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
@@ -163,13 +163,13 @@ func validateTestStepConfiguration(fieldRoot string, input []api.TestStepConfigu
 
 // validateTestStepDependencies ensures that users have referenced valid dependencies
 func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error {
-	dependencyErrors := func(step api.LiteralTestStep, testIdx int, stageField, stepField string, stepIdx int) []error {
+	dependencyErrors := func(step api.LiteralTestStep, testIdx int, stageField, stepField string, stepIdx int, claimRelease *api.ClaimRelease) []error {
 		var errs []error
 		for dependencyIdx, dependency := range step.Dependencies {
 			validationError := func(message string) error {
 				return fmt.Errorf("tests[%d].%s.%s[%d].dependencies[%d]: cannot determine source for dependency %q - %s", testIdx, stageField, stepField, stepIdx, dependencyIdx, dependency.Name, message)
 			}
-			stream, name, explicit := config.DependencyParts(dependency)
+			stream, name, explicit := config.DependencyParts(dependency, claimRelease)
 			if link := api.LinkForImage(stream, name); link == nil {
 				errs = append(errs, validationError("ensure the correct ImageStream name was provided"))
 			}
@@ -249,24 +249,28 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 		}
 		return errs
 	}
-	processSteps := func(steps []api.TestStep, testIdx int, stageField, stepField string) []error {
+	processSteps := func(steps []api.TestStep, testIdx int, stageField, stepField string, claimRelease *api.ClaimRelease) []error {
 		var errs []error
 		for stepIdx, test := range steps {
 			if test.LiteralTestStep != nil {
-				errs = append(errs, dependencyErrors(*test.LiteralTestStep, testIdx, stageField, stepField, stepIdx)...)
+				errs = append(errs, dependencyErrors(*test.LiteralTestStep, testIdx, stageField, stepField, stepIdx, claimRelease)...)
 			}
 		}
 		return errs
 	}
-	processLiteralSteps := func(steps []api.LiteralTestStep, testIdx int, stageField, stepField string) []error {
+	processLiteralSteps := func(steps []api.LiteralTestStep, testIdx int, stageField, stepField string, claimRelease *api.ClaimRelease) []error {
 		var errs []error
 		for stepIdx, test := range steps {
-			errs = append(errs, dependencyErrors(test, testIdx, stageField, stepField, stepIdx)...)
+			errs = append(errs, dependencyErrors(test, testIdx, stageField, stepField, stepIdx, claimRelease)...)
 		}
 		return errs
 	}
 	var errs []error
 	for testIdx, test := range config.Tests {
+		var claimRelease *api.ClaimRelease
+		if test.ClusterClaim != nil {
+			claimRelease = test.ClusterClaim.ClaimRelease(test.As)
+		}
 		if test.MultiStageTestConfiguration != nil {
 			for _, item := range []struct {
 				field string
@@ -276,7 +280,7 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 				{field: "test", list: test.MultiStageTestConfiguration.Test},
 				{field: "post", list: test.MultiStageTestConfiguration.Post},
 			} {
-				errs = append(errs, processSteps(item.list, testIdx, "steps", item.field)...)
+				errs = append(errs, processSteps(item.list, testIdx, "steps", item.field, claimRelease)...)
 			}
 		}
 		if test.MultiStageTestConfigurationLiteral != nil {
@@ -288,7 +292,7 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 				{field: "test", list: test.MultiStageTestConfigurationLiteral.Test},
 				{field: "post", list: test.MultiStageTestConfigurationLiteral.Post},
 			} {
-				errs = append(errs, processLiteralSteps(item.list, testIdx, "literal_steps", item.field)...)
+				errs = append(errs, processLiteralSteps(item.list, testIdx, "literal_steps", item.field, claimRelease)...)
 			}
 		}
 	}
@@ -421,6 +425,10 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 		clusterCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
+	var claimRelease *api.ClaimRelease
+	if test.ClusterClaim != nil {
+		claimRelease = test.ClusterClaim.ClaimRelease(test.As)
+	}
 	if testConfig := test.MultiStageTestConfiguration; testConfig != nil {
 		if resolved {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: non-literal test found in fully-resolved configuration", fieldRoot))
@@ -432,9 +440,9 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 		}
 		context := newContext(fieldPath(fieldRoot), testConfig.Environment, releases)
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
-		validationErrors = append(validationErrors, validateTestSteps(context.addField("pre"), testStagePre, testConfig.Pre)...)
-		validationErrors = append(validationErrors, validateTestSteps(context.addField("test"), testStageTest, testConfig.Test)...)
-		validationErrors = append(validationErrors, validateTestSteps(context.addField("post"), testStagePost, testConfig.Post)...)
+		validationErrors = append(validationErrors, validateTestSteps(context.addField("pre"), testStagePre, testConfig.Pre, claimRelease)...)
+		validationErrors = append(validationErrors, validateTestSteps(context.addField("test"), testStageTest, testConfig.Test, claimRelease)...)
+		validationErrors = append(validationErrors, validateTestSteps(context.addField("post"), testStagePost, testConfig.Post, claimRelease)...)
 	}
 	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
 		typeCount++
@@ -445,13 +453,13 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 		}
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
 		for i, s := range testConfig.Pre {
-			validationErrors = append(validationErrors, validateLiteralTestStep(context.addField("pre").addIndex(i), testStagePre, s)...)
+			validationErrors = append(validationErrors, validateLiteralTestStep(context.addField("pre").addIndex(i), testStagePre, s, claimRelease)...)
 		}
 		for i, s := range testConfig.Test {
-			validationErrors = append(validationErrors, validateLiteralTestStep(context.addField("test").addIndex(i), testStageTest, s)...)
+			validationErrors = append(validationErrors, validateLiteralTestStep(context.addField("test").addIndex(i), testStageTest, s, claimRelease)...)
 		}
 		for i, s := range testConfig.Post {
-			validationErrors = append(validationErrors, validateLiteralTestStep(context.addField("post").addIndex(i), testStagePost, s)...)
+			validationErrors = append(validationErrors, validateLiteralTestStep(context.addField("post").addIndex(i), testStagePost, s, claimRelease)...)
 		}
 	}
 	if typeCount == 0 {
@@ -470,12 +478,12 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 	return validationErrors
 }
 
-func validateTestSteps(context *context, stage testStage, steps []api.TestStep) (ret []error) {
+func validateTestSteps(context *context, stage testStage, steps []api.TestStep, claimRelease *api.ClaimRelease) (ret []error) {
 	for i, s := range steps {
 		contextI := context.addIndex(i)
 		ret = append(ret, validateTestStep(contextI, s)...)
 		if s.LiteralTestStep != nil {
-			ret = append(ret, validateLiteralTestStep(contextI, stage, *s.LiteralTestStep)...)
+			ret = append(ret, validateLiteralTestStep(contextI, stage, *s.LiteralTestStep, claimRelease)...)
 		}
 	}
 	return
@@ -513,7 +521,7 @@ func validateTestStep(context *context, step api.TestStep) (ret []error) {
 	return
 }
 
-func validateLiteralTestStep(context *context, stage testStage, step api.LiteralTestStep) (ret []error) {
+func validateLiteralTestStep(context *context, stage testStage, step api.LiteralTestStep, claimRelease *api.ClaimRelease) (ret []error) {
 	if len(step.As) == 0 {
 		ret = append(ret, context.errorf("`as` is required"))
 	} else if context.seen != nil {
@@ -550,7 +558,7 @@ func validateLiteralTestStep(context *context, stage testStage, step api.Literal
 				case api.PipelineImageStream, api.ReleaseStreamFor(api.LatestReleaseName), api.ReleaseStreamFor(api.InitialReleaseName), api.ReleaseImageStream:
 				default:
 					releaseName := api.ReleaseNameFrom(obj)
-					if !context.releases.Has(releaseName) {
+					if !context.releases.Has(releaseName) && (claimRelease == nil || releaseName != claimRelease.OverrideName) {
 						ret = append(ret, context.addField("from").errorf("unknown imagestream '%s'", imageParts[0]))
 					}
 				}

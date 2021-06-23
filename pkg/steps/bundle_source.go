@@ -87,7 +87,7 @@ func (s *bundleSourceStep) bundleSourceDockerfile() (string, error) {
 	var dockerCommands []string
 	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource))
 	for _, sub := range s.config.Substitutions {
-		streamName, tagName, _ := s.releaseBuildConfig.DependencyParts(api.StepDependency{Name: sub.With}, nil)
+		streamName, tagName, _ := s.releaseBuildConfig.DependencyParts(api.StepDependency{Name: sub.With})
 		replaceSpec, err := utils.ImageDigestFor(s.client, s.jobSpec.Namespace, streamName, tagName)()
 		if err != nil {
 			return "", fmt.Errorf("failed to get image digest for %s: %w", sub.With, err)
@@ -100,7 +100,7 @@ func (s *bundleSourceStep) bundleSourceDockerfile() (string, error) {
 func (s *bundleSourceStep) Requires() []api.StepLink {
 	links := []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceSource)}
 	for _, sub := range s.config.Substitutions {
-		imageStream, name, _ := s.releaseBuildConfig.DependencyParts(api.StepDependency{Name: sub.With}, nil)
+		imageStream, name, _ := s.releaseBuildConfig.DependencyParts(api.StepDependency{Name: sub.With})
 		if link := api.LinkForImage(imageStream, name); link != nil {
 			links = append(links, link)
 		} else {

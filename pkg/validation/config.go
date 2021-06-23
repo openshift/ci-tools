@@ -53,7 +53,7 @@ func validateConfiguration(config *api.ReleaseBuildConfiguration, org, repo stri
 		// validateOperator needs a method that maps `substitute.with` values to image links
 		// to validate the value is meaningful in the context of the configuration
 		linkForImage := func(image string) api.StepLink {
-			imageStream, name, _ := config.DependencyParts(api.StepDependency{Name: image}, nil)
+			imageStream, name, _ := config.DependencyParts(api.StepDependency{Name: image})
 			return api.LinkForImage(imageStream, name)
 		}
 		validationErrors = append(validationErrors, validateOperator("operator", config.Operator, linkForImage, config)...)

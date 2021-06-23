@@ -124,11 +124,11 @@ func (s *indexGeneratorStep) indexGenDockerfile() (string, error) {
 func (s *indexGeneratorStep) Requires() []api.StepLink {
 	var links []api.StepLink
 	for _, bundle := range s.config.OperatorIndex {
-		imageStream, name, _ := s.releaseBuildConfig.DependencyParts(api.StepDependency{Name: bundle}, nil)
+		imageStream, name, _ := s.releaseBuildConfig.DependencyParts(api.StepDependency{Name: bundle})
 		links = append(links, api.LinkForImage(imageStream, name))
 	}
 	if s.config.BaseIndex != "" {
-		imageStream, name, _ := s.releaseBuildConfig.DependencyParts(api.StepDependency{Name: s.config.BaseIndex}, nil)
+		imageStream, name, _ := s.releaseBuildConfig.DependencyParts(api.StepDependency{Name: s.config.BaseIndex})
 		links = append(links, api.LinkForImage(imageStream, name))
 	}
 	return links

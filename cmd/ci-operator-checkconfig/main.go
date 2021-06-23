@@ -12,6 +12,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/steps/release"
+	"github.com/openshift/ci-tools/pkg/validation"
 )
 
 type tagSet map[api.ImageStreamTagReference][]*config.Info
@@ -65,7 +66,9 @@ func (o *options) loadResolver(path string) error {
 
 func (o *options) validateConfiguration(seen tagSet, configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 	if o.resolver != nil {
-		if _, err := registry.ResolveConfig(o.resolver, *configuration); err != nil {
+		if c, err := registry.ResolveConfig(o.resolver, *configuration); err != nil {
+			return err
+		} else if err := validation.IsValidResolvedConfiguration(&c); err != nil {
 			return err
 		}
 	}

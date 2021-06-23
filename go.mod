@@ -55,7 +55,7 @@ require (
 	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/common v0.26.0
 	github.com/satori/go.uuid v1.2.0
-	github.com/sirupsen/logrus v1.7.0
+	github.com/sirupsen/logrus v1.8.1
 	github.com/slack-go/slack v0.7.3
 	github.com/spf13/afero v1.4.1
 	go.uber.org/zap v1.17.0
@@ -67,7 +67,7 @@ require (
 	k8s.io/apimachinery v0.21.1
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
 	k8s.io/klog/v2 v2.8.0
-	k8s.io/test-infra v0.0.0-20210622005358-f9f3b13107d6
+	k8s.io/test-infra v0.0.0-20210623151810-40ee9bd9852d
 	k8s.io/utils v0.0.0-20210527160623-6fdb442a123b
 	sigs.k8s.io/boskos v0.0.0-20210210143059-9ac98d864d2a
 	sigs.k8s.io/controller-runtime v0.9.0

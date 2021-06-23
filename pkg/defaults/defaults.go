@@ -428,7 +428,7 @@ func checkForFullyQualifiedStep(step api.Step, params *api.DeferredParameters) (
 	provides := step.Provides()
 
 	if values, ok := paramsHasAllParametersAsInput(params, provides); ok {
-		step = steps.NewInputEnvironmentStep(step.Name(), values, step.Creates())
+		step = steps.InputEnvironmentStep(step.Name(), values, step.Creates())
 		for k, v := range values {
 			params.Set(k, v)
 		}

@@ -32,72 +32,72 @@ func IsPromotionJob(jobLabels map[string]string) bool {
 //  - raw steps that can be used to create custom and
 //    fine-grained build flows
 type ReleaseBuildConfiguration struct {
-	Metadata Metadata `json:"zz_generated_metadata"`
+	Metadata Metadata `json:"zz_generated_metadata" yaml:"zz_generated_metadata"`
 
-	InputConfiguration `json:",inline"`
+	InputConfiguration `json:",inline" yaml:",inline"`
 
 	// BinaryBuildCommands will create a "bin" image based on "src" that
 	// contains the output of this command. This allows reuse of binary artifacts
 	// across other steps. If empty, no "bin" image will be created.
-	BinaryBuildCommands string `json:"binary_build_commands,omitempty"`
+	BinaryBuildCommands string `json:"binary_build_commands,omitempty" yaml:"binary_build_commands,omitempty"`
 	// TestBinaryBuildCommands will create a "test-bin" image based on "src" that
 	// contains the output of this command. This allows reuse of binary artifacts
 	// across other steps. If empty, no "test-bin" image will be created.
-	TestBinaryBuildCommands string `json:"test_binary_build_commands,omitempty"`
+	TestBinaryBuildCommands string `json:"test_binary_build_commands,omitempty" yaml:"test_binary_build_commands,omitempty"`
 
 	// RpmBuildCommands will create an "rpms" image from "bin" (or "src", if no
 	// binary build commands were specified) that contains the output of this
 	// command. The created RPMs will then be served via HTTP to the "base" image
 	// via an injected rpm.repo in the standard location at /etc/yum.repos.d.
-	RpmBuildCommands string `json:"rpm_build_commands,omitempty"`
+	RpmBuildCommands string `json:"rpm_build_commands,omitempty" yaml:"rpm_build_commands,omitempty"`
 	// RpmBuildLocation is where RPms are deposited after being built. If
 	// unset, this will default under the repository root to
 	// _output/local/releases/rpms/.
-	RpmBuildLocation string `json:"rpm_build_location,omitempty"`
+	RpmBuildLocation string `json:"rpm_build_location,omitempty" yaml:"rpm_build_location,omitempty"`
 
 	// CanonicalGoRepository is a directory path that represents
 	// the desired location of the contents of this repository in
 	// Go. If specified the location of the repository we are
 	// cloning from is ignored.
-	CanonicalGoRepository *string `json:"canonical_go_repository,omitempty"`
+	CanonicalGoRepository *string `json:"canonical_go_repository,omitempty" yaml:"canonical_go_repository,omitempty"`
 
 	// Images describes the images that are built
 	// baseImage the project as part of the release
 	// process. The name of each image is its "to" value
 	// and can be used to build only a specific image.
-	Images []ProjectDirectoryImageBuildStepConfiguration `json:"images,omitempty"`
+	Images []ProjectDirectoryImageBuildStepConfiguration `json:"images,omitempty" yaml:"images,omitempty"`
 
 	// Operator describes the operator bundle(s) that is built by the project
-	Operator *OperatorStepConfiguration `json:"operator,omitempty"`
+	Operator *OperatorStepConfiguration `json:"operator,omitempty" yaml:"operator,omitempty"`
 
 	// Tests describes the tests to run inside of built images.
 	// The images launched as pods but have no explicit access to
 	// the cluster they are running on.
-	Tests []TestStepConfiguration `json:"tests,omitempty"`
+	Tests []TestStepConfiguration `json:"tests,omitempty" yaml:"tests,omitempty"`
 
 	// RawSteps are literal Steps that should be
 	// included in the final pipeline.
-	RawSteps []StepConfiguration `json:"raw_steps,omitempty"`
+	RawSteps []StepConfiguration `json:"raw_steps,omitempty" yaml:"raw_steps,omitempty"`
 
 	// PromotionConfiguration determines how images are promoted
 	// by this command. It is ignored unless promotion has specifically
 	// been requested. Promotion is performed after all other steps
 	// have been completed so that tests can be run prior to promotion.
 	// If no promotion is defined, it is defaulted from the ReleaseTagConfiguration.
-	PromotionConfiguration *PromotionConfiguration `json:"promotion,omitempty"`
+	PromotionConfiguration *PromotionConfiguration `json:"promotion,omitempty" yaml:"promotion,omitempty"`
 
 	// Resources is a set of resource requests or limits over the
 	// input types. The special name '*' may be used to set default
 	// requests and limits.
-	Resources ResourceConfiguration `json:"resources,omitempty"`
+	Resources ResourceConfiguration `json:"resources,omitempty" yaml:"resources,omitempty"`
 }
 
 // Metadata describes the source repo for which a config is written
 type Metadata struct {
-	Org     string `json:"org"`
-	Repo    string `json:"repo"`
-	Branch  string `json:"branch"`
-	Variant string `json:"variant,omitempty"`
+	Org     string `json:"org" yaml:"org"`
+	Repo    string `json:"repo" yaml:"repo"`
+	Branch  string `json:"branch" yaml:"branch"`
+	Variant string `json:"variant,omitempty" yaml:"variant,omitempty"`
 }
 
 // BuildsImage checks if an image is built by the release configuration.
@@ -172,10 +172,10 @@ func (c ResourceConfiguration) RequirementsForStep(name string) ResourceRequirem
 type ResourceRequirements struct {
 	// Requests are resource requests applied to an individual step in the job.
 	// These are directly used in creating the Pods that execute the Job.
-	Requests ResourceList `json:"requests,omitempty"`
+	Requests ResourceList `json:"requests,omitempty" yaml:"requests,omitempty"`
 	// Limits are resource limits applied to an individual step in the job.
 	// These are directly used in creating the Pods that execute the Job.
-	Limits ResourceList `json:"limits,omitempty"`
+	Limits ResourceList `json:"limits,omitempty" yaml:"limits,omitempty"`
 }
 
 // ResourceList is a map of string resource names and resource
@@ -200,20 +200,20 @@ type InputConfiguration struct {
 	// which images are going to be necessary outside
 	// of the pipeline. The key will be the alias that other
 	// steps use to refer to this image.
-	BaseImages map[string]ImageStreamTagReference `json:"base_images,omitempty"`
+	BaseImages map[string]ImageStreamTagReference `json:"base_images,omitempty" yaml:"base_images,omitempty"`
 	// BaseRPMImages is a list of the images and their aliases that will
 	// have RPM repositories injected into them for downstream
 	// image builds that require built project RPMs.
-	BaseRPMImages map[string]ImageStreamTagReference `json:"base_rpm_images,omitempty"`
+	BaseRPMImages map[string]ImageStreamTagReference `json:"base_rpm_images,omitempty" yaml:"base_rpm_images,omitempty"`
 
 	// BuildRootImage supports two ways to get the image that
 	// the pipeline will caches on. The one way is to take the reference
 	// from an image stream, and the other from a dockerfile.
-	BuildRootImage *BuildRootImageConfiguration `json:"build_root,omitempty"`
+	BuildRootImage *BuildRootImageConfiguration `json:"build_root,omitempty" yaml:"build_root,omitempty"`
 
 	// ReleaseTagConfiguration determines how the
 	// full release is assembled.
-	ReleaseTagConfiguration *ReleaseTagConfiguration `json:"tag_specification,omitempty"`
+	ReleaseTagConfiguration *ReleaseTagConfiguration `json:"tag_specification,omitempty" yaml:"tag_specification,omitempty"`
 
 	// Releases maps semantic release payload identifiers
 	// to the names that they will be exposed under. For
@@ -221,53 +221,53 @@ type InputConfiguration struct {
 	// $RELEASE_IMAGE_INITIAL. The 'latest' key is special
 	// and cannot co-exist with 'tag_specification', as
 	// they result in the same output.
-	Releases map[string]UnresolvedRelease `json:"releases,omitempty"`
+	Releases map[string]UnresolvedRelease `json:"releases,omitempty" yaml:"releases,omitempty"`
 }
 
 // UnresolvedRelease describes a semantic release payload
 // identifier we need to resolve to a pull spec.
 type UnresolvedRelease struct {
 	// Candidate describes a candidate release payload
-	Candidate *Candidate `json:"candidate,omitempty"`
+	Candidate *Candidate `json:"candidate,omitempty" yaml:"candidate,omitempty"`
 	// Prerelease describes a yet-to-be released payload
-	Prerelease *Prerelease `json:"prerelease,omitempty"`
+	Prerelease *Prerelease `json:"prerelease,omitempty" yaml:"prerelease,omitempty"`
 	// Release describes a released payload
-	Release *Release `json:"release,omitempty"`
+	Release *Release `json:"release,omitempty" yaml:"release,omitempty"`
 }
 
 // Candidate describes a validated candidate release payload
 type Candidate struct {
 	// Product is the name of the product being released
-	Product ReleaseProduct `json:"product"`
+	Product ReleaseProduct `json:"product" yaml:"product"`
 	// Architecture is the architecture for the product.
 	// Defaults to amd64.
-	Architecture ReleaseArchitecture `json:"architecture,omitempty"`
+	Architecture ReleaseArchitecture `json:"architecture,omitempty" yaml:"architecture,omitempty"`
 	// ReleaseStream is the stream from which we pick the latest candidate
-	Stream ReleaseStream `json:"stream"`
+	Stream ReleaseStream `json:"stream" yaml:"stream"`
 	// Version is the minor version to search for
-	Version string `json:"version"`
+	Version string `json:"version" yaml:"version"`
 	// Relative optionally specifies how old of a release
 	// is requested from this stream. For instance, a value
 	// of 1 will resolve to the previous validated release
 	// for this stream.
-	Relative int `json:"relative,omitempty"`
+	Relative int `json:"relative,omitempty" yaml:"relative,omitempty"`
 }
 
 // Prerelease describes a validated release payload before it is exposed
 type Prerelease struct {
 	// Product is the name of the product being released
-	Product ReleaseProduct `json:"product"`
+	Product ReleaseProduct `json:"product" yaml:"product"`
 	// Architecture is the architecture for the product.
 	// Defaults to amd64.
-	Architecture ReleaseArchitecture `json:"architecture,omitempty"`
+	Architecture ReleaseArchitecture `json:"architecture,omitempty" yaml:"architecture,omitempty"`
 	// VersionBounds describe the allowable version bounds to search in
-	VersionBounds VersionBounds `json:"version_bounds"`
+	VersionBounds VersionBounds `json:"version_bounds" yaml:"version_bounds"`
 }
 
 // VersionBounds describe the upper and lower bounds on a version search
 type VersionBounds struct {
-	Lower string `json:"lower"`
-	Upper string `json:"upper"`
+	Lower string `json:"lower" yaml:"lower"`
+	Upper string `json:"upper" yaml:"upper"`
 }
 
 func (b *VersionBounds) Query() string {
@@ -302,12 +302,12 @@ const (
 // Release describes a generally available release payload
 type Release struct {
 	// Version is the minor version to search for
-	Version string `json:"version"`
+	Version string `json:"version" yaml:"version"`
 	// Channel is the release channel to search in
-	Channel ReleaseChannel `json:"channel"`
+	Channel ReleaseChannel `json:"channel" yaml:"channel"`
 	// Architecture is the architecture for the release.
 	// Defaults to amd64.
-	Architecture ReleaseArchitecture `json:"architecture,omitempty"`
+	Architecture ReleaseArchitecture `json:"architecture,omitempty" yaml:"architecture,omitempty"`
 }
 
 type ReleaseChannel string
@@ -323,31 +323,31 @@ const (
 )
 
 type CIOperatorInrepoConfig struct {
-	BuildRootImage ImageStreamTagReference `json:"build_root_image"`
+	BuildRootImage ImageStreamTagReference `json:"build_root_image" yaml:"build_root_image"`
 }
 
 // BuildRootImageConfiguration holds the two ways of using a base image
 // that the pipeline will caches on.
 type BuildRootImageConfiguration struct {
-	ImageStreamTagReference *ImageStreamTagReference          `json:"image_stream_tag,omitempty"`
-	ProjectImageBuild       *ProjectDirectoryImageBuildInputs `json:"project_image,omitempty"`
+	ImageStreamTagReference *ImageStreamTagReference          `json:"image_stream_tag,omitempty" yaml:"image_stream_tag,omitempty"`
+	ProjectImageBuild       *ProjectDirectoryImageBuildInputs `json:"project_image,omitempty" yaml:"project_image,omitempty"`
 	// If the BuildRoot images pullspec should be read from a file in the repository (BuildRootImageFileName).
-	FromRepository bool `json:"from_repository,omitempty"`
+	FromRepository bool `json:"from_repository,omitempty" yaml:"from_repository,omitempty"`
 
 	// UseBuildCache enables the import and use of the prior `bin` image
 	// as a build cache, if the underlying build root has not changed since
 	// the previous cache was published.
-	UseBuildCache bool `json:"use_build_cache,omitempty"`
+	UseBuildCache bool `json:"use_build_cache,omitempty" yaml:"use_build_cache,omitempty"`
 }
 
 // ImageStreamTagReference identifies an ImageStreamTag
 type ImageStreamTagReference struct {
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
-	Tag       string `json:"tag"`
+	Namespace string `json:"namespace" yaml:"namespace"`
+	Name      string `json:"name" yaml:"name"`
+	Tag       string `json:"tag" yaml:"tag"`
 
 	// As is an optional string to use as the intermediate name for this reference.
-	As string `json:"as,omitempty"`
+	As string `json:"as,omitempty" yaml:"as,omitempty"`
 }
 
 func (i *ImageStreamTagReference) ISTagName() string {
@@ -362,11 +362,11 @@ type ReleaseTagConfiguration struct {
 	// Namespace identifies the namespace from which
 	// all release artifacts not built in the current
 	// job are tagged from.
-	Namespace string `json:"namespace"`
+	Namespace string `json:"namespace" yaml:"namespace"`
 
 	// Name is the image stream name to use that contains all
 	// component tags.
-	Name string `json:"name"`
+	Name string `json:"name" yaml:"name"`
 }
 
 // ReleaseConfiguration records a resolved release with its name.
@@ -374,8 +374,8 @@ type ReleaseTagConfiguration struct {
 // that was set at startup. This will be cleaner when we refactor
 // release dependencies.
 type ReleaseConfiguration struct {
-	Name              string `json:"name"`
-	UnresolvedRelease `json:",inline"`
+	Name              string `json:"name" yaml:"name"`
+	UnresolvedRelease `json:",inline" yaml:",inline"`
 }
 
 // PromotionConfiguration describes where images created by this
@@ -384,66 +384,66 @@ type ReleaseConfiguration struct {
 type PromotionConfiguration struct {
 	// Namespace identifies the namespace to which the built
 	// artifacts will be published to.
-	Namespace string `json:"namespace"`
+	Namespace string `json:"namespace" yaml:"namespace"`
 
 	// Name is an optional image stream name to use that
 	// contains all component tags. If specified, tag is
 	// ignored.
-	Name string `json:"name,omitempty"`
+	Name string `json:"name,omitempty" yaml:"name,omitempty"`
 
 	// Tag is the ImageStreamTag tagged in for each
 	// build image's ImageStream.
-	Tag string `json:"tag,omitempty"`
+	Tag string `json:"tag,omitempty" yaml:"tag,omitempty"`
 
 	// ExcludedImages are image names that will not be promoted.
 	// Exclusions are made before additional_images are included.
 	// Use exclusions when you want to build images for testing
 	// but not promote them afterwards.
-	ExcludedImages []string `json:"excluded_images,omitempty"`
+	ExcludedImages []string `json:"excluded_images,omitempty" yaml:"excluded_images,omitempty"`
 
 	// AdditionalImages is a mapping of images to promote. The
 	// images will be taken from the pipeline image stream. The
 	// key is the name to promote as and the value is the source
 	// name. If you specify a tag that does not exist as the source
 	// the destination tag will not be created.
-	AdditionalImages map[string]string `json:"additional_images,omitempty"`
+	AdditionalImages map[string]string `json:"additional_images,omitempty" yaml:"additional_images,omitempty"`
 
 	// Disabled will no-op succeed instead of running the actual
 	// promotion step. This is useful when two branches need to
 	// promote to the same output imagestream on a cut-over but
 	// never concurrently, and you want to have promotion config
 	// in the ci-operator configuration files all the time.
-	Disabled bool `json:"disabled,omitempty"`
+	Disabled bool `json:"disabled,omitempty" yaml:"disabled,omitempty"`
 
 	// RegistryOverride is an override for the registry domain to
 	// which we will mirror images. This is an advanced option and
 	// should *not* be used in common test workflows. The CI chat
 	// bot uses this option to facilitate image sharing.
-	RegistryOverride string `json:"registry_override,omitempty"`
+	RegistryOverride string `json:"registry_override,omitempty" yaml:"registry_override,omitempty"`
 
 	// DisableBuildCache stops us from uploading the build cache.
 	// This is useful (only) for CI chat bot invocations where
 	// promotion does not imply output artifacts are being created
 	// for posterity.
-	DisableBuildCache bool `json:"disable_build_cache,omitempty"`
+	DisableBuildCache bool `json:"disable_build_cache,omitempty" yaml:"disable_build_cache,omitempty"`
 }
 
 // StepConfiguration holds one step configuration.
 // Only one of the fields in this can be non-null.
 type StepConfiguration struct {
-	InputImageTagStepConfiguration              *InputImageTagStepConfiguration              `json:"input_image_tag_step,omitempty"`
-	PipelineImageCacheStepConfiguration         *PipelineImageCacheStepConfiguration         `json:"pipeline_image_cache_step,omitempty"`
-	SourceStepConfiguration                     *SourceStepConfiguration                     `json:"source_step,omitempty"`
-	BundleSourceStepConfiguration               *BundleSourceStepConfiguration               `json:"bundle_source_step,omitempty"`
-	IndexGeneratorStepConfiguration             *IndexGeneratorStepConfiguration             `json:"index_generator_step,omitempty"`
-	ProjectDirectoryImageBuildStepConfiguration *ProjectDirectoryImageBuildStepConfiguration `json:"project_directory_image_build_step,omitempty"`
-	RPMImageInjectionStepConfiguration          *RPMImageInjectionStepConfiguration          `json:"rpm_image_injection_step,omitempty"`
-	RPMServeStepConfiguration                   *RPMServeStepConfiguration                   `json:"rpm_serve_step,omitempty"`
-	OutputImageTagStepConfiguration             *OutputImageTagStepConfiguration             `json:"output_image_tag_step,omitempty"`
-	ReleaseImagesTagStepConfiguration           *ReleaseTagConfiguration                     `json:"release_images_tag_step,omitempty"`
-	ResolvedReleaseImagesStepConfiguration      *ReleaseConfiguration                        `json:"resolved_release_images_step,omitempty"`
-	TestStepConfiguration                       *TestStepConfiguration                       `json:"test_step,omitempty"`
-	ProjectDirectoryImageBuildInputs            *ProjectDirectoryImageBuildInputs            `json:"project_directory_image_build_inputs,omitempty"`
+	InputImageTagStepConfiguration              *InputImageTagStepConfiguration              `json:"input_image_tag_step,omitempty" yaml:"input_image_tag_step,omitempty"`
+	PipelineImageCacheStepConfiguration         *PipelineImageCacheStepConfiguration         `json:"pipeline_image_cache_step,omitempty" yaml:"pipeline_image_cache_step,omitempty"`
+	SourceStepConfiguration                     *SourceStepConfiguration                     `json:"source_step,omitempty" yaml:"source_step,omitempty"`
+	BundleSourceStepConfiguration               *BundleSourceStepConfiguration               `json:"bundle_source_step,omitempty" yaml:"bundle_source_step,omitempty"`
+	IndexGeneratorStepConfiguration             *IndexGeneratorStepConfiguration             `json:"index_generator_step,omitempty" yaml:"index_generator_step,omitempty"`
+	ProjectDirectoryImageBuildStepConfiguration *ProjectDirectoryImageBuildStepConfiguration `json:"project_directory_image_build_step,omitempty" yaml:"project_directory_image_build_step,omitempty"`
+	RPMImageInjectionStepConfiguration          *RPMImageInjectionStepConfiguration          `json:"rpm_image_injection_step,omitempty" yaml:"rpm_image_injection_step,omitempty"`
+	RPMServeStepConfiguration                   *RPMServeStepConfiguration                   `json:"rpm_serve_step,omitempty" yaml:"rpm_serve_step,omitempty"`
+	OutputImageTagStepConfiguration             *OutputImageTagStepConfiguration             `json:"output_image_tag_step,omitempty" yaml:"output_image_tag_step,omitempty"`
+	ReleaseImagesTagStepConfiguration           *ReleaseTagConfiguration                     `json:"release_images_tag_step,omitempty" yaml:"release_images_tag_step,omitempty"`
+	ResolvedReleaseImagesStepConfiguration      *ReleaseConfiguration                        `json:"resolved_release_images_step,omitempty" yaml:"resolved_release_images_step,omitempty"`
+	TestStepConfiguration                       *TestStepConfiguration                       `json:"test_step,omitempty" yaml:"test_step,omitempty"`
+	ProjectDirectoryImageBuildInputs            *ProjectDirectoryImageBuildInputs            `json:"project_directory_image_build_inputs,omitempty" yaml:"project_directory_image_build_inputs,omitempty"`
 }
 
 // InputImageTagStepConfiguration describes a step that
@@ -451,8 +451,8 @@ type StepConfiguration struct {
 // if no explicit output tag is provided, the name
 // of the image is used as the tag.
 type InputImageTagStepConfiguration struct {
-	InputImage `json:",inline"`
-	Sources    []ImageStreamSource `json:"-"`
+	InputImage `json:",inline" yaml:",inline"`
+	Sources    []ImageStreamSource `json:"-" yaml:"-"`
 }
 
 func (config InputImageTagStepConfiguration) Matches(other InputImage) bool {
@@ -489,8 +489,8 @@ func (config *InputImageTagStepConfiguration) AddSources(sources ...ImageStreamS
 }
 
 type InputImage struct {
-	BaseImage ImageStreamTagReference         `json:"base_image"`
-	To        PipelineImageStreamTagReference `json:"to,omitempty"`
+	BaseImage ImageStreamTagReference         `json:"base_image" yaml:"base_image"`
+	To        PipelineImageStreamTagReference `json:"to,omitempty" yaml:"to,omitempty"`
 }
 
 type ImageStreamSourceType string
@@ -510,26 +510,26 @@ type ImageStreamSource struct {
 // OutputImageTagStepConfiguration describes a step that
 // tags a pipeline image out from the build pipeline.
 type OutputImageTagStepConfiguration struct {
-	From PipelineImageStreamTagReference `json:"from"`
-	To   ImageStreamTagReference         `json:"to"`
+	From PipelineImageStreamTagReference `json:"from" yaml:"from"`
+	To   ImageStreamTagReference         `json:"to" yaml:"to"`
 
 	// Optional means the output step is not built, published, or
 	// promoted unless explicitly targeted. Use for builds which
 	// are invoked only when testing certain parts of the repo.
-	Optional bool `json:"optional"`
+	Optional bool `json:"optional" yaml:"optional"`
 }
 
 // PipelineImageCacheStepConfiguration describes a
 // step that builds a container image to cache the
 // output of commands.
 type PipelineImageCacheStepConfiguration struct {
-	From PipelineImageStreamTagReference `json:"from"`
-	To   PipelineImageStreamTagReference `json:"to"`
+	From PipelineImageStreamTagReference `json:"from" yaml:"from"`
+	To   PipelineImageStreamTagReference `json:"to" yaml:"to"`
 
 	// Commands are the shell commands to run in
 	// the repository root to create the cached
 	// content.
-	Commands string `json:"commands"`
+	Commands string `json:"commands" yaml:"commands"`
 }
 
 // Cluster is the name of a cluster in CI build farm.
@@ -548,59 +548,59 @@ const (
 // gathers artifacts from that step.
 type TestStepConfiguration struct {
 	// As is the name of the test.
-	As string `json:"as"`
+	As string `json:"as" yaml:"as"`
 	// Commands are the shell commands to run in
 	// the repository root to execute tests.
-	Commands string `json:"commands,omitempty"`
+	Commands string `json:"commands,omitempty" yaml:"commands,omitempty"`
 
 	// Cluster specifies the name of the cluster where the test runs.
-	Cluster Cluster `json:"cluster,omitempty"`
+	Cluster Cluster `json:"cluster,omitempty" yaml:"cluster,omitempty"`
 
 	// Secret is an optional secret object which
 	// will be mounted inside the test container.
 	// You cannot set the Secret and Secrets attributes
 	// at the same time.
-	Secret *Secret `json:"secret,omitempty"`
+	Secret *Secret `json:"secret,omitempty" yaml:"secret,omitempty"`
 
 	// Secrets is an optional array of secret objects
 	// which will be mounted inside the test container.
 	// You cannot set the Secret and Secrets attributes
 	// at the same time.
-	Secrets []*Secret `json:"secrets,omitempty"`
+	Secrets []*Secret `json:"secrets,omitempty" yaml:"secrets,omitempty"`
 
 	// Cron is how often the test is expected to run outside
 	// of pull request workflows. Setting this field will
 	// create a periodic job instead of a presubmit
-	Cron *string `json:"cron,omitempty"`
+	Cron *string `json:"cron,omitempty" yaml:"cron,omitempty"`
 
 	// Interval is how frequently the test should be run based
 	// on the last time the test ran. Setting this field will
 	// create a periodic job instead of a presubmit
-	Interval *string `json:"interval,omitempty"`
+	Interval *string `json:"interval,omitempty" yaml:"interval,omitempty"`
 
 	// ReleaseController configures prowgen to create a periodic that
 	// does not get run by prow and instead is run by release-controller.
 	// The job must be configured as a verification or periodic job in a
 	// release-controller config file when this field is set to `true`.
-	ReleaseController bool `json:"release_controller,omitempty"`
+	ReleaseController bool `json:"release_controller,omitempty" yaml:"release_controller,omitempty"`
 
 	// Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit
-	Postsubmit bool `json:"postsubmit,omitempty"`
+	Postsubmit bool `json:"postsubmit,omitempty" yaml:"postsubmit,omitempty"`
 
 	// ClusterClaim claims an OpenShift cluster and exposes environment variable ${KUBECONFIG} to the test container
-	ClusterClaim *ClusterClaim `json:"cluster_claim,omitempty"`
+	ClusterClaim *ClusterClaim `json:"cluster_claim,omitempty" yaml:"cluster_claim,omitempty"`
 
 	// Only one of the following can be not-null.
-	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty"`
-	MultiStageTestConfiguration                               *MultiStageTestConfiguration                               `json:"steps,omitempty"`
-	MultiStageTestConfigurationLiteral                        *MultiStageTestConfigurationLiteral                        `json:"literal_steps,omitempty"`
-	OpenshiftAnsibleClusterTestConfiguration                  *OpenshiftAnsibleClusterTestConfiguration                  `json:"openshift_ansible,omitempty"`
-	OpenshiftAnsibleSrcClusterTestConfiguration               *OpenshiftAnsibleSrcClusterTestConfiguration               `json:"openshift_ansible_src,omitempty"`
-	OpenshiftAnsibleCustomClusterTestConfiguration            *OpenshiftAnsibleCustomClusterTestConfiguration            `json:"openshift_ansible_custom,omitempty"`
-	OpenshiftInstallerClusterTestConfiguration                *OpenshiftInstallerClusterTestConfiguration                `json:"openshift_installer,omitempty"`
-	OpenshiftInstallerUPIClusterTestConfiguration             *OpenshiftInstallerUPIClusterTestConfiguration             `json:"openshift_installer_upi,omitempty"`
-	OpenshiftInstallerUPISrcClusterTestConfiguration          *OpenshiftInstallerUPISrcClusterTestConfiguration          `json:"openshift_installer_upi_src,omitempty"`
-	OpenshiftInstallerCustomTestImageClusterTestConfiguration *OpenshiftInstallerCustomTestImageClusterTestConfiguration `json:"openshift_installer_custom_test_image,omitempty"`
+	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty" yaml:"container,omitempty"`
+	MultiStageTestConfiguration                               *MultiStageTestConfiguration                               `json:"steps,omitempty" yaml:"steps,omitempty"`
+	MultiStageTestConfigurationLiteral                        *MultiStageTestConfigurationLiteral                        `json:"literal_steps,omitempty" yaml:"literal_steps,omitempty"`
+	OpenshiftAnsibleClusterTestConfiguration                  *OpenshiftAnsibleClusterTestConfiguration                  `json:"openshift_ansible,omitempty" yaml:"openshift_ansible,omitempty"`
+	OpenshiftAnsibleSrcClusterTestConfiguration               *OpenshiftAnsibleSrcClusterTestConfiguration               `json:"openshift_ansible_src,omitempty" yaml:"openshift_ansible_src,omitempty"`
+	OpenshiftAnsibleCustomClusterTestConfiguration            *OpenshiftAnsibleCustomClusterTestConfiguration            `json:"openshift_ansible_custom,omitempty" yaml:"openshift_ansible_custom,omitempty"`
+	OpenshiftInstallerClusterTestConfiguration                *OpenshiftInstallerClusterTestConfiguration                `json:"openshift_installer,omitempty" yaml:"openshift_installer,omitempty"`
+	OpenshiftInstallerUPIClusterTestConfiguration             *OpenshiftInstallerUPIClusterTestConfiguration             `json:"openshift_installer_upi,omitempty" yaml:"openshift_installer_upi,omitempty"`
+	OpenshiftInstallerUPISrcClusterTestConfiguration          *OpenshiftInstallerUPISrcClusterTestConfiguration          `json:"openshift_installer_upi_src,omitempty" yaml:"openshift_installer_upi_src,omitempty"`
+	OpenshiftInstallerCustomTestImageClusterTestConfiguration *OpenshiftInstallerCustomTestImageClusterTestConfiguration `json:"openshift_installer_custom_test_image,omitempty" yaml:"openshift_installer_custom_test_image,omitempty"`
 }
 
 // Cloud is the name of a cloud provider, e.g., aws cluster topology, etc.
@@ -614,83 +614,83 @@ const (
 type ClusterClaim struct {
 	// Product is the name of the product being released.
 	// Defaults to ocp.
-	Product ReleaseProduct `json:"product,omitempty"`
+	Product ReleaseProduct `json:"product,omitempty" yaml:"product,omitempty"`
 	// Version is the version of the product
-	Version string `json:"version"`
+	Version string `json:"version" yaml:"version"`
 	// Architecture is the architecture for the product.
 	// Defaults to amd64.
-	Architecture ReleaseArchitecture `json:"architecture,omitempty"`
+	Architecture ReleaseArchitecture `json:"architecture,omitempty" yaml:"architecture,omitempty"`
 	// Cloud is the cloud where the product is installed, e.g., aws.
-	Cloud Cloud `json:"cloud"`
+	Cloud Cloud `json:"cloud" yaml:"cloud"`
 	// Owner is the owner of cloud account used to install the product, e.g., dpp.
-	Owner string `json:"owner"`
+	Owner string `json:"owner" yaml:"owner"`
 	// Timeout is how long ci-operator will wait for the cluster to be ready.
 	// Defaults to 1h.
-	Timeout *prowv1.Duration `json:"timeout,omitempty"`
+	Timeout *prowv1.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
 }
 
 // RegistryReferenceConfig is the struct that step references are unmarshalled into.
 type RegistryReferenceConfig struct {
 	// Reference is the top level field of a reference config.
-	Reference RegistryReference `json:"ref,omitempty"`
+	Reference RegistryReference `json:"ref,omitempty" yaml:"ref,omitempty"`
 }
 
 // RegistryReference contains the LiteralTestStep of a reference as well as the documentation for the step.
 type RegistryReference struct {
 	// LiteralTestStep defines the full test step that can be run by the ci-operator.
-	LiteralTestStep `json:",inline"`
+	LiteralTestStep `json:",inline" yaml:",inline"`
 	// Documentation describes what the step being referenced does.
-	Documentation string `json:"documentation,omitempty"`
+	Documentation string `json:"documentation,omitempty" yaml:"documentation,omitempty"`
 }
 
 // RegistryChainConfig is the struct that chain references are unmarshalled into.
 type RegistryChainConfig struct {
 	// Chain is the top level field of a chain config.
-	Chain RegistryChain `json:"chain,omitempty"`
+	Chain RegistryChain `json:"chain,omitempty" yaml:"chain,omitempty"`
 }
 
 // RegistryChain contains the array of steps, name, and documentation for a step chain.
 type RegistryChain struct {
 	// As defines the name of the chain. This is how the chain will be referenced from a job's config.
-	As string `json:"as,omitempty"`
+	As string `json:"as,omitempty" yaml:"as,omitempty"`
 	// Steps contains the list of steps that comprise the chain. Steps will be run in the order they are defined.
-	Steps []TestStep `json:"steps"`
+	Steps []TestStep `json:"steps" yaml:"steps"`
 	// Documentation describes what the chain does.
-	Documentation string `json:"documentation,omitempty"`
+	Documentation string `json:"documentation,omitempty" yaml:"documentation,omitempty"`
 	// Environment lists parameters that should be set by the test.
-	Environment []StepParameter `json:"env,omitempty"`
+	Environment []StepParameter `json:"env,omitempty" yaml:"env,omitempty"`
 	// Leases lists resources that should be acquired for the test.
-	Leases []StepLease `json:"leases,omitempty"`
+	Leases []StepLease `json:"leases,omitempty" yaml:"leases,omitempty"`
 }
 
 // RegistryWorkflowConfig is the struct that workflow references are unmarshalled into.
 type RegistryWorkflowConfig struct {
 	// Workflow is the top level field of a workflow config.
-	Workflow RegistryWorkflow `json:"workflow,omitempty"`
+	Workflow RegistryWorkflow `json:"workflow,omitempty" yaml:"workflow,omitempty"`
 }
 
 // RegistryWorkflow contains the MultiStageTestConfiguration, name, and documentation for a workflow.
 type RegistryWorkflow struct {
 	// As defines the name of the workflow. This is how the workflow will be referenced from a job's config.
-	As string `json:"as,omitempty"`
+	As string `json:"as,omitempty" yaml:"as,omitempty"`
 	// Steps contains the MultiStageTestConfiguration that the workflow defines.
-	Steps MultiStageTestConfiguration `json:"steps,omitempty"`
+	Steps MultiStageTestConfiguration `json:"steps,omitempty" yaml:"steps,omitempty"`
 	// Documentation describes what the workflow does.
-	Documentation string `json:"documentation,omitempty"`
+	Documentation string `json:"documentation,omitempty" yaml:"documentation,omitempty"`
 }
 
 // RegistryObserverConfig is the struct that observer configs are unmarshalled into
 type RegistryObserverConfig struct {
 	// Observer is the top level field of an observer config
-	Observer RegistryObserver `json:"observer,omitempty"`
+	Observer RegistryObserver `json:"observer,omitempty" yaml:"observer,omitempty"`
 }
 
 // RegistryObserver contains the configuration and documentation for an observer
 type RegistryObserver struct {
 	// Observer defines the observer pod
-	Observer `json:",inline"`
+	Observer `json:",inline" yaml:",inline"`
 	// Documentation describes what the observer being configured does.
-	Documentation string `json:"documentation,omitempty"`
+	Documentation string `json:"documentation,omitempty" yaml:"documentation,omitempty"`
 }
 
 // RegistryMetadata maps the registry info for each step in the registry by filename
@@ -699,31 +699,31 @@ type RegistryMetadata map[string]RegistryInfo
 // RegistryInfo contains metadata about a registry component that is useful for the web UI of the step registry
 type RegistryInfo struct {
 	// Path is the path of the directoryfor the registry component relative to the registry's base directory
-	Path string `json:"path,omitempty"`
+	Path string `json:"path,omitempty" yaml:"path,omitempty"`
 	// Owners is the OWNERS config for the registry component
-	Owners repoowners.Config `json:"owners,omitempty"`
+	Owners repoowners.Config `json:"owners,omitempty" yaml:"owners,omitempty"`
 }
 
 // Observer is the configuration for an observer Pod that will run in parallel
 // with a multi-stage test job.
 type Observer struct {
 	// Name is the name of this observer
-	Name string `json:"name"`
+	Name string `json:"name" yaml:"name"`
 	// From is the container image that will be used for this observer.
-	From string `json:"from,omitempty"`
+	From string `json:"from,omitempty" yaml:"from,omitempty"`
 	// FromImage is a literal ImageStreamTag reference to use for this observer.
-	FromImage *ImageStreamTagReference `json:"from_image,omitempty"`
+	FromImage *ImageStreamTagReference `json:"from_image,omitempty" yaml:"from_image,omitempty"`
 	// Commands is the command(s) that will be run inside the image.
-	Commands string `json:"commands,omitempty"`
+	Commands string `json:"commands,omitempty" yaml:"commands,omitempty"`
 }
 
 // Observers is a configuration for which observer pods should and should not
 // be run during a job
 type Observers struct {
 	// Enable is a list of named observer that should be enabled
-	Enable []string `json:"enable,omitempty"`
+	Enable []string `json:"enable,omitempty" yaml:"enable,omitempty"`
 	// Disable is a list of named observers that should be disabled
-	Disable []string `json:"disable,omitempty"`
+	Disable []string `json:"disable,omitempty" yaml:"disable,omitempty"`
 }
 
 // LiteralTestStep is the external representation of a test step allowing users
@@ -731,89 +731,89 @@ type Observers struct {
 // struct that represents the full configuration that ci-operator can use.
 type LiteralTestStep struct {
 	// As is the name of the LiteralTestStep.
-	As string `json:"as,omitempty"`
+	As string `json:"as,omitempty" yaml:"as,omitempty"`
 	// From is the container image that will be used for this step.
-	From string `json:"from,omitempty"`
+	From string `json:"from,omitempty" yaml:"from,omitempty"`
 	// FromImage is a literal ImageStreamTag reference to use for this step.
-	FromImage *ImageStreamTagReference `json:"from_image,omitempty"`
+	FromImage *ImageStreamTagReference `json:"from_image,omitempty" yaml:"from_image,omitempty"`
 	// Commands is the command(s) that will be run inside the image.
-	Commands string `json:"commands,omitempty"`
+	Commands string `json:"commands,omitempty" yaml:"commands,omitempty"`
 	// Resources defines the resource requirements for the step.
-	Resources ResourceRequirements `json:"resources"`
+	Resources ResourceRequirements `json:"resources" yaml:"resources"`
 	// Timeout is how long the we will wait before aborting a job with SIGINT.
-	Timeout *prowv1.Duration `json:"timeout,omitempty"`
+	Timeout *prowv1.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
 	// GracePeriod is how long the we will wait after sending SIGINT to send
 	// SIGKILL when aborting a Step.
-	GracePeriod *prowv1.Duration `json:"grace_period,omitempty"`
+	GracePeriod *prowv1.Duration `json:"grace_period,omitempty" yaml:"grace_period,omitempty"`
 	// Credentials defines the credentials we'll mount into this step.
-	Credentials []CredentialReference `json:"credentials,omitempty"`
+	Credentials []CredentialReference `json:"credentials,omitempty" yaml:"credentials,omitempty"`
 	// Environment lists parameters that should be set by the test.
-	Environment []StepParameter `json:"env,omitempty"`
+	Environment []StepParameter `json:"env,omitempty" yaml:"env,omitempty"`
 	// Dependencies lists images which must be available before the test runs
 	// and the environment variables which are used to expose their pull specs.
-	Dependencies []StepDependency `json:"dependencies,omitempty"`
+	Dependencies []StepDependency `json:"dependencies,omitempty" yaml:"dependencies,omitempty"`
 	// DnsConfig for step's Pod.
-	DNSConfig *StepDNSConfig `json:"dnsConfig,omitempty"`
+	DNSConfig *StepDNSConfig `json:"dnsConfig,omitempty" yaml:"dnsConfig,omitempty"`
 	// Leases lists resources that should be acquired for the test.
-	Leases []StepLease `json:"leases,omitempty"`
+	Leases []StepLease `json:"leases,omitempty" yaml:"leases,omitempty"`
 	// OptionalOnSuccess defines if this step should be skipped as long
 	// as all `pre` and `test` steps were successful and AllowSkipOnSuccess
 	// flag is set to true in MultiStageTestConfiguration. This option is
 	// applicable to `post` steps.
-	OptionalOnSuccess *bool `json:"optional_on_success,omitempty"`
+	OptionalOnSuccess *bool `json:"optional_on_success,omitempty" yaml:"optional_on_success,omitempty"`
 	// BestEffort defines if this step should cause the job to fail when the
 	// step fails. This only applies when AllowBestEffortPostSteps flag is set
 	// to true in MultiStageTestConfiguration. This option is applicable to
 	// `post` steps.
-	BestEffort *bool `json:"best_effort,omitempty"`
+	BestEffort *bool `json:"best_effort,omitempty" yaml:"best_effort,omitempty"`
 	// Cli is the (optional) name of the release from which the `oc` binary
 	// will be injected into this step.
-	Cli string `json:"cli,omitempty"`
+	Cli string `json:"cli,omitempty" yaml:"cli,omitempty"`
 	// Observers are the observers that should be running
-	Observers []string `json:"observers,omitempty"`
+	Observers []string `json:"observers,omitempty" yaml:"observers,omitempty"`
 	// RunAsScript defines if this step should be executed as a script mounted
 	// in the test container instead of being executed directly via bash
-	RunAsScript *bool `json:"run_as_script,omitempty"`
+	RunAsScript *bool `json:"run_as_script,omitempty" yaml:"run_as_script,omitempty"`
 }
 
 // StepParameter is a variable set by the test, with an optional default.
 type StepParameter struct {
 	// Name of the environment variable.
-	Name string `json:"name"`
+	Name string `json:"name" yaml:"name"`
 	// Default if not set, optional, makes the parameter not required if set.
-	Default *string `json:"default,omitempty"`
+	Default *string `json:"default,omitempty" yaml:"default,omitempty"`
 	// Documentation is a textual description of the parameter.
-	Documentation string `json:"documentation,omitempty"`
+	Documentation string `json:"documentation,omitempty" yaml:"documentation,omitempty"`
 }
 
 // CredentialReference defines a secret to mount into a step and where to mount it.
 type CredentialReference struct {
 	// Namespace is where the source secret exists.
-	Namespace string `json:"namespace"`
+	Namespace string `json:"namespace" yaml:"namespace"`
 	// Names is which source secret to mount.
-	Name string `json:"name"`
+	Name string `json:"name" yaml:"name"`
 	// MountPath is where the secret should be mounted.
-	MountPath string `json:"mount_path"`
+	MountPath string `json:"mount_path" yaml:"mount_path"`
 }
 
 // StepDependency defines a dependency on an image and the environment variable
 // used to expose the image's pull spec to the step.
 type StepDependency struct {
 	// Name is the tag or stream:tag that this dependency references
-	Name string `json:"name"`
+	Name string `json:"name" yaml:"name"`
 	// Env is the environment variable that the image's pull spec is exposed with
-	Env string `json:"env"`
+	Env string `json:"env" yaml:"env"`
 	// PullSpec allows the ci-operator user to pass in an external pull-spec that should be used when resolving the dependency
-	PullSpec string `json:"-"`
+	PullSpec string `json:"-" yaml:"-"`
 }
 
 // StepDNSConfig defines a resource that needs to be acquired prior to execution.
 // Used to expose to the step via the specificed search list
 type StepDNSConfig struct {
 	// Nameservers is a list of IP addresses that will be used as DNS servers for the Pod
-	Nameservers []string `json:"nameservers,omitempty"`
+	Nameservers []string `json:"nameservers,omitempty" yaml:"nameservers,omitempty"`
 	// Searches is a list of DNS search domains for host-name lookup
-	Searches []string `json:"searches,omitempty"`
+	Searches []string `json:"searches,omitempty" yaml:"searches,omitempty"`
 }
 
 // StepLease defines a resource that needs to be acquired prior to execution.
@@ -821,11 +821,11 @@ type StepDNSConfig struct {
 // variable.
 type StepLease struct {
 	// ResourceType is the type of resource that will be leased.
-	ResourceType string `json:"resource_type"`
+	ResourceType string `json:"resource_type" yaml:"resource_type"`
 	// Env is the environment variable that will contain the resource name.
-	Env string `json:"env"`
+	Env string `json:"env" yaml:"env"`
 	// Count is the number of resources to acquire (optional, defaults to 1).
-	Count uint `json:"count,omitempty"`
+	Count uint `json:"count,omitempty" yaml:"count,omitempty"`
 }
 
 // FromImageTag returns the internal name for the image tag that will be used
@@ -842,50 +842,50 @@ func (s *LiteralTestStep) FromImageTag() (PipelineImageStreamTagReference, bool)
 // the same time, config validation will fail.
 type TestStep struct {
 	// LiteralTestStep is a full test step definition.
-	*LiteralTestStep `json:",inline,omitempty"`
+	*LiteralTestStep `json:",inline,omitempty" yaml:",inline,omitempty"`
 	// Reference is the name of a step reference.
-	Reference *string `json:"ref,omitempty"`
+	Reference *string `json:"ref,omitempty" yaml:"ref,omitempty"`
 	// Chain is the name of a step chain reference.
-	Chain *string `json:"chain,omitempty"`
+	Chain *string `json:"chain,omitempty" yaml:"chain,omitempty"`
 }
 
 // MultiStageTestConfiguration is a flexible configuration mode that allows tighter control over
 // the multiple stages of end to end tests.
 type MultiStageTestConfiguration struct {
 	// ClusterProfile defines the profile/cloud provider for end-to-end test steps.
-	ClusterProfile ClusterProfile `json:"cluster_profile,omitempty"`
+	ClusterProfile ClusterProfile `json:"cluster_profile,omitempty" yaml:"cluster_profile,omitempty"`
 	// Pre is the array of test steps run to set up the environment for the test.
-	Pre []TestStep `json:"pre,omitempty"`
+	Pre []TestStep `json:"pre,omitempty" yaml:"pre,omitempty"`
 	// Test is the array of test steps that define the actual test.
-	Test []TestStep `json:"test,omitempty"`
+	Test []TestStep `json:"test,omitempty" yaml:"test,omitempty"`
 	// Post is the array of test steps run after the tests finish and teardown/deprovision resources.
 	// Post steps always run, even if previous steps fail. However, they have an option to skip
 	// execution if previous Pre and Test steps passed.
-	Post []TestStep `json:"post,omitempty"`
+	Post []TestStep `json:"post,omitempty" yaml:"post,omitempty"`
 	// Workflow is the name of the workflow to be used for this configuration. For fields defined in both
 	// the config and the workflow, the fields from the config will override what is set in Workflow.
-	Workflow *string `json:"workflow,omitempty"`
+	Workflow *string `json:"workflow,omitempty" yaml:"workflow,omitempty"`
 	// Environment has the values of parameters for the steps.
-	Environment TestEnvironment `json:"env,omitempty"`
+	Environment TestEnvironment `json:"env,omitempty" yaml:"env,omitempty"`
 	// Dependencies holds override values for dependency parameters.
-	Dependencies TestDependencies `json:"dependencies,omitempty"`
+	Dependencies TestDependencies `json:"dependencies,omitempty" yaml:"dependencies,omitempty"`
 	// DnsConfig for step's Pod.
-	DNSConfig *StepDNSConfig `json:"dnsConfig,omitempty"`
+	DNSConfig *StepDNSConfig `json:"dnsConfig,omitempty" yaml:"dnsConfig,omitempty"`
 	// Leases lists resources that should be acquired for the test.
-	Leases []StepLease `json:"leases,omitempty"`
+	Leases []StepLease `json:"leases,omitempty" yaml:"leases,omitempty"`
 	// AllowSkipOnSuccess defines if any steps can be skipped when
 	// all previous `pre` and `test` steps were successful. The given step must explicitly
 	// ask for being skipped by setting the OptionalOnSuccess flag to true.
-	AllowSkipOnSuccess *bool `json:"allow_skip_on_success,omitempty"`
+	AllowSkipOnSuccess *bool `json:"allow_skip_on_success,omitempty" yaml:"allow_skip_on_success,omitempty"`
 	// AllowBestEffortPostSteps defines if any `post` steps can be ignored when
 	// they fail. The given step must explicitly ask for being ignored by setting
 	// the OptionalOnSuccess flag to true.
-	AllowBestEffortPostSteps *bool `json:"allow_best_effort_post_steps,omitempty"`
+	AllowBestEffortPostSteps *bool `json:"allow_best_effort_post_steps,omitempty" yaml:"allow_best_effort_post_steps,omitempty"`
 	// Observers are the observers that should be running
-	Observers *Observers `json:"observers,omitempty"`
+	Observers *Observers `json:"observers,omitempty" yaml:"observers,omitempty"`
 	// DependencyOverrides allows a step to override a dependency with a fully-qualified pullspec. This will probably only ever
 	// be used with rehearsals. Otherwise, the overrides should be passed in as parameters to ci-operator.
-	DependencyOverrides DependencyOverrides `json:"dependency_overrides,omitempty"`
+	DependencyOverrides DependencyOverrides `json:"dependency_overrides,omitempty" yaml:"dependency_overrides,omitempty"`
 }
 type DependencyOverrides map[string]string
 
@@ -894,35 +894,35 @@ type DependencyOverrides map[string]string
 // ci-operator-configresolver.
 type MultiStageTestConfigurationLiteral struct {
 	// ClusterProfile defines the profile/cloud provider for end-to-end test steps.
-	ClusterProfile ClusterProfile `json:"cluster_profile"`
+	ClusterProfile ClusterProfile `json:"cluster_profile" yaml:"cluster_profile"`
 	// Pre is the array of test steps run to set up the environment for the test.
-	Pre []LiteralTestStep `json:"pre,omitempty"`
+	Pre []LiteralTestStep `json:"pre,omitempty" yaml:"pre,omitempty"`
 	// Test is the array of test steps that define the actual test.
-	Test []LiteralTestStep `json:"test,omitempty"`
+	Test []LiteralTestStep `json:"test,omitempty" yaml:"test,omitempty"`
 	// Post is the array of test steps run after the tests finish and teardown/deprovision resources.
 	// Post steps always run, even if previous steps fail.
-	Post []LiteralTestStep `json:"post,omitempty"`
+	Post []LiteralTestStep `json:"post,omitempty" yaml:"post,omitempty"`
 	// Environment has the values of parameters for the steps.
-	Environment TestEnvironment `json:"env,omitempty"`
+	Environment TestEnvironment `json:"env,omitempty" yaml:"env,omitempty"`
 	// Dependencies holds override values for dependency parameters.
-	Dependencies TestDependencies `json:"dependencies,omitempty"`
+	Dependencies TestDependencies `json:"dependencies,omitempty" yaml:"dependencies,omitempty"`
 	// DnsConfig for step's Pod.
-	DNSConfig *StepDNSConfig `json:"dnsConfig,omitempty"`
+	DNSConfig *StepDNSConfig `json:"dnsConfig,omitempty" yaml:"dnsConfig,omitempty"`
 	// Leases lists resources that should be acquired for the test.
-	Leases []StepLease `json:"leases,omitempty"`
+	Leases []StepLease `json:"leases,omitempty" yaml:"leases,omitempty"`
 	// AllowSkipOnSuccess defines if any steps can be skipped when
 	// all previous `pre` and `test` steps were successful. The given step must explicitly
 	// ask for being skipped by setting the OptionalOnSuccess flag to true.
-	AllowSkipOnSuccess *bool `json:"allow_skip_on_success,omitempty"`
+	AllowSkipOnSuccess *bool `json:"allow_skip_on_success,omitempty" yaml:"allow_skip_on_success,omitempty"`
 	// AllowBestEffortPostSteps defines if any `post` steps can be ignored when
 	// they fail. The given step must explicitly ask for being ignored by setting
 	// the OptionalOnSuccess flag to true.
-	AllowBestEffortPostSteps *bool `json:"allow_best_effort_post_steps,omitempty"`
+	AllowBestEffortPostSteps *bool `json:"allow_best_effort_post_steps,omitempty" yaml:"allow_best_effort_post_steps,omitempty"`
 	// Observers are the observers that need to be run
-	Observers []Observer `json:"observers,omitempty"`
+	Observers []Observer `json:"observers,omitempty" yaml:"observers,omitempty"`
 	// DependencyOverrides allows a step to override a dependency with a fully-qualified pullspec. This will probably only ever
 	// be used with rehearsals. Otherwise, the overrides should be passed in as parameters to ci-operator.
-	DependencyOverrides DependencyOverrides `json:"dependency_overrides,omitempty"`
+	DependencyOverrides DependencyOverrides `json:"dependency_overrides,omitempty" yaml:"dependency_overrides,omitempty"`
 }
 
 // TestEnvironment has the values of parameters for multi-stage tests.
@@ -935,10 +935,10 @@ type TestDependencies map[string]string
 // container.
 type Secret struct {
 	// Secret name, used inside test containers
-	Name string `json:"name"`
+	Name string `json:"name" yaml:"name"`
 	// Secret mount path. Defaults to /usr/test-secrets for first
 	// secret. /usr/test-secrets-2 for second, and so on.
-	MountPath string `json:"mount_path"`
+	MountPath string `json:"mount_path" yaml:"mount_path"`
 }
 
 // MemoryBackedVolume describes a tmpfs (memory backed volume)
@@ -948,7 +948,7 @@ type Secret struct {
 type MemoryBackedVolume struct {
 	// Size is the requested size of the volume as a Kubernetes
 	// quantity, i.e. "1Gi" or "500M"
-	Size string `json:"size"`
+	Size string `json:"size" yaml:"size"`
 }
 
 // ContainerTestConfiguration describes a test that runs a
@@ -956,10 +956,10 @@ type MemoryBackedVolume struct {
 type ContainerTestConfiguration struct {
 	// From is the image stream tag in the pipeline to run this
 	// command in.
-	From PipelineImageStreamTagReference `json:"from"`
+	From PipelineImageStreamTagReference `json:"from" yaml:"from"`
 	// MemoryBackedVolume mounts a volume of the specified size into
 	// the container at /tmp/volume.
-	MemoryBackedVolume *MemoryBackedVolume `json:"memory_backed_volume,omitempty"`
+	MemoryBackedVolume *MemoryBackedVolume `json:"memory_backed_volume,omitempty" yaml:"memory_backed_volume,omitempty"`
 }
 
 // ClusterProfile is the name of a set of input variables
@@ -1177,67 +1177,67 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 // ClusterTestConfiguration describes a test that provisions
 // a cluster and runs a command in it.
 type ClusterTestConfiguration struct {
-	ClusterProfile ClusterProfile `json:"cluster_profile"`
+	ClusterProfile ClusterProfile `json:"cluster_profile" yaml:"cluster_profile"`
 }
 
 // OpenshiftAnsibleClusterTestConfiguration describes a test
 // that provisions a cluster using openshift-ansible and runs
 // conformance tests.
 type OpenshiftAnsibleClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
+	ClusterTestConfiguration `json:",inline" yaml:",inline"`
 }
 
 // OpenshiftAnsibleSrcClusterTestConfiguration describes a
 // test that provisions a cluster using openshift-ansible and
 // executes a command in the `src` image.
 type OpenshiftAnsibleSrcClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
+	ClusterTestConfiguration `json:",inline" yaml:",inline"`
 }
 
 // OpenshiftAnsibleCustomClusterTestConfiguration describes a
 // test that provisions a cluster using openshift-ansible's
 // custom provisioner, and runs conformance tests.
 type OpenshiftAnsibleCustomClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
+	ClusterTestConfiguration `json:",inline" yaml:",inline"`
 }
 
 // OpenshiftAnsible40ClusterTestConfiguration describes a
 // test that provisions a cluster using new installer and openshift-ansible
 type OpenshiftAnsible40ClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
+	ClusterTestConfiguration `json:",inline" yaml:",inline"`
 }
 
 // OpenshiftInstallerClusterTestConfiguration describes a test
 // that provisions a cluster using openshift-installer and runs
 // conformance tests.
 type OpenshiftInstallerClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
+	ClusterTestConfiguration `json:",inline" yaml:",inline"`
 	// If upgrade is true, RELEASE_IMAGE_INITIAL will be used as
 	// the initial payload and the installer image from that
 	// will be upgraded. The `run-upgrade-tests` function will be
 	// available for the commands.
-	Upgrade bool `json:"upgrade,omitempty"`
+	Upgrade bool `json:"upgrade,omitempty" yaml:"upgrade,omitempty"`
 }
 
 // OpenshiftInstallerSrcClusterTestConfiguration describes a
 // test that provisions a cluster using openshift-installer and
 // executes a command in the `src` image.
 type OpenshiftInstallerSrcClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
+	ClusterTestConfiguration `json:",inline" yaml:",inline"`
 }
 
 // OpenshiftInstallerConsoleClusterTestConfiguration describes a
 // test that provisions a cluster using openshift-installer and
 // executes a command in the `console-test` image.
 type OpenshiftInstallerConsoleClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
+	ClusterTestConfiguration `json:",inline" yaml:",inline"`
 }
 
 // OpenshiftInstallerUPIClusterTestConfiguration describes a
 // test that provisions machines using installer-upi image and
 // installs the cluster using UPI flow.
 type OpenshiftInstallerUPIClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
+	ClusterTestConfiguration `json:",inline" yaml:",inline"`
 }
 
 // OpenshiftInstallerUPISrcClusterTestConfiguration describes a
@@ -1245,7 +1245,7 @@ type OpenshiftInstallerUPIClusterTestConfiguration struct {
 // installs the cluster using UPI flow. Tests will be run
 // akin to the OpenshiftInstallerSrcClusterTestConfiguration.
 type OpenshiftInstallerUPISrcClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
+	ClusterTestConfiguration `json:",inline" yaml:",inline"`
 }
 
 // OpenshiftInstallerRandomClusterTestConfiguration describes a
@@ -1257,20 +1257,20 @@ type OpenshiftInstallerRandomClusterTestConfiguration struct{}
 // test that provisions a cluster using openshift-installer and
 // executes a command in the image specified by the job configuration.
 type OpenshiftInstallerCustomTestImageClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
+	ClusterTestConfiguration `json:",inline" yaml:",inline"`
 	// From defines the imagestreamtag that will be used to run the
 	// provided test command.  e.g. stable:console-test
-	From string `json:"from"`
+	From string `json:"from" yaml:"from"`
 }
 
 // OpenshiftInstallerGCPNestedVirtCustomTestImageClusterTestConfiguration describes a
 // test that provisions a gcp cluster using openshift-installer with nested virt enabled
 // and executes a command in the image specified by the job configuration.
 type OpenshiftInstallerGCPNestedVirtCustomTestImageClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
+	ClusterTestConfiguration `json:",inline" yaml:",inline"`
 	// From defines the imagestreamtag that will be used to run the
 	// provided test command.  e.g. stable:console-test
-	From string `json:"from"`
+	From string `json:"from" yaml:"from"`
 }
 
 // PipelineImageStreamTagReference is a tag on the
@@ -1293,14 +1293,14 @@ const (
 // jobs. If no output tag is provided, the default
 // of `src` is used.
 type SourceStepConfiguration struct {
-	From PipelineImageStreamTagReference `json:"from"`
-	To   PipelineImageStreamTagReference `json:"to,omitempty"`
+	From PipelineImageStreamTagReference `json:"from" yaml:"from"`
+	To   PipelineImageStreamTagReference `json:"to,omitempty" yaml:"to,omitempty"`
 
 	// ClonerefsImage is the image where we get the clonerefs tool
-	ClonerefsImage ImageStreamTagReference `json:"clonerefs_image"`
+	ClonerefsImage ImageStreamTagReference `json:"clonerefs_image" yaml:"clonerefs_image"`
 	// ClonerefsPath is the path in the above image where the
 	// clonerefs tool is placed
-	ClonerefsPath string `json:"clonerefs_path"`
+	ClonerefsPath string `json:"clonerefs_path" yaml:"clonerefs_path"`
 }
 
 // OperatorStepConfiguration describes the locations of operator bundle information,
@@ -1308,11 +1308,11 @@ type SourceStepConfiguration struct {
 // be substituted to run in a CI test cluster
 type OperatorStepConfiguration struct {
 	// Bundles define a dockerfile and build context to build a bundle
-	Bundles []Bundle `json:"bundles,omitempty"`
+	Bundles []Bundle `json:"bundles,omitempty" yaml:"bundles,omitempty"`
 
 	// Substitutions describes the pullspecs in the operator manifests that must be subsituted
 	// with the pull specs of the images in the CI registry
-	Substitutions []PullSpecSubstitution `json:"substitutions,omitempty"`
+	Substitutions []PullSpecSubstitution `json:"substitutions,omitempty" yaml:"substitutions,omitempty"`
 }
 
 // IndexUpdate specifies the update mode for an operator being added to an index
@@ -1327,33 +1327,33 @@ const (
 // Bundle contains the data needed to build a bundle from the bundle source image and update an index to include the new bundle
 type Bundle struct {
 	// As defines the name for this bundle. If not set, a name will be automatically generated for the bundle.
-	As string `json:"as,omitempty"`
+	As string `json:"as,omitempty" yaml:"as,omitempty"`
 	// DockerfilePath defines where the dockerfile for build the bundle exists relative to the contextdir
-	DockerfilePath string `json:"dockerfile_path,omitempty"`
+	DockerfilePath string `json:"dockerfile_path,omitempty" yaml:"dockerfile_path,omitempty"`
 	// ContextDir defines the source directory to build the bundle from relative to the repository root
-	ContextDir string `json:"context_dir,omitempty"`
+	ContextDir string `json:"context_dir,omitempty" yaml:"context_dir,omitempty"`
 	// BaseIndex defines what index image to use as a base when adding the bundle to an index
-	BaseIndex string `json:"base_index,omitempty"`
+	BaseIndex string `json:"base_index,omitempty" yaml:"base_index,omitempty"`
 	// UpdateGraph defines the update mode to use when adding the bundle to the base index.
 	// Can be: semver (default), semver-skippatch, or replaces
-	UpdateGraph IndexUpdate `json:"update_graph,omitempty"`
+	UpdateGraph IndexUpdate `json:"update_graph,omitempty" yaml:"update_graph,omitempty"`
 }
 
 // IndexGeneratorStepConfiguration describes a step that creates an index database and
 // Dockerfile to build an operator index that uses the generated database based on
 // bundle names provided in OperatorIndex
 type IndexGeneratorStepConfiguration struct {
-	To PipelineImageStreamTagReference `json:"to,omitempty"`
+	To PipelineImageStreamTagReference `json:"to,omitempty" yaml:"to,omitempty"`
 
 	// OperatorIndex is a list of the names of the bundle images that the
 	// index will contain in its database.
-	OperatorIndex []string `json:"operator_index,omitempty"`
+	OperatorIndex []string `json:"operator_index,omitempty" yaml:"operator_index,omitempty"`
 
 	// BaseIndex is the index image to add the bundle(s) to. If unset, a new index is created
-	BaseIndex string `json:"base_index,omitempty"`
+	BaseIndex string `json:"base_index,omitempty" yaml:"base_index,omitempty"`
 
 	// UpdateGraph defines the mode to us when updating the index graph
-	UpdateGraph IndexUpdate `json:"update_graph,omitempty"`
+	UpdateGraph IndexUpdate `json:"update_graph,omitempty" yaml:"update_graph,omitempty"`
 }
 
 // PipelineImageStreamTagReferenceIndexImageGenerator is the name of the index image generator built by ci-operator
@@ -1381,7 +1381,7 @@ func IndexGeneratorName(indexName PipelineImageStreamTagReference) PipelineImage
 type BundleSourceStepConfiguration struct {
 	// Substitutions contains pullspecs that need to be replaced by images
 	// in the CI cluster for operator bundle images
-	Substitutions []PullSpecSubstitution `json:"substitutions,omitempty"`
+	Substitutions []PullSpecSubstitution `json:"substitutions,omitempty" yaml:"substitutions,omitempty"`
 }
 
 // PipelineImageStreamTagReferenceBundleSourceName is the name of the bundle source image built by the CI
@@ -1412,47 +1412,47 @@ func BundleName(index int) string {
 // ProjectDirectoryImageBuildStepConfiguration describes an
 // image build from a directory in a component project.
 type ProjectDirectoryImageBuildStepConfiguration struct {
-	From PipelineImageStreamTagReference `json:"from,omitempty"`
-	To   PipelineImageStreamTagReference `json:"to"`
+	From PipelineImageStreamTagReference `json:"from,omitempty" yaml:"from,omitempty"`
+	To   PipelineImageStreamTagReference `json:"to" yaml:"to"`
 
-	ProjectDirectoryImageBuildInputs `json:",inline"`
+	ProjectDirectoryImageBuildInputs `json:",inline" yaml:",inline"`
 
 	// Optional means the build step is not built, published, or
 	// promoted unless explicitly targeted. Use for builds which
 	// are invoked only when testing certain parts of the repo.
-	Optional bool `json:"optional,omitempty"`
+	Optional bool `json:"optional,omitempty" yaml:"optional,omitempty"`
 }
 
 // ProjectDirectoryImageBuildInputs holds inputs for an image build from the repo under test
 type ProjectDirectoryImageBuildInputs struct {
 	// ContextDir is the directory in the project
 	// from which this build should be run.
-	ContextDir string `json:"context_dir,omitempty"`
+	ContextDir string `json:"context_dir,omitempty" yaml:"context_dir,omitempty"`
 
 	// DockerfilePath is the path to a Dockerfile in the
 	// project to run relative to the context_dir.
-	DockerfilePath string `json:"dockerfile_path,omitempty"`
+	DockerfilePath string `json:"dockerfile_path,omitempty" yaml:"dockerfile_path,omitempty"`
 
 	// DockerfileLiteral can be used to  provide an inline Dockerfile.
 	// Mutually exclusive with DockerfilePath.
-	DockerfileLiteral *string `json:"dockerfile_literal,omitempty"`
+	DockerfileLiteral *string `json:"dockerfile_literal,omitempty" yaml:"dockerfile_literal,omitempty"`
 
 	// Inputs is a map of tag reference name to image input changes
 	// that will populate the build context for the Dockerfile or
 	// alter the input image for a multi-stage build.
-	Inputs map[string]ImageBuildInputs `json:"inputs,omitempty"`
+	Inputs map[string]ImageBuildInputs `json:"inputs,omitempty" yaml:"inputs,omitempty"`
 
 	// BuildArgs contains build arguments that will be resolved in the Dockerfile.
 	// See https://docs.docker.com/engine/reference/builder/#/arg for more details.
-	BuildArgs []BuildArg `json:"build_args,omitempty"`
+	BuildArgs []BuildArg `json:"build_args,omitempty" yaml:"build_args,omitempty"`
 }
 
 type BuildArg struct {
 	// Name of the build arg.
-	Name string `json:"name,omitempty"`
+	Name string `json:"name,omitempty" yaml:"name,omitempty"`
 
 	// Value of the build arg.
-	Value string `json:"value,omitempty"`
+	Value string `json:"value,omitempty" yaml:"value,omitempty"`
 }
 
 // PullSpecSubstitution contains a name of a pullspec that needs to
@@ -1460,9 +1460,9 @@ type BuildArg struct {
 // for generated operator bundle images.
 type PullSpecSubstitution struct {
 	// PullSpec is the pullspec that needs to be replaced
-	PullSpec string `json:"pullspec,omitempty"`
+	PullSpec string `json:"pullspec,omitempty" yaml:"pullspec,omitempty"`
 	// With is the string that the PullSpec is being replaced by
-	With string `json:"with,omitempty"`
+	With string `json:"with,omitempty" yaml:"with,omitempty"`
 }
 
 // ImageBuildInputs is a subset of the v1 OpenShift Build API object
@@ -1470,37 +1470,37 @@ type PullSpecSubstitution struct {
 type ImageBuildInputs struct {
 	// Paths is a list of paths to copy out of this image and into the
 	// context directory.
-	Paths []ImageSourcePath `json:"paths,omitempty"`
+	Paths []ImageSourcePath `json:"paths,omitempty" yaml:"paths,omitempty"`
 	// As is a list of multi-stage step names or image names that will
 	// be replaced by the image reference from this step. For instance,
 	// if the Dockerfile defines FROM nginx:latest AS base, specifying
 	// either "nginx:latest" or "base" in this array will replace that
 	// image with the pipeline input.
-	As []string `json:"as,omitempty"`
+	As []string `json:"as,omitempty" yaml:"as,omitempty"`
 }
 
 // ImageSourcePath maps a path in the source image into a destination
 // path in the context. See the v1 OpenShift Build API for more info.
 type ImageSourcePath struct {
 	// SourcePath is a file or directory in the source image to copy from.
-	SourcePath string `json:"source_path"`
+	SourcePath string `json:"source_path" yaml:"source_path"`
 	// DestinationDir is the directory in the destination image to copy
 	// to.
-	DestinationDir string `json:"destination_dir"`
+	DestinationDir string `json:"destination_dir" yaml:"destination_dir"`
 }
 
 // RPMImageInjectionStepConfiguration describes a step
 // that updates injects an RPM repo into an image. If no
 // output tag is provided, the input tag is updated.
 type RPMImageInjectionStepConfiguration struct {
-	From PipelineImageStreamTagReference `json:"from"`
-	To   PipelineImageStreamTagReference `json:"to,omitempty"`
+	From PipelineImageStreamTagReference `json:"from" yaml:"from"`
+	To   PipelineImageStreamTagReference `json:"to,omitempty" yaml:"to,omitempty"`
 }
 
 // RPMServeStepConfiguration describes a step that launches
 // a server from an image with RPMs and exposes it to the web.
 type RPMServeStepConfiguration struct {
-	From PipelineImageStreamTagReference `json:"from"`
+	From PipelineImageStreamTagReference `json:"from" yaml:"from"`
 }
 
 const (

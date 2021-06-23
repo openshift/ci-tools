@@ -480,20 +480,20 @@ func mergeSteps(into, from CIOperatorStepDetails) CIOperatorStepDetails {
 }
 
 type CIOperatorStepDetails struct {
-	CIOperatorStepDetailInfo `json:",inline"`
-	Substeps                 []CIOperatorStepDetailInfo `json:"substeps,omitempty"`
+	CIOperatorStepDetailInfo `json:",inline" yaml:",inline"`
+	Substeps                 []CIOperatorStepDetailInfo `json:"substeps,omitempty" yaml:"substeps,omitempty"`
 }
 
 type CIOperatorStepDetailInfo struct {
-	StepName     string                     `json:"name"`
-	Description  string                     `json:"description"`
-	Dependencies []string                   `json:"dependencies"`
-	StartedAt    *time.Time                 `json:"started_at"`
-	FinishedAt   *time.Time                 `json:"finished_at"`
-	Duration     *time.Duration             `json:"duration,omitempty"`
-	Manifests    []ctrlruntimeclient.Object `json:"manifests,omitempty"`
-	LogURL       string                     `json:"log_url,omitempty"`
-	Failed       *bool                      `json:"failed,omitempty"`
+	StepName     string                     `json:"name" yaml:"name"`
+	Description  string                     `json:"description" yaml:"description"`
+	Dependencies []string                   `json:"dependencies" yaml:"dependencies"`
+	StartedAt    *time.Time                 `json:"started_at" yaml:"started_at"`
+	FinishedAt   *time.Time                 `json:"finished_at" yaml:"finished_at"`
+	Duration     *time.Duration             `json:"duration,omitempty" yaml:"duration,omitempty"`
+	Manifests    []ctrlruntimeclient.Object `json:"manifests,omitempty" yaml:"manifests,omitempty"`
+	LogURL       string                     `json:"log_url,omitempty" yaml:"log_url,omitempty"`
+	Failed       *bool                      `json:"failed,omitempty" yaml:"failed,omitempty"`
 }
 
 func (c *CIOperatorStepDetailInfo) UnmarshalJSON(data []byte) error {

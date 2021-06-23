@@ -12,10 +12,10 @@ import (
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
-func TestBitwardenContextsFor(t *testing.T) {
+func TestItemContextsFromConfig(t *testing.T) {
 	var testCases = []struct {
 		in  secretgenerator.Config
-		out []secretbootstrap.BitWardenContext
+		out []secretbootstrap.ItemContext
 	}{
 		{
 			in:  secretgenerator.Config{},
@@ -36,24 +36,24 @@ func TestBitwardenContextsFor(t *testing.T) {
 				}},
 				Password: "whatever",
 			}},
-			out: []secretbootstrap.BitWardenContext{{
-				BWItem: "item1",
-				Field:  "field1",
+			out: []secretbootstrap.ItemContext{{
+				Item:  "item1",
+				Field: "field1",
 			}, {
-				BWItem: "item1",
-				Field:  "field2",
+				Item:  "item1",
+				Field: "field2",
 			}, {
-				BWItem:     "item2",
-				Attachment: "attachment1",
+				Item:  "item2",
+				Field: "attachment1",
 			}, {
-				BWItem:    "item2",
-				Attribute: "password",
+				Item:  "item2",
+				Field: "password",
 			}},
 		},
 	}
 
 	for _, testCase := range testCases {
-		if diff := cmp.Diff(testCase.out, bitwardenContextsFor(testCase.in)); diff != "" {
+		if diff := cmp.Diff(testCase.out, itemContextsFromConfig(testCase.in)); diff != "" {
 			t.Errorf("got incorrect output: %v", diff)
 		}
 	}
@@ -192,15 +192,15 @@ func TestValidateContexts(t *testing.T) {
 			name: "Directly found",
 			cfg:  secretgenerator.Config{{ItemName: "some-item", Fields: []secretgenerator.FieldGenerator{{Name: "field"}}}},
 			bootstrapCfg: secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{
-				From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "some-item", Field: "field"}},
+				From: map[string]secretbootstrap.ItemContext{"": {Item: "some-item", Field: "field"}},
 			}}},
 		},
 		{
 			name: "Directly found dockerconfigjson",
 			cfg:  secretgenerator.Config{{ItemName: "some-item", Attachments: []secretgenerator.FieldGenerator{{Name: "field"}}}},
 			bootstrapCfg: secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{
-				From: map[string]secretbootstrap.BitWardenContext{"": {DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{{
-					BWItem: "some-item", AuthBitwardenAttachment: "field",
+				From: map[string]secretbootstrap.ItemContext{"": {DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{{
+					Item: "some-item", AuthField: "field",
 				}}}},
 			}}},
 		},
@@ -210,7 +210,7 @@ func TestValidateContexts(t *testing.T) {
 			bootstrapCfg: secretbootstrap.Config{
 				VaultDPTPPRefix: "dptp",
 				Secrets: []secretbootstrap.SecretConfig{{
-					From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "some-item", Field: "field"}},
+					From: map[string]secretbootstrap.ItemContext{"": {Item: "some-item", Field: "field"}},
 				}},
 			},
 		},
@@ -220,8 +220,8 @@ func TestValidateContexts(t *testing.T) {
 			bootstrapCfg: secretbootstrap.Config{
 				VaultDPTPPRefix: "dptp",
 				Secrets: []secretbootstrap.SecretConfig{{
-					From: map[string]secretbootstrap.BitWardenContext{"": {DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{{
-						BWItem: "dptp/some-item", AuthBitwardenAttachment: "field",
+					From: map[string]secretbootstrap.ItemContext{"": {DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{{
+						Item: "dptp/some-item", AuthField: "field",
 					}}}},
 				}},
 			},
@@ -230,7 +230,7 @@ func TestValidateContexts(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := validateContexts(bitwardenContextsFor(tc.cfg), tc.bootstrapCfg); err != nil {
+			if err := validateContexts(itemContextsFromConfig(tc.cfg), tc.bootstrapCfg); err != nil {
 				t.Errorf("validation failed unexpectedly: %v", err)
 			}
 		})

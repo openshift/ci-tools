@@ -123,6 +123,9 @@ secret_configs:
     key-name-6:
       bw_item: item-name-3
       field: field-name-1
+    key-name-7:
+      item: item-name-2
+      field: field-name-2
   to:
     - cluster: default
       namespace: namespace-1
@@ -248,30 +251,34 @@ var (
 	defaultConfig = secretbootstrap.Config{
 		Secrets: []secretbootstrap.SecretConfig{
 			{
-				From: map[string]secretbootstrap.BitWardenContext{
+				From: map[string]secretbootstrap.ItemContext{
 					"key-name-1": {
-						BWItem: "item-name-1",
-						Field:  "field-name-1",
+						Item:  "item-name-1",
+						Field: "field-name-1",
 					},
 					"key-name-2": {
-						BWItem: "item-name-1",
-						Field:  "field-name-2",
+						Item:  "item-name-1",
+						Field: "field-name-2",
 					},
 					"key-name-3": {
-						BWItem: "item-name-1",
-						Field:  "field-name-3",
+						Item:  "item-name-1",
+						Field: "field-name-3",
 					},
 					"key-name-4": {
-						BWItem: "item-name-2",
-						Field:  "field-name-1",
+						Item:  "item-name-2",
+						Field: "field-name-1",
 					},
 					"key-name-5": {
-						BWItem: "item-name-2",
-						Field:  "field-name-2",
+						Item:  "item-name-2",
+						Field: "field-name-2",
 					},
 					"key-name-6": {
-						BWItem: "item-name-3",
-						Field:  "field-name-1",
+						Item:  "item-name-3",
+						Field: "field-name-1",
+					},
+					"key-name-7": {
+						Item:  "item-name-2",
+						Field: "field-name-2",
 					},
 				},
 				To: []secretbootstrap.SecretContext{
@@ -288,10 +295,10 @@ var (
 				},
 			},
 			{
-				From: map[string]secretbootstrap.BitWardenContext{
+				From: map[string]secretbootstrap.ItemContext{
 					".dockerconfigjson": {
-						BWItem: "quay.io",
-						Field:  "pull-credentials",
+						Item:  "quay.io",
+						Field: "pull-credentials",
 					},
 				},
 				To: []secretbootstrap.SecretContext{
@@ -308,30 +315,34 @@ var (
 	defaultConfigWithoutDefaultCluster = secretbootstrap.Config{
 		Secrets: []secretbootstrap.SecretConfig{
 			{
-				From: map[string]secretbootstrap.BitWardenContext{
+				From: map[string]secretbootstrap.ItemContext{
 					"key-name-1": {
-						BWItem: "item-name-1",
-						Field:  "field-name-1",
+						Item:  "item-name-1",
+						Field: "field-name-1",
 					},
 					"key-name-2": {
-						BWItem: "item-name-1",
-						Field:  "field-name-2",
+						Item:  "item-name-1",
+						Field: "field-name-2",
 					},
 					"key-name-3": {
-						BWItem: "item-name-1",
-						Field:  "field-name-3",
+						Item:  "item-name-1",
+						Field: "field-name-3",
 					},
 					"key-name-4": {
-						BWItem: "item-name-2",
-						Field:  "field-name-1",
+						Item:  "item-name-2",
+						Field: "field-name-1",
 					},
 					"key-name-5": {
-						BWItem: "item-name-2",
-						Field:  "field-name-2",
+						Item:  "item-name-2",
+						Field: "field-name-2",
 					},
 					"key-name-6": {
-						BWItem: "item-name-3",
-						Field:  "field-name-1",
+						Item:  "item-name-3",
+						Field: "field-name-1",
+					},
+					"key-name-7": {
+						Item:  "item-name-2",
+						Field: "field-name-2",
 					},
 				},
 				To: []secretbootstrap.SecretContext{
@@ -418,16 +429,6 @@ func TestCompleteOptions(t *testing.T) {
 			expectedClusters: []string{"build01"},
 		},
 		{
-			name: "attribute is not password",
-			given: options{
-				logLevel:       "info",
-				configPath:     configWithNonPasswordAttributePath,
-				kubeConfigPath: kubeConfigPath,
-			},
-			expectedConfig: defaultConfig,
-			expectedError:  fmt.Errorf("failed to validate the config: config[0].from[key-name-2].attribute: only the 'password' is supported, not not-password"),
-		},
-		{
 			name: "group is resolved",
 			given: options{
 				logLevel:       "info",
@@ -437,7 +438,7 @@ func TestCompleteOptions(t *testing.T) {
 			expectedConfig: secretbootstrap.Config{
 				ClusterGroups: map[string][]string{"group-a": {"default"}},
 				Secrets: []secretbootstrap.SecretConfig{{
-					From: map[string]secretbootstrap.BitWardenContext{"key-name-1": {BWItem: "item-name-1", Field: "field-name-1"}},
+					From: map[string]secretbootstrap.ItemContext{"key-name-1": {Item: "item-name-1", Field: "field-name-1"}},
 					To:   []secretbootstrap.SecretContext{{Cluster: "default", Namespace: "ns", Name: "name"}},
 				}},
 			},
@@ -487,10 +488,10 @@ func TestValidateCompletedOptions(t *testing.T) {
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
-							From: map[string]secretbootstrap.BitWardenContext{
+							From: map[string]secretbootstrap.ItemContext{
 								"key-name-1": {
-									BWItem: "item-name-1",
-									Field:  "field-name-1",
+									Item:  "item-name-1",
+									Field: "field-name-1",
 								},
 							},
 						},
@@ -516,10 +517,10 @@ func TestValidateCompletedOptions(t *testing.T) {
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
-							From: map[string]secretbootstrap.BitWardenContext{
+							From: map[string]secretbootstrap.ItemContext{
 								"": {
-									BWItem: "item-name-1",
-									Field:  "field-name-1",
+									Item:  "item-name-1",
+									Field: "field-name-1",
 								},
 							},
 							To: []secretbootstrap.SecretContext{
@@ -536,13 +537,13 @@ func TestValidateCompletedOptions(t *testing.T) {
 			expected: fmt.Errorf("config[0].from: empty key is not allowed"),
 		},
 		{
-			name: "empty bw item",
+			name: "empty item",
 			given: options{
 				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
-							From: map[string]secretbootstrap.BitWardenContext{
+							From: map[string]secretbootstrap.ItemContext{
 								"key-name-1": {
 									Field: "field-name-1",
 								},
@@ -561,15 +562,15 @@ func TestValidateCompletedOptions(t *testing.T) {
 			expected: fmt.Errorf("config[0].from[key-name-1]: empty value is not allowed"),
 		},
 		{
-			name: "empty field and empty attachment",
+			name: "empty field",
 			given: options{
 				logLevel: "info",
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
-							From: map[string]secretbootstrap.BitWardenContext{
+							From: map[string]secretbootstrap.ItemContext{
 								"key-name-1": {
-									BWItem: "item-name-1",
+									Item: "item-name-1",
 								},
 							},
 							To: []secretbootstrap.SecretContext{
@@ -583,34 +584,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 					},
 				},
 			},
-			expected: fmt.Errorf("config[0].from[key-name-1]: one of [field, attachment, attribute] must be set"),
-		},
-		{
-			name: "non-empty field and non-empty attachment",
-			given: options{
-				logLevel: "info",
-				config: secretbootstrap.Config{
-					Secrets: []secretbootstrap.SecretConfig{
-						{
-							From: map[string]secretbootstrap.BitWardenContext{
-								"key-name-1": {
-									BWItem:     "item-name-1",
-									Field:      "field-name-1",
-									Attachment: "attachment-name-1",
-								},
-							},
-							To: []secretbootstrap.SecretContext{
-								{
-									Cluster:   "default",
-									Namespace: "namespace-1",
-									Name:      "prod-secret-1",
-								},
-							},
-						},
-					},
-				},
-			},
-			expected: fmt.Errorf("config[0].from[key-name-1]: cannot use more than one in [field, attachment, attribute]"),
+			expected: fmt.Errorf("config[0].from[key-name-1]: field must be set"),
 		},
 		{
 			name: "empty cluster",
@@ -619,10 +593,10 @@ func TestValidateCompletedOptions(t *testing.T) {
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
-							From: map[string]secretbootstrap.BitWardenContext{
+							From: map[string]secretbootstrap.ItemContext{
 								"key-name-1": {
-									BWItem: "item-name-1",
-									Field:  "field-name-1",
+									Item:  "item-name-1",
+									Field: "field-name-1",
 								},
 							},
 							To: []secretbootstrap.SecretContext{
@@ -644,10 +618,10 @@ func TestValidateCompletedOptions(t *testing.T) {
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
-							From: map[string]secretbootstrap.BitWardenContext{
+							From: map[string]secretbootstrap.ItemContext{
 								"key-name-1": {
-									BWItem:     "item-name-1",
-									Attachment: "attachment-name-1",
+									Item:  "item-name-1",
+									Field: "field-name-1",
 								},
 							},
 							To: []secretbootstrap.SecretContext{
@@ -669,10 +643,10 @@ func TestValidateCompletedOptions(t *testing.T) {
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
-							From: map[string]secretbootstrap.BitWardenContext{
+							From: map[string]secretbootstrap.ItemContext{
 								"key-name-1": {
-									BWItem: "item-name-1",
-									Field:  "field-name-1",
+									Item:  "item-name-1",
+									Field: "field-name-1",
 								},
 							},
 							To: []secretbootstrap.SecretContext{
@@ -694,10 +668,10 @@ func TestValidateCompletedOptions(t *testing.T) {
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
-							From: map[string]secretbootstrap.BitWardenContext{
+							From: map[string]secretbootstrap.ItemContext{
 								".dockerconfigjson": {
-									BWItem: "item-name-1",
-									Field:  "field-name-1",
+									Item:  "item-name-1",
+									Field: "field-name-1",
 								},
 							},
 							To: []secretbootstrap.SecretContext{
@@ -736,10 +710,10 @@ func TestValidateCompletedOptions(t *testing.T) {
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
-							From: map[string]secretbootstrap.BitWardenContext{
+							From: map[string]secretbootstrap.ItemContext{
 								"key-name-1": {
-									BWItem: "item-name-1",
-									Field:  "field-name-1",
+									Item:  "item-name-1",
+									Field: "field-name-1",
 								},
 							},
 							To: []secretbootstrap.SecretContext{
@@ -756,10 +730,10 @@ func TestValidateCompletedOptions(t *testing.T) {
 							},
 						},
 						{
-							From: map[string]secretbootstrap.BitWardenContext{
+							From: map[string]secretbootstrap.ItemContext{
 								"key-name-1": {
-									BWItem: "item-name-1",
-									Field:  "field-name-1",
+									Item:  "item-name-1",
+									Field: "field-name-1",
 								},
 							},
 							To: []secretbootstrap.SecretContext{
@@ -791,20 +765,20 @@ func TestValidateCompletedOptions(t *testing.T) {
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
-							From: map[string]secretbootstrap.BitWardenContext{
+							From: map[string]secretbootstrap.ItemContext{
 								".dockerconfigjson": {
 									DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 										{
-											BWItem:                    "bitwarden-item",
-											RegistryURLBitwardenField: "registryURL",
-											AuthBitwardenAttachment:   "auth",
-											EmailBitwardenField:       "email",
+											Item:        "item-1",
+											RegistryURL: "test.com",
+											AuthField:   "auth",
+											EmailField:  "email",
 										},
 										{
-											BWItem:                    "bitwarden-item2",
-											RegistryURLBitwardenField: "registryURL",
-											AuthBitwardenAttachment:   "auth",
-											EmailBitwardenField:       "email",
+											Item:        "item-2",
+											RegistryURL: "test.com",
+											AuthField:   "auth",
+											EmailField:  "email",
 										},
 									},
 								},
@@ -821,78 +795,6 @@ func TestValidateCompletedOptions(t *testing.T) {
 					},
 				},
 			},
-		},
-		{
-			name: "happy dockerconfigJSON configuration: use RegistryURL",
-			given: options{
-				logLevel: "info",
-				config: secretbootstrap.Config{
-					Secrets: []secretbootstrap.SecretConfig{
-						{
-							From: map[string]secretbootstrap.BitWardenContext{
-								".dockerconfigjson": {
-									DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
-										{
-											BWItem:                  "bitwarden-item",
-											RegistryURL:             "quay.io",
-											AuthBitwardenAttachment: "auth",
-											EmailBitwardenField:     "email",
-										},
-										{
-											BWItem:                    "bitwarden-item2",
-											RegistryURLBitwardenField: "registryURL",
-											AuthBitwardenAttachment:   "auth",
-											EmailBitwardenField:       "email",
-										},
-									},
-								},
-							},
-							To: []secretbootstrap.SecretContext{
-								{
-									Cluster:   "default",
-									Name:      "docker-config-json-secret",
-									Namespace: "namespace-1",
-									Type:      "kubernetes.io/dockerconfigjson",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "sad dockerconfigJSON configuration: cannot set both RegistryURL and RegistryURLBitwardenField",
-			given: options{
-				logLevel: "info",
-				config: secretbootstrap.Config{
-					Secrets: []secretbootstrap.SecretConfig{
-						{
-							From: map[string]secretbootstrap.BitWardenContext{
-								".dockerconfigjson": {
-									DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
-										{
-											BWItem:                    "bitwarden-item",
-											RegistryURL:               "quay.io",
-											RegistryURLBitwardenField: "registryURL",
-											AuthBitwardenAttachment:   "auth",
-											EmailBitwardenField:       "email",
-										},
-									},
-								},
-							},
-							To: []secretbootstrap.SecretContext{
-								{
-									Cluster:   "default",
-									Name:      "docker-config-json-secret",
-									Namespace: "namespace-1",
-									Type:      "kubernetes.io/dockerconfigjson",
-								},
-							},
-						},
-					},
-				},
-			},
-			expected: fmt.Errorf("config[0].from[.dockerconfigjson]: registry_url_bw_field and registry_url are mutualy exclusive"),
 		},
 		{
 			name: "sad dockerconfigJSON configuration",
@@ -901,18 +803,18 @@ func TestValidateCompletedOptions(t *testing.T) {
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
-							From: map[string]secretbootstrap.BitWardenContext{
+							From: map[string]secretbootstrap.ItemContext{
 								"key-name-1": {
 									DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 										{
-											BWItem:                    "bitwarden-item",
-											RegistryURLBitwardenField: "registryURL",
+											Item:        "item-1",
+											RegistryURL: "test.com",
 										},
 										{
-											BWItem:                    "bitwarden-item2",
-											RegistryURLBitwardenField: "registryURL",
-											AuthBitwardenAttachment:   "auth",
-											EmailBitwardenField:       "email",
+											Item:        "item-2",
+											RegistryURL: "test.com",
+											AuthField:   "auth",
+											EmailField:  "email",
 										},
 									},
 								},
@@ -928,7 +830,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 					},
 				},
 			},
-			expected: fmt.Errorf("config[0].from[key-name-1]: auth_bw_attachment is missing"),
+			expected: fmt.Errorf("config[0].from[key-name-1]: auth_field is missing"),
 		},
 		{
 			name: "sad dockerconfigJSON configuration: cannot determine registry URL",
@@ -937,13 +839,13 @@ func TestValidateCompletedOptions(t *testing.T) {
 				config: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
-							From: map[string]secretbootstrap.BitWardenContext{
+							From: map[string]secretbootstrap.ItemContext{
 								"key-name-1": {
 									DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 										{
-											BWItem:                  "bitwarden-item2",
-											AuthBitwardenAttachment: "auth",
-											EmailBitwardenField:     "email",
+											Item:       "bitwarden-item2",
+											AuthField:  "auth",
+											EmailField: "email",
 										},
 									},
 								},
@@ -959,7 +861,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 					},
 				},
 			},
-			expected: fmt.Errorf("config[0].from[key-name-1]: either registry_url_bw_field or registry_url must be set"),
+			expected: fmt.Errorf("config[0].from[key-name-1]: registry_url must be set"),
 		},
 	}
 	for _, tc := range testCases {
@@ -998,7 +900,6 @@ func TestConstructSecrets(t *testing.T) {
 						"field-name-4": "value4",
 					},
 				},
-
 				"item-name-3": {
 					Data: map[string]string{
 						"field-name-1": "value1",
@@ -1026,6 +927,7 @@ func TestConstructSecrets(t *testing.T) {
 							"key-name-4": []byte("value1"),
 							"key-name-5": []byte("value2"),
 							"key-name-6": []byte("value1"),
+							"key-name-7": []byte("value2"),
 						},
 						Type: "Opaque",
 					},
@@ -1057,6 +959,7 @@ func TestConstructSecrets(t *testing.T) {
 							"key-name-4": []byte("value1"),
 							"key-name-5": []byte("value2"),
 							"key-name-6": []byte("value1"),
+							"key-name-7": []byte("value2"),
 						},
 						Type: "Opaque",
 					},
@@ -1202,7 +1105,7 @@ Code: 404. Errors:
 			config: secretbootstrap.Config{
 				UserSecretsTargetClusters: []string{"a", "b"},
 				Secrets: []secretbootstrap.SecretConfig{{
-					From: map[string]secretbootstrap.BitWardenContext{"dptp-key": {BWItem: "dptp-item", Field: "dptp-key"}},
+					From: map[string]secretbootstrap.ItemContext{"dptp-key": {Item: "dptp-item", Field: "dptp-key"}},
 					To: []secretbootstrap.SecretContext{
 						{Cluster: "a", Namespace: "some-namespace", Name: "some-name"},
 						{Cluster: "b", Namespace: "some-namespace", Name: "some-name"},
@@ -1242,7 +1145,7 @@ Code: 404. Errors:
 			config: secretbootstrap.Config{
 				UserSecretsTargetClusters: []string{"a", "b"},
 				Secrets: []secretbootstrap.SecretConfig{{
-					From: map[string]secretbootstrap.BitWardenContext{"secret-key": {BWItem: "item", Field: "key", Base64Decode: true}},
+					From: map[string]secretbootstrap.ItemContext{"secret-key": {Item: "item", Field: "key", Base64Decode: true}},
 					To: []secretbootstrap.SecretContext{
 						{Cluster: "a", Namespace: "some-namespace", Name: "some-name"},
 					},
@@ -1270,7 +1173,7 @@ Code: 404. Errors:
 			config: secretbootstrap.Config{
 				UserSecretsTargetClusters: []string{"a", "b"},
 				Secrets: []secretbootstrap.SecretConfig{{
-					From: map[string]secretbootstrap.BitWardenContext{"secret-key": {BWItem: "item", Field: "key", Base64Decode: true}},
+					From: map[string]secretbootstrap.ItemContext{"secret-key": {Item: "item", Field: "key", Base64Decode: true}},
 					To: []secretbootstrap.SecretContext{
 						{Cluster: "a", Namespace: "some-namespace", Name: "some-name"},
 					},
@@ -1297,7 +1200,7 @@ Code: 404. Errors:
 			config: secretbootstrap.Config{
 				UserSecretsTargetClusters: []string{"a", "b"},
 				Secrets: []secretbootstrap.SecretConfig{{
-					From: map[string]secretbootstrap.BitWardenContext{"dptp-key": {BWItem: "dptp-item", Field: "dptp-key"}},
+					From: map[string]secretbootstrap.ItemContext{"dptp-key": {Item: "dptp-item", Field: "dptp-key"}},
 					To: []secretbootstrap.SecretContext{
 						{Cluster: "a", Namespace: "some-namespace", Name: "some-name"},
 						{Cluster: "b", Namespace: "some-namespace", Name: "some-name"},
@@ -1325,7 +1228,7 @@ Code: 404. Errors:
 			config: secretbootstrap.Config{
 				UserSecretsTargetClusters: []string{"a", "b"},
 				Secrets: []secretbootstrap.SecretConfig{{
-					From: map[string]secretbootstrap.BitWardenContext{"dptp-key": {BWItem: "dptp-item", Field: "dptp-key"}},
+					From: map[string]secretbootstrap.ItemContext{"dptp-key": {Item: "dptp-item", Field: "dptp-key"}},
 					To: []secretbootstrap.SecretContext{
 						{Cluster: "a", Namespace: "some-namespace", Name: "some-name", Type: coreapi.SecretTypeBasicAuth},
 						{Cluster: "b", Namespace: "some-namespace", Name: "some-name", Type: coreapi.SecretTypeBasicAuth},
@@ -1936,18 +1839,17 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 			id: "happy case",
 			dockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 				{
-					BWItem:                    "item-name-1",
-					RegistryURLBitwardenField: "registryURL",
-					AuthBitwardenAttachment:   "auth",
-					EmailBitwardenField:       "email",
+					Item:        "item-name-1",
+					RegistryURL: "quay.io",
+					AuthField:   "auth",
+					EmailField:  "email",
 				},
 			},
 			items: map[string]vaultclient.KVData{
 				"item-name-1": {
 					Data: map[string]string{
-						"auth":        "c2VydmljZWFjY291bnQ6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklrRndTekF0YjBaNGJXMUZURXRHTVMwMFVEa3djbEEwUTJWQlRUZERNMGRXUkZwdmJGOVllaTFEUW5NaWZRLmV5SnBjM01pT2lKcmRXSmxjbTVsZEdWekwzTmxjblpwWTJWaFkyTnZkVzUwSWl3aWEzVmlaWEp1WlhSbGN5NXBieTl6WlhKMmFXTmxZV05qYjNWdWRDOXVZVzFsYzNCaFkyVWlPaUpoYkhaaGNtOHRkR1Z6ZENJc0ltdDFZbVZ5Ym1WMFpYTXVhVzh2YzJWeWRtbGpaV0ZqWTI5MWJuUXZjMlZqY21WMExtNWhiV1VpT2lKa1pXWmhkV3gwTFhSdmEyVnVMV1EwT1d4aUlpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WlhKMmFXTmxMV0ZqWTI5MWJuUXVibUZ0WlNJNkltUmxabUYxYkhRaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNTFhV1FpT2lJM05tVTRZMlpsTmkxbU1HWXhMVFF5WlRNdFlqUm1NQzFoTXpjM1pUbGhOemxrWWpRaUxDSnpkV0lpT2lKemVYTjBaVzA2YzJWeWRtbGpaV0ZqWTI5MWJuUTZZV3gyWVhKdkxYUmxjM1E2WkdWbVlYVnNkQ0o5LnMyajh6X2JfT3NMOHY5UGlLR1NUQmFuZDE0MHExMHc3VTlMdU9JWmZlUG1SeF9OMHdKRkZPcVN0MGNjdmtVaUVGV0x5QWNSU2k2cUt3T1FSVzE2MVUzSU52UEY4Q0pDZ2d2R3JHUnMzeHp6N3hjSmgzTWRpcXhzWGViTmNmQmlmWWxXUTU2U1RTZDlUeUh1RkN6c1poNXBlSHVzS3hOa2hJRTNyWHp5ZHNoMkhCaTZMYTlYZ1l4R1VjM0x3NWh4RnB5bXFyajFJNzExbWZLcUV2bUN0a0J4blJtMlhIZmFKalNVRkswWWdoY0lMbkhuWGhMOEx2MUl0bnU4SzlvWFRfWVZIQWY1R3hlaERjZ3FBMmw1NUZyYkJMTGVfNi1DV2V2N2RQZU5PbFlaWE5xbEtkUG5KbW9BREdsOEktTlhKN2x5ZXl2a2hfZ3JkanhXdVVqQ3lQUQ==",
-						"registryURL": "quay.io",
-						"email":       "test@test.com",
+						"auth":  "c2VydmljZWFjY291bnQ6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklrRndTekF0YjBaNGJXMUZURXRHTVMwMFVEa3djbEEwUTJWQlRUZERNMGRXUkZwdmJGOVllaTFEUW5NaWZRLmV5SnBjM01pT2lKcmRXSmxjbTVsZEdWekwzTmxjblpwWTJWaFkyTnZkVzUwSWl3aWEzVmlaWEp1WlhSbGN5NXBieTl6WlhKMmFXTmxZV05qYjNWdWRDOXVZVzFsYzNCaFkyVWlPaUpoYkhaaGNtOHRkR1Z6ZENJc0ltdDFZbVZ5Ym1WMFpYTXVhVzh2YzJWeWRtbGpaV0ZqWTI5MWJuUXZjMlZqY21WMExtNWhiV1VpT2lKa1pXWmhkV3gwTFhSdmEyVnVMV1EwT1d4aUlpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WlhKMmFXTmxMV0ZqWTI5MWJuUXVibUZ0WlNJNkltUmxabUYxYkhRaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNTFhV1FpT2lJM05tVTRZMlpsTmkxbU1HWXhMVFF5WlRNdFlqUm1NQzFoTXpjM1pUbGhOemxrWWpRaUxDSnpkV0lpT2lKemVYTjBaVzA2YzJWeWRtbGpaV0ZqWTI5MWJuUTZZV3gyWVhKdkxYUmxjM1E2WkdWbVlYVnNkQ0o5LnMyajh6X2JfT3NMOHY5UGlLR1NUQmFuZDE0MHExMHc3VTlMdU9JWmZlUG1SeF9OMHdKRkZPcVN0MGNjdmtVaUVGV0x5QWNSU2k2cUt3T1FSVzE2MVUzSU52UEY4Q0pDZ2d2R3JHUnMzeHp6N3hjSmgzTWRpcXhzWGViTmNmQmlmWWxXUTU2U1RTZDlUeUh1RkN6c1poNXBlSHVzS3hOa2hJRTNyWHp5ZHNoMkhCaTZMYTlYZ1l4R1VjM0x3NWh4RnB5bXFyajFJNzExbWZLcUV2bUN0a0J4blJtMlhIZmFKalNVRkswWWdoY0lMbkhuWGhMOEx2MUl0bnU4SzlvWFRfWVZIQWY1R3hlaERjZ3FBMmw1NUZyYkJMTGVfNi1DV2V2N2RQZU5PbFlaWE5xbEtkUG5KbW9BREdsOEktTlhKN2x5ZXl2a2hfZ3JkanhXdVVqQ3lQUQ==",
+						"email": "test@test.com",
 					},
 				},
 			},
@@ -1957,10 +1859,10 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 			id: "invalid conents, parsing fails",
 			dockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 				{
-					BWItem:                    "item-name-1",
-					RegistryURLBitwardenField: "registryURL",
-					AuthBitwardenAttachment:   "auth",
-					EmailBitwardenField:       "email",
+					Item:        "item-name-1",
+					RegistryURL: "quay.io",
+					AuthField:   "auth",
+					EmailField:  "email",
 				},
 			},
 			items: map[string]vaultclient.KVData{
@@ -1976,41 +1878,19 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 			expectedError: "the constructed dockerconfigJSON doesn't parse: illegal base64 data at input byte 8",
 		},
 		{
-			id: "RegistryURL overrides RegistryURLBitwardenField",
-			dockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
-				{
-					BWItem:                    "item-name-1",
-					RegistryURLBitwardenField: "registryURL",
-					AuthBitwardenAttachment:   "auth",
-					EmailBitwardenField:       "email",
-					RegistryURL:               "cool-url",
-				},
-			},
-			items: map[string]vaultclient.KVData{
-				"item-name-1": {
-					Data: map[string]string{
-						"auth":        "c2VydmljZWFjY291bnQ6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklrRndTekF0YjBaNGJXMUZURXRHTVMwMFVEa3djbEEwUTJWQlRUZERNMGRXUkZwdmJGOVllaTFEUW5NaWZRLmV5SnBjM01pT2lKcmRXSmxjbTVsZEdWekwzTmxjblpwWTJWaFkyTnZkVzUwSWl3aWEzVmlaWEp1WlhSbGN5NXBieTl6WlhKMmFXTmxZV05qYjNWdWRDOXVZVzFsYzNCaFkyVWlPaUpoYkhaaGNtOHRkR1Z6ZENJc0ltdDFZbVZ5Ym1WMFpYTXVhVzh2YzJWeWRtbGpaV0ZqWTI5MWJuUXZjMlZqY21WMExtNWhiV1VpT2lKa1pXWmhkV3gwTFhSdmEyVnVMV1EwT1d4aUlpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WlhKMmFXTmxMV0ZqWTI5MWJuUXVibUZ0WlNJNkltUmxabUYxYkhRaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNTFhV1FpT2lJM05tVTRZMlpsTmkxbU1HWXhMVFF5WlRNdFlqUm1NQzFoTXpjM1pUbGhOemxrWWpRaUxDSnpkV0lpT2lKemVYTjBaVzA2YzJWeWRtbGpaV0ZqWTI5MWJuUTZZV3gyWVhKdkxYUmxjM1E2WkdWbVlYVnNkQ0o5LnMyajh6X2JfT3NMOHY5UGlLR1NUQmFuZDE0MHExMHc3VTlMdU9JWmZlUG1SeF9OMHdKRkZPcVN0MGNjdmtVaUVGV0x5QWNSU2k2cUt3T1FSVzE2MVUzSU52UEY4Q0pDZ2d2R3JHUnMzeHp6N3hjSmgzTWRpcXhzWGViTmNmQmlmWWxXUTU2U1RTZDlUeUh1RkN6c1poNXBlSHVzS3hOa2hJRTNyWHp5ZHNoMkhCaTZMYTlYZ1l4R1VjM0x3NWh4RnB5bXFyajFJNzExbWZLcUV2bUN0a0J4blJtMlhIZmFKalNVRkswWWdoY0lMbkhuWGhMOEx2MUl0bnU4SzlvWFRfWVZIQWY1R3hlaERjZ3FBMmw1NUZyYkJMTGVfNi1DV2V2N2RQZU5PbFlaWE5xbEtkUG5KbW9BREdsOEktTlhKN2x5ZXl2a2hfZ3JkanhXdVVqQ3lQUQ==",
-						"registryURL": "quay.io",
-						"email":       "test@test.com",
-					},
-				},
-			},
-			expectedJSON: []byte(`{"auths":{"cool-url":{"auth":"c2VydmljZWFjY291bnQ6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklrRndTekF0YjBaNGJXMUZURXRHTVMwMFVEa3djbEEwUTJWQlRUZERNMGRXUkZwdmJGOVllaTFEUW5NaWZRLmV5SnBjM01pT2lKcmRXSmxjbTVsZEdWekwzTmxjblpwWTJWaFkyTnZkVzUwSWl3aWEzVmlaWEp1WlhSbGN5NXBieTl6WlhKMmFXTmxZV05qYjNWdWRDOXVZVzFsYzNCaFkyVWlPaUpoYkhaaGNtOHRkR1Z6ZENJc0ltdDFZbVZ5Ym1WMFpYTXVhVzh2YzJWeWRtbGpaV0ZqWTI5MWJuUXZjMlZqY21WMExtNWhiV1VpT2lKa1pXWmhkV3gwTFhSdmEyVnVMV1EwT1d4aUlpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WlhKMmFXTmxMV0ZqWTI5MWJuUXVibUZ0WlNJNkltUmxabUYxYkhRaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNTFhV1FpT2lJM05tVTRZMlpsTmkxbU1HWXhMVFF5WlRNdFlqUm1NQzFoTXpjM1pUbGhOemxrWWpRaUxDSnpkV0lpT2lKemVYTjBaVzA2YzJWeWRtbGpaV0ZqWTI5MWJuUTZZV3gyWVhKdkxYUmxjM1E2WkdWbVlYVnNkQ0o5LnMyajh6X2JfT3NMOHY5UGlLR1NUQmFuZDE0MHExMHc3VTlMdU9JWmZlUG1SeF9OMHdKRkZPcVN0MGNjdmtVaUVGV0x5QWNSU2k2cUt3T1FSVzE2MVUzSU52UEY4Q0pDZ2d2R3JHUnMzeHp6N3hjSmgzTWRpcXhzWGViTmNmQmlmWWxXUTU2U1RTZDlUeUh1RkN6c1poNXBlSHVzS3hOa2hJRTNyWHp5ZHNoMkhCaTZMYTlYZ1l4R1VjM0x3NWh4RnB5bXFyajFJNzExbWZLcUV2bUN0a0J4blJtMlhIZmFKalNVRkswWWdoY0lMbkhuWGhMOEx2MUl0bnU4SzlvWFRfWVZIQWY1R3hlaERjZ3FBMmw1NUZyYkJMTGVfNi1DV2V2N2RQZU5PbFlaWE5xbEtkUG5KbW9BREdsOEktTlhKN2x5ZXl2a2hfZ3JkanhXdVVqQ3lQUQ==","email":"test@test.com"}}}`),
-		},
-		{
 			id: "happy multiple case",
 			dockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 				{
-					BWItem:                    "item-name-1",
-					RegistryURLBitwardenField: "registryURL",
-					AuthBitwardenAttachment:   "auth",
-					EmailBitwardenField:       "email",
+					Item:        "item-name-1",
+					RegistryURL: "quay.io",
+					AuthField:   "auth",
+					EmailField:  "email",
 				},
 				{
-					BWItem:                    "item-name-2",
-					RegistryURLBitwardenField: "registryURL",
-					AuthBitwardenAttachment:   "auth",
-					EmailBitwardenField:       "email",
+					Item:        "item-name-2",
+					RegistryURL: "cloud.redhat.com",
+					AuthField:   "auth",
+					EmailField:  "email",
 				},
 			},
 			items: map[string]vaultclient.KVData{
@@ -2035,10 +1915,10 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 			id: "sad case, field is missing",
 			dockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 				{
-					BWItem:                    "item-name-1",
-					RegistryURLBitwardenField: "registryURL",
-					AuthBitwardenAttachment:   "auth",
-					EmailBitwardenField:       "email",
+					Item:        "item-name-1",
+					RegistryURL: "quay.io",
+					AuthField:   "auth",
+					EmailField:  "email",
 				},
 			},
 			items: map[string]vaultclient.KVData{
@@ -2049,7 +1929,7 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 					},
 				},
 			},
-			expectedError: `couldn't get attachment 'auth' from bw item item-name-1: item at path "prefix/item-name-1" has no key "auth"`,
+			expectedError: `couldn't get auth field 'auth' from item item-name-1: item at path "prefix/item-name-1" has no key "auth"`,
 		},
 	}
 
@@ -2072,7 +1952,7 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 	}
 }
 
-func TestGetUnusedBWItems(t *testing.T) {
+func TestGetUnusedItems(t *testing.T) {
 	threshold := time.Now()
 	dayAfter := threshold.AddDate(0, 0, 1)
 	dayBefore := threshold.AddDate(0, 0, -1)
@@ -2081,12 +1961,12 @@ func TestGetUnusedBWItems(t *testing.T) {
 		id            string
 		config        secretbootstrap.Config
 		items         map[string]vaultclient.KVData
-		bwAllowItems  sets.String
+		allowItems    sets.String
 		expectedError string
 	}{
 		{
-			id:           "all used, no unused items expected",
-			bwAllowItems: sets.NewString(),
+			id:         "all used, no unused items expected",
+			allowItems: sets.NewString(),
 			items: map[string]vaultclient.KVData{
 				"item-name-1": {
 					Data: map[string]string{
@@ -2104,19 +1984,19 @@ func TestGetUnusedBWItems(t *testing.T) {
 			config: secretbootstrap.Config{
 				Secrets: []secretbootstrap.SecretConfig{
 					{
-						From: map[string]secretbootstrap.BitWardenContext{
-							"1": {BWItem: "item-name-1", Field: "field-name-1"},
-							"2": {BWItem: "item-name-1", Field: "field-name-2"},
-							"3": {BWItem: "item-name-2", Field: "field-name-1"},
-							"4": {BWItem: "item-name-2", Field: "field-name-2"},
+						From: map[string]secretbootstrap.ItemContext{
+							"1": {Item: "item-name-1", Field: "field-name-1"},
+							"2": {Item: "item-name-1", Field: "field-name-2"},
+							"3": {Item: "item-name-2", Field: "field-name-1"},
+							"4": {Item: "item-name-2", Field: "field-name-2"},
 						},
 					},
 				},
 			},
 		},
 		{
-			id:           "partly used, unused items expected",
-			bwAllowItems: sets.NewString(),
+			id:         "partly used, unused items expected",
+			allowItems: sets.NewString(),
 			items: map[string]vaultclient.KVData{
 				"item-name-1": {
 					Data: map[string]string{
@@ -2134,18 +2014,18 @@ func TestGetUnusedBWItems(t *testing.T) {
 			config: secretbootstrap.Config{
 				Secrets: []secretbootstrap.SecretConfig{
 					{
-						From: map[string]secretbootstrap.BitWardenContext{
-							"1": {BWItem: "item-name-1", Field: "field-name-1"},
-							"2": {BWItem: "item-name-2", Field: "field-name-1"},
+						From: map[string]secretbootstrap.ItemContext{
+							"1": {Item: "item-name-1", Field: "field-name-1"},
+							"2": {Item: "item-name-2", Field: "field-name-1"},
 						},
 					},
 				},
 			},
-			expectedError: "[Unused bw item: 'item-name-1' with  SuperfluousFields: [field-name-2], Unused bw item: 'item-name-2' with  SuperfluousFields: [field-name-2]]",
+			expectedError: "[Unused item: 'item-name-1' with  SuperfluousFields: [field-name-2], Unused item: 'item-name-2' with  SuperfluousFields: [field-name-2]]",
 		},
 		{
-			id:           "partly used with docker json config, unused items expected",
-			bwAllowItems: sets.NewString(),
+			id:         "partly used with docker json config, unused items expected",
+			allowItems: sets.NewString(),
 			items: map[string]vaultclient.KVData{
 				"item-name-1": {
 					Data: map[string]string{
@@ -2161,28 +2041,27 @@ func TestGetUnusedBWItems(t *testing.T) {
 				},
 				"item-name-3": {
 					Data: map[string]string{
-						"registry-url": "test.com",
-						"email":        "test@test.com",
-						"auth":         "authToken",
+						"email": "test@test.com",
+						"auth":  "authToken",
 					},
 				},
 			},
 			config: secretbootstrap.Config{
 				Secrets: []secretbootstrap.SecretConfig{
 					{
-						From: map[string]secretbootstrap.BitWardenContext{
-							"1": {BWItem: "item-name-1", Field: "field-name-1"},
-							"2": {BWItem: "item-name-2", Field: "field-name-1"},
-							"3": {DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{{BWItem: "item-name-3", RegistryURLBitwardenField: "registry-url"}}},
+						From: map[string]secretbootstrap.ItemContext{
+							"1": {Item: "item-name-1", Field: "field-name-1"},
+							"2": {Item: "item-name-2", Field: "field-name-1"},
+							"3": {DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{{Item: "item-name-3"}}},
 						},
 					},
 				},
 			},
-			expectedError: "[Unused bw item: 'item-name-1' with  SuperfluousFields: [field-name-2], Unused bw item: 'item-name-2' with  SuperfluousFields: [field-name-2], Unused bw item: 'item-name-3' with  SuperfluousFields: [auth email]]",
+			expectedError: "[Unused item: 'item-name-1' with  SuperfluousFields: [field-name-2], Unused item: 'item-name-2' with  SuperfluousFields: [field-name-2], Unused item: 'item-name-3' with  SuperfluousFields: [auth email]]",
 		},
 		{
-			id:           "partly used with an allow list, no unused items expected",
-			bwAllowItems: sets.NewString([]string{"item-name-2"}...),
+			id:         "partly used with an allow list, no unused items expected",
+			allowItems: sets.NewString([]string{"item-name-2"}...),
 			items: map[string]vaultclient.KVData{
 				"item-name-1": {
 					Data: map[string]string{
@@ -2198,18 +2077,16 @@ func TestGetUnusedBWItems(t *testing.T) {
 				},
 				"item-name-3": {
 					Data: map[string]string{
-						"registry-url": "test.com",
-						"auth":         "authToken",
+						"auth": "authToken",
 					},
 				},
 			},
 			config: secretbootstrap.Config{
 				Secrets: []secretbootstrap.SecretConfig{
 					{
-						From: map[string]secretbootstrap.BitWardenContext{
-							"1": {BWItem: "item-name-1", Field: "field-name-1"},
-							"2": {BWItem: "item-name-1", Field: "field-name-1"},
-							"3": {DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{{BWItem: "item-name-3", RegistryURLBitwardenField: "registry-url", AuthBitwardenAttachment: "auth"}}},
+						From: map[string]secretbootstrap.ItemContext{
+							"1": {Item: "item-name-1", Field: "field-name-1"},
+							"2": {DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{{Item: "item-name-3", RegistryURL: "test.com", AuthField: "auth"}}},
 						},
 					},
 				},
@@ -2236,7 +2113,7 @@ func TestGetUnusedBWItems(t *testing.T) {
 					},
 				},
 			},
-			expectedError: "Unused bw item: 'item-name-1'",
+			expectedError: "Unused item: 'item-name-1'",
 		},
 	}
 
@@ -2244,7 +2121,7 @@ func TestGetUnusedBWItems(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			client := vaultClientFromTestItems(tc.items)
 			var actualErrMsg string
-			actualErr := getUnusedBWItems(tc.config, client, tc.bwAllowItems, threshold)
+			actualErr := getUnusedItems(tc.config, client, tc.allowItems, threshold)
 			if actualErr != nil {
 				actualErrMsg = actualErr.Error()
 			}
@@ -2276,7 +2153,7 @@ func vaultClientFromTestItems(items map[string]vaultclient.KVData) secrets.Clien
 	return secrets.NewVaultClient(&fakeVaultClient{items: data}, prefix, &censor)
 }
 
-func TestValidateBWItems(t *testing.T) {
+func TestValidateItems(t *testing.T) {
 	t.Parallel()
 	testCases := []struct {
 		name         string
@@ -2288,48 +2165,48 @@ func TestValidateBWItems(t *testing.T) {
 	}{
 		{
 			name:  "Item exists, no error",
-			cfg:   secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "foo", Field: "bar"}}}}},
+			cfg:   secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.ItemContext{"": {Item: "foo", Field: "bar"}}}}},
 			items: map[string]*vaultclient.KVData{"/foo": {Data: map[string]string{"bar": "some-value"}}},
 		},
 		{
 			name: "Item doesn't exist,error",
-			cfg:  secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "foo", Field: "bar"}}}}},
+			cfg:  secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.ItemContext{"": {Item: "foo", Field: "bar"}}}}},
 
 			expectedErrorMsg: "item foo doesn't exist",
 		},
 		{
 			name:         "Item doesn't exist but is in generator config, success",
-			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "foo", Field: "bar"}}}}},
+			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.ItemContext{"": {Item: "foo", Field: "bar"}}}}},
 			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "bar"}}}},
 		},
 		{
 			name:         "Prefix, item doesn't exist but is in generator config, success",
-			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "dptp/foo", Field: "bar"}}}}, VaultDPTPPRefix: "dptp"},
+			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.ItemContext{"": {Item: "dptp/foo", Field: "bar"}}}}, VaultDPTPPRefix: "dptp"},
 			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "bar"}}}},
 		},
 		{
 			name:         "Item doesn't exist, generator only generates different field on item, error",
-			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "foo", Field: "bar"}}}}},
+			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.ItemContext{"": {Item: "foo", Field: "bar"}}}}},
 			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "baz"}}}},
 
 			expectedErrorMsg: "field bar in item foo doesn't exist",
 		},
 		{
 			name:         "Prefix, item doesn't exist, generator only generates different field on item, error",
-			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "dptp/foo", Field: "bar"}}}}, VaultDPTPPRefix: "dptp"},
+			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.ItemContext{"": {Item: "dptp/foo", Field: "bar"}}}}, VaultDPTPPRefix: "dptp"},
 			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "baz"}}}},
 
 			expectedErrorMsg: "field bar in item dptp/foo doesn't exist",
 		},
 		{
 			name:         "Item exists, field doesn't but is in generator config, success",
-			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "foo", Field: "bar"}}}}},
+			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.ItemContext{"": {Item: "foo", Field: "bar"}}}}},
 			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "bar"}}}},
 			items:        map[string]*vaultclient.KVData{"/foo": {Data: map[string]string{"baz": "some-value"}}},
 		},
 		{
 			name:         "prefix Item exists, field doesn't but is in generator config, success",
-			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.BitWardenContext{"": {BWItem: "dptp/foo", Field: "bar"}}}}, VaultDPTPPRefix: "dptp"},
+			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.ItemContext{"": {Item: "dptp/foo", Field: "bar"}}}}, VaultDPTPPRefix: "dptp"},
 			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "bar"}}}},
 			items:        map[string]*vaultclient.KVData{"/foo": {Data: map[string]string{"baz": "some-value"}}},
 		},
@@ -2343,7 +2220,7 @@ func TestValidateBWItems(t *testing.T) {
 			}
 			censor := secrets.NewDynamicCensor()
 			var errMsg string
-			err := o.validateBWItems(secrets.NewVaultClient(&fakeVaultClient{items: tc.items}, "", &censor))
+			err := o.validateItems(secrets.NewVaultClient(&fakeVaultClient{items: tc.items}, "", &censor))
 			if err != nil {
 				errMsg = err.Error()
 			}
@@ -2403,10 +2280,10 @@ func TestIntegration(t *testing.T) {
 			config: secretbootstrap.Config{
 				Secrets: []secretbootstrap.SecretConfig{
 					{
-						From: map[string]secretbootstrap.BitWardenContext{
+						From: map[string]secretbootstrap.ItemContext{
 							"key-name-1": {
-								BWItem: "item-name-1",
-								Field:  "field-name-1",
+								Item:  "item-name-1",
+								Field: "field-name-1",
 							},
 						},
 						To: []secretbootstrap.SecretContext{
@@ -2439,10 +2316,10 @@ func TestIntegration(t *testing.T) {
 			config: secretbootstrap.Config{
 				Secrets: []secretbootstrap.SecretConfig{
 					{
-						From: map[string]secretbootstrap.BitWardenContext{
+						From: map[string]secretbootstrap.ItemContext{
 							"key-name-1": {
-								BWItem: "item-name-1",
-								Field:  "field-name-1",
+								Item:  "item-name-1",
+								Field: "field-name-1",
 							},
 						},
 						To: []secretbootstrap.SecretContext{
@@ -2489,10 +2366,10 @@ func TestIntegration(t *testing.T) {
 				UserSecretsTargetClusters: []string{"cluster-1"},
 				Secrets: []secretbootstrap.SecretConfig{
 					{
-						From: map[string]secretbootstrap.BitWardenContext{
+						From: map[string]secretbootstrap.ItemContext{
 							"key-name-1": {
-								BWItem: "item-name-1",
-								Field:  "field-name-1",
+								Item:  "item-name-1",
+								Field: "field-name-1",
 							},
 						},
 						To: []secretbootstrap.SecretContext{
@@ -2541,10 +2418,10 @@ func TestIntegration(t *testing.T) {
 				UserSecretsTargetClusters: []string{"cluster-1", "cluster-2"},
 				Secrets: []secretbootstrap.SecretConfig{
 					{
-						From: map[string]secretbootstrap.BitWardenContext{
+						From: map[string]secretbootstrap.ItemContext{
 							"key-name-1": {
-								BWItem: "item-name-1",
-								Field:  "field-name-1",
+								Item:  "item-name-1",
+								Field: "field-name-1",
 							},
 						},
 						To: []secretbootstrap.SecretContext{
@@ -2604,10 +2481,10 @@ func TestIntegration(t *testing.T) {
 				UserSecretsTargetClusters: []string{"cluster-1", "cluster-2", "cluster-3"},
 				Secrets: []secretbootstrap.SecretConfig{
 					{
-						From: map[string]secretbootstrap.BitWardenContext{
+						From: map[string]secretbootstrap.ItemContext{
 							"key-name-1": {
-								BWItem: "item-name-1",
-								Field:  "field-name-1",
+								Item:  "item-name-1",
+								Field: "field-name-1",
 							},
 						},
 						To: []secretbootstrap.SecretContext{
@@ -2668,10 +2545,10 @@ func TestIntegration(t *testing.T) {
 			config: secretbootstrap.Config{
 				Secrets: []secretbootstrap.SecretConfig{
 					{
-						From: map[string]secretbootstrap.BitWardenContext{
+						From: map[string]secretbootstrap.ItemContext{
 							"key-name-1": {
-								BWItem: "item-name-1",
-								Field:  "field-name-1",
+								Item:  "item-name-1",
+								Field: "field-name-1",
 							},
 						},
 						To: []secretbootstrap.SecretContext{
@@ -2698,10 +2575,10 @@ func TestIntegration(t *testing.T) {
 				UserSecretsTargetClusters: []string{"cluster-1", "cluster-2"},
 				Secrets: []secretbootstrap.SecretConfig{
 					{
-						From: map[string]secretbootstrap.BitWardenContext{
+						From: map[string]secretbootstrap.ItemContext{
 							"key-name-1": {
-								BWItem: "item-name-1",
-								Field:  "field-name-1",
+								Item:  "item-name-1",
+								Field: "field-name-1",
 							},
 						},
 						To: []secretbootstrap.SecretContext{

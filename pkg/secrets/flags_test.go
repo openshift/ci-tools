@@ -149,7 +149,7 @@ func TestCompleteOptions(t *testing.T) {
 				t.Errorf("unexpected error: %s", diff)
 			}
 			if diff := cmp.Diff(tc.given.VaultToken, tc.expectedToken, testhelper.EquateErrorMessage); diff != "" {
-				t.Errorf("unexpected Bitwarden password: %s", diff)
+				t.Errorf("unexpected password: %s", diff)
 			}
 		})
 	}

@@ -74,7 +74,7 @@ func TestResolving(t *testing.T) {
 			config: Config{
 				VaultDPTPPRefix: "prefix",
 				Secrets: []SecretConfig{{
-					From: map[string]BitWardenContext{"...": {BWItem: "foo", Field: "bar"}},
+					From: map[string]ItemContext{"...": {Item: "foo", Field: "bar"}},
 					To: []SecretContext{{
 						Cluster:   "foo",
 						Namespace: "namspace",
@@ -86,7 +86,7 @@ func TestResolving(t *testing.T) {
 			expectedConfig: Config{
 				VaultDPTPPRefix: "prefix",
 				Secrets: []SecretConfig{{
-					From: map[string]BitWardenContext{"...": {BWItem: "prefix/foo", Field: "bar"}},
+					From: map[string]ItemContext{"...": {Item: "prefix/foo", Field: "bar"}},
 					To: []SecretContext{{
 						Cluster:   "foo",
 						Namespace: "namspace",
@@ -101,7 +101,7 @@ func TestResolving(t *testing.T) {
 			config: Config{
 				VaultDPTPPRefix: "prefix",
 				Secrets: []SecretConfig{{
-					From: map[string]BitWardenContext{"...": {DockerConfigJSONData: []DockerConfigJSONData{{BWItem: "foo", AuthBitwardenAttachment: "bar"}}}},
+					From: map[string]ItemContext{"...": {DockerConfigJSONData: []DockerConfigJSONData{{Item: "foo", AuthField: "bar"}}}},
 					To: []SecretContext{{
 						Cluster:   "foo",
 						Namespace: "namspace",
@@ -113,7 +113,7 @@ func TestResolving(t *testing.T) {
 			expectedConfig: Config{
 				VaultDPTPPRefix: "prefix",
 				Secrets: []SecretConfig{{
-					From: map[string]BitWardenContext{"...": {DockerConfigJSONData: []DockerConfigJSONData{{BWItem: "prefix/foo", AuthBitwardenAttachment: "bar"}}}},
+					From: map[string]ItemContext{"...": {DockerConfigJSONData: []DockerConfigJSONData{{Item: "prefix/foo", AuthField: "bar"}}}},
 					To: []SecretContext{{
 						Cluster:   "foo",
 						Namespace: "namspace",
@@ -165,9 +165,9 @@ func TestLoadConfigFromFile(t *testing.T) {
 				ClusterGroups: map[string][]string{"build_farm": {"app.ci", "build01", "build02"}},
 				Secrets: []SecretConfig{
 					{
-						From: map[string]BitWardenContext{
-							"ops-mirror.pem": {BWItem: "mirror.openshift.com", Attachment: "cert-key.pem"},
-							"rh-cdn.pem":     {BWItem: "rh-cdn", Attachment: "rh-cdn.pem"},
+						From: map[string]ItemContext{
+							"ops-mirror.pem": {Item: "mirror.openshift.com", Field: "cert-key.pem"},
+							"rh-cdn.pem":     {Item: "rh-cdn", Field: "rh-cdn.pem"},
 						},
 						To: []SecretContext{{
 							Cluster:   "app.ci",
@@ -188,7 +188,7 @@ func TestLoadConfigFromFile(t *testing.T) {
 		},
 		{
 			name:          "dup key",
-			expectedError: fmt.Errorf("error converting YAML to JSON: yaml: unmarshal errors:\n  line 16: key \"rh-cdn.pem\" already set in map"),
+			expectedError: fmt.Errorf("error converting YAML to JSON: yaml: unmarshal errors:\n  line 15: key \"rh-cdn.pem\" already set in map"),
 		},
 	}
 
@@ -222,7 +222,7 @@ func TestValidate(t *testing.T) {
 		{
 			name: "valid",
 			config: &Config{Secrets: []SecretConfig{{
-				From: map[string]BitWardenContext{
+				From: map[string]ItemContext{
 					".dockerconfigjson": {},
 				},
 				To: []SecretContext{{
@@ -233,7 +233,7 @@ func TestValidate(t *testing.T) {
 		{
 			name: "kubernetes.io/dockerconfigjson type without the desired key",
 			config: &Config{Secrets: []SecretConfig{{
-				From: map[string]BitWardenContext{
+				From: map[string]ItemContext{
 					"some-key": {},
 				},
 				To: []SecretContext{{
@@ -243,20 +243,9 @@ func TestValidate(t *testing.T) {
 			expected: utilerrors.NewAggregate([]error{fmt.Errorf("secret[0] in secretConfig[0] with kubernetes.io/dockerconfigjson type have no key named .dockerconfigjson")}),
 		},
 		{
-			name: "credentials cannot be an attribute",
-			config: &Config{Secrets: []SecretConfig{{
-				From: map[string]BitWardenContext{
-					"some-key": {
-						Attribute: "credentials",
-					},
-				},
-			}}},
-			expected: utilerrors.NewAggregate([]error{fmt.Errorf("config[0].from[some-key].attribute: only the 'password' is supported, not credentials")}),
-		},
-		{
 			name: "long name",
 			config: &Config{Secrets: []SecretConfig{{
-				From: map[string]BitWardenContext{
+				From: map[string]ItemContext{
 					"some": {},
 				},
 				To: []SecretContext{{

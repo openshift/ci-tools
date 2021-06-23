@@ -155,7 +155,10 @@ func sourceForConfigChangeChannel(buildClusterNames sets.String, registryClient 
 				namespace = strings.TrimPrefix(namespace, "imagestream_")
 				var imagestream imagev1.ImageStream
 				if err := registryClient.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: name}, &imagestream); err != nil {
-					logrus.WithError(err).WithField("name", namespace+"/"+name).Error("Failed to get imagestream")
+					// Not found means user referenced an inexistent stream.
+					if !apierrors.IsNotFound(err) {
+						logrus.WithError(err).WithField("name", namespace+"/"+name).Error("Failed to get imagestream")
+					}
 					continue
 				}
 				for _, tag := range imagestream.Status.Tags {

@@ -149,7 +149,7 @@ func getRemoteBranchHeads(logger *logrus.Entry, git gitFunc, repoDir, remote str
 		return nil, err
 	}
 	if exitCode != 0 {
-		return nil, fmt.Errorf("ls-remote failed: (exit code=%d)", exitCode)
+		return nil, fmt.Errorf("ls-remote failed: (exit code=%d output=%s)", exitCode, out)
 	}
 
 	out = strings.TrimSpace(out)

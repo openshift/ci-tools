@@ -175,17 +175,13 @@ func (s *multiStageTestStep) SubSteps() []api.CIOperatorStepDetailInfo {
 }
 
 func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
-	var claimRelease *api.ClaimRelease
-	if s.clusterClaim != nil {
-		claimRelease = s.clusterClaim.ClaimRelease(s.name)
-	}
 	var needsReleaseImage, needsReleasePayload bool
 	for _, step := range append(append(s.pre, s.test...), s.post...) {
 		if link, ok := step.FromImageTag(); ok {
 			ret = append(ret, api.InternalImageLink(link))
 		} else {
 			dependency := api.StepDependency{Name: step.From}
-			imageStream, name, explicit := s.config.DependencyParts(dependency, claimRelease)
+			imageStream, name, explicit := s.config.DependencyParts(dependency)
 			if explicit {
 				ret = append(ret, api.LinkForImage(imageStream, name))
 			} else {
@@ -205,13 +201,13 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 
 			// we validate that the link will exist at config load time
 			// so we can safely ignore the case where !ok
-			imageStream, name, _ := s.config.DependencyParts(dependency, claimRelease)
+			imageStream, name, _ := s.config.DependencyParts(dependency)
 			ret = append(ret, api.LinkForImage(imageStream, name))
 		}
 
 		if step.Cli != "" {
 			dependency := api.StepDependency{Name: fmt.Sprintf("%s:cli", api.ReleaseStreamFor(step.Cli))}
-			imageStream, name, _ := s.config.DependencyParts(dependency, claimRelease)
+			imageStream, name, _ := s.config.DependencyParts(dependency)
 			ret = append(ret, api.LinkForImage(imageStream, name))
 		}
 	}
@@ -224,11 +220,7 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 		}
 	}
 	if needsReleaseImage && !needsReleasePayload {
-		releaseName := api.LatestReleaseName
-		if claimRelease != nil && claimRelease.OverrideName == api.LatestReleaseName {
-			releaseName = claimRelease.ReleaseName
-		}
-		ret = append(ret, api.ReleaseImagesLink(releaseName))
+		ret = append(ret, api.ReleaseImagesLink(api.LatestReleaseName))
 	}
 	return
 }
@@ -447,10 +439,6 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 	}
 	var ret []coreapi.Pod
 	var errs []error
-	var claimRelease *api.ClaimRelease
-	if s.clusterClaim != nil {
-		claimRelease = s.clusterClaim.ClaimRelease(s.name)
-	}
 	for _, step := range steps {
 		name := fmt.Sprintf("%s-%s", s.name, step.As)
 		if s.allowSkipOnSuccess != nil && *s.allowSkipOnSuccess &&
@@ -464,7 +452,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			image = fmt.Sprintf("%s:%s", api.PipelineImageStream, link)
 		} else {
 			dep := api.StepDependency{Name: image}
-			stream, tag, _ := s.config.DependencyParts(dep, claimRelease)
+			stream, tag, _ := s.config.DependencyParts(dep)
 			image = fmt.Sprintf("%s:%s", stream, tag)
 		}
 		resources, err := resourcesFor(step.Resources)
@@ -571,9 +559,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			addProfile(s.profileSecretName(), s.profile, pod)
 		}
 		if step.Cli != "" {
-			dependency := api.StepDependency{Name: fmt.Sprintf("%s:cli", api.ReleaseStreamFor(step.Cli))}
-			imagestream, _, _ := s.config.DependencyParts(dependency, claimRelease)
-			addCliInjector(imagestream, pod)
+			addCliInjector(step.Cli, pod)
 		}
 		addSharedDirSecret(s.name, pod)
 		addCredentials(step.Credentials, pod)
@@ -626,10 +612,6 @@ func getMountPath(secretName string) string {
 func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]coreapi.EnvVar, []error) {
 	var env []coreapi.EnvVar
 	var errs []error
-	var claimRelease *api.ClaimRelease
-	if s.clusterClaim != nil {
-		claimRelease = s.clusterClaim.ClaimRelease(s.name)
-	}
 	for _, dependency := range step.Dependencies {
 		var ref string
 		// if a fully-qualified pull spec was provided, then just use that. It'll be up to the job to use that pull spec
@@ -637,7 +619,7 @@ func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]cor
 		if dependency.PullSpec != "" {
 			ref = dependency.PullSpec
 		} else {
-			imageStream, name, _ := s.config.DependencyParts(dependency, claimRelease)
+			imageStream, name, _ := s.config.DependencyParts(dependency)
 			depRef, err := utils.ImageDigestFor(s.client, s.jobSpec.Namespace, imageStream, name)()
 			if err != nil {
 				errs = append(errs, fmt.Errorf("could not determine image pull spec for image %s on step %s", dependency.Name, step.As))
@@ -789,7 +771,7 @@ func addCommandScript(name string, pod *coreapi.Pod) {
 	})
 }
 
-func addCliInjector(imagestream string, pod *coreapi.Pod) {
+func addCliInjector(release string, pod *coreapi.Pod) {
 	volumeName := "cli"
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
 		Name: volumeName,
@@ -799,7 +781,7 @@ func addCliInjector(imagestream string, pod *coreapi.Pod) {
 	})
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, coreapi.Container{
 		Name:    "inject-cli",
-		Image:   fmt.Sprintf("%s:cli", imagestream),
+		Image:   fmt.Sprintf("%s:cli", api.ReleaseStreamFor(release)),
 		Command: []string{"/bin/cp"},
 		Args:    []string{"/usr/bin/oc", CliMountPath},
 		VolumeMounts: []coreapi.VolumeMount{{

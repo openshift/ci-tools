@@ -104,11 +104,26 @@ func (s *clusterClaimStep) run(ctx context.Context) error {
 }
 
 func (s *clusterClaimStep) acquireCluster(ctx context.Context, waitForClaim func(client ctrlruntimeclient.WithWatch, ns, name string, claim *hivev1.ClusterClaim, timeout time.Duration) error) (*hivev1.ClusterClaim, error) {
-	clusterPool, err := utils.ClusterPoolFromClaim(ctx, s.clusterClaim, s.hiveClient)
-	if err != nil {
-		return nil, err
+	clusterPools := &hivev1.ClusterPoolList{}
+	listOption := ctrlruntimeclient.MatchingLabels{
+		"product":      string(s.clusterClaim.Product),
+		"version":      s.clusterClaim.Version,
+		"architecture": string(s.clusterClaim.Architecture),
+		"cloud":        string(s.clusterClaim.Cloud),
+		"owner":        s.clusterClaim.Owner,
+	}
+	if err := s.hiveClient.List(ctx, clusterPools, listOption); err != nil {
+		return nil, fmt.Errorf("failed to list cluster pools with list option %v: %w", listOption, err)
 	}
 
+	l := len(clusterPools.Items)
+	if l == 0 {
+		return nil, fmt.Errorf("failed to find a cluster pool providing the cluster: %v", listOption)
+	} else if l > 1 {
+		return nil, fmt.Errorf("find %d cluster pools providing the cluster (%v): should be only one", len(clusterPools.Items), listOption)
+	}
+
+	clusterPool := clusterPools.Items[0]
 	claimName := s.jobSpec.ProwJobID
 	claimNamespace := clusterPool.Namespace
 	claim := &hivev1.ClusterClaim{

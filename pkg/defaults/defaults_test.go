@@ -23,7 +23,6 @@ import (
 
 	imageapi "github.com/openshift/api/image/v1"
 	templateapi "github.com/openshift/api/template/v1"
-	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
@@ -907,39 +906,7 @@ func TestFromConfig(t *testing.T) {
 	buildClient := steps.NewBuildClient(client, nil)
 	var templateClient steps.TemplateClient
 	podClient := steps.NewPodClient(client, nil, nil)
-
-	clusterPool := hivev1.ClusterPool{
-		ObjectMeta: meta.ObjectMeta{
-			Name:      "pool1",
-			Namespace: "ci-cluster-pool",
-			Labels: map[string]string{
-				"product":      string(api.ReleaseProductOCP),
-				"version":      "4.7",
-				"architecture": string(api.ReleaseArchitectureAMD64),
-				"cloud":        string(api.CloudAWS),
-				"owner":        "dpp",
-			},
-		},
-		Spec: hivev1.ClusterPoolSpec{
-			ImageSetRef: hivev1.ClusterImageSetReference{
-				Name: "ocp-4.7.0-amd64",
-			},
-		},
-	}
-	imageset := hivev1.ClusterImageSet{
-		ObjectMeta: meta.ObjectMeta{
-			Name: "ocp-4.7.0-amd64",
-		},
-		Spec: hivev1.ClusterImageSetSpec{
-			ReleaseImage: "pullspec",
-		},
-	}
-	scheme := scheme.Scheme
-	if err := hivev1.SchemeBuilder.AddToScheme(scheme); err != nil {
-		t.Fatalf("failed to add hive scheme to runtime schema: %v", err)
-	}
-	hiveClient := fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme).WithObjects(&clusterPool, &imageset).Build()
-
+	hiveClient := fakectrlruntimeclient.NewFakeClient()
 	var leaseClient *lease.Client
 	var requiredTargets []string
 	var cloneAuthConfig *steps.CloneAuthConfig
@@ -1202,7 +1169,7 @@ func TestFromConfig(t *testing.T) {
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{},
 			}},
 		},
-		expectedSteps: []string{"[release:latest-fast-as-heck-aws]", "fast-as-heck-aws", "[images]"},
+		expectedSteps: []string{"fast-as-heck-aws", "[output-images]", "[images]"},
 	}, {
 		name: "container test with a claim",
 		config: api.ReleaseBuildConfiguration{

@@ -349,7 +349,8 @@ func stepForTest(
 			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
 			addProvidesForStep(step, params)
 		}
-		if c.ClusterClaim != nil {
+		// hive client may not be present for jobs that execute non-claim based tests
+		if hiveClient != nil && c.ClusterClaim != nil {
 			step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step)
 			pullSpec, err := getClusterPoolPullSpec(ctx, c.ClusterClaim, hiveClient)
 			if err != nil {

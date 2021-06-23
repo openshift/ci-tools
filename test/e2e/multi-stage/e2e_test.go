@@ -126,6 +126,14 @@ func TestMultiStage(t *testing.T) {
 			output:  []string{`run-as-script-success succeeded`},
 		},
 		{
+			name:     "non-claim test in config with a claim",
+			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-no-claim"},
+			env:      []string{defaultJobSpec},
+			needHive: false,
+			success:  true,
+			output:   []string{`e2e-no-claim-step succeeded`},
+		},
+		{
 			name:     "e2e-claim",
 			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-claim"},
 			needHive: true,

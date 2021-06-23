@@ -14,6 +14,17 @@ resources:
     requests:
       cpu: 10m
 tests:
+  - as: e2e-no-claim
+    steps:
+      test:
+        - as: step
+          commands: |
+            oc config view
+          from: cli
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
   - as: e2e-claim
     cluster_claim:
       architecture: amd64

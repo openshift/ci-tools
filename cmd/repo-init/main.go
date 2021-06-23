@@ -636,6 +636,8 @@ func determineWorkflowFromClusterPorfile(clusterProfile api.ClusterProfile) *str
 	switch clusterProfile {
 	case api.ClusterProfileAWS:
 		ret = "ipi-aws"
+	case api.ClusterProfileAWSArm64:
+		ret = "ipi-aws"
 	case api.ClusterProfileAzure:
 		ret = "ipi-azure"
 	case api.ClusterProfileGCP:

@@ -969,6 +969,7 @@ type ClusterProfile string
 
 const (
 	ClusterProfileAWS                ClusterProfile = "aws"
+	ClusterProfileAWSArm64           ClusterProfile = "aws-arm64"
 	ClusterProfileAWSAtomic          ClusterProfile = "aws-atomic"
 	ClusterProfileAWSCentos          ClusterProfile = "aws-centos"
 	ClusterProfileAWSCentos40        ClusterProfile = "aws-centos-40"
@@ -1007,6 +1008,7 @@ const (
 func ClusterProfiles() []ClusterProfile {
 	return []ClusterProfile{
 		ClusterProfileAWS,
+		ClusterProfileAWSArm64,
 		ClusterProfileAWSAtomic,
 		ClusterProfileAWSCentos,
 		ClusterProfileAWSCentos40,
@@ -1053,6 +1055,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSCPaaS,
 		ClusterProfileAWS2:
 		return "aws"
+	case ClusterProfileAWSArm64:
+		return "aws-arm64"
 	case
 		ClusterProfileAzure4,
 		ClusterProfileAzureArc:
@@ -1111,6 +1115,8 @@ func (p ClusterProfile) LeaseType() string {
 		ClusterProfileAWSCentos40,
 		ClusterProfileAWSGluster:
 		return "aws-quota-slice"
+	case ClusterProfileAWSArm64:
+		return "aws-arm64-quota-slice"
 	case ClusterProfileAzure4:
 		return "azure4-quota-slice"
 	case ClusterProfileAzureArc:
@@ -1167,7 +1173,7 @@ func (p ClusterProfile) LeaseType() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "azure4", "azure-arc", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "kubevirt", "aws-cpaas", "osd-ephemeral":
+	case "aws", "aws-arm64", "azure4", "azure-arc", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "kubevirt", "aws-cpaas", "osd-ephemeral":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

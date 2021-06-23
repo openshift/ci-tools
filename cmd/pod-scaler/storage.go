@@ -17,6 +17,8 @@ import (
 
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/test-infra/prow/interrupts"
+
+	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 )
 
 // cache closes over how we interact with cached data
@@ -119,7 +121,7 @@ func (e notExist) Unwrap() error {
 }
 
 // loadCache loads cached query data from the given storage loader.
-func loadCache(loader loader, metricName string, logger *logrus.Entry) (*CachedQuery, error) {
+func loadCache(loader loader, metricName string, logger *logrus.Entry) (*pod_scaler.CachedQuery, error) {
 	readStart := time.Now()
 	logger.Info("Reading Prometheus data from cache.")
 	logger.Debug("Loading Prometheus data from storage.")
@@ -137,7 +139,7 @@ func loadCache(loader loader, metricName string, logger *logrus.Entry) (*CachedQ
 		break
 	}
 	logger.Debugf("Read Prometheus data from storage after %s.", time.Since(readStart).Round(time.Second))
-	var cache CachedQuery
+	var cache pod_scaler.CachedQuery
 	if err := json.Unmarshal(data, &cache); err != nil {
 		return nil, fmt.Errorf("could not unmarshal cached data: %w", err)
 	}
@@ -160,10 +162,10 @@ func loadFrom(loader loader, metricName string) ([]byte, error) {
 }
 
 // storeCache prunes and stores cached query data to the given storage storer.
-func storeCache(storer storer, metricName string, data *CachedQuery, logger *logrus.Entry) error {
+func storeCache(storer storer, metricName string, data *pod_scaler.CachedQuery, logger *logrus.Entry) error {
 	pruneStart := time.Now()
 	logger.Debug("Pruning cached Prometheus data.")
-	data.prune()
+	data.Prune()
 	logger.Debugf("Pruned cached Prometheus data after %s.", time.Since(pruneStart).Round(time.Second))
 
 	flushStart := time.Now()

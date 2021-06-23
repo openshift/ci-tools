@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -16,12 +15,9 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/interrupts"
 
-	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/jobconfig"
-	"github.com/openshift/ci-tools/pkg/steps"
+	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 )
 
 const (
@@ -46,18 +42,18 @@ func queriesByMetric() map[string]string {
 	}{
 		{
 			prefix:   "prowjobs",
-			selector: `{` + string(ProwLabelNameCreated) + `="true",` + string(ProwLabelNameJob) + `!="",` + string(LabelNameRehearsal) + `=""}`,
-			labels:   []string{string(ProwLabelNameCreated), string(ProwLabelNameContext), string(ProwLabelNameOrg), string(ProwLabelNameRepo), string(ProwLabelNameBranch), string(ProwLabelNameJob), string(ProwLabelNameType)},
+			selector: `{` + string(pod_scaler.ProwLabelNameCreated) + `="true",` + string(pod_scaler.ProwLabelNameJob) + `!="",` + string(pod_scaler.LabelNameRehearsal) + `=""}`,
+			labels:   []string{string(pod_scaler.ProwLabelNameCreated), string(pod_scaler.ProwLabelNameContext), string(pod_scaler.ProwLabelNameOrg), string(pod_scaler.ProwLabelNameRepo), string(pod_scaler.ProwLabelNameBranch), string(pod_scaler.ProwLabelNameJob), string(pod_scaler.ProwLabelNameType)},
 		},
 		{
 			prefix:   "pods",
-			selector: `{` + string(LabelNameCreated) + `="true",` + string(LabelNameStep) + `=""}`,
-			labels:   []string{string(LabelNameOrg), string(LabelNameRepo), string(LabelNameBranch), string(LabelNameVariant), string(LabelNameTarget), string(LabelNameBuild), string(LabelNameRelease), string(LabelNameApp)},
+			selector: `{` + string(pod_scaler.LabelNameCreated) + `="true",` + string(pod_scaler.LabelNameStep) + `=""}`,
+			labels:   []string{string(pod_scaler.LabelNameOrg), string(pod_scaler.LabelNameRepo), string(pod_scaler.LabelNameBranch), string(pod_scaler.LabelNameVariant), string(pod_scaler.LabelNameTarget), string(pod_scaler.LabelNameBuild), string(pod_scaler.LabelNameRelease), string(pod_scaler.LabelNameApp)},
 		},
 		{
 			prefix:   "steps",
-			selector: `{` + string(LabelNameCreated) + `="true",` + string(LabelNameStep) + `!=""}`,
-			labels:   []string{string(LabelNameOrg), string(LabelNameRepo), string(LabelNameBranch), string(LabelNameVariant), string(LabelNameTarget), string(LabelNameStep)},
+			selector: `{` + string(pod_scaler.LabelNameCreated) + `="true",` + string(pod_scaler.LabelNameStep) + `!=""}`,
+			labels:   []string{string(pod_scaler.LabelNameOrg), string(pod_scaler.LabelNameRepo), string(pod_scaler.LabelNameBranch), string(pod_scaler.LabelNameVariant), string(pod_scaler.LabelNameTarget), string(pod_scaler.LabelNameStep)},
 		},
 	} {
 		for name, metric := range map[string]string{
@@ -88,15 +84,15 @@ func produce(clients map[string]prometheusapi.API, dataCache cache, ignoreLatest
 			logger := logrus.WithField("metric", name)
 			cache, err := loadCache(dataCache, name, logger)
 			if errors.Is(err, notExist{}) {
-				ranges := map[string][]TimeRange{}
+				ranges := map[string][]pod_scaler.TimeRange{}
 				for cluster := range clients {
-					ranges[cluster] = []TimeRange{}
+					ranges[cluster] = []pod_scaler.TimeRange{}
 				}
-				cache = &CachedQuery{
+				cache = &pod_scaler.CachedQuery{
 					Query:           query,
 					RangesByCluster: ranges,
 					Data:            map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{},
-					DataByMetaData:  map[FullMetadata][]model.Fingerprint{},
+					DataByMetaData:  map[pod_scaler.FullMetadata][]model.Fingerprint{},
 				}
 			} else if err != nil {
 				logrus.WithError(err).Error("Failed to load data from storage.")
@@ -159,8 +155,8 @@ func queryFor(metric, selector string, labels []string) string {
   ) (kube_pod_labels` + selector + `)`
 }
 
-func rangeFrom(r prometheusapi.Range) TimeRange {
-	return TimeRange{
+func rangeFrom(r prometheusapi.Range) pod_scaler.TimeRange {
+	return pod_scaler.TimeRange{
 		Start: r.Start,
 		End:   r.End,
 	}
@@ -168,7 +164,7 @@ func rangeFrom(r prometheusapi.Range) TimeRange {
 
 type querier struct {
 	lock *sync.RWMutex
-	data *CachedQuery
+	data *pod_scaler.CachedQuery
 }
 
 type clusterMetadata struct {
@@ -244,6 +240,14 @@ func (q *querier) execute(ctx context.Context, c *clusterMetadata, until time.Ti
 	close(c.errors)
 	errLock.Lock()
 	return kerrors.NewAggregate(errs)
+}
+
+// uncoveredRanges determines the largest subset ranges of r that are not covered by
+// existing data in the querier.
+func (q *querier) uncoveredRanges(cluster string, r pod_scaler.TimeRange) []pod_scaler.TimeRange {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+	return pod_scaler.UncoveredRanges(r, q.data.RangesByCluster[cluster])
 }
 
 func (q *querier) executeOverRange(ctx context.Context, c *clusterMetadata, r prometheusapi.Range) {
@@ -329,258 +333,7 @@ func (q *querier) executeOverRange(ctx context.Context, c *clusterMetadata, r pr
 	saveStart := time.Now()
 	logger.Debug("Saving response from Prometheus data.")
 	q.lock.Lock()
-	q.data.record(c.name, rangeFrom(r), matrix, logger)
+	q.data.Record(c.name, rangeFrom(r), matrix, logger)
 	q.lock.Unlock()
 	logger.Debugf("Saved Prometheus response after %s.", time.Since(saveStart).Round(time.Second))
-}
-
-// record adds the data in the matrix to the cache and records that the given cluster has
-// successfully had this time range queried.
-func (q *CachedQuery) record(clusterName string, r TimeRange, matrix model.Matrix, logger *logrus.Entry) {
-	q.RangesByCluster[clusterName] = coalesce(append(q.RangesByCluster[clusterName], r))
-
-	for _, stream := range matrix {
-		fingerprint := stream.Metric.Fingerprint()
-		meta := metadataFromMetric(stream.Metric)
-		if strings.HasPrefix(meta.Target, fmt.Sprintf("pull-ci-%s-%s", meta.Org, meta.Repo)) || strings.HasPrefix(meta.Target, fmt.Sprintf("branch-ci-%s-%s", meta.Org, meta.Repo)) {
-			// TODO(skuznets): remove this once these time out (June 2021)
-			// This is ignoring data from old Prow control plane versions that did not label context or branch.
-			continue
-		}
-		if strings.HasPrefix(meta.Pod, "release-") && meta.Target != "" {
-			// TODO(skuznets): remove this once these time out (June 2021)
-			// This is hacking to fix data from old CI Operator versions that did not label releases.
-			meta.Target = ""
-		}
-		if strings.HasSuffix(meta.Pod, "-build") && meta.Org == "" {
-			// TODO(skuznets): remove this once these time out (June 2021)
-			// This is hacking to fix data from old build farm versions that did not label Build Pods.
-			continue
-		}
-		// Metrics are unique in our dataset, so if we've already seen this metric/fingerprint,
-		// we're guaranteed to already have recorded it in the indices, and we just need to add
-		// the new data. This case will occur if one metric/fingerprint shows up in more than
-		// one query range.
-		seen := false
-		var hist *circonusllhist.Histogram
-		if existing, exists := q.Data[fingerprint]; exists {
-			hist = existing.Histogram()
-			seen = true
-		} else {
-			hist = circonusllhist.New(circonusllhist.NoLookup())
-		}
-		for _, value := range stream.Values {
-			err := hist.RecordValue(float64(value.Value))
-			if err != nil {
-				logger.WithError(err).Warn("Failed to insert data into histogram. This should never happen.")
-			}
-		}
-		q.Data[fingerprint] = circonusllhist.NewHistogramWithoutLookups(hist)
-		if !seen {
-			q.DataByMetaData[meta] = append(q.DataByMetaData[meta], fingerprint)
-		}
-	}
-}
-
-// prune ensures that no identifying set of labels contains more than fifty entries.
-// We know that an entry fingerprint can only exist for one fully-qualified label set,
-// but if the label set contains a multi-stage step, it will also be referenced in
-// the additional per-step index.
-func (q *CachedQuery) prune() {
-	for meta, values := range q.DataByMetaData {
-		var toRemove []model.Fingerprint
-		if numFingerprints := len(values); numFingerprints > 50 {
-			toRemove = append(toRemove, values[0:numFingerprints-50]...)
-			q.DataByMetaData[meta] = values[numFingerprints-50:]
-		}
-		if len(toRemove) == 0 {
-			continue
-		}
-		for _, item := range toRemove {
-			delete(q.Data, item)
-		}
-	}
-}
-
-func metadataFromMetric(metric model.Metric) FullMetadata {
-	rawMeta := FullMetadata{
-		Metadata: api.Metadata{
-			Org:     oneOf(metric, LabelNameOrg, ProwLabelNameOrg),
-			Repo:    oneOf(metric, LabelNameRepo, ProwLabelNameRepo),
-			Branch:  oneOf(metric, LabelNameBranch, ProwLabelNameBranch),
-			Variant: string(metric[LabelNameVariant]),
-		},
-		Target:    oneOf(metric, LabelNameTarget, ProwLabelNameContext),
-		Step:      string(metric[LabelNameStep]),
-		Pod:       string(metric[LabelNamePod]),
-		Container: string(metric[LabelNameContainer]),
-	}
-	// we know RPM repos, release Pods and Build Pods do not differ by target, so
-	// we can remove those fields when we know we're looking at one of those
-	_, buildPod := metric[LabelNameBuild]
-	_, releasePod := metric[LabelNameRelease]
-	value, set := metric[LabelNameApp]
-	rpmRepoPod := set && value == model.LabelValue(steps.RPMRepoName)
-	if buildPod || releasePod || rpmRepoPod {
-		rawMeta.Target = ""
-	}
-	// RPM repo Pods are generated for a Deployment, so the name is random and not relevant
-	if rpmRepoPod {
-		rawMeta.Pod = ""
-	}
-	// we know the name for ProwJobs is not important
-	if _, prowJob := metric[ProwLabelNameCreated]; prowJob {
-		rawMeta.Pod = ""
-		if rawMeta.Target == "" {
-			// periodic and postsubmit jobs do not have a context, but we can try to
-			// extract a useful name for the job by processing the full name, with the
-			// caveat that labels have a finite length limit and the most specific data
-			// is in the suffix of the job name, so we will alias jobs here whose names
-			// are too long
-			rawMeta.Target = syntheticContextFromJob(rawMeta.Metadata, metric)
-		}
-	}
-	return rawMeta
-}
-
-func oneOf(metric model.Metric, labels ...model.LabelName) string {
-	for _, label := range labels {
-		if value, set := metric[label]; set {
-			return string(value)
-		}
-	}
-	return ""
-}
-
-func syntheticContextFromJob(meta api.Metadata, metric model.Metric) string {
-	job, jobLabeled := metric[ProwLabelNameJob]
-	if !jobLabeled {
-		// this should not happen, but if it does, we can't deduce a job name
-		return ""
-	}
-	jobType, typeLabeled := metric[ProwLabelNameType]
-	if !typeLabeled {
-		// this should not happen, but if it does, we can't deduce a job name
-		return ""
-	}
-	if prowv1.ProwJobType(jobType) == prowv1.PeriodicJob && meta.Repo == "" {
-		// this periodic has no repo associated with it, no use to strip any prefix
-		return string(job)
-	}
-	var prefix string
-	switch prowv1.ProwJobType(jobType) {
-	case prowv1.PresubmitJob, prowv1.BatchJob:
-		prefix = jobconfig.PresubmitPrefix
-	case prowv1.PostsubmitJob:
-		prefix = jobconfig.PostsubmitPrefix
-	case prowv1.PeriodicJob:
-		prefix = jobconfig.PeriodicPrefix
-	default:
-		// this should not happen, but if it does, we can't deduce a job name
-		return ""
-	}
-	namePrefix := meta.JobName(prefix, "")
-	if len(namePrefix) >= len(job) {
-		// the job label truncated away any useful information we would have had
-		return ""
-	}
-	return strings.TrimPrefix(string(job), namePrefix)
-}
-
-// uncoveredRanges determines the largest subset ranges of r that are not covered by
-// existing data in the querier.
-func (q *querier) uncoveredRanges(cluster string, r TimeRange) []TimeRange {
-	q.lock.RLock()
-	defer q.lock.RUnlock()
-	return uncoveredRanges(r, q.data.RangesByCluster[cluster])
-}
-
-func uncoveredRanges(r TimeRange, coverage []TimeRange) []TimeRange {
-	var covered []TimeRange
-	for _, extent := range coverage {
-		startsInside := within(extent.Start, r)
-		endsInside := within(extent.End, r)
-		switch {
-		case startsInside && endsInside:
-			covered = append(covered, extent)
-		case startsInside && !endsInside:
-			covered = append(covered, TimeRange{
-				Start: extent.Start,
-				End:   r.End,
-			})
-		case !startsInside && endsInside:
-			covered = append(covered, TimeRange{
-				Start: r.Start,
-				End:   extent.End,
-			})
-		case extent.Start.Before(r.Start) && extent.End.After(r.End):
-			covered = append(covered, TimeRange{
-				Start: r.Start,
-				End:   r.End,
-			})
-		}
-	}
-	sort.Slice(covered, func(i, j int) bool {
-		return covered[i].Start.Before(covered[j].Start)
-	})
-	covered = coalesce(covered)
-
-	if len(covered) == 0 {
-		return []TimeRange{r}
-	}
-	var uncovered []TimeRange
-	if !covered[0].Start.Equal(r.Start) {
-		uncovered = append(uncovered, TimeRange{Start: r.Start, End: covered[0].Start})
-	}
-	for i := 0; i < len(covered)-1; i++ {
-		uncovered = append(uncovered, TimeRange{Start: covered[i].End, End: covered[i+1].Start})
-	}
-	if !covered[len(covered)-1].End.Equal(r.End) {
-		uncovered = append(uncovered, TimeRange{Start: covered[len(covered)-1].End, End: r.End})
-	}
-	return uncovered
-}
-
-// within determines if the time falls within the range
-func within(t time.Time, r TimeRange) bool {
-	return (r.Start.Equal(t) || r.Start.Before(t)) && (r.End.Equal(t) || r.End.After(t))
-}
-
-// coalesce minimizes the number of timeRanges that are needed to describe a set of times.
-// The output is sorted by start time of the remaining ranges.
-func coalesce(input []TimeRange) []TimeRange {
-	for {
-		coalesced := coalesceOnce(input)
-		if len(coalesced) == len(input) {
-			sort.Slice(coalesced, func(i, j int) bool {
-				return coalesced[i].Start.Before(coalesced[j].Start)
-			})
-			return coalesced
-		}
-		input = coalesced
-	}
-}
-
-func coalesceOnce(input []TimeRange) []TimeRange {
-	for i := 0; i < len(input); i++ {
-		for j := i; j < len(input); j++ {
-			var coalesced *TimeRange
-			if input[i].End.Equal(input[j].Start) {
-				coalesced = &TimeRange{
-					Start: input[i].Start,
-					End:   input[j].End,
-				}
-			}
-			if input[i].Start.Equal(input[j].End) {
-				coalesced = &TimeRange{
-					Start: input[j].Start,
-					End:   input[i].End,
-				}
-			}
-			if coalesced != nil {
-				return append(input[:i], append(input[i+1:j], append(input[j+1:], *coalesced)...)...)
-			}
-		}
-	}
-	return input
 }

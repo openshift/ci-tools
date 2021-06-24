@@ -156,10 +156,12 @@ TAGS ?= e2e,e2e_framework
 # Example:
 #   make e2e
 #   make e2e SUITE=multi-stage
-e2e:
-	echo -n "u:p" > $(TMPDIR)/boskos-credentials
+e2e: $(TMPDIR)/.boskos-credentials
 	BOSKOS_CREDENTIALS_FILE="$(TMPDIR)/boskos-credentials" PACKAGES="./test/e2e/..." TESTFLAGS="$(TESTFLAGS) -tags $(TAGS) -timeout 70m -parallel 100" hack/test-go.sh
 .PHONY: e2e
+
+$(TMPDIR)/.boskos-credentials:
+	echo -n "u:p" > $(TMPDIR)/.boskos-credentials
 
 CLUSTER ?= build01
 
@@ -170,7 +172,9 @@ local-e2e: \
 	$(TMPDIR)/local-secret/.dockerconfigjson \
 	$(TMPDIR)/remote-secret/.dockerconfigjson \
 	$(TMPDIR)/gcs/service-account.json \
-	$(TMPDIR)/boskos
+	$(TMPDIR)/boskos \
+	$(TMPDIR)/prometheus \
+	$(TMPDIR)/promtool
 	$(eval export KUBECONFIG=$(TMPDIR)/.ci-operator-kubeconfig)
 	$(eval export HIVE_KUBECONFIG=$(TMPDIR)/hive-kubeconfig)
 	$(eval export LOCAL_REGISTRY_SECRET_DIR=$(TMPDIR)/local-secret)
@@ -267,4 +271,23 @@ $(TMPDIR)/boskos:
 	oc image extract registry.ci.openshift.org/ci/boskos:latest --path /:$(TMPDIR)/image
 	mv $(TMPDIR)/image/app $(TMPDIR)/boskos
 	chmod +x $(TMPDIR)/boskos
+	rm -rf $(TMPDIR)/image
+
+local-pod-scaler: $(TMPDIR)/prometheus $(TMPDIR)/promtool
+	$(eval export PATH=${PATH}:$(TMPDIR))
+	go run -tags e2e,e2e_framework ./test/e2e/pod-scaler/local/main.go
+.PHONY: local-pod-scaler
+
+$(TMPDIR)/prometheus:
+	mkdir -p $(TMPDIR)/image
+	oc image extract quay.io/prometheus/prometheus:latest --path /bin/prometheus:$(TMPDIR)/image
+	mv $(TMPDIR)/image/prometheus $(TMPDIR)/prometheus
+	chmod +x $(TMPDIR)/prometheus
+	rm -rf $(TMPDIR)/image
+
+$(TMPDIR)/promtool:
+	mkdir -p $(TMPDIR)/image
+	oc image extract quay.io/prometheus/prometheus:main --path /bin/promtool:$(TMPDIR)/image
+	mv $(TMPDIR)/image/promtool $(TMPDIR)/promtool
+	chmod +x $(TMPDIR)/promtool
 	rm -rf $(TMPDIR)/image

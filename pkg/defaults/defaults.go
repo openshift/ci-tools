@@ -28,6 +28,7 @@ import (
 	templateapi "github.com/openshift/api/template/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
@@ -145,9 +146,12 @@ func fromConfig(
 	}
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, imageConfigs)
+			steps, testHasReleaseStep, err := stepForTest(ctx, config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, imageConfigs, pullSecret)
 			if err != nil {
 				return nil, nil, err
+			}
+			if testHasReleaseStep {
+				hasReleaseStep = true
 			}
 			buildSteps = append(buildSteps, steps...)
 			continue
@@ -319,6 +323,7 @@ func fromConfig(
 // copy of `params` and their values from `Provides` only affect themselves,
 // thus avoiding conflicts with other tests pre-pruning.
 func stepForTest(
+	ctx context.Context,
 	config *api.ReleaseBuildConfiguration,
 	params *api.DeferredParameters,
 	podClient steps.PodClient,
@@ -330,31 +335,45 @@ func stepForTest(
 	inputImages inputImageSet,
 	c *api.TestStepConfiguration,
 	imageConfigs *[]*api.InputImageTagStepConfiguration,
-) ([]api.Step, error) {
+	pullSecret *coreapi.Secret,
+) ([]api.Step, bool, error) {
+	var hasReleaseStep bool
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
 		leases := leasesForTest(test)
 		if len(leases) != 0 {
 			params = api.NewDeferredParameters(params)
 		}
+		var testSteps []api.Step
 		step := steps.MultiStageTestStep(*c, config, params, podClient, jobSpec, leases)
 		if len(leases) != 0 {
 			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
 			addProvidesForStep(step, params)
 		}
-		if c.ClusterClaim != nil {
+		// hive client may not be present for jobs that execute non-claim based tests
+		if hiveClient != nil && c.ClusterClaim != nil {
 			step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step)
+			pullSpec, err := getClusterPoolPullSpec(ctx, c.ClusterClaim, hiveClient)
+			if err != nil {
+				return nil, hasReleaseStep, err
+			}
+			hasReleaseStep = true
+			claimRelease := c.ClusterClaim.ClaimRelease(c.As)
+			importStep := releasesteps.ImportReleaseStep(claimRelease.ReleaseName, pullSpec, false, config.Resources, podClient, jobSpec, pullSecret)
+			testSteps = append(testSteps, importStep)
+			addProvidesForStep(step, params)
 		}
+		testSteps = append(testSteps, step)
 		newSteps := stepsForStepImages(client, jobSpec, inputImages, test, imageConfigs)
-		return append([]api.Step{step}, newSteps...), nil
+		return append(testSteps, newSteps...), hasReleaseStep, nil
 	}
 	if test := c.OpenshiftInstallerClusterTestConfiguration; test != nil {
 		if !test.Upgrade {
-			return nil, nil
+			return nil, hasReleaseStep, nil
 		}
 		params = api.NewDeferredParameters(params)
 		step, err := clusterinstall.E2ETestStep(*c.OpenshiftInstallerClusterTestConfiguration, *c, params, podClient, templateClient, jobSpec, config.Resources)
 		if err != nil {
-			return nil, fmt.Errorf("unable to create end to end test step: %w", err)
+			return nil, hasReleaseStep, fmt.Errorf("unable to create end to end test step: %w", err)
 		}
 		step = steps.LeaseStep(leaseClient, []api.StepLease{{
 			ResourceType: test.ClusterProfile.LeaseType(),
@@ -362,13 +381,13 @@ func stepForTest(
 			Count:        1,
 		}}, step, jobSpec.Namespace)
 		addProvidesForStep(step, params)
-		return []api.Step{step}, nil
+		return []api.Step{step}, hasReleaseStep, nil
 	}
 	step := steps.TestStep(*c, config.Resources, podClient, jobSpec)
 	if c.ClusterClaim != nil {
 		step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step)
 	}
-	return []api.Step{step}, nil
+	return []api.Step{step}, hasReleaseStep, nil
 }
 
 // stepsForStepImages creates steps that import images referenced in test steps.
@@ -844,4 +863,18 @@ func ensureImageStreamTag(ctx context.Context, client ctrlruntimeclient.Client, 
 	}); err != nil {
 		logrus.WithError(err).Warnf("Waiting for imagestreamtag %s failed", isTagRef.ISTagName())
 	}
+}
+
+func getClusterPoolPullSpec(ctx context.Context, claim *api.ClusterClaim, hiveClient ctrlruntimeclient.WithWatch) (string, error) {
+	clusterPool, err := utils.ClusterPoolFromClaim(ctx, claim, hiveClient)
+	if err != nil {
+		return "", err
+	}
+
+	clusterImageSet := &hivev1.ClusterImageSet{}
+	if err := hiveClient.Get(ctx, types.NamespacedName{Name: clusterPool.Spec.ImageSetRef.Name}, clusterImageSet); err != nil {
+		return "", fmt.Errorf("failed to find cluster image set `%s` for cluster pool `%s`: %w", clusterPool.Spec.ImageSetRef.Name, clusterPool.Name, err)
+	}
+
+	return clusterImageSet.Spec.ReleaseImage, nil
 }

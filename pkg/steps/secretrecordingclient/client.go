@@ -2,6 +2,7 @@ package secretrecordingclient
 
 import (
 	"context"
+	"sort"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -10,6 +11,7 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/secrets"
+	"github.com/openshift/ci-tools/pkg/steps"
 )
 
 // Wrap wraps the upstream client, allowing us to intercept any secrets it might interact with.
@@ -103,6 +105,13 @@ func (c *client) record(obj ctrlruntimeclient.Object) {
 }
 
 func (c *client) recordSecret(secret *v1.Secret) {
+	c.censor.AddSecrets(valuesToCensor(secret)...)
+}
+
+func valuesToCensor(secret *v1.Secret) []string {
+	if _, skip := secret.Labels[steps.SkipCensoringLabel]; skip {
+		return nil
+	}
 	isServiceAccountCredential := secret.Type == v1.SecretTypeServiceAccountToken
 	var values []string
 	for key, value := range secret.Data {
@@ -124,7 +133,10 @@ func (c *client) recordSecret(secret *v1.Secret) {
 			values = append(values, secret.Annotations[key])
 		}
 	}
-	c.censor.AddSecrets(values...)
+	sort.Slice(values, func(i, j int) bool {
+		return values[i] < values[j]
+	})
+	return values
 }
 
 func (c *client) Status() ctrlruntimeclient.StatusWriter {

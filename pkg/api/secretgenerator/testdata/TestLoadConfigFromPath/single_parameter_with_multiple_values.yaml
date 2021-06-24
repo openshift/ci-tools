@@ -2,10 +2,9 @@
   fields:
   - name: Field$(FieldNum)
     cmd: echo -n Field$(FieldNum)
-  attachments:
+  fields:
   - name: Attachment$(FieldNum)
     cmd: echo -n Attachment$(FieldNum)
-  password: echo -n password$(FieldNum)
   notes: Note$(FieldNum)
   params:
     FieldNum:

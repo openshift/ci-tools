@@ -40,7 +40,7 @@ type options struct {
 func parseOptions(censor *secrets.DynamicCensor) options {
 	var o options
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with bw command")
+	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets in vault.")
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
 	fs.StringVar(&o.bootstrapConfigPath, "bootstrap-config", "", "Path to the config file used for bootstrapping cluster secrets after using this tool.")
 	fs.BoolVar(&o.validate, "validate", true, "Validate that the items created from this tool are used in bootstrapping")
@@ -110,11 +110,6 @@ func (o *options) validateConfig() error {
 				return cmdEmptyErr(i, fieldIndex, "fields")
 			}
 		}
-		for attachmentIndex, attachment := range item.Fields {
-			if attachment.Name != "" && attachment.Cmd == "" {
-				return cmdEmptyErr(i, attachmentIndex, "attachments")
-			}
-		}
 		for paramName, params := range item.Params {
 			if len(params) == 0 {
 				return fmt.Errorf("at least one argument required for param: %s, itemName: %s", paramName, item.ItemName)
@@ -140,9 +135,9 @@ func executeCommand(command string) ([]byte, error) {
 
 func updateSecrets(config secretgenerator.Config, client secrets.Client) error {
 	var errs []error
-	for _, bwItem := range config {
-		logger := logrus.WithField("item", bwItem.ItemName)
-		for _, field := range bwItem.Fields {
+	for _, item := range config {
+		logger := logrus.WithField("item", item.ItemName)
+		for _, field := range item.Fields {
 			logger = logger.WithFields(logrus.Fields{
 				"field":   field.Name,
 				"command": field.Cmd,
@@ -155,61 +150,23 @@ func updateSecrets(config secretgenerator.Config, client secrets.Client) error {
 				errs = append(errs, errors.New(msg))
 				continue
 			}
-			if err := client.SetFieldOnItem(bwItem.ItemName, field.Name, out); err != nil {
+			if err := client.SetFieldOnItem(item.ItemName, field.Name, out); err != nil {
 				msg := "failed to upload field"
 				logger.WithError(err).Error(msg)
 				errs = append(errs, errors.New(msg))
 				continue
 			}
 		}
-		for _, attachment := range bwItem.Attachments {
-			logger = logger.WithFields(logrus.Fields{
-				"attachment": attachment.Name,
-				"command":    attachment.Cmd,
-			})
-			logger.Info("processing attachment")
-			out, err := executeCommand(attachment.Cmd)
-			if err != nil {
-				msg := "failed to generate attachment"
-				logger.WithError(err).Error(msg)
-				errs = append(errs, errors.New(msg))
-				continue
-			}
-			if err := client.SetFieldOnItem(bwItem.ItemName, attachment.Name, out); err != nil {
-				msg := "failed to upload attachment"
-				logger.WithError(err).Error(msg)
-				errs = append(errs, errors.New(msg))
-				continue
-			}
-		}
-		if bwItem.Password != "" {
-			logger = logger.WithFields(logrus.Fields{
-				"password": bwItem.Password,
-			})
-			logger.Info("processing password")
-			out, err := executeCommand(bwItem.Password)
-			if err != nil {
-				msg := "failed to generate password"
-				logger.WithError(err).Error(msg)
-				errs = append(errs, errors.New(msg))
-			} else {
-				if err := client.SetFieldOnItem(bwItem.ItemName, "password", out); err != nil {
-					msg := "failed to upload password"
-					logger.WithError(err).Error(msg)
-					errs = append(errs, errors.New(msg))
-				}
-			}
-		}
 
 		// Adding the notes not empty check here since we dont want to overwrite any notes that might already be present
 		// If notes have to be deleted, it would have to be a manual operation where the user goes to the bw web UI and removes
 		// the notes
-		if bwItem.Notes != "" {
+		if item.Notes != "" {
 			logger = logger.WithFields(logrus.Fields{
-				"notes": bwItem.Notes,
+				"notes": item.Notes,
 			})
 			logger.Info("adding notes")
-			if err := client.UpdateNotesOnItem(bwItem.ItemName, bwItem.Notes); err != nil {
+			if err := client.UpdateNotesOnItem(item.ItemName, item.Notes); err != nil {
 				msg := "failed to update notes"
 				logger.WithError(err).Error(msg)
 				errs = append(errs, errors.New(msg))
@@ -221,7 +178,6 @@ func updateSecrets(config secretgenerator.Config, client secrets.Client) error {
 
 func main() {
 	logrusutil.ComponentInit()
-	// CLI tool which does the secret generation and uploading to bitwarden
 	censor := secrets.NewDynamicCensor()
 	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
 	o := parseOptions(&censor)
@@ -275,11 +231,10 @@ func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 		var err error
 		client, err = o.secrets.NewClient(censor)
 		if err != nil {
-			return append(errs, fmt.Errorf("failed to create Bitwarden client: %w", err))
+			return append(errs, fmt.Errorf("failed to create secrets client: %w", err))
 		}
 	}
 
-	// Upload the output to bitwarden
 	if err := updateSecrets(o.config, client); err != nil {
 		errs = append(errs, fmt.Errorf("failed to update secrets: %w", err))
 	}
@@ -294,18 +249,6 @@ func itemContextsFromConfig(items secretgenerator.Config) []secretbootstrap.Item
 			itemContexts = append(itemContexts, secretbootstrap.ItemContext{
 				Item:  item.ItemName,
 				Field: field.Name,
-			})
-		}
-		for _, attachment := range item.Attachments {
-			itemContexts = append(itemContexts, secretbootstrap.ItemContext{
-				Item:  item.ItemName,
-				Field: attachment.Name,
-			})
-		}
-		if item.Password != "" {
-			itemContexts = append(itemContexts, secretbootstrap.ItemContext{
-				Item:  item.ItemName,
-				Field: string(secretbootstrap.AttributeTypePassword),
 			})
 		}
 	}

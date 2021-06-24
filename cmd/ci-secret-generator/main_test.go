@@ -22,33 +22,30 @@ func TestItemContextsFromConfig(t *testing.T) {
 			out: nil,
 		},
 		{
-			in: secretgenerator.Config{{
-				ItemName: "item1",
-				Fields: []secretgenerator.FieldGenerator{{
-					Name: "field1",
-				}, {
-					Name: "field2",
-				}},
-			}, {
-				ItemName: "item2",
-				Attachments: []secretgenerator.FieldGenerator{{
-					Name: "attachment1",
-				}},
-				Password: "whatever",
-			}},
-			out: []secretbootstrap.ItemContext{{
-				Item:  "item1",
-				Field: "field1",
-			}, {
-				Item:  "item1",
-				Field: "field2",
-			}, {
-				Item:  "item2",
-				Field: "attachment1",
-			}, {
-				Item:  "item2",
-				Field: "password",
-			}},
+			in: secretgenerator.Config{
+				{
+					ItemName: "item1",
+					Fields:   []secretgenerator.FieldGenerator{{Name: "field1"}, {Name: "field2"}},
+				},
+				{
+					ItemName: "item2",
+					Fields:   []secretgenerator.FieldGenerator{{Name: "field1"}},
+				},
+			},
+			out: []secretbootstrap.ItemContext{
+				{
+					Item:  "item1",
+					Field: "field1",
+				},
+				{
+					Item:  "item1",
+					Field: "field2",
+				},
+				{
+					Item:  "item2",
+					Field: "field1",
+				},
+			},
 		},
 	}
 
@@ -76,7 +73,7 @@ func TestVault(t *testing.T) {
 		name: "single item",
 		config: secretgenerator.Config{{
 			ItemName: "single_item",
-			Attachments: []secretgenerator.FieldGenerator{{
+			Fields: []secretgenerator.FieldGenerator{{
 				Name: "name",
 				Cmd:  "printf 'name content'",
 			}},
@@ -90,59 +87,54 @@ func TestVault(t *testing.T) {
 		name: "multiple items with the same name",
 		config: secretgenerator.Config{{
 			ItemName: "multiple_items",
-			Attachments: []secretgenerator.FieldGenerator{{
+			Fields: []secretgenerator.FieldGenerator{{
 				Name: "attachment0",
 				Cmd:  "printf 'attachment0 content'",
 			}, {
 				Name: "attachment1",
 				Cmd:  "printf 'attachment1 content'",
 			}},
-			Fields: []secretgenerator.FieldGenerator{{
-				Name: "field",
-				Cmd:  "printf 'field content'",
-			}},
-			Password: "printf 'password content'",
-			Notes:    "notes content",
+			Notes: "notes content",
 		}},
 		expected: map[string]map[string]string{
 			"secret/prefix/multiple_items": {
 				"attachment0": "attachment0 content",
 				"attachment1": "attachment1 content",
-				"field":       "field content",
-				"password":    "password content",
 				"notes":       "notes content",
 			},
 		},
 	}, {
 		name: "multiple items with the different names",
-		config: secretgenerator.Config{{
-			ItemName: "attachment",
-			Attachments: []secretgenerator.FieldGenerator{{
-				Name: "name",
-				Cmd:  "printf 'attachment content'",
-			}},
-		}, {
-			ItemName: "field",
-			Fields: []secretgenerator.FieldGenerator{{
-				Name: "name",
-				Cmd:  "printf 'field content'",
-			}},
-		}, {
-			ItemName: "password",
-			Password: "printf 'password content'",
-		}, {
-			ItemName: "notes",
-			Notes:    "notes content",
-		}},
+		config: secretgenerator.Config{
+			{
+				ItemName: "attachment",
+				Fields: []secretgenerator.FieldGenerator{
+					{
+						Name: "name",
+						Cmd:  "printf 'attachment content'",
+					},
+				},
+			},
+			{
+				ItemName: "field",
+				Fields: []secretgenerator.FieldGenerator{
+					{
+						Name: "name",
+						Cmd:  "printf 'field content'",
+					},
+				},
+			},
+			{
+				ItemName: "notes",
+				Notes:    "notes content",
+			},
+		},
 		expected: map[string]map[string]string{
 			"secret/prefix/attachment": {
 				"name": "attachment content",
 			},
 			"secret/prefix/field": {
 				"name": "field content",
-			},
-			"secret/prefix/password": {
-				"password": "password content",
 			},
 			"secret/prefix/notes": {
 				"notes": "notes content",
@@ -197,7 +189,7 @@ func TestValidateContexts(t *testing.T) {
 		},
 		{
 			name: "Directly found dockerconfigjson",
-			cfg:  secretgenerator.Config{{ItemName: "some-item", Attachments: []secretgenerator.FieldGenerator{{Name: "field"}}}},
+			cfg:  secretgenerator.Config{{ItemName: "some-item", Fields: []secretgenerator.FieldGenerator{{Name: "field"}}}},
 			bootstrapCfg: secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{
 				From: map[string]secretbootstrap.ItemContext{"": {DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{{
 					Item: "some-item", AuthField: "field",
@@ -216,7 +208,7 @@ func TestValidateContexts(t *testing.T) {
 		},
 		{
 			name: "Strip prefix dockerconfigjson",
-			cfg:  secretgenerator.Config{{ItemName: "some-item", Attachments: []secretgenerator.FieldGenerator{{Name: "field"}}}},
+			cfg:  secretgenerator.Config{{ItemName: "some-item", Fields: []secretgenerator.FieldGenerator{{Name: "field"}}}},
 			bootstrapCfg: secretbootstrap.Config{
 				VaultDPTPPRefix: "dptp",
 				Secrets: []secretbootstrap.SecretConfig{{

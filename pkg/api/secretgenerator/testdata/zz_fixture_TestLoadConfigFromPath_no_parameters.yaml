@@ -1,4 +1,4 @@
-- attachments:
+- fields:
   - cmd: echo -n Attachment1
     name: Attachment1
   item_name: Item1

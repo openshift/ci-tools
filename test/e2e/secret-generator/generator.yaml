@@ -1,5 +1,5 @@
 - item_name: build_farm
-  attachments:
+  fields:
   - cmd: printf \\0
     name: sa.$(service_account).$(cluster).config
   params:
@@ -11,5 +11,3 @@
     - app.ci
     service_account:
     - config-updater
-- item_name: password
-  password: printf \\0

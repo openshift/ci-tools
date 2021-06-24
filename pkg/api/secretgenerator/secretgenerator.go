@@ -75,16 +75,6 @@ func (c Config) IsFieldGenerated(name, component string) bool {
 				return true
 			}
 		}
-
-		for _, attachment := range item.Attachments {
-			if component == attachment.Name {
-				return true
-			}
-		}
-
-		if component == item.Password {
-			return true
-		}
 	}
 	return false
 }
@@ -95,12 +85,10 @@ type FieldGenerator struct {
 }
 
 type SecretItem struct {
-	ItemName    string              `json:"item_name"`
-	Fields      []FieldGenerator    `json:"fields,omitempty"`
-	Attachments []FieldGenerator    `json:"attachments,omitempty"`
-	Password    string              `json:"password,omitempty"`
-	Notes       string              `json:"notes,omitempty"`
-	Params      map[string][]string `json:"params,omitempty"`
+	ItemName string              `json:"item_name"`
+	Fields   []FieldGenerator    `json:"fields,omitempty"`
+	Notes    string              `json:"notes,omitempty"`
+	Params   map[string][]string `json:"params,omitempty"`
 }
 
 func (si SecretItem) generateItemsFromParams() ([]SecretItem, error) {
@@ -119,18 +107,13 @@ func (si SecretItem) generateItemsFromParams() ([]SecretItem, error) {
 				argItem := SecretItem{}
 				err := deepcopy.Copy(&argItem, &qItem)
 				if err != nil {
-					errs = append(errs, fmt.Errorf("error copying bitWardenItem %v: %w", si, err))
+					errs = append(errs, fmt.Errorf("error copying item %v: %w", si, err))
 				}
 				argItem.ItemName = replaceParameter(paramName, param, argItem.ItemName)
 				for i, field := range argItem.Fields {
 					argItem.Fields[i].Name = replaceParameter(paramName, param, field.Name)
 					argItem.Fields[i].Cmd = replaceParameter(paramName, param, field.Cmd)
 				}
-				for i, attachment := range argItem.Attachments {
-					argItem.Attachments[i].Name = replaceParameter(paramName, param, attachment.Name)
-					argItem.Attachments[i].Cmd = replaceParameter(paramName, param, attachment.Cmd)
-				}
-				argItem.Password = replaceParameter(paramName, param, argItem.Password)
 				argItem.Notes = replaceParameter(paramName, param, argItem.Notes)
 				itemsProcessed = append(itemsProcessed, argItem)
 			}

@@ -24,11 +24,3 @@ secret_configs:
     - build_farm
     name: build-farm-credentials
     namespace: ci
-- from:
-    bw_password:
-      attribute: password
-      bw_item: password
-  to:
-  - cluster: app.ci
-    name: password
-    namespace: ci

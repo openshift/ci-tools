@@ -2,10 +2,9 @@
   fields:
   - name: Field$(FieldNum)-$(Env)
     cmd: echo -n Field$(FieldNum)-$(Env)
-  attachments:
+  fields:
   - name: Attachment$(FieldNum)-$(Env)
     cmd: echo -n Attachment$(FieldNum)-$(Env)
-  password: echo -n password$(FieldNum)-$(Env)
   notes: Note$(FieldNum)-$(Env)
   params:
     FieldNum: 

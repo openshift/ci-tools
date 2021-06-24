@@ -206,6 +206,9 @@ func (q *querier) execute(ctx context.Context, c *clusterMetadata, until time.Ti
 		}
 	}()
 
+	q.lock.RLock()
+	previousEntries, previousIdentifiers := len(q.data.Data), len(q.data.DataByMetaData)
+	q.lock.RUnlock()
 	queryStart := time.Now()
 	logger := c.logger.WithFields(logrus.Fields{
 		"start": r.Start.Format(time.RFC3339),
@@ -236,7 +239,10 @@ func (q *querier) execute(ctx context.Context, c *clusterMetadata, until time.Ti
 		}
 	}
 	c.wg.Wait()
-	logger.Infof("Query completed after %s.", time.Since(queryStart).Round(time.Second))
+	q.lock.RLock()
+	currentEntries, currentIdentifiers := len(q.data.Data), len(q.data.DataByMetaData)
+	q.lock.RUnlock()
+	logger.Infof("Query completed after %s, yielding %d new identifiers and %d new data series.", time.Since(queryStart).Round(time.Second), currentIdentifiers-previousIdentifiers, currentEntries-previousEntries)
 	close(c.errors)
 	errLock.Lock()
 	return kerrors.NewAggregate(errs)

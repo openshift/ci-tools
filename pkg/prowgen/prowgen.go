@@ -512,7 +512,9 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 		},
 	}
 	switch profile {
-	case cioperatorapi.ClusterProfileAWS,
+	case
+		cioperatorapi.ClusterProfileAWS,
+		cioperatorapi.ClusterProfileAWSArm64,
 		cioperatorapi.ClusterProfileAzure4,
 		cioperatorapi.ClusterProfileAzureArc,
 		cioperatorapi.ClusterProfileLibvirtS390x,

@@ -301,7 +301,9 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 
 func validateClusterProfile(fieldRoot string, p api.ClusterProfile) []error {
 	switch p {
-	case api.ClusterProfileAWS,
+	case
+		api.ClusterProfileAWS,
+		api.ClusterProfileAWSArm64,
 		api.ClusterProfileAWSAtomic,
 		api.ClusterProfileAWSCentos,
 		api.ClusterProfileAWSCentos40,

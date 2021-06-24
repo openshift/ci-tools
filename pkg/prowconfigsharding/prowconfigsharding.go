@@ -89,7 +89,7 @@ func WriteShardedPluginConfig(pc *plugins.Configuration, target afero.Fs) (*plug
 			}
 			lgtmCopy := lgtm
 			lgtmCopy.Repos = []string{orgOrRepo}
-			fileList[path].Lgtm = append(fileList[path].Lgtm, lgtmCopy)
+			fileList[path].Lgtm = []plugins.Lgtm{lgtmCopy}
 		}
 	}
 	pc.Lgtm = nil

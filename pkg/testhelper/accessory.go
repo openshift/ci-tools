@@ -30,7 +30,7 @@ func ArtifactDir(t TestingTInterface) string {
 	}
 	artifactDir := filepath.Join(baseDir, strings.NewReplacer("/", "_", "\\", "_", ":", "_").Replace(t.Name()))
 	if err := os.MkdirAll(artifactDir, 0755); err != nil {
-		t.Fatalf("could not create artifact dir for ci-operator: %v", err)
+		t.Fatalf("could not create artifact dir: %v", err)
 	}
 	t.Logf("Saving artifacts to %s.", artifactDir)
 	return artifactDir
@@ -120,17 +120,17 @@ type Accessory struct {
 	clientFlags PortFlags
 }
 
-// run begins the accessory process. Only test/e2e/framework.Run
+// RunFromFrameworkRunner begins the accessory process. Only test/e2e/framework.Run
 // is allowed to call this as it required additional synchronization or your
 // tests might pass incorrectly.
-func (a *Accessory) RunFromFrameworkRunner(t *T, parentCtx context.Context) {
+func (a *Accessory) RunFromFrameworkRunner(t TestingTInterface, parentCtx context.Context) {
 	a.run(parentCtx, t, t.Fatalf)
 }
 
-// run begins the accessory process. this call is not blocking.
+// Run begins the accessory process. this call is not blocking.
 // Because testing.T does not allow to call Fatalf in a distinct
 // goroutine, this will use Errorf instead.
-func (a *Accessory) Run(t *testing.T) {
+func (a *Accessory) Run(t TestingTInterface) {
 	a.run(context.Background(), t, t.Errorf)
 }
 
@@ -241,7 +241,7 @@ func WaitForHTTP200(addr, command string, t TestingTInterface) {
 }
 
 // ClientFlags exposes the port on which we are serving content and
-// any other flags that are needed clients to consume
+// any other flags that are needed for clients to consume
 // this accessory.
 func (a *Accessory) ClientFlags() []string {
 	if a.clientFlags == nil {

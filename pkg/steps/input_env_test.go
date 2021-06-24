@@ -10,7 +10,7 @@ func TestInputEnvironmentStep(t *testing.T) {
 	name := "le step"
 	values := map[string]string{"key": "value", "another key": "another value"}
 	links := []api.StepLink{someStepLink("name")}
-	ies := NewInputEnvironmentStep(name, values, links)
+	ies := InputEnvironmentStep(name, values, links)
 
 	specification := stepExpectation{
 		name:     name,

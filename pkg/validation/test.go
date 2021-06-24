@@ -446,7 +446,7 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 	}
 	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
 		typeCount++
-		context := newContext(fieldPath(fieldRoot), testConfig.Environment, releases)
+		context := newContext(fieldPath(fieldRoot).addField("steps"), testConfig.Environment, releases)
 		if testConfig.ClusterProfile != "" {
 			clusterCount++
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)

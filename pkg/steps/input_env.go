@@ -15,10 +15,10 @@ type inputEnvironmentStep struct {
 	links  []api.StepLink
 }
 
-// NewInputEnvironmentStep acts as a shim for a given step, taking a precalculated set of
+// InputEnvironmentStep acts as a shim for a given step, taking a precalculated set of
 // inputs and returning those when executed. May be used to substitute a step that does work
 // with another that simply reports output.
-func NewInputEnvironmentStep(name string, values map[string]string, links []api.StepLink) api.Step {
+func InputEnvironmentStep(name string, values map[string]string, links []api.StepLink) api.Step {
 	return &inputEnvironmentStep{
 		name:   name,
 		values: values,

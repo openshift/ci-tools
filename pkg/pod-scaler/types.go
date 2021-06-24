@@ -3,6 +3,7 @@ package pod_scaler
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -98,6 +99,9 @@ func (q *CachedQuery) Record(clusterName string, r TimeRange, matrix model.Matri
 			hist = circonusllhist.New(circonusllhist.NoLookup())
 		}
 		for _, value := range stream.Values {
+			if math.IsNaN(float64(value.Value)) {
+				continue
+			}
 			err := hist.RecordValue(float64(value.Value))
 			if err != nil {
 				logger.WithError(err).Warn("Failed to insert data into histogram. This should never happen.")

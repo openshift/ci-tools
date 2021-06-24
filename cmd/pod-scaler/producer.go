@@ -230,7 +230,8 @@ func (q *querier) execute(ctx context.Context, c *clusterMetadata, until time.Ti
 				stop = start.Add(time.Duration(numSteps) * r.Step)
 			}
 			c.wg.Add(1)
-			go q.executeOverRange(ctx, c, prometheusapi.Range{Start: start, End: stop, Step: r.Step})
+			// subtracting 1s from the end will ensure we don't double-count samples on the edge, as ranges are inclusive
+			go q.executeOverRange(ctx, c, prometheusapi.Range{Start: start, End: stop.Add(-1 * time.Second), Step: r.Step})
 			start = stop
 			stop = uncoveredRange.End
 		}

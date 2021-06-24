@@ -106,22 +106,22 @@ const (
 secret_configs:
 - from:
     key-name-1:
-      bw_item: item-name-1
+      item: item-name-1
       field: field-name-1
     key-name-2:
-      bw_item: item-name-1
+      item: item-name-1
       field: field-name-2
     key-name-3:
-      bw_item: item-name-1
+      item: item-name-1
       field: field-name-3
     key-name-4:
-      bw_item: item-name-2
+      item: item-name-2
       field: field-name-1
     key-name-5:
-      bw_item: item-name-2
+      item: item-name-2
       field: field-name-2
     key-name-6:
-      bw_item: item-name-3
+      item: item-name-3
       field: field-name-1
     key-name-7:
       item: item-name-2
@@ -135,7 +135,7 @@ secret_configs:
       name: prod-secret-2
 - from:
     .dockerconfigjson:
-      bw_item: quay.io
+      item: quay.io
       field: pull-credentials
   to:
     - cluster: default
@@ -147,23 +147,23 @@ secret_configs:
 secret_configs:
 - from:
     key-name-1:
-      bw_item: item-name-1
+      item: item-name-1
       field: field-name-1
     key-name-2:
-      bw_item: item-name-1
+      item: item-name-1
       field: field-name-2
     key-name-3:
-      bw_item: item-name-1
-      attachment: attachment-name-1
+      item: item-name-1
+      field: attachment-name-1
     key-name-4:
-      bw_item: item-name-2
+      item: item-name-2
       field: field-name-1
     key-name-5:
-      bw_item: item-name-2
-      attachment: attachment-name-1
+      item: item-name-2
+      field: attachment-name-1
     key-name-6:
-      bw_item: item-name-3
-      attachment: attachment-name-2
+      item: item-name-3
+      field: attachment-name-2
   to:
     - cluster: default
       namespace: namespace-1
@@ -176,11 +176,11 @@ secret_configs:
 secret_configs:
 - from:
     key-name-1:
-      bw_item: item-name-1
+      item: item-name-1
       field: field-name-1
     key-name-2:
-      bw_item: item-name-1
-      attribute: not-password
+      item: item-name-1
+      field: not-password
   to:
     - cluster: default
       namespace: namespace-1
@@ -197,7 +197,7 @@ cluster_groups:
 secret_configs:
 - from:
     key-name-1:
-      bw_item: item-name-1
+      item: item-name-1
       field: field-name-1
   to:
   - cluster_groups:

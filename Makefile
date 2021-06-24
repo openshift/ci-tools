@@ -161,6 +161,7 @@ integration:
 .PHONY: integration
 
 TMPDIR ?= /tmp
+TAGS ?= e2e,optional_operators
 
 # Run e2e tests.
 #
@@ -171,7 +172,7 @@ TMPDIR ?= /tmp
 #   make e2e SUITE=multi-stage
 e2e:
 	echo -n "u:p" > $(TMPDIR)/boskos-credentials
-	BOSKOS_CREDENTIALS_FILE="$(TMPDIR)/boskos-credentials" PACKAGES="./test/e2e/..." TESTFLAGS="$(TESTFLAGS) -tags e2e -timeout 70m -parallel 100" hack/test-go.sh
+	BOSKOS_CREDENTIALS_FILE="$(TMPDIR)/boskos-credentials" PACKAGES="./test/e2e/..." TESTFLAGS="$(TESTFLAGS) -tags $(TAGS) -timeout 70m -parallel 100" hack/test-go.sh
 .PHONY: e2e
 
 CLUSTER ?= build01

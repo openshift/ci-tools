@@ -13,10 +13,11 @@ import (
 )
 
 type pluginsConfigWithPointers struct {
-	Plugins  *plugins.Plugins   `json:"plugins,omitempty"`
-	Bugzilla *plugins.Bugzilla  `json:"bugzilla,omitempty"`
-	Approve  []*plugins.Approve `json:"approve,omitempty"`
-	Lgtm     []plugins.Lgtm     `json:"lgtm,omitempty"`
+	Plugins         *plugins.Plugins                    `json:"plugins,omitempty"`
+	Bugzilla        *plugins.Bugzilla                   `json:"bugzilla,omitempty"`
+	Approve         []*plugins.Approve                  `json:"approve,omitempty"`
+	Lgtm            []plugins.Lgtm                      `json:"lgtm,omitempty"`
+	ExternalPlugins map[string][]plugins.ExternalPlugin `json:"external_plugins,omitempty"`
 }
 
 // WriteShardedPluginConfig shards the plugin config and then writes it into
@@ -92,6 +93,17 @@ func WriteShardedPluginConfig(pc *plugins.Configuration, target afero.Fs) (*plug
 		}
 	}
 	pc.Lgtm = nil
+
+	for orgOrRepo, externalPlugins := range pc.ExternalPlugins {
+		path := filepath.Join(orgOrRepo, config.SupplementalPluginConfigFileName)
+		if _, ok := fileList[path]; !ok {
+			fileList[path] = &pluginsConfigWithPointers{}
+		}
+
+		fileList[path].ExternalPlugins = map[string][]plugins.ExternalPlugin{orgOrRepo: externalPlugins}
+		delete(pc.ExternalPlugins, orgOrRepo)
+	}
+	pc.ExternalPlugins = nil
 
 	for path, file := range fileList {
 		if err := MkdirAndWrite(target, path, file); err != nil {

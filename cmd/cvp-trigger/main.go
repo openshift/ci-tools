@@ -47,11 +47,11 @@ const (
 	targetNamespacesOption     = "target-namespaces"
 
 	BundleImage      = "BUNDLE_IMAGE"
-	Channel          = "CHANNEL"
-	IndexImage       = "INDEX_IMAGE"
-	InstallNamespace = "INSTALL_NAMESPACE"
-	Package          = "PACKAGE"
-	TargetNamespaces = "TARGET_NAMESPACES"
+	Channel          = "OO_CHANNEL"
+	IndexImage       = "OO_INDEX"
+	InstallNamespace = "OO_INSTALL_NAMESPACE"
+	Package          = "OO_PACKAGE"
+	TargetNamespaces = "OO_TARGET_NAMESPACES"
 	PyxisUrl         = "PYXIS_URL"
 )
 
@@ -216,20 +216,30 @@ func main() {
 	}
 
 	// build up the multi-stage parameters to pass to the ci-operator.
+	// TODO: Temporarily duplicating params to transition CVP back to using OO_ params to minimize CI impact when consolidating CVP and CI.
+	// This will be fixed shortly.
+	trimOO := func(val string) string {
+		return strings.TrimPrefix(val, "OO_")
+	}
 	params := map[string]string{
-		BundleImage: o.bundleImageRef,
-		Channel:     o.channel,
-		IndexImage:  o.indexImageRef,
-		Package:     o.operatorPackageName,
+		BundleImage:     o.bundleImageRef,
+		Channel:         o.channel,
+		trimOO(Channel): o.channel,
+		IndexImage:      o.indexImageRef,
+		"INDEX_IMAGE":   o.indexImageRef,
+		Package:         o.operatorPackageName,
+		trimOO(Package): o.operatorPackageName,
 	}
 	if o.installNamespace != "" {
 		params[InstallNamespace] = o.installNamespace
+		params[trimOO(InstallNamespace)] = o.installNamespace
 	}
 	if o.pyxisUrl != "" {
 		params[PyxisUrl] = o.pyxisUrl
 	}
 	if o.targetNamespaces != "" {
 		params[TargetNamespaces] = o.targetNamespaces
+		params[trimOO(TargetNamespaces)] = o.targetNamespaces
 	}
 
 	appendMultiStageParams(prowjob.Spec.PodSpec, params)

@@ -191,7 +191,7 @@ func (q *querier) execute(ctx context.Context, c *clusterMetadata, until time.Ti
 		return fmt.Errorf("could not determine Prometheus retention duration: %w", err)
 	}
 	r := prometheusapi.Range{
-		Start: until.Add(-time.Duration(retention)),
+		Start: time.Now().Add(-time.Duration(retention)),
 		End:   until,
 		Step:  1 * time.Minute,
 	}

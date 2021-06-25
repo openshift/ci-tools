@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -244,6 +245,7 @@ func (m mockGit) check() error {
 }
 
 func TestMirror(t *testing.T) {
+	second = time.Millisecond
 	token := "TOKEN"
 	org, repo, branch := "org", "repo", "branch"
 	destOrg := "dest"
@@ -364,7 +366,7 @@ func TestMirror(t *testing.T) {
 			},
 		},
 		{
-			description: "warm cache, ls-remote source fails -> error",
+			description: "warm cache, ls-remote source fails with retries -> error",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
@@ -372,8 +374,24 @@ func TestMirror(t *testing.T) {
 				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", exitCode: 1},
+				{call: "ls-remote --heads org-repo", exitCode: 1},
+				{call: "ls-remote --heads org-repo", exitCode: 1},
+				{call: "ls-remote --heads org-repo", exitCode: 1},
+				{call: "ls-remote --heads org-repo", exitCode: 1},
 			},
 			expectError: true,
+		},
+		{
+			description: "warm cache, ls-remote source succeeds after retries -> success",
+			src:         location{org: org, repo: repo, branch: branch},
+			dst:         location{org: destOrg, repo: repo, branch: branch},
+			expectedGitCalls: []mockGitCall{
+				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "source-sha refs/heads/branch"},
+				{call: "init"},
+				{call: "remote get-url org-repo"},
+				{call: "ls-remote --heads org-repo", exitCode: 1},
+				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
+			},
 		},
 		{
 			description: "warm cache, source branch does not exist -> error",

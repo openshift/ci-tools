@@ -41,6 +41,12 @@ func TestSimpleExitCodes(t *testing.T) {
 			success: false,
 			output:  []string{"Container test in pod failure failed, exit code 1, reason Error"},
 		},
+		{
+			name:    "clone target clones",
+			args:    []string{"--target=cloning"},
+			success: true,
+			output:  []string{"src/github.com/openshift/ci-tools"},
+		},
 	}
 
 	for _, testCase := range testCases {

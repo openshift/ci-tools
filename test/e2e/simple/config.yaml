@@ -18,6 +18,13 @@ tests:
   commands: exit 1
   container:
     from: os
+- as: cloning
+  command: ls -l && pwd
+  container:
+    from_image:
+      namespace: ci
+      name: ci-operator
+      tag: latest
 zz_generated_metadata:
   branch: master
   org: test

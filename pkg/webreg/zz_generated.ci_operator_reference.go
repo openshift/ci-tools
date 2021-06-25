@@ -390,8 +390,19 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Only one of the following can be not-null.\n" +
 	"        container:\n" +
 	"            # From is the image stream tag in the pipeline to run this\n" +
-	"            # command in.\n" +
+	"            # command in. The container test will not clone the source\n" +
+	"            # code into this image, if it needed, it must already be\n" +
+	"            # present by using a tag that is `src` or derived from `src.\n" +
 	"            from: ' '\n" +
+	"            # FromImage is a literal ImageStreamTag reference to use for this test.\n" +
+	"            # It is mutually exclusive with `from`. Contrary to `from`, setting this\n" +
+	"            # will cause the source code to be cloned into the image.\n" +
+	"            from_image:\n" +
+	"                # As is an optional string to use as the intermediate name for this reference.\n" +
+	"                as: ' '\n" +
+	"                name: ' '\n" +
+	"                namespace: ' '\n" +
+	"                tag: ' '\n" +
 	"            # MemoryBackedVolume mounts a volume of the specified size into\n" +
 	"            # the container at /tmp/volume.\n" +
 	"            memory_backed_volume:\n" +
@@ -1091,8 +1102,19 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # Only one of the following can be not-null.\n" +
 	"      container:\n" +
 	"        # From is the image stream tag in the pipeline to run this\n" +
-	"        # command in.\n" +
+	"        # command in. The container test will not clone the source\n" +
+	"        # code into this image, if it needed, it must already be\n" +
+	"        # present by using a tag that is `src` or derived from `src.\n" +
 	"        from: ' '\n" +
+	"        # FromImage is a literal ImageStreamTag reference to use for this test.\n" +
+	"        # It is mutually exclusive with `from`. Contrary to `from`, setting this\n" +
+	"        # will cause the source code to be cloned into the image.\n" +
+	"        from_image:\n" +
+	"            # As is an optional string to use as the intermediate name for this reference.\n" +
+	"            as: ' '\n" +
+	"            name: ' '\n" +
+	"            namespace: ' '\n" +
+	"            tag: ' '\n" +
 	"        # MemoryBackedVolume mounts a volume of the specified size into\n" +
 	"        # the container at /tmp/volume.\n" +
 	"        memory_backed_volume:\n" +

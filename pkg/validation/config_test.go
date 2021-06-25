@@ -11,6 +11,7 @@ import (
 	utilpointer "k8s.io/utils/pointer"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestValidateBuildRoot(t *testing.T) {
@@ -77,7 +78,7 @@ func TestValidateBuildRoot(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := validateBuildRootImageConfiguration("build_root", tc.buildRootImageConfig, tc.hasImages); (err != nil) && tc.expectedValid {
+			if err := validateBuildRootImageConfiguration(newConfigContext().addField("build_root"), tc.buildRootImageConfig, tc.hasImages); (err != nil) && tc.expectedValid {
 				t.Errorf("expected to be valid, got: %v", err)
 			} else if !tc.expectedValid && err == nil {
 				t.Error("expected to be invalid, but returned valid")
@@ -110,20 +111,6 @@ func TestValidateImageStreamTagReferenceMap(t *testing.T) {
 			id: "cannot be bundle source",
 			baseImages: map[string]api.ImageStreamTagReference{
 				string(api.PipelineImageStreamTagReferenceBundleSource): {Tag: "bundle-src"},
-			},
-			expectedValid: false,
-		},
-		{
-			id: "cannot be bundle prefixed",
-			baseImages: map[string]api.ImageStreamTagReference{
-				api.BundleName(0): {Tag: "bundle"},
-			},
-			expectedValid: false,
-		},
-		{
-			id: "cannot be index prefixed",
-			baseImages: map[string]api.ImageStreamTagReference{
-				api.IndexName("test"): {Tag: "index"},
 			},
 			expectedValid: false,
 		},
@@ -329,38 +316,6 @@ func TestValidateImages(t *testing.T) {
 		output: []error{
 			errors.New("images[0]: `to` must be set"),
 		},
-	}, {
-		name: "`to` cannot be src-bundle",
-		input: []api.ProjectDirectoryImageBuildStepConfiguration{{
-			To: "src-bundle",
-		}},
-		output: []error{
-			errors.New("images[0]: `to` cannot be src-bundle"),
-		},
-	}, {
-		name: "`to` cannot start with ci-bundle",
-		input: []api.ProjectDirectoryImageBuildStepConfiguration{{
-			To: "ci-bundle0",
-		}},
-		output: []error{
-			errors.New("images[0]: `to` cannot begin with `ci-bundle`"),
-		},
-	}, {
-		name: "`to` cannot be ci-index-gen",
-		input: []api.ProjectDirectoryImageBuildStepConfiguration{{
-			To: "ci-index-gen",
-		}},
-		output: []error{
-			errors.New("images[0]: `to` cannot begin with ci-index"),
-		},
-	}, {
-		name: "`to` cannot be ci-index",
-		input: []api.ProjectDirectoryImageBuildStepConfiguration{{
-			To: "ci-index",
-		}},
-		output: []error{
-			errors.New("images[0]: `to` cannot begin with ci-index"),
-		},
 	},
 		{
 			name: "two items cannot have identical `to`",
@@ -369,7 +324,7 @@ func TestValidateImages(t *testing.T) {
 				{To: "same-thing"},
 			},
 			output: []error{
-				errors.New("images[1]: duplicate image name 'same-thing' (previously seen in images[0])"),
+				errors.New("images[1]: duplicate image name 'same-thing' (previously defined by field 'images[0]')"),
 			},
 		},
 		{
@@ -401,7 +356,10 @@ func TestValidateImages(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := validateImages("images", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+			config := &api.ReleaseBuildConfiguration{
+				Images: testCase.input,
+			}
+			if actual, expected := validateImages(newConfigContext().addField("images"), config.Images), testCase.output; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
 					return x.Error() == y.Error()
 				})))
@@ -413,14 +371,6 @@ func TestValidateImages(t *testing.T) {
 func TestValidateOperator(t *testing.T) {
 	var goodStepLink = api.AllStepsLink()
 	var badStepLink api.StepLink
-	var config = &api.ReleaseBuildConfiguration{
-		InputConfiguration: api.InputConfiguration{
-			BaseImages: map[string]api.ImageStreamTagReference{
-				"a-base-image": {},
-			},
-		},
-		Images: []api.ProjectDirectoryImageBuildStepConfiguration{{To: "an-image"}, {To: "my-image"}},
-	}
 	var testCases = []struct {
 		name           string
 		input          *api.OperatorStepConfiguration
@@ -489,30 +439,6 @@ func TestValidateOperator(t *testing.T) {
 			withResolvesTo: goodStepLink,
 		},
 		{
-			name: "bundle set with image conflict",
-			input: &api.OperatorStepConfiguration{
-				Bundles: []api.Bundle{{
-					As: "my-image",
-				}},
-			},
-			withResolvesTo: goodStepLink,
-			output: []error{
-				errors.New("operator.bundles[0].as: bundle name `my-image` matches image defined in `images`"),
-			},
-		},
-		{
-			name: "bundle set with base_image conflict",
-			input: &api.OperatorStepConfiguration{
-				Bundles: []api.Bundle{{
-					As: "a-base-image",
-				}},
-			},
-			withResolvesTo: goodStepLink,
-			output: []error{
-				errors.New("operator.bundles[0].as: bundle name `a-base-image` matches a base image"),
-			},
-		},
-		{
 			name: "bundle set with update_graph but not base_index set",
 			input: &api.OperatorStepConfiguration{
 				Bundles: []api.Bundle{{
@@ -557,7 +483,7 @@ func TestValidateOperator(t *testing.T) {
 			linkFunc := func(string) api.StepLink {
 				return testCase.withResolvesTo
 			}
-			if actual, expected := validateOperator("operator", testCase.input, linkFunc, config), testCase.output; !reflect.DeepEqual(actual, expected) {
+			if actual, expected := validateOperator(newConfigContext().addField("operator"), testCase.input, linkFunc), testCase.output; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
 					return x.Error() == y.Error()
 				})))
@@ -830,6 +756,194 @@ func TestReleaseBuildConfiguration_DependencyParts(t *testing.T) {
 			if actualTag != testCase.expectedTag {
 				t.Errorf("%s: did not correctly determine ImageTag wanted %s, got %s", testCase.name, testCase.expectedTag, actualTag)
 			}
+		})
+	}
+}
+
+func TestPipelineImages(t *testing.T) {
+	root := api.BuildRootImageConfiguration{FromRepository: true}
+	input := api.InputConfiguration{BuildRootImage: &root}
+	resources := api.ResourceConfiguration{
+		"*": api.ResourceRequirements{
+			Requests: api.ResourceList{"cpu": "1"},
+		},
+	}
+	makeImages := func(names ...api.PipelineImageStreamTagReference) (ret []api.ProjectDirectoryImageBuildStepConfiguration) {
+		for _, x := range names {
+			ret = append(ret, api.ProjectDirectoryImageBuildStepConfiguration{
+				To: x,
+			})
+		}
+		return
+	}
+	for _, tc := range []struct {
+		name     string
+		conf     api.ReleaseBuildConfiguration
+		expected error
+	}{{
+		name: "all pipeline images are unique",
+		conf: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
+			Images:             makeImages("to0", "to1"),
+			Resources:          resources,
+		},
+	}, {
+		name: "binary_build_commands",
+		conf: api.ReleaseBuildConfiguration{
+			BinaryBuildCommands: "binary build commands",
+			InputConfiguration:  input,
+			Images:              makeImages("bin"),
+			Resources:           resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'bin' (previously defined by field 'binary_build_commands')`),
+	}, {
+		name: "test_binary_build_commands",
+		conf: api.ReleaseBuildConfiguration{
+			TestBinaryBuildCommands: "test_binary build commands",
+			InputConfiguration:      input,
+			Images:                  makeImages("test-bin"),
+			Resources:               resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'test-bin' (previously defined by field 'test_binary_build_commands')`),
+	}, {
+		name: "rpm_build_commands",
+		conf: api.ReleaseBuildConfiguration{
+			RpmBuildCommands:   "rpm build commands",
+			InputConfiguration: input,
+			Images:             makeImages("rpms"),
+			Resources:          resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'rpms' (previously defined by field 'rpm_build_commands')`),
+	}, {
+		name: "bundle",
+		conf: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
+			Images:             makeImages("bundle"),
+			Operator: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{As: "bundle"}},
+			},
+			Resources: resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'bundle' (previously defined by field 'operator.bundles[0].as')`),
+	}, {
+		name: "unnamed bundle",
+		conf: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
+			Images:             makeImages("ci-bundle0"),
+			Operator: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{}},
+			},
+			Resources: resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'ci-bundle0' (previously defined by field 'operator.bundles[0]')`),
+	}, {
+		name: "bundle index",
+		conf: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
+			Images:             makeImages("ci-index-bundle"),
+			Operator: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{As: "bundle"}},
+			},
+			Resources: resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'ci-index-bundle' (previously defined by field 'operator.bundles[0].as')`),
+	}, {
+		name: "bundle source",
+		conf: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
+			Images:             makeImages("src-bundle"),
+			Operator:           &api.OperatorStepConfiguration{},
+			Resources:          resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'src-bundle' (previously defined by field 'operator')`),
+	}, {
+		name: "base_rpm_images",
+		conf: api.ReleaseBuildConfiguration{
+			Images: makeImages("base-rpm-image"),
+			InputConfiguration: api.InputConfiguration{
+				BuildRootImage: &root,
+				BaseRPMImages: map[string]api.ImageStreamTagReference{
+					"base-rpm-image": {Tag: "tag"},
+				},
+			},
+			RpmBuildCommands: "rpm build commands",
+			Resources:        resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'base-rpm-image' (previously defined by field 'base_rpm_images[base-rpm-image]')`),
+	}, {
+		name: "base_rpm_images without-rpms",
+		conf: api.ReleaseBuildConfiguration{
+			Images: makeImages("base-rpm-image-without-rpms"),
+			InputConfiguration: api.InputConfiguration{
+				BuildRootImage: &root,
+				BaseRPMImages: map[string]api.ImageStreamTagReference{
+					"base-rpm-image": {Tag: "tag"},
+				},
+			},
+			RpmBuildCommands: "rpm build commands",
+			Resources:        resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'base-rpm-image-without-rpms' (previously defined by field 'base_rpm_images[base-rpm-image]')`),
+	}, {
+		name: "base_images",
+		conf: api.ReleaseBuildConfiguration{
+			Images: makeImages("base-image"),
+			InputConfiguration: api.InputConfiguration{
+				BuildRootImage: &root,
+				BaseImages: map[string]api.ImageStreamTagReference{
+					"base-image": {Tag: "tag"},
+				},
+			},
+			Resources: resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'base-image' (previously defined by field 'base_images[base-image]')`),
+	}, {
+		name: "images",
+		conf: api.ReleaseBuildConfiguration{
+			Images:             makeImages("duplicated", "duplicated"),
+			InputConfiguration: input,
+			Resources:          resources,
+		},
+		expected: errors.New(`invalid configuration: images[1]: duplicate image name 'duplicated' (previously defined by field 'images[0]')`),
+	}, {
+		name: "build_root.project_image_build",
+		conf: api.ReleaseBuildConfiguration{
+			Images: makeImages("root"),
+			InputConfiguration: api.InputConfiguration{
+				BuildRootImage: &api.BuildRootImageConfiguration{
+					ProjectImageBuild: &api.ProjectDirectoryImageBuildInputs{},
+				},
+			},
+			Resources: resources,
+		},
+		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'root' (previously defined by field 'build_root')`),
+	}, {
+		name: "multi-stage from_image",
+		conf: api.ReleaseBuildConfiguration{
+			Images:             makeImages("from_image"),
+			InputConfiguration: input,
+			Tests: []api.TestStepConfiguration{{
+				As: "test-name",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Test: []api.LiteralTestStep{{
+						As:       "step-name",
+						Commands: "commands",
+						FromImage: &api.ImageStreamTagReference{
+							Namespace: "ns",
+							Name:      "name",
+							Tag:       "from_image",
+						},
+						Resources: resources["*"],
+					}},
+				},
+			}},
+			Resources: resources,
+		},
+		expected: errors.New(`invalid configuration: tests[0].steps.test[0].from_image: duplicate image name 'from_image' (previously defined by field 'images[0]')`),
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := IsValidConfiguration(&tc.conf, "org", "repo")
+			testhelper.Diff(t, "error", err, tc.expected, testhelper.EquateErrorMessage)
 		})
 	}
 }

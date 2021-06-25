@@ -40,20 +40,12 @@ func (o *options) validate() (ret []error) {
 	seen := tagSet{}
 	if err := config.OperateOnCIOperatorConfigDir(o.configDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		// basic validation of the configuration is implicit in the iteration
-		if o.resolver != nil {
-			if _, err := registry.ResolveConfig(o.resolver, *configuration); err != nil {
-				return err
-			}
-		}
-		for _, tag := range release.PromotedTags(configuration) {
-			seen[tag] = append(seen[tag], repoInfo)
-		}
-		if configuration.PromotionConfiguration != nil && configuration.PromotionConfiguration.RegistryOverride != "" {
-			return errors.New("setting promotion.registry_override is not allowed")
+		if err := o.validateConfiguration(seen, configuration, repoInfo); err != nil {
+			ret = append(ret, fmt.Errorf("error validating configuration %s: %w", repoInfo.Filename, err))
 		}
 		return nil
 	}); err != nil {
-		ret = append(ret, fmt.Errorf("error validating configuration files: %w", err))
+		ret = append(ret, fmt.Errorf("error reading configuration files: %w", err))
 	}
 	ret = append(ret, validateTags(seen)...)
 	return
@@ -68,6 +60,21 @@ func (o *options) loadResolver(path string) error {
 		return err
 	}
 	o.resolver = registry.NewResolver(refs, chains, workflows, observers)
+	return nil
+}
+
+func (o *options) validateConfiguration(seen tagSet, configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+	if o.resolver != nil {
+		if _, err := registry.ResolveConfig(o.resolver, *configuration); err != nil {
+			return err
+		}
+	}
+	for _, tag := range release.PromotedTags(configuration) {
+		seen[tag] = append(seen[tag], repoInfo)
+	}
+	if configuration.PromotionConfiguration != nil && configuration.PromotionConfiguration.RegistryOverride != "" {
+		return errors.New("setting promotion.registry_override is not allowed")
+	}
 	return nil
 }
 

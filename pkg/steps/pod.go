@@ -2,6 +2,7 @@ package steps
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -14,7 +15,6 @@ import (
 	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
-	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -85,8 +85,8 @@ func (s *podStep) run(ctx context.Context) error {
 		return fmt.Errorf("unable to calculate %s pod resources for %s: %w", s.name, s.config.As, err)
 	}
 
-	if len(s.config.From.Namespace) > 0 {
-		return fmt.Errorf("pod step does not support an image stream tag reference outside the namespace")
+	if s.config.From.Namespace != "" {
+		return errors.New("pod step does not support an image stream tag reference outside the namespace")
 	}
 	image := fmt.Sprintf("%s:%s", s.config.From.Name, s.config.From.Tag)
 
@@ -155,29 +155,15 @@ func (s *podStep) Objects() []ctrlruntimeclient.Object {
 }
 
 func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client PodClient, jobSpec *api.JobSpec) api.Step {
-	from := config.ContainerTestConfiguration.FromImage
-	if from == nil {
-		from = &api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)}
-	}
-
-	clone := config.ContainerTestConfiguration.Clone
-	if clone == nil {
-		if config.ContainerTestConfiguration.FromImage != nil {
-			clone = utilpointer.BoolPtr(true)
-		} else {
-			clone = utilpointer.BoolPtr(false)
-		}
-	}
-
 	return PodStep(
 		"test",
 		PodStepConfiguration{
 			As:                 config.As,
-			From:               *from,
+			From:               api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
 			Commands:           config.Commands,
 			Secrets:            config.Secrets,
 			MemoryBackedVolume: config.ContainerTestConfiguration.MemoryBackedVolume,
-			Clone:              *clone,
+			Clone:              *config.ContainerTestConfiguration.Clone,
 		},
 		resources,
 		client,

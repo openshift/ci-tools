@@ -112,7 +112,7 @@ func TestValidateTests(t *testing.T) {
 			expectedValid: false,
 		},
 		{
-			id: "container test without `from` or `from_image`",
+			id: "container test without `from`",
 			tests: []api.TestStepConfiguration{
 				{
 					As:                         "test",
@@ -121,28 +121,6 @@ func TestValidateTests(t *testing.T) {
 				},
 			},
 			expectedValid: false,
-		},
-		{
-			id: "container test with both `from` and `from_image`",
-			tests: []api.TestStepConfiguration{
-				{
-					As:                         "test",
-					Commands:                   "commands",
-					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "image", FromImage: &api.ImageStreamTagReference{}},
-				},
-			},
-			expectedValid: false,
-		},
-		{
-			id: "container test with `from_image`",
-			tests: []api.TestStepConfiguration{
-				{
-					As:                         "test",
-					Commands:                   "commands",
-					ContainerTestConfiguration: &api.ContainerTestConfiguration{FromImage: &api.ImageStreamTagReference{}},
-				},
-			},
-			expectedValid: true,
 		},
 		{
 			id: "test without `commands`",

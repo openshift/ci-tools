@@ -21,10 +21,7 @@ tests:
 - as: cloning
   commands: ls -l && pwd
   container:
-    from_image:
-      namespace: ci
-      name: ci-operator
-      tag: latest
+    from: os
 zz_generated_metadata:
   branch: master
   org: test

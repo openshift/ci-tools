@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
@@ -768,6 +769,13 @@ func stepConfigsForBuild(
 		if test.ContainerTestConfiguration != nil || test.MultiStageTestConfigurationLiteral != nil || (test.OpenshiftInstallerClusterTestConfiguration != nil && test.OpenshiftInstallerClusterTestConfiguration.Upgrade) {
 			if test.Secret != nil {
 				test.Secrets = append(test.Secrets, test.Secret)
+			}
+			if test.ContainerTestConfiguration != nil && test.ContainerTestConfiguration.Clone == nil {
+				if config.IsBaseImage(string(test.ContainerTestConfiguration.From)) {
+					test.ContainerTestConfiguration.Clone = utilpointer.BoolPtr(true)
+				} else {
+					test.ContainerTestConfiguration.Clone = utilpointer.BoolPtr(false)
+				}
 			}
 			buildSteps = append(buildSteps, api.StepConfiguration{TestStepConfiguration: test})
 		}

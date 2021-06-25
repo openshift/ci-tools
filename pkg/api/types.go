@@ -981,11 +981,8 @@ type ContainerTestConfiguration struct {
 	// MemoryBackedVolume mounts a volume of the specified size into
 	// the container at /tmp/volume.
 	MemoryBackedVolume *MemoryBackedVolume `json:"memory_backed_volume,omitempty"`
-	// FromImage is a literal ImageStreamTag reference to use for this test.
-	// It is mutually exclusive with `from`.
-	FromImage *ImageStreamTagReference `json:"from_image,omitempty"`
 	// If the step should clone the source code prior to running the command.
-	// Defaults to true if from_image is set, false otherwise.
+	// Defaults to `true` for `base_images`, `false` otherwise.
 	Clone *bool `json:"clone,omitempty"`
 }
 

@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -303,7 +304,7 @@ func TestTestStepAndRequires(t *testing.T) {
 			name: "step without claim",
 			config: api.TestStepConfiguration{
 				As:                         "some",
-				ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "cli"},
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "cli", Clone: utilpointer.BoolPtr(false)},
 			},
 			expected: []api.StepLink{api.InternalImageLink("cli")},
 		},

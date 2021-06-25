@@ -384,11 +384,8 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 				validationErrors = append(validationErrors, fmt.Errorf("%s.memory_backed_volume: 'size' must be a Kubernetes quantity: %w", fieldRoot, err))
 			}
 		}
-		if testConfig.From == "" && testConfig.FromImage == nil {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: 'from' or 'from_image' is required", fieldRoot))
-		}
-		if testConfig.From != "" && testConfig.FromImage != nil {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: only one of 'from' or 'from_image' can be set", fieldRoot))
+		if testConfig.From == "" {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: 'from' is required", fieldRoot))
 		}
 	}
 	var needsReleaseRpms bool

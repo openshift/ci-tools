@@ -390,19 +390,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Only one of the following can be not-null.\n" +
 	"        container:\n" +
 	"            # If the step should clone the source code prior to running the command.\n" +
-	"            # Defaults to true if from_image is set, false otherwise.\n" +
+	"            # Defaults to `true` for `base_images`, `false` otherwise.\n" +
 	"            clone: false\n" +
 	"            # From is the image stream tag in the pipeline to run this\n" +
 	"            # command in.\n" +
 	"            from: ' '\n" +
-	"            # FromImage is a literal ImageStreamTag reference to use for this test.\n" +
-	"            # It is mutually exclusive with `from`.\n" +
-	"            from_image:\n" +
-	"                # As is an optional string to use as the intermediate name for this reference.\n" +
-	"                as: ' '\n" +
-	"                name: ' '\n" +
-	"                namespace: ' '\n" +
-	"                tag: ' '\n" +
 	"            # MemoryBackedVolume mounts a volume of the specified size into\n" +
 	"            # the container at /tmp/volume.\n" +
 	"            memory_backed_volume:\n" +
@@ -1102,19 +1094,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # Only one of the following can be not-null.\n" +
 	"      container:\n" +
 	"        # If the step should clone the source code prior to running the command.\n" +
-	"        # Defaults to true if from_image is set, false otherwise.\n" +
+	"        # Defaults to `true` for `base_images`, `false` otherwise.\n" +
 	"        clone: false\n" +
 	"        # From is the image stream tag in the pipeline to run this\n" +
 	"        # command in.\n" +
 	"        from: ' '\n" +
-	"        # FromImage is a literal ImageStreamTag reference to use for this test.\n" +
-	"        # It is mutually exclusive with `from`.\n" +
-	"        from_image:\n" +
-	"            # As is an optional string to use as the intermediate name for this reference.\n" +
-	"            as: ' '\n" +
-	"            name: ' '\n" +
-	"            namespace: ' '\n" +
-	"            tag: ' '\n" +
 	"        # MemoryBackedVolume mounts a volume of the specified size into\n" +
 	"        # the container at /tmp/volume.\n" +
 	"        memory_backed_volume:\n" +

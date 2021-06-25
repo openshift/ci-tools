@@ -99,6 +99,7 @@ func TestPodStepExecution(t *testing.T) {
 	testCases := []struct {
 		purpose        string
 		podStatus      corev1.PodPhase
+		clone          bool
 		expectRunError bool
 	}{
 		{
@@ -110,43 +111,39 @@ func TestPodStepExecution(t *testing.T) {
 			podStatus:      corev1.PodFailed,
 			expectRunError: true,
 		},
+		{
+			purpose:        "Successful pod with cloning",
+			podStatus:      corev1.PodSucceeded,
+			clone:          true,
+			expectRunError: false,
+		},
 	}
 
 	for _, tc := range testCases {
-		for _, clone := range []bool{false, true} {
-			name := tc.purpose
-			if clone {
-				name = name + "-clone"
+		t.Run(tc.purpose, func(t *testing.T) {
+			ps, _ := preparePodStep(namespace)
+			ps.client = &podClient{LoggingClient: loggingclient.New(&podStatusChangingClient{WithWatch: fakectrlruntimeclient.NewFakeClient(), dest: tc.podStatus})}
+
+			executionExpectation := executionExpectation{
+				prerun: doneExpectation{
+					value: false,
+					err:   false,
+				},
+				runError: tc.expectRunError,
+				postrun: doneExpectation{
+					value: true,
+					err:   false,
+				},
 			}
-			t.Run(name, func(t *testing.T) {
-				ps, _ := preparePodStep(namespace)
-				if !clone {
-					// Referencing the pipeline image means we wont clone
-					ps.config.From.Name = "pipeline"
-				}
-				ps.client = &podClient{LoggingClient: loggingclient.New(&podStatusChangingClient{WithWatch: fakectrlruntimeclient.NewFakeClient(), dest: tc.podStatus})}
 
-				executionExpectation := executionExpectation{
-					prerun: doneExpectation{
-						value: false,
-						err:   false,
-					},
-					runError: tc.expectRunError,
-					postrun: doneExpectation{
-						value: true,
-						err:   false,
-					},
-				}
+			executeStep(t, ps, executionExpectation)
 
-				executeStep(t, ps, executionExpectation)
-
-				pod := &corev1.Pod{}
-				if err := ps.client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: ps.Name()}, pod); err != nil {
-					t.Fatalf("failed to get pod: %v", err)
-				}
-				testhelper.CompareWithFixture(t, pod)
-			})
-		}
+			pod := &corev1.Pod{}
+			if err := ps.client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: ps.Name()}, pod); err != nil {
+				t.Fatalf("failed to get pod: %v", err)
+			}
+			testhelper.CompareWithFixture(t, pod)
+		})
 	}
 }
 

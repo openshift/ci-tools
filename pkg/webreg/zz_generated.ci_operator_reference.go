@@ -389,14 +389,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        commands: ' '\n" +
 	"        # Only one of the following can be not-null.\n" +
 	"        container:\n" +
+	"            # If the step should clone the source code prior to running the command.\n" +
+	"            # Defaults to true if from_image is set, false otherwise.\n" +
+	"            clone: false\n" +
 	"            # From is the image stream tag in the pipeline to run this\n" +
-	"            # command in. The container test will not clone the source\n" +
-	"            # code into this image, if it needed, it must already be\n" +
-	"            # present by using a tag that is `src` or derived from `src.\n" +
+	"            # command in.\n" +
 	"            from: ' '\n" +
 	"            # FromImage is a literal ImageStreamTag reference to use for this test.\n" +
-	"            # It is mutually exclusive with `from`. Contrary to `from`, setting this\n" +
-	"            # will cause the source code to be cloned into the image.\n" +
+	"            # It is mutually exclusive with `from`.\n" +
 	"            from_image:\n" +
 	"                # As is an optional string to use as the intermediate name for this reference.\n" +
 	"                as: ' '\n" +
@@ -1101,14 +1101,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      commands: ' '\n" +
 	"      # Only one of the following can be not-null.\n" +
 	"      container:\n" +
+	"        # If the step should clone the source code prior to running the command.\n" +
+	"        # Defaults to true if from_image is set, false otherwise.\n" +
+	"        clone: false\n" +
 	"        # From is the image stream tag in the pipeline to run this\n" +
-	"        # command in. The container test will not clone the source\n" +
-	"        # code into this image, if it needed, it must already be\n" +
-	"        # present by using a tag that is `src` or derived from `src.\n" +
+	"        # command in.\n" +
 	"        from: ' '\n" +
 	"        # FromImage is a literal ImageStreamTag reference to use for this test.\n" +
-	"        # It is mutually exclusive with `from`. Contrary to `from`, setting this\n" +
-	"        # will cause the source code to be cloned into the image.\n" +
+	"        # It is mutually exclusive with `from`.\n" +
 	"        from_image:\n" +
 	"            # As is an optional string to use as the intermediate name for this reference.\n" +
 	"            as: ' '\n" +

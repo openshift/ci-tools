@@ -14,6 +14,7 @@ import (
 	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -50,6 +51,7 @@ type PodStepConfiguration struct {
 	ServiceAccountName string
 	Secrets            []*api.Secret
 	MemoryBackedVolume *api.MemoryBackedVolume
+	Clone              bool
 }
 
 type podStep struct {
@@ -88,10 +90,7 @@ func (s *podStep) run(ctx context.Context) error {
 	}
 	image := fmt.Sprintf("%s:%s", s.config.From.Name, s.config.From.Tag)
 
-	// We clone if the imagestream is not the pipeline one
-	clone := s.config.From.Name != api.PipelineImageStream
-
-	pod, err := s.generatePodForStep(image, containerResources, clone)
+	pod, err := s.generatePodForStep(image, containerResources, s.config.Clone)
 	if err != nil {
 		return fmt.Errorf("pod step was invalid: %w", err)
 	}
@@ -160,6 +159,16 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 	if from == nil {
 		from = &api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)}
 	}
+
+	clone := config.ContainerTestConfiguration.Clone
+	if clone == nil {
+		if config.ContainerTestConfiguration.FromImage != nil {
+			clone = utilpointer.BoolPtr(true)
+		} else {
+			clone = utilpointer.BoolPtr(false)
+		}
+	}
+
 	return PodStep(
 		"test",
 		PodStepConfiguration{
@@ -168,6 +177,7 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 			Commands:           config.Commands,
 			Secrets:            config.Secrets,
 			MemoryBackedVolume: config.ContainerTestConfiguration.MemoryBackedVolume,
+			Clone:              *clone,
 		},
 		resources,
 		client,

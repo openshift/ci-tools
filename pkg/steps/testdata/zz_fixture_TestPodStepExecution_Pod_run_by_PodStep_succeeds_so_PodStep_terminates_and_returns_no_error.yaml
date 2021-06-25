@@ -54,7 +54,7 @@ spec:
         -eu\nlaunch-tests"],"container_name":"StepName","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
     - name: ARTIFACT_DIR
       value: /logs/artifacts
-    image: pipeline:sometag
+    image: somename:sometag
     name: StepName
     resources: {}
     terminationMessagePolicy: FallbackToLogsOnError

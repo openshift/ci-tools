@@ -18,21 +18,7 @@ export TESTFLAGS
 # assume the user wants jUnit output and will turn it off if they don't.
 JUNIT_REPORT ?= true
 
-# Build code.
-#
-# Args:
-#   WHAT: Directory names to build.  If any of these directories has a 'main'
-#     package, the build will produce executable files under $(OUT_DIR)/local/bin.
-#     If not specified, "everything" will be built.
-#   GOFLAGS: Extra flags to pass to 'go' when building.
-#   TESTFLAGS: Extra flags that should only be passed to hack/test-go.sh
-#
-# Example:
-#   make
-#   make all
-#   make all WHAT=cmd/oc GOFLAGS=-v
-all build:
-	hack/build-go.sh $(WHAT) $(GOFLAGS)
+all build: install
 .PHONY: all build
 
 # Verify code conventions are properly setup.

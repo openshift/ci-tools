@@ -161,7 +161,7 @@ integration:
 .PHONY: integration
 
 TMPDIR ?= /tmp
-TAGS ?= e2e,optional_operators
+TAGS ?= e2e,e2e_framework,optional_operators
 
 # Run e2e tests.
 #

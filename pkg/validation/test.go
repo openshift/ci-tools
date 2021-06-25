@@ -163,6 +163,20 @@ func validateTestStepConfiguration(fieldRoot string, input []api.TestStepConfigu
 
 // validateTestStepDependencies ensures that users have referenced valid dependencies
 func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error {
+	hasOverride := func(test *api.TestStepConfiguration, dep string) bool {
+		// see if there are any dependency overrides specified for the dependency
+		if test.MultiStageTestConfigurationLiteral == nil && test.MultiStageTestConfiguration == nil {
+			return false
+		}
+		if test.MultiStageTestConfigurationLiteral != nil {
+			_, ok := test.MultiStageTestConfigurationLiteral.DependencyOverrides[dep]
+			return ok
+		} else {
+			_, ok := test.MultiStageTestConfiguration.DependencyOverrides[dep]
+			return ok
+		}
+	}
+
 	dependencyErrors := func(step api.LiteralTestStep, testIdx int, stageField, stepField string, stepIdx int) []error {
 		var errs []error
 		for dependencyIdx, dependency := range step.Dependencies {
@@ -196,43 +210,50 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 					}
 				}
 
+				test := &config.Tests[testIdx]
 				if stream == api.PipelineImageStream {
 					switch name {
 					case string(api.PipelineImageStreamTagReferenceRoot):
-						if config.InputConfiguration.BuildRootImage == nil {
+						if config.InputConfiguration.BuildRootImage == nil && !hasOverride(test, dependency.Env) {
 							errs = append(errs, validationError("this dependency requires a build root, which is not configured"))
 						}
 					case string(api.PipelineImageStreamTagReferenceSource):
 						// always present
 					case string(api.PipelineImageStreamTagReferenceBinaries):
-						if config.BinaryBuildCommands == "" {
+						if config.BinaryBuildCommands == "" && !hasOverride(test, dependency.Env) {
 							errs = append(errs, validationError("this dependency requires built binaries, which are not configured"))
 						}
 					case string(api.PipelineImageStreamTagReferenceTestBinaries):
-						if config.TestBinaryBuildCommands == "" {
+						if config.TestBinaryBuildCommands == "" && !hasOverride(test, dependency.Env) {
 							errs = append(errs, validationError("this dependency requires built test binaries, which are not configured"))
 						}
 					case string(api.PipelineImageStreamTagReferenceRPMs):
-						if config.RpmBuildCommands == "" {
+						if config.RpmBuildCommands == "" && !hasOverride(test, dependency.Env) {
 							errs = append(errs, validationError("this dependency requires built RPMs, which are not configured"))
 						}
 					case string(api.PipelineImageStreamTagReferenceIndexImage):
-						if config.Operator == nil {
+						if config.Operator == nil && !hasOverride(test, dependency.Env) {
 							errs = append(errs, validationError("this dependency requires an operator bundle configuration, which is not configured"))
 						}
 					default:
 						// this could be a named index image
 						if api.IsIndexImage(name) {
-							if config.Operator != nil {
+							if config.Operator != nil || len(test.MultiStageTestConfigurationLiteral.DependencyOverrides) > 0 {
 								foundBundle := false
-								for _, bundle := range config.Operator.Bundles {
-									if api.IndexName(bundle.As) == name {
-										foundBundle = true
-										break
+								if config.Operator != nil {
+									for _, bundle := range config.Operator.Bundles {
+										if api.IndexName(bundle.As) == name {
+											foundBundle = true
+											break
+										}
 									}
 								}
 								if !foundBundle {
-									errs = append(errs, validationError(fmt.Sprintf("this dependency requires an operator bundle named %s, which is not configured", strings.TrimPrefix(name, string(api.PipelineImageStreamTagReferenceIndexImage)))))
+									// see if there's a dependency override with the index image name
+									foundBundle = hasOverride(test, dependency.Env)
+									if !foundBundle {
+										errs = append(errs, validationError(fmt.Sprintf("this dependency requires an operator bundle named %s, which is not configured", strings.TrimPrefix(name, string(api.PipelineImageStreamTagReferenceIndexImage)))))
+									}
 								}
 							} else {
 								errs = append(errs, validationError("this dependency requires an operator bundle configuration, which is not configured"))

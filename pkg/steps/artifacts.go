@@ -421,6 +421,7 @@ func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.
 		// TODO alvaroaleman: Auth
 		cloneRefsOptions := cloneRefsOptions(jobSpec, nil)
 		cloneRefsOptions.SrcRoot = codeMount.MountPath
+		cloneRefsOptions.Log = filepath.Join(logMount.MountPath, "clone.json")
 
 		serializedCloneRefsOptions, err := json.Marshal(cloneRefsOptions)
 		if err != nil {
@@ -456,7 +457,6 @@ func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.
 				pod.Spec.Containers[i].WorkingDir = decorate.DetermineWorkDir(codeMount.MountPath, cloneRefsOptions.GitRefs)
 				pod.Spec.Containers[i].VolumeMounts = append(container.VolumeMounts, codeMount)
 			}
-			pod.Spec.Volumes = append(pod.Spec.Volumes, codeVolume)
 		}
 
 	}

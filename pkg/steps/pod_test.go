@@ -123,6 +123,7 @@ func TestPodStepExecution(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.purpose, func(t *testing.T) {
 			ps, _ := preparePodStep(namespace)
+			ps.config.Clone = tc.clone
 			ps.client = &podClient{LoggingClient: loggingclient.New(&podStatusChangingClient{WithWatch: fakectrlruntimeclient.NewFakeClient(), dest: tc.podStatus})}
 
 			executionExpectation := executionExpectation{

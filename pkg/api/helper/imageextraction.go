@@ -45,6 +45,9 @@ func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguratio
 		if testStep.MultiStageTestConfigurationLiteral != nil {
 			insertTagReferencesFromSteps(*testStep.MultiStageTestConfigurationLiteral, result)
 		}
+		if testStep.ContainerTestConfiguration != nil && testStep.ContainerTestConfiguration.FromImage != nil {
+			insert(*testStep.ContainerTestConfiguration.FromImage, result)
+		}
 		if testStep.MultiStageTestConfiguration != nil && testStep.MultiStageTestConfigurationLiteral == nil {
 			errs = append(errs, errors.New("got unresolved config"))
 		}
@@ -63,6 +66,9 @@ func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguratio
 			}
 			if rawStep.TestStepConfiguration.MultiStageTestConfiguration != nil && rawStep.TestStepConfiguration.MultiStageTestConfigurationLiteral == nil {
 				errs = append(errs, errors.New("got unresolved config"))
+			}
+			if rawStep.TestStepConfiguration.ContainerTestConfiguration != nil && rawStep.TestStepConfiguration.ContainerTestConfiguration.FromImage != nil {
+				insert(*rawStep.TestStepConfiguration.ContainerTestConfiguration.FromImage, result)
 			}
 		}
 	}

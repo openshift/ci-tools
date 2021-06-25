@@ -40,17 +40,17 @@ spec:
   pod_spec:
     containers:
     - args:
-      - --multi-stage-param=BUNDLE_IMAGE=git@example.com/org/bundle.git
       - --multi-stage-param=CHANNEL=channel1
-      - --multi-stage-param=INDEX_IMAGE=git@example.com/org/index.git
       - --multi-stage-param=INSTALL_NAMESPACE=namespace2
       - --multi-stage-param=OO_CHANNEL=channel1
-      - --multi-stage-param=OO_INDEX=git@example.com/org/index.git
       - --multi-stage-param=OO_INSTALL_NAMESPACE=namespace2
       - --multi-stage-param=OO_PACKAGE=package1
       - --multi-stage-param=OO_TARGET_NAMESPACES=namespace1
       - --multi-stage-param=PACKAGE=package1
       - --multi-stage-param=TARGET_NAMESPACES=namespace1
+      - --dependency-override-param=BUNDLE_IMAGE=git@example.com/org/bundle.git
+      - --dependency-override-param=INDEX_IMAGE=git@example.com/org/index.git
+      - --dependency-override-param=OO_INDEX=git@example.com/org/index.git
       - --input-hash=CLUSTER_TYPEawsOCP_VERSION4.5
       command:
       - ./cmd/ipi-deprovision/ipi-deprovision.sh

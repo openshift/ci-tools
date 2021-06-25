@@ -89,7 +89,7 @@ var fileSystem = afero.NewOsFs()
 var fs = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 var o options
 
-//var prowJobArtifactsURL string
+// var prowJobArtifactsURL string
 
 // gatherOptions binds flag entries to entries in the options struct
 func (o *options) gatherOptions() {
@@ -222,11 +222,8 @@ func main() {
 		return strings.TrimPrefix(val, "OO_")
 	}
 	params := map[string]string{
-		BundleImage:     o.bundleImageRef,
 		Channel:         o.channel,
 		trimOO(Channel): o.channel,
-		IndexImage:      o.indexImageRef,
-		"INDEX_IMAGE":   o.indexImageRef,
 		Package:         o.operatorPackageName,
 		trimOO(Package): o.operatorPackageName,
 	}
@@ -242,7 +239,13 @@ func main() {
 		params[trimOO(TargetNamespaces)] = o.targetNamespaces
 	}
 
+	depOverrides := map[string]string{
+		BundleImage:   o.bundleImageRef,
+		IndexImage:    o.indexImageRef,
+		"INDEX_IMAGE": o.indexImageRef,
+	}
 	appendMultiStageParams(prowjob.Spec.PodSpec, params)
+	appendMultiStageDepOverrides(prowjob.Spec.PodSpec, depOverrides)
 
 	// Add flag values to inject as ENV var entries in the prowjob configuration
 	envVars := map[string]string{
@@ -391,5 +394,17 @@ func appendMultiStageParams(podSpec *v1.PodSpec, params map[string]string) {
 	sort.Strings(keys)
 	for _, key := range keys {
 		podSpec.Containers[0].Args = append(podSpec.Containers[0].Args, fmt.Sprintf("--multi-stage-param=%s=%s", key, params[key]))
+	}
+}
+
+// appendMultStageParams passes image dependency overrides to ci-operator
+func appendMultiStageDepOverrides(podSpec *v1.PodSpec, overrides map[string]string) {
+	keys := make([]string, 0, len(overrides))
+	for key := range overrides {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		podSpec.Containers[0].Args = append(podSpec.Containers[0].Args, fmt.Sprintf("--dependency-override-param=%s=%s", key, overrides[key]))
 	}
 }

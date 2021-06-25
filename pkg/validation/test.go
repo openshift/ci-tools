@@ -72,10 +72,10 @@ var trapPattern = regexp.MustCompile(`(^|\W)\s*trap\s*['"]?\w*['"]?\s*\w*`)
 // component, the image references exist in the test configuration, etc.) are
 // not performed.
 func IsValidReference(step api.LiteralTestStep) []error {
-	return validateLiteralTestStep(nil, &context{field: fieldPath(step.As)}, testStageUnknown, step, nil)
+	return validateLiteralTestStep(&context{field: fieldPath(step.As)}, testStageUnknown, step, nil)
 }
 
-func validateTestStepConfiguration(configCtx *configContext, fieldRoot string, input []api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
+func validateTestStepConfiguration(fieldRoot string, input []api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
 	var validationErrors []error
 
 	// check for test.As duplicates
@@ -156,7 +156,7 @@ func validateTestStepConfiguration(configCtx *configContext, fieldRoot string, i
 			}
 		}
 
-		validationErrors = append(validationErrors, validateTestConfigurationType(configCtx, fieldRootN, test, release, releases, resolved)...)
+		validationErrors = append(validationErrors, validateTestConfigurationType(fieldRootN, test, release, releases, resolved)...)
 	}
 	return validationErrors
 }
@@ -358,7 +358,7 @@ func searchForTestDuplicates(tests []api.TestStepConfiguration) []error {
 	return nil
 }
 
-func validateTestConfigurationType(configCtx *configContext, fieldRoot string, test api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
+func validateTestConfigurationType(fieldRoot string, test api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
 	var validationErrors []error
 	clusterCount := 0
 	if claim := test.ClusterClaim; claim != nil {
@@ -442,9 +442,9 @@ func validateTestConfigurationType(configCtx *configContext, fieldRoot string, t
 		}
 		context := newContext(fieldPath(fieldRoot), testConfig.Environment, releases)
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
-		validationErrors = append(validationErrors, validateTestSteps(configCtx, context.addField("pre"), testStagePre, testConfig.Pre, claimRelease)...)
-		validationErrors = append(validationErrors, validateTestSteps(configCtx, context.addField("test"), testStageTest, testConfig.Test, claimRelease)...)
-		validationErrors = append(validationErrors, validateTestSteps(configCtx, context.addField("post"), testStagePost, testConfig.Post, claimRelease)...)
+		validationErrors = append(validationErrors, validateTestSteps(context.addField("pre"), testStagePre, testConfig.Pre, claimRelease)...)
+		validationErrors = append(validationErrors, validateTestSteps(context.addField("test"), testStageTest, testConfig.Test, claimRelease)...)
+		validationErrors = append(validationErrors, validateTestSteps(context.addField("post"), testStagePost, testConfig.Post, claimRelease)...)
 	}
 	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
 		typeCount++
@@ -455,13 +455,13 @@ func validateTestConfigurationType(configCtx *configContext, fieldRoot string, t
 		}
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
 		for i, s := range testConfig.Pre {
-			validationErrors = append(validationErrors, validateLiteralTestStep(configCtx, context.addField("pre").addIndex(i), testStagePre, s, claimRelease)...)
+			validationErrors = append(validationErrors, validateLiteralTestStep(context.addField("pre").addIndex(i), testStagePre, s, claimRelease)...)
 		}
 		for i, s := range testConfig.Test {
-			validationErrors = append(validationErrors, validateLiteralTestStep(configCtx, context.addField("test").addIndex(i), testStageTest, s, claimRelease)...)
+			validationErrors = append(validationErrors, validateLiteralTestStep(context.addField("test").addIndex(i), testStageTest, s, claimRelease)...)
 		}
 		for i, s := range testConfig.Post {
-			validationErrors = append(validationErrors, validateLiteralTestStep(configCtx, context.addField("post").addIndex(i), testStagePost, s, claimRelease)...)
+			validationErrors = append(validationErrors, validateLiteralTestStep(context.addField("post").addIndex(i), testStagePost, s, claimRelease)...)
 		}
 	}
 	if typeCount == 0 {
@@ -480,12 +480,12 @@ func validateTestConfigurationType(configCtx *configContext, fieldRoot string, t
 	return validationErrors
 }
 
-func validateTestSteps(configCtx *configContext, context *context, stage testStage, steps []api.TestStep, claimRelease *api.ClaimRelease) (ret []error) {
+func validateTestSteps(context *context, stage testStage, steps []api.TestStep, claimRelease *api.ClaimRelease) (ret []error) {
 	for i, s := range steps {
 		contextI := context.addIndex(i)
 		ret = append(ret, validateTestStep(contextI, s)...)
 		if s.LiteralTestStep != nil {
-			ret = append(ret, validateLiteralTestStep(configCtx, contextI, stage, *s.LiteralTestStep, claimRelease)...)
+			ret = append(ret, validateLiteralTestStep(contextI, stage, *s.LiteralTestStep, claimRelease)...)
 		}
 	}
 	return
@@ -523,7 +523,7 @@ func validateTestStep(context *context, step api.TestStep) (ret []error) {
 	return
 }
 
-func validateLiteralTestStep(configCtx *configContext, context *context, stage testStage, step api.LiteralTestStep, claimRelease *api.ClaimRelease) (ret []error) {
+func validateLiteralTestStep(context *context, stage testStage, step api.LiteralTestStep, claimRelease *api.ClaimRelease) (ret []error) {
 	if len(step.As) == 0 {
 		ret = append(ret, context.errorf("`as` is required"))
 	} else if context.seen != nil {
@@ -546,11 +546,6 @@ func validateLiteralTestStep(configCtx *configContext, context *context, stage t
 		}
 		if step.FromImage.Tag == "" {
 			ret = append(ret, context.addField("from_image").errorf("`tag` is required"))
-		}
-		if configCtx != nil {
-			if err := configCtx.addField(string(context.field)).addField("from_image").addPipelineImage(api.PipelineImageStreamTagReference(step.FromImage.Tag)); err != nil {
-				ret = append(ret, err)
-			}
 		}
 	} else {
 		imageParts := strings.Split(step.From, ":")

@@ -499,7 +499,7 @@ func TestValidateTests(t *testing.T) {
 		},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
-			if errs := validateTestStepConfiguration(newConfigContext(), "tests", tc.tests, tc.release, tc.releases, tc.resolved); len(errs) > 0 && tc.expectedValid {
+			if errs := validateTestStepConfiguration("tests", tc.tests, tc.release, tc.releases, tc.resolved); len(errs) > 0 && tc.expectedValid {
 				t.Errorf("expected to be valid, got: %v", errs)
 			} else if !tc.expectedValid && len(errs) == 0 {
 				t.Error("expected to be invalid, but returned valid")
@@ -872,7 +872,7 @@ func TestValidateTestSteps(t *testing.T) {
 			if tc.seen != nil {
 				context.seen = tc.seen
 			}
-			ret := validateTestSteps(newConfigContext().addField("test"), context, testStageTest, tc.steps, &tc.clusterClaim)
+			ret := validateTestSteps(context, testStageTest, tc.steps, &tc.clusterClaim)
 			if len(ret) > 0 && len(tc.errs) == 0 {
 				t.Fatalf("Unexpected error %v", ret)
 			}
@@ -912,7 +912,7 @@ func TestValidatePostSteps(t *testing.T) {
 			if tc.seen != nil {
 				context.seen = tc.seen
 			}
-			ret := validateTestSteps(newConfigContext().addField("test"), context, testStagePost, tc.steps, nil)
+			ret := validateTestSteps(context, testStagePost, tc.steps, nil)
 			if !errListMessagesEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
 			}
@@ -944,7 +944,7 @@ func TestValidateParameters(t *testing.T) {
 		err:    []error{errors.New("test: unresolved parameter(s): [TEST1]")},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateLiteralTestStep(newConfigContext(), newContext("test", tc.env, tc.releases), testStageTest, api.LiteralTestStep{
+			err := validateLiteralTestStep(newContext("test", tc.env, tc.releases), testStageTest, api.LiteralTestStep{
 				As:       "as",
 				From:     "from",
 				Commands: "commands",
@@ -1205,7 +1205,7 @@ func TestValidateLeases(t *testing.T) {
 			test := api.TestStepConfiguration{
 				MultiStageTestConfigurationLiteral: &tc.test,
 			}
-			err := validateTestConfigurationType(newConfigContext(), "tests[0]", test, nil, nil, true)
+			err := validateTestConfigurationType("tests[0]", test, nil, nil, true)
 			if diff := diff.ObjectReflectDiff(tc.err, err); diff != "<no diffs>" {
 				t.Errorf("unexpected error: %s", diff)
 			}
@@ -1335,7 +1335,7 @@ func TestValidateTestConfigurationType(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := validateTestConfigurationType(newConfigContext(), "test", tc.test, nil, nil, false)
+			actual := validateTestConfigurationType("test", tc.test, nil, nil, false)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("expected differs from actual: %s", diff)
 			}

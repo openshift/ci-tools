@@ -165,7 +165,9 @@ func main() {
 	case "consumer.admission":
 		mainAdmission(opts)
 	}
-	interrupts.WaitForGracefulShutdown()
+	if !opts.once {
+		interrupts.WaitForGracefulShutdown()
+	}
 }
 
 func mainProduce(opts *options, cache cache) {
@@ -206,7 +208,7 @@ func mainProduce(opts *options, cache cache) {
 		logger.Debugf("Loaded Prometheus client.")
 	}
 
-	go produce(clients, cache, opts.ignoreLatest, opts.once)
+	produce(clients, cache, opts.ignoreLatest, opts.once)
 }
 
 func mainAdmission(opts *options) {

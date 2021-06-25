@@ -226,7 +226,7 @@ func (q *querier) execute(ctx context.Context, c *clusterMetadata, until time.Ti
 		numSteps := c.maxSize - 1
 		c.lock.RUnlock()
 		for {
-			if start == uncoveredRange.End {
+			if start.Equal(uncoveredRange.End) {
 				break
 			}
 			if int64(stop.Sub(start)/r.Step) > numSteps {

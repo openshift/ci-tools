@@ -10,11 +10,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
 
@@ -115,6 +117,21 @@ func gatherOptions() options {
 }
 
 type gitFunc func(logger *logrus.Entry, dir string, command ...string) (string, int, error)
+
+var second = time.Second
+
+func withRetryOnNonzero(f gitFunc, retries int) gitFunc {
+	return func(logger *logrus.Entry, dir string, command ...string) (string, int, error) {
+		var out string
+		var exitCode int
+		var commandErr error
+		err := wait.ExponentialBackoff(wait.Backoff{Duration: second, Factor: 2, Steps: retries}, func() (done bool, err error) {
+			out, exitCode, commandErr = f(logger, dir, command...)
+			return exitCode == 0, commandErr
+		})
+		return out, exitCode, err
+	}
+}
 
 func gitExec(logger *logrus.Entry, dir string, command ...string) (string, int, error) {
 	cmdLogger := logger.WithField("command", fmt.Sprintf("git %s", strings.Join(command, " ")))
@@ -318,7 +335,7 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 	}
 
 	logger.Debug("Determining HEAD of source branch")
-	srcHeads, err := getRemoteBranchHeads(logger, g.git, repoDir, srcRemote)
+	srcHeads, err := getRemoteBranchHeads(logger, withRetryOnNonzero(g.git, 5), repoDir, srcRemote)
 	if err != nil {
 		logger.WithError(err).Error("Failed to determine branch HEADs in source")
 		return fmt.Errorf("failed to determine branch HEADs in source")

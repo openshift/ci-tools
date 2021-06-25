@@ -16,26 +16,32 @@ import (
 
 type tagSet map[api.ImageStreamTagReference][]*config.Info
 
-func main() {
-	var configDir, registryDir string
-	flag.StringVar(&configDir, "config-dir", "", "The directory containing configuration files.")
+type options struct {
+	configDir string
+
+	resolver registry.Resolver
+}
+
+func (o *options) parse() error {
+	var registryDir string
+	flag.StringVar(&o.configDir, "config-dir", "", "The directory containing configuration files.")
 	flag.StringVar(&registryDir, "registry", "", "Path to the step registry directory")
 	flag.Parse()
+	if o.configDir == "" {
+		return errors.New("The --config-dir flag is required but was not provided")
+	}
+	if err := o.loadResolver(registryDir); err != nil {
+		return fmt.Errorf("failed to load registry: %w", err)
+	}
+	return nil
+}
 
-	if configDir == "" {
-		fmt.Fprintln(os.Stderr, "The --config-dir flag is required but was not provided")
-		os.Exit(1)
-	}
-	resolver, err := loadResolver(registryDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to load registry: %v\n", err)
-		os.Exit(1)
-	}
+func (o *options) validate() (ret []error) {
 	seen := tagSet{}
-	if err := config.OperateOnCIOperatorConfigDir(configDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+	if err := config.OperateOnCIOperatorConfigDir(o.configDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		// basic validation of the configuration is implicit in the iteration
-		if resolver != nil {
-			if _, err := registry.ResolveConfig(resolver, *configuration); err != nil {
+		if o.resolver != nil {
+			if _, err := registry.ResolveConfig(o.resolver, *configuration); err != nil {
 				return err
 			}
 		}
@@ -47,27 +53,22 @@ func main() {
 		}
 		return nil
 	}); err != nil {
-		fmt.Fprintf(os.Stderr, "error validating configuration files: %v\n", err)
-		os.Exit(1)
+		ret = append(ret, fmt.Errorf("error validating configuration files: %w", err))
 	}
-	if dupes := validateTags(seen); len(dupes) > 0 {
-		fmt.Fprintln(os.Stderr, "non-unique image publication found: ")
-		for _, dupe := range dupes {
-			fmt.Fprintf(os.Stderr, "ERROR: %v\n", dupe)
-		}
-		os.Exit(1)
-	}
+	ret = append(ret, validateTags(seen)...)
+	return
 }
 
-func loadResolver(path string) (registry.Resolver, error) {
+func (o *options) loadResolver(path string) error {
 	if path == "" {
-		return nil, nil
+		return nil
 	}
 	refs, chains, workflows, _, _, observers, err := load.Registry(path, false)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return registry.NewResolver(refs, chains, workflows, observers), nil
+	o.resolver = registry.NewResolver(refs, chains, workflows, observers)
+	return nil
 }
 
 func validateTags(seen tagSet) []error {
@@ -87,4 +88,17 @@ func validateTags(seen tagSet) []error {
 		dupes = append(dupes, fmt.Errorf("output tag %s is promoted from more than one place: %v", tag.ISTagName(), strings.Join(formatted, ", ")))
 	}
 	return dupes
+}
+
+func main() {
+	o := options{}
+	if err := o.parse(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+	if errs := o.validate(); errs != nil {
+		fmt.Fprintln(os.Stderr, "error validating configuration files:")
+		for _, err := range errs {
+			fmt.Fprintln(os.Stderr, err)
+		}
+	}
 }

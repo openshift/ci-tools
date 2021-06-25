@@ -421,7 +421,7 @@ func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.
 		// TODO alvaroaleman: Auth
 		cloneRefsOptions := cloneRefsOptions(jobSpec, nil)
 		cloneRefsOptions.SrcRoot = codeMount.MountPath
-		cloneRefsOptions.Log = filepath.Join(logMount.MountPath, "clone.json")
+		cloneRefsOptions.Log = decorate.CloneLogPath(logMount)
 
 		serializedCloneRefsOptions, err := json.Marshal(cloneRefsOptions)
 		if err != nil {

@@ -58,8 +58,9 @@ func (o *options) validate() (ret []error) {
 		seen[i] = seenI
 		go func() {
 			defer wg.Done()
+			validator := validation.NewValidator()
 			for item := range ch {
-				if err := o.validateConfiguration(seenI, item.configuration, item.repoInfo); err != nil {
+				if err := o.validateConfiguration(&validator, seenI, item.configuration, item.repoInfo); err != nil {
 					errCh <- err
 				}
 			}
@@ -96,11 +97,16 @@ func (o *options) loadResolver(path string) error {
 	return nil
 }
 
-func (o *options) validateConfiguration(seen tagSet, configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+func (o *options) validateConfiguration(
+	validator *validation.Validator,
+	seen tagSet,
+	configuration *api.ReleaseBuildConfiguration,
+	repoInfo *config.Info,
+) error {
 	if o.resolver != nil {
 		if c, err := registry.ResolveConfig(o.resolver, *configuration); err != nil {
 			return err
-		} else if err := validation.IsValidResolvedConfiguration(&c); err != nil {
+		} else if err := validator.IsValidResolvedConfiguration(&c); err != nil {
 			return err
 		}
 	}

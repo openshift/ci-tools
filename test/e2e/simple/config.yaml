@@ -19,7 +19,7 @@ tests:
   container:
     from: os
 - as: cloning
-  command: ls -l && pwd
+  commands: ls -l && pwd
   container:
     from_image:
       namespace: ci

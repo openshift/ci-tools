@@ -162,23 +162,9 @@ func (s *sourceStep) run(ctx context.Context) error {
 }
 
 func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef corev1.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret, fromDigest string) *buildapi.Build {
-	var refs []prowv1.Refs
-	if jobSpec.Refs != nil {
-		r := *jobSpec.Refs
-		if cloneAuthConfig != nil {
-			r.CloneURI = cloneAuthConfig.getCloneURI(r.Org, r.Repo)
-		}
-		refs = append(refs, r)
-	}
 
-	for _, r := range jobSpec.ExtraRefs {
-		if cloneAuthConfig != nil {
-			r.CloneURI = cloneAuthConfig.getCloneURI(r.Org, r.Repo)
-		}
-		refs = append(refs, r)
-	}
-
-	dockerfile := sourceDockerfile(config.From, decorate.DetermineWorkDir(gopath, refs), cloneAuthConfig)
+	optionsSpec := cloneRefsOptions(jobSpec, cloneAuthConfig)
+	dockerfile := sourceDockerfile(config.From, decorate.DetermineWorkDir(gopath, optionsSpec.GitRefs), cloneAuthConfig)
 	buildSource := buildapi.BuildSource{
 		Type:       buildapi.BuildSourceDockerfile,
 		Dockerfile: &dockerfile,
@@ -193,15 +179,6 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 				},
 			},
 		},
-	}
-
-	optionsSpec := clonerefs.Options{
-		SrcRoot:      gopath,
-		Log:          "/dev/null",
-		GitUserName:  "ci-robot",
-		GitUserEmail: "ci-robot@openshift.io",
-		GitRefs:      refs,
-		Fail:         true,
 	}
 
 	if cloneAuthConfig != nil {
@@ -732,4 +709,31 @@ func istObjectReference(ctx context.Context, client ctrlruntimeclient.Client, re
 		return corev1.ObjectReference{}, fmt.Errorf("could not resolve remote image stream tag: %w", err)
 	}
 	return corev1.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s@%s", repo, ist.Image.Name)}, nil
+}
+
+func cloneRefsOptions(jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig) clonerefs.Options {
+	var refs []prowv1.Refs
+	if jobSpec.Refs != nil {
+		r := *jobSpec.Refs
+		if cloneAuthConfig != nil {
+			r.CloneURI = cloneAuthConfig.getCloneURI(r.Org, r.Repo)
+		}
+		refs = append(refs, r)
+	}
+
+	for _, r := range jobSpec.ExtraRefs {
+		if cloneAuthConfig != nil {
+			r.CloneURI = cloneAuthConfig.getCloneURI(r.Org, r.Repo)
+		}
+		refs = append(refs, r)
+	}
+
+	return clonerefs.Options{
+		SrcRoot:      gopath,
+		Log:          "/dev/null",
+		GitUserName:  "ci-robot",
+		GitUserEmail: "ci-robot@openshift.io",
+		GitRefs:      refs,
+		Fail:         true,
+	}
 }

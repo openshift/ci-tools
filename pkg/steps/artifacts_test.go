@@ -711,7 +711,7 @@ func TestAddPodUtils(t *testing.T) {
 			PathStrategy: prowv1.PathStrategyExplicit,
 		},
 		GCSCredentialsSecret: func() *string { s := "gce-sa-credentials-gcs-publisher"; return &s }(),
-	}, "rawspec", []coreapi.VolumeMount{{Name: "secret", MountPath: "/secret"}}); err != nil {
+	}, "rawspec", []coreapi.VolumeMount{{Name: "secret", MountPath: "/secret"}}, false, nil); err != nil {
 		t.Errorf("failed to decorate: %v", err)
 	}
 	testhelper.CompareWithFixture(t, base)

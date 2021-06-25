@@ -113,30 +113,40 @@ func TestPodStepExecution(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.purpose, func(t *testing.T) {
-			ps, _ := preparePodStep(namespace)
-			ps.client = &podClient{LoggingClient: loggingclient.New(&podStatusChangingClient{WithWatch: fakectrlruntimeclient.NewFakeClient(), dest: tc.podStatus})}
-
-			executionExpectation := executionExpectation{
-				prerun: doneExpectation{
-					value: false,
-					err:   false,
-				},
-				runError: tc.expectRunError,
-				postrun: doneExpectation{
-					value: true,
-					err:   false,
-				},
+		for _, clone := range []bool{false, true} {
+			name := tc.purpose
+			if clone {
+				name = name + "-clone"
 			}
+			t.Run(name, func(t *testing.T) {
+				ps, _ := preparePodStep(namespace)
+				if !clone {
+					// Referencing the pipeline image means we wont clone
+					ps.config.From.Name = "pipeline"
+				}
+				ps.client = &podClient{LoggingClient: loggingclient.New(&podStatusChangingClient{WithWatch: fakectrlruntimeclient.NewFakeClient(), dest: tc.podStatus})}
 
-			executeStep(t, ps, executionExpectation)
+				executionExpectation := executionExpectation{
+					prerun: doneExpectation{
+						value: false,
+						err:   false,
+					},
+					runError: tc.expectRunError,
+					postrun: doneExpectation{
+						value: true,
+						err:   false,
+					},
+				}
 
-			pod := &corev1.Pod{}
-			if err := ps.client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: ps.Name()}, pod); err != nil {
-				t.Fatalf("failed to get pod: %v", err)
-			}
-			testhelper.CompareWithFixture(t, pod)
-		})
+				executeStep(t, ps, executionExpectation)
+
+				pod := &corev1.Pod{}
+				if err := ps.client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: ps.Name()}, pod); err != nil {
+					t.Fatalf("failed to get pod: %v", err)
+				}
+				testhelper.CompareWithFixture(t, pod)
+			})
+		}
 	}
 }
 
@@ -224,7 +234,7 @@ func TestGetPodObjectMounts(t *testing.T) {
 			podStepTemplate := expectedPodStepTemplate()
 			tc.podStep(podStepTemplate)
 
-			pod, err := podStepTemplate.generatePodForStep("", corev1.ResourceRequirements{})
+			pod, err := podStepTemplate.generatePodForStep("", corev1.ResourceRequirements{}, false)
 			if err != nil {
 				t.Fatalf("unexpected err: %v", err)
 			}

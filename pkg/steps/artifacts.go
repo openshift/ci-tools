@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -31,6 +32,7 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 	toolswatch "k8s.io/client-go/tools/watch"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/clonerefs"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -392,7 +394,7 @@ func removeFile(podClient PodClient, ns, name, containerName string, paths []str
 	return nil
 }
 
-func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.DecorationConfig, rawJobSpec string, secretsToCensor []coreapi.VolumeMount) error {
+func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.DecorationConfig, rawJobSpec string, secretsToCensor []coreapi.VolumeMount, clone bool, jobSpec *api.JobSpec) error {
 	logMount, logVolume := decorate.LogMountAndVolume()
 	toolsMount, toolsVolume := decorate.ToolsMountAndVolume()
 	blobStorageVolumes, blobStorageMounts, blobStorageOptions := decorate.BlobStorageOptions(*decorationConfig, false)
@@ -413,6 +415,51 @@ func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.
 
 	pod.Spec.Volumes = append(pod.Spec.Volumes, logVolume, toolsVolume)
 	pod.Spec.Volumes = append(pod.Spec.Volumes, blobStorageVolumes...)
+
+	if clone {
+		codeMount, codeVolume := decorate.CodeMountAndVolume()
+		// TODO alvaroaleman: Auth
+		cloneRefsOptions := cloneRefsOptions(jobSpec, nil)
+		cloneRefsOptions.SrcRoot = codeMount.MountPath
+
+		serializedCloneRefsOptions, err := json.Marshal(cloneRefsOptions)
+		if err != nil {
+			return fmt.Errorf("failed to serialize cloneRefsOptions: %w", err)
+		}
+
+		pod.Spec.Volumes = append(pod.Spec.Volumes, codeVolume, corev1.Volume{
+			Name:         "clonerefs-tmp",
+			VolumeSource: coreapi.VolumeSource{EmptyDir: &coreapi.EmptyDirVolumeSource{}},
+		})
+		cloneRefsTmpVolumeMount := corev1.VolumeMount{Name: "clonerefs-tmp", MountPath: "/tmp"}
+
+		initUpload, err := decorate.InitUpload(decorationConfig, blobStorageOptions, blobStorageMounts, &logMount, nil, rawJobSpec)
+		if err != nil {
+			return fmt.Errorf("failed to get initUpload container: %w", err)
+		}
+
+		var resources corev1.ResourceRequirements
+		if decorationConfig.Resources != nil && decorationConfig.Resources.CloneRefs != nil {
+			resources = *decorationConfig.Resources.CloneRefs
+		}
+		pod.Spec.InitContainers = append([]corev1.Container{{
+			Name:         "clonerefs",
+			Image:        decorationConfig.UtilityImages.CloneRefs,
+			Env:          []corev1.EnvVar{{Name: clonerefs.JSONConfigEnvVar, Value: string(serializedCloneRefsOptions)}},
+			Command:      []string{"/clonerefs"},
+			VolumeMounts: []corev1.VolumeMount{logMount, codeMount, cloneRefsTmpVolumeMount},
+			Resources:    resources,
+		}, *initUpload}, pod.Spec.InitContainers...)
+
+		if len(cloneRefsOptions.GitRefs) > 0 {
+			for i, container := range pod.Spec.Containers {
+				pod.Spec.Containers[i].WorkingDir = decorate.DetermineWorkDir(codeMount.MountPath, cloneRefsOptions.GitRefs)
+				pod.Spec.Containers[i].VolumeMounts = append(container.VolumeMounts, codeMount)
+			}
+			pod.Spec.Volumes = append(pod.Spec.Volumes, codeVolume)
+		}
+
+	}
 	return nil
 }
 

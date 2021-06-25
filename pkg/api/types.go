@@ -976,11 +976,17 @@ type MemoryBackedVolume struct {
 // command in one of the previously built images.
 type ContainerTestConfiguration struct {
 	// From is the image stream tag in the pipeline to run this
-	// command in.
-	From PipelineImageStreamTagReference `json:"from"`
+	// command in. The container test will not clone the source
+	// code into this image, if it needed, it must already be
+	// present by using a tag that is `src` or derived from `src.
+	From PipelineImageStreamTagReference `json:"from,omitempty"`
 	// MemoryBackedVolume mounts a volume of the specified size into
 	// the container at /tmp/volume.
 	MemoryBackedVolume *MemoryBackedVolume `json:"memory_backed_volume,omitempty"`
+	// FromImage is a literal ImageStreamTag reference to use for this test.
+	// It is mutually exclusive with `from`. Contrary to `from`, setting this
+	// will cause the source code to be cloned into the image.
+	FromImage *ImageStreamTagReference `json:"from_image,omitempty"`
 }
 
 // ClusterProfile is the name of a set of input variables

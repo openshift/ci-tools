@@ -5,7 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -18,7 +20,8 @@ import (
 type tagSet map[api.ImageStreamTagReference][]*config.Info
 
 type options struct {
-	configDir string
+	configDir      string
+	maxConcurrency int
 
 	resolver registry.Resolver
 }
@@ -27,9 +30,13 @@ func (o *options) parse() error {
 	var registryDir string
 	flag.StringVar(&o.configDir, "config-dir", "", "The directory containing configuration files.")
 	flag.StringVar(&registryDir, "registry", "", "Path to the step registry directory")
+	flag.IntVar(&o.maxConcurrency, "concurrency", 0, "Maximum number of concurrent in-flight goroutines.")
 	flag.Parse()
 	if o.configDir == "" {
 		return errors.New("The --config-dir flag is required but was not provided")
+	}
+	if o.maxConcurrency == 0 {
+		o.maxConcurrency = runtime.GOMAXPROCS(0)
 	}
 	if err := o.loadResolver(registryDir); err != nil {
 		return fmt.Errorf("failed to load registry: %w", err)
@@ -38,17 +45,42 @@ func (o *options) parse() error {
 }
 
 func (o *options) validate() (ret []error) {
-	seen := tagSet{}
-	if err := config.OperateOnCIOperatorConfigDir(o.configDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
-		// basic validation of the configuration is implicit in the iteration
-		if err := o.validateConfiguration(seen, configuration, repoInfo); err != nil {
-			ret = append(ret, fmt.Errorf("error validating configuration %s: %w", repoInfo.Filename, err))
+	type workItem struct {
+		configuration *api.ReleaseBuildConfiguration
+		repoInfo      *config.Info
+	}
+	ch, errCh := make(chan workItem), make(chan error)
+	seen := make([]tagSet, o.maxConcurrency)
+	wg := sync.WaitGroup{}
+	for i := 0; i < o.maxConcurrency; i++ {
+		wg.Add(1)
+		seenI := tagSet{}
+		seen[i] = seenI
+		go func() {
+			defer wg.Done()
+			for item := range ch {
+				if err := o.validateConfiguration(seenI, item.configuration, item.repoInfo); err != nil {
+					errCh <- err
+				}
+			}
+		}()
+	}
+	go func() {
+		for err := range errCh {
+			ret = append(ret, err)
 		}
+	}()
+	if err := config.OperateOnCIOperatorConfigDir(o.configDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+		ch <- workItem{configuration, repoInfo}
 		return nil
 	}); err != nil {
 		ret = append(ret, fmt.Errorf("error reading configuration files: %w", err))
 	}
-	ret = append(ret, validateTags(seen)...)
+	close(ch)
+	wg.Wait()
+	close(errCh)
+	mergePromotedTags(seen)
+	ret = append(ret, validateTags(seen[0])...)
 	return
 }
 
@@ -79,6 +111,19 @@ func (o *options) validateConfiguration(seen tagSet, configuration *api.ReleaseB
 		return errors.New("setting promotion.registry_override is not allowed")
 	}
 	return nil
+}
+
+func mergePromotedTags(s []tagSet) {
+	dst := s[0]
+	for _, src := range s[1:] {
+		for k, v := range src {
+			if l := dst[k]; l != nil {
+				dst[k] = append(l, v...)
+			} else {
+				dst[k] = v
+			}
+		}
+	}
 }
 
 func validateTags(seen tagSet) []error {

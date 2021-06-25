@@ -20,10 +20,7 @@ const (
 
 type ItemContext struct {
 	Item                 string                 `json:"item"`
-	BWItem               string                 `json:"bw_item"`
 	Field                string                 `json:"field,omitempty"`
-	Attachment           string                 `json:"attachment,omitempty"`
-	Attribute            AttributeType          `json:"attribute,omitempty"`
 	DockerConfigJSONData []DockerConfigJSONData `json:"dockerconfigJSON,omitempty"`
 	// If the secret should be base64 decoded before uploading to kube. Encoding
 	// it is useful to be able to store binary data.
@@ -31,13 +28,10 @@ type ItemContext struct {
 }
 
 type DockerConfigJSONData struct {
-	Item                    string `json:"item"`
-	RegistryURL             string `json:"registry_url"`
-	AuthField               string `json:"auth_field"`
-	EmailField              string `json:"email_field,omitempty"`
-	AuthBitwardenAttachment string `json:"auth_bw_attachment"`
-	EmailBitwardenField     string `json:"email_bw_field,omitempty"`
-	BWItem                  string `json:"bw_item"`
+	Item        string `json:"item"`
+	RegistryURL string `json:"registry_url"`
+	AuthField   string `json:"auth_field"`
+	EmailField  string `json:"email_field,omitempty"`
 }
 
 type DockerConfigJSON struct {
@@ -91,40 +85,6 @@ func (c *Config) UnmarshalJSON(d []byte) error {
 	var target configWithoutUnmarshaler
 	if err := json.Unmarshal(d, &target); err != nil {
 		return err
-	}
-
-	for i, secretConfig := range target.Secrets {
-		for key, item := range secretConfig.From {
-			if item.Item == "" {
-				item.Item = item.BWItem
-				item.BWItem = ""
-			}
-
-			if item.Field == "" {
-				if item.Attachment != "" {
-					item.Field = item.Attachment
-					item.Attachment = ""
-				} else if item.Attribute != "" {
-					item.Attribute = ""
-					item.Field = "password"
-				}
-			}
-
-			if item.DockerConfigJSONData != nil {
-				for i, dockerJSONData := range item.DockerConfigJSONData {
-					if dockerJSONData.Item == "" {
-						item.DockerConfigJSONData[i].Item = dockerJSONData.BWItem
-					}
-					if dockerJSONData.EmailBitwardenField != "" {
-						item.DockerConfigJSONData[i].EmailField = dockerJSONData.EmailBitwardenField
-					}
-					if dockerJSONData.AuthBitwardenAttachment != "" {
-						item.DockerConfigJSONData[i].AuthField = dockerJSONData.AuthBitwardenAttachment
-					}
-				}
-			}
-			target.Secrets[i].From[key] = item
-		}
 	}
 
 	*c = Config(target)

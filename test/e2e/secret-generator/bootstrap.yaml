@@ -8,17 +8,17 @@ cluster_groups:
 secret_configs:
 - from:
     sa.config-updater.api.ci.config:
-      attachment: sa.config-updater.api.ci.config
-      bw_item: build_farm
+      field: sa.config-updater.api.ci.config
+      item: build_farm
     sa.config-updater.app.ci.config:
-      attachment: sa.config-updater.app.ci.config
-      bw_item: build_farm
+      field: sa.config-updater.app.ci.config
+      item: build_farm
     sa.config-updater.build01.config:
       field: sa.config-updater.build01.config
-      bw_item: build_farm
+      item: build_farm
     sa.config-updater.build02.config:
       field: sa.config-updater.build02.config
-      bw_item: build_farm
+      item: build_farm
   to:
   - cluster_groups:
     - build_farm

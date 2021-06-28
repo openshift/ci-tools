@@ -4,10 +4,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"runtime"
 	"strings"
 	"sync"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -154,12 +155,12 @@ func validateTags(seen tagSet) []error {
 func main() {
 	o := options{}
 	if err := o.parse(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		logrus.WithError(err).Fatal("failed to parse arguments")
 	}
 	if errs := o.validate(); errs != nil {
-		fmt.Fprintln(os.Stderr, "error validating configuration files:")
 		for _, err := range errs {
-			fmt.Fprintln(os.Stderr, err)
+			logrus.WithError(err).Error()
 		}
+		logrus.Fatal("error validating configuration files")
 	}
 }

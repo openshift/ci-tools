@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
-	"sync"
 
 	"github.com/sirupsen/logrus"
 
@@ -19,6 +18,11 @@ import (
 )
 
 type tagSet map[api.ImageStreamTagReference][]*config.Info
+
+type promotedTag struct {
+	tag      api.ImageStreamTagReference
+	repoInfo *config.Info
+}
 
 type options struct {
 	configDir      string
@@ -47,39 +51,48 @@ func (o *options) validate() (ret []error) {
 		configuration *api.ReleaseBuildConfiguration
 		repoInfo      *config.Info
 	}
-	ch, errCh := make(chan workItem), make(chan error)
-	seen := make([]tagSet, o.maxConcurrency)
-	wg := sync.WaitGroup{}
-	for i := 0; i < o.maxConcurrency; i++ {
-		wg.Add(1)
-		seenI := tagSet{}
-		seen[i] = seenI
+	workCh := make(chan workItem)
+	seenCh := make(chan promotedTag)
+	errCh := make(chan error)
+	doneCh := make(chan struct{})
+	for i := uint(0); i < o.maxConcurrency; i++ {
 		go func() {
-			defer wg.Done()
 			validator := validation.NewValidator()
-			for item := range ch {
-				if err := o.validateConfiguration(&validator, seenI, item.configuration, item.repoInfo); err != nil {
+			for item := range workCh {
+				if err := o.validateConfiguration(&validator, seenCh, item.configuration, item.repoInfo); err != nil {
 					errCh <- err
 				}
 			}
+			doneCh <- struct{}{}
 		}()
 	}
+	seen := tagSet{}
+	go func() {
+		for i := range seenCh {
+			seen[i.tag] = append(seen[i.tag], i.repoInfo)
+		}
+		doneCh <- struct{}{}
+	}()
 	go func() {
 		for err := range errCh {
 			ret = append(ret, err)
 		}
 	}()
 	if err := config.OperateOnCIOperatorConfigDir(o.configDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
-		ch <- workItem{configuration, repoInfo}
+		workCh <- workItem{configuration, repoInfo}
 		return nil
 	}); err != nil {
 		ret = append(ret, fmt.Errorf("error reading configuration files: %w", err))
 	}
-	close(ch)
-	wg.Wait()
+	close(workCh)
+	for i := uint(0); i < o.maxConcurrency; i++ {
+		<-doneCh
+	}
+	close(seenCh)
 	close(errCh)
-	mergePromotedTags(seen)
-	ret = append(ret, validateTags(seen[0])...)
+	<-doneCh
+	close(doneCh)
+	ret = append(ret, validateTags(seen)...)
 	return
 }
 
@@ -97,7 +110,7 @@ func (o *options) loadResolver(path string) error {
 
 func (o *options) validateConfiguration(
 	validator *validation.Validator,
-	seen tagSet,
+	seenCh chan<- promotedTag,
 	configuration *api.ReleaseBuildConfiguration,
 	repoInfo *config.Info,
 ) error {
@@ -109,25 +122,12 @@ func (o *options) validateConfiguration(
 		}
 	}
 	for _, tag := range release.PromotedTags(configuration) {
-		seen[tag] = append(seen[tag], repoInfo)
+		seenCh <- promotedTag{tag, repoInfo}
 	}
 	if configuration.PromotionConfiguration != nil && configuration.PromotionConfiguration.RegistryOverride != "" {
 		return errors.New("setting promotion.registry_override is not allowed")
 	}
 	return nil
-}
-
-func mergePromotedTags(s []tagSet) {
-	dst := s[0]
-	for _, src := range s[1:] {
-		for k, v := range src {
-			if l := dst[k]; l != nil {
-				dst[k] = append(l, v...)
-			} else {
-				dst[k] = v
-			}
-		}
-	}
 }
 
 func validateTags(seen tagSet) []error {

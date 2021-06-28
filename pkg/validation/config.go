@@ -11,6 +11,40 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
+// Validator holds data used across validations.
+type Validator struct {
+	// hasTrapCache avoids redundant regexp searches on step commands.
+	hasTrapCache map[string]bool
+}
+
+// NewValidator creates an object that optimizes bulk validations.
+func NewValidator() Validator {
+	return Validator{
+		hasTrapCache: make(map[string]bool),
+	}
+}
+
+func newSingleUseValidator() Validator {
+	return Validator{}
+}
+
+func (v *Validator) IsValidRuntimeConfiguration(config *api.ReleaseBuildConfiguration) error {
+	return v.validateConfiguration(newConfigContext(), config, "", "", false)
+}
+
+// ValidateResolved behaves as ValidateAtRuntime and also validates that all
+// test steps are fully resolved.
+func (v *Validator) IsValidResolvedConfiguration(config *api.ReleaseBuildConfiguration) error {
+	config.Default()
+	return v.validateConfiguration(newConfigContext(), config, "", "", true)
+}
+
+// Validate validates all the configuration's values.
+func (v *Validator) IsValidConfiguration(config *api.ReleaseBuildConfiguration, org, repo string) error {
+	config.Default()
+	return v.validateConfiguration(newConfigContext(), config, org, repo, false)
+}
+
 // configContext contains data structures used for validations across fields.
 type configContext struct {
 	field fieldPath
@@ -63,23 +97,26 @@ func (c *configContext) addPipelineImage(name api.PipelineImageStreamTagReferenc
 // ValidateAtRuntime validates all the configuration's values without knowledge of config
 // repo structure
 func IsValidRuntimeConfiguration(config *api.ReleaseBuildConfiguration) error {
-	return validateConfiguration(newConfigContext(), config, "", "", false)
+	v := newSingleUseValidator()
+	return v.validateConfiguration(newConfigContext(), config, "", "", false)
 }
 
 // ValidateResolved behaves as ValidateAtRuntime and also validates that all
 // test steps are fully resolved.
 func IsValidResolvedConfiguration(config *api.ReleaseBuildConfiguration) error {
 	config.Default()
-	return validateConfiguration(newConfigContext(), config, "", "", true)
+	v := newSingleUseValidator()
+	return v.validateConfiguration(newConfigContext(), config, "", "", true)
 }
 
 // Validate validates all the configuration's values.
 func IsValidConfiguration(config *api.ReleaseBuildConfiguration, org, repo string) error {
 	config.Default()
-	return validateConfiguration(newConfigContext(), config, org, repo, false)
+	v := newSingleUseValidator()
+	return v.validateConfiguration(newConfigContext(), config, org, repo, false)
 }
 
-func validateConfiguration(ctx *configContext, config *api.ReleaseBuildConfiguration, org, repo string, resolved bool) error {
+func (v *Validator) validateConfiguration(ctx *configContext, config *api.ReleaseBuildConfiguration, org, repo string, resolved bool) error {
 	var validationErrors []error
 	if config.BinaryBuildCommands != "" {
 		ctx.pipelineImages[api.PipelineImageStreamTagReferenceBinaries] = "binary_build_commands"
@@ -96,7 +133,7 @@ func validateConfiguration(ctx *configContext, config *api.ReleaseBuildConfigura
 	for name := range releases {
 		releases.Insert(name)
 	}
-	validationErrors = append(validationErrors, validateTestStepConfiguration("tests", config.Tests, config.ReleaseTagConfiguration, releases, resolved)...)
+	validationErrors = append(validationErrors, v.validateTestStepConfiguration("tests", config.Tests, config.ReleaseTagConfiguration, releases, resolved)...)
 
 	// this validation brings together a large amount of data from separate
 	// parts of the configuration, so it's written as a standalone method

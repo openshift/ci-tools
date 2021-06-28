@@ -405,9 +405,10 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 		return nil, nil, nil, nil, nil, nil, err
 	}
 	// validate the integrity of each reference
+	v := validation.NewValidator()
 	var validationErrors []error
 	for _, r := range references {
-		if err := validation.IsValidReference(r); err != nil {
+		if err := v.IsValidReference(r); err != nil {
 			validationErrors = append(validationErrors, err...)
 		}
 	}

@@ -29,6 +29,18 @@ const (
 	testStagePost
 )
 
+func (v *Validator) commandHasTrap(cmd string) bool {
+	if v.hasTrapCache == nil {
+		return trapPattern.MatchString(cmd)
+	}
+	ret, ok := v.hasTrapCache[cmd]
+	if !ok {
+		ret = trapPattern.MatchString(cmd)
+		v.hasTrapCache[cmd] = ret
+	}
+	return ret
+}
+
 // context contains the information from parent components.
 // All but `field` can be nil if the validation being performed in
 // context-independent.
@@ -71,11 +83,16 @@ var trapPattern = regexp.MustCompile(`(^|\W)\s*trap\s*['"]?\w*['"]?\s*\w*`)
 // Checks that are context-dependent (whether all parameters are set in a parent
 // component, the image references exist in the test configuration, etc.) are
 // not performed.
-func IsValidReference(step api.LiteralTestStep) []error {
-	return validateLiteralTestStep(&context{field: fieldPath(step.As)}, testStageUnknown, step, nil)
+func (v *Validator) IsValidReference(step api.LiteralTestStep) []error {
+	return v.validateLiteralTestStep(&context{field: fieldPath(step.As)}, testStageUnknown, step, nil)
 }
 
-func validateTestStepConfiguration(fieldRoot string, input []api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
+func IsValidReference(step api.LiteralTestStep) []error {
+	v := NewValidator()
+	return v.IsValidReference(step)
+}
+
+func (v *Validator) validateTestStepConfiguration(fieldRoot string, input []api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
 	var validationErrors []error
 
 	// check for test.As duplicates
@@ -156,7 +173,7 @@ func validateTestStepConfiguration(fieldRoot string, input []api.TestStepConfigu
 			}
 		}
 
-		validationErrors = append(validationErrors, validateTestConfigurationType(fieldRootN, test, release, releases, resolved)...)
+		validationErrors = append(validationErrors, v.validateTestConfigurationType(fieldRootN, test, release, releases, resolved)...)
 	}
 	return validationErrors
 }
@@ -358,7 +375,7 @@ func searchForTestDuplicates(tests []api.TestStepConfiguration) []error {
 	return nil
 }
 
-func validateTestConfigurationType(fieldRoot string, test api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
+func (v *Validator) validateTestConfigurationType(fieldRoot string, test api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
 	var validationErrors []error
 	clusterCount := 0
 	if claim := test.ClusterClaim; claim != nil {
@@ -442,9 +459,9 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 		}
 		context := newContext(fieldPath(fieldRoot), testConfig.Environment, releases)
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
-		validationErrors = append(validationErrors, validateTestSteps(context.addField("pre"), testStagePre, testConfig.Pre, claimRelease)...)
-		validationErrors = append(validationErrors, validateTestSteps(context.addField("test"), testStageTest, testConfig.Test, claimRelease)...)
-		validationErrors = append(validationErrors, validateTestSteps(context.addField("post"), testStagePost, testConfig.Post, claimRelease)...)
+		validationErrors = append(validationErrors, v.validateTestSteps(context.addField("pre"), testStagePre, testConfig.Pre, claimRelease)...)
+		validationErrors = append(validationErrors, v.validateTestSteps(context.addField("test"), testStageTest, testConfig.Test, claimRelease)...)
+		validationErrors = append(validationErrors, v.validateTestSteps(context.addField("post"), testStagePost, testConfig.Post, claimRelease)...)
 	}
 	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
 		typeCount++
@@ -455,13 +472,13 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 		}
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
 		for i, s := range testConfig.Pre {
-			validationErrors = append(validationErrors, validateLiteralTestStep(context.addField("pre").addIndex(i), testStagePre, s, claimRelease)...)
+			validationErrors = append(validationErrors, v.validateLiteralTestStep(context.addField("pre").addIndex(i), testStagePre, s, claimRelease)...)
 		}
 		for i, s := range testConfig.Test {
-			validationErrors = append(validationErrors, validateLiteralTestStep(context.addField("test").addIndex(i), testStageTest, s, claimRelease)...)
+			validationErrors = append(validationErrors, v.validateLiteralTestStep(context.addField("test").addIndex(i), testStageTest, s, claimRelease)...)
 		}
 		for i, s := range testConfig.Post {
-			validationErrors = append(validationErrors, validateLiteralTestStep(context.addField("post").addIndex(i), testStagePost, s, claimRelease)...)
+			validationErrors = append(validationErrors, v.validateLiteralTestStep(context.addField("post").addIndex(i), testStagePost, s, claimRelease)...)
 		}
 	}
 	if typeCount == 0 {
@@ -480,12 +497,12 @@ func validateTestConfigurationType(fieldRoot string, test api.TestStepConfigurat
 	return validationErrors
 }
 
-func validateTestSteps(context *context, stage testStage, steps []api.TestStep, claimRelease *api.ClaimRelease) (ret []error) {
+func (v *Validator) validateTestSteps(context *context, stage testStage, steps []api.TestStep, claimRelease *api.ClaimRelease) (ret []error) {
 	for i, s := range steps {
 		contextI := context.addIndex(i)
 		ret = append(ret, validateTestStep(contextI, s)...)
 		if s.LiteralTestStep != nil {
-			ret = append(ret, validateLiteralTestStep(contextI, stage, *s.LiteralTestStep, claimRelease)...)
+			ret = append(ret, v.validateLiteralTestStep(contextI, stage, *s.LiteralTestStep, claimRelease)...)
 		}
 	}
 	return
@@ -523,7 +540,7 @@ func validateTestStep(context *context, step api.TestStep) (ret []error) {
 	return
 }
 
-func validateLiteralTestStep(context *context, stage testStage, step api.LiteralTestStep, claimRelease *api.ClaimRelease) (ret []error) {
+func (v *Validator) validateLiteralTestStep(context *context, stage testStage, step api.LiteralTestStep, claimRelease *api.ClaimRelease) (ret []error) {
 	if len(step.As) == 0 {
 		ret = append(ret, context.errorf("`as` is required"))
 	} else if context.seen != nil {
@@ -570,7 +587,7 @@ func validateLiteralTestStep(context *context, stage testStage, step api.Literal
 	if len(step.Commands) == 0 {
 		ret = append(ret, context.errorf("`commands` is required"))
 	} else {
-		ret = append(ret, validateCommands(step)...)
+		ret = append(ret, v.validateCommands(step)...)
 	}
 
 	if step.BestEffort != nil && *step.BestEffort && step.Timeout == nil {
@@ -595,10 +612,9 @@ func validateLiteralTestStep(context *context, stage testStage, step api.Literal
 	return
 }
 
-func validateCommands(test api.LiteralTestStep) []error {
+func (v *Validator) validateCommands(test api.LiteralTestStep) []error {
 	var validationErrors []error
-
-	if trapPattern.MatchString(test.Commands) && test.GracePeriod == nil {
+	if v.commandHasTrap(test.Commands) && test.GracePeriod == nil {
 		validationErrors = append(validationErrors, fmt.Errorf("test `%s` has `commands` containing `trap` command, but test step is missing grace_period", test.As))
 	}
 

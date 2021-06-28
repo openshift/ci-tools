@@ -4,70 +4,130 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
+	"runtime"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/steps/release"
+	"github.com/openshift/ci-tools/pkg/validation"
 )
 
 type tagSet map[api.ImageStreamTagReference][]*config.Info
 
-func main() {
-	var configDir, registryDir string
-	flag.StringVar(&configDir, "config-dir", "", "The directory containing configuration files.")
-	flag.StringVar(&registryDir, "registry", "", "Path to the step registry directory")
-	flag.Parse()
-
-	if configDir == "" {
-		fmt.Fprintln(os.Stderr, "The --config-dir flag is required but was not provided")
-		os.Exit(1)
-	}
-	resolver, err := loadResolver(registryDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to load registry: %v\n", err)
-		os.Exit(1)
-	}
-	seen := tagSet{}
-	if err := config.OperateOnCIOperatorConfigDir(configDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
-		// basic validation of the configuration is implicit in the iteration
-		if resolver != nil {
-			if _, err := registry.ResolveConfig(resolver, *configuration); err != nil {
-				return err
-			}
-		}
-		for _, tag := range release.PromotedTags(configuration) {
-			seen[tag] = append(seen[tag], repoInfo)
-		}
-		if configuration.PromotionConfiguration != nil && configuration.PromotionConfiguration.RegistryOverride != "" {
-			return errors.New("setting promotion.registry_override is not allowed")
-		}
-		return nil
-	}); err != nil {
-		fmt.Fprintf(os.Stderr, "error validating configuration files: %v\n", err)
-		os.Exit(1)
-	}
-	if dupes := validateTags(seen); len(dupes) > 0 {
-		fmt.Fprintln(os.Stderr, "non-unique image publication found: ")
-		for _, dupe := range dupes {
-			fmt.Fprintf(os.Stderr, "ERROR: %v\n", dupe)
-		}
-		os.Exit(1)
-	}
+type promotedTag struct {
+	tag      api.ImageStreamTagReference
+	repoInfo *config.Info
 }
 
-func loadResolver(path string) (registry.Resolver, error) {
+type options struct {
+	configDir      string
+	maxConcurrency uint
+
+	resolver registry.Resolver
+}
+
+func (o *options) parse() error {
+	var registryDir string
+	flag.StringVar(&o.configDir, "config-dir", "", "The directory containing configuration files.")
+	flag.StringVar(&registryDir, "registry", "", "Path to the step registry directory")
+	flag.UintVar(&o.maxConcurrency, "concurrency", uint(runtime.GOMAXPROCS(0)), "Maximum number of concurrent in-flight goroutines.")
+	flag.Parse()
+	if o.configDir == "" {
+		return errors.New("The --config-dir flag is required but was not provided")
+	}
+	if err := o.loadResolver(registryDir); err != nil {
+		return fmt.Errorf("failed to load registry: %w", err)
+	}
+	return nil
+}
+
+func (o *options) validate() (ret []error) {
+	type workItem struct {
+		configuration *api.ReleaseBuildConfiguration
+		repoInfo      *config.Info
+	}
+	workCh := make(chan workItem)
+	seenCh := make(chan promotedTag)
+	errCh := make(chan error)
+	doneCh := make(chan struct{})
+	for i := uint(0); i < o.maxConcurrency; i++ {
+		go func() {
+			validator := validation.NewValidator()
+			for item := range workCh {
+				if err := o.validateConfiguration(&validator, seenCh, item.configuration, item.repoInfo); err != nil {
+					errCh <- err
+				}
+			}
+			doneCh <- struct{}{}
+		}()
+	}
+	seen := tagSet{}
+	go func() {
+		for i := range seenCh {
+			seen[i.tag] = append(seen[i.tag], i.repoInfo)
+		}
+		doneCh <- struct{}{}
+	}()
+	go func() {
+		for err := range errCh {
+			ret = append(ret, err)
+		}
+	}()
+	if err := config.OperateOnCIOperatorConfigDir(o.configDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+		workCh <- workItem{configuration, repoInfo}
+		return nil
+	}); err != nil {
+		ret = append(ret, fmt.Errorf("error reading configuration files: %w", err))
+	}
+	close(workCh)
+	for i := uint(0); i < o.maxConcurrency; i++ {
+		<-doneCh
+	}
+	close(seenCh)
+	close(errCh)
+	<-doneCh
+	close(doneCh)
+	ret = append(ret, validateTags(seen)...)
+	return
+}
+
+func (o *options) loadResolver(path string) error {
 	if path == "" {
-		return nil, nil
+		return nil
 	}
 	refs, chains, workflows, _, _, observers, err := load.Registry(path, false)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return registry.NewResolver(refs, chains, workflows, observers), nil
+	o.resolver = registry.NewResolver(refs, chains, workflows, observers)
+	return nil
+}
+
+func (o *options) validateConfiguration(
+	validator *validation.Validator,
+	seenCh chan<- promotedTag,
+	configuration *api.ReleaseBuildConfiguration,
+	repoInfo *config.Info,
+) error {
+	if o.resolver != nil {
+		if c, err := registry.ResolveConfig(o.resolver, *configuration); err != nil {
+			return err
+		} else if err := validator.IsValidResolvedConfiguration(&c); err != nil {
+			return err
+		}
+	}
+	for _, tag := range release.PromotedTags(configuration) {
+		seenCh <- promotedTag{tag, repoInfo}
+	}
+	if configuration.PromotionConfiguration != nil && configuration.PromotionConfiguration.RegistryOverride != "" {
+		return errors.New("setting promotion.registry_override is not allowed")
+	}
+	return nil
 }
 
 func validateTags(seen tagSet) []error {
@@ -87,4 +147,17 @@ func validateTags(seen tagSet) []error {
 		dupes = append(dupes, fmt.Errorf("output tag %s is promoted from more than one place: %v", tag.ISTagName(), strings.Join(formatted, ", ")))
 	}
 	return dupes
+}
+
+func main() {
+	o := options{}
+	if err := o.parse(); err != nil {
+		logrus.WithError(err).Fatal("failed to parse arguments")
+	}
+	if errs := o.validate(); errs != nil {
+		for _, err := range errs {
+			logrus.WithError(err).Error()
+		}
+		logrus.Fatal("error validating configuration files")
+	}
 }

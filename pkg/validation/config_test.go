@@ -558,6 +558,26 @@ func TestReleaseBuildConfiguration_validateTestStepDependencies(t *testing.T) {
 			},
 		},
 		{
+			name: "overridden dependencies",
+			config: api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{
+					{MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+						DependencyOverrides: map[string]string{
+							"OH_SNAP": "nice",
+						},
+						Test: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{Dependencies: []api.StepDependency{{Name: "pipeline:bin", Env: "OH_SNAP"}}}}},
+					}},
+					{MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						DependencyOverrides: map[string]string{
+							"OO_INDEX":   "coolstuff",
+							"SOME_THING": "awwwyeah",
+						},
+						Test: []api.LiteralTestStep{{Dependencies: []api.StepDependency{{Name: "ci-index-my-bundle", Env: "OO_INDEX"}, {Name: string(api.PipelineImageStreamTagReferenceRPMs), Env: "SOME_THING"}}}},
+					}},
+				},
+			},
+		},
+		{
 			name: "invalid dependencies",
 			config: api.ReleaseBuildConfiguration{
 				Tests: []api.TestStepConfiguration{

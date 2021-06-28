@@ -22,7 +22,7 @@ type tagSet map[api.ImageStreamTagReference][]*config.Info
 
 type options struct {
 	configDir      string
-	maxConcurrency int
+	maxConcurrency uint
 
 	resolver registry.Resolver
 }
@@ -31,13 +31,10 @@ func (o *options) parse() error {
 	var registryDir string
 	flag.StringVar(&o.configDir, "config-dir", "", "The directory containing configuration files.")
 	flag.StringVar(&registryDir, "registry", "", "Path to the step registry directory")
-	flag.IntVar(&o.maxConcurrency, "concurrency", 0, "Maximum number of concurrent in-flight goroutines.")
+	flag.UintVar(&o.maxConcurrency, "concurrency", uint(runtime.GOMAXPROCS(0)), "Maximum number of concurrent in-flight goroutines.")
 	flag.Parse()
 	if o.configDir == "" {
 		return errors.New("The --config-dir flag is required but was not provided")
-	}
-	if o.maxConcurrency == 0 {
-		o.maxConcurrency = runtime.GOMAXPROCS(0)
 	}
 	if err := o.loadResolver(registryDir); err != nil {
 		return fmt.Errorf("failed to load registry: %w", err)

@@ -773,6 +773,7 @@ func stepConfigsForBuild(
 			if test.ContainerTestConfiguration != nil && test.ContainerTestConfiguration.Clone == nil {
 				if config.IsBaseImage(string(test.ContainerTestConfiguration.From)) {
 					test.ContainerTestConfiguration.Clone = utilpointer.BoolPtr(true)
+					test.ContainerTestConfiguration.Clone = utilpointer.BoolPtr(false)
 				} else {
 					test.ContainerTestConfiguration.Clone = utilpointer.BoolPtr(false)
 				}

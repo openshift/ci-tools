@@ -14,6 +14,7 @@ tests:
   commands: exit 0
   container:
     from: os
+    clone: true
 - as: failure
   commands: exit 1
   container:

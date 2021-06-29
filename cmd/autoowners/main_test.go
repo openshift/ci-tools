@@ -367,10 +367,8 @@ aliases:
 				Organization: "org4",
 				Repository:   "repo4",
 			},
-			expectedHTTPResult: httpResult{
-				repoAliases: ra,
-			},
-			expectedError: nil,
+			expectedHTTPResult: httpResult{},
+			expectedError:      nil,
 		},
 		{
 			description: "owner is with normal error",

@@ -7,7 +7,7 @@ $ autoowners -h
 Usage of autoowners:
   -assign string
         The github username or group name to assign the created pull request to. (default "openshift/openshift-team-developer-productivity-test-platform")
-  -config-subdirs string
+  -config-subdir string
         The comma-separated list of sub-directories where configuration is stored. (default "jobs,config,templates")
   -debug-mode
         Enable the DEBUG level of logs if true.
@@ -43,8 +43,8 @@ Usage of autoowners:
         The sub-directory of the target repo where the configurations are stored. (default "ci-operator")
 ```
 
-Upstream repositories are calculated from `{target-subdir}/{config-subdirs[0]}/{organization}/{repository}`.
-For example, given  `... -target-subdir=ci-operator -config-subdirs=jobs,... ...` the presence of [`ci-operator/jobs/openshift/origin`][openshift/origin-jobs] inserts [openshift/origin][] as an upstream repository.
+Upstream repositories are calculated from `{target-subdir}/{config-subdir[0]}/{organization}/{repository}`.
+For example, given  `... -target-subdir=ci-operator -config-subdir=jobs,... ...` the presence of [`ci-operator/jobs/openshift/origin`][openshift/origin-jobs] inserts [openshift/origin][] as an upstream repository.
 
 The `HEAD` branch for each upstream repository is pulled to extract its `OWNERS` and `OWNERS_ALIASES`.
 If `OWNERS` is missing, the utility will ignore `OWNERS_ALIASES`, even if it is present upstream.

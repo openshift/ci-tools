@@ -871,7 +871,7 @@ func TestValidateTestSteps(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			context := newContext("test", nil, tc.releases)
 			if tc.seen != nil {
-				context.seen = tc.seen
+				context.namesSeen = tc.seen
 			}
 			v := NewValidator()
 			ret := v.validateTestSteps(context, testStageTest, tc.steps, &tc.clusterClaim)
@@ -912,7 +912,7 @@ func TestValidatePostSteps(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			context := newContext("test", nil, tc.releases)
 			if tc.seen != nil {
-				context.seen = tc.seen
+				context.namesSeen = tc.seen
 			}
 			v := NewValidator()
 			ret := v.validateTestSteps(context, testStagePost, tc.steps, nil)

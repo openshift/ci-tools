@@ -45,11 +45,16 @@ func (v *Validator) commandHasTrap(cmd string) bool {
 // All but `field` can be nil if the validation being performed in
 // context-independent.
 type context struct {
-	field      fieldPath
-	env        api.TestEnvironment
-	seen       sets.String
+	// field is the full path to the current field, used in error messages.
+	field fieldPath
+	// env is used to validate that all step parameters are set.
+	env api.TestEnvironment
+	// namesSeen is used to validate that step names are unique.
+	namesSeen sets.String
+	// leasesSeen is used to validate that lease variable names are unique.
 	leasesSeen sets.String
-	releases   sets.String
+	// releases is used to validate references to release images .
+	releases sets.String
 }
 
 // newContext creates a top-level context.
@@ -57,7 +62,7 @@ func newContext(field fieldPath, env api.TestEnvironment, releases sets.String) 
 	return &context{
 		field:      field,
 		env:        env,
-		seen:       sets.NewString(),
+		namesSeen:  sets.NewString(),
 		leasesSeen: sets.NewString(),
 		releases:   releases,
 	}
@@ -546,19 +551,19 @@ func validateTestStep(context *context, step api.TestStep) (ret []error) {
 	if step.Reference != nil {
 		if len(*step.Reference) == 0 {
 			ret = append(ret, context.addField("ref").errorf("length cannot be 0"))
-		} else if context.seen.Has(*step.Reference) {
+		} else if context.namesSeen.Has(*step.Reference) {
 			ret = append(ret, context.addField("ref").errorf("duplicated name %q", *step.Reference))
 		} else {
-			context.seen.Insert(*step.Reference)
+			context.namesSeen.Insert(*step.Reference)
 		}
 	}
 	if step.Chain != nil {
 		if len(*step.Chain) == 0 {
 			ret = append(ret, context.addField("chain").errorf("length cannot be 0"))
-		} else if context.seen.Has(*step.Chain) {
+		} else if context.namesSeen.Has(*step.Chain) {
 			ret = append(ret, context.addField("chain").errorf("duplicated name %q", *step.Chain))
 		} else {
-			context.seen.Insert(*step.Chain)
+			context.namesSeen.Insert(*step.Chain)
 		}
 	}
 	return
@@ -567,11 +572,11 @@ func validateTestStep(context *context, step api.TestStep) (ret []error) {
 func (v *Validator) validateLiteralTestStep(context *context, stage testStage, step api.LiteralTestStep, claimRelease *api.ClaimRelease) (ret []error) {
 	if len(step.As) == 0 {
 		ret = append(ret, context.errorf("`as` is required"))
-	} else if context.seen != nil {
-		if context.seen.Has(step.As) {
+	} else if context.namesSeen != nil {
+		if context.namesSeen.Has(step.As) {
 			ret = append(ret, context.errorf("duplicated name %q", step.As))
 		} else {
-			context.seen.Insert(step.As)
+			context.namesSeen.Insert(step.As)
 		}
 	}
 	if len(step.From) == 0 && step.FromImage == nil {

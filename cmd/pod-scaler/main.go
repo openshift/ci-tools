@@ -11,17 +11,19 @@ import (
 	prometheusclient "github.com/prometheus/client_golang/api"
 	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/sirupsen/logrus"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/api/option"
 	"gopkg.in/fsnotify.v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
 	pprofutil "k8s.io/test-infra/prow/pjutil/pprof"
 	"k8s.io/test-infra/prow/version"
+	controllerruntime "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
@@ -212,9 +214,20 @@ func mainProduce(opts *options, cache cache) {
 }
 
 func mainAdmission(opts *options) {
-	restConfig, err := rest.InClusterConfig()
+	// TODO: figure out the logrusr dependency hell with logr and c-r
+	var level zapcore.Level
+	if err := level.UnmarshalText([]byte(opts.loglevel)); err != nil {
+		logrus.WithError(err).Fatal("Could not parse log level for logr.")
+	}
+
+	controllerruntime.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{
+		DestWriter: os.Stdout,
+		Level:      level,
+	})))
+
+	restConfig, err := util.LoadClusterConfig()
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to load in-cluster config.")
+		logrus.WithError(err).Fatal("Failed to load cluster config.")
 	}
 	client, err := buildclientset.NewForConfig(restConfig)
 	if err != nil {

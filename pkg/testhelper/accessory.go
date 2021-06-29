@@ -145,7 +145,7 @@ func (a *Accessory) run(parentCtx context.Context, t TestingTInterface, failfunc
 	})
 	cmd := exec.CommandContext(ctx, a.command, append(a.args, a.flags(a.port, a.healthPort)...)...)
 	cmd.Env = append(cmd.Env, a.env...)
-	t.Logf("running: %v", cmd.Args)
+	t.Logf("running: %v %v", strings.Join(cmd.Env, " "), strings.Join(cmd.Args, " "))
 	artifactDir := ArtifactDir(t)
 	logFile, err := os.Create(filepath.Join(artifactDir, fmt.Sprintf("%s.log", a.command)))
 	if err != nil {

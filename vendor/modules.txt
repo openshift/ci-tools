@@ -427,6 +427,7 @@ github.com/openshift/imagebuilder/signal
 github.com/openshift/imagebuilder/strslice
 # github.com/openshift/library-go v0.0.0-20200127110935-527e40ed17d9 => github.com/openshift/library-go v0.0.0-20200527213645-a9b77f5402e3
 ## explicit
+github.com/openshift/library-go/pkg/crypto
 github.com/openshift/library-go/pkg/image/imageutil
 github.com/openshift/library-go/pkg/image/internal/digest
 github.com/openshift/library-go/pkg/image/internal/reference
@@ -873,6 +874,9 @@ k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/third_party/forked/golang/netutil
 k8s.io/apimachinery/third_party/forked/golang/reflect
+# k8s.io/apiserver v0.21.1
+## explicit
+k8s.io/apiserver/pkg/authentication/user
 # k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible => k8s.io/client-go v0.21.0
 ## explicit
 k8s.io/client-go/applyconfigurations/admissionregistration/v1
@@ -1152,6 +1156,8 @@ k8s.io/client-go/util/workqueue
 # k8s.io/component-base v0.21.1 => k8s.io/component-base v0.21.0
 k8s.io/component-base/config
 k8s.io/component-base/config/v1alpha1
+# k8s.io/klog v1.0.0
+k8s.io/klog
 # k8s.io/klog/v2 v2.8.0
 ## explicit
 k8s.io/klog/v2

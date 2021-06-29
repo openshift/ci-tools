@@ -67,6 +67,7 @@ require (
 	gopkg.in/robfig/cron.v2 v2.0.0-20150107220207-be2e0b0deed5
 	k8s.io/api v0.21.1
 	k8s.io/apimachinery v0.21.1
+	k8s.io/apiserver v0.21.1
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
 	k8s.io/klog/v2 v2.8.0
 	k8s.io/test-infra v0.0.0-20210623151810-40ee9bd9852d

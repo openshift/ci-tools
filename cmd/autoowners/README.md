@@ -6,41 +6,63 @@ This utility updates the `OWNERS` files from remote OpenShift repositories.
 $ autoowners -h
 Usage of autoowners:
   -assign string
-        The github username or group name to assign the created pull request to. (default "openshift/openshift-team-developer-productivity-test-platform")
-  -config-subdir string
-        The comma-separated list of sub-directories where configuration is stored. (default "jobs,config,templates")
+    	The github username or group name to assign the created pull request to. (default "openshift/openshift-team-developer-productivity-test-platform")
+  -config-subdir value
+    	The sub-directory where configuration is stored. (Default list of directories: jobs,config,templates)
   -debug-mode
-        Enable the DEBUG level of logs if true.
+    	Enable the DEBUG level of logs if true.
   -dry-run
-        Whether to actually create the pull request with github client (default true)
+    	Whether to actually create the pull request with github client (default true)
+  -extra-config-dir value
+    	The directory path from the repo root where extra configuration is stored.
   -git-email string
-        The email to use on the git commit. Requires --git-name. If not specified, uses the system default.
+    	The email to use on the git commit. Requires --git-name. If not specified, uses the system default.
   -git-name string
-        The name to use on the git commit. Requires --git-email. If not specified, uses the system default.
+    	The name to use on the git commit. Requires --git-email. If not specified, uses the system default.
+  -git-signoff
+    	Whether to signoff the commit. (https://git-scm.com/docs/git-commit#Documentation/git-commit.txt---signoff)
+  -github-allowed-burst int
+    	Size of token consumption bursts. If set, --github-hourly-tokens must be positive too and set to a higher or equal number.
+  -github-app-id string
+    	ID of the GitHub app. If set, requires --github-app-private-key-path to be set and --github-token-path to be unset.
+  -github-app-private-key-path string
+    	Path to the private key of the github app. If set, requires --github-app-id to bet set and --github-token-path to be unset
   -github-endpoint value
-        GitHub's API endpoint (may differ for enterprise). (default https://api.github.com)
+    	GitHub's API endpoint (may differ for enterprise). (default https://api.github.com)
   -github-graphql-endpoint string
-        GitHub GraphQL API endpoint (may differ for enterprise). (default "https://api.github.com/graphql")
+    	GitHub GraphQL API endpoint (may differ for enterprise). (default "https://api.github.com/graphql")
   -github-host string
-        GitHub's default host (may differ for enterprise) (default "github.com")
+    	GitHub's default host (may differ for enterprise) (default "github.com")
+  -github-hourly-tokens int
+    	If set to a value larger than zero, enable client-side throttling to limit hourly token consumption. If set, --github-allowed-burst must be positive too.
   -github-login string
-        The GitHub username to use. (default "openshift-bot")
-  -github-token-file string
-        DEPRECATED: use -github-token-path instead.  -github-token-file may be removed anytime after 2019-01-01.
+    	The GitHub username to use. (default "openshift-bot")
+  -github-throttle-org value
+    	Throttler settings for a specific org in org:hourlyTokens:burst format. Can be passed multiple times. Only valid when using github apps auth.
   -github-token-path string
-        Path to the file containing the GitHub OAuth secret.
+    	Path to the file containing the GitHub OAuth secret.
+  -ignore-org value
+    	The orgs for which syncing OWNERS file is disabled.
   -ignore-repo value
-        The repo for which syncing OWNERS file is disabled.
+    	The repo for which syncing OWNERS file is disabled.
   -org string
-        The downstream GitHub org name. (default "openshift")
+    	The downstream GitHub org name. (default "openshift")
+  -plugin-config string
+    	Path to plugin config file.
+  -pr-base-branch string
+    	The base branch to use for the pull request. (default "master")
   -repo string
-        The downstream GitHub repository name. (default "release")
+    	The downstream GitHub repository name. (default "release")
   -self-approve approved
-        Self-approve the PR by adding the approved and `lgtm` labels. Requires write permissions on the repo.
+    	Self-approve the PR by adding the approved and `lgtm` labels. Requires write permissions on the repo.
+  -supplemental-plugin-config-dir value
+    	An additional directory from which to load plugin configs. Can be used for config sharding but only supports a subset of the config. The flag can be passed multiple times.
+  -supplemental-plugin-configs-filename-suffix string
+    	Suffix for additional plugin configs. Only files with this name will be considered (default "_pluginconfig.yaml")
   -target-dir string
-        The directory containing the target repo.
+    	The directory containing the target repo.
   -target-subdir string
-        The sub-directory of the target repo where the configurations are stored. (default "ci-operator")
+    	The sub-directory of the target repo where the configurations are stored. (default "ci-operator")
 ```
 
 Upstream repositories are calculated from `{target-subdir}/{config-subdir[0]}/{organization}/{repository}`.

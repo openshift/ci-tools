@@ -18,11 +18,15 @@ tests:
   commands: exit 1
   container:
     from: os
-- as: cloning
+- as: container-test-from-base-image-implicitly-clones
   commands: echo $PWD|grep -q github.com/openshift/ci-tools
   container:
     from: os
-    clone: true
+- as: container-test-from-base-image-without-cloning-doesnt-clone
+  commands: '! echo $PWD|grep -q github.com/openshift/ci-tools'
+  container:
+    from: os
+    clone: false
 zz_generated_metadata:
   branch: master
   org: test

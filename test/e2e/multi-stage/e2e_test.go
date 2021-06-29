@@ -31,7 +31,7 @@ func TestMultiStage(t *testing.T) {
 		output   []string
 	}{
 		{
-			name:    "fetching full config from resolver",
+			name:    "fetching full config for simple container test from resolver",
 			args:    []string{"--target=success"},
 			env:     []string{defaultJobSpec},
 			success: true,

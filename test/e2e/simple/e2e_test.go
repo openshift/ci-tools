@@ -42,8 +42,13 @@ func TestSimpleExitCodes(t *testing.T) {
 			output:  []string{"Container test in pod failure failed, exit code 1, reason Error"},
 		},
 		{
-			name:    "clone target clones",
-			args:    []string{"--target=cloning"},
+			name:    "implicit cloning",
+			args:    []string{"--target=container-test-from-base-image-implicitly-clones"},
+			success: true,
+		},
+		{
+			name:    "implicit cloning can be disabled",
+			args:    []string{"--target=container-test-from-base-image-without-cloning-doesnt-clone"},
 			success: true,
 		},
 	}

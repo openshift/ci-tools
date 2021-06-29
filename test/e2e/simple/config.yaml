@@ -14,7 +14,6 @@ tests:
   commands: exit 0
   container:
     from: os
-    clone: true
 - as: failure
   commands: exit 1
   container:
@@ -23,6 +22,7 @@ tests:
   commands: ls -l && pwd
   container:
     from: os
+    clone: true
 zz_generated_metadata:
   branch: master
   org: test

@@ -3,7 +3,6 @@
 package prometheus
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -69,20 +68,7 @@ func (d *DataInStages) record(offset time.Duration, metric string, labels series
 	if _, ok := d.ByOffset[offset].ByFile[file]; !ok {
 		d.ByOffset[offset].ByFile[file] = map[pod_scaler.FullMetadata][]*circonusllhist.HistogramWithoutLookups{}
 	}
-
-	// round-tripping ensures we have a slice of buckets in the histogram that's as small as possible,
-	// which ends up being necessary for equality - the natural growth of the slice will lead to some
-	// unused capacity in the hist structure which trips the equality function up
-	withoutLookups := circonusllhist.NewHistogramWithoutLookups(hist)
-	raw, err := withoutLookups.MarshalJSON()
-	if err != nil {
-		return fmt.Errorf("could not serialize histogram: %w", err)
-	}
-	var copied circonusllhist.HistogramWithoutLookups
-	if err := json.Unmarshal(raw, &copied); err != nil {
-		return fmt.Errorf("could not deserialize histogram: %w", err)
-	}
-	d.ByOffset[offset].ByFile[file][identifier] = append(d.ByOffset[offset].ByFile[file][identifier], &copied)
+	d.ByOffset[offset].ByFile[file][identifier] = append(d.ByOffset[offset].ByFile[file][identifier], circonusllhist.NewHistogramWithoutLookups(hist))
 
 	return nil
 }

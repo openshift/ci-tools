@@ -217,27 +217,12 @@ func (q *querier) execute(ctx context.Context, c *clusterMetadata, until time.Ti
 	})
 	logger.Info("Initiating queries to Prometheus.")
 	uncovered := q.uncoveredRanges(c.name, rangeFrom(r))
-	for _, uncoveredRange := range uncovered {
-		// Prometheus has practical limits for how much data we can ask for in any one request,
-		// so we take each uncovered range and split it into chunks we can ask for.
-		start := uncoveredRange.Start
-		stop := uncoveredRange.End
-		c.lock.RLock()
-		numSteps := c.maxSize - 1
-		c.lock.RUnlock()
-		for {
-			if start.Equal(uncoveredRange.End) {
-				break
-			}
-			if int64(stop.Sub(start)/r.Step) > numSteps {
-				stop = start.Add(time.Duration(numSteps) * r.Step)
-			}
-			c.wg.Add(1)
-			// subtracting 1s from the end will ensure we don't double-count samples on the edge, as ranges are inclusive
-			go q.executeOverRange(ctx, c, prometheusapi.Range{Start: start, End: stop.Add(-1 * time.Second), Step: r.Step})
-			start = stop
-			stop = uncoveredRange.End
-		}
+	c.lock.RLock()
+	numSteps := c.maxSize - 1
+	c.lock.RUnlock()
+	for _, r := range divideRange(uncovered, r.Step, numSteps) {
+		c.wg.Add(1)
+		go q.executeOverRange(ctx, c, r)
 	}
 	c.wg.Wait()
 	q.lock.RLock()
@@ -255,6 +240,39 @@ func (q *querier) uncoveredRanges(cluster string, r pod_scaler.TimeRange) []pod_
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 	return pod_scaler.UncoveredRanges(r, q.data.RangesByCluster[cluster])
+}
+
+// divideRange divides a range into smaller ranges based on how many samples we think is reasonable
+// to ask for from Prometheus in one query
+func divideRange(uncovered []pod_scaler.TimeRange, step time.Duration, numSteps int64) []prometheusapi.Range {
+	var divided []prometheusapi.Range
+	for _, uncoveredRange := range uncovered {
+		// Prometheus has practical limits for how much data we can ask for in any one request,
+		// so we take each uncovered range and split it into chunks we can ask for.
+		start := uncoveredRange.Start
+		stop := uncoveredRange.End
+		for {
+			if start.After(uncoveredRange.End) {
+				break
+			}
+			steps := int64(stop.Sub(start) / step)
+			if steps <= 1 {
+				// this range is likely too small to contain novel data and asking for this in a query leads
+				// to weird behavior - if we ignore it for now, we won't call it covered and will subsume it
+				// into a larger range in the future
+				break
+			} else if steps > numSteps {
+				stop = start.Add(time.Duration(numSteps) * step)
+			}
+			divided = append(divided, prometheusapi.Range{Start: start, End: stop, Step: step})
+			// adding a step to the start will ensure we don't double-count samples on the edge, as ranges are inclusive
+			// and the query is evaulated at start, start+step, start+2*step, etc - if we started less than end+step, we
+			// would get the same value we got at the end of the previous query
+			start = stop.Add(step)
+			stop = uncoveredRange.End
+		}
+	}
+	return divided
 }
 
 func (q *querier) executeOverRange(ctx context.Context, c *clusterMetadata, r prometheusapi.Range) {
@@ -278,7 +296,7 @@ func (q *querier) executeOverRange(ctx context.Context, c *clusterMetadata, r pr
 		c.wg.Add(2)
 		middle := r.Start.Add(time.Duration(numSteps) / 2 * r.Step)
 		go q.executeOverRange(ctx, c, prometheusapi.Range{Start: r.Start, End: middle, Step: r.Step})
-		go q.executeOverRange(ctx, c, prometheusapi.Range{Start: middle, End: r.End, Step: r.Step})
+		go q.executeOverRange(ctx, c, prometheusapi.Range{Start: middle.Add(r.Step), End: r.End, Step: r.Step})
 	}
 	if numSteps >= currentMax {
 		logger.Debugf("Preemptively halving request as prior data shows ours is too large (%d>=%d).", numSteps, currentMax)

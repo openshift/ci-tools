@@ -157,7 +157,7 @@ TAGS ?= e2e,e2e_framework
 #   make e2e
 #   make e2e SUITE=multi-stage
 e2e: $(TMPDIR)/.boskos-credentials
-	BOSKOS_CREDENTIALS_FILE="$(TMPDIR)/boskos-credentials" PACKAGES="./test/e2e/..." TESTFLAGS="$(TESTFLAGS) -tags $(TAGS) -timeout 70m -parallel 100" hack/test-go.sh
+	BOSKOS_CREDENTIALS_FILE="$(TMPDIR)/.boskos-credentials" PACKAGES="./test/e2e/..." TESTFLAGS="$(TESTFLAGS) -tags $(TAGS) -timeout 70m -parallel 100" hack/test-go.sh
 .PHONY: e2e
 
 $(TMPDIR)/.boskos-credentials:

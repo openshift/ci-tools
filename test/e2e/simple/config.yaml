@@ -19,7 +19,7 @@ tests:
   container:
     from: os
 - as: cloning
-  commands: ls -l && pwd
+  commands: echo $PWD|grep -q github.com/openshift/ci-tools
   container:
     from: os
     clone: true

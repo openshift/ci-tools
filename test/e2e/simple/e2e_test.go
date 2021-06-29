@@ -45,7 +45,6 @@ func TestSimpleExitCodes(t *testing.T) {
 			name:    "clone target clones",
 			args:    []string{"--target=cloning"},
 			success: true,
-			output:  []string{"src/github.com/openshift/ci-tools"},
 		},
 	}
 

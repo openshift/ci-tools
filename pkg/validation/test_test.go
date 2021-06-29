@@ -1336,7 +1336,7 @@ func TestValidateTestConfigurationType(t *testing.T) {
 					},
 				},
 			},
-			expected: []error{fmt.Errorf("test.cluster is not a vailid cluster: bar")},
+			expected: []error{fmt.Errorf("test.cluster is not a valid cluster: bar")},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

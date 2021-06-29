@@ -421,7 +421,7 @@ func (v *Validator) validateTestConfigurationType(fieldRoot string, test api.Tes
 	}
 	typeCount := 0
 	if cluster := test.Cluster; cluster != "" && !api.ValidClusterNames.Has(string(cluster)) {
-		validationErrors = append(validationErrors, fmt.Errorf("%s.cluster is not a vailid cluster: %s", fieldRoot, string(cluster)))
+		validationErrors = append(validationErrors, fmt.Errorf("%s.cluster is not a valid cluster: %s", fieldRoot, string(cluster)))
 	}
 	if testConfig := test.ContainerTestConfiguration; testConfig != nil {
 		typeCount++

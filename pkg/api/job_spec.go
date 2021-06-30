@@ -14,7 +14,7 @@ import (
 
 // JobSpec is a superset of the upstream spec.
 type JobSpec struct {
-	downwardapi.JobSpec `json:",inline"`
+	downwardapi.JobSpec `json:",inline" yaml:",inline"`
 
 	// rawSpec is the serialized form of the Spec
 	rawSpec string

@@ -87,7 +87,7 @@ spec:
     - /clonerefs
     env:
     - name: CLONEREFS_OPTIONS
-      value: '{"src_root":"/home/prow/go","log":"/logs/clone.json","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"base-ref","base_sha":"base-sha","pulls":[{"number":123,"author":"","sha":"72532003f9e01e89f455187dd92c275204bc9781"}]}],"fail":true}'
+      value: '{"src_root":"/home/prow/go","log":"/logs/clone.json","git_user_name":"ci-robot","git_user_email":"ci-robot@k8s.io","refs":[{"org":"org","repo":"repo","base_ref":"base-ref","base_sha":"base-sha","pulls":[{"number":123,"author":"","sha":"72532003f9e01e89f455187dd92c275204bc9781"}]}]}'
     name: clonerefs
     resources: {}
     volumeMounts:

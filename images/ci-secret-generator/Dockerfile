@@ -6,9 +6,7 @@ COPY usr/bin/oc /usr/bin/oc
 
 COPY google-cloud-sdk.repo /etc/yum.repos.d/google-cloud-sdk.repo
 
-RUN  \
-	dnf install -y nodejs jq google-cloud-sdk && \
-	npm install -g @bitwarden/cli
+RUN dnf install -y jq google-cloud-sdk
 
 ADD ci-secret-generator /usr/bin/ci-secret-generator
 

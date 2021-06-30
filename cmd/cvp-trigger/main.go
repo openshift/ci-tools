@@ -9,14 +9,17 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	pjclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	prowconfig "k8s.io/test-infra/prow/config"
@@ -305,8 +308,16 @@ func main() {
 	selector := fields.SelectorFromSet(map[string]string{"metadata.name": created.Name})
 
 	for {
-		w, err := pjclient.Watch(context.TODO(), metav1.ListOptions{FieldSelector: selector.String()})
-		if err != nil {
+		var w watch.Interface
+		if err = wait.ExponentialBackoff(wait.Backoff{Steps: 10, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
+			var err2 error
+			w, err2 = pjclient.Watch(interrupts.Context(), metav1.ListOptions{FieldSelector: selector.String()})
+			if err2 != nil {
+				logrus.Error(err2)
+				return false, nil
+			}
+			return true, nil
+		}); err != nil {
 			logrus.WithError(err).Fatal("failed to create watch for ProwJobs")
 		}
 

@@ -244,6 +244,10 @@ validate-registry-metadata:
 	test -z "$$(git status -s ./test/multistage-registry/registry | grep registry)"
 .PHONY: validate-registry-metadata
 
+validate-checkconfig:
+	test/validate-checkconfig.sh
+.PHONY: validate-checkconfig
+
 $(TMPDIR)/.ci-operator-kubeconfig:
 	oc --context $(CLUSTER) --as system:admin --namespace ci serviceaccounts create-kubeconfig ci-operator > $(TMPDIR)/.ci-operator-kubeconfig
 

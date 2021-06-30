@@ -54,7 +54,7 @@ func UpsertImmutableSecret(ctx context.Context, client ctrlruntimeclient.Client,
 		return false, err
 	}
 	existing := &coreapi.Secret{}
-	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: secret.Name}, existing); err != nil {
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: secret.Name, Namespace: secret.Namespace}, existing); err != nil {
 		return false, err
 	}
 	if equality.Semantic.DeepEqual(secret.Data, existing.Data) {

@@ -186,7 +186,7 @@ func getOwnersHTTP(fg FileGetter, orgRepo orgRepo, filenames ownersconfig.Filena
 			if _, nf := err.(*github.FileNotFound); nf {
 				logrus.WithField("orgRepo", orgRepo.repoString()).WithField("filename", filename).
 					Debug("Not found file in the upstream repo")
-				continue
+				break
 			}
 			return httpResult, err
 		}

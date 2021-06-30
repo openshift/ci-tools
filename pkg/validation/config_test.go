@@ -762,6 +762,15 @@ func TestReleaseBuildConfiguration_DependencyParts(t *testing.T) {
 			expectedTag:    "really",
 			explicit:       true,
 		},
+		{
+			name:           "release payload image gets overridden by cluster claim",
+			config:         &api.ReleaseBuildConfiguration{},
+			claimRelease:   &api.ClaimRelease{ReleaseName: "latest-e2e-claim", OverrideName: "latest"},
+			dependency:     api.StepDependency{Name: "release:latest"},
+			expectedStream: "release",
+			expectedTag:    "latest-e2e-claim",
+			explicit:       true,
+		},
 	}
 
 	for _, testCase := range testCases {

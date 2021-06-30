@@ -1,3 +1,8 @@
+base_images:
+  os:
+    name: centos
+    namespace: openshift
+    tag: '7'
 releases:
   latest:   # include `latest` as a release to verify that `latest` is automatically overridden when using claims
     release:
@@ -66,6 +71,29 @@ tests:
             requests:
               cpu: 100m
               memory: 200Mi
+  - as: e2e-claim-depend-on-release-image
+    cluster_claim:
+      architecture: amd64
+      cloud: aws
+      owner: fake
+      product: ocp
+      timeout: 3m # a claim from a fake pool should become ready very soon
+      version: "4.7"
+    steps:
+      test:
+        - as: claim-step
+          commands: |
+            set -x
+            cmp "${KUBECONFIG}" /secrets/e2e-claim-depend-on-release-image-hive-admin-kubeconfig/kubeconfig
+            echo "$(RELEASE_IMAGE_LATEST)"
+          from: os
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+          dependencies:
+          - env: RELEASE_IMAGE_LATEST
+            name: release:latest
 zz_generated_metadata:
   branch: master
   org: test

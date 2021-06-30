@@ -358,6 +358,7 @@ func stepForTest(
 			}
 			hasReleaseStep = true
 			claimRelease := c.ClusterClaim.ClaimRelease(c.As)
+			logrus.Infof("Resolved release %s to %s", claimRelease.ReleaseName, pullSpec)
 			importStep := releasesteps.ImportReleaseStep(claimRelease.ReleaseName, pullSpec, false, config.Resources, podClient, jobSpec, pullSecret)
 			testSteps = append(testSteps, importStep)
 			addProvidesForStep(step, params)

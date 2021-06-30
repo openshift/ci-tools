@@ -92,8 +92,14 @@ func (config *ReleaseBuildConfiguration) DependencyParts(dependency StepDependen
 		name = parts[1]
 		explicit = true
 	}
-	if claimRelease != nil && ReleaseStreamFor(claimRelease.OverrideName) == stream {
-		stream = ReleaseStreamFor(claimRelease.ReleaseName)
+	if claimRelease != nil {
+		if stream == ReleaseImageStream && claimRelease.OverrideName == name {
+			// handle release images like `release:latest`
+			name = claimRelease.ReleaseName
+		} else if stream == ReleaseStreamFor(claimRelease.OverrideName) {
+			// handle images from release streams like `stable:cli`
+			stream = ReleaseStreamFor(claimRelease.ReleaseName)
+		}
 	}
 	return stream, name, explicit
 }

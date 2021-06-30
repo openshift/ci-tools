@@ -977,7 +977,7 @@ type MemoryBackedVolume struct {
 type ContainerTestConfiguration struct {
 	// From is the image stream tag in the pipeline to run this
 	// command in.
-	From PipelineImageStreamTagReference `json:"from,omitempty"`
+	From PipelineImageStreamTagReference `json:"from"`
 	// MemoryBackedVolume mounts a volume of the specified size into
 	// the container at /tmp/volume.
 	MemoryBackedVolume *MemoryBackedVolume `json:"memory_backed_volume,omitempty"`

@@ -60,7 +60,7 @@ func (o *options) validate() (ret []error) {
 			validator := validation.NewValidator()
 			for item := range workCh {
 				if err := o.validateConfiguration(&validator, seenCh, item.configuration, item.repoInfo); err != nil {
-					errCh <- err
+					errCh <- fmt.Errorf("failed to validate configuration %s: %w", item.repoInfo.Filename, err)
 				}
 			}
 			doneCh <- struct{}{}
@@ -77,6 +77,7 @@ func (o *options) validate() (ret []error) {
 		for err := range errCh {
 			ret = append(ret, err)
 		}
+		doneCh <- struct{}{}
 	}()
 	if err := config.OperateOnCIOperatorConfigDir(o.configDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		workCh <- workItem{configuration, repoInfo}
@@ -90,6 +91,7 @@ func (o *options) validate() (ret []error) {
 	}
 	close(seenCh)
 	close(errCh)
+	<-doneCh
 	<-doneCh
 	close(doneCh)
 	ret = append(ret, validateTags(seen)...)

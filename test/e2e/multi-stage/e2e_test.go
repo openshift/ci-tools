@@ -147,6 +147,13 @@ func TestMultiStage(t *testing.T) {
 			success:  true,
 			output:   []string{`Imported release 4.7.17`, `to tag release:custom-e2e-claim-as-custom`, `e2e-claim-as-custom-claim-step succeeded`},
 		},
+		{
+			name:     "e2e-claim depends on release image",
+			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-claim-depend-on-release-image"},
+			needHive: true,
+			success:  true,
+			output:   []string{`Imported release 4.7.17`, `to tag release:latest-e2e-claim-depend-on-release-image`, `e2e-claim-depend-on-release-image-claim-step succeeded`},
+		},
 	}
 
 	for _, testCase := range testCases {

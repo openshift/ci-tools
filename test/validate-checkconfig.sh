@@ -9,16 +9,18 @@ trap 'rm -rf "${workdir}"' EXIT
 clonedir="${workdir}/release"
 failure=0
 
+# The `openshift/release` registry is used for all repositories.
+registry="${clonedir}/openshift/ci-operator/step-registry"
+
 for org in openshift redhat-operator-ecosystem; do
-  rm -rf "${clonedir}"
-  git clone "https://github.com/${org}/release.git" --depth 1 "${clonedir}"
+  git clone "https://github.com/${org}/release.git" --depth 1 "${clonedir}/${org}"
 
   # We need to enter the git directory and run git commands from there, our git
   # is too old to know the `-C` option.
-  pushd "${clonedir}"
+  pushd "${clonedir}/${org}"
   if ! ci-operator-checkconfig \
-      --config-dir "${clonedir}/ci-operator/config" \
-      --registry "${clonedir}/ci-operator/step-registry"
+    --config-dir ci-operator/config \
+    --registry "${registry}"
   then
     echo "ERROR: Errors in $org/release"
     echo

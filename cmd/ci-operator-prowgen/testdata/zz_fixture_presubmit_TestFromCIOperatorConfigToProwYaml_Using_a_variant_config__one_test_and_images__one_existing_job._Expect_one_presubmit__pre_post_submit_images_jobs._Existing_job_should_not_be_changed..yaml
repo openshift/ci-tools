@@ -3,7 +3,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - branch
+    - ^branch$
+    - ^branch-
     context: ci/prow/rhel-images
     decorate: true
     decoration_config:
@@ -52,7 +53,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - branch
+    - ^branch$
+    - ^branch-
     context: ci/prow/rhel-unit
     decorate: true
     decoration_config:

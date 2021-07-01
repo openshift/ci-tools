@@ -445,7 +445,7 @@ func generatePresubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.Po
 	return &prowconfig.Presubmit{
 		JobBase:   base,
 		AlwaysRun: true,
-		Brancher:  prowconfig.Brancher{Branches: []string{info.Branch}},
+		Brancher:  prowconfig.Brancher{Branches: sets.NewString(exactlyBranch(info.Branch), featureBranch(info.Branch)).List()},
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/prow/%s", shortName),
 		},
@@ -458,7 +458,7 @@ func generatePostsubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.P
 	base := generateJobBase(name, jc.PostsubmitPrefix, info, podSpec, false, pathAlias, jobRelease, skipCloning)
 	return &prowconfig.Postsubmit{
 		JobBase:  base,
-		Brancher: prowconfig.Brancher{Branches: []string{makeBranchExplicit(info.Branch)}},
+		Brancher: prowconfig.Brancher{Branches: []string{exactlyBranch(info.Branch)}},
 	}
 }
 
@@ -618,14 +618,23 @@ func generateJobBase(name, prefix string, info *ProwgenInfo, podSpec *corev1.Pod
 // not.
 var simpleBranchRegexp = regexp.MustCompile(`^[\w\-.]+$`)
 
-// makeBranchExplicit updates the provided branch to prevent wildcard matches to the given branch
-// if the branch value does not appear to contain an explicit regex pattern. I.e. 'master'
-// is turned into '^master$'.
-func makeBranchExplicit(branch string) string {
+// exactlyBranch returns a regex string that matches exactly the given branch name: I.e. returns
+// '^master$' for 'master'. If the given branch name already looks like a regex, return it unchanged.
+func exactlyBranch(branch string) string {
 	if !simpleBranchRegexp.MatchString(branch) {
 		return branch
 	}
 	return fmt.Sprintf("^%s$", regexp.QuoteMeta(branch))
+}
+
+// featureBranch returns a regex string that matches feature branch prefixes for the given branch name:
+// I.e. returns '^master-' for 'master'. If the given branch name already looks like a regex,
+// return it unchanged.
+func featureBranch(branch string) string {
+	if !simpleBranchRegexp.MatchString(branch) {
+		return branch
+	}
+	return fmt.Sprintf("^%s-", regexp.QuoteMeta(branch))
 }
 
 // IsGenerated returns true if the job was generated using prowgen

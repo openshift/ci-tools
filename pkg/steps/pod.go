@@ -2,6 +2,7 @@ package steps
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -50,6 +51,7 @@ type PodStepConfiguration struct {
 	ServiceAccountName string
 	Secrets            []*api.Secret
 	MemoryBackedVolume *api.MemoryBackedVolume
+	Clone              bool
 }
 
 type podStep struct {
@@ -83,12 +85,12 @@ func (s *podStep) run(ctx context.Context) error {
 		return fmt.Errorf("unable to calculate %s pod resources for %s: %w", s.name, s.config.As, err)
 	}
 
-	if len(s.config.From.Namespace) > 0 {
-		return fmt.Errorf("pod step does not support an image stream tag reference outside the namespace")
+	if s.config.From.Namespace != "" {
+		return errors.New("pod step does not support an image stream tag reference outside the namespace")
 	}
 	image := fmt.Sprintf("%s:%s", s.config.From.Name, s.config.From.Tag)
 
-	pod, err := s.generatePodForStep(image, containerResources)
+	pod, err := s.generatePodForStep(image, containerResources, s.config.Clone)
 	if err != nil {
 		return fmt.Errorf("pod step was invalid: %w", err)
 	}
@@ -161,6 +163,7 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 			Commands:           config.Commands,
 			Secrets:            config.Secrets,
 			MemoryBackedVolume: config.ContainerTestConfiguration.MemoryBackedVolume,
+			Clone:              *config.ContainerTestConfiguration.Clone,
 		},
 		resources,
 		client,
@@ -192,6 +195,7 @@ func generateBasePod(
 	decorationConfig *v1.DecorationConfig,
 	rawJobSpec string,
 	secretsToCensor []coreapi.VolumeMount,
+	clone bool,
 ) (*coreapi.Pod, error) {
 	envMap, err := downwardapi.EnvForSpec(jobSpec.JobSpec)
 	envMap[openshiftCIEnv] = "true"
@@ -223,13 +227,13 @@ func generateBasePod(
 		},
 	}
 	artifactDir = fmt.Sprintf("artifacts/%s", artifactDir)
-	if err := addPodUtils(pod, artifactDir, decorationConfig, rawJobSpec, secretsToCensor); err != nil {
+	if err := addPodUtils(pod, artifactDir, decorationConfig, rawJobSpec, secretsToCensor, clone, jobSpec); err != nil {
 		return nil, fmt.Errorf("failed to decorate pod: %w", err)
 	}
 	return pod, nil
 }
 
-func (s *podStep) generatePodForStep(image string, containerResources coreapi.ResourceRequirements) (*coreapi.Pod, error) {
+func (s *podStep) generatePodForStep(image string, containerResources coreapi.ResourceRequirements, clone bool) (*coreapi.Pod, error) {
 	var secretVolumes []coreapi.Volume
 	var secretVolumeMounts []coreapi.VolumeMount
 	for i, secret := range s.config.Secrets {
@@ -270,7 +274,7 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	}
 
 	artifactDir := s.name
-	pod, err := generateBasePod(s.jobSpec, s.config.Labels, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts)
+	pod, err := generateBasePod(s.jobSpec, s.config.Labels, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts, clone)
 	if err != nil {
 		return nil, err
 	}

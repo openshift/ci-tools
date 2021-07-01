@@ -392,7 +392,7 @@ func removeFile(podClient PodClient, ns, name, containerName string, paths []str
 	return nil
 }
 
-func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.DecorationConfig, rawJobSpec string, secretsToCensor []coreapi.VolumeMount) error {
+func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.DecorationConfig, rawJobSpec string, secretsToCensor []coreapi.VolumeMount, clone bool, jobSpec *api.JobSpec) error {
 	logMount, logVolume := decorate.LogMountAndVolume()
 	toolsMount, toolsVolume := decorate.ToolsMountAndVolume()
 	blobStorageVolumes, blobStorageMounts, blobStorageOptions := decorate.BlobStorageOptions(*decorationConfig, false)
@@ -413,6 +413,29 @@ func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.
 
 	pod.Spec.Volumes = append(pod.Spec.Volumes, logVolume, toolsVolume)
 	pod.Spec.Volumes = append(pod.Spec.Volumes, blobStorageVolumes...)
+
+	if clone {
+		codeMount, codeVolume := decorate.CodeMountAndVolume()
+		cloneRefsContainer, refs, cloneRefsVolumes, err := decorate.CloneRefs(prowv1.ProwJob{Spec: prowv1.ProwJobSpec{Refs: jobSpec.Refs, ExtraRefs: jobSpec.ExtraRefs, DecorationConfig: decorationConfig}}, codeMount, logMount)
+		if err != nil {
+			return fmt.Errorf("failed to construct clonerefs: %w", err)
+		}
+		initUpload, err := decorate.InitUpload(decorationConfig, blobStorageOptions, blobStorageMounts, &logMount, nil, rawJobSpec)
+		if err != nil {
+			return fmt.Errorf("failed to get initUpload container: %w", err)
+		}
+		pod.Spec.InitContainers = append([]corev1.Container{*cloneRefsContainer, *initUpload}, pod.Spec.InitContainers...)
+		pod.Spec.Volumes = append(pod.Spec.Volumes, codeVolume)
+		pod.Spec.Volumes = append(pod.Spec.Volumes, cloneRefsVolumes...)
+
+		if len(refs) > 0 {
+			for i, container := range pod.Spec.Containers {
+				pod.Spec.Containers[i].WorkingDir = decorate.DetermineWorkDir(codeMount.MountPath, refs)
+				pod.Spec.Containers[i].VolumeMounts = append(container.VolumeMounts, codeMount)
+			}
+		}
+
+	}
 	return nil
 }
 

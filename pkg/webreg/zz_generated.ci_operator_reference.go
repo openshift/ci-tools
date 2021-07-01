@@ -389,6 +389,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        commands: ' '\n" +
 	"        # Only one of the following can be not-null.\n" +
 	"        container:\n" +
+	"            # If the step should clone the source code prior to running the command.\n" +
+	"            # Defaults to `true` for `base_images`, `false` otherwise.\n" +
+	"            clone: false\n" +
 	"            # From is the image stream tag in the pipeline to run this\n" +
 	"            # command in.\n" +
 	"            from: ' '\n" +
@@ -1090,6 +1093,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      commands: ' '\n" +
 	"      # Only one of the following can be not-null.\n" +
 	"      container:\n" +
+	"        # If the step should clone the source code prior to running the command.\n" +
+	"        # Defaults to `true` for `base_images`, `false` otherwise.\n" +
+	"        clone: false\n" +
 	"        # From is the image stream tag in the pipeline to run this\n" +
 	"        # command in.\n" +
 	"        from: ' '\n" +

@@ -425,7 +425,7 @@ func (v *Validator) validateTestConfigurationType(fieldRoot string, test api.Tes
 				validationErrors = append(validationErrors, fmt.Errorf("%s.memory_backed_volume: 'size' must be a Kubernetes quantity: %w", fieldRoot, err))
 			}
 		}
-		if len(testConfig.From) == 0 {
+		if testConfig.From == "" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: 'from' is required", fieldRoot))
 		}
 	}

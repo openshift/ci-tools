@@ -981,6 +981,9 @@ type ContainerTestConfiguration struct {
 	// MemoryBackedVolume mounts a volume of the specified size into
 	// the container at /tmp/volume.
 	MemoryBackedVolume *MemoryBackedVolume `json:"memory_backed_volume,omitempty"`
+	// If the step should clone the source code prior to running the command.
+	// Defaults to `true` for `base_images`, `false` otherwise.
+	Clone *bool `json:"clone,omitempty"`
 }
 
 // ClusterProfile is the name of a set of input variables

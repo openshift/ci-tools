@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -99,6 +100,7 @@ func TestPodStepExecution(t *testing.T) {
 	testCases := []struct {
 		purpose        string
 		podStatus      corev1.PodPhase
+		clone          bool
 		expectRunError bool
 	}{
 		{
@@ -110,11 +112,18 @@ func TestPodStepExecution(t *testing.T) {
 			podStatus:      corev1.PodFailed,
 			expectRunError: true,
 		},
+		{
+			purpose:        "Successful pod with cloning",
+			podStatus:      corev1.PodSucceeded,
+			clone:          true,
+			expectRunError: false,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.purpose, func(t *testing.T) {
 			ps, _ := preparePodStep(namespace)
+			ps.config.Clone = tc.clone
 			ps.client = &podClient{LoggingClient: loggingclient.New(&podStatusChangingClient{WithWatch: fakectrlruntimeclient.NewFakeClient(), dest: tc.podStatus})}
 
 			executionExpectation := executionExpectation{
@@ -224,7 +233,7 @@ func TestGetPodObjectMounts(t *testing.T) {
 			podStepTemplate := expectedPodStepTemplate()
 			tc.podStep(podStepTemplate)
 
-			pod, err := podStepTemplate.generatePodForStep("", corev1.ResourceRequirements{})
+			pod, err := podStepTemplate.generatePodForStep("", corev1.ResourceRequirements{}, false)
 			if err != nil {
 				t.Fatalf("unexpected err: %v", err)
 			}
@@ -296,7 +305,7 @@ func TestTestStepAndRequires(t *testing.T) {
 			name: "step without claim",
 			config: api.TestStepConfiguration{
 				As:                         "some",
-				ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "cli"},
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "cli", Clone: utilpointer.BoolPtr(false)},
 			},
 			expected: []api.StepLink{api.InternalImageLink("cli")},
 		},

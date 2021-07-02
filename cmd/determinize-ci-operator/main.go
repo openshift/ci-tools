@@ -64,6 +64,10 @@ func main() {
 		logrus.Fatalf("Invalid options: %v", err)
 	}
 
+	if err := o.ConfirmableOptions.Complete(); err != nil {
+		logrus.Fatalf("Couldn't complete the config options: %v", err)
+	}
+
 	var migratedCount int
 	var toCommit []config.DataWithInfo
 	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {

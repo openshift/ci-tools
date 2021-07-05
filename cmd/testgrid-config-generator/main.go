@@ -21,6 +21,7 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	prowconfig "k8s.io/test-infra/prow/config"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -177,39 +178,9 @@ func getAllowList(data []byte) (map[string]string, error) {
 	return allowList, utilerrors.NewAggregate(errs)
 }
 
-// release is a subset of fields from the release controller's config
-type release struct {
-	Name   string
-	Verify map[string]struct {
-		Optional bool `json:"optional"`
-		Upgrade  bool `json:"upgrade"`
-		ProwJob  struct {
-			Name        string            `json:"name"`
-			Annotations map[string]string `json:"annotations"`
-		} `json:"prowJob"`
-	} `json:"verify"`
-}
-
-var reVersion = regexp.MustCompile(`-(\d+\.\d+)(-|$)`)
-
-// This tool is intended to make the process of maintaining TestGrid dashboards for
-// release-gating and release-informing tests simple.
-//
-// We read all jobs that are annotated for the grid. The release controller's configuration
-// is used to default those roles but they can be overridden per job. We partition by overall
-// type (blocking, informing, broken), version or generic (generic have no version), and by
-// release type (ocp or okd). If the job is blocking on a release definition it will be
-// upgraded from informing to blocking if the job is set to informing.
-func main() {
-	o := gatherOptions()
-
-	if err := o.Validate(); err != nil {
-		logrus.Fatalf("Invalid options: %v", err)
-	}
-
-	// find the default type for jobs referenced by the release controllers
-	configuredJobs := make(map[string]string)
-	if err := filepath.WalkDir(o.releaseConfigDir, func(path string, info fs.DirEntry, err error) error {
+// find the default type for jobs referenced by the release controllers
+func findReleaseControllerJobs(releaseConfigDir string, configuredJobs map[string]string) {
+	if err := filepath.WalkDir(releaseConfigDir, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -249,115 +220,123 @@ func main() {
 	}); err != nil {
 		logrus.WithError(err).Fatal("Could not process input configurations.")
 	}
+}
 
-	// read the list of jobs from the allow list along with its release-type
+// read the list of jobs from the allow list along with its release-type
+func findAllowListJobs(jobsAllowListFile string, configuredJobs map[string]string) map[string]string {
 	var allowList map[string]string
-	if o.jobsAllowListFile != "" {
-		data, err := gzip.ReadFileMaybeGZIP(o.jobsAllowListFile)
-		if err != nil {
-			logrus.WithError(err).Fatalf("could not read allow-list at %s", o.jobsAllowListFile)
-		}
-		allowList, err = getAllowList(data)
-		if err != nil {
-			logrus.WithError(err).Fatalf("failed to build allow-list dictionary")
-		}
-		var disallowed []string
-		for job := range allowList {
-			if value, configured := configuredJobs[job]; configured && value == "blocking" {
-				disallowed = append(disallowed, job)
-			}
-		}
-		if len(disallowed) != 0 {
-			logrus.Fatalf("The following jobs are blocking by virtue of being in the release-controller configuration, but are also in the allow-list. Their entries in the allow-list are disallowed and should be removed: %v", strings.Join(disallowed, ", "))
-		}
-		if o.validationOnlyRun {
-			os.Exit(0)
-		}
-	}
-
-	// find and assign all jobs to the dashboards
-	dashboards := make(map[string]*dashboard)
-	jobConfig, err := jc.ReadFromDir(o.prowJobConfigDir)
+	data, err := gzip.ReadFileMaybeGZIP(jobsAllowListFile)
 	if err != nil {
-		logrus.WithError(err).Fatalf("Failed to load Prow jobs %s", o.prowJobConfigDir)
+		logrus.WithError(err).Fatalf("could not read allow-list at %s", jobsAllowListFile)
+	}
+	allowList, err = getAllowList(data)
+	if err != nil {
+		logrus.WithError(err).Fatalf("failed to build allow-list dictionary")
+	}
+	var disallowed []string
+	for job := range allowList {
+		if value, configured := configuredJobs[job]; configured && value == "blocking" {
+			disallowed = append(disallowed, job)
+		}
+	}
+	if len(disallowed) != 0 {
+		logrus.Fatalf("The following jobs are blocking by virtue of being in the release-controller configuration, but are also in the allow-list. Their entries in the allow-list are disallowed and should be removed: %v", strings.Join(disallowed, ", "))
 	}
 
-	for _, p := range jobConfig.Periodics {
-		name := p.Name
-		var dashboardType string
+	return allowList
+}
 
-		label, ok := allowList[name]
-		if len(label) == 0 && ok {
-			// if the allow list has an empty label for the type, exclude it from dashboards
+func getDashboardType(allowList, configuredJobs map[string]string, jobName string) string {
+	label, ok := allowList[jobName]
+	if len(label) == 0 && ok {
+		// if the allow list has an empty label for the type, exclude it from dashboards
+		return ""
+	}
+
+	switch label {
+	case "informing", "blocking", "broken", "generic-informing":
+		if label == "informing" && configuredJobs[jobName] == "blocking" {
+			return "blocking"
+		}
+		return label
+	default:
+		if label, ok := configuredJobs[jobName]; ok {
+			return label
+		}
+		switch {
+		case strings.HasPrefix(jobName, "release-openshift-"),
+			strings.HasPrefix(jobName, "promote-release-openshift-"),
+			strings.HasPrefix(jobName, "periodic-ci-openshift-release-master-ci-"),
+			strings.HasPrefix(jobName, "periodic-ci-openshift-release-master-okd-"),
+			strings.HasPrefix(jobName, "periodic-ci-openshift-release-master-nightly-"):
+			// the standard release periodics should always appear in testgrid
+			return "informing"
+		default:
+			// unknown labels or non standard jobs do not appear in testgrid
+			return ""
+		}
+	}
+}
+
+func getDashboard(allowList, configuredJobs map[string]string, job prowconfig.Periodic) *dashboard {
+	name := job.Name
+
+	dashboardType := getDashboardType(allowList, configuredJobs, name)
+	if dashboardType == "" {
+		return nil
+	}
+
+	switch dashboardType {
+	case "generic-informing":
+		return genericDashboardFor("informing")
+	default:
+		var stream string
+		switch {
+		case
+			// these will be removable once most / all jobs are generated periodics and are for legacy release-* only
+			strings.Contains(name, "-ocp-"),
+			strings.Contains(name, "-origin-"),
+			// these prefixes control whether a job is ocp or okd going forward
+			strings.HasPrefix(name, "periodic-ci-openshift-release-master-ci-"),
+			strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"):
+			stream = "ocp"
+		case strings.Contains(name, "-okd-"):
+			stream = "okd"
+		case strings.HasPrefix(name, "promote-release-openshift-"):
+			// TODO fix these jobs to have a consistent name
+			stream = "ocp"
+		default:
+			logrus.Warningf("unrecognized release type in job: %s", name)
+			return nil
+		}
+
+		version := job.Labels["job-release"]
+		if len(version) == 0 {
+			m := reVersion.FindStringSubmatch(name)
+			if len(m) == 0 {
+				logrus.Warningf("release is not in -X.Y- form and will go into the generic informing dashboard: %s", name)
+				return genericDashboardFor("informing")
+			}
+			version = m[1]
+		}
+		return dashboardFor(stream, version, dashboardType)
+	}
+}
+
+// find and assign all jobs to the dashboards
+func updateDashboards(testGridConfigDir string, periodicJobs []prowconfig.Periodic, allowList, configuredJobs map[string]string) {
+	dashboards := make(map[string]*dashboard)
+
+	for _, p := range periodicJobs {
+		currentDashboard := getDashboard(allowList, configuredJobs, p)
+		if currentDashboard == nil {
 			continue
 		}
-		switch label {
-		case "informing", "blocking", "broken", "generic-informing":
-			dashboardType = label
-			if label == "informing" && configuredJobs[p.Name] == "blocking" {
-				dashboardType = "blocking"
-			}
-		default:
-			if label, ok := configuredJobs[name]; ok {
-				dashboardType = label
-				break
-			}
-			switch {
-			case strings.HasPrefix(name, "release-openshift-"),
-				strings.HasPrefix(name, "promote-release-openshift-"),
-				strings.HasPrefix(name, "periodic-ci-openshift-release-master-ci-"),
-				strings.HasPrefix(name, "periodic-ci-openshift-release-master-okd-"),
-				strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"):
-				// the standard release periodics should always appear in testgrid
-				dashboardType = "informing"
-			default:
-				// unknown labels or non standard jobs do not appear in testgrid
-				continue
-			}
-		}
 
-		var current *dashboard
-		switch dashboardType {
-		case "generic-informing":
-			current = genericDashboardFor("informing")
-		default:
-			var stream string
-			switch {
-			case
-				// these will be removable once most / all jobs are generated periodics and are for legacy release-* only
-				strings.Contains(name, "-ocp-"),
-				strings.Contains(name, "-origin-"),
-				// these prefixes control whether a job is ocp or okd going forward
-				strings.HasPrefix(name, "periodic-ci-openshift-release-master-ci-"),
-				strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"):
-				stream = "ocp"
-			case strings.Contains(name, "-okd-"):
-				stream = "okd"
-			case strings.HasPrefix(name, "promote-release-openshift-"):
-				// TODO fix these jobs to have a consistent name
-				stream = "ocp"
-			default:
-				logrus.Warningf("unrecognized release type in job: %s", name)
-				continue
-			}
-
-			version := p.Labels["job-release"]
-			if len(version) == 0 {
-				m := reVersion.FindStringSubmatch(name)
-				if len(m) == 0 {
-					logrus.Warningf("release is not in -X.Y- form and will go into the generic informing dashboard: %s", name)
-					current = genericDashboardFor("informing")
-					break
-				}
-				version = m[1]
-			}
-			current = dashboardFor(stream, version, dashboardType)
-		}
-
-		if existing, ok := dashboards[current.Name]; ok {
-			current = existing
+		if existing, ok := dashboards[currentDashboard.Name]; ok {
+			currentDashboard = existing
 		} else {
-			dashboards[current.Name] = current
+			dashboards[currentDashboard.Name] = currentDashboard
 		}
 
 		daysOfResults := int32(0)
@@ -376,7 +355,7 @@ func main() {
 				}
 			}
 		}
-		current.add(p.Name, p.Annotations["description"], daysOfResults)
+		currentDashboard.add(p.Name, p.Annotations["description"], daysOfResults)
 	}
 
 	// first, update the overall list of dashboards that exist for the redhat group
@@ -388,7 +367,7 @@ func main() {
 		dashboardNames.Insert(dash.Name)
 	}
 
-	groupFile := path.Join(o.testGridConfigDir, "groups.yaml")
+	groupFile := path.Join(testGridConfigDir, "groups.yaml")
 	data, err := gzip.ReadFileMaybeGZIP(groupFile)
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not read TestGrid group config")
@@ -448,17 +427,70 @@ func main() {
 			logrus.WithError(err).Fatalf("Could not marshal TestGrid config for %s", dash.Name)
 		}
 
-		if err := ioutil.WriteFile(path.Join(o.testGridConfigDir, fmt.Sprintf("%s.yaml", dash.Name)), data, 0664); err != nil {
+		if err := ioutil.WriteFile(path.Join(testGridConfigDir, fmt.Sprintf("%s.yaml", dash.Name)), data, 0664); err != nil {
 			logrus.WithError(err).Fatalf("Could not write TestGrid config for %s", dash.Name)
 		}
 	}
 
 	// remove any configs we used to generate but no longer do
 	for _, name := range toRemove.List() {
-		if err := os.Remove(path.Join(o.testGridConfigDir, fmt.Sprintf("%s.yaml", name))); err != nil {
+		if err := os.Remove(path.Join(testGridConfigDir, fmt.Sprintf("%s.yaml", name))); err != nil {
 			logrus.WithError(err).Fatalf("Could not remove stale TestGrid config for %s", name)
 		}
 	}
 
 	logrus.Info("Finished generating TestGrid dashboards.")
+}
+
+// release is a subset of fields from the release controller's config
+type release struct {
+	Name   string
+	Verify map[string]struct {
+		Optional bool `json:"optional"`
+		Upgrade  bool `json:"upgrade"`
+		ProwJob  struct {
+			Name        string            `json:"name"`
+			Annotations map[string]string `json:"annotations"`
+		} `json:"prowJob"`
+	} `json:"verify"`
+}
+
+var reVersion = regexp.MustCompile(`-(\d+\.\d+)(-|$)`)
+
+// This tool is intended to make the process of maintaining TestGrid dashboards for
+// OpenShift CI tests simple.
+//
+// We read all jobs that are annotated for the grid. The release controller's configuration
+// is used to default those roles but they can be overridden per job. We partition by overall
+// type (blocking, informing, broken), version or generic (generic have no version), and by
+// release type (ocp or okd). If the job is blocking on a release definition it will be
+// upgraded from informing to blocking if the job is set to informing.
+func main() {
+	o := gatherOptions()
+
+	if err := o.Validate(); err != nil {
+		logrus.Fatalf("Invalid options: %v", err)
+	}
+
+	configuredJobs := make(map[string]string)
+	var allowList map[string]string
+
+	if o.releaseConfigDir != "" {
+		findReleaseControllerJobs(o.releaseConfigDir, configuredJobs)
+	}
+
+	if o.jobsAllowListFile != "" {
+		allowList = findAllowListJobs(o.jobsAllowListFile, configuredJobs)
+
+		if o.validationOnlyRun {
+			os.Exit(0)
+		}
+	}
+
+	jobConfig, err := jc.ReadFromDir(o.prowJobConfigDir)
+	if err != nil {
+		logrus.WithError(err).Fatalf("Failed to load Prow jobs %s", o.prowJobConfigDir)
+	}
+
+	updateDashboards(o.testGridConfigDir, jobConfig.Periodics, configuredJobs, allowList)
 }

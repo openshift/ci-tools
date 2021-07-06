@@ -65,6 +65,7 @@ func preparePodStep(namespace string) (*podStep, stepExpectation) {
 					Sidecar:    "sidecar",
 					Entrypoint: "entrypoint",
 				},
+				SkipCloning: utilpointer.Bool(true),
 			},
 		},
 	}

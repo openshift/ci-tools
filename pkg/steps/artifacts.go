@@ -415,6 +415,10 @@ func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.
 	pod.Spec.Volumes = append(pod.Spec.Volumes, blobStorageVolumes...)
 
 	if clone {
+		// Unless build_root.from_repository: true is set, the decorationConfig the ci-operator pod gets has cloning
+		// disabled.
+		decorationConfig.SkipCloning = nil
+
 		codeMount, codeVolume := decorate.CodeMountAndVolume()
 		cloneRefsContainer, refs, cloneRefsVolumes, err := decorate.CloneRefs(prowv1.ProwJob{Spec: prowv1.ProwJobSpec{Refs: jobSpec.Refs, ExtraRefs: jobSpec.ExtraRefs, DecorationConfig: decorationConfig}}, codeMount, logMount)
 		if err != nil {

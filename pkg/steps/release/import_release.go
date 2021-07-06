@@ -3,6 +3,7 @@ package release
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -55,6 +56,8 @@ type importReleaseStep struct {
 	client     steps.PodClient
 	jobSpec    *api.JobSpec
 	pullSecret *coreapi.Secret
+	// overrideCLIReleaseExtractImage is given for non-amd64 releases
+	overrideCLIReleaseExtractImage *coreapi.ObjectReference
 }
 
 func (s *importReleaseStep) Inputs() (api.InputDefinition, error) {
@@ -147,54 +150,10 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	// TODO: should we allow underride for things we built in pipeline?
 	// get the CLI image from the payload (since we need it to run oc adm release extract)
 	target := fmt.Sprintf("release-images-%s", s.name)
-	targetCLI := fmt.Sprintf("%s-cli", target)
-	if _, err := steps.RunPod(context.TODO(), s.client, &coreapi.Pod{
-		ObjectMeta: meta.ObjectMeta{
-			Name:      targetCLI,
-			Namespace: s.jobSpec.Namespace(),
-			Labels:    map[string]string{releaseLabel: s.name},
-		},
-		Spec: coreapi.PodSpec{
-			RestartPolicy: coreapi.RestartPolicyNever,
-			Containers: []coreapi.Container{
-				{
-					Name:    "release",
-					Image:   fmt.Sprintf("release:%s", s.name), // the cluster will resolve this relative ref for us when we create Pods with it
-					Command: []string{"/bin/sh", "-c", "cluster-version-operator image cli > /dev/termination-log"},
-				},
-			},
-		},
-	}); err != nil {
-		return fmt.Errorf("unable to find the 'cli' image in the provided release image: %w", err)
-	}
-	pod := &coreapi.Pod{}
-	if err := s.client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: targetCLI}, pod); err != nil {
-		return fmt.Errorf("unable to extract the 'cli' image from the release image: %w", err)
-	}
-	if len(pod.Status.ContainerStatuses) == 0 || pod.Status.ContainerStatuses[0].State.Terminated == nil {
-		return fmt.Errorf("unable to extract the 'cli' image from the release image: %w", err)
-	}
-	cliImage := pod.Status.ContainerStatuses[0].State.Terminated.Message
 
-	// tag the cli image into stable so we use the correct pull secrets from the namespace
-	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		return s.client.Update(ctx, &imagev1.ImageStreamTag{
-			ObjectMeta: meta.ObjectMeta{
-				Namespace: s.jobSpec.Namespace(),
-				Name:      fmt.Sprintf("%s:cli", streamName),
-			},
-			Tag: &imagev1.TagReference{
-				ReferencePolicy: imagev1.TagReferencePolicy{
-					Type: imagev1.LocalTagReferencePolicy,
-				},
-				From: &coreapi.ObjectReference{
-					Kind: "DockerImage",
-					Name: cliImage,
-				},
-			},
-		})
-	}); err != nil {
-		return fmt.Errorf("unable to tag the 'cli' image into the stable stream: %w", err)
+	cliImage, err := s.getCLIImage(ctx, target, streamName)
+	if err != nil {
+		return fmt.Errorf("failed to get CLI image: %w", err)
 	}
 
 	var secrets []*api.Secret
@@ -227,12 +186,9 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 
 	// run adm release extract and grab the raw image-references from the payload
 	podConfig := steps.PodStepConfiguration{
-		SkipLogs: true,
-		As:       target,
-		From: api.ImageStreamTagReference{
-			Name: streamName,
-			Tag:  "cli",
-		},
+		SkipLogs:           true,
+		As:                 target,
+		From:               *cliImage,
 		Labels:             map[string]string{releaseLabel: s.name},
 		ServiceAccountName: "ci-operator",
 		Secrets:            secrets,
@@ -429,16 +385,117 @@ func (s *importReleaseStep) Objects() []ctrlruntimeclient.Object {
 }
 
 // ImportReleaseStep imports an existing update payload image
-func ImportReleaseStep(name, pullSpec string, append bool, resources api.ResourceConfiguration,
+func ImportReleaseStep(name string,
+	pullSpec string,
+	append bool,
+	resources api.ResourceConfiguration,
 	client steps.PodClient,
-	jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+	jobSpec *api.JobSpec,
+	pullSecret *coreapi.Secret,
+	overrideCLIReleaseExtractImage *coreapi.ObjectReference) api.Step {
 	return &importReleaseStep{
-		name:       name,
-		pullSpec:   pullSpec,
-		append:     append,
-		resources:  resources,
-		client:     client,
-		jobSpec:    jobSpec,
-		pullSecret: pullSecret,
+		name:                           name,
+		pullSpec:                       pullSpec,
+		append:                         append,
+		resources:                      resources,
+		client:                         client,
+		jobSpec:                        jobSpec,
+		pullSecret:                     pullSecret,
+		overrideCLIReleaseExtractImage: overrideCLIReleaseExtractImage,
 	}
+}
+
+const overrideCLIStreamName = "amd64-cli"
+
+func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName string) (*api.ImageStreamTagReference, error) {
+	if s.overrideCLIReleaseExtractImage != nil {
+		streamImport := &imagev1.ImageStreamImport{
+			ObjectMeta: meta.ObjectMeta{
+				Namespace: s.jobSpec.Namespace(),
+				Name:      overrideCLIStreamName,
+			},
+			Spec: imagev1.ImageStreamImportSpec{
+				Import: true,
+				Images: []imagev1.ImageImportSpec{
+					{
+						To: &coreapi.LocalObjectReference{
+							Name: "latest",
+						},
+						From: *s.overrideCLIReleaseExtractImage,
+						ReferencePolicy: imagev1.TagReferencePolicy{
+							Type: imagev1.LocalTagReferencePolicy,
+						},
+					},
+				},
+			},
+		}
+		if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
+			if err := s.client.Create(ctx, streamImport); err != nil {
+				if kerrors.IsConflict(err) {
+					return false, nil
+				}
+				return false, err
+			}
+			if streamImport.Status.Images[0].Image == nil {
+				return false, nil
+			}
+			return true, nil
+
+		}); err != nil {
+			return nil, fmt.Errorf("failed to import override CLI image into %s:latest: %w", overrideCLIStreamName, err)
+		}
+		return &api.ImageStreamTagReference{Name: overrideCLIStreamName, Tag: "latest"}, nil
+	}
+
+	targetCLI := fmt.Sprintf("%s-cli", target)
+	if _, err := steps.RunPod(context.TODO(), s.client, &coreapi.Pod{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      targetCLI,
+			Namespace: s.jobSpec.Namespace(),
+			Labels:    map[string]string{releaseLabel: s.name},
+		},
+		Spec: coreapi.PodSpec{
+			RestartPolicy: coreapi.RestartPolicyNever,
+			Containers: []coreapi.Container{
+				{
+					Name:    "release",
+					Image:   fmt.Sprintf("release:%s", s.name), // the cluster will resolve this relative ref for us when we create Pods with it
+					Command: []string{"/bin/sh", "-c", "cluster-version-operator image cli > /dev/termination-log"},
+				},
+			},
+		},
+	}); err != nil {
+		return nil, fmt.Errorf("unable to find the 'cli' image in the provided release image: %w", err)
+	}
+	pod := &coreapi.Pod{}
+	if err := s.client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: targetCLI}, pod); err != nil {
+		return nil, fmt.Errorf("unable to extract the 'cli' image from the release image: %w", err)
+	}
+	if len(pod.Status.ContainerStatuses) == 0 || pod.Status.ContainerStatuses[0].State.Terminated == nil {
+		return nil, errors.New("unable to extract the 'cli' image from the release image, pod produced no output")
+	}
+	cliImage := pod.Status.ContainerStatuses[0].State.Terminated.Message
+
+	// tag the cli image into stable so we use the correct pull secrets from the namespace
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		return s.client.Update(ctx, &imagev1.ImageStreamTag{
+			ObjectMeta: meta.ObjectMeta{
+				Namespace: s.jobSpec.Namespace(),
+				Name:      fmt.Sprintf("%s:cli", streamName),
+			},
+			Tag: &imagev1.TagReference{
+				ReferencePolicy: imagev1.TagReferencePolicy{
+					Type: imagev1.LocalTagReferencePolicy,
+				},
+				From: &coreapi.ObjectReference{
+					Kind: "DockerImage",
+					Name: cliImage,
+				},
+			},
+		})
+	}); err != nil {
+		return nil, fmt.Errorf("unable to tag the 'cli' image into the stable stream: %w", err)
+	}
+
+	return &api.ImageStreamTagReference{Name: streamName, Tag: "cli"}, nil
 }

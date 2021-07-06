@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	jiraProjectDPTP = "DPTP"
+	ProjectDPTP = "DPTP"
 
 	IssueTypeBug      = "Bug"
 	IssueTypeIncident = "Incident"
@@ -132,9 +132,9 @@ func NewIssueFiler(slackClient *slack.Client, jiraClient *jira.Client) (IssueFil
 		issueTypesByName: map[string]jira.IssueType{},
 	}
 
-	project, response, err := jiraClient.Project.Get(jiraProjectDPTP)
+	project, response, err := jiraClient.Project.Get(ProjectDPTP)
 	if err := jirautil.JiraError(response, err); err != nil {
-		return nil, fmt.Errorf("could not find Jira project %s: %w", jiraProjectDPTP, err)
+		return nil, fmt.Errorf("could not find Jira project %s: %w", ProjectDPTP, err)
 	}
 	filer.project = *project
 	for _, t := range project.IssueTypes {
@@ -142,7 +142,7 @@ func NewIssueFiler(slackClient *slack.Client, jiraClient *jira.Client) (IssueFil
 	}
 	for _, name := range []string{IssueTypeRequest, IssueTypeStory, IssueTypeBug, IssueTypeIncident, IssueTypeTask} {
 		if _, found := filer.issueTypesByName[name]; !found {
-			return nil, fmt.Errorf("could not find issue type %s in Jira for project %s", name, jiraProjectDPTP)
+			return nil, fmt.Errorf("could not find issue type %s in Jira for project %s", name, ProjectDPTP)
 		}
 	}
 

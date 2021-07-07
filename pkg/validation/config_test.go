@@ -946,9 +946,95 @@ func TestPipelineImages(t *testing.T) {
 			Resources: resources,
 		},
 		expected: errors.New(`invalid configuration: images[0]: duplicate image name 'root' (previously defined by field 'build_root')`),
+	}, {
+		name: "multi-stage from_image",
+		conf: api.ReleaseBuildConfiguration{
+			Images:             makeImages("ns-name-from_image"),
+			InputConfiguration: input,
+			Tests: []api.TestStepConfiguration{{
+				As: "test0",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Test: []api.LiteralTestStep{{
+						As:       "step-name",
+						Commands: "commands",
+						FromImage: &api.ImageStreamTagReference{
+							Namespace: "ns",
+							Name:      "name",
+							Tag:       "from_image",
+						},
+						Resources: resources["*"],
+					}},
+				},
+			}, {
+				As: "test1",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Test: []api.LiteralTestStep{{
+						As:       "step-name",
+						Commands: "commands",
+						FromImage: &api.ImageStreamTagReference{
+							Namespace: "ns",
+							Name:      "name",
+							Tag:       "from_image",
+						},
+						Resources: resources["*"],
+					}},
+				},
+			}},
+			Resources: resources,
+		},
+		expected: errors.New(`invalid configuration: tests[0].steps.test[0].from_image: duplicate image name 'ns-name-from_image' (previously defined by field 'images[0]')`),
+	}, {
+		name: "multi-stage from_image aliased across tests",
+		conf: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
+			Tests: []api.TestStepConfiguration{{
+				As: "test0",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Test: []api.LiteralTestStep{{
+						As:       "step-name",
+						Commands: "commands",
+						FromImage: &api.ImageStreamTagReference{
+							Namespace: "ns",
+							Name:      "name",
+							Tag:       "from_image",
+						},
+						Resources: resources["*"],
+					}},
+				},
+			}, {
+				As: "test1",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Test: []api.LiteralTestStep{{
+						As:       "step-name",
+						Commands: "commands",
+						FromImage: &api.ImageStreamTagReference{
+							Namespace: "ns",
+							Name:      "name",
+							Tag:       "from_image",
+						},
+						Resources: resources["*"],
+					}},
+				},
+			}, {
+				As: "test2",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Test: []api.LiteralTestStep{{
+						As:       "step-name",
+						Commands: "commands",
+						FromImage: &api.ImageStreamTagReference{
+							Namespace: "ns",
+							Name:      "name",
+							Tag:       "from_image",
+						},
+						Resources: resources["*"],
+					}},
+				},
+			}},
+			Resources: resources,
+		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := IsValidConfiguration(&tc.conf, "TODO", "TODO")
+			err := IsValidConfiguration(&tc.conf, "org", "repo")
 			testhelper.Diff(t, "error", err, tc.expected, testhelper.EquateErrorMessage)
 		})
 	}

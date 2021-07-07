@@ -500,7 +500,7 @@ func TestValidateTests(t *testing.T) {
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			v := newSingleUseValidator()
-			if errs := v.validateTestStepConfiguration("tests", tc.tests, tc.release, tc.releases, tc.resolved); len(errs) > 0 && tc.expectedValid {
+			if errs := v.validateTestStepConfiguration(newConfigContext(), "tests", tc.tests, tc.release, tc.releases, tc.resolved); len(errs) > 0 && tc.expectedValid {
 				t.Errorf("expected to be valid, got: %v", errs)
 			} else if !tc.expectedValid && len(errs) == 0 {
 				t.Error("expected to be invalid, but returned valid")
@@ -869,9 +869,9 @@ func TestValidateTestSteps(t *testing.T) {
 		clusterClaim: api.ClaimRelease{ReleaseName: "myclaim-as", OverrideName: "myclaim"},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			context := newContext("test", nil, tc.releases)
+			context := newContext("test", nil, tc.releases, make(testInputImages))
 			if tc.seen != nil {
-				context.seen = tc.seen
+				context.namesSeen = tc.seen
 			}
 			v := NewValidator()
 			ret := v.validateTestSteps(context, testStageTest, tc.steps, &tc.clusterClaim)
@@ -910,9 +910,9 @@ func TestValidatePostSteps(t *testing.T) {
 		}},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			context := newContext("test", nil, tc.releases)
+			context := newContext("test", nil, tc.releases, make(testInputImages))
 			if tc.seen != nil {
-				context.seen = tc.seen
+				context.namesSeen = tc.seen
 			}
 			v := NewValidator()
 			ret := v.validateTestSteps(context, testStagePost, tc.steps, nil)
@@ -948,7 +948,7 @@ func TestValidateParameters(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			v := NewValidator()
-			err := v.validateLiteralTestStep(newContext("test", tc.env, tc.releases), testStageTest, api.LiteralTestStep{
+			err := v.validateLiteralTestStep(newContext("test", tc.env, tc.releases, make(testInputImages)), testStageTest, api.LiteralTestStep{
 				As:       "as",
 				From:     "from",
 				Commands: "commands",
@@ -1210,7 +1210,7 @@ func TestValidateLeases(t *testing.T) {
 				MultiStageTestConfigurationLiteral: &tc.test,
 			}
 			v := NewValidator()
-			err := v.validateTestConfigurationType("tests[0]", test, nil, nil, true)
+			err := v.validateTestConfigurationType("tests[0]", test, nil, nil, make(testInputImages), true)
 			if diff := diff.ObjectReflectDiff(tc.err, err); diff != "<no diffs>" {
 				t.Errorf("unexpected error: %s", diff)
 			}
@@ -1336,12 +1336,12 @@ func TestValidateTestConfigurationType(t *testing.T) {
 					},
 				},
 			},
-			expected: []error{fmt.Errorf("test.cluster is not a vailid cluster: bar")},
+			expected: []error{fmt.Errorf("test.cluster is not a valid cluster: bar")},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			v := NewValidator()
-			actual := v.validateTestConfigurationType("test", tc.test, nil, nil, false)
+			actual := v.validateTestConfigurationType("test", tc.test, nil, nil, make(testInputImages), false)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("expected differs from actual: %s", diff)
 			}

@@ -133,11 +133,6 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 	for name := range releases {
 		releases.Insert(name)
 	}
-	validationErrors = append(validationErrors, v.validateTestStepConfiguration("tests", config.Tests, config.ReleaseTagConfiguration, releases, resolved)...)
-
-	// this validation brings together a large amount of data from separate
-	// parts of the configuration, so it's written as a standalone method
-	validationErrors = append(validationErrors, validateTestStepDependencies(config)...)
 	if config.Operator != nil {
 		// validateOperator needs a method that maps `substitute.with` values to image links
 		// to validate the value is meaningful in the context of the configuration
@@ -161,6 +156,11 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 
 	validationErrors = append(validationErrors, validateReleases("releases", config.Releases, config.ReleaseTagConfiguration != nil)...)
 	validationErrors = append(validationErrors, validateImages(ctx.addField("images"), config.Images)...)
+	validationErrors = append(validationErrors, v.validateTestStepConfiguration(ctx, "tests", config.Tests, config.ReleaseTagConfiguration, releases, resolved)...)
+
+	// this validation brings together a large amount of data from separate
+	// parts of the configuration, so it's written as a standalone method
+	validationErrors = append(validationErrors, validateTestStepDependencies(config)...)
 	var lines []string
 	for _, err := range validationErrors {
 		if err == nil {

@@ -22,6 +22,14 @@ import (
 // contexts).
 type testStage uint8
 
+// testInputImages stores tags referenced in `from_image` fields.
+// This is different from other pipeline images as several steps across all
+// tests can reference the same tag: the validation here mirrors the
+// configuration processing code in `pkg/defaults`.  Only the first field that
+// references each tag is recorded since reporting all of them would not be
+// terribly useful.
+type testInputImages map[api.PipelineImageStreamTagReference]fieldPath
+
 const (
 	testStageUnknown testStage = iota
 	testStagePre
@@ -45,21 +53,34 @@ func (v *Validator) commandHasTrap(cmd string) bool {
 // All but `field` can be nil if the validation being performed in
 // context-independent.
 type context struct {
-	field      fieldPath
-	env        api.TestEnvironment
-	seen       sets.String
+	// field is the full path to the current field, used in error messages.
+	field fieldPath
+	// env is used to validate that all step parameters are set.
+	env api.TestEnvironment
+	// namesSeen is used to validate that step names are unique.
+	namesSeen sets.String
+	// leasesSeen is used to validate that lease variable names are unique.
 	leasesSeen sets.String
-	releases   sets.String
+	// inputImagesSeen is used to accumulate input images across tests.
+	inputImagesSeen testInputImages
+	// releases is used to validate references to release images .
+	releases sets.String
 }
 
 // newContext creates a top-level context.
-func newContext(field fieldPath, env api.TestEnvironment, releases sets.String) *context {
+func newContext(
+	field fieldPath,
+	env api.TestEnvironment,
+	releases sets.String,
+	inputImagesSeen testInputImages,
+) *context {
 	return &context{
-		field:      field,
-		env:        env,
-		seen:       sets.NewString(),
-		leasesSeen: sets.NewString(),
-		releases:   releases,
+		field:           field,
+		env:             env,
+		namesSeen:       sets.NewString(),
+		leasesSeen:      sets.NewString(),
+		inputImagesSeen: inputImagesSeen,
+		releases:        releases,
 	}
 }
 
@@ -92,12 +113,12 @@ func IsValidReference(step api.LiteralTestStep) []error {
 	return v.IsValidReference(step)
 }
 
-func (v *Validator) validateTestStepConfiguration(fieldRoot string, input []api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
+func (v *Validator) validateTestStepConfiguration(configCtx *configContext, fieldRoot string, input []api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
 	var validationErrors []error
 
 	// check for test.As duplicates
 	validationErrors = append(validationErrors, searchForTestDuplicates(input)...)
-
+	inputImagesSeen := make(testInputImages)
 	for num, test := range input {
 		fieldRootN := fmt.Sprintf("%s[%d]", fieldRoot, num)
 		if len(test.As) == 0 {
@@ -173,7 +194,12 @@ func (v *Validator) validateTestStepConfiguration(fieldRoot string, input []api.
 			}
 		}
 
-		validationErrors = append(validationErrors, v.validateTestConfigurationType(fieldRootN, test, release, releases, resolved)...)
+		validationErrors = append(validationErrors, v.validateTestConfigurationType(fieldRootN, test, release, releases, inputImagesSeen, resolved)...)
+	}
+	for tag, field := range inputImagesSeen {
+		if err := configCtx.addField(string(field)).addPipelineImage(tag); err != nil {
+			validationErrors = append(validationErrors, err)
+		}
 	}
 	return validationErrors
 }
@@ -399,7 +425,14 @@ func searchForTestDuplicates(tests []api.TestStepConfiguration) []error {
 	return nil
 }
 
-func (v *Validator) validateTestConfigurationType(fieldRoot string, test api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
+func (v *Validator) validateTestConfigurationType(
+	fieldRoot string,
+	test api.TestStepConfiguration,
+	release *api.ReleaseTagConfiguration,
+	releases sets.String,
+	inputImagesSeen testInputImages,
+	resolved bool,
+) []error {
 	var validationErrors []error
 	clusterCount := 0
 	if claim := test.ClusterClaim; claim != nil {
@@ -416,7 +449,7 @@ func (v *Validator) validateTestConfigurationType(fieldRoot string, test api.Tes
 	}
 	typeCount := 0
 	if cluster := test.Cluster; cluster != "" && !api.ValidClusterNames.Has(string(cluster)) {
-		validationErrors = append(validationErrors, fmt.Errorf("%s.cluster is not a vailid cluster: %s", fieldRoot, string(cluster)))
+		validationErrors = append(validationErrors, fmt.Errorf("%s.cluster is not a valid cluster: %s", fieldRoot, string(cluster)))
 	}
 	if testConfig := test.ContainerTestConfiguration; testConfig != nil {
 		typeCount++
@@ -481,7 +514,7 @@ func (v *Validator) validateTestConfigurationType(fieldRoot string, test api.Tes
 			clusterCount++
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
-		context := newContext(fieldPath(fieldRoot), testConfig.Environment, releases)
+		context := newContext(fieldPath(fieldRoot), testConfig.Environment, releases, inputImagesSeen)
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
 		validationErrors = append(validationErrors, v.validateTestSteps(context.addField("pre"), testStagePre, testConfig.Pre, claimRelease)...)
 		validationErrors = append(validationErrors, v.validateTestSteps(context.addField("test"), testStageTest, testConfig.Test, claimRelease)...)
@@ -489,7 +522,7 @@ func (v *Validator) validateTestConfigurationType(fieldRoot string, test api.Tes
 	}
 	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
 		typeCount++
-		context := newContext(fieldPath(fieldRoot).addField("steps"), testConfig.Environment, releases)
+		context := newContext(fieldPath(fieldRoot).addField("steps"), testConfig.Environment, releases, inputImagesSeen)
 		if testConfig.ClusterProfile != "" {
 			clusterCount++
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
@@ -546,19 +579,19 @@ func validateTestStep(context *context, step api.TestStep) (ret []error) {
 	if step.Reference != nil {
 		if len(*step.Reference) == 0 {
 			ret = append(ret, context.addField("ref").errorf("length cannot be 0"))
-		} else if context.seen.Has(*step.Reference) {
+		} else if context.namesSeen.Has(*step.Reference) {
 			ret = append(ret, context.addField("ref").errorf("duplicated name %q", *step.Reference))
 		} else {
-			context.seen.Insert(*step.Reference)
+			context.namesSeen.Insert(*step.Reference)
 		}
 	}
 	if step.Chain != nil {
 		if len(*step.Chain) == 0 {
 			ret = append(ret, context.addField("chain").errorf("length cannot be 0"))
-		} else if context.seen.Has(*step.Chain) {
+		} else if context.namesSeen.Has(*step.Chain) {
 			ret = append(ret, context.addField("chain").errorf("duplicated name %q", *step.Chain))
 		} else {
-			context.seen.Insert(*step.Chain)
+			context.namesSeen.Insert(*step.Chain)
 		}
 	}
 	return
@@ -567,11 +600,11 @@ func validateTestStep(context *context, step api.TestStep) (ret []error) {
 func (v *Validator) validateLiteralTestStep(context *context, stage testStage, step api.LiteralTestStep, claimRelease *api.ClaimRelease) (ret []error) {
 	if len(step.As) == 0 {
 		ret = append(ret, context.errorf("`as` is required"))
-	} else if context.seen != nil {
-		if context.seen.Has(step.As) {
+	} else if context.namesSeen != nil {
+		if context.namesSeen.Has(step.As) {
 			ret = append(ret, context.errorf("duplicated name %q", step.As))
 		} else {
-			context.seen.Insert(step.As)
+			context.namesSeen.Insert(step.As)
 		}
 	}
 	if len(step.From) == 0 && step.FromImage == nil {
@@ -579,14 +612,22 @@ func (v *Validator) validateLiteralTestStep(context *context, stage testStage, s
 	} else if len(step.From) != 0 && step.FromImage != nil {
 		ret = append(ret, context.errorf("`from` and `from_image` cannot be set together"))
 	} else if step.FromImage != nil {
+		imgCtx := context.addField("from_image")
 		if step.FromImage.Namespace == "" {
-			ret = append(ret, context.addField("from_image").errorf("`namespace` is required"))
+			ret = append(ret, imgCtx.errorf("`namespace` is required"))
 		}
 		if step.FromImage.Name == "" {
-			ret = append(ret, context.addField("from_image").errorf("`name` is required"))
+			ret = append(ret, imgCtx.errorf("`name` is required"))
 		}
 		if step.FromImage.Tag == "" {
-			ret = append(ret, context.addField("from_image").errorf("`tag` is required"))
+			ret = append(ret, imgCtx.errorf("`tag` is required"))
+		}
+		if context.inputImagesSeen != nil {
+			if tag, ok := step.FromImageTag(); ok {
+				if _, ok := context.inputImagesSeen[tag]; !ok {
+					context.inputImagesSeen[tag] = imgCtx.field
+				}
+			}
 		}
 	} else {
 		imageParts := strings.Split(step.From, ":")

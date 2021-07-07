@@ -32,6 +32,21 @@ tests:
   commands: make test-unit
   container:
     from: src
+- as: post
+  commands: make push-stuff
+  container:
+    from: src
+  postsubmit: true
+- as: cronjob
+  commands: make e2e
+  container:
+    from: src
+  cron: 0 0 * * 1
+- as: interval-job
+  commands: make interval
+  container:
+    from: src
+  interval: 4h
 zz_generated_metadata:
   branch: master
   org: super

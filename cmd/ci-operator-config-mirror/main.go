@@ -155,6 +155,14 @@ func main() {
 			}
 			privatePromotionConfiguration(rbc.PromotionConfiguration)
 		}
+		// don't copy periodics and postsubmits
+		var tests []api.TestStepConfiguration
+		for _, test := range rbc.Tests {
+			if test.Cron == nil && test.Interval == nil && !test.Postsubmit {
+				tests = append(tests, test)
+			}
+		}
+		rbc.Tests = tests
 
 		repoInfo.Org = o.toOrg
 		rbc.Metadata.Org = o.toOrg

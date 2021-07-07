@@ -2,41 +2,87 @@
 
 set -euo pipefail
 
-cd $(dirname $0)/..
+cd "$(dirname "$0")/.."
 
-kubeconfig="$(mktemp)"
-dockercfg=$(mktemp)
-trap 'rm -f $kubeconfig $dockercfg' EXIT
-kubectl config view --raw>$kubeconfig
-IFS=$'\n'
-for additional_context in $(kubectl --kubeconfig $kubeconfig config get-contexts -o name|egrep -v 'app\.ci|api\.ci|build01|build02'); do
-  kubectl --kubeconfig $kubeconfig config delete-context "$additional_context"
-  kubectl --kubeconfig $kubeconfig config delete-cluster "$additional_context" || true
-done
-# Make sure user env var wont overrule
+tmpdir="$(mktemp -d )"
+trap 'rm -rf $tmpdir' EXIT
+echo "Extracting kubeconfigs for the controller..."
+oc --context app.ci --namespace ci extract secret/dptp-controller-manager --to "${tmpdir}"
+oc --context app.ci --namespace ci serviceaccounts create-kubeconfig dptp-controller-manager | sed 's/dptp-controller-manager/app.ci/g' > "${tmpdir}/app-ci-kubeconfig"
+rm -rf "${tmpdir}/api-ci-kubeconfig"
 unset KUBECONFIG
 
-# Steve will make this nicer at some point. We need to preserve the `auths[$registryName] = {"auth":"value" }
-# structure while still filtering out the other registries
-kubectl --context build01 get secret -n ci regcred  -o json  \
-  |jq -r '.data[".dockerconfigjson"]' \
-  |base64 -d \
-  |jq '{auths : {"registry.svc.ci.openshift.org": .auths["registry.svc.ci.openshift.org"]}}' >$dockercfg
+# TODO: we could also just make the SA access all leases and CMs in ci
+cat <<EOF | oc --as system:admin --context app.ci apply -f -
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dptp-controller-manager-testing
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dptp-controller-manager-testing
+rules:
+- apiGroups:
+  - prow.k8s.io
+  resources:
+  - prowjobs
+  verbs:
+  - '*'
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - events
+  verbs:
+  - create
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: dptp-controller-manager-testing
+  namespace: dptp-controller-manager-testing
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dptp-controller-manager-testing
+subjects:
+- kind: ServiceAccount
+  name: dptp-controller-manager
+  namespace: ci
+EOF
 
+release="${RELEASE:-"$(go env GOPATH)/src/github.com/openshift/release"}"
 
 go build  -v -o /tmp/dptp-cm ./cmd/dptp-controller-manager
-/tmp/dptp-cm \
-  --leader-election-namespace=ci \
-  --ci-operator-config-path="$(go env GOPATH)/src/github.com/openshift/release/ci-operator/config" \
-  --config-path="$(go env GOPATH)/src/github.com/openshift/release/core-services/prow/02_config/_config.yaml" \
-  --job-config-path="$(go env GOPATH)/src/github.com/openshift/release/ci-operator/jobs" \
-  --leader-election-suffix="$USER" \
-  --enable-controller=serviceaccount_secret_refresher \
-  --serviceAccountRefresherOptions.enabled-namespace=alvaro-test \
-  --step-config-path="$(go env GOPATH)/src/github.com/openshift/release/ci-operator/step-registry" \
-  --testImagesDistributorOptions.imagePullSecretPath=$dockercfg \
-  --kubeconfig=$kubeconfig \
-  --testImagesDistributorOptions.additional-image-stream-tag=ci/clonerefs:latest \
-  --secretSyncerConfigOptions.config="$(go env GOPATH)/src/github.com/openshift/release/core-services/secret-mirroring/_mapping.yaml" \
-  --secretSyncerConfigOptions.secretBoostrapConfigFile="$(go env GOPATH)/src/github.com/openshift/release/core-services/ci-secret-bootstrap/_config.yaml" \
+set -x
+KUBECONFIG="$(kubeconfigs=("${tmpdir}/"*); IFS=":"; echo "${kubeconfigs[*]}")" /tmp/dptp-cm \
+  --leader-election-namespace=dptp-controller-manager-testing \
+  --leader-election-suffix="-$USER" \
+  --config-path="${release}/core-services/prow/02_config/_config.yaml" \
+  --job-config-path="${release}/ci-operator/jobs" \
+  --ci-operator-config-path="${release}/ci-operator/config" \
+  --step-config-path="${release}/ci-operator/step-registry" \
+  --enable-controller=test_images_distributor \
   --dry-run=true

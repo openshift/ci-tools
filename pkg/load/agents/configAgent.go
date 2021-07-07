@@ -233,7 +233,7 @@ func (a *configAgent) loadFilenameToConfig() error {
 		return err
 	}
 	configReloadTimeMetric.Observe(duration.Seconds())
-	logrus.WithField("duration", duration).Info("Configs reloaded")
+	logrus.WithField("duration", duration.String()).Info("Configs reloaded")
 	return nil
 }
 

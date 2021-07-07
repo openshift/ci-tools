@@ -484,17 +484,17 @@ func leasesForTest(s *api.MultiStageTestConfigurationLiteral) (ret []api.StepLea
 // the root image.
 func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context) func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
 	return func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
-		logrus.Debugf("Determining if build cache %s can be used in place of root %s\n", cache.ISTagName(), root.ISTagName())
+		logrus.Debugf("Determining if build cache %s can be used in place of root %s", cache.ISTagName(), root.ISTagName())
 		cacheTag := &imagev1.ImageStreamTag{}
 		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: cache.Namespace, Name: fmt.Sprintf("%s:%s", cache.Name, cache.Tag)}, cacheTag); err != nil {
 			if kapierrors.IsNotFound(err) {
-				logrus.Debugf("Build cache %s not found, falling back to %s\n", cache.ISTagName(), root.ISTagName())
+				logrus.Debugf("Build cache %s not found, falling back to %s", cache.ISTagName(), root.ISTagName())
 				// no build cache, use the normal root
 				return root, nil
 			}
 			return nil, fmt.Errorf("could not resolve build cache image stream tag %s: %w", cache.ISTagName(), err)
 		}
-		logrus.Debugf("Resolved build cache %s to %s\n", cache.ISTagName(), cacheTag.Image.Name)
+		logrus.Debugf("Resolved build cache %s to %s", cache.ISTagName(), cacheTag.Image.Name)
 		metadata := &docker10.DockerImage{}
 		if len(cacheTag.Image.DockerImageMetadata.Raw) == 0 {
 			return nil, fmt.Errorf("could not fetch Docker image metadata build cache %s", cache.ISTagName())
@@ -503,19 +503,19 @@ func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context) 
 			return nil, fmt.Errorf("malformed Docker image metadata on build cache %s: %w", cache.ISTagName(), err)
 		}
 		prior := metadata.Config.Labels[api.ImageVersionLabel(api.PipelineImageStreamTagReferenceRoot)]
-		logrus.Debugf("Build cache %s is based on root image at %s\n", cache.ISTagName(), prior)
+		logrus.Debugf("Build cache %s is based on root image at %s", cache.ISTagName(), prior)
 
 		rootTag := &imagev1.ImageStreamTag{}
 		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: root.Namespace, Name: fmt.Sprintf("%s:%s", root.Name, root.Tag)}, rootTag); err != nil {
 			return nil, fmt.Errorf("could not resolve build root image stream tag %s: %w", root.ISTagName(), err)
 		}
-		logrus.Debugf("Resolved root image %s to %s\n", root.ISTagName(), rootTag.Image.Name)
+		logrus.Debugf("Resolved root image %s to %s", root.ISTagName(), rootTag.Image.Name)
 		current := rootTag.Image.Name
 		if prior == current {
-			logrus.Debugf("Using build cache %s as root image.\n", cache.ISTagName())
+			logrus.Debugf("Using build cache %s as root image.", cache.ISTagName())
 			return cache, nil
 		}
-		logrus.Debugf("Using default image %s as root image.\n", root.ISTagName())
+		logrus.Debugf("Using default image %s as root image.", root.ISTagName())
 		return root, nil
 	}
 }

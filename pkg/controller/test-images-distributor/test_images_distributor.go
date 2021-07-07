@@ -155,7 +155,7 @@ func sourceForConfigChangeChannel(buildClusterNames sets.String, registryClient 
 				namespace = strings.TrimPrefix(namespace, "imagestream_")
 				var imagestream imagev1.ImageStream
 				if err := registryClient.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: name}, &imagestream); err != nil {
-					// Not found means user referenced an inexistent stream.
+					// Not found means user referenced an nonexistent stream.
 					if !apierrors.IsNotFound(err) {
 						logrus.WithError(err).WithField("name", namespace+"/"+name).Error("Failed to get imagestream")
 					}
@@ -200,7 +200,7 @@ func testImageStreamTagImportHandler() handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(func(o ctrlruntimeclient.Object) []reconcile.Request {
 		testimagestreamtagimport, ok := o.(*testimagestreamtagimportv1.TestImageStreamTagImport)
 		if !ok {
-			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not an ImageStram")
+			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not an ImageStream")
 			return nil
 		}
 		return []reconcile.Request{{NamespacedName: types.NamespacedName{

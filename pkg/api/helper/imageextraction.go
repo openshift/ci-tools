@@ -33,9 +33,11 @@ func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguratio
 
 	imageStreamTagReferenceMapIntoMap(cfg.BaseImages, result)
 	imageStreamTagReferenceMapIntoMap(cfg.BaseRPMImages, result)
-	if cfg.BuildRootImage != nil && cfg.BuildRootImage.ImageStreamTagReference != nil {
-		insert(*cfg.BuildRootImage.ImageStreamTagReference, result)
-		if cfg.InputConfiguration.BuildRootImage.UseBuildCache {
+	if cfg.BuildRootImage != nil {
+		if cfg.BuildRootImage.ImageStreamTagReference != nil {
+			insert(*cfg.BuildRootImage.ImageStreamTagReference, result)
+		}
+		if cfg.BuildRootImage.UseBuildCache {
 			insert(api.BuildCacheFor(cfg.Metadata), result)
 		}
 	}

@@ -166,7 +166,7 @@ func postIssuesNeedingApproval(slackClient *slack.Client, jiraClient *jiraapi.Cl
 
 	var channelID, cursor string
 	for {
-		conversations, nextCursor, err := slackClient.GetConversations(&slack.GetConversationsParameters{Cursor: cursor})
+		conversations, nextCursor, err := slackClient.GetConversations(&slack.GetConversationsParameters{Cursor: cursor, Types: []string{"private_channel"}})
 		if err != nil {
 			return fmt.Errorf("could not query Slack for channel ID: %w", err)
 		}

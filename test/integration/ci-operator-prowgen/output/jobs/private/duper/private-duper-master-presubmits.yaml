@@ -3,8 +3,7 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - master
     context: ci/prow/e2e
     decorate: true
     decoration_config:
@@ -85,8 +84,7 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - master
     context: ci/prow/images
     decorate: true
     decoration_config:
@@ -142,8 +140,7 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - master
     context: ci/prow/unit
     decorate: true
     decoration_config:

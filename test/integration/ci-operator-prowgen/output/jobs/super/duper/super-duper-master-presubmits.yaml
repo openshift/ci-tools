@@ -3,7 +3,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - master
+    - ^master$
+    - ^master-
     context: ci/prow/ci-index
     decorate: true
     decoration_config:
@@ -50,7 +51,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - master
+    - ^master$
+    - ^master-
     context: ci/prow/ci-index-my-bundle
     decorate: true
     decoration_config:
@@ -97,7 +99,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - master
+    - ^master$
+    - ^master-
     context: ci/prow/e2e
     decorate: true
     decoration_config:
@@ -170,7 +173,8 @@ presubmits:
   - agent: kubernetes
     always_run: false
     branches:
-    - master
+    - ^master$
+    - ^master-
     context: ci/prow/images
     decorate: true
     decoration_config:
@@ -232,7 +236,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - master
+    - ^master$
+    - ^master-
     context: ci/prow/lint
     decorate: true
     decoration_config:
@@ -279,7 +284,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - master
+    - ^master$
+    - ^master-
     context: ci/prow/steps
     decorate: true
     decoration_config:
@@ -333,7 +339,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - master
+    - ^master$
+    - ^master-
     context: ci/prow/unit
     decorate: true
     decoration_config:
@@ -380,7 +387,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - master
+    - ^master$
+    - ^master-
     context: ci/prow/variant-images
     decorate: true
     decoration_config:
@@ -431,7 +439,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - master
+    - ^master$
+    - ^master-
     context: ci/prow/variant-unit
     decorate: true
     decoration_config:

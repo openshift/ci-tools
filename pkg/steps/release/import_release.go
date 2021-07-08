@@ -14,6 +14,7 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
@@ -409,12 +410,20 @@ const overrideCLIStreamName = "amd64-cli"
 
 func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName string) (*api.ImageStreamTagReference, error) {
 	if s.overrideCLIReleaseExtractImage != nil {
+
+		// Setting the lookup policy on the imagestreamtag doesn't do anything, it gets happily reset to false so we have to
+		// create the imagestream to be able to set it there.
+		if err := s.client.Create(ctx, &imagev1.ImageStream{
+			ObjectMeta: metav1.ObjectMeta{Name: overrideCLIStreamName, Namespace: s.jobSpec.Namespace()},
+			Spec:       imagev1.ImageStreamSpec{LookupPolicy: imagev1.ImageLookupPolicy{Local: true}},
+		}); err != nil && !kerrors.IsAlreadyExists(err) {
+			return nil, fmt.Errorf("failed to create %s imagestream: %w", overrideCLIStreamName, err)
+		}
 		streamTag := &imagev1.ImageStreamTag{
 			ObjectMeta: meta.ObjectMeta{
 				Namespace: s.jobSpec.Namespace(),
 				Name:      overrideCLIStreamName + ":latest",
 			},
-			LookupPolicy: imagev1.ImageLookupPolicy{Local: true},
 			Tag: &imagev1.TagReference{
 				ReferencePolicy: imagev1.TagReferencePolicy{
 					Type: imagev1.LocalTagReferencePolicy,

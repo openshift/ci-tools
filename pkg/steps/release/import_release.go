@@ -409,38 +409,26 @@ const overrideCLIStreamName = "amd64-cli"
 
 func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName string) (*api.ImageStreamTagReference, error) {
 	if s.overrideCLIReleaseExtractImage != nil {
-		streamImport := &imagev1.ImageStreamImport{
+		streamTag := &imagev1.ImageStreamTag{
 			ObjectMeta: meta.ObjectMeta{
 				Namespace: s.jobSpec.Namespace(),
-				Name:      overrideCLIStreamName,
+				Name:      overrideCLIStreamName + ":latest",
 			},
-			Spec: imagev1.ImageStreamImportSpec{
-				Import: true,
-				Images: []imagev1.ImageImportSpec{
-					{
-						To: &coreapi.LocalObjectReference{
-							Name: "latest",
-						},
-						From: *s.overrideCLIReleaseExtractImage,
-						ReferencePolicy: imagev1.TagReferencePolicy{
-							Type: imagev1.LocalTagReferencePolicy,
-						},
-					},
+			Tag: &imagev1.TagReference{
+				ReferencePolicy: imagev1.TagReferencePolicy{
+					Type: imagev1.LocalTagReferencePolicy,
 				},
+				From: s.overrideCLIReleaseExtractImage,
 			},
 		}
 		if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
-			if err := s.client.Create(ctx, streamImport); err != nil {
-				if kerrors.IsConflict(err) {
-					return false, nil
-				}
+			if err := s.client.Create(ctx, streamTag); err != nil && !kerrors.IsConflict(err) {
 				return false, err
 			}
-			if streamImport.Status.Images[0].Image == nil {
-				return false, nil
+			if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(streamTag), streamTag); err != nil {
+				return false, err
 			}
-			return true, nil
-
+			return streamTag.Tag != nil && streamTag.Tag.Generation != nil && *streamTag.Tag.Generation == streamTag.Generation, nil
 		}); err != nil {
 			return nil, fmt.Errorf("failed to import override CLI image into %s:latest: %w", overrideCLIStreamName, err)
 		}

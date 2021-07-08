@@ -448,7 +448,7 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 	}
 
 	targetCLI := fmt.Sprintf("%s-cli", target)
-	if _, err := steps.RunPod(context.TODO(), s.client, &coreapi.Pod{
+	if _, err := steps.RunPod(ctx, s.client, &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      targetCLI,
 			Namespace: s.jobSpec.Namespace(),
@@ -468,7 +468,7 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 		return nil, fmt.Errorf("unable to find the 'cli' image in the provided release image: %w", err)
 	}
 	pod := &coreapi.Pod{}
-	if err := s.client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: targetCLI}, pod); err != nil {
+	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: targetCLI}, pod); err != nil {
 		return nil, fmt.Errorf("unable to extract the 'cli' image from the release image: %w", err)
 	}
 	if len(pod.Status.ContainerStatuses) == 0 || pod.Status.ContainerStatuses[0].State.Terminated == nil {

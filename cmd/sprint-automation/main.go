@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -11,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/pkg/flagutil"
 	"k8s.io/test-infra/prow/config/secret"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
@@ -110,6 +112,10 @@ func main() {
 
 	if err := sendIntakeDigest(slackClient, jiraClient, userIdsByRole[roleIntake]); err != nil {
 		logrus.WithError(err).Fatal("Could not post @dptp-intake digest to Slack.")
+	}
+
+	if err := ensureGroupMembership(slackClient, userIdsByRole); err != nil {
+		logrus.WithError(err).Fatal("Could not ensure Slack group membership.")
 	}
 }
 
@@ -376,4 +382,36 @@ func blockForIssue(issue jiraapi.Issue) slack.Block {
 			},
 		},
 	}
+}
+
+const (
+	userGroupTriage   = "dptp-triage"
+	userGroupHelpdesk = "dptp-helpdesk"
+)
+
+func ensureGroupMembership(client *slack.Client, userIdsByRole map[string]string) error {
+	groups, err := client.GetUserGroups(slack.GetUserGroupsOptionIncludeUsers(true))
+	if err != nil {
+		return fmt.Errorf("could not query Slack for groups: %w", err)
+	}
+	groupsByHandle := map[string]slack.UserGroup{}
+	for i := range groups {
+		groupsByHandle[groups[i].Handle] = groups[i]
+	}
+	for role, handle := range map[string]string{
+		roleTriagePrimary: userGroupTriage,
+		roleHelpdesk:      userGroupHelpdesk,
+	} {
+		group, found := groupsByHandle[handle]
+		if !found {
+			return fmt.Errorf("could not find user group %s", handle)
+		}
+
+		if expected, actual := sets.NewString(userIdsByRole[role]), sets.NewString(group.Users...); !expected.Equal(actual) {
+			if _, err := client.UpdateUserGroupMembers(group.ID, strings.Join(expected.List(), ",")); err != nil {
+				return fmt.Errorf("failed to update group %s: %w", handle, err)
+			}
+		}
+	}
+	return nil
 }

@@ -377,7 +377,7 @@ func blockForIssue(issue jiraapi.Issue) slack.Block {
 			Elements: []slack.MixedElement{
 				&slack.TextBlockObject{
 					Type: slack.MarkdownType,
-					Text: fmt.Sprintf("<%s|*%s*>: %s", issue.Self, issue.Key, summary),
+					Text: fmt.Sprintf("<https://issues.redhat.com/browse/%s|*%s*>: %s", issue.Key, issue.Key, summary),
 				},
 			},
 		},

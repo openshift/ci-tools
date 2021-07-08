@@ -274,23 +274,7 @@ func getIssuesNeedingApproval(jiraClient *jiraapi.Client) ([]slack.Block, error)
 				},
 			}
 		}
-		// we really don't want these things to line wrap, so truncate the summary
-		cutoff := 85
-		summary := issue.Fields.Summary
-		if len(summary) > cutoff {
-			summary = summary[0:cutoff-3] + "..."
-		}
-		blocksByUser[issue.Fields.Assignee.DisplayName] = append(blocksByUser[issue.Fields.Assignee.DisplayName], &slack.ContextBlock{
-			Type: slack.MBTContext,
-			ContextElements: slack.ContextElements{
-				Elements: []slack.MixedElement{
-					&slack.TextBlockObject{
-						Type: slack.MarkdownType,
-						Text: fmt.Sprintf("<%s|*%s*>: %s", issue.Self, issue.Key, summary),
-					},
-				},
-			},
-		})
+		blocksByUser[issue.Fields.Assignee.DisplayName] = append(blocksByUser[issue.Fields.Assignee.DisplayName], blockForIssue(issue))
 	}
 
 	for user, id := range idByUser {
@@ -363,23 +347,7 @@ func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, use
 		},
 	}
 	for _, issue := range issues {
-		// we really don't want these things to line wrap, so truncate the summary
-		cutoff := 85
-		summary := issue.Fields.Summary
-		if len(summary) > cutoff {
-			summary = summary[0:cutoff-3] + "..."
-		}
-		blocks = append(blocks, &slack.ContextBlock{
-			Type: slack.MBTContext,
-			ContextElements: slack.ContextElements{
-				Elements: []slack.MixedElement{
-					&slack.TextBlockObject{
-						Type: slack.MarkdownType,
-						Text: fmt.Sprintf("<%s|*%s*>: %s", issue.Self, issue.Key, summary),
-					},
-				},
-			},
-		})
+		blocks = append(blocks, blockForIssue(issue))
 	}
 	responseChannel, responseTimestamp, err := slackClient.PostMessage(userId, slack.MsgOptionText("Jira card digest.", false), slack.MsgOptionBlocks(blocks...))
 	if err != nil {
@@ -388,4 +356,24 @@ func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, use
 		logrus.Infof("Posted intake digest in channel %s at %s", responseChannel, responseTimestamp)
 	}
 	return nil
+}
+
+func blockForIssue(issue jiraapi.Issue) slack.Block {
+	// we really don't want these things to line wrap, so truncate the summary
+	cutoff := 85
+	summary := issue.Fields.Summary
+	if len(summary) > cutoff {
+		summary = summary[0:cutoff-3] + "..."
+	}
+	return &slack.ContextBlock{
+		Type: slack.MBTContext,
+		ContextElements: slack.ContextElements{
+			Elements: []slack.MixedElement{
+				&slack.TextBlockObject{
+					Type: slack.MarkdownType,
+					Text: fmt.Sprintf("<%s|*%s*>: %s", issue.Self, issue.Key, summary),
+				},
+			},
+		},
+	}
 }

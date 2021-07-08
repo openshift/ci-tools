@@ -40,6 +40,9 @@ github.com/Microsoft/go-winio
 github.com/Microsoft/go-winio/pkg/guid
 # github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5
 github.com/Nvveen/Gotty
+# github.com/PagerDuty/go-pagerduty v1.4.1
+## explicit
+github.com/PagerDuty/go-pagerduty
 # github.com/alecthomas/chroma v0.8.2-0.20201103103104-ab61726cdb54
 ## explicit
 github.com/alecthomas/chroma

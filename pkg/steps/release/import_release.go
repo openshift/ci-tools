@@ -414,6 +414,7 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 				Namespace: s.jobSpec.Namespace(),
 				Name:      overrideCLIStreamName + ":latest",
 			},
+			LookupPolicy: imagev1.ImageLookupPolicy{Local: true},
 			Tag: &imagev1.TagReference{
 				ReferencePolicy: imagev1.TagReferencePolicy{
 					Type: imagev1.LocalTagReferencePolicy,

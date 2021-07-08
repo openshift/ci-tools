@@ -29,6 +29,7 @@ releases:
     candidate:
       product: ocp
       architecture: ppc64le
+      stream: ci
       version: "4.8"
 resources:
   '*':

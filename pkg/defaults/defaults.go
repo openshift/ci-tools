@@ -897,9 +897,9 @@ func resolveCLIOverrideImage(architecture api.ReleaseArchitecture, version strin
 	if version == "" {
 		return nil, errors.New("non-amd64 releases require a version to be configured")
 	}
-	// Should never happen™ but better than a NPD below when stripping everything after the Y stream
-	if len(version) < 3 {
-		return nil, fmt.Errorf("version %q has less than three digits", version)
+	majorMinor, err := official.ExtractMajorMinor(version)
+	if err != nil {
+		return nil, err
 	}
-	return &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "ocp", Name: version[:3]}, nil
+	return &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "ocp", Name: majorMinor}, nil
 }

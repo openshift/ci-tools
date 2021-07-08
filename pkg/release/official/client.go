@@ -107,17 +107,31 @@ func latestPullSpecAndVersion(options []Release) (string, string) {
 // * The appropriate channel for a Cincinnati request, e.g. stable-4.7.
 // * Any errors that turn up while processing.
 func processVersionChannel(version string, channel api.ReleaseChannel) (explicitVersion bool, cincinnatiChannel string, err error) {
+	explicitVersion, majorMinor, err := extractMajorMinor(version)
+	if err != nil {
+		return false, "", err
+	}
+	if strings.HasSuffix(string(channel), fmt.Sprintf("-%s", majorMinor)) {
+		return explicitVersion, string(channel), nil
+	}
+
+	return explicitVersion, fmt.Sprintf("%s-%s", channel, majorMinor), nil
+}
+
+func ExtractMajorMinor(version string) (string, error) {
+	_, majorMinor, err := extractMajorMinor(version)
+	return majorMinor, err
+}
+
+func extractMajorMinor(version string) (explicitVersion bool, majorMinor string, err error) {
 	majorMinorMatch := majorMinorRegExp.FindStringSubmatch(version)
 	if majorMinorMatch == nil {
 		return false, "", fmt.Errorf("version %q does not begin with a major.minor version", version)
 	}
 
 	majorMinorIndex := majorMinorRegExp.SubexpIndex("majorMinor")
-	majorMinor := majorMinorMatch[majorMinorIndex]
+	majorMinor = majorMinorMatch[majorMinorIndex]
 	explicitVersion = version != majorMinor
-	if strings.HasSuffix(string(channel), fmt.Sprintf("-%s", majorMinor)) {
-		return explicitVersion, string(channel), nil
-	}
 
-	return explicitVersion, fmt.Sprintf("%s-%s", channel, majorMinor), nil
+	return explicitVersion, majorMinor, nil
 }

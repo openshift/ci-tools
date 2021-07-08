@@ -196,11 +196,6 @@ func filterPresubmits(changedPresubmits map[string][]prowconfig.Presubmit, logge
 				continue
 			}
 
-			if len(job.Branches) != 1 {
-				jobLogger.Warn("cannot rehearse jobs that run over multiple branches")
-				continue
-			}
-
 			presubmits.Add(repo, job, config.GetSourceType(job.Labels))
 		}
 	}

@@ -31,7 +31,7 @@ func architecture(architecture api.ReleaseArchitecture) string {
 	case api.ReleaseArchitectureAMD64:
 		// default, no postfix
 		return ""
-	case api.ReleaseArchitecturePPC64le, api.ReleaseArchitectureS390x:
+	case api.ReleaseArchitecturePPC64le, api.ReleaseArchitectureS390x, api.ReleaseArchitectureARM64:
 		return "-" + string(architecture)
 	}
 	return ""

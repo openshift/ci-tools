@@ -199,7 +199,7 @@ func TestValidateCandidate(t *testing.T) {
 				Version:      "4.4",
 			},
 			output: []error{
-				errors.New("root.architecture: must be one of amd64, ppc64le, s390x"),
+				errors.New("root.architecture: must be one of amd64, arm64, ppc64le, s390x"),
 			},
 		},
 		{
@@ -305,7 +305,7 @@ func TestValidateRelease(t *testing.T) {
 				Version:      "4.4",
 			},
 			output: []error{
-				errors.New("root.architecture: must be one of amd64, ppc64le, s390x"),
+				errors.New("root.architecture: must be one of amd64, arm64, ppc64le, s390x"),
 			},
 		},
 		{
@@ -393,7 +393,7 @@ func TestValidatePrerelease(t *testing.T) {
 				},
 			},
 			output: []error{
-				errors.New("root.architecture: must be one of amd64, ppc64le, s390x"),
+				errors.New("root.architecture: must be one of amd64, arm64, ppc64le, s390x"),
 			},
 		},
 		{

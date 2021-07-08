@@ -24,6 +24,7 @@ replace (
 require (
 	cloud.google.com/go/storage v1.12.0
 	github.com/GoogleCloudPlatform/testgrid v0.0.68
+	github.com/PagerDuty/go-pagerduty v1.4.1
 	github.com/alecthomas/chroma v0.8.2-0.20201103103104-ab61726cdb54
 	github.com/andygrunwald/go-jira v1.13.0
 	github.com/blang/semver v3.5.1+incompatible

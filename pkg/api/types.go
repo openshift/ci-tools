@@ -289,6 +289,7 @@ const (
 	ReleaseArchitectureAMD64   ReleaseArchitecture = "amd64"
 	ReleaseArchitecturePPC64le ReleaseArchitecture = "ppc64le"
 	ReleaseArchitectureS390x   ReleaseArchitecture = "s390x"
+	ReleaseArchitectureARM64   ReleaseArchitecture = "arm64"
 )
 
 type ReleaseStream string

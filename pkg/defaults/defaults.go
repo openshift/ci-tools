@@ -901,5 +901,5 @@ func resolveCLIOverrideImage(architecture api.ReleaseArchitecture, version strin
 	if err != nil {
 		return nil, err
 	}
-	return &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "ocp", Name: majorMinor}, nil
+	return &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "ocp", Name: majorMinor + ":cli"}, nil
 }

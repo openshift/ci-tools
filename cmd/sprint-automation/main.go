@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -11,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/pkg/flagutil"
 	"k8s.io/test-infra/prow/config/secret"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
@@ -110,6 +112,10 @@ func main() {
 
 	if err := sendIntakeDigest(slackClient, jiraClient, userIdsByRole[roleIntake]); err != nil {
 		logrus.WithError(err).Fatal("Could not post @dptp-intake digest to Slack.")
+	}
+
+	if err := ensureGroupMembership(slackClient, userIdsByRole); err != nil {
+		logrus.WithError(err).Fatal("Could not ensure Slack group membership.")
 	}
 }
 
@@ -274,23 +280,7 @@ func getIssuesNeedingApproval(jiraClient *jiraapi.Client) ([]slack.Block, error)
 				},
 			}
 		}
-		// we really don't want these things to line wrap, so truncate the summary
-		cutoff := 85
-		summary := issue.Fields.Summary
-		if len(summary) > cutoff {
-			summary = summary[0:cutoff-3] + "..."
-		}
-		blocksByUser[issue.Fields.Assignee.DisplayName] = append(blocksByUser[issue.Fields.Assignee.DisplayName], &slack.ContextBlock{
-			Type: slack.MBTContext,
-			ContextElements: slack.ContextElements{
-				Elements: []slack.MixedElement{
-					&slack.TextBlockObject{
-						Type: slack.MarkdownType,
-						Text: fmt.Sprintf("<%s|*%s*>: %s", issue.Self, issue.Key, summary),
-					},
-				},
-			},
-		})
+		blocksByUser[issue.Fields.Assignee.DisplayName] = append(blocksByUser[issue.Fields.Assignee.DisplayName], blockForIssue(issue))
 	}
 
 	for user, id := range idByUser {
@@ -363,29 +353,65 @@ func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, use
 		},
 	}
 	for _, issue := range issues {
-		// we really don't want these things to line wrap, so truncate the summary
-		cutoff := 85
-		summary := issue.Fields.Summary
-		if len(summary) > cutoff {
-			summary = summary[0:cutoff-3] + "..."
-		}
-		blocks = append(blocks, &slack.ContextBlock{
-			Type: slack.MBTContext,
-			ContextElements: slack.ContextElements{
-				Elements: []slack.MixedElement{
-					&slack.TextBlockObject{
-						Type: slack.MarkdownType,
-						Text: fmt.Sprintf("<%s|*%s*>: %s", issue.Self, issue.Key, summary),
-					},
-				},
-			},
-		})
+		blocks = append(blocks, blockForIssue(issue))
 	}
 	responseChannel, responseTimestamp, err := slackClient.PostMessage(userId, slack.MsgOptionText("Jira card digest.", false), slack.MsgOptionBlocks(blocks...))
 	if err != nil {
 		return fmt.Errorf("failed to message @dptp-intake: %w", err)
 	} else {
 		logrus.Infof("Posted intake digest in channel %s at %s", responseChannel, responseTimestamp)
+	}
+	return nil
+}
+
+func blockForIssue(issue jiraapi.Issue) slack.Block {
+	// we really don't want these things to line wrap, so truncate the summary
+	cutoff := 85
+	summary := issue.Fields.Summary
+	if len(summary) > cutoff {
+		summary = summary[0:cutoff-3] + "..."
+	}
+	return &slack.ContextBlock{
+		Type: slack.MBTContext,
+		ContextElements: slack.ContextElements{
+			Elements: []slack.MixedElement{
+				&slack.TextBlockObject{
+					Type: slack.MarkdownType,
+					Text: fmt.Sprintf("<https://issues.redhat.com/browse/%s|*%s*>: %s", issue.Key, issue.Key, summary),
+				},
+			},
+		},
+	}
+}
+
+const (
+	userGroupTriage   = "dptp-triage"
+	userGroupHelpdesk = "dptp-helpdesk"
+)
+
+func ensureGroupMembership(client *slack.Client, userIdsByRole map[string]string) error {
+	groups, err := client.GetUserGroups(slack.GetUserGroupsOptionIncludeUsers(true))
+	if err != nil {
+		return fmt.Errorf("could not query Slack for groups: %w", err)
+	}
+	groupsByHandle := map[string]slack.UserGroup{}
+	for i := range groups {
+		groupsByHandle[groups[i].Handle] = groups[i]
+	}
+	for role, handle := range map[string]string{
+		roleTriagePrimary: userGroupTriage,
+		roleHelpdesk:      userGroupHelpdesk,
+	} {
+		group, found := groupsByHandle[handle]
+		if !found {
+			return fmt.Errorf("could not find user group %s", handle)
+		}
+
+		if expected, actual := sets.NewString(userIdsByRole[role]), sets.NewString(group.Users...); !expected.Equal(actual) {
+			if _, err := client.UpdateUserGroupMembers(group.ID, strings.Join(expected.List(), ",")); err != nil {
+				return fmt.Errorf("failed to update group %s: %w", handle, err)
+			}
+		}
 	}
 	return nil
 }

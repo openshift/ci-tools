@@ -140,7 +140,7 @@ func fromConfig(
 	// A pointer to a slice of pointers is weird, but necessary. Since the slice mutates inside of the other functions,
 	// we need to pass the pointer - otherwise we will lose the updates after leaving the function scope.
 	imageConfigs := &[]*api.InputImageTagStepConfiguration{}
-	resolver := rootImageResolver(client, ctx)
+	resolver := rootImageResolver(client, ctx, promote)
 	rawSteps, err := stepConfigsForBuild(ctx, client, config, jobSpec, ioutil.ReadFile, resolver, imageConfigs, time.Second)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get stepConfigsForBuild: %w", err)
@@ -482,9 +482,13 @@ func leasesForTest(s *api.MultiStageTestConfigurationLiteral) (ret []api.StepLea
 // rootImageResolver creates a resolver for the root image import step. We attempt to resolve the root image and
 // the build cache. If we are able to successfully determine that the build cache is up-to-date, we import it as
 // the root image.
-func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context) func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
+func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context, promote bool) func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
 	return func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
 		logrus.Debugf("Determining if build cache %s can be used in place of root %s", cache.ISTagName(), root.ISTagName())
+		if promote {
+			logrus.Debugf("Promotions cannot use the build cache, so using default image %s as root image.", root.ISTagName())
+			return root, nil
+		}
 		cacheTag := &imagev1.ImageStreamTag{}
 		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: cache.Namespace, Name: fmt.Sprintf("%s:%s", cache.Name, cache.Tag)}, cacheTag); err != nil {
 			if kapierrors.IsNotFound(err) {

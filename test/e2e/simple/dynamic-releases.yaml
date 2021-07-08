@@ -26,11 +26,10 @@ releases:
         lower: "4.4.0"
         upper: "4.5.0-0"
   mainframe:
-    candidate:
-      product: ocp
-      architecture: ppc64le
-      stream: ci
-      version: "4.8"
+    release:
+      version: "4.7"
+      channel: stable
+      architecture: s390x
 resources:
   '*':
     limits:

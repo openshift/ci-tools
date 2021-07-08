@@ -26,7 +26,7 @@ releases:
         lower: "4.4.0"
         upper: "4.5.0-0"
   mainframe:
-    release:
+    candidate:
       product: ocp
       architecture: ppc64le
       version: "4.8"

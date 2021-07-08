@@ -87,11 +87,11 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not initialize PagerDuty client.")
 	}
-	if pagerDutyBlocks, err := getPagerDutyRoles(pagerDutyClient, slackClient); err != nil {
+	userIdsByRole, err := users(pagerDutyClient, slackClient)
+	if err != nil {
 		logrus.WithError(err).Fatal("Could not get rotating roles from PagerDuty.")
-	} else {
-		blocks = append(blocks, pagerDutyBlocks...)
 	}
+	blocks = append(blocks, getPagerDutyBlocks(userIdsByRole)...)
 
 	prowJiraClient, err := o.jiraOptions.Client(secretAgent)
 	if err != nil {
@@ -105,7 +105,11 @@ func main() {
 	}
 
 	if err := postBlocks(slackClient, blocks); err != nil {
-		logrus.WithError(err).Fatal("Could not post to Slack.")
+		logrus.WithError(err).Fatal("Could not post team digest to Slack.")
+	}
+
+	if err := sendIntakeDigest(slackClient, jiraClient, userIdsByRole[roleIntake]); err != nil {
+		logrus.WithError(err).Fatal("Could not post @dptp-intake digest to Slack.")
 	}
 }
 
@@ -113,61 +117,22 @@ const (
 	primaryOnCallQuery     = "DPTP Primary On-Call"
 	secondaryUSOnCallQuery = "DPTP Secondary On-Call (US)"
 	secondaryEUOnCallQuery = "DPTP Secondary On-Call (EU)"
+	roleTriagePrimary      = "@dptp-triage Primary"
+	roleTriageSecondaryUS  = "@dptp-triage Secondary (US)"
+	roleTriageSecondaryEU  = "@dptp-triage Secondary (EU)"
+	roleHelpdesk           = "@dptp-helpdesk"
+	roleIntake             = "@dptp-intake"
 )
 
-func getPagerDutyRoles(client *pagerduty.Client, slackClient *slack.Client) ([]slack.Block, error) {
-	now := time.Now()
+func getPagerDutyBlocks(userIdsByRole map[string]string) []slack.Block {
 	var fields []*slack.TextBlockObject
-	for _, item := range []struct {
-		role         string
-		query        string
-		since, until time.Time
-	}{
-		{
-			role:  "@dptp-triage Primary",
-			query: primaryOnCallQuery,
-			since: now.Add(-1 * time.Second),
-			until: now,
-		},
-		{
-			role:  "@dptp-triage Secondary (US)",
-			query: secondaryUSOnCallQuery,
-			since: now.Add(-24 * time.Hour),
-			until: now,
-		},
-		{
-			role:  "@dptp-triage Secondary (EU)",
-			query: secondaryEUOnCallQuery,
-			since: now.Add(-24 * time.Hour),
-			until: now,
-		},
-		{
-			role:  "@dptp-helpdesk",
-			query: primaryOnCallQuery,
-			since: time.Now().Add(-7 * 24 * time.Hour).Add(-1 * time.Second),
-			until: time.Now().Add(-7 * 24 * time.Hour),
-		},
-		{
-			role:  "@dptp-intake",
-			query: primaryOnCallQuery,
-			since: time.Now().Add(-2 * 7 * 24 * time.Hour).Add(-1 * time.Second),
-			until: time.Now().Add(-2 * 7 * 24 * time.Hour),
-		},
-	} {
-		pagerDutyUser, err := userOnCallDuring(client, item.query, item.since, item.until)
-		if err != nil {
-			return nil, fmt.Errorf("could not get PagerDuty user for %s: %w", item.role, err)
-		}
-		slackUser, err := slackClient.GetUserByEmail(pagerDutyUser.Email)
-		if err != nil {
-			return nil, fmt.Errorf("could not get slack user for %s: %w", pagerDutyUser.Name, err)
-		}
+	for _, role := range []string{roleTriagePrimary, roleTriageSecondaryUS, roleTriageSecondaryEU, roleHelpdesk, roleIntake} {
 		fields = append(fields, &slack.TextBlockObject{
 			Type: slack.PlainTextType,
-			Text: item.role,
+			Text: role,
 		}, &slack.TextBlockObject{
 			Type: slack.MarkdownType,
-			Text: fmt.Sprintf("<@%s>", slackUser.ID),
+			Text: fmt.Sprintf("<@%s>", userIdsByRole[role]),
 		})
 	}
 
@@ -185,7 +150,59 @@ func getPagerDutyRoles(client *pagerduty.Client, slackClient *slack.Client) ([]s
 		},
 	}
 
-	return blocks, nil
+	return blocks
+}
+
+func users(client *pagerduty.Client, slackClient *slack.Client) (map[string]string, error) {
+	now := time.Now()
+	userIdsByRole := map[string]string{}
+	for _, item := range []struct {
+		role         string
+		query        string
+		since, until time.Time
+	}{
+		{
+			role:  roleTriagePrimary,
+			query: primaryOnCallQuery,
+			since: now.Add(-1 * time.Second),
+			until: now,
+		},
+		{
+			role:  roleTriageSecondaryUS,
+			query: secondaryUSOnCallQuery,
+			since: now.Add(-24 * time.Hour),
+			until: now,
+		},
+		{
+			role:  roleTriageSecondaryEU,
+			query: secondaryEUOnCallQuery,
+			since: now.Add(-24 * time.Hour),
+			until: now,
+		},
+		{
+			role:  roleHelpdesk,
+			query: primaryOnCallQuery,
+			since: time.Now().Add(-7 * 24 * time.Hour).Add(-1 * time.Second),
+			until: time.Now().Add(-7 * 24 * time.Hour),
+		},
+		{
+			role:  roleIntake,
+			query: primaryOnCallQuery,
+			since: time.Now().Add(-2 * 7 * 24 * time.Hour).Add(-1 * time.Second),
+			until: time.Now().Add(-2 * 7 * 24 * time.Hour),
+		},
+	} {
+		pagerDutyUser, err := userOnCallDuring(client, item.query, item.since, item.until)
+		if err != nil {
+			return nil, fmt.Errorf("could not get PagerDuty user for %s: %w", item.role, err)
+		}
+		slackUser, err := slackClient.GetUserByEmail(pagerDutyUser.Email)
+		if err != nil {
+			return nil, fmt.Errorf("could not get slack user for %s: %w", pagerDutyUser.Name, err)
+		}
+		userIdsByRole[item.role] = slackUser.ID
+	}
+	return userIdsByRole, nil
 }
 
 func userOnCallDuring(client *pagerduty.Client, query string, since, until time.Time) (*pagerduty.User, error) {
@@ -213,7 +230,7 @@ func userOnCallDuring(client *pagerduty.Client, query string, since, until time.
 func getIssuesNeedingApproval(jiraClient *jiraapi.Client) ([]slack.Block, error) {
 	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND status="QE Review"`, jira.ProjectDPTP), nil)
 	if err := jirautil.JiraError(response, err); err != nil {
-		return nil, fmt.Errorf("could not find Jira project %s: %w", jira.ProjectDPTP, err)
+		return nil, fmt.Errorf("could not query for Jira issues: %w", err)
 	}
 
 	if len(issues) == 0 {
@@ -314,7 +331,61 @@ func postBlocks(slackClient *slack.Client, blocks []slack.Block) error {
 	if err != nil {
 		return fmt.Errorf("failed to post to channel: %w", err)
 	} else {
-		logrus.Infof("Posted response to app mention in channel %s at %s", responseChannel, responseTimestamp)
+		logrus.Infof("Posted team digest in channel %s at %s", responseChannel, responseTimestamp)
+	}
+	return nil
+}
+
+func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, userId string) error {
+	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND (labels is EMPTY OR NOT labels=ready) AND created >= startOfWeek()`, jira.ProjectDPTP), nil)
+	if err := jirautil.JiraError(response, err); err != nil {
+		return fmt.Errorf("could not query for Jira issues: %w", err)
+	}
+
+	if len(issues) == 0 {
+		return nil
+	}
+
+	blocks := []slack.Block{
+		&slack.HeaderBlock{
+			Type: slack.MBTHeader,
+			Text: &slack.TextBlockObject{
+				Type: slack.PlainTextType,
+				Text: "Cards Awaiting Intake",
+			},
+		},
+		&slack.SectionBlock{
+			Type: slack.MBTSection,
+			Text: &slack.TextBlockObject{
+				Type: slack.PlainTextType,
+				Text: "The following issues need to be reviewed as part of the intake process:",
+			},
+		},
+	}
+	for _, issue := range issues {
+		// we really don't want these things to line wrap, so truncate the summary
+		cutoff := 85
+		summary := issue.Fields.Summary
+		if len(summary) > cutoff {
+			summary = summary[0:cutoff-3] + "..."
+		}
+		blocks = append(blocks, &slack.ContextBlock{
+			Type: slack.MBTContext,
+			ContextElements: slack.ContextElements{
+				Elements: []slack.MixedElement{
+					&slack.TextBlockObject{
+						Type: slack.MarkdownType,
+						Text: fmt.Sprintf("<%s|*%s*>: %s", issue.Self, issue.Key, summary),
+					},
+				},
+			},
+		})
+	}
+	responseChannel, responseTimestamp, err := slackClient.PostMessage(userId, slack.MsgOptionText("Jira card digest.", false), slack.MsgOptionBlocks(blocks...))
+	if err != nil {
+		return fmt.Errorf("failed to message @dptp-intake: %w", err)
+	} else {
+		logrus.Infof("Posted intake digest in channel %s at %s", responseChannel, responseTimestamp)
 	}
 	return nil
 }

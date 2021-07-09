@@ -25,5 +25,7 @@ version="v${build_date}-${git_commit}"
 
 for dir in $( find ./cmd/ -mindepth 1 -maxdepth 1 -type d -not \( -name '*ipi-deprovison*' \) ); do
     command="$( basename "${dir}" )"
-    go install $RACE_FLAG -ldflags "-X 'k8s.io/test-infra/prow/version.Name=${command}' -X 'k8s.io/test-infra/prow/version.Version=${version}'" "./cmd/${command}/..."
+    set -o xtrace
+    go install -v $RACE_FLAG -ldflags "-X 'k8s.io/test-infra/prow/version.Name=${command}' -X 'k8s.io/test-infra/prow/version.Version=${version}'" "./cmd/${command}/..."
+    set +o xtrace
 done

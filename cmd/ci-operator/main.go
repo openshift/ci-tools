@@ -1574,7 +1574,7 @@ func inputHash(inputs api.InputDefinition) string {
 // saveNamespaceArtifacts is a best effort attempt to save ci-operator namespace artifacts to disk
 // for review later.
 func (o *options) saveNamespaceArtifacts() {
-	namespaceDir := "build-resources"
+	namespaceDir := api.NamespaceDir
 	if kubeClient, err := coreclientset.NewForConfig(o.clusterConfig); err == nil {
 		pods, _ := kubeClient.Pods(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ := json.MarshalIndent(pods, "", "  ")

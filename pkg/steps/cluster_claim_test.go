@@ -2,7 +2,6 @@ package steps
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -12,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
@@ -242,7 +242,7 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 				},
 			},
 			waitForClaim: func(client ctrlruntimeclient.WithWatch, ns, name string, claim *hivev1.ClusterClaim, timeout time.Duration) error {
-				return errors.New("some error")
+				return wait.ErrWaitTimeout
 			},
 			expected: &hivev1.ClusterClaim{
 				ObjectMeta: metav1.ObjectMeta{
@@ -269,7 +269,7 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 					},
 				},
 			},
-			expectedError: fmt.Errorf("failed to wait for created cluster claim to become ready: %w", errors.New("some error")),
+			expectedError: fmt.Errorf("failed to wait for the created cluster claim to become ready: %w", wait.ErrWaitTimeout),
 		},
 	}
 

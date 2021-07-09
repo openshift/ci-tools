@@ -760,7 +760,7 @@ func TestWaitForConditionOnObject(t *testing.T) {
 			client: fakectrlruntimeclient.NewFakeClient(aPod()),
 			objectFunc: func(client ctrlruntimeclient.Client) error {
 				// wait for watch being ready
-				time.Sleep(10 * time.Millisecond)
+				time.Sleep(100 * time.Millisecond)
 				ctx := context.TODO()
 				pod := &coreapi.Pod{}
 				if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: podName, Namespace: ns}, pod); err != nil {

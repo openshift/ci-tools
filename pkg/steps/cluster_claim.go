@@ -12,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/test-infra/prow/kube"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -132,7 +133,22 @@ func (s *clusterClaimStep) acquireCluster(ctx context.Context, waitForClaim func
 	claimStart := time.Now()
 	into := &hivev1.ClusterClaim{}
 	if err := waitForClaim(s.hiveClient, claimNamespace, claimName, into, s.clusterClaim.Timeout.Duration); err != nil {
-		return claim, fmt.Errorf("failed to wait for created cluster claim to become ready: %w", err)
+		if errors.Is(err, wait.ErrWaitTimeout) {
+			c := &hivev1.ClusterClaim{}
+			if err := s.hiveClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: claim.Namespace, Name: claim.Name}, c); err != nil {
+				return claim, fmt.Errorf("failed to get the claim after timeout of waiting for the created cluster claim for become ready: %w", err)
+			}
+			for i, condition := range c.Status.Conditions {
+				logrus.WithField("index", i).
+					WithField("Message", condition.Message).
+					WithField("LastProbeTime", condition.LastProbeTime).
+					WithField("Reason", condition.Reason).
+					WithField("Status", condition.Status).
+					WithField("Type", condition.Type).
+					Errorf("Found a condition in the cluster claim's status")
+			}
+		}
+		return claim, fmt.Errorf("failed to wait for the created cluster claim to become ready: %w", err)
 	}
 	claim = into
 	logrus.Infof("The claimed cluster is ready after %s.", time.Since(claimStart).Truncate(time.Second))

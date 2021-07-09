@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/bombsimon/logrusr"
 	prometheusclient "github.com/prometheus/client_golang/api"
 	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/sirupsen/logrus"
@@ -15,13 +16,13 @@ import (
 	"gopkg.in/fsnotify.v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
 	pprofutil "k8s.io/test-infra/prow/pjutil/pprof"
 	"k8s.io/test-infra/prow/version"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
@@ -212,9 +213,11 @@ func mainProduce(opts *options, cache cache) {
 }
 
 func mainAdmission(opts *options) {
-	restConfig, err := rest.InClusterConfig()
+	controllerruntime.SetLogger(logrusr.NewLogger(logrus.StandardLogger()))
+
+	restConfig, err := util.LoadClusterConfig()
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to load in-cluster config.")
+		logrus.WithError(err).Fatal("Failed to load cluster config.")
 	}
 	client, err := buildclientset.NewForConfig(restConfig)
 	if err != nil {

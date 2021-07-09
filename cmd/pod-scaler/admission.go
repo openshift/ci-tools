@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sort"
 
 	"github.com/sirupsen/logrus"
 
@@ -75,7 +76,15 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
-	return admission.PatchResponseFromRaw(req.Object.Raw, marshaledPod)
+	response := admission.PatchResponseFromRaw(req.Object.Raw, marshaledPod)
+	// we need these to be deterministically ordered for testing
+	sort.Slice(response.Patches, func(i, j int) bool {
+		if response.Patches[i].Operation != response.Patches[j].Operation {
+			return response.Patches[i].Operation < response.Patches[j].Operation
+		}
+		return response.Patches[i].Path < response.Patches[j].Path
+	})
+	return response
 }
 
 func mutatePod(pod *corev1.Pod, build *buildv1.Build) {

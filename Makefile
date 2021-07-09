@@ -226,10 +226,13 @@ check-breaking-changes:
 .PHONY: check-breaking-changes
 
 .PHONY: generate
-generate:
+generate: imports
 	hack/update-codegen.sh
 	hack/generate-ci-op-reference.sh
-	go run  ./vendor/github.com/coreydaley/openshift-goimports/ -m github.com/openshift/ci-tools
+
+.PHONY: imports
+imports:
+	go run ./vendor/github.com/coreydaley/openshift-goimports/ -m github.com/openshift/ci-tools
 
 .PHONY: verify-gen
 verify-gen: generate

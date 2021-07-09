@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bombsimon/logrusr"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/fsnotify.v1"
 
@@ -219,6 +220,7 @@ func completeSet(raw flagutil.Strings) sets.String {
 
 func main() {
 	logrusutil.ComponentInit()
+	controllerruntime.SetLogger(logrusr.NewLogger(logrus.StandardLogger()))
 
 	opts, err := newOpts()
 	if err != nil {

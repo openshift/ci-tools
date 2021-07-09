@@ -35,7 +35,7 @@ func main() {
 		logger: logger,
 	}
 	prometheusAddr, _ := prometheus.Initialize(t, tmpDir)
-	kubeconfigFile := kubernetes.Fake(t, tmpDir, prometheusAddr)
+	kubeconfigFile := kubernetes.Fake(t, tmpDir, kubernetes.Prometheus(prometheusAddr))
 
 	dataDir, err := ioutil.TempDir(tmpDir, "data")
 	if err != nil {

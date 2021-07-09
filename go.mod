@@ -5,6 +5,9 @@ go 1.16
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v14.2.0+incompatible
 	github.com/Sirupsen/logrus => github.com/sirupsen/logrus v1.6.0
+
+	// forked version that compiles with k8s
+	github.com/bombsimon/logrusr => github.com/stevekuznetsov/logrusr v1.1.1-0.20210709145202-301b9fbb8872
 	github.com/containerd/containerd => github.com/containerd/containerd v0.2.10-0.20180716142608-408d13de2fbb
 
 	github.com/docker/docker => github.com/openshift/moby-moby v1.4.2-0.20190308215630-da810a85109d
@@ -27,6 +30,7 @@ require (
 	github.com/alecthomas/chroma v0.8.2-0.20201103103104-ab61726cdb54
 	github.com/andygrunwald/go-jira v1.13.0
 	github.com/blang/semver v3.5.1+incompatible
+	github.com/bombsimon/logrusr v0.0.0-00010101000000-000000000000
 	github.com/coreydaley/openshift-goimports v0.0.0-20201111145504-7b4aecddd198
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/getlantern/deepcopy v0.0.0-20160317154340-7f45deb8130a
@@ -60,7 +64,6 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/slack-go/slack v0.7.3
 	github.com/spf13/afero v1.4.1
-	go.uber.org/zap v1.17.0
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	google.golang.org/api v0.32.0
 	gopkg.in/fsnotify.v1 v1.4.7

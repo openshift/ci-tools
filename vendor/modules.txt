@@ -133,6 +133,9 @@ github.com/beorn7/perks/quantile
 # github.com/blang/semver v3.5.1+incompatible
 ## explicit
 github.com/blang/semver
+# github.com/bombsimon/logrusr v0.0.0-00010101000000-000000000000 => github.com/stevekuznetsov/logrusr v1.1.1-0.20210709145202-301b9fbb8872
+## explicit
+github.com/bombsimon/logrusr
 # github.com/bwmarrin/snowflake v0.0.0
 github.com/bwmarrin/snowflake
 # github.com/cespare/xxhash/v2 v2.1.1
@@ -218,8 +221,6 @@ github.com/getlantern/deepcopy
 github.com/ghodss/yaml
 # github.com/go-logr/logr v0.4.0
 github.com/go-logr/logr
-# github.com/go-logr/zapr v0.4.0
-github.com/go-logr/zapr
 # github.com/gobuffalo/flect v0.2.0
 github.com/gobuffalo/flect
 # github.com/gogo/protobuf v1.3.2
@@ -546,18 +547,8 @@ go.opencensus.io/trace
 go.opencensus.io/trace/internal
 go.opencensus.io/trace/propagation
 go.opencensus.io/trace/tracestate
-# go.uber.org/atomic v1.7.0
-go.uber.org/atomic
-# go.uber.org/multierr v1.6.0
-go.uber.org/multierr
 # go.uber.org/zap v1.17.0
 ## explicit
-go.uber.org/zap
-go.uber.org/zap/buffer
-go.uber.org/zap/internal/bufferpool
-go.uber.org/zap/internal/color
-go.uber.org/zap/internal/exit
-go.uber.org/zap/zapcore
 # go4.org v0.0.0-20201209231011-d4a079459e60
 go4.org/bytereplacer
 # gocloud.dev v0.19.0
@@ -1333,7 +1324,6 @@ sigs.k8s.io/controller-runtime/pkg/internal/objectutil
 sigs.k8s.io/controller-runtime/pkg/internal/recorder
 sigs.k8s.io/controller-runtime/pkg/leaderelection
 sigs.k8s.io/controller-runtime/pkg/log
-sigs.k8s.io/controller-runtime/pkg/log/zap
 sigs.k8s.io/controller-runtime/pkg/manager
 sigs.k8s.io/controller-runtime/pkg/manager/signals
 sigs.k8s.io/controller-runtime/pkg/metrics
@@ -1375,6 +1365,7 @@ sigs.k8s.io/structured-merge-diff/v4/value
 sigs.k8s.io/yaml
 # github.com/Azure/go-autorest => github.com/Azure/go-autorest v14.2.0+incompatible
 # github.com/Sirupsen/logrus => github.com/sirupsen/logrus v1.6.0
+# github.com/bombsimon/logrusr => github.com/stevekuznetsov/logrusr v1.1.1-0.20210709145202-301b9fbb8872
 # github.com/containerd/containerd => github.com/containerd/containerd v0.2.10-0.20180716142608-408d13de2fbb
 # github.com/docker/docker => github.com/openshift/moby-moby v1.4.2-0.20190308215630-da810a85109d
 # github.com/google/go-cmp => github.com/alvaroaleman/go-cmp v0.5.7-0.20210615160450-f8688cd5aaa0

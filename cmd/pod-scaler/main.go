@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/bombsimon/logrusr"
 	prometheusclient "github.com/prometheus/client_golang/api"
 	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/sirupsen/logrus"
-	"go.uber.org/zap/zapcore"
 	"google.golang.org/api/option"
 	"gopkg.in/fsnotify.v1"
 
@@ -23,7 +23,6 @@ import (
 	pprofutil "k8s.io/test-infra/prow/pjutil/pprof"
 	"k8s.io/test-infra/prow/version"
 	controllerruntime "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
@@ -214,16 +213,7 @@ func mainProduce(opts *options, cache cache) {
 }
 
 func mainAdmission(opts *options) {
-	// TODO: figure out the logrusr dependency hell with logr and c-r
-	var level zapcore.Level
-	if err := level.UnmarshalText([]byte(opts.loglevel)); err != nil {
-		logrus.WithError(err).Fatal("Could not parse log level for logr.")
-	}
-
-	controllerruntime.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{
-		DestWriter: os.Stdout,
-		Level:      level,
-	})))
+	controllerruntime.SetLogger(logrusr.NewLogger(logrus.StandardLogger()))
 
 	restConfig, err := util.LoadClusterConfig()
 	if err != nil {

@@ -16,6 +16,7 @@ import (
 	kapierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -167,6 +168,8 @@ func fromConfig(
 			// factor release steps into something more reusable
 			hasReleaseStep = true
 			var value string
+			var overrideCLIReleaseExtractImage *coreapi.ObjectReference
+			var overrideCLIResolveErr error
 			if env := utils.ReleaseImageEnv(resolveConfig.Name); params.HasInput(env) {
 				value, err = params.Get(env)
 				if err != nil {
@@ -177,17 +180,20 @@ func fromConfig(
 				switch {
 				case resolveConfig.Candidate != nil:
 					value, err = candidate.ResolvePullSpec(httpClient, *resolveConfig.Candidate)
+					overrideCLIReleaseExtractImage, overrideCLIResolveErr = resolveCLIOverrideImage(resolveConfig.Candidate.Architecture, resolveConfig.Candidate.Version)
 				case resolveConfig.Release != nil:
 					value, _, err = official.ResolvePullSpecAndVersion(httpClient, *resolveConfig.Release)
+					overrideCLIReleaseExtractImage, overrideCLIResolveErr = resolveCLIOverrideImage(resolveConfig.Release.Architecture, resolveConfig.Release.Version)
 				case resolveConfig.Prerelease != nil:
 					value, err = prerelease.ResolvePullSpec(httpClient, *resolveConfig.Prerelease)
+					overrideCLIReleaseExtractImage, overrideCLIResolveErr = resolveCLIOverrideImage(resolveConfig.Prerelease.Architecture, resolveConfig.Prerelease.VersionBounds.Lower)
 				}
-				if err != nil {
+				if err := utilerrors.NewAggregate([]error{err, overrideCLIResolveErr}); err != nil {
 					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to resolve release %s: %w", resolveConfig.Name, err))
 				}
 				logrus.Infof("Resolved release %s to %s", resolveConfig.Name, value)
 			}
-			step := releasesteps.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, jobSpec, pullSecret)
+			step := releasesteps.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, jobSpec, pullSecret, overrideCLIReleaseExtractImage)
 			buildSteps = append(buildSteps, step)
 			addProvidesForStep(step, params)
 			continue
@@ -245,7 +251,7 @@ func fromConfig(
 						return nil, nil, results.ForReason("reading_release").ForError(fmt.Errorf("failed to read input release pullSpec %s: %w", name, err))
 					}
 					logrus.Infof("Resolved release %s to %s", name, pullSpec)
-					releaseStep = releasesteps.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, jobSpec, pullSecret)
+					releaseStep = releasesteps.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, jobSpec, pullSecret, nil)
 				} else {
 					releaseStep = releasesteps.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, jobSpec)
 				}
@@ -360,7 +366,7 @@ func stepForTest(
 			hasReleaseStep = true
 			claimRelease := c.ClusterClaim.ClaimRelease(c.As)
 			logrus.Infof("Resolved release %s to %s", claimRelease.ReleaseName, pullSpec)
-			importStep := releasesteps.ImportReleaseStep(claimRelease.ReleaseName, pullSpec, false, config.Resources, podClient, jobSpec, pullSecret)
+			importStep := releasesteps.ImportReleaseStep(claimRelease.ReleaseName, pullSpec, false, config.Resources, podClient, jobSpec, pullSecret, nil)
 			testSteps = append(testSteps, importStep)
 			addProvidesForStep(step, params)
 		}
@@ -886,4 +892,18 @@ func getClusterPoolPullSpec(ctx context.Context, claim *api.ClusterClaim, hiveCl
 	}
 
 	return clusterImageSet.Spec.ReleaseImage, nil
+}
+
+func resolveCLIOverrideImage(architecture api.ReleaseArchitecture, version string) (*coreapi.ObjectReference, error) {
+	if architecture == "" || architecture == api.ReleaseArchitectureAMD64 {
+		return nil, nil
+	}
+	if version == "" {
+		return nil, errors.New("non-amd64 releases require a version to be configured")
+	}
+	majorMinor, err := official.ExtractMajorMinor(version)
+	if err != nil {
+		return nil, err
+	}
+	return &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "ocp", Name: majorMinor + ":cli"}, nil
 }

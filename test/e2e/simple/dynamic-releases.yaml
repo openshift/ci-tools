@@ -25,6 +25,11 @@ releases:
       version_bounds:
         lower: "4.4.0"
         upper: "4.5.0-0"
+  mainframe:
+    release:
+      version: "4.7"
+      channel: stable
+      architecture: s390x
 resources:
   '*':
     limits:

@@ -187,6 +187,10 @@ func TestDynamicReleases(t *testing.T) {
 			name:    "success on prerelease release",
 			release: "pre",
 		},
+		{
+			name:    "successfully imports release for different arch",
+			release: "mainframe",
+		},
 	}
 
 	for _, testCase := range testCases {

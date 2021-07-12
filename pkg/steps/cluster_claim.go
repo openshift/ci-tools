@@ -212,39 +212,45 @@ func (s *clusterClaimStep) releaseCluster(ctx context.Context, clusterClaim *hiv
 	return nil
 }
 
-func (s clusterClaimStep) saveArtifacts(ctx context.Context, namespace, name string) error {
+func (s *clusterClaimStep) saveArtifacts(ctx context.Context, namespace, name string) error {
 	logrus.WithField("clusterClaim.Namespace", namespace).WithField("clusterClaim.Name", name).Debug("Saving artifacts.")
 	var errs []error
 	namespaceDir := api.NamespaceDir
 	claim := &hivev1.ClusterClaim{}
-	if err := s.hiveClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, claim); err != nil {
-		return fmt.Errorf("failed to get the claim %s in namespace %s: %w", name, namespace, err)
-	}
-	data, err := json.MarshalIndent(claim, "", "  ")
-	if err != nil {
+	if err := s.saveObjectAsArtifact(
+		ctx,
+		ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name},
+		claim,
+		"cluster claim",
+		filepath.Join(namespaceDir, "clusterClaim.json"),
+	); err != nil {
 		errs = append(errs, err)
-	} else {
-		if err := api.SaveArtifact(s.censor, filepath.Join(namespaceDir, "claim.json"), data); err != nil {
-			errs = append(errs, err)
-		}
 	}
 
 	if claim.Spec.Namespace != "" {
-		clusterDeployment := &hivev1.ClusterDeployment{}
-		if err := s.hiveClient.Get(ctx, ctrlruntimeclient.ObjectKey{Name: claim.Spec.Namespace, Namespace: claim.Spec.Namespace}, clusterDeployment); err != nil {
-			return fmt.Errorf("failed to get cluster deployment %s in namespace %s: %w", claim.Spec.Namespace, claim.Spec.Namespace, err)
-		}
-		data, err := json.MarshalIndent(clusterDeployment, "", "  ")
-		if err != nil {
+		if err := s.saveObjectAsArtifact(
+			ctx,
+			ctrlruntimeclient.ObjectKey{Namespace: claim.Spec.Namespace, Name: claim.Spec.Namespace},
+			&hivev1.ClusterDeployment{},
+			"cluster deployment",
+			filepath.Join(namespaceDir, "clusterDeployment.json"),
+		); err != nil {
 			errs = append(errs, err)
-		} else {
-			if err := api.SaveArtifact(s.censor, filepath.Join(namespaceDir, "clusterDeployment.json"), data); err != nil {
-				errs = append(errs, err)
-			}
 		}
 	}
 
 	return utilerrors.NewAggregate(errs)
+}
+
+func (s *clusterClaimStep) saveObjectAsArtifact(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, kind, path string) error {
+	if err := s.hiveClient.Get(ctx, key, obj); err != nil {
+		return fmt.Errorf("failed to get %s %s in namespace %s: %w", kind, key.Name, key.Namespace, err)
+	}
+	data, err := json.MarshalIndent(obj, "", "  ")
+	if err != nil {
+		return err
+	}
+	return api.SaveArtifact(s.censor, path, data)
 }
 
 func ClusterClaimStep(as string, clusterClaim *api.ClusterClaim, hiveClient ctrlruntimeclient.WithWatch, client loggingclient.LoggingClient, jobSpec *api.JobSpec, wrapped api.Step, censor *secrets.DynamicCensor) api.Step {

@@ -93,7 +93,7 @@ func AddToManager(mgr manager.Manager,
 	// TODO: Watch buildCluster ImageStreams as well. For now we assume no one will tamper with them.
 	if err := c.Watch(
 		source.NewKindWithCache(&testimagestreamtagimportv1.TestImageStreamTagImport{}, mgr.GetCache()),
-		testImageStreamTagImportHandler(),
+		testImageStreamTagImportHandler(log),
 	); err != nil {
 		return fmt.Errorf("failed to create watch for testimagestreamtagimports: %w", err)
 	}
@@ -196,11 +196,15 @@ func testImageStreamTagImportHandlerForNamedCluster(clusterName string) handler.
 	})
 }
 
-func testImageStreamTagImportHandler() handler.EventHandler {
+func testImageStreamTagImportHandler(l *logrus.Entry) handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(func(o ctrlruntimeclient.Object) []reconcile.Request {
 		testimagestreamtagimport, ok := o.(*testimagestreamtagimportv1.TestImageStreamTagImport)
 		if !ok {
 			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not an ImageStream")
+			return nil
+		}
+		if testimagestreamtagimport.Spec.ClusterName == "" {
+			l.WithField("name", testimagestreamtagimport.Namespace+"/"+testimagestreamtagimport.Name).Error("found testimagestreamtagimport on app.ci that doesn't have .spec.cluster set, can not infer what cluster it is for, ignoring.")
 			return nil
 		}
 		return []reconcile.Request{{NamespacedName: types.NamespacedName{
@@ -281,7 +285,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 	// Fail asap if we cannot reconcile this
 	client, ok := r.buildClusterClients[cluster]
 	if !ok {
-		return controllerutil.TerminalError(fmt.Errorf("no client for cluster %s available", cluster))
+		return controllerutil.TerminalError(fmt.Errorf("no client for cluster %q available", cluster))
 	}
 
 	sourceImageStreamTag := &imagev1.ImageStreamTag{}

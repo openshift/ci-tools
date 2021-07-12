@@ -298,3 +298,12 @@ $(TMPDIR)/promtool:
 	mv $(TMPDIR)/image/promtool $(TMPDIR)/promtool
 	chmod +x $(TMPDIR)/promtool
 	rm -rf $(TMPDIR)/image
+
+$(TMPDIR)/.promoted-image-governor-kubeconfig:
+	oc --context app.ci --as system:admin --namespace ci serviceaccounts create-kubeconfig promoted-image-governor > $(TMPDIR)/.promoted-image-governor-kubeconfig
+
+release_folder := $$PWD/../release
+
+promoted-image-governor: $(TMPDIR)/.promoted-image-governor-kubeconfig
+	go run  ./cmd/promoted-image-governor --kubeconfig=$(TMPDIR)/.promoted-image-governor-kubeconfig --ci-operator-config-path=$(release_folder)/ci-operator/config --release-controller-mirror-config-dir=$(release_folder)/core-services/release-controller/_releases --ignored-image-stream-tags='^ocp\S*/\S+:machine-os-content$$' --ignored-image-stream-tags='^openshift/origin-v3.11:' --dry-run=true
+.PHONY: promoted-image-governor

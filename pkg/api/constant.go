@@ -39,6 +39,8 @@ const (
 	HiveControlPlaneKubeconfigSecretArg = "--hive-kubeconfig=/secrets/hive-hive-credentials/kubeconfig"
 
 	AutoScalePodsLabel = "ci.openshift.io/scale-pods"
+
+	NamespaceDir = "build-resources"
 )
 
 var (

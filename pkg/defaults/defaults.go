@@ -104,7 +104,7 @@ func FromConfig(
 		}
 	}
 
-	return fromConfig(ctx, config, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil))
+	return fromConfig(ctx, config, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor)
 }
 
 func fromConfig(
@@ -125,6 +125,7 @@ func fromConfig(
 	cloneAuthConfig *steps.CloneAuthConfig,
 	pullSecret, pushSecret *coreapi.Secret,
 	params *api.DeferredParameters,
+	censor *secrets.DynamicCensor,
 ) ([]api.Step, []api.Step, error) {
 	requiredNames := sets.NewString()
 	for _, target := range requiredTargets {
@@ -148,7 +149,7 @@ func fromConfig(
 	}
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			steps, testHasReleaseStep, err := stepForTest(ctx, config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, imageConfigs, pullSecret)
+			steps, testHasReleaseStep, err := stepForTest(ctx, config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, imageConfigs, pullSecret, censor)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -343,6 +344,7 @@ func stepForTest(
 	c *api.TestStepConfiguration,
 	imageConfigs *[]*api.InputImageTagStepConfiguration,
 	pullSecret *coreapi.Secret,
+	censor *secrets.DynamicCensor,
 ) ([]api.Step, bool, error) {
 	var hasReleaseStep bool
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
@@ -358,7 +360,7 @@ func stepForTest(
 		}
 		// hive client may not be present for jobs that execute non-claim based tests
 		if hiveClient != nil && c.ClusterClaim != nil {
-			step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step)
+			step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step, censor)
 			pullSpec, err := getClusterPoolPullSpec(ctx, c.ClusterClaim, hiveClient)
 			if err != nil {
 				return nil, hasReleaseStep, err
@@ -393,7 +395,7 @@ func stepForTest(
 	}
 	step := steps.TestStep(*c, config.Resources, podClient, jobSpec)
 	if c.ClusterClaim != nil {
-		step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step)
+		step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step, censor)
 	}
 	return []api.Step{step}, hasReleaseStep, nil
 }

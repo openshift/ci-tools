@@ -2,8 +2,10 @@ package steps
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/test-infra/prow/kube"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -19,6 +22,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"github.com/openshift/ci-tools/pkg/util"
@@ -31,6 +35,7 @@ type clusterClaimStep struct {
 	client       loggingclient.LoggingClient
 	jobSpec      *api.JobSpec
 	wrapped      api.Step
+	censor       *secrets.DynamicCensor
 }
 
 func (s clusterClaimStep) Inputs() (api.InputDefinition, error) {
@@ -132,7 +137,7 @@ func (s *clusterClaimStep) acquireCluster(ctx context.Context, waitForClaim func
 	claimStart := time.Now()
 	into := &hivev1.ClusterClaim{}
 	if err := waitForClaim(s.hiveClient, claimNamespace, claimName, into, s.clusterClaim.Timeout.Duration); err != nil {
-		return claim, fmt.Errorf("failed to wait for created cluster claim to become ready: %w", err)
+		return claim, fmt.Errorf("failed to wait for the created cluster claim to become ready: %w", err)
 	}
 	claim = into
 	logrus.Infof("The claimed cluster is ready after %s.", time.Since(claimStart).Truncate(time.Second))
@@ -186,12 +191,17 @@ func getHiveSecret(src *corev1.Secret, name, namespace, testName string) (*corev
 }
 
 func (s *clusterClaimStep) releaseCluster(ctx context.Context, clusterClaim *hivev1.ClusterClaim) error {
+	logger := logrus.WithField("clusterClaim.Namespace", clusterClaim.Namespace).WithField("clusterClaim.Name", clusterClaim.Name)
+	if err := s.saveArtifacts(ctx, clusterClaim.Namespace, clusterClaim.Name); err != nil {
+		// logging the error without failing the test
+		logger.Error("Failed to save artifacts before releasing the claimed cluster")
+	}
 	logrus.Infof("Releasing cluster claims for test %s", s.Name())
-	logrus.WithField("clusterClaim.Namespace", clusterClaim.Namespace).WithField("clusterClaim.Name", clusterClaim.Name).Debug("Deleting cluster claim.")
+	logger.Debug("Deleting cluster claim.")
 	retry := 3
 	for i := 0; i < retry; i++ {
 		if err := s.hiveClient.Delete(ctx, clusterClaim); err != nil {
-			logrus.WithField("clusterClaim.Name", clusterClaim.Name).WithField("i", i).WithField("clusterClaim.Namespace", clusterClaim.Namespace).Debug("Failed to delete cluster claim.")
+			logger.WithField("i", i).Debug("Failed to delete cluster claim.")
 			if i+1 < retry {
 				continue
 			}
@@ -202,7 +212,48 @@ func (s *clusterClaimStep) releaseCluster(ctx context.Context, clusterClaim *hiv
 	return nil
 }
 
-func ClusterClaimStep(as string, clusterClaim *api.ClusterClaim, hiveClient ctrlruntimeclient.WithWatch, client loggingclient.LoggingClient, jobSpec *api.JobSpec, wrapped api.Step) api.Step {
+func (s *clusterClaimStep) saveArtifacts(ctx context.Context, namespace, name string) error {
+	logrus.WithField("clusterClaim.Namespace", namespace).WithField("clusterClaim.Name", name).Debug("Saving artifacts.")
+	var errs []error
+	namespaceDir := api.NamespaceDir
+	claim := &hivev1.ClusterClaim{}
+	if err := s.saveObjectAsArtifact(
+		ctx,
+		ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name},
+		claim,
+		"cluster claim",
+		filepath.Join(namespaceDir, "clusterClaim.json"),
+	); err != nil {
+		errs = append(errs, err)
+	}
+
+	if claim.Spec.Namespace != "" {
+		if err := s.saveObjectAsArtifact(
+			ctx,
+			ctrlruntimeclient.ObjectKey{Namespace: claim.Spec.Namespace, Name: claim.Spec.Namespace},
+			&hivev1.ClusterDeployment{},
+			"cluster deployment",
+			filepath.Join(namespaceDir, "clusterDeployment.json"),
+		); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return utilerrors.NewAggregate(errs)
+}
+
+func (s *clusterClaimStep) saveObjectAsArtifact(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, kind, path string) error {
+	if err := s.hiveClient.Get(ctx, key, obj); err != nil {
+		return fmt.Errorf("failed to get %s %s in namespace %s: %w", kind, key.Name, key.Namespace, err)
+	}
+	data, err := json.MarshalIndent(obj, "", "  ")
+	if err != nil {
+		return err
+	}
+	return api.SaveArtifact(s.censor, path, data)
+}
+
+func ClusterClaimStep(as string, clusterClaim *api.ClusterClaim, hiveClient ctrlruntimeclient.WithWatch, client loggingclient.LoggingClient, jobSpec *api.JobSpec, wrapped api.Step, censor *secrets.DynamicCensor) api.Step {
 	return &clusterClaimStep{
 		as:           as,
 		clusterClaim: clusterClaim,
@@ -210,5 +261,6 @@ func ClusterClaimStep(as string, clusterClaim *api.ClusterClaim, hiveClient ctrl
 		client:       client,
 		jobSpec:      jobSpec,
 		wrapped:      wrapped,
+		censor:       censor,
 	}
 }

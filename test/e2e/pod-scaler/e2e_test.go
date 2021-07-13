@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"path/filepath"
 	"sort"
@@ -31,6 +32,7 @@ import (
 )
 
 func TestProduce(t *testing.T) {
+	rand.Seed(4641280330504625122)
 	t.Parallel()
 	T := testhelper.NewT(interrupts.Context(), t)
 	prometheusAddr, info := prometheus.Initialize(T, T.TempDir())

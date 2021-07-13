@@ -75,7 +75,6 @@ func (d *DataInStages) record(offset time.Duration, metric string, labels series
 
 // Backfill generates data and backfills it into Prometheus, returning the data written by stage.
 func Backfill(t testhelper.TestingTInterface, prometheusDir string, retentionPeriod time.Duration) *DataInStages {
-	rand.Seed(time.Now().UnixNano())
 	t.Log("Backfilling Prometheus data.")
 	generateStart := time.Now()
 	info, families := generateData(t, retentionPeriod)
@@ -128,18 +127,18 @@ func generateData(t testhelper.TestingTInterface, retentionPeriod time.Duration)
 		Metric: []*prometheus_client.Metric{},
 	}
 	families := []*prometheus_client.MetricFamily{&kubePodLabels}
-	for metric, metadata := range metricGenerators() {
+	for _, metric := range metricGenerators() {
 		family := prometheus_client.MetricFamily{
-			Name:   pointer.StringPtr(metric),
-			Type:   metricTypePtr(metadata.metricType),
+			Name:   pointer.StringPtr(metric.metricName),
+			Type:   metricTypePtr(metric.metricType),
 			Metric: []*prometheus_client.Metric{},
 		}
-		for identifier, labels := range series() {
+		for _, item := range series() {
 			mean := float64(rand.Int31())
 			stddev := rand.Float64() * mean / 20.0
 			for _, offset := range offsets(retentionPeriod) {
 				for j := 0; j < numSeries; j++ {
-					labelPairs := labelsFor(labels)
+					labelPairs := labelsFor(item.labels)
 					var values []float64
 					start := time.Now().Add(-time.Duration(rand.Float64()*float64(retentionPeriod/2-seriesDuration)) - offset - seriesDuration).Round(1 * time.Minute)
 					for k := 0; k < numSamples; k++ {
@@ -150,10 +149,10 @@ func generateData(t testhelper.TestingTInterface, retentionPeriod time.Duration)
 							Label:       labelPairs,
 							TimestampMs: ts,
 						}
-						metadata.addValue(m, rand.NormFloat64()*stddev+mean, float64(k))
+						metric.addValue(m, rand.NormFloat64()*stddev+mean, float64(k))
 						family.Metric = append(family.Metric, m)
 
-						values = append(values, metadata.getValue(m))
+						values = append(values, metric.getValue(m))
 
 						// record a value in the kube_pod_labels metric, which we join on during queries
 						kubePodLabels.Metric = append(kubePodLabels.Metric, &prometheus_client.Metric{
@@ -168,10 +167,10 @@ func generateData(t testhelper.TestingTInterface, retentionPeriod time.Duration)
 						Label:       labelPairs,
 						TimestampMs: pointer.Int64Ptr(start.Add(time.Duration(numSamples)*samplingDuration).UnixNano() / 1e6),
 					}
-					metadata.addValue(stale, math.Float64frombits(value.StaleNaN), 1)
+					metric.addValue(stale, math.Float64frombits(value.StaleNaN), 1)
 					family.Metric = append(family.Metric, stale)
 
-					if err := info.record(offset, metric, labels, identifier, values); err != nil {
+					if err := info.record(offset, metric.metricName, item.labels, item.meta, values); err != nil {
 						t.Fatalf("could not record values into hist: %v", err)
 					}
 				}
@@ -184,14 +183,16 @@ func generateData(t testhelper.TestingTInterface, retentionPeriod time.Duration)
 
 // metricGenerator describes a metric and closes over value operations on the Metric type
 type metricGenerator struct {
+	metricName string
 	metricType prometheus_client.MetricType
 	addValue   func(*prometheus_client.Metric, float64, float64)
 	getValue   func(*prometheus_client.Metric) float64
 }
 
-func metricGenerators() map[string]metricGenerator {
-	return map[string]metricGenerator{
-		"container_cpu_usage_seconds_total": {
+func metricGenerators() []metricGenerator {
+	return []metricGenerator{
+		{
+			metricName: "container_cpu_usage_seconds_total",
 			metricType: prometheus_client.MetricType_COUNTER,
 			addValue: func(metric *prometheus_client.Metric, f, j float64) {
 				metric.Counter = &prometheus_client.Counter{Value: pointer.Float64Ptr(f*j + 1)} // we're interested in measuring the rate
@@ -200,7 +201,8 @@ func metricGenerators() map[string]metricGenerator {
 				return *metric.Counter.Value
 			},
 		},
-		"container_memory_working_set_bytes": {
+		{
+			metricName: "container_memory_working_set_bytes",
 			metricType: prometheus_client.MetricType_GAUGE,
 			addValue: func(metric *prometheus_client.Metric, f, _ float64) {
 				metric.Gauge = &prometheus_client.Gauge{Value: pointer.Float64Ptr(f)}
@@ -215,136 +217,163 @@ func metricGenerators() map[string]metricGenerator {
 // seriesLabels holds a Prometheus label set for a series of data
 type seriesLabels map[string]string
 
-func series() map[pod_scaler.FullMetadata]seriesLabels {
-	return map[pod_scaler.FullMetadata]seriesLabels{
+// seriesInfo connects a set of labels with the metadata it maps to
+type seriesInfo struct {
+	meta   pod_scaler.FullMetadata
+	labels seriesLabels
+}
+
+func series() []seriesInfo {
+	return []seriesInfo{
 		{
-			Metadata: api.Metadata{
-				Org:     "org",
-				Repo:    "repo",
-				Branch:  "branch",
-				Variant: "variant",
+			meta: pod_scaler.FullMetadata{
+				Metadata: api.Metadata{
+					Org:     "org",
+					Repo:    "repo",
+					Branch:  "branch",
+					Variant: "variant",
+				},
+				Target:    "target",
+				Step:      "step",
+				Pod:       "pod",
+				Container: "container",
 			},
-			Target:    "target",
-			Step:      "step",
-			Pod:       "pod",
-			Container: "container",
-		}: map[string]string{
-			"label_created_by_ci":                    "true",
-			"label_ci_openshift_io_metadata_org":     "org",
-			"label_ci_openshift_io_metadata_repo":    "repo",
-			"label_ci_openshift_io_metadata_branch":  "branch",
-			"label_ci_openshift_io_metadata_variant": "variant",
-			"label_ci_openshift_io_metadata_target":  "target",
-			"label_ci_openshift_io_metadata_step":    "step",
-			"pod":                                    "pod",
-			"container":                              "container",
+			labels: seriesLabels{
+				"label_created_by_ci":                    "true",
+				"label_ci_openshift_io_metadata_org":     "org",
+				"label_ci_openshift_io_metadata_repo":    "repo",
+				"label_ci_openshift_io_metadata_branch":  "branch",
+				"label_ci_openshift_io_metadata_variant": "variant",
+				"label_ci_openshift_io_metadata_target":  "target",
+				"label_ci_openshift_io_metadata_step":    "step",
+				"pod":                                    "pod",
+				"container":                              "container",
+			},
 		},
 		{
-			Metadata: api.Metadata{
-				Org:     "org",
-				Repo:    "repo",
-				Branch:  "branch",
-				Variant: "variant",
+			meta: pod_scaler.FullMetadata{
+				Metadata: api.Metadata{
+					Org:     "org",
+					Repo:    "repo",
+					Branch:  "branch",
+					Variant: "variant",
+				},
+				Pod:       "src-build",
+				Container: "container",
 			},
-			Pod:       "src-build",
-			Container: "container",
-		}: map[string]string{
-			"label_created_by_ci":                    "true",
-			"label_ci_openshift_io_metadata_org":     "org",
-			"label_ci_openshift_io_metadata_repo":    "repo",
-			"label_ci_openshift_io_metadata_branch":  "branch",
-			"label_ci_openshift_io_metadata_variant": "variant",
-			"label_ci_openshift_io_metadata_target":  "target",
-			"label_openshift_io_build_name":          "src",
-			"pod":                                    "src-build",
-			"container":                              "container",
+			labels: seriesLabels{
+				"label_created_by_ci":                    "true",
+				"label_ci_openshift_io_metadata_org":     "org",
+				"label_ci_openshift_io_metadata_repo":    "repo",
+				"label_ci_openshift_io_metadata_branch":  "branch",
+				"label_ci_openshift_io_metadata_variant": "variant",
+				"label_ci_openshift_io_metadata_target":  "target",
+				"label_openshift_io_build_name":          "src",
+				"pod":                                    "src-build",
+				"container":                              "container",
+			},
 		},
 		{
-			Metadata: api.Metadata{
-				Org:     "org",
-				Repo:    "repo",
-				Branch:  "branch",
-				Variant: "variant",
+			meta: pod_scaler.FullMetadata{
+				Metadata: api.Metadata{
+					Org:     "org",
+					Repo:    "repo",
+					Branch:  "branch",
+					Variant: "variant",
+				},
+				Pod:       "release-latest-cli",
+				Container: "container",
 			},
-			Pod:       "release-latest-cli",
-			Container: "container",
-		}: map[string]string{
-			"label_created_by_ci":                    "true",
-			"label_ci_openshift_io_metadata_org":     "org",
-			"label_ci_openshift_io_metadata_repo":    "repo",
-			"label_ci_openshift_io_metadata_branch":  "branch",
-			"label_ci_openshift_io_metadata_variant": "variant",
-			"label_ci_openshift_io_metadata_target":  "target",
-			"label_ci_openshift_io_release":          "latest",
-			"pod":                                    "release-latest-cli",
-			"container":                              "container",
+			labels: seriesLabels{
+				"label_created_by_ci":                    "true",
+				"label_ci_openshift_io_metadata_org":     "org",
+				"label_ci_openshift_io_metadata_repo":    "repo",
+				"label_ci_openshift_io_metadata_branch":  "branch",
+				"label_ci_openshift_io_metadata_variant": "variant",
+				"label_ci_openshift_io_metadata_target":  "target",
+				"label_ci_openshift_io_release":          "latest",
+				"pod":                                    "release-latest-cli",
+				"container":                              "container",
+			},
 		},
 		{
-			Metadata: api.Metadata{
-				Org:     "org",
-				Repo:    "repo",
-				Branch:  "branch",
-				Variant: "variant",
+			meta: pod_scaler.FullMetadata{
+				Metadata: api.Metadata{
+					Org:     "org",
+					Repo:    "repo",
+					Branch:  "branch",
+					Variant: "variant",
+				},
+				Container: "rpm-repo",
 			},
-			Container: "rpm-repo",
-		}: map[string]string{
-			"label_created_by_ci":                    "true",
-			"label_ci_openshift_io_metadata_org":     "org",
-			"label_ci_openshift_io_metadata_repo":    "repo",
-			"label_ci_openshift_io_metadata_branch":  "branch",
-			"label_ci_openshift_io_metadata_variant": "variant",
-			"label_ci_openshift_io_metadata_target":  "target",
-			"label_app":                              "rpm-repo",
-			"pod":                                    "rpm-repo-5d88d4fc4c-jg2xb",
-			"container":                              "rpm-repo",
+			labels: seriesLabels{
+				"label_created_by_ci":                    "true",
+				"label_ci_openshift_io_metadata_org":     "org",
+				"label_ci_openshift_io_metadata_repo":    "repo",
+				"label_ci_openshift_io_metadata_branch":  "branch",
+				"label_ci_openshift_io_metadata_variant": "variant",
+				"label_ci_openshift_io_metadata_target":  "target",
+				"label_app":                              "rpm-repo",
+				"pod":                                    "rpm-repo-5d88d4fc4c-jg2xb",
+				"container":                              "rpm-repo",
+			},
 		},
 		{
-			Metadata: api.Metadata{
-				Org:    "org",
-				Repo:   "repo",
-				Branch: "branch",
+			meta: pod_scaler.FullMetadata{
+				Metadata: api.Metadata{
+					Org:    "org",
+					Repo:   "repo",
+					Branch: "branch",
+				},
+				Target:    "context",
+				Container: "container",
 			},
-			Target:    "context",
-			Container: "container",
-		}: map[string]string{
-			"label_created_by_prow":           "true",
-			"label_prow_k8s_io_refs_org":      "org",
-			"label_prow_k8s_io_refs_repo":     "repo",
-			"label_prow_k8s_io_refs_base_ref": "branch",
-			"label_prow_k8s_io_context":       "context",
-			"label_prow_k8s_io_job":           "pull-ci-org-repo-branch-context",
-			"pod":                             "d316d4cc-a438-11eb-b35f-0a580a800e92",
-			"container":                       "container",
+			labels: seriesLabels{
+				"label_created_by_prow":           "true",
+				"label_prow_k8s_io_refs_org":      "org",
+				"label_prow_k8s_io_refs_repo":     "repo",
+				"label_prow_k8s_io_refs_base_ref": "branch",
+				"label_prow_k8s_io_context":       "context",
+				"label_prow_k8s_io_job":           "pull-ci-org-repo-branch-context",
+				"pod":                             "d316d4cc-a438-11eb-b35f-0a580a800e92",
+				"container":                       "container",
+			},
 		},
 		{
-			Metadata: api.Metadata{
-				Org:    "org",
-				Repo:   "repo",
-				Branch: "branch",
+			meta: pod_scaler.FullMetadata{
+				Metadata: api.Metadata{
+					Org:    "org",
+					Repo:   "repo",
+					Branch: "branch",
+				},
+				Target:    "context",
+				Container: "container",
 			},
-			Target:    "context",
-			Container: "container",
-		}: map[string]string{
-			"label_created_by_prow":           "true",
-			"label_prow_k8s_io_refs_org":      "org",
-			"label_prow_k8s_io_refs_repo":     "repo",
-			"label_prow_k8s_io_refs_base_ref": "branch",
-			"label_prow_k8s_io_context":       "",
-			"label_prow_k8s_io_job":           "periodic-ci-org-repo-branch-context",
-			"label_prow_k8s_io_type":          "periodic",
-			"pod":                             "d316d4cc-a437-11eb-b35f-0a580a800e92",
-			"container":                       "container",
+			labels: seriesLabels{
+				"label_created_by_prow":           "true",
+				"label_prow_k8s_io_refs_org":      "org",
+				"label_prow_k8s_io_refs_repo":     "repo",
+				"label_prow_k8s_io_refs_base_ref": "branch",
+				"label_prow_k8s_io_context":       "",
+				"label_prow_k8s_io_job":           "periodic-ci-org-repo-branch-context",
+				"label_prow_k8s_io_type":          "periodic",
+				"pod":                             "d316d4cc-a437-11eb-b35f-0a580a800e92",
+				"container":                       "container",
+			},
 		},
 		{
-			Target:    "periodic-handwritten-prowjob",
-			Container: "container",
-		}: map[string]string{
-			"label_created_by_prow":     "true",
-			"label_prow_k8s_io_context": "",
-			"label_prow_k8s_io_job":     "periodic-handwritten-prowjob",
-			"label_prow_k8s_io_type":    "periodic",
-			"pod":                       "d316d4cc-a437-11eb-b35f-0a580a800e92",
-			"container":                 "container",
+			meta: pod_scaler.FullMetadata{
+				Target:    "periodic-handwritten-prowjob",
+				Container: "container",
+			},
+			labels: seriesLabels{
+				"label_created_by_prow":     "true",
+				"label_prow_k8s_io_context": "",
+				"label_prow_k8s_io_job":     "periodic-handwritten-prowjob",
+				"label_prow_k8s_io_type":    "periodic",
+				"pod":                       "d316d4cc-a437-11eb-b35f-0a580a800e92",
+				"container":                 "container",
+			},
 		},
 	}
 }

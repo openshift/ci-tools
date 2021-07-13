@@ -30,6 +30,9 @@ type ConfigAgent interface {
 	GetGeneration() int
 	AddIndex(indexName string, indexFunc IndexFn) error
 	GetFromIndex(indexName string, indexKey string) ([]*api.ReleaseBuildConfiguration, error)
+	// SubscribeToIndexChanges return a channel with all changes to the given index. The index
+	// does not have to exist yet. If you want to get the initial set of changes, subscribe
+	// before the index exists.
 	SubscribeToIndexChanges(indexName string) (<-chan IndexDelta, error)
 }
 
@@ -46,6 +49,9 @@ type configAgent struct {
 	indexes          map[string]configIndex
 	indexSubscribers map[string][]chan IndexDelta
 	reloadConfig     func() error
+	// closeIndexDeltaSubscriberChannelAfterFirstIndexBuild is used in testing to allow
+	// tests to wait for all deltas associated to an index build.
+	closeIndexDeltaSubscriberChannelAfterFirstIndexBuild bool
 }
 
 type configIndex map[string][]*api.ReleaseBuildConfiguration
@@ -201,10 +207,6 @@ func (a *configAgent) SubscribeToIndexChanges(indexName string) (<-chan IndexDel
 	a.lock.Lock()
 	defer a.lock.Unlock()
 
-	if _, found := a.indexes[indexName]; !found {
-		return nil, fmt.Errorf("index %s does not exist", indexName)
-	}
-
 	if a.indexSubscribers == nil {
 		a.indexSubscribers = map[string][]chan IndexDelta{}
 	}
@@ -280,6 +282,9 @@ func (a *configAgent) buildIndexes() {
 			go func() {
 				for _, change := range changes {
 					channel <- change
+				}
+				if a.closeIndexDeltaSubscriberChannelAfterFirstIndexBuild {
+					close(channel)
 				}
 			}()
 		}

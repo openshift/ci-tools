@@ -57,6 +57,15 @@ rules:
   - events
   verbs:
   - create
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - create
+  - get
+  - watch
+  - list
 ---
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -84,5 +93,5 @@ KUBECONFIG="$(kubeconfigs=("${tmpdir}/"*); IFS=":"; echo "${kubeconfigs[*]}")" /
   --job-config-path="${release}/ci-operator/jobs" \
   --ci-operator-config-path="${release}/ci-operator/config" \
   --step-config-path="${release}/ci-operator/step-registry" \
-  --enable-controller=test_images_distributor \
+  --enable-controller=promotion_namespace_reconciler \
   --dry-run=true

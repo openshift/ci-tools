@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -145,9 +144,6 @@ func TestMutatePods(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			response := mutator.Handle(context.Background(), testCase.request)
-			sort.Slice(response.Patches, func(i, j int) bool {
-				return response.Patches[i].Path < response.Patches[j].Path
-			})
 			testhelper.CompareWithFixture(t, response)
 		})
 	}
@@ -417,7 +413,7 @@ func TestMutatePodResources(t *testing.T) {
 				}
 				return r
 			}, diff)
-			testhelper.CompareWithFixture(t, diff)
+			testhelper.CompareWithFixture(t, diff, testhelper.WithExtension(".diff"))
 		})
 	}
 }

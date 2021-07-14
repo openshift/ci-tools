@@ -88,12 +88,7 @@ type toQuantity func(valueAtQuantile float64) (quantity *resource.Quantity)
 
 func (s *resourceServer) digestData(data *pod_scaler.CachedQuery, quantile float64, request corev1.ResourceName, quantity toQuantity) {
 	s.logger.Debugf("Digesting %d identifiers.", len(data.DataByMetaData))
-	i := 0
 	for meta, fingerprints := range data.DataByMetaData {
-		if i%(len(data.DataByMetaData)/10) == 0 {
-			s.logger.Debugf("Digested %d/%d full identifiers.", i, len(data.DataByMetaData))
-		}
-		i += 1
 		overall := circonusllhist.New()
 		for _, fingerprint := range fingerprints {
 			overall.Merge(data.Data[fingerprint].Histogram())

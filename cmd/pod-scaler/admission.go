@@ -34,7 +34,6 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 	logger.Info("Initializing admission webhook server.")
 	health := pjutil.NewHealthOnPort(healthPort)
 	resources := newResourceServer(cpu, memory, health)
-	health.ServeReady()
 	decoder, err := admission.NewDecoder(scheme.Scheme)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create decoder from scheme.")
@@ -65,23 +64,22 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		logrus.WithError(err).Error("Failed to decode raw object as Pod.")
 		return admission.Errored(http.StatusBadRequest, err)
 	}
+	logger := m.logger.WithField("name", pod.Name)
 	buildName, isBuildPod := pod.Annotations[buildv1.BuildLabel]
-	if !isBuildPod {
-		logrus.Trace("Allowing Pod, it is not implementing a Build.")
-		return admission.Allowed("Not a Pod implementing a Build.")
-	}
-	logger := m.logger.WithField("build", buildName)
-	logger.Trace("Handling labels on Pod created for a Build.")
-	build, err := m.client.Builds(pod.Namespace).Get(ctx, buildName, metav1.GetOptions{})
-	if err != nil {
-		logger.WithError(err).Error("Could not get Build for Pod.")
-		return admission.Allowed("Could not get Build for Pod, ignoring.")
+	if isBuildPod {
+		logger = logger.WithField("build", buildName)
+		logger.Trace("Handling labels on Pod created for a Build.")
+		build, err := m.client.Builds(pod.Namespace).Get(ctx, buildName, metav1.GetOptions{})
+		if err != nil {
+			logger.WithError(err).Error("Could not get Build for Pod.")
+			return admission.Allowed("Could not get Build for Pod, ignoring.")
+		}
+		mutatePodLabels(pod, build)
 	}
 	if err := mutatePodMetadata(pod); err != nil {
 		logger.WithError(err).Error("Failed to handle rehearsal Pod.")
 		return admission.Allowed("Failed to handle rehearsal Pod, ignoring.")
 	}
-	mutatePodLabels(pod, build)
 	mutatePodResources(pod, m.resources)
 
 	marshaledPod, err := json.Marshal(pod)
@@ -182,7 +180,7 @@ func reconcileLimits(resources *corev1.ResourceRequirements) {
 		return
 	}
 	delete(resources.Limits, corev1.ResourceCPU)
-	// Mote: doing math on Quantities is not easy, since they may contain values that overflow
+	// Note: doing math on Quantities is not easy, since they may contain values that overflow
 	// normal integers. Doing math on inf.Dec is possible, but there does not exist any way to
 	// convert back from an inf.Dec to a resource.Quantity. So, while we would want to have a
 	// limit threshold like 120% or similar, we use 200% as that's what is trivially easy to

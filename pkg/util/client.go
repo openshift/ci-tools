@@ -31,6 +31,21 @@ func LoadClusterConfig() (*rest.Config, error) {
 	return rest.InClusterConfig()
 }
 
+// LoadKubeConfig loads a kubeconfig from the file and uses the default context
+func LoadKubeConfig(path string) (*rest.Config, error) {
+	loader := clientcmd.NewDefaultClientConfigLoadingRules()
+	loader.ExplicitPath = path
+	cfg, err := loader.Load()
+	if err != nil {
+		return nil, fmt.Errorf("could not load kubeconfig: %w", err)
+	}
+	clusterConfig, err := clientcmd.NewDefaultClientConfig(*cfg, &clientcmd.ConfigOverrides{}).ClientConfig()
+	if err != nil {
+		return nil, fmt.Errorf("could not load client configuration: %w", err)
+	}
+	return clusterConfig, nil
+}
+
 // LoadKubeConfigs loads kubeconfigs. If the kubeconfigChangedCallBack is non-nil, it will watch all kubeconfigs it loaded
 // and call the callback once they change.
 func LoadKubeConfigs(kubeconfig string, kubeconfigChangedCallBack func(fsnotify.Event)) (map[string]*rest.Config, string, error) {
@@ -50,7 +65,7 @@ func LoadKubeConfigs(kubeconfig string, kubeconfigChangedCallBack func(fsnotify.
 			continue
 		}
 		configs[context] = contextCfg
-		logrus.Infof("Parsed kubeconfig context: %s", context)
+		logrus.Debugf("Parsed kubeconfig context: %s", context)
 	}
 	if kubeconfigsFromEnv := strings.Split(os.Getenv("KUBECONFIG"), ":"); len(kubeconfigsFromEnv) > 0 && len(kubeconfigsFromEnv) > len(configs) {
 		errs = append(errs, fmt.Errorf("KUBECONFIG env var with value %s had %d elements but only got %d kubeconfigs", os.Getenv("KUBECONFIG"), len(kubeconfigsFromEnv), len(configs)))

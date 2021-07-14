@@ -638,17 +638,11 @@ func (o *options) Complete() error {
 	}
 
 	if o.hiveKubeconfigPath != "" {
-		kubeConfigs, _, err := util.LoadKubeConfigs(o.hiveKubeconfigPath, nil)
+		kubeConfig, err := util.LoadKubeConfig(o.hiveKubeconfigPath)
 		if err != nil {
 			return fmt.Errorf("could not load Hive kube config from path %s: %w", o.hiveKubeconfigPath, err)
 		}
-		if len(kubeConfigs) != 1 {
-			return fmt.Errorf("found %d contexts in Hive kube config %s: must be %s only", len(kubeConfigs), o.hiveKubeconfigPath, string(api.HiveCluster))
-		}
-		for k := range kubeConfigs {
-			o.hiveKubeconfig = kubeConfigs[k]
-			break
-		}
+		o.hiveKubeconfig = kubeConfig
 	}
 
 	if err := overrideMultiStageParams(o); err != nil {

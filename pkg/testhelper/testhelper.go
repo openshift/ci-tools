@@ -75,7 +75,11 @@ func WithExtension(extension string) Option {
 
 // golden determines the golden file to use
 func golden(t *testing.T, opts *Options) (string, error) {
-	return filepath.Abs(filepath.Join("testdata", sanitizeFilename(opts.Prefix+t.Name()+opts.Suffix)) + opts.Extension)
+	extension := ".yaml"
+	if opts.Extension != "" {
+		extension = opts.Extension
+	}
+	return filepath.Abs(filepath.Join("testdata", sanitizeFilename(opts.Prefix+t.Name()+opts.Suffix)) + extension)
 }
 
 // CompareWithFixture will compare output with a test fixture and allows to automatically update them
@@ -84,9 +88,7 @@ func golden(t *testing.T, opts *Options) (string, error) {
 // The fixtures are stored in $PWD/testdata/prefix${testName}.yaml
 func CompareWithFixture(t *testing.T, output interface{}, opts ...Option) {
 	t.Helper()
-	options := &Options{
-		Extension: ".yaml",
-	}
+	options := &Options{}
 	for _, opt := range opts {
 		opt(options)
 	}

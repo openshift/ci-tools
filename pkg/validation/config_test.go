@@ -507,6 +507,59 @@ func errListMessagesEqual(a, b []error) bool {
 	return true
 }
 
+func TestReleaseBuildConfiguration_validateImages(t *testing.T) {
+	root := api.BuildRootImageConfiguration{FromRepository: true}
+	input := api.InputConfiguration{BuildRootImage: &root}
+	resources := api.ResourceConfiguration{
+		"*": api.ResourceRequirements{
+			Requests: api.ResourceList{"cpu": "1"},
+		},
+	}
+	for _, tc := range []struct {
+		name     string
+		config   api.ReleaseBuildConfiguration
+		expected error
+	}{{
+		name: "valid",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
+			Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				{To: "image"},
+			},
+			Tests: []api.TestStepConfiguration{{
+				As:       "test",
+				Commands: "commands",
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{
+					From: "from",
+				},
+			}},
+			Resources: resources,
+		},
+	}, {
+		name: "image and test cannot have the same name",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
+			Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				{To: "duplicated"},
+			},
+			Tests: []api.TestStepConfiguration{{
+				As:       "duplicated",
+				Commands: "commands",
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{
+					From: "from",
+				},
+			}},
+			Resources: resources,
+		},
+		expected: errors.New(`invalid configuration: tests[0].as: duplicated name "duplicated" already declared in 'images'`),
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := IsValidResolvedConfiguration(&tc.config)
+			testhelper.Diff(t, "error", err, tc.expected, testhelper.EquateErrorMessage)
+		})
+	}
+}
+
 func TestReleaseBuildConfiguration_validateTestStepDependencies(t *testing.T) {
 	var testCases = []struct {
 		name     string

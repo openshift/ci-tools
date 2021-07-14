@@ -113,7 +113,14 @@ func IsValidReference(step api.LiteralTestStep) []error {
 	return v.IsValidReference(step)
 }
 
-func (v *Validator) validateTestStepConfiguration(configCtx *configContext, fieldRoot string, input []api.TestStepConfiguration, release *api.ReleaseTagConfiguration, releases sets.String, resolved bool) []error {
+func (v *Validator) validateTestStepConfiguration(
+	configCtx *configContext,
+	fieldRoot string,
+	input []api.TestStepConfiguration,
+	release *api.ReleaseTagConfiguration,
+	releases, images sets.String,
+	resolved bool,
+) []error {
 	var validationErrors []error
 
 	// check for test.As duplicates
@@ -127,6 +134,8 @@ func (v *Validator) validateTestStepConfiguration(configCtx *configContext, fiel
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: should not be called 'images' because it gets confused with '[images]' target", fieldRootN))
 		} else if strings.HasPrefix(test.As, string(api.PipelineImageStreamTagReferenceIndexImage)) {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: should begin with 'ci-index' because it gets confused with 'ci-index' and `ci-index-...` targets", fieldRootN))
+		} else if images.Has(test.As) {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.as: duplicated name %q already declared in 'images'", fieldRootN, test.As))
 		} else if len(validation.IsDNS1123Subdomain(test.As)) != 0 {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: '%s' is not a valid Kubernetes object name", fieldRootN, test.As))
 		}

@@ -500,7 +500,7 @@ func TestValidateTests(t *testing.T) {
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			v := newSingleUseValidator()
-			if errs := v.validateTestStepConfiguration(newConfigContext(), "tests", tc.tests, tc.release, tc.releases, tc.resolved); len(errs) > 0 && tc.expectedValid {
+			if errs := v.validateTestStepConfiguration(newConfigContext(), "tests", tc.tests, tc.release, tc.releases, sets.NewString(), tc.resolved); len(errs) > 0 && tc.expectedValid {
 				t.Errorf("expected to be valid, got: %v", errs)
 			} else if !tc.expectedValid && len(errs) == 0 {
 				t.Error("expected to be invalid, but returned valid")

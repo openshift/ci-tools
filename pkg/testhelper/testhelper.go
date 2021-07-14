@@ -48,8 +48,9 @@ func ReadFromFixture(t *testing.T, identifier string) []byte {
 }
 
 type Options struct {
-	Prefix string
-	Suffix string
+	Prefix    string
+	Suffix    string
+	Extension string
 }
 
 type Option func(*Options)
@@ -66,9 +67,15 @@ func WithSuffix(suffix string) Option {
 	}
 }
 
+func WithExtension(extension string) Option {
+	return func(o *Options) {
+		o.Extension = extension
+	}
+}
+
 // golden determines the golden file to use
 func golden(t *testing.T, opts *Options) (string, error) {
-	return filepath.Abs(filepath.Join("testdata", sanitizeFilename(opts.Prefix+t.Name()+opts.Suffix)) + ".yaml")
+	return filepath.Abs(filepath.Join("testdata", sanitizeFilename(opts.Prefix+t.Name()+opts.Suffix)) + opts.Extension)
 }
 
 // CompareWithFixture will compare output with a test fixture and allows to automatically update them
@@ -77,7 +84,9 @@ func golden(t *testing.T, opts *Options) (string, error) {
 // The fixtures are stored in $PWD/testdata/prefix${testName}.yaml
 func CompareWithFixture(t *testing.T, output interface{}, opts ...Option) {
 	t.Helper()
-	options := &Options{}
+	options := &Options{
+		Extension: ".yaml",
+	}
 	for _, opt := range opts {
 		opt(options)
 	}

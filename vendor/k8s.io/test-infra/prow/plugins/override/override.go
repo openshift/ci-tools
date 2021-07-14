@@ -179,7 +179,7 @@ func whoCanUse(overrideConfig plugins.Override, org, repo string) string {
 		repoRef := fmt.Sprintf("%s/%s", org, repo)
 		var allTeams []string
 		for r, allowedTeams := range overrideConfig.AllowedGitHubTeams {
-			if repoRef == "/" || r == repoRef {
+			if repoRef == "/" || r == repoRef || r == org {
 				allTeams = append(allTeams, fmt.Sprintf("%s: %s", r, strings.Join(allowedTeams, " ")))
 			}
 		}
@@ -244,7 +244,9 @@ func authorizedGitHubTeamMember(gc githubClient, log *logrus.Entry, teamSlugs ma
 		log.WithError(err).Warnf("invalid team slug(s)")
 	}
 
-	for _, slug := range teamSlugs[fmt.Sprintf("%s/%s", org, repo)] {
+	slugs := teamSlugs[fmt.Sprintf("%s/%s", org, repo)]
+	slugs = append(slugs, teamSlugs[org]...)
+	for _, slug := range slugs {
 		for _, team := range teams {
 			if team.Slug == slug {
 				members, err := gc.ListTeamMembers(org, team.ID, github.RoleAll)
@@ -332,15 +334,32 @@ func handle(oc overrideClient, log *logrus.Entry, e *github.GenericCommentEvent,
 		return oc.CreateComment(org, repo, number, plugins.FormatResponseRaw(e.Body, e.HTMLURL, user, resp))
 	}
 
+	baseSHAGetter := shaGetterFactory(oc, org, repo, pr.Base.Ref)
+	presubmits, err := oc.presubmits(org, repo, baseSHAGetter, sha)
+	if err != nil {
+		msg := "Failed to get presubmits"
+		log.WithError(err).Error(msg)
+		return oc.CreateComment(org, repo, number, plugins.FormatResponseRaw(e.Body, e.HTMLURL, user, msg))
+	}
+
 	contexts := sets.NewString()
 	for _, status := range statuses {
 		if status.State == github.StatusSuccess {
 			continue
 		}
+
 		contexts.Insert(status.Context)
+
+		for _, job := range presubmits {
+			if job.Context == status.Context {
+				contexts.Insert(job.Name)
+				break
+			}
+		}
 	}
+
 	if unknown := overrides.Difference(contexts); unknown.Len() > 0 {
-		resp := fmt.Sprintf(`/override requires a failed status context to operate on.
+		resp := fmt.Sprintf(`/override requires a failed status context or a job name to operate on.
 The following unknown contexts were given:
 %s
 
@@ -361,19 +380,14 @@ Only the following contexts were expected:
 		oc.CreateComment(org, repo, number, plugins.FormatResponseRaw(e.Body, e.HTMLURL, user, msg))
 	}()
 
-	baseSHAGetter := shaGetterFactory(oc, org, repo, pr.Base.Ref)
-	presubmits, err := oc.presubmits(org, repo, baseSHAGetter, sha)
-	if err != nil {
-		msg := "Failed to get presubmits"
-		log.WithError(err).Error(msg)
-		return oc.CreateComment(org, repo, number, plugins.FormatResponseRaw(e.Body, e.HTMLURL, user, msg))
-	}
 	for _, status := range statuses {
-		if status.State == github.StatusSuccess || !overrides.Has(status.Context) {
+		pre := presubmitForContext(presubmits, status.Context)
+
+		if status.State == github.StatusSuccess || !(overrides.Has(status.Context) || pre != nil && overrides.Has(pre.Name)) {
 			continue
 		}
-		// First create the overridden prow result if necessary
-		pre := presubmitForContext(presubmits, status.Context)
+
+		// Create the overridden prow result if necessary
 		if pre != nil {
 			baseSHA, err := baseSHAGetter()
 			if err != nil {

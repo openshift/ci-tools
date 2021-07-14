@@ -75,6 +75,9 @@ func WithExtension(extension string) Option {
 
 // golden determines the golden file to use
 func golden(t *testing.T, opts *Options) (string, error) {
+	if opts.Extension == "" {
+		opts.Extension = ".yaml"
+	}
 	return filepath.Abs(filepath.Join("testdata", sanitizeFilename(opts.Prefix+t.Name()+opts.Suffix)) + opts.Extension)
 }
 

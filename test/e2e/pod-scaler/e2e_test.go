@@ -34,10 +34,9 @@ import (
 )
 
 func TestProduce(t *testing.T) {
-	rand.Seed(4641280330504625122)
 	t.Parallel()
 	T := testhelper.NewT(interrupts.Context(), t)
-	prometheusAddr, info := prometheus.Initialize(T, T.TempDir())
+	prometheusAddr, info := prometheus.Initialize(T, T.TempDir(), rand.New(rand.NewSource(4641280330504625122)))
 	kubeconfigFile := kubernetes.Fake(T, T.TempDir(), kubernetes.Prometheus(prometheusAddr))
 
 	dataDir := T.TempDir()
@@ -238,10 +237,9 @@ func TestBuildPodAdmission(t *testing.T) {
 }
 
 func TestAdmission(t *testing.T) {
-	rand.Seed(4641280330504625122)
 	t.Parallel()
 	T := testhelper.NewT(interrupts.Context(), t)
-	prometheusAddr, _ := prometheus.Initialize(T, t.TempDir())
+	prometheusAddr, _ := prometheus.Initialize(T, t.TempDir(), rand.New(rand.NewSource(4641280330504625122)))
 
 	kubeconfigFile := kubernetes.Fake(T, T.TempDir(), kubernetes.Prometheus(prometheusAddr), kubernetes.Builds(map[string]map[string]map[string]string{
 		"namespace": {

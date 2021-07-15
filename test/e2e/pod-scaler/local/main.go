@@ -6,6 +6,7 @@ package main
 
 import (
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"time"
 
@@ -34,7 +35,7 @@ func main() {
 		tmpDir: tmpDir,
 		logger: logger,
 	}
-	prometheusAddr, _ := prometheus.Initialize(t, tmpDir)
+	prometheusAddr, _ := prometheus.Initialize(t, tmpDir, rand.New(rand.NewSource(time.Now().UnixNano())))
 	kubeconfigFile := kubernetes.Fake(t, tmpDir, kubernetes.Prometheus(prometheusAddr))
 
 	dataDir, err := ioutil.TempDir(tmpDir, "data")

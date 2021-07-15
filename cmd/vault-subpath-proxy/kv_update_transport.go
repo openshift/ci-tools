@@ -9,12 +9,17 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/semaphore"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/util/retry"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -22,6 +27,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api/vault"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
 // https://github.com/openshift/ci-tools/blob/7af2e075f381ecae1562d1406bad2c86a23e72a3/vendor/k8s.io/api/core/v1/types.go#L5748-L5749
@@ -36,6 +42,16 @@ type kvUpdateTransport struct {
 	// If enabled, the roundtripper will wait for secret
 	// sync to complete. Should only be enabled in tests.
 	synchronousSecretSync bool
+
+	privilegedVaultClient                 *vaultclient.VaultClient
+	existingSecretKeysByNamespaceName     map[types.NamespacedName]sets.String
+	existingSecretKeysByNamespaceNameLock sync.Mutex
+	existingSecretKeysByVaultSecretName   map[string][]namespacedNameKey
+}
+
+type namespacedNameKey struct {
+	name types.NamespacedName
+	key  string
 }
 
 func (k *kvUpdateTransport) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -81,6 +97,13 @@ func (k *kvUpdateTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		errs = append(errs, fmt.Sprintf("secret %s in namespace %s cannot be used in a step: %s", body.Data[vault.SecretSyncTargetNameKey], body.Data[vault.SecretSyncTargetNamepaceKey], err.Error()))
 	}
 
+	keyConflictValidationErrs, err := k.validateKeysDontConflict(r.Context(), body.Data)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to validate keys don't conflict")
+		errs = append(errs, "secret key validation check failed, please contact @dptp-helpdesk in #forum-testplatform")
+	}
+	errs = append(errs, keyConflictValidationErrs...)
+
 	if len(errs) > 0 {
 		return newResponse(400, r, errs...), nil
 	}
@@ -96,7 +119,122 @@ func (k *kvUpdateTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	} else {
 		go k.syncSecret(body.Data)
 	}
+	if response.StatusCode > 199 && response.StatusCode < 300 {
+		path := strings.TrimPrefix(r.URL.Path, "/v1/")
+		k.updateKeyCacheForSecret(path, body.Data)
+
+	}
 	return response, nil
+}
+
+func (k *kvUpdateTransport) updateKeyCacheForSecret(path string, item map[string]string) {
+	k.existingSecretKeysByNamespaceNameLock.Lock()
+	defer k.existingSecretKeysByNamespaceNameLock.Unlock()
+	fmt.Printf("Updating cache for secret at path '%s'\n", path)
+
+	// Clear old entries associated with us
+	for _, existingEntry := range k.existingSecretKeysByVaultSecretName[path] {
+		k.existingSecretKeysByNamespaceName[existingEntry.name].Delete(existingEntry.key)
+	}
+	delete(k.existingSecretKeysByVaultSecretName, path)
+
+	// Create new entries
+	name := types.NamespacedName{Namespace: item[vault.SecretSyncTargetNamepaceKey], Name: item[vault.SecretSyncTargetNameKey]}
+	if k.existingSecretKeysByNamespaceName[name] == nil {
+		k.existingSecretKeysByNamespaceName[name] = sets.String{}
+	}
+	for key := range item {
+		if key == vault.SecretSyncTargetNamepaceKey || key == vault.SecretSyncTargetNameKey {
+			continue
+		}
+		k.existingSecretKeysByNamespaceName[name].Insert(key)
+		k.existingSecretKeysByVaultSecretName[path] = append(k.existingSecretKeysByVaultSecretName[path], namespacedNameKey{name: name, key: key})
+	}
+}
+
+func (k *kvUpdateTransport) validateKeysDontConflict(ctx context.Context, data map[string]string) (validationErrs []string, err error) {
+	if k.privilegedVaultClient == nil {
+		return nil, nil
+	}
+	k.existingSecretKeysByNamespaceNameLock.Lock()
+	defer k.existingSecretKeysByNamespaceNameLock.Unlock()
+	if k.existingSecretKeysByNamespaceName == nil {
+		k.existingSecretKeysByNamespaceName = map[types.NamespacedName]sets.String{}
+		k.existingSecretKeysByVaultSecretName = map[string][]namespacedNameKey{}
+		// Clear up the map if we had an error, to avoid caching an incomplete result
+		defer func() {
+			if err != nil {
+				k.existingSecretKeysByNamespaceName = nil
+			}
+		}()
+
+		everything, err := k.privilegedVaultClient.ListKVRecursively(k.kvMountPath)
+		if err != nil {
+			return nil, fmt.Errorf("listKVRecursively failed: %w", err)
+		}
+		// We fetch pretty much all data, use limited concurrency to not get oom killed
+		sema := semaphore.NewWeighted(10)
+		wg := &sync.WaitGroup{}
+		wg.Add(len(everything))
+
+		var fetchErrs []error
+		var fetchErrLock sync.Mutex
+
+		// Need a new lock to synchronize across the fetching goroutines
+		var existingSecretKeysByNamespaceNameWriteLock sync.Mutex
+		for _, path := range everything {
+			path := path
+			go func() {
+				defer wg.Done()
+				if err := sema.Acquire(ctx, 1); err != nil {
+					fetchErrLock.Lock()
+					fetchErrs = append(fetchErrs, err)
+					fetchErrLock.Unlock()
+					return
+				}
+				defer sema.Release(1)
+
+				item, err := k.privilegedVaultClient.GetKV(path)
+				if err != nil {
+					fetchErrLock.Lock()
+					fetchErrs = append(fetchErrs, err)
+					fetchErrLock.Unlock()
+					return
+				}
+
+				existingSecretKeysByNamespaceNameWriteLock.Lock()
+				defer existingSecretKeysByNamespaceNameWriteLock.Unlock()
+
+				name := types.NamespacedName{Namespace: item.Data[vault.SecretSyncTargetNamepaceKey], Name: item.Data[vault.SecretSyncTargetNameKey]}
+				if k.existingSecretKeysByNamespaceName[name] == nil {
+					k.existingSecretKeysByNamespaceName[name] = make(sets.String, len(item.Data)-2)
+				}
+				for key := range item.Data {
+					if key == vault.SecretSyncTargetNamepaceKey || key == vault.SecretSyncTargetNameKey {
+						continue
+					}
+					k.existingSecretKeysByNamespaceName[name].Insert(key)
+					k.existingSecretKeysByVaultSecretName[path] = append(k.existingSecretKeysByVaultSecretName[path], namespacedNameKey{name: name, key: key})
+				}
+			}()
+		}
+		wg.Wait()
+		if err := utilerrors.NewAggregate(fetchErrs); err != nil {
+			return nil, fmt.Errorf("failed to fetch secrets from vault: %w", err)
+		}
+	}
+
+	name := types.NamespacedName{Namespace: data[vault.SecretSyncTargetNamepaceKey], Name: data[vault.SecretSyncTargetNameKey]}
+	for key := range data {
+		if key == vault.SecretSyncTargetNamepaceKey || key == vault.SecretSyncTargetNameKey {
+			continue
+		}
+		if k.existingSecretKeysByNamespaceName[name].Has(key) {
+			validationErrs = append(validationErrs, fmt.Sprintf("key %s in secret %s is already claimed", key, name))
+		}
+	}
+
+	return validationErrs, nil
 }
 
 func (k *kvUpdateTransport) syncSecret(data map[string]string) {

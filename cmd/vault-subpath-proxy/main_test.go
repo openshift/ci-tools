@@ -328,8 +328,97 @@ path "secret/metadata/team-1/*" {
 		})
 	}
 
-}
+	t.Run("keyConflictTestCases", func(t *testing.T) {
+		kvUpdateTransport.privilegedVaultClient = rootDirect
+		keyConflictTestCases := []struct {
+			name               string
+			targetSecretName   string
+			data               map[string]string
+			expectedStatusCode int
+			expectedErrors     []string
+		}{
+			{
+				name:             "Initial secret gets created",
+				targetSecretName: "some-secret",
+				data: map[string]string{
+					"secretsync/target-namespace": "default",
+					"secretsync/target-name":      "secret",
+					"some-secret-key":             "some-value",
+				},
+			},
+			{
+				name:             "Creating another secret with the same target and same key fails",
+				targetSecretName: "second-secret",
+				data: map[string]string{
+					"secretsync/target-namespace": "default",
+					"secretsync/target-name":      "secret",
+					"some-secret-key":             "some-value",
+				},
+				expectedStatusCode: 400,
+				expectedErrors:     []string{"key some-secret-key in secret default/secret is already claimed"},
+			},
+			{
+				name:             "Creating another secret with the same target but different keys succeeds",
+				targetSecretName: "third-secret",
+				data: map[string]string{
+					"secretsync/target-namespace": "default",
+					"secretsync/target-name":      "secret",
+					"another-secret-key":          "some-value",
+				},
+			},
+			{
+				name:             "Updating the initial secret to replace the key succeeds",
+				targetSecretName: "some-secret",
+				data: map[string]string{
+					"secretsync/target-namespace": "default",
+					"secretsync/target-name":      "secret",
+					"third-secret-key":            "some-value",
+				},
+			},
+			{
+				name:             "Creating another secret that targets what the initial secret used to reference succeeds now",
+				targetSecretName: "second-secret",
+				data: map[string]string{
+					"secretsync/target-namespace": "default",
+					"secretsync/target-name":      "secret",
+					"some-secret-key":             "some-value",
+				},
+			},
+			{
+				name:             "Creating a fourth secret with the same target and key as the previous one fails",
+				targetSecretName: "fourth-secret",
+				data: map[string]string{
+					"secretsync/target-namespace": "default",
+					"secretsync/target-name":      "secret",
+					"some-secret-key":             "some-value",
+				},
+				expectedStatusCode: 400,
+				expectedErrors:     []string{"key some-secret-key in secret default/secret is already claimed"},
+			},
+		}
+		for _, tc := range keyConflictTestCases {
+			t.Run(tc.name, func(t *testing.T) {
+				var actualStatusCode int
+				var actualErrors []string
+				if err := rootProxy.UpsertKV("secret/kv-key-conflict-tests/"+tc.targetSecretName, tc.data); err != nil {
+					responseErr, ok := err.(*api.ResponseError)
+					if !ok {
+						t.Fatalf("got an error back that was not a response error but a %T", err)
+					}
+					actualStatusCode = responseErr.StatusCode
+					actualErrors = responseErr.Errors
+				}
+				if tc.expectedStatusCode != actualStatusCode {
+					t.Errorf("expected status code %d, got status code %d", tc.expectedStatusCode, actualStatusCode)
+				}
+				if diff := cmp.Diff(actualErrors, tc.expectedErrors); diff != "" {
+					t.Fatalf("actual errors differ from expected: %s", diff)
+				}
+			})
+		}
+	})
 
+}
 func writeKV(client *api.Client, path string, data map[string]string) error {
 	request := client.NewRequest("POST", path)
 	body := map[string]map[string]string{

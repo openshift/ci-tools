@@ -5,6 +5,7 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -55,6 +56,7 @@ func TestGetFromIndex(t *testing.T) {
 		})
 	}
 }
+
 func TestGetFromIndex_threadsafety(t *testing.T) {
 	agent := &configAgent{
 		lock: &sync.RWMutex{},
@@ -535,5 +537,46 @@ func TestBuildIndexDelta(t *testing.T) {
 				t.Errorf("expected delta differs from actual: %s", diff)
 			}
 		})
+	}
+}
+
+// TestSubscribeToIndexChangesBeforeIndexExistsYieldsAllChanges tests what the name claims.
+// The behavior is important for controllers, it allows them to initially reconcile everything
+// and then continue edge-driven.
+func TestSubscribeToIndexChangesBeforeIndexExistsYieldsAllChanges(t *testing.T) {
+	agentInterface := NewFakeConfigAgent(load.ByOrgRepo{"": map[string][]api.ReleaseBuildConfiguration{"": {{}}}})
+	agent := agentInterface.(*configAgent)
+	agent.closeIndexDeltaSubscriberChannelAfterFirstIndexBuild = true
+
+	deltaChannel, err := agent.SubscribeToIndexChanges("indexName")
+	if err != nil {
+		t.Fatalf("failed to subscribe to index: %v", err)
+	}
+
+	if err := agent.AddIndex("indexName", func(_ api.ReleaseBuildConfiguration) []string { return []string{"an-index-key"} }); err != nil {
+		t.Fatalf("Failed to add index: %v", err)
+	}
+
+	var changes []IndexDelta
+	readDeltasDone := make(chan struct{})
+	go func() {
+		for delta := range deltaChannel {
+			changes = append(changes, delta)
+		}
+		close(readDeltasDone)
+	}()
+
+	select {
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting to read deltas")
+	case <-readDeltasDone:
+	}
+
+	expectedDeltas := []IndexDelta{{
+		IndexKey: "an-index-key",
+		Added:    []*api.ReleaseBuildConfiguration{{}},
+	}}
+	if diff := cmp.Diff(expectedDeltas, changes); diff != "" {
+		t.Errorf("actual delta doesn't match expected: %s", diff)
 	}
 }

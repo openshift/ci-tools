@@ -28,6 +28,7 @@ import (
 
 	imagev1 "github.com/openshift/api/image/v1"
 
+	promotionnamespacereconciler "github.com/openshift/ci-tools/pkg/controller/promotion_namespace_reconciler"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
 	serviceaccountsecretrefresher "github.com/openshift/ci-tools/pkg/controller/serviceaccount_secret_refresher"
 	testimagesdistributor "github.com/openshift/ci-tools/pkg/controller/test-images-distributor"
@@ -46,6 +47,7 @@ var allControllers = sets.NewString(
 	testimagesdistributor.ControllerName,
 	serviceaccountsecretrefresher.ControllerName,
 	testimagestreamimportcleaner.ControllerName,
+	promotionnamespacereconciler.ControllerName,
 )
 
 type options struct {
@@ -408,6 +410,12 @@ func main() {
 	if opts.enabledControllersSet.Has(testimagestreamimportcleaner.ControllerName) {
 		if err := testimagestreamimportcleaner.AddToManager(mgr, allManagers); err != nil {
 			logrus.WithError(err).Fatal("Failed to construct the testimagestreamimportcleaner controller")
+		}
+	}
+
+	if opts.enabledControllersSet.Has(promotionnamespacereconciler.ControllerName) {
+		if err := promotionnamespacereconciler.AddToManager(mgr, ciOPConfigAgent); err != nil {
+			logrus.WithError(err).Fatalf("Failed to construct the %s controller", promotionnamespacereconciler.ControllerName)
 		}
 	}
 

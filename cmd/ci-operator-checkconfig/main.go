@@ -25,7 +25,7 @@ type promotedTag struct {
 }
 
 type options struct {
-	configDir      string
+	config.Options
 	maxConcurrency uint
 
 	resolver registry.Resolver
@@ -33,15 +33,20 @@ type options struct {
 
 func (o *options) parse() error {
 	var registryDir string
-	flag.StringVar(&o.configDir, "config-dir", "", "The directory containing configuration files.")
 	flag.StringVar(&registryDir, "registry", "", "Path to the step registry directory")
 	flag.UintVar(&o.maxConcurrency, "concurrency", uint(runtime.GOMAXPROCS(0)), "Maximum number of concurrent in-flight goroutines.")
+
+	o.Options.Bind(flag.CommandLine)
 	flag.Parse()
-	if o.configDir == "" {
-		return errors.New("The --config-dir flag is required but was not provided")
-	}
+
 	if err := o.loadResolver(registryDir); err != nil {
 		return fmt.Errorf("failed to load registry: %w", err)
+	}
+	if err := o.Options.Validate(); err != nil {
+		return fmt.Errorf("failed to validate config options: %w", err)
+	}
+	if err := o.Options.Complete(); err != nil {
+		return fmt.Errorf("failed to complete config options: %w", err)
 	}
 	return nil
 }
@@ -79,7 +84,7 @@ func (o *options) validate() (ret []error) {
 		}
 		doneCh <- struct{}{}
 	}()
-	if err := config.OperateOnCIOperatorConfigDir(o.configDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		workCh <- workItem{configuration, repoInfo}
 		return nil
 	}); err != nil {

@@ -76,10 +76,10 @@ type dashboard struct {
 	existing   sets.String
 }
 
-func genericDashboardFor(role string) *dashboard {
+func genericDashboardFor(name string) *dashboard {
 	return &dashboard{
 		Dashboard: &config.Dashboard{
-			Name:         fmt.Sprintf("redhat-openshift-%s", role),
+			Name:         name,
 			DashboardTab: []*config.DashboardTab{},
 		},
 		testGroups: []*config.TestGroup{},
@@ -284,74 +284,79 @@ func main() {
 
 	for _, p := range jobConfig.Periodics {
 		name := p.Name
-		var dashboardType string
-
-		label, ok := allowList[name]
-		if len(label) == 0 && ok {
-			// if the allow list has an empty label for the type, exclude it from dashboards
-			continue
-		}
-		switch label {
-		case "informing", "blocking", "broken", "generic-informing":
-			dashboardType = label
-			if label == "informing" && configuredJobs[p.Name] == "blocking" {
-				dashboardType = "blocking"
-			}
-		default:
-			if label, ok := configuredJobs[name]; ok {
-				dashboardType = label
-				break
-			}
-			switch {
-			case strings.HasPrefix(name, "release-openshift-"),
-				strings.HasPrefix(name, "promote-release-openshift-"),
-				strings.HasPrefix(name, "periodic-ci-openshift-release-master-ci-"),
-				strings.HasPrefix(name, "periodic-ci-openshift-release-master-okd-"),
-				strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"):
-				// the standard release periodics should always appear in testgrid
-				dashboardType = "informing"
-			default:
-				// unknown labels or non standard jobs do not appear in testgrid
-				continue
-			}
-		}
-
 		var current *dashboard
-		switch dashboardType {
-		case "generic-informing":
-			current = genericDashboardFor("informing")
-		default:
-			var stream string
-			switch {
-			case
-				// these will be removable once most / all jobs are generated periodics and are for legacy release-* only
-				strings.Contains(name, "-ocp-"),
-				strings.Contains(name, "-origin-"),
-				// these prefixes control whether a job is ocp or okd going forward
-				strings.HasPrefix(name, "periodic-ci-openshift-release-master-ci-"),
-				strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"):
-				stream = "ocp"
-			case strings.Contains(name, "-okd-"):
-				stream = "okd"
-			case strings.HasPrefix(name, "promote-release-openshift-"):
-				// TODO fix these jobs to have a consistent name
-				stream = "ocp"
-			default:
-				logrus.Warningf("unrecognized release type in job: %s", name)
+
+		dashboardLabel := p.Labels["testgrid-dashboard"]
+		if len(dashboardLabel) != 0 {
+			current = genericDashboardFor(dashboardLabel)
+		} else {
+			var dashboardType string
+			label, ok := allowList[name]
+			if len(label) == 0 && ok {
+				// if the allow list has an empty label for the type, exclude it from dashboards
 				continue
 			}
-
-			version := p.Labels["job-release"]
-			if len(version) == 0 {
-				m := reVersion.FindStringSubmatch(name)
-				if len(m) == 0 {
-					logrus.Warningf("release is not in -X.Y- form and will go into the generic informing dashboard: %s", name)
-					current = genericDashboardFor("informing")
+			switch label {
+			case "informing", "blocking", "broken", "generic-informing":
+				dashboardType = label
+				if label == "informing" && configuredJobs[p.Name] == "blocking" {
+					dashboardType = "blocking"
+				}
+			default:
+				if label, ok := configuredJobs[name]; ok {
+					dashboardType = label
 					break
 				}
-				version = m[1]
+				switch {
+				case strings.HasPrefix(name, "release-openshift-"),
+					strings.HasPrefix(name, "promote-release-openshift-"),
+					strings.HasPrefix(name, "periodic-ci-openshift-release-master-ci-"),
+					strings.HasPrefix(name, "periodic-ci-openshift-release-master-okd-"),
+					strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"):
+					// the standard release periodics should always appear in testgrid
+					dashboardType = "informing"
+				default:
+					// unknown labels or non standard jobs do not appear in testgrid
+					continue
+				}
 			}
-			current = dashboardFor(stream, version, dashboardType)
+
+			switch dashboardType {
+			case "generic-informing":
+				current = genericDashboardFor("redhat-openshift-informing")
+			default:
+				var stream string
+				switch {
+				case
+					// these will be removable once most / all jobs are generated periodics and are for legacy release-* only
+					strings.Contains(name, "-ocp-"),
+					strings.Contains(name, "-origin-"),
+					// these prefixes control whether a job is ocp or okd going forward
+					strings.HasPrefix(name, "periodic-ci-openshift-release-master-ci-"),
+					strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"):
+					stream = "ocp"
+				case strings.Contains(name, "-okd-"):
+					stream = "okd"
+				case strings.HasPrefix(name, "promote-release-openshift-"):
+					// TODO fix these jobs to have a consistent name
+					stream = "ocp"
+				default:
+					logrus.Warningf("unrecognized release type in job: %s", name)
+					continue
+				}
+
+				version := p.Labels["job-release"]
+				if len(version) == 0 {
+					m := reVersion.FindStringSubmatch(name)
+					if len(m) == 0 {
+						logrus.Warningf("release is not in -X.Y- form and will go into the generic informing dashboard: %s", name)
+						current = genericDashboardFor("redhat-openshift-informing")
+						break
+					}
+					version = m[1]
+				}
+				current = dashboardFor(stream, version, dashboardType)
+			}
 		}
 
 		if existing, ok := dashboards[current.Name]; ok {

@@ -18,6 +18,14 @@ for org in openshift redhat-operator-ecosystem; do
   # We need to enter the git directory and run git commands from there, our git
   # is too old to know the `-C` option.
   pushd "${clonedir}/${org}"
+
+  # First we'll run registry-replacer to prune unused base images.
+  registry-replacer \
+    --config-dir ci-operator/config \
+    --registry "${registry}" \
+    --prune-unused-base-images=true \
+    --apply-replacements=false
+
   if ! ci-operator-checkconfig \
     --config-dir ci-operator/config \
     --registry "${registry}"

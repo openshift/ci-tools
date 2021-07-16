@@ -1,0 +1,29 @@
+base_images:
+  fresh_image:
+    name: fresh_image
+    namespace: namespace
+    tag: test-1.0
+  org_image_latest:
+    name: image
+    namespace: org
+    tag: latest
+images:
+- inputs:
+    image:
+      as:
+      - org/image
+    org_image_latest:
+      as:
+      - registry.svc.ci.openshift.org/org/image
+  to: cool_image
+tests:
+- as: ""
+  literal_steps:
+    cluster_profile: ""
+    test:
+    - from: fresh_image
+      resources: {}
+zz_generated_metadata:
+  branch: master
+  org: ""
+  repo: ""

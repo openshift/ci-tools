@@ -24,6 +24,7 @@ func TestReplacer(t *testing.T) {
 		config                                       *api.ReleaseBuildConfiguration
 		pruneUnusedReplacementsEnabled               bool
 		pruneOCPBuilderReplacementsEnabled           bool
+		pruneUnusedBaseImagesEnabled                 bool
 		ensureCorrectPromotionDockerfile             bool
 		ensureCorrectPromotionDockerfileIngoredRepos sets.String
 		promotionTargetToDockerfileMapping           map[string]dockerfileLocation
@@ -345,6 +346,146 @@ func TestReplacer(t *testing.T) {
 			credentials:                        &usernameToken{username: "some-user", token: "some-token"},
 			epectedOpts:                        github.Opts{BasicAuthUser: "some-user", BasicAuthPassword: "some-token"},
 		},
+		{
+			name: "Unused base images are pruned",
+			config: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BaseImages: map[string]api.ImageStreamTagReference{
+						"old_image": {
+							Name:      "old_image",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
+						"other_old_image": {
+							Name:      "other_old_image",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
+						"fresh_image": {
+							Name:      "fresh_image",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
+					},
+				},
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						Inputs: map[string]api.ImageBuildInputs{
+							"image": {As: []string{"org/image"}},
+						},
+					},
+					To: "cool_image",
+				}},
+				Tests: []api.TestStepConfiguration{{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Test: []api.LiteralTestStep{{
+							From: "fresh_image",
+						}},
+					}},
+				},
+				Metadata: api.Metadata{Branch: "master"},
+			},
+			files:                        map[string][]byte{"Dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/image as image")},
+			pruneUnusedBaseImagesEnabled: true,
+			expectWrite:                  true,
+		},
+		{
+			name: "Used base images not pruned",
+			config: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BaseImages: map[string]api.ImageStreamTagReference{
+						"bundle_source_image": {
+							Name:      "bundle_source_image",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
+						"operator_bundle_image": {
+							Name:      "operator_bundle_image",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
+						"operator_substitution_image": {
+							Name:      "operator_substitution_image",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
+						"output_image_tag_image": {
+							Name:      "output_image_tag_image",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
+						"pipeline_image_cache_image": {
+							Name:      "pipeline_image_cache_image",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
+						"rpm_image_injection_image": {
+							Name:      "rpm_image_injection_image",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
+						"source_step_image": {
+							Name:      "source_step_image",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
+						"test_step_image": {
+							Name:      "test_step_image",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
+					},
+				},
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						Inputs: map[string]api.ImageBuildInputs{
+							"image": {As: []string{"registry.svc.ci.openshift.org/org/image"}},
+						},
+					},
+					To: "cool_image",
+				}},
+				Operator: &api.OperatorStepConfiguration{
+					Bundles: []api.Bundle{
+						{BaseIndex: "operator_bundle_image"},
+					},
+					Substitutions: []api.PullSpecSubstitution{
+						{With: "operator_substitution_image"},
+					},
+				},
+				RawSteps: []api.StepConfiguration{
+					{BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
+						Substitutions: []api.PullSpecSubstitution{
+							{With: "bundle_source_image"},
+						},
+					}},
+					{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+						From: "output_image_tag_image",
+					}},
+					{PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
+						From: "pipeline_image_cache_image",
+					}},
+					{RPMImageInjectionStepConfiguration: &api.RPMImageInjectionStepConfiguration{
+						From: "rpm_image_injection_image",
+					}},
+					{SourceStepConfiguration: &api.SourceStepConfiguration{
+						From: "source_step_image",
+					}},
+				},
+				Tests: []api.TestStepConfiguration{{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Test: []api.LiteralTestStep{{
+							Dependencies: []api.StepDependency{
+								{Name: "pipeline:test_step_image"},
+							},
+						}},
+					}},
+				},
+				Metadata: api.Metadata{Branch: "master"},
+			},
+			files:                        map[string][]byte{"Dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/image as image")},
+			pruneUnusedBaseImagesEnabled: true,
+			expectWrite:                  false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -359,11 +500,16 @@ func TestReplacer(t *testing.T) {
 				fakeWriter.Write,
 				tc.pruneUnusedReplacementsEnabled,
 				tc.pruneOCPBuilderReplacementsEnabled,
+				tc.pruneUnusedBaseImagesEnabled,
+				true,
 				tc.ensureCorrectPromotionDockerfile,
 				tc.ensureCorrectPromotionDockerfileIngoredRepos,
 				tc.promotionTargetToDockerfileMapping,
 				majorMinor,
 				nil,
+				func(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error) {
+					return *tc.config, nil
+				},
 			)(tc.config, &config.Info{}); err != nil {
 				t.Errorf("replacer failed: %v", err)
 			}

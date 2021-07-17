@@ -74,10 +74,10 @@ func (d *DataInStages) record(offset time.Duration, metric string, labels series
 }
 
 // Backfill generates data and backfills it into Prometheus, returning the data written by stage.
-func Backfill(t testhelper.TestingTInterface, prometheusDir string, retentionPeriod time.Duration) *DataInStages {
+func Backfill(t testhelper.TestingTInterface, prometheusDir string, retentionPeriod time.Duration, r *rand.Rand) *DataInStages {
 	t.Log("Backfilling Prometheus data.")
 	generateStart := time.Now()
-	info, families := generateData(t, retentionPeriod)
+	info, families := generateData(t, retentionPeriod, r)
 	t.Logf("Generated Prometheus data in %s.", time.Since(generateStart))
 
 	writeStart := time.Now()
@@ -118,7 +118,7 @@ func Backfill(t testhelper.TestingTInterface, prometheusDir string, retentionPer
 	return info
 }
 
-func generateData(t testhelper.TestingTInterface, retentionPeriod time.Duration) (*DataInStages, []*prometheus_client.MetricFamily) {
+func generateData(t testhelper.TestingTInterface, retentionPeriod time.Duration, r *rand.Rand) (*DataInStages, []*prometheus_client.MetricFamily) {
 	info := &DataInStages{ByOffset: map[time.Duration]Data{}}
 	metricTypePtr := func(metric prometheus_client.MetricType) *prometheus_client.MetricType { return &metric }
 	kubePodLabels := prometheus_client.MetricFamily{
@@ -134,13 +134,13 @@ func generateData(t testhelper.TestingTInterface, retentionPeriod time.Duration)
 			Metric: []*prometheus_client.Metric{},
 		}
 		for _, item := range series() {
-			mean := float64(rand.Int31())
-			stddev := rand.Float64() * mean / 20.0
+			mean := float64(r.Int31())
+			stddev := r.Float64() * mean / 20.0
 			for _, offset := range offsets(retentionPeriod) {
 				for j := 0; j < numSeries; j++ {
 					labelPairs := labelsFor(item.labels)
 					var values []float64
-					start := time.Now().Add(-time.Duration(rand.Float64()*float64(retentionPeriod/2-seriesDuration)) - offset - seriesDuration).Round(1 * time.Minute)
+					start := time.Now().Add(-time.Duration(r.Float64()*float64(retentionPeriod/2-seriesDuration)) - offset - seriesDuration).Round(1 * time.Minute)
 					for k := 0; k < numSamples; k++ {
 						ts := pointer.Int64Ptr(start.Add(time.Duration(k)*samplingDuration).UnixNano() / 1e6)
 
@@ -149,7 +149,7 @@ func generateData(t testhelper.TestingTInterface, retentionPeriod time.Duration)
 							Label:       labelPairs,
 							TimestampMs: ts,
 						}
-						metric.addValue(m, rand.NormFloat64()*stddev+mean, float64(k))
+						metric.addValue(m, r.NormFloat64()*stddev+mean, float64(k))
 						family.Metric = append(family.Metric, m)
 
 						values = append(values, metric.getValue(m))

@@ -8,7 +8,6 @@ import (
 	"crypto/x509"
 	"net/http"
 	"path"
-	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -51,16 +50,16 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 		"--mode=consumer.admission",
 		"--serving-cert-dir=" + authDir,
 	}
-	podScaler := testhelper.NewAccessory("pod-scaler", podScalerFlags, func(port, _ string) []string {
+	podScaler := testhelper.NewAccessory("pod-scaler", podScalerFlags, func(port, healthPort string) []string {
 		t.Logf("pod-scaler admission starting on port %s", port)
-		return []string{"--port", port}
+		return []string{"--port", port, "--health-port", healthPort}
 	}, func(port, healthPort string) []string {
 		return []string{port}
 	}, clientcmd.RecommendedConfigPathEnvVar+"="+kubeconfig)
 	podScaler.RunFromFrameworkRunner(t, parent)
 	podScalerHost := "https://" + serverHostname + ":" + podScaler.ClientFlags()[0]
 	t.Logf("pod-scaler admission is running at %s", podScalerHost)
-	time.Sleep(time.Second) // TODO: expose health, ready
+	podScaler.Ready(t)
 
 	var certs []tls.Certificate
 	for _, cert := range clientTLSConfig.Certs {

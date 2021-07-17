@@ -164,7 +164,7 @@ func main() {
 	case "consumer.ui":
 		// TODO
 	case "consumer.admission":
-		mainAdmission(opts)
+		mainAdmission(opts, cache)
 	}
 	if !opts.once {
 		interrupts.WaitForGracefulShutdown()
@@ -212,7 +212,7 @@ func mainProduce(opts *options, cache cache) {
 	produce(clients, cache, opts.ignoreLatest, opts.once)
 }
 
-func mainAdmission(opts *options) {
+func mainAdmission(opts *options, cache cache) {
 	controllerruntime.SetLogger(logrusr.NewLogger(logrus.StandardLogger()))
 
 	restConfig, err := util.LoadClusterConfig()
@@ -223,5 +223,15 @@ func mainAdmission(opts *options) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct client.")
 	}
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client)
+
+	cpuLoaders, memoryLoaders := loaders(cache)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, cpuLoaders, memoryLoaders)
+}
+
+func loaders(cache cache) (cpu, memory []*cacheReloader) {
+	for _, prefix := range []string{prowjobsCachePrefix, podsCachePrefix, stepsCachePrefix} {
+		cpu = append(cpu, newReloader(prefix+"/"+MetricNameCPUUsage, cache))
+		memory = append(memory, newReloader(prefix+"/"+MetricNameMemoryWorkingSet, cache))
+	}
+	return cpu, memory
 }

@@ -772,3 +772,170 @@ func TestCachedQuery_Prune(t *testing.T) {
 		t.Errorf("got incorrect state after pruning: %v", diff)
 	}
 }
+
+func TestMetadataFor(t *testing.T) {
+	var testCases = []struct {
+		name           string
+		pod, container string
+		labels         map[string]string
+		meta           FullMetadata
+	}{
+		{
+			name:      "step pod",
+			pod:       "pod",
+			container: "container",
+			labels: map[string]string{
+				"ci.openshift.io/metadata.org":     "org",
+				"ci.openshift.io/metadata.repo":    "repo",
+				"ci.openshift.io/metadata.branch":  "branch",
+				"ci.openshift.io/metadata.variant": "variant",
+				"ci.openshift.io/metadata.target":  "target",
+				"ci.openshift.io/metadata.step":    "step",
+			},
+			meta: FullMetadata{
+				Metadata: api.Metadata{
+					Org:     "org",
+					Repo:    "repo",
+					Branch:  "branch",
+					Variant: "variant",
+				},
+				Target:    "target",
+				Step:      "step",
+				Pod:       "pod",
+				Container: "container",
+			},
+		},
+		{
+			name:      "build pod",
+			pod:       "src-build",
+			container: "container",
+			labels: map[string]string{
+				"ci.openshift.io/metadata.org":     "org",
+				"ci.openshift.io/metadata.repo":    "repo",
+				"ci.openshift.io/metadata.branch":  "branch",
+				"ci.openshift.io/metadata.variant": "variant",
+				"ci.openshift.io/metadata.target":  "target",
+				"openshift.io/build.name":          "src",
+			},
+			meta: FullMetadata{
+				Metadata: api.Metadata{
+					Org:     "org",
+					Repo:    "repo",
+					Branch:  "branch",
+					Variant: "variant",
+				},
+				Pod:       "src-build",
+				Container: "container",
+			},
+		},
+		{
+			name:      "release pod",
+			pod:       "release-latest-cli",
+			container: "container",
+			labels: map[string]string{
+				"ci.openshift.io/metadata.org":     "org",
+				"ci.openshift.io/metadata.repo":    "repo",
+				"ci.openshift.io/metadata.branch":  "branch",
+				"ci.openshift.io/metadata.variant": "variant",
+				"ci.openshift.io/metadata.target":  "target",
+				"ci.openshift.io/release":          "latest",
+			},
+			meta: FullMetadata{
+				Metadata: api.Metadata{
+					Org:     "org",
+					Repo:    "repo",
+					Branch:  "branch",
+					Variant: "variant",
+				},
+				Pod:       "release-latest-cli",
+				Container: "container",
+			},
+		},
+		{
+			name:      "RPM repo pod",
+			pod:       "rpm-repo-5d88d4fc4c-jg2xb",
+			container: "rpm-repo",
+			labels: map[string]string{
+				"ci.openshift.io/metadata.org":     "org",
+				"ci.openshift.io/metadata.repo":    "repo",
+				"ci.openshift.io/metadata.branch":  "branch",
+				"ci.openshift.io/metadata.variant": "variant",
+				"ci.openshift.io/metadata.target":  "target",
+				"app":                              "rpm-repo",
+			},
+			meta: FullMetadata{
+				Metadata: api.Metadata{
+					Org:     "org",
+					Repo:    "repo",
+					Branch:  "branch",
+					Variant: "variant",
+				},
+				Container: "rpm-repo",
+			},
+		},
+		{
+			name:      "raw prowjob pod",
+			pod:       "d316d4cc-a437-11eb-b35f-0a580a800e92",
+			container: "container",
+			labels: map[string]string{
+				"created-by-prow":           "true",
+				"prow.k8s.io/refs.org":      "org",
+				"prow.k8s.io/refs.repo":     "repo",
+				"prow.k8s.io/refs.base_ref": "branch",
+				"prow.k8s.io/context":       "context",
+			},
+			meta: FullMetadata{
+				Metadata: api.Metadata{
+					Org:    "org",
+					Repo:   "repo",
+					Branch: "branch",
+				},
+				Target:    "context",
+				Container: "container",
+			},
+		},
+		{
+			name:      "raw periodic prowjob pod without context",
+			pod:       "d316d4cc-a437-11eb-b35f-0a580a800e92",
+			container: "container",
+			labels: map[string]string{
+				"created-by-prow":           "true",
+				"prow.k8s.io/refs.org":      "org",
+				"prow.k8s.io/refs.repo":     "repo",
+				"prow.k8s.io/refs.base_ref": "branch",
+				"prow.k8s.io/job":           "periodic-ci-org-repo-branch-context",
+				"prow.k8s.io/type":          "periodic",
+			},
+			meta: FullMetadata{
+				Metadata: api.Metadata{
+					Org:    "org",
+					Repo:   "repo",
+					Branch: "branch",
+				},
+				Target:    "context",
+				Container: "container",
+			},
+		},
+		{
+			name:      "raw repo-less periodic prowjob pod without context",
+			pod:       "d316d4cc-a437-11eb-b35f-0a580a800e92",
+			container: "container",
+			labels: map[string]string{
+				"created-by-prow":  "true",
+				"prow.k8s.io/job":  "periodic-handwritten-prowjob",
+				"prow.k8s.io/type": "periodic",
+			},
+			meta: FullMetadata{
+				Target:    "periodic-handwritten-prowjob",
+				Container: "container",
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if diff := cmp.Diff(MetadataFor(testCase.labels, testCase.pod, testCase.container), testCase.meta); diff != "" {
+				t.Errorf("%s: got incorrect metadata: %v", testCase.name, diff)
+			}
+		})
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"github.com/openhistogram/circonusllhist"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/test-infra/prow/interrupts"
@@ -32,10 +34,9 @@ import (
 )
 
 func TestProduce(t *testing.T) {
-	rand.Seed(4641280330504625122)
 	t.Parallel()
 	T := testhelper.NewT(interrupts.Context(), t)
-	prometheusAddr, info := prometheus.Initialize(T, T.TempDir())
+	prometheusAddr, info := prometheus.Initialize(T, T.TempDir(), rand.New(rand.NewSource(4641280330504625122)))
 	kubeconfigFile := kubernetes.Fake(T, T.TempDir(), kubernetes.Prometheus(prometheusAddr))
 
 	dataDir := T.TempDir()
@@ -144,7 +145,19 @@ func TestBuildPodAdmission(t *testing.T) {
 	defer func() {
 		cancel()
 	}()
-	admissionHost, transport := run.Admission(T, T.TempDir(), kubeconfigFile, ctx)
+	dataDir := T.TempDir()
+	for _, set := range []string{"pods", "prowjobs", "steps"} {
+		for _, metric := range []string{"container_memory_working_set_bytes", "container_cpu_usage_seconds_total"} {
+			if err := os.MkdirAll(filepath.Join(dataDir, set), 0777); err != nil {
+				t.Fatalf("could not seed data dir: %v", err)
+			}
+			if err := ioutil.WriteFile(filepath.Join(dataDir, set, metric+".json"), []byte(`{}`), 0777); err != nil {
+				t.Fatalf("could not seed data dir: %v", err)
+			}
+		}
+	}
+
+	admissionHost, transport := run.Admission(T, dataDir, kubeconfigFile, ctx)
 	admissionClient := http.Client{Transport: transport}
 
 	var testCases = []struct {
@@ -216,6 +229,116 @@ func TestBuildPodAdmission(t *testing.T) {
 
 			var review admissionv1.AdmissionReview
 			if err := json.Unmarshal(rawResponse, &review); err != nil { // TODO: use scheme?
+				t.Fatalf("could not unmarshal response: %v", err)
+			}
+			testhelper.CompareWithFixture(t, review.Response.Patch, testhelper.WithSuffix("-patch"))
+		})
+	}
+}
+
+func TestAdmission(t *testing.T) {
+	t.Parallel()
+	T := testhelper.NewT(interrupts.Context(), t)
+	prometheusAddr, _ := prometheus.Initialize(T, t.TempDir(), rand.New(rand.NewSource(4641280330504625122)))
+
+	kubeconfigFile := kubernetes.Fake(T, T.TempDir(), kubernetes.Prometheus(prometheusAddr), kubernetes.Builds(map[string]map[string]map[string]string{
+		"namespace": {
+			"withoutlabels": map[string]string{},
+			"withlabels": map[string]string{
+				"ci.openshift.io/metadata.org":     "org",
+				"ci.openshift.io/metadata.repo":    "repo",
+				"ci.openshift.io/metadata.branch":  "branch",
+				"ci.openshift.io/metadata.variant": "variant",
+				"ci.openshift.io/metadata.target":  "target",
+			},
+		},
+	}))
+	ctx, cancel := context.WithCancel(interrupts.Context())
+	defer func() {
+		cancel()
+	}()
+	dataDir := T.TempDir()
+	run.Producer(T, dataDir, kubeconfigFile, 0*time.Second)
+	admissionHost, transport := run.Admission(T, dataDir, kubeconfigFile, ctx)
+	admissionClient := http.Client{Transport: transport}
+
+	var testCases = []struct {
+		name string
+		pod  corev1.Pod
+	}{
+		{
+			name: "pod for which we have no data",
+			pod: corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+				Name: "pod",
+				Labels: map[string]string{
+					"ci.openshift.io/metadata.org":     "org",
+					"ci.openshift.io/metadata.repo":    "repo",
+					"ci.openshift.io/metadata.branch":  "branch",
+					"ci.openshift.io/metadata.variant": "variant",
+					"ci.openshift.io/metadata.target":  "NO-PREVIOUS-DATA",
+				}}},
+		},
+		{
+			name: "pod for which we have data",
+			pod: corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+				Name: "pod",
+				Labels: map[string]string{
+					"ci.openshift.io/metadata.org":     "org",
+					"ci.openshift.io/metadata.repo":    "repo",
+					"ci.openshift.io/metadata.branch":  "branch",
+					"ci.openshift.io/metadata.variant": "variant",
+					"ci.openshift.io/metadata.target":  "target",
+					"ci.openshift.io/metadata.step":    "step",
+				}},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "container"}},
+				},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			testCase.pod.TypeMeta = metav1.TypeMeta{
+				Kind:       "Pod",
+				APIVersion: "v1",
+			}
+			rawPod, err := json.Marshal(&testCase.pod)
+			if err != nil {
+				t.Fatalf("failed to marshal pod: %v", err)
+			}
+
+			request := admissionv1.AdmissionRequest{
+				UID:      "705ab4f5-6393-11e8-b7cc-42010a800002",
+				Kind:     metav1.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"},
+				Resource: metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"},
+				Object:   runtime.RawExtension{Raw: rawPod},
+			}
+			rawReview, err := json.Marshal(admissionv1.AdmissionReview{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "AdmissionReview",
+					APIVersion: "admission.k8s.io/v1",
+				},
+				Request: &request,
+			})
+			if err != nil {
+				t.Fatalf("could not marshal request: %v", err)
+			}
+			response, err := admissionClient.Post(fmt.Sprintf("%s/pods", admissionHost), "application/json", bytes.NewBuffer(rawReview))
+			if err != nil {
+				t.Fatalf("could not post request: %v", err)
+			}
+			rawResponse, err := ioutil.ReadAll(response.Body)
+			if err != nil {
+				t.Fatalf("could not read response: %v", err)
+			}
+			if err := response.Body.Close(); err != nil {
+				t.Fatalf("could not close response: %v", err)
+			}
+			testhelper.CompareWithFixture(t, rawResponse)
+
+			var review admissionv1.AdmissionReview
+			if err := json.Unmarshal(rawResponse, &review); err != nil {
 				t.Fatalf("could not unmarshal response: %v", err)
 			}
 			testhelper.CompareWithFixture(t, review.Response.Patch, testhelper.WithSuffix("-patch"))

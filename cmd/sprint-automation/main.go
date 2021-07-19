@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/pkg/flagutil"
 	"k8s.io/test-infra/prow/config/secret"
@@ -91,7 +92,12 @@ func main() {
 	}
 	userIdsByRole, err := users(pagerDutyClient, slackClient)
 	if err != nil {
-		logrus.WithError(err).Fatal("Could not get rotating roles from PagerDuty.")
+		msg := "Could not get rotating roles from PagerDuty."
+		if len(userIdsByRole) == 0 {
+			logrus.WithError(err).Fatal(msg)
+		} else {
+			logrus.WithError(err).Error(msg)
+		}
 	}
 	blocks = append(blocks, getPagerDutyBlocks(userIdsByRole)...)
 
@@ -160,6 +166,7 @@ func getPagerDutyBlocks(userIdsByRole map[string]string) []slack.Block {
 }
 
 func users(client *pagerduty.Client, slackClient *slack.Client) (map[string]string, error) {
+	var errors []error
 	now := time.Now()
 	userIdsByRole := map[string]string{}
 	for _, item := range []struct {
@@ -200,15 +207,17 @@ func users(client *pagerduty.Client, slackClient *slack.Client) (map[string]stri
 	} {
 		pagerDutyUser, err := userOnCallDuring(client, item.query, item.since, item.until)
 		if err != nil {
-			return nil, fmt.Errorf("could not get PagerDuty user for %s: %w", item.role, err)
+			errors = append(errors, fmt.Errorf("could not get PagerDuty user for %s: %w", item.role, err))
+			continue
 		}
 		slackUser, err := slackClient.GetUserByEmail(pagerDutyUser.Email)
 		if err != nil {
-			return nil, fmt.Errorf("could not get slack user for %s: %w", pagerDutyUser.Name, err)
+			errors = append(errors, fmt.Errorf("could not get slack user for %s: %w", pagerDutyUser.Name, err))
+			continue
 		}
 		userIdsByRole[item.role] = slackUser.ID
 	}
-	return userIdsByRole, nil
+	return userIdsByRole, kerrors.NewAggregate(errors)
 }
 
 func userOnCallDuring(client *pagerduty.Client, query string, since, until time.Time) (*pagerduty.User, error) {

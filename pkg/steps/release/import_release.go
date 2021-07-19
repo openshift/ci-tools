@@ -432,7 +432,7 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 			},
 		}
 		if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
-			if err := s.client.Create(ctx, streamTag); err != nil && !kerrors.IsConflict(err) {
+			if err := s.client.Create(ctx, streamTag); err != nil && !kerrors.IsAlreadyExists(err) {
 				return false, err
 			}
 			if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(streamTag), streamTag); err != nil {

@@ -559,7 +559,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient PodClient, nam
 
 	podCheckTicker := time.NewTicker(10 * time.Second)
 	defer podCheckTicker.Stop()
-	podStartTimeout := 15 * time.Minute
+	podStartTimeout := 30 * time.Minute
 	var podSeenRunning bool
 
 	for {

@@ -64,7 +64,7 @@ path "secret/metadata/team-1/*" {
 		t.Errorf("failed to create token with team-1 policy: %v", err)
 	}
 	proxyServerPort := testhelper.GetFreePort(t)
-	proxyServer, err := createProxyServer("http://"+vaultAddr, "127.0.0.1:"+proxyServerPort, "secret", nil)
+	proxyServer, err := createProxyServer("http://"+vaultAddr, "127.0.0.1:"+proxyServerPort, "secret", nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create proxy server: %v", err)
 	}
@@ -333,6 +333,7 @@ path "secret/metadata/team-1/*" {
 		keyConflictTestCases := []struct {
 			name               string
 			targetSecretName   string
+			isDelete           bool
 			data               map[string]string
 			expectedStatusCode int
 			expectedErrors     []string
@@ -395,12 +396,33 @@ path "secret/metadata/team-1/*" {
 				expectedStatusCode: 400,
 				expectedErrors:     []string{"key some-secret-key in secret default/secret is already claimed"},
 			},
+			{
+				name:             "Deleting the second secret succeeds",
+				targetSecretName: "second-secret",
+				isDelete:         true,
+			},
+			{
+				name:             "Creating a fourth secret with the same target and key as the deleted secret succeeds",
+				targetSecretName: "fourth-secret",
+				data: map[string]string{
+					"secretsync/target-namespace": "default",
+					"secretsync/target-name":      "secret",
+					"some-secret-key":             "some-value",
+				},
+			},
 		}
 		for _, tc := range keyConflictTestCases {
 			t.Run(tc.name, func(t *testing.T) {
 				var actualStatusCode int
 				var actualErrors []string
-				if err := rootProxy.UpsertKV("secret/kv-key-conflict-tests/"+tc.targetSecretName, tc.data); err != nil {
+
+				var err error
+				if tc.isDelete {
+					_, err = rootProxy.Logical().Delete("secret/metadata/kv-key-conflict-tests/" + tc.targetSecretName)
+				} else {
+					err = rootProxy.UpsertKV("secret/kv-key-conflict-tests/"+tc.targetSecretName, tc.data)
+				}
+				if err != nil {
 					responseErr, ok := err.(*api.ResponseError)
 					if !ok {
 						t.Fatalf("got an error back that was not a response error but a %T", err)

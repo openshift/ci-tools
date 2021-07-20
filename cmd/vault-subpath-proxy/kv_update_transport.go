@@ -60,8 +60,16 @@ func (k *kvUpdateTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		"path":   r.URL.Path,
 	})
 	l.Debug("Received request")
-	if (r.Method != http.MethodPut && r.Method != http.MethodPost && r.Method != http.MethodPatch) || !strings.HasPrefix(r.URL.Path, "/v1/"+k.kvMountPath) {
+	if (r.Method != http.MethodPut && r.Method != http.MethodPost && r.Method != http.MethodPatch && r.Method != http.MethodDelete) || !strings.HasPrefix(r.URL.Path, "/v1/"+k.kvMountPath) {
 		return k.upstream.RoundTrip(r)
+	}
+	if r.Method == http.MethodDelete {
+		resp, err := k.upstream.RoundTrip(r)
+		if err != nil || resp.StatusCode < 200 || resp.StatusCode > 299 {
+			return resp, err
+		}
+		k.updateKeyCacheForSecret(strings.TrimPrefix(r.URL.Path, "/v1/"), nil)
+		return resp, err
 	}
 	l.Debug("Checking if kv keys in request are valid")
 
@@ -128,18 +136,34 @@ func (k *kvUpdateTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 func (k *kvUpdateTransport) updateKeyCacheForSecret(path string, item map[string]string) {
+	if k.privilegedVaultClient == nil {
+		return
+	}
+
+	// Some requests like deletions operate on metadata, while most like create and update
+	// operate on data. We use the path as cache identifier, so we must treat them as
+	// equal. Only replace a prefix to not mess things up if someone makes their secret
+	// name end with metadata.
+	if strings.HasPrefix(path, k.kvMountPath+"/metadata") {
+		path = strings.Replace(path, "metadata/", "data/", 1)
+	}
+
 	k.existingSecretKeysByNamespaceNameLock.Lock()
 	defer k.existingSecretKeysByNamespaceNameLock.Unlock()
-	fmt.Printf("Updating cache for secret at path '%s'\n", path)
 
 	// Clear old entries associated with us
+	fmt.Printf("---\nPath: %s\nData: %v\n", path, k.existingSecretKeysByVaultSecretName)
 	for _, existingEntry := range k.existingSecretKeysByVaultSecretName[path] {
 		k.existingSecretKeysByNamespaceName[existingEntry.name].Delete(existingEntry.key)
 	}
 	delete(k.existingSecretKeysByVaultSecretName, path)
 
-	// Create new entries
 	name := types.NamespacedName{Namespace: item[vault.SecretSyncTargetNamepaceKey], Name: item[vault.SecretSyncTargetNameKey]}
+	if name.Namespace == "" || name.Name == "" {
+		return
+	}
+
+	// Create new entries
 	if k.existingSecretKeysByNamespaceName[name] == nil {
 		k.existingSecretKeysByNamespaceName[name] = sets.String{}
 	}

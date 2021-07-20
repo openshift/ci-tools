@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -97,13 +98,13 @@ func (s *clusterClaimStep) run(ctx context.Context) error {
 		// always attempt to delete claim if one exists
 		var releaseErr error
 		if clusterClaim != nil {
-			releaseErr = results.ForReason("releasing_cluster_claim").ForError(s.releaseCluster(ctx, clusterClaim))
+			releaseErr = results.ForReason("releasing_cluster_claim").ForError(s.releaseCluster(ctx, clusterClaim, true))
 		}
 		return aggregateWrappedErrorAndReleaseError(acquireErr, releaseErr)
 	}
 
 	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
-	releaseErr := results.ForReason("releasing_cluster_claim").ForError(s.releaseCluster(ctx, clusterClaim))
+	releaseErr := results.ForReason("releasing_cluster_claim").ForError(s.releaseCluster(ctx, clusterClaim, false))
 
 	return aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr)
 }
@@ -190,9 +191,9 @@ func getHiveSecret(src *corev1.Secret, name, namespace, testName string) (*corev
 	}, nil
 }
 
-func (s *clusterClaimStep) releaseCluster(ctx context.Context, clusterClaim *hivev1.ClusterClaim) error {
+func (s *clusterClaimStep) releaseCluster(ctx context.Context, clusterClaim *hivev1.ClusterClaim, printConditions bool) error {
 	logger := logrus.WithField("clusterClaim.Namespace", clusterClaim.Namespace).WithField("clusterClaim.Name", clusterClaim.Name)
-	if err := s.saveArtifacts(ctx, clusterClaim.Namespace, clusterClaim.Name); err != nil {
+	if err := s.saveArtifacts(ctx, clusterClaim.Namespace, clusterClaim.Name, printConditions); err != nil {
 		// logging the error without failing the test
 		logger.Error("Failed to save artifacts before releasing the claimed cluster")
 	}
@@ -212,30 +213,59 @@ func (s *clusterClaimStep) releaseCluster(ctx context.Context, clusterClaim *hiv
 	return nil
 }
 
-func (s *clusterClaimStep) saveArtifacts(ctx context.Context, namespace, name string) error {
+func (s *clusterClaimStep) saveArtifacts(ctx context.Context, namespace, name string, printConditions bool) error {
 	logrus.WithField("clusterClaim.Namespace", namespace).WithField("clusterClaim.Name", name).Debug("Saving artifacts.")
 	var errs []error
 	namespaceDir := api.NamespaceDir
-	claim := &hivev1.ClusterClaim{}
+	claim := hivev1.ClusterClaim{}
 	if err := s.saveObjectAsArtifact(
 		ctx,
 		ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name},
-		claim,
+		&claim,
 		"cluster claim",
 		filepath.Join(namespaceDir, "clusterClaim.json"),
 	); err != nil {
 		errs = append(errs, err)
 	}
+	if printConditions {
+		builder := &strings.Builder{}
+		_, _ = builder.WriteString(fmt.Sprintf("Found %d conditions for ClusterClaim:", len(claim.Status.Conditions)))
+		sort.Slice(claim.Status.Conditions, func(i, j int) bool {
+			return claim.Status.Conditions[i].LastTransitionTime.Before(&claim.Status.Conditions[j].LastTransitionTime)
+		})
+		for _, condition := range claim.Status.Conditions {
+			if condition.Status == corev1.ConditionUnknown || condition.Reason == "Initialized" {
+				continue
+			}
+			_, _ = builder.WriteString(fmt.Sprintf("\n[%s]%s: %s", condition.LastTransitionTime.Format(time.RFC3339), condition.Reason, condition.Message))
+		}
+		logrus.Warn(builder.String())
+	}
 
 	if claim.Spec.Namespace != "" {
+		clusterDeployment := hivev1.ClusterDeployment{}
 		if err := s.saveObjectAsArtifact(
 			ctx,
 			ctrlruntimeclient.ObjectKey{Namespace: claim.Spec.Namespace, Name: claim.Spec.Namespace},
-			&hivev1.ClusterDeployment{},
+			&clusterDeployment,
 			"cluster deployment",
 			filepath.Join(namespaceDir, "clusterDeployment.json"),
 		); err != nil {
 			errs = append(errs, err)
+		}
+		if printConditions {
+			builder := &strings.Builder{}
+			_, _ = builder.WriteString(fmt.Sprintf("Found %d conditions for ClusterDeployment:", len(clusterDeployment.Status.Conditions)))
+			sort.Slice(clusterDeployment.Status.Conditions, func(i, j int) bool {
+				return clusterDeployment.Status.Conditions[i].LastTransitionTime.Before(&clusterDeployment.Status.Conditions[j].LastTransitionTime)
+			})
+			for _, condition := range clusterDeployment.Status.Conditions {
+				if condition.Status == corev1.ConditionUnknown || condition.Reason == "Initialized" {
+					continue
+				}
+				_, _ = builder.WriteString(fmt.Sprintf("\n[%s] %s: %s", condition.LastTransitionTime.Format(time.RFC3339), condition.Reason, condition.Message))
+			}
+			logrus.Warn(builder.String())
 		}
 	}
 

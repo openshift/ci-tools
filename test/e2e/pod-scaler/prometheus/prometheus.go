@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,7 +21,7 @@ import (
 )
 
 // Initialize runs Prometheus with backfilled data under the given dir.
-func Initialize(t testhelper.TestingTInterface, tmpDir string) (string, *DataInStages) {
+func Initialize(t testhelper.TestingTInterface, tmpDir string, r *rand.Rand) (string, *DataInStages) {
 	prometheusDir, err := ioutil.TempDir(tmpDir, "prometheus")
 	if err != nil {
 		t.Fatalf("Failed to create temporary directory for Prometheus: %v", err)
@@ -56,7 +57,7 @@ func Initialize(t testhelper.TestingTInterface, tmpDir string) (string, *DataInS
 	}
 
 	retentionPeriod := 20 * 24 * time.Hour
-	info := Backfill(t, prometheusDir, retentionPeriod)
+	info := Backfill(t, prometheusDir, retentionPeriod, r)
 
 	// restart Prometheus to reload TSDB, by default this can take minutes without a restart
 	prometheusCancel()

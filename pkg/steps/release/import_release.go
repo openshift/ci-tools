@@ -190,7 +190,7 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 		SkipLogs:           true,
 		As:                 target,
 		From:               *cliImage,
-		Labels:             map[string]string{releaseLabel: s.name},
+		Labels:             map[string]string{Label: s.name},
 		ServiceAccountName: "ci-operator",
 		Secrets:            secrets,
 		Commands:           commands,
@@ -450,7 +450,7 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 		ObjectMeta: meta.ObjectMeta{
 			Name:      targetCLI,
 			Namespace: s.jobSpec.Namespace(),
-			Labels:    map[string]string{releaseLabel: s.name},
+			Labels:    map[string]string{Label: s.name},
 		},
 		Spec: coreapi.PodSpec{
 			RestartPolicy: coreapi.RestartPolicyNever,

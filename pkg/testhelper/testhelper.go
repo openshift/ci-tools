@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pmezard/go-difflib/difflib"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -125,20 +124,8 @@ func CompareWithFixture(t *testing.T, output interface{}, opts ...Option) {
 		t.Fatalf("failed to read testdata file: %v", err)
 	}
 
-	diff := difflib.UnifiedDiff{
-		A:        difflib.SplitLines(string(expected)),
-		B:        difflib.SplitLines(string(serializedOutput)),
-		FromFile: golden,
-		ToFile:   "Current",
-		Context:  3,
-	}
-	diffStr, err := difflib.GetUnifiedDiffString(diff)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if diffStr != "" {
-		t.Errorf("got diff between expected and actual result: \n%s\n\nIf this is expected, re-run the test with `UPDATE=true go test ./...` to update the fixtures.", diffStr)
+	if diff := cmp.Diff(string(expected), string(serializedOutput)); diff != "" {
+		t.Errorf("got diff between expected and actual result: \n%s\n\nIf this is expected, re-run the test with `UPDATE=true go test ./...` to update the fixtures.", diff)
 	}
 }
 

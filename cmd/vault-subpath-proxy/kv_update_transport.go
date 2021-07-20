@@ -152,7 +152,6 @@ func (k *kvUpdateTransport) updateKeyCacheForSecret(path string, item map[string
 	defer k.existingSecretKeysByNamespaceNameLock.Unlock()
 
 	// Clear old entries associated with us
-	fmt.Printf("---\nPath: %s\nData: %v\n", path, k.existingSecretKeysByVaultSecretName)
 	for _, existingEntry := range k.existingSecretKeysByVaultSecretName[path] {
 		k.existingSecretKeysByNamespaceName[existingEntry.name].Delete(existingEntry.key)
 	}

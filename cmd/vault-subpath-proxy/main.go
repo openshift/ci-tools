@@ -39,6 +39,7 @@ type options struct {
 	tlsKeyFile  string
 	kubeconfig  string
 	vaultToken  string
+	vaultRole   string
 }
 
 func gatherOptions() (*options, error) {
@@ -49,10 +50,14 @@ func gatherOptions() (*options, error) {
 	flag.StringVar(&o.tlsCertFile, "tls-cert-file", "", "Path to a tls cert file. If set, will server over tls. Requires --tls-key-file")
 	flag.StringVar(&o.tlsKeyFile, "tls-key-file", "", "Path to a tls key file. If set, will server over tls. Requires --tls-cert-file")
 	flag.StringVar(&o.kubeconfig, "kubeconfig", "", "Path to a kubeconfig. If set, secrets will get synced into all clusters in there")
-	flag.StringVar(&o.vaultToken, "vault-token", "", "Vault token that will be used to detect conflicting secrets. Must have read access to the whole kv store.")
+	flag.StringVar(&o.vaultToken, "vault-token", "", "Vault token that will be used to detect conflicting secrets. Must have read access to the whole kv store. Mutually exclusive with --vault-token.")
+	flag.StringVar(&o.vaultRole, "vault-role", "", "Vault role to use for detecting conflicting secrets. Must have access to the whole kv store. Mutually exclusive with --vault-token.")
 	flag.Parse()
 	if (o.tlsCertFile == "") != (o.tlsKeyFile == "") {
 		return nil, errors.New("--tls-cert-file and --tls-key-file must be passed together")
+	}
+	if o.vaultToken != "" && o.vaultRole != "" {
+		return nil, errors.New("--vault-token and --vault-role are mutually exclusive")
 	}
 	return o, nil
 }
@@ -67,11 +72,13 @@ func main() {
 	}
 
 	var privilegedVaultClient *vaultclient.VaultClient
-	if opts.vaultToken != "" {
+	if opts.vaultRole != "" {
+		privilegedVaultClient, err = vaultclient.NewFromKubernetesAuth(opts.vaultAddr, opts.vaultRole)
+	} else if opts.vaultToken != "" {
 		privilegedVaultClient, err = vaultclient.New(opts.vaultAddr, opts.vaultToken)
-		if err != nil {
-			logrus.WithError(err).Fatal("failed to construct vault client")
-		}
+	}
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to construct vault client")
 	}
 
 	var clientGetter func() map[string]ctrlruntimeclient.Client

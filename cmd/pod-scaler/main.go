@@ -55,7 +55,8 @@ type consumerOptions struct {
 	port   int
 	uiPort int
 
-	certDir string
+	certDir         string
+	mutateResources bool
 }
 
 func bindOptions(fs *flag.FlagSet) *options {
@@ -68,6 +69,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.IntVar(&o.port, "port", 0, "Port to serve admission webhooks on.")
 	fs.IntVar(&o.uiPort, "ui-port", 0, "Port to serve frontend on.")
 	fs.StringVar(&o.certDir, "serving-cert-dir", "", "Path to directory with serving certificate and key for the admission webhook server.")
+	fs.BoolVar(&o.mutateResources, "mutate-resources", false, "Enable resource mutation in the admission webhook.")
 	fs.StringVar(&o.loglevel, "loglevel", "debug", "Logging level.")
 	fs.StringVar(&o.logStyle, "log-style", "json", "Logging style: json or text.")
 	fs.StringVar(&o.cacheDir, "cache-dir", "", "Local directory holding cache data (for development mode).")
@@ -225,7 +227,7 @@ func mainAdmission(opts *options, cache cache) {
 	}
 
 	cpuLoaders, memoryLoaders := loaders(cache)
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, cpuLoaders, memoryLoaders)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, cpuLoaders, memoryLoaders, opts.mutateResources)
 }
 
 func loaders(cache cache) (cpu, memory []*cacheReloader) {

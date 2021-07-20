@@ -85,10 +85,11 @@ func TestMutatePods(t *testing.T) {
 		},
 	}
 	mutator := podMutator{
-		logger:    logger,
-		client:    client.BuildV1(),
-		decoder:   decoder,
-		resources: resources,
+		logger:          logger,
+		client:          client.BuildV1(),
+		decoder:         decoder,
+		resources:       resources,
+		mutateResources: true,
 	}
 
 	var testCases = []struct {

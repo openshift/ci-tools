@@ -29,7 +29,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 )
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, cpu, memory []*cacheReloader) {
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, cpu, memory []*cacheReloader, mutateResources bool) {
 	logger := logrus.WithField("component", "admission")
 	logger.Info("Initializing admission webhook server.")
 	health := pjutil.NewHealthOnPort(healthPort)
@@ -42,7 +42,7 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 		Port:    port,
 		CertDir: certDir,
 	}
-	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources}})
+	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResources: mutateResources}})
 	logger.Info("Serving admission webhooks.")
 	if err := server.StartStandalone(interrupts.Context(), nil); err != nil {
 		logrus.WithError(err).Fatal("Failed to serve webhooks.")
@@ -50,10 +50,11 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 }
 
 type podMutator struct {
-	logger    *logrus.Entry
-	client    buildclientv1.BuildV1Interface
-	resources *resourceServer
-	decoder   *admission.Decoder
+	logger          *logrus.Entry
+	client          buildclientv1.BuildV1Interface
+	resources       *resourceServer
+	mutateResources bool
+	decoder         *admission.Decoder
 }
 
 func (m *podMutator) Handle(ctx context.Context, req admission.Request) admission.Response {
@@ -80,7 +81,9 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		logger.WithError(err).Error("Failed to handle rehearsal Pod.")
 		return admission.Allowed("Failed to handle rehearsal Pod, ignoring.")
 	}
-	mutatePodResources(pod, m.resources)
+	if m.mutateResources {
+		mutatePodResources(pod, m.resources)
+	}
 
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {

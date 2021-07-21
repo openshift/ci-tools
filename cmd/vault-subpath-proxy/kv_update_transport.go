@@ -43,10 +43,14 @@ type kvUpdateTransport struct {
 	// sync to complete. Should only be enabled in tests.
 	synchronousSecretSync bool
 
-	privilegedVaultClient                 *vaultclient.VaultClient
+	privilegedVaultClient *vaultclient.VaultClient
+	// existingSecretKeysByNamespaceName is used in the key validation.
 	existingSecretKeysByNamespaceName     map[types.NamespacedName]sets.String
 	existingSecretKeysByNamespaceNameLock sync.RWMutex
-	existingSecretKeysByVaultSecretName   map[string][]namespacedNameKey
+	// existingSecretKeysByVaultSecretName is used as an index for updating
+	// the key cache (existingSecretKeysByNamespaceName) when Vault entries
+	// get updated/deleted.
+	existingSecretKeysByVaultSecretName map[string][]namespacedNameKey
 }
 
 type namespacedNameKey struct {

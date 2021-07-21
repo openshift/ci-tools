@@ -53,6 +53,12 @@ type kvUpdateTransport struct {
 	existingSecretKeysByVaultSecretName map[string][]namespacedNameKey
 }
 
+func (k *kvUpdateTransport) initialize() {
+	for err := k.populateKeyCache(context.Background()); err != nil; {
+		logrus.WithError(err).Error("failed to populate key cache")
+	}
+}
+
 type namespacedNameKey struct {
 	name types.NamespacedName
 	key  string
@@ -204,6 +210,10 @@ func (k *kvUpdateTransport) validateKeysDontConflict(ctx context.Context, data m
 }
 
 func (k *kvUpdateTransport) populateKeyCache(ctx context.Context) (err error) {
+	if k.privilegedVaultClient == nil {
+		return nil
+	}
+
 	k.existingSecretKeysByNamespaceNameLock.Lock()
 	defer k.existingSecretKeysByNamespaceNameLock.Unlock()
 

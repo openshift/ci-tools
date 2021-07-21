@@ -119,7 +119,9 @@ func createProxyServer(vaultAddr string, listenAddr string, kvMountPath string, 
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(vaultURL)
-	proxy.Transport = &kvUpdateTransport{kvMountPath: kvMountPath, upstream: http.DefaultTransport, kubeClients: clients, privilegedVaultClient: privilegedVaultClient}
+	transport := &kvUpdateTransport{kvMountPath: kvMountPath, upstream: http.DefaultTransport, kubeClients: clients, privilegedVaultClient: privilegedVaultClient}
+	transport.initialize()
+	proxy.Transport = transport
 	injector := &kvSubPathInjector{
 		upstream:    retryablehttp.NewClient().StandardClient().Transport,
 		kvMountPath: kvMountPath,

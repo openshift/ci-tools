@@ -150,13 +150,15 @@ func (k *kvUpdateTransport) updateKeyCacheForSecret(path string, item map[string
 		return
 	}
 
-	// Some requests like deletions operate on metadata, while most like create and update
-	// operate on data. We use the path as cache identifier, so we must treat them as
-	// equal. Only replace a prefix to not mess things up if someone makes their secret
-	// name end with metadata.
-	if strings.HasPrefix(path, k.kvMountPath+"/metadata") {
-		path = strings.Replace(path, "metadata/", "data/", 1)
+	// We use the item name as cache key, so we have to remove metadata/data from the path.
+	if strings.HasPrefix(path, k.kvMountPath+"/metadata/") {
+		path = strings.Replace(path, "metadata/", "", 1)
 	}
+	if strings.HasPrefix(path, k.kvMountPath+"/data/") {
+		path = strings.Replace(path, "data/", "", 1)
+	}
+	fmt.Printf("got update request for path %q, cache:\n%v\n", path, k.existingSecretKeysByVaultSecretName)
+	defer func() { fmt.Printf("Cache post update of %q:\n%v\n", path, k.existingSecretKeysByVaultSecretName) }()
 
 	k.existingSecretKeysByNamespaceNameLock.Lock()
 	defer k.existingSecretKeysByNamespaceNameLock.Unlock()

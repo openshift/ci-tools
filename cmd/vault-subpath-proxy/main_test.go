@@ -63,8 +63,13 @@ path "secret/metadata/team-1/*" {
 	if err != nil {
 		t.Errorf("failed to create token with team-1 policy: %v", err)
 	}
+	rootDirect, err := vaultclient.New("http://"+vaultAddr, testhelper.VaultTestingRootToken)
+	if err != nil {
+		t.Fatalf("failed to construct rootDirect client: %v", err)
+	}
+
 	proxyServerPort := testhelper.GetFreePort(t)
-	proxyServer, err := createProxyServer("http://"+vaultAddr, "127.0.0.1:"+proxyServerPort, "secret", nil, nil)
+	proxyServer, err := createProxyServer("http://"+vaultAddr, "127.0.0.1:"+proxyServerPort, "secret", nil, rootDirect)
 	if err != nil {
 		t.Fatalf("failed to create proxy server: %v", err)
 	}
@@ -81,10 +86,6 @@ path "secret/metadata/team-1/*" {
 	})
 	testhelper.WaitForHTTP200("http://127.0.0.1:"+proxyServerPort+"/v1/sys/health", "vault-subpath-proxy", t)
 
-	rootDirect, err := vaultclient.New("http://"+vaultAddr, testhelper.VaultTestingRootToken)
-	if err != nil {
-		t.Fatalf("failed to construct rootDirect client: %v", err)
-	}
 	rootProxy, err := vaultclient.New("http://127.0.0.1:"+proxyServerPort, testhelper.VaultTestingRootToken)
 	if err != nil {
 		t.Fatalf("failed to construct rootProxy client: %v", err)
@@ -233,7 +234,7 @@ path "secret/metadata/team-1/*" {
 			data: map[string]string{
 				"secretsync/target-namespace": "default",
 				"secretsync/target-name":      "secret",
-				"some-secret":                 "some-value",
+				"some-other-secret":           "some-value",
 			},
 			clusters: map[string]ctrlruntimeclient.Client{
 				"a": fakectrlruntimeclient.NewFakeClient(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}}),
@@ -241,10 +242,10 @@ path "secret/metadata/team-1/*" {
 			},
 			expectedSecrets: map[string]*corev1.SecretList{
 				"a": {Items: []corev1.Secret{
-					{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{"some-secret": []byte("some-value")}}},
+					{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{"some-other-secret": []byte("some-value")}}},
 				},
 				"b": {Items: []corev1.Secret{
-					{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{"some-secret": []byte("some-value")}}},
+					{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{"some-other-secret": []byte("some-value")}}},
 				},
 			},
 		},
@@ -272,7 +273,7 @@ path "secret/metadata/team-1/*" {
 				"secretsync/target-namespace": "default",
 				"secretsync/target-name":      "secret",
 				"secretsync/target-clusters":  "a",
-				"some-secret":                 "some-value",
+				"some-third-secret":           "some-value",
 			},
 			clusters: map[string]ctrlruntimeclient.Client{
 				"a": fakectrlruntimeclient.NewFakeClient(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{"pre-existing": []byte("value")}}),
@@ -280,8 +281,8 @@ path "secret/metadata/team-1/*" {
 			expectedSecrets: map[string]*corev1.SecretList{
 				"a": {Items: []corev1.Secret{
 					{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{
-						"some-secret":  []byte("some-value"),
-						"pre-existing": []byte("value"),
+						"some-third-secret": []byte("some-value"),
+						"pre-existing":      []byte("value"),
 					}}},
 				},
 			},
@@ -329,7 +330,6 @@ path "secret/metadata/team-1/*" {
 	}
 
 	t.Run("keyConflictTestCases", func(t *testing.T) {
-		kvUpdateTransport.privilegedVaultClient = rootDirect
 		keyConflictTestCases := []struct {
 			name               string
 			targetSecretName   string

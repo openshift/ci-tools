@@ -198,7 +198,7 @@ func (k *kvUpdateTransport) validateKeysDontConflict(ctx context.Context, data m
 
 	name := types.NamespacedName{Namespace: data[vault.SecretSyncTargetNamepaceKey], Name: data[vault.SecretSyncTargetNameKey]}
 	for key := range data {
-		if key == vault.SecretSyncTargetNamepaceKey || key == vault.SecretSyncTargetNameKey {
+		if key == vault.SecretSyncTargetNamepaceKey || key == vault.SecretSyncTargetNameKey || key == vault.SecretSyncTargetClusterKey {
 			continue
 		}
 		if k.existingSecretKeysByNamespaceName[name].Has(key) {

@@ -28,6 +28,7 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/util"
+	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
 type options struct {
@@ -37,6 +38,8 @@ type options struct {
 	tlsCertFile string
 	tlsKeyFile  string
 	kubeconfig  string
+	vaultToken  string
+	vaultRole   string
 }
 
 func gatherOptions() (*options, error) {
@@ -47,9 +50,14 @@ func gatherOptions() (*options, error) {
 	flag.StringVar(&o.tlsCertFile, "tls-cert-file", "", "Path to a tls cert file. If set, will server over tls. Requires --tls-key-file")
 	flag.StringVar(&o.tlsKeyFile, "tls-key-file", "", "Path to a tls key file. If set, will server over tls. Requires --tls-cert-file")
 	flag.StringVar(&o.kubeconfig, "kubeconfig", "", "Path to a kubeconfig. If set, secrets will get synced into all clusters in there")
+	flag.StringVar(&o.vaultToken, "vault-token", "", "Vault token that will be used to detect conflicting secrets. Must have read access to the whole kv store. Mutually exclusive with --vault-token.")
+	flag.StringVar(&o.vaultRole, "vault-role", "", "Vault role to use for detecting conflicting secrets. Must have access to the whole kv store. Mutually exclusive with --vault-token.")
 	flag.Parse()
 	if (o.tlsCertFile == "") != (o.tlsKeyFile == "") {
 		return nil, errors.New("--tls-cert-file and --tls-key-file must be passed together")
+	}
+	if o.vaultToken != "" && o.vaultRole != "" {
+		return nil, errors.New("--vault-token and --vault-role are mutually exclusive")
 	}
 	return o, nil
 }
@@ -63,6 +71,16 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to get opts")
 	}
 
+	var privilegedVaultClient *vaultclient.VaultClient
+	if opts.vaultRole != "" {
+		privilegedVaultClient, err = vaultclient.NewFromKubernetesAuth(opts.vaultAddr, opts.vaultRole)
+	} else if opts.vaultToken != "" {
+		privilegedVaultClient, err = vaultclient.New(opts.vaultAddr, opts.vaultToken)
+	}
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to construct vault client")
+	}
+
 	var clientGetter func() map[string]ctrlruntimeclient.Client
 	if os.Getenv("KUBECONFIG") != "" || opts.kubeconfig != "" {
 		clientGetter, err = startLoadingKubeconfigs(opts.kubeconfig)
@@ -71,7 +89,7 @@ func main() {
 		}
 	}
 
-	server, err := createProxyServer(opts.vaultAddr, opts.listenAddr, opts.kvMountPath, clientGetter)
+	server, err := createProxyServer(opts.vaultAddr, opts.listenAddr, opts.kvMountPath, clientGetter, privilegedVaultClient)
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to create server")
 	}
@@ -90,7 +108,7 @@ func main() {
 	}
 }
 
-func createProxyServer(vaultAddr string, listenAddr string, kvMountPath string, clients func() map[string]ctrlruntimeclient.Client) (*http.Server, error) {
+func createProxyServer(vaultAddr string, listenAddr string, kvMountPath string, clients func() map[string]ctrlruntimeclient.Client, privilegedVaultClient *vaultclient.VaultClient) (*http.Server, error) {
 	vaultClient, err := api.NewClient(&api.Config{Address: vaultAddr})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create vault client: %w", err)
@@ -101,7 +119,9 @@ func createProxyServer(vaultAddr string, listenAddr string, kvMountPath string, 
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(vaultURL)
-	proxy.Transport = &kvUpdateTransport{kvMountPath: kvMountPath, upstream: http.DefaultTransport, kubeClients: clients}
+	transport := &kvUpdateTransport{kvMountPath: kvMountPath, upstream: http.DefaultTransport, kubeClients: clients, privilegedVaultClient: privilegedVaultClient}
+	transport.initialize()
+	proxy.Transport = transport
 	injector := &kvSubPathInjector{
 		upstream:    retryablehttp.NewClient().StandardClient().Transport,
 		kvMountPath: kvMountPath,

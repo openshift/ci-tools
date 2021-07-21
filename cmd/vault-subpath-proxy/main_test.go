@@ -63,8 +63,13 @@ path "secret/metadata/team-1/*" {
 	if err != nil {
 		t.Errorf("failed to create token with team-1 policy: %v", err)
 	}
+	rootDirect, err := vaultclient.New("http://"+vaultAddr, testhelper.VaultTestingRootToken)
+	if err != nil {
+		t.Fatalf("failed to construct rootDirect client: %v", err)
+	}
+
 	proxyServerPort := testhelper.GetFreePort(t)
-	proxyServer, err := createProxyServer("http://"+vaultAddr, "127.0.0.1:"+proxyServerPort, "secret", nil)
+	proxyServer, err := createProxyServer("http://"+vaultAddr, "127.0.0.1:"+proxyServerPort, "secret", nil, rootDirect)
 	if err != nil {
 		t.Fatalf("failed to create proxy server: %v", err)
 	}
@@ -81,10 +86,6 @@ path "secret/metadata/team-1/*" {
 	})
 	testhelper.WaitForHTTP200("http://127.0.0.1:"+proxyServerPort+"/v1/sys/health", "vault-subpath-proxy", t)
 
-	rootDirect, err := vaultclient.New("http://"+vaultAddr, testhelper.VaultTestingRootToken)
-	if err != nil {
-		t.Fatalf("failed to construct rootDirect client: %v", err)
-	}
 	rootProxy, err := vaultclient.New("http://127.0.0.1:"+proxyServerPort, testhelper.VaultTestingRootToken)
 	if err != nil {
 		t.Fatalf("failed to construct rootProxy client: %v", err)
@@ -233,7 +234,7 @@ path "secret/metadata/team-1/*" {
 			data: map[string]string{
 				"secretsync/target-namespace": "default",
 				"secretsync/target-name":      "secret",
-				"some-secret":                 "some-value",
+				"some-other-secret":           "some-value",
 			},
 			clusters: map[string]ctrlruntimeclient.Client{
 				"a": fakectrlruntimeclient.NewFakeClient(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}}),
@@ -241,10 +242,10 @@ path "secret/metadata/team-1/*" {
 			},
 			expectedSecrets: map[string]*corev1.SecretList{
 				"a": {Items: []corev1.Secret{
-					{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{"some-secret": []byte("some-value")}}},
+					{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{"some-other-secret": []byte("some-value")}}},
 				},
 				"b": {Items: []corev1.Secret{
-					{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{"some-secret": []byte("some-value")}}},
+					{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{"some-other-secret": []byte("some-value")}}},
 				},
 			},
 		},
@@ -272,7 +273,7 @@ path "secret/metadata/team-1/*" {
 				"secretsync/target-namespace": "default",
 				"secretsync/target-name":      "secret",
 				"secretsync/target-clusters":  "a",
-				"some-secret":                 "some-value",
+				"some-third-secret":           "some-value",
 			},
 			clusters: map[string]ctrlruntimeclient.Client{
 				"a": fakectrlruntimeclient.NewFakeClient(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{"pre-existing": []byte("value")}}),
@@ -280,8 +281,8 @@ path "secret/metadata/team-1/*" {
 			expectedSecrets: map[string]*corev1.SecretList{
 				"a": {Items: []corev1.Secret{
 					{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{
-						"some-secret":  []byte("some-value"),
-						"pre-existing": []byte("value"),
+						"some-third-secret": []byte("some-value"),
+						"pre-existing":      []byte("value"),
 					}}},
 				},
 			},
@@ -328,8 +329,118 @@ path "secret/metadata/team-1/*" {
 		})
 	}
 
-}
+	t.Run("keyConflictTestCases", func(t *testing.T) {
+		keyConflictTestCases := []struct {
+			name               string
+			targetSecretName   string
+			isDelete           bool
+			data               map[string]string
+			expectedStatusCode int
+			expectedErrors     []string
+		}{
+			{
+				name:             "Initial secret gets created",
+				targetSecretName: "some-secret",
+				data: map[string]string{
+					"secretsync/target-namespace": "default",
+					"secretsync/target-name":      "secret",
+					"some-secret-key":             "some-value",
+				},
+			},
+			{
+				name:             "Creating another secret with the same target and same key fails",
+				targetSecretName: "second-secret",
+				data: map[string]string{
+					"secretsync/target-namespace": "default",
+					"secretsync/target-name":      "secret",
+					"some-secret-key":             "some-value",
+				},
+				expectedStatusCode: 400,
+				expectedErrors:     []string{"key some-secret-key in secret default/secret is already claimed"},
+			},
+			{
+				name:             "Creating another secret with the same target but different keys succeeds",
+				targetSecretName: "third-secret",
+				data: map[string]string{
+					"secretsync/target-namespace": "default",
+					"secretsync/target-name":      "secret",
+					"another-secret-key":          "some-value",
+				},
+			},
+			{
+				name:             "Updating the initial secret to replace the key succeeds",
+				targetSecretName: "some-secret",
+				data: map[string]string{
+					"secretsync/target-namespace": "default",
+					"secretsync/target-name":      "secret",
+					"third-secret-key":            "some-value",
+				},
+			},
+			{
+				name:             "Creating another secret that targets what the initial secret used to reference succeeds now",
+				targetSecretName: "second-secret",
+				data: map[string]string{
+					"secretsync/target-namespace": "default",
+					"secretsync/target-name":      "secret",
+					"some-secret-key":             "some-value",
+				},
+			},
+			{
+				name:             "Creating a fourth secret with the same target and key as the previous one fails",
+				targetSecretName: "fourth-secret",
+				data: map[string]string{
+					"secretsync/target-namespace": "default",
+					"secretsync/target-name":      "secret",
+					"some-secret-key":             "some-value",
+				},
+				expectedStatusCode: 400,
+				expectedErrors:     []string{"key some-secret-key in secret default/secret is already claimed"},
+			},
+			{
+				name:             "Deleting the second secret succeeds",
+				targetSecretName: "second-secret",
+				isDelete:         true,
+			},
+			{
+				name:             "Creating a fourth secret with the same target and key as the deleted secret succeeds",
+				targetSecretName: "fourth-secret",
+				data: map[string]string{
+					"secretsync/target-namespace": "default",
+					"secretsync/target-name":      "secret",
+					"some-secret-key":             "some-value",
+				},
+			},
+		}
+		for _, tc := range keyConflictTestCases {
+			t.Run(tc.name, func(t *testing.T) {
+				var actualStatusCode int
+				var actualErrors []string
 
+				var err error
+				if tc.isDelete {
+					_, err = rootProxy.Logical().Delete("secret/metadata/kv-key-conflict-tests/" + tc.targetSecretName)
+				} else {
+					err = rootProxy.UpsertKV("secret/kv-key-conflict-tests/"+tc.targetSecretName, tc.data)
+				}
+				if err != nil {
+					responseErr, ok := err.(*api.ResponseError)
+					if !ok {
+						t.Fatalf("got an error back that was not a response error but a %T", err)
+					}
+					actualStatusCode = responseErr.StatusCode
+					actualErrors = responseErr.Errors
+				}
+				if tc.expectedStatusCode != actualStatusCode {
+					t.Errorf("expected status code %d, got status code %d", tc.expectedStatusCode, actualStatusCode)
+				}
+				if diff := cmp.Diff(actualErrors, tc.expectedErrors); diff != "" {
+					t.Fatalf("actual errors differ from expected: %s", diff)
+				}
+			})
+		}
+	})
+
+}
 func writeKV(client *api.Client, path string, data map[string]string) error {
 	request := client.NewRequest("POST", path)
 	body := map[string]map[string]string{

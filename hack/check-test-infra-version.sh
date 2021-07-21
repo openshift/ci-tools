@@ -3,6 +3,7 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+set -o xtrace
 
 # This script checks to make sure that the vendored version of the test-infra repo here is
 # no newer than those vendored into the release controller and chat bot. We assume a layout

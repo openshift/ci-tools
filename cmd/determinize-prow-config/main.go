@@ -11,12 +11,13 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
-
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/plugins"
@@ -203,7 +204,10 @@ func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.Pr
 			}
 			queryCopy.Orgs = nil
 			queryCopy.Repos = []string{repo}
+			ensure48GA(queryCopy)
 			configsByOrgRepo[orgRepo].Tide.Queries = append(configsByOrgRepo[orgRepo].Tide.Queries, *queryCopy)
+			sort.Strings(queryCopy.IncludedBranches)
+			sort.Strings(queryCopy.ExcludedBranches)
 		}
 	}
 	pc.Tide.Queries = nil
@@ -215,6 +219,27 @@ func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.Pr
 	}
 
 	return pc, nil
+}
+
+func ensure48GA(query *prowconfig.TideQuery) {
+	requiredLabels := sets.NewString(query.Labels...)
+	branches := sets.NewString(query.IncludedBranches...)
+	branches47 := sets.NewString("openshift-4.7", "release-4.7")
+	if requiredLabels.Has("cherry-pick-approved") && len(branches.Intersection(branches47)) > 0 {
+		if branches.Has("openshift-4.7") {
+			branches.Insert("openshift-4.8")
+		}
+		if branches.Has("release-4.7") {
+			branches.Insert("release-4.8")
+		}
+		query.IncludedBranches = branches.List()
+	}
+	if requiredLabels.Has("group-lead-approved") || requiredLabels.Has("staff-eng-approved") {
+		query.IncludedBranches = sets.NewString("openshift-4.9", "release-4.9").List()
+		requiredLabels = requiredLabels.Difference(sets.NewString("group-lead-approved"))
+		requiredLabels.Insert("staff-eng-approved")
+		query.Labels = requiredLabels.List()
+	}
 }
 
 func deepCopyTideQuery(q *prowconfig.TideQuery) (*prowconfig.TideQuery, error) {

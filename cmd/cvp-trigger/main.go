@@ -219,27 +219,18 @@ func main() {
 	}
 
 	// build up the multi-stage parameters to pass to the ci-operator.
-	// TODO: Temporarily duplicating params to transition CVP back to using OO_ params to minimize CI impact when consolidating CVP and CI.
-	// This will be fixed shortly.
-	trimOO := func(val string) string {
-		return strings.TrimPrefix(val, "OO_")
-	}
 	params := map[string]string{
-		Channel:         o.channel,
-		trimOO(Channel): o.channel,
-		Package:         o.operatorPackageName,
-		trimOO(Package): o.operatorPackageName,
+		Channel: o.channel,
+		Package: o.operatorPackageName,
 	}
 	if o.installNamespace != "" {
 		params[InstallNamespace] = o.installNamespace
-		params[trimOO(InstallNamespace)] = o.installNamespace
 	}
 	if o.pyxisUrl != "" {
 		params[PyxisUrl] = o.pyxisUrl
 	}
 	if o.targetNamespaces != "" {
 		params[TargetNamespaces] = o.targetNamespaces
-		params[trimOO(TargetNamespaces)] = o.targetNamespaces
 	}
 
 	depOverrides := map[string]string{

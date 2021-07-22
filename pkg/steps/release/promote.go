@@ -77,7 +77,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 	}
 
 	if err := s.ensureNamespaces(ctx, namespaces); err != nil {
-		return fmt.Errorf("failed to ensure namespaces to promote to in central rewgistry: %w", err)
+		return fmt.Errorf("failed to ensure namespaces to promote to in central registry: %w", err)
 	}
 
 	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace())); err != nil {
@@ -97,7 +97,7 @@ func (s *promotionStep) ensureNamespaces(ctx context.Context, namespaces sets.St
 		return fmt.Errorf("push secret has no entry for %s", api.ServiceDomainAPPCIRegistry)
 	}
 
-	appCIKubeconfig := &rest.Config{Host: "https://api.ci.l2s4.p1.openshiftapps.com:6443", BearerToken: appCIDockercfg.Password}
+	appCIKubeconfig := &rest.Config{Host: api.APPCIKubeAPIURL, BearerToken: appCIDockercfg.Password}
 	client, err := corev1client.NewForConfig(appCIKubeconfig)
 	if err != nil {
 		return fmt.Errorf("failed to construct kubeconfig: %w", err)
@@ -136,6 +136,8 @@ func getImageMirrorTarget(tags map[string]api.ImageStreamTagReference, pipeline 
 		return nil, nil
 	}
 	imageMirror := map[string]string{}
+	// Will this ever include more than one?
+	namespaces = sets.String{}
 	for src, dst := range tags {
 		dockerImageReference := findDockerImageReference(pipeline, src)
 		if dockerImageReference == "" {
@@ -143,7 +145,6 @@ func getImageMirrorTarget(tags map[string]api.ImageStreamTagReference, pipeline 
 		}
 		dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
 		imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s", registry, dst.ISTagName())
-		// Will this ever be more than one?
 		namespaces.Insert(dst.Namespace)
 	}
 	if len(imageMirror) == 0 {

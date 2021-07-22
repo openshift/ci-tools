@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/test-infra/prow/interrupts"
+	"k8s.io/test-infra/prow/pjutil"
 
 	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 )
@@ -40,6 +41,12 @@ type cacheReloader struct {
 func (c *cacheReloader) subscribe(out chan<- interface{}) {
 	c.lock.Lock()
 	c.subscribers = append(c.subscribers, out)
+	// if a subscriber is added and we already have data, let them know
+	// so they don't need to wait for the next tick to figure it out
+	if c.lastLoaded != nil {
+		c.logger.Warn("subscriber after data")
+		out <- struct{}{}
+	}
 	c.lock.Unlock()
 }
 
@@ -86,10 +93,32 @@ func (c *cacheReloader) data() *pod_scaler.CachedQuery {
 	return c.lastLoaded
 }
 
+func digestAll(data map[string][]*cacheReloader, digesters map[string]digester, health *pjutil.Health, logger *logrus.Entry) {
+	var infos []digestInfo
+	for id, d := range digesters {
+		for _, item := range data[id] {
+			infos = append(infos, digestInfo{name: item.name, data: item, digest: d})
+		}
+	}
+	loadDone := digest(logger, infos...)
+	interrupts.Run(func(ctx context.Context) {
+		select {
+		case <-ctx.Done():
+			logger.Debug("Waiting for readiness cancelled.")
+			return
+		case <-loadDone:
+			logger.Debug("Ready to serve.")
+			health.ServeReady()
+		}
+	})
+}
+
+type digester func(query *pod_scaler.CachedQuery)
+
 type digestInfo struct {
 	name   string
 	data   *cacheReloader
-	digest func(query *pod_scaler.CachedQuery)
+	digest digester
 }
 
 func digest(logger *logrus.Entry, infos ...digestInfo) <-chan interface{} {
@@ -110,7 +139,7 @@ func digest(logger *logrus.Entry, infos ...digestInfo) <-chan interface{} {
 		thisOnce := &sync.Once{}
 		interrupts.Run(func(ctx context.Context) {
 			subLogger := logger.WithField("subscription", info.name)
-			subscription := make(chan interface{})
+			subscription := make(chan interface{}, 1)
 			info.data.subscribe(subscription)
 			subLogger.Debug("Starting subscription.")
 			for {

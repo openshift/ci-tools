@@ -29,11 +29,11 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 )
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, cpu, memory []*cacheReloader, mutateResources bool) {
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResources bool) {
 	logger := logrus.WithField("component", "admission")
 	logger.Info("Initializing admission webhook server.")
 	health := pjutil.NewHealthOnPort(healthPort)
-	resources := newResourceServer(cpu, memory, health)
+	resources := newResourceServer(loaders, health)
 	decoder, err := admission.NewDecoder(scheme.Scheme)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create decoder from scheme.")

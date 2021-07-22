@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"sync"
 
 	"github.com/openhistogram/circonusllhist"
@@ -9,37 +8,22 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/pjutil"
 
 	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 )
 
-func newResourceServer(cpu, memory []*cacheReloader, health *pjutil.Health) *resourceServer {
+func newResourceServer(loaders map[string][]*cacheReloader, health *pjutil.Health) *resourceServer {
 	logger := logrus.WithField("component", "request_server")
 	server := &resourceServer{
 		logger:     logger,
 		lock:       sync.RWMutex{},
 		byMetaData: map[pod_scaler.FullMetadata]corev1.ResourceRequirements{},
 	}
-	var infos []digestInfo
-	for i := range cpu {
-		infos = append(infos, digestInfo{name: cpu[i].name, data: cpu[i], digest: server.digestCPU})
-	}
-	for i := range memory {
-		infos = append(infos, digestInfo{name: memory[i].name, data: memory[i], digest: server.digestMemory})
-	}
-	loadDone := digest(logger, infos...)
-	interrupts.Run(func(ctx context.Context) {
-		select {
-		case <-ctx.Done():
-			logger.Debug("Waiting for readiness cancelled.")
-			return
-		case <-loadDone:
-			logger.Debug("Ready to serve resource request recommendations.")
-			health.ServeReady()
-		}
-	})
+	digestAll(loaders, map[string]digester{
+		MetricNameCPUUsage:         server.digestCPU,
+		MetricNameMemoryWorkingSet: server.digestMemory,
+	}, health, logger)
 
 	return server
 }

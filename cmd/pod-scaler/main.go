@@ -226,14 +226,14 @@ func mainAdmission(opts *options, cache cache) {
 		logrus.WithError(err).Fatal("Failed to construct client.")
 	}
 
-	cpuLoaders, memoryLoaders := loaders(cache)
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, cpuLoaders, memoryLoaders, opts.mutateResources)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResources)
 }
 
-func loaders(cache cache) (cpu, memory []*cacheReloader) {
+func loaders(cache cache) map[string][]*cacheReloader {
+	l := map[string][]*cacheReloader{}
 	for _, prefix := range []string{prowjobsCachePrefix, podsCachePrefix, stepsCachePrefix} {
-		cpu = append(cpu, newReloader(prefix+"/"+MetricNameCPUUsage, cache))
-		memory = append(memory, newReloader(prefix+"/"+MetricNameMemoryWorkingSet, cache))
+		l[MetricNameCPUUsage] = append(l[MetricNameCPUUsage], newReloader(prefix+"/"+MetricNameCPUUsage, cache))
+		l[MetricNameMemoryWorkingSet] = append(l[MetricNameMemoryWorkingSet], newReloader(prefix+"/"+MetricNameMemoryWorkingSet, cache))
 	}
-	return cpu, memory
+	return l
 }

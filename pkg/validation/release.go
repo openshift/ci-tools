@@ -19,8 +19,12 @@ func validateReleases(fieldRoot string, releases map[string]api.UnresolvedReleas
 	}
 	for _, name := range names.List() {
 		release := releases[name]
-		if hasTagSpec && name == "latest" {
-			validationErrors = append(validationErrors, fmt.Errorf("%s.%s: cannot request resolving a latest release and set tag_specification", fieldRoot, name))
+		if hasTagSpec {
+			for _, incompatibleName := range []string{api.LatestReleaseName, api.InitialReleaseName} {
+				if name == incompatibleName {
+					validationErrors = append(validationErrors, fmt.Errorf("%s.%s: cannot request resolving a(n) %s release and set tag_specification", fieldRoot, name, incompatibleName))
+				}
+			}
 		}
 		var set int
 		if release.Candidate != nil {

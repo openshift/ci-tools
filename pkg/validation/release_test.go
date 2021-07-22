@@ -65,7 +65,24 @@ func TestValidateReleases(t *testing.T) {
 			},
 			hasTagSpec: true,
 			output: []error{
-				errors.New("root.latest: cannot request resolving a latest release and set tag_specification"),
+				errors.New("root.latest: cannot request resolving a(n) latest release and set tag_specification"),
+			},
+		},
+		{
+			name: "invalid use of initial release with tag spec",
+			input: map[string]api.UnresolvedRelease{
+				"initial": {
+					Candidate: &api.Candidate{
+						Product:      api.ReleaseProductOKD,
+						Architecture: api.ReleaseArchitectureAMD64,
+						Stream:       api.ReleaseStreamOKD,
+						Version:      "4.4",
+					},
+				},
+			},
+			hasTagSpec: true,
+			output: []error{
+				errors.New("root.initial: cannot request resolving a(n) initial release and set tag_specification"),
 			},
 		},
 		{

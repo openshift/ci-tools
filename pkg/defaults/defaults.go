@@ -554,16 +554,6 @@ func stepConfigsForBuild(
 		config.InputConfiguration.BaseRPMImages = make(map[string]api.ImageStreamTagReference)
 	}
 
-	// ensure the "As" field is set to the provided alias.
-	for alias, target := range config.InputConfiguration.BaseImages {
-		target.As = alias
-		config.InputConfiguration.BaseImages[alias] = target
-	}
-	for alias, target := range config.InputConfiguration.BaseRPMImages {
-		target.As = alias
-		config.InputConfiguration.BaseRPMImages[alias] = target
-	}
-
 	if target := config.InputConfiguration.BuildRootImage; target != nil {
 		if target.FromRepository {
 			istTagRef, err := buildRootImageStreamFromRepository(readFile)
@@ -659,7 +649,7 @@ func stepConfigsForBuild(
 	for alias, baseImage := range config.BaseImages {
 		config := api.InputImageTagStepConfiguration{
 			InputImage: api.InputImage{
-				BaseImage: defaultImageFromReleaseTag(baseImage, config.ReleaseTagConfiguration),
+				BaseImage: defaultImageFromReleaseTag(alias, baseImage, config.ReleaseTagConfiguration),
 				To:        api.PipelineImageStreamTagReference(alias),
 			},
 			Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBase, Name: alias}},
@@ -673,7 +663,7 @@ func stepConfigsForBuild(
 		intermediateTag := api.PipelineImageStreamTagReference(fmt.Sprintf("%s-without-rpms", alias))
 		config := api.InputImageTagStepConfiguration{
 			InputImage: api.InputImage{
-				BaseImage: defaultImageFromReleaseTag(target, config.ReleaseTagConfiguration),
+				BaseImage: defaultImageFromReleaseTag(alias, target, config.ReleaseTagConfiguration),
 				To:        intermediateTag,
 			},
 			Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBaseRpm, Name: alias}},
@@ -826,7 +816,9 @@ func paramsHasAllParametersAsInput(p api.Parameters, params map[string]func() (s
 	return values, true
 }
 
-func defaultImageFromReleaseTag(base api.ImageStreamTagReference, release *api.ReleaseTagConfiguration) api.ImageStreamTagReference {
+func defaultImageFromReleaseTag(alias string, base api.ImageStreamTagReference, release *api.ReleaseTagConfiguration) api.ImageStreamTagReference {
+	// ensure the "As" field is set to the provided alias.
+	base.As = alias
 	if release == nil {
 		return base
 	}

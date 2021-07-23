@@ -73,6 +73,13 @@ tests:
           requests:
             cpu: 100m
             memory: 200Mi
+- as: registry
+  steps:
+    workflow: workflow
+- as: registry-with-profile
+  steps:
+    cluster_profile: aws
+    workflow: workflow
 - as: informer
   commands: make unit
   container:

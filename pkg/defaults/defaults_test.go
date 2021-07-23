@@ -771,6 +771,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 
 			client := fakectrlruntimeclient.NewFakeClient()
 
+			testCase.input.Default()
 			rawSteps, err := stepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, &imageConfigs, time.Nanosecond)
 			if err != nil {
 				t.Fatalf("failed to get stepConfigsForBuild: %v", err)

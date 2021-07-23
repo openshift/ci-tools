@@ -553,17 +553,6 @@ func stepConfigsForBuild(
 	if config.InputConfiguration.BaseRPMImages == nil {
 		config.InputConfiguration.BaseRPMImages = make(map[string]api.ImageStreamTagReference)
 	}
-
-	// ensure the "As" field is set to the provided alias.
-	for alias, target := range config.InputConfiguration.BaseImages {
-		target.As = alias
-		config.InputConfiguration.BaseImages[alias] = target
-	}
-	for alias, target := range config.InputConfiguration.BaseRPMImages {
-		target.As = alias
-		config.InputConfiguration.BaseRPMImages[alias] = target
-	}
-
 	if target := config.InputConfiguration.BuildRootImage; target != nil {
 		if target.FromRepository {
 			istTagRef, err := buildRootImageStreamFromRepository(readFile)

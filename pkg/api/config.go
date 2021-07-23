@@ -48,6 +48,14 @@ func (config *ReleaseBuildConfiguration) Default() {
 			}
 		}
 	}
+	for alias, target := range config.InputConfiguration.BaseImages {
+		target.As = alias
+		config.InputConfiguration.BaseImages[alias] = target
+	}
+	for alias, target := range config.InputConfiguration.BaseRPMImages {
+		target.As = alias
+		config.InputConfiguration.BaseRPMImages[alias] = target
+	}
 	for i := range config.RawSteps {
 		if test := config.RawSteps[i].TestStepConfiguration; test != nil {
 			defTest(test)

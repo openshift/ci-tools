@@ -358,6 +358,7 @@ type options struct {
 	inputHash                  string
 	secrets                    []*coreapi.Secret
 	templates                  []*templateapi.Template
+	graphConfig                api.GraphConfiguration
 	configSpec                 *api.ReleaseBuildConfiguration
 	jobSpec                    *api.JobSpec
 	clusterConfig              *rest.Config
@@ -517,7 +518,7 @@ func (o *options) Complete() error {
 	if err := validation.IsValidResolvedConfiguration(o.configSpec); err != nil {
 		return results.ForReason("validating_config").ForError(err)
 	}
-
+	o.graphConfig = defaults.FromConfigStatic(o.configSpec)
 	if o.verbose {
 		config, _ := yaml.Marshal(o.configSpec)
 		logrus.WithField("config", string(config)).Trace("Resolved configuration.")
@@ -792,7 +793,7 @@ func (o *options) Run() []error {
 	o.resolveConsoleHost()
 
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig, o.consoleHost)
+	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig, o.consoleHost)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}

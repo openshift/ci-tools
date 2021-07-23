@@ -50,14 +50,15 @@ import (
 
 type inputImageSet map[api.InputImage]struct{}
 
-// FromConfig interprets the human-friendly fields in
-// the release build configuration and generates steps for
-// them, returning the full set of steps requires for the
-// build, including defaulted steps, generated steps and
-// all raw steps that the user provided.
+// FromConfig generates the final execution graph.
+// It interprets the human-friendly fields in the release build configuration
+// and pre-parsed graph configuration and generates steps for them, returning
+// the full set of steps requires for the build, including defaulted steps,
+// generated steps and all raw steps that the user provided.
 func FromConfig(
 	ctx context.Context,
 	config *api.ReleaseBuildConfiguration,
+	graphConf *api.GraphConfiguration,
 	jobSpec *api.JobSpec,
 	templates []*templateapi.Template,
 	paramFile string,
@@ -104,12 +105,13 @@ func FromConfig(
 		}
 	}
 
-	return fromConfig(ctx, config, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost)
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost)
 }
 
 func fromConfig(
 	ctx context.Context,
 	config *api.ReleaseBuildConfiguration,
+	graphConf *api.GraphConfiguration,
 	jobSpec *api.JobSpec,
 	templates []*templateapi.Template,
 	paramFile string,
@@ -141,12 +143,12 @@ func fromConfig(
 	var imageStepLinks []api.StepLink
 	var hasReleaseStep bool
 	resolver := rootImageResolver(client, ctx, promote)
-	graphConf, err := stepConfigsForBuild(ctx, client, config, jobSpec, ioutil.ReadFile, resolver, time.Second, consoleHost)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get stepConfigsForBuild: %w", err)
-	}
 	imageConfigs := graphConf.InputImages()
-	rawSteps := graphConf.Steps
+	rawSteps, err := runtimeStepConfigsForBuild(ctx, client, config, jobSpec, ioutil.ReadFile, resolver, imageConfigs, time.Second, consoleHost)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get steps from configuration: %w", err)
+	}
+	rawSteps = append(graphConf.Steps, rawSteps...)
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			steps, testHasReleaseStep, err := stepForTest(ctx, config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor)
@@ -545,39 +547,23 @@ func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context, 
 type readFile func(string) ([]byte, error)
 type resolveRoot func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error)
 
-func stepConfigsForBuild(
-	ctx context.Context,
-	client ctrlruntimeclient.Client,
-	config *api.ReleaseBuildConfiguration,
-	jobSpec *api.JobSpec,
-	readFile readFile,
-	resolveRoot resolveRoot,
-	second time.Duration,
-	consoleHost string,
-) (api.GraphConfiguration, error) {
+// FromConfigStatic pre-parses the configuration into step graph configuration.
+// This graph configuration can then be used to perform validation and build the
+// final execution graph.  See also FromConfig.
+func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfiguration {
 	var buildSteps []api.StepConfiguration
 	if target := config.InputConfiguration.BuildRootImage; target != nil {
 		if target.FromRepository {
-			istTagRef, err := buildRootImageStreamFromRepository(readFile)
-			if err != nil {
-				return api.GraphConfiguration{}, fmt.Errorf("failed to read buildRootImageStream from repository: %w", err)
+			config := api.InputImageTagStepConfiguration{
+				InputImage: api.InputImage{
+					To: api.PipelineImageStreamTagReferenceRoot,
+				},
+				Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceRoot}},
 			}
-			target.ImageStreamTagReference = istTagRef
-		}
-		if isTagRef := target.ImageStreamTagReference; isTagRef != nil {
-			if config.InputConfiguration.BuildRootImage.UseBuildCache {
-				cache := api.BuildCacheFor(config.Metadata)
-				root, err := resolveRoot(isTagRef, &cache)
-				if err != nil {
-					return api.GraphConfiguration{}, fmt.Errorf("could not resolve build root: %w", err)
-				}
-				isTagRef = root
-			}
-			// if ci-operator runs on app.ci, we do not need to import the image because
-			// the istTagRef has to be an image stream tag on app.ci
-			if target.FromRepository && !strings.HasSuffix(consoleHost, api.ServiceDomainAPPCI) {
-				ensureImageStreamTag(ctx, client, isTagRef, second)
-			}
+			buildSteps = append(buildSteps, api.StepConfiguration{
+				InputImageTagStepConfiguration: &config,
+			})
+		} else if isTagRef := target.ImageStreamTagReference; isTagRef != nil {
 			config := api.InputImageTagStepConfiguration{
 				InputImage: api.InputImage{
 					BaseImage: *isTagRef,
@@ -594,21 +580,6 @@ func stepConfigsForBuild(
 			})
 		}
 	}
-
-	if jobSpec.Refs != nil || len(jobSpec.ExtraRefs) > 0 {
-		step := api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
-			From: api.PipelineImageStreamTagReferenceRoot,
-			To:   api.PipelineImageStreamTagReferenceSource,
-			ClonerefsImage: api.ImageStreamTagReference{
-				Namespace: "ci",
-				Name:      "managed-clonerefs",
-				Tag:       "latest",
-			},
-			ClonerefsPath: "/clonerefs",
-		}}
-		buildSteps = append(buildSteps, step)
-	}
-
 	if len(config.BinaryBuildCommands) > 0 {
 		buildSteps = append(buildSteps, api.StepConfiguration{PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
 			From:     api.PipelineImageStreamTagReferenceSource,
@@ -794,8 +765,70 @@ func stepConfigsForBuild(
 	}
 
 	buildSteps = append(buildSteps, config.RawSteps...)
+	return api.GraphConfiguration{Steps: buildSteps}
+}
 
-	return api.GraphConfiguration{Steps: buildSteps}, nil
+func runtimeStepConfigsForBuild(
+	ctx context.Context,
+	client ctrlruntimeclient.Client,
+	config *api.ReleaseBuildConfiguration,
+	jobSpec *api.JobSpec,
+	readFile readFile,
+	resolveRoot resolveRoot,
+	imageConfigs []*api.InputImageTagStepConfiguration,
+	second time.Duration,
+	consoleHost string,
+) ([]api.StepConfiguration, error) {
+	var buildSteps []api.StepConfiguration
+	if root := config.InputConfiguration.BuildRootImage; root != nil {
+		var target *api.InputImageTagStepConfiguration
+		if root.FromRepository || root.UseBuildCache {
+			for i, s := range imageConfigs {
+				if to := s.InputImage.To; to == api.PipelineImageStreamTagReferenceRoot {
+					target = imageConfigs[i]
+					break
+				}
+			}
+		}
+		if target != nil {
+			istTagRef := &target.InputImage.BaseImage
+			if root.FromRepository {
+				var err error
+				istTagRef, err = buildRootImageStreamFromRepository(readFile)
+				if err != nil {
+					return nil, fmt.Errorf("failed to read buildRootImageStream from repository: %w", err)
+				}
+			}
+			if root.UseBuildCache {
+				cache := api.BuildCacheFor(config.Metadata)
+				root, err := resolveRoot(istTagRef, &cache)
+				if err != nil {
+					return nil, fmt.Errorf("could not resolve build root: %w", err)
+				}
+				istTagRef = root
+			}
+			// if ci-operator runs on app.ci, we do not need to import the image because
+			// the istTagRef has to be an image stream tag on app.ci
+			if root.FromRepository && !strings.HasSuffix(consoleHost, api.ServiceDomainAPPCI) {
+				ensureImageStreamTag(ctx, client, istTagRef, second)
+			}
+			target.InputImage.BaseImage = *istTagRef
+		}
+	}
+	if jobSpec.Refs != nil || len(jobSpec.ExtraRefs) > 0 {
+		step := api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
+			From: api.PipelineImageStreamTagReferenceRoot,
+			To:   api.PipelineImageStreamTagReferenceSource,
+			ClonerefsImage: api.ImageStreamTagReference{
+				Namespace: "ci",
+				Name:      "managed-clonerefs",
+				Tag:       "latest",
+			},
+			ClonerefsPath: "/clonerefs",
+		}}
+		buildSteps = append(buildSteps, step)
+	}
+	return buildSteps, nil
 }
 
 func paramsHasAllParametersAsInput(p api.Parameters, params map[string]func() (string, error)) (map[string]string, bool) {

@@ -897,8 +897,9 @@ func TestStepConfigsForBuild(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			client := fakectrlruntimeclient.NewFakeClient()
-
-			graphConf, actualError := stepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, time.Nanosecond, testCase.consoleHost)
+			graphConf := FromConfigStatic(testCase.input)
+			runtimeSteps, actualError := runtimeStepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, graphConf.InputImages(), time.Nanosecond, testCase.consoleHost)
+			graphConf.Steps = append(graphConf.Steps, runtimeSteps...)
 			if diff := cmp.Diff(testCase.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("actualError does not match expectedError, diff: %s", diff)
 			}
@@ -1444,7 +1445,8 @@ func TestFromConfig(t *testing.T) {
 			for k, v := range tc.params {
 				params.Add(k, func() (string, error) { return v, nil })
 			}
-			configSteps, post, err := fromConfig(context.Background(), &tc.config, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, "")
+			graphConf := FromConfigStatic(&tc.config)
+			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, "")
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}

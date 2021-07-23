@@ -157,8 +157,6 @@ func (k *kvUpdateTransport) updateKeyCacheForSecret(path string, item map[string
 	if strings.HasPrefix(path, k.kvMountPath+"/data/") {
 		path = strings.Replace(path, "data/", "", 1)
 	}
-	fmt.Printf("got update request for path %q, cache:\n%v\n", path, k.existingSecretKeysByVaultSecretName)
-	defer func() { fmt.Printf("Cache post update of %q:\n%v\n", path, k.existingSecretKeysByVaultSecretName) }()
 
 	k.existingSecretKeysByNamespaceNameLock.Lock()
 	defer k.existingSecretKeysByNamespaceNameLock.Unlock()
@@ -168,7 +166,6 @@ func (k *kvUpdateTransport) updateKeyCacheForSecret(path string, item map[string
 		k.existingSecretKeysByNamespaceName[existingEntry.name].Delete(existingEntry.key)
 	}
 	delete(k.existingSecretKeysByVaultSecretName, path)
-
 	name := types.NamespacedName{Namespace: item[vault.SecretSyncTargetNamepaceKey], Name: item[vault.SecretSyncTargetNameKey]}
 	if name.Namespace == "" || name.Name == "" {
 		return
@@ -191,6 +188,11 @@ func (k *kvUpdateTransport) validateKeysDontConflict(ctx context.Context, data m
 	if k.privilegedVaultClient == nil {
 		return nil, nil
 	}
+
+	if data[vault.SecretSyncTargetNamepaceKey] == "" || data[vault.SecretSyncTargetNameKey] == "" {
+		return nil, nil
+	}
+
 	if err := k.populateKeyCache(ctx); err != nil {
 		return nil, err
 	}
@@ -270,6 +272,9 @@ func (k *kvUpdateTransport) populateKeyCache(ctx context.Context) (err error) {
 			defer existingSecretKeysByNamespaceNameWriteLock.Unlock()
 
 			name := types.NamespacedName{Namespace: item.Data[vault.SecretSyncTargetNamepaceKey], Name: item.Data[vault.SecretSyncTargetNameKey]}
+			if name.Namespace == "" || name.Name == "" {
+				return
+			}
 			delete(item.Data, vault.SecretSyncTargetNamepaceKey)
 			delete(item.Data, vault.SecretSyncTargetNameKey)
 

@@ -410,6 +410,20 @@ path "secret/metadata/team-1/*" {
 					"some-secret-key":             "some-value",
 				},
 			},
+			{
+				name:             "Creating a secret with no target",
+				targetSecretName: "selfmanaged-secret",
+				data: map[string]string{
+					"selfmanaged": "some-value",
+				},
+			},
+			{
+				name:             "Creating another secret with no target and the same key succeeds",
+				targetSecretName: "selfmanaged-secret-2",
+				data: map[string]string{
+					"selfmanaged": "some-value",
+				},
+			},
 		}
 		for _, tc := range keyConflictTestCases {
 			t.Run(tc.name, func(t *testing.T) {

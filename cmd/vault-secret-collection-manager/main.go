@@ -97,11 +97,28 @@ func main() {
 
 	metrics.ExposeMetrics(version.Name, config.PushGateway{}, o.MetricsPort)
 
-	interrupts.ListenAndServe(server(privilegedVaultClient, o.authBackendType, o.kvStorePrefix, o.listenAddr), 5*time.Second)
+	manager, server := server(privilegedVaultClient, o.authBackendType, o.kvStorePrefix, o.listenAddr)
+	reconciledPolicies, err := manager.reconcilePolicies()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to reconcile policies")
+	}
+	if len(reconciledPolicies) > 0 {
+		logrus.WithField("reconciled_policies", reconciledPolicies).Info("Successfully reconciled policies")
+	}
+	interrupts.TickLiteral(func() {
+		reconciledPolicies, err := manager.reconcilePolicies()
+		if err != nil {
+			logrus.WithError(err).Error("Failed to reconcile policies")
+		}
+		if len(reconciledPolicies) > 0 {
+			logrus.WithField("reconciled_policies", reconciledPolicies).Info("Successfully reconciled policies")
+		}
+	}, time.Hour)
+	interrupts.ListenAndServe(server, 5*time.Second)
 	interrupts.WaitForGracefulShutdown()
 }
 
-func server(privilegedVaultClient *vaultclient.VaultClient, authBackendType, kvStorePrefix, listenAddr string) *http.Server {
+func server(privilegedVaultClient *vaultclient.VaultClient, authBackendType, kvStorePrefix, listenAddr string) (*secretCollectionManager, *http.Server) {
 	manager := &secretCollectionManager{
 		privilegedVaultClient:   privilegedVaultClient,
 		kvStorePrefix:           kvStorePrefix,
@@ -110,7 +127,7 @@ func server(privilegedVaultClient *vaultclient.VaultClient, authBackendType, kvS
 		authAccessorBackendType: authBackendType,
 	}
 
-	return &http.Server{Addr: listenAddr, Handler: manager.mux()}
+	return manager, &http.Server{Addr: listenAddr, Handler: manager.mux()}
 }
 
 func userWrapper(upstream func(l *logrus.Entry, user string, w http.ResponseWriter, r *http.Request, params httprouter.Params)) func(*logrus.Entry, http.ResponseWriter, *http.Request, httprouter.Params) {
@@ -359,15 +376,11 @@ func (m *secretCollectionManager) createSecretCollection(_ *logrus.Entry, userNa
 	if err != nil {
 		return fmt.Errorf("failed to get user %s: %w", userName, err)
 	}
-	policy := managedVaultPolicy{Path: map[string]managedVaultPolicyCapabilityList{
-		m.kvMetadataPrefix + "/" + secretCollectionName + "/*": {Capabilities: []string{"list"}},
-		m.kvDataPrefix + "/" + secretCollectionName + "/*":     {Capabilities: []string{"create", "update", "read"}},
-	}}
-	serializedPolicy, err := json.Marshal(policy)
+	policy, err := m.serializedPolicyFor(secretCollectionName)
 	if err != nil {
-		return fmt.Errorf("failed to serialize policy for %s: %w", secretCollectionName, err)
+		return fmt.Errorf("failed to construct policy for %s: %w", secretCollectionName, err)
 	}
-	if err := m.privilegedVaultClient.Sys().PutPolicy(prefixedName(secretCollectionName), string(serializedPolicy)); err != nil {
+	if err := m.privilegedVaultClient.Sys().PutPolicy(prefixedName(secretCollectionName), policy); err != nil {
 		return fmt.Errorf("failed to create policy %s: %w", prefixedName(secretCollectionName), err)
 	}
 
@@ -394,8 +407,25 @@ func (m *secretCollectionManager) createSecretCollection(_ *logrus.Entry, userNa
 	return nil
 }
 
+func (m *secretCollectionManager) serializedPolicyFor(name string) (string, error) {
+	policy := managedVaultPolicy{Path: map[string]managedVaultPolicyCapabilityList{
+		m.kvMetadataPrefix + "/" + name + "/*": {Capabilities: []string{"list", "delete"}},
+		m.kvDataPrefix + "/" + name + "/*":     {Capabilities: []string{"create", "update", "read"}},
+	}}
+	serialized, err := json.Marshal(policy)
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize policy: %w", err)
+	}
+
+	return string(serialized), nil
+}
+
 func prefixedName(name string) string {
 	return objectPrefix + "-" + name
+}
+
+func nameFromPrefixedName(name string) string {
+	return strings.TrimPrefix(name, objectPrefix+"-")
 }
 
 func (m *secretCollectionManager) listSecretCollections(l *logrus.Entry, user string, w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -650,4 +680,40 @@ func (m *secretCollectionManager) usersHandler(l *logrus.Entry, _ string, w http
 	if _, err := w.Write(serialized); err != nil {
 		l.WithError(err).Error("failed to write response")
 	}
+}
+
+func (m *secretCollectionManager) reconcilePolicies() (updatedPolicies []string, err error) {
+	policyNames, err := m.privilegedVaultClient.Sys().ListPolicies()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list policies: %w", err)
+	}
+	var errs []error
+	for _, policyName := range policyNames {
+		if !strings.HasPrefix(policyName, objectPrefix) {
+			continue
+		}
+
+		policy, err := m.privilegedVaultClient.Sys().GetPolicy(policyName)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to get policy %s: %w", policyName, err))
+			continue
+		}
+
+		expectedPolicy, err := m.serializedPolicyFor(nameFromPrefixedName(policyName))
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to construct expected policy for %s: %w", nameFromPrefixedName(policyName), err))
+			continue
+		}
+
+		if policy != expectedPolicy {
+			if err := m.privilegedVaultClient.Sys().PutPolicy(policyName, expectedPolicy); err != nil {
+				errs = append(errs, fmt.Errorf("failed to update outdated policy %s: %w", policyName, err))
+				continue
+			}
+
+			updatedPolicies = append(updatedPolicies, policyName)
+		}
+	}
+
+	return updatedPolicies, utilerrors.NewAggregate(errs)
 }

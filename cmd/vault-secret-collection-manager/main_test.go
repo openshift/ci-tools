@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"reflect"
 	"testing"
@@ -29,21 +30,6 @@ func TestSecretCollectionManager(t *testing.T) {
 		t.Fatalf("failed to enable userpass auth: %v", err)
 	}
 
-	mounts, err := client.ListAuthMounts()
-	if err != nil {
-		t.Fatalf("failed to list auth mounts: %v", err)
-	}
-	var mountAccessor string
-	for _, mount := range mounts {
-		if mount.Type == "userpass" {
-			mountAccessor = mount.Accessor
-			break
-		}
-	}
-	if mountAccessor == "" {
-		t.Fatalf("failed to find userpass mount")
-	}
-
 	for _, user := range []string{"user-1", "user-2"} {
 		if _, err := client.Logical().Write(fmt.Sprintf("/auth/userpass/users/%s", user), map[string]interface{}{"password": "password"}); err != nil {
 			t.Fatalf("failed to create userpass user %s: %v", user, err)
@@ -51,7 +37,7 @@ func TestSecretCollectionManager(t *testing.T) {
 	}
 
 	managerListenAddr := "127.0.0.1:" + testhelper.GetFreePort(t)
-	server := server(client, "userpass", "secret/self-managed", managerListenAddr)
+	collectionManager, server := server(client, "userpass", "secret/self-managed", managerListenAddr)
 	go func() {
 		if err := server.ListenAndServe(); err != http.ErrServerClosed {
 			t.Errorf("failed to start secret-collection-manager: %v", err)
@@ -320,6 +306,9 @@ func TestSecretCollectionManager(t *testing.T) {
 						if diff := cmp.Diff(data, retrieved.Data); diff != "" {
 							t.Errorf("retrieved secret differs from created: %s", diff)
 						}
+						if err := client.DestroyKVIrreversibly(scenario.path + "/my-secret"); err != nil {
+							t.Errorf("deleting the secret failed: %v", err)
+						}
 					}
 
 				})
@@ -334,6 +323,43 @@ func TestSecretCollectionManager(t *testing.T) {
 		}
 		if len(results) > 0 {
 			t.Errorf("expected kv store to be empty, but found %v", results)
+		}
+	})
+
+	t.Run("reconcilePolicies", func(t *testing.T) {
+		for _, secretCollectionName := range []string{"first", "second"} {
+			request := mustNewRequest(http.MethodPut, fmt.Sprintf("http://%s/secretcollection/%s", managerListenAddr, secretCollectionName))
+			request.Header.Set("X-Forwarded-Email", "user-1@unchecked.com")
+			if resp, err := http.DefaultClient.Do(request); err != nil || resp.StatusCode != 200 {
+				var respBody []byte
+				if err == nil {
+					var readErr error
+					respBody, readErr = ioutil.ReadAll(resp.Body)
+					if err != nil {
+						t.Errorf("failed to read response body after policy creation failed: %v", readErr)
+					}
+					resp.Body.Close()
+				}
+				t.Errorf("failed to create secret collection %s: err=%v resp=%v, response body: %s", secretCollectionName, err, resp, string(respBody))
+			}
+
+		}
+
+		outdatedFirstPolicy := `{"path":{"secret/data/self-managed/first/*":{"capabilities":["create","update","read"]},"secret/metadata/self-managed/first/*":{"capabilities":["list"]}}}`
+		if err := client.Sys().PutPolicy(prefixedName("first"), outdatedFirstPolicy); err != nil {
+			t.Fatalf("failed to change the first policy: %v", err)
+		}
+		if err := client.Sys().PutPolicy("unrelated", outdatedFirstPolicy); err != nil {
+			t.Fatalf("failed to create 'unrelated' policy: %v", err)
+		}
+
+		changedCollections, err := collectionManager.reconcilePolicies()
+		if err != nil {
+			t.Fatalf("reconcilePolicies: %v", err)
+		}
+
+		if len(changedCollections) != 1 || changedCollections[0] != prefixedName("first") {
+			t.Errorf("expected exactly one changed policy named %s, got %v", prefixedName("first"), err)
 		}
 	})
 

@@ -17,9 +17,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/plugins"
@@ -231,12 +231,16 @@ func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.Pr
 	for repo := range ocpFeatureFreezeExemptRepos {
 		slashSplit := strings.Split(repo, "/")
 		orgRepo := prowconfig.OrgRepo{Org: slashSplit[0], Repo: slashSplit[1]}
-		ensureOcpFeatureFreezeExemptCriteria(&(configsByOrgRepo[orgRepo].Tide.Queries), repo)
+		if _, ok := configsByOrgRepo[orgRepo]; ok {
+			ensureOcpFeatureFreezeExemptCriteria(&(configsByOrgRepo[orgRepo].Tide.Queries), repo)
+		}
 	}
 	for repo := range ocpFeatureFreezeRepos {
 		slashSplit := strings.Split(repo, "/")
 		orgRepo := prowconfig.OrgRepo{Org: slashSplit[0], Repo: slashSplit[1]}
-		ensureOcpFeatureFreezeCriteria(&(configsByOrgRepo[orgRepo].Tide.Queries), repo)
+		if _, ok := configsByOrgRepo[orgRepo]; ok {
+			ensureOcpFeatureFreezeCriteria(&(configsByOrgRepo[orgRepo].Tide.Queries), repo)
+		}
 	}
 
 	for orgOrRepo, cfg := range configsByOrgRepo {

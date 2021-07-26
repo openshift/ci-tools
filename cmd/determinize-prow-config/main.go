@@ -11,12 +11,15 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/plugins"
@@ -169,6 +172,17 @@ func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.Pr
 		delete(pc.Tide.MergeType, orgOrgRepoString)
 	}
 
+	ocpFeatureFreezeRepos := sets.NewString()
+	ocpFeatureFreezeExemptRepos := sets.NewString("openshift/cluster-logging-operator",
+		"openshift/console",
+		"openshift/console-operator",
+		"openshift/elasticsearch-operator",
+		"openshift/elasticsearch-proxy",
+		"openshift/origin-aggregated-logging",
+		"openshift/builder",
+		"openshift/cluster-samples-operator",
+	)
+
 	for _, query := range pc.Tide.Queries {
 		for _, org := range query.Orgs {
 			if configsByOrgRepo[prowconfig.OrgRepo{Org: org}] == nil {
@@ -204,9 +218,30 @@ func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.Pr
 			queryCopy.Orgs = nil
 			queryCopy.Repos = []string{repo}
 			configsByOrgRepo[orgRepo].Tide.Queries = append(configsByOrgRepo[orgRepo].Tide.Queries, *queryCopy)
+			sort.Strings(queryCopy.IncludedBranches)
+			sort.Strings(queryCopy.ExcludedBranches)
+
+			if isOcpFeatureFreezeRepo(queryCopy) && !ocpFeatureFreezeExemptRepos.Has(repo) {
+				ocpFeatureFreezeRepos.Insert(repo)
+			}
 		}
 	}
 	pc.Tide.Queries = nil
+
+	for repo := range ocpFeatureFreezeExemptRepos {
+		slashSplit := strings.Split(repo, "/")
+		orgRepo := prowconfig.OrgRepo{Org: slashSplit[0], Repo: slashSplit[1]}
+		if _, ok := configsByOrgRepo[orgRepo]; ok {
+			ensureOcpFeatureFreezeExemptCriteria(&(configsByOrgRepo[orgRepo].Tide.Queries), repo)
+		}
+	}
+	for repo := range ocpFeatureFreezeRepos {
+		slashSplit := strings.Split(repo, "/")
+		orgRepo := prowconfig.OrgRepo{Org: slashSplit[0], Repo: slashSplit[1]}
+		if _, ok := configsByOrgRepo[orgRepo]; ok {
+			ensureOcpFeatureFreezeCriteria(&(configsByOrgRepo[orgRepo].Tide.Queries), repo)
+		}
+	}
 
 	for orgOrRepo, cfg := range configsByOrgRepo {
 		if err := prowconfigsharding.MkdirAndWrite(target, filepath.Join(orgOrRepo.Org, orgOrRepo.Repo, config.SupplementalProwConfigFileName), cfg); err != nil {
@@ -215,6 +250,87 @@ func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.Pr
 	}
 
 	return pc, nil
+}
+
+func ensureOcpFeatureFreezeCriteria(queries *prowconfig.TideQueries, repo string) {
+	for i := range *queries {
+		included := sets.NewString((*queries)[i].IncludedBranches...)
+		if !(included.Equal(sets.NewString("master")) ||
+			included.Equal(sets.NewString("main")) ||
+			included.Equal(sets.NewString("master", "main"))) {
+			continue
+		}
+		labels := sets.NewString((*queries)[i].Labels...)
+		if labels.Has("bugzilla/valid-bug") {
+			return
+		}
+		(*queries)[i].Labels = append((*queries)[i].Labels, "bugzilla/valid-bug")
+		sort.Strings((*queries)[i].Labels)
+		return
+	}
+	logrus.Warnf("Could not ensure OCP Feature Freeze merge criteria on %s", repo)
+}
+
+func ensureOcpFeatureFreezeExemptCriteria(queries *prowconfig.TideQueries, repo string) {
+	var mainQuery *prowconfig.TideQuery
+	var hasBugQuery, hasApprovalQuery bool
+	approvalLabels := sets.NewString("px-approved", "docs-approved", "qe-approved")
+	for i := range *queries {
+		included := sets.NewString((*queries)[i].IncludedBranches...)
+		if !(included.Equal(sets.NewString("master")) ||
+			included.Equal(sets.NewString("main")) ||
+			included.Equal(sets.NewString("master", "main"))) {
+			continue
+		}
+		mainQuery, _ = deepCopyTideQuery(&(*queries)[i])
+
+		labels := sets.NewString((*queries)[i].Labels...)
+
+		if labels.Has("bugzilla/valid-bug") {
+			hasBugQuery = true
+			continue
+		}
+		if labels.IsSuperset(approvalLabels) {
+			hasApprovalQuery = true
+			continue
+		}
+		// It's neither, so we make it the bug query
+		(*queries)[i].Labels = append((*queries)[i].Labels, "bugzilla/valid-bug")
+		hasBugQuery = true
+		sort.Strings((*queries)[i].Labels)
+	}
+
+	if mainQuery == nil {
+		logrus.Warnf("Could not ensure OCP Feature Freeze-exempt merge criteria on %s", repo)
+		return
+	}
+	mainQuery.Labels = sets.NewString(mainQuery.Labels...).Difference(approvalLabels.Union(sets.NewString("bugzilla/valid-bug"))).List()
+	if !hasBugQuery {
+		mainQuery.Labels = append(mainQuery.Labels, "bugzilla/valid-bug")
+		sort.Strings(mainQuery.Labels)
+		*queries = append(*queries, *mainQuery)
+	}
+	if !hasApprovalQuery {
+		mainQuery.Labels = append(mainQuery.Labels, approvalLabels.List()...)
+		sort.Strings(mainQuery.Labels)
+		*queries = append(*queries, *mainQuery)
+	}
+}
+
+func isOcpFeatureFreezeRepo(query *prowconfig.TideQuery) bool {
+	if !(reflect.DeepEqual(query.IncludedBranches, []string{"release-4.8"}) ||
+		reflect.DeepEqual(query.IncludedBranches, []string{"openshift-4.8"}) ||
+		reflect.DeepEqual(query.IncludedBranches, []string{"openshift-4.8", "release-4.8"})) {
+		return false
+	}
+
+	for _, label := range query.Labels {
+		if label == "group-lead-approved" {
+			return true
+		}
+	}
+
+	return false
 }
 
 func deepCopyTideQuery(q *prowconfig.TideQuery) (*prowconfig.TideQuery, error) {

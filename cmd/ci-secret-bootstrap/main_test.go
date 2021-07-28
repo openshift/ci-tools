@@ -2210,6 +2210,12 @@ func TestValidateItems(t *testing.T) {
 			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "bar"}}}},
 			items:        map[string]*vaultclient.KVData{"/foo": {Data: map[string]string{"baz": "some-value"}}},
 		},
+		{
+			name:         "item exists, field from DockerConfigJSONData doesn't but is in generator config, success",
+			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.ItemContext{"": {DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{{Item: "foo", AuthField: "bar"}}}}}}},
+			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "bar"}}}},
+			items:        map[string]*vaultclient.KVData{"/foo": {Data: map[string]string{"baz": "some-value"}}},
+		},
 	}
 
 	for _, tc := range testCases {

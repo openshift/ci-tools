@@ -723,7 +723,11 @@ func (o *options) validateItems(client secrets.ReadOnlyClient) error {
 						break
 					}
 					if _, err := client.GetFieldOnItem(data.Item, data.AuthField); err != nil {
-						errs = append(errs, fmt.Errorf("field %s in item %s doesn't exist", data.AuthField, data.Item))
+						if o.generatorConfig.IsFieldGenerated(stripDPTPPrefixFromItem(data.Item, &o.config), data.AuthField) {
+							logger.WithField("field", data.AuthField).Warn("Field doesn't exist but it will be generated")
+						} else {
+							errs = append(errs, fmt.Errorf("field %s in item %s doesn't exist", data.AuthField, data.Item))
+						}
 					}
 				}
 			} else {

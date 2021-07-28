@@ -203,7 +203,7 @@ func fromConfig(
 				}
 				logrus.Infof("Resolved release %s to %s", resolveConfig.Name, value)
 			}
-			step := releasesteps.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, jobSpec, pullSecret, overrideCLIReleaseExtractImage)
+			step := releasesteps.ImportReleaseStep(resolveConfig.Name, resolveConfig.TargetName(), value, false, config.Resources, podClient, jobSpec, pullSecret, overrideCLIReleaseExtractImage)
 			buildSteps = append(buildSteps, step)
 			addProvidesForStep(step, params)
 			continue
@@ -261,7 +261,8 @@ func fromConfig(
 						return nil, nil, results.ForReason("reading_release").ForError(fmt.Errorf("failed to read input release pullSpec %s: %w", name, err))
 					}
 					logrus.Infof("Resolved release %s to %s", name, pullSpec)
-					releaseStep = releasesteps.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, jobSpec, pullSecret, nil)
+					target := rawStep.ReleaseImagesTagStepConfiguration.TargetName(name)
+					releaseStep = releasesteps.ImportReleaseStep(name, target, pullSpec, true, config.Resources, podClient, jobSpec, pullSecret, nil)
 				} else {
 					releaseStep = releasesteps.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, jobSpec)
 				}
@@ -377,7 +378,8 @@ func stepForTest(
 			hasReleaseStep = true
 			claimRelease := c.ClusterClaim.ClaimRelease(c.As)
 			logrus.Infof("Resolved release %s to %s", claimRelease.ReleaseName, pullSpec)
-			importStep := releasesteps.ImportReleaseStep(claimRelease.ReleaseName, pullSpec, false, config.Resources, podClient, jobSpec, pullSecret, nil)
+			target := api.ReleaseConfiguration{Name: claimRelease.ReleaseName}.TargetName()
+			importStep := releasesteps.ImportReleaseStep(claimRelease.ReleaseName, target, pullSpec, false, config.Resources, podClient, jobSpec, pullSecret, nil)
 			testSteps = append(testSteps, importStep)
 			addProvidesForStep(step, params)
 		}

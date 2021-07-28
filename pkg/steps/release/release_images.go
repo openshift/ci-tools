@@ -213,7 +213,7 @@ func (s *releaseImagesTagStep) repositoryPullSpec() (string, error) {
 	return "", fmt.Errorf("no pull spec available for image stream %s", api.PipelineImageStream)
 }
 
-func (s *releaseImagesTagStep) Name() string { return "[release-inputs]" }
+func (s *releaseImagesTagStep) Name() string { return s.config.InputsName() }
 
 func (s *releaseImagesTagStep) Description() string {
 	return fmt.Sprintf("Find all of the input images from %s and tag them into the output image stream", sourceName(s.config))

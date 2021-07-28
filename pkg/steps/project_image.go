@@ -151,7 +151,7 @@ func (s *projectDirectoryImageBuildStep) Provides() api.ParameterMap {
 	}
 }
 
-func (s *projectDirectoryImageBuildStep) Name() string { return string(s.config.To) }
+func (s *projectDirectoryImageBuildStep) Name() string { return s.config.TargetName() }
 
 func (s *projectDirectoryImageBuildStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", s.config.To)

@@ -75,7 +75,7 @@ func (s *pipelineImageCacheStep) Provides() api.ParameterMap {
 	}
 }
 
-func (s *pipelineImageCacheStep) Name() string { return string(s.config.To) }
+func (s *pipelineImageCacheStep) Name() string { return s.config.TargetName() }
 
 func (s *pipelineImageCacheStep) Description() string {
 	return fmt.Sprintf("Store build results into a layer on top of %s and save as %s", s.config.From, s.config.To)

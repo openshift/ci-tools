@@ -12,6 +12,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/defaults"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/steps/release"
@@ -134,6 +135,10 @@ func (o *options) validateConfiguration(
 		} else if err := validator.IsValidResolvedConfiguration(&c); err != nil {
 			return err
 		}
+	}
+	graphConf := defaults.FromConfigStatic(configuration)
+	if err := validation.IsValidGraphConfiguration(graphConf.Steps); err != nil {
+		return err
 	}
 	for _, tag := range release.PromotedTags(configuration) {
 		seenCh <- promotedTag{tag, repoInfo}

@@ -519,6 +519,9 @@ func (o *options) Complete() error {
 		return results.ForReason("validating_config").ForError(err)
 	}
 	o.graphConfig = defaults.FromConfigStatic(o.configSpec)
+	if err := validation.IsValidGraphConfiguration(o.graphConfig.Steps); err != nil {
+		return results.ForReason("validating_config").ForError(err)
+	}
 	if o.verbose {
 		config, _ := yaml.Marshal(o.configSpec)
 		logrus.WithField("config", string(config)).Trace("Resolved configuration.")

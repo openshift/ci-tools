@@ -74,6 +74,7 @@ func (o *options) validate() error {
 		if err != nil {
 			return fmt.Errorf("failed to compile regex from %q: %w", s, err)
 		}
+		logrus.WithField("re", re.String()).Info("Ignore tags as required by flag")
 		o.ignoredImageStreamTags = append(o.ignoredImageStreamTags, re)
 	}
 	return nil
@@ -115,6 +116,7 @@ func tagsToDelete(ctx context.Context, client ctrlruntimeclient.Client, promoted
 	for tag := range tagsToCheck {
 		for _, re := range toIgnore {
 			if re.MatchString(tag.ISTagName()) {
+				logrus.WithField("tag", tag.ISTagName()).Info("Ignored tag")
 				delete(tagsToCheck, tag)
 			}
 		}

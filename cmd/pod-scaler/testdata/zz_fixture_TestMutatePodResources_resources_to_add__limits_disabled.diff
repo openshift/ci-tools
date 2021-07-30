@@ -1,0 +1,48 @@
+  &v1.Pod{
+  	TypeMeta:   {},
+  	ObjectMeta: {Name: "tomutate", Labels: {"ci.openshift.io/metadata.branch": "branch", "ci.openshift.io/metadata.org": "org", "ci.openshift.io/metadata.repo": "repo", "ci.openshift.io/metadata.step": "step", "ci.openshift.io/metadata.target": "target", "ci.openshift.io/metadata.variant": "variant"}},
+  	Spec: v1.PodSpec{
+  		Volumes:        nil,
+  		InitContainers: nil,
+  		Containers: []v1.Container{
+  			{Name: "large", Resources: {Limits: {s"cpu": {i: {value: 400}, Format: "DecimalSI"}, s"memory": {i: {value: 40000000000}, Format: "BinarySI"}}, Requests: {s"cpu": {i: {value: 200}, Format: "DecimalSI"}, s"memory": {i: {value: 30000000000}, Format: "BinarySI"}}}},
+  			{
+  				... // 6 identical fields
+  				EnvFrom: nil,
+  				Env:     nil,
+  				Resources: v1.ResourceRequirements{
+  					Limits: {},
+  					Requests: v1.ResourceList{
+  						s"cpu":    {i: {value: 200}, Format: "DecimalSI"},
+- 						s"memory": {i: resource.int64Amount{value: 10000000000}, Format: "BinarySI"},
++ 						s"memory": {i: resource.int64Amount{value: 20000000000}, Format: "BinarySI"},
+  					},
+  				},
+  				VolumeMounts:  nil,
+  				VolumeDevices: nil,
+  				... // 11 identical fields
+  			},
+  			{
+  				... // 6 identical fields
+  				EnvFrom: nil,
+  				Env:     nil,
+  				Resources: v1.ResourceRequirements{
+  					Limits: {},
+  					Requests: v1.ResourceList{
+- 						s"cpu":    {i: resource.int64Amount{value: 10}, Format: "DecimalSI"},
++ 						s"cpu":    {i: resource.int64Amount{value: 100}, Format: "DecimalSI"},
+- 						s"memory": {i: resource.int64Amount{value: 100}, Format: "BinarySI"},
++ 						s"memory": {i: resource.int64Amount{value: 20000000000}, Format: "BinarySI"},
+  					},
+  				},
+  				VolumeMounts:  nil,
+  				VolumeDevices: nil,
+  				... // 11 identical fields
+  			},
+  		},
+  		EphemeralContainers: nil,
+  		RestartPolicy:       "",
+  		... // 30 identical fields
+  	},
+  	Status: {},
+  }

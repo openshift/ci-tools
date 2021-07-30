@@ -140,12 +140,17 @@ func mutatePodLabels(pod *corev1.Pod, build *buildv1.Build) {
 	if pod.Labels == nil {
 		pod.Labels = map[string]string{}
 	}
+	backfilledFromBuild := false
 	for _, label := range []string{steps.LabelMetadataOrg, steps.LabelMetadataRepo, steps.LabelMetadataBranch, steps.LabelMetadataVariant, steps.LabelMetadataTarget} {
 		buildValue, buildHas := build.Labels[label]
 		_, podHas := pod.Labels[label]
 		if buildHas && !podHas {
 			pod.Labels[label] = buildValue
+			backfilledFromBuild = true
 		}
+	}
+	if backfilledFromBuild {
+		pod.Labels[steps.CreatedByCILabel] = "true"
 	}
 }
 

@@ -15,6 +15,9 @@ Patches:
   path: /metadata/labels/ci.openshift.io~1metadata.variant
   value: variant
 - op: add
+  path: /metadata/labels/created-by-ci
+  value: "true"
+- op: add
   path: /spec/containers/0/resources
   value:
     limits:

@@ -119,6 +119,99 @@ func resolveConfig(configAgent agents.ConfigAgent, registryAgent agents.Registry
 	}
 }
 
+const (
+	injectFromOrgQuery     = "injectTestFromOrg"
+	injectFromRepoQuery    = "injectTestFromRepo"
+	injectFromBranchQuery  = "injectTestFromBranch"
+	injectFromVariantQuery = "injectTestFromVariant"
+	injectTestQuery        = "injectTest"
+)
+
+func injectTestFromQuery(w http.ResponseWriter, r *http.Request) (api.Metadata, string, error) {
+	var metadata api.Metadata
+	var test string
+
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusNotImplemented)
+		err := fmt.Errorf("expected GET, got %s", r.Method)
+		if _, errWrite := w.Write([]byte(http.StatusText(http.StatusNotImplemented))); errWrite != nil {
+			err = fmt.Errorf("%s and writing the response body failed with %w", err.Error(), errWrite)
+		}
+		return metadata, test, err
+	}
+	metadata.Org = r.URL.Query().Get(injectFromOrgQuery)
+	if metadata.Org == "" {
+		webreg.MissingQuery(w, injectFromOrgQuery)
+		return metadata, test, fmt.Errorf("missing query %s", injectFromOrgQuery)
+	}
+	metadata.Repo = r.URL.Query().Get(injectFromRepoQuery)
+	if metadata.Repo == "" {
+		webreg.MissingQuery(w, injectFromRepoQuery)
+		return metadata, "", fmt.Errorf("missing query %s", injectFromRepoQuery)
+	}
+	metadata.Branch = r.URL.Query().Get(injectFromBranchQuery)
+	if metadata.Branch == "" {
+		webreg.MissingQuery(w, injectFromBranchQuery)
+		return metadata, test, fmt.Errorf("missing query %s", injectFromVariantQuery)
+	}
+	metadata.Variant = r.URL.Query().Get(injectFromVariantQuery)
+
+	test = r.URL.Query().Get(injectTestQuery)
+	if test == "" {
+		webreg.MissingQuery(w, injectTestQuery)
+		return metadata, test, fmt.Errorf("missing query %s", injectTestQuery)
+	}
+
+	return metadata, test, nil
+}
+
+func resolveConfigWithInjectedTest(configAgent agents.ConfigAgent, registryAgent agents.RegistryAgent) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			w.WriteHeader(http.StatusNotImplemented)
+			_, _ = w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
+			return
+		}
+		metadata, err := webreg.MetadataFromQuery(w, r)
+		if err != nil {
+			metrics.RecordError("invalid query", configresolverMetrics.ErrorRate)
+		}
+		logger := logrus.WithFields(api.LogFieldsFor(metadata))
+
+		config, err := configAgent.GetMatchingConfig(metadata)
+		if err != nil {
+			metrics.RecordError("config not found", configresolverMetrics.ErrorRate)
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "failed to get config: %v", err)
+			logger.WithError(err).Warning("failed to get config")
+			return
+		}
+
+		injectFromMetadata, test, err := injectTestFromQuery(w, r)
+		if err != nil {
+			metrics.RecordError("invalid query", configresolverMetrics.ErrorRate)
+		}
+		injectFromConfig, err := configAgent.GetMatchingConfig(injectFromMetadata)
+		if err != nil {
+			metrics.RecordError("config not found", configresolverMetrics.ErrorRate)
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "failed to get config to inject from: %v", err)
+			logger.WithError(err).Warning("failed to get config")
+			return
+		}
+		configWithInjectedTest, err := config.WithPresubmitFrom(&injectFromConfig, test)
+		if err != nil {
+			metrics.RecordError("test injection failed", configresolverMetrics.ErrorRate)
+			w.WriteHeader(http.StatusInternalServerError) // TODO: Can be be 400 in some cases but meh
+			fmt.Fprintf(w, "failed to inject test into config: %v", err)
+			logger.WithError(err).Warning("failed to inject test into config")
+			return
+		}
+
+		resolveAndRespond(registryAgent, *configWithInjectedTest, w, logger)
+	}
+}
+
 func resolveLiteralConfig(registryAgent agents.RegistryAgent) http.HandlerFunc {
 	logger := logrus.NewEntry(logrus.New())
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -242,6 +335,7 @@ func main() {
 	// add handler func for incorrect paths as well; can help with identifying errors/404s caused by incorrect paths
 	http.HandleFunc("/", handler(http.HandlerFunc(http.NotFound)).ServeHTTP)
 	http.HandleFunc("/config", handler(resolveConfig(configAgent, registryAgent)).ServeHTTP)
+	http.HandleFunc("/configWithInjectedTest", handler(resolveConfigWithInjectedTest(configAgent, registryAgent)).ServeHTTP)
 	http.HandleFunc("/resolve", handler(resolveLiteralConfig(registryAgent)).ServeHTTP)
 	http.HandleFunc("/configGeneration", handler(getConfigGeneration(configAgent)).ServeHTTP)
 	http.HandleFunc("/registryGeneration", handler(getRegistryGeneration(registryAgent)).ServeHTTP)

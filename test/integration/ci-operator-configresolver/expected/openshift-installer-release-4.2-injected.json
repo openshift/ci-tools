@@ -9,6 +9,11 @@
       "namespace": "ocp",
       "name": "4.2",
       "tag": "base"
+    },
+    "release-job-base": {
+      "namespace": "ocp",
+      "name": "4.2",
+      "tag": "release-job-base"
     }
   },
   "build_root": {
@@ -26,21 +31,7 @@
   ],
   "tests": [
     {
-      "as": "unit",
-      "commands": "go test ./pkg/...",
-      "container": {
-        "from": "src"
-      }
-    },
-    {
-      "as": "e2e-aws",
-      "commands": "TEST_SUITE=openshift/conformance/parallel run-tests",
-      "openshift_installer": {
-        "cluster_profile": "aws"
-      }
-    },
-    {
-      "as": "e2e-azure",
+      "as": "e2e",
       "literal_steps": {
         "cluster_profile": "azure4",
         "pre": [
@@ -81,93 +72,6 @@
             "as": "e2e",
             "from": "my-image",
             "commands": "make azure-e2e",
-            "resources": {
-              "requests": {
-                "cpu": "1000m",
-                "memory": "2Gi"
-              }
-            }
-          }
-        ],
-        "post": [
-          {
-            "as": "ipi-deprovision-must-gather",
-            "from": "installer",
-            "commands": "gather\n",
-            "resources": {
-              "requests": {
-                "cpu": "1000m",
-                "memory": "2Gi"
-              }
-            }
-          },
-          {
-            "as": "ipi-deprovision-deprovision",
-            "from": "installer",
-            "commands": "openshift-cluster destroy\n",
-            "resources": {
-              "requests": {
-                "cpu": "1000m",
-                "memory": "2Gi"
-              }
-            }
-          }
-        ],
-        "observers": [
-          {
-            "name": "resourcewatcher",
-            "from_image": {
-              "namespace": "ocp",
-              "name": "resourcewatcher",
-              "tag": "latest"
-            },
-            "commands": "#!/bin/bash\n\nsleep 300"
-          }
-        ]
-      }
-    },
-    {
-      "as": "e2e-gcp",
-      "literal_steps": {
-        "cluster_profile": "gcp",
-        "pre": [
-          {
-            "as": "ipi-install-rbac",
-            "from": "installer",
-            "commands": "setup-rbac\n",
-            "resources": {
-              "requests": {
-                "cpu": "1000m",
-                "memory": "2Gi"
-              }
-            }
-          },
-          {
-            "as": "ipi-install-install",
-            "from": "installer",
-            "commands": "openshift-cluster install\n",
-            "resources": {
-              "requests": {
-                "cpu": "1000m",
-                "memory": "2Gi"
-              }
-            },
-            "env": [
-              {
-                "name": "TEST_PARAMETER",
-                "default": "test parameter default"
-              }
-            ],
-            "observers": [
-              "resourcewatcher"
-            ]
-          }
-        ],
-        "test": [
-          {
-            "as": "e2e",
-            "from": "my-image",
-            "commands": "make custom-e2e",
             "resources": {
               "requests": {
                 "cpu": "1000m",

@@ -13,6 +13,7 @@ import (
 )
 
 // JobSpec is a superset of the upstream spec.
+// +k8s:deepcopy-gen=false
 type JobSpec struct {
 	downwardapi.JobSpec `json:",inline"`
 

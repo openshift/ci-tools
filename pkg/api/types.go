@@ -716,9 +716,11 @@ type RegistryObserver struct {
 }
 
 // RegistryMetadata maps the registry info for each step in the registry by filename
+// +k8s:deepcopy-gen=false
 type RegistryMetadata map[string]RegistryInfo
 
 // RegistryInfo contains metadata about a registry component that is useful for the web UI of the step registry
+// +k8s:deepcopy-gen=false
 type RegistryInfo struct {
 	// Path is the path of the directoryfor the registry component relative to the registry's base directory
 	Path string `json:"path,omitempty"`

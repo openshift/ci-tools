@@ -34,6 +34,11 @@ const (
 	PeriodicPrefix         = "periodic"
 )
 
+// SimpleBranchRegexp matches a branch name that does not appear to be a regex (lacks wildcard,
+// group, or other modifiers). For instance, `master` is considered simple, `master-.*` would
+// not.
+var SimpleBranchRegexp = regexp.MustCompile(`^[\w\-.]+$`)
+
 // Info describes the metadata for a Prow job configuration file
 type Info struct {
 	Org    string

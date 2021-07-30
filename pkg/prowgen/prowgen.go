@@ -613,15 +613,10 @@ func generateJobBase(name, prefix string, info *ProwgenInfo, podSpec *corev1.Pod
 	return base
 }
 
-// simpleBranchRegexp matches a branch name that does not appear to be a regex (lacks wildcard,
-// group, or other modifiers). For instance, `master` is considered simple, `master-.*` would
-// not.
-var simpleBranchRegexp = regexp.MustCompile(`^[\w\-.]+$`)
-
 // exactlyBranch returns a regex string that matches exactly the given branch name: I.e. returns
 // '^master$' for 'master'. If the given branch name already looks like a regex, return it unchanged.
 func exactlyBranch(branch string) string {
-	if !simpleBranchRegexp.MatchString(branch) {
+	if !jc.SimpleBranchRegexp.MatchString(branch) {
 		return branch
 	}
 	return fmt.Sprintf("^%s$", regexp.QuoteMeta(branch))
@@ -631,7 +626,7 @@ func exactlyBranch(branch string) string {
 // I.e. returns '^master-' for 'master'. If the given branch name already looks like a regex,
 // return it unchanged.
 func featureBranch(branch string) string {
-	if !simpleBranchRegexp.MatchString(branch) {
+	if !jc.SimpleBranchRegexp.MatchString(branch) {
 		return branch
 	}
 	return fmt.Sprintf("^%s-", regexp.QuoteMeta(branch))

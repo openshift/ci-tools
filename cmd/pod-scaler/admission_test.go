@@ -248,6 +248,7 @@ func TestMutatePodLabels(t *testing.T) {
 				"ci.openshift.io/metadata.branch":  "branch",
 				"ci.openshift.io/metadata.variant": "variant",
 				"ci.openshift.io/metadata.target":  "target",
+				"created-by-ci":                    "true",
 			}}},
 		},
 		{
@@ -269,6 +270,7 @@ func TestMutatePodLabels(t *testing.T) {
 				"ci.openshift.io/metadata.branch":  "branch",
 				"ci.openshift.io/metadata.variant": "variant",
 				"ci.openshift.io/metadata.target":  "target",
+				"created-by-ci":                    "true",
 			}}},
 		},
 	}

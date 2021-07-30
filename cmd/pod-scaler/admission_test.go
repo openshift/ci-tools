@@ -85,11 +85,11 @@ func TestMutatePods(t *testing.T) {
 		},
 	}
 	mutator := podMutator{
-		logger:          logger,
-		client:          client.BuildV1(),
-		decoder:         decoder,
-		resources:       resources,
-		mutateResources: true,
+		logger:               logger,
+		client:               client.BuildV1(),
+		decoder:              decoder,
+		resources:            resources,
+		mutateResourceLimits: true,
 	}
 
 	var testCases = []struct {
@@ -303,9 +303,10 @@ func TestMutatePodResources(t *testing.T) {
 	}
 
 	var testCases = []struct {
-		name   string
-		server *resourceServer
-		pod    *corev1.Pod
+		name                 string
+		server               *resourceServer
+		mutateResourceLimits bool
+		pod                  *corev1.Pod
 	}{
 		{
 			name: "no resources to add",
@@ -321,6 +322,7 @@ func TestMutatePodResources(t *testing.T) {
 				"ci.openshift.io/metadata.variant": "variant",
 				"ci.openshift.io/metadata.target":  "target",
 			}}},
+			mutateResourceLimits: true,
 		},
 		{
 			name: "resources to add",
@@ -348,6 +350,85 @@ func TestMutatePodResources(t *testing.T) {
 					},
 				},
 			},
+			mutateResourceLimits: true,
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "tomutate",
+					Labels: map[string]string{
+						"ci.openshift.io/metadata.org":     "org",
+						"ci.openshift.io/metadata.repo":    "repo",
+						"ci.openshift.io/metadata.branch":  "branch",
+						"ci.openshift.io/metadata.variant": "variant",
+						"ci.openshift.io/metadata.target":  "target",
+						"ci.openshift.io/metadata.step":    "step",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "large", // we set larger requirements, these will not change
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+								},
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    *resource.NewQuantity(400, resource.DecimalSI),
+									corev1.ResourceMemory: *resource.NewQuantity(4e10, resource.BinarySI),
+								},
+							},
+						},
+						{
+							Name: "medium", // we set larger CPU requirements, memory will change
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceMemory: *resource.NewQuantity(1e10, resource.BinarySI),
+								},
+								Limits: corev1.ResourceList{},
+							},
+						},
+						{
+							Name: "small", // we set smaller requirements, these will change
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    *resource.NewQuantity(10, resource.DecimalSI),
+									corev1.ResourceMemory: *resource.NewQuantity(1e2, resource.BinarySI),
+								},
+								Limits: corev1.ResourceList{},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "resources to add, limits disabled",
+			server: &resourceServer{
+				logger: logger,
+				lock:   sync.RWMutex{},
+				byMetaData: map[pod_scaler.FullMetadata]corev1.ResourceRequirements{
+					baseWithContainer(&metaBase, "large"): {
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+						},
+					},
+					baseWithContainer(&metaBase, "medium"): {
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+						},
+					},
+					baseWithContainer(&metaBase, "small"): {
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+						},
+					},
+				},
+			},
+			mutateResourceLimits: false,
 			pod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "tomutate",
@@ -404,7 +485,7 @@ func TestMutatePodResources(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			original := testCase.pod.DeepCopy()
-			mutatePodResources(testCase.pod, testCase.server)
+			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits)
 			diff := cmp.Diff(original, testCase.pod)
 			// In some cases, cmp.Diff decides to use non-breaking spaces, and it's not
 			// particularly deterministic about this. We don't care.

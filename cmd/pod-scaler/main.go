@@ -55,8 +55,8 @@ type consumerOptions struct {
 	port   int
 	uiPort int
 
-	certDir         string
-	mutateResources bool
+	certDir              string
+	mutateResourceLimits bool
 }
 
 func bindOptions(fs *flag.FlagSet) *options {
@@ -69,7 +69,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.IntVar(&o.port, "port", 0, "Port to serve admission webhooks on.")
 	fs.IntVar(&o.uiPort, "ui-port", 0, "Port to serve frontend on.")
 	fs.StringVar(&o.certDir, "serving-cert-dir", "", "Path to directory with serving certificate and key for the admission webhook server.")
-	fs.BoolVar(&o.mutateResources, "mutate-resources", false, "Enable resource mutation in the admission webhook.")
+	fs.BoolVar(&o.mutateResourceLimits, "mutate-resource-limits", false, "Enable resource limit mutation in the admission webhook.")
 	fs.StringVar(&o.loglevel, "loglevel", "debug", "Logging level.")
 	fs.StringVar(&o.logStyle, "log-style", "json", "Logging style: json or text.")
 	fs.StringVar(&o.cacheDir, "cache-dir", "", "Local directory holding cache data (for development mode).")
@@ -226,7 +226,7 @@ func mainAdmission(opts *options, cache cache) {
 		logrus.WithError(err).Fatal("Failed to construct client.")
 	}
 
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResources)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits)
 }
 
 func loaders(cache cache) map[string][]*cacheReloader {

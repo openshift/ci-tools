@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -65,16 +64,6 @@ type namespacedNameKey struct {
 	key  string
 }
 
-func namespacedNameKeySliceContains(haystack []namespacedNameKey, needle namespacedNameKey) bool {
-	for _, hay := range haystack {
-		if reflect.DeepEqual(hay, needle) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (k *kvUpdateTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	l := logrus.WithFields(logrus.Fields{
 		"method": r.Method,
@@ -126,7 +115,7 @@ func (k *kvUpdateTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		errs = append(errs, fmt.Sprintf("secret %s in namespace %s cannot be used in a step: %s", body.Data[vault.SecretSyncTargetNameKey], body.Data[vault.SecretSyncTargetNamepaceKey], err.Error()))
 	}
 
-	keyConflictValidationErrs, err := k.validateKeysDontConflict(r.Context(), r.URL.Path, body.Data)
+	keyConflictValidationErrs, err := k.validateKeysDontConflict(r.Context(), body.Data)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to validate keys don't conflict")
 		errs = append(errs, "secret key validation check failed, please contact @dptp-helpdesk in #forum-testplatform")
@@ -149,22 +138,11 @@ func (k *kvUpdateTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		go k.syncSecret(body.Data)
 	}
 	if response.StatusCode > 199 && response.StatusCode < 300 {
-		k.updateKeyCacheForSecret(r.URL.Path, body.Data)
+		path := strings.TrimPrefix(r.URL.Path, "/v1/")
+		k.updateKeyCacheForSecret(path, body.Data)
 
 	}
 	return response, nil
-}
-
-func (k *kvUpdateTransport) kvCacheKeyFromURLPath(urlPath string) string {
-	urlPath = strings.TrimPrefix(urlPath, "/v1/")
-	// We use the item name as cache key, so we have to remove metadata/data from the path.
-	if strings.HasPrefix(urlPath, k.kvMountPath+"/metadata/") {
-		urlPath = strings.Replace(urlPath, "metadata/", "", 1)
-	}
-	if strings.HasPrefix(urlPath, k.kvMountPath+"/data/") {
-		urlPath = strings.Replace(urlPath, "data/", "", 1)
-	}
-	return urlPath
 }
 
 func (k *kvUpdateTransport) updateKeyCacheForSecret(path string, item map[string]string) {
@@ -172,7 +150,13 @@ func (k *kvUpdateTransport) updateKeyCacheForSecret(path string, item map[string
 		return
 	}
 
-	path = k.kvCacheKeyFromURLPath(path)
+	// We use the item name as cache key, so we have to remove metadata/data from the path.
+	if strings.HasPrefix(path, k.kvMountPath+"/metadata/") {
+		path = strings.Replace(path, "metadata/", "", 1)
+	}
+	if strings.HasPrefix(path, k.kvMountPath+"/data/") {
+		path = strings.Replace(path, "data/", "", 1)
+	}
 
 	k.existingSecretKeysByNamespaceNameLock.Lock()
 	defer k.existingSecretKeysByNamespaceNameLock.Unlock()
@@ -200,7 +184,7 @@ func (k *kvUpdateTransport) updateKeyCacheForSecret(path string, item map[string
 	}
 }
 
-func (k *kvUpdateTransport) validateKeysDontConflict(ctx context.Context, path string, data map[string]string) (validationErrs []string, err error) {
+func (k *kvUpdateTransport) validateKeysDontConflict(ctx context.Context, data map[string]string) (validationErrs []string, err error) {
 	if k.privilegedVaultClient == nil {
 		return nil, nil
 	}
@@ -213,8 +197,6 @@ func (k *kvUpdateTransport) validateKeysDontConflict(ctx context.Context, path s
 		return nil, err
 	}
 
-	path = k.kvCacheKeyFromURLPath(path)
-
 	k.existingSecretKeysByNamespaceNameLock.RLock()
 	defer k.existingSecretKeysByNamespaceNameLock.RUnlock()
 
@@ -223,7 +205,7 @@ func (k *kvUpdateTransport) validateKeysDontConflict(ctx context.Context, path s
 		if key == vault.SecretSyncTargetNamepaceKey || key == vault.SecretSyncTargetNameKey || key == vault.SecretSyncTargetClusterKey {
 			continue
 		}
-		if k.existingSecretKeysByNamespaceName[name].Has(key) && !namespacedNameKeySliceContains(k.existingSecretKeysByVaultSecretName[path], namespacedNameKey{name: name, key: key}) {
+		if k.existingSecretKeysByNamespaceName[name].Has(key) {
 			validationErrs = append(validationErrs, fmt.Sprintf("key %s in secret %s is already claimed", key, name))
 		}
 	}

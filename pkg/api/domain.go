@@ -47,14 +47,14 @@ func DomainForService(service Service) string {
 // PublicDomainForImage replaces the registry service DNS name and port with the public domain for the registry for the given cluster
 // It will raise an error when the cluster is not recognized
 func PublicDomainForImage(ClusterName, potentiallyPrivate string) (string, error) {
-	d, err := domainForClusterName(ClusterName)
+	d, err := RegistryDomainForClusterName(ClusterName)
 	if err != nil {
 		return "", err
 	}
 	return strings.ReplaceAll(potentiallyPrivate, "image-registry.openshift-image-registry.svc:5000", d), nil
 }
 
-func domainForClusterName(ClusterName string) (string, error) {
+func RegistryDomainForClusterName(ClusterName string) (string, error) {
 	switch ClusterName {
 	case string(ClusterAPPCI):
 		return ServiceDomainAPPCIRegistry, nil

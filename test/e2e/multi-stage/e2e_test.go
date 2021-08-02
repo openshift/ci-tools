@@ -158,13 +158,10 @@ func TestMultiStage(t *testing.T) {
 
 	for _, testCase := range testCases {
 		testCase := testCase
-		if testCase.needHive {
-			t.Logf("skipping hive testcase %s as it is blocked on https://issues.redhat.com/browse/HIVE-1585", testCase.name)
-			continue
-		}
 		framework.Run(t, testCase.name, func(t *framework.T, cmd *framework.CiOperatorCommand) {
 			cmd.AddArgs(testCase.args...)
 			if testCase.needHive {
+				t.Skip("https://issues.redhat.com/browse/HIVE-1585")
 				cmd.AddArgs(framework.HiveKubeconfigFlag(t))
 				// The job name will be used as claim name and e2e tests from different PRs make make claims from the same namespace.
 				// The job name should be unique.

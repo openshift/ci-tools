@@ -546,14 +546,6 @@ func stepConfigsForBuild(
 	second time.Duration,
 ) ([]api.StepConfiguration, error) {
 	var buildSteps []api.StepConfiguration
-
-	if config.InputConfiguration.BaseImages == nil {
-		config.InputConfiguration.BaseImages = make(map[string]api.ImageStreamTagReference)
-	}
-	if config.InputConfiguration.BaseRPMImages == nil {
-		config.InputConfiguration.BaseRPMImages = make(map[string]api.ImageStreamTagReference)
-	}
-
 	if target := config.InputConfiguration.BuildRootImage; target != nil {
 		if target.FromRepository {
 			istTagRef, err := buildRootImageStreamFromRepository(readFile)

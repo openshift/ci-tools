@@ -896,11 +896,9 @@ func TestStepConfigsForBuild(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			var imageConfigs []*api.InputImageTagStepConfiguration
-
 			client := fakectrlruntimeclient.NewFakeClient()
 
-			graphConf, actualError := stepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, &imageConfigs, time.Nanosecond, testCase.consoleHost)
+			graphConf, actualError := stepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, time.Nanosecond, testCase.consoleHost)
 			if diff := cmp.Diff(testCase.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("actualError does not match expectedError, diff: %s", diff)
 			}

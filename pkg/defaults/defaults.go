@@ -140,18 +140,16 @@ func fromConfig(
 	var overridableSteps, buildSteps, postSteps []api.Step
 	var imageStepLinks []api.StepLink
 	var hasReleaseStep bool
-	// A pointer to a slice of pointers is weird, but necessary. Since the slice mutates inside of the other functions,
-	// we need to pass the pointer - otherwise we will lose the updates after leaving the function scope.
-	imageConfigs := &[]*api.InputImageTagStepConfiguration{}
 	resolver := rootImageResolver(client, ctx, promote)
-	graphConf, err := stepConfigsForBuild(ctx, client, config, jobSpec, ioutil.ReadFile, resolver, imageConfigs, time.Second, consoleHost)
+	graphConf, err := stepConfigsForBuild(ctx, client, config, jobSpec, ioutil.ReadFile, resolver, time.Second, consoleHost)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get stepConfigsForBuild: %w", err)
 	}
+	imageConfigs := graphConf.InputImages()
 	rawSteps := graphConf.Steps
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			steps, testHasReleaseStep, err := stepForTest(ctx, config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, imageConfigs, pullSecret, censor)
+			steps, testHasReleaseStep, err := stepForTest(ctx, config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -554,7 +552,6 @@ func stepConfigsForBuild(
 	jobSpec *api.JobSpec,
 	readFile readFile,
 	resolveRoot resolveRoot,
-	imageConfigs *[]*api.InputImageTagStepConfiguration,
 	second time.Duration,
 	consoleHost string,
 ) (api.GraphConfiguration, error) {
@@ -591,7 +588,6 @@ func stepConfigsForBuild(
 			buildSteps = append(buildSteps, api.StepConfiguration{
 				InputImageTagStepConfiguration: &config,
 			})
-			*imageConfigs = append(*imageConfigs, &config)
 		} else if gitSourceRef := target.ProjectImageBuild; gitSourceRef != nil {
 			buildSteps = append(buildSteps, api.StepConfiguration{
 				ProjectDirectoryImageBuildInputs: gitSourceRef,
@@ -665,7 +661,6 @@ func stepConfigsForBuild(
 		}
 		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &config})
 
-		*imageConfigs = append(*imageConfigs, &config)
 	}
 
 	for alias, target := range config.InputConfiguration.BaseRPMImages {
@@ -678,7 +673,6 @@ func stepConfigsForBuild(
 			Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBaseRpm, Name: alias}},
 		}
 		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &config})
-		*imageConfigs = append(*imageConfigs, &config)
 
 		buildSteps = append(buildSteps, api.StepConfiguration{RPMImageInjectionStepConfiguration: &api.RPMImageInjectionStepConfiguration{
 			From: intermediateTag,

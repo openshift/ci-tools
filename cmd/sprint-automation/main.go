@@ -160,6 +160,20 @@ func getPagerDutyBlocks(userIdsByRole map[string]string) []slack.Block {
 			Type:   slack.MBTSection,
 			Fields: fields,
 		},
+		&slack.SectionBlock{
+			Type: slack.MBTSection,
+			Text: &slack.TextBlockObject{
+				Type: slack.MarkdownType,
+				Text: "Role manuals for: <https://docs.google.com/document/d/1eM2H_q9wMHfaJOqT08tO0fYxhAx3hxZp9_Fj1KsmJhA|triage>, <https://docs.google.com/document/d/1CYRzqE2Y4L-SRdp2DB1hXGnpk0tCd5Tm1SjgBI0ihnY|help-desk>, and <https://docs.google.com/document/d/1-zJGyiXiVqUvFWRQ5IYDwxSYmLQPD_cfJeEFXhfjDLA|intake>.",
+			},
+		},
+		&slack.SectionBlock{
+			Type: slack.MBTSection,
+			Text: &slack.TextBlockObject{
+				Type: slack.MarkdownType,
+				Text: "Team definitions for: <https://docs.google.com/document/d/19TRTNxaA3-qC4CM-stBxGTC8RqHs86Qb6mjITBsRpG4|ready>, <https://docs.google.com/document/d/1Qd4qcRHUxk5-eiFIjQm2TTH1TaGQ-zhbphLNXxyvr00|done>.",
+			},
+		},
 	}
 
 	return blocks

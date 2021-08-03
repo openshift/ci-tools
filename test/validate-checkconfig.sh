@@ -12,7 +12,7 @@ failure=0
 # The `openshift/release` registry is used for all repositories.
 registry="${clonedir}/openshift/ci-operator/step-registry"
 
-for org in openshift redhat-operator-ecosystem; do
+for org in openshift redhat-openshift-ecosystem; do
   git clone "https://github.com/${org}/release.git" --depth 1 "${clonedir}/${org}"
 
   # We need to enter the git directory and run git commands from there, our git

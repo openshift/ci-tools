@@ -9,7 +9,7 @@ trap 'rm -rf "${workdir}"' EXIT
 clonedir="${workdir}/release"
 failure=0
 
-for org in openshift redhat-operator-ecosystem; do
+for org in openshift redhat-openshift-ecosystem; do
   rm -rf "${clonedir}"
   git clone "https://github.com/${org}/release.git" --depth 1 "${clonedir}"
 

@@ -2,6 +2,7 @@ package release
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -10,13 +11,18 @@ import (
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/rest"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 )
@@ -64,15 +70,55 @@ func (s *promotionStep) run(ctx context.Context) error {
 		return fmt.Errorf("could not resolve pipeline imagestream: %w", err)
 	}
 
-	imageMirrorTarget := getImageMirrorTarget(tags, pipeline, registryDomain(s.configuration.PromotionConfiguration))
+	imageMirrorTarget, namespaces := getImageMirrorTarget(tags, pipeline, registryDomain(s.configuration.PromotionConfiguration))
 	if len(imageMirrorTarget) == 0 {
 		logrus.Info("Nothing to promote, skipping...")
 		return nil
 	}
 
+	if err := s.ensureNamespaces(ctx, namespaces); err != nil {
+		return fmt.Errorf("failed to ensure namespaces to promote to in central registry: %w", err)
+	}
+
 	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace())); err != nil {
 		return fmt.Errorf("unable to run promotion pod: %w", err)
 	}
+	return nil
+}
+
+func (s *promotionStep) ensureNamespaces(ctx context.Context, namespaces sets.String) error {
+	var dockercfg credentialprovider.DockerConfigJSON
+	if err := json.Unmarshal(s.pushSecret.Data[coreapi.DockerConfigJsonKey], &dockercfg); err != nil {
+		return fmt.Errorf("failed to deserialize push secret: %w", err)
+	}
+
+	appCIDockercfg, hasAppCIDockercfg := dockercfg.Auths[api.ServiceDomainAPPCIRegistry]
+	if !hasAppCIDockercfg {
+		return fmt.Errorf("push secret has no entry for %s", api.ServiceDomainAPPCIRegistry)
+	}
+
+	appCIKubeconfig := &rest.Config{Host: api.APPCIKubeAPIURL, BearerToken: appCIDockercfg.Password}
+	client, err := corev1client.NewForConfig(appCIKubeconfig)
+	if err != nil {
+		return fmt.Errorf("failed to construct kubeconfig: %w", err)
+	}
+
+	for namespace := range namespaces {
+		var success bool
+		var errs []error
+		for i := 0; i < 3; i++ {
+			if _, err := client.Namespaces().Create(ctx, &coreapi.Namespace{ObjectMeta: meta.ObjectMeta{Name: namespace}}, meta.CreateOptions{}); err == nil || apierrors.IsAlreadyExists(err) {
+				success = true
+				break
+			} else {
+				errs = append(errs, err)
+			}
+		}
+		if !success {
+			return fmt.Errorf("failed to create namespace %s with retries: %w", namespace, utilerrors.NewAggregate(errs))
+		}
+	}
+
 	return nil
 }
 
@@ -85,11 +131,13 @@ func registryDomain(configuration *api.PromotionConfiguration) string {
 	return registry
 }
 
-func getImageMirrorTarget(tags map[string]api.ImageStreamTagReference, pipeline *imagev1.ImageStream, registry string) map[string]string {
+func getImageMirrorTarget(tags map[string]api.ImageStreamTagReference, pipeline *imagev1.ImageStream, registry string) (srcTargetMap map[string]string, namespaces sets.String) {
 	if pipeline == nil {
-		return nil
+		return nil, nil
 	}
 	imageMirror := map[string]string{}
+	// Will this ever include more than one?
+	namespaces = sets.String{}
 	for src, dst := range tags {
 		dockerImageReference := findDockerImageReference(pipeline, src)
 		if dockerImageReference == "" {
@@ -97,11 +145,12 @@ func getImageMirrorTarget(tags map[string]api.ImageStreamTagReference, pipeline 
 		}
 		dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
 		imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s", registry, dst.ISTagName())
+		namespaces.Insert(dst.Namespace)
 	}
 	if len(imageMirror) == 0 {
-		return nil
+		return nil, nil
 	}
-	return imageMirror
+	return imageMirror, namespaces
 }
 
 func getPublicImageReference(dockerImageReference, publicDockerImageRepository string) string {

@@ -41,6 +41,8 @@ const (
 	AutoScalePodsLabel = "ci.openshift.io/scale-pods"
 
 	NamespaceDir = "build-resources"
+
+	APPCIKubeAPIURL = "https://api.ci.l2s4.p1.openshiftapps.com:6443"
 )
 
 var (

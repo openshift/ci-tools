@@ -14,17 +14,17 @@ See the [Triggered Job Interface](#triggered-job-interface) section for details
  about the parametrization.
 
 The `cpaas-cvp-optional-operator-common-tests` job runs ci-operator using
-a config stored in [redhat-operator-ecosystem](https://github.com/redhat-operator-ecosystem/release/tree/master/ci-operator/config/redhat-operator-ecosystem/playground).
+a config stored in [redhat-openshift-ecosystem](https://github.com/redhat-openshift-ecosystem/release/tree/master/ci-operator/config/redhat-openshift-ecosystem/playground).
 The exact configuration to use is inferred from the desired OCP version. For
 example, for OCP version 4.5, ci-operator uses the config for the
-artificial `cvp-ocp-4.5` branch of the `redhat-operator-ecosystem/playground`
+artificial `cvp-ocp-4.5` branch of the `redhat-openshift-ecosystem/playground`
 repository. The ci-operator targets a test with a name inferred from the desired
 cloud platform. For example, when `aws` is requested, ci-operator targets the
 `cvp-common-aws` test from the config. This example shows how the job calls
 ci-operator:
 
 ```console
-$  ci-operator --org=redhat-operator-ecosystem \
+$  ci-operator --org=redhat-openshift-ecosystem \
                --repo=playground \
                --branch=cvp-ocp-$(OCP_VERSION) \
                --target=cvp-common-$(CLOUD_PLATFORM) \

@@ -3,7 +3,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - cluster-profile
+    - ^cluster-profile$
+    - ^cluster-profile-
     context: ci/prow/images
     decorate: true
     decoration_config:

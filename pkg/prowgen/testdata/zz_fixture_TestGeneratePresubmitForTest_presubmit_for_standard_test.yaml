@@ -1,7 +1,8 @@
 agent: kubernetes
 always_run: true
 branches:
-- branch
+- ^branch$
+- ^branch-
 context: ci/prow/testname
 decorate: true
 decoration_config:

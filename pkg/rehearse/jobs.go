@@ -94,8 +94,17 @@ func NewCMClient(clusterConfig *rest.Config, namespace string, dry bool) (corecl
 // and we know that `\` is an invalid character in Git branch names, so any
 // that exist in the name have been placed there by regexp.QuoteMeta() and
 // can simply be removed as well.
+// Iterates over all branches and returns an empty string when no branch
+// is a simple branch name after the stripping
 func BranchFromRegexes(branches []string) string {
-	return strings.ReplaceAll(strings.TrimPrefix(strings.TrimSuffix(branches[0], "$"), "^"), "\\", "")
+	for i := range branches {
+		branch := strings.ReplaceAll(strings.TrimPrefix(strings.TrimSuffix(branches[i], "$"), "^"), "\\", "")
+		if branch != "" && jobconfig.SimpleBranchRegexp.MatchString(branch) {
+			return branch
+		}
+	}
+
+	return ""
 }
 
 func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int, refs *pjapi.Refs) (*prowconfig.Presubmit, error) {
@@ -193,11 +202,6 @@ func filterPresubmits(changedPresubmits map[string][]prowconfig.Presubmit, logge
 
 			if len(job.Branches) == 0 {
 				jobLogger.Warn("cannot rehearse jobs with no branches")
-				continue
-			}
-
-			if len(job.Branches) != 1 {
-				jobLogger.Warn("cannot rehearse jobs that run over multiple branches")
 				continue
 			}
 
@@ -440,10 +444,15 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 			if len(splitOrgRepo) != 2 {
 				jobLogger.WithError(fmt.Errorf("failed to identify org and repo from string %s", orgrepo)).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")
 			}
+			branch := BranchFromRegexes(job.Branches)
+			if branch == "" {
+				jobLogger.Warn("failed to extract a simple branch name for a presubmit")
+				continue
+			}
 			metadata := api.Metadata{
 				Org:     splitOrgRepo[0],
 				Repo:    splitOrgRepo[1],
-				Branch:  BranchFromRegexes(job.Branches),
+				Branch:  branch,
 				Variant: VariantFromLabels(job.Labels),
 			}
 			testname := metadata.TestNameFromJobName(job.Name, jobconfig.PresubmitPrefix)

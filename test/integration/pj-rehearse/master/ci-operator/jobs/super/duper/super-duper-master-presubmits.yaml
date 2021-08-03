@@ -81,7 +81,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - master
+    - ^master$
+    - ^master-
     context: ci/prow/images
     decorate: true
     decoration_config:

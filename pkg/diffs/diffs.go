@@ -45,17 +45,18 @@ func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger 
 			continue
 		}
 
-		withoutTests := func(in cioperatorapi.ReleaseBuildConfiguration) cioperatorapi.ReleaseBuildConfiguration {
+		withoutTestsAndResources := func(in cioperatorapi.ReleaseBuildConfiguration) cioperatorapi.ReleaseBuildConfiguration {
 			var out cioperatorapi.ReleaseBuildConfiguration
 			if err := deepcopy.Copy(&out, &in); err != nil {
 				logrus.WithError(err).Warn("Could not deep copy configuration.") // this is a programming error
 				return out
 			}
 			out.Tests = nil
+			out.Resources = nil
 			return out
 		}
 
-		if !equality.Semantic.DeepEqual(withoutTests(oldConfig.Configuration), withoutTests(newConfig.Configuration)) {
+		if !equality.Semantic.DeepEqual(withoutTestsAndResources(oldConfig.Configuration), withoutTestsAndResources(newConfig.Configuration)) {
 			logger.WithField(logCiopConfig, filename).Info(changedCiopConfigMsg)
 			ret[filename] = newConfig
 			continue
@@ -66,6 +67,27 @@ func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger 
 
 		for as, test := range newTests {
 			if !equality.Semantic.DeepEqual(oldTests[as], test) {
+				logger.WithField(logCiopConfig, filename).Info(changedCiopConfigMsg)
+				ret[filename] = newConfig
+				jobs.Insert(as)
+			}
+		}
+
+		oldResources := oldConfig.Configuration.Resources
+		newResources := newConfig.Configuration.Resources
+
+		for as, resource := range newResources {
+			if as == "*" && !equality.Semantic.DeepEqual(oldResources["*"], resource) {
+				for testName := range newTests {
+					if _, ok := newResources[testName]; !ok {
+						jobs.Insert(testName)
+						ret[filename] = newConfig
+					}
+				}
+				break
+			}
+
+			if !equality.Semantic.DeepEqual(oldResources[as], resource) {
 				logger.WithField(logCiopConfig, filename).Info(changedCiopConfigMsg)
 				ret[filename] = newConfig
 				jobs.Insert(as)

@@ -36,6 +36,10 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 					Name:      "name",
 				},
 			},
+			Resources: cioperatorapi.ResourceConfiguration{
+				"*":    cioperatorapi.ResourceRequirements{Requests: cioperatorapi.ResourceList{"cpu": "1"}},
+				"unit": cioperatorapi.ResourceRequirements{Requests: cioperatorapi.ResourceList{"cpu": "1"}},
+			},
 			Tests: []cioperatorapi.TestStepConfiguration{
 				{
 					As:       "unit",
@@ -159,6 +163,89 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 				"org-repo-branch.yaml": {
 					"unit": sets.Empty{},
 					"e2e":  sets.Empty{},
+				},
+			},
+		},
+		{
+			name: "changed resources for a single test",
+			configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
+				before := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
+				afterConfig := config.DataWithInfo{}
+				if err := deepcopy.Copy(&afterConfig, &baseCiopConfig); err != nil {
+					t.Fatal(err)
+				}
+				afterConfig.Configuration.Resources["unit"].Requests["cpu"] = "2"
+				after := config.DataByFilename{"org-repo-branch.yaml": afterConfig}
+				return before, after
+			},
+			expected: func() config.DataByFilename {
+				expected := config.DataWithInfo{}
+				if err := deepcopy.Copy(&expected, &baseCiopConfig); err != nil {
+					t.Fatal(err)
+				}
+				expected.Configuration.Resources["unit"].Requests["cpu"] = "2"
+				return config.DataByFilename{"org-repo-branch.yaml": expected}
+			},
+			expectedAffectedJobs: map[string]sets.String{
+				"org-repo-branch.yaml": {
+					"unit": sets.Empty{},
+				},
+			},
+		},
+		{
+			name: "changed resources for all tests, expect not to include `unit` which already has resources defined",
+			configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
+				before := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
+				afterConfig := config.DataWithInfo{}
+				if err := deepcopy.Copy(&afterConfig, &baseCiopConfig); err != nil {
+					t.Fatal(err)
+				}
+				afterConfig.Configuration.Resources["*"].Requests["cpu"] = "2"
+				after := config.DataByFilename{"org-repo-branch.yaml": afterConfig}
+				return before, after
+			},
+			expected: func() config.DataByFilename {
+				expected := config.DataWithInfo{}
+				if err := deepcopy.Copy(&expected, &baseCiopConfig); err != nil {
+					t.Fatal(err)
+				}
+				expected.Configuration.Resources["*"].Requests["cpu"] = "2"
+				return config.DataByFilename{"org-repo-branch.yaml": expected}
+			},
+			expectedAffectedJobs: map[string]sets.String{
+				"org-repo-branch.yaml": {
+					"e2e":    sets.Empty{},
+					"verify": sets.Empty{},
+				},
+			},
+		},
+		{
+			name: "changed single test and single resource",
+			configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
+				before := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
+				afterConfig := config.DataWithInfo{}
+				if err := deepcopy.Copy(&afterConfig, &baseCiopConfig); err != nil {
+					t.Fatal(err)
+				}
+
+				afterConfig.Configuration.Resources["unit"].Requests["cpu"] = "2"
+				afterConfig.Configuration.Tests[2].Commands = "changed commands"
+				after := config.DataByFilename{"org-repo-branch.yaml": afterConfig}
+				return before, after
+			},
+			expected: func() config.DataByFilename {
+				expected := config.DataWithInfo{}
+				if err := deepcopy.Copy(&expected, &baseCiopConfig); err != nil {
+					t.Fatal(err)
+				}
+				expected.Configuration.Tests[2].Commands = "changed commands"
+				expected.Configuration.Resources["unit"].Requests["cpu"] = "2"
+				return config.DataByFilename{"org-repo-branch.yaml": expected}
+			},
+			expectedAffectedJobs: map[string]sets.String{
+				"org-repo-branch.yaml": {
+					"unit":   sets.Empty{},
+					"verify": sets.Empty{},
 				},
 			},
 		},

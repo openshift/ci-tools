@@ -36,7 +36,7 @@ import (
 func TestProduce(t *testing.T) {
 	t.Parallel()
 	T := testhelper.NewT(interrupts.Context(), t)
-	prometheusAddr, info := prometheus.Initialize(T, T.TempDir(), rand.New(rand.NewSource(4641280330504625122)))
+	prometheusAddr, info := prometheus.Initialize(T, T.TempDir(), rand.New(rand.NewSource(4641280330504625122)), false)
 	kubeconfigFile := kubernetes.Fake(T, T.TempDir(), kubernetes.Prometheus(prometheusAddr))
 
 	dataDir := T.TempDir()
@@ -157,7 +157,7 @@ func TestBuildPodAdmission(t *testing.T) {
 		}
 	}
 
-	admissionHost, transport := run.Admission(T, dataDir, kubeconfigFile, ctx)
+	admissionHost, transport := run.Admission(T, dataDir, kubeconfigFile, ctx, false)
 	admissionClient := http.Client{Transport: transport}
 
 	var testCases = []struct {
@@ -239,7 +239,7 @@ func TestBuildPodAdmission(t *testing.T) {
 func TestAdmission(t *testing.T) {
 	t.Parallel()
 	T := testhelper.NewT(interrupts.Context(), t)
-	prometheusAddr, _ := prometheus.Initialize(T, t.TempDir(), rand.New(rand.NewSource(4641280330504625122)))
+	prometheusAddr, _ := prometheus.Initialize(T, t.TempDir(), rand.New(rand.NewSource(4641280330504625122)), false)
 
 	kubeconfigFile := kubernetes.Fake(T, T.TempDir(), kubernetes.Prometheus(prometheusAddr), kubernetes.Builds(map[string]map[string]map[string]string{
 		"namespace": {
@@ -259,7 +259,7 @@ func TestAdmission(t *testing.T) {
 	}()
 	dataDir := T.TempDir()
 	run.Producer(T, dataDir, kubeconfigFile, 0*time.Second)
-	admissionHost, transport := run.Admission(T, dataDir, kubeconfigFile, ctx)
+	admissionHost, transport := run.Admission(T, dataDir, kubeconfigFile, ctx, false)
 	admissionClient := http.Client{Transport: transport}
 
 	var testCases = []struct {

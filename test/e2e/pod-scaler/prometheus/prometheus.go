@@ -21,7 +21,7 @@ import (
 )
 
 // Initialize runs Prometheus with backfilled data under the given dir.
-func Initialize(t testhelper.TestingTInterface, tmpDir string, r *rand.Rand) (string, *DataInStages) {
+func Initialize(t testhelper.TestingTInterface, tmpDir string, r *rand.Rand, stream bool) (string, *DataInStages) {
 	prometheusDir, err := ioutil.TempDir(tmpDir, "prometheus")
 	if err != nil {
 		t.Fatalf("Failed to create temporary directory for Prometheus: %v", err)
@@ -77,7 +77,7 @@ func Initialize(t testhelper.TestingTInterface, tmpDir string, r *rand.Rand) (st
 			return []string{"--prometheus-endpoint", fmt.Sprintf("%s:%s", prometheusHostname, port)}
 		},
 	)
-	prometheus.RunFromFrameworkRunner(t, interrupts.Context())
+	prometheus.RunFromFrameworkRunner(t, interrupts.Context(), stream)
 	// TODO: wait more intelligently
 	time.Sleep(1 * time.Second)
 	prometheusConnectionFlags := prometheus.ClientFlags()

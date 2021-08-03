@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/hashicorp/vault/api"
 
 	coreapi "k8s.io/api/core/v1"
@@ -2624,6 +2625,60 @@ func TestIntegration(t *testing.T) {
 			},
 			expectedError: utilerrors.NewAggregate([]error{errors.New("failed to update secrets: secret cluster-1:namespace-1/prod-secret-1 needs updating in place, use --force to do so")}),
 		},
+		{
+			id:    "Two items reference the same secret but different keys, success",
+			force: true,
+			config: secretbootstrap.Config{
+				UserSecretsTargetClusters: []string{"cluster-1"},
+			},
+			secretGetters: map[string]Getter{"cluster-1": fake.NewSimpleClientset().CoreV1()},
+			vaultData: map[string]map[string][]byte{
+				"user-item-1": {
+					"some-data-key":               []byte("a-secret"),
+					"secretsync/target-namespace": []byte("namespace-1"),
+					"secretsync/target-name":      []byte("some-name"),
+				},
+				"user-item-2": {
+					"some-different-data-key":     []byte("a-secret"),
+					"secretsync/target-namespace": []byte("namespace-1"),
+					"secretsync/target-name":      []byte("some-name"),
+				},
+			},
+			expectedSecrets: map[string][]coreapi.Secret{
+				"cluster-1": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data: map[string][]byte{
+							"some-data-key":                []byte("a-secret"),
+							"some-different-data-key":      []byte("a-secret"),
+							"secretsync-vault-source-path": []byte("secret/user-item-1,secret/user-item-2"),
+						},
+						Type: coreapi.SecretTypeOpaque,
+					},
+				},
+			},
+		},
+		{
+			id:    "Two items reference the same key in the same secret, failure",
+			force: true,
+			config: secretbootstrap.Config{
+				UserSecretsTargetClusters: []string{"cluster-1"},
+			},
+			secretGetters: map[string]Getter{"cluster-1": fake.NewSimpleClientset().CoreV1()},
+			vaultData: map[string]map[string][]byte{
+				"user-item-1": {
+					"some-data-key":               []byte("a-secret"),
+					"secretsync/target-namespace": []byte("namespace-3"),
+					"secretsync/target-name":      []byte("some-name"),
+				},
+				"user-item-2": {
+					"some-data-key":               []byte("a-secret"),
+					"secretsync/target-namespace": []byte("namespace-3"),
+					"secretsync/target-name":      []byte("some-name"),
+				},
+			},
+			expectedError: utilerrors.NewAggregate([]error{errors.New("the some-data-key key in secret namespace-3/some-name is referenced by multiple vault items: secret/user-item-1,secret/user-item-2")}),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -2686,8 +2741,8 @@ func TestIntegration(t *testing.T) {
 					}
 				}
 
-				if diff := cmp.Diff(actualSecretsByCluster, tc.expectedSecrets); diff != "" {
-					t.Fatal(diff)
+				if diff := cmp.Diff(actualSecretsByCluster, tc.expectedSecrets, cmpopts.EquateEmpty()); diff != "" {
+					t.Errorf("secrets by cluster differ from expected after initial create: %s", diff)
 				}
 			}
 
@@ -2699,7 +2754,7 @@ func TestIntegration(t *testing.T) {
 						s.Data[key] = []byte("old-value")
 					}
 					if _, err := tc.secretGetters[cluster].Secrets(s.Namespace).Update(context.Background(), &s, metav1.UpdateOptions{}); err != nil {
-						t.Fatalf("coudln't update secret: %v", err)
+						t.Fatalf("couldn't update secret %s/%s: %v", s.Namespace, s.Name, err)
 					}
 				}
 			}
@@ -2721,15 +2776,15 @@ func TestIntegration(t *testing.T) {
 				for cluster, secretGetter := range tc.secretGetters {
 					actualSecrets, err := secretGetter.Secrets("").List(context.Background(), metav1.ListOptions{})
 					if err != nil {
-						t.Fatal(err)
+						t.Fatalf("failed to list secrets: %v", err)
 					}
 					if len(actualSecrets.Items) > 0 {
 						actualUpdatedSecretsByCluster[cluster] = append(actualUpdatedSecretsByCluster[cluster], actualSecrets.Items...)
 					}
 				}
 
-				if diff := cmp.Diff(actualUpdatedSecretsByCluster, tc.expectedSecrets); diff != "" {
-					t.Fatal(diff)
+				if diff := cmp.Diff(actualUpdatedSecretsByCluster, tc.expectedSecrets, cmpopts.EquateEmpty()); diff != "" {
+					t.Fatalf("secrets by cluster differ from expected after in update case: %s", diff)
 				}
 			}
 		})

@@ -271,6 +271,7 @@ func TestAdmission(t *testing.T) {
 			pod: corev1.Pod{ObjectMeta: metav1.ObjectMeta{
 				Name: "pod",
 				Labels: map[string]string{
+					"created-by-ci":                    "true",
 					"ci.openshift.io/metadata.org":     "org",
 					"ci.openshift.io/metadata.repo":    "repo",
 					"ci.openshift.io/metadata.branch":  "branch",
@@ -283,6 +284,7 @@ func TestAdmission(t *testing.T) {
 			pod: corev1.Pod{ObjectMeta: metav1.ObjectMeta{
 				Name: "pod",
 				Labels: map[string]string{
+					"created-by-ci":                    "true",
 					"ci.openshift.io/metadata.org":     "org",
 					"ci.openshift.io/metadata.repo":    "repo",
 					"ci.openshift.io/metadata.branch":  "branch",

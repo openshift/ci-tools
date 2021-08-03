@@ -313,7 +313,7 @@ func TestReconcile(t *testing.T) {
 				Images: []imagev1.ImageImportSpec{{
 					From: corev1.ObjectReference{
 						Kind: "DockerImage",
-						Name: "registry.svc.ci.openshift.org/ocp/4.4@sha256:a273f5ac7f1ad8f7ffab45205ac36c8dff92d9107ef3ae429eeb135fa8057b8b",
+						Name: "registry.ci.openshift.org/ns/4.2@sha256:a273f5ac7f1ad8f7ffab45205ac36c8dff92d9107ef3ae429eeb135fa8057b8b",
 					},
 					To:              &corev1.LocalObjectReference{Name: "Question"},
 					ReferencePolicy: imagev1.TagReferencePolicy{Type: "Local"},

@@ -411,6 +411,16 @@ path "secret/metadata/team-1/*" {
 				},
 			},
 			{
+				name:             "Updating the previous secret and adding another key succeeds",
+				targetSecretName: "fourth-secret",
+				data: map[string]string{
+					"secretsync/target-namespace": "default",
+					"secretsync/target-name":      "secret",
+					"some-secret-key":             "some-value",
+					"some-secret-key-2":           "another-value",
+				},
+			},
+			{
 				name:             "Creating a secret with no target",
 				targetSecretName: "selfmanaged-secret",
 				data: map[string]string{

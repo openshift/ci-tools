@@ -308,7 +308,12 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		return fmt.Errorf("failed to get imageStream %s from registry cluster: %w", isName.String(), err)
 	}
 
-	*log = *log.WithField("docker_image_reference", sourceImageStreamTag.Image.DockerImageReference)
+	registryDomain, err := api.RegistryDomainForClusterName(r.registryClusterName)
+	if err != nil {
+		return fmt.Errorf("failed to get registry domain for cluster %s: %w", r.registryClusterName, err)
+	}
+	pullSpec := pullSpecFromImageStreamTag(registryDomain, sourceImageStreamTag)
+	*log = *log.WithField("docker_image_reference", pullSpec)
 	if isImportForbidden(sourceImageStreamTag.Image.DockerImageReference, r.forbiddenRegistries) {
 		log.Debugf("Import from any cluster in %s is forbidden, ignoring", r.forbiddenRegistries)
 		return nil
@@ -351,10 +356,6 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 	if err := controllerutil.EnsureImagePullSecret(ctx, decoded.Namespace, client, log); err != nil {
 		return fmt.Errorf("failed to ensure imagePullSecret on cluster %s: %w", cluster, err)
 	}
-	publicDomainForImage, err := api.PublicDomainForImage(r.registryClusterName, sourceImageStreamTag.Image.DockerImageReference)
-	if err != nil {
-		return fmt.Errorf("failed to get public domain for %s and %s: %w", r.registryClusterName, sourceImageStreamTag.Image.DockerImageReference, err)
-	}
 	imageStreamImport := &imagev1.ImageStreamImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: decoded.Namespace,
@@ -365,7 +366,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 			Images: []imagev1.ImageImportSpec{{
 				From: corev1.ObjectReference{
 					Kind: "DockerImage",
-					Name: publicDomainForImage,
+					Name: pullSpec,
 				},
 				To: &corev1.LocalObjectReference{Name: imageTag},
 				ReferencePolicy: imagev1.TagReferencePolicy{
@@ -635,4 +636,8 @@ func isImportForbidden(pullSpec string, forbiddenRegistries sets.String) bool {
 		}
 	}
 	return false
+}
+
+func pullSpecFromImageStreamTag(registryURL string, isTag *imagev1.ImageStreamTag) string {
+	return registryURL + "/" + isTag.Namespace + "/" + strings.Split(isTag.Name, ":")[0] + "@" + isTag.Image.ObjectMeta.Name
 }

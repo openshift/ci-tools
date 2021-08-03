@@ -29,7 +29,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 )
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResources bool) {
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool) {
 	logger := logrus.WithField("component", "admission")
 	logger.Info("Initializing admission webhook server.")
 	health := pjutil.NewHealthOnPort(healthPort)
@@ -42,7 +42,7 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 		Port:    port,
 		CertDir: certDir,
 	}
-	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResources: mutateResources}})
+	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits}})
 	logger.Info("Serving admission webhooks.")
 	if err := server.StartStandalone(interrupts.Context(), nil); err != nil {
 		logrus.WithError(err).Fatal("Failed to serve webhooks.")
@@ -50,11 +50,11 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 }
 
 type podMutator struct {
-	logger          *logrus.Entry
-	client          buildclientv1.BuildV1Interface
-	resources       *resourceServer
-	mutateResources bool
-	decoder         *admission.Decoder
+	logger               *logrus.Entry
+	client               buildclientv1.BuildV1Interface
+	resources            *resourceServer
+	mutateResourceLimits bool
+	decoder              *admission.Decoder
 }
 
 func (m *podMutator) Handle(ctx context.Context, req admission.Request) admission.Response {
@@ -81,9 +81,7 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		logger.WithError(err).Error("Failed to handle rehearsal Pod.")
 		return admission.Allowed("Failed to handle rehearsal Pod, ignoring.")
 	}
-	if m.mutateResources {
-		mutatePodResources(pod, m.resources)
-	}
+	mutatePodResources(pod, m.resources, m.mutateResourceLimits)
 
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
@@ -140,12 +138,17 @@ func mutatePodLabels(pod *corev1.Pod, build *buildv1.Build) {
 	if pod.Labels == nil {
 		pod.Labels = map[string]string{}
 	}
+	backfilledFromBuild := false
 	for _, label := range []string{steps.LabelMetadataOrg, steps.LabelMetadataRepo, steps.LabelMetadataBranch, steps.LabelMetadataVariant, steps.LabelMetadataTarget} {
 		buildValue, buildHas := build.Labels[label]
 		_, podHas := pod.Labels[label]
 		if buildHas && !podHas {
 			pod.Labels[label] = buildValue
+			backfilledFromBuild = true
 		}
+	}
+	if backfilledFromBuild {
+		pod.Labels[steps.CreatedByCILabel] = "true"
 	}
 }
 
@@ -196,13 +199,15 @@ func reconcileLimits(resources *corev1.ResourceRequirements) {
 	}
 }
 
-func mutatePodResources(pod *corev1.Pod, server *resourceServer) {
+func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool) {
 	for i := range pod.Spec.InitContainers {
 		meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, pod.Spec.InitContainers[i].Name)
 		resources, recommendationExists := server.recommendedRequestFor(meta)
 		if recommendationExists {
 			useOursIfLarger(&resources, &pod.Spec.InitContainers[i].Resources)
-			reconcileLimits(&pod.Spec.InitContainers[i].Resources)
+			if mutateResourceLimits {
+				reconcileLimits(&pod.Spec.InitContainers[i].Resources)
+			}
 		}
 	}
 	for i := range pod.Spec.Containers {
@@ -210,7 +215,9 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer) {
 		resources, recommendationExists := server.recommendedRequestFor(meta)
 		if recommendationExists {
 			useOursIfLarger(&resources, &pod.Spec.Containers[i].Resources)
-			reconcileLimits(&pod.Spec.Containers[i].Resources)
+			if mutateResourceLimits {
+				reconcileLimits(&pod.Spec.Containers[i].Resources)
+			}
 		}
 	}
 }

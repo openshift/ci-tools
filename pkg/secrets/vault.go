@@ -3,6 +3,7 @@ package secrets
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -203,13 +204,24 @@ func (c *vaultClient) GetUserSecrets() (map[types.NamespacedName]map[string]stri
 				return
 			}
 			nn := types.NamespacedName{Namespace: item.Data[vault.SecretSyncTargetNamepaceKey], Name: item.Data[vault.SecretSyncTargetNameKey]}
-			if val, ok := result[nn]; ok {
-				errs = append(errs, fmt.Errorf("both the %s and the %s vault item point to the %s secret", val[vault.VaultSourceKey], path, nn.String()))
-				return
+			if _, ok := result[nn]; !ok {
+				result[nn] = map[string]string{}
 			}
-			result[nn] = map[string]string{vault.VaultSourceKey: path}
+
+			// We must sort the source part elements to avoid no-op updates
+			vaultSourcePaths := []string{path}
+			if result[nn][vault.VaultSourceKey] != "" {
+				vaultSourcePaths = append(vaultSourcePaths, strings.Split(result[nn][vault.VaultSourceKey], ",")...)
+				sort.Stable(sort.StringSlice(vaultSourcePaths))
+			}
+			result[nn][vault.VaultSourceKey] = strings.Join(vaultSourcePaths, ",")
+
 			for k, v := range item.Data {
 				if k == vault.SecretSyncTargetNamepaceKey || k == vault.SecretSyncTargetNameKey {
+					continue
+				}
+				if _, alreadySet := result[nn][k]; alreadySet {
+					errs = append(errs, fmt.Errorf("the %s key in secret %s is referenced by multiple vault items: %s", k, nn, result[nn][vault.VaultSourceKey]))
 					continue
 				}
 				result[nn][k] = v

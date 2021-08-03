@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -114,6 +115,11 @@ func runAndCommitIfNeeded(stdout, stderr io.Writer, author, cmd string, args []s
 	return true, nil
 }
 
+type step struct {
+	command   string
+	arguments []string
+}
+
 func main() {
 	o := parseOptions()
 	if err := validateOptions(o); err != nil {
@@ -135,10 +141,7 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to change to root dir")
 	}
 
-	steps := []struct {
-		command   string
-		arguments []string
-	}{
+	steps := []step{
 		{
 			// Will check if repos that are part of the OCP payload
 			// have an up-to-date .ci-operator.yaml and if yes, update
@@ -234,21 +237,12 @@ func main() {
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: sa}
 	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: sa}
 	author := fmt.Sprintf("%s <%s>", o.gitName, o.gitEmail)
-	commitsCounter := 0
-
-	for _, step := range steps {
-		committed, err := runAndCommitIfNeeded(stdout, stderr, author, step.command, step.arguments)
-		if err != nil {
-			logrus.WithError(err).Fatal("failed to run command and commit the changes")
-		}
-
-		if committed {
-			commitsCounter++
-		}
+	needsPushing, err := runSteps(steps, author, stdout, stderr)
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to run steps")
 	}
-	if commitsCounter == 0 {
-		logrus.Info("no new commits, existing ...")
-		os.Exit(0)
+	if !needsPushing {
+		return
 	}
 
 	title := fmt.Sprintf("%s by auto-config-brancher job at %s", matchTitle, time.Now().Format(time.RFC1123))
@@ -264,4 +258,40 @@ func main() {
 	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, fmt.Sprintf("/cc @%s", o.assign), o.githubLogin+":"+remoteBranch, "master", remoteBranch, true, labelsToAdd, false); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
+}
+
+func runSteps(steps []step, author string, stdout, stderr io.Writer) (needsPushing bool, err error) {
+	startCommitOut, err := exec.Command("git", "rev-parse", "HEAD").CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("failed to execute `git rev-parse HEAD`: %w\noutput:%s\n", err, string(startCommitOut))
+	}
+	startCommitSHA := strings.TrimSpace(string(startCommitOut))
+
+	var didCommit bool
+	for _, step := range steps {
+		committed, err := runAndCommitIfNeeded(stdout, stderr, author, step.command, step.arguments)
+		if err != nil {
+			return false, fmt.Errorf("failed to run command and commit the changes: %w", err)
+		}
+
+		if committed {
+			didCommit = didCommit || true
+		}
+	}
+
+	if !didCommit {
+		logrus.Info("No new commits")
+		return false, nil
+	}
+
+	overallDiff, err := exec.Command("git", "diff", startCommitSHA).CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("failed to check the overall diff: %w, out:\n%s\n", err, string(overallDiff))
+	}
+	if strings.TrimSpace(string(overallDiff)) == "" {
+		logrus.Info("Empty overall diff")
+		return false, nil
+	}
+
+	return true, nil
 }

@@ -3,10 +3,16 @@ package config
 import (
 	"flag"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"github.com/openshift/ci-tools/pkg/api"
+	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 )
 
 func TestOptions_Bind(t *testing.T) {
@@ -247,5 +253,87 @@ func TestOptions_Matches(t *testing.T) {
 				t.Errorf("%s: got incorrect match: expected %v, got %v", testCase.name, expected, actual)
 			}
 		})
+	}
+}
+
+func TestOperateOnCIOperatorConfigDir(t *testing.T) {
+	testConfigDir := "./testdata/config"
+
+	testCases := []struct {
+		id                     string
+		options                Options
+		expectedProcessedFiles sets.String
+	}{
+		{
+			id:      "no options, expect to process all files",
+			options: Options{},
+			expectedProcessedFiles: sets.NewString([]string{
+				"foo-bar-master.yaml",
+				"foo-bar-release-4.9.yaml",
+				"super-duper-master.yaml",
+				"super-duper-release-4.9.yaml",
+			}...),
+		},
+		{
+			id:      "specify org, expect to process only files that belong to that org",
+			options: Options{Org: "foo"},
+			expectedProcessedFiles: sets.NewString([]string{
+				"foo-bar-master.yaml",
+				"foo-bar-release-4.9.yaml",
+			}...),
+		},
+		{
+			id:      "specify org and repo, expect to process only files that belong to that org/repo",
+			options: Options{Org: "foo", Repo: "bar"},
+			expectedProcessedFiles: sets.NewString([]string{
+				"foo-bar-master.yaml",
+				"foo-bar-release-4.9.yaml",
+			}...),
+		},
+		{
+			id: "process only a single modified file",
+			options: Options{
+				onlyProcessChanges: true,
+				modifiedFiles:      sets.NewString([]string{"testdata/config/foo/bar/foo-bar-master.yaml"}...),
+			},
+			expectedProcessedFiles: sets.NewString([]string{
+				"foo-bar-master.yaml",
+			}...),
+		},
+		{
+			id: "process only the multiple modified files",
+			options: Options{
+				onlyProcessChanges: true,
+				modifiedFiles:      sets.NewString([]string{"testdata/config/foo/bar/foo-bar-master.yaml", "testdata/config/super/duper/super-duper-release-4.9.yaml"}...),
+			},
+			expectedProcessedFiles: sets.NewString([]string{
+				"foo-bar-master.yaml",
+				"super-duper-release-4.9.yaml",
+			}...),
+		},
+	}
+
+	for _, tc := range testCases {
+		var errs []error
+		processed := sets.NewString()
+
+		if err := tc.options.OperateOnCIOperatorConfigDir(testConfigDir, func(configuration *cioperatorapi.ReleaseBuildConfiguration, info *Info) error {
+			filename := filepath.Base(info.Filename)
+			if !tc.expectedProcessedFiles.Has(filename) {
+				errs = append(errs, fmt.Errorf("file %s wasn't expected to be processed", filename))
+			}
+			processed.Insert(filename)
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+
+		if len(errs) > 0 {
+			t.Fatal("unexpected errors: %w", errs)
+		}
+
+		if diff := cmp.Diff(processed, tc.expectedProcessedFiles); diff != "" {
+			t.Fatal(diff)
+		}
 	}
 }

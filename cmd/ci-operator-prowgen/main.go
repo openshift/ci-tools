@@ -20,6 +20,8 @@ import (
 )
 
 type options struct {
+	config.Options
+
 	fromDir         string
 	fromReleaseRepo bool
 
@@ -39,6 +41,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.toReleaseRepo, "to-release-repo", false, "If set, it behaves like --to-dir=$GOPATH/src/github.com/openshift/release/ci-operator/jobs")
 
 	flag.BoolVar(&opt.help, "h", false, "Show help for ci-operator-prowgen")
+
+	opt.Options.Bind(flag)
 
 	return opt
 }
@@ -64,6 +68,15 @@ func (o *options) process() error {
 
 	if o.toDir == "" {
 		return fmt.Errorf("ci-operator-prowgen needs exactly one of `--to-{dir,release-repo}` options")
+	}
+
+	// TODO: deprecate --from-dir
+	o.ConfigDir = o.fromDir
+	if err := o.Options.Validate(); err != nil {
+		return fmt.Errorf("failed to validate config options: %w", err)
+	}
+	if err := o.Options.Complete(); err != nil {
+		return fmt.Errorf("failed to complete config options: %w", err)
 	}
 
 	return nil
@@ -181,13 +194,16 @@ func main() {
 	}
 	genJobs := generateJobsToDir(opt.toDir)
 	for _, subDir := range args {
-		if err := config.OperateOnCIOperatorConfigSubdir(opt.fromDir, subDir, genJobs); err != nil {
-			fields := logrus.Fields{"target": opt.toDir, "source": opt.fromDir, "subdir": subDir}
+		if err := opt.OperateOnCIOperatorConfigDir(filepath.Join(opt.fromDir, subDir), genJobs); err != nil {
+			fields := logrus.Fields{"target": opt.toDir, "source": opt.fromDir}
 			logrus.WithError(err).WithFields(fields).Fatal("Failed to generate jobs")
 		}
-		if err := pruneStaleJobs(opt.toDir, subDir); err != nil {
-			fields := logrus.Fields{"target": opt.toDir, "source": opt.fromDir, "subdir": subDir}
-			logrus.WithError(err).WithFields(fields).Fatal("Failed to prune stale generated jobs")
+
+		if opt.ProcessAll() {
+			if err := pruneStaleJobs(opt.toDir, subDir); err != nil {
+				fields := logrus.Fields{"target": opt.toDir, "source": opt.fromDir}
+				logrus.WithError(err).WithFields(fields).Fatal("Failed to prune stale generated jobs")
+			}
 		}
 	}
 }

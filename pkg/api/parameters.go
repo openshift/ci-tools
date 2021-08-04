@@ -9,6 +9,7 @@ import (
 )
 
 // Parameters allows a step to read values set by other steps.
+// +k8s:deepcopy-gen=false
 type Parameters interface {
 	Has(name string) bool
 	HasInput(name string) bool
@@ -45,6 +46,7 @@ func NewOverrideParameters(params Parameters, overrides map[string]string) Param
 	}
 }
 
+// +k8s:deepcopy-gen=false
 type DeferredParameters struct {
 	lock   sync.Mutex
 	params Parameters

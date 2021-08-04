@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -102,4 +103,53 @@ func (config *ReleaseBuildConfiguration) DependencyParts(dependency StepDependen
 		}
 	}
 	return stream, name, explicit
+}
+
+// WithPresubmitFrom returns a new configuration, where a selected test from the source
+// configuration is injected into the base configuration, together with all elements from
+// the source configuration that are potentially necessary to allow that test to function
+// in the context of the base configuration. The intended use case is to inject the test
+// definition of a "release job" (informing/blocking) into a component ci-operator config
+// to allow dynamically executing any such job on any component PR, without the need to
+// clutter each individual component ci-operator config.
+//
+// WARNING: This code is currently experimental and should not be used outside of the
+// "release jobs on PRs" effort
+// TODO: handle the presubmit/periodic better, extract code etc.
+func (config *ReleaseBuildConfiguration) WithPresubmitFrom(source *ReleaseBuildConfiguration, test string) (*ReleaseBuildConfiguration, error) {
+	var result ReleaseBuildConfiguration
+	config.DeepCopyInto(&result)
+
+	for name, isTagRef := range source.BaseImages {
+		// TODO: handle conflicts better
+		if _, ok := result.BaseImages[name]; ok {
+			return nil, fmt.Errorf("conflicting base_images: %s", name)
+		}
+		result.BaseImages[name] = isTagRef
+	}
+
+	for name, release := range source.Releases {
+		if name == "latest" && result.ReleaseTagConfiguration != nil {
+			continue
+		}
+		if result.Releases == nil {
+			result.Releases = map[string]UnresolvedRelease{}
+		}
+		result.Releases[name] = release
+	}
+
+	// TODO: handle resources, likely needs to be union, with max(config, source) on conflicts
+
+	for i := range source.Tests {
+		if source.Tests[i].As == test {
+			test := source.Tests[i]
+			test.Interval = nil
+			test.Cron = nil
+			test.Postsubmit = false
+			result.Tests = []TestStepConfiguration{test}
+
+			return &result, nil
+		}
+	}
+	return nil, fmt.Errorf("test '%s' not found in source configuration", test)
 }

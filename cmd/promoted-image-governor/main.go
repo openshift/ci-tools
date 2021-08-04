@@ -328,11 +328,6 @@ func main() {
 		logrus.WithField("path", abs).Fatal("failed to operate on CI Operator's config directory")
 	}
 
-	kubeConfig, err := clientcmd.BuildConfigFromFlags("", opts.kubeconfig)
-	if err != nil {
-		logrus.WithError(err).Fatalf("could not load kube config from path %s", opts.kubeconfig)
-	}
-
 	if opts.openshiftMappingConfigPath != "" {
 		mappings := generateMappings(promotedTags, opts.openshiftMappingConfig, imageStreamRefs)
 		for filename, mapping := range mappings {
@@ -353,6 +348,11 @@ func main() {
 			}
 		}
 		return
+	}
+
+	kubeConfig, err := clientcmd.BuildConfigFromFlags("", opts.kubeconfig)
+	if err != nil {
+		logrus.WithError(err).Fatalf("could not load kube config from path %s", opts.kubeconfig)
 	}
 
 	client, err := ctrlruntimeclient.New(kubeConfig, ctrlruntimeclient.Options{})

@@ -591,6 +591,12 @@ type TestStepConfiguration struct {
 	// ClusterClaim claims an OpenShift cluster and exposes environment variable ${KUBECONFIG} to the test container
 	ClusterClaim *ClusterClaim `json:"cluster_claim,omitempty"`
 
+	// RunIfChanged is a regex that will result in the test only running if something that matches it was changed.
+	RunIfChanged string `json:"run_if_changed,omitempty"`
+
+	// SkipIfOnlyChanged is a regex that will result in the test being skipped if all changed files match that regex.
+	SkipIfOnlyChanged string `json:"skip_if_only_changed,omitempty"`
+
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty"`
 	MultiStageTestConfiguration                               *MultiStageTestConfiguration                               `json:"steps,omitempty"`

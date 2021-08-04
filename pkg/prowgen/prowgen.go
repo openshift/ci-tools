@@ -515,6 +515,7 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 	case
 		cioperatorapi.ClusterProfileAWS,
 		cioperatorapi.ClusterProfileAWSArm64,
+		cioperatorapi.ClusterProfileAlibaba,
 		cioperatorapi.ClusterProfileAzure4,
 		cioperatorapi.ClusterProfileAzureArc,
 		cioperatorapi.ClusterProfileAzureStack,

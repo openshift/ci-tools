@@ -644,6 +644,8 @@ func determineWorkflowFromClusterPorfile(clusterProfile api.ClusterProfile) *str
 		ret = "ipi-azurestack"
 	case api.ClusterProfileGCP:
 		ret = "ipi-gcp"
+	case api.ClusterProfileAlibaba:
+		ret = "ipi-alibaba"
 	}
 	return &ret
 }

@@ -578,8 +578,8 @@ func TestGetImageMirror(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := getImageMirrorTarget(testCase.tags, testCase.pipeline, "registry.ci.openshift.org"), testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect ImageMirror mapping: %v", testCase.name, diff.ObjectDiff(actual, expected))
+			if actual, _ := getImageMirrorTarget(testCase.tags, testCase.pipeline, "registry.ci.openshift.org"); !reflect.DeepEqual(actual, testCase.expected) {
+				t.Errorf("%s: got incorrect ImageMirror mapping: %v", testCase.name, diff.ObjectDiff(actual, testCase.expected))
 			}
 		})
 	}

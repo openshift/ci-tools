@@ -716,9 +716,11 @@ type RegistryObserver struct {
 }
 
 // RegistryMetadata maps the registry info for each step in the registry by filename
+// +k8s:deepcopy-gen=false
 type RegistryMetadata map[string]RegistryInfo
 
 // RegistryInfo contains metadata about a registry component that is useful for the web UI of the step registry
+// +k8s:deepcopy-gen=false
 type RegistryInfo struct {
 	// Path is the path of the directoryfor the registry component relative to the registry's base directory
 	Path string `json:"path,omitempty"`
@@ -999,6 +1001,7 @@ const (
 	ClusterProfileAWSCentos          ClusterProfile = "aws-centos"
 	ClusterProfileAWSCentos40        ClusterProfile = "aws-centos-40"
 	ClusterProfileAWSGluster         ClusterProfile = "aws-gluster"
+	ClusterProfileAlibaba            ClusterProfile = "alibaba"
 	ClusterProfileAzure              ClusterProfile = "azure"
 	ClusterProfileAzure4             ClusterProfile = "azure4"
 	ClusterProfileAzureArc           ClusterProfile = "azure-arc"
@@ -1040,6 +1043,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSCentos,
 		ClusterProfileAWSCentos40,
 		ClusterProfileAWSGluster,
+		ClusterProfileAlibaba,
 		ClusterProfileAzure4,
 		ClusterProfileAzureArc,
 		ClusterProfileAzureStack,
@@ -1084,6 +1088,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSCPaaS,
 		ClusterProfileAWS2:
 		return "aws"
+	case ClusterProfileAlibaba:
+		return "alibaba"
 	case ClusterProfileAWSArm64:
 		return "aws-arm64"
 	case
@@ -1150,6 +1156,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-quota-slice"
 	case ClusterProfileAWSArm64:
 		return "aws-arm64-quota-slice"
+	case ClusterProfileAlibaba:
+		return "alibaba-quota-slice"
 	case ClusterProfileAzure4:
 		return "azure4-quota-slice"
 	case ClusterProfileAzureArc:
@@ -1210,7 +1218,7 @@ func (p ClusterProfile) LeaseType() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "aws-arm64", "azure4", "azure-arc", "azurestack", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "kubevirt", "aws-cpaas", "osd-ephemeral":
+	case "aws", "aws-arm64", "alibaba", "azure4", "azure-arc", "azurestack", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "kubevirt", "aws-cpaas", "osd-ephemeral":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

@@ -1092,3 +1092,30 @@ func TestPipelineImages(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateReleaseBuildConfiguration(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    *api.ReleaseBuildConfiguration
+		expected []error
+	}{
+		{
+			name:     "empty images and tests -> error",
+			input:    &api.ReleaseBuildConfiguration{},
+			expected: []error{errors.New("you must define at least one test or image build in 'tests' or 'images'")},
+		},
+		{
+			name: "empty images and tests -> not error if additional images are promoted",
+			input: &api.ReleaseBuildConfiguration{
+				PromotionConfiguration: &api.PromotionConfiguration{AdditionalImages: map[string]string{"name": "src"}},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.input.Resources = map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "1"}}}
+			err := validateReleaseBuildConfiguration(tc.input, "org", "repo")
+			testhelper.Diff(t, "error", err, tc.expected, testhelper.EquateErrorMessage)
+		})
+	}
+}

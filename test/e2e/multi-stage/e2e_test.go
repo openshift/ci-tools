@@ -138,30 +138,26 @@ func TestMultiStage(t *testing.T) {
 			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-claim"},
 			needHive: true,
 			success:  true,
-			output:   []string{`Imported release 4.7.17`, `to tag release:latest-e2e-claim`, `e2e-claim-claim-step succeeded`},
+			output:   []string{`Imported release 4.7.`, `to tag release:latest-e2e-claim`, `e2e-claim-claim-step succeeded`},
 		},
 		{
 			name:     "e2e-claim-as-custom",
 			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-claim-as-custom"},
 			needHive: true,
 			success:  true,
-			output:   []string{`Imported release 4.7.17`, `to tag release:custom-e2e-claim-as-custom`, `e2e-claim-as-custom-claim-step succeeded`},
+			output:   []string{`Imported release 4.7.`, `to tag release:custom-e2e-claim-as-custom`, `e2e-claim-as-custom-claim-step succeeded`},
 		},
 		{
 			name:     "e2e-claim depends on release image",
 			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-claim-depend-on-release-image"},
 			needHive: true,
 			success:  true,
-			output:   []string{`Imported release 4.7.17`, `to tag release:latest-e2e-claim-depend-on-release-image`, `e2e-claim-depend-on-release-image-claim-step succeeded`},
+			output:   []string{`Imported release 4.7.`, `to tag release:latest-e2e-claim-depend-on-release-image`, `e2e-claim-depend-on-release-image-claim-step succeeded`},
 		},
 	}
 
 	for _, testCase := range testCases {
 		testCase := testCase
-		if testCase.needHive {
-			t.Logf("skipping hive testcase %s as it is blocked on https://issues.redhat.com/browse/HIVE-1585", testCase.name)
-			continue
-		}
 		framework.Run(t, testCase.name, func(t *framework.T, cmd *framework.CiOperatorCommand) {
 			cmd.AddArgs(testCase.args...)
 			if testCase.needHive {

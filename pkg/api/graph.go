@@ -16,6 +16,7 @@ import (
 
 // Step is a self-contained bit of work that the
 // build pipeline needs to do.
+// +k8s:deepcopy-gen=false
 type Step interface {
 	Inputs() (InputDefinition, error)
 	// Validate checks inputs of steps that are part of the execution graph.
@@ -36,10 +37,12 @@ type Step interface {
 
 type InputDefinition []string
 
+// +k8s:deepcopy-gen=false
 type ParameterMap map[string]func() (string, error)
 
 // StepLink abstracts the types of links that steps
 // require and create.
+// +k8s:deepcopy-gen=false
 type StepLink interface {
 	// SatisfiedBy determines if the other link satisfies
 	// the requirements of this one, either partially or
@@ -145,6 +148,7 @@ type StepLinkOptions struct {
 	UnsatisfiableError string
 }
 
+// +k8s:deepcopy-gen=false
 type StepLinkOption func(*StepLinkOptions)
 
 func StepLinkWithUnsatisfiableErrorMessage(msg string) StepLinkOption {
@@ -268,6 +272,7 @@ func IsReleasePayloadStream(stream string) bool {
 	return stream == ReleaseImageStream
 }
 
+// +k8s:deepcopy-gen=false
 type StepNode struct {
 	Step     Step
 	Children []*StepNode
@@ -422,6 +427,7 @@ func HasAllLinks(needles, haystack []StepLink) bool {
 	return true
 }
 
+// +k8s:deepcopy-gen=false
 type CIOperatorStepGraph []CIOperatorStepDetails
 
 // MergeFrom merges two CIOperatorStepGraphs together using StepNames as merge keys.
@@ -479,11 +485,13 @@ func mergeSteps(into, from CIOperatorStepDetails) CIOperatorStepDetails {
 	return into
 }
 
+// +k8s:deepcopy-gen=false
 type CIOperatorStepDetails struct {
 	CIOperatorStepDetailInfo `json:",inline"`
 	Substeps                 []CIOperatorStepDetailInfo `json:"substeps,omitempty"`
 }
 
+// +k8s:deepcopy-gen=false
 type CIOperatorStepDetailInfo struct {
 	StepName     string                     `json:"name"`
 	Description  string                     `json:"description"`

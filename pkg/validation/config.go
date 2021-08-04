@@ -375,7 +375,8 @@ func validateReleaseTagConfiguration(fieldRoot string, input api.ReleaseTagConfi
 func validateReleaseBuildConfiguration(input *api.ReleaseBuildConfiguration, org, repo string) []error {
 	var validationErrors []error
 
-	if len(input.Tests) == 0 && len(input.Images) == 0 {
+	// Third conjunct is a corner case, the config can e.g. promote its `src`
+	if len(input.Tests) == 0 && len(input.Images) == 0 && (input.PromotionConfiguration == nil || len(input.PromotionConfiguration.AdditionalImages) == 0) {
 		validationErrors = append(validationErrors, errors.New("you must define at least one test or image build in 'tests' or 'images'"))
 	}
 

@@ -17,6 +17,9 @@ then
   mkdir $promtooldir
 fi
 
+echo "Cleaning test cache"
+go clean -testcache
+
 echo "Running on context: "
 oc config current-context
 

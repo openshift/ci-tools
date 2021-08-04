@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -23,6 +25,7 @@ import (
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
@@ -38,6 +41,10 @@ type options struct {
 	ignoredImageStreamTagsRaw        flagutil.Strings
 	ignoredImageStreamTags           []*regexp.Regexp
 	releaseControllerMirrorConfigDir string
+
+	openshiftMappingDir        string
+	openshiftMappingConfigPath string
+	openshiftMappingConfig     *OpenshiftMappingConfig
 }
 
 func parseOptions() *options {
@@ -56,6 +63,8 @@ func parseOptions() *options {
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	fs.Var(&opts.ignoredImageStreamTagsRaw, "ignored-image-stream-tags", "A regex to match tag in the form of namespace/name:tag format. Can be passed multiple times.")
 	fs.StringVar(&opts.releaseControllerMirrorConfigDir, "release-controller-mirror-config-dir", "", "Path to the release controller mirror config directory")
+	fs.StringVar(&opts.openshiftMappingDir, "openshift-mapping-dir", "", "Path to the openshift mapping directory")
+	fs.StringVar(&opts.openshiftMappingConfigPath, "openshift-mapping-config", "", "Path to the openshift mapping config file")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
@@ -69,6 +78,16 @@ func (o *options) validate() error {
 	if o.releaseControllerMirrorConfigDir == "" {
 		return fmt.Errorf("--release-controller-mirror-config-dir must be set")
 	}
+	if (o.openshiftMappingDir == "") != (o.openshiftMappingConfigPath == "") {
+		return fmt.Errorf("--openshift-mapping-dir and --openshift-mapping-config must be set together")
+	}
+	if o.openshiftMappingConfigPath != "" {
+		c, err := loadMappingConfig(o.openshiftMappingConfigPath)
+		if err != nil {
+			logrus.WithError(err).Fatal("could not load openshift mapping config")
+		}
+		o.openshiftMappingConfig = c
+	}
 	for _, s := range o.ignoredImageStreamTagsRaw.Strings() {
 		re, err := regexp.Compile(s)
 		if err != nil {
@@ -78,6 +97,18 @@ func (o *options) validate() error {
 		o.ignoredImageStreamTags = append(o.ignoredImageStreamTags, re)
 	}
 	return nil
+}
+
+func loadMappingConfig(path string) (*OpenshiftMappingConfig, error) {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %s", path)
+	}
+	openshiftMappingConfig := &OpenshiftMappingConfig{}
+	if err = yaml.Unmarshal(data, openshiftMappingConfig); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal the config %q: %w", string(data), err)
+	}
+	return openshiftMappingConfig, nil
 }
 
 func addSchemes() error {
@@ -174,6 +205,63 @@ type ImageStreamRef struct {
 	ExcludeTags []string `json:"excludeTags,omitempty"`
 }
 
+// OpenshiftMappingConfig for openshift image mapping files
+type OpenshiftMappingConfig struct {
+	SourceRegistry  string              `json:"source_registry"`
+	TargetRegistry  string              `json:"target_registry"`
+	SourceNamespace string              `json:"source_namespace"`
+	TargetNamespace string              `json:"target_namespace"`
+	Images          map[string][]string `json:"images,omitempty"`
+}
+
+// generateMappings generates the mappings to mirror the images
+// Those mappings will be stored in https://github.com/openshift/release/tree/master/core-services/image-mirroring/openshift
+// and then used by the periodic-image-mirroring-openshift job
+func generateMappings(promotedTags []api.ImageStreamTagReference, mappingConfig *OpenshiftMappingConfig, imageStreamRefs []ImageStreamRef) map[string]map[string][]string {
+	mappings := map[string]map[string][]string{}
+	for _, tag := range promotedTags {
+		// mirror the images if it is promoted or it is mirrored by the release controllers from OCP image streams
+		if tag.Namespace == mappingConfig.SourceNamespace || isMirroredFromOCP(tag, imageStreamRefs) {
+			if mappingConfig.Images != nil {
+				if targetTags, ok := mappingConfig.Images[tag.Name]; ok {
+					for _, targetTag := range targetTags {
+						filename := fmt.Sprintf("mapping_origin_%s", strings.ReplaceAll(tag.Name, ".", "_"))
+						_, ok := mappings[filename]
+						if !ok {
+							mappings[filename] = map[string][]string{}
+						}
+						src := fmt.Sprintf("%s/%s/%s:%s", mappingConfig.SourceRegistry, mappingConfig.SourceNamespace, tag.Name, tag.Tag)
+						mappings[filename][src] = append(mappings[filename][src],
+							fmt.Sprintf("%s/%s/%s-%s:%s", mappingConfig.TargetRegistry, mappingConfig.TargetNamespace, mappingConfig.SourceNamespace, tag.Tag, targetTag))
+
+					}
+				}
+			}
+		}
+	}
+	return mappings
+}
+
+// isMirroredFromOCP checks if the image is mirrored by the release controllers
+// See https://github.com/openshift/release/blob/0cb6f403581ac09a9112744332b504612a3b7267/core-services/release-controller/_releases/release-ocp-4.6-ci.json#L10 as an example
+func isMirroredFromOCP(tag api.ImageStreamTagReference, refs []ImageStreamRef) bool {
+	if tag.Namespace != "ocp" {
+		return false
+	}
+	for _, ref := range refs {
+		if tag.Name != ref.Name {
+			continue
+		}
+		for _, eTagName := range ref.ExcludeTags {
+			if eTagName == tag.Tag {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
 func main() {
 	logrusutil.ComponentInit()
 
@@ -243,6 +331,28 @@ func main() {
 	kubeConfig, err := clientcmd.BuildConfigFromFlags("", opts.kubeconfig)
 	if err != nil {
 		logrus.WithError(err).Fatalf("could not load kube config from path %s", opts.kubeconfig)
+	}
+
+	if opts.openshiftMappingConfigPath != "" {
+		mappings := generateMappings(promotedTags, opts.openshiftMappingConfig, imageStreamRefs)
+		for filename, mapping := range mappings {
+			var b bytes.Buffer
+			keys := make([]string, 0, len(mapping))
+			for k := range mapping {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+
+			for _, src := range keys {
+				b.WriteString(fmt.Sprintf("%s\n", strings.Join(append([]string{src}, mapping[src]...), " ")))
+			}
+			f := filepath.Join(opts.openshiftMappingDir, filename)
+			logrus.WithField("filename", f).Info("Writing to file")
+			if err := ioutil.WriteFile(f, b.Bytes(), 0644); err != nil {
+				logrus.WithError(err).WithField("filename", f).Fatal("could not write to file")
+			}
+		}
+		return
 	}
 
 	client, err := ctrlruntimeclient.New(kubeConfig, ctrlruntimeclient.Options{})

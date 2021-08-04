@@ -139,3 +139,102 @@ func TestTagsToDelete(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateMappings(t *testing.T) {
+	testCases := []struct {
+		name            string
+		promotedTags    []api.ImageStreamTagReference
+		mappingConfig   *OpenshiftMappingConfig
+		imageStreamRefs []ImageStreamRef
+		expected        map[string]map[string][]string
+	}{
+		{
+			name: "basic case",
+			promotedTags: []api.ImageStreamTagReference{
+				{
+					Namespace: "ci",
+					Name:      "some-tool",
+					Tag:       "latest",
+				},
+				{
+					Namespace: "origin",
+					Name:      "4.8",
+					Tag:       "bar",
+				},
+				{
+					Namespace: "origin",
+					Name:      "4.8",
+					Tag:       "foo",
+				},
+				{
+					Namespace: "origin",
+					Name:      "4.9",
+					Tag:       "bar",
+				},
+				{
+					Namespace: "origin",
+					Name:      "4.9",
+					Tag:       "some",
+				},
+				{
+					Namespace: "ocp",
+					Name:      "4.8",
+					Tag:       "ocp-some",
+				},
+				{
+					Namespace: "ocp",
+					Name:      "4.8",
+					Tag:       "ironic-ipa-downloader",
+				},
+			},
+			mappingConfig: &OpenshiftMappingConfig{
+				SourceNamespace: "origin",
+				TargetNamespace: "openshift",
+				SourceRegistry:  "registry.ci.openshift.org",
+				TargetRegistry:  "quay.io",
+				Images: map[string][]string{
+					"4.8": {"4.8", "4.8.0"},
+					"4.9": {"4.9", "4.9.0", "latest"},
+				},
+			},
+			imageStreamRefs: []ImageStreamRef{
+				{
+					Namespace:   "origin",
+					Name:        "4.8",
+					ExcludeTags: []string{"ironic-ipa-downloader"},
+				},
+			},
+			expected: map[string]map[string][]string{
+				"mapping_origin_4_8": {
+					"registry.ci.openshift.org/origin/4.8:bar": {"quay.io/openshift/origin-bar:4.8", "quay.io/openshift/origin-bar:4.8.0"},
+					"registry.ci.openshift.org/origin/4.8:foo": {"quay.io/openshift/origin-foo:4.8", "quay.io/openshift/origin-foo:4.8.0"},
+					"registry.ci.openshift.org/origin/4.8:ocp-some": {
+						"quay.io/openshift/origin-ocp-some:4.8",
+						"quay.io/openshift/origin-ocp-some:4.8.0",
+					},
+				},
+				"mapping_origin_4_9": {
+					"registry.ci.openshift.org/origin/4.9:bar": {
+						"quay.io/openshift/origin-bar:4.9",
+						"quay.io/openshift/origin-bar:4.9.0",
+						"quay.io/openshift/origin-bar:latest",
+					},
+					"registry.ci.openshift.org/origin/4.9:some": {
+						"quay.io/openshift/origin-some:4.9",
+						"quay.io/openshift/origin-some:4.9.0",
+						"quay.io/openshift/origin-some:latest",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := generateMappings(tc.promotedTags, tc.mappingConfig, tc.imageStreamRefs)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			}
+		})
+	}
+}

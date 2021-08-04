@@ -87,6 +87,11 @@ func (s *promotionStep) run(ctx context.Context) error {
 }
 
 func (s *promotionStep) ensureNamespaces(ctx context.Context, namespaces sets.String) error {
+	// Used primarily (only?) by the chatbot and we likely do not have the permission to create
+	// namespaces (nor are we expected to).
+	if s.configuration.PromotionConfiguration.RegistryOverride != "" {
+		return nil
+	}
 	var dockercfg credentialprovider.DockerConfigJSON
 	if err := json.Unmarshal(s.pushSecret.Data[coreapi.DockerConfigJsonKey], &dockercfg); err != nil {
 		return fmt.Errorf("failed to deserialize push secret: %w", err)

@@ -735,6 +735,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            cluster_profile: ' '\n" +
 	"        openshift_installer_upi_src:\n" +
 	"            cluster_profile: ' '\n" +
+	"        # RunIfChanged is a regex that will result in the test only running if something that matches it was changed.\n" +
+	"        run_if_changed: ' '\n" +
 	"        # Secret is an optional secret object which\n" +
 	"        # will be mounted inside the test container.\n" +
 	"        # You cannot set the Secret and Secrets attributes\n" +
@@ -755,6 +757,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              mount_path: ' '\n" +
 	"              # Secret name, used inside test containers\n" +
 	"              name: ' '\n" +
+	"        # SkipIfOnlyChanged is a regex that will result in the test being skipped if all changed files match that regex.\n" +
+	"        skip_if_only_changed: ' '\n" +
 	"        steps:\n" +
 	"            # AllowBestEffortPostSteps defines if any `post` steps can be ignored when\n" +
 	"            # they fail. The given step must explicitly ask for being ignored by setting\n" +
@@ -1439,6 +1443,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        cluster_profile: ' '\n" +
 	"      openshift_installer_upi_src:\n" +
 	"        cluster_profile: ' '\n" +
+	"      # RunIfChanged is a regex that will result in the test only running if something that matches it was changed.\n" +
+	"      run_if_changed: ' '\n" +
 	"      # Secret is an optional secret object which\n" +
 	"      # will be mounted inside the test container.\n" +
 	"      # You cannot set the Secret and Secrets attributes\n" +
@@ -1459,6 +1465,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"          mount_path: ' '\n" +
 	"          # Secret name, used inside test containers\n" +
 	"          name: ' '\n" +
+	"      # SkipIfOnlyChanged is a regex that will result in the test being skipped if all changed files match that regex.\n" +
+	"      skip_if_only_changed: ' '\n" +
 	"      steps:\n" +
 	"        # AllowBestEffortPostSteps defines if any `post` steps can be ignored when\n" +
 	"        # they fail. The given step must explicitly ask for being ignored by setting\n" +

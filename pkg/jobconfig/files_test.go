@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -401,17 +403,29 @@ func TestMergePresubmits(t *testing.T) {
 					Context:    "context",
 					SkipReport: true,
 				},
-				RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{RunIfChanged: "foo"},
+				RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{RunIfChanged: "whatever"},
 				Optional:            true,
 				Trigger:             "whatever",
 				RerunCommand:        "something",
 			},
 		},
+		{
+			name:     "Run if changed from new takes precedence",
+			old:      &prowconfig.Presubmit{RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{RunIfChanged: "old"}},
+			new:      &prowconfig.Presubmit{RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{RunIfChanged: "new"}},
+			expected: prowconfig.Presubmit{RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{RunIfChanged: "new"}},
+		},
+		{
+			name:     "Skip if only changed from new takes precedence",
+			old:      &prowconfig.Presubmit{RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{SkipIfOnlyChanged: "old"}},
+			new:      &prowconfig.Presubmit{RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{SkipIfOnlyChanged: "new"}},
+			expected: prowconfig.Presubmit{RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{SkipIfOnlyChanged: "new"}},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := mergePresubmits(testCase.old, testCase.new), testCase.expected; !equality.Semantic.DeepEqual(actual, expected) {
-				t.Errorf("%s: did not get expected merged presubmit config:\n%s", testCase.name, diff.ObjectReflectDiff(actual, expected))
+				t.Errorf("actual differs from expected: %s", cmp.Diff(actual, expected, cmp.Exporter(func(_ reflect.Type) bool { return true })))
 			}
 		})
 	}

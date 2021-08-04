@@ -229,10 +229,12 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 	tests := []struct {
 		description string
 
-		test       string
-		repoInfo   *ProwgenInfo
-		jobRelease string
-		clone      bool
+		test              string
+		repoInfo          *ProwgenInfo
+		jobRelease        string
+		clone             bool
+		runIfChanged      string
+		skipIfOnlyChanged string
 	}{{
 		description: "presubmit for standard test",
 		test:        "testname",
@@ -256,11 +258,25 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			jobRelease:  "4.6",
 			clone:       true,
 		},
+		{
+			description:  "presubmit with run_if_changed",
+			test:         "testname",
+			repoInfo:     &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			jobRelease:   "4.6",
+			runIfChanged: "^README.md$",
+		},
+		{
+			description:       "presubmit with skip_if_only_changed",
+			test:              "testname",
+			repoInfo:          &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			jobRelease:        "4.6",
+			skipIfOnlyChanged: "^README.md$",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
 			// podSpec tested in generatePodSpec
-			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, nil, nil, tc.jobRelease, !tc.clone))
+			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, nil, nil, tc.jobRelease, !tc.clone, tc.runIfChanged, tc.skipIfOnlyChanged))
 		})
 	}
 }

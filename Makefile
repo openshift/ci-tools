@@ -126,7 +126,7 @@ production-install: cmd/vault-secret-collection-manager/index.js
 #
 # Example:
 #   make production-install
-race-install: cmd/vault-secret-collection-manager/index.js
+race-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/frontend/node_modules
 	hack/install.sh race
 
 # Run integration tests.
@@ -284,6 +284,24 @@ local-pod-scaler: $(TMPDIR)/prometheus $(TMPDIR)/promtool
 	$(eval export PATH=${PATH}:$(TMPDIR))
 	go run -tags e2e,e2e_framework ./test/e2e/pod-scaler/local/main.go
 .PHONY: local-pod-scaler
+
+frontend-checks: cmd/pod-scaler/frontend/node_modules
+	echo npm --prefix cmd/pod-scaler/frontend run ci-checks
+.PHONY: frontend-checks
+
+cmd/pod-scaler/frontend/node_modules:
+	echo npm --prefix cmd/pod-scaler/frontend install
+
+.PHONY: frontend-format
+frontend-format: cmd/pod-scaler/frontend/node_modules
+	echo npm --prefix cmd/pod-scaler/frontend run format
+
+.PHONY: verify-frontend-format
+verify-frontend-format: frontend-format
+	@# Don't add --quiet here, it disables --exit code in the git 1.7 we have in CI, making this unusuable
+	if  ! git diff --exit-code; then \
+		echo "frontend files are not formatted, run make frontend-format"; exit 1; \
+	fi
 
 $(TMPDIR)/prometheus:
 	mkdir -p $(TMPDIR)/image

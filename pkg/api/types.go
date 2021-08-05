@@ -1026,18 +1026,22 @@ const (
 	ClusterProfileLibvirtS390x       ClusterProfile = "libvirt-s390x"
 	ClusterProfileOpenStack          ClusterProfile = "openstack"
 	ClusterProfileOpenStackKuryr     ClusterProfile = "openstack-kuryr"
-	ClusterProfileOpenStackMecha     ClusterProfile = "openstack-vh-mecha"
-	ClusterProfileOpenStackOsuosl    ClusterProfile = "openstack-osuosl"
-	ClusterProfileOpenStackVexxhost  ClusterProfile = "openstack-vexxhost"
-	ClusterProfileOpenStackPpc64le   ClusterProfile = "openstack-ppc64le"
-	ClusterProfileOvirt              ClusterProfile = "ovirt"
-	ClusterProfilePacket             ClusterProfile = "packet"
-	ClusterProfileVSphere            ClusterProfile = "vsphere"
-	ClusterProfileKubevirt           ClusterProfile = "kubevirt"
-	ClusterProfileAWSCPaaS           ClusterProfile = "aws-cpaas"
-	ClusterProfileOSDEphemeral       ClusterProfile = "osd-ephemeral"
-	ClusterProfileAWS2               ClusterProfile = "aws-2"
-	ClusterProfileHyperShift         ClusterProfile = "hypershift"
+	// TODO(EmilienM) ClusterProfileOpenStackMecha will be removed
+	// once we switch jobs to use Central or Az0 in openshift/release.
+	ClusterProfileOpenStackMecha        ClusterProfile = "openstack-vh-mecha"
+	ClusterProfileOpenStackMechaCentral ClusterProfile = "openstack-vh-mecha-central"
+	ClusterProfileOpenStackMechaAz0     ClusterProfile = "openstack-vh-mecha-az0"
+	ClusterProfileOpenStackOsuosl       ClusterProfile = "openstack-osuosl"
+	ClusterProfileOpenStackVexxhost     ClusterProfile = "openstack-vexxhost"
+	ClusterProfileOpenStackPpc64le      ClusterProfile = "openstack-ppc64le"
+	ClusterProfileOvirt                 ClusterProfile = "ovirt"
+	ClusterProfilePacket                ClusterProfile = "packet"
+	ClusterProfileVSphere               ClusterProfile = "vsphere"
+	ClusterProfileKubevirt              ClusterProfile = "kubevirt"
+	ClusterProfileAWSCPaaS              ClusterProfile = "aws-cpaas"
+	ClusterProfileOSDEphemeral          ClusterProfile = "osd-ephemeral"
+	ClusterProfileAWS2                  ClusterProfile = "aws-2"
+	ClusterProfileHyperShift            ClusterProfile = "hypershift"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1067,6 +1071,8 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileOpenStack,
 		ClusterProfileOpenStackKuryr,
 		ClusterProfileOpenStackMecha,
+		ClusterProfileOpenStackMechaCentral,
+		ClusterProfileOpenStackMechaAz0,
 		ClusterProfileOpenStackOsuosl,
 		ClusterProfileOpenStackVexxhost,
 		ClusterProfileOpenStackPpc64le,
@@ -1127,6 +1133,10 @@ func (p ClusterProfile) ClusterType() string {
 		return "openstack-kuryr"
 	case ClusterProfileOpenStackMecha:
 		return "openstack-vh-mecha"
+	case ClusterProfileOpenStackMechaCentral:
+		return "openstack-vh-mecha-central"
+	case ClusterProfileOpenStackMechaAz0:
+		return "openstack-vh-mecha-az0"
 	case ClusterProfileOpenStackOsuosl:
 		return "openstack-osuosl"
 	case ClusterProfileOpenStackVexxhost:
@@ -1194,6 +1204,10 @@ func (p ClusterProfile) LeaseType() string {
 		return "openstack-kuryr-quota-slice"
 	case ClusterProfileOpenStackMecha:
 		return "openstack-vh-mecha-quota-slice"
+	case ClusterProfileOpenStackMechaCentral:
+		return "openstack-vh-mecha-central-quota-slice"
+	case ClusterProfileOpenStackMechaAz0:
+		return "openstack-vh-mecha-az0-quota-slice"
 	case ClusterProfileOpenStackOsuosl:
 		return "openstack-osuosl-quota-slice"
 	case ClusterProfileOpenStackVexxhost:

@@ -330,32 +330,60 @@ func TestConfigAgent_GetMatchingConfig(t *testing.T) {
 					}}, {Metadata: api.Metadata{
 						Org:    "org",
 						Repo:   "repo",
-						Branch: "branch-fo",
+						Branch: "branch-foo",
 					}}},
 				},
 			},
 			meta: api.Metadata{
 				Org:    "org",
 				Repo:   "repo",
-				Branch: "branch-foo",
+				Branch: "branch-foo-bar",
 			},
 			expectedErr: true,
+		},
+		{
+			name: "no error on simple substring",
+			input: load.ByOrgRepo{
+				"org": map[string][]api.ReleaseBuildConfiguration{
+					"repo": {{Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "release-4.1",
+					}}, {Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "release-4.10",
+					}}},
+				},
+			},
+			meta: api.Metadata{
+				Org:    "org",
+				Repo:   "repo",
+				Branch: "release-4.10",
+			},
+			expected: api.ReleaseBuildConfiguration{Metadata: api.Metadata{
+				Org:    "org",
+				Repo:   "repo",
+				Branch: "release-4.10",
+			}},
 		},
 	}
 
 	for _, testCase := range testCases {
-		agent := &configAgent{lock: &sync.RWMutex{}, configs: testCase.input}
-		actual, actualErr := agent.GetMatchingConfig(testCase.meta)
-		if testCase.expectedErr && actualErr == nil {
-			t.Errorf("%s: expected an error but got none", testCase.name)
-		}
-		if !testCase.expectedErr && actualErr != nil {
-			t.Errorf("%s: expected no error but got one: %v", testCase.name, actualErr)
-		}
+		t.Run(testCase.name, func(t *testing.T) {
+			agent := &configAgent{lock: &sync.RWMutex{}, configs: testCase.input}
+			actual, actualErr := agent.GetMatchingConfig(testCase.meta)
+			if testCase.expectedErr && actualErr == nil {
+				t.Errorf("%s: expected an error but got none", testCase.name)
+			}
+			if !testCase.expectedErr && actualErr != nil {
+				t.Errorf("%s: expected no error but got one: %v", testCase.name, actualErr)
+			}
 
-		if diff := cmp.Diff(actual, testCase.expected); diff != "" {
-			t.Errorf("%s: got incorrect config: %v", testCase.name, diff)
-		}
+			if diff := cmp.Diff(actual, testCase.expected); !testCase.expectedErr && diff != "" {
+				t.Errorf("%s: got incorrect config: %v", testCase.name, diff)
+			}
+		})
 	}
 }
 

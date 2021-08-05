@@ -38,6 +38,8 @@ type ResolverInfo struct {
 	Variant string
 }
 
+type RegistryFlag uint8
+
 const (
 	RefSuffix      = "-ref.yaml"
 	ChainSuffix    = "-chain.yaml"
@@ -45,6 +47,10 @@ const (
 	ObserverSuffix = "-observer.yaml"
 	CommandsSuffix = "-commands.sh"
 	MetadataSuffix = ".metadata.json"
+)
+
+const (
+	RegistryFlat = RegistryFlag(1) << iota
 )
 
 // ByOrgRepo maps org --> repo --> list of branched and variant configs
@@ -174,7 +180,7 @@ func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api
 		return nil, fmt.Errorf("invalid configuration: %w\nvalue:\n%s", err, raw)
 	}
 	if registryPath != "" {
-		refs, chains, workflows, _, _, observers, err := Registry(registryPath, false)
+		refs, chains, workflows, _, _, observers, err := Registry(registryPath, RegistryFlag(0))
 		if err != nil {
 			return nil, fmt.Errorf("failed to load registry: %w", err)
 		}
@@ -268,7 +274,8 @@ func literalConfigFromResolver(raw []byte, address string) (*api.ReleaseBuildCon
 
 // Registry takes the path to a registry config directory and returns the full set of references, chains,
 // and workflows that the registry's Resolver needs to resolve a user's MultiStageTestConfiguration
-func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, api.RegistryMetadata, registry.ObserverByName, error) {
+func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, api.RegistryMetadata, registry.ObserverByName, error) {
+	flat := flags&RegistryFlat != 0
 	references := registry.ReferenceByName{}
 	chains := registry.ChainByName{}
 	workflows := registry.WorkflowByName{}

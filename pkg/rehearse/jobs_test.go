@@ -287,7 +287,7 @@ func TestInlineCiopConfig(t *testing.T) {
 		},
 	}
 
-	references, chains, workflows, _, _, observers, err := load.Registry(testingRegistry, false)
+	references, chains, workflows, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
 	if err != nil {
 		t.Fatalf("Failed to read registry: %v", err)
 	}
@@ -548,7 +548,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 		failToCreate: sets.NewString("rehearse-123-job2"),
 	}}
 
-	references, chains, workflows, _, _, observers, err := load.Registry(testingRegistry, false)
+	references, chains, workflows, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
 	if err != nil {
 		t.Fatalf("Failed to read registry: %v", err)
 	}
@@ -618,7 +618,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 		},
 	}}
 
-	references, chains, workflows, _, _, observers, err := load.Registry(testingRegistry, false)
+	references, chains, workflows, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
 	if err != nil {
 		t.Fatalf("Failed to read registry: %v", err)
 	}
@@ -735,7 +735,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 		},
 	}
 
-	references, chains, workflows, _, _, observers, err := load.Registry(testingRegistry, false)
+	references, chains, workflows, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
 	if err != nil {
 		t.Fatalf("Failed to read registry: %v", err)
 	}

@@ -497,6 +497,36 @@ func TestValidateTests(t *testing.T) {
 			},
 			expectedValid: false,
 		},
+		{
+			id: "cron is mutually exclusive with run_if_changed",
+			tests: []api.TestStepConfiguration{{
+				As:           "Unit",
+				Commands:     "commands",
+				Cron:         &cronString,
+				RunIfChanged: "^README.md$",
+			}},
+			expectedValid: false,
+		},
+		{
+			id: "interval is mutually exclusive with run_if_changed",
+			tests: []api.TestStepConfiguration{{
+				As:           "Unit",
+				Commands:     "commands",
+				Interval:     &intervalString,
+				RunIfChanged: "^README.md$",
+			}},
+			expectedValid: false,
+		},
+		{
+			id: "Run if changed and skip_if_only_changed are mutually exclusive",
+			tests: []api.TestStepConfiguration{{
+				As:                "Unit",
+				Commands:          "commands",
+				RunIfChanged:      "^README.md$",
+				SkipIfOnlyChanged: "^OTHER_README.md$",
+			}},
+			expectedValid: false,
+		},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			v := newSingleUseValidator()

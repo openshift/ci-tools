@@ -445,7 +445,7 @@ func generatePresubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.Po
 	return &prowconfig.Presubmit{
 		JobBase:   base,
 		AlwaysRun: true,
-		Brancher:  prowconfig.Brancher{Branches: sets.NewString(exactlyBranch(info.Branch), featureBranch(info.Branch)).List()},
+		Brancher:  prowconfig.Brancher{Branches: sets.NewString(ExactlyBranch(info.Branch), FeatureBranch(info.Branch)).List()},
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/prow/%s", shortName),
 		},
@@ -462,7 +462,7 @@ func generatePostsubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.P
 	base := generateJobBase(name, jc.PostsubmitPrefix, info, podSpec, false, pathAlias, jobRelease, skipCloning)
 	return &prowconfig.Postsubmit{
 		JobBase:  base,
-		Brancher: prowconfig.Brancher{Branches: []string{exactlyBranch(info.Branch)}},
+		Brancher: prowconfig.Brancher{Branches: []string{ExactlyBranch(info.Branch)}},
 	}
 }
 
@@ -618,19 +618,19 @@ func generateJobBase(name, prefix string, info *ProwgenInfo, podSpec *corev1.Pod
 	return base
 }
 
-// exactlyBranch returns a regex string that matches exactly the given branch name: I.e. returns
+// ExactlyBranch returns a regex string that matches exactly the given branch name: I.e. returns
 // '^master$' for 'master'. If the given branch name already looks like a regex, return it unchanged.
-func exactlyBranch(branch string) string {
+func ExactlyBranch(branch string) string {
 	if !jc.SimpleBranchRegexp.MatchString(branch) {
 		return branch
 	}
 	return fmt.Sprintf("^%s$", regexp.QuoteMeta(branch))
 }
 
-// featureBranch returns a regex string that matches feature branch prefixes for the given branch name:
+// FeatureBranch returns a regex string that matches feature branch prefixes for the given branch name:
 // I.e. returns '^master-' for 'master'. If the given branch name already looks like a regex,
 // return it unchanged.
-func featureBranch(branch string) string {
+func FeatureBranch(branch string) string {
 	if !jc.SimpleBranchRegexp.MatchString(branch) {
 		return branch
 	}

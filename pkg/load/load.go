@@ -43,7 +43,7 @@ const (
 	ChainSuffix    = "-chain.yaml"
 	WorkflowSuffix = "-workflow.yaml"
 	ObserverSuffix = "-observer.yaml"
-	CommandsSuffix = "-commands.sh"
+	CommandsSuffix = "-commands" // excluding the file extension
 	MetadataSuffix = ".metadata.json"
 )
 
@@ -370,8 +370,8 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 				if strings.TrimSuffix(filepath.Base(path), ObserverSuffix) != observer.Observer.Name {
 					return fmt.Errorf("filename %s does not match name of chain; filename should be %s", filepath.Base(path), fmt.Sprint(prefix, ObserverSuffix))
 				}
-				if !flat && observer.Observer.Commands != fmt.Sprintf("%s%s", prefix, CommandsSuffix) {
-					return fmt.Errorf("observer %s has invalid command file path; command should be set to %s", observer.Observer.Name, fmt.Sprintf("%s%s", prefix, CommandsSuffix))
+				if !flat && observer.Observer.Commands != fmt.Sprintf("%s%s%s", prefix, CommandsSuffix, filepath.Ext(observer.Observer.Commands)) {
+					return fmt.Errorf("observer %s has invalid command file path; command should be set to %s (with an optional extension like .sh)", observer.Observer.Name, fmt.Sprintf("%s%s", prefix, CommandsSuffix))
 				}
 				command, err := gzip.ReadFileMaybeGZIP(filepath.Join(dir, observer.Observer.Commands))
 				if err != nil {
@@ -381,7 +381,7 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 				documentation[observer.Observer.Name] = observer.Observer.Documentation
 				observer.Observer.Documentation = ""
 				observers[observer.Observer.Name] = observer.Observer.Observer
-			} else if strings.HasSuffix(path, CommandsSuffix) {
+			} else if strings.HasSuffix(path, fmt.Sprintf("%s%s", CommandsSuffix, filepath.Ext(path))) {
 				// ignore
 			} else if filepath.Base(path) == config.ConfigVersionFileName {
 				if version, err := gzip.ReadFileMaybeGZIP(path); err == nil {
@@ -424,8 +424,8 @@ func loadReference(bytes []byte, baseDir, prefix string, flat bool) (string, str
 	if err != nil {
 		return "", "", api.LiteralTestStep{}, err
 	}
-	if !flat && step.Reference.Commands != fmt.Sprintf("%s%s", prefix, CommandsSuffix) {
-		return "", "", api.LiteralTestStep{}, fmt.Errorf("reference %s has invalid command file path; command should be set to %s", step.Reference.As, fmt.Sprintf("%s%s", prefix, CommandsSuffix))
+	if !flat && step.Reference.Commands != fmt.Sprintf("%s%s%s", prefix, CommandsSuffix, filepath.Ext(step.Reference.Commands)) {
+		return "", "", api.LiteralTestStep{}, fmt.Errorf("reference %s has invalid command file path; command should be set to %s (with an optional extension like .sh)", step.Reference.As, fmt.Sprintf("%s%s", prefix, CommandsSuffix))
 	}
 	command, err := gzip.ReadFileMaybeGZIP(filepath.Join(baseDir, step.Reference.Commands))
 	if err != nil {

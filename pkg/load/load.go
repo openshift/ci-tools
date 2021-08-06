@@ -51,6 +51,8 @@ const (
 
 const (
 	RegistryFlat = RegistryFlag(1) << iota
+	RegistryMetadata
+	RegistryDocumentation
 )
 
 // ByOrgRepo maps org --> repo --> list of branched and variant configs
@@ -280,8 +282,14 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 	chains := registry.ChainByName{}
 	workflows := registry.WorkflowByName{}
 	observers := registry.ObserverByName{}
-	documentation := map[string]string{}
-	metadata := api.RegistryMetadata{}
+	var documentation map[string]string
+	var metadata api.RegistryMetadata
+	if flags&RegistryDocumentation != 0 {
+		documentation = map[string]string{}
+	}
+	if flags&RegistryMetadata != 0 {
+		metadata = api.RegistryMetadata{}
+	}
 	err := filepath.WalkDir(root, func(path string, info fs.DirEntry, err error) error {
 		if info != nil && strings.HasPrefix(info.Name(), "..") {
 			if info.IsDir() {
@@ -329,7 +337,9 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 					return fmt.Errorf("filename %s does not match name of reference; filename should be %s", filepath.Base(path), fmt.Sprint(prefix, RefSuffix))
 				}
 				references[name] = ref
-				documentation[name] = doc
+				if documentation != nil {
+					documentation[name] = doc
+				}
 			} else if strings.HasSuffix(path, ChainSuffix) {
 				var chain api.RegistryChainConfig
 				err := yaml.UnmarshalStrict(raw, &chain)
@@ -342,7 +352,9 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 				if strings.TrimSuffix(filepath.Base(path), ChainSuffix) != chain.Chain.As {
 					return fmt.Errorf("filename %s does not match name of chain; filename should be %s", filepath.Base(path), fmt.Sprint(prefix, ChainSuffix))
 				}
-				documentation[chain.Chain.As] = chain.Chain.Documentation
+				if documentation != nil {
+					documentation[chain.Chain.As] = chain.Chain.Documentation
+				}
 				chain.Chain.Documentation = ""
 				chains[chain.Chain.As] = chain.Chain
 			} else if strings.HasSuffix(path, WorkflowSuffix) {
@@ -357,8 +369,13 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 					return fmt.Errorf("filename %s does not match name of workflow; filename should be %s", filepath.Base(path), fmt.Sprint(prefix, WorkflowSuffix))
 				}
 				workflows[name] = workflow
-				documentation[name] = doc
+				if documentation != nil {
+					documentation[name] = doc
+				}
 			} else if strings.HasSuffix(path, MetadataSuffix) {
+				if metadata == nil {
+					return nil
+				}
 				var data api.RegistryInfo
 				err := json.Unmarshal(raw, &data)
 				if err != nil {
@@ -385,7 +402,9 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 					return err
 				}
 				observer.Observer.Commands = string(command)
-				documentation[observer.Observer.Name] = observer.Observer.Documentation
+				if documentation != nil {
+					documentation[observer.Observer.Name] = observer.Observer.Documentation
+				}
 				observer.Observer.Documentation = ""
 				observers[observer.Observer.Name] = observer.Observer.Observer
 			} else if strings.HasSuffix(path, CommandsSuffix) {

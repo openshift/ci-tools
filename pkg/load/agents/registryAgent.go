@@ -86,7 +86,7 @@ func NewRegistryAgent(registryPath string, opts ...RegistryAgentOption) (Registr
 	if opt.FlatRegistry == nil {
 		opt.FlatRegistry = utilpointer.BoolPtr(true)
 	}
-	var flags load.RegistryFlag
+	flags := load.RegistryMetadata | load.RegistryDocumentation
 	if *opt.FlatRegistry {
 		flags |= load.RegistryFlat
 	}

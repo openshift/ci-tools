@@ -70,6 +70,7 @@ func FromConfig(
 	pullSecret, pushSecret *coreapi.Secret,
 	censor *secrets.DynamicCensor,
 	hiveKubeconfig *rest.Config,
+	consoleHost string,
 ) ([]api.Step, []api.Step, error) {
 	crclient, err := ctrlruntimeclient.NewWithWatch(clusterConfig, ctrlruntimeclient.Options{})
 	crclient = secretrecordingclient.Wrap(crclient, censor)
@@ -104,7 +105,7 @@ func FromConfig(
 		}
 	}
 
-	return fromConfig(ctx, config, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor)
+	return fromConfig(ctx, config, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost)
 }
 
 func fromConfig(
@@ -126,6 +127,7 @@ func fromConfig(
 	pullSecret, pushSecret *coreapi.Secret,
 	params *api.DeferredParameters,
 	censor *secrets.DynamicCensor,
+	consoleHost string,
 ) ([]api.Step, []api.Step, error) {
 	requiredNames := sets.NewString()
 	for _, target := range requiredTargets {
@@ -143,7 +145,7 @@ func fromConfig(
 	// we need to pass the pointer - otherwise we will lose the updates after leaving the function scope.
 	imageConfigs := &[]*api.InputImageTagStepConfiguration{}
 	resolver := rootImageResolver(client, ctx, promote)
-	rawSteps, err := stepConfigsForBuild(ctx, client, config, jobSpec, ioutil.ReadFile, resolver, imageConfigs, time.Second)
+	rawSteps, err := stepConfigsForBuild(ctx, client, config, jobSpec, ioutil.ReadFile, resolver, imageConfigs, time.Second, consoleHost)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get stepConfigsForBuild: %w", err)
 	}
@@ -544,10 +546,13 @@ func stepConfigsForBuild(
 	resolveRoot resolveRoot,
 	imageConfigs *[]*api.InputImageTagStepConfiguration,
 	second time.Duration,
+	consoleHost string,
 ) ([]api.StepConfiguration, error) {
 	var buildSteps []api.StepConfiguration
 	if target := config.InputConfiguration.BuildRootImage; target != nil {
-		if target.FromRepository {
+		// if ci-operator runs on app.ci, we do not need to import the image because
+		// the istTagRef has to be an image stream tag on app.ci
+		if !strings.HasSuffix(consoleHost, api.ServiceDomainAPPCI) && target.FromRepository {
 			istTagRef, err := buildRootImageStreamFromRepository(readFile)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read buildRootImageStream from repository: %w", err)

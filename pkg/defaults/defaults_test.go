@@ -36,6 +36,10 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
+const (
+	build01ConsoleHost = "console.build01.ci.openshift.org"
+)
+
 func init() {
 	if err := imageapi.AddToScheme(scheme.Scheme); err != nil {
 		panic(fmt.Sprintf("failed to register imagev1 scheme: %v", err))
@@ -771,7 +775,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 
 			client := fakectrlruntimeclient.NewFakeClient()
 
-			rawSteps, err := stepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, &imageConfigs, time.Nanosecond)
+			rawSteps, err := stepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, &imageConfigs, time.Nanosecond, build01ConsoleHost)
 			if err != nil {
 				t.Fatalf("failed to get stepConfigsForBuild: %v", err)
 			}
@@ -1345,7 +1349,7 @@ func TestFromConfig(t *testing.T) {
 			for k, v := range tc.params {
 				params.Add(k, func() (string, error) { return v, nil })
 			}
-			configSteps, post, err := fromConfig(context.Background(), &tc.config, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{})
+			configSteps, post, err := fromConfig(context.Background(), &tc.config, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, build01ConsoleHost)
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}

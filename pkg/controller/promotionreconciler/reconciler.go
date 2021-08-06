@@ -150,13 +150,13 @@ func (r *reconciler) reconcile(ctx context.Context, req controllerruntime.Reques
 	}
 	log = log.WithField("org", ciOPConfig.Metadata.Org).WithField("repo", ciOPConfig.Metadata.Repo).WithField("branch", ciOPConfig.Metadata.Branch)
 
-	istCommit, err := commitForIST(ist)
+	istCommit, err := CommitForIST(ist)
 	if err != nil {
 		return controllerutil.TerminalError(fmt.Errorf("failed to get commit for imageStreamTag: %w", err))
 	}
 	log = log.WithField("istCommit", istCommit)
 
-	currentHEAD, found, err := r.currentHEADForBranch(ciOPConfig.Metadata, log)
+	currentHEAD, found, err := CurrentHEADForBranch(r.gitHubClient, ciOPConfig.Metadata, log)
 	if err != nil {
 		return fmt.Errorf("failed to get current git head for imageStreamTag: %w", err)
 	}
@@ -195,7 +195,8 @@ func (r *reconciler) promotionConfig(ist *imagev1.ImageStreamTag) (*cioperatorap
 	}
 }
 
-func commitForIST(ist *imagev1.ImageStreamTag) (string, error) {
+// CommitForIST returns the commit for an isTag
+func CommitForIST(ist *imagev1.ImageStreamTag) (string, error) {
 	metadata := &docker10.DockerImage{}
 	if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, metadata); err != nil {
 		return "", fmt.Errorf("failed to unmarshal imagestream.image.dockerImageMetadata: %w", err)
@@ -203,16 +204,17 @@ func commitForIST(ist *imagev1.ImageStreamTag) (string, error) {
 
 	commit := metadata.Config.Labels["io.openshift.build.commit.id"]
 	if commit == "" {
-		return "", controllerutil.TerminalError(errors.New("ImageStreamTag has no `io.openshift.build.commit.id` label, can't find out source commit"))
+		return "", errors.New("ImageStreamTag has no `io.openshift.build.commit.id` label, can't find out source commit")
 	}
 
 	return commit, nil
 }
 
-func (r *reconciler) currentHEADForBranch(metadata cioperatorapi.Metadata, log *logrus.Entry) (string, bool, error) {
+// CurrentHEADForBranch returns the sha of the current head for a github org/repo/branch
+func CurrentHEADForBranch(githubClient githubClient, metadata cioperatorapi.Metadata, log *logrus.Entry) (string, bool, error) {
 	// We attempted for some time to use the gitClient for this, but we do so many reconciliations that
 	// it results in a massive performance issues that can easely kill the developers laptop.
-	ref, err := r.gitHubClient.GetRef(metadata.Org, metadata.Repo, "heads/"+metadata.Branch)
+	ref, err := githubClient.GetRef(metadata.Org, metadata.Repo, "heads/"+metadata.Branch)
 	if err != nil {
 		if github.IsNotFound(err) {
 			return "", false, nil

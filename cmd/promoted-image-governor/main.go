@@ -21,7 +21,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
+	git "k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,6 +33,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
 	"github.com/openshift/ci-tools/pkg/steps/release"
 )
 
@@ -47,6 +50,9 @@ type options struct {
 	openshiftMappingConfig     *OpenshiftMappingConfig
 
 	logLevel string
+
+	ensurePromotedImagesUpToDate bool
+	flagutil.GitHubOptions
 }
 
 func parseOptions() *options {
@@ -68,6 +74,8 @@ func parseOptions() *options {
 	fs.StringVar(&opts.releaseControllerMirrorConfigDir, "release-controller-mirror-config-dir", "", "Path to the release controller mirror config directory")
 	fs.StringVar(&opts.openshiftMappingDir, "openshift-mapping-dir", "", "Path to the openshift mapping directory")
 	fs.StringVar(&opts.openshiftMappingConfigPath, "openshift-mapping-config", "", "Path to the openshift mapping config file")
+	fs.BoolVar(&opts.ensurePromotedImagesUpToDate, "ensure-promoted-images-up-to-date", false, "Whether to check if promoted images are up to date")
+	opts.GitHubOptions.AddFlags(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
@@ -104,6 +112,9 @@ func (o *options) validate() error {
 		logrus.WithField("re", re.String()).Info("Ignore tags as required by flag")
 		o.ignoredImageStreamTags = append(o.ignoredImageStreamTags, re)
 	}
+	if o.ensurePromotedImagesUpToDate {
+		return o.GitHubOptions.Validate(o.dryRun)
+	}
 	return nil
 }
 
@@ -126,9 +137,9 @@ func addSchemes() error {
 	return nil
 }
 
-func tagsToDelete(ctx context.Context, client ctrlruntimeclient.Client, promotedTags []api.ImageStreamTagReference, toIgnore []*regexp.Regexp, imageStreamRefs []ImageStreamRef) (map[api.ImageStreamTagReference]interface{}, error) {
+func tagsToDelete(ctx context.Context, client ctrlruntimeclient.Client, promotedTags map[api.ImageStreamTagReference]api.Metadata, toIgnore []*regexp.Regexp, imageStreamRefs []ImageStreamRef) (map[api.ImageStreamTagReference]interface{}, error) {
 	imageStreamsWithPromotedTags := map[ctrlruntimeclient.ObjectKey]interface{}{}
-	for _, promotedTag := range promotedTags {
+	for promotedTag := range promotedTags {
 		imageStreamsWithPromotedTags[ctrlruntimeclient.ObjectKey{Namespace: promotedTag.Namespace, Name: promotedTag.Name}] = nil
 	}
 
@@ -149,7 +160,7 @@ func tagsToDelete(ctx context.Context, client ctrlruntimeclient.Client, promoted
 		}
 	}
 
-	for _, promotedTag := range promotedTags {
+	for promotedTag := range promotedTags {
 		delete(tagsToCheck, promotedTag)
 	}
 	for tag := range tagsToCheck {
@@ -225,9 +236,9 @@ type OpenshiftMappingConfig struct {
 // generateMappings generates the mappings to mirror the images
 // Those mappings will be stored in https://github.com/openshift/release/tree/master/core-services/image-mirroring/openshift
 // and then used by the periodic-image-mirroring-openshift job
-func generateMappings(promotedTags []api.ImageStreamTagReference, mappingConfig *OpenshiftMappingConfig, imageStreamRefs []ImageStreamRef) map[string]map[string][]string {
+func generateMappings(promotedTags map[api.ImageStreamTagReference]api.Metadata, mappingConfig *OpenshiftMappingConfig, imageStreamRefs []ImageStreamRef) map[string]map[string][]string {
 	mappings := map[string]map[string][]string{}
-	for _, tag := range promotedTags {
+	for tag := range promotedTags {
 		// mirror the images if it is promoted or it is mirrored by the release controllers from OCP image streams
 		if tag.Namespace == mappingConfig.SourceNamespace || isMirroredFromOCP(tag, imageStreamRefs) {
 			if mappingConfig.Images != nil {
@@ -268,6 +279,67 @@ func isMirroredFromOCP(tag api.ImageStreamTagReference, refs []ImageStreamRef) b
 		return true
 	}
 	return false
+}
+
+type refGetter interface {
+	GetRef(org, repo, ref string) (string, error)
+}
+
+type gitRefGetter struct {
+	clone func(org, repo string) (git.RepoClient, error)
+}
+
+func (g *gitRefGetter) GetRef(org, repo, ref string) (ret string, retError error) {
+	r, err := g.clone(org, repo)
+	if err != nil {
+		return "", fmt.Errorf("failed to clone %s/%s: %w", org, repo, err)
+	}
+	defer func() {
+		if err := r.Clean(); err != nil {
+			retError = err
+		}
+	}()
+	ret, err = r.ShowRef(ref)
+	if err != nil {
+		return "", fmt.Errorf("failed to show ref %s of %s/%s: %w", ref, org, repo, err)
+	}
+	return ret, retError
+}
+
+// checkImageStreamTags checks if promotedTags are built with the current head of org/repo/branch
+func checkImageStreamTags(ctx context.Context, client ctrlruntimeclient.Client, promotedTags map[api.ImageStreamTagReference]api.Metadata, refGetter refGetter) []error {
+	var errs []error
+	for promotedTag, metadata := range promotedTags {
+		ist := &imagev1.ImageStreamTag{}
+		istName := fmt.Sprintf("%s:%s", promotedTag.Name, promotedTag.Tag)
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: promotedTag.Namespace, Name: istName}, ist); err != nil {
+			if kerrors.IsNotFound(err) {
+				// The tag has not been promoted yet
+				continue
+			}
+			errs = append(errs, fmt.Errorf("failed to get promoted isTag %s in namespace %s: %w", istName, promotedTag.Namespace, err))
+			continue
+		}
+		istCommit, err := promotionreconciler.CommitForIST(ist)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to get commit for isTag %s in namespace %s: %w", istName, promotedTag.Namespace, err))
+			continue
+		}
+		log := logrus.WithField("org", metadata.Org).WithField("repo", metadata.Repo).WithField("branch", metadata.Branch)
+		currentHEAD, found, err := promotionreconciler.CurrentHEADForBranch(refGetter, metadata, log)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to get current git head for isTag %s in namespace %s: %w", istName, promotedTag.Namespace, err))
+			continue
+		}
+		if !found {
+			errs = append(errs, fmt.Errorf("got 404 for %s/%s/%s from github for isTag %s in namespace %s, this likely means the repo or branch got deleted or we are not allowed to access it", metadata.Org, metadata.Repo, metadata.Branch, istName, promotedTag.Namespace))
+			continue
+		}
+		if currentHEAD != istCommit {
+			errs = append(errs, fmt.Errorf("the isTag %s in namespace %s is not built from the head %s of %s/%s/%s", istName, promotedTag.Namespace, currentHEAD, metadata.Org, metadata.Repo, metadata.Branch))
+		}
+	}
+	return errs
 }
 
 func main() {
@@ -328,9 +400,11 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to determine absolute CI Operator configuration path")
 	}
-	var promotedTags []api.ImageStreamTagReference
+	promotedTags := map[api.ImageStreamTagReference]api.Metadata{}
 	if err := config.OperateOnCIOperatorConfigDir(abs, func(cfg *api.ReleaseBuildConfiguration, metadata *config.Info) error {
-		promotedTags = append(promotedTags, release.PromotedTags(cfg)...)
+		for _, isTagRef := range release.PromotedTags(cfg) {
+			promotedTags[isTagRef] = cfg.Metadata
+		}
 		return nil
 	}); err != nil {
 		logrus.WithField("path", abs).Fatal("failed to operate on CI Operator's config directory")
@@ -369,12 +443,29 @@ func main() {
 	}
 
 	ctx := interrupts.Context()
+	var errs []error
+
+	if opts.ensurePromotedImagesUpToDate {
+		var secretPaths []string
+		if opts.GitHubOptions.TokenPath != "" {
+			secretPaths = append(secretPaths, opts.GitHubOptions.TokenPath)
+		}
+		secretAgent := &secret.Agent{}
+		if err := secretAgent.Start(secretPaths); err != nil {
+			logrus.WithError(err).Fatal("Failed to start secret agent")
+		}
+		gitClient, err := opts.GitHubOptions.GitClient(secretAgent, opts.dryRun)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create gitClient")
+		}
+		errs = append(errs, checkImageStreamTags(ctx, client, promotedTags, &gitRefGetter{clone: git.ClientFactoryFrom(gitClient).ClientFor})...)
+	}
+
 	toDelete, err := tagsToDelete(ctx, client, promotedTags, opts.ignoredImageStreamTags, imageStreamRefs)
 	if err != nil {
 		logrus.WithError(err).Fatal("could not get tags to delete")
 	}
 
-	var errs []error
 	for tag := range toDelete {
 		logrus.WithField("tag", tag.ISTagName()).Info("deleting tag")
 		if opts.dryRun {

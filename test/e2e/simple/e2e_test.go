@@ -290,7 +290,7 @@ func TestLiteralDynamicRelease(t *testing.T) {
 		framework.Run(t, testCase.name, func(t *framework.T, cmd *framework.CiOperatorCommand) {
 			defer func() {
 				if r := recover(); r != nil {
-					t.Errorf("test paniced, stacktrace:\n%s", string(debug.Stack()))
+					t.Errorf("test panicked, stacktrace:\n%s", string(debug.Stack()))
 				}
 			}()
 			cmd.AddArgs(

@@ -1,3 +1,0 @@
-#!/bin/bash
-
-go install -gcflags="all=-N -l" -ldflags "-X 'main.Debug=true'" -v ./cmd/...

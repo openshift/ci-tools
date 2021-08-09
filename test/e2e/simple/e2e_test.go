@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
+	"strings"
 	"testing"
 
 	"github.com/openshift/ci-tools/test/e2e/framework"
@@ -217,6 +218,7 @@ func TestLiteralDynamicRelease(t *testing.T) {
 	var testCases = []struct {
 		name    string
 		release func(t *framework.T) string
+		target  string
 	}{
 		{
 			name: "published release",
@@ -253,6 +255,7 @@ func TestLiteralDynamicRelease(t *testing.T) {
 				}
 				return i.Nodes[0].Payload
 			},
+			target: "latest",
 		},
 		{
 			name: "nightly release",
@@ -284,6 +287,39 @@ func TestLiteralDynamicRelease(t *testing.T) {
 				}
 				return i.PullSpec
 			},
+			target: "latest",
+		},
+		{
+			name: "non-x86 release",
+			release: func(t *framework.T) string {
+				type info struct {
+					PullSpec string `json:"pullSpec"`
+				}
+				req, err := http.NewRequest(http.MethodGet, "https://s390x.ocp.releases.ci.openshift.org/api/v1/releasestream/4.9.0-0.nightly-s390x/latest?rel=1", nil)
+				if err != nil {
+					t.Fatalf("could not create request for Cincinnati: %v", err)
+				}
+				req.Header.Add("Accept", "application/json")
+				resp, err := http.DefaultClient.Do(req)
+				if err != nil {
+					t.Fatalf("could not fetch release from Cincinnati: %v", err)
+				}
+				defer func() {
+					if err := resp.Body.Close(); err != nil {
+						t.Errorf("could not close response body: %v", err)
+					}
+				}()
+				raw, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					t.Fatalf("could not read release from Cincinnati: %v", err)
+				}
+				var i info
+				if err := json.Unmarshal(raw, &i); err != nil {
+					t.Fatalf("could not parse release from Cincinnati: %v; raw:\n%v", err, string(raw))
+				}
+				return i.PullSpec
+			},
+			target: "mainframe",
 		},
 	}
 	for _, testCase := range testCases {
@@ -297,16 +333,16 @@ func TestLiteralDynamicRelease(t *testing.T) {
 				"--config=dynamic-releases.yaml",
 				framework.LocalPullSecretFlag(t),
 				framework.RemotePullSecretFlag(t),
-				"--target=[release:latest]",
+				fmt.Sprintf("--target=[release:%s]", testCase.target),
 			)
 			cmd.AddEnv(`JOB_SPEC={"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[]},"decoration_config":{"timeout":"4h0m0s","grace_period":"30m0s","utility_images":{"clonerefs":"registry.ci.openshift.org/ci/clonerefs:latest","initupload":"registry.ci.openshift.org/ci/initupload:latest","entrypoint":"registry.ci.openshift.org/ci/entrypoint:latest","sidecar":"registry.ci.openshift.org/ci/sidecar:latest"},"resources":{"clonerefs":{"limits":{"memory":"3Gi"},"requests":{"cpu":"100m","memory":"500Mi"}},"initupload":{"limits":{"memory":"200Mi"},"requests":{"cpu":"100m","memory":"50Mi"}},"place_entrypoint":{"limits":{"memory":"100Mi"},"requests":{"cpu":"100m","memory":"25Mi"}},"sidecar":{"limits":{"memory":"2Gi"},"requests":{"cpu":"100m","memory":"250Mi"}}},"gcs_configuration":{"bucket":"origin-ci-test","path_strategy":"single","default_org":"openshift","default_repo":"origin","mediaTypes":{"log":"text/plain"}},"gcs_credentials_secret":"gce-sa-credentials-gcs-publisher"}}`)
 			cmd.AddEnv(framework.KubernetesClientEnv(t)...)
-			cmd.AddEnv(`RELEASE_IMAGE_LATEST=` + testCase.release(t))
+			cmd.AddEnv(fmt.Sprintf("RELEASE_IMAGE_%s=%s", strings.ToUpper(testCase.target), testCase.release(t)))
 			output, err := cmd.Run()
 			if err != nil {
 				t.Fatalf("explicit var: didn't expect an error from ci-operator: %v; output:\n%v", err, string(output))
 			}
-			cmd.VerboseOutputContains(t, testCase.name, `Using explicitly provided pull-spec for release latest`, `to tag release:latest`)
+			cmd.VerboseOutputContains(t, testCase.name, `Using explicitly provided pull-spec for release `+testCase.target, `to tag release:`+testCase.target)
 		})
 	}
 }

@@ -114,7 +114,7 @@ func (o *options) loadResolver(path string) error {
 	if path == "" {
 		return nil
 	}
-	refs, chains, workflows, _, _, observers, err := load.Registry(path, false)
+	refs, chains, workflows, _, _, observers, err := load.Registry(path, load.RegistryFlag(0))
 	if err != nil {
 		return err
 	}

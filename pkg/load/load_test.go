@@ -819,7 +819,7 @@ func TestRegistry(t *testing.T) {
 		testCases = []struct {
 			name          string
 			registryDir   string
-			flatRegistry  bool
+			flags         RegistryFlag
 			references    registry.ReferenceByName
 			chains        registry.ChainByName
 			workflows     registry.WorkflowByName
@@ -828,16 +828,15 @@ func TestRegistry(t *testing.T) {
 		}{{
 			name:          "Read registry",
 			registryDir:   "../../test/multistage-registry/registry",
-			flatRegistry:  false,
 			references:    expectedReferences,
 			chains:        expectedChains,
 			workflows:     expectedWorkflows,
 			observers:     expectedObservers,
 			expectedError: false,
 		}, {
-			name:         "Read configmap style registry",
-			registryDir:  "../../test/multistage-registry/configmap",
-			flatRegistry: true,
+			name:        "Read configmap style registry",
+			registryDir: "../../test/multistage-registry/configmap",
+			flags:       RegistryFlat,
 			references: registry.ReferenceByName{
 				"ipi-install-install": {
 					As:       "ipi-install-install",
@@ -858,7 +857,6 @@ func TestRegistry(t *testing.T) {
 		}, {
 			name:          "Read registry with ref where name and filename don't match",
 			registryDir:   "../../test/multistage-registry/invalid-filename",
-			flatRegistry:  false,
 			references:    nil,
 			chains:        nil,
 			workflows:     nil,
@@ -866,7 +864,6 @@ func TestRegistry(t *testing.T) {
 		}, {
 			name:          "Read registry where ref has an extra, invalid field",
 			registryDir:   "../../test/multistage-registry/invalid-field",
-			flatRegistry:  false,
 			references:    nil,
 			chains:        nil,
 			workflows:     nil,
@@ -874,7 +871,6 @@ func TestRegistry(t *testing.T) {
 		}, {
 			name:          "Read registry where ref has command containing trap without grace period specified",
 			registryDir:   "../../test/multistage-registry/trap-without-grace-period",
-			flatRegistry:  false,
 			references:    nil,
 			chains:        nil,
 			workflows:     nil,
@@ -882,7 +878,6 @@ func TestRegistry(t *testing.T) {
 		}, {
 			name:          "Read registry where ref has best effort defined without timeout",
 			registryDir:   "../../test/multistage-registry/best-effort-without-timeout",
-			flatRegistry:  false,
 			references:    nil,
 			chains:        nil,
 			workflows:     nil,
@@ -891,7 +886,7 @@ func TestRegistry(t *testing.T) {
 	)
 
 	for _, testCase := range testCases {
-		references, chains, workflows, _, _, observers, err := Registry(testCase.registryDir, testCase.flatRegistry)
+		references, chains, workflows, _, _, observers, err := Registry(testCase.registryDir, testCase.flags)
 		if err == nil && testCase.expectedError == true {
 			t.Errorf("%s: got no error when error was expected", testCase.name)
 		}
@@ -936,7 +931,7 @@ func TestRegistry(t *testing.T) {
 	if err := ioutil.WriteFile(filepath.Join(path, deprovisionGatherRef), fileData, 0664); err != nil {
 		t.Fatalf("failed to populate temp reference file: %v", err)
 	}
-	_, _, _, _, _, _, err = Registry(temp, false)
+	_, _, _, _, _, _, err = Registry(temp, RegistryFlag(0))
 	if err == nil {
 		t.Error("got no error when expecting error on incorrect reference name")
 	}

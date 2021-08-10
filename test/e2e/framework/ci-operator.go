@@ -103,6 +103,8 @@ func (c *CiOperatorCommand) Run() ([]byte, error) {
 	logFile, err := os.Create(filepath.Join(c.artifactDir, "ci-operator.output.log"))
 	if err != nil {
 		c.t.Fatalf("could not create log file: %v", err)
+	} else {
+		fmt.Printf("Log file created: %v\n", logFile.Name())
 	}
 	defer func() {
 		if err := logFile.Close(); err != nil {

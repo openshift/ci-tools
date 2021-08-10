@@ -136,21 +136,23 @@ func registryDomain(configuration *api.PromotionConfiguration) string {
 	return registry
 }
 
-func getImageMirrorTarget(tags map[string]api.ImageStreamTagReference, pipeline *imagev1.ImageStream, registry string) (srcTargetMap map[string]string, namespaces sets.String) {
+func getImageMirrorTarget(tags map[string][]api.ImageStreamTagReference, pipeline *imagev1.ImageStream, registry string) (srcTargetMap map[string]string, namespaces sets.String) {
 	if pipeline == nil {
 		return nil, nil
 	}
 	imageMirror := map[string]string{}
 	// Will this ever include more than one?
 	namespaces = sets.String{}
-	for src, dst := range tags {
-		dockerImageReference := findDockerImageReference(pipeline, src)
-		if dockerImageReference == "" {
-			continue
+	for src, dsts := range tags {
+		for _, dst := range dsts {
+			dockerImageReference := findDockerImageReference(pipeline, src)
+			if dockerImageReference == "" {
+				continue
+			}
+			dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
+			imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s", registry, dst.ISTagName())
+			namespaces.Insert(dst.Namespace)
 		}
-		dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
-		imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s", registry, dst.ISTagName())
-		namespaces.Insert(dst.Namespace)
 	}
 	if len(imageMirror) == 0 {
 		return nil, nil
@@ -274,7 +276,7 @@ func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStrea
 	var tags []api.ImageStreamTagReference
 	mapping, _ := PromotedTagsWithRequiredImages(configuration, sets.NewString())
 	for _, dest := range mapping {
-		tags = append(tags, dest)
+		tags = append(tags, dest...)
 	}
 	sort.Slice(tags, func(i, j int) bool {
 		return tags[i].ISTagName() < tags[j].ISTagName()
@@ -285,12 +287,12 @@ func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStrea
 // PromotedTagsWithRequiredImages returns the tags that are being promoted for the given ReleaseBuildConfiguration
 // accounting for the list of required images. Promoted tags are mapped by the source tag in the pipeline ImageStream
 // we will promote to the output.
-func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration, requiredImages sets.String) (map[string]api.ImageStreamTagReference, sets.String) {
+func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration, requiredImages sets.String) (map[string][]api.ImageStreamTagReference, sets.String) {
 	if configuration == nil || configuration.PromotionConfiguration == nil || configuration.PromotionConfiguration.Disabled {
 		return nil, nil
 	}
 	tags, names := toPromote(*configuration.PromotionConfiguration, configuration.Images, requiredImages)
-	promotedTags := map[string]api.ImageStreamTagReference{}
+	promotedTags := map[string][]api.ImageStreamTagReference{}
 	for dst, src := range tags {
 		var tag api.ImageStreamTagReference
 		if configuration.PromotionConfiguration.Name != "" {
@@ -306,11 +308,16 @@ func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration
 				Tag:       configuration.PromotionConfiguration.Tag,
 			}
 		}
-		promotedTags[src] = tag
+		promotedTags[src] = append(promotedTags[src], tag)
 	}
 	// promote the binary build if one exists and this isn't disabled
 	if configuration.BinaryBuildCommands != "" && !configuration.PromotionConfiguration.DisableBuildCache {
-		promotedTags[string(api.PipelineImageStreamTagReferenceBinaries)] = api.BuildCacheFor(configuration.Metadata)
+		promotedTags[string(api.PipelineImageStreamTagReferenceBinaries)] = append(promotedTags[string(api.PipelineImageStreamTagReferenceBinaries)], api.BuildCacheFor(configuration.Metadata))
+	}
+	for _, tags := range promotedTags {
+		sort.Slice(tags, func(i, j int) bool {
+			return tags[i].ISTagName() < tags[j].ISTagName()
+		})
 	}
 	return promotedTags, names
 }

@@ -409,6 +409,8 @@ func validateClusterProfile(fieldRoot string, p api.ClusterProfile) []error {
 		api.ClusterProfileOpenStack,
 		api.ClusterProfileOpenStackKuryr,
 		api.ClusterProfileOpenStackMecha,
+		api.ClusterProfileOpenStackMechaCentral,
+		api.ClusterProfileOpenStackMechaAz0,
 		api.ClusterProfileOpenStackOsuosl,
 		api.ClusterProfileOpenStackVexxhost,
 		api.ClusterProfileOpenStackPpc64le,

@@ -185,7 +185,8 @@ func (r *reconciler) reconcile(ctx context.Context, l *logrus.Entry, req reconci
 		}
 
 		l.WithField("name", secret.Name).WithField("age", time.Since(secret.CreationTimestamp.Time).String()).Info("Deleting secret that is older than 30 days")
-		if err := r.client.Delete(ctx, &secret); err != nil {
+		// ignore ErrNotExist as there could be a race condition where something else has already deleted the secret.
+		if err := r.client.Delete(ctx, &secret); err != nil && !apierrors.IsNotFound(err) {
 			return nil, fmt.Errorf("failed to delete secret %s/%s: %w", secret.Namespace, secret.Name, err)
 		}
 	}

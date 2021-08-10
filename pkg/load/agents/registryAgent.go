@@ -30,7 +30,7 @@ type registryAgent struct {
 	registryPath  string
 	generation    int
 	errorMetrics  *prometheus.CounterVec
-	flatRegistry  bool
+	flags         load.RegistryFlag
 	references    registry.ReferenceByName
 	chains        registry.ChainByName
 	workflows     registry.WorkflowByName
@@ -86,8 +86,16 @@ func NewRegistryAgent(registryPath string, opts ...RegistryAgentOption) (Registr
 	if opt.FlatRegistry == nil {
 		opt.FlatRegistry = utilpointer.BoolPtr(true)
 	}
-
-	a := &registryAgent{registryPath: registryPath, lock: &sync.RWMutex{}, errorMetrics: opt.ErrorMetric, flatRegistry: *opt.FlatRegistry}
+	flags := load.RegistryMetadata | load.RegistryDocumentation
+	if *opt.FlatRegistry {
+		flags |= load.RegistryFlat
+	}
+	a := &registryAgent{
+		registryPath: registryPath,
+		lock:         &sync.RWMutex{},
+		errorMetrics: opt.ErrorMetric,
+		flags:        flags,
+	}
 	// Load config once so we fail early if that doesn't work and are ready as soon as we return
 	if err := a.loadRegistry(); err != nil {
 		return nil, fmt.Errorf("failed to load registry: %w", err)
@@ -124,7 +132,7 @@ func (a *registryAgent) loadRegistry() error {
 		a.lock.Lock()
 		defer a.lock.Unlock()
 		startTime := time.Now()
-		references, chains, workflows, documentation, metadata, observers, err := load.Registry(a.registryPath, a.flatRegistry)
+		references, chains, workflows, documentation, metadata, observers, err := load.Registry(a.registryPath, a.flags)
 		if err != nil {
 			a.recordError("failed to load ci-operator registry")
 			return time.Duration(0), fmt.Errorf("failed to load ci-operator registry (%w)", err)

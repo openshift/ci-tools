@@ -21,11 +21,6 @@ operator:
 promotion:
   name: other
   namespace: ocp
-releases:
-  initial:
-    candidate:
-      product: okd
-      version: "4.3"
 resources:
   '*':
     limits:

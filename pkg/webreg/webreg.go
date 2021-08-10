@@ -1510,31 +1510,26 @@ func MetadataFromQuery(w http.ResponseWriter, r *http.Request) (api.Metadata, er
 		}
 		return api.Metadata{}, err
 	}
-	org := r.URL.Query().Get(OrgQuery)
-	if org == "" {
-		missingQuery(w, OrgQuery)
-		return api.Metadata{}, fmt.Errorf("missing query %s", OrgQuery)
+
+	var metadata api.Metadata
+	for query, field := range map[string]*string{
+		OrgQuery:    &metadata.Org,
+		RepoQuery:   &metadata.Repo,
+		BranchQuery: &metadata.Branch,
+	} {
+		value := r.URL.Query().Get(query)
+		if value == "" {
+			MissingQuery(w, query)
+			return metadata, fmt.Errorf("missing query %s", query)
+		}
+		*field = value
 	}
-	repo := r.URL.Query().Get(RepoQuery)
-	if repo == "" {
-		missingQuery(w, RepoQuery)
-		return api.Metadata{}, fmt.Errorf("missing query %s", RepoQuery)
-	}
-	branch := r.URL.Query().Get(BranchQuery)
-	if branch == "" {
-		missingQuery(w, BranchQuery)
-		return api.Metadata{}, fmt.Errorf("missing query %s", BranchQuery)
-	}
-	variant := r.URL.Query().Get(VariantQuery)
-	return api.Metadata{
-		Org:     org,
-		Repo:    repo,
-		Branch:  branch,
-		Variant: variant,
-	}, nil
+	metadata.Variant = r.URL.Query().Get(VariantQuery)
+
+	return metadata, nil
 }
 
-func missingQuery(w http.ResponseWriter, field string) {
+func MissingQuery(w http.ResponseWriter, field string) {
 	w.WriteHeader(http.StatusBadRequest)
 	fmt.Fprintf(w, "%s query missing or incorrect", field)
 }
@@ -1549,7 +1544,7 @@ func jobHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, w h
 	}
 	test := r.URL.Query().Get(TestQuery)
 	if test == "" {
-		missingQuery(w, TestQuery)
+		MissingQuery(w, TestQuery)
 		return
 	}
 	configs, err := confAgent.GetMatchingConfig(metadata)

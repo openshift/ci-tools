@@ -206,7 +206,7 @@ func loadResolver(path string) (registry.Resolver, error) {
 	if path == "" {
 		return nil, nil
 	}
-	refs, chains, workflows, _, _, observers, err := load.Registry(path, false)
+	refs, chains, workflows, _, _, observers, err := load.Registry(path, load.RegistryFlag(0))
 	if err != nil {
 		return nil, err
 	}

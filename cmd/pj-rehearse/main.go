@@ -204,7 +204,7 @@ func rehearseMain() error {
 	var observers registry.ObserverByName
 
 	if !o.noRegistry {
-		refs, chains, workflows, _, _, observers, err = load.Registry(filepath.Join(o.releaseRepoPath, config.RegistryPath), false)
+		refs, chains, workflows, _, _, observers, err = load.Registry(filepath.Join(o.releaseRepoPath, config.RegistryPath), load.RegistryFlag(0))
 		if err != nil {
 			logger.WithError(err).Error("could not load step registry")
 			return fmt.Errorf(misconfigurationOutput)

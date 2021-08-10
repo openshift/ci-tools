@@ -25,13 +25,13 @@ type Node interface {
 	Name() string
 	// Type returns the type of the registry element a Node refers to
 	Type() Type
-	// Ancestors returns a set of strings containing the names of all of the node's ancestors
+	// Ancestors returns a set of nodes containing the names of all of the node's ancestors
 	Ancestors() []Node
-	// Descendants returns a set of strings containing the names of all of the node's descendants
+	// Descendants returns a set of nodes containing the names of all of the node's descendants
 	Descendants() []Node
-	// Parents returns a set of strings containing the names of all the node's parents
+	// Parents returns a set of nodes containing the names of all the node's parents
 	Parents() []Node
-	// Children returns a set of strings containing the names of all the node's children
+	// Children returns a set of nodes containing the names of all the node's children
 	Children() []Node
 }
 

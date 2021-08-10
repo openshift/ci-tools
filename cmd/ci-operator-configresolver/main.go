@@ -103,7 +103,11 @@ func resolveConfig(configAgent agents.ConfigAgent, registryAgent agents.Registry
 		}
 		metadata, err := webreg.MetadataFromQuery(w, r)
 		if err != nil {
+			// MetadataFromQuery deals with setting status code and writing response
+			// so we need to just log the error here
 			metrics.RecordError("invalid query", configresolverMetrics.ErrorRate)
+			logrus.WithError(err).Warning("failed to read query from request")
+			return
 		}
 		logger := logrus.WithFields(api.LogFieldsFor(metadata))
 
@@ -174,7 +178,11 @@ func resolveConfigWithInjectedTest(configAgent agents.ConfigAgent, registryAgent
 		}
 		metadata, err := webreg.MetadataFromQuery(w, r)
 		if err != nil {
+			// MetadataFromQuery deals with setting status code and writing response
+			// so we need to just log the error here
 			metrics.RecordError("invalid query", configresolverMetrics.ErrorRate)
+			logrus.WithError(err).Warning("failed to read query from request")
+			return
 		}
 		logger := logrus.WithFields(api.LogFieldsFor(metadata))
 
@@ -189,7 +197,11 @@ func resolveConfigWithInjectedTest(configAgent agents.ConfigAgent, registryAgent
 
 		injectFromMetadata, test, err := injectTestFromQuery(w, r)
 		if err != nil {
+			// injectTestFromQuery deals with setting status code and writing response
+			// so we need to just log the error here
 			metrics.RecordError("invalid query", configresolverMetrics.ErrorRate)
+			logrus.WithError(err).Warning("failed to read query from request")
+			return
 		}
 		injectFromConfig, err := configAgent.GetMatchingConfig(injectFromMetadata)
 		if err != nil {

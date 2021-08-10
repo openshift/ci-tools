@@ -36,10 +36,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-const (
-	build01ConsoleHost = "console.build01.ci.openshift.org"
-)
-
 func init() {
 	if err := imageapi.AddToScheme(scheme.Scheme); err != nil {
 		panic(fmt.Sprintf("failed to register imagev1 scheme: %v", err))
@@ -57,12 +53,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 		return root, nil
 	}
 	var testCases = []struct {
-		name     string
-		input    *api.ReleaseBuildConfiguration
-		jobSpec  *api.JobSpec
-		output   []api.StepConfiguration
-		readFile readFile
-		resolver resolveRoot
+		name          string
+		input         *api.ReleaseBuildConfiguration
+		consoleHost   string
+		jobSpec       *api.JobSpec
+		output        []api.StepConfiguration
+		expectedError error
+		readFile      readFile
+		resolver      resolveRoot
 	}{
 		{
 			name: "minimal information provided",
@@ -767,6 +765,50 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			}},
 		},
+		{
+			name: "reading boot root from repository leads to an error",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						FromRepository: true,
+					},
+				},
+			},
+			consoleHost: "console-openshift-console.apps.ci.l2s4.p1.openshiftapps.com",
+			readFile: func(filename string) ([]byte, error) {
+				return nil, fmt.Errorf("fail to read file: reason")
+			},
+
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
+				},
+			},
+			resolver: noopResolver,
+			output: []api.StepConfiguration{{
+				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+					From: api.PipelineImageStreamTagReferenceRoot,
+					To:   api.PipelineImageStreamTagReferenceSource,
+				}),
+			}, {
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+
+					InputImage: api.InputImage{
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
+						},
+						To: api.PipelineImageStreamTagReferenceRoot,
+					},
+					Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceRoot}},
+				},
+			}},
+			expectedError: fmt.Errorf("failed to read buildRootImageStream from repository: %w", fmt.Errorf("failed to read .ci-operator.yaml file: %w", fmt.Errorf("fail to read file: reason"))),
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -775,51 +817,53 @@ func TestStepConfigsForBuild(t *testing.T) {
 
 			client := fakectrlruntimeclient.NewFakeClient()
 
-			rawSteps, err := stepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, &imageConfigs, time.Nanosecond, build01ConsoleHost)
-			if err != nil {
-				t.Fatalf("failed to get stepConfigsForBuild: %v", err)
+			rawSteps, actualError := stepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, &imageConfigs, time.Nanosecond, testCase.consoleHost)
+			if diff := cmp.Diff(testCase.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("actualError does not match expectedError, diff: %s", diff)
 			}
-			actual := sortStepConfig(rawSteps)
-			expected := sortStepConfig(testCase.output)
-			if diff := cmp.Diff(actual, expected); diff != "" {
-				t.Errorf("actual differs from expected: %s", diff)
-			}
-
-			if testCase.input.InputConfiguration.BuildRootImage.FromRepository {
-				imports := &testimagestreamtagimportv1.TestImageStreamTagImportList{}
-				if err := client.List(context.Background(), imports); err != nil {
-					t.Errorf("failed to list testimageimports: %v", err)
-				}
-				if n := len(imports.Items); n != 1 {
-					t.Fatalf("expected to find exactly one testimageimport, got %d", n)
+			if testCase.expectedError == nil {
+				actual := sortStepConfig(rawSteps)
+				expected := sortStepConfig(testCase.output)
+				if diff := cmp.Diff(actual, expected); diff != "" {
+					t.Errorf("actual differs from expected: %s", diff)
 				}
 
-				var importNS, importName, importTag string
-				for _, step := range testCase.output {
-					if step.InputImageTagStepConfiguration != nil {
-						importNS = step.InputImageTagStepConfiguration.InputImage.BaseImage.Namespace
-						importName = step.InputImageTagStepConfiguration.InputImage.BaseImage.Name
-						importTag = step.InputImageTagStepConfiguration.InputImage.BaseImage.Tag
-						break
+				if testCase.input.InputConfiguration.BuildRootImage.FromRepository {
+					imports := &testimagestreamtagimportv1.TestImageStreamTagImportList{}
+					if err := client.List(context.Background(), imports); err != nil {
+						t.Errorf("failed to list testimageimports: %v", err)
 					}
-				}
+					if n := len(imports.Items); n != 1 {
+						t.Fatalf("expected to find exactly one testimageimport, got %d", n)
+					}
 
-				expected := &testimagestreamtagimportv1.TestImageStreamTagImport{
-					ObjectMeta: meta.ObjectMeta{
-						Namespace: "ci",
-						Name:      importName + "-" + importTag,
-						Labels: map[string]string{
-							"imagestreamtag-namespace": importNS,
-							"imagestreamtag-name":      importName + "_" + importTag,
+					var importNS, importName, importTag string
+					for _, step := range testCase.output {
+						if step.InputImageTagStepConfiguration != nil {
+							importNS = step.InputImageTagStepConfiguration.InputImage.BaseImage.Namespace
+							importName = step.InputImageTagStepConfiguration.InputImage.BaseImage.Name
+							importTag = step.InputImageTagStepConfiguration.InputImage.BaseImage.Tag
+							break
+						}
+					}
+
+					expected := &testimagestreamtagimportv1.TestImageStreamTagImport{
+						ObjectMeta: meta.ObjectMeta{
+							Namespace: "ci",
+							Name:      importName + "-" + importTag,
+							Labels: map[string]string{
+								"imagestreamtag-namespace": importNS,
+								"imagestreamtag-name":      importName + "_" + importTag,
+							},
 						},
-					},
-					Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
-						Namespace: importNS,
-						Name:      importName + ":" + importTag,
-					},
-				}
-				if diff := cmp.Diff(&imports.Items[0], expected, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
-					t.Errorf("actual import differs from expected: %s", diff)
+						Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
+							Namespace: importNS,
+							Name:      importName + ":" + importTag,
+						},
+					}
+					if diff := cmp.Diff(&imports.Items[0], expected, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
+						t.Errorf("actual import differs from expected: %s", diff)
+					}
 				}
 			}
 
@@ -1349,7 +1393,7 @@ func TestFromConfig(t *testing.T) {
 			for k, v := range tc.params {
 				params.Add(k, func() (string, error) { return v, nil })
 			}
-			configSteps, post, err := fromConfig(context.Background(), &tc.config, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, build01ConsoleHost)
+			configSteps, post, err := fromConfig(context.Background(), &tc.config, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, "")
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}

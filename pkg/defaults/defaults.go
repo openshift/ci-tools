@@ -550,15 +550,17 @@ func stepConfigsForBuild(
 ) ([]api.StepConfiguration, error) {
 	var buildSteps []api.StepConfiguration
 	if target := config.InputConfiguration.BuildRootImage; target != nil {
-		// if ci-operator runs on app.ci, we do not need to import the image because
-		// the istTagRef has to be an image stream tag on app.ci
-		if !strings.HasSuffix(consoleHost, api.ServiceDomainAPPCI) && target.FromRepository {
+		if target.FromRepository {
 			istTagRef, err := buildRootImageStreamFromRepository(readFile)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read buildRootImageStream from repository: %w", err)
 			}
 			target.ImageStreamTagReference = istTagRef
-			ensureImageStreamTag(ctx, client, istTagRef, second)
+			// if ci-operator runs on app.ci, we do not need to import the image because
+			// the istTagRef has to be an image stream tag on app.ci
+			if !strings.HasSuffix(consoleHost, api.ServiceDomainAPPCI) {
+				ensureImageStreamTag(ctx, client, istTagRef, second)
+			}
 		}
 		if isTagRef := target.ImageStreamTagReference; isTagRef != nil {
 			if config.InputConfiguration.BuildRootImage.UseBuildCache {

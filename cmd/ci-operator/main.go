@@ -788,11 +788,8 @@ func (o *options) Run() []error {
 	if o.leaseServer != "" && o.leaseServerCredentialsFile != "" {
 		leaseClient = &o.leaseClient
 	}
-
-	o.resolveConsoleHost()
-
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig, o.consoleHost)
+	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -925,34 +922,6 @@ func runStep(ctx context.Context, step api.Step) (api.CIOperatorStepDetails, err
 	}, err
 }
 
-func (o *options) resolveConsoleHost() {
-	if client, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{}); err != nil {
-		logrus.WithError(err).Warn("Could not create client for accessing Routes. Will not resolve console URL.")
-	} else {
-		consoleRoutes := &routev1.RouteList{}
-		if err := client.List(context.TODO(), consoleRoutes, ctrlruntimeclient.InNamespace("openshift-console")); err != nil {
-			logrus.WithError(err).Warn("Could not fetch OpenShift console Route.  Will not resolve console URL.")
-		} else {
-			hostForRoute := func(name string, routes []routev1.Route) string {
-				for _, route := range routes {
-					if route.Name == name {
-						return route.Spec.Host
-					}
-				}
-				return ""
-			}
-			// the canonical route for the console may be in one of two routes,
-			// and we want to prefer the custom one if it is present
-			for _, routeName := range []string{"console-custom", "console"} {
-				if host := hostForRoute(routeName, consoleRoutes.Items); host != "" {
-					o.consoleHost = host
-					break
-				}
-			}
-		}
-	}
-}
-
 func (o *options) resolveInputs(steps []api.Step) error {
 	var inputs api.InputDefinition
 	for _, step := range steps {
@@ -998,6 +967,32 @@ func (o *options) resolveInputs(steps []api.Step) error {
 	o.jobSpec.SetNamespace(o.namespace)
 
 	// If we can resolve the field, use it. If not, don't.
+	if client, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{}); err != nil {
+		logrus.WithError(err).Warn("Could not create client for accessing Routes. Will not resolve console URL.")
+	} else {
+		consoleRoutes := &routev1.RouteList{}
+		if err := client.List(context.TODO(), consoleRoutes, ctrlruntimeclient.InNamespace("openshift-console")); err != nil {
+			logrus.WithError(err).Warn("Could not fetch OpenShift console Route.  Will not resolve console URL.")
+		} else {
+			hostForRoute := func(name string, routes []routev1.Route) string {
+				for _, route := range routes {
+					if route.Name == name {
+						return route.Spec.Host
+					}
+				}
+				return ""
+			}
+			// the canonical route for the console may be in one of two routes,
+			// and we want to prefer the custom one if it is present
+			for _, routeName := range []string{"console-custom", "console"} {
+				if host := hostForRoute(routeName, consoleRoutes.Items); host != "" {
+					o.consoleHost = host
+					break
+				}
+			}
+		}
+	}
+
 	if o.consoleHost != "" {
 		logrus.Infof("Using namespace https://%s/k8s/cluster/projects/%s", o.consoleHost, o.namespace)
 	} else {

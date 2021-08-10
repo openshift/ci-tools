@@ -204,7 +204,6 @@ func testImageStreamTagImportHandler(l *logrus.Entry) handler.EventHandler {
 			return nil
 		}
 		if testimagestreamtagimport.Spec.ClusterName == "" {
-			// This should never happen
 			l.WithField("name", testimagestreamtagimport.Namespace+"/"+testimagestreamtagimport.Name).Error("found testimagestreamtagimport on app.ci that doesn't have .spec.cluster set, can not infer what cluster it is for, ignoring.")
 			return nil
 		}

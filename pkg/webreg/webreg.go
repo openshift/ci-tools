@@ -1510,28 +1510,23 @@ func MetadataFromQuery(w http.ResponseWriter, r *http.Request) (api.Metadata, er
 		}
 		return api.Metadata{}, err
 	}
-	org := r.URL.Query().Get(OrgQuery)
-	if org == "" {
-		MissingQuery(w, OrgQuery)
-		return api.Metadata{}, fmt.Errorf("missing query %s", OrgQuery)
+
+	var metadata api.Metadata
+	for query, field := range map[string]*string{
+		OrgQuery:    &metadata.Org,
+		RepoQuery:   &metadata.Repo,
+		BranchQuery: &metadata.Branch,
+	} {
+		value := r.URL.Query().Get(query)
+		if value == "" {
+			MissingQuery(w, query)
+			return metadata, fmt.Errorf("missing query %s", query)
+		}
+		*field = value
 	}
-	repo := r.URL.Query().Get(RepoQuery)
-	if repo == "" {
-		MissingQuery(w, RepoQuery)
-		return api.Metadata{}, fmt.Errorf("missing query %s", RepoQuery)
-	}
-	branch := r.URL.Query().Get(BranchQuery)
-	if branch == "" {
-		MissingQuery(w, BranchQuery)
-		return api.Metadata{}, fmt.Errorf("missing query %s", BranchQuery)
-	}
-	variant := r.URL.Query().Get(VariantQuery)
-	return api.Metadata{
-		Org:     org,
-		Repo:    repo,
-		Branch:  branch,
-		Variant: variant,
-	}, nil
+	metadata.Variant = r.URL.Query().Get(VariantQuery)
+
+	return metadata, nil
 }
 
 func MissingQuery(w http.ResponseWriter, field string) {

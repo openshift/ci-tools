@@ -143,28 +143,21 @@ func injectTestFromQuery(w http.ResponseWriter, r *http.Request) (api.Metadata, 
 		}
 		return metadata, test, err
 	}
-	metadata.Org = r.URL.Query().Get(injectFromOrgQuery)
-	if metadata.Org == "" {
-		webreg.MissingQuery(w, injectFromOrgQuery)
-		return metadata, test, fmt.Errorf("missing query %s", injectFromOrgQuery)
-	}
-	metadata.Repo = r.URL.Query().Get(injectFromRepoQuery)
-	if metadata.Repo == "" {
-		webreg.MissingQuery(w, injectFromRepoQuery)
-		return metadata, "", fmt.Errorf("missing query %s", injectFromRepoQuery)
-	}
-	metadata.Branch = r.URL.Query().Get(injectFromBranchQuery)
-	if metadata.Branch == "" {
-		webreg.MissingQuery(w, injectFromBranchQuery)
-		return metadata, test, fmt.Errorf("missing query %s", injectFromVariantQuery)
+
+	for query, field := range map[string]*string{
+		injectFromOrgQuery:    &metadata.Org,
+		injectFromRepoQuery:   &metadata.Repo,
+		injectFromBranchQuery: &metadata.Branch,
+		injectTestQuery:       &test,
+	} {
+		value := r.URL.Query().Get(query)
+		if value == "" {
+			webreg.MissingQuery(w, query)
+			return metadata, test, fmt.Errorf("missing query %s", query)
+		}
+		*field = value
 	}
 	metadata.Variant = r.URL.Query().Get(injectFromVariantQuery)
-
-	test = r.URL.Query().Get(injectTestQuery)
-	if test == "" {
-		webreg.MissingQuery(w, injectTestQuery)
-		return metadata, test, fmt.Errorf("missing query %s", injectTestQuery)
-	}
 
 	return metadata, test, nil
 }

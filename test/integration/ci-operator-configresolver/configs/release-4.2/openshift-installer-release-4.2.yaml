@@ -12,6 +12,9 @@ build_root:
     name: release
     namespace: openshift
     tag: golang-1.10
+images:
+- to: installer
+  from: base
 resources:
   '*':
     limits:

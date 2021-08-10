@@ -144,10 +144,11 @@ func fromConfig(
 	// we need to pass the pointer - otherwise we will lose the updates after leaving the function scope.
 	imageConfigs := &[]*api.InputImageTagStepConfiguration{}
 	resolver := rootImageResolver(client, ctx, promote)
-	rawSteps, err := stepConfigsForBuild(ctx, client, config, jobSpec, ioutil.ReadFile, resolver, imageConfigs, time.Second, consoleHost)
+	graphConf, err := stepConfigsForBuild(ctx, client, config, jobSpec, ioutil.ReadFile, resolver, imageConfigs, time.Second, consoleHost)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get stepConfigsForBuild: %w", err)
 	}
+	rawSteps := graphConf.Steps
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			steps, testHasReleaseStep, err := stepForTest(ctx, config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, imageConfigs, pullSecret, censor)
@@ -203,7 +204,7 @@ func fromConfig(
 				}
 				logrus.Infof("Resolved release %s to %s", resolveConfig.Name, value)
 			}
-			step := releasesteps.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, jobSpec, pullSecret, overrideCLIReleaseExtractImage)
+			step := releasesteps.ImportReleaseStep(resolveConfig.Name, resolveConfig.TargetName(), value, false, config.Resources, podClient, jobSpec, pullSecret, overrideCLIReleaseExtractImage)
 			buildSteps = append(buildSteps, step)
 			addProvidesForStep(step, params)
 			continue
@@ -261,7 +262,8 @@ func fromConfig(
 						return nil, nil, results.ForReason("reading_release").ForError(fmt.Errorf("failed to read input release pullSpec %s: %w", name, err))
 					}
 					logrus.Infof("Resolved release %s to %s", name, pullSpec)
-					releaseStep = releasesteps.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, jobSpec, pullSecret, nil)
+					target := rawStep.ReleaseImagesTagStepConfiguration.TargetName(name)
+					releaseStep = releasesteps.ImportReleaseStep(name, target, pullSpec, true, config.Resources, podClient, jobSpec, pullSecret, nil)
 				} else {
 					releaseStep = releasesteps.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, jobSpec)
 				}
@@ -377,7 +379,8 @@ func stepForTest(
 			hasReleaseStep = true
 			claimRelease := c.ClusterClaim.ClaimRelease(c.As)
 			logrus.Infof("Resolved release %s to %s", claimRelease.ReleaseName, pullSpec)
-			importStep := releasesteps.ImportReleaseStep(claimRelease.ReleaseName, pullSpec, false, config.Resources, podClient, jobSpec, pullSecret, nil)
+			target := api.ReleaseConfiguration{Name: claimRelease.ReleaseName}.TargetName()
+			importStep := releasesteps.ImportReleaseStep(claimRelease.ReleaseName, target, pullSpec, false, config.Resources, podClient, jobSpec, pullSecret, nil)
 			testSteps = append(testSteps, importStep)
 			addProvidesForStep(step, params)
 		}
@@ -554,13 +557,13 @@ func stepConfigsForBuild(
 	imageConfigs *[]*api.InputImageTagStepConfiguration,
 	second time.Duration,
 	consoleHost string,
-) ([]api.StepConfiguration, error) {
+) (api.GraphConfiguration, error) {
 	var buildSteps []api.StepConfiguration
 	if target := config.InputConfiguration.BuildRootImage; target != nil {
 		if target.FromRepository {
 			istTagRef, err := buildRootImageStreamFromRepository(readFile)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read buildRootImageStream from repository: %w", err)
+				return api.GraphConfiguration{}, fmt.Errorf("failed to read buildRootImageStream from repository: %w", err)
 			}
 			target.ImageStreamTagReference = istTagRef
 			// if ci-operator runs on app.ci, we do not need to import the image because
@@ -574,7 +577,7 @@ func stepConfigsForBuild(
 				cache := api.BuildCacheFor(config.Metadata)
 				root, err := resolveRoot(isTagRef, &cache)
 				if err != nil {
-					return nil, fmt.Errorf("could not resolve build root: %w", err)
+					return api.GraphConfiguration{}, fmt.Errorf("could not resolve build root: %w", err)
 				}
 				isTagRef = root
 			}
@@ -798,7 +801,7 @@ func stepConfigsForBuild(
 
 	buildSteps = append(buildSteps, config.RawSteps...)
 
-	return buildSteps, nil
+	return api.GraphConfiguration{Steps: buildSteps}, nil
 }
 
 func paramsHasAllParametersAsInput(p api.Parameters, params map[string]func() (string, error)) (map[string]string, bool) {

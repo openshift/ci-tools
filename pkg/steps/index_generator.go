@@ -142,7 +142,7 @@ func (s *indexGeneratorStep) Provides() api.ParameterMap {
 	return api.ParameterMap{}
 }
 
-func (s *indexGeneratorStep) Name() string { return string(s.config.To) }
+func (s *indexGeneratorStep) Name() string { return s.config.TargetName() }
 
 func (s *indexGeneratorStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", s.config.To)

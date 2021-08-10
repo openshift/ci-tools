@@ -278,6 +278,12 @@ type StepNode struct {
 	Children []*StepNode
 }
 
+// GraphConfiguration contains step data used to build the execution graph.
+type GraphConfiguration struct {
+	// Steps accumulates step configuration as the configuration is parsed.
+	Steps []StepConfiguration
+}
+
 // BuildGraph returns a graph or graphs that include
 // all steps given.
 func BuildGraph(steps []Step) []*StepNode {

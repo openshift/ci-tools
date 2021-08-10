@@ -817,12 +817,12 @@ func TestStepConfigsForBuild(t *testing.T) {
 
 			client := fakectrlruntimeclient.NewFakeClient()
 
-			rawSteps, actualError := stepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, &imageConfigs, time.Nanosecond, testCase.consoleHost)
+			graphConf, actualError := stepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, &imageConfigs, time.Nanosecond, testCase.consoleHost)
 			if diff := cmp.Diff(testCase.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("actualError does not match expectedError, diff: %s", diff)
 			}
 			if testCase.expectedError == nil {
-				actual := sortStepConfig(rawSteps)
+				actual := sortStepConfig(graphConf.Steps)
 				expected := sortStepConfig(testCase.output)
 				if diff := cmp.Diff(actual, expected); diff != "" {
 					t.Errorf("actual differs from expected: %s", diff)

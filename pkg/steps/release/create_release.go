@@ -244,9 +244,7 @@ func (s *assembleReleaseStep) Provides() api.ParameterMap {
 	}
 }
 
-func (s *assembleReleaseStep) Name() string {
-	return fmt.Sprintf("[release:%s]", s.name)
-}
+func (s *assembleReleaseStep) Name() string { return s.config.TargetName(s.name) }
 
 func (s *assembleReleaseStep) Description() string {
 	return fmt.Sprintf("Create the release image %q containing all images built by this job", s.name)

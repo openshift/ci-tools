@@ -591,7 +591,7 @@ func (s *sourceStep) Provides() api.ParameterMap {
 	}
 }
 
-func (s *sourceStep) Name() string { return string(s.config.To) }
+func (s *sourceStep) Name() string { return s.config.TargetName() }
 
 func (s *sourceStep) Description() string {
 	return fmt.Sprintf("Clone the correct source code into an image and tag it as %s", s.config.To)

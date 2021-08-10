@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -166,6 +167,127 @@ func TestIsValidGraph_Names(t *testing.T) {
 					To: api.PipelineImageStreamTagReferenceSource,
 				},
 			})
+			err := IsValidGraphConfiguration(graphConf.Steps)
+			testhelper.Diff(t, "error", err, tc.expected, testhelper.EquateErrorMessage)
+		})
+	}
+}
+
+func TestIsValidGraph_ContainerTestFrom(t *testing.T) {
+	tests := func(from ...string) (ret []api.TestStepConfiguration) {
+		for _, f := range from {
+			ret = append(ret, api.TestStepConfiguration{
+				As: "test-" + f,
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{
+					From: api.PipelineImageStreamTagReference(f),
+				},
+			})
+		}
+		return
+	}
+	errs := func(msgs ...string) error {
+		var ret []error
+		for _, m := range msgs {
+			ret = append(ret, errors.New(m))
+		}
+		return utilerrors.NewAggregate(ret)
+	}
+	for _, tc := range []struct {
+		name     string
+		config   api.ReleaseBuildConfiguration
+		expected error
+	}{{
+		name: "invalid",
+		config: api.ReleaseBuildConfiguration{
+			Tests: tests("invalid"),
+		},
+		expected: errs(`tests[test-invalid].from: unknown image "invalid"`),
+	}, {
+		name:   "from src",
+		config: api.ReleaseBuildConfiguration{Tests: tests("src")},
+	}, {
+		name: "from root tag",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: api.InputConfiguration{
+				BuildRootImage: &api.BuildRootImageConfiguration{
+					ImageStreamTagReference: &api.ImageStreamTagReference{},
+				},
+			},
+			Tests: tests("root"),
+		},
+	}, {
+		name: "from base image",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: api.InputConfiguration{
+				BaseImages: map[string]api.ImageStreamTagReference{"from": {}},
+			},
+			Tests: tests("from"),
+		},
+	}, {
+		name: "from base RPM image",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: api.InputConfiguration{
+				BaseRPMImages: map[string]api.ImageStreamTagReference{
+					"from": {},
+				},
+			},
+			Tests: tests("from", "from-without-rpms"),
+		},
+	}, {
+		name: "from binaries image",
+		config: api.ReleaseBuildConfiguration{
+			BinaryBuildCommands: "binary build commands",
+			Tests:               tests("bin"),
+		},
+	}, {
+		name: "from test binaries image",
+		config: api.ReleaseBuildConfiguration{
+			TestBinaryBuildCommands: "test binary build commands",
+			Tests:                   tests("test-bin"),
+		},
+	}, {
+		name: "from RPMS image",
+		config: api.ReleaseBuildConfiguration{
+			RpmBuildCommands: "RPM build commands",
+			Tests:            tests("rpms"),
+		},
+	}, {
+		name: "from unnamed bundle images",
+		config: api.ReleaseBuildConfiguration{
+			Operator: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{}},
+			},
+			Tests: tests("src-bundle", "ci-index", "ci-index-gen", "ci-bundle0"),
+		},
+	}, {
+		name: "from bundle images",
+		config: api.ReleaseBuildConfiguration{
+			Operator: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{As: "bundle"}},
+			},
+			Tests: tests("src-bundle", "ci-index-gen", "bundle", "ci-index-bundle"),
+		},
+	}, {
+		name: "from image",
+		config: api.ReleaseBuildConfiguration{
+			Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				{To: "from"},
+			},
+			Tests: tests("from"),
+		},
+	}, {
+		name: "from root",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: api.InputConfiguration{
+				BuildRootImage: &api.BuildRootImageConfiguration{
+					ProjectImageBuild: &api.ProjectDirectoryImageBuildInputs{},
+				},
+			},
+			Tests: tests("root"),
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			graphConf := defaults.FromConfigStatic(&tc.config)
 			err := IsValidGraphConfiguration(graphConf.Steps)
 			testhelper.Diff(t, "error", err, tc.expected, testhelper.EquateErrorMessage)
 		})

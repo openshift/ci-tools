@@ -16,7 +16,6 @@ import (
 	kapierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -173,6 +172,17 @@ func fromConfig(
 			var value string
 			var overrideCLIReleaseExtractImage *coreapi.ObjectReference
 			var overrideCLIResolveErr error
+			switch {
+			case resolveConfig.Candidate != nil:
+				overrideCLIReleaseExtractImage, overrideCLIResolveErr = resolveCLIOverrideImage(resolveConfig.Candidate.Architecture, resolveConfig.Candidate.Version)
+			case resolveConfig.Release != nil:
+				overrideCLIReleaseExtractImage, overrideCLIResolveErr = resolveCLIOverrideImage(resolveConfig.Release.Architecture, resolveConfig.Release.Version)
+			case resolveConfig.Prerelease != nil:
+				overrideCLIReleaseExtractImage, overrideCLIResolveErr = resolveCLIOverrideImage(resolveConfig.Prerelease.Architecture, resolveConfig.Prerelease.VersionBounds.Lower)
+			}
+			if overrideCLIResolveErr != nil {
+				return nil, nil, results.ForReason("resolving_cli_override").ForError(fmt.Errorf("failed to resolve override CLI image for release %s: %w", resolveConfig.Name, overrideCLIResolveErr))
+			}
 			if env := utils.ReleaseImageEnv(resolveConfig.Name); params.HasInput(env) {
 				value, err = params.Get(env)
 				if err != nil {
@@ -183,15 +193,12 @@ func fromConfig(
 				switch {
 				case resolveConfig.Candidate != nil:
 					value, err = candidate.ResolvePullSpec(httpClient, *resolveConfig.Candidate)
-					overrideCLIReleaseExtractImage, overrideCLIResolveErr = resolveCLIOverrideImage(resolveConfig.Candidate.Architecture, resolveConfig.Candidate.Version)
 				case resolveConfig.Release != nil:
 					value, _, err = official.ResolvePullSpecAndVersion(httpClient, *resolveConfig.Release)
-					overrideCLIReleaseExtractImage, overrideCLIResolveErr = resolveCLIOverrideImage(resolveConfig.Release.Architecture, resolveConfig.Release.Version)
 				case resolveConfig.Prerelease != nil:
 					value, err = prerelease.ResolvePullSpec(httpClient, *resolveConfig.Prerelease)
-					overrideCLIReleaseExtractImage, overrideCLIResolveErr = resolveCLIOverrideImage(resolveConfig.Prerelease.Architecture, resolveConfig.Prerelease.VersionBounds.Lower)
 				}
-				if err := utilerrors.NewAggregate([]error{err, overrideCLIResolveErr}); err != nil {
+				if err != nil {
 					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to resolve release %s: %w", resolveConfig.Name, err))
 				}
 				logrus.Infof("Resolved release %s to %s", resolveConfig.Name, value)

@@ -161,7 +161,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 				secrets = append(secrets, &api.Secret{Name: api.HiveControlPlaneKubeconfigSecret})
 			}
 			podSpec = generateCiOperatorPodSpec(info, secrets, []string{element.As}, additionalArgs...)
-		} else if element.MultiStageTestConfiguration != nil {
+		} else if element.MultiStageTestConfiguration != nil || element.MultiStageTestConfigurationLiteral != nil {
 			podSpec = generatePodSpecMultiStage(info, &element, configSpec.Releases != nil || element.ClusterClaim != nil)
 		} else {
 			var release string
@@ -309,7 +309,12 @@ func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secre
 }
 
 func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepConfiguration, needsPullSecret bool) *corev1.PodSpec {
-	profile := test.MultiStageTestConfiguration.ClusterProfile
+	var profile api.ClusterProfile
+	if test.MultiStageTestConfiguration != nil {
+		profile = test.MultiStageTestConfiguration.ClusterProfile
+	} else {
+		profile = test.MultiStageTestConfigurationLiteral.ClusterProfile
+	}
 	var secrets []*cioperatorapi.Secret
 	if needsPullSecret {
 		// If the ci-operator configuration resolves an official release,

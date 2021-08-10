@@ -16,7 +16,9 @@ import (
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/prowgen"
+	"github.com/openshift/ci-tools/pkg/registry"
 )
 
 type options struct {
@@ -27,6 +29,9 @@ type options struct {
 
 	toDir         string
 	toReleaseRepo bool
+
+	registryPath string
+	resolver     registry.Resolver
 
 	help bool
 }
@@ -39,6 +44,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	flag.StringVar(&opt.toDir, "to-dir", "", "Path to a directory with a directory structure holding Prow job configuration files for multiple components")
 	flag.BoolVar(&opt.toReleaseRepo, "to-release-repo", false, "If set, it behaves like --to-dir=$GOPATH/src/github.com/openshift/release/ci-operator/jobs")
+
+	flag.StringVar(&opt.registryPath, "registry", "", "Path to the step registry directory")
 
 	flag.BoolVar(&opt.help, "h", false, "Show help for ci-operator-prowgen")
 
@@ -78,7 +85,13 @@ func (o *options) process() error {
 	if err := o.Options.Complete(); err != nil {
 		return fmt.Errorf("failed to complete config options: %w", err)
 	}
-
+	if o.registryPath != "" {
+		refs, chains, workflows, _, _, observers, err := load.Registry(o.registryPath, load.RegistryFlag(0))
+		if err != nil {
+			return fmt.Errorf("failed to load registry: %w", err)
+		}
+		o.resolver = registry.NewResolver(refs, chains, workflows, observers)
+	}
 	return nil
 }
 
@@ -107,7 +120,7 @@ func readProwgenConfig(path string) (*config.Prowgen, error) {
 // appropriate location, and either stored a pointer to the parsed config if if was
 // successfully read, or stored `nil` when the prowgen config could not be read (usually
 // because the drop-in is not there).
-func generateJobsToDir(dir string) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
+func generateJobsToDir(dir string, resolver registry.Resolver) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 	// Return a closure so the cache is shared among callback calls
 	cache := map[string]*config.Prowgen{}
 	return func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
@@ -137,7 +150,13 @@ func generateJobsToDir(dir string) func(configSpec *cioperatorapi.ReleaseBuildCo
 		case repoConfig != nil:
 			pInfo.Config = *repoConfig
 		}
-
+		if resolver != nil {
+			resolved, err := registry.ResolveConfig(resolver, *configSpec)
+			if err != nil {
+				return fmt.Errorf("failed to resolve configuration: %w", err)
+			}
+			configSpec = &resolved
+		}
 		return jc.WriteToDir(dir, info.Org, info.Repo, prowgen.GenerateJobs(configSpec, pInfo))
 	}
 }
@@ -192,7 +211,7 @@ func main() {
 	if len(args) == 0 {
 		args = append(args, "")
 	}
-	genJobs := generateJobsToDir(opt.toDir)
+	genJobs := generateJobsToDir(opt.toDir, opt.resolver)
 	for _, subDir := range args {
 		if err := opt.OperateOnCIOperatorConfigDir(filepath.Join(opt.fromDir, subDir), genJobs); err != nil {
 			fields := logrus.Fields{"target": opt.toDir, "source": opt.fromDir}

@@ -821,52 +821,53 @@ func TestStepConfigsForBuild(t *testing.T) {
 			if diff := cmp.Diff(testCase.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("actualError does not match expectedError, diff: %s", diff)
 			}
-			if testCase.expectedError == nil {
-				actual := sortStepConfig(graphConf.Steps)
-				expected := sortStepConfig(testCase.output)
-				if diff := cmp.Diff(actual, expected); diff != "" {
-					t.Errorf("actual differs from expected: %s", diff)
-				}
+			if testCase.expectedError != nil {
+				return
+			}
+			actual := sortStepConfig(graphConf.Steps)
+			expected := sortStepConfig(testCase.output)
+			if diff := cmp.Diff(actual, expected); diff != "" {
+				t.Errorf("actual differs from expected: %s", diff)
+			}
 
-				if testCase.input.InputConfiguration.BuildRootImage.FromRepository {
-					imports := &testimagestreamtagimportv1.TestImageStreamTagImportList{}
-					if err := client.List(context.Background(), imports); err != nil {
-						t.Errorf("failed to list testimageimports: %v", err)
-					}
-					if n := len(imports.Items); n != 1 {
-						t.Fatalf("expected to find exactly one testimageimport, got %d", n)
-					}
+			if !testCase.input.InputConfiguration.BuildRootImage.FromRepository {
+				return
+			}
+			imports := &testimagestreamtagimportv1.TestImageStreamTagImportList{}
+			if err := client.List(context.Background(), imports); err != nil {
+				t.Errorf("failed to list testimageimports: %v", err)
+			}
+			if n := len(imports.Items); n != 1 {
+				t.Fatalf("expected to find exactly one testimageimport, got %d", n)
+			}
 
-					var importNS, importName, importTag string
-					for _, step := range testCase.output {
-						if step.InputImageTagStepConfiguration != nil {
-							importNS = step.InputImageTagStepConfiguration.InputImage.BaseImage.Namespace
-							importName = step.InputImageTagStepConfiguration.InputImage.BaseImage.Name
-							importTag = step.InputImageTagStepConfiguration.InputImage.BaseImage.Tag
-							break
-						}
-					}
-
-					expected := &testimagestreamtagimportv1.TestImageStreamTagImport{
-						ObjectMeta: meta.ObjectMeta{
-							Namespace: "ci",
-							Name:      importName + "-" + importTag,
-							Labels: map[string]string{
-								"imagestreamtag-namespace": importNS,
-								"imagestreamtag-name":      importName + "_" + importTag,
-							},
-						},
-						Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
-							Namespace: importNS,
-							Name:      importName + ":" + importTag,
-						},
-					}
-					if diff := cmp.Diff(&imports.Items[0], expected, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
-						t.Errorf("actual import differs from expected: %s", diff)
-					}
+			var importNS, importName, importTag string
+			for _, step := range testCase.output {
+				if step.InputImageTagStepConfiguration != nil {
+					importNS = step.InputImageTagStepConfiguration.InputImage.BaseImage.Namespace
+					importName = step.InputImageTagStepConfiguration.InputImage.BaseImage.Name
+					importTag = step.InputImageTagStepConfiguration.InputImage.BaseImage.Tag
+					break
 				}
 			}
 
+			expectedImport := &testimagestreamtagimportv1.TestImageStreamTagImport{
+				ObjectMeta: meta.ObjectMeta{
+					Namespace: "ci",
+					Name:      importName + "-" + importTag,
+					Labels: map[string]string{
+						"imagestreamtag-namespace": importNS,
+						"imagestreamtag-name":      importName + "_" + importTag,
+					},
+				},
+				Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
+					Namespace: importNS,
+					Name:      importName + ":" + importTag,
+				},
+			}
+			if diff := cmp.Diff(&imports.Items[0], expectedImport, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
+				t.Errorf("actual import differs from expected: %s", diff)
+			}
 		})
 	}
 }

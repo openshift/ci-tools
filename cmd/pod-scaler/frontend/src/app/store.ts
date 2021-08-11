@@ -10,8 +10,7 @@ export const trees = createSlice({
     updateTrees: (state, action: PayloadAction<Record<string, TreeViewDataItem[]>>) => {
       for (const name in action.payload) {
         if (action.payload.hasOwnProperty(name)) {
-          state[name].length = 0;
-          state[name].push(...action.payload[name]);
+          state[name] = action.payload[name];
         }
       }
     },

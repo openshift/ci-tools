@@ -21,9 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
-	git "k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,6 +33,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
 	"github.com/openshift/ci-tools/pkg/steps/release"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type options struct {
@@ -52,7 +51,6 @@ type options struct {
 	logLevel string
 
 	ensurePromotedImagesUpToDate bool
-	flagutil.GitHubOptions
 }
 
 func parseOptions() *options {
@@ -75,7 +73,6 @@ func parseOptions() *options {
 	fs.StringVar(&opts.openshiftMappingDir, "openshift-mapping-dir", "", "Path to the openshift mapping directory")
 	fs.StringVar(&opts.openshiftMappingConfigPath, "openshift-mapping-config", "", "Path to the openshift mapping config file")
 	fs.BoolVar(&opts.ensurePromotedImagesUpToDate, "ensure-promoted-images-up-to-date", false, "Whether to check if promoted images are up to date")
-	opts.GitHubOptions.AddFlags(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
@@ -111,9 +108,6 @@ func (o *options) validate() error {
 		}
 		logrus.WithField("re", re.String()).Info("Ignore tags as required by flag")
 		o.ignoredImageStreamTags = append(o.ignoredImageStreamTags, re)
-	}
-	if o.ensurePromotedImagesUpToDate {
-		return o.GitHubOptions.Validate(o.dryRun)
 	}
 	return nil
 }
@@ -286,24 +280,10 @@ type refGetter interface {
 }
 
 type gitRefGetter struct {
-	clone func(org, repo string) (git.RepoClient, error)
 }
 
 func (g *gitRefGetter) GetRef(org, repo, ref string) (ret string, retError error) {
-	r, err := g.clone(org, repo)
-	if err != nil {
-		return "", fmt.Errorf("failed to clone %s/%s: %w", org, repo, err)
-	}
-	defer func() {
-		if err := r.Clean(); err != nil {
-			retError = err
-		}
-	}()
-	ret, err = r.ShowRef(ref)
-	if err != nil {
-		return "", fmt.Errorf("failed to show ref %s of %s/%s: %w", ref, org, repo, err)
-	}
-	return ret, retError
+	return util.GetRemoteBranchCommitSha(org, repo, ref)
 }
 
 // checkImageStreamTags checks if promotedTags are built with the current head of org/repo/branch
@@ -446,19 +426,7 @@ func main() {
 	var errs []error
 
 	if opts.ensurePromotedImagesUpToDate {
-		var secretPaths []string
-		if opts.GitHubOptions.TokenPath != "" {
-			secretPaths = append(secretPaths, opts.GitHubOptions.TokenPath)
-		}
-		secretAgent := &secret.Agent{}
-		if err := secretAgent.Start(secretPaths); err != nil {
-			logrus.WithError(err).Fatal("Failed to start secret agent")
-		}
-		gitClient, err := opts.GitHubOptions.GitClient(secretAgent, opts.dryRun)
-		if err != nil {
-			logrus.WithError(err).Fatal("Failed to create gitClient")
-		}
-		errs = append(errs, checkImageStreamTags(ctx, client, promotedTags, &gitRefGetter{clone: git.ClientFactoryFrom(gitClient).ClientFor})...)
+		errs = append(errs, checkImageStreamTags(ctx, client, promotedTags, &gitRefGetter{})...)
 	}
 
 	toDelete, err := tagsToDelete(ctx, client, promotedTags, opts.ignoredImageStreamTags, imageStreamRefs)

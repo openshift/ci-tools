@@ -1695,23 +1695,9 @@ func jobSpecFromGitRef(ref string) (*api.JobSpec, error) {
 	if len(prefix) != 2 {
 		return nil, fmt.Errorf("must be ORG/NAME@REF")
 	}
-	repo := fmt.Sprintf("https://github.com/%s/%s.git", prefix[0], prefix[1])
-	out, err := exec.Command("git", "ls-remote", repo, parts[1]).Output()
+	sha, err := util.GetRemoteBranchCommitSha(prefix[0], prefix[1], parts[1])
 	if err != nil {
-		return nil, fmt.Errorf("'git ls-remote %s %s' failed with '%w'", repo, parts[1], err)
-	}
-	resolved := strings.Split(strings.Split(string(out), "\n")[0], "\t")
-	sha := resolved[0]
-	if len(sha) == 0 {
-		return nil, fmt.Errorf("ref '%s' does not point to any commit in '%s'", parts[1], parts[0])
-	}
-	// sanity check that regular refs are fully determined
-	if strings.HasPrefix(resolved[1], "refs/heads/") && !strings.HasPrefix(parts[1], "refs/heads/") {
-		if resolved[1] != ("refs/heads/" + parts[1]) {
-			trimmed := resolved[1][len("refs/heads/"):]
-			// we could fix this for the user, but better to require them to be explicit
-			return nil, fmt.Errorf("ref '%s' does not point to any commit in '%s' (did you mean '%s'?)", parts[1], parts[0], trimmed)
-		}
+		return nil, fmt.Errorf("failed to get the commit of %s/%s on branch %s: %w", prefix[0], prefix[1], parts[1], err)
 	}
 	logrus.Infof("Resolved %s to commit %s", ref, sha)
 	spec := &api.JobSpec{

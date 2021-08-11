@@ -11,7 +11,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/test-infra/prow/git/localgit"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -421,62 +420,6 @@ func TestCheckImageStreamTags(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			actual := checkImageStreamTags(context.TODO(), tc.client, tc.promotedTags, tc.refGetter)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
-				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
-			}
-		})
-	}
-}
-
-func TestGitRefGetter(t *testing.T) {
-	localgit, clients, err := localgit.New()
-	if err != nil {
-		t.Fatalf("failed to create localgit: %v", err)
-	}
-	defer func() {
-		if err := localgit.Clean(); err != nil {
-			t.Errorf("localgit cleanup failed: %v", err)
-		}
-	}()
-
-	testCases := []struct {
-		name          string
-		org           string
-		repo          string
-		branch        string
-		expected      string
-		expectedError error
-	}{
-		{
-			name:   "basic case",
-			org:    "org",
-			repo:   "repo",
-			branch: "branch",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			if err := localgit.MakeFakeRepo(tc.org, tc.repo); err != nil {
-				t.Fatalf("makeFakeRepo: %v", err)
-			}
-			if err := localgit.CheckoutNewBranch(tc.org, tc.repo, tc.branch); err != nil {
-				t.Fatalf("CheckoutNewBranch: %v", err)
-			}
-			rc, err := clients.ClientFor(tc.org, tc.repo)
-			if err != nil {
-				t.Fatalf("ClientFor: %v", err)
-			}
-			expected, err := rc.ShowRef(tc.branch)
-			if err != nil {
-				t.Fatalf("ShowRef: %v", err)
-			}
-
-			refGetter := gitRefGetter{clone: clients.ClientFor}
-			actual, actualError := refGetter.GetRef(tc.org, tc.repo, tc.branch)
-			if diff := cmp.Diff(expected, actual); diff != "" {
-				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
-			}
-			if diff := cmp.Diff(tc.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
 		})

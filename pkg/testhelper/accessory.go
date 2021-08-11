@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -122,18 +121,18 @@ type Accessory struct {
 // RunFromFrameworkRunner begins the accessory process. Only test/e2e/framework.Run
 // is allowed to call this as it required additional synchronization or your
 // tests might pass incorrectly.
-func (a *Accessory) RunFromFrameworkRunner(t TestingTInterface, parentCtx context.Context) {
-	a.run(parentCtx, t, t.Fatalf)
+func (a *Accessory) RunFromFrameworkRunner(t TestingTInterface, parentCtx context.Context, stream bool) {
+	a.run(parentCtx, t, t.Fatalf, stream)
 }
 
 // Run begins the accessory process. this call is not blocking.
 // Because testing.T does not allow to call Fatalf in a distinct
 // goroutine, this will use Errorf instead.
 func (a *Accessory) Run(t TestingTInterface) {
-	a.run(context.Background(), t, t.Errorf)
+	a.run(context.Background(), t, t.Errorf, false)
 }
 
-func (a *Accessory) run(parentCtx context.Context, t TestingTInterface, failfunc func(format string, args ...interface{})) {
+func (a *Accessory) run(parentCtx context.Context, t TestingTInterface, failfunc func(format string, args ...interface{}), stream bool) {
 	a.port, a.healthPort = GetFreePort(t), GetFreePort(t)
 	ctx, cancel := context.WithCancel(parentCtx)
 	cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
@@ -151,21 +150,22 @@ func (a *Accessory) run(parentCtx context.Context, t TestingTInterface, failfunc
 		failfunc("could not create log file: %v", err)
 	}
 	log := bytes.Buffer{}
-	tee := io.TeeReader(&log, logFile)
-	cmd.Stdout = &log
-	cmd.Stderr = &log
+	writers := []io.Writer{&log, logFile}
+	if stream {
+		writers = append(writers, os.Stdout)
+	}
+	mw := io.MultiWriter(writers...)
+	cmd.Stdout = mw
+	cmd.Stderr = mw
 	go func() {
 		defer func() { cleanupCancel() }()
 		err := cmd.Run()
-		data, readErr := ioutil.ReadAll(tee)
-		if readErr != nil {
-			t.Logf("could not read `%s` log: %v", a.command, readErr)
-		}
-		t.Logf("`%s` logs:\n%v", a.command, string(data))
+		data := log.String()
+		t.Logf("`%s` logs:\n%v", a.command, data)
 		if err != nil && ctx.Err() == nil {
 			// we care about errors in the process that did not result from the
 			// context expiring and us killing it
-			failfunc("`%s` failed: %v logs:\n%v", a.command, err, string(data))
+			failfunc("`%s` failed: %v logs:\n%v", a.command, err, data)
 		}
 	}()
 
@@ -217,7 +217,7 @@ type TestingTInterface interface {
 // WaitForHTTP200 waits 30 seconds for the provided addr to return a http/200. If that doesn't
 // happen, it will call t.Fatalf
 func WaitForHTTP200(addr, command string, t TestingTInterface) {
-	if waitErr := wait.PollImmediate(1*time.Second, 30*time.Second, func() (done bool, err error) {
+	if waitErr := wait.PollImmediate(1*time.Second, 90*time.Second, func() (done bool, err error) {
 		resp, getErr := http.Get(addr)
 		defer func() {
 			if resp == nil || resp.Body == nil {

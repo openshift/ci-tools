@@ -19,7 +19,7 @@ import (
 )
 
 // Admission sets up the pod-scaler admission server and returns a transport for talking to it
-func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, parent context.Context) (string, *http.Transport) {
+func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, parent context.Context, stream bool) (string, *http.Transport) {
 	authDir := t.TempDir()
 	caCertFile := path.Join(authDir, "ca.crt")
 	caKeyFile := path.Join(authDir, "ca.key")
@@ -57,7 +57,7 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 	}, func(port, healthPort string) []string {
 		return []string{port}
 	}, clientcmd.RecommendedConfigPathEnvVar+"="+kubeconfig)
-	podScaler.RunFromFrameworkRunner(t, parent)
+	podScaler.RunFromFrameworkRunner(t, parent, stream)
 	podScalerHost := "https://" + serverHostname + ":" + podScaler.ClientFlags()[0]
 	t.Logf("pod-scaler admission is running at %s", podScalerHost)
 	podScaler.Ready(t)
@@ -80,4 +80,26 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 			RootCAs:      pool,
 		},
 	}
+}
+
+// UI sets up the pod-scaler UI server and returns the host it's serving on
+func UI(t testhelper.TestingTInterface, dataDir string, parent context.Context, stream bool) string {
+	serverHostname := "127.0.0.1"
+	podScalerFlags := []string{
+		"--loglevel=info",
+		"--log-style=text",
+		"--cache-dir", dataDir,
+		"--mode=consumer.ui",
+	}
+	podScaler := testhelper.NewAccessory("pod-scaler", podScalerFlags, func(port, healthPort string) []string {
+		t.Logf("pod-scaler admission starting on port %s", port)
+		return []string{"--ui-port", port, "--health-port", healthPort}
+	}, func(port, healthPort string) []string {
+		return []string{port}
+	})
+	podScaler.RunFromFrameworkRunner(t, parent, stream)
+	podScalerHost := "http://" + serverHostname + ":" + podScaler.ClientFlags()[0]
+	t.Logf("pod-scaler UI is running at %s", podScalerHost)
+	podScaler.Ready(t)
+	return podScalerHost
 }

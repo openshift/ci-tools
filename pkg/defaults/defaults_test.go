@@ -53,14 +53,15 @@ func TestStepConfigsForBuild(t *testing.T) {
 		return root, nil
 	}
 	var testCases = []struct {
-		name          string
-		input         *api.ReleaseBuildConfiguration
-		consoleHost   string
-		jobSpec       *api.JobSpec
-		output        []api.StepConfiguration
-		expectedError error
-		readFile      readFile
-		resolver      resolveRoot
+		name            string
+		input           *api.ReleaseBuildConfiguration
+		consoleHost     string
+		jobSpec         *api.JobSpec
+		output          []api.StepConfiguration
+		readFile        readFile
+		resolver        resolveRoot
+		expectedError   error
+		expectedImports []testimagestreamtagimportv1.TestImageStreamTagImport
 	}{
 		{
 			name: "minimal information provided",
@@ -193,6 +194,20 @@ func TestStepConfigsForBuild(t *testing.T) {
   name: stream-name
   tag: stream-tag`), nil
 			},
+			expectedImports: []testimagestreamtagimportv1.TestImageStreamTagImport{{
+				ObjectMeta: meta.ObjectMeta{
+					Namespace: "ci",
+					Name:      "stream-name-stream-tag",
+					Labels: map[string]string{
+						"imagestreamtag-namespace": "stream-namespace",
+						"imagestreamtag-name":      "stream-name_stream-tag",
+					},
+				},
+				Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
+					Namespace: "stream-namespace",
+					Name:      "stream-name:stream-tag",
+				},
+			}},
 		},
 		{
 			name: "binary build requested",
@@ -766,7 +781,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}},
 		},
 		{
-			name: "reading boot root from repository leads to an error",
+			name: "reading build root from repository leads to an error",
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
 					BuildRootImage: &api.BuildRootImageConfiguration{
@@ -829,45 +844,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 			if diff := cmp.Diff(actual, expected); diff != "" {
 				t.Errorf("actual differs from expected: %s", diff)
 			}
-
-			if !testCase.input.InputConfiguration.BuildRootImage.FromRepository {
-				return
-			}
 			imports := &testimagestreamtagimportv1.TestImageStreamTagImportList{}
 			if err := client.List(context.Background(), imports); err != nil {
 				t.Errorf("failed to list testimageimports: %v", err)
 			}
-			if n := len(imports.Items); n != 1 {
-				t.Fatalf("expected to find exactly one testimageimport, got %d", n)
+			for i := range imports.Items {
+				testhelper.CleanRVAndTypeMeta(&imports.Items[i])
 			}
-
-			var importNS, importName, importTag string
-			for _, step := range testCase.output {
-				if step.InputImageTagStepConfiguration != nil {
-					importNS = step.InputImageTagStepConfiguration.InputImage.BaseImage.Namespace
-					importName = step.InputImageTagStepConfiguration.InputImage.BaseImage.Name
-					importTag = step.InputImageTagStepConfiguration.InputImage.BaseImage.Tag
-					break
-				}
-			}
-
-			expectedImport := &testimagestreamtagimportv1.TestImageStreamTagImport{
-				ObjectMeta: meta.ObjectMeta{
-					Namespace: "ci",
-					Name:      importName + "-" + importTag,
-					Labels: map[string]string{
-						"imagestreamtag-namespace": importNS,
-						"imagestreamtag-name":      importName + "_" + importTag,
-					},
-				},
-				Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
-					Namespace: importNS,
-					Name:      importName + ":" + importTag,
-				},
-			}
-			if diff := cmp.Diff(&imports.Items[0], expectedImport, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
-				t.Errorf("actual import differs from expected: %s", diff)
-			}
+			testhelper.Diff(t, "ImageStreamTag imports", imports.Items, testCase.expectedImports)
 		})
 	}
 }

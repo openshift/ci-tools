@@ -210,6 +210,74 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}},
 		},
 		{
+			name: "build_root_image from repo + build cache",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						FromRepository: true,
+						UseBuildCache:  true,
+					},
+				},
+				Metadata: api.Metadata{
+					Org:    "org",
+					Repo:   "repo",
+					Branch: "branch",
+				},
+			},
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
+				},
+			},
+			resolver: func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
+				return cache, nil
+			},
+			output: []api.StepConfiguration{{
+				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+					From: api.PipelineImageStreamTagReferenceRoot,
+					To:   api.PipelineImageStreamTagReferenceSource,
+				}),
+			}, {
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+					InputImage: api.InputImage{
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "build-cache",
+							Name:      "org-repo",
+							Tag:       "branch",
+						},
+						To: api.PipelineImageStreamTagReferenceRoot,
+					},
+					Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceRoot}},
+				},
+			}},
+			readFile: func(filename string) ([]byte, error) {
+				if filename != ".ci-operator.yaml" {
+					return nil, fmt.Errorf("expected '.ci-operator.yaml' as file for the build_root_image, got %s", filename)
+				}
+				return []byte(`build_root_image:
+  namespace: stream-namespace
+  name: stream-name
+  tag: stream-tag`), nil
+			},
+			expectedImports: []testimagestreamtagimportv1.TestImageStreamTagImport{{
+				ObjectMeta: meta.ObjectMeta{
+					Namespace: "ci",
+					Name:      "org-repo-branch",
+					Labels: map[string]string{
+						"imagestreamtag-namespace": "build-cache",
+						"imagestreamtag-name":      "org-repo_branch",
+					},
+				},
+				Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
+					Namespace: "build-cache",
+					Name:      "org-repo:branch",
+				},
+			}},
+		},
+		{
 			name: "binary build requested",
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{

@@ -160,13 +160,13 @@ var (
 	RuntimeObjectIgnoreRvTypeMeta = cmp.Comparer(func(x, y runtime.Object) bool {
 		xCopy := x.DeepCopyObject()
 		yCopy := y.DeepCopyObject()
-		cleanRVAndTypeMeta(xCopy)
-		cleanRVAndTypeMeta(yCopy)
+		CleanRVAndTypeMeta(xCopy)
+		CleanRVAndTypeMeta(yCopy)
 		return cmp.Diff(xCopy, yCopy) == ""
 	})
 )
 
-func cleanRVAndTypeMeta(r runtime.Object) {
+func CleanRVAndTypeMeta(r runtime.Object) {
 	if metaObject, ok := r.(metav1.Object); ok {
 		metaObject.SetResourceVersion("")
 	}
@@ -181,7 +181,7 @@ func cleanRVAndTypeMeta(r runtime.Object) {
 			panic(fmt.Sprintf("extract list failed: %v", err))
 		}
 		for _, item := range objects {
-			cleanRVAndTypeMeta(item)
+			CleanRVAndTypeMeta(item)
 		}
 	}
 }

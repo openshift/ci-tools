@@ -566,11 +566,6 @@ func stepConfigsForBuild(
 				return api.GraphConfiguration{}, fmt.Errorf("failed to read buildRootImageStream from repository: %w", err)
 			}
 			target.ImageStreamTagReference = istTagRef
-			// if ci-operator runs on app.ci, we do not need to import the image because
-			// the istTagRef has to be an image stream tag on app.ci
-			if !strings.HasSuffix(consoleHost, api.ServiceDomainAPPCI) {
-				ensureImageStreamTag(ctx, client, istTagRef, second)
-			}
 		}
 		if isTagRef := target.ImageStreamTagReference; isTagRef != nil {
 			if config.InputConfiguration.BuildRootImage.UseBuildCache {
@@ -580,6 +575,11 @@ func stepConfigsForBuild(
 					return api.GraphConfiguration{}, fmt.Errorf("could not resolve build root: %w", err)
 				}
 				isTagRef = root
+			}
+			// if ci-operator runs on app.ci, we do not need to import the image because
+			// the istTagRef has to be an image stream tag on app.ci
+			if target.FromRepository && !strings.HasSuffix(consoleHost, api.ServiceDomainAPPCI) {
+				ensureImageStreamTag(ctx, client, isTagRef, second)
 			}
 			config := api.InputImageTagStepConfiguration{
 				InputImage: api.InputImage{

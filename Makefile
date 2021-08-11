@@ -118,7 +118,7 @@ cmd/vault-secret-collection-manager/index.js: cmd/vault-secret-collection-manage
 # Example:
 #   make production-install
 production-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/frontend/dist
-	rm cmd/pod-scaler/frontend/dist/dummy # we keep this file in git to keep the thing compiling without static assets
+	rm -f cmd/pod-scaler/frontend/dist/dummy # we keep this file in git to keep the thing compiling without static assets
 	hack/install.sh
 .PHONY: production-install
 
@@ -236,7 +236,7 @@ imports:
 	go run ./vendor/github.com/coreydaley/openshift-goimports/ -m github.com/openshift/ci-tools
 
 .PHONY: verify-gen
-verify-gen: generate
+verify-gen: generate cmd/pod-scaler/frontend/dist/dummy # we need the dummy file to exist so there's no diff on it
 	@# Don't add --quiet here, it disables --exit code in the git 1.7 we have in CI, making this unusuable
 	if  ! git diff --exit-code; then \
 		echo "generated files are out of date, run make generate"; exit 1; \
@@ -289,7 +289,7 @@ local-pod-scaler: $(TMPDIR)/prometheus $(TMPDIR)/promtool cmd/pod-scaler/fronten
 .PHONY: cmd/pod-scaler/frontend/dist
 cmd/pod-scaler/frontend/dist: cmd/pod-scaler/frontend/node_modules
 	@$(MAKE) npm NPM_ARGS="run build"
-	echo "file used to keep go embed happy" > cmd/pod-scaler/frontend/dist/dummy
+	@$(MAKE) cmd/pod-scaler/frontend/dist/dummy
 
 local-pod-scaler-ui: cmd/pod-scaler/frontend/node_modules $(HOME)/.cache/pod-scaler/steps/container_memory_working_set_bytes.json
 	go run -tags e2e,e2e_framework ./test/e2e/pod-scaler/local/main.go --cache-dir $(HOME)/.cache/pod-scaler --serve-dev-ui
@@ -306,6 +306,9 @@ frontend-checks: cmd/pod-scaler/frontend/node_modules
 cmd/pod-scaler/frontend/node_modules:
 	@$(MAKE) npm NPM_ARGS="ci"
 
+cmd/pod-scaler/frontend/dist/dummy:
+	echo "file used to keep go embed happy" > cmd/pod-scaler/frontend/dist/dummy
+
 .PHONY: frontend-format
 frontend-format: cmd/pod-scaler/frontend/node_modules
 	@$(MAKE) npm NPM_ARGS="run format"
@@ -321,7 +324,7 @@ npm:
 .PHONY: verify-frontend-format
 verify-frontend-format: frontend-format
 	@# Don't add --quiet here, it disables --exit code in the git 1.7 we have in CI, making this unusuable
-	if  ! git diff --exit-code; then \
+	if  ! git diff --exit-code cmd/pod-scaler/frontend; then \
 		echo "frontend files are not formatted, run make frontend-format"; exit 1; \
 	fi
 

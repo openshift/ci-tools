@@ -13,16 +13,18 @@ import (
 )
 
 type options struct {
-	clusterName string
-	releaseRepo string
+	clusterName  string
+	releaseRepo  string
+	buildFarmDir string
 
 	//flagutil.GitHubOptions TODO: this will come in later I think...lets ignore github stuff for now
 }
 
 func (o options) String() string {
-	return fmt.Sprintf("cluster-name: %s\nrelease-repo: %s",
+	return fmt.Sprintf("cluster-name: %s\nrelease-repo: %s\nbuild-farm-dir: %s",
 		o.clusterName,
-		o.releaseRepo)
+		o.releaseRepo,
+		o.buildFarmDir)
 }
 
 func parseOptions() options {
@@ -30,6 +32,7 @@ func parseOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.clusterName, "cluster-name", "", "The name of the new cluster.")
 	fs.StringVar(&o.releaseRepo, "release-repo", "", "Path to the root of the openshift/release repository.")
+	fs.StringVar(&o.buildFarmDir, "build-farm-dir", "", "The name of the new build farm directory.")
 	//o.AddFlags(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("cannot parse args: ", os.Args[1:])
@@ -44,9 +47,24 @@ func validateOptions(o options) error {
 	if o.releaseRepo == "" {
 		return fmt.Errorf("--release-repo must be provided")
 	}
+	if o.buildFarmDir == "" {
+		return fmt.Errorf("--build-farm-dir must be provided")
+	}
 
 	return nil
 }
+
+const (
+	CiOperator           = "ci-operator"
+	Jobs                 = "jobs"
+	InfraPeriodicsFile   = "infra-periodics.yaml"
+	Kubeconfig           = "KUBECONFIG"
+	PerRotSaSecs         = "periodic-rotate-serviceaccount-secrets"
+	BuildFarmCredentials = "build-farm-credentials"
+	SaConfigUpdater      = "sa.config-updater"
+	Config               = "config"
+	Etc                  = "etc"
+)
 
 type InfraPeriodics struct {
 	Periodics []prowconfig.Periodic `json:"periodics,omitempty"`
@@ -92,6 +110,20 @@ func findEnv(c *v1.Container, name string) (*v1.EnvVar, error) {
 	return &v1.EnvVar{}, fmt.Errorf("couldn't find Env with name: %s", name)
 }
 
+func findVolume(ps *v1.PodSpec, name string) (*v1.Volume, error) {
+	idx := -1
+	for i, v := range ps.Volumes {
+		if v.Name == name {
+			idx = i
+			break
+		}
+	}
+	if idx != -1 {
+		return &ps.Volumes[idx], nil
+	}
+	return &v1.Volume{}, fmt.Errorf("couldn't find Volume with name: %s", name)
+}
+
 func loadInfraPeriodics(filename string) *InfraPeriodics {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
@@ -118,29 +150,52 @@ func writeInfraPeriodics(filename string, ip InfraPeriodics) {
 
 }
 
+func appendNewClusterToSecretKubeconfig(per *prowconfig.Periodic, clusterName string) {
+	container, err := findContainer(per.Spec, "")
+	if err != nil {
+		logrus.WithError(err).Fatal()
+	}
+	env, err := findEnv(container, Kubeconfig)
+	if err != nil {
+		logrus.WithError(err).Fatal()
+	}
+	s := fmt.Sprintf(":/%s/%s/%s.%s.%s", Etc, BuildFarmCredentials, SaConfigUpdater, clusterName, Config)
+	env.Value = env.Value + s
+}
+
+func appendSecretItem(per *prowconfig.Periodic, clusterName string) {
+	v, err := findVolume(per.Spec, BuildFarmCredentials)
+	if err != nil {
+		logrus.WithError(err).Fatal()
+	}
+	configPath := fmt.Sprintf("%s.%s.%s", SaConfigUpdater, clusterName, Config)
+	path := v1.KeyToPath{
+		Key:  configPath,
+		Path: configPath,
+	}
+	v.Secret.Items = append(v.Secret.Items, path)
+}
+
 func main() {
 	o := parseOptions()
 	if err := validateOptions(o); err != nil {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
 
-	ipFile := filepath.Join(o.releaseRepo, "ci-operator", "jobs", "infra-periodics.yaml")
+	//TODO: probably a good idea to validate that this cluster doesn't exist
+
+	ipFile := filepath.Join(o.releaseRepo, CiOperator, Jobs, InfraPeriodicsFile)
 	ip := loadInfraPeriodics(ipFile)
-	per, err := findPeriodic(ip, "periodic-rotate-serviceaccount-secrets")
+
+	rotSASecretsPer, err := findPeriodic(ip, PerRotSaSecs)
 	if err != nil {
 		logrus.WithError(err).Fatal()
 	}
 
-	c, err := findContainer(per.Spec, "")
-	if err != nil {
-		logrus.WithError(err).Fatal()
-	}
-	env, err := findEnv(c, "KUBECONFIG")
-	if err != nil {
-		logrus.WithError(err).Fatal()
-	}
-
-	env.Value = "I can change this value!"
+	appendNewClusterToSecretKubeconfig(rotSASecretsPer, o.clusterName)
+	appendSecretItem(rotSASecretsPer, o.clusterName)
+	ap := GeneratePeriodic(o.clusterName, o.buildFarmDir)
+	ip.Periodics = append(ip.Periodics, ap)
 
 	writeInfraPeriodics(ipFile, *ip)
 }

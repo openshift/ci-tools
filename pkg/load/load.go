@@ -31,11 +31,7 @@ import (
 // ResolverInfo contains the data needed to get a config from the configresolver
 type ResolverInfo struct {
 	Address string
-	Org     string
-	Repo    string
-	Branch  string
-	// Variant is optional
-	Variant string
+	api.Metadata
 }
 
 type RegistryFlag uint8

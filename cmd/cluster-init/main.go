@@ -52,31 +52,44 @@ type InfraPeriodics struct {
 	Periodics []prowconfig.Periodic `json:"periodics,omitempty"`
 }
 
-func findPeriodicIdx(ip *InfraPeriodics, name string) (int, error) {
+func findPeriodic(ip *InfraPeriodics, name string) (*prowconfig.Periodic, error) {
+	idx := -1
 	for i, p := range ip.Periodics {
 		if name == p.Name {
-			return i, nil
+			idx = i
 		}
 	}
-	return -1, fmt.Errorf("couldn't find periodic with name: %s", name)
+	if idx != -1 {
+		return &ip.Periodics[idx], nil
+	}
+	return &prowconfig.Periodic{}, fmt.Errorf("couldn't find periodic with name: %s", name)
 }
 
-func findContainerIdx(ps *v1.PodSpec, name string) (int, error) {
+func findContainer(ps *v1.PodSpec, name string) (*v1.Container, error) {
+	idx := -1
 	for i, c := range ps.Containers {
 		if c.Name == name {
-			return i, nil
+			idx = i
 		}
 	}
-	return -1, fmt.Errorf("couldn't find container with name: %s", name)
+	if idx != -1 {
+		return &ps.Containers[idx], nil
+	}
+	return &v1.Container{}, fmt.Errorf("couldn't find Container with name: %s", name)
 }
 
-func findEnvIdx(c v1.Container, name string) (int, error) {
+func findEnv(c *v1.Container, name string) (*v1.EnvVar, error) {
+	idx := -1
 	for i, e := range c.Env {
 		if e.Name == name {
-			return i, nil
+			idx = i
+			break
 		}
 	}
-	return -1, fmt.Errorf("couldn't find Env with name: %s", name)
+	if idx != -1 {
+		return &c.Env[idx], nil
+	}
+	return &v1.EnvVar{}, fmt.Errorf("couldn't find Env with name: %s", name)
 }
 
 func loadInfraPeriodics(filename string) *InfraPeriodics {
@@ -113,21 +126,21 @@ func main() {
 
 	ipFile := filepath.Join(o.releaseRepo, "ci-operator", "jobs", "infra-periodics.yaml")
 	ip := loadInfraPeriodics(ipFile)
-	per, err := findPeriodicIdx(ip, "periodic-rotate-serviceaccount-secrets")
+	per, err := findPeriodic(ip, "periodic-rotate-serviceaccount-secrets")
 	if err != nil {
 		logrus.WithError(err).Fatal()
 	}
 
-	c, err := findContainerIdx(ip.Periodics[per].Spec, "")
+	c, err := findContainer(per.Spec, "")
 	if err != nil {
 		logrus.WithError(err).Fatal()
 	}
-	env, err := findEnvIdx(ip.Periodics[per].Spec.Containers[c], "KUBECONFIG")
+	env, err := findEnv(c, "KUBECONFIG")
 	if err != nil {
 		logrus.WithError(err).Fatal()
 	}
 
-	ip.Periodics[per].Spec.Containers[c].Env[env].Value = "i can change this line!"
+	env.Value = "I can change this value!"
 
 	writeInfraPeriodics(ipFile, *ip)
 }

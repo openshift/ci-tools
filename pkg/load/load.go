@@ -191,11 +191,7 @@ func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api
 }
 
 func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {
-	identifier := fmt.Sprintf("%s/%s@%s", info.Org, info.Repo, info.Branch)
-	if info.Variant != "" {
-		identifier = fmt.Sprintf("%s [%s]", identifier, info.Variant)
-	}
-	logrus.Infof("Loading configuration from %s for %s", info.Address, identifier)
+	logrus.Infof("Loading configuration from %s for %s", info.Address, info.AsString())
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/config", info.Address), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request for configresolver: %w", err)

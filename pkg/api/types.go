@@ -1032,34 +1032,31 @@ type ContainerTestConfiguration struct {
 type ClusterProfile string
 
 const (
-	ClusterProfileAWS                ClusterProfile = "aws"
-	ClusterProfileAWSArm64           ClusterProfile = "aws-arm64"
-	ClusterProfileAWSAtomic          ClusterProfile = "aws-atomic"
-	ClusterProfileAWSCentos          ClusterProfile = "aws-centos"
-	ClusterProfileAWSCentos40        ClusterProfile = "aws-centos-40"
-	ClusterProfileAWSGluster         ClusterProfile = "aws-gluster"
-	ClusterProfileAlibaba            ClusterProfile = "alibaba"
-	ClusterProfileAzure              ClusterProfile = "azure"
-	ClusterProfileAzure4             ClusterProfile = "azure4"
-	ClusterProfileAzureArc           ClusterProfile = "azure-arc"
-	ClusterProfileAzureStack         ClusterProfile = "azurestack"
-	ClusterProfileGCP                ClusterProfile = "gcp"
-	ClusterProfileGCP40              ClusterProfile = "gcp-40"
-	ClusterProfileGCPHA              ClusterProfile = "gcp-ha"
-	ClusterProfileGCPCRIO            ClusterProfile = "gcp-crio"
-	ClusterProfileGCPLogging         ClusterProfile = "gcp-logging"
-	ClusterProfileGCPLoggingJournald ClusterProfile = "gcp-logging-journald"
-	ClusterProfileGCPLoggingJSONFile ClusterProfile = "gcp-logging-json-file"
-	ClusterProfileGCPLoggingCRIO     ClusterProfile = "gcp-logging-crio"
-	ClusterProfileGCP2               ClusterProfile = "gcp-openshift-gce-devel-ci-2"
-	ClusterProfileIBMCloud           ClusterProfile = "ibmcloud"
-	ClusterProfileLibvirtPpc64le     ClusterProfile = "libvirt-ppc64le"
-	ClusterProfileLibvirtS390x       ClusterProfile = "libvirt-s390x"
-	ClusterProfileOpenStack          ClusterProfile = "openstack"
-	ClusterProfileOpenStackKuryr     ClusterProfile = "openstack-kuryr"
-	// TODO(EmilienM) ClusterProfileOpenStackMecha will be removed
-	// once we switch jobs to use Central or Az0 in openshift/release.
-	ClusterProfileOpenStackMecha        ClusterProfile = "openstack-vh-mecha"
+	ClusterProfileAWS                   ClusterProfile = "aws"
+	ClusterProfileAWSArm64              ClusterProfile = "aws-arm64"
+	ClusterProfileAWSAtomic             ClusterProfile = "aws-atomic"
+	ClusterProfileAWSCentos             ClusterProfile = "aws-centos"
+	ClusterProfileAWSCentos40           ClusterProfile = "aws-centos-40"
+	ClusterProfileAWSGluster            ClusterProfile = "aws-gluster"
+	ClusterProfileAlibaba               ClusterProfile = "alibaba"
+	ClusterProfileAzure                 ClusterProfile = "azure"
+	ClusterProfileAzure4                ClusterProfile = "azure4"
+	ClusterProfileAzureArc              ClusterProfile = "azure-arc"
+	ClusterProfileAzureStack            ClusterProfile = "azurestack"
+	ClusterProfileGCP                   ClusterProfile = "gcp"
+	ClusterProfileGCP40                 ClusterProfile = "gcp-40"
+	ClusterProfileGCPHA                 ClusterProfile = "gcp-ha"
+	ClusterProfileGCPCRIO               ClusterProfile = "gcp-crio"
+	ClusterProfileGCPLogging            ClusterProfile = "gcp-logging"
+	ClusterProfileGCPLoggingJournald    ClusterProfile = "gcp-logging-journald"
+	ClusterProfileGCPLoggingJSONFile    ClusterProfile = "gcp-logging-json-file"
+	ClusterProfileGCPLoggingCRIO        ClusterProfile = "gcp-logging-crio"
+	ClusterProfileGCP2                  ClusterProfile = "gcp-openshift-gce-devel-ci-2"
+	ClusterProfileIBMCloud              ClusterProfile = "ibmcloud"
+	ClusterProfileLibvirtPpc64le        ClusterProfile = "libvirt-ppc64le"
+	ClusterProfileLibvirtS390x          ClusterProfile = "libvirt-s390x"
+	ClusterProfileOpenStack             ClusterProfile = "openstack"
+	ClusterProfileOpenStackKuryr        ClusterProfile = "openstack-kuryr"
 	ClusterProfileOpenStackMechaCentral ClusterProfile = "openstack-vh-mecha-central"
 	ClusterProfileOpenStackMechaAz0     ClusterProfile = "openstack-vh-mecha-az0"
 	ClusterProfileOpenStackOsuosl       ClusterProfile = "openstack-osuosl"
@@ -1101,7 +1098,6 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileLibvirtS390x,
 		ClusterProfileOpenStack,
 		ClusterProfileOpenStackKuryr,
-		ClusterProfileOpenStackMecha,
 		ClusterProfileOpenStackMechaCentral,
 		ClusterProfileOpenStackMechaAz0,
 		ClusterProfileOpenStackOsuosl,
@@ -1162,8 +1158,6 @@ func (p ClusterProfile) ClusterType() string {
 		return "openstack"
 	case ClusterProfileOpenStackKuryr:
 		return "openstack-kuryr"
-	case ClusterProfileOpenStackMecha:
-		return "openstack-vh-mecha"
 	case ClusterProfileOpenStackMechaCentral:
 		return "openstack-vh-mecha-central"
 	case ClusterProfileOpenStackMechaAz0:
@@ -1233,8 +1227,6 @@ func (p ClusterProfile) LeaseType() string {
 		return "openstack-quota-slice"
 	case ClusterProfileOpenStackKuryr:
 		return "openstack-kuryr-quota-slice"
-	case ClusterProfileOpenStackMecha:
-		return "openstack-vh-mecha-quota-slice"
 	case ClusterProfileOpenStackMechaCentral:
 		return "openstack-vh-mecha-central-quota-slice"
 	case ClusterProfileOpenStackMechaAz0:

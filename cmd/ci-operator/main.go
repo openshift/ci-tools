@@ -1980,7 +1980,9 @@ func (o *options) getResolverInfo(jobSpec *api.JobSpec) *load.ResolverInfo {
 	// address and variant can only be set via options
 	info := &load.ResolverInfo{
 		Address: o.resolverAddress,
-		Variant: o.variant,
+		Metadata: api.Metadata{
+			Variant: o.variant,
+		},
 	}
 
 	allRefs := jobSpec.ExtraRefs

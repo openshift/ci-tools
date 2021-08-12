@@ -284,6 +284,15 @@ type GraphConfiguration struct {
 	Steps []StepConfiguration
 }
 
+func (c *GraphConfiguration) InputImages() (ret []*InputImageTagStepConfiguration) {
+	for _, s := range c.Steps {
+		if c := s.InputImageTagStepConfiguration; c != nil {
+			ret = append(ret, c)
+		}
+	}
+	return
+}
+
 // BuildGraph returns a graph or graphs that include
 // all steps given.
 func BuildGraph(steps []Step) []*StepNode {

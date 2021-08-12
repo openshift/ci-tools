@@ -350,7 +350,7 @@ func postBlocks(slackClient *slack.Client, blocks []slack.Block) error {
 }
 
 func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, userId string) error {
-	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND (labels is EMPTY OR NOT labels=ready) AND created >= startOfWeek()`, jira.ProjectDPTP), nil)
+	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND (labels is EMPTY OR NOT labels=ready) AND created >= -30d`, jira.ProjectDPTP), nil)
 	if err := jirautil.JiraError(response, err); err != nil {
 		return fmt.Errorf("could not query for Jira issues: %w", err)
 	}

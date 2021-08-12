@@ -13,12 +13,14 @@ failure=0
 # for org in openshift redhat-openshift-ecosystem; do
 for org in openshift; do
   rm -rf "${clonedir}"
+  echo >&2 "$(date --iso-8601=seconds) Cloning ${org}/release"
   git clone "https://github.com/${org}/release.git" --depth 1 "${clonedir}"
 
   # We need to enter the git directory and run git commands from there, our git
   # is too old to know the `-C` option.
   pushd "${clonedir}"
 
+  echo >&2 "$(date --iso-8601=seconds) Executing ci-operator-prowgen"
   ci-operator-prowgen --from-dir "${clonedir}/ci-operator/config" --to-dir "${clonedir}/ci-operator/jobs"
   out="$(git status --porcelain)"
   if [[ -n "$out" ]]; then
@@ -34,6 +36,7 @@ for org in openshift; do
 
   CONFIG="${clonedir}/core-services/prow/02_config"
   if [[ -d "${CONFIG}" ]]; then
+    echo >&2 "$(date --iso-8601=seconds) Executing determinize-prow-config"
     determinize-prow-config --prow-config-dir "${CONFIG}" --sharded-plugin-config-base-dir "${CONFIG}"
     out="$(git status --porcelain)"
     if [[ -n "$out" ]]; then

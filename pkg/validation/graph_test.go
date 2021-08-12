@@ -12,11 +12,16 @@ import (
 )
 
 func TestIsValidGraph_Names(t *testing.T) {
+	input := api.InputConfiguration{
+		BaseImages: map[string]api.ImageStreamTagReference{"from": {}},
+	}
 	tests := func(names ...string) (ret []api.TestStepConfiguration) {
 		for _, n := range names {
 			ret = append(ret, api.TestStepConfiguration{
-				As:                         n,
-				ContainerTestConfiguration: &api.ContainerTestConfiguration{},
+				As: n,
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{
+					From: "from",
+				},
 			})
 		}
 		return
@@ -39,6 +44,7 @@ func TestIsValidGraph_Names(t *testing.T) {
 		config: api.ReleaseBuildConfiguration{
 			InputConfiguration: api.InputConfiguration{
 				BaseImages: map[string]api.ImageStreamTagReference{
+					"from":      {},
 					"duplicate": {},
 				},
 			},
@@ -48,6 +54,7 @@ func TestIsValidGraph_Names(t *testing.T) {
 	}, {
 		name: "duplicate directory builds",
 		config: api.ReleaseBuildConfiguration{
+			InputConfiguration:      input,
 			BinaryBuildCommands:     "binary build commands",
 			TestBinaryBuildCommands: "test binary build commands",
 			RpmBuildCommands:        "RPM build commands",
@@ -55,19 +62,24 @@ func TestIsValidGraph_Names(t *testing.T) {
 		},
 		expected: errs("bin", "test-bin", "rpms"),
 	}, {
-		name:     "duplicate source build",
-		config:   api.ReleaseBuildConfiguration{Tests: tests("src")},
+		name: "duplicate source build",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
+			Tests:              tests("src"),
+		},
 		expected: errs("src"),
 	}, {
 		name: "duplicate operator source",
 		config: api.ReleaseBuildConfiguration{
-			Operator: &api.OperatorStepConfiguration{},
-			Tests:    tests("src-bundle"),
+			InputConfiguration: input,
+			Operator:           &api.OperatorStepConfiguration{},
+			Tests:              tests("src-bundle"),
 		},
 		expected: errs("src-bundle"),
 	}, {
 		name: "duplicate operator bundle",
 		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
 			Operator: &api.OperatorStepConfiguration{
 				Bundles: []api.Bundle{{As: "bundle"}},
 			},
@@ -77,6 +89,7 @@ func TestIsValidGraph_Names(t *testing.T) {
 	}, {
 		name: "duplicate operator index",
 		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
 			Operator: &api.OperatorStepConfiguration{
 				Bundles: []api.Bundle{{As: "bundle"}},
 			},
@@ -86,6 +99,7 @@ func TestIsValidGraph_Names(t *testing.T) {
 	}, {
 		name: "duplicate image build",
 		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: input,
 			Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
 				To: "duplicate",
 			}},
@@ -96,6 +110,7 @@ func TestIsValidGraph_Names(t *testing.T) {
 		name: "duplicate base RPM image",
 		config: api.ReleaseBuildConfiguration{
 			InputConfiguration: api.InputConfiguration{
+				BaseImages: map[string]api.ImageStreamTagReference{"from": {}},
 				BaseRPMImages: map[string]api.ImageStreamTagReference{
 					"duplicate": {},
 				},
@@ -106,14 +121,16 @@ func TestIsValidGraph_Names(t *testing.T) {
 	}, {
 		name: "duplicate RPM server",
 		config: api.ReleaseBuildConfiguration{
-			RpmBuildCommands: "RPM build commands",
-			Tests:            tests("[serve:rpms]"),
+			InputConfiguration: input,
+			RpmBuildCommands:   "RPM build commands",
+			Tests:              tests("[serve:rpms]"),
 		},
 		expected: errs("[serve:rpms]"),
 	}, {
 		name: "duplicate tag specification",
 		config: api.ReleaseBuildConfiguration{
 			InputConfiguration: api.InputConfiguration{
+				BaseImages:              map[string]api.ImageStreamTagReference{"from": {}},
 				ReleaseTagConfiguration: &api.ReleaseTagConfiguration{},
 			},
 			Tests: tests("[release-inputs]", "[release:initial]", "[release:latest]"),
@@ -123,7 +140,8 @@ func TestIsValidGraph_Names(t *testing.T) {
 		name: "duplicate releases",
 		config: api.ReleaseBuildConfiguration{
 			InputConfiguration: api.InputConfiguration{
-				Releases: map[string]api.UnresolvedRelease{"release": {}},
+				BaseImages: map[string]api.ImageStreamTagReference{"from": {}},
+				Releases:   map[string]api.UnresolvedRelease{"release": {}},
 			},
 			Tests: tests("[release:release]"),
 		},
@@ -132,6 +150,7 @@ func TestIsValidGraph_Names(t *testing.T) {
 		name: "duplicate build root",
 		config: api.ReleaseBuildConfiguration{
 			InputConfiguration: api.InputConfiguration{
+				BaseImages: map[string]api.ImageStreamTagReference{"from": {}},
 				BuildRootImage: &api.BuildRootImageConfiguration{
 					ProjectImageBuild: &api.ProjectDirectoryImageBuildInputs{},
 				},

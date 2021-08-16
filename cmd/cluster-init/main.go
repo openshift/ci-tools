@@ -69,6 +69,29 @@ const (
 	PerCiSecBoot         = "periodic-ci-secret-bootstrap"
 )
 
+func loadConfig(filename string, o interface{}) {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		logrus.WithError(err).Fatal("cannot open config file: ", filename)
+	}
+	err = yaml.Unmarshal(data, o)
+	if err != nil {
+		logrus.WithError(err).Fatal("cannot unmarshall config file: ", filename)
+	}
+}
+
+func saveConfig(filename string, o interface{}) {
+	y, err := yaml.Marshal(o)
+	if err != nil {
+		logrus.WithError(err).Fatal("cannot marshal InfraPeriodics")
+	}
+
+	if err = ioutil.WriteFile(filename, y, 0644); err != nil {
+		logrus.WithError(err).Fatal("cannot write InfraPeriodics file: ", filename)
+	}
+
+}
+
 type InfraPeriodics struct {
 	Periodics []prowconfig.Periodic `json:"periodics,omitempty"`
 }
@@ -127,32 +150,6 @@ func findVolume(ps *v1.PodSpec, name string) (*v1.Volume, error) {
 	return &v1.Volume{}, fmt.Errorf("couldn't find Volume with name: %s", name)
 }
 
-func loadInfraPeriodics(filename string) *InfraPeriodics {
-	data, err := ioutil.ReadFile(filename)
-	if err != nil {
-		logrus.WithError(err).Fatal("cannot open config file: ", filename)
-	}
-	ip := InfraPeriodics{}
-	err = yaml.Unmarshal(data, &ip)
-	if err != nil {
-		logrus.WithError(err).Fatal("cannot unmarshall config file: ", filename)
-	}
-
-	return &ip
-}
-
-func writeInfraPeriodics(filename string, ip InfraPeriodics) {
-	y, err := yaml.Marshal(ip)
-	if err != nil {
-		logrus.WithError(err).Fatal("cannot marshal InfraPeriodics")
-	}
-
-	if err = ioutil.WriteFile(filename, y, 0644); err != nil {
-		logrus.WithError(err).Fatal("cannot write InfraPeriodics file: ", filename)
-	}
-
-}
-
 func appendNewClustersConfigUpdaterToKubeconfig(per *prowconfig.Periodic, containerName string, clusterName string) {
 	container, err := findContainer(per.Spec, containerName)
 	if err != nil {
@@ -179,6 +176,14 @@ func appendBuildFarmCredentialSecret(per *prowconfig.Periodic, clusterName strin
 	v.Secret.Items = append(v.Secret.Items, path)
 }
 
+type Post struct {
+	OSRelease OSRelease `json:"postsubmits,omitempty"`
+}
+
+type OSRelease struct {
+	Postsubmits []prowconfig.Postsubmit `json:"openshift/release,omitempty"`
+}
+
 func main() {
 	o := parseOptions()
 	if err := validateOptions(o); err != nil {
@@ -188,11 +193,22 @@ func main() {
 	//TODO: probably a good idea to validate that this cluster doesn't exist
 
 	updateInfraPeriodics(o)
+	updatePostsubmits(o)
+}
+
+func updatePostsubmits(o options) {
+	postsubmitsFile := filepath.Join(o.releaseRepo, CiOperator, Jobs, Openshift, Release, "openshift-release-master-postsubmits.yaml")
+	postsubmits := &Post{}
+	loadConfig(postsubmitsFile, postsubmits)
+	postsubmit := GeneratePostsubmit(o.clusterName, o.buildFarmDir)
+	postsubmits.OSRelease.Postsubmits = append(postsubmits.OSRelease.Postsubmits, postsubmit)
+	saveConfig(postsubmitsFile, *postsubmits)
 }
 
 func updateInfraPeriodics(o options) {
 	ipFile := filepath.Join(o.releaseRepo, CiOperator, Jobs, InfraPeriodicsFile)
-	ip := loadInfraPeriodics(ipFile)
+	ip := &InfraPeriodics{}
+	loadConfig(ipFile, ip)
 
 	rotSASecretsPer, err := findPeriodic(ip, PerRotSaSecs)
 	if err != nil {
@@ -204,19 +220,14 @@ func updateInfraPeriodics(o options) {
 	ap := GeneratePeriodic(o.clusterName, o.buildFarmDir)
 	ip.Periodics = append(ip.Periodics, ap)
 
-	secGenPer, err := findPeriodic(ip, PerCiSecGen)
-	if err != nil {
-		logrus.WithError(err).Fatal()
+	for _, perName := range []string{PerCiSecGen, PerCiSecBoot} {
+		per, err := findPeriodic(ip, perName)
+		if err != nil {
+			logrus.WithError(err).Fatal()
+		}
+		appendNewClustersConfigUpdaterToKubeconfig(per, CiSecretBootstrap, o.clusterName)
+		appendBuildFarmCredentialSecret(per, o.clusterName)
 	}
-	appendNewClustersConfigUpdaterToKubeconfig(secGenPer, CiSecretBootstrap, o.clusterName)
-	appendBuildFarmCredentialSecret(secGenPer, o.clusterName)
 
-	ciSecBootPer, err := findPeriodic(ip, PerCiSecBoot)
-	if err != nil {
-		logrus.WithError(err).Fatal()
-	}
-	appendNewClustersConfigUpdaterToKubeconfig(ciSecBootPer, CiSecretBootstrap, o.clusterName)
-	appendBuildFarmCredentialSecret(ciSecBootPer, o.clusterName)
-
-	writeInfraPeriodics(ipFile, *ip)
+	saveConfig(ipFile, *ip)
 }

@@ -177,11 +177,15 @@ func appendBuildFarmCredentialSecret(per *prowconfig.Periodic, clusterName strin
 }
 
 type Post struct {
-	OSRelease OSRelease `json:"postsubmits,omitempty"`
+	OSRelease struct {
+		Jobs []prowconfig.Postsubmit `json:"openshift/release,omitempty"`
+	} `json:"postsubmits,omitempty"`
 }
 
-type OSRelease struct {
-	Postsubmits []prowconfig.Postsubmit `json:"openshift/release,omitempty"`
+type Pre struct {
+	OSRelease struct {
+		Jobs []prowconfig.Presubmit `json:"openshift/release,omitempty"`
+	} `json:"presubmits,omitempty"`
 }
 
 func main() {
@@ -194,6 +198,16 @@ func main() {
 
 	updateInfraPeriodics(o)
 	updatePostsubmits(o)
+	updatePresubmits(o)
+}
+
+func updatePresubmits(o options) {
+	presubmitsFile := filepath.Join(o.releaseRepo, CiOperator, Jobs, Openshift, Release, "openshift-release-master-presubmits.yaml")
+	presubmits := &Pre{}
+	loadConfig(presubmitsFile, presubmits)
+	presubmit := GeneratePresubmit(o.clusterName, o.buildFarmDir)
+	presubmits.OSRelease.Jobs = append(presubmits.OSRelease.Jobs, presubmit)
+	saveConfig(presubmitsFile, presubmits)
 }
 
 func updatePostsubmits(o options) {
@@ -201,7 +215,7 @@ func updatePostsubmits(o options) {
 	postsubmits := &Post{}
 	loadConfig(postsubmitsFile, postsubmits)
 	postsubmit := GeneratePostsubmit(o.clusterName, o.buildFarmDir)
-	postsubmits.OSRelease.Postsubmits = append(postsubmits.OSRelease.Postsubmits, postsubmit)
+	postsubmits.OSRelease.Jobs = append(postsubmits.OSRelease.Jobs, postsubmit)
 	saveConfig(postsubmitsFile, *postsubmits)
 }
 

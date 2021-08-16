@@ -449,7 +449,7 @@ func generatePresubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.Po
 	base := generateJobBase(name, jc.PresubmitPrefix, info, podSpec, true, pathAlias, jobRelease, skipCloning)
 	return &prowconfig.Presubmit{
 		JobBase:   base,
-		AlwaysRun: true,
+		AlwaysRun: runIfChanged == "" && skipIfOnlyChanged == "",
 		Brancher:  prowconfig.Brancher{Branches: sets.NewString(ExactlyBranch(info.Branch), FeatureBranch(info.Branch)).List()},
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/prow/%s", shortName),

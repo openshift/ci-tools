@@ -18,7 +18,6 @@ const (
 	Latest         = "latest"
 	ConfigDir      = "config-dir"
 	Clusters       = "clusters"
-	BuildClusters  = "build-clusters"
 	Confirm        = "confirm"
 	As             = "as"
 	Always         = "Always"

@@ -64,6 +64,9 @@ const (
 	SaConfigUpdater      = "sa.config-updater"
 	Config               = "config"
 	Etc                  = "etc"
+	CiSecretBootstrap    = "ci-secret-bootstrap"
+	PerCiSecGen          = "periodic-ci-secret-generator"
+	PerCiSecBoot         = "periodic-ci-secret-bootstrap"
 )
 
 type InfraPeriodics struct {
@@ -150,8 +153,8 @@ func writeInfraPeriodics(filename string, ip InfraPeriodics) {
 
 }
 
-func appendNewClusterToSecretKubeconfig(per *prowconfig.Periodic, clusterName string) {
-	container, err := findContainer(per.Spec, "")
+func appendNewClustersConfigUpdaterToKubeconfig(per *prowconfig.Periodic, containerName string, clusterName string) {
+	container, err := findContainer(per.Spec, containerName)
 	if err != nil {
 		logrus.WithError(err).Fatal()
 	}
@@ -163,7 +166,7 @@ func appendNewClusterToSecretKubeconfig(per *prowconfig.Periodic, clusterName st
 	env.Value = env.Value + s
 }
 
-func appendSecretItem(per *prowconfig.Periodic, clusterName string) {
+func appendBuildFarmCredentialSecret(per *prowconfig.Periodic, clusterName string) {
 	v, err := findVolume(per.Spec, BuildFarmCredentials)
 	if err != nil {
 		logrus.WithError(err).Fatal()
@@ -184,6 +187,10 @@ func main() {
 
 	//TODO: probably a good idea to validate that this cluster doesn't exist
 
+	updateInfraPeriodics(o)
+}
+
+func updateInfraPeriodics(o options) {
 	ipFile := filepath.Join(o.releaseRepo, CiOperator, Jobs, InfraPeriodicsFile)
 	ip := loadInfraPeriodics(ipFile)
 
@@ -192,10 +199,24 @@ func main() {
 		logrus.WithError(err).Fatal()
 	}
 
-	appendNewClusterToSecretKubeconfig(rotSASecretsPer, o.clusterName)
-	appendSecretItem(rotSASecretsPer, o.clusterName)
+	appendNewClustersConfigUpdaterToKubeconfig(rotSASecretsPer, "", o.clusterName)
+	appendBuildFarmCredentialSecret(rotSASecretsPer, o.clusterName)
 	ap := GeneratePeriodic(o.clusterName, o.buildFarmDir)
 	ip.Periodics = append(ip.Periodics, ap)
+
+	secGenPer, err := findPeriodic(ip, PerCiSecGen)
+	if err != nil {
+		logrus.WithError(err).Fatal()
+	}
+	appendNewClustersConfigUpdaterToKubeconfig(secGenPer, CiSecretBootstrap, o.clusterName)
+	appendBuildFarmCredentialSecret(secGenPer, o.clusterName)
+
+	ciSecBootPer, err := findPeriodic(ip, PerCiSecBoot)
+	if err != nil {
+		logrus.WithError(err).Fatal()
+	}
+	appendNewClustersConfigUpdaterToKubeconfig(ciSecBootPer, CiSecretBootstrap, o.clusterName)
+	appendBuildFarmCredentialSecret(ciSecBootPer, o.clusterName)
 
 	writeInfraPeriodics(ipFile, *ip)
 }

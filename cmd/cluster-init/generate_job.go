@@ -32,28 +32,50 @@ const (
 	Io            = "io"
 	Role          = "role"
 	Infra         = "infra"
+	Registry      = "registry"
+	Org           = "org"
+	Branch        = "branch"
 )
 
 func GeneratePeriodic(clusterName string, buildFarmDir string) prowconfig.Periodic {
-	releaseRef := generateReleaseRef()
-	utilityConfig := generateUtilityConfig(releaseRef)
-	container := generateContainer(buildFarmDir)
+	utilityConfig := generateUtilityConfig()
+	utilityConfig.ExtraRefs = append(utilityConfig.ExtraRefs, generateReleaseRef())
+	image := fmt.Sprintf("%s:%s", ApplyConfig, Latest)
+	container := generateContainer(buildFarmDir, image)
 	volume := generateVolume(clusterName)
 	podSpec := generatePodSpec(volume, container)
-	jobBase := generateJobBase(clusterName, podSpec, utilityConfig)
+	name := fmt.Sprintf("%s-%s-%s-%s-%s-%s", Periodic, Openshift, Release, Master, clusterName, Apply)
+	jobBase := generateJobBase(clusterName, podSpec, utilityConfig, name, 0)
 	return prowconfig.Periodic{
 		JobBase:  jobBase,
 		Interval: "12h",
 	}
 }
 
-func generateJobBase(clusterName string, ps *v1.PodSpec, uc prowconfig.UtilityConfig) prowconfig.JobBase {
+func GeneratePostsubmit(clusterName string, buildFarmDir string) prowconfig.Postsubmit {
+	utilityConfig := generateUtilityConfig()
+	image := fmt.Sprintf("%s.%s.%s.%s/%s/%s:%s", Registry, Ci, Openshift, Org, Ci, ApplyConfig, Latest)
+	container := generateContainer(buildFarmDir, image)
+	volume := generateVolume(clusterName)
+	podSpec := generatePodSpec(volume, container)
+	name := fmt.Sprintf("%s-%s-%s-%s-%s-%s-%s", Branch, Ci, Openshift, Release, Master, clusterName, Apply)
+	jobBase := generateJobBase(clusterName, podSpec, utilityConfig, name, 1)
+	brancher := prowconfig.Brancher{
+		Branches: []string{"master"},
+	}
+	return prowconfig.Postsubmit{
+		JobBase:  jobBase,
+		Brancher: brancher,
+	}
+}
+
+func generateJobBase(clusterName string, ps *v1.PodSpec, uc prowconfig.UtilityConfig, name string, maxConcurrency int) prowconfig.JobBase {
 	return prowconfig.JobBase{
-		Name: fmt.Sprintf("%s-%s-%s-%s-%s-%s", Periodic, Openshift, Release, Master, clusterName, Apply),
+		Name: name,
 		Labels: map[string]string{
 			fmt.Sprintf("%s.%s.%s/%s", Ci, Openshift, Io, Role): Infra,
 		},
-		MaxConcurrency:  0,
+		MaxConcurrency:  maxConcurrency,
 		Agent:           Kubernetes,
 		Cluster:         AppDotCi,
 		Namespace:       nil,
@@ -85,7 +107,7 @@ func generateReleaseRef() prowapi.Refs {
 	}
 }
 
-func generateUtilityConfig(releaseRef prowapi.Refs) prowconfig.UtilityConfig {
+func generateUtilityConfig() prowconfig.UtilityConfig {
 	return prowconfig.UtilityConfig{
 		Decorate:         proto.Bool(true),
 		PathAlias:        "",
@@ -93,7 +115,7 @@ func generateUtilityConfig(releaseRef prowapi.Refs) prowconfig.UtilityConfig {
 		SkipSubmodules:   false,
 		CloneDepth:       0,
 		SkipFetchHead:    false,
-		ExtraRefs:        []prowapi.Refs{releaseRef},
+		ExtraRefs:        []prowapi.Refs{},
 		DecorationConfig: nil,
 	}
 }
@@ -115,10 +137,10 @@ func generateVolume(clusterName string) v1.Volume {
 	}
 }
 
-func generateContainer(buildFarmDir string) v1.Container {
+func generateContainer(buildFarmDir string, image string) v1.Container {
 	return v1.Container{
 		Name:    "",
-		Image:   fmt.Sprintf("%s:%s", ApplyConfig, Latest),
+		Image:   image,
 		Command: []string{ApplyConfig},
 		Args: []string{
 			fmt.Sprintf(fmt.Sprintf("--%s=%s/%s/%s", ConfigDir, Clusters, BuildClusters, buildFarmDir)),

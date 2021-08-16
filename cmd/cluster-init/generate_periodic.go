@@ -9,6 +9,7 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 )
 
+//TODO: not sure some of these should be constants, what if we only use them once???
 const (
 	Openshift     = "openshift"
 	Release       = "release"

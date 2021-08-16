@@ -398,7 +398,7 @@ func TestMergePresubmits(t *testing.T) {
 					MaxConcurrency: 10,
 					Cluster:        "somewhere",
 				},
-				AlwaysRun: true,
+				AlwaysRun: false,
 				Reporter: prowconfig.Reporter{
 					Context:    "context",
 					SkipReport: true,

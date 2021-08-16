@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"io/ioutil"
 	"net/http"
 	"sort"
 	"strconv"
@@ -233,7 +234,23 @@ func serveUI(port, healthPort int, loaders map[string][]*cacheReloader) {
 	if err != nil {
 		logger.WithError(err).Fatal("Could not prefix static content.")
 	}
-	mux.HandleFunc("/", handler(http.FileServer(http.FS(stripped))).ServeHTTP)
+	index, err := stripped.Open("index.html")
+	if err != nil {
+		logger.WithError(err).Fatal("Could not find index.html in static content.")
+	}
+	indexBytes, err := ioutil.ReadAll(index)
+	if err != nil {
+		logger.WithError(err).Fatal("Could not read index.html.")
+	}
+	if err := index.Close(); err != nil {
+		logger.WithError(err).Fatal("Could not close index.html.")
+	}
+	mux.HandleFunc("/", handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := w.Write(indexBytes); err != nil {
+			logrus.WithError(err).Warn("Could not serve index.html.")
+		}
+	})).ServeHTTP)
+	mux.HandleFunc("/static/", handler(http.StripPrefix("/static/", http.FileServer(http.FS(stripped)))).ServeHTTP)
 	for name := range server.mappings {
 		mux.HandleFunc(fmt.Sprintf("/api/data/%s", name), handler(server.getData(name)).ServeHTTP)
 		mux.HandleFunc(fmt.Sprintf("/api/indices/%s", name), handler(server.getIndex(name)).ServeHTTP)

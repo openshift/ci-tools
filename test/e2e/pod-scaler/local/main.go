@@ -74,7 +74,7 @@ func main() {
 			return []string{}
 		}, func(port, healthPort string) []string {
 			return []string{}
-		}, "API_ENDPOINT="+uiHost, "PATH="+os.Getenv("PATH"))
+		}, "API_ENDPOINT="+uiHost, "PATH="+os.Getenv("PATH"), "ASSET_PATH=/")
 		devUi.RunFromFrameworkRunner(t, interrupts.Context(), true)
 	}
 	interrupts.WaitForGracefulShutdown()

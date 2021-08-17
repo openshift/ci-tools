@@ -19,7 +19,7 @@ const (
 )
 
 type ItemContext struct {
-	Item                 string                 `json:"item"`
+	Item                 string                 `json:"item,omitempty"`
 	Field                string                 `json:"field,omitempty"`
 	DockerConfigJSONData []DockerConfigJSONData `json:"dockerconfigJSON,omitempty"`
 	// If the secret should be base64 decoded before uploading to kube. Encoding
@@ -45,7 +45,7 @@ type DockerAuth struct {
 
 type SecretContext struct {
 	// A cluster to target. Mutually exclusive with 'ClusterGroups'
-	Cluster string `json:"cluster"`
+	Cluster string `json:"cluster,omitempty"`
 	// A list of clusterGroups to target. Mutually exclusive with 'cluster'
 	ClusterGroups []string          `json:"cluster_groups,omitempty"`
 	Namespace     string            `json:"namespace"`
@@ -88,7 +88,9 @@ func (c *Config) UnmarshalJSON(d []byte) error {
 	}
 
 	*c = Config(target)
-	return c.resolve()
+	//TODO: this resolve step is adding "dptp" prefix everywhere...is this okay?
+	//return c.resolve()
+	return nil
 }
 
 func (c *Config) Validate() error {

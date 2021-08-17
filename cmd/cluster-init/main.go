@@ -4,12 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"github.com/sirupsen/logrus"
-	"io/ioutil"
 	"k8s.io/api/core/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"os"
 	"path/filepath"
-	"sigs.k8s.io/yaml"
 )
 
 type options struct {
@@ -61,7 +59,7 @@ const (
 	Kubeconfig           = "KUBECONFIG"
 	PerRotSaSecs         = "periodic-rotate-serviceaccount-secrets"
 	BuildFarmCredentials = "build-farm-credentials"
-	SaConfigUpdater      = "sa.config-updater"
+	ConfigUpdater        = "config-updater"
 	Config               = "config"
 	Etc                  = "etc"
 	CiSecretBootstrap    = "ci-secret-bootstrap"
@@ -70,23 +68,9 @@ const (
 	BuildClusters        = "build-clusters"
 	Common               = "common"
 	CommonExceptAppCi    = "common_except_app.ci"
+	Sa                   = "sa"
+	Test                 = "test"
 )
-
-func loadConfig(filename string, o interface{}) {
-	data, err := ioutil.ReadFile(filename)
-	check(err, "cannot open config file: ", filename)
-	err = yaml.Unmarshal(data, o)
-	check(err, "cannot unmarshall config file: ", filename)
-}
-
-func saveConfig(filename string, o interface{}) {
-	y, err := yaml.Marshal(o)
-	check(err, "cannot marshal InfraPeriodics")
-
-	err = ioutil.WriteFile(filename, y, 0644)
-	check(err, "cannot write InfraPeriodics file: ", filename)
-
-}
 
 type InfraPeriodics struct {
 	Periodics []prowconfig.Periodic `json:"periodics,omitempty"`
@@ -153,14 +137,14 @@ func appendNewClustersConfigUpdaterToKubeconfig(per *prowconfig.Periodic, contai
 	}
 	env, err := findEnv(container, Kubeconfig)
 	check(err)
-	s := fmt.Sprintf(":/%s/%s/%s.%s.%s", Etc, BuildFarmCredentials, SaConfigUpdater, clusterName, Config)
+	s := fmt.Sprintf(":/%s/%s/%s.%s.%s.%s", Etc, BuildFarmCredentials, Sa, ConfigUpdater, clusterName, Config)
 	env.Value = env.Value + s
 }
 
 func appendBuildFarmCredentialSecret(per *prowconfig.Periodic, clusterName string) {
 	v, err := findVolume(per.Spec, BuildFarmCredentials)
 	check(err)
-	configPath := fmt.Sprintf("%s.%s.%s", SaConfigUpdater, clusterName, Config)
+	configPath := fmt.Sprintf("%s.%s.%s.%s", Sa, ConfigUpdater, clusterName, Config)
 	path := v1.KeyToPath{
 		Key:  configPath,
 		Path: configPath,
@@ -186,6 +170,7 @@ func main() {
 	check(err, "Invalid arguments.")
 
 	//TODO: probably a good idea to validate that this cluster doesn't exist
+	// i think we can use the presence of a build dir
 
 	updateInfraPeriodics(o)
 	updatePostsubmits(o)
@@ -193,13 +178,14 @@ func main() {
 	//TODO: is the following good enough? it is hard to modify MD programmatically
 	fmt.Printf("Please add information about the '%s' cluster to %s/clusters/README.md\n",
 		o.clusterName, o.releaseRepo)
-	initClusterBuildFarmDir(o, err)
-
+	//initClusterBuildFarmDir(o) TODO: uncomment
+	updateCiSecretBootstrapConfig(o)
 }
 
-func initClusterBuildFarmDir(o options, err error) {
+func initClusterBuildFarmDir(o options) {
 	buildDir := filepath.Join(o.releaseRepo, Clusters, BuildClusters, o.buildFarmDir)
-	err = os.MkdirAll(buildDir, 0777)
+	fmt.Printf("Creating build dir: %s\n", buildDir)
+	err := os.MkdirAll(buildDir, 0777)
 	check(err)
 
 	commonLink := filepath.Join(o.releaseRepo, Clusters, BuildClusters, o.buildFarmDir, Common)
@@ -210,6 +196,7 @@ func initClusterBuildFarmDir(o options, err error) {
 }
 
 func createSymlink(target string, link string) {
+	fmt.Printf("Creating symlink from: %s to: %s\n", link, target)
 	err := os.Symlink(target, link)
 	check(err, "cannot create symlink.")
 }
@@ -219,7 +206,7 @@ func updatePresubmits(o options) {
 	fmt.Printf("Updating Presubmit Jobs: %s\n", presubmitsFile)
 	presubmits := &Pre{}
 	loadConfig(presubmitsFile, presubmits)
-	presubmit := GeneratePresubmit(o.clusterName, o.buildFarmDir)
+	presubmit := generatePresubmit(o.clusterName, o.buildFarmDir)
 	presubmits.OSRelease.Jobs = append(presubmits.OSRelease.Jobs, presubmit)
 	saveConfig(presubmitsFile, presubmits)
 }
@@ -229,7 +216,7 @@ func updatePostsubmits(o options) {
 	fmt.Printf("Updating Postsubmit Jobs: %s\n", postsubmitsFile)
 	postsubmits := &Post{}
 	loadConfig(postsubmitsFile, postsubmits)
-	postsubmit := GeneratePostsubmit(o.clusterName, o.buildFarmDir)
+	postsubmit := generatePostsubmit(o.clusterName, o.buildFarmDir)
 	postsubmits.OSRelease.Jobs = append(postsubmits.OSRelease.Jobs, postsubmit)
 	saveConfig(postsubmitsFile, *postsubmits)
 }
@@ -239,22 +226,18 @@ func updateInfraPeriodics(o options) {
 	fmt.Printf("Updating Periodic Jobs: %s\n", ipFile)
 	ip := &InfraPeriodics{}
 	loadConfig(ipFile, ip)
-
 	rotSASecretsPer, err := findPeriodic(ip, PerRotSaSecs)
 	check(err)
-
 	appendNewClustersConfigUpdaterToKubeconfig(rotSASecretsPer, "", o.clusterName)
 	appendBuildFarmCredentialSecret(rotSASecretsPer, o.clusterName)
-	ap := GeneratePeriodic(o.clusterName, o.buildFarmDir)
-	ip.Periodics = append(ip.Periodics, ap)
-
 	for _, perName := range []string{PerCiSecGen, PerCiSecBoot} {
 		per, err := findPeriodic(ip, perName)
 		check(err)
 		appendNewClustersConfigUpdaterToKubeconfig(per, CiSecretBootstrap, o.clusterName)
 		appendBuildFarmCredentialSecret(per, o.clusterName)
 	}
-
+	ap := generatePeriodic(o.clusterName, o.buildFarmDir)
+	ip.Periodics = append(ip.Periodics, ap)
 	saveConfig(ipFile, *ip)
 }
 

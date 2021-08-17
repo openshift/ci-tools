@@ -22,7 +22,6 @@ const (
 	As             = "as"
 	Always         = "Always"
 	Cpu            = "cpu"
-	ConfigUpdater  = "config-updater"
 	Kubernetes     = "kubernetes"
 	AppDotCi       = "app.ci"
 	Periodic       = "periodic"
@@ -34,16 +33,14 @@ const (
 	Registry       = "registry"
 	Org            = "org"
 	Branch         = "branch"
-	Test           = "test"
 	Dry            = "dry"
 	BuildFarm      = "build-farm"
 	Pull           = "pull"
-	PjRehearse     = "pj-rehearse"
 	CanBeRehearsed = "can-be-rehearsed"
 	Tmp            = "tmp"
 )
 
-func GeneratePeriodic(clusterName string, buildFarmDir string) prowconfig.Periodic {
+func generatePeriodic(clusterName string, buildFarmDir string) prowconfig.Periodic {
 	utilityConfig := generateUtilityConfig()
 	utilityConfig.ExtraRefs = append(utilityConfig.ExtraRefs, generateReleaseRef())
 	image := fmt.Sprintf("%s:%s", ApplyConfig, Latest)
@@ -63,7 +60,7 @@ func GeneratePeriodic(clusterName string, buildFarmDir string) prowconfig.Period
 	}
 }
 
-func GeneratePostsubmit(clusterName string, buildFarmDir string) prowconfig.Postsubmit {
+func generatePostsubmit(clusterName string, buildFarmDir string) prowconfig.Postsubmit {
 	utilityConfig := generateUtilityConfig()
 	image := fmt.Sprintf("%s.%s.%s.%s/%s/%s:%s", Registry, Ci, Openshift, Org, Ci, ApplyConfig, Latest)
 	args := generateArgs(buildFarmDir)
@@ -86,7 +83,7 @@ func GeneratePostsubmit(clusterName string, buildFarmDir string) prowconfig.Post
 	}
 }
 
-func GeneratePresubmit(clusterName string, buildFarmDir string) prowconfig.Presubmit {
+func generatePresubmit(clusterName string, buildFarmDir string) prowconfig.Presubmit {
 	utilityConfig := generateUtilityConfig()
 	image := fmt.Sprintf("%s.%s.%s.%s/%s/%s:%s", Registry, Ci, Openshift, Org, Ci, ApplyConfig, Latest)
 	mounts := generateVolumeMounts()
@@ -181,7 +178,7 @@ func generateSecretVolume(clusterName string) v1.Volume {
 				SecretName: BuildFarmCredentials,
 				Items: []v1.KeyToPath{
 					{
-						Key:  fmt.Sprintf("%s.%s.%s", SaConfigUpdater, clusterName, Config),
+						Key:  fmt.Sprintf("%s.%s.%s.%s", Sa, ConfigUpdater, clusterName, Config),
 						Path: "kubeconfig",
 					},
 				},

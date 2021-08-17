@@ -25,10 +25,10 @@ const (
 
 type options struct {
 	config.WhitelistOptions
+	config.Options
 
-	configDir string
-	toOrg     string
-	onlyOrg   string
+	toOrg   string
+	onlyOrg string
 
 	clean bool
 }
@@ -37,12 +37,12 @@ func gatherOptions() (options, error) {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
-	fs.StringVar(&o.configDir, "config-path", "", "Path to directory containing ci-operator configurations")
 	fs.StringVar(&o.toOrg, "to-org", "", "Name of the organization which the ci-operator configuration files will be mirrored")
 	fs.StringVar(&o.onlyOrg, "only-org", "", "Mirror only ci-operator configuration from this organization")
 
 	fs.BoolVar(&o.clean, "clean", true, "If the `to-org` folder already exists, then delete all subdirectories")
 
+	o.Options.Bind(fs)
 	o.WhitelistOptions.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)
@@ -51,10 +51,12 @@ func gatherOptions() (options, error) {
 }
 
 func (o *options) validate() error {
-	if len(o.configDir) == 0 {
-		return errors.New("--config-path is not defined")
+	if err := o.Options.Validate(); err != nil {
+		return fmt.Errorf("failed to validate config options: %w", err)
 	}
-
+	if err := o.Options.Complete(); err != nil {
+		return fmt.Errorf("failed to complete config options: %w", err)
+	}
 	if len(o.toOrg) == 0 {
 		return errors.New("--to-org is not defined")
 	}
@@ -174,11 +176,11 @@ func main() {
 		return nil
 	}
 
-	if err := config.OperateOnCIOperatorConfigDir(o.configDir, callback); err != nil {
+	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, callback); err != nil {
 		logrus.WithError(err).Fatal("error while operating in the ci-operator configuration files")
 	}
 
-	dest := filepath.Join(o.configDir, o.toOrg)
+	dest := filepath.Join(o.ConfigDir, o.toOrg)
 	logger := logrus.WithField("destination", dest)
 	if o.clean {
 		logger.Info("Cleaning destination's sub directories")
@@ -188,7 +190,7 @@ func main() {
 	}
 
 	logger.Info("Generating configurations...")
-	if err := configsByRepo.generateConfigs(o.configDir); err != nil {
+	if err := configsByRepo.generateConfigs(o.ConfigDir); err != nil {
 		logger.WithError(err).Fatal("couldn't generate configurations")
 	}
 }

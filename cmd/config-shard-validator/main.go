@@ -27,7 +27,7 @@ import (
 type options struct {
 	releaseRepoDir string
 
-	logLevel string
+	config.Options
 }
 
 func (o *options) Validate() error {
@@ -35,7 +35,15 @@ func (o *options) Validate() error {
 		return errors.New("required flag --release-repo-dir was unset")
 	}
 
-	level, err := logrus.ParseLevel(o.logLevel)
+	o.ConfigDir = path.Join(o.releaseRepoDir, config.CiopConfigInRepoPath)
+	if err := o.Options.Validate(); err != nil {
+		return fmt.Errorf("failed to validate config options: %w", err)
+	}
+	if err := o.Options.Complete(); err != nil {
+		return fmt.Errorf("failed to complete config options: %w", err)
+	}
+
+	level, err := logrus.ParseLevel(o.LogLevel)
 	if err != nil {
 		return fmt.Errorf("invalid --log-level: %w", err)
 	}
@@ -45,13 +53,14 @@ func (o *options) Validate() error {
 
 func (o *options) Bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.releaseRepoDir, "release-repo-dir", "", "Path to openshift/release repo.")
-	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 }
 
 func gatherOptions() options {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	o.Options.Bind(fs)
 	o.Bind(fs)
+
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
@@ -76,7 +85,7 @@ func main() {
 
 	var pathsToCheck []pathWithConfig
 	configInfos := map[string]*config.Info{}
-	if err := config.OperateOnCIOperatorConfigDir(path.Join(o.releaseRepoDir, config.CiopConfigInRepoPath), func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
+	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
 		// we know the path is relative, but there is no API to declare that
 		relPath, _ := filepath.Rel(o.releaseRepoDir, info.Filename)
 		pathsToCheck = append(pathsToCheck, pathWithConfig{path: relPath, configMap: info.ConfigMapName()})

@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/go-retryablehttp"
+
 	"github.com/openshift/ci-tools/test/e2e/framework"
 )
 
@@ -215,6 +217,7 @@ func TestDynamicReleases(t *testing.T) {
 }
 
 func TestLiteralDynamicRelease(t *testing.T) {
+	client := retryablehttp.NewClient()
 	var testCases = []struct {
 		name    string
 		release func(t *framework.T) string
@@ -228,12 +231,12 @@ func TestLiteralDynamicRelease(t *testing.T) {
 						Payload string `json:"payload"`
 					} `json:"nodes"`
 				}
-				req, err := http.NewRequest(http.MethodGet, "https://api.openshift.com/api/upgrades_info/v1/graph?channel=stable-4.4&arch=amd64", nil)
+				req, err := retryablehttp.NewRequest(http.MethodGet, "https://api.openshift.com/api/upgrades_info/v1/graph?channel=stable-4.4&arch=amd64", nil)
 				if err != nil {
 					t.Fatalf("could not create request for Cincinnati: %v", err)
 				}
 				req.Header.Add("Accept", "application/json")
-				resp, err := http.DefaultClient.Do(req)
+				resp, err := client.Do(req)
 				if err != nil {
 					t.Fatalf("could not fetch release from Cincinnati: %v", err)
 				}

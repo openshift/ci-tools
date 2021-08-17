@@ -131,6 +131,42 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 				},
 			},
 		},
+		{
+			description: "test step with lease",
+			test: &ciop.TestStepConfiguration{
+				As: "test",
+				MultiStageTestConfigurationLiteral: &ciop.MultiStageTestConfigurationLiteral{
+					Test: []ciop.LiteralTestStep{
+						{
+							As: "step without lease",
+						},
+						{
+							As: "step with lease",
+							Leases: []ciop.StepLease{
+								{
+									ResourceType: "resource",
+									Count:        10,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			description: "test with lease",
+			test: &ciop.TestStepConfiguration{
+				As: "test",
+				MultiStageTestConfigurationLiteral: &ciop.MultiStageTestConfigurationLiteral{
+					Leases: []ciop.StepLease{
+						{
+							ResourceType: "resource",
+							Count:        10,
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {

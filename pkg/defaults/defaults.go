@@ -297,7 +297,7 @@ func fromConfig(
 				}
 				leases := []api.StepLease{{
 					ResourceType: lease,
-					Env:          steps.DefaultLeaseEnv,
+					Env:          api.DefaultLeaseEnv,
 					Count:        1,
 				}}
 				step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
@@ -359,7 +359,7 @@ func stepForTest(
 ) ([]api.Step, bool, error) {
 	var hasReleaseStep bool
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
-		leases := leasesForTest(test)
+		leases := api.LeasesForTest(test)
 		if len(leases) != 0 {
 			params = api.NewDeferredParameters(params)
 		}
@@ -399,7 +399,7 @@ func stepForTest(
 		}
 		step = steps.LeaseStep(leaseClient, []api.StepLease{{
 			ResourceType: test.ClusterProfile.LeaseType(),
-			Env:          steps.DefaultLeaseEnv,
+			Env:          api.DefaultLeaseEnv,
 			Count:        1,
 		}}, step, jobSpec.Namespace)
 		addProvidesForStep(step, params)
@@ -479,24 +479,6 @@ func checkForFullyQualifiedStep(step api.Step, params *api.DeferredParameters) (
 		params.Add(name, fn)
 	}
 	return step, false
-}
-
-// leasesForTest aggregates all the lease configurations in a test.
-// It is assumed that they have been validated and contain only valid and
-// unique values.
-func leasesForTest(s *api.MultiStageTestConfigurationLiteral) (ret []api.StepLease) {
-	if p := s.ClusterProfile; p != "" {
-		ret = append(ret, api.StepLease{
-			ResourceType: p.LeaseType(),
-			Env:          steps.DefaultLeaseEnv,
-			Count:        1,
-		})
-	}
-	for _, step := range append(s.Pre, append(s.Test, s.Post...)...) {
-		ret = append(ret, step.Leases...)
-	}
-	ret = append(ret, s.Leases...)
-	return
 }
 
 // rootImageResolver creates a resolver for the root image import step. We attempt to resolve the root image and

@@ -1630,7 +1630,7 @@ func (config RPMServeStepConfiguration) TargetName() string {
 }
 
 const (
-	// api.PipelineImageStream is the name of the
+	// PipelineImageStream is the name of the
 	// ImageStream used to hold images built
 	// to cache build steps in the pipeline.
 	PipelineImageStream = "pipeline"
@@ -1653,7 +1653,7 @@ const (
 	// the StableImageStream. Images for other versions of
 	// the stream are held in similarly-named streams.
 	LatestReleaseName = "latest"
-	// LatestReleaseName is the name of the special stable
+	// InitialReleaseName is the name of the special initial
 	// stream we copy at import to keep for upgrade tests.
 	// TODO(skuznets): remove these when they're not implicit
 	InitialReleaseName = "initial"

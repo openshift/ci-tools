@@ -18,7 +18,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
-	"k8s.io/utils/diff"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	imageapi "github.com/openshift/api/image/v1"
@@ -1343,8 +1342,8 @@ func TestFromConfig(t *testing.T) {
 		params:        map[string]string{"CLUSTER_TYPE": "aws"},
 		expectedSteps: []string{"template", "[output-images]", "[images]"},
 		expectedParams: map[string]string{
-			"CLUSTER_TYPE":        "aws",
-			steps.DefaultLeaseEnv: "",
+			"CLUSTER_TYPE":      "aws",
+			api.DefaultLeaseEnv: "",
 		},
 	}, {
 		name:       "param files",
@@ -1482,48 +1481,6 @@ func TestFromConfig(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expectedPost, postNames); diff != "" {
 				t.Errorf("unexpected post steps: %v", diff)
-			}
-		})
-	}
-}
-
-func TestLeasesForTest(t *testing.T) {
-	for _, tc := range []struct {
-		name     string
-		tests    api.MultiStageTestConfigurationLiteral
-		expected []api.StepLease
-	}{{
-		name:  "no configuration or cluster profile, no lease",
-		tests: api.MultiStageTestConfigurationLiteral{},
-	}, {
-		name: "cluster profile, lease",
-		tests: api.MultiStageTestConfigurationLiteral{
-			ClusterProfile: api.ClusterProfileAWS,
-		},
-		expected: []api.StepLease{{
-			ResourceType: "aws-quota-slice",
-			Env:          steps.DefaultLeaseEnv,
-			Count:        1,
-		}},
-	}, {
-		name: "explicit configuration, lease",
-		tests: api.MultiStageTestConfigurationLiteral{
-			Leases: []api.StepLease{{ResourceType: "aws-quota-slice"}},
-		},
-		expected: []api.StepLease{{ResourceType: "aws-quota-slice"}},
-	}, {
-		name: "explicit configuration in step, lease",
-		tests: api.MultiStageTestConfigurationLiteral{
-			Test: []api.LiteralTestStep{
-				{Leases: []api.StepLease{{ResourceType: "aws-quota-slice"}}},
-			},
-		},
-		expected: []api.StepLease{{ResourceType: "aws-quota-slice"}},
-	}} {
-		t.Run(tc.name, func(t *testing.T) {
-			ret := leasesForTest(&tc.tests)
-			if diff := diff.ObjectReflectDiff(tc.expected, ret); diff != "<no diffs>" {
-				t.Errorf("incorrect leases: %s", diff)
 			}
 		})
 	}

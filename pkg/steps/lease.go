@@ -18,8 +18,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
-const DefaultLeaseEnv = "LEASED_RESOURCE"
-
 var NoLeaseClientErr = errors.New("step needs a lease but no lease client provided")
 
 type stepLease struct {

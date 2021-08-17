@@ -333,16 +333,29 @@ func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepCo
 		secrets = append(secrets, &api.Secret{Name: api.HiveControlPlaneKubeconfigSecret})
 	}
 	podSpec := generateCiOperatorPodSpec(info, secrets, []string{test.As}, additionalArgs...)
-	if profile == "" {
-		return podSpec
+
+	if profile != "" {
+		podSpec.Volumes = append(podSpec.Volumes, generateClusterProfileVolume(profile, profile.ClusterType()))
+		clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
+		container := &podSpec.Containers[0]
+		container.Args = append(container.Args, fmt.Sprintf("--secret-dir=%s", clusterProfilePath))
+		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{Name: "cluster-profile", MountPath: clusterProfilePath})
 	}
-	podSpec.Volumes = append(podSpec.Volumes, generateClusterProfileVolume(profile, profile.ClusterType()))
-	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
-	container := &podSpec.Containers[0]
-	container.Args = append(container.Args, fmt.Sprintf("--secret-dir=%s", clusterProfilePath))
-	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{Name: "cluster-profile", MountPath: clusterProfilePath})
-	addLeaseClient(podSpec)
+
+	if profile != "" || testContainsLease(test) {
+		addLeaseClient(podSpec)
+	}
+
 	return podSpec
+}
+
+func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
+	// this is predicated upon the config being fully resolved at this time.
+	if test.MultiStageTestConfigurationLiteral == nil {
+		return false
+	}
+
+	return len(api.LeasesForTest(test.MultiStageTestConfigurationLiteral)) > 0
 }
 
 func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperatorapi.TestStepConfiguration) *corev1.PodSpec {

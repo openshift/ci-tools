@@ -1,3 +1,4 @@
+//go:build e2e
 // +build e2e
 
 // This tool can run the pod-scaler locally, setting up dependencies in an ephemeral manner

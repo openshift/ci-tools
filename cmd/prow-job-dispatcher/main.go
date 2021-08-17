@@ -377,14 +377,13 @@ func main() {
 		}
 	}
 
-	sa := &secret.Agent{}
 	if o.PrometheusOptions.PrometheusPasswordPath != "" {
-		if err := sa.Start([]string{o.PrometheusOptions.PrometheusPasswordPath}); err != nil {
+		if err := secret.Add(o.PrometheusOptions.PrometheusPasswordPath); err != nil {
 			logrus.WithError(err).Fatal("Failed to start secrets agent")
 		}
 	}
 
-	promClient, err := o.PrometheusOptions.NewPrometheusClient(sa.GetSecret)
+	promClient, err := o.PrometheusOptions.NewPrometheusClient(secret.GetSecret)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create prometheus client.")
 	}

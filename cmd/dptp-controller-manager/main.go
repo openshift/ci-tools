@@ -336,17 +336,14 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to add build cluster managers")
 	}
 
-	var secretPaths []string
 	if opts.GitHubOptions.TokenPath != "" {
-		secretPaths = append(secretPaths, opts.GitHubOptions.TokenPath)
-	}
-	secretAgent := &secret.Agent{}
-	if err := secretAgent.Start(secretPaths); err != nil {
-		logrus.WithError(err).Fatal("Failed to start secret agent")
+		if err := secret.Add(opts.GitHubOptions.TokenPath); err != nil {
+			logrus.WithError(err).Fatal("Failed to start secret agent")
+		}
 	}
 
 	if opts.enabledControllersSet.Has(promotionreconciler.ControllerName) {
-		gitHubClient, err := opts.GitHubClient(secretAgent, opts.dryRun)
+		gitHubClient, err := opts.GitHubClient(opts.dryRun)
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to get gitHubClient")
 		}

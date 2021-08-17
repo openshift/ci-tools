@@ -155,12 +155,11 @@ func main() {
 	}
 	interrupts.Run(configWatchAndUpdate)
 
-	secretAgent := &secret.Agent{}
-	if err := secretAgent.Start([]string{o.github.TokenPath, o.webhookSecretFile}); err != nil {
+	if err := secret.Add(o.github.TokenPath, o.webhookSecretFile); err != nil {
 		logger.WithError(err).Fatal("Error starting secrets agent.")
 	}
 
-	githubClient, err := o.github.GitHubClient(secretAgent, o.dryRun)
+	githubClient, err := o.github.GitHubClient(o.dryRun)
 	if err != nil {
 		logger.WithError(err).Fatal("Error getting GitHub client.")
 	}
@@ -174,7 +173,7 @@ func main() {
 		ghc: githubClient,
 	}
 
-	eventServer := githubeventserver.New(o.githubEventServerOptions, secretAgent.GetTokenGenerator(o.webhookSecretFile), logger)
+	eventServer := githubeventserver.New(o.githubEventServerOptions, secret.GetTokenGenerator(o.webhookSecretFile), logger)
 	eventServer.RegisterHandleIssueCommentEvent(serv.handleIssueComment)
 	eventServer.RegisterHandlePullRequestEvent(serv.handlePullRequestEvent)
 	eventServer.RegisterHelpProvider(helpProvider, logger)

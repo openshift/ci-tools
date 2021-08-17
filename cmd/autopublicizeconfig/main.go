@@ -99,12 +99,11 @@ func main() {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
 
-	sa := &secret.Agent{}
-	if err := sa.Start([]string{o.GitHubOptions.TokenPath}); err != nil {
+	if err := secret.Add(o.GitHubOptions.TokenPath); err != nil {
 		logrus.WithError(err).Fatal("Failed to start secrets agent")
 	}
 
-	gc, err := o.GitHubOptions.GitHubClient(sa, o.dryRun)
+	gc, err := o.GitHubOptions.GitHubClient(o.dryRun)
 	if err != nil {
 		logrus.WithError(err).Fatal("error getting GitHub client")
 	}
@@ -140,8 +139,8 @@ func main() {
 		logrus.WithError(err).Fatal("failed to write new publicize configuration")
 	}
 
-	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: sa}
-	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: sa}
+	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secret.Censor}
+	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secret.Censor}
 
 	changed, err := bumper.HasChanges()
 	if err != nil {
@@ -155,7 +154,7 @@ func main() {
 
 	logrus.Info("Preparing pull request")
 	title := fmt.Sprintf("%s %s", matchTitle, time.Now().Format(time.RFC1123))
-	if err := bumper.GitCommitAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin, string(sa.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo), remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr, o.dryRun); err != nil {
+	if err := bumper.GitCommitAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin, string(secret.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo), remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr, o.dryRun); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 

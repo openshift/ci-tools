@@ -19,7 +19,6 @@ import (
 type PRCreationOptions struct {
 	SelfApprove bool
 	flagutil.GitHubOptions
-	secretAgent  *secret.Agent
 	GithubClient github.Client
 }
 
@@ -32,12 +31,11 @@ func (o *PRCreationOptions) Finalize() error {
 	if err := o.GitHubOptions.Validate(false); err != nil {
 		return err
 	}
-	o.secretAgent = &secret.Agent{}
-	if err := o.secretAgent.Start([]string{o.TokenPath}); err != nil {
+	if err := secret.Add(o.TokenPath); err != nil {
 		return fmt.Errorf("failed to start secretAgent: %w", err)
 	}
 	var err error
-	o.GithubClient, err = o.GitHubClient(o.secretAgent, false)
+	o.GithubClient, err = o.GitHubClient(false)
 	if err != nil {
 		return fmt.Errorf("failed to construct github client: %w", err)
 	}
@@ -116,9 +114,9 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		return fmt.Errorf("failed to get botname: %w", err)
 	}
 	username := user.Login
-	token := o.secretAgent.GetSecret(o.TokenPath)
-	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: o.secretAgent}
-	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: o.secretAgent}
+	token := secret.GetSecret(o.TokenPath)
+	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secret.Censor}
+	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secret.Censor}
 
 	sourceBranchName := strings.ReplaceAll(strings.ToLower(prArgs.matchTitle), " ", "-")
 	o.GithubClient.SetMax404Retries(0)

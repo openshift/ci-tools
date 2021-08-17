@@ -14,7 +14,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/test-infra/prow/config/secret"
 	git "k8s.io/test-infra/prow/git/v2"
 	"sigs.k8s.io/yaml"
 
@@ -70,11 +69,7 @@ func main() {
 	if err := o.PRCreationOptions.Finalize(); err != nil {
 		logrus.WithError(err).Fatal("failed to set up pr creation options")
 	}
-	sa := &secret.Agent{}
-	if err := sa.Start(nil); err != nil {
-		logrus.WithError(err).Fatal("failed to start secret agent")
-	}
-	gc, err := o.GitHubOptions.GitClient(sa, false)
+	gc, err := o.GitHubOptions.GitClient(false)
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to construct git client")
 	}

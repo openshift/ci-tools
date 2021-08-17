@@ -126,12 +126,11 @@ func main() {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
 
-	sa := &secret.Agent{}
-	if err := sa.Start([]string{o.GitHubOptions.TokenPath}); err != nil {
+	if err := secret.Add(o.GitHubOptions.TokenPath); err != nil {
 		logrus.WithError(err).Fatal("Failed to start secrets agent")
 	}
 
-	gc, err := o.GitHubOptions.GitHubClient(sa, !o.Confirm)
+	gc, err := o.GitHubOptions.GitHubClient(!o.Confirm)
 	if err != nil {
 		logrus.WithError(err).Fatal("error getting GitHub client")
 	}
@@ -236,8 +235,8 @@ func main() {
 		},
 	}
 
-	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: sa}
-	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: sa}
+	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secret.Censor}
+	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secret.Censor}
 	author := fmt.Sprintf("%s <%s>", o.gitName, o.gitEmail)
 	needsPushing, err := runSteps(steps, author, stdout, stderr)
 	if err != nil {
@@ -248,7 +247,7 @@ func main() {
 	}
 
 	title := fmt.Sprintf("%s by auto-config-brancher job at %s", matchTitle, time.Now().Format(time.RFC1123))
-	if err := bumper.GitPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin, string(sa.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo), remoteBranch, stdout, stderr, ""); err != nil {
+	if err := bumper.GitPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin, string(secret.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo), remoteBranch, stdout, stderr, ""); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 

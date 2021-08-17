@@ -1613,11 +1613,10 @@ func (o *options) saveNamespaceArtifacts() {
 }
 
 func loadLeaseCredentials(leaseServerCredentialsFile string) (string, func() []byte, error) {
-	sa := &secret.Agent{}
-	if err := sa.Start([]string{leaseServerCredentialsFile}); err != nil {
-		return "", nil, fmt.Errorf("failed to start secret agent on file %s: %s", leaseServerCredentialsFile, string(sa.Censor([]byte(err.Error()))))
+	if err := secret.Add(leaseServerCredentialsFile); err != nil {
+		return "", nil, fmt.Errorf("failed to start secret agent on file %s: %s", leaseServerCredentialsFile, string(secret.Censor([]byte(err.Error()))))
 	}
-	splits := strings.Split(string(sa.GetSecret(leaseServerCredentialsFile)), ":")
+	splits := strings.Split(string(secret.GetSecret(leaseServerCredentialsFile)), ":")
 	if len(splits) != 2 {
 		return "", nil, fmt.Errorf("got invalid content of lease server credentials file which must be of the form '<username>:<passwrod>'")
 	}

@@ -27,6 +27,7 @@ import (
 
 type options struct {
 	config.WhitelistOptions
+	config.Options
 
 	configDir string
 	tokenPath string
@@ -46,8 +47,17 @@ type options struct {
 
 func (o *options) validate() []error {
 	var errs []error
-	if o.configDir == "" {
-		errs = append(errs, fmt.Errorf("--config-dir is required"))
+
+	// TODO remove this after change the job to use the --config-dir arg
+	if o.configDir != "" && o.ConfigDir == "" {
+		o.ConfigDir = o.configDir
+	}
+
+	if err := o.Options.Validate(); err != nil {
+		errs = append(errs, fmt.Errorf("failed to validate config options: %w", err))
+	}
+	if err := o.Options.Complete(); err != nil {
+		errs = append(errs, fmt.Errorf("failed to complete config options: %w", err))
 	}
 
 	if o.targetOrg == "" {
@@ -109,6 +119,7 @@ func gatherOptions() options {
 
 	fs.BoolVar(&o.debug, "debug", false, "Set true to enable debug logging level")
 
+	o.Options.Bind(fs)
 	o.WhitelistOptions.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("Could not parse options")
@@ -588,7 +599,7 @@ func main() {
 		return nil
 	}
 
-	if err := config.OperateOnCIOperatorConfigDir(o.configDir, o.makeFilter(callback)); err != nil {
+	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, o.makeFilter(callback)); err != nil {
 		errs = append(errs, err)
 	}
 

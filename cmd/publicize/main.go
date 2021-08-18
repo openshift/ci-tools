@@ -170,20 +170,19 @@ func main() {
 	}
 	interrupts.Run(configWatchAndUpdate)
 
-	secretAgent := &secret.Agent{}
-	if err := secretAgent.Start([]string{o.github.TokenPath, o.webhookSecretFile}); err != nil {
+	if err := secret.Add(o.github.TokenPath, o.webhookSecretFile); err != nil {
 		logger.WithError(err).Fatal("Error starting secrets agent.")
 	}
 
-	webhookTokenGenerator := secretAgent.GetTokenGenerator(o.webhookSecretFile)
-	githubTokenGenerator := secretAgent.GetTokenGenerator(o.github.TokenPath)
+	webhookTokenGenerator := secret.GetTokenGenerator(o.webhookSecretFile)
+	githubTokenGenerator := secret.GetTokenGenerator(o.github.TokenPath)
 
-	githubClient, err := o.github.GitHubClient(secretAgent, o.dryRun)
+	githubClient, err := o.github.GitHubClient(o.dryRun)
 	if err != nil {
 		logger.WithError(err).Fatal("Error getting GitHub client.")
 	}
 
-	gitClient, err := o.git.GitClient(githubClient, githubTokenGenerator, secretAgent.Censor, o.dryRun)
+	gitClient, err := o.git.GitClient(githubClient, githubTokenGenerator, secret.Censor, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Fatal("Error getting Git client.")
 	}

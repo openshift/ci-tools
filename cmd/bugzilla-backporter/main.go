@@ -117,12 +117,10 @@ func main() {
 	}
 
 	// Start the bugzilla secrets agent
-	tokens := []string{o.bugzilla.ApiKeyPath}
-	secretAgent := &secret.Agent{}
-	if err := secretAgent.Start(tokens); err != nil {
+	if err := secret.Add(o.bugzilla.ApiKeyPath); err != nil {
 		logrus.WithError(err).Fatal("Error starting secrets agent.")
 	}
-	bugzillaClient, err := o.bugzilla.BugzillaClient(secretAgent)
+	bugzillaClient, err := o.bugzilla.BugzillaClient()
 	if err != nil {
 		logrus.WithError(err).Fatal("Error getting Bugzilla client.")
 	}

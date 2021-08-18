@@ -119,17 +119,16 @@ func main() {
 		logrus.WithError(err).Fatal("Error starting Prow config agent.")
 	}
 
-	secretAgent := &secret.Agent{}
-	if err := secretAgent.Start([]string{o.slackTokenPath, o.slackSigningSecretPath}); err != nil {
+	if err := secret.Add(o.slackTokenPath, o.slackSigningSecretPath); err != nil {
 		logrus.WithError(err).Fatal("Error starting secrets agent.")
 	}
 
-	jiraClient, err := o.jiraOptions.Client(secretAgent)
+	jiraClient, err := o.jiraOptions.Client()
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not initialize Jira client.")
 	}
 
-	slackClient := slack.New(string(secretAgent.GetSecret(o.slackTokenPath)))
+	slackClient := slack.New(string(secret.GetSecret(o.slackTokenPath)))
 	issueFiler, err := jira.NewIssueFiler(slackClient, jiraClient.JiraClient())
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not initialize Jira issue filer.")
@@ -156,8 +155,8 @@ func main() {
 	mux := http.NewServeMux()
 	// handle the root to allow for a simple uptime probe
 	mux.Handle("/", handler(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) { writer.WriteHeader(http.StatusOK) })))
-	mux.Handle("/slack/interactive-endpoint", handler(handleInteraction(secretAgent.GetTokenGenerator(o.slackSigningSecretPath), interactionrouter.ForModals(issueFiler, slackClient))))
-	mux.Handle("/slack/events-endpoint", handler(handleEvent(secretAgent.GetTokenGenerator(o.slackSigningSecretPath), eventrouter.ForEvents(slackClient, configAgent.Config, gcsClient))))
+	mux.Handle("/slack/interactive-endpoint", handler(handleInteraction(secret.GetTokenGenerator(o.slackSigningSecretPath), interactionrouter.ForModals(issueFiler, slackClient))))
+	mux.Handle("/slack/events-endpoint", handler(handleEvent(secret.GetTokenGenerator(o.slackSigningSecretPath), eventrouter.ForEvents(slackClient, configAgent.Config, gcsClient))))
 	server := &http.Server{Addr: ":" + strconv.Itoa(o.port), Handler: mux}
 
 	health.ServeReady()

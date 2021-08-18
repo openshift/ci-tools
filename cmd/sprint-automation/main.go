@@ -78,15 +78,14 @@ func main() {
 	level, _ := logrus.ParseLevel(o.logLevel)
 	logrus.SetLevel(level)
 
-	secretAgent := &secret.Agent{}
-	if err := secretAgent.Start([]string{o.slackTokenPath}); err != nil {
+	if err := secret.Add(o.slackTokenPath); err != nil {
 		logrus.WithError(err).Fatal("Error starting secrets agent.")
 	}
 
 	var blocks []slack.Block
 
-	slackClient := slack.New(string(secretAgent.GetSecret(o.slackTokenPath)))
-	pagerDutyClient, err := o.pagerDutyOptions.Client(secretAgent)
+	slackClient := slack.New(string(secret.GetSecret(o.slackTokenPath)))
+	pagerDutyClient, err := o.pagerDutyOptions.Client()
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not initialize PagerDuty client.")
 	}
@@ -101,7 +100,7 @@ func main() {
 	}
 	blocks = append(blocks, getPagerDutyBlocks(userIdsByRole)...)
 
-	prowJiraClient, err := o.jiraOptions.Client(secretAgent)
+	prowJiraClient, err := o.jiraOptions.Client()
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not initialize Jira client.")
 	}

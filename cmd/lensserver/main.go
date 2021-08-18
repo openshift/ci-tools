@@ -50,7 +50,7 @@ func main() {
 		logrus.WithError(err).Fatal("Error starting config agent.")
 	}
 
-	ja := jobs.NewJobAgent(context.Background(), &fakePJListingClient{}, false, false, nil, configAgent.Config)
+	ja := jobs.NewJobAgent(context.Background(), &fakePJListingClient{}, false, false, nil, nil, configAgent.Config)
 	ja.Start()
 
 	opener, err := io.NewOpener(interrupts.Context(), o.storage.GCSCredentialsFile, o.storage.S3CredentialsFile)

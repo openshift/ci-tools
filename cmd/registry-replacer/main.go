@@ -109,16 +109,14 @@ func main() {
 
 	// Already create the client here if needed to make sure we fail asap if there is an issue
 	var githubClient pgithub.Client
-	var secretAgent *secret.Agent
 	if opts.TokenPath != "" {
-		secretAgent = &secret.Agent{}
-		if err := secretAgent.Start([]string{opts.TokenPath}); err != nil {
+		if err := secret.Add(opts.TokenPath); err != nil {
 			logrus.WithError(err).Fatal("Failed to load github token")
 		}
 	}
 	if opts.createPR {
 		var err error
-		githubClient, err = opts.GitHubClient(secretAgent, false)
+		githubClient, err = opts.GitHubClient(false)
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to construct githubClient")
 		}
@@ -134,10 +132,10 @@ func main() {
 	}
 
 	var credentials *usernameToken
-	if secretAgent != nil {
+	if opts.TokenPath != "" {
 		credentials = &usernameToken{
 			username: opts.githubUserName,
-			token:    string(secretAgent.GetSecret(opts.TokenPath)),
+			token:    string(secret.GetSecret(opts.TokenPath)),
 		}
 	}
 
@@ -197,7 +195,7 @@ func main() {
 		return
 	}
 
-	if err := upsertPR(githubClient, opts.configDir, opts.githubUserName, secretAgent.GetSecret(opts.TokenPath), opts.selfApprove, opts.pruneUnusedReplacements, opts.ensureCorrectPromotionDockerfile); err != nil {
+	if err := upsertPR(githubClient, opts.configDir, opts.githubUserName, secret.GetSecret(opts.TokenPath), opts.selfApprove, opts.pruneUnusedReplacements, opts.ensureCorrectPromotionDockerfile); err != nil {
 		logrus.WithError(err).Fatal("Failed to create PR")
 	}
 }
@@ -457,8 +455,8 @@ func upsertPR(gc pgithub.Client, dir, githubUsername string, token []byte, selfA
 	}
 
 	censor := censor{secret: token}
-	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: &censor}
-	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: &censor}
+	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: censor.Censor}
+	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: censor.Censor}
 
 	const targetBranch = "registry-replacer"
 	if err := bumper.GitCommitAndPush(

@@ -419,6 +419,16 @@ func TestReplacer(t *testing.T) {
 							Namespace: "namespace",
 							Tag:       "test-1.0",
 						},
+						"project_directory_image_build_image1": {
+							Name:      "project_directory_image_build_image1",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
+						"project_directory_image_build_image2": {
+							Name:      "project_directory_image_build_image2",
+							Namespace: "namespace",
+							Tag:       "test-1.0",
+						},
 						"rpm_image_injection_image": {
 							Name:      "rpm_image_injection_image",
 							Namespace: "namespace",
@@ -463,6 +473,14 @@ func TestReplacer(t *testing.T) {
 					}},
 					{PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
 						From: "pipeline_image_cache_image",
+					}},
+					{ProjectDirectoryImageBuildInputs: &api.ProjectDirectoryImageBuildInputs{
+						Inputs: map[string]api.ImageBuildInputs{"project_directory_image_build_image1": {As: []string{"cool-story"}}},
+					}},
+					{ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							Inputs: map[string]api.ImageBuildInputs{"project_directory_image_build_image2": {As: []string{"cool-story"}}},
+						},
 					}},
 					{RPMImageInjectionStepConfiguration: &api.RPMImageInjectionStepConfiguration{
 						From: "rpm_image_injection_image",

@@ -671,14 +671,17 @@ func pruneUnusedBaseImages(config *api.ReleaseBuildConfiguration, resolvedConfig
 			usedBaseImages.Insert(string(step.OutputImageTagStepConfiguration.From))
 		case step.PipelineImageCacheStepConfiguration != nil:
 			usedBaseImages.Insert(string(step.PipelineImageCacheStepConfiguration.From))
+		case step.ProjectDirectoryImageBuildInputs != nil:
+			getImageBuildInputImages(config, step.ProjectDirectoryImageBuildInputs.Inputs, &usedBaseImages)
+		case step.ProjectDirectoryImageBuildStepConfiguration != nil:
+			getImageBuildInputImages(config, step.ProjectDirectoryImageBuildStepConfiguration.Inputs, &usedBaseImages)
 		case step.RPMImageInjectionStepConfiguration != nil:
 			usedBaseImages.Insert(string(step.RPMImageInjectionStepConfiguration.From))
 		case step.SourceStepConfiguration != nil:
 			usedBaseImages.Insert(string(step.SourceStepConfiguration.From))
 		case step.TestStepConfiguration != nil:
 			getTestStepImages(resolvedConfig, &usedBaseImages, step.TestStepConfiguration)
-		case step.ProjectDirectoryImageBuildStepConfiguration != nil || step.ProjectDirectoryImageBuildInputs != nil ||
-			step.ReleaseImagesTagStepConfiguration != nil || step.ResolvedReleaseImagesStepConfiguration != nil || step.RPMServeStepConfiguration != nil:
+		case step.ReleaseImagesTagStepConfiguration != nil || step.ResolvedReleaseImagesStepConfiguration != nil || step.RPMServeStepConfiguration != nil:
 			// no op
 		default:
 			return fmt.Errorf("unsupported step configuration provided when pruning base images")
@@ -750,6 +753,13 @@ func getOperatorImages(config *api.ReleaseBuildConfiguration, usedBaseImages set
 func getBundleSourceImages(config *api.ReleaseBuildConfiguration, images *sets.String, step *api.BundleSourceStepConfiguration) {
 	for _, substitution := range step.Substitutions {
 		_, name, _ := config.DependencyParts(api.StepDependency{Name: substitution.With}, nil)
+		images.Insert(name)
+	}
+}
+
+func getImageBuildInputImages(config *api.ReleaseBuildConfiguration, inputs map[string]api.ImageBuildInputs, images *sets.String) {
+	for input := range inputs {
+		_, name, _ := config.DependencyParts(api.StepDependency{Name: input}, nil)
 		images.Insert(name)
 	}
 }

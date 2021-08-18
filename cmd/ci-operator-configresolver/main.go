@@ -168,12 +168,19 @@ func main() {
 	http.HandleFunc("/resolve", handler(registryserver.ResolveLiteralConfig(registryAgent, configresolverMetrics)).ServeHTTP)
 	http.HandleFunc("/configGeneration", handler(getConfigGeneration(configAgent)).ServeHTTP)
 	http.HandleFunc("/registryGeneration", handler(getRegistryGeneration(registryAgent)).ServeHTTP)
+	http.HandleFunc("/readyz", func(_ http.ResponseWriter, _ *http.Request) {})
 	interrupts.ListenAndServe(&http.Server{Addr: ":" + strconv.Itoa(o.port)}, o.gracePeriod)
 	uiServer := &http.Server{
 		Addr:    ":" + strconv.Itoa(o.uiPort),
 		Handler: uihandler(webreg.WebRegHandler(registryAgent, configAgent)),
 	}
 	interrupts.ListenAndServe(uiServer, o.gracePeriod)
-	health.ServeReady()
+	health.ServeReady(func() bool {
+		resp, err := http.DefaultClient.Get("http://127.0.0.1:" + strconv.Itoa(o.port) + "/readyz")
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return err == nil && resp.StatusCode == 200
+	})
 	interrupts.WaitForGracefulShutdown()
 }

@@ -23,30 +23,40 @@ const (
 	RegPullCreds          = "registry-pull-credentials"
 	RegPullCredsAll       = "registry-pull-credentials-all"
 	BuildUFarm            = "build_farm"
+	DotDockerConfigJson   = ".dockerconfigjson"
+	Vsphere               = "vsphere"
+	Auth                  = "auth"
+	Email                 = "email"
+	Arm01                 = "arm01"
+	Hive                  = "hive"
 )
 
 func updateCiSecretBootstrapConfig(o options) {
-	ciSecBootFile := filepath.Join(o.releaseRepo, "core-services", "ci-secret-bootstrap", "_config.yaml")
+	ciSecBootDir := filepath.Join(o.releaseRepo, "core-services", "ci-secret-bootstrap")
+	ciSecBootConfigFile := filepath.Join(ciSecBootDir, "_config.yaml")
+	fmt.Printf("Updating ci-secret-bootstrap: %s\n", ciSecBootConfigFile)
 	c := &secretbootstrap.Config{}
-	loadConfig(ciSecBootFile, c)
-	for _, groupName := range []string{"build_farm", "non_app_ci", "non_app_ci_x86"} {
+	loadConfig(ciSecBootConfigFile, c)
+	for _, groupName := range []string{BuildUFarm, "non_app_ci", "non_app_ci_x86"} {
 		c.ClusterGroups[groupName] = append(c.ClusterGroups[groupName], o.clusterName)
 	}
-
+	c.UserSecretsTargetClusters = append(c.UserSecretsTargetClusters, o.clusterName)
 	updatePodScalerSecret(c, o)
 	updateBuildFarmSecret(c, o)
-	appendSecret(generateCiOperatorSecret, c, o)
 	updateDPTPConManSecret(c, o)
 	updateRehearseSecret(c, o)
 	updateChatBotSecret(c, o)
+	updateExistingRegistryPullCredsAllSecrets(c, o)
 	appendSecret(generateRegistryPushCredsSecret, c, o)
 	appendSecret(generateRegistryPullCredsSecret, c, o)
-	updateRegPullCredsAllSecret(c, o)
-	saveConfig(ciSecBootFile, c)
+	appendSecret(generateCiOperatorSecret, c, o)
+	generateRegistryPullCredsAllSecrets(c, o)
+	saveConfig(ciSecBootConfigFile, c)
 }
 
 func appendSecret(generateFunction func(options) secretbootstrap.SecretConfig, c *secretbootstrap.Config, o options) {
 	secret := generateFunction(o)
+	fmt.Printf("Creating new secret with 'to' of: %v\n", secret.To)
 	c.Secrets = append(c.Secrets, secret)
 }
 
@@ -79,10 +89,9 @@ func generateRegistryPushCredsSecret(o options) secretbootstrap.SecretConfig {
 		},
 	}
 	from := generatePushPullSecretFrom(o.clusterName, items)
-	//TODO: will the following still function???
 	sc := secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
-			".dockerconfigjson": from,
+			DotDockerConfigJson: from,
 		},
 		To: []secretbootstrap.SecretContext{
 			generateDCJSecretConfigTo(RegPushCredCiCentral, Ci, o.clusterName),
@@ -106,10 +115,9 @@ func generateRegistryPullCredsSecret(o options) secretbootstrap.SecretConfig {
 		},
 	}
 	from := generatePushPullSecretFrom(o.clusterName, items)
-	//TODO: will the following still function???
 	sc := secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
-			".dockerconfigjson": from,
+			DotDockerConfigJson: from,
 		},
 		To: []secretbootstrap.SecretContext{
 			generateDCJSecretConfigTo(RegPullCreds, Ci, o.clusterName),
@@ -157,7 +165,7 @@ func updatePodScalerSecret(c *secretbootstrap.Config, o options) {
 	name := fmt.Sprintf("%s-%s", PodScaler, Credentials)
 	key := fmt.Sprintf("%s.%s", o.clusterName, Config)
 	field := fmt.Sprintf("%s.%s.%s.%s", Sa, PodScaler, o.clusterName, Config)
-	appendSecretFromFieldItem(c, name, key, secretbootstrap.ItemContext{
+	appendSecretItemContext(c, name, AppDotCi, key, secretbootstrap.ItemContext{
 		Field: field,
 		Item:  PodScaler,
 	})
@@ -166,56 +174,129 @@ func updatePodScalerSecret(c *secretbootstrap.Config, o options) {
 func updateDPTPConManSecret(c *secretbootstrap.Config, o options) {
 	key := fmt.Sprintf("%s.%s", o.clusterName, strings.ToLower(Kubeconfig))
 	field := fmt.Sprintf("%s.%s.%s.%s", Sa, DPTPControllerManager, o.clusterName, Config)
-	appendSecretFromFieldItem(c, DPTPControllerManager, key, secretbootstrap.ItemContext{
+	appendSecretItemContext(c, DPTPControllerManager, AppDotCi, key, secretbootstrap.ItemContext{
 		Field: field,
 		Item:  BuildFarm,
 	})
 }
 
 func updateRehearseSecret(c *secretbootstrap.Config, o options) {
-	sc, err := findSecretConfig(PjRehearse, "", c.Secrets)
-	check(err)
 	keyAndField := fmt.Sprintf("%s.%s.%s.%s", Sa, CiOperator, o.clusterName, Config)
-	sc.From[keyAndField] = secretbootstrap.ItemContext{
+	appendSecretItemContext(c, PjRehearse, "", keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
 		Item:  BuildFarm,
-	}
+	})
 }
 
 func updateChatBotSecret(c *secretbootstrap.Config, o options) {
 	name := fmt.Sprintf("%s-%s-%s", Ci, ChatBot, Kubeconfigs)
 	keyAndField := fmt.Sprintf("%s.%s-%s.%s.%s", Sa, Ci, ChatBot, o.clusterName, Config)
 	item := fmt.Sprintf("%s-%s", Ci, ChatBot)
-	appendSecretFromFieldItem(c, name, keyAndField, secretbootstrap.ItemContext{
+	appendSecretItemContext(c, name, AppDotCi, keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
 		Item:  item,
 	})
 }
 
-func appendSecretFromFieldItem(c *secretbootstrap.Config, name string, key string, value secretbootstrap.ItemContext) {
-	sc, err := findSecretConfig(name, AppDotCi, c.Secrets)
+func appendSecretItemContext(c *secretbootstrap.Config, name string, cluster string, key string, value secretbootstrap.ItemContext) {
+	fmt.Printf("Appending secret item to: {name: %s, cluster: %s}\n", name, cluster)
+	sc, err := findSecretConfig(name, cluster, c.Secrets)
 	check(err)
 	sc.From[key] = value
 }
 
-func updateRegPullCredsAllSecret(c *secretbootstrap.Config, o options) {
-	appendRegistrySecretFromItem(c, RegPullCredsAll, secretbootstrap.DockerConfigJSONData{
-		AuthField:   "token_image-puller_build03_reg_auth_value.txt",
-		Item:        BuildUFarm,
-		RegistryURL: "registry.build03.ci.openshift.org",
-	})
+func updateExistingRegistryPullCredsAllSecrets(c *secretbootstrap.Config, o options) {
+	for _, cluster := range c.UserSecretsTargetClusters {
+		if cluster != Hive && cluster != Arm01 {
+			appendRegistrySecretItemContext(c, RegPullCredsAll, cluster, secretbootstrap.DockerConfigJSONData{
+				AuthField:   fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", o.clusterName),
+				Item:        BuildUFarm,
+				RegistryURL: fmt.Sprintf("registry.%s.ci.openshift.org", o.clusterName),
+			})
+		}
+	}
 }
 
-func appendRegistrySecretFromItem(c *secretbootstrap.Config, name string, value secretbootstrap.DockerConfigJSONData) {
-	sc, err := findSecretConfig(name, AppDotCi, c.Secrets)
+func generateRegistryPullCredsAllSecrets(c *secretbootstrap.Config, o options) {
+	items := []secretbootstrap.DockerConfigJSONData{
+		{
+			AuthField:   "token_image-puller_ci_reg_auth_value.txt",
+			Item:        BuildUFarm,
+			RegistryURL: "registry.svc.ci.openshift.org",
+		},
+		{
+			AuthField:   Auth,
+			Item:        "cloud.openshift.com-pull-secret",
+			RegistryURL: "cloud.openshift.com",
+			EmailField:  Email,
+		},
+		{
+			AuthField:   Auth,
+			Item:        "quay.io-pull-secret",
+			RegistryURL: "quay.io",
+			EmailField:  Email,
+		},
+		{
+			AuthField:   Auth,
+			Item:        "registry.connect.redhat.com-pull-secret",
+			RegistryURL: "registry.connect.redhat.com",
+			EmailField:  Email,
+		},
+		{
+			AuthField:   Auth,
+			Item:        "registry.redhat.io-pull-secret",
+			RegistryURL: "registry.redhat.io",
+			EmailField:  Email,
+		},
+	}
+	for _, cluster := range c.UserSecretsTargetClusters {
+		if cluster != Hive {
+			items = append(items, secretbootstrap.DockerConfigJSONData{
+				AuthField:   fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", cluster),
+				Item:        BuildUFarm,
+				RegistryURL: getRegistryUrlFor(cluster),
+			})
+		}
+	}
+	from := generatePushPullSecretFrom(o.clusterName, items)
+	sc := secretbootstrap.SecretConfig{
+		From: map[string]secretbootstrap.ItemContext{
+			DotDockerConfigJson: from,
+		},
+		To: []secretbootstrap.SecretContext{
+			generateDCJSecretConfigTo(RegPullCredsAll, Ci, o.clusterName),
+			generateDCJSecretConfigTo(RegPullCredsAll, fmt.Sprintf("%s-%s", Test, Credentials), o.clusterName),
+		},
+	}
+	fmt.Printf("Creating new secret with 'to' of: %v\n", sc.To)
+	c.Secrets = append(c.Secrets, sc)
+}
+
+func getRegistryUrlFor(cluster string) string {
+	switch cluster {
+	case Vsphere:
+		return "registry.apps.build01-us-west-2.vmc.ci.openshift.org"
+	case AppDotCi:
+		return "registry.ci.openshift.org"
+	case Arm01:
+		return "registry.arm-build01.arm-build.devcluster.openshift.com"
+	default:
+		return fmt.Sprintf("registry.%s.ci.openshift.org", cluster)
+	}
+}
+
+func appendRegistrySecretItemContext(c *secretbootstrap.Config, name string, cluster string, value secretbootstrap.DockerConfigJSONData) {
+	fmt.Printf("Appending registry secret item to: {name: %s, cluster: %s}\n", name, cluster)
+	sc, err := findSecretConfig(name, cluster, c.Secrets)
 	check(err)
-	data := append(sc.From[".dockerconfigjson"].DockerConfigJSONData, value)
-	sc.From[".dockerconfigjson"] = secretbootstrap.ItemContext{
+	data := append(sc.From[DotDockerConfigJson].DockerConfigJSONData, value)
+	sc.From[DotDockerConfigJson] = secretbootstrap.ItemContext{
 		DockerConfigJSONData: data,
 	}
 }
 
 func updateBuildFarmSecret(c *secretbootstrap.Config, o options) {
+	//TODO: this function will likely need to be modified to support the new schema
 	buildFarmCreds, err := findSecretConfig(fmt.Sprintf("%s-%s", BuildFarm, Credentials), AppDotCi, c.Secrets)
 	check(err)
 	for _, s := range []string{ConfigUpdater, Crier, Deck, Hook, ProwControllerManager, Sinker} {

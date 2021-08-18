@@ -207,7 +207,7 @@ func appendSecretItemContext(c *secretbootstrap.Config, name string, cluster str
 
 func updateExistingRegistryPullCredsAllSecrets(c *secretbootstrap.Config, o options) {
 	for _, cluster := range c.UserSecretsTargetClusters {
-		if cluster != Hive && cluster != Arm01 {
+		if cluster != Hive && cluster != Arm01 && cluster != o.clusterName {
 			appendRegistrySecretItemContext(c, RegPullCredsAll, cluster, secretbootstrap.DockerConfigJSONData{
 				AuthField:   fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", o.clusterName),
 				Item:        BuildUFarm,
@@ -322,5 +322,5 @@ func findSecretConfig(name string, cluster string, sc []secretbootstrap.SecretCo
 	if idx != -1 {
 		return &sc[idx], nil
 	}
-	return &secretbootstrap.SecretConfig{}, fmt.Errorf("couldn't find SecretConfig with name: %s", name)
+	return &secretbootstrap.SecretConfig{}, fmt.Errorf("couldn't find SecretConfig with name: %s and cluster: %s", name, cluster)
 }

@@ -291,7 +291,8 @@ func fromConfig(
 				if err != nil {
 					return nil, nil, fmt.Errorf("failed to get \"CLUSTER_TYPE\" parameter: %w", err)
 				}
-				lease, err := api.LeaseTypeFromClusterType(clusterType)
+				clusterOwner, _ := params.Get("CLUSTER_OWNER")
+				lease, err := api.LeaseTypeFromClusterType(clusterType, clusterOwner)
 				if err != nil {
 					return nil, nil, fmt.Errorf("cannot resolve lease type from cluster type: %w", err)
 				}

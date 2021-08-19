@@ -1267,10 +1267,14 @@ func (p ClusterProfile) LeaseType() string {
 }
 
 // LeaseTypeFromClusterType maps cluster types to lease types
-func LeaseTypeFromClusterType(t string) (string, error) {
+func LeaseTypeFromClusterType(t, owner string) (string, error) {
 	switch t {
 	case "aws", "aws-arm64", "alibaba", "azure4", "azure-arc", "azurestack", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "kubevirt", "aws-cpaas", "osd-ephemeral":
-		return t + "-quota-slice", nil
+		leaseType := t
+		if owner != "" {
+			leaseType = fmt.Sprintf("%s-%s", t, owner)
+		}
+		return leaseType + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)
 	}

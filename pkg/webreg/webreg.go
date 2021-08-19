@@ -23,6 +23,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/registry"
+	registryserver "github.com/openshift/ci-tools/pkg/registry/server"
 )
 
 var ciOperatorRefRendered []byte
@@ -42,11 +43,7 @@ func init() {
 }
 
 const (
-	OrgQuery     = "org"
-	RepoQuery    = "repo"
-	BranchQuery  = "branch"
-	VariantQuery = "variant"
-	TestQuery    = "test"
+	TestQuery = "test"
 )
 
 const htmlPageStart = `
@@ -1501,50 +1498,17 @@ func findConfigForJob(testName string, config api.ReleaseBuildConfiguration) (ap
 	return api.MultiStageTestConfiguration{}, fmt.Errorf("Could not find job %s. Job either does not exist or is not a multi stage test", testName)
 }
 
-func MetadataFromQuery(w http.ResponseWriter, r *http.Request) (api.Metadata, error) {
-	if r.Method != "GET" {
-		w.WriteHeader(http.StatusNotImplemented)
-		err := fmt.Errorf("expected GET, got %s", r.Method)
-		if _, errWrite := w.Write([]byte(http.StatusText(http.StatusNotImplemented))); errWrite != nil {
-			return api.Metadata{}, fmt.Errorf("%s and writing the response body failed with %w", err.Error(), errWrite)
-		}
-		return api.Metadata{}, err
-	}
-
-	var metadata api.Metadata
-	for query, field := range map[string]*string{
-		OrgQuery:    &metadata.Org,
-		RepoQuery:   &metadata.Repo,
-		BranchQuery: &metadata.Branch,
-	} {
-		value := r.URL.Query().Get(query)
-		if value == "" {
-			MissingQuery(w, query)
-			return metadata, fmt.Errorf("missing query %s", query)
-		}
-		*field = value
-	}
-	metadata.Variant = r.URL.Query().Get(VariantQuery)
-
-	return metadata, nil
-}
-
-func MissingQuery(w http.ResponseWriter, field string) {
-	w.WriteHeader(http.StatusBadRequest)
-	fmt.Fprintf(w, "%s query missing or incorrect", field)
-}
-
 func jobHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
-	metadata, err := MetadataFromQuery(w, r)
+	metadata, err := registryserver.MetadataFromQuery(w, r)
 	if err != nil {
 		return
 	}
 	test := r.URL.Query().Get(TestQuery)
 	if test == "" {
-		MissingQuery(w, TestQuery)
+		registryserver.MissingQuery(w, TestQuery)
 		return
 	}
 	configs, err := confAgent.GetMatchingConfig(metadata)

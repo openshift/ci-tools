@@ -48,7 +48,8 @@ import (
 // branches of those releases.
 type importReleaseStep struct {
 	// name is the name of the release we're importing, like 'latest'
-	name string
+	name   string
+	target string
 	// pullSpec is the fully-resolved pull spec of the release payload image we are importing
 	pullSpec string
 	// append determines if we wait for other processes to create images first
@@ -373,9 +374,7 @@ func (s *importReleaseStep) Provides() api.ParameterMap {
 	}
 }
 
-func (s *importReleaseStep) Name() string {
-	return fmt.Sprintf("[release:%s]", s.name)
-}
+func (s *importReleaseStep) Name() string { return s.target }
 
 func (s *importReleaseStep) Description() string {
 	return fmt.Sprintf("Import the release payload %q from an external source", s.name)
@@ -386,7 +385,8 @@ func (s *importReleaseStep) Objects() []ctrlruntimeclient.Object {
 }
 
 // ImportReleaseStep imports an existing update payload image
-func ImportReleaseStep(name string,
+func ImportReleaseStep(
+	name, target string,
 	pullSpec string,
 	append bool,
 	resources api.ResourceConfiguration,
@@ -396,6 +396,7 @@ func ImportReleaseStep(name string,
 	overrideCLIReleaseExtractImage *coreapi.ObjectReference) api.Step {
 	return &importReleaseStep{
 		name:                           name,
+		target:                         target,
 		pullSpec:                       pullSpec,
 		append:                         append,
 		resources:                      resources,

@@ -408,7 +408,7 @@ func main() {
 
 	configs, err := getAllConfigs(o.releaseRepoPath)
 	if err != nil {
-		logrus.Fatal("couldn't get the prow and ci-operator configs")
+		logrus.WithError(err).Fatal("couldn't get the prow and ci-operator configs")
 	}
 	prowConfig := configs.Prow.ProwConfig
 

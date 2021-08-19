@@ -65,7 +65,7 @@ clean:
 #
 # Example:
 #   make format
-format: cmd/vault-secret-collection-manager/index.js
+format: cmd/vault-secret-collection-manager/index.js frontend-format
 	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )
 .PHONY: format
 
@@ -117,7 +117,8 @@ cmd/vault-secret-collection-manager/index.js: cmd/vault-secret-collection-manage
 #
 # Example:
 #   make production-install
-production-install: cmd/vault-secret-collection-manager/index.js
+production-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/frontend/dist
+	rm -f cmd/pod-scaler/frontend/dist/dummy # we keep this file in git to keep the thing compiling without static assets
 	hack/install.sh
 .PHONY: production-install
 
@@ -126,7 +127,7 @@ production-install: cmd/vault-secret-collection-manager/index.js
 #
 # Example:
 #   make production-install
-race-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/frontend/node_modules
+race-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/frontend/dist
 	hack/install.sh race
 
 # Run integration tests.
@@ -235,7 +236,7 @@ imports:
 	go run ./vendor/github.com/coreydaley/openshift-goimports/ -m github.com/openshift/ci-tools
 
 .PHONY: verify-gen
-verify-gen: generate
+verify-gen: generate cmd/pod-scaler/frontend/dist/dummy # we need the dummy file to exist so there's no diff on it
 	@# Don't add --quiet here, it disables --exit code in the git 1.7 we have in CI, making this unusuable
 	if  ! git diff --exit-code; then \
 		echo "generated files are out of date, run make generate"; exit 1; \
@@ -280,26 +281,50 @@ $(TMPDIR)/boskos:
 	chmod +x $(TMPDIR)/boskos
 	rm -rf $(TMPDIR)/image
 
-local-pod-scaler: $(TMPDIR)/prometheus $(TMPDIR)/promtool
+local-pod-scaler: $(TMPDIR)/prometheus $(TMPDIR)/promtool cmd/pod-scaler/frontend/dist
 	$(eval export PATH=${PATH}:$(TMPDIR))
 	go run -tags e2e,e2e_framework ./test/e2e/pod-scaler/local/main.go
 .PHONY: local-pod-scaler
 
+.PHONY: cmd/pod-scaler/frontend/dist
+cmd/pod-scaler/frontend/dist: cmd/pod-scaler/frontend/node_modules
+	@$(MAKE) npm NPM_ARGS="run build"
+	@$(MAKE) cmd/pod-scaler/frontend/dist/dummy
+
+local-pod-scaler-ui: cmd/pod-scaler/frontend/node_modules $(HOME)/.cache/pod-scaler/steps/container_memory_working_set_bytes.json
+	go run -tags e2e,e2e_framework ./test/e2e/pod-scaler/local/main.go --cache-dir $(HOME)/.cache/pod-scaler --serve-dev-ui
+.PHONY: local-pod-scaler
+
+$(HOME)/.cache/pod-scaler/steps/container_memory_working_set_bytes.json:
+	mkdir -p $(HOME)/.cache/pod-scaler
+	gsutil -m cp -r gs://origin-ci-resource-usage-data/* $(HOME)/.cache/pod-scaler
+
 frontend-checks: cmd/pod-scaler/frontend/node_modules
-	echo npm --prefix cmd/pod-scaler/frontend run ci-checks
+	@$(MAKE) npm NPM_ARGS="run ci-checks"
 .PHONY: frontend-checks
 
 cmd/pod-scaler/frontend/node_modules:
-	echo npm --prefix cmd/pod-scaler/frontend install
+	@$(MAKE) npm NPM_ARGS="ci"
+
+cmd/pod-scaler/frontend/dist/dummy:
+	echo "file used to keep go embed happy" > cmd/pod-scaler/frontend/dist/dummy
 
 .PHONY: frontend-format
 frontend-format: cmd/pod-scaler/frontend/node_modules
-	echo npm --prefix cmd/pod-scaler/frontend run format
+	@$(MAKE) npm NPM_ARGS="run format"
+
+ifdef CI
+NPM_FLAGS = 'npm_config_cache=/go/.npm'
+endif
+
+.PHONY: npm
+npm:
+	env $(NPM_FLAGS) npm --prefix cmd/pod-scaler/frontend $(NPM_ARGS)
 
 .PHONY: verify-frontend-format
 verify-frontend-format: frontend-format
 	@# Don't add --quiet here, it disables --exit code in the git 1.7 we have in CI, making this unusuable
-	if  ! git diff --exit-code; then \
+	if  ! git diff --exit-code cmd/pod-scaler/frontend; then \
 		echo "frontend files are not formatted, run make frontend-format"; exit 1; \
 	fi
 

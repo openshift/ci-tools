@@ -1,3 +1,4 @@
+//go:build e2e_framework
 // +build e2e_framework
 
 package framework

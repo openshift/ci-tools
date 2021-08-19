@@ -63,12 +63,11 @@ func main() {
 		logrus.Fatalf("Invalid options: %v", err)
 	}
 
-	secretAgent := &secret.Agent{}
-	if err := secretAgent.Start([]string{o.github.TokenPath}); err != nil {
+	if err := secret.Add(o.github.TokenPath); err != nil {
 		logrus.WithError(err).Fatal("Error starting secrets agent.")
 	}
 
-	client, err := o.github.GitHubClient(secretAgent, o.dryRun)
+	client, err := o.github.GitHubClient(o.dryRun)
 	if err != nil {
 		logrus.WithError(err).Fatal("Error creating github client.")
 	}

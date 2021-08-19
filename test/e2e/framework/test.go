@@ -1,3 +1,4 @@
+//go:build e2e_framework
 // +build e2e_framework
 
 package framework
@@ -70,7 +71,7 @@ func Run(top *testing.T, name string, f TestFunc, accessories ...*Accessory) {
 		for _, accessory := range accessories {
 			// binding the accessory to ctx ensures its lifetime is only
 			// as long as the test we are running in this specific case
-			accessory.RunFromFrameworkRunner(bottom, ctx)
+			accessory.RunFromFrameworkRunner(bottom, ctx, false)
 			cmd.AddArgs(accessory.ClientFlags()...)
 			go func(a *Accessory) {
 				defer wg.Done()

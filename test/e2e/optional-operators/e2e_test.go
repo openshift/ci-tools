@@ -1,3 +1,4 @@
+//go:build optional_operators
 // +build optional_operators
 
 package optional_operators

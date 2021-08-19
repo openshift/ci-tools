@@ -161,7 +161,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 				secrets = append(secrets, &api.Secret{Name: api.HiveControlPlaneKubeconfigSecret})
 			}
 			podSpec = generateCiOperatorPodSpec(info, secrets, []string{element.As}, additionalArgs...)
-		} else if element.MultiStageTestConfiguration != nil {
+		} else if element.MultiStageTestConfiguration != nil || element.MultiStageTestConfigurationLiteral != nil {
 			podSpec = generatePodSpecMultiStage(info, &element, configSpec.Releases != nil || element.ClusterClaim != nil)
 		} else {
 			var release string
@@ -309,7 +309,12 @@ func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secre
 }
 
 func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepConfiguration, needsPullSecret bool) *corev1.PodSpec {
-	profile := test.MultiStageTestConfiguration.ClusterProfile
+	var profile api.ClusterProfile
+	if test.MultiStageTestConfiguration != nil {
+		profile = test.MultiStageTestConfiguration.ClusterProfile
+	} else {
+		profile = test.MultiStageTestConfigurationLiteral.ClusterProfile
+	}
 	var secrets []*cioperatorapi.Secret
 	if needsPullSecret {
 		// If the ci-operator configuration resolves an official release,
@@ -328,16 +333,29 @@ func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepCo
 		secrets = append(secrets, &api.Secret{Name: api.HiveControlPlaneKubeconfigSecret})
 	}
 	podSpec := generateCiOperatorPodSpec(info, secrets, []string{test.As}, additionalArgs...)
-	if profile == "" {
-		return podSpec
+
+	if profile != "" {
+		podSpec.Volumes = append(podSpec.Volumes, generateClusterProfileVolume(profile, profile.ClusterType()))
+		clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
+		container := &podSpec.Containers[0]
+		container.Args = append(container.Args, fmt.Sprintf("--secret-dir=%s", clusterProfilePath))
+		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{Name: "cluster-profile", MountPath: clusterProfilePath})
 	}
-	podSpec.Volumes = append(podSpec.Volumes, generateClusterProfileVolume(profile, profile.ClusterType()))
-	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
-	container := &podSpec.Containers[0]
-	container.Args = append(container.Args, fmt.Sprintf("--secret-dir=%s", clusterProfilePath))
-	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{Name: "cluster-profile", MountPath: clusterProfilePath})
-	addLeaseClient(podSpec)
+
+	if profile != "" || testContainsLease(test) {
+		addLeaseClient(podSpec)
+	}
+
 	return podSpec
+}
+
+func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
+	// this is predicated upon the config being fully resolved at this time.
+	if test.MultiStageTestConfigurationLiteral == nil {
+		return false
+	}
+
+	return len(api.LeasesForTest(test.MultiStageTestConfigurationLiteral)) > 0
 }
 
 func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperatorapi.TestStepConfiguration) *corev1.PodSpec {
@@ -444,7 +462,7 @@ func generatePresubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.Po
 	base := generateJobBase(name, jc.PresubmitPrefix, info, podSpec, true, pathAlias, jobRelease, skipCloning)
 	return &prowconfig.Presubmit{
 		JobBase:   base,
-		AlwaysRun: true,
+		AlwaysRun: runIfChanged == "" && skipIfOnlyChanged == "",
 		Brancher:  prowconfig.Brancher{Branches: sets.NewString(ExactlyBranch(info.Branch), FeatureBranch(info.Branch)).List()},
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/prow/%s", shortName),

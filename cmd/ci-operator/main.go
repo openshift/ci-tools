@@ -358,6 +358,7 @@ type options struct {
 	inputHash                  string
 	secrets                    []*coreapi.Secret
 	templates                  []*templateapi.Template
+	graphConfig                api.GraphConfiguration
 	configSpec                 *api.ReleaseBuildConfiguration
 	jobSpec                    *api.JobSpec
 	clusterConfig              *rest.Config
@@ -517,7 +518,10 @@ func (o *options) Complete() error {
 	if err := validation.IsValidResolvedConfiguration(o.configSpec); err != nil {
 		return results.ForReason("validating_config").ForError(err)
 	}
-
+	o.graphConfig = defaults.FromConfigStatic(o.configSpec)
+	if err := validation.IsValidGraphConfiguration(o.graphConfig.Steps); err != nil {
+		return results.ForReason("validating_config").ForError(err)
+	}
 	if o.verbose {
 		config, _ := yaml.Marshal(o.configSpec)
 		logrus.WithField("config", string(config)).Trace("Resolved configuration.")
@@ -792,7 +796,7 @@ func (o *options) Run() []error {
 	o.resolveConsoleHost()
 
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig, o.consoleHost)
+	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig, o.consoleHost)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -1609,11 +1613,10 @@ func (o *options) saveNamespaceArtifacts() {
 }
 
 func loadLeaseCredentials(leaseServerCredentialsFile string) (string, func() []byte, error) {
-	sa := &secret.Agent{}
-	if err := sa.Start([]string{leaseServerCredentialsFile}); err != nil {
-		return "", nil, fmt.Errorf("failed to start secret agent on file %s: %s", leaseServerCredentialsFile, string(sa.Censor([]byte(err.Error()))))
+	if err := secret.Add(leaseServerCredentialsFile); err != nil {
+		return "", nil, fmt.Errorf("failed to start secret agent on file %s: %s", leaseServerCredentialsFile, string(secret.Censor([]byte(err.Error()))))
 	}
-	splits := strings.Split(string(sa.GetSecret(leaseServerCredentialsFile)), ":")
+	splits := strings.Split(string(secret.GetSecret(leaseServerCredentialsFile)), ":")
 	if len(splits) != 2 {
 		return "", nil, fmt.Errorf("got invalid content of lease server credentials file which must be of the form '<username>:<passwrod>'")
 	}
@@ -1980,7 +1983,9 @@ func (o *options) getResolverInfo(jobSpec *api.JobSpec) *load.ResolverInfo {
 	// address and variant can only be set via options
 	info := &load.ResolverInfo{
 		Address: o.resolverAddress,
-		Variant: o.variant,
+		Metadata: api.Metadata{
+			Variant: o.variant,
+		},
 	}
 
 	allRefs := jobSpec.ExtraRefs

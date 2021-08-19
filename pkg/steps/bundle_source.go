@@ -123,9 +123,7 @@ func (s *bundleSourceStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func (s *bundleSourceStep) Name() string {
-	return string(api.PipelineImageStreamTagReferenceBundleSource)
-}
+func (s *bundleSourceStep) Name() string { return s.config.TargetName() }
 
 func (s *bundleSourceStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", api.PipelineImageStreamTagReferenceBundleSource)

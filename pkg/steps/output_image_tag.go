@@ -123,12 +123,7 @@ func (s *outputImageTagStep) Provides() api.ParameterMap {
 	}
 }
 
-func (s *outputImageTagStep) Name() string {
-	if len(s.config.To.As) == 0 {
-		return fmt.Sprintf("[output:%s:%s]", s.config.To.Name, s.config.To.Tag)
-	}
-	return s.config.To.As
-}
+func (s *outputImageTagStep) Name() string { return s.config.TargetName() }
 
 func (s *outputImageTagStep) Description() string {
 	if len(s.config.To.As) == 0 {

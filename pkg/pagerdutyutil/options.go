@@ -26,9 +26,9 @@ func (o *Options) Validate(_ bool) error {
 	return nil
 }
 
-func (o *Options) Client(secretAgent *secret.Agent) (*pagerduty.Client, error) {
-	if err := secretAgent.Add(o.tokenFile); err != nil {
+func (o *Options) Client() (*pagerduty.Client, error) {
+	if err := secret.Add(o.tokenFile); err != nil {
 		return nil, fmt.Errorf("failed to load --pager-duty-token-file: %w", err)
 	}
-	return pagerduty.NewClient(string(secretAgent.GetSecret(o.tokenFile))), nil
+	return pagerduty.NewClient(string(secret.GetSecret(o.tokenFile))), nil
 }

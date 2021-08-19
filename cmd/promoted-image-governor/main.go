@@ -45,6 +45,8 @@ type options struct {
 	openshiftMappingDir        string
 	openshiftMappingConfigPath string
 	openshiftMappingConfig     *OpenshiftMappingConfig
+
+	logLevel string
 }
 
 func parseOptions() *options {
@@ -59,6 +61,7 @@ func parseOptions() *options {
 	} else {
 		fs.StringVar(&opts.kubeconfig, "kubeconfig", "", kubeconfigFlagDescription)
 	}
+	fs.StringVar(&opts.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	fs.StringVar(&opts.ciOperatorconfigPath, "ci-operator-config-path", "", "Path to the ci operator config")
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	fs.Var(&opts.ignoredImageStreamTagsRaw, "ignored-image-stream-tags", "A regex to match tag in the form of namespace/name:tag format. Can be passed multiple times.")
@@ -72,6 +75,11 @@ func parseOptions() *options {
 }
 
 func (o *options) validate() error {
+	level, err := logrus.ParseLevel(o.logLevel)
+	if err != nil {
+		return fmt.Errorf("invalid log level specified: %w", err)
+	}
+	logrus.SetLevel(level)
 	if o.ciOperatorconfigPath == "" {
 		return fmt.Errorf("--ci-operator-config-path must be set")
 	}
@@ -132,7 +140,7 @@ func tagsToDelete(ctx context.Context, client ctrlruntimeclient.Client, promoted
 			if !kerrors.IsNotFound(err) {
 				errs = append(errs, fmt.Errorf("could not get image stream %s in namespace %s", objectKey.Name, objectKey.Namespace))
 			} else {
-				logrus.WithField("objectKey", objectKey).Warn("image stream not found")
+				logrus.WithField("objectKey", objectKey).Debug("image stream not found")
 			}
 			continue
 		}
@@ -300,10 +308,10 @@ func main() {
 				}
 				ref := c.Publish.MirrorToOrigin.ImageStreamRef
 				if ref.Namespace == "" {
-					logrus.WithField("source-file", path).Warn("publish.mirror-to-origin.imageStreamRef.namespace is empty")
+					logrus.WithField("source-file", path).Debug("publish.mirror-to-origin.imageStreamRef.namespace is empty")
 				}
 				if ref.Name == "" {
-					logrus.WithField("source-file", path).Warn("publish.mirror-to-origin.imageStreamRef.name is empty")
+					logrus.WithField("source-file", path).Debug("publish.mirror-to-origin.imageStreamRef.name is empty")
 				}
 				if ref.Namespace != "" && ref.Name != "" {
 					imageStreamRefs = append(imageStreamRefs, ref)

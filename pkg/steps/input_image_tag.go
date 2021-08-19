@@ -129,7 +129,7 @@ func (s *inputImageTagStep) Provides() api.ParameterMap {
 	}
 }
 
-func (s *inputImageTagStep) Name() string { return fmt.Sprintf("[input:%s]", s.config.To) }
+func (s *inputImageTagStep) Name() string { return s.config.TargetName() }
 
 func (s *inputImageTagStep) Description() string {
 	return fmt.Sprintf("Find the input image %s and tag it into the pipeline", s.config.To)

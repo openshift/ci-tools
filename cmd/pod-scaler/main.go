@@ -164,7 +164,7 @@ func main() {
 	case "producer":
 		mainProduce(opts, cache)
 	case "consumer.ui":
-		// TODO
+		mainUI(opts, cache)
 	case "consumer.admission":
 		mainAdmission(opts, cache)
 	}
@@ -212,6 +212,10 @@ func mainProduce(opts *options, cache cache) {
 	}
 
 	produce(clients, cache, opts.ignoreLatest, opts.once)
+}
+
+func mainUI(opts *options, cache cache) {
+	go serveUI(opts.uiPort, opts.instrumentationOptions.HealthPort, loaders(cache))
 }
 
 func mainAdmission(opts *options, cache cache) {

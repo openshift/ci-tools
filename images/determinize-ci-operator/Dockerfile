@@ -1,7 +1,7 @@
 FROM centos:8
 LABEL maintainer="skuznets@redhat.com"
 
-RUN dnf install --nogpg -y diffutils && \
+RUN dnf install --nogpg -y diffutils git && \
       dnf clean all
 
 ADD determinize-ci-operator /usr/bin/determinize-ci-operator

@@ -370,6 +370,14 @@ type ReleaseTagConfiguration struct {
 	Name string `json:"name"`
 }
 
+func (config ReleaseTagConfiguration) InputsName() string {
+	return "[release-inputs]"
+}
+
+func (config ReleaseTagConfiguration) TargetName(name string) string {
+	return fmt.Sprintf("[release:%s]", name)
+}
+
 // ReleaseConfiguration records a resolved release with its name.
 // We always expect this step to be preempted with an env var
 // that was set at startup. This will be cleaner when we refactor
@@ -377,6 +385,10 @@ type ReleaseTagConfiguration struct {
 type ReleaseConfiguration struct {
 	Name              string `json:"name"`
 	UnresolvedRelease `json:",inline"`
+}
+
+func (config ReleaseConfiguration) TargetName() string {
+	return fmt.Sprintf("[release:%s]", config.Name)
 }
 
 // PromotionConfiguration describes where images created by this
@@ -456,6 +468,10 @@ type InputImageTagStepConfiguration struct {
 	Sources    []ImageStreamSource `json:"-"`
 }
 
+func (config InputImageTagStepConfiguration) TargetName() string {
+	return fmt.Sprintf("[input:%s]", config.To)
+}
+
 func (config InputImageTagStepConfiguration) Matches(other InputImage) bool {
 	return config.InputImage == other
 }
@@ -520,6 +536,13 @@ type OutputImageTagStepConfiguration struct {
 	Optional bool `json:"optional"`
 }
 
+func (config OutputImageTagStepConfiguration) TargetName() string {
+	if len(config.To.As) == 0 {
+		return fmt.Sprintf("[output:%s:%s]", config.To.Name, config.To.Tag)
+	}
+	return config.To.As
+}
+
 // PipelineImageCacheStepConfiguration describes a
 // step that builds a container image to cache the
 // output of commands.
@@ -531,6 +554,10 @@ type PipelineImageCacheStepConfiguration struct {
 	// the repository root to create the cached
 	// content.
 	Commands string `json:"commands"`
+}
+
+func (config PipelineImageCacheStepConfiguration) TargetName() string {
+	return string(config.To)
 }
 
 // Cluster is the name of a cluster in CI build farm.
@@ -608,6 +635,10 @@ type TestStepConfiguration struct {
 	OpenshiftInstallerUPIClusterTestConfiguration             *OpenshiftInstallerUPIClusterTestConfiguration             `json:"openshift_installer_upi,omitempty"`
 	OpenshiftInstallerUPISrcClusterTestConfiguration          *OpenshiftInstallerUPISrcClusterTestConfiguration          `json:"openshift_installer_upi_src,omitempty"`
 	OpenshiftInstallerCustomTestImageClusterTestConfiguration *OpenshiftInstallerCustomTestImageClusterTestConfiguration `json:"openshift_installer_custom_test_image,omitempty"`
+}
+
+func (config TestStepConfiguration) TargetName() string {
+	return config.As
 }
 
 // Cloud is the name of a cloud provider, e.g., aws cluster topology, etc.
@@ -1374,6 +1405,10 @@ type SourceStepConfiguration struct {
 	ClonerefsPath string `json:"clonerefs_path"`
 }
 
+func (config SourceStepConfiguration) TargetName() string {
+	return string(config.To)
+}
+
 // OperatorStepConfiguration describes the locations of operator bundle information,
 // bundle build dockerfiles, and images the operator(s) depends on that must
 // be substituted to run in a CI test cluster
@@ -1427,6 +1462,10 @@ type IndexGeneratorStepConfiguration struct {
 	UpdateGraph IndexUpdate `json:"update_graph,omitempty"`
 }
 
+func (config IndexGeneratorStepConfiguration) TargetName() string {
+	return string(config.To)
+}
+
 // PipelineImageStreamTagReferenceIndexImageGenerator is the name of the index image generator built by ci-operator
 const PipelineImageStreamTagReferenceIndexImageGenerator PipelineImageStreamTagReference = "ci-index-gen"
 
@@ -1453,6 +1492,10 @@ type BundleSourceStepConfiguration struct {
 	// Substitutions contains pullspecs that need to be replaced by images
 	// in the CI cluster for operator bundle images
 	Substitutions []PullSpecSubstitution `json:"substitutions,omitempty"`
+}
+
+func (config BundleSourceStepConfiguration) TargetName() string {
+	return string(PipelineImageStreamTagReferenceBundleSource)
 }
 
 // PipelineImageStreamTagReferenceBundleSourceName is the name of the bundle source image built by the CI
@@ -1492,6 +1535,10 @@ type ProjectDirectoryImageBuildStepConfiguration struct {
 	// promoted unless explicitly targeted. Use for builds which
 	// are invoked only when testing certain parts of the repo.
 	Optional bool `json:"optional,omitempty"`
+}
+
+func (config ProjectDirectoryImageBuildStepConfiguration) TargetName() string {
+	return string(config.To)
 }
 
 // ProjectDirectoryImageBuildInputs holds inputs for an image build from the repo under test
@@ -1568,14 +1615,22 @@ type RPMImageInjectionStepConfiguration struct {
 	To   PipelineImageStreamTagReference `json:"to,omitempty"`
 }
 
+func (config RPMImageInjectionStepConfiguration) TargetName() string {
+	return string(config.To)
+}
+
 // RPMServeStepConfiguration describes a step that launches
 // a server from an image with RPMs and exposes it to the web.
 type RPMServeStepConfiguration struct {
 	From PipelineImageStreamTagReference `json:"from"`
 }
 
+func (config RPMServeStepConfiguration) TargetName() string {
+	return "[serve:rpms]"
+}
+
 const (
-	// api.PipelineImageStream is the name of the
+	// PipelineImageStream is the name of the
 	// ImageStream used to hold images built
 	// to cache build steps in the pipeline.
 	PipelineImageStream = "pipeline"
@@ -1598,7 +1653,7 @@ const (
 	// the StableImageStream. Images for other versions of
 	// the stream are held in similarly-named streams.
 	LatestReleaseName = "latest"
-	// LatestReleaseName is the name of the special stable
+	// InitialReleaseName is the name of the special initial
 	// stream we copy at import to keep for upgrade tests.
 	// TODO(skuznets): remove these when they're not implicit
 	InitialReleaseName = "initial"

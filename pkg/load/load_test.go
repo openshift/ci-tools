@@ -679,11 +679,11 @@ func TestConfigFromResolver(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%s: Failed to marshal parsedConfig to JSON: %v", t.Name(), err)
 	}
-	info := ResolverInfo{Org: "openshift", Repo: "hyperkube", Branch: "master"}
+	metadata := api.Metadata{Org: "openshift", Repo: "hyperkube", Branch: "master"}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			server := httptest.NewServer(testCase.handlerWrapper(t, jsonConfig))
-			info.Address = server.URL
+			info := ResolverInfo{Address: server.URL, Metadata: metadata}
 			config, err := configFromResolver(&info)
 			if err == nil && testCase.expectedError {
 				t.Errorf("%s: expected an error, but got none", testCase.name)

@@ -75,21 +75,6 @@ func (q *CachedQuery) Record(clusterName string, r TimeRange, matrix model.Matri
 	for _, stream := range matrix {
 		fingerprint := stream.Metric.Fingerprint()
 		meta := metadataFromMetric(stream.Metric)
-		if strings.HasPrefix(meta.Target, fmt.Sprintf("pull-ci-%s-%s", meta.Org, meta.Repo)) || strings.HasPrefix(meta.Target, fmt.Sprintf("branch-ci-%s-%s", meta.Org, meta.Repo)) {
-			// TODO(skuznets): remove this once these time out (June 2021)
-			// This is ignoring data from old Prow control plane versions that did not label context or branch.
-			continue
-		}
-		if strings.HasPrefix(meta.Pod, "release-") && meta.Target != "" {
-			// TODO(skuznets): remove this once these time out (June 2021)
-			// This is hacking to fix data from old CI Operator versions that did not label releases.
-			meta.Target = ""
-		}
-		if strings.HasSuffix(meta.Pod, "-build") && meta.Org == "" {
-			// TODO(skuznets): remove this once these time out (June 2021)
-			// This is hacking to fix data from old build farm versions that did not label Build Pods.
-			continue
-		}
 		// Metrics are unique in our dataset, so if we've already seen this metric/fingerprint,
 		// we're guaranteed to already have recorded it in the indices, and we just need to add
 		// the new data. This case will occur if one metric/fingerprint shows up in more than

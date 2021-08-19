@@ -78,15 +78,14 @@ func main() {
 	level, _ := logrus.ParseLevel(o.logLevel)
 	logrus.SetLevel(level)
 
-	secretAgent := &secret.Agent{}
-	if err := secretAgent.Start([]string{o.slackTokenPath}); err != nil {
+	if err := secret.Add(o.slackTokenPath); err != nil {
 		logrus.WithError(err).Fatal("Error starting secrets agent.")
 	}
 
 	var blocks []slack.Block
 
-	slackClient := slack.New(string(secretAgent.GetSecret(o.slackTokenPath)))
-	pagerDutyClient, err := o.pagerDutyOptions.Client(secretAgent)
+	slackClient := slack.New(string(secret.GetSecret(o.slackTokenPath)))
+	pagerDutyClient, err := o.pagerDutyOptions.Client()
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not initialize PagerDuty client.")
 	}
@@ -101,7 +100,7 @@ func main() {
 	}
 	blocks = append(blocks, getPagerDutyBlocks(userIdsByRole)...)
 
-	prowJiraClient, err := o.jiraOptions.Client(secretAgent)
+	prowJiraClient, err := o.jiraOptions.Client()
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not initialize Jira client.")
 	}
@@ -350,7 +349,7 @@ func postBlocks(slackClient *slack.Client, blocks []slack.Block) error {
 }
 
 func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, userId string) error {
-	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND (labels is EMPTY OR NOT labels=ready) AND created >= startOfWeek()`, jira.ProjectDPTP), nil)
+	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND (labels is EMPTY OR NOT labels=ready) AND created >= -30d AND status!=Obsolete`, jira.ProjectDPTP), nil)
 	if err := jirautil.JiraError(response, err); err != nil {
 		return fmt.Errorf("could not query for Jira issues: %w", err)
 	}

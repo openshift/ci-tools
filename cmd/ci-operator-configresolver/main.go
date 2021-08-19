@@ -1,11 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
@@ -21,8 +19,8 @@ import (
 	"k8s.io/test-infra/prow/pjutil"
 	"k8s.io/test-infra/prow/simplifypath"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/load/agents"
+	registryserver "github.com/openshift/ci-tools/pkg/registry/server"
 	"github.com/openshift/ci-tools/pkg/webreg"
 )
 
@@ -92,180 +90,6 @@ func validateOptions(o options) error {
 		return errors.New("--validate-only and --flat-registry flags cannot be set simultaneously")
 	}
 	return o.instrumentationOptions.Validate(false)
-}
-
-func resolveConfig(configAgent agents.ConfigAgent, registryAgent agents.RegistryAgent) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			w.WriteHeader(http.StatusNotImplemented)
-			_, _ = w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
-			return
-		}
-		metadata, err := webreg.MetadataFromQuery(w, r)
-		if err != nil {
-			// MetadataFromQuery deals with setting status code and writing response
-			// so we need to just log the error here
-			metrics.RecordError("invalid query", configresolverMetrics.ErrorRate)
-			logrus.WithError(err).Warning("failed to read query from request")
-			return
-		}
-		logger := logrus.WithFields(api.LogFieldsFor(metadata))
-
-		config, err := configAgent.GetMatchingConfig(metadata)
-		if err != nil {
-			metrics.RecordError("config not found", configresolverMetrics.ErrorRate)
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprintf(w, "failed to get config: %v", err)
-			logger.WithError(err).Warning("failed to get config")
-			return
-		}
-		resolveAndRespond(registryAgent, config, w, logger)
-	}
-}
-
-const (
-	injectFromOrgQuery     = "injectTestFromOrg"
-	injectFromRepoQuery    = "injectTestFromRepo"
-	injectFromBranchQuery  = "injectTestFromBranch"
-	injectFromVariantQuery = "injectTestFromVariant"
-	injectTestQuery        = "injectTest"
-)
-
-func injectTestFromQuery(w http.ResponseWriter, r *http.Request) (api.Metadata, string, error) {
-	var metadata api.Metadata
-	var test string
-
-	if r.Method != "GET" {
-		w.WriteHeader(http.StatusNotImplemented)
-		err := fmt.Errorf("expected GET, got %s", r.Method)
-		if _, errWrite := w.Write([]byte(http.StatusText(http.StatusNotImplemented))); errWrite != nil {
-			err = fmt.Errorf("%s and writing the response body failed with %w", err.Error(), errWrite)
-		}
-		return metadata, test, err
-	}
-
-	for query, field := range map[string]*string{
-		injectFromOrgQuery:    &metadata.Org,
-		injectFromRepoQuery:   &metadata.Repo,
-		injectFromBranchQuery: &metadata.Branch,
-		injectTestQuery:       &test,
-	} {
-		value := r.URL.Query().Get(query)
-		if value == "" {
-			webreg.MissingQuery(w, query)
-			return metadata, test, fmt.Errorf("missing query %s", query)
-		}
-		*field = value
-	}
-	metadata.Variant = r.URL.Query().Get(injectFromVariantQuery)
-
-	return metadata, test, nil
-}
-
-func resolveConfigWithInjectedTest(configAgent agents.ConfigAgent, registryAgent agents.RegistryAgent) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			w.WriteHeader(http.StatusNotImplemented)
-			_, _ = w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
-			return
-		}
-		metadata, err := webreg.MetadataFromQuery(w, r)
-		if err != nil {
-			// MetadataFromQuery deals with setting status code and writing response
-			// so we need to just log the error here
-			metrics.RecordError("invalid query", configresolverMetrics.ErrorRate)
-			logrus.WithError(err).Warning("failed to read query from request")
-			return
-		}
-		logger := logrus.WithFields(api.LogFieldsFor(metadata))
-
-		config, err := configAgent.GetMatchingConfig(metadata)
-		if err != nil {
-			metrics.RecordError("config not found", configresolverMetrics.ErrorRate)
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprintf(w, "failed to get config: %v", err)
-			logger.WithError(err).Warning("failed to get config")
-			return
-		}
-
-		injectFromMetadata, test, err := injectTestFromQuery(w, r)
-		if err != nil {
-			// injectTestFromQuery deals with setting status code and writing response
-			// so we need to just log the error here
-			metrics.RecordError("invalid query", configresolverMetrics.ErrorRate)
-			logrus.WithError(err).Warning("failed to read query from request")
-			return
-		}
-		injectFromConfig, err := configAgent.GetMatchingConfig(injectFromMetadata)
-		if err != nil {
-			metrics.RecordError("config not found", configresolverMetrics.ErrorRate)
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprintf(w, "failed to get config to inject from: %v", err)
-			logger.WithError(err).Warning("failed to get config")
-			return
-		}
-		configWithInjectedTest, err := config.WithPresubmitFrom(&injectFromConfig, test)
-		if err != nil {
-			metrics.RecordError("test injection failed", configresolverMetrics.ErrorRate)
-			w.WriteHeader(http.StatusInternalServerError) // TODO: Can be be 400 in some cases but meh
-			fmt.Fprintf(w, "failed to inject test into config: %v", err)
-			logger.WithError(err).Warning("failed to inject test into config")
-			return
-		}
-
-		resolveAndRespond(registryAgent, *configWithInjectedTest, w, logger)
-	}
-}
-
-func resolveLiteralConfig(registryAgent agents.RegistryAgent) http.HandlerFunc {
-	logger := logrus.NewEntry(logrus.New())
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			w.WriteHeader(http.StatusNotImplemented)
-			_, _ = w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
-			return
-		}
-
-		encoded, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte("Could not read unresolved config from request body."))
-			return
-		}
-		unresolvedConfig := api.ReleaseBuildConfiguration{}
-		if err = json.Unmarshal(encoded, &unresolvedConfig); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte("Could not parse request body as unresolved config."))
-			return
-		}
-		resolveAndRespond(registryAgent, unresolvedConfig, w, logger)
-	}
-}
-
-func resolveAndRespond(registryAgent agents.RegistryAgent, config api.ReleaseBuildConfiguration, w http.ResponseWriter, logger *logrus.Entry) {
-	config, err := registryAgent.ResolveConfig(config)
-	if err != nil {
-		metrics.RecordError("failed to resolve config with registry", configresolverMetrics.ErrorRate)
-		w.WriteHeader(http.StatusBadRequest)
-		if _, writeErr := w.Write([]byte(fmt.Sprintf("failed to resolve config: %v", err))); writeErr != nil {
-			logger.WithError(writeErr).Warning("failed to write body after config resolving failed")
-		}
-		fmt.Fprintf(w, "failed to resolve config with registry: %v", err)
-		logger.WithError(err).Warning("failed to resolve config with registry")
-		return
-	}
-	jsonConfig, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		metrics.RecordError("failed to marshal config", configresolverMetrics.ErrorRate)
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "failed to marshal config to JSON: %v", err)
-		logger.WithError(err).Errorf("failed to marshal config to JSON")
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(jsonConfig); err != nil {
-		logrus.WithError(err).Error("Failed to write response")
-	}
 }
 
 func getConfigGeneration(agent agents.ConfigAgent) http.HandlerFunc {
@@ -339,17 +163,24 @@ func main() {
 	uihandler := metrics.TraceHandler(uisimplifier, configresolverMetrics.HTTPRequestDuration, configresolverMetrics.HTTPResponseSize)
 	// add handler func for incorrect paths as well; can help with identifying errors/404s caused by incorrect paths
 	http.HandleFunc("/", handler(http.HandlerFunc(http.NotFound)).ServeHTTP)
-	http.HandleFunc("/config", handler(resolveConfig(configAgent, registryAgent)).ServeHTTP)
-	http.HandleFunc("/configWithInjectedTest", handler(resolveConfigWithInjectedTest(configAgent, registryAgent)).ServeHTTP)
-	http.HandleFunc("/resolve", handler(resolveLiteralConfig(registryAgent)).ServeHTTP)
+	http.HandleFunc("/config", handler(registryserver.ResolveConfig(configAgent, registryAgent, configresolverMetrics)).ServeHTTP)
+	http.HandleFunc("/configWithInjectedTest", handler(registryserver.ResolveConfigWithInjectedTest(configAgent, registryAgent, configresolverMetrics)).ServeHTTP)
+	http.HandleFunc("/resolve", handler(registryserver.ResolveLiteralConfig(registryAgent, configresolverMetrics)).ServeHTTP)
 	http.HandleFunc("/configGeneration", handler(getConfigGeneration(configAgent)).ServeHTTP)
 	http.HandleFunc("/registryGeneration", handler(getRegistryGeneration(registryAgent)).ServeHTTP)
+	http.HandleFunc("/readyz", func(_ http.ResponseWriter, _ *http.Request) {})
 	interrupts.ListenAndServe(&http.Server{Addr: ":" + strconv.Itoa(o.port)}, o.gracePeriod)
 	uiServer := &http.Server{
 		Addr:    ":" + strconv.Itoa(o.uiPort),
 		Handler: uihandler(webreg.WebRegHandler(registryAgent, configAgent)),
 	}
 	interrupts.ListenAndServe(uiServer, o.gracePeriod)
-	health.ServeReady()
+	health.ServeReady(func() bool {
+		resp, err := http.DefaultClient.Get("http://127.0.0.1:" + strconv.Itoa(o.port) + "/readyz")
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return err == nil && resp.StatusCode == 200
+	})
 	interrupts.WaitForGracefulShutdown()
 }

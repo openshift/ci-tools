@@ -43,6 +43,8 @@ const (
 	NamespaceDir = "build-resources"
 
 	APPCIKubeAPIURL = "https://api.ci.l2s4.p1.openshiftapps.com:6443"
+
+	DefaultLeaseEnv = "LEASED_RESOURCE"
 )
 
 var (

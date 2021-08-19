@@ -109,16 +109,14 @@ func main() {
 
 	// Already create the client here if needed to make sure we fail asap if there is an issue
 	var githubClient pgithub.Client
-	var secretAgent *secret.Agent
 	if opts.TokenPath != "" {
-		secretAgent = &secret.Agent{}
-		if err := secretAgent.Start([]string{opts.TokenPath}); err != nil {
+		if err := secret.Add(opts.TokenPath); err != nil {
 			logrus.WithError(err).Fatal("Failed to load github token")
 		}
 	}
 	if opts.createPR {
 		var err error
-		githubClient, err = opts.GitHubClient(secretAgent, false)
+		githubClient, err = opts.GitHubClient(false)
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to construct githubClient")
 		}
@@ -134,10 +132,10 @@ func main() {
 	}
 
 	var credentials *usernameToken
-	if secretAgent != nil {
+	if opts.TokenPath != "" {
 		credentials = &usernameToken{
 			username: opts.githubUserName,
-			token:    string(secretAgent.GetSecret(opts.TokenPath)),
+			token:    string(secret.GetSecret(opts.TokenPath)),
 		}
 	}
 
@@ -197,7 +195,7 @@ func main() {
 		return
 	}
 
-	if err := upsertPR(githubClient, opts.configDir, opts.githubUserName, secretAgent.GetSecret(opts.TokenPath), opts.selfApprove, opts.pruneUnusedReplacements, opts.ensureCorrectPromotionDockerfile); err != nil {
+	if err := upsertPR(githubClient, opts.configDir, opts.githubUserName, secret.GetSecret(opts.TokenPath), opts.selfApprove, opts.pruneUnusedReplacements, opts.ensureCorrectPromotionDockerfile); err != nil {
 		logrus.WithError(err).Fatal("Failed to create PR")
 	}
 }
@@ -457,8 +455,8 @@ func upsertPR(gc pgithub.Client, dir, githubUsername string, token []byte, selfA
 	}
 
 	censor := censor{secret: token}
-	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: &censor}
-	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: &censor}
+	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: censor.Censor}
+	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: censor.Censor}
 
 	const targetBranch = "registry-replacer"
 	if err := bumper.GitCommitAndPush(
@@ -671,14 +669,17 @@ func pruneUnusedBaseImages(config *api.ReleaseBuildConfiguration, resolvedConfig
 			usedBaseImages.Insert(string(step.OutputImageTagStepConfiguration.From))
 		case step.PipelineImageCacheStepConfiguration != nil:
 			usedBaseImages.Insert(string(step.PipelineImageCacheStepConfiguration.From))
+		case step.ProjectDirectoryImageBuildInputs != nil:
+			getImageBuildInputImages(config, step.ProjectDirectoryImageBuildInputs.Inputs, &usedBaseImages)
+		case step.ProjectDirectoryImageBuildStepConfiguration != nil:
+			getImageBuildInputImages(config, step.ProjectDirectoryImageBuildStepConfiguration.Inputs, &usedBaseImages)
 		case step.RPMImageInjectionStepConfiguration != nil:
 			usedBaseImages.Insert(string(step.RPMImageInjectionStepConfiguration.From))
 		case step.SourceStepConfiguration != nil:
 			usedBaseImages.Insert(string(step.SourceStepConfiguration.From))
 		case step.TestStepConfiguration != nil:
 			getTestStepImages(resolvedConfig, &usedBaseImages, step.TestStepConfiguration)
-		case step.ProjectDirectoryImageBuildStepConfiguration != nil || step.ProjectDirectoryImageBuildInputs != nil ||
-			step.ReleaseImagesTagStepConfiguration != nil || step.ResolvedReleaseImagesStepConfiguration != nil || step.RPMServeStepConfiguration != nil:
+		case step.ReleaseImagesTagStepConfiguration != nil || step.ResolvedReleaseImagesStepConfiguration != nil || step.RPMServeStepConfiguration != nil:
 			// no op
 		default:
 			return fmt.Errorf("unsupported step configuration provided when pruning base images")
@@ -750,6 +751,13 @@ func getOperatorImages(config *api.ReleaseBuildConfiguration, usedBaseImages set
 func getBundleSourceImages(config *api.ReleaseBuildConfiguration, images *sets.String, step *api.BundleSourceStepConfiguration) {
 	for _, substitution := range step.Substitutions {
 		_, name, _ := config.DependencyParts(api.StepDependency{Name: substitution.With}, nil)
+		images.Insert(name)
+	}
+}
+
+func getImageBuildInputImages(config *api.ReleaseBuildConfiguration, inputs map[string]api.ImageBuildInputs, images *sets.String) {
+	for input := range inputs {
+		_, name, _ := config.DependencyParts(api.StepDependency{Name: input}, nil)
 		images.Insert(name)
 	}
 }

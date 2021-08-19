@@ -36,6 +36,16 @@ func (m *Metadata) IsComplete() error {
 	return nil
 }
 
+// AsString returns a string representation of the metadata suitable for using
+// in human-oriented output
+func (m *Metadata) AsString() string {
+	identifier := fmt.Sprintf("%s/%s@%s", m.Org, m.Repo, m.Branch)
+	if m.Variant != "" {
+		identifier = fmt.Sprintf("%s [%s]", identifier, m.Variant)
+	}
+	return identifier
+}
+
 // TestNameFromJobName returns the name of the test from a given job name and prefix
 func (m *Metadata) TestNameFromJobName(jobName, prefix string) string {
 	return strings.TrimPrefix(jobName, m.JobName(prefix, ""))

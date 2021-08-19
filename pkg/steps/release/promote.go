@@ -76,8 +76,10 @@ func (s *promotionStep) run(ctx context.Context) error {
 		return nil
 	}
 
+	// in some cases like when we are called by the ci-chat-bot we may need to create namespaces
+	// in general, we do not expect to be able to do this, so we only do it best-effort
 	if err := s.ensureNamespaces(ctx, namespaces); err != nil {
-		return fmt.Errorf("failed to ensure namespaces to promote to in central registry: %w", err)
+		logrus.WithError(err).Warn("Failed to ensure namespaces to promote to in central registry.")
 	}
 
 	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace())); err != nil {

@@ -74,7 +74,7 @@ func (s *rpmImageInjectionStep) Provides() api.ParameterMap {
 	return nil
 }
 
-func (s *rpmImageInjectionStep) Name() string { return string(s.config.To) }
+func (s *rpmImageInjectionStep) Name() string { return s.config.TargetName() }
 
 func (s *rpmImageInjectionStep) Description() string {
 	return "Inject an RPM repository that will point at the RPM server"

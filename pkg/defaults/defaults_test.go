@@ -18,7 +18,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
-	"k8s.io/utils/diff"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	imageapi "github.com/openshift/api/image/v1"
@@ -53,14 +52,15 @@ func TestStepConfigsForBuild(t *testing.T) {
 		return root, nil
 	}
 	var testCases = []struct {
-		name          string
-		input         *api.ReleaseBuildConfiguration
-		consoleHost   string
-		jobSpec       *api.JobSpec
-		output        []api.StepConfiguration
-		expectedError error
-		readFile      readFile
-		resolver      resolveRoot
+		name            string
+		input           *api.ReleaseBuildConfiguration
+		consoleHost     string
+		jobSpec         *api.JobSpec
+		output          []api.StepConfiguration
+		readFile        readFile
+		resolver        resolveRoot
+		expectedError   error
+		expectedImports []testimagestreamtagimportv1.TestImageStreamTagImport
 	}{
 		{
 			name: "minimal information provided",
@@ -193,6 +193,88 @@ func TestStepConfigsForBuild(t *testing.T) {
   name: stream-name
   tag: stream-tag`), nil
 			},
+			expectedImports: []testimagestreamtagimportv1.TestImageStreamTagImport{{
+				ObjectMeta: meta.ObjectMeta{
+					Namespace: "ci",
+					Name:      "stream-name-stream-tag",
+					Labels: map[string]string{
+						"imagestreamtag-namespace": "stream-namespace",
+						"imagestreamtag-name":      "stream-name_stream-tag",
+					},
+				},
+				Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
+					Namespace: "stream-namespace",
+					Name:      "stream-name:stream-tag",
+				},
+			}},
+		},
+		{
+			name: "build_root_image from repo + build cache",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						FromRepository: true,
+						UseBuildCache:  true,
+					},
+				},
+				Metadata: api.Metadata{
+					Org:    "org",
+					Repo:   "repo",
+					Branch: "branch",
+				},
+			},
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
+				},
+			},
+			resolver: func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
+				return cache, nil
+			},
+			output: []api.StepConfiguration{{
+				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+					From: api.PipelineImageStreamTagReferenceRoot,
+					To:   api.PipelineImageStreamTagReferenceSource,
+				}),
+			}, {
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+					InputImage: api.InputImage{
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "build-cache",
+							Name:      "org-repo",
+							Tag:       "branch",
+						},
+						To: api.PipelineImageStreamTagReferenceRoot,
+					},
+					Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceRoot}},
+				},
+			}},
+			readFile: func(filename string) ([]byte, error) {
+				if filename != ".ci-operator.yaml" {
+					return nil, fmt.Errorf("expected '.ci-operator.yaml' as file for the build_root_image, got %s", filename)
+				}
+				return []byte(`build_root_image:
+  namespace: stream-namespace
+  name: stream-name
+  tag: stream-tag`), nil
+			},
+			expectedImports: []testimagestreamtagimportv1.TestImageStreamTagImport{{
+				ObjectMeta: meta.ObjectMeta{
+					Namespace: "ci",
+					Name:      "org-repo-branch",
+					Labels: map[string]string{
+						"imagestreamtag-namespace": "build-cache",
+						"imagestreamtag-name":      "org-repo_branch",
+					},
+				},
+				Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
+					Namespace: "build-cache",
+					Name:      "org-repo:branch",
+				},
+			}},
 		},
 		{
 			name: "binary build requested",
@@ -766,7 +848,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}},
 		},
 		{
-			name: "reading boot root from repository leads to an error",
+			name: "reading build root from repository leads to an error",
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
 					BuildRootImage: &api.BuildRootImageConfiguration{
@@ -813,60 +895,29 @@ func TestStepConfigsForBuild(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			var imageConfigs []*api.InputImageTagStepConfiguration
-
 			client := fakectrlruntimeclient.NewFakeClient()
-
-			rawSteps, actualError := stepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, &imageConfigs, time.Nanosecond, testCase.consoleHost)
+			graphConf := FromConfigStatic(testCase.input)
+			runtimeSteps, actualError := runtimeStepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, graphConf.InputImages(), time.Nanosecond, testCase.consoleHost)
+			graphConf.Steps = append(graphConf.Steps, runtimeSteps...)
 			if diff := cmp.Diff(testCase.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("actualError does not match expectedError, diff: %s", diff)
 			}
-			if testCase.expectedError == nil {
-				actual := sortStepConfig(rawSteps)
-				expected := sortStepConfig(testCase.output)
-				if diff := cmp.Diff(actual, expected); diff != "" {
-					t.Errorf("actual differs from expected: %s", diff)
-				}
-
-				if testCase.input.InputConfiguration.BuildRootImage.FromRepository {
-					imports := &testimagestreamtagimportv1.TestImageStreamTagImportList{}
-					if err := client.List(context.Background(), imports); err != nil {
-						t.Errorf("failed to list testimageimports: %v", err)
-					}
-					if n := len(imports.Items); n != 1 {
-						t.Fatalf("expected to find exactly one testimageimport, got %d", n)
-					}
-
-					var importNS, importName, importTag string
-					for _, step := range testCase.output {
-						if step.InputImageTagStepConfiguration != nil {
-							importNS = step.InputImageTagStepConfiguration.InputImage.BaseImage.Namespace
-							importName = step.InputImageTagStepConfiguration.InputImage.BaseImage.Name
-							importTag = step.InputImageTagStepConfiguration.InputImage.BaseImage.Tag
-							break
-						}
-					}
-
-					expected := &testimagestreamtagimportv1.TestImageStreamTagImport{
-						ObjectMeta: meta.ObjectMeta{
-							Namespace: "ci",
-							Name:      importName + "-" + importTag,
-							Labels: map[string]string{
-								"imagestreamtag-namespace": importNS,
-								"imagestreamtag-name":      importName + "_" + importTag,
-							},
-						},
-						Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
-							Namespace: importNS,
-							Name:      importName + ":" + importTag,
-						},
-					}
-					if diff := cmp.Diff(&imports.Items[0], expected, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
-						t.Errorf("actual import differs from expected: %s", diff)
-					}
-				}
+			if testCase.expectedError != nil {
+				return
 			}
-
+			actual := sortStepConfig(graphConf.Steps)
+			expected := sortStepConfig(testCase.output)
+			if diff := cmp.Diff(actual, expected); diff != "" {
+				t.Errorf("actual differs from expected: %s", diff)
+			}
+			imports := &testimagestreamtagimportv1.TestImageStreamTagImportList{}
+			if err := client.List(context.Background(), imports); err != nil {
+				t.Errorf("failed to list testimageimports: %v", err)
+			}
+			for i := range imports.Items {
+				testhelper.CleanRVAndTypeMeta(&imports.Items[i])
+			}
+			testhelper.Diff(t, "ImageStreamTag imports", imports.Items, testCase.expectedImports)
 		})
 	}
 }
@@ -1291,8 +1342,8 @@ func TestFromConfig(t *testing.T) {
 		params:        map[string]string{"CLUSTER_TYPE": "aws"},
 		expectedSteps: []string{"template", "[output-images]", "[images]"},
 		expectedParams: map[string]string{
-			"CLUSTER_TYPE":        "aws",
-			steps.DefaultLeaseEnv: "",
+			"CLUSTER_TYPE":      "aws",
+			api.DefaultLeaseEnv: "",
 		},
 	}, {
 		name:       "param files",
@@ -1393,7 +1444,8 @@ func TestFromConfig(t *testing.T) {
 			for k, v := range tc.params {
 				params.Add(k, func() (string, error) { return v, nil })
 			}
-			configSteps, post, err := fromConfig(context.Background(), &tc.config, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, "")
+			graphConf := FromConfigStatic(&tc.config)
+			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, "")
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}
@@ -1429,48 +1481,6 @@ func TestFromConfig(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expectedPost, postNames); diff != "" {
 				t.Errorf("unexpected post steps: %v", diff)
-			}
-		})
-	}
-}
-
-func TestLeasesForTest(t *testing.T) {
-	for _, tc := range []struct {
-		name     string
-		tests    api.MultiStageTestConfigurationLiteral
-		expected []api.StepLease
-	}{{
-		name:  "no configuration or cluster profile, no lease",
-		tests: api.MultiStageTestConfigurationLiteral{},
-	}, {
-		name: "cluster profile, lease",
-		tests: api.MultiStageTestConfigurationLiteral{
-			ClusterProfile: api.ClusterProfileAWS,
-		},
-		expected: []api.StepLease{{
-			ResourceType: "aws-quota-slice",
-			Env:          steps.DefaultLeaseEnv,
-			Count:        1,
-		}},
-	}, {
-		name: "explicit configuration, lease",
-		tests: api.MultiStageTestConfigurationLiteral{
-			Leases: []api.StepLease{{ResourceType: "aws-quota-slice"}},
-		},
-		expected: []api.StepLease{{ResourceType: "aws-quota-slice"}},
-	}, {
-		name: "explicit configuration in step, lease",
-		tests: api.MultiStageTestConfigurationLiteral{
-			Test: []api.LiteralTestStep{
-				{Leases: []api.StepLease{{ResourceType: "aws-quota-slice"}}},
-			},
-		},
-		expected: []api.StepLease{{ResourceType: "aws-quota-slice"}},
-	}} {
-		t.Run(tc.name, func(t *testing.T) {
-			ret := leasesForTest(&tc.tests)
-			if diff := diff.ObjectReflectDiff(tc.expected, ret); diff != "<no diffs>" {
-				t.Errorf("incorrect leases: %s", diff)
 			}
 		})
 	}

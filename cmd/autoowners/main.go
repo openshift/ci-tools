@@ -385,9 +385,9 @@ func (w *OutputWriter) Write(content []byte) (n int, err error) {
 	return len(content), nil
 }
 
-func listUpdatedDirectories(sa *secret.Agent) ([]string, error) {
+func listUpdatedDirectories() ([]string, error) {
 	w := &OutputWriter{}
-	e := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: sa}
+	e := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secret.Censor}
 	if err := bumper.Call(w, e, "git", []string{"status", "--porcelain"}...); err != nil {
 		return nil, err
 	}
@@ -427,11 +427,6 @@ func main() {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	secretAgent := &secret.Agent{}
-	if err := secretAgent.Start(nil); err != nil {
-		logrus.WithError(err).Fatalf("Error starting secrets agent.")
-	}
-
 	pc := plugins.Configuration{}
 	if o.plugins.PluginConfigPath != "" {
 		agent, err := o.plugins.PluginAgent()
@@ -441,7 +436,7 @@ func main() {
 		pc = *(agent.Config())
 	}
 
-	gc, err := o.GitHubOptions.GitHubClient(secretAgent, o.dryRun)
+	gc, err := o.GitHubOptions.GitHubClient(o.dryRun)
 	if err != nil {
 		logrus.WithError(err).Fatal("error getting GitHub client")
 	}
@@ -464,7 +459,7 @@ func main() {
 		logrus.WithError(err).Fatal("Error occurred when walking through the target dir.")
 	}
 
-	directories, err := listUpdatedDirectories(secretAgent)
+	directories, err := listUpdatedDirectories()
 	if err != nil {
 		logrus.WithError(err).Fatal("Error occurred when listing updated directories.")
 	}
@@ -473,14 +468,14 @@ func main() {
 		return
 	}
 
-	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secretAgent}
-	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secretAgent}
+	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secret.Censor}
+	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secret.Censor}
 
 	remoteBranch := "autoowners"
 	matchTitle := "Sync OWNERS files"
 	title := getTitle(matchTitle, time.Now().Format(time.RFC1123))
 	if err := bumper.GitCommitSignoffAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin,
-		string(secretAgent.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, o.githubRepo),
+		string(secret.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, o.githubRepo),
 		remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr, o.gitSignoff, o.dryRun); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}

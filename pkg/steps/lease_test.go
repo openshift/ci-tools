@@ -59,7 +59,7 @@ func emptyNamespace() string { return "" }
 
 func TestLeaseStepForward(t *testing.T) {
 	leases := []api.StepLease{{
-		Env:          DefaultLeaseEnv,
+		Env:          api.DefaultLeaseEnv,
 		ResourceType: "lease_name",
 	}}
 	step := stepNeedsLease{}
@@ -121,16 +121,16 @@ func TestLeaseStepForward(t *testing.T) {
 }
 
 func TestProvidesStripsSuffix(t *testing.T) {
-	leases := []api.StepLease{{Env: DefaultLeaseEnv, ResourceType: "rtype"}}
+	leases := []api.StepLease{{Env: api.DefaultLeaseEnv, ResourceType: "rtype"}}
 	withLease := LeaseStep(nil, leases, &stepNeedsLease{}, emptyNamespace)
 	withLease.(*leaseStep).leases[0].resources = []string{"whatever--01"}
 	expected := "whatever"
-	actual, err := withLease.Provides()[DefaultLeaseEnv]()
+	actual, err := withLease.Provides()[api.DefaultLeaseEnv]()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if actual != expected {
-		t.Errorf("got %q for %s, expected %q", actual, DefaultLeaseEnv, expected)
+		t.Errorf("got %q for %s, expected %q", actual, api.DefaultLeaseEnv, expected)
 	}
 }
 

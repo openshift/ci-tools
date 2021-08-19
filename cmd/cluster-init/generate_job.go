@@ -214,7 +214,7 @@ func generateContainer(image string, args []string, volumeMounts []v1.VolumeMoun
 
 func generateArgs(buildFarmDir string) []string {
 	return []string{
-		fmt.Sprintf(fmt.Sprintf("--%s=%s/%s/%s", ConfigDir, Clusters, BuildClusters, buildFarmDir)),
+		fmt.Sprintf("--%s=%s/%s/%s", ConfigDir, Clusters, BuildClusters, buildFarmDir),
 		fmt.Sprintf("--%s=", As),
 		fmt.Sprintf("--%s=/%s/%s/%s", Kubeconfig, Etc, BuildFarmCredentials, Kubeconfig),
 	}

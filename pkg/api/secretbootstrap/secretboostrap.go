@@ -88,9 +88,7 @@ func (c *Config) UnmarshalJSON(d []byte) error {
 	}
 
 	*c = Config(target)
-	//TODO: this resolve step is adding "dptp" prefix everywhere...is this okay?
-	//return c.resolve()
-	return nil
+	return c.resolve()
 }
 
 func (c *Config) Validate() error {

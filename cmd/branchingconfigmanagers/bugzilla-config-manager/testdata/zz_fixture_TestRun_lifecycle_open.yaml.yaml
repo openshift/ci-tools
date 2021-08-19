@@ -1,0 +1,23 @@
+default:
+  main:
+    target_release: 4.7.0
+  master:
+    target_release: 4.7.0
+  openshift-4.7:
+    dependent_bug_states:
+    - status: MODIFIED
+    - status: ON_QA
+    - status: VERIFIED
+    dependent_bug_target_releases:
+    - 4.8.0
+    target_release: 4.7.0
+    validate_by_default: true
+  release-4.7:
+    dependent_bug_states:
+    - status: MODIFIED
+    - status: ON_QA
+    - status: VERIFIED
+    dependent_bug_target_releases:
+    - 4.8.0
+    target_release: 4.7.0
+    validate_by_default: true

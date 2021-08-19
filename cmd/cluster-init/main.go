@@ -86,6 +86,7 @@ func main() {
 		o.clusterName, o.releaseRepo)
 	initClusterBuildFarmDir(o)
 	updateCiSecretBootstrapConfig(o)
+	updateSecretGenerator(o)
 }
 
 func initClusterBuildFarmDir(o options) {

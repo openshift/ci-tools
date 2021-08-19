@@ -55,7 +55,7 @@ func TestIndexGenDockerfile(t *testing.T) {
 			jobSpec: &api.JobSpec{},
 			client:  &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
 		},
-		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
+		expected: `FROM quay.io/operator-framework/upstream-opm-builder:v1.17.5 AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
 RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate"]
@@ -73,7 +73,7 @@ COPY --from=builder /database/ database`,
 			jobSpec: &api.JobSpec{},
 			client:  &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
 		},
-		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
+		expected: `FROM quay.io/operator-framework/upstream-opm-builder:v1.17.5 AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
 RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0,some-reg/target-namespace/pipeline@ci-bundle1", "--out-dockerfile", "index.Dockerfile", "--generate"]
@@ -92,7 +92,7 @@ COPY --from=builder /database/ database`,
 			jobSpec: &api.JobSpec{},
 			client:  &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
 		},
-		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
+		expected: `FROM quay.io/operator-framework/upstream-opm-builder:v1.17.5 AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
 RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate", "--from-index", "some-reg/target-namespace/pipeline@the-index"]

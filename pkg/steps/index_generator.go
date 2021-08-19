@@ -88,7 +88,7 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 
 func (s *indexGeneratorStep) indexGenDockerfile() (string, error) {
 	var dockerCommands []string
-	dockerCommands = append(dockerCommands, "FROM quay.io/operator-framework/upstream-opm-builder AS builder")
+	dockerCommands = append(dockerCommands, "FROM quay.io/operator-framework/upstream-opm-builder:v1.17.5 AS builder")
 	// pull secret is needed for opm command
 	dockerCommands = append(dockerCommands, "COPY .dockerconfigjson .")
 	dockerCommands = append(dockerCommands, "RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json")

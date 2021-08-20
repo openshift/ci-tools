@@ -1,0 +1,30 @@
+cluster_groups:
+  build_farm:
+  - app.ci
+  - build01
+  - build02
+  cg_2:
+  - build03
+  - build04
+secret_configs:
+- from:
+    ops-mirror.pem:
+      field: cert-key.pem
+      item: mirror.openshift.com
+    rh-cdn.pem:
+      field: rh-cdn.pem
+      item: rh-cdn
+  to:
+  - cluster_groups:
+    - build_farm
+    name: mirror.openshift.com
+    namespace: ocp
+  - cluster_groups:
+    - cg_2
+    name: test.openshift.com
+    namespace: ci
+user_secrets_target_clusters:
+- app.ci
+- build01
+- build02
+vault_dptp_prefix: dptp

@@ -3,10 +3,12 @@ package secretbootstrap
 import (
 	"encoding/json"
 	"fmt"
-
+	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"reflect"
 	"sigs.k8s.io/yaml"
+	"strings"
 
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
@@ -45,7 +47,7 @@ type DockerAuth struct {
 
 type SecretContext struct {
 	// A cluster to target. Mutually exclusive with 'ClusterGroups'
-	Cluster string `json:"cluster"`
+	Cluster string `json:"cluster,omitempty"`
 	// A list of clusterGroups to target. Mutually exclusive with 'cluster'
 	ClusterGroups []string          `json:"cluster_groups,omitempty"`
 	Namespace     string            `json:"namespace"`
@@ -71,9 +73,18 @@ func LoadConfigFromFile(file string, config *Config) error {
 	return yaml.UnmarshalStrict(bytes, config)
 }
 
+// SaveConfigToFile serializes a Config object to the given file
+func SaveConfigToFile(file string, config *Config) error {
+	bytes, err := yaml.Marshal(config)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(file, bytes, 0644)
+}
+
 // Config is what we version in our repository
 type Config struct {
-	VaultDPTPPRefix           string              `json:"vault_dptp_prefix,omitempty"`
+	VaultDPTPPrefix           string              `json:"vault_dptp_prefix,omitempty"`
 	ClusterGroups             map[string][]string `json:"cluster_groups,omitempty"`
 	Secrets                   []SecretConfig      `json:"secret_configs"`
 	UserSecretsTargetClusters []string            `json:"user_secrets_target_clusters,omitempty"`
@@ -89,6 +100,70 @@ func (c *Config) UnmarshalJSON(d []byte) error {
 
 	*c = Config(target)
 	return c.resolve()
+}
+
+func (c *Config) MarshalJSON() ([]byte, error) {
+	target := &configWithoutUnmarshaler{
+		VaultDPTPPrefix:           c.VaultDPTPPrefix,
+		ClusterGroups:             c.ClusterGroups,
+		UserSecretsTargetClusters: c.UserSecretsTargetClusters,
+	}
+
+	var secrets []SecretConfig
+	for _, s := range c.Secrets {
+		c.stripVaultPrefix(&s)
+		s.To = groupClusters(&s, c.ClusterGroups)
+		secrets = append(secrets, s)
+	}
+
+	target.Secrets = secrets
+	return json.Marshal(target)
+}
+
+func groupClusters(s *SecretConfig, clusterGroups map[string][]string) []SecretContext {
+	var scSlice []SecretContext
+	type GroupInfo struct {
+		name      string
+		namespace string
+		typ       corev1.SecretType
+	}
+	giToClusters := make(map[GroupInfo][]string)
+	for _, to := range s.To {
+		n := GroupInfo{name: to.Name, namespace: to.Namespace, typ: to.Type}
+		current := giToClusters[n]
+		giToClusters[n] = append(current, to.Cluster)
+	}
+	for gi, clusters := range giToClusters {
+		group := findMatchingClusterGroup(clusters, clusterGroups)
+		if group != "" {
+			sc := SecretContext{
+				ClusterGroups: []string{group},
+				Namespace:     gi.namespace,
+				Name:          gi.name,
+				Type:          gi.typ,
+			}
+
+			scSlice = append(scSlice, sc)
+		}
+	}
+	return scSlice
+}
+
+func (c *Config) stripVaultPrefix(s *SecretConfig) {
+	pre := c.VaultDPTPPrefix + "/"
+	for key, from := range s.From {
+		from.Item = strings.Replace(from.Item, pre, "", 1)
+		s.From[key] = from
+	}
+}
+
+func findMatchingClusterGroup(clusters []string, clusterGroups map[string][]string) string {
+	for key, inGroup := range clusterGroups {
+		if reflect.DeepEqual(clusters, inGroup) {
+			return key
+		}
+	}
+	return ""
 }
 
 func (c *Config) Validate() error {
@@ -149,14 +224,14 @@ func (c *Config) resolve() error {
 
 		c.Secrets[idx].To = newTo
 
-		if c.VaultDPTPPRefix != "" {
+		if c.VaultDPTPPrefix != "" {
 			for fromKey, fromValue := range secret.From {
 				if fromValue.Item != "" {
-					fromValue.Item = c.VaultDPTPPRefix + "/" + fromValue.Item
+					fromValue.Item = c.VaultDPTPPrefix + "/" + fromValue.Item
 				}
 				for dockerCFGIdx, dockerCFGVal := range fromValue.DockerConfigJSONData {
 					if dockerCFGVal.Item != "" {
-						dockerCFGVal.Item = c.VaultDPTPPRefix + "/" + dockerCFGVal.Item
+						dockerCFGVal.Item = c.VaultDPTPPrefix + "/" + dockerCFGVal.Item
 						fromValue.DockerConfigJSONData[dockerCFGIdx] = dockerCFGVal
 					}
 				}

@@ -2182,7 +2182,7 @@ func TestValidateItems(t *testing.T) {
 		},
 		{
 			name:         "Prefix, item doesn't exist but is in generator config, success",
-			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.ItemContext{"": {Item: "dptp/foo", Field: "bar"}}}}, VaultDPTPPRefix: "dptp"},
+			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.ItemContext{"": {Item: "dptp/foo", Field: "bar"}}}}, VaultDPTPPrefix: "dptp"},
 			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "bar"}}}},
 		},
 		{
@@ -2194,7 +2194,7 @@ func TestValidateItems(t *testing.T) {
 		},
 		{
 			name:         "Prefix, item doesn't exist, generator only generates different field on item, error",
-			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.ItemContext{"": {Item: "dptp/foo", Field: "bar"}}}}, VaultDPTPPRefix: "dptp"},
+			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.ItemContext{"": {Item: "dptp/foo", Field: "bar"}}}}, VaultDPTPPrefix: "dptp"},
 			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "baz"}}}},
 
 			expectedErrorMsg: "field bar in item dptp/foo doesn't exist",
@@ -2207,7 +2207,7 @@ func TestValidateItems(t *testing.T) {
 		},
 		{
 			name:         "prefix Item exists, field doesn't but is in generator config, success",
-			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.ItemContext{"": {Item: "dptp/foo", Field: "bar"}}}}, VaultDPTPPRefix: "dptp"},
+			cfg:          secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{From: map[string]secretbootstrap.ItemContext{"": {Item: "dptp/foo", Field: "bar"}}}}, VaultDPTPPrefix: "dptp"},
 			generatorCfg: secretgenerator.Config{{ItemName: "foo", Fields: []secretgenerator.FieldGenerator{{Name: "bar"}}}},
 			items:        map[string]*vaultclient.KVData{"/foo": {Data: map[string]string{"baz": "some-value"}}},
 		},

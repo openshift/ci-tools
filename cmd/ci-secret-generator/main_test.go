@@ -200,7 +200,7 @@ func TestValidateContexts(t *testing.T) {
 			name: "Strip prefix",
 			cfg:  secretgenerator.Config{{ItemName: "some-item", Fields: []secretgenerator.FieldGenerator{{Name: "field"}}}},
 			bootstrapCfg: secretbootstrap.Config{
-				VaultDPTPPRefix: "dptp",
+				VaultDPTPPrefix: "dptp",
 				Secrets: []secretbootstrap.SecretConfig{{
 					From: map[string]secretbootstrap.ItemContext{"": {Item: "some-item", Field: "field"}},
 				}},
@@ -210,7 +210,7 @@ func TestValidateContexts(t *testing.T) {
 			name: "Strip prefix dockerconfigjson",
 			cfg:  secretgenerator.Config{{ItemName: "some-item", Fields: []secretgenerator.FieldGenerator{{Name: "field"}}}},
 			bootstrapCfg: secretbootstrap.Config{
-				VaultDPTPPRefix: "dptp",
+				VaultDPTPPrefix: "dptp",
 				Secrets: []secretbootstrap.SecretConfig{{
 					From: map[string]secretbootstrap.ItemContext{"": {DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{{
 						Item: "dptp/some-item", AuthField: "field",

@@ -1,7 +1,10 @@
 package secretbootstrap
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -72,7 +75,7 @@ func TestResolving(t *testing.T) {
 		{
 			name: "DPTP prefix gets added to normal BW items",
 			config: Config{
-				VaultDPTPPRefix: "prefix",
+				VaultDPTPPrefix: "prefix",
 				Secrets: []SecretConfig{{
 					From: map[string]ItemContext{"...": {Item: "foo", Field: "bar"}},
 					To: []SecretContext{{
@@ -84,7 +87,7 @@ func TestResolving(t *testing.T) {
 				}},
 			},
 			expectedConfig: Config{
-				VaultDPTPPRefix: "prefix",
+				VaultDPTPPrefix: "prefix",
 				Secrets: []SecretConfig{{
 					From: map[string]ItemContext{"...": {Item: "prefix/foo", Field: "bar"}},
 					To: []SecretContext{{
@@ -99,7 +102,7 @@ func TestResolving(t *testing.T) {
 		{
 			name: "DPTP prefix gets added to dockerconfigjson BW items",
 			config: Config{
-				VaultDPTPPRefix: "prefix",
+				VaultDPTPPrefix: "prefix",
 				Secrets: []SecretConfig{{
 					From: map[string]ItemContext{"...": {DockerConfigJSONData: []DockerConfigJSONData{{Item: "foo", AuthField: "bar"}}}},
 					To: []SecretContext{{
@@ -111,7 +114,7 @@ func TestResolving(t *testing.T) {
 				}},
 			},
 			expectedConfig: Config{
-				VaultDPTPPRefix: "prefix",
+				VaultDPTPPrefix: "prefix",
 				Secrets: []SecretConfig{{
 					From: map[string]ItemContext{"...": {DockerConfigJSONData: []DockerConfigJSONData{{Item: "prefix/foo", AuthField: "bar"}}}},
 					To: []SecretContext{{
@@ -149,9 +152,7 @@ func TestResolving(t *testing.T) {
 
 func TestLoadConfigFromFile(t *testing.T) {
 	testCases := []struct {
-		name string
-
-		configPath    string
+		name          string
 		expected      Config
 		expectedError error
 	}{
@@ -166,8 +167,8 @@ func TestLoadConfigFromFile(t *testing.T) {
 				Secrets: []SecretConfig{
 					{
 						From: map[string]ItemContext{
-							"ops-mirror.pem": {Item: "mirror.openshift.com", Field: "cert-key.pem"},
-							"rh-cdn.pem":     {Item: "rh-cdn", Field: "rh-cdn.pem"},
+							"ops-mirror.pem": {Item: "dptp/mirror.openshift.com", Field: "cert-key.pem"},
+							"rh-cdn.pem":     {Item: "dptp/rh-cdn", Field: "rh-cdn.pem"},
 						},
 						To: []SecretContext{{
 							Cluster:   "app.ci",
@@ -184,6 +185,8 @@ func TestLoadConfigFromFile(t *testing.T) {
 						}},
 					},
 				},
+				VaultDPTPPrefix:           "dptp",
+				UserSecretsTargetClusters: []string{"app.ci", "build01", "build02"},
 			},
 		},
 		{
@@ -204,6 +207,41 @@ func TestLoadConfigFromFile(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("expected config differs from actual config: %s", diff)
+			}
+		})
+	}
+}
+
+func TestRoundtripConfig(t *testing.T) {
+	testCases := []struct {
+		name string
+	}{
+		{
+			name: "basic base",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &Config{}
+			inFile := filepath.Join("testdata", fmt.Sprintf("%s.yaml", t.Name()))
+			err := LoadConfigFromFile(inFile, c)
+			if err != nil {
+				t.Errorf("error loading config file: %v", err)
+			}
+
+			outFile := filepath.Join("testdata", fmt.Sprintf("%s_out.yaml", t.Name()))
+			err = SaveConfigToFile(outFile, c)
+			if err != nil {
+				t.Errorf("error saving config file: %v", err)
+			}
+
+			in, _ := ioutil.ReadFile(inFile)
+			out, _ := ioutil.ReadFile(outFile)
+			if !bytes.Equal(in, out) {
+				t.Errorf("input and output configs are not equal. See output file: %s", outFile)
+			} else {
+				_ = os.Remove(outFile)
 			}
 		})
 	}

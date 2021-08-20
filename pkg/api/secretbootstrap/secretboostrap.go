@@ -112,6 +112,7 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 	var secrets []SecretConfig
 	for _, s := range c.Secrets {
 		c.stripVaultPrefix(&s)
+		//s.To = append(s.To, groupClusters(&s, c.ClusterGroups)...)
 		s.To = groupClusters(&s, c.ClusterGroups)
 		secrets = append(secrets, s)
 	}
@@ -144,6 +145,17 @@ func groupClusters(s *SecretConfig, clusterGroups map[string][]string) []SecretC
 			}
 
 			scSlice = append(scSlice, sc)
+		} else {
+			//These clusters have no matching group and must be added individually
+			for _, cluster := range clusters {
+				sc := SecretContext{
+					Cluster:   cluster,
+					Namespace: gi.namespace,
+					Name:      gi.name,
+					Type:      gi.typ,
+				}
+				scSlice = append(scSlice, sc)
+			}
 		}
 	}
 	return scSlice

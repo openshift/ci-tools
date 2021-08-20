@@ -23,6 +23,14 @@ secret_configs:
     - cg_2
     name: test.openshift.com
     namespace: ci
+- from:
+    sa.ci-chat-bot.build01.config:
+      field: sa.ci-chat-bot.build01.config
+      item: ci-chat-bot
+  to:
+  - cluster: app.ci
+    name: ci-chat-bot-kubeconfigs
+    namespace: ci
 user_secrets_target_clusters:
 - app.ci
 - build01

@@ -112,7 +112,6 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 	var secrets []SecretConfig
 	for _, s := range c.Secrets {
 		c.stripVaultPrefix(&s)
-		//s.To = append(s.To, groupClusters(&s, c.ClusterGroups)...)
 		s.To = groupClusters(&s, c.ClusterGroups)
 		secrets = append(secrets, s)
 	}

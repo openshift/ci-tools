@@ -1,0 +1,57 @@
+base_images:
+  os:
+    name: centos
+    namespace: openshift
+    tag: '7'
+releases:
+  initial:
+    candidate:
+      product: ocp
+      stream: nightly
+      version: "4.5"
+  latest:
+    integration:
+      namespace: ocp
+      name: "4.7"
+resources:
+  '*':
+    limits:
+      cpu: 500m
+    requests:
+      cpu: 10m
+tests:
+  - as: verify-releases
+    steps:
+      test:
+        - as: initial
+          commands: grep -q '4.5' <<<"$( cluster-version-operator version )"
+          from: "release:initial"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+        - as: initial-cli
+          commands: grep -q '4.5' <<<"$( oc version )"
+          from: "stable-initial:cli"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+        - as: latest
+          commands: grep -q 'v1.0.0' <<<"$( cluster-version-operator version )"
+          from: "release:latest"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+        - as: latest-cli
+          commands: grep -q 'v4.2.0-alpha' <<<"$( oc version )" # oc has a broken version in integration streams
+          from: "stable:cli"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+zz_generated_metadata:
+  branch: master
+  org: test
+  repo: test

@@ -119,35 +119,9 @@ func (s *releaseImagesTagStep) run(ctx context.Context) error {
 		logrus.Infof("Tagged shared images from %s", sourceName(s.config))
 	}
 
-	is := &imagev1.ImageStream{}
-	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.config.Namespace, Name: s.config.Name}, is); err != nil {
-		return fmt.Errorf("could not resolve stable imagestream: %w", err)
-	}
-
-	is.UID = ""
-	newIS := &imagev1.ImageStream{
-		ObjectMeta: meta.ObjectMeta{
-			Namespace:   s.jobSpec.Namespace(),
-			Name:        api.ReleaseStreamFor(api.LatestReleaseName),
-			Annotations: map[string]string{},
-		},
-		Spec: imagev1.ImageStreamSpec{
-			LookupPolicy: imagev1.ImageLookupPolicy{
-				Local: true,
-			},
-		},
-	}
-	if raw, ok := is.ObjectMeta.Annotations[releaseConfigAnnotation]; ok {
-		newIS.ObjectMeta.Annotations[releaseConfigAnnotation] = raw
-	}
-	for _, tag := range is.Status.Tags {
-		if valid, _ := utils.FindStatusTag(is, tag.Tag); valid != nil {
-			newIS.Spec.Tags = append(newIS.Spec.Tags, imagev1.TagReference{
-				Name:            tag.Tag,
-				From:            valid,
-				ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.LocalTagReferencePolicy},
-			})
-		}
+	is, newIS, err := snapshotStream(ctx, s.client, s.config.Namespace, s.config.Name, s.jobSpec.Namespace, api.LatestReleaseName)
+	if err != nil {
+		return err
 	}
 
 	initialIS := newIS.DeepCopy()

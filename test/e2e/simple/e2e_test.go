@@ -22,8 +22,8 @@ import (
 
 func TestSimpleExitCodes(t *testing.T) {
 
-	const defaultJobSpec = (`{"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[]},"decoration_config":{"timeout":"4h0m0s","grace_period":"30m0s","utility_images":{"clonerefs":"registry.ci.openshift.org/ci/clonerefs:latest","initupload":"registry.ci.openshift.org/ci/initupload:latest","entrypoint":"registry.ci.openshift.org/ci/entrypoint:latest","sidecar":"registry.ci.openshift.org/ci/sidecar:latest"},"resources":{"clonerefs":{"limits":{"memory":"3Gi"},"requests":{"cpu":"100m","memory":"500Mi"}},"initupload":{"limits":{"memory":"200Mi"},"requests":{"cpu":"100m","memory":"50Mi"}},"place_entrypoint":{"limits":{"memory":"100Mi"},"requests":{"cpu":"100m","memory":"25Mi"}},"sidecar":{"limits":{"memory":"2Gi"},"requests":{"cpu":"100m","memory":"250Mi"}}},"gcs_configuration":{"bucket":"origin-ci-test","path_strategy":"single","default_org":"openshift","default_repo":"origin","mediaTypes":{"log":"text/plain"}},"gcs_credentials_secret":"gce-sa-credentials-gcs-publisher"}}`)
-	const jobSpecWithSkipClone = (`{"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[]},"decoration_config":{"skip_cloning":true,"timeout":"4h0m0s","grace_period":"30m0s","utility_images":{"clonerefs":"registry.ci.openshift.org/ci/clonerefs:latest","initupload":"registry.ci.openshift.org/ci/initupload:latest","entrypoint":"registry.ci.openshift.org/ci/entrypoint:latest","sidecar":"registry.ci.openshift.org/ci/sidecar:latest"},"resources":{"clonerefs":{"limits":{"memory":"3Gi"},"requests":{"cpu":"100m","memory":"500Mi"}},"initupload":{"limits":{"memory":"200Mi"},"requests":{"cpu":"100m","memory":"50Mi"}},"place_entrypoint":{"limits":{"memory":"100Mi"},"requests":{"cpu":"100m","memory":"25Mi"}},"sidecar":{"limits":{"memory":"2Gi"},"requests":{"cpu":"100m","memory":"250Mi"}}},"gcs_configuration":{"bucket":"origin-ci-test","path_strategy":"single","default_org":"openshift","default_repo":"origin","mediaTypes":{"log":"text/plain"}},"gcs_credentials_secret":"gce-sa-credentials-gcs-publisher"}}`)
+	const defaultJobSpec = `{"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[]},"decoration_config":{"timeout":"4h0m0s","grace_period":"30m0s","utility_images":{"clonerefs":"registry.ci.openshift.org/ci/clonerefs:latest","initupload":"registry.ci.openshift.org/ci/initupload:latest","entrypoint":"registry.ci.openshift.org/ci/entrypoint:latest","sidecar":"registry.ci.openshift.org/ci/sidecar:latest"},"resources":{"clonerefs":{"limits":{"memory":"3Gi"},"requests":{"cpu":"100m","memory":"500Mi"}},"initupload":{"limits":{"memory":"200Mi"},"requests":{"cpu":"100m","memory":"50Mi"}},"place_entrypoint":{"limits":{"memory":"100Mi"},"requests":{"cpu":"100m","memory":"25Mi"}},"sidecar":{"limits":{"memory":"2Gi"},"requests":{"cpu":"100m","memory":"250Mi"}}},"gcs_configuration":{"bucket":"origin-ci-test","path_strategy":"single","default_org":"openshift","default_repo":"origin","mediaTypes":{"log":"text/plain"}},"gcs_credentials_secret":"gce-sa-credentials-gcs-publisher"}}`
+	const jobSpecWithSkipClone = `{"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[]},"decoration_config":{"skip_cloning":true,"timeout":"4h0m0s","grace_period":"30m0s","utility_images":{"clonerefs":"registry.ci.openshift.org/ci/clonerefs:latest","initupload":"registry.ci.openshift.org/ci/initupload:latest","entrypoint":"registry.ci.openshift.org/ci/entrypoint:latest","sidecar":"registry.ci.openshift.org/ci/sidecar:latest"},"resources":{"clonerefs":{"limits":{"memory":"3Gi"},"requests":{"cpu":"100m","memory":"500Mi"}},"initupload":{"limits":{"memory":"200Mi"},"requests":{"cpu":"100m","memory":"50Mi"}},"place_entrypoint":{"limits":{"memory":"100Mi"},"requests":{"cpu":"100m","memory":"25Mi"}},"sidecar":{"limits":{"memory":"2Gi"},"requests":{"cpu":"100m","memory":"250Mi"}}},"gcs_configuration":{"bucket":"origin-ci-test","path_strategy":"single","default_org":"openshift","default_repo":"origin","mediaTypes":{"log":"text/plain"}},"gcs_credentials_secret":"gce-sa-credentials-gcs-publisher"}}`
 	var testCases = []struct {
 		name    string
 		args    []string
@@ -217,113 +217,87 @@ func TestDynamicReleases(t *testing.T) {
 	}
 }
 
-func TestLiteralDynamicRelease(t *testing.T) {
+func resolveOfficialSpec(url string) func(*framework.T) string {
+	return func(t *framework.T) string {
+		type info struct {
+			Nodes []struct {
+				Payload string `json:"payload"`
+			} `json:"nodes"`
+		}
+		var i info
+		raw := do(url, t)
+		if err := json.Unmarshal(raw, &i); err != nil {
+			t.Fatalf("could not parse release from Cincinnati: %v; raw:\n%v", err, string(raw))
+		}
+		if len(i.Nodes) < 1 {
+			t.Fatalf("did not get a release from Cincinnati: raw:\n%v", string(raw))
+		}
+		return i.Nodes[0].Payload
+	}
+}
+
+func resolveSpec(url string) func(*framework.T) string {
+	return func(t *framework.T) string {
+		type info struct {
+			PullSpec string `json:"pullSpec"`
+		}
+		var i info
+		raw := do(url, t)
+		if err := json.Unmarshal(raw, &i); err != nil {
+			t.Fatalf("could not parse release from Cincinnati: %v; raw:\n%v", err, string(raw))
+		}
+		return i.PullSpec
+	}
+}
+
+func do(url string, t *framework.T) []byte {
 	client := retryablehttp.NewClient()
+	req, err := retryablehttp.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("could not create request for Cincinnati: %v", err)
+	}
+	req.Header.Add("Accept", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("could not fetch release from Cincinnati: %v", err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Errorf("could not close response body: %v", err)
+		}
+	}()
+	raw, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("could not read release from Cincinnati: %v", err)
+	}
+	return raw
+}
+
+func TestLiteralDynamicRelease(t *testing.T) {
 	var testCases = []struct {
 		name    string
 		release func(t *framework.T) string
 		target  string
 	}{
 		{
-			name: "published release",
-			release: func(t *framework.T) string {
-				type info struct {
-					Nodes []struct {
-						Payload string `json:"payload"`
-					} `json:"nodes"`
-				}
-				req, err := retryablehttp.NewRequest(http.MethodGet, "https://api.openshift.com/api/upgrades_info/v1/graph?channel=stable-4.4&arch=amd64", nil)
-				if err != nil {
-					t.Fatalf("could not create request for Cincinnati: %v", err)
-				}
-				req.Header.Add("Accept", "application/json")
-				resp, err := client.Do(req)
-				if err != nil {
-					t.Fatalf("could not fetch release from Cincinnati: %v", err)
-				}
-				defer func() {
-					if err := resp.Body.Close(); err != nil {
-						t.Errorf("could not close response body: %v", err)
-					}
-				}()
-				raw, err := ioutil.ReadAll(resp.Body)
-				if err != nil {
-					t.Fatalf("could not read release from Cincinnati: %v", err)
-				}
-				var i info
-				if err := json.Unmarshal(raw, &i); err != nil {
-					t.Fatalf("could not parse release from Cincinnati: %v; raw:\n%v", err, string(raw))
-				}
-				if len(i.Nodes) < 1 {
-					t.Fatalf("did not get a release from Cincinnati: raw:\n%v", string(raw))
-				}
-				return i.Nodes[0].Payload
-			},
-			target: "latest",
+			name:    "published release",
+			release: resolveOfficialSpec("https://api.openshift.com/api/upgrades_info/v1/graph?channel=stable-4.4&arch=amd64"),
+			target:  "latest",
 		},
 		{
-			name: "nightly release",
-			release: func(t *framework.T) string {
-				type info struct {
-					PullSpec string `json:"pullSpec"`
-				}
-				req, err := http.NewRequest(http.MethodGet, "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.5.0-0.nightly/latest?rel=1", nil)
-				if err != nil {
-					t.Fatalf("could not create request for Cincinnati: %v", err)
-				}
-				req.Header.Add("Accept", "application/json")
-				resp, err := http.DefaultClient.Do(req)
-				if err != nil {
-					t.Fatalf("could not fetch release from Cincinnati: %v", err)
-				}
-				defer func() {
-					if err := resp.Body.Close(); err != nil {
-						t.Errorf("could not close response body: %v", err)
-					}
-				}()
-				raw, err := ioutil.ReadAll(resp.Body)
-				if err != nil {
-					t.Fatalf("could not read release from Cincinnati: %v", err)
-				}
-				var i info
-				if err := json.Unmarshal(raw, &i); err != nil {
-					t.Fatalf("could not parse release from Cincinnati: %v; raw:\n%v", err, string(raw))
-				}
-				return i.PullSpec
-			},
-			target: "latest",
+			name:    "nightly release",
+			release: resolveSpec("https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.5.0-0.nightly/latest?rel=1"),
+			target:  "latest",
 		},
 		{
-			name: "non-x86 release",
-			release: func(t *framework.T) string {
-				type info struct {
-					PullSpec string `json:"pullSpec"`
-				}
-				req, err := http.NewRequest(http.MethodGet, "https://s390x.ocp.releases.ci.openshift.org/api/v1/releasestream/4.9.0-0.nightly-s390x/latest?rel=1", nil)
-				if err != nil {
-					t.Fatalf("could not create request for Cincinnati: %v", err)
-				}
-				req.Header.Add("Accept", "application/json")
-				resp, err := http.DefaultClient.Do(req)
-				if err != nil {
-					t.Fatalf("could not fetch release from Cincinnati: %v", err)
-				}
-				defer func() {
-					if err := resp.Body.Close(); err != nil {
-						t.Errorf("could not close response body: %v", err)
-					}
-				}()
-				raw, err := ioutil.ReadAll(resp.Body)
-				if err != nil {
-					t.Fatalf("could not read release from Cincinnati: %v", err)
-				}
-				var i info
-				if err := json.Unmarshal(raw, &i); err != nil {
-					t.Fatalf("could not parse release from Cincinnati: %v; raw:\n%v", err, string(raw))
-				}
-				return i.PullSpec
-			},
-			target: "mainframe",
+			name:    "non-x86 release",
+			release: resolveSpec("https://s390x.ocp.releases.ci.openshift.org/api/v1/releasestream/4.9.0-0.nightly-s390x/latest?rel=1"),
+			target:  "mainframe",
+		},
+		{
+			name:    "built release",
+			release: resolveSpec("https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.5.0-0.nightly/latest?rel=1"),
+			target:  "assembled",
 		},
 	}
 	for _, testCase := range testCases {

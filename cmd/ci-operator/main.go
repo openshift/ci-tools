@@ -1784,7 +1784,7 @@ func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 					}
 				}
 				// De-Duplicate errors
-				errMessages.Insert(fmt.Sprintf("step <%T> is missing dependencies: %s", node.Step, strings.Join(missing.List(), ", ")))
+				errMessages.Insert(fmt.Sprintf("step %s is missing dependencies: %s", node.Step.Name(), strings.Join(missing.List(), ", ")))
 			}
 			for _, message := range errMessages.List() {
 				logrus.Info(message)

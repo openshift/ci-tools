@@ -112,7 +112,7 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 	var secrets []SecretConfig
 	for _, s := range c.Secrets {
 		c.stripVaultPrefix(&s)
-		s.To = s.groupClusters()
+		s.groupClusters()
 		secrets = append(secrets, s)
 	}
 
@@ -120,8 +120,8 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 	return json.Marshal(target)
 }
 
-func (s *SecretConfig) groupClusters() []SecretContext {
-	var scSlice []SecretContext
+func (s *SecretConfig) groupClusters() {
+	var secrets []SecretContext
 	for _, to := range s.To {
 		if len(to.ClusterGroups) > 0 {
 			sc := SecretContext{
@@ -131,22 +131,22 @@ func (s *SecretConfig) groupClusters() []SecretContext {
 				Type:          to.Type,
 			}
 			present := false
-			for _, context := range scSlice {
+			for _, context := range secrets {
 				if reflect.DeepEqual(context, sc) {
 					present = true
 					break
 				}
 			}
 			if !present {
-				scSlice = append(scSlice, sc)
+				secrets = append(secrets, sc)
 			}
 		} else {
 			// This cluster was not from a group, so nothing special needs to be done
-			scSlice = append(scSlice, to)
+			secrets = append(secrets, to)
 		}
 	}
 
-	return scSlice
+	s.To = secrets
 }
 
 func (c *Config) stripVaultPrefix(s *SecretConfig) {

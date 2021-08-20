@@ -1399,97 +1399,6 @@ func TestUpdateSecrets(t *testing.T) {
 			},
 		},
 		{
-			name: "basic case with force, unrelated keys are kept",
-			existSecretsOnDefault: []runtime.Object{
-				&coreapi.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "prod-secret-1",
-						Namespace: "namespace-1",
-					},
-					Data: map[string][]byte{
-						"key-name-1": []byte("abc"),
-						"unmanaged":  []byte("data"),
-					},
-				},
-			},
-			secretsMap: map[string][]*coreapi.Secret{
-				"default": {
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "prod-secret-1",
-							Namespace: "namespace-1",
-							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
-						},
-						Data: map[string][]byte{
-							"key-name-1": []byte("value1"),
-							"key-name-2": []byte("value2"),
-							"key-name-3": []byte("attachment-name-1-1-value"),
-							"key-name-4": []byte("value3"),
-							"key-name-5": []byte("attachment-name-2-1-value"),
-							"key-name-6": []byte("attachment-name-3-2-value"),
-							"key-name-7": []byte("yyy"),
-						},
-					},
-				},
-				"build01": {
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "prod-secret-2",
-							Namespace: "namespace-2",
-							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
-						},
-						Data: map[string][]byte{
-							"key-name-1": []byte("value1"),
-							"key-name-2": []byte("value2"),
-							"key-name-3": []byte("attachment-name-1-1-value"),
-							"key-name-4": []byte("value3"),
-							"key-name-5": []byte("attachment-name-2-1-value"),
-							"key-name-6": []byte("attachment-name-3-2-value"),
-							"key-name-7": []byte("yyy"),
-						},
-					},
-				},
-			},
-			force: true,
-			expectedSecretsOnDefault: []coreapi.Secret{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "prod-secret-1",
-						Namespace: "namespace-1",
-						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
-					},
-					Data: map[string][]byte{
-						"key-name-1": []byte("value1"),
-						"key-name-2": []byte("value2"),
-						"key-name-3": []byte("attachment-name-1-1-value"),
-						"key-name-4": []byte("value3"),
-						"key-name-5": []byte("attachment-name-2-1-value"),
-						"key-name-6": []byte("attachment-name-3-2-value"),
-						"key-name-7": []byte("yyy"),
-						"unmanaged":  []byte("data"),
-					},
-				},
-			},
-			expectedSecretsOnBuild01: []coreapi.Secret{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "prod-secret-2",
-						Namespace: "namespace-2",
-						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
-					},
-					Data: map[string][]byte{
-						"key-name-1": []byte("value1"),
-						"key-name-2": []byte("value2"),
-						"key-name-3": []byte("attachment-name-1-1-value"),
-						"key-name-4": []byte("value3"),
-						"key-name-5": []byte("attachment-name-2-1-value"),
-						"key-name-6": []byte("attachment-name-3-2-value"),
-						"key-name-7": []byte("yyy"),
-					},
-				},
-			},
-		},
-		{
 			name: "basic case without force: not semantically equal",
 			existSecretsOnDefault: []runtime.Object{
 				&coreapi.Secret{
@@ -2678,6 +2587,211 @@ func TestIntegration(t *testing.T) {
 				},
 			},
 			expectedError: utilerrors.NewAggregate([]error{errors.New("the some-data-key key in secret namespace-3/some-name is referenced by multiple vault items: secret/user-item-1,secret/user-item-2")}),
+		},
+		{
+			id:    "Successfully create secret from config and vault user secret in multiple selected clusters",
+			force: true,
+			config: secretbootstrap.Config{
+				UserSecretsTargetClusters: []string{"cluster-1", "cluster-2", "cluster-3"},
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.ItemContext{
+							"key-name-1": {
+								Item:  "item-name-1",
+								Field: "field-name-1",
+							},
+						},
+						To: []secretbootstrap.SecretContext{
+							{
+								Cluster:   "cluster-1",
+								Namespace: "namespace-1",
+								Name:      "prod-secret-1",
+							},
+						},
+					},
+				},
+			},
+			secretGetters: map[string]Getter{
+				"cluster-1": fake.NewSimpleClientset().CoreV1(),
+				"cluster-2": fake.NewSimpleClientset().CoreV1(),
+				"cluster-3": fake.NewSimpleClientset().CoreV1(),
+			},
+
+			vaultData: map[string]map[string][]byte{
+				"item-name-1": {"field-name-1": []byte("secret-data")},
+				"user-item-1": {
+					"some-data-key":               []byte("a-secret"),
+					"secretsync/target-namespace": []byte("namespace-1"),
+					"secretsync/target-name":      []byte("prod-secret-1"),
+					"secretsync/target-clusters":  []byte("cluster-1,cluster-3"),
+				},
+			},
+			expectedSecrets: map[string][]coreapi.Secret{
+				"cluster-1": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "prod-secret-1", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data: map[string][]byte{
+							"key-name-1":                   []byte("secret-data"),
+							"some-data-key":                []byte("a-secret"),
+							"secretsync-vault-source-path": []byte("secret/user-item-1"),
+						},
+						Type: coreapi.SecretTypeOpaque,
+					},
+				},
+				"cluster-3": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "prod-secret-1", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data: map[string][]byte{
+							"some-data-key":                []byte("a-secret"),
+							"secretsync-vault-source-path": []byte("secret/user-item-1"),
+						},
+						Type: coreapi.SecretTypeOpaque,
+					},
+				},
+			},
+		},
+		{
+			id:    "Existing config secret with stale keys should be removed",
+			force: true,
+			config: secretbootstrap.Config{
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.ItemContext{
+							"key-name-1": {
+								Item:  "item-name-1",
+								Field: "field-name-1",
+							},
+						},
+						To: []secretbootstrap.SecretContext{
+							{
+								Cluster:   "cluster-1",
+								Namespace: "namespace-1",
+								Name:      "prod-secret-1",
+							},
+						},
+					},
+				},
+			},
+			secretGetters: map[string]Getter{
+				"cluster-1": fake.NewSimpleClientset([]runtime.Object{
+					&coreapi.Secret{
+						ObjectMeta: metav1.ObjectMeta{Name: "prod-secret-1", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data:       map[string][]byte{"old-key-1": []byte("old-value"), "old-key-2": []byte("old-value")},
+						Type:       coreapi.SecretTypeOpaque,
+					},
+				}...).CoreV1(),
+			},
+
+			vaultData: map[string]map[string][]byte{
+				"item-name-1": {"field-name-1": []byte("secret-data")},
+			},
+			expectedSecrets: map[string][]coreapi.Secret{
+				"cluster-1": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "prod-secret-1", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data: map[string][]byte{
+							"key-name-1": []byte("secret-data"),
+						},
+						Type: coreapi.SecretTypeOpaque,
+					},
+				},
+			},
+		},
+		{
+			id:    "Existing user secret with stale keys should be removed",
+			force: true,
+			config: secretbootstrap.Config{
+				UserSecretsTargetClusters: []string{"cluster-1"},
+			},
+			secretGetters: map[string]Getter{
+				"cluster-1": fake.NewSimpleClientset([]runtime.Object{
+					&coreapi.Secret{
+						ObjectMeta: metav1.ObjectMeta{Name: "prod-secret-1", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data:       map[string][]byte{"old-key-1": []byte("old-value"), "old-key-2": []byte("old-value")},
+						Type:       coreapi.SecretTypeOpaque,
+					},
+				}...).CoreV1(),
+			},
+
+			vaultData: map[string]map[string][]byte{
+				"user-item-1": {
+					"some-data-key":               []byte("a-secret"),
+					"secretsync/target-namespace": []byte("namespace-1"),
+					"secretsync/target-name":      []byte("prod-secret-1"),
+					"secretsync/target-clusters":  []byte("cluster-1"),
+				},
+			},
+			expectedSecrets: map[string][]coreapi.Secret{
+				"cluster-1": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "prod-secret-1", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data: map[string][]byte{
+							"some-data-key":                []byte("a-secret"),
+							"secretsync-vault-source-path": []byte("secret/user-item-1"),
+						},
+						Type: coreapi.SecretTypeOpaque,
+					},
+				},
+			},
+		},
+		{
+			id:    "Combined config and user secret with stale keys should be removed",
+			force: true,
+			config: secretbootstrap.Config{
+				UserSecretsTargetClusters: []string{"cluster-1"},
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.ItemContext{
+							"key-name-1": {
+								Item:  "item-name-1",
+								Field: "field-name-1",
+							},
+						},
+						To: []secretbootstrap.SecretContext{
+							{
+								Cluster:   "cluster-1",
+								Namespace: "namespace-1",
+								Name:      "prod-secret-1",
+							},
+						},
+					},
+				},
+			},
+			secretGetters: map[string]Getter{
+				"cluster-1": fake.NewSimpleClientset([]runtime.Object{
+					&coreapi.Secret{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "prod-secret-1",
+							Namespace: "namespace-1",
+						},
+						Data: map[string][]byte{"old-key-1": []byte("old-value"), "old-key-2": []byte("old-value")},
+						Type: coreapi.SecretTypeOpaque,
+					},
+				}...).CoreV1(),
+			},
+
+			vaultData: map[string]map[string][]byte{
+				"item-name-1": {"field-name-1": []byte("secret-data")},
+				"user-item-1": {
+					"some-data-key":               []byte("a-secret"),
+					"secretsync/target-namespace": []byte("namespace-1"),
+					"secretsync/target-name":      []byte("prod-secret-1"),
+					"secretsync/target-clusters":  []byte("cluster-1"),
+				},
+			},
+			expectedSecrets: map[string][]coreapi.Secret{
+				"cluster-1": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "prod-secret-1", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data: map[string][]byte{
+							"key-name-1":                   []byte("secret-data"),
+							"some-data-key":                []byte("a-secret"),
+							"secretsync-vault-source-path": []byte("secret/user-item-1"),
+						},
+						Type: coreapi.SecretTypeOpaque,
+					},
+				},
+			},
 		},
 	}
 

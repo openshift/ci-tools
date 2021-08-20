@@ -514,13 +514,16 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 					shouldCreate = true
 				}
 
-				if !shouldCreate {
-					for k, v := range existingSecret.Data {
+				if len(secret.Data) > 0 {
+					for k := range existingSecret.Data {
 						if _, exists := secret.Data[k]; exists {
 							continue
 						}
-						secret.Data[k] = v
+						logger.WithFields(logrus.Fields{"cluster": cluster, "key": k, "namespace": existingSecret.Namespace, "secret": existingSecret.Name}).Warning("Stale key in secret will be deleted")
 					}
+				}
+
+				if !shouldCreate {
 					if !force && !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data) {
 						logger.Errorf("actual secret data differs the expected")
 						errs = append(errs, fmt.Errorf("secret %s:%s/%s needs updating in place, use --force to do so", cluster, secret.Namespace, secret.Name))

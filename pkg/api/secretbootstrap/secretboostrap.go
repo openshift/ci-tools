@@ -21,7 +21,7 @@ const (
 )
 
 type ItemContext struct {
-	Item                 string                 `json:"item"`
+	Item                 string                 `json:"item,omitempty"`
 	Field                string                 `json:"field,omitempty"`
 	DockerConfigJSONData []DockerConfigJSONData `json:"dockerconfigJSON,omitempty"`
 	// If the secret should be base64 decoded before uploading to kube. Encoding
@@ -164,6 +164,9 @@ func (c *Config) stripVaultPrefix(s *SecretConfig) {
 	pre := c.VaultDPTPPrefix + "/"
 	for key, from := range s.From {
 		from.Item = strings.Replace(from.Item, pre, "", 1)
+		for i, dcj := range from.DockerConfigJSONData {
+			from.DockerConfigJSONData[i].Item = strings.Replace(dcj.Item, pre, "", 1)
+		}
 		s.From[key] = from
 	}
 }

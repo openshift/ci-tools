@@ -31,6 +31,20 @@ secret_configs:
   - cluster: app.ci
     name: ci-chat-bot-kubeconfigs
     namespace: ci
+- from:
+    .dockerconfigjson:
+      dockerconfigJSON:
+      - auth_field: token_image-pusher_app.ci_reg_auth_value.txt
+        item: build_farm
+        registry_url: image-registry.openshift-image-registry.svc.cluster.local:5000
+      - auth_field: token_image-pusher_app.ci_reg_auth_value.txt
+        item: build_farm
+        registry_url: image-registry.openshift-image-registry.svc:5000
+  to:
+  - cluster: app.ci
+    name: registry-push-credentials-ci-central
+    namespace: ci
+    type: kubernetes.io/dockerconfigjson
 user_secrets_target_clusters:
 - app.ci
 - build01

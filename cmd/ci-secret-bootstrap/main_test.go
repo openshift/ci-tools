@@ -440,7 +440,7 @@ func TestCompleteOptions(t *testing.T) {
 				ClusterGroups: map[string][]string{"group-a": {"default"}},
 				Secrets: []secretbootstrap.SecretConfig{{
 					From: map[string]secretbootstrap.ItemContext{"key-name-1": {Item: "item-name-1", Field: "field-name-1"}},
-					To:   []secretbootstrap.SecretContext{{Cluster: "default", Namespace: "ns", Name: "name"}},
+					To:   []secretbootstrap.SecretContext{{ClusterGroups: []string{"group-a"}, Cluster: "default", Namespace: "ns", Name: "name"}},
 				}},
 			},
 			expectedClusters: []string{"default"},

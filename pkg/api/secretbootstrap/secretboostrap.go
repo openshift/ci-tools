@@ -112,7 +112,7 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 	var secrets []SecretConfig
 	for _, s := range c.Secrets {
 		c.stripVaultPrefix(&s)
-		s.To = groupClusters(&s, c.ClusterGroups)
+		s.To = s.groupClusters()
 		secrets = append(secrets, s)
 	}
 
@@ -120,43 +120,32 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 	return json.Marshal(target)
 }
 
-func groupClusters(s *SecretConfig, clusterGroups map[string][]string) []SecretContext {
+func (s *SecretConfig) groupClusters() []SecretContext {
 	var scSlice []SecretContext
-	type GroupInfo struct {
-		name      string
-		namespace string
-		typ       corev1.SecretType
-	}
-	giToClusters := make(map[GroupInfo][]string)
 	for _, to := range s.To {
-		n := GroupInfo{name: to.Name, namespace: to.Namespace, typ: to.Type}
-		current := giToClusters[n]
-		giToClusters[n] = append(current, to.Cluster)
-	}
-	for gi, clusters := range giToClusters {
-		group := findMatchingClusterGroup(clusters, clusterGroups)
-		if group != "" {
+		if len(to.ClusterGroups) > 0 {
 			sc := SecretContext{
-				ClusterGroups: []string{group},
-				Namespace:     gi.namespace,
-				Name:          gi.name,
-				Type:          gi.typ,
+				ClusterGroups: to.ClusterGroups,
+				Namespace:     to.Namespace,
+				Name:          to.Name,
+				Type:          to.Type,
 			}
-
-			scSlice = append(scSlice, sc)
-		} else {
-			//These clusters have no matching group and must be added individually
-			for _, cluster := range clusters {
-				sc := SecretContext{
-					Cluster:   cluster,
-					Namespace: gi.namespace,
-					Name:      gi.name,
-					Type:      gi.typ,
+			present := false
+			for _, context := range scSlice {
+				if reflect.DeepEqual(context, sc) {
+					present = true
+					break
 				}
+			}
+			if !present {
 				scSlice = append(scSlice, sc)
 			}
+		} else {
+			// This cluster was not from a group, so nothing special needs to be done
+			scSlice = append(scSlice, to)
 		}
 	}
+
 	return scSlice
 }
 
@@ -169,15 +158,6 @@ func (c *Config) stripVaultPrefix(s *SecretConfig) {
 		}
 		s.From[key] = from
 	}
-}
-
-func findMatchingClusterGroup(clusters []string, clusterGroups map[string][]string) string {
-	for key, inGroup := range clusterGroups {
-		if reflect.DeepEqual(clusters, inGroup) {
-			return key
-		}
-	}
-	return ""
 }
 
 func (c *Config) Validate() error {
@@ -227,10 +207,11 @@ func (c *Config) resolve() error {
 				}
 				for _, cluster := range clusters {
 					newTo = append(newTo, SecretContext{
-						Cluster:   cluster,
-						Namespace: to.Namespace,
-						Name:      to.Name,
-						Type:      to.Type,
+						ClusterGroups: to.ClusterGroups,
+						Cluster:       cluster,
+						Namespace:     to.Namespace,
+						Name:          to.Name,
+						Type:          to.Type,
 					})
 				}
 			}

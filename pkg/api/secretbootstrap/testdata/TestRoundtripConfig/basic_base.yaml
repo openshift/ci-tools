@@ -6,6 +6,8 @@ cluster_groups:
   cg_2:
   - build03
   - build04
+  cg_3:
+  - build01
 secret_configs:
 - from:
     ops-mirror.pem:
@@ -21,6 +23,7 @@ secret_configs:
     namespace: ocp
   - cluster_groups:
     - cg_2
+    - cg_3
     name: test.openshift.com
     namespace: ci
 - from:
@@ -29,6 +32,9 @@ secret_configs:
       item: ci-chat-bot
   to:
   - cluster: app.ci
+    name: ci-chat-bot-kubeconfigs
+    namespace: ci
+  - cluster: build01
     name: ci-chat-bot-kubeconfigs
     namespace: ci
 - from:

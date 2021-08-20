@@ -1064,6 +1064,8 @@ const (
 	ClusterProfileOpenStackPpc64le      ClusterProfile = "openstack-ppc64le"
 	ClusterProfileOvirt                 ClusterProfile = "ovirt"
 	ClusterProfilePacket                ClusterProfile = "packet"
+	ClusterProfilePacketAssisted        ClusterProfile = "packet-assisted"
+	ClusterProfilePacketSNO             ClusterProfile = "packet-sno"
 	ClusterProfileVSphere               ClusterProfile = "vsphere"
 	ClusterProfileKubevirt              ClusterProfile = "kubevirt"
 	ClusterProfileAWSCPaaS              ClusterProfile = "aws-cpaas"
@@ -1105,6 +1107,8 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileOpenStackPpc64le,
 		ClusterProfileOvirt,
 		ClusterProfilePacket,
+		ClusterProfilePacketAssisted,
+		ClusterProfilePacketSNO,
 		ClusterProfileVSphere,
 		ClusterProfileKubevirt,
 		ClusterProfileAWSCPaaS,
@@ -1172,7 +1176,10 @@ func (p ClusterProfile) ClusterType() string {
 		return "vsphere"
 	case ClusterProfileOvirt:
 		return "ovirt"
-	case ClusterProfilePacket:
+	case
+		ClusterProfilePacket,
+		ClusterProfilePacketAssisted,
+		ClusterProfilePacketSNO:
 		return "packet"
 	case ClusterProfileKubevirt:
 		return "kubevirt"
@@ -1239,7 +1246,10 @@ func (p ClusterProfile) LeaseType() string {
 		return "openstack-ppc64le-quota-slice"
 	case ClusterProfileOvirt:
 		return "ovirt-quota-slice"
-	case ClusterProfilePacket:
+	case
+		ClusterProfilePacket,
+		ClusterProfilePacketAssisted,
+		ClusterProfilePacketSNO:
 		return "packet-quota-slice"
 	case ClusterProfileVSphere:
 		return "vsphere-quota-slice"

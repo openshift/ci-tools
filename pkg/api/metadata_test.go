@@ -1,10 +1,15 @@
 package api
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"k8s.io/utils/diff"
+
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestMetadata_IsComplete(t *testing.T) {
@@ -344,6 +349,68 @@ func TestFlavorForBranch(t *testing.T) {
 		t.Run(testCase.expected, func(t *testing.T) {
 			if actual, expected := FlavorForBranch(testCase.branch), testCase.expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: didn't get correct basename: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
+			}
+		})
+	}
+}
+
+func TestMetadataTestFromString(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		expected    *MetadataWithTest
+		expectedErr error
+	}{
+		{
+			name:  "happy case",
+			input: "org/repo@branch:test",
+			expected: &MetadataWithTest{
+				Metadata: Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+				Test:     "test",
+			},
+		},
+		{
+			name:  "happy case with variant",
+			input: "orgz/repoz@branchz__variantz:testz",
+			expected: &MetadataWithTest{
+				Metadata: Metadata{Org: "orgz", Repo: "repoz", Branch: "branchz", Variant: "variantz"},
+				Test:     "testz",
+			},
+		},
+		{
+			name:        "missing org",
+			input:       "repoz@branchz__variantz:testz",
+			expectedErr: errors.New("test path not in org/repo@branch:test or org/repo@branch__variant:test format: repoz@branchz__variantz:testz"),
+		},
+		{
+			name:        "missing branch",
+			input:       "o/r@:t",
+			expectedErr: errors.New("test path not in org/repo@branch:test or org/repo@branch__variant:test format: o/r@:t"),
+		},
+		{
+			name:        "missing branch with variant",
+			input:       "o/r@__v:t",
+			expectedErr: errors.New("test path not in org/repo@branch:test or org/repo@branch__variant:test format: o/r@__v:t"),
+		},
+		{
+			name:        "missing test",
+			input:       "o/r@b",
+			expectedErr: errors.New("test path not in org/repo@branch:test or org/repo@branch__variant:test format: o/r@b"),
+		},
+		{
+			name:        "missing test with variant",
+			input:       "o/r@b__v",
+			expectedErr: errors.New("test path not in org/repo@branch:test or org/repo@branch__variant:test format: o/r@b__v"),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := MetadataTestFromString(tc.input)
+			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("error differs from expected:\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.expected, actual); tc.expectedErr == nil && diff != "" {
+				t.Errorf("result differs from expected:\n%s", diff)
 			}
 		})
 	}

@@ -609,7 +609,7 @@ func TestConfig(t *testing.T) {
 					t.Fatalf("%s: failed to populate env var: %v", testCase.name, err)
 				}
 			}
-			config, err := Config(path, "", "", "", nil)
+			config, err := Config(path, "", "", nil, nil)
 			if err == nil && testCase.expectedError {
 				t.Errorf("%s: expected an error, but got none", testCase.name)
 			}

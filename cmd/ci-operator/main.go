@@ -73,6 +73,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/registry/server"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
@@ -373,11 +374,15 @@ type options struct {
 	authors                       []string
 
 	resolverAddress string
-	registryPath    string
-	org             string
-	repo            string
-	branch          string
-	variant         string
+	resolverClient  server.ResolverClient
+
+	registryPath string
+	org          string
+	repo         string
+	branch       string
+	variant      string
+
+	injectTest string
 
 	metadataRevision int
 
@@ -456,6 +461,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.branch, "branch", "", "Branch of the project (used by configresolver)")
 	flag.StringVar(&opt.variant, "variant", "", "Variant of the project's ci-operator config (used by configresolver)")
 
+	flag.StringVar(&opt.injectTest, "with-test-from", "", "Inject a test from another ci-operator config, specified by ORG/REPO@BRANCH{__VARIANT}:TEST or JSON (used by configresolver)")
+
 	flag.StringVar(&opt.pullSecretPath, "image-import-pull-secret", "", "A set of dockercfg credentials used to import images for the tag_specification.")
 	flag.StringVar(&opt.pushSecretPath, "image-mirror-push-secret", "", "A set of dockercfg credentials used to mirror images for the promotion.")
 	flag.StringVar(&opt.uploadSecretPath, "gcs-upload-secret", "", "GCS credentials used to upload logs and artifacts.")
@@ -498,6 +505,7 @@ func (o *options) Complete() error {
 	o.jobSpec.Target = target
 
 	info := o.getResolverInfo(jobSpec)
+	o.resolverClient = server.NewResolverClient(o.resolverAddress)
 
 	if o.unresolvedConfigPath != "" && o.configSpecPath != "" {
 		return errors.New("cannot set --config and --unresolved-config at the same time")
@@ -506,10 +514,28 @@ func (o *options) Complete() error {
 		return errors.New("cannot request resolved config with --unresolved-config unless providing --resolver-address")
 	}
 
-	config, err := load.Config(o.configSpecPath, o.unresolvedConfigPath, o.registryPath, o.resolverAddress, info)
+	injectTest, err := o.getInjectTest()
+	if err != nil {
+		return err
+	}
+
+	var config *api.ReleaseBuildConfiguration
+	if injectTest != nil {
+		if o.resolverAddress == "" {
+			return errors.New("cannot request config with injected test without providing --resolver-address")
+		}
+		if o.unresolvedConfigPath != "" || o.configSpecPath != "" {
+			return errors.New("cannot request injecting test into locally provided config")
+		}
+		config, err = o.resolverClient.ConfigWithTest(info, injectTest)
+	} else {
+		config, err = load.Config(o.configSpecPath, o.unresolvedConfigPath, o.registryPath, o.resolverClient, info)
+	}
+
 	if err != nil {
 		return results.ForReason("loading_config").WithError(err).Errorf("failed to load configuration: %v", err)
 	}
+
 	if len(o.gitRef) != 0 && config.CanonicalGoRepository != nil {
 		o.jobSpec.Refs.PathAlias = *config.CanonicalGoRepository
 	}
@@ -2009,6 +2035,18 @@ func (o *options) getResolverInfo(jobSpec *api.JobSpec) *api.Metadata {
 		info.Branch = o.branch
 	}
 	return info
+}
+
+func (o *options) getInjectTest() (*api.MetadataWithTest, error) {
+	if o.injectTest == "" {
+		return nil, nil
+	}
+	var ret api.MetadataWithTest
+	if err := json.Unmarshal([]byte(o.injectTest), &ret); err == nil {
+		return &ret, nil
+	}
+
+	return api.MetadataTestFromString(o.injectTest)
 }
 
 func monitorNamespace(ctx context.Context, cancel func(), namespace string, client coreclientset.NamespaceInterface) {

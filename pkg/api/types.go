@@ -1666,3 +1666,8 @@ const (
 
 	ComponentFormatReplacement = "${component}"
 )
+
+type MetadataWithTest struct {
+	Metadata
+	Test string
+}

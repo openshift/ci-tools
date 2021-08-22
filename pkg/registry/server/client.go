@@ -8,17 +8,28 @@ import (
 	"net/http"
 
 	"github.com/sirupsen/logrus"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
-// ResolverClient
-type ResolverClient struct {
+type ResolverClient interface {
+	Config(*api.Metadata) (*api.ReleaseBuildConfiguration, error)
+	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error)
+	Resolve([]byte) (*api.ReleaseBuildConfiguration, error)
+}
+
+func NewResolverClient(address string) ResolverClient {
+	return &resolverClient{Address: address}
+}
+
+type resolverClient struct {
 	Address string
 }
 
-func (r *ResolverClient) Config(info *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
+func (r *resolverClient) Config(info *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
 	logrus.Infof("Loading configuration from %s for %s", r.Address, info.AsString())
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/config", r.Address), nil)
 	if err != nil {
@@ -35,7 +46,36 @@ func (r *ResolverClient) Config(info *api.Metadata) (*api.ReleaseBuildConfigurat
 	return configFromResolverRequest(req)
 }
 
-func (r *ResolverClient) Resolve(raw []byte) (*api.ReleaseBuildConfiguration, error) {
+func (r *resolverClient) ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error) {
+	logrus.Infof("Loading configuration from %s for %s", r.Address, base.AsString())
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/configWithInjectedTest", r.Address), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request for configresolver: %w", err)
+	}
+	query := req.URL.Query()
+	optional := sets.NewString(VariantQuery, InjectFromVariantQuery)
+	for k, v := range map[string]string{
+		InjectTestQuery:        testSource.Test,
+		InjectFromOrgQuery:     testSource.Org,
+		InjectFromRepoQuery:    testSource.Repo,
+		InjectFromBranchQuery:  testSource.Branch,
+		InjectFromVariantQuery: testSource.Variant,
+		OrgQuery:               base.Org,
+		RepoQuery:              base.Repo,
+		BranchQuery:            base.Branch,
+		VariantQuery:           base.Variant,
+	} {
+		if len(v) == 0 && !optional.Has(k) {
+			return nil, fmt.Errorf("param cannot be empty: %s", k)
+		}
+		query.Add(k, v)
+	}
+
+	req.URL.RawQuery = query.Encode()
+	return configFromResolverRequest(req)
+}
+
+func (r *resolverClient) Resolve(raw []byte) (*api.ReleaseBuildConfiguration, error) {
 	// check that the user has sent us something reasonable
 	unresolvedConfig := &api.ReleaseBuildConfiguration{}
 	if err := yaml.UnmarshalStrict(raw, unresolvedConfig); err != nil {

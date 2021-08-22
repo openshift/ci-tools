@@ -96,7 +96,7 @@ func fromPath(path string) (filenameToConfig, error) {
 		errGroup.Go(func() error {
 			ext := filepath.Ext(path)
 			if !info.IsDir() && (ext == ".yml" || ext == ".yaml") {
-				configSpec, err := Config(path, "", "", "", nil)
+				configSpec, err := Config(path, "", "", nil, nil)
 				if err != nil {
 					return fmt.Errorf("failed to load ci-operator config (%w)", err)
 				}
@@ -117,8 +117,7 @@ func fromPath(path string) (filenameToConfig, error) {
 	return configs, utilerrors.NewAggregate([]error{err, errGroup.Wait()})
 }
 
-func Config(path, unresolvedPath, registryPath, resolverAddress string, info *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
-	resolver := server.ResolverClient{Address: resolverAddress}
+func Config(path, unresolvedPath, registryPath string, resolver server.ResolverClient, info *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
 	// Load the standard configuration path, env, or configresolver (in that order of priority)
 	var raw string
 

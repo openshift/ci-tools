@@ -95,9 +95,8 @@ func resolveAndRespond(resolver Resolver, config api.ReleaseBuildConfiguration, 
 	}
 }
 
-func injectTestFromQuery(w http.ResponseWriter, r *http.Request) (api.Metadata, string, error) {
-	var metadata api.Metadata
-	var test string
+func injectTestFromQuery(w http.ResponseWriter, r *http.Request) (*api.MetadataWithTest, error) {
+	var ret api.MetadataWithTest
 
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusNotImplemented)
@@ -105,25 +104,25 @@ func injectTestFromQuery(w http.ResponseWriter, r *http.Request) (api.Metadata, 
 		if _, errWrite := w.Write([]byte(http.StatusText(http.StatusNotImplemented))); errWrite != nil {
 			err = fmt.Errorf("%s and writing the response body failed with %w", err.Error(), errWrite)
 		}
-		return metadata, test, err
+		return &ret, err
 	}
 
 	for query, field := range map[string]*string{
-		InjectFromOrgQuery:    &metadata.Org,
-		InjectFromRepoQuery:   &metadata.Repo,
-		InjectFromBranchQuery: &metadata.Branch,
-		InjectTestQuery:       &test,
+		InjectFromOrgQuery:    &ret.Org,
+		InjectFromRepoQuery:   &ret.Repo,
+		InjectFromBranchQuery: &ret.Branch,
+		InjectTestQuery:       &ret.Test,
 	} {
 		value := r.URL.Query().Get(query)
 		if value == "" {
 			MissingQuery(w, query)
-			return metadata, test, fmt.Errorf("missing query %s", query)
+			return &ret, fmt.Errorf("missing query %s", query)
 		}
 		*field = value
 	}
-	metadata.Variant = r.URL.Query().Get(InjectFromVariantQuery)
+	ret.Variant = r.URL.Query().Get(InjectFromVariantQuery)
 
-	return metadata, test, nil
+	return &ret, nil
 }
 
 func ResolveConfigWithInjectedTest(configs Getter, resolver Resolver, resolverMetrics *metrics.Metrics) http.HandlerFunc {
@@ -152,7 +151,7 @@ func ResolveConfigWithInjectedTest(configs Getter, resolver Resolver, resolverMe
 			return
 		}
 
-		injectFromMetadata, test, err := injectTestFromQuery(w, r)
+		inject, err := injectTestFromQuery(w, r)
 		if err != nil {
 			// injectTestFromQuery deals with setting status code and writing response
 			// so we need to just log the error here
@@ -160,7 +159,7 @@ func ResolveConfigWithInjectedTest(configs Getter, resolver Resolver, resolverMe
 			logrus.WithError(err).Warning("failed to read query from request")
 			return
 		}
-		injectFromConfig, err := configs.GetMatchingConfig(injectFromMetadata)
+		injectFromConfig, err := configs.GetMatchingConfig(inject.Metadata)
 		if err != nil {
 			metrics.RecordError("config not found", resolverMetrics.ErrorRate)
 			w.WriteHeader(http.StatusNotFound)
@@ -168,7 +167,7 @@ func ResolveConfigWithInjectedTest(configs Getter, resolver Resolver, resolverMe
 			logger.WithError(err).Warning("failed to get config")
 			return
 		}
-		configWithInjectedTest, err := config.WithPresubmitFrom(&injectFromConfig, test)
+		configWithInjectedTest, err := config.WithPresubmitFrom(&injectFromConfig, inject.Test)
 		if err != nil {
 			metrics.RecordError("test injection failed", resolverMetrics.ErrorRate)
 			w.WriteHeader(http.StatusInternalServerError) // TODO: Can be be 400 in some cases but meh

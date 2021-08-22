@@ -1,14 +1,11 @@
 package load
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,16 +20,11 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/registry"
+	"github.com/openshift/ci-tools/pkg/registry/server"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 	"github.com/openshift/ci-tools/pkg/validation"
 )
-
-// ResolverInfo contains the data needed to get a config from the configresolver
-type ResolverInfo struct {
-	Address string
-	api.Metadata
-}
 
 type RegistryFlag uint8
 
@@ -104,7 +96,7 @@ func fromPath(path string) (filenameToConfig, error) {
 		errGroup.Go(func() error {
 			ext := filepath.Ext(path)
 			if !info.IsDir() && (ext == ".yml" || ext == ".yaml") {
-				configSpec, err := Config(path, "", "", nil)
+				configSpec, err := Config(path, "", "", "", nil)
 				if err != nil {
 					return fmt.Errorf("failed to load ci-operator config (%w)", err)
 				}
@@ -125,7 +117,8 @@ func fromPath(path string) (filenameToConfig, error) {
 	return configs, utilerrors.NewAggregate([]error{err, errGroup.Wait()})
 }
 
-func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {
+func Config(path, unresolvedPath, registryPath, resolverAddress string, info *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
+	resolver := server.ResolverClient{Address: resolverAddress}
 	// Load the standard configuration path, env, or configresolver (in that order of priority)
 	var raw string
 
@@ -158,15 +151,15 @@ func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api
 		if err != nil {
 			return nil, fmt.Errorf("--unresolved-config error: %w", err)
 		}
-		configSpec, err := literalConfigFromResolver(data, info.Address)
+		configSpec, err := resolver.Resolve(data)
 		err = results.ForReason("config_resolver_literal").ForError(err)
 		return configSpec, err
 	case unresolvedConfigSet:
-		configSpec, err := literalConfigFromResolver([]byte(unresolvedConfigEnv), info.Address)
+		configSpec, err := resolver.Resolve([]byte(unresolvedConfigEnv))
 		err = results.ForReason("config_resolver_literal").ForError(err)
 		return configSpec, err
 	default:
-		configSpec, err := configFromResolver(info)
+		configSpec, err := resolver.Config(info)
 		err = results.ForReason("config_resolver").ForError(err)
 		return configSpec, err
 	}
@@ -188,69 +181,6 @@ func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api
 		}
 	}
 	return &configSpec, nil
-}
-
-func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {
-	logrus.Infof("Loading configuration from %s for %s", info.Address, info.AsString())
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/config", info.Address), nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request for configresolver: %w", err)
-	}
-	query := req.URL.Query()
-	query.Add("org", info.Org)
-	query.Add("repo", info.Repo)
-	query.Add("branch", info.Branch)
-	if len(info.Variant) > 0 {
-		query.Add("variant", info.Variant)
-	}
-	req.URL.RawQuery = query.Encode()
-	return configFromResolverRequest(req)
-}
-
-func literalConfigFromResolver(raw []byte, address string) (*api.ReleaseBuildConfiguration, error) {
-	// check that the user has sent us something reasonable
-	unresolvedConfig := &api.ReleaseBuildConfiguration{}
-	if err := yaml.UnmarshalStrict(raw, unresolvedConfig); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal unresolved config: invalid configuration: %w, raw: %v", err, string(raw))
-	}
-	encoded, err := json.Marshal(unresolvedConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal unresolved config: invalid configuration: %w", err)
-	}
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/resolve", address), bytes.NewReader(encoded))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request for configresolver: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	return configFromResolverRequest(req)
-}
-
-func configFromResolverRequest(req *http.Request) (*api.ReleaseBuildConfiguration, error) {
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to make request to configresolver: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		var responseBody string
-		if data, err := ioutil.ReadAll(resp.Body); err != nil {
-			logrus.WithError(err).Warn("Failed to read response body from configresolver.")
-		} else {
-			responseBody = string(data)
-		}
-		return nil, fmt.Errorf("got unexpected http %d status code from configresolver: %s", resp.StatusCode, responseBody)
-	}
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read configresolver response body: %w", err)
-	}
-	configSpecHTTP := &api.ReleaseBuildConfiguration{}
-	err = json.Unmarshal(data, configSpecHTTP)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config from configresolver: invalid configuration: %w\nvalue:\n%s", err, string(data))
-	}
-	return configSpecHTTP, nil
 }
 
 // Registry takes the path to a registry config directory and returns the full set of references, chains,

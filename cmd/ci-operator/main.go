@@ -506,7 +506,7 @@ func (o *options) Complete() error {
 		return errors.New("cannot request resolved config with --unresolved-config unless providing --resolver-address")
 	}
 
-	config, err := load.Config(o.configSpecPath, o.unresolvedConfigPath, o.registryPath, info)
+	config, err := load.Config(o.configSpecPath, o.unresolvedConfigPath, o.registryPath, o.resolverAddress, info)
 	if err != nil {
 		return results.ForReason("loading_config").WithError(err).Errorf("failed to load configuration: %v", err)
 	}
@@ -1979,14 +1979,9 @@ func getSecret(name, filename string) (*coreapi.Secret, error) {
 	}, nil
 }
 
-func (o *options) getResolverInfo(jobSpec *api.JobSpec) *load.ResolverInfo {
+func (o *options) getResolverInfo(jobSpec *api.JobSpec) *api.Metadata {
 	// address and variant can only be set via options
-	info := &load.ResolverInfo{
-		Address: o.resolverAddress,
-		Metadata: api.Metadata{
-			Variant: o.variant,
-		},
-	}
+	info := &api.Metadata{Variant: o.variant}
 
 	allRefs := jobSpec.ExtraRefs
 	if jobSpec.Refs != nil {

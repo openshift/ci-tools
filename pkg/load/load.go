@@ -204,6 +204,28 @@ func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, err
 		query.Add("variant", info.Variant)
 	}
 	req.URL.RawQuery = query.Encode()
+	return configFromResolverRequest(req)
+}
+
+func literalConfigFromResolver(raw []byte, address string) (*api.ReleaseBuildConfiguration, error) {
+	// check that the user has sent us something reasonable
+	unresolvedConfig := &api.ReleaseBuildConfiguration{}
+	if err := yaml.UnmarshalStrict(raw, unresolvedConfig); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal unresolved config: invalid configuration: %w, raw: %v", err, string(raw))
+	}
+	encoded, err := json.Marshal(unresolvedConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal unresolved config: invalid configuration: %w", err)
+	}
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/resolve", address), bytes.NewReader(encoded))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request for configresolver: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return configFromResolverRequest(req)
+}
+
+func configFromResolverRequest(req *http.Request) (*api.ReleaseBuildConfiguration, error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -229,41 +251,6 @@ func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, err
 		return nil, fmt.Errorf("failed to unmarshal config from configresolver: invalid configuration: %w\nvalue:\n%s", err, string(data))
 	}
 	return configSpecHTTP, nil
-}
-
-func literalConfigFromResolver(raw []byte, address string) (*api.ReleaseBuildConfiguration, error) {
-	// check that the user has sent us something reasonable
-	unresolvedConfig := &api.ReleaseBuildConfiguration{}
-	if err := yaml.UnmarshalStrict(raw, unresolvedConfig); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal unresolved config: invalid configuration: %w, raw: %v", err, string(raw))
-	}
-	encoded, err := json.Marshal(unresolvedConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal unresolved config: invalid configuration: %w", err)
-	}
-	resp, err := http.Post(fmt.Sprintf("%s/resolve", address), "application/json", bytes.NewReader(encoded))
-	if err != nil {
-		return nil, fmt.Errorf("failed to request resolved config: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		var responseBody string
-		if data, err := ioutil.ReadAll(resp.Body); err != nil {
-			logrus.WithError(err).Warn("Failed to read response body from configresolver.")
-		} else {
-			responseBody = string(data)
-		}
-		return nil, fmt.Errorf("got unexpected http %d status code from configresolver: %s", resp.StatusCode, responseBody)
-	}
-	resolved, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read configresolver response body: %w", err)
-	}
-	resolvedConfig := &api.ReleaseBuildConfiguration{}
-	if err = json.Unmarshal(resolved, resolvedConfig); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal resolved config: invalid configuration: %w\n", err)
-	}
-	return resolvedConfig, nil
 }
 
 // Registry takes the path to a registry config directory and returns the full set of references, chains,

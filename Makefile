@@ -82,7 +82,7 @@ update-vendor:
 		-e GO111MODULE=on \
 		-e GOPROXY=https://proxy.golang.org \
 		-e GOCACHE=/tmp/go-build-cache \
-		golang:1.16 \
+		golang:1.17 \
 		/bin/bash -c "go mod tidy && go mod vendor"
 .PHONY: update-vendor
 

@@ -53,7 +53,7 @@ type SecretContext struct {
 }
 
 func (sc SecretContext) String() string {
-	return sc.Namespace + "/" + sc.Name + " in cluster " + sc.Cluster
+	return fmt.Sprintf("%s/%s in cluster %s in groups %v", sc.Namespace, sc.Name, sc.Cluster, sc.ClusterGroups)
 }
 
 type SecretConfig struct {
@@ -105,13 +105,14 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 		ClusterGroups:             c.ClusterGroups,
 		UserSecretsTargetClusters: c.UserSecretsTargetClusters,
 	}
+	pre := c.VaultDPTPPrefix + "/"
 	var secrets []SecretConfig
 	for _, s := range c.Secrets {
 		var secret SecretConfig
 		if err := deepcopy.Copy(&secret, s); err != nil {
 			return nil, err
 		}
-		c.stripVaultPrefix(&secret)
+		stripVaultPrefix(&secret, pre)
 		secret.groupClusters()
 		secrets = append(secrets, secret)
 	}
@@ -149,12 +150,11 @@ func (s *SecretConfig) groupClusters() {
 	s.To = secrets
 }
 
-func (c *Config) stripVaultPrefix(s *SecretConfig) {
-	pre := c.VaultDPTPPrefix + "/"
+func stripVaultPrefix(s *SecretConfig, pre string) {
 	for key, from := range s.From {
 		from.Item = strings.TrimPrefix(from.Item, pre)
 		for i, dcj := range from.DockerConfigJSONData {
-			from.DockerConfigJSONData[i].Item = strings.Replace(dcj.Item, pre, "", 1)
+			from.DockerConfigJSONData[i].Item = strings.TrimPrefix(dcj.Item, pre)
 		}
 		s.From[key] = from
 	}

@@ -5,12 +5,14 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
 	corev1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -228,19 +230,20 @@ func TestRoundtripConfig(t *testing.T) {
 	for _, tc := range testCases {
 		var outFile string
 		t.Run(tc.name, func(t *testing.T) {
+			bytes := testhelper.ReadFromFixture(t, "")
 			c := &Config{}
-			inFile := filepath.Join("testdata", fmt.Sprintf("%s.yaml", t.Name()))
-			err := LoadConfigFromFile(inFile, c)
+			err := yaml.Unmarshal(bytes, c)
 			if err != nil {
-				t.Fatalf("error loading config file: %v", err)
+				t.Fatalf("error unmarshaling config file: %v", err)
 			}
 
-			outFile = filepath.Join("testdata", fmt.Sprintf("%s_out.yaml", t.Name()))
+			outFile = filepath.Join("testdata", "roundtrip_out.yaml")
 			err = SaveConfigToFile(outFile, c)
 			if err != nil {
 				t.Fatalf("error saving config file: %v", err)
 			}
 
+			inFile := filepath.Join("testdata", "zz_fixture_TestRoundtripConfig_basic_base.yaml")
 			in, _ := ioutil.ReadFile(inFile)
 			out, _ := ioutil.ReadFile(outFile)
 			if diff := cmp.Diff(in, out); diff != "" {
@@ -251,6 +254,126 @@ func TestRoundtripConfig(t *testing.T) {
 		t.Cleanup(func() {
 			if err := os.Remove(outFile); err != nil {
 				t.Fatalf("error removing output config file: %v", err)
+			}
+		})
+	}
+}
+
+func TestGroupClusters(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    SecretConfig
+		expected []SecretContext
+	}{
+		{
+			name: "no group",
+			input: SecretConfig{
+				From: map[string]ItemContext{
+					"item-a": {
+						Item:  "a",
+						Field: "field",
+					},
+				},
+				To: []SecretContext{{
+					Cluster:   "cluster1",
+					Namespace: "ns",
+					Name:      "a",
+				}},
+			},
+			expected: []SecretContext{{
+				Cluster:   "cluster1",
+				Namespace: "ns",
+				Name:      "a",
+			}},
+		},
+		{
+			name: "group",
+			input: SecretConfig{
+				From: map[string]ItemContext{
+					"item-a": {
+						Item:  "a",
+						Field: "field",
+					},
+				},
+				To: []SecretContext{{
+					ClusterGroups: []string{"group-a"},
+					Cluster:       "cluster1",
+					Namespace:     "ns",
+					Name:          "a",
+				}},
+			},
+			expected: []SecretContext{{
+				ClusterGroups: []string{"group-a"},
+				Namespace:     "ns",
+				Name:          "a",
+			}},
+		},
+		{
+			name: "mix",
+			input: SecretConfig{
+				From: map[string]ItemContext{
+					"item-a": {
+						Item:  "a",
+						Field: "field",
+					},
+				},
+				To: []SecretContext{
+					{
+						ClusterGroups: []string{"group-a"},
+						Cluster:       "cluster1",
+						Namespace:     "ns",
+						Name:          "a",
+					},
+					{
+						Cluster:   "cluster2",
+						Namespace: "ns",
+						Name:      "b",
+					},
+				},
+			},
+			expected: []SecretContext{
+				{
+					ClusterGroups: []string{"group-a"},
+					Namespace:     "ns",
+					Name:          "a",
+				},
+				{
+					Cluster:   "cluster2",
+					Namespace: "ns",
+					Name:      "b",
+				},
+			},
+		},
+		{
+			name: "multiple groups",
+			input: SecretConfig{
+				From: map[string]ItemContext{
+					"item-a": {
+						Item:  "a",
+						Field: "field",
+					},
+				},
+				To: []SecretContext{{
+					ClusterGroups: []string{"group-a", "group-b"},
+					Cluster:       "cluster1",
+					Namespace:     "ns",
+					Name:          "a",
+				}},
+			},
+			expected: []SecretContext{{
+				ClusterGroups: []string{"group-a", "group-b"},
+				Namespace:     "ns",
+				Name:          "a",
+			}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			sc := tc.input
+			sc.groupClusters()
+			if !reflect.DeepEqual(sc.To, tc.expected) {
+				t.Fatalf("result of groupClusters() %v doesn't match expected output %v", sc.To, tc.expected)
 			}
 		})
 	}

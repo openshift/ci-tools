@@ -87,6 +87,7 @@ func main() {
 	initClusterBuildFarmDir(o)
 	updateCiSecretBootstrapConfig(o)
 	updateSecretGenerator(o)
+	updateSanitizeProwJobs(o)
 }
 
 func initClusterBuildFarmDir(o options) {

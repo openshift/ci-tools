@@ -33,9 +33,10 @@ const (
 )
 
 type options struct {
-	config.WhitelistOptions
-
 	releaseRepoPath string
+
+	config.WhitelistOptions
+	config.Options
 }
 
 type orgReposWithOfficialImages map[string]sets.String
@@ -62,6 +63,7 @@ func gatherOptions() (options, error) {
 
 	fs.StringVar(&o.releaseRepoPath, "release-repo-path", "", "Path to a openshift/release repository directory")
 
+	o.Options.Bind(fs)
 	o.WhitelistOptions.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parrse flags: %w", err)
@@ -73,6 +75,15 @@ func (o *options) validate() error {
 	if len(o.releaseRepoPath) == 0 {
 		return errors.New("--release-repo-path is not defined")
 	}
+
+	o.ConfigDir = filepath.Join(o.releaseRepoPath, config.CiopConfigInRepoPath)
+	if err := o.Options.Validate(); err != nil {
+		return fmt.Errorf("failed to validate config options: %w", err)
+	}
+	if err := o.Options.Complete(); err != nil {
+		return fmt.Errorf("failed to complete config options: %w", err)
+	}
+
 	return o.WhitelistOptions.Validate()
 }
 
@@ -110,7 +121,7 @@ func privateOrgRepo(repo string) string {
 	return fmt.Sprintf("%s/%s", openshiftPrivOrg, repo)
 }
 
-func getOrgReposWithOfficialImages(releaseRepoPath string, whitelist map[string][]string) (orgReposWithOfficialImages, error) {
+func getOrgReposWithOfficialImages(configDir string, whitelist map[string][]string) (orgReposWithOfficialImages, error) {
 	ret := make(orgReposWithOfficialImages)
 
 	for org, repos := range whitelist {
@@ -143,7 +154,7 @@ func getOrgReposWithOfficialImages(releaseRepoPath string, whitelist map[string]
 		return nil
 	}
 
-	if err := config.OperateOnCIOperatorConfigDir(filepath.Join(releaseRepoPath, config.CiopConfigInRepoPath), callback); err != nil {
+	if err := config.OperateOnCIOperatorConfigDir(configDir, callback); err != nil {
 		return ret, fmt.Errorf("error while operating in ci-operator configuration files: %w", err)
 	}
 
@@ -419,7 +430,7 @@ func main() {
 	}
 
 	logrus.Info("Getting a summary of the orgs/repos that promote official images")
-	orgRepos, err := getOrgReposWithOfficialImages(o.releaseRepoPath, o.WhitelistOptions.WhitelistConfig.Whitelist)
+	orgRepos, err := getOrgReposWithOfficialImages(o.ConfigDir, o.WhitelistOptions.WhitelistConfig.Whitelist)
 	if err != nil {
 		logrus.WithError(err).Fatal("couldn't get the list of org/repos that promote official images")
 	}

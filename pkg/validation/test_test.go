@@ -1304,7 +1304,7 @@ func TestValidateTestConfigurationType(t *testing.T) {
 					},
 				},
 			},
-			expected: []error{fmt.Errorf("test installs more than cluster, probably it defined both cluster_claim and cluster_profile")},
+			expected: []error{fmt.Errorf("test installs more than one cluster, probably it defined both cluster_claim and cluster_profile")},
 		},
 		{
 			name: "claim missing fields",
@@ -1367,6 +1367,42 @@ func TestValidateTestConfigurationType(t *testing.T) {
 				},
 			},
 			expected: []error{fmt.Errorf("test.cluster is not a valid cluster: bar")},
+		},
+		{
+			name: "claim on a container test -> error",
+			test: api.TestStepConfiguration{
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{
+					From: "src",
+				},
+				ClusterClaim: &api.ClusterClaim{
+					Product:      api.ReleaseProductOCP,
+					Version:      "4.6.0",
+					Architecture: api.ReleaseArchitectureAMD64,
+					Cloud:        api.CloudAWS,
+					Owner:        "dpp",
+					Timeout:      &prowv1.Duration{Duration: time.Hour},
+				},
+			},
+			expected: []error{errors.New("test.cluster_claim cannot be set on a test which is not a multi-stage test")},
+		},
+		{
+			name: "claim on a template test -> error",
+			test: api.TestStepConfiguration{
+				OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
+					ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: api.ClusterProfileAWS},
+				},
+				ClusterClaim: &api.ClusterClaim{
+					Product:      api.ReleaseProductOCP,
+					Version:      "4.6.0",
+					Architecture: api.ReleaseArchitectureAMD64,
+					Cloud:        api.CloudAWS,
+					Owner:        "dpp",
+					Timeout:      &prowv1.Duration{Duration: time.Hour},
+				},
+			},
+			expected: []error{
+				errors.New("test.cluster_claim cannot be set on a test which is not a multi-stage test"),
+			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -32,14 +32,14 @@ func (v *Validator) IsValidRuntimeConfiguration(config *api.ReleaseBuildConfigur
 	return v.validateConfiguration(newConfigContext(), config, "", "", false)
 }
 
-// ValidateResolved behaves as ValidateAtRuntime and also validates that all
+// IsValidResolvedConfiguration behaves as ValidateAtRuntime and also validates that all
 // test steps are fully resolved.
 func (v *Validator) IsValidResolvedConfiguration(config *api.ReleaseBuildConfiguration) error {
 	config.Default()
 	return v.validateConfiguration(newConfigContext(), config, "", "", true)
 }
 
-// Validate validates all the configuration's values.
+// IsValidConfiguration validates all the configuration's values.
 func (v *Validator) IsValidConfiguration(config *api.ReleaseBuildConfiguration, org, repo string) error {
 	config.Default()
 	return v.validateConfiguration(newConfigContext(), config, org, repo, false)

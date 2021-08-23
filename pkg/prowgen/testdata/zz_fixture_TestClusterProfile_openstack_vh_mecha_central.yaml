@@ -1,0 +1,40 @@
+containers:
+- args:
+  - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+  - --gcs-upload-secret=/secrets/gcs/service-account.json
+  - --report-credentials-file=/etc/report/credentials
+  - --target=test-name
+  - --secret-dir=/usr/local/test-name-cluster-profile
+  command:
+  - ci-operator
+  image: ci-operator:latest
+  imagePullPolicy: Always
+  name: ""
+  resources:
+    requests:
+      cpu: 10m
+  volumeMounts:
+  - mountPath: /etc/pull-secret
+    name: pull-secret
+    readOnly: true
+  - mountPath: /etc/report
+    name: result-aggregator
+    readOnly: true
+  - mountPath: /secrets/gcs
+    name: gcs-credentials
+    readOnly: true
+  - mountPath: /usr/local/test-name-cluster-profile
+    name: cluster-profile
+serviceAccountName: ci-operator
+volumes:
+- name: pull-secret
+  secret:
+    secretName: registry-pull-credentials
+- name: result-aggregator
+  secret:
+    secretName: result-aggregator
+- name: cluster-profile
+  projected:
+    sources:
+    - secret:
+        name: cluster-secrets-openstack-vh-mecha-central

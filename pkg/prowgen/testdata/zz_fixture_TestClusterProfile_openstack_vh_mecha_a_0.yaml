@@ -1,10 +1,10 @@
 containers:
 - args:
-  - --gcs-upload-secret=/secrets/gcs/service-account.json
   - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-  - --oauth-token-path=/usr/local/github-credentials/oauth
+  - --gcs-upload-secret=/secrets/gcs/service-account.json
   - --report-credentials-file=/etc/report/credentials
-  - --target=target
+  - --target=test-name
+  - --secret-dir=/usr/local/test-name-cluster-profile
   command:
   - ci-operator
   image: ci-operator:latest
@@ -14,26 +14,27 @@ containers:
     requests:
       cpu: 10m
   volumeMounts:
-  - mountPath: /secrets/gcs
-    name: gcs-credentials
-    readOnly: true
-  - mountPath: /usr/local/github-credentials
-    name: github-credentials-openshift-ci-robot-private-git-cloner
-    readOnly: true
   - mountPath: /etc/pull-secret
     name: pull-secret
     readOnly: true
   - mountPath: /etc/report
     name: result-aggregator
     readOnly: true
+  - mountPath: /secrets/gcs
+    name: gcs-credentials
+    readOnly: true
+  - mountPath: /usr/local/test-name-cluster-profile
+    name: cluster-profile
 serviceAccountName: ci-operator
 volumes:
-- name: github-credentials-openshift-ci-robot-private-git-cloner
-  secret:
-    secretName: github-credentials-openshift-ci-robot-private-git-cloner
 - name: pull-secret
   secret:
     secretName: registry-pull-credentials
 - name: result-aggregator
   secret:
     secretName: result-aggregator
+- name: cluster-profile
+  projected:
+    sources:
+    - secret:
+        name: cluster-secrets-openstack-vh-mecha-az0

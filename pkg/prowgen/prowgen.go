@@ -2,13 +2,10 @@ package prowgen
 
 import (
 	"fmt"
-	"path/filepath"
 	"regexp"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
@@ -30,91 +27,6 @@ const (
 type ProwgenInfo struct {
 	cioperatorapi.Metadata
 	Config config.Prowgen
-}
-
-// Generate a PodSpec that runs `ci-operator`, to be used in Presubmit/Postsubmit
-// Various pieces are derived from `org`, `repo`, `branch` and `target`.
-// `additionalArgs` are passed as additional arguments to `ci-operator`
-func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret, skipCloning bool) *corev1.PodSpec {
-	volumeMounts := []corev1.VolumeMount{
-		{
-			Name:      "pull-secret",
-			MountPath: "/etc/pull-secret",
-			ReadOnly:  true,
-		},
-		{
-			Name:      "result-aggregator",
-			MountPath: "/etc/report",
-			ReadOnly:  true,
-		},
-		{
-			Name:      "gcs-credentials",
-			MountPath: cioperatorapi.GCSUploadCredentialsSecretMountPath,
-			ReadOnly:  true,
-		},
-	}
-
-	volumes := []corev1.Volume{
-		{
-			Name: "pull-secret",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{SecretName: "registry-pull-credentials"},
-			},
-		},
-		{
-			Name: "result-aggregator",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
-			},
-		},
-	}
-
-	for _, secret := range secrets {
-		name := strings.ReplaceAll(secret.Name, ".", "-")
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      name,
-			MountPath: fmt.Sprintf("/secrets/%s", secret.Name),
-			ReadOnly:  true,
-		})
-
-		volumes = append(volumes, corev1.Volume{
-			Name: name,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{SecretName: secret.Name},
-			},
-		})
-	}
-
-	if info.Config.Private {
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      api.OauthTokenSecretName,
-			MountPath: oauthTokenPath,
-			ReadOnly:  true,
-		})
-		if skipCloning {
-			volumes = append(volumes, corev1.Volume{
-				Name: api.OauthTokenSecretName,
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{SecretName: api.OauthTokenSecretName},
-				},
-			})
-		}
-	}
-
-	return &corev1.PodSpec{
-		ServiceAccountName: "ci-operator",
-		Containers: []corev1.Container{
-			{
-				Image:           "ci-operator:latest",
-				ImagePullPolicy: corev1.PullAlways,
-				Resources: corev1.ResourceRequirements{
-					Requests: corev1.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
-				},
-				VolumeMounts: volumeMounts,
-			},
-		},
-		Volumes: volumes,
-	}
 }
 
 // GenerateJobs
@@ -144,21 +56,63 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	if configSpec.BuildRootImage != nil && configSpec.BuildRootImage.FromRepository {
 		skipCloning = false
 	}
-	for _, element := range configSpec.Tests {
-		var podSpec *corev1.PodSpec
-		if element.Secret != nil {
-			element.Secrets = append(element.Secrets, element.Secret)
+	podSpecGen := func() CiOperatorPodSpecGenerator {
+		g := NewCiOperatorPodSpecGenerator(info.Metadata)
+		if info.Config.Private {
+			// We can reuse Prow's volume with the token iff ProwJob itself is cloning the code
+			g.GitHubToken(!skipCloning)
 		}
-		if element.ContainerTestConfiguration != nil {
-			podSpec = generateCiOperatorPodSpec(info, element.Secrets, []string{element.As}, skipCloning)
-		} else if element.MultiStageTestConfiguration != nil || element.MultiStageTestConfigurationLiteral != nil {
-			podSpec = generatePodSpecMultiStage(info, &element, configSpec.Releases != nil || element.ClusterClaim != nil, skipCloning)
-		} else {
-			var release string
-			if c := configSpec.ReleaseTagConfiguration; c != nil {
-				release = c.Name
+		return g
+	}
+	mustBuild := func(g CiOperatorPodSpecGenerator) *corev1.PodSpec {
+		podSpec, err := g.Build()
+		if err != nil {
+			panic("BUG: PodSpec generator failed. This should never happen.")
+		}
+		return podSpec
+	}
+	for _, element := range configSpec.Tests {
+		g := podSpecGen()
+		g.Secrets(element.Secret)
+		g.Secrets(element.Secrets...)
+		g.Targets(element.As)
+
+		if element.ClusterClaim != nil {
+			g.Claims()
+		}
+		if testContainsLease(&element) {
+			g.LeaseClient()
+		}
+
+		switch {
+		case element.MultiStageTestConfigurationLiteral != nil:
+			if element.MultiStageTestConfigurationLiteral.ClusterProfile != "" {
+				g.ClusterProfile(element.MultiStageTestConfigurationLiteral.ClusterProfile).LeaseClient()
 			}
-			podSpec = generatePodSpecTemplate(info, release, &element, skipCloning)
+			if configSpec.Releases != nil {
+				g.CIPullSecret()
+			}
+		case element.MultiStageTestConfiguration != nil:
+			if element.MultiStageTestConfiguration.ClusterProfile != "" {
+				g.ClusterProfile(element.MultiStageTestConfiguration.ClusterProfile).LeaseClient()
+			}
+			if configSpec.Releases != nil {
+				g.CIPullSecret()
+			}
+		case element.OpenshiftAnsibleClusterTestConfiguration != nil:
+			g.Template("cluster-launch-e2e", element.Commands, "").ClusterProfile(element.OpenshiftAnsibleClusterTestConfiguration.ClusterProfile).ReleaseRpms(configSpec.ReleaseTagConfiguration.Name)
+		case element.OpenshiftAnsibleCustomClusterTestConfiguration != nil:
+			g.Template("cluster-launch-e2e-openshift-ansible", element.Commands, "").ClusterProfile(element.OpenshiftAnsibleCustomClusterTestConfiguration.ClusterProfile).ReleaseRpms(configSpec.ReleaseTagConfiguration.Name)
+		case element.OpenshiftInstallerClusterTestConfiguration != nil:
+			if !element.OpenshiftInstallerClusterTestConfiguration.Upgrade {
+				g.Template("cluster-launch-installer-e2e", element.Commands, "")
+			}
+			g.ClusterProfile(element.OpenshiftInstallerClusterTestConfiguration.ClusterProfile).LeaseClient()
+		case element.OpenshiftInstallerUPIClusterTestConfiguration != nil:
+			g.Template("cluster-launch-installer-upi-e2e", element.Commands, "").ClusterProfile(element.OpenshiftInstallerUPIClusterTestConfiguration.ClusterProfile).LeaseClient()
+		case element.OpenshiftInstallerCustomTestImageClusterTestConfiguration != nil:
+			fromImage := element.OpenshiftInstallerCustomTestImageClusterTestConfiguration.From
+			g.Template("cluster-launch-installer-custom-test-image", element.Commands, fromImage).ClusterProfile(element.OpenshiftInstallerCustomTestImageClusterTestConfiguration.ClusterProfile).LeaseClient()
 		}
 
 		if element.Cron != nil || element.Interval != nil || element.ReleaseController {
@@ -170,20 +124,20 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			if element.Interval != nil {
 				interval = *element.Interval
 			}
-			periodic := generatePeriodicForTest(element.As, info, podSpec, true, cron, interval, element.ReleaseController, configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.Timeout)
+			periodic := generatePeriodicForTest(element.As, info, mustBuild(g), true, cron, interval, element.ReleaseController, configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.Timeout)
 			if element.Cluster != "" {
 				periodic.Labels[cioperatorapi.ClusterLabel] = string(element.Cluster)
 			}
 			periodics = append(periodics, *periodic)
 		} else if element.Postsubmit {
-			postsubmit := generatePostsubmitForTest(element.As, info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.Timeout)
+			postsubmit := generatePostsubmitForTest(element.As, info, mustBuild(g), configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.Timeout)
 			postsubmit.MaxConcurrency = 1
 			if element.Cluster != "" {
 				postsubmit.Labels[cioperatorapi.ClusterLabel] = string(element.Cluster)
 			}
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
 		} else {
-			presubmit := *generatePresubmitForTest(element.As, info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.RunIfChanged, element.SkipIfOnlyChanged, element.Optional, element.Timeout)
+			presubmit := *generatePresubmitForTest(element.As, info, mustBuild(g), configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.RunIfChanged, element.SkipIfOnlyChanged, element.Optional, element.Timeout)
 			v, requestingKVM := configSpec.Resources.RequirementsForStep(element.As).Requests[cioperatorapi.KVMDeviceLabel]
 			if requestingKVM {
 				presubmit.Labels[cioperatorapi.KVMDeviceLabel] = v
@@ -212,25 +166,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		if promotion.PromotesOfficialImages(configSpec) {
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
-		podSpec := generateCiOperatorPodSpec(info, nil, presubmitTargets, skipCloning)
+		podSpec := mustBuild(podSpecGen().Targets(presubmitTargets...))
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false, nil))
 
 		if configSpec.PromotionConfiguration != nil {
-
-			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets.List(), skipCloning, []string{"--promote"}...)
-			podSpec.Containers[0].Args = append(podSpec.Containers[0].Args,
-				fmt.Sprintf("--image-mirror-push-secret=%s", filepath.Join(cioperatorapi.RegistryPushCredentialsCICentralSecretMountPath, corev1.DockerConfigJsonKey)))
-			podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{
-				Name:      "push-secret",
-				MountPath: cioperatorapi.RegistryPushCredentialsCICentralSecretMountPath,
-				ReadOnly:  true,
-			})
-			podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
-				Name: "push-secret",
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{SecretName: cioperatorapi.RegistryPushCredentialsCICentralSecret},
-				},
-			})
+			podSpec := mustBuild(podSpecGen().Targets(imageTargets.List()...).Promotion())
 			postsubmit := generatePostsubmitForTest("images", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, nil)
 			postsubmit.MaxConcurrency = 1
 			if postsubmit.Labels == nil {
@@ -249,11 +189,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 				continue
 			}
 			indexName := api.IndexName(bundle.As)
-			podSpec := generateCiOperatorPodSpec(info, nil, []string{indexName}, skipCloning)
+			podSpec := mustBuild(podSpecGen().Targets(indexName))
 			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(indexName, info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false, nil))
 		}
 		if containsUnnamedBundle {
-			podSpec := generateCiOperatorPodSpec(info, nil, []string{string(api.PipelineImageStreamTagReferenceIndexImage)}, skipCloning)
+			podSpec := mustBuild(podSpecGen().Targets(string(api.PipelineImageStreamTagReferenceIndexImage)))
 			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(string(api.PipelineImageStreamTagReferenceIndexImage), info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false, nil))
 		}
 	}
@@ -265,80 +205,6 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	}
 }
 
-func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret, targets []string, skipCloning bool, additionalArgs ...string) *corev1.PodSpec {
-	for _, arg := range additionalArgs {
-		if !strings.HasPrefix(arg, "--") {
-			panic(fmt.Sprintf("all args to ci-operator must be in the form --flag=value, not %s", arg))
-		}
-	}
-
-	ret := generatePodSpec(info, secrets, skipCloning)
-	ret.Containers[0].Command = []string{"ci-operator"}
-	ret.Containers[0].Args = append([]string{
-		"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
-		"--gcs-upload-secret=/secrets/gcs/service-account.json",
-		"--report-credentials-file=/etc/report/credentials",
-	}, additionalArgs...)
-	for _, target := range targets {
-		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--target=%s", target))
-	}
-	if info.Config.Private {
-		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--oauth-token-path=%s", filepath.Join(oauthTokenPath, oauthKey)))
-	}
-	for _, secret := range secrets {
-		if secret.Name == api.HiveControlPlaneKubeconfigSecret {
-			continue
-		}
-		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--secret-dir=/secrets/%s", secret.Name))
-	}
-
-	if len(info.Variant) > 0 {
-		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--variant=%s", info.Variant))
-	}
-	return ret
-}
-
-func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepConfiguration, needsPullSecret, skipCloning bool) *corev1.PodSpec {
-	var profile api.ClusterProfile
-	if test.MultiStageTestConfiguration != nil {
-		profile = test.MultiStageTestConfiguration.ClusterProfile
-	} else {
-		profile = test.MultiStageTestConfigurationLiteral.ClusterProfile
-	}
-	var secrets []*cioperatorapi.Secret
-	if needsPullSecret {
-		// If the ci-operator configuration resolves an official release,
-		// we need to create a pull secret in the namespace that ci-operator
-		// runs in. While the --secret-dir mechanism is *meant* to provide
-		// secrets to the tests themselves, this secret will have no consumer
-		// and that is OK. We just need it to exist in the test namespace so
-		// that the image import controller can use it.
-		secrets = append(secrets, &cioperatorapi.Secret{
-			Name: "ci-pull-credentials",
-		})
-	}
-	var additionalArgs []string
-	if test.ClusterClaim != nil {
-		additionalArgs = []string{cioperatorapi.HiveControlPlaneKubeconfigSecretArg}
-		secrets = append(secrets, &api.Secret{Name: api.HiveControlPlaneKubeconfigSecret})
-	}
-	podSpec := generateCiOperatorPodSpec(info, secrets, []string{test.As}, skipCloning, additionalArgs...)
-
-	if profile != "" {
-		podSpec.Volumes = append(podSpec.Volumes, generateClusterProfileVolume(profile, profile.ClusterType()))
-		clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
-		container := &podSpec.Containers[0]
-		container.Args = append(container.Args, fmt.Sprintf("--secret-dir=%s", clusterProfilePath))
-		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{Name: "cluster-profile", MountPath: clusterProfilePath})
-	}
-
-	if profile != "" || testContainsLease(test) {
-		addLeaseClient(podSpec)
-	}
-
-	return podSpec
-}
-
 func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
 	// this is predicated upon the config being fully resolved at this time.
 	if test.MultiStageTestConfigurationLiteral == nil {
@@ -346,105 +212,6 @@ func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
 	}
 
 	return len(api.LeasesForTest(test.MultiStageTestConfigurationLiteral)) > 0
-}
-
-func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperatorapi.TestStepConfiguration, skipCloning bool) *corev1.PodSpec {
-	var testImageStreamTag, template string
-	var clusterProfile cioperatorapi.ClusterProfile
-	var needsReleaseRpms, needsLeaseServer bool
-	if conf := test.OpenshiftAnsibleClusterTestConfiguration; conf != nil {
-		template = "cluster-launch-e2e"
-		clusterProfile = conf.ClusterProfile
-		needsReleaseRpms = true
-	} else if conf := test.OpenshiftAnsibleSrcClusterTestConfiguration; conf != nil {
-		template = "cluster-launch-src"
-		clusterProfile = conf.ClusterProfile
-		needsReleaseRpms = true
-	} else if conf := test.OpenshiftAnsibleCustomClusterTestConfiguration; conf != nil {
-		template = "cluster-launch-e2e-openshift-ansible"
-		clusterProfile = conf.ClusterProfile
-		needsReleaseRpms = true
-	} else if conf := test.OpenshiftInstallerClusterTestConfiguration; conf != nil {
-		if !conf.Upgrade {
-			template = "cluster-launch-installer-e2e"
-		}
-		clusterProfile = conf.ClusterProfile
-		needsLeaseServer = true
-	} else if conf := test.OpenshiftInstallerUPIClusterTestConfiguration; conf != nil {
-		template = "cluster-launch-installer-upi-e2e"
-		needsLeaseServer = true
-		clusterProfile = conf.ClusterProfile
-	} else if conf := test.OpenshiftInstallerUPISrcClusterTestConfiguration; conf != nil {
-		template = "cluster-launch-installer-upi-src"
-		needsLeaseServer = true
-		clusterProfile = conf.ClusterProfile
-	} else if conf := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration; conf != nil {
-		template = "cluster-launch-installer-custom-test-image"
-		needsLeaseServer = true
-		clusterProfile = conf.ClusterProfile
-		testImageStreamTag = conf.From
-	}
-	clusterType := clusterProfile.ClusterType()
-	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
-	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
-	podSpec := generateCiOperatorPodSpec(info, test.Secrets, []string{test.As}, skipCloning)
-	clusterProfileVolume := generateClusterProfileVolume(clusterProfile, clusterType)
-	if len(template) > 0 {
-		podSpec.Volumes = append(podSpec.Volumes, generateConfigMapVolume("job-definition", []string{fmt.Sprintf("prow-job-%s", template)}))
-	}
-	podSpec.Volumes = append(podSpec.Volumes, clusterProfileVolume)
-	container := &podSpec.Containers[0]
-	container.Args = append(container.Args, fmt.Sprintf("--secret-dir=%s", clusterProfilePath))
-	if len(template) > 0 {
-		container.Args = append(container.Args, fmt.Sprintf("--template=%s", templatePath))
-	}
-	if needsLeaseServer {
-		addLeaseClient(podSpec)
-	}
-	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{Name: "cluster-profile", MountPath: clusterProfilePath})
-	if len(template) > 0 {
-		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{Name: "job-definition", MountPath: templatePath, SubPath: fmt.Sprintf("%s.yaml", template)})
-		container.Env = append(
-			container.Env,
-			corev1.EnvVar{Name: "CLUSTER_TYPE", Value: clusterType},
-			corev1.EnvVar{Name: "JOB_NAME_SAFE", Value: strings.Replace(test.As, "_", "-", -1)},
-			corev1.EnvVar{Name: "TEST_COMMAND", Value: test.Commands})
-		if len(testImageStreamTag) > 0 {
-			container.Env = append(container.Env,
-				corev1.EnvVar{Name: "TEST_IMAGESTREAM_TAG", Value: testImageStreamTag})
-		}
-	}
-	if needsReleaseRpms && (info.Org != "openshift" || info.Repo != "origin") {
-		url := cioperatorapi.URLForService(cioperatorapi.ServiceRPMs)
-		var repoPath = fmt.Sprintf("%s/openshift-origin-v%s/", url, release)
-		if strings.HasPrefix(release, "origin-v") {
-			repoPath = fmt.Sprintf("%s/openshift-%s/", url, release)
-		}
-		container.Env = append(container.Env, corev1.EnvVar{
-			Name:  "RPM_REPO_OPENSHIFT_ORIGIN",
-			Value: repoPath,
-		})
-	}
-
-	return podSpec
-}
-
-func addLeaseClient(s *corev1.PodSpec) {
-	s.Containers[0].Args = append(s.Containers[0].Args, "--lease-server-credentials-file=/etc/boskos/credentials")
-	s.Containers[0].VolumeMounts = append(s.Containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      "boskos",
-		MountPath: "/etc/boskos",
-		ReadOnly:  true,
-	})
-	s.Volumes = append(s.Volumes, corev1.Volume{
-		Name: "boskos",
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: "boskos-credentials",
-				Items:      []corev1.KeyToPath{{Key: "credentials", Path: "credentials"}},
-			},
-		},
-	})
 }
 
 func generatePresubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.PodSpec, pathAlias *string, jobRelease string, skipCloning bool, runIfChanged, skipIfOnlyChanged string, optional bool, timeout *prowv1.Duration) *prowconfig.Presubmit {
@@ -503,19 +270,16 @@ func generatePeriodicForTest(name string, info *ProwgenInfo, podSpec *corev1.Pod
 
 func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterType string) corev1.Volume {
 	// AWS-2 and CPaaS and GCP2 PacketAssisted and PacketSNO need a different secret that should be provided to jobs
-	if profile == cioperatorapi.ClusterProfileAWSCPaaS {
-		clusterType = string(profile)
-	} else if profile == cioperatorapi.ClusterProfileAWS2 {
-		clusterType = string(profile)
-	} else if profile == cioperatorapi.ClusterProfileGCP2 {
-		clusterType = string(profile)
-	} else if profile == cioperatorapi.ClusterProfilePacketAssisted {
-		clusterType = string(profile)
-	} else if profile == cioperatorapi.ClusterProfilePacketSNO {
-		clusterType = string(profile)
-	} else if profile == cioperatorapi.ClusterProfileAzure2 {
+	// AWS-2 and CPaaS and GCP2 need a different secret that should be provided to jobs
+	if profile == cioperatorapi.ClusterProfileAWSCPaaS ||
+		profile == cioperatorapi.ClusterProfileAWS2 ||
+		profile == cioperatorapi.ClusterProfileGCP2 ||
+		profile == cioperatorapi.ClusterProfilePacketAssisted ||
+		profile == cioperatorapi.ClusterProfilePacketSNO ||
+		profile == cioperatorapi.ClusterProfileAzure2 {
 		clusterType = string(profile)
 	}
+
 	ret := corev1.Volume{
 		Name: "cluster-profile",
 		VolumeSource: corev1.VolumeSource{

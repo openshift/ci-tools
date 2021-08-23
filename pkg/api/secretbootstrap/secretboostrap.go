@@ -53,7 +53,7 @@ type SecretContext struct {
 }
 
 func (sc SecretContext) String() string {
-	return fmt.Sprintf("%s/%s in cluster %s in groups %v", sc.Namespace, sc.Name, sc.Cluster, sc.ClusterGroups)
+	return sc.Namespace + "/" + sc.Name + " in cluster " + sc.Cluster
 }
 
 type SecretConfig struct {

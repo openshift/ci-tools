@@ -373,7 +373,7 @@ func TestGroupClusters(t *testing.T) {
 			sc := tc.input
 			sc.groupClusters()
 			if !reflect.DeepEqual(sc.To, tc.expected) {
-				t.Fatalf("result of groupClusters() %v doesn't match expected output %v", sc.To, tc.expected)
+				t.Fatalf("result of groupClusters() doesn't match expected output")
 			}
 		})
 	}

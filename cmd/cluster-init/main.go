@@ -36,18 +36,25 @@ func parseOptions() options {
 	return o
 }
 
-func validateOptions(o options) error {
+func validateOptions(o options) []error {
+	var errs []error
 	if o.clusterName == "" {
-		return fmt.Errorf("--cluster-name must be provided")
+		errs = append(errs, fmt.Errorf("--cluster-name must be provided"))
 	}
 	if o.releaseRepo == "" {
-		return fmt.Errorf("--release-repo must be provided")
+		errs = append(errs, fmt.Errorf("--release-repo must be provided"))
 	}
 	if o.buildFarmDir == "" {
-		return fmt.Errorf("--build-farm-dir must be provided")
+		errs = append(errs, fmt.Errorf("--build-farm-dir must be provided"))
 	}
-
-	return nil
+	if periodicExistsFor(o) {
+		errs = append(errs, fmt.Errorf("cluster: %s already exists", o.clusterName))
+	}
+	buildDir := filepath.Join(o.releaseRepo, Clusters, BuildClusters, o.buildFarmDir)
+	if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
+		errs = append(errs, fmt.Errorf("buildFarmDir: %s already exists", o.buildFarmDir))
+	}
+	return errs
 }
 
 const (
@@ -72,11 +79,10 @@ const (
 
 func main() {
 	o := parseOptions()
-	err := validateOptions(o)
-	check(err, "Invalid arguments.")
-
-	//TODO: probably a good idea to validate that this cluster doesn't exist
-	// i think we can use the presence of a build dir
+	validationErrors := validateOptions(o)
+	if len(validationErrors) > 0 {
+		logrus.Fatalf("validation errors: %v", validationErrors)
+	}
 
 	updateInfraPeriodics(o)
 	updatePostsubmits(o)

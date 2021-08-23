@@ -64,6 +64,14 @@ func updateInfraPeriodics(o options) {
 	saveConfig(ipFile, *ip)
 }
 
+func periodicExistsFor(o options) bool {
+	ipFile := filepath.Join(o.releaseRepo, CiOperator, Jobs, InfraPeriodicsFile)
+	ip := &InfraPeriodics{}
+	loadConfig(ipFile, ip)
+	_, err := findPeriodic(ip, fmt.Sprintf("periodic-openshift-release-master-%s-apply", o.clusterName))
+	return err == nil
+}
+
 func appendNewClustersConfigUpdaterToKubeconfig(per *prowconfig.Periodic, containerName string, clusterName string) {
 	container, err := findContainer(per.Spec, containerName)
 	if err != nil {

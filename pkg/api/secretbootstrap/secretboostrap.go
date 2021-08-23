@@ -3,6 +3,7 @@ package secretbootstrap
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/getlantern/deepcopy"
 	"io/ioutil"
 	"reflect"
 	"strings"

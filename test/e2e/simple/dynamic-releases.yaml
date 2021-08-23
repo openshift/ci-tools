@@ -30,6 +30,10 @@ releases:
       version: "4.7"
       channel: stable
       architecture: s390x
+  assembled:
+    integration:
+      namespace: ocp
+      name: "4.7"
 resources:
   '*':
     limits:

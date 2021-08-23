@@ -174,6 +174,8 @@ func fromConfig(
 			var overrideCLIReleaseExtractImage *coreapi.ObjectReference
 			var overrideCLIResolveErr error
 			switch {
+			case resolveConfig.Integration != nil:
+				overrideCLIReleaseExtractImage, overrideCLIResolveErr = resolveCLIOverrideImage(api.ReleaseArchitectureAMD64, resolveConfig.Integration.Name)
 			case resolveConfig.Candidate != nil:
 				overrideCLIReleaseExtractImage, overrideCLIResolveErr = resolveCLIOverrideImage(resolveConfig.Candidate.Architecture, resolveConfig.Candidate.Version)
 			case resolveConfig.Release != nil:
@@ -192,6 +194,19 @@ func fromConfig(
 				logrus.Infof("Using explicitly provided pull-spec for release %s (%s)", resolveConfig.Name, value)
 			} else {
 				switch {
+				case resolveConfig.Integration != nil:
+					logrus.Infof("Building release %s from a snapshot of %s/%s", resolveConfig.Name, resolveConfig.Integration.Namespace, resolveConfig.Integration.Name)
+					// this is the one case where we're not importing a payload, we need to get the images and build one
+					snapshot := releasesteps.ReleaseSnapshotStep(resolveConfig.Name, *resolveConfig.Integration, podClient, jobSpec)
+					assemble := releasesteps.AssembleReleaseStep(resolveConfig.Name, &api.ReleaseTagConfiguration{
+						Namespace: resolveConfig.Integration.Namespace,
+						Name:      resolveConfig.Integration.Name,
+					}, config.Resources, podClient, jobSpec)
+					for _, s := range []api.Step{snapshot, assemble} {
+						buildSteps = append(buildSteps, s)
+						addProvidesForStep(s, params)
+					}
+					imageStepLinks = append(imageStepLinks, snapshot.Creates()...)
 				case resolveConfig.Candidate != nil:
 					value, err = candidate.ResolvePullSpec(httpClient, *resolveConfig.Candidate)
 				case resolveConfig.Release != nil:
@@ -202,11 +217,13 @@ func fromConfig(
 				if err != nil {
 					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to resolve release %s: %w", resolveConfig.Name, err))
 				}
-				logrus.Infof("Resolved release %s to %s", resolveConfig.Name, value)
 			}
-			step := releasesteps.ImportReleaseStep(resolveConfig.Name, resolveConfig.TargetName(), value, false, config.Resources, podClient, jobSpec, pullSecret, overrideCLIReleaseExtractImage)
-			buildSteps = append(buildSteps, step)
-			addProvidesForStep(step, params)
+			if value != "" {
+				logrus.Infof("Resolved release %s to %s", resolveConfig.Name, value)
+				step := releasesteps.ImportReleaseStep(resolveConfig.Name, resolveConfig.TargetName(), value, false, config.Resources, podClient, jobSpec, pullSecret, overrideCLIReleaseExtractImage)
+				buildSteps = append(buildSteps, step)
+				addProvidesForStep(step, params)
+			}
 			continue
 		}
 		var step api.Step

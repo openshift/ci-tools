@@ -227,12 +227,22 @@ type InputConfiguration struct {
 // UnresolvedRelease describes a semantic release payload
 // identifier we need to resolve to a pull spec.
 type UnresolvedRelease struct {
+	// Integration describes an integration stream which we can create a payload out of
+	Integration *Integration `json:"integration,omitempty"`
 	// Candidate describes a candidate release payload
 	Candidate *Candidate `json:"candidate,omitempty"`
 	// Prerelease describes a yet-to-be released payload
 	Prerelease *Prerelease `json:"prerelease,omitempty"`
 	// Release describes a released payload
 	Release *Release `json:"release,omitempty"`
+}
+
+// Integration is an ImageStream holding the latest images from development builds of OCP.
+type Integration struct {
+	// Namespace is the namespace in which the integration stream lives.
+	Namespace string `json:"namespace"`
+	// Name is the name of the ImageStream
+	Name string `json:"name"`
 }
 
 // Candidate describes a validated candidate release payload

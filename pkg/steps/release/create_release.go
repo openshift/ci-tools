@@ -223,8 +223,11 @@ oc adm release extract --from=%q --to=${ARTIFACT_DIR}/release-payload-%s
 	}
 
 	step := steps.PodStep("release", podConfig, resources, s.client, s.jobSpec, nil)
-
-	return results.ForReason("creating_release").ForError(step.Run(ctx))
+	if err := step.Run(ctx); err != nil {
+		return results.ForReason("creating_release").ForError(err)
+	}
+	logrus.Infof("Snapshot integration stream into release %s to tag %s:%s ", version, api.ReleaseImageStream, s.name)
+	return nil
 }
 
 func (s *assembleReleaseStep) Requires() []api.StepLink {

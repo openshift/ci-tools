@@ -15,11 +15,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func getKuberntesAuthToken(client *VaultClient, role string) (string, time.Duration, error) {
+func getKuberntesAuthToken(upstreamClient *VaultClient, role string) (string, time.Duration, error) {
 
 	// Clone the client before resetting the token
-	var err error
-	client.Client, err = client.Client.Clone()
+	client, err := upstreamClient.Client.Clone()
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to clone client: %w", err)
 	}

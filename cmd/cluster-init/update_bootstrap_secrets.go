@@ -182,7 +182,7 @@ func updateDPTPConManSecret(c *secretbootstrap.Config, o options) {
 
 func updateRehearseSecret(c *secretbootstrap.Config, o options) {
 	keyAndField := fmt.Sprintf("%s.%s.%s.%s", Sa, CiOperator, o.clusterName, Config)
-	appendSecretItemContext(c, PjRehearse, "", keyAndField, secretbootstrap.ItemContext{
+	appendSecretItemContext(c, PjRehearse, Build01, keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
 		Item:  BuildFarm,
 	})

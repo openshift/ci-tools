@@ -54,6 +54,7 @@ type options struct {
 	stepConfigPath                       string
 	prowconfig                           configflagutil.ConfigOptions
 	kubeconfig                           string
+	kubeconfigDir                        string
 	leaderElectionSuffix                 string
 	enabledControllers                   flagutil.Strings
 	enabledControllersSet                sets.String
@@ -107,6 +108,7 @@ func newOpts() (*options, error) {
 	} else {
 		flag.StringVar(&opts.kubeconfig, "kubeconfig", "", kubeconfigFlagDescription)
 	}
+	flag.StringVar(&opts.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files. All contexts in it will be considered a build cluster. If it does not have a context named 'app.ci', loading in-cluster config will be attempted.")
 	flag.StringVar(&opts.ciOperatorconfigPath, "ci-operator-config-path", "", "Path to the ci operator config")
 	flag.StringVar(&opts.stepConfigPath, "step-config-path", "", "Path to the registries step configuration")
 	flag.StringVar(&opts.leaderElectionSuffix, "leader-election-suffix", "", "Suffix for the leader election lock. Useful for local testing. If set, --dry-run must be set as well")
@@ -239,7 +241,7 @@ func main() {
 		cancel()
 	}
 
-	kubeconfigs, _, err := util.LoadKubeConfigs(opts.kubeconfig, kubeconfigChangedCallBack)
+	kubeconfigs, err := util.LoadKubeConfigs(opts.kubeconfig, opts.kubeconfigDir, kubeconfigChangedCallBack)
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to load kubeconfigs")
 	}

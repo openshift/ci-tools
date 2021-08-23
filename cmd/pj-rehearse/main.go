@@ -46,6 +46,7 @@ type options struct {
 	dryRun            bool
 	debugLogPath      string
 	prowjobKubeconfig string
+	kubeconfigDir     string
 
 	noTemplates       bool
 	noRegistry        bool
@@ -64,6 +65,7 @@ func gatherOptions() (options, error) {
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
 	fs.StringVar(&o.prowjobKubeconfig, "prowjob-kubeconfig", "", "Path to the prowjob kubeconfig. If unset, default kubeconfig will be used for prowjobs.")
+	fs.StringVar(&o.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files to use for CLI requests.")
 
 	fs.BoolVar(&o.noTemplates, "no-templates", false, "If true, do not attempt to compare templates")
 	fs.BoolVar(&o.noRegistry, "no-registry", false, "If true, do not attempt to compare step registry content")
@@ -150,9 +152,8 @@ func rehearseMain() error {
 	buildClusterConfigs := map[string]*rest.Config{}
 	var prowJobConfig *rest.Config
 	if !o.dryRun {
-		// Only the env var allows to supply multiple kubeconfigs
-		if _, exists := os.LookupEnv("KUBECONFIG"); exists {
-			buildClusterConfigs, _, err = util.LoadKubeConfigs("", nil)
+		if _, exists := os.LookupEnv("KUBECONFIG"); exists || o.kubeconfigDir != "" {
+			buildClusterConfigs, err = util.LoadKubeConfigs("", o.kubeconfigDir, nil)
 			if err != nil {
 				logger.WithError(err).Error("failed to read kubeconfigs")
 				return errors.New(misconfigurationOutput)

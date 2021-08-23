@@ -8,6 +8,7 @@ cluster_groups:
   - build04
   cg_3:
   - build01
+  - build03
 secret_configs:
 - from:
     ops-mirror.pem:

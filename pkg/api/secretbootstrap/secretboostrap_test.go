@@ -1,7 +1,6 @@
 package secretbootstrap
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -227,26 +226,31 @@ func TestRoundtripConfig(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		var outFile string
 		t.Run(tc.name, func(t *testing.T) {
 			c := &Config{}
 			inFile := filepath.Join("testdata", fmt.Sprintf("%s.yaml", t.Name()))
 			err := LoadConfigFromFile(inFile, c)
 			if err != nil {
-				t.Errorf("error loading config file: %v", err)
+				t.Fatalf("error loading config file: %v", err)
 			}
 
-			outFile := filepath.Join("testdata", fmt.Sprintf("%s_out.yaml", t.Name()))
+			outFile = filepath.Join("testdata", fmt.Sprintf("%s_out.yaml", t.Name()))
 			err = SaveConfigToFile(outFile, c)
 			if err != nil {
-				t.Errorf("error saving config file: %v", err)
+				t.Fatalf("error saving config file: %v", err)
 			}
 
 			in, _ := ioutil.ReadFile(inFile)
 			out, _ := ioutil.ReadFile(outFile)
-			if !bytes.Equal(in, out) {
-				t.Errorf("input and output configs are not equal. See output file: %s", outFile)
-			} else {
-				_ = os.Remove(outFile)
+			if diff := cmp.Diff(in, out); diff != "" {
+				t.Fatalf("input and output configs are not equal. %s", diff)
+			}
+		})
+
+		t.Cleanup(func() {
+			if err := os.Remove(outFile); err != nil {
+				t.Fatalf("error removing output config file: %v", err)
 			}
 		})
 	}

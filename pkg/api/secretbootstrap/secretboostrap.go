@@ -3,6 +3,7 @@ package secretbootstrap
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/getlantern/deepcopy"
 	"io/ioutil"
 	"reflect"
 	"strings"
@@ -13,12 +14,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
-)
-
-type AttributeType string
-
-const (
-	AttributeTypePassword AttributeType = "password"
 )
 
 type ItemContext struct {
@@ -109,12 +104,15 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 		ClusterGroups:             c.ClusterGroups,
 		UserSecretsTargetClusters: c.UserSecretsTargetClusters,
 	}
-
 	var secrets []SecretConfig
 	for _, s := range c.Secrets {
-		c.stripVaultPrefix(&s)
-		s.groupClusters()
-		secrets = append(secrets, s)
+		var secret SecretConfig
+		if err := deepcopy.Copy(&secret, s); err != nil {
+			return nil, err
+		}
+		c.stripVaultPrefix(&secret)
+		secret.groupClusters()
+		secrets = append(secrets, secret)
 	}
 
 	target.Secrets = secrets
@@ -153,7 +151,7 @@ func (s *SecretConfig) groupClusters() {
 func (c *Config) stripVaultPrefix(s *SecretConfig) {
 	pre := c.VaultDPTPPrefix + "/"
 	for key, from := range s.From {
-		from.Item = strings.Replace(from.Item, pre, "", 1)
+		from.Item = strings.TrimPrefix(from.Item, pre)
 		for i, dcj := range from.DockerConfigJSONData {
 			from.DockerConfigJSONData[i].Item = strings.Replace(dcj.Item, pre, "", 1)
 		}

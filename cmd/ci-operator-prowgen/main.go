@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/ghodss/yaml"
@@ -113,18 +114,25 @@ func readProwgenConfig(path string) (*config.Prowgen, error) {
 	return pConfig, nil
 }
 
-// generateJobsToDir returns a callback that knows how to generate prow job configuration
-// into the dir provided by consuming ci-operator configuration.
-//
-// Returned callback will cache Prowgen config reads, including unsuccessful attempts
-// The keys are either `org` or `org/repo`, and if present in the cache, a previous
-// execution of the callback already made an attempt to read a prowgen config in the
-// appropriate location, and either stored a pointer to the parsed config if if was
-// successfully read, or stored `nil` when the prowgen config could not be read (usually
-// because the drop-in is not there).
-func generateJobsToDir(dir string, resolver registry.Resolver) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
-	// Return a closure so the cache is shared among callback calls
-	cache := map[string]*config.Prowgen{}
+// generateJobsToDir generates prow job configuration into the dir provided by
+// consuming ci-operator configuration.
+func generateJobsToDir(fromDir, toDir, subDir string, prowConfig map[string]*config.Prowgen, resolver registry.Resolver) error {
+	generated := map[string]*prowconfig.JobConfig{}
+	genJobsFunc := generateJobs(resolver, prowConfig, generated)
+	if err := config.OperateOnCIOperatorConfigDir(filepath.Join(fromDir, subDir), genJobsFunc); err != nil {
+		return fmt.Errorf("failed to generate jobs: %w", err)
+	}
+	for k, v := range generated {
+		i := strings.Index(k, "/")
+		org, repo := k[:i], k[i+1:]
+		if err := jc.WriteToDir(toDir, org, repo, v); err != nil {
+			return fmt.Errorf("failed to write job definitions to output directory: %w", err)
+		}
+	}
+	return nil
+}
+
+func generateJobs(resolver registry.Resolver, cache map[string]*config.Prowgen, output map[string]*prowconfig.JobConfig) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 	return func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 		orgRepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
 		pInfo := &prowgen.ProwgenInfo{Metadata: info.Metadata, Config: config.Prowgen{Private: false, Expose: false}}
@@ -159,7 +167,13 @@ func generateJobsToDir(dir string, resolver registry.Resolver) func(configSpec *
 			}
 			configSpec = &resolved
 		}
-		return jc.WriteToDir(dir, info.Org, info.Repo, prowgen.GenerateJobs(configSpec, pInfo))
+		generated := prowgen.GenerateJobs(configSpec, pInfo)
+		if o, ok := output[orgRepo]; ok {
+			jc.Append(o, generated)
+		} else {
+			output[orgRepo] = generated
+		}
+		return nil
 	}
 }
 
@@ -235,10 +249,10 @@ func main() {
 		args = append(args, "")
 	}
 	logger := logrus.WithFields(logrus.Fields{"target": opt.toDir, "source": opt.fromDir})
-	genJobs := generateJobsToDir(opt.toDir, opt.resolver)
+	config := map[string]*config.Prowgen{}
 	for _, subDir := range args {
 		logger = logger.WithFields(logrus.Fields{"subdir": subDir})
-		if err := opt.OperateOnCIOperatorConfigDir(filepath.Join(opt.fromDir, subDir), genJobs); err != nil {
+		if err := generateJobsToDir(opt.fromDir, opt.toDir, subDir, config, opt.resolver); err != nil {
 			logger.WithError(err).Fatal("Failed to generate jobs")
 		}
 

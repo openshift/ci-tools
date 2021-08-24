@@ -126,9 +126,17 @@ production-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/
 # Set version and name variables.
 #
 # Example:
-#   make production-install
+#   make race-install
 race-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/frontend/dist
 	hack/install.sh race
+
+# Install Go binaries to $GOPATH/bin with debug flags set.
+#
+# Example:
+#   make debug-install
+debug-install: cmd/vault-secret-collection-manager/index.js
+	go install -gcflags="all=-N -l" -ldflags "-X 'main.Debug=true'" $(VERBOSE) ./cmd/...
+.PHONY: debug-install
 
 # Run integration tests.
 #

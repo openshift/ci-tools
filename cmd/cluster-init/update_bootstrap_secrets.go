@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -25,7 +27,7 @@ const (
 func updateCiSecretBootstrapConfig(o options) error {
 	ciSecBootDir := filepath.Join(o.releaseRepo, "core-services", "ci-secret-bootstrap")
 	ciSecBootConfigFile := filepath.Join(ciSecBootDir, "_config.yaml")
-	fmt.Printf("Updating ci-secret-bootstrap: %s\n", ciSecBootConfigFile)
+	logrus.Printf("Updating ci-secret-bootstrap: %s\n", ciSecBootConfigFile)
 
 	data, err := ioutil.ReadFile(ciSecBootConfigFile)
 	if err != nil {
@@ -76,7 +78,7 @@ func updateCiSecretBootstrapConfig(o options) error {
 
 func appendSecret(generateFunction func(options) secretbootstrap.SecretConfig, c *secretbootstrap.Config, o options) {
 	secret := generateFunction(o)
-	fmt.Printf("Creating new secret with 'to' of: %v\n", secret.To)
+	logrus.Printf("Creating new secret with 'to' of: %v\n", secret.To)
 	c.Secrets = append(c.Secrets, secret)
 }
 
@@ -224,7 +226,7 @@ func updateChatBotSecret(c *secretbootstrap.Config, o options) error {
 }
 
 func appendSecretItemContext(c *secretbootstrap.Config, name string, cluster string, key string, value secretbootstrap.ItemContext) error {
-	fmt.Printf("Appending secret item to: {name: %s, cluster: %s}\n", name, cluster)
+	logrus.Printf("Appending secret item to: {name: %s, cluster: %s}\n", name, cluster)
 	sc, err := findSecretConfig(name, cluster, c.Secrets)
 	if err != nil {
 		return err
@@ -298,7 +300,7 @@ func generateRegistryPullCredsAllSecrets(c *secretbootstrap.Config, o options) {
 			generateDCJSecretConfigTo(RegPullCredsAll, TestCredentials, o.clusterName),
 		},
 	}
-	fmt.Printf("Creating new secret with 'to' of: %v\n", sc.To)
+	logrus.Printf("Creating new secret with 'to' of: %v\n", sc.To)
 	c.Secrets = append(c.Secrets, sc)
 }
 
@@ -316,7 +318,7 @@ func getRegistryUrlFor(cluster string) string {
 }
 
 func appendRegistrySecretItemContext(c *secretbootstrap.Config, name string, cluster string, value secretbootstrap.DockerConfigJSONData) error {
-	fmt.Printf("Appending registry secret item to: {name: %s, cluster: %s}\n", name, cluster)
+	logrus.Printf("Appending registry secret item to: {name: %s, cluster: %s}\n", name, cluster)
 	sc, err := findSecretConfig(name, cluster, c.Secrets)
 	if err != nil {
 		return err

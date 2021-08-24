@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
+	"github.com/sirupsen/logrus"
+
 	v1 "k8s.io/api/core/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"sigs.k8s.io/yaml"
@@ -33,7 +35,7 @@ type Pre struct {
 
 func updatePresubmits(o options) error {
 	presubmitsFile := filepath.Join(o.releaseRepo, PrePostFilePath, "openshift-release-master-presubmits.yaml")
-	fmt.Printf("Updating Presubmit Jobs: %s\n", presubmitsFile)
+	logrus.Printf("Updating Presubmit Jobs: %s\n", presubmitsFile)
 	data, err := ioutil.ReadFile(presubmitsFile)
 	if err != nil {
 		return err
@@ -58,7 +60,7 @@ func updatePresubmits(o options) error {
 
 func updatePostsubmits(o options) error {
 	postsubmitsFile := filepath.Join(o.releaseRepo, PrePostFilePath, "openshift-release-master-postsubmits.yaml")
-	fmt.Printf("Updating Postsubmit Jobs: %s\n", postsubmitsFile)
+	logrus.Printf("Updating Postsubmit Jobs: %s\n", postsubmitsFile)
 	data, err := ioutil.ReadFile(postsubmitsFile)
 	if err != nil {
 		return err
@@ -83,7 +85,7 @@ func updatePostsubmits(o options) error {
 
 func updateInfraPeriodics(o options) error {
 	ipFile := filepath.Join(o.releaseRepo, IPFilePath)
-	fmt.Printf("Updating Periodic Jobs: %s\n", ipFile)
+	logrus.Printf("Updating Periodic Jobs: %s\n", ipFile)
 	data, err := ioutil.ReadFile(ipFile)
 	if err != nil {
 		return err

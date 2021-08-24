@@ -14,9 +14,8 @@ func loadConfig(filename string, o interface{}) {
 
 func saveConfig(filename string, o interface{}) {
 	y, err := yaml.Marshal(o)
-	check(err, "cannot marshal InfraPeriodics")
+	check(err, "cannot marshal config")
 
 	err = ioutil.WriteFile(filename, y, 0644)
-	check(err, "cannot write InfraPeriodics file: ", filename)
-
+	check(err, "cannot write config file: ", filename)
 }

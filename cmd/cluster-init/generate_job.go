@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/api"
 	"google.golang.org/protobuf/proto"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -9,50 +10,28 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 )
 
-//TODO: not sure some of these should be constants, what if we only use them once???
 const (
-	Openshift      = "openshift"
-	Release        = "release"
-	Master         = "master"
-	ApplyConfig    = "applyconfig"
-	Latest         = "latest"
-	ConfigDir      = "config-dir"
-	Clusters       = "clusters"
-	Confirm        = "confirm"
-	As             = "as"
-	Always         = "Always"
-	Cpu            = "cpu"
-	Kubernetes     = "kubernetes"
-	AppDotCi       = "app.ci"
-	Periodic       = "periodic"
-	Apply          = "apply"
-	Ci             = "ci"
-	Io             = "io"
-	Role           = "role"
-	Infra          = "infra"
-	Registry       = "registry"
-	Org            = "org"
-	Branch         = "branch"
-	Dry            = "dry"
-	BuildFarm      = "build-farm"
-	Pull           = "pull"
-	CanBeRehearsed = "can-be-rehearsed"
-	Tmp            = "tmp"
+	LatestImage   = "registry.ci.openshift.org/ci/applyconfig:" + api.LatestReleaseName
+	OpenshiftRole = "ci.openshift.io/role"
+	Ci            = "ci"
+	Infra         = "infra"
+	BuildFarm     = "build-farm"
+	Tmp           = "tmp"
 )
 
-func generatePeriodic(clusterName string, buildFarmDir string) prowconfig.Periodic {
+func generatePeriodic(clusterName string) prowconfig.Periodic {
 	utilityConfig := generateUtilityConfig()
 	utilityConfig.ExtraRefs = append(utilityConfig.ExtraRefs, generateReleaseRef())
-	image := fmt.Sprintf("%s:%s", ApplyConfig, Latest)
-	args := generateArgs(buildFarmDir)
-	args = append(args, fmt.Sprintf("--%s=true", Confirm))
+	image := fmt.Sprintf("%s:%s", "applyconfig", api.LatestReleaseName)
+	args := generateArgs(clusterName)
+	args = append(args, "--confirm=true")
 	container := generateContainer(image, args, generateVolumeMounts())
 	volume := generateSecretVolume(clusterName)
 	podSpec := generatePodSpec(container, []v1.Volume{volume})
-	name := fmt.Sprintf("%s-%s-%s-%s-%s-%s", Periodic, Openshift, Release, Master, clusterName, Apply)
+	name := "periodic-openshift-release-master-" + clusterName + "-apply"
 	jobBase := generateJobBase(podSpec, utilityConfig, name)
 	jobBase.Labels = map[string]string{
-		fmt.Sprintf("%s.%s.%s/%s", Ci, Openshift, Io, Role): Infra,
+		OpenshiftRole: Infra,
 	}
 	return prowconfig.Periodic{
 		JobBase:  jobBase,
@@ -60,19 +39,18 @@ func generatePeriodic(clusterName string, buildFarmDir string) prowconfig.Period
 	}
 }
 
-func generatePostsubmit(clusterName string, buildFarmDir string) prowconfig.Postsubmit {
+func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 	utilityConfig := generateUtilityConfig()
-	image := fmt.Sprintf("%s.%s.%s.%s/%s/%s:%s", Registry, Ci, Openshift, Org, Ci, ApplyConfig, Latest)
-	args := generateArgs(buildFarmDir)
-	args = append(args, fmt.Sprintf("--%s=true", Confirm))
-	container := generateContainer(image, args, generateVolumeMounts())
+	args := generateArgs(clusterName)
+	args = append(args, "--confirm=true")
+	container := generateContainer(LatestImage, args, generateVolumeMounts())
 	volume := generateSecretVolume(clusterName)
 	podSpec := generatePodSpec(container, []v1.Volume{volume})
-	name := fmt.Sprintf("%s-%s-%s-%s-%s-%s-%s", Branch, Ci, Openshift, Release, Master, clusterName, Apply)
+	name := "branch-ci-openshift-release-master-" + clusterName + "-apply"
 	jobBase := generateJobBase(podSpec, utilityConfig, name)
 	jobBase.MaxConcurrency = 1
 	jobBase.Labels = map[string]string{
-		fmt.Sprintf("%s.%s.%s/%s", Ci, Openshift, Io, Role): Infra,
+		OpenshiftRole: Infra,
 	}
 	brancher := prowconfig.Brancher{
 		Branches: []string{"master"},
@@ -83,28 +61,27 @@ func generatePostsubmit(clusterName string, buildFarmDir string) prowconfig.Post
 	}
 }
 
-func generatePresubmit(clusterName string, buildFarmDir string) prowconfig.Presubmit {
+func generatePresubmit(clusterName string) prowconfig.Presubmit {
 	utilityConfig := generateUtilityConfig()
-	image := fmt.Sprintf("%s.%s.%s.%s/%s/%s:%s", Registry, Ci, Openshift, Org, Ci, ApplyConfig, Latest)
 	mounts := generateVolumeMounts()
 	mounts = append(mounts, v1.VolumeMount{
 		Name:      Tmp,
-		MountPath: fmt.Sprintf("/%s", Tmp),
+		MountPath: "/" + Tmp,
 	})
-	container := generateContainer(image, generateArgs(buildFarmDir), mounts)
+	container := generateContainer(LatestImage, generateArgs(clusterName), mounts)
 	secretVolume := generateSecretVolume(clusterName)
 	emptyVolume := generateEmptyVolume(Tmp)
 	podSpec := generatePodSpec(container, []v1.Volume{secretVolume, emptyVolume})
-	name := fmt.Sprintf("%s-%s-%s-%s-%s-%s-%s", Pull, Ci, Openshift, Release, Master, clusterName, Dry)
+	name := "pull-ci-openshift-release-master-" + clusterName + "-dry"
 	jobBase := generateJobBase(podSpec, utilityConfig, name)
 	jobBase.Labels = map[string]string{
-		fmt.Sprintf("%s.%s.%s/%s", PjRehearse, Openshift, Io, CanBeRehearsed): "true",
+		"pj-rehearse.openshift.io/can-be-rehearsed": "true",
 	}
 	brancher := prowconfig.Brancher{
 		Branches: []string{"master"},
 	}
-	rerun := fmt.Sprintf("/%s %s-%s", Test, clusterName, Dry)
-	trigger := fmt.Sprintf("(?m)^/%s( | .* )%s-%s,?($|\\s.*)", Test, clusterName, Dry)
+	rerun := prowconfig.DefaultRerunCommandFor(clusterName) + "-dry"
+	trigger := prowconfig.DefaultTriggerFor(clusterName)
 	reporter := generateReporter(clusterName)
 	return prowconfig.Presubmit{
 		JobBase:      jobBase,
@@ -119,15 +96,15 @@ func generatePresubmit(clusterName string, buildFarmDir string) prowconfig.Presu
 
 func generateReporter(clusterName string) prowconfig.Reporter {
 	return prowconfig.Reporter{
-		Context: fmt.Sprintf("%s/%s/%s-%s", Ci, BuildFarm, clusterName, Dry),
+		Context: fmt.Sprintf("ci/build-farm/%s-dry", clusterName),
 	}
 }
 
 func generateJobBase(ps *v1.PodSpec, uc prowconfig.UtilityConfig, name string) prowconfig.JobBase {
 	return prowconfig.JobBase{
 		Name:            name,
-		Agent:           Kubernetes,
-		Cluster:         AppDotCi,
+		Agent:           "kubernetes",
+		Cluster:         string(api.ClusterAPPCI),
 		Namespace:       nil,
 		ErrorOnEviction: false,
 		SourcePath:      "",
@@ -151,9 +128,9 @@ func generatePodSpec(c v1.Container, v []v1.Volume) *v1.PodSpec {
 
 func generateReleaseRef() prowapi.Refs {
 	return prowapi.Refs{
-		Org:     Openshift,
-		Repo:    Release,
-		BaseRef: Master,
+		Org:     "openshift",
+		Repo:    "release",
+		BaseRef: "master",
 	}
 }
 
@@ -172,13 +149,13 @@ func generateUtilityConfig() prowconfig.UtilityConfig {
 
 func generateSecretVolume(clusterName string) v1.Volume {
 	return v1.Volume{
-		Name: BuildFarmCredentials,
+		Name: "build-farm-credentials",
 		VolumeSource: v1.VolumeSource{
 			Secret: &v1.SecretVolumeSource{
-				SecretName: BuildFarmCredentials,
+				SecretName: "build-farm-credentials",
 				Items: []v1.KeyToPath{
 					{
-						Key:  fmt.Sprintf("%s.%s.%s.%s", Sa, ConfigUpdater, clusterName, Config),
+						Key:  secretConfigFor(ConfigUpdater, clusterName),
 						Path: "kubeconfig",
 					},
 				},
@@ -200,32 +177,32 @@ func generateContainer(image string, args []string, volumeMounts []v1.VolumeMoun
 	return v1.Container{
 		Name:    "",
 		Image:   image,
-		Command: []string{ApplyConfig},
+		Command: []string{"applyconfig"},
 		Args:    args,
 		Resources: v1.ResourceRequirements{
 			Requests: map[v1.ResourceName]resource.Quantity{
-				Cpu: resource.MustParse("10m"),
+				"cpu": resource.MustParse("10m"),
 			},
 		},
-		ImagePullPolicy: Always,
+		ImagePullPolicy: "Always",
 		VolumeMounts:    volumeMounts,
 	}
 }
 
-func generateArgs(buildFarmDir string) []string {
+func generateArgs(clusterName string) []string {
 	return []string{
-		fmt.Sprintf("--%s=%s/%s/%s", ConfigDir, Clusters, BuildClusters, buildFarmDir),
-		fmt.Sprintf("--%s=", As),
-		fmt.Sprintf("--%s=/%s/%s/%s", Kubeconfig, Etc, BuildFarmCredentials, Kubeconfig),
+		fmt.Sprintf("--config-dir=clusters/build-clusters/%s", clusterName),
+		"--as=",
+		"--KUBECONFIG=/etc/build-farm-credentials/KUBECONFIG",
 	}
 }
 
 func generateVolumeMounts() []v1.VolumeMount {
 	return []v1.VolumeMount{
 		{
-			Name:      BuildFarmCredentials,
+			Name:      "build-farm-credentials",
 			ReadOnly:  true,
-			MountPath: fmt.Sprintf("/%s/%s", Etc, BuildFarmCredentials),
+			MountPath: "/etc/build-farm-credentials",
 		},
 	}
 }

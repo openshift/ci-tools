@@ -8,6 +8,11 @@ import (
 	"path/filepath"
 )
 
+const (
+	IPFilePath      = "ci-operator/jobs/infra-periodics.yaml"
+	PrePostFilePath = "ci-operator/jobs/openshift/release"
+)
+
 type InfraPeriodics struct {
 	Periodics []prowconfig.Periodic `json:"periodics,omitempty"`
 }
@@ -25,47 +30,47 @@ type Pre struct {
 }
 
 func updatePresubmits(o options) {
-	presubmitsFile := filepath.Join(o.releaseRepo, CiOperator, Jobs, Openshift, Release, "openshift-release-master-presubmits.yaml")
+	presubmitsFile := filepath.Join(o.releaseRepo, PrePostFilePath, "openshift-release-master-presubmits.yaml")
 	fmt.Printf("Updating Presubmit Jobs: %s\n", presubmitsFile)
 	presubmits := &Pre{}
 	loadConfig(presubmitsFile, presubmits)
-	presubmit := generatePresubmit(o.clusterName, o.buildFarmDir)
+	presubmit := generatePresubmit(o.clusterName)
 	presubmits.OSRelease.Jobs = append(presubmits.OSRelease.Jobs, presubmit)
 	saveConfig(presubmitsFile, presubmits)
 }
 
 func updatePostsubmits(o options) {
-	postsubmitsFile := filepath.Join(o.releaseRepo, CiOperator, Jobs, Openshift, Release, "openshift-release-master-postsubmits.yaml")
+	postsubmitsFile := filepath.Join(o.releaseRepo, PrePostFilePath, "openshift-release-master-postsubmits.yaml")
 	fmt.Printf("Updating Postsubmit Jobs: %s\n", postsubmitsFile)
 	postsubmits := &Post{}
 	loadConfig(postsubmitsFile, postsubmits)
-	postsubmit := generatePostsubmit(o.clusterName, o.buildFarmDir)
+	postsubmit := generatePostsubmit(o.clusterName)
 	postsubmits.OSRelease.Jobs = append(postsubmits.OSRelease.Jobs, postsubmit)
 	saveConfig(postsubmitsFile, *postsubmits)
 }
 
 func updateInfraPeriodics(o options) {
-	ipFile := filepath.Join(o.releaseRepo, CiOperator, Jobs, InfraPeriodicsFile)
+	ipFile := filepath.Join(o.releaseRepo, IPFilePath)
 	fmt.Printf("Updating Periodic Jobs: %s\n", ipFile)
 	ip := &InfraPeriodics{}
 	loadConfig(ipFile, ip)
-	rotSASecretsPer, err := findPeriodic(ip, PerRotSaSecs)
+	rotSASecretsPer, err := findPeriodic(ip, "periodic-rotate-serviceaccount-secrets")
 	check(err)
 	appendNewClustersConfigUpdaterToKubeconfig(rotSASecretsPer, "", o.clusterName)
 	appendBuildFarmCredentialSecret(rotSASecretsPer, o.clusterName)
-	for _, perName := range []string{PerCiSecGen, PerCiSecBoot} {
+	for _, perName := range []string{"periodic-ci-secret-generator", "periodic-ci-secret-bootstrap"} {
 		per, err := findPeriodic(ip, perName)
 		check(err)
-		appendNewClustersConfigUpdaterToKubeconfig(per, CiSecretBootstrap, o.clusterName)
+		appendNewClustersConfigUpdaterToKubeconfig(per, "ci-secret-bootstrap", o.clusterName)
 		appendBuildFarmCredentialSecret(per, o.clusterName)
 	}
-	ap := generatePeriodic(o.clusterName, o.buildFarmDir)
+	ap := generatePeriodic(o.clusterName)
 	ip.Periodics = append(ip.Periodics, ap)
 	saveConfig(ipFile, *ip)
 }
 
 func periodicExistsFor(o options) bool {
-	ipFile := filepath.Join(o.releaseRepo, CiOperator, Jobs, InfraPeriodicsFile)
+	ipFile := filepath.Join(o.releaseRepo, IPFilePath)
 	ip := &InfraPeriodics{}
 	loadConfig(ipFile, ip)
 	_, err := findPeriodic(ip, fmt.Sprintf("periodic-openshift-release-master-%s-apply", o.clusterName))
@@ -79,14 +84,13 @@ func appendNewClustersConfigUpdaterToKubeconfig(per *prowconfig.Periodic, contai
 	}
 	env, err := findEnv(container, Kubeconfig)
 	check(err)
-	s := fmt.Sprintf(":/%s/%s/%s.%s.%s.%s", Etc, BuildFarmCredentials, Sa, ConfigUpdater, clusterName, Config)
-	env.Value = env.Value + s
+	env.Value = env.Value + fmt.Sprintf(":/etc/build-farm-credentials/sa.config-updater.%s.config", clusterName)
 }
 
 func appendBuildFarmCredentialSecret(per *prowconfig.Periodic, clusterName string) {
-	v, err := findVolume(per.Spec, BuildFarmCredentials)
+	v, err := findVolume(per.Spec, "build-farm-credentials")
 	check(err)
-	configPath := fmt.Sprintf("%s.%s.%s.%s", Sa, ConfigUpdater, clusterName, Config)
+	configPath := secretConfigFor(ConfigUpdater, clusterName)
 	path := v1.KeyToPath{
 		Key:  configPath,
 		Path: configPath,

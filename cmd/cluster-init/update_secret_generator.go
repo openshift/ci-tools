@@ -2,12 +2,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 	"path/filepath"
-)
-
-const (
-	Build01 = "build01"
 )
 
 //SecretGenConfig is used here as using secretgenerator.Config results in 'special' unmarshalling
@@ -21,15 +18,15 @@ func updateSecretGenerator(o options) {
 	loadConfig(filename, c)
 	appendToSecretItem(BuildUFarm, "sa.$(service_account).$(cluster).config", o, c)
 	appendToSecretItem(BuildUFarm, "token_image-puller_$(cluster)_reg_auth_value.txt", o, c)
-	appendToSecretItem(fmt.Sprintf("%s-%s", Ci, ChatBot), "sa.$(service_account).$(cluster).config", o, c)
+	appendToSecretItem("ci-chat-bot", "sa.$(service_account).$(cluster).config", o, c)
 	appendToSecretItem(PodScaler, "sa.$(service_account).$(cluster).config", o, c)
 
 	saveConfig(filename, c)
 }
 
 func appendToSecretItem(itemName string, name string, o options, c *SecretGenConfig) {
-	si, err := findSecretItem(itemName, name, Build01, *c)
-	fmt.Printf("Appending to secret item: {itemName: %s, name: %s, likeCluster: %s}\n", itemName, name, Build01)
+	si, err := findSecretItem(itemName, name, string(api.ClusterBuild01), *c)
+	fmt.Printf("Appending to secret item: {itemName: %s, name: %s, likeCluster: %s}\n", itemName, name, string(api.ClusterBuild01))
 	check(err)
 	si.Params["cluster"] = append(si.Params["cluster"], o.clusterName)
 }

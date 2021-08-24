@@ -222,7 +222,8 @@ tests:
 				t.Fatalf("Unexpected error writing old postsubmits: %v", err)
 			}
 
-			if err := generateJobsToDir(fullConfigPath, baseProwConfigDir, "", map[string]*config.Prowgen{}, nil); err != nil {
+			o := options{fromDir: fullConfigPath, toDir: baseProwConfigDir}
+			if err := o.generateJobsToDir("", map[string]*config.Prowgen{}); err != nil {
 				t.Fatalf("Unexpected error generating jobs from config: %v", err)
 			}
 

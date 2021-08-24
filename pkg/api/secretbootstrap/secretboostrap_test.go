@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -372,8 +371,8 @@ func TestGroupClusters(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sc := tc.input
 			sc.groupClusters()
-			if !reflect.DeepEqual(sc.To, tc.expected) {
-				t.Fatalf("result of groupClusters() doesn't match expected output")
+			if diff := cmp.Diff(tc.expected, sc.To); diff != "" {
+				t.Fatalf("result of groupClusters() doesn't match expected output: %v", diff)
 			}
 		})
 	}

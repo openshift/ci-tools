@@ -18,7 +18,7 @@ type options struct {
 }
 
 func (o options) String() string {
-	return fmt.Sprintf("cluster-name: %s\nrelease-repo: %s\nbuild-farm-dir: %s",
+	return fmt.Sprintf("cluster-name: %s\nrelease-repo: %s\ndescription: %s",
 		o.clusterName,
 		o.releaseRepo,
 		o.description)
@@ -48,12 +48,13 @@ func validateOptions(o options) []error {
 	if o.description == "" {
 		errs = append(errs, fmt.Errorf("--description must be provided"))
 	}
-	if periodicExistsFor(o) {
+	existsFor, err := periodicExistsFor(o)
+	if existsFor || err != nil {
 		errs = append(errs, fmt.Errorf("cluster: %s already exists", o.clusterName))
 	}
 	buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
 	if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
-		errs = append(errs, fmt.Errorf("description: %s already exists", o.description))
+		errs = append(errs, fmt.Errorf("build farm directory: %s already exists", o.clusterName))
 	}
 	return errs
 }
@@ -63,7 +64,6 @@ const (
 	Kubeconfig    = "KUBECONFIG"
 	ConfigUpdater = "config-updater"
 	Config        = "config"
-	Sa            = "sa"
 )
 
 func main() {
@@ -73,18 +73,31 @@ func main() {
 		logrus.Fatalf("validation errors: %v", validationErrors)
 	}
 
-	updateInfraPeriodics(o)
-	updatePostsubmits(o)
-	updatePresubmits(o)
+	// Each step in the process is allowed to fail independently so that the diffs for the others can still be generated
+	if err := updateInfraPeriodics(o); err != nil {
+		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to update Periodic Jobs")
+	}
+	if err := updatePostsubmits(o); err != nil {
+		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to update PostSubmit Jobs")
+	}
+	if err := updatePresubmits(o); err != nil {
+		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to update PreSubmit Jobs")
+	}
 	//TODO: is the following good enough? it is hard to modify MD programmatically
 	fmt.Printf("Please add information about the '%s' cluster to %s/clusters/README.md\n",
 		o.clusterName, o.releaseRepo)
 	if err := initClusterBuildFarmDir(o); err != nil {
-		fmt.Println(err)
+		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to initialize build farm dir")
 	}
-	updateCiSecretBootstrapConfig(o)
-	updateSecretGenerator(o)
-	updateSanitizeProwJobs(o)
+	if err := updateCiSecretBootstrapConfig(o); err != nil {
+		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to update ci-secretbootstrap config")
+	}
+	if err := updateSecretGenerator(o); err != nil {
+		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to update ci-secretgenerator config")
+	}
+	if err := updateSanitizeProwJobs(o); err != nil {
+		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to update sanitize-prow-jobs config")
+	}
 }
 
 func initClusterBuildFarmDir(o options) error {
@@ -100,12 +113,6 @@ func initClusterBuildFarmDir(o options) error {
 		}
 	}
 	return nil
-}
-
-func check(err error, args ...interface{}) {
-	if err != nil {
-		logrus.WithError(err).Fatal(args)
-	}
 }
 
 func buildFarmDirFor(releaseRepo string, clusterName string) string {

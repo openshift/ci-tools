@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"path/filepath"
+
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
@@ -13,23 +16,48 @@ import (
 //incorrect re-serialization
 type SecretGenConfig []secretgenerator.SecretItem
 
-func updateSecretGenerator(o options) {
+func updateSecretGenerator(o options) error {
 	filename := filepath.Join(o.releaseRepo, "core-services", "ci-secret-generator", "_config.yaml")
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return err
+	}
 	c := &SecretGenConfig{}
-	loadConfig(filename, c)
-	appendToSecretItem(BuildUFarm, "sa.$(service_account).$(cluster).config", o, c)
-	appendToSecretItem(BuildUFarm, "token_image-puller_$(cluster)_reg_auth_value.txt", o, c)
-	appendToSecretItem("ci-chat-bot", "sa.$(service_account).$(cluster).config", o, c)
-	appendToSecretItem(PodScaler, "sa.$(service_account).$(cluster).config", o, c)
+	if err = yaml.Unmarshal(data, c); err != nil {
+		return err
+	}
+	if err := appendToSecretItem(BuildUFarm, "sa.$(service_account).$(cluster).config", o, c); err != nil {
+		return err
+	}
+	if err := appendToSecretItem(BuildUFarm, "token_image-puller_$(cluster)_reg_auth_value.txt", o, c); err != nil {
+		return err
+	}
+	if err := appendToSecretItem("ci-chat-bot", "sa.$(service_account).$(cluster).config", o, c); err != nil {
+		return err
+	}
+	if err := appendToSecretItem(PodScaler, "sa.$(service_account).$(cluster).config", o, c); err != nil {
+		return err
+	}
 
-	saveConfig(filename, c)
+	y, err := yaml.Marshal(c)
+	if err != nil {
+		return err
+	}
+	if err = ioutil.WriteFile(filename, y, 0644); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func appendToSecretItem(itemName string, name string, o options, c *SecretGenConfig) {
+func appendToSecretItem(itemName string, name string, o options, c *SecretGenConfig) error {
 	si, err := findSecretItem(itemName, name, string(api.ClusterBuild01), *c)
+	if err != nil {
+		return err
+	}
 	fmt.Printf("Appending to secret item: {itemName: %s, name: %s, likeCluster: %s}\n", itemName, name, string(api.ClusterBuild01))
-	check(err)
 	si.Params["cluster"] = append(si.Params["cluster"], o.clusterName)
+	return nil
 }
 
 func findSecretItem(itemName string, name string, likeCluster string, c SecretGenConfig) (*secretgenerator.SecretItem, error) {

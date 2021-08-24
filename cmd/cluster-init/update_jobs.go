@@ -2,17 +2,12 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"path/filepath"
-
-	"github.com/sirupsen/logrus"
 
 	v1 "k8s.io/api/core/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
-)
-
-const (
-	IPFilePath      = "ci-operator/jobs/infra-periodics.yaml"
-	PrePostFilePath = "ci-operator/jobs/openshift/release"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -36,73 +31,142 @@ type Pre struct {
 	} `json:"presubmits,omitempty"`
 }
 
-func updatePresubmits(o options) {
+func updatePresubmits(o options) error {
 	presubmitsFile := filepath.Join(o.releaseRepo, PrePostFilePath, "openshift-release-master-presubmits.yaml")
 	fmt.Printf("Updating Presubmit Jobs: %s\n", presubmitsFile)
+	data, err := ioutil.ReadFile(presubmitsFile)
+	if err != nil {
+		return err
+	}
 	presubmits := &Pre{}
-	loadConfig(presubmitsFile, presubmits)
+	if err = yaml.Unmarshal(data, presubmits); err != nil {
+		return err
+	}
 	presubmit := generatePresubmit(o.clusterName)
 	presubmits.OSRelease.Jobs = append(presubmits.OSRelease.Jobs, presubmit)
-	saveConfig(presubmitsFile, presubmits)
+
+	y, err := yaml.Marshal(presubmits)
+	if err != nil {
+		return err
+	}
+	if err = ioutil.WriteFile(presubmitsFile, y, 0644); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func updatePostsubmits(o options) {
+func updatePostsubmits(o options) error {
 	postsubmitsFile := filepath.Join(o.releaseRepo, PrePostFilePath, "openshift-release-master-postsubmits.yaml")
 	fmt.Printf("Updating Postsubmit Jobs: %s\n", postsubmitsFile)
+	data, err := ioutil.ReadFile(postsubmitsFile)
+	if err != nil {
+		return err
+	}
 	postsubmits := &Post{}
-	loadConfig(postsubmitsFile, postsubmits)
+	if err = yaml.Unmarshal(data, postsubmits); err != nil {
+		return err
+	}
 	postsubmit := generatePostsubmit(o.clusterName)
 	postsubmits.OSRelease.Jobs = append(postsubmits.OSRelease.Jobs, postsubmit)
-	saveConfig(postsubmitsFile, *postsubmits)
+
+	y, err := yaml.Marshal(postsubmits)
+	if err != nil {
+		return err
+	}
+	if err = ioutil.WriteFile(postsubmitsFile, y, 0644); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func updateInfraPeriodics(o options) {
+func updateInfraPeriodics(o options) error {
 	ipFile := filepath.Join(o.releaseRepo, IPFilePath)
 	fmt.Printf("Updating Periodic Jobs: %s\n", ipFile)
+	data, err := ioutil.ReadFile(ipFile)
+	if err != nil {
+		return err
+	}
 	ip := &InfraPeriodics{}
-	loadConfig(ipFile, ip)
+	if err := yaml.Unmarshal(data, ip); err != nil {
+		return err
+	}
 	rotSASecretsPer, err := findPeriodic(ip, "periodic-rotate-serviceaccount-secrets")
-	check(err)
-	appendNewClustersConfigUpdaterToKubeconfig(rotSASecretsPer, "", o.clusterName)
-	appendBuildFarmCredentialSecret(rotSASecretsPer, o.clusterName)
+	if err != nil {
+		return err
+	}
+	if err := appendNewClustersConfigUpdaterToKubeconfig(rotSASecretsPer, "", o.clusterName); err != nil {
+		return err
+	}
+	if err := appendBuildFarmCredentialSecret(rotSASecretsPer, o.clusterName); err != nil {
+		return err
+	}
 	for _, perName := range []string{"periodic-ci-secret-generator", "periodic-ci-secret-bootstrap"} {
 		per, err := findPeriodic(ip, perName)
-		check(err)
-		appendNewClustersConfigUpdaterToKubeconfig(per, "ci-secret-bootstrap", o.clusterName)
-		appendBuildFarmCredentialSecret(per, o.clusterName)
+		if err != nil {
+			return err
+		}
+		if err := appendNewClustersConfigUpdaterToKubeconfig(per, "ci-secret-bootstrap", o.clusterName); err != nil {
+			return err
+		}
+		if err := appendBuildFarmCredentialSecret(per, o.clusterName); err != nil {
+			return err
+		}
 	}
 	ap := generatePeriodic(o.clusterName)
 	ip.Periodics = append(ip.Periodics, ap)
-	saveConfig(ipFile, *ip)
+
+	y, err := yaml.Marshal(ip)
+	if err != nil {
+		return err
+	}
+	if err = ioutil.WriteFile(ipFile, y, 0644); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func periodicExistsFor(o options) bool {
+func periodicExistsFor(o options) (bool, error) {
 	ipFile := filepath.Join(o.releaseRepo, IPFilePath)
 	ip := &InfraPeriodics{}
-	loadConfig(ipFile, ip)
-	_, err := findPeriodic(ip, fmt.Sprintf("periodic-openshift-release-master-%s-apply", o.clusterName))
-	return err == nil
+	data, err := ioutil.ReadFile(ipFile)
+	if err != nil {
+		return true, err
+	}
+	if err = yaml.Unmarshal(data, o); err != nil {
+		return true, err
+	}
+	_, perErr := findPeriodic(ip, fmt.Sprintf("periodic-openshift-release-master-%s-apply", o.clusterName))
+	return perErr == nil, nil
 }
 
-func appendNewClustersConfigUpdaterToKubeconfig(per *prowconfig.Periodic, containerName string, clusterName string) {
+func appendNewClustersConfigUpdaterToKubeconfig(per *prowconfig.Periodic, containerName string, clusterName string) error {
 	container, err := findContainer(per.Spec, containerName)
 	if err != nil {
-		logrus.WithError(err).Fatal()
+		return err
 	}
 	env, err := findEnv(container, Kubeconfig)
-	check(err)
+	if err != nil {
+		return err
+	}
 	env.Value = env.Value + fmt.Sprintf(":/etc/build-farm-credentials/sa.config-updater.%s.config", clusterName)
+	return nil
 }
 
-func appendBuildFarmCredentialSecret(per *prowconfig.Periodic, clusterName string) {
+func appendBuildFarmCredentialSecret(per *prowconfig.Periodic, clusterName string) error {
 	v, err := findVolume(per.Spec, "build-farm-credentials")
-	check(err)
+	if err != nil {
+		return err
+	}
 	configPath := secretConfigFor(ConfigUpdater, clusterName)
 	path := v1.KeyToPath{
 		Key:  configPath,
 		Path: configPath,
 	}
 	v.Secret.Items = append(v.Secret.Items, path)
+	return nil
 }
 
 func findPeriodic(ip *InfraPeriodics, name string) (*prowconfig.Periodic, error) {

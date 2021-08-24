@@ -24,13 +24,19 @@ const (
 
 func generatePeriodic(clusterName string) prowconfig.Periodic {
 	utilityConfig := generateUtilityConfig()
-	utilityConfig.ExtraRefs = append(utilityConfig.ExtraRefs, generateReleaseRef())
+	utilityConfig.ExtraRefs = append(utilityConfig.ExtraRefs, prowapi.Refs{
+		Org:     "openshift",
+		Repo:    "release",
+		BaseRef: "master",
+	})
 	image := fmt.Sprintf("%s:%s", "applyconfig", api.LatestReleaseName)
 	args := generateArgs(clusterName)
 	args = append(args, "--confirm=true")
-	container := generateContainer(image, args, generateVolumeMounts())
-	volume := generateSecretVolume(clusterName)
-	podSpec := generatePodSpec(container, []v1.Volume{volume})
+	podSpec := &v1.PodSpec{
+		Volumes:            []v1.Volume{generateSecretVolume(clusterName)},
+		Containers:         []v1.Container{generateContainer(image, args, generateVolumeMounts())},
+		ServiceAccountName: ConfigUpdater,
+	}
 	name := "periodic-openshift-release-master-" + clusterName + "-apply"
 	jobBase := generateJobBase(podSpec, utilityConfig, name)
 	jobBase.Labels = map[string]string{
@@ -46,9 +52,11 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 	utilityConfig := generateUtilityConfig()
 	args := generateArgs(clusterName)
 	args = append(args, "--confirm=true")
-	container := generateContainer(LatestImage, args, generateVolumeMounts())
-	volume := generateSecretVolume(clusterName)
-	podSpec := generatePodSpec(container, []v1.Volume{volume})
+	podSpec := &v1.PodSpec{
+		Volumes:            []v1.Volume{generateSecretVolume(clusterName)},
+		Containers:         []v1.Container{generateContainer(LatestImage, args, generateVolumeMounts())},
+		ServiceAccountName: ConfigUpdater,
+	}
 	name := "branch-ci-openshift-release-master-" + clusterName + "-apply"
 	jobBase := generateJobBase(podSpec, utilityConfig, name)
 	jobBase.MaxConcurrency = 1
@@ -71,10 +79,17 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 		Name:      Tmp,
 		MountPath: "/" + Tmp,
 	})
-	container := generateContainer(LatestImage, generateArgs(clusterName), mounts)
-	secretVolume := generateSecretVolume(clusterName)
-	emptyVolume := generateEmptyVolume(Tmp)
-	podSpec := generatePodSpec(container, []v1.Volume{secretVolume, emptyVolume})
+	emptyVolume := v1.Volume{
+		Name: Tmp,
+		VolumeSource: v1.VolumeSource{
+			EmptyDir: &v1.EmptyDirVolumeSource{},
+		},
+	}
+	podSpec := &v1.PodSpec{
+		Volumes:            []v1.Volume{generateSecretVolume(clusterName), emptyVolume},
+		Containers:         []v1.Container{generateContainer(LatestImage, generateArgs(clusterName), mounts)},
+		ServiceAccountName: ConfigUpdater,
+	}
 	name := "pull-ci-openshift-release-master-" + clusterName + "-dry"
 	jobBase := generateJobBase(podSpec, utilityConfig, name)
 	jobBase.Labels = map[string]string{
@@ -85,7 +100,9 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 	}
 	rerun := prowconfig.DefaultRerunCommandFor(clusterName) + "-dry"
 	trigger := prowconfig.DefaultTriggerFor(clusterName)
-	reporter := generateReporter(clusterName)
+	reporter := prowconfig.Reporter{
+		Context: fmt.Sprintf("ci/build-farm/%s-dry", clusterName),
+	}
 	return prowconfig.Presubmit{
 		JobBase:      jobBase,
 		AlwaysRun:    true,
@@ -97,56 +114,21 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 	}
 }
 
-func generateReporter(clusterName string) prowconfig.Reporter {
-	return prowconfig.Reporter{
-		Context: fmt.Sprintf("ci/build-farm/%s-dry", clusterName),
-	}
-}
-
 func generateJobBase(ps *v1.PodSpec, uc prowconfig.UtilityConfig, name string) prowconfig.JobBase {
 	return prowconfig.JobBase{
-		Name:            name,
-		Agent:           "kubernetes",
-		Cluster:         string(api.ClusterAPPCI),
-		Namespace:       nil,
-		ErrorOnEviction: false,
-		SourcePath:      "",
-		Spec:            ps,
-		PipelineRunSpec: nil,
-		Annotations:     nil,
-		ReporterConfig:  nil,
-		RerunAuthConfig: nil,
-		Hidden:          false,
-		UtilityConfig:   uc,
-	}
-}
-
-func generatePodSpec(c v1.Container, v []v1.Volume) *v1.PodSpec {
-	return &v1.PodSpec{
-		Volumes:            v,
-		Containers:         []v1.Container{c},
-		ServiceAccountName: ConfigUpdater,
-	}
-}
-
-func generateReleaseRef() prowapi.Refs {
-	return prowapi.Refs{
-		Org:     "openshift",
-		Repo:    "release",
-		BaseRef: "master",
+		Name:          name,
+		Agent:         "kubernetes",
+		Cluster:       string(api.ClusterAPPCI),
+		SourcePath:    "",
+		Spec:          ps,
+		UtilityConfig: uc,
 	}
 }
 
 func generateUtilityConfig() prowconfig.UtilityConfig {
 	return prowconfig.UtilityConfig{
-		Decorate:         proto.Bool(true),
-		PathAlias:        "",
-		CloneURI:         "",
-		SkipSubmodules:   false,
-		CloneDepth:       0,
-		SkipFetchHead:    false,
-		ExtraRefs:        []prowapi.Refs{},
-		DecorationConfig: nil,
+		Decorate:  proto.Bool(true),
+		ExtraRefs: []prowapi.Refs{},
 	}
 }
 
@@ -163,15 +145,6 @@ func generateSecretVolume(clusterName string) v1.Volume {
 					},
 				},
 			},
-		},
-	}
-}
-
-func generateEmptyVolume(name string) v1.Volume {
-	return v1.Volume{
-		Name: name,
-		VolumeSource: v1.VolumeSource{
-			EmptyDir: &v1.EmptyDirVolumeSource{},
 		},
 	}
 }

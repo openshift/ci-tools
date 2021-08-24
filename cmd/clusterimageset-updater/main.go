@@ -9,14 +9,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/test-infra/prow/interrupts"
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
@@ -33,8 +31,8 @@ func gatherOptions() (options, error) {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
-	fs.StringVar(&o.poolDir, "pools", "", "Path to directory containing cluster pool specs")
-	fs.StringVar(&o.outputDir, "imagesets", "", "Path to directory containing clusterimagesets")
+	fs.StringVar(&o.poolDir, "pools", "", "Path to directory containing cluster pool specs (*_clusterpool.yaml files)")
+	fs.StringVar(&o.outputDir, "imagesets", "", "Path to directory containing clusterimagesets  (*_clusterimageset.yaml files)")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)
@@ -62,13 +60,8 @@ func main() {
 		logrus.WithError(err).Fatal("Invalid option")
 	}
 
-	go func() {
-		interrupts.WaitForGracefulShutdown()
-		os.Exit(1)
-	}()
-
 	// key: version_in; value: list of file paths
-	autoPools := make(map[string][]string)
+	poolFilesByVersion := make(map[string][]string)
 	if err := filepath.WalkDir(o.poolDir, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -86,7 +79,7 @@ func main() {
 		}
 		if pool.Labels != nil && pool.Labels["version_in"] != "" {
 			version := pool.Labels["version_in"]
-			autoPools[version] = append(autoPools[version], path)
+			poolFilesByVersion[version] = append(poolFilesByVersion[version], path)
 		}
 		return nil
 	}); err != nil {
@@ -94,7 +87,7 @@ func main() {
 	}
 
 	versionToPullspec := make(map[string]string)
-	for version := range autoPools {
+	for version := range poolFilesByVersion {
 		versionBounds, err := api.BoundsFromQuery(version)
 		if err != nil {
 			logrus.WithError(err).Fatalf("Failed to convert `version_in` of `%s` to bounds", version)
@@ -131,11 +124,11 @@ func main() {
 		if imageset.Annotations != nil && imageset.Annotations["version_in"] != "" {
 			isCurrent := false
 			versionIn := imageset.Annotations["version_in"]
-			for version := range autoPools {
+			for version := range poolFilesByVersion {
 				if version == versionIn {
 					if imageset.Spec.ReleaseImage == versionToPullspec[version] {
 						isCurrent = true
-						delete(autoPools, version)
+						delete(poolFilesByVersion, version)
 						delete(versionToPullspec, version)
 					}
 					break
@@ -151,12 +144,16 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to get list of clusterpools setting `version_in`")
 	}
 
+	// make as much progress as possible and print list of errors at end of command
+	var errs []error
+
 	// any remaining items in autopools/versionToPullspec need to be updated
 	for version, pullspec := range versionToPullspec {
 		name, err := nameFromPullspec(pullspec, version)
 		if err != nil {
 			// this shouldn't happen
-			logrus.WithError(err).Fatalf("Failed to generate clusterimageset name for version %s", version)
+			errs = append(errs, fmt.Errorf("Failed to generate clusterimageset name for version %s: %w", version, err))
+			continue
 		}
 		clusterimageset := hivev1.ClusterImageSet{
 			ObjectMeta: v1.ObjectMeta{
@@ -171,43 +168,60 @@ func main() {
 		}
 		raw, err := yaml.Marshal(clusterimageset)
 		if err != nil {
-			logrus.WithError(err).Fatalf("Could not marshal yaml for clusterimageset %s", name)
+			errs = append(errs, fmt.Errorf("Could not marshal yaml for clusterimageset %s: %w", name, err))
+			continue
 		}
 		if err := ioutil.WriteFile(filepath.Join(o.outputDir, fmt.Sprintf("%s_clusterimageset.yaml", name)), raw, 0644); err != nil {
-			logrus.WithError(err).Fatalf("Failed to write file for clusterimageset %s", name)
+			errs = append(errs, fmt.Errorf("Failed to write file for clusterimageset %s: %w", name, err))
 		}
 	}
 
 	// delete old clusterimagesets
 	for _, path := range toDelete {
-		if err := os.Remove(path); err != nil {
-			logrus.WithError(err).Fatalf("Failed to delete file %s", err)
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			errs = append(errs, fmt.Errorf("Failed to delete file %s: %w", path, err))
 		}
 	}
 
 	// update all clusterpool specs
-	for version, files := range autoPools {
+	for version, files := range poolFilesByVersion {
 		imagesetName, err := nameFromPullspec(versionToPullspec[version], version)
 		if err != nil {
 			// this shouldn't happen
-			logrus.WithError(err).Fatalf("Failed to generate clusterimageset name for version %s", version)
+			errs = append(errs, fmt.Errorf("Failed to generate clusterimageset name for version %s: %w", version, err))
+			continue
 		}
 		for _, path := range files {
 			raw, err := ioutil.ReadFile(path)
 			if err != nil {
-				logrus.WithError(err).Fatalf("Failed to read file %s", path)
+				errs = append(errs, fmt.Errorf("Failed to read file %s: %w", path, err))
+				continue
 			}
-			// unmarshalling a remarshalling the clusterpool object would result in all fields being reordered alpabetically
-			// and `status` being unnecessarily included. To avoid that, do a simpler regex based replacement
-			newFile := imagesetReplacer.ReplaceAll(raw, []byte(fmt.Sprintf("imageSetRef:\n    name: %s\n", imagesetName)))
-			if err := ioutil.WriteFile(path, newFile, 0644); err != nil {
-				logrus.WithError(err).Fatalf("Failed to write updated file %s", path)
+			var newClusterPool hivev1.ClusterPool
+			if err := yaml.Unmarshal(raw, &newClusterPool); err != nil {
+				errs = append(errs, fmt.Errorf("Failed to unmarshal clusterpool %s: %w", path, err))
+				continue
+			}
+			newClusterPool.Spec.ImageSetRef.Name = imagesetName
+			newRaw, err := yaml.Marshal(newClusterPool)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("Failed to remarshal clusterpool %s: %w", path, err))
+				continue
+			}
+			if err := ioutil.WriteFile(path, newRaw, 0644); err != nil {
+				errs = append(errs, fmt.Errorf("Failed to write updated file %s: %w", path, err))
 			}
 		}
 	}
-}
 
-var imagesetReplacer = regexp.MustCompile("imageSetRef:\n    name: .*\n")
+	if errs != nil {
+		fmt.Println("The following errors occurred:")
+		for _, err := range errs {
+			fmt.Printf("\t%v\n", err)
+		}
+		os.Exit(1)
+	}
+}
 
 func nameFromPullspec(pullspec string, version string) (string, error) {
 	bounds, err := api.BoundsFromQuery(version)

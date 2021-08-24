@@ -2,11 +2,10 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
-	"strings"
-
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
+	"path/filepath"
+	"strings"
 )
 
 const (

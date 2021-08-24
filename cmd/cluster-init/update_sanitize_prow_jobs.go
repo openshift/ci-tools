@@ -2,10 +2,9 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
-
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
+	"path/filepath"
 )
 
 func updateSanitizeProwJobs(o options) {

@@ -2,10 +2,9 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
-
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
+	"path/filepath"
 )
 
 //SecretGenConfig is used here as using secretgenerator.Config results in 'special' unmarshalling

@@ -124,6 +124,17 @@ func OperateOnJobConfigDir(configDir string, callback func(*prowconfig.JobConfig
 }
 
 func OperateOnJobConfigSubdir(configDir, subDir string, callback func(*prowconfig.JobConfig, *Info) error) error {
+	return OperateOnJobConfigSubdirPaths(configDir, subDir, func(info *Info) error {
+		configPart, err := readFromFile(info.Filename)
+		if err != nil {
+			logrus.WithField("source-file", info.Filename).WithError(err).Error("Failed to read Prow job config")
+			return nil
+		}
+		return callback(configPart, info)
+	})
+}
+
+func OperateOnJobConfigSubdirPaths(configDir, subDir string, callback func(*Info) error) error {
 	if err := filepath.WalkDir(filepath.Join(configDir, subDir), func(path string, info fs.DirEntry, err error) error {
 		logger := logrus.WithField("source-file", path)
 		if err != nil {
@@ -132,19 +143,12 @@ func OperateOnJobConfigSubdir(configDir, subDir string, callback func(*prowconfi
 		}
 
 		if !info.IsDir() && filepath.Ext(path) == ".yaml" {
-			var configPart *prowconfig.JobConfig
-			if configPart, err = readFromFile(path); err != nil {
-				logger.WithError(err).Error("Failed to read Prow job config")
-				return nil
-			}
-
 			info, err := extractInfoFromPath(path)
 			if err != nil {
 				logger.WithError(err).Warn("Failed to determine info for prow job config")
 				return nil
 			}
-
-			return callback(configPart, info)
+			return callback(info)
 		}
 		return nil
 	}); err != nil {

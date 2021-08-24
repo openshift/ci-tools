@@ -3,15 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
+
+	"github.com/sirupsen/logrus"
 )
 
 type options struct {
-	clusterName  string
-	releaseRepo  string
-	buildFarmDir string
+	clusterName string
+	releaseRepo string
+	description string
 
 	//flagutil.GitHubOptions TODO: this will come in later I think...lets ignore github stuff for now
 }
@@ -20,7 +21,7 @@ func (o options) String() string {
 	return fmt.Sprintf("cluster-name: %s\nrelease-repo: %s\nbuild-farm-dir: %s",
 		o.clusterName,
 		o.releaseRepo,
-		o.buildFarmDir)
+		o.description)
 }
 
 func parseOptions() options {
@@ -28,7 +29,7 @@ func parseOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.clusterName, "cluster-name", "", "The name of the new cluster.")
 	fs.StringVar(&o.releaseRepo, "release-repo", "", "Path to the root of the openshift/release repository.")
-	fs.StringVar(&o.buildFarmDir, "build-farm-dir", "", "The name of the new build farm directory.")
+	fs.StringVar(&o.description, "description", "", "This clusters description to be used in the README.MD.")
 	//o.AddFlags(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("cannot parse args: ", os.Args[1:])
@@ -44,37 +45,25 @@ func validateOptions(o options) []error {
 	if o.releaseRepo == "" {
 		errs = append(errs, fmt.Errorf("--release-repo must be provided"))
 	}
-	if o.buildFarmDir == "" {
-		errs = append(errs, fmt.Errorf("--build-farm-dir must be provided"))
+	if o.description == "" {
+		errs = append(errs, fmt.Errorf("--description must be provided"))
 	}
 	if periodicExistsFor(o) {
 		errs = append(errs, fmt.Errorf("cluster: %s already exists", o.clusterName))
 	}
-	buildDir := filepath.Join(o.releaseRepo, Clusters, BuildClusters, o.buildFarmDir)
+	buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
 	if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
-		errs = append(errs, fmt.Errorf("buildFarmDir: %s already exists", o.buildFarmDir))
+		errs = append(errs, fmt.Errorf("description: %s already exists", o.description))
 	}
 	return errs
 }
 
 const (
-	CiOperator           = "ci-operator"
-	Jobs                 = "jobs"
-	InfraPeriodicsFile   = "infra-periodics.yaml"
-	Kubeconfig           = "KUBECONFIG"
-	PerRotSaSecs         = "periodic-rotate-serviceaccount-secrets"
-	BuildFarmCredentials = "build-farm-credentials"
-	ConfigUpdater        = "config-updater"
-	Config               = "config"
-	Etc                  = "etc"
-	CiSecretBootstrap    = "ci-secret-bootstrap"
-	PerCiSecGen          = "periodic-ci-secret-generator"
-	PerCiSecBoot         = "periodic-ci-secret-bootstrap"
-	BuildClusters        = "build-clusters"
-	Common               = "common"
-	CommonExceptAppCi    = "common_except_app.ci"
-	Sa                   = "sa"
-	Test                 = "test"
+	CiOperator    = "ci-operator"
+	Kubeconfig    = "KUBECONFIG"
+	ConfigUpdater = "config-updater"
+	Config        = "config"
+	Sa            = "sa"
 )
 
 func main() {
@@ -90,33 +79,39 @@ func main() {
 	//TODO: is the following good enough? it is hard to modify MD programmatically
 	fmt.Printf("Please add information about the '%s' cluster to %s/clusters/README.md\n",
 		o.clusterName, o.releaseRepo)
-	initClusterBuildFarmDir(o)
+	if err := initClusterBuildFarmDir(o); err != nil {
+		fmt.Println(err)
+	}
 	updateCiSecretBootstrapConfig(o)
 	updateSecretGenerator(o)
 	updateSanitizeProwJobs(o)
 }
 
-func initClusterBuildFarmDir(o options) {
-	buildDir := filepath.Join(o.releaseRepo, Clusters, BuildClusters, o.buildFarmDir)
+func initClusterBuildFarmDir(o options) error {
+	buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
 	fmt.Printf("Creating build dir: %s\n", buildDir)
-	err := os.MkdirAll(buildDir, 0777)
-	check(err)
+	if err := os.MkdirAll(buildDir, 0777); err != nil {
+		return fmt.Errorf("failed to create base directory for cluster: %w", err)
+	}
 
-	commonLink := filepath.Join(o.releaseRepo, Clusters, BuildClusters, o.buildFarmDir, Common)
-	createSymlink(fmt.Sprintf("../%s", Common), commonLink)
-
-	commonExceptAppLink := filepath.Join(o.releaseRepo, Clusters, BuildClusters, o.buildFarmDir, CommonExceptAppCi)
-	createSymlink(fmt.Sprintf("../%s", CommonExceptAppCi), commonExceptAppLink)
-}
-
-func createSymlink(target string, link string) {
-	fmt.Printf("Creating symlink from: %s to: %s\n", link, target)
-	err := os.Symlink(target, link)
-	check(err, "cannot create symlink.")
+	for _, item := range []string{"common", "common_except_app.ci"} {
+		if err := os.Symlink(fmt.Sprintf("../%s", item), filepath.Join(buildDir, item)); err != nil {
+			return fmt.Errorf("failed to symlink %s: %w", item, err)
+		}
+	}
+	return nil
 }
 
 func check(err error, args ...interface{}) {
 	if err != nil {
 		logrus.WithError(err).Fatal(args)
 	}
+}
+
+func buildFarmDirFor(releaseRepo string, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName)
+}
+
+func secretConfigFor(secret string, clusterName string) string {
+	return fmt.Sprintf("sa.%s.%s.config", secret, clusterName)
 }

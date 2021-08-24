@@ -15,6 +15,11 @@ const (
 	PrePostFilePath = "ci-operator/jobs/openshift/release"
 )
 
+const (
+	IPFilePath      = "ci-operator/jobs/infra-periodics.yaml"
+	PrePostFilePath = "ci-operator/jobs/openshift/release"
+)
+
 type InfraPeriodics struct {
 	Periodics []prowconfig.Periodic `json:"periodics,omitempty"`
 }

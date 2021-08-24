@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
@@ -83,9 +85,9 @@ func main() {
 	if err := updatePresubmits(o); err != nil {
 		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to update PreSubmit Jobs")
 	}
-	//TODO: is the following good enough? it is hard to modify MD programmatically
-	fmt.Printf("Please add information about the '%s' cluster to %s/clusters/README.md\n",
-		o.clusterName, o.releaseRepo)
+	if err := updateClustersReadme(o); err != nil {
+		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to update clusters readme")
+	}
 	if err := initClusterBuildFarmDir(o); err != nil {
 		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to initialize build farm dir")
 	}
@@ -100,9 +102,29 @@ func main() {
 	}
 }
 
+func updateClustersReadme(o options) error {
+	reader := bufio.NewReader(os.Stdin)
+	clustersReadmeFile := o.releaseRepo + "/clusters/README.md"
+	fmt.Printf("Would you like to add information about the '%s' cluster to %s? [y,n]: ",
+		o.clusterName, clustersReadmeFile)
+	char, _, err := reader.ReadRune()
+	if err != nil {
+		return err
+	}
+	switch char {
+	case 'y':
+		cmd := exec.Command("vim", clustersReadmeFile)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		return cmd.Run()
+	default:
+		return nil
+	}
+}
+
 func initClusterBuildFarmDir(o options) error {
 	buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
-	fmt.Printf("Creating build dir: %s\n", buildDir)
+	logrus.Printf("Creating build dir: %s\n", buildDir)
 	if err := os.MkdirAll(buildDir, 0777); err != nil {
 		return fmt.Errorf("failed to create base directory for cluster: %w", err)
 	}

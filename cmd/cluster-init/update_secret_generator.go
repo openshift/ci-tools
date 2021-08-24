@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
+	"github.com/sirupsen/logrus"
+
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -55,7 +57,7 @@ func appendToSecretItem(itemName string, name string, o options, c *SecretGenCon
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Appending to secret item: {itemName: %s, name: %s, likeCluster: %s}\n", itemName, name, string(api.ClusterBuild01))
+	logrus.Printf("Appending to secret item: {itemName: %s, name: %s, likeCluster: %s}\n", itemName, name, string(api.ClusterBuild01))
 	si.Params["cluster"] = append(si.Params["cluster"], o.clusterName)
 	return nil
 }

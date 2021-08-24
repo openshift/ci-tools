@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
+	"github.com/sirupsen/logrus"
+
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -12,7 +14,7 @@ import (
 )
 
 func updateSanitizeProwJobs(o options) error {
-	fmt.Println("Updating sanitize-prow-jobs config")
+	logrus.Println("Updating sanitize-prow-jobs config")
 	filename := filepath.Join(o.releaseRepo, "core-services", "sanitize-prow-jobs", "_config.yaml")
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {

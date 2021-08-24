@@ -161,7 +161,7 @@ func ReadFromDir(dir string) (*prowconfig.JobConfig, error) {
 		Periodics:         []prowconfig.Periodic{},
 	}
 	if err := OperateOnJobConfigDir(dir, func(config *prowconfig.JobConfig, elements *Info) error {
-		mergeConfigs(jobConfig, config)
+		Append(jobConfig, config)
 		return nil
 	}); err != nil {
 		return nil, fmt.Errorf("failed to load all Prow jobs: %w", err)
@@ -170,8 +170,9 @@ func ReadFromDir(dir string) (*prowconfig.JobConfig, error) {
 	return jobConfig, nil
 }
 
-// mergeConfigs merges job configuration from part into dest
-func mergeConfigs(dest, part *prowconfig.JobConfig) {
+// Append merges job configuration from part into dest
+// Jobs are assumed to not overlap.
+func Append(dest, part *prowconfig.JobConfig) {
 	if part.PresubmitsStatic != nil {
 		if dest.PresubmitsStatic == nil {
 			dest.PresubmitsStatic = map[string][]prowconfig.Presubmit{}

@@ -243,6 +243,9 @@ type Integration struct {
 	Namespace string `json:"namespace"`
 	// Name is the name of the ImageStream
 	Name string `json:"name"`
+	// IncludeBuiltImages determines if the release we assemble will include
+	// images built during the test itself.
+	IncludeBuiltImages bool `json:"include_built_images,omitempty"`
 }
 
 // Candidate describes a validated candidate release payload
@@ -378,6 +381,10 @@ type ReleaseTagConfiguration struct {
 	// Name is the image stream name to use that contains all
 	// component tags.
 	Name string `json:"name"`
+
+	// IncludeBuiltImages determines if the release we assemble will include
+	// images built during the test itself.
+	IncludeBuiltImages bool `json:"include_built_images,omitempty"`
 }
 
 func (config ReleaseTagConfiguration) InputsName() string {

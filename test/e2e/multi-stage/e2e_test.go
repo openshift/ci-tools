@@ -167,6 +167,26 @@ func TestMultiStage(t *testing.T) {
 				`verify-releases-latest succeeded`, `verify-releases-latest-cli succeeded`,
 			},
 		},
+		{
+			name:    "assembled release includes built image",
+			args:    []string{"--unresolved-config=assembled-release.yaml", "--target=verify-releases"},
+			env:     []string{defaultJobSpec},
+			success: true,
+			output: []string{
+				`Snapshot integration stream into release 4.7.`, `-latest to tag release:latest`,
+				`verify-releases-latest-cli succeeded`,
+			},
+		},
+		{
+			name:    "assembled release does not include built image when not asked to",
+			args:    []string{"--unresolved-config=assembled-release-no-injection.yaml", "--target=verify-releases"},
+			env:     []string{defaultJobSpec},
+			success: true,
+			output: []string{
+				`Snapshot integration stream into release 4.7.`, `-latest to tag release:latest`,
+				`verify-releases-latest-cli succeeded`,
+			},
+		},
 	}
 
 	for _, testCase := range testCases {

@@ -72,7 +72,7 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 			})
 		}
 	}
-	// the Create call mutates the input object (why... ?) so we need to copy it before returning
+	// the Create call mutates the input object, so we need to copy it before returning
 	created := snapshot.DeepCopy()
 	if err := client.Create(ctx, created); err != nil && !kerrors.IsAlreadyExists(err) {
 		return nil, nil, fmt.Errorf("could not create snapshot imagestream %s/%s for release %s: %w", sourceNamespace, sourceName, targetRelease, err)

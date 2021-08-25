@@ -199,8 +199,9 @@ func fromConfig(
 					// this is the one case where we're not importing a payload, we need to get the images and build one
 					snapshot := releasesteps.ReleaseSnapshotStep(resolveConfig.Name, *resolveConfig.Integration, podClient, jobSpec)
 					assemble := releasesteps.AssembleReleaseStep(resolveConfig.Name, &api.ReleaseTagConfiguration{
-						Namespace: resolveConfig.Integration.Namespace,
-						Name:      resolveConfig.Integration.Name,
+						Namespace:          resolveConfig.Integration.Namespace,
+						Name:               resolveConfig.Integration.Name,
+						IncludeBuiltImages: resolveConfig.Integration.IncludeBuiltImages,
 					}, config.Resources, podClient, jobSpec)
 					for _, s := range []api.Step{snapshot, assemble} {
 						buildSteps = append(buildSteps, s)
@@ -282,7 +283,10 @@ func fromConfig(
 					target := rawStep.ReleaseImagesTagStepConfiguration.TargetName(name)
 					releaseStep = releasesteps.ImportReleaseStep(name, target, pullSpec, true, config.Resources, podClient, jobSpec, pullSecret, nil)
 				} else {
-					releaseStep = releasesteps.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, jobSpec)
+					// for backwards compatibility, users get inclusion for free with tag_spec
+					cfg := *rawStep.ReleaseImagesTagStepConfiguration
+					cfg.IncludeBuiltImages = name == api.LatestReleaseName
+					releaseStep = releasesteps.AssembleReleaseStep(name, &cfg, config.Resources, podClient, jobSpec)
 				}
 				overridableSteps = append(overridableSteps, releaseStep)
 				addProvidesForStep(releaseStep, params)

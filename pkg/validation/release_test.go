@@ -451,3 +451,66 @@ func TestValidatePrerelease(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateIntegration(t *testing.T) {
+	var testCases = []struct {
+		name      string
+		inputName string
+		input     api.Integration
+		output    []error
+	}{
+		{
+			name:      "valid integration",
+			inputName: "latest",
+			input: api.Integration{
+				Name:               "4.8",
+				Namespace:          "ocp",
+				IncludeBuiltImages: true,
+			},
+		},
+		{
+			name:      "invalid integration missing namespace",
+			inputName: "latest",
+			input: api.Integration{
+				Name:               "4.8",
+				IncludeBuiltImages: true,
+			},
+			output: []error{
+				errors.New("root.namespace: must be set"),
+			},
+		},
+		{
+			name:      "invalid integration missing name",
+			inputName: "latest",
+			input: api.Integration{
+				Namespace:          "ocp",
+				IncludeBuiltImages: true,
+			},
+			output: []error{
+				errors.New("root.name: must be set"),
+			},
+		},
+		{
+			name:      "invalid integration non-latest sets image inclusion",
+			inputName: "other",
+			input: api.Integration{
+				Name:               "4.8",
+				Namespace:          "ocp",
+				IncludeBuiltImages: true,
+			},
+			output: []error{
+				errors.New("root: only the `latest` release can set `include_built_images`"),
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := validateIntegration("root", testCase.inputName, testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
+					return x.Error() == y.Error()
+				})))
+			}
+		})
+	}
+}

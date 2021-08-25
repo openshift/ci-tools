@@ -231,7 +231,7 @@ oc adm release extract --from=%q --to=${ARTIFACT_DIR}/release-payload-%s
 }
 
 func (s *assembleReleaseStep) Requires() []api.StepLink {
-	if s.name == api.LatestReleaseName {
+	if s.config.IncludeBuiltImages {
 		return []api.StepLink{api.ImagesReadyLink()}
 	}
 	return []api.StepLink{api.ReleaseImagesLink(s.name)}

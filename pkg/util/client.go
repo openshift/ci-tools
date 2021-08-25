@@ -11,6 +11,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/test-infra/prow/kube"
 )
 
 func LoadClusterConfig() (*rest.Config, error) {
@@ -48,35 +49,43 @@ func LoadKubeConfig(path string) (*rest.Config, error) {
 
 // LoadKubeConfigs loads kubeconfigs. If the kubeconfigChangedCallBack is non-nil, it will watch all kubeconfigs it loaded
 // and call the callback once they change.
-func LoadKubeConfigs(kubeconfig string, kubeconfigChangedCallBack func(fsnotify.Event)) (map[string]*rest.Config, string, error) {
-	loader := clientcmd.NewDefaultClientConfigLoadingRules()
-	loader.ExplicitPath = kubeconfig
-	cfg, err := loader.Load()
-	if err != nil {
-		return nil, "", err
-	}
-	configs := map[string]*rest.Config{}
+func LoadKubeConfigs(kubeconfig, kubeconfigDir string, kubeconfigChangedCallBack func(fsnotify.Event)) (map[string]*rest.Config, error) {
 	var errs []error
-	for context := range cfg.Contexts {
-		contextCfg, err := clientcmd.NewNonInteractiveClientConfig(*cfg, context, &clientcmd.ConfigOverrides{}, loader).ClientConfig()
-		if err != nil {
-			// Let the caller decide if they want to handle errors
-			errs = append(errs, fmt.Errorf("create %s client: %w", context, err))
-			continue
-		}
-		configs[context] = contextCfg
-		logrus.Debugf("Parsed kubeconfig context: %s", context)
+	configs, err := kube.LoadClusterConfigs(kube.NewConfig(kube.ConfigFile(kubeconfig),
+		kube.ConfigDir(kubeconfigDir), kube.NoInClusterConfig(true)))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to load cluster configs: %w", err))
 	}
-	if kubeconfigsFromEnv := strings.Split(os.Getenv("KUBECONFIG"), ":"); len(kubeconfigsFromEnv) > 0 && len(kubeconfigsFromEnv) > len(configs) {
-		errs = append(errs, fmt.Errorf("KUBECONFIG env var with value %s had %d elements but only got %d kubeconfigs", os.Getenv("KUBECONFIG"), len(kubeconfigsFromEnv), len(configs)))
+	ret := map[string]*rest.Config{}
+	for k := range configs {
+		v := configs[k]
+		ret[k] = &v
+	}
+
+	var watchFiles []string
+	if kubeconfig == "" && kubeconfigDir == "" {
+		if kubeconfigsFromEnv := strings.Split(os.Getenv("KUBECONFIG"), ":"); len(kubeconfigsFromEnv) > 0 {
+			watchFiles = append(watchFiles, kubeconfigsFromEnv...)
+			if len(kubeconfigsFromEnv) > len(ret) {
+				errs = append(errs, fmt.Errorf("KUBECONFIG env var with value %s had %d elements but only got %d kubeconfigs", os.Getenv("KUBECONFIG"), len(kubeconfigsFromEnv), len(ret)))
+			}
+		}
+	}
+
+	if kubeconfig != "" {
+		watchFiles = append(watchFiles, kubeconfig)
+	}
+	if kubeconfigDir != "" {
+		watchFiles = append(watchFiles, kubeconfigDir)
 	}
 
 	if kubeconfigChangedCallBack != nil {
-		if err := WatchFiles(append(loader.Precedence, kubeconfig), kubeconfigChangedCallBack); err != nil {
+		if err := WatchFiles(watchFiles, kubeconfigChangedCallBack); err != nil {
 			errs = append(errs, fmt.Errorf("failed to watch kubeconfigs: %w", err))
 		}
 	}
-	return configs, cfg.CurrentContext, utilerrors.NewAggregate(errs)
+
+	return ret, utilerrors.NewAggregate(errs)
 }
 
 // WatchFiles watches the passed files if they exist and calls callback for all events

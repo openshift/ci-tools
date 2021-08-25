@@ -21,14 +21,16 @@ import (
 )
 
 type options struct {
-	kubeconfig string
-	namespaces flagutil.Strings
-	dry        bool
+	kubeconfig    string
+	kubeconfigDir string
+	namespaces    flagutil.Strings
+	dry           bool
 }
 
 func opts() *options {
 	opts := &options{}
 	flag.StringVar(&opts.kubeconfig, "kubeconfig", "", "The kubeconfig to use")
+	flag.StringVar(&opts.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files to use")
 	flag.Var(&opts.namespaces, "namespace", "Namespace to run in, can be passed multiple times")
 	flag.BoolVar(&opts.dry, "dry-run", true, "Enable dry-run")
 	flag.Parse()
@@ -42,7 +44,7 @@ func main() {
 	if len(o.namespaces.Strings()) == 0 {
 		logrus.Fatal("Must pass at least one namespace")
 	}
-	kubeconfigs, _, err := util.LoadKubeConfigs(o.kubeconfig, nil)
+	kubeconfigs, err := util.LoadKubeConfigs(o.kubeconfig, o.kubeconfigDir, nil)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to load kubeconfigs")
 	}

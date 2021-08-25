@@ -46,9 +46,10 @@ type options struct {
 }
 
 type producerOptions struct {
-	kubeconfig   string
-	once         bool
-	ignoreLatest time.Duration
+	kubeconfig    string
+	kubeconfigDir string
+	once          bool
+	ignoreLatest  time.Duration
 }
 
 type consumerOptions struct {
@@ -64,6 +65,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	o.instrumentationOptions.AddFlags(fs)
 	fs.StringVar(&o.mode, "mode", "", "Which mode to run in.")
 	fs.StringVar(&o.kubeconfig, "kubeconfig", "", "Path to a ~/.kube/config to use for querying Prometheuses. Each context will be considered a cluster to query.")
+	fs.StringVar(&o.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files to use for querying Prometheuses. Each context will be considered a cluster to query.")
 	fs.DurationVar(&o.ignoreLatest, "ignore-latest", 0, "Duration of latest time series to ignore when querying Prometheus. For instance, 1h will ignore the latest hour of data.")
 	fs.BoolVar(&o.once, "produce-once", false, "Query Prometheus and refresh cached data only once before exiting.")
 	fs.IntVar(&o.port, "port", 0, "Port to serve admission webhooks on.")
@@ -87,8 +89,8 @@ func (o *options) validate() error {
 	switch o.mode {
 	case "producer":
 		_, kubeconfigSet := os.LookupEnv("KUBECONFIG")
-		if o.kubeconfig == "" && !kubeconfigSet {
-			return errors.New("--kubeconfig or $KUBECONFIG is required")
+		if o.kubeconfig == "" && o.kubeconfigDir == "" && !kubeconfigSet {
+			return errors.New("--kubeconfig or --kubeconfig-dir or $KUBECONFIG is required")
 		}
 	case "consumer.ui":
 		if o.uiPort == 0 {
@@ -178,7 +180,7 @@ func mainProduce(opts *options, cache cache) {
 		logrus.WithField("event", e.String()).Fatal("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
 	}
 
-	kubeconfigs, _, err := util.LoadKubeConfigs(opts.kubeconfig, kubeconfigChangedCallBack)
+	kubeconfigs, err := util.LoadKubeConfigs(opts.kubeconfig, opts.kubeconfigDir, kubeconfigChangedCallBack)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to load kubeconfigs")
 	}

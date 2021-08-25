@@ -155,11 +155,24 @@ func TestMultiStage(t *testing.T) {
 			success:  true,
 			output:   []string{`Imported release 4.7.`, `to tag release:latest-e2e-claim-depend-on-release-image`, `e2e-claim-depend-on-release-image-claim-step succeeded`},
 		},
+		{
+			name:    "assembled releases function",
+			args:    []string{"--unresolved-config=integration-releases.yaml", "--target=verify-releases"},
+			env:     []string{defaultJobSpec},
+			success: true,
+			output: []string{
+				`Imported release 4.5.`, `images to tag release:initial`,
+				`Snapshot integration stream into release 4.7.`, `-latest to tag release:latest`,
+				`verify-releases-initial succeeded`, `verify-releases-initial-cli succeeded`,
+				`verify-releases-latest succeeded`, `verify-releases-latest-cli succeeded`,
+			},
+		},
 	}
 
 	for _, testCase := range testCases {
 		testCase := testCase
 		framework.Run(t, testCase.name, func(t *framework.T, cmd *framework.CiOperatorCommand) {
+			cmd.AddArgs(framework.LocalPullSecretFlag(t), framework.RemotePullSecretFlag(t))
 			cmd.AddArgs(testCase.args...)
 			if testCase.needHive {
 				cmd.AddArgs(framework.HiveKubeconfigFlag(t))

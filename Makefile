@@ -61,13 +61,20 @@ clean:
 	rm -rf $(OUT_DIR)
 .PHONY: clean
 
-# Format all Go source code.
+# Format all source code.
 #
 # Example:
 #   make format
-format: cmd/vault-secret-collection-manager/index.js frontend-format
-	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )
+format: frontend-format gofmt
 .PHONY: format
+
+# Format all Go source code.
+#
+# Example:
+#   make gofmt
+gofmt: cmd/vault-secret-collection-manager/index.js
+	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )
+.PHONY: gofmt
 
 # Update vendored code and manifests to ensure formatting.
 #
@@ -142,7 +149,6 @@ integration:
 		if [[ -n $$OPENSHIFT_CI ]]; then count=25; else count=1; fi && \
 		for try in $$(seq $$count); do \
 			echo "Try $$try" && \
-			test/entrypoint-wrapper-integration.sh && \
 			hack/test-integration.sh $(SUITE) ; \
 		done
 .PHONY: integration

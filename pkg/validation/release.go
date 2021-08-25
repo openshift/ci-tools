@@ -27,6 +27,9 @@ func validateReleases(fieldRoot string, releases map[string]api.UnresolvedReleas
 			}
 		}
 		var set int
+		if release.Integration != nil {
+			set = set + 1
+		}
 		if release.Candidate != nil {
 			set = set + 1
 		}
@@ -38,9 +41,11 @@ func validateReleases(fieldRoot string, releases map[string]api.UnresolvedReleas
 		}
 
 		if set > 1 {
-			validationErrors = append(validationErrors, fmt.Errorf("%s.%s: cannot set more than one of candidate, prerelease and release", fieldRoot, name))
+			validationErrors = append(validationErrors, fmt.Errorf("%s.%s: cannot set more than one of integration, candidate, prerelease and release", fieldRoot, name))
 		} else if set == 0 {
-			validationErrors = append(validationErrors, fmt.Errorf("%s.%s: must set candidate, prerelease or release", fieldRoot, name))
+			validationErrors = append(validationErrors, fmt.Errorf("%s.%s: must set integration, candidate, prerelease or release", fieldRoot, name))
+		} else if release.Integration != nil {
+			validationErrors = append(validationErrors, validateIntegration(fmt.Sprintf("%s.%s", fieldRoot, name), *release.Integration)...)
 		} else if release.Candidate != nil {
 			validationErrors = append(validationErrors, validateCandidate(fmt.Sprintf("%s.%s", fieldRoot, name), *release.Candidate)...)
 		} else if release.Release != nil {
@@ -48,6 +53,17 @@ func validateReleases(fieldRoot string, releases map[string]api.UnresolvedReleas
 		} else if release.Prerelease != nil {
 			validationErrors = append(validationErrors, validatePrerelease(fmt.Sprintf("%s.%s", fieldRoot, name), *release.Prerelease)...)
 		}
+	}
+	return validationErrors
+}
+
+func validateIntegration(fieldRoot string, integration api.Integration) []error {
+	var validationErrors []error
+	if integration.Name == "" {
+		validationErrors = append(validationErrors, fmt.Errorf("%s.name: must be set", fieldRoot))
+	}
+	if integration.Namespace == "" {
+		validationErrors = append(validationErrors, fmt.Errorf("%s.namespace: must be set", fieldRoot))
 	}
 	return validationErrors
 }

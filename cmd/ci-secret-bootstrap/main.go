@@ -49,6 +49,7 @@ type options struct {
 	validateItemsUsage bool
 
 	kubeConfigPath      string
+	kubeConfigDir       string
 	configPath          string
 	generatorConfigPath string
 	cluster             string
@@ -79,6 +80,7 @@ func parseOptions(censor *secrets.DynamicCensor) (options, error) {
 	fs.BoolVar(&o.validateItemsUsage, "validate-bitwarden-items-usage", false, fmt.Sprintf("If set, the tool only validates if all fields that exist in Vault and were last modified before %d days ago are being used in the given config.", allowUnusedDays))
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with oc command")
 	fs.StringVar(&o.kubeConfigPath, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests.")
+	fs.StringVar(&o.kubeConfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files to use for CLI requests.")
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
 	fs.StringVar(&o.generatorConfigPath, "generator-config", "", "Path to the secret-generator config file.")
 	fs.StringVar(&o.cluster, "cluster", "", "If set, only provision secrets for this cluster")
@@ -129,7 +131,7 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 	var kubeConfigs map[string]*rest.Config
 	if !o.validateOnly {
 		var err error
-		kubeConfigs, _, err = util.LoadKubeConfigs(o.kubeConfigPath, nil)
+		kubeConfigs, err = util.LoadKubeConfigs(o.kubeConfigPath, o.kubeConfigDir, nil)
 		if err != nil {
 			// We will bail out later on if we don't have the have the right kubeconfigs
 			logrus.WithError(err).Warn("Encountered errors while loading kubeconfigs")
@@ -634,7 +636,7 @@ func insertIfNotEmpty(s sets.String, items ...string) sets.String {
 }
 
 func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient, allowUnused sets.String, allowUnusedAfter time.Time) error {
-	allSecretStoreItems, err := client.GetInUseInformationForAllItems(config.VaultDPTPPRefix)
+	allSecretStoreItems, err := client.GetInUseInformationForAllItems(config.VaultDPTPPrefix)
 	if err != nil {
 		return fmt.Errorf("failed to get in-use information from secret store: %w", err)
 	}
@@ -767,7 +769,7 @@ func (o *options) validateItems(client secrets.ReadOnlyClient) error {
 // both dptp and user secrets only gets the store path as cli prefix (kv) and prepends all item
 // names with the dptp prefix from the config during deserialization.
 func stripDPTPPrefixFromItem(itemName string, cfg *secretbootstrap.Config) string {
-	return strings.TrimPrefix(itemName, cfg.VaultDPTPPRefix+"/")
+	return strings.TrimPrefix(itemName, cfg.VaultDPTPPrefix+"/")
 }
 
 func main() {

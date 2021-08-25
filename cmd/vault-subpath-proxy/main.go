@@ -32,14 +32,15 @@ import (
 )
 
 type options struct {
-	vaultAddr   string
-	kvMountPath string
-	listenAddr  string
-	tlsCertFile string
-	tlsKeyFile  string
-	kubeconfig  string
-	vaultToken  string
-	vaultRole   string
+	vaultAddr     string
+	kvMountPath   string
+	listenAddr    string
+	tlsCertFile   string
+	tlsKeyFile    string
+	kubeconfig    string
+	kubeconfigDir string
+	vaultToken    string
+	vaultRole     string
 }
 
 func gatherOptions() (*options, error) {
@@ -50,6 +51,7 @@ func gatherOptions() (*options, error) {
 	flag.StringVar(&o.tlsCertFile, "tls-cert-file", "", "Path to a tls cert file. If set, will server over tls. Requires --tls-key-file")
 	flag.StringVar(&o.tlsKeyFile, "tls-key-file", "", "Path to a tls key file. If set, will server over tls. Requires --tls-cert-file")
 	flag.StringVar(&o.kubeconfig, "kubeconfig", "", "Path to a kubeconfig. If set, secrets will get synced into all clusters in there")
+	flag.StringVar(&o.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files.  If set, secrets will get synced into all clusters in there")
 	flag.StringVar(&o.vaultToken, "vault-token", "", "Vault token that will be used to detect conflicting secrets. Must have read access to the whole kv store. Mutually exclusive with --vault-token.")
 	flag.StringVar(&o.vaultRole, "vault-role", "", "Vault role to use for detecting conflicting secrets. Must have access to the whole kv store. Mutually exclusive with --vault-token.")
 	flag.Parse()
@@ -82,8 +84,8 @@ func main() {
 	}
 
 	var clientGetter func() map[string]ctrlruntimeclient.Client
-	if os.Getenv("KUBECONFIG") != "" || opts.kubeconfig != "" {
-		clientGetter, err = startLoadingKubeconfigs(opts.kubeconfig)
+	if os.Getenv("KUBECONFIG") != "" || opts.kubeconfig != "" || opts.kubeconfigDir != "" {
+		clientGetter, err = startLoadingKubeconfigs(opts.kubeconfig, opts.kubeconfigDir)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to load kubeconfigs")
 		}
@@ -302,12 +304,12 @@ func (kpr *keypairReloader) getCertificateFunc(_ *tls.ClientHelloInfo) (*tls.Cer
 	return kpr.cert, nil
 }
 
-func startLoadingKubeconfigs(explicitPath string) (func() map[string]ctrlruntimeclient.Client, error) {
+func startLoadingKubeconfigs(explicitPath, kubeconfigDir string) (func() map[string]ctrlruntimeclient.Client, error) {
 	clients := map[string]ctrlruntimeclient.Client{}
 	clientsLock := sync.RWMutex{}
 
-	clients, err := loadKubeconfigs(explicitPath, func(fsnotify.Event) {
-		newClients, err := loadKubeconfigs(explicitPath, nil)
+	clients, err := loadKubeconfigs(explicitPath, kubeconfigDir, func(fsnotify.Event) {
+		newClients, err := loadKubeconfigs(explicitPath, kubeconfigDir, nil)
 		if err != nil {
 			logrus.WithError(err).Error("failed to reload kubeconfigs after fsnotify event")
 			return
@@ -327,8 +329,8 @@ func startLoadingKubeconfigs(explicitPath string) (func() map[string]ctrlruntime
 	}, nil
 }
 
-func loadKubeconfigs(explicitPath string, callBack func(fsnotify.Event)) (map[string]ctrlruntimeclient.Client, error) {
-	kubeconfigs, _, err := util.LoadKubeConfigs(explicitPath, callBack)
+func loadKubeconfigs(explicitPath, kubeconfigDir string, callBack func(fsnotify.Event)) (map[string]ctrlruntimeclient.Client, error) {
+	kubeconfigs, err := util.LoadKubeConfigs(explicitPath, kubeconfigDir, callBack)
 	if err != nil {
 		return nil, err
 	}

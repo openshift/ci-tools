@@ -2,57 +2,22 @@ package util
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"k8s.io/client-go/rest"
 )
 
-const (
-	kubeconfigContent1 = `apiVersion: v1
-clusters:
-- cluster:
-    insecure-skip-tls-verify: true
-    server: https://api.build01.ci.devcluster.openshift.com:6443
-  name: api-build01-ci-devcluster-openshift-com:6443
-contexts:
-- context:
-    cluster: api-build01-ci-devcluster-openshift-com:6443
-    namespace: ci
-    user: system:serviceaccount:ci:hook/api-build01-ci-devcluster-openshift-com:6443
-  name: ci/api-build01-ci-devcluster-openshift-com:6443
-current-context: ci/api-build01-ci-devcluster-openshift-com:6443
-kind: Config
-preferences: {}
-users:
-- name: system:serviceaccount:ci:hook/api-build01-ci-devcluster-openshift-com:6443
-  user:
-    token: TOKEN`
-)
-
 func TestLoadKubeConfigs(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test")
-	if err != nil {
-		t.Errorf("Failed to create temp dir: '%v'", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(dir); err != nil {
-			t.Errorf("Failed to delete temp dir '%s': '%v'", dir, err)
-		}
-	}()
-	filename1 := filepath.Join(dir, "kubeconfig1")
-	if err := ioutil.WriteFile(filename1, []byte(kubeconfigContent1), 0755); err != nil {
-		t.Errorf("Failed to write file '%s': '%v'", filename1, err)
-	}
-
 	var testCases = []struct {
 		name             string
 		kubeconfig       string
+		kubeconfigDir    string
 		kubeconfigEnvVar string
 		expectedConfigs  map[string]*rest.Config
 		expectedContext  string
@@ -61,11 +26,11 @@ func TestLoadKubeConfigs(t *testing.T) {
 		{
 			name:          "file not exist",
 			kubeconfig:    "/tmp/file-not-exists",
-			expectedError: fmt.Errorf("stat /tmp/file-not-exists: no such file or directory"),
+			expectedError: fmt.Errorf(`failed to load cluster configs: fail to load kubecfg from "/tmp/file-not-exists": failed to load: stat /tmp/file-not-exists: no such file or directory`),
 		},
 		{
-			name:       "file kubeconfig1",
-			kubeconfig: filename1,
+			name:       "load from kubeconfig",
+			kubeconfig: filepath.Join(filepath.Join("testdata", "load_from_kubeconfig"), "kubeconfig"),
 			expectedConfigs: map[string]*rest.Config{
 				"ci/api-build01-ci-devcluster-openshift-com:6443": {
 					Host:        "https://api.build01.ci.devcluster.openshift.com:6443",
@@ -84,7 +49,7 @@ func TestLoadKubeConfigs(t *testing.T) {
 		},
 		{
 			name:             "env kubeconfig exists",
-			kubeconfigEnvVar: filename1,
+			kubeconfigEnvVar: filepath.Join(filepath.Join("testdata", "load_from_kubeconfig"), "kubeconfig"),
 			expectedConfigs: map[string]*rest.Config{
 				"ci/api-build01-ci-devcluster-openshift-com:6443": {
 					Host:        "https://api.build01.ci.devcluster.openshift.com:6443",
@@ -96,12 +61,35 @@ func TestLoadKubeConfigs(t *testing.T) {
 			},
 			expectedContext: "ci/api-build01-ci-devcluster-openshift-com:6443",
 		},
+		{
+			name:          "load from kubeconfigDir",
+			kubeconfigDir: filepath.Join("testdata", "load_from_kubeconfigDir"),
+			expectedConfigs: map[string]*rest.Config{
+				"app.ci": {
+					Host:        "https://api.ci.l2s4.p1.openshiftapps.com:6443",
+					BearerToken: "REDACTED",
+				},
+				"build01": {
+					Host:        "https://api.build01.ci.devcluster.openshift.com:6443",
+					BearerToken: "REDACTED",
+				},
+				"build02": {
+					Host:        "https://api.build02.gcp.ci.openshift.org:6443",
+					BearerToken: "REDACTED",
+				},
+				"hive": {
+					Host:        "https://api.hive.9xw5.p1.openshiftapps.com:6443",
+					BearerToken: "REDACTED",
+				},
+			},
+			expectedContext: "ci/api-build01-ci-devcluster-openshift-com:6443",
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			os.Setenv("KUBECONFIG", tc.kubeconfigEnvVar)
-			configs, context, err := LoadKubeConfigs(tc.kubeconfig, nil)
+			configs, err := LoadKubeConfigs(tc.kubeconfig, tc.kubeconfigDir, nil)
 			if err == nil && tc.expectedError != nil || err != nil && tc.expectedError == nil {
 				t.Errorf("actual error differs from expected:\n%s", cmp.Diff(err, tc.expectedError))
 			} else if err != nil && tc.expectedError != nil && !reflect.DeepEqual(err.Error(), tc.expectedError.Error()) {
@@ -110,11 +98,8 @@ func TestLoadKubeConfigs(t *testing.T) {
 			if tc.expectedError != nil {
 				return
 			}
-			if !reflect.DeepEqual(configs, tc.expectedConfigs) {
-				t.Errorf("actual configs differ from expected:\n%s", cmp.Diff(configs, tc.expectedConfigs))
-			}
-			if !reflect.DeepEqual(context, tc.expectedContext) {
-				t.Errorf("actual context differs from expected:\n%s", cmp.Diff(context, tc.expectedContext))
+			if diff := cmp.Diff(tc.expectedConfigs, configs, cmpopts.IgnoreFields(rest.Config{}, "UserAgent")); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
 		})
 	}

@@ -169,7 +169,7 @@ func main() {
 		interrupts.Terminate()
 	}
 
-	kubeConfigs, _, err := util.LoadKubeConfigs(o.hiveKubeconfigPath, kubeconfigChangedCallBack)
+	kubeConfigs, err := util.LoadKubeConfigs(o.hiveKubeconfigPath, "", kubeconfigChangedCallBack)
 	if err != nil {
 		logrus.WithError(err).WithField("o.hiveKubeconfigPath", o.hiveKubeconfigPath).Fatal("could not load Hive kube config")
 	}

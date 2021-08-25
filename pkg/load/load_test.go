@@ -4,8 +4,6 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"io/ioutil"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -17,6 +15,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/diff"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/utils/pointer"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/registry"
@@ -262,10 +261,6 @@ tests:
     cluster_profile: vsphere
 `
 
-func strP(str string) *string {
-	return &str
-}
-
 var parsedConfig = &api.ReleaseBuildConfiguration{
 	InputConfiguration: api.InputConfiguration{
 		BaseImages: map[string]api.ImageStreamTagReference{
@@ -301,7 +296,7 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 	TestBinaryBuildCommands: "",
 	RpmBuildCommands:        "make build-rpms",
 	RpmBuildLocation:        "",
-	CanonicalGoRepository:   strP("github.com/openshift/origin"),
+	CanonicalGoRepository:   pointer.StringPtr("github.com/openshift/origin"),
 	Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
 		From: "base",
 		To:   "template-service-broker",
@@ -614,7 +609,7 @@ func TestConfig(t *testing.T) {
 					t.Fatalf("%s: failed to populate env var: %v", testCase.name, err)
 				}
 			}
-			config, err := Config(path, "", "", nil)
+			config, err := Config(path, "", "", nil, nil)
 			if err == nil && testCase.expectedError {
 				t.Errorf("%s: expected an error, but got none", testCase.name)
 			}
@@ -625,76 +620,6 @@ func TestConfig(t *testing.T) {
 				t.Errorf("%s: didn't get correct config: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
 			}
 
-		})
-	}
-}
-
-func TestConfigFromResolver(t *testing.T) {
-	correctHandler := func(t *testing.T, jsonConfig []byte) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Query().Get("org") != "openshift" {
-				t.Errorf("%s: Org should equal openshift, but was %s", t.Name(), r.URL.Query().Get("org"))
-			}
-			if r.URL.Query().Get("repo") != "hyperkube" {
-				t.Errorf("%s: Repo should equal hyperkube, but was %s", t.Name(), r.URL.Query().Get("repo"))
-			}
-			if r.URL.Query().Get("branch") != "master" {
-				t.Errorf("%s: Branch should equal master, but was %s", t.Name(), r.URL.Query().Get("branch"))
-			}
-			w.WriteHeader(http.StatusOK)
-			if _, err := w.Write(jsonConfig); err != nil {
-				t.Errorf("failed to write data: %v", err)
-			}
-		})
-	}
-	failingHandler := func(t *testing.T, jsonConfig []byte) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusBadRequest)
-			if _, err := w.Write(jsonConfig); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
-		})
-	}
-	var testCases = []struct {
-		name           string
-		handlerWrapper func(t *testing.T, jsonConfig []byte) http.Handler
-		expected       *api.ReleaseBuildConfiguration
-		expectedError  bool
-	}{
-		{
-			name:           "getting config works",
-			handlerWrapper: correctHandler,
-			expected:       parsedConfig,
-			expectedError:  false,
-		},
-		{
-			name:           "function errors on non OK status",
-			handlerWrapper: failingHandler,
-			expected:       nil,
-			expectedError:  true,
-		},
-	}
-
-	jsonConfig, err := json.Marshal(parsedConfig)
-	if err != nil {
-		t.Fatalf("%s: Failed to marshal parsedConfig to JSON: %v", t.Name(), err)
-	}
-	metadata := api.Metadata{Org: "openshift", Repo: "hyperkube", Branch: "master"}
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			server := httptest.NewServer(testCase.handlerWrapper(t, jsonConfig))
-			info := ResolverInfo{Address: server.URL, Metadata: metadata}
-			config, err := configFromResolver(&info)
-			if err == nil && testCase.expectedError {
-				t.Errorf("%s: expected an error, but got none", testCase.name)
-			}
-			if err != nil && !testCase.expectedError {
-				t.Errorf("%s: expected no error, but got one: %v", testCase.name, err)
-			}
-			if !reflect.DeepEqual(config, testCase.expected) {
-				t.Errorf("%s: didn't get correct config: %v", testCase.name, diff.ObjectReflectDiff(config, testCase.expected))
-			}
-			server.Close()
 		})
 	}
 }

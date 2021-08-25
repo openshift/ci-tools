@@ -320,6 +320,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            stream: ' '\n" +
 	"            # Version is the minor version to search for\n" +
 	"            version: ' '\n" +
+	"        # Integration describes an integration stream which we can create a payload out of\n" +
+	"        integration:\n" +
+	"            # Name is the name of the ImageStream\n" +
+	"            name: ' '\n" +
+	"            # Namespace is the namespace in which the integration stream lives.\n" +
+	"            namespace: ' '\n" +
 	"        name: ' '\n" +
 	"        # Prerelease describes a yet-to-be released payload\n" +
 	"        prerelease:\n" +
@@ -1012,6 +1018,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            stream: ' '\n" +
 	"            # Version is the minor version to search for\n" +
 	"            version: ' '\n" +
+	"        # Integration describes an integration stream which we can create a payload out of\n" +
+	"        integration:\n" +
+	"            # Name is the name of the ImageStream\n" +
+	"            name: ' '\n" +
+	"            # Namespace is the namespace in which the integration stream lives.\n" +
+	"            namespace: ' '\n" +
 	"        # Prerelease describes a yet-to-be released payload\n" +
 	"        prerelease:\n" +
 	"            # Architecture is the architecture for the product.\n" +

@@ -24,7 +24,6 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
@@ -211,12 +210,10 @@ func TestGetResolverInfo(t *testing.T) {
 		name     string
 		opt      *options
 		jobSpec  *api.JobSpec
-		expected *load.ResolverInfo
+		expected *api.Metadata
 	}{{
 		name: "Only JobSpec Refs",
-		opt: &options{
-			resolverAddress: configResolverAddress,
-		},
+		opt:  &options{},
 		jobSpec: &api.JobSpec{
 			JobSpec: downwardapi.JobSpec{
 				Refs: &prowapi.Refs{
@@ -226,20 +223,14 @@ func TestGetResolverInfo(t *testing.T) {
 				},
 			},
 		},
-		expected: &load.ResolverInfo{
-			Address: configResolverAddress,
-			Metadata: api.Metadata{
-				Org:    "testOrganization",
-				Repo:   "testRepo",
-				Branch: "testBranch",
-			},
+		expected: &api.Metadata{
+			Org:    "testOrganization",
+			Repo:   "testRepo",
+			Branch: "testBranch",
 		},
 	}, {
 		name: "JobSpec Refs w/ variant set via flag",
-		opt: &options{
-			resolverAddress: configResolverAddress,
-			variant:         "v2",
-		},
+		opt:  &options{variant: "v2"},
 		jobSpec: &api.JobSpec{
 			JobSpec: downwardapi.JobSpec{
 				Refs: &prowapi.Refs{
@@ -249,20 +240,15 @@ func TestGetResolverInfo(t *testing.T) {
 				},
 			},
 		},
-		expected: &load.ResolverInfo{
-			Address: configResolverAddress,
-			Metadata: api.Metadata{
-				Org:     "testOrganization",
-				Repo:    "testRepo",
-				Branch:  "testBranch",
-				Variant: "v2",
-			},
+		expected: &api.Metadata{
+			Org:     "testOrganization",
+			Repo:    "testRepo",
+			Branch:  "testBranch",
+			Variant: "v2",
 		},
 	}, {
 		name: "Ref with ExtraRefs",
-		opt: &options{
-			resolverAddress: configResolverAddress,
-		},
+		opt:  &options{},
 		jobSpec: &api.JobSpec{
 			JobSpec: downwardapi.JobSpec{
 				Refs: &prowapi.Refs{
@@ -277,19 +263,14 @@ func TestGetResolverInfo(t *testing.T) {
 				}},
 			},
 		},
-		expected: &load.ResolverInfo{
-			Address: configResolverAddress,
-			Metadata: api.Metadata{
-				Org:    "testOrganization",
-				Repo:   "testRepo",
-				Branch: "testBranch",
-			},
+		expected: &api.Metadata{
+			Org:    "testOrganization",
+			Repo:   "testRepo",
+			Branch: "testBranch",
 		},
 	}, {
 		name: "Incomplete refs not used",
-		opt: &options{
-			resolverAddress: configResolverAddress,
-		},
+		opt:  &options{},
 		jobSpec: &api.JobSpec{
 			JobSpec: downwardapi.JobSpec{
 				Refs: &prowapi.Refs{
@@ -303,20 +284,16 @@ func TestGetResolverInfo(t *testing.T) {
 				}},
 			},
 		},
-		expected: &load.ResolverInfo{
-			Address: configResolverAddress,
-			Metadata: api.Metadata{
-				Org:    "anotherOrganization",
-				Repo:   "anotherRepo",
-				Branch: "anotherBranch",
-			},
+		expected: &api.Metadata{
+			Org:    "anotherOrganization",
+			Repo:   "anotherRepo",
+			Branch: "anotherBranch",
 		},
 	}, {
 		name: "Refs with single field overridden by options",
 		opt: &options{
-			resolverAddress: configResolverAddress,
-			repo:            "anotherRepo",
-			variant:         "v2",
+			repo:    "anotherRepo",
+			variant: "v2",
 		},
 		jobSpec: &api.JobSpec{
 			JobSpec: downwardapi.JobSpec{
@@ -327,42 +304,34 @@ func TestGetResolverInfo(t *testing.T) {
 				},
 			},
 		},
-		expected: &load.ResolverInfo{
-			Address: configResolverAddress,
-			Metadata: api.Metadata{
-				Org:     "testOrganization",
-				Repo:    "anotherRepo",
-				Branch:  "testBranch",
-				Variant: "v2",
-			},
+		expected: &api.Metadata{
+			Org:     "testOrganization",
+			Repo:    "anotherRepo",
+			Branch:  "testBranch",
+			Variant: "v2",
 		},
 	}, {
 		name: "Only options",
 		opt: &options{
-			resolverAddress: configResolverAddress,
-			org:             "testOrganization",
-			repo:            "testRepo",
-			branch:          "testBranch",
-			variant:         "v2",
+			org:     "testOrganization",
+			repo:    "testRepo",
+			branch:  "testBranch",
+			variant: "v2",
 		},
 		jobSpec: &api.JobSpec{},
-		expected: &load.ResolverInfo{
-			Address: configResolverAddress,
-			Metadata: api.Metadata{
-				Org:     "testOrganization",
-				Repo:    "testRepo",
-				Branch:  "testBranch",
-				Variant: "v2",
-			},
+		expected: &api.Metadata{
+			Org:     "testOrganization",
+			Repo:    "testRepo",
+			Branch:  "testBranch",
+			Variant: "v2",
 		},
 	}, {
 		name: "All fields overridden by options",
 		opt: &options{
-			resolverAddress: configResolverAddress,
-			org:             "anotherOrganization",
-			repo:            "anotherRepo",
-			branch:          "anotherBranch",
-			variant:         "v2",
+			org:     "anotherOrganization",
+			repo:    "anotherRepo",
+			branch:  "anotherBranch",
+			variant: "v2",
 		},
 		jobSpec: &api.JobSpec{
 			JobSpec: downwardapi.JobSpec{
@@ -373,14 +342,11 @@ func TestGetResolverInfo(t *testing.T) {
 				},
 			},
 		},
-		expected: &load.ResolverInfo{
-			Address: configResolverAddress,
-			Metadata: api.Metadata{
-				Org:     "anotherOrganization",
-				Repo:    "anotherRepo",
-				Branch:  "anotherBranch",
-				Variant: "v2",
-			},
+		expected: &api.Metadata{
+			Org:     "anotherOrganization",
+			Repo:    "anotherRepo",
+			Branch:  "anotherBranch",
+			Variant: "v2",
 		},
 	}}
 	for _, testCase := range testCases {

@@ -15,6 +15,7 @@ import (
 
 func TestOptionsValidate(t *testing.T) {
 	good := options{
+		Options:   config.Options{LogLevel: "info"},
 		configDir: "path/to/dir",
 		tokenPath: "path/to/token",
 		targetOrg: "org",
@@ -40,12 +41,12 @@ func TestOptionsValidate(t *testing.T) {
 		},
 		{
 			description:    "missing --token-path does not pass validation",
-			bad:            &options{configDir: "path/to/dir", targetOrg: "org"},
+			bad:            &options{configDir: "path/to/dir", targetOrg: "org", Options: config.Options{LogLevel: "info"}},
 			expectedErrors: 3,
 		},
 		{
 			description:    "missing --target-org does not pass validation",
-			bad:            &options{configDir: "path/to/dir", tokenPath: "path/to/token"},
+			bad:            &options{configDir: "path/to/dir", tokenPath: "path/to/token", Options: config.Options{LogLevel: "info"}},
 			expectedErrors: 3,
 		},
 		{

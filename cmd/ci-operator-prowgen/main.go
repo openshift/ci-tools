@@ -7,10 +7,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
@@ -170,25 +172,46 @@ func getReleaseRepoDir(directory string) (string, error) {
 }
 
 func pruneStaleJobs(jobDir, subDir string) error {
-	if err := jc.OperateOnJobConfigSubdir(jobDir, subDir, func(jobConfig *prowconfig.JobConfig, info *jc.Info) error {
-		pruned := prowgen.Prune(jobConfig)
+	errChan := make(chan error)
+	var errs []error
 
-		if len(pruned.PresubmitsStatic) == 0 && len(pruned.PostsubmitsStatic) == 0 && len(pruned.Periodics) == 0 {
-			if err := os.Remove(info.Filename); err != nil && !os.IsNotExist(err) {
-				return err
-			}
-		} else {
-			if err := jc.WriteToFile(info.Filename, pruned); err != nil {
-				return err
-			}
+	errReadingDone := make(chan struct{})
+	go func() {
+		for err := range errChan {
+			errs = append(errs, err)
 		}
+		close(errReadingDone)
+	}()
 
+	wg := sync.WaitGroup{}
+
+	if err := jc.OperateOnJobConfigSubdir(jobDir, subDir, func(jobConfig *prowconfig.JobConfig, info *jc.Info) error {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pruned := prowgen.Prune(jobConfig)
+
+			if len(pruned.PresubmitsStatic) == 0 && len(pruned.PostsubmitsStatic) == 0 && len(pruned.Periodics) == 0 {
+				if err := os.Remove(info.Filename); err != nil && !os.IsNotExist(err) {
+					errChan <- err
+				}
+			} else {
+				if err := jc.WriteToFile(info.Filename, pruned); err != nil {
+					errChan <- err
+				}
+			}
+		}()
 		return nil
+
 	}); err != nil {
 		return err
 	}
 
-	return nil
+	wg.Wait()
+	close(errChan)
+	<-errReadingDone
+
+	return utilerrors.NewAggregate(errs)
 }
 
 func main() {

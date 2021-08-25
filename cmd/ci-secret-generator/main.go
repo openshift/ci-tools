@@ -261,13 +261,13 @@ func validateContexts(contexts []secretbootstrap.ItemContext, config secretboots
 		var found bool
 		for _, secret := range config.Secrets {
 			for _, haystack := range secret.From {
-				haystack.Item = strings.TrimPrefix(haystack.Item, config.VaultDPTPPRefix+"/")
+				haystack.Item = strings.TrimPrefix(haystack.Item, config.VaultDPTPPrefix+"/")
 				if reflect.DeepEqual(needle, haystack) {
 					found = true
 				}
 				for _, dc := range haystack.DockerConfigJSONData {
 					ctx := secretbootstrap.ItemContext{
-						Item:  strings.TrimPrefix(dc.Item, config.VaultDPTPPRefix+"/"),
+						Item:  strings.TrimPrefix(dc.Item, config.VaultDPTPPrefix+"/"),
 						Field: dc.AuthField,
 					}
 					if reflect.DeepEqual(needle, ctx) {

@@ -467,6 +467,9 @@ func (v *Validator) validateTestConfigurationType(
 		if claim.Owner == "" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.cluster_claim.owner cannot be empty when cluster_claim is not nil", fieldRoot))
 		}
+		if test.MultiStageTestConfigurationLiteral == nil && test.MultiStageTestConfiguration == nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.cluster_claim cannot be set on a test which is not a multi-stage test", fieldRoot))
+		}
 	}
 	typeCount := 0
 	if cluster := test.Cluster; cluster != "" && !api.ValidClusterNames.Has(string(cluster)) {
@@ -486,40 +489,33 @@ func (v *Validator) validateTestConfigurationType(
 	var needsReleaseRpms bool
 	if testConfig := test.OpenshiftAnsibleClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		clusterCount++
 		needsReleaseRpms = true
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftAnsibleSrcClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		clusterCount++
 		needsReleaseRpms = true
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftAnsibleCustomClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		clusterCount++
 		needsReleaseRpms = true
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		clusterCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerUPIClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		clusterCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerUPISrcClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		clusterCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		clusterCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	var claimRelease *api.ClaimRelease
@@ -569,7 +565,7 @@ func (v *Validator) validateTestConfigurationType(
 		validationErrors = append(validationErrors, fmt.Errorf("%s has more than one type", fieldRoot))
 	}
 	if clusterCount > 1 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s installs more than cluster, probably it defined both cluster_claim and cluster_profile", fieldRoot))
+		validationErrors = append(validationErrors, fmt.Errorf("%s installs more than one cluster, probably it defined both cluster_claim and cluster_profile", fieldRoot))
 	}
 
 	return validationErrors

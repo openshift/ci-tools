@@ -91,7 +91,7 @@ func TestValidateReleases(t *testing.T) {
 				"latest": {},
 			},
 			output: []error{
-				errors.New("root.latest: must set candidate, prerelease or release"),
+				errors.New("root.latest: must set integration, candidate, prerelease or release"),
 			},
 		},
 		{
@@ -103,7 +103,7 @@ func TestValidateReleases(t *testing.T) {
 				},
 			},
 			output: []error{
-				errors.New("root.latest: cannot set more than one of candidate, prerelease and release"),
+				errors.New("root.latest: cannot set more than one of integration, candidate, prerelease and release"),
 			},
 		},
 		{
@@ -116,7 +116,7 @@ func TestValidateReleases(t *testing.T) {
 				},
 			},
 			output: []error{
-				errors.New("root.latest: cannot set more than one of candidate, prerelease and release"),
+				errors.New("root.latest: cannot set more than one of integration, candidate, prerelease and release"),
 			},
 		},
 		{

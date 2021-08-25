@@ -134,3 +134,28 @@ func BuildCacheFor(metadata Metadata) ImageStreamTagReference {
 func ImageVersionLabel(fromTag PipelineImageStreamTagReference) string {
 	return fmt.Sprintf("io.openshift.ci.from.%s", fromTag)
 }
+
+var testPathRegex = regexp.MustCompile(`(?P<org>[^/]+)/(?P<repo>[^@]+)@(?P<branch>[^:]+):(?P<test>.+)`)
+
+func MetadataTestFromString(input string) (*MetadataWithTest, error) {
+	var ret MetadataWithTest
+	match := testPathRegex.FindStringSubmatch(input)
+	if match == nil || len(match) != 5 {
+		return &ret, fmt.Errorf("test path not in org/repo@branch:test or org/repo@branch__variant:test format: %s", input)
+	}
+	ret.Org = match[1]
+	ret.Repo = match[2]
+	ret.Test = match[4]
+
+	branchAndVariant := strings.Split(match[3], "__")
+	ret.Branch = branchAndVariant[0]
+	if len(branchAndVariant) > 1 {
+		ret.Variant = branchAndVariant[1]
+
+	}
+	if ret.Branch == "" || (len(branchAndVariant) > 1 && ret.Variant == "") {
+		return &ret, fmt.Errorf("test path not in org/repo@branch:test or org/repo@branch__variant:test format: %s", input)
+	}
+
+	return &ret, nil
+}

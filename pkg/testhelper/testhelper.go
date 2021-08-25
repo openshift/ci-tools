@@ -125,7 +125,7 @@ func CompareWithFixture(t *testing.T, output interface{}, opts ...Option) {
 	}
 
 	if diff := cmp.Diff(string(expected), string(serializedOutput)); diff != "" {
-		t.Errorf("got diff between expected and actual result: \n%s\n\nIf this is expected, re-run the test with `UPDATE=true go test ./...` to update the fixtures.", diff)
+		t.Errorf("got diff between expected and actual result:\nfile: %s\ndiff:\n%s\n\nIf this is expected, re-run the test with `UPDATE=true go test ./...` to update the fixtures.", golden, diff)
 	}
 }
 

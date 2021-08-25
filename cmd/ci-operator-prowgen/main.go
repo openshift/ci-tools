@@ -234,11 +234,12 @@ func main() {
 	if len(args) == 0 {
 		args = append(args, "")
 	}
+	logger := logrus.WithFields(logrus.Fields{"target": opt.toDir, "source": opt.fromDir})
 	genJobs := generateJobsToDir(opt.toDir, opt.resolver)
 	for _, subDir := range args {
+		logger = logger.WithFields(logrus.Fields{"subdir": subDir})
 		if err := opt.OperateOnCIOperatorConfigDir(filepath.Join(opt.fromDir, subDir), genJobs); err != nil {
-			fields := logrus.Fields{"target": opt.toDir, "source": opt.fromDir}
-			logrus.WithError(err).WithFields(fields).Fatal("Failed to generate jobs")
+			logger.WithError(err).Fatal("Failed to generate jobs")
 		}
 
 		if opt.ProcessAll() {

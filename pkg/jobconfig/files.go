@@ -24,17 +24,22 @@ import (
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
+type label string
+
 const (
-	CanBeRehearsedLabel    = "pj-rehearse.openshift.io/can-be-rehearsed"
-	CanBeRehearsedValue    = "true"
-	SSHBastionLabel        = "dptp.openshift.io/ssh-bastion"
-	ProwJobLabelVariant    = "ci-operator.openshift.io/variant"
-	ReleaseControllerLabel = "ci-operator.openshift.io/release-controller"
-	ReleaseControllerValue = "true"
-	JobReleaseKey          = "job-release"
-	PresubmitPrefix        = "pull"
-	PostsubmitPrefix       = "branch"
-	PeriodicPrefix         = "periodic"
+	CanBeRehearsedLabel          = "pj-rehearse.openshift.io/can-be-rehearsed"
+	CanBeRehearsedValue          = "true"
+	SSHBastionLabel              = "dptp.openshift.io/ssh-bastion"
+	ProwJobLabelVariant          = "ci-operator.openshift.io/variant"
+	ReleaseControllerLabel       = "ci-operator.openshift.io/release-controller"
+	LabelGenerated               = "ci-operator.openshift.io/prowgen-controlled"
+	ReleaseControllerValue       = "true"
+	JobReleaseKey                = "job-release"
+	PresubmitPrefix              = "pull"
+	PostsubmitPrefix             = "branch"
+	PeriodicPrefix               = "periodic"
+	Generated              label = "true"
+	NewlyGenerated         label = "newly-generated"
 )
 
 // SimpleBranchRegexp matches a branch name that does not appear to be a regex (lacks wildcard,
@@ -606,4 +611,70 @@ func MakeRegexFilenameLabel(possibleRegex string) string {
 		label = "master"
 	}
 	return label
+}
+
+// IsGenerated returns true if the job was generated using prowgen
+func IsGenerated(job prowconfig.JobBase) bool {
+	_, generated := job.Labels[LabelGenerated]
+	return generated
+}
+
+func isStale(job prowconfig.JobBase) bool {
+	genLabel, generated := job.Labels[LabelGenerated]
+	return generated && genLabel != string(NewlyGenerated)
+}
+
+// Prune removes all prowgen-generated jobs that were not created by preceding
+// calls to GenerateJobs() (that method labels them as "newly generated"). All
+// remaining prowgen-generated jobs will be labeled as simply "generated" and
+// Prune() returns the resulting job config (which may even be completely empty).
+func Prune(jobConfig *prowconfig.JobConfig) *prowconfig.JobConfig {
+	var pruned prowconfig.JobConfig
+
+	for repo, jobs := range jobConfig.PresubmitsStatic {
+		for _, job := range jobs {
+			if isStale(job.JobBase) {
+				continue
+			}
+
+			if IsGenerated(job.JobBase) {
+				job.Labels[LabelGenerated] = string(Generated)
+			}
+
+			if pruned.PresubmitsStatic == nil {
+				pruned.PresubmitsStatic = map[string][]prowconfig.Presubmit{}
+			}
+
+			pruned.PresubmitsStatic[repo] = append(pruned.PresubmitsStatic[repo], job)
+		}
+	}
+
+	for repo, jobs := range jobConfig.PostsubmitsStatic {
+		for _, job := range jobs {
+			if isStale(job.JobBase) {
+				continue
+			}
+			if IsGenerated(job.JobBase) {
+				job.Labels[LabelGenerated] = string(Generated)
+			}
+			if pruned.PostsubmitsStatic == nil {
+				pruned.PostsubmitsStatic = map[string][]prowconfig.Postsubmit{}
+			}
+
+			pruned.PostsubmitsStatic[repo] = append(pruned.PostsubmitsStatic[repo], job)
+		}
+	}
+
+	for _, job := range jobConfig.Periodics {
+		if isStale(job.JobBase) {
+			continue
+		}
+		if IsGenerated(job.JobBase) {
+			job.Labels[LabelGenerated] = string(Generated)
+		}
+
+		pruned.Periodics = append(pruned.Periodics, job)
+	}
+
+	return &pruned
 }

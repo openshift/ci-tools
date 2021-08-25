@@ -203,7 +203,7 @@ func pruneStaleJobs(jobDir, subDir string) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			pruned := prowgen.Prune(jobConfig)
+			pruned := jc.Prune(jobConfig)
 
 			if len(pruned.PresubmitsStatic) == 0 && len(pruned.PostsubmitsStatic) == 0 && len(pruned.Periodics) == 0 {
 				if err := os.Remove(info.Filename); err != nil && !os.IsNotExist(err) {

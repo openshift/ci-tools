@@ -20,16 +20,10 @@ import (
 	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
-type label string
-
 const (
 	oauthTokenPath  = "/usr/local/github-credentials"
 	oauthSecretName = "github-credentials-openshift-ci-robot-private-git-cloner"
 	oauthKey        = "oauth"
-
-	prowJobLabelGenerated       = "ci-operator.openshift.io/prowgen-controlled"
-	generated             label = "true"
-	newlyGenerated        label = "newly-generated"
 )
 
 type ProwgenInfo struct {
@@ -601,7 +595,7 @@ func generateConfigMapVolume(name string, templates []string) corev1.Volume {
 }
 
 func generateJobBase(name, prefix string, info *ProwgenInfo, podSpec *corev1.PodSpec, rehearsable bool, pathAlias *string, jobRelease string, skipCloning bool) prowconfig.JobBase {
-	labels := map[string]string{prowJobLabelGenerated: string(newlyGenerated)}
+	labels := map[string]string{jc.LabelGenerated: string(jc.NewlyGenerated)}
 
 	if rehearsable {
 		labels[jc.CanBeRehearsedLabel] = jc.CanBeRehearsedValue
@@ -655,70 +649,4 @@ func FeatureBranch(branch string) string {
 		return branch
 	}
 	return fmt.Sprintf("^%s-", regexp.QuoteMeta(branch))
-}
-
-// IsGenerated returns true if the job was generated using prowgen
-func IsGenerated(job prowconfig.JobBase) bool {
-	_, generated := job.Labels[prowJobLabelGenerated]
-	return generated
-}
-
-func isStale(job prowconfig.JobBase) bool {
-	genLabel, generated := job.Labels[prowJobLabelGenerated]
-	return generated && genLabel != string(newlyGenerated)
-}
-
-// Prune removes all prowgen-generated jobs that were not created by preceding
-// calls to GenerateJobs() (that method labels them as "newly generated"). All
-// remaining prowgen-generated jobs will be labeled as simply "generated" and
-// Prune() returns the resulting job config (which may even be completely empty).
-func Prune(jobConfig *prowconfig.JobConfig) *prowconfig.JobConfig {
-	var pruned prowconfig.JobConfig
-
-	for repo, jobs := range jobConfig.PresubmitsStatic {
-		for _, job := range jobs {
-			if isStale(job.JobBase) {
-				continue
-			}
-
-			if IsGenerated(job.JobBase) {
-				job.Labels[prowJobLabelGenerated] = string(generated)
-			}
-
-			if pruned.PresubmitsStatic == nil {
-				pruned.PresubmitsStatic = map[string][]prowconfig.Presubmit{}
-			}
-
-			pruned.PresubmitsStatic[repo] = append(pruned.PresubmitsStatic[repo], job)
-		}
-	}
-
-	for repo, jobs := range jobConfig.PostsubmitsStatic {
-		for _, job := range jobs {
-			if isStale(job.JobBase) {
-				continue
-			}
-			if IsGenerated(job.JobBase) {
-				job.Labels[prowJobLabelGenerated] = string(generated)
-			}
-			if pruned.PostsubmitsStatic == nil {
-				pruned.PostsubmitsStatic = map[string][]prowconfig.Postsubmit{}
-			}
-
-			pruned.PostsubmitsStatic[repo] = append(pruned.PostsubmitsStatic[repo], job)
-		}
-	}
-
-	for _, job := range jobConfig.Periodics {
-		if isStale(job.JobBase) {
-			continue
-		}
-		if IsGenerated(job.JobBase) {
-			job.Labels[prowJobLabelGenerated] = string(generated)
-		}
-
-		pruned.Periodics = append(pruned.Periodics, job)
-	}
-
-	return &pruned
 }

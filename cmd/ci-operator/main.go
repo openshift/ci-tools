@@ -662,8 +662,9 @@ func (o *options) Complete() error {
 	}
 
 	if o.uploadSecretPath != "" {
-		if o.uploadSecret, err = getSecret(api.GCSUploadCredentialsSecret, o.uploadSecretPath); err != nil {
-			return fmt.Errorf("could not get upload secret %s from path %s: %w", api.GCSUploadCredentialsSecret, o.uploadSecretPath, err)
+		gcsSecretName := resolveGCSCredentialsSecret(o.jobSpec)
+		if o.uploadSecret, err = getSecret(gcsSecretName, o.uploadSecretPath); err != nil {
+			return fmt.Errorf("could not get upload secret %s from path %s: %w", gcsSecretName, o.uploadSecretPath, err)
 		}
 	}
 
@@ -2003,6 +2004,14 @@ func getSecret(name, filename string) (*coreapi.Secret, error) {
 		},
 		Type: coreapi.SecretTypeOpaque,
 	}, nil
+}
+
+func resolveGCSCredentialsSecret(jobSpec *api.JobSpec) string {
+	if jobSpec.DecorationConfig != nil && jobSpec.DecorationConfig.GCSCredentialsSecret != nil {
+		return *jobSpec.DecorationConfig.GCSCredentialsSecret
+	}
+
+	return api.GCSUploadCredentialsSecret
 }
 
 func (o *options) getResolverInfo(jobSpec *api.JobSpec) *api.Metadata {

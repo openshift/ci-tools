@@ -45,6 +45,7 @@ func AddToManager(mgr manager.Manager,
 	additionalImageStreams sets.String,
 	additionalImageStreamNamespaces sets.String,
 	forbiddenRegistries sets.String,
+	ignoreClusterNames sets.String,
 ) error {
 	log := logrus.WithField("controller", ControllerName)
 
@@ -71,6 +72,10 @@ func AddToManager(mgr manager.Manager,
 	for buildClusterName, buildClusterManager := range buildClusterManagers {
 		if buildClusterName == "api.ci" {
 			log.Debug("distribution to api.ci is disabled")
+			continue
+		}
+		if ignoreClusterNames.Has(buildClusterName) {
+			log.WithField("buildClusterName", buildClusterName).Debug("distribution to the cluster is disabled")
 			continue
 		}
 		buildClusters.Insert(buildClusterName)

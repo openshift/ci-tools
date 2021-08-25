@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/utils/diff"
@@ -27,7 +28,7 @@ func TestValidateTests(t *testing.T) {
 		releases      sets.String
 		tests         []api.TestStepConfiguration
 		resolved      bool
-		expectedValid bool
+		expectedError error
 	}{
 		{
 			id: `ReleaseBuildConfiguration{Tests: {As: "unit"}}`,
@@ -38,7 +39,6 @@ func TestValidateTests(t *testing.T) {
 					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
 				},
 			},
-			expectedValid: true,
 		},
 		{
 			id: `ReleaseBuildConfiguration{Tests: {As: "images"}}`,
@@ -49,7 +49,7 @@ func TestValidateTests(t *testing.T) {
 					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("tests[0].as: should not be called 'images' because it gets confused with '[images]' target"),
 		},
 		{
 			id: `ReleaseBuildConfiguration{Tests: {As: "ci-index"}}`,
@@ -60,7 +60,7 @@ func TestValidateTests(t *testing.T) {
 					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("tests[0].as: should not begin with 'ci-index' because it gets confused with 'ci-index' and `ci-index-...` targets"),
 		},
 		{
 			id: `ReleaseBuildConfiguration{Tests: {As: "ci-index-my-bundle"}}`,
@@ -71,7 +71,7 @@ func TestValidateTests(t *testing.T) {
 					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("tests[0].as: should not begin with 'ci-index' because it gets confused with 'ci-index' and `ci-index-...` targets"),
 		},
 		{
 			id: "No test type",
@@ -81,7 +81,7 @@ func TestValidateTests(t *testing.T) {
 					Commands: "commands",
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("tests[0] has no type, you may want to specify 'container' for a container based test"),
 		},
 		{
 			id: "Multiple test types",
@@ -97,7 +97,7 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New(`tests[0] has more than one type`),
 		},
 		{
 			id: "`commands` and `steps`",
@@ -108,7 +108,7 @@ func TestValidateTests(t *testing.T) {
 					MultiStageTestConfiguration: &api.MultiStageTestConfiguration{},
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("tests[0]: `commands`, `steps`, and `literal_steps` are mutually exclusive"),
 		},
 		{
 			id: "container test without `from`",
@@ -119,7 +119,7 @@ func TestValidateTests(t *testing.T) {
 					ContainerTestConfiguration: &api.ContainerTestConfiguration{},
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("tests[0]: 'from' is required"),
 		},
 		{
 			id: "test without `commands`",
@@ -129,7 +129,7 @@ func TestValidateTests(t *testing.T) {
 					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("tests[0]: either `commands`, `steps`, or `literal_steps` should be set"),
 		},
 		{
 			id: "test valid memory backed volume",
@@ -145,7 +145,6 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedValid: true,
 		},
 		{
 			id: "test invalid memory backed volume",
@@ -161,7 +160,7 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New(`tests[0].memory_backed_volume: 'size' must be a Kubernetes quantity: unable to parse quantity's suffix`),
 		},
 		{
 			id: "test with duplicated `as`",
@@ -177,7 +176,7 @@ func TestValidateTests(t *testing.T) {
 					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("tests: found duplicated test: (test)"),
 		},
 		{
 			id: "test without `as`",
@@ -187,7 +186,7 @@ func TestValidateTests(t *testing.T) {
 					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("tests[0].as: is required"),
 		},
 		{
 			id: "invalid cluster profile",
@@ -197,7 +196,7 @@ func TestValidateTests(t *testing.T) {
 					OpenshiftAnsibleClusterTestConfiguration: &api.OpenshiftAnsibleClusterTestConfiguration{},
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("tests[0]: invalid cluster profile \"\""),
 		},
 		{
 			id: "release missing",
@@ -210,6 +209,7 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
+			expectedError: errors.New("tests[0] requires a release in 'tag_specification'"),
 		},
 		{
 			id: "release must be origin",
@@ -222,8 +222,7 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			release:       &api.ReleaseTagConfiguration{},
-			expectedValid: true,
+			release: &api.ReleaseTagConfiguration{},
 		},
 		{
 			id: "with release",
@@ -236,43 +235,45 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			release:       &api.ReleaseTagConfiguration{Name: "origin-v3.11"},
-			expectedValid: true,
+			release: &api.ReleaseTagConfiguration{Name: "origin-v3.11"},
 		},
 		{
 			id: "invalid secret mountPath",
 			tests: []api.TestStepConfiguration{
 				{
-					As:                                       "test",
-					OpenshiftAnsibleClusterTestConfiguration: &api.OpenshiftAnsibleClusterTestConfiguration{},
+					As:                         "test",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "src"},
 					Secret: &api.Secret{
 						Name:      "secret",
 						MountPath: "/path/to/secret:exec",
 					},
 				},
 			},
-			expectedValid: false,
+			// TODO: The code actually just checks `filepath.IsAbs()`
+			// expectedError: errors.New(""),
 		},
 		{
 			id: "invalid secret name",
 			tests: []api.TestStepConfiguration{
 				{
-					As:                                       "test",
-					OpenshiftAnsibleClusterTestConfiguration: &api.OpenshiftAnsibleClusterTestConfiguration{},
+					As:                         "test",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "src"},
 					Secret: &api.Secret{
 						Name:      "secret_test",
 						MountPath: "/path/to/secret:exec",
 					},
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("tests[0].name: 'secret_test' is not a valid Kubernetes object name"),
 		},
 		{
 			id: "invalid secret and secrets both set",
 			tests: []api.TestStepConfiguration{
 				{
-					As:                                       "test",
-					OpenshiftAnsibleClusterTestConfiguration: &api.OpenshiftAnsibleClusterTestConfiguration{},
+					As:                         "test",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "src"},
 					Secret: &api.Secret{
 						Name:      "secret_test_a",
 						MountPath: "/path/to/secret:exec",
@@ -285,14 +286,15 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("test.Secret and test.Secrets cannot both be set"),
 		},
 		{
 			id: "invalid duplicate secret names",
 			tests: []api.TestStepConfiguration{
 				{
-					As:                                       "test",
-					OpenshiftAnsibleClusterTestConfiguration: &api.OpenshiftAnsibleClusterTestConfiguration{},
+					As:                         "test",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "src"},
 					Secrets: []*api.Secret{
 						{
 							Name:      "secret-test-a",
@@ -305,7 +307,7 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("duplicate secret name entries found for secret-test-a"),
 		},
 		{
 			id: "valid secret",
@@ -319,7 +321,6 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedValid: true,
 		},
 		{
 			id: "valid secrets single entry",
@@ -335,7 +336,6 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedValid: true,
 		},
 		{
 			id: "valid secrets multi entry",
@@ -354,7 +354,6 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedValid: true,
 		},
 		{
 			id: "valid secret with path",
@@ -369,7 +368,6 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedValid: true,
 		},
 		{
 			id: "valid secret with invalid path",
@@ -384,7 +382,7 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New(`tests[0].path: 'path/to/secret' secret mount path is not valid value, should be ^((\/*)\w+)+`),
 		},
 		{
 			id:       "non-literal test is invalid in fully-resolved configuration",
@@ -395,6 +393,7 @@ func TestValidateTests(t *testing.T) {
 					MultiStageTestConfiguration: &api.MultiStageTestConfiguration{},
 				},
 			},
+			expectedError: errors.New("tests[0]: non-literal test found in fully-resolved configuration"),
 		},
 		{
 			id: "cron and postsubmit together are invalid",
@@ -407,7 +406,7 @@ func TestValidateTests(t *testing.T) {
 					Postsubmit:                 true,
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("tests[0]: `cron` and `postsubmit` are mututally exclusive"),
 		},
 		{
 			id: "valid cron",
@@ -419,7 +418,6 @@ func TestValidateTests(t *testing.T) {
 					Cron:                       &cronString,
 				},
 			},
-			expectedValid: true,
 		},
 		{
 			id: "valid interval",
@@ -431,7 +429,6 @@ func TestValidateTests(t *testing.T) {
 					Interval:                   &intervalString,
 				},
 			},
-			expectedValid: true,
 		},
 		{
 			id: "cron and interval together are invalid",
@@ -444,7 +441,7 @@ func TestValidateTests(t *testing.T) {
 					Interval:                   &intervalString,
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("tests[0]: `interval` and `cron` cannot both be set"),
 		},
 		{
 			id: "cron and releaseInforming together are invalid",
@@ -457,7 +454,7 @@ func TestValidateTests(t *testing.T) {
 					ReleaseController:          true,
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("tests[0]: `cron` cannot be set for release controller jobs"),
 		},
 		{
 			id: "interval and releaseInforming together are invalid",
@@ -470,7 +467,7 @@ func TestValidateTests(t *testing.T) {
 					Interval:                   &intervalString,
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("tests[0]: `interval` cannot be set for release controller jobs"),
 		},
 		{
 			id: "invalid cron",
@@ -482,7 +479,7 @@ func TestValidateTests(t *testing.T) {
 					Cron:                       &invalidCronString,
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New("tests[0]: cannot parse cron: Failed to parse int from r: strconv.Atoi: parsing \"r\": invalid syntax"),
 		},
 		{
 			id: "invalid interval",
@@ -494,47 +491,46 @@ func TestValidateTests(t *testing.T) {
 					Interval:                   &invalidIntervalString,
 				},
 			},
-			expectedValid: false,
+			expectedError: errors.New(`tests[0]: cannot parse interval: time: unknown unit "t" in duration "6t"`),
 		},
 		{
 			id: "cron is mutually exclusive with run_if_changed",
 			tests: []api.TestStepConfiguration{{
-				As:           "Unit",
+				As:           "unit",
 				Commands:     "commands",
 				Cron:         &cronString,
 				RunIfChanged: "^README.md$",
 			}},
-			expectedValid: false,
+			expectedError: errors.New("tests[0]: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`"),
 		},
 		{
 			id: "interval is mutually exclusive with run_if_changed",
 			tests: []api.TestStepConfiguration{{
-				As:           "Unit",
+				As:           "unit",
 				Commands:     "commands",
 				Interval:     &intervalString,
 				RunIfChanged: "^README.md$",
 			}},
-			expectedValid: false,
+			expectedError: errors.New("tests[0]: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`"),
 		},
 		{
 			id: "Run if changed and skip_if_only_changed are mutually exclusive",
 			tests: []api.TestStepConfiguration{{
-				As:                "Unit",
+				As:                "unit",
 				Commands:          "commands",
 				RunIfChanged:      "^README.md$",
 				SkipIfOnlyChanged: "^OTHER_README.md$",
 			}},
-			expectedValid: false,
+			expectedError: errors.New("tests[0]: `run_if_changed` and `skip_if_only_changed` are mutually exclusive"),
 		},
 		{
 			id: "secrets used on multi-stage tests",
 			tests: []api.TestStepConfiguration{{
 				As:                          "unit",
-				Commands:                    "commands",
 				Secrets:                     []*api.Secret{{Name: "secret"}},
 				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{},
 			}},
-			expectedValid: false,
+			expectedError: errors.New("tests[0]: secret/secrets can be only used with container-based tests (use credentials in multi-stage tests)"),
 		},
 		{
 			id: "secrets used on template tests",
@@ -544,15 +540,26 @@ func TestValidateTests(t *testing.T) {
 				Secrets:  []*api.Secret{{Name: "secret"}},
 				OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{},
 			}},
-			expectedValid: false,
+			expectedError: errors.New("tests[0]: secret/secrets can be only used with container-based tests (use credentials in multi-stage tests)"),
 		},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			v := newSingleUseValidator()
-			if errs := v.validateTestStepConfiguration(newConfigContext(), "tests", tc.tests, tc.release, tc.releases, sets.NewString(), tc.resolved); len(errs) > 0 && tc.expectedValid {
+			errs := v.validateTestStepConfiguration(newConfigContext(), "tests", tc.tests, tc.release, tc.releases, sets.NewString(), tc.resolved)
+			if tc.expectedError == nil && len(errs) > 0 {
 				t.Errorf("expected to be valid, got: %v", errs)
-			} else if !tc.expectedValid && len(errs) == 0 {
-				t.Error("expected to be invalid, but returned valid")
+			}
+			if tc.expectedError != nil {
+				var found bool
+				for _, err := range errs {
+					if cmp.Diff(err.Error(), tc.expectedError.Error(), testhelper.EquateErrorMessage) == "" {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected '%v' error to be present in:\n%v", tc.expectedError, errs)
+				}
 			}
 		})
 	}

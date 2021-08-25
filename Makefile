@@ -149,7 +149,6 @@ integration:
 		if [[ -n $$OPENSHIFT_CI ]]; then count=25; else count=1; fi && \
 		for try in $$(seq $$count); do \
 			echo "Try $$try" && \
-			test/entrypoint-wrapper-integration.sh && \
 			hack/test-integration.sh $(SUITE) ; \
 		done
 .PHONY: integration

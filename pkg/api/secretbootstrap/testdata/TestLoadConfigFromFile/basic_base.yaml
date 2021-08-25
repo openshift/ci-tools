@@ -16,3 +16,8 @@ secret_configs:
           - build_farm
         namespace: ocp
         name: mirror.openshift.com
+user_secrets_target_clusters:
+  - app.ci
+  - build01
+  - build02
+vault_dptp_prefix: dptp

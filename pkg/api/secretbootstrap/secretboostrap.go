@@ -3,6 +3,11 @@ package secretbootstrap
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"reflect"
+	"strings"
+
+	"github.com/getlantern/deepcopy"
 
 	corev1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -12,14 +17,8 @@ import (
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
-type AttributeType string
-
-const (
-	AttributeTypePassword AttributeType = "password"
-)
-
 type ItemContext struct {
-	Item                 string                 `json:"item"`
+	Item                 string                 `json:"item,omitempty"`
 	Field                string                 `json:"field,omitempty"`
 	DockerConfigJSONData []DockerConfigJSONData `json:"dockerconfigJSON,omitempty"`
 	// If the secret should be base64 decoded before uploading to kube. Encoding
@@ -45,7 +44,7 @@ type DockerAuth struct {
 
 type SecretContext struct {
 	// A cluster to target. Mutually exclusive with 'ClusterGroups'
-	Cluster string `json:"cluster"`
+	Cluster string `json:"cluster,omitempty"`
 	// A list of clusterGroups to target. Mutually exclusive with 'cluster'
 	ClusterGroups []string          `json:"cluster_groups,omitempty"`
 	Namespace     string            `json:"namespace"`
@@ -71,9 +70,18 @@ func LoadConfigFromFile(file string, config *Config) error {
 	return yaml.UnmarshalStrict(bytes, config)
 }
 
+// SaveConfigToFile serializes a Config object to the given file
+func SaveConfigToFile(file string, config *Config) error {
+	bytes, err := yaml.Marshal(config)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(file, bytes, 0644)
+}
+
 // Config is what we version in our repository
 type Config struct {
-	VaultDPTPPRefix           string              `json:"vault_dptp_prefix,omitempty"`
+	VaultDPTPPrefix           string              `json:"vault_dptp_prefix,omitempty"`
 	ClusterGroups             map[string][]string `json:"cluster_groups,omitempty"`
 	Secrets                   []SecretConfig      `json:"secret_configs"`
 	UserSecretsTargetClusters []string            `json:"user_secrets_target_clusters,omitempty"`
@@ -89,6 +97,67 @@ func (c *Config) UnmarshalJSON(d []byte) error {
 
 	*c = Config(target)
 	return c.resolve()
+}
+
+func (c *Config) MarshalJSON() ([]byte, error) {
+	target := &configWithoutUnmarshaler{
+		VaultDPTPPrefix:           c.VaultDPTPPrefix,
+		ClusterGroups:             c.ClusterGroups,
+		UserSecretsTargetClusters: c.UserSecretsTargetClusters,
+	}
+	pre := c.VaultDPTPPrefix + "/"
+	var secrets []SecretConfig
+	for _, s := range c.Secrets {
+		var secret SecretConfig
+		if err := deepcopy.Copy(&secret, s); err != nil {
+			return nil, err
+		}
+		stripVaultPrefix(&secret, pre)
+		secret.groupClusters()
+		secrets = append(secrets, secret)
+	}
+
+	target.Secrets = secrets
+	return json.Marshal(target)
+}
+
+func (s *SecretConfig) groupClusters() {
+	var secrets []SecretContext
+	for _, to := range s.To {
+		if len(to.ClusterGroups) > 0 {
+			sc := SecretContext{
+				ClusterGroups: to.ClusterGroups,
+				Namespace:     to.Namespace,
+				Name:          to.Name,
+				Type:          to.Type,
+			}
+			present := false
+			for _, context := range secrets {
+				if reflect.DeepEqual(context, sc) {
+					present = true
+					break
+				}
+			}
+			if !present {
+				secrets = append(secrets, sc)
+			}
+		} else {
+			// This cluster was not from a group, so nothing special needs to be done
+			secrets = append(secrets, to)
+		}
+	}
+
+	s.To = secrets
+}
+
+func stripVaultPrefix(s *SecretConfig, pre string) {
+	for key, from := range s.From {
+		from.Item = strings.TrimPrefix(from.Item, pre)
+		for i, dcj := range from.DockerConfigJSONData {
+			from.DockerConfigJSONData[i].Item = strings.TrimPrefix(dcj.Item, pre)
+		}
+		s.From[key] = from
+	}
 }
 
 func (c *Config) Validate() error {
@@ -138,10 +207,11 @@ func (c *Config) resolve() error {
 				}
 				for _, cluster := range clusters {
 					newTo = append(newTo, SecretContext{
-						Cluster:   cluster,
-						Namespace: to.Namespace,
-						Name:      to.Name,
-						Type:      to.Type,
+						ClusterGroups: to.ClusterGroups,
+						Cluster:       cluster,
+						Namespace:     to.Namespace,
+						Name:          to.Name,
+						Type:          to.Type,
 					})
 				}
 			}
@@ -149,14 +219,14 @@ func (c *Config) resolve() error {
 
 		c.Secrets[idx].To = newTo
 
-		if c.VaultDPTPPRefix != "" {
+		if c.VaultDPTPPrefix != "" {
 			for fromKey, fromValue := range secret.From {
 				if fromValue.Item != "" {
-					fromValue.Item = c.VaultDPTPPRefix + "/" + fromValue.Item
+					fromValue.Item = c.VaultDPTPPrefix + "/" + fromValue.Item
 				}
 				for dockerCFGIdx, dockerCFGVal := range fromValue.DockerConfigJSONData {
 					if dockerCFGVal.Item != "" {
-						dockerCFGVal.Item = c.VaultDPTPPRefix + "/" + dockerCFGVal.Item
+						dockerCFGVal.Item = c.VaultDPTPPrefix + "/" + dockerCFGVal.Item
 						fromValue.DockerConfigJSONData[dockerCFGIdx] = dockerCFGVal
 					}
 				}

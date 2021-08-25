@@ -2,6 +2,8 @@ package secretbootstrap
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -9,6 +11,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -49,16 +52,18 @@ func TestResolving(t *testing.T) {
 				Secrets: []SecretConfig{{
 					To: []SecretContext{
 						{
-							Cluster:   "a",
-							Namespace: "namspace",
-							Name:      "name",
-							Type:      corev1.SecretTypeBasicAuth,
+							ClusterGroups: []string{"group-a", "group-b"},
+							Cluster:       "a",
+							Namespace:     "namspace",
+							Name:          "name",
+							Type:          corev1.SecretTypeBasicAuth,
 						},
 						{
-							Cluster:   "b",
-							Namespace: "namspace",
-							Name:      "name",
-							Type:      corev1.SecretTypeBasicAuth,
+							ClusterGroups: []string{"group-a", "group-b"},
+							Cluster:       "b",
+							Namespace:     "namspace",
+							Name:          "name",
+							Type:          corev1.SecretTypeBasicAuth,
 						},
 					},
 				}},
@@ -72,7 +77,7 @@ func TestResolving(t *testing.T) {
 		{
 			name: "DPTP prefix gets added to normal BW items",
 			config: Config{
-				VaultDPTPPRefix: "prefix",
+				VaultDPTPPrefix: "prefix",
 				Secrets: []SecretConfig{{
 					From: map[string]ItemContext{"...": {Item: "foo", Field: "bar"}},
 					To: []SecretContext{{
@@ -84,7 +89,7 @@ func TestResolving(t *testing.T) {
 				}},
 			},
 			expectedConfig: Config{
-				VaultDPTPPRefix: "prefix",
+				VaultDPTPPrefix: "prefix",
 				Secrets: []SecretConfig{{
 					From: map[string]ItemContext{"...": {Item: "prefix/foo", Field: "bar"}},
 					To: []SecretContext{{
@@ -99,7 +104,7 @@ func TestResolving(t *testing.T) {
 		{
 			name: "DPTP prefix gets added to dockerconfigjson BW items",
 			config: Config{
-				VaultDPTPPRefix: "prefix",
+				VaultDPTPPrefix: "prefix",
 				Secrets: []SecretConfig{{
 					From: map[string]ItemContext{"...": {DockerConfigJSONData: []DockerConfigJSONData{{Item: "foo", AuthField: "bar"}}}},
 					To: []SecretContext{{
@@ -111,7 +116,7 @@ func TestResolving(t *testing.T) {
 				}},
 			},
 			expectedConfig: Config{
-				VaultDPTPPRefix: "prefix",
+				VaultDPTPPrefix: "prefix",
 				Secrets: []SecretConfig{{
 					From: map[string]ItemContext{"...": {DockerConfigJSONData: []DockerConfigJSONData{{Item: "prefix/foo", AuthField: "bar"}}}},
 					To: []SecretContext{{
@@ -149,9 +154,7 @@ func TestResolving(t *testing.T) {
 
 func TestLoadConfigFromFile(t *testing.T) {
 	testCases := []struct {
-		name string
-
-		configPath    string
+		name          string
 		expected      Config
 		expectedError error
 	}{
@@ -166,24 +169,29 @@ func TestLoadConfigFromFile(t *testing.T) {
 				Secrets: []SecretConfig{
 					{
 						From: map[string]ItemContext{
-							"ops-mirror.pem": {Item: "mirror.openshift.com", Field: "cert-key.pem"},
-							"rh-cdn.pem":     {Item: "rh-cdn", Field: "rh-cdn.pem"},
+							"ops-mirror.pem": {Item: "dptp/mirror.openshift.com", Field: "cert-key.pem"},
+							"rh-cdn.pem":     {Item: "dptp/rh-cdn", Field: "rh-cdn.pem"},
 						},
 						To: []SecretContext{{
-							Cluster:   "app.ci",
-							Namespace: "ocp",
-							Name:      "mirror.openshift.com",
+							ClusterGroups: []string{"build_farm"},
+							Cluster:       "app.ci",
+							Namespace:     "ocp",
+							Name:          "mirror.openshift.com",
 						}, {
-							Cluster:   "build01",
-							Namespace: "ocp",
-							Name:      "mirror.openshift.com",
+							ClusterGroups: []string{"build_farm"},
+							Cluster:       "build01",
+							Namespace:     "ocp",
+							Name:          "mirror.openshift.com",
 						}, {
-							Cluster:   "build02",
-							Namespace: "ocp",
-							Name:      "mirror.openshift.com",
+							ClusterGroups: []string{"build_farm"},
+							Cluster:       "build02",
+							Namespace:     "ocp",
+							Name:          "mirror.openshift.com",
 						}},
 					},
 				},
+				VaultDPTPPrefix:           "dptp",
+				UserSecretsTargetClusters: []string{"app.ci", "build01", "build02"},
 			},
 		},
 		{
@@ -204,6 +212,167 @@ func TestLoadConfigFromFile(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("expected config differs from actual config: %s", diff)
+			}
+		})
+	}
+}
+
+func TestRoundtripConfig(t *testing.T) {
+	testCases := []struct {
+		name string
+	}{
+		{
+			name: "basic base",
+		},
+	}
+
+	for _, tc := range testCases {
+		var outFile string
+		t.Run(tc.name, func(t *testing.T) {
+			bytes := testhelper.ReadFromFixture(t, "")
+			c := &Config{}
+			err := yaml.Unmarshal(bytes, c)
+			if err != nil {
+				t.Fatalf("error unmarshaling config file: %v", err)
+			}
+
+			outFile = filepath.Join("testdata", "roundtrip_out.yaml")
+			err = SaveConfigToFile(outFile, c)
+			if err != nil {
+				t.Fatalf("error saving config file: %v", err)
+			}
+
+			inFile := filepath.Join("testdata", "zz_fixture_TestRoundtripConfig_basic_base.yaml")
+			in, _ := ioutil.ReadFile(inFile)
+			out, _ := ioutil.ReadFile(outFile)
+			if diff := cmp.Diff(in, out); diff != "" {
+				t.Fatalf("input and output configs are not equal. %s", diff)
+			}
+		})
+
+		t.Cleanup(func() {
+			if err := os.Remove(outFile); err != nil {
+				t.Fatalf("error removing output config file: %v", err)
+			}
+		})
+	}
+}
+
+func TestGroupClusters(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    SecretConfig
+		expected []SecretContext
+	}{
+		{
+			name: "no group",
+			input: SecretConfig{
+				From: map[string]ItemContext{
+					"item-a": {
+						Item:  "a",
+						Field: "field",
+					},
+				},
+				To: []SecretContext{{
+					Cluster:   "cluster1",
+					Namespace: "ns",
+					Name:      "a",
+				}},
+			},
+			expected: []SecretContext{{
+				Cluster:   "cluster1",
+				Namespace: "ns",
+				Name:      "a",
+			}},
+		},
+		{
+			name: "group",
+			input: SecretConfig{
+				From: map[string]ItemContext{
+					"item-a": {
+						Item:  "a",
+						Field: "field",
+					},
+				},
+				To: []SecretContext{{
+					ClusterGroups: []string{"group-a"},
+					Cluster:       "cluster1",
+					Namespace:     "ns",
+					Name:          "a",
+				}},
+			},
+			expected: []SecretContext{{
+				ClusterGroups: []string{"group-a"},
+				Namespace:     "ns",
+				Name:          "a",
+			}},
+		},
+		{
+			name: "mix",
+			input: SecretConfig{
+				From: map[string]ItemContext{
+					"item-a": {
+						Item:  "a",
+						Field: "field",
+					},
+				},
+				To: []SecretContext{
+					{
+						ClusterGroups: []string{"group-a"},
+						Cluster:       "cluster1",
+						Namespace:     "ns",
+						Name:          "a",
+					},
+					{
+						Cluster:   "cluster2",
+						Namespace: "ns",
+						Name:      "b",
+					},
+				},
+			},
+			expected: []SecretContext{
+				{
+					ClusterGroups: []string{"group-a"},
+					Namespace:     "ns",
+					Name:          "a",
+				},
+				{
+					Cluster:   "cluster2",
+					Namespace: "ns",
+					Name:      "b",
+				},
+			},
+		},
+		{
+			name: "multiple groups",
+			input: SecretConfig{
+				From: map[string]ItemContext{
+					"item-a": {
+						Item:  "a",
+						Field: "field",
+					},
+				},
+				To: []SecretContext{{
+					ClusterGroups: []string{"group-a", "group-b"},
+					Cluster:       "cluster1",
+					Namespace:     "ns",
+					Name:          "a",
+				}},
+			},
+			expected: []SecretContext{{
+				ClusterGroups: []string{"group-a", "group-b"},
+				Namespace:     "ns",
+				Name:          "a",
+			}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			sc := tc.input
+			sc.groupClusters()
+			if diff := cmp.Diff(tc.expected, sc.To); diff != "" {
+				t.Fatalf("result of groupClusters() doesn't match expected output: %v", diff)
 			}
 		})
 	}

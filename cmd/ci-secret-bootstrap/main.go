@@ -636,7 +636,7 @@ func insertIfNotEmpty(s sets.String, items ...string) sets.String {
 }
 
 func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient, allowUnused sets.String, allowUnusedAfter time.Time) error {
-	allSecretStoreItems, err := client.GetInUseInformationForAllItems(config.VaultDPTPPRefix)
+	allSecretStoreItems, err := client.GetInUseInformationForAllItems(config.VaultDPTPPrefix)
 	if err != nil {
 		return fmt.Errorf("failed to get in-use information from secret store: %w", err)
 	}
@@ -769,7 +769,7 @@ func (o *options) validateItems(client secrets.ReadOnlyClient) error {
 // both dptp and user secrets only gets the store path as cli prefix (kv) and prepends all item
 // names with the dptp prefix from the config during deserialization.
 func stripDPTPPrefixFromItem(itemName string, cfg *secretbootstrap.Config) string {
-	return strings.TrimPrefix(itemName, cfg.VaultDPTPPRefix+"/")
+	return strings.TrimPrefix(itemName, cfg.VaultDPTPPrefix+"/")
 }
 
 func main() {

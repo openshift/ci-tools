@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -198,22 +199,29 @@ func writeToDir(dir string, c map[string]*prowconfig.JobConfig) error {
 		}
 		close(errReadingDone)
 	}()
-
+	type item struct {
+		k string
+		v *prowconfig.JobConfig
+	}
+	ch := make(chan item)
 	wg := sync.WaitGroup{}
-
-	for kl, vl := range c {
-		k, v := kl, vl
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			i := strings.Index(k, "/")
-			org, repo := k[:i], k[i+1:]
-			if err := jc.WriteToDir(dir, org, repo, v); err != nil {
-				errChan <- err
+			for x := range ch {
+				i := strings.Index(x.k, "/")
+				org, repo := x.k[:i], x.k[i+1:]
+				if err := jc.WriteToDir(dir, org, repo, x.v); err != nil {
+					errChan <- err
+				}
 			}
 		}()
 	}
-
+	for k, v := range c {
+		ch <- item{k, v}
+	}
+	close(ch)
 	wg.Wait()
 	close(errChan)
 	<-errReadingDone

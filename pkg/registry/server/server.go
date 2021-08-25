@@ -11,7 +11,6 @@ import (
 	"k8s.io/test-infra/prow/metrics"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/load/agents"
 )
 
 const (
@@ -26,6 +25,16 @@ const (
 	InjectFromVariantQuery = "injectTestFromVariant"
 	InjectTestQuery        = "injectTest"
 )
+
+type Resolver interface {
+	ResolveConfig(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error)
+}
+
+type Getter interface {
+	// GetMatchingConfig loads a configuration that matches the metadata,
+	// allowing for regex matching on branch names.
+	GetMatchingConfig(metadata api.Metadata) (api.ReleaseBuildConfiguration, error)
+}
 
 func MetadataFromQuery(w http.ResponseWriter, r *http.Request) (api.Metadata, error) {
 	if r.Method != "GET" {
@@ -60,8 +69,8 @@ func MissingQuery(w http.ResponseWriter, field string) {
 	fmt.Fprintf(w, "%s query missing or incorrect", field)
 }
 
-func resolveAndRespond(registryAgent agents.RegistryAgent, config api.ReleaseBuildConfiguration, w http.ResponseWriter, logger *logrus.Entry, resolverMetrics *metrics.Metrics) {
-	config, err := registryAgent.ResolveConfig(config)
+func resolveAndRespond(resolver Resolver, config api.ReleaseBuildConfiguration, w http.ResponseWriter, logger *logrus.Entry, resolverMetrics *metrics.Metrics) {
+	config, err := resolver.ResolveConfig(config)
 	if err != nil {
 		metrics.RecordError("failed to resolve config with registry", resolverMetrics.ErrorRate)
 		w.WriteHeader(http.StatusBadRequest)
@@ -86,9 +95,8 @@ func resolveAndRespond(registryAgent agents.RegistryAgent, config api.ReleaseBui
 	}
 }
 
-func injectTestFromQuery(w http.ResponseWriter, r *http.Request) (api.Metadata, string, error) {
-	var metadata api.Metadata
-	var test string
+func injectTestFromQuery(w http.ResponseWriter, r *http.Request) (*api.MetadataWithTest, error) {
+	var ret api.MetadataWithTest
 
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusNotImplemented)
@@ -96,28 +104,28 @@ func injectTestFromQuery(w http.ResponseWriter, r *http.Request) (api.Metadata, 
 		if _, errWrite := w.Write([]byte(http.StatusText(http.StatusNotImplemented))); errWrite != nil {
 			err = fmt.Errorf("%s and writing the response body failed with %w", err.Error(), errWrite)
 		}
-		return metadata, test, err
+		return &ret, err
 	}
 
 	for query, field := range map[string]*string{
-		InjectFromOrgQuery:    &metadata.Org,
-		InjectFromRepoQuery:   &metadata.Repo,
-		InjectFromBranchQuery: &metadata.Branch,
-		InjectTestQuery:       &test,
+		InjectFromOrgQuery:    &ret.Org,
+		InjectFromRepoQuery:   &ret.Repo,
+		InjectFromBranchQuery: &ret.Branch,
+		InjectTestQuery:       &ret.Test,
 	} {
 		value := r.URL.Query().Get(query)
 		if value == "" {
 			MissingQuery(w, query)
-			return metadata, test, fmt.Errorf("missing query %s", query)
+			return &ret, fmt.Errorf("missing query %s", query)
 		}
 		*field = value
 	}
-	metadata.Variant = r.URL.Query().Get(InjectFromVariantQuery)
+	ret.Variant = r.URL.Query().Get(InjectFromVariantQuery)
 
-	return metadata, test, nil
+	return &ret, nil
 }
 
-func ResolveConfigWithInjectedTest(configAgent agents.ConfigAgent, registryAgent agents.RegistryAgent, resolverMetrics *metrics.Metrics) http.HandlerFunc {
+func ResolveConfigWithInjectedTest(configs Getter, resolver Resolver, resolverMetrics *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			w.WriteHeader(http.StatusNotImplemented)
@@ -134,7 +142,7 @@ func ResolveConfigWithInjectedTest(configAgent agents.ConfigAgent, registryAgent
 		}
 		logger := logrus.WithFields(api.LogFieldsFor(metadata))
 
-		config, err := configAgent.GetMatchingConfig(metadata)
+		config, err := configs.GetMatchingConfig(metadata)
 		if err != nil {
 			metrics.RecordError("config not found", resolverMetrics.ErrorRate)
 			w.WriteHeader(http.StatusNotFound)
@@ -143,7 +151,7 @@ func ResolveConfigWithInjectedTest(configAgent agents.ConfigAgent, registryAgent
 			return
 		}
 
-		injectFromMetadata, test, err := injectTestFromQuery(w, r)
+		inject, err := injectTestFromQuery(w, r)
 		if err != nil {
 			// injectTestFromQuery deals with setting status code and writing response
 			// so we need to just log the error here
@@ -151,7 +159,7 @@ func ResolveConfigWithInjectedTest(configAgent agents.ConfigAgent, registryAgent
 			logrus.WithError(err).Warning("failed to read query from request")
 			return
 		}
-		injectFromConfig, err := configAgent.GetMatchingConfig(injectFromMetadata)
+		injectFromConfig, err := configs.GetMatchingConfig(inject.Metadata)
 		if err != nil {
 			metrics.RecordError("config not found", resolverMetrics.ErrorRate)
 			w.WriteHeader(http.StatusNotFound)
@@ -159,7 +167,7 @@ func ResolveConfigWithInjectedTest(configAgent agents.ConfigAgent, registryAgent
 			logger.WithError(err).Warning("failed to get config")
 			return
 		}
-		configWithInjectedTest, err := config.WithPresubmitFrom(&injectFromConfig, test)
+		configWithInjectedTest, err := config.WithPresubmitFrom(&injectFromConfig, inject.Test)
 		if err != nil {
 			metrics.RecordError("test injection failed", resolverMetrics.ErrorRate)
 			w.WriteHeader(http.StatusInternalServerError) // TODO: Can be be 400 in some cases but meh
@@ -168,11 +176,11 @@ func ResolveConfigWithInjectedTest(configAgent agents.ConfigAgent, registryAgent
 			return
 		}
 
-		resolveAndRespond(registryAgent, *configWithInjectedTest, w, logger, resolverMetrics)
+		resolveAndRespond(resolver, *configWithInjectedTest, w, logger, resolverMetrics)
 	}
 }
 
-func ResolveConfig(configAgent agents.ConfigAgent, registryAgent agents.RegistryAgent, resolverMetrics *metrics.Metrics) http.HandlerFunc {
+func ResolveConfig(configs Getter, resolver Resolver, resolverMetrics *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			w.WriteHeader(http.StatusNotImplemented)
@@ -189,7 +197,7 @@ func ResolveConfig(configAgent agents.ConfigAgent, registryAgent agents.Registry
 		}
 		logger := logrus.WithFields(api.LogFieldsFor(metadata))
 
-		config, err := configAgent.GetMatchingConfig(metadata)
+		config, err := configs.GetMatchingConfig(metadata)
 		if err != nil {
 			metrics.RecordError("config not found", resolverMetrics.ErrorRate)
 			w.WriteHeader(http.StatusNotFound)
@@ -197,11 +205,11 @@ func ResolveConfig(configAgent agents.ConfigAgent, registryAgent agents.Registry
 			logger.WithError(err).Warning("failed to get config")
 			return
 		}
-		resolveAndRespond(registryAgent, config, w, logger, resolverMetrics)
+		resolveAndRespond(resolver, config, w, logger, resolverMetrics)
 	}
 }
 
-func ResolveLiteralConfig(registryAgent agents.RegistryAgent, resolverMetrics *metrics.Metrics) http.HandlerFunc {
+func ResolveLiteralConfig(resolver Resolver, resolverMetrics *metrics.Metrics) http.HandlerFunc {
 	logger := logrus.NewEntry(logrus.New())
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
@@ -222,6 +230,6 @@ func ResolveLiteralConfig(registryAgent agents.RegistryAgent, resolverMetrics *m
 			_, _ = w.Write([]byte("Could not parse request body as unresolved config."))
 			return
 		}
-		resolveAndRespond(registryAgent, unresolvedConfig, w, logger, resolverMetrics)
+		resolveAndRespond(resolver, unresolvedConfig, w, logger, resolverMetrics)
 	}
 }

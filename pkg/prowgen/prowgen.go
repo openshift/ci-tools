@@ -154,13 +154,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			element.Secrets = append(element.Secrets, element.Secret)
 		}
 		if element.ContainerTestConfiguration != nil {
-			var additionalArgs []string
-			secrets := element.Secrets
-			if element.ClusterClaim != nil {
-				additionalArgs = []string{cioperatorapi.HiveControlPlaneKubeconfigSecretArg}
-				secrets = append(secrets, &api.Secret{Name: api.HiveControlPlaneKubeconfigSecret})
-			}
-			podSpec = generateCiOperatorPodSpec(info, secrets, []string{element.As}, additionalArgs...)
+			podSpec = generateCiOperatorPodSpec(info, element.Secrets, []string{element.As})
 		} else if element.MultiStageTestConfiguration != nil || element.MultiStageTestConfigurationLiteral != nil {
 			podSpec = generatePodSpecMultiStage(info, &element, configSpec.Releases != nil || element.ClusterClaim != nil)
 		} else {

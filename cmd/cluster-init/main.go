@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/github/prcreation"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 )
@@ -47,9 +49,6 @@ func validateOptions(o options) []error {
 	if o.releaseRepo == "" {
 		errs = append(errs, fmt.Errorf("--release-repo must be provided"))
 	}
-	if o.description == "" {
-		errs = append(errs, fmt.Errorf("--description must be provided"))
-	}
 	existsFor, err := periodicExistsFor(o)
 	if existsFor || err != nil {
 		errs = append(errs, fmt.Errorf("cluster: %s already exists", o.clusterName))
@@ -76,30 +75,34 @@ func main() {
 	}
 
 	// Each step in the process is allowed to fail independently so that the diffs for the others can still be generated
-	if err := updateInfraPeriodics(o); err != nil {
-		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to update Periodic Jobs")
+	errorCount := 0
+	completeStep(updateInfraPeriodics, o, &errorCount)
+	completeStep(updatePostsubmits, o, &errorCount)
+	completeStep(updatePresubmits, o, &errorCount)
+	completeStep(updateClustersReadme, o, &errorCount)
+	completeStep(initClusterBuildFarmDir, o, &errorCount)
+	completeStep(updateCiSecretBootstrapConfig, o, &errorCount)
+	completeStep(updateSecretGenerator, o, &errorCount)
+	completeStep(updateSanitizeProwJobs, o, &errorCount)
+	if errorCount > 0 {
+		logrus.Printf("Due to the %d error(s) encountered a PR will not be generated. The resulting files can be PR'd manually", errorCount)
+	} else {
+		if err := submitPR(o); err != nil {
+			logrus.WithError(err).Fatalf("couldn't commit changes")
+		}
 	}
-	if err := updatePostsubmits(o); err != nil {
-		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to update PostSubmit Jobs")
-	}
-	if err := updatePresubmits(o); err != nil {
-		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to update PreSubmit Jobs")
-	}
-	if err := updateClustersReadme(o); err != nil {
-		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to update clusters readme")
-	}
-	if err := initClusterBuildFarmDir(o); err != nil {
-		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to initialize build farm dir")
-	}
-	if err := updateCiSecretBootstrapConfig(o); err != nil {
-		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to update ci-secretbootstrap config")
-	}
-	if err := updateSecretGenerator(o); err != nil {
-		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to update ci-secretgenerator config")
-	}
-	if err := updateSanitizeProwJobs(o); err != nil {
+}
+
+func completeStep(stepFunction func(options) error, o options, errorCount *int) {
+	if err := stepFunction(o); err != nil {
 		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to update sanitize-prow-jobs config")
+		*errorCount++
 	}
+}
+
+func submitPR(o options) error {
+	//TODO
+	return nil
 }
 
 func updateClustersReadme(o options) error {

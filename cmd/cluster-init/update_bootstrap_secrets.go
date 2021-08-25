@@ -29,14 +29,8 @@ func updateCiSecretBootstrapConfig(o options) error {
 	ciSecBootConfigFile := filepath.Join(ciSecBootDir, "_config.yaml")
 	logrus.Printf("Updating ci-secret-bootstrap: %s\n", ciSecBootConfigFile)
 
-	data, err := ioutil.ReadFile(ciSecBootConfigFile)
-	if err != nil {
-		return err
-	}
 	c := &secretbootstrap.Config{}
-	if err := yaml.Unmarshal(data, c); err != nil {
-		return err
-	}
+	secretbootstrap.LoadConfigFromFile(ciSecBootConfigFile, c)
 
 	for _, groupName := range []string{BuildUFarm, "non_app_ci", "non_app_ci_x86"} {
 		c.ClusterGroups[groupName] = append(c.ClusterGroups[groupName], o.clusterName)

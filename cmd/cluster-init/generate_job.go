@@ -2,12 +2,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/api"
+
 	"google.golang.org/protobuf/proto"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 const (

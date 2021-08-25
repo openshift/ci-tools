@@ -724,6 +724,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  run_as_script: false\n" +
 	"                  # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
 	"                  timeout: 0s\n" +
+	"            # Override job timeout\n" +
+	"            timeout: 0s\n" +
 	"        openshift_ansible:\n" +
 	"            cluster_profile: ' '\n" +
 	"        openshift_ansible_custom:\n" +
@@ -999,6 +1001,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Workflow is the name of the workflow to be used for this configuration. For fields defined in both\n" +
 	"            # the config and the workflow, the fields from the config will override what is set in Workflow.\n" +
 	"            workflow: \"\"\n" +
+	"        # Timeout overrides maximum prowjob duration\n" +
+	"        timeout: 0s\n" +
 	"# Releases maps semantic release payload identifiers\n" +
 	"# to the names that they will be exposed under. For\n" +
 	"# instance, an 'initial' name will be exposed as\n" +
@@ -1438,6 +1442,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              run_as_script: false\n" +
 	"              # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
 	"              timeout: 0s\n" +
+	"        # Override job timeout\n" +
+	"        timeout: 0s\n" +
 	"      openshift_ansible:\n" +
 	"        cluster_profile: ' '\n" +
 	"      openshift_ansible_custom:\n" +
@@ -1713,6 +1719,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Workflow is the name of the workflow to be used for this configuration. For fields defined in both\n" +
 	"        # the config and the workflow, the fields from the config will override what is set in Workflow.\n" +
 	"        workflow: \"\"\n" +
+	"      # Timeout overrides maximum prowjob duration\n" +
+	"      timeout: 0s\n" +
 	"zz_generated_metadata:\n" +
 	"    branch: ' '\n" +
 	"    org: ' '\n" +

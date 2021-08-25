@@ -656,6 +656,9 @@ type TestStepConfiguration struct {
 	// SkipIfOnlyChanged is a regex that will result in the test being skipped if all changed files match that regex.
 	SkipIfOnlyChanged string `json:"skip_if_only_changed,omitempty"`
 
+	// Timeout overrides maximum prowjob duration
+	Timeout *prowv1.Duration `json:"timeout,omitempty"`
+
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty"`
 	MultiStageTestConfiguration                               *MultiStageTestConfiguration                               `json:"steps,omitempty"`
@@ -1016,6 +1019,9 @@ type MultiStageTestConfigurationLiteral struct {
 	// DependencyOverrides allows a step to override a dependency with a fully-qualified pullspec. This will probably only ever
 	// be used with rehearsals. Otherwise, the overrides should be passed in as parameters to ci-operator.
 	DependencyOverrides DependencyOverrides `json:"dependency_overrides,omitempty"`
+
+	// Override job timeout
+	Timeout *prowv1.Duration `json:"timeout,omitempty"`
 }
 
 // TestEnvironment has the values of parameters for multi-stage tests.

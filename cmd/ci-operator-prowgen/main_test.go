@@ -183,6 +183,73 @@ tests:
             cpu: 10m
       serviceAccountName: ci-operator
 `),
+		}, {
+			id:        "Custom test timeout",
+			org:       "super",
+			component: "duper",
+			branch:    "branch",
+			configYAML: []byte(`base_images:
+  base:
+    name: origin-v3.11
+    namespace: openshift
+    tag: base
+images:
+- from: base
+  to: service-serving-cert-signer
+resources:
+  '*':
+    limits:
+      cpu: 500Mi
+    requests:
+      cpu: 10Mi
+tag_specification:
+  name: origin-v3.11
+  namespace: openshift
+  tag: ''
+promotion:
+  name: test
+  namespace: ci
+build_root:
+  image_stream_tag:
+    namespace: openshift
+    name: release
+    tag: golang-1.10
+tests:
+- as: unit
+  timeout: 8h
+  steps:
+    test:
+    - as: test
+      commands: make unit
+      from: src
+      resources:
+        requests:
+          cpu: 100m
+    workflow: ipi-aws
+`),
+			prowOldPresubmitYAML: []byte(""),
+			prowOldPostsubmitYAML: []byte(`postsubmits:
+  super/duper:
+  - agent: kubernetes
+    decorate: true
+    decoration_config:
+      skip_cloning: true
+    name: branch-ci-super-duper-branch-do-not-overwrite
+    spec:
+      containers:
+      - args:
+        - --give-pr-author-access-to-namespace=true
+        - --target=unit
+        command:
+        - ci-operator
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+`),
 		},
 	}
 	for _, tc := range tests {

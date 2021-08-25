@@ -183,6 +183,11 @@ func (v *Validator) validateTestStepConfiguration(
 			}
 		}
 
+		maxJobTimeout := time.Hour * 8
+		if test.Timeout != nil && test.Timeout.Duration > maxJobTimeout {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: job timeout is limited to %s", fieldRootN, maxJobTimeout))
+		}
+
 		// Validate Secret/Secrets
 		if test.Secret != nil && test.Secrets != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("test.Secret and test.Secrets cannot both be set"))

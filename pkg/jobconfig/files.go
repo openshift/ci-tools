@@ -7,13 +7,16 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
 	v1 "k8s.io/api/core/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 
@@ -124,14 +127,55 @@ func OperateOnJobConfigDir(configDir string, callback func(*prowconfig.JobConfig
 }
 
 func OperateOnJobConfigSubdir(configDir, subDir string, callback func(*prowconfig.JobConfig, *Info) error) error {
-	return OperateOnJobConfigSubdirPaths(configDir, subDir, func(info *Info) error {
-		configPart, err := readFromFile(info.Filename)
-		if err != nil {
-			logrus.WithField("source-file", info.Filename).WithError(err).Error("Failed to read Prow job config")
+	type item struct {
+		config *prowconfig.JobConfig
+		info   *Info
+	}
+	inputCh := make(chan *Info)
+	errCh := make(chan error)
+	go func() {
+		if err := OperateOnJobConfigSubdirPaths(configDir, subDir, func(info *Info) error {
+			inputCh <- info
 			return nil
+		}); err != nil {
+			errCh <- err
 		}
-		return callback(configPart, info)
-	})
+		close(inputCh)
+	}()
+	nWorkers := runtime.GOMAXPROCS(0)
+	outputCh := make(chan item)
+	var wg sync.WaitGroup
+	wg.Add(nWorkers)
+	for i := 0; i < nWorkers; i++ {
+		go func() {
+			defer wg.Done()
+			for info := range inputCh {
+				configPart, err := readFromFile(info.Filename)
+				if err != nil {
+					logrus.WithField("source-file", info.Filename).WithError(err).Error("Failed to read Prow job config")
+					continue
+				}
+				outputCh <- item{configPart, info}
+			}
+		}()
+	}
+	go func() {
+		wg.Wait()
+		close(outputCh)
+	}()
+	go func() {
+		for i := range outputCh {
+			if err := callback(i.config, i.info); err != nil {
+				errCh <- err
+			}
+		}
+		close(errCh)
+	}()
+	var ret []error
+	for err := range errCh {
+		ret = append(ret, err)
+	}
+	return utilerrors.NewAggregate(ret)
 }
 
 func OperateOnJobConfigSubdirPaths(configDir, subDir string, callback func(*Info) error) error {

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/utils/diff"
@@ -524,6 +523,26 @@ func TestValidateTests(t *testing.T) {
 				Commands:          "commands",
 				RunIfChanged:      "^README.md$",
 				SkipIfOnlyChanged: "^OTHER_README.md$",
+			}},
+			expectedValid: false,
+		},
+		{
+			id: "secrets used on multi-stage tests",
+			tests: []api.TestStepConfiguration{{
+				As:                          "unit",
+				Commands:                    "commands",
+				Secrets:                     []*api.Secret{{Name: "secret"}},
+				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{},
+			}},
+			expectedValid: false,
+		},
+		{
+			id: "secrets used on template tests",
+			tests: []api.TestStepConfiguration{{
+				As:       "unit",
+				Commands: "commands",
+				Secrets:  []*api.Secret{{Name: "secret"}},
+				OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{},
 			}},
 			expectedValid: false,
 		},

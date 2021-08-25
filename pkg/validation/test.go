@@ -189,6 +189,10 @@ func (v *Validator) validateTestStepConfiguration(
 			test.Secrets = append(test.Secrets, test.Secret)
 		}
 
+		if test.Secrets != nil && test.ContainerTestConfiguration == nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: secret/secrets can be only used with container-based tests (use credentials in multi-stage tests)", fieldRootN))
+		}
+
 		seen := sets.NewString()
 		for _, secret := range test.Secrets {
 			// K8s object names must be valid DNS 1123 subdomains.

@@ -7,8 +7,19 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/sirupsen/logrus"
+)
+
+//TODO: might not need some of these
+const (
+	githubOrg      = "openshift"
+	githubRepo     = "release"
+	githubLogin    = "openshift-bot"
+	githubTeam     = "openshift/test-platform"
+	matchTitle     = "Initialize Build Cluster"
+	upstreamBranch = "master"
 )
 
 type options struct {
@@ -16,14 +27,14 @@ type options struct {
 	releaseRepo string
 	description string
 
-	//flagutil.GitHubOptions TODO: this will come in later I think...lets ignore github stuff for now
+	assign      string
+	githubLogin string
 }
 
 func (o options) String() string {
-	return fmt.Sprintf("cluster-name: %s\nrelease-repo: %s\ndescription: %s",
+	return fmt.Sprintf("cluster-name: %s\nrelease-repo: %s",
 		o.clusterName,
-		o.releaseRepo,
-		o.description)
+		o.releaseRepo)
 }
 
 func parseOptions() options {
@@ -31,8 +42,8 @@ func parseOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.clusterName, "cluster-name", "", "The name of the new cluster.")
 	fs.StringVar(&o.releaseRepo, "release-repo", "", "Path to the root of the openshift/release repository.")
-	fs.StringVar(&o.description, "description", "", "This clusters description to be used in the README.MD.")
-	//o.AddFlags(fs)
+	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
+	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to. Set to DPTP by default")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("cannot parse args: ", os.Args[1:])
 	}
@@ -43,6 +54,8 @@ func validateOptions(o options) []error {
 	var errs []error
 	if o.clusterName == "" {
 		errs = append(errs, fmt.Errorf("--cluster-name must be provided"))
+	} else if strings.ContainsAny(o.clusterName, " \t\n") {
+		errs = append(errs, fmt.Errorf("--cluster-name must not contain whitespace"))
 	}
 	if o.releaseRepo == "" {
 		errs = append(errs, fmt.Errorf("--release-repo must be provided"))
@@ -72,6 +85,8 @@ func main() {
 		logrus.Fatalf("validation errors: %v", validationErrors)
 	}
 
+	//TODO: should we validate that the o.releaseRepo dir is "clean" before we start?
+
 	// Each step in the process is allowed to fail independently so that the diffs for the others can still be generated
 	errorCount := 0
 	completeStep(updateInfraPeriodics, o, &errorCount)
@@ -99,7 +114,54 @@ func completeStep(stepFunction func(options) error, o options, errorCount *int) 
 }
 
 func submitPR(o options) error {
-	//TODO
+	if err := os.Chdir(o.releaseRepo); err != nil {
+		return err
+	}
+	const gitCmd = "git"
+	branch := fmt.Sprintf("init-%s", o.clusterName)
+	commands := []struct {
+		command string
+		args    []string
+	}{
+		{
+			command: gitCmd,
+			args: []string{
+				"checkout",
+				"-b",
+				branch,
+			},
+		},
+		{
+			command: gitCmd,
+			args: []string{
+				"add",
+				"-A",
+			},
+		},
+		{
+			command: gitCmd,
+			args: []string{
+				"commit",
+				"-m",
+				fmt.Sprintf("Initializing job configs for new cluster: %s", o.clusterName),
+			},
+		},
+		{
+			command: gitCmd,
+			args: []string{
+				"push",
+				"--set-upstream",
+				"origin",
+				branch,
+			},
+		},
+	}
+	for _, c := range commands {
+		if err := exec.Command(c.command, c.args...).Run(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

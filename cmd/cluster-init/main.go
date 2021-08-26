@@ -10,15 +10,17 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+
+	"k8s.io/test-infra/prow/cmd/generic-autobumper/bumper"
+
+	"github.com/openshift/ci-tools/pkg/github/prcreation"
 )
 
-//TODO: might not need some of these
 const (
 	githubOrg      = "openshift"
 	githubRepo     = "release"
 	githubLogin    = "openshift-bot"
 	githubTeam     = "openshift/test-platform"
-	matchTitle     = "Initialize Build Cluster"
 	upstreamBranch = "master"
 )
 
@@ -29,6 +31,9 @@ type options struct {
 
 	assign      string
 	githubLogin string
+
+	bumper.GitAuthorOptions
+	prcreation.PRCreationOptions
 }
 
 func (o options) String() string {
@@ -42,8 +47,11 @@ func parseOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.clusterName, "cluster-name", "", "The name of the new cluster.")
 	fs.StringVar(&o.releaseRepo, "release-repo", "", "Path to the root of the openshift/release repository.")
-	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
-	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to. Set to DPTP by default")
+	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use. Set to "+githubLogin+" by default")
+	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to. Set to Test Platform by default")
+
+	o.GitAuthorOptions.AddFlags(fs)
+	o.PRCreationOptions.AddFlags(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("cannot parse args: ", os.Args[1:])
 	}
@@ -67,6 +75,12 @@ func validateOptions(o options) []error {
 	buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
 	if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
 		errs = append(errs, fmt.Errorf("build farm directory: %s already exists", o.clusterName))
+	}
+	if err = o.GitAuthorOptions.Validate(); err != nil {
+		errs = append(errs, err)
+	}
+	if err = o.PRCreationOptions.Validate(true); err != nil {
+		errs = append(errs, err)
 	}
 	return errs
 }
@@ -114,55 +128,28 @@ func completeStep(stepFunction func(options) error, o options, errorCount *int) 
 }
 
 func submitPR(o options) error {
+	if err := o.PRCreationOptions.Finalize(); err != nil {
+		logrus.WithError(err).Fatal("failed to finalize PR creation options")
+	}
 	if err := os.Chdir(o.releaseRepo); err != nil {
 		return err
 	}
-	const gitCmd = "git"
-	branch := fmt.Sprintf("init-%s", o.clusterName)
-	commands := []struct {
-		command string
-		args    []string
-	}{
-		{
-			command: gitCmd,
-			args: []string{
-				"checkout",
-				"-b",
-				branch,
-			},
-		},
-		{
-			command: gitCmd,
-			args: []string{
-				"add",
-				"-A",
-			},
-		},
-		{
-			command: gitCmd,
-			args: []string{
-				"commit",
-				"-m",
-				fmt.Sprintf("Initializing job configs for new cluster: %s", o.clusterName),
-			},
-		},
-		{
-			command: gitCmd,
-			args: []string{
-				"push",
-				"--set-upstream",
-				"origin",
-				branch,
-			},
-		},
+	if err := exec.Command("git", "checkout", "-b", "init-"+o.clusterName).Run(); err != nil {
+		return err
 	}
-	for _, c := range commands {
-		if err := exec.Command(c.command, c.args...).Run(); err != nil {
-			return err
-		}
+	title := fmt.Sprintf("Initialize Build Cluster %s", o.clusterName)
+	if err := o.PRCreationOptions.UpsertPR(o.releaseRepo,
+		githubOrg,
+		githubRepo,
+		upstreamBranch,
+		title,
+		prcreation.PrAssignee(o.assign),
+		prcreation.MatchTitle(title)); err != nil {
+		return err
 	}
-
-	return nil
+	// We have to clean up the remote created by bumper in the UpsertPR method if we want to be able to run this again from the same repo
+	err := exec.Command("git", "remote", "rm", "bumper-fork-remote").Run()
+	return err
 }
 
 func updateClustersReadme(o options) error {

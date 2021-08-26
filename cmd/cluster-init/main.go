@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/github/prcreation"
-	"k8s.io/test-infra/prow/cmd/generic-autobumper/bumper"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -105,27 +103,27 @@ func main() {
 
 	// Each step in the process is allowed to fail independently so that the diffs for the others can still be generated
 	errorCount := 0
-	completeStep(updateInfraPeriodics, o, &errorCount)
-	completeStep(updatePostsubmits, o, &errorCount)
-	completeStep(updatePresubmits, o, &errorCount)
-	completeStep(updateClustersReadme, o, &errorCount)
-	completeStep(initClusterBuildFarmDir, o, &errorCount)
-	completeStep(updateCiSecretBootstrapConfig, o, &errorCount)
-	completeStep(updateSecretGenerator, o, &errorCount)
-	completeStep(updateSanitizeProwJobs, o, &errorCount)
+	for _, step := range []func(options) error{
+		updateInfraPeriodics,
+		updatePostsubmits,
+		updatePresubmits,
+		updateClustersReadme,
+		initClusterBuildFarmDir,
+		updateCiSecretBootstrapConfig,
+		updateSecretGenerator,
+		updateSanitizeProwJobs,
+	} {
+		if err := step(o); err != nil {
+			logrus.WithError(err)
+			errorCount++
+		}
+	}
 	if errorCount > 0 {
-		logrus.Printf("Due to the %d error(s) encountered a PR will not be generated. The resulting files can be PR'd manually", errorCount)
+		logrus.Infof("Due to the %d error(s) encountered a PR will not be generated. The resulting files can be PR'd manually", errorCount)
 	} else {
 		if err := submitPR(o); err != nil {
 			logrus.WithError(err).Fatalf("couldn't commit changes")
 		}
-	}
-}
-
-func completeStep(stepFunction func(options) error, o options, errorCount *int) {
-	if err := stepFunction(o); err != nil {
-		logrus.WithError(err).Log(logrus.ErrorLevel, "failed to update sanitize-prow-jobs config")
-		*errorCount++
 	}
 }
 
@@ -150,8 +148,7 @@ func submitPR(o options) error {
 		return err
 	}
 	// We have to clean up the remote created by bumper in the UpsertPR method if we want to be able to run this again from the same repo
-	err := exec.Command("git", "remote", "rm", "bumper-fork-remote").Run()
-	return err
+	return exec.Command("git", "remote", "rm", "bumper-fork-remote").Run()
 }
 
 func updateClustersReadme(o options) error {
@@ -176,7 +173,7 @@ func updateClustersReadme(o options) error {
 
 func initClusterBuildFarmDir(o options) error {
 	buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
-	logrus.Printf("Creating build dir: %s\n", buildDir)
+	logrus.Infof("Creating build dir: %s\n", buildDir)
 	if err := os.MkdirAll(buildDir, 0777); err != nil {
 		return fmt.Errorf("failed to create base directory for cluster: %w", err)
 	}
@@ -193,6 +190,6 @@ func buildFarmDirFor(releaseRepo string, clusterName string) string {
 	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName)
 }
 
-func secretConfigFor(secret string, clusterName string) string {
-	return fmt.Sprintf("sa.%s.%s.config", secret, clusterName)
+func serviceAccountKubeconfigPath(serviceAccount, clusterName string) string {
+	return fmt.Sprintf("sa.%s.%s.config", serviceAccount, clusterName)
 }

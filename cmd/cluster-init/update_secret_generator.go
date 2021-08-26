@@ -13,6 +13,11 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 )
 
+const (
+	serviceAccountWildcard = "$(service_account)"
+	clusterWildcard        = "$(cluster)"
+)
+
 //SecretGenConfig is used here as using secretgenerator.Config results in 'special' unmarshalling
 //where '$(*)' wildcards from the yaml are expanded in the output. Doing so for this purpose results in
 //incorrect re-serialization
@@ -28,16 +33,17 @@ func updateSecretGenerator(o options) error {
 	if err = yaml.Unmarshal(data, c); err != nil {
 		return err
 	}
-	if err := appendToSecretItem(BuildUFarm, "sa.$(service_account).$(cluster).config", o, c); err != nil {
+	serviceAccountConfigPath := serviceAccountKubeconfigPath(serviceAccountWildcard, clusterWildcard)
+	if err := appendToSecretItem(BuildUFarm, serviceAccountConfigPath, o, c); err != nil {
 		return err
 	}
-	if err := appendToSecretItem(BuildUFarm, "token_image-puller_$(cluster)_reg_auth_value.txt", o, c); err != nil {
+	if err := appendToSecretItem(BuildUFarm, fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", clusterWildcard), o, c); err != nil {
 		return err
 	}
-	if err := appendToSecretItem("ci-chat-bot", "sa.$(service_account).$(cluster).config", o, c); err != nil {
+	if err := appendToSecretItem("ci-chat-bot", serviceAccountConfigPath, o, c); err != nil {
 		return err
 	}
-	if err := appendToSecretItem(PodScaler, "sa.$(service_account).$(cluster).config", o, c); err != nil {
+	if err := appendToSecretItem(PodScaler, serviceAccountConfigPath, o, c); err != nil {
 		return err
 	}
 
@@ -45,11 +51,7 @@ func updateSecretGenerator(o options) error {
 	if err != nil {
 		return err
 	}
-	if err = ioutil.WriteFile(filename, y, 0644); err != nil {
-		return err
-	}
-
-	return nil
+	return ioutil.WriteFile(filename, y, 0644)
 }
 
 func appendToSecretItem(itemName string, name string, o options, c *SecretGenConfig) error {
@@ -57,7 +59,7 @@ func appendToSecretItem(itemName string, name string, o options, c *SecretGenCon
 	if err != nil {
 		return err
 	}
-	logrus.Printf("Appending to secret item: {itemName: %s, name: %s, likeCluster: %s}\n", itemName, name, string(api.ClusterBuild01))
+	logrus.Infof("Appending to secret item: {itemName: %s, name: %s, likeCluster: %s}\n", itemName, name, string(api.ClusterBuild01))
 	si.Params["cluster"] = append(si.Params["cluster"], o.clusterName)
 	return nil
 }

@@ -23,105 +23,104 @@ const (
 )
 
 func generatePeriodic(clusterName string) prowconfig.Periodic {
-	utilityConfig := generateUtilityConfig()
-	utilityConfig.ExtraRefs = append(utilityConfig.ExtraRefs, prowapi.Refs{
-		Org:     "openshift",
-		Repo:    "release",
-		BaseRef: "master",
-	})
-	image := fmt.Sprintf("%s:%s", "applyconfig", api.LatestReleaseName)
 	args := generateArgs(clusterName)
 	args = append(args, "--confirm=true")
-	podSpec := &v1.PodSpec{
-		Volumes:            []v1.Volume{generateSecretVolume(clusterName)},
-		Containers:         []v1.Container{generateContainer(image, args, generateVolumeMounts())},
-		ServiceAccountName: ConfigUpdater,
-	}
-	name := "periodic-openshift-release-master-" + clusterName + "-apply"
-	jobBase := generateJobBase(podSpec, utilityConfig, name)
-	jobBase.Labels = map[string]string{
-		OpenshiftRole: Infra,
-	}
 	return prowconfig.Periodic{
-		JobBase:  jobBase,
+		JobBase: prowconfig.JobBase{
+			Name:       "periodic-openshift-release-master-" + clusterName + "-apply",
+			Agent:      string(prowapi.KubernetesAgent),
+			Cluster:    string(api.ClusterAPPCI),
+			SourcePath: "",
+			Spec: &v1.PodSpec{
+				Volumes: []v1.Volume{generateSecretVolume(clusterName)},
+				Containers: []v1.Container{
+					generateContainer(fmt.Sprintf("%s:%s", "applyconfig", api.LatestReleaseName),
+						args,
+						generateVolumeMounts())},
+				ServiceAccountName: ConfigUpdater,
+			},
+			UtilityConfig: prowconfig.UtilityConfig{
+				Decorate: proto.Bool(true),
+				ExtraRefs: []prowapi.Refs{{
+					Org:     "openshift",
+					Repo:    "release",
+					BaseRef: "master",
+				}},
+			},
+			Labels: map[string]string{
+				OpenshiftRole: Infra,
+			},
+		},
 		Interval: "12h",
 	}
 }
 
 func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
-	utilityConfig := generateUtilityConfig()
 	args := generateArgs(clusterName)
 	args = append(args, "--confirm=true")
-	podSpec := &v1.PodSpec{
-		Volumes:            []v1.Volume{generateSecretVolume(clusterName)},
-		Containers:         []v1.Container{generateContainer(LatestImage, args, generateVolumeMounts())},
-		ServiceAccountName: ConfigUpdater,
-	}
-	name := "branch-ci-openshift-release-master-" + clusterName + "-apply"
-	jobBase := generateJobBase(podSpec, utilityConfig, name)
-	jobBase.MaxConcurrency = 1
-	jobBase.Labels = map[string]string{
-		OpenshiftRole: Infra,
-	}
-	brancher := prowconfig.Brancher{
-		Branches: []string{"master"},
-	}
 	return prowconfig.Postsubmit{
-		JobBase:  jobBase,
-		Brancher: brancher,
+		JobBase: prowconfig.JobBase{
+			Name:       "branch-ci-openshift-release-master-" + clusterName + "-apply",
+			Agent:      string(prowapi.KubernetesAgent),
+			Cluster:    string(api.ClusterAPPCI),
+			SourcePath: "",
+			Spec: &v1.PodSpec{
+				Volumes:            []v1.Volume{generateSecretVolume(clusterName)},
+				Containers:         []v1.Container{generateContainer(LatestImage, args, generateVolumeMounts())},
+				ServiceAccountName: ConfigUpdater,
+			},
+			UtilityConfig: prowconfig.UtilityConfig{
+				Decorate: proto.Bool(true),
+			},
+			MaxConcurrency: 1,
+			Labels: map[string]string{
+				OpenshiftRole: Infra,
+			},
+		},
+		Brancher: prowconfig.Brancher{
+			Branches: []string{"master"},
+		},
 	}
 }
 
 func generatePresubmit(clusterName string) prowconfig.Presubmit {
-	utilityConfig := generateUtilityConfig()
 	mounts := generateVolumeMounts()
 	mounts = append(mounts, v1.VolumeMount{
 		Name:      Tmp,
 		MountPath: "/" + Tmp,
 	})
-	emptyVolume := v1.Volume{
-		Name: Tmp,
-		VolumeSource: v1.VolumeSource{
-			EmptyDir: &v1.EmptyDirVolumeSource{},
-		},
-	}
-	podSpec := &v1.PodSpec{
-		Volumes:            []v1.Volume{generateSecretVolume(clusterName), emptyVolume},
-		Containers:         []v1.Container{generateContainer(LatestImage, generateArgs(clusterName), mounts)},
-		ServiceAccountName: ConfigUpdater,
-	}
-	name := "pull-ci-openshift-release-master-" + clusterName + "-dry"
-	jobBase := generateJobBase(podSpec, utilityConfig, name)
-	jobBase.Labels = map[string]string{
-		"pj-rehearse.openshift.io/can-be-rehearsed": "true",
-	}
-	brancher := prowconfig.Brancher{
-		Branches: []string{"master"},
-	}
-	rerun := prowconfig.DefaultRerunCommandFor(clusterName) + "-dry"
-	trigger := prowconfig.DefaultTriggerFor(clusterName)
-	reporter := prowconfig.Reporter{
-		Context: fmt.Sprintf("ci/build-farm/%s-dry", clusterName),
-	}
 	return prowconfig.Presubmit{
-		JobBase:      jobBase,
+		JobBase: prowconfig.JobBase{
+			Name:       "pull-ci-openshift-release-master-" + clusterName + "-dry",
+			Agent:      string(prowapi.KubernetesAgent),
+			Cluster:    string(api.ClusterAPPCI),
+			SourcePath: "",
+			Spec: &v1.PodSpec{
+				Volumes: []v1.Volume{generateSecretVolume(clusterName),
+					{
+						Name: Tmp,
+						VolumeSource: v1.VolumeSource{
+							EmptyDir: &v1.EmptyDirVolumeSource{},
+						},
+					}},
+				Containers:         []v1.Container{generateContainer(LatestImage, generateArgs(clusterName), mounts)},
+				ServiceAccountName: ConfigUpdater,
+			},
+			UtilityConfig: generateUtilityConfig(),
+			Labels: map[string]string{
+				"pj-rehearse.openshift.io/can-be-rehearsed": "true",
+			},
+		},
 		AlwaysRun:    true,
 		Optional:     false,
-		Trigger:      trigger,
-		RerunCommand: rerun,
-		Brancher:     brancher,
-		Reporter:     reporter,
-	}
-}
-
-func generateJobBase(ps *v1.PodSpec, uc prowconfig.UtilityConfig, name string) prowconfig.JobBase {
-	return prowconfig.JobBase{
-		Name:          name,
-		Agent:         "kubernetes",
-		Cluster:       string(api.ClusterAPPCI),
-		SourcePath:    "",
-		Spec:          ps,
-		UtilityConfig: uc,
+		Trigger:      prowconfig.DefaultTriggerFor(clusterName),
+		RerunCommand: prowconfig.DefaultRerunCommandFor(clusterName) + "-dry",
+		Brancher: prowconfig.Brancher{
+			Branches: []string{"master"},
+		},
+		Reporter: prowconfig.Reporter{
+			Context: fmt.Sprintf("ci/build-farm/%s-dry", clusterName),
+		},
 	}
 }
 
@@ -140,7 +139,7 @@ func generateSecretVolume(clusterName string) v1.Volume {
 				SecretName: "build-farm-credentials",
 				Items: []v1.KeyToPath{
 					{
-						Key:  secretConfigFor(ConfigUpdater, clusterName),
+						Key:  serviceAccountKubeconfigPath(ConfigUpdater, clusterName),
 						Path: "kubeconfig",
 					},
 				},

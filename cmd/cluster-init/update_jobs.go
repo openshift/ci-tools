@@ -35,7 +35,7 @@ type Pre struct {
 
 func updatePresubmits(o options) error {
 	presubmitsFile := filepath.Join(o.releaseRepo, PrePostFilePath, "openshift-release-master-presubmits.yaml")
-	logrus.Printf("Updating Presubmit Jobs: %s\n", presubmitsFile)
+	logrus.Infof("Updating Presubmit Jobs: %s\n", presubmitsFile)
 	data, err := ioutil.ReadFile(presubmitsFile)
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func updatePresubmits(o options) error {
 
 func updatePostsubmits(o options) error {
 	postsubmitsFile := filepath.Join(o.releaseRepo, PrePostFilePath, "openshift-release-master-postsubmits.yaml")
-	logrus.Printf("Updating Postsubmit Jobs: %s\n", postsubmitsFile)
+	logrus.Infof("Updating Postsubmit Jobs: %s\n", postsubmitsFile)
 	data, err := ioutil.ReadFile(postsubmitsFile)
 	if err != nil {
 		return err
@@ -85,7 +85,7 @@ func updatePostsubmits(o options) error {
 
 func updateInfraPeriodics(o options) error {
 	ipFile := filepath.Join(o.releaseRepo, IPFilePath)
-	logrus.Printf("Updating Periodic Jobs: %s\n", ipFile)
+	logrus.Infof("Updating Periodic Jobs: %s\n", ipFile)
 	data, err := ioutil.ReadFile(ipFile)
 	if err != nil {
 		return err
@@ -153,7 +153,7 @@ func appendNewClustersConfigUpdaterToKubeconfig(per *prowconfig.Periodic, contai
 	if err != nil {
 		return err
 	}
-	env.Value = env.Value + fmt.Sprintf(":/etc/build-farm-credentials/sa.config-updater.%s.config", clusterName)
+	env.Value = env.Value + fmt.Sprintf(":/etc/build-farm-credentials/%s", serviceAccountKubeconfigPath(ConfigUpdater, clusterName))
 	return nil
 }
 
@@ -162,7 +162,7 @@ func appendBuildFarmCredentialSecret(per *prowconfig.Periodic, clusterName strin
 	if err != nil {
 		return err
 	}
-	configPath := secretConfigFor(ConfigUpdater, clusterName)
+	configPath := serviceAccountKubeconfigPath(ConfigUpdater, clusterName)
 	path := v1.KeyToPath{
 		Key:  configPath,
 		Path: configPath,

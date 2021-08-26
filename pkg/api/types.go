@@ -284,6 +284,18 @@ func (b *VersionBounds) Query() string {
 	return fmt.Sprintf(">%s <%s", b.Lower, b.Upper)
 }
 
+func BoundsFromQuery(query string) (*VersionBounds, error) {
+	splitParts := strings.Split(query, " ")
+	if len(splitParts) != 2 || !strings.HasPrefix(splitParts[0], ">") || !strings.HasPrefix(splitParts[1], "<") {
+		return nil, fmt.Errorf("Invalid version range `%s`. Must be in form `>4.x.y <4.a.b-c`", query)
+
+	}
+	return &VersionBounds{
+		Lower: strings.TrimPrefix(splitParts[0], ">"),
+		Upper: strings.TrimPrefix(splitParts[1], "<"),
+	}, nil
+}
+
 // ReleaseProduct describes the product being released
 type ReleaseProduct string
 

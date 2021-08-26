@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/github/prcreation"
+	"k8s.io/test-infra/prow/cmd/generic-autobumper/bumper"
 	"os"
 	"os/exec"
 	"path/filepath"

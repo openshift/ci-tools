@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/google/go-cmp/cmp"
-	"github.com/openshift/ci-tools/pkg/testhelper"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestInitClusterBuildFarmDir(t *testing.T) {

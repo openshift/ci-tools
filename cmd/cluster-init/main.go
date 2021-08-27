@@ -1,12 +1,13 @@
 package main
 
 import (
-	"errors"
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"unicode"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 )

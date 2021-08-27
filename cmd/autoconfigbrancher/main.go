@@ -233,6 +233,13 @@ func main() {
 				"--prune=true",
 			},
 		},
+		{
+			command: "/usr/bin/clusterimageset-updater",
+			arguments: []string{
+				"--pools", "./clusters/hive/pools",
+				"--imagesets", "./clusters/hive/pools",
+			},
+		},
 	}
 
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secret.Censor}

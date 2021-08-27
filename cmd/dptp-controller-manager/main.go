@@ -80,6 +80,8 @@ type testImagesDistributorOptions struct {
 	additionalImageStreamNamespaces    sets.String
 	forbiddenRegistriesRaw             flagutil.Strings
 	forbiddenRegistries                sets.String
+	ignoreClusterNamesRaw              flagutil.Strings
+	ignoreClusterNames                 sets.String
 }
 
 type imagePusherOptions struct {
@@ -117,6 +119,7 @@ func newOpts() (*options, error) {
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamsRaw, "testImagesDistributorOptions.additional-image-stream", "An imagestream that will be distributed even if no test explicitly references it. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw, "testImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.forbiddenRegistriesRaw, "testImagesDistributorOptions.forbidden-registry", "The hostname of an image registry from which there is no synchronization of its images. Can be passed multiple times.")
+	flag.Var(&opts.testImagesDistributorOptions.ignoreClusterNamesRaw, "testImagesDistributorOptions.ignore-cluster-name", "The cluster name to which there is no synchronization of test images. Can be passed multiple times.")
 	flag.DurationVar(&opts.blockProfileRate, "block-profile-rate", time.Duration(0), "The block profile rate. Set to non-zero to enable.")
 	flag.StringVar(&opts.registryClusterName, "registry-cluster-name", "app.ci", "the cluster name on which the CI central registry is running")
 	flag.Var(&opts.serviceAccountSecretRefresherOptions.enabledNamespaces, "serviceAccountRefresherOptions.enabled-namespace", "A namespace for which the serviceaccount_secret_refresher should be enabled. Can be passed multiple times.")
@@ -152,6 +155,7 @@ func newOpts() (*options, error) {
 
 	opts.testImagesDistributorOptions.additionalImageStreamNamespaces = completeSet(opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw)
 	opts.testImagesDistributorOptions.forbiddenRegistries = completeSet(opts.testImagesDistributorOptions.forbiddenRegistriesRaw)
+	opts.testImagesDistributorOptions.ignoreClusterNames = completeSet(opts.testImagesDistributorOptions.ignoreClusterNamesRaw)
 
 	imagePusherImageStreams, isErrors := completeImageStream("uniRegistrySyncerOptions.image-stream", opts.imagePusherOptions.imageStreamsRaw)
 	errs = append(errs, isErrors...)
@@ -391,6 +395,7 @@ func main() {
 			opts.testImagesDistributorOptions.additionalImageStreams,
 			opts.testImagesDistributorOptions.additionalImageStreamNamespaces,
 			opts.testImagesDistributorOptions.forbiddenRegistries,
+			opts.testImagesDistributorOptions.ignoreClusterNames,
 		); err != nil {
 			logrus.WithError(err).Fatal("failed to add testimagesdistributor")
 		}

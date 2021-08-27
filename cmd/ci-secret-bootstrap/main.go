@@ -47,6 +47,7 @@ type options struct {
 	dryRun             bool
 	force              bool
 	validateItemsUsage bool
+	confirm            bool
 
 	kubeConfigPath      string
 	kubeConfigDir       string
@@ -79,6 +80,8 @@ func parseOptions(censor *secrets.DynamicCensor) (options, error) {
 	fs.Var(&o.allowUnused, "bw-allow-unused", "One or more items that will be ignored when the --validate-items-usage is specified")
 	fs.BoolVar(&o.validateItemsUsage, "validate-bitwarden-items-usage", false, fmt.Sprintf("If set, the tool only validates if all fields that exist in Vault and were last modified before %d days ago are being used in the given config.", allowUnusedDays))
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with oc command")
+	fs.BoolVar(&o.confirm, "confirm", true, "Whether to mutate the actual secrets in the targeted clusters")
+
 	fs.StringVar(&o.kubeConfigPath, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests.")
 	fs.StringVar(&o.kubeConfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files to use for CLI requests.")
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
@@ -461,8 +464,15 @@ type Getter interface {
 	coreclientset.NamespacesGetter
 }
 
-func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.Secret, force bool) error {
+func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.Secret, force bool, confirm bool) error {
 	var errs []error
+
+	var dryRunOptions []string
+	if !confirm {
+		logrus.Warn("No secrets will be mutated")
+		dryRunOptions = append(dryRunOptions, "All")
+	}
+
 	for cluster, secrets := range secretsMap {
 		logger := logrus.WithField("cluster", cluster)
 		logger.Debug("Syncing secrets for cluster")
@@ -476,7 +486,7 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 					errs = append(errs, fmt.Errorf("failed to check if namespace %s exists: %w", secret.Namespace, err))
 					continue
 				}
-				if _, err := nsClient.Create(context.TODO(), &coreapi.Namespace{ObjectMeta: metav1.ObjectMeta{Name: secret.Namespace}}, metav1.CreateOptions{}); err != nil && !kerrors.IsAlreadyExists(err) {
+				if _, err := nsClient.Create(context.TODO(), &coreapi.Namespace{ObjectMeta: metav1.ObjectMeta{Name: secret.Namespace}}, metav1.CreateOptions{DryRun: dryRunOptions}); err != nil && !kerrors.IsAlreadyExists(err) {
 					errs = append(errs, fmt.Errorf("failed to create namespace %s: %w", secret.Namespace, err))
 					continue
 				}
@@ -497,7 +507,7 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 						errs = append(errs, fmt.Errorf("cannot change secret type from %q to %q (immutable field): %s:%s/%s", existingSecret.Type, secret.Type, cluster, secret.Namespace, secret.Name))
 						continue
 					}
-					if err := secretClient.Delete(context.TODO(), secret.Name, metav1.DeleteOptions{}); err != nil {
+					if err := secretClient.Delete(context.TODO(), secret.Name, metav1.DeleteOptions{DryRun: dryRunOptions}); err != nil {
 						errs = append(errs, fmt.Errorf("error deleting secret: %w", err))
 						continue
 					}
@@ -516,7 +526,7 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 						errs = append(errs, fmt.Errorf("secret %s:%s/%s needs updating in place, use --force to do so", cluster, secret.Namespace, secret.Name))
 						continue
 					}
-					if _, err := secretClient.Update(context.TODO(), secret, metav1.UpdateOptions{}); err != nil {
+					if _, err := secretClient.Update(context.TODO(), secret, metav1.UpdateOptions{DryRun: dryRunOptions}); err != nil {
 						errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 						continue
 					}
@@ -525,7 +535,7 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 			}
 
 			if kerrors.IsNotFound(err) || shouldCreate {
-				if _, err := secretClient.Create(context.TODO(), secret, metav1.CreateOptions{}); err != nil {
+				if _, err := secretClient.Create(context.TODO(), secret, metav1.CreateOptions{DryRun: dryRunOptions}); err != nil {
 					errs = append(errs, fmt.Errorf("error creating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 					continue
 				}
@@ -835,7 +845,7 @@ func reconcileSecrets(o options, client secrets.ReadOnlyClient) (errs []error) {
 			errs = append(errs, fmt.Errorf("failed to write secrets on dry run: %w", err))
 		}
 	} else {
-		if err := updateSecrets(o.secretsGetters, secretsMap, o.force); err != nil {
+		if err := updateSecrets(o.secretsGetters, secretsMap, o.force, o.confirm); err != nil {
 			errs = append(errs, fmt.Errorf("failed to update secrets: %w", err))
 		}
 		logrus.Info("Updated secrets.")

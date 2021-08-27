@@ -726,6 +726,17 @@ func TestGenerateJobBase(t *testing.T) {
 			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
 			clone:   true,
 		},
+		{
+			testName: "private jobs without skipcloning should contain oauth_token_secret config",
+			name:     "test",
+			prefix:   "pull",
+			info: &ProwgenInfo{
+				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+				Config:   config.Prowgen{Private: true, Expose: true},
+			},
+			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
+			clone:   true,
+		},
 	}
 
 	for _, testCase := range testCases {

@@ -567,7 +567,7 @@ github.com/ryanuber/go-glob
 # github.com/satori/go.uuid v1.2.0
 ## explicit
 github.com/satori/go.uuid
-# github.com/shurcooL/githubv4 v0.0.0-20191102174205-af46314aec7b
+# github.com/shurcooL/githubv4 v0.0.0-20210725200734-83ba7b4c9228
 ## explicit
 github.com/shurcooL/githubv4
 # github.com/shurcooL/graphql v0.0.0-20181231061246-d48a9a75455f
@@ -1282,7 +1282,7 @@ k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/kubernetes v1.14.7
 ## explicit
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20210823175823-85d839e08600
+# k8s.io/test-infra v0.0.0-20210827145205-66a2e9540e8a
 ## explicit; go 1.13
 k8s.io/test-infra/ghproxy/ghcache
 k8s.io/test-infra/ghproxy/ghmetrics
@@ -1379,6 +1379,7 @@ k8s.io/test-infra/prow/plugins/size
 k8s.io/test-infra/prow/plugins/skip
 k8s.io/test-infra/prow/plugins/slackevents
 k8s.io/test-infra/prow/plugins/stage
+k8s.io/test-infra/prow/plugins/transfer-issue
 k8s.io/test-infra/prow/plugins/trick-or-treat
 k8s.io/test-infra/prow/plugins/trigger
 k8s.io/test-infra/prow/plugins/updateconfig

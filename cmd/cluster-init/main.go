@@ -75,8 +75,6 @@ func main() {
 	}
 	if errorCount > 0 {
 		logrus.Infof("Due to the %d error(s) encountered a PR will not be generated. The resulting files can be PR'd manually", errorCount)
-	} else {
-		//TODO: this is where we will submit the PR
 	}
 }
 

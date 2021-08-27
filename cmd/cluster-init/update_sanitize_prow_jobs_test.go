@@ -1,22 +1,24 @@
 package main
 
 import (
-	"github.com/google/go-cmp/cmp"
-	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/dispatcher"
 )
 
 func TestUpdateSanitizeProwJobs(t *testing.T) {
 	workingDir, err := os.Getwd()
-	testdata := filepath.Join(workingDir, "testdata")
 	if err != nil {
 		t.Fatalf("couldn't obtain working directory")
 	}
+	testdata := filepath.Join(workingDir, "testdata")
 	testCases := []struct {
 		name string
 		options

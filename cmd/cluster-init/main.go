@@ -45,9 +45,11 @@ func validateOptions(o options) []error {
 	if o.releaseRepo == "" {
 		errs = append(errs, fmt.Errorf("--release-repo must be provided"))
 	}
-	buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
-	if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
-		errs = append(errs, fmt.Errorf("build farm directory: %s already exists", o.clusterName))
+	if o.clusterName != "" {
+		buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
+		if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
+			errs = append(errs, fmt.Errorf("build farm directory: %s already exists", o.clusterName))
+		}
 	}
 	return errs
 }
@@ -107,7 +109,7 @@ func initClusterBuildFarmDir(o options) error {
 
 	for _, item := range []string{"common", "common_except_app.ci"} {
 		if err := os.Symlink(fmt.Sprintf("../%s", item), filepath.Join(buildDir, item)); err != nil {
-			return fmt.Errorf("failed to symlink %s: %w", item, err)
+			return fmt.Errorf("failed to symlink %s to ../%s", item, item)
 		}
 	}
 	return nil

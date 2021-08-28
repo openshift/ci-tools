@@ -1,6 +1,7 @@
 package util
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"k8s.io/client-go/rest"
+	prowflagutil "k8s.io/test-infra/prow/flagutil"
 )
 
 func TestLoadKubeConfigs(t *testing.T) {
@@ -26,7 +28,7 @@ func TestLoadKubeConfigs(t *testing.T) {
 		{
 			name:          "file not exist",
 			kubeconfig:    "/tmp/file-not-exists",
-			expectedError: fmt.Errorf(`failed to load cluster configs: fail to load kubecfg from "/tmp/file-not-exists": failed to load: stat /tmp/file-not-exists: no such file or directory`),
+			expectedError: fmt.Errorf(`failed to load cluster configs: failed to resolve the kubeneates options: load --kubeconfig="/tmp/file-not-exists" configs: fail to load kubecfg from "/tmp/file-not-exists": failed to load: stat /tmp/file-not-exists: no such file or directory`),
 		},
 		{
 			name:       "load from kubeconfig",
@@ -45,7 +47,7 @@ func TestLoadKubeConfigs(t *testing.T) {
 		{
 			name:             "env kubeconfig that does not exist",
 			kubeconfigEnvVar: "/tmp/does-not-exist",
-			expectedError:    fmt.Errorf("KUBECONFIG env var with value /tmp/does-not-exist had 1 elements but only got 0 kubeconfigs"),
+			expectedError:    fmt.Errorf("failed to load cluster configs: KUBECONFIG env var with value /tmp/does-not-exist had 1 elements but only got 0 kubeconfigs"),
 		},
 		{
 			name:             "env kubeconfig exists",
@@ -89,7 +91,19 @@ func TestLoadKubeConfigs(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			os.Setenv("KUBECONFIG", tc.kubeconfigEnvVar)
-			configs, err := LoadKubeConfigs(tc.kubeconfig, tc.kubeconfigDir, nil)
+			fs := flag.NewFlagSet("fake-flags", flag.PanicOnError)
+			var args []string
+			if tc.kubeconfig != "" {
+				args = append(args, fmt.Sprintf("--kubeconfig=%s", tc.kubeconfig))
+			}
+			if tc.kubeconfigDir != "" {
+				args = append(args, fmt.Sprintf("--kubeconfig-dir=%s", tc.kubeconfigDir))
+			}
+			opts, err := gatherOptions(fs, args...)
+			if err != nil {
+				t.Errorf("expected error: %v", err)
+			}
+			configs, err := LoadKubeConfigs(opts.kubernetes, nil)
 			if err == nil && tc.expectedError != nil || err != nil && tc.expectedError == nil {
 				t.Errorf("actual error differs from expected:\n%s", cmp.Diff(err, tc.expectedError))
 			} else if err != nil && tc.expectedError != nil && !reflect.DeepEqual(err.Error(), tc.expectedError.Error()) {
@@ -103,4 +117,17 @@ func TestLoadKubeConfigs(t *testing.T) {
 			}
 		})
 	}
+}
+
+type options struct {
+	kubernetes prowflagutil.KubernetesOptions
+}
+
+func gatherOptions(fs *flag.FlagSet, args ...string) (options, error) {
+	o := options{kubernetes: prowflagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
+	o.kubernetes.AddFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return o, err
+	}
+	return o, nil
 }

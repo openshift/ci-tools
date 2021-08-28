@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/sirupsen/logrus"
-	"gopkg.in/fsnotify.v1"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -35,9 +34,8 @@ var allControllers = sets.NewString(
 
 type options struct {
 	leaderElectionNamespace        string
-	kubeconfig                     string
-	kubeconfigDir                  string
 	leaderElectionSuffix           string
+	kubernetesOptions              flagutil.KubernetesOptions
 	enabledControllers             flagutil.Strings
 	enabledControllersSet          sets.String
 	dryRun                         bool
@@ -54,13 +52,11 @@ type poolsPullSecretProviderOptions struct {
 }
 
 func newOpts() (*options, error) {
-	opts := &options{}
+	opts := &options{kubernetesOptions: flagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
 	opts.addDefaults()
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&opts.leaderElectionNamespace, "leader-election-namespace", "ci", "The namespace to use for leaderelection")
-	fs.StringVar(&opts.kubeconfig, "kubeconfig", "", "The kubeconfig to use. All contexts in it will be considered a build cluster. If it does not have a context named 'hive', loading in-cluster config will be attempted.")
-
-	fs.StringVar(&opts.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files. All contexts in it will be considered a build cluster. If it does not have a context named 'app.ci', loading in-cluster config will be attempted.")
+	opts.kubernetesOptions.AddFlags(fs)
 	fs.StringVar(&opts.leaderElectionSuffix, "leader-election-suffix", "", "Suffix for the leader election lock. Useful for local testing. If set, --dry-run must be set as well")
 	fs.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", allControllers.List(), opts.enabledControllers.Strings()))
 	fs.StringVar(&opts.poolsPullSecretProviderOptions.sourcePullSecretNamespace, "poolsPullSecretProviderOptions.sourcePullSecretNamespace", "ci-cluster-pool", "The namespace where the source pull secret is")
@@ -80,7 +76,9 @@ func newOpts() (*options, error) {
 			errs = append(errs, fmt.Errorf("the following controllers are unknown but were disabled via --disable-controller: %v", diff.List()))
 		}
 	}
-
+	if err := opts.kubernetesOptions.Validate(false); err != nil {
+		errs = append(errs, err)
+	}
 	return opts, utilerrors.NewAggregate(errs)
 }
 
@@ -95,12 +93,12 @@ func main() {
 	ctx := controllerruntime.SetupSignalHandler()
 	ctx, cancel := context.WithCancel(ctx)
 
-	kubeconfigChangedCallBack := func(e fsnotify.Event) {
-		logrus.WithField("event", e.String()).Info("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
+	kubeconfigChangedCallBack := func() {
+		logrus.Info("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
 		cancel()
 	}
 
-	kubeconfigs, err := util.LoadKubeConfigs(opts.kubeconfig, opts.kubeconfigDir, kubeconfigChangedCallBack)
+	kubeconfigs, err := util.LoadKubeConfigs(opts.kubernetesOptions, kubeconfigChangedCallBack)
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to load kubeconfigs")
 	}

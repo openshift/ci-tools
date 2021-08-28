@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -21,20 +22,24 @@ import (
 )
 
 type options struct {
-	kubeconfig    string
-	kubeconfigDir string
-	namespaces    flagutil.Strings
-	dry           bool
+	kubernetesOptions flagutil.KubernetesOptions
+	namespaces        flagutil.Strings
+	dry               bool
 }
 
 func opts() *options {
-	opts := &options{}
-	flag.StringVar(&opts.kubeconfig, "kubeconfig", "", "The kubeconfig to use")
-	flag.StringVar(&opts.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files to use")
-	flag.Var(&opts.namespaces, "namespace", "Namespace to run in, can be passed multiple times")
-	flag.BoolVar(&opts.dry, "dry-run", true, "Enable dry-run")
-	flag.Parse()
-	return opts
+	o := &options{kubernetesOptions: flagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
+	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	o.kubernetesOptions.AddFlags(fs)
+	fs.Var(&o.namespaces, "namespace", "Namespace to run in, can be passed multiple times")
+	fs.BoolVar(&o.dry, "dry-run", true, "Enable dry-run")
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		logrus.WithError(err).Fatal("Failed to parse the args")
+	}
+	if err := o.kubernetesOptions.Validate(o.dry); err != nil {
+		logrus.WithError(err).Fatal("Failed to validate the args")
+	}
+	return o
 }
 
 func main() {
@@ -44,7 +49,7 @@ func main() {
 	if len(o.namespaces.Strings()) == 0 {
 		logrus.Fatal("Must pass at least one namespace")
 	}
-	kubeconfigs, err := util.LoadKubeConfigs(o.kubeconfig, o.kubeconfigDir, nil)
+	kubeconfigs, err := util.LoadKubeConfigs(o.kubernetesOptions, nil)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to load kubeconfigs")
 	}

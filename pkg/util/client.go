@@ -3,15 +3,13 @@ package util
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 	"gopkg.in/fsnotify.v1"
 
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/test-infra/prow/kube"
+	"k8s.io/test-infra/prow/flagutil"
 )
 
 func LoadClusterConfig() (*rest.Config, error) {
@@ -49,48 +47,22 @@ func LoadKubeConfig(path string) (*rest.Config, error) {
 
 // LoadKubeConfigs loads kubeconfigs. If the kubeconfigChangedCallBack is non-nil, it will watch all kubeconfigs it loaded
 // and call the callback once they change.
-func LoadKubeConfigs(kubeconfig, kubeconfigDir string, kubeconfigChangedCallBack func(fsnotify.Event)) (map[string]*rest.Config, error) {
-	var errs []error
-	configs, err := kube.LoadClusterConfigs(kube.NewConfig(kube.ConfigFile(kubeconfig),
-		kube.ConfigDir(kubeconfigDir), kube.NoInClusterConfig(true)))
+func LoadKubeConfigs(opts flagutil.KubernetesOptions, kubeconfigChangedCallBack func()) (map[string]*rest.Config, error) {
+	configs, err := opts.LoadClusterConfigs(kubeconfigChangedCallBack)
 	if err != nil {
-		errs = append(errs, fmt.Errorf("failed to load cluster configs: %w", err))
+		return nil, fmt.Errorf("failed to load cluster configs: %w", err)
 	}
 	ret := map[string]*rest.Config{}
 	for k := range configs {
 		v := configs[k]
 		ret[k] = &v
 	}
-
-	var watchFiles []string
-	if kubeconfig == "" && kubeconfigDir == "" {
-		if kubeconfigsFromEnv := strings.Split(os.Getenv("KUBECONFIG"), ":"); len(kubeconfigsFromEnv) > 0 {
-			watchFiles = append(watchFiles, kubeconfigsFromEnv...)
-			if len(kubeconfigsFromEnv) > len(ret) {
-				errs = append(errs, fmt.Errorf("KUBECONFIG env var with value %s had %d elements but only got %d kubeconfigs", os.Getenv("KUBECONFIG"), len(kubeconfigsFromEnv), len(ret)))
-			}
-		}
-	}
-
-	if kubeconfig != "" {
-		watchFiles = append(watchFiles, kubeconfig)
-	}
-	if kubeconfigDir != "" {
-		watchFiles = append(watchFiles, kubeconfigDir)
-	}
-
-	if kubeconfigChangedCallBack != nil {
-		if err := WatchFiles(watchFiles, kubeconfigChangedCallBack); err != nil {
-			errs = append(errs, fmt.Errorf("failed to watch kubeconfigs: %w", err))
-		}
-	}
-
-	return ret, utilerrors.NewAggregate(errs)
+	return ret, nil
 }
 
 // WatchFiles watches the passed files if they exist and calls callback for all events
 // except Chmod, as Openshift seems to generate frequent Chmod events
-func WatchFiles(candidates []string, callback func(fsnotify.Event)) error {
+func WatchFiles(candidates []string, callback func()) error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("failed to construct watcher: %w", err)
@@ -111,7 +83,7 @@ func WatchFiles(candidates []string, callback func(fsnotify.Event)) error {
 				continue
 			}
 			logrus.WithField("event", event.String()).Info("File changed, calling callback")
-			callback(event)
+			callback()
 		}
 	}()
 

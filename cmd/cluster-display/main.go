@@ -10,11 +10,12 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"gopkg.in/fsnotify.v1"
 
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,11 +31,12 @@ type Page struct {
 }
 
 func gatherOptions() (options, error) {
-	o := options{}
+	o := options{kubernetesOptions: flagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.IntVar(&o.port, "port", 8090, "Port to run the server on")
 	fs.StringVar(&o.hiveKubeconfigPath, "hive-kubeconfig", "", "Path to the kubeconfig file to use for requests to Hive.")
+	o.kubernetesOptions.AddFlags(fs)
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)
@@ -47,16 +49,14 @@ func validateOptions(o options) error {
 	if err != nil {
 		return fmt.Errorf("invalid --log-level: %w", err)
 	}
-	if o.hiveKubeconfigPath == "" {
-		return fmt.Errorf("--hive-kubeconfig must be set")
-	}
-	return nil
+	return o.kubernetesOptions.Validate(false)
 }
 
 type options struct {
 	logLevel           string
 	port               int
 	gracePeriod        time.Duration
+	kubernetesOptions  flagutil.KubernetesOptions
 	hiveKubeconfigPath string
 }
 
@@ -164,19 +164,34 @@ func main() {
 		logrus.WithError(err).Fatal("failed to set up scheme")
 	}
 
-	kubeconfigChangedCallBack := func(e fsnotify.Event) {
-		logrus.WithField("event", e.String()).Info("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
+	kubeconfigChangedCallBack := func() {
+		logrus.Info("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
 		interrupts.Terminate()
 	}
 
-	kubeConfigs, err := util.LoadKubeConfigs(o.hiveKubeconfigPath, "", kubeconfigChangedCallBack)
-	if err != nil {
-		logrus.WithError(err).WithField("o.hiveKubeconfigPath", o.hiveKubeconfigPath).Fatal("could not load Hive kube config")
+	var hiveConfig *rest.Config
+	if o.hiveKubeconfigPath == "" {
+		kubeConfigs, err := util.LoadKubeConfigs(o.kubernetesOptions, kubeconfigChangedCallBack)
+		if err != nil {
+			logrus.WithError(err).Fatal("could not load kube config")
+		}
+		kubeConfig, ok := kubeConfigs[string(api.HiveCluster)]
+		if len(kubeConfigs) != 1 || !ok {
+			logrus.WithError(err).Fatalf("found %d contexts in Hive kube config and it must be %s", len(kubeConfigs), string(api.HiveCluster))
+		}
+		hiveConfig = kubeConfig
+	} else {
+		// This branch will be removed after migration
+		kubeConfig, err := util.LoadKubeConfig(o.hiveKubeconfigPath)
+		if err != nil {
+			logrus.WithField("o.hiveKubeconfigPath", o.hiveKubeconfigPath).WithError(err).Fatal("could not load kube config")
+		}
+		if err := util.WatchFiles([]string{o.hiveKubeconfigPath}, kubeconfigChangedCallBack); err != nil {
+			logrus.WithField("o.hiveKubeconfigPath", o.hiveKubeconfigPath).WithError(err).Fatal("could not watch file")
+		}
+		hiveConfig = kubeConfig
 	}
-	hiveConfig, ok := kubeConfigs[string(api.HiveCluster)]
-	if len(kubeConfigs) != 1 || !ok {
-		logrus.WithError(err).WithField("o.hiveKubeconfigPath", o.hiveKubeconfigPath).Fatalf("found %d contexts in Hive kube config and it must be %s", len(kubeConfigs), string(api.HiveCluster))
-	}
+
 	hiveClient, err := ctrlruntimeclient.New(hiveConfig, ctrlruntimeclient.Options{})
 	if err != nil {
 		logrus.WithError(err).Fatal("could not get Hive client for Hive kube config")

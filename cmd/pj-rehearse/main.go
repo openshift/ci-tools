@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/flagutil"
 	prowgithub "k8s.io/test-infra/prow/github"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
@@ -46,8 +47,7 @@ type options struct {
 	dryRun            bool
 	debugLogPath      string
 	prowjobKubeconfig string
-	kubeconfigDir     string
-
+	kubernetesOptions flagutil.KubernetesOptions
 	noTemplates       bool
 	noRegistry        bool
 	noClusterProfiles bool
@@ -57,7 +57,7 @@ type options struct {
 }
 
 func gatherOptions() (options, error) {
-	o := options{}
+	o := options{kubernetesOptions: flagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
 	fs := flag.CommandLine
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow")
@@ -65,8 +65,7 @@ func gatherOptions() (options, error) {
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
 	fs.StringVar(&o.prowjobKubeconfig, "prowjob-kubeconfig", "", "Path to the prowjob kubeconfig. If unset, default kubeconfig will be used for prowjobs.")
-	fs.StringVar(&o.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files to use for CLI requests.")
-
+	o.kubernetesOptions.AddFlags(fs)
 	fs.BoolVar(&o.noTemplates, "no-templates", false, "If true, do not attempt to compare templates")
 	fs.BoolVar(&o.noRegistry, "no-registry", false, "If true, do not attempt to compare step registry content")
 	fs.BoolVar(&o.noClusterProfiles, "no-cluster-profiles", false, "If true, do not attempt to compare cluster profiles")
@@ -83,7 +82,7 @@ func validateOptions(o options) error {
 	if len(o.releaseRepoPath) == 0 {
 		return fmt.Errorf("--candidate-path was not provided")
 	}
-	return nil
+	return o.kubernetesOptions.Validate(o.dryRun)
 }
 
 const (
@@ -152,12 +151,10 @@ func rehearseMain() error {
 	buildClusterConfigs := map[string]*rest.Config{}
 	var prowJobConfig *rest.Config
 	if !o.dryRun {
-		if _, exists := os.LookupEnv("KUBECONFIG"); exists || o.kubeconfigDir != "" {
-			buildClusterConfigs, err = util.LoadKubeConfigs("", o.kubeconfigDir, nil)
-			if err != nil {
-				logger.WithError(err).Error("failed to read kubeconfigs")
-				return errors.New(misconfigurationOutput)
-			}
+		buildClusterConfigs, err = util.LoadKubeConfigs(o.kubernetesOptions, nil)
+		if err != nil {
+			logger.WithError(err).Error("failed to read kubeconfigs")
+			return errors.New(misconfigurationOutput)
 		}
 		prowJobConfig, err = pjKubeconfig(o.prowjobKubeconfig, buildClusterConfigs["app.ci"])
 		if err != nil {

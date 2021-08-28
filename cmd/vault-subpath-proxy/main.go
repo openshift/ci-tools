@@ -21,8 +21,8 @@ import (
 	"github.com/hashicorp/vault/api"
 	"github.com/hashicorp/vault/sdk/helper/consts"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/fsnotify.v1"
 
+	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/version"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -32,34 +32,38 @@ import (
 )
 
 type options struct {
-	vaultAddr     string
-	kvMountPath   string
-	listenAddr    string
-	tlsCertFile   string
-	tlsKeyFile    string
-	kubeconfig    string
-	kubeconfigDir string
-	vaultToken    string
-	vaultRole     string
+	vaultAddr         string
+	kvMountPath       string
+	listenAddr        string
+	tlsCertFile       string
+	tlsKeyFile        string
+	kubernetesOptions flagutil.KubernetesOptions
+	vaultToken        string
+	vaultRole         string
 }
 
 func gatherOptions() (*options, error) {
-	o := &options{}
-	flag.StringVar(&o.vaultAddr, "vault-addr", "http://127.0.0.1:8300", "The address of the upstream vault")
-	flag.StringVar(&o.kvMountPath, "kv-mount-path", "secret", "The location of the kv mount")
-	flag.StringVar(&o.listenAddr, "listen-addr", "127.0.0.1:8400", "The address the proxy shall listen on")
-	flag.StringVar(&o.tlsCertFile, "tls-cert-file", "", "Path to a tls cert file. If set, will server over tls. Requires --tls-key-file")
-	flag.StringVar(&o.tlsKeyFile, "tls-key-file", "", "Path to a tls key file. If set, will server over tls. Requires --tls-cert-file")
-	flag.StringVar(&o.kubeconfig, "kubeconfig", "", "Path to a kubeconfig. If set, secrets will get synced into all clusters in there")
-	flag.StringVar(&o.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files.  If set, secrets will get synced into all clusters in there")
-	flag.StringVar(&o.vaultToken, "vault-token", "", "Vault token that will be used to detect conflicting secrets. Must have read access to the whole kv store. Mutually exclusive with --vault-token.")
-	flag.StringVar(&o.vaultRole, "vault-role", "", "Vault role to use for detecting conflicting secrets. Must have access to the whole kv store. Mutually exclusive with --vault-token.")
-	flag.Parse()
+	o := &options{kubernetesOptions: flagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
+	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	fs.StringVar(&o.vaultAddr, "vault-addr", "http://127.0.0.1:8300", "The address of the upstream vault")
+	fs.StringVar(&o.kvMountPath, "kv-mount-path", "secret", "The location of the kv mount")
+	fs.StringVar(&o.listenAddr, "listen-addr", "127.0.0.1:8400", "The address the proxy shall listen on")
+	fs.StringVar(&o.tlsCertFile, "tls-cert-file", "", "Path to a tls cert file. If set, will server over tls. Requires --tls-key-file")
+	fs.StringVar(&o.tlsKeyFile, "tls-key-file", "", "Path to a tls key file. If set, will server over tls. Requires --tls-cert-file")
+	o.kubernetesOptions.AddFlags(fs)
+	fs.StringVar(&o.vaultToken, "vault-token", "", "Vault token that will be used to detect conflicting secrets. Must have read access to the whole kv store. Mutually exclusive with --vault-token.")
+	fs.StringVar(&o.vaultRole, "vault-role", "", "Vault role to use for detecting conflicting secrets. Must have access to the whole kv store. Mutually exclusive with --vault-token.")
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		return nil, fmt.Errorf("failed to parse flags: %w", err)
+	}
 	if (o.tlsCertFile == "") != (o.tlsKeyFile == "") {
 		return nil, errors.New("--tls-cert-file and --tls-key-file must be passed together")
 	}
 	if o.vaultToken != "" && o.vaultRole != "" {
 		return nil, errors.New("--vault-token and --vault-role are mutually exclusive")
+	}
+	if err := o.kubernetesOptions.Validate(false); err != nil {
+		return nil, err
 	}
 	return o, nil
 }
@@ -84,11 +88,9 @@ func main() {
 	}
 
 	var clientGetter func() map[string]ctrlruntimeclient.Client
-	if os.Getenv("KUBECONFIG") != "" || opts.kubeconfig != "" || opts.kubeconfigDir != "" {
-		clientGetter, err = startLoadingKubeconfigs(opts.kubeconfig, opts.kubeconfigDir)
-		if err != nil {
-			logrus.WithError(err).Fatal("failed to load kubeconfigs")
-		}
+	clientGetter, err = startLoadingKubeconfigs(opts.kubernetesOptions)
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to load kubeconfigs")
 	}
 
 	server, err := createProxyServer(opts.vaultAddr, opts.listenAddr, opts.kvMountPath, clientGetter, privilegedVaultClient)
@@ -304,12 +306,12 @@ func (kpr *keypairReloader) getCertificateFunc(_ *tls.ClientHelloInfo) (*tls.Cer
 	return kpr.cert, nil
 }
 
-func startLoadingKubeconfigs(explicitPath, kubeconfigDir string) (func() map[string]ctrlruntimeclient.Client, error) {
+func startLoadingKubeconfigs(kubernetesOptions flagutil.KubernetesOptions) (func() map[string]ctrlruntimeclient.Client, error) {
 	clients := map[string]ctrlruntimeclient.Client{}
 	clientsLock := sync.RWMutex{}
 
-	clients, err := loadKubeconfigs(explicitPath, kubeconfigDir, func(fsnotify.Event) {
-		newClients, err := loadKubeconfigs(explicitPath, kubeconfigDir, nil)
+	clients, err := loadKubeconfigs(kubernetesOptions, func() {
+		newClients, err := loadKubeconfigs(kubernetesOptions, nil)
 		if err != nil {
 			logrus.WithError(err).Error("failed to reload kubeconfigs after fsnotify event")
 			return
@@ -329,8 +331,8 @@ func startLoadingKubeconfigs(explicitPath, kubeconfigDir string) (func() map[str
 	}, nil
 }
 
-func loadKubeconfigs(explicitPath, kubeconfigDir string, callBack func(fsnotify.Event)) (map[string]ctrlruntimeclient.Client, error) {
-	kubeconfigs, err := util.LoadKubeConfigs(explicitPath, kubeconfigDir, callBack)
+func loadKubeconfigs(kubernetesOptions flagutil.KubernetesOptions, callBack func()) (map[string]ctrlruntimeclient.Client, error) {
+	kubeconfigs, err := util.LoadKubeConfigs(kubernetesOptions, callBack)
 	if err != nil {
 		return nil, err
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -25,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
+	"k8s.io/test-infra/prow/flagutil"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
@@ -32,48 +34,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
-
-func TestParseOptions(t *testing.T) {
-	testCases := []struct {
-		name     string
-		given    []string
-		expected options
-	}{
-		{
-			name:  "basic case",
-			given: []string{"cmd", "--dry-run=false", "--config=/tmp/config"},
-			expected: options{
-				configPath: "/tmp/config",
-			},
-		},
-		{
-			name:  "with kubeconfig",
-			given: []string{"cmd", "--dry-run=false", "--config=/tmp/config", "--kubeconfig=/tmp/kubeconfig"},
-			expected: options{
-				configPath:     "/tmp/config",
-				kubeConfigPath: "/tmp/kubeconfig",
-			},
-		},
-	}
-	censor := secrets.NewDynamicCensor()
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			oldArgs := os.Args
-			defer func() { os.Args = oldArgs }()
-			os.Args = tc.given
-			actual, err := parseOptions(&censor)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if actual.dryRun != tc.expected.dryRun {
-				t.Errorf("%q: (dryRun) actual differs from expected:\n%s", tc.name, cmp.Diff(actual.dryRun, tc.expected.dryRun))
-			}
-			if actual.kubeConfigPath != tc.expected.kubeConfigPath {
-				t.Errorf("%q: (kubeConfigPath) actual differs from expected:\n%s", tc.name, cmp.Diff(actual.kubeConfigPath, tc.expected.kubeConfigPath))
-			}
-		})
-	}
-}
 
 func TestValidateOptions(t *testing.T) {
 	testCases := []struct {
@@ -358,6 +318,17 @@ var (
 	}
 )
 
+func getKubernetesOptions(kubeconfigPath string) (flagutil.KubernetesOptions, error) {
+	fs := flag.NewFlagSet("fake-flags", flag.PanicOnError)
+	args := []string{fmt.Sprintf("--kubeconfig=%s", kubeconfigPath)}
+	ret := flagutil.KubernetesOptions{NOInClusterConfigDefault: true}
+	ret.AddFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return ret, err
+	}
+	return ret, nil
+}
+
 func TestCompleteOptions(t *testing.T) {
 	dir, err := ioutil.TempDir("", "test")
 	if err != nil {
@@ -401,9 +372,8 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "basic case",
 			given: options{
-				logLevel:       "info",
-				configPath:     configPath,
-				kubeConfigPath: kubeConfigPath,
+				logLevel:   "info",
+				configPath: configPath,
 			},
 			expectedConfig:   defaultConfig,
 			expectedClusters: []string{"build01", "default"},
@@ -411,9 +381,8 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "missing context in kubeconfig",
 			given: options{
-				logLevel:       "info",
-				configPath:     configWithTypoPath,
-				kubeConfigPath: kubeConfigPath,
+				logLevel:   "info",
+				configPath: configWithTypoPath,
 			},
 			expectedConfig: defaultConfig,
 			expectedError:  fmt.Errorf("config[0].to[1]: failed to find cluster context \"bla\" in the kubeconfig"),
@@ -421,10 +390,9 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "only configured cluster is used",
 			given: options{
-				logLevel:       "info",
-				configPath:     configPath,
-				kubeConfigPath: kubeConfigPath,
-				cluster:        "build01",
+				logLevel:   "info",
+				configPath: configPath,
+				cluster:    "build01",
 			},
 			expectedConfig:   defaultConfigWithoutDefaultCluster,
 			expectedClusters: []string{"build01"},
@@ -432,9 +400,8 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "group is resolved",
 			given: options{
-				logLevel:       "info",
-				configPath:     configWithGroupsPath,
-				kubeConfigPath: kubeConfigPath,
+				logLevel:   "info",
+				configPath: configWithGroupsPath,
 			},
 			expectedConfig: secretbootstrap.Config{
 				ClusterGroups: map[string][]string{"group-a": {"default"}},
@@ -447,6 +414,11 @@ func TestCompleteOptions(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
+		kubernetesOptions, err := getKubernetesOptions(kubeConfigPath)
+		if err != nil {
+			t.Errorf("failed to get KubernetesOptions: %v", err)
+		}
+		tc.given.kubernetesOptions = kubernetesOptions
 		t.Run(tc.name, func(t *testing.T) {
 			censor := secrets.NewDynamicCensor()
 			actualError := tc.given.completeOptions(&censor)

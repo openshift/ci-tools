@@ -52,15 +52,7 @@ type options struct {
 func parseOptions() *options {
 	opts := &options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	// Controller-Runtimes root package imports the package that sets this flag
-	kubeconfigFlagDescription := "Path to the kubeconfig file to use for CLI requests."
-	if f := fs.Lookup("kubeconfig"); f != nil {
-		f.Usage = kubeconfigFlagDescription
-		// https://i.kym-cdn.com/entries/icons/original/000/018/012/this_is_fine.jpeg
-		defer func() { opts.kubeconfig = f.Value.String() }()
-	} else {
-		fs.StringVar(&opts.kubeconfig, "kubeconfig", "", kubeconfigFlagDescription)
-	}
+	fs.StringVar(&opts.kubeconfig, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests.")
 	fs.StringVar(&opts.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	fs.StringVar(&opts.ciOperatorconfigPath, "ci-operator-config-path", "", "Path to the ci operator config")
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
@@ -69,7 +61,7 @@ func parseOptions() *options {
 	fs.StringVar(&opts.openshiftMappingDir, "openshift-mapping-dir", "", "Path to the openshift mapping directory")
 	fs.StringVar(&opts.openshiftMappingConfigPath, "openshift-mapping-config", "", "Path to the openshift mapping config file")
 	if err := fs.Parse(os.Args[1:]); err != nil {
-		logrus.WithError(err).Fatal("could not parse input")
+		logrus.WithError(err).Fatal("could not parse args")
 	}
 	return opts
 }

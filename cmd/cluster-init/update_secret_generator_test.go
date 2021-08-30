@@ -2,15 +2,17 @@ package main
 
 import (
 	"fmt"
-	"github.com/google/go-cmp/cmp"
-	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
-	"github.com/openshift/ci-tools/pkg/testhelper"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestFindSecretItem(t *testing.T) {

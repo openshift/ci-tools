@@ -54,6 +54,11 @@ func validateOptions(o options) []error {
 	return errs
 }
 
+const (
+	BuildUFarm = "build_farm"
+	PodScaler  = "pod-scaler"
+)
+
 func main() {
 	o := parseOptions()
 	validationErrors := validateOptions(o)
@@ -66,6 +71,7 @@ func main() {
 	for _, step := range []func(options) error{
 		updateClustersReadme,
 		initClusterBuildFarmDir,
+		updateSecretGenerator,
 		updateSanitizeProwJobs,
 	} {
 		if err := step(o); err != nil {
@@ -115,4 +121,8 @@ func initClusterBuildFarmDir(o options) error {
 
 func buildFarmDirFor(releaseRepo string, clusterName string) string {
 	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName)
+}
+
+func serviceAccountKubeconfigPath(serviceAccount, clusterName string) string {
+	return fmt.Sprintf("sa.%s.%s.config", serviceAccount, clusterName)
 }

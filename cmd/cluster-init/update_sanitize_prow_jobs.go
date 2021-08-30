@@ -11,10 +11,11 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
 func updateSanitizeProwJobs(o options) error {
-	logrus.Println("Updating sanitize-prow-jobs config")
+	logrus.Info("Updating sanitize-prow-jobs config")
 	filename := filepath.Join(o.releaseRepo, "core-services", "sanitize-prow-jobs", "_config.yaml")
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
@@ -25,19 +26,25 @@ func updateSanitizeProwJobs(o options) error {
 		return err
 	}
 	updateConfig(c, o.clusterName)
-	y, err := yaml.Marshal(c)
+	rawYaml, err := yaml.Marshal(c)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filename, y, 0644)
+	return ioutil.WriteFile(filename, rawYaml, 0644)
 }
 
 func updateConfig(c *dispatcher.Config, clusterName string) {
 	appGroup := c.Groups[api.ClusterAPPCI]
 	jobs := appGroup.Jobs
-	jobs = append(jobs, fmt.Sprintf("pull-ci-openshift-release-master-%s-dry", clusterName))
-	jobs = append(jobs, fmt.Sprintf("branch-ci-openshift-release-master-%s-apply", clusterName))
-	jobs = append(jobs, fmt.Sprintf("periodic-openshift-release-master-%s-apply", clusterName))
+	metadata := api.Metadata{
+		Org:    "openshift",
+		Repo:   "release",
+		Branch: "master",
+	}
+	jobs = append(jobs, metadata.JobName(jobconfig.PresubmitPrefix, clusterName+"-dry"))
+	jobs = append(jobs, metadata.JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply"))
+	jobs = append(jobs, fmt.Sprintf("%s-%s-%s-%s-%s-apply",
+		jobconfig.PeriodicPrefix, metadata.Org, metadata.Repo, metadata.Branch, clusterName))
 	c.Groups[api.ClusterAPPCI] = dispatcher.Group{
 		Jobs:    jobs,
 		Paths:   appGroup.Paths,

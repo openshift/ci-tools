@@ -1,13 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -18,21 +18,19 @@ type options struct {
 }
 
 func (o options) String() string {
-	return fmt.Sprintf("cluster-name: %s\nrelease-repo: %s",
-		o.clusterName,
-		o.releaseRepo)
+	return fmt.Sprintf("%#v", o)
 }
 
-func parseOptions() options {
+func parseOptions() (options, error) {
 	var o options
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.clusterName, "cluster-name", "", "The name of the new cluster.")
 	fs.StringVar(&o.releaseRepo, "release-repo", "", "Path to the root of the openshift/release repository.")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
-		logrus.WithError(err).Fatal("cannot parse args: ", os.Args[1:])
+		return options{}, err
 	}
-	return o
+	return o, nil
 }
 
 func validateOptions(o options) []error {
@@ -55,7 +53,10 @@ func validateOptions(o options) []error {
 }
 
 func main() {
-	o := parseOptions()
+	o, err := parseOptions()
+	if err != nil {
+		logrus.WithError(err).Fatal("cannot parse args: ", os.Args[1:])
+	}
 	validationErrors := validateOptions(o)
 	if len(validationErrors) > 0 {
 		logrus.Fatalf("validation errors: %v", validationErrors)
@@ -74,28 +75,18 @@ func main() {
 		}
 	}
 	if errorCount > 0 {
-		logrus.Infof("Due to the %d error(s) encountered a PR will not be generated. The resulting files can be PR'd manually", errorCount)
+		logrus.Fatalf("Due to the %d error(s) encountered a PR will not be generated. The resulting files can be PR'd manually", errorCount)
 	}
 }
 
 func updateClustersReadme(o options) error {
-	reader := bufio.NewReader(os.Stdin)
 	clustersReadmeFile := o.releaseRepo + "/clusters/README.md"
-	fmt.Printf("Would you like to add information about the '%s' cluster to %s? [y,n]: ",
-		o.clusterName, clustersReadmeFile)
-	char, _, err := reader.ReadRune()
-	if err != nil {
-		return err
-	}
-	switch char {
-	case 'y':
-		cmd := exec.Command("vim", clustersReadmeFile)
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		return cmd.Run()
-	default:
-		return nil
-	}
+	fmt.Printf("Opening vim to add information about the '%s' cluster to %s. ", o.clusterName, clustersReadmeFile)
+	time.Sleep(3 * time.Second)
+	cmd := exec.Command("vim", clustersReadmeFile)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	return cmd.Run()
 }
 
 func initClusterBuildFarmDir(o options) error {

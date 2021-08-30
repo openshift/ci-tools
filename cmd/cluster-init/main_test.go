@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -35,11 +36,21 @@ func TestInitClusterBuildFarmDir(t *testing.T) {
 				clusterName: "existingCluster",
 				releaseRepo: testdata,
 			},
-			expectedError: fmt.Errorf("failed to symlink common to ../common"),
+			expectedError: errors.New("failed to symlink common to ../common"),
 		},
 	}
 	for _, tc := range testCases {
 		buildDir := filepath.Join(testdata, "clusters", "build-clusters", tc.clusterName)
+		t.Cleanup(func() {
+			existingClusterDir := filepath.Join(testdata, "clusters", "build-clusters", "existingCluster")
+			// We should NEVER remove the existingCluster
+			if existingClusterDir != buildDir {
+				if err := os.RemoveAll(buildDir); err != nil {
+					t.Fatalf("error removing output config file: %v", err)
+				}
+			}
+		})
+
 		t.Run(tc.name, func(t *testing.T) {
 			err := initClusterBuildFarmDir(tc.options)
 			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
@@ -56,16 +67,6 @@ func TestInitClusterBuildFarmDir(t *testing.T) {
 					if err != nil || dest != expectedDest {
 						t.Fatalf("item: %s was not symlinked to: %s", item, expectedDest)
 					}
-				}
-			}
-		})
-
-		t.Cleanup(func() {
-			existingClusterDir := filepath.Join(testdata, "clusters", "build-clusters", "existingCluster")
-			// We should NEVER remove the existingCluster
-			if existingClusterDir != buildDir {
-				if err := os.RemoveAll(buildDir); err != nil {
-					t.Fatalf("error removing output config file: %v", err)
 				}
 			}
 		})

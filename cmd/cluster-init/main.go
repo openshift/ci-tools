@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -31,17 +32,17 @@ func parseOptions() (options, error) {
 func validateOptions(o options) []error {
 	var errs []error
 	if o.clusterName == "" {
-		errs = append(errs, fmt.Errorf("--cluster-name must be provided"))
+		errs = append(errs, errors.New("--cluster-name must be provided"))
 	} else {
 		for _, char := range o.clusterName {
 			if unicode.IsSpace(char) {
-				errs = append(errs, fmt.Errorf("--cluster-name must not contain whitespace"))
+				errs = append(errs, errors.New("--cluster-name must not contain whitespace"))
 				break
 			}
 		}
 	}
 	if o.releaseRepo == "" {
-		errs = append(errs, fmt.Errorf("--release-repo must be provided"))
+		errs = append(errs, errors.New("--release-repo must be provided"))
 	}
 	if o.clusterName != "" {
 		buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)

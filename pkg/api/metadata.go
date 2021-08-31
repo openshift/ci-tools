@@ -66,6 +66,12 @@ func (m *Metadata) JobName(prefix, name string) string {
 	return fmt.Sprintf("%s-ci-%s-%s-%s-%s", prefix, m.Org, m.Repo, m.Branch, m.TestName(name))
 }
 
+// SimpleJobName returns the job name without the "ci" infix for a  job corresponding to a test defined in this
+// file, including variant, if present
+func (m *Metadata) SimpleJobName(prefix, name string) string {
+	return fmt.Sprintf("%s-%s-%s-%s-%s", prefix, m.Org, m.Repo, m.Branch, m.TestName(name))
+}
+
 // Basename returns the unique name for this file in the config
 func (m *Metadata) Basename() string {
 	basename := strings.Join([]string{m.Org, m.Repo, m.Branch}, "-")

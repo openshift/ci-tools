@@ -207,3 +207,7 @@ func (j *fsJobRun) GetHumanURL() string {
 func (j *fsJobRun) GetGCSArtifactURL() string {
 	return GetGCSArtifactURL(j.GetJobName(), j.GetJobRunID())
 }
+
+func (j *fsJobRun) IsFinished(ctx context.Context) bool {
+	return true
+}

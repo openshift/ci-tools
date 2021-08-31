@@ -58,6 +58,7 @@ func (o *JobRunAggregatorCacheBuilderOptions) getProwJobPathsForJob(ctx context.
 	}
 	query.StartOffset = fmt.Sprintf("logs/%s/%d", o.JobName, startFromRunID)
 	trace.Step("Query configured.")
+	fmt.Printf("  getProwJobPathsForJob from %v\n", query.StartOffset)
 
 	now := time.Now()
 

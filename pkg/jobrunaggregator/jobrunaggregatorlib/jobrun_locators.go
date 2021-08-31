@@ -63,7 +63,7 @@ func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunag
 	if err != nil {
 		return nil, err
 	}
-	endingJobRun, err := a.ciDataClient.GetJobRunForJobNameBeforeTime(ctx, a.jobName, endOfJobRunWindow)
+	endingJobRun, err := a.ciDataClient.GetJobRunForJobNameAfterTime(ctx, a.jobName, endOfJobRunWindow)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunag
 	} else {
 		query.StartOffset = fmt.Sprintf("logs/%s/%s", a.jobName, startingJobRun.Name)
 	}
-	if endingJobRun != nil {
+	if false && endingJobRun != nil {
 		query.EndOffset = fmt.Sprintf("logs/%s/%s", a.jobName, endingJobRun.Name)
 	}
 	fmt.Printf("  starting from %v, ending at %q\n", query.StartOffset, query.EndOffset)
@@ -123,6 +123,7 @@ func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunag
 			}
 
 			payloadTag := GetPayloadTagFromProwJob(prowJob)
+			fmt.Printf("  checking %v/%v for payloadtag match: looking for %q found %q.\n", a.jobName, jobRunId, a.payloadTag, payloadTag)
 			if payloadTag == a.payloadTag {
 				relatedJobRuns = append(relatedJobRuns, jobRunInfo)
 			}

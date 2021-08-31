@@ -231,6 +231,18 @@ func (j *gcsJobRun) GetGCSArtifactURL() string {
 	return GetGCSArtifactURL(j.GetJobName(), j.GetJobRunID())
 }
 
+func (j *gcsJobRun) IsFinished(ctx context.Context) bool {
+	content, err := j.GetContent(ctx, fmt.Sprintf("logs/%v/%v/finished.json", j.GetJobName(), j.GetJobRunID()))
+	if err != nil {
+		return false
+	}
+	if len(content) == 0 {
+		return false
+	}
+
+	return true
+}
+
 func GetHumanURL(jobName, jobRunName string) string {
 	// https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/periodic-ci-openshift-release-master-ci-4.8-e2e-gcp-upgrade/1429691282619371520
 	return fmt.Sprintf("https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/%s/%s", jobName, jobRunName)

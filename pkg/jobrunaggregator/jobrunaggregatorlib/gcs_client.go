@@ -98,7 +98,7 @@ func (o *ciGCSClient) ListJobRunNames(ctx context.Context, jobName, startingID s
 }
 
 func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobName, jobRunID string) (jobrunaggregatorapi.JobRunInfo, error) {
-	fmt.Printf("reading job run %q/%q.\n", jobName, jobRunID)
+	fmt.Printf("reading job run %v/%v.\n", jobName, jobRunID)
 
 	query := &storage.Query{
 		// This ends up being the equivalent of:
@@ -119,8 +119,6 @@ func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobName, jobRunID s
 	// end reading after this jobrun bucket
 	query.EndOffset = fmt.Sprintf("logs/%s/%s", jobName, NextJobRunID(jobRunID))
 
-	now := time.Now()
-
 	// Returns an iterator which iterates over the bucket query results.
 	// Unfortunately, this will list *all* files with the query prefix.
 	bkt := o.gcsClient.Bucket(o.gcsBucketName)
@@ -137,15 +135,6 @@ func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobName, jobRunID s
 		}
 		if err != nil {
 			return nil, err
-		}
-
-		// TODO refine time
-		if now.Sub(attrs.Created) > (100 * 24 * time.Hour) {
-			continue
-		}
-		// chosen because CI jobs only take four hours max (so far), so we only get completed jobs
-		if now.Sub(attrs.Created) < (4 * time.Hour) {
-			continue
 		}
 
 		switch {
@@ -175,8 +164,12 @@ func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobName, jobRunID s
 	}
 
 	// eliminate items without prowjob.json and ones that aren't finished
+	if jobRun == nil {
+		fmt.Printf("  removing %q/%q because it doesn't have a prowjob.json\n", jobName, jobRunID)
+		return nil, nil
+	}
 	if len(jobRun.GetGCSProwJobPath()) == 0 {
-		fmt.Printf("Removing %q/%q because it doesn't have a prowjob.json\n", jobName, jobRunID)
+		fmt.Printf("  removing %q/%q because it doesn't have a prowjob.json but does have junit\n", jobName, jobRunID)
 		return nil, nil
 	}
 	_, err := jobRun.GetProwJob(ctx)

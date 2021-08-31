@@ -17,8 +17,7 @@ expected="${suite_dir}/expected"
 
 os::test::junit::declare_suite_start "integration/cluster-init"
 
-# the :q is to exit the vim console that opens in order to add info to the README file
-os::cmd::expect_success "echo ':q' |  cluster-init -cluster-name=newCluster -release-repo=${actual}"
+os::cmd::expect_success "cluster-init -cluster-name=newCluster -release-repo=${actual}"
 os::integration::compare "${actual}" "${expected}"
 
 os::test::junit::declare_suite_end

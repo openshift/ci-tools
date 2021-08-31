@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,67 +10,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
-
-func TestInitClusterBuildFarmDir(t *testing.T) {
-	workingDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("couldn't obtain working directory")
-	}
-	testdata := filepath.Join(workingDir, "testdata")
-	testCases := []struct {
-		name string
-		options
-		expectedError error
-	}{
-		{
-			name: "basic",
-			options: options{
-				clusterName: "newcluster",
-				releaseRepo: testdata,
-			},
-		},
-		{
-			name: "symlink exists",
-			options: options{
-				clusterName: "existingCluster",
-				releaseRepo: testdata,
-			},
-			expectedError: errors.New("failed to symlink common to ../common"),
-		},
-	}
-	for _, tc := range testCases {
-		buildDir := filepath.Join(testdata, "clusters", "build-clusters", tc.clusterName)
-		t.Cleanup(func() {
-			existingClusterDir := filepath.Join(testdata, "clusters", "build-clusters", "existingCluster")
-			// We should NEVER remove the existingCluster
-			if existingClusterDir != buildDir {
-				if err := os.RemoveAll(buildDir); err != nil {
-					t.Fatalf("error removing output config file: %v", err)
-				}
-			}
-		})
-
-		t.Run(tc.name, func(t *testing.T) {
-			err := initClusterBuildFarmDir(tc.options)
-			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
-				t.Fatalf("error does not match expectedError, diff: %s", diff)
-			}
-
-			if tc.expectedError == nil {
-				if _, err := os.Stat(buildDir); os.IsNotExist(err) {
-					t.Fatalf("build farm directory: %s was not created", buildDir)
-				}
-				for _, item := range []string{"common", "common_except_app.ci"} {
-					expectedDest := filepath.Join("..", item)
-					dest, err := os.Readlink(filepath.Join(buildDir, item))
-					if err != nil || dest != expectedDest {
-						t.Fatalf("item: %s was not symlinked to: %s", item, expectedDest)
-					}
-				}
-			}
-		})
-	}
-}
 
 func TestValidateOptions(t *testing.T) {
 	workingDir, err := os.Getwd()
@@ -97,7 +35,7 @@ func TestValidateOptions(t *testing.T) {
 				clusterName: "",
 				releaseRepo: testdata,
 			},
-			expectedErrors: []error{fmt.Errorf("--cluster-name must be provided")},
+			expectedErrors: []error{errors.New("--cluster-name must be provided")},
 		},
 		{
 			name: "invalid cluster name",
@@ -105,7 +43,7 @@ func TestValidateOptions(t *testing.T) {
 				clusterName: "new cluster",
 				releaseRepo: testdata,
 			},
-			expectedErrors: []error{fmt.Errorf("--cluster-name must not contain whitespace")},
+			expectedErrors: []error{errors.New("--cluster-name must not contain whitespace")},
 		},
 		{
 			name: "missing release repo",
@@ -113,7 +51,7 @@ func TestValidateOptions(t *testing.T) {
 				clusterName: "newcluster",
 				releaseRepo: "",
 			},
-			expectedErrors: []error{fmt.Errorf("--release-repo must be provided")},
+			expectedErrors: []error{errors.New("--release-repo must be provided")},
 		},
 		{
 			name: "build farm dir exists",
@@ -121,14 +59,14 @@ func TestValidateOptions(t *testing.T) {
 				clusterName: "existingCluster",
 				releaseRepo: testdata,
 			},
-			expectedErrors: []error{fmt.Errorf("build farm directory: existingCluster already exists")},
+			expectedErrors: []error{errors.New("build farm directory: existingCluster already exists")},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			errors := validateOptions(tc.options)
-			if diff := cmp.Diff(tc.expectedErrors, errors, testhelper.EquateErrorMessage); diff != "" {
-				t.Fatalf("errors do not match expectedErrors, diff: %s", diff)
+			errs := validateOptions(tc.options)
+			if diff := cmp.Diff(tc.expectedErrors, errs, testhelper.EquateErrorMessage); diff != "" {
+				t.Fatalf("errs do not match expectedErrors, diff: %s", diff)
 			}
 
 		})

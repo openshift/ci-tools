@@ -4,10 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
-	"time"
+	"unicode"
 
 	"github.com/sirupsen/logrus"
 )
@@ -27,18 +25,20 @@ func parseOptions() (options, error) {
 	fs.StringVar(&o.clusterName, "cluster-name", "", "The name of the new cluster.")
 	fs.StringVar(&o.releaseRepo, "release-repo", "", "Path to the root of the openshift/release repository.")
 
-	if err := fs.Parse(os.Args[1:]); err != nil {
-		return options{}, err
-	}
-	return o, nil
+	return o, fs.Parse(os.Args[1:])
 }
 
 func validateOptions(o options) []error {
 	var errs []error
 	if o.clusterName == "" {
 		errs = append(errs, fmt.Errorf("--cluster-name must be provided"))
-	} else if strings.ContainsAny(o.clusterName, " \t\n") {
-		errs = append(errs, fmt.Errorf("--cluster-name must not contain whitespace"))
+	} else {
+		for _, char := range o.clusterName {
+			if unicode.IsSpace(char) {
+				errs = append(errs, fmt.Errorf("--cluster-name must not contain whitespace"))
+				break
+			}
+		}
 	}
 	if o.releaseRepo == "" {
 		errs = append(errs, fmt.Errorf("--release-repo must be provided"))
@@ -65,7 +65,6 @@ func main() {
 	// Each step in the process is allowed to fail independently so that the diffs for the others can still be generated
 	errorCount := 0
 	for _, step := range []func(options) error{
-		updateClustersReadme,
 		initClusterBuildFarmDir,
 		updateSanitizeProwJobs,
 	} {
@@ -77,16 +76,6 @@ func main() {
 	if errorCount > 0 {
 		logrus.Fatalf("Due to the %d error(s) encountered a PR will not be generated. The resulting files can be PR'd manually", errorCount)
 	}
-}
-
-func updateClustersReadme(o options) error {
-	clustersReadmeFile := o.releaseRepo + "/clusters/README.md"
-	logrus.Infof("Opening vim to add information about the '%s' cluster to %s.\n", o.clusterName, clustersReadmeFile)
-	time.Sleep(3 * time.Second)
-	cmd := exec.Command("vim", clustersReadmeFile)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	return cmd.Run()
 }
 
 func initClusterBuildFarmDir(o options) error {

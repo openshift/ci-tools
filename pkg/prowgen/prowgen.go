@@ -614,10 +614,7 @@ func generateJobBase(name, prefix string, info *ProwgenInfo, podSpec *corev1.Pod
 	var decorationConfig *prowv1.DecorationConfig
 	if skipCloning {
 		decorationConfig = &prowv1.DecorationConfig{SkipCloning: utilpointer.BoolPtr(true)}
-	} else if !skipCloning && info.Config.Private {
-		decorationConfig = &prowv1.DecorationConfig{OauthTokenSecret: &prowv1.OauthTokenSecret{Key: api.OauthTokenSecretKey, Name: api.OauthTokenSecretName}}
 	}
-
 	base := prowconfig.JobBase{
 		Agent:  string(prowv1.KubernetesAgent),
 		Labels: labels,

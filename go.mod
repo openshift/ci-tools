@@ -74,7 +74,7 @@ require (
 	k8s.io/apiserver v0.22.0
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
 	k8s.io/klog/v2 v2.9.0
-	k8s.io/test-infra v0.0.0-20210823175823-85d839e08600
+	k8s.io/test-infra v0.0.0-20210830092254-e35aa846a43c
 	k8s.io/utils v0.0.0-20210802155522-efc7438f0176
 	sigs.k8s.io/boskos v0.0.0-20210730172138-093b54882439
 	sigs.k8s.io/controller-runtime v0.9.3-0.20210826145723-8f9d0dfc8446
@@ -163,7 +163,7 @@ require (
 	github.com/pierrec/lz4 v2.2.6+incompatible // indirect
 	github.com/prometheus/procfs v0.6.0 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
-	github.com/shurcooL/githubv4 v0.0.0-20191102174205-af46314aec7b // indirect
+	github.com/shurcooL/githubv4 v0.0.0-20210725200734-83ba7b4c9228 // indirect
 	github.com/shurcooL/graphql v0.0.0-20181231061246-d48a9a75455f // indirect
 	github.com/spf13/cast v1.3.1 // indirect
 	github.com/spf13/cobra v1.1.3 // indirect

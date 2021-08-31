@@ -1,0 +1,11 @@
+# Generated job to make `prowgen` act on this org/repo.
+resources:
+  "*":
+    requests:
+      cpu: 1
+tests:
+- as: generated
+  commands: commands
+  cron: "* * * * *"
+  container:
+    from: root

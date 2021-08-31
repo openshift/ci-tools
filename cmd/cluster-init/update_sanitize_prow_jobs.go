@@ -21,11 +21,11 @@ func updateSanitizeProwJobs(o options) error {
 	if err != nil {
 		return err
 	}
-	c := &dispatcher.Config{}
-	if err = yaml.Unmarshal(data, c); err != nil {
+	var c dispatcher.Config
+	if err = yaml.Unmarshal(data, &c); err != nil {
 		return err
 	}
-	updateConfig(c, o.clusterName)
+	updateConfig(&c, o.clusterName)
 	rawYaml, err := yaml.Marshal(c)
 	if err != nil {
 		return err

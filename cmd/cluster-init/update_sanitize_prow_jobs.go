@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"path/filepath"
 
@@ -42,7 +41,6 @@ func updateConfig(c *dispatcher.Config, clusterName string) {
 	}
 	appGroup.Jobs = append(appGroup.Jobs, metadata.JobName(jobconfig.PresubmitPrefix, clusterName+"-dry"))
 	appGroup.Jobs = append(appGroup.Jobs, metadata.JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply"))
-	appGroup.Jobs = append(appGroup.Jobs, fmt.Sprintf("%s-%s-%s-%s-%s-apply",
-		jobconfig.PeriodicPrefix, metadata.Org, metadata.Repo, metadata.Branch, clusterName))
+	appGroup.Jobs = append(appGroup.Jobs, metadata.SimpleJobName(jobconfig.PeriodicPrefix, clusterName+"-apply"))
 	c.Groups[api.ClusterAPPCI] = appGroup
 }

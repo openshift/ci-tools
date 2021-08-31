@@ -80,7 +80,7 @@ func main() {
 
 func initClusterBuildFarmDir(o options) error {
 	buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
-	logrus.Infof("Creating build dir: %s\n", buildDir)
+	logrus.Infof("Creating build dir: %s", buildDir)
 	if err := os.MkdirAll(buildDir, 0777); err != nil {
 		return fmt.Errorf("failed to create base directory for cluster: %w", err)
 	}

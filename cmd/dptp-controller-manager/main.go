@@ -97,11 +97,11 @@ type serviceAccountSecretRefresherOptions struct {
 
 func newOpts() (*options, error) {
 	opts := &options{GitHubOptions: &flagutil.GitHubOptions{}}
-	opts.addDefaults()
-	opts.GitHubOptions.AddFlags(flag.CommandLine)
-	opts.GitHubOptions.AllowAnonymous = true
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	opts.prowconfig.AddFlags(fs)
+	opts.addDefaults()
+	opts.GitHubOptions.AddFlags(fs)
+	opts.GitHubOptions.AllowAnonymous = true
 	fs.StringVar(&opts.leaderElectionNamespace, "leader-election-namespace", "ci", "The namespace to use for leaderelection")
 	fs.StringVar(&opts.kubeconfig, "kubeconfig", "", "The kubeconfig to use. All contexts in it will be considered a build cluster. If it does not have a context named 'app.ci', loading in-cluster config will be attempted.")
 	fs.StringVar(&opts.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files. All contexts in it will be considered a build cluster. If it does not have a context named 'app.ci', loading in-cluster config will be attempted.")

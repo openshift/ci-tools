@@ -54,6 +54,7 @@ postsubmits:
         secret:
           secretName: result-aggregator
   - agent: jenkins
+    always_run: true
     branches:
     - release-3.11
     context: ci/openshift-jenkins/legacy

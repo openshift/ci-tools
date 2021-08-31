@@ -3,3 +3,9 @@
 .idea/
 /_output
 index.js
+
+
+# default working dir
+/job-aggregator-working-dir
+# go built binary
+/job-run-aggregator

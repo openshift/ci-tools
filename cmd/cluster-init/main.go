@@ -81,7 +81,7 @@ func main() {
 
 func updateClustersReadme(o options) error {
 	clustersReadmeFile := o.releaseRepo + "/clusters/README.md"
-	fmt.Printf("Opening vim to add information about the '%s' cluster to %s. ", o.clusterName, clustersReadmeFile)
+	logrus.Infof("Opening vim to add information about the '%s' cluster to %s.\n", o.clusterName, clustersReadmeFile)
 	time.Sleep(3 * time.Second)
 	cmd := exec.Command("vim", clustersReadmeFile)
 	cmd.Stdin = os.Stdin

@@ -63,7 +63,6 @@ const (
 	CiOperator    = "ci-operator"
 	BuildFarm     = "build-farm"
 	Ci            = "ci"
-	ConfigUpdater = "config-updater"
 )
 
 func RepoMetadata() *api.Metadata {

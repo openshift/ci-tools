@@ -76,11 +76,13 @@ func findSecretItem(itemName string, name string, likeCluster string, c SecretGe
 			for _, fj := range si.Fields {
 				if name == fj.Name {
 					containsName = true
+					break
 				}
 			}
 			for _, cluster := range si.Params["cluster"] {
 				if likeCluster == cluster {
 					containsCluster = true
+					break
 				}
 			}
 			if containsName && containsCluster {

@@ -42,7 +42,7 @@ func TestUpdateConfig(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			updateConfig(&tc.input, tc.clusterName)
+			updateSanitizeProwJobsConfig(&tc.input, tc.clusterName)
 			if diff := cmp.Diff(tc.expected, tc.input); diff != "" {
 				t.Fatalf("expected jobs were different than results: %s", diff)
 			}

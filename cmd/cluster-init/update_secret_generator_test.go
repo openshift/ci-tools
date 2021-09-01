@@ -1,11 +1,8 @@
 package main
 
 import (
+	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -22,7 +19,6 @@ func TestFindSecretItem(t *testing.T) {
 			Name: "secret-a",
 			Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
 		}},
-		Notes: "",
 		Params: map[string][]string{
 			"cluster": {
 				string(api.ClusterAPPCI),
@@ -35,7 +31,6 @@ func TestFindSecretItem(t *testing.T) {
 				Name: "secret-0",
 				Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
 			}},
-			Notes: "",
 			Params: map[string][]string{
 				"cluster": {
 					string(api.ClusterAPPCI),
@@ -48,7 +43,6 @@ func TestFindSecretItem(t *testing.T) {
 				Name: "secret-b",
 				Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
 			}},
-			Notes: "",
 			Params: map[string][]string{
 				"cluster": {
 					string(api.ClusterAPPCI),
@@ -86,7 +80,7 @@ func TestFindSecretItem(t *testing.T) {
 				c:           config,
 			},
 			expected:      &secretgenerator.SecretItem{},
-			expectedError: fmt.Errorf("couldn't find SecretItem with item_name: build_farm name: secret-c containing cluster: build01"),
+			expectedError: errors.New("couldn't find SecretItem with item_name: build_farm name: secret-c containing cluster: build01"),
 		},
 	}
 	for _, tc := range testCases {
@@ -103,56 +97,124 @@ func TestFindSecretItem(t *testing.T) {
 	}
 }
 
-func TestUpdateSecretGenerator(t *testing.T) {
-	workingDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("couldn't obtain working directory")
-	}
-	testdata := filepath.Join(workingDir, "testdata")
+func TestUpdateSecretGeneratorConfig(t *testing.T) {
+	serviceAccountConfigPath := serviceAccountKubeconfigPath(serviceAccountWildcard, clusterWildcard)
 	testCases := []struct {
 		name string
 		options
+		input    SecretGenConfig
+		expected SecretGenConfig
 	}{
 		{
 			name: "basic",
 			options: options{
 				clusterName: "newcluster",
-				releaseRepo: testdata,
+			},
+			input: SecretGenConfig{
+				{
+					ItemName: BuildUFarm,
+					Fields: []secretgenerator.FieldGenerator{{
+						Name: serviceAccountConfigPath,
+						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
+					}},
+					Params: map[string][]string{
+						"cluster": {
+							string(api.ClusterAPPCI),
+							string(api.ClusterBuild01)}},
+				},
+				{
+					ItemName: BuildUFarm,
+					Fields: []secretgenerator.FieldGenerator{{
+						Name: fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", clusterWildcard),
+						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
+					}},
+					Params: map[string][]string{
+						"cluster": {
+							string(api.ClusterAPPCI),
+							string(api.ClusterBuild01)}},
+				},
+				{
+					ItemName: "ci-chat-bot",
+					Fields: []secretgenerator.FieldGenerator{{
+						Name: serviceAccountConfigPath,
+						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
+					}},
+					Params: map[string][]string{
+						"cluster": {
+							string(api.ClusterAPPCI),
+							string(api.ClusterBuild01)}},
+				},
+				{
+					ItemName: PodScaler,
+					Fields: []secretgenerator.FieldGenerator{{
+						Name: serviceAccountConfigPath,
+						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
+					}},
+					Params: map[string][]string{
+						"cluster": {
+							string(api.ClusterAPPCI),
+							string(api.ClusterBuild01)}},
+				},
+			},
+			expected: SecretGenConfig{
+				{
+					ItemName: BuildUFarm,
+					Fields: []secretgenerator.FieldGenerator{{
+						Name: serviceAccountConfigPath,
+						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
+					}},
+					Params: map[string][]string{
+						"cluster": {
+							string(api.ClusterAPPCI),
+							string(api.ClusterBuild01),
+							"newcluster"}},
+				},
+				{
+					ItemName: BuildUFarm,
+					Fields: []secretgenerator.FieldGenerator{{
+						Name: fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", clusterWildcard),
+						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
+					}},
+					Params: map[string][]string{
+						"cluster": {
+							string(api.ClusterAPPCI),
+							string(api.ClusterBuild01),
+							"newcluster"}},
+				},
+				{
+					ItemName: "ci-chat-bot",
+					Fields: []secretgenerator.FieldGenerator{{
+						Name: serviceAccountConfigPath,
+						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
+					}},
+					Params: map[string][]string{
+						"cluster": {
+							string(api.ClusterAPPCI),
+							string(api.ClusterBuild01),
+							"newcluster"}},
+				},
+				{
+					ItemName: PodScaler,
+					Fields: []secretgenerator.FieldGenerator{{
+						Name: serviceAccountConfigPath,
+						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
+					}},
+					Params: map[string][]string{
+						"cluster": {
+							string(api.ClusterAPPCI),
+							string(api.ClusterBuild01),
+							"newcluster"}},
+				},
 			},
 		},
 	}
 	for _, tc := range testCases {
-		var tempConfigFile string
 		t.Run(tc.name, func(t *testing.T) {
-			secretGeneratorDir := filepath.Join(testdata, "core-services", "ci-secret-generator")
-			src := filepath.Join(secretGeneratorDir, "config.yaml")
-			srcFD, err := os.Open(src)
-			if err != nil {
-				t.Fatalf("couldn't open config file")
+			if err := updateSecretGeneratorConfig(tc.options, &tc.input); err != nil {
+				t.Fatalf("error received while updating secret generator config: %v", err)
 			}
-			tempConfigFile = filepath.Join(secretGeneratorDir, "_config.yaml")
-			destFD, err := os.Create(tempConfigFile)
-			if err != nil {
-				t.Fatalf("couldn't create temp config file")
-			}
-			_, err = io.Copy(destFD, srcFD)
-			if err != nil {
-				t.Fatalf("couldn't copy to temp config file")
-			}
-			if err = updateSecretGenerator(tc.options); err != nil {
-				t.Fatalf("updateSecretGenerator returned error: %v", err)
-			}
-
-			configOut, _ := ioutil.ReadFile(tempConfigFile)
-			expectedOut, _ := ioutil.ReadFile(filepath.Join(secretGeneratorDir, "config_expected.yaml"))
-			if diff := cmp.Diff(expectedOut, configOut); diff != "" {
-				t.Fatalf("expected config does not match generated config: %s", diff)
-			}
-		})
-
-		t.Cleanup(func() {
-			if err := os.Remove(tempConfigFile); err != nil {
-				t.Fatalf("error removing output config file: %v", err)
+			if diff := cmp.Diff(tc.expected, tc.input); diff != "" {
+				t.Fatalf("expected config was different than results: %s", diff)
 			}
 		})
 	}

@@ -24,7 +24,7 @@ func updateSanitizeProwJobs(o options) error {
 	if err = yaml.Unmarshal(data, &c); err != nil {
 		return err
 	}
-	updateConfig(&c, o.clusterName)
+	updateSanitizeProwJobsConfig(&c, o.clusterName)
 	rawYaml, err := yaml.Marshal(c)
 	if err != nil {
 		return err
@@ -32,7 +32,7 @@ func updateSanitizeProwJobs(o options) error {
 	return ioutil.WriteFile(filename, rawYaml, 0644)
 }
 
-func updateConfig(c *dispatcher.Config, clusterName string) {
+func updateSanitizeProwJobsConfig(c *dispatcher.Config, clusterName string) {
 	appGroup := c.Groups[api.ClusterAPPCI]
 	metadata := api.Metadata{
 		Org:    "openshift",

@@ -29,10 +29,21 @@ func updateSecretGenerator(o options) error {
 	if err != nil {
 		return err
 	}
-	c := &SecretGenConfig{}
-	if err = yaml.Unmarshal(data, c); err != nil {
+	var c SecretGenConfig
+	if err = yaml.Unmarshal(data, &c); err != nil {
 		return err
 	}
+	if err = updateSecretGeneratorConfig(o, &c); err != nil {
+		return err
+	}
+	rawYaml, err := yaml.Marshal(c)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(filename, rawYaml, 0644)
+}
+
+func updateSecretGeneratorConfig(o options, c *SecretGenConfig) error {
 	serviceAccountConfigPath := serviceAccountKubeconfigPath(serviceAccountWildcard, clusterWildcard)
 	if err := appendToSecretItem(BuildUFarm, serviceAccountConfigPath, o, c); err != nil {
 		return err
@@ -43,15 +54,7 @@ func updateSecretGenerator(o options) error {
 	if err := appendToSecretItem("ci-chat-bot", serviceAccountConfigPath, o, c); err != nil {
 		return err
 	}
-	if err := appendToSecretItem(PodScaler, serviceAccountConfigPath, o, c); err != nil {
-		return err
-	}
-
-	y, err := yaml.Marshal(c)
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(filename, y, 0644)
+	return appendToSecretItem(PodScaler, serviceAccountConfigPath, o, c)
 }
 
 func appendToSecretItem(itemName string, name string, o options, c *SecretGenConfig) error {

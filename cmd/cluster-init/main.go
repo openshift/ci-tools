@@ -54,8 +54,14 @@ func validateOptions(o options) []error {
 }
 
 const (
-	BuildUFarm = "build_farm"
-	PodScaler  = "pod-scaler"
+	BuildUFarm    = "build_farm"
+	PodScaler     = "pod-scaler"
+	Config        = "config"
+	Kubeconfig    = "KUBECONFIG"
+	CiOperator    = "ci-operator"
+	BuildFarm     = "build-farm"
+	Ci            = "ci"
+	ConfigUpdater = "config-updater"
 )
 
 func main() {
@@ -72,11 +78,12 @@ func main() {
 	errorCount := 0
 	for _, step := range []func(options) error{
 		initClusterBuildFarmDir,
+		updateCiSecretBootstrap,
 		updateSecretGenerator,
 		updateSanitizeProwJobs,
 	} {
 		if err := step(o); err != nil {
-			logrus.WithError(err)
+			logrus.WithError(err).Error("error encountered: ")
 			errorCount++
 		}
 	}

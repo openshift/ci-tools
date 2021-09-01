@@ -56,9 +56,14 @@ func validateOptions(o options) []error {
 }
 
 const (
-	buildUFarm    = "build_farm"
-	podScaler     = "pod-scaler"
-	configUpdater = "config-updater"
+	BuildUFarm    = "build_farm"
+	PodScaler     = "pod-scaler"
+	ConfigUpdater = "config-updater"
+	Kubeconfig    = "KUBECONFIG"
+	CiOperator    = "ci-operator"
+	BuildFarm     = "build-farm"
+	Ci            = "ci"
+	ConfigUpdater = "config-updater"
 )
 
 func RepoMetadata() *api.Metadata {
@@ -84,6 +89,7 @@ func main() {
 	for _, step := range []func(options) error{
 		updateJobs,
 		initClusterBuildFarmDir,
+		updateCiSecretBootstrap,
 		updateSecretGenerator,
 		updateSanitizeProwJobs,
 	} {

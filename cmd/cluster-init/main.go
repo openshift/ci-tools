@@ -61,8 +61,12 @@ func validateOptions(o options) []error {
 const (
 	BuildUFarm    = "build_farm"
 	PodScaler     = "pod-scaler"
-	ConfigUpdater = "config-updater"
+	Config        = "config"
 	Kubeconfig    = "KUBECONFIG"
+	CiOperator    = "ci-operator"
+	BuildFarm     = "build-farm"
+	Ci            = "ci"
+	ConfigUpdater = "config-updater"
 )
 
 func main() {
@@ -82,6 +86,7 @@ func main() {
 		updatePostsubmits,
 		updatePresubmits,
 		initClusterBuildFarmDir,
+		updateCiSecretBootstrap,
 		updateSecretGenerator,
 		updateSanitizeProwJobs,
 	} {

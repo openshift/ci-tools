@@ -1094,3 +1094,25 @@ func TestResolveLeases(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveLeasesCopy(t *testing.T) {
+	ref := "ref"
+	refs := ReferenceByName{
+		ref: {As: ref, Leases: []api.StepLease{{}}},
+	}
+	test := api.MultiStageTestConfiguration{
+		Test: []api.TestStep{{Reference: &ref}},
+	}
+	ret0, err := NewResolver(refs, nil, nil, nil).Resolve("test", test)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ret1, err := NewResolver(refs, nil, nil, nil).Resolve("test", test)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ret0.Test[0].Leases[0].Count = 42
+	leases := []api.StepLease{ret0.Test[0].Leases[0], ret1.Test[0].Leases[0]}
+	expected := []api.StepLease{{Count: 42}, {Count: 0}}
+	testhelper.Diff(t, "leases", leases, expected)
+}

@@ -79,7 +79,7 @@ func TestFindSecretItem(t *testing.T) {
 				likeCluster: string(api.ClusterBuild01),
 				c:           config,
 			},
-			expected:      &secretgenerator.SecretItem{},
+			expected:      nil,
 			expectedError: errors.New("couldn't find SecretItem with item_name: build_farm name: secret-c containing cluster: build01"),
 		},
 	}

@@ -94,7 +94,7 @@ func findSecretItem(itemName string, name string, likeCluster string, c SecretGe
 	if idx != -1 {
 		return &c[idx], nil
 	}
-	return &secretgenerator.SecretItem{},
+	return nil,
 		fmt.Errorf("couldn't find SecretItem with item_name: %s name: %s containing cluster: %v",
 			itemName,
 			name,

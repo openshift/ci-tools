@@ -1273,7 +1273,7 @@ func (p ClusterProfile) LeaseType() string {
 	case
 		ClusterProfilePacketAssisted,
 		ClusterProfilePacketSNO:
-		return "packet-edge-qouta-slice"
+		return "packet-edge-quota-slice"
 	case ClusterProfileVSphere:
 		return "vsphere-quota-slice"
 	case ClusterProfileKubevirt:

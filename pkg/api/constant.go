@@ -45,9 +45,6 @@ const (
 	APPCIKubeAPIURL = "https://api.ci.l2s4.p1.openshiftapps.com:6443"
 
 	DefaultLeaseEnv = "LEASED_RESOURCE"
-
-	OauthTokenSecretKey  = "oauth"
-	OauthTokenSecretName = "github-credentials-openshift-ci-robot-private-git-cloner"
 )
 
 var (

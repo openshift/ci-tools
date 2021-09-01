@@ -1268,11 +1268,12 @@ func (p ClusterProfile) LeaseType() string {
 		return "openstack-ppc64le-quota-slice"
 	case ClusterProfileOvirt:
 		return "ovirt-quota-slice"
+	case ClusterProfilePacket:
+		return "packet-quota-slice"
 	case
-		ClusterProfilePacket,
 		ClusterProfilePacketAssisted,
 		ClusterProfilePacketSNO:
-		return "packet-quota-slice"
+		return "packet-edge-qouta-slice"
 	case ClusterProfileVSphere:
 		return "vsphere-quota-slice"
 	case ClusterProfileKubevirt:

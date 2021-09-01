@@ -186,7 +186,6 @@ func GetChangedTemplates(path, baseRev string) ([]string, error) {
 
 func loadRegistryStep(filename string, graph registry.NodeByName) (registry.Node, error) {
 	// if a commands script changed, mark reference as changed
-	filename = strings.ReplaceAll(filename, load.CommandsSuffix, load.RefSuffix)
 	var node registry.Node
 	var ok bool
 	switch {
@@ -196,6 +195,9 @@ func loadRegistryStep(filename string, graph registry.NodeByName) (registry.Node
 		node, ok = graph.Chains[strings.TrimSuffix(filename, load.ChainSuffix)]
 	case strings.HasSuffix(filename, load.WorkflowSuffix):
 		node, ok = graph.Workflows[strings.TrimSuffix(filename, load.WorkflowSuffix)]
+	case strings.Contains(filename, load.CommandsSuffix):
+		extension := filepath.Ext(filename)
+		node, ok = graph.References[strings.TrimSuffix(filename[0:len(filename)-len(extension)], load.CommandsSuffix)]
 	default:
 		return nil, fmt.Errorf("invalid step filename: %s", filename)
 	}
@@ -213,7 +215,7 @@ func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) ([
 		return changes, err
 	}
 	for _, c := range revChanges {
-		if filepath.Ext(c) == ".yaml" || strings.HasSuffix(c, load.CommandsSuffix) {
+		if filepath.Ext(c) == ".yaml" || strings.HasSuffix(c, fmt.Sprintf("%s%s", load.CommandsSuffix, filepath.Ext(c))) {
 			node, err := loadRegistryStep(filepath.Base(c), graph)
 			if err != nil {
 				return changes, err

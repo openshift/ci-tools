@@ -133,7 +133,7 @@ func (v *Validator) validateTestStepConfiguration(
 		} else if test.As == "images" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: should not be called 'images' because it gets confused with '[images]' target", fieldRootN))
 		} else if strings.HasPrefix(test.As, string(api.PipelineImageStreamTagReferenceIndexImage)) {
-			validationErrors = append(validationErrors, fmt.Errorf("%s.as: should begin with 'ci-index' because it gets confused with 'ci-index' and `ci-index-...` targets", fieldRootN))
+			validationErrors = append(validationErrors, fmt.Errorf("%s.as: should not begin with 'ci-index' because it gets confused with 'ci-index' and `ci-index-...` targets", fieldRootN))
 		} else if images.Has(test.As) {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: duplicated name %q already declared in 'images'", fieldRootN, test.As))
 		} else if len(validation.IsDNS1123Subdomain(test.As)) != 0 {
@@ -187,6 +187,10 @@ func (v *Validator) validateTestStepConfiguration(
 
 		if test.Secret != nil {
 			test.Secrets = append(test.Secrets, test.Secret)
+		}
+
+		if test.Secrets != nil && test.ContainerTestConfiguration == nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: secret/secrets can be only used with container-based tests (use credentials in multi-stage tests)", fieldRootN))
 		}
 
 		seen := sets.NewString()

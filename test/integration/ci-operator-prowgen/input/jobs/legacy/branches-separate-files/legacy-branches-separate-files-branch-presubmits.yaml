@@ -1,0 +1,8 @@
+# This job should stay in this file.
+presubmits:
+  legacy/branches-separate-files:
+  - always_run: false
+    branches:
+    - ^branch$
+    - ^branch-
+    name: pull-ci-legacy-branches-separate-files-test

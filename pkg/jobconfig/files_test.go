@@ -12,7 +12,7 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 )
 
-func TestMergeConfigs(t *testing.T) {
+func TestAppend(t *testing.T) {
 	var testCases = []struct {
 		name     string
 		dest     *prowconfig.JobConfig
@@ -75,7 +75,7 @@ func TestMergeConfigs(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			mergeConfigs(testCase.dest, testCase.part)
+			Append(testCase.dest, testCase.part)
 			if actual, expected := testCase.dest, testCase.expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: wanted to get %v, got %v", testCase.name, expected, actual)
 			}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 
 	"github.com/sirupsen/logrus"
 	"gopkg.in/fsnotify.v1"
@@ -55,23 +56,19 @@ type poolsPullSecretProviderOptions struct {
 func newOpts() (*options, error) {
 	opts := &options{}
 	opts.addDefaults()
-	flag.StringVar(&opts.leaderElectionNamespace, "leader-election-namespace", "ci", "The namespace to use for leaderelection")
-	// Controller-Runtimes root package imports the package that sets this flag
-	kubeconfigFlagDescription := "The kubeconfig to use. All contexts in it will be considered a build cluster. If it does not have a context named 'hive', loading in-cluster config will be attempted."
-	if f := flag.Lookup("kubeconfig"); f != nil {
-		f.Usage = kubeconfigFlagDescription
-		// https://i.kym-cdn.com/entries/icons/original/000/018/012/this_is_fine.jpeg
-		defer func() { opts.kubeconfig = f.Value.String() }()
-	} else {
-		flag.StringVar(&opts.kubeconfig, "kubeconfig", "", kubeconfigFlagDescription)
+	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	fs.StringVar(&opts.leaderElectionNamespace, "leader-election-namespace", "ci", "The namespace to use for leaderelection")
+	fs.StringVar(&opts.kubeconfig, "kubeconfig", "", "The kubeconfig to use. All contexts in it will be considered a build cluster. If it does not have a context named 'hive', loading in-cluster config will be attempted.")
+
+	fs.StringVar(&opts.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files. All contexts in it will be considered a build cluster. If it does not have a context named 'app.ci', loading in-cluster config will be attempted.")
+	fs.StringVar(&opts.leaderElectionSuffix, "leader-election-suffix", "", "Suffix for the leader election lock. Useful for local testing. If set, --dry-run must be set as well")
+	fs.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", allControllers.List(), opts.enabledControllers.Strings()))
+	fs.StringVar(&opts.poolsPullSecretProviderOptions.sourcePullSecretNamespace, "poolsPullSecretProviderOptions.sourcePullSecretNamespace", "ci-cluster-pool", "The namespace where the source pull secret is")
+	fs.StringVar(&opts.poolsPullSecretProviderOptions.sourcePullSecretName, "poolsPullSecretProviderOptions.sourcePullSecretName", "pull-secret", "The name of the source pull secret")
+	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		logrus.WithError(err).Fatal("could not parse args")
 	}
-	flag.StringVar(&opts.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files. All contexts in it will be considered a build cluster. If it does not have a context named 'app.ci', loading in-cluster config will be attempted.")
-	flag.StringVar(&opts.leaderElectionSuffix, "leader-election-suffix", "", "Suffix for the leader election lock. Useful for local testing. If set, --dry-run must be set as well")
-	flag.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", allControllers.List(), opts.enabledControllers.Strings()))
-	flag.StringVar(&opts.poolsPullSecretProviderOptions.sourcePullSecretNamespace, "poolsPullSecretProviderOptions.sourcePullSecretNamespace", "ci-cluster-pool", "The namespace where the source pull secret is")
-	flag.StringVar(&opts.poolsPullSecretProviderOptions.sourcePullSecretName, "poolsPullSecretProviderOptions.sourcePullSecretName", "pull-secret", "The name of the source pull secret")
-	flag.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
-	flag.Parse()
 
 	var errs []error
 	if opts.leaderElectionNamespace == "" {

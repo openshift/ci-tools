@@ -505,12 +505,16 @@ func generatePeriodicForTest(name string, info *ProwgenInfo, podSpec *corev1.Pod
 }
 
 func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterType string) corev1.Volume {
-	// AWS-2 and CPaaS and GCP2 need a different secret that should be provided to jobs
+	// AWS-2 and CPaaS and GCP2 PacketAssisted and PacketSNO need a different secret that should be provided to jobs
 	if profile == cioperatorapi.ClusterProfileAWSCPaaS {
 		clusterType = string(profile)
 	} else if profile == cioperatorapi.ClusterProfileAWS2 {
 		clusterType = string(profile)
 	} else if profile == cioperatorapi.ClusterProfileGCP2 {
+		clusterType = string(profile)
+	} else if profile == cioperatorapi.ClusterProfilePacketAssisted {
+		clusterType = string(profile)
+	} else if profile == cioperatorapi.ClusterProfilePacketSNO {
 		clusterType = string(profile)
 	}
 	ret := corev1.Volume{
@@ -614,10 +618,7 @@ func generateJobBase(name, prefix string, info *ProwgenInfo, podSpec *corev1.Pod
 	var decorationConfig *prowv1.DecorationConfig
 	if skipCloning {
 		decorationConfig = &prowv1.DecorationConfig{SkipCloning: utilpointer.BoolPtr(true)}
-	} else if !skipCloning && info.Config.Private {
-		decorationConfig = &prowv1.DecorationConfig{OauthTokenSecret: &prowv1.OauthTokenSecret{Key: api.OauthTokenSecretKey, Name: api.OauthTokenSecretName}}
 	}
-
 	base := prowconfig.JobBase{
 		Agent:  string(prowv1.KubernetesAgent),
 		Labels: labels,

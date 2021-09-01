@@ -181,9 +181,11 @@ func mergeMaps(dst *map[string]string, src map[string]string) {
 
 // mergeLeases joins two lease lists, checking for duplicates.
 func mergeLeases(dst, src []api.StepLease) ([]api.StepLease, error) {
+	var ret []api.StepLease
 	seen := make(map[string]*api.StepLease)
 	var dup []string
 	for i := range dst {
+		ret = append(ret, dst[i])
 		seen[dst[i].Env] = &dst[i]
 	}
 	for i := range src {
@@ -193,13 +195,13 @@ func mergeLeases(dst, src []api.StepLease) ([]api.StepLease, error) {
 			}
 			continue
 		}
-		dst = append(dst, src[i])
+		ret = append(ret, src[i])
 		seen[src[i].Env] = &src[i]
 	}
 	if dup != nil {
 		return nil, fmt.Errorf("cannot override workflow environment variable for lease(s): %v", dup)
 	}
-	return dst, nil
+	return ret, nil
 }
 
 func (r *registry) process(steps []api.TestStep, seen sets.String, stack stack) (ret []api.LiteralTestStep, errs []error) {
@@ -250,6 +252,9 @@ func (r *registry) processStep(step *api.TestStep, seen sets.String, stack stack
 	}
 	seen.Insert(ret.As)
 	var errs []error
+	if ret.Leases != nil {
+		ret.Leases = append([]api.StepLease(nil), ret.Leases...)
+	}
 	if ret.Environment != nil {
 		env := make([]api.StepParameter, 0, len(ret.Environment))
 		for _, e := range ret.Environment {

@@ -7,10 +7,14 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
+
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
@@ -143,18 +147,68 @@ func OperateOnCIOperatorConfigDir(configDir string, callback func(*cioperatorapi
 }
 
 func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
-	return filepath.WalkDir(filepath.Join(configDir, subDir), func(path string, info fs.DirEntry, err error) error {
-		if err != nil {
-			logrus.WithField("source-file", path).WithError(err).Error("Failed to walk CI Operator configuration dir")
-			return err
-		}
-		if isConfigFile(path, info) {
-			if err := OperateOnCIOperatorConfig(path, callback); err != nil {
+	type item struct {
+		config *cioperatorapi.ReleaseBuildConfiguration
+		info   *Info
+	}
+	inputCh := make(chan string)
+	errCh := make(chan error)
+	go func() {
+		if err := filepath.WalkDir(filepath.Join(configDir, subDir), func(path string, info fs.DirEntry, err error) error {
+			if err != nil {
+				logrus.WithField("source-file", path).WithError(err).Error("Failed to walk CI Operator configuration dir")
 				return err
 			}
+			if isConfigFile(path, info) {
+				inputCh <- path
+			}
+			return nil
+		}); err != nil {
+			errCh <- err
 		}
-		return nil
-	})
+		close(inputCh)
+	}()
+	nWorkers := runtime.GOMAXPROCS(0)
+	outputCh := make(chan item)
+	var wg sync.WaitGroup
+	wg.Add(nWorkers)
+	for i := 0; i < nWorkers; i++ {
+		go func() {
+			defer wg.Done()
+			for path := range inputCh {
+				info, err := InfoFromPath(path)
+				if err != nil {
+					logrus.WithField("source-file", path).WithError(err).Error("Failed to resolve info from CI Operator configuration path")
+					errCh <- err
+					continue
+				}
+				config, err := readCiOperatorConfig(path, *info)
+				if err != nil {
+					logrus.WithField("source-file", path).WithError(err).Error("Failed to load CI Operator configuration")
+					errCh <- err
+					continue
+				}
+				outputCh <- item{config, info}
+			}
+		}()
+	}
+	go func() {
+		wg.Wait()
+		close(outputCh)
+	}()
+	go func() {
+		for i := range outputCh {
+			if err := callback(i.config, i.info); err != nil {
+				errCh <- err
+			}
+		}
+		close(errCh)
+	}()
+	var ret []error
+	for err := range errCh {
+		ret = append(ret, err)
+	}
+	return utilerrors.NewAggregate(ret)
 }
 
 func LoggerForInfo(info Info) *logrus.Entry {

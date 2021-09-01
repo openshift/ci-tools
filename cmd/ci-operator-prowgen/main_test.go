@@ -222,7 +222,7 @@ tests:
 				t.Fatalf("Unexpected error writing old postsubmits: %v", err)
 			}
 
-			if err := config.OperateOnCIOperatorConfig(fullConfigPath, generateJobsToDir(baseProwConfigDir, nil)); err != nil {
+			if err := generateJobsToDir(fullConfigPath, baseProwConfigDir, "", map[string]*config.Prowgen{}, nil); err != nil {
 				t.Fatalf("Unexpected error generating jobs from config: %v", err)
 			}
 

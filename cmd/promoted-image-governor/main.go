@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/sirupsen/logrus"
 
@@ -46,6 +47,9 @@ type options struct {
 	openshiftMappingConfigPath string
 	openshiftMappingConfig     *OpenshiftMappingConfig
 
+	explainsRaw flagutil.Strings
+	explains    map[api.ImageStreamTagReference]string
+
 	logLevel string
 }
 
@@ -60,6 +64,7 @@ func parseOptions() *options {
 	fs.StringVar(&opts.releaseControllerMirrorConfigDir, "release-controller-mirror-config-dir", "", "Path to the release controller mirror config directory")
 	fs.StringVar(&opts.openshiftMappingDir, "openshift-mapping-dir", "", "Path to the openshift mapping directory")
 	fs.StringVar(&opts.openshiftMappingConfigPath, "openshift-mapping-config", "", "Path to the openshift mapping config file")
+	fs.Var(&opts.explainsRaw, "explain", "An imagestreamtag to explain its existence. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
 	}
@@ -84,7 +89,7 @@ func (o *options) validate() error {
 	if o.openshiftMappingConfigPath != "" {
 		c, err := loadMappingConfig(o.openshiftMappingConfigPath)
 		if err != nil {
-			logrus.WithError(err).Fatal("could not load openshift mapping config")
+			return fmt.Errorf("could not load openshift mapping config: %w", err)
 		}
 		o.openshiftMappingConfig = c
 	}
@@ -96,8 +101,36 @@ func (o *options) validate() error {
 		logrus.WithField("re", re.String()).Info("Ignore tags as required by flag")
 		o.ignoredImageStreamTags = append(o.ignoredImageStreamTags, re)
 	}
-	return nil
+
+	if o.openshiftMappingConfigPath != "" && len(o.explainsRaw.Strings()) > 0 {
+		return fmt.Errorf("--openshift-mapping-config and --explain cannot be set together")
+	}
+
+	o.explains = map[api.ImageStreamTagReference]string{}
+	var errs []error
+	for _, val := range o.explainsRaw.Strings() {
+		slashSplit := strings.Split(val, "/")
+		if len(slashSplit) != 2 {
+			errs = append(errs, fmt.Errorf("--explain value %s was not in namespace/name:tag format", val))
+			continue
+		}
+		dotSplit := strings.Split(slashSplit[1], ":")
+		if len(dotSplit) != 2 {
+			errs = append(errs, fmt.Errorf("name in --explain must be of imagestreamname:tag format, wasn't the case for %s", slashSplit[1]))
+			continue
+		}
+		o.explains[api.ImageStreamTagReference{
+			Namespace: slashSplit[0],
+			Name:      dotSplit[0],
+			Tag:       dotSplit[1],
+		}] = explanationUnknown
+	}
+	return utilerrors.NewAggregate(errs)
 }
+
+const (
+	explanationUnknown = "unknown"
+)
 
 func loadMappingConfig(path string) (*OpenshiftMappingConfig, error) {
 	data, err := ioutil.ReadFile(path)
@@ -322,7 +355,12 @@ func main() {
 	}
 	var promotedTags []api.ImageStreamTagReference
 	if err := config.OperateOnCIOperatorConfigDir(abs, func(cfg *api.ReleaseBuildConfiguration, metadata *config.Info) error {
-		promotedTags = append(promotedTags, release.PromotedTags(cfg)...)
+		for _, isTagRef := range release.PromotedTags(cfg) {
+			promotedTags = append(promotedTags, isTagRef)
+			if _, ok := opts.explains[isTagRef]; ok {
+				opts.explains[isTagRef] = cfg.Metadata.AsString()
+			}
+		}
 		return nil
 	}); err != nil {
 		logrus.WithField("path", abs).Fatal("failed to operate on CI Operator's config directory")
@@ -364,6 +402,28 @@ func main() {
 	toDelete, err := tagsToDelete(ctx, client, promotedTags, opts.ignoredImageStreamTags, imageStreamRefs)
 	if err != nil {
 		logrus.WithError(err).Fatal("could not get tags to delete")
+	}
+
+	if len(opts.explains) > 0 {
+		w := tabwriter.NewWriter(os.Stdout, 20, 30, 1, ' ', tabwriter.AlignRight)
+		fmt.Fprintf(w, "tag\texplanation\t\n")
+		for tag, e := range opts.explains {
+			if e == explanationUnknown {
+				name := fmt.Sprintf("%s:%s", tag.Name, tag.Tag)
+				isTag := &imagev1.ImageStreamTag{}
+				if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: tag.Namespace, Name: name}, isTag); err != nil {
+					if kerrors.IsNotFound(err) {
+						fmt.Fprintf(w, "%s\t%s\t\n", tag.ISTagName(), "imagestreamtag does not exit")
+						continue
+					} else {
+						logrus.WithError(err).Fatalf("could not get image stream tag %s", tag.ISTagName())
+					}
+				}
+			}
+			fmt.Fprintf(w, "%s\t%s\t\n", tag.ISTagName(), e)
+		}
+		w.Flush()
+		return
 	}
 
 	var errs []error

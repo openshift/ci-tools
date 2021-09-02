@@ -197,7 +197,7 @@ var (
 )
 
 func serveUI(port, healthPort int, loaders map[string][]*cacheReloader) {
-	logger := logrus.WithField("component", "frontend")
+	logger := logrus.WithField("component", "pod-scaler frontend")
 	server := &frontendServer{
 		logger:     logger,
 		lock:       sync.RWMutex{},

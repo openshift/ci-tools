@@ -30,7 +30,7 @@ import (
 )
 
 func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool) {
-	logger := logrus.WithField("component", "admission")
+	logger := logrus.WithField("component", "pod-scaler admission")
 	logger.Info("Initializing admission webhook server.")
 	health := pjutil.NewHealthOnPort(healthPort)
 	resources := newResourceServer(loaders, health)

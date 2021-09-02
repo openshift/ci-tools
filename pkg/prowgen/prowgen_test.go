@@ -106,6 +106,15 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 			},
 		},
 		{
+			description: "azure-2 cluster profile",
+			test: &ciop.TestStepConfiguration{
+				As: "test",
+				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+					ClusterProfile: ciop.ClusterProfileAzure2,
+				},
+			},
+		},
+		{
 			description: "ibmcloud cluster profile",
 			test: &ciop.TestStepConfiguration{
 				As: "test",

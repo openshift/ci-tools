@@ -1062,6 +1062,7 @@ const (
 	ClusterProfileAWSGluster            ClusterProfile = "aws-gluster"
 	ClusterProfileAlibaba               ClusterProfile = "alibaba"
 	ClusterProfileAzure                 ClusterProfile = "azure"
+	ClusterProfileAzure2                ClusterProfile = "azure-2"
 	ClusterProfileAzure4                ClusterProfile = "azure4"
 	ClusterProfileAzureArc              ClusterProfile = "azure-arc"
 	ClusterProfileAzureStack            ClusterProfile = "azurestack"

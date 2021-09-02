@@ -1,0 +1,86 @@
+presubmits:
+  openshift/release:
+  - agent: kubernetes
+    always_run: true
+    branches:
+    - master
+    cluster: app.ci
+    context: ci/build-farm/build01-dry
+    decorate: true
+    labels:
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    name: pull-ci-openshift-release-master-build01-dry
+    rerun_command: /test build01-dry
+    spec:
+      containers:
+      - args:
+        - --config-dir=clusters/build-clusters/build01
+        - --as=
+        - --KUBECONFIG=/etc/build-farm-credentials/KUBECONFIG
+        command:
+        - applyconfig
+        image: registry.ci.openshift.org/ci/applyconfig:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/build-farm-credentials
+          name: build-farm-credentials
+          readOnly: true
+        - mountPath: /tmp
+          name: tmp
+      serviceAccountName: config-updater
+      volumes:
+      - name: build-farm-credentials
+        secret:
+          items:
+          - key: sa.config-updater.build01.config
+            path: kubeconfig
+          secretName: build-farm-credentials
+      - emptyDir: {}
+        name: tmp
+    trigger: (?m)^/test( | .* )build01,?($|\s.*)
+  - agent: kubernetes
+    always_run: true
+    branches:
+    - master
+    cluster: app.ci
+    context: ci/build-farm/newCluster-dry
+    decorate: true
+    labels:
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    name: pull-ci-openshift-release-master-newCluster-dry
+    rerun_command: /test newCluster-dry
+    spec:
+      containers:
+      - args:
+        - --config-dir=clusters/build-clusters/newCluster
+        - --as=
+        - --KUBECONFIG=/etc/build-farm-credentials/KUBECONFIG
+        command:
+        - applyconfig
+        image: registry.ci.openshift.org/ci/applyconfig:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/build-farm-credentials
+          name: build-farm-credentials
+          readOnly: true
+        - mountPath: /tmp
+          name: tmp
+      serviceAccountName: config-updater
+      volumes:
+      - name: build-farm-credentials
+        secret:
+          items:
+          - key: sa.config-updater.newCluster.config
+            path: kubeconfig
+          secretName: build-farm-credentials
+      - emptyDir: {}
+        name: tmp
+    trigger: (?m)^/test( | .* )newCluster,?($|\s.*)

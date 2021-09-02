@@ -1,0 +1,46 @@
+periodics:
+- name: periodic-rotate-serviceaccount-secrets
+  spec:
+    containers:
+    - env:
+      - name: KUBECONFIG
+        value: :/etc/build-farm-credentials/sa.config-updater.build01.config
+      name: ""
+      resources: {}
+    volumes:
+    - name: build-farm-credentials
+      secret:
+        items:
+        - key: sa.config-updater.build01.config
+          path: sa.config-updater.build01.config
+        secretName: secret
+- name: periodic-ci-secret-generator
+  spec:
+    containers:
+    - env:
+      - name: KUBECONFIG
+        value: :/etc/build-farm-credentials/sa.config-updater.build01.config
+      name: ci-secret-bootstrap
+      resources: {}
+    volumes:
+    - name: build-farm-credentials
+      secret:
+        items:
+        - key: sa.config-updater.build01.config
+          path: sa.config-updater.build01.config
+        secretName: secret
+- name: periodic-ci-secret-bootstrap
+  spec:
+    containers:
+    - env:
+      - name: KUBECONFIG
+        value: :/etc/build-farm-credentials/sa.config-updater.build01.config
+      name: ci-secret-bootstrap
+      resources: {}
+    volumes:
+    - name: build-farm-credentials
+      secret:
+        items:
+        - key: sa.config-updater.build01.config
+          path: sa.config-updater.build01.config
+        secretName: secret

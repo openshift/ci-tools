@@ -54,12 +54,15 @@ func TestValidateOptions(t *testing.T) {
 			expectedErrors: []error{errors.New("--release-repo must be provided")},
 		},
 		{
-			name: "build farm dir exists",
+			name: "cluster exists",
 			options: options{
 				clusterName: "existingCluster",
 				releaseRepo: testdata,
 			},
-			expectedErrors: []error{errors.New("build farm directory: existingCluster already exists")},
+			expectedErrors: []error{
+				errors.New("cluster: existingCluster already exists"),
+				errors.New("build farm directory: existingCluster already exists"),
+			},
 		},
 	}
 	for _, tc := range testCases {

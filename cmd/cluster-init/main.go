@@ -42,9 +42,14 @@ func validateOptions(o options) []error {
 		}
 	}
 	if o.releaseRepo == "" {
-		errs = append(errs, errors.New("--release-repo must be provided"))
+		//If the release repo is missing, further checks won't be possible
+		return append(errs, errors.New("--release-repo must be provided"))
 	}
 	if o.clusterName != "" {
+		existsFor, err := periodicExistsFor(o)
+		if existsFor || err != nil {
+			errs = append(errs, fmt.Errorf("cluster: %s already exists", o.clusterName))
+		}
 		buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
 		if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
 			errs = append(errs, fmt.Errorf("build farm directory: %s already exists", o.clusterName))
@@ -54,8 +59,10 @@ func validateOptions(o options) []error {
 }
 
 const (
-	BuildUFarm = "build_farm"
-	PodScaler  = "pod-scaler"
+	BuildUFarm    = "build_farm"
+	PodScaler     = "pod-scaler"
+	ConfigUpdater = "config-updater"
+	Kubeconfig    = "KUBECONFIG"
 )
 
 func main() {
@@ -71,6 +78,9 @@ func main() {
 	// Each step in the process is allowed to fail independently so that the diffs for the others can still be generated
 	errorCount := 0
 	for _, step := range []func(options) error{
+		updateInfraPeriodics,
+		updatePostsubmits,
+		updatePresubmits,
 		initClusterBuildFarmDir,
 		updateSecretGenerator,
 		updateSanitizeProwJobs,

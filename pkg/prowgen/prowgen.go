@@ -560,7 +560,8 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 		cioperatorapi.ClusterProfileHyperShift,
 		cioperatorapi.ClusterProfilePacket,
 		cioperatorapi.ClusterProfilePacketAssisted,
-		cioperatorapi.ClusterProfilePacketSNO:
+		cioperatorapi.ClusterProfilePacketSNO,
+		cioperatorapi.ClusterProfileGCPCRIO:
 	default:
 		ret.VolumeSource.Projected.Sources = append(ret.VolumeSource.Projected.Sources, corev1.VolumeProjection{
 			ConfigMap: &corev1.ConfigMapProjection{

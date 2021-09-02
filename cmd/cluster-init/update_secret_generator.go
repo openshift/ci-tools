@@ -62,7 +62,7 @@ func appendToSecretItem(itemName string, name string, o options, c *SecretGenCon
 	if err != nil {
 		return err
 	}
-	logrus.Infof("Appending to secret item: {itemName: %s, name: %s, likeCluster: %s}\n", itemName, name, string(api.ClusterBuild01))
+	logrus.Infof("Appending to secret item: {itemName: %s, name: %s, likeCluster: %s}", itemName, name, string(api.ClusterBuild01))
 	si.Params["cluster"] = append(si.Params["cluster"], o.clusterName)
 	return nil
 }

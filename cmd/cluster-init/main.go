@@ -86,7 +86,7 @@ func main() {
 		updateSanitizeProwJobs,
 	} {
 		if err := step(o); err != nil {
-			logrus.WithError(err)
+			logrus.Errorf("error encountered: %v", err)
 			errorCount++
 		}
 	}

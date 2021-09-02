@@ -393,6 +393,7 @@ func validateClusterProfile(fieldRoot string, p api.ClusterProfile) []error {
 		api.ClusterProfileAWSAtomic,
 		api.ClusterProfileAWSCentos,
 		api.ClusterProfileAWSCentos40,
+		api.ClusterProfileAWSChina,
 		api.ClusterProfileAWSGluster,
 		api.ClusterProfileAlibaba,
 		api.ClusterProfileAzure4,

@@ -516,6 +516,8 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 		clusterType = string(profile)
 	} else if profile == cioperatorapi.ClusterProfilePacketSNO {
 		clusterType = string(profile)
+	} else if profile == cioperatorapi.ClusterProfileAzure2 {
+		clusterType = string(profile)
 	}
 	ret := corev1.Volume{
 		Name: "cluster-profile",
@@ -537,6 +539,7 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 		cioperatorapi.ClusterProfileAWSArm64,
 		cioperatorapi.ClusterProfileAlibaba,
 		cioperatorapi.ClusterProfileAzure4,
+		cioperatorapi.ClusterProfileAzure2,
 		cioperatorapi.ClusterProfileAzureArc,
 		cioperatorapi.ClusterProfileAzureStack,
 		cioperatorapi.ClusterProfileIBMCloud,

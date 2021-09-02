@@ -41,7 +41,7 @@ func TestPeriodicExistsFor(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			exists, err := periodicExistsFor(tc.options)
 			if err != nil {
-				t.Fatalf("unexpected error occured while running periodicExistsFor: %v", err)
+				t.Fatalf("unexpected error occurred while running periodicExistsFor: %v", err)
 			}
 			if tc.expected != exists {
 				t.Fatalf("result: %v does not match expected: %v", exists, tc.expected)

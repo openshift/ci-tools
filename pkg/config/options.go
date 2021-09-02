@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
 // Options holds options to load CI Operator configuration
@@ -98,14 +99,14 @@ func (o *Options) Bind(fs *flag.FlagSet) {
 	fs.BoolVar(&o.onlyProcessChanges, "only-process-changes", false, "If true, compare changes with the main branch")
 }
 
-func (o *Options) matches(metadata cioperatorapi.Metadata) bool {
+func (o *Options) matches(org, repo string) bool {
 	switch {
 	case o.Org == "" && o.Repo == "":
 		return true
 	case o.Org != "" && o.Repo != "":
-		return o.Org == metadata.Org && o.Repo == metadata.Repo
+		return o.Org == org && o.Repo == repo
 	default:
-		return (o.Org != "" && o.Org == metadata.Org) || (o.Repo != "" && o.Repo == metadata.Repo)
+		return (o.Org != "" && o.Org == org) || (o.Repo != "" && o.Repo == repo)
 	}
 }
 
@@ -113,7 +114,7 @@ func (o *Options) matches(metadata cioperatorapi.Metadata) bool {
 // down to those that were selected by the user with --{org|repo}
 func (o *Options) OperateOnCIOperatorConfigDir(configDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
 	return OperateOnCIOperatorConfigDir(configDir, func(configuration *cioperatorapi.ReleaseBuildConfiguration, info *Info) error {
-		if !o.matches(info.Metadata) {
+		if !o.matches(info.Metadata.Org, info.Metadata.Repo) {
 			return nil
 		}
 
@@ -122,6 +123,20 @@ func (o *Options) OperateOnCIOperatorConfigDir(configDir string, callback func(*
 		}
 
 		return callback(configuration, info)
+	})
+}
+
+// OperateOnJobConfigSubdirPaths filters the full set of configurations
+// down to those that were selected by the user with --{org|repo}
+func (o *Options) OperateOnJobConfigSubdirPaths(dir, subDir string, callback func(info *jc.Info) error) error {
+	return jc.OperateOnJobConfigSubdirPaths(dir, subDir, func(info *jc.Info) error {
+		if !o.matches(info.Org, info.Repo) {
+			return nil
+		}
+		if o.onlyProcessChanges && !o.modifiedFiles.Has(info.Filename) {
+			return nil
+		}
+		return callback(info)
 	})
 }
 

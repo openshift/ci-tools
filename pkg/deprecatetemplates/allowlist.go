@@ -12,7 +12,7 @@ import (
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config"
 
-	"github.com/openshift/ci-tools/pkg/prowgen"
+	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
@@ -61,7 +61,7 @@ func (b blockedJobs) Has(job config.JobBase) bool {
 func (b blockedJobs) Insert(job config.JobBase) {
 	b[job.Name] = blockedJob{
 		current:   true,
-		Generated: prowgen.IsGenerated(job),
+		Generated: jc.IsGenerated(job),
 		Kind:      getKind(job),
 	}
 }

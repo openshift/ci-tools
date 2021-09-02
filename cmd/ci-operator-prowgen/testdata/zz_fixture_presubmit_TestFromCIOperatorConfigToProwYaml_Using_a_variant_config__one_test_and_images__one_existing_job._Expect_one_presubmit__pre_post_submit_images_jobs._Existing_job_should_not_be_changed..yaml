@@ -10,7 +10,7 @@ presubmits:
     decoration_config:
       skip_cloning: true
     labels:
-      ci-operator.openshift.io/prowgen-controlled: newly-generated
+      ci-operator.openshift.io/prowgen-controlled: "true"
       ci-operator.openshift.io/variant: rhel
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
     name: pull-ci-super-duper-branch-rhel-images
@@ -60,7 +60,7 @@ presubmits:
     decoration_config:
       skip_cloning: true
     labels:
-      ci-operator.openshift.io/prowgen-controlled: newly-generated
+      ci-operator.openshift.io/prowgen-controlled: "true"
       ci-operator.openshift.io/variant: rhel
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
     name: pull-ci-super-duper-branch-rhel-unit

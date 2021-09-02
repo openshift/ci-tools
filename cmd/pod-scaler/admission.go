@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/test-infra/prow/entrypoint"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/pjutil"
@@ -108,20 +109,37 @@ func mutatePodMetadata(pod *corev1.Pod) error {
 	if _, isRehearsal := pod.ObjectMeta.Labels[rehearse.Label]; !isRehearsal {
 		return nil
 	}
-	var rawConfig string
+	var rawConfig, rawEntrypointConfig string
+	var foundContainer bool
 	for _, container := range pod.Spec.Containers {
 		if container.Name != "test" {
 			continue
 		}
+		foundContainer = true
 		for _, value := range container.Env {
-			if value.Name != "CONFIG_SPEC" {
-				continue
+			if value.Name == "CONFIG_SPEC" {
+				rawConfig = value.Value
 			}
-			rawConfig = value.Value
+			if value.Name == entrypoint.JSONConfigEnvVar {
+				rawEntrypointConfig = value.Value
+			}
 		}
 	}
 	if rawConfig == "" {
-		return errors.New("could not find configuration in rehearsal Pod's env")
+		if foundContainer {
+			baseError := "could not find $CONFIG_SPEC in the environment of the rehearsal Pod's test container"
+			if rawEntrypointConfig != "" {
+				var opts entrypoint.Options
+				if err := json.Unmarshal([]byte(rawEntrypointConfig), &opts); err != nil {
+					return fmt.Errorf("%s, could not parse $ENTRYPOINT_OPTIONS: %w", baseError, err)
+				}
+				if len(opts.Args) > 0 && opts.Args[0] != "ci-operator" {
+					return fmt.Errorf("%s, $ENTRYPOINT_OPTIONS is running %s, not ci-operator", baseError, opts.Args[0])
+				}
+			}
+			return errors.New(baseError)
+		}
+		return errors.New("could not find test container in the rehearsal Pod")
 	}
 	var config api.ReleaseBuildConfiguration
 	if err := yaml.Unmarshal([]byte(rawConfig), &config); err != nil {

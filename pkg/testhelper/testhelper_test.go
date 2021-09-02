@@ -1,6 +1,7 @@
 package testhelper
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -75,10 +76,16 @@ func TestEquateErrorMessage(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "wrap error: false",
+			name:     "wrapped errors of fmt type are the same",
 			x:        fmt.Errorf("wrap error: same error"),
 			y:        fmt.Errorf("wrap error: %w", fmt.Errorf("same error")),
-			expected: false,
+			expected: true,
+		},
+		{
+			name:     "wrapped errors of different type are the same",
+			x:        errors.New("wrap error: same error"),
+			y:        fmt.Errorf("wrap error: %w", fmt.Errorf("same error")),
+			expected: true,
 		},
 		{
 			name:     "wrap error: true",

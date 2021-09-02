@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -155,7 +156,7 @@ func TestMutatePodMetadata(t *testing.T) {
 		name          string
 		pod           *corev1.Pod
 		expected      *corev1.Pod
-		expectedError bool
+		expectedError error
 	}{
 		{
 			name:     "not a rehearsal Pod",
@@ -163,9 +164,17 @@ func TestMutatePodMetadata(t *testing.T) {
 			expected: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{}}},
 		},
 		{
-			name:          "rehearsal Pod with no config",
+			name:          "rehearsal Pod with test container",
 			pod:           &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{rehearse.Label: "1"}}},
-			expectedError: true,
+			expectedError: errors.New("could not find test container in the rehearsal Pod"),
+		},
+		{
+			name: "rehearsal Pod with no config env",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{rehearse.Label: "1"}},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
+			},
+			expectedError: errors.New("could not find $CONFIG_SPEC in the environment of the rehearsal Pod's test container"),
 		},
 		{
 			name: "rehearsal Pod with malformed config",
@@ -173,7 +182,23 @@ func TestMutatePodMetadata(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{rehearse.Label: "1"}},
 				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Env: []corev1.EnvVar{{Name: "CONFIG_SPEC", Value: "nothing"}}}}},
 			},
-			expectedError: true,
+			expectedError: errors.New("could not unmarshal configuration from rehearsal pod: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type api.ReleaseBuildConfiguration"),
+		},
+		{
+			name: "rehearsal Pod running something other than ci-op",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{rehearse.Label: "1"}},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Env: []corev1.EnvVar{{Name: "ENTRYPOINT_OPTIONS", Value: `{"args":["lol"]}`}}}}},
+			},
+			expectedError: errors.New("could not find $CONFIG_SPEC in the environment of the rehearsal Pod's test container, $ENTRYPOINT_OPTIONS is running lol, not ci-operator"),
+		},
+		{
+			name: "rehearsal Pod malformed entrypoint opts",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{rehearse.Label: "1"}},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Env: []corev1.EnvVar{{Name: "ENTRYPOINT_OPTIONS", Value: "nothing"}}}}},
+			},
+			expectedError: errors.New("could not find $CONFIG_SPEC in the environment of the rehearsal Pod's test container, could not parse $ENTRYPOINT_OPTIONS: invalid character 'o' in literal null (expecting 'u')"),
 		},
 		{
 			name: "rehearsal Pod with config",
@@ -203,13 +228,10 @@ func TestMutatePodMetadata(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			err := mutatePodMetadata(testCase.pod)
-			if testCase.expectedError && err == nil {
-				t.Errorf("%s: expected error but got none", testCase.name)
+			if diff := cmp.Diff(testCase.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: incorrect error: %v", testCase.name, diff)
 			}
-			if !testCase.expectedError && err != nil {
-				t.Errorf("%s: expected no error but got one: %v", testCase.name, err)
-			}
-			if testCase.expectedError {
+			if testCase.expectedError != nil {
 				return
 			}
 			if diff := cmp.Diff(testCase.pod, testCase.expected); diff != "" {

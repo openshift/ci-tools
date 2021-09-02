@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 
-	"google.golang.org/protobuf/proto"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -23,6 +21,7 @@ const (
 func generatePeriodic(clusterName string) prowconfig.Periodic {
 	args := generateArgs(clusterName)
 	args = append(args, "--confirm=true")
+	trueBool := true
 	return prowconfig.Periodic{
 		JobBase: prowconfig.JobBase{
 			Name:       "periodic-openshift-release-master-" + clusterName + "-apply",
@@ -38,7 +37,7 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 				ServiceAccountName: ConfigUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{
-				Decorate: proto.Bool(true),
+				Decorate: &trueBool,
 				ExtraRefs: []prowapi.Refs{{
 					Org:     "openshift",
 					Repo:    "release",
@@ -56,6 +55,7 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 	args := generateArgs(clusterName)
 	args = append(args, "--confirm=true")
+	trueBool := true
 	return prowconfig.Postsubmit{
 		JobBase: prowconfig.JobBase{
 			Name:       "branch-ci-openshift-release-master-" + clusterName + "-apply",
@@ -68,7 +68,7 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 				ServiceAccountName: ConfigUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{
-				Decorate: proto.Bool(true),
+				Decorate: &trueBool,
 			},
 			MaxConcurrency: 1,
 			Labels: map[string]string{
@@ -123,8 +123,9 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 }
 
 func generateUtilityConfig() prowconfig.UtilityConfig {
+	trueBool := true
 	return prowconfig.UtilityConfig{
-		Decorate:  proto.Bool(true),
+		Decorate:  &trueBool,
 		ExtraRefs: []prowapi.Refs{},
 	}
 }

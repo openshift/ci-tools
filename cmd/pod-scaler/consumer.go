@@ -18,7 +18,7 @@ func newReloader(name string, cache cache) *cacheReloader {
 		name:  name,
 		cache: cache,
 		logger: logrus.WithFields(logrus.Fields{
-			"component": "reloader",
+			"component": "pod-scaler reloader",
 			"metric":    name,
 		}),
 		lock: &sync.RWMutex{},

@@ -14,7 +14,7 @@ import (
 )
 
 func newResourceServer(loaders map[string][]*cacheReloader, health *pjutil.Health) *resourceServer {
-	logger := logrus.WithField("component", "request_server")
+	logger := logrus.WithField("component", "pod-scaler request server")
 	server := &resourceServer{
 		logger:     logger,
 		lock:       sync.RWMutex{},

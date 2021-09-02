@@ -3,12 +3,15 @@ package main
 import (
 	"errors"
 	"fmt"
+	"testing"
+
 	"github.com/google/go-cmp/cmp"
-	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/testhelper"
+
 	v1 "k8s.io/api/core/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
-	"testing"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestPeriodicExistsFor(t *testing.T) {
@@ -268,7 +271,7 @@ func TestFindContainer(t *testing.T) {
 	}
 }
 
-func TestFinEnv(t *testing.T) {
+func TestFindEnv(t *testing.T) {
 	testCases := []struct {
 		name          string
 		container     v1.Container

@@ -410,10 +410,6 @@ func main() {
 	}
 
 	ctx := interrupts.Context()
-	toDelete, err := tagsToDelete(ctx, client, promotedTags, opts.ignoredImageStreamTags, imageStreamRefs)
-	if err != nil {
-		logrus.WithError(err).Fatal("could not get tags to delete")
-	}
 
 	if len(opts.explains) > 0 {
 		w := tabwriter.NewWriter(os.Stdout, 20, 30, 1, ' ', tabwriter.AlignRight)
@@ -435,6 +431,11 @@ func main() {
 		}
 		w.Flush()
 		return
+	}
+
+	toDelete, err := tagsToDelete(ctx, client, promotedTags, opts.ignoredImageStreamTags, imageStreamRefs)
+	if err != nil {
+		logrus.WithError(err).Fatal("could not get tags to delete")
 	}
 
 	var errs []error

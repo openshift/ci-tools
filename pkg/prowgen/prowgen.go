@@ -21,9 +21,8 @@ import (
 )
 
 const (
-	oauthTokenPath  = "/usr/local/github-credentials"
-	oauthSecretName = "github-credentials-openshift-ci-robot-private-git-cloner"
-	oauthKey        = "oauth"
+	oauthTokenPath = "/usr/local/github-credentials"
+	oauthKey       = "oauth"
 )
 
 type ProwgenInfo struct {
@@ -34,7 +33,7 @@ type ProwgenInfo struct {
 // Generate a PodSpec that runs `ci-operator`, to be used in Presubmit/Postsubmit
 // Various pieces are derived from `org`, `repo`, `branch` and `target`.
 // `additionalArgs` are passed as additional arguments to `ci-operator`
-func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret) *corev1.PodSpec {
+func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret, skipCloning bool) *corev1.PodSpec {
 	volumeMounts := []corev1.VolumeMount{
 		{
 			Name:      "pull-secret",
@@ -85,18 +84,19 @@ func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret) *corev1
 	}
 
 	if info.Config.Private {
-		volumes = append(volumes, corev1.Volume{
-			Name: oauthSecretName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{SecretName: oauthSecretName},
-			},
-		})
-
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      oauthSecretName,
+			Name:      api.OauthTokenSecretName,
 			MountPath: oauthTokenPath,
 			ReadOnly:  true,
 		})
+		if skipCloning {
+			volumes = append(volumes, corev1.Volume{
+				Name: api.OauthTokenSecretName,
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{SecretName: api.OauthTokenSecretName},
+				},
+			})
+		}
 	}
 
 	return &corev1.PodSpec{
@@ -148,15 +148,15 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			element.Secrets = append(element.Secrets, element.Secret)
 		}
 		if element.ContainerTestConfiguration != nil {
-			podSpec = generateCiOperatorPodSpec(info, element.Secrets, []string{element.As})
+			podSpec = generateCiOperatorPodSpec(info, element.Secrets, []string{element.As}, skipCloning)
 		} else if element.MultiStageTestConfiguration != nil || element.MultiStageTestConfigurationLiteral != nil {
-			podSpec = generatePodSpecMultiStage(info, &element, configSpec.Releases != nil || element.ClusterClaim != nil)
+			podSpec = generatePodSpecMultiStage(info, &element, configSpec.Releases != nil || element.ClusterClaim != nil, skipCloning)
 		} else {
 			var release string
 			if c := configSpec.ReleaseTagConfiguration; c != nil {
 				release = c.Name
 			}
-			podSpec = generatePodSpecTemplate(info, release, &element)
+			podSpec = generatePodSpecTemplate(info, release, &element, skipCloning)
 		}
 
 		if element.Cron != nil || element.Interval != nil || element.ReleaseController {
@@ -210,12 +210,12 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		if promotion.PromotesOfficialImages(configSpec) {
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
-		podSpec := generateCiOperatorPodSpec(info, nil, presubmitTargets)
+		podSpec := generateCiOperatorPodSpec(info, nil, presubmitTargets, skipCloning)
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", ""))
 
 		if configSpec.PromotionConfiguration != nil {
 
-			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets.List(), []string{"--promote"}...)
+			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets.List(), skipCloning, []string{"--promote"}...)
 			podSpec.Containers[0].Args = append(podSpec.Containers[0].Args,
 				fmt.Sprintf("--image-mirror-push-secret=%s", filepath.Join(cioperatorapi.RegistryPushCredentialsCICentralSecretMountPath, corev1.DockerConfigJsonKey)))
 			podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{
@@ -247,11 +247,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 				continue
 			}
 			indexName := api.IndexName(bundle.As)
-			podSpec := generateCiOperatorPodSpec(info, nil, []string{indexName})
+			podSpec := generateCiOperatorPodSpec(info, nil, []string{indexName}, skipCloning)
 			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(indexName, info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", ""))
 		}
 		if containsUnnamedBundle {
-			podSpec := generateCiOperatorPodSpec(info, nil, []string{string(api.PipelineImageStreamTagReferenceIndexImage)})
+			podSpec := generateCiOperatorPodSpec(info, nil, []string{string(api.PipelineImageStreamTagReferenceIndexImage)}, skipCloning)
 			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(string(api.PipelineImageStreamTagReferenceIndexImage), info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", ""))
 		}
 	}
@@ -263,14 +263,14 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	}
 }
 
-func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret, targets []string, additionalArgs ...string) *corev1.PodSpec {
+func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret, targets []string, skipCloning bool, additionalArgs ...string) *corev1.PodSpec {
 	for _, arg := range additionalArgs {
 		if !strings.HasPrefix(arg, "--") {
 			panic(fmt.Sprintf("all args to ci-operator must be in the form --flag=value, not %s", arg))
 		}
 	}
 
-	ret := generatePodSpec(info, secrets)
+	ret := generatePodSpec(info, secrets, skipCloning)
 	ret.Containers[0].Command = []string{"ci-operator"}
 	ret.Containers[0].Args = append([]string{
 		"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
@@ -296,7 +296,7 @@ func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secre
 	return ret
 }
 
-func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepConfiguration, needsPullSecret bool) *corev1.PodSpec {
+func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepConfiguration, needsPullSecret, skipCloning bool) *corev1.PodSpec {
 	var profile api.ClusterProfile
 	if test.MultiStageTestConfiguration != nil {
 		profile = test.MultiStageTestConfiguration.ClusterProfile
@@ -320,7 +320,7 @@ func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepCo
 		additionalArgs = []string{cioperatorapi.HiveControlPlaneKubeconfigSecretArg}
 		secrets = append(secrets, &api.Secret{Name: api.HiveControlPlaneKubeconfigSecret})
 	}
-	podSpec := generateCiOperatorPodSpec(info, secrets, []string{test.As}, additionalArgs...)
+	podSpec := generateCiOperatorPodSpec(info, secrets, []string{test.As}, skipCloning, additionalArgs...)
 
 	if profile != "" {
 		podSpec.Volumes = append(podSpec.Volumes, generateClusterProfileVolume(profile, profile.ClusterType()))
@@ -346,7 +346,7 @@ func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
 	return len(api.LeasesForTest(test.MultiStageTestConfigurationLiteral)) > 0
 }
 
-func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperatorapi.TestStepConfiguration) *corev1.PodSpec {
+func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperatorapi.TestStepConfiguration, skipCloning bool) *corev1.PodSpec {
 	var testImageStreamTag, template string
 	var clusterProfile cioperatorapi.ClusterProfile
 	var needsReleaseRpms, needsLeaseServer bool
@@ -385,7 +385,7 @@ func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperator
 	clusterType := clusterProfile.ClusterType()
 	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
 	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
-	podSpec := generateCiOperatorPodSpec(info, test.Secrets, []string{test.As})
+	podSpec := generateCiOperatorPodSpec(info, test.Secrets, []string{test.As}, skipCloning)
 	clusterProfileVolume := generateClusterProfileVolume(clusterProfile, clusterType)
 	if len(template) > 0 {
 		podSpec.Volumes = append(podSpec.Volumes, generateConfigMapVolume("job-definition", []string{fmt.Sprintf("prow-job-%s", template)}))
@@ -615,6 +615,8 @@ func generateJobBase(name, prefix string, info *ProwgenInfo, podSpec *corev1.Pod
 	var decorationConfig *prowv1.DecorationConfig
 	if skipCloning {
 		decorationConfig = &prowv1.DecorationConfig{SkipCloning: utilpointer.BoolPtr(true)}
+	} else if !skipCloning && info.Config.Private {
+		decorationConfig = &prowv1.DecorationConfig{OauthTokenSecret: &prowv1.OauthTokenSecret{Key: api.OauthTokenSecretKey, Name: api.OauthTokenSecretName}}
 	}
 	base := prowconfig.JobBase{
 		Agent:  string(prowv1.KubernetesAgent),

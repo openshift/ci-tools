@@ -23,17 +23,20 @@ func TestGeneratePodSpec(t *testing.T) {
 		secrets        []*ciop.Secret
 		targets        []string
 		additionalArgs []string
+		skipCloning    bool
 	}{
 		{
 			description: "standard use case",
 			info:        &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			targets:     []string{"target"},
+			skipCloning: true,
 		},
 		{
 			description:    "additional args are included in podspec",
 			info:           &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			targets:        []string{"target"},
 			additionalArgs: []string{"--promote", "--some=thing"},
+			skipCloning:    true,
 		},
 		{
 			description:    "additional args and secret are included in podspec",
@@ -41,14 +44,25 @@ func TestGeneratePodSpec(t *testing.T) {
 			secrets:        []*ciop.Secret{{Name: "secret-name", MountPath: "/usr/local/test-secret"}},
 			targets:        []string{"target"},
 			additionalArgs: []string{"--promote", "--some=thing"},
+			skipCloning:    true,
 		},
 		{
 			description: "multiple targets",
 			info:        &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			targets:     []string{"target", "more", "and-more"},
+			skipCloning: true,
 		},
 		{
 			description: "private job",
+			info: &ProwgenInfo{
+				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+				Config:   config.Prowgen{Private: true},
+			},
+			targets:     []string{"target"},
+			skipCloning: true,
+		},
+		{
+			description: "private job with skip_cloning false",
 			info: &ProwgenInfo{
 				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 				Config:   config.Prowgen{Private: true},
@@ -59,7 +73,7 @@ func TestGeneratePodSpec(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generateCiOperatorPodSpec(tc.info, tc.secrets, tc.targets, tc.additionalArgs...))
+			testhelper.CompareWithFixture(t, generateCiOperatorPodSpec(tc.info, tc.secrets, tc.targets, tc.skipCloning, tc.additionalArgs...))
 		})
 	}
 }
@@ -181,7 +195,7 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generatePodSpecMultiStage(&info, tc.test, true))
+			testhelper.CompareWithFixture(t, generatePodSpecMultiStage(&info, tc.test, true, true))
 		})
 	}
 }
@@ -266,7 +280,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 
 	for idx, tc := range tests {
 		t.Run(fmt.Sprintf("testcase-%d", idx), func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generatePodSpecTemplate(tc.info, tc.release, &tc.test))
+			testhelper.CompareWithFixture(t, generatePodSpecTemplate(tc.info, tc.release, &tc.test, true))
 		})
 	}
 }
@@ -732,6 +746,17 @@ func TestGenerateJobBase(t *testing.T) {
 			info: &ProwgenInfo{
 				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 				Config:   config.Prowgen{Private: false, Expose: true},
+			},
+			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
+			clone:   true,
+		},
+		{
+			testName: "private jobs that clone should contain oauth_token_secret config",
+			name:     "test",
+			prefix:   "pull",
+			info: &ProwgenInfo{
+				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+				Config:   config.Prowgen{Private: true, Expose: true},
 			},
 			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
 			clone:   true,

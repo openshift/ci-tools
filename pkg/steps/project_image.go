@@ -67,7 +67,8 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 type workingDir func(tag string) (string, error)
 type isBundleImage func(tag string) bool
 
-func sourceTagFor(config api.ProjectDirectoryImageBuildStepConfiguration, isBundleImage isBundleImage) (api.PipelineImageStreamTagReference, string) {
+func imagesFor(config api.ProjectDirectoryImageBuildStepConfiguration, workingDir workingDir, isBundleImage isBundleImage) (api.PipelineImageStreamTagReference, []buildapi.ImageSource, error) {
+	images := buildInputsFromStep(config.Inputs)
 	var sourceTag api.PipelineImageStreamTagReference
 	var contextDir string
 	if isBundleImage(string(config.To)) {
@@ -82,12 +83,6 @@ func sourceTagFor(config api.ProjectDirectoryImageBuildStepConfiguration, isBund
 		sourceTag = api.PipelineImageStreamTagReferenceSource
 		contextDir = config.ContextDir
 	}
-	return sourceTag, contextDir
-}
-
-func imagesFor(config api.ProjectDirectoryImageBuildStepConfiguration, workingDir workingDir, isBundleImage isBundleImage) (api.PipelineImageStreamTagReference, []buildapi.ImageSource, error) {
-	sourceTag, contextDir := sourceTagFor(config, isBundleImage)
-	images := buildInputsFromStep(config.Inputs)
 	if _, overwritten := config.Inputs[string(sourceTag)]; !overwritten {
 		// if the user has not overwritten the source, we need to make sure it's mounted in
 		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, sourceTag)
@@ -125,9 +120,17 @@ func getWorkingDir(client ctrlruntimeclient.Client, source, namespace string) (s
 }
 
 func (s *projectDirectoryImageBuildStep) Requires() []api.StepLink {
-	sourceTag, _ := sourceTagFor(s.config, s.releaseBuildConfig.IsBundleImage)
 	links := []api.StepLink{
-		api.InternalImageLink(sourceTag),
+		api.InternalImageLink(api.PipelineImageStreamTagReferenceSource),
+	}
+	if len(s.config.From) > 0 {
+		links = append(links, api.InternalImageLink(s.config.From))
+	}
+	if s.releaseBuildConfig.IsBundleImage(string(s.config.To)) {
+		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReferenceBundleSource))
+	}
+	if api.IsIndexImage(string(s.config.To)) {
+		links = append(links, api.InternalImageLink(api.IndexGeneratorName(s.config.To)))
 	}
 	for name := range s.config.Inputs {
 		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReference(name), api.StepLinkWithUnsatisfiableErrorMessage(fmt.Sprintf("%q is neither an imported nor a built image", name))))

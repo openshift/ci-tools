@@ -9,6 +9,8 @@ import (
 	"unicode"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 type options struct {
@@ -63,6 +65,14 @@ const (
 	PodScaler     = "pod-scaler"
 	ConfigUpdater = "config-updater"
 )
+
+func RepoMetadata() *api.Metadata {
+	return &api.Metadata{
+		Org:    "openshift",
+		Repo:   "release",
+		Branch: "master",
+	}
+}
 
 func main() {
 	o, err := parseOptions()

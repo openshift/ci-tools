@@ -7,24 +7,24 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
+	utilpointer "k8s.io/utils/pointer"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
 const (
-	LatestImage   = "registry.ci.openshift.org/ci/applyconfig:" + api.LatestReleaseName
-	OpenshiftRole = "ci.openshift.io/role"
-	Infra         = "infra"
-	Tmp           = "tmp"
+	LatestImage = api.ServiceDomainAPPCIRegistry + "/ci/applyconfig:latest"
+	LabelRole   = "ci.openshift.io/role"
+	Infra       = "infra"
+	Tmp         = "tmp"
 )
 
 func generatePeriodic(clusterName string) prowconfig.Periodic {
-	args := generateArgs(clusterName)
-	args = append(args, "--confirm=true")
-	trueBool := true
+	args := append(generateArgs(clusterName), "--confirm=true")
 	return prowconfig.Periodic{
 		JobBase: prowconfig.JobBase{
-			Name:       periodicFor(clusterName),
+			Name:       RepoMetadata().SimpleJobName(jobconfig.PeriodicPrefix, clusterName+"-apply"),
 			Agent:      string(prowapi.KubernetesAgent),
 			Cluster:    string(api.ClusterAPPCI),
 			SourcePath: "",
@@ -37,7 +37,7 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 				ServiceAccountName: ConfigUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{
-				Decorate: &trueBool,
+				Decorate: utilpointer.BoolPtr(true),
 				ExtraRefs: []prowapi.Refs{{
 					Org:     "openshift",
 					Repo:    "release",
@@ -45,7 +45,7 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 				}},
 			},
 			Labels: map[string]string{
-				OpenshiftRole: Infra,
+				LabelRole: Infra,
 			},
 		},
 		Interval: "12h",
@@ -53,12 +53,10 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 }
 
 func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
-	args := generateArgs(clusterName)
-	args = append(args, "--confirm=true")
-	trueBool := true
+	args := append(generateArgs(clusterName), "--confirm=true")
 	return prowconfig.Postsubmit{
 		JobBase: prowconfig.JobBase{
-			Name:       "branch-ci-openshift-release-master-" + clusterName + "-apply",
+			Name:       RepoMetadata().JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply"),
 			Agent:      string(prowapi.KubernetesAgent),
 			Cluster:    string(api.ClusterAPPCI),
 			SourcePath: "",
@@ -68,11 +66,11 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 				ServiceAccountName: ConfigUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{
-				Decorate: &trueBool,
+				Decorate: utilpointer.BoolPtr(true),
 			},
 			MaxConcurrency: 1,
 			Labels: map[string]string{
-				OpenshiftRole: Infra,
+				LabelRole: Infra,
 			},
 		},
 		Brancher: prowconfig.Brancher{
@@ -89,7 +87,7 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 	})
 	return prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
-			Name:       "pull-ci-openshift-release-master-" + clusterName + "-dry",
+			Name:       RepoMetadata().JobName(jobconfig.PresubmitPrefix, clusterName+"-dry"),
 			Agent:      string(prowapi.KubernetesAgent),
 			Cluster:    string(api.ClusterAPPCI),
 			SourcePath: "",
@@ -123,9 +121,8 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 }
 
 func generateUtilityConfig() prowconfig.UtilityConfig {
-	trueBool := true
 	return prowconfig.UtilityConfig{
-		Decorate:  &trueBool,
+		Decorate:  utilpointer.BoolPtr(true),
 		ExtraRefs: []prowapi.Refs{},
 	}
 }

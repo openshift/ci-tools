@@ -9,6 +9,8 @@ import (
 
 	prowconfig "k8s.io/test-infra/prow/config"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
 const (
@@ -108,7 +110,7 @@ func periodicExistsFor(o options) (bool, error) {
 	if err = yaml.Unmarshal(data, &ip); err != nil {
 		return true, err
 	}
-	_, perErr := findPeriodic(&ip, periodicFor(o.clusterName))
+	_, perErr := findPeriodic(&ip, RepoMetadata().SimpleJobName(jobconfig.PeriodicPrefix, o.clusterName+"-apply"))
 	return perErr == nil, nil
 }
 
@@ -123,8 +125,4 @@ func findPeriodic(ip *InfraPeriodics, name string) (*prowconfig.Periodic, error)
 		return &ip.Periodics[idx], nil
 	}
 	return nil, fmt.Errorf("couldn't find periodic with name: %s", name)
-}
-
-func periodicFor(clusterName string) string {
-	return fmt.Sprintf("periodic-openshift-release-master-%s-apply", clusterName)
 }

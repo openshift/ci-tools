@@ -17,11 +17,9 @@ const (
 	LatestImage = api.ServiceDomainAPPCIRegistry + "/ci/applyconfig:latest"
 	LabelRole   = "ci.openshift.io/role"
 	Infra       = "infra"
-	Tmp         = "tmp"
 )
 
 func generatePeriodic(clusterName string) prowconfig.Periodic {
-	args := append(generateArgs(clusterName), "--confirm=true")
 	return prowconfig.Periodic{
 		JobBase: prowconfig.JobBase{
 			Name:       RepoMetadata().SimpleJobName(jobconfig.PeriodicPrefix, clusterName+"-apply"),
@@ -32,8 +30,9 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 				Volumes: []v1.Volume{generateSecretVolume(clusterName)},
 				Containers: []v1.Container{
 					generateContainer(fmt.Sprintf("%s:%s", "applyconfig", api.LatestReleaseName),
-						args,
-						generateVolumeMounts())},
+						clusterName,
+						[]string{"--confirm=true"},
+						[]v1.VolumeMount{})},
 				ServiceAccountName: ConfigUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{
@@ -53,7 +52,6 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 }
 
 func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
-	args := append(generateArgs(clusterName), "--confirm=true")
 	return prowconfig.Postsubmit{
 		JobBase: prowconfig.JobBase{
 			Name:       RepoMetadata().JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply"),
@@ -61,8 +59,9 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 			Cluster:    string(api.ClusterAPPCI),
 			SourcePath: "",
 			Spec: &v1.PodSpec{
-				Volumes:            []v1.Volume{generateSecretVolume(clusterName)},
-				Containers:         []v1.Container{generateContainer(LatestImage, args, generateVolumeMounts())},
+				Volumes: []v1.Volume{generateSecretVolume(clusterName)},
+				Containers: []v1.Container{
+					generateContainer(LatestImage, clusterName, []string{"--confirm=true"}, []v1.VolumeMount{})},
 				ServiceAccountName: ConfigUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{
@@ -80,11 +79,6 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 }
 
 func generatePresubmit(clusterName string) prowconfig.Presubmit {
-	mounts := generateVolumeMounts()
-	mounts = append(mounts, v1.VolumeMount{
-		Name:      Tmp,
-		MountPath: "/" + Tmp,
-	})
 	return prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
 			Name:       RepoMetadata().JobName(jobconfig.PresubmitPrefix, clusterName+"-dry"),
@@ -94,15 +88,19 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 			Spec: &v1.PodSpec{
 				Volumes: []v1.Volume{generateSecretVolume(clusterName),
 					{
-						Name: Tmp,
+						Name: "tmp",
 						VolumeSource: v1.VolumeSource{
 							EmptyDir: &v1.EmptyDirVolumeSource{},
 						},
 					}},
-				Containers:         []v1.Container{generateContainer(LatestImage, generateArgs(clusterName), mounts)},
+				Containers: []v1.Container{
+					generateContainer(LatestImage,
+						clusterName,
+						[]string{},
+						[]v1.VolumeMount{{Name: "tmp", MountPath: "/tmp"}})},
 				ServiceAccountName: ConfigUpdater,
 			},
-			UtilityConfig: generateUtilityConfig(),
+			UtilityConfig: prowconfig.UtilityConfig{Decorate: utilpointer.BoolPtr(true)},
 			Labels: map[string]string{
 				"pj-rehearse.openshift.io/can-be-rehearsed": "true",
 			},
@@ -117,13 +115,6 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/build-farm/%s-dry", clusterName),
 		},
-	}
-}
-
-func generateUtilityConfig() prowconfig.UtilityConfig {
-	return prowconfig.UtilityConfig{
-		Decorate:  utilpointer.BoolPtr(true),
-		ExtraRefs: []prowapi.Refs{},
 	}
 }
 
@@ -144,36 +135,24 @@ func generateSecretVolume(clusterName string) v1.Volume {
 	}
 }
 
-func generateContainer(image string, args []string, volumeMounts []v1.VolumeMount) v1.Container {
+func generateContainer(image, clusterName string, extraArgs []string, extraVolumeMounts []v1.VolumeMount) v1.Container {
 	return v1.Container{
 		Name:    "",
 		Image:   image,
 		Command: []string{"applyconfig"},
-		Args:    args,
+		Args: append([]string{
+			fmt.Sprintf("--config-dir=clusters/build-clusters/%s", clusterName),
+			"--as=",
+			"--KUBECONFIG=/etc/build-farm-credentials/KUBECONFIG"},
+			extraArgs...),
 		Resources: v1.ResourceRequirements{
-			Requests: map[v1.ResourceName]resource.Quantity{
-				"cpu": resource.MustParse("10m"),
-			},
+			Requests: map[v1.ResourceName]resource.Quantity{"cpu": resource.MustParse("10m")},
 		},
 		ImagePullPolicy: "Always",
-		VolumeMounts:    volumeMounts,
-	}
-}
-
-func generateArgs(clusterName string) []string {
-	return []string{
-		fmt.Sprintf("--config-dir=clusters/build-clusters/%s", clusterName),
-		"--as=",
-		"--KUBECONFIG=/etc/build-farm-credentials/KUBECONFIG",
-	}
-}
-
-func generateVolumeMounts() []v1.VolumeMount {
-	return []v1.VolumeMount{
-		{
+		VolumeMounts: append([]v1.VolumeMount{{
 			Name:      "build-farm-credentials",
 			ReadOnly:  true,
-			MountPath: "/etc/build-farm-credentials",
-		},
+			MountPath: "/etc/build-farm-credentials"}},
+			extraVolumeMounts...),
 	}
 }

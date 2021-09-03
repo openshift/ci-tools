@@ -2,10 +2,8 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
-	"strings"
-
 	"github.com/sirupsen/logrus"
+	"path/filepath"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
@@ -17,6 +15,7 @@ const (
 	DotDockerConfigJson = ".dockerconfigjson"
 	Arm01               = "arm01"
 	TestCredentials     = "test-credentials"
+	Kubeconfig          = "kubeconfig"
 )
 
 func updateCiSecretBootstrap(o options) error {
@@ -42,7 +41,7 @@ func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
 	if err := updatePodScalerSecret(c, o); err != nil {
 		return err
 	}
-	if err := updateBuildFarmSecret(c, o); err != nil {
+	if err := updateBuildFarmSecrets(c, o); err != nil {
 		return err
 	}
 	if err := updateDPTPControllerManagerSecret(c, o); err != nil {
@@ -71,12 +70,11 @@ func appendSecret(secretGenerator func(options) secretbootstrap.SecretConfig, c 
 }
 
 func generateCiOperatorSecret(o options) secretbootstrap.SecretConfig {
-	key := strings.ToLower(Kubeconfig)
 	return secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
-			key: {
+			Kubeconfig: {
 				Field: serviceAccountKubeconfigPath(CiOperator, o.clusterName),
-				Item:  BuildFarm,
+				Item:  BuildUFarm,
 			},
 		},
 		To: []secretbootstrap.SecretContext{
@@ -175,21 +173,19 @@ func generateDockerConfigJsonSecretConfigTo(name string, namespace string, clust
 }
 
 func updatePodScalerSecret(c *secretbootstrap.Config, o options) error {
-	name := fmt.Sprintf("%s-%s", PodScaler, Credentials)
 	key := fmt.Sprintf("%s.%s", o.clusterName, Config)
-	return appendSecretItemContext(c, name, string(api.ClusterAPPCI), key, secretbootstrap.ItemContext{
+	return appendSecretItemContext(c, PodScaler, string(api.ClusterAPPCI), key, secretbootstrap.ItemContext{
 		Field: serviceAccountKubeconfigPath(PodScaler, o.clusterName),
 		Item:  PodScaler,
 	})
 }
 
 func updateDPTPControllerManagerSecret(c *secretbootstrap.Config, o options) error {
-	key := fmt.Sprintf("%s.%s", o.clusterName, strings.ToLower(Kubeconfig))
 	const DPTPControllerManager = "dptp-controller-manager"
-	field := serviceAccountKubeconfigPath(DPTPControllerManager, o.clusterName)
-	return appendSecretItemContext(c, DPTPControllerManager, string(api.ClusterAPPCI), key, secretbootstrap.ItemContext{
-		Field: field,
-		Item:  BuildFarm,
+	keyAndField := serviceAccountKubeconfigPath(DPTPControllerManager, o.clusterName)
+	return appendSecretItemContext(c, DPTPControllerManager, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
+		Field: keyAndField,
+		Item:  BuildUFarm,
 	})
 }
 
@@ -197,7 +193,7 @@ func updateRehearseSecret(c *secretbootstrap.Config, o options) error {
 	keyAndField := serviceAccountKubeconfigPath(CiOperator, o.clusterName)
 	return appendSecretItemContext(c, "pj-rehearse", string(api.ClusterBuild01), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
-		Item:  BuildFarm,
+		Item:  BuildUFarm,
 	})
 }
 
@@ -316,17 +312,25 @@ func appendRegistrySecretItemContext(c *secretbootstrap.Config, name string, clu
 	return nil
 }
 
-func updateBuildFarmSecret(c *secretbootstrap.Config, o options) error {
-	//TODO: this function will likely need to be modified to support the new schema
-	buildFarmCreds, err := findSecretConfig(fmt.Sprintf("%s-%s", BuildFarm, Credentials), string(api.ClusterAPPCI), c.Secrets)
+func updateBuildFarmSecrets(c *secretbootstrap.Config, o options) error {
+	buildFarmCredentials, err := findSecretConfig(fmt.Sprintf("%s-%s", BuildFarm, Credentials), string(api.ClusterAPPCI), c.Secrets)
 	if err != nil {
 		return err
 	}
+	clientId := o.clusterName + "_github_client_id"
+	buildFarmCredentials.From[clientId] = secretbootstrap.ItemContext{
+		Item:  fmt.Sprintf("%s_%s", BuildUFarm, o.clusterName),
+		Field: "github_client_id",
+	}
 	for _, s := range []string{ConfigUpdater, "crier", "deck", "hook", "prow-controller-manager", "sinker"} {
+		sc, err := findSecretConfig(s, string(api.ClusterAPPCI), c.Secrets)
+		if err != nil {
+			return err
+		}
 		keyAndField := serviceAccountKubeconfigPath(s, o.clusterName)
-		buildFarmCreds.From[keyAndField] = secretbootstrap.ItemContext{
+		sc.From[keyAndField] = secretbootstrap.ItemContext{
 			Field: keyAndField,
-			Item:  BuildFarm,
+			Item:  BuildUFarm,
 		}
 	}
 	return nil
@@ -346,5 +350,5 @@ func findSecretConfig(name string, cluster string, sc []secretbootstrap.SecretCo
 	if idx != -1 {
 		return &sc[idx], nil
 	}
-	return &secretbootstrap.SecretConfig{}, fmt.Errorf("couldn't find SecretConfig with name: %s and cluster: %s", name, cluster)
+	return nil, fmt.Errorf("couldn't find SecretConfig with name: %s and cluster: %s", name, cluster)
 }

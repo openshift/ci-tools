@@ -22,7 +22,7 @@ const (
 func updateCiSecretBootstrap(o options) error {
 	secretBootstrapDir := filepath.Join(o.releaseRepo, "core-services", "ci-secret-bootstrap")
 	secretBootstrapConfigFile := filepath.Join(secretBootstrapDir, "_config.yaml")
-	logrus.Infof("Updating ci-secret-bootstrap: %s\n", secretBootstrapConfigFile)
+	logrus.Infof("Updating ci-secret-bootstrap: %s", secretBootstrapConfigFile)
 
 	var c secretbootstrap.Config
 	if err := secretbootstrap.LoadConfigFromFile(secretBootstrapConfigFile, &c); err != nil {
@@ -66,7 +66,7 @@ func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
 
 func appendSecret(secretGenerator func(options) secretbootstrap.SecretConfig, c *secretbootstrap.Config, o options) {
 	secret := secretGenerator(o)
-	logrus.Infof("Creating new secret with 'to' of: %v\n", secret.To)
+	logrus.Infof("Creating new secret with 'to' of: %v", secret.To)
 	c.Secrets = append(c.Secrets, secret)
 }
 
@@ -212,7 +212,7 @@ func updateChatBotSecret(c *secretbootstrap.Config, o options) error {
 }
 
 func appendSecretItemContext(c *secretbootstrap.Config, name string, cluster string, key string, value secretbootstrap.ItemContext) error {
-	logrus.Infof("Appending secret item to: {name: %s, cluster: %s}\n", name, cluster)
+	logrus.Infof("Appending secret item to: {name: %s, cluster: %s}", name, cluster)
 	sc, err := findSecretConfig(name, cluster, c.Secrets)
 	if err != nil {
 		return err
@@ -286,7 +286,7 @@ func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o opti
 			generateDockerConfigJsonSecretConfigTo(RegPullCredsAll, TestCredentials, o.clusterName),
 		},
 	}
-	logrus.Infof("Creating new secret with 'to' of: %v\n", sc.To)
+	logrus.Infof("Creating new secret with 'to' of: %v", sc.To)
 	c.Secrets = append(c.Secrets, sc)
 }
 
@@ -304,7 +304,7 @@ func getRegistryUrlFor(cluster string) string {
 }
 
 func appendRegistrySecretItemContext(c *secretbootstrap.Config, name string, cluster string, value secretbootstrap.DockerConfigJSONData) error {
-	logrus.Infof("Appending registry secret item to: {name: %s, cluster: %s}\n", name, cluster)
+	logrus.Infof("Appending registry secret item to: {name: %s, cluster: %s}", name, cluster)
 	sc, err := findSecretConfig(name, cluster, c.Secrets)
 	if err != nil {
 		return err

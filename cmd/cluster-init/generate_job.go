@@ -24,7 +24,7 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 	trueBool := true
 	return prowconfig.Periodic{
 		JobBase: prowconfig.JobBase{
-			Name:       "periodic-openshift-release-master-" + clusterName + "-apply",
+			Name:       periodicFor(clusterName),
 			Agent:      string(prowapi.KubernetesAgent),
 			Cluster:    string(api.ClusterAPPCI),
 			SourcePath: "",

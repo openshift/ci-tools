@@ -62,7 +62,6 @@ const (
 	BuildUFarm    = "build_farm"
 	PodScaler     = "pod-scaler"
 	Config        = "config"
-	Kubeconfig    = "KUBECONFIG"
 	CiOperator    = "ci-operator"
 	BuildFarm     = "build-farm"
 	Ci            = "ci"

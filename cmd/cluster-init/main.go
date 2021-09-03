@@ -62,7 +62,6 @@ const (
 	BuildUFarm    = "build_farm"
 	PodScaler     = "pod-scaler"
 	ConfigUpdater = "config-updater"
-	Kubeconfig    = "KUBECONFIG"
 )
 
 func main() {

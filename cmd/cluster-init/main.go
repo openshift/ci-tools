@@ -49,7 +49,10 @@ func validateOptions(o options) []error {
 	}
 	if o.clusterName != "" {
 		existsFor, err := periodicExistsFor(o)
-		if existsFor || err != nil {
+		if err != nil {
+			errs = append(errs, err)
+		}
+		if existsFor {
 			errs = append(errs, fmt.Errorf("cluster: %s already exists", o.clusterName))
 		}
 		buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
@@ -95,7 +98,7 @@ func main() {
 		updateSanitizeProwJobs,
 	} {
 		if err := step(o); err != nil {
-			logrus.Errorf("error encountered: %v", err)
+			logrus.WithError(err).Error("failed to execute step")
 			errorCount++
 		}
 	}

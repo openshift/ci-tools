@@ -1,0 +1,52 @@
+base_images:
+  os:
+    name: centos
+    namespace: openshift
+    tag: '7'
+  cli:
+    name: "4.9"
+    namespace: ocp
+    tag: cli
+raw_steps:
+  - output_image_tag_step:
+      from: cli
+      to:
+        name: stable
+        tag: cli
+releases:
+  latest:
+    integration:
+      namespace: ocp
+      name: "4.7"
+resources:
+  '*':
+    limits:
+      cpu: 500m
+    requests:
+      cpu: 10m
+tests:
+  - as: verify-releases
+    steps:
+      test:
+        - as: latest-cli
+          commands: |-
+            raw_cli_ref="$( cluster-version-operator image cli )"
+            # we want only the SHA, since they will necessarily be in different streams
+            have="${raw_cli_ref##*@}"
+            want="${CLI##*@}"
+            if [[ "${want}" != "${have}" ]]; then
+              echo "[ERROR] Got CLI in release overrriden by pipeline image (but didn't want that), have ${have}, want ${want}"
+              exit 1
+            fi
+          from: "release:latest"
+          dependencies:
+            - name: "stable:cli"
+              env: "CLI"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+zz_generated_metadata:
+  branch: master
+  org: test
+  repo: test

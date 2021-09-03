@@ -10,7 +10,8 @@ metadata:
     cloud: aws
     owner: openshift-ci
     region: us-east-1
-    version_in: ">4.5.0-0 <4.6.0-0"
+    version_lower: '4.5.0-0'
+    version_upper: '4.6.0-0'
 spec:
   baseDomain: hive.aws.ci.openshift.org
   imageSetRef:

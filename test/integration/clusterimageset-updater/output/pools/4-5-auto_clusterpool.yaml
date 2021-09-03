@@ -9,7 +9,8 @@ metadata:
     product: ocp
     region: us-east-1
     version: "4.5"
-    version_in: '>4.5.0-0 <4.6.0-0'
+    version_lower: 4.5.0-0
+    version_upper: 4.6.0-0
   name: ci-ocp-4-5-amd64-aws-us-east-1
   namespace: ci-cluster-pool
 spec:

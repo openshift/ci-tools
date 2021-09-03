@@ -29,7 +29,7 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 			Spec: &v1.PodSpec{
 				Volumes: []v1.Volume{generateSecretVolume(clusterName)},
 				Containers: []v1.Container{
-					generateContainer(fmt.Sprintf("%s:%s", "applyconfig", api.LatestReleaseName),
+					generateContainer("applyconfig:latest",
 						clusterName,
 						[]string{"--confirm=true"},
 						[]v1.VolumeMount{})},

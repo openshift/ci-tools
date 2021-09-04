@@ -22,7 +22,7 @@ presubmits:
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --oauth-token-path=/usr/local/github-credentials/oauth
+        - --oauth-token-path=/usr/local/github-credentials/oauth-token
         - --report-credentials-file=/etc/report/credentials
         - --target=unit
         command:

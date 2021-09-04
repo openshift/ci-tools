@@ -22,7 +22,7 @@ import (
 
 const (
 	oauthTokenPath = "/usr/local/github-credentials"
-	oauthKey       = "oauth"
+	oauthKey       = "oauth-token"
 )
 
 type ProwgenInfo struct {

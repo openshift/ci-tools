@@ -4,7 +4,7 @@ containers:
   - --gcs-upload-secret=/secrets/gcs/service-account.json
   - --report-credentials-file=/etc/report/credentials
   - --target=target
-  - --oauth-token-path=/usr/local/github-credentials/oauth
+  - --oauth-token-path=/usr/local/github-credentials/oauth-token
   command:
   - ci-operator
   image: ci-operator:latest

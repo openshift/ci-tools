@@ -18,7 +18,7 @@ periodics:
     - args:
       - --gcs-upload-secret=/secrets/gcs/service-account.json
       - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-      - --oauth-token-path=/usr/local/github-credentials/oauth
+      - --oauth-token-path=/usr/local/github-credentials/oauth-token
       - --report-credentials-file=/etc/report/credentials
       - --secret-dir=/usr/local/e2e-nightly-cluster-profile
       - --target=e2e-nightly

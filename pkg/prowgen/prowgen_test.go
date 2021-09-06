@@ -295,6 +295,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		clone             bool
 		runIfChanged      string
 		skipIfOnlyChanged string
+		optional          bool
 	}{{
 		description: "presubmit for standard test",
 		test:        "testname",
@@ -332,11 +333,18 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			jobRelease:        "4.6",
 			skipIfOnlyChanged: "^README.md$",
 		},
+		{
+			description: "optional presubmit",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			jobRelease:  "4.6",
+			optional:    true,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
 			// podSpec tested in generatePodSpec
-			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, nil, nil, tc.jobRelease, !tc.clone, tc.runIfChanged, tc.skipIfOnlyChanged))
+			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, nil, nil, tc.jobRelease, !tc.clone, tc.runIfChanged, tc.skipIfOnlyChanged, tc.optional))
 		})
 	}
 }

@@ -481,6 +481,9 @@ func mergePresubmits(old, new *prowconfig.Presubmit) prowconfig.Presubmit {
 		merged.SkipIfOnlyChanged = new.SkipIfOnlyChanged
 		merged.AlwaysRun = new.AlwaysRun
 	}
+	if new.Optional {
+		merged.Optional = new.Optional
+	}
 
 	return merged
 }

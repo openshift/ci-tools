@@ -85,6 +85,11 @@ tests:
   container:
     from: src
   release_controller: true
+- as: optional-job
+  optional: true
+  steps:
+    cluster_profile: aws
+    workflow: workflow
 zz_generated_metadata:
   branch: master
   org: super

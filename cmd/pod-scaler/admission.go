@@ -78,7 +78,7 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		}
 		mutatePodLabels(pod, build)
 	}
-	if err := mutatePodMetadata(pod); err != nil {
+	if err := mutatePodMetadata(pod, logger); err != nil {
 		logger.WithError(err).Error("Failed to handle rehearsal Pod.")
 		return admission.Allowed("Failed to handle rehearsal Pod, ignoring.")
 	}
@@ -105,7 +105,7 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 // where default metadata points to the release repo instead of the repo under test.
 // We can fix this by updating to use the values from the configuration that the job
 // ends up running with.
-func mutatePodMetadata(pod *corev1.Pod) error {
+func mutatePodMetadata(pod *corev1.Pod, logger *logrus.Entry) error {
 	if _, isRehearsal := pod.ObjectMeta.Labels[rehearse.Label]; !isRehearsal {
 		return nil
 	}
@@ -134,7 +134,8 @@ func mutatePodMetadata(pod *corev1.Pod) error {
 					return fmt.Errorf("%s, could not parse $ENTRYPOINT_OPTIONS: %w", baseError, err)
 				}
 				if len(opts.Args) > 0 && opts.Args[0] != "ci-operator" {
-					return fmt.Errorf("%s, $ENTRYPOINT_OPTIONS is running %s, not ci-operator", baseError, opts.Args[0])
+					logger.Debugf("ignoring Pod, %s, $ENTRYPOINT_OPTIONS is running %s, not ci-operator", baseError, opts.Args[0])
+					return nil
 				}
 			}
 			return errors.New(baseError)

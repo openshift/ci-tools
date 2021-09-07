@@ -185,12 +185,15 @@ func TestMutatePodMetadata(t *testing.T) {
 			expectedError: errors.New("could not unmarshal configuration from rehearsal pod: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type api.ReleaseBuildConfiguration"),
 		},
 		{
-			name: "rehearsal Pod running something other than ci-op",
+			name: "rehearsal Pod running something other than ci-op does not error",
 			pod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{rehearse.Label: "1"}},
 				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Env: []corev1.EnvVar{{Name: "ENTRYPOINT_OPTIONS", Value: `{"args":["lol"]}`}}}}},
 			},
-			expectedError: errors.New("could not find $CONFIG_SPEC in the environment of the rehearsal Pod's test container, $ENTRYPOINT_OPTIONS is running lol, not ci-operator"),
+			expected: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{rehearse.Label: "1"}},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Env: []corev1.EnvVar{{Name: "ENTRYPOINT_OPTIONS", Value: `{"args":["lol"]}`}}}}},
+			},
 		},
 		{
 			name: "rehearsal Pod malformed entrypoint opts",
@@ -227,7 +230,7 @@ func TestMutatePodMetadata(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			err := mutatePodMetadata(testCase.pod)
+			err := mutatePodMetadata(testCase.pod, logrus.WithField("test", testCase.name))
 			if diff := cmp.Diff(testCase.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: incorrect error: %v", testCase.name, diff)
 			}
@@ -785,7 +788,7 @@ func TestRehearsalMetadata(t *testing.T) {
 		Target:    "context",
 		Container: "test",
 	}
-	if err := mutatePodMetadata(pod); err != nil {
+	if err := mutatePodMetadata(pod, logrus.WithField("test", "TestRehearsalMetadata")); err != nil {
 		t.Fatalf("failed to mutate metadata: %v", err)
 	}
 	if diff := cmp.Diff(pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, "test"), meta); diff != "" {

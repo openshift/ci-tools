@@ -223,6 +223,8 @@ func aggregateTestCase(combined *junit.TestCase, jobName, toAddJobRunID string, 
 
 type TestCaseDetails struct {
 	Name string
+	// Summary is filled in during the pass/fail calculation
+	Summary string
 
 	Passes   []TestCasePass
 	Failures []TestCaseFailure

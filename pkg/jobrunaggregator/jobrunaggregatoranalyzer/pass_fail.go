@@ -135,10 +135,13 @@ func (a *weeklyAverageFromTenDays) getAggregatedTestRuns(ctx context.Context) (m
 
 func (a *weeklyAverageFromTenDays) FailureMessage(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (string, error) {
 	if alwaysPassTests.Has(testCaseDetails.Name) {
+		summary := fmt.Sprintf("always passing")
 		fmt.Printf("always passing %q\n", testCaseDetails.Name)
+		testCaseDetails.Summary = summary
 		return "", nil
 	}
 	if !didTestRun(testCaseDetails) {
+		testCaseDetails.Summary = "did not run"
 		return "", nil
 	}
 	numberOfAttempts := getAttempts(testCaseDetails)
@@ -146,50 +149,64 @@ func (a *weeklyAverageFromTenDays) FailureMessage(ctx context.Context, suiteName
 	// if most of the job runs skipped this test, then we probably intend to skip the test overall and the failure is actually
 	// due to some kind of "couldn't detect that I should skip".
 	if len(testCaseDetails.Passes) == 0 && len(testCaseDetails.Skips) > len(testCaseDetails.Failures) {
+		testCaseDetails.Summary = "probably intended to skip"
 		return "", nil
 	}
 
 	numberOfPasses := getNumberOfPasses(testCaseDetails)
 	numberOfFailures := getNumberOfFailures(testCaseDetails)
 	if numberOfAttempts < a.minimumNumberOfAttempts {
-		return fmt.Sprintf("Passed %d times, failed %d times, skipped %d times: we require at least %d attempts to have a chance at success",
+		summary := fmt.Sprintf("Passed %d times, failed %d times, skipped %d times: we require at least %d attempts to have a chance at success",
 			numberOfPasses,
 			numberOfFailures,
 			len(testCaseDetails.Skips),
 			a.minimumNumberOfAttempts,
-		), nil
+		)
+		testCaseDetails.Summary = summary
+		return summary, nil
 	}
 	if len(testCaseDetails.Passes) < 1 {
-		return fmt.Sprintf("Passed %d times, failed %d times, skipped %d times: we require at least one pass to consider it a success",
+		summary := fmt.Sprintf("Passed %d times, failed %d times, skipped %d times: we require at least one pass to consider it a success",
 			numberOfPasses,
 			numberOfFailures,
 			len(testCaseDetails.Skips),
-		), nil
+		)
+		testCaseDetails.Summary = summary
+		return summary, nil
 	}
 
 	aggregatedTestRunsByName, err := a.getAggregatedTestRuns(ctx)
+	missingAllHistoricalData := false
 	if err != nil {
-		return "", err
+		fmt.Printf("error getting past reliability data, assume 99%% pass: %v", err)
+		missingAllHistoricalData = true
 	}
 
 	averageTestResult, ok := aggregatedTestRunsByName[testCaseDetails.Name]
-	workingPercentage := 70 // choosing 70% as the default because... it sounds goodish
-	if !ok {
+	workingPercentage := 100
+	switch {
+	case missingAllHistoricalData:
+		workingPercentage = 99
+	case !ok:
 		fmt.Printf("missing historical data for %v, arbitrarily assigning 70%% because David thought it was better than failing\n", testCaseDetails.Name)
+		workingPercentage = 70
+	default:
+		workingPercentage = averageTestResult.WorkingPercentage
 	}
-	workingPercentage = averageTestResult.WorkingPercentage
 
 	requiredNumberOfPasses := requiredPassesByPassPercentageByNumberOfAttempts[numberOfAttempts][workingPercentage]
 	if numberOfPasses < requiredNumberOfPasses {
-		return fmt.Sprintf("Passed %d times, failed %d times.  The historical pass rate is %d.  The required number of passes is %d.",
+		summary := fmt.Sprintf("Passed %d times, failed %d times.  The historical pass rate is %d.  The required number of passes is %d.",
 			numberOfPasses,
 			numberOfFailures,
 			workingPercentage,
 			requiredNumberOfPasses,
-		), nil
-
+		)
+		testCaseDetails.Summary = summary
+		return summary, nil
 	}
 
+	testCaseDetails.Summary = "Passed enough times"
 	return "", nil
 }
 

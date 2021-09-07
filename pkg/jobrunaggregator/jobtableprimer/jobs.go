@@ -36,47 +36,26 @@ var (
 
 var (
 	jobsToAnalyze = []jobrunaggregatorapi.JobRow{
-		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade-build02").
-			WithTestRuns().
-			WithE2EParallel().
-			ToJob(),
-		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade").
-			WithTestRuns().
-			ToJob(),
-		newJob("periodic-ci-openshift-release-master-ci-4.9-upgrade-from-stable-4.8-e2e-aws-upgrade").
-			WithTestRuns().
-			WithE2EParallel().
-			ToJob(),
-		newJob("periodic-ci-openshift-release-master-ci-4.9-upgrade-from-stable-4.8-e2e-aws-ovn-upgrade").
-			WithTestRuns().
-			WithE2EParallel().
-			ToJob(),
-		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-azure-upgrade-single-node").
-			WithTestRuns().
-			ToJob(),
-		newJob("periodic-ci-openshift-release-master-nightly-4.9-e2e-metal-ipi-upgrade").
-			WithTestRuns().
-			WithE2EParallel().
-			ToJob(),
-		newJob("periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade").
-			WithTestRuns().
-			WithE2EParallel().
-			ToJob(),
-		newJob("periodic-ci-openshift-release-master-nightly-4.9-e2e-aws-upgrade").
-			WithTestRuns().
-			WithE2EParallel().
-			ToJob(),
-		newJob("periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-aws-upgrade").
-			WithTestRuns().
-			WithE2EParallel().
-			ToJob(),
-		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-aws-serial").
-			ToJob(),
-		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-gcp").
-			ToJob(),
-		newJob("periodic-ci-openshift-release-master-nightly-4.9-e2e-aws").
-			ToJob(),
-		newJob("periodic-ci-openshift-release-master-nightly-4.9-e2e-aws-serial").
-			ToJob(),
+		// 4.9
+		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade-build02").WithE2EParallel().ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade").ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.9-upgrade-from-stable-4.8-e2e-aws-upgrade").WithE2EParallel().ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.9-upgrade-from-stable-4.8-e2e-aws-ovn-upgrade").WithE2EParallel().ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-azure-upgrade-single-node").ToJob(),
+		newJob("periodic-ci-openshift-release-master-nightly-4.9-e2e-metal-ipi-upgrade").WithE2EParallel().ToJob(),
+		newJob("periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade").WithE2EParallel().ToJob(),
+		newJob("periodic-ci-openshift-release-master-nightly-4.9-e2e-aws-upgrade").WithE2EParallel().ToJob(),
+		newJob("periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-aws-upgrade").WithE2EParallel().ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-aws-serial").ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-gcp").ToJob(),
+		newJob("periodic-ci-openshift-release-master-nightly-4.9-e2e-aws").ToJob(),
+		newJob("periodic-ci-openshift-release-master-nightly-4.9-e2e-aws-serial").ToJob(),
+
+		// 4.10
+		newJob("periodic-ci-openshift-release-master-ci-4.10-e2e-gcp-upgrade").WithE2EParallel().ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-upgrade").ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn-upgrade").ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.10-e2e-aws-serial").ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.10-e2e-gcp").ToJob(),
 	}
 )

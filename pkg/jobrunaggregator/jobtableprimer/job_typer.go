@@ -72,6 +72,11 @@ func newJob(name string) *jobRowBuilder {
 		runsE2E = true
 	}
 
+	collectTestRuns := false
+	if runsUpgrade {
+		collectTestRuns = true
+	}
+
 	return &jobRowBuilder{
 		job: &jobrunaggregatorapi.JobRow{
 			JobName:                     name,
@@ -84,6 +89,7 @@ func newJob(name string) *jobRowBuilder {
 			Release:                     currRelease,
 			FromRelease:                 fromRelease,
 			CollectDisruption:           true, // by default we collect disruption
+			CollectTestRuns:             collectTestRuns,
 			RunsUpgrade:                 runsUpgrade,
 			RunsE2EParallel:             runsE2E,
 			RunsE2ESerial:               runsSerial,
@@ -97,6 +103,11 @@ func (b *jobRowBuilder) WithoutDisruption() *jobRowBuilder {
 }
 
 func (b *jobRowBuilder) WithTestRuns() *jobRowBuilder {
+	b.job.CollectTestRuns = true
+	return b
+}
+
+func (b *jobRowBuilder) WithoutTestRuns() *jobRowBuilder {
 	b.job.CollectTestRuns = true
 	return b
 }

@@ -45,9 +45,8 @@ func validateOptions(o options) []error {
 	}
 	if o.releaseRepo == "" {
 		//If the release repo is missing, further checks won't be possible
-		return append(errs, errors.New("--release-repo must be provided"))
-	}
-	if o.clusterName != "" {
+		errs = append(errs, errors.New("--release-repo must be provided"))
+	} else if o.clusterName != "" {
 		existsFor, err := periodicExistsFor(o)
 		if err != nil {
 			errs = append(errs, err)
@@ -90,9 +89,7 @@ func main() {
 	// Each step in the process is allowed to fail independently so that the diffs for the others can still be generated
 	errorCount := 0
 	for _, step := range []func(options) error{
-		updateInfraPeriodics,
-		updatePostsubmits,
-		updatePresubmits,
+		updateJobs,
 		initClusterBuildFarmDir,
 		updateSecretGenerator,
 		updateSanitizeProwJobs,

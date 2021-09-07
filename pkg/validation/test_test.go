@@ -501,7 +501,7 @@ func TestValidateTests(t *testing.T) {
 				Cron:         &cronString,
 				RunIfChanged: "^README.md$",
 			}},
-			expectedError: errors.New("tests[0]: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`"),
+			expectedError: errors.New("tests[0]: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
 		},
 		{
 			id: "interval is mutually exclusive with run_if_changed",
@@ -511,7 +511,7 @@ func TestValidateTests(t *testing.T) {
 				Interval:     &intervalString,
 				RunIfChanged: "^README.md$",
 			}},
-			expectedError: errors.New("tests[0]: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`"),
+			expectedError: errors.New("tests[0]: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
 		},
 		{
 			id: "Run if changed and skip_if_only_changed are mutually exclusive",
@@ -541,6 +541,39 @@ func TestValidateTests(t *testing.T) {
 				OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{},
 			}},
 			expectedError: errors.New("tests[0]: secret/secrets can be only used with container-based tests (use credentials in multi-stage tests)"),
+		},
+		{
+			id: "cron is mutually exclusive with optional",
+			tests: []api.TestStepConfiguration{{
+				As:       "unit",
+				Commands: "commands",
+				Cron:     &cronString,
+				Optional: true,
+			}},
+			expectedError: errors.New("tests[0]: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
+		},
+		{
+			id: "interval is mutually exclusive with optional",
+			tests: []api.TestStepConfiguration{{
+				As:       "unit",
+				Commands: "commands",
+				Interval: &intervalString,
+				Optional: true,
+			}},
+			expectedError: errors.New("tests[0]: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
+		},
+		{
+			id: "postsubmit job is mutually exclusive with optional",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Optional:                   true,
+					Postsubmit:                 true,
+				},
+			},
+			expectedError: errors.New("tests[0]: `optional` and `postsubmit` are mututally exclusive"),
 		},
 	} {
 		t.Run(tc.id, func(t *testing.T) {

@@ -151,6 +151,9 @@ func (v *Validator) validateTestStepConfiguration(
 		if test.Postsubmit && test.Interval != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` and `postsubmit` are mututally exclusive", fieldRootN))
 		}
+		if test.Postsubmit && test.Optional {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `optional` and `postsubmit` are mututally exclusive", fieldRootN))
+		}
 
 		if test.Cron != nil && test.Interval != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` and `cron` cannot both be set", fieldRootN))
@@ -161,8 +164,8 @@ func (v *Validator) validateTestStepConfiguration(
 		if test.Interval != nil && test.ReleaseController {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` cannot be set for release controller jobs", fieldRootN))
 		}
-		if (test.Cron != nil || test.Interval != nil) && (test.RunIfChanged != "" || test.SkipIfOnlyChanged != "") {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`", fieldRootN))
+		if (test.Cron != nil || test.Interval != nil) && (test.RunIfChanged != "" || test.SkipIfOnlyChanged != "" || test.Optional) {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`", fieldRootN))
 		}
 		if test.RunIfChanged != "" && test.SkipIfOnlyChanged != "" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `run_if_changed` and `skip_if_only_changed` are mutually exclusive", fieldRootN))

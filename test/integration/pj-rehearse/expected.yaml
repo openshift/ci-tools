@@ -234,6 +234,8 @@
       - configMap:
           name: prow-job-cluster-launch-src
         name: job-definition
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
     refs:
       base_ref: master
       base_sha: test_sha
@@ -311,6 +313,8 @@
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
     refs:
       base_ref: master
       base_sha: test_sha
@@ -391,6 +395,8 @@
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
     refs:
       base_ref: master
       base_sha: test_sha
@@ -470,6 +476,8 @@
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
     refs:
       base_ref: master
       base_sha: test_sha
@@ -572,6 +580,8 @@
       - name: result-aggregator
         secret:
           secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
     refs:
       base_ref: master
       base_sha: test_sha
@@ -673,6 +683,8 @@
       - name: result-aggregator
         secret:
           secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
     refs:
       base_ref: master
       base_sha: test_sha
@@ -760,6 +772,8 @@
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
     refs:
       base_ref: master
       base_sha: test_sha
@@ -861,6 +875,8 @@
       - name: result-aggregator
         secret:
           secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
     refs:
       base_ref: master
       base_sha: test_sha
@@ -967,6 +983,8 @@
       - configMap:
           name: prow-job-cluster-launch-src
         name: job-definition
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
     refs:
       base_ref: master
       base_sha: test_sha
@@ -1050,6 +1068,8 @@
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
     refs:
       base_ref: master
       base_sha: test_sha
@@ -1156,6 +1176,8 @@
       - configMap:
           name: prow-job-cluster-launch-installer-e2e
         name: job-definition
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
     refs:
       base_ref: master
       base_sha: test_sha
@@ -1262,6 +1284,8 @@
       - configMap:
           name: prow-job-cluster-launch-installer-e2e
         name: job-definition
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
     refs:
       base_ref: master
       base_sha: test_sha
@@ -1363,6 +1387,8 @@
       - name: result-aggregator
         secret:
           secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
     refs:
       base_ref: master
       base_sha: test_sha
@@ -1464,6 +1490,8 @@
       - name: result-aggregator
         secret:
           secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
     refs:
       base_ref: master
       base_sha: test_sha
@@ -1565,6 +1593,8 @@
       - name: result-aggregator
         secret:
           secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
     refs:
       base_ref: master
       base_sha: test_sha

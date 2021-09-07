@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"path/filepath"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"

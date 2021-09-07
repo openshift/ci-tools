@@ -56,13 +56,12 @@ func validateOptions(o options) []error {
 }
 
 const (
-	BuildUFarm    = "build_farm"
-	PodScaler     = "pod-scaler"
-	ConfigUpdater = "config-updater"
-	Kubeconfig    = "KUBECONFIG"
-	CiOperator    = "ci-operator"
-	BuildFarm     = "build-farm"
-	Ci            = "ci"
+	buildUFarm    = "build_farm"
+	podScaler     = "pod-scaler"
+	configUpdater = "config-updater"
+	ciOperator    = "ci-operator"
+	buildFarm     = "build-farm"
+	ci            = "ci"
 )
 
 func RepoMetadata() *api.Metadata {

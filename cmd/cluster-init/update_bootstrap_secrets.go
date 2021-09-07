@@ -10,12 +10,13 @@ import (
 )
 
 const (
-	Credentials         = "credentials"
-	RegPullCredsAll     = "registry-pull-credentials-all"
-	DotDockerConfigJson = ".dockerconfigjson"
-	Arm01               = "arm01"
-	TestCredentials     = "test-credentials"
-	Kubeconfig          = "kubeconfig"
+	credentials         = "credentials"
+	regPullCredsAll     = "registry-pull-credentials-all"
+	dotDockerConfigJson = ".dockerconfigjson"
+	arm01               = "arm01"
+	testCredentials     = "test-credentials"
+	kubeconfig          = "kubeconfig"
+	config              = "config"
 )
 
 func updateCiSecretBootstrap(o options) error {
@@ -34,7 +35,7 @@ func updateCiSecretBootstrap(o options) error {
 }
 
 func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
-	for _, groupName := range []string{BuildUFarm, "non_app_ci", "non_app_ci_x86"} {
+	for _, groupName := range []string{buildUFarm, "non_app_ci", "non_app_ci_x86"} {
 		c.ClusterGroups[groupName] = append(c.ClusterGroups[groupName], o.clusterName)
 	}
 	c.UserSecretsTargetClusters = append(c.UserSecretsTargetClusters, o.clusterName)
@@ -72,16 +73,16 @@ func appendSecret(secretGenerator func(options) secretbootstrap.SecretConfig, c 
 func generateCiOperatorSecret(o options) secretbootstrap.SecretConfig {
 	return secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
-			Kubeconfig: {
-				Field: serviceAccountKubeconfigPath(CiOperator, o.clusterName),
-				Item:  BuildUFarm,
+			kubeconfig: {
+				Field: serviceAccountKubeconfigPath(ciOperator, o.clusterName),
+				Item:  buildUFarm,
 			},
 		},
 		To: []secretbootstrap.SecretContext{
 			{
 				Cluster:   o.clusterName,
-				Name:      CiOperator,
-				Namespace: TestCredentials,
+				Name:      ciOperator,
+				Namespace: testCredentials,
 			},
 		},
 	}
@@ -91,18 +92,18 @@ func generateRegistryPushCredentialsSecret(o options) secretbootstrap.SecretConf
 	items := []secretbootstrap.DockerConfigJSONData{
 		{
 			AuthField:   "token_image-pusher_app.ci_reg_auth_value.txt",
-			Item:        BuildUFarm,
+			Item:        buildUFarm,
 			RegistryURL: api.ServiceDomainAPPCIRegistry,
 		},
 	}
 	from := generatePushPullSecretFrom(o.clusterName, items)
 	sc := secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
-			DotDockerConfigJson: from,
+			dotDockerConfigJson: from,
 		},
 		To: []secretbootstrap.SecretContext{
-			generateDockerConfigJsonSecretConfigTo(api.RegistryPushCredentialsCICentralSecret, Ci, o.clusterName),
-			generateDockerConfigJsonSecretConfigTo(api.RegistryPushCredentialsCICentralSecret, TestCredentials, o.clusterName),
+			generateDockerConfigJsonSecretConfigTo(api.RegistryPushCredentialsCICentralSecret, ci, o.clusterName),
+			generateDockerConfigJsonSecretConfigTo(api.RegistryPushCredentialsCICentralSecret, testCredentials, o.clusterName),
 		},
 	}
 	return sc
@@ -111,24 +112,24 @@ func generateRegistryPushCredentialsSecret(o options) secretbootstrap.SecretConf
 func generateRegistryPullCredentialsSecret(o options) secretbootstrap.SecretConfig {
 	items := []secretbootstrap.DockerConfigJSONData{
 		{
-			AuthField:   registryPullTokenField(Ci),
-			Item:        BuildUFarm,
+			AuthField:   registryPullTokenField(ci),
+			Item:        buildUFarm,
 			RegistryURL: "registry.svc.ci.openshift.org",
 		},
 		{
 			AuthField:   registryPullTokenField(string(api.ClusterAPPCI)),
-			Item:        BuildUFarm,
+			Item:        buildUFarm,
 			RegistryURL: api.ServiceDomainAPPCIRegistry,
 		},
 	}
 	from := generatePushPullSecretFrom(o.clusterName, items)
 	sc := secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
-			DotDockerConfigJson: from,
+			dotDockerConfigJson: from,
 		},
 		To: []secretbootstrap.SecretContext{
-			generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecret, Ci, o.clusterName),
-			generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecret, TestCredentials, o.clusterName),
+			generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecret, ci, o.clusterName),
+			generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecret, testCredentials, o.clusterName),
 		},
 	}
 	return sc
@@ -139,17 +140,17 @@ func generatePushPullSecretFrom(clusterName string, items []secretbootstrap.Dock
 		DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 			{
 				AuthField:   registryPullTokenField(clusterName),
-				Item:        BuildUFarm,
+				Item:        buildUFarm,
 				RegistryURL: "image-registry.openshift-image-registry.svc.cluster.local:5000",
 			},
 			{
 				AuthField:   registryPullTokenField(clusterName),
-				Item:        BuildUFarm,
+				Item:        buildUFarm,
 				RegistryURL: "image-registry.openshift-image-registry.svc:5000",
 			},
 			{
 				AuthField:   registryPullTokenField(clusterName),
-				Item:        BuildUFarm,
+				Item:        buildUFarm,
 				RegistryURL: fmt.Sprintf("registry.%s.ci.openshift.org", clusterName),
 			},
 		},
@@ -173,10 +174,10 @@ func generateDockerConfigJsonSecretConfigTo(name string, namespace string, clust
 }
 
 func updatePodScalerSecret(c *secretbootstrap.Config, o options) error {
-	key := fmt.Sprintf("%s.%s", o.clusterName, Config)
-	return appendSecretItemContext(c, PodScaler, string(api.ClusterAPPCI), key, secretbootstrap.ItemContext{
-		Field: serviceAccountKubeconfigPath(PodScaler, o.clusterName),
-		Item:  PodScaler,
+	key := fmt.Sprintf("%s.%s", o.clusterName, config)
+	return appendSecretItemContext(c, podScaler, string(api.ClusterAPPCI), key, secretbootstrap.ItemContext{
+		Field: serviceAccountKubeconfigPath(podScaler, o.clusterName),
+		Item:  podScaler,
 	})
 }
 
@@ -185,15 +186,15 @@ func updateDPTPControllerManagerSecret(c *secretbootstrap.Config, o options) err
 	keyAndField := serviceAccountKubeconfigPath(DPTPControllerManager, o.clusterName)
 	return appendSecretItemContext(c, DPTPControllerManager, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
-		Item:  BuildUFarm,
+		Item:  buildUFarm,
 	})
 }
 
 func updateRehearseSecret(c *secretbootstrap.Config, o options) error {
-	keyAndField := serviceAccountKubeconfigPath(CiOperator, o.clusterName)
+	keyAndField := serviceAccountKubeconfigPath(ciOperator, o.clusterName)
 	return appendSecretItemContext(c, "pj-rehearse", string(api.ClusterBuild01), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
-		Item:  BuildUFarm,
+		Item:  buildUFarm,
 	})
 }
 
@@ -219,10 +220,10 @@ func appendSecretItemContext(c *secretbootstrap.Config, name string, cluster str
 
 func updateExistingRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o options) error {
 	for _, cluster := range c.UserSecretsTargetClusters {
-		if cluster != string(api.ClusterHive) && cluster != Arm01 && cluster != o.clusterName {
-			return appendRegistrySecretItemContext(c, RegPullCredsAll, cluster, secretbootstrap.DockerConfigJSONData{
+		if cluster != string(api.ClusterHive) && cluster != arm01 && cluster != o.clusterName {
+			return appendRegistrySecretItemContext(c, regPullCredsAll, cluster, secretbootstrap.DockerConfigJSONData{
 				AuthField:   fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", o.clusterName),
-				Item:        BuildUFarm,
+				Item:        buildUFarm,
 				RegistryURL: fmt.Sprintf("registry.%s.ci.openshift.org", o.clusterName),
 			})
 		}
@@ -235,7 +236,7 @@ func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o opti
 	items := []secretbootstrap.DockerConfigJSONData{
 		{
 			AuthField:   "token_image-puller_ci_reg_auth_value.txt",
-			Item:        BuildUFarm,
+			Item:        buildUFarm,
 			RegistryURL: "registry.svc.ci.openshift.org",
 		},
 		{
@@ -267,7 +268,7 @@ func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o opti
 		if cluster != string(api.ClusterHive) {
 			items = append(items, secretbootstrap.DockerConfigJSONData{
 				AuthField:   registryPullTokenField(cluster),
-				Item:        BuildUFarm,
+				Item:        buildUFarm,
 				RegistryURL: getRegistryUrlFor(cluster),
 			})
 		}
@@ -275,11 +276,11 @@ func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o opti
 	from := generatePushPullSecretFrom(o.clusterName, items)
 	sc := secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
-			DotDockerConfigJson: from,
+			dotDockerConfigJson: from,
 		},
 		To: []secretbootstrap.SecretContext{
-			generateDockerConfigJsonSecretConfigTo(RegPullCredsAll, Ci, o.clusterName),
-			generateDockerConfigJsonSecretConfigTo(RegPullCredsAll, TestCredentials, o.clusterName),
+			generateDockerConfigJsonSecretConfigTo(regPullCredsAll, ci, o.clusterName),
+			generateDockerConfigJsonSecretConfigTo(regPullCredsAll, testCredentials, o.clusterName),
 		},
 	}
 	logrus.Infof("Creating new secret with 'to' of: %v", sc.To)
@@ -292,7 +293,7 @@ func getRegistryUrlFor(cluster string) string {
 		return "registry.apps.build01-us-west-2.vmc.ci.openshift.org"
 	case string(api.ClusterAPPCI):
 		return api.ServiceDomainAPPCIRegistry
-	case Arm01:
+	case arm01:
 		return "registry.arm-build01.arm-build.devcluster.openshift.com"
 	default:
 		return fmt.Sprintf("registry.%s.ci.openshift.org", cluster)
@@ -305,24 +306,24 @@ func appendRegistrySecretItemContext(c *secretbootstrap.Config, name string, clu
 	if err != nil {
 		return err
 	}
-	data := append(sc.From[DotDockerConfigJson].DockerConfigJSONData, value)
-	sc.From[DotDockerConfigJson] = secretbootstrap.ItemContext{
+	data := append(sc.From[dotDockerConfigJson].DockerConfigJSONData, value)
+	sc.From[dotDockerConfigJson] = secretbootstrap.ItemContext{
 		DockerConfigJSONData: data,
 	}
 	return nil
 }
 
 func updateBuildFarmSecrets(c *secretbootstrap.Config, o options) error {
-	buildFarmCredentials, err := findSecretConfig(fmt.Sprintf("%s-%s", BuildFarm, Credentials), string(api.ClusterAPPCI), c.Secrets)
+	buildFarmCredentials, err := findSecretConfig(fmt.Sprintf("%s-%s", buildFarm, credentials), string(api.ClusterAPPCI), c.Secrets)
 	if err != nil {
 		return err
 	}
 	clientId := o.clusterName + "_github_client_id"
 	buildFarmCredentials.From[clientId] = secretbootstrap.ItemContext{
-		Item:  fmt.Sprintf("%s_%s", BuildUFarm, o.clusterName),
+		Item:  fmt.Sprintf("%s_%s", buildUFarm, o.clusterName),
 		Field: "github_client_id",
 	}
-	for _, s := range []string{ConfigUpdater, "crier", "deck", "hook", "prow-controller-manager", "sinker"} {
+	for _, s := range []string{configUpdater, "crier", "deck", "hook", "prow-controller-manager", "sinker"} {
 		sc, err := findSecretConfig(s, string(api.ClusterAPPCI), c.Secrets)
 		if err != nil {
 			return err
@@ -330,7 +331,7 @@ func updateBuildFarmSecrets(c *secretbootstrap.Config, o options) error {
 		keyAndField := serviceAccountKubeconfigPath(s, o.clusterName)
 		sc.From[keyAndField] = secretbootstrap.ItemContext{
 			Field: keyAndField,
-			Item:  BuildUFarm,
+			Item:  buildUFarm,
 		}
 	}
 	return nil

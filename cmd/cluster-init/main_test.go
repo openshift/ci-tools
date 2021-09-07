@@ -60,7 +60,6 @@ func TestValidateOptions(t *testing.T) {
 				releaseRepo: testdata,
 			},
 			expectedErrors: []error{
-				errors.New("cluster: existingCluster already exists"),
 				errors.New("build farm directory: existingCluster already exists"),
 			},
 		},

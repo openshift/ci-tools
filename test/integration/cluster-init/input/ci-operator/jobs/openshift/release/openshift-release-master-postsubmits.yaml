@@ -35,4 +35,4 @@ postsubmits:
               items:
                 - key: sa.config-updater.build01.config
                   path: kubeconfig
-              secretName: build-farm-credentials
+              secretName: config-updater

@@ -36,7 +36,7 @@ periodics:
         items:
         - key: sa.config-updater.build01.config
           path: kubeconfig
-        secretName: build-farm-credentials
+        secretName: config-updater
 - agent: kubernetes
   cluster: app.ci
   decorate: true
@@ -74,4 +74,4 @@ periodics:
         items:
         - key: sa.config-updater.newCluster.config
           path: kubeconfig
-        secretName: build-farm-credentials
+        secretName: config-updater

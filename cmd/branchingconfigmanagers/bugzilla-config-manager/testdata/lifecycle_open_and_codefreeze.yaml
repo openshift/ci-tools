@@ -1,0 +1,7 @@
+ocp:
+  "4.10":
+  - event: "code-freeze"
+    when: "2020-05-17T14:47:58Z"
+  "4.9":
+  - event: "open"
+    when: "2020-05-17T14:47:58Z"

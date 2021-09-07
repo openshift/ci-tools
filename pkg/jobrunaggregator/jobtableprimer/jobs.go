@@ -20,219 +20,63 @@ const (
 
 	v408 = "4.8"
 	v409 = "4.9"
+	v410 = "4.10"
+	v411 = "4.11"
+	v412 = "4.12"
+	v413 = "4.13"
+	v414 = "4.14"
+	v415 = "4.15"
+)
+
+var (
+	reverseOrderedVersions = []string{
+		v415, v414, v413, v412, v411, v410, v409, v408,
+	}
 )
 
 var (
 	jobsToAnalyze = []jobrunaggregatorapi.JobRow{
-		{
-			JobName:                     "periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade-build02",
-			GCSBucketName:               "origin-ci-test",
-			GCSJobHistoryLocationPrefix: "logs/periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade-build02",
-			CollectDisruption:           true,
-			CollectTestRuns:             true,
-			Platform:                    gcp,
-			Network:                     sdn,
-			Topology:                    ha,
-			IPMode:                      ipv4,
-			Release:                     v409,
-			FromRelease:                 v409,
-			RunsUpgrade:                 true,
-			RunsE2EParallel:             true,
-			RunsE2ESerial:               false,
-		},
-		{
-			JobName:                     "periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade",
-			GCSBucketName:               "origin-ci-test",
-			GCSJobHistoryLocationPrefix: "logs/periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade",
-			CollectDisruption:           true,
-			CollectTestRuns:             true,
-			Platform:                    gcp,
-			Network:                     sdn,
-			IPMode:                      ipv4,
-			Topology:                    ha,
-			Release:                     v409,
-			FromRelease:                 v409,
-			RunsUpgrade:                 true,
-			RunsE2EParallel:             false,
-			RunsE2ESerial:               false,
-		},
-		{
-			JobName:                     "periodic-ci-openshift-release-master-ci-4.9-upgrade-from-stable-4.8-e2e-aws-upgrade",
-			GCSBucketName:               "origin-ci-test",
-			GCSJobHistoryLocationPrefix: "logs/periodic-ci-openshift-release-master-ci-4.9-upgrade-from-stable-4.8-e2e-aws-upgrade",
-			CollectDisruption:           true,
-			CollectTestRuns:             true,
-			Platform:                    aws,
-			Network:                     sdn,
-			IPMode:                      ipv4,
-			Topology:                    ha,
-			Release:                     v409,
-			FromRelease:                 v408,
-			RunsUpgrade:                 true,
-			RunsE2EParallel:             true,
-			RunsE2ESerial:               false,
-		},
-		{
-			JobName:                     "periodic-ci-openshift-release-master-ci-4.9-upgrade-from-stable-4.8-e2e-aws-ovn-upgrade",
-			GCSBucketName:               "origin-ci-test",
-			GCSJobHistoryLocationPrefix: "logs/periodic-ci-openshift-release-master-ci-4.9-upgrade-from-stable-4.8-e2e-aws-ovn-upgrade",
-			CollectDisruption:           true,
-			CollectTestRuns:             true,
-			Platform:                    aws,
-			Network:                     ovn,
-			IPMode:                      ipv4,
-			Topology:                    ha,
-			Release:                     v409,
-			FromRelease:                 v408,
-			RunsUpgrade:                 true,
-			RunsE2EParallel:             true,
-			RunsE2ESerial:               false,
-		},
-		{
-			JobName:                     "periodic-ci-openshift-release-master-ci-4.9-e2e-azure-upgrade-single-node",
-			GCSBucketName:               "origin-ci-test",
-			GCSJobHistoryLocationPrefix: "logs/periodic-ci-openshift-release-master-ci-4.9-e2e-azure-upgrade-single-node",
-			CollectDisruption:           true,
-			CollectTestRuns:             true,
-			Platform:                    azure,
-			Network:                     sdn,
-			IPMode:                      ipv4,
-			Topology:                    single,
-			Release:                     v409,
-			FromRelease:                 v409,
-			RunsUpgrade:                 true,
-			RunsE2EParallel:             false,
-			RunsE2ESerial:               false,
-		},
-		{
-			JobName:                     "periodic-ci-openshift-release-master-nightly-4.9-e2e-metal-ipi-upgrade",
-			GCSBucketName:               "origin-ci-test",
-			GCSJobHistoryLocationPrefix: "logs/periodic-ci-openshift-release-master-nightly-4.9-e2e-metal-ipi-upgrade",
-			CollectDisruption:           true,
-			CollectTestRuns:             true,
-			Platform:                    metal,
-			Network:                     sdn,
-			IPMode:                      ipv4,
-			Topology:                    ha,
-			Release:                     v409,
-			FromRelease:                 v409,
-			RunsUpgrade:                 true,
-			RunsE2EParallel:             true,
-			RunsE2ESerial:               false,
-		},
-		{
-			JobName:                     "periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade",
-			GCSBucketName:               "origin-ci-test",
-			GCSJobHistoryLocationPrefix: "logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade",
-			CollectDisruption:           true,
-			CollectTestRuns:             true,
-			Platform:                    metal,
-			Network:                     sdn,
-			IPMode:                      ipv4,
-			Topology:                    ha,
-			Release:                     v409,
-			FromRelease:                 v408,
-			RunsUpgrade:                 true,
-			RunsE2EParallel:             true,
-			RunsE2ESerial:               false,
-		},
-		{
-			JobName:                     "periodic-ci-openshift-release-master-nightly-4.9-e2e-aws-upgrade",
-			GCSBucketName:               "origin-ci-test",
-			GCSJobHistoryLocationPrefix: "logs/periodic-ci-openshift-release-master-nightly-4.9-e2e-aws-upgrade",
-			CollectDisruption:           true,
-			CollectTestRuns:             true,
-			Platform:                    aws,
-			Network:                     sdn,
-			IPMode:                      ipv4,
-			Topology:                    ha,
-			Release:                     v409,
-			FromRelease:                 v409,
-			RunsUpgrade:                 true,
-			RunsE2EParallel:             true,
-			RunsE2ESerial:               false,
-		},
-		{
-			JobName:                     "periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-aws-upgrade",
-			GCSBucketName:               "origin-ci-test",
-			GCSJobHistoryLocationPrefix: "logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-aws-upgrade",
-			CollectDisruption:           true,
-			CollectTestRuns:             true,
-			Platform:                    aws,
-			Network:                     sdn,
-			IPMode:                      ipv4,
-			Topology:                    ha,
-			Release:                     v409,
-			FromRelease:                 v408,
-			RunsUpgrade:                 true,
-			RunsE2EParallel:             true,
-			RunsE2ESerial:               false,
-		},
-
-		{
-			JobName:                     "periodic-ci-openshift-release-master-ci-4.9-e2e-aws-serial",
-			GCSBucketName:               "origin-ci-test",
-			GCSJobHistoryLocationPrefix: "logs/periodic-ci-openshift-release-master-ci-4.9-e2e-aws-serial",
-			CollectDisruption:           true,
-			CollectTestRuns:             false,
-			Platform:                    aws,
-			Network:                     sdn,
-			IPMode:                      ipv4,
-			Topology:                    ha,
-			Release:                     v409,
-			FromRelease:                 "",
-			RunsUpgrade:                 false,
-			RunsE2EParallel:             false,
-			RunsE2ESerial:               true,
-		},
-		{
-			JobName:                     "periodic-ci-openshift-release-master-ci-4.9-e2e-gcp",
-			GCSBucketName:               "origin-ci-test",
-			GCSJobHistoryLocationPrefix: "logs/periodic-ci-openshift-release-master-ci-4.9-e2e-gcp",
-			CollectDisruption:           true,
-			CollectTestRuns:             false,
-			Platform:                    gcp,
-			Network:                     sdn,
-			IPMode:                      ipv4,
-			Topology:                    ha,
-			Release:                     v409,
-			FromRelease:                 "",
-			RunsUpgrade:                 false,
-			RunsE2EParallel:             true,
-			RunsE2ESerial:               false,
-		},
-
-		{
-			JobName:                     "periodic-ci-openshift-release-master-nightly-4.9-e2e-aws",
-			GCSBucketName:               "origin-ci-test",
-			GCSJobHistoryLocationPrefix: "logs/periodic-ci-openshift-release-master-nightly-4.9-e2e-aws",
-			CollectDisruption:           true,
-			CollectTestRuns:             false,
-			Platform:                    aws,
-			Network:                     sdn,
-			IPMode:                      ipv4,
-			Topology:                    ha,
-			Release:                     v409,
-			FromRelease:                 "",
-			RunsUpgrade:                 false,
-			RunsE2EParallel:             true,
-			RunsE2ESerial:               false,
-		},
-		{
-			JobName:                     "periodic-ci-openshift-release-master-nightly-4.9-e2e-aws-serial",
-			GCSBucketName:               "origin-ci-test",
-			GCSJobHistoryLocationPrefix: "logs/periodic-ci-openshift-release-master-nightly-4.9-e2e-aws-serial",
-			CollectDisruption:           true,
-			CollectTestRuns:             false,
-			Platform:                    aws,
-			Network:                     sdn,
-			IPMode:                      ipv4,
-			Topology:                    ha,
-			Release:                     v409,
-			FromRelease:                 "",
-			RunsUpgrade:                 false,
-			RunsE2EParallel:             false,
-			RunsE2ESerial:               true,
-		},
+		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade-build02").
+			WithTestRuns().
+			WithE2EParallel().
+			ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade").
+			WithTestRuns().
+			ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.9-upgrade-from-stable-4.8-e2e-aws-upgrade").
+			WithTestRuns().
+			WithE2EParallel().
+			ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.9-upgrade-from-stable-4.8-e2e-aws-ovn-upgrade").
+			WithTestRuns().
+			WithE2EParallel().
+			ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-azure-upgrade-single-node").
+			WithTestRuns().
+			ToJob(),
+		newJob("periodic-ci-openshift-release-master-nightly-4.9-e2e-metal-ipi-upgrade").
+			WithTestRuns().
+			WithE2EParallel().
+			ToJob(),
+		newJob("periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade").
+			WithTestRuns().
+			WithE2EParallel().
+			ToJob(),
+		newJob("periodic-ci-openshift-release-master-nightly-4.9-e2e-aws-upgrade").
+			WithTestRuns().
+			WithE2EParallel().
+			ToJob(),
+		newJob("periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-aws-upgrade").
+			WithTestRuns().
+			WithE2EParallel().
+			ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-aws-serial").
+			ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-gcp").
+			ToJob(),
+		newJob("periodic-ci-openshift-release-master-nightly-4.9-e2e-aws").
+			ToJob(),
+		newJob("periodic-ci-openshift-release-master-nightly-4.9-e2e-aws-serial").
+			ToJob(),
 	}
 )

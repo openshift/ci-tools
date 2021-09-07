@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	LatestImage = api.ServiceDomainAPPCIRegistry + "/ci/applyconfig:latest"
-	LabelRole   = "ci.openshift.io/role"
-	Infra       = "infra"
+	latestImage  = api.ServiceDomainAPPCIRegistry + "/ci/applyconfig:latest"
+	labelRole    = "ci.openshift.io/role"
+	jobRoleInfra = "infra"
 )
 
 func generatePeriodic(clusterName string) prowconfig.Periodic {
@@ -32,8 +32,8 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 					generateContainer("applyconfig:latest",
 						clusterName,
 						[]string{"--confirm=true"},
-						[]v1.VolumeMount{})},
-				ServiceAccountName: ConfigUpdater,
+						nil)},
+				ServiceAccountName: configUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{
 				Decorate: utilpointer.BoolPtr(true),
@@ -44,7 +44,7 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 				}},
 			},
 			Labels: map[string]string{
-				LabelRole: Infra,
+				labelRole: jobRoleInfra,
 			},
 		},
 		Interval: "12h",
@@ -61,15 +61,15 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 			Spec: &v1.PodSpec{
 				Volumes: []v1.Volume{generateSecretVolume(clusterName)},
 				Containers: []v1.Container{
-					generateContainer(LatestImage, clusterName, []string{"--confirm=true"}, []v1.VolumeMount{})},
-				ServiceAccountName: ConfigUpdater,
+					generateContainer(latestImage, clusterName, []string{"--confirm=true"}, nil)},
+				ServiceAccountName: configUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{
 				Decorate: utilpointer.BoolPtr(true),
 			},
 			MaxConcurrency: 1,
 			Labels: map[string]string{
-				LabelRole: Infra,
+				labelRole: jobRoleInfra,
 			},
 		},
 		Brancher: prowconfig.Brancher{
@@ -94,21 +94,21 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 						},
 					}},
 				Containers: []v1.Container{
-					generateContainer(LatestImage,
+					generateContainer(latestImage,
 						clusterName,
-						[]string{},
+						nil,
 						[]v1.VolumeMount{{Name: "tmp", MountPath: "/tmp"}})},
-				ServiceAccountName: ConfigUpdater,
+				ServiceAccountName: configUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{Decorate: utilpointer.BoolPtr(true)},
 			Labels: map[string]string{
-				"pj-rehearse.openshift.io/can-be-rehearsed": "true",
+				jobconfig.CanBeRehearsedLabel: "true",
 			},
 		},
 		AlwaysRun:    true,
 		Optional:     false,
 		Trigger:      prowconfig.DefaultTriggerFor(clusterName),
-		RerunCommand: prowconfig.DefaultRerunCommandFor(clusterName) + "-dry",
+		RerunCommand: prowconfig.DefaultRerunCommandFor(clusterName + "-dry"),
 		Brancher: prowconfig.Brancher{
 			Branches: []string{"master"},
 		},
@@ -126,7 +126,7 @@ func generateSecretVolume(clusterName string) v1.Volume {
 				SecretName: "build-farm-credentials",
 				Items: []v1.KeyToPath{
 					{
-						Key:  serviceAccountKubeconfigPath(ConfigUpdater, clusterName),
+						Key:  serviceAccountKubeconfigPath(configUpdater, clusterName),
 						Path: "kubeconfig",
 					},
 				},

@@ -45,16 +45,16 @@ func updateSecretGenerator(o options) error {
 
 func updateSecretGeneratorConfig(o options, c *SecretGenConfig) error {
 	serviceAccountConfigPath := serviceAccountKubeconfigPath(serviceAccountWildcard, clusterWildcard)
-	if err := appendToSecretItem(BuildUFarm, serviceAccountConfigPath, o, c); err != nil {
+	if err := appendToSecretItem(buildUFarm, serviceAccountConfigPath, o, c); err != nil {
 		return err
 	}
-	if err := appendToSecretItem(BuildUFarm, fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", clusterWildcard), o, c); err != nil {
+	if err := appendToSecretItem(buildUFarm, fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", clusterWildcard), o, c); err != nil {
 		return err
 	}
 	if err := appendToSecretItem("ci-chat-bot", serviceAccountConfigPath, o, c); err != nil {
 		return err
 	}
-	return appendToSecretItem(PodScaler, serviceAccountConfigPath, o, c)
+	return appendToSecretItem(podScaler, serviceAccountConfigPath, o, c)
 }
 
 func appendToSecretItem(itemName string, name string, o options, c *SecretGenConfig) error {

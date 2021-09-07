@@ -91,6 +91,7 @@ func UI(t testhelper.TestingTInterface, dataDir string, parent context.Context, 
 		"--log-style=text",
 		"--cache-dir", dataDir,
 		"--mode=consumer.ui",
+		"--data-dir", t.TempDir(),
 	}
 	podScaler := testhelper.NewAccessory("pod-scaler", podScalerFlags, func(port, healthPort string) []string {
 		t.Logf("pod-scaler admission starting on port %s", port)

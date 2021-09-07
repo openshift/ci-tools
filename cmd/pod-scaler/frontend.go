@@ -1,13 +1,17 @@
 package main
 
 import (
+	"crypto/sha256"
 	"embed"
 	_ "embed"
+	"encoding/base32"
 	"encoding/json"
 	"fmt"
 	"io/fs"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -196,14 +200,14 @@ var (
 	static embed.FS
 )
 
-func serveUI(port, healthPort int, loaders map[string][]*cacheReloader) {
+func serveUI(port, healthPort int, dataDir string, loaders map[string][]*cacheReloader) {
 	logger := logrus.WithField("component", "pod-scaler frontend")
 	server := &frontendServer{
-		logger:     logger,
-		lock:       sync.RWMutex{},
-		mappings:   endpoints(),
-		indices:    map[string][]*IndexNode{},
-		byMetaData: map[pod_scaler.FullMetadata]map[corev1.ResourceName]dataForDisplay{},
+		logger:   logger,
+		lock:     sync.RWMutex{},
+		mappings: endpoints(),
+		indices:  map[string][]*IndexNode{},
+		dataDir:  dataDir,
 	}
 	health := pjutil.NewHealthOnPort(healthPort)
 	digestAll(loaders, map[string]digester{
@@ -317,9 +321,8 @@ type frontendServer struct {
 	// indices hold identifiers for classes of metadata
 	indices map[string][]*IndexNode
 
-	// byMetaData caches display data calculated for the full assortment of
-	// metadata labels.
-	byMetaData map[pod_scaler.FullMetadata]map[corev1.ResourceName]dataForDisplay
+	// dataDir is where we hold sharded data by metadata identifier
+	dataDir string
 }
 
 // dataForDisplay caches precomputed values for displaying data
@@ -364,13 +367,20 @@ func (s *frontendServer) getData(index string) http.HandlerFunc {
 		}
 		logger := logrus.WithFields(meta.LogFields())
 		s.lock.RLock()
-		data, found := s.byMetaData[meta]
+		data, found, err := s.getDatum(meta)
 		s.lock.RUnlock()
 		if !found {
 			metrics.RecordError("data not found", uiMetrics.ErrorRate)
 			w.WriteHeader(http.StatusNotFound)
 			fmt.Fprint(w, "no data available")
 			logger.Warning("No data found.")
+			return
+		}
+		if err != nil {
+			metrics.RecordError("data read error", uiMetrics.ErrorRate)
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, "error reading data")
+			logger.WithError(err).Warning("Failed to read data.")
 			return
 		}
 		raw, err := json.Marshal(data)
@@ -386,6 +396,69 @@ func (s *frontendServer) getData(index string) http.HandlerFunc {
 			logrus.WithError(err).Error("Failed to write response")
 		}
 	}
+}
+
+func hashed(meta pod_scaler.FullMetadata) (string, error) {
+	raw, err := json.Marshal(meta)
+	if err != nil {
+		return "", fmt.Errorf("could not marshal metadata: %w", err)
+	}
+	hash := sha256.New()
+	if _, err := hash.Write(raw); err != nil {
+		return "", fmt.Errorf("could not hash metadata: %w", err)
+	}
+	return base32.StdEncoding.EncodeToString(hash.Sum(nil)), nil
+}
+
+func (s *frontendServer) getDatum(meta pod_scaler.FullMetadata) (map[corev1.ResourceName]dataForDisplay, bool, error) {
+	hash, err := hashed(meta)
+	if err != nil {
+		return nil, false, fmt.Errorf("could not determine hash for meta: %w", err)
+	}
+	subDir := filepath.Join(s.dataDir, hash)
+	if _, err := os.Stat(subDir); os.IsNotExist(err) {
+		return nil, false, nil
+	}
+	datum := map[corev1.ResourceName]dataForDisplay{}
+	if err := filepath.Walk(subDir, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		extension := filepath.Ext(info.Name())
+		filename := info.Name()[0 : len(info.Name())-len(extension)]
+		if extension != ".json" {
+			return nil
+		}
+		raw, err := ioutil.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("could not read file: %w", err)
+		}
+		var subDatum dataForDisplay
+		if err := json.Unmarshal(raw, &subDatum); err != nil {
+			return fmt.Errorf("could not unmarshal file: %w", err)
+		}
+		datum[corev1.ResourceName(filename)] = subDatum
+		return nil
+	}); err != nil {
+		return nil, true, fmt.Errorf("failed to read data: %w", err)
+	}
+	return datum, true, nil
+}
+
+func (s *frontendServer) setDatum(meta pod_scaler.FullMetadata, resource corev1.ResourceName, datum dataForDisplay) error {
+	hash, err := hashed(meta)
+	if err != nil {
+		return fmt.Errorf("could not determine hash for meta: %w", err)
+	}
+	raw, err := json.Marshal(datum)
+	if err != nil {
+		return fmt.Errorf("could not marshal datum: %w", err)
+	}
+	subDir := filepath.Join(s.dataDir, hash)
+	if err := os.MkdirAll(subDir, 0777); err != nil {
+		return fmt.Errorf("could not create directory: %w", err)
+	}
+	return ioutil.WriteFile(filepath.Join(subDir, fmt.Sprintf("%s.json", string(resource))), raw, 0777)
 }
 
 func (s *frontendServer) digestCPU(data *pod_scaler.CachedQuery) {
@@ -422,14 +495,13 @@ func (s *frontendServer) digestData(data *pod_scaler.CachedQuery, metric corev1.
 			overall.Merge(data.Data[fingerprint].Histogram())
 			members = append(members, data.Data[fingerprint].Histogram())
 		}
-		if _, exists := s.byMetaData[meta]; !exists {
-			s.byMetaData[meta] = map[corev1.ResourceName]dataForDisplay{}
-		}
-		s.byMetaData[meta][metric] = dataForDisplay{
+		if err := s.setDatum(meta, metric, dataForDisplay{
 			Cutoff:     overall.ValueAtQuantile(quantile),
 			LowerBound: overall.ValueAtQuantile(.001),
 			Merged:     overall,
 			Histograms: members,
+		}); err != nil {
+			s.logger.WithError(err).Error("Could not record data.")
 		}
 		s.lock.Unlock()
 	}

@@ -56,6 +56,7 @@ type consumerOptions struct {
 	port   int
 	uiPort int
 
+	dataDir              string
 	certDir              string
 	mutateResourceLimits bool
 }
@@ -75,6 +76,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.StringVar(&o.loglevel, "loglevel", "debug", "Logging level.")
 	fs.StringVar(&o.logStyle, "log-style", "json", "Logging style: json or text.")
 	fs.StringVar(&o.cacheDir, "cache-dir", "", "Local directory holding cache data (for development mode).")
+	fs.StringVar(&o.dataDir, "data-dir", "", "Local directory to cache UI data into.")
 	fs.StringVar(&o.cacheBucket, "cache-bucket", "", "GCS bucket name holding cached Prometheus data.")
 	fs.StringVar(&o.gcsCredentialsFile, "gcs-credentials-file", "", "File where GCS credentials are stored.")
 	return &o
@@ -95,6 +97,9 @@ func (o *options) validate() error {
 	case "consumer.ui":
 		if o.uiPort == 0 {
 			return errors.New("--ui-port is required")
+		}
+		if o.dataDir == "" {
+			return errors.New("--data-dir is required")
 		}
 	case "consumer.admission":
 		if o.port == 0 {
@@ -217,7 +222,7 @@ func mainProduce(opts *options, cache cache) {
 }
 
 func mainUI(opts *options, cache cache) {
-	go serveUI(opts.uiPort, opts.instrumentationOptions.HealthPort, loaders(cache))
+	go serveUI(opts.uiPort, opts.instrumentationOptions.HealthPort, opts.dataDir, loaders(cache))
 }
 
 func mainAdmission(opts *options, cache cache) {

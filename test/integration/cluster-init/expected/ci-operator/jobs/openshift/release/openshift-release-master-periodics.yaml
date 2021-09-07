@@ -74,4 +74,4 @@ periodics:
         items:
         - key: sa.config-updater.newCluster.config
           path: kubeconfig
-        secretName: config-updater
+        secretName: build-farm-credentials

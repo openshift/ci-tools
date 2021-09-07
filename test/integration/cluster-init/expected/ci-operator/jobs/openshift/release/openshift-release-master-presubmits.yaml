@@ -100,7 +100,7 @@ presubmits:
           items:
           - key: sa.config-updater.newCluster.config
             path: kubeconfig
-          secretName: config-updater
+          secretName: build-farm-credentials
       - emptyDir: {}
         name: tmp
     trigger: (?m)^/test( | .* )newCluster,?($|\s.*)

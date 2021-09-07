@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -79,6 +80,11 @@ func (m *Metadata) Basename() string {
 		basename = fmt.Sprintf("%s__%s", basename, m.Variant)
 	}
 	return fmt.Sprintf("%s.yaml", basename)
+}
+
+// JobFilePath returns the file path for the jobs of the supplied suffix type
+func (m *Metadata) JobFilePath(suffix string) string {
+	return filepath.Join(m.Org, m.Repo, fmt.Sprintf("%s-%s-%s-%s.yaml", m.Org, m.Repo, m.Branch, suffix))
 }
 
 // RelativePath returns the path to the config under the root config dir

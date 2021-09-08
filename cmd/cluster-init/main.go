@@ -9,6 +9,8 @@ import (
 	"unicode"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 type options struct {
@@ -42,9 +44,9 @@ func validateOptions(o options) []error {
 		}
 	}
 	if o.releaseRepo == "" {
+		//If the release repo is missing, further checks won't be possible
 		errs = append(errs, errors.New("--release-repo must be provided"))
-	}
-	if o.clusterName != "" {
+	} else if o.clusterName != "" {
 		buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
 		if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
 			errs = append(errs, fmt.Errorf("build farm directory: %s already exists", o.clusterName))
@@ -54,9 +56,18 @@ func validateOptions(o options) []error {
 }
 
 const (
-	BuildUFarm = "build_farm"
-	PodScaler  = "pod-scaler"
+	buildUFarm    = "build_farm"
+	podScaler     = "pod-scaler"
+	configUpdater = "config-updater"
 )
+
+func RepoMetadata() *api.Metadata {
+	return &api.Metadata{
+		Org:    "openshift",
+		Repo:   "release",
+		Branch: "master",
+	}
+}
 
 func main() {
 	o, err := parseOptions()
@@ -71,12 +82,13 @@ func main() {
 	// Each step in the process is allowed to fail independently so that the diffs for the others can still be generated
 	errorCount := 0
 	for _, step := range []func(options) error{
+		updateJobs,
 		initClusterBuildFarmDir,
 		updateSecretGenerator,
 		updateSanitizeProwJobs,
 	} {
 		if err := step(o); err != nil {
-			logrus.WithError(err)
+			logrus.WithError(err).Error("failed to execute step")
 			errorCount++
 		}
 	}

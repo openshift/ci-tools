@@ -29,7 +29,7 @@ postsubmits:
       skip_cloning: true
     labels:
       ci-operator.openshift.io/is-promotion: "true"
-      ci-operator.openshift.io/prowgen-controlled: newly-generated
+      ci-operator.openshift.io/prowgen-controlled: "true"
       ci-operator.openshift.io/variant: rhel
     max_concurrency: 1
     name: branch-ci-super-duper-branch-rhel-images

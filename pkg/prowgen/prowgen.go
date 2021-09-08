@@ -20,16 +20,9 @@ import (
 	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
-type label string
-
 const (
-	oauthTokenPath  = "/usr/local/github-credentials"
-	oauthSecretName = "github-credentials-openshift-ci-robot-private-git-cloner"
-	oauthKey        = "oauth"
-
-	prowJobLabelGenerated       = "ci-operator.openshift.io/prowgen-controlled"
-	generated             label = "true"
-	newlyGenerated        label = "newly-generated"
+	oauthTokenPath = "/usr/local/github-credentials"
+	oauthKey       = "oauth"
 )
 
 type ProwgenInfo struct {
@@ -40,7 +33,7 @@ type ProwgenInfo struct {
 // Generate a PodSpec that runs `ci-operator`, to be used in Presubmit/Postsubmit
 // Various pieces are derived from `org`, `repo`, `branch` and `target`.
 // `additionalArgs` are passed as additional arguments to `ci-operator`
-func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret) *corev1.PodSpec {
+func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret, skipCloning bool) *corev1.PodSpec {
 	volumeMounts := []corev1.VolumeMount{
 		{
 			Name:      "pull-secret",
@@ -91,18 +84,19 @@ func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret) *corev1
 	}
 
 	if info.Config.Private {
-		volumes = append(volumes, corev1.Volume{
-			Name: oauthSecretName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{SecretName: oauthSecretName},
-			},
-		})
-
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      oauthSecretName,
+			Name:      api.OauthTokenSecretName,
 			MountPath: oauthTokenPath,
 			ReadOnly:  true,
 		})
+		if skipCloning {
+			volumes = append(volumes, corev1.Volume{
+				Name: api.OauthTokenSecretName,
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{SecretName: api.OauthTokenSecretName},
+				},
+			})
+		}
 	}
 
 	return &corev1.PodSpec{
@@ -154,15 +148,15 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			element.Secrets = append(element.Secrets, element.Secret)
 		}
 		if element.ContainerTestConfiguration != nil {
-			podSpec = generateCiOperatorPodSpec(info, element.Secrets, []string{element.As})
+			podSpec = generateCiOperatorPodSpec(info, element.Secrets, []string{element.As}, skipCloning)
 		} else if element.MultiStageTestConfiguration != nil || element.MultiStageTestConfigurationLiteral != nil {
-			podSpec = generatePodSpecMultiStage(info, &element, configSpec.Releases != nil || element.ClusterClaim != nil)
+			podSpec = generatePodSpecMultiStage(info, &element, configSpec.Releases != nil || element.ClusterClaim != nil, skipCloning)
 		} else {
 			var release string
 			if c := configSpec.ReleaseTagConfiguration; c != nil {
 				release = c.Name
 			}
-			podSpec = generatePodSpecTemplate(info, release, &element)
+			podSpec = generatePodSpecTemplate(info, release, &element, skipCloning)
 		}
 
 		if element.Cron != nil || element.Interval != nil || element.ReleaseController {
@@ -187,7 +181,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			}
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
 		} else {
-			presubmit := *generatePresubmitForTest(element.As, info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.RunIfChanged, element.SkipIfOnlyChanged)
+			presubmit := *generatePresubmitForTest(element.As, info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.RunIfChanged, element.SkipIfOnlyChanged, element.Optional)
 			v, requestingKVM := configSpec.Resources.RequirementsForStep(element.As).Requests[cioperatorapi.KVMDeviceLabel]
 			if requestingKVM {
 				presubmit.Labels[cioperatorapi.KVMDeviceLabel] = v
@@ -216,12 +210,12 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		if promotion.PromotesOfficialImages(configSpec) {
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
-		podSpec := generateCiOperatorPodSpec(info, nil, presubmitTargets)
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", ""))
+		podSpec := generateCiOperatorPodSpec(info, nil, presubmitTargets, skipCloning)
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false))
 
 		if configSpec.PromotionConfiguration != nil {
 
-			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets.List(), []string{"--promote"}...)
+			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets.List(), skipCloning, []string{"--promote"}...)
 			podSpec.Containers[0].Args = append(podSpec.Containers[0].Args,
 				fmt.Sprintf("--image-mirror-push-secret=%s", filepath.Join(cioperatorapi.RegistryPushCredentialsCICentralSecretMountPath, corev1.DockerConfigJsonKey)))
 			podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{
@@ -253,12 +247,12 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 				continue
 			}
 			indexName := api.IndexName(bundle.As)
-			podSpec := generateCiOperatorPodSpec(info, nil, []string{indexName})
-			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(indexName, info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", ""))
+			podSpec := generateCiOperatorPodSpec(info, nil, []string{indexName}, skipCloning)
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(indexName, info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false))
 		}
 		if containsUnnamedBundle {
-			podSpec := generateCiOperatorPodSpec(info, nil, []string{string(api.PipelineImageStreamTagReferenceIndexImage)})
-			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(string(api.PipelineImageStreamTagReferenceIndexImage), info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", ""))
+			podSpec := generateCiOperatorPodSpec(info, nil, []string{string(api.PipelineImageStreamTagReferenceIndexImage)}, skipCloning)
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(string(api.PipelineImageStreamTagReferenceIndexImage), info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false))
 		}
 	}
 
@@ -269,14 +263,14 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	}
 }
 
-func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret, targets []string, additionalArgs ...string) *corev1.PodSpec {
+func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret, targets []string, skipCloning bool, additionalArgs ...string) *corev1.PodSpec {
 	for _, arg := range additionalArgs {
 		if !strings.HasPrefix(arg, "--") {
 			panic(fmt.Sprintf("all args to ci-operator must be in the form --flag=value, not %s", arg))
 		}
 	}
 
-	ret := generatePodSpec(info, secrets)
+	ret := generatePodSpec(info, secrets, skipCloning)
 	ret.Containers[0].Command = []string{"ci-operator"}
 	ret.Containers[0].Args = append([]string{
 		"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
@@ -302,7 +296,7 @@ func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secre
 	return ret
 }
 
-func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepConfiguration, needsPullSecret bool) *corev1.PodSpec {
+func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepConfiguration, needsPullSecret, skipCloning bool) *corev1.PodSpec {
 	var profile api.ClusterProfile
 	if test.MultiStageTestConfiguration != nil {
 		profile = test.MultiStageTestConfiguration.ClusterProfile
@@ -326,7 +320,7 @@ func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepCo
 		additionalArgs = []string{cioperatorapi.HiveControlPlaneKubeconfigSecretArg}
 		secrets = append(secrets, &api.Secret{Name: api.HiveControlPlaneKubeconfigSecret})
 	}
-	podSpec := generateCiOperatorPodSpec(info, secrets, []string{test.As}, additionalArgs...)
+	podSpec := generateCiOperatorPodSpec(info, secrets, []string{test.As}, skipCloning, additionalArgs...)
 
 	if profile != "" {
 		podSpec.Volumes = append(podSpec.Volumes, generateClusterProfileVolume(profile, profile.ClusterType()))
@@ -352,7 +346,7 @@ func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
 	return len(api.LeasesForTest(test.MultiStageTestConfigurationLiteral)) > 0
 }
 
-func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperatorapi.TestStepConfiguration) *corev1.PodSpec {
+func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperatorapi.TestStepConfiguration, skipCloning bool) *corev1.PodSpec {
 	var testImageStreamTag, template string
 	var clusterProfile cioperatorapi.ClusterProfile
 	var needsReleaseRpms, needsLeaseServer bool
@@ -391,7 +385,7 @@ func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperator
 	clusterType := clusterProfile.ClusterType()
 	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
 	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
-	podSpec := generateCiOperatorPodSpec(info, test.Secrets, []string{test.As})
+	podSpec := generateCiOperatorPodSpec(info, test.Secrets, []string{test.As}, skipCloning)
 	clusterProfileVolume := generateClusterProfileVolume(clusterProfile, clusterType)
 	if len(template) > 0 {
 		podSpec.Volumes = append(podSpec.Volumes, generateConfigMapVolume("job-definition", []string{fmt.Sprintf("prow-job-%s", template)}))
@@ -451,7 +445,7 @@ func addLeaseClient(s *corev1.PodSpec) {
 	})
 }
 
-func generatePresubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.PodSpec, pathAlias *string, jobRelease string, skipCloning bool, runIfChanged, skipIfOnlyChanged string) *prowconfig.Presubmit {
+func generatePresubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.PodSpec, pathAlias *string, jobRelease string, skipCloning bool, runIfChanged, skipIfOnlyChanged string, optional bool) *prowconfig.Presubmit {
 	shortName := info.TestName(name)
 	base := generateJobBase(name, jc.PresubmitPrefix, info, podSpec, true, pathAlias, jobRelease, skipCloning)
 	return &prowconfig.Presubmit{
@@ -467,6 +461,7 @@ func generatePresubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.Po
 			RunIfChanged:      runIfChanged,
 			SkipIfOnlyChanged: skipIfOnlyChanged,
 		},
+		Optional: optional,
 	}
 }
 
@@ -516,6 +511,8 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 		clusterType = string(profile)
 	} else if profile == cioperatorapi.ClusterProfilePacketSNO {
 		clusterType = string(profile)
+	} else if profile == cioperatorapi.ClusterProfileAzure2 {
+		clusterType = string(profile)
 	}
 	ret := corev1.Volume{
 		Name: "cluster-profile",
@@ -535,8 +532,12 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 	case
 		cioperatorapi.ClusterProfileAWS,
 		cioperatorapi.ClusterProfileAWSArm64,
+		cioperatorapi.ClusterProfileAWSC2S,
+		cioperatorapi.ClusterProfileAWSChina,
+		cioperatorapi.ClusterProfileAWSGovCloud,
 		cioperatorapi.ClusterProfileAlibaba,
 		cioperatorapi.ClusterProfileAzure4,
+		cioperatorapi.ClusterProfileAzure2,
 		cioperatorapi.ClusterProfileAzureArc,
 		cioperatorapi.ClusterProfileAzureStack,
 		cioperatorapi.ClusterProfileIBMCloud,
@@ -601,7 +602,7 @@ func generateConfigMapVolume(name string, templates []string) corev1.Volume {
 }
 
 func generateJobBase(name, prefix string, info *ProwgenInfo, podSpec *corev1.PodSpec, rehearsable bool, pathAlias *string, jobRelease string, skipCloning bool) prowconfig.JobBase {
-	labels := map[string]string{prowJobLabelGenerated: string(newlyGenerated)}
+	labels := map[string]string{jc.LabelGenerated: string(jc.NewlyGenerated)}
 
 	if rehearsable {
 		labels[jc.CanBeRehearsedLabel] = jc.CanBeRehearsedValue
@@ -618,6 +619,8 @@ func generateJobBase(name, prefix string, info *ProwgenInfo, podSpec *corev1.Pod
 	var decorationConfig *prowv1.DecorationConfig
 	if skipCloning {
 		decorationConfig = &prowv1.DecorationConfig{SkipCloning: utilpointer.BoolPtr(true)}
+	} else if !skipCloning && info.Config.Private {
+		decorationConfig = &prowv1.DecorationConfig{OauthTokenSecret: &prowv1.OauthTokenSecret{Key: api.OauthTokenSecretKey, Name: api.OauthTokenSecretName}}
 	}
 	base := prowconfig.JobBase{
 		Agent:  string(prowv1.KubernetesAgent),
@@ -655,70 +658,4 @@ func FeatureBranch(branch string) string {
 		return branch
 	}
 	return fmt.Sprintf("^%s-", regexp.QuoteMeta(branch))
-}
-
-// IsGenerated returns true if the job was generated using prowgen
-func IsGenerated(job prowconfig.JobBase) bool {
-	_, generated := job.Labels[prowJobLabelGenerated]
-	return generated
-}
-
-func isStale(job prowconfig.JobBase) bool {
-	genLabel, generated := job.Labels[prowJobLabelGenerated]
-	return generated && genLabel != string(newlyGenerated)
-}
-
-// Prune removes all prowgen-generated jobs that were not created by preceding
-// calls to GenerateJobs() (that method labels them as "newly generated"). All
-// remaining prowgen-generated jobs will be labeled as simply "generated" and
-// Prune() returns the resulting job config (which may even be completely empty).
-func Prune(jobConfig *prowconfig.JobConfig) *prowconfig.JobConfig {
-	var pruned prowconfig.JobConfig
-
-	for repo, jobs := range jobConfig.PresubmitsStatic {
-		for _, job := range jobs {
-			if isStale(job.JobBase) {
-				continue
-			}
-
-			if IsGenerated(job.JobBase) {
-				job.Labels[prowJobLabelGenerated] = string(generated)
-			}
-
-			if pruned.PresubmitsStatic == nil {
-				pruned.PresubmitsStatic = map[string][]prowconfig.Presubmit{}
-			}
-
-			pruned.PresubmitsStatic[repo] = append(pruned.PresubmitsStatic[repo], job)
-		}
-	}
-
-	for repo, jobs := range jobConfig.PostsubmitsStatic {
-		for _, job := range jobs {
-			if isStale(job.JobBase) {
-				continue
-			}
-			if IsGenerated(job.JobBase) {
-				job.Labels[prowJobLabelGenerated] = string(generated)
-			}
-			if pruned.PostsubmitsStatic == nil {
-				pruned.PostsubmitsStatic = map[string][]prowconfig.Postsubmit{}
-			}
-
-			pruned.PostsubmitsStatic[repo] = append(pruned.PostsubmitsStatic[repo], job)
-		}
-	}
-
-	for _, job := range jobConfig.Periodics {
-		if isStale(job.JobBase) {
-			continue
-		}
-		if IsGenerated(job.JobBase) {
-			job.Labels[prowJobLabelGenerated] = string(generated)
-		}
-
-		pruned.Periodics = append(pruned.Periodics, job)
-	}
-
-	return &pruned
 }

@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/test-infra/prow/entrypoint"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/pjutil"
@@ -30,7 +31,7 @@ import (
 )
 
 func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool) {
-	logger := logrus.WithField("component", "admission")
+	logger := logrus.WithField("component", "pod-scaler admission")
 	logger.Info("Initializing admission webhook server.")
 	health := pjutil.NewHealthOnPort(healthPort)
 	resources := newResourceServer(loaders, health)
@@ -77,7 +78,7 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		}
 		mutatePodLabels(pod, build)
 	}
-	if err := mutatePodMetadata(pod); err != nil {
+	if err := mutatePodMetadata(pod, logger); err != nil {
 		logger.WithError(err).Error("Failed to handle rehearsal Pod.")
 		return admission.Allowed("Failed to handle rehearsal Pod, ignoring.")
 	}
@@ -104,24 +105,42 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 // where default metadata points to the release repo instead of the repo under test.
 // We can fix this by updating to use the values from the configuration that the job
 // ends up running with.
-func mutatePodMetadata(pod *corev1.Pod) error {
+func mutatePodMetadata(pod *corev1.Pod, logger *logrus.Entry) error {
 	if _, isRehearsal := pod.ObjectMeta.Labels[rehearse.Label]; !isRehearsal {
 		return nil
 	}
-	var rawConfig string
+	var rawConfig, rawEntrypointConfig string
+	var foundContainer bool
 	for _, container := range pod.Spec.Containers {
 		if container.Name != "test" {
 			continue
 		}
+		foundContainer = true
 		for _, value := range container.Env {
-			if value.Name != "CONFIG_SPEC" {
-				continue
+			if value.Name == "CONFIG_SPEC" {
+				rawConfig = value.Value
 			}
-			rawConfig = value.Value
+			if value.Name == entrypoint.JSONConfigEnvVar {
+				rawEntrypointConfig = value.Value
+			}
 		}
 	}
 	if rawConfig == "" {
-		return errors.New("could not find configuration in rehearsal Pod's env")
+		if foundContainer {
+			baseError := "could not find $CONFIG_SPEC in the environment of the rehearsal Pod's test container"
+			if rawEntrypointConfig != "" {
+				var opts entrypoint.Options
+				if err := json.Unmarshal([]byte(rawEntrypointConfig), &opts); err != nil {
+					return fmt.Errorf("%s, could not parse $ENTRYPOINT_OPTIONS: %w", baseError, err)
+				}
+				if len(opts.Args) > 0 && opts.Args[0] != "ci-operator" {
+					logger.Debugf("ignoring Pod, %s, $ENTRYPOINT_OPTIONS is running %s, not ci-operator", baseError, opts.Args[0])
+					return nil
+				}
+			}
+			return errors.New(baseError)
+		}
+		return errors.New("could not find test container in the rehearsal Pod")
 	}
 	var config api.ReleaseBuildConfiguration
 	if err := yaml.Unmarshal([]byte(rawConfig), &config); err != nil {

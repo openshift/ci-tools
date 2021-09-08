@@ -22,6 +22,11 @@ import (
 	"github.com/openshift/ci-tools/pkg/release/prerelease"
 )
 
+const (
+	versionLowerLabel = "version_lower"
+	versionUpperLabel = "version_upper"
+)
+
 type options struct {
 	poolDir   string
 	outputDir string
@@ -61,7 +66,7 @@ func main() {
 	}
 
 	// key: version_in; value: list of file paths
-	poolFilesByVersion := make(map[string][]string)
+	poolFilesByBounds := make(map[api.VersionBounds][]string)
 	if err := filepath.WalkDir(o.poolDir, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -77,31 +82,30 @@ func main() {
 		if err := yaml.Unmarshal(raw, &pool); err != nil {
 			return err
 		}
-		if pool.Labels != nil && pool.Labels["version_in"] != "" {
-			version := pool.Labels["version_in"]
-			poolFilesByVersion[version] = append(poolFilesByVersion[version], path)
+		bounds, err := labelsToBounds(pool.Labels)
+		if err != nil {
+			return fmt.Errorf("Pool %s: %w", pool.Name, err)
+		}
+		if bounds != nil {
+			poolFilesByBounds[*bounds] = append(poolFilesByBounds[*bounds], path)
 		}
 		return nil
 	}); err != nil {
-		logrus.WithError(err).Fatal("Failed to get list of clusterpools setting `version_in`")
+		logrus.WithError(err).Fatal("Failed to get list of clusterpools setting version bounds")
 	}
 
-	versionToPullspec := make(map[string]string)
-	for version := range poolFilesByVersion {
-		versionBounds, err := api.BoundsFromQuery(version)
-		if err != nil {
-			logrus.WithError(err).Fatalf("Failed to convert `version_in` of `%s` to bounds", version)
-		}
+	boundsToPullspec := make(map[api.VersionBounds]string)
+	for versionBounds := range poolFilesByBounds {
 		release := api.Prerelease{
 			Product:       api.ReleaseProductOCP,
 			Architecture:  api.ReleaseArchitectureAMD64,
-			VersionBounds: *versionBounds,
+			VersionBounds: versionBounds,
 		}
 		pullSpec, err := prerelease.ResolvePullSpec(&http.Client{}, release)
 		if err != nil {
-			logrus.WithError(err).Fatalf("Failed to get pullspec for version range `%s`", version)
+			logrus.WithError(err).Fatalf("Failed to get pullspec for version range `%s`", versionBounds.Query())
 		}
-		versionToPullspec[version] = pullSpec
+		boundsToPullspec[versionBounds] = pullSpec
 	}
 
 	// keep list of outdated or removed cluster image set definitions to delete
@@ -121,15 +125,18 @@ func main() {
 		if err := yaml.Unmarshal(raw, &imageset); err != nil {
 			return err
 		}
-		if imageset.Annotations != nil && imageset.Annotations["version_in"] != "" {
+		bounds, err := labelsToBounds(imageset.Annotations)
+		if err != nil {
+			return fmt.Errorf("Failed to parse version labels for clusterimageset %s: %w", imageset.Name, err)
+		}
+		if bounds != nil {
 			isCurrent := false
-			versionIn := imageset.Annotations["version_in"]
-			for version := range poolFilesByVersion {
-				if version == versionIn {
-					if imageset.Spec.ReleaseImage == versionToPullspec[version] {
+			for poolBounds := range poolFilesByBounds {
+				if poolBounds == *bounds {
+					if imageset.Spec.ReleaseImage == boundsToPullspec[poolBounds] {
 						isCurrent = true
-						delete(poolFilesByVersion, version)
-						delete(versionToPullspec, version)
+						delete(poolFilesByBounds, poolBounds)
+						delete(boundsToPullspec, poolBounds)
 					}
 					break
 				}
@@ -141,25 +148,25 @@ func main() {
 		}
 		return nil
 	}); err != nil {
-		logrus.WithError(err).Fatal("Failed to get list of clusterpools setting `version_in`")
+		logrus.WithError(err).Fatal("Failed to get list of clusterpools setting version bounds")
 	}
 
 	// make as much progress as possible and print list of errors at end of command
 	var errs []error
 
 	// any remaining items in autopools/versionToPullspec need to be updated
-	for version, pullspec := range versionToPullspec {
-		name, err := nameFromPullspec(pullspec, version)
-		if err != nil {
-			// this shouldn't happen
-			errs = append(errs, fmt.Errorf("Failed to generate clusterimageset name for version %s: %w", version, err))
-			continue
-		}
+	for bounds, pullspec := range boundsToPullspec {
+		name := nameFromPullspec(pullspec, bounds)
 		clusterimageset := hivev1.ClusterImageSet{
+			TypeMeta: v1.TypeMeta{
+				Kind:       "ClusterImageSet",
+				APIVersion: "hive.openshift.io/v1",
+			},
 			ObjectMeta: v1.ObjectMeta{
 				Name: name,
 				Annotations: map[string]string{
-					"version_in": version,
+					versionLowerLabel: bounds.Lower,
+					versionUpperLabel: bounds.Upper,
 				},
 			},
 			Spec: hivev1.ClusterImageSetSpec{
@@ -184,13 +191,8 @@ func main() {
 	}
 
 	// update all clusterpool specs
-	for version, files := range poolFilesByVersion {
-		imagesetName, err := nameFromPullspec(versionToPullspec[version], version)
-		if err != nil {
-			// this shouldn't happen
-			errs = append(errs, fmt.Errorf("Failed to generate clusterimageset name for version %s: %w", version, err))
-			continue
-		}
+	for bounds, files := range poolFilesByBounds {
+		imagesetName := nameFromPullspec(boundsToPullspec[bounds], bounds)
 		for _, path := range files {
 			raw, err := ioutil.ReadFile(path)
 			if err != nil {
@@ -223,15 +225,30 @@ func main() {
 	}
 }
 
-func nameFromPullspec(pullspec string, version string) (string, error) {
-	bounds, err := api.BoundsFromQuery(version)
-	if err != nil {
-		return "", err
-	}
+func nameFromPullspec(pullspec string, bounds api.VersionBounds) string {
 	baseName := pullspec[strings.LastIndex(pullspec, "ocp-release"):]
 	// handle names like ocp-release:4.8.3-x86_64, generated by a version_in like ">4.8.0-0 <4.9.0-0"
 	baseName = strings.ReplaceAll(baseName, ":", "-")
 	// handle names like ocp-release@sha256:..., generated by a version_in like ">4.8.0 <4.9.0"
 	baseName = strings.ReplaceAll(baseName, "@", "-")
-	return fmt.Sprintf("%s-for-%s-to-%s", baseName, bounds.Lower, bounds.Upper), nil
+	// replace the `_` in `x86_64`, as `_` is an invalid character for k8s object names
+	baseName = strings.ReplaceAll(baseName, "_", "-")
+	return fmt.Sprintf("%s-for-%s-to-%s", baseName, bounds.Lower, bounds.Upper)
+}
+
+func labelsToBounds(labels map[string]string) (*api.VersionBounds, error) {
+	if labels == nil {
+		return nil, nil
+	}
+	if labels[versionLowerLabel] != "" || labels[versionUpperLabel] != "" {
+		bounds := api.VersionBounds{Upper: labels[versionUpperLabel], Lower: labels[versionLowerLabel]}
+		if bounds.Lower == "" {
+			return nil, fmt.Errorf("if `version_upper` is set, `version_lower` must also be set")
+		}
+		if bounds.Upper == "" {
+			return nil, fmt.Errorf("if `version_lower` is set, `version_upper` must also be set")
+		}
+		return &bounds, nil
+	}
+	return nil, nil
 }

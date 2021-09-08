@@ -250,8 +250,9 @@ type OpenshiftMappingConfig struct {
 // generateMappings generates the mappings to mirror the images
 // Those mappings will be stored in https://github.com/openshift/release/tree/master/core-services/image-mirroring/openshift
 // and then used by the periodic-image-mirroring-openshift job
-func generateMappings(promotedTags []api.ImageStreamTagReference, mappingConfig *OpenshiftMappingConfig, imageStreamRefs []ImageStreamRef) map[string]map[string][]string {
-	mappings := map[string]map[string][]string{}
+func generateMappings(promotedTags []api.ImageStreamTagReference, mappingConfig *OpenshiftMappingConfig, imageStreamRefs []ImageStreamRef) (map[string]map[string]sets.String, error) {
+	mappings := map[string]map[string]sets.String{}
+	var errs []error
 	for _, tag := range promotedTags {
 		// mirror the images if it is promoted or it is mirrored by the release controllers from OCP image streams
 		if tag.Namespace == mappingConfig.SourceNamespace || isMirroredFromOCP(tag, imageStreamRefs) {
@@ -259,20 +260,27 @@ func generateMappings(promotedTags []api.ImageStreamTagReference, mappingConfig 
 				if targetTags, ok := mappingConfig.Images[tag.Name]; ok {
 					for _, targetTag := range targetTags {
 						filename := fmt.Sprintf("mapping_origin_%s", strings.ReplaceAll(tag.Name, ".", "_"))
-						_, ok := mappings[filename]
-						if !ok {
-							mappings[filename] = map[string][]string{}
+						if _, ok := mappings[filename]; !ok {
+							mappings[filename] = map[string]sets.String{}
 						}
 						src := fmt.Sprintf("%s/%s/%s:%s", mappingConfig.SourceRegistry, mappingConfig.SourceNamespace, tag.Name, tag.Tag)
-						mappings[filename][src] = append(mappings[filename][src],
-							fmt.Sprintf("%s/%s/%s-%s:%s", mappingConfig.TargetRegistry, mappingConfig.TargetNamespace, mappingConfig.SourceNamespace, tag.Tag, targetTag))
-
+						dst := fmt.Sprintf("%s/%s/%s-%s:%s", mappingConfig.TargetRegistry, mappingConfig.TargetNamespace, mappingConfig.SourceNamespace, tag.Tag, targetTag)
+						if _, ok = mappings[filename][src]; !ok {
+							mappings[filename][src] = sets.NewString()
+						}
+						if mappings[filename][src].Has(dst) {
+							errs = append(errs, fmt.Errorf("cannot define the same mirroring destination %s more than once for the source %s in filename %s", dst, src, filename))
+						}
+						mappings[filename][src].Insert(dst)
 					}
 				}
 			}
 		}
 	}
-	return mappings
+	if len(errs) > 0 {
+		return nil, utilerrors.NewAggregate(errs)
+	}
+	return mappings, nil
 }
 
 // isMirroredFromOCP checks if the image is mirrored by the release controllers
@@ -367,7 +375,10 @@ func main() {
 	}
 
 	if opts.openshiftMappingConfigPath != "" {
-		mappings := generateMappings(promotedTags, opts.openshiftMappingConfig, imageStreamRefs)
+		mappings, err := generateMappings(promotedTags, opts.openshiftMappingConfig, imageStreamRefs)
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to generate the openshift mapping files for image mirroring")
+		}
 		for filename, mapping := range mappings {
 			var b bytes.Buffer
 			keys := make([]string, 0, len(mapping))
@@ -377,7 +388,7 @@ func main() {
 			sort.Strings(keys)
 
 			for _, src := range keys {
-				b.WriteString(fmt.Sprintf("%s\n", strings.Join(append([]string{src}, mapping[src]...), " ")))
+				b.WriteString(fmt.Sprintf("%s\n", strings.Join(append([]string{src}, mapping[src].List()...), " ")))
 			}
 			f := filepath.Join(opts.openshiftMappingDir, filename)
 			logrus.WithField("filename", f).Info("Writing to file")
@@ -399,10 +410,6 @@ func main() {
 	}
 
 	ctx := interrupts.Context()
-	toDelete, err := tagsToDelete(ctx, client, promotedTags, opts.ignoredImageStreamTags, imageStreamRefs)
-	if err != nil {
-		logrus.WithError(err).Fatal("could not get tags to delete")
-	}
 
 	if len(opts.explains) > 0 {
 		w := tabwriter.NewWriter(os.Stdout, 20, 30, 1, ' ', tabwriter.AlignRight)
@@ -424,6 +431,11 @@ func main() {
 		}
 		w.Flush()
 		return
+	}
+
+	toDelete, err := tagsToDelete(ctx, client, promotedTags, opts.ignoredImageStreamTags, imageStreamRefs)
+	if err != nil {
+		logrus.WithError(err).Fatal("could not get tags to delete")
 	}
 
 	var errs []error

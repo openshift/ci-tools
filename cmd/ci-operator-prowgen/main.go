@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -116,20 +117,22 @@ func readProwgenConfig(path string) (*config.Prowgen, error) {
 
 // generateJobsToDir generates prow job configuration into the dir provided by
 // consuming ci-operator configuration.
-func generateJobsToDir(fromDir, toDir, subDir string, prowConfig map[string]*config.Prowgen, resolver registry.Resolver) error {
+func (o *options) generateJobsToDir(subDir string, prowConfig map[string]*config.Prowgen) error {
 	generated := map[string]*prowconfig.JobConfig{}
-	genJobsFunc := generateJobs(resolver, prowConfig, generated)
-	if err := config.OperateOnCIOperatorConfigDir(filepath.Join(fromDir, subDir), genJobsFunc); err != nil {
+	genJobsFunc := generateJobs(o.resolver, prowConfig, generated)
+	if err := o.OperateOnCIOperatorConfigDir(filepath.Join(o.fromDir, subDir), genJobsFunc); err != nil {
 		return fmt.Errorf("failed to generate jobs: %w", err)
 	}
-	for k, v := range generated {
-		i := strings.Index(k, "/")
-		org, repo := k[:i], k[i+1:]
-		if err := jc.WriteToDir(toDir, org, repo, v); err != nil {
-			return fmt.Errorf("failed to write job definitions to output directory: %w", err)
+	if err := o.OperateOnJobConfigSubdirPaths(o.toDir, subDir, func(info *jc.Info) error {
+		key := fmt.Sprintf("%s/%s", info.Org, info.Repo)
+		if _, ok := generated[key]; !ok {
+			generated[key] = &prowconfig.JobConfig{}
 		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to read job directory paths: %w", err)
 	}
-	return nil
+	return writeToDir(o.toDir, generated)
 }
 
 func generateJobs(resolver registry.Resolver, cache map[string]*config.Prowgen, output map[string]*prowconfig.JobConfig) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
@@ -185,7 +188,7 @@ func getReleaseRepoDir(directory string) (string, error) {
 	return "", fmt.Errorf("%s is not an existing directory", tentative)
 }
 
-func pruneStaleJobs(jobDir, subDir string) error {
+func writeToDir(dir string, c map[string]*prowconfig.JobConfig) error {
 	errChan := make(chan error)
 	var errs []error
 
@@ -196,31 +199,29 @@ func pruneStaleJobs(jobDir, subDir string) error {
 		}
 		close(errReadingDone)
 	}()
-
+	type item struct {
+		k string
+		v *prowconfig.JobConfig
+	}
+	ch := make(chan item)
 	wg := sync.WaitGroup{}
-
-	if err := jc.OperateOnJobConfigSubdir(jobDir, subDir, func(jobConfig *prowconfig.JobConfig, info *jc.Info) error {
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			pruned := prowgen.Prune(jobConfig)
-
-			if len(pruned.PresubmitsStatic) == 0 && len(pruned.PostsubmitsStatic) == 0 && len(pruned.Periodics) == 0 {
-				if err := os.Remove(info.Filename); err != nil && !os.IsNotExist(err) {
-					errChan <- err
-				}
-			} else {
-				if err := jc.WriteToFile(info.Filename, pruned); err != nil {
+			for x := range ch {
+				i := strings.Index(x.k, "/")
+				org, repo := x.k[:i], x.k[i+1:]
+				if err := jc.WriteToDir(dir, org, repo, x.v); err != nil {
 					errChan <- err
 				}
 			}
 		}()
-		return nil
-
-	}); err != nil {
-		return err
 	}
-
+	for k, v := range c {
+		ch <- item{k, v}
+	}
+	close(ch)
 	wg.Wait()
 	close(errChan)
 	<-errReadingDone
@@ -252,15 +253,8 @@ func main() {
 	config := map[string]*config.Prowgen{}
 	for _, subDir := range args {
 		logger = logger.WithFields(logrus.Fields{"subdir": subDir})
-		if err := generateJobsToDir(opt.fromDir, opt.toDir, subDir, config, opt.resolver); err != nil {
+		if err := opt.generateJobsToDir(subDir, config); err != nil {
 			logger.WithError(err).Fatal("Failed to generate jobs")
-		}
-
-		if opt.ProcessAll() {
-			if err := pruneStaleJobs(opt.toDir, subDir); err != nil {
-				fields := logrus.Fields{"target": opt.toDir, "source": opt.fromDir}
-				logrus.WithError(err).WithFields(fields).Fatal("Failed to prune stale generated jobs")
-			}
 		}
 	}
 }

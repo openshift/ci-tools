@@ -151,6 +151,9 @@ func (v *Validator) validateTestStepConfiguration(
 		if test.Postsubmit && test.Interval != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` and `postsubmit` are mututally exclusive", fieldRootN))
 		}
+		if test.Postsubmit && test.Optional {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `optional` and `postsubmit` are mututally exclusive", fieldRootN))
+		}
 
 		if test.Cron != nil && test.Interval != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` and `cron` cannot both be set", fieldRootN))
@@ -161,8 +164,8 @@ func (v *Validator) validateTestStepConfiguration(
 		if test.Interval != nil && test.ReleaseController {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` cannot be set for release controller jobs", fieldRootN))
 		}
-		if (test.Cron != nil || test.Interval != nil) && (test.RunIfChanged != "" || test.SkipIfOnlyChanged != "") {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`", fieldRootN))
+		if (test.Cron != nil || test.Interval != nil) && (test.RunIfChanged != "" || test.SkipIfOnlyChanged != "" || test.Optional) {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`", fieldRootN))
 		}
 		if test.RunIfChanged != "" && test.SkipIfOnlyChanged != "" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `run_if_changed` and `skip_if_only_changed` are mutually exclusive", fieldRootN))
@@ -208,7 +211,7 @@ func (v *Validator) validateTestStepConfiguration(
 			// validate path only if name is passed
 			if secret.MountPath != "" {
 				if ok := filepath.IsAbs(secret.MountPath); !ok {
-					validationErrors = append(validationErrors, fmt.Errorf("%s.path: '%s' secret mount path is not valid value, should be ^((\\/*)\\w+)+", fieldRootN, secret.MountPath))
+					validationErrors = append(validationErrors, fmt.Errorf("%s.path: '%s' secret mount path must be an absolute path", fieldRootN, secret.MountPath))
 				}
 			}
 		}
@@ -393,8 +396,12 @@ func validateClusterProfile(fieldRoot string, p api.ClusterProfile) []error {
 		api.ClusterProfileAWSAtomic,
 		api.ClusterProfileAWSCentos,
 		api.ClusterProfileAWSCentos40,
+		api.ClusterProfileAWSC2S,
+		api.ClusterProfileAWSChina,
+		api.ClusterProfileAWSGovCloud,
 		api.ClusterProfileAWSGluster,
 		api.ClusterProfileAlibaba,
+		api.ClusterProfileAzure2,
 		api.ClusterProfileAzure4,
 		api.ClusterProfileAzureArc,
 		api.ClusterProfileAzureStack,

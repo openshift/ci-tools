@@ -147,13 +147,18 @@ func sanitizeFilename(s string) string {
 var (
 	// EquateErrorMessage reports errors to be equal if both are nil
 	// or both have the same message.
-	//https://github.com/google/go-cmp/issues/24#issuecomment-317635190
-	EquateErrorMessage = cmp.Comparer(func(x, y error) bool {
-		if x == nil || y == nil {
-			return x == nil && y == nil
+	EquateErrorMessage = cmp.FilterValues(func(x, y interface{}) bool {
+		_, ok1 := x.(error)
+		_, ok2 := y.(error)
+		return ok1 && ok2
+	}, cmp.Comparer(func(x, y interface{}) bool {
+		xe := x.(error)
+		ye := y.(error)
+		if xe == nil || ye == nil {
+			return xe == nil && ye == nil
 		}
-		return x.Error() == y.Error()
-	})
+		return xe.Error() == ye.Error()
+	}))
 
 	// RuntimeObjectIgnoreRvTypeMeta compares two kubernetes objects, ignoring their resource
 	// version and TypeMeta. It is what you want 99% of the time.

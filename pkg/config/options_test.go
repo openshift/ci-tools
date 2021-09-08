@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -13,6 +15,8 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	jc "github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestOptions_Bind(t *testing.T) {
@@ -249,7 +253,7 @@ func TestOptions_Matches(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := testCase.input.matches(testCase.metadata), testCase.expected; actual != expected {
+			if actual, expected := testCase.input.matches(testCase.metadata.Org, testCase.metadata.Repo), testCase.expected; actual != expected {
 				t.Errorf("%s: got incorrect match: expected %v, got %v", testCase.name, expected, actual)
 			}
 		})
@@ -335,5 +339,69 @@ func TestOperateOnCIOperatorConfigDir(t *testing.T) {
 		if diff := cmp.Diff(processed, tc.expectedProcessedFiles); diff != "" {
 			t.Fatal(diff)
 		}
+	}
+}
+
+func TestOperateOnJobConfigSubdirPaths(t *testing.T) {
+	dir, err := testhelper.TmpDir(t, map[string]fstest.MapFile{
+		"a":                              {},
+		"b/c.yaml":                       {},
+		"d/e/d-e.yaml":                   {},
+		"f/g/f-g-master-presubmits.yaml": {},
+		"f/h/f-h-master-presubmits.yaml": {},
+		"i/k/i-k-master-presubmits.yaml": {},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name     string
+		opt      Options
+		sub      string
+		expected []string
+	}{{
+		name: "all",
+		expected: []string{
+			"/f/g/f-g-master-presubmits.yaml",
+			"/f/h/f-h-master-presubmits.yaml",
+			"/i/k/i-k-master-presubmits.yaml",
+		},
+	}, {
+		name: "subdir",
+		sub:  "f",
+		expected: []string{
+			"/f/g/f-g-master-presubmits.yaml",
+			"/f/h/f-h-master-presubmits.yaml",
+		},
+	}, {
+		name: "org",
+		opt:  Options{Org: "f"},
+		expected: []string{
+			"/f/g/f-g-master-presubmits.yaml",
+			"/f/h/f-h-master-presubmits.yaml",
+		},
+	}, {
+		name: "repo",
+		opt:  Options{Repo: "g"},
+		expected: []string{
+			"/f/g/f-g-master-presubmits.yaml",
+		},
+	}, {
+		name: "org+repo",
+		opt:  Options{Org: "f", Repo: "g"},
+		expected: []string{
+			"/f/g/f-g-master-presubmits.yaml",
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			var ret []string
+			if err := tc.opt.OperateOnJobConfigSubdirPaths(dir, tc.sub, func(info *jc.Info) error {
+				ret = append(ret, strings.TrimPrefix(info.Filename, dir))
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			testhelper.Diff(t, "directories", ret, tc.expected)
+		})
 	}
 }

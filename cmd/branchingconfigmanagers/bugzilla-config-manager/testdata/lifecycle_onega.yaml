@@ -1,0 +1,4 @@
+ocp: # a product
+  "4.6":
+   - event: "generally-available"
+     when: "2020-04-17T14:47:58Z"

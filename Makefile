@@ -359,5 +359,5 @@ promoted-image-governor: $(TMPDIR)/.promoted-image-governor-kubeconfig
 
 explain: $(TMPDIR)/.promoted-image-governor-kubeconfig
 	@[[ $$istag ]] || (echo "ERROR: \$$istag must be set"; exit 1)
-	go run  ./cmd/promoted-image-governor --kubeconfig=$(TMPDIR)/.promoted-image-governor-kubeconfig --ci-operator-config-path=$(release_folder)/ci-operator/config --release-controller-mirror-config-dir=$(release_folder)/core-services/release-controller/_releases --explain $(istag) --dry-run=true
+	@go run  ./cmd/promoted-image-governor --kubeconfig=$(TMPDIR)/.promoted-image-governor-kubeconfig --ci-operator-config-path=$(release_folder)/ci-operator/config --release-controller-mirror-config-dir=$(release_folder)/core-services/release-controller/_releases --explain $(istag) --dry-run=true --log-level=fatal
 .PHONY: explain

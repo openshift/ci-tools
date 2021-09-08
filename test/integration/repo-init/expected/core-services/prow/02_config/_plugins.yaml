@@ -24,8 +24,7 @@ goose: {}
 heart: {}
 help:
   help_guidelines_url: https://git.k8s.io/community/contributors/guide/help-wanted.md
-label:
-  additional_labels: null
+label: {}
 override: {}
 owners:
   labels_denylist:

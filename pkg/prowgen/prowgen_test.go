@@ -12,6 +12,7 @@ import (
 
 	ciop "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -22,17 +23,20 @@ func TestGeneratePodSpec(t *testing.T) {
 		secrets        []*ciop.Secret
 		targets        []string
 		additionalArgs []string
+		skipCloning    bool
 	}{
 		{
 			description: "standard use case",
 			info:        &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			targets:     []string{"target"},
+			skipCloning: true,
 		},
 		{
 			description:    "additional args are included in podspec",
 			info:           &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			targets:        []string{"target"},
 			additionalArgs: []string{"--promote", "--some=thing"},
+			skipCloning:    true,
 		},
 		{
 			description:    "additional args and secret are included in podspec",
@@ -40,14 +44,25 @@ func TestGeneratePodSpec(t *testing.T) {
 			secrets:        []*ciop.Secret{{Name: "secret-name", MountPath: "/usr/local/test-secret"}},
 			targets:        []string{"target"},
 			additionalArgs: []string{"--promote", "--some=thing"},
+			skipCloning:    true,
 		},
 		{
 			description: "multiple targets",
 			info:        &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			targets:     []string{"target", "more", "and-more"},
+			skipCloning: true,
 		},
 		{
 			description: "private job",
+			info: &ProwgenInfo{
+				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+				Config:   config.Prowgen{Private: true},
+			},
+			targets:     []string{"target"},
+			skipCloning: true,
+		},
+		{
+			description: "private job with skip_cloning false",
 			info: &ProwgenInfo{
 				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 				Config:   config.Prowgen{Private: true},
@@ -58,7 +73,7 @@ func TestGeneratePodSpec(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generateCiOperatorPodSpec(tc.info, tc.secrets, tc.targets, tc.additionalArgs...))
+			testhelper.CompareWithFixture(t, generateCiOperatorPodSpec(tc.info, tc.secrets, tc.targets, tc.skipCloning, tc.additionalArgs...))
 		})
 	}
 }
@@ -102,6 +117,15 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 				As: "test",
 				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
 					ClusterProfile: ciop.ClusterProfileGCP2,
+				},
+			},
+		},
+		{
+			description: "azure-2 cluster profile",
+			test: &ciop.TestStepConfiguration{
+				As: "test",
+				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+					ClusterProfile: ciop.ClusterProfileAzure2,
 				},
 			},
 		},
@@ -171,7 +195,7 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generatePodSpecMultiStage(&info, tc.test, true))
+			testhelper.CompareWithFixture(t, generatePodSpecMultiStage(&info, tc.test, true, true))
 		})
 	}
 }
@@ -256,7 +280,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 
 	for idx, tc := range tests {
 		t.Run(fmt.Sprintf("testcase-%d", idx), func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generatePodSpecTemplate(tc.info, tc.release, &tc.test))
+			testhelper.CompareWithFixture(t, generatePodSpecTemplate(tc.info, tc.release, &tc.test, true))
 		})
 	}
 }
@@ -271,6 +295,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		clone             bool
 		runIfChanged      string
 		skipIfOnlyChanged string
+		optional          bool
 	}{{
 		description: "presubmit for standard test",
 		test:        "testname",
@@ -308,11 +333,18 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			jobRelease:        "4.6",
 			skipIfOnlyChanged: "^README.md$",
 		},
+		{
+			description: "optional presubmit",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			jobRelease:  "4.6",
+			optional:    true,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
 			// podSpec tested in generatePodSpec
-			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, nil, nil, tc.jobRelease, !tc.clone, tc.runIfChanged, tc.skipIfOnlyChanged))
+			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, nil, nil, tc.jobRelease, !tc.clone, tc.runIfChanged, tc.skipIfOnlyChanged, tc.optional))
 		})
 	}
 }
@@ -726,6 +758,17 @@ func TestGenerateJobBase(t *testing.T) {
 			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
 			clone:   true,
 		},
+		{
+			testName: "private jobs that clone should contain oauth_token_secret config",
+			name:     "test",
+			prefix:   "pull",
+			info: &ProwgenInfo{
+				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+				Config:   config.Prowgen{Private: true, Expose: true},
+			},
+			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
+			clone:   true,
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -773,14 +816,14 @@ func TestIsGenerated(t *testing.T) {
 		},
 		{
 			description: "job with the generated label is generated",
-			labels:      map[string]string{prowJobLabelGenerated: "any-value"},
+			labels:      map[string]string{jobconfig.LabelGenerated: "any-value"},
 			expected:    true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			if generated := IsGenerated(prowconfig.JobBase{Labels: tc.labels}); generated != tc.expected {
+			if generated := jobconfig.IsGenerated(prowconfig.JobBase{Labels: tc.labels}); generated != tc.expected {
 				t.Errorf("%s: expected %t, got %t", tc.description, tc.expected, generated)
 			}
 		})
@@ -804,7 +847,7 @@ func TestPruneStaleJobs(t *testing.T) {
 			name: "stale generated presubmit is pruned",
 			jobconfig: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{
-					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{prowJobLabelGenerated: string(generated)}}}},
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{jobconfig.LabelGenerated: string(jobconfig.Generated)}}}},
 				},
 			},
 			expectedPruned: true,
@@ -813,7 +856,7 @@ func TestPruneStaleJobs(t *testing.T) {
 			name: "stale generated postsubmit is pruned",
 			jobconfig: &prowconfig.JobConfig{
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
-					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{prowJobLabelGenerated: string(generated)}}}},
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{jobconfig.LabelGenerated: string(jobconfig.Generated)}}}},
 				},
 			},
 			expectedPruned: true,
@@ -822,7 +865,7 @@ func TestPruneStaleJobs(t *testing.T) {
 			name: "not stale generated presubmit is kept",
 			jobconfig: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{
-					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{prowJobLabelGenerated: string(newlyGenerated)}}}},
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{jobconfig.LabelGenerated: string(jobconfig.NewlyGenerated)}}}},
 				},
 			},
 			expectedPruned: false,
@@ -831,7 +874,7 @@ func TestPruneStaleJobs(t *testing.T) {
 			name: "not stale generated postsubmit is kept",
 			jobconfig: &prowconfig.JobConfig{
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
-					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{prowJobLabelGenerated: string(newlyGenerated)}}}},
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{jobconfig.LabelGenerated: string(jobconfig.NewlyGenerated)}}}},
 				},
 			},
 			expectedPruned: false,
@@ -871,7 +914,7 @@ func TestPruneStaleJobs(t *testing.T) {
 				expected = &prowconfig.JobConfig{}
 			}
 
-			pruned := Prune(tc.jobconfig)
+			pruned := jobconfig.Prune(tc.jobconfig)
 			if diff := cmp.Diff(expected, pruned, unexportedFields...); diff != "" {
 				t.Errorf("Pruned config differs:\n%s", diff)
 			}

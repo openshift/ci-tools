@@ -9,6 +9,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -146,7 +148,8 @@ func TestGenerateMappings(t *testing.T) {
 		promotedTags    []api.ImageStreamTagReference
 		mappingConfig   *OpenshiftMappingConfig
 		imageStreamRefs []ImageStreamRef
-		expected        map[string]map[string][]string
+		expected        map[string]map[string]sets.String
+		expectedErr     error
 	}{
 		{
 			name: "basic case",
@@ -204,26 +207,96 @@ func TestGenerateMappings(t *testing.T) {
 					ExcludeTags: []string{"ironic-ipa-downloader"},
 				},
 			},
-			expected: map[string]map[string][]string{
+			expected: map[string]map[string]sets.String{
 				"mapping_origin_4_8": {
-					"registry.ci.openshift.org/origin/4.8:bar": {"quay.io/openshift/origin-bar:4.8", "quay.io/openshift/origin-bar:4.8.0"},
-					"registry.ci.openshift.org/origin/4.8:foo": {"quay.io/openshift/origin-foo:4.8", "quay.io/openshift/origin-foo:4.8.0"},
-					"registry.ci.openshift.org/origin/4.8:ocp-some": {
+					"registry.ci.openshift.org/origin/4.8:bar": sets.NewString("quay.io/openshift/origin-bar:4.8", "quay.io/openshift/origin-bar:4.8.0"),
+					"registry.ci.openshift.org/origin/4.8:foo": sets.NewString("quay.io/openshift/origin-foo:4.8", "quay.io/openshift/origin-foo:4.8.0"),
+					"registry.ci.openshift.org/origin/4.8:ocp-some": sets.NewString(
 						"quay.io/openshift/origin-ocp-some:4.8",
 						"quay.io/openshift/origin-ocp-some:4.8.0",
-					},
+					),
 				},
 				"mapping_origin_4_9": {
-					"registry.ci.openshift.org/origin/4.9:bar": {
+					"registry.ci.openshift.org/origin/4.9:bar": sets.NewString(
 						"quay.io/openshift/origin-bar:4.9",
 						"quay.io/openshift/origin-bar:4.9.0",
 						"quay.io/openshift/origin-bar:latest",
-					},
-					"registry.ci.openshift.org/origin/4.9:some": {
+					),
+					"registry.ci.openshift.org/origin/4.9:some": sets.NewString(
 						"quay.io/openshift/origin-some:4.9",
 						"quay.io/openshift/origin-some:4.9.0",
 						"quay.io/openshift/origin-some:latest",
-					},
+					),
+				},
+			},
+		},
+		{
+			name: "same destination more than once",
+			promotedTags: []api.ImageStreamTagReference{
+				{
+					Namespace: "origin",
+					Name:      "4.6",
+					Tag:       "ovirt-installer",
+				},
+				{
+					Namespace: "ocp",
+					Name:      "4.6",
+					Tag:       "ovirt-installer",
+				},
+			},
+			mappingConfig: &OpenshiftMappingConfig{
+				SourceNamespace: "origin",
+				TargetNamespace: "openshift",
+				SourceRegistry:  "registry.ci.openshift.org",
+				TargetRegistry:  "quay.io",
+				Images: map[string][]string{
+					"4.6": {"4.6", "4.6.0"},
+				},
+			},
+			imageStreamRefs: []ImageStreamRef{
+				{
+					Namespace: "origin",
+					Name:      "4.6",
+				},
+			},
+			expectedErr: utilerrors.NewAggregate([]error{
+				fmt.Errorf("cannot define the same mirroring destination quay.io/openshift/origin-ovirt-installer:4.6 more than once for the source registry.ci.openshift.org/origin/4.6:ovirt-installer in filename mapping_origin_4_6"),
+				fmt.Errorf("cannot define the same mirroring destination quay.io/openshift/origin-ovirt-installer:4.6.0 more than once for the source registry.ci.openshift.org/origin/4.6:ovirt-installer in filename mapping_origin_4_6"),
+			}),
+		},
+		{
+			name: "same destination more than once: resolved by excluded tags",
+			promotedTags: []api.ImageStreamTagReference{
+				{
+					Namespace: "origin",
+					Name:      "4.6",
+					Tag:       "ovirt-installer",
+				},
+				{
+					Namespace: "ocp",
+					Name:      "4.6",
+					Tag:       "ovirt-installer",
+				},
+			},
+			mappingConfig: &OpenshiftMappingConfig{
+				SourceNamespace: "origin",
+				TargetNamespace: "openshift",
+				SourceRegistry:  "registry.ci.openshift.org",
+				TargetRegistry:  "quay.io",
+				Images: map[string][]string{
+					"4.6": {"4.6", "4.6.0"},
+				},
+			},
+			imageStreamRefs: []ImageStreamRef{
+				{
+					Namespace:   "origin",
+					Name:        "4.6",
+					ExcludeTags: []string{"ovirt-installer"},
+				},
+			},
+			expected: map[string]map[string]sets.String{
+				"mapping_origin_4_6": {
+					"registry.ci.openshift.org/origin/4.6:ovirt-installer": sets.NewString("quay.io/openshift/origin-ovirt-installer:4.6", "quay.io/openshift/origin-ovirt-installer:4.6.0"),
 				},
 			},
 		},
@@ -231,8 +304,11 @@ func TestGenerateMappings(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := generateMappings(tc.promotedTags, tc.mappingConfig, tc.imageStreamRefs)
+			actual, acutalErr := generateMappings(tc.promotedTags, tc.mappingConfig, tc.imageStreamRefs)
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			}
+			if diff := cmp.Diff(tc.expectedErr, acutalErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
 		})

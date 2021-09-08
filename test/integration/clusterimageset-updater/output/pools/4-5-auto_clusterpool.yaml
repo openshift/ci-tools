@@ -9,13 +9,14 @@ metadata:
     product: ocp
     region: us-east-1
     version: "4.5"
-    version_in: '>4.5.0-0 <4.6.0-0'
+    version_lower: 4.5.0-0
+    version_upper: 4.6.0-0
   name: ci-ocp-4-5-amd64-aws-us-east-1
   namespace: ci-cluster-pool
 spec:
   baseDomain: hive.aws.ci.openshift.org
   imageSetRef:
-    name: ocp-release-4.5.41-x86_64-for-4.5.0-0-to-4.6.0-0
+    name: ocp-release-4.5.41-x86-64-for-4.5.0-0-to-4.6.0-0
   installConfigSecretTemplateRef:
     name: install-config-aws-us-east-1
   maxSize: 20

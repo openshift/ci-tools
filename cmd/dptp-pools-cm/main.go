@@ -1,14 +1,12 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
 
 	"github.com/sirupsen/logrus"
-	"gopkg.in/fsnotify.v1"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -20,13 +18,7 @@ import (
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	poolspullsecretprovider "github.com/openshift/ci-tools/pkg/controller/cluster_pools_pull_secret_provider"
-	"github.com/openshift/ci-tools/pkg/util"
-)
-
-const (
-	hiveContextName = string(api.HiveCluster)
 )
 
 var allControllers = sets.NewString(
@@ -35,8 +27,6 @@ var allControllers = sets.NewString(
 
 type options struct {
 	leaderElectionNamespace        string
-	kubeconfig                     string
-	kubeconfigDir                  string
 	leaderElectionSuffix           string
 	enabledControllers             flagutil.Strings
 	enabledControllersSet          sets.String
@@ -58,9 +48,6 @@ func newOpts() (*options, error) {
 	opts.addDefaults()
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&opts.leaderElectionNamespace, "leader-election-namespace", "ci", "The namespace to use for leaderelection")
-	fs.StringVar(&opts.kubeconfig, "kubeconfig", "", "The kubeconfig to use. All contexts in it will be considered a build cluster. If it does not have a context named 'hive', loading in-cluster config will be attempted.")
-
-	fs.StringVar(&opts.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files. All contexts in it will be considered a build cluster. If it does not have a context named 'app.ci', loading in-cluster config will be attempted.")
 	fs.StringVar(&opts.leaderElectionSuffix, "leader-election-suffix", "", "Suffix for the leader election lock. Useful for local testing. If set, --dry-run must be set as well")
 	fs.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", allControllers.List(), opts.enabledControllers.Strings()))
 	fs.StringVar(&opts.poolsPullSecretProviderOptions.sourcePullSecretNamespace, "poolsPullSecretProviderOptions.sourcePullSecretNamespace", "ci-cluster-pool", "The namespace where the source pull secret is")
@@ -80,7 +67,6 @@ func newOpts() (*options, error) {
 			errs = append(errs, fmt.Errorf("the following controllers are unknown but were disabled via --disable-controller: %v", diff.List()))
 		}
 	}
-
 	return opts, utilerrors.NewAggregate(errs)
 }
 
@@ -93,30 +79,13 @@ func main() {
 	}
 
 	ctx := controllerruntime.SetupSignalHandler()
-	ctx, cancel := context.WithCancel(ctx)
 
-	kubeconfigChangedCallBack := func(e fsnotify.Event) {
-		logrus.WithField("event", e.String()).Info("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
-		cancel()
-	}
-
-	kubeconfigs, err := util.LoadKubeConfigs(opts.kubeconfig, opts.kubeconfigDir, kubeconfigChangedCallBack)
+	inClusterConfig, err := rest.InClusterConfig()
 	if err != nil {
-		logrus.WithError(err).Fatal("failed to load kubeconfigs")
-	}
-	hiveConfig, hasHive := kubeconfigs[hiveContextName]
-	if !hasHive {
-		kubeconfigs[hiveContextName], err = rest.InClusterConfig()
-		if err != nil {
-			logrus.WithError(err).Fatalf("--kubeconfig had no context for '%s' and loading InClusterConfig failed", hiveContextName)
-		}
-		logrus.Infof("Loaded %q context from in-cluster config", hiveContextName)
-		if err := util.WatchFiles([]string{"/var/run/secrets/kubernetes.io/serviceaccount/token"}, kubeconfigChangedCallBack); err != nil {
-			logrus.WithError(err).Fatal("failed to watch in-cluster token")
-		}
+		logrus.WithError(err).Fatal("failed to load in-cluster config")
 	}
 
-	mgr, err := controllerruntime.NewManager(hiveConfig, controllerruntime.Options{
+	mgr, err := controllerruntime.NewManager(inClusterConfig, controllerruntime.Options{
 		DryRunClient:                  opts.dryRun,
 		Logger:                        ctrlruntimelog.NullLogger{},
 		LeaderElection:                true,

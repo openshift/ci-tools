@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
@@ -23,7 +22,6 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type Page struct {
@@ -35,7 +33,6 @@ func gatherOptions() (options, error) {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.IntVar(&o.port, "port", 8090, "Port to run the server on")
-	fs.StringVar(&o.hiveKubeconfigPath, "hive-kubeconfig", "", "Path to the kubeconfig file to use for requests to Hive.")
 	o.kubernetesOptions.AddFlags(fs)
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -53,11 +50,10 @@ func validateOptions(o options) error {
 }
 
 type options struct {
-	logLevel           string
-	port               int
-	gracePeriod        time.Duration
-	kubernetesOptions  flagutil.KubernetesOptions
-	hiveKubeconfigPath string
+	logLevel          string
+	port              int
+	gracePeriod       time.Duration
+	kubernetesOptions flagutil.KubernetesOptions
 }
 
 func addSchemes() error {
@@ -169,31 +165,16 @@ func main() {
 		interrupts.Terminate()
 	}
 
-	var hiveConfig *rest.Config
-	if o.hiveKubeconfigPath == "" {
-		kubeConfigs, err := o.kubernetesOptions.LoadClusterConfigs(kubeconfigChangedCallBack)
-		if err != nil {
-			logrus.WithError(err).Fatal("could not load kube config")
-		}
-		kubeConfig, ok := kubeConfigs[string(api.HiveCluster)]
-		if len(kubeConfigs) != 1 || !ok {
-			logrus.WithError(err).Fatalf("found %d contexts in Hive kube config and it must be %s", len(kubeConfigs), string(api.HiveCluster))
-		}
-		hiveConfig = &kubeConfig
-	} else {
-		// This branch and o.hiveKubeconfigPath will be removed after migration
-		kubeConfigs, err := util.LoadKubeConfigs(o.hiveKubeconfigPath, "", nil)
-		if err != nil {
-			logrus.WithError(err).WithField("o.hiveKubeconfigPath", o.hiveKubeconfigPath).Fatal("could not load Hive kube config")
-		}
-		kubeConfig, ok := kubeConfigs[string(api.HiveCluster)]
-		if len(kubeConfigs) != 1 || !ok {
-			logrus.WithError(err).WithField("o.hiveKubeconfigPath", o.hiveKubeconfigPath).Fatalf("found %d contexts in Hive kube config and it must be %s", len(kubeConfigs), string(api.HiveCluster))
-		}
-		hiveConfig = kubeConfig
+	kubeConfigs, err := o.kubernetesOptions.LoadClusterConfigs(kubeconfigChangedCallBack)
+	if err != nil {
+		logrus.WithError(err).Fatal("could not load kube config")
+	}
+	hiveConfig, ok := kubeConfigs[string(api.HiveCluster)]
+	if len(kubeConfigs) != 1 || !ok {
+		logrus.WithError(err).Fatalf("found %d contexts in Hive kube config and it must be %s", len(kubeConfigs), string(api.HiveCluster))
 	}
 
-	hiveClient, err := ctrlruntimeclient.New(hiveConfig, ctrlruntimeclient.Options{})
+	hiveClient, err := ctrlruntimeclient.New(&hiveConfig, ctrlruntimeclient.Options{})
 	if err != nil {
 		logrus.WithError(err).Fatal("could not get Hive client for Hive kube config")
 	}

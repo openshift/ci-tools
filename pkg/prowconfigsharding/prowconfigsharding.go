@@ -18,6 +18,7 @@ type pluginsConfigWithPointers struct {
 	Approve         []*plugins.Approve                  `json:"approve,omitempty"`
 	Lgtm            []plugins.Lgtm                      `json:"lgtm,omitempty"`
 	ExternalPlugins map[string][]plugins.ExternalPlugin `json:"external_plugins,omitempty"`
+	Label           *plugins.Label                      `json:"label,omitempty"`
 }
 
 // WriteShardedPluginConfig shards the plugin config and then writes it into
@@ -31,6 +32,25 @@ func WriteShardedPluginConfig(pc *plugins.Configuration, target afero.Fs) (*plug
 		fileList[filepath.Join(orgOrRepo, config.SupplementalPluginConfigFileName)] = &file
 		delete(pc.Plugins, orgOrRepo)
 	}
+
+	for globalOrgOrRepo := range pc.Label.RestrictedLabels {
+		if globalOrgOrRepo == "*" {
+			continue
+		}
+		path := filepath.Join(globalOrgOrRepo, config.SupplementalPluginConfigFileName)
+		if _, ok := fileList[path]; !ok {
+			fileList[path] = &pluginsConfigWithPointers{}
+		}
+		if fileList[path].Label == nil || fileList[path].Label.RestrictedLabels == nil {
+			fileList[path].Label = &plugins.Label{RestrictedLabels: map[string][]plugins.RestrictedLabel{}}
+		}
+		fileList[path].Label.RestrictedLabels[globalOrgOrRepo] = pc.Label.RestrictedLabels[globalOrgOrRepo]
+		delete(pc.Label.RestrictedLabels, globalOrgOrRepo)
+	}
+	if len(pc.Label.RestrictedLabels) == 0 {
+		pc.Label.RestrictedLabels = nil
+	}
+
 	for org, orgConfig := range pc.Bugzilla.Orgs {
 		if orgConfig.Default != nil {
 			path := filepath.Join(org, config.SupplementalPluginConfigFileName)
@@ -46,6 +66,7 @@ func WriteShardedPluginConfig(pc *plugins.Configuration, target afero.Fs) (*plug
 			}
 			fileList[path].Bugzilla = &newOrgConfig
 		}
+
 		for repo, repoConfig := range orgConfig.Repos {
 			path := filepath.Join(org, repo, config.SupplementalPluginConfigFileName)
 			if _, ok := fileList[path]; !ok {

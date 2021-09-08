@@ -155,6 +155,13 @@ func updateRelease(config *api.ReleaseBuildConfiguration, futureRelease string) 
 	if config.ReleaseTagConfiguration != nil {
 		config.ReleaseTagConfiguration.Name = futureRelease
 	}
+	for name, release := range config.Releases {
+		if release.Integration != nil {
+			updated := *release.Integration
+			updated.Name = futureRelease
+			config.Releases[name] = api.UnresolvedRelease{Integration: &updated}
+		}
+	}
 }
 
 // updateImages updates the release that is used for input images

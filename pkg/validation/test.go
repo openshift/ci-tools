@@ -208,7 +208,7 @@ func (v *Validator) validateTestStepConfiguration(
 			// validate path only if name is passed
 			if secret.MountPath != "" {
 				if ok := filepath.IsAbs(secret.MountPath); !ok {
-					validationErrors = append(validationErrors, fmt.Errorf("%s.path: '%s' secret mount path is not valid value, should be ^((\\/*)\\w+)+", fieldRootN, secret.MountPath))
+					validationErrors = append(validationErrors, fmt.Errorf("%s.path: '%s' secret mount path must be an absolute path", fieldRootN, secret.MountPath))
 				}
 			}
 		}

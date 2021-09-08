@@ -238,22 +238,6 @@ func TestValidateTests(t *testing.T) {
 			release: &api.ReleaseTagConfiguration{Name: "origin-v3.11"},
 		},
 		{
-			id: "invalid secret mountPath",
-			tests: []api.TestStepConfiguration{
-				{
-					As:                         "test",
-					Commands:                   "commands",
-					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "src"},
-					Secret: &api.Secret{
-						Name:      "secret",
-						MountPath: "/path/to/secret:exec",
-					},
-				},
-			},
-			// TODO: The code actually just checks `filepath.IsAbs()`
-			// expectedError: errors.New(""),
-		},
-		{
 			id: "invalid secret name",
 			tests: []api.TestStepConfiguration{
 				{
@@ -382,7 +366,7 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errors.New(`tests[0].path: 'path/to/secret' secret mount path is not valid value, should be ^((\/*)\w+)+`),
+			expectedError: errors.New(`tests[0].path: 'path/to/secret' secret mount path must be an absolute path`),
 		},
 		{
 			id:       "non-literal test is invalid in fully-resolved configuration",

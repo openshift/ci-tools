@@ -473,11 +473,8 @@ func mergePresubmits(old, new *prowconfig.Presubmit) prowconfig.Presubmit {
 	if old.Cluster != "" {
 		merged.Cluster = old.Cluster
 	}
-	if new.RunIfChanged != "" {
+	if new.RunIfChanged != "" || new.SkipIfOnlyChanged != "" {
 		merged.RunIfChanged = new.RunIfChanged
-		merged.AlwaysRun = new.AlwaysRun
-	}
-	if new.SkipIfOnlyChanged != "" {
 		merged.SkipIfOnlyChanged = new.SkipIfOnlyChanged
 		merged.AlwaysRun = new.AlwaysRun
 	}

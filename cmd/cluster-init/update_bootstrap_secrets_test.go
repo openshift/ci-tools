@@ -2,10 +2,12 @@ package main
 
 import (
 	"errors"
+	"testing"
+
 	"github.com/google/go-cmp/cmp"
+
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/testhelper"
-	"testing"
 )
 
 func TestFindSecretConfig(t *testing.T) {

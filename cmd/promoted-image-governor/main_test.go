@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -71,13 +72,14 @@ func TestTagsToDelete(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name            string
-		client          ctrlruntimeclient.Client
-		promotedTags    []api.ImageStreamTagReference
-		toIgnore        []*regexp.Regexp
-		imageStreamRefs []ImageStreamRef
-		expected        map[api.ImageStreamTagReference]interface{}
-		expectedError   error
+		name                                 string
+		client                               ctrlruntimeclient.Client
+		promotedTags                         []api.ImageStreamTagReference
+		toIgnore                             []*regexp.Regexp
+		imageStreamRefs                      []ImageStreamRef
+		expectedTagsToDelete                 map[api.ImageStreamTagReference]interface{}
+		expectedImageStreamsWithPromotedTags map[ctrlruntimeclient.ObjectKey]interface{}
+		expectedError                        error
 	}{
 		{
 			name:   "basic case",
@@ -109,7 +111,7 @@ func TestTagsToDelete(t *testing.T) {
 					ExcludeTags: []string{"machine-os-content"},
 				},
 			},
-			expected: map[api.ImageStreamTagReference]interface{}{
+			expectedTagsToDelete: map[api.ImageStreamTagReference]interface{}{
 				{
 					Namespace: "ci",
 					Name:      "some-tool",
@@ -126,13 +128,21 @@ func TestTagsToDelete(t *testing.T) {
 					Tag:       "machine-os-content",
 				}: nil,
 			},
+			expectedImageStreamsWithPromotedTags: map[ctrlruntimeclient.ObjectKey]interface{}{
+				{Namespace: "ci", Name: "some-tool"}: nil,
+				{Namespace: "ocp", Name: "4.8"}:      nil,
+				{Namespace: "origin", Name: "4.8"}:   nil,
+			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, actualError := tagsToDelete(context.TODO(), tc.client, tc.promotedTags, tc.toIgnore, tc.imageStreamRefs)
-			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+			actualTagsToDelete, actualImageStreamsWithPromotedTags, actualError := tagsToDelete(context.TODO(), tc.client, tc.promotedTags, tc.toIgnore, tc.imageStreamRefs)
+			if diff := cmp.Diff(tc.expectedTagsToDelete, actualTagsToDelete); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			}
+			if diff := cmp.Diff(tc.expectedImageStreamsWithPromotedTags, actualImageStreamsWithPromotedTags); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
 			if diff := cmp.Diff(tc.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
@@ -310,6 +320,159 @@ func TestGenerateMappings(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expectedErr, acutalErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			}
+		})
+	}
+}
+
+func init() {
+	if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
+		panic(fmt.Sprintf("failed to register imagev1 scheme: %v", err))
+	}
+}
+
+func TestDeleteTagsOnBuildFarm(t *testing.T) {
+	ocp41ImageStreamAppCI := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ocp",
+			Name:      "4.1",
+		},
+		Status: imagev1.ImageStreamStatus{
+			Tags: []imagev1.NamedTagEventList{
+				{
+					Tag: "etcd",
+				},
+			},
+		},
+	}
+
+	ocp41ImageStreamBuild01 := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ocp",
+			Name:      "4.1",
+		},
+		Status: imagev1.ImageStreamStatus{
+			Tags: []imagev1.NamedTagEventList{
+				{
+					Tag: "test",
+				},
+				{
+					Tag: "etcd",
+				},
+			},
+		},
+	}
+
+	ocp41TestImageStreamTag := &imagev1.ImageStreamTag{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ocp",
+			Name:      "4.1:test",
+		},
+	}
+	ocp41ETCDImageStreamTag := &imagev1.ImageStreamTag{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ocp",
+			Name:      "4.1:etcd",
+		},
+	}
+
+	testCases := []struct {
+		name                         string
+		appCIClient                  ctrlruntimeclient.Client
+		buildClusterClients          map[string]ctrlruntimeclient.Client
+		imageStreamsWithPromotedTags map[ctrlruntimeclient.ObjectKey]interface{}
+		dryRun                       bool
+		expected                     error
+		verify                       func(context.Context, ctrlruntimeclient.Client, map[string]ctrlruntimeclient.Client) error
+	}{
+		{
+			name:                         "delete image stream tags on build farm",
+			appCIClient:                  fakeclient.NewClientBuilder().WithObjects(ocp41ImageStreamAppCI.DeepCopy(), ocp41ETCDImageStreamTag.DeepCopy()).Build(),
+			imageStreamsWithPromotedTags: map[ctrlruntimeclient.ObjectKey]interface{}{{Namespace: "ocp", Name: "4.1"}: nil},
+			buildClusterClients: map[string]ctrlruntimeclient.Client{
+				"build01": fakeclient.NewClientBuilder().WithObjects(ocp41ImageStreamBuild01.DeepCopy(), ocp41TestImageStreamTag.DeepCopy(),
+					ocp41ETCDImageStreamTag.DeepCopy()).Build(),
+			},
+			verify: func(ctx context.Context, client ctrlruntimeclient.Client, m map[string]ctrlruntimeclient.Client) error {
+				ist := &imagev1.ImageStreamTag{}
+				build01Client := m["build01"]
+				if err := build01Client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ocp", Name: "4.1:test"}, ist); !kerrors.IsNotFound(err) {
+					return fmt.Errorf("expected Not found error, but got %w", err)
+				}
+				ist = &imagev1.ImageStreamTag{}
+				if err := build01Client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ocp", Name: "4.1:etcd"}, ist); err != nil {
+					return fmt.Errorf("unexpected error occurred %w", err)
+				}
+				return nil
+			},
+		},
+		{
+			name:                         "delete image stream tags on build farm: dry-run mode",
+			appCIClient:                  fakeclient.NewClientBuilder().WithObjects(ocp41ImageStreamAppCI.DeepCopy(), ocp41ETCDImageStreamTag.DeepCopy()).Build(),
+			imageStreamsWithPromotedTags: map[ctrlruntimeclient.ObjectKey]interface{}{{Namespace: "ocp", Name: "4.1"}: nil},
+			buildClusterClients: map[string]ctrlruntimeclient.Client{
+				"build01": fakeclient.NewClientBuilder().WithObjects(ocp41ImageStreamBuild01.DeepCopy(), ocp41TestImageStreamTag.DeepCopy(),
+					ocp41ETCDImageStreamTag.DeepCopy()).Build(),
+			},
+			dryRun: true,
+			verify: func(ctx context.Context, client ctrlruntimeclient.Client, m map[string]ctrlruntimeclient.Client) error {
+				ist := &imagev1.ImageStreamTag{}
+				build01Client := m["build01"]
+				if err := build01Client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ocp", Name: "4.1:test"}, ist); err != nil {
+					return fmt.Errorf("unexpected error occurred %w", err)
+				}
+				ist = &imagev1.ImageStreamTag{}
+				if err := build01Client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ocp", Name: "4.1:etcd"}, ist); err != nil {
+					return fmt.Errorf("unexpected error occurred %w", err)
+				}
+				return nil
+			},
+		},
+		{
+			name:                         "delete image stream on build farm",
+			appCIClient:                  fakeclient.NewClientBuilder().WithObjects().Build(),
+			imageStreamsWithPromotedTags: map[ctrlruntimeclient.ObjectKey]interface{}{{Namespace: "ocp", Name: "4.1"}: nil},
+			buildClusterClients: map[string]ctrlruntimeclient.Client{
+				"build01": fakeclient.NewClientBuilder().WithObjects(ocp41ImageStreamBuild01.DeepCopy()).Build(),
+			},
+			verify: func(ctx context.Context, client ctrlruntimeclient.Client, m map[string]ctrlruntimeclient.Client) error {
+				is := &imagev1.ImageStream{}
+				build01Client := m["build01"]
+				if err := build01Client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ocp", Name: "4.1"}, is); !kerrors.IsNotFound(err) {
+					return fmt.Errorf("expected Not found error, but got %w", err)
+				}
+				return nil
+			},
+		},
+		{
+			name:                         "delete image stream on build farm: dry-run mode",
+			appCIClient:                  fakeclient.NewClientBuilder().WithObjects().Build(),
+			imageStreamsWithPromotedTags: map[ctrlruntimeclient.ObjectKey]interface{}{{Namespace: "ocp", Name: "4.1"}: nil},
+			buildClusterClients: map[string]ctrlruntimeclient.Client{
+				"build01": fakeclient.NewClientBuilder().WithObjects(ocp41ImageStreamBuild01.DeepCopy()).Build(),
+			},
+			dryRun: true,
+			verify: func(ctx context.Context, client ctrlruntimeclient.Client, m map[string]ctrlruntimeclient.Client) error {
+				is := &imagev1.ImageStream{}
+				build01Client := m["build01"]
+				if err := build01Client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ocp", Name: "4.1"}, is); err != nil {
+					return fmt.Errorf("unexpected error occurred %w", err)
+				}
+				return nil
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.TODO()
+			actual := deleteTagsOnBuildFarm(ctx, tc.appCIClient, tc.buildClusterClients, tc.imageStreamsWithPromotedTags, tc.dryRun)
+			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			}
+			if tc.verify != nil {
+				if err := tc.verify(ctx, tc.appCIClient, tc.buildClusterClients); err != nil {
+					t.Errorf("unexpected error occurred: %v", err)
+				}
 			}
 		})
 	}

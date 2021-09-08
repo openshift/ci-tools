@@ -21,9 +21,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
+	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/logrusutil"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -37,7 +37,7 @@ import (
 
 type options struct {
 	ciOperatorconfigPath             string
-	kubeconfig                       string
+	kubernetesOptions                flagutil.KubernetesOptions
 	dryRun                           bool
 	ignoredImageStreamTagsRaw        flagutil.Strings
 	ignoredImageStreamTags           []*regexp.Regexp
@@ -56,7 +56,7 @@ type options struct {
 func parseOptions() *options {
 	opts := &options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	fs.StringVar(&opts.kubeconfig, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests.")
+	opts.kubernetesOptions.AddFlags(fs)
 	fs.StringVar(&opts.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	fs.StringVar(&opts.ciOperatorconfigPath, "ci-operator-config-path", "", "Path to the ci operator config")
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
@@ -106,6 +106,10 @@ func (o *options) validate() error {
 		return fmt.Errorf("--openshift-mapping-config and --explain cannot be set together")
 	}
 
+	if err := o.kubernetesOptions.Validate(o.dryRun); err != nil {
+		return err
+	}
+
 	o.explains = map[api.ImageStreamTagReference]string{}
 	var errs []error
 	for _, val := range o.explainsRaw.Strings() {
@@ -130,6 +134,7 @@ func (o *options) validate() error {
 
 const (
 	explanationUnknown = "unknown"
+	appCIContextName   = string(api.ClusterAPPCI)
 )
 
 func loadMappingConfig(path string) (*OpenshiftMappingConfig, error) {
@@ -151,7 +156,7 @@ func addSchemes() error {
 	return nil
 }
 
-func tagsToDelete(ctx context.Context, client ctrlruntimeclient.Client, promotedTags []api.ImageStreamTagReference, toIgnore []*regexp.Regexp, imageStreamRefs []ImageStreamRef) (map[api.ImageStreamTagReference]interface{}, error) {
+func tagsToDelete(ctx context.Context, client ctrlruntimeclient.Client, promotedTags []api.ImageStreamTagReference, toIgnore []*regexp.Regexp, imageStreamRefs []ImageStreamRef) (map[api.ImageStreamTagReference]interface{}, map[ctrlruntimeclient.ObjectKey]interface{}, error) {
 	imageStreamsWithPromotedTags := map[ctrlruntimeclient.ObjectKey]interface{}{}
 	for _, promotedTag := range promotedTags {
 		imageStreamsWithPromotedTags[ctrlruntimeclient.ObjectKey{Namespace: promotedTag.Namespace, Name: promotedTag.Name}] = nil
@@ -163,7 +168,7 @@ func tagsToDelete(ctx context.Context, client ctrlruntimeclient.Client, promoted
 		imageStream := &imagev1.ImageStream{}
 		if err := client.Get(ctx, objectKey, imageStream); err != nil {
 			if !kerrors.IsNotFound(err) {
-				errs = append(errs, fmt.Errorf("could not get image stream %s in namespace %s", objectKey.Name, objectKey.Namespace))
+				errs = append(errs, fmt.Errorf("could not get image stream %s in namespace %s: %w", objectKey.Name, objectKey.Namespace, err))
 			} else {
 				logrus.WithField("objectKey", objectKey).Debug("image stream not found")
 			}
@@ -193,9 +198,9 @@ func tagsToDelete(ctx context.Context, client ctrlruntimeclient.Client, promoted
 		delete(tagsToCheck, tag)
 	}
 	if len(errs) > 0 {
-		return nil, utilerrors.NewAggregate(errs)
+		return nil, nil, utilerrors.NewAggregate(errs)
 	}
-	return tagsToCheck, nil
+	return tagsToCheck, imageStreamsWithPromotedTags, nil
 }
 
 func mirroredTagsByReleaseController(ctx context.Context, client ctrlruntimeclient.Client, refs []ImageStreamRef) ([]api.ImageStreamTagReference, error) {
@@ -303,6 +308,79 @@ func isMirroredFromOCP(tag api.ImageStreamTagReference, refs []ImageStreamRef) b
 	return false
 }
 
+func deleteTagsOnBuildFarm(ctx context.Context, appCIClient ctrlruntimeclient.Client, buildClusterClients map[string]ctrlruntimeclient.Client, imageStreamsWithPromotedTags map[ctrlruntimeclient.ObjectKey]interface{}, dryRun bool) error {
+	var errs []error
+	for streamKey := range imageStreamsWithPromotedTags {
+		for cluster, client := range buildClusterClients {
+			imageStream := &imagev1.ImageStream{}
+			if err := client.Get(ctx, streamKey, imageStream); err != nil {
+				if !kerrors.IsNotFound(err) {
+					errs = append(errs, fmt.Errorf("could not get image stream %s in namespace %s on cluster %s: %w", streamKey.Name, streamKey.Namespace, cluster, err))
+				} else {
+					logrus.WithField("cluster", cluster).WithField("streamKey", streamKey).Debug("image stream not found")
+				}
+				continue
+			}
+
+			appCIImageStream := &imagev1.ImageStream{}
+			if err := appCIClient.Get(ctx, streamKey, appCIImageStream); err != nil {
+				if !kerrors.IsNotFound(err) {
+					errs = append(errs, fmt.Errorf("could not get image stream %s in namespace %s on cluster %s: %w", streamKey.Name, streamKey.Namespace, appCIContextName, err))
+				} else {
+					logrus.WithField("cluster", cluster).WithField("streamKey", streamKey).Info("deleting image stream on build farm")
+					if dryRun {
+						continue
+					}
+					if err := client.Delete(ctx, imageStream); err != nil {
+						if !kerrors.IsNotFound(err) {
+							errs = append(errs, fmt.Errorf("could not delete image stream %s in namespace %s on cluster %s", streamKey.Name, streamKey.Namespace, cluster))
+						} else {
+							logrus.WithField("cluster", cluster).WithField("streamKey", streamKey).Debug("image stream not found upon deleting")
+						}
+						continue
+					}
+					logrus.WithField("cluster", cluster).WithField("streamKey", streamKey).Info("image stream is deleted")
+				}
+				continue
+			}
+
+			tags := sets.NewString()
+			for _, tag := range imageStream.Status.Tags {
+				tags.Insert(tag.Tag)
+			}
+
+			appCITags := sets.NewString()
+			for _, tag := range appCIImageStream.Status.Tags {
+				appCITags.Insert(tag.Tag)
+			}
+
+			for _, tag := range tags.Difference(appCITags).List() {
+				isTagOnBuildFarm := &imagev1.ImageStreamTag{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: imageStream.Namespace,
+						Name:      fmt.Sprintf("%s:%s", imageStream.Name, tag),
+					},
+				}
+				tagKey := fmt.Sprintf("%s/%s", isTagOnBuildFarm.Namespace, isTagOnBuildFarm.Name)
+				logrus.WithField("cluster", cluster).WithField("tagKey", tagKey).Info("deleting image stream tag on build farm")
+				if dryRun {
+					continue
+				}
+				if err := client.Delete(ctx, isTagOnBuildFarm); err != nil {
+					if !kerrors.IsNotFound(err) {
+						errs = append(errs, fmt.Errorf("could not delete image stream tag %s in namespace %s on cluster %s", isTagOnBuildFarm.Name, isTagOnBuildFarm.Namespace, cluster))
+					} else {
+						logrus.WithField("cluster", cluster).WithField("tagKey", tagKey).Debug("image stream tag not found upon deleting")
+					}
+					continue
+				}
+				logrus.WithField("cluster", cluster).WithField("tagKey", tagKey).Info("image stream tag is deleted")
+			}
+		}
+	}
+	return utilerrors.NewAggregate(errs)
+}
+
 func main() {
 	logrusutil.ComponentInit()
 
@@ -399,14 +477,40 @@ func main() {
 		return
 	}
 
-	kubeConfig, err := clientcmd.BuildConfigFromFlags("", opts.kubeconfig)
+	kubeconfigs, err := opts.kubernetesOptions.LoadClusterConfigs()
 	if err != nil {
-		logrus.WithError(err).Fatalf("could not load kube config from path %s", opts.kubeconfig)
+		logrus.WithError(err).Fatal("failed to load kubeconfigs")
 	}
 
-	client, err := ctrlruntimeclient.New(kubeConfig, ctrlruntimeclient.Options{})
+	inClusterConfig, hasInClusterConfig := kubeconfigs[kube.InClusterContext]
+	delete(kubeconfigs, kube.InClusterContext)
+	delete(kubeconfigs, kube.DefaultClusterAlias)
+
+	if _, hasAppCi := kubeconfigs[appCIContextName]; !hasAppCi {
+		if !hasInClusterConfig {
+			logrus.WithError(err).Fatalf("had no context for '%s' and loading InClusterConfig failed", appCIContextName)
+		}
+		logrus.Infof("use InClusterConfig for %s", appCIContextName)
+		kubeconfigs[appCIContextName] = inClusterConfig
+	}
+
+	kubeConfig := kubeconfigs[appCIContextName]
+	appCIClient, err := ctrlruntimeclient.New(&kubeConfig, ctrlruntimeclient.Options{})
 	if err != nil {
 		logrus.WithError(err).Fatalf("could not create client")
+	}
+
+	clients := map[string]ctrlruntimeclient.Client{}
+	for cluster, config := range kubeconfigs {
+		cluster, config := cluster, config
+		if cluster == appCIContextName {
+			continue
+		}
+		client, err := ctrlruntimeclient.New(&config, ctrlruntimeclient.Options{})
+		if err != nil {
+			logrus.WithError(err).WithField("cluster", cluster).Fatal("could not create client for cluster")
+		}
+		clients[cluster] = client
 	}
 
 	ctx := interrupts.Context()
@@ -418,7 +522,7 @@ func main() {
 			if e == explanationUnknown {
 				name := fmt.Sprintf("%s:%s", tag.Name, tag.Tag)
 				isTag := &imagev1.ImageStreamTag{}
-				if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: tag.Namespace, Name: name}, isTag); err != nil {
+				if err := appCIClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: tag.Namespace, Name: name}, isTag); err != nil {
 					if kerrors.IsNotFound(err) {
 						fmt.Fprintf(w, "%s\t%s\t\n", tag.ISTagName(), "imagestreamtag does not exit")
 						continue
@@ -433,7 +537,7 @@ func main() {
 		return
 	}
 
-	toDelete, err := tagsToDelete(ctx, client, promotedTags, opts.ignoredImageStreamTags, imageStreamRefs)
+	toDelete, imageStreamsWithPromotedTags, err := tagsToDelete(ctx, appCIClient, promotedTags, opts.ignoredImageStreamTags, imageStreamRefs)
 	if err != nil {
 		logrus.WithError(err).Fatal("could not get tags to delete")
 	}
@@ -444,7 +548,7 @@ func main() {
 		if opts.dryRun {
 			continue
 		}
-		if err := client.Delete(ctx, &imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{
+		if err := appCIClient.Delete(ctx, &imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s:%s", tag.Name, tag.Tag),
 			Namespace: tag.Namespace,
 		},
@@ -454,5 +558,9 @@ func main() {
 	}
 	if len(errs) > 0 {
 		logrus.WithError(utilerrors.NewAggregate(errs)).Fatal("could not delete tags")
+	}
+
+	if err := deleteTagsOnBuildFarm(ctx, appCIClient, clients, imageStreamsWithPromotedTags, opts.dryRun); err != nil {
+		logrus.WithError(err).Fatal("could not delete tags on build farm")
 	}
 }

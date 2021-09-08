@@ -90,50 +90,44 @@ func generateCiOperatorSecret(o options) secretbootstrap.SecretConfig {
 }
 
 func generateRegistryPushCredentialsSecret(o options) secretbootstrap.SecretConfig {
-	items := []secretbootstrap.DockerConfigJSONData{
-		{
-			AuthField:   "token_image-pusher_app.ci_reg_auth_value.txt",
-			Item:        buildUFarm,
-			RegistryURL: api.ServiceDomainAPPCIRegistry,
-		},
-	}
-	from := generatePushPullSecretFrom(o.clusterName, items)
-	sc := secretbootstrap.SecretConfig{
+	return secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
-			dotDockerConfigJson: from,
+			dotDockerConfigJson: generatePushPullSecretFrom(o.clusterName, []secretbootstrap.DockerConfigJSONData{
+				{
+					AuthField:   "token_image-pusher_app.ci_reg_auth_value.txt",
+					Item:        buildUFarm,
+					RegistryURL: api.ServiceDomainAPPCIRegistry,
+				},
+			}),
 		},
 		To: []secretbootstrap.SecretContext{
 			generateDockerConfigJsonSecretConfigTo(api.RegistryPushCredentialsCICentralSecret, ci, o.clusterName),
 			generateDockerConfigJsonSecretConfigTo(api.RegistryPushCredentialsCICentralSecret, testCredentials, o.clusterName),
 		},
 	}
-	return sc
 }
 
 func generateRegistryPullCredentialsSecret(o options) secretbootstrap.SecretConfig {
-	items := []secretbootstrap.DockerConfigJSONData{
-		{
-			AuthField:   registryPullTokenField(ci),
-			Item:        buildUFarm,
-			RegistryURL: "registry.svc.ci.openshift.org",
-		},
-		{
-			AuthField:   registryPullTokenField(string(api.ClusterAPPCI)),
-			Item:        buildUFarm,
-			RegistryURL: api.ServiceDomainAPPCIRegistry,
-		},
-	}
-	from := generatePushPullSecretFrom(o.clusterName, items)
-	sc := secretbootstrap.SecretConfig{
+	return secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
-			dotDockerConfigJson: from,
+			dotDockerConfigJson: generatePushPullSecretFrom(o.clusterName, []secretbootstrap.DockerConfigJSONData{
+				{
+					AuthField:   registryPullTokenField(ci),
+					Item:        buildUFarm,
+					RegistryURL: "registry.svc.ci.openshift.org",
+				},
+				{
+					AuthField:   registryPullTokenField(string(api.ClusterAPPCI)),
+					Item:        buildUFarm,
+					RegistryURL: api.ServiceDomainAPPCIRegistry,
+				},
+			}),
 		},
 		To: []secretbootstrap.SecretContext{
 			generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecret, ci, o.clusterName),
 			generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecret, testCredentials, o.clusterName),
 		},
 	}
-	return sc
 }
 
 func generatePushPullSecretFrom(clusterName string, items []secretbootstrap.DockerConfigJSONData) secretbootstrap.ItemContext {
@@ -270,14 +264,13 @@ func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o opti
 			items = append(items, secretbootstrap.DockerConfigJSONData{
 				AuthField:   registryPullTokenField(cluster),
 				Item:        buildUFarm,
-				RegistryURL: getRegistryUrlFor(cluster),
+				RegistryURL: registryUrlFor(cluster),
 			})
 		}
 	}
-	from := generatePushPullSecretFrom(o.clusterName, items)
 	sc := secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
-			dotDockerConfigJson: from,
+			dotDockerConfigJson: generatePushPullSecretFrom(o.clusterName, items),
 		},
 		To: []secretbootstrap.SecretContext{
 			generateDockerConfigJsonSecretConfigTo(regPullCredsAll, ci, o.clusterName),
@@ -288,7 +281,7 @@ func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o opti
 	c.Secrets = append(c.Secrets, sc)
 }
 
-func getRegistryUrlFor(cluster string) string {
+func registryUrlFor(cluster string) string {
 	switch cluster {
 	case string(api.ClusterVSphere):
 		return "registry.apps.build01-us-west-2.vmc.ci.openshift.org"
@@ -307,9 +300,8 @@ func appendRegistrySecretItemContext(c *secretbootstrap.Config, name string, clu
 	if err != nil {
 		return err
 	}
-	data := append(sc.From[dotDockerConfigJson].DockerConfigJSONData, value)
 	sc.From[dotDockerConfigJson] = secretbootstrap.ItemContext{
-		DockerConfigJSONData: data,
+		DockerConfigJSONData: append(sc.From[dotDockerConfigJson].DockerConfigJSONData, value),
 	}
 	return nil
 }

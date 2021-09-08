@@ -12,7 +12,6 @@ import (
 
 	"github.com/bombsimon/logrusr"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/fsnotify.v1"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -35,7 +34,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/controller/testimagestreamimportcleaner"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
-	"github.com/openshift/ci-tools/pkg/util"
 )
 
 const (
@@ -54,8 +52,7 @@ type options struct {
 	ciOperatorconfigPath                 string
 	stepConfigPath                       string
 	prowconfig                           configflagutil.ConfigOptions
-	kubeconfig                           string
-	kubeconfigDir                        string
+	kubernetesOptions                    flagutil.KubernetesOptions
 	leaderElectionSuffix                 string
 	enabledControllers                   flagutil.Strings
 	enabledControllersSet                sets.String
@@ -96,15 +93,14 @@ type serviceAccountSecretRefresherOptions struct {
 }
 
 func newOpts() (*options, error) {
-	opts := &options{GitHubOptions: &flagutil.GitHubOptions{}}
+	opts := &options{GitHubOptions: &flagutil.GitHubOptions{}, kubernetesOptions: flagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	opts.prowconfig.AddFlags(fs)
 	opts.addDefaults()
 	opts.GitHubOptions.AddFlags(fs)
 	opts.GitHubOptions.AllowAnonymous = true
 	fs.StringVar(&opts.leaderElectionNamespace, "leader-election-namespace", "ci", "The namespace to use for leaderelection")
-	fs.StringVar(&opts.kubeconfig, "kubeconfig", "", "The kubeconfig to use. All contexts in it will be considered a build cluster. If it does not have a context named 'app.ci', loading in-cluster config will be attempted.")
-	fs.StringVar(&opts.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files. All contexts in it will be considered a build cluster. If it does not have a context named 'app.ci', loading in-cluster config will be attempted.")
+	opts.kubernetesOptions.AddFlags(fs)
 	fs.StringVar(&opts.ciOperatorconfigPath, "ci-operator-config-path", "", "Path to the ci operator config")
 	fs.StringVar(&opts.stepConfigPath, "step-config-path", "", "Path to the registries step configuration")
 	fs.StringVar(&opts.leaderElectionSuffix, "leader-election-suffix", "", "Suffix for the leader election lock. Useful for local testing. If set, --dry-run must be set as well")
@@ -170,7 +166,9 @@ func newOpts() (*options, error) {
 	if err := opts.GitHubOptions.Validate(opts.dryRun); err != nil {
 		errs = append(errs, err)
 	}
-
+	if err := opts.kubernetesOptions.Validate(false); err != nil {
+		errs = append(errs, err)
+	}
 	return opts, utilerrors.NewAggregate(errs)
 }
 
@@ -236,24 +234,21 @@ func main() {
 	ctx := controllerruntime.SetupSignalHandler()
 	ctx, cancel := context.WithCancel(ctx)
 
-	kubeconfigChangedCallBack := func(e fsnotify.Event) {
-		logrus.WithField("event", e.String()).Info("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
+	kubeconfigChangedCallBack := func() {
+		logrus.Info("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
 		cancel()
 	}
 
-	kubeconfigs, err := util.LoadKubeConfigs(opts.kubeconfig, opts.kubeconfigDir, kubeconfigChangedCallBack)
+	kubeconfigs, err := opts.kubernetesOptions.LoadClusterConfigs(kubeconfigChangedCallBack)
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to load kubeconfigs")
 	}
 	if _, hasAppCi := kubeconfigs[appCIContextName]; !hasAppCi {
-		kubeconfigs[appCIContextName], err = rest.InClusterConfig()
+		inClusterConfig, err := rest.InClusterConfig()
 		if err != nil {
 			logrus.WithError(err).Fatalf("--kubeconfig had no context for '%s' and loading InClusterConfig failed", appCIContextName)
 		}
-		logrus.Infof("Loaded %q context from in-cluster config", appCIContextName)
-		if err := util.WatchFiles([]string{"/var/run/secrets/kubernetes.io/serviceaccount/token"}, kubeconfigChangedCallBack); err != nil {
-			logrus.WithError(err).Fatal("faild to watch in-cluster token")
-		}
+		kubeconfigs[appCIContextName] = *inClusterConfig
 	}
 
 	if _, hasRegistryCluster := kubeconfigs[opts.registryClusterName]; !hasRegistryCluster {
@@ -295,7 +290,7 @@ func main() {
 			syncPeriod := 24 * time.Hour
 			options.SyncPeriod = &syncPeriod
 		}
-		mgr, err := controllerruntime.NewManager(cfg, options)
+		mgr, err := controllerruntime.NewManager(&cfg, options)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to construct manager for cluster %s: %w", cluster, err))
 			continue

@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/flagutil"
 	prowgithub "k8s.io/test-infra/prow/github"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
@@ -32,6 +33,7 @@ import (
 
 	imagev1 "github.com/openshift/api/image/v1"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -39,15 +41,13 @@ import (
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/rehearse"
-	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type options struct {
 	dryRun            bool
 	debugLogPath      string
 	prowjobKubeconfig string
-	kubeconfigDir     string
-
+	kubernetesOptions flagutil.KubernetesOptions
 	noTemplates       bool
 	noRegistry        bool
 	noClusterProfiles bool
@@ -57,7 +57,7 @@ type options struct {
 }
 
 func gatherOptions() (options, error) {
-	o := options{}
+	o := options{kubernetesOptions: flagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
 	fs := flag.CommandLine
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow")
@@ -65,8 +65,7 @@ func gatherOptions() (options, error) {
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
 	fs.StringVar(&o.prowjobKubeconfig, "prowjob-kubeconfig", "", "Path to the prowjob kubeconfig. If unset, default kubeconfig will be used for prowjobs.")
-	fs.StringVar(&o.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files to use for CLI requests.")
-
+	o.kubernetesOptions.AddFlags(fs)
 	fs.BoolVar(&o.noTemplates, "no-templates", false, "If true, do not attempt to compare templates")
 	fs.BoolVar(&o.noRegistry, "no-registry", false, "If true, do not attempt to compare step registry content")
 	fs.BoolVar(&o.noClusterProfiles, "no-cluster-profiles", false, "If true, do not attempt to compare cluster profiles")
@@ -83,7 +82,7 @@ func validateOptions(o options) error {
 	if len(o.releaseRepoPath) == 0 {
 		return fmt.Errorf("--candidate-path was not provided")
 	}
-	return nil
+	return o.kubernetesOptions.Validate(o.dryRun)
 }
 
 const (
@@ -108,6 +107,8 @@ This is either a pj-rehearse bug or an infrastructure failure.`
 
 pj-rehearse created invalid rehearsal jobs.This is either a pj-rehearse bug, or
 the rehearsed jobs themselves are invalid.`
+
+	appCIContextName = string(api.ClusterAPPCI)
 )
 
 func loadConfigUpdaterCfg(releaseRepoPath string) (ret prowplugins.ConfigUpdater, err error) {
@@ -149,17 +150,16 @@ func rehearseMain() error {
 	org, repo, prNumber := jobSpec.Refs.Org, jobSpec.Refs.Repo, jobSpec.Refs.Pulls[0].Number
 	logger.Infof("Rehearsing Prow jobs for configuration PR %s/%s#%d", org, repo, prNumber)
 
-	buildClusterConfigs := map[string]*rest.Config{}
+	buildClusterConfigs := map[string]rest.Config{}
 	var prowJobConfig *rest.Config
 	if !o.dryRun {
-		if _, exists := os.LookupEnv("KUBECONFIG"); exists || o.kubeconfigDir != "" {
-			buildClusterConfigs, err = util.LoadKubeConfigs("", o.kubeconfigDir, nil)
-			if err != nil {
-				logger.WithError(err).Error("failed to read kubeconfigs")
-				return errors.New(misconfigurationOutput)
-			}
+		buildClusterConfigs, err = o.kubernetesOptions.LoadClusterConfigs()
+		if err != nil {
+			logger.WithError(err).Error("failed to read kubeconfigs")
+			return errors.New(misconfigurationOutput)
 		}
-		prowJobConfig, err = pjKubeconfig(o.prowjobKubeconfig, buildClusterConfigs["app.ci"])
+		defaultKubeconfig := buildClusterConfigs[appCIContextName]
+		prowJobConfig, err = pjKubeconfig(o.prowjobKubeconfig, &defaultKubeconfig)
 		if err != nil {
 			logger.WithError(err).Error("Could not load prowjob kubeconfig")
 			return fmt.Errorf(misconfigurationOutput)
@@ -424,7 +424,7 @@ func (c cleanups) cleanup() {
 func setupDependencies(
 	jobs []*prowconfig.Presubmit,
 	prNumber int,
-	configs map[string]*rest.Config,
+	configs map[string]rest.Config,
 	log *logrus.Entry,
 	prowJobNamespace string,
 	prowJobClient ctrlruntimeclient.Client,
@@ -462,7 +462,8 @@ func setupDependencies(
 		buildCluster := cluster
 		g.Go(func() error {
 			log := log.WithField("buildCluster", buildCluster)
-			cmClient, err := rehearse.NewCMClient(configs[buildCluster], podNamespace, dryRun)
+			clusterConfig := configs[buildCluster]
+			cmClient, err := rehearse.NewCMClient(&clusterConfig, podNamespace, dryRun)
 			if err != nil {
 				log.WithError(err).Error("could not create a configMap client")
 				return errors.New(misconfigurationOutput)
@@ -490,8 +491,8 @@ func setupDependencies(
 			if dryRun {
 				return nil
 			}
-
-			client, err := ctrlruntimeclient.New(configs[buildCluster], ctrlruntimeclient.Options{})
+			config := configs[buildCluster]
+			client, err := ctrlruntimeclient.New(&config, ctrlruntimeclient.Options{})
 			if err != nil {
 				return fmt.Errorf("failed to construct client for cluster %s: %w", buildCluster, err)
 			}
@@ -511,8 +512,8 @@ func setupDependencies(
 var second = time.Second
 
 func ensureImageStreamTags(ctx context.Context, client ctrlruntimeclient.Client, ists apihelper.ImageStreamTagMap, clusterName, namespace string, istImportClient ctrlruntimeclient.Client, log *logrus.Entry) error {
-	if clusterName == "app.ci" {
-		log.Info("Not creating imports on app.ci cluster as its authoritative source for all imagestreams")
+	if clusterName == appCIContextName {
+		log.WithField("cluster", appCIContextName).Info("Not creating imports as its authoritative source for all imagestreams")
 		return nil
 	}
 

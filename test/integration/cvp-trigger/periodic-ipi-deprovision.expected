@@ -88,6 +88,8 @@ spec:
         - key: gce.json
           path: gce.json
         secretName: cluster-secrets-gcp
+  prowjob_defaults:
+    tenant_id: GlobalDefaultID
   report: true
   type: periodic
 status:

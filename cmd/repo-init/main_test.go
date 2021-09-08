@@ -367,9 +367,20 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 						Name:      "version",
 					},
 					InputConfiguration: api.InputConfiguration{
-						ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
-							Namespace: "promote",
-							Name:      "version",
+						Releases: map[string]api.UnresolvedRelease{
+							api.InitialReleaseName: {
+								Integration: &api.Integration{
+									Namespace: "promote",
+									Name:      "version",
+								},
+							},
+							api.LatestReleaseName: {
+								Integration: &api.Integration{
+									Namespace:          "promote",
+									Name:               "version",
+									IncludeBuiltImages: true,
+								},
+							},
 						},
 						BuildRootImage: &api.BuildRootImageConfiguration{
 							ImageStreamTagReference: &api.ImageStreamTagReference{
@@ -417,9 +428,20 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 						Name:      "version",
 					},
 					InputConfiguration: api.InputConfiguration{
-						ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
-							Namespace: "promote",
-							Name:      "version",
+						Releases: map[string]api.UnresolvedRelease{
+							api.InitialReleaseName: {
+								Integration: &api.Integration{
+									Namespace: "promote",
+									Name:      "version",
+								},
+							},
+							api.LatestReleaseName: {
+								Integration: &api.Integration{
+									Namespace:          "promote",
+									Name:               "version",
+									IncludeBuiltImages: true,
+								},
+							},
 						},
 						BuildRootImage: &api.BuildRootImageConfiguration{
 							ImageStreamTagReference: &api.ImageStreamTagReference{

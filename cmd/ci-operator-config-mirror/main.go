@@ -138,6 +138,14 @@ func main() {
 			privateReleaseTagConfiguration(rbc.ReleaseTagConfiguration)
 		}
 
+		for name, release := range rbc.Releases {
+			if release.Integration != nil {
+				updated := *release.Integration
+				privateIntegrationRelease(&updated)
+				rbc.Releases[name] = api.UnresolvedRelease{Integration: &updated}
+			}
+		}
+
 		if rbc.BuildRootImage != nil && rbc.BuildRootImage.ImageStreamTagReference != nil {
 			privateBuildRoot(rbc.BuildRootImage)
 		}
@@ -199,6 +207,13 @@ func privateReleaseTagConfiguration(tagSpecification *api.ReleaseTagConfiguratio
 	if tagSpecification.Namespace == ocpNamespace {
 		tagSpecification.Name = fmt.Sprintf("%s-priv", tagSpecification.Name)
 		tagSpecification.Namespace = privatePromotionNamespace
+	}
+}
+
+func privateIntegrationRelease(release *api.Integration) {
+	if release.Namespace == ocpNamespace {
+		release.Name = fmt.Sprintf("%s-priv", release.Name)
+		release.Namespace = privatePromotionNamespace
 	}
 }
 

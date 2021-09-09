@@ -49,6 +49,46 @@ func TestPrivateReleaseTagConfiguration(t *testing.T) {
 	}
 }
 
+func TestPrivateIntegrationRelease(t *testing.T) {
+	testCases := []struct {
+		id       string
+		release  *api.Integration
+		expected *api.Integration
+	}{
+		{
+			id: "no changes expected",
+			release: &api.Integration{
+				Name:      "origin-v4",
+				Namespace: "openshift",
+			},
+			expected: &api.Integration{
+				Name:      "origin-v4",
+				Namespace: "openshift",
+			},
+		},
+		{
+			id: "changes expected",
+			release: &api.Integration{
+				Name:      "origin-v4",
+				Namespace: "ocp",
+			},
+			expected: &api.Integration{
+				Name:      "origin-v4-priv",
+				Namespace: "ocp-private",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.id, func(t *testing.T) {
+			privateIntegrationRelease(tc.release)
+			if !reflect.DeepEqual(tc.release, tc.expected) {
+				t.Fatalf("Differences found: %v", diff.ObjectReflectDiff(tc.release, tc.expected))
+			}
+		})
+	}
+}
+
 func TestPrivateBuildRoot(t *testing.T) {
 	testCases := []struct {
 		id        string

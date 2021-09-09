@@ -33,48 +33,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
-func TestParseOptions(t *testing.T) {
-	testCases := []struct {
-		name     string
-		given    []string
-		expected options
-	}{
-		{
-			name:  "basic case",
-			given: []string{"cmd", "--dry-run=false", "--config=/tmp/config"},
-			expected: options{
-				configPath: "/tmp/config",
-			},
-		},
-		{
-			name:  "with kubeconfig",
-			given: []string{"cmd", "--dry-run=false", "--config=/tmp/config", "--kubeconfig=/tmp/kubeconfig"},
-			expected: options{
-				configPath:     "/tmp/config",
-				kubeConfigPath: "/tmp/kubeconfig",
-			},
-		},
-	}
-	censor := secrets.NewDynamicCensor()
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			oldArgs := os.Args
-			defer func() { os.Args = oldArgs }()
-			os.Args = tc.given
-			actual, err := parseOptions(&censor)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if actual.dryRun != tc.expected.dryRun {
-				t.Errorf("%q: (dryRun) actual differs from expected:\n%s", tc.name, cmp.Diff(actual.dryRun, tc.expected.dryRun))
-			}
-			if actual.kubeConfigPath != tc.expected.kubeConfigPath {
-				t.Errorf("%q: (kubeConfigPath) actual differs from expected:\n%s", tc.name, cmp.Diff(actual.kubeConfigPath, tc.expected.kubeConfigPath))
-			}
-		})
-	}
-}
-
 func TestValidateOptions(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -205,37 +163,6 @@ secret_configs:
     - group-a
     namespace: ns
     name: name
-`
-	kubeConfigContent = `---
-apiVersion: v1
-clusters:
-- cluster:
-    server: https://api.ci.openshift.org:443
-  name: api-ci-openshift-org:443
-- cluster:
-    server: https://api.build01.ci.devcluster.openshift.com:6443
-  name: api-build01-ci-devcluster-openshift-com:6443
-contexts:
-- context:
-    cluster: api-build01-ci-devcluster-openshift-com:6443
-    namespace: ci
-    user: system:serviceaccount:ci:tool/api-build01-ci-devcluster-openshift-com:6443
-  name: build01
-- context:
-    cluster: api-ci-openshift-org:443
-    namespace: ci
-    user: system:serviceaccount:ci:tool/api-ci-openshift-org:443
-  name: default
-current-context: default
-kind: Config
-preferences: {}
-users:
-- name: system:serviceaccount:ci:tool/api-ci-openshift-org:443
-  user:
-    token: token1
-- name: system:serviceaccount:ci:tool/api-build01-ci-devcluster-openshift-com:6443
-  user:
-    token: token2
 `
 )
 
@@ -371,7 +298,6 @@ func TestCompleteOptions(t *testing.T) {
 
 	bwPasswordPath := filepath.Join(dir, "bwPasswordPath")
 	configPath := filepath.Join(dir, "configPath")
-	kubeConfigPath := filepath.Join(dir, "kubeConfigPath")
 	configWithTypoPath := filepath.Join(dir, "configWithTypoPath")
 	configWithGroupsPath := filepath.Join(dir, "configWithGroups")
 	configWithNonPasswordAttributePath := filepath.Join(dir, "configContentWithNonPasswordAttribute")
@@ -379,7 +305,6 @@ func TestCompleteOptions(t *testing.T) {
 	fileMap := map[string][]byte{
 		bwPasswordPath:                     []byte("topSecret"),
 		configPath:                         []byte(configContent),
-		kubeConfigPath:                     []byte(kubeConfigContent),
 		configWithTypoPath:                 []byte(configContentWithTypo),
 		configWithGroupsPath:               []byte(configWithGroups),
 		configWithNonPasswordAttributePath: []byte(configContentWithNonPasswordAttribute),
@@ -389,6 +314,11 @@ func TestCompleteOptions(t *testing.T) {
 		if err := ioutil.WriteFile(k, v, 0755); err != nil {
 			t.Errorf("Failed to remove temp dir")
 		}
+	}
+
+	kubeconfigs := map[string]rest.Config{
+		"default": {},
+		"build01": {},
 	}
 
 	testCases := []struct {
@@ -401,9 +331,8 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "basic case",
 			given: options{
-				logLevel:       "info",
-				configPath:     configPath,
-				kubeConfigPath: kubeConfigPath,
+				logLevel:   "info",
+				configPath: configPath,
 			},
 			expectedConfig:   defaultConfig,
 			expectedClusters: []string{"build01", "default"},
@@ -411,9 +340,8 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "missing context in kubeconfig",
 			given: options{
-				logLevel:       "info",
-				configPath:     configWithTypoPath,
-				kubeConfigPath: kubeConfigPath,
+				logLevel:   "info",
+				configPath: configWithTypoPath,
 			},
 			expectedConfig: defaultConfig,
 			expectedError:  fmt.Errorf("config[0].to[1]: failed to find cluster context \"bla\" in the kubeconfig"),
@@ -421,10 +349,9 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "only configured cluster is used",
 			given: options{
-				logLevel:       "info",
-				configPath:     configPath,
-				kubeConfigPath: kubeConfigPath,
-				cluster:        "build01",
+				logLevel:   "info",
+				configPath: configPath,
+				cluster:    "build01",
 			},
 			expectedConfig:   defaultConfigWithoutDefaultCluster,
 			expectedClusters: []string{"build01"},
@@ -432,9 +359,8 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "group is resolved",
 			given: options{
-				logLevel:       "info",
-				configPath:     configWithGroupsPath,
-				kubeConfigPath: kubeConfigPath,
+				logLevel:   "info",
+				configPath: configWithGroupsPath,
 			},
 			expectedConfig: secretbootstrap.Config{
 				ClusterGroups: map[string][]string{"group-a": {"default"}},
@@ -449,7 +375,7 @@ func TestCompleteOptions(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			censor := secrets.NewDynamicCensor()
-			actualError := tc.given.completeOptions(&censor)
+			actualError := tc.given.completeOptions(&censor, kubeconfigs)
 			equalError(t, tc.expectedError, actualError)
 			if tc.expectedError == nil {
 				equal(t, "config", tc.expectedConfig, tc.given.config)

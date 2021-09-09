@@ -569,8 +569,8 @@ func (v *Validator) validateTestConfigurationType(
 	if typeCount == 0 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s has no type, you may want to specify 'container' for a container based test", fieldRoot))
 	} else if typeCount == 1 {
-		if needsReleaseRpms && release == nil {
-			validationErrors = append(validationErrors, fmt.Errorf("%s requires a release in 'tag_specification'", fieldRoot))
+		if needsReleaseRpms && release == nil && !releases.HasAll(api.LatestReleaseName, api.InitialReleaseName) {
+			validationErrors = append(validationErrors, fmt.Errorf("%s requires a release in 'tag_specification' or 'releases'", fieldRoot))
 		}
 	} else if typeCount > 1 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s has more than one type", fieldRoot))

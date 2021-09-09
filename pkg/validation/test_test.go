@@ -209,7 +209,20 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errors.New("tests[0] requires a release in 'tag_specification'"),
+			expectedError: errors.New("tests[0] requires a release in 'tag_specification' or 'releases'"),
+		},
+		{
+			id: "release provided in releases",
+			tests: []api.TestStepConfiguration{
+				{
+					As:       "test",
+					Commands: "commands",
+					OpenshiftAnsibleClusterTestConfiguration: &api.OpenshiftAnsibleClusterTestConfiguration{
+						ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: api.ClusterProfileGCP},
+					},
+				},
+			},
+			releases: sets.NewString(api.InitialReleaseName, api.LatestReleaseName),
 		},
 		{
 			id: "release must be origin",

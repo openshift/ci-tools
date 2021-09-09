@@ -1,0 +1,31 @@
+ocp:
+  "4.1":
+  - event: end-of-life
+    when: "2020-05-05T16:00:00Z"
+  - event: generally-available
+    when: "2019-06-04T16:00:00Z"
+  - event: code-freeze
+    when: "2019-05-01T02:00:00Z"
+  - event: feature-freeze
+    when: "2019-04-27T02:00:00Z"
+  - event: open
+    when: "2019-04-27T00:00:00Z"
+  "4.2":
+  - event: end-of-life
+  - event: generally-available
+    when: "2019-10-16T16:00:00Z"
+  - event: code-freeze
+    when: "2019-09-20T02:00:00Z"
+  - event: feature-freeze
+    when: "2019-07-19T02:00:00Z"
+  - event: open
+    when: "2019-05-13T00:00:00Z"
+  "4.3":
+  - event: end-of-life
+  - event: generally-available
+  - event: code-freeze
+    when: "2020-12-13T02:00:00Z"
+  - event: feature-freeze
+    when: "2019-11-01T02:00:00Z"
+  - event: open
+    when: "2019-09-14T00:00:00Z"

@@ -27,28 +27,32 @@ type options struct {
 	dry               bool
 }
 
-func opts() *options {
+func opts() (*options, error) {
 	o := &options{kubernetesOptions: flagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
-	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	fs := flag.CommandLine
 	o.kubernetesOptions.AddFlags(fs)
 	fs.Var(&o.namespaces, "namespace", "Namespace to run in, can be passed multiple times")
 	fs.BoolVar(&o.dry, "dry-run", true, "Enable dry-run")
 	if err := fs.Parse(os.Args[1:]); err != nil {
-		logrus.WithError(err).Fatal("Failed to parse the args")
+		return nil, fmt.Errorf("failed to parse flags: %w", err)
 	}
-	if err := o.kubernetesOptions.Validate(o.dry); err != nil {
-		logrus.WithError(err).Fatal("Failed to validate the args")
-	}
-	return o
+	return o, nil
 }
 
 func main() {
 	logrusutil.ComponentInit()
 
-	o := opts()
+	o, err := opts()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to get options")
+	}
 	if len(o.namespaces.Strings()) == 0 {
 		logrus.Fatal("Must pass at least one namespace")
 	}
+	if err := o.kubernetesOptions.Validate(o.dry); err != nil {
+		logrus.WithError(err).Fatal("Failed to validate the kubernetesOptions")
+	}
+
 	loadedKubeconfigs, err := o.kubernetesOptions.LoadClusterConfigs()
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to load kubeconfigs")

@@ -122,6 +122,11 @@ func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunag
 				return nil, fmt.Errorf("failed to get prowjob for %q/%q: %w", a.jobName, jobRunId, err)
 			}
 
+			if _, ok := prowJob.Labels["release.openshift.io/aggregator"]; ok {
+				fmt.Printf("  skipping the aggregator prowjob %q/%q\n", a.jobName, jobRunId)
+				continue
+			}
+
 			payloadTag := GetPayloadTagFromProwJob(prowJob)
 			fmt.Printf("  checking %v/%v for payloadtag match: looking for %q found %q.\n", a.jobName, jobRunId, a.payloadTag, payloadTag)
 			if payloadTag == a.payloadTag {

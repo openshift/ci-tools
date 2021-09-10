@@ -182,6 +182,15 @@ func (j *gcsJobRun) GetContent(ctx context.Context, path string) ([]byte, error)
 	// Get an Object handle for the path
 	obj := j.bkt.Object(path)
 
+	// use the object attributes to try to get the latest generation to try to retrieve the data without getting a cached
+	// version of data that does not match the latest content.  I don't know if this will work, but in the easy case
+	// it doesn't seem to fail.
+	objAttrs, err := obj.Attrs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error reading GCS attributes for jobrun/%v/%v at %q: %w", j.GetJobName(), j.GetJobRunID(), path, err)
+	}
+	obj = obj.Generation(objAttrs.Generation)
+
 	// Get an io.Reader for the object.
 	gcsReader, err := obj.NewReader(ctx)
 	if err != nil {

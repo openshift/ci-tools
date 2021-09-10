@@ -111,7 +111,7 @@ func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobName, jobRunID s
 	}
 
 	// Only retrieve the name and creation time for performance
-	if err := query.SetAttrSelection([]string{"Name", "Created"}); err != nil {
+	if err := query.SetAttrSelection([]string{"Name", "Created", "Generation"}); err != nil {
 		return nil, err
 	}
 	// start reading for this jobrun bucket

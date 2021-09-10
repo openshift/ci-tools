@@ -130,7 +130,7 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config, org, repo)...)
 	validationErrors = append(validationErrors, validateBuildRootImageConfiguration(ctx.addField("build_root"), config.InputConfiguration.BuildRootImage, len(config.Images) > 0)...)
 	releases := sets.NewString()
-	for name := range releases {
+	for name := range config.Releases {
 		releases.Insert(name)
 	}
 	if config.Operator != nil {

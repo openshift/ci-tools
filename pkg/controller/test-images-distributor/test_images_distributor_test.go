@@ -662,7 +662,7 @@ func TestTestImageStramTagImportHandlerRoundTrips(t *testing.T) {
 	queue := &hijackingQueue{}
 
 	event := event.CreateEvent{Object: obj}
-	testImageStreamTagImportHandler(logrus.NewEntry(logrus.StandardLogger())).Create(event, queue)
+	testImageStreamTagImportHandler(logrus.NewEntry(logrus.StandardLogger()), sets.NewString()).Create(event, queue)
 
 	if n := len(queue.received); n != 1 {
 		t.Fatalf("expected exactly one reconcile request, got %d(%v)", n, queue.received)

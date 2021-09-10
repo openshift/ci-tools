@@ -89,7 +89,7 @@ func generateRegistryPushCredentialsSecret(o options) secretbootstrap.SecretConf
 		From: map[string]secretbootstrap.ItemContext{
 			dotDockerConfigJson: generatePushPullSecretFrom(o.clusterName, []secretbootstrap.DockerConfigJSONData{
 				{
-					AuthField:   registryCommandTokenField(ci, "pusher"),
+					AuthField:   registryCommandTokenField(string(api.ClusterAPPCI), "pusher"),
 					Item:        buildUFarm,
 					RegistryURL: api.ServiceDomainAPPCIRegistry,
 				},

@@ -597,6 +597,7 @@ const (
 	ClusterBuild01 Cluster = "build01"
 	ClusterBuild02 Cluster = "build02"
 	ClusterVSphere Cluster = "vsphere"
+	ClusterARM01   Cluster = "arm01"
 	ClusterHive    Cluster = "hive"
 )
 

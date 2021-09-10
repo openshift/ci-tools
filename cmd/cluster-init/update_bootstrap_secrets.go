@@ -14,7 +14,6 @@ const (
 	credentials         = "credentials"
 	regPullCredsAll     = "registry-pull-credentials-all"
 	dotDockerConfigJson = ".dockerconfigjson"
-	arm01               = "arm01"
 	testCredentials     = "test-credentials"
 	kubeconfig          = "kubeconfig"
 	config              = "config"
@@ -40,24 +39,20 @@ func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
 		c.ClusterGroups[groupName] = append(c.ClusterGroups[groupName], o.clusterName)
 	}
 	c.UserSecretsTargetClusters = append(c.UserSecretsTargetClusters, o.clusterName)
-	if err := updatePodScalerSecret(c, o); err != nil {
-		return err
+
+	for _, step := range []func(c *secretbootstrap.Config, o options) error{
+		updatePodScalerSecret,
+		updateBuildFarmSecrets,
+		updateDPTPControllerManagerSecret,
+		updateRehearseSecret,
+		updateChatBotSecret,
+		updateExistingRegistryPullCredentialsAllSecrets,
+	} {
+		if err := step(c, o); err != nil {
+			return err
+		}
 	}
-	if err := updateBuildFarmSecrets(c, o); err != nil {
-		return err
-	}
-	if err := updateDPTPControllerManagerSecret(c, o); err != nil {
-		return err
-	}
-	if err := updateRehearseSecret(c, o); err != nil {
-		return err
-	}
-	if err := updateChatBotSecret(c, o); err != nil {
-		return err
-	}
-	if err := updateExistingRegistryPullCredentialsAllSecrets(c, o); err != nil {
-		return err
-	}
+
 	appendSecret(generateRegistryPushCredentialsSecret, c, o)
 	appendSecret(generateRegistryPullCredentialsSecret, c, o)
 	appendSecret(generateCiOperatorSecret, c, o)
@@ -114,7 +109,7 @@ func generateRegistryPullCredentialsSecret(o options) secretbootstrap.SecretConf
 				{
 					AuthField:   registryPullTokenField(ci),
 					Item:        buildUFarm,
-					RegistryURL: "registry.svc.ci.openshift.org",
+					RegistryURL: api.ServiceAPPCIRegistry,
 				},
 				{
 					AuthField:   registryPullTokenField(string(api.ClusterAPPCI)),
@@ -146,7 +141,7 @@ func generatePushPullSecretFrom(clusterName string, items []secretbootstrap.Dock
 			{
 				AuthField:   registryPullTokenField(clusterName),
 				Item:        buildUFarm,
-				RegistryURL: fmt.Sprintf("registry.%s.ci.openshift.org", clusterName),
+				RegistryURL: registryUrlFor(clusterName),
 			},
 		},
 	}
@@ -215,11 +210,11 @@ func appendSecretItemContext(c *secretbootstrap.Config, name string, cluster str
 
 func updateExistingRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o options) error {
 	for _, cluster := range c.UserSecretsTargetClusters {
-		if cluster != string(api.ClusterHive) && cluster != arm01 && cluster != o.clusterName {
+		if cluster != string(api.ClusterHive) && cluster != string(api.ClusterARM01) && cluster != o.clusterName {
 			return appendRegistrySecretItemContext(c, regPullCredsAll, cluster, secretbootstrap.DockerConfigJSONData{
 				AuthField:   fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", o.clusterName),
 				Item:        buildUFarm,
-				RegistryURL: fmt.Sprintf("registry.%s.ci.openshift.org", o.clusterName),
+				RegistryURL: registryUrlFor(o.clusterName),
 			})
 		}
 	}
@@ -227,36 +222,35 @@ func updateExistingRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, 
 }
 
 func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o options) {
-	const auth, email = "auth", "email"
 	items := []secretbootstrap.DockerConfigJSONData{
 		{
 			AuthField:   "token_image-puller_ci_reg_auth_value.txt",
 			Item:        buildUFarm,
-			RegistryURL: "registry.svc.ci.openshift.org",
+			RegistryURL: api.ServiceAPPCIRegistry,
 		},
 		{
-			AuthField:   auth,
+			AuthField:   "auth",
 			Item:        "cloud.openshift.com-pull-secret",
 			RegistryURL: "cloud.openshift.com",
-			EmailField:  email,
+			EmailField:  "email",
 		},
 		{
-			AuthField:   auth,
+			AuthField:   "auth",
 			Item:        "quay.io-pull-secret",
 			RegistryURL: "quay.io",
-			EmailField:  email,
+			EmailField:  "email",
 		},
 		{
-			AuthField:   auth,
+			AuthField:   "auth",
 			Item:        "registry.connect.redhat.com-pull-secret",
 			RegistryURL: "registry.connect.redhat.com",
-			EmailField:  email,
+			EmailField:  "email",
 		},
 		{
-			AuthField:   auth,
+			AuthField:   "auth",
 			Item:        "registry.redhat.io-pull-secret",
 			RegistryURL: "registry.redhat.io",
-			EmailField:  email,
+			EmailField:  "email",
 		},
 	}
 	for _, cluster := range c.UserSecretsTargetClusters {
@@ -287,7 +281,7 @@ func registryUrlFor(cluster string) string {
 		return "registry.apps.build01-us-west-2.vmc.ci.openshift.org"
 	case string(api.ClusterAPPCI):
 		return api.ServiceDomainAPPCIRegistry
-	case arm01:
+	case string(api.ClusterARM01):
 		return "registry.arm-build01.arm-build.devcluster.openshift.com"
 	default:
 		return fmt.Sprintf("registry.%s.ci.openshift.org", cluster)

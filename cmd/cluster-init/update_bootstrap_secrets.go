@@ -89,7 +89,7 @@ func generateRegistryPushCredentialsSecret(o options) secretbootstrap.SecretConf
 		From: map[string]secretbootstrap.ItemContext{
 			dotDockerConfigJson: generatePushPullSecretFrom(o.clusterName, []secretbootstrap.DockerConfigJSONData{
 				{
-					AuthField:   "token_image-pusher_app.ci_reg_auth_value.txt",
+					AuthField:   registryCommandTokenField(ci, "pusher"),
 					Item:        buildUFarm,
 					RegistryURL: api.ServiceDomainAPPCIRegistry,
 				},
@@ -107,12 +107,12 @@ func generateRegistryPullCredentialsSecret(o options) secretbootstrap.SecretConf
 		From: map[string]secretbootstrap.ItemContext{
 			dotDockerConfigJson: generatePushPullSecretFrom(o.clusterName, []secretbootstrap.DockerConfigJSONData{
 				{
-					AuthField:   registryPullTokenField(ci),
+					AuthField:   registryCommandTokenField(ci, "puller"),
 					Item:        buildUFarm,
 					RegistryURL: api.ServiceAPPCIRegistry,
 				},
 				{
-					AuthField:   registryPullTokenField(string(api.ClusterAPPCI)),
+					AuthField:   registryCommandTokenField(string(api.ClusterAPPCI), "puller"),
 					Item:        buildUFarm,
 					RegistryURL: api.ServiceDomainAPPCIRegistry,
 				},
@@ -129,17 +129,17 @@ func generatePushPullSecretFrom(clusterName string, items []secretbootstrap.Dock
 	itemContext := secretbootstrap.ItemContext{
 		DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 			{
-				AuthField:   registryPullTokenField(clusterName),
+				AuthField:   registryCommandTokenField(clusterName, "puller"),
 				Item:        buildUFarm,
 				RegistryURL: "image-registry.openshift-image-registry.svc.cluster.local:5000",
 			},
 			{
-				AuthField:   registryPullTokenField(clusterName),
+				AuthField:   registryCommandTokenField(clusterName, "puller"),
 				Item:        buildUFarm,
 				RegistryURL: "image-registry.openshift-image-registry.svc:5000",
 			},
 			{
-				AuthField:   registryPullTokenField(clusterName),
+				AuthField:   registryCommandTokenField(clusterName, "puller"),
 				Item:        buildUFarm,
 				RegistryURL: registryUrlFor(clusterName),
 			},
@@ -150,8 +150,8 @@ func generatePushPullSecretFrom(clusterName string, items []secretbootstrap.Dock
 	return itemContext
 }
 
-func registryPullTokenField(clusterName string) string {
-	return fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", clusterName)
+func registryCommandTokenField(clusterName, command string) string {
+	return fmt.Sprintf("token_image-%s_%s_reg_auth_value.txt", command, clusterName)
 }
 
 func generateDockerConfigJsonSecretConfigTo(name string, namespace string, clusterName string) secretbootstrap.SecretContext {
@@ -199,7 +199,10 @@ func updateChatBotSecret(c *secretbootstrap.Config, o options) error {
 }
 
 func appendSecretItemContext(c *secretbootstrap.Config, name string, cluster string, key string, value secretbootstrap.ItemContext) error {
-	logrus.Infof("Appending secret item to: {name: %s, cluster: %s}", name, cluster)
+	logrus.WithFields(logrus.Fields{
+		"name":    name,
+		"cluster": cluster,
+	}).Info("Appending registry secret item.")
 	sc, err := findSecretConfig(name, cluster, c.Secrets)
 	if err != nil {
 		return err
@@ -224,7 +227,7 @@ func updateExistingRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, 
 func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o options) {
 	items := []secretbootstrap.DockerConfigJSONData{
 		{
-			AuthField:   "token_image-puller_ci_reg_auth_value.txt",
+			AuthField:   registryCommandTokenField("ci", "puller"),
 			Item:        buildUFarm,
 			RegistryURL: api.ServiceAPPCIRegistry,
 		},
@@ -256,7 +259,7 @@ func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o opti
 	for _, cluster := range c.UserSecretsTargetClusters {
 		if cluster != string(api.ClusterHive) {
 			items = append(items, secretbootstrap.DockerConfigJSONData{
-				AuthField:   registryPullTokenField(cluster),
+				AuthField:   registryCommandTokenField(cluster, "puller"),
 				Item:        buildUFarm,
 				RegistryURL: registryUrlFor(cluster),
 			})

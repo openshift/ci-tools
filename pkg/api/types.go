@@ -1130,6 +1130,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSGovCloud,
 		ClusterProfileAWSGluster,
 		ClusterProfileAlibaba,
+		ClusterProfileAzure2,
 		ClusterProfileAzure4,
 		ClusterProfileAzureArc,
 		ClusterProfileAzureStack,
@@ -1189,6 +1190,7 @@ func (p ClusterProfile) ClusterType() string {
 	case ClusterProfileAWSGovCloud:
 		return "aws-usgov"
 	case
+		ClusterProfileAzure2,
 		ClusterProfileAzure4,
 		ClusterProfileAzureArc:
 		return "azure4"
@@ -1267,6 +1269,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-usgov-quota-slice"
 	case ClusterProfileAlibaba:
 		return "alibaba-quota-slice"
+	case ClusterProfileAzure2:
+		return "azure-2-quota-slice"
 	case ClusterProfileAzure4:
 		return "azure4-quota-slice"
 	case ClusterProfileAzureArc:
@@ -1335,7 +1339,7 @@ func (p ClusterProfile) LeaseType() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "alibaba", "azure4", "azure-arc", "azurestack", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "kubevirt", "aws-cpaas", "osd-ephemeral":
+	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "alibaba", "azure-2", "azure4", "azure-arc", "azurestack", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "kubevirt", "aws-cpaas", "osd-ephemeral":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

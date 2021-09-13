@@ -8,8 +8,6 @@ build_root:
     tag: golang-1.14
 resources:
   '*':
-    limits:
-      cpu: 500m
     requests:
       cpu: 10m
 tests:

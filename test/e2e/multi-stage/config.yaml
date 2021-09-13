@@ -9,8 +9,6 @@ base_images:
     tag: '3.10'
 resources:
   '*':
-    limits:
-      cpu: 500m
     requests:
       cpu: 10m
 tests:

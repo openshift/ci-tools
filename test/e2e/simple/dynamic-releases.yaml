@@ -36,8 +36,6 @@ releases:
       name: "4.7"
 resources:
   '*':
-    limits:
-      cpu: 500m
     requests:
       cpu: 10m
 tests:

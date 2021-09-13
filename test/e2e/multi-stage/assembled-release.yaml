@@ -21,8 +21,6 @@ releases:
       include_built_images: true
 resources:
   '*':
-    limits:
-      cpu: 500m
     requests:
       cpu: 10m
 tests:

@@ -14,8 +14,6 @@ releases:
       version: "4.5"
 resources:
   '*':
-    limits:
-      cpu: 500m
     requests:
       cpu: 10m
 tests:

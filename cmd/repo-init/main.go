@@ -527,9 +527,20 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 			Namespace: originConfig.Namespace,
 			Name:      originConfig.Name,
 		}
-		generated.Configuration.ReleaseTagConfiguration = &api.ReleaseTagConfiguration{
-			Namespace: originConfig.Namespace,
-			Name:      originConfig.Name,
+		generated.Configuration.Releases = map[string]api.UnresolvedRelease{
+			api.InitialReleaseName: {
+				Integration: &api.Integration{
+					Namespace: originConfig.Namespace,
+					Name:      originConfig.Name,
+				},
+			},
+			api.LatestReleaseName: {
+				Integration: &api.Integration{
+					Namespace:          originConfig.Namespace,
+					Name:               originConfig.Name,
+					IncludeBuiltImages: true,
+				},
+			},
 		}
 		if config.PromotesWithOpenShift {
 			workflow := "openshift-e2e-aws"
@@ -638,7 +649,7 @@ func determineWorkflowFromClusterPorfile(clusterProfile api.ClusterProfile) *str
 		ret = "ipi-aws"
 	case api.ClusterProfileAWSArm64:
 		ret = "ipi-aws"
-	case api.ClusterProfileAzure:
+	case api.ClusterProfileAzure, api.ClusterProfileAzure2, api.ClusterProfileAzure4:
 		ret = "ipi-azure"
 	case api.ClusterProfileAzureStack:
 		ret = "ipi-azurestack"

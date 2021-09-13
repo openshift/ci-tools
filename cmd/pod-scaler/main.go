@@ -13,7 +13,6 @@ import (
 	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/option"
-	"gopkg.in/fsnotify.v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/transport"
@@ -46,10 +45,9 @@ type options struct {
 }
 
 type producerOptions struct {
-	kubeconfig    string
-	kubeconfigDir string
-	once          bool
-	ignoreLatest  time.Duration
+	kubernetesOptions prowflagutil.KubernetesOptions
+	once              bool
+	ignoreLatest      time.Duration
 }
 
 type consumerOptions struct {
@@ -62,11 +60,10 @@ type consumerOptions struct {
 }
 
 func bindOptions(fs *flag.FlagSet) *options {
-	o := options{producerOptions: producerOptions{}}
+	o := options{producerOptions: producerOptions{kubernetesOptions: prowflagutil.KubernetesOptions{NOInClusterConfigDefault: true}}}
 	o.instrumentationOptions.AddFlags(fs)
 	fs.StringVar(&o.mode, "mode", "", "Which mode to run in.")
-	fs.StringVar(&o.kubeconfig, "kubeconfig", "", "Path to a ~/.kube/config to use for querying Prometheuses. Each context will be considered a cluster to query.")
-	fs.StringVar(&o.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files to use for querying Prometheuses. Each context will be considered a cluster to query.")
+	o.producerOptions.kubernetesOptions.AddFlags(fs)
 	fs.DurationVar(&o.ignoreLatest, "ignore-latest", 0, "Duration of latest time series to ignore when querying Prometheus. For instance, 1h will ignore the latest hour of data.")
 	fs.BoolVar(&o.once, "produce-once", false, "Query Prometheus and refresh cached data only once before exiting.")
 	fs.IntVar(&o.port, "port", 0, "Port to serve admission webhooks on.")
@@ -90,10 +87,7 @@ const (
 func (o *options) validate() error {
 	switch o.mode {
 	case "producer":
-		_, kubeconfigSet := os.LookupEnv("KUBECONFIG")
-		if o.kubeconfig == "" && o.kubeconfigDir == "" && !kubeconfigSet {
-			return errors.New("--kubeconfig or --kubeconfig-dir or $KUBECONFIG is required")
-		}
+		return o.kubernetesOptions.Validate(false)
 	case "consumer.ui":
 		if o.uiPort == 0 {
 			return errors.New("--ui-port is required")
@@ -181,11 +175,11 @@ func main() {
 }
 
 func mainProduce(opts *options, cache cache) {
-	kubeconfigChangedCallBack := func(e fsnotify.Event) {
-		logrus.WithField("event", e.String()).Fatal("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
+	kubeconfigChangedCallBack := func() {
+		logrus.Fatal("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
 	}
 
-	kubeconfigs, err := util.LoadKubeConfigs(opts.kubeconfig, opts.kubeconfigDir, kubeconfigChangedCallBack)
+	kubeconfigs, err := opts.kubernetesOptions.LoadClusterConfigs(kubeconfigChangedCallBack)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to load kubeconfigs")
 	}
@@ -193,7 +187,7 @@ func mainProduce(opts *options, cache cache) {
 	clients := map[string]prometheusapi.API{}
 	for cluster, config := range kubeconfigs {
 		logger := logrus.WithField("cluster", cluster)
-		client, err := routeclientset.NewForConfig(config)
+		client, err := routeclientset.NewForConfig(&config)
 		if err != nil {
 			logger.WithError(err).Fatal("Failed to construct client.")
 		}

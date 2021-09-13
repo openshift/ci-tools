@@ -597,6 +597,7 @@ const (
 	ClusterBuild01 Cluster = "build01"
 	ClusterBuild02 Cluster = "build02"
 	ClusterVSphere Cluster = "vsphere"
+	ClusterARM01   Cluster = "arm01"
 	ClusterHive    Cluster = "hive"
 )
 
@@ -655,6 +656,9 @@ type TestStepConfiguration struct {
 
 	// SkipIfOnlyChanged is a regex that will result in the test being skipped if all changed files match that regex.
 	SkipIfOnlyChanged string `json:"skip_if_only_changed,omitempty"`
+
+	// Timeout overrides maximum prowjob duration
+	Timeout *prowv1.Duration `json:"timeout,omitempty"`
 
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty"`
@@ -1016,6 +1020,9 @@ type MultiStageTestConfigurationLiteral struct {
 	// DependencyOverrides allows a step to override a dependency with a fully-qualified pullspec. This will probably only ever
 	// be used with rehearsals. Otherwise, the overrides should be passed in as parameters to ci-operator.
 	DependencyOverrides DependencyOverrides `json:"dependency_overrides,omitempty"`
+
+	// Override job timeout
+	Timeout *prowv1.Duration `json:"timeout,omitempty"`
 }
 
 // TestEnvironment has the values of parameters for multi-stage tests.
@@ -1103,6 +1110,7 @@ const (
 	ClusterProfilePacketAssisted        ClusterProfile = "packet-assisted"
 	ClusterProfilePacketSNO             ClusterProfile = "packet-sno"
 	ClusterProfileVSphere               ClusterProfile = "vsphere"
+	ClusterProfileVSphereDiscon         ClusterProfile = "vsphere-discon"
 	ClusterProfileKubevirt              ClusterProfile = "kubevirt"
 	ClusterProfileAWSCPaaS              ClusterProfile = "aws-cpaas"
 	ClusterProfileOSDEphemeral          ClusterProfile = "osd-ephemeral"
@@ -1123,6 +1131,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSGovCloud,
 		ClusterProfileAWSGluster,
 		ClusterProfileAlibaba,
+		ClusterProfileAzure2,
 		ClusterProfileAzure4,
 		ClusterProfileAzureArc,
 		ClusterProfileAzureStack,
@@ -1149,6 +1158,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfilePacketAssisted,
 		ClusterProfilePacketSNO,
 		ClusterProfileVSphere,
+		ClusterProfileVSphereDiscon,
 		ClusterProfileKubevirt,
 		ClusterProfileAWSCPaaS,
 		ClusterProfileOSDEphemeral,
@@ -1181,6 +1191,7 @@ func (p ClusterProfile) ClusterType() string {
 	case ClusterProfileAWSGovCloud:
 		return "aws-usgov"
 	case
+		ClusterProfileAzure2,
 		ClusterProfileAzure4,
 		ClusterProfileAzureArc:
 		return "azure4"
@@ -1217,7 +1228,9 @@ func (p ClusterProfile) ClusterType() string {
 		return "openstack-vexxhost"
 	case ClusterProfileOpenStackPpc64le:
 		return "openstack-ppc64le"
-	case ClusterProfileVSphere:
+	case
+		ClusterProfileVSphere,
+		ClusterProfileVSphereDiscon:
 		return "vsphere"
 	case ClusterProfileOvirt:
 		return "ovirt"
@@ -1257,6 +1270,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-usgov-quota-slice"
 	case ClusterProfileAlibaba:
 		return "alibaba-quota-slice"
+	case ClusterProfileAzure2:
+		return "azure-2-quota-slice"
 	case ClusterProfileAzure4:
 		return "azure4-quota-slice"
 	case ClusterProfileAzureArc:
@@ -1305,6 +1320,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "packet-edge-quota-slice"
 	case ClusterProfileVSphere:
 		return "vsphere-quota-slice"
+	case ClusterProfileVSphereDiscon:
+		return "vsphere-discon-quota-slice"
 	case ClusterProfileKubevirt:
 		return "kubevirt-quota-slice"
 	case ClusterProfileAWSCPaaS:
@@ -1323,7 +1340,7 @@ func (p ClusterProfile) LeaseType() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "alibaba", "azure4", "azure-arc", "azurestack", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "kubevirt", "aws-cpaas", "osd-ephemeral":
+	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "alibaba", "azure-2", "azure4", "azure-arc", "azurestack", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "kubevirt", "aws-cpaas", "osd-ephemeral":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

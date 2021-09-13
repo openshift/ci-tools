@@ -38,7 +38,6 @@ import (
 	vaultapi "github.com/openshift/ci-tools/pkg/api/vault"
 	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
 	"github.com/openshift/ci-tools/pkg/secrets"
-	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type options struct {
@@ -49,8 +48,7 @@ type options struct {
 	validateItemsUsage bool
 	confirm            bool
 
-	kubeConfigPath      string
-	kubeConfigDir       string
+	kubernetesOptions   flagutil.KubernetesOptions
 	configPath          string
 	generatorConfigPath string
 	cluster             string
@@ -73,7 +71,7 @@ const (
 )
 
 func parseOptions(censor *secrets.DynamicCensor) (options, error) {
-	var o options
+	o := options{kubernetesOptions: flagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	o.allowUnused = flagutil.NewStrings()
 	fs.BoolVar(&o.validateOnly, "validate-only", false, "If set, the tool exists after validating its config file.")
@@ -81,9 +79,7 @@ func parseOptions(censor *secrets.DynamicCensor) (options, error) {
 	fs.BoolVar(&o.validateItemsUsage, "validate-bitwarden-items-usage", false, fmt.Sprintf("If set, the tool only validates if all fields that exist in Vault and were last modified before %d days ago are being used in the given config.", allowUnusedDays))
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with oc command")
 	fs.BoolVar(&o.confirm, "confirm", true, "Whether to mutate the actual secrets in the targeted clusters")
-
-	fs.StringVar(&o.kubeConfigPath, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests.")
-	fs.StringVar(&o.kubeConfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files to use for CLI requests.")
+	o.kubernetesOptions.AddFlags(fs)
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
 	fs.StringVar(&o.generatorConfigPath, "generator-config", "", "Path to the secret-generator config file.")
 	fs.StringVar(&o.cluster, "cluster", "", "If set, only provision secrets for this cluster")
@@ -111,10 +107,11 @@ func (o *options) validateOptions() error {
 	if len(o.allowUnused.Strings()) > 0 && !o.validateItemsUsage {
 		errs = append(errs, errors.New("--bw-allow-unused must be specified with --validate-items-usage"))
 	}
+	errs = append(errs, o.kubernetesOptions.Validate(o.dryRun))
 	return utilerrors.NewAggregate(errs)
 }
 
-func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
+func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map[string]rest.Config) error {
 	if err := o.secrets.Complete(censor); err != nil {
 		return err
 	}
@@ -131,14 +128,7 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 		}
 	}
 
-	var kubeConfigs map[string]*rest.Config
 	if !o.validateOnly {
-		var err error
-		kubeConfigs, err = util.LoadKubeConfigs(o.kubeConfigPath, o.kubeConfigDir, nil)
-		if err != nil {
-			// We will bail out later on if we don't have the have the right kubeconfigs
-			logrus.WithError(err).Warn("Encountered errors while loading kubeconfigs")
-		}
 		if o.impersonateUser != "" {
 			for _, kubeConfig := range kubeConfigs {
 				kubeConfig.Impersonate = rest.ImpersonationConfig{UserName: o.impersonateUser}
@@ -165,7 +155,7 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 					if !ok {
 						return fmt.Errorf("config[%d].to[%d]: failed to find cluster context %q in the kubeconfig", i, j, secretContext.Cluster)
 					}
-					client, err := coreclientset.NewForConfig(kc)
+					client, err := coreclientset.NewForConfig(&kc)
 					if err != nil {
 						return err
 					}
@@ -514,13 +504,16 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 					shouldCreate = true
 				}
 
-				if !shouldCreate {
-					for k, v := range existingSecret.Data {
+				if len(secret.Data) > 0 {
+					for k := range existingSecret.Data {
 						if _, exists := secret.Data[k]; exists {
 							continue
 						}
-						secret.Data[k] = v
+						logger.WithFields(logrus.Fields{"cluster": cluster, "key": k, "namespace": existingSecret.Namespace, "secret": existingSecret.Name}).Warning("Stale key in secret will be deleted")
 					}
+				}
+
+				if !shouldCreate {
 					if !force && !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data) {
 						logger.Errorf("actual secret data differs the expected")
 						errs = append(errs, fmt.Errorf("secret %s:%s/%s needs updating in place, use --force to do so", cluster, secret.Namespace, secret.Name))
@@ -794,7 +787,11 @@ func main() {
 	if err := o.validateOptions(); err != nil {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
-	if err := o.completeOptions(&censor); err != nil {
+	kubeconfigs, err := o.kubernetesOptions.LoadClusterConfigs()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to load cluster configs.")
+	}
+	if err := o.completeOptions(&censor, kubeconfigs); err != nil {
 		logrus.WithError(err).Error("Failed to complete options.")
 	}
 	client, err := o.secrets.NewReadOnlyClient(&censor)

@@ -107,6 +107,14 @@ func TestShardPluginConfig(t *testing.T) {
 						{Name: "needs-rebase", Endpoint: "http://needs-rebase", Events: []string{"issue_comment", "pull_request"}},
 					},
 				},
+				Label: plugins.Label{
+					AdditionalLabels: []string{"foo", "bar"},
+					RestrictedLabels: map[string][]plugins.RestrictedLabel{
+						"*":                 {{Label: "exists-everywhere", AllowedUsers: []string{"super-admin"}}},
+						"openshift":         {{Label: "cherrypick-approved", AllowedTeams: []string{"patch-managers"}}},
+						"openshift/release": {{Label: "manual-test-done", AllowedTeams: []string{"manual-testers"}, AllowedUsers: []string{"manual-test-bot"}}},
+					},
+				},
 			},
 
 			expectedConfig: &plugins.Configuration{
@@ -117,6 +125,10 @@ func TestShardPluginConfig(t *testing.T) {
 					},
 				},
 				Cat: plugins.Cat{KeyPath: "/etc/raw"},
+				Label: plugins.Label{
+					AdditionalLabels: []string{"foo", "bar"},
+					RestrictedLabels: map[string][]plugins.RestrictedLabel{"*": {{Label: "exists-everywhere", AllowedUsers: []string{"super-admin"}}}},
+				},
 			},
 			expectedShardFiles: map[string]string{
 				"openshift/_pluginconfig.yaml": strings.Join([]string{
@@ -142,6 +154,12 @@ func TestShardPluginConfig(t *testing.T) {
 					"    - issue_comment",
 					"    - pull_request",
 					"    name: cherrypick",
+					"label:",
+					"  restricted_labels:",
+					"    openshift:",
+					"    - allowed_teams:",
+					"      - patch-managers",
+					"      label: cherrypick-approved",
 					"lgtm:",
 					"- repos:",
 					"  - openshift",
@@ -173,6 +191,14 @@ func TestShardPluginConfig(t *testing.T) {
 					"    - issue_comment",
 					"    - pull_request",
 					"    name: needs-rebase",
+					"label:",
+					"  restricted_labels:",
+					"    openshift/release:",
+					"    - allowed_teams:",
+					"      - manual-testers",
+					"      allowed_users:",
+					"      - manual-test-bot",
+					"      label: manual-test-done",
 					"plugins:",
 					"  openshift/release:",
 					"    plugins:",

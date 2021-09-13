@@ -98,7 +98,7 @@ func AddToManager(mgr manager.Manager,
 	// TODO: Watch buildCluster ImageStreams as well. For now we assume no one will tamper with them.
 	if err := c.Watch(
 		source.NewKindWithCache(&testimagestreamtagimportv1.TestImageStreamTagImport{}, mgr.GetCache()),
-		testImageStreamTagImportHandler(log),
+		testImageStreamTagImportHandler(log, ignoreClusterNames),
 	); err != nil {
 		return fmt.Errorf("failed to create watch for testimagestreamtagimports: %w", err)
 	}
@@ -191,7 +191,7 @@ func testImageStreamTagImportHandlerForNamedCluster(clusterName string) handler.
 	return handler.EnqueueRequestsFromMapFunc(func(o ctrlruntimeclient.Object) []reconcile.Request {
 		testimagestreamtagimport, ok := o.(*testimagestreamtagimportv1.TestImageStreamTagImport)
 		if !ok {
-			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not an ImageStream")
+			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not a TestImageStreamTagImport")
 			return nil
 		}
 		return []reconcile.Request{{NamespacedName: types.NamespacedName{
@@ -201,7 +201,7 @@ func testImageStreamTagImportHandlerForNamedCluster(clusterName string) handler.
 	})
 }
 
-func testImageStreamTagImportHandler(l *logrus.Entry) handler.EventHandler {
+func testImageStreamTagImportHandler(l *logrus.Entry, ignoreClusterNames sets.String) handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(func(o ctrlruntimeclient.Object) []reconcile.Request {
 		testimagestreamtagimport, ok := o.(*testimagestreamtagimportv1.TestImageStreamTagImport)
 		if !ok {
@@ -211,6 +211,9 @@ func testImageStreamTagImportHandler(l *logrus.Entry) handler.EventHandler {
 		if testimagestreamtagimport.Spec.ClusterName == "" {
 			// This should never happen
 			l.WithField("name", testimagestreamtagimport.Namespace+"/"+testimagestreamtagimport.Name).Error("found testimagestreamtagimport on app.ci that doesn't have .spec.cluster set, can not infer what cluster it is for, ignoring.")
+			return nil
+		}
+		if ignoreClusterNames.Has(testimagestreamtagimport.Spec.ClusterName) {
 			return nil
 		}
 		return []reconcile.Request{{NamespacedName: types.NamespacedName{

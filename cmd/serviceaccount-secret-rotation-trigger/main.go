@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -11,49 +12,59 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/logrusutil"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
 	serviceaccountsecretrefresher "github.com/openshift/ci-tools/pkg/controller/serviceaccount_secret_refresher"
-	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type options struct {
-	kubeconfig    string
-	kubeconfigDir string
-	namespaces    flagutil.Strings
-	dry           bool
+	kubernetesOptions flagutil.KubernetesOptions
+	namespaces        flagutil.Strings
+	dry               bool
 }
 
-func opts() *options {
-	opts := &options{}
-	flag.StringVar(&opts.kubeconfig, "kubeconfig", "", "The kubeconfig to use")
-	flag.StringVar(&opts.kubeconfigDir, "kubeconfig-dir", "", "Path to the directory containing kubeconfig files to use")
-	flag.Var(&opts.namespaces, "namespace", "Namespace to run in, can be passed multiple times")
-	flag.BoolVar(&opts.dry, "dry-run", true, "Enable dry-run")
-	flag.Parse()
-	return opts
+func opts() (*options, error) {
+	o := &options{kubernetesOptions: flagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
+	fs := flag.CommandLine
+	o.kubernetesOptions.AddFlags(fs)
+	fs.Var(&o.namespaces, "namespace", "Namespace to run in, can be passed multiple times")
+	fs.BoolVar(&o.dry, "dry-run", true, "Enable dry-run")
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		return nil, fmt.Errorf("failed to parse flags: %w", err)
+	}
+	return o, nil
 }
 
 func main() {
 	logrusutil.ComponentInit()
 
-	o := opts()
+	o, err := opts()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to get options")
+	}
 	if len(o.namespaces.Strings()) == 0 {
 		logrus.Fatal("Must pass at least one namespace")
 	}
-	kubeconfigs, err := util.LoadKubeConfigs(o.kubeconfig, o.kubeconfigDir, nil)
+	if err := o.kubernetesOptions.Validate(o.dry); err != nil {
+		logrus.WithError(err).Fatal("Failed to validate the kubernetesOptions")
+	}
+
+	loadedKubeconfigs, err := o.kubernetesOptions.LoadClusterConfigs()
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to load kubeconfigs")
 	}
-	if len(kubeconfigs) == 0 {
+	if len(loadedKubeconfigs) == 0 {
 		logrus.Fatal("No kubeconfigs available")
 	}
-	for idx := range kubeconfigs {
-		kubeconfigs[idx].QPS = 50
-		kubeconfigs[idx].Burst = 500
+	kubeconfigs := map[string]rest.Config{}
+	for cluster, kubeconfig := range loadedKubeconfigs {
+		kubeconfig.QPS = 50
+		kubeconfig.Burst = 500
+		kubeconfigs[cluster] = kubeconfig
 	}
 
 	ctx := signals.SetupSignalHandler()
@@ -64,7 +75,7 @@ func main() {
 	for clusterName, config := range kubeconfigs {
 		clusterName, config := clusterName, config
 		eg.Go(func() error {
-			client, err := ctrlruntimeclient.New(config, ctrlruntimeclient.Options{})
+			client, err := ctrlruntimeclient.New(&config, ctrlruntimeclient.Options{})
 			if err != nil {
 				logrus.WithError(err).WithField("cluster", clusterName).Warn("Failed to construct client for cluster")
 				return nil

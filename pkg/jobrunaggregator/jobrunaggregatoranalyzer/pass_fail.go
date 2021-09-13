@@ -14,7 +14,7 @@ import (
 )
 
 type baseline interface {
-	FailureMessage(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (string, error)
+	CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (failed bool, message string, err error)
 }
 
 func assignPassFail(ctx context.Context, combined *junit.TestSuites, baselinePassFail baseline) error {
@@ -38,20 +38,28 @@ func assignPassFailForTestSuite(ctx context.Context, parentTestSuites []string, 
 		failureCount += currTestSuite.NumFailed
 	}
 
-	for _, currTestCase := range combined.TestCases {
+	for i := range combined.TestCases {
+		currTestCase := combined.TestCases[i]
 		currDetails := &TestCaseDetails{}
 		if err := yaml.Unmarshal([]byte(currTestCase.SystemOut), currDetails); err != nil {
 			return err
 		}
-		failureMessage, err := baselinePassFail.FailureMessage(ctx, currSuiteNames, currDetails)
+		failed, message, err := baselinePassFail.CheckFailed(ctx, currSuiteNames, currDetails)
 		if err != nil {
 			return err
 		}
-		if len(failureMessage) == 0 {
+		currDetails.Summary = message
+		detailsBytes, err := yaml.Marshal(currDetails)
+		if err != nil {
+			return err
+		}
+		currTestCase.SystemOut = string(detailsBytes)
+
+		if !failed {
 			continue
 		}
 		currTestCase.FailureOutput = &junit.FailureOutput{
-			Message: failureMessage,
+			Message: message,
 			Output:  currTestCase.SystemOut,
 		}
 		failureCount++
@@ -133,24 +141,21 @@ func (a *weeklyAverageFromTenDays) getAggregatedTestRuns(ctx context.Context) (m
 	return a.aggregatedTestRunsByName, a.queryTestRunsErr
 }
 
-func (a *weeklyAverageFromTenDays) FailureMessage(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (string, error) {
+func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (bool, string, error) {
 	if alwaysPassTests.Has(testCaseDetails.Name) {
 		summary := fmt.Sprintf("always passing")
 		fmt.Printf("always passing %q\n", testCaseDetails.Name)
-		testCaseDetails.Summary = summary
-		return "", nil
+		return false, summary, nil
 	}
 	if !didTestRun(testCaseDetails) {
-		testCaseDetails.Summary = "did not run"
-		return "", nil
+		return false, "did not run", nil
 	}
 	numberOfAttempts := getAttempts(testCaseDetails)
 
 	// if most of the job runs skipped this test, then we probably intend to skip the test overall and the failure is actually
 	// due to some kind of "couldn't detect that I should skip".
 	if len(testCaseDetails.Passes) == 0 && len(testCaseDetails.Skips) > len(testCaseDetails.Failures) {
-		testCaseDetails.Summary = "probably intended to skip"
-		return "", nil
+		return false, "probably intended to skip", nil
 	}
 
 	numberOfPasses := getNumberOfPasses(testCaseDetails)
@@ -162,8 +167,7 @@ func (a *weeklyAverageFromTenDays) FailureMessage(ctx context.Context, suiteName
 			len(testCaseDetails.Skips),
 			a.minimumNumberOfAttempts,
 		)
-		testCaseDetails.Summary = summary
-		return summary, nil
+		return true, summary, nil
 	}
 	if len(testCaseDetails.Passes) < 1 {
 		summary := fmt.Sprintf("Passed %d times, failed %d times, skipped %d times: we require at least one pass to consider it a success",
@@ -171,8 +175,7 @@ func (a *weeklyAverageFromTenDays) FailureMessage(ctx context.Context, suiteName
 			numberOfFailures,
 			len(testCaseDetails.Skips),
 		)
-		testCaseDetails.Summary = summary
-		return summary, nil
+		return true, summary, nil
 	}
 
 	aggregatedTestRunsByName, err := a.getAggregatedTestRuns(ctx)
@@ -202,12 +205,10 @@ func (a *weeklyAverageFromTenDays) FailureMessage(ctx context.Context, suiteName
 			workingPercentage,
 			requiredNumberOfPasses,
 		)
-		testCaseDetails.Summary = summary
-		return summary, nil
+		return true, summary, nil
 	}
 
-	testCaseDetails.Summary = "Passed enough times"
-	return "", nil
+	return false, "Passed enough times", nil
 }
 
 var (

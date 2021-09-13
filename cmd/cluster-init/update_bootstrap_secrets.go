@@ -54,23 +54,26 @@ func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
 		updateRehearseSecret,
 		updateChatBotSecret,
 		updateExistingRegistryPullCredentialsAllSecrets,
+		appendSecret(generateRegistryPushCredentialsSecret),
+		appendSecret(generateRegistryPullCredentialsSecret),
+		appendSecret(generateCiOperatorSecret),
+		generateRegistryPullCredentialsAllSecrets,
 	} {
 		if err := step(c, o); err != nil {
 			return err
 		}
 	}
 
-	appendSecret(generateRegistryPushCredentialsSecret, c, o)
-	appendSecret(generateRegistryPullCredentialsSecret, c, o)
-	appendSecret(generateCiOperatorSecret, c, o)
-	generateRegistryPullCredentialsAllSecrets(c, o)
 	return nil
 }
 
-func appendSecret(secretGenerator func(options) secretbootstrap.SecretConfig, c *secretbootstrap.Config, o options) {
-	secret := secretGenerator(o)
-	logrus.Infof("Creating new secret with 'to' of: %v", secret.To)
-	c.Secrets = append(c.Secrets, secret)
+func appendSecret(secretGenerator func(options) secretbootstrap.SecretConfig) func(c *secretbootstrap.Config, o options) error {
+	return func(c *secretbootstrap.Config, o options) error {
+		secret := secretGenerator(o)
+		logrus.Infof("Creating new secret with 'to' of: %v", secret.To)
+		c.Secrets = append(c.Secrets, secret)
+		return nil
+	}
 }
 
 func generateCiOperatorSecret(o options) secretbootstrap.SecretConfig {
@@ -222,7 +225,7 @@ func updateExistingRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, 
 	for _, cluster := range c.UserSecretsTargetClusters {
 		if cluster != string(api.ClusterHive) && cluster != string(api.ClusterARM01) && cluster != o.clusterName {
 			return appendRegistrySecretItemContext(c, regPullCredsAll, cluster, secretbootstrap.DockerConfigJSONData{
-				AuthField:   fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", o.clusterName),
+				AuthField:   registryCommandTokenField(o.clusterName, pull),
 				Item:        buildUFarm,
 				RegistryURL: registryUrlFor(o.clusterName),
 			})
@@ -231,7 +234,7 @@ func updateExistingRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, 
 	return nil
 }
 
-func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o options) {
+func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o options) error {
 	items := []secretbootstrap.DockerConfigJSONData{
 		{
 			AuthField:   registryCommandTokenField("ci", pull),
@@ -283,6 +286,7 @@ func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o opti
 	}
 	logrus.Infof("Creating new secret with 'to' of: %v", sc.To)
 	c.Secrets = append(c.Secrets, sc)
+	return nil
 }
 
 func registryUrlFor(cluster string) string {

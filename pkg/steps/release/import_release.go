@@ -432,11 +432,17 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 				From: s.overrideCLIReleaseExtractImage,
 			},
 		}
+		key := ctrlruntimeclient.ObjectKeyFromObject(streamTag)
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			return s.client.Update(ctx, streamTag)
+		}); err != nil {
+			return nil, fmt.Errorf("unable to tag the override 'cli' image into the %s:latest: %w", overrideCLIStreamName, err)
+		}
 		if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
-			if err := s.client.Create(ctx, streamTag); err != nil && !kerrors.IsAlreadyExists(err) {
-				return false, err
-			}
-			if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(streamTag), streamTag); err != nil {
+			if err := s.client.Get(ctx, key, streamTag); err != nil {
+				if kerrors.IsNotFound(err) {
+					return false, nil
+				}
 				return false, err
 			}
 			return streamTag.Tag != nil && streamTag.Tag.Generation != nil && *streamTag.Tag.Generation == streamTag.Generation, nil
@@ -476,24 +482,37 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 	cliImage := pod.Status.ContainerStatuses[0].State.Terminated.Message
 
 	// tag the cli image into stable so we use the correct pull secrets from the namespace
+	streamTag := &imagev1.ImageStreamTag{
+		ObjectMeta: meta.ObjectMeta{
+			Namespace: s.jobSpec.Namespace(),
+			Name:      fmt.Sprintf("%s:cli", streamName),
+		},
+		Tag: &imagev1.TagReference{
+			ReferencePolicy: imagev1.TagReferencePolicy{
+				Type: imagev1.LocalTagReferencePolicy,
+			},
+			From: &coreapi.ObjectReference{
+				Kind: "DockerImage",
+				Name: cliImage,
+			},
+		},
+	}
+	key := ctrlruntimeclient.ObjectKeyFromObject(streamTag)
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		return s.client.Update(ctx, &imagev1.ImageStreamTag{
-			ObjectMeta: meta.ObjectMeta{
-				Namespace: s.jobSpec.Namespace(),
-				Name:      fmt.Sprintf("%s:cli", streamName),
-			},
-			Tag: &imagev1.TagReference{
-				ReferencePolicy: imagev1.TagReferencePolicy{
-					Type: imagev1.LocalTagReferencePolicy,
-				},
-				From: &coreapi.ObjectReference{
-					Kind: "DockerImage",
-					Name: cliImage,
-				},
-			},
-		})
+		return s.client.Update(ctx, streamTag)
 	}); err != nil {
 		return nil, fmt.Errorf("unable to tag the 'cli' image into the stable stream: %w", err)
+	}
+	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
+		if err := s.client.Get(ctx, key, streamTag); err != nil {
+			if kerrors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		return streamTag.Tag != nil && streamTag.Tag.Generation != nil && *streamTag.Tag.Generation == streamTag.Generation, nil
+	}); err != nil {
+		return nil, fmt.Errorf("unable to wait for the 'cli' image in the stable stream to populate: %w", err)
 	}
 
 	return &api.ImageStreamTagReference{Name: streamName, Tag: "cli"}, nil

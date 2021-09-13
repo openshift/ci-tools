@@ -59,6 +59,9 @@ const (
 	buildUFarm    = "build_farm"
 	podScaler     = "pod-scaler"
 	configUpdater = "config-updater"
+	ciOperator    = "ci-operator"
+	buildFarm     = "build-farm"
+	ci            = "ci"
 )
 
 func RepoMetadata() *api.Metadata {
@@ -84,6 +87,7 @@ func main() {
 	for _, step := range []func(options) error{
 		updateJobs,
 		initClusterBuildFarmDir,
+		updateCiSecretBootstrap,
 		updateSecretGenerator,
 		updateSanitizeProwJobs,
 	} {

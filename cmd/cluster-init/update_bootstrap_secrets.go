@@ -117,11 +117,6 @@ func generateRegistryPullCredentialsSecret(o options) secretbootstrap.SecretConf
 		From: map[string]secretbootstrap.ItemContext{
 			dotDockerConfigJson: generatePushPullSecretFrom(o.clusterName, []secretbootstrap.DockerConfigJSONData{
 				{
-					AuthField:   registryCommandTokenField(ci, pull),
-					Item:        buildUFarm,
-					RegistryURL: api.ServiceAPPCIRegistry,
-				},
-				{
 					AuthField:   registryCommandTokenField(string(api.ClusterAPPCI), pull),
 					Item:        buildUFarm,
 					RegistryURL: api.ServiceDomainAPPCIRegistry,
@@ -236,11 +231,6 @@ func updateExistingRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, 
 
 func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o options) error {
 	items := []secretbootstrap.DockerConfigJSONData{
-		{
-			AuthField:   registryCommandTokenField("ci", pull),
-			Item:        buildUFarm,
-			RegistryURL: api.ServiceAPPCIRegistry,
-		},
 		{
 			AuthField:   "auth",
 			Item:        "cloud.openshift.com-pull-secret",

@@ -213,9 +213,6 @@ secret_configs:
         email_field: email
         item: registry.redhat.io-pull-secret
         registry_url: registry.redhat.io
-      - auth_field: token_image-puller_ci_reg_auth_value.txt
-        item: build_farm
-        registry_url: registry.svc.ci.openshift.org
       - auth_field: token_image-puller_app.ci_reg_auth_value.txt
         item: build_farm
         registry_url: registry.ci.openshift.org
@@ -273,9 +270,6 @@ secret_configs:
       - auth_field: token_image-puller_newCluster_reg_auth_value.txt
         item: build_farm
         registry_url: registry.newCluster.ci.openshift.org
-      - auth_field: token_image-puller_ci_reg_auth_value.txt
-        item: build_farm
-        registry_url: registry.svc.ci.openshift.org
       - auth_field: token_image-puller_app.ci_reg_auth_value.txt
         item: build_farm
         registry_url: registry.ci.openshift.org
@@ -308,9 +302,6 @@ secret_configs:
       - auth_field: token_image-puller_newCluster_reg_auth_value.txt
         item: build_farm
         registry_url: registry.newCluster.ci.openshift.org
-      - auth_field: token_image-puller_ci_reg_auth_value.txt
-        item: build_farm
-        registry_url: registry.svc.ci.openshift.org
       - auth_field: auth
         email_field: email
         item: cloud.openshift.com-pull-secret

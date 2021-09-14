@@ -630,9 +630,9 @@ func isStale(job prowconfig.JobBase, generatedLabels ...string) bool {
 	return false
 }
 
-// Prune removes all prowgen-generated jobs that were not created by preceding
-// calls to GenerateJobs() (that method labels them as "newly generated"). All
-// remaining prowgen-generated jobs will be labeled as simply "generated" and
+// Prune removes all generated jobs that include the supplied generatedLabels with values that
+// are NOT newly-generated.
+// All remaining generated jobs will be labeled as simply "generated" and
 // Prune() returns the resulting job config (which may even be completely empty).
 func Prune(jobConfig *prowconfig.JobConfig, generatedLabels ...string) *prowconfig.JobConfig {
 	var pruned prowconfig.JobConfig

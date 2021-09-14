@@ -75,7 +75,7 @@ func validateOptions(o options) []error {
 			if err := os.Chdir(o.releaseRepo); err != nil {
 				errs = append(errs, err)
 			} else {
-				branch, err := exec.Command("git", "branch", "--show-current").Output()
+				branch, err := exec.Command("git", "rev-parse", "--symbolic-full-name", "--abbrev-ref", "HEAD").Output()
 				if err != nil {
 					errs = append(errs, err)
 				} else if master != strings.TrimSpace(string(branch)) {

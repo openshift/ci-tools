@@ -8,6 +8,7 @@ periodics:
     repo: release
   interval: 12h
   labels:
+    ci-operator.openshift.io/prowgen-controlled: "true"
     ci.openshift.io/role: infra
   name: periodic-openshift-release-master-build01-apply
   spec:
@@ -46,6 +47,8 @@ periodics:
     repo: release
   interval: 12h
   labels:
+    ci-operator.openshift.io/cluster-init-controlled: "true"
+    ci-operator.openshift.io/cluster-init-controlled-newCluster: "true"
     ci.openshift.io/role: infra
   name: periodic-openshift-release-master-newCluster-apply
   spec:

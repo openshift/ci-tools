@@ -18,6 +18,6 @@ expected="${suite_dir}/expected"
 os::test::junit::declare_suite_start "integration/cluster-init"
 
 os::cmd::expect_success "cluster-init -cluster-name=newCluster -release-repo=${actual} -create-pr=false"
-os::integration::compare "${expected}" "${actual}"
+os::integration::compare "${actual}" "${expected}"
 
 os::test::junit::declare_suite_end

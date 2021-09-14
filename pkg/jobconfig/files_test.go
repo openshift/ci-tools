@@ -5,12 +5,18 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 )
+
+var unexportedFields = []cmp.Option{
+	cmpopts.IgnoreUnexported(prowconfig.Presubmit{}),
+	cmpopts.IgnoreUnexported(prowconfig.Periodic{}),
+	cmpopts.IgnoreUnexported(prowconfig.Brancher{}),
+	cmpopts.IgnoreUnexported(prowconfig.RegexpChangeMatcher{}),
+}
 
 func TestAppend(t *testing.T) {
 	var testCases = []struct {
@@ -226,8 +232,8 @@ func TestMergeJobConfig(t *testing.T) {
 	for _, tc := range tests {
 		mergeJobConfig(tc.destination, tc.source, tc.allJobs)
 
-		if !reflect.DeepEqual(tc.destination, tc.expected) {
-			t.Errorf("expected merged job config diff:\n%s", diff.ObjectReflectDiff(tc.expected, tc.destination))
+		if diff := cmp.Diff(tc.expected, tc.destination, unexportedFields...); diff != "" {
+			t.Errorf("expected merged job config diff: %s", diff)
 		}
 	}
 }
@@ -424,8 +430,9 @@ func TestMergePresubmits(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := mergePresubmits(testCase.old, testCase.new), testCase.expected; !equality.Semantic.DeepEqual(actual, expected) {
-				t.Errorf("actual differs from expected: %s", cmp.Diff(actual, expected, cmp.Exporter(func(_ reflect.Type) bool { return true })))
+			result := mergePresubmits(testCase.old, testCase.new)
+			if diff := cmp.Diff(testCase.expected, result, unexportedFields...); diff != "" {
+				t.Errorf("result differs from expected: %s", diff)
 			}
 		})
 	}
@@ -582,8 +589,9 @@ func TestMergePostsubmits(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := mergePostsubmits(testCase.old, testCase.new), testCase.expected; !equality.Semantic.DeepEqual(actual, expected) {
-				t.Errorf("%s: did not get expected merged postsubmit config:\n%s", testCase.name, diff.ObjectReflectDiff(actual, expected))
+			result := mergePostsubmits(testCase.old, testCase.new)
+			if diff := cmp.Diff(testCase.expected, result, unexportedFields...); diff != "" {
+				t.Errorf("%s: did not get expected merged postsubmit config: %s", testCase.name, diff)
 			}
 		})
 	}
@@ -654,8 +662,8 @@ func TestExtractRepoElementsFromPath(t *testing.T) {
 			if err != nil && !testCase.expectedError {
 				t.Errorf("%s: expected no error, but got one: %v", testCase.name, err)
 			}
-			if actual, expected := elements, testCase.expected; !equality.Semantic.DeepEqual(actual, expected) {
-				t.Errorf("%s: did not get expected repo info from path:\n%s", testCase.name, diff.ObjectReflectDiff(actual, expected))
+			if diff := cmp.Diff(testCase.expected, elements); diff != "" {
+				t.Errorf("%s: did not get expected repo info from path: %s", testCase.name, diff)
 			}
 		})
 	}
@@ -700,8 +708,8 @@ func TestInfo_Basename(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.expected, func(t *testing.T) {
-			if actual, expected := testCase.info.Basename(), testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: didn't get correct basename: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
+			if diff := cmp.Diff(testCase.expected, testCase.info.Basename()); diff != "" {
+				t.Errorf("%s: didn't get correct basename: %v", testCase.name, diff)
 			}
 		})
 	}
@@ -808,8 +816,216 @@ func TestInfo_ConfigMapName(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.expected, func(t *testing.T) {
 			info := Info{Branch: testCase.branch, Type: testCase.jobType}
-			if actual, expected := info.ConfigMapName(), testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: didn't get correct basename: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
+			if diff := cmp.Diff(testCase.expected, info.ConfigMapName()); diff != "" {
+				t.Errorf("%s: didn't get correct basename: %v", testCase.name, diff)
+			}
+		})
+	}
+}
+
+func TestPrune(t *testing.T) {
+	testCases := []struct {
+		name            string
+		jobconfig       *prowconfig.JobConfig
+		expectedPruned  bool
+		generatedLabels []string
+	}{
+		{
+			name: "stale generated presubmit is pruned",
+			jobconfig: &prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{LabelProwGenGenerated: string(Generated)}}}},
+				},
+			},
+			expectedPruned:  true,
+			generatedLabels: []string{LabelProwGenGenerated},
+		},
+		{
+			name: "stale generated postsubmit is pruned",
+			jobconfig: &prowconfig.JobConfig{
+				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{LabelProwGenGenerated: string(Generated)}}}},
+				},
+			},
+			expectedPruned:  true,
+			generatedLabels: []string{LabelProwGenGenerated},
+		},
+		{
+			name: "not stale generated presubmit is kept",
+			jobconfig: &prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{LabelProwGenGenerated: string(NewlyGenerated)}}}},
+				},
+			},
+			expectedPruned:  false,
+			generatedLabels: []string{LabelProwGenGenerated},
+		},
+		{
+			name: "not stale generated postsubmit is kept",
+			jobconfig: &prowconfig.JobConfig{
+				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{LabelProwGenGenerated: string(NewlyGenerated)}}}},
+				},
+			},
+			expectedPruned:  false,
+			generatedLabels: []string{LabelProwGenGenerated},
+		},
+		{
+			name: "not generated presubmit is kept",
+			jobconfig: &prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Name: "job"}}},
+				},
+			},
+			expectedPruned:  false,
+			generatedLabels: []string{LabelProwGenGenerated},
+		},
+		{
+			name: "not generated postsubmit is kept",
+			jobconfig: &prowconfig.JobConfig{
+				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Name: "job"}}},
+				},
+			},
+			expectedPruned:  false,
+			generatedLabels: []string{LabelProwGenGenerated},
+		},
+		{
+			name: "periodics are kept",
+			jobconfig: &prowconfig.JobConfig{
+				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{
+					Name:   "job",
+					Labels: map[string]string{LabelProwGenGenerated: string(NewlyGenerated)}}}},
+			},
+			expectedPruned:  false,
+			generatedLabels: []string{LabelProwGenGenerated},
+		},
+		{
+			name: "other tool's generated periodics are kept",
+			jobconfig: &prowconfig.JobConfig{
+				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{
+					Name:   "job",
+					Labels: map[string]string{LabelProwGenGenerated: "true"}}}},
+			},
+			expectedPruned:  false,
+			generatedLabels: []string{LabelClusterInitGenerated},
+		},
+		{
+			name: "periodics are pruned when any labels are included",
+			jobconfig: &prowconfig.JobConfig{
+				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{
+					Name:   "job",
+					Labels: map[string]string{LabelClusterInitGenerated: "true"}}}},
+			},
+			expectedPruned:  true,
+			generatedLabels: []string{LabelClusterInitGenerated, "some-other-label"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Expect either unchanged or empty JobConfig
+			expected := tc.jobconfig
+			if tc.expectedPruned {
+				expected = &prowconfig.JobConfig{}
+			}
+
+			pruned := Prune(tc.jobconfig, tc.generatedLabels...)
+			if diff := cmp.Diff(expected, pruned, unexportedFields...); diff != "" {
+				t.Errorf("Pruned config differs:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestIsGenerated(t *testing.T) {
+	testCases := []struct {
+		description     string
+		labels          map[string]string
+		generatedLabels []string
+		expected        bool
+	}{
+		{
+			description:     "job without any labels is not generated",
+			generatedLabels: []string{LabelProwGenGenerated},
+			expected:        false,
+		},
+		{
+			description:     "job without the generated label is not generated",
+			labels:          map[string]string{"some-label": "some-value"},
+			generatedLabels: []string{LabelProwGenGenerated},
+			expected:        false,
+		},
+		{
+			description:     "job with the generated label is generated",
+			labels:          map[string]string{LabelProwGenGenerated: "any-value"},
+			expected:        true,
+			generatedLabels: []string{LabelProwGenGenerated},
+		},
+		{
+			description:     "job with one of the generated labels is generated",
+			labels:          map[string]string{LabelProwGenGenerated: "any-value"},
+			expected:        true,
+			generatedLabels: []string{LabelProwGenGenerated, "some-other-label"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			if generated := IsGenerated(prowconfig.JobBase{Labels: tc.labels}, tc.generatedLabels...); generated != tc.expected {
+				t.Errorf("%s: expected %t, got %t", tc.description, tc.expected, generated)
+			}
+		})
+	}
+}
+
+func TestIsStale(t *testing.T) {
+	testCases := []struct {
+		description     string
+		labels          map[string]string
+		generatedLabels []string
+		expected        bool
+	}{
+		{
+			description:     "job without any labels and expecting some label is not stale",
+			generatedLabels: []string{LabelProwGenGenerated},
+			expected:        false,
+		},
+		{
+			description:     "job without any labels not expecting some label is not stale",
+			generatedLabels: []string{},
+			expected:        false,
+		},
+		{
+			description:     "job with expected label is stale",
+			labels:          map[string]string{LabelProwGenGenerated: "true"},
+			generatedLabels: []string{LabelProwGenGenerated},
+			expected:        true,
+		},
+		{
+			description:     "job with expected label, newly generated, is not stale",
+			labels:          map[string]string{LabelProwGenGenerated: string(NewlyGenerated)},
+			generatedLabels: []string{LabelProwGenGenerated},
+			expected:        false,
+		},
+		{
+			description:     "job with label other than expected label, is not stale",
+			labels:          map[string]string{LabelProwGenGenerated: string(NewlyGenerated)},
+			generatedLabels: []string{LabelClusterInitGenerated},
+			expected:        false,
+		},
+		{
+			description:     "job with any expected label is stale",
+			labels:          map[string]string{LabelProwGenGenerated: "true"},
+			generatedLabels: []string{LabelProwGenGenerated, "some-other-label"},
+			expected:        true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			if stale := isStale(prowconfig.JobBase{Labels: tc.labels}, tc.generatedLabels...); stale != tc.expected {
+				t.Errorf("%s: expected %t, got %t", tc.description, tc.expected, stale)
 			}
 		})
 	}

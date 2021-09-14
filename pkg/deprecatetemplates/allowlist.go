@@ -61,7 +61,7 @@ func (b blockedJobs) Has(job config.JobBase) bool {
 func (b blockedJobs) Insert(job config.JobBase) {
 	b[job.Name] = blockedJob{
 		current:   true,
-		Generated: jc.IsGenerated(job),
+		Generated: jc.IsGenerated(job, jc.LabelProwGenGenerated),
 		Kind:      getKind(job),
 	}
 }

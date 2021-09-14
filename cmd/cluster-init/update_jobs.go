@@ -31,7 +31,12 @@ func updateJobs(o options) error {
 		Periodics: []prowconfig.Periodic{generatePeriodic(o.clusterName)},
 	}
 	metadata := RepoMetadata()
-	return jobconfig.WriteToDir(filepath.Join(o.releaseRepo, "ci-operator", "jobs"), metadata.Org, metadata.Repo, &config)
+	jobsDir := filepath.Join(o.releaseRepo, "ci-operator", "jobs")
+	return jobconfig.WriteToDir(jobsDir,
+		metadata.Org,
+		metadata.Repo,
+		&config,
+		clusterInitControlledLabelFor(o.clusterName))
 }
 
 func generatePeriodic(clusterName string) prowconfig.Periodic {
@@ -60,6 +65,8 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 			},
 			Labels: map[string]string{
 				labelRole: jobRoleInfra,
+				clusterInitControlledLabelFor(clusterName): string(jobconfig.NewlyGenerated),
+				jobconfig.LabelClusterInitGenerated:        "true",
 			},
 		},
 		Interval: "12h",
@@ -85,6 +92,8 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 			MaxConcurrency: 1,
 			Labels: map[string]string{
 				labelRole: jobRoleInfra,
+				clusterInitControlledLabelFor(clusterName): string(jobconfig.NewlyGenerated),
+				jobconfig.LabelClusterInitGenerated:        "true",
 			},
 		},
 		Brancher: prowconfig.Brancher{
@@ -117,7 +126,9 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 			},
 			UtilityConfig: prowconfig.UtilityConfig{Decorate: utilpointer.BoolPtr(true)},
 			Labels: map[string]string{
-				jobconfig.CanBeRehearsedLabel: "true",
+				jobconfig.CanBeRehearsedLabel:              "true",
+				clusterInitControlledLabelFor(clusterName): string(jobconfig.NewlyGenerated),
+				jobconfig.LabelClusterInitGenerated:        "true",
 			},
 		},
 		AlwaysRun:    true,
@@ -170,4 +181,8 @@ func generateContainer(image, clusterName string, extraArgs []string, extraVolum
 			MountPath: "/etc/build-farm-credentials"}},
 			extraVolumeMounts...),
 	}
+}
+
+func clusterInitControlledLabelFor(cluster string) string {
+	return fmt.Sprintf("%s-%s", jobconfig.LabelClusterInitGenerated, cluster)
 }

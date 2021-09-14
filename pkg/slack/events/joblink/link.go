@@ -195,19 +195,19 @@ func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClie
 		if job.presubmit != nil {
 			spec = pjutil.PresubmitSpec(*job.presubmit, prowapi.Refs{})
 			options = job.presubmit.DecorationConfig.GCSConfiguration
-			generated = jobconfig.IsGenerated(job.presubmit.JobBase)
+			generated = jobconfig.IsGenerated(job.presubmit.JobBase, jobconfig.LabelProwGenGenerated)
 			job.metadata.Variant = rehearse.VariantFromLabels(job.presubmit.Labels)
 			prefix = jobconfig.PresubmitPrefix
 		} else if job.postsubmit != nil {
 			spec = pjutil.PostsubmitSpec(*job.postsubmit, prowapi.Refs{})
 			options = job.postsubmit.DecorationConfig.GCSConfiguration
-			generated = jobconfig.IsGenerated(job.postsubmit.JobBase)
+			generated = jobconfig.IsGenerated(job.postsubmit.JobBase, jobconfig.LabelProwGenGenerated)
 			job.metadata.Variant = rehearse.VariantFromLabels(job.postsubmit.Labels)
 			prefix = jobconfig.PostsubmitPrefix
 		} else if job.periodic != nil {
 			spec = pjutil.PeriodicSpec(*job.periodic)
 			options = job.periodic.DecorationConfig.GCSConfiguration
-			generated = jobconfig.IsGenerated(job.periodic.JobBase)
+			generated = jobconfig.IsGenerated(job.periodic.JobBase, jobconfig.LabelProwGenGenerated)
 			job.metadata.Variant = rehearse.VariantFromLabels(job.periodic.Labels)
 			prefix = jobconfig.PeriodicPrefix
 		} else {

@@ -4,8 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/github/prcreation"
-	"k8s.io/test-infra/prow/cmd/generic-autobumper/bumper"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,7 +12,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/test-infra/prow/cmd/generic-autobumper/bumper"
+
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/github/prcreation"
 )
 
 const (

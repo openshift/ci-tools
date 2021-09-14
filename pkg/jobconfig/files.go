@@ -645,8 +645,7 @@ func Prune(jobConfig *prowconfig.JobConfig, generatedLabels ...string) *prowconf
 
 			if IsGenerated(job.JobBase, generatedLabels...) {
 				for _, generatedLabel := range generatedLabels {
-					_, exists := job.Labels[generatedLabel]
-					if exists {
+					if _, exists := job.Labels[generatedLabel]; exists {
 						job.Labels[generatedLabel] = string(Generated)
 					}
 				}
@@ -668,8 +667,7 @@ func Prune(jobConfig *prowconfig.JobConfig, generatedLabels ...string) *prowconf
 			}
 			if IsGenerated(job.JobBase, generatedLabels...) {
 				for _, generatedLabel := range generatedLabels {
-					_, exists := job.Labels[generatedLabel]
-					if exists {
+					if _, exists := job.Labels[generatedLabel]; exists {
 						job.Labels[generatedLabel] = string(Generated)
 					}
 				}
@@ -688,8 +686,7 @@ func Prune(jobConfig *prowconfig.JobConfig, generatedLabels ...string) *prowconf
 		}
 		if IsGenerated(job.JobBase, generatedLabels...) {
 			for _, generatedLabel := range generatedLabels {
-				_, exists := job.Labels[generatedLabel]
-				if exists {
+				if _, exists := job.Labels[generatedLabel]; exists {
 					job.Labels[generatedLabel] = string(Generated)
 				}
 			}

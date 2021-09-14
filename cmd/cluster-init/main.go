@@ -4,8 +4,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/github/prcreation"
+	"k8s.io/test-infra/prow/cmd/generic-autobumper/bumper"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"unicode"
 
 	"github.com/sirupsen/logrus"
@@ -13,9 +17,22 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
+const (
+	githubLogin = "openshift-bot"
+	githubTeam  = "openshift/test-platform"
+	master      = "master"
+)
+
 type options struct {
 	clusterName string
 	releaseRepo string
+	createPR    bool
+
+	assign      string
+	githubLogin string
+
+	bumper.GitAuthorOptions
+	prcreation.PRCreationOptions
 }
 
 func (o options) String() string {
@@ -27,7 +44,12 @@ func parseOptions() (options, error) {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.clusterName, "cluster-name", "", "The name of the new cluster.")
 	fs.StringVar(&o.releaseRepo, "release-repo", "", "Path to the root of the openshift/release repository.")
+	fs.BoolVar(&o.createPR, "create-pr", true, "If a PR should be created. Set to true by default")
+	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use. Set to "+githubLogin+" by default")
+	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to. Set to Test Platform by default")
 
+	o.GitAuthorOptions.AddFlags(fs)
+	o.PRCreationOptions.AddFlags(fs)
 	return o, fs.Parse(os.Args[1:])
 }
 
@@ -46,11 +68,41 @@ func validateOptions(o options) []error {
 	if o.releaseRepo == "" {
 		//If the release repo is missing, further checks won't be possible
 		errs = append(errs, errors.New("--release-repo must be provided"))
-	} else if o.clusterName != "" {
-		buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
-		if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
-			errs = append(errs, fmt.Errorf("build farm directory: %s already exists", o.clusterName))
+	} else {
+		if o.createPR {
+			//make sure the release repo is on the master branch and clean
+			if err := os.Chdir(o.releaseRepo); err != nil {
+				errs = append(errs, err)
+			} else {
+				branch, err := exec.Command("git", "branch", "--show-current").Output()
+				if err != nil {
+					errs = append(errs, err)
+				} else if master != strings.TrimSpace(string(branch)) {
+					errs = append(errs, errors.New("--release-repo is not currently on master branch"))
+				} else {
+					hasChanges, err := bumper.HasChanges()
+					if err != nil {
+						errs = append(errs, err)
+					}
+					if hasChanges {
+						errs = append(errs, errors.New("--release-repo has local changes"))
+					}
+				}
+			}
 		}
+
+		if o.clusterName != "" {
+			buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
+			if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
+				errs = append(errs, fmt.Errorf("build farm directory: %s already exists", o.clusterName))
+			}
+		}
+	}
+	if err := o.GitAuthorOptions.Validate(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := o.PRCreationOptions.Validate(true); err != nil {
+		errs = append(errs, err)
 	}
 	return errs
 }
@@ -79,7 +131,11 @@ func main() {
 	}
 	validationErrors := validateOptions(o)
 	if len(validationErrors) > 0 {
-		logrus.Fatalf("validation errors: %v", validationErrors)
+		var errorMessage string
+		for _, err := range validationErrors {
+			errorMessage += "\n" + err.Error()
+		}
+		logrus.Fatalf("validation errors: %v", errorMessage)
 	}
 
 	// Each step in the process is allowed to fail independently so that the diffs for the others can still be generated
@@ -98,7 +154,40 @@ func main() {
 	}
 	if errorCount > 0 {
 		logrus.Fatalf("Due to the %d error(s) encountered a PR will not be generated. The resulting files can be PR'd manually", errorCount)
+	} else if o.createPR {
+		if err := submitPR(o); err != nil {
+			logrus.WithError(err).Fatalf("couldn't commit changes")
+		}
 	}
+}
+
+func submitPR(o options) error {
+	if err := o.PRCreationOptions.Finalize(); err != nil {
+		logrus.WithError(err).Fatal("failed to finalize PR creation options")
+	}
+	if err := os.Chdir(o.releaseRepo); err != nil {
+		return err
+	}
+	branchName := "init-" + o.clusterName
+	if err := exec.Command("git", "checkout", "-b", branchName).Run(); err != nil {
+		return err
+	}
+	title := fmt.Sprintf("Initialize Build Cluster %s", o.clusterName)
+	metadata := RepoMetadata()
+	if err := o.PRCreationOptions.UpsertPR(o.releaseRepo,
+		metadata.Org,
+		metadata.Repo,
+		metadata.Branch,
+		title,
+		prcreation.PrAssignee(o.assign),
+		prcreation.MatchTitle(title)); err != nil {
+		return err
+	}
+	// We have to clean up the remote created by bumper in the UpsertPR method if we want to be able to run this again from the same repo
+	if err := exec.Command("git", "remote", "rm", "bumper-fork-remote").Run(); err != nil {
+		return err
+	}
+	return exec.Command("git", "checkout", master).Run()
 }
 
 func initClusterBuildFarmDir(o options) error {

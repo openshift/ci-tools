@@ -216,6 +216,7 @@ var (
 		// used to aggregate overall upgrade result for a single job.  Since we aggregated all the junits, we don't care about this
 		// sub-aggregation. The analysis job runs can all fail on different tests, but the aggregated job will succeed.
 		`Run multi-stage test e2e-gcp-upgrade - e2e-gcp-upgrade-openshift-e2e-test container test`,
+		`Run multi-stage test e2e-aws-ovn-upgrade - e2e-aws-ovn-upgrade-gather-aws-console container test`,
 	)
 )
 

@@ -275,7 +275,7 @@ func readFromFile(path string) (*prowconfig.JobConfig, error) {
 // WriteToDir takes a JobConfig and a target directory, and writes the Prow job configuration
 // into files in that directory. Jobs are sharded by branch and by type. If
 // target files already exist and contain Prow job configuration, the jobs will
-// be merged.
+// be merged. Jobs will be pruned based on the provided generatedLabels
 func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, generatedLabels ...string) error {
 	allJobs := sets.String{}
 	files := map[string]*prowconfig.JobConfig{}

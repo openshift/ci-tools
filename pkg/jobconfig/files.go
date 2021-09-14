@@ -614,8 +614,7 @@ func MakeRegexFilenameLabel(possibleRegex string) string {
 // IsGenerated returns true if the job was generated according to ANY of the generatedLabels
 func IsGenerated(job prowconfig.JobBase, generatedLabels ...string) bool {
 	for _, generatedLabel := range generatedLabels {
-		_, generated := job.Labels[generatedLabel]
-		if generated {
+		if _, generated := job.Labels[generatedLabel]; generated {
 			return true
 		}
 	}
@@ -624,8 +623,7 @@ func IsGenerated(job prowconfig.JobBase, generatedLabels ...string) bool {
 
 func isStale(job prowconfig.JobBase, generatedLabels ...string) bool {
 	for _, generatedLabel := range generatedLabels {
-		value, generated := job.Labels[generatedLabel]
-		if generated && value != string(NewlyGenerated) {
+		if value, generated := job.Labels[generatedLabel]; generated && value != string(NewlyGenerated) {
 			return true
 		}
 	}

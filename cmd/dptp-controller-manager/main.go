@@ -263,6 +263,7 @@ func main() {
 				logrus.WithError(err).Fatalf("had no context for '%s' and the loaded InClusterConfig's host %s is neither %s nor %s", appCIContextName, inClusterConfig.Host, api.APPCIKubeAPIURL, inClusterConfigHost)
 			}
 		}
+		logrus.Infof("use InClusterConfig for %s", appCIContextName)
 		kubeconfigs[appCIContextName] = inClusterConfig
 	}
 

@@ -647,7 +647,10 @@ func Prune(jobConfig *prowconfig.JobConfig, generatedLabels ...string) *prowconf
 
 			if IsGenerated(job.JobBase, generatedLabels...) {
 				for _, generatedLabel := range generatedLabels {
-					job.Labels[generatedLabel] = string(Generated)
+					_, exists := job.Labels[generatedLabel]
+					if exists {
+						job.Labels[generatedLabel] = string(Generated)
+					}
 				}
 
 			}
@@ -667,7 +670,10 @@ func Prune(jobConfig *prowconfig.JobConfig, generatedLabels ...string) *prowconf
 			}
 			if IsGenerated(job.JobBase, generatedLabels...) {
 				for _, generatedLabel := range generatedLabels {
-					job.Labels[generatedLabel] = string(Generated)
+					_, exists := job.Labels[generatedLabel]
+					if exists {
+						job.Labels[generatedLabel] = string(Generated)
+					}
 				}
 			}
 			if pruned.PostsubmitsStatic == nil {
@@ -684,7 +690,10 @@ func Prune(jobConfig *prowconfig.JobConfig, generatedLabels ...string) *prowconf
 		}
 		if IsGenerated(job.JobBase, generatedLabels...) {
 			for _, generatedLabel := range generatedLabels {
-				job.Labels[generatedLabel] = string(Generated)
+				_, exists := job.Labels[generatedLabel]
+				if exists {
+					job.Labels[generatedLabel] = string(Generated)
+				}
 			}
 		}
 

@@ -140,7 +140,11 @@ func Handler(client messagePoster, config JobGetter, gcsClient *storage.Client) 
 		if len(infos) == 0 {
 			return false, nil
 		}
-		blocks := contextFor(logger, infos, config, gcsClient)
+		blocks, err := contextFor(logger, infos, config, gcsClient)
+		if err != nil {
+			logger.WithError(err).Warn("Failed to get context")
+			return false, err
+		}
 		if blocks == nil {
 			return false, nil
 		}
@@ -169,7 +173,7 @@ func rehearsalFromName(name string) (string, string) {
 	return name, rehearsalPR
 }
 
-func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClient *storage.Client) []slack.Block {
+func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClient *storage.Client) ([]slack.Block, error) {
 	var blocks []slack.Block
 	for _, info := range infos {
 		logger = logger.WithFields(logrus.Fields{
@@ -187,6 +191,7 @@ func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClie
 		var spec prowapi.ProwJobSpec
 		var options *prowapi.GCSConfiguration
 		var generated bool
+		var err error
 		var prefix string
 		// we do not want to do a bunch of parsing of URLs to get
 		// at the refs that were used to trigger the job, and we
@@ -195,19 +200,28 @@ func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClie
 		if job.presubmit != nil {
 			spec = pjutil.PresubmitSpec(*job.presubmit, prowapi.Refs{})
 			options = job.presubmit.DecorationConfig.GCSConfiguration
-			generated = jobconfig.IsGenerated(job.presubmit.JobBase, jobconfig.LabelProwGenGenerated)
+			generated, err = jobconfig.IsGenerated(job.presubmit.JobBase, jobconfig.Prowgen)
+			if err != nil {
+				return nil, err
+			}
 			job.metadata.Variant = rehearse.VariantFromLabels(job.presubmit.Labels)
 			prefix = jobconfig.PresubmitPrefix
 		} else if job.postsubmit != nil {
 			spec = pjutil.PostsubmitSpec(*job.postsubmit, prowapi.Refs{})
 			options = job.postsubmit.DecorationConfig.GCSConfiguration
-			generated = jobconfig.IsGenerated(job.postsubmit.JobBase, jobconfig.LabelProwGenGenerated)
+			generated, err = jobconfig.IsGenerated(job.postsubmit.JobBase, jobconfig.Prowgen)
+			if err != nil {
+				return nil, err
+			}
 			job.metadata.Variant = rehearse.VariantFromLabels(job.postsubmit.Labels)
 			prefix = jobconfig.PostsubmitPrefix
 		} else if job.periodic != nil {
 			spec = pjutil.PeriodicSpec(*job.periodic)
 			options = job.periodic.DecorationConfig.GCSConfiguration
-			generated = jobconfig.IsGenerated(job.periodic.JobBase, jobconfig.LabelProwGenGenerated)
+			generated, err = jobconfig.IsGenerated(job.periodic.JobBase, jobconfig.Prowgen)
+			if err != nil {
+				return nil, err
+			}
 			job.metadata.Variant = rehearse.VariantFromLabels(job.periodic.Labels)
 			prefix = jobconfig.PeriodicPrefix
 		} else {
@@ -270,7 +284,7 @@ func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClie
 		})
 	}
 	if blocks == nil {
-		return nil
+		return nil, nil
 	}
 	return append([]slack.Block{&slack.SectionBlock{
 		Type: slack.MBTSection,
@@ -278,7 +292,7 @@ func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClie
 			Type: slack.PlainTextType,
 			Text: "It looks like you mentioned a job result in your message. Here is some helpful information:",
 		},
-	}}, blocks...)
+	}}, blocks...), nil
 }
 
 type jobInfo struct {

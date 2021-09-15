@@ -9,7 +9,7 @@ periodics:
     org: super
     repo: duper
   labels:
-    ci-operator.openshift.io/prowgen-controlled: "true"
+    ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
   name: periodic-ci-super-duper-master-e2e-aws-nightly
   spec:
@@ -79,7 +79,7 @@ periodics:
     repo: duper
   interval: 24h
   labels:
-    ci-operator.openshift.io/prowgen-controlled: "true"
+    ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
   name: periodic-ci-super-duper-master-e2e-aws-nightly-interval
   spec:
@@ -149,7 +149,7 @@ periodics:
     org: super
     repo: duper
   labels:
-    ci-operator.openshift.io/prowgen-controlled: "true"
+    ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
   name: periodic-ci-super-duper-master-e2e-nightly
   spec:
@@ -221,8 +221,8 @@ periodics:
     org: super
     repo: duper
   labels:
-    ci-operator.openshift.io/prowgen-controlled: "true"
     ci-operator.openshift.io/release-controller: "true"
+    ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
   name: periodic-ci-super-duper-master-informer
   spec:

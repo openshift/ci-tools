@@ -10,7 +10,7 @@ periodics:
     repo: duper
   hidden: true
   labels:
-    ci-operator.openshift.io/prowgen-controlled: "true"
+    ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
   name: periodic-ci-private-duper-master-e2e-nightly
   spec:

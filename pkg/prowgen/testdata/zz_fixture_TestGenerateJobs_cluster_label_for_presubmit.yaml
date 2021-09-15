@@ -3,6 +3,5 @@ presubmits:
   - always_run: false
     labels:
       ci-operator.openshift.io/cluster: build01
-      ci-operator.openshift.io/prowgen-controlled: newly-generated
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
     name: pull-ci-organization-repository-branch-unit

@@ -6,7 +6,6 @@ branches:
 context: ci/prow/testname
 decorate: true
 labels:
-  ci-operator.openshift.io/prowgen-controlled: newly-generated
   job-release: "4.6"
   pj-rehearse.openshift.io/can-be-rehearsed: "true"
 name: pull-ci-org-repo-branch-testname

@@ -8,6 +8,5 @@ extra_refs:
   org: org
   repo: repo
 labels:
-  ci-operator.openshift.io/prowgen-controlled: newly-generated
   pj-rehearse.openshift.io/can-be-rehearsed: "true"
 name: periodic-ci-org-repo-branch-testname

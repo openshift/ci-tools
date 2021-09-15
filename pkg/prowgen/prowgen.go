@@ -604,8 +604,7 @@ func generateConfigMapVolume(name string, templates []string) corev1.Volume {
 }
 
 func generateJobBase(name, prefix string, info *ProwgenInfo, podSpec *corev1.PodSpec, rehearsable bool, pathAlias *string, jobRelease string, skipCloning bool, timeout *prowv1.Duration) prowconfig.JobBase {
-	labels := map[string]string{jc.LabelProwGenGenerated: string(jc.NewlyGenerated)}
-
+	labels := map[string]string{}
 	if rehearsable {
 		labels[jc.CanBeRehearsedLabel] = jc.CanBeRehearsedValue
 	}

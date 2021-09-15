@@ -8,7 +8,6 @@ decorate: true
 decoration_config:
   skip_cloning: true
 labels:
-  ci-operator.openshift.io/prowgen-controlled: newly-generated
   ci-operator.openshift.io/variant: also
   pj-rehearse.openshift.io/can-be-rehearsed: "true"
 name: pull-ci-org-repo-branch-also-testname

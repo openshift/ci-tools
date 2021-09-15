@@ -9,7 +9,7 @@ presubmits:
     decoration_config:
       skip_cloning: true
     labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.io/generator: prowgen
     name: pull-ci-super-duper-master-removed-promotion-images
     rerun_command: /test images
     spec:

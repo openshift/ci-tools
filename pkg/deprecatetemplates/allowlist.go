@@ -58,12 +58,17 @@ func (b blockedJobs) Has(job config.JobBase) bool {
 	return has
 }
 
-func (b blockedJobs) Insert(job config.JobBase) {
+func (b blockedJobs) Insert(job config.JobBase) error {
+	generated, err := jc.IsGenerated(job, jc.Prowgen)
+	if err != nil {
+		return err
+	}
 	b[job.Name] = blockedJob{
 		current:   true,
-		Generated: jc.IsGenerated(job, jc.LabelProwGenGenerated),
+		Generated: generated,
 		Kind:      getKind(job),
 	}
+	return nil
 }
 
 func (b blockedJobs) Union(other blockedJobs) blockedJobs {
@@ -92,18 +97,20 @@ type deprecatedTemplate struct {
 	Blockers       map[string]deprecatedTemplateBlocker `json:"blockers,omitempty"`
 }
 
-func (d *deprecatedTemplate) insert(job config.JobBase, defaultBlockers JiraHints) {
+func (d *deprecatedTemplate) insert(job config.JobBase, defaultBlockers JiraHints) error {
 	var knownBlocker bool
 	for _, blocker := range d.Blockers {
 		if blocker.Jobs.Has(job) {
 			// we need to insert to mark the job as 'current' so it is not pruned later
 			// we need to do this for each blocker where this job is listed
-			blocker.Jobs.Insert(job)
+			if err := blocker.Jobs.Insert(job); err != nil {
+				return err
+			}
 			knownBlocker = true
 		}
 	}
 	if knownBlocker {
-		return
+		return nil
 	}
 
 	if len(defaultBlockers) > 0 && (d.UnknownBlocker == nil || d.UnknownBlocker.Jobs == nil || !d.UnknownBlocker.Jobs.Has(job)) {
@@ -117,9 +124,11 @@ func (d *deprecatedTemplate) insert(job config.JobBase, defaultBlockers JiraHint
 					Jobs:        blockedJobs{},
 				}
 			}
-			d.Blockers[key].Jobs.Insert(job)
+			if err := d.Blockers[key].Jobs.Insert(job); err != nil {
+				return err
+			}
 		}
-		return
+		return nil
 	}
 
 	if d.UnknownBlocker == nil {
@@ -131,7 +140,7 @@ func (d *deprecatedTemplate) insert(job config.JobBase, defaultBlockers JiraHint
 		d.UnknownBlocker.newlyAdded = true
 		d.UnknownBlocker.Jobs = blockedJobs{}
 	}
-	d.UnknownBlocker.Jobs.Insert(job)
+	return d.UnknownBlocker.Jobs.Insert(job)
 }
 
 // prune removes all jobs that were not inserted into the allowlist by this

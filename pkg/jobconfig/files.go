@@ -16,6 +16,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
@@ -25,22 +27,24 @@ import (
 )
 
 type label string
+type generator string
 
 const (
-	CanBeRehearsedLabel             = "pj-rehearse.openshift.io/can-be-rehearsed"
-	CanBeRehearsedValue             = "true"
-	SSHBastionLabel                 = "dptp.openshift.io/ssh-bastion"
-	ProwJobLabelVariant             = "ci-operator.openshift.io/variant"
-	ReleaseControllerLabel          = "ci-operator.openshift.io/release-controller"
-	LabelProwGenGenerated           = "ci-operator.openshift.io/prowgen-controlled"
-	LabelClusterInitGenerated       = "ci-operator.openshift.io/cluster-init-controlled"
-	ReleaseControllerValue          = "true"
-	JobReleaseKey                   = "job-release"
-	PresubmitPrefix                 = "pull"
-	PostsubmitPrefix                = "branch"
-	PeriodicPrefix                  = "periodic"
-	Generated                 label = "true"
-	NewlyGenerated            label = "newly-generated"
+	CanBeRehearsedLabel              = "pj-rehearse.openshift.io/can-be-rehearsed"
+	CanBeRehearsedValue              = "true"
+	SSHBastionLabel                  = "dptp.openshift.io/ssh-bastion"
+	ProwJobLabelVariant              = "ci-operator.openshift.io/variant"
+	ReleaseControllerLabel           = "ci-operator.openshift.io/release-controller"
+	LabelCluster                     = "ci.openshift.io/cluster"
+	LabelGenerator                   = "ci.openshift.io/generator"
+	ReleaseControllerValue           = "true"
+	JobReleaseKey                    = "job-release"
+	PresubmitPrefix                  = "pull"
+	PostsubmitPrefix                 = "branch"
+	PeriodicPrefix                   = "periodic"
+	NewlyGenerated         label     = "newly-generated"
+	Prowgen                generator = "prowgen"
+	ClusterInit            generator = "cluster-init"
 )
 
 // SimpleBranchRegexp matches a branch name that does not appear to be a regex (lacks wildcard,
@@ -276,11 +280,13 @@ func readFromFile(path string) (*prowconfig.JobConfig, error) {
 // into files in that directory. Jobs are sharded by branch and by type. If
 // target files already exist and contain Prow job configuration, the jobs will
 // be merged. Jobs will be pruned based on the provided generatedLabels
-func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, generatedLabels ...string) error {
+func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, generator generator, matchLabels labels.Set) error {
 	allJobs := sets.String{}
 	files := map[string]*prowconfig.JobConfig{}
 	key := fmt.Sprintf("%s/%s", org, repo)
 	for _, job := range jobConfig.PresubmitsStatic[key] {
+		job.Labels[string(generator)] = string(NewlyGenerated)
+		job.Labels[LabelGenerator] = string(generator)
 		allJobs.Insert(job.Name)
 		branch := "master"
 		if len(job.Branches) > 0 {
@@ -298,6 +304,8 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 		}
 	}
 	for _, job := range jobConfig.PostsubmitsStatic[key] {
+		job.Labels[string(generator)] = string(NewlyGenerated)
+		job.Labels[LabelGenerator] = string(generator)
 		allJobs.Insert(job.Name)
 		branch := "master"
 		if len(job.Branches) > 0 {
@@ -321,6 +329,8 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 		if job.ExtraRefs[0].Org != org || job.ExtraRefs[0].Repo != repo {
 			continue
 		}
+		job.Labels[string(generator)] = string(NewlyGenerated)
+		job.Labels[LabelGenerator] = string(generator)
 		allJobs.Insert(job.Name)
 		branch := MakeRegexFilenameLabel(job.ExtraRefs[0].BaseRef)
 		file := fmt.Sprintf("%s-%s-%s-periodics.yaml", org, repo, branch)
@@ -344,13 +354,19 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 				sortConfigFields(jobConfig)
 			}
 		}
-		jobConfig = Prune(jobConfig, generatedLabels...)
+		jobConfig, err := Prune(jobConfig, generator, matchLabels)
+		if err != nil {
+			return err
+		}
 		return WriteToFile(info.Filename, jobConfig)
 	}); err != nil {
 		return err
 	}
 	for file, jobConfig := range files {
-		jobConfig = Prune(jobConfig, generatedLabels...)
+		jobConfig, err := Prune(jobConfig, generator, matchLabels)
+		if err != nil {
+			return err
+		}
 		sortConfigFields(jobConfig)
 		if err := WriteToFile(filepath.Join(jobDirForComponent, file), jobConfig); err != nil {
 			return err
@@ -612,46 +628,57 @@ func MakeRegexFilenameLabel(possibleRegex string) string {
 }
 
 // IsGenerated returns true if the job was generated according to ANY of the generatedLabels
-func IsGenerated(job prowconfig.JobBase, generatedLabels ...string) bool {
-	for _, generatedLabel := range generatedLabels {
-		if _, generated := job.Labels[generatedLabel]; generated {
-			return true
-		}
+func IsGenerated(job prowconfig.JobBase, generator generator) (bool, error) {
+	requirement, err := labels.NewRequirement(LabelGenerator, selection.Equals, []string{string(generator)})
+	if err != nil {
+		return false, err
 	}
-	return false
+	return labels.NewSelector().Add(*requirement).Matches(labels.Set(job.Labels)), nil
 }
 
-func isStale(job prowconfig.JobBase, generatedLabels ...string) bool {
-	for _, generatedLabel := range generatedLabels {
-		if value, generated := job.Labels[generatedLabel]; generated && value != string(NewlyGenerated) {
-			return true
-		}
+func isStale(job prowconfig.JobBase, generator generator, pruneLabels labels.Set) (bool, error) {
+	notNewlyGenerated, err := labels.NewRequirement(string(generator), selection.NotEquals, []string{string(NewlyGenerated)})
+	if err != nil {
+		return false, err
 	}
-	return false
+	generatedByGenerator, err := labels.NewRequirement(LabelGenerator, selection.Equals, []string{string(generator)})
+	if err != nil {
+		return false, err
+	}
+	ls := labels.NewSelector().Add(*notNewlyGenerated).Add(*generatedByGenerator)
+	for label, value := range pruneLabels {
+		req, err := labels.NewRequirement(label, selection.Equals, []string{value})
+		if err != nil {
+			return false, err
+		}
+		ls = ls.Add(*req)
+	}
+	return ls.Matches(labels.Set(job.Labels)), nil
 }
 
 // Prune removes all generated jobs that include the supplied generatedLabels with values that
 // are NOT newly-generated.
 // All remaining generated jobs will be labeled as simply "generated" and
 // Prune() returns the resulting job config (which may even be completely empty).
-func Prune(jobConfig *prowconfig.JobConfig, generatedLabels ...string) *prowconfig.JobConfig {
+func Prune(jobConfig *prowconfig.JobConfig, generator generator, pruneLabels labels.Set) (*prowconfig.JobConfig, error) {
 	var pruned prowconfig.JobConfig
 
 	for repo, jobs := range jobConfig.PresubmitsStatic {
 		for _, job := range jobs {
-			if isStale(job.JobBase, generatedLabels...) {
+			stale, err := isStale(job.JobBase, generator, pruneLabels)
+			if err != nil {
+				return nil, err
+			}
+			if stale {
 				continue
 			}
-
-			if IsGenerated(job.JobBase, generatedLabels...) {
-				for _, generatedLabel := range generatedLabels {
-					if _, exists := job.Labels[generatedLabel]; exists {
-						job.Labels[generatedLabel] = string(Generated)
-					}
-				}
-
+			generated, err := IsGenerated(job.JobBase, generator)
+			if err != nil {
+				return nil, err
 			}
-
+			if generated {
+				delete(job.Labels, string(generator))
+			}
 			if pruned.PresubmitsStatic == nil {
 				pruned.PresubmitsStatic = map[string][]prowconfig.Presubmit{}
 			}
@@ -662,15 +689,19 @@ func Prune(jobConfig *prowconfig.JobConfig, generatedLabels ...string) *prowconf
 
 	for repo, jobs := range jobConfig.PostsubmitsStatic {
 		for _, job := range jobs {
-			if isStale(job.JobBase, generatedLabels...) {
+			stale, err := isStale(job.JobBase, generator, pruneLabels)
+			if err != nil {
+				return nil, err
+			}
+			if stale {
 				continue
 			}
-			if IsGenerated(job.JobBase, generatedLabels...) {
-				for _, generatedLabel := range generatedLabels {
-					if _, exists := job.Labels[generatedLabel]; exists {
-						job.Labels[generatedLabel] = string(Generated)
-					}
-				}
+			generated, err := IsGenerated(job.JobBase, generator)
+			if err != nil {
+				return nil, err
+			}
+			if generated {
+				delete(job.Labels, string(generator))
 			}
 			if pruned.PostsubmitsStatic == nil {
 				pruned.PostsubmitsStatic = map[string][]prowconfig.Postsubmit{}
@@ -681,19 +712,22 @@ func Prune(jobConfig *prowconfig.JobConfig, generatedLabels ...string) *prowconf
 	}
 
 	for _, job := range jobConfig.Periodics {
-		if isStale(job.JobBase, generatedLabels...) {
+		stale, err := isStale(job.JobBase, generator, pruneLabels)
+		if err != nil {
+			return nil, err
+		}
+		if stale {
 			continue
 		}
-		if IsGenerated(job.JobBase, generatedLabels...) {
-			for _, generatedLabel := range generatedLabels {
-				if _, exists := job.Labels[generatedLabel]; exists {
-					job.Labels[generatedLabel] = string(Generated)
-				}
-			}
+		generated, err := IsGenerated(job.JobBase, generator)
+		if err != nil {
+			return nil, err
 		}
-
+		if generated {
+			delete(job.Labels, string(generator))
+		}
 		pruned.Periodics = append(pruned.Periodics, job)
 	}
 
-	return &pruned
+	return &pruned, nil
 }

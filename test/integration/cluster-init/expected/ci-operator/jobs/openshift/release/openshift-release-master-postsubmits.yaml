@@ -42,8 +42,8 @@ postsubmits:
     cluster: app.ci
     decorate: true
     labels:
-      ci-operator.openshift.io/cluster-init-controlled: "true"
-      ci-operator.openshift.io/cluster-init-controlled-newCluster: "true"
+      ci.openshift.io/cluster: newCluster
+      ci.openshift.io/generator: cluster-init
       ci.openshift.io/role: infra
     max_concurrency: 1
     name: branch-ci-openshift-release-master-newCluster-apply

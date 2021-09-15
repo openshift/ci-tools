@@ -1,7 +1,7 @@
 periodics:
 - agent: kubernetes
   labels:
-    ci-operator.openshift.io/prowgen-controlled: "true"
+    ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
   cron: '@yearly'
   extra_refs:
@@ -59,7 +59,7 @@ periodics:
             name: cluster-secrets-aws
 - agent: kubernetes
   labels:
-    ci-operator.openshift.io/prowgen-controlled: "true"
+    ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
   cron: '@yearly'
   extra_refs:

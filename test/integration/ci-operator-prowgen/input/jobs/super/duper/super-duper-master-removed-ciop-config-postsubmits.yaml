@@ -9,7 +9,7 @@ postsubmits:
     decoration_config:
       skip_cloning: true
     labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.io/generator: prowgen
     name: branch-ci-super-duper-master-removed-promotion-images
     spec:
       containers:

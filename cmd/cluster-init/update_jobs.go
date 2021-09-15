@@ -36,7 +36,8 @@ func updateJobs(o options) error {
 		metadata.Org,
 		metadata.Repo,
 		&config,
-		clusterInitControlledLabelFor(o.clusterName))
+		jobconfig.ClusterInit,
+		map[string]string{jobconfig.LabelCluster: o.clusterName})
 }
 
 func generatePeriodic(clusterName string) prowconfig.Periodic {
@@ -64,9 +65,8 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 				}},
 			},
 			Labels: map[string]string{
-				labelRole: jobRoleInfra,
-				clusterInitControlledLabelFor(clusterName): string(jobconfig.NewlyGenerated),
-				jobconfig.LabelClusterInitGenerated:        "true",
+				labelRole:              jobRoleInfra,
+				jobconfig.LabelCluster: clusterName,
 			},
 		},
 		Interval: "12h",
@@ -91,9 +91,8 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 			},
 			MaxConcurrency: 1,
 			Labels: map[string]string{
-				labelRole: jobRoleInfra,
-				clusterInitControlledLabelFor(clusterName): string(jobconfig.NewlyGenerated),
-				jobconfig.LabelClusterInitGenerated:        "true",
+				labelRole:              jobRoleInfra,
+				jobconfig.LabelCluster: clusterName,
 			},
 		},
 		Brancher: prowconfig.Brancher{
@@ -126,9 +125,8 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 			},
 			UtilityConfig: prowconfig.UtilityConfig{Decorate: utilpointer.BoolPtr(true)},
 			Labels: map[string]string{
-				jobconfig.CanBeRehearsedLabel:              "true",
-				clusterInitControlledLabelFor(clusterName): string(jobconfig.NewlyGenerated),
-				jobconfig.LabelClusterInitGenerated:        "true",
+				jobconfig.CanBeRehearsedLabel: "true",
+				jobconfig.LabelCluster:        clusterName,
 			},
 		},
 		AlwaysRun:    true,
@@ -181,8 +179,4 @@ func generateContainer(image, clusterName string, extraArgs []string, extraVolum
 			MountPath: "/etc/build-farm-credentials"}},
 			extraVolumeMounts...),
 	}
-}
-
-func clusterInitControlledLabelFor(cluster string) string {
-	return fmt.Sprintf("%s-%s", jobconfig.LabelClusterInitGenerated, cluster)
 }

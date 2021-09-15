@@ -8,7 +8,7 @@ postsubmits:
       skip_cloning: true
     labels:
       ci-operator.openshift.io/is-promotion: "true"
-      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.io/generator: prowgen
     max_concurrency: 1
     name: branch-ci-super-duper-master-images
     spec:
@@ -66,7 +66,7 @@ postsubmits:
     decoration_config:
       skip_cloning: true
     labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.io/generator: prowgen
     max_concurrency: 1
     name: branch-ci-super-duper-master-upload-results
     spec:
@@ -110,8 +110,8 @@ postsubmits:
       skip_cloning: true
     labels:
       ci-operator.openshift.io/is-promotion: "true"
-      ci-operator.openshift.io/prowgen-controlled: "true"
       ci-operator.openshift.io/variant: variant
+      ci.openshift.io/generator: prowgen
     max_concurrency: 1
     name: branch-ci-super-duper-master-variant-images
     path_alias: whoa.com/super/duper

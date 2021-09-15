@@ -54,11 +54,12 @@ type mockAllowlist struct {
 	getTemplates map[string]*deprecatedTemplate
 }
 
-func (m *mockAllowlist) Insert(job config.JobBase, template string) {
+func (m *mockAllowlist) Insert(job config.JobBase, template string) error {
 	if _, ok := m.jobs[template]; !ok {
 		m.jobs[template] = sets.NewString()
 	}
 	m.jobs[template].Insert(job.Name)
+	return nil
 }
 
 func (m *mockAllowlist) Save(_ string) error {
@@ -161,12 +162,14 @@ func TestProcessJobs(t *testing.T) {
 				existingTemplates: sets.NewString(template),
 				allowlist:         &mock,
 			}
-			enforcer.ProcessJobs(mockJobs)
+			if err := enforcer.ProcessJobs(mockJobs); err != nil {
+				t.Fatalf("error received: %v", err)
+			}
 
 			if jobs, ok := mock.jobs[template]; !ok {
-				t.Errorf("%s: no record added for template '%s'", tc.description, template)
+				t.Fatalf("%s: no record added for template '%s'", tc.description, template)
 			} else if diff := cmp.Diff(jobs, tc.inserted); diff != "" {
-				t.Errorf("%s: inserted jobs differ:\n%s", tc.description, diff)
+				t.Fatalf("%s: inserted jobs differ:\n%s", tc.description, diff)
 			}
 		})
 	}

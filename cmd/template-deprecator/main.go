@@ -105,7 +105,9 @@ func main() {
 	}
 
 	enforcer.LoadTemplates(pluginCfg)
-	enforcer.ProcessJobs(prowCfg)
+	if err := enforcer.ProcessJobs(prowCfg); err != nil {
+		logrus.WithError(err).Fatal("Failed process jobs")
+	}
 
 	if opt.prune {
 		enforcer.Prune()

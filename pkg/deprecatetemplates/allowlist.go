@@ -240,7 +240,7 @@ func (d *deprecatedTemplate) Stats() (total, unknown statsLine, blockers []stats
 }
 
 type Allowlist interface {
-	Insert(job config.JobBase, template string)
+	Insert(job config.JobBase, template string) error
 	Save(path string) error
 	Prune()
 	GetTemplates() map[string]*deprecatedTemplate
@@ -265,7 +265,7 @@ func (a *allowlist) Prune() {
 	}
 }
 
-func (a *allowlist) Insert(job config.JobBase, template string) {
+func (a *allowlist) Insert(job config.JobBase, template string) error {
 	if a.Templates == nil {
 		a.Templates = map[string]*deprecatedTemplate{}
 	}
@@ -280,7 +280,7 @@ func (a *allowlist) Insert(job config.JobBase, template string) {
 		}
 	}
 
-	a.Templates[template].insert(job, a.newJobBlockers)
+	return a.Templates[template].insert(job, a.newJobBlockers)
 }
 
 func loadAllowlist(allowlistPath string) (Allowlist, error) {

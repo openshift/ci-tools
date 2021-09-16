@@ -643,15 +643,15 @@ func generatedSelectorFor(generator Generator) (labels.Selector, error) {
 }
 
 func staleSelectorFor(generator Generator, pruneLabels labels.Set) (labels.Selector, error) {
+	ls, err := generatedSelectorFor(generator)
+	if err != nil {
+		return nil, err
+	}
 	notNewlyGenerated, err := labels.NewRequirement(string(generator), selection.NotEquals, []string{string(newlyGenerated)})
 	if err != nil {
 		return nil, err
 	}
-	generatedByGenerator, err := labels.NewRequirement(LabelGenerator, selection.Equals, []string{string(generator)})
-	if err != nil {
-		return nil, err
-	}
-	ls := labels.NewSelector().Add(*notNewlyGenerated).Add(*generatedByGenerator)
+	ls = ls.Add(*notNewlyGenerated)
 	for label, value := range pruneLabels {
 		req, err := labels.NewRequirement(label, selection.Equals, []string{value})
 		if err != nil {

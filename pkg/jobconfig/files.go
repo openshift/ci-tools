@@ -670,19 +670,26 @@ func Prune(jobConfig *prowconfig.JobConfig, generator Generator, pruneLabels lab
 	if err != nil {
 		return nil, err
 	}
+	isStale := func(job prowconfig.JobBase) bool {
+		return staleSelector.Matches(labels.Set(job.Labels))
+	}
 	generatedSelector, err := generatedSelectorFor(generator)
 	if err != nil {
 		return nil, err
 	}
+	isGenerated := func(job prowconfig.JobBase) bool {
+		return generatedSelector.Matches(labels.Set(job.Labels))
+	}
 
 	for repo, jobs := range jobConfig.PresubmitsStatic {
 		for _, job := range jobs {
-			if staleSelector.Matches(labels.Set(job.Labels)) {
+			if isStale(job.JobBase) {
 				continue
 			}
-			if generatedSelector.Matches(labels.Set(job.Labels)) {
+			if isGenerated(job.JobBase) {
 				delete(job.Labels, string(generator))
 			}
+
 			if pruned.PresubmitsStatic == nil {
 				pruned.PresubmitsStatic = map[string][]prowconfig.Presubmit{}
 			}
@@ -693,10 +700,10 @@ func Prune(jobConfig *prowconfig.JobConfig, generator Generator, pruneLabels lab
 
 	for repo, jobs := range jobConfig.PostsubmitsStatic {
 		for _, job := range jobs {
-			if staleSelector.Matches(labels.Set(job.Labels)) {
+			if isStale(job.JobBase) {
 				continue
 			}
-			if generatedSelector.Matches(labels.Set(job.Labels)) {
+			if isGenerated(job.JobBase) {
 				delete(job.Labels, string(generator))
 			}
 			if pruned.PostsubmitsStatic == nil {
@@ -708,12 +715,13 @@ func Prune(jobConfig *prowconfig.JobConfig, generator Generator, pruneLabels lab
 	}
 
 	for _, job := range jobConfig.Periodics {
-		if staleSelector.Matches(labels.Set(job.Labels)) {
+		if isStale(job.JobBase) {
 			continue
 		}
-		if generatedSelector.Matches(labels.Set(job.Labels)) {
+		if isGenerated(job.JobBase) {
 			delete(job.Labels, string(generator))
 		}
+
 		pruned.Periodics = append(pruned.Periodics, job)
 	}
 

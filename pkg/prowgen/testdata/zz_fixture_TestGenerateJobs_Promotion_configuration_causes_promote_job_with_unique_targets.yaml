@@ -8,7 +8,6 @@ postsubmits:
       skip_cloning: true
     labels:
       ci-operator.openshift.io/is-promotion: "true"
-      ci-operator.openshift.io/prowgen-controlled: newly-generated
     max_concurrency: 1
     name: branch-ci-organization-repository-branch-images
     spec:
@@ -65,7 +64,6 @@ presubmits:
     decoration_config:
       skip_cloning: true
     labels:
-      ci-operator.openshift.io/prowgen-controlled: newly-generated
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
     name: pull-ci-organization-repository-branch-images
     rerun_command: /test images

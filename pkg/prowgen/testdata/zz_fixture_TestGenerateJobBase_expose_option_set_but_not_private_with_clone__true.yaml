@@ -1,7 +1,5 @@
 agent: kubernetes
 decorate: true
-labels:
-  ci-operator.openshift.io/prowgen-controlled: newly-generated
 name: pull-ci-org-repo-branch-test
 spec:
   containers:

@@ -59,28 +59,38 @@ type jobconfig interface {
 
 // ProcessJobs reads all existing Prow jobs and makes sure all jobs that use
 // one of the existing templates are present in the allowlist.
-func (e *Enforcer) ProcessJobs(jobConfig jobconfig) {
+func (e *Enforcer) ProcessJobs(jobConfig jobconfig) error {
 
 	for _, job := range jobConfig.AllStaticPresubmits(nil) {
-		e.ingest(job.JobBase)
+		if err := e.ingest(job.JobBase); err != nil {
+			return err
+		}
 	}
 
 	for _, job := range jobConfig.AllStaticPostsubmits(nil) {
-		e.ingest(job.JobBase)
+		if err := e.ingest(job.JobBase); err != nil {
+			return err
+		}
 	}
 
 	for _, job := range jobConfig.AllPeriodics() {
-		e.ingest(job.JobBase)
-	}
-
-}
-
-func (e *Enforcer) ingest(job prowconfig.JobBase) {
-	for template := range e.existingTemplates {
-		if rehearse.UsesConfigMap(job, template) {
-			e.allowlist.Insert(job, template)
+		if err := e.ingest(job.JobBase); err != nil {
+			return err
 		}
 	}
+
+	return nil
+}
+
+func (e *Enforcer) ingest(job prowconfig.JobBase) error {
+	for template := range e.existingTemplates {
+		if rehearse.UsesConfigMap(job, template) {
+			if err := e.allowlist.Insert(job, template); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // SaveAllowlist dumps the allowlist to the given location

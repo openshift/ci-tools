@@ -8,7 +8,6 @@ extra_refs:
   org: org
   repo: repo
 labels:
-  ci-operator.openshift.io/prowgen-controlled: newly-generated
   ci-operator.openshift.io/release-controller: "true"
   job-release: "4.6"
   pj-rehearse.openshift.io/can-be-rehearsed: "true"

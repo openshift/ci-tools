@@ -212,7 +212,7 @@ func writeToDir(dir string, c map[string]*prowconfig.JobConfig) error {
 			for x := range ch {
 				i := strings.Index(x.k, "/")
 				org, repo := x.k[:i], x.k[i+1:]
-				if err := jc.WriteToDir(dir, org, repo, x.v); err != nil {
+				if err := jc.WriteToDir(dir, org, repo, x.v, prowgen.Generator, nil); err != nil {
 					errChan <- err
 				}
 			}

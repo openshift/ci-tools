@@ -59,7 +59,7 @@ presubmits:
     context: ci/prow/images
     decorate: true
     labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.io/generator: prowgen
     max_concurrency: 100
     name: pull-ci-super-duper-master-should-be-removed
     optional: true

@@ -202,9 +202,11 @@ func TestDeprecatedTemplateInsert(t *testing.T) {
 	allowUnexported := cmp.AllowUnexported(blockedJob{}, deprecatedTemplateBlocker{})
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			tc.existingDT.insert(config.JobBase{Name: job}, tc.blockers)
+			if err := tc.existingDT.insert(config.JobBase{Name: job}, tc.blockers); err != nil {
+				t.Fatalf("received error: %v", err)
+			}
 			if diff := cmp.Diff(tc.existingDT, tc.expectedDT, allowUnexported); diff != "" {
-				t.Errorf("%s: deprecated template record differs from expected:\n%s", tc.description, diff)
+				t.Fatalf("%s: deprecated template record differs from expected:\n%s", tc.description, diff)
 			}
 		})
 	}
@@ -306,10 +308,12 @@ func TestAllowlistInsert(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			actual := allowlist{Templates: tc.before}
-			actual.Insert(config.JobBase{Name: job}, template)
+			if err := actual.Insert(config.JobBase{Name: job}, template); err != nil {
+				t.Fatalf("received error: %v", err)
+			}
 			expected := allowlist{Templates: tc.expectedAfter}
 			if diff := cmp.Diff(&expected, &actual, ignoreUnexported); diff != "" {
-				t.Errorf("%s: allowlist differs from expected:\n%s", tc.description, diff)
+				t.Fatalf("%s: allowlist differs from expected:\n%s", tc.description, diff)
 			}
 		})
 	}

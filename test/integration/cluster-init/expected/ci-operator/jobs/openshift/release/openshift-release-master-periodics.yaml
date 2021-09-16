@@ -8,6 +8,7 @@ periodics:
     repo: release
   interval: 12h
   labels:
+    ci.openshift.io/generator: prowgen
     ci.openshift.io/role: infra
   name: periodic-openshift-release-master-build01-apply
   spec:
@@ -46,6 +47,8 @@ periodics:
     repo: release
   interval: 12h
   labels:
+    ci.openshift.io/cluster: newCluster
+    ci.openshift.io/generator: cluster-init
     ci.openshift.io/role: infra
   name: periodic-openshift-release-master-newCluster-apply
   spec:

@@ -4,6 +4,4 @@ branches:
 decorate: true
 decoration_config:
   skip_cloning: true
-labels:
-  ci-operator.openshift.io/prowgen-controlled: newly-generated
 name: branch-ci-Organization-Repository-Branch-Uppercase org, repo and branch

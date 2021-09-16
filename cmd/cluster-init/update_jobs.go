@@ -15,9 +15,10 @@ import (
 )
 
 const (
-	latestImage  = api.ServiceDomainAPPCIRegistry + "/ci/applyconfig:latest"
-	labelRole    = "ci.openshift.io/role"
-	jobRoleInfra = "infra"
+	latestImage                      = api.ServiceDomainAPPCIRegistry + "/ci/applyconfig:latest"
+	labelRole                        = "ci.openshift.io/role"
+	jobRoleInfra                     = "infra"
+	generator    jobconfig.Generator = "cluster-init"
 )
 
 func updateJobs(o options) error {
@@ -31,7 +32,13 @@ func updateJobs(o options) error {
 		Periodics: []prowconfig.Periodic{generatePeriodic(o.clusterName)},
 	}
 	metadata := RepoMetadata()
-	return jobconfig.WriteToDir(filepath.Join(o.releaseRepo, "ci-operator", "jobs"), metadata.Org, metadata.Repo, &config)
+	jobsDir := filepath.Join(o.releaseRepo, "ci-operator", "jobs")
+	return jobconfig.WriteToDir(jobsDir,
+		metadata.Org,
+		metadata.Repo,
+		&config,
+		generator,
+		map[string]string{jobconfig.LabelCluster: o.clusterName})
 }
 
 func generatePeriodic(clusterName string) prowconfig.Periodic {
@@ -59,7 +66,8 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 				}},
 			},
 			Labels: map[string]string{
-				labelRole: jobRoleInfra,
+				labelRole:              jobRoleInfra,
+				jobconfig.LabelCluster: clusterName,
 			},
 		},
 		Interval: "12h",
@@ -84,7 +92,8 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 			},
 			MaxConcurrency: 1,
 			Labels: map[string]string{
-				labelRole: jobRoleInfra,
+				labelRole:              jobRoleInfra,
+				jobconfig.LabelCluster: clusterName,
 			},
 		},
 		Brancher: prowconfig.Brancher{
@@ -118,6 +127,7 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 			UtilityConfig: prowconfig.UtilityConfig{Decorate: utilpointer.BoolPtr(true)},
 			Labels: map[string]string{
 				jobconfig.CanBeRehearsedLabel: "true",
+				jobconfig.LabelCluster:        clusterName,
 			},
 		},
 		AlwaysRun:    true,

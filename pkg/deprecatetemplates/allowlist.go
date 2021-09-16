@@ -13,6 +13,7 @@ import (
 	"k8s.io/test-infra/prow/config"
 
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/prowgen"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
@@ -58,12 +59,17 @@ func (b blockedJobs) Has(job config.JobBase) bool {
 	return has
 }
 
-func (b blockedJobs) Insert(job config.JobBase) {
+func (b blockedJobs) Insert(job config.JobBase) error {
+	generated, err := jc.IsGenerated(job, prowgen.Generator)
+	if err != nil {
+		return err
+	}
 	b[job.Name] = blockedJob{
 		current:   true,
-		Generated: jc.IsGenerated(job),
+		Generated: generated,
 		Kind:      getKind(job),
 	}
+	return nil
 }
 
 func (b blockedJobs) Union(other blockedJobs) blockedJobs {
@@ -92,18 +98,20 @@ type deprecatedTemplate struct {
 	Blockers       map[string]deprecatedTemplateBlocker `json:"blockers,omitempty"`
 }
 
-func (d *deprecatedTemplate) insert(job config.JobBase, defaultBlockers JiraHints) {
+func (d *deprecatedTemplate) insert(job config.JobBase, defaultBlockers JiraHints) error {
 	var knownBlocker bool
 	for _, blocker := range d.Blockers {
 		if blocker.Jobs.Has(job) {
 			// we need to insert to mark the job as 'current' so it is not pruned later
 			// we need to do this for each blocker where this job is listed
-			blocker.Jobs.Insert(job)
+			if err := blocker.Jobs.Insert(job); err != nil {
+				return err
+			}
 			knownBlocker = true
 		}
 	}
 	if knownBlocker {
-		return
+		return nil
 	}
 
 	if len(defaultBlockers) > 0 && (d.UnknownBlocker == nil || d.UnknownBlocker.Jobs == nil || !d.UnknownBlocker.Jobs.Has(job)) {
@@ -117,9 +125,11 @@ func (d *deprecatedTemplate) insert(job config.JobBase, defaultBlockers JiraHint
 					Jobs:        blockedJobs{},
 				}
 			}
-			d.Blockers[key].Jobs.Insert(job)
+			if err := d.Blockers[key].Jobs.Insert(job); err != nil {
+				return err
+			}
 		}
-		return
+		return nil
 	}
 
 	if d.UnknownBlocker == nil {
@@ -131,7 +141,7 @@ func (d *deprecatedTemplate) insert(job config.JobBase, defaultBlockers JiraHint
 		d.UnknownBlocker.newlyAdded = true
 		d.UnknownBlocker.Jobs = blockedJobs{}
 	}
-	d.UnknownBlocker.Jobs.Insert(job)
+	return d.UnknownBlocker.Jobs.Insert(job)
 }
 
 // prune removes all jobs that were not inserted into the allowlist by this
@@ -231,7 +241,7 @@ func (d *deprecatedTemplate) Stats() (total, unknown statsLine, blockers []stats
 }
 
 type Allowlist interface {
-	Insert(job config.JobBase, template string)
+	Insert(job config.JobBase, template string) error
 	Save(path string) error
 	Prune()
 	GetTemplates() map[string]*deprecatedTemplate
@@ -256,7 +266,7 @@ func (a *allowlist) Prune() {
 	}
 }
 
-func (a *allowlist) Insert(job config.JobBase, template string) {
+func (a *allowlist) Insert(job config.JobBase, template string) error {
 	if a.Templates == nil {
 		a.Templates = map[string]*deprecatedTemplate{}
 	}
@@ -271,7 +281,7 @@ func (a *allowlist) Insert(job config.JobBase, template string) {
 		}
 	}
 
-	a.Templates[template].insert(job, a.newJobBlockers)
+	return a.Templates[template].insert(job, a.newJobBlockers)
 }
 
 func loadAllowlist(allowlistPath string) (Allowlist, error) {

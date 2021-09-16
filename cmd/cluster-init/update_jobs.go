@@ -15,9 +15,10 @@ import (
 )
 
 const (
-	latestImage  = api.ServiceDomainAPPCIRegistry + "/ci/applyconfig:latest"
-	labelRole    = "ci.openshift.io/role"
-	jobRoleInfra = "infra"
+	latestImage                      = api.ServiceDomainAPPCIRegistry + "/ci/applyconfig:latest"
+	labelRole                        = "ci.openshift.io/role"
+	jobRoleInfra                     = "infra"
+	generator    jobconfig.Generator = "cluster-init"
 )
 
 func updateJobs(o options) error {
@@ -36,7 +37,7 @@ func updateJobs(o options) error {
 		metadata.Org,
 		metadata.Repo,
 		&config,
-		jobconfig.ClusterInit,
+		generator,
 		map[string]string{jobconfig.LabelCluster: o.clusterName})
 }
 

@@ -22,8 +22,9 @@ import (
 )
 
 const (
-	oauthTokenPath = "/usr/local/github-credentials"
-	oauthKey       = "oauth"
+	oauthTokenPath              = "/usr/local/github-credentials"
+	oauthKey                    = "oauth"
+	Generator      jc.Generator = "prowgen"
 )
 
 type ProwgenInfo struct {

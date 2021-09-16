@@ -26,6 +26,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/prowgen"
 	"github.com/openshift/ci-tools/pkg/rehearse"
 	"github.com/openshift/ci-tools/pkg/slack/events"
 )
@@ -200,7 +201,7 @@ func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClie
 		if job.presubmit != nil {
 			spec = pjutil.PresubmitSpec(*job.presubmit, prowapi.Refs{})
 			options = job.presubmit.DecorationConfig.GCSConfiguration
-			generated, err = jobconfig.IsGenerated(job.presubmit.JobBase, jobconfig.Prowgen)
+			generated, err = jobconfig.IsGenerated(job.presubmit.JobBase, prowgen.Generator)
 			if err != nil {
 				return nil, err
 			}
@@ -209,7 +210,7 @@ func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClie
 		} else if job.postsubmit != nil {
 			spec = pjutil.PostsubmitSpec(*job.postsubmit, prowapi.Refs{})
 			options = job.postsubmit.DecorationConfig.GCSConfiguration
-			generated, err = jobconfig.IsGenerated(job.postsubmit.JobBase, jobconfig.Prowgen)
+			generated, err = jobconfig.IsGenerated(job.postsubmit.JobBase, prowgen.Generator)
 			if err != nil {
 				return nil, err
 			}
@@ -218,7 +219,7 @@ func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClie
 		} else if job.periodic != nil {
 			spec = pjutil.PeriodicSpec(*job.periodic)
 			options = job.periodic.DecorationConfig.GCSConfiguration
-			generated, err = jobconfig.IsGenerated(job.periodic.JobBase, jobconfig.Prowgen)
+			generated, err = jobconfig.IsGenerated(job.periodic.JobBase, prowgen.Generator)
 			if err != nil {
 				return nil, err
 			}

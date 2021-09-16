@@ -13,6 +13,7 @@ import (
 	"k8s.io/test-infra/prow/config"
 
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/prowgen"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
@@ -59,7 +60,7 @@ func (b blockedJobs) Has(job config.JobBase) bool {
 }
 
 func (b blockedJobs) Insert(job config.JobBase) error {
-	generated, err := jc.IsGenerated(job, jc.Prowgen)
+	generated, err := jc.IsGenerated(job, prowgen.Generator)
 	if err != nil {
 		return err
 	}

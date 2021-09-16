@@ -828,7 +828,7 @@ func TestPrune(t *testing.T) {
 	testCases := []struct {
 		name      string
 		jobconfig *prowconfig.JobConfig
-		generator
+		Generator
 		pruneLabels    labels.Set
 		expectedConfig *prowconfig.JobConfig
 	}{
@@ -836,33 +836,33 @@ func TestPrune(t *testing.T) {
 			name: "stale generated presubmit is pruned",
 			jobconfig: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{
-					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{LabelGenerator: string(Prowgen)}}}},
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{LabelGenerator: "prowgen"}}}},
 				},
 			},
-			generator:      Prowgen,
+			Generator:      "prowgen",
 			expectedConfig: &prowconfig.JobConfig{},
 		},
 		{
 			name: "stale generated postsubmit is pruned",
 			jobconfig: &prowconfig.JobConfig{
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
-					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{LabelGenerator: string(Prowgen)}}}},
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{LabelGenerator: "prowgen"}}}},
 				},
 			},
-			generator:      Prowgen,
+			Generator:      "prowgen",
 			expectedConfig: &prowconfig.JobConfig{},
 		},
 		{
 			name: "not stale generated presubmit is kept",
 			jobconfig: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{
-					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{string(Prowgen): string(NewlyGenerated)}}}},
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{"prowgen": string(newlyGenerated)}}}},
 				},
 			},
-			generator: Prowgen,
+			Generator: "prowgen",
 			expectedConfig: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{
-					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{string(Prowgen): string(NewlyGenerated)}}}},
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{"prowgen": string(newlyGenerated)}}}},
 				},
 			},
 		},
@@ -870,13 +870,13 @@ func TestPrune(t *testing.T) {
 			name: "not stale generated postsubmit is kept",
 			jobconfig: &prowconfig.JobConfig{
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
-					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{string(Prowgen): string(NewlyGenerated)}}}},
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{"prowgen": string(newlyGenerated)}}}},
 				},
 			},
-			generator: Prowgen,
+			Generator: "prowgen",
 			expectedConfig: &prowconfig.JobConfig{
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
-					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{string(Prowgen): string(NewlyGenerated)}}}},
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{"prowgen": string(newlyGenerated)}}}},
 				},
 			},
 		},
@@ -887,7 +887,7 @@ func TestPrune(t *testing.T) {
 					"repo": {{JobBase: prowconfig.JobBase{Name: "job"}}},
 				},
 			},
-			generator: Prowgen,
+			Generator: "prowgen",
 			expectedConfig: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{
 					"repo": {{JobBase: prowconfig.JobBase{Name: "job"}}},
@@ -901,7 +901,7 @@ func TestPrune(t *testing.T) {
 					"repo": {{JobBase: prowconfig.JobBase{Name: "job"}}},
 				},
 			},
-			generator: Prowgen,
+			Generator: "prowgen",
 			expectedConfig: &prowconfig.JobConfig{
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
 					"repo": {{JobBase: prowconfig.JobBase{Name: "job"}}},
@@ -913,13 +913,13 @@ func TestPrune(t *testing.T) {
 			jobconfig: &prowconfig.JobConfig{
 				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{
 					Name:   "job",
-					Labels: map[string]string{string(Prowgen): string(NewlyGenerated)}}}},
+					Labels: map[string]string{"prowgen": string(newlyGenerated)}}}},
 			},
-			generator: Prowgen,
+			Generator: "prowgen",
 			expectedConfig: &prowconfig.JobConfig{
 				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{
 					Name:   "job",
-					Labels: map[string]string{string(Prowgen): string(NewlyGenerated)}}}},
+					Labels: map[string]string{"prowgen": string(newlyGenerated)}}}},
 			},
 		},
 		{
@@ -927,13 +927,13 @@ func TestPrune(t *testing.T) {
 			jobconfig: &prowconfig.JobConfig{
 				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{
 					Name:   "job",
-					Labels: map[string]string{string(Prowgen): "true"}}}},
+					Labels: map[string]string{"prowgen": "true"}}}},
 			},
-			generator: ClusterInit,
+			Generator: "cluster-init",
 			expectedConfig: &prowconfig.JobConfig{
 				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{
 					Name:   "job",
-					Labels: map[string]string{string(Prowgen): "true"}}}},
+					Labels: map[string]string{"prowgen": "true"}}}},
 			},
 		},
 		{
@@ -941,9 +941,9 @@ func TestPrune(t *testing.T) {
 			jobconfig: &prowconfig.JobConfig{
 				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{
 					Name:   "job",
-					Labels: map[string]string{LabelCluster: "existingCluster", LabelGenerator: string(ClusterInit)}}}},
+					Labels: map[string]string{LabelCluster: "existingCluster", LabelGenerator: "cluster-init"}}}},
 			},
-			generator:      ClusterInit,
+			Generator:      "cluster-init",
 			pruneLabels:    map[string]string{LabelCluster: "existingCluster"},
 			expectedConfig: &prowconfig.JobConfig{},
 		},
@@ -952,21 +952,21 @@ func TestPrune(t *testing.T) {
 			jobconfig: &prowconfig.JobConfig{
 				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{
 					Name:   "job",
-					Labels: map[string]string{LabelCluster: "existingCluster", LabelGenerator: string(ClusterInit)}}}},
+					Labels: map[string]string{LabelCluster: "existingCluster", LabelGenerator: "cluster-init"}}}},
 			},
-			generator:   ClusterInit,
+			Generator:   "cluster-init",
 			pruneLabels: map[string]string{LabelCluster: "newCluster"},
 			expectedConfig: &prowconfig.JobConfig{
 				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{
 					Name:   "job",
-					Labels: map[string]string{LabelCluster: "existingCluster", LabelGenerator: string(ClusterInit)}}}},
+					Labels: map[string]string{LabelCluster: "existingCluster", LabelGenerator: "cluster-init"}}}},
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			pruned, err := Prune(tc.jobconfig, tc.generator, tc.pruneLabels)
+			pruned, err := Prune(tc.jobconfig, tc.Generator, tc.pruneLabels)
 			if err != nil {
 				t.Fatalf("received error %v", err)
 			}
@@ -981,25 +981,25 @@ func TestIsGenerated(t *testing.T) {
 	testCases := []struct {
 		description string
 		labels      map[string]string
-		generator
-		expected bool
+		generator   Generator
+		expected    bool
 	}{
 		{
 			description: "job without any labels is not generated",
-			generator:   Prowgen,
+			generator:   "prowgen",
 			expected:    false,
 		},
 		{
 			description: "job without the generated label is not generated",
 			labels:      map[string]string{"some-label": "some-value"},
-			generator:   Prowgen,
+			generator:   "prowgen",
 			expected:    false,
 		},
 		{
 			description: "job with the generated label is generated",
-			labels:      map[string]string{LabelGenerator: string(Prowgen)},
+			labels:      map[string]string{LabelGenerator: "prowgen"},
 			expected:    true,
-			generator:   Prowgen,
+			generator:   "prowgen",
 		},
 	}
 
@@ -1016,48 +1016,48 @@ func TestIsGenerated(t *testing.T) {
 	}
 }
 
-func TestIsStale(t *testing.T) {
+func TestStaleSelectorFor(t *testing.T) {
 	testCases := []struct {
 		description string
 		labels      map[string]string
-		generator
+		generator   Generator
 		pruneLabels labels.Set
 		expected    bool
 	}{
 		{
 			description: "job without any labels and expecting some label is not stale",
-			generator:   Prowgen,
+			generator:   "prowgen",
 			expected:    false,
 		},
 		{
 			description: "job with expected label is stale",
-			labels:      map[string]string{LabelGenerator: string(Prowgen)},
-			generator:   Prowgen,
+			labels:      map[string]string{LabelGenerator: "prowgen"},
+			generator:   "prowgen",
 			expected:    true,
 		},
 		{
 			description: "job with expected label, newly generated, is not stale",
-			labels:      map[string]string{string(Prowgen): string(NewlyGenerated)},
-			generator:   Prowgen,
+			labels:      map[string]string{"prowgen": string(newlyGenerated)},
+			generator:   "prowgen",
 			expected:    false,
 		},
 		{
 			description: "job with label other than expected label, is not stale",
-			labels:      map[string]string{string(Prowgen): string(NewlyGenerated)},
-			generator:   ClusterInit,
+			labels:      map[string]string{"prowgen": string(newlyGenerated)},
+			generator:   "cluster-init",
 			expected:    false,
 		},
 		{
 			description: "job with existing cluster label is not stale",
-			labels:      map[string]string{LabelGenerator: string(ClusterInit), LabelCluster: "existingCluster"},
-			generator:   ClusterInit,
+			labels:      map[string]string{LabelGenerator: "cluster-init", LabelCluster: "existingCluster"},
+			generator:   "cluster-init",
 			pruneLabels: map[string]string{LabelCluster: "newCluster"},
 			expected:    false,
 		},
 		{
 			description: "job with passed in cluster label is stale",
-			labels:      map[string]string{LabelGenerator: string(ClusterInit), LabelCluster: "newCluster"},
-			generator:   ClusterInit,
+			labels:      map[string]string{LabelGenerator: "cluster-init", LabelCluster: "newCluster"},
+			generator:   "cluster-init",
 			pruneLabels: map[string]string{LabelCluster: "newCluster"},
 			expected:    true,
 		},
@@ -1065,10 +1065,11 @@ func TestIsStale(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			stale, err := isStale(prowconfig.JobBase{Labels: tc.labels}, tc.generator, tc.pruneLabels)
+			staleSelector, err := staleSelectorFor(tc.generator, tc.pruneLabels)
 			if err != nil {
 				t.Fatalf("received error %v", err)
 			}
+			stale := staleSelector.Matches(labels.Set(tc.labels))
 			if stale != tc.expected {
 				t.Fatalf("%s: expected %t, got %t", tc.description, tc.expected, stale)
 			}

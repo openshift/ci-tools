@@ -63,6 +63,32 @@ func TestValidateOptions(t *testing.T) {
 				errors.New("build farm directory: existingCluster already exists"),
 			},
 		},
+		{
+			name: "valid update single cluster",
+			options: options{
+				clusterName: "existingCluster",
+				releaseRepo: testdata,
+				update:      true,
+			},
+		},
+		{
+			name: "valid update all clusters",
+			options: options{
+				releaseRepo: testdata,
+				update:      true,
+			},
+		},
+		{
+			name: "update single cluster doesn't exist",
+			options: options{
+				clusterName: "newCluster",
+				releaseRepo: testdata,
+				update:      true,
+			},
+			expectedErrors: []error{
+				errors.New("build farm directory: newCluster does not exist. Must exist to perform update"),
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

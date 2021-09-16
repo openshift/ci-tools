@@ -132,7 +132,7 @@ func endpoints() map[string]metadataQueryMapping {
 				{query: ContainerQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Container }},
 			},
 			postProcess: func(meta *pod_scaler.FullMetadata) {
-				meta.Pod += fmt.Sprintf("%s-%s", meta.Target, meta.Step)
+				meta.Pod = fmt.Sprintf("%s-%s", meta.Target, meta.Step)
 			},
 		},
 		"builds": {
@@ -165,6 +165,9 @@ func endpoints() map[string]metadataQueryMapping {
 				{query: VariantQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Variant }, optional: true},
 				{query: TargetQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Target }},
 				{query: ContainerQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Container }},
+			},
+			postProcess: func(meta *pod_scaler.FullMetadata) {
+				meta.Pod = meta.Target
 			},
 		},
 		"rpms": {

@@ -12,9 +12,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/test-infra/prow/cmd/generic-autobumper/bumper"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
 )
 
@@ -34,6 +36,10 @@ type options struct {
 
 	bumper.GitAuthorOptions
 	prcreation.PRCreationOptions
+}
+
+func (o options) secretBootstrapConfigFile() string {
+	return filepath.Join(o.releaseRepo, "core-services", "ci-secret-bootstrap", "_config.yaml")
 }
 
 func (o options) String() string {
@@ -56,9 +62,7 @@ func parseOptions() (options, error) {
 
 func validateOptions(o options) []error {
 	var errs []error
-	if o.clusterName == "" {
-		errs = append(errs, errors.New("--cluster-name must be provided"))
-	} else {
+	if o.clusterName != "" {
 		for _, char := range o.clusterName {
 			if unicode.IsSpace(char) {
 				errs = append(errs, errors.New("--cluster-name must not contain whitespace"))
@@ -139,6 +143,27 @@ func main() {
 		logrus.Fatalf("validation errors: %v", errorMessage)
 	}
 
+	if o.clusterName == "" {
+		logrus.Infof("validating configurations for the existing clusters")
+		clusters, err := getClusters(o)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to get any build clusters")
+		}
+		var errs []error
+		for _, step := range []func(options, []string) error{
+			validateJobs,
+			validateClusterBuildFarmDir,
+		} {
+			if err := step(o, clusters); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		if len(errs) > 0 {
+			logrus.WithError(kerrors.NewAggregate(errs)).Fatal("Failed to validate the build farm configurations")
+		}
+		return
+	}
+
 	// Each step in the process is allowed to fail independently so that the diffs for the others can still be generated
 	errorCount := 0
 	for _, step := range []func(options) error{
@@ -160,6 +185,19 @@ func main() {
 			logrus.WithError(err).Fatalf("couldn't commit changes")
 		}
 	}
+}
+
+func getClusters(o options) ([]string, error) {
+	secretBootstrapConfigFile := o.secretBootstrapConfigFile()
+	var c secretbootstrap.Config
+	if err := secretbootstrap.LoadConfigFromFile(secretBootstrapConfigFile, &c); err != nil {
+		return nil, err
+	}
+	ret := c.ClusterGroups[nonAppCiX86Group]
+	if len(ret) == 0 {
+		return nil, fmt.Errorf(".cluster_groups[non_app_ci_x86] is empty in ci-secret-bootstrap's config file: %q", secretBootstrapConfigFile)
+	}
+	return ret, nil
 }
 
 func submitPR(o options) error {
@@ -206,8 +244,61 @@ func initClusterBuildFarmDir(o options) error {
 	return nil
 }
 
+func validateClusterBuildFarmDir(o options, clusters []string) error {
+	for _, cluster := range clusters {
+		buildDir := buildFarmDirFor(o.releaseRepo, cluster)
+		logrus.Infof("Validating build dir: %s", buildDir)
+		fileInfo, err := os.Stat(buildDir)
+		if err != nil {
+			return err
+		}
+		if !fileInfo.IsDir() {
+			return fmt.Errorf("%s is not a directory", buildDir)
+		}
+
+		for _, item := range []string{"common", "common_except_app.ci"} {
+			newName := filepath.Join(buildDir, item)
+			newNameFileInfo, err := os.Lstat(newName)
+			if err != nil {
+				return err
+			}
+			if newNameFileInfo.Mode()&os.ModeSymlink != 0 {
+				oldName, err := filepath.EvalSymlinks(newName)
+				if err != nil {
+					return err
+				}
+				expectedOldName := filepath.Join(filepath.Dir(buildDir), item)
+				if oldName != expectedOldName {
+					return fmt.Errorf("the resolved target is %s,  expecting %s", oldName, expectedOldName)
+				}
+				oldNameFileInfo, err := os.Stat(oldName)
+				if err != nil {
+					return err
+				}
+				if !oldNameFileInfo.IsDir() {
+					return fmt.Errorf("the linked file is not a directory: %s", oldName)
+				}
+			} else {
+				return fmt.Errorf(" %s is not a symlink", newName)
+			}
+		}
+	}
+	return nil
+}
+
 func buildFarmDirFor(releaseRepo string, clusterName string) string {
-	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName)
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", folder(clusterName))
+}
+
+func folder(name string) string {
+	switch name {
+	case string(api.ClusterBuild01):
+		return "01_cluster"
+	case string(api.ClusterBuild02):
+		return "02_cluster"
+	default:
+		return name
+	}
 }
 
 func serviceAccountKubeconfigPath(serviceAccount, clusterName string) string {

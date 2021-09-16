@@ -30,12 +30,11 @@ func TestValidateOptions(t *testing.T) {
 			},
 		},
 		{
-			name: "missing cluster name",
+			name: "allow for missing cluster name",
 			options: options{
 				clusterName: "",
 				releaseRepo: testdata,
 			},
-			expectedErrors: []error{errors.New("--cluster-name must be provided")},
 		},
 		{
 			name: "invalid cluster name",

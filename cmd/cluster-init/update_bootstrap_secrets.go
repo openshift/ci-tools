@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/sirupsen/logrus"
 
@@ -17,6 +16,7 @@ const (
 	testCredentials     = "test-credentials"
 	kubeconfig          = "kubeconfig"
 	config              = "config"
+	nonAppCiX86Group    = "non_app_ci_x86"
 )
 
 type pushPull string
@@ -27,8 +27,7 @@ const (
 )
 
 func updateCiSecretBootstrap(o options) error {
-	secretBootstrapDir := filepath.Join(o.releaseRepo, "core-services", "ci-secret-bootstrap")
-	secretBootstrapConfigFile := filepath.Join(secretBootstrapDir, "_config.yaml")
+	secretBootstrapConfigFile := o.secretBootstrapConfigFile()
 	logrus.Infof("Updating ci-secret-bootstrap: %s", secretBootstrapConfigFile)
 
 	var c secretbootstrap.Config
@@ -42,7 +41,7 @@ func updateCiSecretBootstrap(o options) error {
 }
 
 func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
-	for _, groupName := range []string{buildUFarm, "non_app_ci", "non_app_ci_x86"} {
+	for _, groupName := range []string{buildUFarm, "non_app_ci", nonAppCiX86Group} {
 		c.ClusterGroups[groupName] = append(c.ClusterGroups[groupName], o.clusterName)
 	}
 	c.UserSecretsTargetClusters = append(c.UserSecretsTargetClusters, o.clusterName)

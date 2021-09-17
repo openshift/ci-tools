@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/sirupsen/logrus"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -22,6 +24,7 @@ const (
 )
 
 func updateJobs(o options) error {
+	logrus.Infof("generating: presubmits, postsubmits, and periodics for %s", o.clusterName)
 	config := prowconfig.JobConfig{
 		PresubmitsStatic: map[string][]prowconfig.Presubmit{
 			"openshift/release": {generatePresubmit(o.clusterName)},

@@ -42,10 +42,12 @@ func updateCiSecretBootstrap(o options) error {
 }
 
 func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
-	for _, groupName := range []string{buildUFarm, "non_app_ci", "non_app_ci_x86"} {
-		c.ClusterGroups[groupName] = append(c.ClusterGroups[groupName], o.clusterName)
+	if !o.update {
+		for _, groupName := range []string{buildUFarm, "non_app_ci", "non_app_ci_x86"} {
+			c.ClusterGroups[groupName] = append(c.ClusterGroups[groupName], o.clusterName)
+		}
+		c.UserSecretsTargetClusters = append(c.UserSecretsTargetClusters, o.clusterName)
 	}
-	c.UserSecretsTargetClusters = append(c.UserSecretsTargetClusters, o.clusterName)
 
 	for _, step := range []func(c *secretbootstrap.Config, o options) error{
 		updatePodScalerSecret,
@@ -54,9 +56,9 @@ func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
 		updateRehearseSecret,
 		updateChatBotSecret,
 		updateExistingRegistryPullCredentialsAllSecrets,
-		appendSecret(generateRegistryPushCredentialsSecret),
-		appendSecret(generateRegistryPullCredentialsSecret),
-		appendSecret(generateCiOperatorSecret),
+		updateSecret(generateRegistryPushCredentialsSecret),
+		updateSecret(generateRegistryPullCredentialsSecret),
+		updateSecret(generateCiOperatorSecret),
 		generateRegistryPullCredentialsAllSecrets,
 	} {
 		if err := step(c, o); err != nil {
@@ -67,13 +69,25 @@ func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
 	return nil
 }
 
-func appendSecret(secretGenerator func(options) secretbootstrap.SecretConfig) func(c *secretbootstrap.Config, o options) error {
+func updateSecret(secretGenerator func(options) secretbootstrap.SecretConfig) func(c *secretbootstrap.Config, o options) error {
 	return func(c *secretbootstrap.Config, o options) error {
 		secret := secretGenerator(o)
+		if err := removeSecret(secret.To[0].Name, o.clusterName, c); err != nil {
+			return err
+		}
 		logrus.Infof("Creating new secret with 'to' of: %v", secret.To)
 		c.Secrets = append(c.Secrets, secret)
 		return nil
 	}
+}
+
+func removeSecret(name, clusterName string, c *secretbootstrap.Config) error {
+	idx, secret, _ := findSecretConfig(name, clusterName, c.Secrets)
+	if idx != -1 {
+		logrus.Infof("Removing existing secret with 'to' of: %v", secret.To)
+		c.Secrets = append(c.Secrets[:idx], c.Secrets[idx:]...)
+	}
+	return nil
 }
 
 func generateCiOperatorSecret(o options) secretbootstrap.SecretConfig {
@@ -170,7 +184,7 @@ func generateDockerConfigJsonSecretConfigTo(name string, namespace string, clust
 
 func updatePodScalerSecret(c *secretbootstrap.Config, o options) error {
 	key := fmt.Sprintf("%s.%s", o.clusterName, config)
-	return appendSecretItemContext(c, podScaler, string(api.ClusterAPPCI), key, secretbootstrap.ItemContext{
+	return updateSecretItemContext(c, podScaler, string(api.ClusterAPPCI), key, secretbootstrap.ItemContext{
 		Field: serviceAccountKubeconfigPath(podScaler, o.clusterName),
 		Item:  podScaler,
 	})
@@ -179,7 +193,7 @@ func updatePodScalerSecret(c *secretbootstrap.Config, o options) error {
 func updateDPTPControllerManagerSecret(c *secretbootstrap.Config, o options) error {
 	const DPTPControllerManager = "dptp-controller-manager"
 	keyAndField := serviceAccountKubeconfigPath(DPTPControllerManager, o.clusterName)
-	return appendSecretItemContext(c, DPTPControllerManager, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
+	return updateSecretItemContext(c, DPTPControllerManager, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
 		Item:  buildUFarm,
 	})
@@ -187,7 +201,7 @@ func updateDPTPControllerManagerSecret(c *secretbootstrap.Config, o options) err
 
 func updateRehearseSecret(c *secretbootstrap.Config, o options) error {
 	keyAndField := serviceAccountKubeconfigPath(ciOperator, o.clusterName)
-	return appendSecretItemContext(c, "pj-rehearse", string(api.ClusterBuild01), keyAndField, secretbootstrap.ItemContext{
+	return updateSecretItemContext(c, "pj-rehearse", string(api.ClusterBuild01), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
 		Item:  buildUFarm,
 	})
@@ -197,18 +211,18 @@ func updateChatBotSecret(c *secretbootstrap.Config, o options) error {
 	const chatBot = "ci-chat-bot"
 	name := chatBot + "-kubeconfigs"
 	keyAndField := serviceAccountKubeconfigPath(chatBot, o.clusterName)
-	return appendSecretItemContext(c, name, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
+	return updateSecretItemContext(c, name, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
 		Item:  chatBot,
 	})
 }
 
-func appendSecretItemContext(c *secretbootstrap.Config, name string, cluster string, key string, value secretbootstrap.ItemContext) error {
+func updateSecretItemContext(c *secretbootstrap.Config, name, cluster, key string, value secretbootstrap.ItemContext) error {
 	logrus.WithFields(logrus.Fields{
 		"name":    name,
 		"cluster": cluster,
 	}).Info("Appending registry secret item.")
-	sc, err := findSecretConfig(name, cluster, c.Secrets)
+	_, sc, err := findSecretConfig(name, cluster, c.Secrets)
 	if err != nil {
 		return err
 	}
@@ -219,7 +233,7 @@ func appendSecretItemContext(c *secretbootstrap.Config, name string, cluster str
 func updateExistingRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o options) error {
 	for _, cluster := range c.UserSecretsTargetClusters {
 		if cluster != string(api.ClusterHive) && cluster != string(api.ClusterARM01) && cluster != o.clusterName {
-			return appendRegistrySecretItemContext(c, regPullCredsAll, cluster, secretbootstrap.DockerConfigJSONData{
+			return updateRegistrySecretItemContext(c, regPullCredsAll, cluster, secretbootstrap.DockerConfigJSONData{
 				AuthField:   registryCommandTokenField(o.clusterName, pull),
 				Item:        buildUFarm,
 				RegistryURL: registryUrlFor(o.clusterName),
@@ -274,6 +288,9 @@ func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o opti
 			generateDockerConfigJsonSecretConfigTo(regPullCredsAll, testCredentials, o.clusterName),
 		},
 	}
+	if err := removeSecret(regPullCredsAll, o.clusterName, c); err != nil {
+		return err
+	}
 	logrus.Infof("Creating new secret with 'to' of: %v", sc.To)
 	c.Secrets = append(c.Secrets, sc)
 	return nil
@@ -292,9 +309,9 @@ func registryUrlFor(cluster string) string {
 	}
 }
 
-func appendRegistrySecretItemContext(c *secretbootstrap.Config, name string, cluster string, value secretbootstrap.DockerConfigJSONData) error {
+func updateRegistrySecretItemContext(c *secretbootstrap.Config, name string, cluster string, value secretbootstrap.DockerConfigJSONData) error {
 	logrus.Infof("Appending registry secret item to: {name: %s, cluster: %s}", name, cluster)
-	sc, err := findSecretConfig(name, cluster, c.Secrets)
+	_, sc, err := findSecretConfig(name, cluster, c.Secrets)
 	if err != nil {
 		return err
 	}
@@ -305,7 +322,7 @@ func appendRegistrySecretItemContext(c *secretbootstrap.Config, name string, clu
 }
 
 func updateBuildFarmSecrets(c *secretbootstrap.Config, o options) error {
-	buildFarmCredentials, err := findSecretConfig(fmt.Sprintf("%s-%s", buildFarm, credentials), string(api.ClusterAPPCI), c.Secrets)
+	_, buildFarmCredentials, err := findSecretConfig(fmt.Sprintf("%s-%s", buildFarm, credentials), string(api.ClusterAPPCI), c.Secrets)
 	if err != nil {
 		return err
 	}
@@ -315,7 +332,7 @@ func updateBuildFarmSecrets(c *secretbootstrap.Config, o options) error {
 		Field: "github_client_id",
 	}
 	for _, s := range []string{configUpdater, "crier", "deck", "hook", "prow-controller-manager", "sinker"} {
-		sc, err := findSecretConfig(s, string(api.ClusterAPPCI), c.Secrets)
+		_, sc, err := findSecretConfig(s, string(api.ClusterAPPCI), c.Secrets)
 		if err != nil {
 			return err
 		}
@@ -328,7 +345,7 @@ func updateBuildFarmSecrets(c *secretbootstrap.Config, o options) error {
 	return nil
 }
 
-func findSecretConfig(name string, cluster string, sc []secretbootstrap.SecretConfig) (*secretbootstrap.SecretConfig, error) {
+func findSecretConfig(name string, cluster string, sc []secretbootstrap.SecretConfig) (int, *secretbootstrap.SecretConfig, error) {
 	idx := func() int {
 		for i, config := range sc {
 			for _, to := range config.To {
@@ -340,7 +357,7 @@ func findSecretConfig(name string, cluster string, sc []secretbootstrap.SecretCo
 		return -1
 	}()
 	if idx != -1 {
-		return &sc[idx], nil
+		return idx, &sc[idx], nil
 	}
-	return nil, fmt.Errorf("couldn't find SecretConfig with name: %s and cluster: %s", name, cluster)
+	return -1, nil, fmt.Errorf("couldn't find SecretConfig with name: %s and cluster: %s", name, cluster)
 }

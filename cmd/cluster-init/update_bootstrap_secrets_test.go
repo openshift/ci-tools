@@ -12,12 +12,13 @@ import (
 
 func TestFindSecretConfig(t *testing.T) {
 	testCases := []struct {
-		name          string
-		secretName    string
-		cluster       string
-		secretConfigs []secretbootstrap.SecretConfig
-		expected      *secretbootstrap.SecretConfig
-		expectedError error
+		name           string
+		secretName     string
+		cluster        string
+		secretConfigs  []secretbootstrap.SecretConfig
+		expectedConfig *secretbootstrap.SecretConfig
+		expectedIndex  int
+		expectedError  error
 	}{
 		{
 			name:       "exists",
@@ -28,7 +29,8 @@ func TestFindSecretConfig(t *testing.T) {
 				{To: []secretbootstrap.SecretContext{{Cluster: "cluster-1", Name: "secret-a"}}},
 				{To: []secretbootstrap.SecretContext{{Cluster: "cluster-1", Name: "secret-b"}}},
 			},
-			expected: &secretbootstrap.SecretConfig{To: []secretbootstrap.SecretContext{{Cluster: "cluster-1", Name: "secret-a"}}},
+			expectedConfig: &secretbootstrap.SecretConfig{To: []secretbootstrap.SecretContext{{Cluster: "cluster-1", Name: "secret-a"}}},
+			expectedIndex:  1,
 		},
 		{
 			name:       "does not exist",
@@ -40,16 +42,20 @@ func TestFindSecretConfig(t *testing.T) {
 				{To: []secretbootstrap.SecretContext{{Cluster: "cluster-1", Name: "secret-b"}}},
 			},
 			expectedError: errors.New("couldn't find SecretConfig with name: secret-c and cluster: cluster-1"),
+			expectedIndex: -1,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			secretConfig, err := findSecretConfig(tc.secretName, tc.cluster, tc.secretConfigs)
+			idx, secretConfig, err := findSecretConfig(tc.secretName, tc.cluster, tc.secretConfigs)
 			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("error did not match expectedError, diff: %s", diff)
 			}
-			if diff := cmp.Diff(tc.expected, secretConfig); diff != "" {
+			if diff := cmp.Diff(tc.expectedConfig, secretConfig); diff != "" {
 				t.Fatalf("secretConfig did not match expected, diff: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedIndex, idx); diff != "" {
+				t.Fatalf("index did not match expected, diff: %s", diff)
 			}
 		})
 	}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net"
 	"os"
 	"runtime"
 	"strings"
@@ -29,7 +28,6 @@ import (
 
 	imagev1 "github.com/openshift/api/image/v1"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
 	serviceaccountsecretrefresher "github.com/openshift/ci-tools/pkg/controller/serviceaccount_secret_refresher"
 	testimagesdistributor "github.com/openshift/ci-tools/pkg/controller/test-images-distributor"
@@ -253,15 +251,6 @@ func main() {
 	if _, hasAppCi := kubeconfigs[appCIContextName]; !hasAppCi {
 		if !hasInClusterConfig {
 			logrus.WithError(err).Fatalf("had no context for '%s' and loading InClusterConfig failed", appCIContextName)
-		} else {
-			// There is a corner case that the inClusterConfig is the current context of a loaded kubeconfig file
-			// In dev, it has to be app.ci's public URL or in a pod, it ${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}
-			// https://github.com/kubernetes/test-infra/blob/5bce0be55da8a04f62c77d2292a81739491544df/prow/kube/config.go#L56-L62
-			// https://github.com/openshift/release-controller/blob/efd4b6d1c92ff73804e397524de974d160a8dc31/vendor/k8s.io/client-go/rest/config.go#L508
-			inClusterConfigHost := "https://" + net.JoinHostPort(os.Getenv("KUBERNETES_SERVICE_HOST"), os.Getenv("KUBERNETES_SERVICE_PORT"))
-			if inClusterConfig.Host != api.APPCIKubeAPIURL && inClusterConfig.Host != inClusterConfigHost {
-				logrus.WithError(err).Fatalf("had no context for '%s' and the loaded InClusterConfig's host %s is neither %s nor %s", appCIContextName, inClusterConfig.Host, api.APPCIKubeAPIURL, inClusterConfigHost)
-			}
 		}
 		logrus.Infof("use InClusterConfig for %s", appCIContextName)
 		kubeconfigs[appCIContextName] = inClusterConfig

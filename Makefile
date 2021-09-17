@@ -348,13 +348,16 @@ $(TMPDIR)/promtool:
 	chmod +x $(TMPDIR)/promtool
 	rm -rf $(TMPDIR)/image
 
-$(TMPDIR)/.promoted-image-governor-kubeconfig:
-	oc --context app.ci --as system:admin --namespace ci serviceaccounts create-kubeconfig promoted-image-governor > $(TMPDIR)/.promoted-image-governor-kubeconfig
+$(TMPDIR)/.promoted-image-governor-kubeconfig-dir:
+	rm -rf $(TMPDIR)/.promoted-image-governor-kubeconfig-dir
+	mkdir -p $(TMPDIR)/.promoted-image-governor-kubeconfig-dir
+	oc --context app.ci --namespace ci extract secret/promoted-image-governor --confirm --to=$(TMPDIR)/.promoted-image-governor-kubeconfig-dir
+	oc --context app.ci --namespace ci serviceaccounts create-kubeconfig promoted-image-governor | sed 's/promoted-image-governor/app.ci/g' > $(TMPDIR)/.promoted-image-governor-kubeconfig-dir/sa.promoted-image-governor.app.ci.config
 
 release_folder := $$PWD/../release
 
-promoted-image-governor: $(TMPDIR)/.promoted-image-governor-kubeconfig
-	go run  ./cmd/promoted-image-governor --kubeconfig=$(TMPDIR)/.promoted-image-governor-kubeconfig --ci-operator-config-path=$(release_folder)/ci-operator/config --release-controller-mirror-config-dir=$(release_folder)/core-services/release-controller/_releases --ignored-image-stream-tags='^ocp\S*/\S+:machine-os-content$$' --ignored-image-stream-tags='^openshift/origin-v3.11:' --openshift-mapping-dir=$(release_folder)/core-services/image-mirroring/openshift --openshift-mapping-config=$(release_folder)/core-services/image-mirroring/openshift/_config.yaml --dry-run=true
+promoted-image-governor: $(TMPDIR)/.promoted-image-governor-kubeconfig-dir
+	go run  ./cmd/promoted-image-governor --kubeconfig-dir=$(TMPDIR)/.promoted-image-governor-kubeconfig-dir --ci-operator-config-path=$(release_folder)/ci-operator/config --release-controller-mirror-config-dir=$(release_folder)/core-services/release-controller/_releases --ignored-image-stream-tags='^ocp\S*/\S+:machine-os-content$$' --ignored-image-stream-tags='^openshift/origin-v3.11:' --dry-run=true
 .PHONY: promoted-image-governor
 
 explain: $(TMPDIR)/.promoted-image-governor-kubeconfig

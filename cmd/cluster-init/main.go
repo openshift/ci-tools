@@ -152,20 +152,34 @@ func main() {
 
 	// Each step in the process is allowed to fail independently so that the diffs for the others can still be generated
 	errorCount := 0
-	steps := []func(options) error{updateJobs}
-	if !o.update {
-		steps = append(steps,
-			initClusterBuildFarmDir,
-			updateCiSecretBootstrap,
-			updateSecretGenerator,
-			updateSanitizeProwJobs,
-			updateBuildClusters,
-		)
+	var clusters []string
+	if o.clusterName == "" {
+		// Updating ALL cluster-init managed clusters
+		buildClusters, err := loadBuildClusters(o)
+		if err != nil {
+			logrus.WithError(err).Error("failed to obtain managed build clusters")
+		}
+		clusters = buildClusters.Managed
+	} else {
+		clusters = []string{o.clusterName}
 	}
-	for _, step := range steps {
-		if err := step(o); err != nil {
-			logrus.WithError(err).Error("failed to execute step")
-			errorCount++
+	for _, cluster := range clusters {
+		o.clusterName = cluster
+		steps := []func(options) error{updateJobs}
+		if !o.update {
+			steps = append(steps,
+				initClusterBuildFarmDir,
+				updateCiSecretBootstrap,
+				updateSecretGenerator,
+				updateSanitizeProwJobs,
+				updateBuildClusters,
+			)
+		}
+		for _, step := range steps {
+			if err := step(o); err != nil {
+				logrus.WithError(err).Error("failed to execute step")
+				errorCount++
+			}
 		}
 	}
 	if errorCount > 0 {

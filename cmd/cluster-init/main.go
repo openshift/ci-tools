@@ -27,6 +27,7 @@ const (
 type options struct {
 	clusterName string
 	releaseRepo string
+	update      bool
 	createPR    bool
 
 	assign      string
@@ -45,6 +46,7 @@ func parseOptions() (options, error) {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.clusterName, "cluster-name", "", "The name of the new cluster.")
 	fs.StringVar(&o.releaseRepo, "release-repo", "", "Path to the root of the openshift/release repository.")
+	fs.BoolVar(&o.update, "update", false, "Run in update mode. Set to false by default")
 	fs.BoolVar(&o.createPR, "create-pr", true, "If a PR should be created. Set to true by default")
 	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use. Set to "+githubLogin+" by default")
 	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to. Set to Test Platform by default")
@@ -56,7 +58,7 @@ func parseOptions() (options, error) {
 
 func validateOptions(o options) []error {
 	var errs []error
-	if o.clusterName == "" {
+	if !o.update && o.clusterName == "" {
 		errs = append(errs, errors.New("--cluster-name must be provided"))
 	} else {
 		for _, char := range o.clusterName {
@@ -92,10 +94,19 @@ func validateOptions(o options) []error {
 			}
 		}
 
-		if o.clusterName != "" {
-			buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
-			if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
-				errs = append(errs, fmt.Errorf("build farm directory: %s already exists", o.clusterName))
+		if o.update {
+			if o.clusterName != "" {
+				buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
+				if _, err := os.Stat(buildDir); os.IsNotExist(err) {
+					errs = append(errs, fmt.Errorf("build farm directory: %s does not exist. Must exist to perform update", o.clusterName))
+				}
+			}
+		} else {
+			if o.clusterName != "" {
+				buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
+				if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
+					errs = append(errs, fmt.Errorf("build farm directory: %s already exists", o.clusterName))
+				}
 			}
 		}
 	}
@@ -141,16 +152,34 @@ func main() {
 
 	// Each step in the process is allowed to fail independently so that the diffs for the others can still be generated
 	errorCount := 0
-	for _, step := range []func(options) error{
-		updateJobs,
-		initClusterBuildFarmDir,
-		updateCiSecretBootstrap,
-		updateSecretGenerator,
-		updateSanitizeProwJobs,
-	} {
-		if err := step(o); err != nil {
-			logrus.WithError(err).Error("failed to execute step")
-			errorCount++
+	var clusters []string
+	if o.clusterName == "" {
+		// Updating ALL cluster-init managed clusters
+		buildClusters, err := loadBuildClusters(o)
+		if err != nil {
+			logrus.WithError(err).Error("failed to obtain managed build clusters")
+		}
+		clusters = buildClusters.Managed
+	} else {
+		clusters = []string{o.clusterName}
+	}
+	for _, cluster := range clusters {
+		o.clusterName = cluster
+		steps := []func(options) error{updateJobs}
+		if !o.update {
+			steps = append(steps,
+				initClusterBuildFarmDir,
+				updateCiSecretBootstrap,
+				updateSecretGenerator,
+				updateSanitizeProwJobs,
+				updateBuildClusters,
+			)
+		}
+		for _, step := range steps {
+			if err := step(o); err != nil {
+				logrus.WithError(err).Error("failed to execute step")
+				errorCount++
+			}
 		}
 	}
 	if errorCount > 0 {

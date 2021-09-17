@@ -54,7 +54,7 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 					generateContainer("applyconfig:latest",
 						clusterName,
 						[]string{"--confirm=true"},
-						nil)},
+						nil, nil)},
 				ServiceAccountName: configUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{
@@ -84,7 +84,7 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 			Spec: &v1.PodSpec{
 				Volumes: []v1.Volume{generateSecretVolume(clusterName)},
 				Containers: []v1.Container{
-					generateContainer(latestImage, clusterName, []string{"--confirm=true"}, nil)},
+					generateContainer(latestImage, clusterName, []string{"--confirm=true"}, nil, nil)},
 				ServiceAccountName: configUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{
@@ -103,6 +103,10 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 }
 
 func generatePresubmit(clusterName string) prowconfig.Presubmit {
+	var optional bool
+	if clusterName == string(api.ClusterVSphere) {
+		optional = true
+	}
 	return prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
 			Name:       RepoMetadata().JobName(jobconfig.PresubmitPrefix, clusterName+"-dry"),
@@ -121,7 +125,7 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 					generateContainer(latestImage,
 						clusterName,
 						nil,
-						[]v1.VolumeMount{{Name: "tmp", MountPath: "/tmp"}})},
+						[]v1.VolumeMount{{Name: "tmp", MountPath: "/tmp"}}, []v1.EnvVar{{Name: "HOME", Value: "/tmp"}})},
 				ServiceAccountName: configUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{Decorate: utilpointer.BoolPtr(true)},
@@ -131,8 +135,8 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 			},
 		},
 		AlwaysRun:    true,
-		Optional:     false,
-		Trigger:      prowconfig.DefaultTriggerFor(clusterName),
+		Optional:     optional,
+		Trigger:      prowconfig.DefaultTriggerFor(clusterName + "-dry"),
 		RerunCommand: prowconfig.DefaultRerunCommandFor(clusterName + "-dry"),
 		Brancher: prowconfig.Brancher{
 			Branches: []string{"master"},
@@ -148,7 +152,7 @@ func generateSecretVolume(clusterName string) v1.Volume {
 		Name: "build-farm-credentials",
 		VolumeSource: v1.VolumeSource{
 			Secret: &v1.SecretVolumeSource{
-				SecretName: "build-farm-credentials",
+				SecretName: "config-updater",
 				Items: []v1.KeyToPath{
 					{
 						Key:  serviceAccountKubeconfigPath(configUpdater, clusterName),
@@ -160,7 +164,48 @@ func generateSecretVolume(clusterName string) v1.Volume {
 	}
 }
 
-func generateContainer(image, clusterName string, extraArgs []string, extraVolumeMounts []v1.VolumeMount) v1.Container {
+func generateContainer(image, clusterName string, extraArgs []string, extraVolumeMounts []v1.VolumeMount, extraEnvVars []v1.EnvVar) v1.Container {
+	var env []v1.EnvVar
+	env = append(env, extraEnvVars...)
+	if clusterName == string(api.ClusterBuild01) || clusterName == string(api.ClusterBuild02) {
+		env = append(env, []v1.EnvVar{
+			{
+				Name: clusterName + "_id",
+				ValueFrom: &v1.EnvVarSource{
+					SecretKeyRef: &v1.SecretKeySelector{
+						Key: clusterName + "-id",
+						LocalObjectReference: v1.LocalObjectReference{
+							Name: clusterName + "-dex-oidc",
+						},
+					},
+				},
+			},
+			{
+				Name: "slack_api_url",
+				ValueFrom: &v1.EnvVarSource{
+					SecretKeyRef: &v1.SecretKeySelector{
+						Key: "url",
+						LocalObjectReference: v1.LocalObjectReference{
+							Name: "ci-slack-api-url",
+						},
+					},
+				},
+			},
+		}...)
+	}
+	if clusterName == string(api.ClusterBuild01) || clusterName == string(api.ClusterBuild02) || clusterName == string(api.ClusterVSphere) {
+		env = append(env, v1.EnvVar{
+			Name: "github_client_id",
+			ValueFrom: &v1.EnvVarSource{
+				SecretKeyRef: &v1.SecretKeySelector{
+					Key: clusterName + "_github_client_id",
+					LocalObjectReference: v1.LocalObjectReference{
+						Name: "build-farm-credentials",
+					},
+				},
+			},
+		})
+	}
 	return v1.Container{
 		Name:    "",
 		Image:   image,
@@ -168,8 +213,9 @@ func generateContainer(image, clusterName string, extraArgs []string, extraVolum
 		Args: append([]string{
 			fmt.Sprintf("--config-dir=clusters/build-clusters/%s", clusterName),
 			"--as=",
-			"--KUBECONFIG=/etc/build-farm-credentials/KUBECONFIG"},
+			"--kubeconfig=/etc/build-farm-credentials/kubeconfig"},
 			extraArgs...),
+		Env: env,
 		Resources: v1.ResourceRequirements{
 			Requests: map[v1.ResourceName]resource.Quantity{"cpu": resource.MustParse("10m")},
 		},

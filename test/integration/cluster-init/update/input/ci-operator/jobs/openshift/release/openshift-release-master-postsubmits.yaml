@@ -16,7 +16,7 @@ postsubmits:
           - args:
               - --config-dir=clusters/build-clusters/existingCluster
               - --as=
-              - --KUBECONFIG=/etc/build-farm-credentials/KUBECONFIG
+              - --kubeconfig=/etc/build-farm-credentials/kubeconfig
               - --confirm=true
               - --extra-arg=true
             command:

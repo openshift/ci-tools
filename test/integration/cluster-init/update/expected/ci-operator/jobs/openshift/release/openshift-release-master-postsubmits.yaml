@@ -16,7 +16,7 @@ postsubmits:
       - args:
         - --config-dir=clusters/build-clusters/existingCluster
         - --as=
-        - --KUBECONFIG=/etc/build-farm-credentials/KUBECONFIG
+        - --kubeconfig=/etc/build-farm-credentials/kubeconfig
         - --confirm=true
         command:
         - applyconfig
@@ -37,4 +37,4 @@ postsubmits:
           items:
           - key: sa.config-updater.existingCluster.config
             path: kubeconfig
-          secretName: build-farm-credentials
+          secretName: config-updater

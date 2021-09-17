@@ -165,11 +165,13 @@ func main() {
 	}
 	for _, cluster := range clusters {
 		o.clusterName = cluster
-		steps := []func(options) error{updateJobs}
+		steps := []func(options) error{
+			updateJobs,
+			updateClusterBuildFarmDir,
+			updateCiSecretBootstrap,
+		}
 		if !o.update {
 			steps = append(steps,
-				initClusterBuildFarmDir,
-				updateCiSecretBootstrap,
 				updateSecretGenerator,
 				updateSanitizeProwJobs,
 				updateBuildClusters,
@@ -220,9 +222,16 @@ func submitPR(o options) error {
 	return exec.Command("git", "checkout", master).Run()
 }
 
-func initClusterBuildFarmDir(o options) error {
+func updateClusterBuildFarmDir(o options) error {
 	buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
-	logrus.Infof("Creating build dir: %s", buildDir)
+	if o.update {
+		logrus.Infof("Updating build dir: %s", buildDir)
+		if err := os.RemoveAll(buildDir); err != nil {
+			return fmt.Errorf("failed to remove base directory for cluster: %w", err)
+		}
+	} else {
+		logrus.Infof("creating build dir: %s", buildDir)
+	}
 	if err := os.MkdirAll(buildDir, 0777); err != nil {
 		return fmt.Errorf("failed to create base directory for cluster: %w", err)
 	}

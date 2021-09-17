@@ -2,16 +2,17 @@ package main
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"path/filepath"
-	"sigs.k8s.io/yaml"
+
+	"github.com/sirupsen/logrus"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	utilpointer "k8s.io/utils/pointer"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/jobconfig"

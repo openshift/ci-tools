@@ -1,9 +1,11 @@
 package main
 
 import (
-	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"path/filepath"
+
+	"github.com/sirupsen/logrus"
+
 	"sigs.k8s.io/yaml"
 )
 

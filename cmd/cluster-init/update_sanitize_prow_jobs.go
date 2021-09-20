@@ -34,13 +34,9 @@ func updateSanitizeProwJobs(o options) error {
 
 func updateSanitizeProwJobsConfig(c *dispatcher.Config, clusterName string) {
 	appGroup := c.Groups[api.ClusterAPPCI]
-	metadata := api.Metadata{
-		Org:    "openshift",
-		Repo:   "release",
-		Branch: "master",
-	}
-	appGroup.Jobs = append(appGroup.Jobs, metadata.JobName(jobconfig.PresubmitPrefix, clusterName+"-dry"))
-	appGroup.Jobs = append(appGroup.Jobs, metadata.JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply"))
-	appGroup.Jobs = append(appGroup.Jobs, metadata.SimpleJobName(jobconfig.PeriodicPrefix, clusterName+"-apply"))
+	metadata := RepoMetadata()
+	appGroup.Jobs = appendIfNotContains(appGroup.Jobs, metadata.JobName(jobconfig.PresubmitPrefix, clusterName+"-dry"))
+	appGroup.Jobs = appendIfNotContains(appGroup.Jobs, metadata.JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply"))
+	appGroup.Jobs = appendIfNotContains(appGroup.Jobs, metadata.SimpleJobName(jobconfig.PeriodicPrefix, clusterName+"-apply"))
 	c.Groups[api.ClusterAPPCI] = appGroup
 }

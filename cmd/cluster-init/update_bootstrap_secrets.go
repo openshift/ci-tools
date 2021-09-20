@@ -42,12 +42,10 @@ func updateCiSecretBootstrap(o options) error {
 }
 
 func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
-	if !o.update {
-		for _, groupName := range []string{buildUFarm, "non_app_ci", "non_app_ci_x86"} {
-			c.ClusterGroups[groupName] = append(c.ClusterGroups[groupName], o.clusterName)
-		}
-		c.UserSecretsTargetClusters = append(c.UserSecretsTargetClusters, o.clusterName)
+	for _, groupName := range []string{buildUFarm, "non_app_ci", "non_app_ci_x86"} {
+		c.ClusterGroups[groupName] = appendIfNotContains(c.ClusterGroups[groupName], o.clusterName)
 	}
+	c.UserSecretsTargetClusters = appendIfNotContains(c.UserSecretsTargetClusters, o.clusterName)
 
 	for _, step := range []func(c *secretbootstrap.Config, o options) error{
 		updatePodScalerSecret,
@@ -309,7 +307,7 @@ func registryUrlFor(cluster string) string {
 	}
 }
 
-func updateRegistrySecretItemContext(c *secretbootstrap.Config, name string, cluster string, value secretbootstrap.DockerConfigJSONData) error {
+func updateRegistrySecretItemContext(c *secretbootstrap.Config, name, cluster string, value secretbootstrap.DockerConfigJSONData) error {
 	logrus.Infof("Appending registry secret item to: {name: %s, cluster: %s}", name, cluster)
 	_, sc, err := findSecretConfig(name, cluster, c.Secrets)
 	if err != nil {

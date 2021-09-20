@@ -169,13 +169,11 @@ func main() {
 			updateJobs,
 			updateClusterBuildFarmDir,
 			updateCiSecretBootstrap,
+			updateSecretGenerator,
+			updateSanitizeProwJobs,
 		}
 		if !o.update {
-			steps = append(steps,
-				updateSecretGenerator,
-				updateSanitizeProwJobs,
-				updateBuildClusters,
-			)
+			steps = append(steps, updateBuildClusters)
 		}
 		for _, step := range steps {
 			if err := step(o); err != nil {
@@ -244,10 +242,19 @@ func updateClusterBuildFarmDir(o options) error {
 	return nil
 }
 
-func buildFarmDirFor(releaseRepo string, clusterName string) string {
+func buildFarmDirFor(releaseRepo, clusterName string) string {
 	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName)
 }
 
 func serviceAccountKubeconfigPath(serviceAccount, clusterName string) string {
 	return fmt.Sprintf("sa.%s.%s.config", serviceAccount, clusterName)
+}
+
+func appendIfNotContains(slice []string, item string) []string {
+	for _, s := range slice {
+		if item == s {
+			return slice
+		}
+	}
+	return append(slice, item)
 }

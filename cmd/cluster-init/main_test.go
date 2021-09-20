@@ -100,3 +100,33 @@ func TestValidateOptions(t *testing.T) {
 		})
 	}
 }
+
+func TestAppendIfNotContains(t *testing.T) {
+	testCases := []struct {
+		name     string
+		item     string
+		slice    []string
+		expected []string
+	}{
+		{
+			name:     "slice does not contain item",
+			item:     "new item",
+			slice:    []string{"existing item", "other item"},
+			expected: []string{"existing item", "other item", "new item"},
+		},
+		{
+			name:     "slice contains item",
+			item:     "existing item",
+			slice:    []string{"existing item", "other item"},
+			expected: []string{"existing item", "other item"},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := appendIfNotContains(tc.slice, tc.item)
+			if diff := cmp.Diff(tc.expected, result); diff != "" {
+				t.Fatalf("result does not match expected, diff: %s", diff)
+			}
+		})
+	}
+}

@@ -80,9 +80,12 @@ presubmits:
       - args:
         - --config-dir=clusters/build-clusters/newCluster
         - --as=
-        - --KUBECONFIG=/etc/build-farm-credentials/KUBECONFIG
+        - --kubeconfig=/etc/build-farm-credentials/kubeconfig
         command:
         - applyconfig
+        env:
+        - name: HOME
+          value: /tmp
         image: registry.ci.openshift.org/ci/applyconfig:latest
         imagePullPolicy: Always
         name: ""
@@ -102,7 +105,7 @@ presubmits:
           items:
           - key: sa.config-updater.newCluster.config
             path: kubeconfig
-          secretName: build-farm-credentials
+          secretName: config-updater
       - emptyDir: {}
         name: tmp
-    trigger: (?m)^/test( | .* )newCluster,?($|\s.*)
+    trigger: (?m)^/test( | .* )newCluster-dry,?($|\s.*)

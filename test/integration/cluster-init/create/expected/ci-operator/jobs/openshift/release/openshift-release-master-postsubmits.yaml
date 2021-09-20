@@ -14,7 +14,7 @@ postsubmits:
       - args:
         - --config-dir=clusters/build-clusters/build01
         - --as=
-        - --KUBECONFIG=/etc/build-farm-credentials/KUBECONFIG
+        - --kubeconfig=/etc/build-farm-credentials/kubeconfig
         - --confirm=true
         command:
         - applyconfig
@@ -52,7 +52,7 @@ postsubmits:
       - args:
         - --config-dir=clusters/build-clusters/newCluster
         - --as=
-        - --KUBECONFIG=/etc/build-farm-credentials/KUBECONFIG
+        - --kubeconfig=/etc/build-farm-credentials/kubeconfig
         - --confirm=true
         command:
         - applyconfig
@@ -73,4 +73,4 @@ postsubmits:
           items:
           - key: sa.config-updater.newCluster.config
             path: kubeconfig
-          secretName: build-farm-credentials
+          secretName: config-updater

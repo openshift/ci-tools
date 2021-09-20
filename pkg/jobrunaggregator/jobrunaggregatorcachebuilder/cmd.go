@@ -30,7 +30,7 @@ func NewJobRunsAggregatorCacheBuilderFlags() *JobRunsAggregatorCacheBuilderFlags
 }
 
 func (f *JobRunsAggregatorCacheBuilderFlags) BindFlags(fs *pflag.FlagSet) {
-	fs.StringSliceVar(&f.JobNames, "jobs", f.JobNames, "The name of the job sto inspect, like periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade")
+	fs.StringSliceVar(&f.JobNames, "jobs", f.JobNames, "The name of the jobs to inspect, like periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade")
 	fs.StringVar(&f.WorkingDir, "working-dir", f.WorkingDir, "The directory to store caches, output, and the like.")
 	fs.StringVar(&f.GCSBucketName, "gcs-bucket-name", f.GCSBucketName, "GCS bucket to read from.")
 }

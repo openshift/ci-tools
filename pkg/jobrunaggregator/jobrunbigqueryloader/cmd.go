@@ -79,7 +79,7 @@ func (f *BigQueryTestRunUploadFlags) Validate() error {
 
 // ToOptions goes from the user input to the runtime values need to run the command.
 // Expect to see unit tests on the options, but not on the flags which are simply value mappings.
-func (f *BigQueryTestRunUploadFlags) ToOptions(ctx context.Context) (*jobsBigQueryLoaderOptions, error) {
+func (f *BigQueryTestRunUploadFlags) ToOptions(ctx context.Context) (*allJobsLoaderOptions, error) {
 	// Create a new GCS Client
 	gcsClient, err := f.Authentication.NewCIGCSClient(ctx, "origin-ci-test")
 	if err != nil {
@@ -95,7 +95,7 @@ func (f *BigQueryTestRunUploadFlags) ToOptions(ctx context.Context) (*jobsBigQue
 	jobRunTable := ciDataSet.Table(jobrunaggregatorlib.JobRunTableName)
 	testRunTable := ciDataSet.Table(jobrunaggregatorlib.TestRunTableName)
 
-	return &jobsBigQueryLoaderOptions{
+	return &allJobsLoaderOptions{
 		ciDataClient: ciDataClient,
 		gcsClient:    gcsClient,
 
@@ -171,7 +171,7 @@ func (f *BigQueryDisruptionUploadFlags) Validate() error {
 
 // ToOptions goes from the user input to the runtime values need to run the command.
 // Expect to see unit tests on the options, but not on the flags which are simply value mappings.
-func (f *BigQueryDisruptionUploadFlags) ToOptions(ctx context.Context) (*jobsBigQueryLoaderOptions, error) {
+func (f *BigQueryDisruptionUploadFlags) ToOptions(ctx context.Context) (*allJobsLoaderOptions, error) {
 	// Create a new GCS Client
 	gcsClient, err := f.Authentication.NewCIGCSClient(ctx, "origin-ci-test")
 	if err != nil {
@@ -187,7 +187,7 @@ func (f *BigQueryDisruptionUploadFlags) ToOptions(ctx context.Context) (*jobsBig
 	jobRunTable := ciDataSet.Table(jobrunaggregatorlib.JobRunTableName)
 	backendDisruptionTable := ciDataSet.Table(jobrunaggregatorapi.BackendDisruptionTableName)
 
-	return &jobsBigQueryLoaderOptions{
+	return &allJobsLoaderOptions{
 		ciDataClient: ciDataClient,
 		gcsClient:    gcsClient,
 

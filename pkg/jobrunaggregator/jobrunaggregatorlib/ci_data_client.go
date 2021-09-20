@@ -73,6 +73,8 @@ ORDER BY Jobs.JobName ASC
 }
 
 func (c *ciDataClient) GetLastJobRunWithTestRunDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
+	// the JobRun.Name is always increasing, so we can sort by that name.  The starttime is based on the prowjob
+	// time and I don't think that is coordinated.
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
 		`
 SELECT distinct(JobRuns.Name), JobRuns.StartTime
@@ -103,6 +105,8 @@ LIMIT 1
 }
 
 func (c *ciDataClient) GetLastJobRunWithDisruptionDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
+	// the JobRun.Name is always increasing, so we can sort by that name.  The starttime is based on the prowjob
+	// time and I don't think that is coordinated.
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
 		`
 SELECT distinct(JobRuns.Name), JobRuns.StartTime

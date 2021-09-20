@@ -199,7 +199,7 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames [
 
 	requiredNumberOfPasses := requiredPassesByPassPercentageByNumberOfAttempts[numberOfAttempts][workingPercentage]
 	if numberOfPasses < requiredNumberOfPasses {
-		summary := fmt.Sprintf("Passed %d times, failed %d times.  The historical pass rate is %d.  The required number of passes is %d.",
+		summary := fmt.Sprintf("Passed %d times, failed %d times.  The historical pass rate is %d%%.  The required number of passes is %d.",
 			numberOfPasses,
 			numberOfFailures,
 			workingPercentage,
@@ -220,6 +220,8 @@ var (
 	)
 )
 
+// these are the required number of passes for a given percentage of historical pass rate.  One var each for
+// number of attempts in the aggregated job.
 var (
 	requiredPassesByPassPercentageFor_10_Attempts = []int{
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 00-09

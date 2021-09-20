@@ -22,7 +22,7 @@ func wantsDisruptionData(job jobrunaggregatorapi.JobRow) bool {
 	return job.CollectDisruption
 }
 
-type jobsBigQueryLoaderOptions struct {
+type allJobsLoaderOptions struct {
 	ciDataClient jobrunaggregatorlib.CIDataClient
 	// GCSClient is used to read the prowjob data
 	gcsClient jobrunaggregatorlib.CIGCSClient
@@ -34,7 +34,7 @@ type jobsBigQueryLoaderOptions struct {
 	jobRunUploader              uploader
 }
 
-func (o *jobsBigQueryLoaderOptions) Run(ctx context.Context) error {
+func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 	fmt.Printf("Locating jobs\n")
 
 	jobs, err := o.ciDataClient.ListAllJobs(ctx)
@@ -77,9 +77,9 @@ func (o *jobsBigQueryLoaderOptions) Run(ctx context.Context) error {
 	return utilerrors.NewAggregate(errs)
 }
 
-func (o *jobsBigQueryLoaderOptions) newJobBigQueryLoaderOptions(job jobrunaggregatorapi.JobRow) *jobBigQueryLoaderOptions {
+func (o *allJobsLoaderOptions) newJobBigQueryLoaderOptions(job jobrunaggregatorapi.JobRow) *jobLoaderOptions {
 
-	return &jobBigQueryLoaderOptions{
+	return &jobLoaderOptions{
 		jobName:                   job.JobName,
 		ciDataClient:              o.ciDataClient,
 		gcsClient:                 o.gcsClient,
@@ -90,12 +90,12 @@ func (o *jobsBigQueryLoaderOptions) newJobBigQueryLoaderOptions(job jobrunaggreg
 	}
 }
 
-// jobBigQueryLoaderOptions
+// jobLoaderOptions
 // 1. reads a local cache of prowjob.json and junit files for a particular job.
 // 2. for every junit file
 // 3. reads all junit for the each jobrun
 // 4. constructs a synthentic junit that includes every test and assigns pass/fail to each test
-type jobBigQueryLoaderOptions struct {
+type jobLoaderOptions struct {
 	jobName string
 
 	// CIDataClient is used to read the last inserted results for a job
@@ -110,7 +110,7 @@ type jobBigQueryLoaderOptions struct {
 	jobRunUploader          uploader
 }
 
-func (o *jobBigQueryLoaderOptions) Run(ctx context.Context) error {
+func (o *jobLoaderOptions) Run(ctx context.Context) error {
 	fmt.Printf("Analyzing job %q.\n", o.jobName)
 
 	lastJobRun, err := o.getLastJobRunWithDataFn(ctx, o.jobName)
@@ -173,8 +173,8 @@ func (o *jobBigQueryLoaderOptions) Run(ctx context.Context) error {
 	return utilerrors.NewAggregate(insertionErrors)
 }
 
-func (o *jobBigQueryLoaderOptions) newJobRunBigQueryLoaderOptions(jobRunID string, readyToUpload chan struct{}) *jobRunBigQueryLoaderOptions {
-	return &jobRunBigQueryLoaderOptions{
+func (o *jobLoaderOptions) newJobRunBigQueryLoaderOptions(jobRunID string, readyToUpload chan struct{}) *jobRunLoaderOptions {
+	return &jobRunLoaderOptions{
 		jobName:        o.jobName,
 		hobRunID:       jobRunID,
 		gcsClient:      o.gcsClient,
@@ -189,11 +189,11 @@ type uploader interface {
 	uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob) error
 }
 
-// jobRunBigQueryLoaderOptions
+// jobRunLoaderOptions
 // 1. reads the GCS bucket for the job run
 // 2. combines all junit for the job run
 // 3. uploads all results to bigquery
-type jobRunBigQueryLoaderOptions struct {
+type jobRunLoaderOptions struct {
 	jobName  string
 	hobRunID string
 
@@ -207,7 +207,7 @@ type jobRunBigQueryLoaderOptions struct {
 	jobRunUploader uploader
 }
 
-func (o *jobRunBigQueryLoaderOptions) Run(ctx context.Context) error {
+func (o *jobRunLoaderOptions) Run(ctx context.Context) error {
 	defer close(o.doneUploading)
 
 	fmt.Printf("Analyzing jobrun/%q/%q.\n", o.jobName, o.hobRunID)
@@ -234,7 +234,7 @@ func (o *jobRunBigQueryLoaderOptions) Run(ctx context.Context) error {
 	return nil
 }
 
-func (o *jobRunBigQueryLoaderOptions) uploadJobRun(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo) error {
+func (o *jobRunLoaderOptions) uploadJobRun(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo) error {
 	prowJob, err := jobRun.GetProwJob(ctx)
 	if err != nil {
 		return err
@@ -254,7 +254,7 @@ func (o *jobRunBigQueryLoaderOptions) uploadJobRun(ctx context.Context, jobRun j
 }
 
 // associateJobRuns returns allJobRuns and currentAggregationTargetJobRuns
-func (o *jobRunBigQueryLoaderOptions) readJobRunFromGCS(ctx context.Context) (jobrunaggregatorapi.JobRunInfo, error) {
+func (o *jobRunLoaderOptions) readJobRunFromGCS(ctx context.Context) (jobrunaggregatorapi.JobRunInfo, error) {
 	jobRunInfo, err := o.gcsClient.ReadJobRunFromGCS(ctx, o.jobName, o.hobRunID)
 	if err != nil {
 		return nil, err

@@ -34,7 +34,7 @@ func TestJobRunBigQueryLoaderOptions_uploadTestSuites(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			o := &jobBigQueryLoaderOptions{
+			o := &jobLoaderOptions{
 				jobName:         tt.fields.JobName,
 				WorkingDir:      tt.fields.WorkingDir,
 				PayloadTag:      tt.fields.PayloadTag,

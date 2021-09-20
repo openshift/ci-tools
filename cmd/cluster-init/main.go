@@ -224,18 +224,21 @@ func updateClusterBuildFarmDir(o options) error {
 	buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
 	if o.update {
 		logrus.Infof("Updating build dir: %s", buildDir)
-		if err := os.RemoveAll(buildDir); err != nil {
-			return fmt.Errorf("failed to remove base directory for cluster: %w", err)
-		}
 	} else {
 		logrus.Infof("creating build dir: %s", buildDir)
+		if err := os.MkdirAll(buildDir, 0777); err != nil {
+			return fmt.Errorf("failed to create base directory for cluster: %w", err)
+		}
 	}
-	if err := os.MkdirAll(buildDir, 0777); err != nil {
-		return fmt.Errorf("failed to create base directory for cluster: %w", err)
-	}
-
 	for _, item := range []string{"common", "common_except_app.ci"} {
-		if err := os.Symlink(fmt.Sprintf("../%s", item), filepath.Join(buildDir, item)); err != nil {
+		target := fmt.Sprintf("../%s", item)
+		source := filepath.Join(buildDir, item)
+		if o.update {
+			if err := os.RemoveAll(source); err != nil {
+				return fmt.Errorf("failed to remove symlink %s, error: %v", source, err)
+			}
+		}
+		if err := os.Symlink(target, source); err != nil {
 			return fmt.Errorf("failed to symlink %s to ../%s", item, item)
 		}
 	}

@@ -70,22 +70,16 @@ func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
 func updateSecret(secretGenerator func(options) secretbootstrap.SecretConfig) func(c *secretbootstrap.Config, o options) error {
 	return func(c *secretbootstrap.Config, o options) error {
 		secret := secretGenerator(o)
-		if err := removeSecret(secret.To[0].Name, o.clusterName, c); err != nil {
-			return err
+		idx, _, _ := findSecretConfig(secret.To[0].Name, o.clusterName, c.Secrets)
+		if idx != -1 {
+			logrus.Infof("Replacing existing secret with 'to' of: %v", secret.To)
+			c.Secrets = append(c.Secrets[:idx], append([]secretbootstrap.SecretConfig{secret}, c.Secrets[idx+1:]...)...)
+		} else {
+			logrus.Infof("Creating new secret with 'to' of: %v", secret.To)
+			c.Secrets = append(c.Secrets, secret)
 		}
-		logrus.Infof("Creating new secret with 'to' of: %v", secret.To)
-		c.Secrets = append(c.Secrets, secret)
 		return nil
 	}
-}
-
-func removeSecret(name, clusterName string, c *secretbootstrap.Config) error {
-	idx, secret, _ := findSecretConfig(name, clusterName, c.Secrets)
-	if idx != -1 {
-		logrus.Infof("Removing existing secret with 'to' of: %v", secret.To)
-		c.Secrets = append(c.Secrets[:idx], c.Secrets[idx:]...)
-	}
-	return nil
 }
 
 func generateCiOperatorSecret(o options) secretbootstrap.SecretConfig {
@@ -269,7 +263,7 @@ func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o opti
 		},
 	}
 	for _, cluster := range c.UserSecretsTargetClusters {
-		if cluster != string(api.ClusterHive) {
+		if cluster != string(api.ClusterHive) && cluster != o.clusterName {
 			items = append(items, secretbootstrap.DockerConfigJSONData{
 				AuthField:   registryCommandTokenField(cluster, pull),
 				Item:        buildUFarm,
@@ -286,11 +280,14 @@ func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o opti
 			generateDockerConfigJsonSecretConfigTo(regPullCredsAll, testCredentials, o.clusterName),
 		},
 	}
-	if err := removeSecret(regPullCredsAll, o.clusterName, c); err != nil {
-		return err
+	idx, _, _ := findSecretConfig(regPullCredsAll, o.clusterName, c.Secrets)
+	if idx != -1 {
+		logrus.Infof("Replacing existing secret with 'to' of: %v", sc.To)
+		c.Secrets = append(c.Secrets[:idx], append([]secretbootstrap.SecretConfig{sc}, c.Secrets[idx+1:]...)...)
+	} else {
+		logrus.Infof("Creating new secret with 'to' of: %v", sc.To)
+		c.Secrets = append(c.Secrets, sc)
 	}
-	logrus.Infof("Creating new secret with 'to' of: %v", sc.To)
-	c.Secrets = append(c.Secrets, sc)
 	return nil
 }
 
@@ -312,6 +309,11 @@ func updateRegistrySecretItemContext(c *secretbootstrap.Config, name, cluster st
 	_, sc, err := findSecretConfig(name, cluster, c.Secrets)
 	if err != nil {
 		return err
+	}
+	for _, si := range sc.From[dotDockerConfigJson].DockerConfigJSONData {
+		if si.AuthField == value.AuthField && si.RegistryURL == value.RegistryURL {
+			return nil
+		}
 	}
 	sc.From[dotDockerConfigJson] = secretbootstrap.ItemContext{
 		DockerConfigJSONData: append(sc.From[dotDockerConfigJson].DockerConfigJSONData, value),

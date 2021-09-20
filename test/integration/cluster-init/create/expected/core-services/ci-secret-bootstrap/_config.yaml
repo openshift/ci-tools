@@ -327,9 +327,6 @@ secret_configs:
       - auth_field: token_image-puller_build01_reg_auth_value.txt
         item: build_farm
         registry_url: registry.build01.ci.openshift.org
-      - auth_field: token_image-puller_newCluster_reg_auth_value.txt
-        item: build_farm
-        registry_url: registry.newCluster.ci.openshift.org
   to:
   - cluster: newCluster
     name: registry-pull-credentials-all

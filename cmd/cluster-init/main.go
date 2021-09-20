@@ -235,7 +235,7 @@ func updateClusterBuildFarmDir(o options) error {
 		source := filepath.Join(buildDir, item)
 		if o.update {
 			if err := os.RemoveAll(source); err != nil {
-				return fmt.Errorf("failed to remove symlink %s, error: %v", source, err)
+				return fmt.Errorf("failed to remove symlink %s, error: %w", source, err)
 			}
 		}
 		if err := os.Symlink(target, source); err != nil {

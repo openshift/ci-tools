@@ -10,15 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openshift/ci-tools/pkg/junit"
-
+	"k8s.io/apimachinery/pkg/util/clock"
 	"sigs.k8s.io/yaml"
 
-	"k8s.io/apimachinery/pkg/util/clock"
-
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
-
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
+	"github.com/openshift/ci-tools/pkg/junit"
 )
 
 // JobRunAggregatorAnalyzerOptions
@@ -64,8 +61,6 @@ func (o *JobRunAggregatorAnalyzerOptions) getRelatedJobs(ctx context.Context) ([
 			continue
 		}
 	}
-
-	return nil, fmt.Errorf("how on earth did we get here??")
 }
 
 func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
@@ -81,8 +76,8 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 		return fmt.Errorf("error creating destination directory %q: %w", currentAggregationDir, err)
 	}
 
-	finishedJobsToAggregate := []jobrunaggregatorapi.JobRunInfo{}
-	finishedJobRunNames := []string{}
+	var finishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo
+	var finishedJobRunNames []string
 	for { // TODO extract to a method.
 		fmt.Println() // for prettier logs
 		// reset vars

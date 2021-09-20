@@ -6,10 +6,12 @@ import (
 	"sort"
 	"strings"
 
+	"gopkg.in/yaml.v2"
+
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/junit"
-	"gopkg.in/yaml.v2"
-	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 type jobRunJunit struct {

@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
-
 	"cloud.google.com/go/bigquery"
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
-	"github.com/openshift/ci-tools/pkg/junit"
+
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
+	"github.com/openshift/ci-tools/pkg/junit"
 )
 
 type testRunUploader struct {

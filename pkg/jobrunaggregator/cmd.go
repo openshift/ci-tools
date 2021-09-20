@@ -1,10 +1,11 @@
 package jobrunaggregator
 
 import (
+	"github.com/spf13/cobra"
+
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatoranalyzer"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunbigqueryloader"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobtableprimer"
-	"github.com/spf13/cobra"
 )
 
 func NewJobAggregatorCommand() *cobra.Command {

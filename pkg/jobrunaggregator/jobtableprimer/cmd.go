@@ -3,12 +3,12 @@ package jobtableprimer
 import (
 	"context"
 
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
-
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
 
 type primeJobTableFlags struct {

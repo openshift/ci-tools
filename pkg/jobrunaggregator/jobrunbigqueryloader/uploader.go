@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 	"golang.org/x/sync/semaphore"
+
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
 
 type getLastJobRunWithDataFunc func(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
@@ -123,6 +125,9 @@ func (o *jobLoaderOptions) Run(ctx context.Context) error {
 	}
 
 	jobRunProcessingCh, errorCh, err := o.gcsClient.ListJobRunNames(ctx, o.jobName, startingJobRunID)
+	if err != nil {
+		return err
+	}
 
 	insertionErrorLock := sync.Mutex{}
 	insertionErrors := []error{}

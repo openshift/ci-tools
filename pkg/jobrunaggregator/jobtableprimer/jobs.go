@@ -15,8 +15,8 @@ const (
 	single = "single"
 
 	ipv4 = "ipv4"
-	ipv6 = "ipv6"
-	dual = "dual"
+	//ipv6 = "ipv6"
+	//dual = "dual"
 
 	v408 = "4.8"
 	v409 = "4.9"

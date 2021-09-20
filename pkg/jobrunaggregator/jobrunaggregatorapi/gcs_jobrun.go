@@ -10,15 +10,16 @@ import (
 	"strings"
 
 	"cloud.google.com/go/storage"
-	"github.com/openshift/ci-tools/pkg/junit"
+
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+
+	"github.com/openshift/ci-tools/pkg/junit"
 )
 
 type gcsJobRun struct {
 	// retrieval mechanisms
-	bkt              *storage.BucketHandle
-	workingDirectory string
+	bkt *storage.BucketHandle
 
 	jobName        string
 	jobRunID       string
@@ -116,7 +117,7 @@ func (j *gcsJobRun) writeCache(ctx context.Context, parentDir string) error {
 
 		currTestSuite := &junit.TestSuite{}
 		if testSuiteErr := xml.Unmarshal(junitContent, currTestSuite); testSuiteErr != nil {
-			return fmt.Errorf("error parsing junit for %q %q: %v then %w", j.GetJobRunID(), junitFile, testSuitesErr, testSuiteErr)
+			return fmt.Errorf("error parsing junit for %q %q: %w", j.GetJobRunID(), junitFile, testSuiteErr)
 		}
 		testSuites.Suites = append(testSuites.Suites, currTestSuite)
 	}
@@ -152,7 +153,7 @@ func (j *gcsJobRun) GetCombinedJUnitTestSuites(ctx context.Context) (*junit.Test
 
 		currTestSuite := &junit.TestSuite{}
 		if testSuiteErr := xml.Unmarshal(junitContent, currTestSuite); testSuiteErr != nil {
-			return nil, fmt.Errorf("error parsing junit for %q %q: %v then %w", j.GetJobRunID(), junitFile, testSuitesErr, testSuiteErr)
+			return nil, fmt.Errorf("error parsing junit for %q %q: %w", j.GetJobRunID(), junitFile, testSuiteErr)
 		}
 		testSuites.Suites = append(testSuites.Suites, currTestSuite)
 	}

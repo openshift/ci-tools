@@ -6,11 +6,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 	"google.golang.org/api/iterator"
+
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
 
 type JobRunsBigQuerySummarizerOptions struct {
@@ -76,7 +78,7 @@ type JobRunBigQuerySummarizerOptions struct {
 }
 
 func (o *JobRunBigQuerySummarizerOptions) Run(ctx context.Context) error {
-	fmt.Printf(o.prefixLog("Reading existing data from job runs of type.\n"))
+	fmt.Print(o.prefixLog("Reading existing data from job runs of type.\n"))
 
 	firstAggregatedDay := false
 	currAggregatedStartDay := jobrunaggregatorlib.GetUTCDay(time.Now().UTC().Add(-1 * 365 * 24 * time.Hour))
@@ -85,14 +87,14 @@ func (o *JobRunBigQuerySummarizerOptions) Run(ctx context.Context) error {
 	case err != nil:
 		return fmt.Errorf("failed reading first row in aggregation table: %w", err)
 	case lastUnifiedTestRun == nil:
-		fmt.Printf(o.prefixLog("No existing data.\n"))
+		fmt.Print(o.prefixLog("No existing data.\n"))
 		firstAggregatedDay = true
 	default:
 		currAggregatedStartDay = jobrunaggregatorlib.GetUTCDay(lastUnifiedTestRun.AggregationStartDate.Add(24 * time.Hour))
-		fmt.Printf(o.prefixLog("Found existing result, starting day is %v.\n"), currAggregatedStartDay)
+		fmt.Print(o.prefixLog("Found existing result, starting day is %v.\n"), currAggregatedStartDay)
 	}
 
-	fmt.Printf(o.prefixLog("Querying unified test run data\n"))
+	fmt.Print(o.prefixLog("Querying unified test run data\n"))
 	interestingUnifiedRows, err := o.CIDataClient.ListUnifiedTestRunsForJobAfterDay(ctx, o.JobName, currAggregatedStartDay)
 	if err != nil {
 		return err
@@ -156,7 +158,7 @@ func (o *JobRunBigQuerySummarizerOptions) Run(ctx context.Context) error {
 		fmt.Printf(o.prefixLog("  read %d new rows, have total %d\n"), newRowsRead, len(testRunsToAggregate))
 
 		if outOfRows {
-			fmt.Printf(o.prefixLog("Out of rows without seeing end of the summary duration.  Returning without a write.\n"))
+			fmt.Print(o.prefixLog("Out of rows without seeing end of the summary duration.  Returning without a write.\n"))
 			break
 		}
 

@@ -7,11 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/storage"
+	"google.golang.org/api/iterator"
+
 	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
-	"cloud.google.com/go/storage"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
-	"google.golang.org/api/iterator"
 )
 
 func GetPayloadTagFromProwJob(prowJob *prowjobv1.ProwJob) string {

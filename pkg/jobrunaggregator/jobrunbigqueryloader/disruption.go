@@ -8,11 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 	"github.com/openshift/ci-tools/pkg/junit"
-	"k8s.io/apimachinery/pkg/util/sets"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 )
 
 type availabilityResult struct {
@@ -155,10 +156,10 @@ func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunagg
 		return err
 	}
 
-	return o.uploadBackendDisruption(ctx, jobRun.GetJobName(), jobRun.GetJobRunID(), combinedJunitContent)
+	return o.uploadBackendDisruption(ctx, jobRun.GetJobRunID(), combinedJunitContent)
 }
 
-func (o *disruptionUploader) uploadBackendDisruption(ctx context.Context, jobName, jobRunName string, suites *junit.TestSuites) error {
+func (o *disruptionUploader) uploadBackendDisruption(ctx context.Context, jobRunName string, suites *junit.TestSuites) error {
 	rows := []*jobrunaggregatorapi.BackendDisruptionRow{}
 	serverAvailabilityResults := getServerAvailabilityResults(suites)
 	for _, backendName := range sets.StringKeySet(serverAvailabilityResults).List() {

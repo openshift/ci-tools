@@ -4,9 +4,11 @@ import (
 	"context"
 
 	"cloud.google.com/go/bigquery"
+
+	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/junit"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 )
 
 type BigQueryInserter interface {
@@ -64,7 +66,10 @@ var _ bigquery.ValueSaver = &testRunRow{}
 
 func (v *testRunRow) Save() (map[string]bigquery.Value, string, error) {
 
-	status := "Unknown"
+	// the linter requires not setting a default value. This seems strictly worse and more error-prone to me, but
+	// I am a slave to the bot.
+	//status := "Unknown"
+	var status string
 	switch {
 	case v.testCase.FailureOutput != nil:
 		status = "Failed"

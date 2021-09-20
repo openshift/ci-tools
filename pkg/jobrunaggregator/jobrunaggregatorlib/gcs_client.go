@@ -9,8 +9,9 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"google.golang.org/api/iterator"
+
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
 type CIGCSClient interface {

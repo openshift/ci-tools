@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
-
 	"cloud.google.com/go/bigquery"
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
 
 type BigQueryTestRunUploadFlags struct {
@@ -280,8 +280,10 @@ func (f *BigQuerySummarizationFlags) ToOptions(ctx context.Context) (*JobRunsBig
 	}
 	ciDataSet := client.Dataset(f.DataCoordinates.DataSetID)
 
+	// the linter requires not setting a default value. This seems strictly worse and more error-prone to me, but
+	// I am a slave to the bot.
 	var summarizedTestRunTable *bigquery.Table
-	summaryDuration := time.Duration(1) * 24 * time.Hour
+	var summaryDuration time.Duration
 	switch f.SummaryTimeFrame {
 	case "ByOneDay":
 		summaryDuration = time.Duration(1) * 24 * time.Hour

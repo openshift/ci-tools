@@ -6,11 +6,13 @@ import (
 	"sync"
 	"time"
 
+	"gopkg.in/yaml.v2"
+
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 	"github.com/openshift/ci-tools/pkg/junit"
-	"gopkg.in/yaml.v2"
-	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 type baseline interface {
@@ -70,6 +72,7 @@ func assignPassFailForTestSuite(ctx context.Context, parentTestSuites []string, 
 	return nil
 }
 
+/* the linter won't allow this.  You'll probably need at some point.
 type simpleBaseline struct{}
 
 func (*simpleBaseline) FailureMessage(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (string, error) {
@@ -96,6 +99,23 @@ func (*simpleBaseline) FailureMessage(ctx context.Context, suiteNames []string, 
 
 	return "", nil
 }
+
+func getWorkingPercentage(testCaseDetails *TestCaseDetails) float32 {
+	// if the same job run has a pass and a fail, then it's a flake.  For now, we will consider those as passes by subtracting
+	// them (for now), from the failure count.
+	failureCount := len(testCaseDetails.Failures)
+	for _, failure := range testCaseDetails.Failures {
+		for _, pass := range testCaseDetails.Passes {
+			if pass.JobRunID == failure.JobRunID {
+				failureCount--
+				break
+			}
+		}
+	}
+
+	return float32(len(testCaseDetails.Passes)) / float32(len(testCaseDetails.Passes)+failureCount) * 100.0
+}
+*/
 
 // weeklyAverageFromTenDays gets the weekly average pass rate from ten days ago so that the latest tests do not
 // influence the pass/fail criteria.
@@ -143,9 +163,8 @@ func (a *weeklyAverageFromTenDays) getAggregatedTestRuns(ctx context.Context) (m
 
 func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (bool, string, error) {
 	if alwaysPassTests.Has(testCaseDetails.Name) {
-		summary := fmt.Sprintf("always passing")
 		fmt.Printf("always passing %q\n", testCaseDetails.Name)
-		return false, summary, nil
+		return false, "always passing", nil
 	}
 	if !didTestRun(testCaseDetails) {
 		return false, "did not run", nil
@@ -186,7 +205,9 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames [
 	}
 
 	averageTestResult, ok := aggregatedTestRunsByName[testCaseDetails.Name]
-	workingPercentage := 100
+	// the linter requires not setting a default value. This seems strictly worse and more error-prone to me, but
+	// I am a slave to the bot.
+	var workingPercentage int
 	switch {
 	case missingAllHistoricalData:
 		workingPercentage = 99
@@ -387,22 +408,6 @@ func didTestRun(testCaseDetails *TestCaseDetails) bool {
 		return false
 	}
 	return true
-}
-
-func getWorkingPercentage(testCaseDetails *TestCaseDetails) float32 {
-	// if the same job run has a pass and a fail, then it's a flake.  For now, we will consider those as passes by subtracting
-	// them (for now), from the failure count.
-	failureCount := len(testCaseDetails.Failures)
-	for _, failure := range testCaseDetails.Failures {
-		for _, pass := range testCaseDetails.Passes {
-			if pass.JobRunID == failure.JobRunID {
-				failureCount--
-				break
-			}
-		}
-	}
-
-	return float32(len(testCaseDetails.Passes)) / float32(len(testCaseDetails.Passes)+failureCount) * 100.0
 }
 
 func getAttempts(testCaseDetails *TestCaseDetails) int {

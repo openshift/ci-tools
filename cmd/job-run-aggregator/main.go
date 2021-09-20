@@ -7,8 +7,9 @@ import (
 	goflag "flag"
 	"os"
 
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator"
 	"github.com/spf13/pflag"
+
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator"
 )
 
 func main() {

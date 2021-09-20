@@ -9,9 +9,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"cloud.google.com/go/storage"
-
 	"cloud.google.com/go/bigquery"
+	"cloud.google.com/go/storage"
 	"github.com/spf13/pflag"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -162,5 +161,7 @@ func saveToken(path string, token *oauth2.Token) {
 		log.Fatalf("Unable to cache oauth token: %v", err)
 	}
 	defer f.Close()
-	json.NewEncoder(f).Encode(token)
+	if err := json.NewEncoder(f).Encode(token); err != nil {
+		fmt.Println(err.Error())
+	}
 }

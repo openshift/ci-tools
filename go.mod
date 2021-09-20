@@ -25,6 +25,7 @@ replace (
 )
 
 require (
+	cloud.google.com/go/bigquery v1.8.0
 	cloud.google.com/go/storage v1.12.0
 	github.com/GoogleCloudPlatform/testgrid v0.0.68
 	github.com/PagerDuty/go-pagerduty v1.4.1
@@ -65,10 +66,14 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/slack-go/slack v0.7.3
 	github.com/spf13/afero v1.4.1
+	github.com/spf13/cobra v1.1.3
+	github.com/spf13/pflag v1.0.5
+	golang.org/x/oauth2 v0.0.0-20200902213428-5d25da1a8d43
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/api v0.32.0
 	gopkg.in/fsnotify.v1 v1.4.7
 	gopkg.in/robfig/cron.v2 v2.0.0-20150107220207-be2e0b0deed5
+	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.22.0
 	k8s.io/apimachinery v0.22.0
 	k8s.io/apiserver v0.22.0

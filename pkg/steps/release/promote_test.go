@@ -546,8 +546,8 @@ func TestGetPromotionPod(t *testing.T) {
 		{
 			name: "basic case",
 			imageMirror: map[string]string{
-				"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62": "registy.ci.openshift.org/ci/applyconfig:latest",
-				"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb":                                                              "registy.ci.openshift.org/ci/bin:latest",
+				"registy.ci.openshift.org/ci/applyconfig:latest": "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62",
+				"registy.ci.openshift.org/ci/bin:latest":         "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
 			},
 			namespace: "ci-op-zyvwvffx",
 		},
@@ -613,8 +613,47 @@ func TestGetImageMirror(t *testing.T) {
 				},
 			},
 			expected: map[string]string{
-				"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb": "registry.ci.openshift.org/ci/a:latest",
-				"docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd": "registry.ci.openshift.org/ci/c:latest",
+				"registry.ci.openshift.org/ci/a:latest": "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"registry.ci.openshift.org/ci/c:latest": "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+			},
+		},
+		{
+			name: "image promoted to multiple names",
+			tags: map[string][]api.ImageStreamTagReference{
+				"b": {
+					{Namespace: "ci", Name: "a", Tag: "promoted"},
+					{Namespace: "ci", Name: "a", Tag: "also-promoted"},
+				},
+				"d": {
+					{Namespace: "ci", Name: "c", Tag: "latest"},
+				},
+			},
+			pipeline: &imageapi.ImageStream{
+				Status: imageapi.ImageStreamStatus{
+					Tags: []imageapi.NamedTagEventList{
+						{
+							Tag: "b",
+							Items: []imageapi.TagEvent{
+								{
+									DockerImageReference: "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+								},
+							},
+						},
+						{
+							Tag: "d",
+							Items: []imageapi.TagEvent{
+								{
+									DockerImageReference: "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: map[string]string{
+				"registry.ci.openshift.org/ci/a:promoted":      "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"registry.ci.openshift.org/ci/a:also-promoted": "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"registry.ci.openshift.org/ci/c:latest":        "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd",
 			},
 		},
 	}

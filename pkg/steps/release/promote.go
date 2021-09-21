@@ -146,13 +146,13 @@ func getImageMirrorTarget(tags map[string][]api.ImageStreamTagReference, pipelin
 	// Will this ever include more than one?
 	namespaces = sets.String{}
 	for src, dsts := range tags {
+		dockerImageReference := findDockerImageReference(pipeline, src)
+		if dockerImageReference == "" {
+			continue
+		}
+		dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
 		for _, dst := range dsts {
-			dockerImageReference := findDockerImageReference(pipeline, src)
-			if dockerImageReference == "" {
-				continue
-			}
-			dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
-			imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s", registry, dst.ISTagName())
+			imageMirror[fmt.Sprintf("%s/%s", registry, dst.ISTagName())] = dockerImageReference
 			namespaces.Insert(dst.Namespace)
 		}
 	}
@@ -191,7 +191,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *cor
 
 	var images []string
 	for _, k := range keys {
-		images = append(images, fmt.Sprintf("%s=%s", k, imageMirrorTarget[k]))
+		images = append(images, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
 	}
 	command := []string{"/bin/sh", "-c"}
 	args := []string{fmt.Sprintf("oc image mirror --registry-config=%s --continue-on-error=true --max-per-registry=20 %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(images, " "))}

@@ -10,6 +10,103 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
+func TestUpdateSecret(t *testing.T) {
+	testCases := []struct {
+		name string
+		options
+		secretGenerator func(options) secretbootstrap.SecretConfig
+		config          secretbootstrap.Config
+		expectedConfig  secretbootstrap.Config
+	}{
+		{
+			name: "secret does not exist",
+			options: options{
+				clusterName: "newCluster",
+			},
+			secretGenerator: func(o options) secretbootstrap.SecretConfig {
+				return secretbootstrap.SecretConfig{
+					From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
+					To:   []secretbootstrap.SecretContext{{Cluster: "newCluster", Name: "secret-a"}},
+				}
+			},
+			config: secretbootstrap.Config{
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
+						To:   []secretbootstrap.SecretContext{{Cluster: "existingCluster", Name: "secret-a"}},
+					},
+				},
+			},
+			expectedConfig: secretbootstrap.Config{
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
+						To:   []secretbootstrap.SecretContext{{Cluster: "existingCluster", Name: "secret-a"}},
+					},
+					{
+						From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
+						To:   []secretbootstrap.SecretContext{{Cluster: "newCluster", Name: "secret-a"}},
+					},
+				},
+			},
+		},
+		{
+			name: "secret exists",
+			options: options{
+				clusterName: "existingCluster",
+			},
+			secretGenerator: func(o options) secretbootstrap.SecretConfig {
+				return secretbootstrap.SecretConfig{
+					From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
+					To:   []secretbootstrap.SecretContext{{Cluster: "existingCluster", Name: "secret-a"}},
+				}
+			},
+			config: secretbootstrap.Config{
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
+						To:   []secretbootstrap.SecretContext{{Cluster: "cluster-1", Name: "secret-a"}},
+					},
+					{
+						From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
+						To:   []secretbootstrap.SecretContext{{Cluster: "existingCluster", Name: "secret-a"}},
+					},
+					{
+						From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
+						To:   []secretbootstrap.SecretContext{{Cluster: "cluster-2", Name: "secret-a"}},
+					},
+				},
+			},
+			expectedConfig: secretbootstrap.Config{
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
+						To:   []secretbootstrap.SecretContext{{Cluster: "cluster-1", Name: "secret-a"}},
+					},
+					{
+						From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
+						To:   []secretbootstrap.SecretContext{{Cluster: "existingCluster", Name: "secret-a"}},
+					},
+					{
+						From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
+						To:   []secretbootstrap.SecretContext{{Cluster: "cluster-2", Name: "secret-a"}},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := updateSecret(tc.secretGenerator)(&tc.config, tc.options); err != nil {
+				t.Fatalf("received error: %v", err)
+			}
+			if diff := cmp.Diff(tc.expectedConfig, tc.config); diff != "" {
+				t.Fatalf("config did not match expected, diff: %s", diff)
+			}
+		})
+	}
+}
+
 func TestFindSecretConfig(t *testing.T) {
 	testCases := []struct {
 		name           string

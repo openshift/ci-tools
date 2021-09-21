@@ -286,7 +286,7 @@ func TestLiteralDynamicRelease(t *testing.T) {
 		},
 		{
 			name:    "nightly release",
-			release: resolveSpec("https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.5.0-0.nightly/latest?rel=1"),
+			release: resolveSpec("https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.10.0-0.nightly/latest?rel=1"),
 			target:  "latest",
 		},
 		{
@@ -296,7 +296,7 @@ func TestLiteralDynamicRelease(t *testing.T) {
 		},
 		{
 			name:    "built release",
-			release: resolveSpec("https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.5.0-0.nightly/latest?rel=1"),
+			release: resolveSpec("https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.10.0-0.nightly/latest?rel=1"),
 			target:  "assembled",
 		},
 	}

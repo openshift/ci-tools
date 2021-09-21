@@ -17,14 +17,14 @@ releases:
       product: ocp
       architecture: amd64
       stream: nightly
-      version: "4.5"
+      version: "4.10"
       relative: 1
   pre:
     prerelease:
       product: ocp
       version_bounds:
         lower: "4.4.0"
-        upper: "4.5.0-0"
+        upper: "4.10.0-0"
   mainframe:
     release:
       version: "4.7"

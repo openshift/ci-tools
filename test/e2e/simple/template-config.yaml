@@ -1,6 +1,6 @@
 tag_specification:
   namespace: ocp
-  name: "4.5"
+  name: "4.10"
 build_root:
   image_stream_tag:
     name: release

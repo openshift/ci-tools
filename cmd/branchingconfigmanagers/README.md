@@ -90,6 +90,8 @@ ocp:
 
 ## Deploying New Config Managers
 
+**NOTE: This section is incomplete and details about deploying Config Manager will be added after we pilot deploying the first one**
+
 Any new config manager should be deployed to run in a periodic Prow job which mounts a ConfigMap `TBD` that contains the
 YAML file with [OCP lifecycle data](#product-lifecycle-data). The Prowjob should first run the Config Manager, then if
 it ended with zero exit code, it should use the `prcreator` tool to commit the changes and submit a PR to propagate the

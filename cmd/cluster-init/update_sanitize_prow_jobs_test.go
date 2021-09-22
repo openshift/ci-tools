@@ -31,12 +31,12 @@ func TestUpdateConfig(t *testing.T) {
 				Groups: dispatcher.JobGroups{
 					api.ClusterAPPCI: dispatcher.Group{
 						Jobs: []string{
-							"pull-ci-openshift-release-master-build01-dry",
 							"branch-ci-openshift-release-master-build01-apply",
-							"periodic-openshift-release-master-build01-apply",
-							"pull-ci-openshift-release-master-newcluster-dry",
 							"branch-ci-openshift-release-master-newcluster-apply",
-							"periodic-openshift-release-master-newcluster-apply"}}},
+							"periodic-openshift-release-master-build01-apply",
+							"periodic-openshift-release-master-newcluster-apply",
+							"pull-ci-openshift-release-master-build01-dry",
+							"pull-ci-openshift-release-master-newcluster-dry"}}},
 			},
 		},
 	}

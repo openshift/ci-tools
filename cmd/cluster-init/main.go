@@ -165,15 +165,15 @@ func main() {
 	}
 	for _, cluster := range clusters {
 		o.clusterName = cluster
-		steps := []func(options) error{updateJobs}
+		steps := []func(options) error{
+			updateJobs,
+			updateClusterBuildFarmDir,
+			updateCiSecretBootstrap,
+			updateSecretGenerator,
+			updateSanitizeProwJobs,
+		}
 		if !o.update {
-			steps = append(steps,
-				initClusterBuildFarmDir,
-				updateCiSecretBootstrap,
-				updateSecretGenerator,
-				updateSanitizeProwJobs,
-				updateBuildClusters,
-			)
+			steps = append(steps, updateBuildClusters)
 		}
 		for _, step := range steps {
 			if err := step(o); err != nil {
@@ -220,22 +220,32 @@ func submitPR(o options) error {
 	return exec.Command("git", "checkout", master).Run()
 }
 
-func initClusterBuildFarmDir(o options) error {
+func updateClusterBuildFarmDir(o options) error {
 	buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
-	logrus.Infof("Creating build dir: %s", buildDir)
-	if err := os.MkdirAll(buildDir, 0777); err != nil {
-		return fmt.Errorf("failed to create base directory for cluster: %w", err)
+	if o.update {
+		logrus.Infof("Updating build dir: %s", buildDir)
+	} else {
+		logrus.Infof("creating build dir: %s", buildDir)
+		if err := os.MkdirAll(buildDir, 0777); err != nil {
+			return fmt.Errorf("failed to create base directory for cluster: %w", err)
+		}
 	}
-
 	for _, item := range []string{"common", "common_except_app.ci"} {
-		if err := os.Symlink(fmt.Sprintf("../%s", item), filepath.Join(buildDir, item)); err != nil {
+		target := fmt.Sprintf("../%s", item)
+		source := filepath.Join(buildDir, item)
+		if o.update {
+			if err := os.RemoveAll(source); err != nil {
+				return fmt.Errorf("failed to remove symlink %s, error: %w", source, err)
+			}
+		}
+		if err := os.Symlink(target, source); err != nil {
 			return fmt.Errorf("failed to symlink %s to ../%s", item, item)
 		}
 	}
 	return nil
 }
 
-func buildFarmDirFor(releaseRepo string, clusterName string) string {
+func buildFarmDirFor(releaseRepo, clusterName string) string {
 	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName)
 }
 

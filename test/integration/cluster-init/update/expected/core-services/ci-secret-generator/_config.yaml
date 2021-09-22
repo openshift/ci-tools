@@ -7,7 +7,7 @@
     cluster:
     - app.ci
     - build01
-    - newCluster
+    - existingCluster
     service_account:
     - config-updater
     - deck
@@ -35,7 +35,7 @@
     cluster:
     - app.ci
     - build01
-    - newCluster
+    - existingCluster
 - fields:
   - cmd: oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account)
       | sed "s/$(service_account)/$(cluster)/g"
@@ -45,7 +45,7 @@
     cluster:
     - arm01
     - build01
-    - newCluster
+    - existingCluster
     service_account:
     - ci-chat-bot
 - fields:
@@ -57,6 +57,6 @@
     cluster:
     - app.ci
     - build01
-    - newCluster
+    - existingCluster
     service_account:
     - pod-scaler

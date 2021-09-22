@@ -47,6 +47,9 @@ secret_configs:
     sa.crier.build01.config:
       field: sa.crier.build01.config
       item: build_farm
+    sa.crier.existingCluster.config:
+      field: sa.crier.existingCluster.config
+      item: build_farm
   to:
   - cluster: app.ci
     name: crier
@@ -60,6 +63,9 @@ secret_configs:
       item: build_farm
     sa.config-updater.build01.config:
       field: sa.config-updater.build01.config
+      item: build_farm
+    sa.config-updater.existingCluster.config:
+      field: sa.config-updater.existingCluster.config
       item: build_farm
   to:
   - cluster: app.ci
@@ -77,6 +83,9 @@ secret_configs:
       item: build_farm
     sa.deck.build01.config:
       field: sa.deck.build01.config
+      item: build_farm
+    sa.deck.existingCluster.config:
+      field: sa.deck.existingCluster.config
       item: build_farm
   to:
   - cluster: app.ci
@@ -109,6 +118,9 @@ secret_configs:
     sa.prow-controller-manager.build01.config:
       field: sa.prow-controller-manager.build01.config
       item: build_farm
+    sa.prow-controller-manager.existingCluster.config:
+      field: sa.prow-controller-manager.existingCluster.config
+      item: build_farm
   to:
   - cluster: app.ci
     name: prow-controller-manager
@@ -122,6 +134,9 @@ secret_configs:
       item: build_farm
     sa.sinker.build01.config:
       field: sa.sinker.build01.config
+      item: build_farm
+    sa.sinker.existingCluster.config:
+      field: sa.sinker.existingCluster.config
       item: build_farm
   to:
   - cluster: app.ci

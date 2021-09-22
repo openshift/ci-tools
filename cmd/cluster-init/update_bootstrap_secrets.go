@@ -327,18 +327,19 @@ func updateBuildFarmSecrets(c *secretbootstrap.Config, o options) error {
 			Item:  fmt.Sprintf("%s_%s", buildUFarm, o.clusterName),
 			Field: "github_client_id",
 		}
-		for _, s := range []string{configUpdater, "crier", "deck", "hook", "prow-controller-manager", "sinker"} {
-			_, sc, err := findSecretConfig(s, string(api.ClusterAPPCI), c.Secrets)
-			if err != nil {
-				return err
-			}
-			keyAndField := serviceAccountKubeconfigPath(s, o.clusterName)
-			sc.From[keyAndField] = secretbootstrap.ItemContext{
-				Field: keyAndField,
-				Item:  buildUFarm,
-			}
+	}
+	for _, s := range []string{configUpdater, "crier", "deck", "hook", "prow-controller-manager", "sinker"} {
+		_, sc, err := findSecretConfig(s, string(api.ClusterAPPCI), c.Secrets)
+		if err != nil {
+			return err
+		}
+		keyAndField := serviceAccountKubeconfigPath(s, o.clusterName)
+		sc.From[keyAndField] = secretbootstrap.ItemContext{
+			Field: keyAndField,
+			Item:  buildUFarm,
 		}
 	}
+
 	return nil
 }
 

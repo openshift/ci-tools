@@ -322,24 +322,26 @@ func updateRegistrySecretItemContext(c *secretbootstrap.Config, name, cluster st
 }
 
 func updateBuildFarmSecrets(c *secretbootstrap.Config, o options) error {
-	_, buildFarmCredentials, err := findSecretConfig(fmt.Sprintf("%s-%s", buildFarm, credentials), string(api.ClusterAPPCI), c.Secrets)
-	if err != nil {
-		return err
-	}
-	clientId := o.clusterName + "_github_client_id"
-	buildFarmCredentials.From[clientId] = secretbootstrap.ItemContext{
-		Item:  fmt.Sprintf("%s_%s", buildUFarm, o.clusterName),
-		Field: "github_client_id",
-	}
-	for _, s := range []string{configUpdater, "crier", "deck", "hook", "prow-controller-manager", "sinker"} {
-		_, sc, err := findSecretConfig(s, string(api.ClusterAPPCI), c.Secrets)
+	if o.clusterName == string(api.ClusterBuild01) || o.clusterName == string(api.ClusterBuild02) || o.clusterName == string(api.ClusterVSphere) {
+		_, buildFarmCredentials, err := findSecretConfig(fmt.Sprintf("%s-%s", buildFarm, credentials), string(api.ClusterAPPCI), c.Secrets)
 		if err != nil {
 			return err
 		}
-		keyAndField := serviceAccountKubeconfigPath(s, o.clusterName)
-		sc.From[keyAndField] = secretbootstrap.ItemContext{
-			Field: keyAndField,
-			Item:  buildUFarm,
+		clientId := o.clusterName + "_github_client_id"
+		buildFarmCredentials.From[clientId] = secretbootstrap.ItemContext{
+			Item:  fmt.Sprintf("%s_%s", buildUFarm, o.clusterName),
+			Field: "github_client_id",
+		}
+		for _, s := range []string{configUpdater, "crier", "deck", "hook", "prow-controller-manager", "sinker"} {
+			_, sc, err := findSecretConfig(s, string(api.ClusterAPPCI), c.Secrets)
+			if err != nil {
+				return err
+			}
+			keyAndField := serviceAccountKubeconfigPath(s, o.clusterName)
+			sc.From[keyAndField] = secretbootstrap.ItemContext{
+				Field: keyAndField,
+				Item:  buildUFarm,
+			}
 		}
 	}
 	return nil

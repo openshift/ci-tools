@@ -10,10 +10,10 @@ default: build01
 groups:
   app.ci:
     jobs:
-    - some-job
-    - pull-ci-openshift-release-master-newCluster-dry
     - branch-ci-openshift-release-master-newCluster-apply
     - periodic-openshift-release-master-newCluster-apply
+    - pull-ci-openshift-release-master-newCluster-dry
+    - some-job
   build01:
     jobs:
     - some-other-job

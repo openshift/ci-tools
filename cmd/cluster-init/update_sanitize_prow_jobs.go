@@ -6,6 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -35,8 +36,10 @@ func updateSanitizeProwJobs(o options) error {
 func updateSanitizeProwJobsConfig(c *dispatcher.Config, clusterName string) {
 	appGroup := c.Groups[api.ClusterAPPCI]
 	metadata := RepoMetadata()
-	appGroup.Jobs = appendIfNotContains(appGroup.Jobs, metadata.JobName(jobconfig.PresubmitPrefix, clusterName+"-dry"))
-	appGroup.Jobs = appendIfNotContains(appGroup.Jobs, metadata.JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply"))
-	appGroup.Jobs = appendIfNotContains(appGroup.Jobs, metadata.SimpleJobName(jobconfig.PeriodicPrefix, clusterName+"-apply"))
+	appGroup.Jobs = sets.NewString(appGroup.Jobs...).
+		Insert(metadata.JobName(jobconfig.PresubmitPrefix, clusterName+"-dry")).
+		Insert(metadata.JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply")).
+		Insert(metadata.SimpleJobName(jobconfig.PeriodicPrefix, clusterName+"-apply")).
+		List()
 	c.Groups[api.ClusterAPPCI] = appGroup
 }

@@ -252,12 +252,3 @@ func buildFarmDirFor(releaseRepo, clusterName string) string {
 func serviceAccountKubeconfigPath(serviceAccount, clusterName string) string {
 	return fmt.Sprintf("sa.%s.%s.config", serviceAccount, clusterName)
 }
-
-func appendIfNotContains(slice []string, item string) []string {
-	for _, s := range slice {
-		if item == s {
-			return slice
-		}
-	}
-	return append(slice, item)
-}

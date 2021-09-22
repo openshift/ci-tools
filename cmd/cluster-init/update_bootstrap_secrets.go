@@ -6,6 +6,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 )
@@ -43,9 +45,9 @@ func updateCiSecretBootstrap(o options) error {
 
 func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
 	for _, groupName := range []string{buildUFarm, "non_app_ci", "non_app_ci_x86"} {
-		c.ClusterGroups[groupName] = appendIfNotContains(c.ClusterGroups[groupName], o.clusterName)
+		c.ClusterGroups[groupName] = sets.NewString(c.ClusterGroups[groupName]...).Insert(o.clusterName).List()
 	}
-	c.UserSecretsTargetClusters = appendIfNotContains(c.UserSecretsTargetClusters, o.clusterName)
+	c.UserSecretsTargetClusters = sets.NewString(c.UserSecretsTargetClusters...).Insert(o.clusterName).List()
 
 	for _, step := range []func(c *secretbootstrap.Config, o options) error{
 		updatePodScalerSecret,
@@ -57,7 +59,7 @@ func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
 		updateSecret(generateRegistryPushCredentialsSecret),
 		updateSecret(generateRegistryPullCredentialsSecret),
 		updateSecret(generateCiOperatorSecret),
-		generateRegistryPullCredentialsAllSecrets,
+		updateSecret(generateRegistryPullCredentialsAllSecrets(c)),
 	} {
 		if err := step(c, o); err != nil {
 			return err
@@ -235,60 +237,53 @@ func updateExistingRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, 
 	return nil
 }
 
-func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o options) error {
-	items := []secretbootstrap.DockerConfigJSONData{
-		{
-			AuthField:   "auth",
-			Item:        "cloud.openshift.com-pull-secret",
-			RegistryURL: "cloud.openshift.com",
-			EmailField:  "email",
-		},
-		{
-			AuthField:   "auth",
-			Item:        "quay.io-pull-secret",
-			RegistryURL: "quay.io",
-			EmailField:  "email",
-		},
-		{
-			AuthField:   "auth",
-			Item:        "registry.connect.redhat.com-pull-secret",
-			RegistryURL: "registry.connect.redhat.com",
-			EmailField:  "email",
-		},
-		{
-			AuthField:   "auth",
-			Item:        "registry.redhat.io-pull-secret",
-			RegistryURL: "registry.redhat.io",
-			EmailField:  "email",
-		},
-	}
-	for _, cluster := range c.UserSecretsTargetClusters {
-		if cluster != string(api.ClusterHive) && cluster != o.clusterName {
-			items = append(items, secretbootstrap.DockerConfigJSONData{
-				AuthField:   registryCommandTokenField(cluster, pull),
-				Item:        buildUFarm,
-				RegistryURL: registryUrlFor(cluster),
-			})
+func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config) func(options) secretbootstrap.SecretConfig {
+	return func(o options) secretbootstrap.SecretConfig {
+		items := []secretbootstrap.DockerConfigJSONData{
+			{
+				AuthField:   "auth",
+				Item:        "cloud.openshift.com-pull-secret",
+				RegistryURL: "cloud.openshift.com",
+				EmailField:  "email",
+			},
+			{
+				AuthField:   "auth",
+				Item:        "quay.io-pull-secret",
+				RegistryURL: "quay.io",
+				EmailField:  "email",
+			},
+			{
+				AuthField:   "auth",
+				Item:        "registry.connect.redhat.com-pull-secret",
+				RegistryURL: "registry.connect.redhat.com",
+				EmailField:  "email",
+			},
+			{
+				AuthField:   "auth",
+				Item:        "registry.redhat.io-pull-secret",
+				RegistryURL: "registry.redhat.io",
+				EmailField:  "email",
+			},
+		}
+		for _, cluster := range c.UserSecretsTargetClusters {
+			if cluster != string(api.ClusterHive) && cluster != o.clusterName { // This cluster's SecretItem is added in generatePushPullSecretFrom
+				items = append(items, secretbootstrap.DockerConfigJSONData{
+					AuthField:   registryCommandTokenField(cluster, pull),
+					Item:        buildUFarm,
+					RegistryURL: registryUrlFor(cluster),
+				})
+			}
+		}
+		return secretbootstrap.SecretConfig{
+			From: map[string]secretbootstrap.ItemContext{
+				dotDockerConfigJson: generatePushPullSecretFrom(o.clusterName, items),
+			},
+			To: []secretbootstrap.SecretContext{
+				generateDockerConfigJsonSecretConfigTo(regPullCredsAll, ci, o.clusterName),
+				generateDockerConfigJsonSecretConfigTo(regPullCredsAll, testCredentials, o.clusterName),
+			},
 		}
 	}
-	sc := secretbootstrap.SecretConfig{
-		From: map[string]secretbootstrap.ItemContext{
-			dotDockerConfigJson: generatePushPullSecretFrom(o.clusterName, items),
-		},
-		To: []secretbootstrap.SecretContext{
-			generateDockerConfigJsonSecretConfigTo(regPullCredsAll, ci, o.clusterName),
-			generateDockerConfigJsonSecretConfigTo(regPullCredsAll, testCredentials, o.clusterName),
-		},
-	}
-	idx, _, _ := findSecretConfig(regPullCredsAll, o.clusterName, c.Secrets)
-	if idx != -1 {
-		logrus.Infof("Replacing existing secret with 'to' of: %v", sc.To)
-		c.Secrets = append(c.Secrets[:idx], append([]secretbootstrap.SecretConfig{sc}, c.Secrets[idx+1:]...)...)
-	} else {
-		logrus.Infof("Creating new secret with 'to' of: %v", sc.To)
-		c.Secrets = append(c.Secrets, sc)
-	}
-	return nil
 }
 
 func registryUrlFor(cluster string) string {

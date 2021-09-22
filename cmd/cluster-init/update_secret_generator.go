@@ -7,6 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -63,7 +64,7 @@ func appendToSecretItem(itemName string, name string, o options, c *SecretGenCon
 		return err
 	}
 	logrus.Infof("Appending to secret item: {itemName: %s, name: %s, likeCluster: %s}", itemName, name, string(api.ClusterBuild01))
-	si.Params["cluster"] = appendIfNotContains(si.Params["cluster"], o.clusterName)
+	si.Params["cluster"] = sets.NewString(si.Params["cluster"]...).Insert(o.clusterName).List()
 	return nil
 }
 

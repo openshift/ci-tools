@@ -55,8 +55,8 @@
   item_name: pod-scaler
   params:
     cluster:
-    - build01
     - app.ci
+    - build01
     - existingCluster
     service_account:
     - pod-scaler

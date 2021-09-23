@@ -190,7 +190,6 @@ func TestStepsRun(t *testing.T) {
 				},
 				{
 					name:      "rpm",
-					runErr:    context.Canceled,
 					shouldRun: true,
 					requires:  []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceBinaries)},
 					creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceRPMs)},
@@ -247,7 +246,6 @@ func TestStepsRun(t *testing.T) {
 				},
 				{
 					name:      "rpm",
-					runErr:    context.Canceled,
 					shouldRun: true,
 					requires:  []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceBinaries)},
 					creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceRPMs)},

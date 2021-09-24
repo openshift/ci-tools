@@ -51,6 +51,20 @@ for org in openshift; do
     fi
   fi
 
+  echo >&2 "$(date --iso-8601=seconds) Executing cluster-init update"
+    cluster-init -release-repo="${clonedir}" -update=true -create-pr=false
+    out="$(git status --porcelain)"
+    if [[ -n "$out" ]]; then
+      echo "ERROR: Changes in $org/release:"
+      git diff
+      echo "ERROR: Running cluster-init in update mode in $org/release results in changes ^^^"
+      echo "ERROR: To avoid breaking $org/release for everyone you should regenerate the build clusters"
+      echo "ERROR: there and merge the changes ASAP after this change to cluster-init"
+      failure=1
+    else
+      echo "Running cluster-init in update mode in $org/release does not result in changes, no followups needed"
+    fi
+
   popd
 done
 

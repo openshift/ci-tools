@@ -229,7 +229,7 @@ pr-deploy-vault-secret-manager:
 .PHONY: pr-deploy-backporter
 
 check-breaking-changes:
-	test/validate-prowgen-breaking-changes.sh
+	test/validate-generation-breaking-changes.sh
 .PHONY: check-breaking-changes
 
 .PHONY: generate

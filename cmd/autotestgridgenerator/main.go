@@ -19,7 +19,7 @@ const (
 	githubOrg      = "kubernetes"
 	githubRepo     = "test-infra"
 	githubLogin    = "openshift-bot"
-	githubTeam     = "openshift/openshift-team-developer-productivity-test-platform"
+	githubTeam     = "openshift/test-platform"
 	matchTitle     = "Update OpenShift testgrid definitions by auto-testgrid-generator job"
 	upstreamBranch = "master"
 )

@@ -24,7 +24,7 @@ const (
 	githubOrg    = "openshift"
 	githubRepo   = "release"
 	githubLogin  = "openshift-bot"
-	githubTeam   = "openshift/openshift-team-developer-productivity-test-platform"
+	githubTeam   = "openshift/test-platform"
 	matchTitle   = "Automate config brancher"
 	remoteBranch = "auto-config-brancher"
 

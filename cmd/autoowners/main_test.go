@@ -184,7 +184,7 @@ func TestGetBody(t *testing.T) {
 * config/openshift/origin
 * jobs/org/repo
 
-/cc @openshift/openshift-team-developer-productivity-test-platform
+/cc @openshift/test-platform
 `
 	result := getBody([]string{"config/openshift/origin", "jobs/org/repo"}, defaultPRAssignee)
 

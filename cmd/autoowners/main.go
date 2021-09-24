@@ -34,7 +34,7 @@ const (
 	githubRepo  = "release"
 	githubLogin = "openshift-bot"
 
-	defaultPRAssignee = "openshift/openshift-team-developer-productivity-test-platform"
+	defaultPRAssignee = "openshift/test-platform"
 
 	configSubDirs      = "jobs,config,templates"
 	targetSubDirectory = "ci-operator"

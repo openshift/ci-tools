@@ -6,7 +6,7 @@ This utility updates the `OWNERS` files from remote OpenShift repositories.
 $ autoowners -h
 Usage of autoowners:
   -assign string
-    	The github username or group name to assign the created pull request to. (default "openshift/openshift-team-developer-productivity-test-platform")
+    	The github username or group name to assign the created pull request to. (default "openshift/test-platform")
   -config-subdir value
     	The sub-directory where configuration is stored. (Default list of directories: jobs,config,templates)
   -debug-mode

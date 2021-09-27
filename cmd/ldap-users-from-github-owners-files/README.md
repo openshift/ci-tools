@@ -11,3 +11,9 @@ Sample usage:
 ```
 go run -race ./cmd/ldap-users-from-github-owners-files  -ldap-file /tmp/out --repo-base-dir ../release -repo-sub-dir core-services/secret
 ```
+
+or generating the mapping files only:
+
+```console
+go run -race ./cmd/ldap-users-from-github-owners-files  -ldap-file /tmp/out -mapping-file /tmp/mapping.yaml
+```

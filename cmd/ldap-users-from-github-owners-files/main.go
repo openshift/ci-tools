@@ -22,9 +22,24 @@ func main() {
 	ldapFile := flag.String("ldap-file", "", "File generated via ldapsearch -LLL -x -h ldap.corp.redhat.com -b ou=users,dc=redhat,dc=com '(rhatSocialURL=GitHub*)' rhatSocialURL uid")
 	repoBaseDir := flag.String("repo-base-dir", "", "base dir for the target repo. Will be used to resolve OWNERS_ALIASES")
 	repoSubdir := flag.String("repo-sub-dir", ".", "Subdir relative to the --repo-base-dir to look for OWNERS files")
+	mappingFile := flag.String("mapping-file", "", "File used to store the mapping results of m(github_login)=kerberos_id. When this flag is provided, the program exists after generating the mapping file.")
 	flag.Parse()
 
-	ldapUsers, errs := getLdapUsers(*ldapFile, *repoBaseDir, *repoSubdir)
+	mapping, errs := createLDAPMapping(*ldapFile)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			logrus.WithError(err).Warn("encountered error trying to parse ldap file")
+		}
+	}
+
+	if *mappingFile != "" {
+		if err := saveMapping(*mappingFile, mapping); err != nil {
+			logrus.WithError(err).Fatal("failed to save the mapping")
+		}
+		return
+	}
+
+	ldapUsers, errs := getAllSecretUsers(*repoBaseDir, *repoSubdir, mapping)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			logrus.WithError(err).Error("encountered error trying to resolve owners")
@@ -37,15 +52,17 @@ func main() {
 	fmt.Fprint(os.Stdout, string(serialized))
 }
 
-func getLdapUsers(ldapFile, repoBaseDir, repoSubdir string) (sets.String, []error) {
-	mappings, errs := createLDAPMapping(ldapFile)
-	if len(errs) > 0 {
-		for _, err := range errs {
-			logrus.WithError(err).Warn("encountered error trying to parse ldap file")
-		}
+func saveMapping(path string, mapping map[string]string) error {
+	logrus.WithField("path", path).Info("Saving the mapping")
+	bytes, err := yaml.Marshal(mapping)
+	if err != nil {
+		return err
 	}
-
-	return getAllSecretUsers(repoBaseDir, repoSubdir, mappings)
+	if err := ioutil.WriteFile(path, bytes, 0644); err != nil {
+		return err
+	}
+	logrus.Info("Exit after saving the mapping")
+	return nil
 }
 
 func getAllSecretUsers(repoBaseDir, repoSubDir string, mapping map[string]string) (sets.String, []error) {

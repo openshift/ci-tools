@@ -139,7 +139,11 @@ func (j *gcsJobRun) GetCombinedJUnitTestSuites(ctx context.Context) (*junit.Test
 	for _, junitFile := range j.GetGCSJunitPaths() {
 		junitContent, err := j.GetContent(ctx, junitFile)
 		if err != nil {
-			return nil, fmt.Errorf("error getting content for %q %q: %w", j.GetJobRunID(), junitFile, err)
+			return nil, fmt.Errorf("error getting content for jobrun/%v/%v %q: %w", j.GetJobName(), j.GetJobRunID(), junitFile, err)
+		}
+		// if the file was retrieve, but the content was empty, there is no work to be done.
+		if len(junitContent) == 0 {
+			continue
 		}
 
 		// try as testsuites first just in case we are one
@@ -153,7 +157,7 @@ func (j *gcsJobRun) GetCombinedJUnitTestSuites(ctx context.Context) (*junit.Test
 
 		currTestSuite := &junit.TestSuite{}
 		if testSuiteErr := xml.Unmarshal(junitContent, currTestSuite); testSuiteErr != nil {
-			return nil, fmt.Errorf("error parsing junit for %q %q: %w", j.GetJobRunID(), junitFile, testSuiteErr)
+			return nil, fmt.Errorf("error parsing junit for jobrun/%v/%v %q: %w", j.GetJobName(), j.GetJobRunID(), junitFile, testSuiteErr)
 		}
 		testSuites.Suites = append(testSuites.Suites, currTestSuite)
 	}

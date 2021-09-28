@@ -52,6 +52,11 @@ func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret, skipClo
 			MountPath: cioperatorapi.GCSUploadCredentialsSecretMountPath,
 			ReadOnly:  true,
 		},
+		{
+			Name:      "github-ldap-mapping",
+			ReadOnly:  true,
+			MountPath: api.GithubLdapMappingConfigMapMountPath,
+		},
 	}
 
 	volumes := []corev1.Volume{
@@ -65,6 +70,16 @@ func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret, skipClo
 			Name: "result-aggregator",
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
+			},
+		},
+		{
+			Name: "github-ldap-mapping",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "github-ldap-mapping",
+					},
+				},
 			},
 		},
 	}

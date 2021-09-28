@@ -33,6 +33,9 @@ containers:
   - mountPath: /secrets/gcs
     name: gcs-credentials
     readOnly: true
+  - mountPath: /configmaps/github-ldap-mapping
+    name: github-ldap-mapping
+    readOnly: true
   - mountPath: /usr/local/test-cluster-profile
     name: cluster-profile
   - mountPath: /usr/local/test
@@ -46,6 +49,9 @@ volumes:
 - name: result-aggregator
   secret:
     secretName: result-aggregator
+- configMap:
+    name: github-ldap-mapping
+  name: github-ldap-mapping
 - configMap:
     name: prow-job-cluster-launch-e2e
   name: job-definition

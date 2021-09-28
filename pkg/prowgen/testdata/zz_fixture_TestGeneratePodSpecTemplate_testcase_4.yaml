@@ -34,6 +34,9 @@ containers:
   - mountPath: /secrets/gcs
     name: gcs-credentials
     readOnly: true
+  - mountPath: /configmaps/github-ldap-mapping
+    name: github-ldap-mapping
+    readOnly: true
   - mountPath: /etc/boskos
     name: boskos
     readOnly: true
@@ -50,6 +53,9 @@ volumes:
 - name: result-aggregator
   secret:
     secretName: result-aggregator
+- configMap:
+    name: github-ldap-mapping
+  name: github-ldap-mapping
 - configMap:
     name: prow-job-cluster-launch-installer-custom-test-image
   name: job-definition

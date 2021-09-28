@@ -24,6 +24,9 @@ containers:
   - mountPath: /secrets/gcs
     name: gcs-credentials
     readOnly: true
+  - mountPath: /configmaps/github-ldap-mapping
+    name: github-ldap-mapping
+    readOnly: true
 serviceAccountName: ci-operator
 volumes:
 - name: pull-secret
@@ -32,3 +35,6 @@ volumes:
 - name: result-aggregator
   secret:
     secretName: result-aggregator
+- configMap:
+    name: github-ldap-mapping
+  name: github-ldap-mapping

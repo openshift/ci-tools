@@ -18,7 +18,7 @@ ax = fig.add_subplot(111)
 test_size = 10
 significance = 0.05
 
-for corpus_size in [10, 25, 50, 250]:
+for corpus_size in [250]:
 	corpus_proportions = numpy.arange(0,1.01,.01)
 	test_proportions = numpy.arange(0,1.1,.1)
 
@@ -35,18 +35,6 @@ for corpus_size in [10, 25, 50, 250]:
 		return significance
 
 	x, y = numpy.meshgrid(corpus_proportions, test_proportions)
-	less = P(x,y,'less')
-
-	min_max = []
-	for c in range(less.shape[1]):
-		appended = False
-		for idx, p in enumerate(less[:,c]):
-			if p <= significance:
-				appended = True
-				min_max.append(idx / test_size)
-				break
-		if not appended:
-			min_max.append(numpy.NAN)
 
 	greater = P(x,y,'greater')
 	max_min = []
@@ -61,7 +49,6 @@ for corpus_size in [10, 25, 50, 250]:
 
 	# mesh = ax.pcolormesh(x, y, z, vmin=0, vmax=1, cmap=cm.viridis, shading='nearest')
 	color = next(ax._get_lines.prop_cycler)['color']
-	ax.plot(corpus_proportions, min_max, color=color)
 	ax.plot(corpus_proportions, max_min, color=color)
 	ax.text(1.005, max_min[-1], 'n={}'.format(corpus_size), color=color)
 

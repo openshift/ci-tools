@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 fig = plt.figure()
 ax = fig.add_subplot(111)
 
-significance = 0.05
+significance = 0.02
 corpus_size = 250
 
 for test_size in [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]:
@@ -45,10 +45,11 @@ for test_size in [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]:
 				# print("percent %d, min_positive_count %d" % (corpus_percentage, test_positive_count))
 				found = True
 				break
-		if corpus_percentage == 100:
-			min_positive_counts.append(test_size-1)
-		elif not found:
-			min_positive_counts.append(0)
+		if not found:
+			if corpus_percentage == 100:
+				min_positive_counts.append(test_size-1)
+			else:
+				min_positive_counts.append(0)
 
 	for i, required_pass in enumerate(min_positive_counts):
 		if i % 10 == 0:

@@ -1,7 +1,8 @@
 package jobrunaggregatoranalyzer
 
 type AggregationConfiguration struct {
-	IndividualJobs []JobRunInfo
+	UnfinishedJobs []JobRunInfo
+	FinishedJobs   []JobRunInfo
 }
 
 type JobRunInfo struct {

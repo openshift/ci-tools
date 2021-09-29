@@ -44,6 +44,9 @@ periodics:
       - mountPath: /secrets/gcs
         name: gcs-credentials
         readOnly: true
+      - mountPath: /configmaps/github-ldap-mapping
+        name: github-ldap-mapping
+        readOnly: true
       - mountPath: /usr/local/e2e-aws-nightly
         name: job-definition
         subPath: cluster-launch-e2e.yaml
@@ -60,6 +63,9 @@ periodics:
         sources:
         - secret:
             name: cluster-secrets-aws
+    - configMap:
+        name: github-ldap-mapping
+      name: github-ldap-mapping
     - configMap:
         name: prow-job-cluster-launch-e2e
       name: job-definition
@@ -114,6 +120,9 @@ periodics:
       - mountPath: /secrets/gcs
         name: gcs-credentials
         readOnly: true
+      - mountPath: /configmaps/github-ldap-mapping
+        name: github-ldap-mapping
+        readOnly: true
       - mountPath: /usr/local/e2e-aws-nightly-interval
         name: job-definition
         subPath: cluster-launch-e2e.yaml
@@ -130,6 +139,9 @@ periodics:
         sources:
         - secret:
             name: cluster-secrets-aws
+    - configMap:
+        name: github-ldap-mapping
+      name: github-ldap-mapping
     - configMap:
         name: prow-job-cluster-launch-e2e
       name: job-definition
@@ -184,6 +196,9 @@ periodics:
       - mountPath: /secrets/gcs
         name: gcs-credentials
         readOnly: true
+      - mountPath: /configmaps/github-ldap-mapping
+        name: github-ldap-mapping
+        readOnly: true
       - mountPath: /usr/local/e2e-nightly
         name: job-definition
         subPath: cluster-launch-e2e.yaml
@@ -202,6 +217,9 @@ periodics:
             name: cluster-secrets-gcp
         - configMap:
             name: cluster-profile-gcp
+    - configMap:
+        name: github-ldap-mapping
+      name: github-ldap-mapping
     - configMap:
         name: prow-job-cluster-launch-e2e
       name: job-definition
@@ -244,6 +262,9 @@ periodics:
       - mountPath: /secrets/gcs
         name: gcs-credentials
         readOnly: true
+      - mountPath: /configmaps/github-ldap-mapping
+        name: github-ldap-mapping
+        readOnly: true
       - mountPath: /etc/pull-secret
         name: pull-secret
         readOnly: true
@@ -252,6 +273,9 @@ periodics:
         readOnly: true
     serviceAccountName: ci-operator
     volumes:
+    - configMap:
+        name: github-ldap-mapping
+      name: github-ldap-mapping
     - name: pull-secret
       secret:
         secretName: registry-pull-credentials

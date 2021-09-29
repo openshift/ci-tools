@@ -55,6 +55,7 @@ var (
 		newJob("periodic-ci-openshift-release-master-ci-4.10-e2e-gcp-upgrade").WithE2EParallel().ToJob(),
 		newJob("periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-upgrade").ToJob(),
 		newJob("periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn-upgrade").ToJob(),
+		newJob("periodic-ci-openshift-release-master-ci-4.10-e2e-aws-ovn-upgrade").ToJob(),
 		newJob("periodic-ci-openshift-release-master-ci-4.10-e2e-aws-serial").ToJob(),
 		newJob("periodic-ci-openshift-release-master-ci-4.10-e2e-gcp").ToJob(),
 		// 4.10 nightly

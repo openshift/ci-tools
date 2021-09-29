@@ -3,6 +3,7 @@ package jobrunaggregatoranalyzer
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -162,7 +163,7 @@ func (a *weeklyAverageFromTenDays) getAggregatedTestRuns(ctx context.Context) (m
 }
 
 func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (bool, string, error) {
-	if alwaysPassTests.Has(testCaseDetails.Name) {
+	if testShouldAlwaysPass(testCaseDetails.Name) {
 		fmt.Printf("always passing %q\n", testCaseDetails.Name)
 		return false, "always passing", nil
 	}
@@ -232,14 +233,17 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames [
 	return false, "Passed enough times", nil
 }
 
-var (
-	alwaysPassTests = sets.NewString(
+func testShouldAlwaysPass(name string) bool {
+	if strings.HasPrefix(name, "Run multi-stage test ") {
+		switch {
 		// used to aggregate overall upgrade result for a single job.  Since we aggregated all the junits, we don't care about this
 		// sub-aggregation. The analysis job runs can all fail on different tests, but the aggregated job will succeed.
-		`Run multi-stage test e2e-gcp-upgrade - e2e-gcp-upgrade-openshift-e2e-test container test`,
-		`Run multi-stage test e2e-aws-ovn-upgrade - e2e-aws-ovn-upgrade-gather-aws-console container test`,
-	)
-)
+		case strings.HasSuffix(name, "-openshift-e2e-test container test"):
+			return true
+		}
+	}
+	return false
+}
 
 // these are the required number of passes for a given percentage of historical pass rate.  One var each for
 // number of attempts in the aggregated job.

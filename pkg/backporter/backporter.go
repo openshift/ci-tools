@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/blang/semver"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
@@ -359,7 +360,8 @@ func sortByTargetRelease(clones []*bugzilla.Bug) {
 		} else if len(clones[j].TargetRelease) == 0 {
 			return false
 		}
-		return clones[i].TargetRelease[0] < clones[j].TargetRelease[0]
+		comparison, _ := CompareTargetReleases(clones[i].TargetRelease[0], clones[j].TargetRelease[0])
+		return comparison < 0
 	})
 }
 
@@ -435,6 +437,56 @@ func getMajorMinorRelease(release string) (string, error) {
 		return "", fmt.Errorf("invalid release - must be of the form x.y.z")
 	}
 	return release[:periodIndex], nil
+}
+
+// CompareTargetReleases compares two target release strings (e.g. "4.10.0" or "4.8.z") and returns
+// then semantic versioning order. ".z" is not actually a valid .<patch>
+// in semantic versioning, so we can rely completely on semver Compare.
+func CompareTargetReleases(a, b string) (int, error) {
+	aMajorMinor, err := getMajorMinorRelease(a)
+	if err != nil {
+		return 0, fmt.Errorf("unable to parse %s as semver: %w", a, err)
+	}
+	bMajorMinor, err := getMajorMinorRelease(b)
+	if err != nil {
+		return 0, fmt.Errorf("unable to parse %s as semver: %w", b, err)
+	}
+	// parsing as semantic version requires major.minor.patch
+	aSemVer, err := semver.Parse(fmt.Sprintf("%s.0", aMajorMinor))
+	if err != nil {
+		return 0, fmt.Errorf("unable to parse %s as semver: %w", a, err)
+	}
+	bSemVer, err := semver.Parse(fmt.Sprintf("%s.0", bMajorMinor))
+	if err != nil {
+		return 0, fmt.Errorf("unable to parse %s as semver: %w", b, err)
+	}
+	semverComparison := aSemVer.Compare(bSemVer)
+	if semverComparison == 0 {
+		// We may be comparing 4.10.z and 4.10.0. Finish comparison as string comparison
+		return strings.Compare(a, b), nil
+	}
+	// Otherwise, we have compared something where the minor versions offer clear semver sorting information (4.10.z vs 4.4.0)
+	return semverComparison, nil
+}
+
+// SortTargetReleases sorts a slice of entries like "4.1.z" and "4.10.0"
+// in increasing order.
+func SortTargetReleases(versions []string, ascending bool) error {
+	var exError error = nil
+	sort.SliceStable(versions, func(i, j int) bool {
+		a, b := versions[i], versions[j]
+		comparison, err := CompareTargetReleases(a, b)
+		if err != nil {
+			exError = fmt.Errorf("unable to compare %s and %s targetRelease: %w", a, b, err)
+			return false
+		}
+		if ascending {
+			return comparison < 0
+		} else {
+			return comparison > 0
+		}
+	})
+	return exError
 }
 
 func buildDependenceTree(root *bugzilla.Bug, client bugzilla.Client) (*dependenceNode, error) {
@@ -572,6 +624,12 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 			targetVersions.Delete(allTargetVersions[i])
 		}
 	}
+	sortedTargetVersions := targetVersions.List()
+	err = SortTargetReleases(sortedTargetVersions, false)
+	if err != nil {
+		return nil, http.StatusInternalServerError, fmt.Errorf("error building dependence tree: %w", err)
+	}
+
 	rootNode, err := buildDependenceTree(root, client)
 	if err != nil {
 		return nil, http.StatusInternalServerError, fmt.Errorf("error building dependence tree: %w", err)
@@ -581,7 +639,7 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 		Clones:          clones,
 		Parent:          root,
 		PRs:             prs,
-		CloneTargets:    targetVersions.List(),
+		CloneTargets:    sortedTargetVersions,
 		MissingReleases: missingReleases,
 		DependenceTree:  rootNode,
 	}

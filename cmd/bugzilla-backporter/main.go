@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"sort"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -82,9 +81,10 @@ func getAllTargetVersions(configFile string) ([]string, error) {
 		}
 	}
 	allTargetVersions := allTargetVersionsSet.List()
-	sort.SliceStable(allTargetVersions, func(i, j int) bool {
-		return allTargetVersions[i] < allTargetVersions[j]
-	})
+	err = backporter.SortTargetReleases(allTargetVersions, true)
+	if err != nil {
+		return nil, fmt.Errorf("unable to sort discovered target_releases %v: %w", allTargetVersions, err)
+	}
 	return allTargetVersions, nil
 }
 

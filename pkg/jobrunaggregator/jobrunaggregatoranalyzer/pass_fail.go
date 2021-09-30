@@ -221,7 +221,7 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames [
 
 	requiredNumberOfPasses := requiredPassesByPassPercentageByNumberOfAttempts[numberOfAttempts][workingPercentage]
 	if numberOfPasses < requiredNumberOfPasses {
-		summary := fmt.Sprintf("Passed %d times, failed %d times.  The historical pass rate is %d%%.  The required number of passes is %d.",
+		summary := fmt.Sprintf("Failed: Passed %d times, failed %d times.  The historical pass rate is %d%%.  The required number of passes is %d.",
 			numberOfPasses,
 			numberOfFailures,
 			workingPercentage,
@@ -230,7 +230,12 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames [
 		return true, summary, nil
 	}
 
-	return false, "Passed enough times", nil
+	return false, fmt.Sprintf("Passed: Passed %d times, failed %d times.  The historical pass rate is %d%%.  The required number of passes is %d.",
+		numberOfPasses,
+		numberOfFailures,
+		workingPercentage,
+		requiredNumberOfPasses,
+	), nil
 }
 
 func testShouldAlwaysPass(name string) bool {

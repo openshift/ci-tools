@@ -6,11 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v2"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/junit"
-	"gopkg.in/yaml.v2"
 )
 
 func htmlForJobRuns(ctx context.Context, finishedJobsToAggregate, unfinishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo) string {
@@ -166,6 +167,10 @@ func htmlForTestCase(jobName string, parents []string, testCase *junit.TestCase,
 	var flakeHTML string
 	currDetails := &TestCaseDetails{}
 	_ = yaml.Unmarshal([]byte(testCase.SystemOut), currDetails)
+
+	if len(currDetails.Failures) == 0 {
+		return ""
+	}
 
 	// a job can have failed runs and still not be failed because it has flaked.
 	failedJobRuns := getFailedJobNames(currDetails)

@@ -443,11 +443,22 @@ func getNumberOfPasses(testCaseDetails *TestCaseDetails) int {
 }
 
 func getNumberOfFailures(testCaseDetails *TestCaseDetails) int {
+	return len(getFailedJobNames(testCaseDetails))
+}
+
+func getFailedJobNames(testCaseDetails *TestCaseDetails) sets.String {
 	// if the same job run has multiple failures, it only counts as a single failure.
 	jobRunsThatFailed := sets.NewString()
 	for _, failure := range testCaseDetails.Failures {
 		jobRunsThatFailed.Insert(failure.JobRunID)
 	}
 
-	return len(jobRunsThatFailed)
+	jobRunsThatPassed := sets.NewString()
+	for _, pass := range testCaseDetails.Passes {
+		jobRunsThatPassed.Insert(pass.JobRunID)
+	}
+
+	jobRunsThatFailed = jobRunsThatFailed.Difference(jobRunsThatPassed)
+
+	return jobRunsThatFailed
 }

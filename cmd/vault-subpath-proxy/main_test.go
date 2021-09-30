@@ -84,7 +84,7 @@ path "secret/metadata/team-1/*" {
 			t.Errorf("failed to close proxy: %v", err)
 		}
 	})
-	testhelper.WaitForHTTP200("http://127.0.0.1:"+proxyServerPort+"/v1/sys/health", "vault-subpath-proxy", t)
+	testhelper.WaitForHTTP200("http://127.0.0.1:"+proxyServerPort+"/v1/sys/health", "vault-subpath-proxy", 90, t)
 
 	rootProxy, err := vaultclient.New("http://127.0.0.1:"+proxyServerPort, testhelper.VaultTestingRootToken)
 	if err != nil {

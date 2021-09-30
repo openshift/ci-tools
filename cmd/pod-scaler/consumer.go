@@ -87,10 +87,13 @@ func (c *cacheReloader) reload() {
 	logger.Debug("Newer update loaded.")
 }
 
+// data returns the lastLoaded CachedQuery and clears it to conserve memory
 func (c *cacheReloader) data() *pod_scaler.CachedQuery {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.lastLoaded
+	lastLoaded := c.lastLoaded
+	c.lastLoaded = nil
+	return lastLoaded
 }
 
 func digestAll(data map[string][]*cacheReloader, digesters map[string]digester, health *pjutil.Health, logger *logrus.Entry) {

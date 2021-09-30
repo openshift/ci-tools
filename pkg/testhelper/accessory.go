@@ -175,17 +175,21 @@ type ReadyOptions struct {
 	// ReadyURL is the url to GET to check for readyness. Defaults to
 	// http://127.0.0.1:${HEALTH_PORT}/healthz/ready
 	ReadyURL string
+	WaitFor  int64
 }
 
 type ReadyOption func(*ReadyOptions)
 
 // Ready returns when the accessory process is ready to serve data.
 func (a *Accessory) Ready(t TestingTInterface, o ...ReadyOption) {
-	opts := ReadyOptions{ReadyURL: fmt.Sprintf("http://127.0.0.1:%s/healthz/ready", a.healthPort)}
+	opts := ReadyOptions{
+		ReadyURL: fmt.Sprintf("http://127.0.0.1:%s/healthz/ready", a.healthPort),
+		WaitFor:  90,
+	}
 	for _, o := range o {
 		o(&opts)
 	}
-	WaitForHTTP200(opts.ReadyURL, a.command, t)
+	WaitForHTTP200(opts.ReadyURL, a.command, opts.WaitFor, t)
 }
 
 var _ TestingTInterface = &testing.T{}
@@ -214,10 +218,10 @@ type TestingTInterface interface {
 	TempDir() string
 }
 
-// WaitForHTTP200 waits 30 seconds for the provided addr to return a http/200. If that doesn't
+// WaitForHTTP200 waits waitFor seconds for the provided addr to return a http/200. If that doesn't
 // happen, it will call t.Fatalf
-func WaitForHTTP200(addr, command string, t TestingTInterface) {
-	if waitErr := wait.PollImmediate(1*time.Second, 90*time.Second, func() (done bool, err error) {
+func WaitForHTTP200(addr, command string, waitFor int64, t TestingTInterface) {
+	if waitErr := wait.PollImmediate(1*time.Second, time.Duration(waitFor)*time.Second, func() (done bool, err error) {
 		resp, getErr := http.Get(addr)
 		defer func() {
 			if resp == nil || resp.Body == nil {

@@ -80,11 +80,13 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 
 	var finishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo
 	var finishedJobRunNames []string
+	var unfinishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo
 	var unfinishedJobNames []string
 	for { // TODO extract to a method.
 		fmt.Println() // for prettier logs
 		// reset vars
 		finishedJobsToAggregate = []jobrunaggregatorapi.JobRunInfo{}
+		unfinishedJobsToAggregate = []jobrunaggregatorapi.JobRunInfo{}
 		finishedJobRunNames = []string{}
 		unfinishedJobNames = []string{}
 
@@ -121,10 +123,16 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 			if prowJob.Status.CompletionTime == nil {
 				fmt.Printf("%v/%v has no completion time for resourceVersion=%v\n", relatedJob.GetJobName(), relatedJob.GetJobRunID(), prowJob.ResourceVersion)
 				unfinishedJobNames = append(unfinishedJobNames, relatedJob.GetJobRunID())
+				unfinishedJobsToAggregate = append(unfinishedJobsToAggregate, relatedJob)
 				continue
 			}
 			finishedJobsToAggregate = append(finishedJobsToAggregate, relatedJob)
 			finishedJobRunNames = append(finishedJobRunNames, relatedJob.GetJobRunID())
+		}
+
+		summaryHTML := htmlForJobRuns(ctx, finishedJobsToAggregate, unfinishedJobsToAggregate)
+		if err := ioutil.WriteFile(filepath.Join(o.workingDir, "aggregation-jobrun-summary.html"), []byte(summaryHTML), 0644); err != nil {
+			return err
 		}
 
 		// ready or not, it's time to check
@@ -220,6 +228,11 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	// now scan for a failure
 	fakeSuite := &junit.TestSuite{Children: currentAggregationJunitSuites.Suites}
 	outputTestCaseFailures([]string{"root"}, fakeSuite)
+
+	summaryHTML := htmlForTestRuns(o.jobName, fakeSuite)
+	if err := ioutil.WriteFile(filepath.Join(o.workingDir, "aggregation-testrun-summary.html"), []byte(summaryHTML), 0644); err != nil {
+		return err
+	}
 
 	if hasFailedTestCase(fakeSuite) {
 		// we already indicated failure messages above

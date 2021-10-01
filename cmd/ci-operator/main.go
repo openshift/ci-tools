@@ -1202,26 +1202,23 @@ func (o *options) initializeNamespace() error {
 		return errors.New("timed out waiting for image pull secrets")
 	}
 
-	if o.givePrAuthorAccessToNamespace && len(o.authors) > 0 {
+	if o.givePrAuthorAccessToNamespace {
 		// Generate rolebinding for all the PR Authors.
-		mapping := func() map[string]string {
-			path := filepath.Join(api.GithubLdapMappingConfigMapMountPath, api.GithubLdapMappingFile)
-			bytes, err := ioutil.ReadFile(path)
-			if err != nil {
-				logrus.WithField("path", path).WithError(err).Debug("Failed to read file")
-				return nil
+		for _, author := range o.authors {
+			logrus.Debugf("Creating rolebinding for user %s in namespace %s", author, o.namespace)
+			if err := client.Create(ctx, &rbacapi.RoleBinding{
+				ObjectMeta: meta.ObjectMeta{
+					Name:      "ci-op-author-access",
+					Namespace: o.namespace,
+				},
+				Subjects: []rbacapi.Subject{{Kind: "User", Name: author}},
+				RoleRef: rbacapi.RoleRef{
+					Kind: "ClusterRole",
+					Name: "admin",
+				},
+			}); err != nil && !kerrors.IsAlreadyExists(err) {
+				return fmt.Errorf("could not create role binding for: %w", err)
 			}
-			var mapping map[string]string
-			if err := yaml.Unmarshal(bytes, mapping); err != nil {
-				logrus.WithField("string(bytes)", string(bytes)).WithError(err).Debug("Failed to unmarshal")
-				return nil
-			}
-			return mapping
-		}()
-		roleBinding := generateAuthorAccessRoleBinding(o.namespace, o.authors, mapping)
-		logrus.Debugf("Creating rolebinding for authors in namespace %s", o.namespace)
-		if err := client.Create(ctx, roleBinding); err != nil && !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not create role binding for: %w", err)
 		}
 	}
 
@@ -1317,29 +1314,6 @@ func (o *options) initializeNamespace() error {
 	}
 
 	return nil
-}
-
-func generateAuthorAccessRoleBinding(namespace string, authors []string, mapping map[string]string) *rbacapi.RoleBinding {
-	var subjects []rbacapi.Subject
-	for _, author := range authors {
-		subjects = append(subjects, rbacapi.Subject{Kind: "User", Name: author})
-		if mapping != nil {
-			if kid, ok := mapping[author]; ok {
-				subjects = append(subjects, rbacapi.Subject{Kind: "User", Name: kid})
-			}
-		}
-	}
-	return &rbacapi.RoleBinding{
-		ObjectMeta: meta.ObjectMeta{
-			Name:      "ci-op-author-access",
-			Namespace: namespace,
-		},
-		Subjects: subjects,
-		RoleRef: rbacapi.RoleRef{
-			Kind: "ClusterRole",
-			Name: "admin",
-		},
-	}
 }
 
 func pdb(labelKey, namespace string) (*policyv1beta1.PodDisruptionBudget, crcontrollerutil.MutateFn) {

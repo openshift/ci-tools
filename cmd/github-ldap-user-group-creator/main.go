@@ -127,20 +127,21 @@ func main() {
 
 	ctx := interrupts.Context()
 
-	mapping := func(path string) map[string]string {
+	mapping, err := func(path string) (map[string]string, error) {
 		logrus.WithField("path", path).Debug("Loading the mapping file ...")
 		bytes, err := ioutil.ReadFile(path)
 		if err != nil {
-			logrus.WithField("path", path).WithError(err).Debug("Failed to read file")
-			return nil
+			return nil, fmt.Errorf("failed to read file %s: %w", path, err)
 		}
 		var mapping map[string]string
 		if err := yaml.Unmarshal(bytes, &mapping); err != nil {
-			logrus.WithField("string(bytes)", string(bytes)).WithError(err).Debug("Failed to unmarshal")
-			return nil
+			return nil, fmt.Errorf("failed to unmarshal: %w", err)
 		}
-		return mapping
+		return mapping, nil
 	}(opts.mappingFile)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to load the mapping")
+	}
 
 	if err := ensureGroups(ctx, clients, mapping, opts.dryRun); err != nil {
 		logrus.WithError(err).Fatal("could not ensure groups")

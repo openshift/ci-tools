@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -35,6 +36,22 @@ func TestGetLandingHandler(t *testing.T) {
 	if resp := rr.Body.String(); resp != landingPage {
 		t.Errorf("might not have changed the landingPage after modifying it in the backporter tool - Response differs from expected by: %s", diff.StringDiff(resp, landingPage))
 	}
+}
+
+func TestCompareTargetReleaseSort(t *testing.T) {
+	assess := func(unsorted []string, expected []string) {
+		err := SortTargetReleases(unsorted, true)
+		if err != nil {
+			t.Errorf("Error sorting target release list %v: %v", unsorted, err)
+			return
+		}
+		if !reflect.DeepEqual(unsorted, expected) {
+			t.Errorf("Semantic sort of %v did not reach expected %v", unsorted, expected)
+		}
+	}
+
+	assess([]string{"4.2.z"}, []string{"4.2.z"})
+	assess([]string{"4.3.z", "4.10.0", "4.10.z", "4.1.0", "4.2.0", "4.11.0", "4.1.z", "4.2.z"}, []string{"4.1.0", "4.1.z", "4.2.0", "4.2.z", "4.3.z", "4.10.0", "4.10.z", "4.11.0"})
 }
 
 func TestGetBugHandler(t *testing.T) {
@@ -111,7 +128,7 @@ func TestGetClonesHandler(t *testing.T) {
 		t.Fatalf("error creating bug: %v", err)
 	}
 	if err := fake.UpdateBug(toBeClonedID, bugzilla.BugUpdate{
-		TargetRelease: []string{"4.4.0"},
+		TargetRelease: []string{"4.10.0"},
 	}); err != nil {
 		t.Fatalf("error while updating bug: %v", err)
 	}
@@ -124,13 +141,19 @@ func TestGetClonesHandler(t *testing.T) {
 		t.Fatalf("error while cloning bug: %v", err)
 	}
 	if err := fake.UpdateBug(cloneID, bugzilla.BugUpdate{
-		TargetRelease: []string{"4.3.z"},
+		TargetRelease: []string{"4.9.z"},
 	}); err != nil {
 		t.Fatalf("error while updating bug: %v", err)
 	}
 	clone, err := fake.GetBug(cloneID)
 	if err != nil {
 		t.Fatalf("error retreiving clone: %v", err)
+	}
+	allTargetVersions := []string{"4.9.z", "4.10.0", "4.1.z", "4.2.z", "4.3.z", "4.4.z", "4.5.z", "4.6.z", "4.7.z", "4.8.z"}
+	// backporter logic relies on allTargetVersions being sorted
+	err = SortTargetReleases(allTargetVersions, true)
+	if err != nil {
+		t.Fatalf("Unable to sort target release slice")
 	}
 	testCases := []struct {
 		name              string
@@ -154,13 +177,13 @@ func TestGetClonesHandler(t *testing.T) {
 				},
 				toBeCloned,
 				nil,
-				[]string{"4.2.z"},
+				[]string{"4.8.z", "4.7.z", "4.6.z", "4.5.z", "4.4.z", "4.3.z", "4.2.z", "4.1.z"},
 				[]string{},
 				[]string{},
-				&dependenceNode{toBeClonedID, "4.4.0", []*dependenceNode{{cloneID, "4.3.z", nil}}},
+				&dependenceNode{toBeClonedID, toBeCloned.TargetRelease[0], []*dependenceNode{{cloneID, clone.TargetRelease[0], nil}}},
 			},
 			tmplt:             clonesTemplate,
-			allTargetVersions: []string{"4.2.z", "4.3.z", "4.4.z", "4.5.z", "4.6.0"},
+			allTargetVersions: allTargetVersions,
 		},
 		{
 			name: "bad_params",
@@ -265,7 +288,7 @@ func TestCreateCloneHandler(t *testing.T) {
 				Clones:         []*bugzilla.Bug{&intermediateClone, toBeCloned},
 				Parent:         toBeCloned,
 				PRs:            nil,
-				CloneTargets:   []string{"4.2.z", "4.3.z"},
+				CloneTargets:   []string{"4.3.z", "4.2.z"},
 				NewCloneIDs:    []string{strconv.Itoa(toBeClonedID + 1)},
 				DependenceTree: &dependenceNode{toBeClonedID, originalTargetRelease, []*dependenceNode{{intermediateClone.ID, intermediateRelease, nil}}},
 			},

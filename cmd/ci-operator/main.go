@@ -1202,21 +1202,12 @@ func (o *options) initializeNamespace() error {
 		return errors.New("timed out waiting for image pull secrets")
 	}
 
-	if o.givePrAuthorAccessToNamespace {
+	if o.givePrAuthorAccessToNamespace && len(o.authors) > 0 {
+		roleBinding := generateAuthorAccessRoleBinding(o.namespace, o.authors)
 		// Generate rolebinding for all the PR Authors.
 		for _, author := range o.authors {
 			logrus.Debugf("Creating rolebinding for user %s in namespace %s", author, o.namespace)
-			if err := client.Create(ctx, &rbacapi.RoleBinding{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      "ci-op-author-access",
-					Namespace: o.namespace,
-				},
-				Subjects: []rbacapi.Subject{{Kind: "User", Name: author}},
-				RoleRef: rbacapi.RoleRef{
-					Kind: "ClusterRole",
-					Name: "admin",
-				},
-			}); err != nil && !kerrors.IsAlreadyExists(err) {
+			if err := client.Create(ctx, roleBinding); err != nil && !kerrors.IsAlreadyExists(err) {
 				return fmt.Errorf("could not create role binding for: %w", err)
 			}
 		}
@@ -1314,6 +1305,24 @@ func (o *options) initializeNamespace() error {
 	}
 
 	return nil
+}
+
+func generateAuthorAccessRoleBinding(namespace string, authors []string) *rbacapi.RoleBinding {
+	var subjects []rbacapi.Subject
+	for _, author := range authors {
+		subjects = append(subjects, rbacapi.Subject{Kind: "Group", Name: author + api.GroupSuffix})
+	}
+	return &rbacapi.RoleBinding{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "ci-op-author-access",
+			Namespace: namespace,
+		},
+		Subjects: subjects,
+		RoleRef: rbacapi.RoleRef{
+			Kind: "ClusterRole",
+			Name: "admin",
+		},
+	}
 }
 
 func pdb(labelKey, namespace string) (*policyv1beta1.PodDisruptionBudget, crcontrollerutil.MutateFn) {

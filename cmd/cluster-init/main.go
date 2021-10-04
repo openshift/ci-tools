@@ -120,12 +120,13 @@ func validateOptions(o options) []error {
 }
 
 const (
-	buildUFarm    = "build_farm"
-	podScaler     = "pod-scaler"
-	configUpdater = "config-updater"
-	ciOperator    = "ci-operator"
-	buildFarm     = "build-farm"
-	ci            = "ci"
+	buildUFarm                 = "build_farm"
+	podScaler                  = "pod-scaler"
+	configUpdater              = "config-updater"
+	ciOperator                 = "ci-operator"
+	buildFarm                  = "build-farm"
+	githubLdapUserGroupCreator = "github-ldap-user-group-creator"
+	ci                         = "ci"
 )
 
 func RepoMetadata() *api.Metadata {

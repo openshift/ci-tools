@@ -54,6 +54,7 @@ func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
 		updateBuildFarmSecrets,
 		updateDPTPControllerManagerSecret,
 		updateRehearseSecret,
+		updateGithubLdapUserGroupCreatorSecret,
 		updateChatBotSecret,
 		updateExistingRegistryPullCredentialsAllSecrets,
 		updateSecret(generateRegistryPushCredentialsSecret),
@@ -196,6 +197,14 @@ func updateDPTPControllerManagerSecret(c *secretbootstrap.Config, o options) err
 func updateRehearseSecret(c *secretbootstrap.Config, o options) error {
 	keyAndField := serviceAccountKubeconfigPath(ciOperator, o.clusterName)
 	return updateSecretItemContext(c, "pj-rehearse", string(api.ClusterBuild01), keyAndField, secretbootstrap.ItemContext{
+		Field: keyAndField,
+		Item:  buildUFarm,
+	})
+}
+
+func updateGithubLdapUserGroupCreatorSecret(c *secretbootstrap.Config, o options) error {
+	keyAndField := serviceAccountKubeconfigPath(githubLdapUserGroupCreator, o.clusterName)
+	return updateSecretItemContext(c, githubLdapUserGroupCreator, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
 		Item:  buildUFarm,
 	})

@@ -1178,7 +1178,7 @@ func (o *options) initializeNamespace() error {
 
 	pullStart := time.Now()
 	var imagePullSecretsMinted bool
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 119; i++ {
 		imagePullSecretsMinted = true
 		serviceAccounts := map[string]*coreapi.ServiceAccount{
 			"builder": {},
@@ -1193,7 +1193,7 @@ func (o *options) initializeNamespace() error {
 		if imagePullSecretsMinted {
 			break
 		}
-		logrus.Debugf("[%d/30] Image pull secrets in namespace not yet ready, sleeping for a second...", i)
+		logrus.Debugf("[%d/120] Image pull secrets in namespace not yet ready, sleeping for a second...", i)
 		time.Sleep(time.Second)
 	}
 	logrus.Debugf("Spent %v waiting for image pull secrets to initialize in the new namespace.", time.Since(pullStart))

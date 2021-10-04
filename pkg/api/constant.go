@@ -49,8 +49,7 @@ const (
 	OauthTokenSecretKey  = "oauth"
 	OauthTokenSecretName = "github-credentials-openshift-ci-robot-private-git-cloner"
 
-	GithubLdapMappingConfigMapMountPath = "/configmaps/github-ldap-mapping"
-	GithubLdapMappingFile               = "mapping.yaml"
+	GroupSuffix = "-group"
 )
 
 var (

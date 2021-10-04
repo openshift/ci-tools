@@ -827,38 +827,17 @@ func TestGenerateAuthorAccessRoleBinding(t *testing.T) {
 	testCases := []struct {
 		id       string
 		authors  []string
-		mapping  map[string]string
 		expected *rbacapi.RoleBinding
 	}{
 		{
 			id:      "basic case",
 			authors: []string{"a", "e"},
-			mapping: map[string]string{
-				"a": "b",
-				"c": "d",
-			},
 			expected: &rbacapi.RoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "ci-op-author-access",
 					Namespace: "ci-op-xxxx",
 				},
-				Subjects: []rbacapi.Subject{{Kind: "User", Name: "a"}, {Kind: "User", Name: "b"}, {Kind: "User", Name: "e"}},
-				RoleRef: rbacapi.RoleRef{
-					Kind: "ClusterRole",
-					Name: "admin",
-				},
-			},
-		},
-		{
-			id:      "no panic on nil mapping",
-			authors: []string{"a"},
-			mapping: nil,
-			expected: &rbacapi.RoleBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "ci-op-author-access",
-					Namespace: "ci-op-xxxx",
-				},
-				Subjects: []rbacapi.Subject{{Kind: "User", Name: "a"}},
+				Subjects: []rbacapi.Subject{{Kind: "Group", Name: "a-group"}, {Kind: "Group", Name: "e-group"}},
 				RoleRef: rbacapi.RoleRef{
 					Kind: "ClusterRole",
 					Name: "admin",
@@ -869,7 +848,7 @@ func TestGenerateAuthorAccessRoleBinding(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.id, func(t *testing.T) {
-			actual := generateAuthorAccessRoleBinding("ci-op-xxxx", tc.authors, tc.mapping)
+			actual := generateAuthorAccessRoleBinding("ci-op-xxxx", tc.authors)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 				t.Fatal(diff)
 			}

@@ -64,7 +64,6 @@ func (o *options) validate() error {
 const (
 	appCIContextName = string(api.ClusterAPPCI)
 	toolName         = "github-ldap-user-group-creator"
-	groupSuffix      = "-group"
 )
 
 func addSchemes() error {
@@ -158,8 +157,8 @@ func ensureGroups(ctx context.Context, clients map[string]ctrlruntimeclient.Clie
 			errs = append(errs, fmt.Errorf("failed to list groups on cluster %s: %w", cluster, err))
 		} else {
 			for _, group := range groups.Items {
-				_, ok := mapping[strings.TrimSuffix(group.Name, groupSuffix)]
-				if !strings.HasSuffix(group.Name, groupSuffix) || !ok {
+				_, ok := mapping[strings.TrimSuffix(group.Name, api.GroupSuffix)]
+				if !strings.HasSuffix(group.Name, api.GroupSuffix) || !ok {
 					logrus.WithField("cluster", cluster).WithField("group.Name", group.Name).Info("Deleting group ...")
 					if dryRun {
 						continue
@@ -174,7 +173,7 @@ func ensureGroups(ctx context.Context, clients map[string]ctrlruntimeclient.Clie
 		}
 
 		for githubLogin, kerberosId := range mapping {
-			groupName := fmt.Sprintf("%s%s", githubLogin, groupSuffix)
+			groupName := fmt.Sprintf("%s%s", githubLogin, api.GroupSuffix)
 			logrus.WithField("cluster", cluster).WithField("groupName", groupName).Info("Upserting group ...")
 			if dryRun {
 				continue

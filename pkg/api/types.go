@@ -1421,6 +1421,31 @@ func (p ClusterProfile) LeaseType() string {
 	}
 }
 
+// ConfigMap maps profiles to the ConfigMap they require (if applicable).
+func (p ClusterProfile) ConfigMap() string {
+	switch p {
+	case
+		ClusterProfileAWSAtomic,
+		ClusterProfileAWSCentos,
+		ClusterProfileAWSCentos40,
+		ClusterProfileAWSGluster,
+		ClusterProfileAzure,
+		ClusterProfileGCP,
+		ClusterProfileGCP2,
+		ClusterProfileGCP40,
+		ClusterProfileGCPCRIO,
+		ClusterProfileGCPHA,
+		ClusterProfileGCPLogging,
+		ClusterProfileGCPLoggingCRIO,
+		ClusterProfileGCPLoggingJSONFile,
+		ClusterProfileGCPLoggingJournald,
+		ClusterProfileOvirt:
+		return fmt.Sprintf("cluster-profile-%s", p)
+	default:
+		return ""
+	}
+}
+
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {

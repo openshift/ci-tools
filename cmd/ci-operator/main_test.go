@@ -844,6 +844,21 @@ func TestGenerateAuthorAccessRoleBinding(t *testing.T) {
 				},
 			},
 		},
+		{
+			id:      "gh username with uppercase is lowercased",
+			authors: []string{"USER"},
+			expected: &rbacapi.RoleBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ci-op-author-access",
+					Namespace: "ci-op-xxxx",
+				},
+				Subjects: []rbacapi.Subject{{Kind: "Group", Name: "user-group"}},
+				RoleRef: rbacapi.RoleRef{
+					Kind: "ClusterRole",
+					Name: "admin",
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {

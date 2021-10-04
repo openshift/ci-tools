@@ -1310,7 +1310,7 @@ func (o *options) initializeNamespace() error {
 func generateAuthorAccessRoleBinding(namespace string, authors []string) *rbacapi.RoleBinding {
 	var subjects []rbacapi.Subject
 	for _, author := range authors {
-		subjects = append(subjects, rbacapi.Subject{Kind: "Group", Name: author + api.GroupSuffix})
+		subjects = append(subjects, rbacapi.Subject{Kind: "Group", Name: strings.ToLower(author) + api.GroupSuffix})
 	}
 	return &rbacapi.RoleBinding{
 		ObjectMeta: meta.ObjectMeta{

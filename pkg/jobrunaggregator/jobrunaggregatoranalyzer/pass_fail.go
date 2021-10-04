@@ -247,6 +247,11 @@ func testShouldAlwaysPass(name string) bool {
 			return true
 		}
 	}
+	if strings.Contains(name, `Cluster should remain functional during upgrade`) {
+		// this test is a side-effect of other tests.  For the purpose of aggregation, we can have each individual job run
+		// fail this test, but the aggregated output can be successful.
+		return true
+	}
 	return false
 }
 

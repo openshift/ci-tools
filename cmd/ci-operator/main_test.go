@@ -844,6 +844,21 @@ func TestGenerateAuthorAccessRoleBinding(t *testing.T) {
 				},
 			},
 		},
+		{
+			id:      "no duplicated authors",
+			authors: []string{"a", "a"},
+			expected: &rbacapi.RoleBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ci-op-author-access",
+					Namespace: "ci-op-xxxx",
+				},
+				Subjects: []rbacapi.Subject{{Kind: "Group", Name: "a-group"}},
+				RoleRef: rbacapi.RoleRef{
+					Kind: "ClusterRole",
+					Name: "admin",
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {

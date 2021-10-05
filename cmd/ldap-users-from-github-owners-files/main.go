@@ -39,7 +39,12 @@ func main() {
 		return
 	}
 
-	ldapUsers, errs := getAllSecretUsers(*repoBaseDir, *repoSubdir, mapping)
+	lowercaseGitHubUsersMapping := map[string]string{}
+	for gitHubUser, v := range mapping {
+		lowercaseGitHubUsersMapping[strings.ToLower(gitHubUser)] = v
+	}
+
+	ldapUsers, errs := getAllSecretUsers(*repoBaseDir, *repoSubdir, lowercaseGitHubUsersMapping)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			logrus.WithError(err).Error("encountered error trying to resolve owners")
@@ -159,7 +164,7 @@ func createLDAPMapping(ldapFile string) (map[string]string, []error) {
 		var ldapUser, gitHubUser string
 		for _, line := range lines {
 			if bytes.HasPrefix(bytes.ToLower(line), []byte("rhatsocialurl: github->")) {
-				slashSplit := strings.Split(string(bytes.ToLower(line)), "/")
+				slashSplit := strings.Split(string(line), "/")
 				if slashSplit[len(slashSplit)-1] != "" {
 					gitHubUser = slashSplit[len(slashSplit)-1]
 				} else if slashSplit[len(slashSplit)-2] != "" {
@@ -181,11 +186,11 @@ func createLDAPMapping(ldapFile string) (map[string]string, []error) {
 			errs = append(errs, fmt.Errorf("entry ---\n%s\n---\n: %s ", string(entry), errMsg))
 			continue
 		}
-		if _, alreadyExists := result[strings.ToLower(gitHubUser)]; alreadyExists {
+		if _, alreadyExists := result[gitHubUser]; alreadyExists {
 			errs = append(errs, fmt.Errorf("found another entry for ldap user %s", gitHubUser))
 			continue
 		}
-		result[strings.ToLower(gitHubUser)] = ldapUser
+		result[gitHubUser] = ldapUser
 	}
 
 	return result, errs

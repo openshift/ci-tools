@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/google/go-cmp/cmp"
-	"github.com/openshift/ci-tools/pkg/api"
 	"net/http"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 func TestClusterProfiles(t *testing.T) {
@@ -154,12 +156,7 @@ func TestConfigValidation(t *testing.T) {
 
 			writer := &fakeWriter{}
 
-			validateConfig(writer, r, func(githubUsername string) (repository *repo, err error) {
-				return &repo{
-					path:    "dummy",
-					inUseBy: "",
-				}, nil
-			})
+			validateConfig(writer, r)
 
 			actual := &validationResponse{}
 			_ = json.Unmarshal(writer.body, actual)

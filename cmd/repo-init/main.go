@@ -11,19 +11,20 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/afero"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/test-infra/prow/flagutil"
-	"k8s.io/test-infra/prow/interrupts"
 	"os"
 	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/afero"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/flagutil"
+	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/plugins"
 	"sigs.k8s.io/yaml"
 
@@ -49,8 +50,9 @@ type options struct {
 }
 
 type serverOptions struct {
-	port     int
-	numRepos int
+	port             int
+	numRepos         int
+	serverConfigPath string
 }
 
 func (o *options) Validate() error {
@@ -58,6 +60,9 @@ func (o *options) Validate() error {
 	case "api":
 		if o.port == 0 {
 			return errors.New("--port is required")
+		}
+		if o.serverConfigPath == "" {
+			return errors.New("--server-config-path is required")
 		}
 		if err := o.GitHubOptions.Validate(false); err != nil {
 			return err
@@ -67,8 +72,11 @@ func (o *options) Validate() error {
 			return errors.New("--port is required")
 		}
 	case "cli":
+		if o.releaseRepo == "" {
+			return errors.New("--release-repo is required")
+		}
 	default:
-		return errors.New("--mode must be either \"server\", or \"cli\"")
+		return errors.New("--mode must be either \"server\", \"ui\", or \"cli\"")
 	}
 	if level, err := logrus.ParseLevel(o.loglevel); err != nil {
 		return fmt.Errorf("--loglevel invalid: %w", err)
@@ -100,6 +108,7 @@ func gatherOptions() options {
 	fs.IntVar(&o.port, "port", 0, "Port to run on if in server mode.")
 	fs.IntVar(&o.numRepos, "num-repos", 4, "The number of o/release repos to check out.")
 	fs.BoolVar(&o.disableCors, "disable-cors", false, "Set this to disable CORS.")
+	fs.StringVar(&o.serverConfigPath, "server-config-path", "", "Path to the dir containing configs necessary to run the server.")
 	o.GitHubOptions.AddFlags(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		fmt.Printf("ERROR: could not parse input: %v", err)
@@ -163,7 +172,7 @@ func main() {
 	o := gatherOptions()
 
 	if err := o.Validate(); err != nil {
-		errorExit(fmt.Sprintf("Aw shit %v", err))
+		errorExit(fmt.Sprintf("%v", err))
 	}
 
 	switch o.mode {
@@ -173,11 +182,13 @@ func main() {
 		mainCli(o)
 	case "ui":
 		mainUI(o)
+	default:
+		errorExit("invalid mode specified. must be one of \"server\", \"ui\", or \"cli\"")
 	}
 }
 
 func mainApi(o options) {
-	go serveAPI(o.port, o.instrumentationOptions.HealthPort, o.numRepos, o.GitHubOptions, o.disableCors)
+	go serveAPI(o.port, o.instrumentationOptions.HealthPort, o.numRepos, o.GitHubOptions, o.disableCors, o.serverConfigPath)
 	interrupts.WaitForGracefulShutdown()
 }
 

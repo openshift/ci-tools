@@ -1,20 +1,28 @@
-import {createContext} from 'react';
+import { createContext } from 'react';
 
 export const ghAuthState = {
   isAuthenticated: false,
   token: null,
-  client_id: process.env.REACT_APP_CLIENT_ID,
-  redirect_uri: process.env.REACT_APP_REDIRECT_URI,
-  client_secret: process.env.REACT_APP_CLIENT_SECRET,
-  proxy_url: process.env.REACT_APP_PROXY_URL
 };
+
+export interface ConfigProperties {
+  githubApiUrl: string | undefined;
+  githubClientId: string | undefined;
+  githubRedirectUrl: string | undefined;
+  loaded: boolean;
+}
+
+export interface ConfigPropertiesContextInterface {
+  configProperties: ConfigProperties;
+  setProperties?: any;
+}
 
 export interface ValidationStateInterface {
   valid?: boolean;
-  errorMessage?: string
-  errors?: ValidationError[]
+  errorMessage?: string;
+  errors?: ValidationError[];
 
-  getErrorMessage(): string
+  getErrorMessage(): string;
 }
 
 export interface ValidationError {
@@ -25,14 +33,14 @@ export interface ValidationError {
 
 export class ValidationState implements ValidationStateInterface {
   valid?: boolean;
-  errorMessage?: string
-  errors?: ValidationError[]
+  errorMessage?: string;
+  errors?: ValidationError[];
 
   getErrorMessage(): string {
     if (this.errorMessage !== undefined) {
       return this.errorMessage;
     } else {
-      return "";
+      return '';
     }
   }
 }
@@ -67,8 +75,8 @@ export interface BuildConfig {
   containerImages: ContainerImage[];
   buildCommands?: string;
   testBuildCommands?: string;
-  operatorConfig: OperatorConfig
-  release: ReleaseConfig
+  operatorConfig: OperatorConfig;
+  release: ReleaseConfig;
 }
 
 export interface OperatorConfig {
@@ -78,7 +86,7 @@ export interface OperatorConfig {
   contextDir?: string;
   baseIndex?: string;
   updateGraph?: UpdateGraphType;
-  substitutions: PullspecSubstitution[]
+  substitutions: PullspecSubstitution[];
 }
 
 export interface ReleaseConfig {
@@ -97,7 +105,7 @@ export interface ContainerImage {
   from: string;
   literalDockerfile: boolean;
   dockerfile: string;
-  inputs?: ContainerImageInput[]
+  inputs?: ContainerImageInput[];
 }
 
 export interface ContainerImageInput {
@@ -123,7 +131,7 @@ export type Test = {
   operatorConfig?: OperatorTestConfig;
   env: { [env: string]: string };
   dependencies: { [env: string]: string };
-}
+};
 
 export type OperatorTestConfig = {
   bundleName?: string;
@@ -131,31 +139,30 @@ export type OperatorTestConfig = {
   channel?: string;
   installNamespace?: string;
   targetNamespaces?: string;
-}
+};
 
 export enum TestType {
   Unit = 'Unit',
   E2e = 'E2e',
-  Operator = 'Operator'
+  Operator = 'Operator',
 }
 
 export enum CloudProvider {
   Aws = 'Aws',
   Azure = 'Azure',
-  Gcp = 'Gcp'
+  Gcp = 'Gcp',
 }
 
 export enum UpdateGraphType {
   semver = 'semver',
   semverSkippatch = 'semver_skippatch',
   replaces = 'release',
-
 }
 
 export enum ReleaseType {
   No = 'No',
   Published = 'Published',
-  Nightly = 'Nightly'
+  Nightly = 'Nightly',
 }
 
 export interface WizardStep {
@@ -175,6 +182,7 @@ export interface ConfigContextInterface {
   setConfig?: any;
 }
 
-export const ConfigContext = createContext({} as ConfigContextInterface)
+export const ConfigPropertiesContext = createContext({} as ConfigPropertiesContextInterface);
+export const ConfigContext = createContext({} as ConfigContextInterface);
 export const WizardContext = createContext({} as WizardContextInterface);
-export const AuthContext = createContext({userData: {isAuthenticated: false}} as AuthContextInterface);
+export const AuthContext = createContext({ userData: { isAuthenticated: false } } as AuthContextInterface);

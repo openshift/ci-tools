@@ -1,17 +1,19 @@
 import {
-  AuthContextInterface,
   CloudProvider,
   ContainerImage,
   Image,
   OperatorConfig,
-  PullspecSubstitution, ReleaseType,
+  PullspecSubstitution,
+  ReleaseType,
   RepoConfig,
   Test,
-  TestType, UserData,
+  TestType,
+  UserData,
   ValidationState
 } from "@app/types";
+import _ from "lodash";
 
-export function accessibleRouteChangeHandler() {
+export function accessibleRouteChangeHandler(): number {
   return window.setTimeout(() => {
     const mainContainer = document.getElementById('primary-app-container');
     if (mainContainer) {
@@ -20,7 +22,8 @@ export function accessibleRouteChangeHandler() {
   }, 50);
 }
 
-export function marshallConfig(config: RepoConfig) {
+// eslint-disable-next-line @typescript-eslint/ban-types
+export function marshallConfig(config: RepoConfig): object {
   return {
     org: config.org,
     repo: config.repo,
@@ -43,8 +46,9 @@ export function marshallConfig(config: RepoConfig) {
   };
 }
 
-export function marshallBaseImages(images: Image[] | undefined) {
-  let marshalledImages = {};
+// eslint-disable-next-line @typescript-eslint/ban-types
+export function marshallBaseImages(images: Image[] | undefined): object {
+  const marshalledImages = {};
   if (images !== undefined) {
     images.forEach(image => {
       marshalledImages[image.name] = image;
@@ -59,7 +63,7 @@ function marshallContainerImages(images: ContainerImage[] | undefined) {
 }
 
 function marshallContainerImage(image: ContainerImage) {
-  let marshalledImage = {
+  const marshalledImage = {
     from: image.from,
     to: image.name
   };
@@ -74,25 +78,16 @@ function marshallContainerImage(image: ContainerImage) {
   //multiple pullspecs in the Dockerfile, and this is how it is represented on the back-end. For UI purposes it was (IMO)
   //cleaner to represent them separately.
   if (image.inputs !== undefined && image.inputs.length > 0) {
-    let grouped = []
-    // @ts-ignore
-    image.inputs.reduce((prev, curr) => {
-      //The last empty row (if present) will be undefined, so skip it.
-      if (curr.name !== undefined) {
-        if (!grouped[curr.name]) {
-          grouped[curr.name] = [];
-        }
-        grouped[curr.name].push(curr.replaces);
-      }
+    const grouped = _.chain(image.inputs)
+      .filter(image => image.name !== undefined)
+      .groupBy("name")
+      .value();
 
-      return grouped;
-    })
-
-    let inputs = {}
-    Object.keys(grouped).map(function (image, index) {
+    const inputs = {}
+    Object.keys(grouped).map(function (image) {
       inputs[image] = {
         from: image,
-        as: grouped[image]
+        as: grouped[image].map(image => image.name)
       }
     });
 
@@ -102,9 +97,9 @@ function marshallContainerImage(image: ContainerImage) {
   return marshalledImage;
 }
 
-
 function marshallTests(tests: Test[], testTypes: TestType[]) {
-  let marshalledTests: object[] = [];
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  const marshalledTests: object[] = [];
   if (tests !== undefined && tests.length > 0) {
     tests.filter(test => testTypes.includes(test.type)).forEach(test => {
       if (test.type === TestType.Unit) {
@@ -137,9 +132,9 @@ function marshallTests(tests: Test[], testTypes: TestType[]) {
 }
 
 function marshallEnvironment(operatorTest: Test) {
-  let environment = {};
+  const environment = {};
   if (operatorTest.operatorConfig !== undefined) {
-    let operatorConfig = operatorTest.operatorConfig;
+    const operatorConfig = operatorTest.operatorConfig;
     if (operatorConfig.channel !== undefined) {
       environment['OO_CHANNEL'] = getYamlString(operatorConfig.channel);
     }
@@ -158,9 +153,9 @@ function marshallEnvironment(operatorTest: Test) {
 }
 
 function marshallDependencies(operatorTest: Test) {
-  let dependencies = {};
+  const dependencies = {};
   if (operatorTest.operatorConfig !== undefined) {
-    let operatorConfig = operatorTest.operatorConfig;
+    const operatorConfig = operatorTest.operatorConfig;
     if (operatorConfig.bundleName === undefined || operatorConfig.bundleName === "") {
       operatorConfig.bundleName = "ci-index";
     }
@@ -177,7 +172,7 @@ function getTrimmedVal(val: string | undefined) {
 //Escape special characters with single quotes.
 function getYamlString(val: string) {
   val = getTrimmedVal(val);
-  if (val.match("/[ `!@#$%^&*()_+\-=\[\\]{};':\"\\|,.<>\/?~]/") !== null) {
+  if (val.match("/[ `!@#$%^&*()_+-=[\\]{};':\"\\|,.<>/?~]/") !== null) {
     val = "'" + val + "'";
   }
 
@@ -186,7 +181,7 @@ function getYamlString(val: string) {
 
 function marshallOperator(operatorBundle: OperatorConfig | undefined) {
   if (operatorBundle !== undefined && operatorBundle.isOperator) {
-    let name = getTrimmedVal(operatorBundle.name);
+    const name = getTrimmedVal(operatorBundle.name);
     return {
       name: name !== "" ? name : "ci-index",
       dockerfile_path: getTrimmedVal(operatorBundle.dockerfilePath),
@@ -201,7 +196,8 @@ function marshallOperator(operatorBundle: OperatorConfig | undefined) {
 }
 
 function marshallOperatorSubstitutions(substitutions: PullspecSubstitution[]) {
-  let marshalledSubstitutions: object[] = [];
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  const marshalledSubstitutions: object[] = [];
   if (substitutions !== undefined && substitutions.length > 0) {
     substitutions.forEach(substitution => {
       marshalledSubstitutions.push({
@@ -226,18 +222,20 @@ function determineOOWorkflow(cloudProvider: CloudProvider | undefined) {
   return "optional-operators-ci-aws";
 }
 
+// eslint-disable-next-line @typescript-eslint/ban-types
 export function validateConfig(type: string, config: RepoConfig, userData: UserData, additionalData: object): Promise<ValidationState> {
-  let marshalledConfig = marshallConfig(config);
+  const marshalledConfig = marshallConfig(config);
 
-  let request = {
+  const request = {
     validation_type: type,
     data: {
       config: marshalledConfig,
       ...additionalData
     }
   }
-  return fetch(process.env.API_URI + '/config-validations', {
+  return fetch(process.env.REACT_APP_API_URI + '/config-validations', {
     method: 'POST',
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     headers: {
       'Accept': 'application/json',
@@ -252,7 +250,7 @@ export function validateConfig(type: string, config: RepoConfig, userData: UserD
         return json;
       });
     })
-    .catch((e) => {
+    .catch(() => {
       return {
         valid: false,
         errorMessage: "An error occurred while validating the data."
@@ -262,9 +260,10 @@ export function validateConfig(type: string, config: RepoConfig, userData: UserD
 
 //Convert the config into a real YAML representation of what the ci-operator config would look like.
 export function convertConfig(config: RepoConfig, userData: UserData): Promise<string | undefined> {
-  let marshalledConfig = marshallConfig(config);
-  return fetch(process.env.API_URI + '/configs?conversionOnly=true', {
+  const marshalledConfig = marshallConfig(config);
+  return fetch(process.env.REACT_APP_API_URI + '/configs?conversionOnly=true', {
     method: 'POST',
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     headers: {
       'Content-Type': 'application/json',
@@ -278,15 +277,16 @@ export function convertConfig(config: RepoConfig, userData: UserData): Promise<s
         return yaml;
       });
     })
-    .catch((e) => {
+    .catch(() => {
       return undefined;
     });
 }
 
 // fetch doesn't support timeouts by default, and this can vary by browser. Chrome has something crazy like 300 seconds.
-export async function fetchWithTimeout(resource, options = {}) {
+export async function fetchWithTimeout(resource: string, options = {}): Promise<any> {
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  const { timeout = 10000 } = options;
+  const {timeout = 10000} = options;
 
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);

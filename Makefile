@@ -229,6 +229,22 @@ pr-deploy-vault-secret-manager:
 	echo "server is at https://$$( oc  --context app.ci --as system:admin get route vault-secret-collection-manager -n ci-tools-$(PULL_REQUEST) -o jsonpath={.spec.host} )"
 .PHONY: pr-deploy-backporter
 
+pr-deploy-repo-init-api:
+	$(eval USER=$(shell curl --fail -Ss https://api.github.com/repos/openshift/ci-tools/pulls/$(PULL_REQUEST)|jq -r .head.user.login))
+	$(eval BRANCH=$(shell curl --fail -Ss https://api.github.com/repos/openshift/ci-tools/pulls/$(PULL_REQUEST)|jq -r .head.ref))
+	$(eval GH_TOKEN=$(shell oc --context app.ci get secret -n ci github-credentials-openshift-bot -o json | jq -r '.data.oauth' | base64 -d))
+	oc --context app.ci --as system:admin process -p USER=$(USER) -p BRANCH=$(BRANCH) -p PULL_REQUEST=$(PULL_REQUEST) -p GH_TOKEN=$(GH_TOKEN) -f hack/pr-deploy-repo-init-api.yaml | oc  --context app.ci --as system:admin apply -f -
+	echo "server is at https://$$( oc  --context app.ci --as system:admin get route repo-init-api -n ci-tools-$(PULL_REQUEST) -o jsonpath={.spec.host} )"
+.PHONY: pr-deploy-repo-init-api
+
+pr-deploy-repo-init-ui:
+	$(eval USER=$(shell curl --fail -Ss https://api.github.com/repos/openshift/ci-tools/pulls/$(PULL_REQUEST)|jq -r .head.user.login))
+	$(eval BRANCH=$(shell curl --fail -Ss https://api.github.com/repos/openshift/ci-tools/pulls/$(PULL_REQUEST)|jq -r .head.ref))
+	$(eval API_HOST=$(shell oc  --context app.ci --as system:admin get route repo-init-api -n ci-tools-$(PULL_REQUEST) -o jsonpath={.spec.host} ))
+	oc --context app.ci --as system:admin process -p USER=$(USER) -p BRANCH=$(BRANCH) -p PULL_REQUEST=$(PULL_REQUEST) -p API_HOST=$(API_HOST) -f hack/pr-deploy-repo-init-ui.yaml | oc  --context app.ci --as system:admin apply -f -
+	echo "server is at https://$$( oc  --context app.ci --as system:admin get route repo-init-ui -n ci-tools-$(PULL_REQUEST) -o jsonpath={.spec.host} )"
+.PHONY: pr-deploy-repo-init-ui
+
 check-breaking-changes:
 	test/validate-generation-breaking-changes.sh
 .PHONY: check-breaking-changes
@@ -243,7 +259,7 @@ imports:
 	go run ./vendor/github.com/coreydaley/openshift-goimports/ -m github.com/openshift/ci-tools
 
 .PHONY: verify-gen
-verify-gen: generate cmd/pod-scaler/frontend/dist/dummy # we need the dummy file to exist so there's no diff on it
+verify-gen: generate cmd/pod-scaler/frontend/dist/dummy cmd/repo-init/frontend/dist/dummy # we need the dummy file to exist so there's no diff on it
 	@# Don't add --quiet here, it disables --exit code in the git 1.7 we have in CI, making this unusuable
 	if  ! git diff --exit-code; then \
 		echo "generated files are out of date, run make generate"; exit 1; \
@@ -295,7 +311,7 @@ local-pod-scaler: $(TMPDIR)/prometheus $(TMPDIR)/promtool cmd/pod-scaler/fronten
 
 .PHONY: cmd/pod-scaler/frontend/dist
 cmd/pod-scaler/frontend/dist: cmd/pod-scaler/frontend/node_modules
-	@$(MAKE) npm NPM_ARGS="run build"
+	@$(MAKE) npm-pod-scaler NPM_ARGS="run build"
 	@$(MAKE) cmd/pod-scaler/frontend/dist/dummy
 
 local-pod-scaler-ui: cmd/pod-scaler/frontend/node_modules $(HOME)/.cache/pod-scaler/steps/container_memory_working_set_bytes.json
@@ -307,31 +323,31 @@ $(HOME)/.cache/pod-scaler/steps/container_memory_working_set_bytes.json:
 	gsutil -m cp -r gs://origin-ci-resource-usage-data/* $(HOME)/.cache/pod-scaler
 
 frontend-checks: cmd/pod-scaler/frontend/node_modules cmd/repo-init/frontend/node_modules
-	@$(MAKE) npm NPM_ARGS="run ci-checks"
+	@$(MAKE) npm-pod-scaler NPM_ARGS="run ci-checks"
+	@$(MAKE) npm-repo-init NPM_ARGS="run ci-checks"
 .PHONY: frontend-checks
 
 cmd/pod-scaler/frontend/node_modules:
-	@$(MAKE) npm NPM_ARGS="ci"
+	@$(MAKE) npm-pod-scaler NPM_ARGS="ci"
 
 cmd/pod-scaler/frontend/dist/dummy:
 	echo "file used to keep go embed happy" > cmd/pod-scaler/frontend/dist/dummy
 
 .PHONY: frontend-format
 frontend-format: cmd/pod-scaler/frontend/node_modules cmd/repo-init/frontend/node_modules
-	@$(MAKE) npm NPM_ARGS="run format"
-
-local-repo-init-api: cmd/repo-init/frontend/dist
-	$(eval export PATH=${PATH}:$(TMPDIR))
-	go run -tags e2e,e2e_framework ./test/e2e/repo-init/local/main.go
-.PHONY: local-repo-init-ui
+	@$(MAKE) npm-pod-scaler  NPM_ARGS="run format"
+	@$(MAKE) npm-repo-init  NPM_ARGS="run format"
 
 .PHONY: cmd/repo-init/frontend/dist
 cmd/repo-init/frontend/dist: cmd/repo-init/frontend/node_modules
-	@$(MAKE) npm NPM_ARGS="run build"
+	# This environment variable needs to be present when running the npm build as this is when it will get injected into the production artifact.
+	# Ideally it would not be set here in the Make target, but doing this temporarily until something better is figured out.
+	$(eval export REACT_APP_API_URI=https://repo-init-apiserver.apps.ci.l2s4.p1.openshiftapps.com)
+	@$(MAKE) npm-repo-init  NPM_ARGS="run build"
 	@$(MAKE) cmd/repo-init/frontend/dist/dummy
 
 cmd/repo-init/frontend/node_modules:
-	@$(MAKE) npm NPM_ARGS="ci"
+	@$(MAKE) npm-repo-init NPM_ARGS="ci"
 
 cmd/repo-init/frontend/dist/dummy:
 	echo "file used to keep go embed happy" > cmd/repo-init/frontend/dist/dummy
@@ -340,9 +356,18 @@ ifdef CI
 NPM_FLAGS = 'npm_config_cache=/go/.npm'
 endif
 
+.PHONY: npm-pod-scaler
+npm-pod-scaler:
+	@$(MAKE) npm NPM_PREFIX="--prefix cmd/pod-scaler/frontend"
+
+.PHONY: npm-repo-init
+npm-repo-init:
+	@$(MAKE) npm NPM_PREFIX="--prefix cmd/repo-init/frontend"
+
 .PHONY: npm
 npm:
-	env $(NPM_FLAGS) npm --prefix cmd/pod-scaler/frontend $(NPM_ARGS)
+	npm version
+	env $(NPM_FLAGS) npm $(NPM_PREFIX) $(NPM_ARGS)
 
 .PHONY: verify-frontend-format
 verify-frontend-format: frontend-format

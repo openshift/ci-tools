@@ -3,17 +3,19 @@ package main
 import (
 	"embed"
 	_ "embed"
-	"github.com/sirupsen/logrus"
 	"io/fs"
 	"io/ioutil"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/sirupsen/logrus"
+
 	prowConfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
 	"k8s.io/test-infra/prow/simplifypath"
-	"net/http"
-	"strconv"
-	"time"
 )
 
 var (

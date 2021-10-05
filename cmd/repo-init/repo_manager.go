@@ -2,48 +2,50 @@ package main
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io/ioutil"
+	"os"
+	"strconv"
+	"sync"
+	"time"
+
+	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/test-infra/prow/cmd/generic-autobumper/bumper"
 	"k8s.io/test-infra/prow/config/secret"
-	"os"
-	"strconv"
-	"time"
 )
+
+type repoManager struct {
+	mux            sync.Mutex
+	numRepos       int
+	availableRepos []*repo
+	inUseRepos     []*repo
+}
 
 type repo struct {
 	path    string
 	inUseBy string
 }
 
-var (
-	numRepos       int
-	availableRepos []*repo
-	inUseRepos     []*repo
-)
-
-func initRepoManager(repoCount int) {
+func (rm *repoManager) init() {
 	logrus.SetLevel(logrus.DebugLevel)
-
-	numRepos = repoCount
 
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secret.Censor}
 	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secret.Censor}
 
 	repoChannel := make(chan *repo)
-	for i := 0; i < numRepos; i++ {
+	for i := 0; i < rm.numRepos; i++ {
 		go func(repoChannel chan *repo) {
 			repo := initRepo(stdout, stderr)
 			repoChannel <- repo
 			logrus.Debugf("Initialized repo %v", repo)
 		}(repoChannel)
 	}
-	for i := 0; i < numRepos; i++ {
-		availableRepos = append(availableRepos, <-repoChannel)
+	for i := 0; i < rm.numRepos; i++ {
+		rm.availableRepos = append(rm.availableRepos, <-repoChannel)
 	}
 
-	logrus.Debugf("Done initializing repos. %v", availableRepos)
+	logrus.Debugf("Done initializing repos. %v", rm.availableRepos)
 }
 
 func initRepo(stdout, stderr bumper.HideSecretsWriter) *repo {
@@ -66,44 +68,49 @@ func initRepo(stdout, stderr bumper.HideSecretsWriter) *repo {
 type RepoGetter func(githubUsername string) (repository *repo, err error)
 
 // retrieveAndLockAvailable obtains an available repo (if one exists) and assigns it to the specified githubUsername.
-func retrieveAndLockAvailable(githubUsername string) (repository *repo, err error) {
+func (rm *repoManager) retrieveAndLockAvailable(githubUsername string) (repository *repo, err error) {
+	rm.mux.Lock()
 	// since repositories are almost always in use for a very short time, try a handful of times before we abort.
 	err = wait.ExponentialBackoff(wait.Backoff{Duration: time.Second, Factor: 2, Steps: 5}, func() (done bool, err error) {
 		repository, err = func() (*repo, error) {
-			if len(availableRepos) > 0 {
-				availableRepo := availableRepos[0]
-				availableRepos = append(availableRepos[0:], availableRepos[1:]...)
-				availableRepo.inUseBy = githubUsername
-				inUseRepos = append(inUseRepos, availableRepo)
-				// make sure we update the repo to the latest changes before giving it out.
-				err := updateRepo(availableRepo)
-				if err != nil {
-					return nil, fmt.Errorf("unable to lock and sync repo: %w", err)
-				}
-
-				return availableRepo, nil
+			if len(rm.availableRepos) == 0 {
+				return nil, fmt.Errorf("all repositories are currently in use")
 			}
-			return nil, fmt.Errorf("all repositories are currently in use")
+			availableRepo := rm.availableRepos[0]
+			rm.availableRepos = append(rm.availableRepos[0:], rm.availableRepos[1:]...)
+			availableRepo.inUseBy = githubUsername
+			rm.inUseRepos = append(rm.inUseRepos, availableRepo)
+			// make sure we update the repo to the latest changes before giving it out.
+			err := updateRepo(availableRepo)
+			if err != nil {
+				return nil, fmt.Errorf("unable to lock and sync repo: %w", err)
+			}
+
+			return availableRepo, nil
 		}()
 		return repository != nil, err
 	})
+
+	rm.mux.Unlock()
 	return repository, err
 }
 
-func returnInUse(r *repo) {
-	for i, cr := range inUseRepos {
+func (rm *repoManager) returnInUse(r *repo) {
+	rm.mux.Lock()
+	for i, cr := range rm.inUseRepos {
 		if r == cr {
-			inUseRepos = append(inUseRepos[i:], inUseRepos[i+1:]...)
+			rm.inUseRepos = append(rm.inUseRepos[i:], rm.inUseRepos[i+1:]...)
 			r.inUseBy = ""
-			availableRepos = append(availableRepos, r)
+			rm.availableRepos = append(rm.availableRepos, r)
 		}
 	}
+	rm.mux.Unlock()
 }
 
 func updateRepo(repo *repo) error {
 	err := os.Chdir(repo.path)
 	if err != nil {
-		logrus.WithError(err).Error("Can't change dir")
+		logrus.WithError(err).Error("can't change dir")
 		return err
 	}
 	logrus.Debugf("Pulling latest changes")
@@ -122,7 +129,7 @@ func updateRepo(repo *repo) error {
 
 func pushChanges(gitRepo *repo, org, repo, githubUsername, githubToken string, createPR bool) (string, error) {
 	if err := updateRepo(gitRepo); err != nil {
-		logrus.WithError(err).Error("Can't change dir")
+		logrus.WithError(err).Error("unable to update repo")
 		return "", err
 	}
 
@@ -142,7 +149,7 @@ func pushChanges(gitRepo *repo, org, repo, githubUsername, githubToken string, c
 		targetBranch,
 		os.Stdout,
 		os.Stderr,
-		availableRepos[0].path,
+		gitRepo.path,
 	); err != nil {
 		return "", fmt.Errorf("failed to push changes: %w", err)
 	}
@@ -168,7 +175,7 @@ func pushChanges(gitRepo *repo, org, repo, githubUsername, githubToken string, c
 
 	}
 
-	logrus.Debugf("Resetting local back to master.")
+	logrus.Debugf("Resetting local repository.")
 	if err := bumper.Call(os.Stdout,
 		os.Stderr,
 		"git",
@@ -176,6 +183,14 @@ func pushChanges(gitRepo *repo, org, repo, githubUsername, githubToken string, c
 		"--hard",
 		"origin/master"); err != nil {
 		return "", fmt.Errorf("failed to reset local: %w", err)
+	}
+
+	if err := bumper.Call(os.Stdout,
+		os.Stderr,
+		"git",
+		"clean",
+		"-df"); err != nil {
+		return "", fmt.Errorf("failed to clean local: %w", err)
 	}
 
 	return targetBranch, nil

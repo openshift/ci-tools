@@ -12,7 +12,7 @@
     "start": "sirv dist --cors --single --host --port 8080",
     "start:dev": "webpack serve --color --progress --config webpack.dev.js",
     "test": "jest --watch",
-    "test:coverage": "jest --coverage",
+    "test:coverage": "jest --coverage --passWithNoTests",
     "eslint": "eslint --ext .tsx,.js ./src/",
     "lint": "npm run eslint",
     "format": "prettier --check --write ./src/**/*.{tsx,ts}",
@@ -46,7 +46,6 @@
     "imagemin": "^8.0.0",
     "jest": "^27.0.4",
     "mini-css-extract-plugin": "^1.6.0",
-    "node-sass": "^6.0.1",
     "postcss": "^8.3.1",
     "prettier": "^2.3.1",
     "prop-types": "^15.7.2",
@@ -69,7 +68,7 @@
     "webpack": "^5.53.0",
     "webpack-bundle-analyzer": "^4.4.2",
     "webpack-cli": "^4.7.2",
-    "webpack-dev-server": "^3.11.2",
+    "webpack-dev-server": "^4.3.1",
     "webpack-merge": "^5.8.0"
   },
   "dependencies": {
@@ -93,5 +92,11 @@
     "redux": "^4.1.0",
     "sirv-cli": "^1.0.12",
     "styled-components": "^5.3.1"
+  },
+  "engines": {
+    "node": ">=10"
+  },
+  "optionalDependencies": {
+    "fsevents": "^2.3.2"
   }
 }

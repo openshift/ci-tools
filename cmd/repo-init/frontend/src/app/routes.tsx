@@ -4,10 +4,10 @@ import { accessibleRouteChangeHandler } from '@app/utils/utils';
 import { NotFound } from '@app/NotFound/NotFound';
 import { useDocumentTitle } from '@app/utils/useDocumentTitle';
 import { LastLocationProvider, useLastLocation } from 'react-router-last-location';
-import RepoInitWizard from "@app/RepoInitWizard/RepoInitWizard";
-import {ConfigEditor} from "@app/ConfigEditor/ConfigEditor";
-import {Login} from "@app/Login/Login";
-import {Home} from "@app/Home/Home";
+import RepoInitWizard from '@app/RepoInitWizard/RepoInitWizard';
+import { ConfigEditor } from '@app/ConfigEditor/ConfigEditor';
+import { Login } from '@app/Login/Login';
+import { Home } from '@app/Home/Home';
 
 let routeFocusTimer: number;
 export interface IAppRoute {
@@ -51,13 +51,13 @@ const routes: AppRouteConfig[] = [
         component: Login,
         exact: true,
         path: '/login',
-        title: 'Login'
+        title: 'Login',
       },
       {
         component: ConfigEditor,
         path: '/config-editor',
         title: 'Edit Raw Config',
-      }
+      },
     ],
   },
 ];
@@ -85,7 +85,7 @@ const RouteWithTitleUpdates = ({ component: Component, isAsync = false, title, .
     return <Component {...rest} {...routeProps} />;
   }
 
-  return <Route render={routeWithTitle} {...rest}/>;
+  return <Route render={routeWithTitle} {...rest} />;
 };
 
 const PageNotFound = ({ title }: { title: string }) => {
@@ -98,11 +98,11 @@ const flattenedRoutes: IAppRoute[] = routes.reduce(
   [] as IAppRoute[]
 );
 
-
 const AppRoutes = (): React.ReactElement => {
-    return <LastLocationProvider>
+  return (
+    <LastLocationProvider>
       <Switch>
-        {flattenedRoutes.map(({path, exact, component, title, isAsync}, idx) => (
+        {flattenedRoutes.map(({ path, exact, component, title, isAsync }, idx) => (
           <RouteWithTitleUpdates
             path={path}
             exact={exact}
@@ -112,10 +112,10 @@ const AppRoutes = (): React.ReactElement => {
             isAsync={isAsync}
           />
         ))}
-        <PageNotFound title="404 Page Not Found"/>
+        <PageNotFound title="404 Page Not Found" />
       </Switch>
     </LastLocationProvider>
-
+  );
 };
 
 export { AppRoutes, routes };

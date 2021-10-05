@@ -4,7 +4,7 @@ const { stylePaths } = require("./stylePaths");
 const HOST = process.env.HOST || "localhost";
 const PORT = process.env.PORT || "9000";
 
-const API_ENDPOINT = process.env.API_ENDPOINT || "http://localhost:9000";
+const API_ENDPOINT = process.env.REACT_APP_API_URI || "http://localhost:8080";
 
 module.exports = merge(common('development'), {
   mode: "development",
@@ -16,7 +16,6 @@ module.exports = merge(common('development'), {
     compress: true,
     inline: true,
     historyApiFallback: true,
-    overlay: true,
     open: true,
     proxy: {
       '/api': {

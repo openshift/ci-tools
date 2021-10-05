@@ -65,7 +65,7 @@ const TestConfig: React.FunctionComponent = () => {
   function saveTest() {
     const tests = configContext.config.tests;
     if (tests.find(t => (t.name.toLowerCase() === curTest.name.toLowerCase())) === undefined) {
-      if (curTest.name.trim() !== "" && curTest.testCommands !== "") {
+      if (curTest.name !== undefined && curTest.name !== "" && curTest.name.trim() !== "" && curTest.testCommands !== "") {
         const updatedTests = configContext.config.tests.concat(curTest);
         const validationConfig = {...configContext.config, tests: updatedTests};
 
@@ -82,6 +82,7 @@ const TestConfig: React.FunctionComponent = () => {
                 errorMessages: validationState.errors != undefined ? validationState.errors.map(error => error.message) : [""],
                 stepIsComplete: false
               });
+              return;
             }
           })
 
@@ -90,9 +91,11 @@ const TestConfig: React.FunctionComponent = () => {
           ...context.step,
           errorMessages: ["You must, at a minimum, provide a name and the commands to run."]
         });
+        return;
       }
     } else {
       context.setStep({...context.step, errorMessages: ["A test with that name already exists."]});
+      return;
     }
     validate();
   }
@@ -158,7 +161,7 @@ const TestConfig: React.FunctionComponent = () => {
   }
 
   function loadClusterProfiles() {
-    fetch(process.env.API_URI + '/cluster-profiles', {
+    fetch(process.env.REACT_APP_API_URI + '/cluster-profiles', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

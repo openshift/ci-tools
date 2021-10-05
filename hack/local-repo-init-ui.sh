@@ -24,7 +24,8 @@ function start() {
     --port=8080 \
     --github-endpoint=https://api.github.com \
     --disable-cors=true \
-    --num-repos=1 &
+    --num-repos=1 \
+    --server-config-path=/tmp/serverconfig &
 
   repo-init \
     --loglevel=debug \

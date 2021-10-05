@@ -27,7 +27,7 @@ const RepoInfo: React.FunctionComponent = () => {
   function validate() {
     const config = configContext.config;
     if (config.org && config.repo && config.branch) {
-      fetch('http://localhost:8080/api/configs?org=' + config.org + '&repo=' + config.repo)
+      fetch(process.env.REACT_APP_API_URI + '/configs?org=' + config.org + '&repo=' + config.repo)
         .then((r) => {
           if (r.status === 404) {
             context.setStep({...context.step, errorMessages: [], stepIsComplete: true});

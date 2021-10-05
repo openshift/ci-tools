@@ -1,6 +1,6 @@
-# `pod-scaler` Frontend
+# `repo-init` Frontend
 
-The `pod-scaler` frontend is built off of the Patternfly React TypeScript Seed. 
+The `repo-init` frontend is built off of the Patternfly React TypeScript Seed. 
 
 ## Development scripts
 ```sh

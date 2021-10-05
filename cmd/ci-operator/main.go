@@ -1205,12 +1205,11 @@ func (o *options) initializeNamespace() error {
 	if o.givePrAuthorAccessToNamespace && len(o.authors) > 0 {
 		roleBinding := generateAuthorAccessRoleBinding(o.namespace, o.authors)
 		// Generate rolebinding for all the PR Authors.
-		for _, author := range o.authors {
-			logrus.Debugf("Creating rolebinding for user %s in namespace %s", author, o.namespace)
-			if err := client.Create(ctx, roleBinding); err != nil && !kerrors.IsAlreadyExists(err) {
-				return fmt.Errorf("could not create role binding for: %w", err)
-			}
+		logrus.Debugf("Creating ci-op-author-access rolebinding in namespace %s", o.namespace)
+		if err := client.Create(ctx, roleBinding); err != nil && !kerrors.IsAlreadyExists(err) {
+			return fmt.Errorf("could not create role binding for: %w", err)
 		}
+
 	}
 
 	for _, secret := range []*coreapi.Secret{o.pullSecret, o.pushSecret, o.uploadSecret} {
@@ -1309,7 +1308,8 @@ func (o *options) initializeNamespace() error {
 
 func generateAuthorAccessRoleBinding(namespace string, authors []string) *rbacapi.RoleBinding {
 	var subjects []rbacapi.Subject
-	for _, author := range authors {
+	authorSet := sets.NewString(authors...)
+	for _, author := range authorSet.List() {
 		subjects = append(subjects, rbacapi.Subject{Kind: "Group", Name: author + api.GroupSuffix})
 	}
 	return &rbacapi.RoleBinding{

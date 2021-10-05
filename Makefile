@@ -124,8 +124,9 @@ cmd/vault-secret-collection-manager/index.js: cmd/vault-secret-collection-manage
 #
 # Example:
 #   make production-install
-production-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/frontend/dist
+production-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/frontend/dist cmd/repo-init/frontend/dist
 	rm -f cmd/pod-scaler/frontend/dist/dummy # we keep this file in git to keep the thing compiling without static assets
+	rm -f cmd/repo-init/frontend/dist/dummy
 	hack/install.sh
 .PHONY: production-install
 
@@ -134,7 +135,7 @@ production-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/
 #
 # Example:
 #   make production-install
-race-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/frontend/dist
+race-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/frontend/dist cmd/repo-init/frontend/dist
 	hack/install.sh race
 
 # Run integration tests.
@@ -305,7 +306,7 @@ $(HOME)/.cache/pod-scaler/steps/container_memory_working_set_bytes.json:
 	mkdir -p $(HOME)/.cache/pod-scaler
 	gsutil -m cp -r gs://origin-ci-resource-usage-data/* $(HOME)/.cache/pod-scaler
 
-frontend-checks: cmd/pod-scaler/frontend/node_modules
+frontend-checks: cmd/pod-scaler/frontend/node_modules cmd/repo-init/frontend/node_modules
 	@$(MAKE) npm NPM_ARGS="run ci-checks"
 .PHONY: frontend-checks
 
@@ -316,8 +317,24 @@ cmd/pod-scaler/frontend/dist/dummy:
 	echo "file used to keep go embed happy" > cmd/pod-scaler/frontend/dist/dummy
 
 .PHONY: frontend-format
-frontend-format: cmd/pod-scaler/frontend/node_modules
+frontend-format: cmd/pod-scaler/frontend/node_modules cmd/repo-init/frontend/node_modules
 	@$(MAKE) npm NPM_ARGS="run format"
+
+local-repo-init-api: cmd/repo-init/frontend/dist
+	$(eval export PATH=${PATH}:$(TMPDIR))
+	go run -tags e2e,e2e_framework ./test/e2e/repo-init/local/main.go
+.PHONY: local-repo-init-ui
+
+.PHONY: cmd/repo-init/frontend/dist
+cmd/repo-init/frontend/dist: cmd/repo-init/frontend/node_modules
+	@$(MAKE) npm NPM_ARGS="run build"
+	@$(MAKE) cmd/repo-init/frontend/dist/dummy
+
+cmd/repo-init/frontend/node_modules:
+	@$(MAKE) npm NPM_ARGS="ci"
+
+cmd/repo-init/frontend/dist/dummy:
+	echo "file used to keep go embed happy" > cmd/repo-init/frontend/dist/dummy
 
 ifdef CI
 NPM_FLAGS = 'npm_config_cache=/go/.npm'

@@ -224,7 +224,7 @@ func (v *Validator) validateTestStepConfiguration(
 		validationErrors = append(validationErrors, v.validateTestConfigurationType(fieldRootN, test, release, releases, inputImagesSeen, resolved)...)
 	}
 	for tag, field := range inputImagesSeen {
-		if err := configCtx.addField(string(field)).addPipelineImage(tag); err != nil {
+		if err := configCtx.AddField(string(field)).addPipelineImage(tag); err != nil {
 			validationErrors = append(validationErrors, err)
 		}
 	}

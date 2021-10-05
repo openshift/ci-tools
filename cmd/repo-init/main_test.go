@@ -319,6 +319,11 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 			},
 			expected: ciopconfig.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
+					Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					},
 					InputConfiguration: api.InputConfiguration{
 						BuildRootImage: &api.BuildRootImageConfiguration{
 							ImageStreamTagReference: &api.ImageStreamTagReference{
@@ -362,6 +367,11 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 			},
 			expected: ciopconfig.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
+					Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					},
 					PromotionConfiguration: &api.PromotionConfiguration{
 						Namespace: "promote",
 						Name:      "version",
@@ -423,6 +433,11 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 			},
 			expected: ciopconfig.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
+					Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					},
 					PromotionConfiguration: &api.PromotionConfiguration{
 						Namespace: "promote",
 						Name:      "version",
@@ -490,6 +505,11 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 			},
 			expected: ciopconfig.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
+					Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					},
 					InputConfiguration: api.InputConfiguration{
 						BuildRootImage: &api.BuildRootImageConfiguration{
 							ImageStreamTagReference: &api.ImageStreamTagReference{
@@ -550,6 +570,11 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 			},
 			expected: ciopconfig.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
+					Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					},
 					InputConfiguration: api.InputConfiguration{
 						BuildRootImage: &api.BuildRootImageConfiguration{
 							ImageStreamTagReference: &api.ImageStreamTagReference{
@@ -642,6 +667,11 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 			},
 			expected: ciopconfig.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
+					Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					},
 					InputConfiguration: api.InputConfiguration{
 						BuildRootImage: &api.BuildRootImageConfiguration{
 							ImageStreamTagReference: &api.ImageStreamTagReference{
@@ -694,6 +724,11 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 			},
 			expected: ciopconfig.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
+					Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					},
 					InputConfiguration: api.InputConfiguration{
 						BuildRootImage: &api.BuildRootImageConfiguration{
 							ImageStreamTagReference: &api.ImageStreamTagReference{

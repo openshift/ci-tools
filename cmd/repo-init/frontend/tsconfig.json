@@ -22,8 +22,7 @@
       "@assets/*": ["node_modules/@patternfly/react-core/dist/styles/assets/*"]
     },
     "importHelpers": true,
-    "skipLibCheck": true,
-    "types": []
+    "skipLibCheck": true
   },
   "include": [
     "**/*.ts",
@@ -31,10 +30,5 @@
     "**/*.jsx",
     "**/*.js"
   ],
-  "exclude": [
-    "node_modules",
-    "./node_modules",
-    "./node_modules/*",
-    "*/node_modules/*"
-  ]
+  "exclude": ["node_modules"]
 }

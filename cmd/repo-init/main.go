@@ -11,18 +11,19 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/afero"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/test-infra/prow/flagutil"
+	"k8s.io/test-infra/prow/interrupts"
 	"os"
 	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
 
-	"github.com/spf13/afero"
-
-	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/plugins"
 	"sigs.k8s.io/yaml"
 
@@ -32,22 +33,74 @@ import (
 )
 
 type options struct {
-	releaseRepo string
-	config      string
+	mode string
+
+	serverOptions
+
+	instrumentationOptions flagutil.InstrumentationOptions
+
+	loglevel string
+	logStyle string
+
+	releaseRepo   string
+	config        string
+	disableCors   bool
+	GitHubOptions flagutil.GitHubOptions
+}
+
+type serverOptions struct {
+	port     int
+	numRepos int
 }
 
 func (o *options) Validate() error {
-	if o.releaseRepo == "" {
-		return errors.New("--release-repo is required")
+	switch o.mode {
+	case "api":
+		if o.port == 0 {
+			return errors.New("--port is required")
+		}
+		if err := o.GitHubOptions.Validate(false); err != nil {
+			return err
+		}
+	case "ui":
+		if o.port == 0 {
+			return errors.New("--port is required")
+		}
+	case "cli":
+	default:
+		return errors.New("--mode must be either \"server\", or \"cli\"")
 	}
-	return nil
+	if level, err := logrus.ParseLevel(o.loglevel); err != nil {
+		return fmt.Errorf("--loglevel invalid: %w", err)
+	} else {
+		logrus.SetLevel(level)
+	}
+	if o.logStyle != logStyleJson && o.logStyle != logStyleText {
+		return fmt.Errorf("--log-style must be one of %s or %s, not %s", logStyleText, logStyleJson, o.logStyle)
+	}
+
+	return o.instrumentationOptions.Validate(false)
+
 }
+
+const (
+	logStyleJson = "json"
+	logStyleText = "text"
+)
 
 func gatherOptions() options {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	o.instrumentationOptions.AddFlags(fs)
+	fs.StringVar(&o.mode, "mode", "cli", "Whether to run the repo initializer as an interactive cli, a standalone server, or in ui mode.")
 	fs.StringVar(&o.releaseRepo, "release-repo", "", "Path to the root of the openshift/release repository.")
 	fs.StringVar(&o.config, "config", "", "JSON configuration to use instead of the interactive mode.")
+	fs.StringVar(&o.loglevel, "loglevel", "debug", "Logging level.")
+	fs.StringVar(&o.logStyle, "log-style", "json", "Logging style: json or text.")
+	fs.IntVar(&o.port, "port", 0, "Port to run on if in server mode.")
+	fs.IntVar(&o.numRepos, "num-repos", 4, "The number of o/release repos to check out.")
+	fs.BoolVar(&o.disableCors, "disable-cors", false, "Set this to disable CORS.")
+	o.GitHubOptions.AddFlags(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		fmt.Printf("ERROR: could not parse input: %v", err)
 		os.Exit(1)
@@ -56,21 +109,24 @@ func gatherOptions() options {
 }
 
 type initConfig struct {
-	Org                   string    `json:"org"`
-	Repo                  string    `json:"repo"`
-	Branch                string    `json:"branch"`
-	CanonicalGoRepository string    `json:"canonical_go_repository"`
-	Promotes              bool      `json:"promotes"`
-	PromotesWithOpenShift bool      `json:"promotes_with_openshift"`
-	NeedsBase             bool      `json:"needs_base"`
-	NeedsOS               bool      `json:"needs_os"`
-	GoVersion             string    `json:"go_version"`
-	BuildCommands         string    `json:"build_commands"`
-	TestBuildCommands     string    `json:"test_build_commands"`
-	Tests                 []test    `json:"tests"`
-	CustomE2E             []e2eTest `json:"custom_e2e"`
-	ReleaseType           string    `json:"release_type"`
-	ReleaseVersion        string    `json:"release_version"`
+	Org                   string                                            `json:"org"`
+	Repo                  string                                            `json:"repo"`
+	Branch                string                                            `json:"branch"`
+	BaseImages            map[string]api.ImageStreamTagReference            `json:"base_images"`
+	Images                []api.ProjectDirectoryImageBuildStepConfiguration `json:"images"`
+	CanonicalGoRepository string                                            `json:"canonical_go_repository"`
+	Promotes              bool                                              `json:"promotes"`
+	PromotesWithOpenShift bool                                              `json:"promotes_with_openshift"`
+	NeedsBase             bool                                              `json:"needs_base"`
+	NeedsOS               bool                                              `json:"needs_os"`
+	GoVersion             string                                            `json:"go_version"`
+	BuildCommands         string                                            `json:"build_commands"`
+	TestBuildCommands     string                                            `json:"test_build_commands"`
+	Tests                 []test                                            `json:"tests"`
+	CustomE2E             []e2eTest                                         `json:"custom_e2e"`
+	ReleaseType           string                                            `json:"release_type"`
+	ReleaseVersion        string                                            `json:"release_version"`
+	OperatorBundle        *operatorBundle                                   `json:"operator_bundle"`
 }
 
 type test struct {
@@ -80,18 +136,57 @@ type test struct {
 }
 
 type e2eTest struct {
-	As      string             `json:"as"`
-	Profile api.ClusterProfile `json:"profile"`
-	Command string             `json:"command"`
-	Cli     bool               `json:"cli"`
+	As           string                    `json:"as"`
+	Profile      api.ClusterProfile        `json:"profile"`
+	Command      string                    `json:"command"`
+	Cli          bool                      `json:"cli"`
+	Resources    *api.ResourceRequirements `json:"resources"`
+	Workflow     string                    `json:"workflow"`
+	Environment  api.TestEnvironment       `json:"environment"`
+	Dependencies api.TestDependencies      `dependencies:"dependencies"`
+}
+
+type operatorBundle struct {
+	Name             string                     `json:"name"`
+	DockerfilePath   string                     `json:"dockerfile_path"`
+	ContextDir       string                     `json:"context_dir"`
+	BaseIndex        string                     `json:"base_index"`
+	UpdateGraph      string                     `json:"update_graph"`
+	PackageName      string                     `json:"package_name"`
+	Channel          string                     `json:"channel"`
+	InstallNamespace string                     `json:"install_namespace"`
+	TargetNamespaces string                     `json:"target_namespaces"`
+	Substitutions    []api.PullSpecSubstitution `json:"substitutions"`
 }
 
 func main() {
 	o := gatherOptions()
+
 	if err := o.Validate(); err != nil {
-		errorExit(fmt.Sprintf("invalid options: %v", err))
+		errorExit(fmt.Sprintf("Aw shit %v", err))
 	}
 
+	switch o.mode {
+	case "api":
+		mainApi(o)
+	case "cli":
+		mainCli(o)
+	case "ui":
+		mainUI(o)
+	}
+}
+
+func mainApi(o options) {
+	go serveAPI(o.port, o.instrumentationOptions.HealthPort, o.numRepos, o.GitHubOptions, o.disableCors)
+	interrupts.WaitForGracefulShutdown()
+}
+
+func mainUI(o options) {
+	go serveUI(o.port, o.instrumentationOptions.HealthPort, o.instrumentationOptions.MetricsPort)
+	interrupts.WaitForGracefulShutdown()
+}
+
+func mainCli(o options) {
 	go func() {
 		interrupts.WaitForGracefulShutdown()
 		os.Exit(1)
@@ -272,7 +367,7 @@ create this run without using the interactive interface:
 		errorExit(fmt.Sprintf("could not update Prow plugin configuration: %v", err))
 	}
 
-	if err := createCIOperatorConfig(config, o.releaseRepo); err != nil {
+	if _, err := createCIOperatorConfig(config, o.releaseRepo, true); err != nil {
 		errorExit(fmt.Sprintf("could not generate new CI Operator configuration: %v", err))
 	}
 }
@@ -477,9 +572,8 @@ Ensure that webhooks are set up for Prow to watch GitHub state.`)
 	})
 }
 
-func createCIOperatorConfig(config initConfig, releaseRepo string) error {
-	fmt.Println(`
-Generating CI Operator configuration ...`)
+func createCIOperatorConfig(config initConfig, releaseRepo string, commit bool) (*api.ReleaseBuildConfiguration, error) {
+	logrus.Print(`Generating CI Operator configuration ...`)
 	info := api.Metadata{
 		Org:    "openshift",
 		Repo:   "origin",
@@ -491,11 +585,14 @@ Generating CI Operator configuration ...`)
 		originConfig = configuration
 		return nil
 	}); err != nil {
-		return fmt.Errorf("failed to load configuration for openshift/origin: %w", err)
+		return nil, fmt.Errorf("failed to load configuration for openshift/origin: %w", err)
 	}
 
 	generated := generateCIOperatorConfig(config, originConfig.PromotionConfiguration)
-	return generated.CommitTo(path.Join(releaseRepo, ciopconfig.CiopConfigInRepoPath))
+	if commit {
+		return &generated.Configuration, generated.CommitTo(path.Join(releaseRepo, ciopconfig.CiopConfigInRepoPath))
+	}
+	return &generated.Configuration, nil
 }
 
 func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConfiguration) ciopconfig.DataWithInfo {
@@ -508,6 +605,11 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 			},
 		},
 		Configuration: api.ReleaseBuildConfiguration{
+			Metadata: api.Metadata{
+				Org:    config.Org,
+				Repo:   config.Repo,
+				Branch: config.Branch,
+			},
 			BinaryBuildCommands:     config.BuildCommands,
 			TestBinaryBuildCommands: config.TestBuildCommands,
 			Tests:                   []api.TestStepConfiguration{},
@@ -517,6 +619,9 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 			}},
 		},
 	}
+
+	generated.Configuration.BaseImages = config.BaseImages
+	generated.Configuration.Images = config.Images
 
 	if config.CanonicalGoRepository != "" {
 		generated.Configuration.CanonicalGoRepository = &config.CanonicalGoRepository
@@ -584,6 +689,32 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 		},
 	}
 
+	if config.OperatorBundle != nil {
+		operatorConfig := api.OperatorStepConfiguration{}
+		generated.Configuration.Operator = &operatorConfig
+		if config.OperatorBundle.Name != "" {
+			operatorConfig.Bundles = []api.Bundle{
+				{
+					As: config.OperatorBundle.Name,
+				},
+			}
+		}
+		if config.OperatorBundle.BaseIndex != "" {
+			operatorConfig.Bundles[0].BaseIndex = config.OperatorBundle.BaseIndex
+		}
+		if config.OperatorBundle.ContextDir != "" {
+			operatorConfig.Bundles[0].ContextDir = config.OperatorBundle.ContextDir
+		}
+		if config.OperatorBundle.Channel != "" {
+			operatorConfig.Bundles[0].ContextDir = config.OperatorBundle.ContextDir
+		}
+		if config.OperatorBundle.DockerfilePath != "" {
+			operatorConfig.Bundles[0].DockerfilePath = config.OperatorBundle.DockerfilePath
+		}
+
+		operatorConfig.Substitutions = config.OperatorBundle.Substitutions
+	}
+
 	for _, test := range config.Tests {
 		generated.Configuration.Tests = append(generated.Configuration.Tests, api.TestStepConfiguration{
 			As:       test.As,
@@ -598,15 +729,17 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 		t := api.TestStepConfiguration{
 			As: test.As,
 			MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
-				Workflow:       determineWorkflowFromClusterPorfile(test.Profile),
+				Workflow:       determineWorkflow(test.Workflow, test.Profile),
 				ClusterProfile: test.Profile,
+				Environment:    test.Environment,
+				Dependencies:   test.Dependencies,
 				Test: []api.TestStep{
 					{
 						LiteralTestStep: &api.LiteralTestStep{
 							As:        test.As,
 							Commands:  test.Command,
 							From:      "src",
-							Resources: api.ResourceRequirements{Requests: map[string]string{"cpu": "100m"}},
+							Resources: getTestResourceRequest(test),
 						},
 					},
 				},
@@ -639,24 +772,36 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 		}
 		generated.Configuration.Releases = map[string]api.UnresolvedRelease{api.LatestReleaseName: release}
 	}
+
 	return generated
 }
 
-func determineWorkflowFromClusterPorfile(clusterProfile api.ClusterProfile) *string {
+func determineWorkflow(workflow string, clusterProfile api.ClusterProfile) *string {
 	var ret string
-	switch clusterProfile {
-	case api.ClusterProfileAWS:
-		ret = "ipi-aws"
-	case api.ClusterProfileAWSArm64:
-		ret = "ipi-aws"
-	case api.ClusterProfileAzure, api.ClusterProfileAzure2, api.ClusterProfileAzure4:
-		ret = "ipi-azure"
-	case api.ClusterProfileAzureStack:
-		ret = "ipi-azurestack"
-	case api.ClusterProfileGCP:
-		ret = "ipi-gcp"
-	case api.ClusterProfileAlibaba:
-		ret = "ipi-alibaba"
+	if workflow != "" {
+		ret = workflow
+	} else {
+		switch clusterProfile {
+		case api.ClusterProfileAWS:
+			ret = "ipi-aws"
+		case api.ClusterProfileAWSArm64:
+			ret = "ipi-aws"
+		case api.ClusterProfileAzure, api.ClusterProfileAzure2, api.ClusterProfileAzure4:
+			ret = "ipi-azure"
+		case api.ClusterProfileAzureStack:
+			ret = "ipi-azurestack"
+		case api.ClusterProfileGCP:
+			ret = "ipi-gcp"
+		case api.ClusterProfileAlibaba:
+			ret = "ipi-alibaba"
+		}
 	}
 	return &ret
+}
+
+func getTestResourceRequest(test e2eTest) api.ResourceRequirements {
+	if test.Resources != nil {
+		return *test.Resources
+	}
+	return api.ResourceRequirements{Requests: map[string]string{"cpu": "100m"}}
 }

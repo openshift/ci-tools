@@ -693,9 +693,34 @@ func TestGenerateJobs(t *testing.T) {
 			if !tc.keep {
 				pruneForTests(jobConfig) // prune the fields that are tested in TestGeneratePre/PostsubmitForTest
 			}
-			testhelper.CompareWithFixture(t, jobConfig)
+			testhelper.CompareWithFixture(t, sortPodspecsInJobsonfig(jobConfig))
 		})
 	}
+}
+
+func sortPodspecsInJobsonfig(jobConfig *prowconfig.JobConfig) *prowconfig.JobConfig {
+	for repo := range jobConfig.PresubmitsStatic {
+		for i := range jobConfig.PresubmitsStatic[repo] {
+			if jobConfig.PresubmitsStatic[repo][i].Spec != nil {
+				sorted(jobConfig.PresubmitsStatic[repo][i].Spec)
+			}
+		}
+	}
+	for repo := range jobConfig.PostsubmitsStatic {
+		for i := range jobConfig.PostsubmitsStatic[repo] {
+			if jobConfig.PostsubmitsStatic[repo][i].Spec != nil {
+				sorted(jobConfig.PostsubmitsStatic[repo][i].Spec)
+			}
+		}
+	}
+
+	for i := range jobConfig.Periodics {
+		if jobConfig.Periodics[i].Spec != nil {
+			sorted(jobConfig.Periodics[i].Spec)
+		}
+	}
+
+	return jobConfig
 }
 
 func TestGenerateJobBase(t *testing.T) {

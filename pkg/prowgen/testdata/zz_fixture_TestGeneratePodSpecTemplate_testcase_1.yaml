@@ -1,12 +1,12 @@
 containers:
 - args:
-  - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
   - --gcs-upload-secret=/secrets/gcs/service-account.json
-  - --report-credentials-file=/etc/report/credentials
-  - --target=test
-  - --secret-dir=/usr/local/test-cluster-profile
-  - --template=/usr/local/test
+  - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
   - --lease-server-credentials-file=/etc/boskos/credentials
+  - --report-credentials-file=/etc/report/credentials
+  - --secret-dir=/usr/local/test-cluster-profile
+  - --target=test
+  - --template=/usr/local/test
   command:
   - ci-operator
   env:
@@ -23,42 +23,42 @@ containers:
     requests:
       cpu: 10m
   volumeMounts:
+  - mountPath: /etc/boskos
+    name: boskos
+    readOnly: true
+  - mountPath: /usr/local/test-cluster-profile
+    name: cluster-profile
+  - mountPath: /secrets/gcs
+    name: gcs-credentials
+    readOnly: true
+  - mountPath: /usr/local/test
+    name: job-definition
+    subPath: cluster-launch-installer-e2e.yaml
   - mountPath: /etc/pull-secret
     name: pull-secret
     readOnly: true
   - mountPath: /etc/report
     name: result-aggregator
     readOnly: true
-  - mountPath: /secrets/gcs
-    name: gcs-credentials
-    readOnly: true
-  - mountPath: /etc/boskos
-    name: boskos
-    readOnly: true
-  - mountPath: /usr/local/test-cluster-profile
-    name: cluster-profile
-  - mountPath: /usr/local/test
-    name: job-definition
-    subPath: cluster-launch-installer-e2e.yaml
 serviceAccountName: ci-operator
 volumes:
-- name: pull-secret
-  secret:
-    secretName: registry-pull-credentials
-- name: result-aggregator
-  secret:
-    secretName: result-aggregator
-- configMap:
-    name: prow-job-cluster-launch-installer-e2e
-  name: job-definition
-- name: cluster-profile
-  projected:
-    sources:
-    - secret:
-        name: cluster-secrets-aws
 - name: boskos
   secret:
     items:
     - key: credentials
       path: credentials
     secretName: boskos-credentials
+- name: cluster-profile
+  projected:
+    sources:
+    - secret:
+        name: cluster-secrets-aws
+- configMap:
+    name: prow-job-cluster-launch-installer-e2e
+  name: job-definition
+- name: pull-secret
+  secret:
+    secretName: registry-pull-credentials
+- name: result-aggregator
+  secret:
+    secretName: result-aggregator

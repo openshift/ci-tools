@@ -1,11 +1,11 @@
 containers:
 - args:
-  - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
   - --gcs-upload-secret=/secrets/gcs/service-account.json
-  - --report-credentials-file=/etc/report/credentials
-  - --target=test
-  - --secret-dir=/secrets/ci-pull-credentials
+  - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
   - --lease-server-credentials-file=/etc/boskos/credentials
+  - --report-credentials-file=/etc/report/credentials
+  - --secret-dir=/secrets/ci-pull-credentials
+  - --target=test
   command:
   - ci-operator
   image: ci-operator:latest
@@ -15,35 +15,35 @@ containers:
     requests:
       cpu: 10m
   volumeMounts:
+  - mountPath: /etc/boskos
+    name: boskos
+    readOnly: true
+  - mountPath: /secrets/ci-pull-credentials
+    name: ci-pull-credentials
+    readOnly: true
+  - mountPath: /secrets/gcs
+    name: gcs-credentials
+    readOnly: true
   - mountPath: /etc/pull-secret
     name: pull-secret
     readOnly: true
   - mountPath: /etc/report
     name: result-aggregator
     readOnly: true
-  - mountPath: /secrets/gcs
-    name: gcs-credentials
-    readOnly: true
-  - mountPath: /secrets/ci-pull-credentials
-    name: ci-pull-credentials
-    readOnly: true
-  - mountPath: /etc/boskos
-    name: boskos
-    readOnly: true
 serviceAccountName: ci-operator
 volumes:
-- name: pull-secret
-  secret:
-    secretName: registry-pull-credentials
-- name: result-aggregator
-  secret:
-    secretName: result-aggregator
-- name: ci-pull-credentials
-  secret:
-    secretName: ci-pull-credentials
 - name: boskos
   secret:
     items:
     - key: credentials
       path: credentials
     secretName: boskos-credentials
+- name: ci-pull-credentials
+  secret:
+    secretName: ci-pull-credentials
+- name: pull-secret
+  secret:
+    secretName: registry-pull-credentials
+- name: result-aggregator
+  secret:
+    secretName: result-aggregator

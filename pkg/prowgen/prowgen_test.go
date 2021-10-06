@@ -2,6 +2,8 @@ package prowgen
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -69,9 +71,34 @@ func TestGeneratePodSpec(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generateCiOperatorPodSpec(tc.info, tc.secrets, tc.targets, tc.skipCloning, tc.additionalArgs...))
+			testhelper.CompareWithFixture(t, sorted(generateCiOperatorPodSpec(tc.info, tc.secrets, tc.targets, tc.skipCloning, tc.additionalArgs...)))
 		})
 	}
+}
+
+func sorted(spec *corev1.PodSpec) *corev1.PodSpec {
+	container := &spec.Containers[0]
+	sort.Slice(spec.Volumes, func(i, j int) bool {
+		return spec.Volumes[i].Name < spec.Volumes[j].Name
+	})
+	sort.Slice(container.Env, func(i, j int) bool {
+		return container.Env[i].Name < container.Env[j].Name
+	})
+	sort.Slice(container.VolumeMounts, func(i, j int) bool {
+		return container.VolumeMounts[i].Name < container.VolumeMounts[j].Name
+	})
+
+	canSortArgs := true
+	for i := range container.Args {
+		if !strings.HasPrefix(container.Args[i], "--") {
+			canSortArgs = false
+			break
+		}
+	}
+	if canSortArgs {
+		sort.Strings(container.Args)
+	}
+	return spec
 }
 
 func TestGeneratePodSpecMultiStage(t *testing.T) {
@@ -191,7 +218,7 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generatePodSpecMultiStage(&info, tc.test, true, true))
+			testhelper.CompareWithFixture(t, sorted(generatePodSpecMultiStage(&info, tc.test, true, true)))
 		})
 	}
 }
@@ -276,7 +303,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 
 	for idx, tc := range tests {
 		t.Run(fmt.Sprintf("testcase-%d", idx), func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generatePodSpecTemplate(tc.info, tc.release, &tc.test, true))
+			testhelper.CompareWithFixture(t, sorted(generatePodSpecTemplate(tc.info, tc.release, &tc.test, true)))
 		})
 	}
 }
@@ -769,7 +796,7 @@ func TestGenerateJobBase(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.testName, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generateJobBase(testCase.name, testCase.prefix, testCase.info, testCase.podSpec, testCase.rehearsable, testCase.pathAlias, "", !testCase.clone, nil))
+			testhelper.CompareWithFixture(t, generateJobBase(testCase.name, testCase.prefix, testCase.info, sorted(testCase.podSpec), testCase.rehearsable, testCase.pathAlias, "", !testCase.clone, nil))
 		})
 	}
 }

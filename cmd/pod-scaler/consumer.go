@@ -36,11 +36,13 @@ type cacheReloader struct {
 	lastUpdated time.Time
 	lastLoaded  *pod_scaler.CachedQuery
 	subscribers []chan<- interface{}
+	seenCount   int
 }
 
 func (c *cacheReloader) subscribe(out chan<- interface{}) {
 	c.lock.Lock()
 	c.subscribers = append(c.subscribers, out)
+	c.logger.Debugf("new subscriber, subscriber count now: %d", len(c.subscribers))
 	// if a subscriber is added and we already have data, let them know
 	// so they don't need to wait for the next tick to figure it out
 	if c.lastLoaded != nil {
@@ -80,6 +82,7 @@ func (c *cacheReloader) reload() {
 	c.lock.Lock()
 	c.lastUpdated = lastUpdated
 	c.lastLoaded = data
+	c.seenCount = 0
 	for _, subscriber := range c.subscribers {
 		subscriber <- struct{}{}
 	}
@@ -90,9 +93,17 @@ func (c *cacheReloader) reload() {
 // data returns the lastLoaded CachedQuery and clears it to conserve memory
 func (c *cacheReloader) data() *pod_scaler.CachedQuery {
 	c.lock.RLock()
+	c.seenCount++
+	c.logger.Debugf("getting data, %d of %d subscribers have now seen this data", c.seenCount, len(c.subscribers))
 	defer c.lock.RUnlock()
 	lastLoaded := c.lastLoaded
-	c.lastLoaded = nil
+	if lastLoaded == nil {
+		c.logger.Error("tried to get data, but it was nil")
+	}
+	if c.seenCount == len(c.subscribers) {
+		c.logger.Debugf("all %d subscribers have seen the data, clearing now", len(c.subscribers))
+		c.lastLoaded = nil
+	}
 	return lastLoaded
 }
 

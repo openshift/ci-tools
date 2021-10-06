@@ -1,11 +1,11 @@
 containers:
 - args:
-  - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
   - --gcs-upload-secret=/secrets/gcs/service-account.json
+  - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
   - --report-credentials-file=/etc/report/credentials
-  - --target=target
-  - --target=more
   - --target=and-more
+  - --target=more
+  - --target=target
   command:
   - ci-operator
   image: ci-operator:latest
@@ -15,14 +15,14 @@ containers:
     requests:
       cpu: 10m
   volumeMounts:
+  - mountPath: /secrets/gcs
+    name: gcs-credentials
+    readOnly: true
   - mountPath: /etc/pull-secret
     name: pull-secret
     readOnly: true
   - mountPath: /etc/report
     name: result-aggregator
-    readOnly: true
-  - mountPath: /secrets/gcs
-    name: gcs-credentials
     readOnly: true
 serviceAccountName: ci-operator
 volumes:

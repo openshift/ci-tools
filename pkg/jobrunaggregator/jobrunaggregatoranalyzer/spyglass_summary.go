@@ -17,6 +17,23 @@ import (
 func htmlForJobRuns(ctx context.Context, finishedJobsToAggregate, unfinishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo) string {
 	html := `<!DOCTYPE html>
 <html>
+<head>
+<style>
+a {
+	color: #ff8caa;
+}
+a:visited {
+	color: #ff8caa;
+}
+a:hover {
+	color: #ffffff;
+}
+body {
+	background-color: rgba(0,0,0,.54);
+	color: #ffffff;
+}
+</style>
+</head>
 <body>`
 
 	if len(unfinishedJobsToAggregate) > 0 {
@@ -26,7 +43,7 @@ func htmlForJobRuns(ctx context.Context, finishedJobsToAggregate, unfinishedJobs
 `
 		for _, job := range unfinishedJobsToAggregate {
 			html += `<li>`
-			html += fmt.Sprintf(`<a href="%s">%s/%s</a>`, job.GetHumanURL(), job.GetJobName(), job.GetJobRunID())
+			html += fmt.Sprintf(`<a target="_blank" href="%s">%s/%s</a>`, job.GetHumanURL(), job.GetJobName(), job.GetJobRunID())
 			prowJob, err := job.GetProwJob(ctx)
 			if err != nil {
 				html += fmt.Sprintf(" unable to get prowjob: %v\n", err)
@@ -49,7 +66,7 @@ func htmlForJobRuns(ctx context.Context, finishedJobsToAggregate, unfinishedJobs
 `
 		for _, job := range finishedJobsToAggregate {
 			html += `<li>`
-			html += fmt.Sprintf(`<a href="%s">%s/%s</a>`, job.GetHumanURL(), job.GetJobName(), job.GetJobRunID())
+			html += fmt.Sprintf(`<a target="_blank" href="%s">%s/%s</a>`, job.GetHumanURL(), job.GetJobName(), job.GetJobRunID())
 			prowJob, err := job.GetProwJob(ctx)
 			if err != nil {
 				html += fmt.Sprintf(" unable to get prowjob: %v\n", err)

@@ -57,10 +57,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		skipCloning = false
 	}
 	podSpecGen := func() CiOperatorPodSpecGenerator {
-		g := NewCiOperatorPodSpecGenerator(info.Metadata)
+		g := NewCiOperatorPodSpecGenerator()
+		g.Add(Variant(info.Variant))
 		if info.Config.Private {
 			// We can reuse Prow's volume with the token iff ProwJob itself is cloning the code
-			g.GitHubToken(!skipCloning)
+			g.Add(GitHubToken(!skipCloning))
 		}
 		return g
 	}
@@ -73,46 +74,58 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	}
 	for _, element := range configSpec.Tests {
 		g := podSpecGen()
-		g.Secrets(element.Secret)
-		g.Secrets(element.Secrets...)
-		g.Targets(element.As)
+		g.Add(Secrets(element.Secret), Secrets(element.Secrets...))
+		g.Add(Targets(element.As))
 
 		if element.ClusterClaim != nil {
-			g.Claims()
+			g.Add(Claims())
 		}
 		if testContainsLease(&element) {
-			g.LeaseClient()
+			g.Add(LeaseClient())
 		}
 
 		switch {
 		case element.MultiStageTestConfigurationLiteral != nil:
 			if element.MultiStageTestConfigurationLiteral.ClusterProfile != "" {
-				g.ClusterProfile(element.MultiStageTestConfigurationLiteral.ClusterProfile).LeaseClient()
+				g.Add(ClusterProfile(element.MultiStageTestConfigurationLiteral.ClusterProfile, element.As), LeaseClient())
 			}
 			if configSpec.Releases != nil {
-				g.CIPullSecret()
+				g.Add(CIPullSecret())
 			}
 		case element.MultiStageTestConfiguration != nil:
 			if element.MultiStageTestConfiguration.ClusterProfile != "" {
-				g.ClusterProfile(element.MultiStageTestConfiguration.ClusterProfile).LeaseClient()
+				g.Add(ClusterProfile(element.MultiStageTestConfiguration.ClusterProfile, element.As), LeaseClient())
 			}
 			if configSpec.Releases != nil {
-				g.CIPullSecret()
+				g.Add(CIPullSecret())
 			}
 		case element.OpenshiftAnsibleClusterTestConfiguration != nil:
-			g.Template("cluster-launch-e2e", element.Commands, "").ClusterProfile(element.OpenshiftAnsibleClusterTestConfiguration.ClusterProfile).ReleaseRpms(configSpec.ReleaseTagConfiguration.Name)
+			g.Add(
+				Template("cluster-launch-e2e", element.Commands, "", element.As, element.OpenshiftAnsibleClusterTestConfiguration.ClusterProfile),
+				ReleaseRpms(configSpec.ReleaseTagConfiguration.Name, info.Metadata),
+			)
 		case element.OpenshiftAnsibleCustomClusterTestConfiguration != nil:
-			g.Template("cluster-launch-e2e-openshift-ansible", element.Commands, "").ClusterProfile(element.OpenshiftAnsibleCustomClusterTestConfiguration.ClusterProfile).ReleaseRpms(configSpec.ReleaseTagConfiguration.Name)
+			g.Add(
+				Template("cluster-launch-e2e-openshift-ansible", element.Commands, "", element.As, element.OpenshiftAnsibleCustomClusterTestConfiguration.ClusterProfile),
+				ReleaseRpms(configSpec.ReleaseTagConfiguration.Name, info.Metadata),
+			)
 		case element.OpenshiftInstallerClusterTestConfiguration != nil:
 			if !element.OpenshiftInstallerClusterTestConfiguration.Upgrade {
-				g.Template("cluster-launch-installer-e2e", element.Commands, "")
+				g.Add(Template("cluster-launch-installer-e2e", element.Commands, "", element.As, element.OpenshiftInstallerClusterTestConfiguration.ClusterProfile))
 			}
-			g.ClusterProfile(element.OpenshiftInstallerClusterTestConfiguration.ClusterProfile).LeaseClient()
+			g.Add(ClusterProfile(element.OpenshiftInstallerClusterTestConfiguration.ClusterProfile, element.As))
+			g.Add(LeaseClient())
 		case element.OpenshiftInstallerUPIClusterTestConfiguration != nil:
-			g.Template("cluster-launch-installer-upi-e2e", element.Commands, "").ClusterProfile(element.OpenshiftInstallerUPIClusterTestConfiguration.ClusterProfile).LeaseClient()
+			g.Add(
+				Template("cluster-launch-installer-upi-e2e", element.Commands, "", element.As, element.OpenshiftInstallerUPIClusterTestConfiguration.ClusterProfile),
+				LeaseClient(),
+			)
 		case element.OpenshiftInstallerCustomTestImageClusterTestConfiguration != nil:
 			fromImage := element.OpenshiftInstallerCustomTestImageClusterTestConfiguration.From
-			g.Template("cluster-launch-installer-custom-test-image", element.Commands, fromImage).ClusterProfile(element.OpenshiftInstallerCustomTestImageClusterTestConfiguration.ClusterProfile).LeaseClient()
+			g.Add(
+				Template("cluster-launch-installer-custom-test-image", element.Commands, fromImage, element.As, element.OpenshiftInstallerCustomTestImageClusterTestConfiguration.ClusterProfile),
+				LeaseClient(),
+			)
 		}
 
 		if element.Cron != nil || element.Interval != nil || element.ReleaseController {
@@ -166,11 +179,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		if promotion.PromotesOfficialImages(configSpec) {
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
-		podSpec := mustBuild(podSpecGen().Targets(presubmitTargets...))
+		podSpec := mustBuild(podSpecGen().Add(Targets(presubmitTargets...)))
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false, nil))
 
 		if configSpec.PromotionConfiguration != nil {
-			podSpec := mustBuild(podSpecGen().Targets(imageTargets.List()...).Promotion())
+			podSpec := mustBuild(podSpecGen().Add(Promotion(), Targets(imageTargets.List()...)))
 			postsubmit := generatePostsubmitForTest("images", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, nil)
 			postsubmit.MaxConcurrency = 1
 			if postsubmit.Labels == nil {
@@ -189,11 +202,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 				continue
 			}
 			indexName := api.IndexName(bundle.As)
-			podSpec := mustBuild(podSpecGen().Targets(indexName))
+			podSpec := mustBuild(podSpecGen().Add(Targets(indexName)))
 			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(indexName, info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false, nil))
 		}
 		if containsUnnamedBundle {
-			podSpec := mustBuild(podSpecGen().Targets(string(api.PipelineImageStreamTagReferenceIndexImage)))
+			podSpec := mustBuild(podSpecGen().Add(Targets(string(api.PipelineImageStreamTagReferenceIndexImage))))
 			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(string(api.PipelineImageStreamTagReferenceIndexImage), info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false, nil))
 		}
 	}

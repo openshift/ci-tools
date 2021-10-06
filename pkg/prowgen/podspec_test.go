@@ -1,7 +1,6 @@
 package prowgen
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -12,30 +11,31 @@ import (
 
 func TestNewCiOperatorPodSpecGenerator(t *testing.T) {
 	t.Parallel()
-	meta := api.Metadata{
-		Org:    "org",
-		Repo:   "repository",
-		Branch: "branch",
-	}
 	tests := []struct {
-		name    string
-		variant string
+		name     string
+		mutators []PodSpecMutator
 	}{
 		{
-			name: "podspec for public repo",
+			name: "defaults repo",
 		},
 		{
-			name:    "parameter is added for variant",
-			variant: "variant",
+			name:     "no parameter is added when variant is empty",
+			mutators: []PodSpecMutator{Variant("")},
+		},
+		{
+			name:     "parameter is added for variant",
+			mutators: []PodSpecMutator{Variant("variant")},
 		},
 	}
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			tcMeta := meta
-			tcMeta.Variant = tc.variant
-			podspec, err := NewCiOperatorPodSpecGenerator(tcMeta).Build()
+			g := NewCiOperatorPodSpecGenerator()
+			for i := range tc.mutators {
+				g.Add(tc.mutators[i])
+			}
+			podspec, err := g.Build()
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -46,29 +46,26 @@ func TestNewCiOperatorPodSpecGenerator(t *testing.T) {
 
 func TestGitHubToken(t *testing.T) {
 	t.Parallel()
-	meta := api.Metadata{
-		Org:    "org",
-		Repo:   "repository",
-		Branch: "branch",
-	}
 	tests := []struct {
-		name string
-		g    CiOperatorPodSpecGenerator
+		name                  string
+		reuseDecorationVolume bool
 	}{
 		{
-			name: "podspec for private repo without reusing Prow's volume with credentials",
-			g:    NewCiOperatorPodSpecGenerator(meta).GitHubToken(false),
+			name:                  "podspec for private repo without reusing Prow's volume with credentials",
+			reuseDecorationVolume: false,
 		},
 		{
-			name: "podspec for private repo, reusing Prow's volume with credentials",
-			g:    NewCiOperatorPodSpecGenerator(meta).GitHubToken(true),
+			name:                  "podspec for private repo, reusing Prow's volume with credentials",
+			reuseDecorationVolume: true,
 		},
 	}
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			podspec, err := tc.g.Build()
+			g := NewCiOperatorPodSpecGenerator()
+			g.Add(GitHubToken(tc.reuseDecorationVolume))
+			podspec, err := g.Build()
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -80,10 +77,9 @@ func TestGitHubToken(t *testing.T) {
 func TestReleaseRpms(t *testing.T) {
 	t.Parallel()
 	meta := api.Metadata{
-		Org:     "org",
-		Repo:    "repository",
-		Branch:  "branch",
-		Variant: "variant",
+		Org:    "org",
+		Repo:   "repository",
+		Branch: "branch",
 	}
 	tests := []struct {
 		name          string
@@ -91,13 +87,13 @@ func TestReleaseRpms(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:      "envvar additional envvar generated for template",
-			generator: NewCiOperatorPodSpecGenerator(meta).Targets("tgt").ClusterProfile(api.ClusterProfileAWS).Template("template", "kommand", "").ReleaseRpms("3.11"),
-		},
-		{
-			name:          "release RPM do not make sense without a template",
-			generator:     NewCiOperatorPodSpecGenerator(meta).Targets("tgt").ReleaseRpms("3.11"),
-			expectedError: errors.New("empty template but nonempty release RPM version"),
+			name: "envvar additional envvar generated for template",
+			generator: NewCiOperatorPodSpecGenerator().Add(
+				Targets("tgt"),
+				ClusterProfile(api.ClusterProfileAWS, "tgt"),
+				Template("template", "kommand", "", "tgt", api.ClusterProfileAWS),
+				ReleaseRpms("3.11", meta),
+			),
 		},
 	}
 	for _, tc := range tests {
@@ -117,11 +113,6 @@ func TestReleaseRpms(t *testing.T) {
 
 func TestTargets(t *testing.T) {
 	t.Parallel()
-	meta := api.Metadata{
-		Org:    "org",
-		Repo:   "repository",
-		Branch: "branch",
-	}
 	tests := []struct {
 		name    string
 		targets []string
@@ -139,7 +130,7 @@ func TestTargets(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			podspec, err := NewCiOperatorPodSpecGenerator(meta).Targets(tc.targets...).Build()
+			podspec, err := NewCiOperatorPodSpecGenerator().Add(Targets(tc.targets...)).Build()
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -150,12 +141,6 @@ func TestTargets(t *testing.T) {
 
 func TestCIPullSecret(t *testing.T) {
 	t.Parallel()
-	meta := api.Metadata{
-		Org:     "org",
-		Repo:    "repository",
-		Branch:  "branch",
-		Variant: "variant",
-	}
 	tests := []struct {
 		name string
 	}{
@@ -167,7 +152,9 @@ func TestCIPullSecret(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			podspec, err := NewCiOperatorPodSpecGenerator(meta).CIPullSecret().Build()
+			g := NewCiOperatorPodSpecGenerator()
+			g.Add(CIPullSecret())
+			podspec, err := g.Build()
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -178,12 +165,6 @@ func TestCIPullSecret(t *testing.T) {
 
 func TestClaims(t *testing.T) {
 	t.Parallel()
-	meta := api.Metadata{
-		Org:     "org",
-		Repo:    "repository",
-		Branch:  "branch",
-		Variant: "variant",
-	}
 	tests := []struct {
 		name string
 	}{
@@ -195,7 +176,9 @@ func TestClaims(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			podspec, err := NewCiOperatorPodSpecGenerator(meta).Claims().Build()
+			g := NewCiOperatorPodSpecGenerator()
+			g.Add(Claims())
+			podspec, err := g.Build()
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -206,12 +189,6 @@ func TestClaims(t *testing.T) {
 
 func TestLeaseClient(t *testing.T) {
 	t.Parallel()
-	meta := api.Metadata{
-		Org:     "org",
-		Repo:    "repository",
-		Branch:  "branch",
-		Variant: "variant",
-	}
 	tests := []struct {
 		name string
 	}{
@@ -223,7 +200,9 @@ func TestLeaseClient(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			podspec, err := NewCiOperatorPodSpecGenerator(meta).LeaseClient().Build()
+			g := NewCiOperatorPodSpecGenerator()
+			g.Add(LeaseClient())
+			podspec, err := g.Build()
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -234,12 +213,6 @@ func TestLeaseClient(t *testing.T) {
 
 func TestSecrets(t *testing.T) {
 	t.Parallel()
-	meta := api.Metadata{
-		Org:     "org",
-		Repo:    "repository",
-		Branch:  "branch",
-		Variant: "variant",
-	}
 	tests := []struct {
 		name    string
 		secrets []*api.Secret
@@ -260,7 +233,9 @@ func TestSecrets(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			podspec, err := NewCiOperatorPodSpecGenerator(meta).Secrets(tc.secrets...).Build()
+			g := NewCiOperatorPodSpecGenerator()
+			g.Add(Secrets(tc.secrets...))
+			podspec, err := g.Build()
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -271,12 +246,6 @@ func TestSecrets(t *testing.T) {
 
 func TestPromotion(t *testing.T) {
 	t.Parallel()
-	meta := api.Metadata{
-		Org:     "org",
-		Repo:    "repository",
-		Branch:  "branch",
-		Variant: "variant",
-	}
 	tests := []struct {
 		name string
 	}{
@@ -288,7 +257,7 @@ func TestPromotion(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			podspec, err := NewCiOperatorPodSpecGenerator(meta).Promotion().Build()
+			podspec, err := NewCiOperatorPodSpecGenerator().Add(Promotion()).Build()
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -299,60 +268,27 @@ func TestPromotion(t *testing.T) {
 
 func TestClusterProfile(t *testing.T) {
 	t.Parallel()
-	meta := api.Metadata{
-		Org:    "org",
-		Repo:   "repository",
-		Branch: "branch",
+	tests := []api.ClusterProfile{
+		api.ClusterProfileAWS,
+		api.ClusterProfileGCP,
+		api.ClusterProfileOpenStack,
+		api.ClusterProfileAWSCPaaS,
 	}
-	tests := api.ClusterProfiles()
 	for _, tc := range tests {
 		tc := tc
 		t.Run(string(tc), func(t *testing.T) {
 			t.Parallel()
-			podspec, err := NewCiOperatorPodSpecGenerator(meta).ClusterProfile(tc).Targets("test-name").Build()
+			podspec, err := NewCiOperatorPodSpecGenerator().Add(ClusterProfile(tc, "test-name"), Targets("test-name")).Build()
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
 			testhelper.CompareWithFixture(t, podspec)
 		})
 	}
-
-	errorTests := []struct {
-		name          string
-		g             CiOperatorPodSpecGenerator
-		expectedError error
-	}{
-		{
-			name:          "no targets",
-			g:             NewCiOperatorPodSpecGenerator(meta).ClusterProfile(api.ClusterProfileAWS),
-			expectedError: errors.New("ci-operator must have exactly one target when using a cluster profile"),
-		},
-		{
-			name:          "multiple targets",
-			g:             NewCiOperatorPodSpecGenerator(meta).ClusterProfile(api.ClusterProfileAWS).Targets("one", "two"),
-			expectedError: errors.New("ci-operator must have exactly one target when using a cluster profile"),
-		},
-	}
-	for _, tc := range errorTests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			_, err := tc.g.Build()
-			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
-				t.Errorf("Error differs from expected:\n%s", diff)
-			}
-		})
-	}
-
 }
 
 func TestTemplate(t *testing.T) {
 	t.Parallel()
-	meta := api.Metadata{
-		Org:    "org",
-		Repo:   "repository",
-		Branch: "branch",
-	}
 	cp := api.ClusterProfileAWS
 	tests := []struct {
 		name          string
@@ -361,34 +297,19 @@ func TestTemplate(t *testing.T) {
 	}{
 		{
 			name: "template with command",
-			g:    NewCiOperatorPodSpecGenerator(meta).ClusterProfile(cp).Targets("t").Template("cluster-launch-installer-upi-e2e", "make things", ""),
+			g:    NewCiOperatorPodSpecGenerator().Add(ClusterProfile(cp, "t"), Template("cluster-launch-installer-upi-e2e", "make things", "", "t", cp), Targets("t")),
 		},
 		{
 			name: "template with different command",
-			g:    NewCiOperatorPodSpecGenerator(meta).ClusterProfile(cp).Targets("t").Template("cluster-launch-installer-upi-e2e", "make different things", ""),
+			g:    NewCiOperatorPodSpecGenerator().Add(ClusterProfile(cp, "t"), Template("cluster-launch-installer-upi-e2e", "make different things", "", "t", cp), Targets("t")),
 		},
 		{
 			name: "different template with command",
-			g:    NewCiOperatorPodSpecGenerator(meta).ClusterProfile(cp).Targets("t").Template("cluster-launch-installer-libvirt-e2e", "make things", ""),
+			g:    NewCiOperatorPodSpecGenerator().Add(ClusterProfile(cp, "t"), Template("cluster-launch-installer-libvirt-e2e", "make things", "", "t", cp)),
 		},
 		{
 			name: "template with a custom test image",
-			g:    NewCiOperatorPodSpecGenerator(meta).ClusterProfile(cp).Targets("t").Template("cluster-launch-installer-upi-e2e", "make things", "custom-image"),
-		},
-		{
-			name:          "template without cluster profile -> error",
-			g:             NewCiOperatorPodSpecGenerator(meta).Targets("t").Template("tmplt", "c", ""),
-			expectedError: errors.New("template requires cluster profile"),
-		},
-		{
-			name:          "template with multiple targets -> error",
-			g:             NewCiOperatorPodSpecGenerator(meta).ClusterProfile(cp).Template("tmplt", "c", ""),
-			expectedError: errors.New("[ci-operator must have exactly one target when using a cluster profile, ci-operator must have exactly one target when using a template]"),
-		},
-		{
-			name:          "template with zero targets -> error",
-			g:             NewCiOperatorPodSpecGenerator(meta).ClusterProfile(cp).Template("tmplt", "c", "").Targets("t1", "t2"),
-			expectedError: errors.New("[ci-operator must have exactly one target when using a cluster profile, ci-operator must have exactly one target when using a template]"),
+			g:    NewCiOperatorPodSpecGenerator().Add(ClusterProfile(cp, "t"), Template("cluster-launch-installer-upi-e2e", "make things", "custom-image", "t", cp), Targets("t")),
 		},
 	}
 	for _, tc := range tests {

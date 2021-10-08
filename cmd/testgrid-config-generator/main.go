@@ -329,7 +329,8 @@ func main() {
 				strings.Contains(name, "-origin-"),
 				// these prefixes control whether a job is ocp or okd going forward
 				strings.HasPrefix(name, "periodic-ci-openshift-release-master-ci-"),
-				strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"):
+				strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"),
+				strings.HasPrefix(name, "periodic-ci-openshift-verification-tests-master-"):
 				stream = "ocp"
 			case strings.Contains(name, "-okd-"):
 				stream = "okd"

@@ -60,7 +60,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		g := NewCiOperatorPodSpecGenerator()
 		g.Add(Variant(info.Variant))
 		if info.Config.Private {
-			// We can reuse Prow's volume with the token iff ProwJob itself is cloning the code
+			// We can reuse Prow's volume with the token if ProwJob itself is cloning the code
 			g.Add(GitHubToken(!skipCloning))
 		}
 		return g
@@ -279,106 +279,6 @@ func generatePeriodicForTest(name string, info *ProwgenInfo, podSpec *corev1.Pod
 		Cron:     cron,
 		Interval: interval,
 	}
-}
-
-func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterType string) corev1.Volume {
-	// AWS-2 and CPaaS and GCP2 PacketAssisted and PacketSNO need a different secret that should be provided to jobs
-	// AWS-2 and CPaaS and GCP2 need a different secret that should be provided to jobs
-	if profile == cioperatorapi.ClusterProfileAWSCPaaS ||
-		profile == cioperatorapi.ClusterProfileAWS2 ||
-		profile == cioperatorapi.ClusterProfileGCP2 ||
-		profile == cioperatorapi.ClusterProfilePacketAssisted ||
-		profile == cioperatorapi.ClusterProfilePacketSNO ||
-		profile == cioperatorapi.ClusterProfileAzure2 {
-		clusterType = string(profile)
-	}
-
-	ret := corev1.Volume{
-		Name: "cluster-profile",
-		VolumeSource: corev1.VolumeSource{
-			Projected: &corev1.ProjectedVolumeSource{
-				Sources: []corev1.VolumeProjection{{
-					Secret: &corev1.SecretProjection{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: fmt.Sprintf("cluster-secrets-%s", clusterType),
-						},
-					}},
-				},
-			},
-		},
-	}
-	switch profile {
-	case
-		cioperatorapi.ClusterProfileAWS,
-		cioperatorapi.ClusterProfileAWSArm64,
-		cioperatorapi.ClusterProfileAWSC2S,
-		cioperatorapi.ClusterProfileAWSChina,
-		cioperatorapi.ClusterProfileAWSGovCloud,
-		cioperatorapi.ClusterProfileAlibaba,
-		cioperatorapi.ClusterProfileAzure4,
-		cioperatorapi.ClusterProfileAzure2,
-		cioperatorapi.ClusterProfileAzureArc,
-		cioperatorapi.ClusterProfileAzureStack,
-		cioperatorapi.ClusterProfileIBMCloud,
-		cioperatorapi.ClusterProfileLibvirtS390x,
-		cioperatorapi.ClusterProfileLibvirtPpc64le,
-		cioperatorapi.ClusterProfileOpenStack,
-		cioperatorapi.ClusterProfileOpenStackKuryr,
-		cioperatorapi.ClusterProfileOpenStackMechaCentral,
-		cioperatorapi.ClusterProfileOpenStackMechaAz0,
-		cioperatorapi.ClusterProfileOpenStackOsuosl,
-		cioperatorapi.ClusterProfileOpenStackVexxhost,
-		cioperatorapi.ClusterProfileOpenStackPpc64le,
-		cioperatorapi.ClusterProfileVSphere,
-		cioperatorapi.ClusterProfileVSphereDiscon,
-		cioperatorapi.ClusterProfileKubevirt,
-		cioperatorapi.ClusterProfileAWSCPaaS,
-		cioperatorapi.ClusterProfileOSDEphemeral,
-		cioperatorapi.ClusterProfileAWS2,
-		cioperatorapi.ClusterProfileHyperShift,
-		cioperatorapi.ClusterProfilePacket,
-		cioperatorapi.ClusterProfilePacketAssisted,
-		cioperatorapi.ClusterProfilePacketSNO:
-	default:
-		ret.VolumeSource.Projected.Sources = append(ret.VolumeSource.Projected.Sources, corev1.VolumeProjection{
-			ConfigMap: &corev1.ConfigMapProjection{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: fmt.Sprintf("cluster-profile-%s", profile),
-				},
-			},
-		})
-	}
-	return ret
-}
-
-func generateConfigMapVolume(name string, templates []string) corev1.Volume {
-	ret := corev1.Volume{Name: name}
-	switch len(templates) {
-	case 0:
-	case 1:
-		ret.VolumeSource = corev1.VolumeSource{
-			ConfigMap: &corev1.ConfigMapVolumeSource{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: templates[0],
-				},
-			},
-		}
-	default:
-		ret.VolumeSource = corev1.VolumeSource{
-			Projected: &corev1.ProjectedVolumeSource{},
-		}
-		s := &ret.VolumeSource.Projected.Sources
-		for _, t := range templates {
-			*s = append(*s, corev1.VolumeProjection{
-				ConfigMap: &corev1.ConfigMapProjection{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: t,
-					},
-				},
-			})
-		}
-	}
-	return ret
 }
 
 func generateJobBase(name, prefix string, info *ProwgenInfo, podSpec *corev1.PodSpec, rehearsable bool, pathAlias *string, jobRelease string, skipCloning bool, timeout *prowv1.Duration) prowconfig.JobBase {

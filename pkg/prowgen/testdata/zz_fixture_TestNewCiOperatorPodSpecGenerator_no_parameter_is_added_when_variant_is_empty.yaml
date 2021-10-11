@@ -2,10 +2,7 @@ containers:
 - args:
   - --gcs-upload-secret=/secrets/gcs/service-account.json
   - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-  - --promote
   - --report-credentials-file=/etc/report/credentials
-  - --some=thing
-  - --target=target
   command:
   - ci-operator
   image: ci-operator:latest

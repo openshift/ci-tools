@@ -2,22 +2,21 @@ containers:
 - args:
   - --gcs-upload-secret=/secrets/gcs/service-account.json
   - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-  - --lease-server-credentials-file=/etc/boskos/credentials
   - --report-credentials-file=/etc/report/credentials
-  - --secret-dir=/usr/local/test-cluster-profile
-  - --target=test
-  - --template=/usr/local/test
+  - --secret-dir=/usr/local/tgt-cluster-profile
+  - --target=tgt
+  - --template=/usr/local/tgt
   command:
   - ci-operator
   env:
   - name: CLUSTER_TYPE
-    value: gcp
+    value: aws
   - name: JOB_NAME_SAFE
-    value: test
+    value: tgt
+  - name: RPM_REPO_OPENSHIFT_ORIGIN
+    value: https://artifacts-rpms-openshift-origin-ci-rpms.apps.ci.l2s4.p1.openshiftapps.com/openshift-origin-v3.11/
   - name: TEST_COMMAND
-    value: commands
-  - name: TEST_IMAGESTREAM_TAG
-    value: pipeline:kubevirt-test
+    value: kommand
   image: ci-operator:latest
   imagePullPolicy: Always
   name: ""
@@ -25,17 +24,14 @@ containers:
     requests:
       cpu: 10m
   volumeMounts:
-  - mountPath: /etc/boskos
-    name: boskos
-    readOnly: true
-  - mountPath: /usr/local/test-cluster-profile
+  - mountPath: /usr/local/tgt-cluster-profile
     name: cluster-profile
   - mountPath: /secrets/gcs
     name: gcs-credentials
     readOnly: true
-  - mountPath: /usr/local/test
+  - mountPath: /usr/local/tgt
     name: job-definition
-    subPath: cluster-launch-installer-custom-test-image.yaml
+    subPath: template.yaml
   - mountPath: /etc/pull-secret
     name: pull-secret
     readOnly: true
@@ -44,21 +40,13 @@ containers:
     readOnly: true
 serviceAccountName: ci-operator
 volumes:
-- name: boskos
-  secret:
-    items:
-    - key: credentials
-      path: credentials
-    secretName: boskos-credentials
 - name: cluster-profile
   projected:
     sources:
     - secret:
-        name: cluster-secrets-gcp
-    - configMap:
-        name: cluster-profile-gcp
+        name: cluster-secrets-aws
 - configMap:
-    name: prow-job-cluster-launch-installer-custom-test-image
+    name: prow-job-template
   name: job-definition
 - name: pull-secret
   secret:

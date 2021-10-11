@@ -2,22 +2,18 @@ containers:
 - args:
   - --gcs-upload-secret=/secrets/gcs/service-account.json
   - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-  - --lease-server-credentials-file=/etc/boskos/credentials
   - --report-credentials-file=/etc/report/credentials
-  - --secret-dir=/usr/local/test-cluster-profile
-  - --target=test
-  - --template=/usr/local/test
+  - --secret-dir=/usr/local/t-cluster-profile
+  - --template=/usr/local/t
   command:
   - ci-operator
   env:
   - name: CLUSTER_TYPE
-    value: gcp
+    value: aws
   - name: JOB_NAME_SAFE
-    value: test
+    value: t
   - name: TEST_COMMAND
-    value: commands
-  - name: TEST_IMAGESTREAM_TAG
-    value: pipeline:kubevirt-test
+    value: make things
   image: ci-operator:latest
   imagePullPolicy: Always
   name: ""
@@ -25,17 +21,14 @@ containers:
     requests:
       cpu: 10m
   volumeMounts:
-  - mountPath: /etc/boskos
-    name: boskos
-    readOnly: true
-  - mountPath: /usr/local/test-cluster-profile
+  - mountPath: /usr/local/t-cluster-profile
     name: cluster-profile
   - mountPath: /secrets/gcs
     name: gcs-credentials
     readOnly: true
-  - mountPath: /usr/local/test
+  - mountPath: /usr/local/t
     name: job-definition
-    subPath: cluster-launch-installer-custom-test-image.yaml
+    subPath: cluster-launch-installer-libvirt-e2e.yaml
   - mountPath: /etc/pull-secret
     name: pull-secret
     readOnly: true
@@ -44,21 +37,13 @@ containers:
     readOnly: true
 serviceAccountName: ci-operator
 volumes:
-- name: boskos
-  secret:
-    items:
-    - key: credentials
-      path: credentials
-    secretName: boskos-credentials
 - name: cluster-profile
   projected:
     sources:
     - secret:
-        name: cluster-secrets-gcp
-    - configMap:
-        name: cluster-profile-gcp
+        name: cluster-secrets-aws
 - configMap:
-    name: prow-job-cluster-launch-installer-custom-test-image
+    name: prow-job-cluster-launch-installer-libvirt-e2e
   name: job-definition
 - name: pull-secret
   secret:

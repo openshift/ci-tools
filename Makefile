@@ -360,9 +360,9 @@ promoted-image-governor: $(TMPDIR)/.promoted-image-governor-kubeconfig-dir
 	go run  ./cmd/promoted-image-governor --kubeconfig-dir=$(TMPDIR)/.promoted-image-governor-kubeconfig-dir --ci-operator-config-path=$(release_folder)/ci-operator/config --release-controller-mirror-config-dir=$(release_folder)/core-services/release-controller/_releases --ignored-image-stream-tags='^ocp\S*/\S+:machine-os-content$$' --ignored-image-stream-tags='^openshift/origin-v3.11:' --dry-run=true
 .PHONY: promoted-image-governor
 
-explain: $(TMPDIR)/.promoted-image-governor-kubeconfig
+explain: $(TMPDIR)/.promoted-image-governor-kubeconfig-dir
 	@[[ $$istag ]] || (echo "ERROR: \$$istag must be set"; exit 1)
-	@go run  ./cmd/promoted-image-governor --kubeconfig=$(TMPDIR)/.promoted-image-governor-kubeconfig --ci-operator-config-path=$(release_folder)/ci-operator/config --release-controller-mirror-config-dir=$(release_folder)/core-services/release-controller/_releases --explain $(istag) --dry-run=true --log-level=fatal
+	@go run  ./cmd/promoted-image-governor --kubeconfig-dir=$(TMPDIR)/.promoted-image-governor-kubeconfig-dir --ci-operator-config-path=$(release_folder)/ci-operator/config --release-controller-mirror-config-dir=$(release_folder)/core-services/release-controller/_releases --explain $(istag) --dry-run=true --log-level=fatal
 .PHONY: explain
 
 

@@ -9,14 +9,16 @@ import (
 )
 
 const (
-	BigQueryProjectID   = "openshift-ci-data-analysis"
-	CIDataSetID         = "ci_data"
-	JobRunTableName     = "JobRuns"
-	JobTableName        = "Job"
-	TestRunTableName    = "TestRuns"
-	UnifiedTestRunTable = "UnifiedTestRuns"
-	PerDayTestRunTable  = "TestRunSummaryPerDay"
-	PerWeekTestRunTable = "TestRunSummaryPerWeek"
+	BigQueryProjectID      = "openshift-ci-data-analysis"
+	CIDataSetID            = "ci_data"
+	ReleaseTableName       = "ReleaseTags"
+	ReleaseJobRunTableName = "ReleaseJobRuns"
+	JobRunTableName        = "JobRuns"
+	JobTableName           = "Job"
+	TestRunTableName       = "TestRuns"
+	UnifiedTestRunTable    = "UnifiedTestRuns"
+	PerDayTestRunTable     = "TestRunSummaryPerDay"
+	PerWeekTestRunTable    = "TestRunSummaryPerWeek"
 )
 
 type BigQueryDataCoordinates struct {

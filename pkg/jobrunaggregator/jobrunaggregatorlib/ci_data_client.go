@@ -9,6 +9,8 @@ import (
 	"cloud.google.com/go/bigquery"
 	"google.golang.org/api/iterator"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
@@ -31,6 +33,8 @@ type CIDataClient interface {
 	ListUnifiedTestRunsForJobAfterDay(ctx context.Context, jobName string, startDay time.Time) (*UnifiedTestRunRowIterator, error)
 
 	ListAggregatedTestRunsForJob(ctx context.Context, frequency, jobName string, startDay time.Time) ([]jobrunaggregatorapi.AggregatedTestRunRow, error)
+
+	ListReleaseTags(ctx context.Context) (sets.String, error)
 }
 
 type ciDataClient struct {
@@ -201,6 +205,30 @@ ORDER BY UnifiedTestRuns.JobRunStartTime ASC
 		return nil, err
 	}
 	return &UnifiedTestRunRowIterator{delegatedIterator: it}, nil
+}
+
+func (c *ciDataClient) ListReleaseTags(ctx context.Context) (sets.String, error) {
+	set := sets.String{}
+	queryString := c.dataCoordinates.SubstituteDataSetLocation(`SELECT distinct(ReleaseTag) FROM DATA_SET_LOCATION.ReleaseTags`)
+	query := c.client.Query(queryString)
+	it, err := query.Read(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		row := jobrunaggregatorapi.ReleaseRow{}
+		err := it.Next(&row)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		set.Insert(row.ReleaseTag)
+	}
+
+	return set, nil
 }
 
 type UnifiedTestRunRowIterator struct {

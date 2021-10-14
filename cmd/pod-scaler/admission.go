@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/test-infra/prow/entrypoint"
@@ -218,6 +219,23 @@ func reconcileLimits(resources *corev1.ResourceRequirements) {
 	}
 }
 
+func preventUnschedulable(resources *corev1.ResourceRequirements) {
+	if resources.Requests == nil {
+		return
+	}
+	if _, ok := resources.Requests[corev1.ResourceCPU]; !ok {
+		return
+	}
+
+	// 10 CPU is a ballpark number. Current build farm nodes have 16 CPU so pods get unschedulable
+	// around 14 CPU
+	// TODO(DPTP-2525): Make configurable and perhaps cluster-specific?
+	cpuRequestCap := *resource.NewQuantity(10, resource.DecimalSI)
+	if resources.Requests.Cpu().Cmp(cpuRequestCap) == 1 {
+		resources.Requests[corev1.ResourceCPU] = cpuRequestCap
+	}
+}
+
 func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool) {
 	for i := range pod.Spec.InitContainers {
 		meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, pod.Spec.InitContainers[i].Name)
@@ -228,6 +246,7 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 				reconcileLimits(&pod.Spec.InitContainers[i].Resources)
 			}
 		}
+		preventUnschedulable(&pod.Spec.InitContainers[i].Resources)
 	}
 	for i := range pod.Spec.Containers {
 		meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, pod.Spec.Containers[i].Name)
@@ -238,5 +257,6 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 				reconcileLimits(&pod.Spec.Containers[i].Resources)
 			}
 		}
+		preventUnschedulable(&pod.Spec.Containers[i].Resources)
 	}
 }

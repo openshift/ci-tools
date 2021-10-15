@@ -850,12 +850,15 @@ func (o *options) Run() []error {
 	if err != nil {
 		return []error{results.ForReason("building_graph").WithError(err).Errorf("could not build execution graph: %v", err)}
 	}
-
-	if err := printExecutionOrder(nodes); err != nil {
-		return err
+	stepList, errs := nodes.TopologicalSort()
+	if errs != nil {
+		return append([]error{errors.New("could not sort nodes")}, errs...)
 	}
-
-	graph := calculateGraph(nodes)
+	logrus.Infof("Running %s", strings.Join(nodeNames(stepList), ", "))
+	graph, errs := calculateGraph(stepList)
+	if errs != nil {
+		return errs
+	}
 	defer func() {
 		serializedGraph, err := json.Marshal(graph)
 		if err != nil {
@@ -865,10 +868,6 @@ func (o *options) Run() []error {
 
 		_ = api.SaveArtifact(o.censor, api.CIOperatorStepGraphJSONFilename, serializedGraph)
 	}()
-
-	if err := validateGraph(nodes); err != nil {
-		return err
-	}
 	// initialize the namespace if necessary and create any resources that must
 	// exist prior to execution
 	if err := o.initializeNamespace(); err != nil {
@@ -1795,51 +1794,37 @@ func printDigraph(w io.Writer, steps []api.Step) error {
 	return nil
 }
 
-func printExecutionOrder(graph api.StepGraph) []error {
-	ordered, err := graph.TopologicalSort()
-	if err != nil {
-		return append([]error{errors.New("could not sort nodes")}, err...)
+func calculateGraph(nodes api.OrderedStepList) (*api.CIOperatorStepGraph, []error) {
+	if err := validateSteps(nodes); err != nil {
+		return nil, err
 	}
-	logrus.Infof("Running %s", strings.Join(nodeNames(ordered), ", "))
-	return nil
-}
-
-func calculateGraph(graph api.StepGraph) *api.CIOperatorStepGraph {
 	var result api.CIOperatorStepGraph
-	graph.IterateAllEdges(func(n *api.StepNode) {
+	for i, n := range nodes {
 		r := api.CIOperatorStepDetails{CIOperatorStepDetailInfo: api.CIOperatorStepDetailInfo{StepName: n.Step.Name(), Description: n.Step.Description()}}
 		for _, requirement := range n.Step.Requires() {
-			graph.IterateAllEdges(func(inner *api.StepNode) {
+			for _, inner := range nodes[:i] {
 				if api.HasAnyLinks([]api.StepLink{requirement}, inner.Step.Creates()) {
 					r.Dependencies = append(r.Dependencies, inner.Step.Name())
 				}
-			})
+			}
 		}
 		result = append(result, r)
-	})
+	}
 
-	return &result
+	return &result, nil
 }
 
-func validateGraph(graph api.StepGraph) []error {
-	errs := graph.Validate()
-	var noLeaseClient bool
-	for _, err := range errs {
-		if errors.Is(err, steps.NoLeaseClientErr) {
-			noLeaseClient = true
+func validateSteps(nodes api.OrderedStepList) []error {
+	var errs []error
+	for _, n := range nodes {
+		if err := n.Step.Validate(); err != nil {
+			errs = append(errs, fmt.Errorf("step %q failed validation: %w", n.Step.Name(), err))
+			if errors.Is(err, steps.NoLeaseClientErr) {
+				errs = append(errs, errors.New("a lease client was required but none was provided, add the --lease-... arguments"))
+			} else if errors.Is(err, steps.NoHiveClientErr) {
+				errs = append(errs, errors.New("a Hive client was required but none was provided, add the --hive-kubeconfig argument"))
+			}
 		}
-	}
-	if noLeaseClient {
-		errs = append(errs, errors.New("a lease client was required but none was provided, add the --lease-... arguments"))
-	}
-	var noHiveClient bool
-	for _, err := range errs {
-		if errors.Is(err, steps.NoHiveClientErr) {
-			noHiveClient = true
-		}
-	}
-	if noHiveClient {
-		errs = append(errs, errors.New("a Hive client was required but none was provided, add the --hive-kubeconfig argument"))
 	}
 	return errs
 }

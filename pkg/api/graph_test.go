@@ -15,7 +15,6 @@ import (
 	"github.com/google/gofuzz"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -234,118 +233,6 @@ func TestBuildGraph(t *testing.T) {
 		if actual, expected := BuildGraph(testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
 			t.Errorf("%s: did not generate step graph as expected:\nwant:\n\t%v\nhave:\n\t%v", testCase.name, expected, actual)
 		}
-	}
-}
-
-type fakeValidationStep struct {
-	name string
-	err  error
-}
-
-func (*fakeValidationStep) Inputs() (InputDefinition, error)    { return nil, nil }
-func (*fakeValidationStep) Run(ctx context.Context) error       { return nil }
-func (*fakeValidationStep) Requires() []StepLink                { return nil }
-func (*fakeValidationStep) Creates() []StepLink                 { return nil }
-func (f *fakeValidationStep) Name() string                      { return f.name }
-func (*fakeValidationStep) Description() string                 { return "" }
-func (*fakeValidationStep) Provides() ParameterMap              { return nil }
-func (f *fakeValidationStep) Validate() error                   { return f.err }
-func (*fakeValidationStep) Objects() []ctrlruntimeclient.Object { return nil }
-
-func TestValidateGraph(t *testing.T) {
-	valid0 := fakeValidationStep{name: "valid0"}
-	valid1 := fakeValidationStep{name: "valid1"}
-	valid2 := fakeValidationStep{name: "valid2"}
-	valid3 := fakeValidationStep{name: "valid3"}
-	invalid0 := fakeValidationStep{
-		name: "invalid0",
-		err:  errors.New("invalid0"),
-	}
-	invalid1 := fakeValidationStep{
-		name: "invalid1",
-		err:  errors.New("invalid0"),
-	}
-	for _, tc := range []struct {
-		name     string
-		expected bool
-		graph    StepGraph
-	}{{
-		name:     "empty graph",
-		expected: true,
-	}, {
-		name:     "valid graph",
-		expected: true,
-		graph: StepGraph{{
-			Step: &valid0,
-			Children: []*StepNode{
-				{Step: &valid1},
-				{Step: &valid2},
-			},
-		}, {
-			Step: &valid3,
-		}},
-	}, {
-		name:     "valid graph, duplicate steps",
-		expected: true,
-		graph: StepGraph{{
-			Step: &valid0,
-			Children: []*StepNode{
-				{Step: &valid1},
-				{Step: &valid2},
-			},
-		}, {
-			Step: &valid3,
-			Children: []*StepNode{
-				{Step: &valid1},
-				{Step: &valid2},
-			},
-		}},
-	}, {
-		name: "invalid graph",
-		graph: StepGraph{{
-			Step: &valid0,
-			Children: []*StepNode{
-				{Step: &valid1},
-				{Step: &valid2},
-			},
-		}, {
-			Step: &invalid0,
-			Children: []*StepNode{
-				{Step: &valid1},
-				{Step: &valid2},
-			},
-		}},
-	}, {
-		name: "invalid graph, duplicate steps",
-		graph: StepGraph{{
-			Step: &valid0,
-			Children: []*StepNode{
-				{Step: &invalid0},
-				{Step: &invalid1},
-			},
-		}, {
-			Step: &valid3,
-			Children: []*StepNode{
-				{Step: &invalid0},
-				{Step: &invalid1},
-			},
-		}},
-	}} {
-		t.Run(tc.name, func(t *testing.T) {
-			err := tc.graph.Validate()
-			if (err == nil) != tc.expected {
-				t.Errorf("got %v, want %v", err == nil, tc.expected)
-			}
-			msgs := sets.NewString()
-			for _, e := range err {
-				msg := e.Error()
-				if msgs.Has(msg) {
-					t.Errorf("duplicate error: %v", msg)
-				} else {
-					msgs.Insert(msg)
-				}
-			}
-		})
 	}
 }
 

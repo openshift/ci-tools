@@ -386,19 +386,9 @@ func BuildPartialGraph(steps []Step, names []string) (StepGraph, error) {
 	return BuildGraph(targeted), nil
 }
 
-// ValidateGraph performs validations on each step in the graph once.
-func (g StepGraph) Validate() []error {
-	var errs []error
-	g.IterateAllEdges(func(n *StepNode) {
-		if err := n.Step.Validate(); err != nil {
-			errs = append(errs, fmt.Errorf("step %q failed validation: %w", n.Step.Name(), err))
-		}
-	})
-	return errs
-}
-
-func (g StepGraph) TopologicalSort() ([]*StepNode, []error) {
-	var sortedNodes []*StepNode
+// TopologicalSort validates nodes form a DAG and orders them topologically.
+func (g StepGraph) TopologicalSort() (OrderedStepList, []error) {
+	var ret OrderedStepList
 	var satisfied []StepLink
 	seen := make(map[Step]struct{})
 	for len(g) > 0 {
@@ -418,7 +408,7 @@ func (g StepGraph) TopologicalSort() ([]*StepNode, []error) {
 				continue
 			}
 			satisfied = append(satisfied, node.Step.Creates()...)
-			sortedNodes = append(sortedNodes, node)
+			ret = append(ret, node)
 			seen[node.Step] = struct{}{}
 			changed = true
 		}
@@ -447,7 +437,7 @@ func (g StepGraph) TopologicalSort() ([]*StepNode, []error) {
 		}
 		g = waiting
 	}
-	return sortedNodes, nil
+	return ret, nil
 }
 
 // IterateAllEdges applies an operation to every node in the graph once.

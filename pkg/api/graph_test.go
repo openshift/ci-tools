@@ -281,6 +281,10 @@ func TestTopologicalSort(t *testing.T) {
 	img1 := fakeSortStep{name: "img1", requires: []string{"bin"}}
 	img2 := fakeSortStep{name: "img2", requires: []string{"root"}}
 	missing0 := fakeSortStep{name: "missing0", requires: []string{"missing1"}}
+	cycle0 := fakeSortStep{name: "cycle0"}
+	cycle1 := fakeSortStep{name: "cycle1", requires: []string{"cycle0", "cycle3"}}
+	cycle2 := fakeSortStep{name: "cycle2", requires: []string{"cycle0", "cycle1"}}
+	cycle3 := fakeSortStep{name: "cycle3", requires: []string{"cycle0", "cycle2"}}
 	for _, tc := range []struct {
 		name     string
 		steps    []Step
@@ -300,6 +304,14 @@ func TestTopologicalSort(t *testing.T) {
 			errors.New("steps are missing dependencies"),
 		},
 		steps: []Step{&missing0},
+	}, {
+		name: "cycle",
+		expected: []error{
+			errors.New("cycle in graph: cycle0 -> cycle1 -> cycle2 -> cycle3 -> cycle1"),
+			errors.New("cycle in graph: cycle0 -> cycle2 -> cycle3 -> cycle1 -> cycle2"),
+			errors.New("cycle in graph: cycle0 -> cycle3 -> cycle1 -> cycle2 -> cycle3"),
+		},
+		steps: []Step{&cycle0, &cycle1, &cycle2, &cycle3},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			steps := make([]Step, len(tc.steps))

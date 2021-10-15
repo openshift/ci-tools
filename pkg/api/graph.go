@@ -390,6 +390,9 @@ func BuildPartialGraph(steps []Step, names []string) (StepGraph, error) {
 func (g StepGraph) TopologicalSort() (OrderedStepList, []error) {
 	var ret OrderedStepList
 	var satisfied []StepLink
+	if err := iterateDAG(g, nil, sets.NewString(), func(*StepNode) {}); err != nil {
+		return nil, err
+	}
 	seen := make(map[Step]struct{})
 	for len(g) > 0 {
 		var changed bool
@@ -438,6 +441,22 @@ func (g StepGraph) TopologicalSort() (OrderedStepList, []error) {
 		g = waiting
 	}
 	return ret, nil
+}
+
+// iterateDAG applies a function to every node of a DAG, detecting cycles.
+func iterateDAG(graph StepGraph, path []string, inPath sets.String, f func(*StepNode)) (ret []error) {
+	for _, node := range graph {
+		name := node.Step.Name()
+		if inPath.Has(name) {
+			ret = append(ret, fmt.Errorf("cycle in graph: %s -> %s", strings.Join(path, " -> "), name))
+			continue
+		}
+		inPath.Insert(name)
+		ret = append(ret, iterateDAG(node.Children, append(path, name), inPath, f)...)
+		inPath.Delete(name)
+		f(node)
+	}
+	return ret
 }
 
 // IterateAllEdges applies an operation to every node in the graph once.

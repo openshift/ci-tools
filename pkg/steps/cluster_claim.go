@@ -228,17 +228,22 @@ func (s *clusterClaimStep) saveArtifacts(ctx context.Context, namespace, name st
 		errs = append(errs, err)
 	}
 	if printConditions {
-		builder := &strings.Builder{}
-		_, _ = builder.WriteString(fmt.Sprintf("Found %d conditions for ClusterClaim:", len(claim.Status.Conditions)))
-		sort.Slice(claim.Status.Conditions, func(i, j int) bool {
-			return claim.Status.Conditions[i].LastTransitionTime.Before(&claim.Status.Conditions[j].LastTransitionTime)
-		})
+		var relevantConditions []hivev1.ClusterClaimCondition
 		for _, condition := range claim.Status.Conditions {
 			if condition.Status == corev1.ConditionUnknown || condition.Reason == "Initialized" {
 				continue
 			}
-			_, _ = builder.WriteString(fmt.Sprintf("\n[%s]%s: %s", condition.LastTransitionTime.Format(time.RFC3339), condition.Reason, condition.Message))
+			relevantConditions = append(relevantConditions, condition)
 		}
+		builder := &strings.Builder{}
+		_, _ = builder.WriteString(fmt.Sprintf("Found %d conditions for ClusterClaim:\n", len(relevantConditions)))
+		sort.Slice(relevantConditions, func(i, j int) bool {
+			return relevantConditions[i].LastTransitionTime.Before(&relevantConditions[j].LastTransitionTime)
+		})
+		for _, condition := range relevantConditions {
+			_, _ = builder.WriteString(fmt.Sprintf("\n  *[%s]%s: %s", condition.LastTransitionTime.Format(time.RFC3339), condition.Reason, condition.Message))
+		}
+		_, _ = builder.WriteString("\n")
 		logrus.Warn(builder.String())
 	}
 

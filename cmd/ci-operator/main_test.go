@@ -373,10 +373,10 @@ func TestErrWroteJUnit(t *testing.T) {
 
 func TestBuildPartialGraph(t *testing.T) {
 	testCases := []struct {
-		name             string
-		input            []api.Step
-		targetName       string
-		expectedErrorMsg string
+		name           string
+		input          []api.Step
+		targetName     string
+		expectedErrors []error
 	}{
 		{
 			name: "Missing input image results in human-readable error",
@@ -400,8 +400,12 @@ func TestBuildPartialGraph(t *testing.T) {
 				steps.OutputImageTagStep(api.OutputImageTagStepConfiguration{From: api.PipelineImageStreamTagReference("oc-bin-image")}, nil, nil),
 				steps.ImagesReadyStep(steps.OutputImageTagStep(api.OutputImageTagStepConfiguration{From: api.PipelineImageStreamTagReference("oc-bin-image")}, nil, nil).Creates()),
 			},
-			targetName:       "[images]",
-			expectedErrorMsg: "steps are missing dependencies",
+			targetName: "[images]",
+			expectedErrors: []error{
+				errors.New("steps are missing dependencies"),
+				errors.New(`step [output::] is missing dependencies: <&api.internalImageStreamLink{name:"stable"}>`),
+				errors.New(`step oc-bin-image is missing dependencies: "cli" is neither an imported nor a built image`),
+			},
 		},
 	}
 
@@ -413,13 +417,8 @@ func TestBuildPartialGraph(t *testing.T) {
 			}
 
 			// Apparently we only coincidentally validate the graph during the topologicalSort we do prior to printing it
-			_, err = topologicalSort(steps)
-			if err == nil {
-				return
-			}
-			if err.Error() != tc.expectedErrorMsg {
-				t.Errorf("expected error message %q, got %q", tc.expectedErrorMsg, err.Error())
-			}
+			_, errs := topologicalSort(steps)
+			testhelper.Diff(t, "errors", errs, tc.expectedErrors, testhelper.EquateErrorMessage)
 		})
 	}
 }

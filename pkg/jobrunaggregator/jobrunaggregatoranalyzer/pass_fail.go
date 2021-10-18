@@ -3,6 +3,7 @@ package jobrunaggregatoranalyzer
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -162,7 +163,7 @@ func (a *weeklyAverageFromTenDays) getAggregatedTestRuns(ctx context.Context) (m
 }
 
 func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (bool, string, error) {
-	if alwaysPassTests.Has(testCaseDetails.Name) {
+	if testShouldAlwaysPass(testCaseDetails.Name) {
 		fmt.Printf("always passing %q\n", testCaseDetails.Name)
 		return false, "always passing", nil
 	}
@@ -220,7 +221,7 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames [
 
 	requiredNumberOfPasses := requiredPassesByPassPercentageByNumberOfAttempts[numberOfAttempts][workingPercentage]
 	if numberOfPasses < requiredNumberOfPasses {
-		summary := fmt.Sprintf("Passed %d times, failed %d times.  The historical pass rate is %d%%.  The required number of passes is %d.",
+		summary := fmt.Sprintf("Failed: Passed %d times, failed %d times.  The historical pass rate is %d%%.  The required number of passes is %d.",
 			numberOfPasses,
 			numberOfFailures,
 			workingPercentage,
@@ -229,23 +230,36 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames [
 		return true, summary, nil
 	}
 
-	return false, "Passed enough times", nil
+	return false, fmt.Sprintf("Passed: Passed %d times, failed %d times.  The historical pass rate is %d%%.  The required number of passes is %d.",
+		numberOfPasses,
+		numberOfFailures,
+		workingPercentage,
+		requiredNumberOfPasses,
+	), nil
 }
 
-var (
-	alwaysPassTests = sets.NewString(
+func testShouldAlwaysPass(name string) bool {
+	if strings.HasPrefix(name, "Run multi-stage test ") {
+		switch {
 		// used to aggregate overall upgrade result for a single job.  Since we aggregated all the junits, we don't care about this
 		// sub-aggregation. The analysis job runs can all fail on different tests, but the aggregated job will succeed.
-		`Run multi-stage test e2e-gcp-upgrade - e2e-gcp-upgrade-openshift-e2e-test container test`,
-		`Run multi-stage test e2e-aws-ovn-upgrade - e2e-aws-ovn-upgrade-gather-aws-console container test`,
-	)
-)
+		case strings.HasSuffix(name, "-openshift-e2e-test container test"):
+			return true
+		}
+	}
+	if strings.Contains(name, `Cluster should remain functional during upgrade`) {
+		// this test is a side-effect of other tests.  For the purpose of aggregation, we can have each individual job run
+		// fail this test, but the aggregated output can be successful.
+		return true
+	}
+	return false
+}
 
 // these are the required number of passes for a given percentage of historical pass rate.  One var each for
 // number of attempts in the aggregated job.
 var (
 	requiredPassesByPassPercentageFor_10_Attempts = []int{
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 00-09
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0-9
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 10-19
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 20-29
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 30-39
@@ -258,20 +272,20 @@ var (
 		9, // 100
 	}
 	requiredPassesByPassPercentageFor_09_Attempts = []int{
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 00-09
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0-9
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 10-19
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 20-29
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 30-39
 		0, 0, 0, 0, 1, 1, 1, 1, 1, 1, // 40-49
 		1, 1, 1, 1, 1, 1, 2, 2, 2, 2, // 50-59
 		2, 2, 2, 2, 2, 2, 2, 3, 3, 3, // 60-69
-		3, 3, 3, 3, 3, 3, 5, 5, 5, 5, // 70-79
-		5, 5, 5, 5, 6, 6, 6, 6, 6, 6, // 80-89
-		6, 7, 7, 7, 7, 7, 7, 8, 8, 8, // 90-99
-		9, // 100
+		3, 3, 3, 3, 3, 3, 4, 4, 4, 4, // 70-79
+		4, 4, 4, 4, 5, 5, 5, 5, 5, 5, // 80-89
+		5, 6, 6, 6, 6, 6, 6, 7, 7, 7, // 90-99
+		8, // 100
 	}
 	requiredPassesByPassPercentageFor_08_Attempts = []int{
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 00-09
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0-9
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 10-19
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 20-29
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 30-39
@@ -280,86 +294,86 @@ var (
 		1, 2, 2, 2, 2, 2, 2, 2, 2, 2, // 60-69
 		2, 2, 3, 3, 3, 3, 3, 3, 3, 3, // 70-79
 		3, 3, 4, 4, 4, 4, 4, 4, 4, 4, // 80-89
-		5, 5, 5, 5, 5, 5, 7, 7, 7, 7, // 90-99
-		8, // 100
-	}
-	requiredPassesByPassPercentageFor_07_Attempts = []int{
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 00-09
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 10-19
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 20-29
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 30-39
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 40-49
-		0, 0, 0, 2, 2, 2, 2, 2, 2, 2, // 50-59
-		2, 2, 2, 2, 2, 2, 2, 3, 3, 3, // 60-69
-		3, 3, 3, 3, 3, 3, 3, 3, 3, 4, // 70-79
-		4, 4, 4, 4, 4, 4, 4, 4, 6, 6, // 80-89
-		6, 6, 6, 6, 6, 7, 7, 7, 7, 7, // 90-99
+		5, 5, 5, 5, 5, 5, 6, 6, 6, 6, // 90-99
 		7, // 100
 	}
-	requiredPassesByPassPercentageFor_06_Attempts = []int{
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 00-09
+	requiredPassesByPassPercentageFor_07_Attempts = []int{
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0-9
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 10-19
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 20-29
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 30-39
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 40-49
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 2, // 50-59
-		2, 2, 2, 2, 2, 2, 2, 2, 2, 2, // 60-69
-		2, 2, 2, 2, 4, 4, 4, 4, 4, 4, // 70-79
-		4, 4, 4, 4, 4, 4, 5, 5, 5, 5, // 80-89
-		5, 5, 5, 5, 5, 6, 6, 6, 6, 6, // 90-99
+		0, 0, 0, 1, 1, 1, 1, 1, 1, 1, // 50-59
+		1, 1, 1, 1, 1, 1, 1, 2, 2, 2, // 60-69
+		2, 2, 2, 2, 2, 2, 2, 2, 2, 3, // 70-79
+		3, 3, 3, 3, 3, 3, 3, 3, 4, 4, // 80-89
+		4, 4, 4, 4, 4, 5, 5, 5, 5, 5, // 90-99
 		6, // 100
 	}
-	requiredPassesByPassPercentageFor_05_Attempts = []int{
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 00-09
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 10-19
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 20-29
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 30-39
-		0, 0, 0, 0, 0, 0, 1, 1, 1, 1, // 40-49
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 50-59
-		1, 1, 1, 1, 1, 1, 1, 2, 2, 2, // 60-69
-		2, 2, 2, 2, 2, 2, 2, 2, 2, 2, // 70-79
-		2, 2, 5, 5, 5, 5, 5, 5, 5, 5, // 80-89
-		5, 5, 5, 5, 5, 5, 5, 5, 5, 5, // 90-99
-		5, // 100
-	}
-	requiredPassesByPassPercentageFor_04_Attempts = []int{
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 00-09
+	requiredPassesByPassPercentageFor_06_Attempts = []int{
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0-9
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 10-19
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 20-29
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 30-39
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 40-49
-		0, 0, 0, 0, 1, 1, 1, 1, 1, 1, // 50-59
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // 50-59
 		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 60-69
-		1, 1, 1, 1, 1, 1, 3, 3, 3, 3, // 70-79
-		3, 3, 3, 3, 3, 3, 3, 3, 3, 3, // 80-89
-		3, 4, 4, 4, 4, 4, 4, 4, 4, 4, // 90-99
-		4, // 100
+		1, 1, 1, 1, 2, 2, 2, 2, 2, 2, // 70-79
+		2, 2, 2, 2, 2, 2, 3, 3, 3, 3, // 80-89
+		3, 3, 3, 3, 3, 4, 4, 4, 4, 4, // 90-99
+		5, // 100
 	}
-	requiredPassesByPassPercentageFor_03_Attempts = []int{
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 00-09
+	requiredPassesByPassPercentageFor_05_Attempts = []int{
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0-9
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 10-19
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 20-29
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 30-39
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 40-49
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 50-59
-		0, 0, 0, 0, 1, 1, 1, 1, 1, 1, // 60-69
+		0, 0, 0, 0, 0, 0, 0, 1, 1, 1, // 60-69
 		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 70-79
-		1, 1, 1, 1, 1, 1, 1, 3, 3, 3, // 80-89
-		3, 3, 3, 3, 3, 3, 3, 3, 3, 3, // 90-99
-		3, // 100
+		1, 1, 2, 2, 2, 2, 2, 2, 2, 2, // 80-89
+		2, 2, 2, 2, 3, 3, 3, 3, 3, 3, // 90-99
+		4, // 100
 	}
-	requiredPassesByPassPercentageFor_02_Attempts = []int{
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 00-09
+	requiredPassesByPassPercentageFor_04_Attempts = []int{
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0-9
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 10-19
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 20-29
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 30-39
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 40-49
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 50-59
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 60-69
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 2, // 70-79
-		2, 2, 2, 2, 2, 2, 2, 2, 2, 2, // 80-89
-		2, 2, 2, 2, 2, 2, 2, 2, 2, 2, // 90-99
+		0, 0, 0, 0, 0, 0, 1, 1, 1, 1, // 70-79
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 80-89
+		1, 2, 2, 2, 2, 2, 2, 2, 2, 3, // 90-99
+		3, // 100
+	}
+	requiredPassesByPassPercentageFor_03_Attempts = []int{
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0-9
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 10-19
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 20-29
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 30-39
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 40-49
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 50-59
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 60-69
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 70-79
+		0, 0, 0, 0, 0, 0, 0, 1, 1, 1, // 80-89
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 2, // 90-99
 		2, // 100
+	}
+	requiredPassesByPassPercentageFor_02_Attempts = []int{
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0-9
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 10-19
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 20-29
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 30-39
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 40-49
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 50-59
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 60-69
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // 70-79
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 80-89
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 90-99
+		1, // 100
 	}
 	requiredPassesByPassPercentageFor_01_Attempts = []int{
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 00-09
@@ -434,11 +448,22 @@ func getNumberOfPasses(testCaseDetails *TestCaseDetails) int {
 }
 
 func getNumberOfFailures(testCaseDetails *TestCaseDetails) int {
+	return len(getFailedJobNames(testCaseDetails))
+}
+
+func getFailedJobNames(testCaseDetails *TestCaseDetails) sets.String {
 	// if the same job run has multiple failures, it only counts as a single failure.
 	jobRunsThatFailed := sets.NewString()
 	for _, failure := range testCaseDetails.Failures {
 		jobRunsThatFailed.Insert(failure.JobRunID)
 	}
 
-	return len(jobRunsThatFailed)
+	jobRunsThatPassed := sets.NewString()
+	for _, pass := range testCaseDetails.Passes {
+		jobRunsThatPassed.Insert(pass.JobRunID)
+	}
+
+	jobRunsThatFailed = jobRunsThatFailed.Difference(jobRunsThatPassed)
+
+	return jobRunsThatFailed
 }

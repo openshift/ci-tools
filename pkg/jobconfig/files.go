@@ -76,7 +76,12 @@ func (i *Info) ConfigMapName() string {
 	if i.Type == "periodics" && i.Branch == "" {
 		return fmt.Sprintf("job-config-%s", cioperatorapi.FlavorForBranch(""))
 	}
-	return fmt.Sprintf("job-config-%s", cioperatorapi.FlavorForBranch(i.Branch))
+	flavor := cioperatorapi.FlavorForBranch(i.Branch)
+	if flavor == "master" {
+		return fmt.Sprintf("job-config-%s-%s", flavor, i.Type)
+	}
+
+	return fmt.Sprintf("job-config-%s", flavor)
 }
 
 // We use the directory/file naming convention to encode useful information

@@ -555,6 +555,7 @@ func main() {
 		}); err != nil {
 			errs = append(errs, err)
 		}
+		logrus.WithField("tag", tag.ISTagName()).Info("image stream tag is deleted")
 	}
 	if len(errs) > 0 {
 		logrus.WithError(utilerrors.NewAggregate(errs)).Fatal("could not delete tags")

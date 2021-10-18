@@ -1,1 +1,1 @@
-[{"op":"add","path":"/spec/containers/0/resources/limits","value":{"memory":"3763863526"}},{"op":"add","path":"/spec/containers/0/resources/requests","value":{"cpu":"1846107784431m","memory":"1881931763"}}]
+[{"op":"add","path":"/spec/containers/0/resources/limits","value":{"memory":"3763863526"}},{"op":"add","path":"/spec/containers/0/resources/requests","value":{"cpu":"10","memory":"1881931763"}}]

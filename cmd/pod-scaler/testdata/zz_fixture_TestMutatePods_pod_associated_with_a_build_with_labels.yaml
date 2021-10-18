@@ -23,7 +23,7 @@ Patches:
     limits:
       memory: 39062500Ki
     requests:
-      cpu: "100"
+      cpu: "9"
       memory: 19531250Ki
 - op: add
   path: /spec/containers/1/resources

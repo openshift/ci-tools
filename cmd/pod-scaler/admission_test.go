@@ -79,7 +79,7 @@ func TestMutatePods(t *testing.T) {
 				Container: "test",
 			}: {
 				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+					corev1.ResourceCPU:    *resource.NewQuantity(9, resource.DecimalSI),
 					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
 				},
 			},
@@ -359,19 +359,25 @@ func TestMutatePodResources(t *testing.T) {
 				byMetaData: map[pod_scaler.FullMetadata]corev1.ResourceRequirements{
 					baseWithContainer(&metaBase, "large"): {
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+							corev1.ResourceCPU:    *resource.NewQuantity(5, resource.DecimalSI),
 							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
 						},
 					},
 					baseWithContainer(&metaBase, "medium"): {
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+							corev1.ResourceCPU:    *resource.NewQuantity(5, resource.DecimalSI),
 							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
 						},
 					},
 					baseWithContainer(&metaBase, "small"): {
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+							corev1.ResourceCPU:    *resource.NewQuantity(5, resource.DecimalSI),
+							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+						},
+					},
+					baseWithContainer(&metaBase, "overcap"): {
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    *resource.NewQuantity(20, resource.DecimalSI),
 							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
 						},
 					},
@@ -396,11 +402,11 @@ func TestMutatePodResources(t *testing.T) {
 							Name: "large", // we set larger requirements, these will not change
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceCPU:    *resource.NewQuantity(8, resource.DecimalSI),
 									corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
 								},
 								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    *resource.NewQuantity(400, resource.DecimalSI),
+									corev1.ResourceCPU:    *resource.NewQuantity(16, resource.DecimalSI),
 									corev1.ResourceMemory: *resource.NewQuantity(4e10, resource.BinarySI),
 								},
 							},
@@ -409,7 +415,7 @@ func TestMutatePodResources(t *testing.T) {
 							Name: "medium", // we set larger CPU requirements, memory will change
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceCPU:    *resource.NewQuantity(8, resource.DecimalSI),
 									corev1.ResourceMemory: *resource.NewQuantity(1e10, resource.BinarySI),
 								},
 								Limits: corev1.ResourceList{},
@@ -417,6 +423,16 @@ func TestMutatePodResources(t *testing.T) {
 						},
 						{
 							Name: "small", // we set smaller requirements, these will change
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceMemory: *resource.NewQuantity(1e2, resource.BinarySI),
+								},
+								Limits: corev1.ResourceList{},
+							},
+						},
+						{
+							Name: "small", // we set smaller cpu but recommendation is over cap, so we end up with the cap
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									corev1.ResourceCPU:    *resource.NewQuantity(10, resource.DecimalSI),
@@ -437,19 +453,19 @@ func TestMutatePodResources(t *testing.T) {
 				byMetaData: map[pod_scaler.FullMetadata]corev1.ResourceRequirements{
 					baseWithContainer(&metaBase, "large"): {
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+							corev1.ResourceCPU:    *resource.NewQuantity(5, resource.DecimalSI),
 							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
 						},
 					},
 					baseWithContainer(&metaBase, "medium"): {
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+							corev1.ResourceCPU:    *resource.NewQuantity(5, resource.DecimalSI),
 							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
 						},
 					},
 					baseWithContainer(&metaBase, "small"): {
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+							corev1.ResourceCPU:    *resource.NewQuantity(5, resource.DecimalSI),
 							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
 						},
 					},
@@ -474,11 +490,11 @@ func TestMutatePodResources(t *testing.T) {
 							Name: "large", // we set larger requirements, these will not change
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceCPU:    *resource.NewQuantity(8, resource.DecimalSI),
 									corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
 								},
 								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    *resource.NewQuantity(400, resource.DecimalSI),
+									corev1.ResourceCPU:    *resource.NewQuantity(16, resource.DecimalSI),
 									corev1.ResourceMemory: *resource.NewQuantity(4e10, resource.BinarySI),
 								},
 							},
@@ -487,7 +503,7 @@ func TestMutatePodResources(t *testing.T) {
 							Name: "medium", // we set larger CPU requirements, memory will change
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceCPU:    *resource.NewQuantity(8, resource.DecimalSI),
 									corev1.ResourceMemory: *resource.NewQuantity(1e10, resource.BinarySI),
 								},
 								Limits: corev1.ResourceList{},
@@ -497,7 +513,7 @@ func TestMutatePodResources(t *testing.T) {
 							Name: "small", // we set smaller requirements, these will change
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    *resource.NewQuantity(10, resource.DecimalSI),
+									corev1.ResourceCPU:    *resource.NewQuantity(2, resource.DecimalSI),
 									corev1.ResourceMemory: *resource.NewQuantity(1e2, resource.BinarySI),
 								},
 								Limits: corev1.ResourceList{},

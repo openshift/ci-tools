@@ -215,7 +215,7 @@ type jobRunLoaderOptions struct {
 func (o *jobRunLoaderOptions) Run(ctx context.Context) error {
 	defer close(o.doneUploading)
 
-	fmt.Printf("Analyzing jobrun/%q/%q.\n", o.jobName, o.hobRunID)
+	fmt.Printf("Analyzing jobrun/%v/%v.\n", o.jobName, o.hobRunID)
 
 	jobRun, err := o.readJobRunFromGCS(ctx)
 	if err != nil {
@@ -233,7 +233,7 @@ func (o *jobRunLoaderOptions) Run(ctx context.Context) error {
 	}
 
 	if err := o.uploadJobRun(ctx, jobRun); err != nil {
-		return fmt.Errorf("jobRun/%q/%q failed to upload to bigquery: %w", o.jobName, o.hobRunID, err)
+		return fmt.Errorf("jobrun/%v/%v failed to upload to bigquery: %w", o.jobName, o.hobRunID, err)
 	}
 
 	return nil
@@ -244,13 +244,13 @@ func (o *jobRunLoaderOptions) uploadJobRun(ctx context.Context, jobRun jobrunagg
 	if err != nil {
 		return err
 	}
-	fmt.Printf("uploading prowjob.yaml: %q/%q\n", jobRun.GetJobName(), jobRun.GetJobRunID())
+	fmt.Printf("uploading prowjob.yaml: jobrun/%v/%v\n", jobRun.GetJobName(), jobRun.GetJobRunID())
 	jobRunRow := newJobRunRow(jobRun, prowJob)
 	if err := o.jobRunInserter.Put(ctx, jobRunRow); err != nil {
 		return err
 	}
 
-	fmt.Printf("  uploading content: %q/%q\n", jobRun.GetJobName(), jobRun.GetJobRunID())
+	fmt.Printf("  uploading content: jobrun/%v/%v\n", jobRun.GetJobName(), jobRun.GetJobRunID())
 	if err := o.jobRunUploader.uploadContent(ctx, jobRun, prowJob); err != nil {
 		return err
 	}
@@ -266,14 +266,14 @@ func (o *jobRunLoaderOptions) readJobRunFromGCS(ctx context.Context) (jobrunaggr
 	}
 	prowjob, err := jobRunInfo.GetProwJob(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get prowjob for %q/%q: %w", o.jobName, o.hobRunID, err)
+		return nil, fmt.Errorf("failed to get prowjob for jobrun/%v/%v: %w", o.jobName, o.hobRunID, err)
 	}
 	if prowjob.Status.CompletionTime == nil {
 		fmt.Printf("Removing %q/%q because it isn't finished\n", o.jobName, o.hobRunID)
 		return nil, nil
 	}
 	if _, err := jobRunInfo.GetAllContent(ctx); err != nil {
-		return nil, fmt.Errorf("failed to get all content for %q/%q: %w", o.jobName, o.hobRunID, err)
+		return nil, fmt.Errorf("failed to get all content for jobrun/%v/%v: %w", o.jobName, o.hobRunID, err)
 	}
 
 	return jobRunInfo, nil

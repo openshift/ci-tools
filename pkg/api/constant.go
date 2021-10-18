@@ -48,6 +48,8 @@ const (
 
 	OauthTokenSecretKey  = "oauth"
 	OauthTokenSecretName = "github-credentials-openshift-ci-robot-private-git-cloner"
+
+	GroupSuffix = "-group"
 )
 
 var (

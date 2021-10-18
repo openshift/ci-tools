@@ -1,7 +1,8 @@
 package prowgen
 
 import (
-	"fmt"
+	"sort"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -12,275 +13,30 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-func TestGeneratePodSpec(t *testing.T) {
-	tests := []struct {
-		description    string
-		info           *ProwgenInfo
-		secrets        []*ciop.Secret
-		targets        []string
-		additionalArgs []string
-		skipCloning    bool
-	}{
-		{
-			description: "standard use case",
-			info:        &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			targets:     []string{"target"},
-			skipCloning: true,
-		},
-		{
-			description:    "additional args are included in podspec",
-			info:           &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			targets:        []string{"target"},
-			additionalArgs: []string{"--promote", "--some=thing"},
-			skipCloning:    true,
-		},
-		{
-			description:    "additional args and secret are included in podspec",
-			info:           &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			secrets:        []*ciop.Secret{{Name: "secret-name", MountPath: "/usr/local/test-secret"}},
-			targets:        []string{"target"},
-			additionalArgs: []string{"--promote", "--some=thing"},
-			skipCloning:    true,
-		},
-		{
-			description: "multiple targets",
-			info:        &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			targets:     []string{"target", "more", "and-more"},
-			skipCloning: true,
-		},
-		{
-			description: "private job",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
-				Config:   config.Prowgen{Private: true},
-			},
-			targets:     []string{"target"},
-			skipCloning: true,
-		},
-		{
-			description: "private job with skip_cloning false",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
-				Config:   config.Prowgen{Private: true},
-			},
-			targets: []string{"target"},
-		},
-	}
+func sorted(spec *corev1.PodSpec) *corev1.PodSpec {
+	container := &spec.Containers[0]
+	sort.Slice(spec.Volumes, func(i, j int) bool {
+		return spec.Volumes[i].Name < spec.Volumes[j].Name
+	})
+	sort.Slice(container.Env, func(i, j int) bool {
+		return container.Env[i].Name < container.Env[j].Name
+	})
+	sort.Slice(container.VolumeMounts, func(i, j int) bool {
+		return container.VolumeMounts[i].Name < container.VolumeMounts[j].Name
+	})
 
-	for _, tc := range tests {
-		t.Run(tc.description, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generateCiOperatorPodSpec(tc.info, tc.secrets, tc.targets, tc.skipCloning, tc.additionalArgs...))
-		})
+	canSortArgs := true
+	for i := range container.Args {
+		if !strings.HasPrefix(container.Args[i], "--") {
+			canSortArgs = false
+			break
+		}
 	}
+	if canSortArgs {
+		sort.Strings(container.Args)
+	}
+	return spec
 }
-
-func TestGeneratePodSpecMultiStage(t *testing.T) {
-	info := ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}}
-	tests := []struct {
-		description string
-		test        *ciop.TestStepConfiguration
-	}{
-		{
-			description: "aws cluster profile",
-			test: &ciop.TestStepConfiguration{
-				As: "test",
-				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
-					ClusterProfile: ciop.ClusterProfileAWS,
-				},
-			},
-		},
-		{
-			description: "aws cpaas cluster profile",
-			test: &ciop.TestStepConfiguration{
-				As: "test",
-				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
-					ClusterProfile: ciop.ClusterProfileAWSCPaaS,
-				},
-			},
-		},
-		{
-			description: "aws-2 cluster profile",
-			test: &ciop.TestStepConfiguration{
-				As: "test",
-				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
-					ClusterProfile: ciop.ClusterProfileAWS2,
-				},
-			},
-		},
-		{
-			description: "gcp-2 cluster profile",
-			test: &ciop.TestStepConfiguration{
-				As: "test",
-				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
-					ClusterProfile: ciop.ClusterProfileGCP2,
-				},
-			},
-		},
-		{
-			description: "azure-2 cluster profile",
-			test: &ciop.TestStepConfiguration{
-				As: "test",
-				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
-					ClusterProfile: ciop.ClusterProfileAzure2,
-				},
-			},
-		},
-		{
-			description: "ibmcloud cluster profile",
-			test: &ciop.TestStepConfiguration{
-				As: "test",
-				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
-					ClusterProfile: ciop.ClusterProfileIBMCloud,
-				},
-			},
-		},
-		{
-			description: "cluster-claim",
-			test: &ciop.TestStepConfiguration{
-				As:                          "test",
-				ClusterClaim:                &ciop.ClusterClaim{},
-				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{},
-			},
-		},
-		{
-			description: "hypershift cluster profile",
-			test: &ciop.TestStepConfiguration{
-				As: "test",
-				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
-					ClusterProfile: ciop.ClusterProfileHyperShift,
-				},
-			},
-		},
-		{
-			description: "test step with lease",
-			test: &ciop.TestStepConfiguration{
-				As: "test",
-				MultiStageTestConfigurationLiteral: &ciop.MultiStageTestConfigurationLiteral{
-					Test: []ciop.LiteralTestStep{
-						{
-							As: "step without lease",
-						},
-						{
-							As: "step with lease",
-							Leases: []ciop.StepLease{
-								{
-									ResourceType: "resource",
-									Count:        10,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			description: "test with lease",
-			test: &ciop.TestStepConfiguration{
-				As: "test",
-				MultiStageTestConfigurationLiteral: &ciop.MultiStageTestConfigurationLiteral{
-					Leases: []ciop.StepLease{
-						{
-							ResourceType: "resource",
-							Count:        10,
-						},
-					},
-				},
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.description, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generatePodSpecMultiStage(&info, tc.test, true, true))
-		})
-	}
-}
-
-func TestGeneratePodSpecTemplate(t *testing.T) {
-	tests := []struct {
-		info    *ProwgenInfo
-		release string
-		test    ciop.TestStepConfiguration
-	}{
-		{
-			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
-			release: "origin-v4.0",
-			test: ciop.TestStepConfiguration{
-				As:       "test",
-				Commands: "commands",
-				OpenshiftAnsibleClusterTestConfiguration: &ciop.OpenshiftAnsibleClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
-				},
-			},
-		},
-		{
-			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
-			release: "origin-v4.0",
-			test: ciop.TestStepConfiguration{
-				As:       "test",
-				Commands: "commands",
-				OpenshiftInstallerClusterTestConfiguration: &ciop.OpenshiftInstallerClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "aws"},
-				},
-			},
-		},
-		{
-			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
-			release: "origin-v4.0",
-			test: ciop.TestStepConfiguration{
-				As:       "test",
-				Commands: "commands",
-				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
-					From:                     "pipeline:kubevirt-test",
-				},
-			},
-		},
-		{
-			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
-			release: "origin-v4.0",
-			test: ciop.TestStepConfiguration{
-				As:       "test",
-				Commands: "commands",
-				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
-					From:                     "pipeline:kubevirt-test",
-				},
-			},
-		},
-		{
-			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
-			release: "origin-v4.0",
-			test: ciop.TestStepConfiguration{
-				As:       "test",
-				Commands: "commands",
-				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
-					From:                     "pipeline:kubevirt-test",
-				},
-			},
-		},
-		{
-			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
-			release: "origin-v4.0",
-			test: ciop.TestStepConfiguration{
-				As:       "test",
-				Commands: "commands",
-				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
-					From:                     "pipeline:kubevirt-test",
-				},
-			},
-		},
-	}
-
-	for idx, tc := range tests {
-		t.Run(fmt.Sprintf("testcase-%d", idx), func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generatePodSpecTemplate(tc.info, tc.release, &tc.test, true))
-		})
-	}
-}
-
 func TestGeneratePresubmitForTest(t *testing.T) {
 	tests := []struct {
 		description string
@@ -514,21 +270,6 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			}},
 		}, {
-			id: "template test which doesn't require `tag_specification`",
-			config: &ciop.ReleaseBuildConfiguration{
-				Tests: []ciop.TestStepConfiguration{{
-					As: "oTeste",
-					OpenshiftInstallerClusterTestConfiguration: &ciop.OpenshiftInstallerClusterTestConfiguration{
-						ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
-					},
-				}},
-			},
-			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
-				Org:    "organization",
-				Repo:   "repository",
-				Branch: "branch",
-			}},
-		}, {
 			id: "Promotion configuration causes --promote job",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests:                  []ciop.TestStepConfiguration{},
@@ -666,9 +407,34 @@ func TestGenerateJobs(t *testing.T) {
 			if !tc.keep {
 				pruneForTests(jobConfig) // prune the fields that are tested in TestGeneratePre/PostsubmitForTest
 			}
-			testhelper.CompareWithFixture(t, jobConfig)
+			testhelper.CompareWithFixture(t, sortPodspecsInJobsonfig(jobConfig))
 		})
 	}
+}
+
+func sortPodspecsInJobsonfig(jobConfig *prowconfig.JobConfig) *prowconfig.JobConfig {
+	for repo := range jobConfig.PresubmitsStatic {
+		for i := range jobConfig.PresubmitsStatic[repo] {
+			if jobConfig.PresubmitsStatic[repo][i].Spec != nil {
+				sorted(jobConfig.PresubmitsStatic[repo][i].Spec)
+			}
+		}
+	}
+	for repo := range jobConfig.PostsubmitsStatic {
+		for i := range jobConfig.PostsubmitsStatic[repo] {
+			if jobConfig.PostsubmitsStatic[repo][i].Spec != nil {
+				sorted(jobConfig.PostsubmitsStatic[repo][i].Spec)
+			}
+		}
+	}
+
+	for i := range jobConfig.Periodics {
+		if jobConfig.Periodics[i].Spec != nil {
+			sorted(jobConfig.Periodics[i].Spec)
+		}
+	}
+
+	return jobConfig
 }
 
 func TestGenerateJobBase(t *testing.T) {
@@ -769,7 +535,7 @@ func TestGenerateJobBase(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.testName, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generateJobBase(testCase.name, testCase.prefix, testCase.info, testCase.podSpec, testCase.rehearsable, testCase.pathAlias, "", !testCase.clone, nil))
+			testhelper.CompareWithFixture(t, generateJobBase(testCase.name, testCase.prefix, testCase.info, sorted(testCase.podSpec), testCase.rehearsable, testCase.pathAlias, "", !testCase.clone, nil))
 		})
 	}
 }

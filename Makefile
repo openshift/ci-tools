@@ -229,7 +229,7 @@ pr-deploy-vault-secret-manager:
 .PHONY: pr-deploy-backporter
 
 check-breaking-changes:
-	test/validate-prowgen-breaking-changes.sh
+	test/validate-generation-breaking-changes.sh
 .PHONY: check-breaking-changes
 
 .PHONY: generate
@@ -360,7 +360,18 @@ promoted-image-governor: $(TMPDIR)/.promoted-image-governor-kubeconfig-dir
 	go run  ./cmd/promoted-image-governor --kubeconfig-dir=$(TMPDIR)/.promoted-image-governor-kubeconfig-dir --ci-operator-config-path=$(release_folder)/ci-operator/config --release-controller-mirror-config-dir=$(release_folder)/core-services/release-controller/_releases --ignored-image-stream-tags='^ocp\S*/\S+:machine-os-content$$' --ignored-image-stream-tags='^openshift/origin-v3.11:' --dry-run=true
 .PHONY: promoted-image-governor
 
-explain: $(TMPDIR)/.promoted-image-governor-kubeconfig
+explain: $(TMPDIR)/.promoted-image-governor-kubeconfig-dir
 	@[[ $$istag ]] || (echo "ERROR: \$$istag must be set"; exit 1)
-	@go run  ./cmd/promoted-image-governor --kubeconfig=$(TMPDIR)/.promoted-image-governor-kubeconfig --ci-operator-config-path=$(release_folder)/ci-operator/config --release-controller-mirror-config-dir=$(release_folder)/core-services/release-controller/_releases --explain $(istag) --dry-run=true --log-level=fatal
+	@go run  ./cmd/promoted-image-governor --kubeconfig-dir=$(TMPDIR)/.promoted-image-governor-kubeconfig-dir --ci-operator-config-path=$(release_folder)/ci-operator/config --release-controller-mirror-config-dir=$(release_folder)/core-services/release-controller/_releases --explain $(istag) --dry-run=true --log-level=fatal
 .PHONY: explain
+
+
+$(TMPDIR)/.github-ldap-user-group-creator-kubeconfig-dir:
+	rm -rf $(TMPDIR)/.github-ldap-user-group-creator-kubeconfig-dir
+	mkdir -p $(TMPDIR)/.github-ldap-user-group-creator-kubeconfig-dir
+	oc --context app.ci --namespace ci extract secret/github-ldap-user-group-creator --confirm --to=$(TMPDIR)/.github-ldap-user-group-creator-kubeconfig-dir
+	oc --context app.ci --namespace ci serviceaccounts create-kubeconfig github-ldap-user-group-creator | sed 's/github-ldap-user-group-creator/app.ci/g' > $(TMPDIR)/.github-ldap-user-group-creator-kubeconfig-dir/sa.github-ldap-user-group-creator.app.ci.config
+
+github-ldap-user-group-creator: $(TMPDIR)/.github-ldap-user-group-creator-kubeconfig-dir
+	@go run  ./cmd/github-ldap-user-group-creator --kubeconfig-dir=$(TMPDIR)/.github-ldap-user-group-creator-kubeconfig-dir --mapping-file=/tmp/mapping.yaml --dry-run=true --log-level=debug
+.PHONY: github-ldap-user-group-creator

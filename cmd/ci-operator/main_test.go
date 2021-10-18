@@ -411,13 +411,13 @@ func TestBuildPartialGraph(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			steps, err := api.BuildPartialGraph(tc.input, []string{tc.targetName})
+			graph, err := api.BuildPartialGraph(tc.input, []string{tc.targetName})
 			if err != nil {
 				t.Fatalf("failed to build graph: %v", err)
 			}
 
 			// Apparently we only coincidentally validate the graph during the topologicalSort we do prior to printing it
-			_, errs := topologicalSort(steps)
+			_, errs := topologicalSort(graph)
 			testhelper.Diff(t, "errors", errs, tc.expectedErrors, testhelper.EquateErrorMessage)
 		})
 	}

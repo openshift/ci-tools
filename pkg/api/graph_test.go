@@ -175,12 +175,12 @@ func TestBuildGraph(t *testing.T) {
 	var testCases = []struct {
 		name   string
 		input  []Step
-		output []*StepNode
+		output StepGraph
 	}{
 		{
 			name:  "basic graph",
 			input: []Step{root, other, src, bin, testBin, rpm, unrelated, final},
-			output: []*StepNode{{
+			output: StepGraph{{
 				Step: root,
 				Children: []*StepNode{{
 					Step: src,
@@ -215,7 +215,7 @@ func TestBuildGraph(t *testing.T) {
 		{
 			name:  "duplicate links",
 			input: []Step{duplicateRoot, duplicateSrc},
-			output: []*StepNode{{
+			output: StepGraph{{
 				Step: duplicateRoot,
 				Children: []*StepNode{{
 					Step:     duplicateSrc,
@@ -263,14 +263,14 @@ func TestValidateGraph(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		expected bool
-		graph    []*StepNode
+		graph    StepGraph
 	}{{
 		name:     "empty graph",
 		expected: true,
 	}, {
 		name:     "valid graph",
 		expected: true,
-		graph: []*StepNode{{
+		graph: StepGraph{{
 			Step: &valid0,
 			Children: []*StepNode{
 				{Step: &valid1},
@@ -282,7 +282,7 @@ func TestValidateGraph(t *testing.T) {
 	}, {
 		name:     "valid graph, duplicate steps",
 		expected: true,
-		graph: []*StepNode{{
+		graph: StepGraph{{
 			Step: &valid0,
 			Children: []*StepNode{
 				{Step: &valid1},
@@ -297,7 +297,7 @@ func TestValidateGraph(t *testing.T) {
 		}},
 	}, {
 		name: "invalid graph",
-		graph: []*StepNode{{
+		graph: StepGraph{{
 			Step: &valid0,
 			Children: []*StepNode{
 				{Step: &valid1},
@@ -312,7 +312,7 @@ func TestValidateGraph(t *testing.T) {
 		}},
 	}, {
 		name: "invalid graph, duplicate steps",
-		graph: []*StepNode{{
+		graph: StepGraph{{
 			Step: &valid0,
 			Children: []*StepNode{
 				{Step: &invalid0},
@@ -327,7 +327,7 @@ func TestValidateGraph(t *testing.T) {
 		}},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ValidateGraph(tc.graph)
+			err := tc.graph.Validate()
 			if (err == nil) != tc.expected {
 				t.Errorf("got %v, want %v", err == nil, tc.expected)
 			}

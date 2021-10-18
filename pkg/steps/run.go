@@ -19,7 +19,7 @@ type message struct {
 	stepDetails     api.CIOperatorStepDetails
 }
 
-func Run(ctx context.Context, graph []*api.StepNode) (*junit.TestSuites, []api.CIOperatorStepDetails, []error) {
+func Run(ctx context.Context, graph api.StepGraph) (*junit.TestSuites, []api.CIOperatorStepDetails, []error) {
 	var seen []api.StepLink
 	executionResults := make(chan message)
 	done := make(chan bool)

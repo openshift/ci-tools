@@ -293,16 +293,25 @@ func (c *GraphConfiguration) InputImages() (ret []*InputImageTagStepConfiguratio
 	return
 }
 
+// +k8s:deepcopy-gen=false
+// StepGraph is a DAG of steps referenced by its roots
+type StepGraph []*StepNode
+
+// +k8s:deepcopy-gen=false
+// OrderedStepList is a topologically-ordered sequence of steps
+// Edges are determined based on the Creates/Requires methods.
+type OrderedStepList []*StepNode
+
 // BuildGraph returns a graph or graphs that include
 // all steps given.
-func BuildGraph(steps []Step) []*StepNode {
+func BuildGraph(steps []Step) StepGraph {
 	var allNodes []*StepNode
 	for _, step := range steps {
 		node := StepNode{Step: step, Children: []*StepNode{}}
 		allNodes = append(allNodes, &node)
 	}
 
-	var roots []*StepNode
+	var ret StepGraph
 	for _, node := range allNodes {
 		isRoot := true
 		for _, other := range allNodes {
@@ -316,16 +325,16 @@ func BuildGraph(steps []Step) []*StepNode {
 			}
 		}
 		if isRoot {
-			roots = append(roots, node)
+			ret = append(ret, node)
 		}
 	}
 
-	return roots
+	return ret
 }
 
 // BuildPartialGraph returns a graph or graphs that include
 // only the dependencies of the named steps.
-func BuildPartialGraph(steps []Step, names []string) ([]*StepNode, error) {
+func BuildPartialGraph(steps []Step, names []string) (StepGraph, error) {
 	if len(names) == 0 {
 		return BuildGraph(steps), nil
 	}
@@ -377,9 +386,9 @@ func BuildPartialGraph(steps []Step, names []string) ([]*StepNode, error) {
 }
 
 // ValidateGraph performs validations on each step in the graph once.
-func ValidateGraph(nodes []*StepNode) []error {
+func (g StepGraph) Validate() []error {
 	var errs []error
-	IterateAllEdges(nodes, func(n *StepNode) {
+	g.IterateAllEdges(func(n *StepNode) {
 		if err := n.Step.Validate(); err != nil {
 			errs = append(errs, fmt.Errorf("step %q failed validation: %w", n.Step.Name(), err))
 		}
@@ -388,8 +397,8 @@ func ValidateGraph(nodes []*StepNode) []error {
 }
 
 // IterateAllEdges applies an operation to every node in the graph once.
-func IterateAllEdges(nodes []*StepNode, f func(*StepNode)) {
-	iterateAllEdges(nodes, sets.NewString(), f)
+func (g StepGraph) IterateAllEdges(f func(*StepNode)) {
+	iterateAllEdges(g, sets.NewString(), f)
 }
 
 func iterateAllEdges(nodes []*StepNode, alreadyIterated sets.String, f func(*StepNode)) {

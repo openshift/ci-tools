@@ -1779,17 +1779,17 @@ func nodeNames(nodes []*api.StepNode) []string {
 	return names
 }
 
-func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, []error) {
-	var sortedNodes []*api.StepNode
+func topologicalSort(graph api.StepGraph) (api.OrderedStepList, []error) {
+	var ret api.OrderedStepList
 	var satisfied []api.StepLink
-	api.IterateAllEdges(nodes, func(inner *api.StepNode) {
+	graph.IterateAllEdges(func(inner *api.StepNode) {
 		satisfied = append(satisfied, inner.Step.Creates()...)
 	})
 	seen := make(map[api.Step]struct{})
-	for len(nodes) > 0 {
+	for len(graph) > 0 {
 		var changed bool
 		var waiting []*api.StepNode
-		for _, node := range nodes {
+		for _, node := range graph {
 			for _, child := range node.Children {
 				if _, ok := seen[child.Step]; !ok {
 					waiting = append(waiting, child)
@@ -1802,7 +1802,7 @@ func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, []error) {
 				waiting = append(waiting, node)
 				continue
 			}
-			sortedNodes = append(sortedNodes, node)
+			ret = append(ret, node)
 			seen[node.Step] = struct{}{}
 			changed = true
 		}
@@ -1829,9 +1829,9 @@ func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, []error) {
 			}
 			return nil, ret
 		}
-		nodes = waiting
+		graph = waiting
 	}
-	return sortedNodes, nil
+	return ret, nil
 }
 
 func printDigraph(w io.Writer, steps []api.Step) error {
@@ -1850,8 +1850,8 @@ func printDigraph(w io.Writer, steps []api.Step) error {
 	return nil
 }
 
-func printExecutionOrder(nodes []*api.StepNode) []error {
-	ordered, err := topologicalSort(nodes)
+func printExecutionOrder(graph api.StepGraph) []error {
+	ordered, err := topologicalSort(graph)
 	if err != nil {
 		return append([]error{errors.New("could not sort nodes")}, err...)
 	}
@@ -1859,12 +1859,12 @@ func printExecutionOrder(nodes []*api.StepNode) []error {
 	return nil
 }
 
-func calculateGraph(nodes []*api.StepNode) *api.CIOperatorStepGraph {
+func calculateGraph(graph api.StepGraph) *api.CIOperatorStepGraph {
 	var result api.CIOperatorStepGraph
-	api.IterateAllEdges(nodes, func(n *api.StepNode) {
+	graph.IterateAllEdges(func(n *api.StepNode) {
 		r := api.CIOperatorStepDetails{CIOperatorStepDetailInfo: api.CIOperatorStepDetailInfo{StepName: n.Step.Name(), Description: n.Step.Description()}}
 		for _, requirement := range n.Step.Requires() {
-			api.IterateAllEdges(nodes, func(inner *api.StepNode) {
+			graph.IterateAllEdges(func(inner *api.StepNode) {
 				if api.HasAnyLinks([]api.StepLink{requirement}, inner.Step.Creates()) {
 					r.Dependencies = append(r.Dependencies, inner.Step.Name())
 				}
@@ -1876,8 +1876,8 @@ func calculateGraph(nodes []*api.StepNode) *api.CIOperatorStepGraph {
 	return &result
 }
 
-func validateGraph(nodes []*api.StepNode) []error {
-	errs := api.ValidateGraph(nodes)
+func validateGraph(graph api.StepGraph) []error {
+	errs := graph.Validate()
 	var noLeaseClient bool
 	for _, err := range errs {
 		if errors.Is(err, steps.NoLeaseClientErr) {

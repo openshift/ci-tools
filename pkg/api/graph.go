@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -394,6 +395,59 @@ func (g StepGraph) Validate() []error {
 		}
 	})
 	return errs
+}
+
+func (g StepGraph) TopologicalSort() ([]*StepNode, []error) {
+	var sortedNodes []*StepNode
+	var satisfied []StepLink
+	seen := make(map[Step]struct{})
+	for len(g) > 0 {
+		var changed bool
+		var waiting []*StepNode
+		for _, node := range g {
+			for _, child := range node.Children {
+				if _, ok := seen[child.Step]; !ok {
+					waiting = append(waiting, child)
+				}
+			}
+			if _, ok := seen[node.Step]; ok {
+				continue
+			}
+			if !HasAllLinks(node.Step.Requires(), satisfied) {
+				waiting = append(waiting, node)
+				continue
+			}
+			satisfied = append(satisfied, node.Step.Creates()...)
+			sortedNodes = append(sortedNodes, node)
+			seen[node.Step] = struct{}{}
+			changed = true
+		}
+		if !changed && len(waiting) > 0 {
+			errMessages := sets.String{}
+			for _, node := range waiting {
+				missing := sets.String{}
+				for _, link := range node.Step.Requires() {
+					if !HasAllLinks([]StepLink{link}, satisfied) {
+						if msg := link.UnsatisfiableError(); msg != "" {
+							missing.Insert(msg)
+						} else {
+							missing.Insert(fmt.Sprintf("<%#v>", link))
+						}
+					}
+				}
+				// De-Duplicate errors
+				errMessages.Insert(fmt.Sprintf("step %s is missing dependencies: %s", node.Step.Name(), strings.Join(missing.List(), ", ")))
+			}
+			ret := make([]error, 0, errMessages.Len()+1)
+			ret = append(ret, errors.New("steps are missing dependencies"))
+			for _, message := range errMessages.List() {
+				ret = append(ret, errors.New(message))
+			}
+			return nil, ret
+		}
+		g = waiting
+	}
+	return sortedNodes, nil
 }
 
 // IterateAllEdges applies an operation to every node in the graph once.

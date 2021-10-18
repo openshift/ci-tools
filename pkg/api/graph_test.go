@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math/rand"
 	"reflect"
+	"sort"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/gofuzz"
@@ -14,6 +17,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestMatches(t *testing.T) {
@@ -338,6 +343,114 @@ func TestValidateGraph(t *testing.T) {
 					t.Errorf("duplicate error: %v", msg)
 				} else {
 					msgs.Insert(msg)
+				}
+			}
+		})
+	}
+}
+
+type fakeSortLink struct {
+	name string
+}
+
+func (l fakeSortLink) SatisfiedBy(lhs StepLink) bool {
+	return l.name == lhs.(fakeSortLink).name
+}
+
+func (l fakeSortLink) UnsatisfiableError() string { return "" }
+
+type fakeSortStep struct {
+	name     string
+	err      error
+	requires []string
+}
+
+func (*fakeSortStep) Inputs() (InputDefinition, error)    { return nil, nil }
+func (*fakeSortStep) Run(ctx context.Context) error       { return nil }
+func (f *fakeSortStep) Name() string                      { return f.name }
+func (*fakeSortStep) Description() string                 { return "" }
+func (*fakeSortStep) Provides() ParameterMap              { return nil }
+func (f *fakeSortStep) Validate() error                   { return f.err }
+func (*fakeSortStep) Objects() []ctrlruntimeclient.Object { return nil }
+
+func (f *fakeSortStep) Creates() []StepLink {
+	return []StepLink{fakeSortLink{name: f.name}}
+}
+
+func (f *fakeSortStep) Requires() (ret []StepLink) {
+	for _, r := range f.requires {
+		ret = append(ret, fakeSortLink{name: r})
+	}
+	return
+}
+
+func TestTopologicalSort(t *testing.T) {
+	t.Parallel()
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	root := fakeSortStep{name: "root"}
+	src := fakeSortStep{name: "src", requires: []string{"root"}}
+	bin := fakeSortStep{name: "bin", requires: []string{"src"}}
+	img0 := fakeSortStep{name: "img0", requires: []string{"root", "bin"}}
+	img1 := fakeSortStep{name: "img1", requires: []string{"bin"}}
+	img2 := fakeSortStep{name: "img2", requires: []string{"root"}}
+	missing0 := fakeSortStep{name: "missing0", requires: []string{"missing1"}}
+	for _, tc := range []struct {
+		name     string
+		steps    []Step
+		expected []error
+	}{{
+		name: "empty graph",
+	}, {
+		name:  "valid graph",
+		steps: []Step{&root, &src, &bin, &img0, &img1, &img2},
+	}, {
+		name:  "repeated path",
+		steps: []Step{&root, &src, &bin, &img0, &img1, &img2},
+	}, {
+		name: "missing dependency",
+		expected: []error{
+			errors.New(`step missing0 is missing dependencies: <api.fakeSortLink{name:"missing1"}>`),
+			errors.New("steps are missing dependencies"),
+		},
+		steps: []Step{&missing0},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			steps := make([]Step, len(tc.steps))
+			copy(steps, tc.steps)
+			rnd.Shuffle(len(steps), func(i, j int) {
+				steps[i], steps[j] = steps[j], steps[i]
+			})
+			nodes, err := BuildGraph(steps).TopologicalSort()
+			var stepNames, nodeNames []string
+			if tc.expected == nil {
+				for _, s := range tc.steps {
+					stepNames = append(stepNames, s.(*fakeSortStep).name)
+				}
+				for _, n := range nodes {
+					nodeNames = append(nodeNames, n.Step.Name())
+				}
+				sort.Slice(stepNames, func(i, j int) bool {
+					return stepNames[i] < stepNames[j]
+				})
+				sort.Slice(nodeNames, func(i, j int) bool {
+					return nodeNames[i] < nodeNames[j]
+				})
+			}
+			sort.Slice(err, func(i, j int) bool {
+				return err[i].Error() < err[j].Error()
+			})
+			testhelper.Diff(t, "nodes", stepNames, nodeNames)
+			testhelper.Diff(t, "errors", err, tc.expected, testhelper.EquateErrorMessage)
+			for i, n0 := range nodes {
+				s := n0.Step.(*fakeSortStep)
+			next1:
+				for _, r := range s.requires {
+					for _, n1 := range nodes[:i] {
+						if n1.Step.Name() == r {
+							continue next1
+						}
+					}
+					t.Errorf("dependency %s not before %s", r, s.name)
 				}
 			}
 		})

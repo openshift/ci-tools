@@ -1779,59 +1779,6 @@ func nodeNames(nodes []*api.StepNode) []string {
 	return names
 }
 
-func topologicalSort(graph api.StepGraph) (api.OrderedStepList, []error) {
-	var ret api.OrderedStepList
-	var satisfied []api.StepLink
-	seen := make(map[api.Step]struct{})
-	for len(graph) > 0 {
-		var changed bool
-		var waiting []*api.StepNode
-		for _, node := range graph {
-			for _, child := range node.Children {
-				if _, ok := seen[child.Step]; !ok {
-					waiting = append(waiting, child)
-				}
-			}
-			if _, ok := seen[node.Step]; ok {
-				continue
-			}
-			if !api.HasAllLinks(node.Step.Requires(), satisfied) {
-				waiting = append(waiting, node)
-				continue
-			}
-			satisfied = append(satisfied, node.Step.Creates()...)
-			ret = append(ret, node)
-			seen[node.Step] = struct{}{}
-			changed = true
-		}
-		if !changed && len(waiting) > 0 {
-			errMessages := sets.String{}
-			for _, node := range waiting {
-				missing := sets.String{}
-				for _, link := range node.Step.Requires() {
-					if !api.HasAllLinks([]api.StepLink{link}, satisfied) {
-						if msg := link.UnsatisfiableError(); msg != "" {
-							missing.Insert(msg)
-						} else {
-							missing.Insert(fmt.Sprintf("<%#v>", link))
-						}
-					}
-				}
-				// De-Duplicate errors
-				errMessages.Insert(fmt.Sprintf("step %s is missing dependencies: %s", node.Step.Name(), strings.Join(missing.List(), ", ")))
-			}
-			ret := make([]error, 0, errMessages.Len()+1)
-			ret = append(ret, errors.New("steps are missing dependencies"))
-			for _, message := range errMessages.List() {
-				ret = append(ret, errors.New(message))
-			}
-			return nil, ret
-		}
-		graph = waiting
-	}
-	return ret, nil
-}
-
 func printDigraph(w io.Writer, steps []api.Step) error {
 	for _, step := range steps {
 		for _, other := range steps {
@@ -1849,7 +1796,7 @@ func printDigraph(w io.Writer, steps []api.Step) error {
 }
 
 func printExecutionOrder(graph api.StepGraph) []error {
-	ordered, err := topologicalSort(graph)
+	ordered, err := graph.TopologicalSort()
 	if err != nil {
 		return append([]error{errors.New("could not sort nodes")}, err...)
 	}

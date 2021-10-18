@@ -417,7 +417,7 @@ func TestBuildPartialGraph(t *testing.T) {
 			}
 
 			// Apparently we only coincidentally validate the graph during the topologicalSort we do prior to printing it
-			_, errs := topologicalSort(graph)
+			_, errs := graph.TopologicalSort()
 			testhelper.Diff(t, "errors", errs, tc.expectedErrors, testhelper.EquateErrorMessage)
 		})
 	}

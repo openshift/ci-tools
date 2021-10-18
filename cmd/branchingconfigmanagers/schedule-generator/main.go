@@ -27,6 +27,7 @@ type options struct {
 	logLevel          string
 	scheduleDir       string
 	dryRun            bool
+	validateOnly      bool
 	kubernetesOptions flagutil.KubernetesOptions
 }
 
@@ -37,6 +38,7 @@ func gatherOptions() (*options, error) {
 	fs.StringVar(&o.scheduleDir, "schedule-dir", "", "Directory holding schedules.")
 	o.kubernetesOptions.AddFlags(fs)
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Do not mutate cluster state.")
+	fs.BoolVar(&o.validateOnly, "validate-only", false, "Whether to only validate the schedule files.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)
 	}
@@ -48,7 +50,35 @@ func validateOptions(o *options) error {
 	if err != nil {
 		return fmt.Errorf("invalid --log-level: %w", err)
 	}
+	if o.scheduleDir == "" {
+		return fmt.Errorf("--schedule-dir must be specified")
+	}
 	return o.kubernetesOptions.Validate(o.dryRun)
+}
+
+func validateSchedules(schedules ocplifecycle.Config) error {
+	var errs []error
+	for _, lifecyclePhaseByVersions := range schedules {
+		for version, lifecyclePhases := range lifecyclePhaseByVersions {
+			if _, err := ocplifecycle.ParseMajorMinor(version); err != nil {
+				errs = append(errs, fmt.Errorf("invalid version: %s", version))
+			}
+			for i, lifecyclePhase := range lifecyclePhases {
+				if err := lifecyclePhase.Event.Validate(); err != nil {
+					errs = append(errs, fmt.Errorf("unknown event: %s", lifecyclePhase.Event))
+				}
+
+				if i == 0 {
+					continue
+				}
+
+				if lifecyclePhase.When.After(lifecyclePhases[i-1].When.Time) {
+					errs = append(errs, fmt.Errorf("version %s: event `%s` date is after event `%s`", version, lifecyclePhase.Event, lifecyclePhases[i-1].Event))
+				}
+			}
+		}
+	}
+	return kerrors.NewAggregate(errs)
 }
 
 func main() {
@@ -73,23 +103,29 @@ func main() {
 		logrus.WithError(err).Fatal("Could not read schedules.")
 	}
 
-	raw, err := yaml.Marshal(schedules)
-	if err != nil {
-		logrus.WithError(err).Fatal("Could not find marshal schedules")
-	}
-
-	var errors []error
-	for ctx, config := range kubeConfigs {
-		client, err := ctrlruntimeclient.New(&config, ctrlruntimeclient.Options{})
+	if o.validateOnly {
+		if err := validateSchedules(*schedules); err != nil {
+			logrus.WithError(err).Fatal("error while validating the schedules.")
+		}
+	} else {
+		raw, err := yaml.Marshal(schedules)
 		if err != nil {
-			errors = append(errors, fmt.Errorf("could not get client for cluster %q: %w", ctx, err))
+			logrus.WithError(err).Fatal("Could not find marshal schedules")
 		}
-		if err := upsertConfigMap(string(raw), client); err != nil {
-			errors = append(errors, fmt.Errorf("could not upsert configmap for cluster %q: %w", ctx, err))
+
+		var errors []error
+		for ctx, config := range kubeConfigs {
+			client, err := ctrlruntimeclient.New(&config, ctrlruntimeclient.Options{})
+			if err != nil {
+				errors = append(errors, fmt.Errorf("could not get client for cluster %q: %w", ctx, err))
+			}
+			if err := upsertConfigMap(string(raw), client); err != nil {
+				errors = append(errors, fmt.Errorf("could not upsert configmap for cluster %q: %w", ctx, err))
+			}
 		}
-	}
-	if len(errors) > 0 {
-		logrus.WithError(kerrors.NewAggregate(errors)).Fatal("Failed to update cluster state.")
+		if len(errors) > 0 {
+			logrus.WithError(kerrors.NewAggregate(errors)).Fatal("Failed to update cluster state.")
+		}
 	}
 }
 

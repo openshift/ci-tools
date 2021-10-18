@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // Config is an OCP lifecycle config. It holds a top-level product key (e.G. OCP)
@@ -38,11 +39,32 @@ const (
 	// LifecycleEventEndOfLife marks the moment that a version is no longer supported and release branches
 	// close for good for this version.
 	LifecycleEventEndOfLife LifecycleEvent = "end-of-life"
+	// LifecycleEventEndOfFullSupport marks the moment that a version is no longer supported fully.
+	LifecycleEventEndOfFullSupport LifecycleEvent = "end-of-full-support"
+	// LifecycleEventEndOfMaintenanceSupport marks the moment that a version is no longer supported.
+	LifecycleEventEndOfMaintenanceSupport LifecycleEvent = "end-of-maintenance-support"
 )
 
+func (le LifecycleEvent) Validate() error {
+	events := sets.NewString([]string{
+		string(LifecycleEventOpen),
+		string(LifecycleEventFeatureFreeze),
+		string(LifecycleEventCodeFreeze),
+		string(LifecycleEventGenerallyAvailable),
+		string(LifecycleEventEndOfLife),
+		string(LifecycleEventEndOfFullSupport),
+		string(LifecycleEventEndOfMaintenanceSupport),
+	}...)
+
+	if !events.Has(string(le)) {
+		return fmt.Errorf("unknown event: %s", le)
+	}
+	return nil
+}
+
 type MajorMinor struct {
-	Major int
-	Minor int
+	Major int `json:"major"`
+	Minor int `json:"minor"`
 }
 
 func (m MajorMinor) WithIncrementedMinor(increment int) MajorMinor {

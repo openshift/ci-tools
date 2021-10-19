@@ -852,7 +852,7 @@ func (o *options) Run() []error {
 	}
 
 	if err := printExecutionOrder(nodes); err != nil {
-		return []error{fmt.Errorf("could not print execution order: %w", err)}
+		return err
 	}
 
 	graph := calculateGraph(nodes)
@@ -1779,7 +1779,7 @@ func nodeNames(nodes []*api.StepNode) []string {
 	return names
 }
 
-func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
+func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, []error) {
 	var sortedNodes []*api.StepNode
 	var satisfied []api.StepLink
 	api.IterateAllEdges(nodes, func(inner *api.StepNode) {
@@ -1822,10 +1822,12 @@ func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 				// De-Duplicate errors
 				errMessages.Insert(fmt.Sprintf("step %s is missing dependencies: %s", node.Step.Name(), strings.Join(missing.List(), ", ")))
 			}
+			ret := make([]error, 0, errMessages.Len()+1)
+			ret = append(ret, errors.New("steps are missing dependencies"))
 			for _, message := range errMessages.List() {
-				logrus.Info(message)
+				ret = append(ret, errors.New(message))
 			}
-			return nil, errors.New("steps are missing dependencies")
+			return nil, ret
 		}
 		nodes = waiting
 	}
@@ -1848,10 +1850,10 @@ func printDigraph(w io.Writer, steps []api.Step) error {
 	return nil
 }
 
-func printExecutionOrder(nodes []*api.StepNode) error {
+func printExecutionOrder(nodes []*api.StepNode) []error {
 	ordered, err := topologicalSort(nodes)
 	if err != nil {
-		return fmt.Errorf("could not sort nodes: %w", err)
+		return append([]error{errors.New("could not sort nodes")}, err...)
 	}
 	logrus.Infof("Running %s", strings.Join(nodeNames(ordered), ", "))
 	return nil

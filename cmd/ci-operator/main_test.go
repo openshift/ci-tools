@@ -403,7 +403,7 @@ func TestBuildPartialGraph(t *testing.T) {
 			targetName: "[images]",
 			expectedErrors: []error{
 				errors.New("steps are missing dependencies"),
-				errors.New(`step [output::] is missing dependencies: <&api.internalImageStreamLink{name:"stable"}>`),
+				errors.New(`step [output::] is missing dependencies: <&api.internalImageStreamLink{name:"stable"}>, <&api.internalImageStreamTagLink{name:"pipeline", tag:"oc-bin-image", unsatisfiableError:""}>`),
 				errors.New(`step oc-bin-image is missing dependencies: "cli" is neither an imported nor a built image`),
 			},
 		},

@@ -1782,9 +1782,6 @@ func nodeNames(nodes []*api.StepNode) []string {
 func topologicalSort(graph api.StepGraph) (api.OrderedStepList, []error) {
 	var ret api.OrderedStepList
 	var satisfied []api.StepLink
-	graph.IterateAllEdges(func(inner *api.StepNode) {
-		satisfied = append(satisfied, inner.Step.Creates()...)
-	})
 	seen := make(map[api.Step]struct{})
 	for len(graph) > 0 {
 		var changed bool
@@ -1802,6 +1799,7 @@ func topologicalSort(graph api.StepGraph) (api.OrderedStepList, []error) {
 				waiting = append(waiting, node)
 				continue
 			}
+			satisfied = append(satisfied, node.Step.Creates()...)
 			ret = append(ret, node)
 			seen[node.Step] = struct{}{}
 			changed = true

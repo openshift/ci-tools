@@ -126,6 +126,7 @@ const (
 	ciOperator                 = "ci-operator"
 	buildFarm                  = "build-farm"
 	githubLdapUserGroupCreator = "github-ldap-user-group-creator"
+	promotedImageGovernor      = "promoted-image-governor"
 	ci                         = "ci"
 )
 

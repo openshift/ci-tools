@@ -1779,61 +1779,6 @@ func nodeNames(nodes []*api.StepNode) []string {
 	return names
 }
 
-func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, []error) {
-	var sortedNodes []*api.StepNode
-	var satisfied []api.StepLink
-	api.IterateAllEdges(nodes, func(inner *api.StepNode) {
-		satisfied = append(satisfied, inner.Step.Creates()...)
-	})
-	seen := make(map[api.Step]struct{})
-	for len(nodes) > 0 {
-		var changed bool
-		var waiting []*api.StepNode
-		for _, node := range nodes {
-			for _, child := range node.Children {
-				if _, ok := seen[child.Step]; !ok {
-					waiting = append(waiting, child)
-				}
-			}
-			if _, ok := seen[node.Step]; ok {
-				continue
-			}
-			if !api.HasAllLinks(node.Step.Requires(), satisfied) {
-				waiting = append(waiting, node)
-				continue
-			}
-			sortedNodes = append(sortedNodes, node)
-			seen[node.Step] = struct{}{}
-			changed = true
-		}
-		if !changed && len(waiting) > 0 {
-			errMessages := sets.String{}
-			for _, node := range waiting {
-				missing := sets.String{}
-				for _, link := range node.Step.Requires() {
-					if !api.HasAllLinks([]api.StepLink{link}, satisfied) {
-						if msg := link.UnsatisfiableError(); msg != "" {
-							missing.Insert(msg)
-						} else {
-							missing.Insert(fmt.Sprintf("<%#v>", link))
-						}
-					}
-				}
-				// De-Duplicate errors
-				errMessages.Insert(fmt.Sprintf("step %s is missing dependencies: %s", node.Step.Name(), strings.Join(missing.List(), ", ")))
-			}
-			ret := make([]error, 0, errMessages.Len()+1)
-			ret = append(ret, errors.New("steps are missing dependencies"))
-			for _, message := range errMessages.List() {
-				ret = append(ret, errors.New(message))
-			}
-			return nil, ret
-		}
-		nodes = waiting
-	}
-	return sortedNodes, nil
-}
-
 func printDigraph(w io.Writer, steps []api.Step) error {
 	for _, step := range steps {
 		for _, other := range steps {
@@ -1850,8 +1795,8 @@ func printDigraph(w io.Writer, steps []api.Step) error {
 	return nil
 }
 
-func printExecutionOrder(nodes []*api.StepNode) []error {
-	ordered, err := topologicalSort(nodes)
+func printExecutionOrder(graph api.StepGraph) []error {
+	ordered, err := graph.TopologicalSort()
 	if err != nil {
 		return append([]error{errors.New("could not sort nodes")}, err...)
 	}
@@ -1859,12 +1804,12 @@ func printExecutionOrder(nodes []*api.StepNode) []error {
 	return nil
 }
 
-func calculateGraph(nodes []*api.StepNode) *api.CIOperatorStepGraph {
+func calculateGraph(graph api.StepGraph) *api.CIOperatorStepGraph {
 	var result api.CIOperatorStepGraph
-	api.IterateAllEdges(nodes, func(n *api.StepNode) {
+	graph.IterateAllEdges(func(n *api.StepNode) {
 		r := api.CIOperatorStepDetails{CIOperatorStepDetailInfo: api.CIOperatorStepDetailInfo{StepName: n.Step.Name(), Description: n.Step.Description()}}
 		for _, requirement := range n.Step.Requires() {
-			api.IterateAllEdges(nodes, func(inner *api.StepNode) {
+			graph.IterateAllEdges(func(inner *api.StepNode) {
 				if api.HasAnyLinks([]api.StepLink{requirement}, inner.Step.Creates()) {
 					r.Dependencies = append(r.Dependencies, inner.Step.Name())
 				}
@@ -1876,8 +1821,8 @@ func calculateGraph(nodes []*api.StepNode) *api.CIOperatorStepGraph {
 	return &result
 }
 
-func validateGraph(nodes []*api.StepNode) []error {
-	errs := api.ValidateGraph(nodes)
+func validateGraph(graph api.StepGraph) []error {
+	errs := graph.Validate()
 	var noLeaseClient bool
 	for _, err := range errs {
 		if errors.Is(err, steps.NoLeaseClientErr) {

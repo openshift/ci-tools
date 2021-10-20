@@ -102,6 +102,6 @@ func UI(t testhelper.TestingTInterface, dataDir string, parent context.Context, 
 	podScaler.RunFromFrameworkRunner(t, parent, stream)
 	podScalerHost := "http://" + serverHostname + ":" + podScaler.ClientFlags()[0]
 	t.Logf("pod-scaler UI is running at %s", podScalerHost)
-	podScaler.Ready(t, func(o *testhelper.ReadyOptions) { o.WaitFor = 200 })
+	podScaler.Ready(t, func(o *testhelper.ReadyOptions) { o.WaitFor = 300 })
 	return podScalerHost
 }

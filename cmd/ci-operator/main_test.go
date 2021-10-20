@@ -20,6 +20,7 @@ import (
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	"k8s.io/utils/diff"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -419,6 +420,74 @@ func TestBuildPartialGraph(t *testing.T) {
 			// Apparently we only coincidentally validate the graph during the topologicalSort we do prior to printing it
 			_, errs := graph.TopologicalSort()
 			testhelper.Diff(t, "errors", errs, tc.expectedErrors, testhelper.EquateErrorMessage)
+		})
+	}
+}
+
+type fakeValidationStep struct {
+	name string
+	err  error
+}
+
+func (*fakeValidationStep) Inputs() (api.InputDefinition, error) { return nil, nil }
+func (*fakeValidationStep) Run(ctx context.Context) error        { return nil }
+func (*fakeValidationStep) Requires() []api.StepLink             { return nil }
+func (*fakeValidationStep) Creates() []api.StepLink              { return nil }
+func (f *fakeValidationStep) Name() string                       { return f.name }
+func (*fakeValidationStep) Description() string                  { return "" }
+func (*fakeValidationStep) Provides() api.ParameterMap           { return nil }
+func (f *fakeValidationStep) Validate() error                    { return f.err }
+func (*fakeValidationStep) Objects() []ctrlruntimeclient.Object  { return nil }
+
+func TestValidateSteps(t *testing.T) {
+	valid0 := fakeValidationStep{name: "valid0"}
+	valid1 := fakeValidationStep{name: "valid1"}
+	valid2 := fakeValidationStep{name: "valid2"}
+	valid3 := fakeValidationStep{name: "valid3"}
+	invalid0 := fakeValidationStep{
+		name: "invalid0",
+		err:  errors.New("invalid0"),
+	}
+	for _, tc := range []struct {
+		name     string
+		expected bool
+		steps    api.OrderedStepList
+	}{{
+		name:     "empty graph",
+		expected: true,
+	}, {
+		name:     "valid graph",
+		expected: true,
+		steps: api.OrderedStepList{{
+			Step: &valid0,
+			Children: []*api.StepNode{
+				{Step: &valid1},
+				{Step: &valid2},
+			},
+		}, {
+			Step: &valid3,
+		}},
+	}, {
+		name: "invalid graph",
+		steps: api.OrderedStepList{{
+			Step: &valid0,
+			Children: []*api.StepNode{
+				{Step: &valid1},
+				{Step: &valid2},
+			},
+		}, {
+			Step: &invalid0,
+			Children: []*api.StepNode{
+				{Step: &valid1},
+				{Step: &valid2},
+			},
+		}},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateSteps(tc.steps)
+			if (err == nil) != tc.expected {
+				t.Errorf("got %v, want %v", err == nil, tc.expected)
+			}
 		})
 	}
 }

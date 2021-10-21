@@ -1,0 +1,131 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+parameters:
+- description: The PR to deploy from.
+  name: PULL_REQUEST
+  required: true
+- description: The fork to deploy from.
+  name: USER
+  required: true
+- description: The branch to deploy from.
+  name: BRANCH
+  required: true
+- description: The API host.
+  name: API_HOST
+  required: true
+objects:
+- kind: ImageStream
+  apiVersion: image.openshift.io/v1
+  metadata:
+    namespace: ci-tools-${PULL_REQUEST}
+    name: output
+  spec:
+    lookupPolicy:
+      local: true
+- apiVersion: build.openshift.io/v1
+  kind: BuildConfig
+  metadata:
+    name: repo-init-ui
+    namespace: ci-tools-${PULL_REQUEST}
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: "output:repo-init-ui"
+    source:
+      dockerfile: |
+        FROM registry.ci.openshift.org/openshift/release:golang-1.16
+
+        ENV NODE_VERSION=12.6.0
+        RUN yum install -y curl
+        RUN curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.34.0/install.sh | bash
+        ENV NVM_DIR=/root/.nvm
+        RUN . "$NVM_DIR/nvm.sh" && nvm install ${NODE_VERSION}
+        RUN . "$NVM_DIR/nvm.sh" && nvm use v${NODE_VERSION}
+        RUN . "$NVM_DIR/nvm.sh" && nvm alias default v${NODE_VERSION}
+        ENV PATH="/root/.nvm/versions/node/v${NODE_VERSION}/bin/:${PATH}"
+        ENV REACT_APP_API_URI="https://${API_HOST}/api"
+        RUN node --version
+        RUN npm --version
+
+        COPY . .
+        RUN \
+          npm --prefix ./cmd/repo-init/frontend install && \
+          npm --prefix ./cmd/repo-init/frontend run build && \
+          go install ./cmd/repo-init/
+      git:
+        ref: ${BRANCH}
+        uri: https://github.com/${USER}/ci-tools.git
+      contextDir: ./
+      type: Git
+    strategy:
+      dockerStrategy:
+        imageOptimizationPolicy: SkipLayers
+      type: Docker
+    triggers:
+      - type: ConfigChange
+- apiVersion: v1
+  kind: Service
+  metadata:
+    namespace: ci-tools-${PULL_REQUEST}
+    labels:
+      app: repo-init-ui
+    name: repo-init-ui
+  spec:
+    ports:
+    - name: ui
+      port: 80
+      protocol: TCP
+      targetPort: 8082
+    selector:
+      app: repo-init-ui
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    labels:
+    name: repo-init-ui
+    namespace: ci-tools-${PULL_REQUEST}
+  spec:
+    tls:
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect
+    port:
+      targetPort: ui
+    to:
+      kind: Service
+      name: repo-init-ui
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    namespace: ci-tools-${PULL_REQUEST}
+    name: repo-init-ui
+    annotations:
+      image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"output:repo-init-ui"},"fieldPath":"spec.template.spec.containers[?(@.name==\"repo-init-ui\")].image"}]'
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: repo-init-ui
+    template:
+      metadata:
+        labels:
+          app: repo-init-ui
+      spec:
+        containers:
+          - name: repo-init-ui
+            image: "output:repo-init-ui"
+            imagePullPolicy: Always
+            command:
+              - /go/bin/repo-init
+              - -loglevel=debug
+              - -mode=ui
+              - -port=8082
+            resources:
+              requests:
+                memory: "2Gi"
+                cpu: "500m"
+              limits:
+                memory: "4Gi"
+            ports:
+              - name: ui
+                containerPort: 8082

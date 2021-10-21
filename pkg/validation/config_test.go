@@ -78,7 +78,7 @@ func TestValidateBuildRoot(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := validateBuildRootImageConfiguration(newConfigContext().addField("build_root"), tc.buildRootImageConfig, tc.hasImages); (err != nil) && tc.expectedValid {
+			if err := validateBuildRootImageConfiguration(NewConfigContext().AddField("build_root"), tc.buildRootImageConfig, tc.hasImages); (err != nil) && tc.expectedValid {
 				t.Errorf("expected to be valid, got: %v", err)
 			} else if !tc.expectedValid && err == nil {
 				t.Error("expected to be invalid, but returned valid")
@@ -359,7 +359,7 @@ func TestValidateImages(t *testing.T) {
 			config := &api.ReleaseBuildConfiguration{
 				Images: testCase.input,
 			}
-			if actual, expected := validateImages(newConfigContext().addField("images"), config.Images), testCase.output; !reflect.DeepEqual(actual, expected) {
+			if actual, expected := ValidateImages(NewConfigContext().AddField("images"), config.Images), testCase.output; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
 					return x.Error() == y.Error()
 				})))
@@ -483,7 +483,7 @@ func TestValidateOperator(t *testing.T) {
 			linkFunc := func(string) api.StepLink {
 				return testCase.withResolvesTo
 			}
-			if actual, expected := validateOperator(newConfigContext().addField("operator"), testCase.input, linkFunc), testCase.output; !reflect.DeepEqual(actual, expected) {
+			if actual, expected := validateOperator(NewConfigContext().AddField("operator"), testCase.input, linkFunc), testCase.output; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
 					return x.Error() == y.Error()
 				})))

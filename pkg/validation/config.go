@@ -29,20 +29,20 @@ func newSingleUseValidator() Validator {
 }
 
 func (v *Validator) IsValidRuntimeConfiguration(config *api.ReleaseBuildConfiguration) error {
-	return v.validateConfiguration(newConfigContext(), config, "", "", false)
+	return v.validateConfiguration(NewConfigContext(), config, "", "", false)
 }
 
 // IsValidResolvedConfiguration behaves as ValidateAtRuntime and also validates that all
 // test steps are fully resolved.
 func (v *Validator) IsValidResolvedConfiguration(config *api.ReleaseBuildConfiguration) error {
 	config.Default()
-	return v.validateConfiguration(newConfigContext(), config, "", "", true)
+	return v.validateConfiguration(NewConfigContext(), config, "", "", true)
 }
 
 // IsValidConfiguration validates all the configuration's values.
 func (v *Validator) IsValidConfiguration(config *api.ReleaseBuildConfiguration, org, repo string) error {
 	config.Default()
-	return v.validateConfiguration(newConfigContext(), config, org, repo, false)
+	return v.validateConfiguration(NewConfigContext(), config, org, repo, false)
 }
 
 // configContext contains data structures used for validations across fields.
@@ -54,7 +54,7 @@ type configContext struct {
 }
 
 // newConfigContext creates a top-level, empty context.
-func newConfigContext() *configContext {
+func NewConfigContext() *configContext {
 	return &configContext{
 		pipelineImages: make(map[api.PipelineImageStreamTagReference]string),
 	}
@@ -64,7 +64,7 @@ func (c *configContext) errorf(format string, args ...interface{}) error {
 	return c.field.errorf(format, args...)
 }
 
-func (c *configContext) addField(name string) *configContext {
+func (c *configContext) AddField(name string) *configContext {
 	ret := *c
 	ret.field = ret.field.addField(name)
 	return &ret
@@ -98,7 +98,7 @@ func (c *configContext) addPipelineImage(name api.PipelineImageStreamTagReferenc
 // repo structure
 func IsValidRuntimeConfiguration(config *api.ReleaseBuildConfiguration) error {
 	v := newSingleUseValidator()
-	return v.validateConfiguration(newConfigContext(), config, "", "", false)
+	return v.validateConfiguration(NewConfigContext(), config, "", "", false)
 }
 
 // ValidateResolved behaves as ValidateAtRuntime and also validates that all
@@ -106,14 +106,14 @@ func IsValidRuntimeConfiguration(config *api.ReleaseBuildConfiguration) error {
 func IsValidResolvedConfiguration(config *api.ReleaseBuildConfiguration) error {
 	config.Default()
 	v := newSingleUseValidator()
-	return v.validateConfiguration(newConfigContext(), config, "", "", true)
+	return v.validateConfiguration(NewConfigContext(), config, "", "", true)
 }
 
 // Validate validates all the configuration's values.
 func IsValidConfiguration(config *api.ReleaseBuildConfiguration, org, repo string) error {
 	config.Default()
 	v := newSingleUseValidator()
-	return v.validateConfiguration(newConfigContext(), config, org, repo, false)
+	return v.validateConfiguration(NewConfigContext(), config, org, repo, false)
 }
 
 func (v *Validator) validateConfiguration(ctx *configContext, config *api.ReleaseBuildConfiguration, org, repo string, resolved bool) error {
@@ -128,22 +128,13 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 		ctx.pipelineImages[api.PipelineImageStreamTagReferenceRPMs] = "rpm_build_commands"
 	}
 	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config, org, repo)...)
-	validationErrors = append(validationErrors, validateBuildRootImageConfiguration(ctx.addField("build_root"), config.InputConfiguration.BuildRootImage, len(config.Images) > 0)...)
-	releases := sets.NewString()
-	for name := range config.Releases {
-		releases.Insert(name)
-	}
+	validationErrors = append(validationErrors, validateBuildRootImageConfiguration(ctx.AddField("build_root"), config.InputConfiguration.BuildRootImage, len(config.Images) > 0)...)
+
 	if config.Operator != nil {
-		// validateOperator needs a method that maps `substitute.with` values to image links
-		// to validate the value is meaningful in the context of the configuration
-		linkForImage := func(image string) api.StepLink {
-			imageStream, name, _ := config.DependencyParts(api.StepDependency{Name: image}, nil)
-			return api.LinkForImage(imageStream, name)
-		}
-		validationErrors = append(validationErrors, validateOperator(ctx.addField("operator"), config.Operator, linkForImage)...)
+		validationErrors = append(validationErrors, ValidateOperator(ctx.AddField("operator"), config)...)
 	}
-	validationErrors = append(validationErrors, validateBaseImages(ctx.addField("base_images"), config.InputConfiguration.BaseImages)...)
-	validationErrors = append(validationErrors, validateBaseRPMImages(ctx.addField("base_rpm_images"), config.InputConfiguration.BaseRPMImages)...)
+	validationErrors = append(validationErrors, ValidateBaseImages(ctx.AddField("base_images"), config.InputConfiguration.BaseImages)...)
+	validationErrors = append(validationErrors, validateBaseRPMImages(ctx.AddField("base_rpm_images"), config.InputConfiguration.BaseRPMImages)...)
 	// Validate tag_specification
 	if config.InputConfiguration.ReleaseTagConfiguration != nil {
 		validationErrors = append(validationErrors, validateReleaseTagConfiguration("tag_specification", *config.InputConfiguration.ReleaseTagConfiguration)...)
@@ -155,14 +146,8 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 	}
 
 	validationErrors = append(validationErrors, validateReleases("releases", config.Releases, config.ReleaseTagConfiguration != nil)...)
-	validationErrors = append(validationErrors, validateImages(ctx.addField("images"), config.Images)...)
-	if tests := config.Tests; len(tests) != 0 {
-		images := sets.NewString()
-		for _, i := range config.Images {
-			images.Insert(string(i.To))
-		}
-		validationErrors = append(validationErrors, v.validateTestStepConfiguration(ctx, "tests", config.Tests, config.ReleaseTagConfiguration, releases, images, resolved)...)
-	}
+	validationErrors = append(validationErrors, ValidateImages(ctx.AddField("images"), config.Images)...)
+	validationErrors = append(validationErrors, v.ValidateTestStepConfiguration(ctx, config, resolved)...)
 	// this validation brings together a large amount of data from separate
 	// parts of the configuration, so it's written as a standalone method
 	validationErrors = append(validationErrors, validateTestStepDependencies(config)...)
@@ -183,6 +168,24 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 	}
 }
 
+func (v *Validator) ValidateTestStepConfiguration(ctx *configContext, config *api.ReleaseBuildConfiguration, resolved bool) []error {
+	var validationErrors []error
+
+	releases := sets.NewString()
+	for name := range config.Releases {
+		releases.Insert(name)
+	}
+
+	if tests := config.Tests; len(tests) != 0 {
+		images := sets.NewString()
+		for _, i := range config.Images {
+			images.Insert(string(i.To))
+		}
+		validationErrors = append(validationErrors, v.validateTestStepConfiguration(ctx, "tests", config.Tests, config.ReleaseTagConfiguration, releases, images, resolved)...)
+	}
+	return validationErrors
+}
+
 func validateBuildRootImageConfiguration(ctx *configContext, input *api.BuildRootImageConfiguration, hasImages bool) (ret []error) {
 	if input == nil {
 		if hasImages {
@@ -200,7 +203,7 @@ func validateBuildRootImageConfiguration(ctx *configContext, input *api.BuildRoo
 	} else if input.ProjectImageBuild == nil && input.ImageStreamTagReference == nil && !input.FromRepository {
 		ret = append(ret, ctx.errorf("you have to specify one of project_image, image_stream_tag or from_repository"))
 	} else if input.ImageStreamTagReference != nil {
-		ret = append(ret, validateBuildRootImageStreamTag(ctx.addField("image_stream_tag"), *input.ImageStreamTagReference)...)
+		ret = append(ret, validateBuildRootImageStreamTag(ctx.AddField("image_stream_tag"), *input.ImageStreamTagReference)...)
 	}
 	if err := ctx.addPipelineImage(api.PipelineImageStreamTagReferenceRoot); err != nil {
 		ret = append(ret, err)
@@ -211,18 +214,18 @@ func validateBuildRootImageConfiguration(ctx *configContext, input *api.BuildRoo
 func validateBuildRootImageStreamTag(ctx *configContext, buildRoot api.ImageStreamTagReference) []error {
 	var validationErrors []error
 	if len(buildRoot.Namespace) == 0 {
-		validationErrors = append(validationErrors, ctx.addField("namespace").errorf("value required but not provided"))
+		validationErrors = append(validationErrors, ctx.AddField("namespace").errorf("value required but not provided"))
 	}
 	if len(buildRoot.Name) == 0 {
-		validationErrors = append(validationErrors, ctx.addField("name").errorf("value required but not provided"))
+		validationErrors = append(validationErrors, ctx.AddField("name").errorf("value required but not provided"))
 	}
 	if len(buildRoot.Tag) == 0 {
-		validationErrors = append(validationErrors, ctx.addField("tag").errorf("value required but not provided"))
+		validationErrors = append(validationErrors, ctx.AddField("tag").errorf("value required but not provided"))
 	}
 	return validationErrors
 }
 
-func validateImages(ctx *configContext, images []api.ProjectDirectoryImageBuildStepConfiguration) []error {
+func ValidateImages(ctx *configContext, images []api.ProjectDirectoryImageBuildStepConfiguration) []error {
 	var validationErrors []error
 	for num, image := range images {
 		ctxN := ctx.addIndex(num)
@@ -239,19 +242,34 @@ func validateImages(ctx *configContext, images []api.ProjectDirectoryImageBuildS
 	return validationErrors
 }
 
+func ValidateOperator(ctx *configContext, config *api.ReleaseBuildConfiguration) []error {
+	// validateOperator needs a method that maps `substitute.with` values to image links
+	// to validate the value is meaningful in the context of the configuration
+	linkForImage := func(image string) api.StepLink {
+		return LinkForImage(image, config)
+	}
+
+	return validateOperator(ctx, config.Operator, linkForImage)
+}
+
+func LinkForImage(image string, config *api.ReleaseBuildConfiguration) api.StepLink {
+	imageStream, name, _ := config.DependencyParts(api.StepDependency{Name: image}, nil)
+	return api.LinkForImage(imageStream, name)
+}
+
 func validateOperator(ctx *configContext, input *api.OperatorStepConfiguration, linkForImage func(string) api.StepLink) []error {
 	var validationErrors []error
 	if err := ctx.addPipelineImage(api.PipelineImageStreamTagReferenceBundleSource); err != nil {
 		validationErrors = append(validationErrors, err)
 	}
 	for num, bundle := range input.Bundles {
-		ctxN := ctx.addField("bundles").addIndex(num)
+		ctxN := ctx.AddField("bundles").addIndex(num)
 		ctxImage := ctxN
 		imageName := bundle.As
 		if imageName == "" {
 			imageName = api.BundleName(num)
 		} else {
-			ctxImage = ctxN.addField("as")
+			ctxImage = ctxN.AddField("as")
 		}
 		if err := ctxImage.addPipelineImage(api.PipelineImageStreamTagReference(imageName)); err != nil {
 			validationErrors = append(validationErrors, err)
@@ -260,34 +278,43 @@ func validateOperator(ctx *configContext, input *api.OperatorStepConfiguration, 
 			validationErrors = append(validationErrors, err)
 		}
 		if bundle.As == "" && bundle.BaseIndex != "" {
-			validationErrors = append(validationErrors, ctxN.addField("base_index").errorf("base_index requires as to be set"))
+			validationErrors = append(validationErrors, ctxN.AddField("base_index").errorf("base_index requires as to be set"))
 		}
 		if bundle.UpdateGraph != "" {
 			if bundle.BaseIndex == "" {
-				validationErrors = append(validationErrors, ctxN.addField("update_graph").errorf("update_graph requires base_index to be set"))
+				validationErrors = append(validationErrors, ctxN.AddField("update_graph").errorf("update_graph requires base_index to be set"))
 			}
 			if bundle.UpdateGraph != api.IndexUpdateSemver && bundle.UpdateGraph != api.IndexUpdateSemverSkippatch && bundle.UpdateGraph != api.IndexUpdateReplaces {
-				validationErrors = append(validationErrors, ctxN.addField("update_graph").errorf("update_graph must be %s, %s, or %s", api.IndexUpdateSemver, api.IndexUpdateSemverSkippatch, api.IndexUpdateReplaces))
+				validationErrors = append(validationErrors, ctxN.AddField("update_graph").errorf("update_graph must be %s, %s, or %s", api.IndexUpdateSemver, api.IndexUpdateSemverSkippatch, api.IndexUpdateReplaces))
 			}
 		}
 	}
 	for num, sub := range input.Substitutions {
-		ctxN := ctx.addField("substitute").addIndex(num)
-		if sub.PullSpec == "" {
-			validationErrors = append(validationErrors, ctxN.addField("pullspec").errorf("must be set"))
-		}
-		if sub.With == "" {
-			validationErrors = append(validationErrors, ctxN.addField("with").errorf("must be set"))
-		}
+		ctxN := ctx.AddField("substitute").addIndex(num)
 
-		if link := linkForImage(sub.With); link == nil {
-			validationErrors = append(validationErrors, ctxN.addField("with").errorf("could not resolve '%s' to an image involved in the config", sub.With))
+		if err := ValidateOperatorSubstitution(ctxN, sub, linkForImage); err != nil {
+			validationErrors = append(validationErrors, err)
 		}
 	}
 	return validationErrors
 }
 
-func validateBaseImages(ctx *configContext, images map[string]api.ImageStreamTagReference) []error {
+func ValidateOperatorSubstitution(ctx *configContext, sub api.PullSpecSubstitution, linkForImage func(string) api.StepLink) error {
+	if sub.PullSpec == "" {
+		return ctx.AddField("pullspec").errorf("must be set")
+	}
+	if sub.With == "" {
+		return ctx.AddField("with").errorf("must be set")
+	}
+
+	if link := linkForImage(sub.With); link == nil {
+		return ctx.AddField("with").errorf("could not resolve '%s' to an image involved in the config", sub.With)
+	}
+
+	return nil
+}
+
+func ValidateBaseImages(ctx *configContext, images map[string]api.ImageStreamTagReference) []error {
 	ret := validateImageStreamTagReferenceMap("base_images", images)
 	for name := range images {
 		if err := ctx.addKey(name).addPipelineImage(api.PipelineImageStreamTagReference(name)); err != nil {

@@ -1,0 +1,7 @@
+html, body, #root {
+  height: 100%;
+}
+
+#primary-app-container, .pf-l-grid {
+  height: 100%;
+}

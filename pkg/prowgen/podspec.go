@@ -84,6 +84,8 @@ type CiOperatorPodSpecGenerator interface {
 	// Build returns the PodSpec built by taking the default PodSpec, applying
 	// all added mutators and sorting several list fields by their keys.
 	Build() (*corev1.PodSpec, error)
+	// MustBuild is same as Build but panics whenever an error would be reported
+	MustBuild() *corev1.PodSpec
 }
 
 // NewCiOperatorPodSpecGenerator returns a new CiOperatorPodSpecGenerator instance
@@ -620,4 +622,14 @@ func (c *ciOperatorPodSpecGenerator) Build() (*corev1.PodSpec, error) {
 	}
 
 	return spec, kerrors.NewAggregate(c.buildErrors)
+}
+
+// MustBuild produces and returns a new `PodSpec` containing all configured elements
+// It panics on building errors.
+func (c *ciOperatorPodSpecGenerator) MustBuild() *corev1.PodSpec {
+	podSpec, err := c.Build()
+	if err != nil {
+		panic("BUG: PodSpec generator failed")
+	}
+	return podSpec
 }

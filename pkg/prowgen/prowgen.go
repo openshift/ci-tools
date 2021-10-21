@@ -65,13 +65,6 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		}
 		return g
 	}
-	mustBuild := func(g CiOperatorPodSpecGenerator) *corev1.PodSpec {
-		podSpec, err := g.Build()
-		if err != nil {
-			panic("BUG: PodSpec generator failed. This should never happen.")
-		}
-		return podSpec
-	}
 	for _, element := range configSpec.Tests {
 		g := podSpecGen()
 		g.Add(Secrets(element.Secret), Secrets(element.Secrets...))
@@ -137,20 +130,20 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			if element.Interval != nil {
 				interval = *element.Interval
 			}
-			periodic := generatePeriodicForTest(element.As, info, mustBuild(g), true, cron, interval, element.ReleaseController, configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.Timeout)
+			periodic := generatePeriodicForTest(element.As, info, g.MustBuild(), true, cron, interval, element.ReleaseController, configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.Timeout)
 			if element.Cluster != "" {
 				periodic.Labels[cioperatorapi.ClusterLabel] = string(element.Cluster)
 			}
 			periodics = append(periodics, *periodic)
 		} else if element.Postsubmit {
-			postsubmit := generatePostsubmitForTest(element.As, info, mustBuild(g), configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.Timeout)
+			postsubmit := generatePostsubmitForTest(element.As, info, g.MustBuild(), configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.Timeout)
 			postsubmit.MaxConcurrency = 1
 			if element.Cluster != "" {
 				postsubmit.Labels[cioperatorapi.ClusterLabel] = string(element.Cluster)
 			}
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
 		} else {
-			presubmit := *generatePresubmitForTest(element.As, info, mustBuild(g), configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.RunIfChanged, element.SkipIfOnlyChanged, element.Optional, element.Timeout)
+			presubmit := *generatePresubmitForTest(element.As, info, g.MustBuild(), configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.RunIfChanged, element.SkipIfOnlyChanged, element.Optional, element.Timeout)
 			v, requestingKVM := configSpec.Resources.RequirementsForStep(element.As).Requests[cioperatorapi.KVMDeviceLabel]
 			if requestingKVM {
 				presubmit.Labels[cioperatorapi.KVMDeviceLabel] = v
@@ -179,11 +172,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		if promotion.PromotesOfficialImages(configSpec) {
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
-		podSpec := mustBuild(podSpecGen().Add(Targets(presubmitTargets...)))
+		podSpec := podSpecGen().Add(Targets(presubmitTargets...)).MustBuild()
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false, nil))
 
 		if configSpec.PromotionConfiguration != nil {
-			podSpec := mustBuild(podSpecGen().Add(Promotion(), Targets(imageTargets.List()...)))
+			podSpec := podSpecGen().Add(Promotion(), Targets(imageTargets.List()...)).MustBuild()
 			postsubmit := generatePostsubmitForTest("images", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, nil)
 			postsubmit.MaxConcurrency = 1
 			if postsubmit.Labels == nil {
@@ -202,11 +195,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 				continue
 			}
 			indexName := api.IndexName(bundle.As)
-			podSpec := mustBuild(podSpecGen().Add(Targets(indexName)))
+			podSpec := podSpecGen().Add(Targets(indexName)).MustBuild()
 			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(indexName, info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false, nil))
 		}
 		if containsUnnamedBundle {
-			podSpec := mustBuild(podSpecGen().Add(Targets(string(api.PipelineImageStreamTagReferenceIndexImage))))
+			podSpec := podSpecGen().Add(Targets(string(api.PipelineImageStreamTagReferenceIndexImage))).MustBuild()
 			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(string(api.PipelineImageStreamTagReferenceIndexImage), info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false, nil))
 		}
 	}

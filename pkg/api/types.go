@@ -1101,6 +1101,7 @@ const (
 	ClusterProfileLibvirtS390x          ClusterProfile = "libvirt-s390x"
 	ClusterProfileOpenStack             ClusterProfile = "openstack"
 	ClusterProfileOpenStackKuryr        ClusterProfile = "openstack-kuryr"
+	ClusterProfileOpenStackNFV          ClusterProfile = "openstack-nfv"
 	ClusterProfileOpenStackMechaCentral ClusterProfile = "openstack-vh-mecha-central"
 	ClusterProfileOpenStackMechaAz0     ClusterProfile = "openstack-vh-mecha-az0"
 	ClusterProfileOpenStackOsuosl       ClusterProfile = "openstack-osuosl"
@@ -1149,6 +1150,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileLibvirtS390x,
 		ClusterProfileOpenStack,
 		ClusterProfileOpenStackKuryr,
+		ClusterProfileOpenStackNFV,
 		ClusterProfileOpenStackMechaCentral,
 		ClusterProfileOpenStackMechaAz0,
 		ClusterProfileOpenStackOsuosl,
@@ -1219,6 +1221,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "openstack"
 	case ClusterProfileOpenStackKuryr:
 		return "openstack-kuryr"
+	case ClusterProfileOpenStackNFV:
+		return "openstack-nfv"
 	case ClusterProfileOpenStackMechaCentral:
 		return "openstack-vh-mecha-central"
 	case ClusterProfileOpenStackMechaAz0:
@@ -1301,6 +1305,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "openstack-quota-slice"
 	case ClusterProfileOpenStackKuryr:
 		return "openstack-kuryr-quota-slice"
+	case ClusterProfileOpenStackNFV:
+		return "openstack-nfv-quota-slice"
 	case ClusterProfileOpenStackMechaCentral:
 		return "openstack-vh-mecha-central-quota-slice"
 	case ClusterProfileOpenStackMechaAz0:

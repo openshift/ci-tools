@@ -332,6 +332,7 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 		cioperatorapi.ClusterProfileLibvirtPpc64le,
 		cioperatorapi.ClusterProfileOpenStack,
 		cioperatorapi.ClusterProfileOpenStackKuryr,
+		cioperatorapi.ClusterProfileOpenStackNFV,
 		cioperatorapi.ClusterProfileOpenStackMechaCentral,
 		cioperatorapi.ClusterProfileOpenStackMechaAz0,
 		cioperatorapi.ClusterProfileOpenStackOsuosl,

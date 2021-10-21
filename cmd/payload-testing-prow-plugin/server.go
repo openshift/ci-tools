@@ -10,6 +10,8 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/pluginhelp"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 type githubClient interface {
@@ -42,33 +44,29 @@ type server struct {
 type releaseType string
 type jobType string
 
-const (
-	nightlyRelease releaseType = "nightly"
-	ciRelease      releaseType = "ci"
-
-	informing jobType = "informing"
-	blocking  jobType = "blocking"
-	periodics jobType = "periodics"
-	all       jobType = "all"
-)
-
 type jobSetSpecification struct {
 	ocp         string
 	releaseType releaseType
 	jobs        jobType
 }
 
-func triggerReleaseJobs(specification jobSetSpecification) string {
-	// TODO(DPTP-2540): Resolve ("4.10", "nightly", "informing") to a list of job names from release controller
+func triggerReleaseJobs(specification jobSetSpecification, meta api.Metadata, tests []string) error {
 	// TODO(DPTP-2540): Translate the list of job names to list of (org, repo, branch, variant, test) tuples
 	// TODO(DPTP-2540): Create a CR for the controller to pick up
-	return "Would trigger 10 jobs of type '%'s for the %s release of OCP"
+	return nil
+}
+
+func resolve(ocp string, releaseType releaseType, jobType jobType) []string {
+	// TODO(DPTP-2540): Resolve ("4.10", "nightly", "informing") to a list of job names from release controller
+	return []string{fmt.Sprintf("dummy-ocp-%s-%s-%s-job1", ocp, releaseType, jobType), fmt.Sprintf("dummy-ocp-%s-%s-%s-job2", ocp, releaseType, jobType)}
 }
 
 func specsFromComment(comment string) []jobSetSpecification {
 	matches := ocpPayloadTestsPattern.FindAllStringSubmatch(comment, -1)
-	specs := []jobSetSpecification{{ocp: "4.10", releaseType: "nightly", jobs: "informing"}}
-
+	if len(matches) == 0 {
+		return nil
+	}
+	var specs []jobSetSpecification
 	ocpIdx := ocpPayloadTestsPattern.SubexpIndex("ocp")
 	releaseIdx := ocpPayloadTestsPattern.SubexpIndex("release")
 	jobsIdx := ocpPayloadTestsPattern.SubexpIndex("jobs")
@@ -83,25 +81,34 @@ func specsFromComment(comment string) []jobSetSpecification {
 	return specs
 }
 
+const (
+	pluginName = "payload-testing"
+)
+
 func (s *server) handleIssueComment(l *logrus.Entry, ic github.IssueCommentEvent) {
-	if ic.Issue.IsPullRequest() {
-		return
-	}
-
-	specs := specsFromComment(ic.Comment.Body)
-	if len(specs) == 0 {
-		return
-	}
-
 	org := ic.Repo.Owner.Login
 	repo := ic.Repo.Name
 	prNumber := ic.Issue.Number
 
-	logger := logrus.WithFields(logrus.Fields{
+	logger := l.WithFields(logrus.Fields{
 		github.OrgLogField:  org,
 		github.RepoLogField: repo,
 		github.PrLogField:   prNumber,
+		"plugin":            pluginName,
 	})
+
+	// only reacts on comments on PRs
+	if !ic.Issue.IsPullRequest() {
+		logger.Debug("not a pull request")
+		return
+	}
+
+	logger.WithField("ic.Comment.Body", ic.Comment.Body).Debug("received a comment")
+	specs := specsFromComment(ic.Comment.Body)
+	if len(specs) == 0 {
+		logger.Debug("found no specs from comments")
+		return
+	}
 
 	pr, err := s.ghc.GetPullRequest(org, repo, prNumber)
 	if err != nil {
@@ -110,14 +117,35 @@ func (s *server) handleIssueComment(l *logrus.Entry, ic github.IssueCommentEvent
 		return
 	}
 
-	// TODO(DPTP-2540): Extract necessary information from PR
-	var messages []string
-	for i := range specs {
-		messages = append(messages, triggerReleaseJobs(specs[i]))
+	meta := api.Metadata{
+		Org:    ic.Repo.Owner.Login,
+		Repo:   ic.Repo.Name,
+		Branch: pr.Base.Ref,
 	}
 
-	comment := strings.Join(messages, "\n - ")
-	s.createComment(ic, fmt.Sprintf(comment), logger)
+	// TODO(DPTP-2540): Extract necessary information from PR
+	var messages []string
+	for _, spec := range specs {
+		tests := resolve(spec.ocp, spec.releaseType, spec.jobs)
+		if err := triggerReleaseJobs(spec, meta, tests); err != nil {
+			logger.WithError(err).Warn("could not trigger release jobs")
+			s.createComment(ic, fmt.Sprintf("could not trigger release jobs: %v", err), logger)
+			continue
+		}
+		messages = append(messages, message(spec, tests))
+	}
+
+	comment := strings.Join(messages, "\n")
+	s.createComment(ic, comment, logger)
+}
+
+func message(spec jobSetSpecification, tests []string) string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("trigger %d jobs of type %s for the %s release of OCP %s\n", len(tests), spec.jobs, spec.releaseType, spec.ocp))
+	for _, test := range tests {
+		b.WriteString(fmt.Sprintf("- %s\n", test))
+	}
+	return b.String()
 }
 
 func (s *server) createComment(ic github.IssueCommentEvent, message string, logger *logrus.Entry) {

@@ -5,8 +5,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/openshift/ci-tools/pkg/api"
-	configresolver "github.com/openshift/ci-tools/pkg/registry/server"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/test-infra/prow/config/secret"
@@ -62,11 +60,9 @@ func main() {
 	if err != nil {
 		logger.WithError(err).Fatal("Error getting GitHub client.")
 	}
-	resolverClient := configresolver.NewResolverClient(api.URLForService(api.ServiceConfig))
 
 	serv := &server{
-		ghc:                githubClient,
-		ciopResolverClient: resolverClient,
+		ghc: githubClient,
 	}
 
 	eventServer := githubeventserver.New(o.githubEventServerOptions, getWebhookHMAC, logger)

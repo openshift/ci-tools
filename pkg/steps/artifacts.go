@@ -417,14 +417,15 @@ func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.
 	if clone {
 		// Unless build_root.from_repository: true is set, the decorationConfig the ci-operator pod gets has cloning
 		// disabled.
+		decorationConfig := *decorationConfig
 		decorationConfig.SkipCloning = nil
 
 		codeMount, codeVolume := decorate.CodeMountAndVolume()
-		cloneRefsContainer, refs, cloneRefsVolumes, err := decorate.CloneRefs(prowv1.ProwJob{Spec: prowv1.ProwJobSpec{Refs: jobSpec.Refs, ExtraRefs: jobSpec.ExtraRefs, DecorationConfig: decorationConfig}}, codeMount, logMount)
+		cloneRefsContainer, refs, cloneRefsVolumes, err := decorate.CloneRefs(prowv1.ProwJob{Spec: prowv1.ProwJobSpec{Refs: jobSpec.Refs, ExtraRefs: jobSpec.ExtraRefs, DecorationConfig: &decorationConfig}}, codeMount, logMount)
 		if err != nil {
 			return fmt.Errorf("failed to construct clonerefs: %w", err)
 		}
-		initUpload, err := decorate.InitUpload(decorationConfig, blobStorageOptions, blobStorageMounts, &logMount, nil, rawJobSpec)
+		initUpload, err := decorate.InitUpload(&decorationConfig, blobStorageOptions, blobStorageMounts, &logMount, nil, rawJobSpec)
 		if err != nil {
 			return fmt.Errorf("failed to get initUpload container: %w", err)
 		}

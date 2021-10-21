@@ -593,6 +593,32 @@ func Variant(variant string) PodSpecMutator {
 	}
 }
 
+// InjectTestFrom configures ci-operator to inject the specified test from the
+// specified ci-operator config into the base config and target it
+func InjectTestFrom(source *cioperatorapi.MetadataWithTest) PodSpecMutator {
+	addInjectParams := func(spec *corev1.PodSpec) error {
+		container := &spec.Containers[0]
+		var variant string
+		if source.Variant != "" {
+			variant = fmt.Sprintf("__%s", source.Variant)
+		}
+		for name, item := range map[string]string{
+			"organization": source.Org,
+			"repository":   source.Repo,
+			"branch":       source.Branch,
+			"test":         source.Test,
+		} {
+			if item == "" {
+				return fmt.Errorf("%s cannot be empty in injected test specification", name)
+			}
+		}
+		coordinate := fmt.Sprintf("%s/%s@%s%s:%s", source.Org, source.Repo, source.Branch, variant, source.Test)
+		addUniqueParameter(container, fmt.Sprintf("--with-test-from=%s", coordinate))
+		return nil
+	}
+	return aggregateMutator(Targets(source.Test), addInjectParams)
+}
+
 // Build produces and returns a new `PodSpec` containing all configured elements
 func (c *ciOperatorPodSpecGenerator) Build() (*corev1.PodSpec, error) {
 	spec := defaultPodSpec.DeepCopy()

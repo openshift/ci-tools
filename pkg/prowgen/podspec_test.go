@@ -1,6 +1,7 @@
 package prowgen
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -324,6 +325,96 @@ func TestTemplate(t *testing.T) {
 				testhelper.CompareWithFixture(t, podspec)
 			}
 
+		})
+	}
+}
+
+func TestInjectTestFrom(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name        string
+		source      *api.MetadataWithTest
+		expectedErr error
+	}{
+		{
+			name: "inject coordinates without variant",
+			source: &api.MetadataWithTest{
+				Metadata: api.Metadata{
+					Org:    "org-1",
+					Repo:   "repo-1",
+					Branch: "branch-1",
+				},
+				Test: "test-1",
+			},
+		},
+		{
+			name: "inject coordinates with variant",
+			source: &api.MetadataWithTest{
+				Metadata: api.Metadata{
+					Org:     "org-2",
+					Repo:    "repo-2",
+					Branch:  "branch-2",
+					Variant: "variant-2",
+				},
+				Test: "test-2",
+			},
+		},
+		{
+			name: "error on missing org",
+			source: &api.MetadataWithTest{
+				Metadata: api.Metadata{
+					Repo:   "repo-1",
+					Branch: "branch-1",
+				},
+				Test: "test-1",
+			},
+			expectedErr: errors.New("organization cannot be empty in injected test specification"),
+		},
+		{
+			name: "error on missing repo",
+			source: &api.MetadataWithTest{
+				Metadata: api.Metadata{
+					Org:    "org-1",
+					Branch: "branch-1",
+				},
+				Test: "test-1",
+			},
+			expectedErr: errors.New("repository cannot be empty in injected test specification"),
+		},
+		{
+			name: "error on missing branch",
+			source: &api.MetadataWithTest{
+				Metadata: api.Metadata{
+					Org:  "org-1",
+					Repo: "repo-1",
+				},
+				Test: "test-1",
+			},
+			expectedErr: errors.New("branch cannot be empty in injected test specification"),
+		},
+		{
+			name: "error on missing test",
+			source: &api.MetadataWithTest{
+				Metadata: api.Metadata{
+					Org:    "org-1",
+					Repo:   "repo-1 ",
+					Branch: "branch-1",
+				},
+			},
+			expectedErr: errors.New("test cannot be empty in injected test specification"),
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			podspec, err := NewCiOperatorPodSpecGenerator().Add(InjectTestFrom(tc.source)).Build()
+			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("Error differs form expected:\n%s", diff)
+			}
+			if tc.expectedErr == nil {
+				testhelper.CompareWithFixture(t, podspec)
+			}
 		})
 	}
 }

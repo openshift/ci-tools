@@ -79,9 +79,9 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 		if config.Post == nil {
 			config.Post = workflow.Post
 		}
-		mergeEnvironments(&config.Environment, workflow.Environment)
-		mergeDependencies(&config.Dependencies, workflow.Dependencies)
-		mergeDependencyOverrides(&config.DependencyOverrides, workflow.DependencyOverrides)
+		config.Environment = mergeEnvironments(workflow.Environment, config.Environment)
+		config.Dependencies = mergeDependencies(workflow.Dependencies, config.Dependencies)
+		config.DependencyOverrides = mergeDependencyOverrides(workflow.DependencyOverrides, config.DependencyOverrides)
 		if l, err := mergeLeases(workflow.Leases, config.Leases); err != nil {
 			resolveErrors = append(resolveErrors, err)
 		} else {
@@ -141,42 +141,38 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 }
 
 // mergeEnvironments joins two environment maps.
-// Elements in `dst` are overwritten by those in `src` if they target the same
-// variable.
-func mergeEnvironments(dst *api.TestEnvironment, src api.TestEnvironment) {
-	mergeMaps((*map[string]string)(dst), src)
+// A copy of `dst` is returned with elements overwritten by those in `src` if
+// they target the same variable.
+func mergeEnvironments(dst api.TestEnvironment, src api.TestEnvironment) api.TestEnvironment {
+	return mergeMaps(dst, src)
 }
 
 // mergeDependencies joins to dependency maps.
-// Elements in `dst` are overwritten by those in `src` if they target the same
-// variable.
-func mergeDependencies(dst *api.TestDependencies, src api.TestDependencies) {
-	mergeMaps((*map[string]string)(dst), src)
+// A copy of `dst` is returned with elements overwritten by those in `src` if
+// they target the same variable.
+func mergeDependencies(dst api.TestDependencies, src api.TestDependencies) api.TestDependencies {
+	return mergeMaps(dst, src)
 }
 
 // mergeDependencyOverrides joins two dependency_override maps.
-// Elements in `dst` are overwritten by those in `src` if they target the same
-// variable.
-func mergeDependencyOverrides(dst *api.DependencyOverrides, src api.DependencyOverrides) {
-	mergeMaps((*map[string]string)(dst), src)
+// A copy of `dst` is returned with elements overwritten by those in `src` if
+// they target the same variable.
+func mergeDependencyOverrides(dst api.DependencyOverrides, src api.DependencyOverrides) api.DependencyOverrides {
+	return mergeMaps(dst, src)
 }
 
-func mergeMaps(dst *map[string]string, src map[string]string) {
-	if src == nil {
-		return
+func mergeMaps(dst map[string]string, src map[string]string) map[string]string {
+	if dst == nil && src == nil {
+		return nil
 	}
-	if *dst == nil {
-		*dst = make(map[string]string, len(src))
-		for k, v := range src {
-			(*dst)[k] = v
-		}
-		return
+	ret := map[string]string{}
+	for k, v := range dst {
+		ret[k] = v
 	}
 	for k, v := range src {
-		if _, ok := (*dst)[k]; !ok {
-			(*dst)[k] = v
-		}
+		ret[k] = v
 	}
+	return ret
 }
 
 // mergeLeases joins two lease lists, checking for duplicates.

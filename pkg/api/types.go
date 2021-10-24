@@ -1744,6 +1744,6 @@ const (
 )
 
 type MetadataWithTest struct {
-	Metadata
-	Test string
+	Metadata `json:",inline"`
+	Test     string `json:"test,omitempty"`
 }

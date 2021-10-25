@@ -50,7 +50,17 @@ func main() {
 		logger.Fatalf("Invalid options: %v", err)
 	}
 
-	if err := secret.Add(o.github.TokenPath, o.webhookSecretFile); err != nil {
+	var tokens []string
+
+	if o.github.TokenPath != "" {
+		tokens = append(tokens, o.github.TokenPath)
+	}
+	if o.github.AppPrivateKeyPath != "" {
+		tokens = append(tokens, o.github.AppPrivateKeyPath)
+	}
+	tokens = append(tokens, o.webhookSecretFile)
+
+	if err := secret.Add(tokens...); err != nil {
 		logger.WithError(err).Fatal("Error starting secrets agent.")
 	}
 

@@ -221,6 +221,10 @@ func (o *jobRunLoaderOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// this can happen if there is no prowjob.json, so no work to do.
+	if jobRun == nil {
+		return nil
+	}
 
 	// TODO we *could* read to see if we've already uploaded this.  That doesn't see necessary based on how
 	//  we decide to pull the data to upload though.
@@ -263,6 +267,10 @@ func (o *jobRunLoaderOptions) readJobRunFromGCS(ctx context.Context) (jobrunaggr
 	jobRunInfo, err := o.gcsClient.ReadJobRunFromGCS(ctx, o.jobName, o.hobRunID)
 	if err != nil {
 		return nil, err
+	}
+	// this can happen if there is no prowjob.json
+	if jobRunInfo == nil {
+		return nil, nil
 	}
 	prowjob, err := jobRunInfo.GetProwJob(ctx)
 	if err != nil {

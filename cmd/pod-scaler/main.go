@@ -259,15 +259,17 @@ func loaders(cache cache) map[string][]*cacheReloader {
 
 func allDataReadyToConsume(loaders map[string][]*cacheReloader) bool {
 	logger := logrus.WithField("component", "pod-scaler main")
+	var unreadyLoaders int
 	for metric, l := range loaders {
 		for _, loader := range l {
 			logger.WithField("metric", metric)
 			updated, err := lastUpdated(loader.cache, loader.name)
 			if err != nil || updated.IsZero() {
-				logger.WithError(err).Info("couldn't get cache's lastUpdated time.")
-				return false
+				logger.WithError(err).Warn("couldn't get cache's lastUpdated time.")
+				unreadyLoaders++
 			}
 		}
 	}
-	return true
+
+	return unreadyLoaders == 0
 }

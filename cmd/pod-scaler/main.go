@@ -216,14 +216,7 @@ func mainProduce(opts *options, cache cache) {
 }
 
 func mainUI(opts *options, cache cache) {
-	l := loaders(cache)
-	for {
-		if allDataReadyToConsume(l) {
-			break
-		}
-	}
-
-	go serveUI(opts.uiPort, opts.instrumentationOptions.HealthPort, opts.dataDir, l)
+	go serveUI(opts.uiPort, opts.instrumentationOptions.HealthPort, opts.dataDir, loaders(cache))
 }
 
 func mainAdmission(opts *options, cache cache) {
@@ -238,14 +231,7 @@ func mainAdmission(opts *options, cache cache) {
 		logrus.WithError(err).Fatal("Failed to construct client.")
 	}
 
-	l := loaders(cache)
-	for {
-		if allDataReadyToConsume(l) {
-			break
-		}
-	}
-
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, l, opts.mutateResourceLimits)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits)
 }
 
 func loaders(cache cache) map[string][]*cacheReloader {
@@ -255,21 +241,4 @@ func loaders(cache cache) map[string][]*cacheReloader {
 		l[MetricNameMemoryWorkingSet] = append(l[MetricNameMemoryWorkingSet], newReloader(prefix+"/"+MetricNameMemoryWorkingSet, cache))
 	}
 	return l
-}
-
-func allDataReadyToConsume(loaders map[string][]*cacheReloader) bool {
-	logger := logrus.WithField("component", "pod-scaler main")
-	var unreadyLoaders int
-	for metric, l := range loaders {
-		for _, loader := range l {
-			logger.WithField("metric", metric)
-			updated, err := lastUpdated(loader.cache, loader.name)
-			if err != nil || updated.IsZero() {
-				logger.WithError(err).Warn("couldn't get cache's lastUpdated time.")
-				unreadyLoaders++
-			}
-		}
-	}
-
-	return unreadyLoaders == 0
 }

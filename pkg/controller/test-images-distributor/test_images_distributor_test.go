@@ -728,6 +728,45 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 			expectedResult: true,
 		},
 		{
+			name: "imagestream is referenced by integration stream",
+			config: api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					Releases: map[string]api.UnresolvedRelease{
+						api.InitialReleaseName: {
+							Integration: &api.Integration{
+								Namespace: namespace,
+								Name:      streamName,
+							},
+						},
+						api.LatestReleaseName: {
+							Integration: &api.Integration{
+								Namespace:          namespace,
+								Name:               streamName,
+								IncludeBuiltImages: true,
+							},
+						},
+					},
+				},
+			},
+			expectedResult: true,
+		},
+		{
+			name: "imagestream is referenced by non-integration stream",
+			config: api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					Releases: map[string]api.UnresolvedRelease{
+						api.LatestReleaseName: {
+							Release: &api.Release{
+								Version:      "v",
+								Channel:      api.ReleaseChannelStable,
+								Architecture: api.ReleaseArchitectureAMD64,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "imagestreamtag is referenced by imagestreamtag import",
 			client: fakeclient.NewFakeClient((&testimagestreamtagimportv1.TestImageStreamTagImport{Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
 				Namespace: namespace,

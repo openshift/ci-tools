@@ -26,7 +26,8 @@ func ServiceHost(releaseProduct api.ReleaseProduct, arch api.ReleaseArchitecture
 	return fmt.Sprintf("https://%s.%s.releases.%s/api/v1/releasestream", arch, product, api.ServiceDomainCI)
 }
 
-func architecture(architecture api.ReleaseArchitecture) string {
+// Architecture determines the architecture in the Release Controllers' endpoints
+func Architecture(architecture api.ReleaseArchitecture) string {
 	switch architecture {
 	case api.ReleaseArchitectureAMD64:
 		// default, no postfix
@@ -39,10 +40,11 @@ func architecture(architecture api.ReleaseArchitecture) string {
 
 // endpoint determines the API endpoint to use for a candidate release
 func endpoint(candidate api.Candidate) string {
-	return fmt.Sprintf("%s/%s.0-0.%s%s/latest", ServiceHost(candidate.Product, candidate.Architecture), candidate.Version, candidate.Stream, architecture(candidate.Architecture))
+	return fmt.Sprintf("%s/%s.0-0.%s%s/latest", ServiceHost(candidate.Product, candidate.Architecture), candidate.Version, candidate.Stream, Architecture(candidate.Architecture))
 }
 
-func defaultFields(candidate api.Candidate) api.Candidate {
+// DefaultFields add default values to the fields of candidate
+func DefaultFields(candidate api.Candidate) api.Candidate {
 	if candidate.Product == api.ReleaseProductOKD && candidate.Stream == "" {
 		candidate.Stream = api.ReleaseStreamOKD
 	}
@@ -56,7 +58,7 @@ func defaultFields(candidate api.Candidate) api.Candidate {
 
 // ResolvePullSpec determines the pull spec for the candidate release
 func ResolvePullSpec(client release.HTTPClient, candidate api.Candidate) (string, error) {
-	return resolvePullSpec(client, endpoint(defaultFields(candidate)), candidate.Relative)
+	return resolvePullSpec(client, endpoint(DefaultFields(candidate)), candidate.Relative)
 }
 
 func resolvePullSpec(client release.HTTPClient, endpoint string, relative int) (string, error) {

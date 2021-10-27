@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -72,7 +73,7 @@ func addSchemes() error {
 
 func main() {
 	logrusutil.ComponentInit()
-	logger := logrus.WithField("plugin", "payload-testing")
+	logger := logrus.WithField("plugin", pluginName)
 
 	o := gatherOptions()
 	if err := o.Validate(); err != nil {
@@ -93,7 +94,7 @@ func main() {
 		logger.WithError(err).Fatal("Error starting secrets agent.")
 	}
 	if err := addSchemes(); err != nil {
-		logrus.WithError(err).Fatal("failed to set up scheme")
+		logger.WithError(err).Fatal("failed to set up scheme")
 	}
 
 	getWebhookHMAC := secret.GetTokenGenerator(o.webhookSecretFile)
@@ -104,12 +105,12 @@ func main() {
 	}
 
 	kubeconfigChangedCallBack := func() {
-		logrus.Info("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
+		logger.Info("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
 		interrupts.Terminate()
 	}
 	kubeconfigs, err := o.kubernetesOptions.LoadClusterConfigs(kubeconfigChangedCallBack)
 	if err != nil {
-		logrus.WithError(err).Fatal("failed to load kubeconfigs")
+		logger.WithError(err).Fatal("failed to load kubeconfigs")
 	}
 
 	inClusterConfig, hasInClusterConfig := kubeconfigs[kube.InClusterContext]
@@ -118,26 +119,21 @@ func main() {
 
 	if _, hasAppCi := kubeconfigs[appCIContextName]; !hasAppCi {
 		if !hasInClusterConfig {
-			logrus.WithError(err).Fatalf("had no context for '%s' and loading InClusterConfig failed", appCIContextName)
+			logger.WithError(err).Fatalf("had no context for '%s' and loading InClusterConfig failed", appCIContextName)
 		}
-		logrus.Infof("use InClusterConfig for %s", appCIContextName)
+		logger.Infof("use InClusterConfig for %s", appCIContextName)
 		kubeconfigs[appCIContextName] = inClusterConfig
 	}
 
 	kubeConfig := kubeconfigs[appCIContextName]
 	kubeClient, err := ctrlruntimeclient.New(&kubeConfig, ctrlruntimeclient.Options{})
 	if err != nil {
-		logrus.WithError(err).WithField("context", appCIContextName).Fatal("could not get client for kube config")
-	}
-
-	jobResolver, err := newReleaseControllerJobResolver()
-	if err != nil {
-		logrus.WithError(err).Fatal("could not create job resolver")
+		logger.WithError(err).WithField("context", appCIContextName).Fatal("could not get client for kube config")
 	}
 
 	testResolver, err := newFileTestResolver(o.ciOpConfigDir)
 	if err != nil {
-		logrus.WithError(err).Fatal("could not create test resolver")
+		logger.WithError(err).Fatal("could not create test resolver")
 	}
 
 	serv := &server{
@@ -145,7 +141,7 @@ func main() {
 		kubeClient:   kubeClient,
 		ctx:          controllerruntime.SetupSignalHandler(),
 		namespace:    o.namespace,
-		jobResolver:  jobResolver,
+		jobResolver:  newReleaseControllerJobResolver(&http.Client{}),
 		testResolver: testResolver,
 	}
 

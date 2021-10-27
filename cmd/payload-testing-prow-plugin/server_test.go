@@ -16,6 +16,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
+	"github.com/openshift/ci-tools/pkg/release/config"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -86,7 +87,7 @@ func TestMessage(t *testing.T) {
 	}
 }
 
-func fakeResolve(ocp string, releaseType releaseType, jobType jobType) []string {
+func fakeResolve(ocp string, releaseType api.ReleaseStream, jobType config.JobType) []string {
 	return []string{fmt.Sprintf("dummy-ocp-%s-%s-%s-job1", ocp, releaseType, jobType), fmt.Sprintf("dummy-ocp-%s-%s-%s-job2", ocp, releaseType, jobType)}
 }
 
@@ -189,7 +190,7 @@ func TestHandle(t *testing.T) {
 				ctx:        context.TODO(),
 				kubeClient: fakeclient.NewClientBuilder().Build(),
 				namespace:  "ci",
-				jobResolver: newFakeJobResolver(map[string][]Job{"4.10": {
+				jobResolver: newFakeJobResolver(map[string][]config.Job{"4.10": {
 					{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial"},
 					{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi"},
 				}}),
@@ -217,7 +218,7 @@ func TestHandle(t *testing.T) {
 				ctx:        context.TODO(),
 				kubeClient: fakeclient.NewClientBuilder().Build(),
 				namespace:  "ci",
-				jobResolver: newFakeJobResolver(map[string][]Job{"4.10": {
+				jobResolver: newFakeJobResolver(map[string][]config.Job{"4.10": {
 					{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial"},
 					{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi"},
 					{Name: "release-openshift-ocp-installer-e2e-azure-serial-4.10"},
@@ -255,14 +256,14 @@ trigger 0 jobs of type all for the ci release of OCP 4.8
 }
 
 type fakeJobResolver struct {
-	jobs map[string][]Job
+	jobs map[string][]config.Job
 }
 
-func newFakeJobResolver(jobs map[string][]Job) jobResolver {
+func newFakeJobResolver(jobs map[string][]config.Job) jobResolver {
 	return &fakeJobResolver{jobs: jobs}
 }
 
-func (r *fakeJobResolver) resolve(ocp string, _ releaseType, _ jobType) ([]Job, error) {
+func (r *fakeJobResolver) resolve(ocp string, _ api.ReleaseStream, _ config.JobType) ([]config.Job, error) {
 	return r.jobs[ocp], nil
 }
 

@@ -2,34 +2,32 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/release"
+	"github.com/openshift/ci-tools/pkg/release/config"
 )
 
 type releaseControllerJobResolver struct {
+	httpClient release.HTTPClient
 }
 
-func newReleaseControllerJobResolver() (jobResolver, error) {
-	ret := &releaseControllerJobResolver{}
-	return ret, nil
+func newReleaseControllerJobResolver(httpClient release.HTTPClient) jobResolver {
+	return &releaseControllerJobResolver{httpClient: httpClient}
 }
 
-func (r *releaseControllerJobResolver) resolve(_ string, releaseType releaseType, jobType jobType) ([]Job, error) {
-	// TODO: Use rest API implemented in https://issues.redhat.com/browse/OCPCRT-109
-	// promoted-image-governor has struct of RC's config. We can share it by then.
-	switch releaseType {
-	case nightlyRelease, ciRelease:
-	default:
+func (r *releaseControllerJobResolver) resolve(ocp string, releaseType api.ReleaseStream, jobType config.JobType) ([]config.Job, error) {
+	if releaseType != api.ReleaseStreamNightly && releaseType != api.ReleaseStreamCI {
 		return nil, fmt.Errorf("release type is not supported: %s", releaseType)
-
 	}
 
-	switch jobType {
-	case informing, blocking, periodics, all:
-	default:
+	if jobType != config.Informing && jobType != config.Blocking && jobType != config.Periodics && jobType != config.All {
 		return nil, fmt.Errorf("job type is not supported: %s", jobType)
-
 	}
-	return []Job{
-		{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial"},
-		{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi"},
-	}, nil
+	return config.ResolveJobs(r.httpClient, api.Candidate{
+		Product:      api.ReleaseProductOCP,
+		Architecture: api.ReleaseArchitectureAMD64,
+		Stream:       releaseType,
+		Version:      ocp,
+	}, jobType)
 }

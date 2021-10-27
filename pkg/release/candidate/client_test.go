@@ -164,7 +164,7 @@ func TestDefaultFields(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		actual, expected := defaultFields(testCase.input), testCase.output
+		actual, expected := DefaultFields(testCase.input), testCase.output
 		if diff := cmp.Diff(actual, expected); diff != "" {
 			t.Errorf("%s: got incorrect candidate: %v", testCase.name, cmp.Diff(actual, expected))
 		}

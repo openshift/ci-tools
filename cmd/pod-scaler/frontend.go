@@ -470,7 +470,7 @@ func (s *frontendServer) digestCPU(data *pod_scaler.CachedQuery) {
 }
 
 func (s *frontendServer) digestMemory(data *pod_scaler.CachedQuery) {
-	s.logger.Debugf("Digesting new CPU consumption metrics.")
+	s.logger.Debugf("Digesting new Memory consumption metrics.")
 	s.digestData(data, corev1.ResourceMemory, memRequestQuantile)
 }
 

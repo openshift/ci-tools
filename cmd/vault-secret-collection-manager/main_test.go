@@ -44,7 +44,7 @@ func TestSecretCollectionManager(t *testing.T) {
 		}
 	}()
 
-	testhelper.WaitForHTTP200(fmt.Sprintf("http://%s/healthz", managerListenAddr), "secret-collection-manager", t)
+	testhelper.WaitForHTTP200(fmt.Sprintf("http://%s/healthz", managerListenAddr), "secret-collection-manager", 90, t)
 	t.Cleanup(func() {
 		if err := server.Close(); err != nil {
 			t.Errorf("failed to close server: %v", err)

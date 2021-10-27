@@ -34,19 +34,13 @@ type cacheReloader struct {
 
 	lock        *sync.RWMutex
 	lastUpdated time.Time
-	lastLoaded  *pod_scaler.CachedQuery
-	subscribers []chan<- interface{}
+	subscribers []chan<- *pod_scaler.CachedQuery
 }
 
-func (c *cacheReloader) subscribe(out chan<- interface{}) {
+func (c *cacheReloader) subscribe(out chan<- *pod_scaler.CachedQuery) {
 	c.lock.Lock()
 	c.subscribers = append(c.subscribers, out)
-	// if a subscriber is added and we already have data, let them know
-	// so they don't need to wait for the next tick to figure it out
-	if c.lastLoaded != nil {
-		c.logger.Warn("subscriber after data")
-		out <- struct{}{}
-	}
+	c.logger.Debugf("new subscriber, subscriber count now: %d", len(c.subscribers))
 	c.lock.Unlock()
 }
 
@@ -79,18 +73,11 @@ func (c *cacheReloader) reload() {
 	}
 	c.lock.Lock()
 	c.lastUpdated = lastUpdated
-	c.lastLoaded = data
 	for _, subscriber := range c.subscribers {
-		subscriber <- struct{}{}
+		subscriber <- data
 	}
 	c.lock.Unlock()
 	logger.Debug("Newer update loaded.")
-}
-
-func (c *cacheReloader) data() *pod_scaler.CachedQuery {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.lastLoaded
 }
 
 func digestAll(data map[string][]*cacheReloader, digesters map[string]digester, health *pjutil.Health, logger *logrus.Entry) {
@@ -139,7 +126,7 @@ func digest(logger *logrus.Entry, infos ...digestInfo) <-chan interface{} {
 		thisOnce := &sync.Once{}
 		interrupts.Run(func(ctx context.Context) {
 			subLogger := logger.WithField("subscription", info.name)
-			subscription := make(chan interface{}, 1)
+			subscription := make(chan *pod_scaler.CachedQuery, 1)
 			info.data.subscribe(subscription)
 			subLogger.Debug("Starting subscription.")
 			for {
@@ -147,11 +134,11 @@ func digest(logger *logrus.Entry, infos ...digestInfo) <-chan interface{} {
 				case <-ctx.Done():
 					subLogger.Debug("Subscription cancelled.")
 					return
-				case <-subscription:
+				case data := <-subscription:
+					subLogger.Debug("Digesting new data from subscription.")
+					info.digest(data)
+					thisOnce.Do(update)
 				}
-				subLogger.Debug("Digesting new data from subscription.")
-				info.digest(info.data.data())
-				thisOnce.Do(update)
 			}
 		})
 	}

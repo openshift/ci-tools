@@ -36,4 +36,5 @@ type ReleaseJobRunRow struct {
 	Retries        bigquery.NullInt64    `bigquery:"retries"`
 	UpgradesFrom   bigquery.NullString   `bigquery:"upgradesFrom"`
 	UpgradesTo     bigquery.NullString   `bigquery:"upgradesTo"`
+	Upgrade        bool                  `bigquery:"upgrade"`
 }

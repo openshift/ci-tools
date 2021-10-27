@@ -32,12 +32,12 @@ type allReleaseUploaderOptions struct {
 }
 
 func (r *allReleaseUploaderOptions) Run(ctx context.Context) error {
-	if err := r.findOrCreateTable(ctx, jobrunaggregatorlib.ReleaseTableName); err != nil {
-		return errors.Wrapf(err, "could not find or create %s table", jobrunaggregatorlib.ReleaseTableName)
+	if err := r.findTable(ctx, jobrunaggregatorlib.ReleaseTableName); err != nil {
+		return errors.Wrapf(err, "could not find %s table", jobrunaggregatorlib.ReleaseTableName)
 	}
 
-	if err := r.findOrCreateTable(ctx, jobrunaggregatorlib.ReleaseJobRunTableName); err != nil {
-		return errors.Wrapf(err, "could not find or create %s table", jobrunaggregatorlib.ReleaseJobRunTableName)
+	if err := r.findTable(ctx, jobrunaggregatorlib.ReleaseJobRunTableName); err != nil {
+		return errors.Wrapf(err, "could not find %s table", jobrunaggregatorlib.ReleaseJobRunTableName)
 	}
 
 	releaseTagSet, err := r.ciDataClient.ListReleaseTags(ctx)
@@ -106,32 +106,20 @@ func (r *allReleaseUploaderOptions) fetchReleaseTags(release string) ReleaseTags
 	return tags
 }
 
-func (r *allReleaseUploaderOptions) findOrCreateTable(ctx context.Context, tableName string) error {
+func (r *allReleaseUploaderOptions) findTable(ctx context.Context, tableName string) error {
 	switch tableName {
 	case jobrunaggregatorlib.ReleaseTableName:
 		r.releaseTable = r.ciDataSet.Table(jobrunaggregatorlib.ReleaseTableName)
 		_, err := r.releaseTable.Metadata(ctx)
 		if err != nil {
-			schema, err := bigquery.InferSchema(jobrunaggregatorapi.ReleaseRow{})
-			if err != nil {
-				return err
-			}
-			if err := r.releaseTable.Create(ctx, &bigquery.TableMetadata{Schema: schema}); err != nil {
-				return err
-			}
+			return err
 		}
 		r.releaseInserter = r.releaseTable.Inserter()
 	case jobrunaggregatorlib.ReleaseJobRunTableName:
 		r.releaseJobRunTable = r.ciDataSet.Table(jobrunaggregatorlib.ReleaseJobRunTableName)
 		_, err := r.releaseJobRunTable.Metadata(ctx)
 		if err != nil {
-			schema, err := bigquery.InferSchema(jobrunaggregatorapi.ReleaseJobRunRow{})
-			if err != nil {
-				return err
-			}
-			if err := r.releaseJobRunTable.Create(ctx, &bigquery.TableMetadata{Schema: schema}); err != nil {
-				return err
-			}
+			return err
 		}
 		r.releaseJobRunInserter = r.releaseJobRunTable.Inserter()
 	}
@@ -155,12 +143,13 @@ func releaseDetailsToBigQuery(tag ReleaseTag, details ReleaseDetails) jobrunaggr
 }
 
 func releaseJobRunsToBigQuery(details ReleaseDetails) []*jobrunaggregatorapi.ReleaseJobRunRow {
-	results := make([]*jobrunaggregatorapi.ReleaseJobRunRow, 0)
+	rows := make([]*jobrunaggregatorapi.ReleaseJobRunRow, 0)
+	results := make(map[string]*jobrunaggregatorapi.ReleaseJobRunRow)
 
 	if jobs, ok := details.Results["blockingJobs"]; ok {
 		for platform, jobResult := range jobs {
 			id := idFromURL(jobResult.URL)
-			results = append(results, &jobrunaggregatorapi.ReleaseJobRunRow{
+			results[id] = &jobrunaggregatorapi.ReleaseJobRunRow{
 				Name:    id,
 				JobName: platform,
 				Kind:    "Blocking",
@@ -171,14 +160,14 @@ func releaseJobRunsToBigQuery(details ReleaseDetails) []*jobrunaggregatorapi.Rel
 					DateTime: civil.DateTimeOf(jobResult.TransitionTime),
 					Valid:    !jobResult.TransitionTime.IsZero(),
 				},
-			})
+			}
 		}
 	}
 
 	if jobs, ok := details.Results["informingJobs"]; ok {
 		for platform, jobResult := range jobs {
 			id := idFromURL(jobResult.URL)
-			results = append(results, &jobrunaggregatorapi.ReleaseJobRunRow{
+			results[id] = &jobrunaggregatorapi.ReleaseJobRunRow{
 				Name:    id,
 				JobName: platform,
 				Kind:    "Informing",
@@ -188,29 +177,22 @@ func releaseJobRunsToBigQuery(details ReleaseDetails) []*jobrunaggregatorapi.Rel
 					DateTime: civil.DateTimeOf(jobResult.TransitionTime),
 					Valid:    !jobResult.TransitionTime.IsZero(),
 				},
-			})
+			}
 		}
 	}
 
 	for _, upgrade := range append(details.UpgradesTo, details.UpgradesFrom...) {
 		for _, run := range upgrade.History {
 			id := idFromURL(run.URL)
-			results = append(results, &jobrunaggregatorapi.ReleaseJobRunRow{
-				Name:    id,
-				JobName: run.URL,
-				Kind:    "Upgrade",
-				State:   run.State,
-				TransitionTime: bigquery.NullDateTime{
-					DateTime: civil.DateTimeOf(run.TransitionTime),
-					Valid:    !run.TransitionTime.IsZero(),
-				},
-				UpgradesFrom: bigquery.NullString{StringVal: upgrade.From, Valid: true},
-				UpgradesTo:   bigquery.NullString{StringVal: upgrade.To, Valid: true},
-			})
+			if result, ok := results[id]; ok {
+				result.Upgrade = true
+				result.UpgradesFrom = bigquery.NullString{StringVal: upgrade.From, Valid: true}
+				result.UpgradesTo =   bigquery.NullString{StringVal: upgrade.To, Valid: true}
+			}
 		}
 	}
 
-	return results
+	return rows
 }
 
 func idFromURL(prowURL string) string {

@@ -2,6 +2,7 @@ package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -16,7 +17,7 @@ type PullRequestPayloadQualificationRun struct {
 
 	// Spec is considered immutable and should be entirely created by the requestor
 	Spec   PullRequestPayloadTestSpec   `json:"spec"`
-	Status PullRequestPayloadTestStatus `json:"status"`
+	Status PullRequestPayloadTestStatus `json:"status,omitempty"`
 }
 
 // PullRequestPayloadTestSpec specifies for which PR the payload qualification run was requested
@@ -92,8 +93,8 @@ type ReleaseJobSpec struct {
 // PullRequestPayloadTestStatus provides runtime data, such as references to submitted ProwJobs,
 // whether all jobs are submitted, finished, etc.
 type PullRequestPayloadTestStatus struct {
-	Conditions []metav1.Condition            `json:"conditions"`
-	Jobs       []PullRequestPayloadJobStatus `json:"jobs"`
+	Conditions []metav1.Condition            `json:"conditions,omitempty"`
+	Jobs       []PullRequestPayloadJobStatus `json:"jobs,omitempty"`
 }
 
 // PullRequestPayloadJobStatus is a reference to a Prowjob submitted for a single item
@@ -105,6 +106,8 @@ type PullRequestPayloadJobStatus struct {
 	ReleaseJobName string `json:"jobName"`
 	// ProwJob is a name of the submitted ProwJob resource
 	ProwJob string `json:"prowJob"`
+
+	Status prowv1.ProwJobStatus `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

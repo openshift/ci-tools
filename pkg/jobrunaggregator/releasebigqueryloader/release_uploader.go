@@ -27,6 +27,12 @@ type allReleaseUploaderOptions struct {
 	releaseJobRunInserter *bigquery.Inserter
 	releaseJobRunTable    *bigquery.Table
 
+	repositoryTableInserter *bigquery.Inserter
+	repositoryTable         *bigquery.Table
+
+	pullRequestInserter *bigquery.Inserter
+	pullRequestTable    *bigquery.Table
+
 	releases  []string
 	ciDataSet *bigquery.Dataset
 }
@@ -38,6 +44,14 @@ func (r *allReleaseUploaderOptions) Run(ctx context.Context) error {
 
 	if err := r.findTable(ctx, jobrunaggregatorlib.ReleaseJobRunTableName); err != nil {
 		return errors.Wrapf(err, "could not find %s table", jobrunaggregatorlib.ReleaseJobRunTableName)
+	}
+
+	if err := r.findTable(ctx, jobrunaggregatorlib.ReleaseRepositoryTableName); err != nil {
+		return errors.Wrapf(err, "could not find %s table", jobrunaggregatorlib.ReleaseRepositoryTableName)
+	}
+
+	if err := r.findTable(ctx, jobrunaggregatorlib.ReleasePullRequestsTableName); err != nil {
+		return errors.Wrapf(err, "could not find %s table", jobrunaggregatorlib.ReleasePullRequestsTableName)
 	}
 
 	releaseTagSet, err := r.ciDataClient.ListReleaseTags(ctx)
@@ -52,14 +66,12 @@ func (r *allReleaseUploaderOptions) Run(ctx context.Context) error {
 		for _, tag := range tags.Tags {
 			fmt.Fprintf(os.Stderr, "Fetching tag %s from release controller...\n", tag.Name)
 			releaseDetails := r.fetchReleaseDetails(release, tag)
-			bigQueryReleaseDetails := releaseDetailsToBigQuery(tag, releaseDetails)
-
+			releaseTag, repositories, pullRequests := releaseDetailsToBigQuery(tag, releaseDetails)
 			// We skip releases that aren't fully baked, or already in the big query tables:
-			if _, ok := releaseTagSet[bigQueryReleaseDetails.ReleaseTag]; ok {
+			if releaseTag.Phase == "Ready" || repositories == nil {
 				continue
 			}
-
-			if bigQueryReleaseDetails.Phase == "Ready" || !bigQueryReleaseDetails.ChangeLog.Valid {
+			if _, ok := releaseTagSet[releaseTag.ReleaseTag]; ok {
 				continue
 			}
 
@@ -68,7 +80,19 @@ func (r *allReleaseUploaderOptions) Run(ctx context.Context) error {
 				return errors.Wrapf(err, "could not insert job runs to table")
 			}
 
-			if err := r.releaseInserter.Put(ctx, bigQueryReleaseDetails); err != nil {
+			if len(repositories) != 0 {
+				if err := r.repositoryTableInserter.Put(ctx, repositories); err != nil {
+					return errors.Wrapf(err, "could not insert repositories to table")
+				}
+			}
+
+			if len(pullRequests) != 0 {
+				if err := r.pullRequestInserter.Put(ctx, pullRequests); err != nil {
+					return errors.Wrapf(err, "could not insert pull requests to table")
+				}
+			}
+
+			if err := r.releaseInserter.Put(ctx, releaseTag); err != nil {
 				return errors.Wrapf(err, "could not insert release details for %s", tag.Name)
 			}
 		}
@@ -122,24 +146,40 @@ func (r *allReleaseUploaderOptions) findTable(ctx context.Context, tableName str
 			return err
 		}
 		r.releaseJobRunInserter = r.releaseJobRunTable.Inserter()
+	case jobrunaggregatorlib.ReleasePullRequestsTableName:
+		r.pullRequestTable = r.ciDataSet.Table(jobrunaggregatorlib.ReleasePullRequestsTableName)
+		_, err := r.pullRequestTable.Metadata(ctx)
+		if err != nil {
+			return err
+		}
+		r.pullRequestInserter = r.pullRequestTable.Inserter()
+	case jobrunaggregatorlib.ReleaseRepositoryTableName:
+		r.repositoryTable = r.ciDataSet.Table(jobrunaggregatorlib.ReleaseRepositoryTableName)
+		_, err := r.repositoryTable.Metadata(ctx)
+		if err != nil {
+			return err
+		}
+		r.repositoryTableInserter = r.repositoryTable.Inserter()
+
 	}
 
 	return nil
 }
 
-func releaseDetailsToBigQuery(tag ReleaseTag, details ReleaseDetails) jobrunaggregatorapi.ReleaseRow {
-	changeLog := bigquery.NullString{}
-	if len(details.ChangeLog) > 0 {
-		changeLog = bigquery.NullString{StringVal: string(details.ChangeLog), Valid: true}
-	}
-
+func releaseDetailsToBigQuery(tag ReleaseTag, details ReleaseDetails) (*jobrunaggregatorapi.ReleaseRow, []jobrunaggregatorapi.ReleaseRepositoryRow, []jobrunaggregatorapi.ReleasePullRequestRow) {
 	release := jobrunaggregatorapi.ReleaseRow{
 		ReleaseTag: details.Name,
 		Phase:      tag.Phase,
-		ChangeLog:  changeLog,
+	}
+	if len(details.ChangeLog) == 0 {
+		return &release, nil, nil
 	}
 
-	return release
+	changelog := NewChangelog(tag.Name, string(details.ChangeLog))
+	release.KubernetesVersion = changelog.KubernetesVersion()
+	release.CurrentOSURL, release.CurrentOSVersion, release.PreviousOSURL, release.PreviousOSVersion, release.OSDiffURL = changelog.CoreOSVersion()
+	release.PreviousReleaseTag = changelog.PreviousReleaseTag()
+	return &release, changelog.Repositories(), changelog.PullRequests()
 }
 
 func releaseJobRunsToBigQuery(details ReleaseDetails) []*jobrunaggregatorapi.ReleaseJobRunRow {
@@ -186,10 +226,14 @@ func releaseJobRunsToBigQuery(details ReleaseDetails) []*jobrunaggregatorapi.Rel
 			id := idFromURL(run.URL)
 			if result, ok := results[id]; ok {
 				result.Upgrade = true
-				result.UpgradesFrom = bigquery.NullString{StringVal: upgrade.From, Valid: true}
-				result.UpgradesTo =   bigquery.NullString{StringVal: upgrade.To, Valid: true}
+				result.UpgradesFrom = upgrade.From
+				result.UpgradesTo = upgrade.To
 			}
 		}
+	}
+
+	for _, result := range results {
+		rows = append(rows, result)
 	}
 
 	return rows

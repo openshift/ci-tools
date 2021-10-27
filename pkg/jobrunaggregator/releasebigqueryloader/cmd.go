@@ -96,7 +96,6 @@ func (f *BigQueryReleaseUploadFlags) ToOptions(ctx context.Context) (*allRelease
 	}, nil
 }
 
-
 type BigQueryReleaseTableCreateFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags

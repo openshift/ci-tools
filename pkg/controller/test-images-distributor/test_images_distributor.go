@@ -613,9 +613,8 @@ func indexConfigsByTestInputImageStreamTag(resolver registryResolver) agents.Ind
 		for key := range m {
 			result = append(result, key)
 		}
-
-		if cfg.ReleaseTagConfiguration != nil {
-			result = append(result, indexKeyForImageStream(cfg.ReleaseTagConfiguration.Namespace, cfg.ReleaseTagConfiguration.Name))
+		for _, r := range apihelper.TestInputImageStreamsFromResolvedConfig(cfg) {
+			result = append(result, indexKeyForImageStream(r.Namespace, r.Name))
 		}
 		return result
 	}

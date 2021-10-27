@@ -23,6 +23,26 @@ func MergeImageStreamTagMaps(target ImageStreamTagMap, toMerge ...ImageStreamTag
 	}
 }
 
+func TestInputImageStreamsFromResolvedConfig(cfg api.ReleaseBuildConfiguration) []types.NamespacedName {
+	s := map[types.NamespacedName]struct{}{}
+	add := func(ns, name string) {
+		s[types.NamespacedName{Namespace: ns, Name: name}] = struct{}{}
+	}
+	if c := cfg.ReleaseTagConfiguration; c != nil {
+		add(c.Namespace, c.Name)
+	}
+	for _, r := range cfg.Releases {
+		if i := r.Integration; i != nil {
+			add(i.Namespace, i.Name)
+		}
+	}
+	var ret []types.NamespacedName
+	for k := range s {
+		ret = append(ret, k)
+	}
+	return ret
+}
+
 // TestInputImageStreamTagsFromResolvedConfig returns all ImageStreamTags referenced anywhere in the config as input.
 // It only returns their namespace and name and drops the cluster field, as we plan to remove that.
 // The key is in namespace/name format.

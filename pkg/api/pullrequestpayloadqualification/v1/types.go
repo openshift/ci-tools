@@ -7,6 +7,10 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
+const (
+	PullRequestPayloadQualificationRunLabel = "pullrequestpayloadqualificationruns.ci.openshift.io"
+)
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // PullRequestPayloadQualificationRun represents the intent to run a battery of OCP release

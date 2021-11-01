@@ -1,17 +1,23 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/pluginhelp"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
 )
 
 type githubClient interface {
@@ -38,7 +44,12 @@ func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
 }
 
 type server struct {
-	ghc githubClient
+	ghc          githubClient
+	ctx          context.Context
+	kubeClient   ctrlruntimeclient.Client
+	namespace    string
+	jobResolver  jobResolver
+	testResolver testResolver
 }
 
 type releaseType string
@@ -50,15 +61,27 @@ type jobSetSpecification struct {
 	jobs        jobType
 }
 
-func triggerReleaseJobs(specification jobSetSpecification, meta api.Metadata, tests []string) error {
-	// TODO(DPTP-2540): Translate the list of job names to list of (org, repo, branch, variant, test) tuples
-	// TODO(DPTP-2540): Create a CR for the controller to pick up
-	return nil
+const (
+	nightlyRelease releaseType = "nightly"
+	ciRelease      releaseType = "ci"
+
+	informing jobType = "informing"
+	blocking  jobType = "blocking"
+	periodics jobType = "periodics"
+	all       jobType = "all"
+)
+
+type Job struct {
+	Name                 string `json:"name"`
+	api.MetadataWithTest `json:",inline"`
 }
 
-func resolve(ocp string, releaseType releaseType, jobType jobType) []string {
-	// TODO(DPTP-2540): Resolve ("4.10", "nightly", "informing") to a list of job names from release controller
-	return []string{fmt.Sprintf("dummy-ocp-%s-%s-%s-job1", ocp, releaseType, jobType), fmt.Sprintf("dummy-ocp-%s-%s-%s-job2", ocp, releaseType, jobType)}
+type jobResolver interface {
+	resolve(ocp string, releaseType releaseType, jobType jobType) ([]Job, error)
+}
+
+type testResolver interface {
+	resolve(job string) (api.MetadataWithTest, error)
 }
 
 func specsFromComment(comment string) []jobSetSpecification {
@@ -86,9 +109,17 @@ const (
 )
 
 func (s *server) handleIssueComment(l *logrus.Entry, ic github.IssueCommentEvent) {
+	if comment := s.handle(l, ic); comment != "" {
+		s.createComment(ic, comment, l)
+	}
+}
+
+func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 	org := ic.Repo.Owner.Login
 	repo := ic.Repo.Name
 	prNumber := ic.Issue.Number
+
+	guid := ic.GUID
 
 	logger := l.WithFields(logrus.Fields{
 		github.OrgLogField:  org,
@@ -100,43 +131,106 @@ func (s *server) handleIssueComment(l *logrus.Entry, ic github.IssueCommentEvent
 	// only reacts on comments on PRs
 	if !ic.Issue.IsPullRequest() {
 		logger.Debug("not a pull request")
-		return
+		return ""
 	}
 
 	logger.WithField("ic.Comment.Body", ic.Comment.Body).Debug("received a comment")
 	specs := specsFromComment(ic.Comment.Body)
 	if len(specs) == 0 {
 		logger.Debug("found no specs from comments")
-		return
+		return ""
 	}
 
-	pr, err := s.ghc.GetPullRequest(org, repo, prNumber)
-	if err != nil {
-		logger.WithError(err).Warn("could not get pull request")
-		s.createComment(ic, fmt.Sprintf("could not get pull request: %v", err), logger)
-		return
-	}
-
-	meta := api.Metadata{
-		Org:    ic.Repo.Owner.Login,
-		Repo:   ic.Repo.Name,
-		Branch: pr.Base.Ref,
-	}
-
-	// TODO(DPTP-2540): Extract necessary information from PR
 	var messages []string
-	for _, spec := range specs {
-		tests := resolve(spec.ocp, spec.releaseType, spec.jobs)
-		if err := triggerReleaseJobs(spec, meta, tests); err != nil {
-			logger.WithError(err).Warn("could not trigger release jobs")
-			s.createComment(ic, fmt.Sprintf("could not trigger release jobs: %v", err), logger)
-			continue
-		}
-		messages = append(messages, message(spec, tests))
+	builder := &prpqrBuilder{
+		namespace: s.namespace,
+		org:       org,
+		repo:      repo,
+		prNumber:  prNumber,
+		guid:      guid,
+		counter:   0,
 	}
+	for _, spec := range specs {
+		specLogger := logger.WithFields(logrus.Fields{
+			"ocp":         spec.ocp,
+			"releaseType": spec.releaseType,
+			"jobs":        spec.jobs,
+		})
+		var jobNames []string
+		var jobTuples []api.MetadataWithTest
+		jobs, err := s.jobResolver.resolve(spec.ocp, spec.releaseType, spec.jobs)
+		if err != nil {
+			specLogger.WithError(err).Error("could not resolve jobs")
+			return fmt.Sprintf("could not resolve jobs for %s %s %s: %v", spec.ocp, spec.releaseType, spec.jobs, err)
+		}
+		for _, job := range jobs {
+			if job.Test != "" {
+				jobNames = append(jobNames, job.Name)
+				jobTuples = append(jobTuples, api.MetadataWithTest{
+					Metadata: job.Metadata,
+					Test:     job.Test,
+				})
+			} else {
+				jobTuple, err := s.testResolver.resolve(job.Name)
+				if err != nil {
+					// This is expected for non-generated jobs
+					specLogger.WithError(err).WithField("job.Name", job.Name).Warn("could not resolve tests for job")
+					continue
+				}
+				jobNames = append(jobNames, job.Name)
+				jobTuples = append(jobTuples, jobTuple)
+			}
+		}
+		if len(jobTuples) > 0 {
+			if err := s.kubeClient.Create(s.ctx, builder.build(jobTuples)); err != nil {
+				specLogger.WithError(err).Error("could not create PullRequestPayloadQualificationRun")
+				return fmt.Sprintf("could not create PullRequestPayloadQualificationRun: %v", err)
+			}
+		} else {
+			specLogger.Warn("found no resolved tests")
+		}
+		messages = append(messages, message(spec, jobNames))
+	}
+	return strings.Join(messages, "\n")
+}
 
-	comment := strings.Join(messages, "\n")
-	s.createComment(ic, comment, logger)
+type prpqrBuilder struct {
+	namespace string
+	org       string
+	repo      string
+	prNumber  int
+	guid      string
+	counter   int
+}
+
+func (b *prpqrBuilder) build(jobTuples []api.MetadataWithTest) *prpqv1.PullRequestPayloadQualificationRun {
+	var releaseJobSpecs []prpqv1.ReleaseJobSpec
+	for _, jobTuple := range jobTuples {
+		releaseJobSpecs = append(releaseJobSpecs, prpqv1.ReleaseJobSpec{
+			CIOperatorConfig: jobTuple.Metadata,
+			Test:             jobTuple.Test,
+		})
+	}
+	run := &prpqv1.PullRequestPayloadQualificationRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-%d", b.guid, b.counter),
+			Namespace: b.namespace,
+			Labels: map[string]string{
+				api.DPTPRequesterLabel: pluginName,
+				kube.OrgLabel:          b.org,
+				kube.RepoLabel:         b.repo,
+				kube.PullLabel:         strconv.Itoa(b.prNumber),
+				"event-GUID":           b.guid,
+			},
+		},
+		Spec: prpqv1.PullRequestPayloadTestSpec{
+			Jobs: prpqv1.PullRequestPayloadJobSpec{
+				Jobs: releaseJobSpecs,
+			},
+		},
+	}
+	b.counter++
+	return run
 }
 
 func message(spec jobSetSpecification, tests []string) string {
@@ -150,6 +244,6 @@ func message(spec jobSetSpecification, tests []string) string {
 
 func (s *server) createComment(ic github.IssueCommentEvent, message string, logger *logrus.Entry) {
 	if err := s.ghc.CreateComment(ic.Repo.Owner.Login, ic.Repo.Name, ic.Issue.Number, fmt.Sprintf("@%s: %s", ic.Comment.User.Login, message)); err != nil {
-		logger.WithError(err).Warn("failed to create a comment")
+		logger.WithError(err).Error("failed to create a comment")
 	}
 }

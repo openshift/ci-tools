@@ -105,8 +105,9 @@ var (
 	}
 
 	configWithBuildFarmWithJobs = Config{
-		Default: "api.ci",
-		KVM:     []api.Cluster{api.ClusterBuild02},
+		Default:  "api.ci",
+		KVM:      []api.Cluster{api.ClusterBuild02},
+		NoBuilds: []api.Cluster{api.ClusterBuild03},
 		BuildFarm: map[CloudProvider]map[api.Cluster]Filenames{
 			CloudAWS: {
 				api.ClusterBuild01: {
@@ -399,6 +400,24 @@ func TestDetermineClusterForJob(t *testing.T) {
 			config: &configWithBuildFarmWithJobs,
 			jobBase: config.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-os-master-unit",
 				Labels: map[string]string{"ci-operator.openshift.io/cluster": "b01"},
+			},
+			expected:               "b01",
+			expectedCanBeRelocated: false,
+		},
+		{
+			name:   "a job with noBuilds label",
+			config: &configWithBuildFarmWithJobs,
+			jobBase: config.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-os-master-unit",
+				Labels: map[string]string{"ci.openshift.io/no-builds": "true"},
+			},
+			expected:               "build03",
+			expectedCanBeRelocated: false,
+		},
+		{
+			name:   "a job with cluster label and noBuilds label: cluster label wins",
+			config: &configWithBuildFarmWithJobs,
+			jobBase: config.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-os-master-unit",
+				Labels: map[string]string{"ci-operator.openshift.io/cluster": "b01", "ci.openshift.io/no-builds": "true"},
 			},
 			expected:               "b01",
 			expectedCanBeRelocated: false,

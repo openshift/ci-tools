@@ -56,6 +56,9 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	if configSpec.BuildRootImage != nil && configSpec.BuildRootImage.FromRepository {
 		skipCloning = false
 	}
+
+	noBuilds := hasNoBuilds(configSpec)
+
 	podSpecGen := func() CiOperatorPodSpecGenerator {
 		g := NewCiOperatorPodSpecGenerator()
 		g.Add(Variant(info.Variant))
@@ -130,20 +133,20 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			if element.Interval != nil {
 				interval = *element.Interval
 			}
-			periodic := generatePeriodicForTest(element.As, info, g.MustBuild(), true, cron, interval, element.ReleaseController, configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.Timeout)
+			periodic := generatePeriodicForTest(element.As, info, g.MustBuild(), true, cron, interval, element.ReleaseController, configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.Timeout, noBuilds)
 			if element.Cluster != "" {
 				periodic.Labels[cioperatorapi.ClusterLabel] = string(element.Cluster)
 			}
 			periodics = append(periodics, *periodic)
 		} else if element.Postsubmit {
-			postsubmit := generatePostsubmitForTest(element.As, info, g.MustBuild(), configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.Timeout)
+			postsubmit := generatePostsubmitForTest(element.As, info, g.MustBuild(), configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.Timeout, noBuilds)
 			postsubmit.MaxConcurrency = 1
 			if element.Cluster != "" {
 				postsubmit.Labels[cioperatorapi.ClusterLabel] = string(element.Cluster)
 			}
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
 		} else {
-			presubmit := *generatePresubmitForTest(element.As, info, g.MustBuild(), configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.RunIfChanged, element.SkipIfOnlyChanged, element.Optional, element.Timeout)
+			presubmit := *generatePresubmitForTest(element.As, info, g.MustBuild(), configSpec.CanonicalGoRepository, jobRelease, skipCloning, element.RunIfChanged, element.SkipIfOnlyChanged, element.Optional, element.Timeout, noBuilds)
 			v, requestingKVM := configSpec.Resources.RequirementsForStep(element.As).Requests[cioperatorapi.KVMDeviceLabel]
 			if requestingKVM {
 				presubmit.Labels[cioperatorapi.KVMDeviceLabel] = v
@@ -173,11 +176,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
 		podSpec := podSpecGen().Add(Targets(presubmitTargets...)).MustBuild()
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false, nil))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false, nil, noBuilds))
 
 		if configSpec.PromotionConfiguration != nil {
 			podSpec := podSpecGen().Add(Promotion(), Targets(imageTargets.List()...)).MustBuild()
-			postsubmit := generatePostsubmitForTest("images", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, nil)
+			postsubmit := generatePostsubmitForTest("images", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, nil, noBuilds)
 			postsubmit.MaxConcurrency = 1
 			if postsubmit.Labels == nil {
 				postsubmit.Labels = map[string]string{}
@@ -196,11 +199,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			}
 			indexName := api.IndexName(bundle.As)
 			podSpec := podSpecGen().Add(Targets(indexName)).MustBuild()
-			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(indexName, info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false, nil))
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(indexName, info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false, nil, noBuilds))
 		}
 		if containsUnnamedBundle {
 			podSpec := podSpecGen().Add(Targets(string(api.PipelineImageStreamTagReferenceIndexImage))).MustBuild()
-			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(string(api.PipelineImageStreamTagReferenceIndexImage), info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false, nil))
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(string(api.PipelineImageStreamTagReferenceIndexImage), info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning, "", "", false, nil, noBuilds))
 		}
 	}
 
@@ -209,6 +212,20 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		PostsubmitsStatic: postsubmits,
 		Periodics:         periodics,
 	}
+}
+
+func hasNoBuilds(c *cioperatorapi.ReleaseBuildConfiguration) bool {
+	if c == nil {
+		return false
+	}
+	// only consider release jobs ATM
+	if c.Metadata.Org != "openshift" || c.Metadata.Repo != "release" || c.Metadata.Branch != "master" {
+		return false
+	}
+	if len(c.Images) == 0 && c.BuildRootImage == nil && c.RpmBuildCommands == "" && c.TestBinaryBuildCommands == "" {
+		return true
+	}
+	return false
 }
 
 func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
@@ -220,9 +237,9 @@ func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
 	return len(api.LeasesForTest(test.MultiStageTestConfigurationLiteral)) > 0
 }
 
-func generatePresubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.PodSpec, pathAlias *string, jobRelease string, skipCloning bool, runIfChanged, skipIfOnlyChanged string, optional bool, timeout *prowv1.Duration) *prowconfig.Presubmit {
+func generatePresubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.PodSpec, pathAlias *string, jobRelease string, skipCloning bool, runIfChanged, skipIfOnlyChanged string, optional bool, timeout *prowv1.Duration, noBuilds bool) *prowconfig.Presubmit {
 	shortName := info.TestName(name)
-	base := generateJobBase(name, jc.PresubmitPrefix, info, podSpec, true, pathAlias, jobRelease, skipCloning, timeout)
+	base := generateJobBase(name, jc.PresubmitPrefix, info, podSpec, true, pathAlias, jobRelease, skipCloning, timeout, noBuilds)
 	return &prowconfig.Presubmit{
 		JobBase:   base,
 		AlwaysRun: runIfChanged == "" && skipIfOnlyChanged == "",
@@ -240,16 +257,16 @@ func generatePresubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.Po
 	}
 }
 
-func generatePostsubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.PodSpec, pathAlias *string, jobRelease string, skipCloning bool, timeout *prowv1.Duration) *prowconfig.Postsubmit {
-	base := generateJobBase(name, jc.PostsubmitPrefix, info, podSpec, false, pathAlias, jobRelease, skipCloning, timeout)
+func generatePostsubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.PodSpec, pathAlias *string, jobRelease string, skipCloning bool, timeout *prowv1.Duration, noBuilds bool) *prowconfig.Postsubmit {
+	base := generateJobBase(name, jc.PostsubmitPrefix, info, podSpec, false, pathAlias, jobRelease, skipCloning, timeout, noBuilds)
 	return &prowconfig.Postsubmit{
 		JobBase:  base,
 		Brancher: prowconfig.Brancher{Branches: []string{ExactlyBranch(info.Branch)}},
 	}
 }
 
-func generatePeriodicForTest(name string, info *ProwgenInfo, podSpec *corev1.PodSpec, rehearsable bool, cron string, interval string, releaseController bool, pathAlias *string, jobRelease string, skipCloning bool, timeout *prowv1.Duration) *prowconfig.Periodic {
-	base := generateJobBase(name, jc.PeriodicPrefix, info, podSpec, rehearsable, nil, jobRelease, skipCloning, timeout)
+func generatePeriodicForTest(name string, info *ProwgenInfo, podSpec *corev1.PodSpec, rehearsable bool, cron string, interval string, releaseController bool, pathAlias *string, jobRelease string, skipCloning bool, timeout *prowv1.Duration, noBuilds bool) *prowconfig.Periodic {
+	base := generateJobBase(name, jc.PeriodicPrefix, info, podSpec, rehearsable, nil, jobRelease, skipCloning, timeout, noBuilds)
 	// periodics are not associated with a repo per se, but we can add in an
 	// extra ref so that periodics which want to access the repo tha they are
 	// defined for can have that information
@@ -274,10 +291,14 @@ func generatePeriodicForTest(name string, info *ProwgenInfo, podSpec *corev1.Pod
 	}
 }
 
-func generateJobBase(name, prefix string, info *ProwgenInfo, podSpec *corev1.PodSpec, rehearsable bool, pathAlias *string, jobRelease string, skipCloning bool, timeout *prowv1.Duration) prowconfig.JobBase {
+func generateJobBase(name, prefix string, info *ProwgenInfo, podSpec *corev1.PodSpec, rehearsable bool, pathAlias *string, jobRelease string, skipCloning bool, timeout *prowv1.Duration, noBuilds bool) prowconfig.JobBase {
 	labels := map[string]string{}
 	if rehearsable {
 		labels[jc.CanBeRehearsedLabel] = jc.CanBeRehearsedValue
+	}
+
+	if noBuilds {
+		labels[api.NoBuildsLabel] = api.NoBuildsValue
 	}
 
 	jobName := info.JobName(prefix, name)

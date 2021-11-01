@@ -10,10 +10,12 @@ import (
 	"github.com/sirupsen/logrus"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
 	"github.com/openshift/ci-tools/pkg/html"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
 const (
@@ -77,10 +79,12 @@ Created: {{ .ObjectMeta.CreationTimestamp }}
   {{ range $i, $job := .Jobs }}
   <li>
     <tt>
-      {{ with .CIOperatorConfig -}}
-        {{ .Org }}/{{ .Repo }}@{{ .Branch -}}
-        {{- with .Variant }}__{{ . }}{{ end }}
-      {{- end }}:{{ .Test }}
+      {{ with $status := jobStatus $i }}
+        <span class="{{ jobClass $status }}">{{ jobText $job }}</span>:
+        <a href="{{ $status.Status.URL }}">{{ $status.ProwJob }}</a>
+      {{ else }}
+        {{ jobText $job }}
+      {{ end }}
     </tt>
   </li>
   {{ end }}
@@ -92,33 +96,12 @@ Created: {{ .ObjectMeta.CreationTimestamp }}
 
 <h2>Status</h2> {{ with .Status }}
 
-Jobs:
-
-<ul>
-  {{ range .Jobs }}
-  <li>
-      Prow job: <a href="{{ .Status.URL }}">{{ .ProwJob }}</a><br/>
-      {{ with .Status }}
-      Description: {{ .Description }}<br/>
-      State: {{ .State }}<br/>
-      Started: {{ .StartTime }}<br/>
-      Completed: {{ with .CompletionTime }}{{ . }}{{ end }}<br/>
-      Pod: {{ .PodName }}<br/>
-      {{ end }}
-  </li>
-  {{ end }}
-</ul>
-
-Conditions:
 <ul>
 {{ range .Conditions }}
   <li>
-    Type: {{ .Type }}<br/>
-    Status: {{ .Status }}<br/>
-    ObservedGeneration: {{ .ObservedGeneration }}<br/>
-    LastTransitionTime: {{ .LastTransitionTime }}<br/>
-    Reason: {{ .Reason }}<br/>
-    Message: {{ .Message }}<br/>
+    <span {{ if ne .Status "True" }}class="text-danger"{{ end }}>
+      {{ .LastTransitionTime }}: {{ .Type }}: {{ .Reason }}: {{ .Message }}
+    </span>
   </li>
 {{ end }}
 </ul>
@@ -190,6 +173,18 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	title := fmt.Sprintf(runTitle, run.ObjectMeta.Name)
+	status := make([]*prpqv1.PullRequestPayloadJobStatus, 0, len(run.Spec.Jobs.Jobs))
+	for _, j := range run.Spec.Jobs.Jobs {
+		name := j.JobName()
+		var match *prpqv1.PullRequestPayloadJobStatus
+		for i, s := range run.Status.Jobs {
+			if s.ReleaseJobName == name {
+				match = &run.Status.Jobs[i]
+				break
+			}
+		}
+		status = append(status, match)
+	}
 	tmpl := template.New("runTemplate")
 	tmpl.Funcs(template.FuncMap{
 		"prLink": func(pr *prpqv1.PullRequestUnderTest) template.HTML {
@@ -218,6 +213,24 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 			repo := template.HTMLEscapeString(pr.Repo)
 			ret := fmt.Sprintf(`<a href="https://github.com/%s/%s/commit/%s">%s</a>`, org, repo, h, h)
 			return template.HTML(ret)
+		},
+		"jobStatus": func(i int) *prpqv1.PullRequestPayloadJobStatus {
+			return status[i]
+		},
+		"jobClass": func(s *prpqv1.PullRequestPayloadJobStatus) string {
+			switch s.Status.State {
+			case prowv1.SuccessState:
+				return "text-success"
+			case prowv1.FailureState:
+				return "text-danger"
+			case prowv1.AbortedState:
+				return "text-warning"
+			default:
+				return ""
+			}
+		},
+		"jobText": func(s *prpqv1.ReleaseJobSpec) string {
+			return s.CIOperatorConfig.JobName(jobconfig.PeriodicPrefix, s.Test)
 		},
 	})
 	if _, err := tmpl.Parse(runTemplate); err != nil {

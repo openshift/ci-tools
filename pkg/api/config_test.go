@@ -152,6 +152,13 @@ func TestWithPresubmitFrom(t *testing.T) {
 			expected:     &ReleaseBuildConfiguration{InputConfiguration: InputConfiguration{ReleaseTagConfiguration: &baseReleaseTagConfiguration}},
 			defaultTests: true,
 		},
+		{
+			name:         "latest release from source is not added if base has releases.latest",
+			base:         &ReleaseBuildConfiguration{InputConfiguration: InputConfiguration{Releases: map[string]UnresolvedRelease{LatestReleaseName: {Release: &Release{Version: "4.9.base"}}}}},
+			source:       &ReleaseBuildConfiguration{InputConfiguration: InputConfiguration{Releases: map[string]UnresolvedRelease{"latest": {Release: &Release{Version: "4.9.source"}}}}},
+			expected:     &ReleaseBuildConfiguration{InputConfiguration: InputConfiguration{Releases: map[string]UnresolvedRelease{LatestReleaseName: {Release: &Release{Version: "4.9.base"}}}}},
+			defaultTests: true,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

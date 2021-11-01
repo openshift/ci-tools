@@ -128,8 +128,13 @@ func (config *ReleaseBuildConfiguration) WithPresubmitFrom(source *ReleaseBuildC
 		result.BaseImages[name] = isTagRef
 	}
 
+	var hasLatestRelease bool
+	if result.Releases != nil {
+		_, hasLatestRelease = result.Releases[LatestReleaseName]
+	}
+
 	for name, release := range source.Releases {
-		if name == "latest" && result.ReleaseTagConfiguration != nil {
+		if name == LatestReleaseName && (result.ReleaseTagConfiguration != nil || hasLatestRelease) {
 			continue
 		}
 		if result.Releases == nil {

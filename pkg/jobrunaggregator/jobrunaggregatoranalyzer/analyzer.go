@@ -111,6 +111,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 			if !relatedJob.IsFinished(ctx) {
 				fmt.Printf("%v/%v is not finished\n", relatedJob.GetJobName(), relatedJob.GetJobRunID())
 				unfinishedJobNames = append(unfinishedJobNames, relatedJob.GetJobRunID())
+				unfinishedJobsToAggregate = append(unfinishedJobsToAggregate, relatedJob)
 				continue
 			}
 
@@ -118,6 +119,8 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 			if err != nil {
 				fmt.Printf("  error reading prowjob %v: %v\n", relatedJob.GetJobRunID(), err)
 				unfinishedJobNames = append(unfinishedJobNames, relatedJob.GetJobRunID())
+				unfinishedJobsToAggregate = append(unfinishedJobsToAggregate, relatedJob)
+				continue
 			}
 
 			if prowJob.Status.CompletionTime == nil {

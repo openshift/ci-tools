@@ -22,7 +22,7 @@ func TestNewFileTestResolver(t *testing.T) {
 			dir:  filepath.Join("testdata", "config"),
 			expected: &fileTestResolver{
 				tuples: map[string]api.MetadataWithTest{
-					"periodic-ci-testdata-config-openshift-release-master-nightly-4.10-e2e-aws-serial": {
+					"periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial": {
 						Metadata: api.Metadata{
 							Org:     "openshift",
 							Repo:    "release",
@@ -31,7 +31,7 @@ func TestNewFileTestResolver(t *testing.T) {
 						},
 						Test: "e2e-aws-serial",
 					},
-					"periodic-ci-testdata-config-openshift-release-master-nightly-4.10-e2e-metal-ipi": {
+					"periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi": {
 						Metadata: api.Metadata{
 							Org:     "openshift",
 							Repo:    "release",

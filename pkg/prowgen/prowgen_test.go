@@ -96,7 +96,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
 			// podSpec tested in generatePodSpec
-			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, nil, nil, tc.jobRelease, !tc.clone, tc.runIfChanged, tc.skipIfOnlyChanged, tc.optional, nil))
+			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, nil, nil, tc.jobRelease, !tc.clone, tc.runIfChanged, tc.skipIfOnlyChanged, tc.optional, nil, false))
 		})
 	}
 }
@@ -158,7 +158,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
 			// podSpec tested in generatePodSpec
-			testhelper.CompareWithFixture(t, generatePeriodicForTest(tc.test, tc.repoInfo, nil, true, tc.cron, tc.interval, tc.releaseController, nil, tc.jobRelease, !tc.clone, nil))
+			testhelper.CompareWithFixture(t, generatePeriodicForTest(tc.test, tc.repoInfo, nil, true, tc.cron, tc.interval, tc.releaseController, nil, tc.jobRelease, !tc.clone, nil, false))
 		})
 	}
 }
@@ -208,7 +208,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// podSpec tested in generatePodSpec
-			testhelper.CompareWithFixture(t, generatePostsubmitForTest(tc.name, tc.repoInfo, nil, nil, tc.jobRelease, !tc.clone, nil))
+			testhelper.CompareWithFixture(t, generatePostsubmitForTest(tc.name, tc.repoInfo, nil, nil, tc.jobRelease, !tc.clone, nil, false))
 		})
 	}
 }
@@ -535,7 +535,7 @@ func TestGenerateJobBase(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.testName, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generateJobBase(testCase.name, testCase.prefix, testCase.info, sorted(testCase.podSpec), testCase.rehearsable, testCase.pathAlias, "", !testCase.clone, nil))
+			testhelper.CompareWithFixture(t, generateJobBase(testCase.name, testCase.prefix, testCase.info, sorted(testCase.podSpec), testCase.rehearsable, testCase.pathAlias, "", !testCase.clone, nil, false))
 		})
 	}
 }

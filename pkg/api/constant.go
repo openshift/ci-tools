@@ -21,6 +21,9 @@ const (
 	KVMDeviceLabel = "devices.kubevirt.io/kvm"
 	ClusterLabel   = "ci-operator.openshift.io/cluster"
 
+	NoBuildsLabel = "ci.openshift.io/no-builds"
+	NoBuildsValue = "true"
+
 	// HiveCluster is the cluster where Hive is deployed
 	HiveCluster = ClusterHive
 

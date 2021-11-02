@@ -36,6 +36,8 @@ type Config struct {
 	SSHBastion api.Cluster `json:"sshBastion"`
 	// the cluster names for kvm jobs
 	KVM []api.Cluster `json:"kvm"`
+	// the cluster names for no-builds jobs
+	NoBuilds []api.Cluster `json:"noBuilds,omitempty"`
 	// Groups maps a group of jobs to a cluster
 	Groups JobGroups `json:"groups"`
 	// BuildFarm maps groups of jobs to a cloud provider, like GCP
@@ -97,6 +99,10 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 		}
 		if cluster, ok := jobBase.Labels[api.ClusterLabel]; ok {
 			return api.Cluster(cluster), false, nil
+		}
+		if _, ok := jobBase.Labels[api.NoBuildsLabel]; ok && len(config.NoBuilds) > 0 {
+			// Any deterministic distribution is fine for now.
+			return config.NoBuilds[len(jobBase.Name)%len(config.KVM)], false, nil
 		}
 	}
 

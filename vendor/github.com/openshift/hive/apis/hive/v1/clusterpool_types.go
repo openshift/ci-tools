@@ -21,6 +21,12 @@ type ClusterPoolSpec struct {
 	// +required
 	Size int32 `json:"size"`
 
+	// RunningCount is the number of clusters we should keep running. The remainder will be kept hibernated until claimed.
+	// By default no clusters will be kept running (all will be hibernated).
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	RunningCount int32 `json:"runningCount,omitempty"`
+
 	// MaxSize is the maximum number of clusters that will be provisioned including clusters that have been claimed
 	// and ones waiting to be used.
 	// By default there is no limit.
@@ -46,6 +52,11 @@ type ClusterPoolSpec struct {
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
 
+	// Annotations to be applied to new ClusterDeployments created for the pool. ClusterDeployments that have already been
+	// claimed will not be affected when this value is modified.
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+
 	// InstallConfigSecretTemplateRef is a secret with the key install-config.yaml consisting of the content of the install-config.yaml
 	// to be used as a template for all clusters in this pool.
 	// Cluster specific settings (name, basedomain) will be injected dynamically when the ClusterDeployment install-config Secret is generated.
@@ -56,8 +67,15 @@ type ClusterPoolSpec struct {
 	// clusters in the clusterpool to hibernating power state after it has been running for the given duration. The time
 	// that a cluster has been running is the time since the cluster was installed or the time since the cluster last came
 	// out of hibernation.
+	// This is a Duration value; see https://pkg.go.dev/time#ParseDuration for accepted formats.
 	// +optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=duration
 	HibernateAfter *metav1.Duration `json:"hibernateAfter,omitempty"`
+
+	// InstallAttemptsLimit is the maximum number of times Hive will attempt to install the cluster.
+	// +optional
+	InstallAttemptsLimit *int32 `json:"installAttemptsLimit,omitempty"`
 
 	// SkipMachinePools allows creating clusterpools where the machinepools are not managed by hive after cluster creation
 	// +optional
@@ -71,13 +89,19 @@ type ClusterPoolSpec struct {
 // ClusterPoolClaimLifetime defines the lifetimes for claims for the cluster pool.
 type ClusterPoolClaimLifetime struct {
 	// Default is the default lifetime of the claim when no lifetime is set on the claim itself.
+	// This is a Duration value; see https://pkg.go.dev/time#ParseDuration for accepted formats.
 	// +optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=duration
 	Default *metav1.Duration `json:"default,omitempty"`
 
 	// Maximum is the maximum lifetime of the claim after it is assigned a cluster. If the claim still exists
 	// when the lifetime has elapsed, the claim will be deleted by Hive.
 	// The lifetime of a claim is the mimimum of the lifetimes set by the cluster pool and the claim itself.
+	// This is a Duration value; see https://pkg.go.dev/time#ParseDuration for accepted formats.
 	// +optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=duration
 	Maximum *metav1.Duration `json:"maximum,omitempty"`
 }
 
@@ -124,6 +148,9 @@ const (
 	// ClusterPoolCapacityAvailableCondition is set to provide information on whether the cluster pool has capacity
 	// available to create more clusters for the pool.
 	ClusterPoolCapacityAvailableCondition ClusterPoolConditionType = "CapacityAvailable"
+	// ClusterPoolAllClustersCurrentCondition indicates whether all unassigned (installing or ready)
+	// ClusterDeployments in the pool match the current configuration of the ClusterPool.
+	ClusterPoolAllClustersCurrentCondition ClusterPoolConditionType = "AllClustersCurrent"
 )
 
 // +genclient

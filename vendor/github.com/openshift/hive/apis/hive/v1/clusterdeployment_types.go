@@ -46,9 +46,9 @@ const (
 	// target specific regions of the cluster-platform.
 	HiveClusterRegionLabel = "hive.openshift.io/cluster-region"
 
-	// FinalizerMachineManagementTargetNamespace is used on ClusterDeployments to
-	// ensure we clean up the machine management target namespace before cleaning up the API object.
-	FinalizerMachineManagementTargetNamespace string = "hive.openshift.io/machine-management-targetnamespace"
+	// FinalizerArgoCDCluster is used on ClusterDeployments to ensure we clean up the ArgoCD cluster
+	// secret before cleaning up the API object.
+	FinalizerArgoCDCluster = "hive.openshift.io/argocd-cluster"
 )
 
 // ClusterPowerState is used to indicate whether a cluster is running or in a
@@ -88,7 +88,9 @@ type ClusterDeploymentSpec struct {
 	// +optional
 	PullSecretRef *corev1.LocalObjectReference `json:"pullSecretRef,omitempty"`
 
-	// PreserveOnDelete allows the user to disconnect a cluster from Hive without deprovisioning it
+	// PreserveOnDelete allows the user to disconnect a cluster from Hive without deprovisioning it. This can also be
+	// used to abandon ongoing cluster deprovision.
+	// +optional
 	PreserveOnDelete bool `json:"preserveOnDelete,omitempty"`
 
 	// ControlPlaneConfig contains additional configuration for the target cluster's control plane
@@ -119,6 +121,13 @@ type ClusterDeploymentSpec struct {
 	// May be unset in the case of adopted clusters.
 	Provisioning *Provisioning `json:"provisioning,omitempty"`
 
+	// ClusterInstallLocalReference provides reference to an object that implements
+	// the hivecontract ClusterInstall. The namespace of the object is same as the
+	// ClusterDeployment.
+	// This cannot be set when Provisioning is also set.
+	// +optional
+	ClusterInstallRef *ClusterInstallLocalReference `json:"clusterInstallRef,omitempty"`
+
 	// ClusterPoolRef is a reference to the ClusterPool that this ClusterDeployment originated from.
 	// +optional
 	ClusterPoolRef *ClusterPoolReference `json:"clusterPoolRef,omitempty"`
@@ -131,17 +140,15 @@ type ClusterDeploymentSpec struct {
 	// HibernateAfter will transition a cluster to hibernating power state after it has been running for the
 	// given duration. The time that a cluster has been running is the time since the cluster was installed or the
 	// time since the cluster last came out of hibernation.
+	// This is a Duration value; see https://pkg.go.dev/time#ParseDuration for accepted formats.
 	// +optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=duration
 	HibernateAfter *metav1.Duration `json:"hibernateAfter,omitempty"`
 
 	// InstallAttemptsLimit is the maximum number of times Hive will attempt to install the cluster.
 	// +optional
 	InstallAttemptsLimit *int32 `json:"installAttemptsLimit,omitempty"`
-
-	// MachineManagement contains machine management settings including the strategy that will be used when
-	// provisioning worker machines.
-	// +optional
-	MachineManagement *MachineManagement `json:"machineManagement,omitempty"`
 
 	// BoundServiceAccountSignkingKeySecretRef refers to a Secret that contains a
 	// 'bound-service-account-signing-key.key' data key pointing to the private
@@ -151,23 +158,15 @@ type ClusterDeploymentSpec struct {
 	BoundServiceAccountSignkingKeySecretRef *corev1.LocalObjectReference `json:"boundServiceAccountSigningKeySecretRef,omitempty"`
 }
 
-// MachineManagement contains settings used for machine management.
-type MachineManagement struct {
-	// Central contains settings for central machine management. If set Central indicates that central machine
-	// management will be used as opposed to management on the spoke cluster.
-	// +optional
-	Central *CentralMachineManagement `json:"central,omitempty"`
+// ClusterInstallLocalReference provides reference to an object that implements
+// the hivecontract ClusterInstall. The namespace of the object is same as the
+// ClusterDeployment.
+type ClusterInstallLocalReference struct {
+	Group   string `json:"group"`
+	Version string `json:"version"`
+	Kind    string `json:"kind"`
 
-	// TargetNamespace is the namespace in which we will create worker machineset resources. Resources
-	// required to create machines will be copied to the TargetNamespace.
-	// TargetNamespace is created for you and cannot be set during creation. TargetNamespace is also
-	// immutable once set.
-	// +optional
-	TargetNamespace string `json:"targetNamespace,omitempty"`
-}
-
-// CentralMachineManagement contains settings used for central machine managemnt.
-type CentralMachineManagement struct {
+	Name string `json:"name"`
 }
 
 // Provisioning contains settings used only for initial cluster provisioning.
@@ -208,11 +207,6 @@ type Provisioning struct {
 	// additional features of the installer.
 	// +optional
 	InstallerEnv []corev1.EnvVar `json:"installerEnv,omitempty"`
-
-	// InstallStrategy provides platform agnostic configuration for the use of alternate install strategies.
-	// Defaults to openshift-install if none specified.
-	// +optional
-	InstallStrategy *InstallStrategy `json:"installStrategy,omitempty"`
 }
 
 // ClusterImageSetReference is a reference to a ClusterImageSet
@@ -230,6 +224,9 @@ type ClusterPoolReference struct {
 	// ClaimName is the name of the ClusterClaim that claimed the cluster from the pool.
 	// +optional
 	ClaimName string `json:"claimName,omitempty"`
+	// ClaimedTimestamp is the time this cluster was assigned to a ClusterClaim. This is only used for
+	// ClusterDeployments belonging to ClusterPools.
+	ClaimedTimestamp *metav1.Time `json:"claimedTimestamp,omitempty"`
 }
 
 // ClusterMetadata contains metadata information about the installed cluster.
@@ -245,7 +242,8 @@ type ClusterMetadata struct {
 	AdminKubeconfigSecretRef corev1.LocalObjectReference `json:"adminKubeconfigSecretRef"`
 
 	// AdminPasswordSecretRef references the secret containing the admin username/password which can be used to login to this cluster.
-	AdminPasswordSecretRef corev1.LocalObjectReference `json:"adminPasswordSecretRef"`
+	// +optional
+	AdminPasswordSecretRef *corev1.LocalObjectReference `json:"adminPasswordSecretRef,omitempty"`
 }
 
 // ClusterDeploymentStatus defines the observed state of ClusterDeployment
@@ -294,22 +292,10 @@ type ClusterDeploymentStatus struct {
 	// +optional
 	ProvisionRef *corev1.LocalObjectReference `json:"provisionRef,omitempty"`
 
-	// InstallStrategy contains observed state from specific install strategies.
-	// +optional
-	InstallStrategy *InstallStrategyStatus `json:"installStrategy,omitempty"`
-
 	// Platform contains the observed state for the specific platform upon which to
 	// perform the installation.
 	// +optional
 	Platform *PlatformStatus `json:"platformStatus,omitempty"`
-}
-
-// InstallStrategyStatus contains observed state from specific install strategies.
-type InstallStrategyStatus struct {
-
-	// Agent defines the observed state of the Agent install strategy for this cluster.
-	// +optional
-	Agent *agent.InstallStrategyStatus `json:"agent,omitempty"`
 }
 
 // ClusterDeploymentCondition contains details for the current condition of a cluster deployment
@@ -335,12 +321,7 @@ type ClusterDeploymentCondition struct {
 // ClusterDeploymentConditionType is a valid value for ClusterDeploymentCondition.Type
 type ClusterDeploymentConditionType string
 
-// WARNING: All ClusterDeploymentConditionTypes should be added to the AllClusterDeploymentConditions slice below.
 const (
-	// ClusterImageSetNotFoundCondition is set when the ClusterImageSet referenced by the
-	// ClusterDeployment is not found.
-	ClusterImageSetNotFoundCondition ClusterDeploymentConditionType = "ClusterImageSetNotFound"
-
 	// InstallerImageResolutionFailedCondition is a condition that indicates whether the job
 	// to determine the installer image based on a release image was successful.
 	InstallerImageResolutionFailedCondition ClusterDeploymentConditionType = "InstallerImageResolutionFailed"
@@ -391,6 +372,14 @@ const (
 	// ProvisionStoppedCondition is set when cluster provisioning is stopped
 	ProvisionStoppedCondition ClusterDeploymentConditionType = "ProvisionStopped"
 
+	// Provisioned is True when a cluster is installed; False while it is provisioning or deprovisioning.
+	// The Reason indicates where it is in that lifecycle.
+	ProvisionedCondition ClusterDeploymentConditionType = "Provisioned"
+
+	// RequirementsMetCondition is set True when all pre-provision requirements have been met,
+	// and the controllers can begin the cluster install.
+	RequirementsMetCondition ClusterDeploymentConditionType = "RequirementsMet"
+
 	// AuthenticationFailureCondition is true when platform credentials cannot be used because of authentication failure
 	AuthenticationFailureClusterDeploymentCondition ClusterDeploymentConditionType = "AuthenticationFailure"
 
@@ -401,25 +390,25 @@ const (
 	// AWSPrivateLinkFailedClusterDeploymentCondition is true controller fails to setup private link access
 	// for the cluster.
 	AWSPrivateLinkFailedClusterDeploymentCondition ClusterDeploymentConditionType = "AWSPrivateLinkFailed"
+
+	// These are conditions that are copied from ClusterInstall on to the ClusterDeployment object.
+	ClusterInstallFailedClusterDeploymentCondition          ClusterDeploymentConditionType = "ClusterInstallFailed"
+	ClusterInstallCompletedClusterDeploymentCondition       ClusterDeploymentConditionType = "ClusterInstallCompleted"
+	ClusterInstallStoppedClusterDeploymentCondition         ClusterDeploymentConditionType = "ClusterInstallStopped"
+	ClusterInstallRequirementsMetClusterDeploymentCondition ClusterDeploymentConditionType = "ClusterInstallRequirementsMet"
 )
 
-// AllClusterDeploymentConditions is a slice containing all condition types. This can be used for dealing with
-// cluster deployment conditions dynamically.
-var AllClusterDeploymentConditions = []ClusterDeploymentConditionType{
-	ClusterImageSetNotFoundCondition,
-	InstallerImageResolutionFailedCondition,
-	ControlPlaneCertificateNotFoundCondition,
-	IngressCertificateNotFoundCondition,
-	UnreachableCondition,
+// PositivePolarityClusterDeploymentConditions is a slice containing all condition types with positive polarity
+// For controllers that handle these conditions, the desired state is True
+// All cluster deployment condition types that are not in this slice are assumed to have negative polarity
+var PositivePolarityClusterDeploymentConditions = []ClusterDeploymentConditionType{
 	ActiveAPIURLOverrideCondition,
-	DNSNotReadyCondition,
-	ProvisionFailedCondition,
-	SyncSetFailedCondition,
-	RelocationFailedCondition,
 	ClusterHibernatingCondition,
-	InstallLaunchErrorCondition,
 	AWSPrivateLinkReadyClusterDeploymentCondition,
-	AWSPrivateLinkFailedClusterDeploymentCondition,
+	ClusterInstallCompletedClusterDeploymentCondition,
+	ClusterInstallRequirementsMetClusterDeploymentCondition,
+	RequirementsMetCondition,
+	ProvisionedCondition,
 }
 
 // Cluster hibernating reasons
@@ -450,7 +439,31 @@ const (
 	// SyncSetsNotAppliedReason is used as the reason when SyncSets have not yet been applied
 	// for the cluster based on ClusterSync.Status.FirstSucessTime
 	SyncSetsNotAppliedReason = "SyncSetsNotApplied"
+	// SyncSetsAppliedReason means SyncSets have been successfully applied at some point.
+	// (It does not necessarily mean they are currently copacetic -- check ClusterSync status
+	// for that.)
+	SyncSetsAppliedReason = "SyncSetsApplied"
 )
+
+// Provisioned status condition reasons
+const (
+	// ProvisioningProvisionedReason is set while the cluster is still provisioning.
+	ProvisioningProvisionedReason = "Provisioning"
+	// ProvisionStoppedProvisionedReason means cluster provisioning is stopped. The ProvisionStopped condition may contain more detail.
+	ProvisionStoppedProvisionedReason = "ProvisionStopped"
+	// ProvisionedProvisionedReason is set when the provision is successful.
+	ProvisionedProvisionedReason = "Provisioned"
+	// DeprovisioningProvisionedReason is set when we start to deprovision the cluster.
+	DeprovisioningProvisionedReason = "Deprovisioning"
+	// DeprovisionFailedProvisionedReason means the deprovision failed terminally.
+	DeprovisionFailedProvisionedReason = "DeprovisionFailed"
+	// DeprovisionedProvisionedReason is set when the cluster has been successfully deprovisioned
+	DeprovisionedProvisionedReason = "Deprovisioned"
+)
+
+// InitializedConditionReason is used when a condition is initialized for the first time, and the status of the
+// condition is still Unknown
+const InitializedConditionReason = "Initialized"
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -458,12 +471,12 @@ const (
 // ClusterDeployment is the Schema for the clusterdeployments API
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="InfraID",type="string",JSONPath=".spec.clusterMetadata.infraID"
 // +kubebuilder:printcolumn:name="Platform",type="string",JSONPath=".metadata.labels.hive\\.openshift\\.io/cluster-platform"
 // +kubebuilder:printcolumn:name="Region",type="string",JSONPath=".metadata.labels.hive\\.openshift\\.io/cluster-region"
-// +kubebuilder:printcolumn:name="ClusterType",type="string",JSONPath=".metadata.labels.hive\\.openshift\\.io/cluster-type"
-// +kubebuilder:printcolumn:name="Installed",type="boolean",JSONPath=".spec.installed"
-// +kubebuilder:printcolumn:name="InfraID",type="string",JSONPath=".spec.clusterMetadata.infraID"
 // +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".metadata.labels.hive\\.openshift\\.io/version-major-minor-patch"
+// +kubebuilder:printcolumn:name="ClusterType",type="string",JSONPath=".metadata.labels.hive\\.openshift\\.io/cluster-type"
+// +kubebuilder:printcolumn:name="ProvisionStatus",type="string",JSONPath=".status.conditions[?(@.type=='Provisioned')].reason"
 // +kubebuilder:printcolumn:name="PowerState",type="string",JSONPath=".status.conditions[?(@.type=='Hibernating')].reason"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:path=clusterdeployments,shortName=cd,scope=Namespaced
@@ -511,7 +524,7 @@ type Platform struct {
 	Ovirt *ovirt.Platform `json:"ovirt,omitempty"`
 
 	// AgentBareMetal is the configuration used when performing an Assisted Agent based installation
-	// to bare metal. Can only be used with the Assisted InstallStrategy.
+	// to bare metal.
 	AgentBareMetal *agent.BareMetalPlatform `json:"agentBareMetal,omitempty"`
 }
 
@@ -520,14 +533,6 @@ type Platform struct {
 type PlatformStatus struct {
 	// AWS is the observed state on AWS.
 	AWS *aws.PlatformStatus `json:"aws,omitempty"`
-}
-
-// InstallStrategy provides configuration for optional alternative install strategies.
-type InstallStrategy struct {
-
-	// Agent is the install strategy configuration for provisioning a cluster with the
-	// Agent based assisted installer.
-	Agent *agent.InstallStrategy `json:"agent,omitempty"`
 }
 
 // ClusterIngress contains the configurable pieces for any ClusterIngress objects

@@ -23,7 +23,10 @@ type ClusterClaimSpec struct {
 
 	// Lifetime is the maximum lifetime of the claim after it is assigned a cluster. If the claim still exists
 	// when the lifetime has elapsed, the claim will be deleted by Hive.
+	// This is a Duration value; see https://pkg.go.dev/time#ParseDuration for accepted formats.
 	// +optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=duration
 	Lifetime *metav1.Duration `json:"lifetime,omitempty"`
 }
 
@@ -65,8 +68,6 @@ type ClusterClaimConditionType string
 const (
 	// ClusterClaimPendingCondition is set when a cluster has not yet been assigned and made ready to the claim.
 	ClusterClaimPendingCondition ClusterClaimConditionType = "Pending"
-	// ClusterClaimClusterDeletedCondition is set when the cluster assigned to the claim has been deleted.
-	ClusterClaimClusterDeletedCondition ClusterClaimConditionType = "ClusterDeleted"
 	// ClusterRunningCondition is true when a claimed cluster is running and ready for use.
 	ClusterRunningCondition ClusterClaimConditionType = "ClusterRunning"
 )

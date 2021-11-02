@@ -17,6 +17,11 @@ const (
 	UnifiedTestRunTable = "UnifiedTestRuns"
 	PerDayTestRunTable  = "TestRunSummaryPerDay"
 	PerWeekTestRunTable = "TestRunSummaryPerWeek"
+
+	ReleaseTableName             = "ReleaseTags"
+	ReleaseRepositoryTableName   = "ReleaseRepositories"
+	ReleaseJobRunTableName       = "ReleaseJobRuns"
+	ReleasePullRequestsTableName = "ReleasePullRequests"
 )
 
 type BigQueryDataCoordinates struct {

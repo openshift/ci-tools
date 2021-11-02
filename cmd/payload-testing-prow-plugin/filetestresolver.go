@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
@@ -25,11 +27,12 @@ func newFileTestResolver(dir string) (testResolver, error) {
 		}
 		for _, element := range configuration.Tests {
 			if element.Cron != nil || element.Interval != nil || element.ReleaseController {
-				jobName := info.JobName(jc.PeriodicPrefix, element.As)
+				jobName := configuration.Metadata.JobName(jc.PeriodicPrefix, element.As)
 				ret.tuples[jobName] = api.MetadataWithTest{
 					Metadata: configuration.Metadata,
 					Test:     element.As,
 				}
+				logrus.WithField("jobName", jobName).WithField("test", element.As).Info("loaded job for test")
 			}
 		}
 		return nil

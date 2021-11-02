@@ -53,7 +53,7 @@ func aClusterDeployment() *hivev1.ClusterDeployment {
 				AdminKubeconfigSecretRef: corev1.LocalObjectReference{
 					Name: "ci-openshift-46-aws-us-east-1-ccx23-0-gpjsf-admin-kubeconfig",
 				},
-				AdminPasswordSecretRef: corev1.LocalObjectReference{
+				AdminPasswordSecretRef: &corev1.LocalObjectReference{
 					Name: "ci-openshift-46-aws-us-east-1-ccx23-0-gpjsf-admin-password",
 				},
 			},

@@ -149,6 +149,9 @@ func (s *clusterClaimStep) acquireCluster(ctx context.Context, waitForClaim func
 	if clusterDeployment.Spec.ClusterMetadata == nil {
 		return claim, fmt.Errorf("got nil cluster metadata from cluster deployment %s in namespace %s", claim.Spec.Namespace, claim.Spec.Namespace)
 	}
+	if clusterDeployment.Spec.ClusterMetadata.AdminPasswordSecretRef == nil {
+		return claim, fmt.Errorf("got nil admin password secret reference from cluster deployment %s in namespace %s", claim.Spec.Namespace, claim.Spec.Namespace)
+	}
 
 	for src, dst := range map[string]string{clusterDeployment.Spec.ClusterMetadata.AdminKubeconfigSecretRef.Name: api.HiveAdminKubeconfigSecret, clusterDeployment.Spec.ClusterMetadata.AdminPasswordSecretRef.Name: api.HiveAdminPasswordSecret} {
 		srcSecret := &corev1.Secret{}

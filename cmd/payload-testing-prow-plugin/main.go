@@ -22,6 +22,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
+	"github.com/openshift/ci-tools/pkg/load/agents"
 )
 
 type options struct {
@@ -131,9 +132,9 @@ func main() {
 		logger.WithError(err).WithField("context", appCIContextName).Fatal("could not get client for kube config")
 	}
 
-	testResolver, err := newFileTestResolver(o.ciOpConfigDir)
+	configAgent, err := agents.NewConfigAgent(o.ciOpConfigDir)
 	if err != nil {
-		logger.WithError(err).Fatal("could not create test resolver")
+		logger.WithError(err).Fatal("could not get config agent")
 	}
 
 	serv := &server{
@@ -142,7 +143,7 @@ func main() {
 		ctx:          controllerruntime.SetupSignalHandler(),
 		namespace:    o.namespace,
 		jobResolver:  newReleaseControllerJobResolver(&http.Client{}),
-		testResolver: testResolver,
+		testResolver: &fileTestResolver{configAgent: configAgent},
 	}
 
 	eventServer := githubeventserver.New(o.githubEventServerOptions, getWebhookHMAC, logger)

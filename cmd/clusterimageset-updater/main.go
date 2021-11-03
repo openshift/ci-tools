@@ -133,11 +133,7 @@ func main() {
 			isCurrent := false
 			for poolBounds := range poolFilesByBounds {
 				if poolBounds == *bounds {
-					if imageset.Spec.ReleaseImage == boundsToPullspec[poolBounds] {
-						isCurrent = true
-						delete(poolFilesByBounds, poolBounds)
-						delete(boundsToPullspec, poolBounds)
-					}
+					isCurrent = imageset.Spec.ReleaseImage == boundsToPullspec[poolBounds]
 					break
 				}
 			}

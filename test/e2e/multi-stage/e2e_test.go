@@ -187,6 +187,16 @@ func TestMultiStage(t *testing.T) {
 				`verify-releases-latest-cli succeeded`,
 			},
 		},
+		{
+			name:    "request for increased shm-size",
+			args:    []string{"--unresolved-config=config.yaml", "--target=shm-increase"},
+			env:     []string{defaultJobSpec},
+			success: true,
+			output: []string{
+				`Adding Dshm Volume to pod: shm-increase-step-with-increased-shm`,
+				`Container test in pod shm-increase-step-with-increased-shm completed successfully`,
+			},
+		},
 	}
 
 	for _, testCase := range testCases {

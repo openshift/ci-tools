@@ -460,8 +460,9 @@ func validateResourceList(fieldRoot string, list api.ResourceList) []error {
 	var numInvalid int
 	for key := range list {
 		switch key {
-		case "cpu", "memory":
-			if quantity, err := resource.ParseQuantity(list[key]); err != nil {
+		case "cpu", "memory", api.ShmResource:
+			quantity, err := resource.ParseQuantity(list[key])
+			if err != nil {
 				validationErrors = append(validationErrors, fmt.Errorf("%s.%s: invalid quantity: %w", fieldRoot, key, err))
 			} else {
 				if quantity.IsZero() {
@@ -469,6 +470,12 @@ func validateResourceList(fieldRoot string, list api.ResourceList) []error {
 				}
 				if quantity.Sign() == -1 {
 					validationErrors = append(validationErrors, fmt.Errorf("%s.%s: quantity cannot be negative", fieldRoot, key))
+				}
+			}
+			if key == api.ShmResource {
+				maxSize := resource.MustParse("2G")
+				if quantity.Cmp(maxSize) > 0 {
+					validationErrors = append(validationErrors, fmt.Errorf("%s.%s: quantity cannot be greater than %v", fieldRoot, key, maxSize))
 				}
 			}
 		case "devices.kubevirt.io/kvm":

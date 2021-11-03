@@ -50,6 +50,8 @@ const (
 	OauthTokenSecretName = "github-credentials-openshift-ci-robot-private-git-cloner"
 
 	GroupSuffix = "-group"
+
+	ShmResource = "ci-operator.openshift.io/shm"
 )
 
 var (

@@ -167,6 +167,7 @@ func TestGeneratePods(t *testing.T) {
 	}
 	jobSpec.SetNamespace("namespace")
 	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil)
+	step.test[0].Resources = api.ResourceRequirements{Requests: api.ResourceList{"shm": "2G"}}
 	env := []coreapi.EnvVar{
 		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
 		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},

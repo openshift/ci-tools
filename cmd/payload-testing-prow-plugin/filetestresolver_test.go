@@ -49,7 +49,7 @@ func TestNewFileTestResolver(t *testing.T) {
 			actual, actualError := newFileTestResolver(tc.dir)
 			v, ok := actual.(*fileTestResolver)
 			if !ok {
-				t.Errorf("returned expected type")
+				t.Fatalf("returned unexpected type")
 			}
 			if diff := cmp.Diff(tc.expected, v, cmp.Comparer(func(x, y fileTestResolver) bool {
 				return cmp.Diff(x.tuples, y.tuples) == ""

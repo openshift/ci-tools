@@ -18,6 +18,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
+	"github.com/openshift/ci-tools/pkg/release/config"
 )
 
 type githubClient interface {
@@ -52,32 +53,14 @@ type server struct {
 	testResolver testResolver
 }
 
-type releaseType string
-type jobType string
-
 type jobSetSpecification struct {
 	ocp         string
-	releaseType releaseType
-	jobs        jobType
-}
-
-const (
-	nightlyRelease releaseType = "nightly"
-	ciRelease      releaseType = "ci"
-
-	informing jobType = "informing"
-	blocking  jobType = "blocking"
-	periodics jobType = "periodics"
-	all       jobType = "all"
-)
-
-type Job struct {
-	Name                 string `json:"name"`
-	api.MetadataWithTest `json:",inline"`
+	releaseType api.ReleaseStream
+	jobs        config.JobType
 }
 
 type jobResolver interface {
-	resolve(ocp string, releaseType releaseType, jobType jobType) ([]Job, error)
+	resolve(ocp string, releaseType api.ReleaseStream, jobType config.JobType) ([]config.Job, error)
 }
 
 type testResolver interface {
@@ -97,8 +80,8 @@ func specsFromComment(comment string) []jobSetSpecification {
 	for i := range matches {
 		specs = append(specs, jobSetSpecification{
 			ocp:         matches[i][ocpIdx],
-			releaseType: releaseType(matches[i][releaseIdx]),
-			jobs:        jobType(matches[i][jobsIdx]),
+			releaseType: api.ReleaseStream(matches[i][releaseIdx]),
+			jobs:        config.JobType(matches[i][jobsIdx]),
 		})
 	}
 	return specs
@@ -125,7 +108,6 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		github.OrgLogField:  org,
 		github.RepoLogField: repo,
 		github.PrLogField:   prNumber,
-		"plugin":            pluginName,
 	})
 
 	// only reacts on comments on PRs
@@ -174,7 +156,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 				jobTuple, err := s.testResolver.resolve(job.Name)
 				if err != nil {
 					// This is expected for non-generated jobs
-					specLogger.WithError(err).WithField("job.Name", job.Name).Warn("could not resolve tests for job")
+					specLogger.WithError(err).WithField("job.Name", job.Name).Info("could not resolve tests for job")
 					continue
 				}
 				jobNames = append(jobNames, job.Name)

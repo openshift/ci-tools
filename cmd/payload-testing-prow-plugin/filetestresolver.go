@@ -37,7 +37,7 @@ func newFileTestResolver(dir string) (testResolver, error) {
 		}
 		return nil
 	}); err != nil {
-		return nil, fmt.Errorf("failed to operater on ci operator config dir %s: %w", dir, err)
+		return nil, fmt.Errorf("failed to operate on ci operator config dir %s: %w", dir, err)
 	}
 	return ret, nil
 }

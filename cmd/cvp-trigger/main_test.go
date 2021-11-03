@@ -136,16 +136,17 @@ func Test_options_validate(t *testing.T) {
 	}
 
 	type fields struct {
-		bundleImageRef string
-		channel        string
-		indexImageRef  string
-		jobConfigPath  string
-		jobName        string
-		ocpVersion     string
-		outputPath     string
-		packageName    string
-		prowConfigPath string
-		dryRun         bool
+		bundleImageRef          string
+		channel                 string
+		indexImageRef           string
+		jobConfigPath           string
+		jobName                 string
+		ocpVersion              string
+		outputPath              string
+		packageName             string
+		prowConfigPath          string
+		customScorecardTestcase string
+		dryRun                  bool
 	}
 	tests := []struct {
 		name    string
@@ -155,16 +156,17 @@ func Test_options_validate(t *testing.T) {
 		{
 			name: "valid options",
 			fields: fields{
-				prowConfigPath: "/not/empty",
-				jobConfigPath:  "/also/not/empty",
-				jobName:        "some-job",
-				bundleImageRef: "master",
-				indexImageRef:  "latest",
-				ocpVersion:     "4.5",
-				outputPath:     "/output/path",
-				packageName:    "foo",
-				channel:        "bar",
-				dryRun:         false,
+				prowConfigPath:          "/not/empty",
+				jobConfigPath:           "/also/not/empty",
+				jobName:                 "some-job",
+				bundleImageRef:          "master",
+				indexImageRef:           "latest",
+				ocpVersion:              "4.5",
+				outputPath:              "/output/path",
+				packageName:             "foo",
+				channel:                 "bar",
+				customScorecardTestcase: "somescorecard",
+				dryRun:                  false,
 			},
 			wantErr: false,
 		},
@@ -378,11 +380,12 @@ func Test_options_validate(t *testing.T) {
 					ConfigPath:    tt.fields.prowConfigPath,
 					JobConfigPath: tt.fields.jobConfigPath,
 				},
-				jobName:             tt.fields.jobName,
-				ocpVersion:          tt.fields.ocpVersion,
-				operatorPackageName: tt.fields.packageName,
-				outputPath:          tt.fields.outputPath,
-				dryRun:              tt.fields.dryRun,
+				jobName:                 tt.fields.jobName,
+				ocpVersion:              tt.fields.ocpVersion,
+				operatorPackageName:     tt.fields.packageName,
+				outputPath:              tt.fields.outputPath,
+				customScorecardTestcase: tt.fields.customScorecardTestcase,
+				dryRun:                  tt.fields.dryRun,
 			}
 			if err := o.validateOptions(); (err != nil) != tt.wantErr {
 				t.Errorf("validateOptions() error = %v, wantErr %v", err, tt.wantErr)

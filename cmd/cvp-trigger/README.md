@@ -77,5 +77,6 @@ CVP Trigger must load the configuration for the
    the existing OperatorGroup's target namespace set will be replaced. The special
    value "!install" will set the target namespace to the operator's installation
    namespace.
+- `CUSTOM_SCORECARD_TESTCASE`: Optional. Name of the custom scorecard test which is to be run.
 - `PYXIS_URL`: Optional. URL that contains specific cvp product package name for specific ISV
    with unique pid.

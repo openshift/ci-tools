@@ -80,7 +80,7 @@
       name: test
       resources:
         requests:
-          shm: 2G
+          ci-operator.openshift.io/shm: 2G
       terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
       - mountPath: /logs

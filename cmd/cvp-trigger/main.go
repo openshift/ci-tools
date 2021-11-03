@@ -36,42 +36,45 @@ import (
 )
 
 const (
-	bundleImageRefOption       = "bundle-image-ref"
-	channelOption              = "channel"
-	indexImageRefOption        = "index-image-ref"
-	installNamespaceOption     = "install-namespace"
-	jobConfigPathOption        = "job-config-path"
-	jobNameOption              = "job-name"
-	ocpVersionOption           = "ocp-version"
-	operatorPackageNameOptions = "operator-package-name"
-	outputFilePathOption       = "output-path"
-	prowConfigPathOption       = "prow-config-path"
-	releaseImageRefOption      = "release-image-ref"
-	targetNamespacesOption     = "target-namespaces"
+	bundleImageRefOption          = "bundle-image-ref"
+	channelOption                 = "channel"
+	indexImageRefOption           = "index-image-ref"
+	installNamespaceOption        = "install-namespace"
+	jobConfigPathOption           = "job-config-path"
+	jobNameOption                 = "job-name"
+	ocpVersionOption              = "ocp-version"
+	operatorPackageNameOptions    = "operator-package-name"
+	outputFilePathOption          = "output-path"
+	prowConfigPathOption          = "prow-config-path"
+	releaseImageRefOption         = "release-image-ref"
+	targetNamespacesOption        = "target-namespaces"
+	customScorecardTestcaseOption = "custom-scorecard-testcase"
 
-	BundleImage      = "BUNDLE_IMAGE"
-	Channel          = "OO_CHANNEL"
-	IndexImage       = "OO_INDEX"
-	InstallNamespace = "OO_INSTALL_NAMESPACE"
-	Package          = "OO_PACKAGE"
-	TargetNamespaces = "OO_TARGET_NAMESPACES"
-	PyxisUrl         = "PYXIS_URL"
+	BundleImage             = "BUNDLE_IMAGE"
+	Channel                 = "OO_CHANNEL"
+	IndexImage              = "OO_INDEX"
+	InstallNamespace        = "OO_INSTALL_NAMESPACE"
+	Package                 = "OO_PACKAGE"
+	TargetNamespaces        = "OO_TARGET_NAMESPACES"
+	CustomScorecardTestcase = "CUSTOM_SCORECARD_TESTCASE"
+	PyxisUrl                = "PYXIS_URL"
 )
 
 type options struct {
-	bundleImageRef      string
-	channel             string
-	indexImageRef       string
-	installNamespace    string
-	jobName             string
-	prowconfig          configflagutil.ConfigOptions
-	ocpVersion          string
-	operatorPackageName string
-	outputPath          string
-	releaseImageRef     string
-	targetNamespaces    string
-	pyxisUrl            string
-	dryRun              bool
+	bundleImageRef          string
+	channel                 string
+	indexImageRef           string
+	installNamespace        string
+	jobName                 string
+	prowconfig              configflagutil.ConfigOptions
+	ocpVersion              string
+	operatorPackageName     string
+	outputPath              string
+	releaseImageRef         string
+	targetNamespaces        string
+	pyxisUrl                string
+	customScorecardTestcase string
+	dryRun                  bool
 }
 
 type jobResult interface {
@@ -110,6 +113,7 @@ func (o *options) gatherOptions() {
 	fs.StringVar(&o.releaseImageRef, releaseImageRefOption, "", "Pull spec of a specific release payload image used for OCP deployment.")
 	fs.StringVar(&o.targetNamespaces, targetNamespacesOption, "", "A comma-separated list of namespaces the operator will target. If empty, all namespaces are targeted")
 	fs.StringVar(&o.pyxisUrl, PyxisUrl, "", "URL that contains specific cvp product package name for specific ISV with unique pid")
+	fs.StringVar(&o.customScorecardTestcase, customScorecardTestcaseOption, "", "Name of custom scorecard testcase that needs to be executed")
 	fs.BoolVar(&o.dryRun, "dry-run", false, "Executes a dry-run, displaying the job YAML without submitting the job to Prow")
 }
 
@@ -231,6 +235,9 @@ func main() {
 	}
 	if o.targetNamespaces != "" {
 		params[TargetNamespaces] = o.targetNamespaces
+	}
+	if o.customScorecardTestcase != "" {
+		params[CustomScorecardTestcase] = o.customScorecardTestcase
 	}
 
 	depOverrides := map[string]string{

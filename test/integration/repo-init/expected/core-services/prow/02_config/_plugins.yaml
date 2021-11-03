@@ -1,5 +1,6 @@
 blunderbuss:
   request_count: 2
+branch_cleaner: {}
 bugzilla: {}
 cat: {}
 cherry_pick_unapproved:

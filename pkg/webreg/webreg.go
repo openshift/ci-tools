@@ -2,6 +2,7 @@ package webreg
 
 import (
 	"bytes"
+	_ "embed"
 	"errors"
 	"fmt"
 	"html/template"
@@ -46,7 +47,9 @@ const (
 	TestQuery = "test"
 )
 
-const htmlPageStart = `
+//go:embed base.css
+var baseCSS string
+var htmlPageStart = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -55,68 +58,7 @@ const htmlPageStart = `
 <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<style>
-@namespace svg url(http://www.w3.org/2000/svg);
-svg|a:link, svg|a:visited {
-  cursor: pointer;
-}
-
-svg|a text,
-text svg|a {
-  fill: #007bff;
-  text-decoration: none;
-  background-color: transparent;
-  -webkit-text-decoration-skip: objects;
-}
-
-svg|a:hover text, svg|a:active text {
-  fill: #0056b3;
-  text-decoration: underline;
-}
-
-pre {
-	border: 10px solid transparent;
-}
-h1, h2, h3 {
-	padding-top: 10px;
-}
-h1 a:link,
-h2 a:link,
-h3 a:link,
-h4 a:link,
-h5 a:link {
-  color: inherit;
-  text-decoration: none;
-}
-h1 a:hover,
-h2 a:hover,
-h3 a:hover,
-h4 a:hover,
-h5 a:hover {
-  text-decoration: underline;
-}
-h1 a:visited,
-h2 a:visited,
-h3 a:visited,
-h4 a:visited,
-h5 a:visited {
-  color: inherit;
-  text-decoration: none;
-}
-.info {
-	text-decoration-line: underline;
-	text-decoration-style: dotted;
-	text-decoration-color: #c0c0c0;
-}
-button {
-  padding:0.2em 1em;
-  border-radius: 8px;
-  cursor:pointer;
-}
-td {
-  vertical-align: middle;
-}
-</style>
+<style>` + baseCSS + `</style>
 </head>
 <body>
 <nav class="navbar navbar-expand-lg navbar-light bg-light">

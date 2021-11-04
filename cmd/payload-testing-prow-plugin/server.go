@@ -116,17 +116,17 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		return ""
 	}
 
-	pr, err := s.ghc.GetPullRequest(org, repo, prNumber)
-	if err != nil {
-		logger.Debug("could not get pull request")
-		return fmt.Sprintf("could not get pull request https://github.com/%s/%s/pull/%d: %v", org, repo, prNumber, err)
-	}
-
 	logger.WithField("ic.Comment.Body", ic.Comment.Body).Debug("received a comment")
 	specs := specsFromComment(ic.Comment.Body)
 	if len(specs) == 0 {
 		logger.Debug("found no specs from comments")
 		return ""
+	}
+
+	pr, err := s.ghc.GetPullRequest(org, repo, prNumber)
+	if err != nil {
+		logger.Debug("could not get pull request")
+		return fmt.Sprintf("could not get pull request https://github.com/%s/%s/pull/%d: %v", org, repo, prNumber, err)
 	}
 
 	var messages []string
@@ -145,6 +145,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 			"releaseType": spec.releaseType,
 			"jobs":        spec.jobs,
 		})
+		builder.spec = spec
 		var jobNames []string
 		var jobTuples []api.MetadataWithTest
 		jobs, err := s.jobResolver.resolve(spec.ocp, spec.releaseType, spec.jobs)
@@ -191,6 +192,7 @@ type prpqrBuilder struct {
 	guid      string
 	counter   int
 	pr        *github.PullRequest
+	spec      jobSetSpecification
 }
 
 func (b *prpqrBuilder) build(jobTuples []api.MetadataWithTest) *prpqv1.PullRequestPayloadQualificationRun {
@@ -217,6 +219,11 @@ func (b *prpqrBuilder) build(jobTuples []api.MetadataWithTest) *prpqv1.PullReque
 		Spec: prpqv1.PullRequestPayloadTestSpec{
 			Jobs: prpqv1.PullRequestPayloadJobSpec{
 				Jobs: releaseJobSpecs,
+				ReleaseControllerConfig: prpqv1.ReleaseControllerConfig{
+					OCP:       b.spec.ocp,
+					Release:   string(b.spec.releaseType),
+					Specifier: string(b.spec.jobs),
+				},
 			},
 			PullRequest: prpqv1.PullRequestUnderTest{
 				Org:     b.org,

@@ -136,9 +136,15 @@ func TestBuild(t *testing.T) {
 						"prow.k8s.io/refs.org":        "org",
 						"prow.k8s.io/refs.pull":       "123",
 						"prow.k8s.io/refs.repo":       "repo",
+						"prow.k8s.io/refs.base_ref":   "ref",
 					},
 				},
 				Spec: prpqv1.PullRequestPayloadTestSpec{
+					PullRequest: prpqv1.PullRequestUnderTest{Org: "org",
+						Repo:        "repo",
+						BaseRef:     "ref",
+						BaseSHA:     "sha",
+						PullRequest: prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"}},
 					Jobs: prpqv1.PullRequestPayloadJobSpec{
 						Jobs: []prpqv1.ReleaseJobSpec{
 							{
@@ -163,6 +169,19 @@ func TestBuild(t *testing.T) {
 				repo:      "repo",
 				prNumber:  123,
 				guid:      "some-guid",
+				pr: &github.PullRequest{
+					Base: github.PullRequestBranch{
+						Ref: "ref",
+						SHA: "sha",
+					},
+					Title: "title",
+					Head: github.PullRequestBranch{
+						SHA: "head-sha",
+					},
+					User: github.User{
+						Login: "login",
+					},
+				},
 			}
 			actual := builder.build(tc.jobTuples)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"time"
 
 	"cloud.google.com/go/bigquery"
 
@@ -53,34 +54,21 @@ func (d dryRunInserter) Put(ctx context.Context, src interface{}) (err error) {
 	return nil
 }
 
-type jobRunRow struct {
-	prowJob *prowv1.ProwJob
-	jobRun  jobrunaggregatorapi.JobRunInfo
-}
-
-func newJobRunRow(jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob) *jobRunRow {
-	return &jobRunRow{
-		prowJob: prowJob,
-		jobRun:  jobRun,
+func newJobRunRow(jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob) *jobrunaggregatorapi.JobRunRow {
+	var endTime time.Time
+	if prowJob.Status.CompletionTime != nil {
+		endTime = prowJob.Status.CompletionTime.Time
+	}
+	return &jobrunaggregatorapi.JobRunRow{
+		Name:       jobRun.GetJobRunID(),
+		JobName:    jobRun.GetJobName(),
+		Status:     string(prowJob.Status.State),
+		StartTime:  prowJob.Status.StartTime.Time,
+		EndTime:    endTime,
+		ReleaseTag: prowJob.Labels["release.openshift.io/analysis"],
+		Cluster:    prowJob.Spec.Cluster,
 	}
 
-}
-
-var _ bigquery.ValueSaver = &jobRunRow{}
-
-func (v *jobRunRow) Save() (map[string]bigquery.Value, string, error) {
-	insertID := v.jobRun.GetJobRunID()
-	row := map[string]bigquery.Value{
-		"Name":       insertID,
-		"JobName":    v.jobRun.GetJobName(),
-		"Status":     v.prowJob.Status.State,
-		"StartTime":  v.prowJob.Status.StartTime,
-		"EndTime":    v.prowJob.Status.CompletionTime,
-		"ReleaseTag": v.prowJob.Labels["release.openshift.io/analysis"],
-		"Cluster":    v.prowJob.Spec.Cluster,
-	}
-
-	return row, insertID, nil
 }
 
 type testRunRow struct {

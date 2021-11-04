@@ -474,7 +474,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			continue
 		}
 		allResources := &resources
-		if !resources.Limits.Name(api.ShmResource, resource.BinarySI).IsZero() {
+		if !resources.Requests.Name(api.ShmResource, resource.BinarySI).IsZero() {
 			// If shm is in Limits it must also be in Requests
 			allResources = resources.DeepCopy()
 			logrus.Info("removing shm from resources for container")

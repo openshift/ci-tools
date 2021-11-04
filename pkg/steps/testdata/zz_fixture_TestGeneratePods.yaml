@@ -78,9 +78,7 @@
         value: /var/run/secrets/ci.openshift.io/multi-stage
       image: pipeline:src
       name: test
-      resources:
-        requests:
-          ci-operator.openshift.io/shm: 2G
+      resources: {}
       terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
       - mountPath: /logs

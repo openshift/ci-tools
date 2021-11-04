@@ -140,11 +140,13 @@ LIMIT 1
 func (c *ciDataClient) GetLastJobRunWithDisruptionDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
 	// the JobRun.Name is always increasing, so we can sort by that name.  The starttime is based on the prowjob
 	// time and I don't think that is coordinated.
+	// the disruption jobrun table is now distinct, so we will use the disruption jobrun table as authoritative for what data should and should not
+	// be uploaded rather than using the absence of backenddisruption itself.  Some jobs don't include this data so we end up
+	// inserting many duplicated entries
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
 		`
-SELECT distinct(JobRuns.Name), JobRuns.StartTime
+SELECT *
 FROM DATA_SET_LOCATION.` + jobrunaggregatorapi.DisruptionJobRunTableName + ` as JobRuns
-INNER JOIN DATA_SET_LOCATION.BackendDisruption on BackendDisruption.JobRunName = JobRuns.Name
 WHERE JobRuns.JobName = @JobName
 ORDER BY JobRuns.Name DESC
 LIMIT 1
@@ -152,7 +154,6 @@ LIMIT 1
 
 	query := c.client.Query(queryString)
 	query.QueryConfig.Parameters = []bigquery.QueryParameter{
-		{Name: "JobRunTableName", Value: c.disruptionJobRunTableName},
 		{Name: "JobName", Value: jobName},
 	}
 	lastJobRunRow, err := query.Read(ctx)

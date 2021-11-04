@@ -80,7 +80,7 @@ require (
 	k8s.io/apiserver v0.22.0
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
 	k8s.io/klog/v2 v2.9.0
-	k8s.io/test-infra v0.0.0-20210927132935-c8f9effdaa18
+	k8s.io/test-infra v0.0.0-20211103092459-3f7904a7d1e9
 	k8s.io/utils v0.0.0-20210802155522-efc7438f0176
 	sigs.k8s.io/boskos v0.0.0-20210730172138-093b54882439
 	sigs.k8s.io/controller-runtime v0.9.3-0.20210826145723-8f9d0dfc8446

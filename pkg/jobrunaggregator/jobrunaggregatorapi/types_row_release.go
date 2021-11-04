@@ -8,6 +8,12 @@ type ReleaseRow struct {
 	// the release after it's "fully baked."
 	Phase string `bigquery:"phase"`
 
+	// Release contains the X.Y version of the payload, e.g. 4.8
+	Release string `bigquery:"release"`
+
+	// Architecture contains the architecture for the release, e.g. amd64
+	Architecture string `bigquery:"architecture"`
+
 	// ReleaseTag contains the release version, e.g. 4.8.0-0.nightly-2021-10-28-013428.
 	ReleaseTag string `bigquery:"releaseTag"`
 
@@ -55,8 +61,8 @@ type ReleaseRepositoryRow struct {
 // ReleasePullRequestRow represents a pull request that was included for the first time
 // in a release payload.
 type ReleasePullRequestRow struct {
-	// ID typically contains the GitHub pull request number.
-	ID string `bigquery:"id"`
+	// PullRequestID contains the GitHub pull request number.
+	PullRequestID string `bigquery:"pullRequestID"`
 
 	// ReleaseTag is the OpenShift version, e.g. 4.8.0-0.nightly-2021-10-28-013428.
 	ReleaseTag string `bigquery:"releaseTag"`

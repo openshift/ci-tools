@@ -5,8 +5,9 @@ import "time"
 // ReleaseTags represents the type returned from a release controller endpoint
 // like https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.9.0-0.nightly/tags
 type ReleaseTags struct {
-	Name string       `json:"name"`
-	Tags []ReleaseTag `json:"tags"`
+	Name         string       `json:"name"`
+	Tags         []ReleaseTag `json:"tags"`
+	Architecture string       `json:"architecture"`
 }
 
 // ReleaseTag is an individual release tag.

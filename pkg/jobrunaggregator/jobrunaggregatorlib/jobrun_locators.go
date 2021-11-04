@@ -32,7 +32,7 @@ type analysisJobAggregator struct {
 	// bigquery dataset.
 	startTime time.Time
 
-	ciDataClient  CIDataClient
+	ciDataClient  AggregationJobClient
 	ciGCSClient   CIGCSClient
 	gcsClient     *storage.Client
 	gcsBucketName string
@@ -41,7 +41,7 @@ type analysisJobAggregator struct {
 func NewPayloadAnalysisJobLocator(
 	jobName, payloadTag string,
 	startTime time.Time,
-	ciDataClient CIDataClient,
+	ciDataClient AggregationJobClient,
 	ciGCSClient CIGCSClient,
 	gcsClient *storage.Client,
 	gcsBucketName string) JobRunLocator {

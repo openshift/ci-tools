@@ -12,9 +12,7 @@ const (
 	BigQueryProjectID   = "openshift-ci-data-analysis"
 	CIDataSetID         = "ci_data"
 	JobRunTableName     = "JobRuns"
-	JobTableName        = "Job"
 	TestRunTableName    = "TestRuns"
-	UnifiedTestRunTable = "UnifiedTestRuns"
 	PerDayTestRunTable  = "TestRunSummaryPerDay"
 	PerWeekTestRunTable = "TestRunSummaryPerWeek"
 

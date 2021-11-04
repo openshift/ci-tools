@@ -26,16 +26,6 @@ type AggregatedTestRunRow struct {
 	//JobLabels            []string
 }
 
-type JobRunRow struct {
-	Name       string
-	JobName    string
-	Status     string
-	StartTime  time.Time
-	EndTime    time.Time
-	ReleaseTag string
-	Cluster    string
-}
-
 const BackendDisruptionTableName = "BackendDisruption"
 
 type BackendDisruptionRow struct {

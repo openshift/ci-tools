@@ -18,14 +18,15 @@ import (
 type JobRunsBigQuerySummarizerOptions struct {
 	Frequency       string
 	SummaryDuration time.Duration
-	CIDataClient    jobrunaggregatorlib.CIDataClient
+	JobLister       jobrunaggregatorlib.JobLister
+	CIDataClient    jobrunaggregatorlib.TestRunSummarizerClient
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 
 	AggregatedTestRunInserter BigQueryInserter
 }
 
 func (o *JobRunsBigQuerySummarizerOptions) Run(ctx context.Context) error {
-	jobs, err := o.CIDataClient.ListAllJobs(ctx)
+	jobs, err := o.JobLister.ListAllJobs(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get jobs: %w", err)
 	}
@@ -73,7 +74,7 @@ type JobRunBigQuerySummarizerOptions struct {
 	Frequency string
 
 	SummaryDuration           time.Duration
-	CIDataClient              jobrunaggregatorlib.CIDataClient
+	CIDataClient              jobrunaggregatorlib.TestRunSummarizerClient
 	AggregatedTestRunInserter BigQueryInserter
 }
 

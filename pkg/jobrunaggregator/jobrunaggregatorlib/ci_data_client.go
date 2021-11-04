@@ -14,38 +14,66 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
-type CIDataClient interface {
-	ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error)
-
+// AggregationJobClient client view used by the aggregation job
+type AggregationJobClient interface {
 	// GetJobRunForJobNameBeforeTime returns the jobRun closest to, but BEFORE, the time provided.
 	// This is useful for bounding a query of GCS buckets in a window.
 	// nil means that no jobRun was found before the specified time.
 	GetJobRunForJobNameBeforeTime(ctx context.Context, jobName string, targetTime time.Time) (*jobrunaggregatorapi.JobRunRow, error)
-
 	// GetJobRunForJobNameAfterTime returns the jobRun closest to, but AFTER, the time provided.
 	// This is useful for bounding a query of GCS buckets in a window.
 	// nil means that no jobRun as found after the specified time.
 	GetJobRunForJobNameAfterTime(ctx context.Context, jobName string, targetTime time.Time) (*jobrunaggregatorapi.JobRunRow, error)
 
+	ListAggregatedTestRunsForJob(ctx context.Context, frequency, jobName string, startDay time.Time) ([]jobrunaggregatorapi.AggregatedTestRunRow, error)
+}
+
+// TestRunUploadClient client view used by the test run uploader.  This is separated to make it easier to reason about which tables
+// are in use by this client
+type TestRunUploadClient interface {
 	GetLastJobRunWithTestRunDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
-	GetLastJobRunWithDisruptionDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
+}
+
+// TestRunSummarizerClient client view used by the test run summarization client.
+type TestRunSummarizerClient interface {
 	GetLastAggregationForJob(ctx context.Context, frequency, jobName string) (*jobrunaggregatorapi.AggregatedTestRunRow, error)
 	ListUnifiedTestRunsForJobAfterDay(ctx context.Context, jobName string, startDay time.Time) (*UnifiedTestRunRowIterator, error)
+}
 
-	ListAggregatedTestRunsForJob(ctx context.Context, frequency, jobName string, startDay time.Time) ([]jobrunaggregatorapi.AggregatedTestRunRow, error)
+// DisruptionUploadClient client view used by the disruption loader so its easier to reason about which tables are in play
+type DisruptionUploadClient interface {
+	GetLastJobRunWithDisruptionDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
+}
 
+type JobLister interface {
+	ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error)
+}
+
+type CIDataClient interface {
+	JobLister
+	AggregationJobClient
+	TestRunUploadClient
+	DisruptionUploadClient
+	TestRunSummarizerClient
+
+	// these deal with release tags
 	ListReleaseTags(ctx context.Context) (sets.String, error)
 }
 
 type ciDataClient struct {
 	dataCoordinates BigQueryDataCoordinates
 	client          *bigquery.Client
+
+	disruptionJobRunTableName string
+	testJobRunTableName       string
 }
 
 func NewCIDataClient(dataCoordinates BigQueryDataCoordinates, client *bigquery.Client) CIDataClient {
 	return &ciDataClient{
-		dataCoordinates: dataCoordinates,
-		client:          client,
+		dataCoordinates:           dataCoordinates,
+		client:                    client,
+		disruptionJobRunTableName: jobrunaggregatorapi.DisruptionJobRunTableName,
+		testJobRunTableName:       jobrunaggregatorapi.LegacyJobRunTableName,
 	}
 }
 
@@ -115,7 +143,7 @@ func (c *ciDataClient) GetLastJobRunWithDisruptionDataForJobName(ctx context.Con
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
 		`
 SELECT distinct(JobRuns.Name), JobRuns.StartTime
-FROM DATA_SET_LOCATION.JobRuns 
+FROM DATA_SET_LOCATION.` + jobrunaggregatorapi.DisruptionJobRunTableName + ` as JobRuns
 INNER JOIN DATA_SET_LOCATION.BackendDisruption on BackendDisruption.JobRunName = JobRuns.Name
 WHERE JobRuns.JobName = @JobName
 ORDER BY JobRuns.Name DESC
@@ -124,6 +152,7 @@ LIMIT 1
 
 	query := c.client.Query(queryString)
 	query.QueryConfig.Parameters = []bigquery.QueryParameter{
+		{Name: "JobRunTableName", Value: c.disruptionJobRunTableName},
 		{Name: "JobName", Value: jobName},
 	}
 	lastJobRunRow, err := query.Read(ctx)

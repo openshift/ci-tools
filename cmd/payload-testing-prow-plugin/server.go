@@ -116,6 +116,12 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		return ""
 	}
 
+	pr, err := s.ghc.GetPullRequest(org, repo, prNumber)
+	if err != nil {
+		logger.Debug("could not get pull request")
+		return fmt.Sprintf("could not get pull request https://github.com/%s/%s/pull/%d: %v", org, repo, prNumber, err)
+	}
+
 	logger.WithField("ic.Comment.Body", ic.Comment.Body).Debug("received a comment")
 	specs := specsFromComment(ic.Comment.Body)
 	if len(specs) == 0 {
@@ -131,6 +137,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		prNumber:  prNumber,
 		guid:      guid,
 		counter:   0,
+		pr:        pr,
 	}
 	for _, spec := range specs {
 		specLogger := logger.WithFields(logrus.Fields{
@@ -183,6 +190,7 @@ type prpqrBuilder struct {
 	prNumber  int
 	guid      string
 	counter   int
+	pr        *github.PullRequest
 }
 
 func (b *prpqrBuilder) build(jobTuples []api.MetadataWithTest) *prpqv1.PullRequestPayloadQualificationRun {
@@ -201,6 +209,7 @@ func (b *prpqrBuilder) build(jobTuples []api.MetadataWithTest) *prpqv1.PullReque
 				api.DPTPRequesterLabel: pluginName,
 				kube.OrgLabel:          b.org,
 				kube.RepoLabel:         b.repo,
+				kube.BaseRefLabel:      b.pr.Base.Ref,
 				kube.PullLabel:         strconv.Itoa(b.prNumber),
 				"event-GUID":           b.guid,
 			},
@@ -208,6 +217,18 @@ func (b *prpqrBuilder) build(jobTuples []api.MetadataWithTest) *prpqv1.PullReque
 		Spec: prpqv1.PullRequestPayloadTestSpec{
 			Jobs: prpqv1.PullRequestPayloadJobSpec{
 				Jobs: releaseJobSpecs,
+			},
+			PullRequest: prpqv1.PullRequestUnderTest{
+				Org:     b.org,
+				Repo:    b.repo,
+				BaseRef: b.pr.Base.Ref,
+				BaseSHA: b.pr.Base.SHA,
+				PullRequest: prpqv1.PullRequest{
+					Number: b.prNumber,
+					Author: b.pr.User.Login,
+					SHA:    b.pr.Head.SHA,
+					Title:  b.pr.Title,
+				},
 			},
 		},
 	}

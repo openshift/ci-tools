@@ -146,6 +146,7 @@ func TestBuild(t *testing.T) {
 						BaseSHA:     "sha",
 						PullRequest: prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"}},
 					Jobs: prpqv1.PullRequestPayloadJobSpec{
+						ReleaseControllerConfig: prpqv1.ReleaseControllerConfig{OCP: "4.10", Release: "nightly", Specifier: "ci"},
 						Jobs: []prpqv1.ReleaseJobSpec{
 							{
 								CIOperatorConfig: api.Metadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
@@ -181,6 +182,11 @@ func TestBuild(t *testing.T) {
 					User: github.User{
 						Login: "login",
 					},
+				},
+				spec: jobSetSpecification{
+					ocp:         "4.10",
+					releaseType: "nightly",
+					jobs:        "ci",
 				},
 			}
 			actual := builder.build(tc.jobTuples)

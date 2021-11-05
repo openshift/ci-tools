@@ -1,0 +1,60 @@
+@namespace svg url(http://www.w3.org/2000/svg);
+svg|a:link, svg|a:visited {
+  cursor: pointer;
+}
+
+svg|a text,
+text svg|a {
+  fill: #007bff;
+  text-decoration: none;
+  background-color: transparent;
+  -webkit-text-decoration-skip: objects;
+}
+
+svg|a:hover text, svg|a:active text {
+  fill: #0056b3;
+  text-decoration: underline;
+}
+
+pre {
+	border: 10px solid transparent;
+}
+h1, h2, h3 {
+	padding-top: 10px;
+}
+h1 a:link,
+h2 a:link,
+h3 a:link,
+h4 a:link,
+h5 a:link {
+  color: inherit;
+  text-decoration: none;
+}
+h1 a:hover,
+h2 a:hover,
+h3 a:hover,
+h4 a:hover,
+h5 a:hover {
+  text-decoration: underline;
+}
+h1 a:visited,
+h2 a:visited,
+h3 a:visited,
+h4 a:visited,
+h5 a:visited {
+  color: inherit;
+  text-decoration: none;
+}
+.info {
+	text-decoration-line: underline;
+	text-decoration-style: dotted;
+	text-decoration-color: #c0c0c0;
+}
+button {
+  padding:0.2em 1em;
+  border-radius: 8px;
+  cursor:pointer;
+}
+td {
+  vertical-align: middle;
+}

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/chroma"
-	"github.com/alecthomas/chroma/formatters/html"
+	htmlformatter "github.com/alecthomas/chroma/formatters/html"
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/alecthomas/chroma/styles"
 	"github.com/sirupsen/logrus"
@@ -20,6 +20,7 @@ import (
 	"k8s.io/test-infra/prow/repoowners"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/html"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/registry"
@@ -46,79 +47,7 @@ const (
 	TestQuery = "test"
 )
 
-const htmlPageStart = `
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8"><title>%s</title>
-<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
-<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
-<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<style>
-@namespace svg url(http://www.w3.org/2000/svg);
-svg|a:link, svg|a:visited {
-  cursor: pointer;
-}
-
-svg|a text,
-text svg|a {
-  fill: #007bff;
-  text-decoration: none;
-  background-color: transparent;
-  -webkit-text-decoration-skip: objects;
-}
-
-svg|a:hover text, svg|a:active text {
-  fill: #0056b3;
-  text-decoration: underline;
-}
-
-pre {
-	border: 10px solid transparent;
-}
-h1, h2, h3 {
-	padding-top: 10px;
-}
-h1 a:link,
-h2 a:link,
-h3 a:link,
-h4 a:link,
-h5 a:link {
-  color: inherit;
-  text-decoration: none;
-}
-h1 a:hover,
-h2 a:hover,
-h3 a:hover,
-h4 a:hover,
-h5 a:hover {
-  text-decoration: underline;
-}
-h1 a:visited,
-h2 a:visited,
-h3 a:visited,
-h4 a:visited,
-h5 a:visited {
-  color: inherit;
-  text-decoration: none;
-}
-.info {
-	text-decoration-line: underline;
-	text-decoration-style: dotted;
-	text-decoration-color: #c0c0c0;
-}
-button {
-  padding:0.2em 1em;
-  border-radius: 8px;
-  cursor:pointer;
-}
-td {
-  vertical-align: middle;
-}
-</style>
-</head>
-<body>
+const bodyStart = `
 <nav class="navbar navbar-expand-lg navbar-light bg-light">
   <a class="navbar-brand" href="/">Openshift CI Step Registry</a>
   <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
@@ -149,11 +78,9 @@ td {
 <div class="container">
 `
 
-const htmlPageEnd = `
+const bodyEnd = `
 <p class="small">Source code for this page located on <a href="https://github.com/openshift/ci-tools">GitHub</a></p>
-</div>
-</body>
-</html>`
+</div>`
 
 const errPage = `
 {{ . }}
@@ -838,13 +765,7 @@ func writeErrorPage(w http.ResponseWriter, pageErr error, status int) {
 }
 
 func writePage(w http.ResponseWriter, title string, body *template.Template, data interface{}) {
-	fmt.Fprintf(w, htmlPageStart, title)
-	if err := body.Execute(w, data); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "%s: %v", http.StatusText(http.StatusInternalServerError), err)
-		return
-	}
-	fmt.Fprintln(w, htmlPageEnd)
+	_ = html.WritePage(w, title, bodyStart, bodyEnd, body, data)
 }
 
 func setDocs(t *template.Template, docs map[string]string) *template.Template {
@@ -1283,7 +1204,7 @@ func syntax(source string, lexer chroma.Lexer) (string, error) {
 	var output bytes.Buffer
 	style := styles.Get("dracula")
 	// highlighted lines based on linking currently require WithClasses to be used
-	formatter := html.New(html.Standalone(false), html.LinkableLineNumbers(true, "line"), html.WithLineNumbers(true), html.LineNumbersInTable(true), html.WithClasses(true))
+	formatter := htmlformatter.New(htmlformatter.Standalone(false), htmlformatter.LinkableLineNumbers(true, "line"), htmlformatter.WithLineNumbers(true), htmlformatter.LineNumbersInTable(true), htmlformatter.WithClasses(true))
 	iterator, err := lexer.Tokenise(nil, source)
 	if err != nil {
 		return "", fmt.Errorf("failed to tokenise source: %w", err)

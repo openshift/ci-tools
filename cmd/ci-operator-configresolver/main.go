@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 	"k8s.io/test-infra/prow/pjutil"
 	"k8s.io/test-infra/prow/simplifypath"
 
+	"github.com/openshift/ci-tools/pkg/html"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	registryserver "github.com/openshift/ci-tools/pkg/registry/server"
 	"github.com/openshift/ci-tools/pkg/webreg"
@@ -136,6 +138,10 @@ func main() {
 	if o.validateOnly {
 		os.Exit(0)
 	}
+	static, err := fs.Sub(html.StaticFS, html.StaticSubdir)
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to open static subdirectory")
+	}
 	health := pjutil.NewHealthOnPort(o.instrumentationOptions.HealthPort)
 	metrics.ExposeMetrics("ci-operator-configresolver", prowConfig.PushGateway{}, flagutil.DefaultMetricsPort)
 	simplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root
@@ -170,9 +176,12 @@ func main() {
 	http.HandleFunc("/registryGeneration", handler(getRegistryGeneration(registryAgent)).ServeHTTP)
 	http.HandleFunc("/readyz", func(_ http.ResponseWriter, _ *http.Request) {})
 	interrupts.ListenAndServe(&http.Server{Addr: ":" + strconv.Itoa(o.port)}, o.gracePeriod)
+	uiMux := http.NewServeMux()
+	uiMux.HandleFunc(html.StaticURL, handler(http.StripPrefix(html.StaticURL, http.FileServer(http.FS(static)))).ServeHTTP)
+	uiMux.Handle("/", uihandler(webreg.WebRegHandler(registryAgent, configAgent)))
 	uiServer := &http.Server{
 		Addr:    ":" + strconv.Itoa(o.uiPort),
-		Handler: uihandler(webreg.WebRegHandler(registryAgent, configAgent)),
+		Handler: uiMux,
 	}
 	interrupts.ListenAndServe(uiServer, o.gracePeriod)
 	health.ServeReady(func() bool {

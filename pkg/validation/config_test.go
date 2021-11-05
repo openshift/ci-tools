@@ -235,6 +235,28 @@ func TestValidateResources(t *testing.T) {
 			},
 			expectedErr: true,
 		},
+		{
+			name: "valid shm value passes",
+			input: api.ResourceConfiguration{
+				"*": api.ResourceRequirements{
+					Requests: api.ResourceList{
+						api.ShmResource: "2G",
+					},
+				},
+			},
+			expectedErr: false,
+		},
+		{
+			name: "too large of shm value makes an error",
+			input: api.ResourceConfiguration{
+				"*": api.ResourceRequirements{
+					Requests: api.ResourceList{
+						api.ShmResource: "3G",
+					},
+				},
+			},
+			expectedErr: true,
+		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			err := validateResources("", testCase.input)

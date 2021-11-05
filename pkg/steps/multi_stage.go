@@ -13,6 +13,7 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -472,6 +473,14 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			errs = append(errs, err)
 			continue
 		}
+		allResources := &resources
+		if !resources.Requests.Name(api.ShmResource, resource.BinarySI).IsZero() {
+			// If shm is in Limits it must also be in Requests
+			allResources = resources.DeepCopy()
+			logrus.Info("removing shm from resources for container")
+			delete(resources.Requests, api.ShmResource)
+			delete(resources.Limits, api.ShmResource)
+		}
 		if step.BestEffort != nil && *step.BestEffort {
 			bestEffort.Insert(name)
 		}
@@ -566,6 +575,10 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 				{Name: "KUBECONFIG", Value: filepath.Join(SecretMountPath, "kubeconfig")},
 				{Name: "KUBEADMIN_PASSWORD_FILE", Value: filepath.Join(SecretMountPath, "kubeadmin-password")},
 			}...)
+		}
+		shmSize := allResources.Requests.Name(api.ShmResource, resource.BinarySI)
+		if !shmSize.IsZero() {
+			addDshmVolume(shmSize, pod, container)
 		}
 		if s.profile != "" {
 			addProfile(s.profileSecretName(), s.profile, pod)
@@ -724,6 +737,21 @@ func addCredentials(credentials []api.CredentialReference, pod *coreapi.Pod) {
 			MountPath: credential.MountPath,
 		})
 	}
+}
+
+func addDshmVolume(shmSize *resource.Quantity, pod *coreapi.Pod, container *coreapi.Container) {
+	logrus.Infof("Adding Dshm Volume to pod: %s", pod.Name)
+	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+		Name: "dshm",
+		VolumeSource: coreapi.VolumeSource{
+			EmptyDir: &coreapi.EmptyDirVolumeSource{
+				Medium:    coreapi.StorageMediumMemory,
+				SizeLimit: shmSize}},
+	})
+	container.VolumeMounts = append(container.VolumeMounts, coreapi.VolumeMount{
+		Name:      "dshm",
+		MountPath: "/dev/shm",
+	})
 }
 
 func volumeName(ns, name string) string {

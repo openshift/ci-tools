@@ -89,6 +89,8 @@
         name: home
       - mountPath: /tmp/entrypoint-wrapper
         name: entrypoint-wrapper
+      - mountPath: /dev/shm
+        name: dshm
       - mountPath: /var/run/secrets/ci.openshift.io/cluster-profile
         name: cluster-profile
       - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
@@ -147,6 +149,10 @@
         secretName: k8-secret
     - emptyDir: {}
       name: entrypoint-wrapper
+    - emptyDir:
+        medium: Memory
+        sizeLimit: 2G
+      name: dshm
     - name: cluster-profile
       secret:
         secretName: test-cluster-profile

@@ -112,6 +112,19 @@ tests:
     steps:
       test:
         - ref: timeout
+  - as: shm-increase
+    steps:
+      test:
+        - as: step-with-increased-shm
+          commands: echo Success
+          from: os
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+              ci-operator.openshift.io/shm: 2G
+            limits:
+              ci-operator.openshift.io/shm: 2G
 
 zz_generated_metadata:
   branch: master

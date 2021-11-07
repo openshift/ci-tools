@@ -4,7 +4,3 @@ decoration_config:
   skip_cloning: true
 hidden: true
 name: pull-ci-org-repo-branch-test
-spec:
-  containers:
-  - name: test
-    resources: {}

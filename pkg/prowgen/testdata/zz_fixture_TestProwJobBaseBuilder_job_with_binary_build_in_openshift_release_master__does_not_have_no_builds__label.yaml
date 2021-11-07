@@ -2,4 +2,4 @@ agent: kubernetes
 decorate: true
 decoration_config:
   skip_cloning: true
-name: pull-ci-org-repo-branch-test
+name: default-ci-openshift-release-master-

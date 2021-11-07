@@ -1,7 +1,0 @@
-agent: kubernetes
-decorate: true
-name: pull-ci-org-repo-branch-test
-spec:
-  containers:
-  - name: test
-    resources: {}

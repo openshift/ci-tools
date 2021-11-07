@@ -6,7 +6,3 @@ labels:
   ci-operator.openshift.io/variant: whatever
 name: pull-ci-org-repo-branch-whatever-test
 path_alias: /some/where
-spec:
-  containers:
-  - name: test
-    resources: {}

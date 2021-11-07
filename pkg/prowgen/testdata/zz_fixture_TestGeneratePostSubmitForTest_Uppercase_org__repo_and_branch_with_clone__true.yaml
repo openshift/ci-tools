@@ -1,6 +1,0 @@
-agent: kubernetes
-branches:
-- ^Branch$
-decorate: true
-name: 'branch-ci-Organization-Repository-Branch-Uppercase org, repo and branch with
-  clone: true'

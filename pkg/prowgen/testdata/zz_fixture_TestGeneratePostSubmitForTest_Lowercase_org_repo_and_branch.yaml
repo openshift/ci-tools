@@ -4,4 +4,4 @@ branches:
 decorate: true
 decoration_config:
   skip_cloning: true
-name: branch-ci-organization-repository-branch-Lowercase org repo and branch
+name: branch-ci-organization-repository-branch-postsubmit

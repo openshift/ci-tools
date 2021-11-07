@@ -1,0 +1,7 @@
+agent: kubernetes
+decorate: true
+decoration_config:
+  skip_cloning: true
+labels:
+  ci-operator.openshift.io/variant: variant
+name: default-ci-vorg-vrepo-vbranch-variant-

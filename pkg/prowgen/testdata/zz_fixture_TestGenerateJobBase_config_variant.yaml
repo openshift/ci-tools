@@ -5,7 +5,3 @@ decoration_config:
 labels:
   ci-operator.openshift.io/variant: whatever
 name: pull-ci-org-repo-branch-whatever-test
-spec:
-  containers:
-  - name: test
-    resources: {}

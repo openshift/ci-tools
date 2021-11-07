@@ -668,3 +668,22 @@ func (c *ciOperatorPodSpecGenerator) MustBuild() *corev1.PodSpec {
 	}
 	return podSpec
 }
+
+// fakePodSpecBuilder is a fake implementation of the CiOperatorPodSpecGenerator interface, useful
+// for testing.
+type fakePodSpecBuilder int
+
+func (f *fakePodSpecBuilder) Add(_ ...PodSpecMutator) CiOperatorPodSpecGenerator {
+	return nil
+}
+func (f *fakePodSpecBuilder) Build() (*corev1.PodSpec, error) {
+	return nil, nil
+}
+func (f *fakePodSpecBuilder) MustBuild() *corev1.PodSpec {
+	return nil
+}
+
+func newFakePodSpecBuilder() CiOperatorPodSpecGenerator {
+	f := fakePodSpecBuilder(0)
+	return &f
+}

@@ -143,7 +143,7 @@ func (c *Changelog) PullRequests() []jobrunaggregatorapi.ReleasePullRequestRow {
 					}
 					if strings.Contains(url, "github.com") {
 						row.URL = url
-						row.ID = strings.ReplaceAll(text, "#", "")
+						row.PullRequestID = strings.ReplaceAll(text, "#", "")
 					}
 					if strings.Contains(url, "bugzilla.redhat.com") {
 						row.BugURL = url

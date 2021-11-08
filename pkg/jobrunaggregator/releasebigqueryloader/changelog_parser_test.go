@@ -210,12 +210,12 @@ func TestChangelog_PullRequests(t *testing.T) {
 			root: soup.HTMLParse(simpleChangelog),
 			want: []jobrunaggregatorapi.ReleasePullRequestRow{
 				{
-					ID:          "583",
-					ReleaseTag:  "test",
-					Name:        "kuryr-cni, kuryr-controller",
-					Description: "Rebase openshift/kuryr-kubernetes from",
-					BugURL:      "",
-					URL:         "https://github.com/openshift/kuryr-kubernetes/pull/583",
+					PullRequestID: "583",
+					ReleaseTag:    "test",
+					Name:          "kuryr-cni, kuryr-controller",
+					Description:   "Rebase openshift/kuryr-kubernetes from",
+					BugURL:        "",
+					URL:           "https://github.com/openshift/kuryr-kubernetes/pull/583",
 				},
 			},
 		},

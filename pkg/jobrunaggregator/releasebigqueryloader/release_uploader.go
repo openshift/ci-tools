@@ -8,10 +8,13 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strings"
 
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/civil"
 	"github.com/pkg/errors"
+
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
@@ -33,8 +36,9 @@ type allReleaseUploaderOptions struct {
 	pullRequestInserter *bigquery.Inserter
 	pullRequestTable    *bigquery.Table
 
-	releases  []string
-	ciDataSet *bigquery.Dataset
+	releases      []string
+	ciDataSet     *bigquery.Dataset
+	architectures []string
 }
 
 func (r *allReleaseUploaderOptions) Run(ctx context.Context) error {
@@ -61,39 +65,41 @@ func (r *allReleaseUploaderOptions) Run(ctx context.Context) error {
 
 	for _, release := range r.releases {
 		fmt.Fprintf(os.Stderr, "Fetching release %s from release controller...\n", release)
-		tags := r.fetchReleaseTags(release)
+		allTags := r.fetchReleaseTags(release)
 
-		for _, tag := range tags.Tags {
-			fmt.Fprintf(os.Stderr, "Fetching tag %s from release controller...\n", tag.Name)
-			releaseDetails := r.fetchReleaseDetails(release, tag)
-			releaseTag, repositories, pullRequests := releaseDetailsToBigQuery(tag, releaseDetails)
-			// We skip releases that aren't fully baked, or already in the big query tables:
-			if releaseTag.Phase == "Ready" || repositories == nil {
-				continue
-			}
-			if _, ok := releaseTagSet[releaseTag.ReleaseTag]; ok {
-				continue
-			}
-
-			runs := releaseJobRunsToBigQuery(releaseDetails)
-			if err := r.releaseJobRunInserter.Put(ctx, runs); err != nil {
-				return errors.Wrapf(err, "could not insert job runs to table")
-			}
-
-			if len(repositories) != 0 {
-				if err := r.repositoryTableInserter.Put(ctx, repositories); err != nil {
-					return errors.Wrapf(err, "could not insert repositories to table")
+		for _, tags := range allTags {
+			for _, tag := range tags.Tags {
+				fmt.Fprintf(os.Stderr, "Fetching tag %s from release controller...\n", tag.Name)
+				releaseDetails := r.fetchReleaseDetails(tags.Architecture, release, tag)
+				releaseTag, repositories, pullRequests := releaseDetailsToBigQuery(tags.Architecture, tag, releaseDetails)
+				// We skip releases that aren't fully baked, or already in the big query tables:
+				if releaseTag.Phase == "Ready" || repositories == nil {
+					continue
 				}
-			}
-
-			if len(pullRequests) != 0 {
-				if err := r.pullRequestInserter.Put(ctx, pullRequests); err != nil {
-					return errors.Wrapf(err, "could not insert pull requests to table")
+				if _, ok := releaseTagSet[releaseTag.ReleaseTag]; ok {
+					continue
 				}
-			}
 
-			if err := r.releaseInserter.Put(ctx, releaseTag); err != nil {
-				return errors.Wrapf(err, "could not insert release details for %s", tag.Name)
+				runs := releaseJobRunsToBigQuery(releaseDetails)
+				if err := r.releaseJobRunInserter.Put(ctx, runs); err != nil {
+					return errors.Wrapf(err, "could not insert job runs to table")
+				}
+
+				if len(repositories) != 0 {
+					if err := r.repositoryTableInserter.Put(ctx, repositories); err != nil {
+						return errors.Wrapf(err, "could not insert repositories to table")
+					}
+				}
+
+				if len(pullRequests) != 0 {
+					if err := r.pullRequestInserter.Put(ctx, pullRequests); err != nil {
+						return errors.Wrapf(err, "could not insert pull requests to table")
+					}
+				}
+
+				if err := r.releaseInserter.Put(ctx, releaseTag); err != nil {
+					return errors.Wrapf(err, "could not insert release details for %s", tag.Name)
+				}
 			}
 		}
 	}
@@ -101,9 +107,14 @@ func (r *allReleaseUploaderOptions) Run(ctx context.Context) error {
 	return nil
 }
 
-func (r *allReleaseUploaderOptions) fetchReleaseDetails(release string, tag ReleaseTag) ReleaseDetails {
+func (r *allReleaseUploaderOptions) fetchReleaseDetails(architecture, release string, tag ReleaseTag) ReleaseDetails {
 	releaseDetails := ReleaseDetails{}
-	url := fmt.Sprintf("https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/%s/release/%s", release, tag.Name)
+	releaseName := release
+	if architecture != "amd64" {
+		releaseName += "-" + architecture
+	}
+
+	url := fmt.Sprintf("https://%s.ocp.releases.ci.openshift.org/api/v1/releasestream/%s/release/%s", architecture, releaseName, tag.Name)
 
 	resp, err := r.httpClient.Get(url)
 	if err != nil {
@@ -116,18 +127,35 @@ func (r *allReleaseUploaderOptions) fetchReleaseDetails(release string, tag Rele
 	return releaseDetails
 }
 
-func (r *allReleaseUploaderOptions) fetchReleaseTags(release string) ReleaseTags {
-	tags := ReleaseTags{}
+func (r *allReleaseUploaderOptions) fetchReleaseTags(release string) []ReleaseTags {
+	allTags := make([]ReleaseTags, 0)
+	for _, arch := range r.architectures {
+		tags := ReleaseTags{
+			Architecture: arch,
+		}
+		releaseName := release
+		if arch != "amd64" {
+			releaseName += "-" + arch
+		}
+		uri := fmt.Sprintf("https://%s.ocp.releases.ci.openshift.org/api/v1/releasestream/%s/tags", arch, releaseName)
+		resp, err := r.httpClient.Get(uri)
+		if err != nil {
+			panic(err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			klog.Errorf("release controller returned non-200 error code for %s: %d %s", uri, resp.StatusCode, resp.Status)
+			continue
+		}
 
-	resp, err := r.httpClient.Get(fmt.Sprintf("https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/%s/tags", release))
-	if err != nil {
-		panic(err)
+		if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
+			klog.Errorf("couldn't decode json: %w", err)
+			resp.Body.Close()
+			continue
+		}
+		resp.Body.Close()
+		allTags = append(allTags, tags)
 	}
-	defer resp.Body.Close()
-	if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
-		panic(err)
-	}
-	return tags
+	return allTags
 }
 
 func (r *allReleaseUploaderOptions) findTable(ctx context.Context, tableName string) error {
@@ -166,11 +194,18 @@ func (r *allReleaseUploaderOptions) findTable(ctx context.Context, tableName str
 	return nil
 }
 
-func releaseDetailsToBigQuery(tag ReleaseTag, details ReleaseDetails) (*jobrunaggregatorapi.ReleaseRow, []jobrunaggregatorapi.ReleaseRepositoryRow, []jobrunaggregatorapi.ReleasePullRequestRow) {
+func releaseDetailsToBigQuery(architecture string, tag ReleaseTag, details ReleaseDetails) (*jobrunaggregatorapi.ReleaseRow, []jobrunaggregatorapi.ReleaseRepositoryRow, []jobrunaggregatorapi.ReleasePullRequestRow) {
 	release := jobrunaggregatorapi.ReleaseRow{
-		ReleaseTag: details.Name,
-		Phase:      tag.Phase,
+		Architecture: architecture,
+		ReleaseTag:   details.Name,
+		Phase:        tag.Phase,
 	}
+	// 4.10.0-0.nightly-2021-11-04-001635 -> 4.10
+	parts := strings.Split(details.Name, ".")
+	if len(parts) >= 2 {
+		release.Release = strings.Join(parts[:2], ".")
+	}
+
 	if len(details.ChangeLog) == 0 {
 		return &release, nil, nil
 	}

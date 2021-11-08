@@ -16,6 +16,7 @@ type BigQueryReleaseUploadFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
 	Releases        []string
+	Architectures   []string
 }
 
 func NewBigQueryReleaseUploadFlags() *BigQueryReleaseUploadFlags {
@@ -29,6 +30,7 @@ func (f *BigQueryReleaseUploadFlags) BindFlags(fs *pflag.FlagSet) {
 	f.DataCoordinates.BindFlags(fs)
 	f.Authentication.BindFlags(fs)
 	fs.StringArrayVar(&f.Releases, "releases", f.Releases, "openshift releases to collect data from")
+	fs.StringArrayVar(&f.Architectures, "architectures", f.Architectures, "architectures to collect data from")
 }
 
 func NewBigQueryReleaseUploadFlagsCommand() *cobra.Command {
@@ -89,17 +91,17 @@ func (f *BigQueryReleaseUploadFlags) ToOptions(ctx context.Context) (*allRelease
 	ciDataSet := client.Dataset(f.DataCoordinates.DataSetID)
 
 	return &allReleaseUploaderOptions{
-		ciDataClient: ciDataClient,
-		ciDataSet:    ciDataSet,
-		httpClient:   httpClient,
-		releases:     f.Releases,
+		ciDataClient:  ciDataClient,
+		ciDataSet:     ciDataSet,
+		httpClient:    httpClient,
+		releases:      f.Releases,
+		architectures: f.Architectures,
 	}, nil
 }
 
 type BigQueryReleaseTableCreateFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
-	Releases        []string
 }
 
 func NewBigQueryReleaseTableCreateFlags() *BigQueryReleaseTableCreateFlags {

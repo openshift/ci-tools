@@ -18,7 +18,7 @@ SELECT
   Jobs.FromRelease as FromRelease,
   if(Jobs.FromRelease="",false,true) as IsUpgrade,
 FROM openshift-ci-data-analysis.ci_data.BackendDisruption
-INNER JOIN openshift-ci-data-analysis.ci_data.JobRuns on BackendDisruption.JobRunName = JobRuns.Name
+INNER JOIN openshift-ci-data-analysis.ci_data.BackendDisruption_JobRuns as JobRuns on BackendDisruption.JobRunName = JobRuns.Name
 INNER JOIN openshift-ci-data-analysis.ci_data.Jobs on JobRuns.JobName = Jobs.JobName
 `
 )

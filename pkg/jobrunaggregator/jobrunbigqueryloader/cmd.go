@@ -3,6 +3,7 @@ package jobrunbigqueryloader
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"cloud.google.com/go/bigquery"
@@ -17,6 +18,8 @@ import (
 type BigQueryTestRunUploadFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
+
+	DryRun bool
 }
 
 func NewBigQueryTestRunUploadFlags() *BigQueryTestRunUploadFlags {
@@ -29,6 +32,8 @@ func NewBigQueryTestRunUploadFlags() *BigQueryTestRunUploadFlags {
 func (f *BigQueryTestRunUploadFlags) BindFlags(fs *pflag.FlagSet) {
 	f.DataCoordinates.BindFlags(fs)
 	f.Authentication.BindFlags(fs)
+
+	fs.BoolVar(&f.DryRun, "dry-run", f.DryRun, "Run the command, but don't mutate data.")
 }
 
 func NewBigQueryTestRunUploadFlagsCommand() *cobra.Command {
@@ -91,24 +96,36 @@ func (f *BigQueryTestRunUploadFlags) ToOptions(ctx context.Context) (*allJobsLoa
 		return nil, err
 	}
 	ciDataClient := jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, client)
-	ciDataSet := client.Dataset(f.DataCoordinates.DataSetID)
-	jobRunTable := ciDataSet.Table(jobrunaggregatorlib.JobRunTableName)
-	testRunTable := ciDataSet.Table(jobrunaggregatorlib.TestRunTableName)
+
+	var jobRunTableInserter jobrunaggregatorlib.BigQueryInserter
+	var testRunTableInserter jobrunaggregatorlib.BigQueryInserter
+	if !f.DryRun {
+		ciDataSet := client.Dataset(f.DataCoordinates.DataSetID)
+		jobRunTable := ciDataSet.Table(jobrunaggregatorapi.LegacyJobRunTableName)
+		testRunTable := ciDataSet.Table(jobrunaggregatorlib.TestRunTableName)
+		jobRunTableInserter = jobRunTable.Inserter()
+		testRunTableInserter = testRunTable.Inserter()
+	} else {
+		jobRunTableInserter = NewDryRunInserter(os.Stdout, jobrunaggregatorapi.LegacyJobRunTableName)
+		testRunTableInserter = NewDryRunInserter(os.Stdout, jobrunaggregatorlib.TestRunTableName)
+	}
 
 	return &allJobsLoaderOptions{
 		ciDataClient: ciDataClient,
 		gcsClient:    gcsClient,
 
-		jobRunInserter:              jobRunTable.Inserter(),
+		jobRunInserter:              jobRunTableInserter,
 		shouldCollectedDataForJobFn: wantsTestRunData,
 		getLastJobRunWithDataFn:     ciDataClient.GetLastJobRunWithTestRunDataForJobName,
-		jobRunUploader:              newTestRunUploader(testRunTable.Inserter()),
+		jobRunUploader:              newTestRunUploader(testRunTableInserter),
 	}, nil
 }
 
 type BigQueryDisruptionUploadFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
+
+	DryRun bool
 }
 
 func NewBigQueryDisruptionUploadFlags() *BigQueryDisruptionUploadFlags {
@@ -121,6 +138,8 @@ func NewBigQueryDisruptionUploadFlags() *BigQueryDisruptionUploadFlags {
 func (f *BigQueryDisruptionUploadFlags) BindFlags(fs *pflag.FlagSet) {
 	f.DataCoordinates.BindFlags(fs)
 	f.Authentication.BindFlags(fs)
+
+	fs.BoolVar(&f.DryRun, "dry-run", f.DryRun, "Run the command, but don't mutate data.")
 }
 
 func NewBigQueryDisruptionUploadFlagsCommand() *cobra.Command {
@@ -183,18 +202,28 @@ func (f *BigQueryDisruptionUploadFlags) ToOptions(ctx context.Context) (*allJobs
 		return nil, err
 	}
 	ciDataClient := jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, client)
-	ciDataSet := client.Dataset(f.DataCoordinates.DataSetID)
-	jobRunTable := ciDataSet.Table(jobrunaggregatorlib.JobRunTableName)
-	backendDisruptionTable := ciDataSet.Table(jobrunaggregatorapi.BackendDisruptionTableName)
+
+	var jobRunTableInserter jobrunaggregatorlib.BigQueryInserter
+	var backendDisruptionTableInserter jobrunaggregatorlib.BigQueryInserter
+	if !f.DryRun {
+		ciDataSet := client.Dataset(f.DataCoordinates.DataSetID)
+		jobRunTable := ciDataSet.Table(jobrunaggregatorapi.DisruptionJobRunTableName)
+		backendDisruptionTable := ciDataSet.Table(jobrunaggregatorapi.BackendDisruptionTableName)
+		jobRunTableInserter = jobRunTable.Inserter()
+		backendDisruptionTableInserter = backendDisruptionTable.Inserter()
+	} else {
+		jobRunTableInserter = NewDryRunInserter(os.Stdout, jobrunaggregatorapi.DisruptionJobRunTableName)
+		backendDisruptionTableInserter = NewDryRunInserter(os.Stdout, jobrunaggregatorapi.BackendDisruptionTableName)
+	}
 
 	return &allJobsLoaderOptions{
 		ciDataClient: ciDataClient,
 		gcsClient:    gcsClient,
 
-		jobRunInserter:              jobRunTable.Inserter(),
+		jobRunInserter:              jobRunTableInserter,
 		shouldCollectedDataForJobFn: wantsDisruptionData,
 		getLastJobRunWithDataFn:     ciDataClient.GetLastJobRunWithDisruptionDataForJobName,
-		jobRunUploader:              newDisruptionUploader(backendDisruptionTable.Inserter()),
+		jobRunUploader:              newDisruptionUploader(backendDisruptionTableInserter),
 	}, nil
 }
 
@@ -295,10 +324,13 @@ func (f *BigQuerySummarizationFlags) ToOptions(ctx context.Context) (*JobRunsBig
 		return nil, fmt.Errorf("invalid summary timeframe: %q", f.SummaryTimeFrame)
 	}
 
+	ciDataClient := jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, client)
+
 	return &JobRunsBigQuerySummarizerOptions{
 		Frequency:                 f.SummaryTimeFrame,
 		SummaryDuration:           summaryDuration,
-		CIDataClient:              jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, client),
+		JobLister:                 ciDataClient,
+		CIDataClient:              ciDataClient,
 		DataCoordinates:           f.DataCoordinates,
 		AggregatedTestRunInserter: summarizedTestRunTable.Inserter(),
 	}, nil

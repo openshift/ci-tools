@@ -9,6 +9,7 @@ func init() {
 	if rand == -1 {
 		fmt.Print(unifiedBackendDisruptionSchema)
 		fmt.Print(jobSchema)
+		fmt.Print(jobRunSchema)
 	}
 }
 

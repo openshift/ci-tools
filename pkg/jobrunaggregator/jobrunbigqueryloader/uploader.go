@@ -25,7 +25,7 @@ func wantsDisruptionData(job jobrunaggregatorapi.JobRow) bool {
 }
 
 type allJobsLoaderOptions struct {
-	ciDataClient jobrunaggregatorlib.CIDataClient
+	ciDataClient jobrunaggregatorlib.JobLister
 	// GCSClient is used to read the prowjob data
 	gcsClient jobrunaggregatorlib.CIGCSClient
 
@@ -83,7 +83,6 @@ func (o *allJobsLoaderOptions) newJobBigQueryLoaderOptions(job jobrunaggregatora
 
 	return &jobLoaderOptions{
 		jobName:                   job.JobName,
-		ciDataClient:              o.ciDataClient,
 		gcsClient:                 o.gcsClient,
 		numberOfConcurrentReaders: 20,
 		jobRunInserter:            o.jobRunInserter,
@@ -100,8 +99,6 @@ func (o *allJobsLoaderOptions) newJobBigQueryLoaderOptions(job jobrunaggregatora
 type jobLoaderOptions struct {
 	jobName string
 
-	// CIDataClient is used to read the last inserted results for a job
-	ciDataClient jobrunaggregatorlib.CIDataClient
 	// GCSClient is used to read the prowjob data
 	gcsClient jobrunaggregatorlib.CIGCSClient
 

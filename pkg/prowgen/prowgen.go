@@ -2,7 +2,6 @@ package prowgen
 
 import (
 	"fmt"
-	"regexp"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -243,7 +242,7 @@ func generatePresubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.Po
 	return &prowconfig.Presubmit{
 		JobBase:   base,
 		AlwaysRun: runIfChanged == "" && skipIfOnlyChanged == "",
-		Brancher:  prowconfig.Brancher{Branches: sets.NewString(ExactlyBranch(info.Branch), FeatureBranch(info.Branch)).List()},
+		Brancher:  prowconfig.Brancher{Branches: sets.NewString(jc.ExactlyBranch(info.Branch), jc.FeatureBranch(info.Branch)).List()},
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/prow/%s", shortName),
 		},
@@ -261,7 +260,7 @@ func generatePostsubmitForTest(name string, info *ProwgenInfo, podSpec *corev1.P
 	base := generateJobBase(name, jc.PostsubmitPrefix, info, podSpec, false, pathAlias, jobRelease, skipCloning, timeout, noBuilds)
 	return &prowconfig.Postsubmit{
 		JobBase:  base,
-		Brancher: prowconfig.Brancher{Branches: []string{ExactlyBranch(info.Branch)}},
+		Brancher: prowconfig.Brancher{Branches: []string{jc.ExactlyBranch(info.Branch)}},
 	}
 }
 
@@ -336,23 +335,4 @@ func generateJobBase(name, prefix string, info *ProwgenInfo, podSpec *corev1.Pod
 		base.Hidden = true
 	}
 	return base
-}
-
-// ExactlyBranch returns a regex string that matches exactly the given branch name: I.e. returns
-// '^master$' for 'master'. If the given branch name already looks like a regex, return it unchanged.
-func ExactlyBranch(branch string) string {
-	if !jc.SimpleBranchRegexp.MatchString(branch) {
-		return branch
-	}
-	return fmt.Sprintf("^%s$", regexp.QuoteMeta(branch))
-}
-
-// FeatureBranch returns a regex string that matches feature branch prefixes for the given branch name:
-// I.e. returns '^master-' for 'master'. If the given branch name already looks like a regex,
-// return it unchanged.
-func FeatureBranch(branch string) string {
-	if !jc.SimpleBranchRegexp.MatchString(branch) {
-		return branch
-	}
-	return fmt.Sprintf("^%s-", regexp.QuoteMeta(branch))
 }

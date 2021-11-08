@@ -732,3 +732,22 @@ func Prune(jobConfig *prowconfig.JobConfig, generator Generator, pruneLabels lab
 
 	return &pruned, nil
 }
+
+// FeatureBranch returns a regex string that matches feature branch prefixes for the given branch name:
+// I.e. returns '^master-' for 'master'. If the given branch name already looks like a regex,
+// return it unchanged.
+func FeatureBranch(branch string) string {
+	if !SimpleBranchRegexp.MatchString(branch) {
+		return branch
+	}
+	return fmt.Sprintf("^%s-", regexp.QuoteMeta(branch))
+}
+
+// ExactlyBranch returns a regex string that matches exactly the given branch name: I.e. returns
+// '^master$' for 'master'. If the given branch name already looks like a regex, return it unchanged.
+func ExactlyBranch(branch string) string {
+	if !SimpleBranchRegexp.MatchString(branch) {
+		return branch
+	}
+	return fmt.Sprintf("^%s$", regexp.QuoteMeta(branch))
+}

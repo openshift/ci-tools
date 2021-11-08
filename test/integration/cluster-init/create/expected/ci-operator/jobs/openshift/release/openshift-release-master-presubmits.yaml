@@ -65,7 +65,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - master
+    - ^master$
+    - ^master-
     cluster: app.ci
     context: ci/build-farm/newCluster-dry
     decorate: true

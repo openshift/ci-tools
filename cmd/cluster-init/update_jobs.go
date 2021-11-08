@@ -100,7 +100,7 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 			},
 		},
 		Brancher: prowconfig.Brancher{
-			Branches: []string{"master"},
+			Branches: []string{jobconfig.ExactlyBranch("master")},
 		},
 	}
 }
@@ -142,7 +142,7 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 		Trigger:      prowconfig.DefaultTriggerFor(clusterName + "-dry"),
 		RerunCommand: prowconfig.DefaultRerunCommandFor(clusterName + "-dry"),
 		Brancher: prowconfig.Brancher{
-			Branches: []string{"master"},
+			Branches: []string{jobconfig.ExactlyBranch("master"), jobconfig.FeatureBranch("master")},
 		},
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/build-farm/%s-dry", clusterName),

@@ -2,7 +2,7 @@ postsubmits:
   openshift/release:
   - agent: kubernetes
     branches:
-    - master
+    - ^master$
     cluster: app.ci
     decorate: true
     labels:

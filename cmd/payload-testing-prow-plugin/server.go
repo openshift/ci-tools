@@ -14,6 +14,7 @@ import (
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/pluginhelp"
+	"k8s.io/test-infra/prow/plugins/trigger"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -44,13 +45,30 @@ func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
 	return pluginHelp, nil
 }
 
+type trustedChecker interface {
+	trustedUser(author, org, repo string, num int) (bool, error)
+}
+
+type githubTrustedChecker struct {
+	githubClient github.Client
+}
+
+func (c *githubTrustedChecker) trustedUser(author, org, repo string, _ int) (bool, error) {
+	triggerTrustedResponse, err := trigger.TrustedUser(c.githubClient, false, "", author, org, repo)
+	if err != nil {
+		return false, fmt.Errorf("error checking %s for trust: %w", author, err)
+	}
+	return triggerTrustedResponse.IsTrusted, nil
+}
+
 type server struct {
-	ghc          githubClient
-	ctx          context.Context
-	kubeClient   ctrlruntimeclient.Client
-	namespace    string
-	jobResolver  jobResolver
-	testResolver testResolver
+	ghc            githubClient
+	ctx            context.Context
+	kubeClient     ctrlruntimeclient.Client
+	namespace      string
+	jobResolver    jobResolver
+	testResolver   testResolver
+	trustedChecker trustedChecker
 }
 
 type jobSetSpecification struct {
@@ -121,6 +139,16 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 	if len(specs) == 0 {
 		logger.Debug("found no specs from comments")
 		return ""
+	}
+
+	trusted, err := s.trustedChecker.trustedUser(ic.Comment.User.Login, org, repo, prNumber)
+	if err != nil {
+		logger.WithError(err).WithField("user", ic.Comment.User.Login).Error("could not check if the user is trusted")
+		return fmt.Sprintf("could not check if the user %s is trusted for pull request %s/%s#%d: %v", ic.Comment.User.Login, org, repo, prNumber, err)
+	}
+	if !trusted {
+		logger.WithError(err).WithField("user", ic.Comment.User.Login).Error("the user is not trusted")
+		return fmt.Sprintf("user %s is not trusted for pull request %s/%s#%d", ic.Comment.User.Login, org, repo, prNumber)
 	}
 
 	pr, err := s.ghc.GetPullRequest(org, repo, prNumber)

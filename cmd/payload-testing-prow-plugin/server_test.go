@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -197,6 +198,16 @@ func TestBuild(t *testing.T) {
 	}
 }
 
+type fakeTrustedChecker struct {
+}
+
+func (c *fakeTrustedChecker) trustedUser(author, _, _ string, _ int) (bool, error) {
+	if strings.Contains(author, "not-trusted") {
+		return false, nil
+	}
+	return true, nil
+}
+
 func TestHandle(t *testing.T) {
 	ghc := fakegithub.NewFakeClient()
 	pr123 := github.PullRequest{}
@@ -219,7 +230,8 @@ func TestHandle(t *testing.T) {
 					{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial"},
 					{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi"},
 				}}),
-				testResolver: newFakeTestResolver(),
+				testResolver:   newFakeTestResolver(),
+				trustedChecker: &fakeTrustedChecker{},
 			},
 			ic: github.IssueCommentEvent{
 				GUID: "guid",
@@ -250,7 +262,8 @@ func TestHandle(t *testing.T) {
 				}, "4.8": {
 					{Name: "some-non-prow-gen-job"},
 				}}),
-				testResolver: newFakeTestResolver(),
+				testResolver:   newFakeTestResolver(),
+				trustedChecker: &fakeTrustedChecker{},
 			},
 			ic: github.IssueCommentEvent{
 				GUID: "guid",
@@ -268,6 +281,33 @@ func TestHandle(t *testing.T) {
 
 trigger 0 jobs of type all for the ci release of OCP 4.8
 `,
+		},
+		{
+			name: "user is not trusted",
+			s: &server{
+				ghc:            ghc,
+				ctx:            context.TODO(),
+				namespace:      "ci",
+				trustedChecker: &fakeTrustedChecker{},
+			},
+			ic: github.IssueCommentEvent{
+				Repo: github.Repo{
+					Owner: github.User{
+						Login: "org",
+					},
+					Name: "repo",
+				},
+				GUID: "guid",
+				Issue: github.Issue{
+					Number:      123,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					User: github.User{Login: "not-trusted"},
+					Body: "/payload 4.10 nightly informing",
+				},
+			},
+			expected: `user not-trusted is not trusted for pull request org/repo#123`,
 		},
 	}
 	for _, tc := range testCases {

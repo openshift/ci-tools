@@ -69,11 +69,11 @@ func validateOptions(o options) []error {
 		}
 	}
 	if o.releaseRepo == "" {
-		//If the release repo is missing, further checks won't be possible
+		// If the release repo is missing, further checks won't be possible
 		errs = append(errs, errors.New("--release-repo must be provided"))
 	} else {
 		if o.createPR {
-			//make sure the release repo is on the master branch and clean
+			// make sure the release repo is on the master branch and clean
 			if err := os.Chdir(o.releaseRepo); err != nil {
 				errs = append(errs, err)
 			} else {

@@ -11,8 +11,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/load"
-	"github.com/openshift/ci-tools/pkg/prowgen"
 )
 
 type IndexDelta struct {
@@ -135,7 +135,7 @@ func (a *configAgent) GetMatchingConfig(metadata api.Metadata) (api.ReleaseBuild
 	}
 	var matchingConfigs []api.ReleaseBuildConfiguration
 	for _, config := range repoConfigs {
-		for _, f := range []func(string) string{prowgen.ExactlyBranch, prowgen.FeatureBranch} {
+		for _, f := range []func(string) string{jobconfig.ExactlyBranch, jobconfig.FeatureBranch} {
 			r, err := regexp.Compile(f(config.Metadata.Branch))
 			if err != nil {
 				return api.ReleaseBuildConfiguration{}, fmt.Errorf("could not compile regex for %s/%s@%s: %w", metadata.Org, metadata.Repo, config.Metadata.Branch, err)

@@ -34,6 +34,20 @@ for org in openshift; do
     echo "Running Prowgen in $org/release does not result in changes, no followups needed"
   fi
 
+  echo >&2 "$(date --iso-8601=seconds) Executing sanitize-prow-jobs"
+  sanitize-prow-jobs --prow-jobs-dir ci-operator/jobs --config-path core-services/sanitize-prow-jobs/_config.yaml
+  out="$(git status --porcelain)"
+  if [[ -n "$out" ]]; then
+    echo "ERROR: Changes in $org/release:"
+    git diff
+    echo "ERROR: Running sanitize-prow-jobs in $org/release results in changes ^^^"
+    echo "ERROR: To avoid breaking $org/release for everyone you should regenerate"
+    echo "ERROR: the jobs there and merge the changes ASAP after this change"
+    failure=1
+  else
+    echo "Running sanitize-prow-jobs in $org/release does not result in changes, no followups needed"
+  fi
+
   CONFIG="${clonedir}/core-services/prow/02_config"
   if [[ -d "${CONFIG}" ]]; then
     echo >&2 "$(date --iso-8601=seconds) Executing determinize-prow-config"

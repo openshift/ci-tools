@@ -50,15 +50,15 @@ Created: {{ .ObjectMeta.CreationTimestamp }}
 <h2>Pull request</h2>
 
 {{ with .PullRequest }}
-<a href={{ printf "http://github.com/%s/%s/pulls/%d" .Org .Repo .PullRequest.Number }}>{{ .PullRequest.Title }}</a>
+{{ prLink . }}
 <ul>
-  {{ with .PullRequest }}
-    <li>Author: {{ .Author }}</li>
-    <li>SHA: <tt>{{ .SHA }}</tt></li>
-  {{ end }}
-  <li>Base: <tt>{{ .BaseRef }}</tt> (<tt>{{ .BaseSHA }}</tt>)</li>
+    <li>Author: {{ authorLink .PullRequest.Author }}</li>
+    <li>SHA: <tt>{{ shaLink . .PullRequest.SHA }}</tt></li>
+  <li>
+    Base: <tt>{{ refLink . .BaseRef }}</tt> (<tt>{{ shaLink . .BaseSHA }}</tt>)
+  </li>
 </ul>
-{{ end }}
+{{ end }}{{/* with .PullRequest */}}
 
 {{ with .Jobs }}
 
@@ -77,15 +77,18 @@ Created: {{ .ObjectMeta.CreationTimestamp }}
   {{ range $i, $job := .Jobs }}
   <li>
     <tt>
-      {{ with .CIOperatorConfig }}{{ .Org }}/{{ .Repo }}@{{ .Branch }}{{ with .Variant }}__{{ . }}{{ end }}{{ end }}:{{ .Test }}
+      {{ with .CIOperatorConfig -}}
+        {{ .Org }}/{{ .Repo }}@{{ .Branch -}}
+        {{- with .Variant }}__{{ . }}{{ end }}
+      {{- end }}:{{ .Test }}
     </tt>
   </li>
   {{ end }}
 </ul>
 
-{{ end }}
+{{ end }}{{/* with .Jobs */}}
 
-{{ end }}
+{{ end }}{{/* with .Spec */}}
 
 <h2>Status</h2> {{ with .Status }}
 
@@ -94,16 +97,14 @@ Jobs:
 <ul>
   {{ range .Jobs }}
   <li>
-    <ul>
-      <li>Prow job: <a href="{{ .Status.URL }}">{{ .ProwJob }}</a></li>
+      Prow job: <a href="{{ .Status.URL }}">{{ .ProwJob }}</a><br/>
       {{ with .Status }}
-      <li>Description: {{ .Description }}</li>
-      <li>State: {{ .State }}</li>
-      <li>Started: {{ .StartTime }}</li>
-      <li>Completed: {{ with .CompletionTime }}{{ . }}{{ end }}</li>
-      <li>Pod: {{ .PodName }}</li>
+      Description: {{ .Description }}<br/>
+      State: {{ .State }}<br/>
+      Started: {{ .StartTime }}<br/>
+      Completed: {{ with .CompletionTime }}{{ . }}{{ end }}<br/>
+      Pod: {{ .PodName }}<br/>
       {{ end }}
-    </ul>
   </li>
   {{ end }}
 </ul>
@@ -122,7 +123,7 @@ Conditions:
 {{ end }}
 </ul>
 
-{{ end }}
+{{ end }}{{/* with .Status */}}
 `
 )
 
@@ -130,7 +131,6 @@ type server struct {
 	client           ctrlruntimeclient.Client
 	ctx              context.Context
 	namespace        string
-	runTemplate      *template.Template
 	runsListTemplate *template.Template
 }
 
@@ -139,16 +139,11 @@ func newServer(client ctrlruntimeclient.Client, ctx context.Context, namespace s
 	if err != nil {
 		return server{}, err
 	}
-	runTemplate, err := template.New("runTemplate").Parse(runTemplate)
-	if err != nil {
-		return server{}, err
-	}
 	return server{
 		client:           client,
 		ctx:              ctx,
 		namespace:        namespace,
 		runsListTemplate: runsListTemplate,
-		runTemplate:      runTemplate,
 	}, nil
 }
 
@@ -195,7 +190,42 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	title := fmt.Sprintf(runTitle, run.ObjectMeta.Name)
-	if err := html.WritePage(w, title, bodyStart, pageEnd, s.runTemplate, &run); err != nil {
+	tmpl := template.New("runTemplate")
+	tmpl.Funcs(template.FuncMap{
+		"prLink": func(pr *prpqv1.PullRequestUnderTest) template.HTML {
+			org := template.HTMLEscapeString(pr.Org)
+			repo := template.HTMLEscapeString(pr.Repo)
+			title := template.HTMLEscapeString(pr.PullRequest.Title)
+			n := pr.PullRequest.Number
+			ret := fmt.Sprintf(`<a href="http://github.com/%s/%s/pull/%d">%s</a>`, org, repo, n, title)
+			return template.HTML(ret)
+		},
+		"authorLink": func(a string) template.HTML {
+			a = template.HTMLEscapeString(a)
+			ret := fmt.Sprintf(`<a href="https://github.com/%s">%s</a>`, a, a)
+			return template.HTML(ret)
+		},
+		"refLink": func(pr *prpqv1.PullRequestUnderTest, r string) template.HTML {
+			r = template.HTMLEscapeString(r)
+			org := template.HTMLEscapeString(pr.Org)
+			repo := template.HTMLEscapeString(pr.Repo)
+			ret := fmt.Sprintf(`<a href="https://github.com/%s/%s/tree/%s">%s</a>`, org, repo, r, r)
+			return template.HTML(ret)
+		},
+		"shaLink": func(pr *prpqv1.PullRequestUnderTest, h string) template.HTML {
+			h = template.HTMLEscapeString(h)
+			org := template.HTMLEscapeString(pr.Org)
+			repo := template.HTMLEscapeString(pr.Repo)
+			ret := fmt.Sprintf(`<a href="https://github.com/%s/%s/commit/%s">%s</a>`, org, repo, h, h)
+			return template.HTML(ret)
+		},
+	})
+	if _, err := tmpl.Parse(runTemplate); err != nil {
+		logrus.WithError(err).Errorf("failed to parse template")
+		writeStatus(w, http.StatusInternalServerError)
+		return
+	}
+	if err := html.WritePage(w, title, bodyStart, pageEnd, tmpl, &run); err != nil {
 		logrus.WithError(err).Errorf("failed to write page")
 		writeStatus(w, http.StatusInternalServerError)
 		return

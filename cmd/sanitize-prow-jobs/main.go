@@ -13,10 +13,12 @@ import (
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/dispatcher"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
@@ -112,6 +114,16 @@ func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.
 				return err
 			}
 			jc.PresubmitsStatic[k][idx].JobBase.Cluster = string(cluster)
+
+			// Enforce that even hand-crafted jobs have explicit branch regexes
+			// Presubmits are generally expected to hit also on "feature branches",
+			// so we generate regexes for both exact match and feature branch patterns
+			featureBranches := sets.NewString()
+			for _, branch := range jc.PresubmitsStatic[k][idx].Branches {
+				featureBranches.Insert(jobconfig.FeatureBranch(branch))
+				featureBranches.Insert(jobconfig.ExactlyBranch(branch))
+			}
+			jc.PresubmitsStatic[k][idx].Branches = featureBranches.List()
 		}
 	}
 	for k := range jc.PostsubmitsStatic {
@@ -121,6 +133,14 @@ func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.
 				return err
 			}
 			jc.PostsubmitsStatic[k][idx].JobBase.Cluster = string(cluster)
+
+			// Enforce that even hand-crafted jobs have explicit branch regexes
+			// Postsubmits are generally expected to only hit on exact match branches
+			// so we do not generate a regex for feature branch pattern like we do
+			// for presubmits above
+			for item := range jc.PostsubmitsStatic[k][idx].Branches {
+				jc.PostsubmitsStatic[k][idx].Branches[item] = jobconfig.ExactlyBranch(jc.PostsubmitsStatic[k][idx].Branches[item])
+			}
 		}
 	}
 	for idx := range jc.Periodics {

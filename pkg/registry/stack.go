@@ -75,8 +75,36 @@ func (s *stack) resolveDep(env string) string {
 	return ""
 }
 
-func (s *stack) checkUnused(r *stackRecord) (ret []error) {
+// checkUnused emits errors for each unused parameter/dependency in the record.
+// `overridden` is an alternative list of steps used to exclude unused errors
+// for parameters that exist only in overridden steps.  This can happen if a
+// workflow sets a parameter for a step that is replaced by a test.
+func (s *stack) checkUnused(r *stackRecord, overridden [][]api.TestStep, registry *registry) (ret []error) {
+	if len(r.unusedEnv) == 0 && len(r.unusedDeps) == 0 {
+		return nil
+	}
+	params, deps := sets.NewString(), sets.NewString()
+	for ; len(overridden) != 0; overridden = overridden[1:] {
+		for _, s := range overridden[0] {
+			if err := registry.iterateSteps(s, func(s *api.LiteralTestStep) {
+				for _, e := range s.Environment {
+					params.Insert(e.Name)
+				}
+				for _, d := range s.Dependencies {
+					deps.Insert(d.Env)
+				}
+			}); err != nil {
+				ret = append(ret, err)
+			}
+		}
+	}
+	if ret != nil {
+		return
+	}
 	for u := range r.unusedEnv {
+		if params.Has(u) {
+			continue
+		}
 		var l []string
 		for _, sr := range s.records {
 			for _, e := range sr.env {
@@ -89,6 +117,9 @@ func (s *stack) checkUnused(r *stackRecord) (ret []error) {
 		ret = append(ret, s.errorf("parameter %q is overridden in %v but not declared in any step", u, l))
 	}
 	for u := range r.unusedDeps {
+		if deps.Has(u) {
+			continue
+		}
 		var l []string
 		for _, sr := range s.records {
 			for _, d := range sr.deps {

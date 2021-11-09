@@ -967,6 +967,16 @@ func TestResolveParameters(t *testing.T) {
 			}},
 		},
 		err: errors.New("test/test: step/step: unresolved parameter: UNRESOLVED"),
+	}, {
+		name: "unresolved workflow override is not an error",
+		test: api.MultiStageTestConfiguration{
+			Workflow: &workflow,
+			Test: []api.TestStep{{
+				LiteralTestStep: &api.LiteralTestStep{As: "step"},
+			}},
+		},
+		expectedParams: [][]api.StepParameter{nil},
+		expectedDeps:   [][]api.StepDependency{nil},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			ret, err := NewResolver(refs, chains, workflows, observers).Resolve("test", tc.test)

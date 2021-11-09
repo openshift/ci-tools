@@ -27,6 +27,7 @@ import (
 	v1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
 	"github.com/openshift/ci-tools/pkg/controller/prpqr_reconciler/pjstatussyncer"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
 const (
@@ -104,8 +105,8 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 		return fmt.Errorf("failed to get the PullRequestPayloadQualificationRun: %s in namespace %s: %w", req.Name, req.Namespace, err)
 	}
 
-	prowjobs := generateProwjobs(prpqr.Spec.PullRequest.Org, prpqr.Spec.PullRequest.Repo, prpqr.Spec.PullRequest.BaseRef, req.Name, req.Namespace)
-	for _, pj := range prowjobs {
+	prowjobs := generateProwjobs(prpqr.Spec.PullRequest.Org, prpqr.Spec.PullRequest.Repo, prpqr.Spec.PullRequest.BaseRef, req.Name, req.Namespace, prpqr.Spec.Jobs.Jobs)
+	for releaseJobName, pj := range prowjobs {
 		logger = logger.WithFields(logrus.Fields{"name": pj.Name, "namespace": req.Namespace})
 
 		err := r.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: pj.Namespace, Name: pj.Name}, &prowv1.ProwJob{})
@@ -138,7 +139,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 		}
 
 		prpqr.Status.Jobs = append(prpqr.Status.Jobs, v1.PullRequestPayloadJobStatus{
-			ReleaseJobName: pj.Spec.Job,
+			ReleaseJobName: releaseJobName,
 			ProwJob:        pj.Name,
 			Status:         pj.Status,
 		})
@@ -154,37 +155,40 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 
 // TODO: Currently we create a single dummy prowjob just for testing. The actual implementation
 // will be introduced in https://issues.redhat.com/browse/DPTP-2577
-func generateProwjobs(org, repo, branch, prpqrName, prpqrNamespace string) []prowv1.ProwJob {
-	labels := map[string]string{
-		v1.PullRequestPayloadQualificationRunLabel: prpqrName,
+func generateProwjobs(org, repo, branch, prpqrName, prpqrNamespace string, releaseJobSpec []v1.ReleaseJobSpec) map[string]prowv1.ProwJob {
+	ret := make(map[string]prowv1.ProwJob)
+	for _, spec := range releaseJobSpec {
+		labels := map[string]string{
+			v1.PullRequestPayloadQualificationRunLabel: prpqrName,
+		}
+
+		base := prowconfig.JobBase{
+			Agent: string(prowv1.KubernetesAgent),
+			Spec: &corev1.PodSpec{
+				Containers: []corev1.Container{{Image: "centos:8", Command: []string{"sleep"}, Args: []string{"100"}}},
+			},
+
+			UtilityConfig: prowconfig.UtilityConfig{
+				Decorate: utilpointer.BoolPtr(true),
+			},
+		}
+
+		extraRefs := prowv1.Refs{
+			Org:     org,
+			Repo:    repo,
+			BaseRef: branch,
+		}
+		base.ExtraRefs = []prowv1.Refs{extraRefs}
+
+		periodicJob := prowconfig.Periodic{
+			JobBase: base,
+			Cron:    "@yearly",
+		}
+
+		pj := pjutil.NewProwJob(pjutil.PeriodicSpec(periodicJob), labels, nil)
+		pj.Namespace = prpqrNamespace
+
+		ret[spec.CIOperatorConfig.JobName(jobconfig.PeriodicPrefix, spec.Test)] = pj
 	}
-
-	base := prowconfig.JobBase{
-		Agent: string(prowv1.KubernetesAgent),
-		Name:  fmt.Sprintf("dummy-pj-for-%s", prpqrName),
-		Spec: &corev1.PodSpec{
-			Containers: []corev1.Container{{Image: "centos:8", Command: []string{"sleep"}, Args: []string{"100"}}},
-		},
-
-		UtilityConfig: prowconfig.UtilityConfig{
-			Decorate: utilpointer.BoolPtr(true),
-		},
-	}
-
-	extraRefs := prowv1.Refs{
-		Org:     org,
-		Repo:    repo,
-		BaseRef: branch,
-	}
-	base.ExtraRefs = []prowv1.Refs{extraRefs}
-
-	periodicJob := prowconfig.Periodic{
-		JobBase: base,
-		Cron:    "@yearly",
-	}
-
-	pj := pjutil.NewProwJob(pjutil.PeriodicSpec(periodicJob), labels, nil)
-	pj.Name = fmt.Sprintf("dummy-pj-for-%s", prpqrName)
-	pj.Namespace = prpqrNamespace
-	return []prowv1.ProwJob{pj}
+	return ret
 }

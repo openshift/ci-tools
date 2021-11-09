@@ -12,6 +12,7 @@ const (
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:shortName=prpqr
 
 // PullRequestPayloadQualificationRun represents the intent to run a battery of OCP release
 // payload validating jobs

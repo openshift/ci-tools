@@ -305,6 +305,7 @@ func main() {
 			switch {
 			case strings.HasPrefix(name, "release-openshift-"),
 				strings.HasPrefix(name, "promote-release-openshift-"),
+				strings.HasPrefix(name, "periodic-ci-openshift-multiarch"),
 				strings.HasPrefix(name, "periodic-ci-openshift-release-master-ci-"),
 				strings.HasPrefix(name, "periodic-ci-openshift-release-master-okd-"),
 				strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"):
@@ -328,6 +329,7 @@ func main() {
 				strings.Contains(name, "-ocp-"),
 				strings.Contains(name, "-origin-"),
 				// these prefixes control whether a job is ocp or okd going forward
+				strings.HasPrefix(name, "periodic-ci-openshift-multiarch"),
 				strings.HasPrefix(name, "periodic-ci-openshift-release-master-ci-"),
 				strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"),
 				strings.HasPrefix(name, "periodic-ci-openshift-verification-tests-master-"):

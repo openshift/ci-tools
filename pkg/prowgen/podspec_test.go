@@ -140,6 +140,38 @@ func TestTargets(t *testing.T) {
 	}
 }
 
+func TestCustomHashInput(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		inputs []string
+	}{
+		{
+			name:   "custom hash input is added",
+			inputs: []string{"one"},
+		},
+		{
+			name:   "custom hash inputs are added",
+			inputs: []string{"one", "two"},
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			g := NewCiOperatorPodSpecGenerator()
+			for _, input := range tc.inputs {
+				g.Add(CustomHashInput(input))
+			}
+			podspec, err := g.Build()
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			testhelper.CompareWithFixture(t, podspec)
+		})
+	}
+}
+
 func TestCIPullSecret(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

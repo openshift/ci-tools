@@ -108,11 +108,13 @@ ORDER BY Jobs.JobName ASC
 func (c *ciDataClient) GetLastJobRunWithTestRunDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
 	// the JobRun.Name is always increasing, so we can sort by that name.  The starttime is based on the prowjob
 	// time and I don't think that is coordinated.
+	// the testruns jobrun table is now distinct, so we will use the jobrun table as authoritative for what data should and should not
+	// be uploaded rather than using the absence of testruns itself.  This will avoid having a large join and if a jobrun lacks test runs
+	// for some reason, this avoids duplicate jobruns being created.
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
 		`
-SELECT distinct(JobRuns.Name), JobRuns.StartTime
+SELECT *
 FROM DATA_SET_LOCATION.JobRuns 
-INNER JOIN DATA_SET_LOCATION.TestRuns on TestRuns.JobRunName = JobRuns.Name
 WHERE JobRuns.JobName = @JobName
 ORDER BY JobRuns.Name DESC
 LIMIT 1

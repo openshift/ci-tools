@@ -1,6 +1,8 @@
 package jobrunaggregatorapi
 
-import "cloud.google.com/go/bigquery"
+import (
+	"time"
+)
 
 type ReleaseRow struct {
 	// Phase contains the overall status of a payload: e.g. Ready, Accepted,
@@ -11,16 +13,24 @@ type ReleaseRow struct {
 	// Release contains the X.Y version of the payload, e.g. 4.8
 	Release string `bigquery:"release"`
 
+	// Stream contains the stream of the payload, e.g. nightly or ci
+	Stream string `bigquery:"stream"`
+
 	// Architecture contains the architecture for the release, e.g. amd64
 	Architecture string `bigquery:"architecture"`
 
 	// ReleaseTag contains the release version, e.g. 4.8.0-0.nightly-2021-10-28-013428.
 	ReleaseTag string `bigquery:"releaseTag"`
 
+	// ReleaseTime contains the time the release was created, i.e. the -YYYY-MM-DD-HHMMSS suffix
+	// of 4.8.0-0.nightly-2021-10-28-013428.
+	ReleaseTime time.Time `bigquery:"releaseTime"`
+
 	// PreviousReleaseTag contains the previously accepted build, on which any
 	// changelog is based from.
 	PreviousReleaseTag string `bigquery:"previousReleaseTag"`
 
+	// KubernetesVersion contains the kube version, i.e. 1.22.1.
 	KubernetesVersion string `bigquery:"kubernetesVersion"`
 
 	// CurrentOSVersion contains the current machine OS version.
@@ -80,23 +90,42 @@ type ReleasePullRequestRow struct {
 	BugURL string `bigquery:"bugURL"`
 }
 
-type ReleaseUpgradeRow struct {
-	From    string
-	To      string
-	Success int
-	Failure int
-	Total   int
-}
-
 type ReleaseJobRunRow struct {
-	Name           string                `bigquery:"name"`
-	JobName        string                `bigquery:"jobName"`
-	Kind           string                `bigquery:"kind"`
-	State          string                `bigquery:"state"`
-	URL            string                `bigquery:"url"`
-	TransitionTime bigquery.NullDateTime `bigquery:"transitionTime"`
-	Retries        bigquery.NullInt64    `bigquery:"retries"`
-	UpgradesFrom   string                `bigquery:"upgradesFrom"`
-	UpgradesTo     string                `bigquery:"upgradesTo"`
-	Upgrade        bool                  `bigquery:"upgrade"`
+	// Name contains the Prow name of this job run.
+	Name string `bigquery:"name"`
+
+	// ReleaseTag is the OpenShift version, e.g. 4.8.0-0.nightly-2021-10-28-013428.
+	ReleaseTag string `bigquery:"releaseTag"`
+
+	// JobName contains the job name as known by the release controller --
+	// this is a shortened form like "aws-serial"
+	JobName string `bigquery:"jobName"`
+
+	// Kind contains the job run kind, i.e. whether it's Blocking or Informing.
+	Kind string `bigquery:"kind"`
+
+	// State holds the overall status of the job, such as Failed.
+	State string `bigquery:"state"`
+
+	// URL contains a link to Prow.
+	URL string `bigquery:"url"`
+
+	// Transition time contains the transition time from the release
+	// controller.
+	TransitionTime time.Time `bigquery:"transitionTime"`
+
+	// Retries contains the number of retries were performed on this job,
+	// for this release tag.
+	Retries int `bigquery:"retries"`
+
+	// UpgradesFrom contains the source version when this job run is
+	// an upgrade.
+	UpgradesFrom string `bigquery:"upgradesFrom"`
+
+	// UpgradesTo contains the target version when this job run is
+	// an upgrade.
+	UpgradesTo string `bigquery:"upgradesTo"`
+
+	// Upgrade is a flag that indicates whether this job run was an upgrade or not.
+	Upgrade bool `bigquery:"upgrade"`
 }

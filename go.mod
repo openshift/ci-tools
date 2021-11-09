@@ -25,7 +25,6 @@ replace (
 )
 
 require (
-	cloud.google.com/go v0.81.0
 	cloud.google.com/go/bigquery v1.8.0
 	cloud.google.com/go/storage v1.12.0
 	github.com/GoogleCloudPlatform/testgrid v0.0.68
@@ -207,3 +206,5 @@ require (
 	knative.dev/pkg v0.0.0-20200711004937-22502028e31a // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.1.2 // indirect
 )
+
+require cloud.google.com/go v0.81.0 // indirect

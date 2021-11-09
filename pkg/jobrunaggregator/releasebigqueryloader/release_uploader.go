@@ -8,10 +8,11 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/bigquery"
-	"cloud.google.com/go/civil"
 	"github.com/pkg/errors"
 
 	"k8s.io/klog/v2"
@@ -206,6 +207,23 @@ func releaseDetailsToBigQuery(architecture string, tag ReleaseTag, details Relea
 		release.Release = strings.Join(parts[:2], ".")
 	}
 
+	// Get "nightly" or "ci" from the string
+	if len(parts) >= 4 {
+		stream := strings.Split(parts[3], "-")
+		if len(stream) >= 2 {
+			release.Stream = stream[0]
+		}
+	}
+
+	dateTime := regexp.MustCompile(`.*([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6})`)
+	match := dateTime.FindStringSubmatch(tag.Name)
+	if len(match) > 1 {
+		t, err := time.Parse("2006-01-02-150405", match[1])
+		if err == nil {
+			release.ReleaseTime = t
+		}
+	}
+
 	if len(details.ChangeLog) == 0 {
 		return &release, nil, nil
 	}
@@ -225,16 +243,14 @@ func releaseJobRunsToBigQuery(details ReleaseDetails) []*jobrunaggregatorapi.Rel
 		for platform, jobResult := range jobs {
 			id := idFromURL(jobResult.URL)
 			results[id] = &jobrunaggregatorapi.ReleaseJobRunRow{
-				Name:    id,
-				JobName: platform,
-				Kind:    "Blocking",
-				State:   jobResult.State,
-				URL:     jobResult.URL,
-				Retries: bigquery.NullInt64{Int64: int64(jobResult.Retries), Valid: true},
-				TransitionTime: bigquery.NullDateTime{
-					DateTime: civil.DateTimeOf(jobResult.TransitionTime),
-					Valid:    !jobResult.TransitionTime.IsZero(),
-				},
+				Name:           id,
+				ReleaseTag:     details.Name,
+				JobName:        platform,
+				Kind:           "Blocking",
+				State:          jobResult.State,
+				URL:            jobResult.URL,
+				Retries:        jobResult.Retries,
+				TransitionTime: jobResult.TransitionTime,
 			}
 		}
 	}
@@ -243,15 +259,14 @@ func releaseJobRunsToBigQuery(details ReleaseDetails) []*jobrunaggregatorapi.Rel
 		for platform, jobResult := range jobs {
 			id := idFromURL(jobResult.URL)
 			results[id] = &jobrunaggregatorapi.ReleaseJobRunRow{
-				Name:    id,
-				JobName: platform,
-				Kind:    "Informing",
-				State:   jobResult.State,
-				URL:     jobResult.URL,
-				TransitionTime: bigquery.NullDateTime{
-					DateTime: civil.DateTimeOf(jobResult.TransitionTime),
-					Valid:    !jobResult.TransitionTime.IsZero(),
-				},
+				Name:           id,
+				ReleaseTag:     details.Name,
+				JobName:        platform,
+				Kind:           "Informing",
+				State:          jobResult.State,
+				URL:            jobResult.URL,
+				Retries:        jobResult.Retries,
+				TransitionTime: jobResult.TransitionTime,
 			}
 		}
 	}

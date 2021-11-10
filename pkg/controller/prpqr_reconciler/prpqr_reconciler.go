@@ -11,6 +11,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/pjutil"
@@ -111,7 +112,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 
 		err := r.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: pj.Namespace, Name: pj.Name}, &prowv1.ProwJob{})
 		if err != nil && !kerrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get the PullRequestPayloadQualificationRun: %s in namespace %s: %w", req.Name, req.Namespace, err)
+			return fmt.Errorf("failed to get the Prowjob: %s in namespace %s: %w", req.Name, req.Namespace, err)
 		}
 
 		if !kerrors.IsNotFound(err) {
@@ -138,17 +139,21 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 			return fmt.Errorf("failed to wait for created ProwJob to appear in cache: %w", err)
 		}
 
-		prpqr.Status.Jobs = append(prpqr.Status.Jobs, v1.PullRequestPayloadJobStatus{
-			ReleaseJobName: releaseJobName,
-			ProwJob:        pj.Name,
-			Status:         pj.Status,
-		})
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			prpqr.Status.Jobs = append(prpqr.Status.Jobs, v1.PullRequestPayloadJobStatus{
+				ReleaseJobName: releaseJobName,
+				ProwJob:        pj.Name,
+				Status:         pj.Status,
+			})
 
-		logger.Info("Updating PullRequestPayloadQualificationRun...")
-		if err := r.client.Update(ctx, prpqr); err != nil {
+			logger.Info("Updating PullRequestPayloadQualificationRun...")
+			if err := r.client.Update(ctx, prpqr); err != nil {
+				return err
+			}
+			return nil
+		}); err != nil {
 			return fmt.Errorf("failed to update PullRequestPayloadQualificationRun %s: %w", prpqr.Name, err)
 		}
-
 	}
 	return nil
 }

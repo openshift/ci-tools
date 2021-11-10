@@ -140,6 +140,11 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 		}
 
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			prpqr := &v1.PullRequestPayloadQualificationRun{}
+			if err := r.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: req.Namespace, Name: req.Name}, prpqr); err != nil {
+				return fmt.Errorf("failed to get the PullRequestPayloadQualificationRun: %w", err)
+			}
+
 			prpqr.Status.Jobs = append(prpqr.Status.Jobs, v1.PullRequestPayloadJobStatus{
 				ReleaseJobName: releaseJobName,
 				ProwJob:        pj.Name,
@@ -148,11 +153,11 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 
 			logger.Info("Updating PullRequestPayloadQualificationRun...")
 			if err := r.client.Update(ctx, prpqr); err != nil {
-				return err
+				return fmt.Errorf("failed to update PullRequestPayloadQualificationRun %s: %w", prpqr.Name, err)
 			}
 			return nil
 		}); err != nil {
-			return fmt.Errorf("failed to update PullRequestPayloadQualificationRun %s: %w", prpqr.Name, err)
+			return err
 		}
 	}
 	return nil

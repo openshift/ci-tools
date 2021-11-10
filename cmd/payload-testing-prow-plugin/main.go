@@ -26,6 +26,7 @@ import (
 )
 
 type options struct {
+	logLevel                 string
 	githubEventServerOptions githubeventserver.Options
 	github                   prowflagutil.GitHubOptions
 	kubernetesOptions        prowflagutil.KubernetesOptions
@@ -38,6 +39,7 @@ func gatherOptions() options {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
+	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.webhookSecretFile, "hmac-secret-file", "/etc/webhook/hmac", "Path to the file containing the GitHub HMAC secret.")
 
 	o.github.AddFlags(fs)
@@ -52,6 +54,10 @@ func gatherOptions() options {
 }
 
 func (o *options) Validate() error {
+	_, err := logrus.ParseLevel(o.logLevel)
+	if err != nil {
+		return fmt.Errorf("invalid --log-level: %w", err)
+	}
 	if o.ciOpConfigDir == "" {
 		return fmt.Errorf("--ci-op-config-dir must be set")
 	}
@@ -80,6 +86,9 @@ func main() {
 	if err := o.Validate(); err != nil {
 		logger.Fatalf("Invalid options: %v", err)
 	}
+
+	level, _ := logrus.ParseLevel(o.logLevel)
+	logrus.SetLevel(level)
 
 	var tokens []string
 

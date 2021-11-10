@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -116,6 +117,7 @@ func (s *server) handleIssueComment(l *logrus.Entry, ic github.IssueCommentEvent
 }
 
 func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
+	start := time.Now()
 	org := ic.Repo.Owner.Login
 	repo := ic.Repo.Name
 	prNumber := ic.Issue.Number
@@ -126,6 +128,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		github.OrgLogField:  org,
 		github.RepoLogField: repo,
 		github.PrLogField:   prNumber,
+		github.EventGUID:    guid,
 	})
 
 	// only reacts on comments on PRs
@@ -141,7 +144,9 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		return ""
 	}
 
+	startTrustedUser := time.Now()
 	trusted, err := s.trustedChecker.trustedUser(ic.Comment.User.Login, org, repo, prNumber)
+	logger.WithField("duration", time.Since(startTrustedUser)).Debug("trustedUser completed")
 	if err != nil {
 		logger.WithError(err).WithField("user", ic.Comment.User.Login).Error("could not check if the user is trusted")
 		return fmt.Sprintf("could not check if the user %s is trusted for pull request %s/%s#%d: %v", ic.Comment.User.Login, org, repo, prNumber, err)
@@ -151,7 +156,9 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		return fmt.Sprintf("user %s is not trusted for pull request %s/%s#%d", ic.Comment.User.Login, org, repo, prNumber)
 	}
 
+	startGetPullRequest := time.Now()
 	pr, err := s.ghc.GetPullRequest(org, repo, prNumber)
+	logger.WithField("duration", time.Since(startGetPullRequest)).Debug("GetPullRequest completed")
 	if err != nil {
 		logger.Debug("could not get pull request")
 		return fmt.Sprintf("could not get pull request https://github.com/%s/%s/pull/%d: %v", org, repo, prNumber, err)
@@ -176,11 +183,17 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		builder.spec = spec
 		var jobNames []string
 		var jobTuples []api.MetadataWithTest
+		specLogger.Debug("resolving jobs ...")
+		startResolveJobs := time.Now()
 		jobs, err := s.jobResolver.resolve(spec.ocp, spec.releaseType, spec.jobs)
+		specLogger.WithField("duration", time.Since(startResolveJobs)).WithField("len(jobs)", len(jobs)).
+			Debug("resolving jobs completed")
 		if err != nil {
 			specLogger.WithError(err).Error("could not resolve jobs")
 			return fmt.Sprintf("could not resolve jobs for %s %s %s: %v", spec.ocp, spec.releaseType, spec.jobs, err)
 		}
+		specLogger.Debug("resolving tests ...")
+		startResolveTests := time.Now()
 		for _, job := range jobs {
 			if job.Test != "" {
 				jobNames = append(jobNames, job.Name)
@@ -199,16 +212,24 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 				jobTuples = append(jobTuples, jobTuple)
 			}
 		}
+		specLogger.WithField("duration", time.Since(startResolveTests)).WithField("len(jobNames)", len(jobNames)).
+			Debug("resolving tests completed")
 		if len(jobTuples) > 0 {
-			if err := s.kubeClient.Create(s.ctx, builder.build(jobTuples)); err != nil {
+			specLogger.Debug("creating PullRequestPayloadQualificationRuns ...")
+			startCreateRuns := time.Now()
+			run := builder.build(jobTuples)
+			if err := s.kubeClient.Create(s.ctx, run); err != nil {
 				specLogger.WithError(err).Error("could not create PullRequestPayloadQualificationRun")
 				return fmt.Sprintf("could not create PullRequestPayloadQualificationRun: %v", err)
 			}
+			specLogger.WithField("duration", time.Since(startCreateRuns)).WithField("run.Name", run.Name).
+				WithField("run.Namespace", run.Namespace).Debug("creating PullRequestPayloadQualificationRuns completed")
 		} else {
 			specLogger.Warn("found no resolved tests")
 		}
 		messages = append(messages, message(spec, jobNames))
 	}
+	logger.WithField("duration", time.Since(start)).Debug("handle completed")
 	return strings.Join(messages, "\n")
 }
 

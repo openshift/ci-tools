@@ -144,6 +144,9 @@ func main() {
 		namespace:    o.namespace,
 		jobResolver:  newReleaseControllerJobResolver(&http.Client{}),
 		testResolver: &fileTestResolver{configAgent: configAgent},
+		trustedChecker: &githubTrustedChecker{
+			githubClient: githubClient,
+		},
 	}
 
 	eventServer := githubeventserver.New(o.githubEventServerOptions, getWebhookHMAC, logger)

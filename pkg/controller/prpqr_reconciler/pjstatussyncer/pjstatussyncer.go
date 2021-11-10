@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -110,10 +111,15 @@ func (r *reconciler) reconcile(ctx context.Context, log *logrus.Entry, req contr
 	}
 	for i, job := range prpqr.Status.Jobs {
 		if job.ProwJob == pj.Name && !reflect.DeepEqual(pj.Status, job.Status) {
-			prpqr.Status.Jobs[i].Status = pj.Status
+			if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				prpqr.Status.Jobs[i].Status = pj.Status
 
-			logger.WithField("to_state", pj.Status.State).Info("Updating PullRequestPayloadQualificationRun...")
-			if err := r.client.Update(ctx, prpqr); err != nil {
+				logger.WithField("to_state", pj.Status.State).Info("Updating PullRequestPayloadQualificationRun...")
+				if err := r.client.Update(ctx, prpqr); err != nil {
+					return err
+				}
+				return nil
+			}); err != nil {
 				return fmt.Errorf("failed to update PullRequestPayloadQualificationRun %s: %w", prpqr.Name, err)
 			}
 		}

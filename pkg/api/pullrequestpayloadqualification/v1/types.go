@@ -5,6 +5,7 @@ import (
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
 const (
@@ -123,4 +124,10 @@ type PullRequestPayloadQualificationRunList struct {
 	metav1.ListMeta `json:"metadata"`
 
 	Items []PullRequestPayloadQualificationRun `json:"items"`
+}
+
+// JobName maps the name in the spec to the corresponding Prow job name.
+// It matches the `ReleaseJobName` value in the status.
+func (s ReleaseJobSpec) JobName() string {
+	return s.CIOperatorConfig.JobName(jobconfig.PeriodicPrefix, s.Test)
 }

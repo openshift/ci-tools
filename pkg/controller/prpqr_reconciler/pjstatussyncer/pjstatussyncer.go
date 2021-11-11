@@ -112,6 +112,10 @@ func (r *reconciler) reconcile(ctx context.Context, log *logrus.Entry, req contr
 	for i, job := range prpqr.Status.Jobs {
 		if job.ProwJob == pj.Name && !reflect.DeepEqual(pj.Status, job.Status) {
 			if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				prpqr := &v1.PullRequestPayloadQualificationRun{}
+				if err := r.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: req.Namespace, Name: prpqrName}, prpqr); err != nil {
+					return fmt.Errorf("failed to get the PullRequestPayloadQualificationRun: %s in namespace %s: %w", prpqrName, req.Namespace, err)
+				}
 				prpqr.Status.Jobs[i].Status = pj.Status
 
 				logger.WithField("to_state", pj.Status.State).Info("Updating PullRequestPayloadQualificationRun...")

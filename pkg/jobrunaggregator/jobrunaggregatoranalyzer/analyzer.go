@@ -67,7 +67,13 @@ func (o *JobRunAggregatorAnalyzerOptions) getRelatedJobs(ctx context.Context) ([
 func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	// if it hasn't been more than hour since the jobRuns started, the list isn't complete.
 	readyAt := o.jobRunStartEstimate.Add(1 * time.Hour)
-	timeToStopWaiting := o.jobRunStartEstimate.Add(3*time.Hour + 10*time.Minute)
+
+	// the aggregator has a long time.  The jobs it aggregates only have 4h (we think).
+	durationToWait := o.timeout - 20*time.Minute
+	if durationToWait > (4*time.Hour + 15*time.Minute) {
+		durationToWait = 4*time.Hour + 15*time.Minute
+	}
+	timeToStopWaiting := o.jobRunStartEstimate.Add(durationToWait)
 
 	fmt.Printf("Aggregating job runs of type %q for %q.  now=%v, ReadyAt=%v, timeToStopWaiting=%v.\n", o.jobName, o.payloadTag, o.clock.Now(), readyAt, timeToStopWaiting)
 	ctx, cancel := context.WithTimeout(ctx, o.timeout)

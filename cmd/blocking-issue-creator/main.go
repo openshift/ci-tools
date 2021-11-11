@@ -46,7 +46,7 @@ func gatherOptions() options {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
-	fs.BoolVar(&o.dryRun, "dry-run", false, "Dry run for testing. Uses API tokens but does not mutate.")
+	fs.BoolVar(&o.dryRun, "dry-run", true, "Dry run for testing. Uses API tokens but does not mutate.")
 
 	o.github.AddFlags(fs)
 	o.FutureOptions.Bind(fs)
@@ -101,10 +101,6 @@ func main() {
 			branches.Insert(futureBranch)
 		}
 
-		if len(branches) == 0 {
-			return nil
-		}
-
 		if err := manageIssues(client, botUser.Login, repoInfo, branches, logger); err != nil {
 			failed = true
 			return nil
@@ -135,15 +131,28 @@ func manageIssues(client githubClient, githubLogin string, repoInfo *config.Info
 		logger.WithError(err).Error("Failed to search for open issues.")
 		return err
 	}
-
-	if len(issues) > 1 {
-		logger.Warnf("Found more than one merge blocking issue by the bot: %v", len(issues))
-		for _, issue := range issues[1:] {
+	closeIssues := func(issues []github.Issue, closingLog string) error {
+		for _, issue := range issues {
 			if err := client.CloseIssue(repoInfo.Org, repoInfo.Repo, issue.Number); err != nil {
 				logger.WithError(err).Error("Failed to close issue.")
 				return err
 			}
-			logger.WithField("number", issue.Number).Info("Closed extra issue.")
+			logger.WithField("number", issue.Number).Info(closingLog)
+		}
+		return nil
+	}
+
+	if len(branches) == 0 {
+		if len(issues) > 0 {
+			logger.Infof("Repository does not have any blocked branches, number of blocking issues to be deleted: %v", len(issues))
+		}
+		return closeIssues(issues, "Closed issue")
+	}
+
+	if len(issues) > 1 {
+		logger.Warnf("Found more than one merge blocking issue by the bot: %v", len(issues))
+		if err := closeIssues(issues[1:], "Closed extra issue"); err != nil {
+			return err
 		}
 	}
 

@@ -167,6 +167,50 @@ func TestManageIssues(t *testing.T) {
 				},
 			},
 		},
+		{
+			id:       "close abandoned cases, branch list empty",
+			branches: sets.NewString(),
+			repoInfo: &config.Info{Metadata: cioperatorapi.Metadata{
+				Org:    "testOrg",
+				Repo:   "testRepo",
+				Branch: "testBranch",
+			},
+			},
+			issues: map[int]*github.Issue{
+				1: {
+					ID:     1,
+					Number: 1,
+					Title:  "Old Title",
+					Body:   "Old Body",
+					Labels: []github.Label{{Name: "tide/merge-blocker"}},
+				},
+				2: {
+					ID:     2,
+					Number: 2,
+					Title:  "Old Title",
+					Body:   "Old Body",
+					Labels: []github.Label{{Name: "tide/merge-blocker"}},
+				},
+			},
+			expectedIssues: []github.Issue{
+				{
+					ID:     1,
+					Number: 1,
+					Title:  "Old Title",
+					Body:   "Old Body",
+					Labels: []github.Label{{Name: "tide/merge-blocker"}},
+					State:  "closed",
+				},
+				{
+					ID:     2,
+					Number: 2,
+					Title:  "Old Title",
+					Body:   "Old Body",
+					Labels: []github.Label{{Name: "tide/merge-blocker"}},
+					State:  "closed",
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {

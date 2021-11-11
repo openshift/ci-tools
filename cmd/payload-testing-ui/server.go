@@ -81,7 +81,11 @@ Created: {{ .ObjectMeta.CreationTimestamp }}
     <tt>
       {{ with $status := jobStatus $i }}
         <span class="{{ jobClass $status }}">{{ jobText $job }}</span>:
-        <a href="{{ $status.Status.URL }}">{{ $status.ProwJob }}</a>
+        {{ if $status.Status.URL }}
+          <a href="{{ $status.Status.URL }}">{{ $status.ProwJob }}</a>
+        {{ else }}
+          {{ $status.ProwJob }}
+        {{ end }}
       {{ else }}
         {{ jobText $job }}
       {{ end }}

@@ -967,39 +967,31 @@ func TestResolveParameters(t *testing.T) {
 			}},
 		},
 		err: errors.New("test/test: step/step: unresolved parameter: UNRESOLVED"),
+	}, {
+		name: "unresolved workflow override is not an error",
+		test: api.MultiStageTestConfiguration{
+			Workflow: &workflow,
+			Test: []api.TestStep{{
+				LiteralTestStep: &api.LiteralTestStep{As: "step"},
+			}},
+		},
+		expectedParams: [][]api.StepParameter{nil},
+		expectedDeps:   [][]api.StepDependency{nil},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			ret, err := NewResolver(refs, chains, workflows, observers).Resolve("test", tc.test)
-			if tc.err != nil {
-				if err == nil {
-					t.Fatal("unexpected success")
-				}
-				if diff := cmp.Diff(err.Error(), tc.err.Error()); diff != "" {
-					t.Fatal(diff)
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				var params [][]api.StepParameter
-				for _, s := range append(ret.Pre, append(ret.Test, ret.Post...)...) {
+			var params [][]api.StepParameter
+			var deps [][]api.StepDependency
+			for _, l := range [][]api.LiteralTestStep{ret.Pre, ret.Test, ret.Post} {
+				for _, s := range l {
 					params = append(params, s.Environment)
-				}
-				if diff := cmp.Diff(params, tc.expectedParams); diff != "" {
-					t.Error(diff)
-				}
-				var deps [][]api.StepDependency
-				for _, s := range append(ret.Pre, append(ret.Test, ret.Post...)...) {
 					deps = append(deps, s.Dependencies)
 				}
-				if diff := cmp.Diff(deps, tc.expectedDeps); diff != "" {
-					t.Error(diff)
-				}
-				depOverrides := ret.DependencyOverrides
-				if diff := cmp.Diff(depOverrides, tc.expectedDepOverrides); diff != "" {
-					t.Error(diff)
-				}
 			}
+			testhelper.Diff(t, "error", err, tc.err, testhelper.EquateErrorMessage)
+			testhelper.Diff(t, "parameters", params, tc.expectedParams)
+			testhelper.Diff(t, "dependencies", deps, tc.expectedDeps)
+			testhelper.Diff(t, "dependency overrides", ret.DependencyOverrides, tc.expectedDepOverrides)
 		})
 	}
 }

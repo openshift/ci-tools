@@ -36,7 +36,7 @@ func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 				ret = append(ret, err...)
 			}
 		}
-		ret = append(ret, stack.checkUnused(&stack.records[0])...)
+		ret = append(ret, stack.checkUnused(&stack.records[0], nil, &reg)...)
 	}
 	return utilerrors.NewAggregate(ret)
 }
@@ -62,6 +62,7 @@ func NewResolver(stepsByName ReferenceByName, chainsByName ChainByName, workflow
 
 func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error) {
 	var resolveErrors []error
+	var overridden [][]api.TestStep
 	if config.Workflow != nil {
 		workflow, ok := r.workflowsByName[*config.Workflow]
 		if !ok {
@@ -72,12 +73,18 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 		}
 		if config.Pre == nil {
 			config.Pre = workflow.Pre
+		} else {
+			overridden = append(overridden, workflow.Pre)
 		}
 		if config.Test == nil {
 			config.Test = workflow.Test
+		} else {
+			overridden = append(overridden, workflow.Test)
 		}
 		if config.Post == nil {
 			config.Post = workflow.Post
+		} else {
+			overridden = append(overridden, workflow.Post)
 		}
 		config.Environment = mergeEnvironments(workflow.Environment, config.Environment)
 		config.Dependencies = mergeDependencies(workflow.Dependencies, config.Dependencies)
@@ -116,7 +123,7 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 	post, errs := r.process(config.Post, sets.NewString(), stack)
 	expandedFlow.Post = append(expandedFlow.Post, post...)
 	resolveErrors = append(resolveErrors, errs...)
-	resolveErrors = append(resolveErrors, stack.checkUnused(&stack.records[0])...)
+	resolveErrors = append(resolveErrors, stack.checkUnused(&stack.records[0], overridden, r)...)
 
 	observerNames := sets.NewString()
 	for _, step := range append(pre, append(test, post...)...) {
@@ -227,7 +234,7 @@ func (r *registry) processChain(step *api.TestStep, seen sets.String, stack stac
 	stack.push(rec)
 	defer stack.pop()
 	ret, err := r.process(chain.Steps, seen, stack)
-	err = append(err, stack.checkUnused(&rec)...)
+	err = append(err, stack.checkUnused(&rec, nil, r)...)
 	return ret, err
 }
 
@@ -274,6 +281,31 @@ func (r *registry) processStep(step *api.TestStep, seen sets.String, stack stack
 		ret.Dependencies = deps
 	}
 	return ret, errs
+}
+
+// iterateSteps calls a function for each leaf child of a step.
+func (r *registry) iterateSteps(s api.TestStep, f func(*api.LiteralTestStep)) error {
+	switch {
+	case s.Chain != nil:
+		c, ok := r.chainsByName[*s.Chain]
+		if !ok {
+			return fmt.Errorf("invalid reference: %s", *s.Reference)
+		}
+		for _, s := range c.Steps {
+			if err := r.iterateSteps(s, f); err != nil {
+				return err
+			}
+		}
+	case s.Reference != nil:
+		r, ok := r.stepsByName[*s.Reference]
+		if !ok {
+			return fmt.Errorf("invalid reference: %s", *s.Reference)
+		}
+		f(&r)
+	case s.LiteralTestStep != nil:
+		f(s.LiteralTestStep)
+	}
+	return nil
 }
 
 // ResolveConfig uses a resolver to resolve an entire ci-operator config

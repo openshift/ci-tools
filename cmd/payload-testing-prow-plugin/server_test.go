@@ -246,6 +246,8 @@ func TestHandle(t *testing.T) {
 			expected: `trigger 2 jobs of type informing for the nightly release of OCP 4.10
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi
+
+See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 `,
 		},
 		{
@@ -278,6 +280,8 @@ func TestHandle(t *testing.T) {
 			expected: `trigger 2 jobs of type informing for the nightly release of OCP 4.10
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi
+
+See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 
 trigger 0 jobs of type all for the ci release of OCP 4.8
 `,

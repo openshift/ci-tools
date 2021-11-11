@@ -137,14 +137,14 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 
 	// only reacts on comments on PRs
 	if !ic.Issue.IsPullRequest() {
-		logger.Debug("not a pull request")
+		logger.Trace("not a pull request")
 		return ""
 	}
 
-	logger.WithField("ic.Comment.Body", ic.Comment.Body).Debug("received a comment")
+	logger.WithField("ic.Comment.Body", ic.Comment.Body).Trace("received a comment")
 	specs := specsFromComment(ic.Comment.Body)
 	if len(specs) == 0 {
-		logger.Debug("found no specs from comments")
+		logger.Trace("found no specs from comments")
 		return ""
 	}
 

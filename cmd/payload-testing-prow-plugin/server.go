@@ -23,6 +23,10 @@ import (
 	"github.com/openshift/ci-tools/pkg/release/config"
 )
 
+const (
+	prPayloadTestsUIURL = "https://pr-payload-tests.ci.openshift.org/runs"
+)
+
 type githubClient interface {
 	CreateComment(owner, repo string, number int, comment string) error
 	GetPullRequest(org, repo string, number int) (*github.PullRequest, error)
@@ -222,12 +226,15 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 				specLogger.WithError(err).Error("could not create PullRequestPayloadQualificationRun")
 				return fmt.Sprintf("could not create PullRequestPayloadQualificationRun: %v", err)
 			}
+			messages = append(messages, message(spec, jobNames))
+			messages = append(messages, fmt.Sprintf("See details on %s/%s/%s\n", prPayloadTestsUIURL, builder.namespace, run.Name))
+
 			specLogger.WithField("duration", time.Since(startCreateRuns)).WithField("run.Name", run.Name).
 				WithField("run.Namespace", run.Namespace).Debug("creating PullRequestPayloadQualificationRuns completed")
 		} else {
 			specLogger.Warn("found no resolved tests")
+			messages = append(messages, message(spec, jobNames))
 		}
-		messages = append(messages, message(spec, jobNames))
 	}
 	logger.WithField("duration", time.Since(start)).Debug("handle completed")
 	return strings.Join(messages, "\n")

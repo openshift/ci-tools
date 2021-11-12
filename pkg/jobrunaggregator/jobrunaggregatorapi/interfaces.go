@@ -28,6 +28,9 @@ type JobRunInfo interface {
 
 	GetProwJob(ctx context.Context) (*prowjobv1.ProwJob, error)
 	GetCombinedJUnitTestSuites(ctx context.Context) (*junit.TestSuites, error)
+	// GetOpenShiftTestsFilesWithPrefix checks the datasource for "openshift-e2e-test/artifacts/junit/<prefix>*"
+	// and returns that content indexed by local filename.  This is useful for things like back-disruption and alerts.
+	GetOpenShiftTestsFilesWithPrefix(ctx context.Context, prefix string) (map[string]string, error)
 	GetContent(ctx context.Context, path string) ([]byte, error)
 	GetAllContent(ctx context.Context) (map[string][]byte, error)
 	ClearAllContent()

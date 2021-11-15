@@ -341,6 +341,7 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 		cioperatorapi.ClusterProfileVSphere,
 		cioperatorapi.ClusterProfileVSphereDiscon,
 		cioperatorapi.ClusterProfileVSphereClusterbot,
+		cioperatorapi.ClusterProfileVSphereMultizone,
 		cioperatorapi.ClusterProfileKubevirt,
 		cioperatorapi.ClusterProfileAWSCPaaS,
 		cioperatorapi.ClusterProfileOSDEphemeral,

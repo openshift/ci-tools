@@ -6,10 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
@@ -104,8 +104,10 @@ func FromConfig(
 			return nil, nil, fmt.Errorf("could not get Hive client for Hive kube config: %w", err)
 		}
 	}
+	httpClient := retryablehttp.NewClient()
+	httpClient.Logger = nil
 
-	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost)
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost)
 }
 
 func fromConfig(

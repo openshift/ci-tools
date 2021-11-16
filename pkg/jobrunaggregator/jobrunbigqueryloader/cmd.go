@@ -91,16 +91,18 @@ func (f *BigQueryTestRunUploadFlags) ToOptions(ctx context.Context) (*allJobsLoa
 		return nil, err
 	}
 
-	client, err := f.Authentication.NewBigQueryClient(ctx, f.DataCoordinates.ProjectID)
+	bigQueryClient, err := f.Authentication.NewBigQueryClient(ctx, f.DataCoordinates.ProjectID)
 	if err != nil {
 		return nil, err
 	}
-	ciDataClient := jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, client)
+	ciDataClient := jobrunaggregatorlib.NewRetryingCIDataClient(
+		jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
+	)
 
 	var jobRunTableInserter jobrunaggregatorlib.BigQueryInserter
 	var testRunTableInserter jobrunaggregatorlib.BigQueryInserter
 	if !f.DryRun {
-		ciDataSet := client.Dataset(f.DataCoordinates.DataSetID)
+		ciDataSet := bigQueryClient.Dataset(f.DataCoordinates.DataSetID)
 		jobRunTable := ciDataSet.Table(jobrunaggregatorapi.LegacyJobRunTableName)
 		testRunTable := ciDataSet.Table(jobrunaggregatorlib.TestRunTableName)
 		jobRunTableInserter = jobRunTable.Inserter()
@@ -197,16 +199,18 @@ func (f *BigQueryDisruptionUploadFlags) ToOptions(ctx context.Context) (*allJobs
 		return nil, err
 	}
 
-	client, err := f.Authentication.NewBigQueryClient(ctx, f.DataCoordinates.ProjectID)
+	bigQueryClient, err := f.Authentication.NewBigQueryClient(ctx, f.DataCoordinates.ProjectID)
 	if err != nil {
 		return nil, err
 	}
-	ciDataClient := jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, client)
+	ciDataClient := jobrunaggregatorlib.NewRetryingCIDataClient(
+		jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
+	)
 
 	var jobRunTableInserter jobrunaggregatorlib.BigQueryInserter
 	var backendDisruptionTableInserter jobrunaggregatorlib.BigQueryInserter
 	if !f.DryRun {
-		ciDataSet := client.Dataset(f.DataCoordinates.DataSetID)
+		ciDataSet := bigQueryClient.Dataset(f.DataCoordinates.DataSetID)
 		jobRunTable := ciDataSet.Table(jobrunaggregatorapi.DisruptionJobRunTableName)
 		backendDisruptionTable := ciDataSet.Table(jobrunaggregatorapi.BackendDisruptionTableName)
 		jobRunTableInserter = jobRunTable.Inserter()
@@ -303,11 +307,11 @@ func (f *BigQuerySummarizationFlags) Validate() error {
 // ToOptions goes from the user input to the runtime values need to run the command.
 // Expect to see unit tests on the options, but not on the flags which are simply value mappings.
 func (f *BigQuerySummarizationFlags) ToOptions(ctx context.Context) (*JobRunsBigQuerySummarizerOptions, error) {
-	client, err := f.Authentication.NewBigQueryClient(ctx, f.DataCoordinates.ProjectID)
+	bigQueryClient, err := f.Authentication.NewBigQueryClient(ctx, f.DataCoordinates.ProjectID)
 	if err != nil {
 		return nil, err
 	}
-	ciDataSet := client.Dataset(f.DataCoordinates.DataSetID)
+	ciDataSet := bigQueryClient.Dataset(f.DataCoordinates.DataSetID)
 
 	// the linter requires not setting a default value. This seems strictly worse and more error-prone to me, but
 	// I am a slave to the bot.
@@ -324,7 +328,9 @@ func (f *BigQuerySummarizationFlags) ToOptions(ctx context.Context) (*JobRunsBig
 		return nil, fmt.Errorf("invalid summary timeframe: %q", f.SummaryTimeFrame)
 	}
 
-	ciDataClient := jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, client)
+	ciDataClient := jobrunaggregatorlib.NewRetryingCIDataClient(
+		jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
+	)
 
 	return &JobRunsBigQuerySummarizerOptions{
 		Frequency:                 f.SummaryTimeFrame,

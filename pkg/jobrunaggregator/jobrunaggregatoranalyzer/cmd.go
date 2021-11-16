@@ -119,7 +119,9 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 	if err != nil {
 		return nil, err
 	}
-	ciDataClient := jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient)
+	ciDataClient := jobrunaggregatorlib.NewRetryingCIDataClient(
+		jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
+	)
 
 	gcsClient, err := f.Authentication.NewGCSClient(ctx)
 	if err != nil {

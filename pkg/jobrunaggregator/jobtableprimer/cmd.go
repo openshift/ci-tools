@@ -77,16 +77,18 @@ func (f *primeJobTableFlags) Validate() error {
 // ToOptions goes from the user input to the runtime values need to run the command.
 // Expect to see unit tests on the options, but not on the flags which are simply value mappings.
 func (f *primeJobTableFlags) ToOptions(ctx context.Context) (*CreateJobsOptions, error) {
-	client, err := f.Authentication.NewBigQueryClient(ctx, f.DataCoordinates.ProjectID)
+	bigQueryClient, err := f.Authentication.NewBigQueryClient(ctx, f.DataCoordinates.ProjectID)
 	if err != nil {
 		return nil, err
 	}
-	ciDataSet := client.Dataset(f.DataCoordinates.DataSetID)
+	ciDataSet := bigQueryClient.Dataset(f.DataCoordinates.DataSetID)
 	jobTable := ciDataSet.Table(jobrunaggregatorapi.JobsTableName)
 
 	return &CreateJobsOptions{
 		jobsToCreate: jobsToAnalyze,
-		ciDataClient: jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, client),
+		ciDataClient: jobrunaggregatorlib.NewRetryingCIDataClient(
+			jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
+		),
 
 		jobInserter: jobTable.Inserter(),
 	}, nil

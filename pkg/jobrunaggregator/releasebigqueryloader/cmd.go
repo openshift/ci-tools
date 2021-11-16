@@ -82,13 +82,15 @@ func (f *BigQueryReleaseUploadFlags) Validate() error {
 // ToOptions goes from the user input to the runtime values need to run the command.
 // Expect to see unit tests on the options, but not on the flags which are simply value mappings.
 func (f *BigQueryReleaseUploadFlags) ToOptions(ctx context.Context) (*allReleaseUploaderOptions, error) {
-	client, err := f.Authentication.NewBigQueryClient(ctx, f.DataCoordinates.ProjectID)
+	bigQueryClient, err := f.Authentication.NewBigQueryClient(ctx, f.DataCoordinates.ProjectID)
 	if err != nil {
 		return nil, err
 	}
-	ciDataClient := jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, client)
+	ciDataClient := jobrunaggregatorlib.NewRetryingCIDataClient(
+		jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
+	)
 	httpClient := &http.Client{Timeout: 60 * time.Second}
-	ciDataSet := client.Dataset(f.DataCoordinates.DataSetID)
+	ciDataSet := bigQueryClient.Dataset(f.DataCoordinates.DataSetID)
 
 	return &allReleaseUploaderOptions{
 		ciDataClient:  ciDataClient,
@@ -165,12 +167,14 @@ func (f *BigQueryReleaseTableCreateFlags) Validate() error {
 // ToOptions goes from the user input to the runtime values need to run the command.
 // Expect to see unit tests on the options, but not on the flags which are simply value mappings.
 func (f *BigQueryReleaseTableCreateFlags) ToOptions(ctx context.Context) (*allReleaseTableCreatorOptions, error) {
-	client, err := f.Authentication.NewBigQueryClient(ctx, f.DataCoordinates.ProjectID)
+	bigQueryClient, err := f.Authentication.NewBigQueryClient(ctx, f.DataCoordinates.ProjectID)
 	if err != nil {
 		return nil, err
 	}
-	ciDataClient := jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, client)
-	ciDataSet := client.Dataset(f.DataCoordinates.DataSetID)
+	ciDataClient := jobrunaggregatorlib.NewRetryingCIDataClient(
+		jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
+	)
+	ciDataSet := bigQueryClient.Dataset(f.DataCoordinates.DataSetID)
 
 	return &allReleaseTableCreatorOptions{
 		ciDataClient: ciDataClient,

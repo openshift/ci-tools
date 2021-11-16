@@ -7,9 +7,11 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"cloud.google.com/go/storage"
+	"google.golang.org/api/iterator"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -165,6 +167,59 @@ func (j *gcsJobRun) GetCombinedJUnitTestSuites(ctx context.Context) (*junit.Test
 	return testSuites, nil
 }
 
+func (j *gcsJobRun) GetOpenShiftTestsFilesWithPrefix(ctx context.Context, prefix string) (map[string]string, error) {
+	regex, err := regexp.Compile("/" + prefix + "[^/]*")
+	if err != nil {
+		return nil, err
+	}
+	ret := map[string]string{}
+
+	query := &storage.Query{
+		// This ends up being the equivalent of:
+		// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade
+		// the next directory step is based on some bit of metadata I don't recognize
+		Prefix: filepath.Join("logs", j.jobName, j.jobRunID),
+
+		// TODO this field is apparently missing from this level of go/storage
+		// Omit owner and ACL fields for performance
+		//Projection: storage.ProjectionNoACL,
+	}
+
+	// Only retrieve the name and creation time for performance
+	if err := query.SetAttrSelection([]string{"Name", "Created"}); err != nil {
+		return nil, err
+	}
+
+	// Returns an iterator which iterates over the bucket query results.
+	// Unfortunately, this will list *all* files with the query prefix.
+	it := j.bkt.Objects(ctx, query)
+
+	// Find the query results we're the most interested in. In this case, we're interested in files called prowjob.json
+	// so that we only get each jobrun once and we queue them in a channel
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			// we're done adding values, so close the channel
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		if !regex.MatchString(attrs.Name) {
+			continue
+		}
+
+		content, err := j.getCurrentContent(ctx, attrs.Name)
+		if err != nil {
+			return nil, err
+		}
+		ret[attrs.Name] = string(content)
+	}
+
+	return ret, nil
+}
+
 func (j *gcsJobRun) GetProwJob(ctx context.Context) (*prowjobv1.ProwJob, error) {
 	if len(j.gcsProwJobPath) == 0 {
 		return nil, fmt.Errorf("missing prowjob path to GCS content for jobrun/%v/%v", j.GetJobName(), j.GetJobRunID())
@@ -184,6 +239,19 @@ func (j *gcsJobRun) GetContent(ctx context.Context, path string) ([]byte, error)
 		return content, nil
 	}
 
+	newContent, err := j.getCurrentContent(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	if j.pathToContent == nil {
+		j.pathToContent = map[string][]byte{}
+	}
+	j.pathToContent[path] = newContent
+
+	return newContent, nil
+}
+
+func (j *gcsJobRun) getCurrentContent(ctx context.Context, path string) ([]byte, error) {
 	// Get an Object handle for the path
 	obj := j.bkt.Object(path)
 
@@ -204,6 +272,7 @@ func (j *gcsJobRun) GetContent(ctx context.Context, path string) ([]byte, error)
 	defer gcsReader.Close()
 
 	return ioutil.ReadAll(gcsReader)
+
 }
 
 func (j *gcsJobRun) GetAllContent(ctx context.Context) (map[string][]byte, error) {

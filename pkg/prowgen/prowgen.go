@@ -20,7 +20,6 @@ const (
 	Generator      jc.Generator = "prowgen"
 )
 
-//goland:noinspection GoNameStartsWithPackageName
 type ProwgenInfo struct {
 	cioperatorapi.Metadata
 	Config config.Prowgen
@@ -103,12 +102,12 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		if promotion.PromotesOfficialImages(configSpec) {
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
-		jobBaseGen := newJobBaseBuilder().Name("images")
+		jobBaseGen := newJobBaseBuilder().TestName("images")
 		jobBaseGen.PodSpec.Add(Targets(presubmitTargets...))
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, "images", info, "", "", false))
 
 		if configSpec.PromotionConfiguration != nil {
-			jobBaseGen = newJobBaseBuilder().Name("images")
+			jobBaseGen = newJobBaseBuilder().TestName("images")
 			jobBaseGen.PodSpec.Add(Promotion(), Targets(imageTargets.List()...))
 			postsubmit := generatePostsubmitForTest(jobBaseGen, info)
 			postsubmit.MaxConcurrency = 1
@@ -128,13 +127,13 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 				continue
 			}
 			indexName := api.IndexName(bundle.As)
-			jobBaseGen := newJobBaseBuilder().Name(indexName)
+			jobBaseGen := newJobBaseBuilder().TestName(indexName)
 			jobBaseGen.PodSpec.Add(Targets(indexName))
 			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, indexName, info, "", "", false))
 		}
 		if containsUnnamedBundle {
 			name := string(api.PipelineImageStreamTagReferenceIndexImage)
-			jobBaseGen := newJobBaseBuilder().Name(name)
+			jobBaseGen := newJobBaseBuilder().TestName(name)
 			jobBaseGen.PodSpec.Add(Targets(name))
 			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, name, info, "", "", false))
 		}
@@ -185,7 +184,10 @@ func generatePostsubmitForTest(jobBaseBuilder *prowJobBaseBuilder, info *Prowgen
 }
 
 func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenInfo, cron string, interval string, releaseController bool, pathAlias *string) *prowconfig.Periodic {
-	base := jobBaseBuilder.Rehearsable(true).Build(jc.PeriodicPrefix)
+	// Periodics are rehearsable
+	// We are resetting PathAlias because it will be set on the `ExtraRefs` item
+	base := jobBaseBuilder.Rehearsable(true).PathAlias("").Build(jc.PeriodicPrefix)
+
 	// periodics are not associated with a repo per se, but we can add in an
 	// extra ref so that periodics which want to access the repo tha they are
 	// defined for can have that information
@@ -195,7 +197,6 @@ func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenIn
 		BaseRef: info.Branch,
 	}
 	if pathAlias != nil {
-		base.PathAlias = ""
 		ref.PathAlias = *pathAlias
 	}
 	base.ExtraRefs = append([]prowv1.Refs{ref}, base.ExtraRefs...)

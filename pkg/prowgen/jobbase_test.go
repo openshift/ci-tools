@@ -246,7 +246,7 @@ func TestGenerateJobBase(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.testName, func(t *testing.T) {
-			jobBaseGen := NewProwJobBaseBuilder(&ciop.ReleaseBuildConfiguration{CanonicalGoRepository: &testCase.canonicalGoRepository}, testCase.info, newFakePodSpecBuilder()).Rehearsable(testCase.rehearsable).Name(testCase.name)
+			jobBaseGen := NewProwJobBaseBuilder(&ciop.ReleaseBuildConfiguration{CanonicalGoRepository: &testCase.canonicalGoRepository}, testCase.info, newFakePodSpecBuilder()).Rehearsable(testCase.rehearsable).TestName(testCase.name)
 			testhelper.CompareWithFixture(t, jobBaseGen.Build("pull"))
 		})
 	}

@@ -13,24 +13,21 @@ import (
 
 type prowJobBaseBuilder struct {
 	PodSpec CiOperatorPodSpecGenerator
+	base    prowconfig.JobBase
 
-	configSpec *cioperatorapi.ReleaseBuildConfiguration
-	info       *ProwgenInfo
-
-	labels  map[string]string
-	timeout *prowv1.Duration
-	name    string
+	info     *ProwgenInfo
+	testName string
 }
 
-func (p *prowJobBaseBuilder) jobRelease() string {
-	if release, found := p.configSpec.Releases[cioperatorapi.LatestReleaseName]; found && release.Candidate != nil {
+func jobRelease(configSpec *cioperatorapi.ReleaseBuildConfiguration) string {
+	if release, found := configSpec.Releases[cioperatorapi.LatestReleaseName]; found && release.Candidate != nil {
 		return release.Candidate.Version
 	}
 	return ""
 }
 
-func (p *prowJobBaseBuilder) skipCloning() bool {
-	return p.configSpec.BuildRootImage == nil || !p.configSpec.BuildRootImage.FromRepository
+func skipCloning(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
+	return configSpec.BuildRootImage == nil || !configSpec.BuildRootImage.FromRepository
 }
 
 func hasNoBuilds(c *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) bool {
@@ -47,40 +44,70 @@ func hasNoBuilds(c *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) 
 	return false
 }
 
+// NewProwJobBaseBuilder returns a new builder instance populated with defaults
+// from the given ReleaseBuildConfiguration, Prowgen config. The embedded PodSpec
+// is built using an injected CiOperatorPodSpecGenerator, not directly. The embedded
+// PodSpec is not built until the Build method is called.
 func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo, podSpecGenerator CiOperatorPodSpecGenerator) *prowJobBaseBuilder {
 	b := &prowJobBaseBuilder{
 		PodSpec: podSpecGenerator,
 
-		labels:     map[string]string{},
-		configSpec: configSpec,
-		info:       info,
+		base: prowconfig.JobBase{
+			Agent:  string(prowv1.KubernetesAgent),
+			Labels: map[string]string{},
+			UtilityConfig: prowconfig.UtilityConfig{
+				Decorate: utilpointer.BoolPtr(true),
+			},
+		},
+	}
+
+	if skipCloning(configSpec) {
+		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{SkipCloning: utilpointer.BoolPtr(true)}
+	} else if info.Config.Private {
+		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{OauthTokenSecret: &prowv1.OauthTokenSecret{Key: cioperatorapi.OauthTokenSecretKey, Name: cioperatorapi.OauthTokenSecretName}}
 	}
 
 	if len(info.Variant) > 0 {
-		b.labels[jc.ProwJobLabelVariant] = info.Variant
+		b.base.Labels[jc.ProwJobLabelVariant] = info.Variant
 	}
 
-	if release := b.jobRelease(); release != "" {
-		b.labels[jc.JobReleaseKey] = release
+	if release := jobRelease(configSpec); release != "" {
+		b.base.Labels[jc.JobReleaseKey] = release
 	}
 
 	if hasNoBuilds(configSpec, info) {
-		b.labels[cioperatorapi.NoBuildsLabel] = cioperatorapi.NoBuildsValue
+		b.base.Labels[cioperatorapi.NoBuildsLabel] = cioperatorapi.NoBuildsValue
 	}
 
 	b.PodSpec.Add(Variant(info.Variant))
 	if info.Config.Private {
 		// We can reuse Prow's volume with the token if ProwJob itself is cloning the code
-		b.PodSpec.Add(GitHubToken(!b.skipCloning()))
+		b.PodSpec.Add(GitHubToken(!skipCloning(configSpec)))
 	}
 
+	if configSpec.CanonicalGoRepository != nil {
+		b.base.UtilityConfig.PathAlias = *configSpec.CanonicalGoRepository
+	}
+
+	if info.Config.Private && !info.Config.Expose {
+		b.base.Hidden = true
+	}
+
+	b.info = info
 	return b
 }
 
+// NewProwJobBaseBuilderForTest creates a new builder populated with defaults
+// for the given ci-operator test. The resulting builder is a superset of a
+// one built by NewProwJobBaseBuilder, with additional fields set for test
 func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo, podSpecGenerator CiOperatorPodSpecGenerator, test cioperatorapi.TestStepConfiguration) *prowJobBaseBuilder {
 	p := NewProwJobBaseBuilder(configSpec, info, podSpecGenerator)
-	p.name = test.As
-	p.timeout = test.Timeout
+	p.testName = test.As
+
+	maxCustomDuration := time.Hour * 8
+	if test.Timeout != nil && test.Timeout.Duration <= maxCustomDuration {
+		p.base.UtilityConfig.DecorationConfig.Timeout = test.Timeout
+	}
 
 	p.PodSpec.Add(Secrets(test.Secret), Secrets(test.Secrets...))
 	p.PodSpec.Add(Targets(test.As))
@@ -97,25 +124,25 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		if test.MultiStageTestConfigurationLiteral.ClusterProfile != "" {
 			p.PodSpec.Add(ClusterProfile(test.MultiStageTestConfigurationLiteral.ClusterProfile, test.As), LeaseClient())
 		}
-		if p.configSpec.Releases != nil {
+		if configSpec.Releases != nil {
 			p.PodSpec.Add(CIPullSecret())
 		}
 	case test.MultiStageTestConfiguration != nil:
 		if test.MultiStageTestConfiguration.ClusterProfile != "" {
 			p.PodSpec.Add(ClusterProfile(test.MultiStageTestConfiguration.ClusterProfile, test.As), LeaseClient())
 		}
-		if p.configSpec.Releases != nil {
+		if configSpec.Releases != nil {
 			p.PodSpec.Add(CIPullSecret())
 		}
 	case test.OpenshiftAnsibleClusterTestConfiguration != nil:
 		p.PodSpec.Add(
 			Template("cluster-launch-e2e", test.Commands, "", test.As, test.OpenshiftAnsibleClusterTestConfiguration.ClusterProfile),
-			ReleaseRpms(p.configSpec.ReleaseTagConfiguration.Name, p.info.Metadata),
+			ReleaseRpms(configSpec.ReleaseTagConfiguration.Name, p.info.Metadata),
 		)
 	case test.OpenshiftAnsibleCustomClusterTestConfiguration != nil:
 		p.PodSpec.Add(
 			Template("cluster-launch-e2e-openshift-ansible", test.Commands, "", test.As, test.OpenshiftAnsibleCustomClusterTestConfiguration.ClusterProfile),
-			ReleaseRpms(p.configSpec.ReleaseTagConfiguration.Name, p.info.Metadata),
+			ReleaseRpms(configSpec.ReleaseTagConfiguration.Name, p.info.Metadata),
 		)
 	case test.OpenshiftInstallerClusterTestConfiguration != nil:
 		if !test.OpenshiftInstallerClusterTestConfiguration.Upgrade {
@@ -138,48 +165,33 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 	return p
 }
 
+// PathAlias sets UtilityConfig.PathAlias to the given value, including an empty
+// one. This field is defaulted in NewJobBaseBuilder (inferred from ReleaseBuildConfiguration)
+// so this method allows to reset it.
+func (p *prowJobBaseBuilder) PathAlias(alias string) *prowJobBaseBuilder {
+	p.base.UtilityConfig.PathAlias = alias
+	return p
+}
+
+// Rehearsable sets/unsets the label that makes jobs rehearsable
 func (p *prowJobBaseBuilder) Rehearsable(yes bool) *prowJobBaseBuilder {
 	if yes {
-		p.labels[jc.CanBeRehearsedLabel] = jc.CanBeRehearsedValue
+		p.base.Labels[jc.CanBeRehearsedLabel] = jc.CanBeRehearsedValue
 	} else {
-		delete(p.labels, jc.CanBeRehearsedLabel)
+		delete(p.base.Labels, jc.CanBeRehearsedLabel)
 	}
 	return p
 }
 
-func (p *prowJobBaseBuilder) Name(name string) *prowJobBaseBuilder {
-	p.name = name
+// TestName sets the base name that specifies the *test* this job will run
+func (p *prowJobBaseBuilder) TestName(name string) *prowJobBaseBuilder {
+	p.testName = name
 	return p
 }
 
+// Build builds and returns the final JobBase instance
 func (p *prowJobBaseBuilder) Build(namePrefix string) prowconfig.JobBase {
-	jobName := p.info.JobName(namePrefix, p.name)
-
-	var decorationConfig *prowv1.DecorationConfig
-	if p.skipCloning() {
-		decorationConfig = &prowv1.DecorationConfig{SkipCloning: utilpointer.BoolPtr(true)}
-	} else if p.info.Config.Private {
-		decorationConfig = &prowv1.DecorationConfig{OauthTokenSecret: &prowv1.OauthTokenSecret{Key: cioperatorapi.OauthTokenSecretKey, Name: cioperatorapi.OauthTokenSecretName}}
-	}
-	maxCustomDuration := time.Hour * 8
-	if p.timeout != nil && p.timeout.Duration <= maxCustomDuration {
-		decorationConfig.Timeout = p.timeout
-	}
-	base := prowconfig.JobBase{
-		Agent:  string(prowv1.KubernetesAgent),
-		Labels: p.labels,
-		Name:   jobName,
-		Spec:   p.PodSpec.MustBuild(),
-		UtilityConfig: prowconfig.UtilityConfig{
-			DecorationConfig: decorationConfig,
-			Decorate:         utilpointer.BoolPtr(true),
-		},
-	}
-	if p.configSpec.CanonicalGoRepository != nil {
-		base.PathAlias = *p.configSpec.CanonicalGoRepository
-	}
-	if p.info.Config.Private && !p.info.Config.Expose {
-		base.Hidden = true
-	}
-	return base
+	p.base.Name = p.info.JobName(namePrefix, p.testName)
+	p.base.Spec = p.PodSpec.MustBuild()
+	return p.base
 }

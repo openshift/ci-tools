@@ -179,7 +179,7 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 	title := fmt.Sprintf(runTitle, run.ObjectMeta.Name)
 	status := make([]*prpqv1.PullRequestPayloadJobStatus, 0, len(run.Spec.Jobs.Jobs))
 	for _, j := range run.Spec.Jobs.Jobs {
-		name := j.JobName()
+		name := j.JobName(jobconfig.PeriodicPrefix)
 		var match *prpqv1.PullRequestPayloadJobStatus
 		for i, s := range run.Status.Jobs {
 			if s.ReleaseJobName == name {
@@ -234,7 +234,7 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 			}
 		},
 		"jobText": func(s *prpqv1.ReleaseJobSpec) string {
-			return s.CIOperatorConfig.JobName(jobconfig.PeriodicPrefix, s.Test)
+			return s.JobName(jobconfig.PeriodicPrefix)
 		},
 	})
 	if _, err := tmpl.Parse(runTemplate); err != nil {

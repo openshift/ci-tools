@@ -198,7 +198,7 @@ func generateProwjobs(org, repo, branch, prpqrName, prpqrNamespace string, relea
 		pj := pjutil.NewProwJob(pjutil.PeriodicSpec(periodicJob), labels, nil)
 		pj.Namespace = prpqrNamespace
 
-		ret[spec.CIOperatorConfig.JobName(jobconfig.PeriodicPrefix, spec.Test)] = pj
+		ret[spec.JobName(jobconfig.PeriodicPrefix)] = pj
 	}
 	return ret
 }

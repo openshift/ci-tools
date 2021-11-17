@@ -150,11 +150,11 @@ func TestBuild(t *testing.T) {
 						ReleaseControllerConfig: prpqv1.ReleaseControllerConfig{OCP: "4.10", Release: "nightly", Specifier: "ci"},
 						Jobs: []prpqv1.ReleaseJobSpec{
 							{
-								CIOperatorConfig: api.Metadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
+								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
 								Test:             "e2e-aws-serial",
 							},
 							{
-								CIOperatorConfig: api.Metadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
+								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
 								Test:             "e2e-metal-ipi",
 							},
 						},

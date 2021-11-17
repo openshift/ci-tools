@@ -16,7 +16,6 @@ import (
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	v1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
 )
 
@@ -42,7 +41,7 @@ func TestReconcile(t *testing.T) {
 						ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
 						Jobs: []v1.ReleaseJobSpec{
 							{
-								CIOperatorConfig: api.Metadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"},
+								CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"},
 								Test:             "test-name"},
 						},
 					},
@@ -62,7 +61,7 @@ func TestReconcile(t *testing.T) {
 						ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
 						Jobs: []v1.ReleaseJobSpec{
 							{
-								CIOperatorConfig: api.Metadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"},
+								CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"},
 								Test:             "test-name"},
 						},
 					},

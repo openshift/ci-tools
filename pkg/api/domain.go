@@ -11,7 +11,11 @@ const (
 	ServiceDomainCI    = "ci.openshift.org"
 	ServiceDomainAPPCI = "apps.ci.l2s4.p1.openshiftapps.com"
 
-	ServiceDomainAPPCIRegistry = "registry.ci.openshift.org"
+	ServiceDomainAPPCIRegistry   = "registry.ci.openshift.org"
+	ServiceDomainBuild01Registry = "registry.build01.ci.openshift.org"
+	ServiceDomainBuild02Registry = "registry.build02.ci.openshift.org"
+	ServiceDomainBuild03Registry = "registry.build03.ci.openshift.org"
+	ServiceDomainVSphereRegistry = "registry.apps.build01-us-west-2.vmc.ci.openshift.org"
 )
 
 type Service string
@@ -58,6 +62,14 @@ func RegistryDomainForClusterName(ClusterName string) (string, error) {
 	switch ClusterName {
 	case string(ClusterAPPCI):
 		return ServiceDomainAPPCIRegistry, nil
+	case string(ClusterBuild01):
+		return ServiceDomainBuild01Registry, nil
+	case string(ClusterBuild02):
+		return ServiceDomainBuild02Registry, nil
+	case string(ClusterBuild03):
+		return ServiceDomainBuild03Registry, nil
+	case string(ClusterVSphere):
+		return ServiceDomainVSphereRegistry, nil
 	}
 	return "", fmt.Errorf("failed to get the domain for cluster %s", ClusterName)
 }

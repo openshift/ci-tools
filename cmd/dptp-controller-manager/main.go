@@ -28,6 +28,7 @@ import (
 
 	imagev1 "github.com/openshift/api/image/v1"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
 	serviceaccountsecretrefresher "github.com/openshift/ci-tools/pkg/controller/serviceaccount_secret_refresher"
 	testimagesdistributor "github.com/openshift/ci-tools/pkg/controller/test-images-distributor"
@@ -380,6 +381,17 @@ func main() {
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to construct registryAgent")
 		}
+
+		registriesExceptAppCI := sets.NewString()
+		for cluster := range allClustersExceptRegistryCluster {
+			domain, err := api.RegistryDomainForClusterName(cluster)
+			if err != nil {
+				logrus.WithError(err).WithField("cluster", cluster).Fatal("failed to get the registry domain")
+			}
+			registriesExceptAppCI.Insert(domain)
+		}
+		logrus.WithField("registriesExceptAppCI", registriesExceptAppCI.List()).Info("forbidden registries from build-farm clusters")
+		opts.testImagesDistributorOptions.forbiddenRegistries.Union(registriesExceptAppCI)
 
 		if err := testimagesdistributor.AddToManager(
 			mgr,

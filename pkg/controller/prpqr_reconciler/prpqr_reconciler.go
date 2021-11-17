@@ -29,10 +29,12 @@ import (
 	"github.com/openshift/ci-tools/pkg/controller/prpqr_reconciler/pjstatussyncer"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
 const (
-	controllerName = "prpqr_reconciler"
+	controllerName      = "prpqr_reconciler"
+	releaseJobNameLabel = "releaseJobName"
 )
 
 func AddToManager(mgr manager.Manager, ns string) error {
@@ -110,12 +112,13 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 	for releaseJobName, pj := range prowjobs {
 		logger = logger.WithFields(logrus.Fields{"name": pj.Name, "namespace": req.Namespace})
 
-		err := r.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: pj.Namespace, Name: pj.Name}, &prowv1.ProwJob{})
-		if err != nil && !kerrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get the Prowjob: %s in namespace %s: %w", req.Name, req.Namespace, err)
+		pjList := &prowv1.ProwJobList{}
+		if err := r.client.List(ctx, pjList, ctrlruntimeclient.MatchingLabels{v1.PullRequestPayloadQualificationRunLabel: prpqr.Name, releaseJobNameLabel: utils.Trim63(releaseJobName)}); err != nil {
+			return fmt.Errorf("failed to get list of Prowjobs: %w", err)
 		}
 
-		if !kerrors.IsNotFound(err) {
+		if len(pjList.Items) > 0 {
+			logger.Info("Prowjob already exists...")
 			continue
 		}
 
@@ -168,8 +171,10 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 func generateProwjobs(org, repo, branch, prpqrName, prpqrNamespace string, releaseJobSpec []v1.ReleaseJobSpec) map[string]prowv1.ProwJob {
 	ret := make(map[string]prowv1.ProwJob)
 	for _, spec := range releaseJobSpec {
+		releaseJobName := spec.JobName(jobconfig.PeriodicPrefix)
 		labels := map[string]string{
 			v1.PullRequestPayloadQualificationRunLabel: prpqrName,
+			releaseJobNameLabel:                        releaseJobName,
 		}
 
 		base := prowconfig.JobBase{
@@ -198,7 +203,7 @@ func generateProwjobs(org, repo, branch, prpqrName, prpqrNamespace string, relea
 		pj := pjutil.NewProwJob(pjutil.PeriodicSpec(periodicJob), labels, nil)
 		pj.Namespace = prpqrNamespace
 
-		ret[spec.JobName(jobconfig.PeriodicPrefix)] = pj
+		ret[releaseJobName] = pj
 	}
 	return ret
 }

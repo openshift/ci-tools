@@ -10,10 +10,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	prowconfig "k8s.io/test-infra/prow/config"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	v1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -124,8 +126,10 @@ func TestReconcile(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &reconciler{
-				logger: logrus.WithField("test-name", tc.name),
-				client: fakectrlruntimeclient.NewClientBuilder().WithObjects(append(tc.prpqr, tc.prowJobs...)...).Build(),
+				logger:               logrus.WithField("test-name", tc.name),
+				client:               fakectrlruntimeclient.NewClientBuilder().WithObjects(append(tc.prpqr, tc.prowJobs...)...).Build(),
+				configResolverClient: &fakeResolverClient{},
+				prowConfigGetter:     &fakeProwConfigGetter{},
 			}
 			req := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "test-namespace", Name: "prpqr-test"}}
 			if err := r.reconcile(context.Background(), req, r.logger); err != nil {
@@ -173,4 +177,30 @@ func pruneProwjobsForTests(items []prowv1.ProwJob) {
 		items[i].Status.StartTime = zeroTime
 		items[i].Name = "some-uuid"
 	}
+}
+
+type fakeResolverClient struct{}
+
+func (f *fakeResolverClient) ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error) {
+	return &api.ReleaseBuildConfiguration{
+		Metadata: *base,
+		Tests: []api.TestStepConfiguration{
+			{
+				As: testSource.Test,
+			},
+		},
+	}, nil
+}
+
+type fakeProwConfigGetter struct{}
+
+func (f *fakeProwConfigGetter) Config() periodicDefaulter {
+	return &fakePeriodicDefaulter{}
+}
+
+type fakePeriodicDefaulter struct{}
+
+func (f *fakePeriodicDefaulter) DefaultPeriodic(periodic *prowconfig.Periodic) error {
+	periodic.Cluster = "this-job-was-defaulted"
+	return nil
 }

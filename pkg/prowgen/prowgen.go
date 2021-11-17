@@ -57,25 +57,16 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 				interval = *element.Interval
 			}
 			periodic := GeneratePeriodicForTest(g, info, cron, interval, element.ReleaseController, configSpec.CanonicalGoRepository)
-			if element.Cluster != "" {
-				periodic.Labels[cioperatorapi.ClusterLabel] = string(element.Cluster)
-			}
 			periodics = append(periodics, *periodic)
 		} else if element.Postsubmit {
 			postsubmit := generatePostsubmitForTest(g, info)
 			postsubmit.MaxConcurrency = 1
-			if element.Cluster != "" {
-				postsubmit.Labels[cioperatorapi.ClusterLabel] = string(element.Cluster)
-			}
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
 		} else {
 			presubmit := generatePresubmitForTest(g, element.As, info, element.RunIfChanged, element.SkipIfOnlyChanged, element.Optional)
 			v, requestingKVM := configSpec.Resources.RequirementsForStep(element.As).Requests[cioperatorapi.KVMDeviceLabel]
 			if requestingKVM {
 				presubmit.Labels[cioperatorapi.KVMDeviceLabel] = v
-			}
-			if element.Cluster != "" {
-				presubmit.Labels[cioperatorapi.ClusterLabel] = string(element.Cluster)
 			}
 			presubmits[orgrepo] = append(presubmits[orgrepo], *presubmit)
 		}

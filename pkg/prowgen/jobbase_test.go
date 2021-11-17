@@ -403,6 +403,15 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "simple container-based test with cluster",
+			test: ciop.TestStepConfiguration{
+				As:                         "simple",
+				Commands:                   "make",
+				Cluster:                    "build01",
+				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -413,6 +422,57 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			}
 			b := NewProwJobBaseBuilderForTest(tc.cfg, info, NewCiOperatorPodSpecGenerator(), tc.test).Build("prefix")
 			testhelper.CompareWithFixture(t, b)
+		})
+	}
+}
+
+func TestMiscellaneous(t *testing.T) {
+	defaultInfo := &ProwgenInfo{
+		Metadata: ciop.Metadata{
+			Org:    "org",
+			Repo:   "repo",
+			Branch: "branch",
+		},
+	}
+	defaultConfig := &ciop.ReleaseBuildConfiguration{
+		Metadata: defaultInfo.Metadata,
+	}
+	simpleBuilder := func() *prowJobBaseBuilder {
+		return NewProwJobBaseBuilder(defaultConfig, defaultInfo, newFakePodSpecBuilder())
+	}
+
+	t.Parallel()
+	testCases := []struct {
+		name    string
+		builder *prowJobBaseBuilder
+	}{
+		{
+			name:    "WithLabel",
+			builder: simpleBuilder().WithLabel("key", "value"),
+		},
+		{
+			name:    "Cluster",
+			builder: simpleBuilder().Cluster("build99"),
+		},
+		{
+			name:    "TestName",
+			builder: simpleBuilder().TestName("best-test"),
+		},
+		{
+			name:    "Rehearsable",
+			builder: simpleBuilder().Rehearsable(true),
+		},
+		{
+			name:    "PathAlias",
+			builder: simpleBuilder().PathAlias("alias.path"),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc := tc
+			t.Parallel()
+			jobBase := tc.builder.Build("default")
+			testhelper.CompareWithFixture(t, jobBase)
 		})
 	}
 }

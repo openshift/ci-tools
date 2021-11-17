@@ -1,0 +1,5 @@
+agent: kubernetes
+decorate: true
+decoration_config:
+  skip_cloning: true
+name: default-ci-org-repo-branch-best-test

@@ -1,0 +1,7 @@
+agent: kubernetes
+decorate: true
+decoration_config:
+  skip_cloning: true
+labels:
+  pj-rehearse.openshift.io/can-be-rehearsed: "true"
+name: default-ci-org-repo-branch-

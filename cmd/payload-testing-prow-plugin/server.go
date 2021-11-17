@@ -255,8 +255,13 @@ func (b *prpqrBuilder) build(jobTuples []api.MetadataWithTest) *prpqv1.PullReque
 	var releaseJobSpecs []prpqv1.ReleaseJobSpec
 	for _, jobTuple := range jobTuples {
 		releaseJobSpecs = append(releaseJobSpecs, prpqv1.ReleaseJobSpec{
-			CIOperatorConfig: jobTuple.Metadata,
-			Test:             jobTuple.Test,
+			CIOperatorConfig: prpqv1.CIOperatorMetadata{
+				Org:     jobTuple.Org,
+				Repo:    jobTuple.Repo,
+				Branch:  jobTuple.Branch,
+				Variant: jobTuple.Variant,
+			},
+			Test: jobTuple.Test,
 		})
 	}
 	run := &prpqv1.PullRequestPayloadQualificationRun{

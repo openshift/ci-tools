@@ -5,7 +5,6 @@ import (
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
 const (
@@ -84,6 +83,14 @@ type ReleaseControllerConfig struct {
 	Revision string `json:"revision,omitempty"`
 }
 
+// CIOperatorMetadata describes the source repo for which a config is written
+type CIOperatorMetadata struct {
+	Org     string `json:"org"`
+	Repo    string `json:"repo"`
+	Branch  string `json:"branch"`
+	Variant string `json:"variant,omitempty"`
+}
+
 // ReleaseJobSpec identifies the release payload one qualification test to execute. In this context,
 // "test" means one item in the specified ci-operator configuration file. This structure corresponds
 // to a single configured Prowjob (like "periodic-ci-openshift-release-master-ci-4.9-e2e-gcp") and
@@ -91,7 +98,7 @@ type ReleaseControllerConfig struct {
 // as the configured one.
 type ReleaseJobSpec struct {
 	// CIOperatorConfig identifies the ci-operator configuration with the test
-	CIOperatorConfig api.Metadata `json:"ciOperatorConfig"`
+	CIOperatorConfig CIOperatorMetadata `json:"ciOperatorConfig"`
 	// Test is the name of the test in the ci-operator configuration
 	Test string `json:"test"`
 }
@@ -128,6 +135,15 @@ type PullRequestPayloadQualificationRunList struct {
 
 // JobName maps the name in the spec to the corresponding Prow job name.
 // It matches the `ReleaseJobName` value in the status.
-func (s ReleaseJobSpec) JobName() string {
-	return s.CIOperatorConfig.JobName(jobconfig.PeriodicPrefix, s.Test)
+func (s *ReleaseJobSpec) JobName(prefix string) string {
+	mwt := api.MetadataWithTest{
+		Metadata: api.Metadata{
+			Org:     s.CIOperatorConfig.Org,
+			Repo:    s.CIOperatorConfig.Repo,
+			Branch:  s.CIOperatorConfig.Branch,
+			Variant: s.CIOperatorConfig.Variant,
+		},
+		Test: s.Test,
+	}
+	return mwt.JobName(prefix)
 }

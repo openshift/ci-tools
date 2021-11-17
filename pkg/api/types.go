@@ -1753,3 +1753,7 @@ type MetadataWithTest struct {
 	Metadata `json:",inline"`
 	Test     string `json:"test,omitempty"`
 }
+
+func (m *MetadataWithTest) JobName(prefix string) string {
+	return m.Metadata.JobName(prefix, m.Test)
+}

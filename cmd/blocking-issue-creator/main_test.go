@@ -70,11 +70,7 @@ func TestManageIssues(t *testing.T) {
 				Metadata: cioperatorapi.Metadata{
 					Org:    "testOrg",
 					Repo:   "testRepo",
-					Branch: "testBranch",
-				},
-			},
-			issues: map[int]*github.Issue{},
-			expectedIssues: []github.Issue{
+
 				{
 					ID:     1,
 					Title:  "Future Release Branches Frozen For Merging | branch:release-4.9",

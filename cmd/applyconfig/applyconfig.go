@@ -44,13 +44,7 @@ type options struct {
 const (
 	ocApply   command = "apply"
 	ocProcess command = "process"
-	ocVersion command = "version"
-
-	dryNone   dryRunMethod = ""
-	dryAuto   dryRunMethod = "auto"
-	dryServer dryRunMethod = "server"
-	dryClient dryRunMethod = "client"
-)
+	ocVersion command = "versi
 
 const defaultAdminUser = "system:admin"
 

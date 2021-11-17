@@ -11,10 +11,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	prowconfig "k8s.io/test-infra/prow/config"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	v1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
 )
 
@@ -70,17 +72,18 @@ func TestReconcile(t *testing.T) {
 						Namespace: "test-namespace",
 						Annotations: map[string]string{
 							"prow.k8s.io/context": "",
-							"prow.k8s.io/job":     "",
+							"prow.k8s.io/job":     "test-org-test-repo-100-test-name",
 							"releaseJobName":      "periodic-ci-test-org-test-repo-test-branch-test-name",
 						},
 						Labels: map[string]string{
 							"created-by-prow":           "true",
 							"prow.k8s.io/context":       "",
-							"prow.k8s.io/job":           "",
+							"prow.k8s.io/job":           "test-org-test-repo-100-test-name",
 							"prow.k8s.io/refs.base_ref": "test-branch",
 							"prow.k8s.io/refs.org":      "test-org",
 							"prow.k8s.io/refs.repo":     "test-repo",
 							"prow.k8s.io/type":          "periodic",
+							"prow.k8s.io/refs.pull":     "100",
 							"pullrequestpayloadqualificationruns.ci.openshift.io": "prpqr-test",
 							"releaseJobNameHash": "ee3858eff62263cd7266320c00d1d38b",
 						},
@@ -272,17 +275,18 @@ func TestReconcile(t *testing.T) {
 						Namespace: "test-namespace",
 						Annotations: map[string]string{
 							"prow.k8s.io/context": "",
-							"prow.k8s.io/job":     "",
+							"prow.k8s.io/job":     "test-org-test-repo-100-test-name-2",
 							"releaseJobName":      "periodic-ci-test-org-test-repo-test-branch-test-name-2",
 						},
 						Labels: map[string]string{
 							"created-by-prow":           "true",
 							"prow.k8s.io/context":       "",
-							"prow.k8s.io/job":           "",
+							"prow.k8s.io/job":           "test-org-test-repo-100-test-name-2",
 							"prow.k8s.io/refs.base_ref": "test-branch",
 							"prow.k8s.io/refs.org":      "test-org",
 							"prow.k8s.io/refs.repo":     "test-repo",
 							"prow.k8s.io/type":          "periodic",
+							"prow.k8s.io/refs.pull":     "100",
 							"pullrequestpayloadqualificationruns.ci.openshift.io": "prpqr-test",
 							"releaseJobNameHash": "428af2aff595f9d8074f2f6bfba1aec1",
 						},
@@ -296,8 +300,10 @@ func TestReconcile(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &reconciler{
-				logger: logrus.WithField("test-name", tc.name),
-				client: fakectrlruntimeclient.NewClientBuilder().WithObjects(append(tc.prpqr, tc.prowJobs...)...).Build(),
+				logger:               logrus.WithField("test-name", tc.name),
+				client:               fakectrlruntimeclient.NewClientBuilder().WithObjects(append(tc.prpqr, tc.prowJobs...)...).Build(),
+				configResolverClient: &fakeResolverClient{},
+				prowConfigGetter:     &fakeProwConfigGetter{},
 			}
 			req := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "test-namespace", Name: "prpqr-test"}}
 			if err := r.reconcile(context.Background(), req, r.logger); err != nil {
@@ -326,4 +332,30 @@ func TestReconcile(t *testing.T) {
 			}
 		})
 	}
+}
+
+type fakeResolverClient struct{}
+
+func (f *fakeResolverClient) ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error) {
+	return &api.ReleaseBuildConfiguration{
+		Metadata: *base,
+		Tests: []api.TestStepConfiguration{
+			{
+				As: testSource.Test,
+			},
+		},
+	}, nil
+}
+
+type fakeProwConfigGetter struct{}
+
+func (f *fakeProwConfigGetter) Config() periodicDefaulter {
+	return &fakePeriodicDefaulter{}
+}
+
+type fakePeriodicDefaulter struct{}
+
+func (f *fakePeriodicDefaulter) DefaultPeriodic(periodic *prowconfig.Periodic) error {
+	periodic.Cluster = "this-job-was-defaulted"
+	return nil
 }

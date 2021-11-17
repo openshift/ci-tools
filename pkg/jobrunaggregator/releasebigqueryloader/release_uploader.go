@@ -80,7 +80,7 @@ func (r *allReleaseUploaderOptions) Run(ctx context.Context) error {
 				releaseDetails := r.fetchReleaseDetails(tags.Architecture, release, tag)
 				releaseTag, repositories, pullRequests := releaseDetailsToBigQuery(tags.Architecture, tag, releaseDetails)
 				// We skip releases that aren't fully baked (i.e. all jobs run and changelog calculated)
-				if releaseTag.Phase == "Ready" || repositories == nil {
+				if (releaseTag.Phase != "Accepted" && releaseTag.Phase != "Rejected") || repositories == nil {
 					continue
 				}
 

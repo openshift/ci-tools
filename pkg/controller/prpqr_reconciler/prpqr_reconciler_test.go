@@ -8,7 +8,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -51,6 +50,14 @@ func TestReconcile(t *testing.T) {
 							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name"}}},
 					},
 					Status: v1.PullRequestPayloadTestStatus{
+						Conditions: []metav1.Condition{
+							{
+								Status:  "True",
+								Reason:  "AllJobsTriggered",
+								Message: "All jobs triggered successfully",
+							},
+						},
+
 						Jobs: []v1.PullRequestPayloadJobStatus{{ReleaseJobName: "periodic-ci-test-org-test-repo-test-branch-test-name", Status: prowv1.ProwJobStatus{State: "triggered"}}},
 					},
 				},
@@ -72,13 +79,6 @@ func TestReconcile(t *testing.T) {
 							"pullrequestpayloadqualificationruns.ci.openshift.io": "prpqr-test",
 							"releaseJobName": "periodic-ci-test-org-test-repo-test-branch-test-name",
 						},
-					},
-					Spec: prowv1.ProwJobSpec{
-						Type:      "periodic",
-						Agent:     "kubernetes",
-						Report:    true,
-						ExtraRefs: []prowv1.Refs{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch"}},
-						PodSpec:   &corev1.PodSpec{Containers: []corev1.Container{{Image: "centos:8", Command: []string{"sleep"}, Args: []string{"100"}}}},
 					},
 					Status: prowv1.ProwJobStatus{State: "triggered"},
 				},
@@ -105,7 +105,17 @@ func TestReconcile(t *testing.T) {
 						PullRequest: v1.PullRequestUnderTest{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}},
 						Jobs: v1.PullRequestPayloadJobSpec{
 							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
-							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name"}}},
+							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name"}},
+						},
+					},
+					Status: v1.PullRequestPayloadTestStatus{
+						Conditions: []metav1.Condition{
+							{
+								Status:  "True",
+								Reason:  "AllJobsTriggered",
+								Message: "All jobs triggered successfully",
+							},
+						},
 					},
 				},
 			},
@@ -127,13 +137,6 @@ func TestReconcile(t *testing.T) {
 							"releaseJobName": "periodic-ci-test-org-test-repo-test-branch-test-name",
 						},
 					},
-					Spec: prowv1.ProwJobSpec{
-						Type:      "periodic",
-						Agent:     "kubernetes",
-						Report:    true,
-						ExtraRefs: []prowv1.Refs{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch"}},
-						PodSpec:   &corev1.PodSpec{Containers: []corev1.Container{{Image: "centos:8", Command: []string{"sleep"}, Args: []string{"100"}}}},
-					},
 					Status: prowv1.ProwJobStatus{State: "triggered"},
 				},
 			},
@@ -154,13 +157,6 @@ func TestReconcile(t *testing.T) {
 							"pullrequestpayloadqualificationruns.ci.openshift.io": "prpqr-test",
 							"releaseJobName": "periodic-ci-test-org-test-repo-test-branch-test-name",
 						},
-					},
-					Spec: prowv1.ProwJobSpec{
-						Type:      "periodic",
-						Agent:     "kubernetes",
-						Report:    true,
-						ExtraRefs: []prowv1.Refs{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch"}},
-						PodSpec:   &corev1.PodSpec{Containers: []corev1.Container{{Image: "centos:8", Command: []string{"sleep"}, Args: []string{"100"}}}},
 					},
 					Status: prowv1.ProwJobStatus{State: "triggered"},
 				},
@@ -200,6 +196,13 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 					Status: v1.PullRequestPayloadTestStatus{
+						Conditions: []metav1.Condition{
+							{
+								Status:  "True",
+								Reason:  "AllJobsTriggered",
+								Message: "All jobs triggered successfully",
+							},
+						},
 						Jobs: []v1.PullRequestPayloadJobStatus{
 							{ReleaseJobName: "periodic-ci-test-org-test-repo-test-branch-test-name", Status: prowv1.ProwJobStatus{State: "triggered"}},
 							{ReleaseJobName: "periodic-ci-test-org-test-repo-test-branch-test-name-2", Status: prowv1.ProwJobStatus{State: "triggered"}},
@@ -225,13 +228,6 @@ func TestReconcile(t *testing.T) {
 							"releaseJobName": "periodic-ci-test-org-test-repo-test-branch-test-name",
 						},
 					},
-					Spec: prowv1.ProwJobSpec{
-						Type:      "periodic",
-						Agent:     "kubernetes",
-						Report:    true,
-						ExtraRefs: []prowv1.Refs{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch"}},
-						PodSpec:   &corev1.PodSpec{Containers: []corev1.Container{{Image: "centos:8", Command: []string{"sleep"}, Args: []string{"100"}}}},
-					},
 					Status: prowv1.ProwJobStatus{State: "triggered"},
 				},
 			},
@@ -253,13 +249,6 @@ func TestReconcile(t *testing.T) {
 							"releaseJobName": "periodic-ci-test-org-test-repo-test-branch-test-name",
 						},
 					},
-					Spec: prowv1.ProwJobSpec{
-						Type:      "periodic",
-						Agent:     "kubernetes",
-						Report:    true,
-						ExtraRefs: []prowv1.Refs{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch"}},
-						PodSpec:   &corev1.PodSpec{Containers: []corev1.Container{{Image: "centos:8", Command: []string{"sleep"}, Args: []string{"100"}}}},
-					},
 					Status: prowv1.ProwJobStatus{State: "triggered"},
 				},
 				{
@@ -278,13 +267,6 @@ func TestReconcile(t *testing.T) {
 							"pullrequestpayloadqualificationruns.ci.openshift.io": "prpqr-test",
 							"releaseJobName": "periodic-ci-test-org-test-repo-test-branch-test-name-2",
 						},
-					},
-					Spec: prowv1.ProwJobSpec{
-						Type:      "periodic",
-						Agent:     "kubernetes",
-						Report:    true,
-						ExtraRefs: []prowv1.Refs{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch"}},
-						PodSpec:   &corev1.PodSpec{Containers: []corev1.Container{{Image: "centos:8", Command: []string{"sleep"}, Args: []string{"100"}}}},
 					},
 					Status: prowv1.ProwJobStatus{State: "triggered"},
 				},
@@ -307,7 +289,7 @@ func TestReconcile(t *testing.T) {
 			if err := r.client.List(context.Background(), &actualProwjobsList); err != nil {
 				t.Fatal(err)
 			}
-			if diff := cmp.Diff(actualProwjobsList.Items, tc.expectedProwjobs, cmpopts.IgnoreFields(prowv1.ProwJob{}, "ResourceVersion", "Status.StartTime", "ObjectMeta.Name")); diff != "" {
+			if diff := cmp.Diff(actualProwjobsList.Items, tc.expectedProwjobs, cmpopts.IgnoreFields(prowv1.ProwJob{}, "Spec", "ResourceVersion", "Status.StartTime", "ObjectMeta.Name")); diff != "" {
 				t.Fatal(diff)
 			}
 
@@ -315,7 +297,12 @@ func TestReconcile(t *testing.T) {
 			if err := r.client.List(context.Background(), &actualPrpqr); err != nil {
 				t.Fatal(err)
 			}
-			if diff := cmp.Diff(actualPrpqr.Items, tc.expected, cmpopts.IgnoreFields(metav1.TypeMeta{}, "Kind", "APIVersion"), cmpopts.IgnoreFields(prowv1.ProwJobStatus{}, "StartTime"), cmpopts.IgnoreFields(v1.PullRequestPayloadQualificationRun{}, "ResourceVersion"), cmpopts.IgnoreFields(v1.PullRequestPayloadJobStatus{}, "ProwJob")); diff != "" {
+			if diff := cmp.Diff(actualPrpqr.Items, tc.expected,
+				cmpopts.IgnoreFields(metav1.TypeMeta{}, "Kind", "APIVersion"),
+				cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime"),
+				cmpopts.IgnoreFields(prowv1.ProwJobStatus{}, "StartTime"),
+				cmpopts.IgnoreFields(v1.PullRequestPayloadQualificationRun{}, "ResourceVersion"),
+				cmpopts.IgnoreFields(v1.PullRequestPayloadJobStatus{}, "ProwJob")); diff != "" {
 				t.Fatal(diff)
 			}
 		})

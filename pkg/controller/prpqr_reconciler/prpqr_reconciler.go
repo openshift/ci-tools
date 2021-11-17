@@ -9,6 +9,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
@@ -35,6 +36,9 @@ import (
 const (
 	controllerName      = "prpqr_reconciler"
 	releaseJobNameLabel = "releaseJobName"
+
+	conditionAllJobsTriggered = "AllJobsTriggered"
+	conditionWithErrors       = "WithErrors"
 )
 
 func AddToManager(mgr manager.Manager, ns string) error {
@@ -103,6 +107,9 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 	logger = logger.WithField("namespace", req.Namespace).WithField("prpqr_name", req.Name)
 	logger.Info("Starting reconciliation")
 
+	var prpqrMutations []func(prpqr *v1.PullRequestPayloadQualificationRun)
+	createdJobs := make(map[string]v1.PullRequestPayloadJobStatus)
+
 	prpqr := &v1.PullRequestPayloadQualificationRun{}
 	if err := r.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: req.Namespace, Name: req.Name}, prpqr); err != nil {
 		return fmt.Errorf("failed to get the PullRequestPayloadQualificationRun: %s in namespace %s: %w", req.Name, req.Namespace, err)
@@ -114,7 +121,12 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 
 		pjList := &prowv1.ProwJobList{}
 		if err := r.client.List(ctx, pjList, ctrlruntimeclient.MatchingLabels{v1.PullRequestPayloadQualificationRunLabel: prpqr.Name, releaseJobNameLabel: utils.Trim63(releaseJobName)}); err != nil {
-			return fmt.Errorf("failed to get list of Prowjobs: %w", err)
+			logger.WithError(err).Error("failed to get list of Prowjobs")
+			createdJobs[releaseJobName] = v1.PullRequestPayloadJobStatus{ReleaseJobName: releaseJobName, Status: prowv1.ProwJobStatus{
+				State:       prowv1.ErrorState,
+				Description: fmt.Errorf("failed to list prowjobs: %w", err).Error(),
+			}}
+			continue
 		}
 
 		if len(pjList.Items) > 0 {
@@ -124,7 +136,14 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 
 		logger.Info("Creating prowjob...")
 		if err := r.client.Create(ctx, &pj); err != nil {
-			return fmt.Errorf("failed to create prowjob: %w", err)
+			createdJobs[releaseJobName] = v1.PullRequestPayloadJobStatus{
+				ReleaseJobName: releaseJobName,
+				Status: prowv1.ProwJobStatus{
+					State:       prowv1.ErrorState,
+					Description: fmt.Errorf("failed to create prowjob: %w", err).Error(),
+				},
+			}
+			continue
 		}
 
 		// There is some delay until it gets back to our cache, so block until we can retrieve
@@ -142,28 +161,56 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 			return fmt.Errorf("failed to wait for created ProwJob to appear in cache: %w", err)
 		}
 
-		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			prpqr := &v1.PullRequestPayloadQualificationRun{}
-			if err := r.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: req.Namespace, Name: req.Name}, prpqr); err != nil {
-				return fmt.Errorf("failed to get the PullRequestPayloadQualificationRun: %w", err)
-			}
+		createdJobs[releaseJobName] = v1.PullRequestPayloadJobStatus{ReleaseJobName: releaseJobName, ProwJob: pj.Name, Status: pj.Status}
+	}
 
-			prpqr.Status.Jobs = append(prpqr.Status.Jobs, v1.PullRequestPayloadJobStatus{
-				ReleaseJobName: releaseJobName,
-				ProwJob:        pj.Name,
-				Status:         pj.Status,
-			})
-
-			logger.Info("Updating PullRequestPayloadQualificationRun...")
-			if err := r.client.Update(ctx, prpqr); err != nil {
-				return fmt.Errorf("failed to update PullRequestPayloadQualificationRun %s: %w", prpqr.Name, err)
-			}
-			return nil
-		}); err != nil {
-			return err
+	prpqrMutations = append(prpqrMutations, func(prpqr *v1.PullRequestPayloadQualificationRun) {
+		for _, status := range createdJobs {
+			prpqr.Status.Jobs = append(prpqr.Status.Jobs, status)
 		}
+		prpqr.Status.Conditions = append(prpqr.Status.Conditions, constructCondition(createdJobs))
+	})
+
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		prpqr := &v1.PullRequestPayloadQualificationRun{}
+		if err := r.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: req.Namespace, Name: req.Name}, prpqr); err != nil {
+			return fmt.Errorf("failed to get the PullRequestPayloadQualificationRun: %w", err)
+		}
+
+		for _, mutate := range prpqrMutations {
+			mutate(prpqr)
+		}
+
+		logger.Info("Updating PullRequestPayloadQualificationRun...")
+		if err := r.client.Update(ctx, prpqr); err != nil {
+			return fmt.Errorf("failed to update PullRequestPayloadQualificationRun %s: %w", prpqr.Name, err)
+		}
+		return nil
+	}); err != nil {
+		return err
 	}
 	return nil
+}
+
+func constructCondition(createdJobs map[string]v1.PullRequestPayloadJobStatus) metav1.Condition {
+	message := "All jobs triggered successfully"
+	reason := conditionAllJobsTriggered
+	status := metav1.ConditionTrue
+
+	for _, jobStatus := range createdJobs {
+		if jobStatus.Status.State == prowv1.ErrorState {
+			message = "Jobs triggered with errors"
+			status = metav1.ConditionFalse
+			reason = conditionWithErrors
+		}
+	}
+
+	return metav1.Condition{
+		Status:             status,
+		LastTransitionTime: metav1.Time{Time: time.Now()},
+		Reason:             reason,
+		Message:            message,
+	}
 }
 
 // TODO: Currently we create a single dummy prowjob just for testing. The actual implementation

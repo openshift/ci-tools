@@ -12,6 +12,7 @@ func init() {
 		fmt.Print(testRunsUnifiedTestRunsForLast200JobRunsSchema)
 		fmt.Print(testRunsUnifiedTestRunsSingleResultForLast200JobRunsSchema)
 		fmt.Print(testRunsSummaryLast200RunsSchema)
+		fmt.Print(alertSchema)
 	}
 }
 

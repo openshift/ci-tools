@@ -1,0 +1,19 @@
+function forDavid
+    set --local aggid (uuid)
+    set --local org $argv[1]
+    set --local repo $argv[2]
+    set --local pr $argv[3]
+    set --local variant $argv[4]
+    set --local test $argv[5]
+    set --local iterations $argv[6]
+    set --local jobname $repo-$pr-$variant-$test
+    set --local confirm $argv[7]
+    for i in (seq $iterations)
+        go run ./cmd/payload-testing/manual-trigger/main.go --pull-request $org/$repo#$pr --test openshift/release@master__$variant:$test --github-token-path /home/afri/Temporary/muller-pat-2022-10-25 --prow-config-path=../release/core-services/prow/02_config/_config.yaml --confirm=$confirm --aggregation-id=$aggid
+    end
+
+    echo ""
+    echo "== Triggered $iterations `$variant:$test` iterations"
+    echo "URL:             https://prow.ci.openshift.org/?job=$jobname"
+    echo "Aggregation ID: `$aggid`"
+end

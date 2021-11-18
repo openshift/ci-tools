@@ -2,4 +2,6 @@ agent: kubernetes
 decorate: true
 decoration_config:
   skip_cloning: true
-name: pull-ci-org-repo-branch-test
+labels:
+  job-release: THIS
+name: default-ci-org-repo-branch-

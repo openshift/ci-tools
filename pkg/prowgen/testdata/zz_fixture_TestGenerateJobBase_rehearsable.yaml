@@ -5,7 +5,3 @@ decoration_config:
 labels:
   pj-rehearse.openshift.io/can-be-rehearsed: "true"
 name: pull-ci-org-repo-branch-test
-spec:
-  containers:
-  - name: test
-    resources: {}

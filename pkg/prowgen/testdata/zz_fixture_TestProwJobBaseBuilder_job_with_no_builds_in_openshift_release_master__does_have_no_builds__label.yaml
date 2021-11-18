@@ -1,0 +1,7 @@
+agent: kubernetes
+decorate: true
+decoration_config:
+  skip_cloning: true
+labels:
+  ci.openshift.io/no-builds: "true"
+name: default-ci-openshift-release-master-

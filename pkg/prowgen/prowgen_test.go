@@ -7,13 +7,13 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
+	utilpointer "k8s.io/utils/pointer"
 
 	ciop "github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-func sorted(spec *corev1.PodSpec) *corev1.PodSpec {
+func sorted(spec *corev1.PodSpec) {
 	container := &spec.Containers[0]
 	sort.Slice(spec.Volumes, func(i, j int) bool {
 		return spec.Volumes[i].Name < spec.Volumes[j].Name
@@ -35,8 +35,8 @@ func sorted(spec *corev1.PodSpec) *corev1.PodSpec {
 	if canSortArgs {
 		sort.Strings(container.Args)
 	}
-	return spec
 }
+
 func TestGeneratePresubmitForTest(t *testing.T) {
 	tests := []struct {
 		description string
@@ -48,55 +48,41 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		runIfChanged      string
 		skipIfOnlyChanged string
 		optional          bool
-	}{{
-		description: "presubmit for standard test",
-		test:        "testname",
-		repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-	},
+	}{
+		{
+			description: "presubmit for standard test",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+		},
 		{
 			description: "presubmit for a test in a variant config",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"}},
 		},
 		{
-			description: "presubmit with job release specified",
-			test:        "testname",
-			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			jobRelease:  "4.6",
-		},
-		{
-			description: "presubmit with job release specified and clone",
-			test:        "testname",
-			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			jobRelease:  "4.6",
-			clone:       true,
-		},
-		{
 			description:  "presubmit with run_if_changed",
 			test:         "testname",
 			repoInfo:     &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			jobRelease:   "4.6",
 			runIfChanged: "^README.md$",
 		},
 		{
 			description:       "presubmit with skip_if_only_changed",
 			test:              "testname",
 			repoInfo:          &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			jobRelease:        "4.6",
 			skipIfOnlyChanged: "^README.md$",
 		},
 		{
 			description: "optional presubmit",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			jobRelease:  "4.6",
 			optional:    true,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
-			// podSpec tested in generatePodSpec
-			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, nil, nil, tc.jobRelease, !tc.clone, tc.runIfChanged, tc.skipIfOnlyChanged, tc.optional, nil, false))
+			test := ciop.TestStepConfiguration{As: tc.test}
+			jobBaseGen := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo, newFakePodSpecBuilder(), test)
+			testhelper.CompareWithFixture(t, generatePresubmitForTest(jobBaseGen, tc.test, tc.repoInfo, tc.runIfChanged, tc.skipIfOnlyChanged, tc.optional))
 		})
 	}
 }
@@ -126,44 +112,23 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 			cron:        "@yearly",
 		},
 		{
-			description: "periodic for specific release",
+			description: "periodic using interval",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			jobRelease:  "4.6",
-			cron:        "@yearly",
-		},
-		{
-			description: "periodic for specific release using interval",
-			test:        "testname",
-			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			jobRelease:  "4.6",
 			interval:    "6h",
-		},
-		{
-			description: "periodic for specific release and clone: true",
-			test:        "testname",
-			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			jobRelease:  "4.6",
-			clone:       true,
-			cron:        "@yearly",
-		},
-		{
-			description:       "release controller job",
-			test:              "testname",
-			repoInfo:          &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			jobRelease:        "4.6",
-			releaseController: true,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
-			// podSpec tested in generatePodSpec
-			testhelper.CompareWithFixture(t, generatePeriodicForTest(tc.test, tc.repoInfo, nil, true, tc.cron, tc.interval, tc.releaseController, nil, tc.jobRelease, !tc.clone, nil, false))
+			test := ciop.TestStepConfiguration{As: tc.test}
+			jobBaseGen := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo, newFakePodSpecBuilder(), test)
+			testhelper.CompareWithFixture(t, GeneratePeriodicForTest(jobBaseGen, tc.repoInfo, tc.cron, tc.interval, tc.releaseController, nil))
 		})
 	}
 }
 
 func TestGeneratePostSubmitForTest(t *testing.T) {
+	testname := "postsubmit"
 	tests := []struct {
 		name       string
 		repoInfo   *ProwgenInfo
@@ -186,34 +151,17 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				Branch: "Branch",
 			}},
 		},
-		{
-			name: "Uppercase org, repo and branch with clone: true",
-			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
-				Org:    "Organization",
-				Repo:   "Repository",
-				Branch: "Branch",
-			}},
-			clone: true,
-		},
-		{
-			name: "Lowercase org repo and branch with release",
-			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
-				Org:    "organization",
-				Repo:   "repository",
-				Branch: "branch",
-			}},
-			jobRelease: "4.6",
-		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// podSpec tested in generatePodSpec
-			testhelper.CompareWithFixture(t, generatePostsubmitForTest(tc.name, tc.repoInfo, nil, nil, tc.jobRelease, !tc.clone, nil, false))
+			test := ciop.TestStepConfiguration{As: testname}
+			jobBaseGen := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo, newFakePodSpecBuilder(), test)
+			testhelper.CompareWithFixture(t, generatePostsubmitForTest(jobBaseGen, tc.repoInfo))
 		})
 	}
 }
 
-var (
+const (
 	cron = "0 0 * * *"
 )
 
@@ -377,7 +325,7 @@ func TestGenerateJobs(t *testing.T) {
 			id: "cluster label for periodic",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
-					{As: "unit", Cron: &cron, Cluster: "build01", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "unit", Cron: utilpointer.StringPtr(cron), Cluster: "build01", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
 				},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
@@ -407,12 +355,12 @@ func TestGenerateJobs(t *testing.T) {
 			if !tc.keep {
 				pruneForTests(jobConfig) // prune the fields that are tested in TestGeneratePre/PostsubmitForTest
 			}
-			testhelper.CompareWithFixture(t, sortPodspecsInJobsonfig(jobConfig))
+			testhelper.CompareWithFixture(t, sortPodspecsInJobconfig(jobConfig))
 		})
 	}
 }
 
-func sortPodspecsInJobsonfig(jobConfig *prowconfig.JobConfig) *prowconfig.JobConfig {
+func sortPodspecsInJobconfig(jobConfig *prowconfig.JobConfig) *prowconfig.JobConfig {
 	for repo := range jobConfig.PresubmitsStatic {
 		for i := range jobConfig.PresubmitsStatic[repo] {
 			if jobConfig.PresubmitsStatic[repo][i].Spec != nil {
@@ -435,109 +383,6 @@ func sortPodspecsInJobsonfig(jobConfig *prowconfig.JobConfig) *prowconfig.JobCon
 	}
 
 	return jobConfig
-}
-
-func TestGenerateJobBase(t *testing.T) {
-	path := "/some/where"
-	var testCases = []struct {
-		testName    string
-		name        string
-		prefix      string
-		info        *ProwgenInfo
-		podSpec     *corev1.PodSpec
-		rehearsable bool
-		pathAlias   *string
-		clone       bool
-	}{
-		{
-			testName: "no special options",
-			name:     "test",
-			prefix:   "pull",
-			info:     &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			podSpec:  &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
-		},
-		{
-			testName:    "rehearsable",
-			name:        "test",
-			prefix:      "pull",
-			info:        &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			podSpec:     &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
-			rehearsable: true,
-		},
-		{
-			testName: "config variant",
-			name:     "test",
-			prefix:   "pull",
-			info:     &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"}},
-			podSpec:  &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
-		},
-		{
-			testName:  "path alias",
-			name:      "test",
-			prefix:    "pull",
-			info:      &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"}},
-			podSpec:   &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
-			pathAlias: &path,
-		},
-		{
-			testName: "hidden job for private repos",
-			name:     "test",
-			prefix:   "pull",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
-				Config:   config.Prowgen{Private: true},
-			},
-			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
-		},
-		{
-			testName: "expose job for private repos with public results",
-			name:     "test",
-			prefix:   "pull",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
-				Config:   config.Prowgen{Private: true, Expose: true},
-			},
-			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
-		},
-		{
-			testName: "expose option set but not private",
-			name:     "test",
-			prefix:   "pull",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
-				Config:   config.Prowgen{Private: false, Expose: true},
-			},
-			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
-		},
-		{
-			testName: "expose option set but not private with clone: true",
-			name:     "test",
-			prefix:   "pull",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
-				Config:   config.Prowgen{Private: false, Expose: true},
-			},
-			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
-			clone:   true,
-		},
-		{
-			testName: "private jobs that clone should contain oauth_token_secret config",
-			name:     "test",
-			prefix:   "pull",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
-				Config:   config.Prowgen{Private: true, Expose: true},
-			},
-			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
-			clone:   true,
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.testName, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generateJobBase(testCase.name, testCase.prefix, testCase.info, sorted(testCase.podSpec), testCase.rehearsable, testCase.pathAlias, "", !testCase.clone, nil, false))
-		})
-	}
 }
 
 func pruneForTests(jobConfig *prowconfig.JobConfig) {

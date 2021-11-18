@@ -168,6 +168,7 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 	}
 
 	return &JobRunAggregatorAnalyzerOptions{
+		explicitGCSPrefix:   f.ExplicitGCSPrefix,
 		jobRunLocator:       jobRunLocator,
 		passFailCalculator:  newWeeklyAverageFromTenDaysAgo(f.JobName, estimatedStartTime, 3, ciDataClient),
 		jobName:             f.JobName,

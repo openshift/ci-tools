@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -23,19 +24,21 @@ type gcsJobRun struct {
 	// retrieval mechanisms
 	bkt *storage.BucketHandle
 
-	jobName        string
-	jobRunID       string
-	gcsProwJobPath string
-	gcsJunitPaths  []string
+	jobRunGCSBucketRoot string
+	jobName             string
+	jobRunID            string
+	gcsProwJobPath      string
+	gcsJunitPaths       []string
 
 	pathToContent map[string][]byte
 }
 
-func NewGCSJobRun(bkt *storage.BucketHandle, jobName, jobRunID string) JobRunInfo {
+func NewGCSJobRun(bkt *storage.BucketHandle, jobGCSBucketRoot string, jobName, jobRunID string) JobRunInfo {
 	return &gcsJobRun{
-		bkt:      bkt,
-		jobName:  jobName,
-		jobRunID: jobRunID,
+		bkt:                 bkt,
+		jobRunGCSBucketRoot: path.Join(jobGCSBucketRoot, jobRunID),
+		jobName:             jobName,
+		jobRunID:            jobRunID,
 	}
 }
 
@@ -178,7 +181,7 @@ func (j *gcsJobRun) GetOpenShiftTestsFilesWithPrefix(ctx context.Context, prefix
 		// This ends up being the equivalent of:
 		// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade
 		// the next directory step is based on some bit of metadata I don't recognize
-		Prefix: filepath.Join("logs", j.jobName, j.jobRunID),
+		Prefix: j.jobRunGCSBucketRoot,
 
 		// TODO this field is apparently missing from this level of go/storage
 		// Omit owner and ACL fields for performance
@@ -307,11 +310,11 @@ func (j *gcsJobRun) ClearAllContent() {
 }
 
 func (j *gcsJobRun) GetHumanURL() string {
-	return GetHumanURL(j.GetJobName(), j.GetJobRunID())
+	return GetHumanURLForLocation(j.jobRunGCSBucketRoot)
 }
 
 func (j *gcsJobRun) GetGCSArtifactURL() string {
-	return GetGCSArtifactURL(j.GetJobName(), j.GetJobRunID())
+	return GetGCSArtifactURLForLocation(j.jobRunGCSBucketRoot)
 }
 
 func (j *gcsJobRun) IsFinished(ctx context.Context) bool {
@@ -326,12 +329,22 @@ func (j *gcsJobRun) IsFinished(ctx context.Context) bool {
 	return true
 }
 
-func GetHumanURL(jobName, jobRunName string) string {
+func GetHumanURLForReleaseJob(jobName, jobRunName string) string {
 	// https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/periodic-ci-openshift-release-master-ci-4.8-e2e-gcp-upgrade/1429691282619371520
 	return fmt.Sprintf("https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/%s/%s", jobName, jobRunName)
 }
 
-func GetGCSArtifactURL(jobName, jobRunName string) string {
+func GetGCSArtifactURLForReleaseJob(jobName, jobRunName string) string {
 	// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade/1420676206029705216/artifacts/e2e-gcp-upgrade/
 	return fmt.Sprintf("https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/%s/%s/artifacts", jobName, jobRunName)
+}
+
+func GetHumanURLForLocation(jobRunGCSBucketRoot string) string {
+	// https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/periodic-ci-openshift-release-master-ci-4.8-e2e-gcp-upgrade/1429691282619371520
+	return fmt.Sprintf("https://prow.ci.openshift.org/view/gs/origin-ci-test/%s", jobRunGCSBucketRoot)
+}
+
+func GetGCSArtifactURLForLocation(jobRunGCSBucketRoot string) string {
+	// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade/1420676206029705216/artifacts/e2e-gcp-upgrade/
+	return fmt.Sprintf("https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/%s/artifacts", jobRunGCSBucketRoot)
 }

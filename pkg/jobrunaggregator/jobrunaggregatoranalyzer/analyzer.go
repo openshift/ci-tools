@@ -28,9 +28,10 @@ type JobRunAggregatorAnalyzerOptions struct {
 	jobRunLocator      jobrunaggregatorlib.JobRunLocator
 	passFailCalculator baseline
 
-	jobName    string
-	payloadTag string
-	workingDir string
+	explicitGCSPrefix string
+	jobName           string
+	payloadTag        string
+	workingDir        string
 
 	// jobRunStartEstimate is the time that we think the job runs we're aggregating started.
 	// it should be within an hour, plus or minus.
@@ -170,13 +171,17 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 
 	aggregationConfiguration := &AggregationConfiguration{}
 	for _, jobRunName := range unfinishedJobNames {
+		jobRunGCSBucketRoot := filepath.Join("logs", o.jobName, jobRunName)
+		if len(o.explicitGCSPrefix) > 0 {
+			jobRunGCSBucketRoot = filepath.Join(o.explicitGCSPrefix, jobRunName)
+		}
 		aggregationConfiguration.FinishedJobs = append(
 			aggregationConfiguration.FinishedJobs,
 			JobRunInfo{
 				JobName:      o.jobName,
 				JobRunID:     jobRunName,
-				HumanURL:     jobrunaggregatorapi.GetHumanURL(o.jobName, jobRunName),
-				GCSBucketURL: jobrunaggregatorapi.GetGCSArtifactURL(o.jobName, jobRunName),
+				HumanURL:     jobrunaggregatorapi.GetHumanURLForLocation(jobRunGCSBucketRoot),
+				GCSBucketURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(jobRunGCSBucketRoot),
 				Status:       "unknown",
 			},
 		)

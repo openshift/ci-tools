@@ -121,7 +121,7 @@ func (o *jobLoaderOptions) Run(ctx context.Context) error {
 		startingJobRunID = jobrunaggregatorlib.NextJobRunID(lastJobRun.Name)
 	}
 
-	jobRunProcessingCh, errorCh, err := o.gcsClient.ListJobRunNames(ctx, o.jobName, startingJobRunID)
+	jobRunProcessingCh, errorCh, err := o.gcsClient.ListJobRunNamesOlderThanFourHours(ctx, o.jobName, startingJobRunID)
 	if err != nil {
 		return err
 	}
@@ -261,7 +261,7 @@ func (o *jobRunLoaderOptions) uploadJobRun(ctx context.Context, jobRun jobrunagg
 
 // associateJobRuns returns allJobRuns and currentAggregationTargetJobRuns
 func (o *jobRunLoaderOptions) readJobRunFromGCS(ctx context.Context) (jobrunaggregatorapi.JobRunInfo, error) {
-	jobRunInfo, err := o.gcsClient.ReadJobRunFromGCS(ctx, o.jobName, o.hobRunID)
+	jobRunInfo, err := o.gcsClient.ReadJobRunFromGCS(ctx, "logs/"+o.jobName, o.jobName, o.hobRunID)
 	if err != nil {
 		return nil, err
 	}

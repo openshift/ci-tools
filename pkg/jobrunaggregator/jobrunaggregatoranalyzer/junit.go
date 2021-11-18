@@ -186,13 +186,13 @@ func aggregateTestCase(combined *junit.TestCase, jobName, toAddJobRunID string, 
 
 	switch {
 	case toAdd.FailureOutput != nil:
-		humanURL := jobrunaggregatorapi.GetHumanURL(jobName, toAddJobRunID)
+		humanURL := jobrunaggregatorapi.GetHumanURLForReleaseJob(jobName, toAddJobRunID)
 		currDetails.Failures = append(
 			currDetails.Failures,
 			TestCaseFailure{
 				JobRunID:       toAddJobRunID,
 				HumanURL:       humanURL,
-				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURL(jobName, toAddJobRunID),
+				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForReleaseJob(jobName, toAddJobRunID),
 			})
 
 	case toAdd.SkipMessage != nil:
@@ -200,8 +200,8 @@ func aggregateTestCase(combined *junit.TestCase, jobName, toAddJobRunID string, 
 			currDetails.Skips,
 			TestCaseSkip{
 				JobRunID:       toAddJobRunID,
-				HumanURL:       jobrunaggregatorapi.GetHumanURL(jobName, toAddJobRunID),
-				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURL(jobName, toAddJobRunID),
+				HumanURL:       jobrunaggregatorapi.GetHumanURLForReleaseJob(jobName, toAddJobRunID),
+				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForReleaseJob(jobName, toAddJobRunID),
 			})
 
 	default:
@@ -209,8 +209,8 @@ func aggregateTestCase(combined *junit.TestCase, jobName, toAddJobRunID string, 
 			currDetails.Passes,
 			TestCasePass{
 				JobRunID:       toAddJobRunID,
-				HumanURL:       jobrunaggregatorapi.GetHumanURL(jobName, toAddJobRunID),
-				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURL(jobName, toAddJobRunID),
+				HumanURL:       jobrunaggregatorapi.GetHumanURLForReleaseJob(jobName, toAddJobRunID),
+				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForReleaseJob(jobName, toAddJobRunID),
 			})
 
 	}

@@ -114,7 +114,7 @@ func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunag
 		switch {
 		case strings.HasSuffix(attrs.Name, "prowjob.json"):
 			jobRunId := filepath.Base(filepath.Dir(attrs.Name))
-			jobRunInfo, err := a.ciGCSClient.ReadJobRunFromGCS(ctx, a.jobName, jobRunId)
+			jobRunInfo, err := a.ciGCSClient.ReadJobRunFromGCS(ctx, a.gcsPrefix, a.jobName, jobRunId)
 			if err != nil {
 				return nil, err
 			}

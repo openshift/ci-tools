@@ -318,7 +318,7 @@ func (j *gcsJobRun) GetGCSArtifactURL() string {
 }
 
 func (j *gcsJobRun) IsFinished(ctx context.Context) bool {
-	content, err := j.GetContent(ctx, fmt.Sprintf("logs/%v/%v/finished.json", j.GetJobName(), j.GetJobRunID()))
+	content, err := j.GetContent(ctx, fmt.Sprintf("%s/finished.json", j.jobRunGCSBucketRoot))
 	if err != nil {
 		return false
 	}
@@ -327,16 +327,6 @@ func (j *gcsJobRun) IsFinished(ctx context.Context) bool {
 	}
 
 	return true
-}
-
-func GetHumanURLForReleaseJob(jobName, jobRunName string) string {
-	// https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/periodic-ci-openshift-release-master-ci-4.8-e2e-gcp-upgrade/1429691282619371520
-	return fmt.Sprintf("https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/%s/%s", jobName, jobRunName)
-}
-
-func GetGCSArtifactURLForReleaseJob(jobName, jobRunName string) string {
-	// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade/1420676206029705216/artifacts/e2e-gcp-upgrade/
-	return fmt.Sprintf("https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/%s/%s/artifacts", jobName, jobRunName)
 }
 
 func GetHumanURLForLocation(jobRunGCSBucketRoot string) string {

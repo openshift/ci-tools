@@ -187,7 +187,12 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 		)
 	}
 
-	currentAggregationJunit := &aggregatedJobRunJunit{}
+	currentAggregationJunit := &aggregatedJobRunJunit{
+		jobGCSBucketRoot: filepath.Join("logs", o.jobName),
+	}
+	if len(o.explicitGCSPrefix) > 0 {
+		currentAggregationJunit.jobGCSBucketRoot = o.explicitGCSPrefix
+	}
 	for i := range finishedJobsToAggregate {
 		jobRun := finishedJobsToAggregate[i]
 		currJunit, err := newJobRunJunit(ctx, jobRun)

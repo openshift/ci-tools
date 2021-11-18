@@ -50,9 +50,9 @@ func makeProwjob(configuration *api.ReleaseBuildConfiguration, pr *github.PullRe
 			jobBaseGen.Cluster("build01")
 
 			periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, "@yearly", "", false, configuration.CanonicalGoRepository)
-			periodic.Name = fmt.Sprintf("%s-%s-%d-%s-%s", base.Org, base.Repo, pr.Number, inject.Variant, inject.Test)
 			break
 		}
+		// TODO(muller): Handle the not found case
 	}
 
 	// TODO(muller): Name the job something better
@@ -93,6 +93,7 @@ type options struct {
 	pullRequest    string
 	test           string
 	prowConfigPath string
+	aggregationID  string
 
 	confirm bool
 
@@ -107,6 +108,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.test, "test", "", "Coordinates of the test to execute (org/repo@branch__variant:test)")
 	fs.BoolVar(&o.confirm, "confirm", false, "Set to true to actually submit the create ProwJob")
 	fs.StringVar(&o.prowConfigPath, "prow-config-path", "", "Path to Prow configuration file")
+	fs.StringVar(&o.aggregationID, "aggregation-id", "", "If set, release.openshift.io/aggregation-id label will be set to this value on the spawned job")
 
 	o.github.AddFlags(fs)
 
@@ -200,7 +202,12 @@ func main() {
 	if err != nil {
 		logrus.Fatal("Failed to make a Prowjob")
 	}
-	prowjob := pjutil.NewProwJob(pjutil.PeriodicSpec(*prowjobConfig), nil, nil)
+	// TODO(muller): Need to propagate this to trigger
+	extraLabels := map[string]string{}
+	if o.aggregationID != "" {
+		extraLabels["release.openshift.io/aggregation-id"] = o.aggregationID
+	}
+	prowjob := pjutil.NewProwJob(pjutil.PeriodicSpec(*prowjobConfig), extraLabels, nil)
 
 	if !o.confirm {
 		jobAsYAML, err := yaml.Marshal(prowjob)

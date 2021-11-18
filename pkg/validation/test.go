@@ -35,6 +35,12 @@ const (
 	testStagePre
 	testStageTest
 	testStagePost
+
+	// These are a bit arbitrary but they reflect what was working when I set
+	// these limits. Tests with claims must be shorter because they infer
+	// more things from the name
+	maxClaimTestNameLength = 42
+	maxTestNameLength      = 61
 )
 
 func (v *Validator) commandHasTrap(cmd string) bool {
@@ -130,6 +136,10 @@ func (v *Validator) validateTestStepConfiguration(
 		fieldRootN := fmt.Sprintf("%s[%d]", fieldRoot, num)
 		if len(test.As) == 0 {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: is required", fieldRootN))
+		} else if l := len(test.As); l > maxTestNameLength {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.as: %d characters long, maximum length is %d", fieldRootN, l, maxTestNameLength))
+		} else if l := len(test.As); l > maxClaimTestNameLength && test.ClusterClaim != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.as: %d characters long, maximum length is %d for tests with claims", fieldRootN, l, maxClaimTestNameLength))
 		} else if test.As == "images" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: should not be called 'images' because it gets confused with '[images]' target", fieldRootN))
 		} else if strings.HasPrefix(test.As, string(api.PipelineImageStreamTagReferenceIndexImage)) {

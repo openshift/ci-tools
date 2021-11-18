@@ -114,11 +114,6 @@ func (v *Validator) IsValidReference(step api.LiteralTestStep) []error {
 	return v.validateLiteralTestStep(&context{field: fieldPath(step.As)}, testStageUnknown, step, nil)
 }
 
-func IsValidReference(step api.LiteralTestStep) []error {
-	v := NewValidator()
-	return v.IsValidReference(step)
-}
-
 func (v *Validator) validateTestStepConfiguration(
 	configCtx *configContext,
 	fieldRoot string,

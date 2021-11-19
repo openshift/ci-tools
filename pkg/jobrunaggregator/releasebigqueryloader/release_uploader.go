@@ -70,14 +70,17 @@ func (r *allReleaseUploaderOptions) Run(ctx context.Context) error {
 
 		for _, tags := range allTags {
 			for _, tag := range tags.Tags {
+				// Skip release tags that are already in BigQuery
+				if _, ok := releaseTagSet[tag.Name]; ok {
+					fmt.Fprintf(os.Stderr, "%s is already present, skipping...\n", tag.Name)
+					continue
+				}
+
 				fmt.Fprintf(os.Stderr, "Fetching tag %s from release controller...\n", tag.Name)
 				releaseDetails := r.fetchReleaseDetails(tags.Architecture, release, tag)
 				releaseTag, repositories, pullRequests := releaseDetailsToBigQuery(tags.Architecture, tag, releaseDetails)
-				// We skip releases that aren't fully baked, or already in the big query tables:
-				if releaseTag.Phase == "Ready" || repositories == nil {
-					continue
-				}
-				if _, ok := releaseTagSet[releaseTag.ReleaseTag]; ok {
+				// We skip releases that aren't fully baked (i.e. all jobs run and changelog calculated)
+				if (releaseTag.Phase != "Accepted" && releaseTag.Phase != "Rejected") || repositories == nil {
 					continue
 				}
 

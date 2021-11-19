@@ -391,7 +391,7 @@ func main() {
 			registriesExceptAppCI.Insert(domain)
 		}
 		logrus.WithField("registriesExceptAppCI", registriesExceptAppCI.List()).Info("forbidden registries from build-farm clusters")
-		opts.testImagesDistributorOptions.forbiddenRegistries.Union(registriesExceptAppCI)
+		opts.testImagesDistributorOptions.forbiddenRegistries = opts.testImagesDistributorOptions.forbiddenRegistries.Union(registriesExceptAppCI)
 
 		if err := testimagesdistributor.AddToManager(
 			mgr,

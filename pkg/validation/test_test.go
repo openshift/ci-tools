@@ -572,6 +572,32 @@ func TestValidateTests(t *testing.T) {
 			},
 			expectedError: errors.New("tests[0]: `optional` and `postsubmit` are mututally exclusive"),
 		},
+		{
+			id: "test name too long",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "yada-yada-yada-yada-yada-yada-yada-yada-yada-yada-yada-yada-yada-yada-yada-yada-yada-yada",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+				},
+			},
+			expectedError: errors.New("tests[0].as: 89 characters long, maximum length is 61"),
+		},
+		{
+			id: "test name too long for claim tests which must be shorter",
+			tests: []api.TestStepConfiguration{
+				{
+					As: "yada-yada-yada-yada-yada-yada-yada-yada-yada-yada",
+					ClusterClaim: &api.ClusterClaim{
+						Version: "4.9",
+						Cloud:   "gcp",
+						Owner:   "ME",
+					},
+					MultiStageTestConfiguration: &api.MultiStageTestConfiguration{},
+				},
+			},
+			expectedError: errors.New("tests[0].as: 49 characters long, maximum length is 42 for tests with claims"),
+		},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			v := newSingleUseValidator()

@@ -159,15 +159,35 @@ func (j *gcsJobRun) GetCombinedJUnitTestSuites(ctx context.Context) (*junit.Test
 			testSuites.Suites = append(testSuites.Suites, currTestSuites.Suites...)
 			continue
 		}
+		if isParseFloatError(testSuitesErr) {
+			// this was a testsuites, but we cannot read the file.  There is no choice to ignore errors so we suppress here
+			fmt.Fprintf(os.Stderr, "error parsing testsuites: %v", testSuitesErr)
+			continue
+		}
 
 		currTestSuite := &junit.TestSuite{}
 		if testSuiteErr := xml.Unmarshal(junitContent, currTestSuite); testSuiteErr != nil {
-			return nil, fmt.Errorf("error parsing junit for jobrun/%v/%v %q: %w", j.GetJobName(), j.GetJobRunID(), junitFile, testSuiteErr)
+			if isParseFloatError(testSuitesErr) {
+				// this was a testsuite, but we cannot read the file.  There is no choice to ignore errors so we suppress here
+				fmt.Fprintf(os.Stderr, "error parsing testsuite: %v", testSuitesErr)
+				continue
+			}
+			return nil, fmt.Errorf("error parsing junit for jobrun/%v/%v %q: testsuiteError=%w  testsuitesError=%v", j.GetJobName(), j.GetJobRunID(), junitFile, testSuiteErr, testSuitesErr)
 		}
 		testSuites.Suites = append(testSuites.Suites, currTestSuite)
 	}
 
 	return testSuites, nil
+}
+
+func isParseFloatError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if strings.HasPrefix(err.Error(), "strconv.ParseFloat:") {
+		return true
+	}
+	return false
 }
 
 func (j *gcsJobRun) GetOpenShiftTestsFilesWithPrefix(ctx context.Context, prefix string) (map[string]string, error) {

@@ -3,6 +3,7 @@ package jobrunaggregatoranalyzer
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 	"github.com/openshift/ci-tools/pkg/junit"
 )
 
@@ -72,7 +74,20 @@ func (a *aggregatedJobRunJunit) aggregateAllJobRuns() (*junit.TestSuites, error)
 	for _, aggregationName := range sets.StringKeySet(a.aggregationNameToJobRuns).List() {
 		jobRunJunits := a.aggregationNameToJobRuns[aggregationName]
 		for _, currJobRunJunit := range jobRunJunits {
-			if err := combineTestSuites(combined, currJobRunJunit.jobRun.GetJobName(), currJobRunJunit.jobRun.GetJobRunID(), currJobRunJunit.combinedJunit); err != nil {
+			rawBackendDisruptionData, err := currJobRunJunit.jobRun.GetOpenShiftTestsFilesWithPrefix(context.Background(), "backend-disruption")
+			if err != nil {
+				return nil, err
+			}
+			if len(rawBackendDisruptionData) == 0 {
+				fmt.Fprintf(os.Stderr, "Could not fetch backend disruption data for %s", currJobRunJunit.jobRun.GetJobRunID())
+				continue
+			}
+
+			disruptionData := jobrunaggregatorlib.GetServerAvailabilityResultsFromDirectData(rawBackendDisruptionData)
+			if err != nil {
+				return nil, err
+			}
+			if err := combineTestSuites(combined, disruptionData, currJobRunJunit.jobRun.GetJobName(), currJobRunJunit.jobRun.GetJobRunID(), currJobRunJunit.combinedJunit); err != nil {
 				return nil, err
 			}
 		}
@@ -86,27 +101,27 @@ func (a *aggregatedJobRunJunit) aggregateAllJobRuns() (*junit.TestSuites, error)
 	return a.combinedJunit, nil
 }
 
-func combineTestSuites(combined *junit.TestSuites, jobName, toAddJobRunID string, toAdd *junit.TestSuites) error {
+func combineTestSuites(combined *junit.TestSuites, disruptionData map[string]jobrunaggregatorlib.AvailabilityResult, jobName, toAddJobRunID string, toAdd *junit.TestSuites) error {
 	for _, suiteToAdd := range toAdd.Suites {
 		combinedSuite := ensureSuiteInSuites(combined, suiteToAdd.Name)
-		if err := combineTestSuite(combinedSuite, jobName, toAddJobRunID, suiteToAdd); err != nil {
+		if err := combineTestSuite(combinedSuite, disruptionData, jobName, toAddJobRunID, suiteToAdd); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func combineTestSuite(combined *junit.TestSuite, jobName, toAddJobRunID string, toAdd *junit.TestSuite) error {
+func combineTestSuite(combined *junit.TestSuite, disruptionData map[string]jobrunaggregatorlib.AvailabilityResult, jobName, toAddJobRunID string, toAdd *junit.TestSuite) error {
 	for _, testCaseToAdd := range toAdd.TestCases {
 		combinedTestCase := ensureTestCaseInSuite(combined, testCaseToAdd.Name)
-		if err := aggregateTestCase(combinedTestCase, jobName, toAddJobRunID, testCaseToAdd); err != nil {
+		if err := aggregateTestCase(combinedTestCase, disruptionData, jobName, toAddJobRunID, testCaseToAdd); err != nil {
 			return err
 		}
 	}
 
 	for _, suiteToAdd := range toAdd.Children {
 		combinedSuite := ensureSuiteInSuite(combined, suiteToAdd.Name)
-		if err := combineTestSuite(combinedSuite, jobName, toAddJobRunID, suiteToAdd); err != nil {
+		if err := combineTestSuite(combinedSuite, disruptionData, jobName, toAddJobRunID, suiteToAdd); err != nil {
 			return err
 		}
 	}
@@ -174,10 +189,11 @@ func ensureTestCaseInSuite(o *junit.TestSuite, name string) *junit.TestCase {
 	return ret
 }
 
-func aggregateTestCase(combined *junit.TestCase, jobName, toAddJobRunID string, toAdd *junit.TestCase) error {
+func aggregateTestCase(combined *junit.TestCase, disruptionData map[string]jobrunaggregatorlib.AvailabilityResult, jobName, toAddJobRunID string, toAdd *junit.TestCase) error {
 	currDetails := &TestCaseDetails{
 		Name: toAdd.Name,
 	}
+
 	if len(combined.SystemOut) > 0 {
 		if err := yaml.Unmarshal([]byte(combined.SystemOut), currDetails); err != nil {
 			return err
@@ -185,6 +201,27 @@ func aggregateTestCase(combined *junit.TestCase, jobName, toAddJobRunID string, 
 	}
 
 	switch {
+	case jobrunaggregatorlib.IsDisruptionTest(toAdd.Name):
+		backend := jobrunaggregatorlib.GetBackendName(toAdd.Name)
+		secondsUnavailable := 0
+		if availability, ok := disruptionData[backend]; ok {
+			secondsUnavailable = availability.SecondsUnavailable
+		} else if toAdd.FailureOutput != nil {
+			// Fallback to junit disruption data
+			seconds, err := jobrunaggregatorlib.GetOutageSecondsFromMessage(toAdd.FailureOutput.Output)
+			if err != nil {
+				return err
+			}
+			secondsUnavailable = seconds
+		}
+
+		currDetails.Disruption = append(currDetails.Disruption,
+			TestCaseDisruption{
+				JobRunID:          toAddJobRunID,
+				HumanURL:          jobrunaggregatorapi.GetHumanURL(jobName, toAddJobRunID),
+				GCSArtifactURL:    jobrunaggregatorapi.GetGCSArtifactURL(jobName, toAddJobRunID),
+				DisruptionSeconds: secondsUnavailable,
+			})
 	case toAdd.FailureOutput != nil:
 		humanURL := jobrunaggregatorapi.GetHumanURL(jobName, toAddJobRunID)
 		currDetails.Failures = append(
@@ -194,7 +231,6 @@ func aggregateTestCase(combined *junit.TestCase, jobName, toAddJobRunID string, 
 				HumanURL:       humanURL,
 				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURL(jobName, toAddJobRunID),
 			})
-
 	case toAdd.SkipMessage != nil:
 		currDetails.Skips = append(
 			currDetails.Skips,
@@ -203,7 +239,6 @@ func aggregateTestCase(combined *junit.TestCase, jobName, toAddJobRunID string, 
 				HumanURL:       jobrunaggregatorapi.GetHumanURL(jobName, toAddJobRunID),
 				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURL(jobName, toAddJobRunID),
 			})
-
 	default:
 		currDetails.Passes = append(
 			currDetails.Passes,
@@ -228,9 +263,10 @@ type TestCaseDetails struct {
 	// Summary is filled in during the pass/fail calculation
 	Summary string
 
-	Passes   []TestCasePass
-	Failures []TestCaseFailure
-	Skips    []TestCaseSkip
+	Passes     []TestCasePass
+	Failures   []TestCaseFailure
+	Skips      []TestCaseSkip
+	Disruption []TestCaseDisruption
 	//NeverExecuted []TestCaseNeverExecuted
 }
 
@@ -238,6 +274,13 @@ type TestCasePass struct {
 	JobRunID       string
 	HumanURL       string
 	GCSArtifactURL string
+}
+
+type TestCaseDisruption struct {
+	JobRunID          string
+	HumanURL          string
+	GCSArtifactURL    string
+	DisruptionSeconds int
 }
 
 type TestCaseFailure struct {

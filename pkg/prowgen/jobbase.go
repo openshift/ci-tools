@@ -112,6 +112,10 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 	p.PodSpec.Add(Secrets(test.Secret), Secrets(test.Secrets...))
 	p.PodSpec.Add(Targets(test.As))
 
+	if test.Cluster != "" {
+		p.WithLabel(cioperatorapi.ClusterLabel, string(test.Cluster))
+	}
+
 	if test.ClusterClaim != nil {
 		p.PodSpec.Add(Claims())
 	}
@@ -186,6 +190,23 @@ func (p *prowJobBaseBuilder) Rehearsable(yes bool) *prowJobBaseBuilder {
 // TestName sets the base name that specifies the *test* this job will run
 func (p *prowJobBaseBuilder) TestName(name string) *prowJobBaseBuilder {
 	p.testName = name
+	return p
+}
+
+// Cluster sets where the job will run when submitted. Note that this is different
+// from setting ClusterLabel label which is consumed by sanitize-prow-config when
+// dispatching jobs among clusters. Generated configs will usually not set `Cluster`
+// at all and will have ClusterLabel when explicitly configured.
+// Cluster set by this method is mostly useful for dynamically creating Prowjobs
+// to be submitted to the cluster right away.
+func (p *prowJobBaseBuilder) Cluster(cluster cioperatorapi.Cluster) *prowJobBaseBuilder {
+	p.base.Cluster = string(cluster)
+	return p
+}
+
+// WithLabel sets a label to the given value
+func (p *prowJobBaseBuilder) WithLabel(key, value string) *prowJobBaseBuilder {
+	p.base.Labels[key] = value
 	return p
 }
 

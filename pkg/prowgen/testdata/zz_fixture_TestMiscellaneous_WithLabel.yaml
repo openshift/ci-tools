@@ -1,0 +1,7 @@
+agent: kubernetes
+decorate: true
+decoration_config:
+  skip_cloning: true
+labels:
+  key: value
+name: default-ci-org-repo-branch-

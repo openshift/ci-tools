@@ -74,7 +74,7 @@ func TestCreateRBACs(t *testing.T) {
 					Name: "ci-operator-image",
 				},
 			},
-			expectedError: "timeout while waiting for dockercfg secret creation for service account 'ci-operator'",
+			expectedError: `timeout while waiting for dockercfg secret creation for service account "ci-operator": timed out waiting for the condition`,
 		},
 	}
 

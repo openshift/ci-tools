@@ -33,3 +33,9 @@ type BackendDisruptionRow struct {
 	JobRunName        string
 	DisruptionSeconds int
 }
+
+type BackendDisruptionStatisticsRow struct {
+	BackendName string
+	Mean        float64
+	P95         float64
+}

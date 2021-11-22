@@ -25,6 +25,9 @@ type AggregationJobClient interface {
 	// nil means that no jobRun as found after the specified time.
 	GetJobRunForJobNameAfterTime(ctx context.Context, jobName string, targetTime time.Time) (*jobrunaggregatorapi.JobRunRow, error)
 
+	// GetBackendDisruptionStatisticsByJob gets the mean and p95 disruption per backend from the week from 10 days ago.
+	GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error)
+
 	ListAggregatedTestRunsForJob(ctx context.Context, frequency, jobName string, startDay time.Time) ([]jobrunaggregatorapi.AggregatedTestRunRow, error)
 }
 
@@ -171,6 +174,84 @@ LIMIT 1
 		return nil, err
 	}
 	return lastJobRun, nil
+}
+
+func (c *ciDataClient) GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {
+	rows := make([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, 0)
+
+	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
+SELECT
+    p95.BackendName,
+    p95.P95,
+    mean.Mean 
+FROM
+    (
+        SELECT
+            BackendName,
+            ANY_VALUE(P95) AS P95
+            FROM (
+                SELECT
+                    BackendName,
+                    PERCENTILE_CONT(BackendDisruption.DisruptionSeconds, 0.95) OVER(PARTITION BY BackendDisruption.BackendName) AS P95,
+                FROM
+                    DATA_SET_LOCATION.BackendDisruption as BackendDisruption
+                INNER JOIN
+                    DATA_SET_LOCATION.BackendDisruption_JobRuns as JobRuns on JobRuns.Name = BackendDisruption.JobRunName
+                WHERE
+                    JobRuns.StartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
+                AND
+                    TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
+                AND
+                    JobRuns.JobName = @JobName
+            )
+            GROUP BY
+                BackendName
+      ) p95
+LEFT JOIN
+    (
+        SELECT
+            BackendName,
+            AVG(BackendDisruption.DisruptionSeconds) as Mean
+            FROM
+                DATA_SET_LOCATION.BackendDisruption as BackendDisruption
+            INNER JOIN
+                DATA_SET_LOCATION.BackendDisruption_JobRuns as JobRuns on JobRuns.Name = BackendDisruption.JobRunName
+            WHERE
+                JobRuns.StartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
+            AND
+                TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
+            AND
+                JobRuns.JobName = @JobName
+            GROUP BY
+                BackendName
+      ) mean
+ON
+    (p95.BackendName = mean.BackendName)
+`)
+	query := c.client.Query(queryString)
+	query.QueryConfig.Parameters = []bigquery.QueryParameter{
+		{Name: "JobName", Value: jobName},
+	}
+
+	it, err := query.Read(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		row := jobrunaggregatorapi.BackendDisruptionStatisticsRow{}
+		err := it.Next(&row)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		rows = append(rows, row)
+	}
+
+	return rows, nil
 }
 
 func (c *ciDataClient) GetLastAggregationForJob(ctx context.Context, frequency, jobName string) (*jobrunaggregatorapi.AggregatedTestRunRow, error) {

@@ -6,9 +6,9 @@ import (
 	"os"
 
 	"gopkg.in/yaml.v2"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
@@ -20,17 +20,32 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 		Name:      "BackendDisruption",
 		TestCases: []*junit.TestCase{},
 	}
+	collectedDataTestCase := &junit.TestCase{
+		Name: "should collect disruption data",
+	}
+	disruptionJunitSuite.TestCases = append(disruptionJunitSuite.TestCases, collectedDataTestCase)
 
 	jobRunIDToBackendNameToAvailabilityResult, err := getDisruptionByJobRunID(ctx, finishedJobsToAggregate)
+	if jobRunIDToBackendNameToAvailabilityResult != nil {
+		rawDataBytes, err := yaml.Marshal(jobRunIDToBackendNameToAvailabilityResult)
+		if err != nil {
+			collectedDataTestCase.SystemOut = string(rawDataBytes)
+		}
+	}
 	switch {
 	case len(jobRunIDToBackendNameToAvailabilityResult) < 3 && err != nil:
 		return nil, err
 	case len(jobRunIDToBackendNameToAvailabilityResult) < 3 && err == nil:
-		return nil, fmt.Errorf("david has to fill this in to fail the aggregation but not the commmand")
+		collectedDataTestCase.FailureOutput = &junit.FailureOutput{
+			Message: "not enough data to aggregate",
+			Output:  collectedDataTestCase.SystemOut,
+		}
+		disruptionJunitSuite.NumFailed++
+		return disruptionJunitSuite, nil
 
 	default:
 		// ignore the errors if we have at least three results
-		fmt.Fprintf(os.Stderr, "Could not fetch backend disruption data for all runs %v", err)
+		fmt.Fprintf(os.Stderr, "Could not fetch backend disruption data for all runs %v\n", err)
 	}
 
 	allBackends := getAllDisruptionBackendNames(jobRunIDToBackendNameToAvailabilityResult)
@@ -119,7 +134,7 @@ func getDisruptionByJobRunID(ctx context.Context, finishedJobsToAggregate []jobr
 			continue
 		}
 		if len(rawBackendDisruptionData) == 0 {
-			fmt.Fprintf(os.Stderr, "Could not fetch backend disruption data for %s", jobRun.GetJobRunID())
+			fmt.Fprintf(os.Stderr, "Could not fetch backend disruption data for %s\n", jobRun.GetJobRunID())
 			continue
 		}
 

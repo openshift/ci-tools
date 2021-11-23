@@ -224,6 +224,17 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	if err := assignPassFail(ctx, currentAggregationJunitSuites, o.passFailCalculator); err != nil {
 		return err
 	}
+
+	fmt.Printf("%q for %q:  aggregating disruption tests.\n", o.jobName, o.payloadTag)
+	disruptionSuite, err := o.CalculateDisruptionTestSuite(ctx, o.jobName, finishedJobsToAggregate)
+	if err != nil {
+		return err
+	}
+	currentAggregationJunitSuites.Suites = append(currentAggregationJunitSuites.Suites, disruptionSuite)
+
+	// TODO this is the spot where we would add an alertSuite that aggregates the alerts firing in our clusters to prevent
+	//  allowing more and more failing alerts through just because one fails.
+
 	currentAggrationJunitXML, err := xml.Marshal(currentAggregationJunitSuites)
 	if err != nil {
 		return err

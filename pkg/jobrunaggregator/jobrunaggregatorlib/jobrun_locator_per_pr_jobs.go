@@ -37,7 +37,8 @@ func NewPayloadAnalysisJobLocatorForPR(
 }
 
 type perPRProwJobMatcher struct {
-	// aggregationID is how we recognize repeated per-PR jobs
+	// aggregationID is how we recognize repeated per-PR jobs.  It is set when invoking the aggregator based on the value
+	// that the per-PR payload controller sets in the prowjobs it creates.
 	aggregationID string
 }
 
@@ -48,9 +49,6 @@ func (a perPRProwJobMatcher) shouldAggregateReleaseControllerJob(prowJob *prowjo
 	jobRunId := prowJob.Labels["prow.k8s.io/build-id"]
 	fmt.Printf("  checking %v/%v for aggregationID match: looking for %q found %q.\n", jobName, jobRunId, a.aggregationID, payloadTag)
 	aggregationIDMatches := len(a.aggregationID) > 0 && aggregationID == a.aggregationID
-	if aggregationIDMatches {
-		return true
-	}
 
-	return false
+	return aggregationIDMatches
 }

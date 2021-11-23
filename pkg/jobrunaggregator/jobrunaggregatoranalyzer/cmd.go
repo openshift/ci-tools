@@ -47,8 +47,8 @@ func (f *JobRunsAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.JobName, "job", f.JobName, "The name of the job to inspect, like periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade")
 	fs.StringVar(&f.WorkingDir, "working-dir", f.WorkingDir, "The directory to store caches, output, and the like.")
 	fs.StringVar(&f.PayloadTag, "payload-tag", f.PayloadTag, "The payload tag to aggregate, like 4.9.0-0.ci-2021-07-19-185802")
-	fs.StringVar(&f.AggregationID, "aggregation-id", f.AggregationID, "mutually exclusive to --payload-tag.  Matches the .label[release.openshift.io/aggregation-id], which is a UID")
-	fs.StringVar(&f.ExplicitGCSPrefix, "explicit-gcs-prefix", f.ExplicitGCSPrefix, "only used by per PR payload promotion jobs.  This overrides the well-known mapping and scopes the GCS query")
+	fs.StringVar(&f.AggregationID, "aggregation-id", f.AggregationID, "mutually exclusive to --payload-tag.  Matches the .label[release.openshift.io/aggregation-id] on the prowjob, which is a UID")
+	fs.StringVar(&f.ExplicitGCSPrefix, "explicit-gcs-prefix", f.ExplicitGCSPrefix, "only used by per PR payload promotion jobs.  This overrides the well-known mapping and becomes the required prefix for the GCS query")
 	fs.DurationVar(&f.Timeout, "timeout", f.Timeout, "Time to wait for aggregation to complete.")
 	fs.StringVar(&f.EstimatedJobStartTimeString, "job-start-time", f.EstimatedJobStartTimeString, fmt.Sprintf("Start time in RFC822Z: %s", kubeTimeSerializationLayout))
 }

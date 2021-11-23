@@ -167,12 +167,12 @@ func (j *gcsJobRun) GetCombinedJUnitTestSuites(ctx context.Context) (*junit.Test
 
 		currTestSuite := &junit.TestSuite{}
 		if testSuiteErr := xml.Unmarshal(junitContent, currTestSuite); testSuiteErr != nil {
-			if isParseFloatError(testSuitesErr) {
+			if isParseFloatError(testSuiteErr) {
 				// this was a testsuite, but we cannot read the file.  There is no choice to ignore errors so we suppress here
-				fmt.Fprintf(os.Stderr, "error parsing testsuite: %v", testSuitesErr)
+				fmt.Fprintf(os.Stderr, "error parsing testsuite: %v", testSuiteErr)
 				continue
 			}
-			return nil, fmt.Errorf("error parsing junit for jobrun/%v/%v %q: testsuiteError=%w  testsuitesError=%v", j.GetJobName(), j.GetJobRunID(), junitFile, testSuiteErr, testSuitesErr)
+			return nil, fmt.Errorf("error parsing junit for jobrun/%v/%v %q: testsuiteError=%w  testsuitesError=%v", j.GetJobName(), j.GetJobRunID(), junitFile, testSuiteErr, testSuitesErr.Error() /*tricking invalid/wrong linter*/)
 		}
 		testSuites.Suites = append(testSuites.Suites, currTestSuite)
 	}

@@ -45,9 +45,6 @@ func (a releaseControllerProwJobMatcher) shouldAggregateReleaseControllerJob(pro
 	jobRunId := prowJob.Labels["prow.k8s.io/build-id"]
 	fmt.Printf("  checking %v/%v for payloadtag match: looking for %q found %q.\n", jobName, jobRunId, a.payloadTag, payloadTag)
 	payloadTagMatches := len(a.payloadTag) > 0 && payloadTag == a.payloadTag
-	if payloadTagMatches {
-		return true
-	}
 
-	return false
+	return payloadTagMatches
 }

@@ -28,6 +28,8 @@ type JobRunAggregatorAnalyzerOptions struct {
 	jobRunLocator      jobrunaggregatorlib.JobRunLocator
 	passFailCalculator baseline
 
+	// explicitGCSPrefix is set to control the base path we search in GCSBuckets. If not set, the jobName will be used
+	// to set a default value that usually works.
 	explicitGCSPrefix string
 	jobName           string
 	payloadTag        string
@@ -236,7 +238,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	}
 
 	fmt.Printf("%q for %q:  aggregating disruption tests.\n", o.jobName, o.payloadTag)
-	disruptionSuite, err := o.CalculateDisruptionTestSuite(ctx, o.jobName, finishedJobsToAggregate)
+	disruptionSuite, err := o.CalculateDisruptionTestSuite(ctx, currentAggregationJunit.jobGCSBucketRoot, finishedJobsToAggregate)
 	if err != nil {
 		return err
 	}

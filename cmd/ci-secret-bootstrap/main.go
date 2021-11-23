@@ -47,12 +47,12 @@ type options struct {
 	force              bool
 	validateItemsUsage bool
 	confirm            bool
-	configUpdaterOnly  bool
 
 	kubernetesOptions   flagutil.KubernetesOptions
 	configPath          string
 	generatorConfigPath string
 	cluster             string
+	secretNamesRaw      flagutil.Strings
 	logLevel            string
 	impersonateUser     string
 
@@ -80,11 +80,11 @@ func parseOptions(censor *secrets.DynamicCensor) (options, error) {
 	fs.BoolVar(&o.validateItemsUsage, "validate-bitwarden-items-usage", false, fmt.Sprintf("If set, the tool only validates if all fields that exist in Vault and were last modified before %d days ago are being used in the given config.", allowUnusedDays))
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with oc command")
 	fs.BoolVar(&o.confirm, "confirm", true, "Whether to mutate the actual secrets in the targeted clusters")
-	fs.BoolVar(&o.configUpdaterOnly, "config-updater-only", false, "Only work on secrets with the name config-updater. Useful when joining a new cluster to the CI build farm.")
 	o.kubernetesOptions.AddFlags(fs)
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
 	fs.StringVar(&o.generatorConfigPath, "generator-config", "", "Path to the secret-generator config file.")
 	fs.StringVar(&o.cluster, "cluster", "", "If set, only provision secrets for this cluster")
+	fs.Var(&o.secretNamesRaw, "secret-names", "If set, only provision secrets with the name. Can be passed multiple times.")
 	fs.BoolVar(&o.force, "force", false, "If true, update the secrets even if existing one differs from Bitwarden items instead of existing with error. Default false.")
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	fs.StringVar(&o.impersonateUser, "as", "", "Username to impersonate")
@@ -122,10 +122,11 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 		return err
 	}
 
-	if o.configUpdaterOnly {
-		logrus.WithField("o.configUpdaterOnly", o.configUpdaterOnly).Info("Removing secrets whose name is not config-updater ...")
-		configUpdaterOnly(&o.config)
-		logrus.WithField("o.config.Secrets", o.config.Secrets).WithField("o.configUpdaterOnly", o.configUpdaterOnly).Info("Removed secrets whose name is not config-updater")
+	if vals := o.secretNamesRaw.Strings(); len(vals) > 0 {
+		secretNames := sets.NewString(vals...)
+		logrus.Info("pruning irrelevant secrets ...")
+		pruneIrrelevantSecrets(&o.config, secretNames)
+		logrus.WithField("o.config.Secrets", o.config.Secrets).Info("pruned irrelevant secrets")
 	}
 
 	if o.generatorConfigPath != "" {
@@ -182,11 +183,11 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 	return o.validateCompletedOptions()
 }
 
-func configUpdaterOnly(c *secretbootstrap.Config) {
+func pruneIrrelevantSecrets(c *secretbootstrap.Config, secretNames sets.String) {
 	var secretConfigs []secretbootstrap.SecretConfig
 	for _, secretConfig := range c.Secrets {
 		for _, secretContext := range secretConfig.To {
-			if secretContext.Name == "config-updater" {
+			if secretNames.Has(secretContext.Name) {
 				secretConfigs = append(secretConfigs, secretConfig)
 				continue
 			}

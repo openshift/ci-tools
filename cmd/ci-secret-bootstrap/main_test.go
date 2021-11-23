@@ -2831,7 +2831,7 @@ func TestIntegration(t *testing.T) {
 	}
 }
 
-func TestConfigUpdaterOnly(t *testing.T) {
+func TestPruneIrrelevantSecrets(t *testing.T) {
 	testCases := []struct {
 		name     string
 		given    *secretbootstrap.Config
@@ -2879,9 +2879,9 @@ func TestConfigUpdaterOnly(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			configUpdaterOnly(tc.given)
+			pruneIrrelevantSecrets(tc.given, sets.NewString("config-updater"))
 			if diff := cmp.Diff(tc.given, tc.expected); diff != "" {
-				t.Errorf("%s: actual differs from expected after casin update e: %s", tc.name, diff)
+				t.Errorf("%s: actual differs from expected: %s", tc.name, diff)
 			}
 		})
 	}

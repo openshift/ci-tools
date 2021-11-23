@@ -52,6 +52,7 @@ type options struct {
 	configPath          string
 	generatorConfigPath string
 	cluster             string
+	secretNamesRaw      flagutil.Strings
 	logLevel            string
 	impersonateUser     string
 
@@ -83,6 +84,7 @@ func parseOptions(censor *secrets.DynamicCensor) (options, error) {
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
 	fs.StringVar(&o.generatorConfigPath, "generator-config", "", "Path to the secret-generator config file.")
 	fs.StringVar(&o.cluster, "cluster", "", "If set, only provision secrets for this cluster")
+	fs.Var(&o.secretNamesRaw, "secret-names", "If set, only provision secrets with the name. Can be passed multiple times.")
 	fs.BoolVar(&o.force, "force", false, "If true, update the secrets even if existing one differs from Bitwarden items instead of existing with error. Default false.")
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	fs.StringVar(&o.impersonateUser, "as", "", "Username to impersonate")
@@ -118,6 +120,13 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 
 	if err := secretbootstrap.LoadConfigFromFile(o.configPath, &o.config); err != nil {
 		return err
+	}
+
+	if vals := o.secretNamesRaw.Strings(); len(vals) > 0 {
+		secretNames := sets.NewString(vals...)
+		logrus.Info("pruning irrelevant secrets ...")
+		pruneIrrelevantSecrets(&o.config, secretNames)
+		logrus.WithField("o.config.Secrets", o.config.Secrets).Info("pruned irrelevant secrets")
 	}
 
 	if o.generatorConfigPath != "" {
@@ -172,6 +181,19 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 	o.config.Secrets = filteredSecrets
 
 	return o.validateCompletedOptions()
+}
+
+func pruneIrrelevantSecrets(c *secretbootstrap.Config, secretNames sets.String) {
+	var secretConfigs []secretbootstrap.SecretConfig
+	for _, secretConfig := range c.Secrets {
+		for _, secretContext := range secretConfig.To {
+			if secretNames.Has(secretContext.Name) {
+				secretConfigs = append(secretConfigs, secretConfig)
+				continue
+			}
+		}
+	}
+	c.Secrets = secretConfigs
 }
 
 func (o *options) validateCompletedOptions() error {

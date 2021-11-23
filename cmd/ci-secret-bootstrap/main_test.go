@@ -2830,3 +2830,59 @@ func TestIntegration(t *testing.T) {
 		})
 	}
 }
+
+func TestPruneIrrelevantSecrets(t *testing.T) {
+	testCases := []struct {
+		name     string
+		given    *secretbootstrap.Config
+		expected *secretbootstrap.Config
+	}{
+		{
+			name: "base case",
+			given: &secretbootstrap.Config{
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.ItemContext{
+							"sa.config-updater.app.ci.config":  {Field: "sa.config-updater.app.ci.config", Item: "build_farm"},
+							"sa.config-updater.build01.config": {Field: "sa.config-updater.build01.config", Item: "build_farm"},
+						},
+						To: []secretbootstrap.SecretContext{
+							{Namespace: "ci", Name: "config-updater", Cluster: "app.ci"},
+							{Namespace: "ci", Name: "vault", Cluster: "app.ci"},
+						},
+					},
+					{
+						From: map[string]secretbootstrap.ItemContext{
+							"a": {Field: "b", Item: "c"},
+						},
+						To: []secretbootstrap.SecretContext{
+							{Namespace: "ci", Name: "some", Cluster: "build03"},
+						},
+					},
+				},
+			},
+			expected: &secretbootstrap.Config{
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.ItemContext{
+							"sa.config-updater.app.ci.config":  {Field: "sa.config-updater.app.ci.config", Item: "build_farm"},
+							"sa.config-updater.build01.config": {Field: "sa.config-updater.build01.config", Item: "build_farm"},
+						},
+						To: []secretbootstrap.SecretContext{
+							{Namespace: "ci", Name: "config-updater", Cluster: "app.ci"},
+							{Namespace: "ci", Name: "vault", Cluster: "app.ci"},
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pruneIrrelevantSecrets(tc.given, sets.NewString("config-updater"))
+			if diff := cmp.Diff(tc.given, tc.expected); diff != "" {
+				t.Errorf("%s: actual differs from expected: %s", tc.name, diff)
+			}
+		})
+	}
+}

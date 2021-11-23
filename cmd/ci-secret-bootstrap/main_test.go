@@ -2831,7 +2831,7 @@ func TestIntegration(t *testing.T) {
 	}
 }
 
-func TestPruneIrrelevantSecrets(t *testing.T) {
+func TestPruneIrrelevantConfiguration(t *testing.T) {
 	testCases := []struct {
 		name     string
 		given    *secretbootstrap.Config
@@ -2860,6 +2860,7 @@ func TestPruneIrrelevantSecrets(t *testing.T) {
 						},
 					},
 				},
+				UserSecretsTargetClusters: []string{"b01"},
 			},
 			expected: &secretbootstrap.Config{
 				Secrets: []secretbootstrap.SecretConfig{
@@ -2879,7 +2880,7 @@ func TestPruneIrrelevantSecrets(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			pruneIrrelevantSecrets(tc.given, sets.NewString("config-updater"))
+			pruneIrrelevantConfiguration(tc.given, sets.NewString("config-updater"))
 			if diff := cmp.Diff(tc.given, tc.expected); diff != "" {
 				t.Errorf("%s: actual differs from expected: %s", tc.name, diff)
 			}

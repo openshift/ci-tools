@@ -3,8 +3,6 @@ package jobrunbigqueryloader
 import (
 	"context"
 	"fmt"
-	"strings"
-	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -25,35 +23,36 @@ func newDisruptionUploader(backendDisruptionInserter jobrunaggregatorlib.BigQuer
 }
 
 func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob) error {
-	fmt.Printf("  uploading backend disruption results: %q/%q\n", jobRun.GetJobName(), jobRun.GetJobRunID())
-	backendDisruptionData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "backend-disruption")
-	if err != nil {
-		return err
-	}
-	if len(backendDisruptionData) > 0 {
-		return o.uploadBackendDisruptionFromDirectData(ctx, jobRun.GetJobRunID(), backendDisruptionData)
-	}
+	//fmt.Printf("  uploading backend disruption results: %q/%q\n", jobRun.GetJobName(), jobRun.GetJobRunID())
+	//backendDisruptionData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "backend-disruption")
+	//if err != nil {
+	//	return err
+	//}
+	//if false && len(backendDisruptionData) > 0 {
+	//	return o.uploadBackendDisruptionFromDirectData(ctx, jobRun.GetJobRunID(), backendDisruptionData)
+	//}
 
-	dateWeStartedTrackingDirectDisruptionData, err := time.Parse(time.RFC3339, "2021-11-08T00:00:00Z")
-	if err != nil {
-		return err
-	}
-	// TODO fix better before we hit 4.20
-	releaseHasDisruptionData := strings.Contains(jobRun.GetJobName(), "4.10") ||
-		strings.Contains(jobRun.GetJobName(), "4.11") ||
-		strings.Contains(jobRun.GetJobName(), "4.12") ||
-		strings.Contains(jobRun.GetJobName(), "4.13") ||
-		strings.Contains(jobRun.GetJobName(), "4.14") ||
-		strings.Contains(jobRun.GetJobName(), "4.15") ||
-		strings.Contains(jobRun.GetJobName(), "4.16") ||
-		strings.Contains(jobRun.GetJobName(), "4.17") ||
-		strings.Contains(jobRun.GetJobName(), "4.17") ||
-		strings.Contains(jobRun.GetJobName(), "4.19")
-	if releaseHasDisruptionData && prowJob.CreationTimestamp.After(dateWeStartedTrackingDirectDisruptionData) {
-		fmt.Printf("  No disruption data found, returning: %v/%v\n", jobRun.GetJobName(), jobRun.GetJobRunID())
-		// we  have no data, just return
-		return nil
-	}
+	// about 8pm on 11/23 real-time (eastern standard).  The PR needed to make this real was merged at 4:30pm
+	//dateWeStartedTrackingDirectDisruptionData, err := time.Parse(time.RFC3339, "2021-11-24T00:00:00Z")
+	//if err != nil {
+	//	return err
+	//}
+	//// TODO fix better before we hit 4.20
+	//releaseHasDisruptionData := strings.Contains(jobRun.GetJobName(), "4.10") ||
+	//	strings.Contains(jobRun.GetJobName(), "4.11") ||
+	//	strings.Contains(jobRun.GetJobName(), "4.12") ||
+	//	strings.Contains(jobRun.GetJobName(), "4.13") ||
+	//	strings.Contains(jobRun.GetJobName(), "4.14") ||
+	//	strings.Contains(jobRun.GetJobName(), "4.15") ||
+	//	strings.Contains(jobRun.GetJobName(), "4.16") ||
+	//	strings.Contains(jobRun.GetJobName(), "4.17") ||
+	//	strings.Contains(jobRun.GetJobName(), "4.17") ||
+	//	strings.Contains(jobRun.GetJobName(), "4.19")
+	//if releaseHasDisruptionData && prowJob.CreationTimestamp.After(dateWeStartedTrackingDirectDisruptionData) {
+	//	fmt.Printf("  No disruption data found, returning: %v/%v\n", jobRun.GetJobName(), jobRun.GetJobRunID())
+	//	// we  have no data, just return
+	//	return nil
+	//}
 
 	fmt.Printf("  missing direct backend disruption results, trying to read from junit: %v/%v\n", jobRun.GetJobName(), jobRun.GetJobRunID())
 	// if we don't have

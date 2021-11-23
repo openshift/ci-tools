@@ -2848,7 +2848,7 @@ func TestPruneIrrelevantSecrets(t *testing.T) {
 						},
 						To: []secretbootstrap.SecretContext{
 							{Namespace: "ci", Name: "config-updater", Cluster: "app.ci"},
-							{Namespace: "ci", Name: "vault", Cluster: "app.ci"},
+							{Namespace: "vault", Name: "config-updater", Cluster: "app.ci"},
 						},
 					},
 					{
@@ -2870,7 +2870,7 @@ func TestPruneIrrelevantSecrets(t *testing.T) {
 						},
 						To: []secretbootstrap.SecretContext{
 							{Namespace: "ci", Name: "config-updater", Cluster: "app.ci"},
-							{Namespace: "ci", Name: "vault", Cluster: "app.ci"},
+							{Namespace: "vault", Name: "config-updater", Cluster: "app.ci"},
 						},
 					},
 				},

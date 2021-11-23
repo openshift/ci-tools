@@ -31,6 +31,32 @@ func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunagg
 		return err
 	}
 	if len(backendDisruptionData) > 0 {
+		// we compute both ways to compare
+		combinedJunitContent, err := jobRun.GetCombinedJUnitTestSuites(ctx)
+		if err != nil {
+			return err
+		}
+		junitAvailability := jobrunaggregatorlib.GetServerAvailabilityResultsFromJunit(combinedJunitContent)
+		directDataAvailabilityResults := jobrunaggregatorlib.GetServerAvailabilityResultsFromDirectData(backendDisruptionData)
+		allBackends := sets.StringKeySet(junitAvailability)
+		allBackends.Insert(sets.StringKeySet(directDataAvailabilityResults).List()...)
+		for _, backendName := range allBackends.List() {
+			if backendName == "image-registry-new-connections" || backendName == "service-load-balancer-with-pdb-new-connections" {
+				// these were never collected using junit
+				continue
+			}
+			if backendName == "image-registry-reused-connections" || backendName == "service-load-balancer-with-pdb-reused-connections" {
+				// these were a combine new/re-used number in the past
+				continue
+			}
+			junitDisruption := junitAvailability[backendName]
+			directDisruption := directDataAvailabilityResults[backendName]
+			if junitDisruption != directDisruption {
+				output := fmt.Sprintf("%s/%s has a diff on %v junit=%v direct=%v\n", jobRun.GetJobName(), jobRun.GetJobRunID(), backendName, junitDisruption.SecondsUnavailable, directDisruption.SecondsUnavailable)
+				panic(output)
+			}
+		}
+
 		return o.uploadBackendDisruptionFromDirectData(ctx, jobRun.GetJobRunID(), backendDisruptionData)
 	}
 

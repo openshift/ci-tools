@@ -154,7 +154,7 @@ SELECT *
 FROM DATA_SET_LOCATION.` + jobrunaggregatorapi.DisruptionJobRunTableName + ` as JobRuns
 WHERE JobRuns.JobName = @JobName
 ORDER BY JobRuns.Name DESC
-LIMIT 1
+LIMIT 500
 `)
 
 	query := c.client.Query(queryString)
@@ -166,12 +166,15 @@ LIMIT 1
 		return nil, fmt.Errorf("failed to query aggregation table with %q: %w", queryString, err)
 	}
 	lastJobRun := &jobrunaggregatorapi.JobRunRow{}
-	err = lastJobRunRow.Next(lastJobRun)
-	if err == iterator.Done {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
+
+	for {
+		err = lastJobRunRow.Next(lastJobRun)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 	return lastJobRun, nil
 }

@@ -8,7 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/junit"
 )
@@ -42,6 +43,10 @@ var (
 	detectUpgradeOutage = regexp.MustCompile(` unreachable during disruption.*for at least (?P<DisruptionDuration>.*) of `)
 	detectE2EOutage     = regexp.MustCompile(` was failing for (?P<DisruptionDuration>.*) seconds `)
 )
+
+func RequiredDisruptionTests() sets.String {
+	return sets.StringKeySet(upgradeBackendNameToTestSubstring)
+}
 
 func IsDisruptionTest(testName string) bool {
 	for _, v := range upgradeBackendNameToTestSubstring {
@@ -101,7 +106,7 @@ func GetServerAvailabilityResultsFromDirectData(backendDisruptionData map[string
 				SecondsUnavailable: int(math.Ceil(disruption.DisruptedDuration.Seconds())),
 			}
 		}
-		addUnavailability(availabilityResultsByName, currAvailabilityResults)
+		AddUnavailability(availabilityResultsByName, currAvailabilityResults)
 	}
 
 	return availabilityResultsByName
@@ -112,7 +117,7 @@ func GetServerAvailabilityResultsFromJunit(suites *junit.TestSuites) map[string]
 
 	for _, curr := range suites.Suites {
 		currResults := GetServerAvailabilityResultsBySuite(curr)
-		addUnavailability(availabilityResultsByName, currResults)
+		AddUnavailability(availabilityResultsByName, currResults)
 	}
 
 	return availabilityResultsByName
@@ -123,7 +128,7 @@ func GetServerAvailabilityResultsBySuite(suite *junit.TestSuite) map[string]Avai
 
 	for _, curr := range suite.Children {
 		currResults := GetServerAvailabilityResultsBySuite(curr)
-		addUnavailability(availabilityResultsByName, currResults)
+		AddUnavailability(availabilityResultsByName, currResults)
 	}
 
 	for _, testCase := range suite.TestCases {
@@ -172,7 +177,7 @@ func addUnavailabilityForAPIServerTest(runningTotals map[string]AvailabilityResu
 	runningTotals[serverName] = existing
 }
 
-func addUnavailability(runningTotals, toAdd map[string]AvailabilityResult) {
+func AddUnavailability(runningTotals, toAdd map[string]AvailabilityResult) {
 	for serverName, unavailability := range toAdd {
 		existing := runningTotals[serverName]
 		existing.SecondsUnavailable += unavailability.SecondsUnavailable

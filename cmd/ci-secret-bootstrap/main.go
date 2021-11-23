@@ -124,9 +124,9 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 
 	if vals := o.secretNamesRaw.Strings(); len(vals) > 0 {
 		secretNames := sets.NewString(vals...)
-		logrus.Info("pruning irrelevant secrets ...")
+		logrus.WithField("secretNames", secretNames.List()).Info("pruning irrelevant secrets ...")
 		pruneIrrelevantSecrets(&o.config, secretNames)
-		logrus.WithField("o.config.Secrets", o.config.Secrets).Info("pruned irrelevant secrets")
+		logrus.WithField("secretNames", secretNames.List()).WithField("o.config.Secrets", o.config.Secrets).Info("pruned irrelevant secrets")
 	}
 
 	if o.generatorConfigPath != "" {
@@ -189,7 +189,7 @@ func pruneIrrelevantSecrets(c *secretbootstrap.Config, secretNames sets.String) 
 		for _, secretContext := range secretConfig.To {
 			if secretNames.Has(secretContext.Name) {
 				secretConfigs = append(secretConfigs, secretConfig)
-				continue
+				break
 			}
 		}
 	}

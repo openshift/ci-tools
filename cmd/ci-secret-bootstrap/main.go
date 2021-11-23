@@ -47,6 +47,7 @@ type options struct {
 	force              bool
 	validateItemsUsage bool
 	confirm            bool
+	configUpdaterOnly  bool
 
 	kubernetesOptions   flagutil.KubernetesOptions
 	configPath          string
@@ -79,6 +80,7 @@ func parseOptions(censor *secrets.DynamicCensor) (options, error) {
 	fs.BoolVar(&o.validateItemsUsage, "validate-bitwarden-items-usage", false, fmt.Sprintf("If set, the tool only validates if all fields that exist in Vault and were last modified before %d days ago are being used in the given config.", allowUnusedDays))
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with oc command")
 	fs.BoolVar(&o.confirm, "confirm", true, "Whether to mutate the actual secrets in the targeted clusters")
+	fs.BoolVar(&o.configUpdaterOnly, "config-updater-only", false, "Only work on secrets with the name config-updater. Useful when joining a new cluster to the CI build farm.")
 	o.kubernetesOptions.AddFlags(fs)
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
 	fs.StringVar(&o.generatorConfigPath, "generator-config", "", "Path to the secret-generator config file.")
@@ -118,6 +120,12 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 
 	if err := secretbootstrap.LoadConfigFromFile(o.configPath, &o.config); err != nil {
 		return err
+	}
+
+	if o.configUpdaterOnly {
+		logrus.WithField("o.configUpdaterOnly", o.configUpdaterOnly).Info("Removing secrets whose name is not config-updater ...")
+		configUpdaterOnly(&o.config)
+		logrus.WithField("o.config.Secrets", o.config.Secrets).WithField("o.configUpdaterOnly", o.configUpdaterOnly).Info("Removed secrets whose name is not config-updater")
 	}
 
 	if o.generatorConfigPath != "" {
@@ -172,6 +180,19 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 	o.config.Secrets = filteredSecrets
 
 	return o.validateCompletedOptions()
+}
+
+func configUpdaterOnly(c *secretbootstrap.Config) {
+	var secretConfigs []secretbootstrap.SecretConfig
+	for _, secretConfig := range c.Secrets {
+		for _, secretContext := range secretConfig.To {
+			if secretContext.Name == "config-updater" {
+				secretConfigs = append(secretConfigs, secretConfig)
+				continue
+			}
+		}
+	}
+	c.Secrets = secretConfigs
 }
 
 func (o *options) validateCompletedOptions() error {

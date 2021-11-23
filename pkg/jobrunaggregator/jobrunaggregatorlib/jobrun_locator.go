@@ -15,19 +15,16 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
-func GetPayloadTagFromProwJob(prowJob *prowjobv1.ProwJob) string {
-	return prowJob.Labels["release.openshift.io/analysis"]
-}
-
 type JobRunLocator interface {
 	FindRelatedJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error)
 }
 
+type prowJobMatcherFunc func(prowJob *prowjobv1.ProwJob) bool
+
 type analysisJobAggregator struct {
 	jobName string
 
-	// payloadTag is how we will recognize repeated jobs
-	payloadTag string
+	prowJobMatcher prowJobMatcherFunc
 	// startTime is the time when the analysis jobs were started.  We'll look plus or minus a day from here to bound the
 	// bigquery dataset.
 	startTime time.Time
@@ -36,24 +33,28 @@ type analysisJobAggregator struct {
 	ciGCSClient   CIGCSClient
 	gcsClient     *storage.Client
 	gcsBucketName string
+	gcsPrefix     string
 }
 
 func NewPayloadAnalysisJobLocator(
-	jobName, payloadTag string,
+	jobName string,
+	prowJobMatcher prowJobMatcherFunc,
 	startTime time.Time,
 	ciDataClient AggregationJobClient,
 	ciGCSClient CIGCSClient,
 	gcsClient *storage.Client,
-	gcsBucketName string) JobRunLocator {
+	gcsBucketName string,
+	gcsPrefix string) JobRunLocator {
 
 	return &analysisJobAggregator{
-		jobName:       jobName,
-		payloadTag:    payloadTag,
-		startTime:     startTime,
-		ciDataClient:  ciDataClient,
-		ciGCSClient:   ciGCSClient,
-		gcsClient:     gcsClient,
-		gcsBucketName: gcsBucketName,
+		jobName:        jobName,
+		prowJobMatcher: prowJobMatcher,
+		startTime:      startTime,
+		ciDataClient:   ciDataClient,
+		ciGCSClient:    ciGCSClient,
+		gcsClient:      gcsClient,
+		gcsBucketName:  gcsBucketName,
+		gcsPrefix:      gcsPrefix,
 	}
 }
 
@@ -72,7 +73,7 @@ func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunag
 	query := &storage.Query{
 		// This ends up being the equivalent of:
 		// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade
-		Prefix: "logs/" + a.jobName,
+		Prefix: a.gcsPrefix,
 
 		// TODO this field is apparently missing from this level of go/storage
 		// Omit owner and ACL fields for performance
@@ -84,12 +85,12 @@ func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunag
 		return nil, err
 	}
 	if startingJobRun == nil {
-		query.StartOffset = fmt.Sprintf("logs/%s/%s", a.jobName, "0")
+		query.StartOffset = fmt.Sprintf("%s/%s", a.gcsPrefix, "0")
 	} else {
-		query.StartOffset = fmt.Sprintf("logs/%s/%s", a.jobName, startingJobRun.Name)
+		query.StartOffset = fmt.Sprintf("%s/%s", a.gcsPrefix, startingJobRun.Name)
 	}
 	if endingJobRun != nil {
-		query.EndOffset = fmt.Sprintf("logs/%s/%s", a.jobName, endingJobRun.Name)
+		query.EndOffset = fmt.Sprintf("%s/%s", a.gcsPrefix, endingJobRun.Name)
 	}
 	fmt.Printf("  starting from %v, ending at %q\n", query.StartOffset, query.EndOffset)
 
@@ -114,7 +115,7 @@ func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunag
 		switch {
 		case strings.HasSuffix(attrs.Name, "prowjob.json"):
 			jobRunId := filepath.Base(filepath.Dir(attrs.Name))
-			jobRunInfo, err := a.ciGCSClient.ReadJobRunFromGCS(ctx, a.jobName, jobRunId)
+			jobRunInfo, err := a.ciGCSClient.ReadJobRunFromGCS(ctx, a.gcsPrefix, a.jobName, jobRunId)
 			if err != nil {
 				return nil, err
 			}
@@ -123,15 +124,9 @@ func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunag
 				return nil, fmt.Errorf("failed to get prowjob for %q/%q: %w", a.jobName, jobRunId, err)
 			}
 
-			if _, ok := prowJob.Labels["release.openshift.io/aggregator"]; ok {
-				fmt.Printf("  skipping the aggregator prowjob %q/%q\n", a.jobName, jobRunId)
-				continue
-			}
-
-			payloadTag := GetPayloadTagFromProwJob(prowJob)
-			fmt.Printf("  checking %v/%v for payloadtag match: looking for %q found %q.\n", a.jobName, jobRunId, a.payloadTag, payloadTag)
-			if payloadTag == a.payloadTag {
+			if a.prowJobMatcher(prowJob) {
 				relatedJobRuns = append(relatedJobRuns, jobRunInfo)
+				break
 			}
 
 		default:

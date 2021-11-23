@@ -21,6 +21,8 @@ type JobRunsAnalyzerFlags struct {
 	JobName                     string
 	WorkingDir                  string
 	PayloadTag                  string
+	AggregationID               string
+	ExplicitGCSPrefix           string
 	Timeout                     time.Duration
 	EstimatedJobStartTimeString string
 }
@@ -45,6 +47,8 @@ func (f *JobRunsAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.JobName, "job", f.JobName, "The name of the job to inspect, like periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade")
 	fs.StringVar(&f.WorkingDir, "working-dir", f.WorkingDir, "The directory to store caches, output, and the like.")
 	fs.StringVar(&f.PayloadTag, "payload-tag", f.PayloadTag, "The payload tag to aggregate, like 4.9.0-0.ci-2021-07-19-185802")
+	fs.StringVar(&f.AggregationID, "aggregation-id", f.AggregationID, "mutually exclusive to --payload-tag.  Matches the .label[release.openshift.io/aggregation-id] on the prowjob, which is a UID")
+	fs.StringVar(&f.ExplicitGCSPrefix, "explicit-gcs-prefix", f.ExplicitGCSPrefix, "only used by per PR payload promotion jobs.  This overrides the well-known mapping and becomes the required prefix for the GCS query")
 	fs.DurationVar(&f.Timeout, "timeout", f.Timeout, "Time to wait for aggregation to complete.")
 	fs.StringVar(&f.EstimatedJobStartTimeString, "job-start-time", f.EstimatedJobStartTimeString, fmt.Sprintf("Start time in RFC822Z: %s", kubeTimeSerializationLayout))
 }
@@ -91,9 +95,6 @@ func (f *JobRunsAnalyzerFlags) Validate() error {
 	if len(f.JobName) == 0 {
 		return fmt.Errorf("missing --job: like periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade")
 	}
-	if len(f.PayloadTag) == 0 {
-		return fmt.Errorf("missing --job: like 4.9.0-0.ci-2021-07-19-185802")
-	}
 	if _, err := time.Parse(kubeTimeSerializationLayout, f.EstimatedJobStartTimeString); err != nil {
 		return err
 	}
@@ -102,6 +103,15 @@ func (f *JobRunsAnalyzerFlags) Validate() error {
 	}
 	if err := f.Authentication.Validate(); err != nil {
 		return err
+	}
+	if len(f.PayloadTag) > 0 && len(f.AggregationID) > 0 {
+		return fmt.Errorf("cannot specify both --payload-tag and --aggregation-id")
+	}
+	if len(f.PayloadTag) == 0 && len(f.AggregationID) == 0 {
+		return fmt.Errorf("exactly one of --payload-tag or --aggregation-id must be specified")
+	}
+	if len(f.AggregationID) > 0 && len(f.ExplicitGCSPrefix) == 0 {
+		return fmt.Errorf("if --aggregation-id is specified, you must specify --explicit-gcs-prefix")
 	}
 
 	return nil
@@ -132,18 +142,33 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 		return nil, err
 	}
 
-	// TODO will need different flags for finding payload promotion jobs from CI
-	jobRunLocator := jobrunaggregatorlib.NewPayloadAnalysisJobLocator(
-		f.JobName,
-		f.PayloadTag,
-		estimatedStartTime,
-		ciDataClient,
-		ciGCSClient,
-		gcsClient,
-		"origin-ci-test",
-	)
+	var jobRunLocator jobrunaggregatorlib.JobRunLocator
+	if len(f.PayloadTag) > 0 {
+		jobRunLocator = jobrunaggregatorlib.NewPayloadAnalysisJobLocatorForReleaseController(
+			f.JobName,
+			f.PayloadTag,
+			estimatedStartTime,
+			ciDataClient,
+			ciGCSClient,
+			gcsClient,
+			"origin-ci-test",
+		)
+	}
+	if len(f.AggregationID) > 0 {
+		jobRunLocator = jobrunaggregatorlib.NewPayloadAnalysisJobLocatorForPR(
+			f.JobName,
+			f.AggregationID,
+			estimatedStartTime,
+			ciDataClient,
+			ciGCSClient,
+			gcsClient,
+			"origin-ci-test",
+			f.ExplicitGCSPrefix,
+		)
+	}
 
 	return &JobRunAggregatorAnalyzerOptions{
+		explicitGCSPrefix:   f.ExplicitGCSPrefix,
 		jobRunLocator:       jobRunLocator,
 		passFailCalculator:  newWeeklyAverageFromTenDaysAgo(f.JobName, estimatedStartTime, 3, ciDataClient),
 		jobName:             f.JobName,

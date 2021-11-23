@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 
 	"gopkg.in/yaml.v2"
 
@@ -15,7 +16,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 )
 
-func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx context.Context, jobName string, finishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo) (*junit.TestSuite, error) {
+func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx context.Context, jobGCSBucketRoot string, finishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo) (*junit.TestSuite, error) {
 	disruptionJunitSuite := &junit.TestSuite{
 		Name:      "BackendDisruption",
 		TestCases: []*junit.TestCase{},
@@ -67,8 +68,8 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 		}
 		for jobRunID := range jobRunIDToAvailabilityResultForBackend {
 			currAvailabilityStat := jobRunIDToAvailabilityResultForBackend[jobRunID]
-			humanURL := jobrunaggregatorapi.GetHumanURL(jobName, jobRunID)
-			gcsArtifactURL := jobrunaggregatorapi.GetGCSArtifactURL(jobName, jobRunID)
+			humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, jobRunID))
+			gcsArtifactURL := jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, jobRunID))
 			overMean := float64(currAvailabilityStat.SecondsUnavailable) > historicalStats.mean
 			overP95 := float64(currAvailabilityStat.SecondsUnavailable) > historicalStats.p95
 			switch {

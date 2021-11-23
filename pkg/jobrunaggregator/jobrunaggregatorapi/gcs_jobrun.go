@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -23,19 +24,21 @@ type gcsJobRun struct {
 	// retrieval mechanisms
 	bkt *storage.BucketHandle
 
-	jobName        string
-	jobRunID       string
-	gcsProwJobPath string
-	gcsJunitPaths  []string
+	jobRunGCSBucketRoot string
+	jobName             string
+	jobRunID            string
+	gcsProwJobPath      string
+	gcsJunitPaths       []string
 
 	pathToContent map[string][]byte
 }
 
-func NewGCSJobRun(bkt *storage.BucketHandle, jobName, jobRunID string) JobRunInfo {
+func NewGCSJobRun(bkt *storage.BucketHandle, jobGCSBucketRoot string, jobName, jobRunID string) JobRunInfo {
 	return &gcsJobRun{
-		bkt:      bkt,
-		jobName:  jobName,
-		jobRunID: jobRunID,
+		bkt:                 bkt,
+		jobRunGCSBucketRoot: path.Join(jobGCSBucketRoot, jobRunID),
+		jobName:             jobName,
+		jobRunID:            jobRunID,
 	}
 }
 
@@ -156,15 +159,35 @@ func (j *gcsJobRun) GetCombinedJUnitTestSuites(ctx context.Context) (*junit.Test
 			testSuites.Suites = append(testSuites.Suites, currTestSuites.Suites...)
 			continue
 		}
+		if isParseFloatError(testSuitesErr) {
+			// this was a testsuites, but we cannot read the file.  There is no choice to ignore errors so we suppress here
+			fmt.Fprintf(os.Stderr, "error parsing testsuites: %v", testSuitesErr)
+			continue
+		}
 
 		currTestSuite := &junit.TestSuite{}
 		if testSuiteErr := xml.Unmarshal(junitContent, currTestSuite); testSuiteErr != nil {
-			return nil, fmt.Errorf("error parsing junit for jobrun/%v/%v %q: %w", j.GetJobName(), j.GetJobRunID(), junitFile, testSuiteErr)
+			if isParseFloatError(testSuiteErr) {
+				// this was a testsuite, but we cannot read the file.  There is no choice to ignore errors so we suppress here
+				fmt.Fprintf(os.Stderr, "error parsing testsuite: %v", testSuiteErr)
+				continue
+			}
+			return nil, fmt.Errorf("error parsing junit for jobrun/%v/%v %q: testsuiteError=%w  testsuitesError=%v", j.GetJobName(), j.GetJobRunID(), junitFile, testSuiteErr, testSuitesErr.Error() /*tricking invalid/wrong linter*/)
 		}
 		testSuites.Suites = append(testSuites.Suites, currTestSuite)
 	}
 
 	return testSuites, nil
+}
+
+func isParseFloatError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if strings.HasPrefix(err.Error(), "strconv.ParseFloat:") {
+		return true
+	}
+	return false
 }
 
 func (j *gcsJobRun) GetOpenShiftTestsFilesWithPrefix(ctx context.Context, prefix string) (map[string]string, error) {
@@ -178,7 +201,7 @@ func (j *gcsJobRun) GetOpenShiftTestsFilesWithPrefix(ctx context.Context, prefix
 		// This ends up being the equivalent of:
 		// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade
 		// the next directory step is based on some bit of metadata I don't recognize
-		Prefix: filepath.Join("logs", j.jobName, j.jobRunID),
+		Prefix: j.jobRunGCSBucketRoot,
 
 		// TODO this field is apparently missing from this level of go/storage
 		// Omit owner and ACL fields for performance
@@ -307,15 +330,15 @@ func (j *gcsJobRun) ClearAllContent() {
 }
 
 func (j *gcsJobRun) GetHumanURL() string {
-	return GetHumanURL(j.GetJobName(), j.GetJobRunID())
+	return GetHumanURLForLocation(j.jobRunGCSBucketRoot)
 }
 
 func (j *gcsJobRun) GetGCSArtifactURL() string {
-	return GetGCSArtifactURL(j.GetJobName(), j.GetJobRunID())
+	return GetGCSArtifactURLForLocation(j.jobRunGCSBucketRoot)
 }
 
 func (j *gcsJobRun) IsFinished(ctx context.Context) bool {
-	content, err := j.GetContent(ctx, fmt.Sprintf("logs/%v/%v/finished.json", j.GetJobName(), j.GetJobRunID()))
+	content, err := j.GetContent(ctx, fmt.Sprintf("%s/finished.json", j.jobRunGCSBucketRoot))
 	if err != nil {
 		return false
 	}
@@ -326,12 +349,12 @@ func (j *gcsJobRun) IsFinished(ctx context.Context) bool {
 	return true
 }
 
-func GetHumanURL(jobName, jobRunName string) string {
+func GetHumanURLForLocation(jobRunGCSBucketRoot string) string {
 	// https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/periodic-ci-openshift-release-master-ci-4.8-e2e-gcp-upgrade/1429691282619371520
-	return fmt.Sprintf("https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/%s/%s", jobName, jobRunName)
+	return fmt.Sprintf("https://prow.ci.openshift.org/view/gs/origin-ci-test/%s", jobRunGCSBucketRoot)
 }
 
-func GetGCSArtifactURL(jobName, jobRunName string) string {
+func GetGCSArtifactURLForLocation(jobRunGCSBucketRoot string) string {
 	// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade/1420676206029705216/artifacts/e2e-gcp-upgrade/
-	return fmt.Sprintf("https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/%s/%s/artifacts", jobName, jobRunName)
+	return fmt.Sprintf("https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/%s/artifacts", jobRunGCSBucketRoot)
 }

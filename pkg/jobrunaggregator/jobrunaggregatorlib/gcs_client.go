@@ -15,11 +15,11 @@ import (
 )
 
 type CIGCSClient interface {
-	ReadJobRunFromGCS(ctx context.Context, jobName, jobRunID string) (jobrunaggregatorapi.JobRunInfo, error)
+	ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation, jobName, jobRunID string) (jobrunaggregatorapi.JobRunInfo, error)
 
 	// ListJobRunNames returns a string channel for jobRunNames, an error channel for reporting errors during listing,
 	// and an error if the listing cannot begin.
-	ListJobRunNames(ctx context.Context, jobName, startingID string) (chan string, chan error, error)
+	ListJobRunNamesOlderThanFourHours(ctx context.Context, jobName, startingID string) (chan string, chan error, error)
 }
 
 type ciGCSClient struct {
@@ -27,7 +27,7 @@ type ciGCSClient struct {
 	gcsBucketName string
 }
 
-func (o *ciGCSClient) ListJobRunNames(ctx context.Context, jobName, startingID string) (chan string, chan error, error) {
+func (o *ciGCSClient) ListJobRunNamesOlderThanFourHours(ctx context.Context, jobName, startingID string) (chan string, chan error, error) {
 	query := &storage.Query{
 		// This ends up being the equivalent of:
 		// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade
@@ -98,13 +98,13 @@ func (o *ciGCSClient) ListJobRunNames(ctx context.Context, jobName, startingID s
 	return jobRunProcessingCh, errorCh, nil
 }
 
-func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobName, jobRunID string) (jobrunaggregatorapi.JobRunInfo, error) {
-	fmt.Printf("reading job run %v/%v.\n", jobName, jobRunID)
+func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation, jobName, jobRunID string) (jobrunaggregatorapi.JobRunInfo, error) {
+	fmt.Printf("reading job run %v/%v.\n", jobGCSRootLocation, jobRunID)
 
 	query := &storage.Query{
 		// This ends up being the equivalent of:
 		// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade
-		Prefix: "logs/" + jobName,
+		Prefix: jobGCSRootLocation,
 
 		// TODO this field is apparently missing from this level of go/storage
 		// Omit owner and ACL fields for performance
@@ -116,9 +116,9 @@ func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobName, jobRunID s
 		return nil, err
 	}
 	// start reading for this jobrun bucket
-	query.StartOffset = fmt.Sprintf("logs/%s/%s", jobName, jobRunID)
+	query.StartOffset = fmt.Sprintf("%s/%s", jobGCSRootLocation, jobRunID)
 	// end reading after this jobrun bucket
-	query.EndOffset = fmt.Sprintf("logs/%s/%s", jobName, NextJobRunID(jobRunID))
+	query.EndOffset = fmt.Sprintf("%s/%s", jobGCSRootLocation, NextJobRunID(jobRunID))
 
 	// Returns an iterator which iterates over the bucket query results.
 	// Unfortunately, this will list *all* files with the query prefix.
@@ -143,7 +143,7 @@ func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobName, jobRunID s
 			fmt.Printf("  found %s\n", attrs.Name)
 			jobRunId := filepath.Base(filepath.Dir(attrs.Name))
 			if jobRun == nil {
-				jobRun = jobrunaggregatorapi.NewGCSJobRun(bkt, jobName, jobRunId)
+				jobRun = jobrunaggregatorapi.NewGCSJobRun(bkt, jobGCSRootLocation, jobName, jobRunId)
 			}
 			jobRun.SetGCSProwJobPath(attrs.Name)
 
@@ -155,7 +155,7 @@ func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobName, jobRunID s
 			}
 			jobRunId := nameParts[2]
 			if jobRun == nil {
-				jobRun = jobrunaggregatorapi.NewGCSJobRun(bkt, jobName, jobRunId)
+				jobRun = jobrunaggregatorapi.NewGCSJobRun(bkt, jobGCSRootLocation, jobName, jobRunId)
 			}
 			jobRun.AddGCSJunitPaths(attrs.Name)
 

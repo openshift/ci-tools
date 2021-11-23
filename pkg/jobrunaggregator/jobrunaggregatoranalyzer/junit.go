@@ -3,6 +3,7 @@ package jobrunaggregatoranalyzer
 import (
 	"context"
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 
@@ -40,6 +41,7 @@ func newJobRunJunit(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo) 
 }
 
 type aggregatedJobRunJunit struct {
+	jobGCSBucketRoot         string
 	aggregationNameToJobRuns map[string][]*jobRunJunit
 
 	combinedJunit *junit.TestSuites
@@ -72,7 +74,7 @@ func (a *aggregatedJobRunJunit) aggregateAllJobRuns() (*junit.TestSuites, error)
 	for _, aggregationName := range sets.StringKeySet(a.aggregationNameToJobRuns).List() {
 		jobRunJunits := a.aggregationNameToJobRuns[aggregationName]
 		for _, currJobRunJunit := range jobRunJunits {
-			if err := combineTestSuites(combined, currJobRunJunit.jobRun.GetJobName(), currJobRunJunit.jobRun.GetJobRunID(), currJobRunJunit.combinedJunit); err != nil {
+			if err := combineTestSuites(combined, a.jobGCSBucketRoot, currJobRunJunit.jobRun.GetJobRunID(), currJobRunJunit.combinedJunit); err != nil {
 				return nil, err
 			}
 		}
@@ -86,27 +88,27 @@ func (a *aggregatedJobRunJunit) aggregateAllJobRuns() (*junit.TestSuites, error)
 	return a.combinedJunit, nil
 }
 
-func combineTestSuites(combined *junit.TestSuites, jobName, toAddJobRunID string, toAdd *junit.TestSuites) error {
+func combineTestSuites(combined *junit.TestSuites, jobGCSBucketRoot, toAddJobRunID string, toAdd *junit.TestSuites) error {
 	for _, suiteToAdd := range toAdd.Suites {
 		combinedSuite := ensureSuiteInSuites(combined, suiteToAdd.Name)
-		if err := combineTestSuite(combinedSuite, jobName, toAddJobRunID, suiteToAdd); err != nil {
+		if err := combineTestSuite(combinedSuite, jobGCSBucketRoot, toAddJobRunID, suiteToAdd); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func combineTestSuite(combined *junit.TestSuite, jobName, toAddJobRunID string, toAdd *junit.TestSuite) error {
+func combineTestSuite(combined *junit.TestSuite, jobGCSBucketRoot, toAddJobRunID string, toAdd *junit.TestSuite) error {
 	for _, testCaseToAdd := range toAdd.TestCases {
 		combinedTestCase := ensureTestCaseInSuite(combined, testCaseToAdd.Name)
-		if err := aggregateTestCase(combinedTestCase, jobName, toAddJobRunID, testCaseToAdd); err != nil {
+		if err := aggregateTestCase(combinedTestCase, jobGCSBucketRoot, toAddJobRunID, testCaseToAdd); err != nil {
 			return err
 		}
 	}
 
 	for _, suiteToAdd := range toAdd.Children {
 		combinedSuite := ensureSuiteInSuite(combined, suiteToAdd.Name)
-		if err := combineTestSuite(combinedSuite, jobName, toAddJobRunID, suiteToAdd); err != nil {
+		if err := combineTestSuite(combinedSuite, jobGCSBucketRoot, toAddJobRunID, suiteToAdd); err != nil {
 			return err
 		}
 	}
@@ -174,7 +176,7 @@ func ensureTestCaseInSuite(o *junit.TestSuite, name string) *junit.TestCase {
 	return ret
 }
 
-func aggregateTestCase(combined *junit.TestCase, jobName, toAddJobRunID string, toAdd *junit.TestCase) error {
+func aggregateTestCase(combined *junit.TestCase, jobGCSBucketRoot, toAddJobRunID string, toAdd *junit.TestCase) error {
 	currDetails := &TestCaseDetails{
 		Name: toAdd.Name,
 	}
@@ -186,13 +188,13 @@ func aggregateTestCase(combined *junit.TestCase, jobName, toAddJobRunID string, 
 
 	switch {
 	case toAdd.FailureOutput != nil:
-		humanURL := jobrunaggregatorapi.GetHumanURL(jobName, toAddJobRunID)
+		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID))
 		currDetails.Failures = append(
 			currDetails.Failures,
 			TestCaseFailure{
 				JobRunID:       toAddJobRunID,
 				HumanURL:       humanURL,
-				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURL(jobName, toAddJobRunID),
+				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID)),
 			})
 
 	case toAdd.SkipMessage != nil:
@@ -200,8 +202,8 @@ func aggregateTestCase(combined *junit.TestCase, jobName, toAddJobRunID string, 
 			currDetails.Skips,
 			TestCaseSkip{
 				JobRunID:       toAddJobRunID,
-				HumanURL:       jobrunaggregatorapi.GetHumanURL(jobName, toAddJobRunID),
-				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURL(jobName, toAddJobRunID),
+				HumanURL:       jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID)),
+				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID)),
 			})
 
 	default:
@@ -209,8 +211,8 @@ func aggregateTestCase(combined *junit.TestCase, jobName, toAddJobRunID string, 
 			currDetails.Passes,
 			TestCasePass{
 				JobRunID:       toAddJobRunID,
-				HumanURL:       jobrunaggregatorapi.GetHumanURL(jobName, toAddJobRunID),
-				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURL(jobName, toAddJobRunID),
+				HumanURL:       jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID)),
+				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID)),
 			})
 
 	}

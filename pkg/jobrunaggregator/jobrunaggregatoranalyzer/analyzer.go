@@ -28,9 +28,12 @@ type JobRunAggregatorAnalyzerOptions struct {
 	jobRunLocator      jobrunaggregatorlib.JobRunLocator
 	passFailCalculator baseline
 
-	jobName    string
-	payloadTag string
-	workingDir string
+	// explicitGCSPrefix is set to control the base path we search in GCSBuckets. If not set, the jobName will be used
+	// to set a default value that usually works.
+	explicitGCSPrefix string
+	jobName           string
+	payloadTag        string
+	workingDir        string
 
 	// jobRunStartEstimate is the time that we think the job runs we're aggregating started.
 	// it should be within an hour, plus or minus.
@@ -170,19 +173,28 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 
 	aggregationConfiguration := &AggregationConfiguration{}
 	for _, jobRunName := range unfinishedJobNames {
+		jobRunGCSBucketRoot := filepath.Join("logs", o.jobName, jobRunName)
+		if len(o.explicitGCSPrefix) > 0 {
+			jobRunGCSBucketRoot = filepath.Join(o.explicitGCSPrefix, jobRunName)
+		}
 		aggregationConfiguration.FinishedJobs = append(
 			aggregationConfiguration.FinishedJobs,
 			JobRunInfo{
 				JobName:      o.jobName,
 				JobRunID:     jobRunName,
-				HumanURL:     jobrunaggregatorapi.GetHumanURL(o.jobName, jobRunName),
-				GCSBucketURL: jobrunaggregatorapi.GetGCSArtifactURL(o.jobName, jobRunName),
+				HumanURL:     jobrunaggregatorapi.GetHumanURLForLocation(jobRunGCSBucketRoot),
+				GCSBucketURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(jobRunGCSBucketRoot),
 				Status:       "unknown",
 			},
 		)
 	}
 
-	currentAggregationJunit := &aggregatedJobRunJunit{}
+	currentAggregationJunit := &aggregatedJobRunJunit{
+		jobGCSBucketRoot: filepath.Join("logs", o.jobName),
+	}
+	if len(o.explicitGCSPrefix) > 0 {
+		currentAggregationJunit.jobGCSBucketRoot = o.explicitGCSPrefix
+	}
 	for i := range finishedJobsToAggregate {
 		jobRun := finishedJobsToAggregate[i]
 		currJunit, err := newJobRunJunit(ctx, jobRun)
@@ -226,7 +238,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	}
 
 	fmt.Printf("%q for %q:  aggregating disruption tests.\n", o.jobName, o.payloadTag)
-	disruptionSuite, err := o.CalculateDisruptionTestSuite(ctx, o.jobName, finishedJobsToAggregate)
+	disruptionSuite, err := o.CalculateDisruptionTestSuite(ctx, currentAggregationJunit.jobGCSBucketRoot, finishedJobsToAggregate)
 	if err != nil {
 		return err
 	}

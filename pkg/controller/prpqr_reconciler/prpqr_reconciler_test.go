@@ -52,6 +52,7 @@ func TestReconcile(t *testing.T) {
 					Status: v1.PullRequestPayloadTestStatus{
 						Conditions: []metav1.Condition{
 							{
+								Type:    "AllJobsTriggered",
 								Status:  "True",
 								Reason:  "AllJobsTriggered",
 								Message: "All jobs triggered successfully",
@@ -111,6 +112,7 @@ func TestReconcile(t *testing.T) {
 					Status: v1.PullRequestPayloadTestStatus{
 						Conditions: []metav1.Condition{
 							{
+								Type:    "AllJobsTriggered",
 								Status:  "True",
 								Reason:  "AllJobsTriggered",
 								Message: "All jobs triggered successfully",
@@ -198,6 +200,7 @@ func TestReconcile(t *testing.T) {
 					Status: v1.PullRequestPayloadTestStatus{
 						Conditions: []metav1.Condition{
 							{
+								Type:    "AllJobsTriggered",
 								Status:  "True",
 								Reason:  "AllJobsTriggered",
 								Message: "All jobs triggered successfully",

@@ -208,6 +208,7 @@ func constructCondition(createdJobs map[string]v1.PullRequestPayloadJobStatus) m
 	}
 
 	return metav1.Condition{
+		Type:               conditionAllJobsTriggered,
 		Status:             status,
 		LastTransitionTime: metav1.Time{Time: time.Now()},
 		Reason:             reason,

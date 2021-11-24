@@ -46,7 +46,7 @@ func TestDomainForService(t *testing.T) {
 	}
 }
 
-func TestPublicDomainForImage(t *testing.T) {
+func TestRegistryDomainForClusterName(t *testing.T) {
 	testCases := []struct {
 		name               string
 		clusterName        string
@@ -55,30 +55,35 @@ func TestPublicDomainForImage(t *testing.T) {
 		expectedError      error
 	}{
 		{
-			name:               "app.ci with svc dns",
-			clusterName:        "app.ci",
-			potentiallyPrivate: "image-registry.openshift-image-registry.svc:5000/ci/applyconfig@sha256:bf08a76268b29f056cfab7a105c8473b359d1154fbbe3091fe6052ad6d0427cd",
-			expected:           "registry.ci.openshift.org/ci/applyconfig@sha256:bf08a76268b29f056cfab7a105c8473b359d1154fbbe3091fe6052ad6d0427cd",
-		},
-
-		{
-			name:               "app.ci with public domain",
-			clusterName:        "app.ci",
-			potentiallyPrivate: "gcr.io/k8s-prow/tide@sha256:5245b7747c44d560aab27bc07dbaaf50bbb55f71d0973f85b09c79b8d8b93c97",
-			expected:           "gcr.io/k8s-prow/tide@sha256:5245b7747c44d560aab27bc07dbaaf50bbb55f71d0973f85b09c79b8d8b93c97",
+			name:        "app.ci",
+			clusterName: "app.ci",
+			expected:    "registry.ci.openshift.org",
 		},
 		{
-			name:               "unknown context",
-			clusterName:        "unknown",
-			potentiallyPrivate: "gcr.io/k8s-prow/tide@sha256:5245b7747c44d560aab27bc07dbaaf50bbb55f71d0973f85b09c79b8d8b93c97",
-			expected:           "",
-			expectedError:      fmt.Errorf("failed to get the domain for cluster unknown"),
+			name:        "vsphere",
+			clusterName: "vsphere",
+			expected:    "registry.apps.build01-us-west-2.vmc.ci.openshift.org",
+		},
+		{
+			name:        "build01",
+			clusterName: "build01",
+			expected:    "registry.build01.ci.openshift.org",
+		},
+		{
+			name:        "build99",
+			clusterName: "build99",
+			expected:    "registry.build99.ci.openshift.org",
+		},
+		{
+			name:          "b01",
+			clusterName:   "b01",
+			expectedError: fmt.Errorf("failed to get the domain for cluster b01"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, actualError := PublicDomainForImage(tc.clusterName, tc.potentiallyPrivate)
+			actual, actualError := RegistryDomainForClusterName(tc.clusterName)
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("actual does not match expected, diff: %s", diff)
 			}

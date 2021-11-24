@@ -66,8 +66,12 @@ func TestReconcile(t *testing.T) {
 				{
 					TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace:   "test-namespace",
-						Annotations: map[string]string{"prow.k8s.io/context": "", "prow.k8s.io/job": ""},
+						Namespace: "test-namespace",
+						Annotations: map[string]string{
+							"prow.k8s.io/context": "",
+							"prow.k8s.io/job":     "",
+							"releaseJobName":      "periodic-ci-test-org-test-repo-test-branch-test-name",
+						},
 						Labels: map[string]string{
 							"created-by-prow":           "true",
 							"prow.k8s.io/context":       "",
@@ -77,7 +81,7 @@ func TestReconcile(t *testing.T) {
 							"prow.k8s.io/refs.repo":     "test-repo",
 							"prow.k8s.io/type":          "periodic",
 							"pullrequestpayloadqualificationruns.ci.openshift.io": "prpqr-test",
-							"releaseJobName": "periodic-ci-test-org-test-repo-test-branch-test-name",
+							"releaseJobNameHash": "ee3858eff62263cd7266320c00d1d38b",
 						},
 					},
 					Status: prowv1.ProwJobStatus{State: "triggered"},
@@ -123,8 +127,12 @@ func TestReconcile(t *testing.T) {
 				&prowv1.ProwJob{
 					TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace:   "test-namespace",
-						Annotations: map[string]string{"prow.k8s.io/context": "", "prow.k8s.io/job": ""},
+						Namespace: "test-namespace",
+						Annotations: map[string]string{
+							"prow.k8s.io/context": "",
+							"prow.k8s.io/job":     "",
+							"releaseJobName":      "periodic-ci-test-org-test-repo-test-branch-test-name",
+						},
 						Labels: map[string]string{
 							"created-by-prow":           "true",
 							"prow.k8s.io/context":       "",
@@ -134,7 +142,7 @@ func TestReconcile(t *testing.T) {
 							"prow.k8s.io/refs.repo":     "test-repo",
 							"prow.k8s.io/type":          "periodic",
 							"pullrequestpayloadqualificationruns.ci.openshift.io": "prpqr-test",
-							"releaseJobName": "periodic-ci-test-org-test-repo-test-branch-test-name",
+							"releaseJobNameHash": "ee3858eff62263cd7266320c00d1d38b",
 						},
 					},
 					Status: prowv1.ProwJobStatus{State: "triggered"},
@@ -144,8 +152,12 @@ func TestReconcile(t *testing.T) {
 				{
 					TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace:   "test-namespace",
-						Annotations: map[string]string{"prow.k8s.io/context": "", "prow.k8s.io/job": ""},
+						Namespace: "test-namespace",
+						Annotations: map[string]string{
+							"prow.k8s.io/context": "",
+							"prow.k8s.io/job":     "",
+							"releaseJobName":      "periodic-ci-test-org-test-repo-test-branch-test-name",
+						},
 						Labels: map[string]string{
 							"created-by-prow":           "true",
 							"prow.k8s.io/context":       "",
@@ -155,7 +167,7 @@ func TestReconcile(t *testing.T) {
 							"prow.k8s.io/refs.repo":     "test-repo",
 							"prow.k8s.io/type":          "periodic",
 							"pullrequestpayloadqualificationruns.ci.openshift.io": "prpqr-test",
-							"releaseJobName": "periodic-ci-test-org-test-repo-test-branch-test-name",
+							"releaseJobNameHash": "ee3858eff62263cd7266320c00d1d38b",
 						},
 					},
 					Status: prowv1.ProwJobStatus{State: "triggered"},
@@ -225,7 +237,7 @@ func TestReconcile(t *testing.T) {
 							"prow.k8s.io/refs.repo":     "test-repo",
 							"prow.k8s.io/type":          "periodic",
 							"pullrequestpayloadqualificationruns.ci.openshift.io": "prpqr-test",
-							"releaseJobName": "periodic-ci-test-org-test-repo-test-branch-test-name",
+							"releaseJobNameHash": "ee3858eff62263cd7266320c00d1d38b",
 						},
 					},
 					Status: prowv1.ProwJobStatus{State: "triggered"},
@@ -246,7 +258,7 @@ func TestReconcile(t *testing.T) {
 							"prow.k8s.io/refs.repo":     "test-repo",
 							"prow.k8s.io/type":          "periodic",
 							"pullrequestpayloadqualificationruns.ci.openshift.io": "prpqr-test",
-							"releaseJobName": "periodic-ci-test-org-test-repo-test-branch-test-name",
+							"releaseJobNameHash": "ee3858eff62263cd7266320c00d1d38b",
 						},
 					},
 					Status: prowv1.ProwJobStatus{State: "triggered"},
@@ -254,8 +266,12 @@ func TestReconcile(t *testing.T) {
 				{
 					TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace:   "test-namespace",
-						Annotations: map[string]string{"prow.k8s.io/context": "", "prow.k8s.io/job": ""},
+						Namespace: "test-namespace",
+						Annotations: map[string]string{
+							"prow.k8s.io/context": "",
+							"prow.k8s.io/job":     "",
+							"releaseJobName":      "periodic-ci-test-org-test-repo-test-branch-test-name-2",
+						},
 						Labels: map[string]string{
 							"created-by-prow":           "true",
 							"prow.k8s.io/context":       "",
@@ -265,7 +281,7 @@ func TestReconcile(t *testing.T) {
 							"prow.k8s.io/refs.repo":     "test-repo",
 							"prow.k8s.io/type":          "periodic",
 							"pullrequestpayloadqualificationruns.ci.openshift.io": "prpqr-test",
-							"releaseJobName": "periodic-ci-test-org-test-repo-test-branch-test-name-2",
+							"releaseJobNameHash": "428af2aff595f9d8074f2f6bfba1aec1",
 						},
 					},
 					Status: prowv1.ProwJobStatus{State: "triggered"},

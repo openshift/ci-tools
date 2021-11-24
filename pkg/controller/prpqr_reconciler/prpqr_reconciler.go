@@ -2,6 +2,8 @@ package prpqr_reconciler
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -30,12 +32,12 @@ import (
 	"github.com/openshift/ci-tools/pkg/controller/prpqr_reconciler/pjstatussyncer"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
 const (
-	controllerName      = "prpqr_reconciler"
-	releaseJobNameLabel = "releaseJobName"
+	controllerName           = "prpqr_reconciler"
+	releaseJobNameLabel      = "releaseJobNameHash"
+	releaseJobNameAnnotation = "releaseJobName"
 
 	conditionAllJobsTriggered = "AllJobsTriggered"
 	conditionWithErrors       = "WithErrors"
@@ -120,7 +122,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 		logger = logger.WithFields(logrus.Fields{"name": pj.Name, "namespace": req.Namespace})
 
 		pjList := &prowv1.ProwJobList{}
-		if err := r.client.List(ctx, pjList, ctrlruntimeclient.MatchingLabels{v1.PullRequestPayloadQualificationRunLabel: prpqr.Name, releaseJobNameLabel: utils.Trim63(releaseJobName)}); err != nil {
+		if err := r.client.List(ctx, pjList, ctrlruntimeclient.MatchingLabels{v1.PullRequestPayloadQualificationRunLabel: prpqr.Name, releaseJobNameLabel: jobNameHash(releaseJobName)}); err != nil {
 			logger.WithError(err).Error("failed to get list of Prowjobs")
 			createdJobs[releaseJobName] = v1.PullRequestPayloadJobStatus{ReleaseJobName: releaseJobName, Status: prowv1.ProwJobStatus{
 				State:       prowv1.ErrorState,
@@ -213,6 +215,13 @@ func constructCondition(createdJobs map[string]v1.PullRequestPayloadJobStatus) m
 	}
 }
 
+func jobNameHash(name string) string {
+	hasher := md5.New()
+	// MD5 Write never returns error
+	_, _ = hasher.Write([]byte(name))
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
 // TODO: Currently we create a single dummy prowjob just for testing. The actual implementation
 // will be introduced in https://issues.redhat.com/browse/DPTP-2577
 func generateProwjobs(org, repo, branch, prpqrName, prpqrNamespace string, releaseJobSpec []v1.ReleaseJobSpec) map[string]prowv1.ProwJob {
@@ -221,7 +230,10 @@ func generateProwjobs(org, repo, branch, prpqrName, prpqrNamespace string, relea
 		releaseJobName := spec.JobName(jobconfig.PeriodicPrefix)
 		labels := map[string]string{
 			v1.PullRequestPayloadQualificationRunLabel: prpqrName,
-			releaseJobNameLabel:                        releaseJobName,
+			releaseJobNameLabel:                        jobNameHash(releaseJobName),
+		}
+		annotations := map[string]string{
+			releaseJobNameAnnotation: releaseJobName,
 		}
 
 		base := prowconfig.JobBase{
@@ -247,7 +259,7 @@ func generateProwjobs(org, repo, branch, prpqrName, prpqrNamespace string, relea
 			Cron:    "@yearly",
 		}
 
-		pj := pjutil.NewProwJob(pjutil.PeriodicSpec(periodicJob), labels, nil)
+		pj := pjutil.NewProwJob(pjutil.PeriodicSpec(periodicJob), labels, annotations)
 		pj.Namespace = prpqrNamespace
 
 		ret[releaseJobName] = pj

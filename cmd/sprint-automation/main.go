@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -9,17 +10,23 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	jiraapi "github.com/andygrunwald/go-jira"
+	"github.com/blang/semver"
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/test-infra/pkg/flagutil"
 	"k8s.io/test-infra/prow/config/secret"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	jirautil "k8s.io/test-infra/prow/jira"
 	"k8s.io/test-infra/prow/logrusutil"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	configv1 "github.com/openshift/api/config/v1"
+
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/jira"
 	"github.com/openshift/ci-tools/pkg/pagerdutyutil"
 )
@@ -27,8 +34,9 @@ import (
 type options struct {
 	logLevel string
 
-	jiraOptions      prowflagutil.JiraOptions
-	pagerDutyOptions pagerdutyutil.Options
+	jiraOptions       prowflagutil.JiraOptions
+	kubernetesOptions prowflagutil.KubernetesOptions
+	pagerDutyOptions  pagerdutyutil.Options
 
 	slackTokenPath string
 }
@@ -43,7 +51,7 @@ func (o *options) Validate() error {
 		return fmt.Errorf("--slack-token-path is required")
 	}
 
-	for _, group := range []flagutil.OptionGroup{&o.jiraOptions, &o.pagerDutyOptions} {
+	for _, group := range []flagutil.OptionGroup{&o.jiraOptions, &o.pagerDutyOptions, &o.kubernetesOptions} {
 		if err := group.Validate(false); err != nil {
 			return err
 		}
@@ -53,10 +61,10 @@ func (o *options) Validate() error {
 }
 
 func gatherOptions(fs *flag.FlagSet, args ...string) options {
-	var o options
+	o := options{kubernetesOptions: prowflagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 
-	for _, group := range []flagutil.OptionGroup{&o.jiraOptions, &o.pagerDutyOptions} {
+	for _, group := range []flagutil.OptionGroup{&o.jiraOptions, &o.pagerDutyOptions, &o.kubernetesOptions} {
 		group.AddFlags(fs)
 	}
 
@@ -66,6 +74,13 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 		logrus.WithError(err).Fatal("Could not parse args.")
 	}
 	return o
+}
+
+func addSchemes() error {
+	if err := configv1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add configv1 to scheme: %w", err)
+	}
+	return nil
 }
 
 func main() {
@@ -121,6 +136,39 @@ func main() {
 
 	if err := ensureGroupMembership(slackClient, userIdsByRole); err != nil {
 		logrus.WithError(err).Fatal("Could not ensure Slack group membership.")
+	}
+
+	if err := addSchemes(); err != nil {
+		logrus.WithError(err).Fatal("failed to set up scheme")
+	}
+	kubeConfigs, err := o.kubernetesOptions.LoadClusterConfigs()
+	if err != nil {
+		logrus.WithError(err).Fatal("could not load kube configs")
+	}
+
+	clients := map[api.Cluster]ctrlruntimeclient.Reader{}
+	for _, cluster := range []api.Cluster{api.ClusterBuild01, api.ClusterBuild02} {
+		clusterName := string(cluster)
+		config, ok := kubeConfigs[clusterName]
+		if !ok {
+			logrus.WithField("context", clusterName).Fatal("failed to find context in kube configs")
+		}
+		client, err := ctrlruntimeclient.New(&config, ctrlruntimeclient.Options{})
+		if err != nil {
+			logrus.WithField("clusterName", clusterName).WithError(err).Fatal("could not get client for kube config")
+		}
+		clients[cluster] = client
+	}
+
+	versionInfo, err := upgradeBuild02(context.TODO(), clients[api.ClusterBuild01], clients[api.ClusterBuild02])
+	if err != nil {
+		logrus.WithError(err).Fatal("could not determine if build02 needs to upgraded")
+	}
+	if versionInfo != nil {
+		logrus.WithField("toVersion", versionInfo.version).Info("Posting @dptp-triage about upgrading build02 to Slack")
+		if err := sendTriageBuild02Upgrade(slackClient, versionInfo.version, versionInfo.stableDuration); err != nil {
+			logrus.WithError(err).Fatal("Could not post @dptp-triage about upgrading build02 to Slack.")
+		}
 	}
 }
 
@@ -315,17 +363,23 @@ func getIssuesNeedingApproval(jiraClient *jiraapi.Client) ([]slack.Block, error)
 	return blocks, nil
 }
 
-const dptpTeamChannel = "team-dp-testplatform"
+const (
+	dptpTeamChannel = "team-dp-testplatform"
+	dptpOpsChannel  = "ops-testplatform"
 
-func postBlocks(slackClient *slack.Client, blocks []slack.Block) error {
+	privateChannelType = "private_channel"
+	publicChannelType  = "public_channel"
+)
+
+func channelID(slackClient *slack.Client, channel, t string) (string, error) {
 	var channelID, cursor string
 	for {
-		conversations, nextCursor, err := slackClient.GetConversations(&slack.GetConversationsParameters{Cursor: cursor, Types: []string{"private_channel"}})
+		conversations, nextCursor, err := slackClient.GetConversations(&slack.GetConversationsParameters{Cursor: cursor, Types: []string{t}})
 		if err != nil {
-			return fmt.Errorf("could not query Slack for channel ID: %w", err)
+			return "", fmt.Errorf("could not query Slack for channel ID: %w", err)
 		}
 		for _, conversation := range conversations {
-			if conversation.Name == dptpTeamChannel {
+			if conversation.Name == channel {
 				channelID = conversation.ID
 				break
 			}
@@ -336,9 +390,16 @@ func postBlocks(slackClient *slack.Client, blocks []slack.Block) error {
 		cursor = nextCursor
 	}
 	if channelID == "" {
-		return fmt.Errorf("could not find Slack channel %s", dptpTeamChannel)
+		return "", fmt.Errorf("could not find Slack channel %s", channel)
 	}
+	return channelID, nil
+}
 
+func postBlocks(slackClient *slack.Client, blocks []slack.Block) error {
+	channelID, err := channelID(slackClient, dptpTeamChannel, privateChannelType)
+	if err != nil {
+		return fmt.Errorf("failed for get channel ID for %s", dptpTeamChannel)
+	}
 	responseChannel, responseTimestamp, err := slackClient.PostMessage(channelID, slack.MsgOptionText("Jira card digest.", false), slack.MsgOptionBlocks(blocks...))
 	if err != nil {
 		return fmt.Errorf("failed to post to channel: %w", err)
@@ -383,6 +444,121 @@ func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, use
 	}
 
 	logrus.Infof("Posted intake digest in channel %s at %s", responseChannel, responseTimestamp)
+	return nil
+}
+
+type versionInfo struct {
+	stable          bool
+	stableDuration  string
+	version         string
+	state           configv1.UpdateState
+	semanticVersion semver.Version
+}
+
+// newVersionInfo checks if the current version is stable enough.
+// A version is stable iff Z-stream (or Y-stream) upgrade has been completed for 1 day (1 week).
+// Z-stream upgrade: the current version is upgraded from the same minor version e.g., 4.8.23 <- 4.8.18
+// Y-stream upgrade: the current version is upgraded from a smaller minor version e.g., 4.9.6 <- 4.8.18
+func newVersionInfo(status configv1.ClusterVersionStatus) (*versionInfo, error) {
+	if len(status.History) == 0 {
+		return nil, fmt.Errorf("failed to get history of ClusterVersion version")
+	}
+	current := status.History[0]
+	ret := &versionInfo{
+		version: current.Version,
+		state:   current.State,
+		// soak a day after a Z-stream upgrade
+		stable:         current.State == configv1.CompletedUpdate && current.CompletionTime != nil && time.Since(current.CompletionTime.Time) > 24*time.Hour,
+		stableDuration: "1 day",
+	}
+	cv, err := semver.Make(current.Version)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine semantic version: %s", current.Version)
+	}
+	ret.semanticVersion = cv
+	if ret.stable && len(status.History) > 1 {
+		previous := status.History[1]
+		pv, err := semver.Make(previous.Version)
+		if err != nil {
+			return nil, fmt.Errorf("failed to determine semantic version: %s", previous.Version)
+		}
+		if cv.Minor > pv.Minor {
+			// soak a week after a Y-stream upgrade
+			ret.stable = time.Since(current.CompletionTime.Time) > 7*24*time.Hour
+			ret.stableDuration = "7 days"
+		}
+	}
+	return ret, nil
+}
+
+func clusterVersion(ctx context.Context, clusterName string, Client ctrlruntimeclient.Reader) (*versionInfo, error) {
+	cv := &configv1.ClusterVersion{}
+	if err := Client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "version"}, cv); err != nil {
+		return nil, fmt.Errorf("failed to get ClusterVersion version on %s: %w", clusterName, err)
+	}
+	return newVersionInfo(cv.Status)
+}
+
+func upgradeBuild02(ctx context.Context, build01Client, build02Client ctrlruntimeclient.Reader) (*versionInfo, error) {
+	build01VI, err := clusterVersion(ctx, "build01", build01Client)
+	if err != nil {
+		return nil, err
+	}
+	if !build01VI.stable {
+		logrus.WithField("build01Version", build01VI.version).Info("The version on build01 has not been stable enough and hence no need to upgrade build02")
+		return nil, nil
+	}
+
+	build02VI, err := clusterVersion(ctx, "build02", build02Client)
+	if err != nil {
+		return nil, err
+	}
+	if build02VI.state != configv1.CompletedUpdate {
+		logrus.WithField("state", build02VI.state).Info("The previous upgrade of build02 has not been completed")
+		return nil, nil
+	}
+	if build02VI.semanticVersion.Equals(build01VI.semanticVersion) {
+		logrus.WithField("version", build01VI.version).Info("build01 and build02 have the same version and hence no need to upgrade build02")
+		return nil, nil
+	}
+
+	if build02VI.semanticVersion.GT(build01VI.semanticVersion) {
+		return nil, fmt.Errorf("version of build02 %s is newer than build01 %s", build02VI.version, build01VI.version)
+	}
+	return build01VI, nil
+}
+
+func sendTriageBuild02Upgrade(slackClient *slack.Client, version, stableDuration string) error {
+	blocks := []slack.Block{
+		&slack.HeaderBlock{
+			Type: slack.MBTHeader,
+			Text: &slack.TextBlockObject{
+				Type: slack.PlainTextType,
+				Text: "Upgrade Build02",
+			},
+		},
+		&slack.SectionBlock{
+			Type: slack.MBTSection,
+			Text: &slack.TextBlockObject{
+				Type: slack.PlainTextType,
+				// Ideally, we could just run the upgrade command and notify triage via slack
+				// In reality we still need some manual checks before upgrading build02
+				Text: fmt.Sprintf("@%s Version %s is stable on `build01` for %s. Please upgrade `build02` if `build02` is healthy: `oc --as system:admin --context build02 adm upgrade --to=%s`",
+					userGroupTriage, version, stableDuration, version),
+			},
+		},
+	}
+
+	channelID, err := channelID(slackClient, dptpOpsChannel, publicChannelType)
+	if err != nil {
+		return fmt.Errorf("failed for get channel ID for %s", dptpOpsChannel)
+	}
+	responseChannel, responseTimestamp, err := slackClient.PostMessage(channelID, slack.MsgOptionBlocks(blocks...))
+	if err != nil {
+		return fmt.Errorf("failed to message @dptp-triage: %w", err)
+	}
+
+	logrus.Infof("Posted message to triage in channel %s at %s", responseChannel, responseTimestamp)
 	return nil
 }
 

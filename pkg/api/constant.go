@@ -58,7 +58,7 @@ const (
 )
 
 var (
-	ValidClusterNames = sets.NewString(
+	clusterNames = sets.NewString(
 		string(ClusterAPPCI),
 		string(ClusterBuild01),
 		string(ClusterBuild02),
@@ -66,3 +66,8 @@ var (
 		string(ClusterVSphere),
 	)
 )
+
+// ValidClusterName checks if a cluster name is valid
+func ValidClusterName(clusterName string) bool {
+	return clusterNames.Has(clusterName) || buildClusterRegEx.MatchString(clusterName)
+}

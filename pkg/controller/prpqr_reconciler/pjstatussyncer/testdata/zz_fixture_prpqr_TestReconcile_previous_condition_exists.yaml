@@ -1,0 +1,36 @@
+- apiVersion: ci.openshift.io/v1
+  kind: PullRequestPayloadQualificationRun
+  metadata:
+    creationTimestamp: null
+    name: prpqr-test
+    namespace: test-namespace
+  spec:
+    jobs:
+      releaseControllerConfig:
+        ocp: ""
+        release: ""
+        specifier: ""
+      releaseJobSpec: null
+    pullRequest:
+      baseRef: ""
+      baseSHA: ""
+      org: ""
+      pr:
+        author: ""
+        number: 0
+        sha: ""
+        title: ""
+      repo: ""
+  status:
+    conditions:
+    - lastTransitionTime: "1970-01-01T00:00:00Z"
+      message: All jobs have finished.
+      reason: AllJobsFinished
+      status: "True"
+      type: AllJobsFinished
+    jobs:
+    - jobName: release-job-name
+      prowJob: test-pj
+      status:
+        startTime: "1970-01-01T00:00:00Z"
+        state: success

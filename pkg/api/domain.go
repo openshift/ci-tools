@@ -49,15 +49,15 @@ var (
 	buildClusterRegEx = regexp.MustCompile(`build\d\d+`)
 )
 
-func RegistryDomainForClusterName(ClusterName string) (string, error) {
-	if ClusterName == string(ClusterAPPCI) {
+func RegistryDomainForClusterName(clusterName string) (string, error) {
+	if clusterName == string(ClusterAPPCI) {
 		return ServiceDomainAPPCIRegistry, nil
 	}
-	if ClusterName == string(ClusterVSphere) {
+	if clusterName == string(ClusterVSphere) {
 		return ServiceDomainVSphereRegistry, nil
 	}
-	if buildClusterRegEx.MatchString(ClusterName) {
-		return fmt.Sprintf("registry.%s.ci.openshift.org", ClusterName), nil
+	if buildClusterRegEx.MatchString(clusterName) {
+		return fmt.Sprintf("registry.%s.ci.openshift.org", clusterName), nil
 	}
-	return "", fmt.Errorf("failed to get the domain for cluster %s", ClusterName)
+	return "", fmt.Errorf("failed to get the domain for cluster %s", clusterName)
 }

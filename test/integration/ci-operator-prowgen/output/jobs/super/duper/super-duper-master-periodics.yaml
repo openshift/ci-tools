@@ -56,10 +56,8 @@ periodics:
     serviceAccountName: ci-operator
     volumes:
     - name: cluster-profile
-      projected:
-        sources:
-        - secret:
-            name: cluster-secrets-aws
+      secret:
+        secretName: cluster-secrets-aws
     - configMap:
         name: prow-job-cluster-launch-e2e
       name: job-definition
@@ -126,10 +124,8 @@ periodics:
     serviceAccountName: ci-operator
     volumes:
     - name: cluster-profile
-      projected:
-        sources:
-        - secret:
-            name: cluster-secrets-aws
+      secret:
+        secretName: cluster-secrets-aws
     - configMap:
         name: prow-job-cluster-launch-e2e
       name: job-definition

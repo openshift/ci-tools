@@ -44,10 +44,8 @@ spec:
         path: credentials
       secretName: boskos-credentials
   - name: cluster-profile
-    projected:
-      sources:
-      - secret:
-          name: cluster-secrets-alibaba
+    secret:
+      secretName: cluster-secrets-alibaba
   - name: pull-secret
     secret:
       secretName: registry-pull-credentials

@@ -303,17 +303,6 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 
 	ret := corev1.Volume{
 		Name: clusterProfileVolume,
-		VolumeSource: corev1.VolumeSource{
-			Projected: &corev1.ProjectedVolumeSource{
-				Sources: []corev1.VolumeProjection{{
-					Secret: &corev1.SecretProjection{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: fmt.Sprintf("cluster-secrets-%s", clusterType),
-						},
-					}},
-				},
-			},
-		},
 	}
 	switch profile {
 	case
@@ -349,14 +338,26 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 		cioperatorapi.ClusterProfilePacket,
 		cioperatorapi.ClusterProfilePacketAssisted,
 		cioperatorapi.ClusterProfilePacketSNO:
+		ret.VolumeSource = corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: fmt.Sprintf("cluster-secrets-%s", clusterType),
+			},
+		}
 	default:
-		ret.VolumeSource.Projected.Sources = append(ret.VolumeSource.Projected.Sources, corev1.VolumeProjection{
-			ConfigMap: &corev1.ConfigMapProjection{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: fmt.Sprintf("cluster-profile-%s", profile),
+		ret.VolumeSource.Projected = &corev1.ProjectedVolumeSource{
+			Sources: []corev1.VolumeProjection{
+				{
+					Secret: &corev1.SecretProjection{
+						LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("cluster-secrets-%s", clusterType)},
+					},
+				},
+				{
+					ConfigMap: &corev1.ConfigMapProjection{
+						LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("cluster-profile-%s", profile)},
+					},
 				},
 			},
-		})
+		}
 	}
 	return ret
 }

@@ -54,10 +54,8 @@ spec:
         path: credentials
       secretName: boskos-credentials
   - name: cluster-profile
-    projected:
-      sources:
-      - secret:
-          name: cluster-secrets-alibaba
+    secret:
+      secretName: cluster-secrets-alibaba
   - configMap:
       name: prow-job-cluster-launch-installer-upi-e2e
     name: job-definition

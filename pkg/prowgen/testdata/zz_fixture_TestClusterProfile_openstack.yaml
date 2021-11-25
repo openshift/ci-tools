@@ -28,10 +28,8 @@ containers:
 serviceAccountName: ci-operator
 volumes:
 - name: cluster-profile
-  projected:
-    sources:
-    - secret:
-        name: cluster-secrets-openstack
+  secret:
+    secretName: cluster-secrets-openstack
 - name: pull-secret
   secret:
     secretName: registry-pull-credentials

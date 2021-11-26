@@ -17,7 +17,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 
-	corev1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/cmd/generic-autobumper/bumper"
@@ -25,6 +24,7 @@ import (
 	"k8s.io/test-infra/prow/config/secret"
 	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
@@ -115,15 +115,25 @@ func (o *options) validate() error {
 }
 
 var (
-	knownCloudProviders = sets.NewString(string(dispatcher.CloudAWS), string(dispatcher.CloudGCP))
+	knownCloudProviders = sets.NewString(string(api.CloudAWS), string(api.CloudGCP))
 )
 
-// getCloudProviderFromEnv returns the value of environment variable "CLUSTER_TYPE" if defined in the pod's spec; empty string otherwise.
-func getCloudProviderFromEnv(spec *corev1.PodSpec) string {
-	if spec == nil {
+// determineCloud determines which cloud this job should run.
+// It returns the value of ci-operator.openshift.io/cloud if it is none empty.
+// The label is set by prow-gen for multistage tests.
+// For template tests and hand-crafted tests, it returns the value of env. var. CLUSTER_TYPE from the job's spec.
+func determineCloud(jobBase prowconfig.JobBase) string {
+	labels := jobBase.Labels
+	if labels != nil {
+		if v, ok := labels[api.CloudLabel]; ok && v != "" {
+			return v
+		}
+	}
+
+	if jobBase.Spec == nil {
 		return ""
 	}
-	for _, c := range spec.Containers {
+	for _, c := range jobBase.Spec.Containers {
 		for _, e := range c.Env {
 			if e.Name == "CLUSTER_TYPE" {
 				if knownCloudProviders.Has(e.Value) {
@@ -140,21 +150,21 @@ func getCloudProvidersForE2ETests(jc *prowconfig.JobConfig) sets.String {
 	cloudProviders := sets.NewString()
 	for k := range jc.PresubmitsStatic {
 		for _, job := range jc.PresubmitsStatic[k] {
-			if ct := getCloudProviderFromEnv(job.Spec); ct != "" {
-				cloudProviders.Insert(ct)
+			if cloud := determineCloud(job.JobBase); cloud != "" {
+				cloudProviders.Insert(cloud)
 			}
 		}
 	}
 	for k := range jc.PostsubmitsStatic {
 		for _, job := range jc.PostsubmitsStatic[k] {
-			if ct := getCloudProviderFromEnv(job.Spec); ct != "" {
-				cloudProviders.Insert(ct)
+			if cloud := determineCloud(job.JobBase); cloud != "" {
+				cloudProviders.Insert(cloud)
 			}
 		}
 	}
 	for _, job := range jc.Periodics {
-		if ct := getCloudProviderFromEnv(job.Spec); ct != "" {
-			cloudProviders.Insert(ct)
+		if cloud := determineCloud(job.JobBase); cloud != "" {
+			cloudProviders.Insert(cloud)
 		}
 	}
 	return cloudProviders

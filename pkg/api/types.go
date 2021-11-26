@@ -683,6 +683,7 @@ type Cloud string
 
 const (
 	CloudAWS Cloud = "aws"
+	CloudGCP Cloud = "gcp"
 )
 
 // ClusterClaim claims an OpenShift cluster for the job.
@@ -1184,7 +1185,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSGluster,
 		ClusterProfileAWSCPaaS,
 		ClusterProfileAWS2:
-		return "aws"
+		return string(CloudAWS)
 	case ClusterProfileAlibaba:
 		return "alibaba"
 	case ClusterProfileAWSArm64:
@@ -1212,7 +1213,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileGCPLoggingJSONFile,
 		ClusterProfileGCPLoggingCRIO,
 		ClusterProfileGCP2:
-		return "gcp"
+		return string(CloudGCP)
 	case ClusterProfileIBMCloud:
 		return "ibmcloud"
 	case ClusterProfileLibvirtPpc64le:

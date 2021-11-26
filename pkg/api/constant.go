@@ -18,8 +18,10 @@ const (
 	// DPTPRequesterLabel is the label on a Kubernates CR whose value indicates the automated tool that requests the CR
 	DPTPRequesterLabel = "dptp.openshift.io/requester"
 
-	KVMDeviceLabel = "devices.kubevirt.io/kvm"
-	ClusterLabel   = "ci-operator.openshift.io/cluster"
+	KVMDeviceLabel           = "devices.kubevirt.io/kvm"
+	ClusterLabel             = "ci-operator.openshift.io/cluster"
+	CloudLabel               = "ci-operator.openshift.io/cloud"
+	CloudClusterProfileLabel = "ci-operator.openshift.io/cloud-cluster-profile"
 
 	NoBuildsLabel = "ci.openshift.io/no-builds"
 	NoBuildsValue = "true"

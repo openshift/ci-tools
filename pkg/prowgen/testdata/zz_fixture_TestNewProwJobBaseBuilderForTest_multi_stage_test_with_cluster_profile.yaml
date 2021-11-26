@@ -2,6 +2,9 @@ agent: kubernetes
 decorate: true
 decoration_config:
   skip_cloning: true
+labels:
+  ci-operator.openshift.io/cloud: alibaba
+  ci-operator.openshift.io/cloud-cluster-profile: alibaba
 name: prefix-ci-o-r-b-simple
 spec:
   containers:

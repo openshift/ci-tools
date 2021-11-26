@@ -306,7 +306,7 @@ func generateProwjobs(rc injectingResolverClient, defaulter periodicDefaulter, b
 			periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, "@yearly", "", false, ciopConfig.CanonicalGoRepository)
 			var variant string
 			if inject.Variant != "" {
-				variant = fmt.Sprintf("-%s", variant)
+				variant = fmt.Sprintf("-%s", inject.Variant)
 			}
 			periodic.Name = fmt.Sprintf("%s-%s-%d%s-%s", baseCiop.Org, baseCiop.Repo, pr.PullRequest.Number, variant, inject.Test)
 			break

@@ -543,7 +543,7 @@ func sendTriageBuild02Upgrade(slackClient *slack.Client, version, stableDuration
 				Type: slack.PlainTextType,
 				// Ideally, we could just run the upgrade command and notify triage via slack
 				// In reality we still need some manual checks before upgrading build02
-				Text: fmt.Sprintf("@%s Version %s is stable on `build01` for %s. Please upgrade `build02` if `build02` is healthy: `oc --as system:admin --context build02 adm upgrade --to=%s`",
+				Text: fmt.Sprintf("@%s `build01` has been stable with Version %s for %s. Please upgrade `build02` if it is healthy: `oc --as system:admin --context build02 adm upgrade --to=%s`",
 					userGroupTriage, version, stableDuration, version),
 			},
 		},

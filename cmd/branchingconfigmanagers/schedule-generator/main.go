@@ -93,11 +93,6 @@ func main() {
 	level, _ := logrus.ParseLevel(o.logLevel)
 	logrus.SetLevel(level)
 
-	kubeConfigs, err := o.kubernetesOptions.LoadClusterConfigs(nil)
-	if err != nil {
-		logrus.WithError(err).Fatal("Could not load kube config")
-	}
-
 	schedules, err := readSchedules(o.scheduleDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not read schedules.")
@@ -113,6 +108,10 @@ func main() {
 			logrus.WithError(err).Fatal("Could not find marshal schedules")
 		}
 
+		kubeConfigs, err := o.kubernetesOptions.LoadClusterConfigs(nil)
+		if err != nil {
+			logrus.WithError(err).Fatal("Could not load kube config")
+		}
 		var errors []error
 		for ctx, config := range kubeConfigs {
 			client, err := ctrlruntimeclient.New(&config, ctrlruntimeclient.Options{})

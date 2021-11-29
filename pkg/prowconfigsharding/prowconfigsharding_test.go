@@ -318,7 +318,7 @@ func TestShardPluginConfig(t *testing.T) {
 			}
 			// Defaulting is unexported and only happens inside plugins.ConfigAgent.Load()
 			initialConfigAgent := plugins.ConfigAgent{}
-			if err := initialConfigAgent.Start(filepath.Join(tempDir, "_original_config.yaml"), nil, "", false); err != nil {
+			if err := initialConfigAgent.Start(filepath.Join(tempDir, "_original_config.yaml"), nil, "", false, false); err != nil {
 				t.Fatalf("failed to start old plugin config agent: %v", err)
 			}
 

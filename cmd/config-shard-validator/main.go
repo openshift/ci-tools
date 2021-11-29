@@ -78,7 +78,7 @@ func main() {
 	}
 
 	pluginAgent := plugins.ConfigAgent{}
-	if err := pluginAgent.Load(path.Join(o.releaseRepoDir, config.PluginConfigInRepoPath), []string{filepath.Dir(config.PluginConfigInRepoPath)}, "_pluginconfig.yaml", true); err != nil {
+	if err := pluginAgent.Load(path.Join(o.releaseRepoDir, config.PluginConfigInRepoPath), []string{filepath.Dir(config.PluginConfigInRepoPath)}, "_pluginconfig.yaml", true, false); err != nil {
 		logrus.WithError(err).Fatal("Error loading Prow plugin config.")
 	}
 	pcfg := pluginAgent.Config()

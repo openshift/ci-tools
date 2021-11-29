@@ -10,15 +10,24 @@ import (
 
 	"k8s.io/client-go/rest"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	prowconfigflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/logrusutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
 	"github.com/openshift/ci-tools/pkg/controller/prpqr_reconciler"
+	"github.com/openshift/ci-tools/pkg/registry/server"
+)
+
+var (
+	configResolverAddress = api.URLForService(api.ServiceConfig)
 )
 
 type options struct {
+	prowconfigflagutil.ConfigOptions
+
 	namespace string
 	dryRun    bool
 }
@@ -36,6 +45,10 @@ func gatherOptions() (*options, error) {
 	return o, nil
 }
 
+func (o *options) Validate() error {
+	return o.ConfigOptions.Validate(o.dryRun)
+}
+
 func main() {
 	logrusutil.ComponentInit()
 	controllerruntime.SetLogger(logrusr.NewLogger(logrus.StandardLogger()))
@@ -43,6 +56,15 @@ func main() {
 	o, err := gatherOptions()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get options")
+	}
+
+	if err := o.Validate(); err != nil {
+		logrus.WithError(err).Fatal("Invalid options")
+	}
+
+	agent, err := o.ConfigOptions.ConfigAgent()
+	if err != nil {
+		logrus.WithError(err).Fatal("could not load Prow configuration")
 	}
 
 	ctx := controllerruntime.SetupSignalHandler()
@@ -68,7 +90,7 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to add prpqv1 to scheme")
 	}
 
-	if err := prpqr_reconciler.AddToManager(mgr, o.namespace); err != nil {
+	if err := prpqr_reconciler.AddToManager(mgr, o.namespace, server.NewResolverClient(configResolverAddress), agent); err != nil {
 		logrus.WithError(err).Fatal("Failed to add prpqr_reconciler to manager")
 	}
 

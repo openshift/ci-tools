@@ -9,7 +9,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -18,7 +17,6 @@ import (
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/pjutil"
-	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -28,10 +26,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	v1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
 	"github.com/openshift/ci-tools/pkg/controller/prpqr_reconciler/pjstatussyncer"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/prowgen"
 )
 
 const (
@@ -43,7 +43,27 @@ const (
 	conditionWithErrors       = "WithErrors"
 )
 
-func AddToManager(mgr manager.Manager, ns string) error {
+type injectingResolverClient interface {
+	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error)
+}
+
+type prowConfigGetter interface {
+	Config() periodicDefaulter
+}
+
+type wrappedProwConfigAgent struct {
+	pc *prowconfig.Agent
+}
+
+func (w *wrappedProwConfigAgent) Config() periodicDefaulter {
+	return w.pc.Config()
+}
+
+type periodicDefaulter interface {
+	DefaultPeriodic(periodic *prowconfig.Periodic) error
+}
+
+func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, prowConfigAgent *prowconfig.Agent) error {
 	if err := pjstatussyncer.AddToManager(mgr, ns); err != nil {
 		return fmt.Errorf("failed to construct pjstatussyncer: %w", err)
 	}
@@ -51,8 +71,10 @@ func AddToManager(mgr manager.Manager, ns string) error {
 	c, err := controller.New(controllerName, mgr, controller.Options{
 		MaxConcurrentReconciles: 1,
 		Reconciler: &reconciler{
-			logger: logrus.WithField("controller", controllerName),
-			client: mgr.GetClient(),
+			logger:               logrus.WithField("controller", controllerName),
+			client:               mgr.GetClient(),
+			configResolverClient: rc,
+			prowConfigGetter:     &wrappedProwConfigAgent{pc: prowConfigAgent},
 		},
 	})
 	if err != nil {
@@ -92,6 +114,9 @@ func prpqrHandler() handler.EventHandler {
 type reconciler struct {
 	logger *logrus.Entry
 	client ctrlruntimeclient.Client
+
+	configResolverClient injectingResolverClient
+	prowConfigGetter     prowConfigGetter
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -117,7 +142,14 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 		return fmt.Errorf("failed to get the PullRequestPayloadQualificationRun: %s in namespace %s: %w", req.Name, req.Namespace, err)
 	}
 
-	prowjobs := generateProwjobs(prpqr.Spec.PullRequest.Org, prpqr.Spec.PullRequest.Repo, prpqr.Spec.PullRequest.BaseRef, req.Name, req.Namespace, prpqr.Spec.Jobs.Jobs)
+	baseMetadata := metadataFromPullRequestUnderTest(prpqr.Spec.PullRequest)
+	prowjobs, errs := generateProwjobs(r.configResolverClient, r.prowConfigGetter.Config(), baseMetadata, req.Name, req.Namespace, prpqr.Spec.Jobs.Jobs, &prpqr.Spec.PullRequest)
+	for job, err := range errs {
+		createdJobs[job] = v1.PullRequestPayloadJobStatus{ReleaseJobName: job, Status: prowv1.ProwJobStatus{
+			State:       prowv1.ErrorState,
+			Description: err.Error(),
+		}}
+	}
 	for releaseJobName, pj := range prowjobs {
 		logger = logger.WithFields(logrus.Fields{"name": pj.Name, "namespace": req.Namespace})
 
@@ -223,47 +255,105 @@ func jobNameHash(name string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-// TODO: Currently we create a single dummy prowjob just for testing. The actual implementation
-// will be introduced in https://issues.redhat.com/browse/DPTP-2577
-func generateProwjobs(org, repo, branch, prpqrName, prpqrNamespace string, releaseJobSpec []v1.ReleaseJobSpec) map[string]prowv1.ProwJob {
-	ret := make(map[string]prowv1.ProwJob)
+func generateProwjobs(rc injectingResolverClient, defaulter periodicDefaulter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, releaseJobSpec []v1.ReleaseJobSpec, pr *v1.PullRequestUnderTest) (map[string]prowv1.ProwJob, map[string]error) {
+	fakeProwgenInfo := &prowgen.ProwgenInfo{Metadata: *baseCiop}
+
+	prowjobs := map[string]prowv1.ProwJob{}
+	errs := map[string]error{}
+
 	for _, spec := range releaseJobSpec {
-		releaseJobName := spec.JobName(jobconfig.PeriodicPrefix)
+		mimickedJob := spec.JobName(jobconfig.PeriodicPrefix)
 		labels := map[string]string{
 			v1.PullRequestPayloadQualificationRunLabel: prpqrName,
-			releaseJobNameLabel:                        jobNameHash(releaseJobName),
+			releaseJobNameLabel:                        jobNameHash(mimickedJob),
 		}
 		annotations := map[string]string{
-			releaseJobNameAnnotation: releaseJobName,
+			releaseJobNameAnnotation: mimickedJob,
 		}
 
-		base := prowconfig.JobBase{
-			Agent: string(prowv1.KubernetesAgent),
-			Spec: &corev1.PodSpec{
-				Containers: []corev1.Container{{Image: "centos:8", Command: []string{"sleep"}, Args: []string{"100"}}},
+		inject := &api.MetadataWithTest{
+			Metadata: api.Metadata{
+				Org:     spec.CIOperatorConfig.Org,
+				Repo:    spec.CIOperatorConfig.Repo,
+				Branch:  spec.CIOperatorConfig.Branch,
+				Variant: spec.CIOperatorConfig.Variant,
 			},
+			Test: spec.Test,
+		}
 
-			UtilityConfig: prowconfig.UtilityConfig{
-				Decorate: utilpointer.BoolPtr(true),
-			},
+		ciopConfig, err := rc.ConfigWithTest(baseCiop, inject)
+		if err != nil {
+			errs[mimickedJob] = fmt.Errorf("failed to get config from resolver: %w", err)
+			continue
+		}
+
+		var periodic *prowconfig.Periodic
+		for i := range ciopConfig.Tests {
+			if ciopConfig.Tests[i].As != inject.Test {
+				continue
+			}
+			jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[i])
+			jobBaseGen.PodSpec.Add(prowgen.InjectTestFrom(inject))
+
+			// Avoid sharing when we run the same job multiple times.
+			// PRPQR name should be safe to use as a discriminating input, because
+			// there should never be more than one execution of a specific job per
+			// PRPQR (until aggregated jobs, but for them we'll have a sequence index)
+			jobBaseGen.PodSpec.Add(prowgen.CustomHashInput(prpqrName))
+
+			// TODO(muller): Solve cluster assignment
+			jobBaseGen.Cluster("build01")
+			periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, "@yearly", "", false, ciopConfig.CanonicalGoRepository)
+			var variant string
+			if inject.Variant != "" {
+				variant = fmt.Sprintf("-%s", inject.Variant)
+			}
+			periodic.Name = fmt.Sprintf("%s-%s-%d%s-%s", baseCiop.Org, baseCiop.Repo, pr.PullRequest.Number, variant, inject.Test)
+			break
+		}
+		// We did not find the injected test: this is a bug
+		if periodic == nil {
+			errs[mimickedJob] = fmt.Errorf("BUG: test '%s' not found in injected config", inject.Test)
+			continue
 		}
 
 		extraRefs := prowv1.Refs{
-			Org:     org,
-			Repo:    repo,
-			BaseRef: branch,
+			Org:  baseCiop.Org,
+			Repo: baseCiop.Repo,
+			// TODO(muller): All these commented-out fields need to be propagated via the PRPQR spec
+			// We do not need them now but we should eventually wire them through
+			// RepoLink:  pr.Base.Repo.HTMLURL,
+			BaseRef: pr.BaseRef,
+			BaseSHA: pr.BaseSHA,
+			// BaseLink:  fmt.Sprintf("%s/commit/%s", pr.Base.Repo.HTMLURL, pr.BaseSHA),
+			PathAlias: periodic.ExtraRefs[0].PathAlias,
+			Pulls: []prowv1.Pull{
+				{
+					Number: pr.PullRequest.Number,
+					Author: pr.PullRequest.Author,
+					SHA:    pr.PullRequest.SHA,
+					Title:  pr.PullRequest.Title,
+					// Link:       pr.HTMLURL,
+					// AuthorLink: pr.User.HTMLURL,
+					// CommitLink: fmt.Sprintf("%s/pull/%d/commits/%s", pr.Base.Repo.HTMLURL, pr.Number, pr.Head.SHA),
+				},
+			},
 		}
-		base.ExtraRefs = []prowv1.Refs{extraRefs}
+		periodic.ExtraRefs = []prowv1.Refs{extraRefs}
 
-		periodicJob := prowconfig.Periodic{
-			JobBase: base,
-			Cron:    "@yearly",
+		if err = defaulter.DefaultPeriodic(periodic); err != nil {
+			errs[mimickedJob] = fmt.Errorf("failed to default the ProwJob: %w", err)
+			continue
 		}
 
-		pj := pjutil.NewProwJob(pjutil.PeriodicSpec(periodicJob), labels, annotations)
+		pj := pjutil.NewProwJob(pjutil.PeriodicSpec(*periodic), labels, annotations)
 		pj.Namespace = prpqrNamespace
 
-		ret[releaseJobName] = pj
+		prowjobs[mimickedJob] = pj
 	}
-	return ret
+	return prowjobs, errs
+}
+
+func metadataFromPullRequestUnderTest(pr v1.PullRequestUnderTest) *api.Metadata {
+	return &api.Metadata{Org: pr.Org, Repo: pr.Repo, Branch: pr.BaseRef}
 }

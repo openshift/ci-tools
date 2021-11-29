@@ -102,7 +102,7 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 		}
 		if _, ok := jobBase.Labels[api.NoBuildsLabel]; ok && len(config.NoBuilds) > 0 {
 			// Any deterministic distribution is fine for now.
-			return config.NoBuilds[len(jobBase.Name)%len(config.KVM)], false, nil
+			return config.NoBuilds[len(jobBase.Name)%len(config.NoBuilds)], false, nil
 		}
 	}
 

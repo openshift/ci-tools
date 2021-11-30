@@ -10,6 +10,9 @@ func init() {
 		fmt.Print(unifiedBackendDisruptionSchema)
 		fmt.Print(jobSchema)
 		fmt.Print(jobRunSchema)
+		fmt.Print(unifiedBackendDisruptionBackendsSchema)
+		fmt.Print(unifiedBackendDisruptionBackendByCountSchema)
+		fmt.Print(unifiedBackendDisruptionByCountByJobSchema)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -103,9 +104,10 @@ func main() {
 
 		if err := manageIssues(client, botUser.Login, repoInfo, branches, logger); err != nil {
 			failed = true
-			return nil
 		}
 
+		//sleep to respect Github's API 30 requests per minute limit, absolute minimum is above 2 seconds
+		time.Sleep(5 * time.Second)
 		return nil
 	}); err != nil || failed {
 		logrus.WithError(err).Fatal("Could not publish merge blocking issues.")

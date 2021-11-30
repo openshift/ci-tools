@@ -142,6 +142,15 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 		return fmt.Errorf("failed to get the PullRequestPayloadQualificationRun: %s in namespace %s: %w", req.Name, req.Namespace, err)
 	}
 
+	existingProwjobs := &prowv1.ProwJobList{}
+	if err := r.client.List(ctx, existingProwjobs, ctrlruntimeclient.MatchingLabels{v1.PullRequestPayloadQualificationRunLabel: prpqr.Name}); err != nil {
+		return fmt.Errorf("failed to get ProwJobs for this PullRequestPayloadQualifiactionRun: %w", err)
+	}
+	existingProwjobsByNameHash := map[string]*prowv1.ProwJob{}
+	for i, pj := range existingProwjobs.Items {
+		existingProwjobsByNameHash[pj.Labels[releaseJobNameLabel]] = &existingProwjobs.Items[i]
+	}
+
 	baseMetadata := metadataFromPullRequestUnderTest(prpqr.Spec.PullRequest)
 	prowjobs, errs := generateProwjobs(r.configResolverClient, r.prowConfigGetter.Config(), baseMetadata, req.Name, req.Namespace, prpqr.Spec.Jobs.Jobs, &prpqr.Spec.PullRequest)
 	for job, err := range errs {
@@ -153,17 +162,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 	for releaseJobName, pj := range prowjobs {
 		logger = logger.WithFields(logrus.Fields{"name": pj.Name, "namespace": req.Namespace})
 
-		pjList := &prowv1.ProwJobList{}
-		if err := r.client.List(ctx, pjList, ctrlruntimeclient.MatchingLabels{v1.PullRequestPayloadQualificationRunLabel: prpqr.Name, releaseJobNameLabel: jobNameHash(releaseJobName)}); err != nil {
-			logger.WithError(err).Error("failed to get list of Prowjobs")
-			createdJobs[releaseJobName] = v1.PullRequestPayloadJobStatus{ReleaseJobName: releaseJobName, Status: prowv1.ProwJobStatus{
-				State:       prowv1.ErrorState,
-				Description: fmt.Errorf("failed to list prowjobs: %w", err).Error(),
-			}}
-			continue
-		}
-
-		if len(pjList.Items) > 0 {
+		if _, exists := existingProwjobsByNameHash[jobNameHash(releaseJobName)]; exists {
 			logger.Info("Prowjob already exists...")
 			continue
 		}

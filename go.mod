@@ -30,7 +30,7 @@ require (
 	github.com/GoogleCloudPlatform/testgrid v0.0.68
 	github.com/PagerDuty/go-pagerduty v1.4.1
 	github.com/alecthomas/chroma v0.8.2-0.20201103103104-ab61726cdb54
-	github.com/andygrunwald/go-jira v1.13.0
+	github.com/andygrunwald/go-jira v1.14.0
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/bombsimon/logrusr v0.0.0-00010101000000-000000000000
 	github.com/coreydaley/openshift-goimports v0.0.0-20201111145504-7b4aecddd198
@@ -79,7 +79,7 @@ require (
 	k8s.io/apiserver v0.22.0
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
 	k8s.io/klog/v2 v2.9.0
-	k8s.io/test-infra v0.0.0-20211110153326-74a5a2f770f3
+	k8s.io/test-infra v0.0.0-20211130120656-618b931b1fca
 	k8s.io/utils v0.0.0-20210802155522-efc7438f0176
 	sigs.k8s.io/boskos v0.0.0-20210730172138-093b54882439
 	sigs.k8s.io/controller-runtime v0.9.3-0.20210826145723-8f9d0dfc8446
@@ -107,7 +107,6 @@ require (
 	github.com/clarketm/json v1.13.4 // indirect
 	github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1 // indirect
 	github.com/dlclark/regexp2 v1.2.0 // indirect
 	github.com/docker/docker v1.13.1 // indirect
@@ -176,7 +175,7 @@ require (
 	github.com/spf13/viper v1.8.1 // indirect
 	github.com/subosito/gotenv v1.2.0 // indirect
 	github.com/tektoncd/pipeline v0.14.1-0.20200710073957-5eeb17f81999 // indirect
-	github.com/trivago/tgo v1.0.1 // indirect
+	github.com/trivago/tgo v1.0.7 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	go4.org v0.0.0-20201209231011-d4a079459e60 // indirect
 	gocloud.dev v0.19.0 // indirect
@@ -207,4 +206,7 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.1.2 // indirect
 )
 
-require cloud.google.com/go v0.81.0 // indirect
+require (
+	cloud.google.com/go v0.81.0 // indirect
+	github.com/golang-jwt/jwt v3.2.1+incompatible // indirect
+)

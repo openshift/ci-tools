@@ -526,7 +526,7 @@ Updating Prow plugin configuration ...`)
 	configPath := path.Join(releaseRepo, ciopconfig.PluginConfigInRepoPath)
 	supplementalPluginConfigDir := path.Join(releaseRepo, filepath.Dir(ciopconfig.PluginConfigInRepoPath))
 	agent := plugins.ConfigAgent{}
-	if err := agent.Load(configPath, []string{supplementalPluginConfigDir}, "_pluginconfig.yaml", false); err != nil {
+	if err := agent.Load(configPath, []string{supplementalPluginConfigDir}, "_pluginconfig.yaml", false, false); err != nil {
 		return fmt.Errorf("could not load Prow plugin configuration: %w", err)
 	}
 

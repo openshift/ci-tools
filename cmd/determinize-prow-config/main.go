@@ -98,7 +98,7 @@ func updateProwConfig(configDir, shardingBaseDir string) error {
 func updatePluginConfig(configDir, shardingBaseDir string) error {
 	configPath := path.Join(configDir, config.PluginConfigFile)
 	agent := plugins.ConfigAgent{}
-	if err := agent.Load(configPath, []string{filepath.Dir(configPath)}, "_pluginconfig.yaml", false); err != nil {
+	if err := agent.Load(configPath, []string{filepath.Dir(configPath)}, "_pluginconfig.yaml", false, true); err != nil {
 		return fmt.Errorf("could not load Prow plugin configuration: %w", err)
 	}
 	cfg := agent.Config()

@@ -49,28 +49,42 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 		fmt.Fprintf(os.Stderr, "Could not fetch backend disruption data for all runs %v\n", err)
 	}
 
-	allBackends := getAllDisruptionBackendNames(jobRunIDToBackendNameToAvailabilityResult)
-	for _, backendName := range allBackends.List() {
-		jobRunIDToAvailabilityResultForBackend := getDisruptionForBackend(jobRunIDToBackendNameToAvailabilityResult, backendName)
-		failedJobRunIDs, successfulJobRunIDs, failed, message, err := o.passFailCalculator.CheckDisruptionMeanWithinTwoStandardDeviations(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
-		if err != nil {
-			return nil, err
-		}
+	testCaseNamePatternToDisruptionCheckFn := map[string]disruptionJunitCheckFunc{
+		"%s mean disruption should be less than historical plus two standard deviations": o.passFailCalculator.CheckDisruptionMeanWithinTwoStandardDeviations,
+		// TODO add a SKIP mechanism to disruptionJunitCheckFunc instead of the fail bool
+		//"%s mean disruption should be less than historical plus one standard deviation":  o.passFailCalculator.CheckDisruptionMeanWithinOneStandardDeviation,
+		"%s disruption P95 should not be worse": o.passFailCalculator.CheckP95Disruption,
+	}
 
-		testCaseName := fmt.Sprintf("%s should remain available", backendName)
-		junitTestCase, err := disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot, failedJobRunIDs, successfulJobRunIDs, failed, message)
-		if err != nil {
-			return nil, err
-		}
-		disruptionJunitSuite.TestCases = append(disruptionJunitSuite.TestCases, junitTestCase)
+	for _, testCaseNamePattern := range sets.StringKeySet(testCaseNamePatternToDisruptionCheckFn).List() {
+		disruptionCheckFn := testCaseNamePatternToDisruptionCheckFn[testCaseNamePattern]
 
-		if failed {
-			disruptionJunitSuite.NumFailed++
+		allBackends := getAllDisruptionBackendNames(jobRunIDToBackendNameToAvailabilityResult)
+		for _, backendName := range allBackends.List() {
+			jobRunIDToAvailabilityResultForBackend := getDisruptionForBackend(jobRunIDToBackendNameToAvailabilityResult, backendName)
+
+			failedJobRunIDs, successfulJobRunIDs, failed, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
+			if err != nil {
+				return nil, err
+			}
+
+			testCaseName := fmt.Sprintf(testCaseNamePattern, backendName)
+			junitTestCase, err := disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot, failedJobRunIDs, successfulJobRunIDs, failed, message)
+			if err != nil {
+				return nil, err
+			}
+			disruptionJunitSuite.TestCases = append(disruptionJunitSuite.TestCases, junitTestCase)
+
+			if failed {
+				disruptionJunitSuite.NumFailed++
+			}
 		}
 	}
 
 	return disruptionJunitSuite, nil
 }
+
+type disruptionJunitCheckFunc func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, failed bool, message string, err error)
 
 func disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot string, failedJobRunIDs, successfulJobRunIDs []string, failed bool, message string) (*junit.TestCase, error) {
 	junitTestCase := &junit.TestCase{

@@ -19,7 +19,7 @@ import (
 
 type baseline interface {
 	CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (failed bool, message string, err error)
-	CheckDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (stats *jobrunaggregatorapi.BackendDisruptionStatisticsRow, failed bool, message string, err error)
+	CheckDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (stats *DisruptionStatistic, failed bool, message string, err error)
 }
 
 func assignPassFail(ctx context.Context, combined *junit.TestSuites, baselinePassFail baseline) error {
@@ -131,6 +131,10 @@ func getWorkingPercentage(testCaseDetails *TestCaseDetails) float32 {
 	return float32(len(testCaseDetails.Passes)) / float32(len(testCaseDetails.Passes)+failureCount) * 100.0
 }
 */
+type DisruptionStatistic struct {
+	p95  float64
+	mean float64
+}
 
 // weeklyAverageFromTenDays gets the weekly average pass rate from ten days ago so that the latest tests do not
 // influence the pass/fail criteria.
@@ -146,7 +150,7 @@ type weeklyAverageFromTenDays struct {
 
 	queryDisruptionOnce sync.Once
 	queryDisruptionErr  error
-	disruptionByBackend map[string]jobrunaggregatorapi.BackendDisruptionStatisticsRow
+	disruptionByBackend map[string]DisruptionStatistic
 }
 
 func newWeeklyAverageFromTenDaysAgo(jobName string, startDay time.Time, minimumNumberOfAttempts int, bigQueryClient jobrunaggregatorlib.CIDataClient) baseline {
@@ -160,7 +164,7 @@ func newWeeklyAverageFromTenDaysAgo(jobName string, startDay time.Time, minimumN
 		queryTestRunsOnce:        sync.Once{},
 		queryTestRunsErr:         nil,
 		aggregatedTestRunsByName: nil,
-		disruptionByBackend:      make(map[string]jobrunaggregatorapi.BackendDisruptionStatisticsRow),
+		disruptionByBackend:      make(map[string]DisruptionStatistic),
 	}
 }
 
@@ -181,7 +185,7 @@ func (a *weeklyAverageFromTenDays) getAggregatedTestRuns(ctx context.Context) (m
 	return a.aggregatedTestRunsByName, a.queryTestRunsErr
 }
 
-func (a *weeklyAverageFromTenDays) getDisruptionByBackend(ctx context.Context) (map[string]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {
+func (a *weeklyAverageFromTenDays) getDisruptionByBackend(ctx context.Context) (map[string]DisruptionStatistic, error) {
 	a.queryDisruptionOnce.Do(func() {
 		rows, err := a.bigQueryClient.GetBackendDisruptionStatisticsByJob(ctx, a.jobName)
 		if err != nil {
@@ -189,10 +193,12 @@ func (a *weeklyAverageFromTenDays) getDisruptionByBackend(ctx context.Context) (
 			return
 		}
 
-		a.disruptionByBackend = make(map[string]jobrunaggregatorapi.BackendDisruptionStatisticsRow)
-		for i := range rows {
-			row := rows[i]
-			a.disruptionByBackend[row.BackendName] = row
+		a.disruptionByBackend = make(map[string]DisruptionStatistic)
+		for _, row := range rows {
+			a.disruptionByBackend[row.BackendName] = DisruptionStatistic{
+				p95:  row.P95,
+				mean: row.Mean,
+			}
 		}
 
 	})
@@ -200,7 +206,7 @@ func (a *weeklyAverageFromTenDays) getDisruptionByBackend(ctx context.Context) (
 	return a.disruptionByBackend, a.queryDisruptionErr
 }
 
-func (a *weeklyAverageFromTenDays) CheckDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (*jobrunaggregatorapi.BackendDisruptionStatisticsRow, bool, string, error) {
+func (a *weeklyAverageFromTenDays) CheckDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (*DisruptionStatistic, bool, string, error) {
 	missingAllHistoricalData := false
 	historicalDisruption, err := a.getDisruptionByBackend(ctx)
 	if err != nil {
@@ -213,7 +219,7 @@ func (a *weeklyAverageFromTenDays) CheckDisruption(ctx context.Context, jobRunID
 	// the aggregation fails.
 	disruptionThreshold := float64(1)
 	if !missingAllHistoricalData {
-		disruptionThreshold = historicalDisruptionStatistic.Mean + historicalDisruptionStatistic.StandardDeviation
+		disruptionThreshold = historicalDisruptionStatistic.mean * 1.10
 	}
 
 	totalRuns := len(jobRunIDToAvailabilityResultForBackend)
@@ -227,25 +233,25 @@ func (a *weeklyAverageFromTenDays) CheckDisruption(ctx context.Context, jobRunID
 	}
 
 	// We allow one "mulligan" by throwing away at most one outlier > our p95.
-	if float64(max) > historicalDisruptionStatistic.P95 {
-		fmt.Printf("%s throwing away one outlier (outlier=%ds p95=%fs)\n", backend, max, historicalDisruptionStatistic.P95)
+	if float64(max) > historicalDisruptionStatistic.p95 {
+		fmt.Printf("%s throwing away one outlier (outlier=%ds p95=%fs)\n", backend, max, historicalDisruptionStatistic.p95)
 		totalRuns--
 		totalDisruption -= max
 	}
 	meanDisruption := float64(totalDisruption) / float64(totalRuns)
-	fmt.Printf("%s disruption calculated for current runs (historicalMean=%.2fs failureThreshold(mean+StandardDeviation)=%.2fs historicalP95=%.2fs runs=%d totalDisruptionSecs=%ds mean=%.2fs max=%ds)\n",
-		backend, historicalDisruptionStatistic.Mean, disruptionThreshold, historicalDisruptionStatistic.P95, totalRuns, totalDisruption, meanDisruption, max)
+	fmt.Printf("%s disruption calculated for current runs (historicalMean=%.2fs failureThreshold(110%%)=%.2fs historicalP95=%.2fs runs=%d totalDisruptionSecs=%ds mean=%.2fs max=%ds)\n",
+		backend, historicalDisruptionStatistic.mean, disruptionThreshold, historicalDisruptionStatistic.p95, totalRuns, totalDisruption, meanDisruption, max)
 
 	if meanDisruption > disruptionThreshold {
 		return &historicalDisruptionStatistic, true, fmt.Sprintf(
-			"Mean disruption of %s is %.2f seconds, which is more than (mean+StandardDeviation) of the weekly historical mean from 10 days ago of %.2f seconds, marking this as a failure",
+			"Mean disruption of %s is %.2f seconds, which is more than 110%% of the weekly historical mean from 10 days ago of %.2f seconds, marking this as a failure",
 			backend,
 			meanDisruption,
 			disruptionThreshold), nil
 	}
 
 	return &historicalDisruptionStatistic, false, fmt.Sprintf(
-		"Mean disruption of %s is %.2f seconds, which is no more than (mean+StandardDeviation) of the weekly historical mean from 10 days ago of %.2f seconds. This is OK.",
+		"Mean disruption of %s is %.2f seconds, which is no more than 110%% of the weekly historical mean from 10 days ago of %.2f seconds. This is OK.",
 		backend,
 		meanDisruption,
 		disruptionThreshold), nil

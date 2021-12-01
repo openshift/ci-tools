@@ -70,8 +70,8 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 			currAvailabilityStat := jobRunIDToAvailabilityResultForBackend[jobRunID]
 			humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, jobRunID))
 			gcsArtifactURL := jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, jobRunID))
-			overMean := float64(currAvailabilityStat.SecondsUnavailable) > historicalStats.Mean
-			overP95 := float64(currAvailabilityStat.SecondsUnavailable) > historicalStats.P95
+			overMean := float64(currAvailabilityStat.SecondsUnavailable) > historicalStats.mean
+			overP95 := float64(currAvailabilityStat.SecondsUnavailable) > historicalStats.p95
 			switch {
 			case overP95:
 				currDetails.Failures = append(currDetails.Failures, TestCaseFailure{

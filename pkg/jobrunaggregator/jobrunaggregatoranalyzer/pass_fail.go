@@ -17,11 +17,19 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 )
 
+type testCaseStatus string
+
+const (
+	testCaseFailed  testCaseStatus = "failed"
+	testCasePassed  testCaseStatus = "passed"
+	testCaseSkipped testCaseStatus = "skipped"
+)
+
 type baseline interface {
-	CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (failed bool, message string, err error)
-	CheckDisruptionMeanWithinTwoStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, failed bool, message string, err error)
-	CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, failed bool, message string, err error)
-	CheckP95Disruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failureJobRunIDs []string, successJobRunIDs []string, failed bool, message string, err error)
+	CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (status testCaseStatus, message string, err error)
+	CheckDisruptionMeanWithinTwoStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
+	CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
+	CheckP95Disruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failureJobRunIDs []string, successJobRunIDs []string, status testCaseStatus, message string, err error)
 }
 
 func assignPassFail(ctx context.Context, combined *junit.TestSuites, baselinePassFail baseline) error {
@@ -53,7 +61,7 @@ func assignPassFailForTestSuite(ctx context.Context, parentTestSuites []string, 
 			return err
 		}
 
-		var failed bool
+		var status testCaseStatus
 		var message string
 		var err error
 		// TODO once we are ready to stop failing on aggregating the availability tests, we write something here to ignore
@@ -62,7 +70,7 @@ func assignPassFailForTestSuite(ctx context.Context, parentTestSuites []string, 
 		//if jobrunaggregatorlib.IsDisruptionTest(currTestCase.Name) {
 		//}
 
-		failed, message, err = baselinePassFail.CheckFailed(ctx, currSuiteNames, currDetails)
+		status, message, err = baselinePassFail.CheckFailed(ctx, currSuiteNames, currDetails)
 		if err != nil {
 			return err
 		}
@@ -74,14 +82,13 @@ func assignPassFailForTestSuite(ctx context.Context, parentTestSuites []string, 
 		}
 		currTestCase.SystemOut = string(detailsBytes)
 
-		if !failed {
-			continue
+		if status == testCaseFailed {
+			currTestCase.FailureOutput = &junit.FailureOutput{
+				Message: message,
+				Output:  currTestCase.SystemOut,
+			}
+			failureCount++
 		}
-		currTestCase.FailureOutput = &junit.FailureOutput{
-			Message: message,
-			Output:  currTestCase.SystemOut,
-		}
-		failureCount++
 	}
 
 	combined.NumFailed = failureCount
@@ -202,11 +209,11 @@ func (a *weeklyAverageFromTenDays) getDisruptionByBackend(ctx context.Context) (
 	return a.disruptionByBackend, a.queryDisruptionErr
 }
 
-func (a *weeklyAverageFromTenDays) CheckDisruptionMeanWithinTwoStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) ([]string, []string, bool, string, error) {
+func (a *weeklyAverageFromTenDays) CheckDisruptionMeanWithinTwoStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) ([]string, []string, testCaseStatus, string, error) {
 	return a.checkDisruptionMean(ctx, jobRunIDToAvailabilityResultForBackend, backend, meanPlusTwoStandardDeviations)
 }
 
-func (a *weeklyAverageFromTenDays) CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) ([]string, []string, bool, string, error) {
+func (a *weeklyAverageFromTenDays) CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) ([]string, []string, testCaseStatus, string, error) {
 	return a.checkDisruptionMean(ctx, jobRunIDToAvailabilityResultForBackend, backend, meanPlusOneStandardDeviation)
 }
 
@@ -220,7 +227,7 @@ func meanPlusOneStandardDeviation(historicalDisruptionStatistic jobrunaggregator
 	return historicalDisruptionStatistic.Mean + historicalDisruptionStatistic.StandardDeviation
 }
 
-func (a *weeklyAverageFromTenDays) checkDisruptionMean(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, disruptonThresholdFn disruptionThresholdFunc) ([]string, []string, bool, string, error) {
+func (a *weeklyAverageFromTenDays) checkDisruptionMean(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, disruptonThresholdFn disruptionThresholdFunc) ([]string, []string, testCaseStatus, string, error) {
 	failedJobRunsIDs := []string{}
 	successfulJobRunIDs := []string{}
 
@@ -272,14 +279,14 @@ func (a *weeklyAverageFromTenDays) checkDisruptionMean(ctx context.Context, jobR
 		backend, historicalString, totalRuns, totalDisruption, meanDisruption, max)
 
 	if meanDisruption > disruptionThreshold {
-		return failedJobRunsIDs, successfulJobRunIDs, true, fmt.Sprintf(
+		return failedJobRunsIDs, successfulJobRunIDs, testCaseFailed, fmt.Sprintf(
 			"Mean disruption of %s is %.2f seconds, which is more than the failureThreshold of the weekly historical mean from 10 days ago: %s, marking this as a failure",
 			backend,
 			meanDisruption,
 			historicalString), nil
 	}
 
-	return failedJobRunsIDs, successfulJobRunIDs, false, fmt.Sprintf(
+	return failedJobRunsIDs, successfulJobRunIDs, testCasePassed, fmt.Sprintf(
 		"Mean disruption of %s is %.2f seconds, which is no more than failureThreshold of the weekly historical mean from 10 days ago: %s. This is OK.",
 		backend,
 		meanDisruption,
@@ -287,7 +294,7 @@ func (a *weeklyAverageFromTenDays) checkDisruptionMean(ctx context.Context, jobR
 	), nil
 }
 
-func (a *weeklyAverageFromTenDays) CheckP95Disruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) ([]string, []string, bool, string, error) {
+func (a *weeklyAverageFromTenDays) CheckP95Disruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) ([]string, []string, testCaseStatus, string, error) {
 	failureJobRunIDs := []string{}
 	successJobRunIDs := []string{}
 
@@ -310,11 +317,11 @@ func (a *weeklyAverageFromTenDays) CheckP95Disruption(ctx context.Context, jobRu
 
 	if numberOfPasses == 0 {
 		summary := fmt.Sprintf("Zero successful runs, we require at least one success to pass.  P95=%.2fs", historicalDisruptionStatistic.P95)
-		return failureJobRunIDs, successJobRunIDs, true, summary, nil
+		return failureJobRunIDs, successJobRunIDs, testCaseFailed, summary, nil
 	}
 	if numberOfAttempts < 3 {
 		summary := fmt.Sprintf("We require at least three attempts to pass.  P95=%.2fs", historicalDisruptionStatistic.P95)
-		return failureJobRunIDs, successJobRunIDs, true, summary, nil
+		return failureJobRunIDs, successJobRunIDs, testCaseFailed, summary, nil
 	}
 
 	workingPercentage := 95 // P95 should be a 95% success rate on all runs
@@ -328,7 +335,7 @@ func (a *weeklyAverageFromTenDays) CheckP95Disruption(ctx context.Context, jobRu
 			historicalDisruptionStatistic.P95,
 			requiredNumberOfPasses,
 		)
-		return failureJobRunIDs, successJobRunIDs, true, summary, nil
+		return failureJobRunIDs, successJobRunIDs, testCaseFailed, summary, nil
 	}
 
 	summary := fmt.Sprintf("Passed: Passed %d times, failed %d times.  The historical P95=%.2fs.  The required number of passes is %d.",
@@ -337,23 +344,23 @@ func (a *weeklyAverageFromTenDays) CheckP95Disruption(ctx context.Context, jobRu
 		historicalDisruptionStatistic.P95,
 		requiredNumberOfPasses,
 	)
-	return failureJobRunIDs, successJobRunIDs, false, summary, nil
+	return failureJobRunIDs, successJobRunIDs, testCasePassed, summary, nil
 }
 
-func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (bool, string, error) {
+func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (testCaseStatus, string, error) {
 	if testShouldAlwaysPass(testCaseDetails.Name) {
 		fmt.Printf("always passing %q\n", testCaseDetails.Name)
-		return false, "always passing", nil
+		return testCasePassed, "always passing", nil
 	}
 	if !didTestRun(testCaseDetails) {
-		return false, "did not run", nil
+		return testCasePassed, "did not run", nil
 	}
 	numberOfAttempts := getAttempts(testCaseDetails)
 
 	// if most of the job runs skipped this test, then we probably intend to skip the test overall and the failure is actually
 	// due to some kind of "couldn't detect that I should skip".
 	if len(testCaseDetails.Passes) == 0 && len(testCaseDetails.Skips) > len(testCaseDetails.Failures) {
-		return false, "probably intended to skip", nil
+		return testCasePassed, "probably intended to skip", nil
 	}
 
 	numberOfPasses := getNumberOfPasses(testCaseDetails)
@@ -365,7 +372,7 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames [
 			len(testCaseDetails.Skips),
 			a.minimumNumberOfAttempts,
 		)
-		return true, summary, nil
+		return testCaseFailed, summary, nil
 	}
 	if len(testCaseDetails.Passes) < 1 {
 		summary := fmt.Sprintf("Passed %d times, failed %d times, skipped %d times: we require at least one pass to consider it a success",
@@ -373,7 +380,7 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames [
 			numberOfFailures,
 			len(testCaseDetails.Skips),
 		)
-		return true, summary, nil
+		return testCaseFailed, summary, nil
 	}
 
 	aggregatedTestRunsByName, err := a.getAggregatedTestRuns(ctx)
@@ -405,10 +412,10 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames [
 			workingPercentage,
 			requiredNumberOfPasses,
 		)
-		return true, summary, nil
+		return testCaseFailed, summary, nil
 	}
 
-	return false, fmt.Sprintf("Passed: Passed %d times, failed %d times.  The historical pass rate is %d%%.  The required number of passes is %d.",
+	return testCasePassed, fmt.Sprintf("Passed: Passed %d times, failed %d times.  The historical pass rate is %d%%.  The required number of passes is %d.",
 		numberOfPasses,
 		numberOfFailures,
 		workingPercentage,

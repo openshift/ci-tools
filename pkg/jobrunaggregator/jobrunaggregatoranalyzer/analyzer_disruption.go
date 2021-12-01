@@ -62,20 +62,19 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 		allBackends := getAllDisruptionBackendNames(jobRunIDToBackendNameToAvailabilityResult)
 		for _, backendName := range allBackends.List() {
 			jobRunIDToAvailabilityResultForBackend := getDisruptionForBackend(jobRunIDToBackendNameToAvailabilityResult, backendName)
-
-			failedJobRunIDs, successfulJobRunIDs, failed, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
+			failedJobRunIDs, successfulJobRunIDs, status, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
 			if err != nil {
 				return nil, err
 			}
 
 			testCaseName := fmt.Sprintf(testCaseNamePattern, backendName)
-			junitTestCase, err := disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot, failedJobRunIDs, successfulJobRunIDs, failed, message)
+			junitTestCase, err := disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot, failedJobRunIDs, successfulJobRunIDs, status, message)
 			if err != nil {
 				return nil, err
 			}
 			disruptionJunitSuite.TestCases = append(disruptionJunitSuite.TestCases, junitTestCase)
 
-			if failed {
+			if status == testCaseFailed {
 				disruptionJunitSuite.NumFailed++
 			}
 		}
@@ -84,9 +83,9 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 	return disruptionJunitSuite, nil
 }
 
-type disruptionJunitCheckFunc func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, failed bool, message string, err error)
+type disruptionJunitCheckFunc func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
 
-func disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot string, failedJobRunIDs, successfulJobRunIDs []string, failed bool, message string) (*junit.TestCase, error) {
+func disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot string, failedJobRunIDs, successfulJobRunIDs []string, status testCaseStatus, message string) (*junit.TestCase, error) {
 	junitTestCase := &junit.TestCase{
 		Name: testCaseName,
 	}
@@ -121,10 +120,15 @@ func disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot string, failedJobR
 	}
 	junitTestCase.SystemOut = string(detailsBytes)
 
-	if failed {
+	switch status {
+	case testCaseFailed:
 		junitTestCase.FailureOutput = &junit.FailureOutput{
 			Message: message,
 			Output:  junitTestCase.SystemOut,
+		}
+	case testCaseSkipped:
+		junitTestCase.SkipMessage = &junit.SkipMessage{
+			Message: message,
 		}
 	}
 

@@ -24,7 +24,6 @@ var (
 		"oauth-api-reused-connections":                      "OAuth APIs remain available with reused connections",
 		"service-load-balancer-with-pdb-reused-connections": "Application behind service load balancer with PDB is not disrupted",
 		"image-registry-reused-connections":                 "Image registry remain available",
-		"cluster-ingress-new-connections":                   "Cluster frontend ingress remain available",
 		"ingress-to-oauth-server-new-connections":           "OAuth remains available via cluster frontend ingress using new connections",
 		"ingress-to-oauth-server-used-connections":          "OAuth remains available via cluster frontend ingress using reused connections",
 		"ingress-to-console-new-connections":                "Console remains available via cluster frontend ingress using new connections",

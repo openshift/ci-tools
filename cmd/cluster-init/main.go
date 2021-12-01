@@ -173,6 +173,7 @@ func main() {
 			updateCiSecretBootstrap,
 			updateSecretGenerator,
 			updateSanitizeProwJobs,
+			updateProwPluginConfig,
 		}
 		if !o.update {
 			steps = append(steps, updateBuildClusters)

@@ -52,74 +52,69 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 	allBackends := getAllDisruptionBackendNames(jobRunIDToBackendNameToAvailabilityResult)
 	for _, backendName := range allBackends.List() {
 		jobRunIDToAvailabilityResultForBackend := getDisruptionForBackend(jobRunIDToBackendNameToAvailabilityResult, backendName)
-		historicalStats, failed, message, err := o.passFailCalculator.CheckDisruption(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
+		failedJobRunIDs, successfulJobRunIDs, failed, message, err := o.passFailCalculator.CheckDisruptionMeanWithinTwoStandardDeviations(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
 		if err != nil {
 			return nil, err
 		}
 
-		junitTestCase := &junit.TestCase{
-			Name: fmt.Sprintf("%s should remain available", backendName),
+		testCaseName := fmt.Sprintf("%s should remain available", backendName)
+		junitTestCase, err := disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot, failedJobRunIDs, successfulJobRunIDs, failed, message)
+		if err != nil {
+			return nil, err
 		}
 		disruptionJunitSuite.TestCases = append(disruptionJunitSuite.TestCases, junitTestCase)
 
-		currDetails := TestCaseDetails{
-			Name:    junitTestCase.Name,
-			Summary: message,
+		if failed {
+			disruptionJunitSuite.NumFailed++
 		}
-		for jobRunID := range jobRunIDToAvailabilityResultForBackend {
-			currAvailabilityStat := jobRunIDToAvailabilityResultForBackend[jobRunID]
-			humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, jobRunID))
-			gcsArtifactURL := jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, jobRunID))
-			overMean := float64(currAvailabilityStat.SecondsUnavailable) > historicalStats.Mean
-			overP95 := float64(currAvailabilityStat.SecondsUnavailable) > historicalStats.P95
-			switch {
-			case overP95:
-				currDetails.Failures = append(currDetails.Failures, TestCaseFailure{
-					JobRunID:       jobRunID,
-					HumanURL:       humanURL,
-					GCSArtifactURL: gcsArtifactURL,
-				})
+	}
 
-			case overMean: // this will mark it as a flake in higher layers
-				currDetails.Failures = append(currDetails.Failures, TestCaseFailure{
-					JobRunID:       jobRunID,
-					HumanURL:       humanURL,
-					GCSArtifactURL: gcsArtifactURL,
-				})
-				currDetails.Passes = append(currDetails.Passes, TestCasePass{
-					JobRunID:       jobRunID,
-					HumanURL:       humanURL,
-					GCSArtifactURL: gcsArtifactURL,
-				})
+	return disruptionJunitSuite, nil
+}
 
-			default: // this will mark as success only
-				currDetails.Passes = append(currDetails.Passes, TestCasePass{
-					JobRunID:       jobRunID,
-					HumanURL:       humanURL,
-					GCSArtifactURL: gcsArtifactURL,
-				})
-			}
-		}
+func disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot string, failedJobRunIDs, successfulJobRunIDs []string, failed bool, message string) (*junit.TestCase, error) {
+	junitTestCase := &junit.TestCase{
+		Name: testCaseName,
+	}
 
-		currDetails.Summary = message
-		detailsBytes, err := yaml.Marshal(currDetails)
-		if err != nil {
-			return nil, err
-		}
-		junitTestCase.SystemOut = string(detailsBytes)
+	currDetails := TestCaseDetails{
+		Name:    junitTestCase.Name,
+		Summary: message,
+	}
+	for _, jobRunID := range failedJobRunIDs {
+		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, jobRunID))
+		gcsArtifactURL := jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, jobRunID))
+		currDetails.Failures = append(currDetails.Failures, TestCaseFailure{
+			JobRunID:       jobRunID,
+			HumanURL:       humanURL,
+			GCSArtifactURL: gcsArtifactURL,
+		})
+	}
+	for _, jobRunID := range successfulJobRunIDs {
+		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, jobRunID))
+		gcsArtifactURL := jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, jobRunID))
+		currDetails.Passes = append(currDetails.Passes, TestCasePass{
+			JobRunID:       jobRunID,
+			HumanURL:       humanURL,
+			GCSArtifactURL: gcsArtifactURL,
+		})
+	}
 
-		if !failed {
-			continue
-		}
+	currDetails.Summary = message
+	detailsBytes, err := yaml.Marshal(currDetails)
+	if err != nil {
+		return nil, err
+	}
+	junitTestCase.SystemOut = string(detailsBytes)
+
+	if failed {
 		junitTestCase.FailureOutput = &junit.FailureOutput{
 			Message: message,
 			Output:  junitTestCase.SystemOut,
 		}
-		disruptionJunitSuite.NumFailed++
-
 	}
 
-	return disruptionJunitSuite, nil
+	return junitTestCase, nil
 }
 
 // getDisruptionByJobRunID returns a map of map[jobRunID] to map[backend-name]availabilityResult

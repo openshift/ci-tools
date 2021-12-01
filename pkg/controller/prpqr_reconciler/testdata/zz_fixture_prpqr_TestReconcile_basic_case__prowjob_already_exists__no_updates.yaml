@@ -34,3 +34,9 @@
       reason: AllJobsTriggered
       status: "True"
       type: AllJobsTriggered
+    jobs:
+    - jobName: periodic-ci-test-org-test-repo-test-branch-test-name
+      prowJob: some-uuid
+      status:
+        startTime: "1970-01-01T00:00:00Z"
+        state: triggered

@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -134,8 +135,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 	logger = logger.WithField("namespace", req.Namespace).WithField("prpqr_name", req.Name)
 	logger.Info("Starting reconciliation")
 
-	var prpqrMutations []func(prpqr *v1.PullRequestPayloadQualificationRun)
-	createdJobs := make(map[string]v1.PullRequestPayloadJobStatus)
+	statuses := make(map[string]*v1.PullRequestPayloadJobStatus)
 
 	prpqr := &v1.PullRequestPayloadQualificationRun{}
 	if err := r.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: req.Namespace, Name: req.Name}, prpqr); err != nil {
@@ -151,26 +151,50 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 		existingProwjobsByNameHash[pj.Labels[releaseJobNameLabel]] = &existingProwjobs.Items[i]
 	}
 
-	baseMetadata := metadataFromPullRequestUnderTest(prpqr.Spec.PullRequest)
-	prowjobs, errs := generateProwjobs(r.configResolverClient, r.prowConfigGetter.Config(), baseMetadata, req.Name, req.Namespace, prpqr.Spec.Jobs.Jobs, &prpqr.Spec.PullRequest)
-	for job, err := range errs {
-		createdJobs[job] = v1.PullRequestPayloadJobStatus{ReleaseJobName: job, Status: prowv1.ProwJobStatus{
-			State:       prowv1.ErrorState,
-			Description: err.Error(),
-		}}
+	statusByJobName := map[string]*v1.PullRequestPayloadJobStatus{}
+	for i := range prpqr.Status.Jobs {
+		jobName := prpqr.Status.Jobs[i].ReleaseJobName
+		statusByJobName[jobName] = &prpqr.Status.Jobs[i]
 	}
-	for releaseJobName, pj := range prowjobs {
-		logger = logger.WithFields(logrus.Fields{"name": pj.Name, "namespace": req.Namespace})
 
-		if _, exists := existingProwjobsByNameHash[jobNameHash(releaseJobName)]; exists {
-			logger.Info("Prowjob already exists...")
+	baseMetadata := metadataFromPullRequestUnderTest(prpqr.Spec.PullRequest)
+	for _, jobSpec := range prpqr.Spec.Jobs.Jobs {
+		mimickedJob := jobSpec.JobName(jobconfig.PeriodicPrefix)
+		logger = logger.WithFields(logrus.Fields{"want-job": mimickedJob})
+
+		if status, exists := statusByJobName[mimickedJob]; exists {
+			logger.WithField("prowjob", status.ProwJob).Debug("Job already present in status")
+			statuses[mimickedJob] = status
+			continue
+		}
+
+		if job, exists := existingProwjobsByNameHash[jobNameHash(mimickedJob)]; exists {
+			logger.WithField("prowjob", job.Name).Debug("Prowjob already exists")
+			statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
+				ReleaseJobName: mimickedJob,
+				ProwJob:        job.Name,
+				Status:         job.Status,
+			}
+			continue
+		}
+
+		prowjob, err := generateProwjob(r.configResolverClient, r.prowConfigGetter.Config(), baseMetadata, req.Name, req.Namespace, &jobSpec, &prpqr.Spec.PullRequest)
+		if err != nil {
+			logger.WithError(err).Error("Failed to create a payload prowjob")
+			statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
+				ReleaseJobName: mimickedJob,
+				Status: prowv1.ProwJobStatus{
+					State:       prowv1.ErrorState,
+					Description: err.Error(),
+				},
+			}
 			continue
 		}
 
 		logger.Info("Creating prowjob...")
-		if err := r.client.Create(ctx, &pj); err != nil {
-			createdJobs[releaseJobName] = v1.PullRequestPayloadJobStatus{
-				ReleaseJobName: releaseJobName,
+		if err := r.client.Create(ctx, prowjob); err != nil {
+			statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
+				ReleaseJobName: mimickedJob,
 				Status: prowv1.ProwJobStatus{
 					State:       prowv1.ErrorState,
 					Description: fmt.Errorf("failed to create prowjob: %w", err).Error(),
@@ -181,7 +205,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 
 		// There is some delay until it gets back to our cache, so block until we can retrieve
 		// it successfully.
-		key := ctrlruntimeclient.ObjectKey{Namespace: pj.Namespace, Name: pj.Name}
+		key := ctrlruntimeclient.ObjectKey{Namespace: prowjob.Namespace, Name: prowjob.Name}
 		if err := wait.Poll(100*time.Millisecond, 5*time.Second, func() (bool, error) {
 			if err := r.client.Get(ctx, key, &prowv1.ProwJob{}); err != nil {
 				if kerrors.IsNotFound(err) {
@@ -191,18 +215,24 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 			}
 			return true, nil
 		}); err != nil {
-			return fmt.Errorf("failed to wait for created ProwJob to appear in cache: %w", err)
+			statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
+				ReleaseJobName: mimickedJob,
+				Status: prowv1.ProwJobStatus{
+					State:       prowv1.ErrorState,
+					Description: fmt.Errorf("created job never appeared in cache: %w", err).Error(),
+				},
+			}
+			continue
 		}
 
-		createdJobs[releaseJobName] = v1.PullRequestPayloadJobStatus{ReleaseJobName: releaseJobName, ProwJob: pj.Name, Status: pj.Status}
+		statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
+			ReleaseJobName: mimickedJob,
+			ProwJob:        prowjob.Name,
+			Status:         prowjob.Status,
+		}
 	}
 
-	prpqrMutations = append(prpqrMutations, func(prpqr *v1.PullRequestPayloadQualificationRun) {
-		for _, status := range createdJobs {
-			prpqr.Status.Jobs = append(prpqr.Status.Jobs, status)
-		}
-		prpqr.Status.Conditions = append(prpqr.Status.Conditions, constructCondition(createdJobs))
-	})
+	allJobsTriggeredCondition := constructCondition(statuses)
 
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		prpqr := &v1.PullRequestPayloadQualificationRun{}
@@ -210,8 +240,11 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 			return fmt.Errorf("failed to get the PullRequestPayloadQualificationRun: %w", err)
 		}
 
-		for _, mutate := range prpqrMutations {
-			mutate(prpqr)
+		oldStatus := prpqr.Status.DeepCopy()
+		reconcileStatus(prpqr, statuses, allJobsTriggeredCondition)
+		if reflect.DeepEqual(*oldStatus, prpqr.Status) {
+			logger.Info("PullRequestPayloadQualificationRun status is up to date, no updates necessary")
+			return nil
 		}
 
 		logger.Info("Updating PullRequestPayloadQualificationRun...")
@@ -225,12 +258,70 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 	return nil
 }
 
-func constructCondition(createdJobs map[string]v1.PullRequestPayloadJobStatus) metav1.Condition {
+func reconcileStatus(theirs *v1.PullRequestPayloadQualificationRun, ourStatuses map[string]*v1.PullRequestPayloadJobStatus, ourCondition metav1.Condition) {
+	var foundCondition bool
+	for i := range theirs.Status.Conditions {
+		if theirs.Status.Conditions[i].Type == ourCondition.Type {
+			if theirs.Status.Conditions[i].Status != ourCondition.Status {
+				theirs.Status.Conditions[i] = ourCondition
+			}
+			foundCondition = true
+			break
+		}
+	}
+	if !foundCondition {
+		theirs.Status.Conditions = append(theirs.Status.Conditions, ourCondition)
+	}
+
+	statusByJobName := map[string]*v1.PullRequestPayloadJobStatus{}
+	for i := range theirs.Status.Jobs {
+		jobName := theirs.Status.Jobs[i].ReleaseJobName
+		statusByJobName[jobName] = &theirs.Status.Jobs[i]
+	}
+
+	theirs.Status.Jobs = []v1.PullRequestPayloadJobStatus{}
+	for _, spec := range theirs.Spec.Jobs.Jobs {
+		jobName := spec.JobName(jobconfig.PeriodicPrefix)
+		our := ourStatuses[jobName]
+		their := statusByJobName[jobName]
+		theirs.Status.Jobs = append(theirs.Status.Jobs, reconcileJobStatus(jobName, their, our))
+	}
+}
+
+func reconcileJobStatus(name string, their, our *v1.PullRequestPayloadJobStatus) v1.PullRequestPayloadJobStatus {
+	if their == nil && our == nil {
+		return v1.PullRequestPayloadJobStatus{
+			ReleaseJobName: name,
+			Status: prowv1.ProwJobStatus{
+				State:       prowv1.ErrorState,
+				Description: fmt.Sprintf("BUG: job '%s' not present in old nor new status", name),
+			},
+		}
+	}
+
+	if their == nil {
+		return *our
+	}
+	if our == nil {
+		return *their
+	}
+
+	if their.ProwJob != our.ProwJob {
+		// TODO(muller): Weird state which we should probably log as a bug
+		return *our
+	}
+	if their.Status.State == prowv1.ErrorState {
+		return *our
+	}
+	return *their
+}
+
+func constructCondition(statuses map[string]*v1.PullRequestPayloadJobStatus) metav1.Condition {
 	message := "All jobs triggered successfully"
 	reason := conditionAllJobsTriggered
 	status := metav1.ConditionTrue
 
-	for _, jobStatus := range createdJobs {
+	for _, jobStatus := range statuses {
 		if jobStatus.Status.State == prowv1.ErrorState {
 			message = "Jobs triggered with errors"
 			status = metav1.ConditionFalse
@@ -254,103 +345,94 @@ func jobNameHash(name string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-func generateProwjobs(rc injectingResolverClient, defaulter periodicDefaulter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, releaseJobSpec []v1.ReleaseJobSpec, pr *v1.PullRequestUnderTest) (map[string]prowv1.ProwJob, map[string]error) {
+func generateProwjob(rc injectingResolverClient, defaulter periodicDefaulter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, spec *v1.ReleaseJobSpec, pr *v1.PullRequestUnderTest) (*prowv1.ProwJob, error) {
 	fakeProwgenInfo := &prowgen.ProwgenInfo{Metadata: *baseCiop}
 
-	prowjobs := map[string]prowv1.ProwJob{}
-	errs := map[string]error{}
-
-	for _, spec := range releaseJobSpec {
-		mimickedJob := spec.JobName(jobconfig.PeriodicPrefix)
-		labels := map[string]string{
-			v1.PullRequestPayloadQualificationRunLabel: prpqrName,
-			releaseJobNameLabel:                        jobNameHash(mimickedJob),
-		}
-		annotations := map[string]string{
-			releaseJobNameAnnotation: mimickedJob,
-		}
-
-		inject := &api.MetadataWithTest{
-			Metadata: api.Metadata{
-				Org:     spec.CIOperatorConfig.Org,
-				Repo:    spec.CIOperatorConfig.Repo,
-				Branch:  spec.CIOperatorConfig.Branch,
-				Variant: spec.CIOperatorConfig.Variant,
-			},
-			Test: spec.Test,
-		}
-
-		ciopConfig, err := rc.ConfigWithTest(baseCiop, inject)
-		if err != nil {
-			errs[mimickedJob] = fmt.Errorf("failed to get config from resolver: %w", err)
-			continue
-		}
-
-		var periodic *prowconfig.Periodic
-		for i := range ciopConfig.Tests {
-			if ciopConfig.Tests[i].As != inject.Test {
-				continue
-			}
-			jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[i])
-			jobBaseGen.PodSpec.Add(prowgen.InjectTestFrom(inject))
-
-			// Avoid sharing when we run the same job multiple times.
-			// PRPQR name should be safe to use as a discriminating input, because
-			// there should never be more than one execution of a specific job per
-			// PRPQR (until aggregated jobs, but for them we'll have a sequence index)
-			jobBaseGen.PodSpec.Add(prowgen.CustomHashInput(prpqrName))
-
-			// TODO(muller): Solve cluster assignment
-			jobBaseGen.Cluster("build01")
-			periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, "@yearly", "", false, ciopConfig.CanonicalGoRepository)
-			var variant string
-			if inject.Variant != "" {
-				variant = fmt.Sprintf("-%s", inject.Variant)
-			}
-			periodic.Name = fmt.Sprintf("%s-%s-%d%s-%s", baseCiop.Org, baseCiop.Repo, pr.PullRequest.Number, variant, inject.Test)
-			break
-		}
-		// We did not find the injected test: this is a bug
-		if periodic == nil {
-			errs[mimickedJob] = fmt.Errorf("BUG: test '%s' not found in injected config", inject.Test)
-			continue
-		}
-
-		extraRefs := prowv1.Refs{
-			Org:  baseCiop.Org,
-			Repo: baseCiop.Repo,
-			// TODO(muller): All these commented-out fields need to be propagated via the PRPQR spec
-			// We do not need them now but we should eventually wire them through
-			// RepoLink:  pr.Base.Repo.HTMLURL,
-			BaseRef: pr.BaseRef,
-			BaseSHA: pr.BaseSHA,
-			// BaseLink:  fmt.Sprintf("%s/commit/%s", pr.Base.Repo.HTMLURL, pr.BaseSHA),
-			PathAlias: periodic.ExtraRefs[0].PathAlias,
-			Pulls: []prowv1.Pull{
-				{
-					Number: pr.PullRequest.Number,
-					Author: pr.PullRequest.Author,
-					SHA:    pr.PullRequest.SHA,
-					Title:  pr.PullRequest.Title,
-					// Link:       pr.HTMLURL,
-					// AuthorLink: pr.User.HTMLURL,
-					// CommitLink: fmt.Sprintf("%s/pull/%d/commits/%s", pr.Base.Repo.HTMLURL, pr.Number, pr.Head.SHA),
-				},
-			},
-		}
-		periodic.ExtraRefs = []prowv1.Refs{extraRefs}
-
-		if err = defaulter.DefaultPeriodic(periodic); err != nil {
-			errs[mimickedJob] = fmt.Errorf("failed to default the ProwJob: %w", err)
-			continue
-		}
-
-		pj := pjutil.NewProwJob(pjutil.PeriodicSpec(*periodic), labels, annotations)
-		pj.Namespace = prpqrNamespace
-
-		prowjobs[mimickedJob] = pj
+	mimickedJob := spec.JobName(jobconfig.PeriodicPrefix)
+	labels := map[string]string{
+		v1.PullRequestPayloadQualificationRunLabel: prpqrName,
+		releaseJobNameLabel:                        jobNameHash(mimickedJob),
 	}
-	return prowjobs, errs
+	annotations := map[string]string{
+		releaseJobNameAnnotation: mimickedJob,
+	}
+
+	inject := &api.MetadataWithTest{
+		Metadata: api.Metadata{
+			Org:     spec.CIOperatorConfig.Org,
+			Repo:    spec.CIOperatorConfig.Repo,
+			Branch:  spec.CIOperatorConfig.Branch,
+			Variant: spec.CIOperatorConfig.Variant,
+		},
+		Test: spec.Test,
+	}
+
+	ciopConfig, err := rc.ConfigWithTest(baseCiop, inject)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get config from resolver: %w", err)
+	}
+
+	var periodic *prowconfig.Periodic
+	for i := range ciopConfig.Tests {
+		if ciopConfig.Tests[i].As != inject.Test {
+			continue
+		}
+		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[i])
+		jobBaseGen.PodSpec.Add(prowgen.InjectTestFrom(inject))
+
+		// Avoid sharing when we run the same job multiple times.
+		// PRPQR name should be safe to use as a discriminating input, because
+		// there should never be more than one execution of a specific job per
+		// PRPQR (until aggregated jobs, but for them we'll have a sequence index)
+		jobBaseGen.PodSpec.Add(prowgen.CustomHashInput(prpqrName))
+
+		// TODO(muller): Solve cluster assignment
+		jobBaseGen.Cluster("build01")
+		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, "@yearly", "", false, ciopConfig.CanonicalGoRepository)
+		var variant string
+		if inject.Variant != "" {
+			variant = fmt.Sprintf("-%s", inject.Variant)
+		}
+		periodic.Name = fmt.Sprintf("%s-%s-%d%s-%s", baseCiop.Org, baseCiop.Repo, pr.PullRequest.Number, variant, inject.Test)
+		break
+	}
+	// We did not find the injected test: this is a bug
+	if periodic == nil {
+		return nil, fmt.Errorf("BUG: test '%s' not found in injected config", inject.Test)
+	}
+
+	extraRefs := prowv1.Refs{
+		Org:  baseCiop.Org,
+		Repo: baseCiop.Repo,
+		// TODO(muller): All these commented-out fields need to be propagated via the PRPQR spec
+		// We do not need them now but we should eventually wire them through
+		// RepoLink:  pr.Base.Repo.HTMLURL,
+		BaseRef: pr.BaseRef,
+		BaseSHA: pr.BaseSHA,
+		// BaseLink:  fmt.Sprintf("%s/commit/%s", pr.Base.Repo.HTMLURL, pr.BaseSHA),
+		PathAlias: periodic.ExtraRefs[0].PathAlias,
+		Pulls: []prowv1.Pull{
+			{
+				Number: pr.PullRequest.Number,
+				Author: pr.PullRequest.Author,
+				SHA:    pr.PullRequest.SHA,
+				Title:  pr.PullRequest.Title,
+				// Link:       pr.HTMLURL,
+				// AuthorLink: pr.User.HTMLURL,
+				// CommitLink: fmt.Sprintf("%s/pull/%d/commits/%s", pr.Base.Repo.HTMLURL, pr.Number, pr.Head.SHA),
+			},
+		},
+	}
+	periodic.ExtraRefs = []prowv1.Refs{extraRefs}
+
+	if err = defaulter.DefaultPeriodic(periodic); err != nil {
+		return nil, fmt.Errorf("failed to default the ProwJob: %w", err)
+	}
+
+	pj := pjutil.NewProwJob(pjutil.PeriodicSpec(*periodic), labels, annotations)
+	pj.Namespace = prpqrNamespace
+
+	return &pj, err
 }
 
 func metadataFromPullRequestUnderTest(pr v1.PullRequestUnderTest) *api.Metadata {

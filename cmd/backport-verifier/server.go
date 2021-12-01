@@ -171,6 +171,8 @@ func (s *server) handle(l *logrus.Entry, org, repo, user string, num int, reques
 			message = fmt.Sprintf("%s\n\nThe following commits %s:\n%s", message, item.qualifier, strings.Join(formatted, "\n"))
 		}
 	}
+	footer := "\n\nComment <code>/validate-backports</code> to re-evaluate validity of the upstream PRs, for example when they are merged upstream."
+	message = message + footer
 	if commentErr := s.ghc.CreateComment(org, repo, num, message); commentErr != nil {
 		logger.WithError(commentErr).Warn("couldn't respond to user")
 	}

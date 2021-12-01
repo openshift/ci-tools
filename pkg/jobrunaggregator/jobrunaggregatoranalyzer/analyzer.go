@@ -239,11 +239,14 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 
 	fmt.Printf("%q for %q:  aggregating disruption tests.\n", o.jobName, o.payloadTag)
 
-	disruptionSuite, err := o.CalculateDisruptionTestSuite(ctx, currentAggregationJunit.jobGCSBucketRoot, finishedJobsToAggregate)
-	if err != nil {
-		return err
-	}
-	currentAggregationJunitSuites.Suites = append(currentAggregationJunitSuites.Suites, disruptionSuite)
+	/*
+		FIXME: uncomment this when we have the disruption logic sorted out
+		disruptionSuite, err := o.CalculateDisruptionTestSuite(ctx, currentAggregationJunit.jobGCSBucketRoot, finishedJobsToAggregate)
+		if err != nil {
+			return err
+		}
+		currentAggregationJunitSuites.Suites = append(currentAggregationJunitSuites.Suites, disruptionSuite)
+	*/
 
 	// TODO this is the spot where we would add an alertSuite that aggregates the alerts firing in our clusters to prevent
 	//  allowing more and more failing alerts through just because one fails.

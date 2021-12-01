@@ -213,7 +213,9 @@ func (a *weeklyAverageFromTenDays) CheckDisruption(ctx context.Context, jobRunID
 	// the aggregation fails.
 	disruptionThreshold := float64(1)
 	if !missingAllHistoricalData {
-		disruptionThreshold = historicalDisruptionStatistic.Mean + historicalDisruptionStatistic.StandardDeviation
+		// this allows 98% of cases to pass.  If you fail this, you're really bad:
+		// https://en.wikipedia.org/wiki/68%E2%80%9395%E2%80%9399.7_rule
+		disruptionThreshold = historicalDisruptionStatistic.Mean + (2 * historicalDisruptionStatistic.StandardDeviation)
 	}
 
 	totalRuns := len(jobRunIDToAvailabilityResultForBackend)
@@ -233,22 +235,28 @@ func (a *weeklyAverageFromTenDays) CheckDisruption(ctx context.Context, jobRunID
 		totalDisruption -= max
 	}
 	meanDisruption := float64(totalDisruption) / float64(totalRuns)
-	fmt.Printf("%s disruption calculated for current runs (historicalMean=%.2fs failureThreshold(mean+StandardDeviation)=%.2fs historicalP95=%.2fs runs=%d totalDisruptionSecs=%ds mean=%.2fs max=%ds)\n",
-		backend, historicalDisruptionStatistic.Mean, disruptionThreshold, historicalDisruptionStatistic.P95, totalRuns, totalDisruption, meanDisruption, max)
+	historicalString := fmt.Sprintf("historicalMean=%.2fs standardDeviation=%.2fs failureThreshold(mean+2*StandardDeviation)=%.2fs historicalP95=%.2fs",
+		historicalDisruptionStatistic.Mean,
+		historicalDisruptionStatistic.StandardDeviation,
+		disruptionThreshold,
+		historicalDisruptionStatistic.P95)
+	fmt.Printf("%s disruption calculated for current runs (%s runs=%d totalDisruptionSecs=%ds mean=%.2fs max=%ds)\n",
+		backend, historicalString, totalRuns, totalDisruption, meanDisruption, max)
 
 	if meanDisruption > disruptionThreshold {
 		return &historicalDisruptionStatistic, true, fmt.Sprintf(
-			"Mean disruption of %s is %.2f seconds, which is more than (mean+StandardDeviation) of the weekly historical mean from 10 days ago of %.2f seconds, marking this as a failure",
+			"Mean disruption of %s is %.2f seconds, which is more than (mean+2*StandardDeviation) of the weekly historical mean from 10 days ago: %s, marking this as a failure",
 			backend,
 			meanDisruption,
-			disruptionThreshold), nil
+			historicalString), nil
 	}
 
 	return &historicalDisruptionStatistic, false, fmt.Sprintf(
-		"Mean disruption of %s is %.2f seconds, which is no more than (mean+StandardDeviation) of the weekly historical mean from 10 days ago of %.2f seconds. This is OK.",
+		"Mean disruption of %s is %.2f seconds, which is no more than (mean+2*StandardDeviation) of the weekly historical mean from 10 days ago: %s. This is OK.",
 		backend,
 		meanDisruption,
-		disruptionThreshold), nil
+		historicalString,
+	), nil
 }
 
 func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (bool, string, error) {

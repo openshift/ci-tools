@@ -68,6 +68,7 @@ var (
 				api.ClusterBuild02: {},
 			},
 		},
+		BuildFarmCloud: map[api.Cloud][]string{"aws": {"build01"}, "gcp": {"build02"}},
 		Groups: map[api.Cluster]Group{
 			"api.ci": {
 				Paths: []string{
@@ -121,6 +122,60 @@ var (
 				api.ClusterBuild02: {},
 			},
 		},
+		BuildFarmCloud: map[api.Cloud][]string{"aws": {"build01"}, "gcp": {"build02"}},
+		Groups: map[api.Cluster]Group{
+			"api.ci": {
+				Paths: []string{
+					".*-postsubmits.yaml$",
+					".*-periodics.yaml$",
+				},
+				PathREs: []*regexp.Regexp{
+					regexp.MustCompile(".*-postsubmits.yaml$"),
+					regexp.MustCompile(".*-periodics.yaml$"),
+				},
+				Jobs: []string{
+					"pull-ci-openshift-release-master-build01-dry",
+					"pull-ci-openshift-release-master-core-dry",
+					"pull-ci-openshift-release-master-services-dry",
+					"periodic-acme-cert-issuer-for-build01",
+				},
+			},
+			"build01": {
+				Jobs: []string{
+					"periodic-build01-upgrade",
+					"periodic-ci-image-import-to-build01",
+					"pull-ci-openshift-config-master-format",
+					"pull-ci-openshift-psap-special-resource-operator-release-4.6-images",
+					"pull-ci-openshift-psap-special-resource-operator-release-4.6-unit",
+					"pull-ci-openshift-psap-special-resource-operator-release-4.6-verify",
+				},
+				Paths: []string{".*openshift-priv/.*-presubmits.yaml$"},
+				PathREs: []*regexp.Regexp{
+					regexp.MustCompile(".*openshift-priv/.*-presubmits.yaml$"),
+				},
+			},
+		},
+	}
+
+	configWithBuildFarmWithJobsAndDetermineE2EByJob = Config{
+		Default:           "api.ci",
+		KVM:               []api.Cluster{api.ClusterBuild02},
+		NoBuilds:          []api.Cluster{api.ClusterBuild03},
+		DetermineE2EByJob: true,
+		BuildFarm: map[api.Cloud]map[api.Cluster]Filenames{
+			api.CloudAWS: {
+				api.ClusterBuild01: {
+					FilenamesRaw: []string{
+						"some-build-farm-presubmits.yaml",
+					},
+					Filenames: sets.NewString("some-build-farm-presubmits.yaml"),
+				},
+			},
+			api.CloudGCP: {
+				api.ClusterBuild02: {},
+			},
+		},
+		BuildFarmCloud: map[api.Cloud][]string{"aws": {"build01"}, "gcp": {"build02"}},
 		Groups: map[api.Cluster]Group{
 			"api.ci": {
 				Paths: []string{
@@ -420,6 +475,50 @@ func TestDetermineClusterForJob(t *testing.T) {
 				Labels: map[string]string{"ci-operator.openshift.io/cluster": "b01", "ci.openshift.io/no-builds": "true"},
 			},
 			expected:               "b01",
+			expectedCanBeRelocated: false,
+		},
+		{
+			name:   "DetermineE2EByJob: cloud label has no effect if DetermineE2EByJob=false",
+			config: &configWithBuildFarmWithJobs,
+			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
+				Labels: map[string]string{"ci-operator.openshift.io/cloud": "aws"},
+			},
+			expected:               "api.ci",
+			expectedCanBeRelocated: true,
+		},
+		{
+			name:   "DetermineE2EByJob: cloud label",
+			config: &configWithBuildFarmWithJobsAndDetermineE2EByJob,
+			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
+				Labels: map[string]string{"ci-operator.openshift.io/cloud": "aws"},
+			},
+			expected:               "build01",
+			expectedCanBeRelocated: false,
+		},
+		{
+			name:   "DetermineE2EByJob: env var",
+			config: &configWithBuildFarmWithJobsAndDetermineE2EByJob,
+			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
+				Spec: &v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Env: []v1.EnvVar{
+								{Name: "CLUSTER_TYPE", Value: "gcp"},
+							},
+						},
+					},
+				},
+			},
+			expected:               "build02",
+			expectedCanBeRelocated: false,
+		},
+		{
+			name:   "a job with cloud label and noBuilds label: cloud label wins",
+			config: &configWithBuildFarmWithJobsAndDetermineE2EByJob,
+			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
+				Labels: map[string]string{"ci-operator.openshift.io/cloud": "aws", "ci.openshift.io/no-builds": "true"},
+			},
+			expected:               "build01",
 			expectedCanBeRelocated: false,
 		},
 	}

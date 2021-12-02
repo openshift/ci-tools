@@ -12,17 +12,27 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+
+	"k8s.io/client-go/tools/cache"
+
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
+	watchtools "k8s.io/client-go/tools/watch"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	templateapi "github.com/openshift/api/template/v1"
@@ -56,12 +66,13 @@ const (
 )
 
 type templateExecutionStep struct {
-	template  *templateapi.Template
-	resources api.ResourceConfiguration
-	params    api.Parameters
-	podClient PodClient
-	client    TemplateClient
-	jobSpec   *api.JobSpec
+	template       *templateapi.Template
+	resources      api.ResourceConfiguration
+	params         api.Parameters
+	kubeCoreClient corev1.CoreV1Interface
+	podClient      PodClient
+	client         TemplateClient
+	jobSpec        *api.JobSpec
 
 	subTests []*junit.TestCase
 }
@@ -174,7 +185,7 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			_, err := waitForPodCompletion(context.TODO(), s.podClient, s.jobSpec.Namespace(), ref.Ref.Name, testCaseNotifier, false)
+			_, err := waitForPodCompletion(context.TODO(), s.kubeCoreClient, s.podClient, s.jobSpec.Namespace(), ref.Ref.Name, testCaseNotifier, false)
 			s.subTests = append(s.subTests, testCaseNotifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), ref.Ref.Name))...)
 			if err != nil {
 				return fmt.Errorf("template pod %q failed: %w", ref.Ref.Name, err)
@@ -281,14 +292,15 @@ func (s *templateExecutionStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, templateClient TemplateClient, jobSpec *api.JobSpec, resources api.ResourceConfiguration) api.Step {
+func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, kubeCoreClient corev1.CoreV1Interface, podClient PodClient, templateClient TemplateClient, jobSpec *api.JobSpec, resources api.ResourceConfiguration) api.Step {
 	return &templateExecutionStep{
-		template:  template,
-		resources: resources,
-		params:    params,
-		podClient: podClient,
-		client:    templateClient,
-		jobSpec:   jobSpec,
+		template:       template,
+		resources:      resources,
+		params:         params,
+		kubeCoreClient: kubeCoreClient,
+		podClient:      podClient,
+		client:         templateClient,
+		jobSpec:        jobSpec,
 	}
 }
 
@@ -483,7 +495,7 @@ func waitForCompletedPodDeletion(ctx context.Context, podClient ctrlruntimeclien
 	return waitForPodDeletion(ctx, podClient, namespace, name, uid)
 }
 
-func waitForPodCompletion(ctx context.Context, podClient PodClient, namespace, name string, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, error) {
+func waitForPodCompletion(ctx context.Context, kubeCoreClient corev1.CoreV1Interface, podClient PodClient, namespace, name string, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, error) {
 	if notifier == nil {
 		notifier = NopNotifier
 	}
@@ -492,7 +504,7 @@ func waitForPodCompletion(ctx context.Context, podClient PodClient, namespace, n
 	completed := make(map[string]time.Time)
 	var pod *coreapi.Pod
 	for {
-		newPod, err := waitForPodCompletionOrTimeout(ctx, podClient, namespace, name, completed, notifier, skipLogs)
+		newPod, err := waitForPodCompletionOrTimeout(ctx, kubeCoreClient, podClient, namespace, name, completed, notifier, skipLogs)
 		if newPod != nil {
 			pod = newPod
 		}
@@ -519,62 +531,66 @@ func waitForPodCompletion(ctx context.Context, podClient PodClient, namespace, n
 	return pod, nil
 }
 
-func waitForPodCompletionOrTimeout(ctx context.Context, podClient PodClient, namespace, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, error) {
-	// Warning: this is extremely fragile, inherited legacy code.  Please be
-	// careful and test thoroughly when making changes, as they very frequently
-	// lead to systemic production failures.  Some guidance:
-	// - There is a complex interaction between this code and the container
-	//   notifier.  Updates to the state of the pod are received via the watch
-	//   and communicated to the notifier.  Even in case of interruption (i.e.
-	//   cancellation of `ctx`) and/or failure, events should continue to be
-	//   processed until the notifier signals that it is done.  This ensures
-	//   the state of the pod is correctly reported, artifacts are gathered,
-	//   and termination happens deterministically for both success and failure
-	//   scenarios.
-	pod := &coreapi.Pod{}
-	if err := podClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, pod); err != nil {
-		if kerrors.IsNotFound(err) {
+func waitForPodCompletionOrTimeout(ctx context.Context, kubeCoreClient corev1.CoreV1Interface, podClient PodClient, namespace, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, error) {
+	fieldSelector := fields.OneTermEqualSelector("metadata.name", name).String()
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.FieldSelector = fieldSelector
+			return kubeCoreClient.Pods(namespace).List(context.TODO(), options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			options.FieldSelector = fieldSelector
+			return kubeCoreClient.Pods(namespace).Watch(context.TODO(), options)
+		},
+	}
+
+	var retPod *coreapi.Pod
+
+	// podPrecondition is called after the lister is synchronized, before the watch itself is called.  it returns: done, error
+	// if done, then the watch is terminated before calling the condition
+	// if err != nil, then the watch is terminated and an error comes back.
+	podPrecondition := func(store cache.Store) (bool, error) {
+		podObj, exists, err := store.Get(namespace + "/" + name)
+		if err != nil {
+			return false, err
+		}
+		if !exists {
 			notifier.Complete(name)
 			logrus.Infof("error: could not wait for pod '%s': it is no longer present on the cluster"+
 				" (usually a result of a race or resource pressure. re-running the job should help)", name)
-			return nil, fmt.Errorf("pod was deleted while ci-operator step was waiting for it")
+			return false, kerrors.NewNotFound(schema.GroupResource{Resource: "pods"}, name)
 		}
-		return nil, fmt.Errorf("could not list pod: %w", err)
-	}
+		pod := podObj.(*coreapi.Pod)
+		retPod = pod
 
-	if pod.Spec.RestartPolicy == coreapi.RestartPolicyAlways {
-		return pod, nil
-	}
-	podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
-	if podJobIsOK(pod) {
-		if !skipLogs {
-			logrus.Debugf("Pod %s already succeeded in %s", pod.Name, podDuration(pod).Truncate(time.Second))
+		if pod.Spec.RestartPolicy == coreapi.RestartPolicyAlways {
+			return true, nil
 		}
-		return pod, nil
-	}
-	if podJobIsFailed(pod) {
-		return pod, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
-	}
-	done := ctx.Done()
-
-	podCheckTicker := time.NewTicker(10 * time.Second)
-	defer podCheckTicker.Stop()
-	podStartTimeout := 30 * time.Minute
-	var podSeenRunning bool
-
-	for {
-		select {
-		case <-done:
-			return pod, ctx.Err()
-		case <-podCheckTicker.C:
-			if err := podClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, pod); err != nil {
-				if kerrors.IsNotFound(err) {
-					return pod, appendLogToError(fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", ")), podMessages(pod))
-				}
-				logrus.WithError(err).Warnf("Failed to get pod %s.", name)
-				continue
+		podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
+		if podJobIsOK(pod) {
+			if !skipLogs {
+				logrus.Debugf("Pod %s already succeeded in %s", pod.Name, podDuration(pod).Truncate(time.Second))
 			}
+			return true, nil
+		}
+		if podJobIsFailed(pod) {
+			return true, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
+		}
 
+		return false /*done*/, nil
+	}
+
+	var podSeenRunning bool
+	podStartTimeout := 30 * time.Minute
+
+	_, err := watchtools.UntilWithSync(ctx, lw, &coreapi.Pod{}, podPrecondition, func(e watch.Event) (bool, error) {
+		switch e.Type {
+		case watch.Added, watch.Modified:
+			pod, ok := e.Object.(*coreapi.Pod)
+			if !ok {
+				return true, fmt.Errorf("unknown event object %#v", e.Object)
+			}
+			retPod = pod
 			if !podSeenRunning {
 				if podHasStarted(pod) {
 					podSeenRunning = true
@@ -582,7 +598,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient PodClient, nam
 					message := fmt.Sprintf("pod didn't start running within %s: %s\n%s", podStartTimeout, getReasonsForUnreadyContainers(pod), getEventsForPod(ctx, pod, podClient))
 					logrus.Infof(message)
 					notifier.Complete(name)
-					return pod, errors.New(message)
+					return false, errors.New(message)
 				}
 			}
 			podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
@@ -590,13 +606,26 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient PodClient, nam
 				if !skipLogs {
 					logrus.Debugf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
 				}
-				return pod, nil
+				return true, nil
 			}
 			if podJobIsFailed(pod) {
-				return pod, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
+				return false, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
 			}
+
+			return false, nil
+
+		case watch.Deleted:
+			return true, nil
+
+		case watch.Error:
+			return false, fmt.Errorf("encountered error while watching for pod: %v", e.Object)
+
+		default:
+			return false, fmt.Errorf("unexpected event type: %T", e.Type)
 		}
-	}
+	})
+
+	return retPod, err
 }
 
 // podHasStarted checks if a test pod can be considered as "running".

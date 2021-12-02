@@ -107,7 +107,7 @@ func FromConfig(
 	httpClient := retryablehttp.NewClient()
 	httpClient.Logger = nil
 
-	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost)
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, coreGetter, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost)
 }
 
 func fromConfig(
@@ -121,6 +121,7 @@ func fromConfig(
 	client loggingclient.LoggingClient,
 	buildClient steps.BuildClient,
 	templateClient steps.TemplateClient,
+	kubeCoreClient coreclientset.CoreV1Interface,
 	podClient steps.PodClient,
 	leaseClient *lease.Client,
 	hiveClient ctrlruntimeclient.WithWatch,
@@ -153,7 +154,7 @@ func fromConfig(
 	rawSteps = append(graphConf.Steps, rawSteps...)
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			steps, testHasReleaseStep, err := stepForTest(ctx, config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor)
+			steps, testHasReleaseStep, err := stepForTest(ctx, config, params, kubeCoreClient, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -304,7 +305,7 @@ func fromConfig(
 	}
 
 	for _, template := range templates {
-		step := steps.TemplateExecutionStep(template, params, podClient, templateClient, jobSpec, config.Resources)
+		step := steps.TemplateExecutionStep(template, params, kubeCoreClient, podClient, templateClient, jobSpec, config.Resources)
 		var hasClusterType, hasUseLease bool
 		for _, p := range template.Parameters {
 			hasClusterType = hasClusterType || p.Name == "CLUSTER_TYPE"
@@ -368,6 +369,7 @@ func stepForTest(
 	ctx context.Context,
 	config *api.ReleaseBuildConfiguration,
 	params *api.DeferredParameters,
+	kubeCoreClient coreclientset.CoreV1Interface,
 	podClient steps.PodClient,
 	leaseClient *lease.Client,
 	templateClient steps.TemplateClient,
@@ -416,7 +418,7 @@ func stepForTest(
 			return nil, hasReleaseStep, nil
 		}
 		params = api.NewDeferredParameters(params)
-		step, err := clusterinstall.E2ETestStep(*c.OpenshiftInstallerClusterTestConfiguration, *c, params, podClient, templateClient, jobSpec, config.Resources)
+		step, err := clusterinstall.E2ETestStep(*c.OpenshiftInstallerClusterTestConfiguration, *c, params, kubeCoreClient, podClient, templateClient, jobSpec, config.Resources)
 		if err != nil {
 			return nil, hasReleaseStep, fmt.Errorf("unable to create end to end test step: %w", err)
 		}

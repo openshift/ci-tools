@@ -8,6 +8,7 @@ import (
 	"github.com/ghodss/yaml"
 
 	corev1 "k8s.io/api/core/v1"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	templateapi "github.com/openshift/api/template/v1"
@@ -40,6 +41,7 @@ func E2ETestStep(
 	config api.OpenshiftInstallerClusterTestConfiguration,
 	testConfig api.TestStepConfiguration,
 	params api.Parameters,
+	kubeCoreClient corev1client.CoreV1Interface,
 	podClient steps.PodClient,
 	templateClient steps.TemplateClient,
 	jobSpec *api.JobSpec,
@@ -96,7 +98,7 @@ func E2ETestStep(
 		params = api.NewOverrideParameters(params, overrides)
 	}
 
-	step := steps.TemplateExecutionStep(template, params, podClient, templateClient, jobSpec, resources)
+	step := steps.TemplateExecutionStep(template, params, kubeCoreClient, podClient, templateClient, jobSpec, resources)
 	subTests, ok := step.(nestedSubTests)
 	if !ok {
 		return nil, fmt.Errorf("unexpected %T", step)

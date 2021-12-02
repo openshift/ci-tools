@@ -111,11 +111,31 @@ func TestWithPresubmitFrom(t *testing.T) {
 			defaultTests: true,
 		},
 		{
-			name: "errors when base_images conflict",
+			name: "base_images do not conflict when both configs have a same base image",
 			base: &ReleaseBuildConfiguration{InputConfiguration: InputConfiguration{BaseImages: baseBaseImages}},
 			source: &ReleaseBuildConfiguration{
 				InputConfiguration: InputConfiguration{BaseImages: baseBaseImages},
 				Tests:              []TestStepConfiguration{sourceTest},
+			},
+			expected: &ReleaseBuildConfiguration{
+				InputConfiguration: InputConfiguration{
+					BaseImages: map[string]ImageStreamTagReference{
+						"base-image": {Namespace: "base-namespace", Name: "base-image", Tag: "base-tag"},
+					}},
+			},
+			defaultTests: true,
+		},
+		{
+			name: "errors when base_images conflict",
+			base: &ReleaseBuildConfiguration{InputConfiguration: InputConfiguration{BaseImages: baseBaseImages}},
+			source: &ReleaseBuildConfiguration{
+				InputConfiguration: InputConfiguration{BaseImages: map[string]ImageStreamTagReference{"base-image": {
+					Namespace: "another-namespace",
+					Name:      "base-image",
+					Tag:       "base-tag",
+				}},
+				},
+				Tests: []TestStepConfiguration{sourceTest},
 			},
 			expectedError: errors.New("conflicting base_images: base-image"),
 		},

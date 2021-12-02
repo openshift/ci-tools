@@ -122,7 +122,7 @@ func (config *ReleaseBuildConfiguration) WithPresubmitFrom(source *ReleaseBuildC
 
 	for name, isTagRef := range source.BaseImages {
 		// TODO: handle conflicts better
-		if _, ok := result.BaseImages[name]; ok {
+		if destIsTagRef, ok := result.BaseImages[name]; ok && isTagRef != destIsTagRef {
 			return nil, fmt.Errorf("conflicting base_images: %s", name)
 		}
 		result.BaseImages[name] = isTagRef

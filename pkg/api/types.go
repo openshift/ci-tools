@@ -702,6 +702,8 @@ type ClusterClaim struct {
 	Cloud Cloud `json:"cloud"`
 	// Owner is the owner of cloud account used to install the product, e.g., dpp.
 	Owner string `json:"owner"`
+	// Labels is the labels to select the cluster pools
+	Labels map[string]string `json:"labels,omitempty"`
 	// Timeout is how long ci-operator will wait for the cluster to be ready.
 	// Defaults to 1h.
 	Timeout *prowv1.Duration `json:"timeout,omitempty"`

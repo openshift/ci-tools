@@ -113,6 +113,16 @@ func htmlForTestRuns(jobName string, suite *junit.TestSuite) string {
 	}
 
 	html += `
+<h2>Skipped Tests</h2>
+<ol>
+`
+	html += htmlForTestSuite(jobName, []string{}, suite, skippedOnly)
+	html += `
+</ol>
+<br/>
+`
+
+	html += `
 <h2>Passed Tests</h2>
 <ol>
 `
@@ -146,6 +156,10 @@ func successOnly(testCase *junit.TestCase) bool {
 	return !failedOnly(testCase)
 }
 
+func skippedOnly(testCase *junit.TestCase) bool {
+	return testCase.SkipMessage != nil
+}
+
 func htmlForTestSuite(jobName string, parents []string, suite *junit.TestSuite, filter testCaseFilterFunc) string {
 	htmls := []string{}
 	currSuite := parents
@@ -174,9 +188,12 @@ func htmlForTestCase(jobName string, parents []string, testCase *junit.TestCase,
 		return ""
 	}
 	var status string
-	if failedOnly(testCase) {
+	switch {
+	case testCase.SkipMessage != nil:
+		status = "Skipped"
+	case testCase.FailureOutput != nil && failedOnly(testCase):
 		status = "Failed"
-	} else {
+	default:
 		status = "Passed"
 	}
 

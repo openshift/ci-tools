@@ -3,7 +3,6 @@ package jobrunaggregatoranalyzer
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -17,11 +16,20 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 )
 
+type testCaseStatus string
+
+const (
+	testCaseFailed  testCaseStatus = "failed"
+	testCasePassed  testCaseStatus = "passed"
+	testCaseSkipped testCaseStatus = "skipped"
+)
+
 type baseline interface {
-	CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (failed bool, message string, err error)
-	CheckDisruptionMeanWithinTwoStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, failed bool, message string, err error)
-	CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, failed bool, message string, err error)
-	CheckP95Disruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failureJobRunIDs []string, successJobRunIDs []string, failed bool, message string, err error)
+	CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (status testCaseStatus, message string, err error)
+	CheckDisruptionMeanWithinTwoStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
+	CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
+	CheckPercentileDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, percentile int) (failureJobRunIDs []string, successJobRunIDs []string, status testCaseStatus, message string, err error)
+	CheckPercentileRankDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, maxDisruptionSeconds int) (failureJobRunIDs []string, successJobRunIDs []string, status testCaseStatus, message string, err error)
 }
 
 func assignPassFail(ctx context.Context, combined *junit.TestSuites, baselinePassFail baseline) error {
@@ -53,7 +61,7 @@ func assignPassFailForTestSuite(ctx context.Context, parentTestSuites []string, 
 			return err
 		}
 
-		var failed bool
+		var status testCaseStatus
 		var message string
 		var err error
 		// TODO once we are ready to stop failing on aggregating the availability tests, we write something here to ignore
@@ -62,7 +70,7 @@ func assignPassFailForTestSuite(ctx context.Context, parentTestSuites []string, 
 		//if jobrunaggregatorlib.IsDisruptionTest(currTestCase.Name) {
 		//}
 
-		failed, message, err = baselinePassFail.CheckFailed(ctx, currSuiteNames, currDetails)
+		status, message, err = baselinePassFail.CheckFailed(ctx, currSuiteNames, currDetails)
 		if err != nil {
 			return err
 		}
@@ -74,14 +82,13 @@ func assignPassFailForTestSuite(ctx context.Context, parentTestSuites []string, 
 		}
 		currTestCase.SystemOut = string(detailsBytes)
 
-		if !failed {
-			continue
+		if status == testCaseFailed {
+			currTestCase.FailureOutput = &junit.FailureOutput{
+				Message: message,
+				Output:  currTestCase.SystemOut,
+			}
+			failureCount++
 		}
-		currTestCase.FailureOutput = &junit.FailureOutput{
-			Message: message,
-			Output:  currTestCase.SystemOut,
-		}
-		failureCount++
 	}
 
 	combined.NumFailed = failureCount
@@ -148,7 +155,7 @@ type weeklyAverageFromTenDays struct {
 
 	queryDisruptionOnce sync.Once
 	queryDisruptionErr  error
-	disruptionByBackend map[string]jobrunaggregatorapi.BackendDisruptionStatisticsRow
+	disruptionByBackend map[string]backendDisruptionStats
 }
 
 func newWeeklyAverageFromTenDaysAgo(jobName string, startDay time.Time, minimumNumberOfAttempts int, bigQueryClient jobrunaggregatorlib.CIDataClient) baseline {
@@ -162,7 +169,7 @@ func newWeeklyAverageFromTenDaysAgo(jobName string, startDay time.Time, minimumN
 		queryTestRunsOnce:        sync.Once{},
 		queryTestRunsErr:         nil,
 		aggregatedTestRunsByName: nil,
-		disruptionByBackend:      make(map[string]jobrunaggregatorapi.BackendDisruptionStatisticsRow),
+		disruptionByBackend:      make(map[string]backendDisruptionStats),
 	}
 }
 
@@ -183,7 +190,7 @@ func (a *weeklyAverageFromTenDays) getAggregatedTestRuns(ctx context.Context) (m
 	return a.aggregatedTestRunsByName, a.queryTestRunsErr
 }
 
-func (a *weeklyAverageFromTenDays) getDisruptionByBackend(ctx context.Context) (map[string]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {
+func (a *weeklyAverageFromTenDays) getDisruptionByBackend(ctx context.Context) (map[string]backendDisruptionStats, error) {
 	a.queryDisruptionOnce.Do(func() {
 		rows, err := a.bigQueryClient.GetBackendDisruptionStatisticsByJob(ctx, a.jobName)
 		if err != nil {
@@ -191,10 +198,10 @@ func (a *weeklyAverageFromTenDays) getDisruptionByBackend(ctx context.Context) (
 			return
 		}
 
-		a.disruptionByBackend = make(map[string]jobrunaggregatorapi.BackendDisruptionStatisticsRow)
+		a.disruptionByBackend = make(map[string]backendDisruptionStats)
 		for i := range rows {
 			row := rows[i]
-			a.disruptionByBackend[row.BackendName] = row
+			a.disruptionByBackend[row.BackendName] = constructBackendDisruptionStats(row)
 		}
 
 	})
@@ -202,42 +209,39 @@ func (a *weeklyAverageFromTenDays) getDisruptionByBackend(ctx context.Context) (
 	return a.disruptionByBackend, a.queryDisruptionErr
 }
 
-func (a *weeklyAverageFromTenDays) CheckDisruptionMeanWithinTwoStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) ([]string, []string, bool, string, error) {
+func (a *weeklyAverageFromTenDays) CheckDisruptionMeanWithinTwoStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) ([]string, []string, testCaseStatus, string, error) {
 	return a.checkDisruptionMean(ctx, jobRunIDToAvailabilityResultForBackend, backend, meanPlusTwoStandardDeviations)
 }
 
-func (a *weeklyAverageFromTenDays) CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) ([]string, []string, bool, string, error) {
+func (a *weeklyAverageFromTenDays) CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) ([]string, []string, testCaseStatus, string, error) {
 	return a.checkDisruptionMean(ctx, jobRunIDToAvailabilityResultForBackend, backend, meanPlusOneStandardDeviation)
 }
 
-type disruptionThresholdFunc func(jobrunaggregatorapi.BackendDisruptionStatisticsRow) float64
+type disruptionThresholdFunc func(stats backendDisruptionStats) float64
 
-func meanPlusTwoStandardDeviations(historicalDisruptionStatistic jobrunaggregatorapi.BackendDisruptionStatisticsRow) float64 {
-	return historicalDisruptionStatistic.Mean + (2 * historicalDisruptionStatistic.StandardDeviation)
+func meanPlusTwoStandardDeviations(historicalDisruptionStatistic backendDisruptionStats) float64 {
+	return historicalDisruptionStatistic.rowData.Mean + (2 * historicalDisruptionStatistic.rowData.StandardDeviation)
 }
 
-func meanPlusOneStandardDeviation(historicalDisruptionStatistic jobrunaggregatorapi.BackendDisruptionStatisticsRow) float64 {
-	return historicalDisruptionStatistic.Mean + historicalDisruptionStatistic.StandardDeviation
+func meanPlusOneStandardDeviation(historicalDisruptionStatistic backendDisruptionStats) float64 {
+	return historicalDisruptionStatistic.rowData.Mean + historicalDisruptionStatistic.rowData.StandardDeviation
 }
 
-func (a *weeklyAverageFromTenDays) checkDisruptionMean(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, disruptonThresholdFn disruptionThresholdFunc) ([]string, []string, bool, string, error) {
+func (a *weeklyAverageFromTenDays) checkDisruptionMean(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, disruptonThresholdFn disruptionThresholdFunc) ([]string, []string, testCaseStatus, string, error) {
 	failedJobRunsIDs := []string{}
 	successfulJobRunIDs := []string{}
 
-	missingAllHistoricalData := false
 	historicalDisruption, err := a.getDisruptionByBackend(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error getting past disruption data, assume 1s disruption allowed: %v\n", err)
-		missingAllHistoricalData = true
+		message := fmt.Sprintf("error getting historical disruption data, skipping: %v\n", err)
+		failedJobRunsIDs = sets.StringKeySet(jobRunIDToAvailabilityResultForBackend).List()
+		return failedJobRunsIDs, successfulJobRunIDs, testCaseSkipped, message, nil
 	}
 	historicalDisruptionStatistic := historicalDisruption[backend]
 
 	// If disruption mean (excluding at most 1 outlier) is greater than 10% of the historical mean,
 	// the aggregation fails.
-	disruptionThreshold := float64(1)
-	if !missingAllHistoricalData {
-		disruptionThreshold = disruptonThresholdFn(historicalDisruptionStatistic)
-	}
+	disruptionThreshold := disruptonThresholdFn(historicalDisruptionStatistic)
 
 	totalRuns := len(jobRunIDToAvailabilityResultForBackend)
 	totalDisruption := 0
@@ -257,29 +261,29 @@ func (a *weeklyAverageFromTenDays) checkDisruptionMean(ctx context.Context, jobR
 	}
 
 	// We allow one "mulligan" by throwing away at most one outlier > our p95.
-	if float64(max) > historicalDisruptionStatistic.P95 {
-		fmt.Printf("%s throwing away one outlier (outlier=%ds p95=%fs)\n", backend, max, historicalDisruptionStatistic.P95)
+	if float64(max) > historicalDisruptionStatistic.rowData.P95 {
+		fmt.Printf("%s throwing away one outlier (outlier=%ds p95=%fs)\n", backend, max, historicalDisruptionStatistic.rowData.P95)
 		totalRuns--
 		totalDisruption -= max
 	}
 	meanDisruption := float64(totalDisruption) / float64(totalRuns)
 	historicalString := fmt.Sprintf("historicalMean=%.2fs standardDeviation=%.2fs failureThreshold=%.2fs historicalP95=%.2fs",
-		historicalDisruptionStatistic.Mean,
-		historicalDisruptionStatistic.StandardDeviation,
+		historicalDisruptionStatistic.rowData.Mean,
+		historicalDisruptionStatistic.rowData.StandardDeviation,
 		disruptionThreshold,
-		historicalDisruptionStatistic.P95)
+		historicalDisruptionStatistic.rowData.P95)
 	fmt.Printf("%s disruption calculated for current runs (%s runs=%d totalDisruptionSecs=%ds mean=%.2fs max=%ds)\n",
 		backend, historicalString, totalRuns, totalDisruption, meanDisruption, max)
 
 	if meanDisruption > disruptionThreshold {
-		return failedJobRunsIDs, successfulJobRunIDs, true, fmt.Sprintf(
+		return failedJobRunsIDs, successfulJobRunIDs, testCaseFailed, fmt.Sprintf(
 			"Mean disruption of %s is %.2f seconds, which is more than the failureThreshold of the weekly historical mean from 10 days ago: %s, marking this as a failure",
 			backend,
 			meanDisruption,
 			historicalString), nil
 	}
 
-	return failedJobRunsIDs, successfulJobRunIDs, false, fmt.Sprintf(
+	return failedJobRunsIDs, successfulJobRunIDs, testCasePassed, fmt.Sprintf(
 		"Mean disruption of %s is %.2f seconds, which is no more than failureThreshold of the weekly historical mean from 10 days ago: %s. This is OK.",
 		backend,
 		meanDisruption,
@@ -287,18 +291,25 @@ func (a *weeklyAverageFromTenDays) checkDisruptionMean(ctx context.Context, jobR
 	), nil
 }
 
-func (a *weeklyAverageFromTenDays) CheckP95Disruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) ([]string, []string, bool, string, error) {
-	failureJobRunIDs := []string{}
-	successJobRunIDs := []string{}
-
+func (a *weeklyAverageFromTenDays) CheckPercentileDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, percentile int) ([]string, []string, testCaseStatus, string, error) {
 	historicalDisruption, err := a.getDisruptionByBackend(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error getting past disruption data, assume 0s disruption allowed: %v\n", err)
+		message := fmt.Sprintf("error getting historical disruption data, skipping: %v\n", err)
+		failureJobRunIDs := sets.StringKeySet(jobRunIDToAvailabilityResultForBackend).List()
+		return failureJobRunIDs, []string{}, testCaseSkipped, message, nil
 	}
 	historicalDisruptionStatistic := historicalDisruption[backend]
 
+	return a.checkPercentileDisruption(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, percentile)
+}
+
+func (a *weeklyAverageFromTenDays) checkPercentileDisruption(jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, historicalDisruptionStatistic backendDisruptionStats, thresholdPercentile int) ([]string, []string, testCaseStatus, string, error) {
+	failureJobRunIDs := []string{}
+	successJobRunIDs := []string{}
+	threshold := historicalDisruptionStatistic.percentileByIndex[thresholdPercentile]
+
 	for jobRunID, disruption := range jobRunIDToAvailabilityResultForBackend {
-		if float64(disruption.SecondsUnavailable) > historicalDisruptionStatistic.P95 {
+		if float64(disruption.SecondsUnavailable) > threshold {
 			failureJobRunIDs = append(failureJobRunIDs, jobRunID)
 		} else {
 			successJobRunIDs = append(successJobRunIDs, jobRunID)
@@ -307,53 +318,82 @@ func (a *weeklyAverageFromTenDays) CheckP95Disruption(ctx context.Context, jobRu
 	numberOfAttempts := len(successJobRunIDs) + len(failureJobRunIDs)
 	numberOfPasses := len(successJobRunIDs)
 	numberOfFailures := len(failureJobRunIDs)
-
-	if numberOfPasses == 0 {
-		summary := fmt.Sprintf("Zero successful runs, we require at least one success to pass.  P95=%.2fs", historicalDisruptionStatistic.P95)
-		return failureJobRunIDs, successJobRunIDs, true, summary, nil
-	}
-	if numberOfAttempts < 3 {
-		summary := fmt.Sprintf("We require at least three attempts to pass.  P95=%.2fs", historicalDisruptionStatistic.P95)
-		return failureJobRunIDs, successJobRunIDs, true, summary, nil
-	}
-
-	workingPercentage := 95 // P95 should be a 95% success rate on all runs
+	workingPercentage := thresholdPercentile // the percentile is our success percentage
 	requiredNumberOfPasses := requiredPassesByPassPercentageByNumberOfAttempts[numberOfAttempts][workingPercentage]
 	// TODO try to tighten this after we can keep the test in for about a week.
 	requiredNumberOfPasses = requiredNumberOfPasses - 1 // subtracting one because our current sample missed by one
+
+	if requiredNumberOfPasses <= 0 {
+		message := fmt.Sprintf("current percentile is so low that we cannot latch, skipping P%d=%.2fs", thresholdPercentile, threshold)
+		failureJobRunIDs = sets.StringKeySet(jobRunIDToAvailabilityResultForBackend).List()
+		return failureJobRunIDs, successJobRunIDs, testCaseSkipped, message, nil
+	}
+
+	if numberOfPasses == 0 {
+		summary := fmt.Sprintf("Zero successful runs, we require at least one success to pass.  P%d=%.2fs", thresholdPercentile, threshold)
+		return failureJobRunIDs, successJobRunIDs, testCaseFailed, summary, nil
+	}
+	if numberOfAttempts < 3 {
+		summary := fmt.Sprintf("We require at least three attempts to pass.  P%d=%.2fs", thresholdPercentile, threshold)
+		return failureJobRunIDs, successJobRunIDs, testCaseFailed, summary, nil
+	}
+
 	if numberOfPasses < requiredNumberOfPasses {
-		summary := fmt.Sprintf("Failed: Passed %d times, failed %d times.  The historical P95=%.2fs.  The required number of passes is %d.",
+		summary := fmt.Sprintf("Failed: Passed %d times, failed %d times.  The historical P%d=%.2fs.  The required number of passes is %d.",
 			numberOfPasses,
 			numberOfFailures,
-			historicalDisruptionStatistic.P95,
+			thresholdPercentile, threshold,
 			requiredNumberOfPasses,
 		)
-		return failureJobRunIDs, successJobRunIDs, true, summary, nil
+		return failureJobRunIDs, successJobRunIDs, testCaseFailed, summary, nil
 	}
 
-	summary := fmt.Sprintf("Passed: Passed %d times, failed %d times.  The historical P95=%.2fs.  The required number of passes is %d.",
+	summary := fmt.Sprintf("Passed: Passed %d times, failed %d times.  The historical P%d=%.2fs.  The required number of passes is %d.",
 		numberOfPasses,
 		numberOfFailures,
-		historicalDisruptionStatistic.P95,
+		thresholdPercentile, threshold,
 		requiredNumberOfPasses,
 	)
-	return failureJobRunIDs, successJobRunIDs, false, summary, nil
+	return failureJobRunIDs, successJobRunIDs, testCasePassed, summary, nil
 }
 
-func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (bool, string, error) {
+// getPercentileRank returns the maximum percentile that is at or below the disruptionThresholdSeconds
+func getPercentileRank(historicalDisruption backendDisruptionStats, disruptionThresholdSeconds int) int {
+	for i := 1; i <= 99; i++ {
+		if historicalDisruption.percentileByIndex[i] > float64(disruptionThresholdSeconds) {
+			return i - 1
+		}
+	}
+	return 99
+}
+
+func (a *weeklyAverageFromTenDays) CheckPercentileRankDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, maxDisruptionSeconds int) ([]string, []string, testCaseStatus, string, error) {
+	historicalDisruption, err := a.getDisruptionByBackend(ctx)
+	if err != nil {
+		message := fmt.Sprintf("error getting historical disruption data, skipping: %v\n", err)
+		failureJobRunIDs := sets.StringKeySet(jobRunIDToAvailabilityResultForBackend).List()
+		return failureJobRunIDs, []string{}, testCaseSkipped, message, nil
+	}
+	historicalDisruptionStatistic := historicalDisruption[backend]
+	thresholdPercentile := getPercentileRank(historicalDisruptionStatistic, maxDisruptionSeconds)
+
+	return a.checkPercentileDisruption(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, thresholdPercentile)
+}
+
+func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (testCaseStatus, string, error) {
 	if testShouldAlwaysPass(testCaseDetails.Name) {
 		fmt.Printf("always passing %q\n", testCaseDetails.Name)
-		return false, "always passing", nil
+		return testCasePassed, "always passing", nil
 	}
 	if !didTestRun(testCaseDetails) {
-		return false, "did not run", nil
+		return testCasePassed, "did not run", nil
 	}
 	numberOfAttempts := getAttempts(testCaseDetails)
 
 	// if most of the job runs skipped this test, then we probably intend to skip the test overall and the failure is actually
 	// due to some kind of "couldn't detect that I should skip".
 	if len(testCaseDetails.Passes) == 0 && len(testCaseDetails.Skips) > len(testCaseDetails.Failures) {
-		return false, "probably intended to skip", nil
+		return testCasePassed, "probably intended to skip", nil
 	}
 
 	numberOfPasses := getNumberOfPasses(testCaseDetails)
@@ -365,7 +405,7 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames [
 			len(testCaseDetails.Skips),
 			a.minimumNumberOfAttempts,
 		)
-		return true, summary, nil
+		return testCaseFailed, summary, nil
 	}
 	if len(testCaseDetails.Passes) < 1 {
 		summary := fmt.Sprintf("Passed %d times, failed %d times, skipped %d times: we require at least one pass to consider it a success",
@@ -373,7 +413,7 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames [
 			numberOfFailures,
 			len(testCaseDetails.Skips),
 		)
-		return true, summary, nil
+		return testCaseFailed, summary, nil
 	}
 
 	aggregatedTestRunsByName, err := a.getAggregatedTestRuns(ctx)
@@ -405,10 +445,10 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames [
 			workingPercentage,
 			requiredNumberOfPasses,
 		)
-		return true, summary, nil
+		return testCaseFailed, summary, nil
 	}
 
-	return false, fmt.Sprintf("Passed: Passed %d times, failed %d times.  The historical pass rate is %d%%.  The required number of passes is %d.",
+	return testCasePassed, fmt.Sprintf("Passed: Passed %d times, failed %d times.  The historical pass rate is %d%%.  The required number of passes is %d.",
 		numberOfPasses,
 		numberOfFailures,
 		workingPercentage,

@@ -18,16 +18,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
-// CloudProvider define cloud providers
-type CloudProvider string
-
-const (
-	// CloudAWS is the cloud provider AWS
-	CloudAWS CloudProvider = "aws"
-	// CloudGCP is the cloud provider GCP
-	CloudGCP CloudProvider = "gcp"
-)
-
 // Config is the configuration file of this tools, which defines the cluster parameter for each Prow job, i.e., where it runs
 type Config struct {
 	// the cluster cluster name if no other condition matches
@@ -41,7 +31,7 @@ type Config struct {
 	// Groups maps a group of jobs to a cluster
 	Groups JobGroups `json:"groups"`
 	// BuildFarm maps groups of jobs to a cloud provider, like GCP
-	BuildFarm map[CloudProvider]map[api.Cluster]Filenames `json:"buildFarm,omitempty"`
+	BuildFarm map[api.Cloud]map[api.Cluster]Filenames `json:"buildFarm,omitempty"`
 }
 
 type Filenames struct {
@@ -159,7 +149,7 @@ func isSSHBastionJob(base prowconfig.JobBase) bool {
 }
 
 // IsInBuildFarm returns the cloudProvider if the cluster is in the build farm; empty string otherwise.
-func (config *Config) IsInBuildFarm(clusterName api.Cluster) CloudProvider {
+func (config *Config) IsInBuildFarm(clusterName api.Cluster) api.Cloud {
 	for cloudProvider, v := range config.BuildFarm {
 		for cluster := range v {
 			if cluster == clusterName {

@@ -60,11 +60,11 @@ var (
 
 	configWithBuildFarm = Config{
 		Default: "api.ci",
-		BuildFarm: map[CloudProvider]map[api.Cluster]Filenames{
-			CloudAWS: {
+		BuildFarm: map[api.Cloud]map[api.Cluster]Filenames{
+			api.CloudAWS: {
 				api.ClusterBuild01: {},
 			},
-			CloudGCP: {
+			api.CloudGCP: {
 				api.ClusterBuild02: {},
 			},
 		},
@@ -108,8 +108,8 @@ var (
 		Default:  "api.ci",
 		KVM:      []api.Cluster{api.ClusterBuild02},
 		NoBuilds: []api.Cluster{api.ClusterBuild03},
-		BuildFarm: map[CloudProvider]map[api.Cluster]Filenames{
-			CloudAWS: {
+		BuildFarm: map[api.Cloud]map[api.Cluster]Filenames{
+			api.CloudAWS: {
 				api.ClusterBuild01: {
 					FilenamesRaw: []string{
 						"some-build-farm-presubmits.yaml",
@@ -117,7 +117,7 @@ var (
 					Filenames: sets.NewString("some-build-farm-presubmits.yaml"),
 				},
 			},
-			CloudGCP: {
+			api.CloudGCP: {
 				api.ClusterBuild02: {},
 			},
 		},
@@ -444,7 +444,7 @@ func TestIsInBuildFarm(t *testing.T) {
 		name        string
 		config      *Config
 		clusterName api.Cluster
-		expected    CloudProvider
+		expected    api.Cloud
 	}{
 		{
 			name:        "build01",

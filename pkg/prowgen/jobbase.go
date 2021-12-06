@@ -125,15 +125,19 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 
 	switch {
 	case test.MultiStageTestConfigurationLiteral != nil:
-		if test.MultiStageTestConfigurationLiteral.ClusterProfile != "" {
-			p.PodSpec.Add(ClusterProfile(test.MultiStageTestConfigurationLiteral.ClusterProfile, test.As), LeaseClient())
+		if clusterProfile := test.MultiStageTestConfigurationLiteral.ClusterProfile; clusterProfile != "" {
+			p.PodSpec.Add(ClusterProfile(clusterProfile, test.As), LeaseClient())
+			p.WithLabel(cioperatorapi.CloudClusterProfileLabel, string(clusterProfile))
+			p.WithLabel(cioperatorapi.CloudLabel, clusterProfile.ClusterType())
 		}
 		if configSpec.Releases != nil {
 			p.PodSpec.Add(CIPullSecret())
 		}
 	case test.MultiStageTestConfiguration != nil:
-		if test.MultiStageTestConfiguration.ClusterProfile != "" {
-			p.PodSpec.Add(ClusterProfile(test.MultiStageTestConfiguration.ClusterProfile, test.As), LeaseClient())
+		if clusterProfile := test.MultiStageTestConfiguration.ClusterProfile; clusterProfile != "" {
+			p.PodSpec.Add(ClusterProfile(clusterProfile, test.As), LeaseClient())
+			p.WithLabel(cioperatorapi.CloudClusterProfileLabel, string(clusterProfile))
+			p.WithLabel(cioperatorapi.CloudLabel, clusterProfile.ClusterType())
 		}
 		if configSpec.Releases != nil {
 			p.PodSpec.Add(CIPullSecret())

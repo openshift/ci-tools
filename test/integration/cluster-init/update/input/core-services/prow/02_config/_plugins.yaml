@@ -1,0 +1,32 @@
+config_updater:
+  cluster_groups:
+    build_farm_ci:
+      clusters:
+        - app.ci
+        - build01
+        - existingCluster
+      namespaces:
+        - ci
+    build_farm_ocp:
+      clusters:
+        - app.ci
+        - build01
+        - existingCluster
+      namespaces:
+        - ocp
+  gzip: false
+  maps:
+    ci-operator/config/**/*-fcos.yaml:
+      clusters:
+        app.ci:
+          - ci
+      gzip: true
+      name: ci-operator-misc-configs
+    ci-operator/templates/master-sidecar-3.yaml:
+      cluster_groups:
+        - build_farm_ci
+      name: prow-job-master-sidecar-3
+    core-services/release-controller/_repos/*:
+      cluster_groups:
+        - build_farm_ocp
+      name: base-repos

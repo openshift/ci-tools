@@ -1346,6 +1346,7 @@ func TestValidateTestConfigurationType(t *testing.T) {
 					Cloud:        api.CloudAWS,
 					Owner:        "dpp",
 					Timeout:      &prowv1.Duration{Duration: time.Hour},
+					Labels:       map[string]string{"size": "2", "multi-az": "false"},
 				},
 				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
 					Test: []api.TestStep{
@@ -1484,6 +1485,35 @@ func TestValidateTestConfigurationType(t *testing.T) {
 			},
 			expected: []error{
 				errors.New("test.cluster_claim cannot be set on a test which is not a multi-stage test"),
+			},
+		},
+		{
+			name: "claim with a built-in key -> error",
+			test: api.TestStepConfiguration{
+				ClusterClaim: &api.ClusterClaim{
+					Product:      api.ReleaseProductOCP,
+					Version:      "4.6.0",
+					Architecture: api.ReleaseArchitectureAMD64,
+					Cloud:        api.CloudAWS,
+					Owner:        "dpp",
+					Timeout:      &prowv1.Duration{Duration: time.Hour},
+					Labels:       map[string]string{"cloud": "b"},
+				},
+				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+					Test: []api.TestStep{
+						{
+							LiteralTestStep: &api.LiteralTestStep{
+								As:        "e2e-aws-test",
+								Commands:  "oc get node",
+								From:      "cli",
+								Resources: api.ResourceRequirements{Requests: api.ResourceList{"cpu": "1"}},
+							},
+						},
+					},
+				},
+			},
+			expected: []error{
+				errors.New("test.cluster_claim.labels contains an invalid key in claim's label: cloud"),
 			},
 		},
 	} {

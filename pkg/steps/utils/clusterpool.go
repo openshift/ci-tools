@@ -21,6 +21,9 @@ func ClusterPoolFromClaim(ctx context.Context, claim *api.ClusterClaim, hiveClie
 		"cloud":        string(claim.Cloud),
 		"owner":        claim.Owner,
 	}
+	for k, v := range claim.Labels {
+		listOption[k] = v
+	}
 	if err := hiveClient.List(ctx, clusterPools, listOption); err != nil {
 		return nil, fmt.Errorf("failed to list cluster pools with list option %v: %w", listOption, err)
 	}

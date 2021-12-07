@@ -380,6 +380,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            as: ' '\n" +
 	"            # Cloud is the cloud where the product is installed, e.g., aws.\n" +
 	"            cloud: ' '\n" +
+	"            # Labels is the labels to select the cluster pools\n" +
+	"            labels:\n" +
+	"                \"\": \"\"\n" +
 	"            # Owner is the owner of cloud account used to install the product, e.g., dpp.\n" +
 	"            owner: ' '\n" +
 	"            # Product is the name of the product being released.\n" +
@@ -1098,6 +1101,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        as: ' '\n" +
 	"        # Cloud is the cloud where the product is installed, e.g., aws.\n" +
 	"        cloud: ' '\n" +
+	"        # Labels is the labels to select the cluster pools\n" +
+	"        labels:\n" +
+	"            \"\": \"\"\n" +
 	"        # Owner is the owner of cloud account used to install the product, e.g., dpp.\n" +
 	"        owner: ' '\n" +
 	"        # Product is the name of the product being released.\n" +

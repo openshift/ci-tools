@@ -483,6 +483,11 @@ func (v *Validator) validateTestConfigurationType(
 	clusterCount := 0
 	if claim := test.ClusterClaim; claim != nil {
 		clusterCount++
+		for key := range claim.Labels {
+			if key == "product" || key == "version" || key == "architecture" || key == "cloud" || key == "owner" {
+				validationErrors = append(validationErrors, fmt.Errorf("%s.cluster_claim.labels contains an invalid key in claim's label: %s", fieldRoot, key))
+			}
+		}
 		if claim.Version == "" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.cluster_claim.version cannot be empty when cluster_claim is not nil", fieldRoot))
 		}

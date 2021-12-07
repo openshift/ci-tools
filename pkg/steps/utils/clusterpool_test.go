@@ -3,13 +3,17 @@ package utils
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
@@ -91,6 +95,100 @@ func TestClusterPoolFromClaim(t *testing.T) {
 				return
 			}
 			if diff := cmp.Diff(tc.expected, got); err == nil && diff != "" {
+				t.Errorf("Selected pool differs from expected:\n%s", diff)
+			}
+		})
+	}
+}
+
+func init() {
+	if err := hivev1.AddToScheme(scheme.Scheme); err != nil {
+		panic(fmt.Sprintf("failed to register hivev1 scheme: %v", err))
+	}
+}
+
+func TestClusterPoolFromClaimWithLabels(t *testing.T) {
+	testCases := []struct {
+		description string
+		pools       []ctrlruntimeclient.Object
+		labels      map[string]string
+		expected    *hivev1.ClusterPool
+		expectErr   error
+	}{
+		{
+			description: "select the clusters to satisfy labels",
+			labels:      map[string]string{"a": "b"},
+			pools: []ctrlruntimeclient.Object{
+				&hivev1.ClusterPool{ObjectMeta: v1.ObjectMeta{Name: "pool",
+					Labels: map[string]string{
+						"architecture": "amd64",
+						"cloud":        "aws",
+						"owner":        "o",
+						"product":      "ocp",
+						"version":      "v",
+					},
+				}, Spec: hivev1.ClusterPoolSpec{Size: 3, MaxSize: pointer.Int32(4)}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
+				&hivev1.ClusterPool{ObjectMeta: v1.ObjectMeta{Name: "pool with label", Labels: map[string]string{"a": "b",
+					"architecture": "amd64",
+					"cloud":        "aws",
+					"owner":        "o",
+					"product":      "ocp",
+					"version":      "v",
+				}}, Spec: hivev1.ClusterPoolSpec{Size: 3, MaxSize: pointer.Int32(3)}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
+			},
+			expected: &hivev1.ClusterPool{ObjectMeta: v1.ObjectMeta{Name: "pool with label", Labels: map[string]string{"a": "b",
+				"architecture": "amd64",
+				"cloud":        "aws",
+				"owner":        "o",
+				"product":      "ocp",
+				"version":      "v",
+			}}, Spec: hivev1.ClusterPoolSpec{Size: 3, MaxSize: pointer.Int32(3)}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
+		},
+		{
+			description: "select the clusters without labels",
+			pools: []ctrlruntimeclient.Object{
+				&hivev1.ClusterPool{ObjectMeta: v1.ObjectMeta{Name: "pool",
+					Labels: map[string]string{
+						"architecture": "amd64",
+						"cloud":        "aws",
+						"owner":        "o",
+						"product":      "ocp",
+						"version":      "v",
+					},
+				}, Spec: hivev1.ClusterPoolSpec{Size: 3, MaxSize: pointer.Int32(4)}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
+				&hivev1.ClusterPool{ObjectMeta: v1.ObjectMeta{Name: "pool with label", Labels: map[string]string{"a": "b",
+					"architecture": "amd64",
+					"cloud":        "aws",
+					"owner":        "o",
+					"product":      "ocp",
+					"version":      "v",
+				}}, Spec: hivev1.ClusterPoolSpec{Size: 3, MaxSize: pointer.Int32(3)}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
+			},
+			expected: &hivev1.ClusterPool{ObjectMeta: v1.ObjectMeta{Name: "pool", Labels: map[string]string{
+				"architecture": "amd64",
+				"cloud":        "aws",
+				"owner":        "o",
+				"product":      "ocp",
+				"version":      "v",
+			}}, Spec: hivev1.ClusterPoolSpec{Size: 3, MaxSize: pointer.Int32(4)}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			got, err := ClusterPoolFromClaim(context.TODO(), &api.ClusterClaim{Labels: tc.labels,
+				Architecture: api.ReleaseArchitectureAMD64,
+				Cloud:        api.CloudAWS,
+				Owner:        "o",
+				Product:      api.ReleaseProductOCP,
+				Version:      "v",
+			},
+				fakectrlruntimeclient.NewClientBuilder().WithObjects(tc.pools...).Build())
+			if diff := cmp.Diff(tc.expectErr, err, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("error differs from expected:\n%s", diff)
+				return
+			}
+			if diff := cmp.Diff(tc.expected, got, testhelper.RuntimeObjectIgnoreRvTypeMeta); err == nil && diff != "" {
 				t.Errorf("Selected pool differs from expected:\n%s", diff)
 			}
 		})

@@ -20,7 +20,6 @@ go build  -v -o /tmp/prow-job-dispatcher ./cmd/prow-job-dispatcher
   --prometheus-password-path=${prom_password_file} \
   --config-path="$(go env GOPATH)/src/github.com/openshift/release/core-services/sanitize-prow-jobs/_config.yaml" \
   --prow-jobs-dir="$(go env GOPATH)/src/github.com/openshift/release/ci-operator/jobs" \
-  --create-pr=true \
   --target-dir="$(go env GOPATH)/src/github.com/openshift/release" \
   --github-token-path=/tmp/token \
   --github-login=openshift-bot \

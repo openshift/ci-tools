@@ -16,7 +16,7 @@ spec:
     - ci-operator
     env:
     - name: CLUSTER_TYPE
-      value: alibaba
+      value: alibabacloud
     - name: JOB_NAME_SAFE
       value: template1
     - name: RPM_REPO_OPENSHIFT_ORIGIN
@@ -47,7 +47,7 @@ spec:
   volumes:
   - name: cluster-profile
     secret:
-      secretName: cluster-secrets-alibaba
+      secretName: cluster-secrets-alibabacloud
   - configMap:
       name: prow-job-cluster-launch-e2e-openshift-ansible
     name: job-definition

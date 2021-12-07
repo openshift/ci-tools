@@ -625,6 +625,6 @@ func getClusterProfiles() []api.ClusterProfile {
 		api.ClusterProfileAzure4,
 		api.ClusterProfileAzureStack,
 		api.ClusterProfileGCP,
-		api.ClusterProfileAlibaba,
+		api.ClusterProfileAlibabaCloud,
 	}
 }

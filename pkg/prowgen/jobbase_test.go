@@ -320,7 +320,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			test: ciop.TestStepConfiguration{
 				As: "simple",
 				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
-					ClusterProfile: ciop.ClusterProfileAlibaba,
+					ClusterProfile: ciop.ClusterProfileAlibabaCloud,
 					Workflow:       pointer.StringPtr("workflow"),
 				},
 			},
@@ -357,7 +357,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			test: ciop.TestStepConfiguration{
 				As: "template1",
 				OpenshiftAnsibleClusterTestConfiguration: &ciop.OpenshiftAnsibleClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibaba},
+					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibabaCloud},
 				},
 			},
 		},
@@ -371,7 +371,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			test: ciop.TestStepConfiguration{
 				As: "template1",
 				OpenshiftAnsibleCustomClusterTestConfiguration: &ciop.OpenshiftAnsibleCustomClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibaba},
+					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibabaCloud},
 				},
 			},
 		},
@@ -380,7 +380,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			test: ciop.TestStepConfiguration{
 				As: "template1",
 				OpenshiftInstallerClusterTestConfiguration: &ciop.OpenshiftInstallerClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibaba},
+					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibabaCloud},
 				},
 			},
 		},
@@ -389,7 +389,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			test: ciop.TestStepConfiguration{
 				As: "template1",
 				OpenshiftInstallerUPIClusterTestConfiguration: &ciop.OpenshiftInstallerUPIClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibaba},
+					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibabaCloud},
 				},
 			},
 		},
@@ -398,7 +398,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			test: ciop.TestStepConfiguration{
 				As: "template1",
 				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibaba},
+					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibabaCloud},
 					From:                     "yada",
 				},
 			},

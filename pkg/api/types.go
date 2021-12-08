@@ -1084,7 +1084,7 @@ const (
 	ClusterProfileAWSChina              ClusterProfile = "aws-china"
 	ClusterProfileAWSGovCloud           ClusterProfile = "aws-usgov"
 	ClusterProfileAWSGluster            ClusterProfile = "aws-gluster"
-	ClusterProfileAlibaba               ClusterProfile = "alibaba"
+	ClusterProfileAlibabaCloud          ClusterProfile = "alibabacloud"
 	ClusterProfileAzure                 ClusterProfile = "azure"
 	ClusterProfileAzure2                ClusterProfile = "azure-2"
 	ClusterProfileAzure4                ClusterProfile = "azure4"
@@ -1137,7 +1137,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSChina,
 		ClusterProfileAWSGovCloud,
 		ClusterProfileAWSGluster,
-		ClusterProfileAlibaba,
+		ClusterProfileAlibabaCloud,
 		ClusterProfileAzure2,
 		ClusterProfileAzure4,
 		ClusterProfileAzureArc,
@@ -1190,8 +1190,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSCPaaS,
 		ClusterProfileAWS2:
 		return string(CloudAWS)
-	case ClusterProfileAlibaba:
-		return "alibaba"
+	case ClusterProfileAlibabaCloud:
+		return "alibabacloud"
 	case ClusterProfileAWSArm64:
 		return "aws-arm64"
 	case ClusterProfileAWSC2S:
@@ -1282,8 +1282,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-china-quota-slice"
 	case ClusterProfileAWSGovCloud:
 		return "aws-usgov-quota-slice"
-	case ClusterProfileAlibaba:
-		return "alibaba-quota-slice"
+	case ClusterProfileAlibabaCloud:
+		return "alibabacloud-quota-slice"
 	case ClusterProfileAzure2:
 		return "azure-2-quota-slice"
 	case ClusterProfileAzure4:

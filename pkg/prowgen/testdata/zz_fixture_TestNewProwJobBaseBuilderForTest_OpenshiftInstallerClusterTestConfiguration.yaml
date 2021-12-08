@@ -17,7 +17,7 @@ spec:
     - ci-operator
     env:
     - name: CLUSTER_TYPE
-      value: alibaba
+      value: alibabacloud
     - name: JOB_NAME_SAFE
       value: template1
     - name: TEST_COMMAND
@@ -55,7 +55,7 @@ spec:
       secretName: boskos-credentials
   - name: cluster-profile
     secret:
-      secretName: cluster-secrets-alibaba
+      secretName: cluster-secrets-alibabacloud
   - configMap:
       name: prow-job-cluster-launch-installer-e2e
     name: job-definition

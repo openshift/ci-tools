@@ -114,7 +114,7 @@ func TestGetRouter(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
-			router := getRouter(context.TODO(), tc.hiveClient)
+			router := getRouter(context.TODO(), tc.hiveClient, nil)
 			router.ServeHTTP(rr, req)
 
 			if diff := cmp.Diff(tc.expectedCode, rr.Code); diff != "" {

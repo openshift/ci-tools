@@ -417,3 +417,13 @@ $(TMPDIR)/.github-ldap-user-group-creator-kubeconfig-dir:
 github-ldap-user-group-creator: $(TMPDIR)/.github-ldap-user-group-creator-kubeconfig-dir
 	@go run  ./cmd/github-ldap-user-group-creator --kubeconfig-dir=$(TMPDIR)/.github-ldap-user-group-creator-kubeconfig-dir --mapping-file=/tmp/mapping.yaml --dry-run=true --log-level=debug
 .PHONY: github-ldap-user-group-creator
+
+$(TMPDIR)/.cluster-display-kubeconfig-dir:
+	rm -rf $(TMPDIR)/.cluster-display-kubeconfig-dir
+	mkdir -p $(TMPDIR)/.cluster-display-kubeconfig-dir
+	oc --context app.ci --namespace ci extract secret/cluster-display --confirm --to=$(TMPDIR)/.cluster-display-kubeconfig-dir
+	oc --context app.ci --namespace ci serviceaccounts create-kubeconfig cluster-display | sed 's/cluster-display/app.ci/g' > $(TMPDIR)/.cluster-display-kubeconfig-dir/sa.cluster-display.app.ci.config
+
+cluster-display: $(TMPDIR)/.cluster-display-kubeconfig-dir
+	@go run  ./cmd/cluster-display --kubeconfig-dir=$(TMPDIR)/.cluster-display-kubeconfig-dir
+.PHONY: cluster-display

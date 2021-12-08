@@ -959,26 +959,11 @@ func (o *options) resolveConsoleHost() {
 	if client, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{}); err != nil {
 		logrus.WithError(err).Warn("Could not create client for accessing Routes. Will not resolve console URL.")
 	} else {
-		consoleRoutes := &routev1.RouteList{}
-		if err := client.List(context.TODO(), consoleRoutes, ctrlruntimeclient.InNamespace("openshift-console")); err != nil {
-			logrus.WithError(err).Warn("Could not fetch OpenShift console Route.  Will not resolve console URL.")
+		host, err := api.ResolveConsoleHost(context.TODO(), client)
+		if err != nil {
+			logrus.WithError(err).Warn("Could not resolve OpenShift console host. Will not resolve console URL.")
 		} else {
-			hostForRoute := func(name string, routes []routev1.Route) string {
-				for _, route := range routes {
-					if route.Name == name {
-						return route.Spec.Host
-					}
-				}
-				return ""
-			}
-			// the canonical route for the console may be in one of two routes,
-			// and we want to prefer the custom one if it is present
-			for _, routeName := range []string{"console-custom", "console"} {
-				if host := hostForRoute(routeName, consoleRoutes.Items); host != "" {
-					o.consoleHost = host
-					break
-				}
-			}
+			o.consoleHost = host
 		}
 	}
 }

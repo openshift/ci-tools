@@ -142,6 +142,9 @@ func htmlForTestRuns(jobName string, suite *junit.TestSuite) string {
 type testCaseFilterFunc func(*junit.TestCase) bool
 
 func failedOnly(testCase *junit.TestCase) bool {
+	if strings.Contains(testCase.SystemOut, ": we require at least") {
+		return true
+	}
 	if testCase.FailureOutput == nil {
 		return false
 	}
@@ -166,7 +169,6 @@ func htmlForTestSuite(jobName string, parents []string, suite *junit.TestSuite, 
 	if len(suite.Name) > 0 {
 		currSuite = append(currSuite, suite.Name)
 	}
-
 	for _, testCase := range suite.TestCases {
 		curr := htmlForTestCase(jobName, currSuite, testCase, filter)
 		if len(curr) > 0 {
@@ -191,7 +193,7 @@ func htmlForTestCase(jobName string, parents []string, testCase *junit.TestCase,
 	switch {
 	case testCase.SkipMessage != nil:
 		status = "Skipped"
-	case testCase.FailureOutput != nil && failedOnly(testCase):
+	case failedOnly(testCase):
 		status = "Failed"
 	default:
 		status = "Passed"
@@ -202,7 +204,7 @@ func htmlForTestCase(jobName string, parents []string, testCase *junit.TestCase,
 	currDetails := &TestCaseDetails{}
 	_ = yaml.Unmarshal([]byte(testCase.SystemOut), currDetails)
 
-	if len(currDetails.Failures) == 0 {
+	if len(currDetails.Failures) == 0 && !strings.Contains(currDetails.Summary, ": we require at least") {
 		return ""
 	}
 

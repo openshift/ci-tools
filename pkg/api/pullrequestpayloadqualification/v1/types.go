@@ -101,6 +101,10 @@ type ReleaseJobSpec struct {
 	CIOperatorConfig CIOperatorMetadata `json:"ciOperatorConfig"`
 	// Test is the name of the test in the ci-operator configuration
 	Test string `json:"test"`
+	// AggregatedCount is a number that specifies how many instances of the job will run in parallel.
+	// When the value is 0 it means that the job is not run as aggregated and 1 means that
+	// the job is aggregated with a single execution.
+	AggregatedCount int `json:"aggregatedCount,omitempty"`
 }
 
 // PullRequestPayloadTestStatus provides runtime data, such as references to submitted ProwJobs,

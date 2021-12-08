@@ -2,6 +2,7 @@ package prowgen
 
 import (
 	"fmt"
+	"hash/fnv"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -174,10 +175,26 @@ func generatePostsubmitForTest(jobBaseBuilder *prowJobBaseBuilder, info *Prowgen
 	}
 }
 
+// hashDailyCron returns a cron pattern derived from a hash of the job name that
+// places the trigger between 22 and 04 UTC
+func hashDailyCron(job string) string {
+	h := fnv.New32()
+	// hash writes never return errors
+	_, _ = h.Write([]byte(job))
+	jobHash := h.Sum32()
+	minute := jobHash % 60
+	hour := (22 + (jobHash % 6)) % 24
+	return fmt.Sprintf("%d %d * * *", minute, hour)
+}
+
 func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenInfo, cron string, interval string, releaseController bool, pathAlias *string) *prowconfig.Periodic {
 	// Periodics are rehearsable
 	// We are resetting PathAlias because it will be set on the `ExtraRefs` item
 	base := jobBaseBuilder.Rehearsable(true).PathAlias("").Build(jc.PeriodicPrefix)
+
+	if cron == "@daily" {
+		cron = hashDailyCron(base.Name)
+	}
 
 	// periodics are not associated with a repo per se, but we can add in an
 	// extra ref so that periodics which want to access the repo tha they are

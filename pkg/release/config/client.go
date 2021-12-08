@@ -22,12 +22,19 @@ func endpoint(c api.Candidate) string {
 type Job struct {
 	Name                 string `json:"name"`
 	api.MetadataWithTest `json:",inline"`
+
+	AggregatedCount int `json:"-"`
+}
+
+type AggregatedJob struct {
+	AnalysisJobCount int `json:"analysisJobCount"`
 }
 
 type Verify map[string]VerifyItem
 
 type VerifyItem struct {
-	ProwJob Job `json:"prowJob"`
+	ProwJob           Job           `json:"prowJob"`
+	AggregatedProwJob AggregatedJob `json:"aggregatedProwJob"`
 }
 
 type JobType string
@@ -81,7 +88,9 @@ func resolveJobs(client release.HTTPClient, endpoint string, jobType JobType) ([
 	sort.Strings(keys)
 	var jobs []Job
 	for _, k := range keys {
-		jobs = append(jobs, verify[k].ProwJob)
+		j := verify[k].ProwJob
+		j.AggregatedCount = verify[k].AggregatedProwJob.AnalysisJobCount
+		jobs = append(jobs, j)
 	}
 	return jobs, nil
 }

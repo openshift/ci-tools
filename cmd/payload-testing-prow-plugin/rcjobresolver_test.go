@@ -28,8 +28,9 @@ func TestResolve(t *testing.T) {
 			releaseType: api.ReleaseStreamNightly,
 			jobType:     config.Blocking,
 			expected: []config.Job{
-				{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade"},
-				{Name: "periodic-ci-openshift-release-master-ci-4.10-e2e-azure-ovn-upgrade"},
+				{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade", AggregatedCount: 5},
+				{Name: "periodic-ci-openshift-release-master-ci-4.10-e2e-azure-ovn-upgrade", AggregatedCount: 10},
+				{Name: "periodic-ci-openshift-release-master-ci-4.10-e2e-azure-ovn-upgrade-2"},
 			},
 		},
 	}
@@ -47,7 +48,7 @@ func TestResolve(t *testing.T) {
         "name": "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade"
       },
       "aggregatedProwJob": {
-        "analysisJobCount": 10
+        "analysisJobCount": 5
       }
     },
     "aggregated-azure-ovn-upgrade-4.10-micro": {
@@ -62,7 +63,17 @@ func TestResolve(t *testing.T) {
       "aggregatedProwJob": {
         "analysisJobCount": 10
       }
-    }
+    },
+    "non-aggregated-azure-ovn-upgrade-4.10-micro": {
+		"disabled": false,
+		"optional": true,
+		"upgrade": true,
+		"upgradeFrom": "",
+		"upgradeFromRelease": null,
+		"prowJob": {
+		  "name": "periodic-ci-openshift-release-master-ci-4.10-e2e-azure-ovn-upgrade-2"
+		}
+	  }
 }`
 				return &http.Response{
 					StatusCode: http.StatusOK,

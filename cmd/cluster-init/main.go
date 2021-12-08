@@ -127,6 +127,7 @@ const (
 	buildFarm                  = "build-farm"
 	githubLdapUserGroupCreator = "github-ldap-user-group-creator"
 	promotedImageGovernor      = "promoted-image-governor"
+	clusterDisplay             = "cluster-display"
 	ci                         = "ci"
 )
 

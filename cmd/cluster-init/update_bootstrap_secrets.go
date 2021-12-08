@@ -56,6 +56,7 @@ func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
 		updateRehearseSecret,
 		updateGithubLdapUserGroupCreatorSecret,
 		updatePromotedImageGovernor,
+		updateClusterDisplay,
 		updateChatBotSecret,
 		updateExistingRegistryPullCredentialsAllSecrets,
 		updateSecret(generateRegistryPushCredentialsSecret),
@@ -214,6 +215,14 @@ func updateGithubLdapUserGroupCreatorSecret(c *secretbootstrap.Config, o options
 func updatePromotedImageGovernor(c *secretbootstrap.Config, o options) error {
 	keyAndField := serviceAccountKubeconfigPath(promotedImageGovernor, o.clusterName)
 	return updateSecretItemContext(c, promotedImageGovernor, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
+		Field: keyAndField,
+		Item:  buildUFarm,
+	})
+}
+
+func updateClusterDisplay(c *secretbootstrap.Config, o options) error {
+	keyAndField := serviceAccountKubeconfigPath(clusterDisplay, o.clusterName)
+	return updateSecretItemContext(c, clusterDisplay, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
 		Item:  buildUFarm,
 	})

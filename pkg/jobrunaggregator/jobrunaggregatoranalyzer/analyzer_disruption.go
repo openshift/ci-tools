@@ -70,6 +70,9 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 				return nil, err
 			}
 
+			// we are correcting our disruption numbers, so we are forcing everything to skipped until 12/15
+			status = testCaseSkipped
+
 			testCaseName := fmt.Sprintf(testCaseNamePattern, backendName)
 			junitTestCase, err := disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot, failedJobRunIDs, successfulJobRunIDs, status, message)
 			if err != nil {

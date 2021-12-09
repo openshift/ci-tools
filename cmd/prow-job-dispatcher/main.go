@@ -24,7 +24,6 @@ import (
 	"k8s.io/test-infra/prow/config/secret"
 	"sigs.k8s.io/yaml"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
@@ -114,56 +113,25 @@ func (o *options) validate() error {
 	return o.PrometheusOptions.Validate()
 }
 
-var (
-	knownCloudProviders = sets.NewString(string(api.CloudAWS), string(api.CloudGCP))
-)
-
-// determineCloud determines which cloud this job should run.
-// It returns the value of ci-operator.openshift.io/cloud if it is none empty.
-// The label is set by prow-gen for multistage tests.
-// For template tests and hand-crafted tests, it returns the value of env. var. CLUSTER_TYPE from the job's spec.
-func determineCloud(jobBase prowconfig.JobBase) string {
-	labels := jobBase.Labels
-	if labels != nil {
-		if v, ok := labels[api.CloudLabel]; ok && v != "" {
-			return v
-		}
-	}
-
-	if jobBase.Spec == nil {
-		return ""
-	}
-	for _, c := range jobBase.Spec.Containers {
-		for _, e := range c.Env {
-			if e.Name == "CLUSTER_TYPE" {
-				if knownCloudProviders.Has(e.Value) {
-					return e.Value
-				}
-			}
-		}
-	}
-	return ""
-}
-
 // getCloudProvidersForE2ETests returns a set of cloud providers where a cluster is hosted for an e2e test defined in the given Prow job config.
 func getCloudProvidersForE2ETests(jc *prowconfig.JobConfig) sets.String {
 	cloudProviders := sets.NewString()
 	for k := range jc.PresubmitsStatic {
 		for _, job := range jc.PresubmitsStatic[k] {
-			if cloud := determineCloud(job.JobBase); cloud != "" {
+			if cloud := dispatcher.DetermineCloud(job.JobBase); cloud != "" {
 				cloudProviders.Insert(cloud)
 			}
 		}
 	}
 	for k := range jc.PostsubmitsStatic {
 		for _, job := range jc.PostsubmitsStatic[k] {
-			if cloud := determineCloud(job.JobBase); cloud != "" {
+			if cloud := dispatcher.DetermineCloud(job.JobBase); cloud != "" {
 				cloudProviders.Insert(cloud)
 			}
 		}
 	}
 	for _, job := range jc.Periodics {
-		if cloud := determineCloud(job.JobBase); cloud != "" {
+		if cloud := dispatcher.DetermineCloud(job.JobBase); cloud != "" {
 			cloudProviders.Insert(cloud)
 		}
 	}

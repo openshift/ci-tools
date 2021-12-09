@@ -20,6 +20,8 @@ import (
 
 // Config is the configuration file of this tools, which defines the cluster parameter for each Prow job, i.e., where it runs
 type Config struct {
+	// the job will be run on the same cloud as the one for the e2e test
+	DetermineE2EByJob bool `json:"determineE2EByJob,omitempty"`
 	// the cluster cluster name if no other condition matches
 	Default api.Cluster `json:"default"`
 	// the cluster name for ssh bastion jobs
@@ -32,6 +34,8 @@ type Config struct {
 	Groups JobGroups `json:"groups"`
 	// BuildFarm maps groups of jobs to a cloud provider, like GCP
 	BuildFarm map[api.Cloud]map[api.Cluster]Filenames `json:"buildFarm,omitempty"`
+	// BuildFarmCloud maps sets of clusters to a cloud provider, like GCP
+	BuildFarmCloud map[api.Cloud][]string `json:"-"`
 }
 
 type Filenames struct {
@@ -70,6 +74,37 @@ func isApplyConfigJob(jobBase prowconfig.JobBase) bool {
 	return false
 }
 
+var (
+	knownCloudProviders = sets.NewString(string(api.CloudAWS), string(api.CloudGCP))
+)
+
+// DetermineCloud determines which cloud this job should run.
+// It returns the value of ci-operator.openshift.io/cloud if it is none empty.
+// The label is set by prow-gen for multistage tests.
+// For template tests and hand-crafted tests, it returns the value of env. var. CLUSTER_TYPE from the job's spec.
+func DetermineCloud(jobBase prowconfig.JobBase) string {
+	labels := jobBase.Labels
+	if labels != nil {
+		if v, ok := labels[api.CloudLabel]; ok && v != "" {
+			return v
+		}
+	}
+
+	if jobBase.Spec == nil {
+		return ""
+	}
+	for _, c := range jobBase.Spec.Containers {
+		for _, e := range c.Env {
+			if e.Name == "CLUSTER_TYPE" {
+				if knownCloudProviders.Has(e.Value) {
+					return e.Value
+				}
+			}
+		}
+	}
+	return ""
+}
+
 // DetermineClusterForJob return the cluster for a prow job and if it can be relocated to a cluster in build farm
 func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path string) (clusterName api.Cluster, mayBeRelocated bool, _ error) {
 	if jobBase.Agent != "kubernetes" && jobBase.Agent != "" {
@@ -90,6 +125,17 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 		if cluster, ok := jobBase.Labels[api.ClusterLabel]; ok {
 			return api.Cluster(cluster), false, nil
 		}
+	}
+
+	if config.DetermineE2EByJob {
+		if cloud := DetermineCloud(jobBase); cloud != "" {
+			if clusters, ok := config.BuildFarmCloud[api.Cloud(cloud)]; ok {
+				return api.Cluster(clusters[len(jobBase.Name)%len(clusters)]), false, nil
+			}
+		}
+	}
+
+	if jobBase.Labels != nil {
 		if _, ok := jobBase.Labels[api.NoBuildsLabel]; ok && len(config.NoBuilds) > 0 {
 			// Any deterministic distribution is fine for now.
 			return config.NoBuilds[len(jobBase.Name)%len(config.NoBuilds)], false, nil
@@ -200,13 +246,19 @@ func LoadConfig(configPath string) (*Config, error) {
 	}
 
 	for cloudProvider := range config.BuildFarm {
+		if config.BuildFarmCloud == nil {
+			config.BuildFarmCloud = map[api.Cloud][]string{}
+		}
+		clusters := sets.NewString()
 		for cluster, filenames := range config.BuildFarm[cloudProvider] {
+			clusters.Insert(string(cluster))
 			filenames.Filenames = sets.NewString()
 			for _, f := range filenames.FilenamesRaw {
 				filenames.Filenames.Insert(f)
 			}
 			config.BuildFarm[cloudProvider][cluster] = filenames
 		}
+		config.BuildFarmCloud[cloudProvider] = clusters.List()
 	}
 
 	if len(errs) > 0 {

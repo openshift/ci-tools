@@ -102,29 +102,31 @@ func TestBuild(t *testing.T) {
 	testCases := []struct {
 		name      string
 		b         *prpqrBuilder
-		jobTuples []api.MetadataWithTest
+		jobTuples []prpqv1.ReleaseJobSpec
 		expected  *prpqv1.PullRequestPayloadQualificationRun
 	}{
 		{
 			name: "basic case",
-			jobTuples: []api.MetadataWithTest{
+			jobTuples: []prpqv1.ReleaseJobSpec{
 				{
-					Metadata: api.Metadata{
+					CIOperatorConfig: prpqv1.CIOperatorMetadata{
 						Org:     "openshift",
 						Repo:    "release",
 						Branch:  "master",
 						Variant: "nightly-4.10",
 					},
-					Test: "e2e-aws-serial",
+					Test:            "e2e-aws-serial",
+					AggregatedCount: 5,
 				},
 				{
-					Metadata: api.Metadata{
+					CIOperatorConfig: prpqv1.CIOperatorMetadata{
 						Org:     "openshift",
 						Repo:    "release",
 						Branch:  "master",
 						Variant: "nightly-4.10",
 					},
-					Test: "e2e-metal-ipi",
+					Test:            "e2e-metal-ipi",
+					AggregatedCount: 10,
 				},
 			},
 			expected: &prpqv1.PullRequestPayloadQualificationRun{
@@ -152,10 +154,12 @@ func TestBuild(t *testing.T) {
 							{
 								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
 								Test:             "e2e-aws-serial",
+								AggregatedCount:  5,
 							},
 							{
 								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
 								Test:             "e2e-metal-ipi",
+								AggregatedCount:  10,
 							},
 						},
 					},

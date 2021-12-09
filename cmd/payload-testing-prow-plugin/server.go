@@ -186,7 +186,6 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		})
 		builder.spec = spec
 		var jobNames []string
-		var jobTuples []api.MetadataWithTest
 		specLogger.Debug("resolving jobs ...")
 		startResolveJobs := time.Now()
 		jobs, err := s.jobResolver.resolve(spec.ocp, spec.releaseType, spec.jobs)
@@ -198,12 +197,20 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		}
 		specLogger.Debug("resolving tests ...")
 		startResolveTests := time.Now()
+
+		var releaseJobSpecs []prpqv1.ReleaseJobSpec
 		for _, job := range jobs {
 			if job.Test != "" {
 				jobNames = append(jobNames, job.Name)
-				jobTuples = append(jobTuples, api.MetadataWithTest{
-					Metadata: job.Metadata,
-					Test:     job.Test,
+				releaseJobSpecs = append(releaseJobSpecs, prpqv1.ReleaseJobSpec{
+					CIOperatorConfig: prpqv1.CIOperatorMetadata{
+						Org:     job.Metadata.Org,
+						Repo:    job.Metadata.Repo,
+						Branch:  job.Metadata.Branch,
+						Variant: job.Metadata.Variant,
+					},
+					Test:            job.Test,
+					AggregatedCount: job.AggregatedCount,
 				})
 			} else {
 				jobTuple, err := s.testResolver.resolve(job.Name)
@@ -213,15 +220,25 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 					continue
 				}
 				jobNames = append(jobNames, job.Name)
-				jobTuples = append(jobTuples, jobTuple)
+				releaseJobSpecs = append(releaseJobSpecs, prpqv1.ReleaseJobSpec{
+					CIOperatorConfig: prpqv1.CIOperatorMetadata{
+						Org:     jobTuple.Metadata.Org,
+						Repo:    jobTuple.Metadata.Repo,
+						Branch:  jobTuple.Metadata.Branch,
+						Variant: jobTuple.Metadata.Variant,
+					},
+					Test:            jobTuple.Test,
+					AggregatedCount: job.AggregatedCount,
+				})
 			}
 		}
+
 		specLogger.WithField("duration", time.Since(startResolveTests)).WithField("len(jobNames)", len(jobNames)).
 			Debug("resolving tests completed")
-		if len(jobTuples) > 0 {
+		if len(releaseJobSpecs) > 0 {
 			specLogger.Debug("creating PullRequestPayloadQualificationRuns ...")
 			startCreateRuns := time.Now()
-			run := builder.build(jobTuples)
+			run := builder.build(releaseJobSpecs)
 			if err := s.kubeClient.Create(s.ctx, run); err != nil {
 				specLogger.WithError(err).Error("could not create PullRequestPayloadQualificationRun")
 				return fmt.Sprintf("could not create PullRequestPayloadQualificationRun: %v", err)
@@ -251,19 +268,7 @@ type prpqrBuilder struct {
 	spec      jobSetSpecification
 }
 
-func (b *prpqrBuilder) build(jobTuples []api.MetadataWithTest) *prpqv1.PullRequestPayloadQualificationRun {
-	var releaseJobSpecs []prpqv1.ReleaseJobSpec
-	for _, jobTuple := range jobTuples {
-		releaseJobSpecs = append(releaseJobSpecs, prpqv1.ReleaseJobSpec{
-			CIOperatorConfig: prpqv1.CIOperatorMetadata{
-				Org:     jobTuple.Org,
-				Repo:    jobTuple.Repo,
-				Branch:  jobTuple.Branch,
-				Variant: jobTuple.Variant,
-			},
-			Test: jobTuple.Test,
-		})
-	}
+func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec) *prpqv1.PullRequestPayloadQualificationRun {
 	run := &prpqv1.PullRequestPayloadQualificationRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-%d", b.guid, b.counter),

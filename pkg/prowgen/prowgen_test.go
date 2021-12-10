@@ -130,10 +130,12 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 func TestGeneratePostSubmitForTest(t *testing.T) {
 	testname := "postsubmit"
 	tests := []struct {
-		name       string
-		repoInfo   *ProwgenInfo
-		jobRelease string
-		clone      bool
+		name              string
+		repoInfo          *ProwgenInfo
+		jobRelease        string
+		runIfChanged      string
+		skipIfOnlyChanged string
+		clone             bool
 	}{
 		{
 			name: "Lowercase org repo and branch",
@@ -151,12 +153,30 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				Branch: "Branch",
 			}},
 		},
+		{
+			name: "postsubmit with run_if_changed",
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+			runIfChanged: "^README.md$",
+		},
+		{
+			name: "postsubmit with skip_if_only_changed",
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+			skipIfOnlyChanged: "^README.md$",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			test := ciop.TestStepConfiguration{As: testname}
 			jobBaseGen := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo, newFakePodSpecBuilder(), test)
-			testhelper.CompareWithFixture(t, generatePostsubmitForTest(jobBaseGen, tc.repoInfo))
+			testhelper.CompareWithFixture(t, generatePostsubmitForTest(jobBaseGen, tc.repoInfo, tc.runIfChanged, tc.skipIfOnlyChanged))
 		})
 	}
 }

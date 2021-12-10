@@ -60,7 +60,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			periodic := GeneratePeriodicForTest(g, info, cron, interval, element.ReleaseController, configSpec.CanonicalGoRepository)
 			periodics = append(periodics, *periodic)
 		} else if element.Postsubmit {
-			postsubmit := generatePostsubmitForTest(g, info)
+			postsubmit := generatePostsubmitForTest(g, info, element.RunIfChanged, element.SkipIfOnlyChanged)
 			postsubmit.MaxConcurrency = 1
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
 		} else {
@@ -101,7 +101,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		if configSpec.PromotionConfiguration != nil {
 			jobBaseGen = newJobBaseBuilder().TestName("images")
 			jobBaseGen.PodSpec.Add(Promotion(), Targets(imageTargets.List()...))
-			postsubmit := generatePostsubmitForTest(jobBaseGen, info)
+			postsubmit := generatePostsubmitForTest(jobBaseGen, info, "", "")
 			postsubmit.MaxConcurrency = 1
 			if postsubmit.Labels == nil {
 				postsubmit.Labels = map[string]string{}
@@ -167,10 +167,16 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 	}
 }
 
-func generatePostsubmitForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenInfo) *prowconfig.Postsubmit {
+func generatePostsubmitForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenInfo, runIfChanged, skipIfOnlyChanged string) *prowconfig.Postsubmit {
 	base := jobBaseBuilder.Build(jc.PostsubmitPrefix)
+	alwaysRun := runIfChanged == "" && skipIfOnlyChanged == ""
 	return &prowconfig.Postsubmit{
-		JobBase:  base,
+		JobBase:   base,
+		AlwaysRun: &alwaysRun,
+		RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{
+			RunIfChanged:      runIfChanged,
+			SkipIfOnlyChanged: skipIfOnlyChanged,
+		},
 		Brancher: prowconfig.Brancher{Branches: []string{jc.ExactlyBranch(info.Branch)}},
 	}
 }

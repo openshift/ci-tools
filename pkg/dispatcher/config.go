@@ -120,7 +120,7 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 		if _, ok := jobBase.Labels[api.KVMDeviceLabel]; ok && len(config.KVM) > 0 {
 			// Any deterministic distribution is fine for now.
 			// We could implement more effective distribution when we understand more about the jobs.
-			return config.KVM[len(jobBase.Name)%len(config.KVM)], false, nil
+			return config.KVM[len(filepath.Base(path))%len(config.KVM)], false, nil
 		}
 		if cluster, ok := jobBase.Labels[api.ClusterLabel]; ok {
 			return api.Cluster(cluster), false, nil
@@ -130,7 +130,7 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 	if config.DetermineE2EByJob {
 		if cloud := DetermineCloud(jobBase); cloud != "" {
 			if clusters, ok := config.BuildFarmCloud[api.Cloud(cloud)]; ok {
-				return api.Cluster(clusters[len(jobBase.Name)%len(clusters)]), false, nil
+				return api.Cluster(clusters[len(filepath.Base(path))%len(clusters)]), false, nil
 			}
 		}
 	}
@@ -138,7 +138,7 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 	if jobBase.Labels != nil {
 		if _, ok := jobBase.Labels[api.NoBuildsLabel]; ok && len(config.NoBuilds) > 0 {
 			// Any deterministic distribution is fine for now.
-			return config.NoBuilds[len(jobBase.Name)%len(config.NoBuilds)], false, nil
+			return config.NoBuilds[len(filepath.Base(path))%len(config.NoBuilds)], false, nil
 		}
 	}
 

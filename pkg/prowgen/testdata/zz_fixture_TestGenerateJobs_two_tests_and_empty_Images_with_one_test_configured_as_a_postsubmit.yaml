@@ -1,6 +1,7 @@
 postsubmits:
   organization/repository:
-  - max_concurrency: 1
+  - always_run: true
+    max_concurrency: 1
     name: branch-ci-organization-repository-branch-leTest
 presubmits:
   organization/repository:

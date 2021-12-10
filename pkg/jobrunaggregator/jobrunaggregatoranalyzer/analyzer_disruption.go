@@ -65,10 +65,13 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 		allBackends := getAllDisruptionBackendNames(jobRunIDToBackendNameToAvailabilityResult)
 		for _, backendName := range allBackends.List() {
 			jobRunIDToAvailabilityResultForBackend := getDisruptionForBackend(jobRunIDToBackendNameToAvailabilityResult, backendName)
-			failedJobRunIDs, successfulJobRunIDs, status, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
+			failedJobRunIDs, successfulJobRunIDs, _, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
 			if err != nil {
 				return nil, err
 			}
+
+			// we are correcting our disruption numbers, so we are forcing everything to skipped until 12/15
+			status := testCaseSkipped
 
 			testCaseName := fmt.Sprintf(testCaseNamePattern, backendName)
 			junitTestCase, err := disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot, failedJobRunIDs, successfulJobRunIDs, status, message)

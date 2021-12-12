@@ -1,6 +1,7 @@
 postsubmits:
   private/duper:
   - agent: kubernetes
+    always_run: true
     branches:
     - ^master$
     decorate: true

@@ -1,8 +1,9 @@
 agent: kubernetes
-always_run: true
+always_run: false
 branches:
 - ^branch$
 decorate: true
 decoration_config:
   skip_cloning: true
 name: branch-ci-organization-repository-branch-postsubmit
+run_if_changed: ^README.md$

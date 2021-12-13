@@ -1,6 +1,7 @@
 postsubmits:
   openshift/ci-tools:
   - agent: kubernetes
+    always_run: true
     branches:
     - ^master$
     cluster: api.ci

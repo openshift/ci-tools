@@ -1,4 +1,5 @@
 agent: kubernetes
+always_run: true
 branches:
 - ^Branch$
 decorate: true

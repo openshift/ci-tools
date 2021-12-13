@@ -1,6 +1,7 @@
 postsubmits:
   openshift/origin:
   - agent: kubernetes
+    always_run: true
     branches:
     - ^master$
     cluster: api.ci

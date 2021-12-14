@@ -411,7 +411,7 @@ func TestMergePresubmits(t *testing.T) {
 					SkipReport: true,
 				},
 				RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{RunIfChanged: "whatever"},
-				Optional:            true,
+				Optional:            false,
 				Trigger:             "whatever",
 				RerunCommand:        "something",
 			},

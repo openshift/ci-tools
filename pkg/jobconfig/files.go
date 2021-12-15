@@ -487,7 +487,6 @@ func mergePresubmits(old, new *prowconfig.Presubmit) prowconfig.Presubmit {
 	merged.AlwaysRun = old.AlwaysRun
 	merged.RunIfChanged = old.RunIfChanged
 	merged.SkipIfOnlyChanged = old.SkipIfOnlyChanged
-	merged.Optional = old.Optional
 	merged.MaxConcurrency = old.MaxConcurrency
 	merged.SkipReport = old.SkipReport
 	if old.Cluster != "" {
@@ -498,8 +497,15 @@ func mergePresubmits(old, new *prowconfig.Presubmit) prowconfig.Presubmit {
 		merged.SkipIfOnlyChanged = new.SkipIfOnlyChanged
 		merged.AlwaysRun = new.AlwaysRun
 	}
-	if new.Optional {
-		merged.Optional = new.Optional
+
+	// TODO(muller): Special case images jobs for now. Some repos are marking
+	// images jobs as optional for which we do not have syntax in ci-operator (should we?).
+	// Tolerate manual changes for these jobs for now
+	if strings.HasSuffix(merged.Name, "-images") {
+		merged.Optional = old.Optional
+		if new.Optional {
+			merged.Optional = new.Optional
+		}
 	}
 
 	return merged

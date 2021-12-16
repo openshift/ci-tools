@@ -245,9 +245,9 @@ func TestCreateCloneHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error creating bug: %v", err)
 	}
-	clonedRelease := "4.3.z"
-	intermediateRelease := "4.4.z"
-	originalTargetRelease := "4.5.0"
+	clonedRelease := "4.8.z"
+	intermediateRelease := "4.9.z"
+	originalTargetRelease := "4.10.0"
 	if err := fake.UpdateBug(toBeClonedID, bugzilla.BugUpdate{
 		TargetRelease: []string{originalTargetRelease},
 	}); err != nil {
@@ -258,7 +258,7 @@ func TestCreateCloneHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting bug details from Fake.")
 	}
-	toBeCloned.TargetRelease = []string{"4.5.0"}
+	toBeCloned.TargetRelease = []string{"4.10.0"}
 	intermediateClone := *toBeCloned
 	intermediateClone.ID = toBeClonedID + 1
 	intermediateClone.TargetRelease = []string{intermediateRelease}
@@ -288,7 +288,7 @@ func TestCreateCloneHandler(t *testing.T) {
 				Clones:         []*bugzilla.Bug{&intermediateClone, toBeCloned},
 				Parent:         toBeCloned,
 				PRs:            nil,
-				CloneTargets:   []string{"4.3.z", "4.2.z"},
+				CloneTargets:   []string{"4.8.z", "4.7.z"},
 				NewCloneIDs:    []string{strconv.Itoa(toBeClonedID + 1)},
 				DependenceTree: &dependenceNode{toBeClonedID, originalTargetRelease, []*dependenceNode{{intermediateClone.ID, intermediateRelease, nil}}},
 			},
@@ -297,7 +297,7 @@ func TestCreateCloneHandler(t *testing.T) {
 			existingBugs: map[int]bugzilla.Bug{
 				toBeClonedID: *toBeCloned,
 			},
-			allTargetVersions: []string{"4.2.z", "4.3.z", "4.4.z", "4.5.z", "4.6.0"},
+			allTargetVersions: []string{"4.7.z", "4.8.z", "4.9.z", "4.10.0"},
 		},
 		{
 			name: "Bad params- Non-existent bug ID ",
@@ -323,7 +323,7 @@ func TestCreateCloneHandler(t *testing.T) {
 				Clones:         []*bugzilla.Bug{&expectedClone, &intermediateClone, toBeCloned},
 				Parent:         toBeCloned,
 				PRs:            nil,
-				CloneTargets:   []string{"4.2.z"},
+				CloneTargets:   []string{"4.7.z"},
 				NewCloneIDs:    []string{strconv.Itoa(toBeClonedID + 1), strconv.Itoa(toBeClonedID + 2)},
 				DependenceTree: &dependenceNode{toBeClonedID, originalTargetRelease, []*dependenceNode{{intermediateClone.ID, intermediateRelease, []*dependenceNode{{expectedClone.ID, clonedRelease, nil}}}}},
 			},
@@ -332,7 +332,7 @@ func TestCreateCloneHandler(t *testing.T) {
 			existingBugs: map[int]bugzilla.Bug{
 				toBeClonedID: *toBeCloned,
 			},
-			allTargetVersions: []string{"4.2.z", "4.3.z", "4.4.z", "4.5.z", "4.6.0"},
+			allTargetVersions: []string{"4.7.z", "4.8.z", "4.9.z", "4.10.0"},
 		},
 	}
 	for _, tc := range testcases {

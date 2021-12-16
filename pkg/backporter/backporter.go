@@ -720,11 +720,12 @@ func CreateCloneHandler(client bugzilla.Client, sortedTargetReleases []string, m
 		// Get clones and sort them
 		clones, err := client.GetAllClones(bug)
 		if err != nil {
-			handleError(w, err, fmt.Sprintf("unable to convert \"ID\" parameter from string to int: %s", req.FormValue("ID")), http.StatusBadRequest, req.URL.Path, 0, m)
+			handleError(w, err, fmt.Sprintf("unable to retrieve all clones: %v", err), http.StatusBadRequest, req.URL.Path, 0, m)
 			return
 		}
 		sortByTargetRelease(clones)
-		toCloneMajorMinorRelease, err := getMajorMinorRelease(req.FormValue("release"))
+		toCloneRelease := req.FormValue("release")
+		toCloneMajorMinorRelease, err := getMajorMinorRelease(toCloneRelease)
 		if err != nil {
 			handleError(w, err, releaseInvalidErrorMsg(req.FormValue("release")), http.StatusBadRequest, endpoint, bugID, m)
 			return
@@ -735,16 +736,25 @@ func CreateCloneHandler(client bugzilla.Client, sortedTargetReleases []string, m
 			if !isTargetReleaseSet(clone) {
 				continue
 			}
-			cloneMajorMinorRel, err := getMajorMinorRelease(clone.TargetRelease[0])
+			cloneTargetRelease := clone.TargetRelease[0]
+			cloneMajorMinorRel, err := getMajorMinorRelease(cloneTargetRelease)
 			if err != nil {
-				handleError(w, err, releaseInvalidErrorMsg(clone.TargetRelease[0]), http.StatusBadRequest, endpoint, bugID, m)
+				handleError(w, err, releaseInvalidErrorMsg(cloneTargetRelease), http.StatusBadRequest, endpoint, bugID, m)
 				return
 			}
-			if toCloneMajorMinorRelease == cloneMajorMinorRel {
+
+			versionCompare, err := CompareTargetReleases(cloneTargetRelease, toCloneRelease)
+			if err != nil {
+				handleError(w, err, fmt.Sprintf("unable to compare releases: %s vs %s: %v", cloneTargetRelease, toCloneMajorMinorRelease, err), http.StatusBadRequest, endpoint, bugID, m)
+				return
+			}
+
+			if versionCompare == 0 {
 				handleError(w, err, fmt.Sprintf("clone for major release %s already exists", clone.TargetRelease[0]), http.StatusBadRequest, endpoint, bugID, m)
 				return
 			}
-			if cloneMajorMinorRel > toCloneMajorMinorRelease {
+
+			if versionCompare > 0 {
 				sourceBug = clone
 				sourceBugMajorMinorRel = cloneMajorMinorRel
 				break

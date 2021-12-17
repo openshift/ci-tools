@@ -2,9 +2,27 @@ package util
 
 import (
 	"fmt"
+	"strings"
 
 	imageapi "github.com/openshift/api/image/v1"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
+
+// ParseImageStreamTagReference creates a reference from an "is:tag" string.
+func ParseImageStreamTagReference(s string) (api.ImageStreamTagReference, error) {
+	var ret api.ImageStreamTagReference
+	i := strings.LastIndex(s, ":")
+	if i == -1 {
+		return ret, fmt.Errorf("invalid ImageStreamTagReference: %s", s)
+	}
+	ret.Name = s[:i]
+	ret.Tag = s[i+1:]
+	if strings.Contains(ret.Name, ":") {
+		return ret, fmt.Errorf("invalid ImageStreamTagReference: %s", s)
+	}
+	return ret, nil
+}
 
 // ResolvePullSpec if a tag of an imagestream is resolved
 func ResolvePullSpec(is *imageapi.ImageStream, tag string, requireExact bool) (string, bool) {

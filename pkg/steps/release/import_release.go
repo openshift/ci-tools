@@ -26,6 +26,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 // importReleaseStep is responsible for importing release images from
@@ -480,7 +481,12 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 		return nil, errors.New("unable to extract the 'cli' image from the release image, pod produced no output")
 	}
 	cliImage := pod.Status.ContainerStatuses[0].State.Terminated.Message
-
+	// See https://issues.redhat.com/browse/DPTP-2448 for why this is an
+	// explicit URL and not simply the `:cli` tag.
+	cliImageRef, err := util.ParseImageStreamTagReference(cliImage)
+	if err != nil {
+		return nil, err
+	}
 	// tag the cli image into stable so we use the correct pull secrets from the namespace
 	streamTag := &imagev1.ImageStreamTag{
 		ObjectMeta: meta.ObjectMeta{
@@ -515,5 +521,5 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 		return nil, fmt.Errorf("unable to wait for the 'cli' image in the stable stream to populate: %w", err)
 	}
 
-	return &api.ImageStreamTagReference{Name: streamName, Tag: "cli"}, nil
+	return &cliImageRef, nil
 }

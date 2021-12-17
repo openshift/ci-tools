@@ -282,9 +282,7 @@ func runSteps(steps []step, author string, stdout, stderr io.Writer) (needsPushi
 			return false, fmt.Errorf("failed to run command and commit the changes: %w", err)
 		}
 
-		if committed {
-			didCommit = didCommit || true
-		}
+		didCommit = didCommit || committed
 	}
 
 	if !didCommit {

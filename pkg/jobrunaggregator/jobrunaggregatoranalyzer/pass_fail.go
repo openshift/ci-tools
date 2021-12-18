@@ -237,7 +237,15 @@ func (a *weeklyAverageFromTenDays) checkDisruptionMean(ctx context.Context, jobR
 		failedJobRunsIDs = sets.StringKeySet(jobRunIDToAvailabilityResultForBackend).List()
 		return failedJobRunsIDs, successfulJobRunIDs, testCaseSkipped, message, nil
 	}
-	historicalDisruptionStatistic := historicalDisruption[backend]
+	historicalDisruptionStatistic, ok := historicalDisruption[backend]
+
+	// if we have no data, then we won't have enough indexes, so we get an out of range.
+	// this happens when we add new disruption tests, so we just skip instead
+	if !ok {
+		message := "We have no historical data."
+		failureJobRunIDs := sets.StringKeySet(jobRunIDToAvailabilityResultForBackend).List()
+		return failureJobRunIDs, []string{}, testCaseSkipped, message, nil
+	}
 
 	// If disruption mean (excluding at most 1 outlier) is greater than 10% of the historical mean,
 	// the aggregation fails.
@@ -298,7 +306,15 @@ func (a *weeklyAverageFromTenDays) CheckPercentileDisruption(ctx context.Context
 		failureJobRunIDs := sets.StringKeySet(jobRunIDToAvailabilityResultForBackend).List()
 		return failureJobRunIDs, []string{}, testCaseSkipped, message, nil
 	}
-	historicalDisruptionStatistic := historicalDisruption[backend]
+	historicalDisruptionStatistic, ok := historicalDisruption[backend]
+
+	// if we have no data, then we won't have enough indexes, so we get an out of range.
+	// this happens when we add new disruption tests, so we just skip instead
+	if !ok {
+		message := "We have no historical data."
+		failureJobRunIDs := sets.StringKeySet(jobRunIDToAvailabilityResultForBackend).List()
+		return failureJobRunIDs, []string{}, testCaseSkipped, message, nil
+	}
 
 	return a.checkPercentileDisruption(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, percentile)
 }
@@ -374,7 +390,16 @@ func (a *weeklyAverageFromTenDays) CheckPercentileRankDisruption(ctx context.Con
 		failureJobRunIDs := sets.StringKeySet(jobRunIDToAvailabilityResultForBackend).List()
 		return failureJobRunIDs, []string{}, testCaseSkipped, message, nil
 	}
-	historicalDisruptionStatistic := historicalDisruption[backend]
+	historicalDisruptionStatistic, ok := historicalDisruption[backend]
+
+	// if we have no data, then we won't have enough indexes, so we get an out of range.
+	// this happens when we add new disruption tests, so we just skip instead
+	if !ok {
+		message := "We have no historical data."
+		failureJobRunIDs := sets.StringKeySet(jobRunIDToAvailabilityResultForBackend).List()
+		return failureJobRunIDs, []string{}, testCaseSkipped, message, nil
+	}
+
 	thresholdPercentile := getPercentileRank(historicalDisruptionStatistic, maxDisruptionSeconds)
 
 	return a.checkPercentileDisruption(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, thresholdPercentile)

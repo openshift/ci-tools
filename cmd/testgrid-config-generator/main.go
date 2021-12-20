@@ -206,10 +206,14 @@ func addDashboardTab(p prowConfig.Periodic,
 	configuredJobs map[string]string,
 	allowList map[string]string,
 	aggregateJobName *string) {
-	name := p.Name
+	prowName := p.Name
+	jobName := p.Name
 	var dashboardType string
 
-	label, ok := allowList[name]
+	if aggregateJobName != nil {
+		jobName = *aggregateJobName
+	}
+	label, ok := allowList[jobName]
 	if len(label) == 0 && ok {
 		// if the allow list has an empty label for the type, exclude it from dashboards
 		return
@@ -218,24 +222,24 @@ func addDashboardTab(p prowConfig.Periodic,
 	switch label {
 	case "informing", "blocking", "broken", "generic-informing":
 		dashboardType = label
-		if label == "informing" && (configuredJobs[p.Name] == "blocking" || aggregateJobName != nil) {
+		if label == "informing" && (aggregateJobName != nil || configuredJobs[p.Name] == "blocking") {
 			dashboardType = "blocking"
 		}
 	default:
 		if aggregateJobName != nil {
 			dashboardType = "blocking"
 			break
-		} else if label, ok := configuredJobs[name]; ok {
+		} else if label, ok := configuredJobs[prowName]; ok {
 			dashboardType = label
 			break
 		}
 		switch {
-		case strings.HasPrefix(name, "release-openshift-"),
-			strings.HasPrefix(name, "promote-release-openshift-"),
-			strings.HasPrefix(name, "periodic-ci-openshift-multiarch"),
-			strings.HasPrefix(name, "periodic-ci-openshift-release-master-ci-"),
-			strings.HasPrefix(name, "periodic-ci-openshift-release-master-okd-"),
-			strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"):
+		case strings.HasPrefix(prowName, "release-openshift-"),
+			strings.HasPrefix(prowName, "promote-release-openshift-"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-multiarch"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-ci-"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-okd-"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-nightly-"):
 			// the standard release periodics should always appear in testgrid
 			dashboardType = "informing"
 		default:
@@ -253,29 +257,29 @@ func addDashboardTab(p prowConfig.Periodic,
 		switch {
 		case
 			// these will be removable once most / all jobs are generated periodics and are for legacy release-* only
-			strings.Contains(name, "-ocp-"),
-			strings.Contains(name, "-origin-"),
+			strings.Contains(prowName, "-ocp-"),
+			strings.Contains(prowName, "-origin-"),
 			// these prefixes control whether a job is ocp or okd going forward
-			strings.HasPrefix(name, "periodic-ci-openshift-multiarch"),
-			strings.HasPrefix(name, "periodic-ci-openshift-release-master-ci-"),
-			strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"),
-			strings.HasPrefix(name, "periodic-ci-openshift-verification-tests-master-"):
+			strings.HasPrefix(prowName, "periodic-ci-openshift-multiarch"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-ci-"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-nightly-"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-verification-tests-master-"):
 			stream = "ocp"
-		case strings.Contains(name, "-okd-"):
+		case strings.Contains(prowName, "-okd-"):
 			stream = "okd"
-		case strings.HasPrefix(name, "promote-release-openshift-"):
+		case strings.HasPrefix(prowName, "promote-release-openshift-"):
 			// TODO fix these jobs to have a consistent name
 			stream = "ocp"
 		default:
-			logrus.Warningf("unrecognized release type in job: %s", name)
+			logrus.Warningf("unrecognized release type in job: %s", prowName)
 			return
 		}
 
 		version := p.Labels["job-release"]
 		if len(version) == 0 {
-			m := reVersion.FindStringSubmatch(name)
+			m := reVersion.FindStringSubmatch(prowName)
 			if len(m) == 0 {
-				logrus.Warningf("release is not in -X.Y- form and will go into the generic informing dashboard: %s", name)
+				logrus.Warningf("release is not in -X.Y- form and will go into the generic informing dashboard: %s", prowName)
 				current = genericDashboardFor("informing")
 				break
 			}
@@ -307,11 +311,7 @@ func addDashboardTab(p prowConfig.Periodic,
 		}
 	}
 
-	if aggregateJobName != nil {
-		current.add(*aggregateJobName, p.Annotations["description"], daysOfResults)
-	} else {
-		current.add(name, p.Annotations["description"], daysOfResults)
-	}
+	current.add(jobName, p.Annotations["description"], daysOfResults)
 }
 
 // This tool is intended to make the process of maintaining TestGrid dashboards for

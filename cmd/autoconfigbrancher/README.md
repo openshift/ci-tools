@@ -61,7 +61,7 @@ the [`bumper` package from test-infra](https://github.com/kubernetes/test-infra/
 ## How is it deployed
 
 The periodic
-job [periodic-prow-auto-config-brancher](https://prow.ci.openshift.org/?job=periodic-prow-auto-config-brancher) ([definition](https://github.com/openshift/release/blob/master/ci-operator/jobs/infra-periodics.yaml#L828-L875))
+job [periodic-prow-auto-config-brancher](https://prow.ci.openshift.org/?job=periodic-prow-auto-config-brancher) ([definition](https://github.com/openshift/release/blob/55cd2ebb8a00445fb06789433dfe98e2199b9a97/ci-operator/jobs/infra-periodics.yaml#L828-L875))
 uses `autoconfigbrancher` to
 create [PRs in openshift/release](https://github.com/openshift/release/pulls?q=is%3Apr+%22Automate+config+brancher%22+is%3Aclosed+sort%3Acreated-desc)
 .

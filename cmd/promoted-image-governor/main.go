@@ -32,6 +32,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	releaseconfig "github.com/openshift/ci-tools/pkg/release/config"
 	"github.com/openshift/ci-tools/pkg/steps/release"
 )
 
@@ -156,7 +157,7 @@ func addSchemes() error {
 	return nil
 }
 
-func tagsToDelete(ctx context.Context, client ctrlruntimeclient.Client, promotedTags []api.ImageStreamTagReference, toIgnore []*regexp.Regexp, imageStreamRefs []ImageStreamRef) (map[api.ImageStreamTagReference]interface{}, map[ctrlruntimeclient.ObjectKey]interface{}, error) {
+func tagsToDelete(ctx context.Context, client ctrlruntimeclient.Client, promotedTags []api.ImageStreamTagReference, toIgnore []*regexp.Regexp, imageStreamRefs []releaseconfig.ImageStreamRef) (map[api.ImageStreamTagReference]interface{}, map[ctrlruntimeclient.ObjectKey]interface{}, error) {
 	imageStreamsWithPromotedTags := map[ctrlruntimeclient.ObjectKey]interface{}{}
 	for _, promotedTag := range promotedTags {
 		imageStreamsWithPromotedTags[ctrlruntimeclient.ObjectKey{Namespace: promotedTag.Namespace, Name: promotedTag.Name}] = nil
@@ -203,7 +204,7 @@ func tagsToDelete(ctx context.Context, client ctrlruntimeclient.Client, promoted
 	return tagsToCheck, imageStreamsWithPromotedTags, nil
 }
 
-func mirroredTagsByReleaseController(ctx context.Context, client ctrlruntimeclient.Client, refs []ImageStreamRef) ([]api.ImageStreamTagReference, error) {
+func mirroredTagsByReleaseController(ctx context.Context, client ctrlruntimeclient.Client, refs []releaseconfig.ImageStreamRef) ([]api.ImageStreamTagReference, error) {
 	var ret []api.ImageStreamTagReference
 	for _, ref := range refs {
 		imageStream := &imagev1.ImageStream{}
@@ -225,24 +226,6 @@ func mirroredTagsByReleaseController(ctx context.Context, client ctrlruntimeclie
 	return ret, nil
 }
 
-type ReleaseControllerMirrorConfig struct {
-	Publish Publish `json:"publish"`
-}
-
-type Publish struct {
-	MirrorToOrigin MirrorToOrigin `json:"mirror-to-origin"`
-}
-
-type MirrorToOrigin struct {
-	ImageStreamRef ImageStreamRef `json:"imageStreamRef"`
-}
-
-type ImageStreamRef struct {
-	Namespace   string   `json:"namespace"`
-	Name        string   `json:"name"`
-	ExcludeTags []string `json:"excludeTags,omitempty"`
-}
-
 // OpenshiftMappingConfig for openshift image mapping files
 type OpenshiftMappingConfig struct {
 	SourceRegistry  string              `json:"source_registry"`
@@ -255,7 +238,7 @@ type OpenshiftMappingConfig struct {
 // generateMappings generates the mappings to mirror the images
 // Those mappings will be stored in https://github.com/openshift/release/tree/master/core-services/image-mirroring/openshift
 // and then used by the periodic-image-mirroring-openshift job
-func generateMappings(promotedTags []api.ImageStreamTagReference, mappingConfig *OpenshiftMappingConfig, imageStreamRefs []ImageStreamRef) (map[string]map[string]sets.String, error) {
+func generateMappings(promotedTags []api.ImageStreamTagReference, mappingConfig *OpenshiftMappingConfig, imageStreamRefs []releaseconfig.ImageStreamRef) (map[string]map[string]sets.String, error) {
 	mappings := map[string]map[string]sets.String{}
 	var errs []error
 	for _, tag := range promotedTags {
@@ -290,7 +273,7 @@ func generateMappings(promotedTags []api.ImageStreamTagReference, mappingConfig 
 
 // isMirroredFromOCP checks if the image is mirrored by the release controllers
 // See https://github.com/openshift/release/blob/0cb6f403581ac09a9112744332b504612a3b7267/core-services/release-controller/_releases/release-ocp-4.6-ci.json#L10 as an example
-func isMirroredFromOCP(tag api.ImageStreamTagReference, refs []ImageStreamRef) bool {
+func isMirroredFromOCP(tag api.ImageStreamTagReference, refs []releaseconfig.ImageStreamRef) bool {
 	if tag.Namespace != "ocp" {
 		return false
 	}
@@ -399,7 +382,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed to determine absolute release controller mirror config path")
 	}
 
-	var imageStreamRefs []ImageStreamRef
+	var imageStreamRefs []releaseconfig.ImageStreamRef
 	if err := filepath.Walk(abs,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -412,7 +395,7 @@ func main() {
 					logrus.WithField("source-file", path).WithError(err).Error("Failed to read file")
 					return err
 				}
-				c := &ReleaseControllerMirrorConfig{}
+				c := &releaseconfig.Config{}
 				if err := json.Unmarshal(data, c); err != nil {
 					logrus.WithField("source-file", path).WithError(err).Error("Failed to unmarshal ReleaseControllerMirrorConfig")
 					return err
@@ -501,12 +484,12 @@ func main() {
 	}
 
 	clients := map[string]ctrlruntimeclient.Client{}
-	for cluster, config := range kubeconfigs {
-		cluster, config := cluster, config
+	for cluster, kubeConfig := range kubeconfigs {
+		cluster, kubeConfig := cluster, kubeConfig
 		if cluster == appCIContextName {
 			continue
 		}
-		client, err := ctrlruntimeclient.New(&config, ctrlruntimeclient.Options{})
+		client, err := ctrlruntimeclient.New(&kubeConfig, ctrlruntimeclient.Options{})
 		if err != nil {
 			logrus.WithError(err).WithField("cluster", cluster).Fatal("could not create client for cluster")
 		}

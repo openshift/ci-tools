@@ -375,3 +375,53 @@ func (r *fakeTestResolver) resolve(job string) (api.MetadataWithTest, error) {
 	}
 	return api.MetadataWithTest{}, fmt.Errorf("failed to resolve job %s", job)
 }
+
+func TestFormatError(t *testing.T) {
+	testCases := []struct {
+		name     string
+		err      error
+		expected string
+	}{
+		{
+			name: "could not create PullRequestPayloadQualificationRun: context canceled",
+			err:  fmt.Errorf("could not create PullRequestPayloadQualificationRun: %w", fmt.Errorf("context canceled")),
+			expected: `An error was encountered. We were able to detect the following conditions from the error:
+
+- The pod running the tool gets restarted. Please try again later.
+
+
+<details><summary>Full error message.</summary>
+
+<code>
+could not create PullRequestPayloadQualificationRun: context canceled
+</code>
+
+</details>
+
+Please contact an administrator to resolve this issue.`,
+		},
+		{
+			name: "unknown error",
+			err:  fmt.Errorf("unknown error"),
+			expected: `An error was encountered. No known errors were detected, please see the full error message for details.
+
+<details><summary>Full error message.</summary>
+
+<code>
+unknown error
+</code>
+
+</details>
+
+Please contact an administrator to resolve this issue.`,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := formatError(tc.err)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+			}
+		})
+	}
+}

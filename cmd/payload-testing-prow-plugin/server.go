@@ -153,7 +153,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 	logger.WithField("duration", time.Since(startTrustedUser)).Debug("trustedUser completed")
 	if err != nil {
 		logger.WithError(err).WithField("user", ic.Comment.User.Login).Error("could not check if the user is trusted")
-		return fmt.Sprintf("could not check if the user %s is trusted for pull request %s/%s#%d: %v", ic.Comment.User.Login, org, repo, prNumber, err)
+		return formatError(fmt.Errorf("could not check if the user %s is trusted for pull request %s/%s#%d: %w", ic.Comment.User.Login, org, repo, prNumber, err))
 	}
 	if !trusted {
 		logger.WithError(err).WithField("user", ic.Comment.User.Login).Error("the user is not trusted")
@@ -165,7 +165,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 	logger.WithField("duration", time.Since(startGetPullRequest)).Debug("GetPullRequest completed")
 	if err != nil {
 		logger.Debug("could not get pull request")
-		return fmt.Sprintf("could not get pull request https://github.com/%s/%s/pull/%d: %v", org, repo, prNumber, err)
+		return formatError(fmt.Errorf("could not get pull request https://github.com/%s/%s/pull/%d: %w", org, repo, prNumber, err))
 	}
 
 	var messages []string
@@ -193,7 +193,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 			Debug("resolving jobs completed")
 		if err != nil {
 			specLogger.WithError(err).Error("could not resolve jobs")
-			return fmt.Sprintf("could not resolve jobs for %s %s %s: %v", spec.ocp, spec.releaseType, spec.jobs, err)
+			return formatError(fmt.Errorf("could not resolve jobs for %s %s %s: %w", spec.ocp, spec.releaseType, spec.jobs, err))
 		}
 		specLogger.Debug("resolving tests ...")
 		startResolveTests := time.Now()
@@ -241,7 +241,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 			run := builder.build(releaseJobSpecs)
 			if err := s.kubeClient.Create(s.ctx, run); err != nil {
 				specLogger.WithError(err).Error("could not create PullRequestPayloadQualificationRun")
-				return fmt.Sprintf("could not create PullRequestPayloadQualificationRun: %v", err)
+				return formatError(fmt.Errorf("could not create PullRequestPayloadQualificationRun: %w", err))
 			}
 			messages = append(messages, message(spec, jobNames))
 			messages = append(messages, fmt.Sprintf("See details on %s/%s/%s\n", prPayloadTestsUIURL, builder.namespace, run.Name))
@@ -322,4 +322,35 @@ func (s *server) createComment(ic github.IssueCommentEvent, message string, logg
 	if err := s.ghc.CreateComment(ic.Repo.Owner.Login, ic.Repo.Name, ic.Issue.Number, fmt.Sprintf("@%s: %s", ic.Comment.User.Login, message)); err != nil {
 		logger.WithError(err).Error("failed to create a comment")
 	}
+}
+
+func formatError(err error) string {
+	knownErrors := map[string]string{
+		"could not create PullRequestPayloadQualificationRun: context canceled": "The pod running the tool gets restarted. Please try again later.",
+	}
+	var applicable []string
+	for key, value := range knownErrors {
+		if strings.Contains(err.Error(), key) {
+			applicable = append(applicable, value)
+		}
+	}
+	digest := "No known errors were detected, please see the full error message for details."
+	if len(applicable) > 0 {
+		digest = "We were able to detect the following conditions from the error:\n\n"
+		for _, item := range applicable {
+			digest = fmt.Sprintf("%s- %s\n", digest, item)
+		}
+	}
+	return fmt.Sprintf(`An error was encountered. %s
+
+<details><summary>Full error message.</summary>
+
+<code>
+%v
+</code>
+
+</details>
+
+Please contact an administrator to resolve this issue.`,
+		digest, err)
 }

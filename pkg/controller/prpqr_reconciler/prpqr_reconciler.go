@@ -178,7 +178,20 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 			continue
 		}
 
-		prowjob, err := generateProwjob(r.configResolverClient, r.prowConfigGetter.Config(), baseMetadata, req.Name, req.Namespace, &jobSpec, &prpqr.Spec.PullRequest)
+		ciopConfig, err := resolveCiopConfig(r.configResolverClient, baseMetadata, jobSpec)
+		if err != nil {
+			logger.WithError(err).Error("Failed to resolve the ci-operator configuration")
+			statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
+				ReleaseJobName: mimickedJob,
+				Status: prowv1.ProwJobStatus{
+					State:       prowv1.ErrorState,
+					Description: err.Error(),
+				},
+			}
+			continue
+		}
+
+		prowjob, err := generateProwjob(ciopConfig, r.prowConfigGetter.Config(), baseMetadata, req.Name, req.Namespace, &jobSpec, &prpqr.Spec.PullRequest)
 		if err != nil {
 			logger.WithError(err).Error("Failed to create a payload prowjob")
 			statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -345,7 +358,26 @@ func jobNameHash(name string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-func generateProwjob(rc injectingResolverClient, defaulter periodicDefaulter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, spec *v1.ReleaseJobSpec, pr *v1.PullRequestUnderTest) (*prowv1.ProwJob, error) {
+func resolveCiopConfig(rc injectingResolverClient, baseCiop *api.Metadata, spec v1.ReleaseJobSpec) (*api.ReleaseBuildConfiguration, error) {
+	inject := &api.MetadataWithTest{
+		Metadata: api.Metadata{
+			Org:     spec.CIOperatorConfig.Org,
+			Repo:    spec.CIOperatorConfig.Repo,
+			Branch:  spec.CIOperatorConfig.Branch,
+			Variant: spec.CIOperatorConfig.Variant,
+		},
+		Test: spec.Test,
+	}
+
+	ciopConfig, err := rc.ConfigWithTest(baseCiop, inject)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get config from resolver: %w", err)
+	}
+
+	return ciopConfig, nil
+}
+
+func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter periodicDefaulter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, spec *v1.ReleaseJobSpec, pr *v1.PullRequestUnderTest) (*prowv1.ProwJob, error) {
 	fakeProwgenInfo := &prowgen.ProwgenInfo{Metadata: *baseCiop}
 
 	mimickedJob := spec.JobName(jobconfig.PeriodicPrefix)
@@ -365,11 +397,6 @@ func generateProwjob(rc injectingResolverClient, defaulter periodicDefaulter, ba
 			Variant: spec.CIOperatorConfig.Variant,
 		},
 		Test: spec.Test,
-	}
-
-	ciopConfig, err := rc.ConfigWithTest(baseCiop, inject)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get config from resolver: %w", err)
 	}
 
 	var periodic *prowconfig.Periodic
@@ -425,14 +452,14 @@ func generateProwjob(rc injectingResolverClient, defaulter periodicDefaulter, ba
 	}
 	periodic.ExtraRefs = []prowv1.Refs{extraRefs}
 
-	if err = defaulter.DefaultPeriodic(periodic); err != nil {
+	if err := defaulter.DefaultPeriodic(periodic); err != nil {
 		return nil, fmt.Errorf("failed to default the ProwJob: %w", err)
 	}
 
 	pj := pjutil.NewProwJob(pjutil.PeriodicSpec(*periodic), labels, annotations)
 	pj.Namespace = prpqrNamespace
 
-	return &pj, err
+	return &pj, nil
 }
 
 func metadataFromPullRequestUnderTest(pr v1.PullRequestUnderTest) *api.Metadata {

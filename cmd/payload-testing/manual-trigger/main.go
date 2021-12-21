@@ -47,7 +47,7 @@ func makeProwjob(configuration *api.ReleaseBuildConfiguration, pr *github.PullRe
 			jobBaseGen.PodSpec.Add(prowgen.CustomHashInput(time.Now().String()))
 
 			// TODO(muller): Solve cluster assignment
-			jobBaseGen.Cluster("build01")
+			jobBaseGen.Cluster("build02")
 
 			periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, "@yearly", "", false, configuration.CanonicalGoRepository)
 			break
@@ -58,7 +58,7 @@ func makeProwjob(configuration *api.ReleaseBuildConfiguration, pr *github.PullRe
 	// TODO(muller): Name the job something better
 	periodic.Name = fmt.Sprintf("%s-%d-%s-%s", base.Repo, pr.Number, inject.Variant, inject.Test)
 	// TODO(muller): Solve cluster assignment
-	periodic.Cluster = "build01"
+	periodic.Cluster = "build02"
 
 	// This is a copy of createRefs() from pjutil.go
 	// TODO(muller): DRY

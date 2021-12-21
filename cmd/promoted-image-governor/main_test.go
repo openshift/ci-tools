@@ -19,6 +19,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	releaseconfig "github.com/openshift/ci-tools/pkg/release/config"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -76,7 +77,7 @@ func TestTagsToDelete(t *testing.T) {
 		client                               ctrlruntimeclient.Client
 		promotedTags                         []api.ImageStreamTagReference
 		toIgnore                             []*regexp.Regexp
-		imageStreamRefs                      []ImageStreamRef
+		imageStreamRefs                      []releaseconfig.ImageStreamRef
 		expectedTagsToDelete                 map[api.ImageStreamTagReference]interface{}
 		expectedImageStreamsWithPromotedTags map[ctrlruntimeclient.ObjectKey]interface{}
 		expectedError                        error
@@ -104,7 +105,7 @@ func TestTagsToDelete(t *testing.T) {
 			toIgnore: []*regexp.Regexp{
 				regexp.MustCompile(`^ocp/\S+:machine-os-content$`),
 			},
-			imageStreamRefs: []ImageStreamRef{
+			imageStreamRefs: []releaseconfig.ImageStreamRef{
 				{
 					Namespace:   "origin",
 					Name:        "4.8",
@@ -157,7 +158,7 @@ func TestGenerateMappings(t *testing.T) {
 		name            string
 		promotedTags    []api.ImageStreamTagReference
 		mappingConfig   *OpenshiftMappingConfig
-		imageStreamRefs []ImageStreamRef
+		imageStreamRefs []releaseconfig.ImageStreamRef
 		expected        map[string]map[string]sets.String
 		expectedErr     error
 	}{
@@ -210,7 +211,7 @@ func TestGenerateMappings(t *testing.T) {
 					"4.9": {"4.9", "4.9.0", "latest"},
 				},
 			},
-			imageStreamRefs: []ImageStreamRef{
+			imageStreamRefs: []releaseconfig.ImageStreamRef{
 				{
 					Namespace:   "origin",
 					Name:        "4.8",
@@ -263,7 +264,7 @@ func TestGenerateMappings(t *testing.T) {
 					"4.6": {"4.6", "4.6.0"},
 				},
 			},
-			imageStreamRefs: []ImageStreamRef{
+			imageStreamRefs: []releaseconfig.ImageStreamRef{
 				{
 					Namespace: "origin",
 					Name:      "4.6",
@@ -297,7 +298,7 @@ func TestGenerateMappings(t *testing.T) {
 					"4.6": {"4.6", "4.6.0"},
 				},
 			},
-			imageStreamRefs: []ImageStreamRef{
+			imageStreamRefs: []releaseconfig.ImageStreamRef{
 				{
 					Namespace:   "origin",
 					Name:        "4.6",

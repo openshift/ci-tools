@@ -19,24 +19,6 @@ func endpoint(c api.Candidate) string {
 	return fmt.Sprintf("%s/%s.0-0.%s%s/config", candidate.ServiceHost(c.Product, c.Architecture), c.Version, c.Stream, candidate.Architecture(c.Architecture))
 }
 
-type Job struct {
-	Name                 string `json:"name"`
-	api.MetadataWithTest `json:",inline"`
-
-	AggregatedCount int `json:"-"`
-}
-
-type AggregatedJob struct {
-	AnalysisJobCount int `json:"analysisJobCount"`
-}
-
-type Verify map[string]VerifyItem
-
-type VerifyItem struct {
-	ProwJob           Job           `json:"prowJob"`
-	AggregatedProwJob AggregatedJob `json:"aggregatedProwJob"`
-}
-
 type JobType string
 
 const (
@@ -76,7 +58,7 @@ func resolveJobs(client release.HTTPClient, endpoint string, jobType JobType) ([
 	if readErr != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", readErr)
 	}
-	verify := Verify{}
+	verify := map[string]VerifyItem{}
 	err = json.Unmarshal(data, &verify)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal release controll's jobs in config: %w (%s)", err, data)

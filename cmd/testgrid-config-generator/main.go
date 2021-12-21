@@ -26,6 +26,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
+	releaseconfig "github.com/openshift/ci-tools/pkg/release/config"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
@@ -180,25 +181,6 @@ func getAllowList(data []byte) (map[string]string, error) {
 	return allowList, utilerrors.NewAggregate(errs)
 }
 
-type prowJob struct {
-	Name        string            `json:"name"`
-	Annotations map[string]string `json:"annotations"`
-}
-
-// release is a subset of fields from the release controller's config
-type release struct {
-	Name   string
-	Verify map[string]struct {
-		Optional          bool    `json:"optional"`
-		Upgrade           bool    `json:"upgrade"`
-		ProwJob           prowJob `json:"prowJob"`
-		AggregatedProwJob *struct {
-			ProwJob          *prowJob `json:"prowJob,omitempty"`
-			AnalysisJobCount int      `json:"analysisJobCount"`
-		} `json:"aggregatedProwJob,omitempty"`
-	} `json:"verify"`
-}
-
 var reVersion = regexp.MustCompile(`-(\d+\.\d+)(-|$)`)
 
 func addDashboardTab(p prowConfig.Periodic,
@@ -344,7 +326,7 @@ func main() {
 			return fmt.Errorf("could not read release controller config at %s: %w", path, err)
 		}
 
-		var releaseConfig release
+		var releaseConfig releaseconfig.Config
 		if err := json.Unmarshal(data, &releaseConfig); err != nil {
 			return fmt.Errorf("could not unmarshal release controller config at %s: %w", path, err)
 		}

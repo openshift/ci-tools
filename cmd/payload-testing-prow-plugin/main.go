@@ -23,6 +23,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
 	"github.com/openshift/ci-tools/pkg/load/agents"
+	registryserver "github.com/openshift/ci-tools/pkg/registry/server"
 )
 
 type options struct {
@@ -156,6 +157,7 @@ func main() {
 		trustedChecker: &githubTrustedChecker{
 			githubClient: githubClient,
 		},
+		ciOpConfigResolver: registryserver.NewResolverClient(api.URLForService(api.ServiceConfig)),
 	}
 
 	eventServer := githubeventserver.New(o.githubEventServerOptions, getWebhookHMAC, logger)

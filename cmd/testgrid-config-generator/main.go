@@ -21,6 +21,7 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	prowConfig "k8s.io/test-infra/prow/config"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -37,6 +38,8 @@ type options struct {
 	validationOnlyRun bool
 	jobsAllowListFile string
 }
+
+const defaultAggregateProwJobName = "release-openshift-release-analysis-aggregator"
 
 func (o *options) Validate() error {
 	if o.prowJobConfigDir == "" && !o.validationOnlyRun {
@@ -180,6 +183,119 @@ func getAllowList(data []byte) (map[string]string, error) {
 
 var reVersion = regexp.MustCompile(`-(\d+\.\d+)(-|$)`)
 
+func addDashboardTab(p prowConfig.Periodic,
+	dashboards map[string]*dashboard,
+	configuredJobs map[string]string,
+	allowList map[string]string,
+	aggregateJobName *string) {
+	prowName := p.Name
+	jobName := p.Name
+	var dashboardType string
+
+	if aggregateJobName != nil {
+		jobName = *aggregateJobName
+	}
+	label, ok := allowList[jobName]
+	if len(label) == 0 && ok {
+		// if the allow list has an empty label for the type, exclude it from dashboards
+		return
+	}
+
+	switch label {
+	case "informing", "blocking", "broken", "generic-informing":
+		dashboardType = label
+		if label == "informing" && (aggregateJobName != nil || configuredJobs[p.Name] == "blocking") {
+			dashboardType = "blocking"
+		}
+	default:
+		if aggregateJobName != nil {
+			dashboardType = "blocking"
+			break
+		} else if label, ok := configuredJobs[prowName]; ok {
+			dashboardType = label
+			break
+		}
+		switch {
+		case strings.HasPrefix(prowName, "release-openshift-"),
+			strings.HasPrefix(prowName, "promote-release-openshift-"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-multiarch"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-ci-"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-okd-"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-nightly-"):
+			// the standard release periodics should always appear in testgrid
+			dashboardType = "informing"
+		default:
+			// unknown labels or non standard jobs do not appear in testgrid
+			return
+		}
+	}
+
+	var current *dashboard
+	switch dashboardType {
+	case "generic-informing":
+		current = genericDashboardFor("informing")
+	default:
+		var stream string
+		switch {
+		case
+			// these will be removable once most / all jobs are generated periodics and are for legacy release-* only
+			strings.Contains(prowName, "-ocp-"),
+			strings.Contains(prowName, "-origin-"),
+			// these prefixes control whether a job is ocp or okd going forward
+			strings.HasPrefix(prowName, "periodic-ci-openshift-multiarch"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-ci-"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-nightly-"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-verification-tests-master-"):
+			stream = "ocp"
+		case strings.Contains(prowName, "-okd-"):
+			stream = "okd"
+		case strings.HasPrefix(prowName, "promote-release-openshift-"):
+			// TODO fix these jobs to have a consistent name
+			stream = "ocp"
+		default:
+			logrus.Warningf("unrecognized release type in job: %s", prowName)
+			return
+		}
+
+		version := p.Labels["job-release"]
+		if len(version) == 0 {
+			m := reVersion.FindStringSubmatch(prowName)
+			if len(m) == 0 {
+				logrus.Warningf("release is not in -X.Y- form and will go into the generic informing dashboard: %s", prowName)
+				current = genericDashboardFor("informing")
+				break
+			}
+			version = m[1]
+		}
+		current = dashboardFor(stream, version, dashboardType)
+	}
+
+	if existing, ok := dashboards[current.Name]; ok {
+		current = existing
+	} else {
+		dashboards[current.Name] = current
+	}
+
+	daysOfResults := int32(0)
+	// for infrequently run jobs (at 12h or 24h intervals) we'd prefer to have more history than just the default
+	// 7-10 days (specified by the default testgrid config), so try to set number of days of results so that we
+	// see at least 100 entries, capping out at 2 months (60 days).
+	desiredResults := 100
+	if len(p.Interval) > 0 {
+		if interval, err := time.ParseDuration(p.Interval); err == nil && interval > 0 && interval < (14*24*time.Hour) {
+			daysOfResults = int32(math.Round(float64(time.Duration(desiredResults)*interval) / float64(24*time.Hour)))
+			if daysOfResults < 7 {
+				daysOfResults = 0
+			}
+			if daysOfResults > 60 {
+				daysOfResults = 60
+			}
+		}
+	}
+
+	current.add(jobName, p.Annotations["description"], daysOfResults)
+}
+
 // This tool is intended to make the process of maintaining TestGrid dashboards for
 // release-gating and release-informing tests simple.
 //
@@ -197,6 +313,7 @@ func main() {
 
 	// find the default type for jobs referenced by the release controllers
 	configuredJobs := make(map[string]string)
+	aggregateJobsMap := make(map[string][]string)
 	if err := filepath.WalkDir(o.releaseConfigDir, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -214,7 +331,7 @@ func main() {
 			return fmt.Errorf("could not unmarshal release controller config at %s: %w", path, err)
 		}
 
-		for _, job := range releaseConfig.Verify {
+		for name, job := range releaseConfig.Verify {
 			existing := configuredJobs[job.ProwJob.Name]
 			var dashboardType string
 			switch {
@@ -230,6 +347,18 @@ func main() {
 					continue
 				}
 				dashboardType = "blocking"
+			}
+			if job.AggregatedProwJob != nil {
+				jobName := defaultAggregateProwJobName
+				if job.AggregatedProwJob.ProwJob != nil && len(job.AggregatedProwJob.ProwJob.Name) > 0 {
+					jobName = job.AggregatedProwJob.ProwJob.Name
+				}
+				aggregateJobName := fmt.Sprintf("%s-%s", name, jobName)
+				if _, ok := aggregateJobsMap[job.ProwJob.Name]; !ok {
+					aggregateJobsMap[job.ProwJob.Name] = []string{aggregateJobName}
+				} else {
+					aggregateJobsMap[job.ProwJob.Name] = append(aggregateJobsMap[job.ProwJob.Name], aggregateJobName)
+				}
 			}
 			configuredJobs[job.ProwJob.Name] = dashboardType
 		}
@@ -271,103 +400,12 @@ func main() {
 	}
 
 	for _, p := range jobConfig.Periodics {
-		name := p.Name
-		var dashboardType string
-
-		label, ok := allowList[name]
-		if len(label) == 0 && ok {
-			// if the allow list has an empty label for the type, exclude it from dashboards
-			continue
-		}
-		switch label {
-		case "informing", "blocking", "broken", "generic-informing":
-			dashboardType = label
-			if label == "informing" && configuredJobs[p.Name] == "blocking" {
-				dashboardType = "blocking"
-			}
-		default:
-			if label, ok := configuredJobs[name]; ok {
-				dashboardType = label
-				break
-			}
-			switch {
-			case strings.HasPrefix(name, "release-openshift-"),
-				strings.HasPrefix(name, "promote-release-openshift-"),
-				strings.HasPrefix(name, "periodic-ci-openshift-multiarch"),
-				strings.HasPrefix(name, "periodic-ci-openshift-release-master-ci-"),
-				strings.HasPrefix(name, "periodic-ci-openshift-release-master-okd-"),
-				strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"):
-				// the standard release periodics should always appear in testgrid
-				dashboardType = "informing"
-			default:
-				// unknown labels or non standard jobs do not appear in testgrid
-				continue
+		addDashboardTab(p, dashboards, configuredJobs, allowList, nil)
+		if aggregateJobs, ok := aggregateJobsMap[p.Name]; ok {
+			for _, aggregateJob := range aggregateJobs {
+				addDashboardTab(p, dashboards, configuredJobs, allowList, &aggregateJob)
 			}
 		}
-
-		var current *dashboard
-		switch dashboardType {
-		case "generic-informing":
-			current = genericDashboardFor("informing")
-		default:
-			var stream string
-			switch {
-			case
-				// these will be removable once most / all jobs are generated periodics and are for legacy release-* only
-				strings.Contains(name, "-ocp-"),
-				strings.Contains(name, "-origin-"),
-				// these prefixes control whether a job is ocp or okd going forward
-				strings.HasPrefix(name, "periodic-ci-openshift-multiarch"),
-				strings.HasPrefix(name, "periodic-ci-openshift-release-master-ci-"),
-				strings.HasPrefix(name, "periodic-ci-openshift-release-master-nightly-"),
-				strings.HasPrefix(name, "periodic-ci-openshift-verification-tests-master-"):
-				stream = "ocp"
-			case strings.Contains(name, "-okd-"):
-				stream = "okd"
-			case strings.HasPrefix(name, "promote-release-openshift-"):
-				// TODO fix these jobs to have a consistent name
-				stream = "ocp"
-			default:
-				logrus.Warningf("unrecognized release type in job: %s", name)
-				continue
-			}
-
-			version := p.Labels["job-release"]
-			if len(version) == 0 {
-				m := reVersion.FindStringSubmatch(name)
-				if len(m) == 0 {
-					logrus.Warningf("release is not in -X.Y- form and will go into the generic informing dashboard: %s", name)
-					current = genericDashboardFor("informing")
-					break
-				}
-				version = m[1]
-			}
-			current = dashboardFor(stream, version, dashboardType)
-		}
-
-		if existing, ok := dashboards[current.Name]; ok {
-			current = existing
-		} else {
-			dashboards[current.Name] = current
-		}
-
-		daysOfResults := int32(0)
-		// for infrequently run jobs (at 12h or 24h intervals) we'd prefer to have more history than just the default
-		// 7-10 days (specified by the default testgrid config), so try to set number of days of results so that we
-		// see at least 100 entries, capping out at 2 months (60 days).
-		desiredResults := 100
-		if len(p.Interval) > 0 {
-			if interval, err := time.ParseDuration(p.Interval); err == nil && interval > 0 && interval < (14*24*time.Hour) {
-				daysOfResults = int32(math.Round(float64(time.Duration(desiredResults)*interval) / float64(24*time.Hour)))
-				if daysOfResults < 7 {
-					daysOfResults = 0
-				}
-				if daysOfResults > 60 {
-					daysOfResults = 60
-				}
-			}
-		}
-		current.add(p.Name, p.Annotations["description"], daysOfResults)
 	}
 
 	// first, update the overall list of dashboards that exist for the redhat group

@@ -34,12 +34,13 @@ type Job struct {
 }
 
 type AggregatedJob struct {
-	AnalysisJobCount int `json:"analysisJobCount"`
+	ProwJob          *Job `json:"prowJob,omitempty"`
+	AnalysisJobCount int  `json:"analysisJobCount"`
 }
 
 type VerifyItem struct {
-	Optional          bool          `json:"optional"`
-	Upgrade           bool          `json:"upgrade"`
-	ProwJob           Job           `json:"prowJob"`
-	AggregatedProwJob AggregatedJob `json:"aggregatedProwJob"`
+	Optional          bool           `json:"optional"`
+	Upgrade           bool           `json:"upgrade"`
+	ProwJob           Job            `json:"prowJob"`
+	AggregatedProwJob *AggregatedJob `json:"aggregatedProwJob,omitempty"`
 }

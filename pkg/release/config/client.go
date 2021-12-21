@@ -71,7 +71,9 @@ func resolveJobs(client release.HTTPClient, endpoint string, jobType JobType) ([
 	var jobs []Job
 	for _, k := range keys {
 		j := verify[k].ProwJob
-		j.AggregatedCount = verify[k].AggregatedProwJob.AnalysisJobCount
+		if verify[k].AggregatedProwJob != nil {
+			j.AggregatedCount = verify[k].AggregatedProwJob.AnalysisJobCount
+		}
 		jobs = append(jobs, j)
 	}
 	return jobs, nil

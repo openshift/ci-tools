@@ -1,0 +1,34 @@
+{
+  "name":"4.10.0-0.nightly",
+  "to": "release",
+  "message": "Builds releases from OSBS images that are on quay.io",
+  "mirrorPrefix": "4.10-art-latest",
+  "expires":"168h",
+  "referenceMode": "source",
+  "pullSecretName": "source",
+  "check":{
+    "OCP and Origin images should match": {
+      "consistentImages":{"parent":"4.10.0-0.ci"}
+    }
+  },
+  "publish":{
+    "tag":{"tagRef":{"name":"4.10"}}
+  },
+  "verify":{
+    "aggregated-aws-ovn-upgrade-4.10-micro":{
+      "upgrade":true,
+      "prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.10-e2e-aws-ovn-upgrade"},
+      "aggregatedProwJob": {
+        "analysisJobCount": 10
+      }
+    },
+    "aggregated-aws-ovn-upgrade-4.10-minor":{
+      "upgrade":true,
+      "upgradeFrom": "PreviousMinor",
+      "prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn-upgrade"},
+      "aggregatedProwJob": {
+        "analysisJobCount": 10
+      }
+    }
+  }
+}

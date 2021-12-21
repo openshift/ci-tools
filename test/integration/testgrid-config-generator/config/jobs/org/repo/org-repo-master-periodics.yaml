@@ -72,3 +72,15 @@ periodics:
   labels:
     job-release: "4.2"
   name: release-openshift-origin-job-from-allow-list
+- agent: kubernetes
+  decorate: true
+  interval: 12h
+  labels:
+    job-release: "4.10"
+  name: periodic-ci-openshift-release-master-ci-4.10-e2e-aws-ovn-upgrade
+- agent: kubernetes
+  decorate: true
+  interval: 12h
+  labels:
+    job-release: "4.10"
+  name: periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn-upgrade

@@ -1,0 +1,43 @@
+- apiVersion: ci.openshift.io/v1
+  kind: PullRequestPayloadQualificationRun
+  metadata:
+    creationTimestamp: null
+    name: prpqr-test
+    namespace: test-namespace
+    resourceVersion: "1000"
+  spec:
+    jobs:
+      releaseControllerConfig:
+        ocp: "4.9"
+        release: ci
+        specifier: informing
+      releaseJobSpec:
+      - aggregatedCount: 2
+        ciOperatorConfig:
+          branch: test-branch
+          org: test-org
+          repo: test-repo
+        test: test-name
+    pullRequest:
+      baseRef: test-branch
+      baseSHA: "123456"
+      org: test-org
+      pr:
+        author: test
+        number: 100
+        sha: "12345"
+        title: test-pr
+      repo: test-repo
+  status:
+    conditions:
+    - lastTransitionTime: "1970-01-01T00:00:00Z"
+      message: All jobs triggered successfully
+      reason: AllJobsTriggered
+      status: "True"
+      type: AllJobsTriggered
+    jobs:
+    - jobName: aggregator-periodic-ci-test-org-test-repo-test-branch-test-name
+      prowJob: some-uuid
+      status:
+        startTime: "1970-01-01T00:00:00Z"
+        state: triggered

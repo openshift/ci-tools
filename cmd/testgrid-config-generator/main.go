@@ -221,7 +221,8 @@ func addDashboardTab(p prowConfig.Periodic,
 			strings.HasPrefix(prowName, "periodic-ci-openshift-multiarch"),
 			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-ci-"),
 			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-okd-"),
-			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-nightly-"):
+			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-nightly-"),
+			strings.HasPrefix(prowName, "periodic-ci-shiftstack-shiftstack-ci-main-periodic-"):
 			// the standard release periodics should always appear in testgrid
 			dashboardType = "informing"
 		default:
@@ -245,7 +246,8 @@ func addDashboardTab(p prowConfig.Periodic,
 			strings.HasPrefix(prowName, "periodic-ci-openshift-multiarch"),
 			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-ci-"),
 			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-nightly-"),
-			strings.HasPrefix(prowName, "periodic-ci-openshift-verification-tests-master-"):
+			strings.HasPrefix(prowName, "periodic-ci-openshift-verification-tests-master-"),
+			strings.HasPrefix(prowName, "periodic-ci-shiftstack-shiftstack-ci-main-periodic-"):
 			stream = "ocp"
 		case strings.Contains(prowName, "-okd-"):
 			stream = "okd"

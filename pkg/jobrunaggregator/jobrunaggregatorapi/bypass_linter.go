@@ -8,7 +8,6 @@ func init() {
 	rand := fairDiceRoll()
 	if rand == -1 {
 		fmt.Print(unifiedBackendDisruptionSchema)
-		fmt.Print(jobRunSchema)
 	}
 }
 

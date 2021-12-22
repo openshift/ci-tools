@@ -1,4 +1,4 @@
-package jobruntablecreator
+package tablescreator
 
 import (
 	"context"
@@ -10,25 +10,25 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
 
-type BigQueryJobRunTableCreateFlags struct {
+type BigQueryTablesCreateFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
 }
 
-func NewBigQueryJobRunTableCreateFlags() *BigQueryJobRunTableCreateFlags {
-	return &BigQueryJobRunTableCreateFlags{
+func NewBigQueryTablesCreateFlags() *BigQueryTablesCreateFlags {
+	return &BigQueryTablesCreateFlags{
 		DataCoordinates: jobrunaggregatorlib.NewBigQueryDataCoordinates(),
 		Authentication:  jobrunaggregatorlib.NewGoogleAuthenticationFlags(),
 	}
 }
 
-func (f *BigQueryJobRunTableCreateFlags) BindFlags(fs *pflag.FlagSet) {
+func (f *BigQueryTablesCreateFlags) BindFlags(fs *pflag.FlagSet) {
 	f.DataCoordinates.BindFlags(fs)
 	f.Authentication.BindFlags(fs)
 }
 
-func NewBigQueryJobRunTableCreateFlagsCommand() *cobra.Command {
-	f := NewBigQueryJobRunTableCreateFlags()
+func NewBigQueryCreateTablesFlagsCommand() *cobra.Command {
+	f := NewBigQueryTablesCreateFlags()
 
 	cmd := &cobra.Command{
 		Use:          "create-tables",
@@ -63,7 +63,7 @@ func NewBigQueryJobRunTableCreateFlagsCommand() *cobra.Command {
 }
 
 // Validate checks to see if the user-input is likely to produce functional runtime options
-func (f *BigQueryJobRunTableCreateFlags) Validate() error {
+func (f *BigQueryTablesCreateFlags) Validate() error {
 	if err := f.DataCoordinates.Validate(); err != nil {
 		return err
 	}
@@ -76,7 +76,7 @@ func (f *BigQueryJobRunTableCreateFlags) Validate() error {
 
 // ToOptions goes from the user input to the runtime values need to run the command.
 // Expect to see unit tests on the options, but not on the flags which are simply value mappings.
-func (f *BigQueryJobRunTableCreateFlags) ToOptions(ctx context.Context) (*allJobRunTableCreatorOptions, error) {
+func (f *BigQueryTablesCreateFlags) ToOptions(ctx context.Context) (*allJobsTableCreatorOptions, error) {
 	bigQueryClient, err := f.Authentication.NewBigQueryClient(ctx, f.DataCoordinates.ProjectID)
 	if err != nil {
 		return nil, err
@@ -86,7 +86,7 @@ func (f *BigQueryJobRunTableCreateFlags) ToOptions(ctx context.Context) (*allJob
 	)
 	ciDataSet := bigQueryClient.Dataset(f.DataCoordinates.DataSetID)
 
-	return &allJobRunTableCreatorOptions{
+	return &allJobsTableCreatorOptions{
 		ciDataClient: ciDataClient,
 		ciDataSet:    ciDataSet,
 	}, nil

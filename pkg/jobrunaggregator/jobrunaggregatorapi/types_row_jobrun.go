@@ -6,7 +6,7 @@ const (
 	LegacyJobRunTableName     = "JobRuns"
 	DisruptionJobRunTableName = "BackendDisruption_JobRuns"
 
-	jobRunSchema = `
+	JobRunSchema = `
 [
   {
     "name": "Name",

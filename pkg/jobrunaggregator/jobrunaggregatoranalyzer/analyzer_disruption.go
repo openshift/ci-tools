@@ -70,14 +70,20 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 				return nil, err
 			}
 
+			// we lack confidence to re-enforce disruption over the holidays, but we want to see how many failures we would have.
+			// TODO **** or get off the pot early january, 2022.
+			if status == testCaseFailed {
+				status = testCaseFlaked
+			}
+
 			testCaseName := fmt.Sprintf(testCaseNamePattern, backendName)
-			junitTestCase, err := disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot, failedJobRunIDs, successfulJobRunIDs, status, message)
+			junitTestCases, err := disruptionToJUnitTestCases(testCaseName, jobGCSBucketRoot, failedJobRunIDs, successfulJobRunIDs, status, message)
 			if err != nil {
 				return nil, err
 			}
-			disruptionJunitSuite.TestCases = append(disruptionJunitSuite.TestCases, junitTestCase)
+			disruptionJunitSuite.TestCases = append(disruptionJunitSuite.TestCases, junitTestCases...)
 
-			if status == testCaseFailed {
+			if status == testCaseFailed || status == testCaseFlaked {
 				disruptionJunitSuite.NumFailed++
 			}
 		}
@@ -100,7 +106,7 @@ func checkPercentileRankDisruption(passFailCalculator baseline, maxDisruptionSec
 
 type disruptionJunitCheckFunc func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
 
-func disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot string, failedJobRunIDs, successfulJobRunIDs []string, status testCaseStatus, message string) (*junit.TestCase, error) {
+func disruptionToJUnitTestCases(testCaseName, jobGCSBucketRoot string, failedJobRunIDs, successfulJobRunIDs []string, status testCaseStatus, message string) ([]*junit.TestCase, error) {
 	junitTestCase := &junit.TestCase{
 		Name: testCaseName,
 	}
@@ -141,13 +147,29 @@ func disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot string, failedJobR
 			Message: message,
 			Output:  junitTestCase.SystemOut,
 		}
+
+	case testCaseFlaked:
+		// for a flake, we mark a failure *and* we return a success.  This makes test-grid show a flaky result instead of
+		// a failing one.
+		junitTestCase.FailureOutput = &junit.FailureOutput{
+			Message: message,
+			Output:  junitTestCase.SystemOut,
+		}
+		return []*junit.TestCase{
+			junitTestCase,
+			{
+				Name:      testCaseName,
+				SystemOut: string(detailsBytes),
+			},
+		}, nil
+
 	case testCaseSkipped:
 		junitTestCase.SkipMessage = &junit.SkipMessage{
 			Message: message,
 		}
 	}
 
-	return junitTestCase, nil
+	return []*junit.TestCase{junitTestCase}, nil
 }
 
 // getDisruptionByJobRunID returns a map of map[jobRunID] to map[backend-name]availabilityResult

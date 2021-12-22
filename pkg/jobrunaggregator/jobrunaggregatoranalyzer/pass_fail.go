@@ -20,6 +20,7 @@ type testCaseStatus string
 
 const (
 	testCaseFailed  testCaseStatus = "failed"
+	testCaseFlaked  testCaseStatus = "flaked"
 	testCasePassed  testCaseStatus = "passed"
 	testCaseSkipped testCaseStatus = "skipped"
 )

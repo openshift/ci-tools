@@ -29,7 +29,7 @@ func (r *allReleaseTableCreatorOptions) Run(ctx context.Context) error {
 			return err
 		}
 	} else {
-		fmt.Fprintf(os.Stderr, "table already exists: %s\n", jobrunaggregatorlib.ReleaseTableName)
+		fmt.Fprintf(os.Stdout, "table already exists: %s\n", jobrunaggregatorlib.ReleaseTableName)
 	}
 
 	// Create release runs table
@@ -44,7 +44,7 @@ func (r *allReleaseTableCreatorOptions) Run(ctx context.Context) error {
 			return err
 		}
 	} else {
-		fmt.Fprintf(os.Stderr, "table already exists: %s\n", jobrunaggregatorlib.ReleaseJobRunTableName)
+		fmt.Fprintf(os.Stdout, "table already exists: %s\n", jobrunaggregatorlib.ReleaseJobRunTableName)
 	}
 
 	// Create release repositories
@@ -59,7 +59,7 @@ func (r *allReleaseTableCreatorOptions) Run(ctx context.Context) error {
 			return err
 		}
 	} else {
-		fmt.Fprintf(os.Stderr, "table already exists: %s\n", jobrunaggregatorlib.ReleaseRepositoryTableName)
+		fmt.Fprintf(os.Stdout, "table already exists: %s\n", jobrunaggregatorlib.ReleaseRepositoryTableName)
 	}
 
 	// Create release pull requests
@@ -74,7 +74,7 @@ func (r *allReleaseTableCreatorOptions) Run(ctx context.Context) error {
 			return err
 		}
 	} else {
-		fmt.Fprintf(os.Stderr, "table already exists: %s\n", jobrunaggregatorlib.ReleasePullRequestsTableName)
+		fmt.Fprintf(os.Stdout, "table already exists: %s\n", jobrunaggregatorlib.ReleasePullRequestsTableName)
 	}
 
 	return nil

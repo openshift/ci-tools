@@ -7,6 +7,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunbigqueryloader"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobtableprimer"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/releasebigqueryloader"
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/tablescreator"
 )
 
 func NewJobAggregatorCommand() *cobra.Command {
@@ -24,5 +25,6 @@ func NewJobAggregatorCommand() *cobra.Command {
 	cmd.AddCommand(releasebigqueryloader.NewBigQueryReleaseTableCreateFlagsCommand())
 	cmd.AddCommand(releasebigqueryloader.NewBigQueryReleaseUploadFlagsCommand())
 
+	cmd.AddCommand(tablescreator.NewBigQueryCreateTablesFlagsCommand())
 	return cmd
 }

@@ -1,0 +1,191 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+parameters:
+- description: The PR to deploy from.
+  name: PULL_REQUEST
+  required: true
+- description: The fork to deploy from.
+  name: USER
+  required: true
+- description: The branch to deploy from.
+  name: BRANCH
+  required: true
+objects:
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    name: ci-tools-${PULL_REQUEST}
+    annotations:
+      ci.openshift.io/ttl.hard: 48h0m0s
+- kind: RoleBinding
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    name: author-admin
+    namespace: ci-tools-${PULL_REQUEST}
+  roleRef:
+    kind: ClusterRole
+    name: admin
+    namespace: ci-tools-${PULL_REQUEST}
+  subjects:
+  - kind: Group
+    name: ${USER}-group
+    apiGroup: rbac.authorization.k8s.io
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    namespace: ci-tools-${PULL_REQUEST}
+    name: payload-testing-ui
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRoleBinding
+  metadata:
+    namespace: ci-tools-${PULL_REQUEST}
+    name: payload-testing-reader-ci-tools-${PULL_REQUEST}
+  roleRef:
+    name: payload-testing-reader
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+  subjects:
+  - kind: ServiceAccount
+    name: payload-testing-ui
+    namespace: ci-tools-${PULL_REQUEST}
+- kind: ImageStream
+  apiVersion: image.openshift.io/v1
+  metadata:
+    namespace: ci-tools-${PULL_REQUEST}
+    name: output
+  spec:
+    lookupPolicy:
+      local: true
+- apiVersion: build.openshift.io/v1
+  kind: BuildConfig
+  metadata:
+    name: server
+    namespace: ci-tools-${PULL_REQUEST}
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: output:server
+    source:
+      contextDir: images/payload-testing-ui
+      git:
+        ref: ${BRANCH}
+        uri: https://github.com/${USER}/ci-tools.git
+      images:
+      - from:
+          kind: ImageStreamTag
+          namespace: ci-tools-${PULL_REQUEST}
+          name: "output:binaries"
+        paths:
+        - destinationDir: images/payload-testing-ui/.
+          sourcePath: /go/bin/payload-testing-ui
+      type: Git
+    strategy:
+      dockerStrategy:
+        imageOptimizationPolicy: SkipLayers
+      type: Docker
+    triggers:
+    - type: ImageChange
+      imageChange:
+        from:
+          kind: ImageStreamTag
+          namespace: ci-tools-${PULL_REQUEST}
+          name: "output:binaries"
+- apiVersion: build.openshift.io/v1
+  kind: BuildConfig
+  metadata:
+    name: binaries
+    namespace: ci-tools-${PULL_REQUEST}
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: "output:binaries"
+    source:
+      dockerfile: |
+        FROM registry.ci.openshift.org/openshift/release:golang-1.17
+
+        COPY . .
+        RUN go install ./cmd/payload-testing-ui/...
+      git:
+        ref: ${BRANCH}
+        uri: https://github.com/${USER}/ci-tools.git
+      contextDir: ./
+      type: Git
+    strategy:
+      dockerStrategy:
+        imageOptimizationPolicy: SkipLayers
+      type: Docker
+    triggers:
+    - type: ConfigChange
+- apiVersion: v1
+  kind: Service
+  metadata:
+    namespace: ci-tools-${PULL_REQUEST}
+    labels:
+      app: server
+    name: server
+  spec:
+    ports:
+    - name: ui
+      port: 8000
+      protocol: TCP
+      targetPort: ui
+    selector:
+      app: server
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    labels:
+      app: server
+    name: payload-testing-ui
+    namespace: ci-tools-${PULL_REQUEST}
+  spec:
+    tls:
+      insecureEdgeTerminationPolicy: Redirect
+      termination: edge
+    port:
+      targetPort: ui
+    to:
+      kind: Service
+      name: server
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    namespace: ci-tools-${PULL_REQUEST}
+    name: server
+    annotations:
+      image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"output:server"},"fieldPath":"spec.template.spec.containers[?(@.name==\"payload-testing-ui\")].image"}]'
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: server
+    template:
+      metadata:
+        labels:
+          app: server
+      spec:
+        containers:
+        - name: prpqr-ui
+          image: "output:server"
+          imagePullPolicy: Always
+          args:
+          - --port=8000
+          ports:
+          - name: ui
+            containerPort: 8000
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 3
+            periodSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 3
+            timeoutSeconds: 600
+        serviceAccountName: payload-testing-ui

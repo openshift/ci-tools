@@ -245,6 +245,15 @@ pr-deploy-repo-init-ui:
 	echo "server is at https://$$( oc  --context app.ci --as system:admin get route repo-init-ui -n ci-tools-$(PULL_REQUEST) -o jsonpath={.spec.host} )"
 .PHONY: pr-deploy-repo-init-ui
 
+pr-deploy-prpqr-ui:
+	$(eval USER=$(shell curl --fail -Ss https://api.github.com/repos/openshift/ci-tools/pulls/$(PULL_REQUEST)|jq -r .head.user.login))
+	$(eval BRANCH=$(shell curl --fail -Ss https://api.github.com/repos/openshift/ci-tools/pulls/$(PULL_REQUEST)|jq -r .head.ref))
+	oc --context app.ci --as system:admin process -p USER=$(USER) -p BRANCH=$(BRANCH) -p PULL_REQUEST=$(PULL_REQUEST) -f hack/pr-deploy-prpqr-ui.yaml | oc  --context app.ci --as system:admin apply -f -
+	oc --context app.ci --as system:admin start-build -n ci-tools-$(PULL_REQUEST) binaries
+	echo "server is at https://$$( oc  --context app.ci --as system:admin get route payload-testing-ui -n ci-tools-$(PULL_REQUEST) -o jsonpath={.spec.host} )/runs"
+.PHONY: pr-deploy-prpqr-ui
+
+
 check-breaking-changes:
 	test/validate-generation-breaking-changes.sh
 .PHONY: check-breaking-changes

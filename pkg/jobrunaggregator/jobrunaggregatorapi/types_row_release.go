@@ -48,6 +48,9 @@ type ReleaseRow struct {
 
 	// OSDiffURL is a link to the release page diffing the two OS versions.
 	OSDiffURL string `bigquery:"osDiffURL"`
+
+	// CreatedAt contains a timestamp for when this record was created in BigQuery.
+	CreatedAt time.Time `bigquery:"createdAt" json:"-"`
 }
 
 // ReleaseRepositoryRow represents a repository whose contents was updated in the referenced
@@ -66,6 +69,9 @@ type ReleaseRepositoryRow struct {
 	// FullChangelog contains a link that diffs the contents of this repo
 	// from the prior accepted release.
 	FullChangelog string `bigquery:"fullChangeLog"`
+
+	// CreatedAt contains a timestamp for when this record was created in BigQuery.
+	CreatedAt time.Time `bigquery:"createdAt" json:"-"`
 }
 
 // ReleasePullRequestRow represents a pull request that was included for the first time
@@ -88,6 +94,9 @@ type ReleasePullRequestRow struct {
 
 	// BugURL links to the bug, if any.
 	BugURL string `bigquery:"bugURL"`
+
+	// CreatedAt contains a timestamp for when this record was created in BigQuery.
+	CreatedAt time.Time `bigquery:"createdAt" json:"-"`
 }
 
 type ReleaseJobRunRow struct {
@@ -128,4 +137,7 @@ type ReleaseJobRunRow struct {
 
 	// Upgrade is a flag that indicates whether this job run was an upgrade or not.
 	Upgrade bool `bigquery:"upgrade"`
+
+	// CreatedAt contains a timestamp for when this record was created in BigQuery.
+	CreatedAt time.Time `bigquery:"createdAt" json:"-"`
 }

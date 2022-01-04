@@ -203,6 +203,7 @@ func releaseDetailsToBigQuery(architecture string, tag ReleaseTag, details Relea
 		Architecture: architecture,
 		ReleaseTag:   details.Name,
 		Phase:        tag.Phase,
+		CreatedAt:    time.Now(),
 	}
 	// 4.10.0-0.nightly-2021-11-04-001635 -> 4.10
 	parts := strings.Split(details.Name, ".")
@@ -254,6 +255,7 @@ func releaseJobRunsToBigQuery(details ReleaseDetails) []*jobrunaggregatorapi.Rel
 				URL:            jobResult.URL,
 				Retries:        jobResult.Retries,
 				TransitionTime: jobResult.TransitionTime,
+				CreatedAt:      time.Now(),
 			}
 		}
 	}
@@ -270,6 +272,7 @@ func releaseJobRunsToBigQuery(details ReleaseDetails) []*jobrunaggregatorapi.Rel
 				URL:            jobResult.URL,
 				Retries:        jobResult.Retries,
 				TransitionTime: jobResult.TransitionTime,
+				CreatedAt:      time.Now(),
 			}
 		}
 	}

@@ -2,6 +2,7 @@ package releasebigqueryloader
 
 import (
 	"strings"
+	"time"
 
 	"github.com/anaskhan96/soup"
 
@@ -84,6 +85,7 @@ func (c *Changelog) Repositories() []jobrunaggregatorapi.ReleaseRepositoryRow {
 			Name:       imageName,
 			ReleaseTag: c.releaseTag,
 			Head:       head,
+			CreatedAt:  time.Now(),
 		}
 		ul := section.FindNextElementSibling()
 		if ul.Error != nil {
@@ -133,6 +135,7 @@ func (c *Changelog) PullRequests() []jobrunaggregatorapi.ReleasePullRequestRow {
 				row := jobrunaggregatorapi.ReleasePullRequestRow{
 					Name:       imageName,
 					ReleaseTag: c.releaseTag,
+					CreatedAt:  time.Now(),
 				}
 				row.Description = strings.Trim(strings.TrimPrefix(item.Text(), ": "), " ")
 				anchors := item.FindAll("a")

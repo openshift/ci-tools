@@ -1,8 +1,8 @@
 package releasebigqueryloader
 
 import (
+	"bytes"
 	"encoding/json"
-	"reflect"
 	"testing"
 
 	"github.com/anaskhan96/soup"
@@ -226,16 +226,16 @@ func TestChangelog_PullRequests(t *testing.T) {
 				releaseTag: "test",
 				root:       tt.root,
 			}
-			if got := c.PullRequests(); !reflect.DeepEqual(got, tt.want) {
-				gotJSON, err := json.MarshalIndent(got, "", "    ")
-				if err != nil {
-					t.Fatal(err)
-				}
-				wantJSON, err := json.MarshalIndent(tt.want, "", "    ")
-				if err != nil {
-					t.Fatal(err)
-				}
-
+			got := c.PullRequests()
+			gotJSON, err := json.MarshalIndent(got, "", "    ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantJSON, err := json.MarshalIndent(tt.want, "", "    ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(gotJSON, wantJSON) {
 				t.Errorf("PullRequests() = %v, want %v", string(gotJSON), string(wantJSON))
 			}
 		})
@@ -267,18 +267,18 @@ func TestChangelog_Repositories(t *testing.T) {
 				releaseTag: "test",
 				root:       tt.root,
 			}
-			if got := c.Repositories(); !reflect.DeepEqual(got, tt.want) {
-				gotJSON, err := json.MarshalIndent(got, "", "    ")
-				if err != nil {
-					t.Fatal(err)
-				}
-				wantJSON, err := json.MarshalIndent(tt.want, "", "    ")
-				if err != nil {
-					t.Fatal(err)
-				}
+			got := c.Repositories()
+			gotJSON, err := json.MarshalIndent(got, "", "    ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantJSON, err := json.MarshalIndent(tt.want, "", "    ")
+			if err != nil {
+				t.Fatal(err)
+			}
 
+			if !bytes.Equal(gotJSON, wantJSON) {
 				t.Errorf("Repositories() = %v, want %v", string(gotJSON), string(wantJSON))
-
 			}
 		})
 	}

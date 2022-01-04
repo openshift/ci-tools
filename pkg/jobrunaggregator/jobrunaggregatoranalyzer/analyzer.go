@@ -233,7 +233,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := assignPassFail(ctx, currentAggregationJunitSuites, o.passFailCalculator); err != nil {
+	if err := assignPassFail(ctx, o.jobName, currentAggregationJunitSuites, o.passFailCalculator); err != nil {
 		return err
 	}
 

@@ -25,16 +25,16 @@ const (
 )
 
 type baseline interface {
-	CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (status testCaseStatus, message string, err error)
+	CheckFailed(ctx context.Context, jobName string, suiteNames []string, testCaseDetails *TestCaseDetails) (status testCaseStatus, message string, err error)
 	CheckDisruptionMeanWithinTwoStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
 	CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
 	CheckPercentileDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, percentile int) (failureJobRunIDs []string, successJobRunIDs []string, status testCaseStatus, message string, err error)
 	CheckPercentileRankDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, maxDisruptionSeconds int) (failureJobRunIDs []string, successJobRunIDs []string, status testCaseStatus, message string, err error)
 }
 
-func assignPassFail(ctx context.Context, combined *junit.TestSuites, baselinePassFail baseline) error {
+func assignPassFail(ctx context.Context, jobName string, combined *junit.TestSuites, baselinePassFail baseline) error {
 	for _, currTestSuite := range combined.Suites {
-		if err := assignPassFailForTestSuite(ctx, []string{}, currTestSuite, baselinePassFail); err != nil {
+		if err := assignPassFailForTestSuite(ctx, jobName, []string{}, currTestSuite, baselinePassFail); err != nil {
 			return err
 		}
 
@@ -43,12 +43,12 @@ func assignPassFail(ctx context.Context, combined *junit.TestSuites, baselinePas
 	return nil
 }
 
-func assignPassFailForTestSuite(ctx context.Context, parentTestSuites []string, combined *junit.TestSuite, baselinePassFail baseline) error {
+func assignPassFailForTestSuite(ctx context.Context, jobName string, parentTestSuites []string, combined *junit.TestSuite, baselinePassFail baseline) error {
 	failureCount := uint(0)
 
 	currSuiteNames := append(parentTestSuites, combined.Name)
 	for _, currTestSuite := range combined.Children {
-		if err := assignPassFailForTestSuite(ctx, currSuiteNames, currTestSuite, baselinePassFail); err != nil {
+		if err := assignPassFailForTestSuite(ctx, jobName, currSuiteNames, currTestSuite, baselinePassFail); err != nil {
 			return err
 		}
 		failureCount += currTestSuite.NumFailed
@@ -70,7 +70,7 @@ func assignPassFailForTestSuite(ctx context.Context, parentTestSuites []string, 
 		//if jobrunaggregatorlib.IsDisruptionTest(currTestCase.Name) {
 		//}
 
-		status, message, err = baselinePassFail.CheckFailed(ctx, currSuiteNames, currDetails)
+		status, message, err = baselinePassFail.CheckFailed(ctx, jobName, currSuiteNames, currDetails)
 		if err != nil {
 			return err
 		}
@@ -405,10 +405,10 @@ func (a *weeklyAverageFromTenDays) CheckPercentileRankDisruption(ctx context.Con
 	return a.checkPercentileDisruption(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, thresholdPercentile)
 }
 
-func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames []string, testCaseDetails *TestCaseDetails) (testCaseStatus, string, error) {
-	if testShouldAlwaysPass(testCaseDetails.Name) {
-		fmt.Printf("always passing %q\n", testCaseDetails.Name)
-		return testCasePassed, "always passing", nil
+func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, jobName string, suiteNames []string, testCaseDetails *TestCaseDetails) (testCaseStatus, string, error) {
+	if reason := testShouldAlwaysPass(jobName, testCaseDetails.Name); len(reason) > 0 {
+		reason := fmt.Sprintf("always passing %q: %v\n", testCaseDetails.Name, reason)
+		return testCasePassed, reason, nil
 	}
 	if !didTestRun(testCaseDetails) {
 		return testCasePassed, "did not run", nil
@@ -481,22 +481,46 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, suiteNames [
 	), nil
 }
 
-func testShouldAlwaysPass(name string) bool {
-	if strings.HasPrefix(name, "Run multi-stage test ") {
+var testsRequiringHistoryRewrite = map[testCoordinates]string{
+	{
+		jobName:  "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade",
+		testName: "[sig-api-machinery] OpenShift APIs remain available with reused connections",
+	}: "history correction on improperly loose disruption criteria, expires 2022-01-15",
+	{
+		jobName:  "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade",
+		testName: "[sig-api-machinery] Kubernetes APIs remain available with reused connections",
+	}: "history correction on improperly loose disruption criteria, expires 2022-01-15",
+}
+
+type testCoordinates struct {
+	jobName  string
+	testName string
+}
+
+func testShouldAlwaysPass(jobName, testName string) string {
+	coordinates := testCoordinates{
+		jobName:  jobName,
+		testName: testName,
+	}
+	if reason := testsRequiringHistoryRewrite[coordinates]; len(reason) > 0 {
+		return reason
+	}
+
+	if strings.HasPrefix(testName, "Run multi-stage test ") {
 		switch {
 		// used to aggregate overall upgrade result for a single job.  Since we aggregated all the junits, we don't care about this
 		// sub-aggregation. The analysis job runs can all fail on different tests, but the aggregated job will succeed.
-		case strings.HasSuffix(name, "-openshift-e2e-test container test"):
-			return true
+		case strings.HasSuffix(testName, "-openshift-e2e-test container test"):
+			return "used to aggregate overall upgrade result for a single job"
 		}
 	}
-	if strings.Contains(name, `Cluster should remain functional during upgrade`) {
+	if strings.Contains(testName, `Cluster should remain functional during upgrade`) {
 		// this test is a side-effect of other tests.  For the purpose of aggregation, we can have each individual job run
 		// fail this test, but the aggregated output can be successful.
-		return true
+		return "this test is a side-effect of other tests"
 	}
 
-	return false
+	return ""
 }
 
 // these are the required number of passes for a given percentage of historical pass rate.  One var each for

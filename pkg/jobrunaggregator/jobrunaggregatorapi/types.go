@@ -20,8 +20,8 @@ type AggregatedTestRunRow struct {
 	PassCount            int
 	FailCount            int
 	FlakeCount           int
-	PassPercentage       int
-	WorkingPercentage    int
+	PassPercentage       float64
+	WorkingPercentage    float64
 	DominantCluster      string
 	//JobLabels            []string
 }

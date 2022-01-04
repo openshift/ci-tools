@@ -234,11 +234,13 @@ func TestHandle(t *testing.T) {
 					{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial"},
 					{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi"},
 				}}),
-				testResolver:   newFakeTestResolver(),
-				trustedChecker: &fakeTrustedChecker{},
+				testResolver:       newFakeTestResolver(),
+				trustedChecker:     &fakeTrustedChecker{},
+				ciOpConfigResolver: &fakeCIOpConfigResolver{},
 			},
 			ic: github.IssueCommentEvent{
 				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}},
 				Issue: github.Issue{
 					Number:      123,
 					PullRequest: &struct{}{},
@@ -268,11 +270,13 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 				}, "4.8": {
 					{Name: "some-non-prow-gen-job"},
 				}}),
-				testResolver:   newFakeTestResolver(),
-				trustedChecker: &fakeTrustedChecker{},
+				testResolver:       newFakeTestResolver(),
+				trustedChecker:     &fakeTrustedChecker{},
+				ciOpConfigResolver: &fakeCIOpConfigResolver{},
 			},
 			ic: github.IssueCommentEvent{
 				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}},
 				Issue: github.Issue{
 					Number:      123,
 					PullRequest: &struct{}{},
@@ -316,6 +320,34 @@ trigger 0 jobs of type all for the ci release of OCP 4.8
 				},
 			},
 			expected: `user not-trusted is not trusted for pull request org/repo#123`,
+		},
+		{
+			name: "not contribute to official images",
+			s: &server{
+				ghc:        ghc,
+				ctx:        context.TODO(),
+				kubeClient: fakeclient.NewClientBuilder().Build(),
+				namespace:  "ci",
+				jobResolver: newFakeJobResolver(map[string][]config.Job{"4.10": {
+					{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial"},
+					{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi"},
+				}}),
+				testResolver:       newFakeTestResolver(),
+				trustedChecker:     &fakeTrustedChecker{},
+				ciOpConfigResolver: &fakeCIOpConfigResolver{},
+			},
+			ic: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "org"}, Name: "repo"},
+				Issue: github.Issue{
+					Number:      123,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: "/payload 4.10 nightly informing",
+				},
+			},
+			expected: `the repo org/repo does not contribute to the OpenShift official images`,
 		},
 	}
 	for _, tc := range testCases {
@@ -424,4 +456,19 @@ Please contact an administrator to resolve this issue.`,
 			}
 		})
 	}
+}
+
+type fakeCIOpConfigResolver struct {
+}
+
+func (r fakeCIOpConfigResolver) Config(m *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
+	if m == nil {
+		return nil, fmt.Errorf("some error")
+	}
+	if m.Org == "openshift" {
+		return &api.ReleaseBuildConfiguration{
+			PromotionConfiguration: &api.PromotionConfiguration{Namespace: "ocp"},
+		}, nil
+	}
+	return &api.ReleaseBuildConfiguration{}, nil
 }

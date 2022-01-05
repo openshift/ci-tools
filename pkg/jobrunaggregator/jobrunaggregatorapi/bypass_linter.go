@@ -8,6 +8,10 @@ func init() {
 	rand := fairDiceRoll()
 	if rand == -1 {
 		fmt.Print(unifiedBackendDisruptionSchema)
+		fmt.Print(testRunsUnifiedLast200JobRunsSchema)
+		fmt.Print(testRunsUnifiedTestRunsForLast200JobRunsSchema)
+		fmt.Print(testRunsUnifiedTestRunsSingleResultForLast200JobRunsSchema)
+		fmt.Print(testRunsSummaryLast200RunsSchema)
 	}
 }
 

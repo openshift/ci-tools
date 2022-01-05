@@ -2,11 +2,8 @@ package jobrunbigqueryloader
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"time"
 
-	"cloud.google.com/go/bigquery"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -228,116 +225,5 @@ func (f *BigQueryDisruptionUploadFlags) ToOptions(ctx context.Context) (*allJobs
 		shouldCollectedDataForJobFn: wantsDisruptionData,
 		getLastJobRunWithDataFn:     ciDataClient.GetLastJobRunWithDisruptionDataForJobName,
 		jobRunUploader:              newDisruptionUploader(backendDisruptionTableInserter),
-	}, nil
-}
-
-type BigQuerySummarizationFlags struct {
-	SummaryTimeFrame string
-
-	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
-	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
-}
-
-func NewBigQuerySummarizationFlags() *BigQuerySummarizationFlags {
-	return &BigQuerySummarizationFlags{
-		DataCoordinates: jobrunaggregatorlib.NewBigQueryDataCoordinates(),
-		Authentication:  jobrunaggregatorlib.NewGoogleAuthenticationFlags(),
-	}
-}
-
-func (f *BigQuerySummarizationFlags) BindFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&f.SummaryTimeFrame, "summary-timeframe", f.SummaryTimeFrame, "summary timeframe")
-	f.DataCoordinates.BindFlags(fs)
-	f.Authentication.BindFlags(fs)
-}
-
-func NewBigQuerySummarizationFlagsCommand() *cobra.Command {
-	f := NewBigQuerySummarizationFlags()
-
-	cmd := &cobra.Command{
-		Use:          "summarize-test-runs",
-		Long:         `Summarize test runs in bigquery`,
-		SilenceUsage: true,
-
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
-
-			if err := f.Validate(); err != nil {
-				logrus.WithError(err).Fatal("Flags are invalid")
-			}
-			o, err := f.ToOptions(ctx)
-			if err != nil {
-				logrus.WithError(err).Fatal("Failed to build runtime options")
-			}
-
-			if err := o.Run(ctx); err != nil {
-				logrus.WithError(err).Fatal("Command failed")
-			}
-
-			return nil
-		},
-
-		Args: jobrunaggregatorlib.NoArgs,
-	}
-
-	f.BindFlags(cmd.Flags())
-
-	return cmd
-}
-
-// Validate checks to see if the user-input is likely to produce functional runtime options
-func (f *BigQuerySummarizationFlags) Validate() error {
-	switch f.SummaryTimeFrame {
-	case "ByOneDay":
-	case "ByOneWeek":
-	default:
-		return fmt.Errorf("invalid summary timeframe: %q", f.SummaryTimeFrame)
-	}
-
-	if err := f.DataCoordinates.Validate(); err != nil {
-		return err
-	}
-	if err := f.Authentication.Validate(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// ToOptions goes from the user input to the runtime values need to run the command.
-// Expect to see unit tests on the options, but not on the flags which are simply value mappings.
-func (f *BigQuerySummarizationFlags) ToOptions(ctx context.Context) (*JobRunsBigQuerySummarizerOptions, error) {
-	bigQueryClient, err := f.Authentication.NewBigQueryClient(ctx, f.DataCoordinates.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	ciDataSet := bigQueryClient.Dataset(f.DataCoordinates.DataSetID)
-
-	// the linter requires not setting a default value. This seems strictly worse and more error-prone to me, but
-	// I am a slave to the bot.
-	var summarizedTestRunTable *bigquery.Table
-	var summaryDuration time.Duration
-	switch f.SummaryTimeFrame {
-	case "ByOneDay":
-		summaryDuration = time.Duration(1) * 24 * time.Hour
-		summarizedTestRunTable = ciDataSet.Table(jobrunaggregatorlib.PerDayTestRunTable)
-	case "ByOneWeek":
-		summaryDuration = time.Duration(1) * 7 * 24 * time.Hour
-		summarizedTestRunTable = ciDataSet.Table(jobrunaggregatorlib.PerWeekTestRunTable)
-	default:
-		return nil, fmt.Errorf("invalid summary timeframe: %q", f.SummaryTimeFrame)
-	}
-
-	ciDataClient := jobrunaggregatorlib.NewRetryingCIDataClient(
-		jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
-	)
-
-	return &JobRunsBigQuerySummarizerOptions{
-		Frequency:                 f.SummaryTimeFrame,
-		SummaryDuration:           summaryDuration,
-		JobLister:                 ciDataClient,
-		CIDataClient:              ciDataClient,
-		DataCoordinates:           f.DataCoordinates,
-		AggregatedTestRunInserter: summarizedTestRunTable.Inserter(),
 	}, nil
 }

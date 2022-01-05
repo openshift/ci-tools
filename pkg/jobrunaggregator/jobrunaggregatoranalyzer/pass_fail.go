@@ -459,7 +459,7 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, jobName stri
 		fmt.Printf("missing historical data for %v, arbitrarily assigning 70%% because David thought it was better than failing\n", testCaseDetails.Name)
 		workingPercentage = 70
 	default:
-		workingPercentage = averageTestResult.WorkingPercentage
+		workingPercentage = int(averageTestResult.WorkingPercentage)
 	}
 
 	requiredNumberOfPasses := requiredPassesByPassPercentageByNumberOfAttempts[numberOfAttempts][workingPercentage]

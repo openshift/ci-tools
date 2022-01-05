@@ -29,7 +29,7 @@ type allJobsLoaderOptions struct {
 	// GCSClient is used to read the prowjob data
 	gcsClient jobrunaggregatorlib.CIGCSClient
 
-	jobRunInserter BigQueryInserter
+	jobRunInserter jobrunaggregatorlib.BigQueryInserter
 
 	shouldCollectedDataForJobFn shouldCollectDataForJobFunc
 	getLastJobRunWithDataFn     getLastJobRunWithDataFunc
@@ -103,7 +103,7 @@ type jobLoaderOptions struct {
 	gcsClient jobrunaggregatorlib.CIGCSClient
 
 	numberOfConcurrentReaders int64
-	jobRunInserter            BigQueryInserter
+	jobRunInserter            jobrunaggregatorlib.BigQueryInserter
 
 	getLastJobRunWithDataFn getLastJobRunWithDataFunc
 	jobRunUploader          uploader
@@ -203,7 +203,7 @@ type jobRunLoaderOptions struct {
 	gcsClient jobrunaggregatorlib.CIGCSClient
 
 	readyToUpload  chan struct{}
-	jobRunInserter BigQueryInserter
+	jobRunInserter jobrunaggregatorlib.BigQueryInserter
 	doneUploading  chan struct{}
 
 	jobRunUploader uploader

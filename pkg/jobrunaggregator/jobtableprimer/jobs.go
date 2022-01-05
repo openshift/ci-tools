@@ -8,11 +8,13 @@ import (
 )
 
 const (
-	gcp     = "gcp"
-	aws     = "aws"
-	azure   = "azure"
-	metal   = "metal"
-	vsphere = "vsphere"
+	gcp       = "gcp"
+	aws       = "aws"
+	azure     = "azure"
+	metal     = "metal"
+	vsphere   = "vsphere"
+	ovirt     = "ovirt"
+	openstack = "openstack"
 
 	sdn = "sdn"
 	ovn = "ovn"

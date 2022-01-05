@@ -9,11 +9,10 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"gopkg.in/yaml.v3"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
@@ -131,6 +130,7 @@ func (o *GenerateJobNamesOptions) Run(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("error reading %v: %w", url, err)
 		}
+		resp.Body.Close()
 
 		releaseConfig := &FakeReleaseConfig{}
 		if err := json.Unmarshal(content, releaseConfig); err != nil {
@@ -161,6 +161,7 @@ func (o *GenerateJobNamesOptions) Run(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("error reading %v: %w", url, err)
 		}
+		resp.Body.Close()
 
 		periodicConfig := &FakePeriodicConfig{}
 		if err := yaml.Unmarshal(content, periodicConfig); err != nil {

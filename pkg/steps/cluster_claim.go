@@ -114,6 +114,7 @@ func (s *clusterClaimStep) acquireCluster(ctx context.Context, waitForClaim func
 	if err != nil {
 		return nil, err
 	}
+	logrus.Infof("Claiming cluster from pool %s/%s owned by %s", clusterPool.Namespace, clusterPool.Name, clusterPool.Labels["owner"])
 
 	claimName := s.jobSpec.ProwJobID
 	claimNamespace := clusterPool.Namespace

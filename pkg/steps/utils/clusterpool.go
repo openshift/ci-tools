@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/sirupsen/logrus"
+
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
@@ -29,8 +31,23 @@ func ClusterPoolFromClaim(ctx context.Context, claim *api.ClusterClaim, hiveClie
 	}
 
 	pools := clusterPools.Items
+	logrus.Debugf("Found %d matching pools", len(pools))
 	if len(pools) == 0 {
 		return nil, fmt.Errorf("failed to find a cluster pool providing the cluster: %v", listOption)
+	}
+
+	logPool := func(pool *hivev1.ClusterPool) {
+		fields := logrus.Fields{
+			"name":      pool.Name,
+			"namespace": pool.Namespace,
+			"ready":     pool.Status.Ready,
+			"size":      pool.Spec.Size,
+			"maxsize":   "unlimited",
+		}
+		if pool.Spec.MaxSize != nil {
+			fields["maxsize"] = int(*pool.Spec.MaxSize)
+		}
+		logrus.WithFields(fields).Debug("Pool matches test requirements")
 	}
 
 	better := func(one, two *hivev1.ClusterPool) *hivev1.ClusterPool {
@@ -61,8 +78,11 @@ func ClusterPoolFromClaim(ctx context.Context, claim *api.ClusterClaim, hiveClie
 	}
 
 	best := &pools[0]
+	logPool(best)
 	for i := range pools[1:] {
-		best = better(best, &pools[i+1])
+		candidate := &pools[i+1]
+		logPool(candidate)
+		best = better(best, candidate)
 	}
 	return best, nil
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -386,8 +387,14 @@ func generateProwjob(rc injectingResolverClient, defaulter periodicDefaulter, ba
 		// PRPQR (until aggregated jobs, but for them we'll have a sequence index)
 		jobBaseGen.PodSpec.Add(prowgen.CustomHashInput(prpqrName))
 
-		// TODO(muller): Solve cluster assignment
-		jobBaseGen.Cluster("build01")
+		// TODO(muller): Solve cluster assignment.
+		// The proper solution is to wire DetermineClusterForJob here but it is a more invasive change
+		if strings.Contains(inject.Test, "vsphere") {
+			jobBaseGen.Cluster("vsphere")
+		} else {
+			jobBaseGen.Cluster("build01")
+		}
+
 		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, "@yearly", "", false, ciopConfig.CanonicalGoRepository)
 		var variant string
 		if inject.Variant != "" {

@@ -3,6 +3,7 @@ package validation
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -368,11 +369,21 @@ func validateImageStreamTagReferenceMap(fieldRoot string, input map[string]api.I
 	return validationErrors
 }
 
+var (
+	openshiftWebhookForbiddingNamespaces = regexp.MustCompile("^kube|^openshift|^default$|^redhat")
+	// openshift is on every cluster we do not need to create
+	exceptions = sets.NewString("openshift")
+)
+
 func validatePromotionConfiguration(fieldRoot string, input api.PromotionConfiguration) []error {
 	var validationErrors []error
 
 	if len(input.Namespace) == 0 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s: no namespace defined", fieldRoot))
+	}
+
+	if openshiftWebhookForbiddingNamespaces.MatchString(input.Namespace) && !exceptions.Has(input.Namespace) {
+		validationErrors = append(validationErrors, fmt.Errorf("%s: cannot promote to namespace %s matching this regular expression: (^kube.*|^openshift.*|^default$|^redhat.*)", fieldRoot, input.Namespace))
 	}
 
 	if len(input.Name) == 0 && len(input.Tag) == 0 {

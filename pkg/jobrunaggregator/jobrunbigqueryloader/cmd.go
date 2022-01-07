@@ -105,8 +105,8 @@ func (f *BigQueryTestRunUploadFlags) ToOptions(ctx context.Context) (*allJobsLoa
 		jobRunTableInserter = jobRunTable.Inserter()
 		testRunTableInserter = testRunTable.Inserter()
 	} else {
-		jobRunTableInserter = NewDryRunInserter(os.Stdout, jobrunaggregatorapi.LegacyJobRunTableName)
-		testRunTableInserter = NewDryRunInserter(os.Stdout, jobrunaggregatorlib.TestRunTableName)
+		jobRunTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.LegacyJobRunTableName)
+		testRunTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorlib.TestRunTableName)
 	}
 
 	return &allJobsLoaderOptions{
@@ -213,8 +213,8 @@ func (f *BigQueryDisruptionUploadFlags) ToOptions(ctx context.Context) (*allJobs
 		jobRunTableInserter = jobRunTable.Inserter()
 		backendDisruptionTableInserter = backendDisruptionTable.Inserter()
 	} else {
-		jobRunTableInserter = NewDryRunInserter(os.Stdout, jobrunaggregatorapi.DisruptionJobRunTableName)
-		backendDisruptionTableInserter = NewDryRunInserter(os.Stdout, jobrunaggregatorapi.BackendDisruptionTableName)
+		jobRunTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.DisruptionJobRunTableName)
+		backendDisruptionTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.BackendDisruptionTableName)
 	}
 
 	return &allJobsLoaderOptions{

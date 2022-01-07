@@ -2,6 +2,7 @@ package jobtableprimer
 
 import (
 	"context"
+	"os"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -14,6 +15,8 @@ import (
 type primeJobTableFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
+
+	DryRun bool
 }
 
 func newPrimeJobTableFlags() *primeJobTableFlags {
@@ -26,6 +29,8 @@ func newPrimeJobTableFlags() *primeJobTableFlags {
 func (f *primeJobTableFlags) BindFlags(fs *pflag.FlagSet) {
 	f.DataCoordinates.BindFlags(fs)
 	f.Authentication.BindFlags(fs)
+
+	fs.BoolVar(&f.DryRun, "dry-run", f.DryRun, "Run the command, but don't mutate data.")
 }
 
 func NewPrimeJobTableCommand() *cobra.Command {
@@ -81,8 +86,14 @@ func (f *primeJobTableFlags) ToOptions(ctx context.Context) (*CreateJobsOptions,
 	if err != nil {
 		return nil, err
 	}
-	ciDataSet := bigQueryClient.Dataset(f.DataCoordinates.DataSetID)
-	jobTable := ciDataSet.Table(jobrunaggregatorapi.JobsTableName)
+	var jobTableInserter jobrunaggregatorlib.BigQueryInserter
+	if !f.DryRun {
+		ciDataSet := bigQueryClient.Dataset(f.DataCoordinates.DataSetID)
+		jobTable := ciDataSet.Table(jobrunaggregatorapi.JobsTableName)
+		jobTableInserter = jobTable.Inserter()
+	} else {
+		jobTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.LegacyJobRunTableName)
+	}
 
 	return &CreateJobsOptions{
 		jobsToCreate: jobsToAnalyze,
@@ -90,6 +101,6 @@ func (f *primeJobTableFlags) ToOptions(ctx context.Context) (*CreateJobsOptions,
 			jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
 		),
 
-		jobInserter: jobTable.Inserter(),
+		jobInserter: jobTableInserter,
 	}, nil
 }

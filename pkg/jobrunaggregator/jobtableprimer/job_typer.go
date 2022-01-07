@@ -21,6 +21,12 @@ func newJob(name string) *jobRowBuilder {
 		platform = azure
 	case strings.Contains(name, "metal"):
 		platform = metal
+	case strings.Contains(name, "vsphere"):
+		platform = vsphere
+	case strings.Contains(name, "ovirt"):
+		platform = ovirt
+	case strings.Contains(name, "openstack"):
+		platform = openstack
 	}
 
 	runsUpgrade := false

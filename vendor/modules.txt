@@ -38,6 +38,9 @@ github.com/Azure/go-autorest/logger
 # github.com/Azure/go-autorest/tracing v0.6.0
 ## explicit; go 1.12
 github.com/Azure/go-autorest/tracing
+# github.com/Azure/go-ntlmssp v0.0.0-20200615164410-66371956d46c
+## explicit
+github.com/Azure/go-ntlmssp
 # github.com/GoogleCloudPlatform/testgrid v0.0.68
 ## explicit; go 1.14
 github.com/GoogleCloudPlatform/testgrid/config
@@ -266,6 +269,12 @@ github.com/getlantern/deepcopy
 # github.com/ghodss/yaml v1.0.0
 ## explicit
 github.com/ghodss/yaml
+# github.com/go-asn1-ber/asn1-ber v1.5.1
+## explicit; go 1.13
+github.com/go-asn1-ber/asn1-ber
+# github.com/go-ldap/ldap/v3 v3.4.1
+## explicit; go 1.13
+github.com/go-ldap/ldap/v3
 # github.com/go-logr/logr v0.4.0
 ## explicit; go 1.14
 github.com/go-logr/logr
@@ -675,6 +684,7 @@ gocloud.dev/internal/retry
 ## explicit; go 1.11
 golang.org/x/crypto/ed25519
 golang.org/x/crypto/ed25519/internal/edwards25519
+golang.org/x/crypto/md4
 golang.org/x/crypto/pbkdf2
 golang.org/x/crypto/pkcs12
 golang.org/x/crypto/pkcs12/internal/rc2

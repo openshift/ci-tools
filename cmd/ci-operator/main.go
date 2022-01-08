@@ -1294,7 +1294,7 @@ func generateAuthorAccessRoleBinding(namespace string, authors []string) *rbacap
 	var subjects []rbacapi.Subject
 	authorSet := sets.NewString(authors...)
 	for _, author := range authorSet.List() {
-		subjects = append(subjects, rbacapi.Subject{Kind: "Group", Name: author + api.GroupSuffix})
+		subjects = append(subjects, rbacapi.Subject{Kind: "Group", Name: api.GitHubUserGroup(author)})
 	}
 	return &rbacapi.RoleBinding{
 		ObjectMeta: meta.ObjectMeta{

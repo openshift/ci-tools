@@ -1,6 +1,8 @@
 package api
 
 import (
+	"fmt"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -54,7 +56,7 @@ const (
 	OauthTokenSecretKey  = "oauth"
 	OauthTokenSecretName = "github-credentials-openshift-ci-robot-private-git-cloner"
 
-	GroupSuffix = "-group"
+	CIAdminsGroupName = "test-platform-ci-admins"
 
 	ShmResource = "ci-operator.openshift.io/shm"
 )
@@ -68,6 +70,11 @@ var (
 		string(ClusterVSphere),
 	)
 )
+
+// GitHubUserGroup returns the group name for a GitHub user
+func GitHubUserGroup(username string) string {
+	return fmt.Sprintf("%s-group", username)
+}
 
 // ValidClusterName checks if a cluster name is valid
 func ValidClusterName(clusterName string) bool {

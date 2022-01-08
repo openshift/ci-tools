@@ -1,0 +1,16 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: pool-admin-rbac
+objects:
+  - apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: "${POOL_NAMESPACE}"
+  - apiVersion: user.openshift.io/v1
+    kind: Group
+    metadata:
+      name: "${team}-pool-admins"
+    users:
+      - aaa
+      - ${bbb}

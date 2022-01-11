@@ -296,6 +296,11 @@ func TestValidatePromotion(t *testing.T) {
 			input:    api.PromotionConfiguration{Namespace: "foo", Name: "bar", Tag: "baz"},
 			expected: []error{errors.New("promotion: both name and tag defined")},
 		},
+		{
+			name:     "cannot promote to namespace openshift-some",
+			input:    api.PromotionConfiguration{Namespace: "openshift-some", Tag: "bar"},
+			expected: []error{errors.New("promotion: cannot promote to namespace openshift-some matching this regular expression: (^kube.*|^openshift.*|^default$|^redhat.*)")},
+		},
 	}
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {

@@ -5,6 +5,7 @@ import "time"
 const (
 	LegacyJobRunTableName     = "JobRuns"
 	DisruptionJobRunTableName = "BackendDisruption_JobRuns"
+	AlertJobRunTableName      = "Alerts_JobRuns"
 
 	JobRunSchema = `
 [

@@ -48,6 +48,11 @@ type DisruptionUploadClient interface {
 	GetLastJobRunWithDisruptionDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
 }
 
+// AlertUploadClient client view used by the alert loader so its easier to reason about which tables are in play
+type AlertUploadClient interface {
+	GetLastJobRunWithAlertDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
+}
+
 type JobLister interface {
 	ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error)
 }
@@ -57,6 +62,7 @@ type CIDataClient interface {
 	AggregationJobClient
 	TestRunUploadClient
 	DisruptionUploadClient
+	AlertUploadClient
 	TestRunSummarizerClient
 
 	// these deal with release tags
@@ -109,6 +115,18 @@ ORDER BY Jobs.JobName ASC
 }
 
 func (c *ciDataClient) GetLastJobRunWithTestRunDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
+	return c.getLastJobRunWithTestRunDataForJobName(ctx, jobrunaggregatorapi.LegacyJobRunTableName, jobName)
+}
+
+func (c *ciDataClient) GetLastJobRunWithDisruptionDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
+	return c.getLastJobRunWithTestRunDataForJobName(ctx, jobrunaggregatorapi.DisruptionJobRunTableName, jobName)
+}
+
+func (c *ciDataClient) GetLastJobRunWithAlertDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
+	return c.getLastJobRunWithTestRunDataForJobName(ctx, jobrunaggregatorapi.AlertJobRunTableName, jobName)
+}
+
+func (c *ciDataClient) getLastJobRunWithTestRunDataForJobName(ctx context.Context, tableName, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
 	// the JobRun.Name is always increasing, so we can sort by that name.  The starttime is based on the prowjob
 	// time and I don't think that is coordinated.
 	// the testruns jobrun table is now distinct, so we will use the jobrun table as authoritative for what data should and should not
@@ -117,41 +135,7 @@ func (c *ciDataClient) GetLastJobRunWithTestRunDataForJobName(ctx context.Contex
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
 		`
 SELECT *
-FROM DATA_SET_LOCATION.JobRuns 
-WHERE JobRuns.JobName = @JobName
-ORDER BY JobRuns.Name DESC
-LIMIT 1
-`)
-
-	query := c.client.Query(queryString)
-	query.QueryConfig.Parameters = []bigquery.QueryParameter{
-		{Name: "JobName", Value: jobName},
-	}
-	lastJobRunRow, err := query.Read(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query aggregation table with %q: %w", queryString, err)
-	}
-	lastJobRun := &jobrunaggregatorapi.JobRunRow{}
-	err = lastJobRunRow.Next(lastJobRun)
-	if err == iterator.Done {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return lastJobRun, nil
-}
-
-func (c *ciDataClient) GetLastJobRunWithDisruptionDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	// the JobRun.Name is always increasing, so we can sort by that name.  The starttime is based on the prowjob
-	// time and I don't think that is coordinated.
-	// the disruption jobrun table is now distinct, so we will use the disruption jobrun table as authoritative for what data should and should not
-	// be uploaded rather than using the absence of backenddisruption itself.  Some jobs don't include this data so we end up
-	// inserting many duplicated entries
-	queryString := c.dataCoordinates.SubstituteDataSetLocation(
-		`
-SELECT *
-FROM DATA_SET_LOCATION.` + jobrunaggregatorapi.DisruptionJobRunTableName + ` as JobRuns
+FROM DATA_SET_LOCATION.` + tableName + ` as JobRuns 
 WHERE JobRuns.JobName = @JobName
 ORDER BY JobRuns.Name DESC
 LIMIT 1

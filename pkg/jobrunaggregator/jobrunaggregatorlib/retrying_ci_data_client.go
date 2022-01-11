@@ -64,6 +64,16 @@ func (c *retryingCIDataClient) GetLastJobRunWithDisruptionDataForJobName(ctx con
 	return ret, err
 }
 
+func (c *retryingCIDataClient) GetLastJobRunWithAlertDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
+	var ret *jobrunaggregatorapi.JobRunRow
+	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
+		var innerErr error
+		ret, innerErr = c.delegate.GetLastJobRunWithAlertDataForJobName(ctx, jobName)
+		return innerErr
+	})
+	return ret, err
+}
+
 func (c *retryingCIDataClient) GetLastAggregationForJob(ctx context.Context, frequency, jobName string) (*jobrunaggregatorapi.AggregatedTestRunRow, error) {
 	var ret *jobrunaggregatorapi.AggregatedTestRunRow
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {

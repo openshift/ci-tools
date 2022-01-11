@@ -18,6 +18,7 @@ func NewJobAggregatorCommand() *cobra.Command {
 
 	cmd.AddCommand(jobrunbigqueryloader.NewBigQueryTestRunUploadFlagsCommand())
 	cmd.AddCommand(jobrunbigqueryloader.NewBigQueryDisruptionUploadFlagsCommand())
+	cmd.AddCommand(jobrunbigqueryloader.NewBigQueryAlertUploadFlagsCommand())
 	cmd.AddCommand(jobrunaggregatoranalyzer.NewJobRunsAnalyzerCommand())
 	cmd.AddCommand(jobtableprimer.NewPrimeJobTableCommand())
 	cmd.AddCommand(jobtableprimer.NewGenerateJobNamesCommand())

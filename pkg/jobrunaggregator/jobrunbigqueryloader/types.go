@@ -29,8 +29,12 @@ func newJobRunRow(jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob
 }
 
 type testRunRow struct {
-	prowJob    *prowv1.ProwJob
-	jobRun     jobrunaggregatorapi.JobRunInfo
+	prowJob *prowv1.ProwJob
+	jobRun  jobrunaggregatorapi.JobRunInfo
+
+	// ci-tools/pkg/junit/types.go mentions that a TestSuite can itself hold
+	// TestSuites, hence declared as a slice below; but we only use a single
+	// TestSuite today.
 	testSuites []string
 	testCase   *junit.TestCase
 }
@@ -45,8 +49,11 @@ func newTestRunRow(jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJo
 
 }
 
+// Ensure (at compile time) that testRunRow implements the bigquery.ValueSaver interface
 var _ bigquery.ValueSaver = &testRunRow{}
 
+// Save, a custom method defined for the testRunRow type, is called by the Put method
+// to create a row that will be uploaded to Big Query.
 func (v *testRunRow) Save() (map[string]bigquery.Value, string, error) {
 
 	// the linter requires not setting a default value. This seems strictly worse and more error-prone to me, but
@@ -62,6 +69,7 @@ func (v *testRunRow) Save() (map[string]bigquery.Value, string, error) {
 		status = "Passed"
 	}
 
+	// We can add v.TestSuites[0] here so that the TestRun table gets populated with it.
 	row := map[string]bigquery.Value{
 		"Name":       v.testCase.Name,
 		"JobRunName": v.jobRun.GetJobRunID(),

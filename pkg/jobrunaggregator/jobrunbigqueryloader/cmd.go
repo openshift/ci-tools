@@ -16,6 +16,9 @@ type BigQueryTestRunUploadFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
 
+	// DryRun controls if we are actually going to upload to Big Query.  If it
+	// is true, then no actual mutation happens and what we intend to do is
+	// sent to stdout.  If it is false, then data is inserted into bigquery
 	DryRun bool
 }
 
@@ -102,6 +105,8 @@ func (f *BigQueryTestRunUploadFlags) ToOptions(ctx context.Context) (*allJobsLoa
 		ciDataSet := bigQueryClient.Dataset(f.DataCoordinates.DataSetID)
 		jobRunTable := ciDataSet.Table(jobrunaggregatorapi.LegacyJobRunTableName)
 		testRunTable := ciDataSet.Table(jobrunaggregatorlib.TestRunTableName)
+
+		// Use Inserter that will write to Big Query
 		jobRunTableInserter = jobRunTable.Inserter()
 		testRunTableInserter = testRunTable.Inserter()
 	} else {

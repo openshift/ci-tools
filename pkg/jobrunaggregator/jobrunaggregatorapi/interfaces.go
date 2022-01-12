@@ -13,7 +13,8 @@ import (
 )
 
 // JobRunInfo is a way to interact with JobRuns and gather their junit results.
-// The backing store can vary by impl, but GCS buckets and
+// The backing store can vary by implementation (e.g., GCS buckets, files, etc.).
+// Today, we use GCS buckets.
 type JobRunInfo interface {
 	IsFinished(ctx context.Context) bool
 

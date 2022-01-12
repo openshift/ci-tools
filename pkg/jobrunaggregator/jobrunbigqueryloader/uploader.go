@@ -178,7 +178,7 @@ func (o *jobLoaderOptions) Run(ctx context.Context) error {
 func (o *jobLoaderOptions) newJobRunBigQueryLoaderOptions(jobRunID string, readyToUpload chan struct{}) *jobRunLoaderOptions {
 	return &jobRunLoaderOptions{
 		jobName:        o.jobName,
-		hobRunID:       jobRunID,
+		jobRunID:       jobRunID,
 		gcsClient:      o.gcsClient,
 		readyToUpload:  readyToUpload,
 		jobRunInserter: o.jobRunInserter,
@@ -197,7 +197,7 @@ type uploader interface {
 // 3. uploads all results to bigquery
 type jobRunLoaderOptions struct {
 	jobName  string
-	hobRunID string
+	jobRunID string
 
 	// GCSClient is used to read the prowjob data
 	gcsClient jobrunaggregatorlib.CIGCSClient
@@ -212,7 +212,7 @@ type jobRunLoaderOptions struct {
 func (o *jobRunLoaderOptions) Run(ctx context.Context) error {
 	defer close(o.doneUploading)
 
-	fmt.Printf("Analyzing jobrun/%v/%v.\n", o.jobName, o.hobRunID)
+	fmt.Printf("Analyzing jobrun/%v/%v.\n", o.jobName, o.jobRunID)
 
 	jobRun, err := o.readJobRunFromGCS(ctx)
 	if err != nil {
@@ -234,7 +234,7 @@ func (o *jobRunLoaderOptions) Run(ctx context.Context) error {
 	}
 
 	if err := o.uploadJobRun(ctx, jobRun); err != nil {
-		return fmt.Errorf("jobrun/%v/%v failed to upload to bigquery: %w", o.jobName, o.hobRunID, err)
+		return fmt.Errorf("jobrun/%v/%v failed to upload to bigquery: %w", o.jobName, o.jobRunID, err)
 	}
 
 	return nil
@@ -261,7 +261,7 @@ func (o *jobRunLoaderOptions) uploadJobRun(ctx context.Context, jobRun jobrunagg
 
 // associateJobRuns returns allJobRuns and currentAggregationTargetJobRuns
 func (o *jobRunLoaderOptions) readJobRunFromGCS(ctx context.Context) (jobrunaggregatorapi.JobRunInfo, error) {
-	jobRunInfo, err := o.gcsClient.ReadJobRunFromGCS(ctx, "logs/"+o.jobName, o.jobName, o.hobRunID)
+	jobRunInfo, err := o.gcsClient.ReadJobRunFromGCS(ctx, "logs/"+o.jobName, o.jobName, o.jobRunID)
 	if err != nil {
 		return nil, err
 	}
@@ -271,14 +271,14 @@ func (o *jobRunLoaderOptions) readJobRunFromGCS(ctx context.Context) (jobrunaggr
 	}
 	prowjob, err := jobRunInfo.GetProwJob(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get prowjob for jobrun/%v/%v: %w", o.jobName, o.hobRunID, err)
+		return nil, fmt.Errorf("failed to get prowjob for jobrun/%v/%v: %w", o.jobName, o.jobRunID, err)
 	}
 	if prowjob.Status.CompletionTime == nil {
-		fmt.Printf("Removing %q/%q because it isn't finished\n", o.jobName, o.hobRunID)
+		fmt.Printf("Removing %q/%q because it isn't finished\n", o.jobName, o.jobRunID)
 		return nil, nil
 	}
 	if _, err := jobRunInfo.GetAllContent(ctx); err != nil {
-		return nil, fmt.Errorf("failed to get all content for jobrun/%v/%v: %w", o.jobName, o.hobRunID, err)
+		return nil, fmt.Errorf("failed to get all content for jobrun/%v/%v: %w", o.jobName, o.jobRunID, err)
 	}
 
 	return jobRunInfo, nil

@@ -2,6 +2,10 @@ package jobrunaggregatorapi
 
 import "time"
 
+// UnifiedTestRunRow (and any other type that ends in "Row") corresponds to a
+// Big Query row in a table that has that same name.
+// See https://console.cloud.google.com/bigquery?project=<theProject>
+// and pick a dataset in use to see the table.
 type UnifiedTestRunRow struct {
 	TestName        string
 	JobRunName      string

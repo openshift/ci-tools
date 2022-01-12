@@ -86,9 +86,12 @@ func NewCIDataClient(dataCoordinates BigQueryDataCoordinates, client *bigquery.C
 	}
 }
 
+// ListAllJobs gets every job in the Jobs table ordered by name and returns it as one big
+// JobRow slice.  As of now, there are 134 jobs.  These jobs are initially
+// and statically added (primed) in the "Run" method in the jobtableprimer package.
 func (c *ciDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
-		`SELECT *  
+		`SELECT *
 FROM DATA_SET_LOCATION.Jobs
 ORDER BY Jobs.JobName ASC
 `)

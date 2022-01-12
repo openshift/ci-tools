@@ -23,6 +23,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/registry/server"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 	"github.com/openshift/ci-tools/pkg/validation"
 )
@@ -77,16 +78,21 @@ type filenameToConfig map[string]api.ReleaseBuildConfiguration
 // FromPath returns all configs found at or below the given path
 func fromPath(path string) (filenameToConfig, error) {
 	configs := filenameToConfig{}
+	f, err := os.Open(path)
+	if err != nil {
+		return configs, err
+	}
 	lock := &sync.Mutex{}
 	errGroup := &errgroup.Group{}
 
-	err := filepath.WalkDir(path, func(path string, info fs.DirEntry, err error) error {
+	err = util.WalkFD(f, os.O_RDONLY, 0777, func(f *os.File, info fs.DirEntry, err error) error {
 		if err != nil {
-			// file may not exist due to race condition between the reload and k8s removing deleted/moved symlinks in a confimap directory; ignore it
-			if os.IsNotExist(err) {
-				return nil
-			}
 			return err
+		}
+		if info.IsDir() {
+			if err := f.Close(); err != nil {
+				logrus.WithError(err).Errorf("failed to close %q", f.Name())
+			}
 		}
 		if strings.HasPrefix(info.Name(), "..") {
 			if info.IsDir() {
@@ -97,11 +103,17 @@ func fromPath(path string) (filenameToConfig, error) {
 		if info.IsDir() {
 			return nil
 		}
-		if ext := filepath.Ext(path); ext != ".yml" && ext != ".yaml" {
+		base := info.Name()
+		if ext := filepath.Ext(base); ext != ".yml" && ext != ".yaml" {
 			return nil
 		}
 		errGroup.Go(func() error {
-			configSpec, err := Config(path, "", "", nil, nil)
+			defer func() {
+				if err := f.Close(); err != nil {
+					logrus.WithError(err).Errorf("failed to close %q", f.Name())
+				}
+			}()
+			configSpec, err := ConfigFile(f)
 			if err != nil {
 				return fmt.Errorf("failed to load ci-operator config (%w)", err)
 			}
@@ -109,9 +121,9 @@ func fromPath(path string) (filenameToConfig, error) {
 			if err := validation.IsValidRuntimeConfiguration(configSpec); err != nil {
 				return fmt.Errorf("invalid ci-operator config: %w", err)
 			}
-			logrus.Tracef("Adding %s to filenameToConfig", filepath.Base(path))
+			logrus.Tracef("Adding %s to filenameToConfig", base)
 			lock.Lock()
-			configs[filepath.Base(path)] = *configSpec
+			configs[base] = *configSpec
 			lock.Unlock()
 			return nil
 		})
@@ -223,14 +235,19 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 	if flags&RegistryMetadata != 0 {
 		metadata = api.RegistryMetadata{}
 	}
-	err := filepath.WalkDir(root, func(path string, info fs.DirEntry, err error) error {
+	f, err := os.Open(root)
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, err
+	}
+	err = util.WalkFD(f, os.O_RDONLY, 0777, func(f *os.File, info fs.DirEntry, err error) error {
 		if err != nil {
-			// file may not exist due to race condition between the reload and k8s removing deleted/moved symlinks in a confimap directory; ignore it
-			if os.IsNotExist(err) {
-				return nil
-			}
 			return err
 		}
+		defer func() {
+			if err := f.Close(); err != nil {
+				logrus.WithError(err).Errorf("failed to close %q", f.Name())
+			}
+		}()
 		if strings.HasPrefix(info.Name(), "..") {
 			if info.IsDir() {
 				return filepath.SkipDir
@@ -243,10 +260,15 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 		if filepath.Ext(info.Name()) == ".md" || info.Name() == "OWNERS" {
 			return nil
 		}
-		raw, err := gzip.ReadFileMaybeGZIP(path)
+		raw, err := ioutil.ReadAll(f)
 		if err != nil {
 			return err
 		}
+		raw, err = gzip.ReadBytesMaybeGZIP(raw)
+		if err != nil {
+			return err
+		}
+		path := f.Name()
 		dir := filepath.Dir(path)
 		var prefix string
 		if !flat {

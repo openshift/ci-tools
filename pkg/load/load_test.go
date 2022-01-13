@@ -811,25 +811,27 @@ func TestRegistry(t *testing.T) {
 	)
 
 	for _, testCase := range testCases {
-		references, chains, workflows, _, _, observers, err := Registry(testCase.registryDir, testCase.flags)
-		if err == nil && testCase.expectedError == true {
-			t.Errorf("%s: got no error when error was expected", testCase.name)
-		}
-		if err != nil && testCase.expectedError == false {
-			t.Errorf("%s: got error when error wasn't expected: %v", testCase.name, err)
-		}
-		if !reflect.DeepEqual(references, testCase.references) {
-			t.Errorf("%s: output references different from expected: %s", testCase.name, diff.ObjectReflectDiff(references, testCase.references))
-		}
-		if !reflect.DeepEqual(chains, testCase.chains) {
-			t.Errorf("%s: output chains different from expected: %s", testCase.name, diff.ObjectReflectDiff(chains, testCase.chains))
-		}
-		if !reflect.DeepEqual(workflows, testCase.workflows) {
-			t.Errorf("%s: output workflows different from expected: %s", testCase.name, diff.ObjectReflectDiff(workflows, testCase.workflows))
-		}
-		if !reflect.DeepEqual(observers, testCase.observers) {
-			t.Errorf("%s: output observers different from expected: %s", testCase.name, diff.ObjectReflectDiff(observers, testCase.observers))
-		}
+		t.Run(testCase.name, func(t *testing.T) {
+			references, chains, workflows, _, _, observers, err := Registry(testCase.registryDir, testCase.flags)
+			if err == nil && testCase.expectedError == true {
+				t.Error("got no error when error was expected")
+			}
+			if err != nil && testCase.expectedError == false {
+				t.Errorf("got error when error wasn't expected: %v", err)
+			}
+			if !reflect.DeepEqual(references, testCase.references) {
+				t.Errorf("output references different from expected: %s", diff.ObjectReflectDiff(references, testCase.references))
+			}
+			if !reflect.DeepEqual(chains, testCase.chains) {
+				t.Errorf("output chains different from expected: %s", diff.ObjectReflectDiff(chains, testCase.chains))
+			}
+			if !reflect.DeepEqual(workflows, testCase.workflows) {
+				t.Errorf("output workflows different from expected: %s", diff.ObjectReflectDiff(workflows, testCase.workflows))
+			}
+			if !reflect.DeepEqual(observers, testCase.observers) {
+				t.Errorf("output observers different from expected: %s", diff.ObjectReflectDiff(observers, testCase.observers))
+			}
+		})
 	}
 	// set up a temporary directory registry with a broken component
 	temp, err := ioutil.TempDir("", "")

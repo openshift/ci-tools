@@ -43,5 +43,5 @@ func loadBuildClusters(o options) (*BuildClusters, error) {
 }
 
 func buildClustersFile(o options) string {
-	return filepath.Join(o.releaseRepo, "clusters", "build-clusters", "cluster-init.yaml")
+	return filepath.Join(o.releaseRepo, "clusters", "build-clusters", "_cluster-init.yaml")
 }

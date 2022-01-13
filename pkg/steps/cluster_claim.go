@@ -13,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -93,18 +94,28 @@ func (s *clusterClaimStep) run(ctx context.Context) error {
 	}
 
 	clusterClaim, err := s.acquireCluster(ctx, waitForClaim)
+	// Make sure we release the claim no matter what. This is a very brute force solution,
+	// that works even if wrapped() blocks and doesn't correctly end when ctx is cancelled.
+	if clusterClaim != nil {
+		go func() {
+			<-ctx.Done()
+			if err := s.releaseCluster(cleanupCtx, clusterClaim, false); err != nil {
+				logrus.WithError(err).Error("failed to release cluster claim")
+			}
+		}()
+	}
 	if err != nil {
 		acquireErr := results.ForReason("acquiring_cluster_claim").ForError(err)
 		// always attempt to delete claim if one exists
 		var releaseErr error
 		if clusterClaim != nil {
-			releaseErr = results.ForReason("releasing_cluster_claim").ForError(s.releaseCluster(ctx, clusterClaim, true))
+			releaseErr = results.ForReason("releasing_cluster_claim").ForError(s.releaseCluster(cleanupCtx, clusterClaim, true))
 		}
 		return aggregateWrappedErrorAndReleaseError(acquireErr, releaseErr)
 	}
 
 	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
-	releaseErr := results.ForReason("releasing_cluster_claim").ForError(s.releaseCluster(ctx, clusterClaim, false))
+	releaseErr := results.ForReason("releasing_cluster_claim").ForError(s.releaseCluster(cleanupCtx, clusterClaim, false))
 
 	return aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr)
 }
@@ -199,13 +210,13 @@ func (s *clusterClaimStep) releaseCluster(ctx context.Context, clusterClaim *hiv
 	logger := logrus.WithField("clusterClaim.Namespace", clusterClaim.Namespace).WithField("clusterClaim.Name", clusterClaim.Name)
 	if err := s.saveArtifacts(ctx, clusterClaim.Namespace, clusterClaim.Name, printConditions); err != nil {
 		// logging the error without failing the test
-		logger.Error("Failed to save artifacts before releasing the claimed cluster")
+		logger.WithError(err).Error("Failed to save artifacts before releasing the claimed cluster")
 	}
 	logrus.Infof("Releasing cluster claims for test %s", s.Name())
 	logger.Debug("Deleting cluster claim.")
 	retry := 3
 	for i := 0; i < retry; i++ {
-		if err := s.hiveClient.Delete(ctx, clusterClaim); err != nil {
+		if err := s.hiveClient.Delete(ctx, clusterClaim); err != nil && !apierrors.IsNotFound(err) {
 			logger.WithField("i", i).Debug("Failed to delete cluster claim.")
 			if i+1 < retry {
 				continue

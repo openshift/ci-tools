@@ -481,20 +481,44 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, jobName stri
 	), nil
 }
 
-var testsRequiringHistoryRewrite = map[testCoordinates]string{
-	{
-		jobName:  "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade",
-		testName: "[sig-api-machinery] OpenShift APIs remain available with reused connections",
-	}: "history correction on improperly loose disruption criteria, expires 2022-01-15",
-	{
-		jobName:  "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade",
-		testName: "[sig-api-machinery] Kubernetes APIs remain available with reused connections",
-	}: "history correction on improperly loose disruption criteria, expires 2022-01-15",
-}
+var testsRequiringHistoryRewrite map[testCoordinates]string
 
 type testCoordinates struct {
 	jobName  string
 	testName string
+}
+
+func init() {
+
+	testsRequiringHistoryRewrite[testCoordinates{
+		jobName:  "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade",
+		testName: "[sig-api-machinery] OpenShift APIs remain available with reused connections",
+	}] = "history correction on improperly loose disruption criteria, expires 2022-01-15"
+
+	testsRequiringHistoryRewrite[testCoordinates{
+		jobName:  "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade",
+		testName: "[sig-api-machinery] Kubernetes APIs remain available with reused connections",
+	}] = "history correction on improperly loose disruption criteria, expires 2022-01-15"
+
+	for _, jobName := range []string{
+		"periodic-ci-openshift-release-master-ci-4.10-e2e-azure-ovn-upgrade",
+		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-azure-upgrade",
+		"periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade",
+		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn-upgrade",
+		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-gcp-ovn-upgrade",
+		"periodic-ci-openshift-release-master-ci-4.10-e2e-gcp-upgrade",
+		"periodic-ci-openshift-release-master-ci-4.10-e2e-aws-ovn-upgrade",
+	} {
+		testsRequiringHistoryRewrite[testCoordinates{
+			jobName:  jobName,
+			testName: "[sig-arch][bz-kube-apiserver][Late] Alerts alert/KubeAPIErrorBudgetBurn should not be at or above info [Suite:openshift/conformance/parallel]",
+		}] = "history correction on improperly loose disruption criteria, expires 2022-01-24"
+
+		testsRequiringHistoryRewrite[testCoordinates{
+			jobName:  jobName,
+			testName: "bz-kube-apiserver][invariant] alert/KubeAPIErrorBudgetBurn should not be at or above info",
+		}] = "history correction on improperly loose disruption criteria, expires 2022-01-24"
+	}
 }
 
 func testShouldAlwaysPass(jobName, testName string) string {

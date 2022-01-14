@@ -42,6 +42,9 @@ func (o *ciGCSClient) ListJobRunNamesOlderThanFourHours(ctx context.Context, job
 	if err := query.SetAttrSelection([]string{"Name", "Created"}); err != nil {
 		return nil, nil, err
 	}
+
+	// When debugging, you can set the starting ID to a number such that you
+	// will process a relatively small number of jobsRuns.
 	query.StartOffset = fmt.Sprintf("logs/%s/%s", jobName, startingID)
 	fmt.Printf("  starting from %v\n", query.StartOffset)
 

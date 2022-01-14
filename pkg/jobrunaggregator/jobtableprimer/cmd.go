@@ -92,7 +92,7 @@ func (f *primeJobTableFlags) ToOptions(ctx context.Context) (*CreateJobsOptions,
 		jobTable := ciDataSet.Table(jobrunaggregatorapi.JobsTableName)
 		jobTableInserter = jobTable.Inserter()
 	} else {
-		jobTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.LegacyJobRunTableName)
+		jobTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.JobsTableName)
 	}
 
 	return &CreateJobsOptions{

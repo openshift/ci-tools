@@ -58,6 +58,8 @@ func NewPayloadAnalysisJobLocator(
 	}
 }
 
+// FindRelatedJobs returns a slice of JobRunInfo which has info contained in GCS buckets
+// used to determine pass/fail.
 func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	startOfJobRunWindow := a.startTime.Add(-1 * 1 * time.Hour)
 	endOfJobRunWindow := a.startTime.Add(1 * 4 * time.Hour)
@@ -85,6 +87,8 @@ func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunag
 		return nil, err
 	}
 	if startingJobRun == nil {
+		// For debugging, you can set this to a jobID that is not that far away from
+		// jobs related to what you are trying to aggregate.
 		query.StartOffset = fmt.Sprintf("%s/%s", a.gcsPrefix, "0")
 	} else {
 		query.StartOffset = fmt.Sprintf("%s/%s", a.gcsPrefix, startingJobRun.Name)

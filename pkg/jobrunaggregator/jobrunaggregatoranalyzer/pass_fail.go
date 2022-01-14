@@ -481,7 +481,7 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, jobName stri
 	), nil
 }
 
-var testsRequiringHistoryRewrite map[testCoordinates]string
+var testsRequiringHistoryRewrite = map[testCoordinates]string{}
 
 type testCoordinates struct {
 	jobName  string

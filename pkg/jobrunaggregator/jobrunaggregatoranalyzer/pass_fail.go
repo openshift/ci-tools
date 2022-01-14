@@ -503,6 +503,16 @@ func init() {
 	for _, jobName := range []string{
 		"periodic-ci-openshift-release-master-ci-4.10-e2e-azure-ovn-upgrade",
 		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-azure-upgrade",
+	} {
+		testsRequiringHistoryRewrite[testCoordinates{
+			jobName:  jobName,
+			testName: "[sig-network-edge] Application behind service load balancer with PDB remains available using new connections",
+		}] = "history correction on kube update, expires 2022-01-24 - https://bugzilla.redhat.com/show_bug.cgi?id=2040715"
+	}
+
+	for _, jobName := range []string{
+		"periodic-ci-openshift-release-master-ci-4.10-e2e-azure-ovn-upgrade",
+		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-azure-upgrade",
 		"periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade",
 		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn-upgrade",
 		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-gcp-ovn-upgrade",
@@ -512,12 +522,12 @@ func init() {
 		testsRequiringHistoryRewrite[testCoordinates{
 			jobName:  jobName,
 			testName: "[sig-arch][bz-kube-apiserver][Late] Alerts alert/KubeAPIErrorBudgetBurn should not be at or above info [Suite:openshift/conformance/parallel]",
-		}] = "history correction on improperly loose disruption criteria, expires 2022-01-24"
+		}] = "history correction on kube update, expires 2022-01-24"
 
 		testsRequiringHistoryRewrite[testCoordinates{
 			jobName:  jobName,
 			testName: "bz-kube-apiserver][invariant] alert/KubeAPIErrorBudgetBurn should not be at or above info",
-		}] = "history correction on improperly loose disruption criteria, expires 2022-01-24"
+		}] = "history correction on kube update, expires 2022-01-24"
 	}
 }
 

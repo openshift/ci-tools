@@ -22,7 +22,7 @@ import (
 	utilgzip "github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
-const rawConfig = `tag_specification:
+const rawTestConfig = `tag_specification:
   name: '4.0'
   namespace: ocp
 promotion:
@@ -525,14 +525,14 @@ func TestConfig(t *testing.T) {
 	}{
 		{
 			name:          "loading config from file works",
-			config:        rawConfig,
+			config:        rawTestConfig,
 			asFile:        true,
 			expected:      parsedConfig,
 			expectedError: false,
 		},
 		{
 			name:          "loading config from gzipped file works",
-			config:        rawConfig,
+			config:        rawTestConfig,
 			asFile:        true,
 			expected:      parsedConfig,
 			isGzipped:     true,
@@ -540,14 +540,14 @@ func TestConfig(t *testing.T) {
 		},
 		{
 			name:          "loading config from env works",
-			config:        rawConfig,
+			config:        rawTestConfig,
 			asEnv:         true,
 			expected:      parsedConfig,
 			expectedError: false,
 		},
 		{
 			name:          "loading config from compressed env works",
-			config:        rawConfig,
+			config:        rawTestConfig,
 			asEnv:         true,
 			compressEnv:   true,
 			expected:      parsedConfig,
@@ -555,7 +555,7 @@ func TestConfig(t *testing.T) {
 		},
 		{
 			name:          "no file or env fails to load config",
-			config:        rawConfig,
+			config:        rawTestConfig,
 			asEnv:         true,
 			expected:      parsedConfig,
 			expectedError: false,

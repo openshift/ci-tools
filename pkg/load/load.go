@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -120,6 +121,19 @@ func fromPath(path string) (filenameToConfig, error) {
 	return configs, utilerrors.NewAggregate([]error{err, errGroup.Wait()})
 }
 
+func ConfigFile(f *os.File) (*api.ReleaseBuildConfiguration, error) {
+	data, err := ioutil.ReadAll(f)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read configuration file: %w", err)
+	}
+	data, err = gzip.ReadBytesMaybeGZIP(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode configuration file: %w", err)
+	}
+	ret, err := rawConfig(string(data), f.Name())
+	return &ret, err
+}
+
 func Config(path, unresolvedPath, registryPath string, resolver server.ResolverClient, info *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
 	// Load the standard configuration path, env, or configresolver (in that order of priority)
 	var raw string
@@ -165,12 +179,9 @@ func Config(path, unresolvedPath, registryPath string, resolver server.ResolverC
 		err = results.ForReason("config_resolver").ForError(err)
 		return configSpec, err
 	}
-	configSpec := api.ReleaseBuildConfiguration{}
-	if err := yaml.UnmarshalStrict([]byte(raw), &configSpec); err != nil {
-		if len(path) > 0 {
-			return nil, fmt.Errorf("invalid configuration in file %s: %w\nvalue:\n%s", path, err, raw)
-		}
-		return nil, fmt.Errorf("invalid configuration: %w\nvalue:\n%s", err, raw)
+	configSpec, err := rawConfig(raw, path)
+	if err != nil {
+		return nil, err
 	}
 	if registryPath != "" {
 		refs, chains, workflows, _, _, observers, err := Registry(registryPath, RegistryFlag(0))
@@ -183,6 +194,17 @@ func Config(path, unresolvedPath, registryPath string, resolver server.ResolverC
 		}
 	}
 	return &configSpec, nil
+}
+
+func rawConfig(raw, path string) (api.ReleaseBuildConfiguration, error) {
+	ret := api.ReleaseBuildConfiguration{}
+	if err := yaml.UnmarshalStrict([]byte(raw), &ret); err != nil {
+		if len(path) > 0 {
+			return ret, fmt.Errorf("invalid configuration in file %s: %w\nvalue:\n%s", path, err, raw)
+		}
+		return ret, fmt.Errorf("invalid configuration: %w\nvalue:\n%s", err, raw)
+	}
+	return ret, nil
 }
 
 // Registry takes the path to a registry config directory and returns the full set of references, chains,

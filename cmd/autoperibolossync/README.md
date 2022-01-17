@@ -24,7 +24,7 @@ configuration changing binary.
 
 `autoperibolossync` runs [private-org-peribolos-sync](../private-org-peribolos-sync) over a working copy of a repository
 containing Peribolos config. If the execution results in Peribolos changes, the tool submits or updates a pull request
-in that repository that updates the mainline with the changes, using the
+in that repository that updates the mainline with the changes, using
 Prow's [generic-autobumper](https://github.com/kubernetes/test-infra/tree/master/prow/cmd/generic-autobumper) package.
 
 ## How is it deployed

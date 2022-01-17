@@ -3,8 +3,7 @@ package jobrunbigqueryloader
 import (
 	"context"
 	"fmt"
-
-	"cloud.google.com/go/bigquery"
+	"strings"
 
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
@@ -43,7 +42,7 @@ func (o *testRunUploader) uploadTestSuites(ctx context.Context, jobRun jobrunagg
 	return nil
 }
 
-func (o *testRunUploader) uploadTestSuite(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, parentSuites []string, suite *junit.TestSuite) error {
+func (o *testRunUploader) uploadTestSuite(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, parentSuites []string, suite *junit.TestSuite) error { //nolint
 	currSuites := append(parentSuites, suite.Name)
 	for _, testSuite := range suite.Children {
 		if err := o.uploadTestSuite(ctx, jobRun, prowJob, currSuites, testSuite); err != nil {
@@ -51,13 +50,25 @@ func (o *testRunUploader) uploadTestSuite(ctx context.Context, jobRun jobrunaggr
 		}
 	}
 
-	toInsert := []bigquery.ValueSaver{}
+	toInsert := []*jobrunaggregatorapi.TestRunRow{}
 	for i := range suite.TestCases {
 		testCase := suite.TestCases[i]
 		if testCase.SkipMessage != nil {
 			continue
 		}
-		toInsert = append(toInsert, newTestRunRow(jobRun, prowJob, currSuites, testCase))
+
+		var status string
+		switch {
+		case testCase.FailureOutput != nil:
+			status = "Failed"
+		case testCase.SkipMessage != nil:
+			status = "Skipped"
+		default:
+			status = "Passed"
+		}
+
+		testSuiteStr := strings.Join(currSuites, "|||")
+		toInsert = append(toInsert, newTestRunRow(jobRun, status, testSuiteStr, testCase))
 	}
 	if err := o.testRunInserter.Put(ctx, toInsert); err != nil {
 		return err

@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/spf13/pflag"
+
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
 const (
@@ -92,8 +94,25 @@ func (d dryRunInserter) Put(ctx context.Context, src interface{}) (err error) {
 	buf := &bytes.Buffer{}
 	fmt.Fprintf(buf, "BULK INSERT into %v\n", d.table)
 	for i := 0; i < srcVal.Len(); i++ {
-		s := srcVal.Index(i).Interface()
-		fmt.Fprintf(buf, "\tINSERT into %v: %v\n", d.table, s)
+
+		switch s := srcVal.Index(i).Interface().(type) {
+		case *jobrunaggregatorapi.TestRunRow:
+			fmt.Fprintf(buf, "\tINSERT into %v: %#v\n", d.table, s)
+
+		case *jobrunaggregatorapi.JobRunRow:
+			fmt.Fprintf(buf, "\tINSERT into %v: name=%v, jobname=%v, status=%v\n", d.table, s.Name, s.JobName, s.Status)
+
+		case *jobrunaggregatorapi.BackendDisruptionRow:
+			fmt.Fprintf(buf, "\tINSERT into %v: %#v\n", d.table, s)
+
+		case jobrunaggregatorapi.JobRow:
+			fmt.Fprintf(buf, "\tINSERT into %v: JobName=%v\n", d.table, s.JobName)
+
+		default:
+
+			// If we don't know the type, output something generic.
+			fmt.Fprintf(buf, "\tINSERT into %v: %#v\n", d.table, s)
+		}
 	}
 	fmt.Fprint(d.out, buf.String())
 

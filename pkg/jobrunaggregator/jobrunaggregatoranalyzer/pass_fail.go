@@ -151,11 +151,16 @@ type weeklyAverageFromTenDays struct {
 
 	queryTestRunsOnce        sync.Once
 	queryTestRunsErr         error
-	aggregatedTestRunsByName map[string]jobrunaggregatorapi.AggregatedTestRunRow
+	aggregatedTestRunsByName map[TestKey]jobrunaggregatorapi.AggregatedTestRunRow
 
 	queryDisruptionOnce sync.Once
 	queryDisruptionErr  error
 	disruptionByBackend map[string]backendDisruptionStats
+}
+
+type TestKey struct {
+	TestCaseName          string
+	CombinedTestSuiteName string
 }
 
 func newWeeklyAverageFromTenDaysAgo(jobName string, startDay time.Time, minimumNumberOfAttempts int, bigQueryClient jobrunaggregatorlib.CIDataClient) baseline {
@@ -173,17 +178,25 @@ func newWeeklyAverageFromTenDaysAgo(jobName string, startDay time.Time, minimumN
 	}
 }
 
-func (a *weeklyAverageFromTenDays) getAggregatedTestRuns(ctx context.Context) (map[string]jobrunaggregatorapi.AggregatedTestRunRow, error) {
+func (a *weeklyAverageFromTenDays) getAggregatedTestRuns(ctx context.Context) (map[TestKey]jobrunaggregatorapi.AggregatedTestRunRow, error) {
 	a.queryTestRunsOnce.Do(func() {
 		rows, err := a.bigQueryClient.ListAggregatedTestRunsForJob(ctx, "ByOneWeek", a.jobName, a.startDay)
-		a.aggregatedTestRunsByName = map[string]jobrunaggregatorapi.AggregatedTestRunRow{}
+		a.aggregatedTestRunsByName = map[TestKey]jobrunaggregatorapi.AggregatedTestRunRow{}
 		if err != nil {
 			a.queryTestRunsErr = err
 			return
 		}
 		for i := range rows {
 			row := rows[i]
-			a.aggregatedTestRunsByName[row.TestName] = row
+			key := TestKey{
+				TestCaseName: row.TestName,
+			}
+			if row.TestSuiteName.Valid {
+				key.CombinedTestSuiteName = row.TestSuiteName.StringVal
+			} else {
+				key.CombinedTestSuiteName = ""
+			}
+			a.aggregatedTestRunsByName[key] = row
 		}
 	})
 
@@ -406,7 +419,7 @@ func (a *weeklyAverageFromTenDays) CheckPercentileRankDisruption(ctx context.Con
 }
 
 func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, jobName string, suiteNames []string, testCaseDetails *TestCaseDetails) (testCaseStatus, string, error) {
-	if reason := testShouldAlwaysPass(jobName, testCaseDetails.Name); len(reason) > 0 {
+	if reason := testShouldAlwaysPass(jobName, testCaseDetails.Name, testCaseDetails.TestSuiteName); len(reason) > 0 {
 		reason := fmt.Sprintf("always passing %q: %v\n", testCaseDetails.Name, reason)
 		return testCasePassed, reason, nil
 	}
@@ -444,11 +457,15 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, jobName stri
 	aggregatedTestRunsByName, err := a.getAggregatedTestRuns(ctx)
 	missingAllHistoricalData := false
 	if err != nil {
-		fmt.Printf("error getting past reliability data, assume 99%% pass: %v", err)
+		fmt.Printf("error getting past reliability data, assume 99%% pass: %v\n", err)
 		missingAllHistoricalData = true
 	}
 
-	averageTestResult, ok := aggregatedTestRunsByName[testCaseDetails.Name]
+	testKey := TestKey{
+		TestCaseName:          testCaseDetails.Name,
+		CombinedTestSuiteName: testCaseDetails.TestSuiteName,
+	}
+	averageTestResult, ok := aggregatedTestRunsByName[testKey]
 	// the linter requires not setting a default value. This seems strictly worse and more error-prone to me, but
 	// I am a slave to the bot.
 	var workingPercentage int
@@ -484,8 +501,9 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, jobName stri
 var testsRequiringHistoryRewrite = make(map[testCoordinates]string)
 
 type testCoordinates struct {
-	jobName  string
-	testName string
+	jobName       string
+	testName      string
+	testSuiteName string
 }
 
 func init() {
@@ -531,11 +549,15 @@ func init() {
 	}
 }
 
-func testShouldAlwaysPass(jobName, testName string) string {
+func testShouldAlwaysPass(jobName, testName, testSuiteName string) string {
 	coordinates := testCoordinates{
-		jobName:  jobName,
-		testName: testName,
+		jobName:       jobName,
+		testName:      testName,
+		testSuiteName: testSuiteName,
 	}
+	// TODO remove this, but for now we have it to match our current hardcoded constants
+	coordinates.testSuiteName = ""
+
 	if reason := testsRequiringHistoryRewrite[coordinates]; len(reason) > 0 {
 		return reason
 	}

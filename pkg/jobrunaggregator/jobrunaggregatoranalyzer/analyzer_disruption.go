@@ -74,7 +74,8 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 			status := testCaseSkipped
 
 			testCaseName := fmt.Sprintf(testCaseNamePattern, backendName)
-			junitTestCase, err := disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot, failedJobRunIDs, successfulJobRunIDs, status, message)
+			testSuiteName := "aggregated-disruption"
+			junitTestCase, err := disruptionToJUnitTestCase(testCaseName, testSuiteName, jobGCSBucketRoot, failedJobRunIDs, successfulJobRunIDs, status, message)
 			if err != nil {
 				return nil, err
 			}
@@ -103,14 +104,15 @@ func checkPercentileRankDisruption(passFailCalculator baseline, maxDisruptionSec
 
 type disruptionJunitCheckFunc func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
 
-func disruptionToJUnitTestCase(testCaseName, jobGCSBucketRoot string, failedJobRunIDs, successfulJobRunIDs []string, status testCaseStatus, message string) (*junit.TestCase, error) {
+func disruptionToJUnitTestCase(testCaseName, testSuiteName, jobGCSBucketRoot string, failedJobRunIDs, successfulJobRunIDs []string, status testCaseStatus, message string) (*junit.TestCase, error) {
 	junitTestCase := &junit.TestCase{
 		Name: testCaseName,
 	}
 
 	currDetails := TestCaseDetails{
-		Name:    junitTestCase.Name,
-		Summary: message,
+		Name:          junitTestCase.Name,
+		TestSuiteName: testSuiteName,
+		Summary:       message,
 	}
 	for _, jobRunID := range failedJobRunIDs {
 		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, jobRunID))

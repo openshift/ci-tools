@@ -91,24 +91,29 @@ func (a *aggregatedJobRunJunit) aggregateAllJobRuns() (*junit.TestSuites, error)
 func combineTestSuites(combined *junit.TestSuites, jobGCSBucketRoot, toAddJobRunID string, toAdd *junit.TestSuites) error {
 	for _, suiteToAdd := range toAdd.Suites {
 		combinedSuite := ensureSuiteInSuites(combined, suiteToAdd.Name)
-		if err := combineTestSuite(combinedSuite, jobGCSBucketRoot, toAddJobRunID, suiteToAdd); err != nil {
+		if err := combineTestSuite([]string{}, combinedSuite, jobGCSBucketRoot, toAddJobRunID, suiteToAdd); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func combineTestSuite(combined *junit.TestSuite, jobGCSBucketRoot, toAddJobRunID string, toAdd *junit.TestSuite) error {
+func combineTestSuite(parentSuiteNames []string, combined *junit.TestSuite, jobGCSBucketRoot, toAddJobRunID string, toAdd *junit.TestSuite) error {
+	currentSuiteNames := []string{}
+	currentSuiteNames = append(currentSuiteNames, parentSuiteNames...)
+	currentSuiteNames = append(currentSuiteNames, combined.Name)
+	suiteAsSingleString := strings.Join(currentSuiteNames, "|||")
+
 	for _, testCaseToAdd := range toAdd.TestCases {
 		combinedTestCase := ensureTestCaseInSuite(combined, testCaseToAdd.Name)
-		if err := aggregateTestCase(combinedTestCase, jobGCSBucketRoot, toAddJobRunID, testCaseToAdd); err != nil {
+		if err := aggregateTestCase(suiteAsSingleString, combinedTestCase, jobGCSBucketRoot, toAddJobRunID, testCaseToAdd); err != nil {
 			return err
 		}
 	}
 
 	for _, suiteToAdd := range toAdd.Children {
 		combinedSuite := ensureSuiteInSuite(combined, suiteToAdd.Name)
-		if err := combineTestSuite(combinedSuite, jobGCSBucketRoot, toAddJobRunID, suiteToAdd); err != nil {
+		if err := combineTestSuite(currentSuiteNames, combinedSuite, jobGCSBucketRoot, toAddJobRunID, suiteToAdd); err != nil {
 			return err
 		}
 	}
@@ -176,9 +181,10 @@ func ensureTestCaseInSuite(o *junit.TestSuite, name string) *junit.TestCase {
 	return ret
 }
 
-func aggregateTestCase(combined *junit.TestCase, jobGCSBucketRoot, toAddJobRunID string, toAdd *junit.TestCase) error {
+func aggregateTestCase(testSuiteName string, combined *junit.TestCase, jobGCSBucketRoot, toAddJobRunID string, toAdd *junit.TestCase) error {
 	currDetails := &TestCaseDetails{
-		Name: toAdd.Name,
+		Name:          toAdd.Name,
+		TestSuiteName: testSuiteName,
 	}
 	if len(combined.SystemOut) > 0 {
 		if err := yaml.Unmarshal([]byte(combined.SystemOut), currDetails); err != nil {
@@ -226,7 +232,8 @@ func aggregateTestCase(combined *junit.TestCase, jobGCSBucketRoot, toAddJobRunID
 }
 
 type TestCaseDetails struct {
-	Name string
+	Name          string
+	TestSuiteName string
 	// Summary is filled in during the pass/fail calculation
 	Summary string
 

@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 )
 
-// ReadFileMaybeGZIP wraps util.ReadFileMaybeGZIP, returning the decompressed contents
+// ReadFileMaybeGZIP wraps util.ReadBytesMaybeGZIP, returning the decompressed contents
 // if the file is gzipped, or otherwise the raw contents
 func ReadFileMaybeGZIP(path string) ([]byte, error) {
 	b, err := ioutil.ReadFile(path)

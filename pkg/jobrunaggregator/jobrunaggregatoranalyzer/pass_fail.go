@@ -509,13 +509,15 @@ type testCoordinates struct {
 func init() {
 
 	testsRequiringHistoryRewrite[testCoordinates{
-		jobName:  "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade",
-		testName: "[sig-api-machinery] OpenShift APIs remain available with reused connections",
+		jobName:       "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade",
+		testName:      "[sig-api-machinery] OpenShift APIs remain available with reused connections",
+		testSuiteName: "Cluster upgrade",
 	}] = "history correction on improperly loose disruption criteria, expires 2022-01-15"
 
 	testsRequiringHistoryRewrite[testCoordinates{
-		jobName:  "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade",
-		testName: "[sig-api-machinery] Kubernetes APIs remain available with reused connections",
+		jobName:       "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade",
+		testName:      "[sig-api-machinery] Kubernetes APIs remain available with reused connections",
+		testSuiteName: "Cluster upgrade",
 	}] = "history correction on improperly loose disruption criteria, expires 2022-01-15"
 
 	for _, jobName := range []string{
@@ -523,8 +525,9 @@ func init() {
 		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-azure-upgrade",
 	} {
 		testsRequiringHistoryRewrite[testCoordinates{
-			jobName:  jobName,
-			testName: "[sig-network-edge] Application behind service load balancer with PDB remains available using new connections",
+			jobName:       jobName,
+			testName:      "[sig-network-edge] Application behind service load balancer with PDB remains available using new connections",
+			testSuiteName: "Cluster upgrade",
 		}] = "history correction on kube update, expires 2022-01-24 - https://bugzilla.redhat.com/show_bug.cgi?id=2040715"
 	}
 
@@ -538,31 +541,23 @@ func init() {
 		"periodic-ci-openshift-release-master-ci-4.10-e2e-aws-ovn-upgrade",
 	} {
 		testsRequiringHistoryRewrite[testCoordinates{
-			jobName:  jobName,
-			testName: "[sig-arch][bz-kube-apiserver][Late] Alerts alert/KubeAPIErrorBudgetBurn should not be at or above info [Suite:openshift/conformance/parallel]",
+			jobName:       jobName,
+			testName:      "[sig-arch][bz-kube-apiserver][Late] Alerts alert/KubeAPIErrorBudgetBurn should not be at or above info [Suite:openshift/conformance/parallel]",
+			testSuiteName: "openshift-tests",
 		}] = "history correction on kube update, expires 2022-01-24"
 
-		testsRequiringHistoryRewrite[testCoordinates{
-			jobName:  jobName,
-			testName: "bz-kube-apiserver][invariant] alert/KubeAPIErrorBudgetBurn should not be at or above info",
-		}] = "history correction on kube update, expires 2022-01-24"
-	}
-
-	for _, jobName := range []string{
-		"periodic-ci-openshift-multiarch-master-nightly-4.10-upgrade-from-nightly-4.9-ocp-remote-libvirt-s390x",
-		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn-upgrade",
-		"periodic-ci-openshift-release-master-ci-4.10-e2e-aws-ovn-upgrade",
-		"periodic-ci-openshift-release-master-ci-4.10-e2e-azure-upgrade-single-node",
-		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-azure-ovn-upgrade",
-		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-azure-upgrade",
-		"periodic-ci-openshift-release-master-nightly-4.10-upgrade-from-stable-4.9-e2e-metal-ipi-upgrade",
-	} {
 		testsRequiringHistoryRewrite[testCoordinates{
 			jobName:       jobName,
-			testName:      "[sig-network] pods should successfully create sandboxes by other",
-			testSuiteName: "openshift-upgrade-test",
-		}] = "Test has been failing for a longtime but went undetected"
+			testName:      "bz-kube-apiserver][invariant] alert/KubeAPIErrorBudgetBurn should not be at or above info",
+			testSuiteName: "openshift-tests",
+		}] = "history correction on kube update, expires 2022-01-24"
 	}
+
+	testsRequiringHistoryRewrite[testCoordinates{
+		jobName:       "periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn-upgrade",
+		testName:      "[sig-network] pods should successfully create sandboxes by other",
+		testSuiteName: "openshift-tests-upgrade",
+	}] = "Test has been failing for a longtime but went undetected"
 }
 
 func testShouldAlwaysPass(jobName, testName, testSuiteName string) string {

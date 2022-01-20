@@ -2,6 +2,7 @@ package prpqr_reconciler
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 )
 
 func TestReconcile(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
 	testCases := []struct {
 		name     string
 		prowJobs []ctrlruntimeclient.Object
@@ -136,6 +138,21 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "basic aggregated case",
+			prpqr: []ctrlruntimeclient.Object{
+				&v1.PullRequestPayloadQualificationRun{
+					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
+					Spec: v1.PullRequestPayloadTestSpec{
+						PullRequest: v1.PullRequestUnderTest{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}},
+						Jobs: v1.PullRequestPayloadJobSpec{
+							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
+							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name", AggregatedCount: 2}},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -188,7 +205,11 @@ func prunePRPQRForTests(items []v1.PullRequestPayloadQualificationRun) {
 }
 
 func pruneProwjobsForTests(items []prowv1.ProwJob) {
-	for i := range items {
+	for i, pj := range items {
+		if strings.HasPrefix(pj.Spec.Job, "aggregator") {
+			items[i].Spec.PodSpec.Containers[0].Args[5] = "--job-start-time=some-time"
+		}
+
 		items[i].Status.StartTime = zeroTime
 		items[i].Name = "some-uuid"
 	}

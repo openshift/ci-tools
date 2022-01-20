@@ -547,6 +547,22 @@ func init() {
 			testName: "bz-kube-apiserver][invariant] alert/KubeAPIErrorBudgetBurn should not be at or above info",
 		}] = "history correction on kube update, expires 2022-01-24"
 	}
+
+	for _, jobName := range []string{
+		"periodic-ci-openshift-multiarch-master-nightly-4.10-upgrade-from-nightly-4.9-ocp-remote-libvirt-s390x",
+		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn-upgrade",
+		"periodic-ci-openshift-release-master-ci-4.10-e2e-aws-ovn-upgrade",
+		"periodic-ci-openshift-release-master-ci-4.10-e2e-azure-upgrade-single-node",
+		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-azure-ovn-upgrade",
+		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-azure-upgrade",
+		"periodic-ci-openshift-release-master-nightly-4.10-upgrade-from-stable-4.9-e2e-metal-ipi-upgrade",
+	} {
+		testsRequiringHistoryRewrite[testCoordinates{
+			jobName:       jobName,
+			testName:      "[sig-network] pods should successfully create sandboxes by other",
+			testSuiteName: "openshift-upgrade-test",
+		}] = "Test has been failing for a longtime but went undetected"
+	}
 }
 
 func testShouldAlwaysPass(jobName, testName, testSuiteName string) string {
@@ -555,8 +571,6 @@ func testShouldAlwaysPass(jobName, testName, testSuiteName string) string {
 		testName:      testName,
 		testSuiteName: testSuiteName,
 	}
-	// TODO remove this, but for now we have it to match our current hardcoded constants
-	coordinates.testSuiteName = ""
 
 	if reason := testsRequiringHistoryRewrite[coordinates]; len(reason) > 0 {
 		return reason

@@ -11,8 +11,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
-	"github.com/openshift/ci-tools/pkg/load"
 )
 
 type IndexDelta struct {
@@ -27,7 +27,7 @@ type ConfigAgent interface {
 	// GetMatchingConfig loads a configuration that matches the metadata,
 	// allowing for regex matching on branch names.
 	GetMatchingConfig(metadata api.Metadata) (api.ReleaseBuildConfiguration, error)
-	GetAll() load.ByOrgRepo
+	GetAll() config.ByOrgRepo
 	GetGeneration() int
 	AddIndex(indexName string, indexFunc IndexFn) error
 	GetFromIndex(indexName string, indexKey string) ([]*api.ReleaseBuildConfiguration, error)
@@ -39,7 +39,7 @@ type IndexFn func(api.ReleaseBuildConfiguration) []string
 
 type configAgent struct {
 	lock             *sync.RWMutex
-	configs          load.ByOrgRepo
+	configs          config.ByOrgRepo
 	configPath       string
 	generation       int
 	errorMetrics     *prometheus.CounterVec
@@ -65,7 +65,7 @@ func init() {
 
 // NewFakeConfigAgent returns a new static config agent
 // that can be used for tests
-func NewFakeConfigAgent(configs load.ByOrgRepo) ConfigAgent {
+func NewFakeConfigAgent(configs config.ByOrgRepo) ConfigAgent {
 	a := &configAgent{
 		lock:         &sync.RWMutex{},
 		configs:      configs,
@@ -157,7 +157,7 @@ func (a *configAgent) GetMatchingConfig(metadata api.Metadata) (api.ReleaseBuild
 	}
 }
 
-func (a *configAgent) GetAll() load.ByOrgRepo {
+func (a *configAgent) GetAll() config.ByOrgRepo {
 	a.lock.RLock()
 	defer a.lock.RUnlock()
 	return a.configs
@@ -225,7 +225,7 @@ func (a *configAgent) loadFilenameToConfig() error {
 		a.lock.Lock()
 		defer a.lock.Unlock()
 		startTime := time.Now()
-		configs, err := load.FromPathByOrgRepo(a.configPath)
+		configs, err := config.LoadByOrgRepo(a.configPath)
 		if err != nil {
 			return time.Duration(0), fmt.Errorf("loading config failed: %w", err)
 		}

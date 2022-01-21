@@ -9,7 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/config"
 )
 
 func TestGetFromIndex(t *testing.T) {
@@ -129,7 +129,7 @@ func TestBuildIndexes(t *testing.T) {
 	testCases := []struct {
 		name     string
 		agent    *configAgent
-		configs  load.ByOrgRepo
+		configs  config.ByOrgRepo
 		expected map[string]configIndex
 	}{
 		{
@@ -139,7 +139,7 @@ func TestBuildIndexes(t *testing.T) {
 					"index-a": func(_ api.ReleaseBuildConfiguration) []string { return []string{"key-a"} },
 				},
 			},
-			configs:  load.ByOrgRepo{"org": {"repo": []api.ReleaseBuildConfiguration{cfg}}},
+			configs:  config.ByOrgRepo{"org": {"repo": []api.ReleaseBuildConfiguration{cfg}}},
 			expected: map[string]configIndex{"index-a": {"key-a": []*api.ReleaseBuildConfiguration{&cfg}}},
 		},
 		{
@@ -150,7 +150,7 @@ func TestBuildIndexes(t *testing.T) {
 					"index-b": func(_ api.ReleaseBuildConfiguration) []string { return []string{"key-b"} },
 				},
 			},
-			configs: load.ByOrgRepo{"org": {"repo": []api.ReleaseBuildConfiguration{cfg}}},
+			configs: config.ByOrgRepo{"org": {"repo": []api.ReleaseBuildConfiguration{cfg}}},
 			expected: map[string]configIndex{
 				"index-a": {"key-a": []*api.ReleaseBuildConfiguration{&cfg}},
 				"index-b": {"key-b": []*api.ReleaseBuildConfiguration{&cfg}},
@@ -163,7 +163,7 @@ func TestBuildIndexes(t *testing.T) {
 					"index-a": func(_ api.ReleaseBuildConfiguration) []string { return nil },
 				},
 			},
-			configs:  load.ByOrgRepo{"org": {"repo": []api.ReleaseBuildConfiguration{cfg}}},
+			configs:  config.ByOrgRepo{"org": {"repo": []api.ReleaseBuildConfiguration{cfg}}},
 			expected: map[string]configIndex{"index-a": {}},
 		},
 	}
@@ -182,14 +182,14 @@ func TestBuildIndexes(t *testing.T) {
 func TestConfigAgent_GetMatchingConfig(t *testing.T) {
 	var testCases = []struct {
 		name        string
-		input       load.ByOrgRepo
+		input       config.ByOrgRepo
 		meta        api.Metadata
 		expected    api.ReleaseBuildConfiguration
 		expectedErr bool
 	}{
 		{
 			name:  "no configs in org fails",
-			input: load.ByOrgRepo{},
+			input: config.ByOrgRepo{},
 			meta: api.Metadata{
 				Org:    "org",
 				Repo:   "repo",
@@ -199,7 +199,7 @@ func TestConfigAgent_GetMatchingConfig(t *testing.T) {
 		},
 		{
 			name: "no configs in repo fails",
-			input: load.ByOrgRepo{
+			input: config.ByOrgRepo{
 				"org": map[string][]api.ReleaseBuildConfiguration{},
 			},
 			meta: api.Metadata{
@@ -211,7 +211,7 @@ func TestConfigAgent_GetMatchingConfig(t *testing.T) {
 		},
 		{
 			name: "no configs for variant fails",
-			input: load.ByOrgRepo{
+			input: config.ByOrgRepo{
 				"org": map[string][]api.ReleaseBuildConfiguration{
 					"repo": {{Metadata: api.Metadata{
 						Org:    "org",
@@ -230,7 +230,7 @@ func TestConfigAgent_GetMatchingConfig(t *testing.T) {
 		},
 		{
 			name: "literal match returns it",
-			input: load.ByOrgRepo{
+			input: config.ByOrgRepo{
 				"org": map[string][]api.ReleaseBuildConfiguration{
 					"repo": {{Metadata: api.Metadata{
 						Org:    "org",
@@ -253,7 +253,7 @@ func TestConfigAgent_GetMatchingConfig(t *testing.T) {
 		},
 		{
 			name: "regex match on branch returns it",
-			input: load.ByOrgRepo{
+			input: config.ByOrgRepo{
 				"org": map[string][]api.ReleaseBuildConfiguration{
 					"repo": {{Metadata: api.Metadata{
 						Org:    "org",
@@ -276,7 +276,7 @@ func TestConfigAgent_GetMatchingConfig(t *testing.T) {
 		},
 		{
 			name: "regex match on branch with variant returns it",
-			input: load.ByOrgRepo{
+			input: config.ByOrgRepo{
 				"org": map[string][]api.ReleaseBuildConfiguration{
 					"repo": {{Metadata: api.Metadata{
 						Org:     "org",
@@ -302,7 +302,7 @@ func TestConfigAgent_GetMatchingConfig(t *testing.T) {
 		},
 		{
 			name: "regex match on branch without variant fails",
-			input: load.ByOrgRepo{
+			input: config.ByOrgRepo{
 				"org": map[string][]api.ReleaseBuildConfiguration{
 					"repo": {{Metadata: api.Metadata{
 						Org:    "org",
@@ -321,7 +321,7 @@ func TestConfigAgent_GetMatchingConfig(t *testing.T) {
 		},
 		{
 			name: "multiple matches fails",
-			input: load.ByOrgRepo{
+			input: config.ByOrgRepo{
 				"org": map[string][]api.ReleaseBuildConfiguration{
 					"repo": {{Metadata: api.Metadata{
 						Org:    "org",
@@ -343,7 +343,7 @@ func TestConfigAgent_GetMatchingConfig(t *testing.T) {
 		},
 		{
 			name: "no error on simple substring",
-			input: load.ByOrgRepo{
+			input: config.ByOrgRepo{
 				"org": map[string][]api.ReleaseBuildConfiguration{
 					"repo": {{Metadata: api.Metadata{
 						Org:    "org",

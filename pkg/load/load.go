@@ -9,10 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/test-infra/prow/config"
@@ -43,85 +41,8 @@ const (
 	RegistryDocumentation
 )
 
-// ByOrgRepo maps org --> repo --> list of branched and variant configs
-type ByOrgRepo map[string]map[string][]api.ReleaseBuildConfiguration
-
-func FromPathByOrgRepo(path string) (ByOrgRepo, error) {
-	byFilename, err := fromPath(path)
-	if err != nil {
-		return nil, err
-	}
-
-	return partitionByOrgRepo(byFilename), nil
-}
-
-func partitionByOrgRepo(byFilename filenameToConfig) ByOrgRepo {
-	byOrgRepo := map[string]map[string][]api.ReleaseBuildConfiguration{}
-	for _, configuration := range byFilename {
-		org, repo := configuration.Metadata.Org, configuration.Metadata.Repo
-		if _, exists := byOrgRepo[org]; !exists {
-			byOrgRepo[org] = map[string][]api.ReleaseBuildConfiguration{}
-		}
-		if _, exists := byOrgRepo[org][repo]; !exists {
-			byOrgRepo[org][repo] = []api.ReleaseBuildConfiguration{}
-		}
-		byOrgRepo[org][repo] = append(byOrgRepo[org][repo], configuration)
-	}
-	return byOrgRepo
-}
-
-// FilenameToConfig contains configs keyed by the file they were found in
-type filenameToConfig map[string]api.ReleaseBuildConfiguration
-
-// FromPath returns all configs found at or below the given path
-func fromPath(path string) (filenameToConfig, error) {
-	configs := filenameToConfig{}
-	lock := &sync.Mutex{}
-	errGroup := &errgroup.Group{}
-
-	err := filepath.WalkDir(path, func(path string, info fs.DirEntry, err error) error {
-		if err != nil {
-			// file may not exist due to race condition between the reload and k8s removing deleted/moved symlinks in a confimap directory; ignore it
-			if os.IsNotExist(err) {
-				return nil
-			}
-			return err
-		}
-		if strings.HasPrefix(info.Name(), "..") {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if ext := filepath.Ext(path); ext != ".yml" && ext != ".yaml" {
-			return nil
-		}
-		errGroup.Go(func() error {
-			configSpec, err := Config(path, "", "", nil, nil)
-			if err != nil {
-				return fmt.Errorf("failed to load ci-operator config (%w)", err)
-			}
-
-			if err := validation.IsValidRuntimeConfiguration(configSpec); err != nil {
-				return fmt.Errorf("invalid ci-operator config: %w", err)
-			}
-			logrus.Tracef("Adding %s to filenameToConfig", filepath.Base(path))
-			lock.Lock()
-			configs[filepath.Base(path)] = *configSpec
-			lock.Unlock()
-			return nil
-		})
-		return nil
-	})
-
-	return configs, utilerrors.NewAggregate([]error{err, errGroup.Wait()})
-}
-
+// Config loads the standard configuration path, env, or configresolver (in that order of priority)
 func Config(path, unresolvedPath, registryPath string, resolver server.ResolverClient, info *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
-	// Load the standard configuration path, env, or configresolver (in that order of priority)
 	var raw string
 
 	configSpecEnv, configSpecSet := os.LookupEnv("CONFIG_SPEC")

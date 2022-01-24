@@ -115,8 +115,8 @@ func (i *Info) LogFields() logrus.Fields {
 	}
 }
 
-func isConfigFile(path string, info fs.DirEntry) bool {
-	extension := filepath.Ext(path)
+func isConfigFile(info fs.DirEntry) bool {
+	extension := filepath.Ext(info.Name())
 	return !info.IsDir() && (extension == ".yaml" || extension == ".yml")
 }
 
@@ -159,7 +159,7 @@ func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*ci
 				logrus.WithField("source-file", path).WithError(err).Error("Failed to walk CI Operator configuration dir")
 				return err
 			}
-			if isConfigFile(path, info) {
+			if isConfigFile(info) {
 				inputCh <- path
 			}
 			return nil

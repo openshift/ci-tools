@@ -19,6 +19,8 @@ import (
 )
 
 const (
+	aggregatorPrefix = "aggregator-"
+
 	runsURL   = "/runs/"
 	bodyStart = `
 <div class="container">`
@@ -182,7 +184,7 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 		name := j.JobName(jobconfig.PeriodicPrefix)
 		var match *prpqv1.PullRequestPayloadJobStatus
 		for i, s := range run.Status.Jobs {
-			if s.ReleaseJobName == name {
+			if strings.TrimPrefix(s.ReleaseJobName, aggregatorPrefix) == name {
 				match = &run.Status.Jobs[i]
 				break
 			}

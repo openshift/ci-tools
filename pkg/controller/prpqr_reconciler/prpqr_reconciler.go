@@ -572,6 +572,12 @@ func generateAggregatorJob(uid, aggregatorJobName, jobName, prpqrName, prpqrName
 					Secret: &corev1.SecretVolumeSource{SecretName: "gce-sa-credentials-gcs-publisher"},
 				},
 			},
+			{
+				Name: "temp",
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				},
+			},
 		},
 		Containers: []corev1.Container{
 			{
@@ -588,8 +594,13 @@ func generateAggregatorJob(uid, aggregatorJobName, jobName, prpqrName, prpqrName
 					fmt.Sprintf("--aggregation-id=%s", uid),
 					fmt.Sprintf("--explicit-gcs-prefix=logs/%s", submitted),
 					fmt.Sprintf("--job-start-time=%s", startTime.Format(time.RFC3339)),
+					"--working-dir=/tmp",
 				},
 				VolumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "temp",
+						MountPath: "/tmp",
+					},
 					{
 						Name:      "pull-secret",
 						MountPath: "/etc/pull-secret",

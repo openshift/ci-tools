@@ -185,6 +185,7 @@
         - --aggregation-id=a0e1bddfc1d7a5e78e6c2e483f238b15
         - --explicit-gcs-prefix=logs/test-org-test-repo-100-test-name
         - --job-start-time=some-time
+        - --working-dir=/tmp
         command:
         - job-run-aggregator
         image: registry.ci.openshift.org/ci/job-run-aggregator
@@ -194,6 +195,8 @@
           requests:
             cpu: 10m
         volumeMounts:
+        - mountPath: /tmp
+          name: temp
         - mountPath: /etc/pull-secret
           name: pull-secret
           readOnly: true
@@ -207,6 +210,8 @@
       - name: gcs-credentials
         secret:
           secretName: gce-sa-credentials-gcs-publisher
+      - emptyDir: {}
+        name: temp
     report: true
     type: periodic
   status:

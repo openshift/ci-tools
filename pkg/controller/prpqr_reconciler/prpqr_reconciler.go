@@ -619,6 +619,8 @@ func generateAggregatorJob(uid, aggregatorJobName, jobName, prpqrName, prpqrName
 	}
 
 	pj := pjutil.NewProwJob(pjutil.PeriodicSpec(periodic), labels, annotations)
+	pj.Namespace = prpqrNamespace
+
 	return &pj, nil
 }
 

@@ -3,63 +3,6 @@
   metadata:
     annotations:
       prow.k8s.io/context: ""
-      prow.k8s.io/job: aggregator-periodic-ci-test-org-test-repo-test-branch-test-name
-      releaseJobName: e2bd00d6b219bda9ee14b9e9e3c8300e
-    creationTimestamp: null
-    labels:
-      created-by-prow: "true"
-      prow.k8s.io/context: ""
-      prow.k8s.io/job: aggregator-periodic-ci-test-org-test-repo-test-branch-test-name
-      prow.k8s.io/type: periodic
-      pullrequestpayloadqualificationruns.ci.openshift.io: prpqr-test
-      release.openshift.io/aggregation-id: a0e1bddfc1d7a5e78e6c2e483f238b15
-    name: some-uuid
-    resourceVersion: "1"
-  spec:
-    cluster: this-job-was-defaulted
-    job: aggregator-periodic-ci-test-org-test-repo-test-branch-test-name
-    namespace: test-namespace
-    pod_spec:
-      containers:
-      - args:
-        - --analyze-job-runs
-        - --google-service-account-credential-file=/secrets/gcs/service-account.json
-        - --job=periodic-ci-test-org-test-repo-test-branch-test-name
-        - --aggregation-id=a0e1bddfc1d7a5e78e6c2e483f238b15
-        - --explicit-gcs-prefix=logs/test-org-test-repo-100-test-name
-        - --job-start-time=some-time
-        command:
-        - job-run-aggregator
-        image: registry.ci.openshift.org/ci/job-run-aggregator
-        imagePullPolicy: Always
-        name: ""
-        resources:
-          requests:
-            cpu: 10m
-        volumeMounts:
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
-        - mountPath: /secrets/gcs
-          name: gcs-credentials
-          readOnly: true
-      volumes:
-      - name: pull-secret
-        secret:
-          secretName: registry-pull-credentials
-      - name: gcs-credentials
-        secret:
-          secretName: gce-sa-credentials-gcs-publisher
-    report: true
-    type: periodic
-  status:
-    startTime: "1970-01-01T00:00:00Z"
-    state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
-    annotations:
-      prow.k8s.io/context: ""
       prow.k8s.io/job: test-org-test-repo-100-test-name
       releaseJobName: periodic-ci-test-org-test-repo-test-branch-test-name
     creationTimestamp: null
@@ -206,6 +149,64 @@
       - name: result-aggregator
         secret:
           secretName: result-aggregator
+    report: true
+    type: periodic
+  status:
+    startTime: "1970-01-01T00:00:00Z"
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/context: ""
+      prow.k8s.io/job: aggregator-periodic-ci-test-org-test-repo-test-branch-test-name
+      releaseJobName: e2bd00d6b219bda9ee14b9e9e3c8300e
+    creationTimestamp: null
+    labels:
+      created-by-prow: "true"
+      prow.k8s.io/context: ""
+      prow.k8s.io/job: aggregator-periodic-ci-test-org-test-repo-test-branch-test-name
+      prow.k8s.io/type: periodic
+      pullrequestpayloadqualificationruns.ci.openshift.io: prpqr-test
+      release.openshift.io/aggregation-id: a0e1bddfc1d7a5e78e6c2e483f238b15
+    name: some-uuid
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    cluster: this-job-was-defaulted
+    job: aggregator-periodic-ci-test-org-test-repo-test-branch-test-name
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --analyze-job-runs
+        - --google-service-account-credential-file=/secrets/gcs/service-account.json
+        - --job=periodic-ci-test-org-test-repo-test-branch-test-name
+        - --aggregation-id=a0e1bddfc1d7a5e78e6c2e483f238b15
+        - --explicit-gcs-prefix=logs/test-org-test-repo-100-test-name
+        - --job-start-time=some-time
+        command:
+        - job-run-aggregator
+        image: registry.ci.openshift.org/ci/job-run-aggregator
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+      volumes:
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: gcs-credentials
+        secret:
+          secretName: gce-sa-credentials-gcs-publisher
     report: true
     type: periodic
   status:

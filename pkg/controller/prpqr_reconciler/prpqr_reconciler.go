@@ -582,7 +582,7 @@ func generateAggregatorJob(uid, aggregatorJobName, jobName, prpqrName, prpqrName
 				},
 				Command: []string{"job-run-aggregator"},
 				Args: []string{
-					"--analyze-job-runs",
+					"analyze-job-runs",
 					"--google-service-account-credential-file=/secrets/gcs/service-account.json",
 					fmt.Sprintf("--job=%s", jobName),
 					fmt.Sprintf("--aggregation-id=%s", uid),

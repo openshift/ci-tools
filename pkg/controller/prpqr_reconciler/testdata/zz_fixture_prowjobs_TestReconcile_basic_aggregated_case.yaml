@@ -179,7 +179,7 @@
     pod_spec:
       containers:
       - args:
-        - --analyze-job-runs
+        - analyze-job-runs
         - --google-service-account-credential-file=/secrets/gcs/service-account.json
         - --job=periodic-ci-test-org-test-repo-test-branch-test-name
         - --aggregation-id=a0e1bddfc1d7a5e78e6c2e483f238b15

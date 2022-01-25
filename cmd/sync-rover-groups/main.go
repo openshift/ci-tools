@@ -149,7 +149,11 @@ func roverGroups(manifestDirs sets.String, config *group.Config, groupCollector 
 	}
 
 	groupNames.Insert(api.CIAdminsGroupName)
-	for k := range config.Groups {
+	for k, v := range config.Groups {
+		if v.RenameTo != "" {
+			logrus.WithField("group", v.RenameTo).Info("Skip resolving the renamed group")
+			groupNames.Delete(v.RenameTo)
+		}
 		groupNames.Insert(k)
 	}
 

@@ -265,7 +265,7 @@ func TestEnsureGroups(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.TODO()
-			actual := ensureGroups(ctx, tc.clients, tc.groups, tc.dryRun)
+			actual := ensureGroups(ctx, tc.clients, tc.groups, 60, tc.dryRun)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}

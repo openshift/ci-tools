@@ -9,6 +9,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -257,8 +258,9 @@ func TestEnsureGroups(t *testing.T) {
 					},
 				},
 			},
-			dryRun:   true,
-			expected: fmt.Errorf("attempt to create invalid group gh01-group on cluster b01: duplicate member: a"),
+			dryRun: true,
+			expected: kerrors.NewAggregate([]error{fmt.Errorf("attempt to create invalid group gh01-group on cluster b01: duplicate member: a"),
+				fmt.Errorf("attempt to create invalid group gh01-group on cluster b02: duplicate member: a")}),
 		},
 	}
 

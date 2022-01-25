@@ -1536,6 +1536,11 @@ func (in *ClusterProvisionSpec) DeepCopyInto(out *ClusterProvisionSpec) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.PrevProvisionName != nil {
+		in, out := &in.PrevProvisionName, &out.PrevProvisionName
+		*out = new(string)
+		**out = **in
+	}
 	return
 }
 
@@ -2105,6 +2110,15 @@ func (in *FailedProvisionConfig) DeepCopyInto(out *FailedProvisionConfig) {
 		in, out := &in.AWS, &out.AWS
 		*out = new(FailedProvisionAWSConfig)
 		**out = **in
+	}
+	if in.RetryReasons != nil {
+		in, out := &in.RetryReasons, &out.RetryReasons
+		*out = new([]string)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make([]string, len(*in))
+			copy(*out, *in)
+		}
 	}
 	return
 }

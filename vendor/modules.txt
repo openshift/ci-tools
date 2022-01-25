@@ -498,7 +498,7 @@ github.com/openshift/client-go/template/clientset/versioned/scheme
 github.com/openshift/client-go/template/clientset/versioned/typed/template/v1
 github.com/openshift/client-go/user/clientset/versioned/scheme
 github.com/openshift/client-go/user/clientset/versioned/typed/user/v1
-# github.com/openshift/hive/apis v0.0.0-20211101200331-e360a7970f30
+# github.com/openshift/hive/apis v0.0.0-20220124211047-fcac82e4f82f
 ## explicit; go 1.16
 github.com/openshift/hive/apis/hive/v1
 github.com/openshift/hive/apis/hive/v1/agent

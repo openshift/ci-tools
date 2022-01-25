@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sync"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/semaphore"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -31,11 +33,12 @@ import (
 type options struct {
 	kubernetesOptions flagutil.KubernetesOptions
 
-	mappingFile string
-	logLevel    string
-	dryRun      bool
-	groupsFile  string
-	configFile  string
+	mappingFile    string
+	logLevel       string
+	dryRun         bool
+	groupsFile     string
+	configFile     string
+	maxConcurrency int
 }
 
 func parseOptions() *options {
@@ -47,6 +50,7 @@ func parseOptions() *options {
 	fs.StringVar(&opts.mappingFile, "mapping-file", "", "File to the mapping results of m(github_login)=kerberos_id.")
 	fs.StringVar(&opts.groupsFile, "groups-file", "", "The yaml file storing the groups")
 	fs.StringVar(&opts.configFile, "config-file", "", "The yaml file storing the config file for the groups")
+	flag.IntVar(&opts.maxConcurrency, "concurrency", 60, "Maximum number of concurrent in-flight goroutines to handle groups.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
 	}
@@ -182,7 +186,7 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to make groups")
 	}
 
-	if err := ensureGroups(ctx, clients, groups, opts.dryRun); err != nil {
+	if err := ensureGroups(ctx, clients, groups, opts.maxConcurrency, opts.dryRun); err != nil {
 		logrus.WithError(err).Fatal("could not ensure groups")
 	}
 }
@@ -240,8 +244,28 @@ func makeGroups(mapping map[string]string, roverGroups map[string][]string, conf
 	return groups, kerrors.NewAggregate(errs)
 }
 
-func ensureGroups(ctx context.Context, clients map[string]ctrlruntimeclient.Client, groupsToCreate map[string]GroupClusters, dryRun bool) error {
+func ensureGroups(ctx context.Context, clients map[string]ctrlruntimeclient.Client, groupsToCreate map[string]GroupClusters, maxConcurrency int, dryRun bool) error {
 	var errs []error
+
+	handleGroup := func(cluster string, client ctrlruntimeclient.Client, group *userv1.Group) error {
+		if err := validate(group); err != nil {
+			return fmt.Errorf("attempt to create invalid group %s on cluster %s: %w", group.Name, cluster, err)
+		}
+		logger := logrus.WithFields(logrus.Fields{
+			"cluster":    cluster,
+			"group.Name": group.Name,
+		})
+		logger.Info("Upserting group ...")
+		if dryRun {
+			return nil
+		}
+		if _, err := UpsertGroup(ctx, client, group); err != nil {
+			return fmt.Errorf("failed to upsert group %s on cluster %s: %w", group.Name, cluster, err)
+		}
+		logger.Info("Upserted group")
+		return nil
+	}
+
 	for cluster, client := range clients {
 		listOption := ctrlruntimeclient.MatchingLabels{
 			api.DPTPRequesterLabel: toolName,
@@ -276,23 +300,27 @@ func ensureGroups(ctx context.Context, clients map[string]ctrlruntimeclient.Clie
 			}
 		}
 
+		errLock := &sync.Mutex{}
+		sem := semaphore.NewWeighted(int64(maxConcurrency))
 		for _, groupClusters := range groupsToCreate {
 			if !groupClusters.Clusters.Has(cluster) {
 				continue
 			}
 			group := groupClusters.Group.DeepCopy()
-			if err := validate(group); err != nil {
-				errs = append(errs, fmt.Errorf("attempt to create invalid group %s on cluster %s: %w", group.Name, cluster, err))
+			if err := sem.Acquire(ctx, 1); err != nil {
+				return fmt.Errorf("failed to acquire semaphore: %w", err)
 			}
-			logrus.WithField("cluster", cluster).WithField("group.Name", group.Name).Info("Upserting group ...")
-			if dryRun {
-				continue
-			}
-			if _, err := UpsertGroup(ctx, client, group); err != nil {
-				errs = append(errs, fmt.Errorf("failed to upsert group %s on cluster %s: %w", group.Name, cluster, err))
-				continue
-			}
-			logrus.WithField("cluster", cluster).WithField("group.Name", group.Name).Info("Upserted group")
+			go func(cluster string, client ctrlruntimeclient.Client, group *userv1.Group) {
+				defer sem.Release(1)
+				if err := handleGroup(cluster, client, group); err != nil {
+					errLock.Lock()
+					errs = append(errs, err)
+					errLock.Unlock()
+				}
+			}(cluster, client, group)
+		}
+		if err := sem.Acquire(ctx, int64(maxConcurrency)); err != nil {
+			logrus.WithError(err).Fatal("failed to acquire semaphore while waiting all workers to finish")
 		}
 	}
 	return kerrors.NewAggregate(errs)

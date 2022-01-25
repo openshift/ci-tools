@@ -101,15 +101,19 @@ func main() {
 		logrus.WithError(err).Fatal("failed to add schemes")
 	}
 
-	conn, err := ldapv3.DialURL(fmt.Sprintf("ldap://%s", opts.ldapServer))
-	if err != nil {
-		logrus.Fatal(err)
+	// validate runs as a presubmit which does not have access to Red Hat Intranet
+	var conn *ldapv3.Conn
+	if !opts.validateSubjects {
+		conn, err := ldapv3.DialURL(fmt.Sprintf("ldap://%s", opts.ldapServer))
+		if err != nil {
+			logrus.Fatal(err)
+		}
+		defer conn.Close()
 	}
-	defer conn.Close()
 
 	groupCollector := newYamlGroupCollector(opts.validateSubjects)
 	groupResolver := &ldapGroupResolver{conn: conn}
-	groups, err := roverGroups(opts.manifestDirs, config, groupCollector, groupResolver)
+	groups, err := roverGroups(opts.manifestDirs, config, opts.validateSubjects, groupCollector, groupResolver)
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to get rover groups")
 	}
@@ -135,7 +139,7 @@ type groupCollector interface {
 	collect(dir string) (sets.String, error)
 }
 
-func roverGroups(manifestDirs sets.String, config *group.Config, groupCollector groupCollector, groupResolver groupResolver) (map[string][]string, error) {
+func roverGroups(manifestDirs sets.String, config *group.Config, validateSubjects bool, groupCollector groupCollector, groupResolver groupResolver) (map[string][]string, error) {
 	var errs []error
 
 	groupNames := sets.NewString()
@@ -158,22 +162,26 @@ func roverGroups(manifestDirs sets.String, config *group.Config, groupCollector 
 	}
 
 	groups := map[string][]string{}
-	for _, name := range groupNames.List() {
-		logrus.WithField("group", name).Debug("resolving group ...")
-		g, err := groupResolver.resolve(name)
-		if err != nil {
-			if IsNotFoundError(err) && name != api.CIAdminsGroupName {
-				logrus.WithError(err).WithField("group", name).Warn("failed to resolve group")
+	if !validateSubjects {
+		for _, name := range groupNames.List() {
+			logrus.WithField("group", name).Debug("resolving group ...")
+			g, err := groupResolver.resolve(name)
+			if err != nil {
+				if IsNotFoundError(err) && name != api.CIAdminsGroupName {
+					logrus.WithError(err).WithField("group", name).Warn("failed to resolve group")
+					continue
+				}
+				errs = append(errs, fmt.Errorf("failed to resolve group %s: %w", name, err))
 				continue
 			}
-			errs = append(errs, fmt.Errorf("failed to resolve group %s: %w", name, err))
-			continue
+			if l := len(g.Members); name == api.CIAdminsGroupName && l < 3 {
+				errs = append(errs, fmt.Errorf("group %s should has at lesat 3 members, found %d", api.CIAdminsGroupName, l))
+				continue
+			}
+			groups[name] = g.Members
 		}
-		if l := len(g.Members); name == api.CIAdminsGroupName && l < 3 {
-			errs = append(errs, fmt.Errorf("group %s should has at lesat 3 members, found %d", api.CIAdminsGroupName, l))
-			continue
-		}
-		groups[name] = g.Members
+	} else {
+		logrus.WithField("validateSubjects", validateSubjects).Debug("Skip resolving groups")
 	}
 
 	if len(errs) > 0 {

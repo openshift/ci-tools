@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/rand"
 
 	"github.com/sirupsen/logrus"
 
@@ -77,6 +78,8 @@ func ClusterPoolFromClaim(ctx context.Context, claim *api.ClusterClaim, hiveClie
 		return one
 	}
 
+	// Shuffle the slice to avoid selecting always the first of the best pools when there are more
+	rand.Shuffle(len(pools), func(i, j int) { pools[i], pools[j] = pools[j], pools[i] })
 	best := &pools[0]
 	logPool(best)
 	for i := range pools[1:] {

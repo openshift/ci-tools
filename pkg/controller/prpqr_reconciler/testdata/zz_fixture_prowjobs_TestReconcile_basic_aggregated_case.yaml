@@ -209,7 +209,7 @@
           secretName: registry-pull-credentials
       - name: gcs-credentials
         secret:
-          secretName: gce-sa-credentials-gcs-publisher
+          secretName: release-controller-signature-publisher
       - emptyDir: {}
         name: temp
     report: true

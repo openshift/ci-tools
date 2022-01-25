@@ -569,7 +569,7 @@ func generateAggregatorJob(uid, aggregatorJobName, jobName, prpqrName, prpqrName
 			{
 				Name: "gcs-credentials",
 				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{SecretName: "gce-sa-credentials-gcs-publisher"},
+					Secret: &corev1.SecretVolumeSource{SecretName: "release-controller-signature-publisher"},
 				},
 			},
 			{

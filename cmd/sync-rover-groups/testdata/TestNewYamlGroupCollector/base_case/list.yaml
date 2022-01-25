@@ -1,0 +1,40 @@
+###comments
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dptp-controller-manager
+  namespace: ci
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: helm-chartrepos-view
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: helm-chartrepos-viewer
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: group-from-cluster-role-binding
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  labels:
+    app: dptp-controller-manager
+  name: dptp-controller-manager
+  namespace: prow-monitoring
+spec:
+  selector:
+    matchLabels:
+      app: dptp-controller-manager
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 15s
+      scheme: http
+  namespaceSelector:
+    matchNames:
+      - ci

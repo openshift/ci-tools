@@ -1,0 +1,12 @@
+cluster_groups:
+  dp-managed:
+    - build01
+    - build02
+groups:
+  some-group: {}
+  old-group-name:
+    rename_to: new-group-name
+    cluster_groups:
+      - dp-managed
+    clusters:
+      - arm01

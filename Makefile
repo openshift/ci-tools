@@ -424,8 +424,12 @@ $(TMPDIR)/.github-ldap-user-group-creator-kubeconfig-dir:
 	oc --context app.ci --namespace ci serviceaccounts create-kubeconfig github-ldap-user-group-creator | sed 's/github-ldap-user-group-creator/app.ci/g' > $(TMPDIR)/.github-ldap-user-group-creator-kubeconfig-dir/sa.github-ldap-user-group-creator.app.ci.config
 
 github-ldap-user-group-creator: $(TMPDIR)/.github-ldap-user-group-creator-kubeconfig-dir
-	@go run  ./cmd/github-ldap-user-group-creator --kubeconfig-dir=$(TMPDIR)/.github-ldap-user-group-creator-kubeconfig-dir --mapping-file=/tmp/mapping.yaml --dry-run=true --log-level=debug
+	go run  ./cmd/github-ldap-user-group-creator --kubeconfig-dir=$(TMPDIR)/.github-ldap-user-group-creator-kubeconfig-dir --groups-file=/tmp/groups.yaml --mapping-file=/tmp/mapping.yaml --config-file=$(release_folder)/core-services/sync-rover-groups/_config.yaml --dry-run=true --log-level=debug
 .PHONY: github-ldap-user-group-creator
+
+sync-rover-groups:
+	go run  ./cmd/sync-rover-groups --manifest-dir=$(release_folder)/clusters --config-file=$(release_folder)/core-services/sync-rover-groups/_config.yaml --log-level=debug
+.PHONY: sync-rover-groups
 
 $(TMPDIR)/.cluster-display-kubeconfig-dir:
 	rm -rf $(TMPDIR)/.cluster-display-kubeconfig-dir

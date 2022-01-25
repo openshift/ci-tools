@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -52,12 +53,26 @@ func TestClusterPoolFromClaim(t *testing.T) {
 			expected:    &hivev1.ClusterPool{ObjectMeta: v1.ObjectMeta{Name: "i-have-six-clusters"}, Status: hivev1.ClusterPoolStatus{Ready: 6}},
 		},
 		{
-			description: "select the first when there are many depleted",
+			// The method samples from the best pools so technically both could be returned. The actual one selected depends
+			// on the random seed
+			description: "select one when there are many depleted",
 			pools: []hivev1.ClusterPool{
 				{ObjectMeta: v1.ObjectMeta{Name: "i-have-no-clusters"}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
 				{ObjectMeta: v1.ObjectMeta{Name: "me-neither"}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
 			},
 			expected: &hivev1.ClusterPool{ObjectMeta: v1.ObjectMeta{Name: "i-have-no-clusters"}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
+		},
+		{
+			// The method samples from the best pools so technically both could be returned. The actual one selected depends
+			// on the random seed
+			description: "select one from the better two",
+			pools: []hivev1.ClusterPool{
+				{ObjectMeta: v1.ObjectMeta{Name: "i-have-no-clusters"}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
+				{ObjectMeta: v1.ObjectMeta{Name: "me-neither"}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
+				{ObjectMeta: v1.ObjectMeta{Name: "i-have-one"}, Status: hivev1.ClusterPoolStatus{Ready: 1}},
+				{ObjectMeta: v1.ObjectMeta{Name: "me-too"}, Status: hivev1.ClusterPoolStatus{Ready: 1}},
+			},
+			expected: &hivev1.ClusterPool{ObjectMeta: v1.ObjectMeta{Name: "i-have-one"}, Status: hivev1.ClusterPoolStatus{Ready: 1}},
 		},
 		{
 			description: "select the cluster with most ready clusters",
@@ -87,6 +102,8 @@ func TestClusterPoolFromClaim(t *testing.T) {
 		},
 	}
 
+	// Stable seed is needed because `ClusterPoolFromClaim` randomly samples in some situations
+	rand.Seed(0)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			got, err := ClusterPoolFromClaim(context.TODO(), &api.ClusterClaim{}, fakePoolClient{returns: tc.pools})

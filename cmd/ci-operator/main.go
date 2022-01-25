@@ -13,6 +13,7 @@ import (
 	"io"
 	"io/fs"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path"
@@ -187,7 +188,7 @@ func main() {
 			}
 		}()
 	}
-	// "i just doin't want spam"
+	// "i just don't want spam"
 	klog.LogToStderr(false)
 	logrus.Infof("%s version %s", version.Name, version.Version)
 	flagSet := flag.NewFlagSet("", flag.ExitOnError)
@@ -231,6 +232,8 @@ func main() {
 	if err := addSchemes(); err != nil {
 		logrus.WithError(err).Fatal("failed to set up scheme")
 	}
+
+	rand.Seed(time.Now().UnixNano())
 
 	if err := opt.Complete(); err != nil {
 		logrus.WithError(err).Error("Failed to load arguments.")

@@ -217,18 +217,20 @@ func makeGroups(mapping map[string]string, roverGroups map[string][]string, conf
 		groupName := k
 		clustersForRoverGroup := clusters
 		labels := map[string]string{api.DPTPRequesterLabel: toolName}
-		if v, ok := config.Groups[k]; ok {
-			resolved := v.ResolveClusters(config.ClusterGroups)
-			if resolved.Len() > 0 {
-				logrus.WithField("groupName", groupName).WithField("clusters", resolved.List()).
-					Info("Group does not exists on all clusters")
-				clustersForRoverGroup = resolved
-			}
-			if v.RenameTo != "" {
-				logrus.WithField("old", oldGroupName).WithField("new", v.RenameTo).
-					Info("Group is renamed")
-				groupName = v.RenameTo
-				labels["rover-group-name"] = oldGroupName
+		if config != nil {
+			if v, ok := config.Groups[k]; ok {
+				resolved := v.ResolveClusters(config.ClusterGroups)
+				if resolved.Len() > 0 {
+					logrus.WithField("groupName", groupName).WithField("clusters", resolved.List()).
+						Info("Group does not exists on all clusters")
+					clustersForRoverGroup = resolved
+				}
+				if v.RenameTo != "" {
+					logrus.WithField("old", oldGroupName).WithField("new", v.RenameTo).
+						Info("Group is renamed")
+					groupName = v.RenameTo
+					labels["rover-group-name"] = oldGroupName
+				}
 			}
 		}
 		if _, ok := groups[groupName]; ok {

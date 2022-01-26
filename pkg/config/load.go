@@ -7,16 +7,13 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"sync"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 	"github.com/openshift/ci-tools/pkg/validation"
 )
@@ -169,9 +166,9 @@ func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*ci
 		info   *Info
 	}
 	inputCh := make(chan string)
-	errCh := make(chan error)
-	go func() {
-		if err := filepath.WalkDir(filepath.Join(configDir, subDir), func(path string, info fs.DirEntry, err error) error {
+	produce := func() error {
+		defer close(inputCh)
+		return filepath.WalkDir(filepath.Join(configDir, subDir), func(path string, info fs.DirEntry, err error) error {
 			if err != nil {
 				logrus.WithField("source-file", path).WithError(err).Error("Failed to walk CI Operator configuration dir")
 				// file may not exist due to race condition between the reload and k8s removing deleted/moved symlinks in a confimap directory; ignore it
@@ -190,56 +187,42 @@ func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*ci
 				inputCh <- path
 			}
 			return nil
-		}); err != nil {
-			errCh <- err
-		}
-		close(inputCh)
-	}()
-	nWorkers := runtime.GOMAXPROCS(0)
-	outputCh := make(chan item)
-	var wg sync.WaitGroup
-	wg.Add(nWorkers)
-	for i := 0; i < nWorkers; i++ {
-		go func() {
-			defer wg.Done()
-			for path := range inputCh {
-				info, err := InfoFromPath(path)
-				if err != nil {
-					logrus.WithField("source-file", path).WithError(err).Error("Failed to resolve info from CI Operator configuration path")
-					errCh <- err
-					continue
-				}
-				config, err := readCiOperatorConfig(path, *info)
-				if err != nil {
-					logrus.WithField("source-file", path).WithError(err).Error("Failed to load CI Operator configuration")
-					errCh <- err
-					continue
-				}
-				if err := validation.IsValidRuntimeConfiguration(config); err != nil {
-					errCh <- fmt.Errorf("invalid ci-operator config: %w", err)
-					continue
-				}
-				outputCh <- item{config, info}
-			}
-		}()
+		})
 	}
-	go func() {
-		wg.Wait()
-		close(outputCh)
-	}()
-	go func() {
+	outputCh := make(chan item)
+	errCh := make(chan error)
+	map_ := func() error {
+		for path := range inputCh {
+			info, err := InfoFromPath(path)
+			if err != nil {
+				logrus.WithField("source-file", path).WithError(err).Error("Failed to resolve info from CI Operator configuration path")
+				errCh <- err
+				continue
+			}
+			config, err := readCiOperatorConfig(path, *info)
+			if err != nil {
+				logrus.WithField("source-file", path).WithError(err).Error("Failed to load CI Operator configuration")
+				errCh <- err
+				continue
+			}
+			if err := validation.IsValidRuntimeConfiguration(config); err != nil {
+				errCh <- fmt.Errorf("invalid ci-operator config: %w", err)
+				continue
+			}
+			outputCh <- item{config, info}
+		}
+		return nil
+	}
+	reduce := func() error {
 		for i := range outputCh {
 			if err := callback(i.config, i.info); err != nil {
 				errCh <- err
 			}
 		}
-		close(errCh)
-	}()
-	var ret []error
-	for err := range errCh {
-		ret = append(ret, err)
+		return nil
 	}
-	return utilerrors.NewAggregate(ret)
+	done := func() { close(outputCh) }
+	return util.ProduceMapReduce(0, produce, map_, reduce, done, errCh)
 }
 
 func LoggerForInfo(info Info) *logrus.Entry {

@@ -15,6 +15,7 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	v1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
@@ -173,7 +174,7 @@ func TestReconcile(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			pruneProwjobsForTests(actualProwjobsList.Items)
+			pruneProwjobsForTests(t, actualProwjobsList.Items)
 			testhelper.CompareWithFixture(t, actualProwjobsList.Items, testhelper.WithPrefix("prowjobs-"))
 
 			var actualPrpqr v1.PullRequestPayloadQualificationRunList
@@ -204,10 +205,26 @@ func prunePRPQRForTests(items []v1.PullRequestPayloadQualificationRun) {
 	}
 }
 
-func pruneProwjobsForTests(items []prowv1.ProwJob) {
+func pruneProwjobsForTests(t *testing.T, items []prowv1.ProwJob) {
 	for i, pj := range items {
 		if strings.HasPrefix(pj.Spec.Job, "aggregator") {
-			items[i].Spec.PodSpec.Containers[0].Args[5] = "--job-start-time=some-time"
+			unResolvedConfig := items[i].Spec.PodSpec.Containers[0].Env[0].Value
+
+			c := &api.ReleaseBuildConfiguration{}
+			if err := yaml.Unmarshal([]byte(unResolvedConfig), c); err != nil {
+				t.Fatal(err)
+			}
+
+			if _, ok := c.Tests[0].MultiStageTestConfiguration.Environment["JOB_START_TIME"]; ok {
+				c.Tests[0].MultiStageTestConfiguration.Environment["JOB_START_TIME"] = "1970-01-01T01:00:00+01:00"
+			}
+
+			unresolvedConfigRaw, err := yaml.Marshal(c)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			items[i].Spec.PodSpec.Containers[0].Env[0].Value = string(unresolvedConfigRaw)
 		}
 
 		items[i].Status.StartTime = zeroTime

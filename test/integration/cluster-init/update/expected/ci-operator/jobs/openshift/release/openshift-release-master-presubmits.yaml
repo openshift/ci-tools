@@ -1,7 +1,7 @@
 presubmits:
   openshift/release:
   - agent: kubernetes
-    always_run: true
+    always_run: false
     branches:
     - ^master$
     - ^master-
@@ -14,6 +14,7 @@ presubmits:
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
     name: pull-ci-openshift-release-master-existingCluster-dry
     rerun_command: /test existingCluster-dry
+    run_if_changed: ^clusters/.*
     spec:
       containers:
       - args:

@@ -297,10 +297,14 @@ func ensureGroups(ctx context.Context, clients map[string]ctrlruntimeclient.Clie
 		if dryRun {
 			return nil
 		}
-		if _, err := UpsertGroup(ctx, client, group); err != nil {
+		if modified, err := upsertGroup(ctx, client, group); err != nil {
 			return fmt.Errorf("failed to upsert group %s on cluster %s: %w", group.Name, cluster, err)
+		} else if modified {
+			logger.Info("Upserted group (created or modified on the cluster")
+		} else {
+			logger.Info("Group with expected members already present in the cluster")
 		}
-		logger.Info("Upserted group")
+
 		return nil
 	}
 
@@ -359,24 +363,27 @@ func validate(group *userv1.Group) error {
 	return nil
 }
 
-func UpsertGroup(ctx context.Context, client ctrlruntimeclient.Client, group *userv1.Group) (created bool, err error) {
+func upsertGroup(ctx context.Context, client ctrlruntimeclient.Client, group *userv1.Group) (modified bool, err error) {
 	err = client.Create(ctx, group.DeepCopy())
 	if err == nil {
 		return true, nil
 	}
 	if !errors.IsAlreadyExists(err) {
-		return false, err
+		return false, fmt.Errorf("[1] create failed: %w", err)
 	}
 	existing := &userv1.Group{}
 	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: group.Name}, existing); err != nil {
-		return false, err
+		return false, fmt.Errorf("[2] get failed: %w", err)
 	}
 	if equality.Semantic.DeepEqual(group.Users, existing.Users) {
 		return false, nil
 	}
 	if err := client.Delete(ctx, existing); err != nil {
-		return false, fmt.Errorf("delete failed: %w", err)
+		return false, fmt.Errorf("[3] delete failed: %w", err)
 	}
 	// Recreate counts as "Update"
-	return false, client.Create(ctx, group)
+	if err := client.Create(ctx, group); err != nil {
+		return false, fmt.Errorf("[4] create failed: %w", err)
+	}
+	return true, nil
 }

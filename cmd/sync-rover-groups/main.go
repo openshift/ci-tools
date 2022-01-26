@@ -104,10 +104,11 @@ func main() {
 	// validate runs as a presubmit which does not have access to Red Hat Intranet
 	var conn *ldapv3.Conn
 	if !opts.validateSubjects {
-		conn, err := ldapv3.DialURL(fmt.Sprintf("ldap://%s", opts.ldapServer))
+		c, err := ldapv3.DialURL(fmt.Sprintf("ldap://%s", opts.ldapServer))
 		if err != nil {
 			logrus.Fatal(err)
 		}
+		conn = c
 		defer conn.Close()
 	}
 

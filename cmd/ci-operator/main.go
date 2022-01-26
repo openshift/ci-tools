@@ -1282,7 +1282,7 @@ func (o *options) initializeNamespace() error {
 		}
 	}
 
-	for _, pdbLabelKey := range []string{"openshift.io/build.name", "created-by-ci"} {
+	for _, pdbLabelKey := range []string{buildv1.BuildLabel, steps.CreatedByCILabel} {
 		pdb, mutateFn := pdb(pdbLabelKey, o.namespace)
 		if _, err := crcontrollerutil.CreateOrUpdate(ctx, client, pdb, mutateFn); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("failed to create pdb for label key %s: %w", pdbLabelKey, err)

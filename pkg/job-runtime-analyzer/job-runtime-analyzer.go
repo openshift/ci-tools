@@ -3,7 +3,6 @@ package jobruntimeanalyzer
 import (
 	"encoding/json"
 	"fmt"
-	buildv1 "github.com/openshift/api/build/v1"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -18,6 +17,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+
+	buildv1 "github.com/openshift/api/build/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )

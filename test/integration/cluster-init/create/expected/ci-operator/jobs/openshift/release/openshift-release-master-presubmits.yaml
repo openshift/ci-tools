@@ -63,7 +63,7 @@ presubmits:
         name: tmp
     trigger: (?m)^/test( | .* )build01-dry,?($|\s.*)
   - agent: kubernetes
-    always_run: true
+    always_run: false
     branches:
     - ^master$
     - ^master-
@@ -76,6 +76,7 @@ presubmits:
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
     name: pull-ci-openshift-release-master-newCluster-dry
     rerun_command: /test newCluster-dry
+    run_if_changed: ^clusters/.*
     spec:
       containers:
       - args:

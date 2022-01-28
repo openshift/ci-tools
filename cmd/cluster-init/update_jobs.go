@@ -137,10 +137,13 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 				jobconfig.LabelCluster:        clusterName,
 			},
 		},
-		AlwaysRun:    true,
+		AlwaysRun:    false,
 		Optional:     optional,
 		Trigger:      prowconfig.DefaultTriggerFor(clusterName + "-dry"),
 		RerunCommand: prowconfig.DefaultRerunCommandFor(clusterName + "-dry"),
+		RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{
+			RunIfChanged: "^clusters/.*",
+		},
 		Brancher: prowconfig.Brancher{
 			Branches: []string{jobconfig.ExactlyBranch("master"), jobconfig.FeatureBranch("master")},
 		},

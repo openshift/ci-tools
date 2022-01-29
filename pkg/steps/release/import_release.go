@@ -509,7 +509,9 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 	}); err != nil {
 		return nil, fmt.Errorf("unable to tag the 'cli' image into the stable stream: %w", err)
 	}
-	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
+
+	startedWaiting := time.Now()
+	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 6, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
 		if err := s.client.Get(ctx, key, streamTag); err != nil {
 			if kerrors.IsNotFound(err) {
 				return false, nil
@@ -518,7 +520,8 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 		}
 		return streamTag.Tag != nil && streamTag.Tag.Generation != nil && *streamTag.Tag.Generation == streamTag.Generation, nil
 	}); err != nil {
-		return nil, fmt.Errorf("unable to wait for the 'cli' image in the stable stream to populate: %w", err)
+		duration := time.Since(startedWaiting)
+		return nil, fmt.Errorf("unable to wait for the 'cli' image in the stable stream to populate (waited for %s): %w", duration, err)
 	}
 
 	return &cliImageRef, nil

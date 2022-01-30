@@ -26,8 +26,10 @@ func Producer(t testhelper.TestingTInterface, dataDir, kubeconfigFile string, ig
 	start := time.Now()
 	t.Logf("Running pod-scaler %v", podScalerFlags)
 	podScaler := exec.CommandContext(interrupts.Context(), "pod-scaler", podScalerFlags...)
-	if out, err := podScaler.CombinedOutput(); err != nil {
+	out, err := podScaler.CombinedOutput()
+	if err != nil {
 		t.Fatalf("Failed to run pod-scaler: %v: %s", err, string(out))
 	}
+	t.Logf(string(out))
 	t.Logf("Ran pod-scaler in %s", time.Since(start))
 }

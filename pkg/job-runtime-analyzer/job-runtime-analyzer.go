@@ -18,6 +18,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
+	buildv1 "github.com/openshift/api/build/v1"
+
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
@@ -184,7 +186,7 @@ func filterPods(pods corev1.PodList, steps api.CIOperatorStepGraph) corev1.PodLi
 	result := corev1.PodList{}
 	for _, pod := range pods.Items {
 		for _, step := range steps {
-			if pod.Name != step.StepName && pod.Labels["openshift.io/build.name"] != step.StepName {
+			if pod.Name != step.StepName && pod.Labels[buildv1.BuildLabel] != step.StepName {
 				continue
 			}
 			result.Items = append(result.Items, pod)

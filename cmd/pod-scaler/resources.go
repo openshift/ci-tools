@@ -64,7 +64,7 @@ func formatMemory() toQuantity {
 }
 
 func (s *resourceServer) digestMemory(data *pod_scaler.CachedQuery) {
-	s.logger.Debugf("Digesting new CPU consumption metrics.")
+	s.logger.Debugf("Digesting new memory consumption metrics.")
 	s.digestData(data, memRequestQuantile, corev1.ResourceMemory, formatMemory())
 }
 

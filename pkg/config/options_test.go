@@ -262,6 +262,7 @@ func TestOptions_Matches(t *testing.T) {
 
 func TestOperateOnCIOperatorConfigDir(t *testing.T) {
 	treeDir := "./testdata/tree/config"
+	cmDir := "./testdata/cm/config"
 	testCases := []struct {
 		id, path               string
 		options                Options
@@ -323,6 +324,16 @@ func TestOperateOnCIOperatorConfigDir(t *testing.T) {
 				"foo-bar-master.yaml",
 				"super-duper-release-4.9.yaml",
 			}...),
+		},
+		{
+			id:   "load from a ConfigMap mount",
+			path: cmDir,
+			expectedProcessedFiles: sets.NewString(
+				"foo-bar-master.yaml",
+				"foo-bar-release-4.9.yaml",
+				"super-duper-master.yaml",
+				"super-duper-release-4.9.yaml",
+			),
 		},
 	}
 

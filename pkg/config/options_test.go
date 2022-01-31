@@ -318,27 +318,29 @@ func TestOperateOnCIOperatorConfigDir(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		var errs []error
-		processed := sets.NewString()
+		t.Run(tc.id, func(t *testing.T) {
+			var errs []error
+			processed := sets.NewString()
 
-		if err := tc.options.OperateOnCIOperatorConfigDir(testConfigDir, func(configuration *cioperatorapi.ReleaseBuildConfiguration, info *Info) error {
-			filename := filepath.Base(info.Filename)
-			if !tc.expectedProcessedFiles.Has(filename) {
-				errs = append(errs, fmt.Errorf("file %s wasn't expected to be processed", filename))
+			if err := tc.options.OperateOnCIOperatorConfigDir(testConfigDir, func(configuration *cioperatorapi.ReleaseBuildConfiguration, info *Info) error {
+				filename := filepath.Base(info.Filename)
+				if !tc.expectedProcessedFiles.Has(filename) {
+					errs = append(errs, fmt.Errorf("file %s wasn't expected to be processed", filename))
+				}
+				processed.Insert(filename)
+				return nil
+			}); err != nil {
+				t.Fatal(err)
 			}
-			processed.Insert(filename)
-			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
 
-		if len(errs) > 0 {
-			t.Fatal("unexpected errors: %w", errs)
-		}
+			if len(errs) > 0 {
+				t.Fatal("unexpected errors: %w", errs)
+			}
 
-		if diff := cmp.Diff(processed, tc.expectedProcessedFiles); diff != "" {
-			t.Fatal(diff)
-		}
+			if !processed.Equal(tc.expectedProcessedFiles) {
+				t.Errorf("unexpected processed files: %s", cmp.Diff(processed, tc.expectedProcessedFiles))
+			}
+		})
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base32"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -25,7 +26,6 @@ import (
 	"time"
 
 	"github.com/bombsimon/logrusr"
-	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -55,6 +55,7 @@ import (
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/yaml"
 
 	buildv1 "github.com/openshift/api/build/v1"
 	imageapi "github.com/openshift/api/image/v1"
@@ -74,11 +75,13 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/registry/server"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 	"github.com/openshift/ci-tools/pkg/validation"
 )
 
@@ -532,7 +535,7 @@ func (o *options) Complete() error {
 		}
 		config, err = o.resolverClient.ConfigWithTest(info, injectTest)
 	} else {
-		config, err = load.Config(o.configSpecPath, o.unresolvedConfigPath, o.registryPath, o.resolverClient, info)
+		config, err = o.loadConfig(info)
 	}
 
 	if err != nil {
@@ -1985,6 +1988,71 @@ func (o *options) getInjectTest() (*api.MetadataWithTest, error) {
 	}
 
 	return api.MetadataTestFromString(o.injectTest)
+}
+
+// loadConfig loads the standard configuration path, env, or configresolver (in that order of priority)
+func (o *options) loadConfig(info *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
+	var raw string
+
+	configSpecEnv, configSpecSet := os.LookupEnv("CONFIG_SPEC")
+	unresolvedConfigEnv, unresolvedConfigSet := os.LookupEnv("UNRESOLVED_CONFIG")
+
+	switch {
+	case len(o.configSpecPath) > 0:
+		data, err := gzip.ReadFileMaybeGZIP(o.configSpecPath)
+		if err != nil {
+			return nil, fmt.Errorf("--config error: %w", err)
+		}
+		raw = string(data)
+	case configSpecSet:
+		if len(configSpecEnv) == 0 {
+			return nil, errors.New("CONFIG_SPEC environment variable cannot be set to an empty string")
+		}
+		// if being run by pj-rehearse, config spec may be base64 and gzipped
+		if decoded, err := base64.StdEncoding.DecodeString(configSpecEnv); err != nil {
+			raw = configSpecEnv
+		} else {
+			data, err := gzip.ReadBytesMaybeGZIP(decoded)
+			if err != nil {
+				return nil, fmt.Errorf("--config error: %w", err)
+			}
+			raw = string(data)
+		}
+	case len(o.unresolvedConfigPath) > 0:
+		data, err := gzip.ReadFileMaybeGZIP(o.unresolvedConfigPath)
+		if err != nil {
+			return nil, fmt.Errorf("--unresolved-config error: %w", err)
+		}
+		configSpec, err := o.resolverClient.Resolve(data)
+		err = results.ForReason("config_resolver_literal").ForError(err)
+		return configSpec, err
+	case unresolvedConfigSet:
+		configSpec, err := o.resolverClient.Resolve([]byte(unresolvedConfigEnv))
+		err = results.ForReason("config_resolver_literal").ForError(err)
+		return configSpec, err
+	default:
+		configSpec, err := o.resolverClient.Config(info)
+		err = results.ForReason("config_resolver").ForError(err)
+		return configSpec, err
+	}
+	configSpec := api.ReleaseBuildConfiguration{}
+	if err := yaml.UnmarshalStrict([]byte(raw), &configSpec); err != nil {
+		if len(o.configSpecPath) > 0 {
+			return nil, fmt.Errorf("invalid configuration in file %s: %w\nvalue:\n%s", o.configSpecPath, err, raw)
+		}
+		return nil, fmt.Errorf("invalid configuration: %w\nvalue:\n%s", err, raw)
+	}
+	if o.registryPath != "" {
+		refs, chains, workflows, _, _, observers, err := load.Registry(o.registryPath, load.RegistryFlag(0))
+		if err != nil {
+			return nil, fmt.Errorf("failed to load registry: %w", err)
+		}
+		configSpec, err = registry.ResolveConfig(registry.NewResolver(refs, chains, workflows, observers), configSpec)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve configuration: %w", err)
+		}
+	}
+	return &configSpec, nil
 }
 
 func monitorNamespace(ctx context.Context, cancel func(), namespace string, client coreclientset.NamespaceInterface) {

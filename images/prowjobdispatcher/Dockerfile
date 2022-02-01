@@ -1,4 +1,4 @@
-FROM centos:8
+FROM quay.io/centos/centos:stream8
 
 ADD prow-job-dispatcher /usr/bin/prow-job-dispatcher
 ADD sanitize-prow-jobs /usr/bin/sanitize-prow-jobs

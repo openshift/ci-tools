@@ -1,4 +1,4 @@
-FROM centos:8
+FROM quay.io/centos/centos:stream8
 LABEL maintainer="sgoeddel@redhat.com"
 
 RUN yum install -y git diffutils && yum clean all

@@ -1,4 +1,4 @@
-FROM centos:8
+FROM quay.io/centos/centos:stream8
 LABEL maintainer="aaleman@<<this-products-parent-company-name>>.com"
 
 ADD dptp-controller-manager /usr/bin/dptp-controller-manager

@@ -174,6 +174,7 @@ func main() {
 			updateCiSecretBootstrap,
 			updateSecretGenerator,
 			updateSanitizeProwJobs,
+			updateSyncRoverGroups,
 			updateProwPluginConfig,
 		}
 		if !o.update {

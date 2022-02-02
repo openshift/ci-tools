@@ -245,7 +245,7 @@ type Integration struct {
 	Name string `json:"name"`
 	// IncludeBuiltImages determines if the release we assemble will include
 	// images built during the test itself.
-	IncludeBuiltImages bool `json:"include_built_images,omitempty"`
+	IncludeBuiltImages bool `json:"include_built_images"`
 }
 
 // Candidate describes a validated candidate release payload
@@ -358,12 +358,12 @@ type BuildRootImageConfiguration struct {
 	ImageStreamTagReference *ImageStreamTagReference          `json:"image_stream_tag,omitempty"`
 	ProjectImageBuild       *ProjectDirectoryImageBuildInputs `json:"project_image,omitempty"`
 	// If the BuildRoot images pullspec should be read from a file in the repository (BuildRootImageFileName).
-	FromRepository bool `json:"from_repository,omitempty"`
+	FromRepository bool `json:"from_repository"`
 
 	// UseBuildCache enables the import and use of the prior `bin` image
 	// as a build cache, if the underlying build root has not changed since
 	// the previous cache was published.
-	UseBuildCache bool `json:"use_build_cache,omitempty"`
+	UseBuildCache bool `json:"use_build_cache"`
 }
 
 // ImageStreamTagReference identifies an ImageStreamTag
@@ -396,7 +396,7 @@ type ReleaseTagConfiguration struct {
 
 	// IncludeBuiltImages determines if the release we assemble will include
 	// images built during the test itself.
-	IncludeBuiltImages bool `json:"include_built_images,omitempty"`
+	IncludeBuiltImages bool `json:"include_built_images"`
 }
 
 func (config ReleaseTagConfiguration) InputsName() string {
@@ -455,7 +455,7 @@ type PromotionConfiguration struct {
 	// promote to the same output imagestream on a cut-over but
 	// never concurrently, and you want to have promotion config
 	// in the ci-operator configuration files all the time.
-	Disabled bool `json:"disabled,omitempty"`
+	Disabled bool `json:"disabled"`
 
 	// RegistryOverride is an override for the registry domain to
 	// which we will mirror images. This is an advanced option and
@@ -467,7 +467,7 @@ type PromotionConfiguration struct {
 	// This is useful (only) for CI chat bot invocations where
 	// promotion does not imply output artifacts are being created
 	// for posterity.
-	DisableBuildCache bool `json:"disable_build_cache,omitempty"`
+	DisableBuildCache bool `json:"disable_build_cache"`
 }
 
 // StepConfiguration holds one step configuration.
@@ -641,10 +641,10 @@ type TestStepConfiguration struct {
 	// does not get run by prow and instead is run by release-controller.
 	// The job must be configured as a verification or periodic job in a
 	// release-controller config file when this field is set to `true`.
-	ReleaseController bool `json:"release_controller,omitempty"`
+	ReleaseController bool `json:"release_controller"`
 
 	// Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit
-	Postsubmit bool `json:"postsubmit,omitempty"`
+	Postsubmit bool `json:"postsubmit"`
 
 	// ClusterClaim claims an OpenShift cluster and exposes environment variable ${KUBECONFIG} to the test container
 	ClusterClaim *ClusterClaim `json:"cluster_claim,omitempty"`
@@ -653,7 +653,7 @@ type TestStepConfiguration struct {
 	RunIfChanged string `json:"run_if_changed,omitempty"`
 
 	// Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.
-	Optional bool `json:"optional,omitempty"`
+	Optional bool `json:"optional"`
 
 	// SkipIfOnlyChanged is a regex that will result in the test being skipped if all changed files match that regex.
 	SkipIfOnlyChanged string `json:"skip_if_only_changed,omitempty"`
@@ -1426,7 +1426,7 @@ type OpenshiftInstallerClusterTestConfiguration struct {
 	// the initial payload and the installer image from that
 	// will be upgraded. The `run-upgrade-tests` function will be
 	// available for the commands.
-	Upgrade bool `json:"upgrade,omitempty"`
+	Upgrade bool `json:"upgrade"`
 }
 
 // OpenshiftInstallerSrcClusterTestConfiguration describes a
@@ -1642,7 +1642,7 @@ type ProjectDirectoryImageBuildStepConfiguration struct {
 	// Optional means the build step is not built, published, or
 	// promoted unless explicitly targeted. Use for builds which
 	// are invoked only when testing certain parts of the repo.
-	Optional bool `json:"optional,omitempty"`
+	Optional bool `json:"optional"`
 }
 
 func (config ProjectDirectoryImageBuildStepConfiguration) TargetName() string {

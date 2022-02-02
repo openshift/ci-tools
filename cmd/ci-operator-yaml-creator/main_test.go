@@ -78,6 +78,7 @@ build_root_image:
 			},
 			expectedUpdatedReleaseRepoCfg: `build_root:
   from_repository: true
+  use_build_cache: false
 zz_generated_metadata:
   branch: ""
   org: ""

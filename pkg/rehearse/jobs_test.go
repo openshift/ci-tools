@@ -51,12 +51,15 @@ const testingCiOpCfgJob1YAML = `tests:
         namespace: fancy
         tag: first
       resources: {}
+  optional: false
+  postsubmit: false
+  release_controller: false
 zz_generated_metadata:
   branch: ""
   org: ""
   repo: ""
 `
-const testingCiOpCfgJob2YAML = "tests:\n- as: job2\nzz_generated_metadata:\n  branch: \"\"\n  org: \"\"\n  repo: \"\"\n"
+const testingCiOpCfgJob2YAML = "tests:\n- as: job2\n  optional: false\n  postsubmit: false\n  release_controller: false\nzz_generated_metadata:\n  branch: \"\"\n  org: \"\"\n  repo: \"\"\n"
 
 // configFiles contains the info needed to allow inlineCiOpConfig to successfully inline
 // CONFIG_SPEC and not fail
@@ -492,7 +495,6 @@ func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, or
 			PodSpec: &v1.PodSpec{
 				Containers: []v1.Container{{
 					Command: []string{"ci-operator"},
-					Args:    []string{},
 					Env:     []v1.EnvVar{{Name: "CONFIG_SPEC", Value: configSpec}},
 				}},
 			},

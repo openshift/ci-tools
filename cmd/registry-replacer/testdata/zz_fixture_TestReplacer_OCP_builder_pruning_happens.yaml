@@ -1,4 +1,6 @@
 promotion:
+  disable_build_cache: false
+  disabled: false
   namespace: ocp
   tag: "4.8"
 zz_generated_metadata:

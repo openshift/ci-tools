@@ -15,6 +15,7 @@ images:
     org_image_latest:
       as:
       - registry.svc.ci.openshift.org/org/image
+  optional: false
   to: cool_image
 tests:
 - as: ""
@@ -23,6 +24,9 @@ tests:
     test:
     - from: fresh_image
       resources: {}
+  optional: false
+  postsubmit: false
+  release_controller: false
 zz_generated_metadata:
   branch: master
   org: ""

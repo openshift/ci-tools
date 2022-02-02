@@ -4,8 +4,11 @@ images:
     root:
       as:
       - ocp/builder:something
+  optional: false
   to: promotionTarget
 promotion:
+  disable_build_cache: false
+  disabled: false
   name: "4.6"
   namespace: ocp
 zz_generated_metadata:

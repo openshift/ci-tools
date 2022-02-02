@@ -47,7 +47,7 @@ import (
 ## Installation
 ```
 # Install using go get
-$ go get -u github.com/coreydaley/openshift-goimports
+$ go get -u github.com/openshift-eng/openshift-goimports
 ```
 
 ## Usage

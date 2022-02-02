@@ -265,7 +265,7 @@ generate: imports
 
 .PHONY: imports
 imports:
-	go run ./vendor/github.com/coreydaley/openshift-goimports/ -m github.com/openshift/ci-tools
+	go run ./vendor/github.com/openshift-eng/openshift-goimports/ -m github.com/openshift/ci-tools
 
 .PHONY: verify-gen
 verify-gen: generate cmd/pod-scaler/frontend/dist/dummy cmd/repo-init/frontend/dist/dummy # we need the dummy file to exist so there's no diff on it

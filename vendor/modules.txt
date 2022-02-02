@@ -178,12 +178,6 @@ github.com/cespare/xxhash/v2
 # github.com/clarketm/json v1.13.4
 ## explicit
 github.com/clarketm/json
-# github.com/coreydaley/openshift-goimports v0.0.0-20201111145504-7b4aecddd198
-## explicit; go 1.13
-github.com/coreydaley/openshift-goimports
-github.com/coreydaley/openshift-goimports/cmd
-github.com/coreydaley/openshift-goimports/pkg/imports
-github.com/coreydaley/openshift-goimports/pkg/util
 # github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964
 ## explicit
 github.com/danwakefield/fnmatch
@@ -475,6 +469,12 @@ github.com/opencontainers/runc/libcontainer/user
 # github.com/openhistogram/circonusllhist v0.3.1-0.20210608220433-1bd1bfa6c998
 ## explicit; go 1.16
 github.com/openhistogram/circonusllhist
+# github.com/openshift-eng/openshift-goimports v0.0.0-20220201193023-4f8ea117352c
+## explicit; go 1.13
+github.com/openshift-eng/openshift-goimports
+github.com/openshift-eng/openshift-goimports/cmd
+github.com/openshift-eng/openshift-goimports/pkg/imports
+github.com/openshift-eng/openshift-goimports/pkg/util
 # github.com/openshift/api v0.0.0-20210730095913-85e1d547cdee => github.com/openshift/api v0.0.0-20201120165435-072a4cd8ca42
 ## explicit; go 1.15
 github.com/openshift/api/build/v1

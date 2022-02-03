@@ -10,9 +10,11 @@ periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn
 periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-upgrade
 periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-azure-upgrade
+periodic-ci-openshift-release-master-nightly-4.10-credentials-request-freeze
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10-ci.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10.json
+periodic-ci-openshift-hypershift-main-periodics-e2e-aws-pooled-periodic-conformance
 periodic-ci-openshift-release-master-ci-4.10-e2e-aws-ovn
 periodic-ci-openshift-release-master-ci-4.10-e2e-aws-techpreview
 periodic-ci-openshift-release-master-ci-4.10-e2e-aws-techpreview-serial
@@ -73,12 +75,86 @@ release-openshift-ocp-osd-aws-nightly-4.10
 release-openshift-ocp-osd-gcp-nightly-4.10
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10.json
 
+// begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11-ci.json
+periodic-ci-openshift-release-master-ci-4.11-e2e-aws-ovn-upgrade
+periodic-ci-openshift-release-master-ci-4.11-e2e-aws-serial
+periodic-ci-openshift-release-master-ci-4.11-e2e-gcp
+periodic-ci-openshift-release-master-ci-4.11-e2e-gcp-upgrade
+periodic-ci-openshift-release-master-ci-4.11-e2e-gcp-upgrade
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-aws-ovn-upgrade
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-aws-ovn-upgrade
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-aws-upgrade
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-azure-upgrade
+// end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11-ci.json
+
+// begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11.json
+periodic-ci-openshift-hypershift-main-periodics-e2e-aws-pooled-periodic-conformance
+periodic-ci-openshift-release-master-ci-4.11-e2e-aws-ovn
+periodic-ci-openshift-release-master-ci-4.11-e2e-aws-techpreview
+periodic-ci-openshift-release-master-ci-4.11-e2e-aws-techpreview-serial
+periodic-ci-openshift-release-master-ci-4.11-e2e-azure-ovn
+periodic-ci-openshift-release-master-ci-4.11-e2e-azure-ovn-upgrade
+periodic-ci-openshift-release-master-ci-4.11-e2e-azure-techpreview
+periodic-ci-openshift-release-master-ci-4.11-e2e-azure-techpreview-serial
+periodic-ci-openshift-release-master-ci-4.11-e2e-azure-upgrade-single-node
+periodic-ci-openshift-release-master-ci-4.11-e2e-gcp-ovn
+periodic-ci-openshift-release-master-ci-4.11-e2e-gcp-techpreview
+periodic-ci-openshift-release-master-ci-4.11-e2e-gcp-techpreview-serial
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-gcp-ovn-upgrade
+periodic-ci-openshift-release-master-nightly-4.11-console-aws
+periodic-ci-openshift-release-master-nightly-4.11-e2e-aws
+periodic-ci-openshift-release-master-nightly-4.11-e2e-aws-csi
+periodic-ci-openshift-release-master-nightly-4.11-e2e-aws-fips
+periodic-ci-openshift-release-master-nightly-4.11-e2e-aws-proxy
+periodic-ci-openshift-release-master-nightly-4.11-e2e-aws-serial
+periodic-ci-openshift-release-master-nightly-4.11-e2e-aws-single-node
+periodic-ci-openshift-release-master-nightly-4.11-e2e-aws-single-node-serial
+periodic-ci-openshift-release-master-nightly-4.11-e2e-aws-upgrade
+periodic-ci-openshift-release-master-nightly-4.11-e2e-aws-upgrade
+periodic-ci-openshift-release-master-nightly-4.11-e2e-azure
+periodic-ci-openshift-release-master-nightly-4.11-e2e-azure-csi
+periodic-ci-openshift-release-master-nightly-4.11-e2e-azure-deploy-cnv
+periodic-ci-openshift-release-master-nightly-4.11-e2e-azure-upgrade-cnv
+periodic-ci-openshift-release-master-nightly-4.11-e2e-gcp
+periodic-ci-openshift-release-master-nightly-4.11-e2e-gcp-csi
+periodic-ci-openshift-release-master-nightly-4.11-e2e-gcp-rt
+periodic-ci-openshift-release-master-nightly-4.11-e2e-metal-assisted
+periodic-ci-openshift-release-master-nightly-4.11-e2e-metal-assisted-ipv6
+periodic-ci-openshift-release-master-nightly-4.11-e2e-metal-ipi
+periodic-ci-openshift-release-master-nightly-4.11-e2e-metal-ipi-ovn-dualstack
+periodic-ci-openshift-release-master-nightly-4.11-e2e-metal-ipi-ovn-ipv6
+periodic-ci-openshift-release-master-nightly-4.11-e2e-metal-ipi-serial-ipv4
+periodic-ci-openshift-release-master-nightly-4.11-e2e-metal-ipi-upgrade
+periodic-ci-openshift-release-master-nightly-4.11-e2e-metal-ipi-upgrade-ovn-ipv6
+periodic-ci-openshift-release-master-nightly-4.11-e2e-metal-ipi-virtualmedia
+periodic-ci-openshift-release-master-nightly-4.11-e2e-metal-single-node-live-iso
+periodic-ci-openshift-release-master-nightly-4.11-e2e-ovirt
+periodic-ci-openshift-release-master-nightly-4.11-e2e-ovirt-csi
+periodic-ci-openshift-release-master-nightly-4.11-e2e-vsphere
+periodic-ci-openshift-release-master-nightly-4.11-e2e-vsphere-csi
+periodic-ci-openshift-release-master-nightly-4.11-e2e-vsphere-serial
+periodic-ci-openshift-release-master-nightly-4.11-e2e-vsphere-techpreview
+periodic-ci-openshift-release-master-nightly-4.11-e2e-vsphere-techpreview-serial
+periodic-ci-openshift-release-master-nightly-4.11-e2e-vsphere-upi
+periodic-ci-openshift-release-master-nightly-4.11-e2e-vsphere-upi-serial
+periodic-ci-openshift-release-master-nightly-4.11-upgrade-from-stable-4.10-e2e-aws-upgrade
+periodic-ci-openshift-release-master-nightly-4.11-upgrade-from-stable-4.10-e2e-metal-ipi-upgrade
+periodic-ci-openshift-release-master-nightly-4.11-upgrade-from-stable-4.10-e2e-metal-ipi-upgrade-ovn-ipv6
+release-openshift-ocp-installer-e2e-aws-upi-4.11
+release-openshift-ocp-installer-e2e-azure-serial-4.11
+release-openshift-ocp-installer-e2e-gcp-serial-4.11
+release-openshift-ocp-installer-e2e-metal-4.11
+release-openshift-ocp-installer-e2e-metal-serial-4.11
+release-openshift-ocp-osd-aws-nightly-4.11
+release-openshift-ocp-osd-gcp-nightly-4.11
+// end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11.json
+
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-master-periodics.yaml
 periodic-ci-openshift-release-master-ci-4.10-e2e-aws
 periodic-ci-openshift-release-master-ci-4.10-e2e-aws-calico
 periodic-ci-openshift-release-master-ci-4.10-e2e-aws-cgroupsv2
 periodic-ci-openshift-release-master-ci-4.10-e2e-aws-cilium
-periodic-ci-openshift-release-master-ci-4.10-e2e-aws-hypershift
+periodic-ci-openshift-release-master-ci-4.10-e2e-aws-crun
 periodic-ci-openshift-release-master-ci-4.10-e2e-aws-network-stress
 periodic-ci-openshift-release-master-ci-4.10-e2e-aws-ovn
 periodic-ci-openshift-release-master-ci-4.10-e2e-aws-ovn-network-stress
@@ -122,12 +198,29 @@ periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-gcp-upg
 periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-ovirt-upgrade
 periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-vsphere-upgrade
 periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-from-stable-4.8-e2e-aws-upgrade
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-aws-ovn-upgrade
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-aws-ovn-upgrade-rollback
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-aws-upgrade
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-aws-upgrade-infra
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-aws-upgrade-rollback
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-aws-upgrade-workload
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-aws-uwm
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-azure-ovn-upgrade
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-azure-upgrade
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-gcp-ovn-upgrade
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-gcp-upgrade
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-ovirt-upgrade
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-vsphere-upgrade
+periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-from-stable-4.9-e2e-aws-upgrade
 periodic-ci-openshift-release-master-nightly-4.10-console-aws
+periodic-ci-openshift-release-master-nightly-4.10-credentials-request-freeze
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-canary
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-cgroupsv2
+periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-crun
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-csi
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-csi-migration
+periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-driver-toolkit
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-fips
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-fips-serial
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-ovn-local-gateway
@@ -136,6 +229,7 @@ periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-single-node
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-single-node-serial
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade
+periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-workers-rhel7
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-workers-rhel8
 periodic-ci-openshift-release-master-nightly-4.10-e2e-azure
@@ -172,10 +266,10 @@ periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-single-node-live-iso
 periodic-ci-openshift-release-master-nightly-4.10-e2e-ovirt
 periodic-ci-openshift-release-master-nightly-4.10-e2e-ovirt-csi
 periodic-ci-openshift-release-master-nightly-4.10-e2e-ovirt-ovn
+periodic-ci-openshift-release-master-nightly-4.10-e2e-telco5g
 periodic-ci-openshift-release-master-nightly-4.10-e2e-vsphere
 periodic-ci-openshift-release-master-nightly-4.10-e2e-vsphere-csi
 periodic-ci-openshift-release-master-nightly-4.10-e2e-vsphere-ovn
-periodic-ci-openshift-release-master-nightly-4.10-e2e-vsphere-proxy
 periodic-ci-openshift-release-master-nightly-4.10-e2e-vsphere-serial
 periodic-ci-openshift-release-master-nightly-4.10-e2e-vsphere-techpreview
 periodic-ci-openshift-release-master-nightly-4.10-e2e-vsphere-techpreview-serial
@@ -185,8 +279,32 @@ periodic-ci-openshift-release-master-nightly-4.10-upgrade-from-stable-4.8-e2e-aw
 periodic-ci-openshift-release-master-nightly-4.10-upgrade-from-stable-4.9-e2e-aws-upgrade
 periodic-ci-openshift-release-master-nightly-4.10-upgrade-from-stable-4.9-e2e-metal-ipi-upgrade
 periodic-ci-openshift-release-master-nightly-4.10-upgrade-from-stable-4.9-e2e-metal-ipi-upgrade-ovn-ipv6
+periodic-ci-openshift-release-master-nightly-4.11-upgrade-from-stable-4.10-e2e-aws-upgrade
+periodic-ci-openshift-release-master-nightly-4.11-upgrade-from-stable-4.10-e2e-metal-ipi-upgrade
+periodic-ci-openshift-release-master-nightly-4.11-upgrade-from-stable-4.10-e2e-metal-ipi-upgrade-ovn-ipv6
 periodic-ci-openshift-release-master-okd-4.10-e2e-aws
 periodic-ci-openshift-release-master-okd-4.10-e2e-vsphere
 periodic-ci-openshift-release-master-okd-4.10-e2e-vsphere-upi
 // end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-master-periodics.yaml
+
+// begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.10-periodics.yaml
+promote-release-openshift-machine-os-content-e2e-aws-4.10
+promote-release-openshift-machine-os-content-e2e-aws-4.10-ppc64le
+promote-release-openshift-machine-os-content-e2e-aws-4.10-s390x
+release-openshift-ocp-installer-e2e-aws-csi-4.10
+release-openshift-ocp-installer-e2e-aws-mirrors-4.10
+release-openshift-ocp-installer-e2e-aws-upi-4.10
+release-openshift-ocp-installer-e2e-azure-serial-4.10
+release-openshift-ocp-installer-e2e-gcp-serial-4.10
+release-openshift-ocp-installer-e2e-metal-4.10
+release-openshift-ocp-installer-e2e-metal-compact-4.10
+release-openshift-ocp-installer-e2e-metal-serial-4.10
+release-openshift-ocp-osd-aws-nightly-4.10
+release-openshift-ocp-osd-gcp-nightly-4.10
+release-openshift-origin-installer-e2e-aws-disruptive-4.10
+release-openshift-origin-installer-e2e-aws-shared-vpc-4.10
+release-openshift-origin-installer-e2e-aws-upgrade-4.7-to-4.8-to-4.9-to-4.10-ci
+release-openshift-origin-installer-e2e-azure-shared-vpc-4.10
+release-openshift-origin-installer-e2e-gcp-shared-vpc-4.10
+// end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.10-periodics.yaml
 

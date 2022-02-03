@@ -43,11 +43,10 @@ type perPRProwJobMatcher struct {
 }
 
 func (a perPRProwJobMatcher) shouldAggregateReleaseControllerJob(prowJob *prowjobv1.ProwJob) bool {
-	payloadTag := GetPayloadTagFromProwJob(prowJob)
 	aggregationID := GetAggregationIDFromProwJob(prowJob)
 	jobName := prowJob.Labels["prow.k8s.io/job"]
 	jobRunId := prowJob.Labels["prow.k8s.io/build-id"]
-	fmt.Printf("  checking %v/%v for aggregationID match: looking for %q found %q.\n", jobName, jobRunId, a.aggregationID, payloadTag)
+	fmt.Printf("  checking %v/%v for aggregationID match: looking for %q found %q.\n", jobName, jobRunId, a.aggregationID, aggregationID)
 	aggregationIDMatches := len(a.aggregationID) > 0 && aggregationID == a.aggregationID
 
 	return aggregationIDMatches

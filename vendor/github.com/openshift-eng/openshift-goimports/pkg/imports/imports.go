@@ -114,11 +114,11 @@ func Format(files chan string, wg *sync.WaitGroup, modulePtr *string, dry *bool)
 		}
 		klog.V(2).Infof("Processing %s", path)
 		importGroups := map[string][]ast.ImportSpec{
-			"standard":   []ast.ImportSpec{},
-			"other":      []ast.ImportSpec{},
-			"kubernetes": []ast.ImportSpec{},
-			"openshift":  []ast.ImportSpec{},
-			"module":     []ast.ImportSpec{},
+			"standard":   {},
+			"other":      {},
+			"kubernetes": {},
+			"openshift":  {},
+			"module":     {},
 		}
 		var breaks []string
 		fs := token.NewFileSet()

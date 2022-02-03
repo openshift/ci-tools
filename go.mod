@@ -33,7 +33,6 @@ require (
 	github.com/andygrunwald/go-jira v1.14.0
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/bombsimon/logrusr v0.0.0-00010101000000-000000000000
-	github.com/coreydaley/openshift-goimports v0.0.0-20201111145504-7b4aecddd198
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/getlantern/deepcopy v0.0.0-20160317154340-7f45deb8130a
 	github.com/ghodss/yaml v1.0.0
@@ -49,6 +48,7 @@ require (
 	github.com/mattn/go-zglob v0.0.2
 	github.com/montanaflynn/stats v0.6.3
 	github.com/openhistogram/circonusllhist v0.3.1-0.20210608220433-1bd1bfa6c998
+	github.com/openshift-eng/openshift-goimports v0.0.0-20220201193023-4f8ea117352c
 	github.com/openshift/api v0.0.0-20210730095913-85e1d547cdee
 	github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0
 	github.com/openshift/client-go v3.9.0+incompatible

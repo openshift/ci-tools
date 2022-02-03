@@ -33,8 +33,8 @@ import (
 
 	klog "k8s.io/klog/v2"
 
-	"github.com/coreydaley/openshift-goimports/pkg/imports"
-	"github.com/coreydaley/openshift-goimports/pkg/util"
+	"github.com/openshift-eng/openshift-goimports/pkg/imports"
+	"github.com/openshift-eng/openshift-goimports/pkg/util"
 )
 
 var (
@@ -54,21 +54,28 @@ var rootCmd = &cobra.Command{
 	Short: "Organize go imports according to OpenShift best practices.",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
+		switch {
+		case len(args) > 1:
+			klog.Errorf("only one path can be specified")
+			os.Exit(1)
+		case len(args) == 1:
+			if len(path) > 0 {
+				klog.Errorf("path cannot be specified with a path argument")
+				os.Exit(1)
+			}
+			path = args[0]
+		case len(args) == 0 && len(path) == 0:
+			path = "."
+		}
+
 		// If no module is provided, let's try to determine it programatically
 		if len(module) == 0 {
-			modFilePath := fmt.Sprintf("%s/go.mod", path)
-			klog.V(2).Infof("No module path provided, checking for %q", modFilePath)
-			if _, err := os.Stat(modFilePath); os.IsNotExist(err) {
-				klog.Error("no go.mod file found and no module name provided.")
-				os.Exit(1)
-			}
-			f, err := ioutil.ReadFile(fmt.Sprintf("%s/go.mod", path))
+			module, err := findGoModule(path)
 			if err != nil {
-				klog.Errorf("unable to open go.mod file for reading: %v", err)
+				klog.Errorf("no module name provided and failed to find go.mod: %v", err)
 				os.Exit(1)
 			}
-			module = modfile.ModulePath(f)
-			if len(module) == 0 {
+			if module == "" {
 				klog.Error("unable to automatically determine module path, please provide one using the --module flag")
 				os.Exit(1)
 			}
@@ -80,29 +87,39 @@ var rootCmd = &cobra.Command{
 			wg.Add(1)
 			go imports.Format(files, &wg, &module, &dry)
 		}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
 
-			err := filepath.Walk(path,
-				func(path string, f os.FileInfo, err error) error {
-					if err != nil {
-						return err
-					}
-					if f.IsDir() && f.Name() == "vendor" {
-						return filepath.SkipDir
-					}
-					if util.IsGoFile(f) {
-						klog.V(2).Infof("Queueing %s", path)
-						files <- path
-					}
-					return nil
-				})
-			if err != nil {
-				klog.Error(err)
-			}
+		if s, err := os.Stat(path); err != nil {
+			klog.Errorf("unable to stat path %q: %v", path, err)
+			os.Exit(1)
+		} else if s.IsDir() {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				err := filepath.Walk(path,
+					func(path string, f os.FileInfo, err error) error {
+						if err != nil {
+							return err
+						}
+						if f.IsDir() && f.Name() == "vendor" {
+							return filepath.SkipDir
+						}
+						if util.IsGoFile(f) {
+							klog.V(2).Infof("Queueing %s", path)
+							files <- path
+						}
+						return nil
+					})
+				if err != nil {
+					klog.Error(err)
+				}
+				close(files)
+			}()
+		} else {
+			klog.V(2).Infof("Queueing %s", path)
+			files <- path
 			close(files)
-		}()
+		}
 
 		wg.Wait()
 	},
@@ -122,7 +139,7 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.openshift-goimports.yaml)")
 
-	rootCmd.Flags().StringVarP(&path, "path", "p", ".", "The path to the go module to organize. Defaults to the current directory.")
+	rootCmd.Flags().StringVarP(&path, "path", "p", "", "The path to the go module to organize. Defaults to the current directory.")
 	rootCmd.Flags().StringVarP(&module, "module", "m", "", "The name of the go module. Example: github.com/example-org/example-repo")
 	rootCmd.Flags().BoolVarP(&dry, "dry", "d", false, "Dry run only, do not actually make any changes to files")
 }
@@ -151,4 +168,38 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		klog.Infof("Using config file: %s", viper.ConfigFileUsed())
 	}
+}
+
+func findGoModule(path string) (string, error) {
+	if s, err := os.Stat(path); err != nil {
+		return "", err
+	} else if !s.IsDir() {
+		path = filepath.Dir(path)
+	}
+
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+
+	for path != "." {
+		modFilePath := fmt.Sprintf("%s/go.mod", path)
+		if _, err := os.Stat(modFilePath); !os.IsNotExist(err) {
+			break
+		}
+		path = filepath.Dir(path)
+	}
+	if path == "." {
+		return "", nil
+	}
+
+	f, err := ioutil.ReadFile(fmt.Sprintf("%s/go.mod", path))
+	if err != nil {
+		return "", fmt.Errorf("unable to open go.mod file for reading: %v", err)
+	}
+	module = modfile.ModulePath(f)
+	if len(module) == 0 {
+		return "", fmt.Errorf("unable to automatically determine module path, please provide one using the --module flag")
+	}
+	return module, nil
 }

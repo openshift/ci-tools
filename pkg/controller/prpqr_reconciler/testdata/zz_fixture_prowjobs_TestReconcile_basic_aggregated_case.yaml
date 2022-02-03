@@ -173,45 +173,71 @@
     namespace: test-namespace
     resourceVersion: "1"
   spec:
+    agent: kubernetes
     cluster: this-job-was-defaulted
+    decoration_config:
+      skip_cloning: true
+      timeout: 6h0m0s
     job: aggregator-periodic-ci-test-org-test-repo-test-branch-test-name
-    namespace: test-namespace
     pod_spec:
       containers:
       - args:
-        - analyze-job-runs
-        - --google-service-account-credential-file=/secrets/gcs/service-account.json
-        - --job=periodic-ci-test-org-test-repo-test-branch-test-name
-        - --aggregation-id=a0e1bddfc1d7a5e78e6c2e483f238b15
-        - --explicit-gcs-prefix=logs/test-org-test-repo-100-test-name
-        - --job-start-time=some-time
-        - --working-dir=/tmp
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --report-credentials-file=/etc/report/credentials
+        - --target=release-analysis-prpqr-aggregator
         command:
-        - job-run-aggregator
-        image: registry.ci.openshift.org/ci/job-run-aggregator
+        - ci-operator
+        env:
+        - name: UNRESOLVED_CONFIG
+          value: |
+            resources:
+              '*':
+                limits:
+                  memory: 6Gi
+                requests:
+                  cpu: 100m
+                  memory: 200Mi
+            tests:
+            - as: release-analysis-prpqr-aggregator
+              steps:
+                env:
+                  AGGREGATION_ID: a0e1bddfc1d7a5e78e6c2e483f238b15
+                  EXPLICIT_GCS_PREFIX: logs/test-org-test-repo-100-test-name
+                  GOOGLE_SA_CREDENTIAL_FILE: /var/run/secrets/google-serviceaccount-credentials.json
+                  JOB_START_TIME: "1970-01-01T01:00:00+01:00"
+                  VERIFICATION_JOB_NAME: periodic-ci-test-org-test-repo-test-branch-test-name
+                  WORKING_DIR: $(ARTIFACT_DIR)/release-analysis-aggregator
+                test:
+                - ref: openshift-release-analysis-prpqr-aggregator
+            zz_generated_metadata:
+              branch: test-branch
+              org: test-org
+              repo: test-repo
+        image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
         resources:
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /tmp
-          name: temp
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
         - mountPath: /secrets/gcs
           name: gcs-credentials
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
+      serviceAccountName: ci-operator
       volumes:
       - name: pull-secret
         secret:
           secretName: registry-pull-credentials
-      - name: gcs-credentials
+      - name: result-aggregator
         secret:
-          secretName: gce-sa-credentials-gcs-publisher
-      - emptyDir: {}
-        name: temp
+          secretName: result-aggregator
     report: true
     type: periodic
   status:

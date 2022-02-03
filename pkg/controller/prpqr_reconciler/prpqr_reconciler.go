@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -46,7 +46,8 @@ const (
 	conditionAllJobsTriggered = "AllJobsTriggered"
 	conditionWithErrors       = "WithErrors"
 
-	aggregationIDLabel = "release.openshift.io/aggregation-id"
+	aggregationIDLabel          = "release.openshift.io/aggregation-id"
+	defaultAggregatorJobTimeout = 6 * time.Hour
 )
 
 type injectingResolverClient interface {
@@ -229,7 +230,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 			prowjobsToCreate = append(prowjobsToCreate, aggregatedProwjobs...)
 
 			submitted := generateJobNameToSubmit(baseMetadata, inject, &prpqr.Spec.PullRequest)
-			aggregatorJob, err := generateAggregatorJob(uid, mimickedJob, jobSpec.JobName(jobconfig.PeriodicPrefix), req.Name, req.Namespace, r.prowConfigGetter.Config(), time.Now(), submitted)
+			aggregatorJob, err := generateAggregatorJob(baseMetadata, uid, mimickedJob, jobSpec.JobName(jobconfig.PeriodicPrefix), req.Name, req.Namespace, r.prowConfigGetter.Config(), time.Now(), submitted)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate an aggregator prowjob")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -556,80 +557,63 @@ func generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfigur
 	return ret, nil
 }
 
-func generateAggregatorJob(uid, aggregatorJobName, jobName, prpqrName, prpqrNamespace string, defaulter periodicDefaulter, startTime time.Time, submitted string) (*prowv1.ProwJob, error) {
-	labels := map[string]string{aggregationIDLabel: uid, v1.PullRequestPayloadQualificationRunLabel: prpqrName}
-	spec := &corev1.PodSpec{
-		Volumes: []corev1.Volume{
+func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobName, prpqrName, prpqrNamespace string, defaulter periodicDefaulter, startTime time.Time, submitted string) (*prowv1.ProwJob, error) {
+	ciopConfig := &api.ReleaseBuildConfiguration{
+		Metadata: *baseCiop,
+		Tests: []api.TestStepConfiguration{
 			{
-				Name: "pull-secret",
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{SecretName: "registry-pull-credentials"},
-				},
-			},
-			{
-				Name: "gcs-credentials",
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{SecretName: "gce-sa-credentials-gcs-publisher"},
-				},
-			},
-			{
-				Name: "temp",
-				VolumeSource: corev1.VolumeSource{
-					EmptyDir: &corev1.EmptyDirVolumeSource{},
-				},
-			},
-		},
-		Containers: []corev1.Container{
-			{
-				Image:           "registry.ci.openshift.org/ci/job-run-aggregator",
-				ImagePullPolicy: corev1.PullAlways,
-				Resources: corev1.ResourceRequirements{
-					Requests: corev1.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
-				},
-				Command: []string{"job-run-aggregator"},
-				Args: []string{
-					"analyze-job-runs",
-					"--google-service-account-credential-file=/secrets/gcs/service-account.json",
-					fmt.Sprintf("--job=%s", jobName),
-					fmt.Sprintf("--aggregation-id=%s", uid),
-					fmt.Sprintf("--explicit-gcs-prefix=logs/%s", submitted),
-					fmt.Sprintf("--job-start-time=%s", startTime.Format(time.RFC3339)),
-					"--working-dir=/tmp",
-				},
-				VolumeMounts: []corev1.VolumeMount{
-					{
-						Name:      "temp",
-						MountPath: "/tmp",
+				As: "release-analysis-prpqr-aggregator",
+				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+					Environment: map[string]string{
+						"GOOGLE_SA_CREDENTIAL_FILE": "/var/run/secrets/google-serviceaccount-credentials.json",
+						"VERIFICATION_JOB_NAME":     jobName,
+						"JOB_START_TIME":            startTime.Format(time.RFC3339),
+						"AGGREGATION_ID":            uid,
+						"WORKING_DIR":               "$(ARTIFACT_DIR)/release-analysis-aggregator",
+						"EXPLICIT_GCS_PREFIX":       fmt.Sprintf("logs/%s", submitted),
 					},
-					{
-						Name:      "pull-secret",
-						MountPath: "/etc/pull-secret",
-						ReadOnly:  true,
-					},
-					{
-						Name:      "gcs-credentials",
-						MountPath: api.GCSUploadCredentialsSecretMountPath,
-						ReadOnly:  true,
+					Test: []api.TestStep{
+						{
+							Reference: &[]string{"openshift-release-analysis-prpqr-aggregator"}[0],
+						},
 					},
 				},
 			},
 		},
-	}
-	annotations := map[string]string{
-		releaseJobNameAnnotation: jobNameHash(aggregatorJobName),
+		Resources: map[string]api.ResourceRequirements{
+			"*": {
+				Requests: map[string]string{"cpu": "100m", "memory": "200Mi"},
+				Limits:   map[string]string{"memory": "6Gi"},
+			},
+		},
 	}
 
-	periodic := prowconfig.Periodic{JobBase: prowconfig.JobBase{
-		Name:      aggregatorJobName,
-		Namespace: &[]string{prpqrNamespace}[0],
-		Spec:      spec,
-	}}
+	unresolvedConfigRaw, err := yaml.Marshal(ciopConfig)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't marshal ci-operator config")
+	}
 
-	if err := defaulter.DefaultPeriodic(&periodic); err != nil {
+	jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, &prowgen.ProwgenInfo{}, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[0])
+
+	periodic := prowgen.GeneratePeriodicForTest(jobBaseGen, &prowgen.ProwgenInfo{}, "@yearly", "", false, ciopConfig.CanonicalGoRepository)
+	periodic.Name = aggregatorJobName
+
+	// Aggregator jobs need more time to finish than the jobs they are aggregating. The default job timeout in CI is set to 4h
+	periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: defaultAggregatorJobTimeout}
+
+	// The aggregator job doesn't need to clone any repository.
+	periodic.ExtraRefs = nil
+
+	periodic.Spec.Containers[0].Env = append(periodic.Spec.Containers[0].Env, corev1.EnvVar{Name: "UNRESOLVED_CONFIG", Value: string(unresolvedConfigRaw)})
+
+	if err := defaulter.DefaultPeriodic(periodic); err != nil {
 		return nil, fmt.Errorf("failed to default the ProwJob: %w", err)
 	}
 
-	pj := pjutil.NewProwJob(pjutil.PeriodicSpec(periodic), labels, annotations)
+	labels := map[string]string{aggregationIDLabel: uid, v1.PullRequestPayloadQualificationRunLabel: prpqrName}
+	annotations := map[string]string{releaseJobNameAnnotation: jobNameHash(aggregatorJobName)}
+
+	pj := pjutil.NewProwJob(pjutil.PeriodicSpec(*periodic), labels, annotations)
 	pj.Namespace = prpqrNamespace
 
 	return &pj, nil

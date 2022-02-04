@@ -75,15 +75,15 @@ require (
 	gopkg.in/fsnotify.v1 v1.4.7
 	gopkg.in/robfig/cron.v2 v2.0.0-20150107220207-be2e0b0deed5
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.22.0
-	k8s.io/apimachinery v0.22.0
-	k8s.io/apiserver v0.22.0
+	k8s.io/api v0.22.2
+	k8s.io/apimachinery v0.22.2
+	k8s.io/apiserver v0.22.2
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
 	k8s.io/klog/v2 v2.9.0
-	k8s.io/test-infra v0.0.0-20211201201517-885e4a13b661
-	k8s.io/utils v0.0.0-20210802155522-efc7438f0176
+	k8s.io/test-infra v0.0.0-20220204183202-5bc58aa2c904
+	k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a
 	sigs.k8s.io/boskos v0.0.0-20210730172138-093b54882439
-	sigs.k8s.io/controller-runtime v0.9.3-0.20210826145723-8f9d0dfc8446
+	sigs.k8s.io/controller-runtime v0.10.3
 	sigs.k8s.io/controller-tools v0.6.3-0.20210827222652-7b3a8699fa04
 	sigs.k8s.io/yaml v1.2.0
 )
@@ -199,8 +199,8 @@ require (
 	gopkg.in/ini.v1 v1.62.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
-	k8s.io/apiextensions-apiserver v0.22.0 // indirect
-	k8s.io/component-base v0.22.0 // indirect
+	k8s.io/apiextensions-apiserver v0.22.2 // indirect
+	k8s.io/component-base v0.22.2 // indirect
 	k8s.io/kube-openapi v0.0.0-20210421082810-95288971da7e // indirect
 	k8s.io/kubernetes v1.14.7 // indirect
 	knative.dev/pkg v0.0.0-20200711004937-22502028e31a // indirect
@@ -210,6 +210,7 @@ require (
 require (
 	cloud.google.com/go v0.81.0 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20200615164410-66371956d46c // indirect
+	github.com/denormal/go-gitignore v0.0.0-20180930084346-ae8ad1d07817 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.1 // indirect
 	github.com/golang-jwt/jwt v3.2.1+incompatible // indirect
 )

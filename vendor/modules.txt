@@ -184,6 +184,9 @@ github.com/danwakefield/fnmatch
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
+# github.com/denormal/go-gitignore v0.0.0-20180930084346-ae8ad1d07817
+## explicit
+github.com/denormal/go-gitignore
 # github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 ## explicit; go 1.12
 github.com/dgrijalva/jwt-go/v4
@@ -925,7 +928,7 @@ gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 ## explicit
 gopkg.in/yaml.v3
-# k8s.io/api v0.22.0
+# k8s.io/api v0.22.2
 ## explicit; go 1.16
 k8s.io/api/admission/v1
 k8s.io/api/admission/v1beta1
@@ -972,12 +975,12 @@ k8s.io/api/scheduling/v1beta1
 k8s.io/api/storage/v1
 k8s.io/api/storage/v1alpha1
 k8s.io/api/storage/v1beta1
-# k8s.io/apiextensions-apiserver v0.22.0
+# k8s.io/apiextensions-apiserver v0.22.2
 ## explicit; go 1.16
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1
-# k8s.io/apimachinery v0.22.0
+# k8s.io/apimachinery v0.22.2
 ## explicit; go 1.16
 k8s.io/apimachinery/pkg/api/equality
 k8s.io/apimachinery/pkg/api/errors
@@ -1032,7 +1035,7 @@ k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/third_party/forked/golang/netutil
 k8s.io/apimachinery/third_party/forked/golang/reflect
-# k8s.io/apiserver v0.22.0
+# k8s.io/apiserver v0.22.2
 ## explicit; go 1.16
 k8s.io/apiserver/pkg/authentication/user
 # k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible => k8s.io/client-go v0.22.0
@@ -1313,7 +1316,7 @@ k8s.io/client-go/util/jsonpath
 k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
-# k8s.io/component-base v0.22.0 => k8s.io/component-base v0.22.0
+# k8s.io/component-base v0.22.2 => k8s.io/component-base v0.22.0
 ## explicit; go 1.16
 k8s.io/component-base/config
 k8s.io/component-base/config/v1alpha1
@@ -1326,7 +1329,7 @@ k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/kubernetes v1.14.7
 ## explicit
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20211201201517-885e4a13b661
+# k8s.io/test-infra v0.0.0-20220204183202-5bc58aa2c904
 ## explicit; go 1.16
 k8s.io/test-infra/ghproxy/ghcache
 k8s.io/test-infra/ghproxy/ghmetrics
@@ -1345,6 +1348,7 @@ k8s.io/test-infra/prow/commentpruner
 k8s.io/test-infra/prow/config
 k8s.io/test-infra/prow/config/org
 k8s.io/test-infra/prow/config/secret
+k8s.io/test-infra/prow/crier/reporters/criercommonlib
 k8s.io/test-infra/prow/crier/reporters/github
 k8s.io/test-infra/prow/deck/jobs
 k8s.io/test-infra/prow/entrypoint
@@ -1448,7 +1452,7 @@ k8s.io/test-infra/prow/spyglass/lenses
 k8s.io/test-infra/prow/spyglass/lenses/common
 k8s.io/test-infra/prow/version
 k8s.io/test-infra/robots/pr-creator/updater
-# k8s.io/utils v0.0.0-20210802155522-efc7438f0176
+# k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a
 ## explicit; go 1.12
 k8s.io/utils/buffer
 k8s.io/utils/diff
@@ -1470,7 +1474,7 @@ knative.dev/pkg/kmp
 sigs.k8s.io/boskos/client
 sigs.k8s.io/boskos/common
 sigs.k8s.io/boskos/storage
-# sigs.k8s.io/controller-runtime v0.9.3-0.20210826145723-8f9d0dfc8446
+# sigs.k8s.io/controller-runtime v0.10.3
 ## explicit; go 1.16
 sigs.k8s.io/controller-runtime
 sigs.k8s.io/controller-runtime/pkg/builder

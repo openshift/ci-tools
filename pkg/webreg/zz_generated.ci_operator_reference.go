@@ -29,6 +29,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# the pipeline will caches on. The one way is to take the reference\n" +
 	"# from an image stream, and the other from a dockerfile.\n" +
 	"build_root:\n" +
+	"    # If the BuildRoot images pullspec should be read from a file in the repository (BuildRootImageFileName).\n" +
+	"    from_repository: true\n" +
 	"    image_stream_tag:\n" +
 	"        # As is an optional string to use as the intermediate name for this reference.\n" +
 	"        as: ' '\n" +
@@ -72,6 +74,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      destination_dir: ' '\n" +
 	"                      # SourcePath is a file or directory in the source image to copy from.\n" +
 	"                      source_path: ' '\n" +
+	"    # UseBuildCache enables the import and use of the prior `bin` image\n" +
+	"    # as a build cache, if the underlying build root has not changed since\n" +
+	"    # the previous cache was published.\n" +
+	"    use_build_cache: true\n" +
 	"# CanonicalGoRepository is a directory path that represents\n" +
 	"# the desired location of the contents of this repository in\n" +
 	"# Go. If specified the location of the repository we are\n" +
@@ -119,6 +125,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  destination_dir: ' '\n" +
 	"                  # SourcePath is a file or directory in the source image to copy from.\n" +
 	"                  source_path: ' '\n" +
+	"      # Optional means the build step is not built, published, or\n" +
+	"      # promoted unless explicitly targeted. Use for builds which\n" +
+	"      # are invoked only when testing certain parts of the repo.\n" +
+	"      optional: true\n" +
 	"      to: ' '\n" +
 	"# Operator describes the operator bundle(s) that is built by the project\n" +
 	"operator:\n" +
@@ -155,6 +165,17 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"    # the destination tag will not be created.\n" +
 	"    additional_images:\n" +
 	"        \"\": \"\"\n" +
+	"    # DisableBuildCache stops us from uploading the build cache.\n" +
+	"    # This is useful (only) for CI chat bot invocations where\n" +
+	"    # promotion does not imply output artifacts are being created\n" +
+	"    # for posterity.\n" +
+	"    disable_build_cache: true\n" +
+	"    # Disabled will no-op succeed instead of running the actual\n" +
+	"    # promotion step. This is useful when two branches need to\n" +
+	"    # promote to the same output imagestream on a cut-over but\n" +
+	"    # never concurrently, and you want to have promotion config\n" +
+	"    # in the ci-operator configuration files all the time.\n" +
+	"    disabled: true\n" +
 	"    # ExcludedImages are image names that will not be promoted.\n" +
 	"    # Exclusions are made before additional_images are included.\n" +
 	"    # Use exclusions when you want to build images for testing\n" +
@@ -299,8 +320,15 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      destination_dir: ' '\n" +
 	"                      # SourcePath is a file or directory in the source image to copy from.\n" +
 	"                      source_path: ' '\n" +
+	"        # Optional means the build step is not built, published, or\n" +
+	"        # promoted unless explicitly targeted. Use for builds which\n" +
+	"        # are invoked only when testing certain parts of the repo.\n" +
+	"        optional: true\n" +
 	"        to: ' '\n" +
 	"      release_images_tag_step:\n" +
+	"        # IncludeBuiltImages determines if the release we assemble will include\n" +
+	"        # images built during the test itself.\n" +
+	"        include_built_images: true\n" +
 	"        # Name is the image stream name to use that contains all\n" +
 	"        # component tags.\n" +
 	"        name: ' '\n" +
@@ -322,6 +350,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            version: ' '\n" +
 	"        # Integration describes an integration stream which we can create a payload out of\n" +
 	"        integration:\n" +
+	"            # IncludeBuiltImages determines if the release we assemble will include\n" +
+	"            # images built during the test itself.\n" +
+	"            include_built_images: true\n" +
 	"            # Name is the name of the ImageStream\n" +
 	"            name: ' '\n" +
 	"            # Namespace is the namespace in which the integration stream lives.\n" +
@@ -737,6 +768,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            cluster_profile: ' '\n" +
 	"        openshift_installer:\n" +
 	"            cluster_profile: ' '\n" +
+	"            # If upgrade is true, RELEASE_IMAGE_INITIAL will be used as\n" +
+	"            # the initial payload and the installer image from that\n" +
+	"            # will be upgraded. The `run-upgrade-tests` function will be\n" +
+	"            # available for the commands.\n" +
+	"            upgrade: true\n" +
 	"        openshift_installer_custom_test_image:\n" +
 	"            cluster_profile: ' '\n" +
 	"            # From defines the imagestreamtag that will be used to run the\n" +
@@ -746,6 +782,15 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            cluster_profile: ' '\n" +
 	"        openshift_installer_upi_src:\n" +
 	"            cluster_profile: ' '\n" +
+	"        # Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.\n" +
+	"        optional: true\n" +
+	"        # Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit\n" +
+	"        postsubmit: true\n" +
+	"        # ReleaseController configures prowgen to create a periodic that\n" +
+	"        # does not get run by prow and instead is run by release-controller.\n" +
+	"        # The job must be configured as a verification or periodic job in a\n" +
+	"        # release-controller config file when this field is set to `true`.\n" +
+	"        release_controller: true\n" +
 	"        # RunIfChanged is a regex that will result in the test only running if something that matches it was changed.\n" +
 	"        run_if_changed: ' '\n" +
 	"        # Secret is an optional secret object which\n" +
@@ -1027,6 +1072,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            version: ' '\n" +
 	"        # Integration describes an integration stream which we can create a payload out of\n" +
 	"        integration:\n" +
+	"            # IncludeBuiltImages determines if the release we assemble will include\n" +
+	"            # images built during the test itself.\n" +
+	"            include_built_images: true\n" +
 	"            # Name is the name of the ImageStream\n" +
 	"            name: ' '\n" +
 	"            # Namespace is the namespace in which the integration stream lives.\n" +
@@ -1072,6 +1120,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# ReleaseTagConfiguration determines how the\n" +
 	"# full release is assembled.\n" +
 	"tag_specification:\n" +
+	"    # IncludeBuiltImages determines if the release we assemble will include\n" +
+	"    # images built during the test itself.\n" +
+	"    include_built_images: true\n" +
 	"    # Name is the image stream name to use that contains all\n" +
 	"    # component tags.\n" +
 	"    name: ' '\n" +
@@ -1458,6 +1509,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        cluster_profile: ' '\n" +
 	"      openshift_installer:\n" +
 	"        cluster_profile: ' '\n" +
+	"        # If upgrade is true, RELEASE_IMAGE_INITIAL will be used as\n" +
+	"        # the initial payload and the installer image from that\n" +
+	"        # will be upgraded. The `run-upgrade-tests` function will be\n" +
+	"        # available for the commands.\n" +
+	"        upgrade: true\n" +
 	"      openshift_installer_custom_test_image:\n" +
 	"        cluster_profile: ' '\n" +
 	"        # From defines the imagestreamtag that will be used to run the\n" +
@@ -1467,6 +1523,15 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        cluster_profile: ' '\n" +
 	"      openshift_installer_upi_src:\n" +
 	"        cluster_profile: ' '\n" +
+	"      # Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.\n" +
+	"      optional: true\n" +
+	"      # Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit\n" +
+	"      postsubmit: true\n" +
+	"      # ReleaseController configures prowgen to create a periodic that\n" +
+	"      # does not get run by prow and instead is run by release-controller.\n" +
+	"      # The job must be configured as a verification or periodic job in a\n" +
+	"      # release-controller config file when this field is set to `true`.\n" +
+	"      release_controller: true\n" +
 	"      # RunIfChanged is a regex that will result in the test only running if something that matches it was changed.\n" +
 	"      run_if_changed: ' '\n" +
 	"      # Secret is an optional secret object which\n" +

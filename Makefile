@@ -428,7 +428,7 @@ github-ldap-user-group-creator: $(TMPDIR)/.github-ldap-user-group-creator-kubeco
 .PHONY: github-ldap-user-group-creator
 
 sync-rover-groups:
-	go run  ./cmd/sync-rover-groups --manifest-dir=$(release_folder)/clusters --config-file=$(release_folder)/core-services/sync-rover-groups/_config.yaml --log-level=debug
+	go run  ./cmd/sync-rover-groups --manifest-dir=$(release_folder)/clusters --config-file=$(release_folder)/core-services/sync-rover-groups/_config.yaml --mapping-file=/tmp/mapping.yaml --log-level=debug
 .PHONY: sync-rover-groups
 
 $(TMPDIR)/.cluster-display-kubeconfig-dir:

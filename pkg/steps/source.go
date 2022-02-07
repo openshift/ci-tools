@@ -445,6 +445,7 @@ func isInfraReason(reason buildapi.StatusReason) bool {
 		buildapi.StatusReasonFailedContainer,
 		buildapi.StatusReasonFetchImageContentFailed,
 		buildapi.StatusReasonFetchSourceFailed,
+		buildapi.StatusReasonGenericBuildFailed,
 		buildapi.StatusReasonNoBuildContainerStatus,
 		buildapi.StatusReasonOutOfMemoryKilled,
 		buildapi.StatusReasonPullBuilderImageFailed,

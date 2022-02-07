@@ -60,7 +60,7 @@ type githubTrustedChecker struct {
 }
 
 func (c *githubTrustedChecker) trustedUser(author, org, repo string, _ int) (bool, error) {
-	triggerTrustedResponse, err := trigger.TrustedUser(c.githubClient, false, "", author, org, repo)
+	triggerTrustedResponse, err := trigger.TrustedUser(c.githubClient, false, []string{}, "", author, org, repo)
 	if err != nil {
 		return false, fmt.Errorf("error checking %s for trust: %w", author, err)
 	}

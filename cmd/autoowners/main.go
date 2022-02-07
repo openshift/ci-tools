@@ -27,8 +27,8 @@ import (
 )
 
 const (
-	doNotEdit     = "# DO NOT EDIT; this file is auto-generated using https://github.com/openshift/ci-tools."
-	ownersComment = "# See the OWNERS docs: https://git.k8s.io/community/contributors/guide/owners.md"
+	doNotEdit     = "DO NOT EDIT; this file is auto-generated using https://github.com/openshift/ci-tools."
+	ownersComment = "See the OWNERS docs: https://git.k8s.io/community/contributors/guide/owners.md"
 
 	githubOrg   = "openshift"
 	githubRepo  = "release"
@@ -232,7 +232,7 @@ func addHeader(path string, header string) error {
 	return ioutil.WriteFile(path, append([]byte(header), content...), 0644)
 }
 
-func writeOwners(orgRepo orgRepo, httpResult httpResult, cleaner ownersCleaner) error {
+func writeOwners(orgRepo orgRepo, httpResult httpResult, cleaner ownersCleaner, header string) error {
 	for _, directory := range orgRepo.Directories {
 		path := filepath.Join(directory, "OWNERS")
 		err := os.Remove(path)
@@ -254,12 +254,28 @@ func writeOwners(orgRepo orgRepo, httpResult httpResult, cleaner ownersCleaner) 
 			logrus.WithError(err).Error("error occurred when saving config")
 			return err
 		}
-		err = addHeader(path, strings.Join([]string{doNotEdit, ownersComment, "", ""}, "\n"))
+
+		err = addHeader(path, header)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func makeHeader(destOrg, srcOrg, srcRepo string, fetched time.Time) string {
+	lines := []string{
+		doNotEdit,
+		fmt.Sprintf("Fetched from https://github.com/%s/%s root OWNERS on %s", srcOrg, srcRepo, fetched.UTC().Format(time.RFC3339)),
+		"If the repo had OWNERS_ALIASES then the aliases were expanded",
+		fmt.Sprintf("Logins who are not members of '%s' organization were filtered out", destOrg),
+		ownersComment,
+	}
+	for i := range lines {
+		lines[i] = fmt.Sprintf("# %s\n", lines[i])
+	}
+
+	return strings.Join(lines, "") + "\n"
 }
 
 func pullOwners(gc github.Client, configRootDir string, blocklist blocklist, configSubDirs, extraDirs []string, githubOrg string, githubRepo string, pc plugins.Configuration) error {
@@ -287,7 +303,8 @@ func pullOwners(gc github.Client, configRootDir string, blocklist blocklist, con
 				Warn("Ignoring the repo with no OWNERS file in the upstream repo.")
 			continue
 		}
-		if err := writeOwners(orgRepo, httpResult, cleaner); err != nil {
+
+		if err := writeOwners(orgRepo, httpResult, cleaner, makeHeader(githubOrg, orgRepo.Organization, orgRepo.Repository, time.Now())); err != nil {
 			errs = append(errs, err)
 		}
 	}

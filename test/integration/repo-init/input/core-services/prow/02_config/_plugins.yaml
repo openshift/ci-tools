@@ -13,6 +13,17 @@ cherry_pick_unapproved:
   comment: This PR is not for the master branch but does not have the `cherry-pick-approved`  label.
     Adding the `do-not-merge/cherry-pick-not-approved`  label.
 config_updater:
+  cluster_groups:
+    build_farm_ci:
+      clusters:
+      - app.ci
+      - build01
+      - build02
+      - build03
+      - build04
+      - vsphere
+      namespaces:
+      - ci
   gzip: false
   maps:
     config/prow/config.yaml:
@@ -25,6 +36,10 @@ config_updater:
         default:
         - ""
       name: plugins
+    path/*:
+      cluster_groups:
+      - build_farm_ci
+      name: cm-path
 external_plugins:
   openshift:
   - endpoint: http://refresh

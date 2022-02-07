@@ -436,19 +436,19 @@ func waitForBuildDeletion(ctx context.Context, client ctrlruntimeclient.Client, 
 
 func isInfraReason(reason buildapi.StatusReason) bool {
 	infraReasons := []buildapi.StatusReason{
-		buildapi.StatusReasonCannotCreateBuildPod,
-		buildapi.StatusReasonBuildPodDeleted,
-		buildapi.StatusReasonExceededRetryTimeout,
-		buildapi.StatusReasonPushImageToRegistryFailed,
-		buildapi.StatusReasonPullBuilderImageFailed,
-		buildapi.StatusReasonFetchSourceFailed,
-		buildapi.StatusReasonBuildPodExists,
-		buildapi.StatusReasonNoBuildContainerStatus,
-		buildapi.StatusReasonFailedContainer,
-		buildapi.StatusReasonOutOfMemoryKilled,
-		buildapi.StatusReasonCannotRetrieveServiceAccount,
-		buildapi.StatusReasonFetchImageContentFailed,
 		buildapi.StatusReason("BuildPodEvicted"), // vendoring to get this is so hard
+		buildapi.StatusReasonBuildPodDeleted,
+		buildapi.StatusReasonBuildPodExists,
+		buildapi.StatusReasonCannotCreateBuildPod,
+		buildapi.StatusReasonCannotRetrieveServiceAccount,
+		buildapi.StatusReasonExceededRetryTimeout,
+		buildapi.StatusReasonFailedContainer,
+		buildapi.StatusReasonFetchImageContentFailed,
+		buildapi.StatusReasonFetchSourceFailed,
+		buildapi.StatusReasonNoBuildContainerStatus,
+		buildapi.StatusReasonOutOfMemoryKilled,
+		buildapi.StatusReasonPullBuilderImageFailed,
+		buildapi.StatusReasonPushImageToRegistryFailed,
 	}
 	for _, option := range infraReasons {
 		if reason == option {

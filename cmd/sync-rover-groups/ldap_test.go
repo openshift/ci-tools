@@ -101,6 +101,35 @@ func TestGetGitHubID(t *testing.T) {
 			name:  "not github",
 			value: "Twitter->https://twitter.com/tom",
 		},
+		{
+			name:  "gitlab as github",
+			value: "Github->https://gitlab.consulting.redhat.com/tom",
+		},
+		{
+			name:     "www is ignored",
+			value:    "Github->https://www.github.com/tom/",
+			expected: "tom",
+		},
+		{
+			name:     "capital letters are ignored",
+			value:    "Github->https://GitHub.com/tom",
+			expected: "tom",
+		},
+		{
+			name:     "http is good",
+			value:    "Github->http://github.com/tom/",
+			expected: "tom",
+		},
+		{
+			name:     "no protolcol at all",
+			value:    "Github->github.com/tom/",
+			expected: "tom",
+		},
+		{
+			name:     "git.io",
+			value:    "Github->https://git.io/tom",
+			expected: "tom",
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

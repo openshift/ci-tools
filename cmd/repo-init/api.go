@@ -25,7 +25,7 @@ import (
 	"k8s.io/test-infra/prow/simplifypath"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/validation"
 )
 
@@ -339,7 +339,7 @@ func loadConfigs(w http.ResponseWriter, r *http.Request, repoGetterFunc RepoGett
 	}
 	releaseRepo := availableRepo.path
 
-	configs, err := load.FromPathByOrgRepo(getConfigPath(org, repo, releaseRepo))
+	configs, err := config.LoadByOrgRepo(getConfigPath(org, repo, releaseRepo))
 
 	if err != nil {
 		logrus.WithError(err).Error("Error while loading configs")

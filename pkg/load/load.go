@@ -1,7 +1,6 @@
 package load
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,10 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/test-infra/prow/config"
@@ -20,8 +17,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/registry"
-	"github.com/openshift/ci-tools/pkg/registry/server"
-	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 	"github.com/openshift/ci-tools/pkg/validation"
 )
@@ -42,148 +37,6 @@ const (
 	RegistryMetadata
 	RegistryDocumentation
 )
-
-// ByOrgRepo maps org --> repo --> list of branched and variant configs
-type ByOrgRepo map[string]map[string][]api.ReleaseBuildConfiguration
-
-func FromPathByOrgRepo(path string) (ByOrgRepo, error) {
-	byFilename, err := fromPath(path)
-	if err != nil {
-		return nil, err
-	}
-
-	return partitionByOrgRepo(byFilename), nil
-}
-
-func partitionByOrgRepo(byFilename filenameToConfig) ByOrgRepo {
-	byOrgRepo := map[string]map[string][]api.ReleaseBuildConfiguration{}
-	for _, configuration := range byFilename {
-		org, repo := configuration.Metadata.Org, configuration.Metadata.Repo
-		if _, exists := byOrgRepo[org]; !exists {
-			byOrgRepo[org] = map[string][]api.ReleaseBuildConfiguration{}
-		}
-		if _, exists := byOrgRepo[org][repo]; !exists {
-			byOrgRepo[org][repo] = []api.ReleaseBuildConfiguration{}
-		}
-		byOrgRepo[org][repo] = append(byOrgRepo[org][repo], configuration)
-	}
-	return byOrgRepo
-}
-
-// FilenameToConfig contains configs keyed by the file they were found in
-type filenameToConfig map[string]api.ReleaseBuildConfiguration
-
-// FromPath returns all configs found at or below the given path
-func fromPath(path string) (filenameToConfig, error) {
-	configs := filenameToConfig{}
-	lock := &sync.Mutex{}
-	errGroup := &errgroup.Group{}
-
-	err := filepath.WalkDir(path, func(path string, info fs.DirEntry, err error) error {
-		if err != nil {
-			// file may not exist due to race condition between the reload and k8s removing deleted/moved symlinks in a confimap directory; ignore it
-			if os.IsNotExist(err) {
-				return nil
-			}
-			return err
-		}
-		if strings.HasPrefix(info.Name(), "..") {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if ext := filepath.Ext(path); ext != ".yml" && ext != ".yaml" {
-			return nil
-		}
-		errGroup.Go(func() error {
-			configSpec, err := Config(path, "", "", nil, nil)
-			if err != nil {
-				return fmt.Errorf("failed to load ci-operator config (%w)", err)
-			}
-
-			if err := validation.IsValidRuntimeConfiguration(configSpec); err != nil {
-				return fmt.Errorf("invalid ci-operator config: %w", err)
-			}
-			logrus.Tracef("Adding %s to filenameToConfig", filepath.Base(path))
-			lock.Lock()
-			configs[filepath.Base(path)] = *configSpec
-			lock.Unlock()
-			return nil
-		})
-		return nil
-	})
-
-	return configs, utilerrors.NewAggregate([]error{err, errGroup.Wait()})
-}
-
-func Config(path, unresolvedPath, registryPath string, resolver server.ResolverClient, info *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
-	// Load the standard configuration path, env, or configresolver (in that order of priority)
-	var raw string
-
-	configSpecEnv, configSpecSet := os.LookupEnv("CONFIG_SPEC")
-	unresolvedConfigEnv, unresolvedConfigSet := os.LookupEnv("UNRESOLVED_CONFIG")
-
-	switch {
-	case len(path) > 0:
-		data, err := gzip.ReadFileMaybeGZIP(path)
-		if err != nil {
-			return nil, fmt.Errorf("--config error: %w", err)
-		}
-		raw = string(data)
-	case configSpecSet:
-		if len(configSpecEnv) == 0 {
-			return nil, errors.New("CONFIG_SPEC environment variable cannot be set to an empty string")
-		}
-		// if being run by pj-rehearse, config spec may be base64 and gzipped
-		if decoded, err := base64.StdEncoding.DecodeString(configSpecEnv); err != nil {
-			raw = configSpecEnv
-		} else {
-			data, err := gzip.ReadBytesMaybeGZIP(decoded)
-			if err != nil {
-				return nil, fmt.Errorf("--config error: %w", err)
-			}
-			raw = string(data)
-		}
-	case len(unresolvedPath) > 0:
-		data, err := gzip.ReadFileMaybeGZIP(unresolvedPath)
-		if err != nil {
-			return nil, fmt.Errorf("--unresolved-config error: %w", err)
-		}
-		configSpec, err := resolver.Resolve(data)
-		err = results.ForReason("config_resolver_literal").ForError(err)
-		return configSpec, err
-	case unresolvedConfigSet:
-		configSpec, err := resolver.Resolve([]byte(unresolvedConfigEnv))
-		err = results.ForReason("config_resolver_literal").ForError(err)
-		return configSpec, err
-	default:
-		configSpec, err := resolver.Config(info)
-		err = results.ForReason("config_resolver").ForError(err)
-		return configSpec, err
-	}
-	configSpec := api.ReleaseBuildConfiguration{}
-	if err := yaml.UnmarshalStrict([]byte(raw), &configSpec); err != nil {
-		if len(path) > 0 {
-			return nil, fmt.Errorf("invalid configuration in file %s: %w\nvalue:\n%s", path, err, raw)
-		}
-		return nil, fmt.Errorf("invalid configuration: %w\nvalue:\n%s", err, raw)
-	}
-	if registryPath != "" {
-		refs, chains, workflows, _, _, observers, err := Registry(registryPath, RegistryFlag(0))
-		if err != nil {
-			return nil, fmt.Errorf("failed to load registry: %w", err)
-		}
-		configSpec, err = registry.ResolveConfig(registry.NewResolver(refs, chains, workflows, observers), configSpec)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve configuration: %w", err)
-		}
-	}
-	return &configSpec, nil
-}
 
 // Registry takes the path to a registry config directory and returns the full set of references, chains,
 // and workflows that the registry's Resolver needs to resolve a user's MultiStageTestConfiguration

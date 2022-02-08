@@ -1,0 +1,20 @@
+build_root:
+  image_stream_tag:
+    name: release
+    namespace: openshift
+    tag: golang-1.10
+resources:
+  '*':
+    limits:
+      cpu: 500Mi
+    requests:
+      cpu: 10Mi
+tests:
+- as: test
+  commands: make test
+  container:
+    from: src
+zz_generated_metadata:
+  branch: release-4.9
+  org: foo
+  repo: bar

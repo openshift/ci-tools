@@ -261,15 +261,16 @@ func TestOptions_Matches(t *testing.T) {
 }
 
 func TestOperateOnCIOperatorConfigDir(t *testing.T) {
-	testConfigDir := "./testdata/config"
-
+	treeDir := "./testdata/tree/config"
+	cmDir := "./testdata/cm/config"
 	testCases := []struct {
-		id                     string
+		id, path               string
 		options                Options
 		expectedProcessedFiles sets.String
 	}{
 		{
 			id:      "no options, expect to process all files",
+			path:    treeDir,
 			options: Options{},
 			expectedProcessedFiles: sets.NewString([]string{
 				"foo-bar-master.yaml",
@@ -280,6 +281,7 @@ func TestOperateOnCIOperatorConfigDir(t *testing.T) {
 		},
 		{
 			id:      "specify org, expect to process only files that belong to that org",
+			path:    treeDir,
 			options: Options{Org: "foo"},
 			expectedProcessedFiles: sets.NewString([]string{
 				"foo-bar-master.yaml",
@@ -288,6 +290,7 @@ func TestOperateOnCIOperatorConfigDir(t *testing.T) {
 		},
 		{
 			id:      "specify org and repo, expect to process only files that belong to that org/repo",
+			path:    treeDir,
 			options: Options{Org: "foo", Repo: "bar"},
 			expectedProcessedFiles: sets.NewString([]string{
 				"foo-bar-master.yaml",
@@ -295,50 +298,66 @@ func TestOperateOnCIOperatorConfigDir(t *testing.T) {
 			}...),
 		},
 		{
-			id: "process only a single modified file",
+			id:   "process only a single modified file",
+			path: treeDir,
 			options: Options{
 				onlyProcessChanges: true,
-				modifiedFiles:      sets.NewString([]string{"testdata/config/foo/bar/foo-bar-master.yaml"}...),
+				modifiedFiles: sets.NewString(
+					filepath.Join(treeDir, "foo/bar/foo-bar-master.yaml"),
+				),
 			},
 			expectedProcessedFiles: sets.NewString([]string{
 				"foo-bar-master.yaml",
 			}...),
 		},
 		{
-			id: "process only the multiple modified files",
+			id:   "process only the multiple modified files",
+			path: treeDir,
 			options: Options{
 				onlyProcessChanges: true,
-				modifiedFiles:      sets.NewString([]string{"testdata/config/foo/bar/foo-bar-master.yaml", "testdata/config/super/duper/super-duper-release-4.9.yaml"}...),
+				modifiedFiles: sets.NewString(
+					filepath.Join(treeDir, "foo/bar/foo-bar-master.yaml"),
+					filepath.Join(treeDir, "super/duper/super-duper-release-4.9.yaml"),
+				),
 			},
 			expectedProcessedFiles: sets.NewString([]string{
 				"foo-bar-master.yaml",
 				"super-duper-release-4.9.yaml",
 			}...),
 		},
+		{
+			id:   "load from a ConfigMap mount",
+			path: cmDir,
+			expectedProcessedFiles: sets.NewString(
+				"foo-bar-master.yaml",
+				"foo-bar-release-4.9.yaml",
+				"super-duper-master.yaml",
+				"super-duper-release-4.9.yaml",
+			),
+		},
 	}
 
 	for _, tc := range testCases {
-		var errs []error
-		processed := sets.NewString()
+		t.Run(tc.id, func(t *testing.T) {
+			processed := sets.NewString()
 
-		if err := tc.options.OperateOnCIOperatorConfigDir(testConfigDir, func(configuration *cioperatorapi.ReleaseBuildConfiguration, info *Info) error {
-			filename := filepath.Base(info.Filename)
-			if !tc.expectedProcessedFiles.Has(filename) {
-				errs = append(errs, fmt.Errorf("file %s wasn't expected to be processed", filename))
+			if err := tc.options.OperateOnCIOperatorConfigDir(tc.path, func(configuration *cioperatorapi.ReleaseBuildConfiguration, info *Info) error {
+				filename := filepath.Base(info.Filename)
+				if !tc.expectedProcessedFiles.Has(filename) {
+					t.Errorf("file %s wasn't expected to be processed", filename)
+				}
+				if processed.Has(filename) {
+					t.Errorf("file %s was processed more than once", filename)
+				}
+				processed.Insert(filename)
+				return nil
+			}); err != nil {
+				t.Fatal(err)
 			}
-			processed.Insert(filename)
-			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
-
-		if len(errs) > 0 {
-			t.Fatal("unexpected errors: %w", errs)
-		}
-
-		if diff := cmp.Diff(processed, tc.expectedProcessedFiles); diff != "" {
-			t.Fatal(diff)
-		}
+			if !processed.Equal(tc.expectedProcessedFiles) {
+				t.Errorf("unexpected processed files: %s", cmp.Diff(processed, tc.expectedProcessedFiles))
+			}
+		})
 	}
 }
 

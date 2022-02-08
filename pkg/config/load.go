@@ -115,9 +115,26 @@ func (i *Info) LogFields() logrus.Fields {
 	}
 }
 
-func isConfigFile(path string, info fs.DirEntry) bool {
-	extension := filepath.Ext(path)
+func isConfigFile(info fs.DirEntry) bool {
+	extension := filepath.Ext(info.Name())
 	return !info.IsDir() && (extension == ".yaml" || extension == ".yml")
+}
+
+// isMountSpecialFile identifies special files in Kubernetes mounts
+// The general structure of a mount is:
+//
+//     config
+//     ├── ..2019_11_15_19_57_20.547184898
+//     │   ├── foo-bar-master.yaml
+//     │   └── super-duper-master.yaml
+//     ├── ..data -> ..2019_11_15_19_57_20.547184898
+//     ├── foo-bar-master.yaml -> ..data/foo-bar-master.yaml
+//     └── super-duper-master.yaml -> ..data/super-duper-master.yaml
+//
+// In a recursive directory traversal, paths starting with `..` are skipped so
+// files are not processed twice.
+func isMountSpecialFile(path string) bool {
+	return strings.HasPrefix(path, "..")
 }
 
 // OperateOnCIOperatorConfig runs the callback on the parsed data from
@@ -157,9 +174,19 @@ func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*ci
 		if err := filepath.WalkDir(filepath.Join(configDir, subDir), func(path string, info fs.DirEntry, err error) error {
 			if err != nil {
 				logrus.WithField("source-file", path).WithError(err).Error("Failed to walk CI Operator configuration dir")
+				// file may not exist due to race condition between the reload and k8s removing deleted/moved symlinks in a confimap directory; ignore it
+				if os.IsNotExist(err) {
+					return nil
+				}
 				return err
 			}
-			if isConfigFile(path, info) {
+			if isMountSpecialFile(info.Name()) {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if isConfigFile(info) {
 				inputCh <- path
 			}
 			return nil
@@ -186,6 +213,10 @@ func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*ci
 				if err != nil {
 					logrus.WithField("source-file", path).WithError(err).Error("Failed to load CI Operator configuration")
 					errCh <- err
+					continue
+				}
+				if err := validation.IsValidRuntimeConfiguration(config); err != nil {
+					errCh <- fmt.Errorf("invalid ci-operator config: %w", err)
 					continue
 				}
 				outputCh <- item{config, info}
@@ -277,5 +308,26 @@ func LoadByFilename(path string) (ByFilename, error) {
 		return nil, err
 	}
 
+	return config, nil
+}
+
+// ByOrgRepo maps org --> repo --> list of branched and variant configs
+type ByOrgRepo map[string]map[string][]cioperatorapi.ReleaseBuildConfiguration
+
+func (all ByOrgRepo) add(c *cioperatorapi.ReleaseBuildConfiguration, i *Info) error {
+	org := all[c.Metadata.Org]
+	if org == nil {
+		org = make(map[string][]cioperatorapi.ReleaseBuildConfiguration)
+		all[c.Metadata.Org] = org
+	}
+	org[c.Metadata.Repo] = append(org[c.Metadata.Repo], *c)
+	return nil
+}
+
+func LoadByOrgRepo(path string) (ByOrgRepo, error) {
+	config := ByOrgRepo{}
+	if err := OperateOnCIOperatorConfigDir(path, config.add); err != nil {
+		return nil, err
+	}
 	return config, nil
 }

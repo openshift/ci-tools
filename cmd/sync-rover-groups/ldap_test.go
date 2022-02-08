@@ -79,3 +79,35 @@ func TestResolve(t *testing.T) {
 		})
 	}
 }
+
+func TestGetGitHubID(t *testing.T) {
+
+	testCases := []struct {
+		name     string
+		value    string
+		expected string
+	}{
+		{
+			name:     "base case",
+			value:    "Github->https://github.com/tom",
+			expected: "tom",
+		},
+		{
+			name:     "slash suffix",
+			value:    "Github->https://github.com/tom/",
+			expected: "tom",
+		},
+		{
+			name:  "not github",
+			value: "Twitter->https://twitter.com/tom",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := getGitHubID(tc.value)
+			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+			}
+		})
+	}
+}

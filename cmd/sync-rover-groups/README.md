@@ -5,6 +5,9 @@
 `sync-rover-groups` is a tool to resolve the groups in [the manifests](https://github.com/openshift/release/tree/master/clusters) of CI clusters
 in the release repo. Its result is a configuration file consumed by [github-ldap-user-group-creator](../github-ldap-user-group-creator).
 
+It can also generate the mapping file in yaml format: `m(GitHubID)=KerberosID` for each user
+that set up GitHub URL at Rover.
+
 
 ## Why it exists
 

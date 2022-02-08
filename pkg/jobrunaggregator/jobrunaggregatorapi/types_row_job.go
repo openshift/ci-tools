@@ -42,6 +42,12 @@ const (
     "type": "STRING",
     "mode": "REQUIRED"
   },
+    {
+    "name": "Architecture",
+    "description": "amd64, arm64, ppc64le, s390x",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
   {
     "name": "Network",
     "description": "ovn, sdn, etc",
@@ -101,6 +107,7 @@ type JobRow struct {
 	CollectDisruption           bool
 	CollectTestRuns             bool
 	Platform                    string
+	Architecture                string
 	Network                     string
 	IPMode                      string
 	Topology                    string

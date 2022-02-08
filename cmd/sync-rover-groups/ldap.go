@@ -126,6 +126,9 @@ func (r *ldapGroupResolver) getGitHubUserKerberosIDMapping() (map[string]string,
 // A user can have multiple "rhatSocialURL"s for GitHub, Twitter, LinkedIn etc, even multiple for GitHub.
 // Example of such values: "Github->https://github.com/tom", "Github->https://github.com/tom/", or "Twitter->https://twitter.com/tom"
 func getGitHubID(value string) string {
+	if small := strings.ToLower(value); !strings.Contains(small, "github.com/") && !strings.Contains(small, "git.io/") {
+		return ""
+	}
 	if strings.HasPrefix(value, "Github->") {
 		slashSplit := strings.Split(value, "/")
 		if ret := slashSplit[len(slashSplit)-1]; ret != "" {

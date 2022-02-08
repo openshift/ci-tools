@@ -585,7 +585,7 @@ func testShouldAlwaysPass(jobName, testName, testSuiteName string) string {
 		return "this test is a side-effect of other tests"
 	}
 
-	if strings.HasSuffix(testName, "-gather-azure-cli container test ") {
+	if strings.HasSuffix(testName, "-gather-azure-cli container test") {
 		// this is only for gathering artifacts.
 		return "used only to collect artifacts"
 	}

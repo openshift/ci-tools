@@ -50,6 +50,7 @@ SELECT
   JobRuns.ReleaseTag as ReleaseTag,
   JobRuns.Cluster as Cluster,
   Jobs.Platform as Platform,
+  Jobs.Architecture as Architecture,
   Jobs.Network as Network,
   Jobs.IPMode as IPMode,
   Jobs.Topology as Topology,

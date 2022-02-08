@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/clonerefs"
@@ -369,14 +370,14 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 }
 
 func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.Build) error {
-	var buildErr error
+	var buildErrs []error
 	attempts := 5
 	if boErr := wait.ExponentialBackoff(wait.Backoff{Duration: time.Minute, Factor: 1.5, Steps: attempts}, func() (bool, error) {
 		if err := buildClient.Create(ctx, build); err != nil && !kerrors.IsAlreadyExists(err) {
 			return false, fmt.Errorf("could not create build %s: %w", build.Name, err)
 		}
 
-		buildErr = waitForBuildOrTimeout(ctx, buildClient, build.Namespace, build.Name)
+		buildErr := waitForBuildOrTimeout(ctx, buildClient, build.Namespace, build.Name)
 		if buildErr == nil {
 			if err := gatherSuccessfulBuildLog(buildClient, build.Namespace, build.Name); err != nil {
 				// log error but do not fail successful build
@@ -384,6 +385,7 @@ func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.B
 			}
 			return true, nil
 		}
+		buildErrs = append(buildErrs, buildErr)
 
 		b := &buildapi.Build{}
 		if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: build.Namespace, Name: build.Name}, b); err != nil {
@@ -415,7 +417,7 @@ func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.B
 		return false, nil
 	}); boErr != nil {
 		if boErr == wait.ErrWaitTimeout {
-			return fmt.Errorf("build not successful after %d attempts, last error: %w", attempts, buildErr)
+			return fmt.Errorf("build not successful after %d attempts: %w", attempts, errors.NewAggregate(buildErrs))
 		}
 		return boErr
 	}

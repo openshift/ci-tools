@@ -16,6 +16,7 @@ func init() {
 		fmt.Print(testRunsSummaryAllJobRunsSchema)
 		fmt.Print(alertSchema)
 		fmt.Print(unifiedAlertSchema)
+		fmt.Print(testRunsUnifiedJobRunsSchema)
 	}
 }
 

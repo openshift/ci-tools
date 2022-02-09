@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/clonerefs"
@@ -158,7 +159,7 @@ func (s *sourceStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return handleBuild(ctx, s.client, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest))
+	return handleBuild(ctx, s.client, *createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest))
 }
 
 func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef corev1.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret, fromDigest string) *buildapi.Build {
@@ -368,47 +369,61 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 	return true
 }
 
-func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.Build) error {
-	if err := buildClient.Create(ctx, build); err != nil {
-		if !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not create build %s: %w", build.Name, err)
+func handleBuild(ctx context.Context, buildClient BuildClient, build buildapi.Build) error {
+	var buildErrs []error
+	attempts := 5
+	if boErr := wait.ExponentialBackoff(wait.Backoff{Duration: time.Minute, Factor: 1.5, Steps: attempts}, func() (bool, error) {
+		var buildAttempt buildapi.Build
+		build.DeepCopyInto(&buildAttempt)
+		if err := buildClient.Create(ctx, &buildAttempt); err != nil && !kerrors.IsAlreadyExists(err) {
+			return false, fmt.Errorf("could not create build %s: %w", buildAttempt.Name, err)
 		}
+
+		buildErr := waitForBuildOrTimeout(ctx, buildClient, buildAttempt.Namespace, buildAttempt.Name)
+		if buildErr == nil {
+			if err := gatherSuccessfulBuildLog(buildClient, buildAttempt.Namespace, buildAttempt.Name); err != nil {
+				// log error but do not fail successful build
+				logrus.WithError(err).Warnf("Failed gathering successful build %s logs into artifacts.", buildAttempt.Name)
+			}
+			return true, nil
+		}
+		buildErrs = append(buildErrs, buildErr)
+
 		b := &buildapi.Build{}
-		if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: build.Namespace, Name: build.Name}, b); err != nil {
-			return fmt.Errorf("could not get build %s: %w", build.Name, err)
+		if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: buildAttempt.Namespace, Name: buildAttempt.Name}, b); err != nil {
+			return false, fmt.Errorf("could not get build %s: %w", buildAttempt.Name, err)
 		}
 
-		if isBuildPhaseTerminated(b.Status.Phase) &&
-			(isInfraReason(b.Status.Reason) || hintsAtInfraReason(b.Status.LogSnippet)) {
-			logrus.Infof("Build %s previously failed from an infrastructure error (%s), retrying...", b.Name, b.Status.Reason)
-			zero := int64(0)
-			foreground := metav1.DeletePropagationForeground
-			opts := metav1.DeleteOptions{
-				GracePeriodSeconds: &zero,
-				Preconditions:      &metav1.Preconditions{UID: &b.UID},
-				PropagationPolicy:  &foreground,
-			}
-			if err := buildClient.Delete(ctx, build, &ctrlruntimeclient.DeleteOptions{Raw: &opts}); err != nil && !kerrors.IsNotFound(err) && !kerrors.IsConflict(err) {
-				return fmt.Errorf("could not delete build %s: %w", build.Name, err)
-			}
-			if err := waitForBuildDeletion(ctx, buildClient, build.Namespace, build.Name); err != nil {
-				return fmt.Errorf("could not wait for build %s to be deleted: %w", build.Name, err)
-			}
-			if err := buildClient.Create(ctx, build); err != nil && !kerrors.IsAlreadyExists(err) {
-				return fmt.Errorf("could not recreate build %s: %w", build.Name, err)
-			}
+		if !isBuildPhaseTerminated(b.Status.Phase) {
+			return false, buildErr
 		}
-	}
-	err := waitForBuildOrTimeout(ctx, buildClient, build.Namespace, build.Name)
-	if err == nil {
-		if err := gatherSuccessfulBuildLog(buildClient, build.Namespace, build.Name); err != nil {
-			// log error but do not fail successful build
-			logrus.WithError(err).Warnf("Failed gathering successful build %s logs into artifacts.", build.Name)
-		}
-	}
-	// this will still be the err from waitForBuild
-	return err
 
+		if !(isInfraReason(b.Status.Reason) || hintsAtInfraReason(b.Status.LogSnippet)) {
+			return false, buildErr
+		}
+
+		logrus.Infof("Build %s previously failed from an infrastructure error (%s), retrying...", b.Name, b.Status.Reason)
+		zero := int64(0)
+		foreground := metav1.DeletePropagationForeground
+		opts := metav1.DeleteOptions{
+			GracePeriodSeconds: &zero,
+			Preconditions:      &metav1.Preconditions{UID: &b.UID},
+			PropagationPolicy:  &foreground,
+		}
+		if err := buildClient.Delete(ctx, &buildAttempt, &ctrlruntimeclient.DeleteOptions{Raw: &opts}); err != nil && !kerrors.IsNotFound(err) && !kerrors.IsConflict(err) {
+			return false, fmt.Errorf("could not delete build %s: %w", buildAttempt.Name, err)
+		}
+		if err := waitForBuildDeletion(ctx, buildClient, buildAttempt.Namespace, buildAttempt.Name); err != nil {
+			return false, fmt.Errorf("could not wait for build %s to be deleted: %w", buildAttempt.Name, err)
+		}
+		return false, nil
+	}); boErr != nil {
+		if boErr == wait.ErrWaitTimeout {
+			return fmt.Errorf("build not successful after %d attempts: %w", attempts, errors.NewAggregate(buildErrs))
+		}
+		return boErr
+	}
+	return nil
 }
 
 func waitForBuildDeletion(ctx context.Context, client ctrlruntimeclient.Client, ns, name string) error {

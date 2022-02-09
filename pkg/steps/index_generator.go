@@ -79,7 +79,7 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 		s.pullSecret,
 		nil,
 	)
-	err = handleBuild(ctx, s.client, build)
+	err = handleBuild(ctx, s.client, *build)
 	if err != nil && strings.Contains(err.Error(), "error checking provided apis") {
 		return results.ForReason("generating_index").WithError(err).Errorf("failed to generate operator index due to invalid bundle info: %v", err)
 	}

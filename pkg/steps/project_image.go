@@ -61,7 +61,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 		s.pullSecret,
 		s.config.BuildArgs,
 	)
-	return handleBuild(ctx, s.client, build)
+	return handleBuild(ctx, s.client, *build)
 }
 
 type workingDir func(tag string) (string, error)

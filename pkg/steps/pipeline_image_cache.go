@@ -44,7 +44,7 @@ func (s *pipelineImageCacheStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return handleBuild(ctx, s.client, buildFromSource(
+	return handleBuild(ctx, s.client, *buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,

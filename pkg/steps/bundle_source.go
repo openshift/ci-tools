@@ -75,7 +75,7 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 		s.pullSecret,
 		nil,
 	)
-	return handleBuild(ctx, s.client, build)
+	return handleBuild(ctx, s.client, *build)
 }
 
 func replaceCommand(pullSpec, with string) string {

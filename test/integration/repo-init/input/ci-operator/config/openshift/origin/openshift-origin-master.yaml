@@ -30,8 +30,7 @@ tag_specification:
   name: "4.3"
   namespace: ocp
 tests:
-- artifact_dir: /tmp/artifacts
-  as: unit
+- as: unit
   commands: TMPDIR=/tmp/volume GOTEST_FLAGS='-p 8' ARTIFACT_DIR=/tmp/artifacts TIMEOUT=180s
     JUNIT_REPORT=1 TEST_KUBE=true KUBERNETES_SERVICE_HOST= hack/test-go.sh
   container:

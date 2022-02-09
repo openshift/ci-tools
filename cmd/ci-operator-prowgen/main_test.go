@@ -50,7 +50,6 @@ resources:
 tag_specification:
   name: origin-v3.11
   namespace: openshift
-  tag: ''
 promotion:
   namespace: ci
   name: other
@@ -89,7 +88,6 @@ resources:
 tag_specification:
   name: origin-v3.11
   namespace: openshift
-  tag: ''
 promotion:
   name: test
   namespace: ci
@@ -145,7 +143,6 @@ resources:
 tag_specification:
   name: origin-v3.11
   namespace: openshift
-  tag: ''
 promotion:
   name: test
   namespace: ci
@@ -205,7 +202,6 @@ resources:
 tag_specification:
   name: origin-v3.11
   namespace: openshift
-  tag: ''
 promotion:
   name: test
   namespace: ci

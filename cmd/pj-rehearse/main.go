@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -37,6 +38,7 @@ import (
 	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	"github.com/openshift/ci-tools/pkg/config"
+	ciopconfig "github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/diffs"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
@@ -117,6 +119,16 @@ func loadConfigUpdaterCfg(releaseRepoPath string) (ret prowplugins.ConfigUpdater
 		ret = agent.Config().ConfigUpdater
 	}
 	return
+}
+
+func loadProwConfig(releaseRepoPath string) (*prowconfig.Config, error) {
+	configPath := path.Join(releaseRepoPath, ciopconfig.ConfigInRepoPath)
+	agent := prowconfig.Agent{}
+	if err := agent.Start(configPath, "", nil, ""); err != nil {
+		return nil, fmt.Errorf("could not load Prow configuration: %w", err)
+	}
+
+	return agent.Config(), nil
 }
 
 func rehearseMain() error {
@@ -306,7 +318,11 @@ func rehearseMain() error {
 
 	resolver := registry.NewResolver(refs, chains, workflows, observers)
 	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, resolver, prNumber, loggers, rehearsalTemplates.Names, rehearsalClusterProfiles.Names, jobSpec.Refs)
-	imagestreamtags, presubmitsToRehearse, err := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse)
+	pc, err := loadProwConfig(o.releaseRepoPath)
+	if err != nil {
+		return err
+	}
+	imagestreamtags, presubmitsToRehearse, err := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse, pc)
 	if err != nil {
 		return err
 	}

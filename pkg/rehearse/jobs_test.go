@@ -456,7 +456,7 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 	}
 }
 
-func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, org, repo, branch, configSpec string) *pjapi.ProwJob {
+func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, org, repo, branch, configSpec, jobURLPrefix string) *pjapi.ProwJob {
 	return &pjapi.ProwJob{
 		TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -495,6 +495,11 @@ func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, or
 					Args:    []string{},
 					Env:     []v1.EnvVar{{Name: "CONFIG_SPEC", Value: configSpec}},
 				}},
+			},
+			DecorationConfig: &pjapi.DecorationConfig{
+				GCSConfiguration: &pjapi.GCSConfiguration{
+					JobURLPrefix: jobURLPrefix,
+				},
 			},
 		},
 		Status: pjapi.ProwJobStatus{
@@ -570,7 +575,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 
 			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
 
-			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
+			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs, &prowconfig.Config{})
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
@@ -636,7 +641,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 			)
 
 			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
-			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
+			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs, &prowconfig.Config{})
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
@@ -669,6 +674,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to compress config: %v", err)
 	}
+	targetOrgRepoPrefix := "https://org.repo.com/"
 
 	testCases := []struct {
 		description               string
@@ -686,11 +692,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					testRefs, targetOrg, targetRepo, "master", job1Cfg).Spec,
+					testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job2"),
-					testRefs, targetOrg, targetRepo, "master", job2Cfg).Spec,
+					testRefs, targetOrg, targetRepo, "master", job2Cfg, targetOrgRepoPrefix).Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		}, {
@@ -703,11 +709,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					testRefs, targetOrg, targetRepo, "master", job1Cfg).Spec,
+					testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "not-master", "job2"),
-					testRefs, targetOrg, targetRepo, "not-master", job2Cfg).Spec,
+					testRefs, targetOrg, targetRepo, "not-master", job2Cfg, targetOrgRepoPrefix).Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		},
@@ -721,11 +727,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					testRefs, targetOrg, targetRepo, "master", job1Cfg).Spec,
+					testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
 					fmt.Sprintf(rehearseJobContextTemplate, anotherTargetOrgRepo, "master", "job2"),
-					testRefs, anotherTargetOrg, anotherTargetRepo, "master", job2Cfg).Spec,
+					testRefs, anotherTargetOrg, anotherTargetRepo, "master", job2Cfg, "https://star.com/").Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		}, {
@@ -747,7 +753,16 @@ func TestExecuteJobsPositive(t *testing.T) {
 			client.createReactors = append(client.createReactors, setSuccessCreateReactor)
 
 			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
-			imageStreamTags, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
+			pc := prowconfig.Config{
+				ProwConfig: prowconfig.ProwConfig{
+					Plank: prowconfig.Plank{
+						JobURLPrefixConfig: map[string]string{
+							"*":           "https://star.com/",
+							targetOrg:     "https://org.com/",
+							targetOrgRepo: targetOrgRepoPrefix,
+						}},
+				}}
+			imageStreamTags, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs, &pc)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
@@ -1394,6 +1409,47 @@ func TestContextFor(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			if diff := cmp.Diff(testCase.output, contextFor(testCase.input)); diff != "" {
 				t.Errorf("%s: got incorrect context: %v", testCase.name, diff)
+			}
+		})
+	}
+}
+
+func TestDetermineJobURLPrefix(t *testing.T) {
+	testCases := []struct {
+		name     string
+		org      string
+		repo     string
+		expected string
+	}{
+		{
+			name:     "default",
+			org:      "someOrg",
+			repo:     "someRepo",
+			expected: "https://star.com/",
+		},
+		{
+			name:     "by org",
+			org:      "org",
+			repo:     "someRepo",
+			expected: "https://org.com/",
+		},
+		{
+			name:     "by repo",
+			org:      "org",
+			repo:     "repo",
+			expected: "https://org.repo.com/",
+		},
+	}
+	for _, tc := range testCases {
+		plank := prowconfig.Plank{JobURLPrefixConfig: map[string]string{
+			"*":        "https://star.com/",
+			"org":      "https://org.com/",
+			"org/repo": "https://org.repo.com/",
+		}}
+		t.Run(tc.name, func(t *testing.T) {
+			actual := determineJobURLPrefix(plank, tc.org, tc.repo)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Fatalf("url prefix did not match expected, diff: %s", diff)
 			}
 		})
 	}

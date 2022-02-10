@@ -507,19 +507,7 @@ type testCoordinates struct {
 }
 
 func init() {
-
-	testsRequiringHistoryRewrite[testCoordinates{
-		jobName:       "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade",
-		testName:      "[sig-api-machinery] OpenShift APIs remain available with reused connections",
-		testSuiteName: "Cluster upgrade",
-	}] = "history correction on improperly loose disruption criteria, expires 2022-01-15"
-
-	testsRequiringHistoryRewrite[testCoordinates{
-		jobName:       "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade",
-		testName:      "[sig-api-machinery] Kubernetes APIs remain available with reused connections",
-		testSuiteName: "Cluster upgrade",
-	}] = "history correction on improperly loose disruption criteria, expires 2022-01-15"
-
+	/* This is an example for creating testCoordinates for the same test from multiple jobs
 	for _, jobName := range []string{
 		"periodic-ci-openshift-release-master-ci-4.10-e2e-azure-ovn-upgrade",
 		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-azure-upgrade",
@@ -529,29 +517,7 @@ func init() {
 			testName:      "[sig-network-edge] Application behind service load balancer with PDB remains available using new connections",
 			testSuiteName: "Cluster upgrade",
 		}] = "history correction on kube update, expires 2022-01-24 - https://bugzilla.redhat.com/show_bug.cgi?id=2040715"
-	}
-
-	for _, jobName := range []string{
-		"periodic-ci-openshift-release-master-ci-4.10-e2e-azure-ovn-upgrade",
-		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-azure-upgrade",
-		"periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-upgrade",
-		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn-upgrade",
-		"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-gcp-ovn-upgrade",
-		"periodic-ci-openshift-release-master-ci-4.10-e2e-gcp-upgrade",
-		"periodic-ci-openshift-release-master-ci-4.10-e2e-aws-ovn-upgrade",
-	} {
-		testsRequiringHistoryRewrite[testCoordinates{
-			jobName:       jobName,
-			testName:      "[sig-arch][bz-kube-apiserver][Late] Alerts alert/KubeAPIErrorBudgetBurn should not be at or above info [Suite:openshift/conformance/parallel]",
-			testSuiteName: "openshift-tests",
-		}] = "history correction on kube update, expires 2022-01-24"
-
-		testsRequiringHistoryRewrite[testCoordinates{
-			jobName:       jobName,
-			testName:      "bz-kube-apiserver][invariant] alert/KubeAPIErrorBudgetBurn should not be at or above info",
-			testSuiteName: "openshift-tests",
-		}] = "history correction on kube update, expires 2022-01-24"
-	}
+	}*/
 
 	testsRequiringHistoryRewrite[testCoordinates{
 		jobName:       "periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn-upgrade",

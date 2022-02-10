@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -94,7 +95,10 @@ func (r *resolverClient) Resolve(raw []byte) (*api.ReleaseBuildConfiguration, er
 }
 
 func configFromResolverRequest(req *http.Request) (*api.ReleaseBuildConfiguration, error) {
-	client := &http.Client{}
+	retryClient := retryablehttp.NewClient()
+	retryClient.RetryMax = 5
+	client := retryClient.StandardClient()
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request to configresolver: %w", err)

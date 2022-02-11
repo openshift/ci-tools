@@ -117,13 +117,17 @@ test_copy_kubeconfig() {
     diff <(echo "$v") <(echo "yes")
 
     echo '[INFO] Verifying KUBECONFIG is populated when possible'
-    ( sleep 5 & echo "test" > "/tmp/.kubeconfig" ) &
-    if ! v=$(KUBECONFIG="/tmp/.kubeconfig" entrypoint-wrapper --dry-run bash -c 'for (( i = 0; i < 10; i++ )); do if [[ -f "${KUBECONFIG}" ]]; then cat "${KUBECONFIG}" >&3; break; fi; sleep 1; done' \
+    ( sleep 1 && echo "test" > "/tmp/.kubeconfig" ) &
+    if ! v=$( \
+        KUBECONFIG="${dir}/kubeconfig" \
+        entrypoint-wrapper --dry-run \
+            bash -c 'for i in {0..9}; do if [[ -f "${KUBECONFIG}" ]]; then cat "${KUBECONFIG}" >&3; break; fi; sleep 0.2; done' \
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
     fi
     diff <(echo "$v") <(echo "test")
+    wait
 }
 
 test_copy_dir() {

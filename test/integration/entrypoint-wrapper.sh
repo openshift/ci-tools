@@ -18,8 +18,13 @@ ERR=${dir}/err.log
 SECRET=${dir}/secret.yaml
 
 fail() {
-    echo "$1"
-    cat "${ERR}"
+    echo -n "$1"
+    if [[ -e "${ERR}" ]]; then
+        echo ', output:'
+        cat "${ERR}"
+    else
+        echo
+    fi
     return 1
 }
 
@@ -182,7 +187,7 @@ test_copy_dir() {
 
 test_signal() {
     local pid
-    entrypoint-wrapper --dry-run sleep 1d 2> "${ERR}" &
+    entrypoint-wrapper --dry-run sleep 1d > "${OUT}" 2> "${ERR}" &
     pid=$!
     if ! timeout 1s sh -c \
         'until pgrep -P "$1" sleep > /dev/null ; do :; done' \
@@ -194,6 +199,11 @@ test_signal() {
     kill -s "$1" "${pid}"
     if wait "$pid"; then
         fail "[ERROR] entrypoint-wrapper did not fail as expected:"
+    elif ! cmp --quiet "${OUT}" "${SECRET}"; then
+        echo '[ERROR] output:'
+        cat "${OUT}"
+        echo '[ERROR] error output:'
+        cat "${ERR}"
     fi
 }
 
@@ -208,8 +218,8 @@ os::cmd::expect_success "run_test entrypoint-wrapper --dry-run true \> ${OUT}"
 os::integration::compare "${OUT}" "${SECRET}"
 os::cmd::expect_failure "run_test entrypoint-wrapper --dry-run false \> ${OUT}"
 os::integration::compare "${OUT}" "${SECRET}"
-os::cmd::expect_success "run_test test_signal INT \> ${OUT}"
+os::cmd::expect_success "run_test test_signal INT"
 os::integration::compare "${OUT}" "${SECRET}"
-os::cmd::expect_success "run_test test_signal TERM \> ${OUT}"
+os::cmd::expect_success "run_test test_signal TERM"
 os::integration::compare "${OUT}" "${SECRET}"
 os::test::junit::declare_suite_end

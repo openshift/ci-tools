@@ -366,6 +366,7 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename
 // JobConfigurer holds all the information that is needed for the configuration of the jobs.
 type JobConfigurer struct {
 	ciopConfigs           config.DataByFilename
+	prowConfig            *prowconfig.Config
 	registryResolver      registry.Resolver
 	clusterProfileCMNames map[string]string
 	templateCMNames       map[string]string
@@ -375,9 +376,10 @@ type JobConfigurer struct {
 }
 
 // NewJobConfigurer filters the jobs and returns a new JobConfigurer.
-func NewJobConfigurer(ciopConfigs config.DataByFilename, resolver registry.Resolver, prNumber int, loggers Loggers, templates, profiles map[string]string, refs *pjapi.Refs) *JobConfigurer {
+func NewJobConfigurer(ciopConfigs config.DataByFilename, prowConfig *prowconfig.Config, resolver registry.Resolver, prNumber int, loggers Loggers, templates, profiles map[string]string, refs *pjapi.Refs) *JobConfigurer {
 	return &JobConfigurer{
 		ciopConfigs:           ciopConfigs,
+		prowConfig:            prowConfig,
 		registryResolver:      resolver,
 		clusterProfileCMNames: profiles,
 		templateCMNames:       templates,
@@ -427,7 +429,7 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics)
 }
 
 // ConfigurePresubmitRehearsals adds the required configuration for the presubmits to be rehearsed.
-func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmits, pc *prowconfig.Config) (apihelper.ImageStreamTagMap, []*prowconfig.Presubmit, error) {
+func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmits) (apihelper.ImageStreamTagMap, []*prowconfig.Presubmit, error) {
 	var rehearsals []*prowconfig.Presubmit
 	allImageStreamTags := apihelper.ImageStreamTagMap{}
 
@@ -458,7 +460,7 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 			if job.DecorationConfig.GCSConfiguration == nil {
 				job.DecorationConfig.GCSConfiguration = &pjapi.GCSConfiguration{}
 			}
-			job.DecorationConfig.GCSConfiguration.JobURLPrefix = determineJobURLPrefix(pc.Plank, metadata.Org, metadata.Repo)
+			job.DecorationConfig.GCSConfiguration.JobURLPrefix = determineJobURLPrefix(jc.prowConfig.Plank, metadata.Org, metadata.Repo)
 
 			rehearsal, err := makeRehearsalPresubmit(&job, orgrepo, jc.prNumber, jc.refs)
 			if err != nil {

@@ -23,6 +23,34 @@ fail() {
     return 1
 }
 
+setup_test() {
+    mkdir -p "${SHARED_DIR}"
+    echo test0 > "${SHARED_DIR}/test0.txt"
+    printf %s > "${SECRET}" '{' \
+        '"kind":"Secret",' \
+        '"apiVersion":"v1",' \
+        '"metadata":{' \
+            '"name":"test",' \
+            '"creationTimestamp":null,' \
+            '"labels":{' \
+                '"ci.openshift.io/skip-censoring":"true"' \
+            '}' \
+        '},' \
+        '"data":{' \
+            '"test0.txt":"dGVzdDAK"' \
+        '},' \
+        '"type":"Opaque"' \
+    $'}\n'
+}
+
+cleanup_test() { rm -rf "${dir}"; }
+
+run_test() {
+    cleanup_test
+    setup_test
+    eval "$@"
+}
+
 test_mkdir() {
     echo '[INFO] Verifying the directory is created'
     [[ ! -e "${TMPDIR}" ]]
@@ -170,20 +198,18 @@ test_signal() {
 }
 
 os::test::junit::declare_suite_start "integration/entrypoint-wrapper"
-mkdir "${SHARED_DIR}"
-echo > "${SECRET}" '{"kind":"Secret","apiVersion":"v1","metadata":{"name":"test","creationTimestamp":null,"labels":{"ci.openshift.io/skip-censoring":"true"}},"data":{"test0.txt":"dGVzdDAK"},"type":"Opaque"}'
-os::cmd::expect_success test_mkdir
-os::cmd::expect_success test_shared_dir
-os::cmd::expect_success test_cli_dir
-os::cmd::expect_success test_copy_dir
-os::cmd::expect_success test_home_dir
-os::cmd::expect_success test_copy_kubeconfig
-os::cmd::expect_success "entrypoint-wrapper --dry-run true > ${OUT}"
+os::cmd::expect_success 'run_test test_mkdir'
+os::cmd::expect_success 'run_test test_shared_dir'
+os::cmd::expect_success 'run_test test_cli_dir'
+os::cmd::expect_success 'run_test test_copy_dir'
+os::cmd::expect_success 'run_test test_home_dir'
+os::cmd::expect_success 'run_test test_copy_kubeconfig'
+os::cmd::expect_success "run_test entrypoint-wrapper --dry-run true \> ${OUT}"
 os::integration::compare "${OUT}" "${SECRET}"
-os::cmd::expect_failure "entrypoint-wrapper --dry-run false > ${OUT}"
+os::cmd::expect_failure "run_test entrypoint-wrapper --dry-run false \> ${OUT}"
 os::integration::compare "${OUT}" "${SECRET}"
-os::cmd::expect_success "test_signal INT > ${OUT}"
+os::cmd::expect_success "run_test test_signal INT \> ${OUT}"
 os::integration::compare "${OUT}" "${SECRET}"
-os::cmd::expect_success "test_signal TERM > ${OUT}"
+os::cmd::expect_success "run_test test_signal TERM \> ${OUT}"
 os::integration::compare "${OUT}" "${SECRET}"
 os::test::junit::declare_suite_end

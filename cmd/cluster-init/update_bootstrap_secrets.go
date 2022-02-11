@@ -344,7 +344,7 @@ func updateRegistrySecretItemContext(c *secretbootstrap.Config, name, cluster st
 }
 
 func updateBuildFarmSecrets(c *secretbootstrap.Config, o options) error {
-	if o.clusterName == string(api.ClusterBuild01) || o.clusterName == string(api.ClusterBuild02) || o.clusterName == string(api.ClusterVSphere) {
+	if o.clusterName == string(api.ClusterVSphere) {
 		_, buildFarmCredentials, err := findSecretConfig(fmt.Sprintf("%s-%s", buildFarm, credentials), string(api.ClusterAPPCI), c.Secrets)
 		if err != nil {
 			return err

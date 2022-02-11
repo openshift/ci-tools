@@ -117,7 +117,8 @@ test_copy_kubeconfig() {
     diff <(echo "$v") <(echo "yes")
 
     echo '[INFO] Verifying KUBECONFIG is populated when possible'
-    ( sleep 1 && echo "test" > "/tmp/.kubeconfig" ) &
+    echo "test" > "${dir}/kubeconfig.new"
+    ( sleep 1 && mv "${dir}/kubeconfig.new" "${dir}/kubeconfig" ) &
     if ! v=$( \
         KUBECONFIG="${dir}/kubeconfig" \
         entrypoint-wrapper --dry-run \

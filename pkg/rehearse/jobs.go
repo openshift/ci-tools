@@ -427,23 +427,19 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics)
 }
 
 // ConfigurePresubmitRehearsals adds the required configuration for the presubmits to be rehearsed.
-func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmits) (apihelper.ImageStreamTagMap, []*prowconfig.Presubmit, error) {
+func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmits, pc *prowconfig.Config) (apihelper.ImageStreamTagMap, []*prowconfig.Presubmit, error) {
 	var rehearsals []*prowconfig.Presubmit
 	allImageStreamTags := apihelper.ImageStreamTagMap{}
 
 	presubmitsFiltered := filterPresubmits(presubmits, jc.loggers.Job)
 	for orgrepo, jobs := range presubmitsFiltered {
+		splitOrgRepo := strings.Split(orgrepo, "/")
+		if len(splitOrgRepo) != 2 {
+			jc.loggers.Job.WithError(fmt.Errorf("failed to identify org and repo from string %s", orgrepo)).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")
+		}
+
 		for _, job := range jobs {
 			jobLogger := jc.loggers.Job.WithFields(logrus.Fields{"target-repo": orgrepo, "target-job": job.Name})
-			rehearsal, err := makeRehearsalPresubmit(&job, orgrepo, jc.prNumber, jc.refs)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to make rehearsal presubmit: %w", err)
-			}
-
-			splitOrgRepo := strings.Split(orgrepo, "/")
-			if len(splitOrgRepo) != 2 {
-				jobLogger.WithError(fmt.Errorf("failed to identify org and repo from string %s", orgrepo)).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")
-			}
 			branch := BranchFromRegexes(job.Branches)
 			if branch == "" {
 				jobLogger.Warn("failed to extract a simple branch name for a presubmit")
@@ -454,6 +450,19 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 				Repo:    splitOrgRepo[1],
 				Branch:  branch,
 				Variant: VariantFromLabels(job.Labels),
+			}
+			// We need to set the JobURLPrefix to get the correct Details link on rehearsal gh statuses
+			if job.DecorationConfig == nil {
+				job.DecorationConfig = &pjapi.DecorationConfig{}
+			}
+			if job.DecorationConfig.GCSConfiguration == nil {
+				job.DecorationConfig.GCSConfiguration = &pjapi.GCSConfiguration{}
+			}
+			job.DecorationConfig.GCSConfiguration.JobURLPrefix = determineJobURLPrefix(pc.Plank, metadata.Org, metadata.Repo)
+
+			rehearsal, err := makeRehearsalPresubmit(&job, orgrepo, jc.prNumber, jc.refs)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to make rehearsal presubmit: %w", err)
 			}
 			testname := metadata.TestNameFromJobName(job.Name, jobconfig.PresubmitPrefix)
 
@@ -1014,4 +1023,16 @@ func (e *Executor) submitPresubmit(job *prowconfig.Presubmit) (*pjapi.ProwJob, e
 	prowJob.Namespace = e.namespace
 	e.loggers.Job.WithFields(pjutil.ProwJobFields(&prowJob)).Info("Submitting a new prowjob.")
 	return &prowJob, e.pjclient.Create(context.Background(), &prowJob)
+}
+
+func determineJobURLPrefix(plank prowconfig.Plank, org string, repo string) string {
+	jobURLPrefix := plank.JobURLPrefixConfig["*"]
+	if plank.JobURLPrefixConfig[org] != "" {
+		jobURLPrefix = plank.JobURLPrefixConfig[org]
+	}
+	if plank.JobURLPrefixConfig[fmt.Sprintf("%s/%s", org, repo)] != "" {
+		jobURLPrefix = plank.JobURLPrefixConfig[fmt.Sprintf("%s/%s", org, repo)]
+	}
+
+	return jobURLPrefix
 }

@@ -351,7 +351,7 @@ frontend-format: cmd/pod-scaler/frontend/node_modules cmd/repo-init/frontend/nod
 cmd/repo-init/frontend/dist: cmd/repo-init/frontend/node_modules
 	# This environment variable needs to be present when running the npm build as this is when it will get injected into the production artifact.
 	# Ideally it would not be set here in the Make target, but doing this temporarily until something better is figured out.
-	$(eval export REACT_APP_API_URI=https://repo-init-apiserver.apps.ci.l2s4.p1.openshiftapps.com)
+	$(eval export REACT_APP_API_URI=https://repo-init-apiserver-ci.apps.ci.l2s4.p1.openshiftapps.com/api)
 	@$(MAKE) npm-repo-init  NPM_ARGS="run build"
 	@$(MAKE) cmd/repo-init/frontend/dist/dummy
 

@@ -1450,6 +1450,9 @@ k8s.io/test-infra/prow/spyglass
 k8s.io/test-infra/prow/spyglass/api
 k8s.io/test-infra/prow/spyglass/lenses
 k8s.io/test-infra/prow/spyglass/lenses/common
+k8s.io/test-infra/prow/tide
+k8s.io/test-infra/prow/tide/blockers
+k8s.io/test-infra/prow/tide/history
 k8s.io/test-infra/prow/version
 k8s.io/test-infra/robots/pr-creator/updater
 # k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a

@@ -7,14 +7,11 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"sync"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
@@ -23,6 +20,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/prowgen"
 	"github.com/openshift/ci-tools/pkg/registry"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type options struct {
@@ -189,44 +187,30 @@ func getReleaseRepoDir(directory string) (string, error) {
 }
 
 func writeToDir(dir string, c map[string]*prowconfig.JobConfig) error {
-	errChan := make(chan error)
-	var errs []error
-
-	errReadingDone := make(chan struct{})
-	go func() {
-		for err := range errChan {
-			errs = append(errs, err)
-		}
-		close(errReadingDone)
-	}()
 	type item struct {
 		k string
 		v *prowconfig.JobConfig
 	}
 	ch := make(chan item)
-	wg := sync.WaitGroup{}
-	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for x := range ch {
-				i := strings.Index(x.k, "/")
-				org, repo := x.k[:i], x.k[i+1:]
-				if err := jc.WriteToDir(dir, org, repo, x.v, prowgen.Generator, nil); err != nil {
-					errChan <- err
-				}
+	produce := func() error {
+		defer close(ch)
+		for k, v := range c {
+			ch <- item{k, v}
+		}
+		return nil
+	}
+	errCh := make(chan error)
+	map_ := func() error {
+		for x := range ch {
+			i := strings.Index(x.k, "/")
+			org, repo := x.k[:i], x.k[i+1:]
+			if err := jc.WriteToDir(dir, org, repo, x.v, prowgen.Generator, nil); err != nil {
+				errCh <- err
 			}
-		}()
+		}
+		return nil
 	}
-	for k, v := range c {
-		ch <- item{k, v}
-	}
-	close(ch)
-	wg.Wait()
-	close(errChan)
-	<-errReadingDone
-
-	return utilerrors.NewAggregate(errs)
+	return util.ProduceMap(0, produce, map_, errCh)
 }
 
 func main() {

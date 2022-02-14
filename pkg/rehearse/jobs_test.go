@@ -573,9 +573,9 @@ func TestExecuteJobsErrors(t *testing.T) {
 				setSuccessCreateReactor,
 			)
 
-			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
 
-			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs, &prowconfig.Config{})
+			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
@@ -640,8 +640,8 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 				},
 			)
 
-			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
-			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs, &prowconfig.Config{})
+			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
+			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
@@ -752,7 +752,6 @@ func TestExecuteJobsPositive(t *testing.T) {
 			client := newTC()
 			client.createReactors = append(client.createReactors, setSuccessCreateReactor)
 
-			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
 			pc := prowconfig.Config{
 				ProwConfig: prowconfig.ProwConfig{
 					Plank: prowconfig.Plank{
@@ -762,7 +761,8 @@ func TestExecuteJobsPositive(t *testing.T) {
 							targetOrgRepo: targetOrgRepoPrefix,
 						}},
 				}}
-			imageStreamTags, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs, &pc)
+			jc := NewJobConfigurer(testCiopConfigs, &pc, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
+			imageStreamTags, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}

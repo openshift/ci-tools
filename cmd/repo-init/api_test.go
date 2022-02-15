@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -18,7 +19,7 @@ func TestClusterProfiles(t *testing.T) {
 	}
 
 	writer := &fakeWriter{}
-	clusterProfileHandler()(writer, r)
+	clusterProfileHandler(logrus.WithField("component", "repo-init-api"))(writer, r)
 
 	expected, _ := json.Marshal(getClusterProfiles())
 	if diff := cmp.Diff(writer.body, expected); diff != "" {
@@ -156,7 +157,7 @@ func TestConfigValidation(t *testing.T) {
 
 			writer := &fakeWriter{}
 
-			validateConfig(writer, r)
+			validateConfig(writer, r, logrus.WithField("component", "repo-init-api"))
 
 			actual := &validationResponse{}
 			_ = json.Unmarshal(writer.body, actual)

@@ -7,10 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
@@ -18,11 +16,11 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
@@ -140,55 +138,41 @@ func OperateOnJobConfigDir(configDir string, callback func(*prowconfig.JobConfig
 }
 
 func OperateOnJobConfigSubdir(configDir, subDir string, callback func(*prowconfig.JobConfig, *Info) error) error {
+	inputCh := make(chan *Info)
+	produce := func() error {
+		defer close(inputCh)
+		return OperateOnJobConfigSubdirPaths(configDir, subDir, func(info *Info) error {
+			inputCh <- info
+			return nil
+		})
+	}
 	type item struct {
 		config *prowconfig.JobConfig
 		info   *Info
 	}
-	inputCh := make(chan *Info)
-	errCh := make(chan error)
-	go func() {
-		if err := OperateOnJobConfigSubdirPaths(configDir, subDir, func(info *Info) error {
-			inputCh <- info
-			return nil
-		}); err != nil {
-			errCh <- err
-		}
-		close(inputCh)
-	}()
-	nWorkers := runtime.GOMAXPROCS(0)
 	outputCh := make(chan item)
-	var wg sync.WaitGroup
-	wg.Add(nWorkers)
-	for i := 0; i < nWorkers; i++ {
-		go func() {
-			defer wg.Done()
-			for info := range inputCh {
-				configPart, err := readFromFile(info.Filename)
-				if err != nil {
-					logrus.WithField("source-file", info.Filename).WithError(err).Error("Failed to read Prow job config")
-					continue
-				}
-				outputCh <- item{configPart, info}
+	map_ := func() error {
+		for info := range inputCh {
+			configPart, err := readFromFile(info.Filename)
+			if err != nil {
+				logrus.WithField("source-file", info.Filename).WithError(err).Error("Failed to read Prow job config")
+				continue
 			}
-		}()
+			outputCh <- item{configPart, info}
+		}
+		return nil
 	}
-	go func() {
-		wg.Wait()
-		close(outputCh)
-	}()
-	go func() {
+	errCh := make(chan error)
+	reduce := func() error {
 		for i := range outputCh {
 			if err := callback(i.config, i.info); err != nil {
 				errCh <- err
 			}
 		}
-		close(errCh)
-	}()
-	var ret []error
-	for err := range errCh {
-		ret = append(ret, err)
+		return nil
 	}
-	return utilerrors.NewAggregate(ret)
+	done := func() { close(outputCh) }
+	return util.ProduceMapReduce(0, produce, map_, reduce, done, errCh)
 }
 
 func OperateOnJobConfigSubdirPaths(configDir, subDir string, callback func(*Info) error) error {

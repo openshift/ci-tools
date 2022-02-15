@@ -18,7 +18,6 @@ import (
 )
 
 type retestController struct {
-	ctx          context.Context
 	ghClient     githubClient
 	gitClient    git.ClientFactory
 	configGetter config.Getter
@@ -34,7 +33,6 @@ type retestController struct {
 
 func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool) *retestController {
 	return &retestController{
-		ctx:          context.Background(),
 		ghClient:     ghClient,
 		gitClient:    gitClient,
 		configGetter: cfg,
@@ -48,6 +46,7 @@ func newController(ghClient githubClient, cfg config.Getter, gitClient git.Clien
 }
 
 func (c *retestController) sync() error {
+	defer c.changedFiles.prune()
 	// Input: Tide Config
 	// Output: A list of PRs that are filter out by the queries in Tide's config
 	candidates, err := findCandidates(c.configGetter, c.ghClient, c.usesGitHubApp, c.logger)
@@ -60,7 +59,12 @@ func (c *retestController) sync() error {
 		logrus.Infof("Candidate PR: https://github.com/%s/%s/pull/%d", pr.Repository.Owner.Login, pr.Repository.Name, pr.Number)
 	}
 
-	candidates, err = c.atLeastOneRequiredJob(candidates)
+	candidates, _ = c.atLeastOneRequiredJob(candidates)
+
+	logrus.Infof("Remaining %d candidates for retest (fail at least one required prowjob)", len(candidates))
+	for _, pr := range candidates {
+		logrus.Infof("Candidate PR: https://github.com/%s/%s/pull/%d", pr.Repository.Owner.Login, pr.Repository.Name, pr.Number)
+	}
 
 	// Input: A list of PRs that would merge but have failing required jobs
 	// Output: A subset of input PRs that are *not* in a back-off (whatever the back-off is)
@@ -85,23 +89,37 @@ func findCandidates(config config.Getter, gc githubClient, usesGitHubAppsAuth bo
 func (c *retestController) atLeastOneRequiredJob(candidates map[string]tide.PullRequest) (map[string]tide.PullRequest, error) {
 	output := map[string]tide.PullRequest{}
 	for key, pr := range candidates {
-		// All
+
 		presubmits, err := c.presubmitsForPRByContext(pr)
 		if err != nil {
+			c.logger.WithError(err).Errorf("Failed to get presubmits for %s", key)
 			return nil, err
+		}
+		c.logger.Infof("Pull request %s has %d relevant presubmits configured", key, len(presubmits))
+
+		if len(presubmits) == 0 {
+			continue
 		}
 
 		contexts, err := headContexts(c.ghClient, pr)
 		if err != nil {
+			c.logger.WithError(err).Errorf("Failed to get contexts for %s", key)
 			return nil, err
 		}
+		c.logger.Infof("HEAD commit of PR %s has %d contexts", key, len(contexts))
+
 		for _, ctx := range contexts {
 			if ctx.State != githubql.StatusStateFailure {
 				continue
 			}
-			if _, has := presubmits[string(ctx.Context)]; has {
+			if ps, has := presubmits[string(ctx.Context)]; has {
+				c.logger.Infof("PR %s fails required job %s (context=%s)", key, ps.Name, ctx.Context)
 				output[key] = pr
+				break
 			}
+		}
+		if _, ok := output[key]; !ok {
+			c.logger.Infof("PR %s has no failing context of a required Prowjob", key)
 		}
 	}
 	return output, nil
@@ -249,7 +267,7 @@ func notInBackOff(input map[string]tide.PullRequest) map[string]tide.PullRequest
 	return input
 }
 
-func retest(prs map[string]tide.PullRequest) {
+func retest(gprs map[string]tide.PullRequest) {
 
 }
 
@@ -370,4 +388,12 @@ func headContexts(ghc githubClient, pr tide.PullRequest) ([]tide.Context, error)
 	}
 
 	return contexts, nil
+}
+
+// prune removes any cached file changes that were not used since the last prune.
+func (c *changedFilesAgent) prune() {
+	c.Lock()
+	defer c.Unlock()
+	c.changeCache = c.nextChangeCache
+	c.nextChangeCache = make(map[changeCacheKey][]string)
 }

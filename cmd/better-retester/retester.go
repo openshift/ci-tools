@@ -30,8 +30,6 @@ type retestController struct {
 	// Cache entries expire if they are not used during a sync loop.
 	changedFiles *changedFilesAgent
 
-	mergeChecker *mergeChecker
-
 	logger *logrus.Entry
 
 	usesGitHubApp bool
@@ -48,7 +46,6 @@ func newController(ghClient githubClient, cfg config.Getter, gitClient git.Clien
 			ghc:             ghClient,
 			nextChangeCache: make(map[changeCacheKey][]string),
 		},
-		mergeChecker:  newMergeChecker(cfg, ghClient),
 		logger:        logrus.NewEntry(logrus.StandardLogger()),
 		usesGitHubApp: usesApp,
 	}
@@ -66,8 +63,8 @@ func (c *retestController) sync() error {
 	if err != nil {
 		return err
 	}
-	//each filteredPool holds a subset of input PRs whose jobs are actually required for merge
-	filteredPools := c.filterSubpools(c.mergeChecker.isAllowed, rawPools)
+	// each filteredPool holds a subset of input PRs whose jobs are actually required for merge
+	filteredPools := c.filterSubpools(rawPools)
 
 	for key, filteredPool := range filteredPools {
 		filteredPRs := filteredPool.prs
@@ -356,7 +353,7 @@ func subpoolsInParallel(goroutines int, sps map[string]*subpool, process func(*s
 // filterSubpools filters non-pool PRs out of the initially identified subpools,
 // deleting any pools that become empty.
 // See filterSubpool for filtering details.
-func (c *retestController) filterSubpools(mergeAllowed func(*tide.PullRequest) (string, error), raw map[string]*subpool) map[string]*subpool {
+func (c *retestController) filterSubpools(raw map[string]*subpool) map[string]*subpool {
 	filtered := make(map[string]*subpool)
 	var lock sync.Mutex
 
@@ -369,7 +366,7 @@ func (c *retestController) filterSubpools(mergeAllowed func(*tide.PullRequest) (
 				return
 			}
 			key := poolKey(sp.org, sp.repo, sp.branch)
-			if spFiltered := filterSubpool(c.ghClient, mergeAllowed, sp); spFiltered != nil {
+			if spFiltered := filterSubpool(c.ghClient, sp); spFiltered != nil {
 				sp.log.WithField("key", key).WithField("pool", spFiltered).Debug("filtered sub-pool")
 
 				lock.Lock()
@@ -528,10 +525,10 @@ func (c *retestController) initSubpoolData(sp *subpool) error {
 // filtered subpool.
 // If the subpool becomes empty 'nil' is returned to indicate that the subpool
 // should be deleted.
-func filterSubpool(ghc githubClient, mergeAllowed func(*tide.PullRequest) (string, error), sp *subpool) *subpool {
+func filterSubpool(ghc githubClient, sp *subpool) *subpool {
 	var toKeep []tide.PullRequest
 	for _, pr := range sp.prs {
-		if !filterPR(ghc, mergeAllowed, sp, &pr) {
+		if !filterPR(ghc, sp, &pr) {
 			toKeep = append(toKeep, pr)
 		}
 	}
@@ -551,17 +548,8 @@ func filterSubpool(ghc githubClient, mergeAllowed func(*tide.PullRequest) (strin
 //   status is preventing merge. Required ProwJob statuses are allowed to be
 //   'pending' because this prevents kicking PRs from the pool when Tide is
 //   retesting them.)
-func filterPR(ghc githubClient, mergeAllowed func(*tide.PullRequest) (string, error), sp *subpool, pr *tide.PullRequest) bool {
+func filterPR(ghc githubClient, sp *subpool, pr *tide.PullRequest) bool {
 	log := sp.log.WithFields(logFields(*pr))
-	// Skip PRs that are known to be unmergeable.
-	if reason, err := mergeAllowed(pr); err != nil {
-		log.WithError(err).Error("Error checking PR mergeability.")
-		return true
-	} else if reason != "" {
-		log.WithField("reason", reason).Debug("filtering out PR as it is not mergeable")
-		return true
-	}
-
 	// Filter out PRs with unsuccessful contexts unless the only unsuccessful
 	// contexts are pending required prowjobs.
 	contexts, err := headContexts(log, ghc, pr)
@@ -791,121 +779,4 @@ func contextsToStrings(contexts []tide.Context) []string {
 		names = append(names, string(c.Context))
 	}
 	return names
-}
-
-// mergeChecker provides a function to check if a PR can be merged with
-// the requested method and does not have a merge conflict.
-// It caches results and should be cleared periodically with clearCache()
-type mergeChecker struct {
-	config config.Getter
-	ghc    githubClient
-
-	sync.Mutex
-	cache map[config.OrgRepo]map[github.PullRequestMergeType]bool
-}
-
-func (m *mergeChecker) clearCache() {
-	// Only do this once per token reset since it could be a bit expensive for
-	// Tide instances that handle hundreds of repos.
-	ticker := time.NewTicker(time.Hour)
-	for {
-		<-ticker.C
-		m.Lock()
-		m.cache = make(map[config.OrgRepo]map[github.PullRequestMergeType]bool)
-		m.Unlock()
-	}
-}
-
-func (m *mergeChecker) repoMethods(orgRepo config.OrgRepo) (map[github.PullRequestMergeType]bool, error) {
-	m.Lock()
-	defer m.Unlock()
-
-	repoMethods, ok := m.cache[orgRepo]
-	if !ok {
-		fullRepo, err := m.ghc.GetRepo(orgRepo.Org, orgRepo.Repo)
-		if err != nil {
-			return nil, err
-		}
-		logrus.WithFields(logrus.Fields{
-			"org":              orgRepo.Org,
-			"repo":             orgRepo.Repo,
-			"AllowMergeCommit": fullRepo.AllowMergeCommit,
-			"AllowSquashMerge": fullRepo.AllowSquashMerge,
-			"AllowRebaseMerge": fullRepo.AllowRebaseMerge,
-		}).Debug("GetRepo returns these values for repo methods")
-		repoMethods = map[github.PullRequestMergeType]bool{
-			github.MergeMerge:  fullRepo.AllowMergeCommit,
-			github.MergeSquash: fullRepo.AllowSquashMerge,
-			github.MergeRebase: fullRepo.AllowRebaseMerge,
-		}
-		m.cache[orgRepo] = repoMethods
-	}
-	return repoMethods, nil
-}
-
-// isAllowed checks if a PR does not have merge conflicts and requests an
-// allowed merge method. If there is no error it returns a string explanation if
-// not allowed or "" if allowed.
-func (m *mergeChecker) isAllowed(pr *tide.PullRequest) (string, error) {
-	if pr.Mergeable == githubql.MergeableStateConflicting {
-		return "PR has a merge conflict.", nil
-	}
-	mergeMethod, err := prMergeMethod(m.config().Tide, pr)
-	if err != nil {
-		// This should be impossible.
-		return "", fmt.Errorf("Programmer error! Failed to determine a merge method: %w", err)
-	}
-	orgRepo := config.OrgRepo{Org: string(pr.Repository.Owner.Login), Repo: string(pr.Repository.Name)}
-	repoMethods, err := m.repoMethods(orgRepo)
-	if err != nil {
-		return "", fmt.Errorf("error getting repo data: %w", err)
-	}
-	if allowed, exists := repoMethods[mergeMethod]; !exists {
-		// Should be impossible as well.
-		return "", fmt.Errorf("Programmer error! PR requested the unrecognized merge type %q", mergeMethod)
-	} else if !allowed {
-		return fmt.Sprintf("Merge type %q disallowed by repo settings", mergeMethod), nil
-	}
-	return "", nil
-}
-
-func prMergeMethod(c config.Tide, pr *tide.PullRequest) (github.PullRequestMergeType, error) {
-	repo := config.OrgRepo{Org: string(pr.Repository.Owner.Login), Repo: string(pr.Repository.Name)}
-	method := c.MergeMethod(repo)
-	squashLabel := c.SquashLabel
-	rebaseLabel := c.RebaseLabel
-	mergeLabel := c.MergeLabel
-	if squashLabel != "" || rebaseLabel != "" || mergeLabel != "" {
-		labelCount := 0
-		for _, prlabel := range pr.Labels.Nodes {
-			switch string(prlabel.Name) {
-			case "":
-				continue
-			case squashLabel:
-				method = github.MergeSquash
-				labelCount++
-			case rebaseLabel:
-				method = github.MergeRebase
-				labelCount++
-			case mergeLabel:
-				method = github.MergeMerge
-				labelCount++
-			}
-			if labelCount > 1 {
-				return "", fmt.Errorf("conflicting merge method override labels")
-			}
-		}
-	}
-	return method, nil
-}
-
-func newMergeChecker(cfg config.Getter, ghc githubClient) *mergeChecker {
-	m := &mergeChecker{
-		config: cfg,
-		ghc:    ghc,
-		cache:  map[config.OrgRepo]map[github.PullRequestMergeType]bool{},
-	}
-
-	go m.clearCache()
-	return m
 }

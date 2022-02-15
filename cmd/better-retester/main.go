@@ -11,16 +11,25 @@ import (
 	"k8s.io/test-infra/pkg/flagutil"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
+	"k8s.io/test-infra/prow/git/v2"
+	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/interrupts"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type githubClient interface {
+	GetCombinedStatus(org, repo, ref string) (*github.CombinedStatus, error)
+	GetPullRequestChanges(org, repo string, number int) ([]github.PullRequestChange, error)
+	GetRef(string, string, string) (string, error)
+	GetRepo(owner, name string) (github.FullRepo, error)
+	ListCheckRuns(org, repo, ref string) (*github.CheckRunList, error)
 	QueryWithGitHubAppsSupport(ctx context.Context, q interface{}, vars map[string]interface{}, org string) error
 }
 
 type options struct {
-	config configflagutil.ConfigOptions
-	github prowflagutil.GitHubOptions
+	config     configflagutil.ConfigOptions
+	github     prowflagutil.GitHubOptions
+	kubernetes prowflagutil.KubernetesOptions
 
 	runOnce bool
 	dryRun  bool
@@ -29,7 +38,7 @@ type options struct {
 }
 
 func (o *options) Validate() error {
-	for _, group := range []flagutil.OptionGroup{&o.github, &o.config} {
+	for _, group := range []flagutil.OptionGroup{&o.github, &o.config, &o.kubernetes} {
 		if err := group.Validate(o.dryRun); err != nil {
 			return err
 		}
@@ -47,7 +56,7 @@ func gatherOptions() options {
 	fs.BoolVar(&o.runOnce, "run-once", false, "If true, run only once then quit.")
 	fs.StringVar(&intervalRaw, "interval", "1h", "Parseable duration string that specifies the sync period")
 
-	for _, group := range []flagutil.OptionGroup{&o.github, &o.config} {
+	for _, group := range []flagutil.OptionGroup{&o.github, &o.config, &o.kubernetes} {
 		group.AddFlags(fs)
 	}
 
@@ -74,12 +83,32 @@ func main() {
 		logrus.WithError(err).Fatal("Error creating github client")
 	}
 
+	gitClient, err := o.github.GitClient(o.dryRun)
+	if err != nil {
+		logrus.WithError(err).Fatal("Error getting Git client.")
+	}
+
 	configAgent, err := o.config.ConfigAgent()
 	if err != nil {
 		logrus.WithError(err).Fatal("Error starting config agent.")
 	}
 
-	c := newController(gc, configAgent.Config, o.github.AppPrivateKeyPath != "")
+	kubeCfg, err := o.kubernetes.InfrastructureClusterConfig(o.dryRun)
+	if err != nil {
+		logrus.WithError(err).Fatal("Error getting kubeconfig.")
+	}
+	prowJobClient, err := ctrlruntimeclient.New(kubeCfg, ctrlruntimeclient.Options{})
+	if err != nil {
+		logrus.WithError(err).Fatal("could not get ProwJob client")
+	}
+
+	c := newController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), prowJobClient, o.github.AppPrivateKeyPath != "")
+
+	interrupts.OnInterrupt(func() {
+		if err := gitClient.Clean(); err != nil {
+			logrus.WithError(err).Error("Could not clean up git client cache.")
+		}
+	})
 
 	execute(c)
 	if o.runOnce {

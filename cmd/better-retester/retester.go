@@ -11,20 +11,17 @@ import (
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/tide"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type retestController struct {
-	ctx           context.Context
-	ghClient      githubClient
-	gitClient     git.ClientFactory
-	configGetter  config.Getter
-	prowJobClient ctrlruntimeclient.Client
+	ctx          context.Context
+	ghClient     githubClient
+	gitClient    git.ClientFactory
+	configGetter config.Getter
 
 	// changedFiles caches the names of files changed by PRs.
 	// Cache entries expire if they are not used during a sync loop.
@@ -35,13 +32,12 @@ type retestController struct {
 	usesGitHubApp bool
 }
 
-func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, prowJobClient ctrlruntimeclient.Client, usesApp bool) *retestController {
+func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool) *retestController {
 	return &retestController{
-		ctx:           context.Background(),
-		ghClient:      ghClient,
-		gitClient:     gitClient,
-		configGetter:  cfg,
-		prowJobClient: prowJobClient,
+		ctx:          context.Background(),
+		ghClient:     ghClient,
+		gitClient:    gitClient,
+		configGetter: cfg,
 		changedFiles: &changedFilesAgent{
 			ghc:             ghClient,
 			nextChangeCache: make(map[changeCacheKey][]string),
@@ -255,9 +251,6 @@ type subpool struct {
 	// sha is the baseSHA for this subpool
 	sha string
 
-	// pjs contains all ProwJobs of type Presubmit or Batch
-	// that have the same baseSHA as the subpool
-	pjs []prowapi.ProwJob
 	prs []tide.PullRequest
 
 	cc map[int]contextChecker
@@ -310,19 +303,6 @@ func (c *retestController) dividePool(pool map[string]tide.PullRequest) (map[str
 		sps[fn].prs = append(sps[fn].prs, pr)
 	}
 
-	for subpoolkey, sp := range sps {
-		pjs := &prowapi.ProwJobList{}
-		err := c.prowJobClient.List(
-			c.ctx,
-			pjs,
-			ctrlruntimeclient.MatchingFields{cacheIndexName: cacheIndexKey(sp.org, sp.repo, sp.branch, sp.sha)},
-			ctrlruntimeclient.InNamespace(c.configGetter().ProwJobNamespace))
-		if err != nil {
-			return nil, fmt.Errorf("failed to list jobs for subpool %s: %w", subpoolkey, err)
-		}
-		c.logger.WithField("subpool", subpoolkey).Debugf("Found %d prowjobs.", len(pjs.Items))
-		sps[subpoolkey].pjs = pjs.Items
-	}
 	return sps, nil
 }
 

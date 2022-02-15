@@ -18,8 +18,10 @@ func TestClusterProfiles(t *testing.T) {
 		t.Fatalf("could not make request: %v", err)
 	}
 
+	s := server{logger: logrus.WithField("component", "repo-init-api")}
+
 	writer := &fakeWriter{}
-	clusterProfileHandler(logrus.WithField("component", "repo-init-api"))(writer, r)
+	s.clusterProfileHandler()(writer, r)
 
 	expected, _ := json.Marshal(getClusterProfiles())
 	if diff := cmp.Diff(writer.body, expected); diff != "" {
@@ -157,7 +159,8 @@ func TestConfigValidation(t *testing.T) {
 
 			writer := &fakeWriter{}
 
-			validateConfig(writer, r, logrus.WithField("component", "repo-init-api"))
+			s := server{logger: logrus.WithField("component", "repo-init-api")}
+			s.validateConfig(writer, r)
 
 			actual := &validationResponse{}
 			_ = json.Unmarshal(writer.body, actual)

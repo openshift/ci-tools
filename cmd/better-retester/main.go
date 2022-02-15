@@ -19,9 +19,6 @@ import (
 type githubClient interface {
 	GetCombinedStatus(org, repo, ref string) (*github.CombinedStatus, error)
 	GetPullRequestChanges(org, repo string, number int) ([]github.PullRequestChange, error)
-	GetRef(string, string, string) (string, error)
-	GetRepo(owner, name string) (github.FullRepo, error)
-	ListCheckRuns(org, repo, ref string) (*github.CheckRunList, error)
 	QueryWithGitHubAppsSupport(ctx context.Context, q interface{}, vars map[string]interface{}, org string) error
 }
 

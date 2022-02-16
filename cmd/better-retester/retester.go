@@ -16,6 +16,17 @@ import (
 	"k8s.io/test-infra/prow/tide"
 )
 
+type pullRequest struct {
+	prSha             string
+	baseSha           string
+	retestsForPrSha   int
+	retestsForBaseSha int
+}
+
+type backoffCache struct {
+	cache map[string]*pullRequest
+}
+
 type retestController struct {
 	ghClient     githubClient
 	gitClient    git.ClientFactory
@@ -24,6 +35,7 @@ type retestController struct {
 	logger *logrus.Entry
 
 	usesGitHubApp bool
+	backoff       *backoffCache
 }
 
 func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool) *retestController {
@@ -33,7 +45,12 @@ func newController(ghClient githubClient, cfg config.Getter, gitClient git.Clien
 		configGetter:  cfg,
 		logger:        logrus.NewEntry(logrus.StandardLogger()),
 		usesGitHubApp: usesApp,
+		backoff:       &backoffCache{cache: map[string]*pullRequest{}},
 	}
+}
+
+func prUrl(pr tide.PullRequest) string {
+	return fmt.Sprintf("https://github.com/%s/%s/pull/%d", pr.Repository.Owner.Login, pr.Repository.Name, pr.Number)
 }
 
 func (c *retestController) sync() error {
@@ -46,7 +63,7 @@ func (c *retestController) sync() error {
 
 	logrus.Infof("Found %d candidates for retest (pass label criteria, fail some tests)", len(candidates))
 	for _, pr := range candidates {
-		logrus.Infof("Candidate PR: https://github.com/%s/%s/pull/%d", pr.Repository.Owner.Login, pr.Repository.Name, pr.Number)
+		logrus.Infof("Candidate PR: %s", prUrl(pr))
 	}
 
 	candidates, err = c.atLeastOneRequiredJob(candidates)
@@ -56,17 +73,81 @@ func (c *retestController) sync() error {
 
 	logrus.Infof("Remaining %d candidates for retest (fail at least one required prowjob)", len(candidates))
 	for _, pr := range candidates {
-		logrus.Infof("Candidate PR: https://github.com/%s/%s/pull/%d", pr.Repository.Owner.Login, pr.Repository.Name, pr.Number)
+		logrus.Infof("Candidate PR: %s", prUrl(pr))
 	}
 
-	// Input: A list of PRs that would merge but have failing required jobs
-	// Output: A subset of input PRs that are *not* in a back-off (whatever the back-off is)
-	candidates = notInBackOff(candidates)
+	var errs []error
+	for _, pr := range candidates {
+		errs = append(errs, c.retestOrBackoff(pr))
+	}
 
-	// Actually comment...
-	retest(candidates)
+	// TODO: Load the backoff records from disk after start (using an option) and survive when it is not present
+	// TODO: Persist the backoff records after each sync (atomically, so that we do not corrupt it on interrupt)
+	// TODO: Prune old records from backoff (we'll need to start tracking some "last considered" time)
 
 	logrus.Info("Sync finished")
+	return utilerrors.NewAggregate(errs)
+}
+
+type retestBackoffAction int
+
+const (
+	retestBackoffHold = iota
+	retestBackoffPause
+	retestBackoffRetest
+
+	maxRetestsForShaAndBase = 3
+	maxRetestsForSha        = 3 * maxRetestsForShaAndBase
+)
+
+func (b *backoffCache) check(pr tide.PullRequest, baseSha string) (retestBackoffAction, string) {
+	key := prKey(&pr)
+	if _, has := b.cache[key]; !has {
+		b.cache[key] = &pullRequest{}
+	}
+	record := b.cache[key]
+	if record.prSha != string(pr.HeadRefOID) {
+		record.prSha = string(pr.HeadRefOID)
+		record.retestsForPrSha = 0
+		record.retestsForBaseSha = 0
+	}
+	if record.baseSha != baseSha {
+		record.baseSha = baseSha
+		record.retestsForBaseSha = 0
+	}
+
+	if record.retestsForPrSha == maxRetestsForSha {
+		record.retestsForPrSha = 0
+		record.retestsForBaseSha = 0
+		return retestBackoffHold, fmt.Sprintf("Revision %s was retested %d times: holding", record.prSha, maxRetestsForSha)
+	}
+
+	if record.retestsForBaseSha == maxRetestsForShaAndBase {
+		return retestBackoffPause, fmt.Sprintf("Revision %s was retested %d times against base HEAD %s: pausing", record.prSha, maxRetestsForShaAndBase, record.baseSha)
+	}
+
+	record.retestsForBaseSha++
+	record.retestsForPrSha++
+
+	return retestBackoffRetest, fmt.Sprintf("Remaining retests: %d against base HEAD %s and %d for PR HEAD %s in total", maxRetestsForShaAndBase-record.retestsForBaseSha, record.baseSha, maxRetestsForSha-record.retestsForPrSha, record.prSha)
+}
+
+func (c *retestController) retestOrBackoff(pr tide.PullRequest) error {
+	branchRef := string(pr.BaseRef.Prefix) + string(pr.BaseRef.Name)
+	baseSha, err := c.ghClient.GetRef(string(pr.Repository.Owner.Login), string(pr.Repository.Name), strings.TrimPrefix(branchRef, "refs/"))
+	if err != nil {
+		return err
+	}
+
+	action, message := c.backoff.check(pr, baseSha)
+	switch action {
+	case retestBackoffHold:
+		c.logger.Infof("%s: %s (%s)", prUrl(pr), "/hold", message)
+	case retestBackoffPause:
+		c.logger.Infof("%s: %s (%s)", prUrl(pr), "no comment", message)
+	case retestBackoffRetest:
+		c.logger.Infof("%s: %s (%s)", prUrl(pr), "/retest-required", message)
+	}
 	return nil
 }
 
@@ -254,14 +335,6 @@ func search(query querier, log *logrus.Entry, q string, start, end time.Time, or
 		"remaining":      remaining,
 	}).Debug("Finished query")
 	return ret, nil
-}
-
-func notInBackOff(input map[string]tide.PullRequest) map[string]tide.PullRequest {
-	return input
-}
-
-func retest(prs map[string]tide.PullRequest) {
-
 }
 
 func (c *retestController) presubmitsForPRByContext(pr tide.PullRequest) map[string]config.Presubmit {

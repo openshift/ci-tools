@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	githubql "github.com/shurcooL/githubv4"
@@ -10,12 +11,14 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/tide"
 )
 
 type retestController struct {
 	ghClient     githubClient
+	gitClient    git.ClientFactory
 	configGetter config.Getter
 
 	logger *logrus.Entry
@@ -23,9 +26,10 @@ type retestController struct {
 	usesGitHubApp bool
 }
 
-func newController(ghClient githubClient, cfg config.Getter, usesApp bool) *retestController {
+func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool) *retestController {
 	return &retestController{
 		ghClient:      ghClient,
+		gitClient:     gitClient,
 		configGetter:  cfg,
 		logger:        logrus.NewEntry(logrus.StandardLogger()),
 		usesGitHubApp: usesApp,
@@ -34,20 +38,26 @@ func newController(ghClient githubClient, cfg config.Getter, usesApp bool) *rete
 
 func (c *retestController) sync() error {
 	// Input: Tide Config
-	// Output: A list of PRs that would merge but have failing jobs
+	// Output: A list of PRs that are filter out by the queries in Tide's config
 	candidates, err := findCandidates(c.configGetter, c.ghClient, c.usesGitHubApp, c.logger)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to find retestable candidates: %w", err)
 	}
 
-	logrus.Infof("Found %d candidates for retest", len(candidates))
-	for key, pr := range candidates {
-		logrus.Infof("Candidate PR: %s (https://github.com/%s/%s/pull/%d", key, pr.Repository.Owner.Login, pr.Repository.Name, pr.Number)
+	logrus.Infof("Found %d candidates for retest (pass label criteria, fail some tests)", len(candidates))
+	for _, pr := range candidates {
+		logrus.Infof("Candidate PR: https://github.com/%s/%s/pull/%d", pr.Repository.Owner.Login, pr.Repository.Name, pr.Number)
 	}
 
-	// Input: A list of PRs that would merge but have failing jobs
-	// Output: A subset of input PRs whose jobs are actually required for merge
-	candidates = atLeastOneFailingRequiredJob(candidates)
+	candidates, err = c.atLeastOneRequiredJob(candidates)
+	if err != nil {
+		return fmt.Errorf("Failed to filter candidate PRs that have at least one required job: %w", err)
+	}
+
+	logrus.Infof("Remaining %d candidates for retest (fail at least one required prowjob)", len(candidates))
+	for _, pr := range candidates {
+		logrus.Infof("Candidate PR: https://github.com/%s/%s/pull/%d", pr.Repository.Owner.Login, pr.Repository.Name, pr.Number)
+	}
 
 	// Input: A list of PRs that would merge but have failing required jobs
 	// Output: A subset of input PRs that are *not* in a back-off (whatever the back-off is)
@@ -55,6 +65,7 @@ func (c *retestController) sync() error {
 
 	// Actually comment...
 	retest(candidates)
+
 	logrus.Info("Sync finished")
 	return nil
 }
@@ -66,6 +77,45 @@ func findCandidates(config config.Getter, gc githubClient, usesGitHubAppsAuth bo
 	}
 
 	return prs, nil
+}
+
+func (c *retestController) atLeastOneRequiredJob(candidates map[string]tide.PullRequest) (map[string]tide.PullRequest, error) {
+	output := map[string]tide.PullRequest{}
+	for key, pr := range candidates {
+		// Get all non-optional Prowjobs configured for this org/repo/branch that could run on this PR
+		presubmits := c.presubmitsForPRByContext(pr)
+
+		c.logger.Infof("Pull request %s has %d relevant presubmits configured", key, len(presubmits))
+
+		// If this PR cannot ever trigger any required Prowjob, `/retest-required` will never do anything useful for it
+		if len(presubmits) == 0 {
+			continue
+		}
+
+		// Get all contexts on the HEAD of the PR
+		contexts, err := headContexts(c.ghClient, pr)
+		if err != nil {
+			c.logger.WithError(err).Errorf("Failed to get contexts for %s", key)
+			return nil, err
+		}
+		c.logger.Infof("HEAD commit of PR %s has %d contexts", key, len(contexts))
+
+		for _, ctx := range contexts {
+			if ctx.State != githubql.StatusStateFailure {
+				continue
+			}
+			// It is enough to find a single failed context that corresponds to a required Prowjob
+			if ps, has := presubmits[string(ctx.Context)]; has {
+				c.logger.Infof("PR %s fails required job %s (context=%s)", key, ps.Name, ctx.Context)
+				output[key] = pr
+				break
+			}
+		}
+		if _, ok := output[key]; !ok {
+			c.logger.Infof("PR %s has no failing context of a required Prowjob", key)
+		}
+	}
+	return output, nil
 }
 
 // refactor out the query function from the tide's controller
@@ -206,14 +256,56 @@ func search(query querier, log *logrus.Entry, q string, start, end time.Time, or
 	return ret, nil
 }
 
-func atLeastOneFailingRequiredJob(input map[string]tide.PullRequest) map[string]tide.PullRequest {
-	return input
-}
-
 func notInBackOff(input map[string]tide.PullRequest) map[string]tide.PullRequest {
 	return input
 }
 
 func retest(prs map[string]tide.PullRequest) {
 
+}
+
+func (c *retestController) presubmitsForPRByContext(pr tide.PullRequest) map[string]config.Presubmit {
+	presubmits := map[string]config.Presubmit{}
+
+	presubmitsForRepo := c.configGetter().GetPresubmitsStatic(string(pr.Repository.Owner.Login) + "/" + string(pr.Repository.Name))
+
+	for _, ps := range presubmitsForRepo {
+		if ps.ContextRequired() && ps.CouldRun(string(pr.BaseRef.Name)) {
+			presubmits[ps.Context] = ps
+		}
+	}
+
+	return presubmits
+}
+
+// headContexts gets the status contexts for the commit with OID == pr.HeadRefOID
+//
+// First, we try to get this value from the commits we got with the PR query.
+// Unfortunately the 'last' commit ordering is determined by author date
+// not commit date so if commits are reordered non-chronologically on the PR
+// branch the 'last' commit isn't necessarily the logically last commit.
+// We list multiple commits with the query to increase our chance of success,
+// but if we don't find the head commit we have to ask GitHub for it
+// specifically (this costs an API token).
+func headContexts(ghc githubClient, pr tide.PullRequest) ([]tide.Context, error) {
+	// We didn't get the head commit from the query (the commits must not be
+	// logically ordered) so we need to specifically ask GitHub for the status
+	// and coerce it to a graphql type.
+	org := string(pr.Repository.Owner.Login)
+	repo := string(pr.Repository.Name)
+	combined, err := ghc.GetCombinedStatus(org, repo, string(pr.HeadRefOID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get the combined status: %w", err)
+	}
+
+	contexts := make([]tide.Context, 0, len(combined.Statuses))
+	for _, status := range combined.Statuses {
+		contexts = append(contexts, tide.Context{
+			Context:     githubql.String(status.Context),
+			Description: githubql.String(status.Description),
+			State:       githubql.StatusState(strings.ToUpper(status.State)),
+		})
+	}
+
+	return contexts, nil
 }

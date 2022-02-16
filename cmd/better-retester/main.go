@@ -11,10 +11,13 @@ import (
 	"k8s.io/test-infra/pkg/flagutil"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
+	"k8s.io/test-infra/prow/git/v2"
+	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/interrupts"
 )
 
 type githubClient interface {
+	GetCombinedStatus(org, repo, ref string) (*github.CombinedStatus, error)
 	QueryWithGitHubAppsSupport(ctx context.Context, q interface{}, vars map[string]interface{}, org string) error
 }
 
@@ -74,12 +77,23 @@ func main() {
 		logrus.WithError(err).Fatal("Error creating github client")
 	}
 
+	gitClient, err := o.github.GitClient(o.dryRun)
+	if err != nil {
+		logrus.WithError(err).Fatal("Error getting Git client.")
+	}
+
 	configAgent, err := o.config.ConfigAgent()
 	if err != nil {
 		logrus.WithError(err).Fatal("Error starting config agent.")
 	}
 
-	c := newController(gc, configAgent.Config, o.github.AppPrivateKeyPath != "")
+	c := newController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "")
+
+	interrupts.OnInterrupt(func() {
+		if err := gitClient.Clean(); err != nil {
+			logrus.WithError(err).Error("Could not clean up git client cache.")
+		}
+	})
 
 	execute(c)
 	if o.runOnce {

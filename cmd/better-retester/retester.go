@@ -51,7 +51,7 @@ func (c *retestController) sync() error {
 	// Output: A list of PRs that are filter out by the queries in Tide's config
 	candidates, err := findCandidates(c.configGetter, c.ghClient, c.usesGitHubApp, c.logger)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to find retestable candidates: %w", err)
 	}
 
 	logrus.Infof("Found %d candidates for retest (pass label criteria, fail some tests)", len(candidates))
@@ -59,7 +59,10 @@ func (c *retestController) sync() error {
 		logrus.Infof("Candidate PR: https://github.com/%s/%s/pull/%d", pr.Repository.Owner.Login, pr.Repository.Name, pr.Number)
 	}
 
-	candidates, _ = c.atLeastOneRequiredJob(candidates)
+	candidates, err = c.atLeastOneRequiredJob(candidates)
+	if err != nil {
+		return fmt.Errorf("Failed to filter candidate PRs that have at least one required job: %w", err)
+	}
 
 	logrus.Infof("Remaining %d candidates for retest (fail at least one required prowjob)", len(candidates))
 	for _, pr := range candidates {
@@ -89,7 +92,7 @@ func findCandidates(config config.Getter, gc githubClient, usesGitHubAppsAuth bo
 func (c *retestController) atLeastOneRequiredJob(candidates map[string]tide.PullRequest) (map[string]tide.PullRequest, error) {
 	output := map[string]tide.PullRequest{}
 	for key, pr := range candidates {
-
+		// Get all non-optional Prowjobs configured for this org/repo/branch that could run on this PR
 		presubmits, err := c.presubmitsForPRByContext(pr)
 		if err != nil {
 			c.logger.WithError(err).Errorf("Failed to get presubmits for %s", key)
@@ -97,10 +100,12 @@ func (c *retestController) atLeastOneRequiredJob(candidates map[string]tide.Pull
 		}
 		c.logger.Infof("Pull request %s has %d relevant presubmits configured", key, len(presubmits))
 
+		// If this PR cannot ever trigger any required Prowjob, `/retest-required` will never do anything useful for it
 		if len(presubmits) == 0 {
 			continue
 		}
 
+		// Get all contexts on the HEAD of the PR
 		contexts, err := headContexts(c.ghClient, pr)
 		if err != nil {
 			c.logger.WithError(err).Errorf("Failed to get contexts for %s", key)
@@ -112,6 +117,7 @@ func (c *retestController) atLeastOneRequiredJob(candidates map[string]tide.Pull
 			if ctx.State != githubql.StatusStateFailure {
 				continue
 			}
+			// It is enough to find a single failed context that corresponds to a required Prowjob
 			if ps, has := presubmits[string(ctx.Context)]; has {
 				c.logger.Infof("PR %s fails required job %s (context=%s)", key, ps.Name, ctx.Context)
 				output[key] = pr
@@ -267,7 +273,7 @@ func notInBackOff(input map[string]tide.PullRequest) map[string]tide.PullRequest
 	return input
 }
 
-func retest(gprs map[string]tide.PullRequest) {
+func retest(prs map[string]tide.PullRequest) {
 
 }
 

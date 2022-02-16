@@ -18,7 +18,6 @@ import (
 
 type githubClient interface {
 	GetCombinedStatus(org, repo, ref string) (*github.CombinedStatus, error)
-	GetPullRequestChanges(org, repo string, number int) ([]github.PullRequestChange, error)
 	QueryWithGitHubAppsSupport(ctx context.Context, q interface{}, vars map[string]interface{}, org string) error
 }
 

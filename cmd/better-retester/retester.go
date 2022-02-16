@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	githubql "github.com/shurcooL/githubv4"
@@ -22,10 +21,6 @@ type retestController struct {
 	gitClient    git.ClientFactory
 	configGetter config.Getter
 
-	// changedFiles caches the names of files changed by PRs.
-	// Cache entries expire if they are not used during a sync loop.
-	changedFiles *changedFilesAgent
-
 	logger *logrus.Entry
 
 	usesGitHubApp bool
@@ -33,20 +28,15 @@ type retestController struct {
 
 func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool) *retestController {
 	return &retestController{
-		ghClient:     ghClient,
-		gitClient:    gitClient,
-		configGetter: cfg,
-		changedFiles: &changedFilesAgent{
-			ghc:             ghClient,
-			nextChangeCache: make(map[changeCacheKey][]string),
-		},
+		ghClient:      ghClient,
+		gitClient:     gitClient,
+		configGetter:  cfg,
 		logger:        logrus.NewEntry(logrus.StandardLogger()),
 		usesGitHubApp: usesApp,
 	}
 }
 
 func (c *retestController) sync() error {
-	defer c.changedFiles.prune()
 	// Input: Tide Config
 	// Output: A list of PRs that are filter out by the queries in Tide's config
 	candidates, err := findCandidates(c.configGetter, c.ghClient, c.usesGitHubApp, c.logger)
@@ -93,11 +83,8 @@ func (c *retestController) atLeastOneRequiredJob(candidates map[string]tide.Pull
 	output := map[string]tide.PullRequest{}
 	for key, pr := range candidates {
 		// Get all non-optional Prowjobs configured for this org/repo/branch that could run on this PR
-		presubmits, err := c.presubmitsForPRByContext(pr)
-		if err != nil {
-			c.logger.WithError(err).Errorf("Failed to get presubmits for %s", key)
-			return nil, err
-		}
+		presubmits := c.presubmitsForPRByContext(pr)
+
 		c.logger.Infof("Pull request %s has %d relevant presubmits configured", key, len(presubmits))
 
 		// If this PR cannot ever trigger any required Prowjob, `/retest-required` will never do anything useful for it
@@ -277,91 +264,18 @@ func retest(prs map[string]tide.PullRequest) {
 
 }
 
-type changeCacheKey struct {
-	org, repo string
-	number    int
-	sha       string
-}
-
-// changedFilesAgent queries and caches the names of files changed by PRs.
-// Cache entries expire if they are not used during a sync loop.
-type changedFilesAgent struct {
-	ghc         githubClient
-	changeCache map[changeCacheKey][]string
-	// nextChangeCache caches file change info that is relevant this sync for use next sync.
-	// This becomes the new changeCache when prune() is called at the end of each sync.
-	nextChangeCache map[changeCacheKey][]string
-	sync.RWMutex
-}
-
-// prChanges gets the files changed by the PR, either from the cache or by
-// querying GitHub.
-func (c *changedFilesAgent) prChanges(pr *tide.PullRequest) config.ChangedFilesProvider {
-	return func() ([]string, error) {
-		cacheKey := changeCacheKey{
-			org:    string(pr.Repository.Owner.Login),
-			repo:   string(pr.Repository.Name),
-			number: int(pr.Number),
-			sha:    string(pr.HeadRefOID),
-		}
-
-		c.RLock()
-		changedFiles, ok := c.changeCache[cacheKey]
-		if ok {
-			c.RUnlock()
-			c.Lock()
-			c.nextChangeCache[cacheKey] = changedFiles
-			c.Unlock()
-			return changedFiles, nil
-		}
-		if changedFiles, ok = c.nextChangeCache[cacheKey]; ok {
-			c.RUnlock()
-			return changedFiles, nil
-		}
-		c.RUnlock()
-
-		// We need to query the changes from GitHub.
-		changes, err := c.ghc.GetPullRequestChanges(
-			string(pr.Repository.Owner.Login),
-			string(pr.Repository.Name),
-			int(pr.Number),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error getting PR changes for #%d: %w", int(pr.Number), err)
-		}
-		changedFiles = make([]string, 0, len(changes))
-		for _, change := range changes {
-			changedFiles = append(changedFiles, change.Filename)
-		}
-
-		c.Lock()
-		c.nextChangeCache[cacheKey] = changedFiles
-		c.Unlock()
-		return changedFiles, nil
-	}
-}
-
-func (c *retestController) presubmitsForPRByContext(pr tide.PullRequest) (map[string]config.Presubmit, error) {
+func (c *retestController) presubmitsForPRByContext(pr tide.PullRequest) map[string]config.Presubmit {
 	presubmits := map[string]config.Presubmit{}
 
-	presubmitsForPull := c.configGetter().GetPresubmitsStatic(string(pr.Repository.Owner.Login) + "/" + string(pr.Repository.Name))
+	presubmitsForRepo := c.configGetter().GetPresubmitsStatic(string(pr.Repository.Owner.Login) + "/" + string(pr.Repository.Name))
 
-	for _, ps := range presubmitsForPull {
-		if !ps.ContextRequired() {
-			continue
+	for _, ps := range presubmitsForRepo {
+		if ps.ContextRequired() && ps.CouldRun(string(pr.BaseRef.Name)) {
+			presubmits[ps.Context] = ps
 		}
-
-		shouldRun, err := ps.ShouldRun(string(pr.BaseRef.Name), c.changedFiles.prChanges(&pr), false, false)
-		if err != nil {
-			return nil, err
-		}
-		if !shouldRun {
-			continue
-		}
-		presubmits[ps.Context] = ps
 	}
 
-	return presubmits, nil
+	return presubmits
 }
 
 // headContexts gets the status contexts for the commit with OID == pr.HeadRefOID
@@ -394,12 +308,4 @@ func headContexts(ghc githubClient, pr tide.PullRequest) ([]tide.Context, error)
 	}
 
 	return contexts, nil
-}
-
-// prune removes any cached file changes that were not used since the last prune.
-func (c *changedFilesAgent) prune() {
-	c.Lock()
-	defer c.Unlock()
-	c.changeCache = c.nextChangeCache
-	c.nextChangeCache = make(map[changeCacheKey][]string)
 }

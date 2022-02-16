@@ -20,6 +20,7 @@ import (
 	prowConfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
+	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
 	"k8s.io/test-infra/prow/simplifypath"
@@ -77,13 +78,14 @@ type serverConfigType string
 var configTypes = []serverConfigType{GitHubClientId, GitHubClientSecret, GitHubRedirectUri}
 
 func serveAPI(port, healthPort, numRepos int, ghOptions flagutil.GitHubOptions, disableCorsVerification bool, serverConfigPath string) {
+	logrusutil.ComponentInit()
 	rm := &repoManager{
 		numRepos: numRepos,
 	}
 	rm.init()
 
 	s := server{
-		logger:        logrus.WithField("component", "repo-init-api"),
+		logger:        &logrus.Entry{},
 		githubOptions: ghOptions,
 		disableCors:   disableCorsVerification,
 		rm:            rm,

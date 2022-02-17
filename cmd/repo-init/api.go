@@ -85,7 +85,7 @@ func serveAPI(port, healthPort, numRepos int, ghOptions flagutil.GitHubOptions, 
 	rm.init()
 
 	s := server{
-		logger:        &logrus.Entry{},
+		logger:        logrus.WithField("component", "repo-init-apiserver"),
 		githubOptions: ghOptions,
 		disableCors:   disableCorsVerification,
 		rm:            rm,

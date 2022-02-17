@@ -13,6 +13,7 @@ import (
 
 	prowConfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/interrupts"
+	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
 	"k8s.io/test-infra/prow/simplifypath"
@@ -26,6 +27,7 @@ var (
 )
 
 func serveUI(port, healthPort, metricsPort int) {
+	logrusutil.ComponentInit()
 	logger := logrus.WithField("component", "repo-init-frontend")
 
 	health := pjutil.NewHealthOnPort(healthPort)

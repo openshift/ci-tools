@@ -79,12 +79,16 @@ func Initialize(t testhelper.TestingTInterface, tmpDir string, r *rand.Rand, str
 		},
 	)
 	prometheus.RunFromFrameworkRunner(t, interrupts.Context(), stream)
-	// TODO: wait more intelligently
-	time.Sleep(1 * time.Second)
 	prometheusConnectionFlags := prometheus.ClientFlags()
 	// this is a hack, but whatever
 	prometheusAddr := prometheusConnectionFlags[1]
 	prometheusHost := "http://" + prometheusAddr
+	prometheus.Ready(t, func(o *testhelper.ReadyOptions) {
+		o.ReadyURL = prometheusHost + "/-/ready"
+		o.WaitFor = 5
+	})
+	// TODO: for some reason the above is not sufficient, leave this for now
+	time.Sleep(5 * time.Second)
 	t.Logf("Prometheus is running at %s", prometheusHost)
 	return prometheusAddr, info
 }

@@ -87,6 +87,8 @@ func Initialize(t testhelper.TestingTInterface, tmpDir string, r *rand.Rand, str
 		o.ReadyURL = prometheusHost + "/-/ready"
 		o.WaitFor = 5
 	})
+	// TODO: for some reason the above is not sufficient, leave this for now
+	time.Sleep(5 * time.Second)
 	t.Logf("Prometheus is running at %s", prometheusHost)
 	return prometheusAddr, info
 }

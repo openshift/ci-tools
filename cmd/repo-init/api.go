@@ -343,6 +343,7 @@ func (s server) loadConfigs(w http.ResponseWriter, r *http.Request) {
 
 	githubUser := r.Header.Get("github_user")
 	availableRepo, err := s.rm.retrieveAndLockAvailable(githubUser)
+	defer s.rm.returnInUse(availableRepo)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		s.logger.WithError(err).Error("unable to get available repo")
@@ -351,6 +352,7 @@ func (s server) loadConfigs(w http.ResponseWriter, r *http.Request) {
 	}
 	releaseRepo := availableRepo.path
 
+	//TODO(smg247): note, this generates an error inside that isn't really an error in this case. We need to make sure this is being filtered
 	configs, err := config.LoadByOrgRepo(getConfigPath(org, repo, releaseRepo))
 
 	if err != nil {

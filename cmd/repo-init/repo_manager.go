@@ -36,7 +36,7 @@ func (rm *repoManager) init() {
 
 	repoChannel := make(chan *repo)
 	for i := 0; i < rm.numRepos; i++ {
-		go func(repoChannel chan *repo) { //TODO(smg247): this doesn't work with 4 repo's I think we might not want to do this asynchronously
+		go func(repoChannel chan *repo) {
 			repo := initRepo(stdout, stderr)
 			repoChannel <- repo
 			logrus.Debugf("Initialized repo %v", repo)
@@ -75,8 +75,9 @@ func (rm *repoManager) retrieveAndLockAvailable(githubUsername string) (reposito
 			if len(rm.availableRepos) == 0 {
 				return nil, fmt.Errorf("all repositories are currently in use")
 			}
-			availableRepo := rm.availableRepos[0]
-			rm.availableRepos = append(rm.availableRepos[0:], rm.availableRepos[1:]...)
+			lastIndex := len(rm.availableRepos) - 1
+			availableRepo := rm.availableRepos[lastIndex]
+			rm.availableRepos = rm.availableRepos[:lastIndex]
 			availableRepo.inUseBy = githubUsername
 			rm.inUseRepos = append(rm.inUseRepos, availableRepo)
 			// make sure we update the repo to the latest changes before giving it out.
@@ -98,7 +99,7 @@ func (rm *repoManager) returnInUse(r *repo) {
 	rm.mux.Lock()
 	for i, cr := range rm.inUseRepos {
 		if r == cr {
-			rm.inUseRepos = append(rm.inUseRepos[i:], rm.inUseRepos[i+1:]...)
+			rm.inUseRepos = append(rm.inUseRepos[0:i], rm.inUseRepos[i+1:]...)
 			r.inUseBy = ""
 			rm.availableRepos = append(rm.availableRepos, r)
 		}

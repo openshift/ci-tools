@@ -30,6 +30,9 @@ type options struct {
 	dryRun  bool
 
 	interval time.Duration
+
+	cacheFile      string
+	cacheRecordAge time.Duration
 }
 
 func (o *options) Validate() error {
@@ -46,10 +49,13 @@ func gatherOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
 	var intervalRaw string
+	var cacheRecordAgeRaw string
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Dry run for testing. Uses API tokens but does not mutate.")
 	fs.BoolVar(&o.runOnce, "run-once", false, "If true, run only once then quit.")
 	fs.StringVar(&intervalRaw, "interval", "1h", "Parseable duration string that specifies the sync period")
+	fs.StringVar(&o.cacheFile, "cache-file", "", "File to persist cache. No persistence of cache if not set")
+	fs.StringVar(&cacheRecordAgeRaw, "cache-record-age", "7d", "Parseable duration string that specifies how long a cache record lives in cache after the last time it was considered")
 
 	for _, group := range []flagutil.OptionGroup{&o.github, &o.config} {
 		group.AddFlags(fs)
@@ -64,6 +70,11 @@ func gatherOptions() options {
 	if err != nil {
 		logrus.WithError(err).Fatal("could not parse interval")
 	}
+	o.cacheRecordAge, err = time.ParseDuration(cacheRecordAgeRaw)
+	if err != nil {
+		logrus.WithError(err).Fatal("could not parse cache record age")
+	}
+
 	return o
 }
 
@@ -88,7 +99,7 @@ func main() {
 		logrus.WithError(err).Fatal("Error starting config agent.")
 	}
 
-	c := newController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "")
+	c := newController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge)
 
 	interrupts.OnInterrupt(func() {
 		if err := gitClient.Clean(); err != nil {

@@ -2,29 +2,99 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
 	githubql "github.com/shurcooL/githubv4"
 	"github.com/sirupsen/logrus"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/tide"
+	"sigs.k8s.io/yaml"
 )
 
-type pullRequest struct {
-	prSha             string
-	baseSha           string
-	retestsForPrSha   int
-	retestsForBaseSha int
+type PullRequest struct {
+	PRSha              string      `json:"pr_sha,omitempty"`
+	BaseSha            string      `json:"base_sha,omitempty"`
+	RetestsForPrSha    int         `json:"retests_for_pr_sha,omitempty"`
+	RetestsForBaseSha  int         `json:"retests_for_base_sha,omitempty"`
+	LastConsideredTime metav1.Time `json:"last_considered_time,omitempty"`
 }
 
 type backoffCache struct {
-	cache map[string]*pullRequest
+	cache          map[string]*PullRequest
+	file           string
+	cacheRecordAge time.Duration
+	logger         *logrus.Entry
+}
+
+func (b *backoffCache) loadFromDisk() error {
+	if b.file == "" {
+		return nil
+	}
+	if _, err := os.Stat(b.file); errors.Is(err, os.ErrNotExist) {
+		b.logger.WithField("file", b.file).Info("cache file does not exit")
+		return nil
+	}
+	bytes, err := ioutil.ReadFile(b.file)
+	if err != nil {
+		return fmt.Errorf("failed to read file %s: %w", b.file, err)
+	}
+	cache := map[string]*PullRequest{}
+	if err := yaml.Unmarshal(bytes, &cache); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+	for key, pr := range cache {
+		if age := time.Since(pr.LastConsideredTime.Time); age > b.cacheRecordAge {
+			b.logger.WithField("key", key).WithField("LastConsideredTime", pr.LastConsideredTime.Time).
+				WithField("age", age).Info("deleting old record from cache")
+			delete(cache, key)
+		}
+	}
+	b.cache = cache
+	return nil
+}
+
+func (b *backoffCache) saveToDisk() (ret error) {
+	if b.file == "" {
+		return nil
+	}
+	bytes, err := yaml.Marshal(b.cache)
+	if err != nil {
+		return fmt.Errorf("failed to marshal: %w", err)
+	}
+	// write to a temp file and rename it to the cache file to ensure "atomic write":
+	// either it is complete or nothing
+	tmpFile, err := ioutil.TempFile("", "backoffCache")
+	if err != nil {
+		return fmt.Errorf("failed to create a temp file: %w", err)
+	}
+	tmp := tmpFile.Name()
+	defer func() {
+		// do nothing when the file does not exist, e.g., write failed, or it has been renamed.
+		if _, err := os.Stat(tmp); errors.Is(err, os.ErrNotExist) {
+			return
+		}
+		if err := os.Remove(tmp); err != nil {
+			ret = fmt.Errorf("failed to delete file %s: %w", tmp, err)
+		}
+	}()
+
+	if err := ioutil.WriteFile(tmp, bytes, 0644); err != nil {
+		return fmt.Errorf("failed to write file %s: %w", tmp, err)
+	}
+	if err := os.Rename(tmp, b.file); err != nil {
+		return fmt.Errorf("failed to rename file from %s to %s: %w", tmp, b.file, err)
+	}
+	return ret
 }
 
 type retestController struct {
@@ -38,15 +108,20 @@ type retestController struct {
 	backoff       *backoffCache
 }
 
-func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool) *retestController {
-	return &retestController{
+func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration) *retestController {
+	logger := logrus.NewEntry(logrus.StandardLogger())
+	ret := &retestController{
 		ghClient:      ghClient,
 		gitClient:     gitClient,
 		configGetter:  cfg,
-		logger:        logrus.NewEntry(logrus.StandardLogger()),
+		logger:        logger,
 		usesGitHubApp: usesApp,
-		backoff:       &backoffCache{cache: map[string]*pullRequest{}},
+		backoff:       &backoffCache{cache: map[string]*PullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger},
 	}
+	if err := ret.backoff.loadFromDisk(); err != nil {
+		logger.WithError(err).Warn("Failed to load backoff cache from disk")
+	}
+	return ret
 }
 
 func prUrl(pr tide.PullRequest) string {
@@ -58,7 +133,7 @@ func (c *retestController) sync() error {
 	// Output: A list of PRs that are filter out by the queries in Tide's config
 	candidates, err := findCandidates(c.configGetter, c.ghClient, c.usesGitHubApp, c.logger)
 	if err != nil {
-		return fmt.Errorf("Failed to find retestable candidates: %w", err)
+		return fmt.Errorf("failed to find retestable candidates: %w", err)
 	}
 
 	logrus.Infof("Found %d candidates for retest (pass label criteria, fail some tests)", len(candidates))
@@ -68,7 +143,7 @@ func (c *retestController) sync() error {
 
 	candidates, err = c.atLeastOneRequiredJob(candidates)
 	if err != nil {
-		return fmt.Errorf("Failed to filter candidate PRs that have at least one required job: %w", err)
+		return fmt.Errorf("failed to filter candidate PRs that have at least one required job: %w", err)
 	}
 
 	logrus.Infof("Remaining %d candidates for retest (fail at least one required prowjob)", len(candidates))
@@ -81,10 +156,9 @@ func (c *retestController) sync() error {
 		errs = append(errs, c.retestOrBackoff(pr))
 	}
 
-	// TODO: Load the backoff records from disk after start (using an option) and survive when it is not present
-	// TODO: Persist the backoff records after each sync (atomically, so that we do not corrupt it on interrupt)
-	// TODO: Prune old records from backoff (we'll need to start tracking some "last considered" time)
-
+	if err := c.backoff.saveToDisk(); err != nil {
+		errs = append(errs, fmt.Errorf("failed to save cache to disk: %w", err))
+	}
 	logrus.Info("Sync finished")
 	return utilerrors.NewAggregate(errs)
 }
@@ -103,33 +177,34 @@ const (
 func (b *backoffCache) check(pr tide.PullRequest, baseSha string) (retestBackoffAction, string) {
 	key := prKey(&pr)
 	if _, has := b.cache[key]; !has {
-		b.cache[key] = &pullRequest{}
+		b.cache[key] = &PullRequest{}
 	}
 	record := b.cache[key]
-	if record.prSha != string(pr.HeadRefOID) {
-		record.prSha = string(pr.HeadRefOID)
-		record.retestsForPrSha = 0
-		record.retestsForBaseSha = 0
+	record.LastConsideredTime = metav1.Now()
+	if currentPRSha := string(pr.HeadRefOID); record.PRSha != currentPRSha {
+		record.PRSha = currentPRSha
+		record.RetestsForPrSha = 0
+		record.RetestsForBaseSha = 0
 	}
-	if record.baseSha != baseSha {
-		record.baseSha = baseSha
-		record.retestsForBaseSha = 0
-	}
-
-	if record.retestsForPrSha == maxRetestsForSha {
-		record.retestsForPrSha = 0
-		record.retestsForBaseSha = 0
-		return retestBackoffHold, fmt.Sprintf("Revision %s was retested %d times: holding", record.prSha, maxRetestsForSha)
+	if record.BaseSha != baseSha {
+		record.BaseSha = baseSha
+		record.RetestsForBaseSha = 0
 	}
 
-	if record.retestsForBaseSha == maxRetestsForShaAndBase {
-		return retestBackoffPause, fmt.Sprintf("Revision %s was retested %d times against base HEAD %s: pausing", record.prSha, maxRetestsForShaAndBase, record.baseSha)
+	if record.RetestsForPrSha == maxRetestsForSha {
+		record.RetestsForPrSha = 0
+		record.RetestsForBaseSha = 0
+		return retestBackoffHold, fmt.Sprintf("Revision %s was retested %d times: holding", record.PRSha, maxRetestsForSha)
 	}
 
-	record.retestsForBaseSha++
-	record.retestsForPrSha++
+	if record.RetestsForBaseSha == maxRetestsForShaAndBase {
+		return retestBackoffPause, fmt.Sprintf("Revision %s was retested %d times against base HEAD %s: pausing", record.PRSha, maxRetestsForShaAndBase, record.BaseSha)
+	}
 
-	return retestBackoffRetest, fmt.Sprintf("Remaining retests: %d against base HEAD %s and %d for PR HEAD %s in total", maxRetestsForShaAndBase-record.retestsForBaseSha, record.baseSha, maxRetestsForSha-record.retestsForPrSha, record.prSha)
+	record.RetestsForBaseSha++
+	record.RetestsForPrSha++
+
+	return retestBackoffRetest, fmt.Sprintf("Remaining retests: %d against base HEAD %s and %d for PR HEAD %s in total", maxRetestsForShaAndBase-record.RetestsForBaseSha, record.BaseSha, maxRetestsForSha-record.RetestsForPrSha, record.PRSha)
 }
 
 func (c *retestController) retestOrBackoff(pr tide.PullRequest) error {

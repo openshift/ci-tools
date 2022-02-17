@@ -386,7 +386,14 @@ func getBody(directories []string, assign string) string {
 		lines = append(lines, fmt.Sprintf("* %s", d))
 	}
 	lines = append(lines, []string{"", fmt.Sprintf("/cc @%s", assign), ""}...)
-	return strings.Join(lines, "\n")
+
+	body := strings.Join(lines, "\n")
+
+	if len(body) >= 65536 {
+		body = body[:65530] + "..."
+	}
+
+	return body
 }
 
 func getTitle(matchTitle, datetime string) string {

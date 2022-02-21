@@ -263,10 +263,10 @@ func writeOwners(orgRepo orgRepo, httpResult httpResult, cleaner ownersCleaner, 
 	return nil
 }
 
-func makeHeader(destOrg, srcOrg, srcRepo string, fetched time.Time) string {
+func makeHeader(destOrg, srcOrg, srcRepo string) string {
 	lines := []string{
 		doNotEdit,
-		fmt.Sprintf("Fetched from https://github.com/%s/%s root OWNERS on %s", srcOrg, srcRepo, fetched.UTC().Format(time.RFC3339)),
+		fmt.Sprintf("Fetched from https://github.com/%s/%s root OWNERS", srcOrg, srcRepo),
 		"If the repo had OWNERS_ALIASES then the aliases were expanded",
 		fmt.Sprintf("Logins who are not members of '%s' organization were filtered out", destOrg),
 		ownersComment,
@@ -304,7 +304,7 @@ func pullOwners(gc github.Client, configRootDir string, blocklist blocklist, con
 			continue
 		}
 
-		if err := writeOwners(orgRepo, httpResult, cleaner, makeHeader(githubOrg, orgRepo.Organization, orgRepo.Repository, time.Now())); err != nil {
+		if err := writeOwners(orgRepo, httpResult, cleaner, makeHeader(githubOrg, orgRepo.Organization, orgRepo.Repository)); err != nil {
 			errs = append(errs, err)
 		}
 	}

@@ -39,3 +39,20 @@ export const SuccessMessage: (props: MessageProps) => (JSX.Element) = (props: Me
   }
   return <div/>
 }
+
+export const InfoMessage: (props: MessageProps) => (JSX.Element) = (props: MessageProps) => {
+  if (props.messages && props.messages.length > 0) {
+    return (
+      <AlertGroup>
+        {props.messages.map((message, i) => {
+          return <Alert key={"info_" + i} variant="info" title={message}/>
+        })}
+      </AlertGroup>
+    );
+  } else if (props.message && props.message.trim()) {
+    return (
+      <Alert variant="info" title={props.message}/>
+    )
+  }
+  return <div/>
+}

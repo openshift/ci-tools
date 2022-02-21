@@ -187,6 +187,9 @@ func execCmd(argv []string) error {
 	}
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	if err := proc.Start(); err != nil {
+		return fmt.Errorf("failed to start main process: %w", err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
@@ -202,7 +205,7 @@ func execCmd(argv []string) error {
 			}
 		}
 	}()
-	return proc.Run()
+	return proc.Wait()
 }
 
 // manageCLI configures the PATH to include a CLI_DIR if one was provided

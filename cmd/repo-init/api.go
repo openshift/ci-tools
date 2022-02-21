@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -602,6 +603,13 @@ func (s server) generateConfig(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		s.logger.WithError(err).Error("could not generate new CI Operator configuration")
 		return
+	}
+
+	s.logger.Debug("running 'make jobs' prior to commit")
+	makeJobs := exec.Command("make", "jobs")
+	err = makeJobs.Run()
+	if err != nil {
+		s.logger.WithError(err).Error("failed to make jobs")
 	}
 
 	createPR, _ := strconv.ParseBool(r.URL.Query().Get("generatePR"))

@@ -60,7 +60,7 @@ func TestMakeGroups(t *testing.T) {
 							Name:   "a-group",
 							Labels: map[string]string{api.DPTPRequesterLabel: toolName},
 						},
-						Users: userv1.OptionalNames{"a", "b"},
+						Users: userv1.OptionalNames{"b"},
 					},
 				},
 				"c-group": {

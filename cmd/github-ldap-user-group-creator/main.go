@@ -207,7 +207,7 @@ func makeGroups(mapping map[string]string, roverGroups map[string][]string, conf
 			Clusters: clustersExceptHive,
 			Group: &userv1.Group{
 				ObjectMeta: metav1.ObjectMeta{Name: groupName, Labels: map[string]string{api.DPTPRequesterLabel: toolName}},
-				Users:      sets.NewString(githubLogin, kerberosId).Delete("").List(),
+				Users:      []string{kerberosId},
 			},
 		}
 	}

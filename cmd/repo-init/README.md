@@ -18,13 +18,17 @@ To start up the API you may run something like
 repo-init --mode=api --port=8080 --github-token-path=/tmp/token --github-endpoint=https://api.github.com --num-repos=4 --server-config-path=/tmp/serverconfig
 ```
 
-where `/tmp/serverconfig` would contain these files:
+#### Github OAuth
 
-`github-client-id` - this file should contain the client ID of the OAuth application in GitHub.
+In order to run the application locally you must configure a [Github OAuth app](https://docs.github.com/en/developers/apps/building-oauth-apps/creating-an-oauth-app) to authenticate.
+The following settings should be configured:
+* 'Homepage URL' should be set to `http://localhost:9000`
+* 'Authorization callback URL' should be set to `http://localhost:9000/login`
 
-`github-client-secret` - this file should contain the client secret of the OAuth application in GitHub.
-
-`github-redirect-uri`  - this file should contain the redirect URI of the OAuth application in GitHub.
+Now the `/tmp/serverconfig` directory (or where ever you set `--server-config-path` to) can be modified to contain the following values from your OAuth app:
+* `github-client-id` - this file should contain the client ID of the OAuth application in GitHub.
+* `github-client-secret` - this file should contain the client secret of the OAuth application in GitHub.
+* `github-redirect-uri`  - this file should contain the redirect URI of the OAuth application in GitHub. (`http://localhost:9000/login`)
 
 ### UI
 

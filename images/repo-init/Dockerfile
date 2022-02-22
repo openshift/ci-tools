@@ -5,6 +5,7 @@ ADD repo-init /usr/bin/repo-init
 
 RUN yum install -y git && \
     yum install -y podman && \
+    yum install -y make && \
     yum clean all && \
     rm -rf /var/cache/yum
 

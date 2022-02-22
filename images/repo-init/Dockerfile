@@ -4,6 +4,7 @@ LABEL maintainer="eberglin@redhat.com"
 ADD repo-init /usr/bin/repo-init
 
 RUN yum install -y git && \
+    yum install -y podman && \
     yum clean all && \
     rm -rf /var/cache/yum
 

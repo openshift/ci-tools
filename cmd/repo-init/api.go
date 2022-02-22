@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -421,7 +422,6 @@ func unmarshalValidationRequest(data []byte) (validationType, interface{}, error
 func (s server) validateConfig(w http.ResponseWriter, r *http.Request) {
 	logger := s.logger.WithField("handler", "configValidationHandler")
 	body, err := ioutil.ReadAll(r.Body)
-
 	if err != nil {
 		logger.WithError(err).Error("Error while reading request body")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -435,6 +435,7 @@ func (s server) validateConfig(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("Invalid validation request"))
 		return
 	}
+	logger.WithField("validationType", validationType).Debug("validating the config")
 
 	var validationErrors []error
 
@@ -457,8 +458,32 @@ func (s server) validateConfig(w http.ResponseWriter, r *http.Request) {
 		case OperatorBundle:
 			validationErrors = append(validationErrors, validation.ValidateOperator(context.AddField("operator_bundle"), generated)...)
 		case Tests:
-			v := validation.NewValidator()
-			validationErrors = append(validationErrors, v.ValidateTestStepConfiguration(context.AddField("tests"), generated, false)...)
+			// Build up a graph configuration with the relevant parts in order to validate the tests
+			var rawSteps []api.StepConfiguration
+			for _, t := range generated.Tests {
+				test := t
+				rawSteps = append(rawSteps, api.StepConfiguration{
+					TestStepConfiguration: &test,
+				})
+			}
+			for _, i := range generated.InputConfiguration.BaseImages {
+				image := i
+				rawSteps = append(rawSteps, api.StepConfiguration{
+					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+						InputImage: api.InputImage{
+							BaseImage: image,
+							To:        api.PipelineImageStreamTagReference(image.Name),
+						}}})
+			}
+			for _, i := range generated.Images {
+				image := i
+				rawSteps = append(rawSteps, api.StepConfiguration{
+					ProjectDirectoryImageBuildStepConfiguration: &image,
+				})
+			}
+			if err = validation.IsValidGraphConfiguration(rawSteps); err != nil {
+				validationErrors = append(validationErrors, err)
+			}
 		default:
 			logger.WithError(err).Error("Invalid validation type specified")
 			w.WriteHeader(http.StatusBadRequest)
@@ -601,6 +626,14 @@ func (s server) generateConfig(w http.ResponseWriter, r *http.Request) {
 	if _, err := createCIOperatorConfig(config, releaseRepo, true); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		s.logger.WithError(err).Error("could not generate new CI Operator configuration")
+		return
+	}
+
+	s.logger.Debug("running 'make jobs' prior to commit")
+	makeJobs := exec.Command("make", "jobs")
+	if err = makeJobs.Run(); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		s.logger.WithError(err).Error("failed to make jobs")
 		return
 	}
 

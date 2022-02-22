@@ -629,11 +629,10 @@ func (s server) generateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.logger.Debug("running 'make jobs' prior to commit")
-	makeJobs := exec.Command("make", "jobs")
-	if err = makeJobs.Run(); err != nil {
+	err = generateJobs(s.logger)
+	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		s.logger.WithError(err).Error("failed to make jobs")
+		s.logger.WithError(err).Error("failed to generate jobs")
 		return
 	}
 
@@ -654,6 +653,45 @@ func (s server) generateConfig(w http.ResponseWriter, r *http.Request) {
 		s.logger.WithError(err).Error("error occurred while writing response")
 		return
 	}
+}
+
+func generateJobs(logger *logrus.Entry) error {
+	logger.Debug("mimicking 'make jobs' prior to commit")
+	steps := []struct {
+		command   string
+		arguments []string
+	}{
+		{
+			command: "ci-operator-checkconfig",
+			arguments: []string{
+				"--config-dir", "./ci-operator/config",
+				"--registry", "./ci-operator/step-registry",
+			},
+		},
+		{
+			command: "ci-operator-prowgen",
+			arguments: []string{
+				"--from-dir", "./ci-operator/config",
+				"--to-dir", "./ci-operator/jobs",
+			},
+		},
+		{
+			command: "sanitize-prow-jobs",
+			arguments: []string{
+				"--prow-jobs-dir", "./ci-operator/jobs",
+				"--config-path", "./core-services/sanitize-prow-jobs/_config.yaml",
+			},
+		},
+	}
+	for _, step := range steps {
+		cmd := exec.Command(step.command, step.arguments...)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("error: %w while running: %s", err, step.command)
+		}
+	}
+
+	logger.Debug("completed mimicking 'make jobs' prior to commit")
+	return nil
 }
 
 func configExists(org, repo, releaseRepo string) bool {

@@ -1,5 +1,5 @@
 <testsuites>
-  <testsuite name="operator" tests="8" skipped="0" failures="0" time="whatever">
+  <testsuite name="step graph" tests="8" skipped="0" failures="0" time="whatever">
     <testcase name="All images are built and tagged into stable" time="whatever"></testcase>
     <testcase name="Clone the correct source code into an image and tag it as src" time="whatever"></testcase>
     <testcase name="Create the release image &#34;latest&#34; containing all images built by this job" time="whatever"></testcase>

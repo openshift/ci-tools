@@ -531,6 +531,10 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient PodClient, nam
 	//   the state of the pod is correctly reported, artifacts are gathered,
 	//   and termination happens deterministically for both success and failure
 	//   scenarios.
+	// - Since ea8f62fcf, most of the above only applies to template tests.
+	//   Container and multi-stage tests now solely rely on `test-infra`'s
+	//   `pod-utils` for artifact gathering and so use a notifier which
+	//   instantly reports itself as done when the watched containers finish.
 	pod := &coreapi.Pod{}
 	if err := podClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, pod); err != nil {
 		if kerrors.IsNotFound(err) {

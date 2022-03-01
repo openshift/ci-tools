@@ -39,7 +39,9 @@ func Run(ctx context.Context, graph api.StepGraph) (*junit.TestSuites, []api.CIO
 
 	suites := &junit.TestSuites{
 		Suites: []*junit.TestSuite{
-			{},
+			{
+				Name: "step graph",
+			},
 		},
 	}
 	suite := suites.Suites[0]

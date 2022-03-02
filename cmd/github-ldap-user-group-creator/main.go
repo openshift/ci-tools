@@ -18,6 +18,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/test-infra/prow/config/org"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/kube"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/group"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 type options struct {
@@ -40,6 +42,10 @@ type options struct {
 	groupsFile     string
 	configFile     string
 	maxConcurrency int
+
+	openshiftPrivAdminsGroup string
+	peribolosConfig          string
+	orgFromPeribolosConfig   string
 }
 
 func parseOptions() *options {
@@ -51,7 +57,10 @@ func parseOptions() *options {
 	fs.StringVar(&opts.mappingFile, "mapping-file", "", "File to the mapping results of m(github_login)=kerberos_id.")
 	fs.StringVar(&opts.groupsFile, "groups-file", "", "The yaml file storing the groups")
 	fs.StringVar(&opts.configFile, "config-file", "", "The yaml file storing the config file for the groups")
-	flag.IntVar(&opts.maxConcurrency, "concurrency", 60, "Maximum number of concurrent in-flight goroutines to handle groups.")
+	fs.IntVar(&opts.maxConcurrency, "concurrency", 60, "Maximum number of concurrent in-flight goroutines to handle groups.")
+	fs.StringVar(&opts.openshiftPrivAdminsGroup, "openshift-priv-admins-group", "openshift-priv-admins", "The group that will be used for the openshift-priv namespace in the app.ci cluster.")
+	fs.StringVar(&opts.peribolosConfig, "peribolos-config", "", "Peribolos configuration file")
+	fs.StringVar(&opts.orgFromPeribolosConfig, "org-from-peribolos-config", "openshift-priv", "Org from peribolos configuration")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
 	}
@@ -72,6 +81,14 @@ func (o *options) validate() error {
 		return fmt.Errorf("--groups-file must not be empty")
 	}
 
+	if o.peribolosConfig != "" {
+		if o.openshiftPrivAdminsGroup == "" {
+			return fmt.Errorf("--openshift-priv-admins-group must be set if --peribolos-config is set")
+		}
+		if o.orgFromPeribolosConfig == "" {
+			return fmt.Errorf("--org-from-peribolos-config must be set if --peribolos-config is set")
+		}
+	}
 	return nil
 }
 
@@ -94,6 +111,18 @@ func main() {
 
 	if err := opts.validate(); err != nil {
 		logrus.WithError(err).Fatal("failed to validate the option")
+	}
+
+	var openshiftPrivAdmins sets.String
+	if opts.peribolosConfig != "" {
+		admins, err := getOpenshiftPrivAdmins(opts.peribolosConfig, opts.orgFromPeribolosConfig)
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to get OpenShiftPrivAdmins")
+		}
+		openshiftPrivAdmins = admins
+		if openshiftPrivAdmins == nil || openshiftPrivAdmins.Len() == 0 {
+			logrus.Warn("found no OpenShiftPrivAdmins")
+		}
 	}
 
 	var config *group.Config
@@ -182,7 +211,7 @@ func main() {
 		logrus.WithField("groupName", api.CIAdminsGroupName).WithField("len", l).Fatal("Require at least 3 members of ci-admins group")
 	}
 
-	groups, err := makeGroups(mapping, roverGroups, config, clusters)
+	groups, err := makeGroups(openshiftPrivAdmins, opts.peribolosConfig, opts.openshiftPrivAdminsGroup, mapping, roverGroups, config, clusters)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to make groups")
 	}
@@ -192,14 +221,56 @@ func main() {
 	}
 }
 
+func getOpenshiftPrivAdmins(peribolosConfig, orgFromPeribolosConfig string) (sets.String, error) {
+	b, err := gzip.ReadFileMaybeGZIP(peribolosConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read peribolos configuration file: %w", err)
+	}
+
+	var config org.FullConfig
+	if err := yaml.Unmarshal(b, &peribolosConfig); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal peribolos config: %w", err)
+	}
+
+	members := sets.NewString()
+	orgConfig, ok := config.Orgs[orgFromPeribolosConfig]
+	if !ok {
+		return nil, fmt.Errorf("failed to find org %s in peribolos config", orgFromPeribolosConfig)
+	}
+
+	members.Insert(orgConfig.Admins...)
+	members.Insert(orgConfig.Members...)
+	return members, nil
+}
+
 type GroupClusters struct {
 	Clusters sets.String
 	Group    *userv1.Group
 }
 
-func makeGroups(mapping map[string]string, roverGroups map[string][]string, config *group.Config, clusters sets.String) (map[string]GroupClusters, error) {
+func makeGroups(openshiftPrivAdmins sets.String, peribolosConfig, openshiftPrivAdminsGroup string, mapping map[string]string, roverGroups map[string][]string, config *group.Config, clusters sets.String) (map[string]GroupClusters, error) {
 	groups := map[string]GroupClusters{}
 	var errs []error
+
+	if peribolosConfig != "" {
+		kerberosIDs := sets.NewString()
+		for _, admin := range openshiftPrivAdmins.List() {
+			kerberosID, ok := mapping[admin]
+			if !ok {
+				errs = append(errs, fmt.Errorf("faild to map github user %s to a kerberos ID", admin))
+				continue
+			}
+			kerberosIDs.Insert(kerberosID)
+		}
+		groups[openshiftPrivAdminsGroup] = GroupClusters{
+			Clusters: sets.NewString(string(api.ClusterAPPCI)),
+			Group: &userv1.Group{
+				ObjectMeta: metav1.ObjectMeta{Name: openshiftPrivAdminsGroup, Labels: map[string]string{api.DPTPRequesterLabel: toolName}},
+				Users:      kerberosIDs.List(),
+			},
+		}
+	}
+
 	clustersExceptHive := clusters.Difference(sets.NewString(string(api.HiveCluster)))
 	for githubLogin, kerberosId := range mapping {
 		groupName := api.GitHubUserGroup(githubLogin)

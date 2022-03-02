@@ -228,7 +228,7 @@ func getOpenshiftPrivAdmins(peribolosConfig, orgFromPeribolosConfig string) (set
 	}
 
 	var config org.FullConfig
-	if err := yaml.Unmarshal(b, &peribolosConfig); err != nil {
+	if err := yaml.Unmarshal(b, &config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal peribolos config: %w", err)
 	}
 
@@ -252,12 +252,13 @@ func makeGroups(openshiftPrivAdmins sets.String, peribolosConfig, openshiftPrivA
 	groups := map[string]GroupClusters{}
 	var errs []error
 
+	ignoredOpenshiftPrivAdminNames := sets.NewString()
 	if peribolosConfig != "" {
 		kerberosIDs := sets.NewString()
 		for _, admin := range openshiftPrivAdmins.List() {
 			kerberosID, ok := mapping[admin]
 			if !ok {
-				errs = append(errs, fmt.Errorf("faild to map github user %s to a kerberos ID", admin))
+				ignoredOpenshiftPrivAdminNames.Insert(admin)
 				continue
 			}
 			kerberosIDs.Insert(kerberosID)
@@ -269,6 +270,10 @@ func makeGroups(openshiftPrivAdmins sets.String, peribolosConfig, openshiftPrivA
 				Users:      kerberosIDs.List(),
 			},
 		}
+	}
+	if ignoredOpenshiftPrivAdminNames.Len() > 0 {
+		logrus.WithField("ignoredOpenshiftPrivAdminNames", ignoredOpenshiftPrivAdminNames.List()).
+			Warn("These logins are members of openshift-priv but have no mapping to RH login.")
 	}
 
 	clustersExceptHive := clusters.Difference(sets.NewString(string(api.HiveCluster)))

@@ -28,6 +28,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/validation"
 )
 
@@ -40,6 +41,7 @@ type server struct {
 	rm            *repoManager
 
 	logger *logrus.Entry
+	censor *secrets.DynamicCensor
 }
 
 // l keeps the tree legible
@@ -80,6 +82,10 @@ var configTypes = []serverConfigType{GitHubClientId, GitHubClientSecret, GitHubR
 
 func serveAPI(port, healthPort, numRepos int, ghOptions flagutil.GitHubOptions, disableCorsVerification bool, serverConfigPath string) {
 	logrusutil.ComponentInit()
+	// Set up a censor, so we don't log access tokens
+	censor := secrets.NewDynamicCensor()
+	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
+
 	rm := &repoManager{
 		numRepos: numRepos,
 	}
@@ -90,6 +96,7 @@ func serveAPI(port, healthPort, numRepos int, ghOptions flagutil.GitHubOptions, 
 		githubOptions: ghOptions,
 		disableCors:   disableCorsVerification,
 		rm:            rm,
+		censor:        &censor,
 	}
 
 	err := s.loadServerConfig(serverConfigPath)
@@ -165,7 +172,6 @@ func (s *server) authHandler() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		logger.WithField("code", code).Debug("authorizing")
 
 		data := url.Values{
 			"client_id":     {s.serverConfig[GitHubClientId]},
@@ -206,6 +212,8 @@ func (s *server) authHandler() http.HandlerFunc {
 		}
 
 		accessToken := res["access_token"]
+		// We don't want to log this token
+		s.censor.AddSecrets(accessToken)
 
 		// get the user information
 		ghClient := s.githubOptions.GitHubClientWithAccessToken(accessToken)

@@ -437,17 +437,21 @@ func (s *multiStageTestStep) runSteps(
 
 	err = utilerrors.NewAggregate(errs)
 	finished := time.Now()
+	duration := finished.Sub(start)
 	testCase := &junit.TestCase{
 		Name:      fmt.Sprintf("Run multi-stage test %s phase", phase),
-		Duration:  finished.Sub(start).Seconds(),
+		Duration:  duration.Seconds(),
 		SystemOut: fmt.Sprintf("The collected steps of multi-stage phase %s.", phase),
 	}
+	verb := "succeeded"
 	if err != nil {
+		verb = "failed"
 		testCase.FailureOutput = &junit.FailureOutput{
 			Output: err.Error(),
 		}
 	}
 	s.subTests = append(s.subTests, testCase)
+	logrus.Infof("Step phase %s %s after %s.", phase, verb, duration.Truncate(time.Second))
 
 	return err
 }

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/openshift/ci-tools/pkg/validation"
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"

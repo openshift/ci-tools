@@ -1454,3 +1454,64 @@ func TestDetermineJobURLPrefix(t *testing.T) {
 		})
 	}
 }
+
+func TestSortConfigs(t *testing.T) {
+	testCases := []struct {
+		name     string
+		configs  []*config.DataWithInfo
+		expected []*config.DataWithInfo
+	}{
+		{
+			name: "2 configs",
+			configs: []*config.DataWithInfo{
+				{
+					Info: config.Info{Filename: "targetOrg-targetRepo-master.yaml"},
+				},
+				{
+					Info: config.Info{Filename: "targetOrg-targetRepo-not-master.yaml"},
+				},
+			},
+			expected: []*config.DataWithInfo{
+				{
+					Info: config.Info{Filename: "targetOrg-targetRepo-not-master.yaml"},
+				},
+				{
+					Info: config.Info{Filename: "targetOrg-targetRepo-master.yaml"},
+				},
+			},
+		},
+		{
+			name: "3 configs",
+			configs: []*config.DataWithInfo{
+				{
+					Info: config.Info{Filename: "anotherOrg-anotherRepo-master.yaml"},
+				},
+				{
+					Info: config.Info{Filename: "targetOrg-targetRepo-not-master.yaml"},
+				},
+				{
+					Info: config.Info{Filename: "targetOrg-targetRepo-master.yaml"},
+				},
+			},
+			expected: []*config.DataWithInfo{
+				{
+					Info: config.Info{Filename: "targetOrg-targetRepo-not-master.yaml"},
+				},
+				{
+					Info: config.Info{Filename: "targetOrg-targetRepo-master.yaml"},
+				},
+				{
+					Info: config.Info{Filename: "anotherOrg-anotherRepo-master.yaml"},
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := SortConfigs(tc.configs)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Fatalf("sorted configs did not match expected, diff: %s", diff)
+			}
+		})
+	}
+}

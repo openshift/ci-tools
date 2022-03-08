@@ -15,6 +15,11 @@ type ClusterDeprovisionSpec struct {
 	// ClusterID is a globally unique identifier for the cluster to deprovision. It will be used if specified.
 	ClusterID string `json:"clusterID,omitempty"`
 
+	// ClusterName is the friendly name of the cluster. It is used for subdomains,
+	// some resource tagging, and other instances where a friendly name for the
+	// cluster is useful.
+	ClusterName string `json:"clusterName,omitempty"`
+
 	// Platform contains platform-specific configuration for a ClusterDeprovision
 	Platform ClusterDeprovisionPlatform `json:"platform,omitempty"`
 }
@@ -44,6 +49,8 @@ type ClusterDeprovisionPlatform struct {
 	VSphere *VSphereClusterDeprovision `json:"vsphere,omitempty"`
 	// Ovirt contains oVirt-specific deprovision settings
 	Ovirt *OvirtClusterDeprovision `json:"ovirt,omitempty"`
+	// IBMCloud contains IBM Cloud specific deprovision settings
+	IBMCloud *IBMClusterDeprovision `json:"ibmcloud,omitempty"`
 }
 
 // AWSClusterDeprovision contains AWS-specific configuration for a ClusterDeprovision
@@ -114,6 +121,16 @@ type OvirtClusterDeprovision struct {
 	// CertificatesSecretRef refers to a secret that contains the oVirt CA certificates
 	// necessary for communicating with the oVirt.
 	CertificatesSecretRef corev1.LocalObjectReference `json:"certificatesSecretRef"`
+}
+
+// IBMClusterDeprovision contains IBM Cloud specific configuration for a ClusterDeprovision
+type IBMClusterDeprovision struct {
+	// CredentialsSecretRef is the IBM Cloud credentials to use for deprovisioning the cluster
+	CredentialsSecretRef corev1.LocalObjectReference `json:"credentialsSecretRef"`
+	// Region specifies the IBM Cloud region
+	Region string `json:"region"`
+	// BaseDomain is the DNS base domain
+	BaseDomain string `json:"baseDomain"`
 }
 
 // +genclient

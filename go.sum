@@ -1236,8 +1236,8 @@ github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0 h1:sl7XRcZyQARNk
 github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0/go.mod h1:DE+EEa9c2Bv/B4eQ64cYqTiarVTl9Kf5EQsUyEsZ2iU=
 github.com/openshift/client-go v0.0.0-20210730113412-1811c1b3fc0e h1:vhwzeXUxLd6JZlWZ+miBzTEpmVctHyHNq9z43ScYxWI=
 github.com/openshift/client-go v0.0.0-20210730113412-1811c1b3fc0e/go.mod h1:P1pjphFOgm/nYjmtouHGaSLGtdP25dQICJnYtcYhfEs=
-github.com/openshift/hive/apis v0.0.0-20220124211047-fcac82e4f82f h1:wZ0MhJ5MiTZxXEDd0qHsuuqp66kX9FYX5mUP9ayZBmo=
-github.com/openshift/hive/apis v0.0.0-20220124211047-fcac82e4f82f/go.mod h1:77ODrnaHiDlfbqQgvk5nUWuqf2AsGY/99QlfNTiqHwI=
+github.com/openshift/hive/apis v0.0.0-20220308072022-688681d11095 h1:xEcXfbyk17/yb4EHI4zw65Vllbu02jN5Ak2FasAn/eM=
+github.com/openshift/hive/apis v0.0.0-20220308072022-688681d11095/go.mod h1:E1bgquRiwfugdArdecPbpYIrAdve5kTzMaJb0+8jMXI=
 github.com/openshift/imagebuilder v1.1.1 h1:KAUR31p8UBJdfVO42azWgb+LeMAed2zaKQ19e0C0X2I=
 github.com/openshift/imagebuilder v1.1.1/go.mod h1:9aJRczxCH0mvT6XQ+5STAQaPWz7OsWcU5/mRkt8IWeo=
 github.com/openshift/library-go v0.0.0-20210826121606-162472d92388 h1:ggLWm/jY4Ju6CJm6xl0mVkd9HVxYCAffEuckauJCCXQ=

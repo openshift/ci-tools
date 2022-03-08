@@ -871,6 +871,17 @@ func defaultImageFromReleaseTag(alias string, base api.ImageStreamTagReference, 
 	return base
 }
 
+// validateCIOperatorInrepoConfig validates the content of the in-repo .ci-operator.yaml file
+// These need to be validated separately because they are dynamically loaded by ci-operator at runtime and are part
+// of the tested repository, not static configuration validated by Validator.
+func validateCIOperatorInrepoConfig(inrepoConfig *api.CIOperatorInrepoConfig) error {
+	root := inrepoConfig.BuildRootImage
+	if root.Namespace == "" || root.Name == "" || root.Tag == "" {
+		return fmt.Errorf("invalid .ci-operator.yaml: all build_root_image members (namespace, name, tag) must be non-empty")
+	}
+	return nil
+}
+
 func buildRootImageStreamFromRepository(readFile readFile) (*api.ImageStreamTagReference, error) {
 	data, err := readFile(api.CIOperatorInrepoConfigFileName)
 	if err != nil {
@@ -880,7 +891,8 @@ func buildRootImageStreamFromRepository(readFile readFile) (*api.ImageStreamTagR
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal %s: %w", api.CIOperatorInrepoConfigFileName, err)
 	}
-	return &config.BuildRootImage, nil
+
+	return &config.BuildRootImage, validateCIOperatorInrepoConfig(&config)
 }
 
 func ensureImageStreamTag(ctx context.Context, client ctrlruntimeclient.Client, isTagRef *api.ImageStreamTagReference, second time.Duration) {

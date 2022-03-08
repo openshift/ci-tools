@@ -52,7 +52,7 @@ require (
 	github.com/openshift/api v0.0.0-20210730095913-85e1d547cdee
 	github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0
 	github.com/openshift/client-go v3.9.0+incompatible
-	github.com/openshift/hive/apis v0.0.0-20220124211047-fcac82e4f82f
+	github.com/openshift/hive/apis v0.0.0-20220308072022-688681d11095
 	github.com/openshift/imagebuilder v1.1.1
 	github.com/openshift/library-go v0.0.0-20200127110935-527e40ed17d9
 	github.com/openshift/openshift-apiserver v0.0.0-alpha.0

@@ -671,9 +671,7 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 	}
 	// The order is INTENTIONALLY reversed to cheaply increase the chance of hitting
 	// a useful rehearsal (prefer higher OCP versions)
-	sort.Slice(sortedConfigs, func(i, j int) bool {
-		return sortedConfigs[i].Info.Filename > sortedConfigs[j].Info.Filename
-	})
+	sortedConfigs = SortConfigs(sortedConfigs)
 
 	stepWorklist := getAffectedNodes(regSteps)
 
@@ -711,6 +709,13 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 		}
 	}
 	return selectedPresubmits, selectedPeriodics
+}
+
+func SortConfigs(sortedConfigs []*config.DataWithInfo) []*config.DataWithInfo {
+	sort.Slice(sortedConfigs, func(i, j int) bool {
+		return sortedConfigs[i].Info.Filename > sortedConfigs[j].Info.Filename
+	})
+	return sortedConfigs
 }
 
 func getClusterTypes(jobs map[string][]prowconfig.Presubmit) []string {

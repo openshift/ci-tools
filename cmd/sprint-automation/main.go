@@ -320,7 +320,7 @@ func userOnCallDuring(client *pagerduty.Client, query string, since, until time.
 
 func sendNextWeeksRoleDigest(client *pagerduty.Client, slackClient *slack.Client) error {
 	var errors []error
-	// Use one week from now at noon UTC
+	// Use one week from now at noon UTC to ensure that PD roles have begun
 	nextWeek := time.Now().Add(7 * 24 * time.Hour)
 	nextWeek = time.Date(nextWeek.Year(), nextWeek.Month(), nextWeek.Day(), 12, 0, 0, 0, time.UTC)
 
@@ -329,7 +329,17 @@ func sendNextWeeksRoleDigest(client *pagerduty.Client, slackClient *slack.Client
 		errors = append(errors, errs...)
 	}
 
+	// Invert to group all roles for each userId as a user can be in multiple roles
+	rolesByUserId := make(map[string][]string)
 	for role, userId := range userIdsByRole {
+		if roles, ok := rolesByUserId[userId]; ok {
+			rolesByUserId[userId] = append(roles, role)
+		} else {
+			rolesByUserId[userId] = []string{role}
+		}
+	}
+
+	for userId, roles := range rolesByUserId {
 		message := []slack.Block{
 			&slack.HeaderBlock{
 				Type: slack.MBTHeader,
@@ -342,10 +352,25 @@ func sendNextWeeksRoleDigest(client *pagerduty.Client, slackClient *slack.Client
 				Type: slack.MBTSection,
 				Text: &slack.TextBlockObject{
 					Type: slack.PlainTextType,
-					Text: fmt.Sprintf("Next week, you will be in the %s role.", role),
+					Text: "Next week, you will be in the following roles:",
 				},
 			},
 		}
+
+		for _, role := range roles {
+			message = append(message, &slack.ContextBlock{
+				Type: slack.MBTContext,
+				ContextElements: slack.ContextElements{
+					Elements: []slack.MixedElement{
+						&slack.TextBlockObject{
+							Type: slack.PlainTextType,
+							Text: role,
+						},
+					},
+				},
+			})
+		}
+
 		responseChannel, responseTimestamp, err := slackClient.PostMessage(
 			userId,
 			slack.MsgOptionText("Next week's role.", false),

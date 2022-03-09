@@ -1454,3 +1454,169 @@ func TestDetermineJobURLPrefix(t *testing.T) {
 		})
 	}
 }
+
+func TestMoreRelevant(t *testing.T) {
+	testCases := []struct {
+		name     string
+		one      *config.DataWithInfo
+		two      *config.DataWithInfo
+		expected bool
+	}{
+		{
+			name: "same org/repo, branches main and release-4.10",
+			one: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-main.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "main",
+					},
+				},
+			},
+			two: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-release-4.10.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "release-4.10",
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "different org/repo, branches main and release-4.10",
+			one: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-main.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "main",
+					},
+				},
+			},
+			two: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "anotherOrg-anotherRepo-release-4.10.yaml",
+					Metadata: api.Metadata{
+						Org:    "anotherOrg",
+						Repo:   "anotherRepo",
+						Branch: "release-4.10",
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "same org/repo, branches release-4.9 and release-4.10",
+			one: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-release-4.9.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "release-4.9",
+					},
+				},
+			},
+			two: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-release-4.10.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "release-4.10",
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "different org/repo, branches release-4.9 and release-4.10",
+			one: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-release-4.9.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "release-4.9",
+					},
+				},
+			},
+			two: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "anotherOrg-anotherRepo-release-4.10.yaml",
+					Metadata: api.Metadata{
+						Org:    "anotherOrg",
+						Repo:   "anotherRepo",
+						Branch: "release-4.10",
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "same org/repo, branches master and not-master",
+			one: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-master.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "master",
+					},
+				},
+			},
+			two: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-not-master.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "not-master",
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "same org/repo, branches release-4.1 and release-4.10",
+			one: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-release-4.1.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "release-4.1",
+					},
+				},
+			},
+			two: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-release-4.10.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "release-4.10",
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := moreRelevant(tc.one, tc.two)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				not := "not "
+				if tc.expected {
+					not = ""
+				}
+				t.Fatalf("expected config one to %sbe more relevant than config two, diff: %s", not, diff)
+			}
+		})
+	}
+}

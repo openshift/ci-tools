@@ -1458,59 +1458,36 @@ func TestDetermineJobURLPrefix(t *testing.T) {
 func TestSortConfigs(t *testing.T) {
 	testCases := []struct {
 		name     string
-		configs  []*config.DataWithInfo
-		expected []*config.DataWithInfo
+		one      *config.DataWithInfo
+		two      *config.DataWithInfo
+		expected bool
 	}{
 		{
-			name: "2 configs",
-			configs: []*config.DataWithInfo{
-				{
-					Info: config.Info{Filename: "targetOrg-targetRepo-master.yaml"},
-				},
-				{
-					Info: config.Info{Filename: "targetOrg-targetRepo-not-master.yaml"},
-				},
+			name: "expected true",
+			one: &config.DataWithInfo{
+				Info: config.Info{Filename: "targetOrg-targetRepo-not-master.yaml"},
 			},
-			expected: []*config.DataWithInfo{
-				{
-					Info: config.Info{Filename: "targetOrg-targetRepo-not-master.yaml"},
-				},
-				{
-					Info: config.Info{Filename: "targetOrg-targetRepo-master.yaml"},
-				},
+			two: &config.DataWithInfo{
+				Info: config.Info{Filename: "targetOrg-targetRepo-master.yaml"},
 			},
+			expected: true,
 		},
 		{
-			name: "3 configs",
-			configs: []*config.DataWithInfo{
-				{
-					Info: config.Info{Filename: "anotherOrg-anotherRepo-master.yaml"},
-				},
-				{
-					Info: config.Info{Filename: "targetOrg-targetRepo-not-master.yaml"},
-				},
-				{
-					Info: config.Info{Filename: "targetOrg-targetRepo-master.yaml"},
-				},
+			name: "expected false",
+			one: &config.DataWithInfo{
+				Info: config.Info{Filename: "targetOrg-targetRepo-master.yaml"},
 			},
-			expected: []*config.DataWithInfo{
-				{
-					Info: config.Info{Filename: "targetOrg-targetRepo-not-master.yaml"},
-				},
-				{
-					Info: config.Info{Filename: "targetOrg-targetRepo-master.yaml"},
-				},
-				{
-					Info: config.Info{Filename: "anotherOrg-anotherRepo-master.yaml"},
-				},
+			two: &config.DataWithInfo{
+				Info: config.Info{Filename: "targetOrg-targetRepo-not-master.yaml"},
 			},
+			expected: false,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := SortConfigs(tc.configs)
+			actual := moreRelevant(tc.one, tc.two)
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
-				t.Fatalf("sorted configs did not match expected, diff: %s", diff)
+				t.Fatalf("config one is not more relevant than config two, diff: %s", diff)
 			}
 		})
 	}

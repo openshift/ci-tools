@@ -1615,7 +1615,7 @@ func TestMoreRelevant(t *testing.T) {
 				if tc.expected {
 					not = ""
 				}
-				t.Fatalf("config one is %smore relevant than config two, diff: %s", not, diff)
+				t.Fatalf("expected config one to %sbe more relevant than config two, diff: %s", not, diff)
 			}
 		})
 	}

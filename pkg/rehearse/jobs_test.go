@@ -1455,7 +1455,7 @@ func TestDetermineJobURLPrefix(t *testing.T) {
 	}
 }
 
-func TestSortConfigs(t *testing.T) {
+func TestMoreRelevant(t *testing.T) {
 	testCases := []struct {
 		name     string
 		one      *config.DataWithInfo

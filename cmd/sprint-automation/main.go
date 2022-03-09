@@ -562,6 +562,8 @@ func sendTriageBuild02Upgrade(slackClient *slack.Client, version, stableDuration
 	return nil
 }
 
+const dateFormat = "Mon, 02 Jan 2006"
+
 func blockForIssue(issue jiraapi.Issue) slack.Block {
 	// we really don't want these things to line wrap, so truncate the summary
 	cutoff := 85
@@ -569,13 +571,19 @@ func blockForIssue(issue jiraapi.Issue) slack.Block {
 	if len(summary) > cutoff {
 		summary = summary[0:cutoff-3] + "..."
 	}
+	created := time.Time(issue.Fields.Created).Format(dateFormat)
+	updated := time.Time(issue.Fields.Updated).Format(dateFormat)
 	return &slack.ContextBlock{
 		Type: slack.MBTContext,
 		ContextElements: slack.ContextElements{
 			Elements: []slack.MixedElement{
 				&slack.TextBlockObject{
 					Type: slack.MarkdownType,
-					Text: fmt.Sprintf("<https://issues.redhat.com/browse/%s|*%s*>: %s", issue.Key, issue.Key, summary),
+					Text: fmt.Sprintf("<https://issues.redhat.com/browse/%s|*%s*>: %s \n", issue.Key, issue.Key, summary),
+				},
+				&slack.TextBlockObject{
+					Type: slack.PlainTextType,
+					Text: fmt.Sprintf("Created on: %s  Last updated: %s", created, updated),
 				},
 			},
 		},

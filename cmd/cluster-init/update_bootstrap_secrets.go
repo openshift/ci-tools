@@ -44,7 +44,7 @@ func updateCiSecretBootstrap(o options) error {
 }
 
 func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
-	for _, groupName := range []string{buildUFarm, "non_app_ci", "non_app_ci_x86"} {
+	for _, groupName := range []string{buildUFarm, "non_app_ci"} {
 		c.ClusterGroups[groupName] = sets.NewString(c.ClusterGroups[groupName]...).Insert(o.clusterName).List()
 	}
 	c.UserSecretsTargetClusters = sets.NewString(c.UserSecretsTargetClusters...).Insert(o.clusterName).List()

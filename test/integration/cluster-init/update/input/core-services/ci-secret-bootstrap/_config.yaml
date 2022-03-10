@@ -10,7 +10,7 @@ cluster_groups:
     - build01
   non_app_ci_arm:
     - arm01
-  non_app_ci_x86:
+  non_osd_x86:
     - build01
 secret_configs:
   - from:

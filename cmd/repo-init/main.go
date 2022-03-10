@@ -15,9 +15,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"strings"
 
+	"github.com/docker/docker/pkg/fileutils"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 
@@ -462,25 +462,46 @@ func fetchOrDefaultWithPrompt(msg, def string) string {
 	return ""
 }
 
+type RepoProwConfig struct {
+	Tide TideRepoProwConfig `json:"tide,omitempty"`
+}
+
+type TideRepoProwConfig struct {
+	Queries prowconfig.TideQueries `json:"queries,omitempty"`
+}
+
 func updateProwConfig(config initConfig, releaseRepo string) error {
 	configPath := path.Join(releaseRepo, ciopconfig.ConfigInRepoPath)
+	configDir := path.Dir(configPath)
+	tmpDir, err := ioutil.TempDir("", "repo-init")
+	if err != nil {
+		return fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.Remove(tmpDir)
+
+	targetOrgRepo := prowconfig.OrgRepo{Org: config.Org, Repo: config.Repo}
+	for i, orgRepo := range []string{
+		path.Join(config.Org, config.Repo),
+		path.Join("openshift", "cluster-version-operator"),
+		path.Join("openshift", "ci-tools"),
+	} {
+		src := path.Join(configDir, orgRepo, ciopconfig.SupplementalProwConfigFileName)
+		logrus.WithField("src", src).Info("copying ...")
+		if _, err := os.Stat(src); errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if _, err := fileutils.CopyFile(src, path.Join(tmpDir, fmt.Sprintf("%d%s", i, ciopconfig.SupplementalProwConfigFileName))); err != nil {
+			return fmt.Errorf("failed to copy file: %w", err)
+		}
+	}
+
 	agent := prowconfig.Agent{}
-	if err := agent.Start(configPath, "", nil, ""); err != nil {
+	if err := agent.Start(configPath, "", []string{tmpDir}, ciopconfig.SupplementalProwConfigFileName); err != nil {
 		return fmt.Errorf("could not load Prow configuration: %w", err)
 	}
 
 	prowConfig := agent.Config()
-	editProwConfig(prowConfig, config)
 
-	data, err := yaml.Marshal(prowConfig)
-	if err != nil {
-		return fmt.Errorf("could not marshal Prow configuration: %w", err)
-	}
-
-	return ioutil.WriteFile(configPath, data, 0644)
-}
-
-func editProwConfig(prowConfig *prowconfig.Config, config initConfig) {
 	fmt.Println(`
 Updating Prow configuration ...`)
 	queries := prowConfig.Tide.Queries.QueryMap()
@@ -496,7 +517,7 @@ Updating Prow configuration ...`)
 
 No additional "tide" queries will be added.
 `, config.Org, config.Repo, strings.Join(existingStrings, "\n"))
-		return
+		return nil
 	}
 
 	// this is a bit hacky but simple -- we have a couple types of tide interactions
@@ -510,14 +531,27 @@ No additional "tide" queries will be added.
 		copyCatQueries = queries.ForRepo(prowconfig.OrgRepo{Org: "openshift", Repo: "ci-tools"})
 	}
 
-	orgRepo := fmt.Sprintf("%s/%s", config.Org, config.Repo)
-	for i := range prowConfig.Tide.Queries {
-		for _, copyCat := range copyCatQueries {
-			if reflect.DeepEqual(prowConfig.Tide.Queries[i], copyCat) {
-				prowConfig.Tide.Queries[i].Repos = append(prowConfig.Tide.Queries[i].Repos, orgRepo)
-			}
-		}
+	tideQueries := prowconfig.TideQueries(nil)
+	for _, q := range copyCatQueries {
+		q.Repos = []string{targetOrgRepo.String()}
+		tideQueries = append(tideQueries, q)
 	}
+	repoProwConfig := RepoProwConfig{
+		Tide: TideRepoProwConfig{
+			Queries: tideQueries,
+		},
+	}
+
+	data, err := yaml.Marshal(repoProwConfig)
+	if err != nil {
+		return fmt.Errorf("could not marshal Prow configuration: %w", err)
+	}
+
+	p := path.Join(configDir, path.Join(config.Org, config.Repo))
+	if err := os.MkdirAll(p, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+	return ioutil.WriteFile(path.Join(p, ciopconfig.SupplementalProwConfigFileName), data, 0644)
 }
 
 func updatePluginConfig(config initConfig, releaseRepo string) error {

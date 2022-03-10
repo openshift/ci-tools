@@ -327,6 +327,13 @@ func sendNextWeeksRoleDigest(client *pagerduty.Client, slackClient *slack.Client
 	userIdsByRole, errs := usersOnCallAtTime(client, slackClient, nextWeek)
 	if len(errs) > 0 {
 		errors = append(errors, errs...)
+		msg := "Could not get rotating roles from PagerDuty."
+		err := kerrors.NewAggregate(errors)
+		if len(userIdsByRole) == 0 {
+			logrus.WithError(err).Fatal(msg)
+		} else {
+			logrus.WithError(err).Error(msg)
+		}
 	}
 
 	// Invert to group all roles for each userId as a user can be in multiple roles

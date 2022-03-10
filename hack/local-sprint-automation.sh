@@ -29,4 +29,4 @@ OC extract secret/jira-token-dptp-bot --keys token --to "${data}/jira"
 OC extract secret/pagerduty --keys token --to "${data}/pd"
 
 os::log::info "Running sprint-automation"
-sprint-automation --week-start=true --slack-token-path "${data}/oauth_token" --pager-duty-token-file="${data}/pd/token" --jira-bearer-token-file="${data}/jira/token" --jira-endpoint=https://issues.redhat.com --log-level=trace
+go run ./cmd/sprint-automation --week-start=true --slack-token-path "${data}/oauth_token" --pager-duty-token-file="${data}/pd/token" --jira-bearer-token-file="${data}/jira/token" --jira-endpoint=https://issues.redhat.com --log-level=trace

@@ -413,6 +413,7 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics)
 			metadata.Repo = job.ExtraRefs[0].Repo
 			metadata.Branch = job.ExtraRefs[0].BaseRef
 		}
+		jc.configureDecorationConfig(job.JobBase, metadata)
 		testname := metadata.TestNameFromJobName(job.Name, jobconfig.PeriodicPrefix)
 		imageStreamTags, err := jc.configureJobSpec(job.Spec, metadata, testname, jc.loggers.Debug.WithField("name", job.Name))
 		if err != nil {
@@ -453,14 +454,7 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 				Branch:  branch,
 				Variant: VariantFromLabels(job.Labels),
 			}
-			// We need to set the JobURLPrefix to get the correct Details link on rehearsal gh statuses
-			if job.DecorationConfig == nil {
-				job.DecorationConfig = &pjapi.DecorationConfig{}
-			}
-			if job.DecorationConfig.GCSConfiguration == nil {
-				job.DecorationConfig.GCSConfiguration = &pjapi.GCSConfiguration{}
-			}
-			job.DecorationConfig.GCSConfiguration.JobURLPrefix = determineJobURLPrefix(jc.prowConfig.Plank, metadata.Org, metadata.Repo)
+			jc.configureDecorationConfig(job.JobBase, metadata)
 
 			rehearsal, err := makeRehearsalPresubmit(&job, orgrepo, jc.prNumber, jc.refs)
 			if err != nil {
@@ -480,6 +474,17 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 		}
 	}
 	return allImageStreamTags, rehearsals, nil
+}
+
+// configureDecorationConfig sets the DecorationConfig.GCSConfiguration.JobURLPrefix to get the correct Details link on rehearsal gh statuses
+func (jc *JobConfigurer) configureDecorationConfig(job prowconfig.JobBase, metadata api.Metadata) {
+	if job.DecorationConfig == nil {
+		job.DecorationConfig = &pjapi.DecorationConfig{}
+	}
+	if job.DecorationConfig.GCSConfiguration == nil {
+		job.DecorationConfig.GCSConfiguration = &pjapi.GCSConfiguration{}
+	}
+	job.DecorationConfig.GCSConfiguration.JobURLPrefix = determineJobURLPrefix(jc.prowConfig.Plank, metadata.Org, metadata.Repo)
 }
 
 func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadata, testName string, logger *logrus.Entry) (apihelper.ImageStreamTagMap, error) {

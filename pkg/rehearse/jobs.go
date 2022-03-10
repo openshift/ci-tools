@@ -413,7 +413,7 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics)
 			metadata.Repo = job.ExtraRefs[0].Repo
 			metadata.Branch = job.ExtraRefs[0].BaseRef
 		}
-		jc.configureDecorationConfig(job.JobBase, metadata)
+		jc.configureDecorationConfig(&job.JobBase, metadata)
 		testname := metadata.TestNameFromJobName(job.Name, jobconfig.PeriodicPrefix)
 		imageStreamTags, err := jc.configureJobSpec(job.Spec, metadata, testname, jc.loggers.Debug.WithField("name", job.Name))
 		if err != nil {
@@ -454,7 +454,7 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 				Branch:  branch,
 				Variant: VariantFromLabels(job.Labels),
 			}
-			jc.configureDecorationConfig(job.JobBase, metadata)
+			jc.configureDecorationConfig(&job.JobBase, metadata)
 
 			rehearsal, err := makeRehearsalPresubmit(&job, orgrepo, jc.prNumber, jc.refs)
 			if err != nil {
@@ -477,7 +477,7 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 }
 
 // configureDecorationConfig sets the DecorationConfig.GCSConfiguration.JobURLPrefix to get the correct Details link on rehearsal gh statuses
-func (jc *JobConfigurer) configureDecorationConfig(job prowconfig.JobBase, metadata api.Metadata) {
+func (jc *JobConfigurer) configureDecorationConfig(job *prowconfig.JobBase, metadata api.Metadata) {
 	if job.DecorationConfig == nil {
 		job.DecorationConfig = &pjapi.DecorationConfig{}
 	}

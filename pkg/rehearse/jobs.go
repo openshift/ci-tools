@@ -714,7 +714,32 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 }
 
 func moreRelevant(one, two *config.DataWithInfo) bool {
-	return one.Info.Filename > two.Info.Filename
+	branchI := one.Info.Metadata.Branch
+	branchJ := two.Info.Metadata.Branch
+	if branchI == "master" || branchI == "main" {
+		return true
+	} else if strings.HasPrefix(branchI, "release-4.") || strings.HasPrefix(branchI, "openshift-4.") {
+		if strings.HasPrefix(branchJ, "release-4.") || strings.HasPrefix(branchJ, "openshift-4.") {
+			numberI := strings.TrimPrefix(branchI, "release-4.")
+			if numberI == branchI {
+				numberI = strings.TrimPrefix(branchI, "openshift-4.")
+			}
+			numberJ := strings.TrimPrefix(branchJ, "release-4.")
+			if numberJ == branchJ {
+				numberJ = strings.TrimPrefix(branchJ, "openshift-4.")
+			}
+			intI, _ := strconv.Atoi(numberI)
+			intJ, _ := strconv.Atoi(numberJ)
+			if intI > intJ {
+				return true
+			} else {
+				return false
+			}
+		} else {
+			return true
+		}
+	}
+	return branchI > branchJ
 }
 
 func getClusterTypes(jobs map[string][]prowconfig.Presubmit) []string {

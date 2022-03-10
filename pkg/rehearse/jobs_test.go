@@ -1484,7 +1484,7 @@ func TestMoreRelevant(t *testing.T) {
 					},
 				},
 			},
-			expected: false,
+			expected: true,
 		},
 		{
 			name: "different org/repo, branches main and release-4.10",
@@ -1532,7 +1532,7 @@ func TestMoreRelevant(t *testing.T) {
 					},
 				},
 			},
-			expected: true,
+			expected: false,
 		},
 		{
 			name: "different org/repo, branches release-4.9 and release-4.10",
@@ -1556,7 +1556,7 @@ func TestMoreRelevant(t *testing.T) {
 					},
 				},
 			},
-			expected: true,
+			expected: false,
 		},
 		{
 			name: "same org/repo, branches master and not-master",
@@ -1580,7 +1580,7 @@ func TestMoreRelevant(t *testing.T) {
 					},
 				},
 			},
-			expected: false,
+			expected: true,
 		},
 		{
 			name: "same org/repo, branches release-4.1 and release-4.10",

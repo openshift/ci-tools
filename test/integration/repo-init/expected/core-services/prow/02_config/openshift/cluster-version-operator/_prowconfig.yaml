@@ -36,7 +36,7 @@ tide:
     - do-not-merge/work-in-progress
     - needs-rebase
     repos:
-    - org/repo
+    - openshift/cluster-version-operator
   - includedBranches:
     - openshift-4.11
     - release-4.11
@@ -53,7 +53,7 @@ tide:
     - do-not-merge/work-in-progress
     - needs-rebase
     repos:
-    - org/repo
+    - openshift/cluster-version-operator
   - includedBranches:
     - main
     - master
@@ -69,7 +69,7 @@ tide:
     - keep-main-query-separate
     - needs-rebase
     repos:
-    - org/repo
+    - openshift/cluster-version-operator
   - excludedBranches:
     - feature-es6x
     - feature-prom-connector
@@ -110,4 +110,4 @@ tide:
     - do-not-merge/work-in-progress
     - needs-rebase
     repos:
-    - org/repo
+    - openshift/cluster-version-operator

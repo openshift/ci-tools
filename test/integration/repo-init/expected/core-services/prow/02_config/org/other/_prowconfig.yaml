@@ -1,18 +1,11 @@
 tide:
   queries:
-  - excludedBranches:
-    - openshift-4.1
-    - release-4.0
-    - release-4.1
-    - release-4.2
-    - release-4.3
-    - release-4.4
-    labels:
+  - labels:
     - approved
     - lgtm
     missingLabels:
+    - backports/unvalidated-commits
     - bugzilla/invalid-bug
-    - do-not-merge/blocked-paths
     - do-not-merge/hold
     - do-not-merge/invalid-owners-file
     - do-not-merge/work-in-progress

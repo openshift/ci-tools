@@ -716,28 +716,15 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 func moreRelevant(one, two *config.DataWithInfo) bool {
 	branchI := one.Info.Metadata.Branch
 	branchJ := two.Info.Metadata.Branch
-	if branchI == "master" || branchI == "main" {
-		return true
-	} else if strings.HasPrefix(branchI, "release-4.") || strings.HasPrefix(branchI, "openshift-4.") {
-		if strings.HasPrefix(branchJ, "release-4.") || strings.HasPrefix(branchJ, "openshift-4.") {
-			numberI := strings.TrimPrefix(branchI, "release-4.")
-			if numberI == branchI {
-				numberI = strings.TrimPrefix(branchI, "openshift-4.")
-			}
-			numberJ := strings.TrimPrefix(branchJ, "release-4.")
-			if numberJ == branchJ {
-				numberJ = strings.TrimPrefix(branchJ, "openshift-4.")
-			}
-			intI, _ := strconv.Atoi(numberI)
-			intJ, _ := strconv.Atoi(numberJ)
-			if intI > intJ {
-				return true
-			} else {
-				return false
-			}
-		} else {
-			return true
-		}
+	branches := map[string]int{}
+	for i := 1; i < 50; i++ {
+		branches[fmt.Sprintf("release-4.%d", i)] = i
+		branches[fmt.Sprintf("openshift-4.%d", i)] = i
+	}
+	branches["master"] = 100
+	branches["main"] = 100
+	if branches[branchI] > 0 || branches[branchJ] > 0 {
+		return branches[branchI] > branches[branchJ]
 	}
 	return branchI > branchJ
 }

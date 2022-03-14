@@ -1330,7 +1330,7 @@ k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/kubernetes v1.14.7
 ## explicit
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20220217031743-9703a3111217
+# k8s.io/test-infra v0.0.0-20220311160907-ddb235f0044d
 ## explicit; go 1.16
 k8s.io/test-infra/ghproxy/ghcache
 k8s.io/test-infra/ghproxy/ghmetrics

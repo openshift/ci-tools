@@ -1213,16 +1213,15 @@ func (p ClusterProfile) ClusterType() string {
 	case
 		ClusterProfileAzure2,
 		ClusterProfileAzure4,
-		ClusterProfileAzureArc:
+		ClusterProfileAzureArc,
+		ClusterProfileAzureQE:
 		return "azure4"
 	case ClusterProfileAzureStack:
 		return "azurestack"
-	case ClusterProfileAzureMag:
+	case
+		ClusterProfileAzureMag,
+		ClusterProfileAzureMagQE:
 		return "azuremag"
-	case ClusterProfileAzureQE:
-		return "azure-qe"
-	case ClusterProfileAzureMagQE:
-		return "azuremag-qe"
 	case ClusterProfileEquinixOcpMetal:
 		return "equinix-ocp-metal"
 	case

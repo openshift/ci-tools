@@ -64,7 +64,7 @@ tide:
     - do-not-merge/invalid-owners-file
     - bugzilla/invalid-bug
     repos:
-    - openshift/cluster-version-operator
+    - openshift/unsharded-b
   - excludedBranches:
     - release-4.0
     - release-4.1
@@ -83,7 +83,7 @@ tide:
     - do-not-merge/invalid-owners-file
     - bugzilla/invalid-bug
     repos:
-    - openshift/ci-tools
-    - openshift/cluster-version-operator
+    - openshift/unsharded-a
+    - openshift/unsharded-b
   status_update_period: 1m0s
   sync_period: 1m0s

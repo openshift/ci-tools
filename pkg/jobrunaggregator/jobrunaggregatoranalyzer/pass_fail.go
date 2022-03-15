@@ -526,6 +526,8 @@ func init() {
 	}] = "Test has been failing for a longtime but went undetected"
 }
 
+// testShouldAlwaysPass returns a reason if a test should be skipped and considered always passing, or empty
+// string if we should proceed with normal test analysis.
 func testShouldAlwaysPass(jobName, testName, testSuiteName string) string {
 	coordinates := testCoordinates{
 		jobName:       jobName,
@@ -537,14 +539,11 @@ func testShouldAlwaysPass(jobName, testName, testSuiteName string) string {
 		return reason
 	}
 
-	if strings.HasPrefix(testName, "Run multi-stage test ") {
-		switch {
-		// used to aggregate overall upgrade result for a single job.  Since we aggregated all the junits, we don't care about this
-		// sub-aggregation. The analysis job runs can all fail on different tests, but the aggregated job will succeed.
-		case strings.HasSuffix(testName, "-openshift-e2e-test container test"):
-			return "used to aggregate overall upgrade result for a single job"
-		}
+	if testSuiteName == "step graph" {
+		// examples: "step graph.Run multi-stage test post phase"
+		return "step graph tests are added by ci and are not useful for aggregation"
 	}
+
 	if strings.Contains(testName, `Cluster should remain functional during upgrade`) {
 		// this test is a side-effect of other tests.  For the purpose of aggregation, we can have each individual job run
 		// fail this test, but the aggregated output can be successful.

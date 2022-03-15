@@ -123,6 +123,10 @@ func main() {
 		logrus.WithError(err).Fatal("Could not post team digest to Slack.")
 	}
 
+	if err := ensureGroupMembership(slackClient, userIdsByRole); err != nil {
+		logrus.WithError(err).Fatal("Could not ensure Slack group membership.")
+	}
+
 	if err := sendIntakeDigest(slackClient, jiraClient, userIdsByRole[roleIntake]); err != nil {
 		logrus.WithError(err).Fatal("Could not post @dptp-intake digest to Slack.")
 	}
@@ -131,10 +135,6 @@ func main() {
 		if err := sendNextWeeksRoleDigest(pagerDutyClient, slackClient); err != nil {
 			logrus.WithError(err).Fatal("Could not post next week's role digest to Slack.")
 		}
-	}
-
-	if err := ensureGroupMembership(slackClient, userIdsByRole); err != nil {
-		logrus.WithError(err).Fatal("Could not ensure Slack group membership.")
 	}
 
 	if err := addSchemes(); err != nil {
@@ -238,13 +238,17 @@ func getPagerDutyBlocks(userIdsByRole map[string]string) []slack.Block {
 }
 
 func users(client *pagerduty.Client, slackClient *slack.Client) (map[string]string, error) {
-	userIdsByRole, errors := usersOnCallAtTime(client, slackClient, time.Now())
+	now := time.Now()
+	userIdsByRole, errors := usersOnCallAtTime(client, slackClient, now.Year(), now.Month(), now.Day())
 	return userIdsByRole, kerrors.NewAggregate(errors)
 }
 
-func usersOnCallAtTime(client *pagerduty.Client, slackClient *slack.Client, when time.Time) (map[string]string, []error) {
+func usersOnCallAtTime(client *pagerduty.Client, slackClient *slack.Client, year int, month time.Month, day int) (map[string]string, []error) {
 	var errors []error
 	userIdsByRole := map[string]string{}
+	// 7 am UTC is when our PD day begins, and US on-call ends at 10pm UTC. Query 8 am - 9 pm for safe results
+	dayStart := time.Date(year, month, day, 8, 0, 1, 0, time.UTC)
+	dayEnd := dayStart.Add(13 * time.Hour).Add(-2 * time.Second)
 	for _, item := range []struct {
 		role         string
 		query        string
@@ -253,32 +257,32 @@ func usersOnCallAtTime(client *pagerduty.Client, slackClient *slack.Client, when
 		{
 			role:  roleTriagePrimary,
 			query: primaryOnCallQuery,
-			since: when.Add(-1 * time.Second),
-			until: when,
+			since: dayStart,
+			until: dayEnd,
 		},
 		{
 			role:  roleTriageSecondaryUS,
 			query: secondaryUSOnCallQuery,
-			since: when.Add(-24 * time.Hour),
-			until: when,
+			since: dayStart,
+			until: dayEnd,
 		},
 		{
 			role:  roleTriageSecondaryEU,
 			query: secondaryEUOnCallQuery,
-			since: when.Add(-24 * time.Hour),
-			until: when,
+			since: dayStart,
+			until: dayEnd,
 		},
 		{
 			role:  roleHelpdesk,
 			query: primaryOnCallQuery,
-			since: when.Add(-7 * 24 * time.Hour).Add(-1 * time.Second),
-			until: when.Add(-7 * 24 * time.Hour),
+			since: dayStart.Add(-7 * 24 * time.Hour),
+			until: dayEnd.Add(-7 * 24 * time.Hour),
 		},
 		{
 			role:  roleIntake,
 			query: primaryOnCallQuery,
-			since: when.Add(-2 * 7 * 24 * time.Hour).Add(-1 * time.Second),
-			until: when.Add(-2 * 7 * 24 * time.Hour),
+			since: dayStart.Add(-2 * 7 * 24 * time.Hour),
+			until: dayEnd.Add(-2 * 7 * 24 * time.Hour),
 		},
 	} {
 		pagerDutyUser, err := userOnCallDuring(client, item.query, item.since, item.until)
@@ -322,9 +326,7 @@ func sendNextWeeksRoleDigest(client *pagerduty.Client, slackClient *slack.Client
 	var errors []error
 	// Use one week from now at noon UTC to ensure that PD roles have begun
 	nextWeek := time.Now().Add(7 * 24 * time.Hour)
-	nextWeek = time.Date(nextWeek.Year(), nextWeek.Month(), nextWeek.Day(), 12, 0, 0, 0, time.UTC)
-
-	userIdsByRole, errs := usersOnCallAtTime(client, slackClient, nextWeek)
+	userIdsByRole, errs := usersOnCallAtTime(client, slackClient, nextWeek.Year(), nextWeek.Month(), nextWeek.Day())
 	if len(errs) > 0 {
 		errors = append(errors, errs...)
 		msg := "Could not get rotating roles from PagerDuty."

@@ -57,6 +57,22 @@ type Loggers struct {
 	Job, Debug logrus.FieldLogger
 }
 
+// Number of openshift versions
+var numVersion = 50
+
+// Global map that contains relevance of known branches
+var relevancy = map[string]int{
+	"master": numVersion + 1,
+	"main":   numVersion + 1,
+}
+
+func init() {
+	for i := 1; i < numVersion; i++ {
+		relevancy[fmt.Sprintf("release-4.%d", i)] = i
+		relevancy[fmt.Sprintf("openshift-4.%d", i)] = i
+	}
+}
+
 // NewProwJobClient creates a ProwJob client with a dry run capability
 func NewProwJobClient(clusterConfig *rest.Config, dry bool) (ctrlruntimeclient.Client, error) {
 	if dry {
@@ -713,20 +729,9 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 	return selectedPresubmits, selectedPeriodics
 }
 
+// Compare two branches by their relevancy
 func moreRelevant(one, two *config.DataWithInfo) bool {
-	branchI := one.Info.Metadata.Branch
-	branchJ := two.Info.Metadata.Branch
-	branches := map[string]int{}
-	for i := 1; i < 50; i++ {
-		branches[fmt.Sprintf("release-4.%d", i)] = i
-		branches[fmt.Sprintf("openshift-4.%d", i)] = i
-	}
-	branches["master"] = 100
-	branches["main"] = 100
-	if branches[branchI] > 0 || branches[branchJ] > 0 {
-		return branches[branchI] > branches[branchJ]
-	}
-	return branchI > branchJ
+	return relevancy[one.Info.Metadata.Branch] > relevancy[two.Info.Metadata.Branch]
 }
 
 func getClusterTypes(jobs map[string][]prowconfig.Presubmit) []string {

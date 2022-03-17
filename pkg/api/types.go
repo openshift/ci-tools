@@ -1094,6 +1094,7 @@ const (
 	ClusterProfileAzureQE               ClusterProfile = "azure-qe"
 	ClusterProfileAzureMagQE            ClusterProfile = "azuremag-qe"
 	ClusterProfileEquinixOcpMetal       ClusterProfile = "equinix-ocp-metal"
+	ClusterProfileGCPQE                 ClusterProfile = "gcp-qe"
 	ClusterProfileGCP                   ClusterProfile = "gcp"
 	ClusterProfileGCP40                 ClusterProfile = "gcp-40"
 	ClusterProfileGCPHA                 ClusterProfile = "gcp-ha"
@@ -1151,6 +1152,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAzureQE,
 		ClusterProfileAzureMagQE,
 		ClusterProfileEquinixOcpMetal,
+		ClusterProfileGCPQE,
 		ClusterProfileGCP,
 		ClusterProfileGCP40,
 		ClusterProfileGCPHA,
@@ -1225,6 +1227,7 @@ func (p ClusterProfile) ClusterType() string {
 	case ClusterProfileEquinixOcpMetal:
 		return "equinix-ocp-metal"
 	case
+		ClusterProfileGCPQE,
 		ClusterProfileGCP,
 		ClusterProfileGCP40,
 		ClusterProfileGCPHA,
@@ -1320,6 +1323,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "azuremag-qe-quota-slice"
 	case ClusterProfileEquinixOcpMetal:
 		return "equinix-ocp-metal-quota-slice"
+	case ClusterProfileGCPQE:
+		return "gcp-qe-quota-slice"
 	case
 		ClusterProfileGCP,
 		ClusterProfileGCP40,

@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -23,8 +22,6 @@ type githubClient interface {
 	QueryWithGitHubAppsSupport(ctx context.Context, q interface{}, vars map[string]interface{}, org string) error
 }
 
-type arrayFlags []string
-
 type options struct {
 	config configflagutil.ConfigOptions
 	github prowflagutil.GitHubOptions
@@ -37,16 +34,7 @@ type options struct {
 	cacheFile      string
 	cacheRecordAge time.Duration
 
-	enableOnRepo arrayFlags
-}
-
-func (list *arrayFlags) Set(value string) error {
-	*list = append(*list, value)
-	return nil
-}
-
-func (list *arrayFlags) String() string {
-	return strings.Join(*list, ", ")
+	enableOnRepos prowflagutil.Strings
 }
 
 func (o *options) Validate() error {
@@ -70,7 +58,7 @@ func gatherOptions() options {
 	fs.StringVar(&intervalRaw, "interval", "1h", "Parseable duration string that specifies the sync period")
 	fs.StringVar(&o.cacheFile, "cache-file", "", "File to persist cache. No persistence of cache if not set")
 	fs.StringVar(&cacheRecordAgeRaw, "cache-record-age", "168h", "Parseable duration string that specifies how long a cache record lives in cache after the last time it was considered")
-	fs.Var(&o.enableOnRepo, "enable-on-repo", "Repository is saved in list. It can be used more than once, the result is a list of repositories where we start commenting instead of logging")
+	fs.Var(&o.enableOnRepos, "enable-on-repo", "Repository is saved in list. It can be used more than once, the result is a list of repositories where we start commenting instead of logging")
 
 	for _, group := range []flagutil.OptionGroup{&o.github, &o.config} {
 		group.AddFlags(fs)
@@ -114,7 +102,7 @@ func main() {
 		logrus.WithError(err).Fatal("Error starting config agent.")
 	}
 
-	c := newController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, o.enableOnRepo)
+	c := newController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, o.enableOnRepos.Strings())
 
 	interrupts.OnInterrupt(func() {
 		if err := gitClient.Clean(); err != nil {

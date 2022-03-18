@@ -22,7 +22,7 @@ func TestGatherOptions(t *testing.T) {
 
 	actual := gatherOptions()
 
-	if !stringSlicesEqual(actual.enableOnRepo, expected) {
-		t.Errorf("Test failed, expected: '%+v', got:  '%+v'", expected, actual.enableOnRepo)
+	if !stringSlicesEqual(actual.enableOnRepos.Strings(), expected) {
+		t.Errorf("Test failed, expected: '%+v', got:  '%+v'", expected, actual.enableOnRepos)
 	}
 }

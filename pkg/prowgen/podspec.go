@@ -290,7 +290,7 @@ const (
 )
 
 func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterType string) corev1.Volume {
-	// AWS-2 and CPaaS and GCP2 PacketAssisted and PacketSNO and AzureQE and AzureMagQE need a different secret that should be provided to jobs
+	// AWS-2 and CPaaS and GCPQE and GCP2 PacketAssisted and PacketSNO and AzureQE and AzureMagQE need a different secret that should be provided to jobs
 	if profile == cioperatorapi.ClusterProfileAWSCPaaS ||
 		profile == cioperatorapi.ClusterProfileAWS2 ||
 		profile == cioperatorapi.ClusterProfileAWSQE ||
@@ -299,6 +299,7 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 		profile == cioperatorapi.ClusterProfileAWSGovCloudQE ||
 		profile == cioperatorapi.ClusterProfileAWSSC2SQE ||
 		profile == cioperatorapi.ClusterProfileGCP2 ||
+		profile == cioperatorapi.ClusterProfileGCPQE ||
 		profile == cioperatorapi.ClusterProfilePacketAssisted ||
 		profile == cioperatorapi.ClusterProfilePacketSNO ||
 		profile == cioperatorapi.ClusterProfileAzureQE ||

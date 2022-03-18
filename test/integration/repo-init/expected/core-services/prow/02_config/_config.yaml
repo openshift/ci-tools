@@ -45,49 +45,45 @@ tide:
   max_goroutines: 20
   queries:
   - includedBranches:
-    - openshift-4.1
     - release-4.0
     - release-4.1
     - release-4.2
     - release-4.3
     - release-4.4
+    - openshift-4.1
     labels:
+    - lgtm
     - approved
     - bugzilla/valid-bug
     - cherry-pick-approved
-    - lgtm
     missingLabels:
-    - bugzilla/invalid-bug
+    - needs-rebase
     - do-not-merge/blocked-paths
     - do-not-merge/hold
-    - do-not-merge/invalid-owners-file
     - do-not-merge/work-in-progress
-    - needs-rebase
+    - do-not-merge/invalid-owners-file
+    - bugzilla/invalid-bug
     repos:
-    - openshift/cluster-version-operator
-    - org/repo
+    - openshift/unsharded-b
   - excludedBranches:
-    - openshift-4.1
     - release-4.0
     - release-4.1
     - release-4.2
     - release-4.3
     - release-4.4
+    - openshift-4.1
     labels:
-    - approved
     - lgtm
+    - approved
     missingLabels:
-    - bugzilla/invalid-bug
+    - needs-rebase
     - do-not-merge/blocked-paths
     - do-not-merge/hold
-    - do-not-merge/invalid-owners-file
     - do-not-merge/work-in-progress
-    - needs-rebase
+    - do-not-merge/invalid-owners-file
+    - bugzilla/invalid-bug
     repos:
-    - openshift/ci-tools
-    - openshift/cluster-version-operator
-    - org/repo
-    - org/other
-    - org/third
+    - openshift/unsharded-a
+    - openshift/unsharded-b
   status_update_period: 1m0s
   sync_period: 1m0s

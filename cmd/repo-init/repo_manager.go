@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/test-infra/prow/cmd/generic-autobumper/bumper"
 	"k8s.io/test-infra/prow/config/secret"
+	"k8s.io/test-infra/prow/flagutil"
 )
 
 type repoManager struct {
@@ -65,8 +66,6 @@ func initRepo(stdout, stderr bumper.HideSecretsWriter) *repo {
 	return &thisRepo
 }
 
-type RepoGetter func(githubUsername string) (repository *repo, err error)
-
 // retrieveAndLockAvailable obtains an available repo (if one exists) and assigns it to the specified githubUsername.
 func (rm *repoManager) retrieveAndLockAvailable(githubUsername string) (repository *repo, err error) {
 	rm.mux.Lock()
@@ -76,8 +75,9 @@ func (rm *repoManager) retrieveAndLockAvailable(githubUsername string) (reposito
 			if len(rm.availableRepos) == 0 {
 				return nil, fmt.Errorf("all repositories are currently in use")
 			}
-			availableRepo := rm.availableRepos[0]
-			rm.availableRepos = append(rm.availableRepos[0:], rm.availableRepos[1:]...)
+			lastIndex := len(rm.availableRepos) - 1
+			availableRepo := rm.availableRepos[lastIndex]
+			rm.availableRepos = rm.availableRepos[:lastIndex]
 			availableRepo.inUseBy = githubUsername
 			rm.inUseRepos = append(rm.inUseRepos, availableRepo)
 			// make sure we update the repo to the latest changes before giving it out.
@@ -99,7 +99,7 @@ func (rm *repoManager) returnInUse(r *repo) {
 	rm.mux.Lock()
 	for i, cr := range rm.inUseRepos {
 		if r == cr {
-			rm.inUseRepos = append(rm.inUseRepos[i:], rm.inUseRepos[i+1:]...)
+			rm.inUseRepos = append(rm.inUseRepos[0:i], rm.inUseRepos[i+1:]...)
 			r.inUseBy = ""
 			rm.availableRepos = append(rm.availableRepos, r)
 		}
@@ -127,7 +127,7 @@ func updateRepo(repo *repo) error {
 	return nil
 }
 
-func pushChanges(gitRepo *repo, org, repo, githubUsername, githubToken string, createPR bool) (string, error) {
+func pushChanges(gitRepo *repo, githubOptions flagutil.GitHubOptions, org, repo, githubUsername, githubToken string, createPR bool) (string, error) {
 	if err := updateRepo(gitRepo); err != nil {
 		logrus.WithError(err).Error("unable to update repo")
 		return "", err
@@ -200,10 +200,19 @@ func commitChanges(message, email, name string) error {
 	if err := bumper.Call(os.Stdout, os.Stderr, "git", "add", "-A"); err != nil {
 		return fmt.Errorf("git add: %w", err)
 	}
-	commitArgs := []string{"commit", "-m", message}
-	if name != "" && email != "" {
-		commitArgs = append(commitArgs, "--author", fmt.Sprintf("%s <%s>", name, email))
+
+	if err := bumper.Call(os.Stdout, os.Stderr, "git", "config", "--local", "user.email", email); err != nil {
+		return fmt.Errorf("failed to configure email address: %w", err)
 	}
+	if err := bumper.Call(os.Stdout, os.Stderr, "git", "config", "--local", "user.name", name); err != nil {
+		return fmt.Errorf("failed to configure email address: %w", err)
+	}
+	if err := bumper.Call(os.Stdout, os.Stderr, "git", "config", "--local", "commit.gpgsign", "false"); err != nil {
+		return fmt.Errorf("failed to configure disabling gpg signing: %w", err)
+	}
+
+	author := fmt.Sprintf("%s <%s>", name, email)
+	commitArgs := []string{"commit", "-m", message, "--author", author}
 
 	if err := bumper.Call(os.Stdout, os.Stderr, "git", commitArgs...); err != nil {
 		return fmt.Errorf("git commit: %w", err)

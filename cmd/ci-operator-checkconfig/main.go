@@ -16,6 +16,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/steps/release"
+	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/validation"
 )
 
@@ -64,51 +65,40 @@ func (o *options) validate() (ret []error) {
 		configuration *api.ReleaseBuildConfiguration
 		repoInfo      *config.Info
 	}
-	workCh := make(chan workItem)
-	seenCh := make(chan promotedTag)
+	inputCh := make(chan workItem)
+	produce := func() error {
+		defer close(inputCh)
+		if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+			inputCh <- workItem{configuration, repoInfo}
+			return nil
+		}); err != nil {
+			return fmt.Errorf("error reading configuration files: %w", err)
+		}
+		return nil
+	}
+	outputCh := make(chan promotedTag)
 	errCh := make(chan error)
-	doneCh := make(chan struct{})
-	for i := uint(0); i < o.maxConcurrency; i++ {
-		go func() {
-			validator := validation.NewValidator()
-			for item := range workCh {
-				if err := o.validateConfiguration(&validator, seenCh, item.configuration, item.repoInfo); err != nil {
-					errCh <- fmt.Errorf("failed to validate configuration %s: %w", item.repoInfo.Filename, err)
-				}
+	map_ := func() error {
+		validator := validation.NewValidator()
+		for item := range inputCh {
+			if err := o.validateConfiguration(&validator, outputCh, item.configuration, item.repoInfo); err != nil {
+				errCh <- fmt.Errorf("failed to validate configuration %s: %w", item.repoInfo.Filename, err)
 			}
-			doneCh <- struct{}{}
-		}()
+		}
+		return nil
 	}
 	seen := tagSet{}
-	go func() {
-		for i := range seenCh {
+	reduce := func() error {
+		for i := range outputCh {
 			seen[i.tag] = append(seen[i.tag], i.repoInfo)
 		}
-		doneCh <- struct{}{}
-	}()
-	go func() {
-		for err := range errCh {
-			ret = append(ret, err)
-		}
-		doneCh <- struct{}{}
-	}()
-	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
-		workCh <- workItem{configuration, repoInfo}
 		return nil
-	}); err != nil {
-		ret = append(ret, fmt.Errorf("error reading configuration files: %w", err))
 	}
-	close(workCh)
-	for i := uint(0); i < o.maxConcurrency; i++ {
-		<-doneCh
+	done := func() { close(outputCh) }
+	if err := util.ProduceMapReduce(0, produce, map_, reduce, done, errCh); err != nil {
+		ret = append(ret, err)
 	}
-	close(seenCh)
-	close(errCh)
-	<-doneCh
-	<-doneCh
-	close(doneCh)
-	ret = append(ret, validateTags(seen)...)
-	return
+	return append(ret, validateTags(seen)...)
 }
 
 func (o *options) loadResolver(path string) error {

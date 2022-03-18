@@ -58,6 +58,17 @@ var ghRequestDurationHistVec = prometheus.NewHistogramVec(
 	[]string{"token_hash", "path", "status", "user_agent"},
 )
 
+// ghRequestDurationHistVec provides the 'github_request_duration' histogram that keeps track
+// of the duration of GitHub requests by API path.
+var ghRequestWaitDurationHistVec = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "github_request_wait_duration_seconds",
+		Help:    "GitHub request wait duration before sending to API in seconds",
+		Buckets: []float64{0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60},
+	},
+	[]string{"token_hash", "request_type", "api"},
+)
+
 // cacheCounter provides the 'ghcache_responses' counter vec that is indexed
 // by the cache response mode.
 var cacheCounter = prometheus.NewCounterVec(
@@ -97,6 +108,7 @@ func init() {
 	prometheus.MustRegister(ghTokenUntilResetGaugeVec)
 	prometheus.MustRegister(ghTokenUsageGaugeVec)
 	prometheus.MustRegister(ghRequestDurationHistVec)
+	prometheus.MustRegister(ghRequestWaitDurationHistVec)
 	prometheus.MustRegister(cacheCounter)
 	prometheus.MustRegister(timeoutDuration)
 	prometheus.MustRegister(cacheEntryAge)
@@ -174,4 +186,10 @@ func CollectCacheEntryAgeMetrics(age float64, path, userAgent, tokenHash string)
 // API path to 'github_request_timeouts' on prometheus.
 func CollectRequestTimeoutMetrics(tokenHash, path, userAgent string, reqStartTime, responseTime time.Time) {
 	timeoutDuration.With(prometheus.Labels{"token_hash": tokenHash, "path": simplifier.Simplify(path), "user_agent": userAgentWithoutVersion(userAgent)}).Observe(float64(responseTime.Sub(reqStartTime).Seconds()))
+}
+
+// CollectGitHubRequestWaitDurationMetrics publishes the wait duration of requests
+// before sending to respective GitHub API on prometheus.
+func CollectGitHubRequestWaitDurationMetrics(tokenHash, requestType, api string, duration time.Duration) {
+	ghRequestWaitDurationHistVec.With(prometheus.Labels{"token_hash": tokenHash, "request_type": requestType, "api": api}).Observe(duration.Seconds())
 }

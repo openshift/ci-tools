@@ -34,21 +34,21 @@ func TestEndpoint(t *testing.T) {
 				Product:      api.ReleaseProductOCP,
 				Architecture: api.ReleaseArchitecturePPC64le,
 			},
-			output: "https://ppc64le.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable/latest",
+			output: "https://ppc64le.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-ppc64le/latest",
 		},
 		{
 			input: api.Prerelease{
 				Product:      api.ReleaseProductOCP,
 				Architecture: api.ReleaseArchitectureS390x,
 			},
-			output: "https://s390x.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable/latest",
+			output: "https://s390x.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-s390x/latest",
 		},
 		{
 			input: api.Prerelease{
 				Product:      api.ReleaseProductOCP,
 				Architecture: api.ReleaseArchitectureARM64,
 			},
-			output: "https://arm64.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable/latest",
+			output: "https://arm64.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-arm64/latest",
 		},
 	}
 

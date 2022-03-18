@@ -152,12 +152,12 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 		return err
 	}
 	var errs []error
-	if err := s.runSteps(ctx, s.pre, env, true, false, secretVolumes, secretVolumeMounts); err != nil {
+	if err := s.runSteps(ctx, "pre", s.pre, env, true, false, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q pre steps failed: %w", s.name, err))
-	} else if err := s.runSteps(ctx, s.test, env, true, len(errs) != 0, secretVolumes, secretVolumeMounts); err != nil {
+	} else if err := s.runSteps(ctx, "test", s.test, env, true, len(errs) != 0, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q test steps failed: %w", s.name, err))
 	}
-	if err := s.runSteps(context.Background(), s.post, env, false, len(errs) != 0, secretVolumes, secretVolumeMounts); err != nil {
+	if err := s.runSteps(context.Background(), "post", s.post, env, false, len(errs) != 0, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q post steps failed: %w", s.name, err))
 	}
 	return utilerrors.NewAggregate(errs)
@@ -388,6 +388,7 @@ func commandConfigMapForTest(testName string) string {
 
 func (s *multiStageTestStep) runSteps(
 	ctx context.Context,
+	phase string,
 	steps []api.LiteralTestStep,
 	env []coreapi.EnvVar,
 	shortCircuit bool,
@@ -395,6 +396,8 @@ func (s *multiStageTestStep) runSteps(
 	secretVolumes []coreapi.Volume,
 	secretVolumeMounts []coreapi.VolumeMount,
 ) error {
+	start := time.Now()
+	logrus.Infof("Running multi-stage phase %s", phase)
 	pods, isBestEffort, err := s.generatePods(steps, env, hasPrevErrs, secretVolumes, secretVolumeMounts)
 	if err != nil {
 		return err
@@ -431,7 +434,26 @@ func (s *multiStageTestStep) runSteps(
 	default:
 		break
 	}
-	return utilerrors.NewAggregate(errs)
+
+	err = utilerrors.NewAggregate(errs)
+	finished := time.Now()
+	duration := finished.Sub(start)
+	testCase := &junit.TestCase{
+		Name:      fmt.Sprintf("Run multi-stage test %s phase", phase),
+		Duration:  duration.Seconds(),
+		SystemOut: fmt.Sprintf("The collected steps of multi-stage phase %s.", phase),
+	}
+	verb := "succeeded"
+	if err != nil {
+		verb = "failed"
+		testCase.FailureOutput = &junit.FailureOutput{
+			Output: err.Error(),
+		}
+	}
+	s.subTests = append(s.subTests, testCase)
+	logrus.Infof("Step phase %s %s after %s.", phase, verb, duration.Truncate(time.Second))
+
+	return err
 }
 
 const multiStageTestStepContainerName = "test"

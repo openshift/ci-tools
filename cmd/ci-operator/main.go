@@ -1548,6 +1548,7 @@ func (o *options) writeFailingJUnit(errs []error) {
 	suites := &junit.TestSuites{
 		Suites: []*junit.TestSuite{
 			{
+				Name:      "job",
 				NumTests:  uint(len(errs)),
 				NumFailed: uint(len(errs)),
 				TestCases: testCases,
@@ -1563,7 +1564,6 @@ func (o *options) writeJUnit(suites *junit.TestSuites, name string) error {
 	if suites == nil {
 		return nil
 	}
-	suites.Suites[0].Name = name
 	sort.Slice(suites.Suites, func(i, j int) bool {
 		return suites.Suites[i].Name < suites.Suites[j].Name
 	})

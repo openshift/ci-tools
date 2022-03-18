@@ -54,7 +54,7 @@ type configContext struct {
 	pipelineImages map[api.PipelineImageStreamTagReference]string
 }
 
-// newConfigContext creates a top-level, empty context.
+// NewConfigContext creates a top-level, empty context.
 func NewConfigContext() *configContext {
 	return &configContext{
 		pipelineImages: make(map[api.PipelineImageStreamTagReference]string),
@@ -95,14 +95,14 @@ func (c *configContext) addPipelineImage(name api.PipelineImageStreamTagReferenc
 	return nil
 }
 
-// ValidateAtRuntime validates all the configuration's values without knowledge of config
+// IsValidRuntimeConfiguration validates all the configuration's values without knowledge of config
 // repo structure
 func IsValidRuntimeConfiguration(config *api.ReleaseBuildConfiguration) error {
 	v := newSingleUseValidator()
 	return v.validateConfiguration(NewConfigContext(), config, "", "", false)
 }
 
-// ValidateResolved behaves as ValidateAtRuntime and also validates that all
+// IsValidResolvedConfiguration behaves as ValidateAtRuntime and also validates that all
 // test steps are fully resolved.
 func IsValidResolvedConfiguration(config *api.ReleaseBuildConfiguration) error {
 	config.Default()
@@ -110,7 +110,7 @@ func IsValidResolvedConfiguration(config *api.ReleaseBuildConfiguration) error {
 	return v.validateConfiguration(NewConfigContext(), config, "", "", true)
 }
 
-// Validate validates all the configuration's values.
+// IsValidConfiguration validates all the configuration's values.
 func IsValidConfiguration(config *api.ReleaseBuildConfiguration, org, repo string) error {
 	config.Default()
 	v := newSingleUseValidator()

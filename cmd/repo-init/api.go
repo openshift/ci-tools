@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -20,31 +21,33 @@ import (
 	prowConfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
+	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
 	"k8s.io/test-infra/prow/simplifypath"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/validation"
 )
+
+type server struct {
+	// NOTE: this map should not be altered outside the loadServerConfig function.
+	serverConfig map[serverConfigType]string
+
+	githubOptions flagutil.GitHubOptions
+	disableCors   bool
+	rm            *repoManager
+
+	logger *logrus.Entry
+	censor *secrets.DynamicCensor
+}
 
 // l keeps the tree legible
 func l(fragment string, children ...simplifypath.Node) simplifypath.Node {
 	return simplifypath.L(fragment, children...)
 }
-
-var (
-	apiMetrics = metrics.NewMetrics("repo_init_api")
-
-	configTypes = []serverConfigType{GitHubClientId, GitHubClientSecret, GitHubRedirectUri}
-	// NOTE: this map should not be altered outside of the loadServerConfig function.
-	serverConfig = make(map[serverConfigType]string)
-
-	githubOptions flagutil.GitHubOptions
-	disableCors   bool
-	rm            *repoManager
-)
 
 type validationResponse struct {
 	Valid            bool              `json:"valid"`
@@ -75,21 +78,31 @@ const (
 
 type serverConfigType string
 
+var configTypes = []serverConfigType{GitHubClientId, GitHubClientSecret, GitHubRedirectUri}
+
 func serveAPI(port, healthPort, numRepos int, ghOptions flagutil.GitHubOptions, disableCorsVerification bool, serverConfigPath string) {
-	githubOptions = ghOptions
-	disableCors = disableCorsVerification
+	logrusutil.ComponentInit()
+	// Set up a censor, so we don't log access tokens
+	censor := secrets.NewDynamicCensor()
+	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
 
-	logger := logrus.WithField("component", "api")
-
-	err := loadServerConfig(serverConfigPath)
-	if err != nil {
-		logger.WithError(err).Fatal("Unable to load server config")
-	}
-
-	rm = &repoManager{
+	rm := &repoManager{
 		numRepos: numRepos,
 	}
 	rm.init()
+
+	s := server{
+		logger:        logrus.WithField("component", "repo-init-apiserver"),
+		githubOptions: ghOptions,
+		disableCors:   disableCorsVerification,
+		rm:            rm,
+		censor:        &censor,
+	}
+
+	err := s.loadServerConfig(serverConfigPath)
+	if err != nil {
+		s.logger.WithError(err).Fatal("Unable to load server config")
+	}
 
 	health := pjutil.NewHealthOnPort(healthPort)
 	health.ServeReady()
@@ -104,19 +117,22 @@ func serveAPI(port, healthPort, numRepos int, ghOptions flagutil.GitHubOptions, 
 			l("server-configs"),
 		),
 	))
+
+	apiMetrics := metrics.NewMetrics("repo_init_api")
 	handler := metrics.TraceHandler(simplifier, apiMetrics.HTTPRequestDuration, apiMetrics.HTTPResponseSize)
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/auth", handler(authHandler()).ServeHTTP)
-	mux.HandleFunc("/api/cluster-profiles", handler(clusterProfileHandler()).ServeHTTP)
-	mux.HandleFunc("/api/configs", handler(configHandler()).ServeHTTP)
-	mux.HandleFunc("/api/config-validations", handler(configValidationHandler()).ServeHTTP)
-	mux.HandleFunc("/api/server-configs", handler(serverConfigHandler()).ServeHTTP)
+	mux.HandleFunc("/api/auth", handler(s.authHandler()).ServeHTTP)
+	mux.HandleFunc("/api/cluster-profiles", handler(s.clusterProfileHandler()).ServeHTTP)
+	mux.HandleFunc("/api/configs", handler(s.configHandler()).ServeHTTP)
+	mux.HandleFunc("/api/config-validations", handler(s.configValidationHandler()).ServeHTTP)
+	mux.HandleFunc("/api/server-configs", handler(s.serverConfigHandler()).ServeHTTP)
 	httpServer := &http.Server{Addr: ":" + strconv.Itoa(port), Handler: mux}
 	interrupts.ListenAndServe(httpServer, 5*time.Second)
-	logger.Debug("Ready to serve HTTP requests.")
+	s.logger.Debug("Ready to serve HTTP requests.")
 }
 
-func loadServerConfig(configPath string) error {
+func (s *server) loadServerConfig(configPath string) error {
+	s.serverConfig = make(map[serverConfigType]string)
 	fs, err := ioutil.ReadDir(configPath)
 	if err != nil {
 		return fmt.Errorf("error while loading server configs: %w", err)
@@ -132,7 +148,7 @@ func loadServerConfig(configPath string) error {
 					return err
 				}
 
-				serverConfig[configKey] = strings.TrimSpace(string(fileContent))
+				s.serverConfig[configKey] = strings.TrimSpace(string(fileContent))
 				break
 			}
 		}
@@ -141,9 +157,10 @@ func loadServerConfig(configPath string) error {
 	return nil
 }
 
-func authHandler() http.HandlerFunc {
+func (s *server) authHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		disableCORS(w)
+		logger := s.logger.WithField("handler", "authHandler")
+		s.disableCORS(w)
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -151,16 +168,16 @@ func authHandler() http.HandlerFunc {
 
 		code, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			logrus.WithError(err).Error("unable to read request body")
+			logger.WithError(err).Error("unable to read request body")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		data := url.Values{
-			"client_id":     {serverConfig[GitHubClientId]},
-			"client_secret": {serverConfig[GitHubClientSecret]},
+			"client_id":     {s.serverConfig[GitHubClientId]},
+			"client_secret": {s.serverConfig[GitHubClientSecret]},
 			"code":          {string(code)},
-			"redirect_uri":  {serverConfig[GitHubRedirectUri]},
+			"redirect_uri":  {s.serverConfig[GitHubRedirectUri]},
 		}
 
 		// get the access token
@@ -168,7 +185,7 @@ func authHandler() http.HandlerFunc {
 			"https://github.com/login/oauth/access_token",
 			strings.NewReader(data.Encode()))
 		if err != nil {
-			logrus.WithError(err).Error("unable to initialize request")
+			logger.WithError(err).Error("unable to initialize request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -179,7 +196,7 @@ func authHandler() http.HandlerFunc {
 		resp, err := client.Do(req)
 
 		if err != nil {
-			logrus.WithError(err).Error("unable to get access token")
+			logger.WithError(err).Error("unable to get access token")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -189,18 +206,20 @@ func authHandler() http.HandlerFunc {
 
 		err = json.NewDecoder(resp.Body).Decode(&res)
 		if err != nil {
-			logrus.WithError(err).Error("unable to decode response")
+			logger.WithError(err).Error("unable to decode response")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		accessToken := res["access_token"]
+		// We don't want to log this token
+		s.censor.AddSecrets(accessToken)
 
 		// get the user information
-		ghClient := githubOptions.GitHubClientWithAccessToken(accessToken)
+		ghClient := s.githubOptions.GitHubClientWithAccessToken(accessToken)
 		user, err := ghClient.BotUser()
 		if err != nil {
-			logrus.WithError(err).Error("unable to retrieve user")
+			logger.WithError(err).Error("unable to retrieve user")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -212,23 +231,24 @@ func authHandler() http.HandlerFunc {
 			"userName":    user.Login,
 		})
 		if err != nil {
-			logrus.WithError(err).Error("unable marshall data")
+			logger.WithError(err).Error("unable marshall data")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		_, err = w.Write(marshalled)
 		if err != nil {
-			logrus.WithError(err).Error("unable to write response")
+			logger.WithError(err).Error("unable to write response")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	}
 }
 
-func clusterProfileHandler() http.HandlerFunc {
+func (s *server) clusterProfileHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		disableCORS(w)
+		logger := s.logger.WithField("handler", "clusterProfileHandler")
+		s.disableCORS(w)
 		switch r.Method {
 		case http.MethodGet:
 			marshalled, err := json.Marshal(getClusterProfiles())
@@ -240,7 +260,7 @@ func clusterProfileHandler() http.HandlerFunc {
 			_, err = w.Write(marshalled)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				logrus.WithError(err).Error("unable to marshall response")
+				logger.WithError(err).Error("unable to marshall response")
 				return
 			}
 		case http.MethodOptions:
@@ -251,12 +271,12 @@ func clusterProfileHandler() http.HandlerFunc {
 	}
 }
 
-func configValidationHandler() http.HandlerFunc {
+func (s *server) configValidationHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		disableCORS(w)
+		s.disableCORS(w)
 		switch r.Method {
 		case http.MethodPost:
-			validateConfig(w, r)
+			s.validateConfig(w, r)
 		case http.MethodOptions:
 			w.WriteHeader(http.StatusNoContent)
 		default:
@@ -265,14 +285,14 @@ func configValidationHandler() http.HandlerFunc {
 	}
 }
 
-func configHandler() http.HandlerFunc {
+func (s *server) configHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		disableCORS(w)
+		s.disableCORS(w)
 		switch r.Method {
 		case http.MethodGet:
-			loadConfigs(w, r, rm.retrieveAndLockAvailable)
+			s.loadConfigs(w, r)
 		case http.MethodPost:
-			generateConfig(w, r, rm.retrieveAndLockAvailable)
+			s.generateConfig(w, r)
 		case http.MethodOptions:
 			w.WriteHeader(http.StatusNoContent)
 		default:
@@ -281,14 +301,15 @@ func configHandler() http.HandlerFunc {
 	}
 }
 
-func serverConfigHandler() http.HandlerFunc {
+func (s *server) serverConfigHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		disableCORS(w)
+		logger := s.logger.WithField("handler", "serverConfigHandler")
+		s.disableCORS(w)
 		switch r.Method {
 		case http.MethodGet:
 			configMap := make(map[serverConfigType]string)
 
-			for key, value := range serverConfig {
+			for key, value := range s.serverConfig {
 				if key != GitHubClientSecret {
 					configMap[key] = value
 				}
@@ -297,7 +318,7 @@ func serverConfigHandler() http.HandlerFunc {
 			w.WriteHeader(http.StatusOK)
 			marshalledConfig, err := json.Marshal(configMap)
 			if err != nil {
-				logrus.WithError(err).Error("caught error marshalling configs")
+				logger.WithError(err).Error("caught error marshalling configs")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -310,39 +331,41 @@ func serverConfigHandler() http.HandlerFunc {
 	}
 }
 
-func disableCORS(w http.ResponseWriter) {
-	if disableCors {
+func (s server) disableCORS(w http.ResponseWriter) {
+	if s.disableCors {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "*")
 	}
 }
 
-func loadConfigs(w http.ResponseWriter, r *http.Request, repoGetterFunc RepoGetter) {
+func (s server) loadConfigs(w http.ResponseWriter, r *http.Request) {
 	org := r.URL.Query().Get("org")
 	repo := r.URL.Query().Get("repo")
 
 	if org == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		logrus.Error("no org provided")
+		s.logger.Error("no org provided")
 		_, _ = w.Write([]byte("You must provide an org when querying configs."))
 		return
 	}
 
 	githubUser := r.Header.Get("github_user")
-	availableRepo, err := repoGetterFunc(githubUser)
+	availableRepo, err := s.rm.retrieveAndLockAvailable(githubUser)
+	defer s.rm.returnInUse(availableRepo)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		logrus.WithError(err).Error("unable to get available repo")
+		s.logger.WithError(err).Error("unable to get available repo")
 		_, _ = w.Write([]byte("Unable to retrieve a copy of the o/release repo to use. This probably just means that all of them are in use. Please try again in a few seconds."))
 		return
 	}
 	releaseRepo := availableRepo.path
 
+	//TODO(smg247): note, this generates an error inside that isn't really an error in this case. We need to make sure this is being filtered
 	configs, err := config.LoadByOrgRepo(getConfigPath(org, repo, releaseRepo))
 
 	if err != nil {
-		logrus.WithError(err).Error("Error while loading configs")
+		s.logger.WithError(err).Error("Error while loading configs")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -355,7 +378,7 @@ func loadConfigs(w http.ResponseWriter, r *http.Request, repoGetterFunc RepoGett
 	marshalledConfigs, err := json.Marshal(configs)
 
 	if err != nil {
-		logrus.WithError(err).Error("Error while marhalling configs")
+		s.logger.WithError(err).Error("Error while marhalling configs")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -363,7 +386,7 @@ func loadConfigs(w http.ResponseWriter, r *http.Request, repoGetterFunc RepoGett
 	w.WriteHeader(http.StatusOK)
 	_, err = w.Write(marshalledConfigs)
 	if err != nil {
-		logrus.WithError(err).Error("Error while writing response")
+		s.logger.WithError(err).Error("Error while writing response")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -404,11 +427,11 @@ func unmarshalValidationRequest(data []byte) (validationType, interface{}, error
 	}
 }
 
-func validateConfig(w http.ResponseWriter, r *http.Request) {
+func (s server) validateConfig(w http.ResponseWriter, r *http.Request) {
+	logger := s.logger.WithField("handler", "configValidationHandler")
 	body, err := ioutil.ReadAll(r.Body)
-
 	if err != nil {
-		logrus.WithError(err).Error("Error while reading request body")
+		logger.WithError(err).Error("Error while reading request body")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -416,10 +439,11 @@ func validateConfig(w http.ResponseWriter, r *http.Request) {
 	validationType, validationObject, err := unmarshalValidationRequest(body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		logrus.WithError(err).Error("unable to unmarshal request")
+		logger.WithError(err).Error("unable to unmarshal request")
 		_, _ = w.Write([]byte("Invalid validation request"))
 		return
 	}
+	logger.WithField("validationType", validationType).Debug("validating the config")
 
 	var validationErrors []error
 
@@ -442,10 +466,34 @@ func validateConfig(w http.ResponseWriter, r *http.Request) {
 		case OperatorBundle:
 			validationErrors = append(validationErrors, validation.ValidateOperator(context.AddField("operator_bundle"), generated)...)
 		case Tests:
-			v := validation.NewValidator()
-			validationErrors = append(validationErrors, v.ValidateTestStepConfiguration(context.AddField("tests"), generated, false)...)
+			// Build up a graph configuration with the relevant parts in order to validate the tests
+			var rawSteps []api.StepConfiguration
+			for _, t := range generated.Tests {
+				test := t
+				rawSteps = append(rawSteps, api.StepConfiguration{
+					TestStepConfiguration: &test,
+				})
+			}
+			for _, i := range generated.InputConfiguration.BaseImages {
+				image := i
+				rawSteps = append(rawSteps, api.StepConfiguration{
+					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+						InputImage: api.InputImage{
+							BaseImage: image,
+							To:        api.PipelineImageStreamTagReference(image.Name),
+						}}})
+			}
+			for _, i := range generated.Images {
+				image := i
+				rawSteps = append(rawSteps, api.StepConfiguration{
+					ProjectDirectoryImageBuildStepConfiguration: &image,
+				})
+			}
+			if err = validation.IsValidGraphConfiguration(rawSteps); err != nil {
+				validationErrors = append(validationErrors, err)
+			}
 		default:
-			logrus.WithError(err).Error("Invalid validation type specified")
+			logger.WithError(err).Error("Invalid validation type specified")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -467,7 +515,7 @@ func validateConfig(w http.ResponseWriter, r *http.Request) {
 	response := validationResponse{Valid: true}
 	if len(validationErrors) > 0 {
 		response.Valid = false
-		logrus.WithError(err).Errorf("Caught errors %v", validationErrors)
+		logger.WithError(err).Errorf("Caught errors %v", validationErrors)
 
 		for _, e := range validationErrors {
 			errorString := e.Error()
@@ -490,7 +538,7 @@ func validateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	marshalled, err := json.Marshal(response)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to marshal validation errors")
+		logger.WithError(err).Error("Failed to marshal validation errors")
 	}
 	_, _ = w.Write(marshalled)
 }
@@ -507,20 +555,20 @@ func getConfigPath(org, repo, releaseRepo string) string {
 
 // generateConfig is responsible for taking the initConfig and converting it into an api.ReleaseBuildConfiguration. Optionally
 // this function may also push this config to GitHub and create a pull request for the o/release repo.
-func generateConfig(w http.ResponseWriter, r *http.Request, repoGetterFunc RepoGetter) {
+func (s server) generateConfig(w http.ResponseWriter, r *http.Request) {
 	bodyBytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		logrus.WithError(err).Error("Unable to read request body")
+		s.logger.WithError(err).Error("Unable to read request body")
 		return
 	}
 
 	var config initConfig
-	logrus.Debugf("Unmarshalled config as: %s", string(bodyBytes))
+	s.logger.Debugf("Unmarshalled config as: %s", string(bodyBytes))
 	err = json.Unmarshal(bodyBytes, &config)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		logrus.WithError(err).Error("Unable to marshal request body")
+		s.logger.WithError(err).Error("Unable to marshal request body")
 		return
 	}
 
@@ -528,16 +576,16 @@ func generateConfig(w http.ResponseWriter, r *http.Request, repoGetterFunc RepoG
 	// since we might be interacting with git, grab one of the checked out o/release repos and assign it to the current
 	// user. we'll hold on to this until all git interactions are complete to prevent weirdness resulting from multiple users
 	// dealing with the same working copy.
-	repo, err := repoGetterFunc(githubUser)
+	repo, err := s.rm.retrieveAndLockAvailable(githubUser)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		logrus.WithError(err).Error("unable to get available repo")
+		s.logger.WithError(err).Error("unable to get available repo")
 		_, _ = w.Write([]byte("Unable to retrieve a copy of the o/release repo to use. This probably just means that all of them are in use. Please try again in a few seconds."))
 		return
 	}
 
 	releaseRepo := repo.path
-	defer rm.returnInUse(repo)
+	defer s.rm.returnInUse(repo)
 
 	// if we're only converting the initConfig, then we won't commit any changes against the local working copy or create a pull request.
 	if conversionOnly, err := strconv.ParseBool(r.URL.Query().Get("conversionOnly")); err == nil && conversionOnly {
@@ -545,20 +593,20 @@ func generateConfig(w http.ResponseWriter, r *http.Request, repoGetterFunc RepoG
 
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			logrus.WithError(err).Error("could not generate new CI Operator configuration")
+			s.logger.WithError(err).Error("could not generate new CI Operator configuration")
 			return
 		}
 		marshalled, err := yaml.Marshal(generatedConfig)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			logrus.WithError(err).Error("could not marshal CI Operator configuration")
+			s.logger.WithError(err).Error("could not marshal CI Operator configuration")
 			return
 		}
 		w.WriteHeader(http.StatusOK)
 
 		if _, err := w.Write(marshalled); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			logrus.WithError(err).Error("Could not write CI Operator configuration response")
+			s.logger.WithError(err).Error("Could not write CI Operator configuration response")
 			return
 		}
 		return
@@ -573,28 +621,35 @@ func generateConfig(w http.ResponseWriter, r *http.Request, repoGetterFunc RepoG
 
 	if err := updateProwConfig(config, releaseRepo); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		logrus.WithError(err).Error("could not update Prow configuration")
+		s.logger.WithError(err).Error("could not update Prow configuration")
 		return
 	}
 
 	if err := updatePluginConfig(config, releaseRepo); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		logrus.WithError(err).Error("could not update Prow plugin configuration")
+		s.logger.WithError(err).Error("could not update Prow plugin configuration")
 		return
 	}
 
 	if _, err := createCIOperatorConfig(config, releaseRepo, true); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		logrus.WithError(err).Error("could not generate new CI Operator configuration")
+		s.logger.WithError(err).Error("could not generate new CI Operator configuration")
+		return
+	}
+
+	err = generateJobs(s.logger)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		s.logger.WithError(err).Error("failed to generate jobs")
 		return
 	}
 
 	createPR, _ := strconv.ParseBool(r.URL.Query().Get("generatePR"))
-	branch, err := pushChanges(repo, config.Org, config.Repo, githubUser, r.Header.Get("access_token"), createPR)
+	branch, err := pushChanges(repo, s.githubOptions, config.Org, config.Repo, githubUser, r.Header.Get("access_token"), createPR)
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		logrus.WithError(err).Error("could not push changes")
+		s.logger.WithError(err).Error("could not push changes")
 		return
 	}
 
@@ -603,9 +658,48 @@ func generateConfig(w http.ResponseWriter, r *http.Request, repoGetterFunc RepoG
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		logrus.WithError(err).Error("error occurred while writing response")
+		s.logger.WithError(err).Error("error occurred while writing response")
 		return
 	}
+}
+
+func generateJobs(logger *logrus.Entry) error {
+	logger.Debug("mimicking 'make jobs' prior to commit")
+	steps := []struct {
+		command   string
+		arguments []string
+	}{
+		{
+			command: "ci-operator-checkconfig",
+			arguments: []string{
+				"--config-dir", "./ci-operator/config",
+				"--registry", "./ci-operator/step-registry",
+			},
+		},
+		{
+			command: "ci-operator-prowgen",
+			arguments: []string{
+				"--from-dir", "./ci-operator/config",
+				"--to-dir", "./ci-operator/jobs",
+			},
+		},
+		{
+			command: "sanitize-prow-jobs",
+			arguments: []string{
+				"--prow-jobs-dir", "./ci-operator/jobs",
+				"--config-path", "./core-services/sanitize-prow-jobs/_config.yaml",
+			},
+		},
+	}
+	for _, step := range steps {
+		cmd := exec.Command(step.command, step.arguments...)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("error: %w while running: %s", err, step.command)
+		}
+	}
+
+	logger.Debug("completed mimicking 'make jobs' prior to commit")
+	return nil
 }
 
 func configExists(org, repo, releaseRepo string) bool {

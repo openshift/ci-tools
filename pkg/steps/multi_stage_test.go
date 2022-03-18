@@ -485,18 +485,23 @@ func TestJUnit(t *testing.T) {
 		expected: []string{
 			"Run multi-stage test test - test-pre0 container test",
 			"Run multi-stage test test - test-pre1 container test",
+			"Run multi-stage test pre phase",
 			"Run multi-stage test test - test-test0 container test",
 			"Run multi-stage test test - test-test1 container test",
+			"Run multi-stage test test phase",
 			"Run multi-stage test test - test-post0 container test",
 			"Run multi-stage test test - test-post1 container test",
+			"Run multi-stage test post phase",
 		},
 	}, {
 		name:     "failure in a pre step",
 		failures: sets.NewString("test-pre0"),
 		expected: []string{
 			"Run multi-stage test test - test-pre0 container test",
+			"Run multi-stage test pre phase",
 			"Run multi-stage test test - test-post0 container test",
 			"Run multi-stage test test - test-post1 container test",
+			"Run multi-stage test post phase",
 		},
 	}, {
 		name:     "failure in a test step",
@@ -504,9 +509,12 @@ func TestJUnit(t *testing.T) {
 		expected: []string{
 			"Run multi-stage test test - test-pre0 container test",
 			"Run multi-stage test test - test-pre1 container test",
+			"Run multi-stage test pre phase",
 			"Run multi-stage test test - test-test0 container test",
+			"Run multi-stage test test phase",
 			"Run multi-stage test test - test-post0 container test",
 			"Run multi-stage test test - test-post1 container test",
+			"Run multi-stage test post phase",
 		},
 	}, {
 		name:     "failure in a post step",
@@ -514,10 +522,13 @@ func TestJUnit(t *testing.T) {
 		expected: []string{
 			"Run multi-stage test test - test-pre0 container test",
 			"Run multi-stage test test - test-pre1 container test",
+			"Run multi-stage test pre phase",
 			"Run multi-stage test test - test-test0 container test",
 			"Run multi-stage test test - test-test1 container test",
+			"Run multi-stage test test phase",
 			"Run multi-stage test test - test-post0 container test",
 			"Run multi-stage test test - test-post1 container test",
+			"Run multi-stage test post phase",
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {

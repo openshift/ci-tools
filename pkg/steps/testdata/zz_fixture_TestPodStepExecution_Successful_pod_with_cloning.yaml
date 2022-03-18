@@ -66,9 +66,7 @@ spec:
     - mountPath: /home/prow/go
       name: code
     workingDir: /home/prow/go/src/github.com/org/repo
-  - command:
-    - /sidecar
-    env:
+  - env:
     - name: JOB_SPEC
     - name: SIDECAR_OPTIONS
       value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/StepName","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset
@@ -83,9 +81,7 @@ spec:
       name: code
     workingDir: /home/prow/go/src/github.com/org/repo
   initContainers:
-  - command:
-    - /clonerefs
-    env:
+  - env:
     - name: CLONEREFS_OPTIONS
       value: '{"src_root":"/home/prow/go","log":"/logs/clone.json","git_user_name":"ci-robot","git_user_email":"ci-robot@k8s.io","refs":[{"org":"org","repo":"repo","base_ref":"base-ref","base_sha":"base-sha","pulls":[{"number":123,"author":"","sha":"72532003f9e01e89f455187dd92c275204bc9781"}]}],"github_api_endpoints":["https://api.github.com"]}'
     name: clonerefs
@@ -97,9 +93,7 @@ spec:
       name: code
     - mountPath: /tmp
       name: clonerefs-tmp
-  - command:
-    - /initupload
-    env:
+  - env:
     - name: INITUPLOAD_OPTIONS
       value: '{"sub_dir":"artifacts/StepName","dry_run":false,"log":"/logs/clone.json"}'
     - name: JOB_SPEC
@@ -109,10 +103,7 @@ spec:
     - mountPath: /logs
       name: logs
   - args:
-    - /entrypoint
-    - /tools/entrypoint
-    command:
-    - /bin/cp
+    - --copy-mode-only
     image: entrypoint
     name: place-entrypoint
     resources: {}

@@ -30,18 +30,24 @@ func init() {
 
 func TestMakeGroups(t *testing.T) {
 	testCases := []struct {
-		name        string
-		mapping     map[string]string
-		roverGroups map[string][]string
-		config      *group.Config
-		clusters    sets.String
-		expected    map[string]GroupClusters
-		expectedErr error
+		name                     string
+		openshiftPrivAdmins      sets.String
+		peribolosConfig          string
+		openshiftPrivAdminsGroup string
+		mapping                  map[string]string
+		roverGroups              map[string][]string
+		config                   *group.Config
+		clusters                 sets.String
+		expected                 map[string]GroupClusters
+		expectedErr              error
 	}{
 		{
-			name:        "basic case",
-			mapping:     map[string]string{"a": "b", "c": "c"},
-			roverGroups: map[string][]string{"old-group-name": {"b", "c"}, "x": {"y", "y"}},
+			name:                     "basic case",
+			peribolosConfig:          "bar",
+			openshiftPrivAdmins:      sets.NewString("a"),
+			openshiftPrivAdminsGroup: "openshift-priv-admins",
+			mapping:                  map[string]string{"a": "b", "c": "c"},
+			roverGroups:              map[string][]string{"old-group-name": {"b", "c"}, "x": {"y", "y"}},
 			config: &group.Config{
 				ClusterGroups: map[string][]string{"cluster-group-1": {"build01", "build02"}},
 				Groups: map[string]group.Target{
@@ -53,6 +59,16 @@ func TestMakeGroups(t *testing.T) {
 			},
 			clusters: sets.NewString("app.ci", "build01", "build02", "hive"),
 			expected: map[string]GroupClusters{
+				"openshift-priv-admins": {
+					Clusters: sets.NewString("app.ci"),
+					Group: &userv1.Group{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:   "openshift-priv-admins",
+							Labels: map[string]string{api.DPTPRequesterLabel: toolName},
+						},
+						Users: userv1.OptionalNames{"b"},
+					},
+				},
 				"a-group": {
 					Clusters: sets.NewString("app.ci", "build01", "build02"),
 					Group: &userv1.Group{
@@ -60,7 +76,7 @@ func TestMakeGroups(t *testing.T) {
 							Name:   "a-group",
 							Labels: map[string]string{api.DPTPRequesterLabel: toolName},
 						},
-						Users: userv1.OptionalNames{"a", "b"},
+						Users: userv1.OptionalNames{"b"},
 					},
 				},
 				"c-group": {
@@ -99,7 +115,8 @@ func TestMakeGroups(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, actualErr := makeGroups(tc.mapping, tc.roverGroups, tc.config, tc.clusters)
+			actual, actualErr := makeGroups(tc.openshiftPrivAdmins, tc.peribolosConfig, tc.openshiftPrivAdminsGroup,
+				tc.mapping, tc.roverGroups, tc.config, tc.clusters)
 			if diff := cmp.Diff(tc.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}

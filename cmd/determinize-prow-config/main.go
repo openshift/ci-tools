@@ -68,16 +68,14 @@ func main() {
 
 func updateProwConfig(configDir, shardingBaseDir string) error {
 	configPath := path.Join(configDir, config.ProwConfigFile)
-	agent := prowconfig.Agent{}
 	var additionalConfigs []string
 	if shardingBaseDir != "" {
 		additionalConfigs = append(additionalConfigs, shardingBaseDir)
 	}
-	if err := agent.Start(configPath, "", additionalConfigs, "_prowconfig.yaml"); err != nil {
-		return fmt.Errorf("could not load Prow configuration: %w", err)
+	config, err := prowconfig.LoadStrict(configPath, "", additionalConfigs, "_prowconfig.yaml")
+	if err != nil {
+		return fmt.Errorf("failed to load Prow config in strict mode: %w", err)
 	}
-
-	config := agent.Config()
 
 	if shardingBaseDir != "" {
 		pc, err := shardProwConfig(&config.ProwConfig, afero.NewBasePathFs(afero.NewOsFs(), shardingBaseDir))

@@ -46,7 +46,7 @@ import (
 	"k8s.io/test-infra/prow/pjutil"
 	"k8s.io/test-infra/prow/tide/blockers"
 	"k8s.io/test-infra/prow/tide/history"
-	"k8s.io/test-infra/prow/version"
+	_ "k8s.io/test-infra/prow/version"
 )
 
 // For mocking out sleep during unit tests.
@@ -367,7 +367,6 @@ func (c *Controller) Sync() error {
 		c.logger.WithField("duration", duration.String()).Info("Synced")
 		tideMetrics.syncDuration.Set(duration.Seconds())
 		tideMetrics.syncHeartbeat.WithLabelValues("sync").Inc()
-		version.GatherProwVersion(c.logger)
 	}()
 	defer c.changedFiles.prune()
 	c.config().BranchProtectionWarnings(c.logger, c.config().PresubmitsStatic)
@@ -1089,7 +1088,12 @@ func (c *Controller) pickNewBatch(sp subpool, candidates []PullRequest, maxBatch
 	}
 
 	for _, pr := range candidates {
-		if ok, err := r.Merge(string(pr.HeadRefOID)); err != nil {
+		mergeMethod, err := prMergeMethod(c.config().Tide, &pr)
+		if err != nil {
+			sp.log.WithFields(pr.logFields()).Warnf("Failed to get merge method for PR, will skip: %v.", err)
+			continue
+		}
+		if ok, err := r.MergeWithStrategy(string(pr.HeadRefOID), string(mergeMethod)); err != nil {
 			// we failed to abort the merge and our git client is
 			// in a bad state; it must be cleaned before we try again
 			return nil, err

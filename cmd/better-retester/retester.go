@@ -107,17 +107,20 @@ type retestController struct {
 
 	usesGitHubApp bool
 	backoff       *backoffCache
+
+	commentOnRepos []string
 }
 
-func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration) *retestController {
+func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, enableOnRepos []string) *retestController {
 	logger := logrus.NewEntry(logrus.StandardLogger())
 	ret := &retestController{
-		ghClient:      ghClient,
-		gitClient:     gitClient,
-		configGetter:  cfg,
-		logger:        logger,
-		usesGitHubApp: usesApp,
-		backoff:       &backoffCache{cache: map[string]*PullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger},
+		ghClient:       ghClient,
+		gitClient:      gitClient,
+		configGetter:   cfg,
+		logger:         logger,
+		usesGitHubApp:  usesApp,
+		backoff:        &backoffCache{cache: map[string]*PullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger},
+		commentOnRepos: enableOnRepos,
 	}
 	if err := ret.backoff.loadFromDisk(); err != nil {
 		logger.WithError(err).Warn("Failed to load backoff cache from disk")

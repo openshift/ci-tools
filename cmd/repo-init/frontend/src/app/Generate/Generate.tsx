@@ -3,7 +3,7 @@ import {Button} from '@patternfly/react-core';
 import {AuthContext, ConfigContext, WizardContext} from "@app/types";
 import {fetchWithTimeout, marshallConfig} from "@app/utils/utils";
 import {ConfigEditor} from "@app/ConfigEditor/ConfigEditor";
-import {ErrorMessage, SuccessMessage} from "@app/Common/Messaging";
+import {ErrorMessage, SuccessMessage, InfoMessage} from "@app/Common/Messaging";
 
 const Generate: React.FunctionComponent = () => {
   const authContext = useContext(AuthContext);
@@ -11,9 +11,11 @@ const Generate: React.FunctionComponent = () => {
   const configContext = useContext(ConfigContext);
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [infoMessage, setInfoMessage] = useState("");
 
   function submit(generatePR: boolean) {
     setIsLoading(true);
+    setInfoMessage("Generating the config, this could take a minute...");
     setSuccessMessage("");
     context.setStep({
       ...context.step,
@@ -21,6 +23,7 @@ const Generate: React.FunctionComponent = () => {
       stepIsComplete: false
     });
     fetchWithTimeout(process.env.REACT_APP_API_URI + '/configs?generatePR=' + generatePR, {
+      timeout: 120000,
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -35,6 +38,7 @@ const Generate: React.FunctionComponent = () => {
           context.setStep({...context.step, errorMessage: "", stepIsComplete: true});
           r.text()
             .then(text => {
+              setInfoMessage("");
               if (generatePR) {
                 setSuccessMessage("Config and Pull Request created!")
               } else {
@@ -63,6 +67,7 @@ const Generate: React.FunctionComponent = () => {
   }
 
   function generateError() {
+    setInfoMessage("");
     context.setStep({
       ...context.step,
       errorMessages: ["An error was caught while generating the config."],
@@ -75,6 +80,7 @@ const Generate: React.FunctionComponent = () => {
     <ConfigEditor readOnly={true}/>
     <ErrorMessage messages={context.step.errorMessages}/>
     <SuccessMessage message={successMessage}/>
+    <InfoMessage message={infoMessage}/>
     <Button
       variant="primary"
       isLoading={isLoading}

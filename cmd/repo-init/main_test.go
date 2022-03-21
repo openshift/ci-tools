@@ -5,109 +5,11 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/util/diff"
-	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/plugins"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	ciopconfig "github.com/openshift/ci-tools/pkg/config"
 )
-
-func TestEditProwConfig(t *testing.T) {
-	var testCases = []struct {
-		name       string
-		prowConfig *prowconfig.Config
-		config     initConfig
-		expected   *prowconfig.Config
-	}{
-		{
-			name: "queries already exist, nothing changes",
-			config: initConfig{
-				Org:  "org",
-				Repo: "repo",
-			},
-			prowConfig: &prowconfig.Config{
-				ProwConfig: prowconfig.ProwConfig{
-					Tide: prowconfig.Tide{
-						Queries: prowconfig.TideQueries{{
-							Repos: []string{"org/repo"},
-						}},
-					},
-				},
-			},
-			expected: &prowconfig.Config{
-				ProwConfig: prowconfig.ProwConfig{
-					Tide: prowconfig.Tide{
-						Queries: prowconfig.TideQueries{{
-							Repos: []string{"org/repo"},
-						}},
-					},
-				},
-			},
-		},
-		{
-			name: "repo does not need bugzilla",
-			config: initConfig{
-				Org:                   "org",
-				Repo:                  "repo",
-				Promotes:              true,
-				PromotesWithOpenShift: false,
-			},
-			prowConfig: &prowconfig.Config{
-				ProwConfig: prowconfig.ProwConfig{
-					Tide: prowconfig.Tide{
-						Queries: prowconfig.TideQueries{{
-							Repos: []string{"openshift/ci-tools"},
-						}},
-					},
-				},
-			},
-			expected: &prowconfig.Config{
-				ProwConfig: prowconfig.ProwConfig{
-					Tide: prowconfig.Tide{
-						Queries: prowconfig.TideQueries{{
-							Repos: []string{"openshift/ci-tools", "org/repo"},
-						}},
-					},
-				},
-			},
-		},
-		{
-			name: "repo needs bugzilla",
-			config: initConfig{
-				Org:                   "org",
-				Repo:                  "repo",
-				Promotes:              true,
-				PromotesWithOpenShift: true,
-			},
-			prowConfig: &prowconfig.Config{
-				ProwConfig: prowconfig.ProwConfig{
-					Tide: prowconfig.Tide{
-						Queries: prowconfig.TideQueries{{
-							Repos: []string{"openshift/cluster-version-operator"},
-						}},
-					},
-				},
-			},
-			expected: &prowconfig.Config{
-				ProwConfig: prowconfig.ProwConfig{
-					Tide: prowconfig.Tide{
-						Queries: prowconfig.TideQueries{{
-							Repos: []string{"openshift/cluster-version-operator", "org/repo"},
-						}},
-					},
-				},
-			},
-		},
-	}
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			editProwConfig(testCase.prowConfig, testCase.config)
-			if actual, expected := testCase.prowConfig, testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect edited Prow config: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
-			}
-		})
-	}
-}
 
 func TestEditPluginConfig(t *testing.T) {
 	no := false

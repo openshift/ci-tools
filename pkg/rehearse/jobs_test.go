@@ -573,9 +573,9 @@ func TestExecuteJobsErrors(t *testing.T) {
 				setSuccessCreateReactor,
 			)
 
-			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
 
-			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs, &prowconfig.Config{})
+			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
@@ -640,8 +640,8 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 				},
 			)
 
-			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
-			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs, &prowconfig.Config{})
+			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
+			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
@@ -752,7 +752,6 @@ func TestExecuteJobsPositive(t *testing.T) {
 			client := newTC()
 			client.createReactors = append(client.createReactors, setSuccessCreateReactor)
 
-			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
 			pc := prowconfig.Config{
 				ProwConfig: prowconfig.ProwConfig{
 					Plank: prowconfig.Plank{
@@ -762,7 +761,8 @@ func TestExecuteJobsPositive(t *testing.T) {
 							targetOrgRepo: targetOrgRepoPrefix,
 						}},
 				}}
-			imageStreamTags, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs, &pc)
+			jc := NewJobConfigurer(testCiopConfigs, &pc, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
+			imageStreamTags, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
@@ -1450,6 +1450,172 @@ func TestDetermineJobURLPrefix(t *testing.T) {
 			actual := determineJobURLPrefix(plank, tc.org, tc.repo)
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Fatalf("url prefix did not match expected, diff: %s", diff)
+			}
+		})
+	}
+}
+
+func TestMoreRelevant(t *testing.T) {
+	testCases := []struct {
+		name     string
+		one      *config.DataWithInfo
+		two      *config.DataWithInfo
+		expected bool
+	}{
+		{
+			name: "same org/repo, branches main and release-4.10",
+			one: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-main.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "main",
+					},
+				},
+			},
+			two: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-release-4.10.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "release-4.10",
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "different org/repo, branches main and release-4.10",
+			one: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-main.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "main",
+					},
+				},
+			},
+			two: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "anotherOrg-anotherRepo-release-4.10.yaml",
+					Metadata: api.Metadata{
+						Org:    "anotherOrg",
+						Repo:   "anotherRepo",
+						Branch: "release-4.10",
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "same org/repo, branches release-4.9 and release-4.10",
+			one: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-release-4.9.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "release-4.9",
+					},
+				},
+			},
+			two: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-release-4.10.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "release-4.10",
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "different org/repo, branches release-4.9 and release-4.10",
+			one: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-release-4.9.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "release-4.9",
+					},
+				},
+			},
+			two: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "anotherOrg-anotherRepo-release-4.10.yaml",
+					Metadata: api.Metadata{
+						Org:    "anotherOrg",
+						Repo:   "anotherRepo",
+						Branch: "release-4.10",
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "same org/repo, branches master and not-master",
+			one: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-master.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "master",
+					},
+				},
+			},
+			two: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-not-master.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "not-master",
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "same org/repo, branches release-4.1 and release-4.10",
+			one: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-release-4.1.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "release-4.1",
+					},
+				},
+			},
+			two: &config.DataWithInfo{
+				Info: config.Info{
+					Filename: "targetOrg-targetRepo-release-4.10.yaml",
+					Metadata: api.Metadata{
+						Org:    "targetOrg",
+						Repo:   "targetRepo",
+						Branch: "release-4.10",
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := moreRelevant(tc.one, tc.two)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				not := "not "
+				if tc.expected {
+					not = ""
+				}
+				t.Fatalf("expected config one to %sbe more relevant than config two, diff: %s", not, diff)
 			}
 		})
 	}

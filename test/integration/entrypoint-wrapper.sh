@@ -18,9 +18,42 @@ ERR=${dir}/err.log
 SECRET=${dir}/secret.yaml
 
 fail() {
-    echo "$1"
-    cat "${ERR}"
+    echo -n "$1"
+    if [[ -e "${ERR}" ]]; then
+        echo ', output:'
+        cat "${ERR}"
+    else
+        echo
+    fi
     return 1
+}
+
+setup_test() {
+    mkdir -p "${SHARED_DIR}"
+    echo test0 > "${SHARED_DIR}/test0.txt"
+    printf %s > "${SECRET}" '{' \
+        '"kind":"Secret",' \
+        '"apiVersion":"v1",' \
+        '"metadata":{' \
+            '"name":"test",' \
+            '"creationTimestamp":null,' \
+            '"labels":{' \
+                '"ci.openshift.io/skip-censoring":"true"' \
+            '}' \
+        '},' \
+        '"data":{' \
+            '"test0.txt":"dGVzdDAK"' \
+        '},' \
+        '"type":"Opaque"' \
+    $'}\n'
+}
+
+cleanup_test() { rm -rf "${dir}"; }
+
+run_test() {
+    cleanup_test
+    setup_test
+    eval "$@"
 }
 
 test_mkdir() {
@@ -154,7 +187,7 @@ test_copy_dir() {
 
 test_signal() {
     local pid
-    entrypoint-wrapper --dry-run sleep 1d 2> "${ERR}" &
+    entrypoint-wrapper --dry-run sleep 1d > "${OUT}" 2> "${ERR}" &
     pid=$!
     if ! timeout 1s sh -c \
         'until pgrep -P "$1" sleep > /dev/null ; do :; done' \
@@ -166,24 +199,27 @@ test_signal() {
     kill -s "$1" "${pid}"
     if wait "$pid"; then
         fail "[ERROR] entrypoint-wrapper did not fail as expected:"
+    elif ! cmp --quiet "${OUT}" "${SECRET}"; then
+        echo '[ERROR] output:'
+        cat "${OUT}"
+        echo '[ERROR] error output:'
+        cat "${ERR}"
     fi
 }
 
 os::test::junit::declare_suite_start "integration/entrypoint-wrapper"
-mkdir "${SHARED_DIR}"
-echo > "${SECRET}" '{"kind":"Secret","apiVersion":"v1","metadata":{"name":"test","creationTimestamp":null,"labels":{"ci.openshift.io/skip-censoring":"true"}},"data":{"test0.txt":"dGVzdDAK"},"type":"Opaque"}'
-os::cmd::expect_success test_mkdir
-os::cmd::expect_success test_shared_dir
-os::cmd::expect_success test_cli_dir
-os::cmd::expect_success test_copy_dir
-os::cmd::expect_success test_home_dir
-os::cmd::expect_success test_copy_kubeconfig
-os::cmd::expect_success "entrypoint-wrapper --dry-run true > ${OUT}"
+os::cmd::expect_success 'run_test test_mkdir'
+os::cmd::expect_success 'run_test test_shared_dir'
+os::cmd::expect_success 'run_test test_cli_dir'
+os::cmd::expect_success 'run_test test_copy_dir'
+os::cmd::expect_success 'run_test test_home_dir'
+os::cmd::expect_success 'run_test test_copy_kubeconfig'
+os::cmd::expect_success "run_test entrypoint-wrapper --dry-run true \> ${OUT}"
 os::integration::compare "${OUT}" "${SECRET}"
-os::cmd::expect_failure "entrypoint-wrapper --dry-run false > ${OUT}"
+os::cmd::expect_failure "run_test entrypoint-wrapper --dry-run false \> ${OUT}"
 os::integration::compare "${OUT}" "${SECRET}"
-os::cmd::expect_success "test_signal INT > ${OUT}"
+os::cmd::expect_success "run_test test_signal INT"
 os::integration::compare "${OUT}" "${SECRET}"
-os::cmd::expect_success "test_signal TERM > ${OUT}"
+os::cmd::expect_success "run_test test_signal TERM"
 os::integration::compare "${OUT}" "${SECRET}"
 os::test::junit::declare_suite_end

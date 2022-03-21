@@ -1080,9 +1080,11 @@ const (
 	ClusterProfileAWSAtomic             ClusterProfile = "aws-atomic"
 	ClusterProfileAWSCentos             ClusterProfile = "aws-centos"
 	ClusterProfileAWSCentos40           ClusterProfile = "aws-centos-40"
-	ClusterProfileAWSC2S                ClusterProfile = "aws-c2s"
-	ClusterProfileAWSChina              ClusterProfile = "aws-china"
-	ClusterProfileAWSGovCloud           ClusterProfile = "aws-usgov"
+	ClusterProfileAWSQE                 ClusterProfile = "aws-qe"
+	ClusterProfileAWSC2SQE              ClusterProfile = "aws-c2s-qe"
+	ClusterProfileAWSChinaQE            ClusterProfile = "aws-china-qe"
+	ClusterProfileAWSGovCloudQE         ClusterProfile = "aws-usgov-qe"
+	ClusterProfileAWSSC2SQE             ClusterProfile = "aws-sc2s-qe"
 	ClusterProfileAWSGluster            ClusterProfile = "aws-gluster"
 	ClusterProfileAlibabaCloud          ClusterProfile = "alibabacloud"
 	ClusterProfileAzure                 ClusterProfile = "azure"
@@ -1091,7 +1093,10 @@ const (
 	ClusterProfileAzureArc              ClusterProfile = "azure-arc"
 	ClusterProfileAzureStack            ClusterProfile = "azurestack"
 	ClusterProfileAzureMag              ClusterProfile = "azuremag"
+	ClusterProfileAzureQE               ClusterProfile = "azure-qe"
+	ClusterProfileAzureMagQE            ClusterProfile = "azuremag-qe"
 	ClusterProfileEquinixOcpMetal       ClusterProfile = "equinix-ocp-metal"
+	ClusterProfileGCPQE                 ClusterProfile = "gcp-qe"
 	ClusterProfileGCP                   ClusterProfile = "gcp"
 	ClusterProfileGCP40                 ClusterProfile = "gcp-40"
 	ClusterProfileGCPHA                 ClusterProfile = "gcp-ha"
@@ -1136,9 +1141,11 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSAtomic,
 		ClusterProfileAWSCentos,
 		ClusterProfileAWSCentos40,
-		ClusterProfileAWSC2S,
-		ClusterProfileAWSChina,
-		ClusterProfileAWSGovCloud,
+		ClusterProfileAWSQE,
+		ClusterProfileAWSC2SQE,
+		ClusterProfileAWSChinaQE,
+		ClusterProfileAWSGovCloudQE,
+		ClusterProfileAWSSC2SQE,
 		ClusterProfileAWSGluster,
 		ClusterProfileAlibabaCloud,
 		ClusterProfileAzure2,
@@ -1146,7 +1153,10 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAzureArc,
 		ClusterProfileAzureStack,
 		ClusterProfileAzureMag,
+		ClusterProfileAzureQE,
+		ClusterProfileAzureMagQE,
 		ClusterProfileEquinixOcpMetal,
+		ClusterProfileGCPQE,
 		ClusterProfileGCP,
 		ClusterProfileGCP40,
 		ClusterProfileGCPHA,
@@ -1194,30 +1204,37 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSCentos40,
 		ClusterProfileAWSGluster,
 		ClusterProfileAWSCPaaS,
-		ClusterProfileAWS2:
+		ClusterProfileAWS2,
+		ClusterProfileAWSQE:
 		return string(CloudAWS)
 	case ClusterProfileAlibabaCloud:
 		return "alibabacloud"
 	case ClusterProfileAWSArm64:
 		return "aws-arm64"
-	case ClusterProfileAWSC2S:
+	case ClusterProfileAWSC2SQE:
 		return "aws-c2s"
-	case ClusterProfileAWSChina:
+	case ClusterProfileAWSChinaQE:
 		return "aws-china"
-	case ClusterProfileAWSGovCloud:
+	case ClusterProfileAWSGovCloudQE:
 		return "aws-usgov"
+	case ClusterProfileAWSSC2SQE:
+		return "aws-sc2s"
 	case
 		ClusterProfileAzure2,
 		ClusterProfileAzure4,
-		ClusterProfileAzureArc:
+		ClusterProfileAzureArc,
+		ClusterProfileAzureQE:
 		return "azure4"
 	case ClusterProfileAzureStack:
 		return "azurestack"
-	case ClusterProfileAzureMag:
+	case
+		ClusterProfileAzureMag,
+		ClusterProfileAzureMagQE:
 		return "azuremag"
 	case ClusterProfileEquinixOcpMetal:
 		return "equinix-ocp-metal"
 	case
+		ClusterProfileGCPQE,
 		ClusterProfileGCP,
 		ClusterProfileGCP40,
 		ClusterProfileGCPHA,
@@ -1289,12 +1306,16 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-quota-slice"
 	case ClusterProfileAWSArm64:
 		return "aws-arm64-quota-slice"
-	case ClusterProfileAWSC2S:
-		return "aws-c2s-quota-slice"
-	case ClusterProfileAWSChina:
-		return "aws-china-quota-slice"
-	case ClusterProfileAWSGovCloud:
-		return "aws-usgov-quota-slice"
+	case ClusterProfileAWSQE:
+		return "aws-qe-quota-slice"
+	case ClusterProfileAWSC2SQE:
+		return "aws-c2s-qe-quota-slice"
+	case ClusterProfileAWSChinaQE:
+		return "aws-china-qe-quota-slice"
+	case ClusterProfileAWSGovCloudQE:
+		return "aws-usgov-qe-quota-slice"
+	case ClusterProfileAWSSC2SQE:
+		return "aws-sc2s-qe-quota-slice"
 	case ClusterProfileAlibabaCloud:
 		return "alibabacloud-quota-slice"
 	case ClusterProfileAzure2:
@@ -1307,8 +1328,14 @@ func (p ClusterProfile) LeaseType() string {
 		return "azurestack-quota-slice"
 	case ClusterProfileAzureMag:
 		return "azuremag-quota-slice"
+	case ClusterProfileAzureQE:
+		return "azure-qe-quota-slice"
+	case ClusterProfileAzureMagQE:
+		return "azuremag-qe-quota-slice"
 	case ClusterProfileEquinixOcpMetal:
 		return "equinix-ocp-metal-quota-slice"
+	case ClusterProfileGCPQE:
+		return "gcp-qe-quota-slice"
 	case
 		ClusterProfileGCP,
 		ClusterProfileGCP40,
@@ -1379,7 +1406,7 @@ func (p ClusterProfile) LeaseType() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "alibaba", "azure-2", "azure4", "azure-arc", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "packet-edge", "kubevirt", "aws-cpaas", "osd-ephemeral":
+	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "alibaba", "azure-2", "azure4", "azure-arc", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "packet-edge", "kubevirt", "aws-cpaas", "osd-ephemeral":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

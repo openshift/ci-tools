@@ -247,3 +247,17 @@ func getRevChanges(root, path, base string) ([]string, error) {
 	}
 	return ret, nil
 }
+
+// LoadProwConfig loads Prow configuration from the release repo
+func LoadProwConfig(releaseRepo string) (*prowconfig.Config, error) {
+	agent := prowconfig.Agent{}
+	if err := agent.Start(filepath.Join(releaseRepo, ConfigInRepoPath), "", []string{filepath.Dir(filepath.Join(releaseRepo, ConfigInRepoPath))}, SupplementalProwConfigFileName); err != nil {
+		return nil, fmt.Errorf("could not load Prow configuration: %w", err)
+	}
+	return agent.Config(), nil
+}
+
+// ProwConfigForOrgRepo returns the Prow configuration file for the org/repo
+func ProwConfigForOrgRepo(releaseRepo, org, repo string) string {
+	return filepath.Join(filepath.Join(filepath.Dir(filepath.Join(releaseRepo, ConfigInRepoPath)), org, repo), SupplementalProwConfigFileName)
+}

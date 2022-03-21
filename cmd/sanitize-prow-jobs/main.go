@@ -8,17 +8,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/sirupsen/logrus"
 
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
@@ -40,70 +39,57 @@ func bindOptions(flag *flag.FlagSet) *options {
 }
 
 func determinizeJobs(prowJobConfigDir string, config *dispatcher.Config) error {
-	errChan := make(chan error)
-	var errs []error
-
-	errReadingDone := make(chan struct{})
-	go func() {
-		for err := range errChan {
-			errs = append(errs, err)
-		}
-		close(errReadingDone)
-	}()
-
-	wg := sync.WaitGroup{}
-	if err := filepath.WalkDir(prowJobConfigDir, func(path string, info fs.DirEntry, err error) error {
-		if err != nil {
-			errChan <- fmt.Errorf("failed to walk file/directory '%s'", path)
+	ch := make(chan string)
+	errCh := make(chan error)
+	produce := func() error {
+		defer close(ch)
+		return filepath.WalkDir(prowJobConfigDir, func(path string, info fs.DirEntry, err error) error {
+			if err != nil {
+				errCh <- fmt.Errorf("failed to walk file/directory %q: %w", path, err)
+				return nil
+			}
+			if info.IsDir() || !strings.HasSuffix(path, ".yaml") {
+				return nil
+			}
+			ch <- path
 			return nil
-		}
-
-		if info.IsDir() || !strings.HasSuffix(path, ".yaml") {
-			return nil
-		}
-
-		wg.Add(1)
-		go func(path string) {
-			defer wg.Done()
-
+		})
+	}
+	map_ := func() error {
+		for path := range ch {
 			data, err := gzip.ReadFileMaybeGZIP(path)
 			if err != nil {
-				errChan <- fmt.Errorf("failed to read file %q: %w", path, err)
-				return
+				errCh <- fmt.Errorf("failed to read file %q: %w", path, err)
+				continue
 			}
 
 			jobConfig := &prowconfig.JobConfig{}
 			if err := yaml.Unmarshal(data, jobConfig); err != nil {
-				errChan <- fmt.Errorf("failed to unmarshal file %q: %w", path, err)
-				return
+				errCh <- fmt.Errorf("failed to unmarshal file %q: %w", path, err)
+				continue
 			}
 
 			if err := defaultJobConfig(jobConfig, path, config); err != nil {
-				errChan <- fmt.Errorf("failed to default job config %q: %w", path, err)
+				errCh <- fmt.Errorf("failed to default job config %q: %w", path, err)
 			}
 
 			serialized, err := yaml.Marshal(jobConfig)
 			if err != nil {
-				errChan <- fmt.Errorf("failed to marshal file %q: %w", path, err)
-				return
+				errCh <- fmt.Errorf("failed to marshal file %q: %w", path, err)
+				continue
 			}
 
 			if err := ioutil.WriteFile(path, serialized, 0644); err != nil {
-				errChan <- fmt.Errorf("failed to write file %q: %w", path, err)
-				return
+				errCh <- fmt.Errorf("failed to write file %q: %w", path, err)
+				continue
 			}
-		}(path)
-
+		}
 		return nil
-	}); err != nil {
+	}
+	if err := util.ProduceMap(0, produce, map_, errCh); err != nil {
 		return fmt.Errorf("failed to determinize all Prow jobs: %w", err)
 	}
-
-	wg.Wait()
-	close(errChan)
-	<-errReadingDone
-
-	return utilerrors.NewAggregate(errs)
+	return nil
 }
 
 func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.Config) error {

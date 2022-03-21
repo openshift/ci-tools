@@ -26,11 +26,9 @@ periodic-ci-openshift-release-master-nightly-4.10-credentials-request-freeze
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10-multi.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10-ppc64le.json
-periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-installer-remote-libvirt-ppc64le
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10-ppc64le.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10-s390x.json
-periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-installer-remote-libvirt-s390x
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10-s390x.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10.json
@@ -121,15 +119,12 @@ periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-azure-
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11-multi.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11-ppc64le.json
-periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-installer-remote-libvirt-ppc64le
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11-ppc64le.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11-s390x.json
-periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-installer-remote-libvirt-s390x
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11-s390x.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11.json
-periodic-ci-openshift-hypershift-main-periodics-e2e-aws-pooled-periodic-conformance
 periodic-ci-openshift-release-master-ci-4.11-e2e-aws-ovn
 periodic-ci-openshift-release-master-ci-4.11-e2e-aws-techpreview
 periodic-ci-openshift-release-master-ci-4.11-e2e-aws-techpreview-serial
@@ -190,6 +185,35 @@ release-openshift-ocp-osd-aws-nightly-4.11
 release-openshift-ocp-osd-gcp-nightly-4.11
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11.json
 
+// begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/multiarch/openshift-multiarch-master-periodics.yaml
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-e2e-aws-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-e2e-aws-arm64-single-node
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-e2e-aws-arm64-techpreview
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-e2e-aws-arm64-techpreview-serial
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-e2e-aws-ovn-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-e2e-aws-upi-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-e2e-compact-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-e2e-compact-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-e2e-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-e2e-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-e2e-serial-aws-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-e2e-serial-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-e2e-serial-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-image-ecosystem-aws-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-image-ecosystem-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-image-ecosystem-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-installer-e2e-aws-ovn-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-jenkins-e2e-aws-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-jenkins-e2e-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-jenkins-e2e-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.10-upgrade-from-nightly-4.9-ocp-e2e-aws-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.10-upgrade-from-nightly-4.9-ocp-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.10-upgrade-from-nightly-4.9-ocp-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.11-upgrade-from-nightly-4.10-ocp-e2e-aws-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.11-upgrade-from-nightly-4.10-ocp-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.11-upgrade-from-nightly-4.10-ocp-remote-libvirt-s390x
+// end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/multiarch/openshift-multiarch-master-periodics.yaml
+
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-master-periodics.yaml
 periodic-ci-openshift-release-master-ci-4.10-e2e-aws
 periodic-ci-openshift-release-master-ci-4.10-e2e-aws-calico
@@ -226,10 +250,8 @@ periodic-ci-openshift-release-master-ci-4.10-e2e-gcp-upgrade
 periodic-ci-openshift-release-master-ci-4.10-e2e-network-migration
 periodic-ci-openshift-release-master-ci-4.10-e2e-network-migration-rollback
 periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn-upgrade
-periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn-upgrade-rollback
 periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-upgrade
 periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-upgrade-infra
-periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-upgrade-rollback
 periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-upgrade-workload
 periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-uwm
 periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-azure-ovn-upgrade
@@ -326,6 +348,8 @@ periodic-ci-openshift-release-master-nightly-4.11-upgrade-from-stable-4.10-e2e-m
 periodic-ci-openshift-release-master-okd-4.10-e2e-aws
 periodic-ci-openshift-release-master-okd-4.10-e2e-vsphere
 periodic-ci-openshift-release-master-okd-4.10-e2e-vsphere-upi
+periodic-ci-openshift-release-master-okd-4.10-upgrade-from-okd-4.9-e2e-upgrade-aws
+periodic-ci-openshift-release-master-okd-4.11-upgrade-from-okd-4.10-e2e-upgrade-aws
 // end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-master-periodics.yaml
 
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.10-periodics.yaml

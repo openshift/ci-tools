@@ -153,12 +153,6 @@ func main() {
 
 	uisimplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root
 		l(""),
-		l("help",
-			l("adding-components"),
-			l("examples"),
-			l("ci-operator"),
-			l("leases"),
-		),
 		l("search"),
 		l("job"),
 		l("reference"),

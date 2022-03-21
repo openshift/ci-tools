@@ -149,7 +149,7 @@ func (a *registryAgent) loadRegistry() error {
 	if err != nil {
 		return err
 	}
-	configReloadTimeMetric.Observe(duration.Seconds())
+	registryReloadTimeMetric.Observe(duration.Seconds())
 	logrus.WithField("duration", duration).Info("Registry reloaded")
 	return nil
 }

@@ -63,9 +63,7 @@ spec:
       name: logs
     - mountPath: /tools
       name: tools
-  - command:
-    - /sidecar
-    env:
+  - env:
     - name: JOB_SPEC
     - name: SIDECAR_OPTIONS
       value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/StepName","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset
@@ -78,10 +76,7 @@ spec:
       name: logs
   initContainers:
   - args:
-    - /entrypoint
-    - /tools/entrypoint
-    command:
-    - /bin/cp
+    - --copy-mode-only
     image: entrypoint
     name: place-entrypoint
     resources: {}

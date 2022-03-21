@@ -175,6 +175,8 @@ const (
 	primaryOnCallQuery     = "DPTP Primary On-Call"
 	secondaryUSOnCallQuery = "DPTP Secondary On-Call (US)"
 	secondaryEUOnCallQuery = "DPTP Secondary On-Call (EU)"
+	helpdeskQuery          = "DPTP Help Desk"
+	intakeQuery            = "DPTP Intake"
 	roleTriagePrimary      = "@dptp-triage Primary"
 	roleTriageSecondaryUS  = "@dptp-triage Secondary (US)"
 	roleTriageSecondaryEU  = "@dptp-triage Secondary (EU)"
@@ -274,15 +276,15 @@ func usersOnCallAtTime(client *pagerduty.Client, slackClient *slack.Client, year
 		},
 		{
 			role:  roleHelpdesk,
-			query: primaryOnCallQuery,
-			since: dayStart.Add(-7 * 24 * time.Hour),
-			until: dayEnd.Add(-7 * 24 * time.Hour),
+			query: helpdeskQuery,
+			since: dayStart,
+			until: dayEnd,
 		},
 		{
 			role:  roleIntake,
-			query: primaryOnCallQuery,
-			since: dayStart.Add(-2 * 7 * 24 * time.Hour),
-			until: dayEnd.Add(-2 * 7 * 24 * time.Hour),
+			query: intakeQuery,
+			since: dayStart,
+			until: dayEnd,
 		},
 	} {
 		pagerDutyUser, err := userOnCallDuring(client, item.query, item.since, item.until)

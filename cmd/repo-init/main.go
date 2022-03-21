@@ -815,6 +815,8 @@ func determineWorkflow(workflow string, clusterProfile api.ClusterProfile) *stri
 			ret = "ipi-gcp"
 		case api.ClusterProfileAlibabaCloud:
 			ret = "ipi-alibabacloud"
+		case api.ClusterProfileNutanix:
+			ret = "ipi-nutanix"
 		}
 	}
 	return &ret

@@ -20,6 +20,7 @@ type githubClient interface {
 	GetCombinedStatus(org, repo, ref string) (*github.CombinedStatus, error)
 	GetRef(string, string, string) (string, error)
 	QueryWithGitHubAppsSupport(ctx context.Context, q interface{}, vars map[string]interface{}, org string) error
+	CreateComment(owner, repo string, number int, comment string) error
 }
 
 type options struct {

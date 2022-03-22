@@ -211,6 +211,22 @@ func (b *backoffCache) check(pr tide.PullRequest, baseSha string) (retestBackoff
 	return retestBackoffRetest, fmt.Sprintf("Remaining retests: %d against base HEAD %s and %d for PR HEAD %s in total", maxRetestsForShaAndBase-record.RetestsForBaseSha, record.BaseSha, maxRetestsForSha-record.RetestsForPrSha, record.PRSha)
 }
 
+func contains(elems []string, v string) bool {
+	for _, s := range elems {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *retestController) createComment(pr tide.PullRequest, cmd, message string) {
+	comment := fmt.Sprintf("%s\n\n%s\n", cmd, message)
+	if err := c.ghClient.CreateComment(string(pr.Repository.Owner.Login), string(pr.Repository.Name), int(pr.Number), comment); err != nil {
+		c.logger.WithError(err).Error("failed to create a comment")
+	}
+}
+
 func (c *retestController) retestOrBackoff(pr tide.PullRequest) error {
 	branchRef := string(pr.BaseRef.Prefix) + string(pr.BaseRef.Name)
 	baseSha, err := c.ghClient.GetRef(string(pr.Repository.Owner.Login), string(pr.Repository.Name), strings.TrimPrefix(branchRef, "refs/"))
@@ -218,14 +234,23 @@ func (c *retestController) retestOrBackoff(pr tide.PullRequest) error {
 		return err
 	}
 
+	repo := fmt.Sprintf("%s/%s", pr.Repository.Owner.Login, pr.Repository.Name)
 	action, message := c.backoff.check(pr, baseSha)
 	switch action {
 	case retestBackoffHold:
-		c.logger.Infof("%s: %s (%s)", prUrl(pr), "/hold", message)
+		if contains(c.commentOnRepos, repo) {
+			c.createComment(pr, "/hold", message)
+		} else {
+			c.logger.Infof("%s: %s (%s)", prUrl(pr), "/hold", message)
+		}
 	case retestBackoffPause:
 		c.logger.Infof("%s: %s (%s)", prUrl(pr), "no comment", message)
 	case retestBackoffRetest:
-		c.logger.Infof("%s: %s (%s)", prUrl(pr), "/retest-required", message)
+		if contains(c.commentOnRepos, repo) {
+			c.createComment(pr, "/retest-required", message)
+		} else {
+			c.logger.Infof("%s: %s (%s)", prUrl(pr), "/retest-required", message)
+		}
 	}
 	return nil
 }

@@ -298,20 +298,41 @@ func userOnCallDuring(client *pagerduty.Client, query string, since, until time.
 		return nil, fmt.Errorf("could not query PagerDuty for the %s on-call schedule: %w", query, err)
 	}
 	if len(scheduleResponse.Schedules) != 1 {
-		return nil, fmt.Errorf("did not get exactly one schedule when querying PagerDuty for the %s on-call schedule: %v", query, scheduleResponse.Schedules)
+		return nil, fmt.Errorf("did not get exactly one schedule when querying PagerDuty for the '%s' on-call schedule: %v", query, scheduleResponse.Schedules)
 	}
+	schedule := scheduleResponse.Schedules[0]
 
-	users, err := client.ListOnCallUsers(scheduleResponse.Schedules[0].ID, pagerduty.ListOnCallUsersOptions{
+	users, err := client.ListOnCallUsers(schedule.ID, pagerduty.ListOnCallUsersOptions{
 		Since: since.String(),
 		Until: until.String(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("could not query PagerDuty for the %s on-call: %w", query, err)
 	}
-	if len(users) != 1 {
-		return nil, fmt.Errorf("did not get exactly one user when querying PagerDuty for the %s on-call: %v", query, users)
+	if len(users) == 0 {
+		return nil, fmt.Errorf("did not get any users when querying PagerDuty for the '%s' on-call: %v", query, users)
+	} else if len(users) == 1 {
+		return &users[0], nil
 	}
-	return &users[0], nil
+
+	// more than 1 user means there must be an override, determine who the override is associated with
+	overrides, err := client.ListOverrides(schedule.ID, pagerduty.ListOverridesOptions{
+		Since: since.String(),
+		Until: until.String(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("could not query PagerDuty for the '%s' overrides: %w", query, err)
+	}
+	if len(overrides.Overrides) != 1 {
+		return nil, fmt.Errorf("did not get exactly one override when querying PagerDuty for the '%s' overrides: %v", query, overrides)
+	}
+	override := overrides.Overrides[0]
+
+	user, err := client.GetUser(override.User.ID, pagerduty.GetUserOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("could not get User: %s associated with the override: %v", override.User.ID, override)
+	}
+	return user, nil
 }
 
 func sendNextWeeksRoleDigest(client *pagerduty.Client, slackClient *slack.Client) error {

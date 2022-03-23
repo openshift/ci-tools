@@ -298,6 +298,7 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 		profile == cioperatorapi.ClusterProfileAWSChinaQE ||
 		profile == cioperatorapi.ClusterProfileAWSGovCloudQE ||
 		profile == cioperatorapi.ClusterProfileAWSSC2SQE ||
+		profile == cioperatorapi.ClusterProfileAWSOSDMSP ||
 		profile == cioperatorapi.ClusterProfileGCP2 ||
 		profile == cioperatorapi.ClusterProfileGCPQE ||
 		profile == cioperatorapi.ClusterProfilePacketAssisted ||
@@ -320,6 +321,7 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 		cioperatorapi.ClusterProfileAWSChinaQE,
 		cioperatorapi.ClusterProfileAWSGovCloudQE,
 		cioperatorapi.ClusterProfileAWSSC2SQE,
+		cioperatorapi.ClusterProfileAWSOSDMSP,
 		cioperatorapi.ClusterProfileAlibabaCloud,
 		cioperatorapi.ClusterProfileAzure4,
 		cioperatorapi.ClusterProfileAzure2,

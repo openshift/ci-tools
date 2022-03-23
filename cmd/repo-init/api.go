@@ -714,6 +714,7 @@ func getClusterProfiles() []api.ClusterProfile {
 	return []api.ClusterProfile{
 		api.ClusterProfileAWS,
 		api.ClusterProfileAWSArm64,
+		api.ClusterProfileAWSOSDMSP,
 		api.ClusterProfileAzure,
 		api.ClusterProfileAzure2,
 		api.ClusterProfileAzure4,

@@ -15,7 +15,9 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/config"
+	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/tide"
@@ -108,10 +110,10 @@ type retestController struct {
 	usesGitHubApp bool
 	backoff       *backoffCache
 
-	commentOnRepos []string
+	commentOnRepos sets.String
 }
 
-func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, enableOnRepos []string) *retestController {
+func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, enableOnRepos prowflagutil.Strings) *retestController {
 	logger := logrus.NewEntry(logrus.StandardLogger())
 	ret := &retestController{
 		ghClient:       ghClient,
@@ -120,7 +122,7 @@ func newController(ghClient githubClient, cfg config.Getter, gitClient git.Clien
 		logger:         logger,
 		usesGitHubApp:  usesApp,
 		backoff:        &backoffCache{cache: map[string]*PullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger},
-		commentOnRepos: enableOnRepos,
+		commentOnRepos: enableOnRepos.StringSet(),
 	}
 	if err := ret.backoff.loadFromDisk(); err != nil {
 		logger.WithError(err).Warn("Failed to load backoff cache from disk")
@@ -211,19 +213,14 @@ func (b *backoffCache) check(pr tide.PullRequest, baseSha string) (retestBackoff
 	return retestBackoffRetest, fmt.Sprintf("Remaining retests: %d against base HEAD %s and %d for PR HEAD %s in total", maxRetestsForShaAndBase-record.RetestsForBaseSha, record.BaseSha, maxRetestsForSha-record.RetestsForPrSha, record.PRSha)
 }
 
-func contains(elems []string, v string) bool {
-	for _, s := range elems {
-		if v == s {
-			return true
+func (c *retestController) createComment(pr tide.PullRequest, repo, cmd, message string) {
+	if c.commentOnRepos.Has(repo) {
+		comment := fmt.Sprintf("%s\n\n%s\n", cmd, message)
+		if err := c.ghClient.CreateComment(string(pr.Repository.Owner.Login), string(pr.Repository.Name), int(pr.Number), comment); err != nil {
+			c.logger.WithError(err).Error("failed to create a comment")
 		}
-	}
-	return false
-}
-
-func (c *retestController) createComment(pr tide.PullRequest, cmd, message string) {
-	comment := fmt.Sprintf("%s\n\n%s\n", cmd, message)
-	if err := c.ghClient.CreateComment(string(pr.Repository.Owner.Login), string(pr.Repository.Name), int(pr.Number), comment); err != nil {
-		c.logger.WithError(err).Error("failed to create a comment")
+	} else {
+		c.logger.Infof("%s: %s (%s)", prUrl(pr), cmd, message)
 	}
 }
 
@@ -238,19 +235,11 @@ func (c *retestController) retestOrBackoff(pr tide.PullRequest) error {
 	action, message := c.backoff.check(pr, baseSha)
 	switch action {
 	case retestBackoffHold:
-		if contains(c.commentOnRepos, repo) {
-			c.createComment(pr, "/hold", message)
-		} else {
-			c.logger.Infof("%s: %s (%s)", prUrl(pr), "/hold", message)
-		}
+		c.createComment(pr, repo, "/hold", message)
 	case retestBackoffPause:
 		c.logger.Infof("%s: %s (%s)", prUrl(pr), "no comment", message)
 	case retestBackoffRetest:
-		if contains(c.commentOnRepos, repo) {
-			c.createComment(pr, "/retest-required", message)
-		} else {
-			c.logger.Infof("%s: %s (%s)", prUrl(pr), "/retest-required", message)
-		}
+		c.createComment(pr, repo, "/retest-required", message)
 	}
 	return nil
 }

@@ -103,7 +103,7 @@ func main() {
 		logrus.WithError(err).Fatal("Error starting config agent.")
 	}
 
-	c := newController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, o.enableOnRepos.Strings())
+	c := newController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, o.enableOnRepos)
 
 	interrupts.OnInterrupt(func() {
 		if err := gitClient.Clean(); err != nil {

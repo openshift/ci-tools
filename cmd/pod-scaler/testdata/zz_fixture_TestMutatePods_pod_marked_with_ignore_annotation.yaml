@@ -1,0 +1,7 @@
+Patches: null
+allowed: true
+status:
+  code: 200
+  metadata: {}
+  reason: ignoring pod due to presence of annotation
+uid: ""

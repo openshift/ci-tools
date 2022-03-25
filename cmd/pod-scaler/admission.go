@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 
 	"github.com/sirupsen/logrus"
 
@@ -69,6 +70,16 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 	}
 	logger := m.logger.WithField("name", pod.Name)
 	buildName, isBuildPod := pod.Annotations[buildv1.BuildLabel]
+
+	scalePod, err := shouldScalePod(pod)
+	if err != nil {
+		logger.WithError(err).Error("Could not determine if pod should be scaled")
+		return admission.Errored(http.StatusInternalServerError, err)
+	}
+	if !scalePod {
+		return admission.Allowed("ignoring pod due to presence of annotation")
+	}
+
 	if isBuildPod {
 		logger = logger.WithField("build", buildName)
 		logger.Trace("Handling labels on Pod created for a Build.")
@@ -100,6 +111,15 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		return response.Patches[i].Path < response.Patches[j].Path
 	})
 	return response
+}
+
+func shouldScalePod(pod *corev1.Pod) (bool, error) {
+	scale, present := pod.Annotations["ci-workload-autoscaler.openshift.io/scale"]
+	if present {
+		return strconv.ParseBool(scale)
+	}
+	// By default, the pod should be scaled if the annotation is not present
+	return true, nil
 }
 
 // mutatePodMetadata updates metadata labels for Pods created by Prow for rehearsals,

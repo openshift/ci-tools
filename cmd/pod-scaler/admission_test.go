@@ -141,6 +141,17 @@ func TestMutatePods(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "pod marked with ignore annotation",
+			request: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					UID:      "705ab4f5-6393-11e8-b7cc-42010a800002",
+					Kind:     metav1.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"},
+					Resource: metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"},
+					Object:   runtime.RawExtension{Raw: []byte(`{"apiVersion": "v1","kind": "Pod","metadata": {"creationTimestamp": null, "name": "somethingelse","namespace": "namespace", "labels": {"openshift.io/build.name": "withlabels"}, "annotations": {"openshift.io/build.name": "withlabels", "ci-workload-autoscaler.openshift.io/scale": "false"}}, "spec":{"containers":[{"name":"test"},{"name":"other"}]}, "status":{}}`)},
+				},
+			},
+		},
 	}
 
 	for _, testCase := range testCases {

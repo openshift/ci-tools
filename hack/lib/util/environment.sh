@@ -53,7 +53,9 @@ readonly -f os::util::environment::setup_time_vars
 function os::util::environment::setup_tmpdir_vars() {
     local sub_dir=$1
 
-    BASETMPDIR="${TMPDIR:-/tmp}/openshift/${sub_dir}"
+    tmp=${TMPDIR:-/tmp}
+    [[ "${tmp}" != */ ]] && tmp="${tmp}/" # add a trailing slash if missing
+    BASETMPDIR="${tmp}openshift/${sub_dir}"
     export BASETMPDIR
 
     BASEOUTDIR="${OS_OUTPUT_SCRIPTPATH}/${sub_dir}"

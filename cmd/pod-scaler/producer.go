@@ -129,10 +129,10 @@ func produce(clients map[string]prometheusapi.API, dataCache cache, ignoreLatest
 				if err := q.execute(interrupts.Context(), metadata, until); err != nil {
 					metadata.logger.WithError(err).Error("Failed to query Prometheus.")
 				}
-
-			}
-			if err := storeCache(dataCache, name, cache, logger); err != nil {
-				logger.WithError(err).Error("Failed to write cached data.")
+				if err := storeCache(dataCache, name, cache, logger); err != nil {
+					logger.WithError(err).Error("Failed to write cached data.")
+				}
+				cache.Clear()
 			}
 		}
 	})

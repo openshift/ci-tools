@@ -334,6 +334,12 @@ func (q *CachedQuery) Prune() {
 	}
 }
 
+// Clear clears out the Data and DataByMetaData this is utilized to conserve memory ones the data has been stored
+func (q *CachedQuery) Clear() {
+	q.Data = map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{}
+	q.DataByMetaData = map[FullMetadata][]model.Fingerprint{}
+}
+
 // TimeRange describes a range of time, inclusive.
 type TimeRange struct {
 	Start time.Time `json:"start"`

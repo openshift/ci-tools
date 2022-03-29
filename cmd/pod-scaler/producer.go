@@ -107,7 +107,6 @@ func produce(clients map[string]prometheusapi.API, dataCache cache, ignoreLatest
 				lock: &sync.RWMutex{},
 				data: cache,
 			}
-			wg := &sync.WaitGroup{}
 			for clusterName, client := range clients {
 				metadata := &clusterMetadata{
 					logger: logger.WithField("cluster", clusterName),
@@ -126,15 +125,12 @@ func produce(clients map[string]prometheusapi.API, dataCache cache, ignoreLatest
 					sync: semaphore.NewWeighted(MaxSamplesPerRequest / 15),
 					wg:   &sync.WaitGroup{},
 				}
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					if err := q.execute(interrupts.Context(), metadata, until); err != nil {
-						metadata.logger.WithError(err).Error("Failed to query Prometheus.")
-					}
-				}()
+
+				if err := q.execute(interrupts.Context(), metadata, until); err != nil {
+					metadata.logger.WithError(err).Error("Failed to query Prometheus.")
+				}
+
 			}
-			wg.Wait()
 			if err := storeCache(dataCache, name, cache, logger); err != nil {
 				logger.WithError(err).Error("Failed to write cached data.")
 			}

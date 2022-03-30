@@ -51,6 +51,7 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 		"--mode=consumer.admission",
 		"--mutate-resource-limits",
 		"--serving-cert-dir=" + authDir,
+		"--metrics-port=9092",
 	}
 	podScaler := testhelper.NewAccessory("pod-scaler", podScalerFlags, func(port, healthPort string) []string {
 		t.Logf("pod-scaler admission starting on port %s", port)
@@ -92,6 +93,7 @@ func UI(t testhelper.TestingTInterface, dataDir string, parent context.Context, 
 		"--cache-dir", dataDir,
 		"--mode=consumer.ui",
 		"--data-dir", t.TempDir(),
+		"--metrics-port=9093",
 	}
 	podScaler := testhelper.NewAccessory("pod-scaler", podScalerFlags, func(port, healthPort string) []string {
 		t.Logf("pod-scaler admission starting on port %s", port)

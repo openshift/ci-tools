@@ -21,6 +21,7 @@ func Producer(t testhelper.TestingTInterface, dataDir, kubeconfigFile string, ig
 		"--kubeconfig", kubeconfigFile,
 		"--mode=producer",
 		"--produce-once=true",
+		"--metrics-port=9091",
 		fmt.Sprintf("--ignore-latest=%s", ignoreUntil.String()),
 	}
 	start := time.Now()

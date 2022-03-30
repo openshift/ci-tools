@@ -22,8 +22,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
-	prowConfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
@@ -223,7 +221,6 @@ func serveUI(port, healthPort int, dataDir string, loaders map[string][]*cacheRe
 		nodes = append(nodes, l(name))
 	}
 
-	metrics.ExposeMetrics("pod-scaler", prowConfig.PushGateway{}, flagutil.DefaultMetricsPort)
 	simplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root
 		l(""), // actual UI
 		l("api",

@@ -16,9 +16,11 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/transport"
+	prowConfig "k8s.io/test-infra/prow/config"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
+	"k8s.io/test-infra/prow/metrics"
 	pprofutil "k8s.io/test-infra/prow/pjutil/pprof"
 	"k8s.io/test-infra/prow/version"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -148,6 +150,7 @@ func main() {
 	logrus.Infof("%s version %s", version.Name, version.Version)
 
 	pprofutil.Instrument(opts.instrumentationOptions)
+	metrics.ExposeMetrics("pod-scaler", prowConfig.PushGateway{}, opts.instrumentationOptions.MetricsPort)
 
 	var cache cache
 	if opts.cacheDir != "" {

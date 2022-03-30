@@ -78,7 +78,7 @@ func produce(clients map[string]prometheusapi.API, dataCache cache, ignoreLatest
 		}
 	} else {
 		execute = func(f func()) {
-			interrupts.TickLiteral(f, 3*time.Hour)
+			interrupts.TickLiteral(f, 2*time.Hour)
 		}
 	}
 	execute(func() {

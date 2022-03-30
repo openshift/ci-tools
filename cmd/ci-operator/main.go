@@ -483,7 +483,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 }
 
 func (o *options) Complete() error {
-	o.resolveConsoleHost()
 	jobSpec, err := api.ResolveSpecFromEnv()
 	if err != nil {
 		if len(o.gitRef) == 0 {
@@ -826,6 +825,8 @@ func (o *options) Run() []error {
 	if o.leaseServer != "" && o.leaseServerCredentialsFile != "" {
 		leaseClient = &o.leaseClient
 	}
+
+	o.resolveConsoleHost()
 
 	// load the graph from the configuration
 	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig, o.consoleHost)

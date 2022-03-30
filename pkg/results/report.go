@@ -45,10 +45,6 @@ func getUsernameAndPassword(credentials string) (string, string, error) {
 
 // Client returns an HTTP or HTTPs client, based on the options
 func (o *Options) Reporter(spec *api.JobSpec, consoleHost string) (Reporter, error) {
-	if consoleHost == "" {
-		consoleHost = "unknown"
-	}
-
 	if o.address == "" || o.credentials == "" {
 		return &noopReporter{}, nil
 	}

@@ -85,3 +85,11 @@ func TestGenerateMetadata(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerateMetadataAccumulatesErrors(t *testing.T) {
+	expectedMsg := `Failed to update registry metadata: [missing OWNERS file at testdata/a/OWNERS, missing OWNERS file at testdata/b/OWNERS]`
+	_, err := generateMetadata("./testdata")
+	if err == nil || err.Error() != expectedMsg {
+		t.Errorf("expected error to be %s, was %v", expectedMsg, err)
+	}
+}

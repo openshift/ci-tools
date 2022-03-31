@@ -101,9 +101,10 @@ var (
 	// This is supposed to be a simple, non-exhaustive list of profiles that are
 	// commonly used.  Advanced users can edit the configuration themselves.
 	clusterProfiles = map[api.ClusterProfile]string{
-		api.ClusterProfileAWS:   "ipi-aws",
-		api.ClusterProfileAzure: "ipi-azure",
-		api.ClusterProfileGCP:   "ipi-gcp",
+		api.ClusterProfileAWS:       "ipi-aws",
+		api.ClusterProfileAWSOSDMSP: "osd-create",
+		api.ClusterProfileAzure:     "ipi-azure",
+		api.ClusterProfileGCP:       "ipi-gcp",
 	}
 	clusterProfileList = func() (ret []api.ClusterProfile) {
 		for k := range clusterProfiles {

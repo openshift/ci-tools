@@ -74,7 +74,7 @@ test_shared_dir() {
     then
         fail '[ERROR] entrypoint-wrapper failed'
     fi
-    diff <(echo "$v") <(echo "${TMPDIR}"/secret)
+    diff <(echo "$v") <(cd "${TMPDIR}"/secret && pwd)
 }
 
 test_cli_dir() {

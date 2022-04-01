@@ -16,6 +16,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/test-infra/prow/repoowners"
 	"sigs.k8s.io/yaml"
 
@@ -47,7 +48,8 @@ func gatherOptions() (options, error) {
 
 func generateMetadata(registryPath string) (api.RegistryMetadata, error) {
 	metadata := make(map[string]api.RegistryInfo)
-	if err := filepath.WalkDir(registryPath, func(path string, info fs.DirEntry, err error) error {
+	var errs []error
+	err := filepath.WalkDir(registryPath, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -60,12 +62,18 @@ func generateMetadata(registryPath string) (api.RegistryMetadata, error) {
 			// all step registry components are required to have an owners file in the same directory as the component
 			owners, err := gzip.ReadFileMaybeGZIP(ownersPath)
 			if err != nil {
-				return fmt.Errorf("failed to read OWNERS file for component %s at %s: %w", info.Name(), ownersPath, err)
+				if os.IsNotExist(err) {
+					errs = append(errs, fmt.Errorf("missing OWNERS file at %s", ownersPath))
+				} else {
+					errs = append(errs, fmt.Errorf("failed to read OWNERS file for component %s at %s: %w", info.Name(), ownersPath, err))
+				}
+				return nil
 			}
 			var ownersConfig repoowners.Config
 			err = yaml.Unmarshal(owners, &ownersConfig)
 			if err != nil {
-				return fmt.Errorf("failed to unmarshal OWNERS file at %s: %w", ownersPath, err)
+				errs = append(errs, fmt.Errorf("failed to unmarshal OWNERS file at %s: %w", ownersPath, err))
+				return nil
 			}
 			metadata[info.Name()] = api.RegistryInfo{
 				Path:   relpath,
@@ -73,7 +81,8 @@ func generateMetadata(registryPath string) (api.RegistryMetadata, error) {
 			}
 		}
 		return nil
-	}); err != nil {
+	})
+	if err := utilerrors.NewAggregate(append(errs, err)); err != nil {
 		return api.RegistryMetadata{}, fmt.Errorf("Failed to update registry metadata: %w", err)
 	}
 	return metadata, nil

@@ -206,6 +206,16 @@ path "secret/metadata/team-1/*" {
 			data: map[string]string{"key": "data"},
 		},
 		{
+			name: "Multiple namespaces are allowed",
+			data: map[string]string{"secretsync/target-namespace": "one-namespace,another-namespace"},
+		},
+		{
+			name:               "Invalid value in one of multiple namespaces fails validation",
+			data:               map[string]string{"secretsync/target-namespace": "one-namespace,invalid/namespace"},
+			expectedStatusCode: 400,
+			expectedErrors:     []string{"value of key secretsync/target-namespace is invalid: [a lowercase RFC 1123 label must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?')]"},
+		},
+		{
 			name:               "Namespace key with invalid value is refused",
 			data:               map[string]string{"secretsync/target-namespace": "invalid/value"},
 			expectedStatusCode: 400,
@@ -228,6 +238,23 @@ path "secret/metadata/team-1/*" {
 		{
 			name: "Target cluster key is allowed",
 			data: map[string]string{"secretsync/target-clusters": "whatever"},
+		},
+		{
+			name: "Secret gets synced in multiple namespaces",
+			data: map[string]string{
+				"secretsync/target-namespace": "target-namespace-1,target-namespace-2",
+				"secretsync/target-name":      "secret",
+				"some-other-secret":           "some-value",
+			},
+			clusters: map[string]ctrlruntimeclient.Client{
+				"a": fakectrlruntimeclient.NewFakeClient(),
+			},
+			expectedSecrets: map[string]*corev1.SecretList{
+				"a": {Items: []corev1.Secret{
+					{ObjectMeta: metav1.ObjectMeta{Namespace: "target-namespace-1", Name: "secret"}, Data: map[string][]byte{"some-other-secret": []byte("some-value")}},
+					{ObjectMeta: metav1.ObjectMeta{Namespace: "target-namespace-2", Name: "secret"}, Data: map[string][]byte{"some-other-secret": []byte("some-value")}},
+				}},
+			},
 		},
 		{
 			name: "Secret gets synced into multiple clusters, create in one, update in the other",
@@ -352,6 +379,17 @@ path "secret/metadata/team-1/*" {
 				targetSecretName: "second-secret",
 				data: map[string]string{
 					"secretsync/target-namespace": "default",
+					"secretsync/target-name":      "secret",
+					"some-secret-key":             "some-value",
+				},
+				expectedStatusCode: 400,
+				expectedErrors:     []string{"key some-secret-key in secret default/secret is already claimed"},
+			},
+			{
+				name:             "Creating another secret for multiple namespaces that include the same target and same key fails",
+				targetSecretName: "second-secret",
+				data: map[string]string{
+					"secretsync/target-namespace": "default,other",
 					"secretsync/target-name":      "secret",
 					"some-secret-key":             "some-value",
 				},

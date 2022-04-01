@@ -108,7 +108,15 @@ func (k *kvUpdateTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 
 	var errs []string
 	for key, value := range body.Data {
-		if key == vault.SecretSyncTargetNamepaceKey || key == vault.SecretSyncTargetNameKey {
+		if key == vault.SecretSyncTargetNamepaceKey {
+			for _, namespace := range strings.Split(value, ",") {
+				if valueErrs := validation.IsDNS1123Label(namespace); len(valueErrs) > 0 {
+					errs = append(errs, fmt.Sprintf("value of key %s is invalid: %v", key, valueErrs))
+				}
+			}
+			continue
+		}
+		if key == vault.SecretSyncTargetNameKey {
 			if valueErrs := validation.IsDNS1123Label(value); len(valueErrs) > 0 {
 				errs = append(errs, fmt.Sprintf("value of key %s is invalid: %v", key, valueErrs))
 			}
@@ -182,21 +190,24 @@ func (k *kvUpdateTransport) updateKeyCacheForSecret(path string, item map[string
 		k.existingSecretKeysByNamespaceName[existingEntry.name].Delete(existingEntry.key)
 	}
 	delete(k.existingSecretKeysByVaultSecretName, path)
-	name := types.NamespacedName{Namespace: item[vault.SecretSyncTargetNamepaceKey], Name: item[vault.SecretSyncTargetNameKey]}
-	if name.Namespace == "" || name.Name == "" {
-		return
-	}
 
-	// Create new entries
-	if k.existingSecretKeysByNamespaceName[name] == nil {
-		k.existingSecretKeysByNamespaceName[name] = sets.String{}
-	}
-	for key := range item {
-		if key == vault.SecretSyncTargetNamepaceKey || key == vault.SecretSyncTargetNameKey {
-			continue
+	for _, namespace := range strings.Split(item[vault.SecretSyncTargetNamepaceKey], ",") {
+		name := types.NamespacedName{Namespace: namespace, Name: item[vault.SecretSyncTargetNameKey]}
+		if name.Namespace == "" || name.Name == "" {
+			return
 		}
-		k.existingSecretKeysByNamespaceName[name].Insert(key)
-		k.existingSecretKeysByVaultSecretName[path] = append(k.existingSecretKeysByVaultSecretName[path], namespacedNameKey{name: name, key: key})
+
+		// Create new entries
+		if k.existingSecretKeysByNamespaceName[name] == nil {
+			k.existingSecretKeysByNamespaceName[name] = sets.String{}
+		}
+		for key := range item {
+			if key == vault.SecretSyncTargetNamepaceKey || key == vault.SecretSyncTargetNameKey {
+				continue
+			}
+			k.existingSecretKeysByNamespaceName[name].Insert(key)
+			k.existingSecretKeysByVaultSecretName[path] = append(k.existingSecretKeysByVaultSecretName[path], namespacedNameKey{name: name, key: key})
+		}
 	}
 }
 
@@ -205,26 +216,27 @@ func (k *kvUpdateTransport) validateKeysDontConflict(ctx context.Context, path s
 		return nil, nil
 	}
 
-	if data[vault.SecretSyncTargetNamepaceKey] == "" || data[vault.SecretSyncTargetNameKey] == "" {
-		return nil, nil
-	}
-
 	if err := k.populateKeyCache(ctx); err != nil {
 		return nil, err
 	}
 
-	path = k.kvCacheKeyFromURLPath(path)
-
 	k.existingSecretKeysByNamespaceNameLock.RLock()
 	defer k.existingSecretKeysByNamespaceNameLock.RUnlock()
-
-	name := types.NamespacedName{Namespace: data[vault.SecretSyncTargetNamepaceKey], Name: data[vault.SecretSyncTargetNameKey]}
-	for key := range data {
-		if key == vault.SecretSyncTargetNamepaceKey || key == vault.SecretSyncTargetNameKey || key == vault.SecretSyncTargetClusterKey {
+	for _, namespace := range strings.Split(data[vault.SecretSyncTargetNamepaceKey], ",") {
+		if namespace == "" || data[vault.SecretSyncTargetNameKey] == "" {
 			continue
 		}
-		if k.existingSecretKeysByNamespaceName[name].Has(key) && !namespacedNameKeySliceContains(k.existingSecretKeysByVaultSecretName[path], namespacedNameKey{name: name, key: key}) {
-			validationErrs = append(validationErrs, fmt.Sprintf("key %s in secret %s is already claimed", key, name))
+
+		path = k.kvCacheKeyFromURLPath(path)
+
+		name := types.NamespacedName{Namespace: namespace, Name: data[vault.SecretSyncTargetNameKey]}
+		for key := range data {
+			if key == vault.SecretSyncTargetNamepaceKey || key == vault.SecretSyncTargetNameKey || key == vault.SecretSyncTargetClusterKey {
+				continue
+			}
+			if k.existingSecretKeysByNamespaceName[name].Has(key) && !namespacedNameKeySliceContains(k.existingSecretKeysByVaultSecretName[path], namespacedNameKey{name: name, key: key}) {
+				validationErrs = append(validationErrs, fmt.Sprintf("key %s in secret %s is already claimed", key, name))
+			}
 		}
 	}
 
@@ -289,20 +301,24 @@ func (k *kvUpdateTransport) populateKeyCache(ctx context.Context) (err error) {
 			existingSecretKeysByNamespaceNameWriteLock.Lock()
 			defer existingSecretKeysByNamespaceNameWriteLock.Unlock()
 
-			name := types.NamespacedName{Namespace: item.Data[vault.SecretSyncTargetNamepaceKey], Name: item.Data[vault.SecretSyncTargetNameKey]}
-			if name.Namespace == "" || name.Name == "" {
-				return
-			}
-			delete(item.Data, vault.SecretSyncTargetNamepaceKey)
-			delete(item.Data, vault.SecretSyncTargetNameKey)
+			namespaces := strings.Split(item.Data[vault.SecretSyncTargetNamepaceKey], ",")
+			for _, namespace := range namespaces {
+				name := types.NamespacedName{Namespace: namespace, Name: item.Data[vault.SecretSyncTargetNameKey]}
+				if name.Namespace == "" || name.Name == "" {
+					continue
+				}
+				delete(item.Data, vault.SecretSyncTargetNamepaceKey)
+				delete(item.Data, vault.SecretSyncTargetNameKey)
 
-			if k.existingSecretKeysByNamespaceName[name] == nil {
-				k.existingSecretKeysByNamespaceName[name] = make(sets.String, len(item.Data))
+				if k.existingSecretKeysByNamespaceName[name] == nil {
+					k.existingSecretKeysByNamespaceName[name] = make(sets.String, len(item.Data))
+				}
+				for key := range item.Data {
+					k.existingSecretKeysByNamespaceName[name].Insert(key)
+					k.existingSecretKeysByVaultSecretName[path] = append(k.existingSecretKeysByVaultSecretName[path], namespacedNameKey{name: name, key: key})
+				}
 			}
-			for key := range item.Data {
-				k.existingSecretKeysByNamespaceName[name].Insert(key)
-				k.existingSecretKeysByVaultSecretName[path] = append(k.existingSecretKeysByVaultSecretName[path], namespacedNameKey{name: name, key: key})
-			}
+
 		}()
 	}
 	wg.Wait()
@@ -327,47 +343,50 @@ func (k *kvUpdateTransport) syncSecret(data map[string]string) {
 		if !vault.TargetsCluster(cluster, data) {
 			continue
 		}
-		secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-			Namespace: data[vault.SecretSyncTargetNamepaceKey],
-			Name:      data[vault.SecretSyncTargetNameKey],
-		}}
 
-		// The returned error is always nil, but we have to keep this signature to be able to pass this to CreateOrUpdate
-		// nolint:unparam
-		mutateFn := func() error {
-			if secret.Data == nil {
-				secret.Data = map[string][]byte{}
-			}
-			for k, v := range data {
-				if k == vault.SecretSyncTargetNamepaceKey || k == vault.SecretSyncTargetNameKey || k == vault.SecretSyncTargetClusterKey {
-					continue
+		for _, namespace := range strings.Split(data[vault.SecretSyncTargetNamepaceKey], ",") {
+			secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      data[vault.SecretSyncTargetNameKey],
+			}}
+
+			// The returned error is always nil, but we have to keep this signature to be able to pass this to CreateOrUpdate
+			// nolint:unparam
+			mutateFn := func() error {
+				if secret.Data == nil {
+					secret.Data = map[string][]byte{}
 				}
-				secret.Data[k] = []byte(v)
+				for k, v := range data {
+					if k == vault.SecretSyncTargetNamepaceKey || k == vault.SecretSyncTargetNameKey || k == vault.SecretSyncTargetClusterKey {
+						continue
+					}
+					secret.Data[k] = []byte(v)
+				}
+
+				return nil
 			}
 
-			return nil
-		}
-
-		var result crcontrollerutil.OperationResult
-		var err error
-		if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-			result, err = crcontrollerutil.CreateOrUpdate(ctx, client, secret, mutateFn)
-			return err
-		}); err != nil {
-			logrus.WithError(err).WithFields(logrus.Fields{
-				"cluster":   cluster,
-				"namespace": secret.Namespace,
-				"name":      secret.Name,
-			}).Error("failed to upsert secret")
-			continue
-		}
-		if result != crcontrollerutil.OperationResultNone {
-			logrus.WithFields(logrus.Fields{
-				"cluster":   cluster,
-				"namespace": secret.Namespace,
-				"name":      secret.Name,
-				"operation": result,
-			}).Debug("Upserted secret")
+			var result crcontrollerutil.OperationResult
+			var err error
+			if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+				result, err = crcontrollerutil.CreateOrUpdate(ctx, client, secret, mutateFn)
+				return err
+			}); err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"cluster":   cluster,
+					"namespace": secret.Namespace,
+					"name":      secret.Name,
+				}).Error("failed to upsert secret")
+				continue
+			}
+			if result != crcontrollerutil.OperationResultNone {
+				logrus.WithFields(logrus.Fields{
+					"cluster":   cluster,
+					"namespace": secret.Namespace,
+					"name":      secret.Name,
+					"operation": result,
+				}).Debug("Upserted secret")
+			}
 		}
 	}
 }

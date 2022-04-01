@@ -1014,6 +1014,39 @@ Code: 404. Errors:
 			},
 		},
 		{
+			name: "Secret for multiple namespaces",
+			items: map[string]vaultclient.KVData{
+				"my/vault/secret": {
+					Data: map[string]string{
+						"secretsync/target-namespace": "some-namespace,another-namespace",
+						"secretsync/target-name":      "some-name",
+						"some-data-key":               "a-secret",
+					},
+				},
+			},
+			config: secretbootstrap.Config{UserSecretsTargetClusters: []string{"cluster"}},
+			expected: map[string][]*coreapi.Secret{
+				"cluster": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "another-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Type:       coreapi.SecretTypeOpaque,
+						Data: map[string][]byte{
+							"some-data-key":                []byte("a-secret"),
+							"secretsync-vault-source-path": []byte("prefix/my/vault/secret"),
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Type:       coreapi.SecretTypeOpaque,
+						Data: map[string][]byte{
+							"some-data-key":                []byte("a-secret"),
+							"secretsync-vault-source-path": []byte("prefix/my/vault/secret"),
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "Secret gets combined from user- and dptp secret ",
 			items: map[string]vaultclient.KVData{
 				"my/vault/secret": {
@@ -1184,7 +1217,7 @@ Code: 404. Errors:
 				}
 				for key := range actual {
 					sort.Slice(actual[key], func(i, j int) bool {
-						return actual[key][i].Name < actual[key][j].Name
+						return actual[key][i].Namespace+actual[key][i].Name < actual[key][j].Namespace+actual[key][j].Name
 					})
 				}
 				for key := range tc.expected {

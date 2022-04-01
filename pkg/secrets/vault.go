@@ -203,28 +203,34 @@ func (c *vaultClient) GetUserSecrets() (map[types.NamespacedName]map[string]stri
 			if item.Data[vault.SecretSyncTargetNamepaceKey] == "" || item.Data[vault.SecretSyncTargetNameKey] == "" {
 				return
 			}
-			nn := types.NamespacedName{Namespace: item.Data[vault.SecretSyncTargetNamepaceKey], Name: item.Data[vault.SecretSyncTargetNameKey]}
-			if _, ok := result[nn]; !ok {
-				result[nn] = map[string]string{}
-			}
-
-			// We must sort the source part elements to avoid no-op updates
-			vaultSourcePaths := []string{path}
-			if result[nn][vault.VaultSourceKey] != "" {
-				vaultSourcePaths = append(vaultSourcePaths, strings.Split(result[nn][vault.VaultSourceKey], ",")...)
-				sort.Stable(sort.StringSlice(vaultSourcePaths))
-			}
-			result[nn][vault.VaultSourceKey] = strings.Join(vaultSourcePaths, ",")
-
-			for k, v := range item.Data {
-				if k == vault.SecretSyncTargetNamepaceKey || k == vault.SecretSyncTargetNameKey {
+			namespaces := strings.Split(item.Data[vault.SecretSyncTargetNamepaceKey], ",")
+			for _, namespace := range namespaces {
+				nn := types.NamespacedName{Namespace: namespace, Name: item.Data[vault.SecretSyncTargetNameKey]}
+				if nn.Namespace == "" || nn.Name == "" {
 					continue
 				}
-				if _, alreadySet := result[nn][k]; alreadySet {
-					errs = append(errs, fmt.Errorf("the %s key in secret %s is referenced by multiple vault items: %s", k, nn, result[nn][vault.VaultSourceKey]))
-					continue
+				if _, ok := result[nn]; !ok {
+					result[nn] = map[string]string{}
 				}
-				result[nn][k] = v
+
+				// We must sort the source part elements to avoid no-op updates
+				vaultSourcePaths := []string{path}
+				if result[nn][vault.VaultSourceKey] != "" {
+					vaultSourcePaths = append(vaultSourcePaths, strings.Split(result[nn][vault.VaultSourceKey], ",")...)
+					sort.Stable(sort.StringSlice(vaultSourcePaths))
+				}
+				result[nn][vault.VaultSourceKey] = strings.Join(vaultSourcePaths, ",")
+
+				for k, v := range item.Data {
+					if k == vault.SecretSyncTargetNamepaceKey || k == vault.SecretSyncTargetNameKey {
+						continue
+					}
+					if _, alreadySet := result[nn][k]; alreadySet {
+						errs = append(errs, fmt.Errorf("the %s key in secret %s is referenced by multiple vault items: %s", k, nn, result[nn][vault.VaultSourceKey]))
+						continue
+					}
+					result[nn][k] = v
+				}
 			}
 		}()
 	}

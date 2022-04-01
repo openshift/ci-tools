@@ -1112,6 +1112,7 @@ const (
 	ClusterProfileLibvirtS390x          ClusterProfile = "libvirt-s390x"
 	ClusterProfileNutanix               ClusterProfile = "nutanix"
 	ClusterProfileOpenStack             ClusterProfile = "openstack"
+	ClusterProfileOpenStackHwoffload    ClusterProfile = "openstack-hwoffload"
 	ClusterProfileOpenStackKuryr        ClusterProfile = "openstack-kuryr"
 	ClusterProfileOpenStackNFV          ClusterProfile = "openstack-nfv"
 	ClusterProfileOpenStackMechaCentral ClusterProfile = "openstack-vh-mecha-central"
@@ -1179,6 +1180,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileNutanix,
 		ClusterProfileOSDEphemeral,
 		ClusterProfileOpenStack,
+		ClusterProfileOpenStackHwoffload,
 		ClusterProfileOpenStackKuryr,
 		ClusterProfileOpenStackMechaAz0,
 		ClusterProfileOpenStackMechaCentral,
@@ -1261,6 +1263,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "nutanix"
 	case ClusterProfileOpenStack:
 		return "openstack"
+	case ClusterProfileOpenStackHwoffload:
+		return "openstack-hwoffload"
 	case ClusterProfileOpenStackKuryr:
 		return "openstack-kuryr"
 	case ClusterProfileOpenStackNFV:
@@ -1368,6 +1372,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "nutanix-quota-slice"
 	case ClusterProfileOpenStack:
 		return "openstack-quota-slice"
+	case ClusterProfileOpenStackHwoffload:
+		return "openstack-hwoffload-quota-slice"
 	case ClusterProfileOpenStackKuryr:
 		return "openstack-kuryr-quota-slice"
 	case ClusterProfileOpenStackNFV:

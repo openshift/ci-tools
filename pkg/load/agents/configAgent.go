@@ -109,7 +109,7 @@ func NewConfigAgent(configPath string, opts ...ConfigAgentOption) (ConfigAgent, 
 	a.reloadConfig = a.loadFilenameToConfig
 	// Load config once so we fail early if that doesn't work and are ready as soon as we return
 	if err := a.reloadConfig(); err != nil {
-		return nil, fmt.Errorf("failed to laod config: %w", err)
+		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
 	return a, startWatchers(a.configPath, a.reloadConfig, a.recordError)

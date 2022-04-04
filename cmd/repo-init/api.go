@@ -251,7 +251,7 @@ func (s *server) clusterProfileHandler() http.HandlerFunc {
 		s.disableCORS(w)
 		switch r.Method {
 		case http.MethodGet:
-			marshalled, err := json.Marshal(getClusterProfiles())
+			marshalled, err := json.Marshal(clusterProfileList)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -706,20 +706,4 @@ func configExists(org, repo, releaseRepo string) bool {
 	configPath := path.Join(releaseRepo, "ci-operator", "config", org, repo)
 	_, err := os.Stat(configPath)
 	return err == nil
-}
-
-// getClusterProfiles returns a limited set of cluster profiles to use for e2e testing.
-// TODO: this should be removed when we deprecate cluster profiles.
-func getClusterProfiles() []api.ClusterProfile {
-	return []api.ClusterProfile{
-		api.ClusterProfileAWS,
-		api.ClusterProfileAWSArm64,
-		api.ClusterProfileAWSOSDMSP,
-		api.ClusterProfileAzure,
-		api.ClusterProfileAzure2,
-		api.ClusterProfileAzure4,
-		api.ClusterProfileAzureStack,
-		api.ClusterProfileGCP,
-		api.ClusterProfileAlibabaCloud,
-	}
 }

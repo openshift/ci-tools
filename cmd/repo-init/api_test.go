@@ -23,7 +23,10 @@ func TestClusterProfiles(t *testing.T) {
 	writer := &fakeWriter{}
 	s.clusterProfileHandler()(writer, r)
 
-	expected, _ := json.Marshal(getClusterProfiles())
+	expected, err := json.Marshal(clusterProfileList)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if diff := cmp.Diff(writer.body, expected); diff != "" {
 		t.Fatalf("unexpected response %v", diff)
 	}

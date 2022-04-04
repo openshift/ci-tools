@@ -398,67 +398,17 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 	return errs
 }
 
-func validateClusterProfile(fieldRoot string, p api.ClusterProfile) []error {
-	switch p {
-	case
-		api.ClusterProfileAWS,
-		api.ClusterProfileAWSArm64,
-		api.ClusterProfileAWSAtomic,
-		api.ClusterProfileAWSCentos,
-		api.ClusterProfileAWSCentos40,
-		api.ClusterProfileAWSQE,
-		api.ClusterProfileAWSC2SQE,
-		api.ClusterProfileAWSChinaQE,
-		api.ClusterProfileAWSGovCloudQE,
-		api.ClusterProfileAWSSC2SQE,
-		api.ClusterProfileAWSGluster,
-		api.ClusterProfileAWSOSDMSP,
-		api.ClusterProfileAlibabaCloud,
-		api.ClusterProfileAzure2,
-		api.ClusterProfileAzure4,
-		api.ClusterProfileAzureArc,
-		api.ClusterProfileAzureStack,
-		api.ClusterProfileAzureMag,
-		api.ClusterProfileAzureQE,
-		api.ClusterProfileAzureMagQE,
-		api.ClusterProfileEquinixOcpMetal,
-		api.ClusterProfileGCPQE,
-		api.ClusterProfileGCP,
-		api.ClusterProfileGCP2,
-		api.ClusterProfileGCP40,
-		api.ClusterProfileGCPHA,
-		api.ClusterProfileGCPCRIO,
-		api.ClusterProfileGCPLogging,
-		api.ClusterProfileGCPLoggingJournald,
-		api.ClusterProfileGCPLoggingJSONFile,
-		api.ClusterProfileGCPLoggingCRIO,
-		api.ClusterProfileIBMCloud,
-		api.ClusterProfileLibvirtPpc64le,
-		api.ClusterProfileLibvirtS390x,
-		api.ClusterProfileNutanix,
-		api.ClusterProfileOpenStack,
-		api.ClusterProfileOpenStackKuryr,
-		api.ClusterProfileOpenStackNFV,
-		api.ClusterProfileOpenStackMechaCentral,
-		api.ClusterProfileOpenStackMechaAz0,
-		api.ClusterProfileOpenStackOsuosl,
-		api.ClusterProfileOpenStackVexxhost,
-		api.ClusterProfileOpenStackPpc64le,
-		api.ClusterProfileOvirt,
-		api.ClusterProfilePacket,
-		api.ClusterProfilePacketAssisted,
-		api.ClusterProfilePacketSNO,
-		api.ClusterProfileVSphere,
-		api.ClusterProfileVSphereDiscon,
-		api.ClusterProfileVSphereClusterbot,
-		api.ClusterProfileVSpherePlatformNone,
-		api.ClusterProfileVSphereMultizone,
-		api.ClusterProfileKubevirt,
-		api.ClusterProfileAWSCPaaS,
-		api.ClusterProfileAWS2,
-		api.ClusterProfileOSDEphemeral,
-		api.ClusterProfileHyperShift:
-		return nil
+func (v *Validator) validateClusterProfile(fieldRoot string, p api.ClusterProfile) []error {
+	if v.validClusterProfiles != nil {
+		if _, ok := v.validClusterProfiles[p]; ok {
+			return nil
+		}
+	} else {
+		for _, x := range api.ClusterProfiles() {
+			if x == p {
+				return nil
+			}
+		}
 	}
 	return []error{fmt.Errorf("%s: invalid cluster profile %q", fieldRoot, p)}
 }
@@ -530,33 +480,33 @@ func (v *Validator) validateTestConfigurationType(
 	if testConfig := test.OpenshiftAnsibleClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		needsReleaseRpms = true
-		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftAnsibleSrcClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		needsReleaseRpms = true
-		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftAnsibleCustomClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		needsReleaseRpms = true
-		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerUPIClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerUPISrcClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	var claimRelease *api.ClaimRelease
 	if test.ClusterClaim != nil {
@@ -569,7 +519,7 @@ func (v *Validator) validateTestConfigurationType(
 		typeCount++
 		if testConfig.ClusterProfile != "" {
 			clusterCount++
-			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
 		context := newContext(fieldPath(fieldRoot), testConfig.Environment, releases, inputImagesSeen)
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
@@ -582,7 +532,7 @@ func (v *Validator) validateTestConfigurationType(
 		context := newContext(fieldPath(fieldRoot).addField("steps"), testConfig.Environment, releases, inputImagesSeen)
 		if testConfig.ClusterProfile != "" {
 			clusterCount++
-			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
 		for i, s := range testConfig.Pre {

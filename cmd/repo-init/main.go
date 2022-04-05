@@ -15,6 +15,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -93,6 +94,24 @@ func (o *options) Validate() error {
 const (
 	logStyleJson = "json"
 	logStyleText = "text"
+)
+
+var (
+	// Valid cluster profile options and their associated workflows.
+	// This is supposed to be a simple, non-exhaustive list of profiles that are
+	// commonly used.  Advanced users can edit the configuration themselves.
+	clusterProfiles = map[api.ClusterProfile]string{
+		api.ClusterProfileAWS:   "ipi-aws",
+		api.ClusterProfileAzure: "ipi-azure",
+		api.ClusterProfileGCP:   "ipi-gcp",
+	}
+	clusterProfileList = func() (ret []api.ClusterProfile) {
+		for k := range clusterProfiles {
+			ret = append(ret, k)
+		}
+		sort.Slice(ret, func(i, j int) bool { return ret[i] < ret[j] })
+		return
+	}()
 )
 
 func gatherOptions() options {
@@ -322,11 +341,10 @@ A test named %s already exists. Please choose a different name.\n`, test.As)
 				}
 			}
 
-			clusterProfiles := sets.NewString("gcp", "aws", "azure")
 			test.Profile = api.ClusterProfile(fetchOrDefaultWithPrompt("Which specific cloud provider does the test require, if any? ", string(api.ClusterProfileAWS)))
 			for {
-				if !clusterProfiles.Has(string(test.Profile)) {
-					fmt.Printf("Cluster profile %s is not valid. Please choose one from: %s.\n", test.Profile, strings.Join(clusterProfiles.List(), ", "))
+				if clusterProfiles[test.Profile] == "" {
+					fmt.Printf("Cluster profile %s is not valid. Please choose one from: %s.\n", test.Profile, clusterProfileList)
 					test.Profile = api.ClusterProfile(fetchOrDefaultWithPrompt("Which specific cloud provider does the test require, if any? ", string(api.ClusterProfileAWS)))
 				} else {
 					break
@@ -674,7 +692,7 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 				As: "e2e-aws",
 				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
 					Workflow:       &workflow,
-					ClusterProfile: "aws",
+					ClusterProfile: api.ClusterProfileAWS,
 				},
 			})
 		}
@@ -750,7 +768,6 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 		t := api.TestStepConfiguration{
 			As: test.As,
 			MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
-				Workflow:       determineWorkflow(test.Workflow, test.Profile),
 				ClusterProfile: test.Profile,
 				Environment:    test.Environment,
 				Dependencies:   test.Dependencies,
@@ -766,7 +783,11 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 				},
 			},
 		}
-
+		if w := test.Workflow; w != "" {
+			t.MultiStageTestConfiguration.Workflow = &w
+		} else if w := clusterProfiles[test.Profile]; w != "" {
+			t.MultiStageTestConfiguration.Workflow = &w
+		}
 		if test.Cli {
 			t.MultiStageTestConfiguration.Test[0].Cli = "latest"
 		}
@@ -795,31 +816,6 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 	}
 
 	return generated
-}
-
-func determineWorkflow(workflow string, clusterProfile api.ClusterProfile) *string {
-	var ret string
-	if workflow != "" {
-		ret = workflow
-	} else {
-		switch clusterProfile {
-		case api.ClusterProfileAWS:
-			ret = "ipi-aws"
-		case api.ClusterProfileAWSArm64:
-			ret = "ipi-aws"
-		case api.ClusterProfileAzure, api.ClusterProfileAzure2, api.ClusterProfileAzure4:
-			ret = "ipi-azure"
-		case api.ClusterProfileAzureStack:
-			ret = "ipi-azurestack"
-		case api.ClusterProfileGCP:
-			ret = "ipi-gcp"
-		case api.ClusterProfileAlibabaCloud:
-			ret = "ipi-alibabacloud"
-		case api.ClusterProfileNutanix:
-			ret = "ipi-nutanix"
-		}
-	}
-	return &ret
 }
 
 func getTestResourceRequest(test e2eTest) api.ResourceRequirements {

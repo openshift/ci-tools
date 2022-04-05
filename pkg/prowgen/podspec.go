@@ -290,33 +290,35 @@ const (
 )
 
 func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile) corev1.Volume {
-	ret := corev1.Volume{
-		Name: clusterProfileVolume,
-	}
-	secret := profile.Secret()
-	if cm := profile.ConfigMap(); cm != "" {
-		ret.VolumeSource.Projected = &corev1.ProjectedVolumeSource{
-			Sources: []corev1.VolumeProjection{
-				{
-					Secret: &corev1.SecretProjection{
-						LocalObjectReference: corev1.LocalObjectReference{Name: secret},
-					},
-				},
-				{
-					ConfigMap: &corev1.ConfigMapProjection{
-						LocalObjectReference: corev1.LocalObjectReference{Name: cm},
-					},
-				},
+	if secret, cm := profile.Secret(), profile.ConfigMap(); cm == "" {
+		return corev1.Volume{
+			Name: clusterProfileVolume,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: secret},
 			},
 		}
 	} else {
-		ret.VolumeSource = corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: secret,
+		return corev1.Volume{
+			Name: clusterProfileVolume,
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{{
+						Secret: &corev1.SecretProjection{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: secret,
+							},
+						},
+					}, {
+						ConfigMap: &corev1.ConfigMapProjection{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: cm,
+							},
+						},
+					}},
+				},
 			},
 		}
 	}
-	return ret
 }
 
 func generateConfigMapVolume(name string, templates []string) corev1.Volume {

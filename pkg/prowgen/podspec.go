@@ -289,7 +289,8 @@ const (
 	clusterProfileVolume = "cluster-profile"
 )
 
-func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterType string) corev1.Volume {
+func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile) corev1.Volume {
+	clusterType := profile.ClusterType()
 	// AWS-2 and CPaaS and GCPQE and GCP2 PacketAssisted and PacketSNO and AzureQE and AzureMagQE need a different secret that should be provided to jobs
 	if profile == cioperatorapi.ClusterProfileAWSCPaaS ||
 		profile == cioperatorapi.ClusterProfileAWS2 ||
@@ -372,7 +373,7 @@ func generateConfigMapVolume(name string, templates []string) corev1.Volume {
 func ClusterProfile(profile cioperatorapi.ClusterProfile, target string) PodSpecMutator {
 	return func(spec *corev1.PodSpec) error {
 		container := &spec.Containers[0]
-		wantVolume := generateClusterProfileVolume(profile, profile.ClusterType())
+		wantVolume := generateClusterProfileVolume(profile)
 		if err := addVolume(spec, wantVolume); err != nil {
 			return err
 		}

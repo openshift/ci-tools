@@ -554,6 +554,13 @@ func testShouldAlwaysPass(jobName, testName, testSuiteName string) string {
 		// this is only for gathering artifacts.
 		return "used only to collect artifacts"
 	}
+
+	if testName == "initialize" {
+		// initialize test appears only when job run fails so job run will fail anyway
+		//
+		return "ignore initialize"
+	}
+
 	return ""
 }
 

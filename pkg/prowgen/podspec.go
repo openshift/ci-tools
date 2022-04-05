@@ -290,35 +290,16 @@ const (
 )
 
 func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile) corev1.Volume {
-	clusterType := profile.ClusterType()
-	// AWS-2 and CPaaS and GCPQE and GCP2 PacketAssisted and PacketSNO and AzureQE and AzureMagQE need a different secret that should be provided to jobs
-	if profile == cioperatorapi.ClusterProfileAWSCPaaS ||
-		profile == cioperatorapi.ClusterProfileAWS2 ||
-		profile == cioperatorapi.ClusterProfileAWSQE ||
-		profile == cioperatorapi.ClusterProfileAWSC2SQE ||
-		profile == cioperatorapi.ClusterProfileAWSChinaQE ||
-		profile == cioperatorapi.ClusterProfileAWSGovCloudQE ||
-		profile == cioperatorapi.ClusterProfileAWSSC2SQE ||
-		profile == cioperatorapi.ClusterProfileAWSOSDMSP ||
-		profile == cioperatorapi.ClusterProfileGCP2 ||
-		profile == cioperatorapi.ClusterProfileGCPQE ||
-		profile == cioperatorapi.ClusterProfilePacketAssisted ||
-		profile == cioperatorapi.ClusterProfilePacketSNO ||
-		profile == cioperatorapi.ClusterProfileAzureQE ||
-		profile == cioperatorapi.ClusterProfileAzureMagQE ||
-		profile == cioperatorapi.ClusterProfileAzure2 {
-		clusterType = string(profile)
-	}
-
 	ret := corev1.Volume{
 		Name: clusterProfileVolume,
 	}
+	secret := profile.Secret()
 	if cm := profile.ConfigMap(); cm != "" {
 		ret.VolumeSource.Projected = &corev1.ProjectedVolumeSource{
 			Sources: []corev1.VolumeProjection{
 				{
 					Secret: &corev1.SecretProjection{
-						LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("cluster-secrets-%s", clusterType)},
+						LocalObjectReference: corev1.LocalObjectReference{Name: secret},
 					},
 				},
 				{
@@ -331,7 +312,7 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile) corev1.V
 	} else {
 		ret.VolumeSource = corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
-				SecretName: fmt.Sprintf("cluster-secrets-%s", clusterType),
+				SecretName: secret,
 			},
 		}
 	}

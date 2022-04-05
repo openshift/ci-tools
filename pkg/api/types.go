@@ -1446,6 +1446,36 @@ func (p ClusterProfile) ConfigMap() string {
 	}
 }
 
+// Secret maps profiles to the Secret they require.
+func (p ClusterProfile) Secret() string {
+	var name string
+	switch p {
+	// These profiles have their own credentials.
+	case
+		ClusterProfileAWSCPaaS,
+		ClusterProfileAWS2,
+		ClusterProfileAWSQE,
+		ClusterProfileAWSC2SQE,
+		ClusterProfileAWSChinaQE,
+		ClusterProfileAWSGovCloudQE,
+		ClusterProfileAWSSC2SQE,
+		ClusterProfileAWSOSDMSP,
+		ClusterProfileGCP2,
+		ClusterProfileGCPQE,
+		ClusterProfilePacketAssisted,
+		ClusterProfilePacketSNO,
+		ClusterProfileAzureQE,
+		ClusterProfileAzureMagQE,
+		ClusterProfileAzure2:
+		name = string(p)
+	// Other profiles share the same base set of credentials, named by
+	// convention after their shared cluster type.
+	default:
+		name = p.ClusterType()
+	}
+	return fmt.Sprintf("cluster-secrets-%s", name)
+}
+
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {

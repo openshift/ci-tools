@@ -3,9 +3,10 @@ package helpdesk
 import (
 	"strings"
 
-	"github.com/openshift/ci-tools/pkg/slack/events"
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack/slackevents"
+
+	"github.com/openshift/ci-tools/pkg/slack/events"
 )
 
 const (
@@ -17,9 +18,7 @@ const (
 // in forum-testplatform channel that mention @dptp-helpdesk.
 func Handler() events.PartialHandler {
 	return events.PartialHandlerFunc("helpdesk",
-		func(
-			callback *slackevents.EventsAPIEvent,
-			logger *logrus.Entry) (handled bool, err error) {
+		func(callback *slackevents.EventsAPIEvent, logger *logrus.Entry) (handled bool, err error) {
 
 			if callback.Type != slackevents.CallbackEvent {
 				return false, nil

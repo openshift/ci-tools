@@ -1112,6 +1112,7 @@ const (
 	ClusterProfileLibvirtS390x          ClusterProfile = "libvirt-s390x"
 	ClusterProfileNutanix               ClusterProfile = "nutanix"
 	ClusterProfileOpenStack             ClusterProfile = "openstack"
+	ClusterProfileOpenStackHwoffload    ClusterProfile = "openstack-hwoffload"
 	ClusterProfileOpenStackKuryr        ClusterProfile = "openstack-kuryr"
 	ClusterProfileOpenStackNFV          ClusterProfile = "openstack-nfv"
 	ClusterProfileOpenStackMechaCentral ClusterProfile = "openstack-vh-mecha-central"
@@ -1139,62 +1140,63 @@ const (
 func ClusterProfiles() []ClusterProfile {
 	return []ClusterProfile{
 		ClusterProfileAWS,
+		ClusterProfileAWS2,
 		ClusterProfileAWSArm64,
 		ClusterProfileAWSAtomic,
+		ClusterProfileAWSC2SQE,
+		ClusterProfileAWSCPaaS,
 		ClusterProfileAWSCentos,
 		ClusterProfileAWSCentos40,
-		ClusterProfileAWSQE,
-		ClusterProfileAWSC2SQE,
 		ClusterProfileAWSChinaQE,
-		ClusterProfileAWSGovCloudQE,
-		ClusterProfileAWSSC2SQE,
 		ClusterProfileAWSGluster,
+		ClusterProfileAWSGovCloudQE,
 		ClusterProfileAWSOSDMSP,
+		ClusterProfileAWSQE,
+		ClusterProfileAWSSC2SQE,
 		ClusterProfileAlibabaCloud,
 		ClusterProfileAzure2,
 		ClusterProfileAzure4,
 		ClusterProfileAzureArc,
-		ClusterProfileAzureStack,
 		ClusterProfileAzureMag,
-		ClusterProfileAzureQE,
 		ClusterProfileAzureMagQE,
+		ClusterProfileAzureQE,
+		ClusterProfileAzureStack,
 		ClusterProfileEquinixOcpMetal,
-		ClusterProfileGCPQE,
 		ClusterProfileGCP,
+		ClusterProfileGCP2,
 		ClusterProfileGCP40,
-		ClusterProfileGCPHA,
 		ClusterProfileGCPCRIO,
+		ClusterProfileGCPHA,
 		ClusterProfileGCPLogging,
-		ClusterProfileGCPLoggingJournald,
-		ClusterProfileGCPLoggingJSONFile,
 		ClusterProfileGCPLoggingCRIO,
+		ClusterProfileGCPLoggingJSONFile,
+		ClusterProfileGCPLoggingJournald,
+		ClusterProfileGCPQE,
+		ClusterProfileHyperShift,
 		ClusterProfileIBMCloud,
+		ClusterProfileKubevirt,
 		ClusterProfileLibvirtPpc64le,
 		ClusterProfileLibvirtS390x,
 		ClusterProfileNutanix,
+		ClusterProfileOSDEphemeral,
 		ClusterProfileOpenStack,
+		ClusterProfileOpenStackHwoffload,
 		ClusterProfileOpenStackKuryr,
-		ClusterProfileOpenStackNFV,
-		ClusterProfileOpenStackMechaCentral,
 		ClusterProfileOpenStackMechaAz0,
+		ClusterProfileOpenStackMechaCentral,
+		ClusterProfileOpenStackNFV,
 		ClusterProfileOpenStackOsuosl,
-		ClusterProfileOpenStackVexxhost,
 		ClusterProfileOpenStackPpc64le,
+		ClusterProfileOpenStackVexxhost,
 		ClusterProfileOvirt,
 		ClusterProfilePacket,
 		ClusterProfilePacketAssisted,
 		ClusterProfilePacketSNO,
 		ClusterProfileVSphere,
-		ClusterProfileVSphereDiscon,
 		ClusterProfileVSphereClusterbot,
-		ClusterProfileVSpherePlatformNone,
+		ClusterProfileVSphereDiscon,
 		ClusterProfileVSphereMultizone,
-		ClusterProfileKubevirt,
-		ClusterProfileAWSCPaaS,
-		ClusterProfileOSDEphemeral,
-		ClusterProfileAWS2,
-		ClusterProfileGCP2,
-		ClusterProfileHyperShift,
+		ClusterProfileVSpherePlatformNone,
 	}
 }
 
@@ -1261,6 +1263,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "nutanix"
 	case ClusterProfileOpenStack:
 		return "openstack"
+	case ClusterProfileOpenStackHwoffload:
+		return "openstack-hwoffload"
 	case ClusterProfileOpenStackKuryr:
 		return "openstack-kuryr"
 	case ClusterProfileOpenStackNFV:
@@ -1368,6 +1372,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "nutanix-quota-slice"
 	case ClusterProfileOpenStack:
 		return "openstack-quota-slice"
+	case ClusterProfileOpenStackHwoffload:
+		return "openstack-hwoffload-quota-slice"
 	case ClusterProfileOpenStackKuryr:
 		return "openstack-kuryr-quota-slice"
 	case ClusterProfileOpenStackNFV:

@@ -314,55 +314,21 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 	}
 	switch profile {
 	case
-		cioperatorapi.ClusterProfileAWS,
-		cioperatorapi.ClusterProfileAWSArm64,
-		cioperatorapi.ClusterProfileAWSQE,
-		cioperatorapi.ClusterProfileAWSC2SQE,
-		cioperatorapi.ClusterProfileAWSChinaQE,
-		cioperatorapi.ClusterProfileAWSGovCloudQE,
-		cioperatorapi.ClusterProfileAWSSC2SQE,
-		cioperatorapi.ClusterProfileAWSOSDMSP,
-		cioperatorapi.ClusterProfileAlibabaCloud,
-		cioperatorapi.ClusterProfileAzure4,
-		cioperatorapi.ClusterProfileAzure2,
-		cioperatorapi.ClusterProfileAzureArc,
-		cioperatorapi.ClusterProfileAzureStack,
-		cioperatorapi.ClusterProfileAzureMag,
-		cioperatorapi.ClusterProfileAzureQE,
-		cioperatorapi.ClusterProfileAzureMagQE,
-		cioperatorapi.ClusterProfileEquinixOcpMetal,
-		cioperatorapi.ClusterProfileGCPQE,
-		cioperatorapi.ClusterProfileIBMCloud,
-		cioperatorapi.ClusterProfileLibvirtS390x,
-		cioperatorapi.ClusterProfileLibvirtPpc64le,
-		cioperatorapi.ClusterProfileNutanix,
-		cioperatorapi.ClusterProfileOpenStack,
-		cioperatorapi.ClusterProfileOpenStackKuryr,
-		cioperatorapi.ClusterProfileOpenStackNFV,
-		cioperatorapi.ClusterProfileOpenStackMechaCentral,
-		cioperatorapi.ClusterProfileOpenStackMechaAz0,
-		cioperatorapi.ClusterProfileOpenStackOsuosl,
-		cioperatorapi.ClusterProfileOpenStackVexxhost,
-		cioperatorapi.ClusterProfileOpenStackPpc64le,
-		cioperatorapi.ClusterProfileVSphere,
-		cioperatorapi.ClusterProfileVSphereDiscon,
-		cioperatorapi.ClusterProfileVSphereClusterbot,
-		cioperatorapi.ClusterProfileVSpherePlatformNone,
-		cioperatorapi.ClusterProfileVSphereMultizone,
-		cioperatorapi.ClusterProfileKubevirt,
-		cioperatorapi.ClusterProfileAWSCPaaS,
-		cioperatorapi.ClusterProfileOSDEphemeral,
-		cioperatorapi.ClusterProfileAWS2,
-		cioperatorapi.ClusterProfileHyperShift,
-		cioperatorapi.ClusterProfilePacket,
-		cioperatorapi.ClusterProfilePacketAssisted,
-		cioperatorapi.ClusterProfilePacketSNO:
-		ret.VolumeSource = corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: fmt.Sprintf("cluster-secrets-%s", clusterType),
-			},
-		}
-	default:
+		cioperatorapi.ClusterProfileAWSAtomic,
+		cioperatorapi.ClusterProfileAWSCentos,
+		cioperatorapi.ClusterProfileAWSCentos40,
+		cioperatorapi.ClusterProfileAWSGluster,
+		cioperatorapi.ClusterProfileAzure,
+		cioperatorapi.ClusterProfileGCP,
+		cioperatorapi.ClusterProfileGCP2,
+		cioperatorapi.ClusterProfileGCP40,
+		cioperatorapi.ClusterProfileGCPCRIO,
+		cioperatorapi.ClusterProfileGCPHA,
+		cioperatorapi.ClusterProfileGCPLogging,
+		cioperatorapi.ClusterProfileGCPLoggingCRIO,
+		cioperatorapi.ClusterProfileGCPLoggingJSONFile,
+		cioperatorapi.ClusterProfileGCPLoggingJournald,
+		cioperatorapi.ClusterProfileOvirt:
 		ret.VolumeSource.Projected = &corev1.ProjectedVolumeSource{
 			Sources: []corev1.VolumeProjection{
 				{
@@ -375,6 +341,12 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 						LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("cluster-profile-%s", profile)},
 					},
 				},
+			},
+		}
+	default:
+		ret.VolumeSource = corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: fmt.Sprintf("cluster-secrets-%s", clusterType),
 			},
 		}
 	}

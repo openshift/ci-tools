@@ -682,8 +682,10 @@ func (config TestStepConfiguration) TargetName() string {
 type Cloud string
 
 const (
-	CloudAWS Cloud = "aws"
-	CloudGCP Cloud = "gcp"
+	CloudAWS     Cloud = "aws"
+	CloudGCP     Cloud = "gcp"
+	CloudAzure4  Cloud = "azure4"
+	CloudVSphere Cloud = "vsphere"
 )
 
 // ClusterClaim claims an OpenShift cluster for the job.
@@ -1419,6 +1421,59 @@ func (p ClusterProfile) LeaseType() string {
 	default:
 		return ""
 	}
+}
+
+// ConfigMap maps profiles to the ConfigMap they require (if applicable).
+func (p ClusterProfile) ConfigMap() string {
+	switch p {
+	case
+		ClusterProfileAWSAtomic,
+		ClusterProfileAWSCentos,
+		ClusterProfileAWSCentos40,
+		ClusterProfileAWSGluster,
+		ClusterProfileAzure,
+		ClusterProfileGCP,
+		ClusterProfileGCP2,
+		ClusterProfileGCP40,
+		ClusterProfileGCPCRIO,
+		ClusterProfileGCPHA,
+		ClusterProfileGCPLogging,
+		ClusterProfileGCPLoggingCRIO,
+		ClusterProfileGCPLoggingJSONFile,
+		ClusterProfileGCPLoggingJournald,
+		ClusterProfileOvirt:
+		return fmt.Sprintf("cluster-profile-%s", p)
+	default:
+		return ""
+	}
+}
+
+// Secret maps profiles to the Secret they require.
+func (p ClusterProfile) Secret() string {
+	var name string
+	switch p {
+	// These profiles share credentials with the base cloud provider profile.
+	case
+		ClusterProfileAWSAtomic,
+		ClusterProfileAWSCentos,
+		ClusterProfileAWSCentos40,
+		ClusterProfileAWSGluster,
+		ClusterProfileGCP40,
+		ClusterProfileGCPCRIO,
+		ClusterProfileGCPHA,
+		ClusterProfileGCPLogging,
+		ClusterProfileGCPLoggingCRIO,
+		ClusterProfileGCPLoggingJSONFile,
+		ClusterProfileGCPLoggingJournald,
+		ClusterProfileVSphereClusterbot,
+		ClusterProfileVSphereDiscon,
+		ClusterProfileVSphereMultizone,
+		ClusterProfileVSpherePlatformNone:
+		name = p.ClusterType()
+	default:
+		name = string(p)
+	}
+	return fmt.Sprintf("cluster-secrets-%s", name)
 }
 
 // LeaseTypeFromClusterType maps cluster types to lease types

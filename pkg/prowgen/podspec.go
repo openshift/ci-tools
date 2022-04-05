@@ -289,68 +289,36 @@ const (
 	clusterProfileVolume = "cluster-profile"
 )
 
-func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterType string) corev1.Volume {
-	// AWS-2 and CPaaS and GCPQE and GCP2 PacketAssisted and PacketSNO and AzureQE and AzureMagQE need a different secret that should be provided to jobs
-	if profile == cioperatorapi.ClusterProfileAWSCPaaS ||
-		profile == cioperatorapi.ClusterProfileAWS2 ||
-		profile == cioperatorapi.ClusterProfileAWSQE ||
-		profile == cioperatorapi.ClusterProfileAWSC2SQE ||
-		profile == cioperatorapi.ClusterProfileAWSChinaQE ||
-		profile == cioperatorapi.ClusterProfileAWSGovCloudQE ||
-		profile == cioperatorapi.ClusterProfileAWSSC2SQE ||
-		profile == cioperatorapi.ClusterProfileAWSOSDMSP ||
-		profile == cioperatorapi.ClusterProfileGCP2 ||
-		profile == cioperatorapi.ClusterProfileGCPQE ||
-		profile == cioperatorapi.ClusterProfilePacketAssisted ||
-		profile == cioperatorapi.ClusterProfilePacketSNO ||
-		profile == cioperatorapi.ClusterProfileAzureQE ||
-		profile == cioperatorapi.ClusterProfileAzureMagQE ||
-		profile == cioperatorapi.ClusterProfileAzure2 {
-		clusterType = string(profile)
-	}
-
-	ret := corev1.Volume{
-		Name: clusterProfileVolume,
-	}
-	switch profile {
-	case
-		cioperatorapi.ClusterProfileAWSAtomic,
-		cioperatorapi.ClusterProfileAWSCentos,
-		cioperatorapi.ClusterProfileAWSCentos40,
-		cioperatorapi.ClusterProfileAWSGluster,
-		cioperatorapi.ClusterProfileAzure,
-		cioperatorapi.ClusterProfileGCP,
-		cioperatorapi.ClusterProfileGCP2,
-		cioperatorapi.ClusterProfileGCP40,
-		cioperatorapi.ClusterProfileGCPCRIO,
-		cioperatorapi.ClusterProfileGCPHA,
-		cioperatorapi.ClusterProfileGCPLogging,
-		cioperatorapi.ClusterProfileGCPLoggingCRIO,
-		cioperatorapi.ClusterProfileGCPLoggingJSONFile,
-		cioperatorapi.ClusterProfileGCPLoggingJournald,
-		cioperatorapi.ClusterProfileOvirt:
-		ret.VolumeSource.Projected = &corev1.ProjectedVolumeSource{
-			Sources: []corev1.VolumeProjection{
-				{
-					Secret: &corev1.SecretProjection{
-						LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("cluster-secrets-%s", clusterType)},
-					},
-				},
-				{
-					ConfigMap: &corev1.ConfigMapProjection{
-						LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("cluster-profile-%s", profile)},
-					},
+func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile) corev1.Volume {
+	if secret, cm := profile.Secret(), profile.ConfigMap(); cm == "" {
+		return corev1.Volume{
+			Name: clusterProfileVolume,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: secret},
+			},
+		}
+	} else {
+		return corev1.Volume{
+			Name: clusterProfileVolume,
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{{
+						Secret: &corev1.SecretProjection{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: secret,
+							},
+						},
+					}, {
+						ConfigMap: &corev1.ConfigMapProjection{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: cm,
+							},
+						},
+					}},
 				},
 			},
 		}
-	default:
-		ret.VolumeSource = corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: fmt.Sprintf("cluster-secrets-%s", clusterType),
-			},
-		}
 	}
-	return ret
 }
 
 func generateConfigMapVolume(name string, templates []string) corev1.Volume {
@@ -388,7 +356,7 @@ func generateConfigMapVolume(name string, templates []string) corev1.Volume {
 func ClusterProfile(profile cioperatorapi.ClusterProfile, target string) PodSpecMutator {
 	return func(spec *corev1.PodSpec) error {
 		container := &spec.Containers[0]
-		wantVolume := generateClusterProfileVolume(profile, profile.ClusterType())
+		wantVolume := generateClusterProfileVolume(profile)
 		if err := addVolume(spec, wantVolume); err != nil {
 			return err
 		}

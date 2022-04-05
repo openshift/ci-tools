@@ -682,8 +682,10 @@ func (config TestStepConfiguration) TargetName() string {
 type Cloud string
 
 const (
-	CloudAWS Cloud = "aws"
-	CloudGCP Cloud = "gcp"
+	CloudAWS     Cloud = "aws"
+	CloudGCP     Cloud = "gcp"
+	CloudAzure4  Cloud = "azure4"
+	CloudVSphere Cloud = "vsphere"
 )
 
 // ClusterClaim claims an OpenShift cluster for the job.
@@ -1450,28 +1452,26 @@ func (p ClusterProfile) ConfigMap() string {
 func (p ClusterProfile) Secret() string {
 	var name string
 	switch p {
-	// These profiles have their own credentials.
+	// These profiles share credentials with the base cloud provider profile.
 	case
-		ClusterProfileAWSCPaaS,
-		ClusterProfileAWS2,
-		ClusterProfileAWSQE,
-		ClusterProfileAWSC2SQE,
-		ClusterProfileAWSChinaQE,
-		ClusterProfileAWSGovCloudQE,
-		ClusterProfileAWSSC2SQE,
-		ClusterProfileAWSOSDMSP,
-		ClusterProfileGCP2,
-		ClusterProfileGCPQE,
-		ClusterProfilePacketAssisted,
-		ClusterProfilePacketSNO,
-		ClusterProfileAzureQE,
-		ClusterProfileAzureMagQE,
-		ClusterProfileAzure2:
-		name = string(p)
-	// Other profiles share the same base set of credentials, named by
-	// convention after their shared cluster type.
-	default:
+		ClusterProfileAWSAtomic,
+		ClusterProfileAWSCentos,
+		ClusterProfileAWSCentos40,
+		ClusterProfileAWSGluster,
+		ClusterProfileGCP40,
+		ClusterProfileGCPCRIO,
+		ClusterProfileGCPHA,
+		ClusterProfileGCPLogging,
+		ClusterProfileGCPLoggingCRIO,
+		ClusterProfileGCPLoggingJSONFile,
+		ClusterProfileGCPLoggingJournald,
+		ClusterProfileVSphereClusterbot,
+		ClusterProfileVSphereDiscon,
+		ClusterProfileVSphereMultizone,
+		ClusterProfileVSpherePlatformNone:
 		name = p.ClusterType()
+	default:
+		name = string(p)
 	}
 	return fmt.Sprintf("cluster-secrets-%s", name)
 }

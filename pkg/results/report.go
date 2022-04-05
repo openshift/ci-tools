@@ -16,7 +16,8 @@ import (
 
 const (
 	// reportAddress is the default result aggregator address in app.ci
-	reportAddress = "https://result-aggregator-ci.apps.ci.l2s4.p1.openshiftapps.com"
+	reportAddress      = "https://result-aggregator-ci.apps.ci.l2s4.p1.openshiftapps.com"
+	unknownConsoleHost = "unknown"
 )
 
 // Options holds the configuration options for connecting to the remote aggregation server
@@ -48,6 +49,11 @@ func (o *Options) Reporter(spec *api.JobSpec, consoleHost string) (Reporter, err
 	if o.address == "" || o.credentials == "" {
 		return &noopReporter{}, nil
 	}
+
+	if consoleHost == "" {
+		consoleHost = unknownConsoleHost
+	}
+
 	username, password, err := getUsernameAndPassword(o.credentials)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get username and password: %w", err)

@@ -20,6 +20,7 @@ type githubClient interface {
 	GetCombinedStatus(org, repo, ref string) (*github.CombinedStatus, error)
 	GetRef(string, string, string) (string, error)
 	QueryWithGitHubAppsSupport(ctx context.Context, q interface{}, vars map[string]interface{}, org string) error
+	CreateComment(owner, repo string, number int, comment string) error
 }
 
 type options struct {
@@ -102,7 +103,7 @@ func main() {
 		logrus.WithError(err).Fatal("Error starting config agent.")
 	}
 
-	c := newController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, o.enableOnRepos.Strings())
+	c := newController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, o.enableOnRepos)
 
 	interrupts.OnInterrupt(func() {
 		if err := gitClient.Clean(); err != nil {

@@ -33,20 +33,22 @@ type Config struct {
 	// Groups maps a group of jobs to a cluster
 	Groups JobGroups `json:"groups"`
 	// BuildFarm maps groups of jobs to a cloud provider, like GCP
-	BuildFarm map[api.Cloud]map[api.Cluster]Filenames `json:"buildFarm,omitempty"`
+	BuildFarm map[api.Cloud]map[api.Cluster]*BuildFarmConfig `json:"buildFarm,omitempty"`
 	// BuildFarmCloud maps sets of clusters to a cloud provider, like GCP
 	BuildFarmCloud map[api.Cloud][]string `json:"-"`
 }
 
-type Filenames struct {
+type BuildFarmConfig struct {
 	FilenamesRaw []string    `json:"filenames,omitempty"`
 	Filenames    sets.String `json:"-"`
+
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 // JobGroups maps a group of jobs to a cluster
 type JobGroups = map[api.Cluster]Group
 
-//Group is a group of jobs
+// Group is a group of jobs
 type Group struct {
 	// a list of job names
 	Jobs []string `json:"jobs,omitempty"`
@@ -172,7 +174,7 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 			}
 		}
 	}
-	//sort for tests
+	// sort for tests
 	sort.Strings(matches)
 	if len(matches) > 1 {
 		return "", false, fmt.Errorf("path %s matches more than 1 regex: %s", path, matches)
@@ -284,7 +286,7 @@ func (config *Config) Validate() error {
 			matches = append(matches, k)
 		}
 	}
-	//sort for tests
+	// sort for tests
 	sort.Strings(matches)
 	if len(matches) > 1 {
 		return fmt.Errorf("there are job names occurring more than once: %s", matches)

@@ -30,24 +30,22 @@ func init() {
 
 func TestMakeGroups(t *testing.T) {
 	testCases := []struct {
-		name                     string
-		openshiftPrivAdmins      sets.String
-		peribolosConfig          string
-		openshiftPrivAdminsGroup string
-		mapping                  map[string]string
-		roverGroups              map[string][]string
-		config                   *group.Config
-		clusters                 sets.String
-		expected                 map[string]GroupClusters
-		expectedErr              error
+		name                string
+		openshiftPrivAdmins sets.String
+		peribolosConfig     string
+		mapping             map[string]string
+		roverGroups         map[string][]string
+		config              *group.Config
+		clusters            sets.String
+		expected            map[string]GroupClusters
+		expectedErr         error
 	}{
 		{
-			name:                     "basic case",
-			peribolosConfig:          "bar",
-			openshiftPrivAdmins:      sets.NewString("a"),
-			openshiftPrivAdminsGroup: "openshift-priv-admins",
-			mapping:                  map[string]string{"a": "b", "c": "c"},
-			roverGroups:              map[string][]string{"old-group-name": {"b", "c"}, "x": {"y", "y"}},
+			name:                "basic case",
+			peribolosConfig:     "bar",
+			openshiftPrivAdmins: sets.NewString("a"),
+			mapping:             map[string]string{"a": "b", "c": "c"},
+			roverGroups:         map[string][]string{"old-group-name": {"b", "c"}, "x": {"y", "y"}},
 			config: &group.Config{
 				ClusterGroups: map[string][]string{"cluster-group-1": {"build01", "build02"}},
 				Groups: map[string]group.Target{
@@ -115,7 +113,7 @@ func TestMakeGroups(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, actualErr := makeGroups(tc.openshiftPrivAdmins, tc.peribolosConfig, tc.openshiftPrivAdminsGroup,
+			actual, actualErr := makeGroups(tc.openshiftPrivAdmins, tc.peribolosConfig,
 				tc.mapping, tc.roverGroups, tc.config, tc.clusters)
 			if diff := cmp.Diff(tc.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)

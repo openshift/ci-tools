@@ -1,6 +1,7 @@
 package group
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -26,6 +27,11 @@ func TestLoadConfig(t *testing.T) {
 					"some-group":     {},
 				},
 			},
+		},
+		{
+			name:        "cannot use the group name openshift-priv-admins",
+			file:        filepath.Join("testdata", "TestLoadConfig", "openshift_priv_admins.yaml"),
+			expectedErr: fmt.Errorf("failed to validate config file: cannot use the group name openshift-priv-admins in the configuration file"),
 		},
 	}
 	for _, tc := range testCases {

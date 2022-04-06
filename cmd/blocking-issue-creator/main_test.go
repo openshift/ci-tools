@@ -49,7 +49,7 @@ func TestManageIssues(t *testing.T) {
 			issues: map[int]*github.Issue{
 				1: {
 					ID:     1,
-					Title:  "Future Release Branches Frozen For Merging | branch:release-4.9",
+					Title:  "Future Release Branches Frozen For Merging | branch:release-4.99",
 					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nContact the [Test Platform](https://coreos.slack.com/messages/CBN38N3MW) or [Automated Release](https://coreos.slack.com/messages/CB95J6R4N) teams for more information.",
 					Labels: []github.Label{{Name: "tide/merge-blocker"}},
 				},

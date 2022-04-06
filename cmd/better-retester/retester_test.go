@@ -1,18 +1,36 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/openshift/ci-tools/pkg/testhelper"
 	"github.com/shurcooL/githubv4"
 	"github.com/sirupsen/logrus"
+
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	github "k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/github/fakegithub"
 	"k8s.io/test-infra/prow/tide"
+
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
+
+type MyFakeClient struct {
+	*fakegithub.FakeClient
+}
+
+func (f *MyFakeClient) QueryWithGitHubAppsSupport(ctx context.Context, q interface{}, vars map[string]interface{}, org string) error {
+	return nil
+}
+
+func (f *MyFakeClient) GetRef(owner, repo, ref string) (string, error) {
+	if owner == "failed test" {
+		return "", fmt.Errorf("failed")
+	}
+	return "abcde", nil
+}
 
 func TestRetestOrBackoff(t *testing.T) {
 	ghc := &MyFakeClient{fakegithub.NewFakeClient()}

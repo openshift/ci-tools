@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"time"
 
@@ -14,7 +13,6 @@ import (
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/github"
-	"k8s.io/test-infra/prow/github/fakegithub"
 	"k8s.io/test-infra/prow/interrupts"
 )
 
@@ -23,21 +21,6 @@ type githubClient interface {
 	GetRef(string, string, string) (string, error)
 	QueryWithGitHubAppsSupport(ctx context.Context, q interface{}, vars map[string]interface{}, org string) error
 	CreateComment(owner, repo string, number int, comment string) error
-}
-
-type MyFakeClient struct {
-	*fakegithub.FakeClient
-}
-
-func (f *MyFakeClient) QueryWithGitHubAppsSupport(ctx context.Context, q interface{}, vars map[string]interface{}, org string) error {
-	return nil
-}
-
-func (f *MyFakeClient) GetRef(owner, repo, ref string) (string, error) {
-	if owner == "failed test" {
-		return "", fmt.Errorf("failed")
-	}
-	return "abcde", nil
 }
 
 type options struct {

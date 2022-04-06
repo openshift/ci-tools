@@ -218,7 +218,7 @@ func htmlForTestCase(jobName string, parents []string, testCase *junit.TestCase,
 				continue
 			}
 			failureHTML += `<li>`
-			failureHTML += fmt.Sprintf(`<a href="%s">Failure - %s/%s</a>`, currFailure.HumanURL, jobName, currFailure.JobRunID)
+			failureHTML += fmt.Sprintf(`<a target="_blank" href="%s">Failure - %s/%s</a>`, currFailure.HumanURL, jobName, currFailure.JobRunID)
 			failureHTML += "</li>\n"
 		}
 		failureHTML += "</ol></p>\n"
@@ -236,7 +236,7 @@ func htmlForTestCase(jobName string, parents []string, testCase *junit.TestCase,
 				continue
 			}
 			flakeHTML += `<li>`
-			flakeHTML += fmt.Sprintf(`<a href="%s">Flake - %s/%s</a>`, currFailure.HumanURL, jobName, currFailure.JobRunID)
+			flakeHTML += fmt.Sprintf(`<a target="_blank" href="%s">Flake - %s/%s</a>`, currFailure.HumanURL, jobName, currFailure.JobRunID)
 			flakeHTML += "</li>\n"
 			seen.Insert(currFailure.JobRunID)
 		}

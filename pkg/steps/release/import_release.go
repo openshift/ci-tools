@@ -511,7 +511,7 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 	}
 
 	startedWaiting := time.Now()
-	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 6, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
+	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 9, Duration: time.Second, Factor: 2}, func() (bool, error) {
 		if err := s.client.Get(ctx, key, streamTag); err != nil {
 			if kerrors.IsNotFound(err) {
 				return false, nil

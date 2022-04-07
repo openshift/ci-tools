@@ -22,8 +22,10 @@ import (
 	"k8s.io/test-infra/prow/cmd/generic-autobumper/bumper"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
+	"k8s.io/test-infra/prow/flagutil"
 	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
@@ -49,6 +51,10 @@ type options struct {
 	targetDir   string
 	assign      string
 
+	enableClusters  flagutil.Strings
+	disableClusters flagutil.Strings
+	defaultCluster  string
+
 	bumper.GitAuthorOptions
 	dispatcher.PrometheusOptions
 	prcreation.PRCreationOptions
@@ -67,6 +73,10 @@ func gatherOptions() options {
 	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
 	fs.StringVar(&o.assign, "assign", "ghost", "The github username or group name to assign the created pull request to.")
+
+	fs.Var(&o.enableClusters, "enable-cluster", "Enable this cluster. Does nothing if the cluster is enabled. Can be passed multiple times and must be disjoint with all --disable-cluster values.")
+	fs.Var(&o.disableClusters, "disable-cluster", "Disable this cluster. Does nothing if the cluster is disabled. Can be passed multiple times and must be disjoint with all --enable-cluster values.")
+	fs.StringVar(&o.defaultCluster, "default-cluster", "", "If passed, changes the default cluster to the specified value.")
 
 	o.GitAuthorOptions.AddFlags(fs)
 	o.PrometheusOptions.AddFlags(fs)
@@ -93,6 +103,17 @@ func (o *options) validate() error {
 	if o.prometheusDaysBefore < 1 || o.prometheusDaysBefore > 15 {
 		return fmt.Errorf("--prometheus-days-before must be between 1 and 15")
 	}
+
+	enabled := o.enableClusters.StringSet()
+	disabled := o.disableClusters.StringSet()
+	if enabled.Intersection(disabled).Len() > 0 {
+		return fmt.Errorf("--enable-cluster and --disable-cluster values must be disjoint sets")
+	}
+
+	if disabled.Has(o.defaultCluster) {
+		return fmt.Errorf("--default-cluster value cannot be also be in --disable-cluster")
+	}
+
 	if o.createPR {
 		if o.githubLogin == "" {
 			return fmt.Errorf("--github-login cannot be empty string")
@@ -150,7 +171,7 @@ type clusterVolume struct {
 // The chosen cluster will be the one with minimal workload with the given cloud provider.
 // If the cluster provider is empty string, it will choose the one with minimal workload across all cloud providers.
 func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowconfig.JobConfig, path string, config *dispatcher.Config, jobVolumes map[string]float64) (string, error) {
-	//no cluster in the build farm is from the targeting cloud provider
+	// no cluster in the build farm is from the targeting cloud provider
 	if _, ok := cv.clusterVolumeMap[cloudProvider]; !ok {
 		cloudProvider = ""
 	}
@@ -239,17 +260,30 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 	if config == nil {
 		return fmt.Errorf("config is nil")
 	}
+
+	disabledClusters := map[api.Cloud][]api.Cluster{}
+
 	// cv stores the volume for each cluster in the build farm
 	cv := &clusterVolume{clusterVolumeMap: map[string]map[string]float64{}, cloudProviders: sets.NewString()}
 	for cloudProvider, v := range config.BuildFarm {
-		cv.cloudProviders.Insert(string(cloudProvider))
-		for cluster := range v {
-			clusterString := string(cluster)
+		for cluster, cfg := range v {
+			if cfg.Disabled {
+				if cluster == config.Default {
+					return fmt.Errorf("Default cluster %s is disabled", cluster)
+				}
+				disabledClusters[cloudProvider] = append(disabledClusters[cloudProvider], cluster)
+				delete(config.BuildFarm[cloudProvider], cluster)
+				continue
+			}
+
 			cloudProviderString := string(cloudProvider)
 			if _, ok := cv.clusterVolumeMap[cloudProviderString]; !ok {
 				cv.clusterVolumeMap[cloudProviderString] = map[string]float64{}
 			}
-			cv.clusterVolumeMap[cloudProviderString][clusterString] = 0
+			cv.clusterVolumeMap[cloudProviderString][string(cluster)] = 0
+		}
+		if len(cv.clusterVolumeMap) > 0 {
+			cv.cloudProviders.Insert(string(cloudProvider))
 		}
 	}
 
@@ -336,7 +370,13 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 
 	for cloudProvider, jobGroups := range config.BuildFarm {
 		for cluster := range jobGroups {
-			config.BuildFarm[cloudProvider][cluster] = dispatcher.Filenames{FilenamesRaw: results[string(cluster)]}
+			config.BuildFarm[cloudProvider][cluster] = &dispatcher.BuildFarmConfig{FilenamesRaw: results[string(cluster)]}
+		}
+	}
+
+	for provider, clusters := range disabledClusters {
+		for _, cluster := range clusters {
+			config.BuildFarm[provider][cluster] = &dispatcher.BuildFarmConfig{Disabled: true}
 		}
 	}
 
@@ -383,6 +423,26 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to load config from %q", o.configPath)
 	}
+
+	if o.defaultCluster != "" {
+		config.Default = api.Cluster(o.defaultCluster)
+	}
+
+	enabled := o.enableClusters.StringSet()
+	disabled := o.disableClusters.StringSet()
+	if len(enabled) > 0 || len(disabled) > 0 {
+		for provider := range config.BuildFarm {
+			for cluster := range config.BuildFarm[provider] {
+				if enabled.Has(string(cluster)) {
+					config.BuildFarm[provider][cluster].Disabled = false
+				}
+				if disabled.Has(string(cluster)) {
+					config.BuildFarm[provider][cluster].Disabled = true
+				}
+			}
+		}
+	}
+
 	logrus.Info("Dispatching ...")
 	if err := dispatchJobs(context.TODO(), o.prowJobConfigDir, o.maxConcurrency, config, jobVolumes); err != nil {
 		logrus.WithError(err).Fatal("Failed to dispatch")

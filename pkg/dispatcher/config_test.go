@@ -60,7 +60,7 @@ var (
 
 	configWithBuildFarm = Config{
 		Default: "api.ci",
-		BuildFarm: map[api.Cloud]map[api.Cluster]Filenames{
+		BuildFarm: map[api.Cloud]map[api.Cluster]*BuildFarmConfig{
 			api.CloudAWS: {
 				api.ClusterBuild01: {},
 			},
@@ -109,7 +109,7 @@ var (
 		Default:  "api.ci",
 		KVM:      []api.Cluster{api.ClusterBuild02},
 		NoBuilds: []api.Cluster{api.ClusterBuild03},
-		BuildFarm: map[api.Cloud]map[api.Cluster]Filenames{
+		BuildFarm: map[api.Cloud]map[api.Cluster]*BuildFarmConfig{
 			api.CloudAWS: {
 				api.ClusterBuild01: {
 					FilenamesRaw: []string{
@@ -162,7 +162,7 @@ var (
 		KVM:               []api.Cluster{api.ClusterBuild02},
 		NoBuilds:          []api.Cluster{api.ClusterBuild03},
 		DetermineE2EByJob: true,
-		BuildFarm: map[api.Cloud]map[api.Cluster]Filenames{
+		BuildFarm: map[api.Cloud]map[api.Cluster]*BuildFarmConfig{
 			api.CloudAWS: {
 				api.ClusterBuild01: {
 					FilenamesRaw: []string{
@@ -300,7 +300,7 @@ func TestGetClusterForJob(t *testing.T) {
 			path:    "ci-operator/jobs/openshift-s2i/s2i-wildfly/openshift-s2i-s2i-wildfly-master-postsubmits.yaml",
 		},
 		{
-			//https://github.com/openshift/release/pull/15918
+			// https://github.com/openshift/release/pull/15918
 			name: "error: PR 15918",
 			config: &Config{
 				Default: "api.ci",
@@ -322,7 +322,7 @@ func TestGetClusterForJob(t *testing.T) {
 			expectedErr: fmt.Errorf("path ci-operator/jobs/openshift/openshift-azure/openshift-openshift-azure-infra-periodics.yaml matches more than 1 regex: [.*/openshift-openshift-azure-infra-periodics.yaml$ .*infra-periodics.yaml$]"),
 		},
 		{
-			//https://github.com/openshift/ci-tools/pull/1722
+			// https://github.com/openshift/ci-tools/pull/1722
 			name: "error: PR 1722",
 			config: &Config{
 				Default: "api.ci",
@@ -340,7 +340,7 @@ func TestGetClusterForJob(t *testing.T) {
 			expectedErr: fmt.Errorf("path ci-operator/jobs/kubevirt/kubevirt-ssp-operator/kubevirt-kubevirt-ssp-operator-master-presubmits.yaml matches more than 1 regex: [.*kubevirt-kubevirt-ssp-operator-master-presubmits.yaml$ .*kubevirt-ssp-operator-master-presubmits.yaml$]"),
 		},
 		{
-			//https://github.com/openshift/ci-tools/pull/1722
+			// https://github.com/openshift/ci-tools/pull/1722
 			name: "fix: PR 1722",
 			config: &Config{
 				Default: "api.ci",

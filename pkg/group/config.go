@@ -8,6 +8,11 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+const (
+	// OpenshiftPrivAdminsGroup defines the group that will be used for the openshift-priv namespace in the app.ci cluster.
+	OpenshiftPrivAdminsGroup = "openshift-priv-admins"
+)
+
 // Config represents the configuration file for the groups
 type Config struct {
 	// ClusterGroups holds the mapping from cluster group name to the clusters in the group
@@ -43,7 +48,19 @@ func LoadConfig(file string) (*Config, error) {
 	}
 	config := &Config{}
 	if err := yaml.Unmarshal(data, config); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config file")
+		return nil, fmt.Errorf("failed to unmarshal config file: %w", err)
+	}
+	if err := config.validate(); err != nil {
+		return nil, fmt.Errorf("failed to validate config file: %w", err)
 	}
 	return config, nil
+}
+
+func (c *Config) validate() error {
+	for k, v := range c.Groups {
+		if k == OpenshiftPrivAdminsGroup || v.RenameTo == OpenshiftPrivAdminsGroup {
+			return fmt.Errorf("cannot use the group name %s in the configuration file", OpenshiftPrivAdminsGroup)
+		}
+	}
+	return nil
 }

@@ -95,7 +95,7 @@ func TestProcessSubmissionHandler(t *testing.T) {
 		Name: "happy path with additional details",
 		Filer: jira.NewFake(map[jira.IssueRequest]jira.IssueResponse{
 			{
-				IssueType: "Incident",
+				IssueType: "Story",
 				Title:     "api.ci Is Broken Again",
 				Description: `h3. Summary
 The bootstrap node auto-approver is down for the fiftieth time.

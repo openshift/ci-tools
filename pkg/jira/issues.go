@@ -16,11 +16,9 @@ import (
 const (
 	ProjectDPTP = "DPTP"
 
-	IssueTypeBug      = "Bug"
-	IssueTypeIncident = "Incident"
-	IssueTypeRequest  = "Request"
-	IssueTypeStory    = "Story"
-	IssueTypeTask     = "Task"
+	IssueTypeBug   = "Bug"
+	IssueTypeStory = "Story"
+	IssueTypeTask  = "Task"
 )
 
 // IssueFiler knows how to file an issue in Jira
@@ -140,7 +138,7 @@ func NewIssueFiler(slackClient *slack.Client, jiraClient *jira.Client) (IssueFil
 	for _, t := range project.IssueTypes {
 		filer.issueTypesByName[t.Name] = t
 	}
-	for _, name := range []string{IssueTypeRequest, IssueTypeStory, IssueTypeBug, IssueTypeIncident, IssueTypeTask} {
+	for _, name := range []string{IssueTypeStory, IssueTypeBug, IssueTypeTask} {
 		if _, found := filer.issueTypesByName[name]; !found {
 			return nil, fmt.Errorf("could not find issue type %s in Jira for project %s", name, ProjectDPTP)
 		}

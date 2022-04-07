@@ -16,7 +16,7 @@ func TestProcessSubmissionHandler(t *testing.T) {
 		Name: "happy path with additional details",
 		Filer: jira.NewFake(map[jira.IssueRequest]jira.IssueResponse{
 			{
-				IssueType: "Request",
+				IssueType: "Story",
 				Title:     "Please Help Me",
 				Description: `h3. Requirement
 I would like to do something really simple.

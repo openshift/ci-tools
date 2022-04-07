@@ -99,7 +99,7 @@ func helpdeskButtonHandler(updater modals.ViewUpdater) interactions.Handler {
 func issueParameters() modals.JiraIssueParameters {
 	return modals.JiraIssueParameters{
 		Id:        Identifier,
-		IssueType: jira.IssueTypeRequest,
+		IssueType: jira.IssueTypeStory,
 		Template: template.Must(template.New(string(Identifier)).Funcs(modals.BulletListFunc()).Parse(`h3. Requirement
 {{ .` + blockIdRequirement + ` }}
 

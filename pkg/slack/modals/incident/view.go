@@ -123,7 +123,7 @@ type slackClient interface {
 func issueParameters(client infoGetter) modals.JiraIssueParameters {
 	return modals.JiraIssueParameters{
 		Id:        Identifier,
-		IssueType: jira.IssueTypeIncident,
+		IssueType: jira.IssueTypeStory,
 		Template: template.Must(template.New(string(Identifier)).Funcs(slackEntityFormatFuncs(client)).Parse(`h3. Summary
 {{ .` + blockIdSummary + ` }}
 

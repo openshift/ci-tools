@@ -184,7 +184,7 @@ func getReposForPrivateOrg(releaseRepoPath string, allowlist map[string][]string
 	}
 
 	callback := func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
-		if !promotion.BuildsOfficialImages(c) {
+		if !promotion.BuildsOfficialImages(c, promotion.WithoutOKD) {
 			return nil
 		}
 

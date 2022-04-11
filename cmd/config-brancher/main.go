@@ -69,7 +69,7 @@ func main() {
 	}
 
 	var toCommit []config.DataWithInfo
-	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
+	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, promotion.WithOKD, func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
 		for _, output := range generateBranchedConfigs(o.CurrentRelease, o.BumpRelease, o.FutureReleases.Strings(), config.DataWithInfo{Configuration: *configuration, Info: *info}) {
 			if !o.Confirm {
 				output.Logger().Info("Would commit new file.")
@@ -169,7 +169,7 @@ func updateRelease(config *api.ReleaseBuildConfiguration, futureRelease string) 
 func updateImages(config *api.ReleaseBuildConfiguration, currentRelease, futureRelease string) {
 	for name := range config.InputConfiguration.BaseImages {
 		image := config.InputConfiguration.BaseImages[name]
-		if promotion.RefersToOfficialImage(image.Name, image.Namespace) && image.Name == currentRelease {
+		if promotion.RefersToOfficialImage(image.Namespace, promotion.WithOKD) && image.Name == currentRelease {
 			image.Name = futureRelease
 		}
 		config.InputConfiguration.BaseImages[name] = image
@@ -177,7 +177,7 @@ func updateImages(config *api.ReleaseBuildConfiguration, currentRelease, futureR
 
 	for i := range config.InputConfiguration.BaseRPMImages {
 		image := config.InputConfiguration.BaseRPMImages[i]
-		if promotion.RefersToOfficialImage(image.Name, image.Namespace) && image.Name == currentRelease {
+		if promotion.RefersToOfficialImage(image.Namespace, promotion.WithOKD) && image.Name == currentRelease {
 			image.Name = futureRelease
 		}
 		config.InputConfiguration.BaseRPMImages[i] = image
@@ -185,7 +185,7 @@ func updateImages(config *api.ReleaseBuildConfiguration, currentRelease, futureR
 
 	if config.InputConfiguration.BuildRootImage != nil {
 		image := config.InputConfiguration.BuildRootImage.ImageStreamTagReference
-		if image != nil && promotion.RefersToOfficialImage(image.Name, image.Namespace) && image.Name == currentRelease {
+		if image != nil && promotion.RefersToOfficialImage(image.Namespace, promotion.WithOKD) && image.Name == currentRelease {
 			image.Name = futureRelease
 		}
 		config.InputConfiguration.BuildRootImage.ImageStreamTagReference = image

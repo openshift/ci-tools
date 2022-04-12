@@ -526,7 +526,7 @@ func (o *options) makeFilter(callback func(*api.ReleaseBuildConfiguration, *conf
 		if o.repo != "" && o.repo != fmt.Sprintf("%s/%s", i.Org, i.Repo) {
 			return nil
 		}
-		if !promotion.BuildsOfficialImages(c) {
+		if !promotion.BuildsOfficialImages(c, promotion.WithoutOKD) {
 			return nil
 		}
 		return callback(c, i)

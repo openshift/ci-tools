@@ -1,0 +1,7 @@
+ocp:
+  "4.9":
+  - event: "generally-available"
+    when: "2020-04-17T14:47:58Z"
+  "4.10":
+  - event: "generally-available"
+    when: "2020-04-17T14:47:58Z"

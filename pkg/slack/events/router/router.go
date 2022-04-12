@@ -16,7 +16,7 @@ import (
 // event callbacks for the handlers we know about
 func ForEvents(client *slack.Client, config config.Getter, gcsClient *storage.Client) events.Handler {
 	return events.MultiHandler(
-		helpdesk.Handler(),
+		helpdesk.Handler(client),
 		mention.Handler(client),
 		joblink.Handler(client, joblink.NewJobGetter(config), gcsClient),
 	)

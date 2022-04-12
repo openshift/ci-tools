@@ -331,6 +331,9 @@ func (s *multiStageTestStep) createCredentials(ctx context.Context) error {
 			// chance we get a second-level collision (ns-a, name) and (ns, a-name) is
 			// small, so we can get away with this string prefixing
 			name := fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)
+			if _, ok := toCreate[name]; ok {
+				continue
+			}
 			raw := &coreapi.Secret{}
 			if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: credential.Namespace, Name: credential.Name}, raw); err != nil {
 				return fmt.Errorf("could not read source credential: %w", err)

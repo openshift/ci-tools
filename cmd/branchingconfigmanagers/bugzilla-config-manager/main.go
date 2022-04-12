@@ -72,7 +72,7 @@ func main() {
 
 	configPath := path.Join(opts.pluginConfigDir, config.PluginConfigFile)
 	agent := plugins.ConfigAgent{}
-	if err := agent.Load(configPath, []string{opts.pluginConfigDir}, "_pluginconfig.yaml", false, false); err != nil {
+	if err := agent.Load(configPath, []string{opts.pluginConfigDir}, "_pluginconfig.yaml", false, true); err != nil {
 		logrus.WithError(err).Fatal("failed to load Prow plugin configuration")
 	}
 

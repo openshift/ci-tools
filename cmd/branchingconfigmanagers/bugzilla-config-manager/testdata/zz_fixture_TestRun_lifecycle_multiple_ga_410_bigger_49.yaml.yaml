@@ -1,0 +1,23 @@
+default:
+  openshift-4.9:
+    dependent_bug_target_releases:
+    - 4.10.0
+    - 4.10.z
+    target_release: 4.9.z
+    validate_by_default: true
+  openshift-4.10:
+    dependent_bug_target_releases:
+    - 4.11.0
+    target_release: 4.10.z
+    validate_by_default: true
+  release-4.9:
+    dependent_bug_target_releases:
+    - 4.10.0
+    - 4.10.z
+    target_release: 4.9.z
+    validate_by_default: true
+  release-4.10:
+    dependent_bug_target_releases:
+    - 4.11.0
+    target_release: 4.10.z
+    validate_by_default: true

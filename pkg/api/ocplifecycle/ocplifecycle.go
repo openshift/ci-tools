@@ -67,6 +67,15 @@ type MajorMinor struct {
 	Minor int `json:"minor"`
 }
 
+func (m MajorMinor) Less(other MajorMinor) bool {
+	if m.Major < other.Major {
+		return true
+	} else if m.Major > other.Major {
+		return false
+	}
+	return m.Minor < other.Minor
+}
+
 func (m MajorMinor) WithIncrementedMinor(increment int) MajorMinor {
 	return MajorMinor{Major: m.Major, Minor: m.Minor + increment}
 }

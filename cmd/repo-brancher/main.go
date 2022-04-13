@@ -109,7 +109,7 @@ func main() {
 	}
 
 	failed := false
-	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, promotion.WithoutOKD, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		logger := config.LoggerForInfo(*repoInfo)
 
 		repoDir := path.Join(gitDir, repoInfo.Org, repoInfo.Repo)

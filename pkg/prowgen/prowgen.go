@@ -91,7 +91,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	if len(imageTargets) > 0 {
 		// Identify which jobs need to have a release payload explicitly requested
 		var presubmitTargets = imageTargets.List()
-		if promotion.PromotesOfficialImages(configSpec) {
+		if promotion.PromotesOfficialImages(configSpec, promotion.WithOKD) {
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
 		jobBaseGen := newJobBaseBuilder().TestName("images")

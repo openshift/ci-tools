@@ -33,10 +33,11 @@ or bump the configuration files.
 
 ### Mirroring configuration
 
-In the mirror configuration mode, it copies the development branch config to all branches for the provided
-`--future-release` values, not changing the configuration for the dev branch and making sure that the release branch for
-the version that matches that in the dev branch has a disabled promotion stanza to ensure only one branch feeds a
-release ImageStream.
+In the mirror configuration mode, it copies the development branch configuration to all branches for the provided
+`--future-release` values. The development branch version is not changed. Since this results in both the development
+branch and one of the release branches promoting to the same release ImageStream, promotion is disabled in the release
+branch for the version which matches that in the promotion stanza of the development branch. This ensures only one
+branch feeds that release ImageStream.
 
 ### Bumping configuration
 

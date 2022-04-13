@@ -136,7 +136,7 @@ func getOrgReposWithOfficialImages(configDir string, whitelist map[string][]stri
 
 	callback := func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
 
-		if !promotion.BuildsOfficialImages(c) {
+		if !promotion.BuildsOfficialImages(c, promotion.WithoutOKD) {
 			return nil
 		}
 

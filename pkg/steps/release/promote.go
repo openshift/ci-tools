@@ -22,6 +22,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
@@ -33,7 +34,7 @@ type promotionStep struct {
 	configuration  *api.ReleaseBuildConfiguration
 	requiredImages sets.String
 	jobSpec        *api.JobSpec
-	client         steps.PodClient
+	client         kubernetes.PodClient
 	pushSecret     *coreapi.Secret
 }
 
@@ -348,7 +349,7 @@ func (s *promotionStep) Objects() []ctrlruntimeclient.Object {
 
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skipped.
-func PromotionStep(configuration *api.ReleaseBuildConfiguration, requiredImages sets.String, jobSpec *api.JobSpec, client steps.PodClient, pushSecret *coreapi.Secret) api.Step {
+func PromotionStep(configuration *api.ReleaseBuildConfiguration, requiredImages sets.String, jobSpec *api.JobSpec, client kubernetes.PodClient, pushSecret *coreapi.Secret) api.Step {
 	return &promotionStep{
 		configuration:  configuration,
 		requiredImages: requiredImages,

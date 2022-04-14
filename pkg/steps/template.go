@@ -29,6 +29,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -59,7 +60,7 @@ type templateExecutionStep struct {
 	template  *templateapi.Template
 	resources api.ResourceConfiguration
 	params    api.Parameters
-	podClient PodClient
+	podClient kubernetes.PodClient
 	client    TemplateClient
 	jobSpec   *api.JobSpec
 
@@ -281,7 +282,7 @@ func (s *templateExecutionStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, templateClient TemplateClient, jobSpec *api.JobSpec, resources api.ResourceConfiguration) api.Step {
+func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient kubernetes.PodClient, templateClient TemplateClient, jobSpec *api.JobSpec, resources api.ResourceConfiguration) api.Step {
 	return &templateExecutionStep{
 		template:  template,
 		resources: resources,
@@ -483,7 +484,7 @@ func waitForCompletedPodDeletion(ctx context.Context, podClient ctrlruntimeclien
 	return WaitForPodDeletion(ctx, podClient, namespace, name, uid)
 }
 
-func WaitForPodCompletion(ctx context.Context, podClient PodClient, namespace, name string, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, error) {
+func WaitForPodCompletion(ctx context.Context, podClient kubernetes.PodClient, namespace, name string, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, error) {
 	if notifier == nil {
 		notifier = NopNotifier
 	}
@@ -519,7 +520,7 @@ func WaitForPodCompletion(ctx context.Context, podClient PodClient, namespace, n
 	return pod, nil
 }
 
-func waitForPodCompletionOrTimeout(ctx context.Context, podClient PodClient, namespace, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, error) {
+func waitForPodCompletionOrTimeout(ctx context.Context, podClient kubernetes.PodClient, namespace, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, error) {
 	// Warning: this is extremely fragile, inherited legacy code.  Please be
 	// careful and test thoroughly when making changes, as they very frequently
 	// lead to systemic production failures.  Some guidance:
@@ -769,7 +770,7 @@ func failedContainerNames(pod *coreapi.Pod) []string {
 	return names
 }
 
-func podLogNewFailedContainers(podClient PodClient, pod *coreapi.Pod, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) {
+func podLogNewFailedContainers(podClient kubernetes.PodClient, pod *coreapi.Pod, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) {
 	var statuses []coreapi.ContainerStatus
 	statuses = append(statuses, pod.Status.InitContainerStatuses...)
 	statuses = append(statuses, pod.Status.ContainerStatuses...)

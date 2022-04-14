@@ -33,6 +33,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/release"
 	"github.com/openshift/ci-tools/pkg/release/candidate"
@@ -95,7 +96,7 @@ func FromConfig(
 		return nil, nil, fmt.Errorf("could not get core client for cluster config: %w", err)
 	}
 
-	podClient := steps.NewPodClient(client, clusterConfig, coreGetter.RESTClient())
+	podClient := kubernetes.NewPodClient(client, clusterConfig, coreGetter.RESTClient())
 
 	var hiveClient ctrlruntimeclient.WithWatch
 	if hiveKubeconfig != nil {
@@ -121,7 +122,7 @@ func fromConfig(
 	client loggingclient.LoggingClient,
 	buildClient steps.BuildClient,
 	templateClient steps.TemplateClient,
-	podClient steps.PodClient,
+	podClient kubernetes.PodClient,
 	leaseClient *lease.Client,
 	hiveClient ctrlruntimeclient.WithWatch,
 	httpClient release.HTTPClient,
@@ -368,7 +369,7 @@ func stepForTest(
 	ctx context.Context,
 	config *api.ReleaseBuildConfiguration,
 	params *api.DeferredParameters,
-	podClient steps.PodClient,
+	podClient kubernetes.PodClient,
 	leaseClient *lease.Client,
 	templateClient steps.TemplateClient,
 	client loggingclient.LoggingClient,

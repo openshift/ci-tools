@@ -24,6 +24,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -62,7 +63,7 @@ type multiStageTestStep struct {
 	// params exposes getters for variables created by other steps
 	params                   api.Parameters
 	env                      api.TestEnvironment
-	client                   PodClient
+	client                   kubernetes.PodClient
 	jobSpec                  *api.JobSpec
 	pre, test, post          []api.LiteralTestStep
 	subTests                 []*junit.TestCase
@@ -77,7 +78,7 @@ func MultiStageTestStep(
 	testConfig api.TestStepConfiguration,
 	config *api.ReleaseBuildConfiguration,
 	params api.Parameters,
-	client PodClient,
+	client kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
 ) api.Step {
@@ -88,7 +89,7 @@ func newMultiStageTestStep(
 	testConfig api.TestStepConfiguration,
 	config *api.ReleaseBuildConfiguration,
 	params api.Parameters,
-	client PodClient,
+	client kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
 ) *multiStageTestStep {

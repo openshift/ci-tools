@@ -19,6 +19,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -49,7 +50,7 @@ type assembleReleaseStep struct {
 	config    *api.ReleaseTagConfiguration
 	name      string
 	resources api.ResourceConfiguration
-	client    steps.PodClient
+	client    kubernetes.PodClient
 	jobSpec   *api.JobSpec
 }
 
@@ -260,7 +261,7 @@ func (s *assembleReleaseStep) Objects() []ctrlruntimeclient.Object {
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
 func AssembleReleaseStep(name string, config *api.ReleaseTagConfiguration, resources api.ResourceConfiguration,
-	client steps.PodClient, jobSpec *api.JobSpec) api.Step {
+	client kubernetes.PodClient, jobSpec *api.JobSpec) api.Step {
 	return &assembleReleaseStep{
 		config:    config,
 		name:      name,

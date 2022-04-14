@@ -23,6 +23,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -56,7 +57,7 @@ type importReleaseStep struct {
 	// append determines if we wait for other processes to create images first
 	append     bool
 	resources  api.ResourceConfiguration
-	client     steps.PodClient
+	client     kubernetes.PodClient
 	jobSpec    *api.JobSpec
 	pullSecret *coreapi.Secret
 	// overrideCLIReleaseExtractImage is given for non-amd64 releases
@@ -391,7 +392,7 @@ func ImportReleaseStep(
 	pullSpec string,
 	append bool,
 	resources api.ResourceConfiguration,
-	client steps.PodClient,
+	client kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	pullSecret *coreapi.Secret,
 	overrideCLIReleaseExtractImage *coreapi.ObjectReference) api.Step {

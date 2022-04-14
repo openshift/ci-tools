@@ -19,6 +19,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
@@ -59,7 +60,7 @@ type podStep struct {
 	name      string
 	config    PodStepConfiguration
 	resources api.ResourceConfiguration
-	client    PodClient
+	client    kubernetes.PodClient
 	jobSpec   *api.JobSpec
 
 	subTests []*junit.TestCase
@@ -155,7 +156,7 @@ func (s *podStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client PodClient, jobSpec *api.JobSpec) api.Step {
+func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client kubernetes.PodClient, jobSpec *api.JobSpec) api.Step {
 	return PodStep(
 		"test",
 		PodStepConfiguration{
@@ -173,7 +174,7 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 	)
 }
 
-func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, client PodClient, jobSpec *api.JobSpec, clusterClaim *api.ClusterClaim) api.Step {
+func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, client kubernetes.PodClient, jobSpec *api.JobSpec, clusterClaim *api.ClusterClaim) api.Step {
 	return &podStep{
 		name:         name,
 		config:       config,
@@ -359,7 +360,7 @@ func getSecretVolumeMountFromSecret(secretMountPath string, secretIndex int) []c
 // PodStep and is intended for other steps that may need to run transient actions.
 // This pod will not be able to gather artifacts, nor will it report log messages
 // unless it fails.
-func RunPod(ctx context.Context, podClient PodClient, pod *coreapi.Pod) (*coreapi.Pod, error) {
+func RunPod(ctx context.Context, podClient kubernetes.PodClient, pod *coreapi.Pod) (*coreapi.Pod, error) {
 	pod, err := CreateOrRestartPod(ctx, podClient, pod)
 	if err != nil {
 		return pod, err

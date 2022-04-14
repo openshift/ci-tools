@@ -26,6 +26,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/release"
 	"github.com/openshift/ci-tools/pkg/secrets"
@@ -1006,7 +1007,7 @@ func TestFromConfig(t *testing.T) {
 	}
 	buildClient := steps.NewBuildClient(client, nil)
 	var templateClient steps.TemplateClient
-	podClient := steps.NewPodClient(client, nil, nil)
+	podClient := kubernetes.NewPodClient(client, nil, nil)
 
 	clusterPool := hivev1.ClusterPool{
 		ObjectMeta: meta.ObjectMeta{

@@ -33,9 +33,6 @@ func AddToManager(
 		if err := c.Watch(source.NewKindWithCache(&testimagestreamtagimportv1.TestImageStreamTagImport{}, clusterManager.GetCache()), &handler.EnqueueRequestForObject{}); err != nil {
 			return fmt.Errorf("failed to watch testimagestreamtagimports in cluster %s: %w", clusterName, err)
 		}
-		if err := mgr.Add(c); err != nil {
-			return fmt.Errorf("failed to add controller for cluster %s to manager: %w", clusterName, err)
-		}
 	}
 
 	return nil

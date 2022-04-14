@@ -27,7 +27,7 @@ import (
 	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/ci-tools/pkg/api/vault"
-	"github.com/openshift/ci-tools/pkg/steps"
+	ci_validation "github.com/openshift/ci-tools/pkg/validation"
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
@@ -130,7 +130,7 @@ func (k *kvUpdateTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		}
 	}
 
-	if err := steps.ValidateSecretInStep(body.Data[vault.SecretSyncTargetNamepaceKey], body.Data[vault.SecretSyncTargetNameKey]); err != nil {
+	if err := ci_validation.ValidateSecretInStep(body.Data[vault.SecretSyncTargetNamepaceKey], body.Data[vault.SecretSyncTargetNameKey]); err != nil {
 		errs = append(errs, fmt.Sprintf("secret %s in namespace %s cannot be used in a step: %s", body.Data[vault.SecretSyncTargetNameKey], body.Data[vault.SecretSyncTargetNamepaceKey], err.Error()))
 	}
 

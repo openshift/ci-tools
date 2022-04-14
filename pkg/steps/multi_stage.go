@@ -33,8 +33,6 @@ import (
 const (
 	// MultiStageTestLabel is the label we use to mark a pod as part of a multi-stage test
 	MultiStageTestLabel = "ci.openshift.io/multi-stage-test"
-	// SkipCensoringLabel is the label we use to mark a secret as not needing to be censored
-	SkipCensoringLabel = "ci.openshift.io/skip-censoring"
 	// ClusterProfileMountPath is where we mount the cluster profile in a pod
 	ClusterProfileMountPath = "/var/run/secrets/ci.openshift.io/cluster-profile"
 	// SecretMountPath is where we mount the shared dir secret
@@ -45,12 +43,11 @@ const (
 	ClusterProfileMountEnv = "CLUSTER_PROFILE_DIR"
 	// CliMountPath is where we mount the cli in a pod
 	CliMountPath = "/cli"
-	// CliEnv if the env we use to expose the path to the cli
-	CliEnv = "CLI_DIR"
 	// CommandPrefix is the prefix we add to a user's commands
 	CommandPrefix = "#!/bin/bash\nset -eu\n"
 	// CommandScriptMountPath is where we mount the command script
 	CommandScriptMountPath = "/var/run/configmaps/ci.openshift.io/multi-stage"
+	homeVolumeName         = "home"
 )
 
 var envForProfile = []string{
@@ -312,7 +309,7 @@ func (s *multiStageTestStep) createSharedDirSecret(ctx context.Context) error {
 	secret := &coreapi.Secret{ObjectMeta: meta.ObjectMeta{
 		Namespace: s.jobSpec.Namespace(),
 		Name:      s.name,
-		Labels:    map[string]string{SkipCensoringLabel: "true"},
+		Labels:    map[string]string{api.SkipCensoringLabel: "true"},
 	}}
 	if err := s.client.Delete(ctx, secret); err != nil && !kerrors.IsNotFound(err) {
 		return fmt.Errorf("cannot delete shared directory %q: %w", s.name, err)
@@ -633,7 +630,7 @@ func secretsForCensoring(client loggingclient.LoggingClient, namespace string, c
 	var secretVolumes []coreapi.Volume
 	var secretVolumeMounts []coreapi.VolumeMount
 	for i, secret := range secretList.Items {
-		if _, skip := secret.ObjectMeta.Labels[SkipCensoringLabel]; skip {
+		if _, skip := secret.ObjectMeta.Labels[api.SkipCensoringLabel]; skip {
 			continue
 		}
 		if _, skip := secret.ObjectMeta.Annotations["kubernetes.io/service-account.name"]; skip {
@@ -701,7 +698,7 @@ func addSecretWrapper(pod *coreapi.Pod) {
 	})
 	mount := coreapi.VolumeMount{Name: volume, MountPath: dir}
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, coreapi.Container{
-		Image:                    fmt.Sprintf("%s/ci/entrypoint-wrapper:latest", ciRegistry),
+		Image:                    fmt.Sprintf("%s/ci/entrypoint-wrapper:latest", api.DomainForService(api.ServiceRegistry)),
 		Name:                     "cp-entrypoint-wrapper",
 		Command:                  []string{"cp"},
 		Args:                     []string{"/bin/entrypoint-wrapper", bin},
@@ -852,7 +849,7 @@ func addCliInjector(imagestream string, pod *coreapi.Pod) {
 		MountPath: CliMountPath,
 	})
 	container.Env = append(container.Env, coreapi.EnvVar{
-		Name:  CliEnv,
+		Name:  api.CliEnv,
 		Value: CliMountPath,
 	})
 }

@@ -25,7 +25,6 @@ import (
 const (
 	testSecretVolumePrefix = "test-secret"
 	testSecretDefaultPath  = "/usr/test-secrets"
-	homeVolumeName         = "home"
 
 	openshiftCIEnv = "OPENSHIFT_CI"
 )

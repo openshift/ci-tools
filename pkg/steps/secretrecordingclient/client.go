@@ -10,8 +10,8 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/secrets"
-	"github.com/openshift/ci-tools/pkg/steps"
 )
 
 // Wrap wraps the upstream client, allowing us to intercept any secrets it might interact with.
@@ -109,7 +109,7 @@ func (c *client) recordSecret(secret *v1.Secret) {
 }
 
 func valuesToCensor(secret *v1.Secret) []string {
-	if _, skip := secret.Labels[steps.SkipCensoringLabel]; skip {
+	if _, skip := secret.Labels[api.SkipCensoringLabel]; skip {
 		return nil
 	}
 	isServiceAccountCredential := secret.Type == v1.SecretTypeServiceAccountToken

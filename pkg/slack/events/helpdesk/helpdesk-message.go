@@ -15,13 +15,13 @@ const (
 	dptpHelpdeskId = "<@STSR51Q76>"
 )
 
-type ephemeralMessagePoster interface {
-	PostEphemeral(channelID, userID string, options ...slack.MsgOption) (string, error)
+type messagePoster interface {
+	PostMessage(channelID string, options ...slack.MsgOption) (string, string, error)
 }
 
 // Handler returns a handler that knows how to respond to new messages
 // in forum-testplatform channel that mention @dptp-helpdesk.
-func Handler(client ephemeralMessagePoster) events.PartialHandler {
+func Handler(client messagePoster) events.PartialHandler {
 	return events.PartialHandlerFunc("helpdesk",
 		func(callback *slackevents.EventsAPIEvent, logger *logrus.Entry) (handled bool, err error) {
 
@@ -49,11 +49,11 @@ func Handler(client ephemeralMessagePoster) events.PartialHandler {
 				timestamp = event.ThreadTimeStamp
 			}
 
-			responseTimestamp, err := client.PostEphemeral(event.Channel, event.User, slack.MsgOptionBlocks(getResponse()...), slack.MsgOptionTS(timestamp))
+			responseChannel, responseTimestamp, err := client.PostMessage(event.Channel, slack.MsgOptionBlocks(getResponse()...), slack.MsgOptionTS(timestamp))
 			if err != nil {
-				logger.WithError(err).Warn("Failed to post ephemeral response")
+				logger.WithError(err).Warn("Failed to post a response")
 			} else {
-				logger.Infof("Posted ephemeral message in channel %s to user %s at %s", event.Channel, event.User, responseTimestamp)
+				logger.Infof("Posted response in a new thread in channel %s to user %s at %s", responseChannel, event.User, responseTimestamp)
 			}
 
 			return true, err

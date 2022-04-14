@@ -47,29 +47,18 @@ func TestPromotesOfficialImages(t *testing.T) {
 			expected: false,
 		},
 		{
-			name: "config explicitly promoting to okd release imagestream in okd namespace produces official images",
+			name: "config explicitly promoting to okd namespace produces official images",
 			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
 				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Namespace: "openshift",
-					Name:      "origin-v4.0",
+					Namespace: "origin",
 				},
 			},
 			expected: true,
 		},
-		{
-			name: "config explicitly promoting to random imagestream in okd namespace does not produce official images",
-			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
-				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Namespace: "openshift",
-					Name:      "random",
-				},
-			},
-			expected: false,
-		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := PromotesOfficialImages(testCase.configSpec), testCase.expected; actual != expected {
+			if actual, expected := PromotesOfficialImages(testCase.configSpec, WithOKD), testCase.expected; actual != expected {
 				t.Errorf("%s: did not identify official promotion correctly, expected %v got %v", testCase.name, expected, actual)
 			}
 		})
@@ -412,12 +401,12 @@ func TestOptionsMatche(t *testing.T) {
 		{
 			name: "for okd4.0",
 			input: []string{
-				"--current-release=origin-v4.0",
+				"--current-release=4.8",
 			},
 			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
 				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Name:      "origin-v4.0",
-					Namespace: "openshift",
+					Name:      "4.8",
+					Namespace: "origin",
 				},
 			},
 			expected: true,
@@ -444,7 +433,7 @@ func TestOptionsMatche(t *testing.T) {
 		if err := fs.Parse(testCase.input); err != nil {
 			t.Fatalf("%s: cannot parse args: %v", testCase.name, err)
 		}
-		if actual, expected := o.matches(testCase.configSpec), testCase.expected; actual != expected {
+		if actual, expected := o.matches(testCase.configSpec, WithOKD), testCase.expected; actual != expected {
 			t.Errorf("expected matches, but failed, input_args=%v, promation_config=%v.", testCase.input, testCase.configSpec)
 		}
 	}

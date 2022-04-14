@@ -104,10 +104,10 @@ func TestOptionsMakeFilter(t *testing.T) {
 		},
 	}
 	// Check that our assumptions about what is an official image still holds
-	if !promotion.BuildsOfficialImages(official) {
+	if !promotion.BuildsOfficialImages(official, promotion.WithoutOKD) {
 		t.Fatal("Test data assumed to be official images are not official images")
 	}
-	if promotion.BuildsOfficialImages(notOfficial) {
+	if promotion.BuildsOfficialImages(notOfficial, promotion.WithoutOKD) {
 		t.Fatal("Test data assumed to be non-official images are official images")
 	}
 	testcases := []struct {

@@ -152,6 +152,11 @@ func main() {
 		os.Exit(0)
 	}
 
+	if o.dryRun {
+		logrus.Info("Running in dry-run mode, not preparing a Pull Request")
+		os.Exit(0)
+	}
+
 	logrus.Info("Preparing pull request")
 	title := fmt.Sprintf("%s %s", matchTitle, time.Now().Format(time.RFC1123))
 	if err := bumper.GitCommitAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin, string(secret.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo), remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr, o.dryRun); err != nil {
@@ -184,7 +189,7 @@ func getReposForPrivateOrg(releaseRepoPath string, allowlist map[string][]string
 	}
 
 	callback := func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
-		if !promotion.BuildsOfficialImages(c) {
+		if !promotion.BuildsOfficialImages(c, promotion.WithoutOKD) {
 			return nil
 		}
 

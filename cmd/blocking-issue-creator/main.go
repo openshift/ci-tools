@@ -83,7 +83,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed to throttle")
 	}
 
-	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, promotion.WithoutOKD, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		logger := config.LoggerForInfo(*repoInfo)
 
 		branches := sets.NewString()
@@ -106,7 +106,7 @@ func main() {
 			failed = true
 		}
 
-		//sleep to respect Github's API 30 requests per minute limit, absolute minimum is above 2 seconds
+		// sleep to respect Github's API 30 requests per minute limit, absolute minimum is above 2 seconds
 		time.Sleep(5 * time.Second)
 		return nil
 	}); err != nil || failed {

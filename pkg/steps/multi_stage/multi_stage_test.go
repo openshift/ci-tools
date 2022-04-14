@@ -1,4 +1,4 @@
-package steps
+package multi_stage
 
 import (
 	"context"
@@ -24,12 +24,13 @@ import (
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 // the multiStageTestStep implements the subStepReporter interface
-var _ SubStepReporter = &multiStageTestStep{}
+var _ steps.SubStepReporter = &multiStageTestStep{}
 
 func TestRequires(t *testing.T) {
 	for _, tc := range []struct {
@@ -530,7 +531,7 @@ func TestJUnit(t *testing.T) {
 				return
 			}
 			var names []string
-			for _, t := range step.(SubtestReporter).SubTests() {
+			for _, t := range step.(steps.SubtestReporter).SubTests() {
 				names = append(names, t.Name)
 			}
 			if !reflect.DeepEqual(names, tc.expected) {

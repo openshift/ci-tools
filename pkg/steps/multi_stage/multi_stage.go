@@ -1,4 +1,4 @@
-package steps
+package multi_stage
 
 import (
 	"context"
@@ -26,6 +26,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
+	base_steps "github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"github.com/openshift/ci-tools/pkg/util"
@@ -412,7 +413,7 @@ func (s *multiStageTestStep) runSteps(
 
 		// Simplify to DeleteAllOf when https://bugzilla.redhat.com/show_bug.cgi?id=1937523 is fixed across production.
 		podList := &coreapi.PodList{}
-		if err := s.client.List(CleanupCtx, podList, ctrlruntimeclient.InNamespace(s.jobSpec.Namespace()), ctrlruntimeclient.MatchingLabels{MultiStageTestLabel: s.name}); err != nil {
+		if err := s.client.List(base_steps.CleanupCtx, podList, ctrlruntimeclient.InNamespace(s.jobSpec.Namespace()), ctrlruntimeclient.MatchingLabels{MultiStageTestLabel: s.name}); err != nil {
 			errs = append(errs, fmt.Errorf("failed to list pods with label %s=%s: %w", MultiStageTestLabel, s.name, err))
 		} else {
 			for _, pod := range podList.Items {
@@ -420,11 +421,11 @@ func (s *multiStageTestStep) runSteps(
 					// Ignore pods that are complete or on their way out.
 					continue
 				}
-				if err := s.client.Delete(CleanupCtx, &pod); err != nil && !kerrors.IsNotFound(err) {
+				if err := s.client.Delete(base_steps.CleanupCtx, &pod); err != nil && !kerrors.IsNotFound(err) {
 					errs = append(errs, fmt.Errorf("failed to delete pod %s with label %s=%s: %w", pod.Name, MultiStageTestLabel, s.name, err))
 					continue
 				}
-				if err := WaitForPodDeletion(CleanupCtx, s.client, s.jobSpec.Namespace(), pod.Name, pod.UID); err != nil {
+				if err := base_steps.WaitForPodDeletion(base_steps.CleanupCtx, s.client, s.jobSpec.Namespace(), pod.Name, pod.UID); err != nil {
 					errs = append(errs, fmt.Errorf("failed waiting for pod %s with label %s=%s to be deleted: %w", pod.Name, MultiStageTestLabel, s.name, err))
 					continue
 				}
@@ -490,7 +491,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			stream, tag, _ := s.config.DependencyParts(dep, claimRelease)
 			image = fmt.Sprintf("%s:%s", stream, tag)
 		}
-		resources, err := ResourcesFor(step.Resources)
+		resources, err := base_steps.ResourcesFor(step.Resources)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -530,14 +531,14 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		} else {
 			commands = []string{"/bin/bash", "-c", CommandPrefix + step.Commands}
 		}
-		labels := map[string]string{LabelMetadataStep: step.As}
-		pod, err := GenerateBasePod(s.jobSpec, labels, name, multiStageTestStepContainerName, commands, image, resources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts, false)
+		labels := map[string]string{base_steps.LabelMetadataStep: step.As}
+		pod, err := base_steps.GenerateBasePod(s.jobSpec, labels, name, multiStageTestStepContainerName, commands, image, resources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts, false)
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
-		delete(pod.Labels, ProwJobIdLabel)
-		pod.Annotations[AnnotationSaveContainerLogs] = "true"
+		delete(pod.Labels, base_steps.ProwJobIdLabel)
+		pod.Annotations[base_steps.AnnotationSaveContainerLogs] = "true"
 		pod.Labels[MultiStageTestLabel] = s.name
 		pod.Spec.ServiceAccountName = s.name
 		pod.Spec.TerminationGracePeriodSeconds = terminationGracePeriodSeconds
@@ -858,7 +859,7 @@ func addCliInjector(imagestream string, pod *coreapi.Pod) {
 func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, shortCircuit bool, isBestEffort func(string) bool) error {
 	var errs []error
 	for _, pod := range pods {
-		err := s.runPod(ctx, &pod, NewTestCaseNotifier(NopNotifier))
+		err := s.runPod(ctx, &pod, base_steps.NewTestCaseNotifier(base_steps.NopNotifier))
 		if err != nil {
 			if isBestEffort(pod.Name) {
 				logrus.Infof("Pod %s is running in best-effort mode, ignoring the failure...", pod.Name)
@@ -873,14 +874,14 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 	return utilerrors.NewAggregate(errs)
 }
 
-func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *TestCaseNotifier) error {
+func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *base_steps.TestCaseNotifier) error {
 	start := time.Now()
 	logrus.Infof("Running step %s.", pod.Name)
 	client := s.client.WithNewLoggingClient()
-	if _, err := CreateOrRestartPod(ctx, client, pod); err != nil {
+	if _, err := base_steps.CreateOrRestartPod(ctx, client, pod); err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %w", pod.Name, err)
 	}
-	newPod, err := WaitForPodCompletion(ctx, client, pod.Namespace, pod.Name, notifier, false)
+	newPod, err := base_steps.WaitForPodCompletion(ctx, client, pod.Namespace, pod.Name, notifier, false)
 	if newPod != nil {
 		pod = newPod
 	}
@@ -926,7 +927,7 @@ func getClusterClaimPodParams(secretVolumeMounts []coreapi.VolumeMount, testName
 	var errs []error
 
 	for _, secretName := range []string{api.HiveAdminKubeconfigSecret, api.HiveAdminPasswordSecret} {
-		mountPath := getMountPath(NamePerTest(secretName, testName))
+		mountPath := getMountPath(base_steps.NamePerTest(secretName, testName))
 		var foundMountPath bool
 		for _, secretVolumeMount := range secretVolumeMounts {
 			if secretVolumeMount.MountPath == mountPath {
@@ -943,7 +944,7 @@ func getClusterClaimPodParams(secretVolumeMounts []coreapi.VolumeMount, testName
 		}
 		if !foundMountPath {
 			// should never happen
-			errs = append(errs, fmt.Errorf("failed to find foundMountPath %s to create secret %s", mountPath, NamePerTest(secretName, testName)))
+			errs = append(errs, fmt.Errorf("failed to find foundMountPath %s to create secret %s", mountPath, base_steps.NamePerTest(secretName, testName)))
 		}
 	}
 

@@ -565,7 +565,7 @@ func TestJUnit(t *testing.T) {
 				return
 			}
 			var names []string
-			for _, t := range step.(subtestReporter).SubTests() {
+			for _, t := range step.(SubtestReporter).SubTests() {
 				names = append(names, t.Name)
 			}
 			if !reflect.DeepEqual(names, tc.expected) {

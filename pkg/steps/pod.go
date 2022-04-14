@@ -29,10 +29,12 @@ const (
 	openshiftCIEnv = "OPENSHIFT_CI"
 )
 
-// when we're cleaning up, we need a context to use for client calls, but we cannot
+// CleanupCtx is used by steps when the primary context is cancelled.
+// When we're cleaning up, we need a context to use for client calls, but we cannot
 // use the normal context we have in steps, as that may be cancelled (and that would
-// be why we're cleaning up in the first place).
-var cleanupCtx = context.Background()
+// be why we're cleaning up in the first place).  This is intended only for
+// internal usage of this package and its sub-packages.
+var CleanupCtx = context.Background()
 
 // PodStepConfiguration allows other steps to reuse the pod launching and monitoring
 // behavior without reimplementing function. It also enforces conventions like naming,
@@ -79,7 +81,7 @@ func (s *podStep) run(ctx context.Context) error {
 	if !s.config.SkipLogs {
 		logrus.Infof("Executing %s %s", s.name, s.config.As)
 	}
-	containerResources, err := resourcesFor(s.resources.RequirementsForStep(s.config.As))
+	containerResources, err := ResourcesFor(s.resources.RequirementsForStep(s.config.As))
 	if err != nil {
 		return fmt.Errorf("unable to calculate %s pod resources for %s: %w", s.name, s.config.As, err)
 	}
@@ -102,12 +104,12 @@ func (s *podStep) run(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 		logrus.Infof("cleanup: Deleting %s pod %s", s.name, s.config.As)
-		if err := s.client.Delete(cleanupCtx, &coreapi.Pod{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.config.As}}); err != nil && !kerrors.IsNotFound(err) {
+		if err := s.client.Delete(CleanupCtx, &coreapi.Pod{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.config.As}}); err != nil && !kerrors.IsNotFound(err) {
 			logrus.WithError(err).Warnf("Could not delete %s pod.", s.name)
 		}
 	}()
 
-	pod, err = createOrRestartPod(ctx, s.client, pod)
+	pod, err = CreateOrRestartPod(ctx, s.client, pod)
 	if err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %w", s.name, err)
 	}
@@ -116,7 +118,7 @@ func (s *podStep) run(ctx context.Context) error {
 		s.subTests = testCaseNotifier.SubTests(s.Description() + " - ")
 	}()
 
-	if _, err := waitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
+	if _, err := WaitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
 		return fmt.Errorf("%s %q failed: %w", s.name, pod.Name, err)
 	}
 	return nil
@@ -182,7 +184,7 @@ func PodStep(name string, config PodStepConfiguration, resources api.ResourceCon
 	}
 }
 
-func generateBasePod(
+func GenerateBasePod(
 	jobSpec *api.JobSpec,
 	baseLabels map[string]string,
 	name string,
@@ -242,30 +244,30 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	if s.clusterClaim != nil {
 		secretVolumeMounts = append(secretVolumeMounts, []coreapi.VolumeMount{
 			{
-				Name:      namePerTest(api.HiveAdminKubeconfigSecret, s.config.As),
+				Name:      NamePerTest(api.HiveAdminKubeconfigSecret, s.config.As),
 				ReadOnly:  true,
-				MountPath: filepath.Join(testSecretDefaultPath, namePerTest(api.HiveAdminKubeconfigSecret, s.config.As)),
+				MountPath: filepath.Join(testSecretDefaultPath, NamePerTest(api.HiveAdminKubeconfigSecret, s.config.As)),
 			},
 			{
-				Name:      namePerTest(api.HiveAdminPasswordSecret, s.config.As),
+				Name:      NamePerTest(api.HiveAdminPasswordSecret, s.config.As),
 				ReadOnly:  true,
-				MountPath: filepath.Join(testSecretDefaultPath, namePerTest(api.HiveAdminPasswordSecret, s.config.As)),
+				MountPath: filepath.Join(testSecretDefaultPath, NamePerTest(api.HiveAdminPasswordSecret, s.config.As)),
 			},
 		}...)
 		secretVolumes = append(secretVolumes, []coreapi.Volume{
 			{
-				Name: namePerTest(api.HiveAdminKubeconfigSecret, s.config.As),
+				Name: NamePerTest(api.HiveAdminKubeconfigSecret, s.config.As),
 				VolumeSource: coreapi.VolumeSource{
 					Secret: &coreapi.SecretVolumeSource{
-						SecretName: namePerTest(api.HiveAdminKubeconfigSecret, s.config.As),
+						SecretName: NamePerTest(api.HiveAdminKubeconfigSecret, s.config.As),
 					},
 				},
 			},
 			{
-				Name: namePerTest(api.HiveAdminPasswordSecret, s.config.As),
+				Name: NamePerTest(api.HiveAdminPasswordSecret, s.config.As),
 				VolumeSource: coreapi.VolumeSource{
 					Secret: &coreapi.SecretVolumeSource{
-						SecretName: namePerTest(api.HiveAdminPasswordSecret, s.config.As),
+						SecretName: NamePerTest(api.HiveAdminPasswordSecret, s.config.As),
 					},
 				},
 			},
@@ -273,7 +275,7 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	}
 
 	artifactDir := s.name
-	pod, err := generateBasePod(s.jobSpec, s.config.Labels, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts, clone)
+	pod, err := GenerateBasePod(s.jobSpec, s.config.Labels, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts, clone)
 	if err != nil {
 		return nil, err
 	}
@@ -282,8 +284,8 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	container.VolumeMounts = append(container.VolumeMounts, secretVolumeMounts...)
 	if s.clusterClaim != nil {
 		container.Env = append(container.Env, []coreapi.EnvVar{
-			{Name: "KUBECONFIG", Value: filepath.Join(filepath.Join(testSecretDefaultPath, namePerTest(api.HiveAdminKubeconfigSecret, s.config.As)), api.HiveAdminKubeconfigSecretKey)},
-			{Name: "KUBEADMIN_PASSWORD_FILE", Value: filepath.Join(filepath.Join(testSecretDefaultPath, namePerTest(api.HiveAdminPasswordSecret, s.config.As)), api.HiveAdminPasswordSecretKey)},
+			{Name: "KUBECONFIG", Value: filepath.Join(filepath.Join(testSecretDefaultPath, NamePerTest(api.HiveAdminKubeconfigSecret, s.config.As)), api.HiveAdminKubeconfigSecretKey)},
+			{Name: "KUBEADMIN_PASSWORD_FILE", Value: filepath.Join(filepath.Join(testSecretDefaultPath, NamePerTest(api.HiveAdminPasswordSecret, s.config.As)), api.HiveAdminPasswordSecretKey)},
 		}...)
 	}
 	pod.Spec.Volumes = append(pod.Spec.Volumes, secretVolumes...)
@@ -358,9 +360,9 @@ func getSecretVolumeMountFromSecret(secretMountPath string, secretIndex int) []c
 // This pod will not be able to gather artifacts, nor will it report log messages
 // unless it fails.
 func RunPod(ctx context.Context, podClient PodClient, pod *coreapi.Pod) (*coreapi.Pod, error) {
-	pod, err := createOrRestartPod(ctx, podClient, pod)
+	pod, err := CreateOrRestartPod(ctx, podClient, pod)
 	if err != nil {
 		return pod, err
 	}
-	return waitForPodCompletion(ctx, podClient, pod.Namespace, pod.Name, nil, true)
+	return WaitForPodCompletion(ctx, podClient, pod.Namespace, pod.Name, nil, true)
 }

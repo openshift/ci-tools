@@ -113,7 +113,7 @@ func TestLeaseStepForward(t *testing.T) {
 		}
 	})
 	t.Run("SubTests", func(T *testing.T) {
-		s, l := step.SubTests(), withLease.(subtestReporter).SubTests()
+		s, l := step.SubTests(), withLease.(SubtestReporter).SubTests()
 		if !reflect.DeepEqual(l, s) {
 			t.Errorf("not properly forwarded: %s", diff.ObjectDiff(l, s))
 		}

@@ -411,7 +411,7 @@ func (s *multiStageTestStep) runSteps(
 
 		// Simplify to DeleteAllOf when https://bugzilla.redhat.com/show_bug.cgi?id=1937523 is fixed across production.
 		podList := &coreapi.PodList{}
-		if err := s.client.List(cleanupCtx, podList, ctrlruntimeclient.InNamespace(s.jobSpec.Namespace()), ctrlruntimeclient.MatchingLabels{MultiStageTestLabel: s.name}); err != nil {
+		if err := s.client.List(CleanupCtx, podList, ctrlruntimeclient.InNamespace(s.jobSpec.Namespace()), ctrlruntimeclient.MatchingLabels{MultiStageTestLabel: s.name}); err != nil {
 			errs = append(errs, fmt.Errorf("failed to list pods with label %s=%s: %w", MultiStageTestLabel, s.name, err))
 		} else {
 			for _, pod := range podList.Items {
@@ -419,11 +419,11 @@ func (s *multiStageTestStep) runSteps(
 					// Ignore pods that are complete or on their way out.
 					continue
 				}
-				if err := s.client.Delete(cleanupCtx, &pod); err != nil && !kerrors.IsNotFound(err) {
+				if err := s.client.Delete(CleanupCtx, &pod); err != nil && !kerrors.IsNotFound(err) {
 					errs = append(errs, fmt.Errorf("failed to delete pod %s with label %s=%s: %w", pod.Name, MultiStageTestLabel, s.name, err))
 					continue
 				}
-				if err := waitForPodDeletion(cleanupCtx, s.client, s.jobSpec.Namespace(), pod.Name, pod.UID); err != nil {
+				if err := WaitForPodDeletion(CleanupCtx, s.client, s.jobSpec.Namespace(), pod.Name, pod.UID); err != nil {
 					errs = append(errs, fmt.Errorf("failed waiting for pod %s with label %s=%s to be deleted: %w", pod.Name, MultiStageTestLabel, s.name, err))
 					continue
 				}
@@ -489,7 +489,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			stream, tag, _ := s.config.DependencyParts(dep, claimRelease)
 			image = fmt.Sprintf("%s:%s", stream, tag)
 		}
-		resources, err := resourcesFor(step.Resources)
+		resources, err := ResourcesFor(step.Resources)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -530,13 +530,13 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			commands = []string{"/bin/bash", "-c", CommandPrefix + step.Commands}
 		}
 		labels := map[string]string{LabelMetadataStep: step.As}
-		pod, err := generateBasePod(s.jobSpec, labels, name, multiStageTestStepContainerName, commands, image, resources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts, false)
+		pod, err := GenerateBasePod(s.jobSpec, labels, name, multiStageTestStepContainerName, commands, image, resources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts, false)
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
 		delete(pod.Labels, ProwJobIdLabel)
-		pod.Annotations[annotationSaveContainerLogs] = "true"
+		pod.Annotations[AnnotationSaveContainerLogs] = "true"
 		pod.Labels[MultiStageTestLabel] = s.name
 		pod.Spec.ServiceAccountName = s.name
 		pod.Spec.TerminationGracePeriodSeconds = terminationGracePeriodSeconds
@@ -876,10 +876,10 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	start := time.Now()
 	logrus.Infof("Running step %s.", pod.Name)
 	client := s.client.WithNewLoggingClient()
-	if _, err := createOrRestartPod(ctx, client, pod); err != nil {
+	if _, err := CreateOrRestartPod(ctx, client, pod); err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %w", pod.Name, err)
 	}
-	newPod, err := waitForPodCompletion(ctx, client, pod.Namespace, pod.Name, notifier, false)
+	newPod, err := WaitForPodCompletion(ctx, client, pod.Namespace, pod.Name, notifier, false)
 	if newPod != nil {
 		pod = newPod
 	}
@@ -925,7 +925,7 @@ func getClusterClaimPodParams(secretVolumeMounts []coreapi.VolumeMount, testName
 	var errs []error
 
 	for _, secretName := range []string{api.HiveAdminKubeconfigSecret, api.HiveAdminPasswordSecret} {
-		mountPath := getMountPath(namePerTest(secretName, testName))
+		mountPath := getMountPath(NamePerTest(secretName, testName))
 		var foundMountPath bool
 		for _, secretVolumeMount := range secretVolumeMounts {
 			if secretVolumeMount.MountPath == mountPath {
@@ -942,7 +942,7 @@ func getClusterClaimPodParams(secretVolumeMounts []coreapi.VolumeMount, testName
 		}
 		if !foundMountPath {
 			// should never happen
-			errs = append(errs, fmt.Errorf("failed to find foundMountPath %s to create secret %s", mountPath, namePerTest(secretName, testName)))
+			errs = append(errs, fmt.Errorf("failed to find foundMountPath %s to create secret %s", mountPath, NamePerTest(secretName, testName)))
 		}
 	}
 

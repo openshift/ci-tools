@@ -129,7 +129,7 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 		logrus.Infof("cleanup: Deleting template %s", s.template.Name)
-		if err := s.client.Delete(cleanupCtx, &templateapi.TemplateInstance{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.template.Name}}, ctrlruntimeclient.PropagationPolicy(meta.DeletePropagationForeground)); err != nil && !kerrors.IsNotFound(err) {
+		if err := s.client.Delete(CleanupCtx, &templateapi.TemplateInstance{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.template.Name}}, ctrlruntimeclient.PropagationPolicy(meta.DeletePropagationForeground)); err != nil && !kerrors.IsNotFound(err) {
 			logrus.WithError(err).Error("Could not delete template instance.")
 		}
 	}()
@@ -174,7 +174,7 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			_, err := waitForPodCompletion(context.TODO(), s.podClient, s.jobSpec.Namespace(), ref.Ref.Name, testCaseNotifier, false)
+			_, err := WaitForPodCompletion(context.TODO(), s.podClient, s.jobSpec.Namespace(), ref.Ref.Name, testCaseNotifier, false)
 			s.subTests = append(s.subTests, testCaseNotifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), ref.Ref.Name))...)
 			if err != nil {
 				return fmt.Errorf("template pod %q failed: %w", ref.Ref.Name, err)
@@ -217,7 +217,7 @@ func hasContainerResources(container coreapi.Container) bool {
 }
 
 func injectResourcesToPod(pod *coreapi.Pod, templateName string, resources api.ResourceConfiguration) error {
-	containerResources, err := resourcesFor(resources.RequirementsForStep(templateName))
+	containerResources, err := ResourcesFor(resources.RequirementsForStep(templateName))
 	if err != nil {
 		return fmt.Errorf("unable to calculate resources for %s: %w", pod.Name, err)
 	}
@@ -400,7 +400,7 @@ func waitForCompletedTemplateInstanceDeletion(ctx context.Context, client ctrlru
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			if err := waitForPodDeletion(ctx, client, namespace, ref.Ref.Name, ref.Ref.UID); err != nil {
+			if err := WaitForPodDeletion(ctx, client, namespace, ref.Ref.Name, ref.Ref.UID); err != nil {
 				return err
 			}
 		}
@@ -408,7 +408,7 @@ func waitForCompletedTemplateInstanceDeletion(ctx context.Context, client ctrlru
 	return nil
 }
 
-func createOrRestartPod(ctx context.Context, podClient ctrlruntimeclient.Client, pod *coreapi.Pod) (*coreapi.Pod, error) {
+func CreateOrRestartPod(ctx context.Context, podClient ctrlruntimeclient.Client, pod *coreapi.Pod) (*coreapi.Pod, error) {
 	namespace, name := pod.Namespace, pod.Name
 	if err := waitForCompletedPodDeletion(ctx, podClient, namespace, name); err != nil {
 		return nil, fmt.Errorf("unable to delete completed pod: %w", err)
@@ -442,7 +442,7 @@ func createOrRestartPod(ctx context.Context, podClient ctrlruntimeclient.Client,
 	return pod, nil
 }
 
-func waitForPodDeletion(ctx context.Context, podClient ctrlruntimeclient.Client, namespace, name string, uid types.UID) error {
+func WaitForPodDeletion(ctx context.Context, podClient ctrlruntimeclient.Client, namespace, name string, uid types.UID) error {
 	return wait.ExponentialBackoffWithContext(ctx, wait.Backoff{Duration: 2 * time.Second, Factor: 2, Steps: 10}, func() (done bool, err error) {
 		pod := &coreapi.Pod{}
 		err = podClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, pod)
@@ -480,10 +480,10 @@ func waitForCompletedPodDeletion(ctx context.Context, podClient ctrlruntimeclien
 		return fmt.Errorf("could not delete completed pod: %w", err)
 	}
 
-	return waitForPodDeletion(ctx, podClient, namespace, name, uid)
+	return WaitForPodDeletion(ctx, podClient, namespace, name, uid)
 }
 
-func waitForPodCompletion(ctx context.Context, podClient PodClient, namespace, name string, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, error) {
+func WaitForPodCompletion(ctx context.Context, podClient PodClient, namespace, name string, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, error) {
 	if notifier == nil {
 		notifier = NopNotifier
 	}

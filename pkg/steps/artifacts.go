@@ -50,7 +50,7 @@ const (
 	annotationContainersForSubTestResults = "ci-operator.openshift.io/container-sub-tests"
 	// A boolean value which indicates that the logs from all containers in the
 	// pod must be copied to the artifact directory (default is "false").
-	annotationSaveContainerLogs = "ci-operator.openshift.io/save-container-logs"
+	AnnotationSaveContainerLogs = "ci-operator.openshift.io/save-container-logs"
 	// artifactEnv is the env var in which we hold the artifact dir for users
 	artifactEnv = "ARTIFACT_DIR"
 )
@@ -747,7 +747,7 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 		return fmt.Errorf("could not list pod: %w", err)
 	}
 
-	if pod.Annotations[annotationSaveContainerLogs] != "true" {
+	if pod.Annotations[AnnotationSaveContainerLogs] != "true" {
 		logger.Trace("Container logs not requested.")
 		return nil
 	}

@@ -104,14 +104,14 @@ func Run(ctx context.Context, graph api.StepGraph) (*junit.TestSuites, []api.CIO
 	}
 }
 
-// subtestReporter may be implemented by steps that can return an optional set of
+// SubtestReporter may be implemented by steps that can return an optional set of
 // additional JUnit tests to report to the cluster.
-type subtestReporter interface {
+type SubtestReporter interface {
 	SubTests() []*junit.TestCase
 }
 
-// substepReport allows steps to report substeps.
-// TODO: Should this be merged with the subtestReporter?
+// SubStepReporter allows steps to report substeps.
+// TODO: Should this be merged with the SubtestReporter?
 type SubStepReporter interface {
 	SubSteps() []api.CIOperatorStepDetailInfo
 }
@@ -120,7 +120,7 @@ func runStep(ctx context.Context, node *api.StepNode, out chan<- message) {
 	start := time.Now()
 	err := node.Step.Run(ctx)
 	var additionalTests []*junit.TestCase
-	if reporter, ok := node.Step.(subtestReporter); ok {
+	if reporter, ok := node.Step.(SubtestReporter); ok {
 		additionalTests = reporter.SubTests()
 	}
 	duration := time.Since(start)

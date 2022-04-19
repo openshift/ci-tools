@@ -21,11 +21,15 @@ import (
 
 const containerName = "test"
 
-func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []coreapi.EnvVar,
-	hasPrevErrs bool, secretVolumes []coreapi.Volume, secretVolumeMounts []coreapi.VolumeMount) ([]coreapi.Pod, func(string) bool, error) {
+func (s *multiStageTestStep) generatePods(
+	steps []api.LiteralTestStep,
+	env []coreapi.EnvVar,
+	secretVolumes []coreapi.Volume,
+	secretVolumeMounts []coreapi.VolumeMount,
+) ([]coreapi.Pod, func(string) bool, error) {
 	bestEffort := sets.NewString()
 	isBestEffort := func(podName string) bool {
-		if s.allowBestEffortPostSteps == nil || !*s.allowBestEffortPostSteps {
+		if s.flags&allowBestEffortPostSteps == 0 {
 			// the user has not requested best-effort steps or they've explicitly disabled them
 			return false
 		}
@@ -39,9 +43,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 	}
 	for _, step := range steps {
 		name := fmt.Sprintf("%s-%s", s.name, step.As)
-		if s.allowSkipOnSuccess != nil && *s.allowSkipOnSuccess &&
-			step.OptionalOnSuccess != nil && *step.OptionalOnSuccess &&
-			!hasPrevErrs {
+		if o := step.OptionalOnSuccess; o != nil && *o && s.flags&allowSkipOnSuccess != 0 && s.flags&hasPrevErrs == 0 {
 			logrus.Infof(fmt.Sprintf("Skipping optional step %s", name))
 			continue
 		}

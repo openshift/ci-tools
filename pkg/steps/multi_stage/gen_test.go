@@ -91,7 +91,7 @@ func TestGeneratePods(t *testing.T) {
 		Name:      "secret",
 		MountPath: "/secret",
 	}}
-	ret, _, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, env, false, secretVolumes, secretVolumeMounts)
+	ret, _, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, env, secretVolumes, secretVolumeMounts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 					Environment: tc.env,
 				},
 			}, &api.ReleaseBuildConfiguration{}, nil, nil, &jobSpec, nil)
-			pods, _, err := step.(*multiStageTestStep).generatePods(test, nil, false, nil, nil)
+			pods, _, err := step.(*multiStageTestStep).generatePods(test, nil, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -232,7 +232,7 @@ func TestGeneratePodBestEffort(t *testing.T) {
 	}
 	jobSpec.SetNamespace("namespace")
 	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil)
-	_, isBestEffort, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Post, nil, false, nil, nil)
+	_, isBestEffort, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Post, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

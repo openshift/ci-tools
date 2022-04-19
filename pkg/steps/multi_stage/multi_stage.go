@@ -20,6 +20,22 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
+// stepFlag controls the behavior of a test throughout its execution.
+type stepFlag uint8
+
+const (
+	// A test failure should terminate the current phase.
+	// Set for `pre` and `test`, unset for `post`.
+	shortCircuit = stepFlag(1) << iota
+	// There was a failure in any of the previous steps.
+	// Used in the implementation of best-effort steps.
+	hasPrevErrs
+	// The test was configured to allow "skip on success" steps.
+	allowSkipOnSuccess
+	// The test was configured to allow best-effort steps.
+	allowBestEffortPostSteps
+)
+
 const (
 	// MultiStageTestLabel is the label we use to mark a pod as part of a multi-stage test
 	MultiStageTestLabel = "ci.openshift.io/multi-stage-test"
@@ -50,17 +66,16 @@ type multiStageTestStep struct {
 	profile api.ClusterProfile
 	config  *api.ReleaseBuildConfiguration
 	// params exposes getters for variables created by other steps
-	params                   api.Parameters
-	env                      api.TestEnvironment
-	client                   kubernetes.PodClient
-	jobSpec                  *api.JobSpec
-	pre, test, post          []api.LiteralTestStep
-	subTests                 []*junit.TestCase
-	subSteps                 []api.CIOperatorStepDetailInfo
-	allowSkipOnSuccess       *bool
-	allowBestEffortPostSteps *bool
-	leases                   []api.StepLease
-	clusterClaim             *api.ClusterClaim
+	params          api.Parameters
+	env             api.TestEnvironment
+	client          kubernetes.PodClient
+	jobSpec         *api.JobSpec
+	pre, test, post []api.LiteralTestStep
+	subTests        []*junit.TestCase
+	subSteps        []api.CIOperatorStepDetailInfo
+	flags           stepFlag
+	leases          []api.StepLease
+	clusterClaim    *api.ClusterClaim
 }
 
 func MultiStageTestStep(
@@ -83,21 +98,27 @@ func newMultiStageTestStep(
 	leases []api.StepLease,
 ) *multiStageTestStep {
 	ms := testConfig.MultiStageTestConfigurationLiteral
+	var flags stepFlag
+	if p := ms.AllowSkipOnSuccess; p != nil && *p {
+		flags |= allowSkipOnSuccess
+	}
+	if p := ms.AllowBestEffortPostSteps; p != nil && *p {
+		flags |= allowBestEffortPostSteps
+	}
 	return &multiStageTestStep{
-		name:                     testConfig.As,
-		profile:                  ms.ClusterProfile,
-		config:                   config,
-		params:                   params,
-		env:                      ms.Environment,
-		client:                   client,
-		jobSpec:                  jobSpec,
-		pre:                      ms.Pre,
-		test:                     ms.Test,
-		post:                     ms.Post,
-		allowSkipOnSuccess:       ms.AllowSkipOnSuccess,
-		allowBestEffortPostSteps: ms.AllowBestEffortPostSteps,
-		leases:                   leases,
-		clusterClaim:             testConfig.ClusterClaim,
+		name:         testConfig.As,
+		profile:      ms.ClusterProfile,
+		config:       config,
+		params:       params,
+		env:          ms.Environment,
+		client:       client,
+		jobSpec:      jobSpec,
+		pre:          ms.Pre,
+		test:         ms.Test,
+		post:         ms.Post,
+		flags:        flags,
+		leases:       leases,
+		clusterClaim: testConfig.ClusterClaim,
 	}
 }
 
@@ -138,12 +159,14 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 		return err
 	}
 	var errs []error
-	if err := s.runSteps(ctx, "pre", s.pre, env, true, false, secretVolumes, secretVolumeMounts); err != nil {
+	s.flags |= shortCircuit
+	if err := s.runSteps(ctx, "pre", s.pre, env, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q pre steps failed: %w", s.name, err))
-	} else if err := s.runSteps(ctx, "test", s.test, env, true, len(errs) != 0, secretVolumes, secretVolumeMounts); err != nil {
+	} else if err := s.runSteps(ctx, "test", s.test, env, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q test steps failed: %w", s.name, err))
 	}
-	if err := s.runSteps(context.Background(), "post", s.post, env, false, len(errs) != 0, secretVolumes, secretVolumeMounts); err != nil {
+	s.flags &= ^shortCircuit
+	if err := s.runSteps(context.Background(), "post", s.post, env, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q post steps failed: %w", s.name, err))
 	}
 	return utilerrors.NewAggregate(errs)

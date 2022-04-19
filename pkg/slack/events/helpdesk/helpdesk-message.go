@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	channelId      = "CBN38N3MW"
-	dptpHelpdeskId = "<@STSR51Q76>"
+	channelId       = "CBN38N3MW"
+	helpdeskMention = "@dptp-helpdesk"
 )
 
 type messagePoster interface {
@@ -42,7 +42,7 @@ func Handler(client messagePoster) events.PartialHandler {
 				log.Debugf("not in correct channel. wanted: %s, message was in: %s", channelId, event.Channel)
 				return false, nil
 			}
-			if !strings.Contains(event.Text, dptpHelpdeskId) {
+			if !strings.Contains(event.Text, helpdeskMention) {
 				log.Debugf("dptp-helpdesk not mentioned in message: %s", event.Text)
 				return false, nil
 			}

@@ -24,6 +24,8 @@ type messagePoster interface {
 func Handler(client messagePoster) events.PartialHandler {
 	return events.PartialHandlerFunc("helpdesk",
 		func(callback *slackevents.EventsAPIEvent, logger *logrus.Entry) (handled bool, err error) {
+			log := logger.WithField("handler", "helpdesk-message")
+			log.Debugf("checking event payload")
 
 			if callback.Type != slackevents.CallbackEvent {
 				return false, nil
@@ -37,12 +39,14 @@ func Handler(client messagePoster) events.PartialHandler {
 				return false, nil
 			}
 			if event.Channel != channelId {
+				log.Debugf("not in correct channel. wanted: %s, message was in: %s", channelId, event.Channel)
 				return false, nil
 			}
 			if !strings.Contains(event.Text, dptpHelpdeskId) {
+				log.Debugf("dptp-helpdesk not mentioned in message: %s", event.Text)
 				return false, nil
 			}
-			logger.Info("Handling response in forum-testplatform channel...")
+			log.Info("Handling response in forum-testplatform channel...")
 
 			timestamp := event.TimeStamp
 			if event.ThreadTimeStamp != "" {
@@ -51,9 +55,9 @@ func Handler(client messagePoster) events.PartialHandler {
 
 			responseChannel, responseTimestamp, err := client.PostMessage(event.Channel, slack.MsgOptionBlocks(getResponse()...), slack.MsgOptionTS(timestamp))
 			if err != nil {
-				logger.WithError(err).Warn("Failed to post a response")
+				log.WithError(err).Warn("Failed to post a response")
 			} else {
-				logger.Infof("Posted response in a new thread in channel %s to user %s at %s", responseChannel, event.User, responseTimestamp)
+				log.Infof("Posted response in a new thread in channel %s to user %s at %s", responseChannel, event.User, responseTimestamp)
 			}
 
 			return true, err

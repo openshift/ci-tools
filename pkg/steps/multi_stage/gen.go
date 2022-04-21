@@ -26,14 +26,10 @@ func (s *multiStageTestStep) generatePods(
 	env []coreapi.EnvVar,
 	secretVolumes []coreapi.Volume,
 	secretVolumeMounts []coreapi.VolumeMount,
-) ([]coreapi.Pod, func(string) bool, error) {
-	bestEffort := sets.NewString()
-	isBestEffort := func(podName string) bool {
-		if s.flags&allowBestEffortPostSteps == 0 {
-			// the user has not requested best-effort steps or they've explicitly disabled them
-			return false
-		}
-		return bestEffort.Has(podName)
+) ([]coreapi.Pod, sets.String, error) {
+	var bestEffortSteps sets.String
+	if s.flags&allowBestEffortPostSteps != 0 {
+		bestEffortSteps = sets.NewString()
 	}
 	var ret []coreapi.Pod
 	var errs []error
@@ -68,8 +64,8 @@ func (s *multiStageTestStep) generatePods(
 			delete(resources.Requests, api.ShmResource)
 			delete(resources.Limits, api.ShmResource)
 		}
-		if step.BestEffort != nil && *step.BestEffort {
-			bestEffort.Insert(name)
+		if bestEffortSteps != nil && step.BestEffort != nil && *step.BestEffort {
+			bestEffortSteps.Insert(name)
 		}
 		p := func(i int64) *int64 {
 			return &i
@@ -182,7 +178,7 @@ func (s *multiStageTestStep) generatePods(
 		}
 		ret = append(ret, *pod)
 	}
-	return ret, isBestEffort, utilerrors.NewAggregate(errs)
+	return ret, bestEffortSteps, utilerrors.NewAggregate(errs)
 }
 
 func addSecretWrapper(pod *coreapi.Pod) {

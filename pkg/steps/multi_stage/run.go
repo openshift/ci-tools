@@ -11,6 +11,7 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -29,7 +30,7 @@ func (s *multiStageTestStep) runSteps(
 ) error {
 	start := time.Now()
 	logrus.Infof("Running multi-stage phase %s", phase)
-	pods, isBestEffort, err := s.generatePods(steps, env, secretVolumes, secretVolumeMounts)
+	pods, bestEffortSteps, err := s.generatePods(steps, env, secretVolumes, secretVolumeMounts)
 	if err != nil {
 		s.flags |= hasPrevErrs
 		return err
@@ -40,7 +41,7 @@ func (s *multiStageTestStep) runSteps(
 			s.flags |= hasPrevErrs
 		}
 	}()
-	if err := s.runPods(ctx, pods, isBestEffort); err != nil {
+	if err := s.runPods(ctx, pods, bestEffortSteps); err != nil {
 		errs = append(errs, err)
 	}
 	select {
@@ -93,14 +94,14 @@ func (s *multiStageTestStep) runSteps(
 	return err
 }
 
-func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, isBestEffort func(string) bool) error {
+func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, bestEffortSteps sets.String) error {
 	var errs []error
 	for _, pod := range pods {
 		err := s.runPod(ctx, &pod, base_steps.NewTestCaseNotifier(base_steps.NopNotifier))
 		if err == nil {
 			continue
 		}
-		if isBestEffort(pod.Name) {
+		if bestEffortSteps != nil && bestEffortSteps.Has(pod.Name) {
 			logrus.Infof("Pod %s is running in best-effort mode, ignoring the failure...", pod.Name)
 			continue
 		}

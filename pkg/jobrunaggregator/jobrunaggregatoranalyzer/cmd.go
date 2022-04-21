@@ -158,6 +158,7 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 		jobRunLocator = jobrunaggregatorlib.NewPayloadAnalysisJobLocatorForPR(
 			f.JobName,
 			f.AggregationID,
+			jobrunaggregatorlib.AggregationIDLabel,
 			estimatedStartTime,
 			ciDataClient,
 			ciGCSClient,

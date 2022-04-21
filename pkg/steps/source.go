@@ -256,7 +256,7 @@ func resolvePipelineImageStreamTagReference(ctx context.Context, client loggingc
 
 func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, fromTagDigest, dockerfilePath string, resources api.ResourceConfiguration, pullSecret *corev1.Secret, buildArgs []api.BuildArg) *buildapi.Build {
 	logrus.Infof("Building %s", toTag)
-	buildResources, err := resourcesFor(resources.RequirementsForStep(string(toTag)))
+	buildResources, err := ResourcesFor(resources.RequirementsForStep(string(toTag)))
 	if err != nil {
 		panic(fmt.Errorf("unable to parse resource requirement for build %s: %w", toTag, err))
 	}
@@ -568,7 +568,7 @@ func printBuildLogs(buildClient BuildClient, namespace, name string) {
 	}
 }
 
-func resourcesFor(req api.ResourceRequirements) (corev1.ResourceRequirements, error) {
+func ResourcesFor(req api.ResourceRequirements) (corev1.ResourceRequirements, error) {
 	apireq := corev1.ResourceRequirements{}
 	for name, value := range req.Requests {
 		q, err := resource.ParseQuantity(value)

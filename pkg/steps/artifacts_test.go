@@ -2,7 +2,6 @@ package steps
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -18,8 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/diff"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/remotecommand"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -494,51 +491,6 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 	}
 }
 
-type fakePodClient struct {
-	*fakePodExecutor
-	namespace, name string
-}
-
-func (f *fakePodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
-	if namespace != f.namespace {
-		return nil, fmt.Errorf("unexpected namespace: %q", namespace)
-	}
-	if name != f.name {
-		return nil, fmt.Errorf("unexpected name: %q", name)
-	}
-	return &testExecutor{command: opts.Command}, nil
-}
-
-func (*fakePodClient) GetLogs(string, string, *coreapi.PodLogOptions) *rest.Request {
-	return rest.NewRequestWithClient(nil, "", rest.ClientContentConfig{}, nil)
-}
-
-func (f *fakePodClient) WithNewLoggingClient() PodClient {
-	return f
-}
-
-type testExecutor struct {
-	command []string
-}
-
-func (e testExecutor) Stream(opts remotecommand.StreamOptions) error {
-	if reflect.DeepEqual(e.command, []string{"tar", "czf", "-", "-C", "/tmp/artifacts", "."}) {
-		var tar []byte
-		tar, err := base64.StdEncoding.DecodeString(`
-H4sIAMq1b10AA+3RPQrDMAyGYc09hU8QrCpOzuOAKR2y2Ar0+HX/tnboEErhfRbxoW8QyEvzwS8uO4r
-dNI63qXOK96yP/JRELZnNdpySSlTrBQlxz6Netua5hiDLctrOa665tA+9Ut9v/pr3/x9+fQQAAAAAAA
-AAAAAAAAAA4GtXigWTnQAoAAA=`)
-		if err != nil {
-			return err
-		}
-		_, err = opts.Stdout.Write(tar)
-		return err
-	} else if reflect.DeepEqual(e.command, []string{"rm", "-f", "/tmp/done"}) {
-		return nil
-	}
-	return fmt.Errorf("unexpected command: %v", e.command)
-}
-
 func TestArtifactWorker(t *testing.T) {
 	tmp, err := ioutil.TempDir("", "")
 	if err != nil {
@@ -550,8 +502,8 @@ func TestArtifactWorker(t *testing.T) {
 		}
 	}()
 	pod := "pod"
-	podClient := &fakePodClient{
-		fakePodExecutor: &fakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(
+	podClient := &testhelper.FakePodClient{
+		FakePodExecutor: &testhelper.FakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(
 			&coreapi.Pod{
 				ObjectMeta: meta.ObjectMeta{
 					Name:      pod,
@@ -569,8 +521,8 @@ func TestArtifactWorker(t *testing.T) {
 				},
 			})),
 		},
-		namespace: "namespace",
-		name:      pod,
+		Namespace: "namespace",
+		Name:      pod,
 	}
 	w := NewArtifactWorker(podClient, tmp, "namespace")
 	w.CollectFromPod(pod, []string{"container"}, nil)

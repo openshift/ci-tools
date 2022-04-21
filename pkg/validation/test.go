@@ -738,6 +738,18 @@ func validateCredentials(fieldRoot string, credentials []api.CredentialReference
 	return errs
 }
 
+func ValidateSecretInStep(ns, name string) error {
+	// only secrets in test-credentials namespace can be used in a step
+	if ns != "test-credentials" {
+		return nil
+	}
+	volumeName := strings.ReplaceAll(fmt.Sprintf("%s-%s", ns, name), ".", "-")
+	if valueErrs := validation.IsDNS1123Label(volumeName); len(valueErrs) > 0 {
+		return fmt.Errorf("volumeName %s: %v", volumeName, valueErrs)
+	}
+	return nil
+}
+
 func validateParameters(context *context, params []api.StepParameter) error {
 	var missing []string
 	for _, param := range params {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
@@ -40,7 +41,7 @@ func E2ETestStep(
 	config api.OpenshiftInstallerClusterTestConfiguration,
 	testConfig api.TestStepConfiguration,
 	params api.Parameters,
-	podClient steps.PodClient,
+	podClient kubernetes.PodClient,
 	templateClient steps.TemplateClient,
 	jobSpec *api.JobSpec,
 	resources api.ResourceConfiguration,

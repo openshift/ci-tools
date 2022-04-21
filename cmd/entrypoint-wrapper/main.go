@@ -28,7 +28,7 @@ import (
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 
-	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
@@ -210,7 +210,7 @@ func execCmd(argv []string) error {
 
 // manageCLI configures the PATH to include a CLI_DIR if one was provided
 func manageCLI(proc *exec.Cmd) {
-	cliDir, set := os.LookupEnv(steps.CliEnv)
+	cliDir, set := os.LookupEnv(api.CliEnv)
 	if set {
 		proc.Env = append(proc.Env, fmt.Sprintf("PATH=%s:%s", os.Getenv("PATH"), cliDir))
 	}
@@ -287,7 +287,7 @@ func createSecret(client coreclientset.SecretInterface, name, dir string, dry bo
 	if secret.Labels == nil {
 		secret.Labels = map[string]string{}
 	}
-	secret.Labels[steps.SkipCensoringLabel] = "true"
+	secret.Labels[api.SkipCensoringLabel] = "true"
 	if dry {
 		err := encoder.Encode(secret, os.Stdout)
 		if err != nil {

@@ -95,7 +95,7 @@ func (s *leaseStep) Provides() api.ParameterMap {
 }
 
 func (s *leaseStep) SubTests() []*junit.TestCase {
-	if subTests, ok := s.wrapped.(subtestReporter); ok {
+	if subTests, ok := s.wrapped.(SubtestReporter); ok {
 		return subTests.SubTests()
 	}
 	return nil

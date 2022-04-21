@@ -2,7 +2,6 @@ package steps
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path"
 	"reflect"
@@ -339,48 +338,6 @@ func TestGeneratePodBestEffort(t *testing.T) {
 	}
 }
 
-type fakePodExecutor struct {
-	loggingclient.LoggingClient
-	failures    sets.String
-	createdPods []*coreapi.Pod
-}
-
-func (f *fakePodExecutor) Create(ctx context.Context, o ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
-	if pod, ok := o.(*coreapi.Pod); ok {
-		if pod.Namespace == "" {
-			return errors.New("pod had no namespace set")
-		}
-		f.createdPods = append(f.createdPods, pod.DeepCopy())
-		pod.Status.Phase = coreapi.PodPending
-	}
-	return f.LoggingClient.Create(ctx, o, opts...)
-}
-
-func (f *fakePodExecutor) Get(ctx context.Context, n ctrlruntimeclient.ObjectKey, o ctrlruntimeclient.Object) error {
-	if err := f.LoggingClient.Get(ctx, n, o); err != nil {
-		return err
-	}
-	if pod, ok := o.(*coreapi.Pod); ok {
-		fail := f.failures.Has(n.Name)
-		if fail {
-			pod.Status.Phase = coreapi.PodFailed
-		} else {
-			pod.Status.Phase = coreapi.PodSucceeded
-		}
-		for _, container := range pod.Spec.Containers {
-			terminated := &coreapi.ContainerStateTerminated{}
-			if fail {
-				terminated.ExitCode = 1
-			}
-			pod.Status.ContainerStatuses = append(pod.Status.ContainerStatuses, coreapi.ContainerStatus{
-				Name:  container.Name,
-				State: coreapi.ContainerState{Terminated: terminated}})
-		}
-	}
-
-	return nil
-}
-
 func TestRun(t *testing.T) {
 	yes := true
 	for _, tc := range []struct {
@@ -424,7 +381,10 @@ func TestRun(t *testing.T) {
 				ImagePullSecrets: []v1.LocalObjectReference{{Name: "ci-operator-dockercfg-12345"}},
 			}
 			name := "test"
-			crclient := &fakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(sa.DeepCopyObject())), failures: tc.failures}
+			crclient := &testhelper.FakePodExecutor{
+				LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(sa.DeepCopyObject())),
+				Failures:      tc.failures,
+			}
 			jobSpec := api.JobSpec{
 				JobSpec: prowdapi.JobSpec{
 					Job:       "job",
@@ -442,6 +402,7 @@ func TestRun(t *testing.T) {
 				},
 			}
 			jobSpec.SetNamespace("ns")
+			client := &testhelper.FakePodClient{FakePodExecutor: crclient}
 			step := MultiStageTestStep(api.TestStepConfiguration{
 				As: name,
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
@@ -450,7 +411,7 @@ func TestRun(t *testing.T) {
 					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: &yes}},
 					AllowSkipOnSuccess: &yes,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: crclient}, &jobSpec, nil)
+			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil)
 			if err := step.Run(context.Background()); (err != nil) != (tc.failures != nil) {
 				t.Errorf("expected error: %t, got error: %v", (tc.failures != nil), err)
 			}
@@ -462,7 +423,7 @@ func TestRun(t *testing.T) {
 				t.Errorf("unexpected secrets: %#v", l)
 			}
 			var names []string
-			for _, pod := range crclient.createdPods {
+			for _, pod := range crclient.CreatedPods {
 				if pod.Namespace != jobSpec.Namespace() {
 					t.Errorf("pod %s didn't have namespace %s set, had %q instead", pod.Name, jobSpec.Namespace(), pod.Namespace)
 				}
@@ -534,7 +495,10 @@ func TestJUnit(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sa := &coreapi.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-namespace", Labels: map[string]string{"ci.openshift.io/multi-stage-test": "test"}}}
 
-			client := &fakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(sa.DeepCopyObject())), failures: tc.failures}
+			crclient := &testhelper.FakePodExecutor{
+				LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(sa.DeepCopyObject())),
+				Failures:      tc.failures,
+			}
 			jobSpec := api.JobSpec{
 				JobSpec: prowdapi.JobSpec{
 					Job:       "job",
@@ -552,6 +516,7 @@ func TestJUnit(t *testing.T) {
 				},
 			}
 			jobSpec.SetNamespace("test-namespace")
+			client := &testhelper.FakePodClient{FakePodExecutor: crclient}
 			step := MultiStageTestStep(api.TestStepConfiguration{
 				As: "test",
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
@@ -559,13 +524,13 @@ func TestJUnit(t *testing.T) {
 					Test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
 					Post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{fakePodExecutor: client}, &jobSpec, nil)
+			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil)
 			if err := step.Run(context.Background()); tc.failures == nil && err != nil {
 				t.Error(err)
 				return
 			}
 			var names []string
-			for _, t := range step.(subtestReporter).SubTests() {
+			for _, t := range step.(SubtestReporter).SubTests() {
 				names = append(names, t.Name)
 			}
 			if !reflect.DeepEqual(names, tc.expected) {

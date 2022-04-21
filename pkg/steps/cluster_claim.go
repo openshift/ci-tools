@@ -99,7 +99,7 @@ func (s *clusterClaimStep) run(ctx context.Context) error {
 	if clusterClaim != nil {
 		go func() {
 			<-ctx.Done()
-			if err := s.releaseCluster(cleanupCtx, clusterClaim, false); err != nil {
+			if err := s.releaseCluster(CleanupCtx, clusterClaim, false); err != nil {
 				logrus.WithError(err).Error("failed to release cluster claim")
 			}
 		}()
@@ -109,13 +109,13 @@ func (s *clusterClaimStep) run(ctx context.Context) error {
 		// always attempt to delete claim if one exists
 		var releaseErr error
 		if clusterClaim != nil {
-			releaseErr = results.ForReason("releasing_cluster_claim").ForError(s.releaseCluster(cleanupCtx, clusterClaim, true))
+			releaseErr = results.ForReason("releasing_cluster_claim").ForError(s.releaseCluster(CleanupCtx, clusterClaim, true))
 		}
 		return aggregateWrappedErrorAndReleaseError(acquireErr, releaseErr)
 	}
 
 	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
-	releaseErr := results.ForReason("releasing_cluster_claim").ForError(s.releaseCluster(cleanupCtx, clusterClaim, false))
+	releaseErr := results.ForReason("releasing_cluster_claim").ForError(s.releaseCluster(CleanupCtx, clusterClaim, false))
 
 	return aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr)
 }
@@ -182,7 +182,7 @@ func (s *clusterClaimStep) acquireCluster(ctx context.Context, waitForClaim func
 	return claim, nil
 }
 
-func namePerTest(name, testName string) string {
+func NamePerTest(name, testName string) string {
 	return strings.ReplaceAll(utils.Trim63(fmt.Sprintf("%s-%s", testName, name)), ".", "-")
 }
 
@@ -200,7 +200,7 @@ func getHiveSecret(src *corev1.Secret, name, namespace, testName string) (*corev
 		return nil, fmt.Errorf("failed to find key %s in secret %s in namespace %s", key, src.Name, src.Namespace)
 	}
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: namePerTest(name, testName), Namespace: namespace},
+		ObjectMeta: metav1.ObjectMeta{Name: NamePerTest(name, testName), Namespace: namespace},
 		Data:       map[string][]byte{key: src.Data[key]},
 		Type:       src.Type,
 	}, nil

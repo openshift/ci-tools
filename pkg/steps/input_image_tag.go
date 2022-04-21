@@ -22,10 +22,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
-var (
-	ciRegistry = api.DomainForService(api.ServiceRegistry)
-)
-
 // inputImageTagStep will ensure that a tag exists
 // in the pipeline ImageStream that resolves to
 // the base image

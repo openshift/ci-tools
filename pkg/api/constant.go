@@ -51,7 +51,11 @@ const (
 
 	APPCIKubeAPIURL = "https://api.ci.l2s4.p1.openshiftapps.com:6443"
 
+	// CliEnv if the env we use to expose the path to the cli
+	CliEnv          = "CLI_DIR"
 	DefaultLeaseEnv = "LEASED_RESOURCE"
+	// SkipCensoringLabel is the label we use to mark a secret as not needing to be censored
+	SkipCensoringLabel = "ci.openshift.io/skip-censoring"
 
 	OauthTokenSecretKey  = "oauth"
 	OauthTokenSecretName = "github-credentials-openshift-ci-robot-private-git-cloner"

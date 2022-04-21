@@ -17,7 +17,6 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/util/validation"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/entrypoint"
 	utilpointer "k8s.io/utils/pointer"
@@ -25,6 +24,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -34,8 +34,6 @@ import (
 const (
 	// MultiStageTestLabel is the label we use to mark a pod as part of a multi-stage test
 	MultiStageTestLabel = "ci.openshift.io/multi-stage-test"
-	// SkipCensoringLabel is the label we use to mark a secret as not needing to be censored
-	SkipCensoringLabel = "ci.openshift.io/skip-censoring"
 	// ClusterProfileMountPath is where we mount the cluster profile in a pod
 	ClusterProfileMountPath = "/var/run/secrets/ci.openshift.io/cluster-profile"
 	// SecretMountPath is where we mount the shared dir secret
@@ -46,12 +44,11 @@ const (
 	ClusterProfileMountEnv = "CLUSTER_PROFILE_DIR"
 	// CliMountPath is where we mount the cli in a pod
 	CliMountPath = "/cli"
-	// CliEnv if the env we use to expose the path to the cli
-	CliEnv = "CLI_DIR"
 	// CommandPrefix is the prefix we add to a user's commands
 	CommandPrefix = "#!/bin/bash\nset -eu\n"
 	// CommandScriptMountPath is where we mount the command script
 	CommandScriptMountPath = "/var/run/configmaps/ci.openshift.io/multi-stage"
+	homeVolumeName         = "home"
 )
 
 var envForProfile = []string{
@@ -66,7 +63,7 @@ type multiStageTestStep struct {
 	// params exposes getters for variables created by other steps
 	params                   api.Parameters
 	env                      api.TestEnvironment
-	client                   PodClient
+	client                   kubernetes.PodClient
 	jobSpec                  *api.JobSpec
 	pre, test, post          []api.LiteralTestStep
 	subTests                 []*junit.TestCase
@@ -81,7 +78,7 @@ func MultiStageTestStep(
 	testConfig api.TestStepConfiguration,
 	config *api.ReleaseBuildConfiguration,
 	params api.Parameters,
-	client PodClient,
+	client kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
 ) api.Step {
@@ -92,7 +89,7 @@ func newMultiStageTestStep(
 	testConfig api.TestStepConfiguration,
 	config *api.ReleaseBuildConfiguration,
 	params api.Parameters,
-	client PodClient,
+	client kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
 ) *multiStageTestStep {
@@ -313,7 +310,7 @@ func (s *multiStageTestStep) createSharedDirSecret(ctx context.Context) error {
 	secret := &coreapi.Secret{ObjectMeta: meta.ObjectMeta{
 		Namespace: s.jobSpec.Namespace(),
 		Name:      s.name,
-		Labels:    map[string]string{SkipCensoringLabel: "true"},
+		Labels:    map[string]string{api.SkipCensoringLabel: "true"},
 	}}
 	if err := s.client.Delete(ctx, secret); err != nil && !kerrors.IsNotFound(err) {
 		return fmt.Errorf("cannot delete shared directory %q: %w", s.name, err)
@@ -415,7 +412,7 @@ func (s *multiStageTestStep) runSteps(
 
 		// Simplify to DeleteAllOf when https://bugzilla.redhat.com/show_bug.cgi?id=1937523 is fixed across production.
 		podList := &coreapi.PodList{}
-		if err := s.client.List(cleanupCtx, podList, ctrlruntimeclient.InNamespace(s.jobSpec.Namespace()), ctrlruntimeclient.MatchingLabels{MultiStageTestLabel: s.name}); err != nil {
+		if err := s.client.List(CleanupCtx, podList, ctrlruntimeclient.InNamespace(s.jobSpec.Namespace()), ctrlruntimeclient.MatchingLabels{MultiStageTestLabel: s.name}); err != nil {
 			errs = append(errs, fmt.Errorf("failed to list pods with label %s=%s: %w", MultiStageTestLabel, s.name, err))
 		} else {
 			for _, pod := range podList.Items {
@@ -423,11 +420,11 @@ func (s *multiStageTestStep) runSteps(
 					// Ignore pods that are complete or on their way out.
 					continue
 				}
-				if err := s.client.Delete(cleanupCtx, &pod); err != nil && !kerrors.IsNotFound(err) {
+				if err := s.client.Delete(CleanupCtx, &pod); err != nil && !kerrors.IsNotFound(err) {
 					errs = append(errs, fmt.Errorf("failed to delete pod %s with label %s=%s: %w", pod.Name, MultiStageTestLabel, s.name, err))
 					continue
 				}
-				if err := waitForPodDeletion(cleanupCtx, s.client, s.jobSpec.Namespace(), pod.Name, pod.UID); err != nil {
+				if err := WaitForPodDeletion(CleanupCtx, s.client, s.jobSpec.Namespace(), pod.Name, pod.UID); err != nil {
 					errs = append(errs, fmt.Errorf("failed waiting for pod %s with label %s=%s to be deleted: %w", pod.Name, MultiStageTestLabel, s.name, err))
 					continue
 				}
@@ -493,7 +490,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			stream, tag, _ := s.config.DependencyParts(dep, claimRelease)
 			image = fmt.Sprintf("%s:%s", stream, tag)
 		}
-		resources, err := resourcesFor(step.Resources)
+		resources, err := ResourcesFor(step.Resources)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -534,13 +531,13 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			commands = []string{"/bin/bash", "-c", CommandPrefix + step.Commands}
 		}
 		labels := map[string]string{LabelMetadataStep: step.As}
-		pod, err := generateBasePod(s.jobSpec, labels, name, multiStageTestStepContainerName, commands, image, resources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts, false)
+		pod, err := GenerateBasePod(s.jobSpec, labels, name, multiStageTestStepContainerName, commands, image, resources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts, false)
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
 		delete(pod.Labels, ProwJobIdLabel)
-		pod.Annotations[annotationSaveContainerLogs] = "true"
+		pod.Annotations[AnnotationSaveContainerLogs] = "true"
 		pod.Labels[MultiStageTestLabel] = s.name
 		pod.Spec.ServiceAccountName = s.name
 		pod.Spec.TerminationGracePeriodSeconds = terminationGracePeriodSeconds
@@ -634,7 +631,7 @@ func secretsForCensoring(client loggingclient.LoggingClient, namespace string, c
 	var secretVolumes []coreapi.Volume
 	var secretVolumeMounts []coreapi.VolumeMount
 	for i, secret := range secretList.Items {
-		if _, skip := secret.ObjectMeta.Labels[SkipCensoringLabel]; skip {
+		if _, skip := secret.ObjectMeta.Labels[api.SkipCensoringLabel]; skip {
 			continue
 		}
 		if _, skip := secret.ObjectMeta.Annotations["kubernetes.io/service-account.name"]; skip {
@@ -702,7 +699,7 @@ func addSecretWrapper(pod *coreapi.Pod) {
 	})
 	mount := coreapi.VolumeMount{Name: volume, MountPath: dir}
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, coreapi.Container{
-		Image:                    fmt.Sprintf("%s/ci/entrypoint-wrapper:latest", ciRegistry),
+		Image:                    fmt.Sprintf("%s/ci/entrypoint-wrapper:latest", api.DomainForService(api.ServiceRegistry)),
 		Name:                     "cp-entrypoint-wrapper",
 		Command:                  []string{"cp"},
 		Args:                     []string{"/bin/entrypoint-wrapper", bin},
@@ -783,19 +780,6 @@ func volumeName(ns, name string) string {
 	return strings.ReplaceAll(fmt.Sprintf("%s-%s", ns, name), ".", "-")
 }
 
-// ValidateSecretInStep validates a secret used in a step
-func ValidateSecretInStep(ns, name string) error {
-	// only secrets in test-credentials namespace can be used in a step
-	if ns != "test-credentials" {
-		return nil
-	}
-	volumeName := volumeName(ns, name)
-	if valueErrs := validation.IsDNS1123Label(volumeName); len(valueErrs) > 0 {
-		return fmt.Errorf("volumeName %s: %v", volumeName, valueErrs)
-	}
-	return nil
-}
-
 func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
 	volumeName := "cluster-profile"
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
@@ -866,7 +850,7 @@ func addCliInjector(imagestream string, pod *coreapi.Pod) {
 		MountPath: CliMountPath,
 	})
 	container.Env = append(container.Env, coreapi.EnvVar{
-		Name:  CliEnv,
+		Name:  api.CliEnv,
 		Value: CliMountPath,
 	})
 }
@@ -893,10 +877,10 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	start := time.Now()
 	logrus.Infof("Running step %s.", pod.Name)
 	client := s.client.WithNewLoggingClient()
-	if _, err := createOrRestartPod(ctx, client, pod); err != nil {
+	if _, err := CreateOrRestartPod(ctx, client, pod); err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %w", pod.Name, err)
 	}
-	newPod, err := waitForPodCompletion(ctx, client, pod.Namespace, pod.Name, notifier, false)
+	newPod, err := WaitForPodCompletion(ctx, client, pod.Namespace, pod.Name, notifier, false)
 	if newPod != nil {
 		pod = newPod
 	}
@@ -942,7 +926,7 @@ func getClusterClaimPodParams(secretVolumeMounts []coreapi.VolumeMount, testName
 	var errs []error
 
 	for _, secretName := range []string{api.HiveAdminKubeconfigSecret, api.HiveAdminPasswordSecret} {
-		mountPath := getMountPath(namePerTest(secretName, testName))
+		mountPath := getMountPath(NamePerTest(secretName, testName))
 		var foundMountPath bool
 		for _, secretVolumeMount := range secretVolumeMounts {
 			if secretVolumeMount.MountPath == mountPath {
@@ -959,7 +943,7 @@ func getClusterClaimPodParams(secretVolumeMounts []coreapi.VolumeMount, testName
 		}
 		if !foundMountPath {
 			// should never happen
-			errs = append(errs, fmt.Errorf("failed to find foundMountPath %s to create secret %s", mountPath, namePerTest(secretName, testName)))
+			errs = append(errs, fmt.Errorf("failed to find foundMountPath %s to create secret %s", mountPath, NamePerTest(secretName, testName)))
 		}
 	}
 

@@ -25,8 +25,6 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/remotecommand"
 	toolswatch "k8s.io/client-go/tools/watch"
@@ -38,7 +36,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
-	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 )
 
 const (
@@ -50,7 +48,7 @@ const (
 	annotationContainersForSubTestResults = "ci-operator.openshift.io/container-sub-tests"
 	// A boolean value which indicates that the logs from all containers in the
 	// pod must be copied to the artifact directory (default is "false").
-	annotationSaveContainerLogs = "ci-operator.openshift.io/save-container-logs"
+	AnnotationSaveContainerLogs = "ci-operator.openshift.io/save-container-logs"
 	// artifactEnv is the env var in which we hold the artifact dir for users
 	artifactEnv = "ARTIFACT_DIR"
 )
@@ -167,46 +165,6 @@ func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
 	return tests
 }
 
-type PodClient interface {
-	loggingclient.LoggingClient
-	// WithNewLoggingClient returns a new instance of the PodClient that resets
-	// its LoggingClient.
-	WithNewLoggingClient() PodClient
-	Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error)
-	GetLogs(namespace, name string, opts *coreapi.PodLogOptions) *rest.Request
-}
-
-func NewPodClient(ctrlclient loggingclient.LoggingClient, config *rest.Config, client rest.Interface) PodClient {
-	return &podClient{LoggingClient: ctrlclient, config: config, client: client}
-}
-
-type podClient struct {
-	loggingclient.LoggingClient
-	config *rest.Config
-	client rest.Interface
-}
-
-func (c podClient) Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
-	u := c.client.Post().Resource("pods").Namespace(namespace).Name(pod).SubResource("exec").VersionedParams(opts, scheme.ParameterCodec).URL()
-	e, err := remotecommand.NewSPDYExecutor(c.config, "POST", u)
-	if err != nil {
-		return nil, fmt.Errorf("could not initialize a new SPDY executor: %w", err)
-	}
-	return e, nil
-}
-
-func (c podClient) GetLogs(namespace, name string, opts *coreapi.PodLogOptions) *rest.Request {
-	return c.client.Get().Namespace(namespace).Name(name).Resource("pods").SubResource("log").VersionedParams(opts, scheme.ParameterCodec)
-}
-
-func (c podClient) WithNewLoggingClient() PodClient {
-	return podClient{
-		LoggingClient: c.New(),
-		config:        c.config,
-		client:        c.client,
-	}
-}
-
 type evaluator func(obj runtime.Object) (bool, error)
 
 // waitForConditionOnObject uses a watch to wait for a condition to be true on an object.
@@ -256,7 +214,7 @@ func waitForConditionOnObject(ctx context.Context, client ctrlruntimeclient.With
 	return syncErr
 }
 
-func waitForContainer(podClient PodClient, ns, name, containerName string) error {
+func waitForContainer(podClient kubernetes.PodClient, ns, name, containerName string) error {
 	logrus.WithFields(logrus.Fields{
 		"namespace": ns,
 		"name":      name,
@@ -285,7 +243,7 @@ func waitForContainer(podClient PodClient, ns, name, containerName string) error
 	return waitForConditionOnObject(ctx, podClient, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &corev1.PodList{}, &corev1.Pod{}, evaluatorFunc, 300*5*time.Second)
 }
 
-func copyArtifacts(podClient PodClient, into, ns, name, containerName string, paths []string) error {
+func copyArtifacts(podClient kubernetes.PodClient, into, ns, name, containerName string, paths []string) error {
 	logrus.Tracef("Copying artifacts from %s into %s", name, into)
 	var args []string
 	for _, s := range paths {
@@ -371,7 +329,7 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 	return nil
 }
 
-func removeFile(podClient PodClient, ns, name, containerName string, paths []string) error {
+func removeFile(podClient kubernetes.PodClient, ns, name, containerName string, paths []string) error {
 	e, err := podClient.Exec(ns, name, &coreapi.PodExecOptions{
 		Container: containerName,
 		Stdout:    true,
@@ -487,7 +445,7 @@ type podContainersMap map[string]sets.String
 // This worker is thread safe and may be invoked in parallel.
 type ArtifactWorker struct {
 	dir       string
-	podClient PodClient
+	podClient kubernetes.PodClient
 	namespace string
 
 	// Processing this requires the lock, so it must not be held
@@ -500,7 +458,7 @@ type ArtifactWorker struct {
 	hasArtifacts sets.String
 }
 
-func NewArtifactWorker(podClient PodClient, artifactDir, namespace string) *ArtifactWorker {
+func NewArtifactWorker(podClient kubernetes.PodClient, artifactDir, namespace string) *ArtifactWorker {
 	// stream artifacts in the background
 	w := &ArtifactWorker{
 		podClient: podClient,
@@ -735,7 +693,7 @@ func hasMountsArtifactsVolume(pod *coreapi.Pod) bool {
 	return false
 }
 
-func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podName string) error {
+func gatherContainerLogsOutput(podClient kubernetes.PodClient, artifactDir, namespace, podName string) error {
 	logger := logrus.WithFields(logrus.Fields{"pod": podName, "namespace": namespace, "artifactDir": artifactDir})
 	logger.Trace("Gathering container logs.")
 	var validationErrors []error
@@ -747,7 +705,7 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 		return fmt.Errorf("could not list pod: %w", err)
 	}
 
-	if pod.Annotations[annotationSaveContainerLogs] != "true" {
+	if pod.Annotations[AnnotationSaveContainerLogs] != "true" {
 		logger.Trace("Container logs not requested.")
 		return nil
 	}

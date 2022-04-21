@@ -13,8 +13,8 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/yaml"
 
-	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
+	"github.com/openshift/ci-tools/pkg/validation"
 )
 
 type ItemContext struct {
@@ -171,7 +171,7 @@ func (c *Config) Validate() error {
 		}
 		k := -1
 		for j, secretContext := range secretConfig.To {
-			if err := steps.ValidateSecretInStep(secretContext.Namespace, secretContext.Name); err != nil {
+			if err := validation.ValidateSecretInStep(secretContext.Namespace, secretContext.Name); err != nil {
 				errs = append(errs, fmt.Errorf("secret[%d] in secretConfig[%d] cannot be used in a step: %w", j, i, err))
 			}
 			if secretContext.Type == corev1.SecretTypeDockerConfigJson {

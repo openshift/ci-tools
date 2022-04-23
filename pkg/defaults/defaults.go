@@ -44,6 +44,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
+	"github.com/openshift/ci-tools/pkg/steps/multi_stage"
 	releasesteps "github.com/openshift/ci-tools/pkg/steps/release"
 	"github.com/openshift/ci-tools/pkg/steps/secretrecordingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -388,7 +389,7 @@ func stepForTest(
 			params = api.NewDeferredParameters(params)
 		}
 		var testSteps []api.Step
-		step := steps.MultiStageTestStep(*c, config, params, podClient, jobSpec, leases)
+		step := multi_stage.MultiStageTestStep(*c, config, params, podClient, jobSpec, leases)
 		if len(leases) != 0 {
 			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
 			addProvidesForStep(step, params)

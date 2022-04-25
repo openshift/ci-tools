@@ -2,16 +2,135 @@ package ocplifecycle
 
 import (
 	"fmt"
+	"io/ioutil"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"gopkg.in/yaml.v2"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
+// LoadConfig loads the lifecycle configuration from a given localtion.
+func LoadConfig(path string) (Config, error) {
+	configBytes, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read lifecycle config from path %s: %w", path, err)
+	}
+
+	var lifecycleConfig Config
+	if err := yaml.Unmarshal(configBytes, &lifecycleConfig); err != nil {
+		return nil, fmt.Errorf("failed to deserialize the lifecycle config: %w", err)
+	}
+
+	return lifecycleConfig, nil
+}
+
+type TimelineOptions struct {
+	OnlyEvents sets.String
+}
+
+func mergeOptions(opts []TimelineOptions) TimelineOptions {
+	ret := TimelineOptions{}
+	onlyEvents := sets.NewString()
+
+	for _, opt := range opts {
+		onlyEvents = onlyEvents.Union(opt.OnlyEvents)
+	}
+
+	ret.OnlyEvents = onlyEvents
+
+	return ret
+}
+
+// Event holds information about the product version and the lifecycle phase.
+type Event struct {
+	ProductVersion string
+	LifecyclePhase LifecyclePhase
+}
+
+// Timeline is a list of events.
+type Timeline []Event
+
+// TimelineByProduct is a list of events mapped by version
+type TimelineByVersion map[string]Timeline
+
+// DeterminePlaceInTime returns the the previous and the next event based on the given point in time.
+func (t Timeline) DeterminePlaceInTime(now time.Time) (Event, Event) {
+	before := Event{}
+	after := Event{
+		ProductVersion: "*",
+		LifecyclePhase: LifecyclePhase{When: &metav1.Time{Time: now}},
+	}
+
+	for _, event := range t {
+		lifecyclePhase := event.LifecyclePhase
+		if now.Before(lifecyclePhase.When.Time) {
+			after = event
+			break
+		}
+		before = event
+	}
+
+	return before, after
+}
+
 // Config is an OCP lifecycle config. It holds a top-level product key (e.G. OCP)
 // that maps to versions (e.G. 4.8) and those finally include the lifecycle phases.
 type Config map[string]map[string][]LifecyclePhase
+
+// GetTimeline returns a list of events in chronological order for a given product name.
+func (c Config) GetTimeline(product string, opts ...TimelineOptions) Timeline {
+	options := mergeOptions(opts)
+
+	var timeline Timeline
+	for productVersion, phases := range c[product] {
+		for _, phase := range phases {
+			if phase.When != nil {
+
+				if !options.OnlyEvents.Has(string(phase.Event)) {
+					continue
+				}
+
+				timeline = append(timeline, Event{
+					ProductVersion: productVersion,
+					LifecyclePhase: phase,
+				})
+			}
+		}
+	}
+	// Sort timeline from past to future events
+	sort.Slice(timeline, func(i, j int) bool {
+		return timeline[i].LifecyclePhase.When.Time.Before(timeline[j].LifecyclePhase.When.Time)
+	})
+	return timeline
+}
+
+// GetTimeline returns a list of events in chronological order for a given product name mapped by version.
+func (c Config) GetTimelinesByVersion(product string) TimelineByVersion {
+	timelineByVersion := make(TimelineByVersion)
+	for productVersion, phases := range c[product] {
+		timeline := Timeline{}
+		for _, phase := range phases {
+			if phase.When != nil {
+				timeline = append(timeline, Event{
+					ProductVersion: productVersion,
+					LifecyclePhase: phase,
+				})
+			}
+		}
+		// Sort timeline from past to future events
+		sort.Slice(timeline, func(i, j int) bool {
+			return timeline[i].LifecyclePhase.When.Time.Before(timeline[j].LifecyclePhase.When.Time)
+		})
+		timelineByVersion[productVersion] = timeline
+	}
+
+	return timelineByVersion
+}
 
 // LifecyclePhase describes a phase in the release lifecycle for a version of a product.
 type LifecyclePhase struct {

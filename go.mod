@@ -1,6 +1,6 @@
 module github.com/openshift/ci-tools
 
-go 1.17
+go 1.18
 
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v14.2.0+incompatible
@@ -19,9 +19,9 @@ replace (
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20201120165435-072a4cd8ca42
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20210730113412-1811c1b3fc0e
 	github.com/openshift/library-go => github.com/openshift/library-go v0.0.0-20210826121606-162472d92388
-	k8s.io/client-go => k8s.io/client-go v0.22.0
-	k8s.io/component-base => k8s.io/component-base v0.22.0
-	k8s.io/kubectl => k8s.io/kubectl v0.22.0
+	k8s.io/client-go => k8s.io/client-go v0.22.2
+	k8s.io/component-base => k8s.io/component-base v0.22.2
+	k8s.io/kubectl => k8s.io/kubectl v0.22.2
 )
 
 require (
@@ -149,7 +149,7 @@ require (
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/json-iterator/go v1.1.11 // indirect
+	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jstemmer/go-junit-report v0.9.1 // indirect
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
@@ -160,7 +160,7 @@ require (
 	github.com/mitchellh/mapstructure v1.4.1 // indirect
 	github.com/moby/spdystream v0.2.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/modern-go/reflect2 v1.0.1 // indirect
+	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2-0.20190823105129-775207bd45b6 // indirect
 	github.com/opencontainers/runc v1.0.0-rc9 // indirect

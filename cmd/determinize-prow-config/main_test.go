@@ -18,6 +18,8 @@ import (
 	"k8s.io/test-infra/prow/github"
 	utilpointer "k8s.io/utils/pointer"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/ci-tools/pkg/api/shardprowconfig"
 )
 
 func TestShardProwConfig(t *testing.T) {
@@ -260,7 +262,7 @@ func TestShardProwConfig(t *testing.T) {
 				t.Fatalf("failed to serialize the original config: %v", err)
 			}
 
-			newConfig, err := shardProwConfig(tc.in, afs)
+			newConfig, err := shardprowconfig.ShardProwConfig(tc.in, afs, determinizeProwConfigFunctors{})
 			if err != nil {
 				t.Fatalf("shardProwConfig failed: %v", err)
 			}

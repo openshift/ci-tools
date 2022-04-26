@@ -8,11 +8,12 @@ import (
 
 	"github.com/spf13/afero"
 
-	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/prowconfigsharding"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/git/types"
+
+	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/prowconfigsharding"
 )
 
 type ShardProwConfigFunctors interface {

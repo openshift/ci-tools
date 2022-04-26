@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/openshift/ci-tools/pkg/api/shardprowconfig"
 	"github.com/spf13/afero"
 
 	"k8s.io/test-infra/prow/config"
@@ -260,7 +261,7 @@ func TestShardProwConfig(t *testing.T) {
 				t.Fatalf("failed to serialize the original config: %v", err)
 			}
 
-			newConfig, err := shardProwConfig(tc.in, afs)
+			newConfig, err := shardprowconfig.ShardProwConfig(tc.in, afs, newShardProwConfigFunctors())
 			if err != nil {
 				t.Fatalf("shardProwConfig failed: %v", err)
 			}

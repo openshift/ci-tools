@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"k8s.io/test-infra/prow/git/types"
 	"os"
 	"path"
 	"path/filepath"
@@ -19,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/git/types"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/plugins"
 

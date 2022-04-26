@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"k8s.io/test-infra/prow/git/types"
 	"os"
 	"path"
 	"path/filepath"
@@ -19,6 +18,7 @@ import (
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	prowconfig "k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/git/types"
 	"k8s.io/test-infra/prow/plugins"
 	"sigs.k8s.io/yaml"
 

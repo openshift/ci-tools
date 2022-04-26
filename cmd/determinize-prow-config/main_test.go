@@ -4,7 +4,6 @@ import (
 	"flag"
 	"io/fs"
 	"io/ioutil"
-	"k8s.io/test-infra/prow/git/types"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +15,7 @@ import (
 
 	"k8s.io/test-infra/prow/config"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
+	"k8s.io/test-infra/prow/git/types"
 	utilpointer "k8s.io/utils/pointer"
 	"sigs.k8s.io/yaml"
 )

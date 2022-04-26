@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/test-infra/prow/git/types"
 	"os"
 	"path"
 	"path/filepath"
@@ -18,7 +19,6 @@ import (
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/plugins"
 	"sigs.k8s.io/yaml"
 
@@ -123,8 +123,8 @@ type prowConfigWithPointers struct {
 }
 
 type tideConfig struct {
-	MergeType map[string]github.PullRequestMergeType `json:"merge_method,omitempty"`
-	Queries   prowconfig.TideQueries                 `json:"queries,omitempty"`
+	MergeType map[string]types.PullRequestMergeType `json:"merge_method,omitempty"`
+	Queries   prowconfig.TideQueries                `json:"queries,omitempty"`
 }
 
 func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.ProwConfig, error) {
@@ -163,7 +163,7 @@ func shardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs) (*prowconfig.Pr
 		if configsByOrgRepo[orgRepo] == nil {
 			configsByOrgRepo[orgRepo] = &prowConfigWithPointers{}
 		}
-		configsByOrgRepo[orgRepo].Tide = &tideConfig{MergeType: map[string]github.PullRequestMergeType{orgOrgRepoString: mergeMethod}}
+		configsByOrgRepo[orgRepo].Tide = &tideConfig{MergeType: map[string]types.PullRequestMergeType{orgOrgRepoString: mergeMethod}}
 		delete(pc.Tide.MergeType, orgOrgRepoString)
 	}
 

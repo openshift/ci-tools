@@ -6,12 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/prowconfigsharding"
 	"github.com/spf13/afero"
+
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
+
+	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/prowconfigsharding"
 )
 
 type QueryModifier func(*prowconfig.TideQuery, string)

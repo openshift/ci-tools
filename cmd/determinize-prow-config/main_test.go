@@ -11,7 +11,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/openshift/ci-tools/pkg/api/shardprowconfig"
 	"github.com/spf13/afero"
 
 	"k8s.io/test-infra/prow/config"
@@ -19,6 +18,8 @@ import (
 	"k8s.io/test-infra/prow/github"
 	utilpointer "k8s.io/utils/pointer"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/ci-tools/pkg/api/shardprowconfig"
 )
 
 func TestShardProwConfig(t *testing.T) {

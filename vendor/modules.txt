@@ -496,7 +496,7 @@ github.com/jbenet/go-context/io
 # github.com/jmespath/go-jmespath v0.4.0
 ## explicit; go 1.14
 github.com/jmespath/go-jmespath
-# github.com/json-iterator/go v1.1.11
+# github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
 # github.com/jstemmer/go-junit-report v0.9.1
@@ -545,8 +545,8 @@ github.com/moby/spdystream/spdy
 # github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 ## explicit
 github.com/modern-go/concurrent
-# github.com/modern-go/reflect2 v1.0.1
-## explicit
+# github.com/modern-go/reflect2 v1.0.2
+## explicit; go 1.12
 github.com/modern-go/reflect2
 # github.com/montanaflynn/stats v0.6.3
 ## explicit
@@ -1154,7 +1154,7 @@ k8s.io/apimachinery/third_party/forked/golang/reflect
 # k8s.io/apiserver v0.22.2
 ## explicit; go 1.16
 k8s.io/apiserver/pkg/authentication/user
-# k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible => k8s.io/client-go v0.22.0
+# k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible => k8s.io/client-go v0.22.2
 ## explicit; go 1.16
 k8s.io/client-go/applyconfigurations/admissionregistration/v1
 k8s.io/client-go/applyconfigurations/admissionregistration/v1beta1
@@ -1432,7 +1432,7 @@ k8s.io/client-go/util/jsonpath
 k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
-# k8s.io/component-base v0.22.2 => k8s.io/component-base v0.22.0
+# k8s.io/component-base v0.22.2 => k8s.io/component-base v0.22.2
 ## explicit; go 1.16
 k8s.io/component-base/config
 k8s.io/component-base/config/v1alpha1
@@ -1672,6 +1672,6 @@ sigs.k8s.io/yaml
 # github.com/openshift/api => github.com/openshift/api v0.0.0-20201120165435-072a4cd8ca42
 # github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20210730113412-1811c1b3fc0e
 # github.com/openshift/library-go => github.com/openshift/library-go v0.0.0-20210826121606-162472d92388
-# k8s.io/client-go => k8s.io/client-go v0.22.0
-# k8s.io/component-base => k8s.io/component-base v0.22.0
-# k8s.io/kubectl => k8s.io/kubectl v0.22.0
+# k8s.io/client-go => k8s.io/client-go v0.22.2
+# k8s.io/component-base => k8s.io/component-base v0.22.2
+# k8s.io/kubectl => k8s.io/kubectl v0.22.2

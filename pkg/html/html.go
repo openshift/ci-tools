@@ -48,7 +48,7 @@ func WritePage(w http.ResponseWriter, title, bodyStart, end string, body *templa
 	if _, err := fmt.Fprintln(w, end); err != nil {
 		return e(err)
 	}
-	if _, err := fmt.Fprintln(w, pageEnd); err != nil {
+	if _, err := fmt.Fprint(w, pageEnd); err != nil {
 		return e(err)
 	}
 	return nil

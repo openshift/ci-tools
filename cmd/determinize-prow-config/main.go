@@ -63,14 +63,14 @@ func main() {
 	}
 }
 
-func newShardProwConfigFunctors() shardprowconfig.ShardProwConfigFunctors {
-	return shardprowconfig.ShardProwConfigFunctors{
-		GetDataFromProwConfig: func(*prowconfig.ProwConfig) {},
-		ModifyQuery: func(queryCopy *prowconfig.TideQuery, repo string) {
-			queryCopy.Orgs = nil
-			queryCopy.Repos = []string{repo}
-		},
-	}
+type determinizeProwConfigFunctors struct{}
+
+func (d determinizeProwConfigFunctors) ModifyQuery(queryCopy *prowconfig.TideQuery, repo string) {
+	queryCopy.Orgs = nil
+	queryCopy.Repos = []string{repo}
+}
+
+func (d determinizeProwConfigFunctors) GetDataFromProwConfig(*prowconfig.ProwConfig) {
 }
 
 func updateProwConfig(configDir, shardingBaseDir string) error {
@@ -87,7 +87,7 @@ func updateProwConfig(configDir, shardingBaseDir string) error {
 	if shardingBaseDir != "" {
 		pc, err := shardprowconfig.ShardProwConfig(&config.ProwConfig,
 			afero.NewBasePathFs(afero.NewOsFs(), shardingBaseDir),
-			newShardProwConfigFunctors(),
+			determinizeProwConfigFunctors{},
 		)
 		if err != nil {
 			return fmt.Errorf("failed to shard the prow config: %w", err)

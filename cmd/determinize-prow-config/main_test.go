@@ -262,7 +262,7 @@ func TestShardProwConfig(t *testing.T) {
 				t.Fatalf("failed to serialize the original config: %v", err)
 			}
 
-			newConfig, err := shardprowconfig.ShardProwConfig(tc.in, afs, newShardProwConfigFunctors())
+			newConfig, err := shardprowconfig.ShardProwConfig(tc.in, afs, determinizeProwConfigFunctors{})
 			if err != nil {
 				t.Fatalf("shardProwConfig failed: %v", err)
 			}

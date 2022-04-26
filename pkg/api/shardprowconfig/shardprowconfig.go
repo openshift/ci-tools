@@ -16,12 +16,9 @@ import (
 	"github.com/openshift/ci-tools/pkg/prowconfigsharding"
 )
 
-type QueryModifier func(*prowconfig.TideQuery, string)
-type ProwConfigGetter func(*prowconfig.ProwConfig)
-
-type ShardProwConfigFunctors struct {
-	ModifyQuery           QueryModifier
-	GetDataFromProwConfig ProwConfigGetter
+type ShardProwConfigFunctors interface {
+	ModifyQuery(*prowconfig.TideQuery, string)
+	GetDataFromProwConfig(*prowconfig.ProwConfig)
 }
 
 // prowConfigWithPointers mimics the upstream prowConfig but has pointer fields only

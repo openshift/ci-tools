@@ -24,23 +24,17 @@ import (
 	"time"
 )
 
-
 import (
 	"crypto/tls"
-	"encoding/json"
-	"io/ioutil"
 	"net/http"
 
-	admissionv1 "k8s.io/api/admission/v1"
-	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	KubernetesHostnameLabelName = "kubernetes.io/hostname"
-
 	CiWorkloadLabelName           = "ci-workload"
+	CiWorkloadNamespaceLabelName           = "ci-workload-namespace"
 	CiWorkloadLabelValueBuilds = "builds"
 	CiWorkloadLabelValueTests  = "tests"
 
@@ -63,6 +57,9 @@ var (
 	additionalReservedTestCPU string
 	additionalReservedBuildMemory string
 	additionalReservedTestMemory string
+
+	shrinkTestCPU float32
+	shrinkBuildCPU float32
 
 	mutex = sync.Mutex{}
 	buildsNodeNameList = make([]string, 0)
@@ -243,27 +240,23 @@ func nodePresent(node *corev1.Node, exists bool) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	if hostname, ok := node.Labels[KubernetesHostnameLabelName]; ok {
-		if val, ok := node.Labels[CiWorkloadLabelName]; ok {
-			var modification func([]string, string) []string
-			if exists {
-				klog.InfoS("Registering node in cache", "hostname", hostname, CiWorkloadLabelName, val)
-				modification = addToHostnames
-			} else {
-				klog.InfoS("Removing node from cache", "hostname", hostname, CiWorkloadLabelName, val)
-				modification = removeFromHostnames
-			}
-			switch val {
-			case CiWorkloadLabelValueBuilds:
-				buildsNodeNameList = modification(buildsNodeNameList, hostname)
-			case CiWorkloadLabelValueTests:
-				testsNodeNameList = modification(testsNodeNameList, hostname)
-			}
+	if val, ok := node.Labels[CiWorkloadLabelName]; ok {
+		var modification func([]string, string) []string
+		if exists {
+			klog.InfoS("Registering node in cache", "hostname", node.Name, CiWorkloadLabelName, val)
+			modification = addToHostnames
+		} else {
+			klog.InfoS("Removing node from cache", "hostname", node.Name, CiWorkloadLabelName, val)
+			modification = removeFromHostnames
 		}
-	} else {
-		klog.Warningf("Node %v did not contain label %v; incompatible API change?", node.Name, KubernetesHostnameLabelName)
-		return
+		switch val {
+		case CiWorkloadLabelValueBuilds:
+			buildsNodeNameList = modification(buildsNodeNameList, node.Name)
+		case CiWorkloadLabelValueTests:
+			testsNodeNameList = modification(testsNodeNameList, node.Name)
+		}
 	}
+
 }
 
 
@@ -273,6 +266,9 @@ func init() {
 	rootCmd.Flags().IntVar(&port, "port", 443, "Port to listen on for HTTPS traffic")
 	rootCmd.Flags().StringVar(&impersonateUser, "as", "", "Impersonate a user, like system:admin")
 
+	rootCmd.Flags().Float32Var(&shrinkTestCPU, "shrink-cpu-requests-tests", 1.0, "Multiply test workload CPU requests by this factor")
+	rootCmd.Flags().Float32Var(&shrinkBuildCPU, "shrink-cpu-requests-builds", 1.0, "Multiply build workload CPU requests by this factor")
+
 	rootCmd.Flags().BoolVar(&applyAdditionalReserved, "apply-additional-reserved", false, "Create or update daemonsets to reserve additional system memory")
 	rootCmd.Flags().StringVar(&additionalReservedBuildCPU, "reserve-system-cpu-builds", "100m", "Additional cores to reserve on build workload nodes using daemonset")
 	rootCmd.Flags().StringVar(&additionalReservedBuildMemory, "reserve-system-memory-builds", "200Mi", "Additional bytes to reserve on build workload nodes using daemonset")
@@ -280,104 +276,6 @@ func init() {
 	rootCmd.Flags().StringVar(&additionalReservedTestMemory, "reserve-system-memory-tests", "200Mi", "Additional bytes to reserve on test workload nodes using daemonset")
 }
 
-func admissionReviewFromRequest(r *http.Request, deserializer runtime.Decoder) (*admissionv1.AdmissionReview, error) {
-	// Validate that the incoming content type is correct.
-	if r.Header.Get("Content-Type") != "application/json" {
-		return nil, fmt.Errorf("expected application/json content-type")
-	}
-
-	// Get the body data, which will be the AdmissionReview
-	// content for the request.
-	var body []byte
-	if r.Body != nil {
-		requestData, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			return nil, err
-		}
-		body = requestData
-	}
-
-	// Decode the request body into
-	admissionReviewRequest := &admissionv1.AdmissionReview{}
-	if _, _, err := deserializer.Decode(body, nil, admissionReviewRequest); err != nil {
-		return nil, err
-	}
-
-	return admissionReviewRequest, nil
-}
-
-func mutatePod(w http.ResponseWriter, r *http.Request) {
-	logger.Printf("received message on mutate")
-
-	deserializer := codecs.UniversalDeserializer()
-
-	// Parse the AdmissionReview from the http request.
-	admissionReviewRequest, err := admissionReviewFromRequest(r, deserializer)
-	if err != nil {
-		msg := fmt.Sprintf("error getting admission review from request: %v", err)
-		logger.Printf(msg)
-		w.WriteHeader(400)
-		w.Write([]byte(msg))
-		return
-	}
-
-	// Do server-side validation that we are only dealing with a pod resource. This
-	// should also be part of the MutatingWebhookConfiguration in the cluster, but
-	// we should verify here before continuing.
-	podResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
-	if admissionReviewRequest.Request.Resource != podResource {
-		msg := fmt.Sprintf("did not receive pod, got %s", admissionReviewRequest.Request.Resource.Resource)
-		logger.Printf(msg)
-		w.WriteHeader(400)
-		w.Write([]byte(msg))
-		return
-	}
-
-	// Decode the pod from the AdmissionReview.
-	rawRequest := admissionReviewRequest.Request.Object.Raw
-	pod := corev1.Pod{}
-	if _, _, err := deserializer.Decode(rawRequest, nil, &pod); err != nil {
-		msg := fmt.Sprintf("error decoding raw pod: %v", err)
-		logger.Printf(msg)
-		w.WriteHeader(500)
-		w.Write([]byte(msg))
-		return
-	}
-
-	// Create a response that will add a label to the pod if it does
-	// not already have a label with the key of "hello". In this case
-	// it does not matter what the value is, as long as the key exists.
-	admissionResponse := &admissionv1.AdmissionResponse{}
-	var patch string
-	patchType := v1.PatchTypeJSONPatch
-	if _, ok := pod.Labels["hello"]; !ok {
-		patch = `[{"op":"add","path":"/metadata/labels","value":{"hello":"world"}}]`
-	}
-
-	admissionResponse.Allowed = true
-	if patch != "" {
-		admissionResponse.PatchType = &patchType
-		admissionResponse.Patch = []byte(patch)
-	}
-
-	// Construct the response, which is just another AdmissionReview.
-	var admissionReviewResponse admissionv1.AdmissionReview
-	admissionReviewResponse.Response = admissionResponse
-	admissionReviewResponse.SetGroupVersionKind(admissionReviewRequest.GroupVersionKind())
-	admissionReviewResponse.Response.UID = admissionReviewRequest.Request.UID
-
-	resp, err := json.Marshal(admissionReviewResponse)
-	if err != nil {
-		msg := fmt.Sprintf("error marshalling response json: %v", err)
-		logger.Printf(msg)
-		w.WriteHeader(500)
-		w.Write([]byte(msg))
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(resp)
-}
 
 func runWebhookServer(cert *tls.Certificate) {
 	fmt.Println("Starting webhook server")

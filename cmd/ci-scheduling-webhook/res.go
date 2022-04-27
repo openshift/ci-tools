@@ -45,6 +45,7 @@ func createOrUpdateDaemonSet(ctx context.Context, clientset *kubernetes.Clientse
 	return nil
 }
 
+// TODO : Replace these daemonsets with RuntimeClass with overhead. Perhaps 500m per build.
 func systemReservingDaemonset(ciWorkloadName string, cpuQuantity string, memQuantity string) *appsv1.DaemonSet {
 
 	workloadTaintName := CiWorkloadTestsTaintName
@@ -70,6 +71,11 @@ func systemReservingDaemonset(ciWorkloadName string, cpuQuantity string, memQuan
 					},
 				},
 				Spec: corev1.PodSpec{
+					// I don't think daemonset pods can be evicted but sdn pods set a priority, so follow
+					// suite and try to protect this extra CPU and memory as best we can.
+					PriorityClassName: "system-cluster-critical",
+
+
 
 					// Toleration plus affinity will ensure this daemonset only runs
 					// on nodes with ci-workload label set equal ciWorkloadName.
@@ -147,4 +153,82 @@ func systemReservingDaemonset(ciWorkloadName string, cpuQuantity string, memQuan
 		},
 	}
 	return ds
+}
+
+func int32Ptr(i int32) *int32 { return &i }
+
+func kubeletReservingDeployment(nodeName string, ciWorkloadName string, cpuQuantity string, memQuantity string) *appsv1.Deployment {
+	workloadTaintName := CiWorkloadTestsTaintName
+	if ciWorkloadName == CiWorkloadLabelValueBuilds {
+		workloadTaintName = CiWorkloadBuildsTaintName
+	}
+
+	labelName := "cpu-reserve-" + nodeName
+	deploymentName := labelName + "-" + ciWorkloadName
+
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: deploymentName,
+			Namespace: DeploymentNamespace,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: int32Ptr(2),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					labelName: ciWorkloadName,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						labelName: ciWorkloadName,
+					},
+				},
+				Spec: corev1.PodSpec{
+					// Just run pause -- allowing other pods to consume our overhead when we are evicted
+					Containers: []corev1.Container{
+						{
+							Name:  "pause",
+							Image: "gcr.io/google_containers/pause:latest",
+							Resources: corev1.ResourceRequirements {
+								Limits: corev1.ResourceList {
+									corev1.ResourceCPU: resource.MustParse(cpuQuantity),
+									corev1.ResourceMemory: resource.MustParse(memQuantity),
+								},
+								Requests: corev1.ResourceList {
+									corev1.ResourceCPU: resource.MustParse(cpuQuantity),
+									corev1.ResourceMemory: resource.MustParse(memQuantity),
+								},
+							},
+						},
+					},
+					Tolerations: []corev1.Toleration{
+						{
+							Key:      workloadTaintName,
+							Operator: "Exists",
+							Effect:   "NoSchedule",
+						},
+					},
+					Affinity: &corev1.Affinity{
+						PodAntiAffinity: &corev1.PodAntiAffinity{
+							PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm {
+								{
+									Weight:          1,
+									PodAffinityTerm: corev1.PodAffinityTerm {
+										LabelSelector: &metav1.LabelSelector {
+											MatchLabels: map[string]string {
+												labelName: ciWorkloadName,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	return deployment
 }

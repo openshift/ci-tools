@@ -9,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/git/types"
 	"k8s.io/test-infra/prow/plugins"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 	utilpointer "k8s.io/utils/pointer"
@@ -221,39 +221,39 @@ func TestInjectPrivateReposTideQueries(t *testing.T) {
 func TestInjectPrivateMergeType(t *testing.T) {
 	testCases := []struct {
 		id             string
-		tideMergeTypes map[string]github.PullRequestMergeType
-		expected       map[string]github.PullRequestMergeType
+		tideMergeTypes map[string]types.PullRequestMergeType
+		expected       map[string]types.PullRequestMergeType
 	}{
 		{
 			id: "no changes expected",
-			tideMergeTypes: map[string]github.PullRequestMergeType{
-				"anotherOrg/Repo": github.MergeMerge,
-				"openshift/Repo2": github.MergeRebase,
-				"testshift/Repo3": github.MergeSquash,
+			tideMergeTypes: map[string]types.PullRequestMergeType{
+				"anotherOrg/Repo": types.MergeMerge,
+				"openshift/Repo2": types.MergeRebase,
+				"testshift/Repo3": types.MergeSquash,
 			},
-			expected: map[string]github.PullRequestMergeType{
-				"anotherOrg/Repo": github.MergeMerge,
-				"openshift/Repo2": github.MergeRebase,
-				"testshift/Repo3": github.MergeSquash,
+			expected: map[string]types.PullRequestMergeType{
+				"anotherOrg/Repo": types.MergeMerge,
+				"openshift/Repo2": types.MergeRebase,
+				"testshift/Repo3": types.MergeSquash,
 			},
 		},
 		{
 			id: "changes expected",
-			tideMergeTypes: map[string]github.PullRequestMergeType{
-				"anotherOrg/Repo":       github.MergeMerge,
-				"openshift/testRepo1":   github.MergeSquash,
-				"openshift/anotherRepo": github.MergeSquash,
-				"testshift/anotherRepo": github.MergeMerge,
-				"testshift/testRepo3":   github.MergeMerge,
+			tideMergeTypes: map[string]types.PullRequestMergeType{
+				"anotherOrg/Repo":       types.MergeMerge,
+				"openshift/testRepo1":   types.MergeSquash,
+				"openshift/anotherRepo": types.MergeSquash,
+				"testshift/anotherRepo": types.MergeMerge,
+				"testshift/testRepo3":   types.MergeMerge,
 			},
-			expected: map[string]github.PullRequestMergeType{
-				"anotherOrg/Repo":          github.MergeMerge,
-				"openshift/testRepo1":      github.MergeSquash,
-				"openshift/anotherRepo":    github.MergeSquash,
-				"testshift/anotherRepo":    github.MergeMerge,
-				"testshift/testRepo3":      github.MergeMerge,
-				"openshift-priv/testRepo1": github.MergeSquash,
-				"openshift-priv/testRepo3": github.MergeMerge,
+			expected: map[string]types.PullRequestMergeType{
+				"anotherOrg/Repo":          types.MergeMerge,
+				"openshift/testRepo1":      types.MergeSquash,
+				"openshift/anotherRepo":    types.MergeSquash,
+				"testshift/anotherRepo":    types.MergeMerge,
+				"testshift/testRepo3":      types.MergeMerge,
+				"openshift-priv/testRepo1": types.MergeSquash,
+				"openshift-priv/testRepo3": types.MergeMerge,
 			},
 		},
 	}

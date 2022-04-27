@@ -216,7 +216,12 @@ func (s *server) authHandler() http.HandlerFunc {
 		s.censor.AddSecrets(accessToken)
 
 		// get the user information
-		ghClient := s.githubOptions.GitHubClientWithAccessToken(accessToken)
+		ghClient, err := s.githubOptions.GitHubClientWithAccessToken(accessToken)
+		if err != nil {
+			logger.WithError(err).Error("unable to create github client")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		user, err := ghClient.BotUser()
 		if err != nil {
 			logger.WithError(err).Error("unable to retrieve user")

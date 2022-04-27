@@ -15,7 +15,7 @@ import (
 
 	"k8s.io/test-infra/prow/config"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
-	"k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/git/types"
 	utilpointer "k8s.io/utils/pointer"
 	"sigs.k8s.io/yaml"
 
@@ -94,9 +94,9 @@ func TestShardProwConfig(t *testing.T) {
 			name: "Org and repo mergemethod config gets written out",
 			in: &config.ProwConfig{
 				Tide: config.Tide{
-					MergeType: map[string]github.PullRequestMergeType{
-						"openshift":         github.MergeSquash,
-						"openshift/release": github.MergeRebase,
+					MergeType: map[string]types.PullRequestMergeType{
+						"openshift":         types.MergeSquash,
+						"openshift/release": types.MergeRebase,
 					},
 				},
 			},
@@ -130,9 +130,9 @@ func TestShardProwConfig(t *testing.T) {
 					},
 				},
 				Tide: config.Tide{
-					MergeType: map[string]github.PullRequestMergeType{
-						"openshift":         github.MergeSquash,
-						"openshift/release": github.MergeRebase,
+					MergeType: map[string]types.PullRequestMergeType{
+						"openshift":         types.MergeSquash,
+						"openshift/release": types.MergeRebase,
 					},
 				},
 			},

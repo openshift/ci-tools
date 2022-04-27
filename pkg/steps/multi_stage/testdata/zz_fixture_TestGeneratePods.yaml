@@ -103,6 +103,7 @@
       image: sidecar
       name: sidecar
       resources: {}
+      terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
       - mountPath: /logs
         name: logs
@@ -258,6 +259,7 @@
       image: sidecar
       name: sidecar
       resources: {}
+      terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
       - mountPath: /logs
         name: logs
@@ -409,6 +411,7 @@
       image: sidecar
       name: sidecar
       resources: {}
+      terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
       - mountPath: /logs
         name: logs
@@ -564,6 +567,7 @@
       image: sidecar
       name: sidecar
       resources: {}
+      terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
       - mountPath: /logs
         name: logs

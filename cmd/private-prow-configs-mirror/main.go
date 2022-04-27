@@ -18,7 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/git/types"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/plugins"
 
@@ -221,7 +221,7 @@ func setPrivateReposTideQueries(tideQueries []prowconfig.TideQuery, orgRepos org
 	}
 }
 
-func injectPrivateMergeType(tideMergeTypes map[string]github.PullRequestMergeType, orgRepos orgReposWithOfficialImages) {
+func injectPrivateMergeType(tideMergeTypes map[string]types.PullRequestMergeType, orgRepos orgReposWithOfficialImages) {
 	logrus.Info("Processing...")
 
 	for orgRepo, value := range tideMergeTypes {

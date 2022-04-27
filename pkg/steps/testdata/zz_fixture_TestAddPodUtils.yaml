@@ -27,6 +27,7 @@ spec:
     image: sidecar
     name: sidecar
     resources: {}
+    terminationMessagePolicy: FallbackToLogsOnError
     volumeMounts:
     - mountPath: /logs
       name: logs

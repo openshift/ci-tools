@@ -27,7 +27,7 @@ replace (
 require (
 	cloud.google.com/go/bigquery v1.8.0
 	cloud.google.com/go/storage v1.12.0
-	github.com/GoogleCloudPlatform/testgrid v0.0.68
+	github.com/GoogleCloudPlatform/testgrid v0.0.123
 	github.com/PagerDuty/go-pagerduty v1.4.1
 	github.com/alecthomas/chroma v0.8.2-0.20201103103104-ab61726cdb54
 	github.com/andygrunwald/go-jira v1.14.0
@@ -80,7 +80,7 @@ require (
 	k8s.io/apiserver v0.22.2
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
 	k8s.io/klog/v2 v2.9.0
-	k8s.io/test-infra v0.0.0-20220315203149-843d26549556
+	k8s.io/test-infra v0.0.0-20220426162453-28f5d976bee5
 	k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a
 	sigs.k8s.io/boskos v0.0.0-20210730172138-093b54882439
 	sigs.k8s.io/controller-runtime v0.10.3
@@ -208,6 +208,7 @@ require (
 )
 
 require (
+	bitbucket.org/creachadair/stringset v0.0.9 // indirect
 	cloud.google.com/go v0.81.0 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20200615164410-66371956d46c // indirect
 	github.com/ProtonMail/go-crypto v0.0.0-20210428141323-04723f9f07d7 // indirect

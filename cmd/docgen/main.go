@@ -17,7 +17,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to resolve filepath")
 	}
-	commentMap, err := genyaml.NewCommentMap(files...)
+	commentMap, err := genyaml.NewCommentMap(map[string][]byte{}, files...)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct commentMap")
 	}

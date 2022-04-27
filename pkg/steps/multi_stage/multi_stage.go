@@ -138,6 +138,9 @@ func (s *multiStageTestStep) Run(ctx context.Context) error {
 
 func (s *multiStageTestStep) run(ctx context.Context) error {
 	logrus.Infof("Running multi-stage test %s", s.name)
+	if s.profile != "" {
+		s.getProfileData(ctx)
+	}
 	env, err := s.environment(ctx)
 	if err != nil {
 		return err
@@ -249,6 +252,19 @@ func (s *multiStageTestStep) Provides() api.ParameterMap {
 }
 func (s *multiStageTestStep) SubTests() []*junit.TestCase { return s.subTests }
 
+func (s *multiStageTestStep) getProfileData(ctx context.Context) error {
+	var secret coreapi.Secret
+	name := s.profileSecretName()
+	key := ctrlruntimeclient.ObjectKey{
+		Namespace: s.jobSpec.Namespace(),
+		Name:      name,
+	}
+	if err := s.client.Get(ctx, key, &secret); err != nil {
+		return fmt.Errorf("could not get cluster profile secret %q: %w", name, err)
+	}
+	return nil
+}
+
 func (s *multiStageTestStep) environment(ctx context.Context) ([]coreapi.EnvVar, error) {
 	var ret []coreapi.EnvVar
 	for _, l := range s.leases {
@@ -260,10 +276,6 @@ func (s *multiStageTestStep) environment(ctx context.Context) ([]coreapi.EnvVar,
 	}
 
 	if s.profile != "" {
-		secret := s.profileSecretName()
-		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: secret}, &coreapi.Secret{}); err != nil {
-			return nil, fmt.Errorf("could not find secret %q: %w", secret, err)
-		}
 		for _, e := range envForProfile {
 			val, err := s.params.Get(e)
 			if err != nil {

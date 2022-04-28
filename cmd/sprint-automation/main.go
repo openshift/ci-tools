@@ -135,6 +135,9 @@ func main() {
 		if err := sendNextWeeksRoleDigest(pagerDutyClient, slackClient); err != nil {
 			logrus.WithError(err).Fatal("Could not post next week's role digest to Slack.")
 		}
+		if err := notifyTriageOfHandover(slackClient, userIdsByRole[roleTriagePrimary]); err != nil {
+			logrus.WithError(err).Fatal("Could not notify triage engineer of handover doc via Slack.")
+		}
 	}
 
 	if err := addSchemes(); err != nil {
@@ -502,7 +505,7 @@ func channelID(slackClient *slack.Client, channel, t string) (string, error) {
 func postBlocks(slackClient *slack.Client, blocks []slack.Block) error {
 	channelID, err := channelID(slackClient, dptpTeamChannel, privateChannelType)
 	if err != nil {
-		return fmt.Errorf("failed for get channel ID for %s", dptpTeamChannel)
+		return fmt.Errorf("failed to get channel ID for %s: %w", dptpTeamChannel, err)
 	}
 	responseChannel, responseTimestamp, err := slackClient.PostMessage(channelID, slack.MsgOptionText("Jira card digest.", false), slack.MsgOptionBlocks(blocks...))
 	if err != nil {
@@ -723,5 +726,34 @@ func ensureGroupMembership(client *slack.Client, userIdsByRole map[string]string
 			}
 		}
 	}
+	return nil
+}
+
+const handoverDocLocation = "https://docs.google.com/document/d/1l2ewqieLYjIUA7nsJiPoD4vscsyxgcGXWlTgjqcTzzk"
+
+func notifyTriageOfHandover(client *slack.Client, triageId string) error {
+	blocks := []slack.Block{
+		&slack.HeaderBlock{
+			Type: slack.MBTHeader,
+			Text: &slack.TextBlockObject{
+				Type: slack.PlainTextType,
+				Text: "Triage Handover",
+			},
+		},
+		&slack.SectionBlock{
+			Type: slack.MBTSection,
+			Text: &slack.TextBlockObject{
+				Type: slack.MarkdownType,
+				Text: fmt.Sprintf("Please review the <%s|*Triage Handover Document*> to view any ongoing incidents. Remember to add any relevant information to it during your time in the Triage role.", handoverDocLocation),
+			},
+		},
+	}
+
+	responseChannel, responseTimestamp, err := client.PostMessage(triageId, slack.MsgOptionText("Triage Handover", false), slack.MsgOptionBlocks(blocks...))
+	if err != nil {
+		return fmt.Errorf("failed to message @dptp-triage: %w", err)
+	}
+
+	logrus.Infof("Posted Triage Handover reminder in channel %s at %s", responseChannel, responseTimestamp)
 	return nil
 }

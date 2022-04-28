@@ -224,4 +224,5 @@ require (
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
+	k8s.io/metrics v0.22.0
 )

@@ -1,0 +1,40 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ci-scheduling-webhook
+---
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: ci-scheduler-runtime-builds
+handler: runc
+overhead:
+  podFixed:
+    # Reserve an additional 500m for each build on crio as overhead for the runtime
+    memory: "500Mi"
+    cpu: "500m"
+scheduling:
+  nodeSelector:
+    ci-workload: builds
+  tolerations:
+    - effect: NoSchedule
+      key: node-role.kubernetes.io/ci-builds-worker
+      operator: Exists
+    # legacy name
+    - effect: NoSchedule
+      key: node-role.kubernetes.io/ci-build-worker
+      operator: Exists
+---
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: ci-scheduler-runtime-tests
+handler: runc
+scheduling:
+  nodeSelector:
+    ci-workload: tests
+  tolerations:
+    - effect: NoSchedule
+      key: node-role.kubernetes.io/ci-tests-worker
+      operator: Exists

@@ -1,30 +1,31 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	admissionv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 	"net/http"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"encoding/json"
 	"strings"
+	"time"
 )
 
 const (
-	CiBuildNameLabelName = "openshift.io/build.name"
-	CiNamepsace = "ci"
+	CiBuildNameLabelName     = "openshift.io/build.name"
+	CiNamepsace              = "ci"
 	CiCreatedByProwLabelName = "created-by-prow"
 )
 
 var (
 	// Non "openshift-*" namespace that need safe-to-evict
-	safeToEvictNamespace = map[string]bool {
+	safeToEvictNamespace = map[string]bool{
 		"rh-corp-logging": true,
-		"ocp": true,
-		"cert-manager": true,
+		"ocp":             true,
+		"cert-manager":    true,
 	}
 )
 
@@ -54,15 +55,20 @@ func admissionReviewFromRequest(r *http.Request, deserializer runtime.Decoder) (
 	return admissionReviewRequest, nil
 }
 
-
 func mutatePod(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	lastProfileTime := &start
+
 	deserializer := codecs.UniversalDeserializer()
 
 	writeHttpError := func(statusCode int, err error) {
-		msg := fmt.Sprintf("error during mutation: %v", err)
+		msg := fmt.Sprintf("error during mutation operation: %v", err)
 		klog.Error(msg)
 		w.WriteHeader(statusCode)
-		w.Write([]byte(msg))
+		_, err = w.Write([]byte(msg))
+		if err != nil {
+			klog.Errorf("Unable to return http error response to caller: %v", err)
+		}
 	}
 
 	// Parse the AdmissionReview from the http request.
@@ -76,8 +82,8 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 	// should also be part of the MutatingWebhookConfiguration in the cluster, but
 	// we should verify here before continuing.
 	podResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
-	if admissionReviewRequest.Request.Resource != podResource {
-		writeHttpError(400, fmt.Errorf("did not receive pod, got %s", admissionReviewRequest.Request.Resource.Resource))
+	if admissionReviewRequest.Request == nil || admissionReviewRequest.Request.Resource != podResource {
+		writeHttpError(400, fmt.Errorf("did not receive pod, got %v", admissionReviewRequest.Request))
 		return
 	}
 
@@ -89,20 +95,30 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	podClass := ""  // will be set to CiWorkloadLabelValueBuilds or CiWorkloadLabelValueTests depending on analysis
+	profile := func(action string) {
+		duration := time.Since(start)
+		sinceLastProfile := time.Since(*lastProfileTime)
+		now := time.Now()
+		lastProfileTime = &now
+		klog.Infof("[%v] [%v] within (ms): %v [diff %v]", admissionReviewRequest.Request.UID, action, duration.Milliseconds(), sinceLastProfile.Milliseconds())
+	}
+
+	profile("decoded request")
+
+	podClass := "" // will be set to CiWorkloadLabelValueBuilds or CiWorkloadLabelValueTests depending on analysis
 
 	patchEntries := make([]map[string]interface{}, 0)
 	addPatchEntry := func(op string, path string, value interface{}) {
-		patch := map[string]interface{} {
-			"op": op,
-			"path": path,
+		patch := map[string]interface{}{
+			"op":    op,
+			"path":  path,
 			"value": value,
 		}
 		patchEntries = append(patchEntries, patch)
 	}
 
-	podName := pod.Name
-	namespace := pod.Namespace
+	podName := admissionReviewRequest.Request.Name
+	namespace := admissionReviewRequest.Request.Namespace
 
 	// OSD has so. many. operator related resources which aren't using replicasets.
 	// These are normally unevictable and thus prevent the autoscaler from considering
@@ -115,7 +131,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 			annotations = make(map[string]string, 0)
 		}
 		annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "true"
-		addPatchEntry("add", "/metadata/annotations", annotations )
+		addPatchEntry("add", "/metadata/annotations", annotations)
 	}
 
 	if namespace == CiNamepsace {
@@ -152,12 +168,13 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 			if _, ok := labels[CiBuildNameLabelName]; ok {
 				podClass = CiWorkloadLabelValueBuilds
 			} else {
-				podClass = CiWorkloadTestsTaintName
+				podClass = CiWorkloadLabelValueTests
 			}
 		}
 	}
 
 	if podClass != "" {
+		profile("classified request")
 
 		// Setup labels we might want to use in the future to set pod affinity
 		labels[CiWorkloadLabelName] = podClass
@@ -178,11 +195,11 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 				for key := range c.Resources.Requests {
 					if key == corev1.ResourceCPU {
 						// TODO : use convert to unstructured
-						newRequests := map[string]interface{} {
-							string(corev1.ResourceCPU): fmt.Sprintf("%vm", int64(float32(c.Resources.Requests.Cpu().MilliValue()) * factor)),
+						newRequests := map[string]interface{}{
+							string(corev1.ResourceCPU):    fmt.Sprintf("%vm", int64(float32(c.Resources.Requests.Cpu().MilliValue())*factor)),
 							string(corev1.ResourceMemory): fmt.Sprintf("%v", c.Resources.Requests.Memory().String()),
 						}
-						addPatchEntry("replace", fmt.Sprintf("/spec/%v/%v/resources/requests", containerType, i), newRequests)
+						addPatchEntry("add", fmt.Sprintf("/spec/%v/%v/resources/requests", containerType, i), newRequests)
 					}
 				}
 			}
@@ -196,28 +213,10 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		reduceCPURequests("initContainers", pod.Spec.InitContainers, cpuFactor)
 		reduceCPURequests("containers", pod.Spec.Containers, cpuFactor)
 
-
-		// Setup toleration appropriate for podClass so that it can only land on desired machineset
-		podTolerations := pod.Spec.Tolerations
-		var tolerationKey string
-		if podClass == CiWorkloadLabelValueTests {
-			tolerationKey = CiWorkloadTestsTaintName
-		} else {
-			tolerationKey = CiWorkloadBuildsTaintName
-		}
-		podTolerations = append(podTolerations, corev1.Toleration{
-			Key:               tolerationKey,
-			Operator:          "Exists",
-			Effect:            "NoSchedule",
-		})
-
-		unstructuredTolerations, err := runtime.DefaultUnstructuredConverter.ToUnstructured(podTolerations)
-		if err != nil {
-			writeHttpError(500, fmt.Errorf("error decoding tolerations to unstructured data: %v", err))
-			return
-		}
-		
-		addPatchEntry("add", "/spec/tolerations", unstructuredTolerations)
+		// Setup toleration appropriate for podClass so that it can only land on desired machineset.
+		// This is achieved by virtue of using a RuntimeClass object which specifies the necsesary
+		// tolerations for each workload.
+		addPatchEntry("add", "/spec/runtimeClassName", "ci-scheduler-runtime-"+podClass)
 
 		// Set a nodeSelector to ensure this finds our desired machineset nodes
 		nodeSelector := make(map[string]string)
@@ -229,67 +228,113 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		// autoscaler will be find unused nodes (vs if the pods were spread
 		// across all nodes evenly).
 
-		mutex.Lock()
-		var orderedNodeNames []string
-		if podClass == CiWorkloadLabelValueTests {
-			copy(orderedNodeNames, testsNodeNameList)
-		} else {
-			copy(orderedNodeNames, buildsNodeNameList)
-		}
-		mutex.Unlock()
+		orderedNodeNames, excludedNodes, err := getNodeNamesInPreferredOrder(podClass, &pod)
+		profile("assessed node fit")
 
-		if len(orderedNodeNames) > 0 {
-			preferredSchedulingTerms := make([]corev1.PreferredSchedulingTerm, len(orderedNodeNames))
-			for i, nodeName := range orderedNodeNames {
-				preferredSchedulingTerms = append(preferredSchedulingTerms,
-					corev1.PreferredSchedulingTerm{
-						Weight:     int32(i),
-						Preference: corev1.NodeSelectorTerm{
-							MatchFields: [] corev1.NodeSelectorRequirement {
-								{
-									Key:      "metadata.name",
-									Operator: "In",
-									Values:   []string{nodeName},
+		if err == nil {
+
+			affinityChanged := false
+			affinity := corev1.Affinity{
+				NodeAffinity: &corev1.NodeAffinity{},
+			}
+
+			if len(excludedNodes) > 0 {
+				excludedHostnames := make([]string, 0)
+				for i := range excludedNodes {
+					excludedNode := excludedNodes[i]
+					if hostname, ok := excludedNode.Labels[KubeNodeHostnameLabel]; ok {
+						excludedHostnames = append(excludedHostnames, hostname)
+					} else {
+						klog.Warningf("Node %v does not have %v label set. Anti-affinity will not function.", excludedNode.Name, KubeNodeHostnameLabel)
+					}
+				}
+
+				if len(excludedHostnames) > 0 {
+					// Use MatchExpressions here because MatchFields because MatchExpressions
+					// only allows one value in the Values list.
+					requiredNoSchedulingSelector := corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      KubeNodeHostnameLabel,
+										Operator: "NotIn",
+										Values:   excludedHostnames,
+									},
 								},
 							},
 						},
-					},
-				)
+					}
+					affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &requiredNoSchedulingSelector
+					affinityChanged = true
+				}
 			}
 
-			affinity := corev1.Affinity{
-				NodeAffinity: &corev1.NodeAffinity{
-					PreferredDuringSchedulingIgnoredDuringExecution: preferredSchedulingTerms,
-				},
-			}
+			if len(orderedNodeNames) > 0 {
+				preferredSchedulingTerms := make([]corev1.PreferredSchedulingTerm, 0)
+				for i, nodeName := range orderedNodeNames {
+					if i == 5 {
+						// 5 viable nodes should be sufficient for the scheduler to find a spot.
+						// Avoid making the pod.spec huge.
+						break
+					}
+					preferredSchedulingTerms = append(preferredSchedulingTerms,
+						corev1.PreferredSchedulingTerm{
+							Weight: int32(i) + 1,
+							Preference: corev1.NodeSelectorTerm{
+								MatchFields: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "metadata.name",
+										Operator: "In",
+										Values:   []string{nodeName},
+									},
+								},
+							},
+						},
+					)
+				}
 
-			unstructuredAffinity, err := runtime.DefaultUnstructuredConverter.ToUnstructured(affinity)
-			if err != nil {
-				writeHttpError(500, fmt.Errorf("error decoding affinity to unstructured data: %v", err))
-				return
+				affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = preferredSchedulingTerms
+				affinityChanged = true
 			}
+			if affinityChanged {
+				unstructuredAffinity, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&affinity)
+				if err != nil {
+					writeHttpError(500, fmt.Errorf("error decoding affinity to unstructured data: %v", err))
+					return
+				}
 
-			addPatchEntry("add", "/spec/affinity", unstructuredAffinity)
+				addPatchEntry("add", "/spec/affinity", unstructuredAffinity)
+			}
+		} else {
+			klog.Errorf("No node affinity will be set in pod due to error: %v", err)
 		}
-
 	}
-
-
 
 	// Create a response that will add a label to the pod if it does
 	// not already have a label with the key of "hello". In this case
 	// it does not matter what the value is, as long as the key exists.
 	admissionResponse := &admissionv1.AdmissionResponse{}
-	var patch string
+	patch := make([]byte, 0)
 	patchType := admissionv1.PatchTypeJSONPatch
-	if _, ok := pod.Labels["hello"]; !ok {
-		patch = `[{"op":"add","path":"/metadata/labels","value":{"hello":"world"}}]`
+
+	if len(patchEntries) > 0 {
+		marshalled, err := json.Marshal(patchEntries)
+		if err != nil {
+			klog.Errorf("Error marshalling JSON patch (%v) from: %v", patchEntries)
+			writeHttpError(500, fmt.Errorf("error marshalling jsonpatch: %v", err))
+			return
+		}
+		patch = marshalled
 	}
 
 	admissionResponse.Allowed = true
-	if patch != "" {
+	if len(patch) > 0 {
+		klog.InfoS("Incoming pod to be modified", "podClass", podClass, "namespace", namespace, "pod", podName)
 		admissionResponse.PatchType = &patchType
-		admissionResponse.Patch = []byte(patch)
+		admissionResponse.Patch = patch
+	} else {
+		klog.InfoS("Incoming pod to be ignored", "podClass", podClass, "namespace", namespace, "pod", podName)
 	}
 
 	// Construct the response, which is just another AdmissionReview.
@@ -300,13 +345,14 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := json.Marshal(admissionReviewResponse)
 	if err != nil {
-		msg := fmt.Sprintf("error marshalling response json: %v", err)
-		logger.Printf(msg)
-		w.WriteHeader(500)
-		w.Write([]byte(msg))
+		writeHttpError(500, fmt.Errorf("error marshalling admission review reponse: %v", err))
 		return
 	}
+	profile("ready to write response")
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(resp)
+	_, err = w.Write(resp)
+	if err != nil {
+		klog.Errorf("Unable to respond to caller with admission review: %v", err)
+	}
 }

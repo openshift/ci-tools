@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -19,8 +18,6 @@ import (
 	"log"
 	"math/big"
 	"os"
-	"sort"
-	"sync"
 	"time"
 )
 
@@ -28,42 +25,27 @@ import (
 	"crypto/tls"
 	"net/http"
 
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 const (
-	CiWorkloadLabelName           = "ci-workload"
-	CiWorkloadNamespaceLabelName           = "ci-workload-namespace"
-	CiWorkloadLabelValueBuilds = "builds"
-	CiWorkloadLabelValueTests  = "tests"
-
-	CiWorkloadBuildsTaintName = "node-role.kubernetes.io/ci-builds-worker"
-	CiWorkloadTestsTaintName = "node-role.kubernetes.io/ci-tests-worker"
-
-	DeploymentNamespace = "ci-scheduling-webhook"
+	CiWorkloadLabelName          = "ci-workload"
+	CiWorkloadNamespaceLabelName = "ci-workload-namespace"
+	CiWorkloadLabelValueBuilds   = "builds"
+	CiWorkloadLabelValueTests    = "tests"
+	KubeNodeHostnameLabel        = "kubernetes.io/hostname"
 )
 
 var (
-	tlsCertFile string
-	tlsKeyFile  string
-	port       int
+	tlsCertFile     string
+	tlsKeyFile      string
+	port            int
 	impersonateUser string
-	codecs  = serializer.NewCodecFactory(runtime.NewScheme())
-	logger  = log.New(os.Stdout, "http: ", log.LstdFlags)
+	codecs          = serializer.NewCodecFactory(runtime.NewScheme())
+	logger          = log.New(os.Stdout, "http: ", log.LstdFlags)
 
-	applyAdditionalReserved    bool
-	additionalReservedBuildCPU string
-	additionalReservedTestCPU string
-	additionalReservedBuildMemory string
-	additionalReservedTestMemory string
-
-	shrinkTestCPU float32
+	shrinkTestCPU  float32
 	shrinkBuildCPU float32
-
-	mutex = sync.Mutex{}
-	buildsNodeNameList = make([]string, 0)
-	testsNodeNameList = make([]string, 0)
 )
 
 func generateTestCertificate() (*tls.Certificate, error) {
@@ -80,8 +62,8 @@ func generateTestCertificate() (*tls.Certificate, error) {
 
 	tml := x509.Certificate{
 		// you can add any attr that you need
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().AddDate(5, 0, 0),
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().AddDate(5, 0, 0),
 		// you have to generate a different serial number each execution
 		SerialNumber: big.NewInt(123123),
 		Subject: pkix.Name{
@@ -126,7 +108,12 @@ func Run(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 	} else {
-		*cert, err = tls.LoadX509KeyPair(tlsCertFile, tlsKeyFile)
+		certP, err := tls.LoadX509KeyPair(tlsCertFile, tlsKeyFile)
+		if err != nil {
+			fmt.Printf("Error loading tls files from file system: %v", err)
+			os.Exit(1)
+		}
+		cert = &certP
 	}
 
 	kubeConfigPath, kubeConfigPresent := os.LookupEnv("KUBECONFIG")
@@ -151,55 +138,21 @@ func Run(cmd *cobra.Command, args []string) {
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		klog.Errorf("Error initializing client set: %v", err)
+		klog.Errorf("Error initializing kubernetes client set: %v", err)
 		os.Exit(1)
 	}
 
-	initNodeList, err := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	metricsclientset, err := metrics.NewForConfig(config)
 	if err != nil {
-		klog.Errorf("Error initializing node watcher: %v", err)
+		klog.Errorf("Error initializing metrics client set: %v", err)
 		os.Exit(1)
 	}
 
-	for _, node := range initNodeList.Items {
-		nodePresent(&node, true)
-	}
-
-	watcher, err := clientset.CoreV1().Nodes().Watch(ctx, metav1.ListOptions{})
+	err = initializePrioritization(ctx, clientset, metricsclientset)
 	if err != nil {
-		klog.Errorf("Error initializing node watcher: %v", err)
+		klog.Errorf("Error initializing node prioritization processes: %v", err)
 		os.Exit(1)
 	}
-
-	go func() {
-		for event := range watcher.ResultChan() {
-			node := event.Object.(*corev1.Node)
-			switch event.Type {
-			case watch.Added:
-				nodePresent(node, true)
-			case watch.Deleted:
-				nodePresent(node, false)
-			}
-		}
-	}()
-
-	if applyAdditionalReserved {
-
-		buildDaemonSet := systemReservingDaemonset(CiWorkloadLabelValueBuilds, additionalReservedBuildCPU, additionalReservedBuildMemory)
-		err := createOrUpdateDaemonSet(ctx, clientset, buildDaemonSet)
-		if err != nil {
-			klog.Errorf("Unable to create daemonset for additional system reserved: %v", err)
-			os.Exit(1)
-		}
-
-		testDaemonSet := systemReservingDaemonset(CiWorkloadLabelValueTests, additionalReservedTestCPU, additionalReservedBuildMemory)
-		err = createOrUpdateDaemonSet(ctx, clientset, testDaemonSet)
-		if err != nil {
-			klog.Errorf("Unable to create daemonset for additional system reserved: %v", err)
-			os.Exit(1)
-		}
-	}
-
 	runWebhookServer(cert)
 }
 
@@ -219,47 +172,6 @@ func Execute() {
 	cobra.CheckErr(rootCmd.Execute())
 }
 
-func removeFromHostnames(s []string, r string) []string {
-	for i, v := range s {
-		if v == r {
-			s = append(s[:i], s[i+1:]...)
-		}
-	}
-	sort.Strings(s)
-	return s
-}
-
-func addToHostnames(s []string, r string) []string {
-	s = removeFromHostnames(s, r) // eliminate any potential for duplicates
-	s = append(s, r)
-	sort.Strings(s)
-	return s
-}
-
-func nodePresent(node *corev1.Node, exists bool) {
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	if val, ok := node.Labels[CiWorkloadLabelName]; ok {
-		var modification func([]string, string) []string
-		if exists {
-			klog.InfoS("Registering node in cache", "hostname", node.Name, CiWorkloadLabelName, val)
-			modification = addToHostnames
-		} else {
-			klog.InfoS("Removing node from cache", "hostname", node.Name, CiWorkloadLabelName, val)
-			modification = removeFromHostnames
-		}
-		switch val {
-		case CiWorkloadLabelValueBuilds:
-			buildsNodeNameList = modification(buildsNodeNameList, node.Name)
-		case CiWorkloadLabelValueTests:
-			testsNodeNameList = modification(testsNodeNameList, node.Name)
-		}
-	}
-
-}
-
-
 func init() {
 	rootCmd.Flags().StringVar(&tlsCertFile, "tls-cert", "", "Certificate for TLS")
 	rootCmd.Flags().StringVar(&tlsKeyFile, "tls-key", "", "Private key file for TLS")
@@ -268,14 +180,7 @@ func init() {
 
 	rootCmd.Flags().Float32Var(&shrinkTestCPU, "shrink-cpu-requests-tests", 1.0, "Multiply test workload CPU requests by this factor")
 	rootCmd.Flags().Float32Var(&shrinkBuildCPU, "shrink-cpu-requests-builds", 1.0, "Multiply build workload CPU requests by this factor")
-
-	rootCmd.Flags().BoolVar(&applyAdditionalReserved, "apply-additional-reserved", false, "Create or update daemonsets to reserve additional system memory")
-	rootCmd.Flags().StringVar(&additionalReservedBuildCPU, "reserve-system-cpu-builds", "100m", "Additional cores to reserve on build workload nodes using daemonset")
-	rootCmd.Flags().StringVar(&additionalReservedBuildMemory, "reserve-system-memory-builds", "200Mi", "Additional bytes to reserve on build workload nodes using daemonset")
-	rootCmd.Flags().StringVar(&additionalReservedTestCPU, "reserve-system-cpu-tests", "100m", "Additional cores to reserve on test workload nodes using daemonset")
-	rootCmd.Flags().StringVar(&additionalReservedTestMemory, "reserve-system-memory-tests", "200Mi", "Additional bytes to reserve on test workload nodes using daemonset")
 }
-
 
 func runWebhookServer(cert *tls.Certificate) {
 	fmt.Println("Starting webhook server")

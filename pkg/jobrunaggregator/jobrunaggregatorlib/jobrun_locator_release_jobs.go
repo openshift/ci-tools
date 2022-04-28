@@ -9,8 +9,9 @@ import (
 	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 )
 
+// GetPayloadTagFromProwJob gets the payload tag from prow jobs.
 func GetPayloadTagFromProwJob(prowJob *prowjobv1.ProwJob) string {
-	return prowJob.Labels["release.openshift.io/analysis"]
+	return prowJob.Annotations["release.openshift.io/tag"]
 }
 
 func NewPayloadAnalysisJobLocatorForReleaseController(

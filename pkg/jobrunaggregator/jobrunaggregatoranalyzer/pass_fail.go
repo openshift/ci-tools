@@ -566,7 +566,34 @@ func testShouldAlwaysPass(jobName, testName, testSuiteName string) string {
 
 // these are the required number of passes for a given percentage of historical pass rate.  One var each for
 // number of attempts in the aggregated job.
+// data here is generated with required-pass-rate.py
 var (
+	requiredPassesByPassPercentageFor_12_Attempts = []int{
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0-9
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 10-19
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 20-29
+		0, 0, 0, 0, 0, 1, 1, 1, 1, 1, // 30-39
+		1, 1, 1, 1, 1, 2, 2, 2, 2, 2, // 40-49
+		2, 2, 2, 2, 3, 3, 3, 3, 3, 3, // 50-59
+		3, 3, 4, 4, 4, 4, 4, 4, 4, 4, // 60-69
+		5, 5, 5, 5, 5, 5, 5, 6, 6, 6, // 70-79
+		6, 6, 6, 7, 7, 7, 7, 7, 7, 8, // 80-89
+		8, 8, 8, 8, 9, 9, 9, 9, 10, 10, // 90-99
+		11,
+	}
+	requiredPassesByPassPercentageFor_11_Attempts = []int{
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0-9
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 10-19
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 20-29
+		0, 0, 0, 0, 0, 0, 0, 0, 1, 1, // 30-39
+		1, 1, 1, 1, 1, 1, 1, 1, 2, 2, // 40-49
+		2, 2, 2, 2, 2, 2, 2, 2, 3, 3, // 50-59
+		3, 3, 3, 3, 3, 3, 4, 4, 4, 4, // 60-69
+		4, 4, 4, 4, 5, 5, 5, 5, 5, 5, // 70-79
+		5, 6, 6, 6, 6, 6, 6, 7, 7, 7, // 80-89
+		7, 7, 7, 8, 8, 8, 8, 8, 9, 9, // 90-99
+		10,
+	}
 	requiredPassesByPassPercentageFor_10_Attempts = []int{
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0-9
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 10-19
@@ -723,6 +750,8 @@ var (
 		requiredPassesByPassPercentageFor_08_Attempts,
 		requiredPassesByPassPercentageFor_09_Attempts,
 		requiredPassesByPassPercentageFor_10_Attempts,
+		requiredPassesByPassPercentageFor_11_Attempts,
+		requiredPassesByPassPercentageFor_12_Attempts,
 	}
 )
 

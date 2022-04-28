@@ -42,7 +42,8 @@ type JobRunAggregatorAnalyzerOptions struct {
 	timeout             time.Duration
 }
 
-func (o *JobRunAggregatorAnalyzerOptions) getRelatedJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
+// GetRelatedJobRuns gets all related job runs for analysis
+func (o *JobRunAggregatorAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	errorsInARow := 0
 	for {
 		jobsToAggregate, err := o.jobRunLocator.FindRelatedJobs(ctx)
@@ -87,79 +88,13 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 		return fmt.Errorf("error creating destination directory %q: %w", currentAggregationDir, err)
 	}
 
-	var finishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo
-	var finishedJobRunNames []string
-	var unfinishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo
-	var unfinishedJobNames []string
-	for { // TODO extract to a method.
-		fmt.Println() // for prettier logs
-		// reset vars
-		finishedJobsToAggregate = []jobrunaggregatorapi.JobRunInfo{}
-		unfinishedJobsToAggregate = []jobrunaggregatorapi.JobRunInfo{}
-		finishedJobRunNames = []string{}
-		unfinishedJobNames = []string{}
-
-		relatedJobs, err := o.getRelatedJobs(ctx)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("%q for %q: found %d related jobRuns.\n", o.jobName, o.payloadTag, len(relatedJobs))
-
-		if o.clock.Now().Before(readyAt) {
-			fmt.Printf("%q for %q: waiting until %v to collect more jobRuns before assessing finished or not. (now=%v)\n", o.jobName, o.payloadTag, readyAt, o.clock.Now())
-			time.Sleep(2 * time.Minute)
-			continue
-		}
-		fmt.Printf("%q for %q: it is %v, finished waiting until %v.\n", o.jobName, o.payloadTag, o.clock.Now(), readyAt)
-		if len(relatedJobs) == 0 {
-			return fmt.Errorf("%q for %q: found no related jobRuns", o.jobName, o.payloadTag)
-		}
-
-		for i := range relatedJobs {
-			relatedJob := relatedJobs[i]
-			if !relatedJob.IsFinished(ctx) {
-				fmt.Printf("%v/%v is not finished\n", relatedJob.GetJobName(), relatedJob.GetJobRunID())
-				unfinishedJobNames = append(unfinishedJobNames, relatedJob.GetJobRunID())
-				unfinishedJobsToAggregate = append(unfinishedJobsToAggregate, relatedJob)
-				continue
-			}
-
-			prowJob, err := relatedJob.GetProwJob(ctx)
-			if err != nil {
-				fmt.Printf("  error reading prowjob %v: %v\n", relatedJob.GetJobRunID(), err)
-				unfinishedJobNames = append(unfinishedJobNames, relatedJob.GetJobRunID())
-				unfinishedJobsToAggregate = append(unfinishedJobsToAggregate, relatedJob)
-				continue
-			}
-
-			if prowJob.Status.CompletionTime == nil {
-				fmt.Printf("%v/%v has no completion time for resourceVersion=%v\n", relatedJob.GetJobName(), relatedJob.GetJobRunID(), prowJob.ResourceVersion)
-				unfinishedJobNames = append(unfinishedJobNames, relatedJob.GetJobRunID())
-				unfinishedJobsToAggregate = append(unfinishedJobsToAggregate, relatedJob)
-				continue
-			}
-			finishedJobsToAggregate = append(finishedJobsToAggregate, relatedJob)
-			finishedJobRunNames = append(finishedJobRunNames, relatedJob.GetJobRunID())
-		}
-
-		summaryHTML := htmlForJobRuns(ctx, finishedJobsToAggregate, unfinishedJobsToAggregate)
-		if err := ioutil.WriteFile(filepath.Join(o.workingDir, "aggregation-jobrun-summary.html"), []byte(summaryHTML), 0644); err != nil {
-			return err
-		}
-
-		// ready or not, it's time to check
-		if o.clock.Now().After(timeToStopWaiting) {
-			fmt.Printf("%q for %q: waited long enough. Ready or not, here I come. (readyOrNot=%v now=%v)\n", o.jobName, o.payloadTag, timeToStopWaiting, o.clock.Now())
-			break
-		}
-
-		if len(unfinishedJobNames) > 0 {
-			fmt.Printf("%q for %q: found %d unfinished related jobRuns: %v\n", o.jobName, o.payloadTag, len(unfinishedJobNames), strings.Join(unfinishedJobNames, ", "))
-			time.Sleep(2 * time.Minute)
-			continue
-		}
-
-		break
+	err := jobrunaggregatorlib.WaitUntilTime(ctx, readyAt)
+	if err != nil {
+		return err
+	}
+	finishedJobsToAggregate, _, finishedJobRunNames, unfinishedJobNames, err := jobrunaggregatorlib.WaitAndGetAllFinishedJobRuns(ctx, timeToStopWaiting, o, o.workingDir)
+	if err != nil {
+		return err
 	}
 
 	if len(unfinishedJobNames) > 0 {

@@ -25,7 +25,7 @@ const (
 )
 
 type baseline interface {
-	CheckFailed(ctx context.Context, jobName string, suiteNames []string, testCaseDetails *TestCaseDetails) (status testCaseStatus, message string, err error)
+	CheckFailed(ctx context.Context, jobName string, suiteNames []string, testCaseDetails *jobrunaggregatorlib.TestCaseDetails) (status testCaseStatus, message string, err error)
 	CheckDisruptionMeanWithinFiveStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
 	CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
 	CheckPercentileDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, percentile int) (failureJobRunIDs []string, successJobRunIDs []string, status testCaseStatus, message string, err error)
@@ -56,7 +56,7 @@ func assignPassFailForTestSuite(ctx context.Context, jobName string, parentTestS
 
 	for i := range combined.TestCases {
 		currTestCase := combined.TestCases[i]
-		currDetails := &TestCaseDetails{}
+		currDetails := &jobrunaggregatorlib.TestCaseDetails{}
 		if err := yaml.Unmarshal([]byte(currTestCase.SystemOut), currDetails); err != nil {
 			return err
 		}
@@ -423,7 +423,7 @@ func (a *weeklyAverageFromTenDays) CheckPercentileRankDisruption(ctx context.Con
 	return a.checkPercentileDisruption(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, thresholdPercentile)
 }
 
-func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, jobName string, suiteNames []string, testCaseDetails *TestCaseDetails) (testCaseStatus, string, error) {
+func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, jobName string, suiteNames []string, testCaseDetails *jobrunaggregatorlib.TestCaseDetails) (testCaseStatus, string, error) {
 	if reason := testShouldAlwaysPass(jobName, testCaseDetails.Name, testCaseDetails.TestSuiteName); len(reason) > 0 {
 		reason := fmt.Sprintf("always passing %q: %v\n", testCaseDetails.Name, reason)
 		return testCasePassed, reason, nil
@@ -760,14 +760,14 @@ var (
 	}
 )
 
-func didTestRun(testCaseDetails *TestCaseDetails) bool {
+func didTestRun(testCaseDetails *jobrunaggregatorlib.TestCaseDetails) bool {
 	if len(testCaseDetails.Passes) == 0 && len(testCaseDetails.Failures) == 0 {
 		return false
 	}
 	return true
 }
 
-func getAttempts(testCaseDetails *TestCaseDetails) int {
+func getAttempts(testCaseDetails *jobrunaggregatorlib.TestCaseDetails) int {
 	// if the same job run has a pass and a fail, or multiple passes, it only counts as a single attempt.
 	jobRunsThatAttempted := sets.NewString()
 	for _, failure := range testCaseDetails.Failures {
@@ -780,7 +780,7 @@ func getAttempts(testCaseDetails *TestCaseDetails) int {
 	return len(jobRunsThatAttempted)
 }
 
-func getNumberOfPasses(testCaseDetails *TestCaseDetails) int {
+func getNumberOfPasses(testCaseDetails *jobrunaggregatorlib.TestCaseDetails) int {
 	// if the same job run has multiple passes, it only counts as a single pass.
 	jobRunsThatPassed := sets.NewString()
 	for _, pass := range testCaseDetails.Passes {
@@ -790,11 +790,11 @@ func getNumberOfPasses(testCaseDetails *TestCaseDetails) int {
 	return len(jobRunsThatPassed)
 }
 
-func getNumberOfFailures(testCaseDetails *TestCaseDetails) int {
+func getNumberOfFailures(testCaseDetails *jobrunaggregatorlib.TestCaseDetails) int {
 	return len(getFailedJobNames(testCaseDetails))
 }
 
-func getFailedJobNames(testCaseDetails *TestCaseDetails) sets.String {
+func getFailedJobNames(testCaseDetails *jobrunaggregatorlib.TestCaseDetails) sets.String {
 	// if the same job run has multiple failures, it only counts as a single failure.
 	jobRunsThatFailed := sets.NewString()
 	for _, failure := range testCaseDetails.Failures {

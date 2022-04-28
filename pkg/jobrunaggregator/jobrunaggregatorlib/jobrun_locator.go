@@ -15,6 +15,13 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
+var (
+	// JobSearchWindowStartOffset defines the start offset of the job search window.
+	JobSearchWindowStartOffset time.Duration = 1 * time.Hour
+	// JobSearchWindowEndOffset defines the end offset of the job search window.
+	JobSearchWindowEndOffset time.Duration = 4 * time.Hour
+)
+
 type JobRunLocator interface {
 	FindRelatedJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error)
 }
@@ -61,8 +68,8 @@ func NewPayloadAnalysisJobLocator(
 // FindRelatedJobs returns a slice of JobRunInfo which has info contained in GCS buckets
 // used to determine pass/fail.
 func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
-	startOfJobRunWindow := a.startTime.Add(-1 * 1 * time.Hour)
-	endOfJobRunWindow := a.startTime.Add(1 * 4 * time.Hour)
+	startOfJobRunWindow := a.startTime.Add(-1 * JobSearchWindowStartOffset)
+	endOfJobRunWindow := a.startTime.Add(JobSearchWindowEndOffset)
 	startingJobRun, err := a.ciDataClient.GetJobRunForJobNameBeforeTime(ctx, a.jobName, startOfJobRunWindow)
 	if err != nil {
 		return nil, err

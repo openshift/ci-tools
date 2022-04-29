@@ -16,15 +16,96 @@ import (
 	"time"
 )
 
+type PodClass string
+
+const (
+	PodClassBuilds PodClass = "builds"
+	PodClassTests PodClass = "tests"
+	PodClassNone PodClass = ""
+)
+
 var (
 	nodeMetricsMap sync.Map // map[nodeName string]*NodeMetrics
 	podCpuRequests sync.Map // map[ns_slash_podName string]in64
+	assumedPodAssignment sync.Map // map[nodeName String]*map[podName String]*Pod
 	nodesInformer  cache.SharedIndexInformer
 	podsInformer   cache.SharedIndexInformer
 )
 
 const IndexPodsByNode = "IndexPodsByNode"
 const IndexNodesByCiWorkload = "IndexNodesByCiWorkload"
+
+func getPodFromInformer(qualifiedPodName string) (*corev1.Pod, error) {
+	obj, ok, err := podsInformer.GetIndexer().GetByKey(qualifiedPodName)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		pod := obj.(*corev1.Pod)
+		return pod, nil
+	} else {
+		return nil, nil
+	}
+}
+
+func pruneScheduledAssumedPods(nodeName string, excludePod *corev1.Pod) (remainingAssumedPods []*corev1.Pod) {
+	remainingAssumedPods = make([]*corev1.Pod, 0)
+	if _, ok, err := nodesInformer.GetIndexer().GetByKey(nodeName); !ok || err != nil {
+		if err != nil {
+			klog.Errorf("Error querying node indexer: %v", err)
+			return
+		}
+		assumedPodAssignment.Delete(nodeName) // the node is gone, we don't need assumed pods for it
+		return
+	} else {
+		value, ok := assumedPodAssignment.Load(nodeName)
+		if !ok {
+			return
+		}
+		assumedPods := value.(*sync.Map)
+		assumedPods.Range(func(key, value interface{}) bool {
+			unixNanosCreation := key.(int64)
+			pod := value.(*corev1.Pod)
+
+			if excludePod != nil && excludePod.Namespace == pod.Namespace && excludePod.Name == pod.Name {
+				return true
+			}
+
+			age := time.Now().Sub(time.Unix(0, unixNanosCreation))
+			if age > 20 * time.Minute {
+				klog.Warningf("Pod %v has languished without being scheduled -- removing from assumed")
+				// Why is this pod not getting scheduled. Who knows. Avoid memory leak.
+				assumedPods.Delete(key)
+				return true
+			}
+
+			qualifiedPodName := pod.Namespace + "/" + pod.Name
+			currentPodCopy, err := getPodFromInformer(qualifiedPodName)
+			if err != nil {
+				klog.Errorf("Error querying pod indexer: %v", err)
+				return true
+			}
+
+			if currentPodCopy != nil && currentPodCopy.Spec.NodeName != "" {
+				if age > 1 * time.Minute {
+					// Don't remove the pod from assumed for 1 minute. This will give the pod a chance to start
+					// consuming actual CPU, measured by node metrics. Until then, we may be double counting the
+					// pod's requests. That's fine.
+					// Yes, this all to help reduce OutOfCpu from
+					// https://github.com/kubernetes/kubernetes/issues/106884#issuecomment-1005074672 .
+					klog.Infof("Pod %v/%v [%v] has been scheduled to %v -- removing from assumed for %v", currentPodCopy.Namespace, currentPodCopy.Name, key, currentPodCopy.Spec.NodeName, nodeName)
+					// the pod has been scheduled, so remove it from assumed
+					assumedPods.Delete(key)
+					return true
+				}
+			}
+			// Otherwise, the pod has not been scheduled and we keep in it assumed for now.
+			remainingAssumedPods = append(remainingAssumedPods, pod)
+			return true
+		})
+		return
+	}
+}
 
 func initializePrioritization(ctx context.Context, k8sClientSet *kubernetes.Clientset, metricsClientSet *metrics.Clientset) error {
 
@@ -93,9 +174,13 @@ func initializePrioritization(ctx context.Context, k8sClientSet *kubernetes.Clie
 	go func() {
 		// periodically clean up:
 		//  1. metrics for nodes that are no longer around
-		//  2. calculated pod requests for pods that are no longer present
+		//  2. calculated pod requests for pods that are no longer present / running
+		//  3. Assumed pod assignments
 		for range time.Tick(time.Second * 60) {
+
+			nodeMetricsCount := 0
 			nodeMetricsMap.Range(func(key, value interface{}) bool {
+				nodeMetricsCount++
 				nodeName := key.(string)
 				if _, ok, err := nodesInformer.GetIndexer().GetByKey(nodeName); !ok || err != nil {
 					if err != nil {
@@ -107,26 +192,40 @@ func initializePrioritization(ctx context.Context, k8sClientSet *kubernetes.Clie
 				}
 				return true
 			})
+
+			cachedPodRequests := 0
 			podCpuRequests.Range(func(key, value interface{}) bool {
+				cachedPodRequests++
 				qualifiedPodName := key.(string)
-				obj, ok, err := podsInformer.GetIndexer().GetByKey(qualifiedPodName)
+				pod, err := getPodFromInformer(qualifiedPodName)
 				if err != nil {
 					klog.Errorf("Error querying pod indexer: %v", err)
+					podCpuRequests.Delete(key) // avoid a memory leak in this undefined error state
 					return true
 				}
-				if ok {
+				if pod != nil {
 					// Pod was found. But is it running?
-					pod := obj.(*corev1.Pod)
 					if pod.Status.Phase == corev1.PodPending || pod.Status.Phase == corev1.PodRunning {
 						// Still running. Don't remove its metrics from our cache.
 						return true
 					}
 				}
 				// Pod has not been found or is no longer running.
-				klog.InfoS("Removing pod request cache for absent pod", "pod", qualifiedPodName)
+				klog.InfoS("Removing pod request cache for defunct pod", "pod", qualifiedPodName)
 				podCpuRequests.Delete(key)
 				return true
 			})
+
+			assumedPodsCount := 0
+			assumedPodAssignment.Range(func(key, value interface{}) bool {
+				nodeName := key.(string)
+				unprunedPods := pruneScheduledAssumedPods(nodeName, nil)
+				assumedPodsCount += len(unprunedPods)
+				return true
+			})
+
+			// None of these should grow disproportionally to the number of pods / nodes in the system.
+			klog.InfoS("Caching metrics", "assumedPods", assumedPodsCount, "cachedPodRequests", cachedPodRequests, "cachedNodeMetrics", nodeMetricsCount)
 		}
 	}()
 
@@ -149,8 +248,8 @@ func isNodeReady(node *corev1.Node) bool {
 
 // getWorkloadNodes returns all nodes presently available which support a given
 // podClass (workload type).
-func getWorkloadNodes(podClass string) ([]*corev1.Node, error) {
-	items, err := nodesInformer.GetIndexer().ByIndex(IndexNodesByCiWorkload, podClass)
+func getWorkloadNodes(podClass PodClass) ([]*corev1.Node, error) {
+	items, err := nodesInformer.GetIndexer().ByIndex(IndexNodesByCiWorkload, string(podClass))
 	if err != nil {
 		return nil, err
 	}
@@ -167,24 +266,37 @@ func getWorkloadNodes(podClass string) ([]*corev1.Node, error) {
 	return nodes, nil
 }
 
-func getPodsUsingNode(nodeName string) ([]*corev1.Pod, error) {
+func getPodsUsingNode(nodeName string, excludePod *corev1.Pod) ([]*corev1.Pod, []*corev1.Pod, error) {
 	items, err := podsInformer.GetIndexer().ByIndex(IndexPodsByNode, nodeName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	pods := make([]*corev1.Pod, 0)
 	for i := range items {
 		pod := items[i].(*corev1.Pod)
-
+		if excludePod != nil && excludePod.Namespace == pod.Namespace && excludePod.Name == pod.Name {
+			continue
+		}
 		if pod.Status.Phase == corev1.PodPending || pod.Status.Phase == corev1.PodRunning {
 			// Count only pods which are consuming resources
 			pods = append(pods, pod)
 		}
 	}
-	return pods, nil
+
+	// If we have potentially recently informed scheduling of a pod and it may not
+	// have yet been official scheduled on the node, then it will be in the assumed
+	// pod map for this node.
+	// Return the pods we find as if they are actually scheduled.
+	assumedPods := pruneScheduledAssumedPods(nodeName, excludePod)
+	return pods, assumedPods, nil
 }
 
-func computePodCPUMillisRequest(pod *corev1.Pod, useCache bool) int64 {
+func calculatePodCPUMillisRequest(pod *corev1.Pod, useCache bool) int64 {
+	if pod.Name == "" || pod.Namespace == "" {
+		// Incoming pods may not specify their names and expect the server to generate one.
+		// Avoid using cached calculations for such pods.
+		useCache = false
+	}
 	qualifiedPodName := pod.Namespace + "/" + pod.Name
 	if useCache {
 		if val, ok := podCpuRequests.Load(qualifiedPodName); ok {
@@ -223,7 +335,9 @@ func computePodCPUMillisRequest(pod *corev1.Pod, useCache bool) int64 {
 		}
 	}
 
-	podCpuRequests.Store(qualifiedPodName, podRequest)
+	if useCache {
+		podCpuRequests.Store(qualifiedPodName, podRequest)
+	}
 	return podRequest
 }
 
@@ -231,7 +345,7 @@ func computePodCPUMillisRequest(pod *corev1.Pod, useCache bool) int64 {
 // heavily utilized.
 func filterWorkloadNodes(workloadNodes []*corev1.Node, pod *corev1.Pod) ([]*corev1.Node, []*corev1.Node, error) {
 	// Don't use cache for incoming pod. It's possible it was recreated under the same name.
-	incomingPodCpuMillis := computePodCPUMillisRequest(pod, false)
+	incomingPodCpuMillis := calculatePodCPUMillisRequest(pod, false)
 	filteredList := make([]*corev1.Node, 0)
 	execludedList := make([]*corev1.Node, 0)
 
@@ -245,8 +359,34 @@ func filterWorkloadNodes(workloadNodes []*corev1.Node, pod *corev1.Pod) ([]*core
 			logKeyPairs = append(logKeyPairs, val)
 		}
 
+		// Pass incoming pod because this webhook permits reinvocation.
+		// Don't recount this pod as assumed.
+		scheduledPods, assumedPods, err := getPodsUsingNode(nodeName, pod)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		var scheduledPodsRequestedMillis int64
+		var assumedPodsRequestedMillis int64
+		for _, scheduledPod := range scheduledPods {
+			scheduledPodsRequestedMillis += calculatePodCPUMillisRequest(scheduledPod, true)
+		}
+
+		assumedPodNames := make([]string, len(assumedPods))
+		for i, assumedPod := range assumedPods {
+			assumedPodsRequestedMillis += calculatePodCPUMillisRequest(assumedPod, true)
+			assumedPodNames[i] = assumedPod.Namespace + "/" + assumedPod.Name
+		}
+
+		// For the purposes of our calculations, we calculate assumed pods as if they were scheduled.
+		scheduledPlusAssumedPodsRequestedMillis := scheduledPodsRequestedMillis + assumedPodsRequestedMillis
+
 		addLogKeyPair("incomingPod", fmt.Sprintf("-n %v pod/%v", pod.Namespace, pod.Name))
+		addLogKeyPair("incomingPodRequest", fmt.Sprintf("cpu=%v", incomingPodCpuMillis))
+
 		addLogKeyPair("assessingNode", nodeName)
+		addLogKeyPair("assumedPodsMillis", fmt.Sprintf("%v", assumedPodsRequestedMillis))
+		addLogKeyPair("assumedPodNames", fmt.Sprintf("%#q", assumedPodNames))
 
 		addExclusionReason := func(reason string) {
 			exclusionReasons = append(exclusionReasons, reason)
@@ -257,18 +397,22 @@ func filterWorkloadNodes(workloadNodes []*corev1.Node, pod *corev1.Pod) ([]*core
 			nodeMetrics := m.(*metricsv1b1.NodeMetrics)
 			millisInUse := nodeMetrics.Usage.Cpu().MilliValue() // this is a measure metric of CPU usage (not requests/limits)
 			measuredCpuUse := 100 * millisInUse / node.Status.Capacity.Cpu().MilliValue()
-			addLogKeyPair("metricNodeCpu", fmt.Sprintf("%v%%", measuredCpuUse))
+			addLogKeyPair("cpuUse:measured", fmt.Sprintf("%vm / %v%%", millisInUse, measuredCpuUse))
 
-			millisPlusPod := millisInUse + incomingPodCpuMillis
+			millisInUse += assumedPodsRequestedMillis // assume these pods will consume their requested CPU
+			assumedCpuUse := 100 * millisInUse / node.Status.Capacity.Cpu().MilliValue()
+			addLogKeyPair("cpuUse:measured+assumedUse", fmt.Sprintf("%vm / %v%%", millisInUse, assumedCpuUse))
+
+			millisInUsePlusPod := millisInUse + incomingPodCpuMillis
 
 			// We must be careful here, because a single big pod could drive us over the desired
 			// target cpu utilization. If it will, but the pod will have the majority of the CPU,
 			// we should let it through.
-			podWouldDrivePercent := 100 * incomingPodCpuMillis / millisPlusPod
+			podWouldDrivePercent := 100 * incomingPodCpuMillis / millisInUsePlusPod
 
-			predictedCpuUse := 100 * millisPlusPod / node.Status.Capacity.Cpu().MilliValue()
-			addLogKeyPair("predictedNodeCpu", fmt.Sprintf("%v%%", predictedCpuUse))
-			addLogKeyPair("predictedPodCpuOwnership", fmt.Sprintf("%v%%", podWouldDrivePercent))
+			predictedCpuUse := 100 * millisInUsePlusPod / node.Status.Capacity.Cpu().MilliValue()
+			addLogKeyPair("cpuUse:measured+assumed+incoming", fmt.Sprintf("%vm / %v%%", millisInUsePlusPod, predictedCpuUse))
+			addLogKeyPair("cpuUse:incomingPodShare", fmt.Sprintf("%v%%", podWouldDrivePercent))
 
 			if predictedCpuUse > 60 && podWouldDrivePercent < 80 {
 				// This node would be heavily utilized AND this pod would not be
@@ -279,28 +423,21 @@ func filterWorkloadNodes(workloadNodes []*corev1.Node, pod *corev1.Pod) ([]*core
 			addLogKeyPair("nodeMetrics", "UNAVAILABLE")
 		}
 
-		scheduledPods, err := getPodsUsingNode(nodeName)
-		if err != nil {
-			return nil, nil, err
-		}
+		scheduledPodsCapacityPercent := 100 * scheduledPodsRequestedMillis / node.Status.Capacity.Cpu().MilliValue()
+		addLogKeyPair("cpuRequests:current", fmt.Sprintf("%vm / %v%%", scheduledPodsRequestedMillis, scheduledPodsCapacityPercent))
 
-		var scheduledPodsRequestedMillis int64
-		for _, pod := range scheduledPods {
-			scheduledPodsRequestedMillis += computePodCPUMillisRequest(pod, true)
-		}
+		scheduledPodsPlusAssumedCapacityPercent := 100 * scheduledPlusAssumedPodsRequestedMillis / node.Status.Capacity.Cpu().MilliValue()
+		addLogKeyPair("cpuRequests:current+assumed", fmt.Sprintf("%vm / %v%%", scheduledPlusAssumedPodsRequestedMillis, scheduledPodsPlusAssumedCapacityPercent))
 
-		scheduledPodsAllocatablePercent := 100 * scheduledPodsRequestedMillis / node.Status.Capacity.Cpu().MilliValue()
-		addLogKeyPair("scheduledCpuRequests", fmt.Sprintf("%v%%", scheduledPodsAllocatablePercent))
+		predictedMillisPlusPod := scheduledPlusAssumedPodsRequestedMillis + incomingPodCpuMillis
+		predictedMillisCapacityPercent := 100 * predictedMillisPlusPod / node.Status.Capacity.Cpu().MilliValue()
+		addLogKeyPair("cpuRequests:current+assumed+incoming", fmt.Sprintf("%vm / %v%%", predictedMillisPlusPod, predictedMillisCapacityPercent))
 
-		scheduledMillisPlusPod := scheduledPodsRequestedMillis + incomingPodCpuMillis
+		podWouldDriveRequestedPercent := 100 * incomingPodCpuMillis / predictedMillisPlusPod
 		// what percentage of the use could this pod drive? See comment about big pods above.
-		podWouldDriveRequestedPercent := 100 * incomingPodCpuMillis / scheduledMillisPlusPod
-		addLogKeyPair("predictedPodCpuRequestsOwnership", fmt.Sprintf("%v%%", podWouldDriveRequestedPercent))
+		addLogKeyPair("cpuRequests:incomingPodShare", fmt.Sprintf("%v%%", podWouldDriveRequestedPercent))
 
-		percentCpuRequested := 100 * scheduledMillisPlusPod / node.Status.Capacity.Cpu().MilliValue()
-		addLogKeyPair("predictedCpuRequests", fmt.Sprintf("%v%%", percentCpuRequested))
-
-		if percentCpuRequested > 90 && podWouldDriveRequestedPercent < 90 {
+		if predictedMillisCapacityPercent > 90 && podWouldDriveRequestedPercent < 90 {
 			// We want requested high, but ideally not approach 100% because of
 			// https://github.com/kubernetes/kubernetes/issues/106884#issuecomment-1005074672 .
 			// When this issue is fixed (looks like with kube 1.23), we can ignore
@@ -308,6 +445,10 @@ func filterWorkloadNodes(workloadNodes []*corev1.Node, pod *corev1.Pod) ([]*core
 			// Until then, this approach should reduce, but not eliminate the potential for OutOfCpu
 			// being reported by the kubelet.
 			addExclusionReason("Predicted CPU requests are too high and incoming Pod would not own the majority")
+		}
+
+		if len(scheduledPods) + len(assumedPods) > 130 {
+			addExclusionReason("Too many pods have been scheduled to node")
 		}
 
 		if len(exclusionReasons) == 0 {
@@ -321,12 +462,11 @@ func filterWorkloadNodes(workloadNodes []*corev1.Node, pod *corev1.Pod) ([]*core
 			addLogKeyPair("exclusionReasons", exclusionMsg)
 			klog.InfoS("Node excluded from pod affinity", logKeyPairs...)
 		}
-
 	}
 	return filteredList, execludedList, nil
 }
 
-func getNodeNamesInPreferredOrder(podClass string, pod *corev1.Pod) ([]string, []*corev1.Node, error) {
+func getNodeNamesInPreferredOrder(podClass PodClass, pod *corev1.Pod) ([]string, []*corev1.Node, error) {
 	possibleNodes, err := getWorkloadNodes(podClass)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error finding workload nodes: %v", err)
@@ -343,5 +483,39 @@ func getNodeNamesInPreferredOrder(podClass string, pod *corev1.Pod) ([]string, [
 	}
 
 	sort.Strings(preferredOrderNodeNames)
+
+	if len(preferredOrderNodeNames) > 0 {
+
+		// the assumed pods concept is another part of the workaround
+		// for https://github.com/kubernetes/kubernetes/issues/106884#issuecomment-1005074672 .
+		// If we get a big rush of pods going into our hook, but the scheduler
+		// takes awhile to schedule them, our cpu request calculation in the prioritization
+		// calculation will be off. To reduce the risk of this, assume that the pod will
+		// be successfully scheduled on the first node. Use this when consider the requests
+		// budget.
+		firstPreference := preferredOrderNodeNames[0]
+		assumedPodsMap := &sync.Map{}
+		testPodMap, ok := assumedPodAssignment.Load(firstPreference)
+		if ok {
+			assumedPodsMap = testPodMap.(*sync.Map)
+		}
+
+		assumedSchedulingTime := time.Now().UnixNano() // approximately when do we think this pod would be scheduled
+		// This webhook permits reinvocation (reinvocationPolicy: "IfNeeded").
+		// Before adding this assumed pod, make sure we haven't already added it.
+		// If we have, update the record with this updated Pod (requests may have changed).
+		assumedPodsMap.Range(func(key interface{}, value interface{}) bool {
+			existingAssumedPod := value.(*corev1.Pod)
+			if existingAssumedPod.Namespace == pod.Namespace && existingAssumedPod.Name == pod.Name {
+				assumedSchedulingTime = key.(int64)
+				return false
+			}
+			return true
+		})
+
+		assumedPodsMap.Store(assumedSchedulingTime, pod)
+		assumedPodAssignment.Store(firstPreference, assumedPodsMap)
+	}
+
 	return preferredOrderNodeNames, excludedNodes, nil
 }

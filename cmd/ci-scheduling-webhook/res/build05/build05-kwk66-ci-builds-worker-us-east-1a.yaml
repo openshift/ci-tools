@@ -1,0 +1,84 @@
+---
+apiVersion: machine.openshift.io/v1beta1
+kind: MachineSet
+metadata:
+  annotations:
+    # instance type is unknown, so the autoscaler must be told about capacity:  https://access.redhat.com/solutions/6640721
+    machine.openshift.io/GPU: "0"
+    machine.openshift.io/memoryMb: "65536"
+    machine.openshift.io/vCPU: "16"
+  labels:
+    machine.openshift.io/cluster-api-cluster: build05-kwk66
+  name: build05-kwk66-ci-builds-worker-us-east-1a
+  namespace: openshift-machine-api
+spec:
+  deletePolicy: Oldest
+  replicas: 1
+  selector:
+    matchLabels:
+      machine.openshift.io/cluster-api-cluster: build05-kwk66
+      machine.openshift.io/cluster-api-machineset: build05-kwk66-ci-builds-worker-us-east-1a
+  template:
+    metadata:
+      labels:
+        machine.openshift.io/cluster-api-cluster: build05-kwk66
+        machine.openshift.io/cluster-api-machine-role: worker
+        machine.openshift.io/cluster-api-machine-type: worker
+        machine.openshift.io/cluster-api-machineset: build05-kwk66-ci-builds-worker-us-east-1a
+    spec:
+      metadata:
+        labels:
+          ci-workload: builds
+      providerSpec:
+        value:
+          ami:
+            id: ami-0efc96a4e17e7b048
+          apiVersion: awsproviderconfig.openshift.io/v1beta1
+          blockDevices:
+          - ebs:
+              iops: 10000
+              volumeSize: 2000
+              volumeType: io1
+          credentialsSecret:
+            name: aws-cloud-credentials
+          deviceIndex: 0
+          iamInstanceProfile:
+            id: build05-kwk66-worker-profile
+          instanceType: m5.4xlarge
+          kind: AWSMachineProviderConfig
+          metadata: {}
+          placement:
+            availabilityZone: us-east-1a
+            region: us-east-1
+          securityGroups:
+          - filters:
+            - name: tag:Name
+              values:
+              - build05-kwk66-worker-sg
+          subnet:
+            filters:
+            - name: tag:Name
+              values:
+              - build05-kwk66-private-us-east-1a
+          tags:
+          - name: kubernetes.io/cluster/build05-kwk66
+            value: owned
+          userDataSecret:
+            name: worker-user-data
+      taints:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/ci-builds-worker
+        value: ci-builds-worker
+---
+apiVersion: autoscaling.openshift.io/v1beta1
+kind: MachineAutoscaler
+metadata:
+  name: build05-kwk66-ci-builds-worker-us-east-1a
+  namespace: openshift-machine-api
+spec:
+  maxReplicas: 50
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: machine.openshift.io/v1beta1
+    kind: MachineSet
+    name: build05-kwk66-ci-builds-worker-us-east-1a

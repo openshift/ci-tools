@@ -105,7 +105,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 
 	profile("decoded request")
 
-	podClass := "" // will be set to CiWorkloadLabelValueBuilds or CiWorkloadLabelValueTests depending on analysis
+	podClass := PodClassNone // will be set to CiWorkloadLabelValueBuilds or CiWorkloadLabelValueTests depending on analysis
 
 	patchEntries := make([]map[string]interface{}, 0)
 	addPatchEntry := func(op string, path string, value interface{}) {
@@ -137,7 +137,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 	if namespace == CiNamepsace {
 		if _, ok := pod.Labels[CiCreatedByProwLabelName]; ok {
 			// if we are in 'ci' and created by prow, this the direct prowjob pod. Treat as test.
-			podClass = CiWorkloadLabelValueTests
+			podClass = PodClassTests
 		}
 	}
 
@@ -166,21 +166,19 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 
 		if !skipPod {
 			if _, ok := labels[CiBuildNameLabelName]; ok {
-				podClass = CiWorkloadLabelValueBuilds
+				podClass = PodClassBuilds
 			} else {
-				podClass = CiWorkloadLabelValueTests
+				podClass = PodClassTests
 			}
 		}
 	}
 
-	if podClass != "" {
+	if podClass != PodClassNone {
 		profile("classified request")
 
 		// Setup labels we might want to use in the future to set pod affinity
-		labels[CiWorkloadLabelName] = podClass
+		labels[CiWorkloadLabelName] = string(podClass)
 		labels[CiWorkloadNamespaceLabelName] = namespace
-
-		addPatchEntry("add", "/metadata/labels", labels)
 
 		// Reduce CPU requests, if appropriate
 		reduceCPURequests := func(containerType string, containers []corev1.Container, factor float32) {
@@ -195,17 +193,35 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 				for key := range c.Resources.Requests {
 					if key == corev1.ResourceCPU {
 						// TODO : use convert to unstructured
-						newRequests := map[string]interface{}{
-							string(corev1.ResourceCPU):    fmt.Sprintf("%vm", int64(float32(c.Resources.Requests.Cpu().MilliValue())*factor)),
-							string(corev1.ResourceMemory): fmt.Sprintf("%v", c.Resources.Requests.Memory().String()),
+
+						// Our webhook can be reinvoked. A simple, imprecise way of determining whether
+						// we are being reinvoked which changes to cpu requests, we leave a signature
+						// value of xxxxxx1m on the end of the millicore value. If found, assume we have
+						// touched this request before and leave it be (instead of reducing it a second
+						// time by the reduction factor).
+						if c.Resources.Requests.Cpu().MilliValue() % 10 == 1 {
+							continue
 						}
+
+						// Apply the reduction factory and add our signature 1 millicore.
+						reduced := int64(float32(c.Resources.Requests.Cpu().MilliValue())*factor) / 10 * 10 + 1
+
+						newRequests := map[string]interface{}{
+							string(corev1.ResourceCPU):    fmt.Sprintf("%vm", reduced),
+						}
+
+						if c.Resources.Requests.Memory().Value() > 0 {
+							newRequests[string(corev1.ResourceMemory)] = fmt.Sprintf("%v", c.Resources.Requests.Memory().String())
+						}
+
 						addPatchEntry("add", fmt.Sprintf("/spec/%v/%v/resources/requests", containerType, i), newRequests)
 					}
 				}
 			}
 		}
+
 		var cpuFactor float32
-		if podClass == CiWorkloadLabelValueTests {
+		if podClass == PodClassTests {
 			cpuFactor = shrinkTestCPU
 		} else {
 			cpuFactor = shrinkBuildCPU
@@ -220,7 +236,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 
 		// Set a nodeSelector to ensure this finds our desired machineset nodes
 		nodeSelector := make(map[string]string)
-		nodeSelector[CiWorkloadLabelName] = podClass
+		nodeSelector[CiWorkloadLabelName] = string(podClass)
 		addPatchEntry("add", "/spec/nodeSelector", nodeSelector)
 
 		// Set up a softNodeAffinity to try to deterministically schedule this Pod
@@ -280,7 +296,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 					}
 					preferredSchedulingTerms = append(preferredSchedulingTerms,
 						corev1.PreferredSchedulingTerm{
-							Weight: int32(i) + 1,
+							Weight: int32(len(orderedNodeNames)) - int32(i),
 							Preference: corev1.NodeSelectorTerm{
 								MatchFields: []corev1.NodeSelectorRequirement{
 									{
@@ -297,6 +313,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 				affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = preferredSchedulingTerms
 				affinityChanged = true
 			}
+
 			if affinityChanged {
 				unstructuredAffinity, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&affinity)
 				if err != nil {
@@ -306,10 +323,14 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 
 				addPatchEntry("add", "/spec/affinity", unstructuredAffinity)
 			}
+
 		} else {
 			klog.Errorf("No node affinity will be set in pod due to error: %v", err)
 		}
+
+		addPatchEntry("add", "/metadata/labels", labels)
 	}
+
 
 	// Create a response that will add a label to the pod if it does
 	// not already have a label with the key of "hello". In this case

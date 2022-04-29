@@ -25,6 +25,8 @@ metadata:
   name: ci-scheduling-admission-webhook
   namespace: ci-scheduling-webhook
 spec:
+  # There is some state stored for assumed pods.
+  # Prefer vertical to horizontal scaling.
   replicas: 1
   selector:
     matchLabels:
@@ -46,8 +48,8 @@ spec:
           - "/etc/pki/tls/certs/admission/tls.crt"
           - "--tls-key"
           - "/etc/pki/tls/certs/admission/tls.key"
-          - "--shrink-cpu-requests-tests"
-          - "0.3"
+          #- "--shrink-cpu-requests-tests"
+          #- "0.3"
           name: webhook
           imagePullPolicy: Always
           ports:

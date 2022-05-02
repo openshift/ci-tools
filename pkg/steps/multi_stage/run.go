@@ -24,19 +24,23 @@ func (s *multiStageTestStep) runSteps(
 	phase string,
 	steps []api.LiteralTestStep,
 	env []coreapi.EnvVar,
-	shortCircuit bool,
-	hasPrevErrs bool,
 	secretVolumes []coreapi.Volume,
 	secretVolumeMounts []coreapi.VolumeMount,
 ) error {
 	start := time.Now()
 	logrus.Infof("Running multi-stage phase %s", phase)
-	pods, isBestEffort, err := s.generatePods(steps, env, hasPrevErrs, secretVolumes, secretVolumeMounts)
+	pods, isBestEffort, err := s.generatePods(steps, env, secretVolumes, secretVolumeMounts)
 	if err != nil {
+		s.flags |= hasPrevErrs
 		return err
 	}
 	var errs []error
-	if err := s.runPods(ctx, pods, shortCircuit, isBestEffort); err != nil {
+	defer func() {
+		if len(errs) != 0 {
+			s.flags |= hasPrevErrs
+		}
+	}()
+	if err := s.runPods(ctx, pods, isBestEffort); err != nil {
 		errs = append(errs, err)
 	}
 	select {
@@ -89,19 +93,20 @@ func (s *multiStageTestStep) runSteps(
 	return err
 }
 
-func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, shortCircuit bool, isBestEffort func(string) bool) error {
+func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, isBestEffort func(string) bool) error {
 	var errs []error
 	for _, pod := range pods {
 		err := s.runPod(ctx, &pod, base_steps.NewTestCaseNotifier(base_steps.NopNotifier))
-		if err != nil {
-			if isBestEffort(pod.Name) {
-				logrus.Infof("Pod %s is running in best-effort mode, ignoring the failure...", pod.Name)
-				continue
-			}
-			errs = append(errs, err)
-			if shortCircuit {
-				break
-			}
+		if err == nil {
+			continue
+		}
+		if isBestEffort(pod.Name) {
+			logrus.Infof("Pod %s is running in best-effort mode, ignoring the failure...", pod.Name)
+			continue
+		}
+		errs = append(errs, err)
+		if s.flags&shortCircuit != 0 {
+			break
 		}
 	}
 	return utilerrors.NewAggregate(errs)

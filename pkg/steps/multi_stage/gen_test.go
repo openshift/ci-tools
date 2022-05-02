@@ -232,7 +232,7 @@ func TestGeneratePodBestEffort(t *testing.T) {
 	}
 	jobSpec.SetNamespace("namespace")
 	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil)
-	_, isBestEffort, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Post, nil, nil, nil)
+	_, bestEffortSteps, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Post, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestGeneratePodBestEffort(t *testing.T) {
 		"test-step1": true,
 		"test-step2": false,
 	} {
-		if actual, expected := isBestEffort(pod), bestEffort; actual != expected {
+		if actual, expected := bestEffortSteps.Has(pod), bestEffort; actual != expected {
 			t.Errorf("didn't check best-effort status of Pod %s correctly, expected %v", pod, bestEffort)
 		}
 	}

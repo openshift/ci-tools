@@ -78,6 +78,19 @@ func (t Timeline) DeterminePlaceInTime(now time.Time) (Event, Event) {
 	return before, after
 }
 
+// DeterminePlaceInTime returns pointer to the exact lifecycle phase by comparing dates
+func (t Timeline) GetExactLifecyclePhase(now time.Time) *Event {
+	for _, e := range t {
+		lifecycleTime := e.LifecyclePhase.When.Time
+		if now.Day() == lifecycleTime.Day() &&
+			now.Month() == lifecycleTime.Month() &&
+			now.Year() == lifecycleTime.Year() {
+			return &e
+		}
+	}
+	return nil
+}
+
 // Config is an OCP lifecycle config. It holds a top-level product key (e.G. OCP)
 // that maps to versions (e.G. 4.8) and those finally include the lifecycle phases.
 type Config map[string]map[string][]LifecyclePhase
@@ -193,6 +206,14 @@ func (m MajorMinor) Less(other MajorMinor) bool {
 		return false
 	}
 	return m.Minor < other.Minor
+}
+
+func (m MajorMinor) GetVersion() string {
+	return fmt.Sprintf("%d.%d", m.Major, m.Minor)
+}
+
+func (m MajorMinor) GetFutureVersion() string {
+	return fmt.Sprintf("%d.%d", m.Major, m.Minor+1)
 }
 
 func (m MajorMinor) WithIncrementedMinor(increment int) MajorMinor {

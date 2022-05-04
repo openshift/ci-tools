@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"gopkg.in/fsnotify.v1"
 
 	coreapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,7 +49,7 @@ func main() {
 	flagSet := flag.NewFlagSet("", flag.ExitOnError)
 	opt := bindOptions(flagSet)
 	if err := flagSet.Parse(os.Args[1:]); err != nil {
-		logrus.WithError(err).Fatal("Failed to parsse flagset")
+		logrus.WithError(err).Fatal("failed to parse flag set")
 	}
 	opt.cmd = flagSet.Args()
 	if err := opt.complete(); err != nil {
@@ -62,23 +63,38 @@ func main() {
 }
 
 type options struct {
-	dry     bool
-	name    string
-	srcPath string
-	dstPath string
-	cmd     []string
-	client  coreclientset.SecretInterface
+	dry            bool
+	name           string
+	srcPath        string
+	dstPath        string
+	waitPath       string
+	waitTimeoutStr string
+	waitTimeout    time.Duration
+	cmd            []string
+	client         coreclientset.SecretInterface
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
 	opt := &options{}
 	flag.BoolVar(&opt.dry, "dry-run", false, "Print the secret instead of creating it")
+	flag.StringVar(&opt.waitPath, "wait-for-file", "", "Wait for a file to appear at this path before starting the program")
+	flag.StringVar(&opt.waitTimeoutStr, "wait-timeout", "", "Used with --wait-for-file, maximum wait time before starting the program")
 	return opt
 }
 
 func (o *options) complete() error {
 	if len(o.cmd) == 0 {
 		return fmt.Errorf("a command is required")
+	}
+	if w := o.waitTimeoutStr; w != "" {
+		if o.waitPath == "" {
+			return fmt.Errorf("--wait-timeout requires --wait-for-file")
+		}
+		if d, err := time.ParseDuration(w); err != nil {
+			return fmt.Errorf("invalid wait timeout duration %q: %w", w, err)
+		} else {
+			o.waitTimeout = d
+		}
 	}
 	if o.srcPath = os.Getenv("SHARED_DIR"); o.srcPath == "" {
 		return fmt.Errorf("environment variable SHARED_DIR is empty")
@@ -104,6 +120,11 @@ func (o *options) complete() error {
 func (o *options) run() error {
 	if err := copyDir(o.dstPath, o.srcPath); err != nil {
 		return fmt.Errorf("failed to copy secret mount: %w", err)
+	}
+	if o.waitPath != "" {
+		if err := waitForFile(o.waitPath, o.waitTimeout); err != nil {
+			return fmt.Errorf("failed to wait for file: %w", err)
+		}
 	}
 	var errs []error
 	ctx, cancel := context.WithCancel(context.Background())
@@ -168,6 +189,40 @@ func copyDir(dst, src string) error {
 		}
 	}
 	return nil
+}
+
+func waitForFile(path string, timeout time.Duration) error {
+	dir := filepath.Dir(path)
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("failed to create file system watcher: %w", err)
+	}
+	defer func() {
+		if err := watcher.Close(); err != nil {
+			log.Printf("failed to close file system watcher: %v", err)
+		}
+	}()
+	if err := watcher.Add(dir); err != nil {
+		return fmt.Errorf("failed to watch file %q: %w", dir, err)
+	}
+	if err := syscall.Access(path, syscall.F_OK); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	for {
+		select {
+		case e := <-watcher.Events:
+			if e.Op&fsnotify.Create != 0 && e.Name == path {
+				return nil
+			}
+		case err := <-watcher.Errors:
+			return err
+		case <-time.After(timeout):
+			log.Printf("warning: timeout after waiting %s for file %q", timeout, path)
+			return nil
+		}
+	}
 }
 
 func execCmd(argv []string) error {

@@ -30,6 +30,7 @@ import (
 
 const (
 	CiWorkloadLabelName          = "ci-workload"
+	CiWorkloadNodeAssumed          = "ci-workload-assumed-node"
 	CiWorkloadNamespaceLabelName = "ci-workload-namespace"
 	KubeNodeHostnameLabel        = "kubernetes.io/hostname"
 )

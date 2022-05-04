@@ -12,6 +12,7 @@ import (
 	metricsv1b1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -27,7 +28,7 @@ const (
 var (
 	nodeMetricsMap sync.Map // map[nodeName string]*NodeMetrics
 	podCpuRequests sync.Map // map[ns_slash_podName string]in64
-	assumedPodAssignment sync.Map // map[nodeName String]*map[podName String]*Pod
+	assumedPodAssignment sync.Map // map[nodeName String]*map[time.Time]*Pod
 	nodesInformer  cache.SharedIndexInformer
 	podsInformer   cache.SharedIndexInformer
 )
@@ -64,14 +65,14 @@ func pruneScheduledAssumedPods(nodeName string, excludePod *corev1.Pod) (remaini
 		}
 		assumedPods := value.(*sync.Map)
 		assumedPods.Range(func(key, value interface{}) bool {
-			unixNanosCreation := key.(int64)
+			unixNanosCreation := key.(time.Time)
 			pod := value.(*corev1.Pod)
 
 			if excludePod != nil && excludePod.Namespace == pod.Namespace && excludePod.Name == pod.Name {
 				return true
 			}
 
-			age := time.Now().Sub(time.Unix(0, unixNanosCreation))
+			age := time.Now().Sub(unixNanosCreation)
 			if age > 20 * time.Minute {
 				klog.Warningf("Pod %v has languished without being scheduled -- removing from assumed")
 				// Why is this pod not getting scheduled. Who knows. Avoid memory leak.
@@ -104,6 +105,17 @@ func pruneScheduledAssumedPods(nodeName string, excludePod *corev1.Pod) (remaini
 			return true
 		})
 		return
+	}
+}
+
+// pruneScheduledAssumedPod removes a pod from assumed scheduling when a pod is scheduled
+func pruneScheduledAssumedPod(pod *corev1.Pod) {
+	nodeName := pod.Spec.NodeName
+	if len(nodeName) == 0 {
+		return
+	}
+	if assumedNodeName, ok := pod.Labels[CiWorkloadNodeAssumed]; ok {
+		pruneScheduledAssumedPods(assumedNodeName, nil)
 	}
 }
 
@@ -140,6 +152,17 @@ func initializePrioritization(ctx context.Context, k8sClientSet *kubernetes.Clie
 	if err != nil {
 		return fmt.Errorf("unable to create new pod informer index: %v", err)
 	}
+
+	podsInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			pod := obj.(*corev1.Pod)
+			pruneScheduledAssumedPod(pod)
+		},
+		UpdateFunc: func(obj interface{}, newObj interface{}) {
+			pod := newObj.(*corev1.Pod)
+			pruneScheduledAssumedPod(pod)
+		},
+	})
 
 	stopCh := make(chan struct{})
 	informerFactory.Start(stopCh) // runs in background
@@ -344,12 +367,21 @@ func calculatePodCPUMillisRequest(pod *corev1.Pod, useCache bool) int64 {
 // filterWorkloadNodes will return a new slice after removing nodes which
 // heavily utilized.
 func filterWorkloadNodes(workloadNodes []*corev1.Node, pod *corev1.Pod) ([]*corev1.Node, []*corev1.Node, error) {
-	// Don't use cache for incoming pod. It's possible it was recreated under the same name.
+	// Don't use cache for incoming pod. It's possible it was recreated under the same name
+	// or that we are being reinvoked as part of our reinvocation policy.
 	incomingPodCpuMillis := calculatePodCPUMillisRequest(pod, false)
 	filteredList := make([]*corev1.Node, 0)
 	execludedList := make([]*corev1.Node, 0)
 
-	for _, node := range workloadNodes {
+	// Sort in an order of node name to encourage assignment in a deterministic
+	// node order.
+	sort.Slice(workloadNodes, func(i, j int) bool {
+		return strings.Compare(workloadNodes[i].Name, workloadNodes[j].Name) < 0
+	})
+
+	const filteredNodeCountTarget = 5  // how many nodes should we return?
+
+	for i, node := range workloadNodes {
 		nodeName := node.Name
 		exclusionReasons := make([]string, 0)
 
@@ -455,6 +487,13 @@ func filterWorkloadNodes(workloadNodes []*corev1.Node, pod *corev1.Pod) ([]*core
 			filteredList = append(filteredList, node)
 			addLogKeyPair("affinity", "true")
 			klog.InfoS("Node included in pod affinity", logKeyPairs...)
+			if len(filteredList) == filteredNodeCountTarget {
+				// nodes excluded only because we have a candidate. They may or may not have capacity.
+				quickExclude := workloadNodes[i+1:]
+				// After we find the required viable node, ignore the rest
+				execludedList = append(execludedList, quickExclude...)
+				return filteredList, execludedList, nil
+			}
 		} else {
 			execludedList = append(execludedList, node)
 			exclusionMsg := fmt.Sprintf("%#q", exclusionReasons)
@@ -466,7 +505,7 @@ func filterWorkloadNodes(workloadNodes []*corev1.Node, pod *corev1.Pod) ([]*core
 	return filteredList, execludedList, nil
 }
 
-func getNodeNamesInPreferredOrder(podClass PodClass, pod *corev1.Pod) ([]string, []*corev1.Node, error) {
+func getNodeNamesInPreferredOrder(podClass PodClass, pod *corev1.Pod) ([]*corev1.Node, []*corev1.Node, error) {
 	possibleNodes, err := getWorkloadNodes(podClass)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error finding workload nodes: %v", err)
@@ -477,14 +516,12 @@ func getNodeNamesInPreferredOrder(podClass PodClass, pod *corev1.Pod) ([]string,
 		return nil, nil, fmt.Errorf("error filtering workload nodes: %v", err)
 	}
 
-	preferredOrderNodeNames := make([]string, len(filteredNodes))
-	for i := range filteredNodes {
-		preferredOrderNodeNames[i] = filteredNodes[i].Name
-	}
+	if len(filteredNodes) > 0 {
 
-	sort.Strings(preferredOrderNodeNames)
-
-	if len(preferredOrderNodeNames) > 0 {
+		// filtered already come back sorted, but just in case.
+		sort.Slice(filteredNodes, func(i, j int) bool {
+			return strings.Compare(filteredNodes[i].Name, filteredNodes[j].Name) < 0
+		})
 
 		// the assumed pods concept is another part of the workaround
 		// for https://github.com/kubernetes/kubernetes/issues/106884#issuecomment-1005074672 .
@@ -493,21 +530,21 @@ func getNodeNamesInPreferredOrder(podClass PodClass, pod *corev1.Pod) ([]string,
 		// calculation will be off. To reduce the risk of this, assume that the pod will
 		// be successfully scheduled on the first node. Use this when consider the requests
 		// budget.
-		firstPreference := preferredOrderNodeNames[0]
+		firstPreference := filteredNodes[0].Name
 		assumedPodsMap := &sync.Map{}
 		testPodMap, ok := assumedPodAssignment.Load(firstPreference)
 		if ok {
 			assumedPodsMap = testPodMap.(*sync.Map)
 		}
 
-		assumedSchedulingTime := time.Now().UnixNano() // approximately when do we think this pod would be scheduled
+		assumedSchedulingTime := time.Now() // approximately when do we think this pod would be scheduled
 		// This webhook permits reinvocation (reinvocationPolicy: "IfNeeded").
 		// Before adding this assumed pod, make sure we haven't already added it.
 		// If we have, update the record with this updated Pod (requests may have changed).
 		assumedPodsMap.Range(func(key interface{}, value interface{}) bool {
 			existingAssumedPod := value.(*corev1.Pod)
 			if existingAssumedPod.Namespace == pod.Namespace && existingAssumedPod.Name == pod.Name {
-				assumedSchedulingTime = key.(int64)
+				assumedSchedulingTime = key.(time.Time)
 				return false
 			}
 			return true
@@ -517,5 +554,5 @@ func getNodeNamesInPreferredOrder(podClass PodClass, pod *corev1.Pod) ([]string,
 		assumedPodAssignment.Store(firstPreference, assumedPodsMap)
 	}
 
-	return preferredOrderNodeNames, excludedNodes, nil
+	return filteredNodes, excludedNodes, nil
 }

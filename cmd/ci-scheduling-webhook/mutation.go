@@ -11,6 +11,7 @@ import (
 	"k8s.io/klog/v2"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -27,6 +28,8 @@ var (
 		"ocp":             true,
 		"cert-manager":    true,
 	}
+
+	queue sync.Mutex
 )
 
 func admissionReviewFromRequest(r *http.Request, deserializer runtime.Decoder) (*admissionv1.AdmissionReview, error) {
@@ -56,6 +59,9 @@ func admissionReviewFromRequest(r *http.Request, deserializer runtime.Decoder) (
 }
 
 func mutatePod(w http.ResponseWriter, r *http.Request) {
+	queue.Lock()
+	defer queue.Unlock()
+
 	start := time.Now()
 	lastProfileTime := &start
 
@@ -244,7 +250,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		// autoscaler will be find unused nodes (vs if the pods were spread
 		// across all nodes evenly).
 
-		orderedNodeNames, excludedNodes, err := getNodeNamesInPreferredOrder(podClass, &pod)
+		orderedNodes, excludedNodes, err := getNodeNamesInPreferredOrder(podClass, &pod)
 		profile("assessed node fit")
 
 		if err == nil {
@@ -252,6 +258,40 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 			affinityChanged := false
 			affinity := corev1.Affinity{
 				NodeAffinity: &corev1.NodeAffinity{},
+			}
+
+			if len(orderedNodes) > 0 {
+				labels[CiWorkloadNodeAssumed] = orderedNodes[0].Name // Store where we assume this pod will land
+				preferredSchedulingTerms := make([]corev1.PreferredSchedulingTerm, 0)
+				weight := int32(10)
+				for i, node := range orderedNodes {
+					nodeName := node.Name
+					if i > 4 {
+						// A limited number of viable nodes should be sufficient for the scheduler to find a spot.
+						// Avoid making the pod.spec huge. Exclude the others so our weighting takes precedence
+						// over other default scheduler scoring.
+						excludedNodes = append(excludedNodes, node)
+						continue
+					}
+					preferredSchedulingTerms = append(preferredSchedulingTerms,
+						corev1.PreferredSchedulingTerm{
+							Weight: weight,
+							Preference: corev1.NodeSelectorTerm{
+								MatchFields: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "metadata.name",
+										Operator: "In",
+										Values:   []string{nodeName},
+									},
+								},
+							},
+						},
+					)
+					weight = 1  // after our assumed node, everything else is only mildly encouraged
+				}
+
+				affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = preferredSchedulingTerms
+				affinityChanged = true
 			}
 
 			if len(excludedNodes) > 0 {
@@ -284,34 +324,6 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 					affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &requiredNoSchedulingSelector
 					affinityChanged = true
 				}
-			}
-
-			if len(orderedNodeNames) > 0 {
-				preferredSchedulingTerms := make([]corev1.PreferredSchedulingTerm, 0)
-				for i, nodeName := range orderedNodeNames {
-					if i == 5 {
-						// 5 viable nodes should be sufficient for the scheduler to find a spot.
-						// Avoid making the pod.spec huge.
-						break
-					}
-					preferredSchedulingTerms = append(preferredSchedulingTerms,
-						corev1.PreferredSchedulingTerm{
-							Weight: int32(len(orderedNodeNames)) - int32(i),
-							Preference: corev1.NodeSelectorTerm{
-								MatchFields: []corev1.NodeSelectorRequirement{
-									{
-										Key:      "metadata.name",
-										Operator: "In",
-										Values:   []string{nodeName},
-									},
-								},
-							},
-						},
-					)
-				}
-
-				affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = preferredSchedulingTerms
-				affinityChanged = true
 			}
 
 			if affinityChanged {

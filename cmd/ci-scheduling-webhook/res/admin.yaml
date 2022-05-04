@@ -11,9 +11,9 @@ metadata:
 handler: runc
 overhead:
   podFixed:
-    # Reserve an additional 500m for each build on crio as overhead for the runtime
+    # Reserve an CPU and memory for each build on crio as overhead for the runtime
     memory: "500Mi"
-    cpu: "500m"
+    cpu: "1"
 scheduling:
   nodeSelector:
     ci-workload: builds
@@ -31,6 +31,11 @@ kind: RuntimeClass
 metadata:
   name: ci-scheduler-runtime-tests
 handler: runc
+overhead:
+  podFixed:
+    # Reserve an CPU and memory for each build on crio as overhead for the runtime
+    memory: "500Mi"
+    cpu: "300m"
 scheduling:
   nodeSelector:
     ci-workload: tests

@@ -154,6 +154,26 @@ func TestValidateReleases(t *testing.T) {
 				errors.New("root.third.version_bounds.upper: must be set"),
 			},
 		},
+		{
+			name: "invalid name of integration release",
+			input: map[string]api.UnresolvedRelease{
+				"ocp-4.11": {
+					Integration: &api.Integration{
+						Name:      "4.11",
+						Namespace: "ocp",
+					},
+				},
+				"ocp-4-11": {
+					Integration: &api.Integration{
+						Name:      "4.11",
+						Namespace: "ocp",
+					},
+				},
+			},
+			output: []error{
+				errors.New("the name of an integration release must not contain '.' but found root.ocp-4.11"),
+			},
+		},
 	}
 
 	for _, testCase := range testCases {

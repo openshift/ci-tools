@@ -34,7 +34,7 @@ handler: runc
 overhead:
   podFixed:
     # Reserve an CPU and memory for each build on crio as overhead for the runtime
-    memory: "500Mi"
+    memory: "600Mi"
     cpu: "300m"
 scheduling:
   nodeSelector:

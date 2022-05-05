@@ -11,7 +11,6 @@ import (
 	"k8s.io/klog/v2"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -19,6 +18,7 @@ const (
 	CiBuildNameLabelName     = "openshift.io/build.name"
 	CiNamepsace              = "ci"
 	CiCreatedByProwLabelName = "created-by-prow"
+	KubernetesHostnameLabelName = "kubernetes.io/hostname"
 )
 
 var (
@@ -28,8 +28,6 @@ var (
 		"ocp":             true,
 		"cert-manager":    true,
 	}
-
-	queue sync.Mutex
 )
 
 func admissionReviewFromRequest(r *http.Request, deserializer runtime.Decoder) (*admissionv1.AdmissionReview, error) {
@@ -59,9 +57,6 @@ func admissionReviewFromRequest(r *http.Request, deserializer runtime.Decoder) (
 }
 
 func mutatePod(w http.ResponseWriter, r *http.Request) {
-	queue.Lock()
-	defer queue.Unlock()
-
 	start := time.Now()
 	lastProfileTime := &start
 
@@ -245,88 +240,37 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		nodeSelector[CiWorkloadLabelName] = string(podClass)
 		addPatchEntry("add", "/spec/nodeSelector", nodeSelector)
 
-		// Set up a softNodeAffinity to try to deterministically schedule this Pod
-		// on an ordered list of nodes. This will make it more likely that the
-		// autoscaler will be find unused nodes (vs if the pods were spread
-		// across all nodes evenly).
-
-		orderedNodes, excludedNodes, err := getNodeNamesInPreferredOrder(podClass, &pod)
-		profile("assessed node fit")
+		// We want to try to help the autoscaler out by quieting load on select nodes.
+		// Once the nodes are selected, no pods will be scheduled to them and eventually
+		// the autoscaler should be able to reclaim them. At that point, another
+		// sacrifice will be selected.
+		// This is a natural backpressure to k8s trying to spread load over
+		// all available nodes (keeping them alive unnecessarily long).
+		sacrificialHostnames, err := findHostnamesToSacrifice(podClass)
 
 		if err == nil {
+			if len(sacrificialHostnames) > 0 {
+				affinity := corev1.Affinity{
+					NodeAffinity: &corev1.NodeAffinity{},
+				}
 
-			affinityChanged := false
-			affinity := corev1.Affinity{
-				NodeAffinity: &corev1.NodeAffinity{},
-			}
-
-			if len(orderedNodes) > 0 {
-				labels[CiWorkloadNodeAssumed] = orderedNodes[0].Name // Store where we assume this pod will land
-				preferredSchedulingTerms := make([]corev1.PreferredSchedulingTerm, 0)
-				weight := int32(10)
-				for i, node := range orderedNodes {
-					nodeName := node.Name
-					if i > 4 {
-						// A limited number of viable nodes should be sufficient for the scheduler to find a spot.
-						// Avoid making the pod.spec huge. Exclude the others so our weighting takes precedence
-						// over other default scheduler scoring.
-						excludedNodes = append(excludedNodes, node)
-						continue
-					}
-					preferredSchedulingTerms = append(preferredSchedulingTerms,
-						corev1.PreferredSchedulingTerm{
-							Weight: weight,
-							Preference: corev1.NodeSelectorTerm{
-								MatchFields: []corev1.NodeSelectorRequirement{
-									{
-										Key:      "metadata.name",
-										Operator: "In",
-										Values:   []string{nodeName},
-									},
+				// Use MatchExpressions here because MatchFields because MatchExpressions
+				// only allows one value in the Values list.
+				requiredNoSchedulingSelector := corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      KubernetesHostnameLabelName,
+									Operator: "NotIn",
+									Values:   sacrificialHostnames,
 								},
 							},
 						},
-					)
-					weight = 1  // after our assumed node, everything else is only mildly encouraged
+					},
 				}
+				affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &requiredNoSchedulingSelector
 
-				affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = preferredSchedulingTerms
-				affinityChanged = true
-			}
-
-			if len(excludedNodes) > 0 {
-				excludedHostnames := make([]string, 0)
-				for i := range excludedNodes {
-					excludedNode := excludedNodes[i]
-					if hostname, ok := excludedNode.Labels[KubeNodeHostnameLabel]; ok {
-						excludedHostnames = append(excludedHostnames, hostname)
-					} else {
-						klog.Warningf("Node %v does not have %v label set. Anti-affinity will not function.", excludedNode.Name, KubeNodeHostnameLabel)
-					}
-				}
-
-				if len(excludedHostnames) > 0 {
-					// Use MatchExpressions here because MatchFields because MatchExpressions
-					// only allows one value in the Values list.
-					requiredNoSchedulingSelector := corev1.NodeSelector{
-						NodeSelectorTerms: []corev1.NodeSelectorTerm{
-							{
-								MatchExpressions: []corev1.NodeSelectorRequirement{
-									{
-										Key:      KubeNodeHostnameLabel,
-										Operator: "NotIn",
-										Values:   excludedHostnames,
-									},
-								},
-							},
-						},
-					}
-					affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &requiredNoSchedulingSelector
-					affinityChanged = true
-				}
-			}
-
-			if affinityChanged {
 				unstructuredAffinity, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&affinity)
 				if err != nil {
 					writeHttpError(500, fmt.Errorf("error decoding affinity to unstructured data: %v", err))
@@ -335,7 +279,6 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 
 				addPatchEntry("add", "/spec/affinity", unstructuredAffinity)
 			}
-
 		} else {
 			klog.Errorf("No node affinity will be set in pod due to error: %v", err)
 		}
@@ -363,11 +306,11 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 
 	admissionResponse.Allowed = true
 	if len(patch) > 0 {
-		klog.InfoS("Incoming pod to be modified", "podClass", podClass, "namespace", namespace, "pod", podName)
+		klog.InfoS("Incoming pod to be modified", "podClass", podClass, "pod", fmt.Sprintf("-n %v pod/%v", namespace, podName))
 		admissionResponse.PatchType = &patchType
 		admissionResponse.Patch = patch
 	} else {
-		klog.InfoS("Incoming pod to be ignored", "podClass", podClass, "namespace", namespace, "pod", podName)
+		klog.InfoS("Incoming pod to be ignored", "podClass", podClass, "pod", fmt.Sprintf("-n %v pod/%v", namespace, podName))
 	}
 
 	// Construct the response, which is just another AdmissionReview.

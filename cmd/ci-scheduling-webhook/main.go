@@ -24,15 +24,11 @@ import (
 import (
 	"crypto/tls"
 	"net/http"
-
-	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 const (
 	CiWorkloadLabelName          = "ci-workload"
-	CiWorkloadNodeAssumed          = "ci-workload-assumed-node"
 	CiWorkloadNamespaceLabelName = "ci-workload-namespace"
-	KubeNodeHostnameLabel        = "kubernetes.io/hostname"
 )
 
 var (
@@ -90,7 +86,7 @@ func generateTestCertificate() (*tls.Certificate, error) {
 	return &tlsCert, nil
 }
 
-func Run(cmd *cobra.Command, args []string) {
+func Run(_ *cobra.Command, _ []string) {
 
 	if (tlsCertFile == "" || tlsKeyFile == "") && (tlsCertFile != "" || tlsKeyFile != "") {
 		fmt.Println("--tls-cert and --tls-key required must both be specified or both omitted")
@@ -135,19 +131,13 @@ func Run(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
+	clientSet, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		klog.Errorf("Error initializing kubernetes client set: %v", err)
 		os.Exit(1)
 	}
 
-	metricsclientset, err := metrics.NewForConfig(config)
-	if err != nil {
-		klog.Errorf("Error initializing metrics client set: %v", err)
-		os.Exit(1)
-	}
-
-	err = initializePrioritization(ctx, clientset, metricsclientset)
+	err = initializePrioritization(ctx, clientSet)
 	if err != nil {
 		klog.Errorf("Error initializing node prioritization processes: %v", err)
 		os.Exit(1)

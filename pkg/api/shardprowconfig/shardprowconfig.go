@@ -108,6 +108,9 @@ func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConf
 				return nil, fmt.Errorf("failed to deepcopy tide query %+v: %w", query, err)
 			}
 
+			queryCopy.Orgs = nil
+			queryCopy.Repos = []string{repo}
+
 			f.ModifyQuery(queryCopy, repo)
 
 			configsByOrgRepo[orgRepo].Tide.Queries = append(configsByOrgRepo[orgRepo].Tide.Queries, *queryCopy)

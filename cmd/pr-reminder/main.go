@@ -3,19 +3,21 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"sort"
+	"strings"
+	"time"
+
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
-	"io/ioutil"
+
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/logrusutil"
-	"os"
-	"sort"
-	"strings"
-	"time"
 )
 
 type options struct {

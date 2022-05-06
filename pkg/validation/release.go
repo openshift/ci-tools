@@ -18,6 +18,9 @@ func validateReleases(fieldRoot string, releases map[string]api.UnresolvedReleas
 		names.Insert(name)
 	}
 	for _, name := range names.List() {
+		if err := partOfImageStreamName(name); err != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s[%s]: the release name is not valid: %w", fieldRoot, name, err))
+		}
 		release := releases[name]
 		if hasTagSpec {
 			for _, incompatibleName := range []string{api.LatestReleaseName, api.InitialReleaseName} {
@@ -45,9 +48,6 @@ func validateReleases(fieldRoot string, releases map[string]api.UnresolvedReleas
 		} else if set == 0 {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.%s: must set integration, candidate, prerelease or release", fieldRoot, name))
 		} else if release.Integration != nil {
-			if strings.Contains(name, ".") {
-				validationErrors = append(validationErrors, fmt.Errorf("the name of an integration release must not contain '.' but found %s", fmt.Sprintf("%s.%s", fieldRoot, name)))
-			}
 			validationErrors = append(validationErrors, validateIntegration(fmt.Sprintf("%s.%s", fieldRoot, name), name, *release.Integration)...)
 		} else if release.Candidate != nil {
 			validationErrors = append(validationErrors, validateCandidate(fmt.Sprintf("%s.%s", fieldRoot, name), *release.Candidate)...)

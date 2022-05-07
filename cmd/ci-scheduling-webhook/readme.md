@@ -50,7 +50,13 @@ Why not try (insert clever solution here)? Well you have to contend with:
 5. The huge influxes of pods common to our testing infrastructure.
 6. It has to be simple, safe, and effective. 
 
-The idea implemented in the webhook is this:
+The idea implemented in the webhook has two aspects:
+Aspect 1:
+1. Scan nodes on the cluster and taint any that have 1 or 0 pods as PreferredNoSchedule.
+2. If the cluster is not under load, these taints will help ensure the autoscaler will scale these nodes down.
+3. If new pods are scheduled onto this PreferredNoSchedule nodes, the taint is removed. This indicates the cluster is under pressure. 
+
+Aspect 2:
 1. Scan nodes and find 10% of nodes in the cluster that look close to being able to be scaled down (assessed by low pod count).
 2. Begin modifying all incoming pods to have anti-node affinity for those "sacrificial nodes".
 3. Preventing new pods from being scheduled on these nodes means they stand in improving chance of being selected for scale down once their final pod(s) terminate gracefully.

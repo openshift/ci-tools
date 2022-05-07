@@ -2500,7 +2500,6 @@ k8s.io/kubernetes v1.14.7 h1:wJx/r2HuPVaaBeCUk/P47GSK0eyrj3mI/kESRFBp6/A=
 k8s.io/kubernetes v1.14.7/go.mod h1:ocZa8+6APFNC2tX1DZASIbocyYT5jHzqFVsY5aoB7Jk=
 k8s.io/legacy-cloud-providers v0.17.0/go.mod h1:DdzaepJ3RtRy+e5YhNtrCYwlgyK87j/5+Yfp0L9Syp8=
 k8s.io/legacy-cloud-providers v0.17.4/go.mod h1:FikRNoD64ECjkxO36gkDgJeiQWwyZTuBkhu+yxOc1Js=
-k8s.io/metrics v0.22.0 h1:fQ9Rc0ZAfTBevXSyjSk2yogoNHmS0ae+IFLVGHs8h/g=
 k8s.io/metrics v0.22.0/go.mod h1:eYnwafAUNLLpVmY/msoq0RKIKH5C4TzfjKnMZ0Xrt3A=
 k8s.io/test-infra v0.0.0-20181019233642-2e10a0bbe9b3/go.mod h1:2NzXB13Ji0nqpyublHeiPC4FZwU0TknfvyaaNfl/BTA=
 k8s.io/test-infra v0.0.0-20191212060232-70b0b49fe247/go.mod h1:d8SKryJBXAwfCFVL4wieRez47J2NOOAb9d029sWLseQ=

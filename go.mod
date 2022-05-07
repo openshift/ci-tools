@@ -202,7 +202,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.22.2 // indirect
 	k8s.io/component-base v0.22.2 // indirect
 	k8s.io/kube-openapi v0.0.0-20210421082810-95288971da7e // indirect
-	k8s.io/kubernetes v1.14.7 // indirect
+	k8s.io/kubernetes v1.14.7
 	knative.dev/pkg v0.0.0-20200711004937-22502028e31a // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.1.2 // indirect
 )
@@ -224,5 +224,4 @@ require (
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	k8s.io/metrics v0.22.0
 )

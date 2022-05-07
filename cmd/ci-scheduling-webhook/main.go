@@ -41,6 +41,7 @@ var (
 
 	shrinkTestCPU  float32
 	shrinkBuildCPU float32
+	prioritization Prioritization
 )
 
 func generateTestCertificate() (*tls.Certificate, error) {
@@ -137,7 +138,11 @@ func Run(_ *cobra.Command, _ []string) {
 		os.Exit(1)
 	}
 
-	err = initializePrioritization(ctx, clientSet)
+	prioritization = Prioritization{
+		context:      ctx,
+		k8sClientSet: clientSet,
+	}
+	err = prioritization.initializePrioritization()
 	if err != nil {
 		klog.Errorf("Error initializing node prioritization processes: %v", err)
 		os.Exit(1)

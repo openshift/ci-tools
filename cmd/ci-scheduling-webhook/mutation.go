@@ -246,7 +246,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		// sacrifice will be selected.
 		// This is a natural backpressure to k8s trying to spread load over
 		// all available nodes (keeping them alive unnecessarily long).
-		sacrificialHostnames, err := findHostnamesToSacrifice(podClass)
+		sacrificialHostnames, err := prioritization.findHostnamesToSacrifice(podClass)
 
 		if err == nil {
 			if len(sacrificialHostnames) > 0 {

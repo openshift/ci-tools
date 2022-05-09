@@ -85,6 +85,8 @@ type ConfigAgentOptions struct {
 	// ErrorMetric holds the CounterVec to count errors on. It must include a `error` label
 	// or the agent panics on the first error.
 	ErrorMetric *prometheus.CounterVec
+
+	UniversalSymlinkWatcher *UniversalSymlinkWatcher
 }
 
 type ConfigAgentOption func(*ConfigAgentOptions)
@@ -112,12 +114,11 @@ func NewConfigAgent(configPath string, opts ...ConfigAgentOption) (ConfigAgent, 
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	return a, startWatchers(a.configPath, a.reloadConfig, a.recordError)
-}
+	if opt.UniversalSymlinkWatcher != nil {
+		opt.UniversalSymlinkWatcher.ConfigEventFn = a.reloadConfig
+	}
 
-func (a *configAgent) recordError(label string) {
-	labels := prometheus.Labels{"error": label}
-	a.errorMetrics.With(labels).Inc()
+	return a, startWatchers(configPath, a.reloadConfig, a.errorMetrics, opt.UniversalSymlinkWatcher)
 }
 
 // GetMatchingConfig loads a configuration that matches the metadata,

@@ -7,10 +7,12 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"gopkg.in/fsnotify.v1"
 
 	prowConfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/flagutil"
@@ -26,11 +28,17 @@ import (
 	"github.com/openshift/ci-tools/pkg/webreg"
 )
 
+const (
+	releaseRepoConfigsPath  = "ci-operator/config"
+	releaseRepoRegistryPath = "ci-operator/step-registry"
+)
+
 type options struct {
 	configPath             string
 	registryPath           string
 	logLevel               string
 	address                string
+	releaseRepoGitSyncPath string
 	port                   int
 	uiAddress              string
 	uiPort                 int
@@ -49,6 +57,7 @@ func gatherOptions() (options, error) {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.configPath, "config", "", "Path to config dirs")
 	fs.StringVar(&o.registryPath, "registry", "", "Path to registry dirs")
+	fs.StringVar(&o.releaseRepoGitSyncPath, "release-repo-git-sync-path", "", "Path to release repository dir")
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.address, "address", ":8080", "DEPRECATED: Address to run server on")
 	fs.StringVar(&o.uiAddress, "ui-address", ":8082", "DEPRECATED: Address to run the registry UI on")
@@ -65,29 +74,50 @@ func gatherOptions() (options, error) {
 	return o, nil
 }
 
-func validateOptions(o options) error {
+func validateOptions(o *options) error {
 	_, err := logrus.ParseLevel(o.logLevel)
 	if err != nil {
 		return fmt.Errorf("invalid --log-level: %w", err)
 	}
-	if o.configPath == "" {
-		return fmt.Errorf("--config is required")
+
+	if o.releaseRepoGitSyncPath != "" && (o.configPath != "" || o.registryPath != "") {
+		return fmt.Errorf("--release-repo-path is mutually exclusive with --config and --registry")
 	}
-	if _, err := os.Stat(o.configPath); err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("--config points to a nonexistent directory: %w", err)
+
+	if o.releaseRepoGitSyncPath == "" {
+		if o.configPath == "" {
+			return fmt.Errorf("--config is required")
 		}
-		return fmt.Errorf("Error getting stat info for --config directory: %w", err)
-	}
-	if o.registryPath == "" {
-		return fmt.Errorf("--registry is required")
-	}
-	if _, err := os.Stat(o.registryPath); err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("--registry points to a nonexistent directory: %w", err)
+
+		if _, err := os.Stat(o.configPath); err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("--config points to a nonexistent directory: %w", err)
+			}
+			return fmt.Errorf("error getting stat info for --config directory: %w", err)
 		}
-		return fmt.Errorf("Error getting stat info for --registry directory: %w", err)
+
+		if o.registryPath == "" {
+			return fmt.Errorf("--registry is required")
+		}
+
+		if _, err := os.Stat(o.registryPath); err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("--registry points to a nonexistent directory: %w", err)
+			}
+			return fmt.Errorf("error getting stat info for --registry directory: %w", err)
+		}
+	} else {
+		if _, err := os.Stat(o.releaseRepoGitSyncPath); err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("--release-repo-path points to a nonexistent directory: %w", err)
+			}
+			return fmt.Errorf("error getting stat info for --release-repo-path directory: %w", err)
+		}
+
+		o.configPath = filepath.Join(o.releaseRepoGitSyncPath, releaseRepoConfigsPath)
+		o.registryPath = filepath.Join(o.releaseRepoGitSyncPath, releaseRepoRegistryPath)
 	}
+
 	if o.validateOnly && o.flatRegistry {
 		return errors.New("--validate-only and --flat-registry flags cannot be set simultaneously")
 	}
@@ -119,18 +149,44 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("failed go gather options")
 	}
-	if err := validateOptions(o); err != nil {
+	if err := validateOptions(&o); err != nil {
 		logrus.Fatalf("invalid options: %v", err)
 	}
 	level, _ := logrus.ParseLevel(o.logLevel)
 	logrus.SetLevel(level)
 
-	configAgent, err := agents.NewConfigAgent(o.configPath, agents.WithConfigMetrics(configresolverMetrics.ErrorRate))
+	configAgentOption := func(*agents.ConfigAgentOptions) {}
+	registryAgentOption := func(*agents.RegistryAgentOptions) {}
+	if o.releaseRepoGitSyncPath != "" {
+		eventCh := make(chan fsnotify.Event)
+		errCh := make(chan error)
+
+		universalSymlinkWatcher := &agents.UniversalSymlinkWatcher{
+			EventCh:   eventCh,
+			ErrCh:     errCh,
+			WatchPath: o.releaseRepoGitSyncPath,
+		}
+
+		configAgentOption = func(opt *agents.ConfigAgentOptions) {
+			opt.UniversalSymlinkWatcher = universalSymlinkWatcher
+		}
+		registryAgentOption = func(opt *agents.RegistryAgentOptions) {
+			opt.UniversalSymlinkWatcher = universalSymlinkWatcher
+		}
+
+		watcher, err := universalSymlinkWatcher.GetWatcher()
+		if err != nil {
+			logrus.Fatalf("Failed to get the universal symlink watcher: %v", err)
+		}
+		interrupts.Run(watcher)
+	}
+
+	configAgent, err := agents.NewConfigAgent(o.configPath, agents.WithConfigMetrics(configresolverMetrics.ErrorRate), configAgentOption)
 	if err != nil {
 		logrus.Fatalf("Failed to get config agent: %v", err)
 	}
 
-	registryAgent, err := agents.NewRegistryAgent(o.registryPath, agents.WithRegistryMetrics(configresolverMetrics.ErrorRate), agents.WithRegistryFlat(o.flatRegistry))
+	registryAgent, err := agents.NewRegistryAgent(o.registryPath, agents.WithRegistryMetrics(configresolverMetrics.ErrorRate), agents.WithRegistryFlat(o.flatRegistry), registryAgentOption)
 	if err != nil {
 		logrus.Fatalf("Failed to get registry agent: %v", err)
 	}

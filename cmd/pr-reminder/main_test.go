@@ -3,12 +3,15 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
-	"github.com/openshift/ci-tools/pkg/testhelper"
-	"github.com/slack-go/slack"
-	"k8s.io/test-infra/prow/github"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/slack-go/slack"
+
+	"k8s.io/test-infra/prow/github"
+
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func Test_user_requestedToReview(t *testing.T) {

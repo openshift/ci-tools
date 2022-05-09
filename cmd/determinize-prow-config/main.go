@@ -65,9 +65,7 @@ func main() {
 
 type determinizeProwConfigFunctors struct{}
 
-func (d determinizeProwConfigFunctors) ModifyQuery(queryCopy *prowconfig.TideQuery, repo string) {
-	queryCopy.Orgs = nil
-	queryCopy.Repos = []string{repo}
+func (d determinizeProwConfigFunctors) ModifyQuery(*prowconfig.TideQuery, string) {
 }
 
 func (d determinizeProwConfigFunctors) GetDataFromProwConfig(*prowconfig.ProwConfig) {

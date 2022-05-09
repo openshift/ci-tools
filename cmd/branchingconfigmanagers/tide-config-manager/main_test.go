@@ -18,6 +18,11 @@ func TestReconcile(t *testing.T) {
 		LifecyclePhase: ocplifecycle.LifecyclePhase{
 			Event: ocplifecycle.LifecycleEventFeatureFreeze},
 		ProductVersion: "4.9"}
+	codeFreezeEvent := &ocplifecycle.Event{
+		LifecyclePhase: ocplifecycle.LifecyclePhase{
+			Event: ocplifecycle.LifecycleEventCodeFreeze},
+		ProductVersion: "4.9"}
+
 	type args struct {
 		event  *ocplifecycle.Event
 		config *prowconfig.ProwConfig
@@ -153,6 +158,83 @@ func TestReconcile(t *testing.T) {
   - includedBranches:
     - master
     - openshift-4.9
+    repos:
+    - openshift/dummy
+`},
+		},
+		{
+			name: "bugzilla/valid-bug will be removed during code freeze from repo with main",
+			args: args{
+				target: afero.NewMemMapFs(),
+				event:  codeFreezeEvent,
+				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+					{
+						Repos:            []string{"openshift/dummy"},
+						Labels:           []string{"bugzilla/valid-bug"},
+						IncludedBranches: []string{"main", "release-4.9"},
+					},
+				}}},
+			},
+			wantErr: false,
+			expectedShardFiles: map[string]string{
+				"openshift/dummy/_prowconfig.yaml": `tide:
+  queries:
+  - includedBranches:
+    - main
+    - release-4.9
+    repos:
+    - openshift/dummy
+`},
+		},
+		{
+			name: "bugzilla/valid-bug will not be removed as repo is no feature freeze due to a qe-approved label",
+			args: args{
+				target: afero.NewMemMapFs(),
+				event:  codeFreezeEvent,
+				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+					{
+						Repos:            []string{"openshift/dummy"},
+						Labels:           []string{"bugzilla/valid-bug", "qe-approved"},
+						IncludedBranches: []string{"main", "release-4.9"},
+					},
+				}}},
+			},
+			wantErr: false,
+			expectedShardFiles: map[string]string{
+				"openshift/dummy/_prowconfig.yaml": `tide:
+  queries:
+  - includedBranches:
+    - main
+    - release-4.9
+    labels:
+    - bugzilla/valid-bug
+    - qe-approved
+    repos:
+    - openshift/dummy
+`},
+		},
+		{
+			name: "no master or main will lead to ignoring the config during code freeze",
+			args: args{
+				target: afero.NewMemMapFs(),
+				event:  codeFreezeEvent,
+				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+					{
+						Repos:            []string{"openshift/dummy"},
+						Labels:           []string{"bugzilla/valid-bug"},
+						IncludedBranches: []string{"openshift-4.9", "release-4.9"},
+					},
+				}}},
+			},
+			wantErr: false,
+			expectedShardFiles: map[string]string{
+				"openshift/dummy/_prowconfig.yaml": `tide:
+  queries:
+  - includedBranches:
+    - openshift-4.9
+    - release-4.9
+    labels:
+    - bugzilla/valid-bug
     repos:
     - openshift/dummy
 `},

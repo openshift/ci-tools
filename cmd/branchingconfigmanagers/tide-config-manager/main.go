@@ -79,7 +79,6 @@ func main() {
 }
 
 const (
-	// consts related to the FeatureFreeze event
 	staffEngApproved   = "staff-eng-approved"
 	cherryPickApproved = "cherry-pick-approved"
 	qeApproved         = "qe-approved"
@@ -94,29 +93,40 @@ const (
 	ocpProductName     = "ocp"
 )
 
-func newFeatureFreezeEvent(current, future string) featureFreezeEvent {
-	return featureFreezeEvent{
-		excludedLabels:                sets.NewString(qeApproved, docsApproved, pxApproved),
-		excludedOrgs:                  []string{openshiftPriv},
-		repos:                         sets.NewString(),
-		mainMaster:                    sets.NewString(mainBranch, masterBranch),
-		openshiftReleaseBranches:      sets.NewString(release+current, openshift+current),
-		openshiftReleaseBranchesPlus1: sets.NewString(release+future, openshift+future),
+type sharedDataDelegate struct {
+	excludedLabels sets.String
+	mainMaster     sets.String
+	validBug       sets.String
+}
+
+func newSharedDataDelegate() *sharedDataDelegate {
+	return &sharedDataDelegate{
+		excludedLabels: sets.NewString(qeApproved, docsApproved, pxApproved),
+		mainMaster:     sets.NewString(mainBranch, masterBranch),
+		validBug:       sets.NewString(validBug),
 	}
+
 }
 
 type featureFreezeEvent struct {
-	excludedLabels                sets.String
 	excludedOrgs                  []string
 	repos                         sets.String
-	mainMaster                    sets.String
 	openshiftReleaseBranches      sets.String
 	openshiftReleaseBranchesPlus1 sets.String
+	*sharedDataDelegate
+}
+
+func newFeatureFreezeEvent(current, future string, delegate *sharedDataDelegate) featureFreezeEvent {
+	return featureFreezeEvent{
+		excludedOrgs:                  []string{openshiftPriv},
+		repos:                         sets.NewString(),
+		openshiftReleaseBranches:      sets.NewString(release+current, openshift+current),
+		openshiftReleaseBranchesPlus1: sets.NewString(release+future, openshift+future),
+		sharedDataDelegate:            delegate,
+	}
 }
 
 func (ffe featureFreezeEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
-	q.Orgs = nil
-	q.Repos = []string{repo}
 	ffe.ensureFeatureFreezeApprovals(q)
 	if ffe.repos.Has(repo) {
 		ffe.ensureFeatureFreezeBugs(q)
@@ -128,10 +138,6 @@ func (ffe featureFreezeEvent) GetDataFromProwConfig(pc *prowconfig.ProwConfig) {
 		branches := sets.NewString(query.IncludedBranches...)
 		labels := sets.NewString(query.Labels...)
 		ffe.rewriteReposToExcludeOrgs(&query)
-		if branches.Intersection(ffe.openshiftReleaseBranchesPlus1).Len() > 0 && labels.Has(staffEngApproved) {
-			ffe.repos.Insert(query.Repos...)
-			continue
-		}
 		if branches.Intersection(ffe.openshiftReleaseBranchesPlus1).Len() > 0 && labels.Has(staffEngApproved) {
 			ffe.repos.Insert(query.Repos...)
 			continue
@@ -164,7 +170,7 @@ func (ffe *featureFreezeEvent) ensureFeatureFreezeBugs(q *prowconfig.TideQuery) 
 	if requiredLabels.Intersection(ffe.excludedLabels).Len() > 0 {
 		return
 	}
-	requiredLabels = requiredLabels.Union(sets.NewString(validBug))
+	requiredLabels = requiredLabels.Union(ffe.validBug)
 	q.Labels = requiredLabels.List()
 }
 
@@ -178,8 +184,57 @@ func (ffe *featureFreezeEvent) ensureFeatureFreezeApprovals(q *prowconfig.TideQu
 		return
 	}
 	requiredLabels = requiredLabels.Union(ffe.excludedLabels)
-	requiredLabels = requiredLabels.Difference(sets.NewString(validBug))
+	requiredLabels = requiredLabels.Difference(ffe.validBug)
 	q.Labels = requiredLabels.List()
+}
+
+type codeFreezeEvent struct {
+	repos                          sets.String
+	noFeatureFreezeRepos           sets.String
+	bugzillaLabelOnMainMasterRepos sets.String
+	*sharedDataDelegate
+}
+
+func newCodeFreezeEvent(delegate *sharedDataDelegate) codeFreezeEvent {
+	return codeFreezeEvent{
+		repos:                          sets.NewString(),
+		noFeatureFreezeRepos:           sets.NewString(),
+		bugzillaLabelOnMainMasterRepos: sets.NewString(),
+		sharedDataDelegate:             delegate,
+	}
+}
+
+func (cfe codeFreezeEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
+	if cfe.repos.Has(repo) {
+		branches := sets.NewString(q.IncludedBranches...)
+		if len(branches.Intersection(cfe.mainMaster)) == 0 {
+			return
+		}
+		q.Labels = sets.NewString(q.Labels...).Difference(cfe.validBug).List()
+	}
+}
+
+func (cfe codeFreezeEvent) GetDataFromProwConfig(pc *prowconfig.ProwConfig) {
+	for _, query := range pc.Tide.Queries {
+		branches := sets.NewString(query.IncludedBranches...)
+		if len(branches.Intersection(cfe.mainMaster)) == 0 {
+			continue
+		}
+		labels := sets.NewString(query.Labels...)
+		if len(labels.Intersection(cfe.excludedLabels)) > 0 {
+			for _, repo := range query.Repos {
+				cfe.noFeatureFreezeRepos.Insert(repo)
+			}
+		}
+		if len(labels.Intersection(cfe.validBug)) > 0 {
+			for _, repo := range query.Repos {
+				cfe.bugzillaLabelOnMainMasterRepos.Insert(repo)
+			}
+		}
+	}
+	for repo := range cfe.bugzillaLabelOnMainMasterRepos.Difference(cfe.noFeatureFreezeRepos) {
+		cfe.repos.Insert(repo)
+	}
 }
 
 func updateProwConfigs(o *options, now time.Time) error {
@@ -215,6 +270,7 @@ func updateProwConfigs(o *options, now time.Time) error {
 }
 
 func reconcile(event *ocplifecycle.Event, config *prowconfig.ProwConfig, target afero.Fs) error {
+	delegate := newSharedDataDelegate()
 	currentVersion, err := ocplifecycle.ParseMajorMinor(event.ProductVersion)
 	if err != nil {
 		return fmt.Errorf("failed to parse %s as majorMinor version: %w", event.ProductVersion, err)
@@ -223,8 +279,12 @@ func reconcile(event *ocplifecycle.Event, config *prowconfig.ProwConfig, target 
 		_, err = shardprowconfig.ShardProwConfig(config, target,
 			newFeatureFreezeEvent(
 				currentVersion.GetVersion(),
-				currentVersion.GetFutureVersion()),
+				currentVersion.GetFutureVersion(),
+				delegate),
 		)
+	}
+	if event.LifecyclePhase.Event == ocplifecycle.LifecycleEventCodeFreeze {
+		_, err = shardprowconfig.ShardProwConfig(config, target, newCodeFreezeEvent(delegate))
 	}
 	if err != nil {
 		return fmt.Errorf("failed to shard the prow config: %w", err)

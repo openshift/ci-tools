@@ -71,23 +71,26 @@ type config struct {
 type githubToKerberos map[string]string
 
 type user struct {
-	kerberosId string
-	githubId   string
-	slackId    string
-	teamName   string
-	prRequests []prRequest
+	KerberosId string
+	GithubId   string
+	SlackId    string
+	TeamName   string
+	PrRequests []prRequest
 }
 
 func (u *user) requestedToReview(pr github.PullRequest) bool {
-	for _, team := range pr.RequestedTeams {
-		if u.teamName == team.Slug {
-			return true
+	// only check PRs that the user is the author of, as they could have requested their own team
+	if u.GithubId != pr.User.Login {
+		for _, team := range pr.RequestedTeams {
+			if u.TeamName == team.Slug {
+				return true
+			}
 		}
-	}
 
-	for _, reviewer := range pr.RequestedReviewers {
-		if u.githubId == reviewer.Login {
-			return true
+		for _, reviewer := range pr.RequestedReviewers {
+			if u.GithubId == reviewer.Login {
+				return true
+			}
 		}
 	}
 
@@ -95,17 +98,24 @@ func (u *user) requestedToReview(pr github.PullRequest) bool {
 }
 
 type prRequest struct {
-	repo        string
-	number      int
-	url         string
-	title       string
-	author      string
-	created     time.Time
-	lastUpdated time.Time
+	Repo        string
+	Number      int
+	Url         string
+	Title       string
+	Author      string
+	Created     time.Time
+	LastUpdated time.Time
 }
 
 func (p prRequest) link() string {
-	return fmt.Sprintf("<%s|*%s#%d*>: %s - by: *%s*", p.url, p.repo, p.number, p.title, p.author)
+	return fmt.Sprintf("<%s|*%s#%d*>: %s - by: *%s*", p.Url, p.Repo, p.Number, p.Title, p.Author)
+}
+
+func (p prRequest) createdUpdatedMessage() string {
+	return fmt.Sprintf("%s Created: %s | Updated: %s",
+		p.recency(),
+		p.Created.Format(time.RFC1123),
+		p.LastUpdated.Format(time.RFC1123))
 }
 
 const (
@@ -114,18 +124,24 @@ const (
 	old    = ":red_circle:"
 )
 
-func (p prRequest) createdUpdatedMessage() string {
-	var recency string
-	// PRs that have been updated in the last day should be called out
+func (p prRequest) recency() string {
 	now := time.Now()
-	if p.created.After(now.Add(-time.Hour * 24 * 2)) {
-		recency = recent
-	} else if p.created.After(now.Add(-time.Hour * 24 * 7)) {
-		recency = normal
+	if p.Created.After(now.Add(-time.Hour * 24 * 2)) {
+		return recent
+	} else if p.Created.After(now.Add(-time.Hour * 24 * 7)) {
+		return normal
 	} else {
-		recency = old
+		return old
 	}
-	return fmt.Sprintf("%s Created: %s | Updated: %s", recency, p.created.Format(time.RFC1123), p.lastUpdated.Format(time.RFC1123))
+}
+
+type prClient interface {
+	GetPullRequests(org, repo string) ([]github.PullRequest, error)
+}
+
+type slackClient interface {
+	GetUserByEmail(email string) (*slack.User, error)
+	PostMessage(channelID string, options ...slack.MsgOption) (string, string, error)
 }
 
 func main() {
@@ -168,7 +184,22 @@ func main() {
 		logrus.WithError(err).Fatal("failed to create github client")
 	}
 
-	for _, orgRepo := range c.Repos {
+	for _, user := range findPrsForUsers(users, c.Repos, ghClient) {
+		if len(user.PrRequests) > 0 {
+			// sort by most recent update first
+			sort.Slice(user.PrRequests, func(i, j int) bool {
+				return user.PrRequests[i].LastUpdated.After(user.PrRequests[j].LastUpdated)
+			})
+
+			if err = messageUser(user, slackClient); err != nil {
+				logrus.WithError(err).Fatal("failed to message users")
+			}
+		}
+	}
+}
+
+func findPrsForUsers(users map[string]user, repos []string, ghClient prClient) map[string]user {
+	for _, orgRepo := range repos {
 		split := strings.Split(orgRepo, "/")
 		org, repo := split[0], split[1]
 
@@ -179,35 +210,22 @@ func main() {
 		for _, pr := range prs {
 			for i, u := range users {
 				if u.requestedToReview(pr) {
-					u.prRequests = append(u.prRequests, prRequest{
-						repo:        orgRepo,
-						number:      pr.Number,
-						url:         pr.HTMLURL,
-						title:       pr.Title,
-						author:      pr.User.Login,
-						created:     pr.CreatedAt,
-						lastUpdated: pr.UpdatedAt,
+					u.PrRequests = append(u.PrRequests, prRequest{
+						Repo:        orgRepo,
+						Number:      pr.Number,
+						Url:         pr.HTMLURL,
+						Title:       pr.Title,
+						Author:      pr.User.Login,
+						Created:     pr.CreatedAt,
+						LastUpdated: pr.UpdatedAt,
 					})
 					users[i] = u
 				}
 			}
-
 		}
 	}
 
-	for _, user := range users {
-		if len(user.prRequests) > 0 {
-			// sort by most recent update first
-			sort.Slice(user.prRequests, func(i, j int) bool {
-				return user.prRequests[i].lastUpdated.After(user.prRequests[j].lastUpdated)
-			})
-
-			if err = messageUser(user, slackClient); err != nil {
-				logrus.WithError(err).Fatal("failed to message users")
-			}
-		}
-	}
-
+	return users
 }
 
 func loadConfig(filename string, config interface{}) error {
@@ -221,7 +239,7 @@ func loadConfig(filename string, config interface{}) error {
 	return nil
 }
 
-func createUsers(config config, gtk githubToKerberos, slackClient *slack.Client) (map[string]user, error) {
+func createUsers(config config, gtk githubToKerberos, slackClient slackClient) (map[string]user, error) {
 	users := make(map[string]user, len(config.TeamMembers))
 	for _, member := range config.TeamMembers {
 		email := fmt.Sprintf("%s@redhat.com", member)
@@ -230,24 +248,24 @@ func createUsers(config config, gtk githubToKerberos, slackClient *slack.Client)
 			return nil, fmt.Errorf("could not get slack user for %s: %w", member, err)
 		}
 		users[member] = user{
-			kerberosId: member,
-			teamName:   config.TeamName,
-			slackId:    slackUser.ID,
+			KerberosId: member,
+			TeamName:   config.TeamName,
+			SlackId:    slackUser.ID,
 		}
 	}
 
 	for githubId, kerberosId := range gtk {
 		userInfo, exists := users[kerberosId]
 		if exists {
-			userInfo.githubId = githubId
+			userInfo.GithubId = githubId
 			users[kerberosId] = userInfo
 		}
 	}
 
 	var usersMissingGithubId []string
 	for _, userInfo := range users {
-		if userInfo.githubId == "" {
-			usersMissingGithubId = append(usersMissingGithubId, userInfo.kerberosId)
+		if userInfo.GithubId == "" {
+			usersMissingGithubId = append(usersMissingGithubId, userInfo.KerberosId)
 		}
 	}
 	if len(usersMissingGithubId) > 0 {
@@ -257,7 +275,7 @@ func createUsers(config config, gtk githubToKerberos, slackClient *slack.Client)
 	return users, nil
 }
 
-func messageUser(user user, slackClient *slack.Client) error {
+func messageUser(user user, slackClient slackClient) error {
 	var errors []error
 	message := []slack.Block{
 		&slack.HeaderBlock{
@@ -271,7 +289,7 @@ func messageUser(user user, slackClient *slack.Client) error {
 			Type: slack.MBTSection,
 			Text: &slack.TextBlockObject{
 				Type: slack.PlainTextType,
-				Text: fmt.Sprintf("You have %d PR(s) to review:", len(user.prRequests)),
+				Text: fmt.Sprintf("You have %d PR(s) to review:", len(user.PrRequests)),
 			},
 		},
 		&slack.ContextBlock{
@@ -295,7 +313,7 @@ func messageUser(user user, slackClient *slack.Client) error {
 		},
 	}
 
-	for _, pr := range user.prRequests {
+	for _, pr := range user.PrRequests {
 		message = append(message, &slack.ContextBlock{
 			Type: slack.MBTContext,
 			ContextElements: slack.ContextElements{
@@ -313,11 +331,11 @@ func messageUser(user user, slackClient *slack.Client) error {
 		})
 	}
 
-	responseChannel, responseTimestamp, err := slackClient.PostMessage(user.slackId,
+	responseChannel, responseTimestamp, err := slackClient.PostMessage(user.SlackId,
 		slack.MsgOptionText("PR Review Reminders.", false),
 		slack.MsgOptionBlocks(message...))
 	if err != nil {
-		errors = append(errors, fmt.Errorf("failed to message userId: %s about PR review reminder: %w", user.slackId, err))
+		errors = append(errors, fmt.Errorf("failed to message userId: %s about PR review reminder: %w", user.SlackId, err))
 	} else {
 		logrus.Infof("Posted PR review reminder in channel %s at %s", responseChannel, responseTimestamp)
 	}

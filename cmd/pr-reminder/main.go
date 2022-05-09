@@ -109,23 +109,23 @@ func (p prRequest) link() string {
 }
 
 const (
-	recent = " :large_green_circle:"
-	normal = " :large_orange_circle:"
-	old    = " :red_circle:"
+	recent = ":large_green_circle:"
+	normal = ":large_orange_circle:"
+	old    = ":red_circle:"
 )
 
 func (p prRequest) createdUpdatedMessage() string {
-	message := fmt.Sprintf("Created: %s | Updated: %s", p.created.Format(time.RFC1123), p.lastUpdated.Format(time.RFC1123))
+	var recency string
 	// PRs that have been updated in the last day should be called out
 	now := time.Now()
 	if p.created.After(now.Add(-time.Hour * 24 * 2)) {
-		message += recent
+		recency = recent
 	} else if p.created.After(now.Add(-time.Hour * 24 * 7)) {
-		message += normal
+		recency = normal
 	} else {
-		message += old
+		recency = old
 	}
-	return message
+	return fmt.Sprintf("%s Created: %s | Updated: %s", recency, p.created.Format(time.RFC1123), p.lastUpdated.Format(time.RFC1123))
 }
 
 func main() {
@@ -244,6 +244,16 @@ func createUsers(config config, gtk githubToKerberos, slackClient *slack.Client)
 		}
 	}
 
+	var usersMissingGithubId []string
+	for _, userInfo := range users {
+		if userInfo.githubId == "" {
+			usersMissingGithubId = append(usersMissingGithubId, userInfo.kerberosId)
+		}
+	}
+	if len(usersMissingGithubId) > 0 {
+		return nil, fmt.Errorf("no githubId found for user(s): %v", usersMissingGithubId)
+	}
+
 	return users, nil
 }
 
@@ -261,7 +271,7 @@ func messageUser(user user, slackClient *slack.Client) error {
 			Type: slack.MBTSection,
 			Text: &slack.TextBlockObject{
 				Type: slack.PlainTextType,
-				Text: fmt.Sprintf("You have %d PRs to review:", len(user.prRequests)),
+				Text: fmt.Sprintf("You have %d PR(s) to review:", len(user.prRequests)),
 			},
 		},
 		&slack.ContextBlock{

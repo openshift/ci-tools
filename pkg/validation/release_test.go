@@ -2,6 +2,7 @@ package validation
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -155,7 +156,7 @@ func TestValidateReleases(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid name of integration release",
+			name: "invalid release name",
 			input: map[string]api.UnresolvedRelease{
 				"ocp-4.11": {
 					Integration: &api.Integration{
@@ -169,9 +170,17 @@ func TestValidateReleases(t *testing.T) {
 						Namespace: "ocp",
 					},
 				},
+				"e2e-hub-4.9": {
+					Candidate: &api.Candidate{
+						Product: api.ReleaseProductOCP,
+						Stream:  api.ReleaseStreamNightly,
+						Version: "4.8",
+					},
+				},
 			},
 			output: []error{
-				errors.New("the name of an integration release must not contain '.' but found root.ocp-4.11"),
+				fmt.Errorf("root[e2e-hub-4.9]: the release name is not valid: %w", fmt.Errorf("must not contain '.'")),
+				fmt.Errorf("root[ocp-4.11]: the release name is not valid: %w", fmt.Errorf("must not contain '.'")),
 			},
 		},
 	}

@@ -511,3 +511,11 @@ func validateResourceList(fieldRoot string, list api.ResourceList) []error {
 
 	return validationErrors
 }
+
+func partOfImageStreamName(name string) error {
+	// https://issues.redhat.com/browse/DPTP-2858
+	if strings.Contains(name, ".") {
+		return fmt.Errorf("must not contain '.'")
+	}
+	return nil
+}

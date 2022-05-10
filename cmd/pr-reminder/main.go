@@ -21,10 +21,10 @@ import (
 )
 
 type options struct {
-	config            string
-	roverGroupsConfig string
-	slackTokenPath    string
-	logLevel          string
+	config              string
+	githubMappingConfig string
+	slackTokenPath      string
+	logLevel            string
 
 	flagutil.GitHubOptions
 }
@@ -39,7 +39,7 @@ func (o *options) validate() error {
 		return fmt.Errorf("--config-path is required")
 	}
 
-	if o.roverGroupsConfig == "" {
+	if o.githubMappingConfig == "" {
 		return fmt.Errorf("--rover-groups-config-path is required")
 	}
 
@@ -54,7 +54,7 @@ func parseOptions() (options, error) {
 	var o options
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.config, "config-path", "", "The config file location")
-	fs.StringVar(&o.roverGroupsConfig, "rover-groups-config-path", "", "the sync-rover-groups config file location")
+	fs.StringVar(&o.githubMappingConfig, "github-mapping-config-path", "", "the github-mapping config file location")
 	fs.StringVar(&o.slackTokenPath, "slack-token-path", "", "Path to the file containing the Slack token to use.")
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 
@@ -165,7 +165,7 @@ func main() {
 	}
 
 	var gtk githubToKerberos
-	if err = loadConfig(o.roverGroupsConfig, &gtk); err != nil {
+	if err = loadConfig(o.githubMappingConfig, &gtk); err != nil {
 		logrus.WithError(err).Fatal("failed to load rover groups config")
 	}
 

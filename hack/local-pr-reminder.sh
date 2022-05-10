@@ -23,4 +23,4 @@ OC extract configmap/pr-reminder-config --keys config.yaml --to "${data}"
 OC extract configmap/sync-rover-groups --keys mapping.yaml --to "${data}"
 
 os::log::info "Running pr-reminder"
-go run ./cmd/pr-reminder --config-path="${data}/config.yaml" --rover-groups-config-path="${data}/mapping.yaml" --slack-token-path="${data}/oauth_token"
+go run ./cmd/pr-reminder --config-path="${data}/config.yaml" --github-mapping-config-path="${data}/mapping.yaml" --slack-token-path="${data}/oauth_token"

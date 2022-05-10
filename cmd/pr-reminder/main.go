@@ -79,7 +79,7 @@ type user struct {
 }
 
 func (u *user) requestedToReview(pr github.PullRequest) bool {
-	// only check PRs that the user is the author of, as they could have requested their own team
+	// only check PRs that the user is not the author of, as they could have requested their own team
 	if u.GithubId != pr.User.Login {
 		for _, team := range pr.RequestedTeams {
 			if u.TeamName == team.Slug {

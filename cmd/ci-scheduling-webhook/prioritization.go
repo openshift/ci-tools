@@ -16,6 +16,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/util/taints"
 	taintutils "k8s.io/kubernetes/pkg/util/taints"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -51,6 +52,30 @@ type Prioritization struct {
 const IndexPodsByNode = "IndexPodsByNode"
 const IndexNodesByCiWorkload = "IndexNodesByCiWorkload"
 
+func (p *Prioritization) nodeUpdated(old, new interface{}) {
+	oldNode := old.(*corev1.Node)
+	newNode := new.(*corev1.Node)
+	addP, removeP := taints.TaintSetDiff(newNode.Spec.Taints, oldNode.Spec.Taints)
+	add := make([]string, len(addP))
+	remove := make([]string, len(removeP))
+	for i := range addP {
+		add[i] = addP[i].Key
+	}
+	for i := range removeP {
+		remove[i] = removeP[i].Key
+	}
+	current := make([]string, len(newNode.Spec.Taints))
+	for i := range newNode.Spec.Taints {
+		current[i] = newNode.Spec.Taints[i].Key
+	}
+	if len(add) > 0 || len(remove) > 0 {
+		klog.Infof(
+			"Node taints updated. %v adding(%#v); removing(%#v):  %#v",
+			newNode.Name, add, remove, current,
+		)
+	}
+}
+
 func (p* Prioritization) initializePrioritization() error {
 
 	informerFactory := informers.NewSharedInformerFactory(p.k8sClientSet, 0)
@@ -66,6 +91,13 @@ func (p* Prioritization) initializePrioritization() error {
 			return workloads, nil
 		},
 	})
+
+	nodesInformer.AddEventHandler(
+		cache.ResourceEventHandlerFuncs{
+			// Called on resource update and every resyncPeriod on existing resources.
+			UpdateFunc: p.nodeUpdated,
+		},
+	)
 
 	if err != nil {
 		return fmt.Errorf("unable to create new node informer index: %v", err)
@@ -171,6 +203,7 @@ func (p* Prioritization) AddOrUpdateTaintOnNode(nodeName string, taints ...*core
 			oldNodeCopy = curNewNode
 		}
 		if !updated {
+			klog.Errorf("No taint update was actually made: %v", nodeName)
 			return nil
 		}
 		return p.PatchNodeTaints(nodeName, oldNode, newNode)
@@ -290,7 +323,7 @@ func (p* Prioritization) setPreferNoSchedule(ctx context.Context, nodeName strin
 		return err
 	}
 
-	klog.V(6).InfoS("Changing taint of node", "nodeName", nodeName, "taint", SchedulerTaintName, "doTaint", doTaint)
+	klog.InfoS("Changing taint of node", "nodeName", nodeName, "taint", SchedulerTaintName, "doTaint", doTaint)
 
 	if doTaint {
 		err := p.AddOrUpdateTaintOnNode(nodeName, &SchedulerTaint)
@@ -319,7 +352,7 @@ func (p* Prioritization) findHostnamesToSacrifice(podClass PodClass) ([]string, 
 	}
 
 	const maxScaleSize = 80 // this must be in agreement with the machineautoscaler configuration
-	maxSacrificialNodeCount := len(workloadNodes) / 10
+	maxSacrificialNodeCount := int(math.Ceil(float64(len(workloadNodes)) / 10))
 
 	if len(workloadNodes) + maxSacrificialNodeCount >= maxScaleSize {
 		// we are approaching the maximum scale of nodes for this podClass.
@@ -392,9 +425,10 @@ func (p* Prioritization) findHostnamesToSacrifice(podClass PodClass) ([]string, 
 		}
 
 		podCount := getCachedPodCount(node.Name)
+
 		if podCount < 2 && time.Now().Sub(node.CreationTimestamp.Time) > 15 * time.Minute {
 			if !taints.TaintExists(node.Spec.Taints, &SchedulerTaint) {
-				klog.Infof("Tainting podClass %v node with PreferredNoSchedule taint (pods=%v): %v", podClass, podCount, node.Name)
+				klog.Infof("Tainting podClass %v node with PreferredNoSchedule taint (pods=%v) (existing taints: %#v): %v", podClass, podCount, node.Spec.Taints, node.Name)
 				p.setPreferNoSchedule(p.context, node.Name, true)
 			}
 		} else {
@@ -417,9 +451,11 @@ func (p* Prioritization) findHostnamesToSacrifice(podClass PodClass) ([]string, 
 			// scale nodes down.
 			klog.Infof("Eliminating sacrificial nodes for podClass %s as system has new node: %v", podClass, node.Name)
 			sacrificialHostnames = nil
+			break
 		}
 	}
 
-	klog.Infof("Current sacrificial nodes for podClass %v: %v", podClass, sacrificialOutcomes)
+	klog.Infof("Targeted sacrificial nodes for podClass %v: %v", podClass, sacrificialOutcomes)
+	klog.Infof("Actual sacrificial nodes for podClass %v: %v", podClass, sacrificialHostnames)
 	return sacrificialHostnames, nil
 }

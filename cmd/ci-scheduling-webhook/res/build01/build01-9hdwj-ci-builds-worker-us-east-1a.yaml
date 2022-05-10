@@ -13,7 +13,6 @@ metadata:
   namespace: openshift-machine-api
 spec:
   deletePolicy: Oldest
-  replicas: 1
   selector:
     matchLabels:
       machine.openshift.io/cluster-api-cluster: build01-9hdwj
@@ -77,7 +76,7 @@ metadata:
   namespace: openshift-machine-api
 spec:
   maxReplicas: 80
-  minReplicas: 1
+  minReplicas: 0
   scaleTargetRef:
     apiVersion: machine.openshift.io/v1beta1
     kind: MachineSet

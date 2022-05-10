@@ -1257,14 +1257,12 @@ func (o *options) initializeNamespace() error {
 			return fmt.Errorf("failed to get pipeline imagestream: %w", err)
 		}
 	}
-	if is != nil {
-		o.jobSpec.SetOwner(&meta.OwnerReference{
-			APIVersion: "image.openshift.io/v1",
-			Kind:       "ImageStream",
-			Name:       api.PipelineImageStream,
-			UID:        is.UID,
-		})
-	}
+	o.jobSpec.SetOwner(&meta.OwnerReference{
+		APIVersion: "image.openshift.io/v1",
+		Kind:       "ImageStream",
+		Name:       api.PipelineImageStream,
+		UID:        is.UID,
+	})
 
 	if o.cloneAuthConfig != nil && o.cloneAuthConfig.Secret != nil {
 		o.cloneAuthConfig.Secret.Immutable = utilpointer.BoolPtr(true)

@@ -207,6 +207,28 @@ test_signal() {
     fi
 }
 
+test_wait() {
+    local ret=0
+    local wait_file=${dir}/wait.txt
+    rm -f "${wait_file}"
+    timeout 5s \
+        entrypoint-wrapper \
+        --dry-run \
+        --wait-for-file "${wait_file}" \
+        --wait-timeout 5s \
+        bash -c '[[ -e "$1" ]]' bash "${wait_file}" \
+        > "${OUT}" 2> "${ERR}" &
+    local pid=$!
+    sleep 0.1
+    > "${wait_file}"
+    if ! wait "${pid}"; then
+        fail '[ERROR] failed to wait for file'
+        ret=1
+    fi
+    rm -f "${wait_file}"
+    return "${ret}"
+}
+
 os::test::junit::declare_suite_start "integration/entrypoint-wrapper"
 os::cmd::expect_success 'run_test test_mkdir'
 os::cmd::expect_success 'run_test test_shared_dir'
@@ -221,5 +243,7 @@ os::integration::compare "${OUT}" "${SECRET}"
 os::cmd::expect_success "run_test test_signal INT"
 os::integration::compare "${OUT}" "${SECRET}"
 os::cmd::expect_success "run_test test_signal TERM"
+os::integration::compare "${OUT}" "${SECRET}"
+os::cmd::expect_success 'run_test test_wait'
 os::integration::compare "${OUT}" "${SECRET}"
 os::test::junit::declare_suite_end

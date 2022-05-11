@@ -246,30 +246,49 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		// sacrifice will be selected.
 		// This is a natural backpressure to k8s trying to spread load over
 		// all available nodes (keeping them alive unnecessarily long).
-		sacrificialHostnames, err := prioritization.findHostnamesToSacrifice(podClass)
+		sacrificialHostnames, avoidanceHostnames, err := prioritization.findHostnamesToSacrifice(podClass)
 
 		if err == nil {
-			if len(sacrificialHostnames) > 0 {
+			if len(sacrificialHostnames) > 0 || len(avoidanceHostnames) > 0 {
 				affinity := corev1.Affinity{
 					NodeAffinity: &corev1.NodeAffinity{},
 				}
 
-				// Use MatchExpressions here because MatchFields because MatchExpressions
-				// only allows one value in the Values list.
-				requiredNoSchedulingSelector := corev1.NodeSelector{
-					NodeSelectorTerms: []corev1.NodeSelectorTerm{
-						{
-							MatchExpressions: []corev1.NodeSelectorRequirement{
-								{
-									Key:      KubernetesHostnameLabelName,
-									Operator: "NotIn",
-									Values:   sacrificialHostnames,
+				if len(sacrificialHostnames) > 0 {
+					// Use MatchExpressions here because MatchFields because MatchExpressions
+					// only allows one value in the Values list.
+					requiredNoSchedulingSelector := corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      KubernetesHostnameLabelName,
+										Operator: "NotIn",
+										Values:   sacrificialHostnames,
+									},
 								},
 							},
 						},
-					},
+					}
+					affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &requiredNoSchedulingSelector
 				}
-				affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &requiredNoSchedulingSelector
+
+				if len(avoidanceHostnames) > 0 {
+					affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = []corev1.PreferredSchedulingTerm {
+						{
+							Weight:     100,
+							Preference: corev1.NodeSelectorTerm{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      KubernetesHostnameLabelName,
+										Operator: "NotIn",
+										Values:   avoidanceHostnames,
+									},
+								},
+							},
+						},
+					}
+				}
 
 				unstructuredAffinity, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&affinity)
 				if err != nil {

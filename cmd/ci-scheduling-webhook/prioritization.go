@@ -2,24 +2,14 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/strategicpatch"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	clientretry "k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/util/taints"
-	taintutils "k8s.io/kubernetes/pkg/util/taints"
-	"math"
 	"sort"
-	"strings"
-	"sync"
 	"time"
 )
 
@@ -29,17 +19,11 @@ const (
 	PodClassBuilds PodClass = "builds"
 	PodClassTests PodClass = "tests"
 	PodClassNone PodClass = ""
-	SchedulerTaintName = "ci-workloads"
 )
 
 var (
 	nodesInformer  cache.SharedIndexInformer
 	podsInformer           cache.SharedIndexInformer
-	sacrificeMu            sync.Mutex
-	SchedulerTaint               = corev1.Taint{
-		Key:    SchedulerTaintName,
-		Effect: corev1.TaintEffectPreferNoSchedule,
-	}
 )
 
 
@@ -51,6 +35,7 @@ type Prioritization struct {
 
 const IndexPodsByNode = "IndexPodsByNode"
 const IndexNodesByCiWorkload = "IndexNodesByCiWorkload"
+const IndexNodesByTaint = "IndexNodesByTaint"
 
 func (p *Prioritization) nodeUpdated(old, new interface{}) {
 	oldNode := old.(*corev1.Node)
@@ -81,6 +66,13 @@ func (p* Prioritization) initializePrioritization() error {
 	informerFactory := informers.NewSharedInformerFactory(p.k8sClientSet, 0)
 	nodesInformer = informerFactory.Core().V1().Nodes().Informer()
 
+	nodesInformer.AddEventHandler(
+		cache.ResourceEventHandlerFuncs{
+			// Called on resource update and every resyncPeriod on existing resources.
+			UpdateFunc: p.nodeUpdated,
+		},
+	)
+
 	err := nodesInformer.AddIndexers(map[string]cache.IndexFunc{
 		IndexNodesByCiWorkload: func(obj interface{}) ([]string, error) {
 			node := obj.(*corev1.Node)
@@ -92,15 +84,23 @@ func (p* Prioritization) initializePrioritization() error {
 		},
 	})
 
-	nodesInformer.AddEventHandler(
-		cache.ResourceEventHandlerFuncs{
-			// Called on resource update and every resyncPeriod on existing resources.
-			UpdateFunc: p.nodeUpdated,
-		},
-	)
-
 	if err != nil {
 		return fmt.Errorf("unable to create new node informer index: %v", err)
+	}
+
+	err = nodesInformer.AddIndexers(map[string]cache.IndexFunc{
+		IndexNodesByTaint: func(obj interface{}) ([]string, error) {
+			node := obj.(*corev1.Node)
+			taintKeys := make([]string, len(node.Spec.Taints))
+			for i := range node.Spec.Taints {
+				taintKeys[i] = node.Spec.Taints[i].Key
+			}
+			return taintKeys, nil
+		},
+	})
+
+	if err != nil {
+		return fmt.Errorf("unable to create new node informer index by taint: %v", err)
 	}
 
 	podsInformer = informerFactory.Core().V1().Pods().Informer()
@@ -138,136 +138,6 @@ func (p* Prioritization) isNodeReady(node *corev1.Node) bool {
 	return false
 }
 
-var UpdateTaintBackoff = wait.Backoff{
-	Steps:    5,
-	Duration: 100 * time.Millisecond,
-	Jitter:   1.0,
-}
-
-// PatchNodeTaints patches node's taints.
-func (p* Prioritization)  PatchNodeTaints(nodeName string, oldNode *corev1.Node, newNode *corev1.Node) error {
-	oldData, err := json.Marshal(oldNode)
-	if err != nil {
-		return fmt.Errorf("failed to marshal old node %#v for node %q: %v", oldNode, nodeName, err)
-	}
-
-	newTaints := newNode.Spec.Taints
-	newNodeClone := oldNode.DeepCopy()
-	newNodeClone.Spec.Taints = newTaints
-	newData, err := json.Marshal(newNodeClone)
-	if err != nil {
-		return fmt.Errorf("failed to marshal new node %#v for node %q: %v", newNodeClone, nodeName, err)
-	}
-
-	patchBytes, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, corev1.Node{})
-	if err != nil {
-		return fmt.Errorf("failed to create patch for node %q: %v", nodeName, err)
-	}
-
-	_, err = p.k8sClientSet.CoreV1().Nodes().Patch(context.TODO(), nodeName, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
-	return err
-}
-
-// AddOrUpdateTaintOnNode add taints to the node. If taint was added into node, it'll issue API calls
-// to update nodes; otherwise, no API calls. Return error if any.
-func (p* Prioritization) AddOrUpdateTaintOnNode(nodeName string, taints ...*corev1.Taint) error {
-	if len(taints) == 0 {
-		return nil
-	}
-	firstTry := true
-	return clientretry.RetryOnConflict(UpdateTaintBackoff, func() error {
-		var err error
-		var oldNode *corev1.Node
-		// First we try getting node from the API server cache, as it's cheaper. If it fails
-		// we get it from etcd to be sure to have fresh data.
-		if firstTry {
-			oldNode, err = p.k8sClientSet.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{ResourceVersion: "0"})
-			firstTry = false
-		} else {
-			oldNode, err = p.k8sClientSet.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
-		}
-		if err != nil {
-			return err
-		}
-
-		var newNode *corev1.Node
-		oldNodeCopy := oldNode
-		updated := false
-		for _, taint := range taints {
-			curNewNode, ok, err := taintutils.AddOrUpdateTaint(oldNodeCopy, taint)
-			if err != nil {
-				return fmt.Errorf("failed to update taint of node")
-			}
-			updated = updated || ok
-			newNode = curNewNode
-			oldNodeCopy = curNewNode
-		}
-		if !updated {
-			klog.Errorf("No taint update was actually made: %v", nodeName)
-			return nil
-		}
-		return p.PatchNodeTaints(nodeName, oldNode, newNode)
-	})
-}
-
-// RemoveTaintOffNode is for cleaning up taints temporarily added to node,
-// won't fail if target taint doesn't exist or has been removed.
-// If passed a node it'll check if there's anything to be done, if taint is not present it won't issue
-// any API calls.
-func (p* Prioritization) RemoveTaintOffNode(nodeName string, node *corev1.Node, taints ...*corev1.Taint) error {
-	if len(taints) == 0 {
-		return nil
-	}
-	// Short circuit for limiting amount of API calls.
-	if node != nil {
-		match := false
-		for _, taint := range taints {
-			if taintutils.TaintExists(node.Spec.Taints, taint) {
-				match = true
-				break
-			}
-		}
-		if !match {
-			return nil
-		}
-	}
-
-	firstTry := true
-	return clientretry.RetryOnConflict(UpdateTaintBackoff, func() error {
-		var err error
-		var oldNode *corev1.Node
-		// First we try getting node from the API server cache, as it's cheaper. If it fails
-		// we get it from etcd to be sure to have fresh data.
-		if firstTry {
-			oldNode, err = p.k8sClientSet.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{ResourceVersion: "0"})
-			firstTry = false
-		} else {
-			oldNode, err = p.k8sClientSet.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
-		}
-		if err != nil {
-			return err
-		}
-
-		var newNode *corev1.Node
-		oldNodeCopy := oldNode
-		updated := false
-		for _, taint := range taints {
-			curNewNode, ok, err := taintutils.RemoveTaint(oldNodeCopy, taint)
-			if err != nil {
-				return fmt.Errorf("failed to remove taint of node")
-			}
-			updated = updated || ok
-			newNode = curNewNode
-			oldNodeCopy = curNewNode
-		}
-		if !updated {
-			return nil
-		}
-		return p.PatchNodeTaints(nodeName, oldNode, newNode)
-	})
-}
-
-
 // getWorkloadNodes returns all nodes presently available which support a given
 // podClass (workload type).
 func (p* Prioritization) getWorkloadNodes(podClass PodClass) ([]*corev1.Node, error) {
@@ -277,12 +147,28 @@ func (p* Prioritization) getWorkloadNodes(podClass PodClass) ([]*corev1.Node, er
 	}
 	nodes := make([]*corev1.Node, 0)
 	for i := range items {
-		node := items[i].(*corev1.Node)
+		nodeByIndex := items[i].(*corev1.Node)
+		nodeObj, exists, err := nodesInformer.GetIndexer().GetByKey(nodeByIndex.Name)
+
+		if err != nil {
+			klog.Errorf("Error trying to find node object %v: %v", nodeByIndex.Name, err)
+			continue
+		}
+
+		if !exists {
+			klog.Warningf("Node no longer exists: %v", nodeByIndex.Name)
+			// If the node is cordoned or otherwise unavailable, don't
+			// include it. We should only return viable nodes for new workloads.
+			continue
+		}
+
+		node := nodeObj.(*corev1.Node)
 		if !p.isNodeReady(node) {
 			// If the node is cordoned or otherwise unavailable, don't
 			// include it. We should only return viable nodes for new workloads.
 			continue
 		}
+
 		nodes = append(nodes, node)
 	}
 	return nodes, nil
@@ -315,61 +201,48 @@ func (p* Prioritization) getNodeHostname(node *corev1.Node) string {
 	}
 }
 
-func (p* Prioritization) setPreferNoSchedule(ctx context.Context, nodeName string, doTaint bool) error {
-
-	node, err := p.k8sClientSet.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-	if err != nil {
-		klog.Errorf("Unable to get node %v to taint it %v: %v", nodeName, doTaint, err)
-		return err
-	}
-
-	klog.InfoS("Changing taint of node", "nodeName", nodeName, "taint", SchedulerTaintName, "doTaint", doTaint)
-
-	if doTaint {
-		err := p.AddOrUpdateTaintOnNode(nodeName, &SchedulerTaint)
-		if err != nil {
-			klog.Errorf("Unable to apply taint %v to %v: %v", SchedulerTaintName, nodeName, err)
-		}
-	} else {
-		err := p.RemoveTaintOffNode(nodeName, node, &SchedulerTaint)
-		if err != nil {
-			klog.Errorf("Unable to remove taint %v to %v: %v", SchedulerTaintName, nodeName, err)
-		}
-	}
-
-	return nil
-}
-
-func (p* Prioritization) findHostnamesToSacrifice(podClass PodClass) ([]string, error) {
+func (p* Prioritization) findHostnamesToSacrifice(podClass PodClass) ([]string, []string, error) {
 	workloadNodes, err := p.getWorkloadNodes(podClass)  // find all nodes that are relevant to this workload class
 
 	if err != nil {
-		return nil, fmt.Errorf("unable to find workload nodes for %v: %v", podClass, err)
+		return nil, nil, fmt.Errorf("unable to find workload nodes for %v: %v", podClass, err)
 	}
 
 	if len(workloadNodes) <= 1 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
-	const maxScaleSize = 80 // this must be in agreement with the machineautoscaler configuration
-	maxSacrificialNodeCount := int(math.Ceil(float64(len(workloadNodes)) / 10))
+	sacrificialHostnames := make([]string, 0)
 
-	if len(workloadNodes) + maxSacrificialNodeCount >= maxScaleSize {
-		// we are approaching the maximum scale of nodes for this podClass.
-		// and if everything is busy, the machineautoscaler would not be able
-		// to accommodate sacrificial nodes by scaling up. Limit our involvement to
-		// 1 node. Also, if len/10 hits zero, make sure we are targeting at least 1.
-		maxSacrificialNodeCount = 1
-		klog.Warningf("Limiting sacrificial nodes for podClass %v as system is reaching maximum scaling limit", podClass)
+	toNodes := func(nodeObjs []interface{}) []*corev1.Node {
+		nodes := make([]*corev1.Node, len(nodeObjs))
+		for i, obj := range nodeObjs {
+			node := obj.(*corev1.Node)
+			nodes[i] = node
+		}
+		return nodes
 	}
 
-	if  maxSacrificialNodeCount == 0 {
-		// if len/10 hits zero, make sure we are targeting at least 1.
-		maxSacrificialNodeCount = 1
+	v, err := nodesInformer.GetIndexer().ByIndex(IndexNodesByTaint, "DeletionCandidateOfClusterAutoscaler")
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to select sacrificial nodes: %#v", err)
 	}
 
-	sacrificeMu.Lock()
-	defer sacrificeMu.Unlock()
+	nodes := toNodes(v)
+
+	for _, node := range nodes {
+		hostname := p.getNodeHostname(node)
+		if len(hostname) == 0 {
+			klog.Errorf("Unable to get %v label for node: %v", KubernetesHostnameLabelName, node.Name)
+			continue
+		}
+
+		if val, ok := node.Labels[CiWorkloadLabelName]; !ok || val != string(podClass) {
+			continue
+		}
+
+		sacrificialHostnames = append(sacrificialHostnames, hostname)
+	}
 
 	cachedPodCount := make(map[string]int) // maps node name to running pod count
 
@@ -395,27 +268,23 @@ func (p* Prioritization) findHostnamesToSacrifice(podClass PodClass) ([]string, 
 		return classedPodCount
 	}
 
-	sortNodeSliceByPodCountThenName := func(s *[]*corev1.Node, lowToHigh bool) {
-		ns := *s
-		sort.Slice(ns, func(i, j int) bool {
-			pi := getCachedPodCount(ns[i].Name)
-			pj := getCachedPodCount(ns[j].Name)
-			if pi == pj {
-				// For nodes with the same pod count, make sure we return in a deterministic order
-				return strings.Compare(ns[i].Name, ns[j].Name) < 0
-			}
-			val :=  pi < pj
-			if lowToHigh {
-				return val
-			} else {
-				return val
-			}
-		})
-	}
-
-	sortNodeSliceByPodCountThenName(&workloadNodes, true)
-	sacrificialHostnames := make([]string, 0)
-	sacrificialOutcomes := make([]string, 0)
+	// Sort first by podCount then by oldest. The goal is to always be psuedo-draining the node
+	// with the fewest pods which is at least 15 minutes old. Sorting by oldest helps make this
+	// search deterministic -- we want to report the same node consistently unless there is a node
+	// with fewer pods.
+	sort.Slice(workloadNodes, func(i, j int) bool {
+		nodeI := workloadNodes[i]
+		podsI := getCachedPodCount(nodeI.Name)
+		nodeJ := workloadNodes[j]
+		podsJ := getCachedPodCount(nodeJ.Name)
+		if podsI < podsJ {
+			return true
+		} else if podsI == podsJ {
+			return workloadNodes[i].CreationTimestamp.Time.Before(workloadNodes[j].CreationTimestamp.Time)
+		} else {
+			return false
+		}
+	})
 
 	for _, node := range workloadNodes {
 		hostname := p.getNodeHostname(node)
@@ -423,39 +292,33 @@ func (p* Prioritization) findHostnamesToSacrifice(podClass PodClass) ([]string, 
 			klog.Errorf("Unable to get %v label for node: %v", KubernetesHostnameLabelName, node.Name)
 			continue
 		}
-
-		podCount := getCachedPodCount(node.Name)
-
-		if podCount < 2 && time.Now().Sub(node.CreationTimestamp.Time) > 15 * time.Minute {
-			if !taints.TaintExists(node.Spec.Taints, &SchedulerTaint) {
-				klog.Infof("Tainting podClass %v node with PreferredNoSchedule taint (pods=%v) (existing taints: %#v): %v", podClass, podCount, node.Spec.Taints, node.Name)
-				p.setPreferNoSchedule(p.context, node.Name, true)
-			}
-		} else {
-			if taints.TaintExists(node.Spec.Taints, &SchedulerTaint) {
-				klog.Infof("Removing PreferredNoSchedule taint from podClass %s node (pods=%v): %v", podClass, podCount, node.Name)
-				p.setPreferNoSchedule(p.context, node.Name, false)
-			}
-		}
-
-		sacrificialHostnames = append(sacrificialHostnames, hostname)
-		sacrificialOutcomes = append(sacrificialOutcomes, fmt.Sprintf("%v=%v", hostname, podCount))
-		if len(sacrificialHostnames) >= maxSacrificialNodeCount {
+		if time.Now().Sub(node.CreationTimestamp.Time) > 15 * time.Minute {
+			klog.Infof("Antagonising for podClass=%v pods=%v : %v", podClass, getCachedPodCount(node.Name), hostname)
+			sacrificialHostnames = append(sacrificialHostnames, hostname)
 			break
 		}
 	}
 
-	for _, node := range workloadNodes {
-		if time.Now().Sub(node.CreationTimestamp.Time) < 15 * time.Minute {
-			// the cluster has scaled up recently. We have no business trying to
-			// scale nodes down.
-			klog.Infof("Eliminating sacrificial nodes for podClass %s as system has new node: %v", podClass, node.Name)
-			sacrificialHostnames = nil
-			break
+	sort.Strings(sacrificialHostnames)
+
+	// Now we want to gently avoid the oldest 25% of nodes with anti-affinity. This should help
+	// accelerate the autoscaler finding nodes when the cluster is high in capacity relative to
+	// the workloads.
+	sort.Slice(workloadNodes, func(i, j int) bool {
+		return workloadNodes[i].CreationTimestamp.Time.Before(workloadNodes[j].CreationTimestamp.Time)
+	})
+
+	avoidanceHostnames := make([]string, 0)
+	for _, avoidanceNode := range workloadNodes[:len(workloadNodes) / 4] {
+		hostname := p.getNodeHostname(avoidanceNode)
+		if len(hostname) == 0 {
+			klog.Errorf("Unable to get %v label for node: %v", KubernetesHostnameLabelName, avoidanceNode.Name)
+			continue
 		}
+		avoidanceHostnames = append(avoidanceHostnames, hostname)
 	}
 
-	klog.Infof("Targeted sacrificial nodes for podClass %v: %v", podClass, sacrificialOutcomes)
-	klog.Infof("Actual sacrificial nodes for podClass %v: %v", podClass, sacrificialHostnames)
-	return sacrificialHostnames, nil
+	klog.Infof("Sacrificial nodes for podClass %v: %v", podClass, sacrificialHostnames)
+	klog.Infof("Avoidance nodes for podClass %v: %v", podClass, avoidanceHostnames)
+	return sacrificialHostnames, avoidanceHostnames, nil
 }

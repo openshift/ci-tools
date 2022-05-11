@@ -85,10 +85,12 @@ func (s *rpmServerStep) run(ctx context.Context) error {
 	}
 	one := int64(1)
 	two := int32(2)
+	progressDeadline := int32(1200) // It can take 10 minutes for a machine to come up, so double default deadline
 	deployment := &appsapi.Deployment{
 		ObjectMeta: commonMeta,
 		Spec: appsapi.DeploymentSpec{
-			Replicas: &two,
+			ProgressDeadlineSeconds: &progressDeadline,
+			Replicas:                &two,
 			Selector: &meta.LabelSelector{
 				MatchLabels: labelSet,
 			},

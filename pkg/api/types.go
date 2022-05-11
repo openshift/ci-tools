@@ -1138,6 +1138,7 @@ const (
 	ClusterProfileOSDEphemeral          ClusterProfile = "osd-ephemeral"
 	ClusterProfileAWS2                  ClusterProfile = "aws-2"
 	ClusterProfileHyperShift            ClusterProfile = "hypershift"
+	ClusterProfileAWS3                  ClusterProfile = "aws-3"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1145,6 +1146,7 @@ func ClusterProfiles() []ClusterProfile {
 	return []ClusterProfile{
 		ClusterProfileAWS,
 		ClusterProfileAWS2,
+		ClusterProfileAWS3,
 		ClusterProfileAWSArm64,
 		ClusterProfileAWSAtomic,
 		ClusterProfileAWSC2SQE,
@@ -1217,6 +1219,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSGluster,
 		ClusterProfileAWSCPaaS,
 		ClusterProfileAWS2,
+		ClusterProfileAWS3,
 		ClusterProfileAWSQE:
 		return string(CloudAWS)
 	case
@@ -1427,6 +1430,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "osd-ephemeral-quota-slice"
 	case ClusterProfileAWS2:
 		return "aws-2-quota-slice"
+	case ClusterProfileAWS3:
+		return "aws-3-quota-slice"
 	case ClusterProfileHyperShift:
 		return "hypershift-quota-slice"
 	default:

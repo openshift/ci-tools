@@ -292,6 +292,11 @@ func (p* Prioritization) findHostnamesToSacrifice(podClass PodClass) ([]string, 
 			klog.Errorf("Unable to get %v label for node: %v", KubernetesHostnameLabelName, node.Name)
 			continue
 		}
+		if instanceType, ok := node.Labels["node.kubernetes.io/instance-type"]; ok {
+			if instanceType != "m5.4xlarge" { // temporary hack to not antagonize experimental types
+				continue
+			}
+		}
 		if time.Now().Sub(node.CreationTimestamp.Time) > 15 * time.Minute {
 			klog.Infof("Antagonising for podClass=%v pods=%v : %v", podClass, getCachedPodCount(node.Name), hostname)
 			sacrificialHostnames = append(sacrificialHostnames, hostname)
@@ -314,6 +319,11 @@ func (p* Prioritization) findHostnamesToSacrifice(podClass PodClass) ([]string, 
 		if len(hostname) == 0 {
 			klog.Errorf("Unable to get %v label for node: %v", KubernetesHostnameLabelName, avoidanceNode.Name)
 			continue
+		}
+		if instanceType, ok := avoidanceNode.Labels["node.kubernetes.io/instance-type"]; ok {
+			if instanceType != "m5.4xlarge" { // temporary hack to not antagonize experimental types
+				continue
+			}
 		}
 		avoidanceHostnames = append(avoidanceHostnames, hostname)
 	}

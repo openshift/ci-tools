@@ -311,7 +311,7 @@ func handleError(w http.ResponseWriter, err error, shortErrorMessage string, sta
 		_, fprintfErr = fmt.Fprintf(w, "failed while building error page")
 	}
 	metrics.RecordError(shortErrorMessage, m.ErrorRate)
-	logrus.WithFields(logFieldsFor(endpoint, bugID)).WithError(fmt.Errorf("%s: %v", shortErrorMessage, utilerrors.NewAggregate([]error{err, wpErr, fprintfErr})))
+	logrus.WithFields(logFieldsFor(endpoint, bugID)).WithError(fmt.Errorf("%s: %v", shortErrorMessage, utilerrors.NewAggregate([]error{err, wpErr, fprintfErr}))).Error("an error occurred")
 }
 
 // HandlerFuncWithErrorReturn allows returning errors to be logged
@@ -667,7 +667,7 @@ func GetClonesHandler(client bugzilla.Client, allTargetVersions []string, m *met
 
 		wrpr, statusCode, err := getClonesTemplateData(bugID, client, allTargetVersions)
 		if err != nil {
-			handleError(w, err, "unable to get get bug details", statusCode, req.URL.Path, bugID, m)
+			handleError(w, err, "unable to get bug details", statusCode, req.URL.Path, bugID, m)
 			return
 		}
 		err = writePage(w, "Clones", clonesTemplate, wrpr)
@@ -816,7 +816,7 @@ func CreateCloneHandler(client bugzilla.Client, sortedTargetReleases []string, m
 		// Repopulate the fields of the page with the right data
 		data, statusCode, err := getClonesTemplateData(bugID, client, sortedTargetReleases)
 		if err != nil {
-			handleError(w, err, "unable to get get bug details", statusCode, endpoint, bugID, m)
+			handleError(w, err, "unable to get bug details", statusCode, endpoint, bugID, m)
 			return
 		}
 		// Populating the NewCloneId which is used to show the success info banner

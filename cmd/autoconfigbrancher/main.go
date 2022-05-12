@@ -240,6 +240,16 @@ func main() {
 				"--imagesets", "./clusters/hive/pools",
 			},
 		},
+		{
+			command: "/usr/bin/promoted-image-governor",
+			arguments: []string{
+				"--ci-operator-config-path", "./ci-operator/config",
+				"--release-controller-mirror-config-dir", "./core-services/release-controller/_releases",
+				"--openshift-mapping-dir", "./core-services/image-mirroring/openshift",
+				"--openshift-mapping-config", "./core-services/image-mirroring/openshift/_config.yaml",
+				"--dry-run=true",
+			},
+		},
 	}
 
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secret.Censor}

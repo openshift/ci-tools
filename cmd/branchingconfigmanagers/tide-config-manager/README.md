@@ -1,0 +1,1 @@
+# tide-config-manager

@@ -91,7 +91,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	if len(imageTargets) > 0 {
 		// Identify which jobs need to have a release payload explicitly requested
 		var presubmitTargets = imageTargets.List()
-		if promotion.PromotesOfficialImages(configSpec, promotion.WithOKD) {
+		if promotion.PromotesOfficialImages(configSpec, promotion.WithOKD) && needImportReleaseForTests(configSpec) {
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
 		jobBaseGen := newJobBaseBuilder().TestName("images")
@@ -136,6 +136,27 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		PostsubmitsStatic: postsubmits,
 		Periodics:         periodics,
 	}
+}
+
+func needImportReleaseForTests(c *cioperatorapi.ReleaseBuildConfiguration) bool {
+	if c == nil {
+		return false
+	}
+	for _, test := range c.Tests {
+		if test.ClusterClaim != nil ||
+			test.MultiStageTestConfiguration != nil && test.MultiStageTestConfiguration.ClusterProfile != "" ||
+			test.MultiStageTestConfigurationLiteral != nil && test.MultiStageTestConfigurationLiteral.ClusterProfile != "" ||
+			test.OpenshiftAnsibleClusterTestConfiguration != nil && test.OpenshiftAnsibleClusterTestConfiguration.ClusterProfile != "" ||
+			test.OpenshiftAnsibleSrcClusterTestConfiguration != nil && test.OpenshiftAnsibleSrcClusterTestConfiguration.ClusterProfile != "" ||
+			test.OpenshiftAnsibleCustomClusterTestConfiguration != nil && test.OpenshiftAnsibleCustomClusterTestConfiguration.ClusterProfile != "" ||
+			test.OpenshiftInstallerClusterTestConfiguration != nil && test.OpenshiftInstallerClusterTestConfiguration.ClusterProfile != "" ||
+			test.OpenshiftInstallerUPIClusterTestConfiguration != nil && test.OpenshiftInstallerUPIClusterTestConfiguration.ClusterProfile != "" ||
+			test.OpenshiftInstallerUPISrcClusterTestConfiguration != nil && test.OpenshiftInstallerUPISrcClusterTestConfiguration.ClusterProfile != "" ||
+			test.OpenshiftInstallerCustomTestImageClusterTestConfiguration != nil && test.OpenshiftInstallerCustomTestImageClusterTestConfiguration.ClusterProfile != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {

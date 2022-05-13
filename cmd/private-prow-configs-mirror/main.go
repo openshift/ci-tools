@@ -24,7 +24,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/promotion"
 	"github.com/openshift/ci-tools/pkg/prowconfigsharding"
 )
 
@@ -136,7 +135,7 @@ func getOrgReposWithOfficialImages(configDir string, whitelist map[string][]stri
 
 	callback := func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
 
-		if !promotion.BuildsOfficialImages(c, promotion.WithoutOKD) {
+		if !api.BuildsOfficialImages(c, api.WithoutOKD) {
 			return nil
 		}
 

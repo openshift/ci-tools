@@ -22,7 +22,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
 type options struct {
@@ -526,7 +525,7 @@ func (o *options) makeFilter(callback func(*api.ReleaseBuildConfiguration, *conf
 		if o.repo != "" && o.repo != fmt.Sprintf("%s/%s", i.Org, i.Repo) {
 			return nil
 		}
-		if !promotion.BuildsOfficialImages(c, promotion.WithoutOKD) {
+		if !api.BuildsOfficialImages(c, api.WithoutOKD) {
 			return nil
 		}
 		return callback(c, i)

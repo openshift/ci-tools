@@ -15,7 +15,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
 const (
@@ -123,7 +122,7 @@ func main() {
 			return nil
 		}
 
-		if !promotion.BuildsOfficialImages(rbc, promotion.WithoutOKD) && !o.WhitelistConfig.IsWhitelisted(repoInfo) {
+		if !api.BuildsOfficialImages(rbc, api.WithoutOKD) && !o.WhitelistConfig.IsWhitelisted(repoInfo) {
 			logger.Warn("Skipping...")
 			return nil
 		}
@@ -159,7 +158,7 @@ func main() {
 		}
 
 		if rbc.PromotionConfiguration != nil {
-			if !promotion.BuildsOfficialImages(rbc, promotion.WithoutOKD) && o.WhitelistConfig.IsWhitelisted(repoInfo) {
+			if !api.BuildsOfficialImages(rbc, api.WithoutOKD) && o.WhitelistConfig.IsWhitelisted(repoInfo) {
 				logger.Warn("Repo is whitelisted. Disable promotion...")
 				rbc.PromotionConfiguration.Disabled = true
 			}

@@ -72,20 +72,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		}
 	}
 
-	imageTargets := sets.NewString()
-	if configSpec.PromotionConfiguration != nil {
-		for additional := range configSpec.PromotionConfiguration.AdditionalImages {
-			imageTargets.Insert(configSpec.PromotionConfiguration.AdditionalImages[additional])
-		}
-	}
-
 	newJobBaseBuilder := func() *prowJobBaseBuilder {
 		return NewProwJobBaseBuilder(configSpec, info, NewCiOperatorPodSpecGenerator())
 	}
 
-	if len(configSpec.Images) > 0 || imageTargets.Len() > 0 {
-		imageTargets.Insert("[images]")
-	}
+	imageTargets := api.ImageTargets(configSpec)
 
 	if len(imageTargets) > 0 {
 		// Identify which jobs need to have a release payload explicitly requested

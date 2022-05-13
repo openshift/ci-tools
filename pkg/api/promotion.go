@@ -1,5 +1,7 @@
 package api
 
+import "k8s.io/apimachinery/pkg/util/sets"
+
 type OKDInclusion bool
 
 const (
@@ -9,6 +11,21 @@ const (
 	WithOKD    OKDInclusion = true
 	WithoutOKD OKDInclusion = false
 )
+
+// ImageTargets returns image targets
+func ImageTargets(c *ReleaseBuildConfiguration) sets.String {
+	imageTargets := sets.NewString()
+	if c.PromotionConfiguration != nil {
+		for additional := range c.PromotionConfiguration.AdditionalImages {
+			imageTargets.Insert(c.PromotionConfiguration.AdditionalImages[additional])
+		}
+	}
+
+	if len(c.Images) > 0 || imageTargets.Len() > 0 {
+		imageTargets.Insert("[images]")
+	}
+	return imageTargets
+}
 
 // PromotesOfficialImages determines if a configuration will result in official images
 // being promoted. This is a proxy for determining if a configuration contributes to

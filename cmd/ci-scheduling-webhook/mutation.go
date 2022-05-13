@@ -79,6 +79,12 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	nodeResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}
+	if admissionReviewRequest.Request == nil || admissionReviewRequest.Request.Resource == nodeResource {
+		mutateNode(admissionReviewRequest, w, r)
+		return
+	}
+
 	// Do server-side validation that we are only dealing with a pod resource. This
 	// should also be part of the MutatingWebhookConfiguration in the cluster, but
 	// we should verify here before continuing.
@@ -101,7 +107,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		sinceLastProfile := time.Since(*lastProfileTime)
 		now := time.Now()
 		lastProfileTime = &now
-		klog.Infof("[%v] [%v] within (ms): %v [diff %v]", admissionReviewRequest.Request.UID, action, duration.Milliseconds(), sinceLastProfile.Milliseconds())
+		klog.Infof("mutate-pod [%v] [%v] within (ms): %v [diff %v]", admissionReviewRequest.Request.UID, action, duration.Milliseconds(), sinceLastProfile.Milliseconds())
 	}
 
 	profile("decoded request")
@@ -246,15 +252,15 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		// sacrifice will be selected.
 		// This is a natural backpressure to k8s trying to spread load over
 		// all available nodes (keeping them alive unnecessarily long).
-		sacrificialHostnames, avoidanceHostnames, err := prioritization.findHostnamesToSacrifice(podClass)
+		precludedHostnames, err := prioritization.findHostnamesToPreclude(podClass)
 
 		if err == nil {
-			if len(sacrificialHostnames) > 0 || len(avoidanceHostnames) > 0 {
+			if len(precludedHostnames) > 0 {
 				affinity := corev1.Affinity{
 					NodeAffinity: &corev1.NodeAffinity{},
 				}
 
-				if len(sacrificialHostnames) > 0 {
+				if len(precludedHostnames) > 0 {
 					// Use MatchExpressions here because MatchFields because MatchExpressions
 					// only allows one value in the Values list.
 					requiredNoSchedulingSelector := corev1.NodeSelector{
@@ -264,30 +270,13 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 									{
 										Key:      KubernetesHostnameLabelName,
 										Operator: "NotIn",
-										Values:   sacrificialHostnames,
+										Values:   precludedHostnames,
 									},
 								},
 							},
 						},
 					}
 					affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &requiredNoSchedulingSelector
-				}
-
-				if len(avoidanceHostnames) > 0 {
-					affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = []corev1.PreferredSchedulingTerm {
-						{
-							Weight:     100,
-							Preference: corev1.NodeSelectorTerm{
-								MatchExpressions: []corev1.NodeSelectorRequirement{
-									{
-										Key:      KubernetesHostnameLabelName,
-										Operator: "NotIn",
-										Values:   avoidanceHostnames,
-									},
-								},
-							},
-						},
-					}
 				}
 
 				unstructuredAffinity, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&affinity)
@@ -330,6 +319,182 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		admissionResponse.Patch = patch
 	} else {
 		klog.InfoS("Incoming pod to be ignored", "podClass", podClass, "pod", fmt.Sprintf("-n %v pod/%v", namespace, podName))
+	}
+
+	// Construct the response, which is just another AdmissionReview.
+	var admissionReviewResponse admissionv1.AdmissionReview
+	admissionReviewResponse.Response = admissionResponse
+	admissionReviewResponse.SetGroupVersionKind(admissionReviewRequest.GroupVersionKind())
+	admissionReviewResponse.Response.UID = admissionReviewRequest.Request.UID
+
+	resp, err := json.Marshal(admissionReviewResponse)
+	if err != nil {
+		writeHttpError(500, fmt.Errorf("error marshalling admission review reponse: %v", err))
+		return
+	}
+	profile("ready to write response")
+
+	w.Header().Set("Content-Type", "application/json")
+	_, err = w.Write(resp)
+	if err != nil {
+		klog.Errorf("Unable to respond to caller with admission review: %v", err)
+	}
+}
+
+func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	lastProfileTime := &start
+
+	deserializer := codecs.UniversalDeserializer()
+
+	writeHttpError := func(statusCode int, err error) {
+		msg := fmt.Sprintf("error during mutation operation: %v", err)
+		klog.Error(msg)
+		w.WriteHeader(statusCode)
+		_, err = w.Write([]byte(msg))
+		if err != nil {
+			klog.Errorf("Unable to return http error response to caller: %v", err)
+		}
+	}
+
+	// Do server-side validation that we are only dealing with a pod resource. This
+	// should also be part of the MutatingWebhookConfiguration in the cluster, but
+	// we should verify here before continuing.
+	nodeResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}
+	if admissionReviewRequest.Request == nil || admissionReviewRequest.Request.Resource != nodeResource {
+		writeHttpError(400, fmt.Errorf("did not receive node, got %v", admissionReviewRequest.Request))
+		return
+	}
+
+	// Decode the pod from the AdmissionReview.
+	rawRequest := admissionReviewRequest.Request.Object.Raw
+	node := corev1.Node{}
+	if _, _, err := deserializer.Decode(rawRequest, nil, &node); err != nil {
+		writeHttpError(500, fmt.Errorf("error decoding raw node: %v", err))
+		return
+	}
+
+	profile := func(action string) {
+		duration := time.Since(start)
+		sinceLastProfile := time.Since(*lastProfileTime)
+		now := time.Now()
+		lastProfileTime = &now
+		klog.Infof("mutate-node [%v] [%v] within (ms): %v [diff %v]", admissionReviewRequest.Request.UID, action, duration.Milliseconds(), sinceLastProfile.Milliseconds())
+	}
+
+	profile("decoded request")
+
+	podClass := PodClassNone // will be set to CiWorkloadLabelValueBuilds or CiWorkloadLabelValueTests depending on analysis
+
+	patchEntries := make([]map[string]interface{}, 0)
+	addPatchEntry := func(op string, path string, value interface{}) {
+		patch := map[string]interface{}{
+			"op":    op,
+			"path":  path,
+			"value": value,
+		}
+		patchEntries = append(patchEntries, patch)
+	}
+
+	nodeName := admissionReviewRequest.Request.Name
+
+	labels := node.Labels
+	if labels != nil {
+		if pc, ok := labels[CiWorkloadLabelName]; ok {
+			podClass = PodClass(pc)
+		}
+	}
+
+	taintDesired := false
+	var desiredEffect corev1.TaintEffect
+
+	if podClass != PodClassNone {
+		profile("classified request")
+
+		state := prioritization.getNodeAvoidanceState(&node)
+		switch state {
+		case CiAvoidanceStateOff:
+			taintDesired = false
+		case CiAvoidanceStatePreferNoSchedule:
+			taintDesired = true
+			desiredEffect = corev1.TaintEffectPreferNoSchedule
+		case CiAvoidanceStateNoSchedule:
+			taintDesired = true
+			desiredEffect = corev1.TaintEffectNoSchedule
+		}
+
+		// We want to ensure this node taint matches the intent of the label
+		taints := node.Spec.Taints
+		if taints == nil {
+			taints = make([]corev1.Taint, 0)
+		}
+
+		foundIndex := -1
+		var foundEffect corev1.TaintEffect
+		for i, taint := range taints {
+			if taint.Key == CiWorkloadAvoidanceTaintName {
+				foundIndex = i
+				foundEffect = taint.Effect
+			}
+		}
+
+		modified := false
+
+		if foundIndex == -1 && taintDesired {
+			taints = append(taints, corev1.Taint{
+				Key:    CiWorkloadAvoidanceTaintName,
+				Value:  string(podClass),
+				Effect: desiredEffect,
+			})
+			modified = true
+		}
+
+		if foundIndex >= 0 {
+			if !taintDesired {
+				// remove our taint from the list
+				taints = append(taints[:foundIndex], taints[foundIndex+1:]...)
+				modified = true
+			} else if foundEffect != desiredEffect {
+				taints[foundIndex].Effect = desiredEffect
+				modified = true
+			}
+		}
+
+		if modified {
+			taintMap := map[string][]corev1.Taint {
+				"taints": taints,
+			}
+			unstructedTaints, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&taintMap)
+			if err != nil {
+				writeHttpError(500, fmt.Errorf("error decoding taints to unstructured data: %v", err))
+				return
+			}
+			addPatchEntry("add", "/spec/taints", unstructedTaints["taints"])
+		}
+
+	}
+
+	admissionResponse := &admissionv1.AdmissionResponse{}
+	patch := make([]byte, 0)
+	patchType := admissionv1.PatchTypeJSONPatch
+
+	if len(patchEntries) > 0 {
+		marshalled, err := json.Marshal(patchEntries)
+		if err != nil {
+			klog.Errorf("Error marshalling JSON patch (%v) from: %v", patchEntries)
+			writeHttpError(500, fmt.Errorf("error marshalling jsonpatch: %v", err))
+			return
+		}
+		patch = marshalled
+	}
+
+	admissionResponse.Allowed = true
+	if len(patch) > 0 {
+		klog.InfoS("Incoming node to be modified", "podClass", podClass, "node", fmt.Sprintf(nodeName), "taintDesired", taintDesired, "desiredEffect", desiredEffect)
+		admissionResponse.PatchType = &patchType
+		admissionResponse.Patch = patch
+	} else {
+		klog.InfoS("Incoming node to be ignored", "podClass", podClass, "node", fmt.Sprintf(nodeName), "taintDesired", taintDesired, "desiredEffect", desiredEffect)
 	}
 
 	// Construct the response, which is just another AdmissionReview.

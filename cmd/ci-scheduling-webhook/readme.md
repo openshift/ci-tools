@@ -90,7 +90,7 @@ This provides a gentle pressure to the cluster to allows nodes to be scaled down
 ```shell
 [ci-tools]$ export KUBECONFIG=~/.kube/config
 [ci-tools]$ go run github.com/openshift/ci-tools/cmd/ci-scheduling-webhook --as system:admin --port 8443 --shrink-cpu-requests-tests 0.3 &
-[ci-tools]$ cmd/ci-scheduling-webhook/testing/post.sh
+[ci-tools]$ cmd/ci-scheduling-webhook/testing/post-pods.sh
 ```
 
 ## Manual Deployment

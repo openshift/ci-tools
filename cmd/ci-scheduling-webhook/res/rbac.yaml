@@ -21,6 +21,16 @@ rules:
       - list
       - get
       - patch
+  - apiGroups:
+      - "machine.openshift.io"
+    resources:
+      - machines
+      - machinesets
+    verbs:
+      - watch
+      - list
+      - get
+      - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -28,7 +29,13 @@ import (
 
 const (
 	CiWorkloadLabelName          = "ci-workload"
-	CiWorkloadNamespaceLabelName = "ci-workload-namespace"
+	CiWorkloadAvoidanceTaintName = "ci-workload-avoid"
+	CiWorkloadAvoidanceLabelName = "ci-workload-avoid"
+	CiWorkloadNamespaceLabelName      = "ci-workload-namespace"
+
+	CiAvoidanceStateOff = "off"
+	CiAvoidanceStatePreferNoSchedule = "prefer"
+	CiAvoidanceStateNoSchedule = "on"
 )
 
 var (
@@ -138,9 +145,12 @@ func Run(_ *cobra.Command, _ []string) {
 		os.Exit(1)
 	}
 
+	dynamicClient, err := dynamic.NewForConfig(config)
+
 	prioritization = Prioritization{
 		context:      ctx,
 		k8sClientSet: clientSet,
+		dynamicClient: dynamicClient,
 	}
 	err = prioritization.initializePrioritization()
 	if err != nil {

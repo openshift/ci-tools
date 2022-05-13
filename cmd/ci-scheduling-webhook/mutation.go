@@ -246,12 +246,6 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		nodeSelector[CiWorkloadLabelName] = string(podClass)
 		addPatchEntry("add", "/spec/nodeSelector", nodeSelector)
 
-		// We want to try to help the autoscaler out by quieting load on select nodes.
-		// Once the nodes are selected, no pods will be scheduled to them and eventually
-		// the autoscaler should be able to reclaim them. At that point, another
-		// sacrifice will be selected.
-		// This is a natural backpressure to k8s trying to spread load over
-		// all available nodes (keeping them alive unnecessarily long).
 		precludedHostnames, err := prioritization.findHostnamesToPreclude(podClass)
 
 		if err == nil {

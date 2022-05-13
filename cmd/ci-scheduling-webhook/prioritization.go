@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/util/taints"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -59,6 +60,7 @@ const IndexNodesByTaint = "IndexNodesByTaint"
 func (p *Prioritization) nodeUpdated(old, new interface{}) {
 	oldNode := old.(*corev1.Node)
 	newNode := new.(*corev1.Node)
+
 	addP, removeP := taints.TaintSetDiff(newNode.Spec.Taints, oldNode.Spec.Taints)
 	add := make([]string, len(addP))
 	remove := make([]string, len(removeP))
@@ -287,11 +289,6 @@ func (p* Prioritization) runNodeAvoidance(podClass PodClass) ([]*corev1.Node, er
 	precludeNodes := make([]*corev1.Node, 0)
 
 	for _, node := range workloadNodes {
-		if instanceType, ok := node.Labels["node.kubernetes.io/instance-type"]; ok {
-			if instanceType != "m5.4xlarge" { // temporary hack to not antagonize experimental types
-				continue
-			}
-		}
 
 		for _, taint := range node.Spec.Taints {
 			// If we find a workload node that has out NoSchedule taint, we need might be able to delete it.
@@ -338,13 +335,26 @@ func (p* Prioritization) runNodeAvoidance(podClass PodClass) ([]*corev1.Node, er
 			}
 		}
 
+		maxTargets := int(math.Ceil(float64(len(workloadNodes)) / 4)) // find appox 25% of nodes
+
 		if time.Now().Sub(node.CreationTimestamp.Time) > 15 * time.Minute {
 			if len(precludeNodes) == 0 {
 				// this is the most likely node to be scaled down next.
 				// don't let pods schedule to it.
 				precludeNodes = append(precludeNodes, node)
 			}
-			if len(avoidanceNodes) >= len(workloadNodes) / 4 {
+
+			if p.getNodeAvoidanceState(node) == CiAvoidanceStateNoSchedule && getCachedPodCount(node.Name) != 0 {
+				// If the webhook is shutdown after we label, but before the taint is applied, there
+				// will be no "update" to the node to trigger the taint application when we start back up.
+				// fall back to PreferNoSchedule.
+				err := p.setNodeAvoidanceState(node, CiAvoidanceStatePreferNoSchedule)
+				if err != nil {
+					klog.Errorf("Unable to turn on PreferNoSchedule avoidance for node %v: %#v", node.Name, err)
+				}
+			}
+
+			if len(avoidanceNodes) >= maxTargets {
 				err := p.setNodeAvoidanceState(node, CiAvoidanceStateOff)
 				if err != nil {
 					klog.Errorf("Unable to turn off avoidance for node %v: %#v", node.Name, err)
@@ -364,6 +374,8 @@ func (p* Prioritization) runNodeAvoidance(podClass PodClass) ([]*corev1.Node, er
 					}
 				}
 			}
+		} else {
+			klog.Infof("Ignoring node %v for podClass %v since it is too young", node.Name, podClass)
 		}
 	}
 
@@ -420,12 +432,25 @@ func (p* Prioritization) scaleDown(node *corev1.Node) error {
 	instanceState, ok := machineAnnotations[MachineInstanceStateAnnotationKey]
 
 	if !ok || instanceState.(string) != "running" {
-		return fmt.Errorf("unable to scale down machine which is not in the running state machine %v", machineName)
+		return fmt.Errorf("unable to scale down machine which is not in the running state node %v / machine %v", node.Name, machineName)
 	}
 
 	_, ok = machineAnnotations[MachineDeleteAnnotationKey]
 	if ok {
-		return fmt.Errorf("will not scale down machine - it is already annotated for deletion: %v", machineName)
+		klog.Infof("will not attempt to scale down machine - it is already annotated for deletion: %v", machineName)
+		return nil
+	}
+
+	if node.Spec.Unschedulable == true {
+		klog.Infof("will not attempt to scale down machine - it is Unschedulable; node %v / machine %v", node.Name, machineName)
+		return nil
+	}
+
+	for _, taint := range node.Spec.Taints {
+		if taint.Effect == corev1.TaintEffectNoSchedule && strings.Contains(taint.Key, "ci-") == false {
+			klog.Infof("will not attempt to scale down machine - it is tainted with %:%v=%v ; node %v / machine %v", taint.Key, taint.Value, taint.Effect, node.Name, machineName)
+			return nil
+		}
 	}
 
 	machineLabels, found, err := unstructured.NestedMap(machineObj.UnstructuredContent(), "metadata", "labels")
@@ -530,8 +555,8 @@ func (p* Prioritization) setNodeAvoidanceState(node *corev1.Node, newState strin
 
 	payloadBytes, _ := json.Marshal(payload)
 	_, err := p.k8sClientSet.CoreV1().Nodes().Patch(p.context, node.Name, types.JSONPatchType, payloadBytes, metav1.PatchOptions{})
-	if err != nil {
-		klog.Infof("Set avoidance state %v for node: %v", newState, node.Name)
+	if err == nil {
+		klog.Infof("Avoidance label state changed (old state %v) to %v for node: %v", currentState, newState, node.Name)
 	}
 	return err
 }

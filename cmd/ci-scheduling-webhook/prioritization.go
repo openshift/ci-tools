@@ -27,13 +27,15 @@ type PodClass string
 const (
 	PodClassBuilds PodClass = "builds"
 	PodClassTests PodClass = "tests"
+	PodClassLongTests PodClass = "longtests"
+	PodClassProwJobs PodClass = "prowjobs"
 	PodClassNone PodClass = ""
 
 	// When a machine is annotated with this and the machineset is scaled down,
 	// it will target machines with this annotation to satisfy the change.
 	MachineDeleteAnnotationKey         = "machine.openshift.io/cluster-api-delete-machine"
+	NodeDisableScaleDownLabelKey      = "cluster-autoscaler.kubernetes.io/scale-down-disabled"
 	PodMachineAnnotationKey           = "machine.openshift.io/machine"
-	MachineMachineSetLabelKey         = "machine.openshift.io/cluster-api-machineset"
 	MachineInstanceStateAnnotationKey = "machine.openshift.io/instance-state"
 )
 
@@ -437,6 +439,8 @@ func (p* Prioritization) scaleDown(node *corev1.Node) error {
 
 	_, ok = machineAnnotations[MachineDeleteAnnotationKey]
 	if ok {
+		// This is an important check as it will prevent us from trying to scale down a machineset
+		// multiple times for the same machine.
 		klog.Infof("will not attempt to scale down machine - it is already annotated for deletion: %v", machineName)
 		return nil
 	}
@@ -446,24 +450,30 @@ func (p* Prioritization) scaleDown(node *corev1.Node) error {
 		return nil
 	}
 
-	for _, taint := range node.Spec.Taints {
-		if taint.Effect == corev1.TaintEffectNoSchedule && strings.Contains(taint.Key, "ci-") == false {
-			klog.Infof("will not attempt to scale down machine - it is tainted with %:%v=%v ; node %v / machine %v", taint.Key, taint.Value, taint.Effect, node.Name, machineName)
-			return nil
+	machineMetadata, found, err := unstructured.NestedMap(machineObj.UnstructuredContent(), "metadata")
+	if err != nil {
+		return fmt.Errorf("could not get machine metadata for node %v / machine %v: %#v", node.Name, machineName, err)
+	}
+
+	machineOwnerReferencesInterface, ok := machineMetadata["ownerReferences"]
+	if !ok {
+		return fmt.Errorf("could not find machineset ownerReferences associated with machine: %v node: %v", machineName, node.Name)
+	}
+
+	machineOwnerReferences := machineOwnerReferencesInterface.([]interface{})
+
+	var machineSetName string
+	for _, ownerInterface := range machineOwnerReferences {
+		owner := ownerInterface.(map[string]interface{})
+		ownerKind := owner["kind"].(string)
+		if ownerKind == "MachineSet" {
+			machineSetName = owner["name"].(string)
 		}
 	}
 
-	machineLabels, found, err := unstructured.NestedMap(machineObj.UnstructuredContent(), "metadata", "labels")
-	if err != nil {
-		return fmt.Errorf("could not get machine labels node %v / machine %v: %#v", node.Name, machineName, err)
+	if len(machineSetName) == 0 {
+		return fmt.Errorf("unable to find machineset name in machine owner references: %v node: %v", machineName, node.Name)
 	}
-
-	machineSetNameInterface, ok := machineLabels[MachineMachineSetLabelKey]
-	if !ok {
-		return fmt.Errorf("could not find machineset label associated with machine: %v node: %v", machineName, node.Name)
-	}
-
-	machineSetName := machineSetNameInterface.(string)
 
 	ms, err := machinesetClient.Get(p.context, machineSetName, metav1.GetOptions{})
 	if err != nil {
@@ -557,6 +567,8 @@ func (p* Prioritization) setNodeAvoidanceState(node *corev1.Node, newState strin
 	_, err := p.k8sClientSet.CoreV1().Nodes().Patch(p.context, node.Name, types.JSONPatchType, payloadBytes, metav1.PatchOptions{})
 	if err == nil {
 		klog.Infof("Avoidance label state changed (old state %v) to %v for node: %v", currentState, newState, node.Name)
+	} else {
+		klog.Errorf("Failed to change avoidance label (old state %v) to %v for node %v: %#v", currentState, newState, node.Name, err)
 	}
 	return err
 }

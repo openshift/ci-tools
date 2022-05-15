@@ -19,6 +19,11 @@ spec:
       machine.openshift.io/cluster-api-machineset: build01-9hdwj-ci-builds-worker-us-east-1a
   template:
     metadata:
+      annotations:
+        # By the time we delete a machine, there should be nothing we care about.
+        # The only times this is violated is pods in weird states. Ignore them.
+        # https://github.com/openshift/machine-api-operator/blob/master/FAQ.md#i-want-to-skip-draining-when-i-delete-a-machine
+        machine.openshift.io/exclude-node-draining: "true"
       labels:
         machine.openshift.io/cluster-api-cluster: build01-9hdwj
         machine.openshift.io/cluster-api-machine-role: worker

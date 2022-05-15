@@ -9,13 +9,14 @@ metadata:
     machine.openshift.io/vCPU: "16"
   labels:
     machine.openshift.io/cluster-api-cluster: build03-vqlvf
-  name: build03-vqlvf-ci-builds-worker-us-east-1a
+  name: build03-vqlvf-ci-longtests-worker-us-east-1a
   namespace: openshift-machine-api
 spec:
+  deletePolicy: Oldest
   selector:
     matchLabels:
       machine.openshift.io/cluster-api-cluster: build03-vqlvf
-      machine.openshift.io/cluster-api-machineset: build03-vqlvf-ci-builds-worker-us-east-1a
+      machine.openshift.io/cluster-api-machineset: build03-vqlvf-ci-longtests-worker-us-east-1a
   template:
     metadata:
       annotations:
@@ -27,11 +28,11 @@ spec:
         machine.openshift.io/cluster-api-cluster: build03-vqlvf
         machine.openshift.io/cluster-api-machine-role: worker
         machine.openshift.io/cluster-api-machine-type: worker
-        machine.openshift.io/cluster-api-machineset: build03-vqlvf-ci-builds-worker-us-east-1a
+        machine.openshift.io/cluster-api-machineset: build03-vqlvf-ci-longtests-worker-us-east-1a
     spec:
       metadata:
         labels:
-          ci-workload: builds
+          ci-workload: longtests
       providerSpec:
         value:
           ami:
@@ -39,9 +40,10 @@ spec:
           apiVersion: awsproviderconfig.openshift.io/v1beta1
           blockDevices:
           - ebs:
-              iops: 5000
-              volumeSize: 2000
+              # Disk pressure was spotted at 300
+              volumeSize: 500
               volumeType: io1
+              iops: 5000
           credentialsSecret:
             name: aws-cloud-credentials
           deviceIndex: 0
@@ -70,13 +72,13 @@ spec:
             name: worker-user-data
       taints:
       - effect: NoSchedule
-        key: node-role.kubernetes.io/ci-builds-worker
-        value: ci-builds-worker
+        key: node-role.kubernetes.io/ci-longtests-worker
+        value: ci-longtests-worker
 ---
 apiVersion: autoscaling.openshift.io/v1beta1
 kind: MachineAutoscaler
 metadata:
-  name: build03-vqlvf-ci-builds-worker-us-east-1a
+  name: build03-vqlvf-ci-longtests-worker-us-east-1a
   namespace: openshift-machine-api
 spec:
   maxReplicas: 120
@@ -84,4 +86,4 @@ spec:
   scaleTargetRef:
     apiVersion: machine.openshift.io/v1beta1
     kind: MachineSet
-    name: build03-vqlvf-ci-builds-worker-us-east-1a
+    name: build03-vqlvf-ci-longtests-worker-us-east-1a

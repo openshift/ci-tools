@@ -8,14 +8,15 @@ metadata:
     machine.openshift.io/memoryMb: "32768"
     machine.openshift.io/vCPU: "16"
   labels:
-    machine.openshift.io/cluster-api-cluster: build03-vqlvf
-  name: build03-vqlvf-ci-builds-worker-us-east-1a
+    machine.openshift.io/cluster-api-cluster: build05-kwk66
+  name: build05-kwk66-ci-prowjobs-worker-us-east-1a
   namespace: openshift-machine-api
 spec:
+  deletePolicy: Oldest
   selector:
     matchLabels:
-      machine.openshift.io/cluster-api-cluster: build03-vqlvf
-      machine.openshift.io/cluster-api-machineset: build03-vqlvf-ci-builds-worker-us-east-1a
+      machine.openshift.io/cluster-api-cluster: build05-kwk66
+      machine.openshift.io/cluster-api-machineset: build05-kwk66-ci-prowjobs-worker-us-east-1a
   template:
     metadata:
       annotations:
@@ -24,29 +25,29 @@ spec:
         # https://github.com/openshift/machine-api-operator/blob/master/FAQ.md#i-want-to-skip-draining-when-i-delete-a-machine
         machine.openshift.io/exclude-node-draining: "true"
       labels:
-        machine.openshift.io/cluster-api-cluster: build03-vqlvf
+        machine.openshift.io/cluster-api-cluster: build05-kwk66
         machine.openshift.io/cluster-api-machine-role: worker
         machine.openshift.io/cluster-api-machine-type: worker
-        machine.openshift.io/cluster-api-machineset: build03-vqlvf-ci-builds-worker-us-east-1a
+        machine.openshift.io/cluster-api-machineset: build05-kwk66-ci-prowjobs-worker-us-east-1a
     spec:
       metadata:
         labels:
-          ci-workload: builds
+          ci-workload: prowjobs
       providerSpec:
         value:
           ami:
-            id: ami-0b35795bcab04ee70
+            id: ami-0efc96a4e17e7b048
           apiVersion: awsproviderconfig.openshift.io/v1beta1
           blockDevices:
           - ebs:
-              iops: 5000
-              volumeSize: 2000
+              volumeSize: 500
               volumeType: io1
+              iops: 5000
           credentialsSecret:
             name: aws-cloud-credentials
           deviceIndex: 0
           iamInstanceProfile:
-            id: build03-vqlvf-worker-profile
+            id: build05-kwk66-worker-profile
           instanceType: c6i.4xlarge
           kind: AWSMachineProviderConfig
           metadata: {}
@@ -57,26 +58,26 @@ spec:
           - filters:
             - name: tag:Name
               values:
-              - build03-vqlvf-worker-sg
+              - build05-kwk66-worker-sg
           subnet:
             filters:
             - name: tag:Name
               values:
-              - build03-vqlvf-private-us-east-1a
+              - build05-kwk66-private-us-east-1a
           tags:
-          - name: kubernetes.io/cluster/build03-vqlvf
+          - name: kubernetes.io/cluster/build05-kwk66
             value: owned
           userDataSecret:
             name: worker-user-data
       taints:
       - effect: NoSchedule
-        key: node-role.kubernetes.io/ci-builds-worker
-        value: ci-builds-worker
+        key: node-role.kubernetes.io/ci-prowjobs-worker
+        value: ci-prowjobs-worker
 ---
 apiVersion: autoscaling.openshift.io/v1beta1
 kind: MachineAutoscaler
 metadata:
-  name: build03-vqlvf-ci-builds-worker-us-east-1a
+  name: build05-kwk66-ci-prowjobs-worker-us-east-1a
   namespace: openshift-machine-api
 spec:
   maxReplicas: 120
@@ -84,4 +85,4 @@ spec:
   scaleTargetRef:
     apiVersion: machine.openshift.io/v1beta1
     kind: MachineSet
-    name: build03-vqlvf-ci-builds-worker-us-east-1a
+    name: build05-kwk66-ci-prowjobs-worker-us-east-1a

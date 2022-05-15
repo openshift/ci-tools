@@ -144,7 +144,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 	if namespace == CiNamepsace {
 		if _, ok := pod.Labels[CiCreatedByProwLabelName]; ok {
 			// if we are in 'ci' and created by prow, this the direct prowjob pod. Treat as test.
-			podClass = PodClassTests
+			podClass = PodClassProwJobs
 		}
 	}
 
@@ -177,6 +177,22 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 			} else {
 				podClass = PodClassTests
 			}
+		}
+	}
+
+	if podClass == PodClassTests {
+		// Segmenting long run tests onto their own node set helps normal tests nodes scale down
+		// more effectively.
+		if strings.HasPrefix(podName, "release-images-") ||
+			strings.HasPrefix(podName, "release-analysis-aggregator-") ||
+			strings.HasPrefix(podName, "e2e-aws-upgrade") ||
+			strings.HasPrefix(podName, "rpm-repo") ||
+			strings.HasPrefix(podName, "osde2e-stage") ||
+			strings.HasPrefix(podName, "e2e-aws-cnv") ||
+			strings.Contains(podName, "ovn-upgrade-ipi") ||
+			strings.Contains(podName, "ovn-upgrade-ovn") ||
+			strings.Contains(podName, "ovn-upgrade-openshift-e2e-test") {
+			podClass = PodClassLongTests
 		}
 	}
 
@@ -423,9 +439,15 @@ func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.Resp
 			taints = make([]corev1.Taint, 0)
 		}
 
+		okToTaint := true
 		foundIndex := -1
 		var foundEffect corev1.TaintEffect
 		for i, taint := range taints {
+			if taint.Effect == corev1.TaintEffectNoSchedule && strings.Contains(taint.Key, "ci-") == false {
+				klog.Infof("will not attempt to mutate node - it is tainted with %v:%v=%v:  node %v", taint.Key, taint.Value, taint.Effect, node.Name)
+				okToTaint = false
+				break
+			}
 			if taint.Key == CiWorkloadAvoidanceTaintName {
 				foundIndex = i
 				foundEffect = taint.Effect
@@ -454,7 +476,7 @@ func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.Resp
 			}
 		}
 
-		if modified {
+		if okToTaint && modified {
 			taintMap := map[string][]corev1.Taint {
 				"taints": taints,
 			}
@@ -464,6 +486,14 @@ func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.Resp
 				return
 			}
 			addPatchEntry("add", "/spec/taints", unstructedTaints["taints"])
+
+			// If the webhook is preparing to scale down a machine, label the node so that the
+			// cluster autoscaler ignores it. We don't want them trying to scale down the same
+			// node at the same time.
+			// https://github.com/kubernetes/autoscaler/blob/a13c59c2430e5fe0e07d8233a536326394e0c925/cluster-autoscaler/FAQ.md#how-can-i-prevent-cluster-autoscaler-from-scaling-down-a-particular-node
+			prepareScaleDown := desiredEffect == corev1.TaintEffectNoSchedule
+			escapedKey := strings.ReplaceAll(NodeDisableScaleDownLabelKey, "/", "~1")
+			addPatchEntry("add", "/metadata/labels/" + escapedKey, fmt.Sprintf("%v", prepareScaleDown))
 		}
 
 	}

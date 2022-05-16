@@ -244,6 +244,7 @@ func addDashboardTab(p prowConfig.Periodic,
 			strings.Contains(prowName, "-origin-"),
 			// these prefixes control whether a job is ocp or okd going forward
 			strings.HasPrefix(prowName, "periodic-ci-openshift-multiarch"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-openshift-tests-"),
 			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-ci-"),
 			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-nightly-"),
 			strings.HasPrefix(prowName, "periodic-ci-openshift-verification-tests-master-"),

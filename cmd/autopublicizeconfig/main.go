@@ -21,7 +21,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
 const (
@@ -189,7 +188,7 @@ func getReposForPrivateOrg(releaseRepoPath string, allowlist map[string][]string
 	}
 
 	callback := func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
-		if !promotion.BuildsOfficialImages(c, promotion.WithoutOKD) {
+		if !api.BuildsOfficialImages(c, api.WithoutOKD) {
 			return nil
 		}
 

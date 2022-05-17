@@ -20,7 +20,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
-	"github.com/openshift/ci-tools/pkg/promotion"
 	"github.com/openshift/ci-tools/pkg/release/config"
 )
 
@@ -175,7 +174,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		logger.WithError(err).Error("could not resolve ci-operator's config")
 		return formatError(fmt.Errorf("could not resolve ci-operator's config for %s/%s/%s: %w", org, repo, pr.Base.Ref, err))
 	}
-	if !promotion.PromotesOfficialImages(ciOpConfig, promotion.WithOKD) {
+	if !api.PromotesOfficialImages(ciOpConfig, api.WithOKD) {
 		logger.Info("the repo does not contribute to the OpenShift official images")
 		return fmt.Sprintf("the repo %s/%s does not contribute to the OpenShift official images", org, repo)
 	}

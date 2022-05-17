@@ -12,7 +12,6 @@ import (
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
-	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
 const (
@@ -73,25 +72,16 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		}
 	}
 
-	imageTargets := sets.NewString()
-	if configSpec.PromotionConfiguration != nil {
-		for additional := range configSpec.PromotionConfiguration.AdditionalImages {
-			imageTargets.Insert(configSpec.PromotionConfiguration.AdditionalImages[additional])
-		}
-	}
-
 	newJobBaseBuilder := func() *prowJobBaseBuilder {
 		return NewProwJobBaseBuilder(configSpec, info, NewCiOperatorPodSpecGenerator())
 	}
 
-	if len(configSpec.Images) > 0 || imageTargets.Len() > 0 {
-		imageTargets.Insert("[images]")
-	}
+	imageTargets := api.ImageTargets(configSpec)
 
 	if len(imageTargets) > 0 {
 		// Identify which jobs need to have a release payload explicitly requested
 		var presubmitTargets = imageTargets.List()
-		if promotion.PromotesOfficialImages(configSpec, promotion.WithOKD) {
+		if api.PromotesOfficialImages(configSpec, api.WithOKD) {
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
 		jobBaseGen := newJobBaseBuilder().TestName("images")

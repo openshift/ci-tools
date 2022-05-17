@@ -83,7 +83,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed to throttle")
 	}
 
-	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, promotion.WithoutOKD, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, api.WithoutOKD, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		logger := config.LoggerForInfo(*repoInfo)
 
 		branches := sets.NewString()

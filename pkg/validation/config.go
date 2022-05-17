@@ -152,7 +152,14 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 
 	// Validate promotion
 	if config.PromotionConfiguration != nil {
-		validationErrors = append(validationErrors, validatePromotionConfiguration("promotion", *config.PromotionConfiguration)...)
+		validationErrors = append(validationErrors,
+			validatePromotionConfiguration("promotion",
+				*config.PromotionConfiguration,
+				api.PromotesOfficialImages(config, api.WithOKD),
+				len(api.ImageTargets(config)) > 0,
+				api.ExtractPromotionNamespace(config),
+				config.ReleaseTagConfiguration,
+				config.Releases)...)
 	}
 
 	validationErrors = append(validationErrors, validateReleases("releases", config.Releases, config.ReleaseTagConfiguration != nil)...)
@@ -384,7 +391,7 @@ var (
 	exceptions = sets.NewString("openshift")
 )
 
-func validatePromotionConfiguration(fieldRoot string, input api.PromotionConfiguration) []error {
+func validatePromotionConfiguration(fieldRoot string, input api.PromotionConfiguration, promotesOfficialImages, imageTargets bool, promotionNamespace string, releaseTagConfiguration *api.ReleaseTagConfiguration, releases map[string]api.UnresolvedRelease) []error {
 	var validationErrors []error
 
 	if len(input.Namespace) == 0 {
@@ -401,6 +408,12 @@ func validatePromotionConfiguration(fieldRoot string, input api.PromotionConfigu
 
 	if len(input.Name) != 0 && len(input.Tag) != 0 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s: both name and tag defined", fieldRoot))
+	}
+
+	if promotesOfficialImages && imageTargets {
+		if _, ok := releases["latest"]; !ok && releaseTagConfiguration == nil {
+			validationErrors = append(validationErrors, fmt.Errorf("importing the release stream is required to ensure the promoted images to the namespace %s can be integrated properly. Although it can be achieved by tag_specification or releases[\"latest\"], adding an e2e test is strongly suggested", promotionNamespace))
+		}
 	}
 	return validationErrors
 }

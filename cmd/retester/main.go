@@ -36,6 +36,7 @@ type options struct {
 	cacheRecordAge time.Duration
 
 	enableOnRepos prowflagutil.Strings
+	enableOnOrgs  prowflagutil.Strings
 }
 
 func (o *options) Validate() error {
@@ -60,6 +61,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.cacheFile, "cache-file", "", "File to persist cache. No persistence of cache if not set")
 	fs.StringVar(&cacheRecordAgeRaw, "cache-record-age", "168h", "Parseable duration string that specifies how long a cache record lives in cache after the last time it was considered")
 	fs.Var(&o.enableOnRepos, "enable-on-repo", "Repository is saved in list. It can be used more than once, the result is a list of repositories where we start commenting instead of logging")
+	fs.Var(&o.enableOnOrgs, "enable-on-org", "Organization is saved in list. It can be used more than once, the result is a list of organizations (owners) where we start commenting instead of logging")
 
 	for _, group := range []flagutil.OptionGroup{&o.github, &o.config} {
 		group.AddFlags(fs)
@@ -103,7 +105,7 @@ func main() {
 		logrus.WithError(err).Fatal("Error starting config agent.")
 	}
 
-	c := newController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, o.enableOnRepos)
+	c := newController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, o.enableOnRepos, o.enableOnOrgs)
 
 	interrupts.OnInterrupt(func() {
 		if err := gitClient.Clean(); err != nil {

@@ -350,7 +350,7 @@ func (a *weeklyAverageFromTenDays) checkPercentileDisruption(jobRunIDToAvailabil
 	workingPercentage := thresholdPercentile // the percentile is our success percentage
 	requiredNumberOfPasses := requiredPassesByPassPercentageByNumberOfAttempts[numberOfAttempts][workingPercentage]
 	// TODO try to tighten this after we can keep the test in for about a week.
-	requiredNumberOfPasses = requiredNumberOfPasses - 1 // subtracting one because our current sample missed by one
+	requiredNumberOfPasses = requiredNumberOfPasses - 2 // subtracting one because our current sample missed by one
 
 	if requiredNumberOfPasses <= 0 {
 		message := fmt.Sprintf("current percentile is so low that we cannot latch, skipping P%d=%.2fs", thresholdPercentile, threshold)

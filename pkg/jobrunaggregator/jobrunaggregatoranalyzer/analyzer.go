@@ -172,13 +172,20 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	fmt.Printf("%q for %q:  aggregating disruption tests.\n", o.jobName, o.payloadTag)
+	if strings.Contains(o.jobName, "azure") {
+		// Azure presently shows disruption spikes that resolve on their own, and we do not want to fail payloads
+		// on this until we can be more confident in our results and refine the tests.
+		fmt.Printf("skipping disruption aggregation test suite on Azure jobs for time being")
+	} else {
 
-	disruptionSuite, err := o.CalculateDisruptionTestSuite(ctx, currentAggregationJunit.jobGCSBucketRoot, finishedJobsToAggregate)
-	if err != nil {
-		return err
+		fmt.Printf("%q for %q:  aggregating disruption tests.\n", o.jobName, o.payloadTag)
+
+		disruptionSuite, err := o.CalculateDisruptionTestSuite(ctx, currentAggregationJunit.jobGCSBucketRoot, finishedJobsToAggregate)
+		if err != nil {
+			return err
+		}
+		currentAggregationJunitSuites.Suites = append(currentAggregationJunitSuites.Suites, disruptionSuite)
 	}
-	currentAggregationJunitSuites.Suites = append(currentAggregationJunitSuites.Suites, disruptionSuite)
 
 	// TODO this is the spot where we would add an alertSuite that aggregates the alerts firing in our clusters to prevent
 	//  allowing more and more failing alerts through just because one fails.

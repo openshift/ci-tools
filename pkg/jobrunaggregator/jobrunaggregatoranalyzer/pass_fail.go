@@ -26,7 +26,7 @@ const (
 
 type baseline interface {
 	CheckFailed(ctx context.Context, jobName string, suiteNames []string, testCaseDetails *TestCaseDetails) (status testCaseStatus, message string, err error)
-	CheckDisruptionMeanWithinTwoStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
+	CheckDisruptionMeanWithinFiveStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
 	CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
 	CheckPercentileDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, percentile int) (failureJobRunIDs []string, successJobRunIDs []string, status testCaseStatus, message string, err error)
 	CheckPercentileRankDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, maxDisruptionSeconds int) (failureJobRunIDs []string, successJobRunIDs []string, status testCaseStatus, message string, err error)
@@ -222,8 +222,8 @@ func (a *weeklyAverageFromTenDays) getDisruptionByBackend(ctx context.Context) (
 	return a.disruptionByBackend, a.queryDisruptionErr
 }
 
-func (a *weeklyAverageFromTenDays) CheckDisruptionMeanWithinTwoStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) ([]string, []string, testCaseStatus, string, error) {
-	return a.checkDisruptionMean(ctx, jobRunIDToAvailabilityResultForBackend, backend, meanPlusTwoStandardDeviations)
+func (a *weeklyAverageFromTenDays) CheckDisruptionMeanWithinFiveStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) ([]string, []string, testCaseStatus, string, error) {
+	return a.checkDisruptionMean(ctx, jobRunIDToAvailabilityResultForBackend, backend, meanPlusFiveStandardDeviations)
 }
 
 func (a *weeklyAverageFromTenDays) CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) ([]string, []string, testCaseStatus, string, error) {
@@ -232,8 +232,8 @@ func (a *weeklyAverageFromTenDays) CheckDisruptionMeanWithinOneStandardDeviation
 
 type disruptionThresholdFunc func(stats backendDisruptionStats) float64
 
-func meanPlusTwoStandardDeviations(historicalDisruptionStatistic backendDisruptionStats) float64 {
-	return historicalDisruptionStatistic.rowData.Mean + (2 * historicalDisruptionStatistic.rowData.StandardDeviation)
+func meanPlusFiveStandardDeviations(historicalDisruptionStatistic backendDisruptionStats) float64 {
+	return historicalDisruptionStatistic.rowData.Mean + (5 * historicalDisruptionStatistic.rowData.StandardDeviation)
 }
 
 func meanPlusOneStandardDeviation(historicalDisruptionStatistic backendDisruptionStats) float64 {
@@ -263,6 +263,11 @@ func (a *weeklyAverageFromTenDays) checkDisruptionMean(ctx context.Context, jobR
 	// If disruption mean (excluding at most 1 outlier) is greater than 10% of the historical mean,
 	// the aggregation fails.
 	disruptionThreshold := disruptonThresholdFn(historicalDisruptionStatistic)
+
+	// we always allow at least one second
+	if disruptionThreshold < 1 {
+		disruptionThreshold = 1
+	}
 
 	totalRuns := len(jobRunIDToAvailabilityResultForBackend)
 	totalDisruption := 0

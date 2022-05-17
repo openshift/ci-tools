@@ -51,7 +51,7 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 	}
 
 	testCaseNamePatternToDisruptionCheckFn := map[string]disruptionJunitCheckFunc{
-		"%s mean disruption should be less than historical plus two standard deviations": o.passFailCalculator.CheckDisruptionMeanWithinTwoStandardDeviations,
+		"%s mean disruption should be less than historical plus five standard deviations": o.passFailCalculator.CheckDisruptionMeanWithinFiveStandardDeviations,
 		// TODO add a SKIP mechanism to disruptionJunitCheckFunc instead of the fail bool
 		//"%s mean disruption should be less than historical plus one standard deviation":  o.passFailCalculator.CheckDisruptionMeanWithinOneStandardDeviation,
 		"%s disruption P70 should not be worse":  checkPercentileDisruption(o.passFailCalculator, 70), // for 7 attempts, this  gives us a latch on getting worse

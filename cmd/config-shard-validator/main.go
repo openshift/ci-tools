@@ -12,7 +12,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/api/core/v1"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
@@ -130,9 +129,9 @@ func main() {
 		logrus.WithError(err).Fatal("Could not load Prow job configurations.")
 	}
 
-	if err := validatePaths(pathsToCheck, &pcfg.ConfigUpdater); err != nil {
-		for _, validationErr := range err.Errors() {
-			logrus.WithError(validationErr).Error("Validation failed")
+	if errs := validatePaths(pathsToCheck, &pcfg.ConfigUpdater); errs != nil {
+		for _, err := range errs {
+			logrus.WithError(err).Error("Validation failed")
 		}
 		foundFailures = true
 	}
@@ -172,7 +171,7 @@ func checkSpec(spec *v1.PodSpec, relPath, name string, configInfos map[string]*c
 	return foundFailures
 }
 
-func validatePaths(pathsToCheck []pathWithConfig, pcfg *plugins.ConfigUpdater) utilerrors.Aggregate {
+func validatePaths(pathsToCheck []pathWithConfig, pcfg *plugins.ConfigUpdater) (errs []error) {
 	var globs []interface{ Match(string) bool }
 	var globStrings []string
 	var configs []plugins.ConfigMapSpec
@@ -186,12 +185,9 @@ func validatePaths(pathsToCheck []pathWithConfig, pcfg *plugins.ConfigUpdater) u
 		globStrings = append(globStrings, s)
 		configs = append(configs, c)
 	}
-	var errs []error
-
 	for _, pathToCheck := range pathsToCheck {
-		var matchesAny bool
-		var matchedMap string
-		path := field.NewPath(pathToCheck.path, "config_updater", "maps")
+		var matches []string
+		path := field.NewPath("config_updater", "maps")
 		for i, glob := range globs {
 			globStr, updateConfig := globStrings[i], configs[i]
 			path := path.Child(globStr)
@@ -202,20 +198,22 @@ func validatePaths(pathsToCheck []pathWithConfig, pcfg *plugins.ConfigUpdater) u
 				errs = append(errs, field.Invalid(path.Child("gzip"), updateConfig.GZIP, "field must be set to `true` for jobconfigs"))
 			}
 			if glob.Match(pathToCheck.path) {
-				if matchesAny {
-					errs = append(errs, field.Invalid(path, globStr, fmt.Sprintf("File matches glob from more than one ConfigMap: %s, %s.", matchedMap, pathToCheck.configMap)))
-				}
+				matches = append(matches, globStr)
 				if updateConfig.Name != pathToCheck.configMap {
 					errs = append(errs, field.Invalid(path, globStr, fmt.Sprintf("File matches glob from unexpected ConfigMap %s instead of %s.", updateConfig.Name, pathToCheck.configMap)))
 				}
-				matchesAny = true
-				matchedMap = pathToCheck.configMap
 			}
 		}
-		if !matchesAny {
-			errs = append(errs, field.Invalid(path, pathToCheck.path, "Config file does not belong to any auto-updating config."))
+		switch len(matches) {
+		case 1:
+		case 0:
+			errs = append(errs, field.Invalid(path, "", fmt.Sprintf("Config file does not belong to any auto-updating config: %s", pathToCheck.path)))
+		default:
+			for _, s := range matches {
+				errs = append(errs, field.Invalid(path, s, fmt.Sprintf("File %q matches glob from more than one ConfigMap", pathToCheck.path)))
+			}
 		}
 	}
 
-	return utilerrors.NewAggregate(errs)
+	return errs
 }

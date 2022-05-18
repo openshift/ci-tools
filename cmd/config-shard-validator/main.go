@@ -175,11 +175,19 @@ func validatePaths(pathsToCheck []pathWithConfig, pcfg *plugins.ConfigUpdater) (
 	var globs []interface{ Match(string) bool }
 	var globStrings []string
 	var configs []plugins.ConfigMapSpec
+	path := field.NewPath("config_updater", "maps")
 	for s, c := range pcfg.Maps {
+		path := path.Child(s)
+		if _, ok := c.Clusters[prowv1.DefaultClusterAlias]; ok {
+			errs = append(errs, field.Invalid(path.Child("clusters"), prowv1.DefaultClusterAlias, "`default` cluster name is not allowed, a clustername must be explicitly specified"))
+		}
 		g, err := zglob.New(s)
 		if err != nil {
 			logrus.WithField("glob", s).WithError(err).Warn("Failed to compile glob matcher.")
 			continue
+		}
+		if g.Match("ci-operator/jobs") && (c.GZIP == nil || !*c.GZIP) {
+			errs = append(errs, field.Invalid(path.Child("gzip"), c.GZIP, "field must be set to `true` for jobconfigs"))
 		}
 		globs = append(globs, g)
 		globStrings = append(globStrings, s)
@@ -191,12 +199,6 @@ func validatePaths(pathsToCheck []pathWithConfig, pcfg *plugins.ConfigUpdater) (
 		for i, glob := range globs {
 			globStr, updateConfig := globStrings[i], configs[i]
 			path := path.Child(globStr)
-			if _, hasDefaultCluster := updateConfig.Clusters[prowv1.DefaultClusterAlias]; hasDefaultCluster {
-				errs = append(errs, field.Invalid(path.Child("clusters"), prowv1.DefaultClusterAlias, "`default` cluster name is not allowed, a clustername must be explicitly specified"))
-			}
-			if glob.Match("ci-operator/jobs") && (updateConfig.GZIP == nil || !*updateConfig.GZIP) {
-				errs = append(errs, field.Invalid(path.Child("gzip"), updateConfig.GZIP, "field must be set to `true` for jobconfigs"))
-			}
 			if glob.Match(pathToCheck.path) {
 				matches = append(matches, globStr)
 				if updateConfig.Name != pathToCheck.configMap {

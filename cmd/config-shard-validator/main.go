@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/api/core/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
@@ -21,6 +22,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type options struct {
@@ -193,29 +195,42 @@ func validatePaths(pathsToCheck []pathWithConfig, pcfg *plugins.ConfigUpdater) (
 		globStrings = append(globStrings, s)
 		configs = append(configs, c)
 	}
-	for _, pathToCheck := range pathsToCheck {
-		var matches []string
-		path := field.NewPath("config_updater", "maps")
-		for i, glob := range globs {
-			globStr, updateConfig := globStrings[i], configs[i]
-			path := path.Child(globStr)
-			if glob.Match(pathToCheck.path) {
-				matches = append(matches, globStr)
-				if updateConfig.Name != pathToCheck.configMap {
-					errs = append(errs, field.Invalid(path, globStr, fmt.Sprintf("File matches glob from unexpected ConfigMap %s instead of %s.", updateConfig.Name, pathToCheck.configMap)))
+	inputCh := make(chan pathWithConfig)
+	errCh := make(chan error)
+	produce := func() error {
+		defer close(inputCh)
+		for _, x := range pathsToCheck {
+			inputCh <- x
+		}
+		return nil
+	}
+	map_ := func() error {
+		for pathToCheck := range inputCh {
+			var matches []string
+			path := field.NewPath("config_updater", "maps")
+			for i, glob := range globs {
+				globStr, updateConfig := globStrings[i], configs[i]
+				if glob.Match(pathToCheck.path) {
+					matches = append(matches, globStr)
+					if updateConfig.Name != pathToCheck.configMap {
+						errCh <- field.Invalid(path.Child(globStr), "", fmt.Sprintf("File matches glob from unexpected ConfigMap %s instead of %s.", updateConfig.Name, pathToCheck.configMap))
+					}
+				}
+			}
+			switch len(matches) {
+			case 1:
+			case 0:
+				errCh <- field.Invalid(path, "", fmt.Sprintf("Config file does not belong to any auto-updating config: %s", pathToCheck.path))
+			default:
+				for _, s := range matches {
+					errCh <- field.Invalid(path, s, fmt.Sprintf("File %q matches glob from more than one ConfigMap", pathToCheck.path))
 				}
 			}
 		}
-		switch len(matches) {
-		case 1:
-		case 0:
-			errs = append(errs, field.Invalid(path, "", fmt.Sprintf("Config file does not belong to any auto-updating config: %s", pathToCheck.path)))
-		default:
-			for _, s := range matches {
-				errs = append(errs, field.Invalid(path, s, fmt.Sprintf("File %q matches glob from more than one ConfigMap", pathToCheck.path)))
-			}
-		}
+		return nil
 	}
-
+	if err := util.ProduceMap(0, produce, map_, errCh); err != nil {
+		errs = append(errs, err.(utilerrors.Aggregate).Errors()...)
+	}
 	return errs
 }

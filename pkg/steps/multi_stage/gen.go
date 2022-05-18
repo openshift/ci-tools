@@ -19,7 +19,11 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
-const containerName = "test"
+const (
+	containerName     = "test"
+	profileVolumeName = "cluster-profile"
+	vpnContainerName  = "vpn-client"
+)
 
 func (s *multiStageTestStep) generatePods(
 	steps []api.LiteralTestStep,
@@ -121,7 +125,10 @@ func (s *multiStageTestStep) generatePods(
 			pod.Spec.Containers[idx].VolumeMounts = append(pod.Spec.Containers[idx].VolumeMounts, coreapi.VolumeMount{Name: homeVolumeName, MountPath: "/alabama"})
 		}
 
-		addSecretWrapper(pod)
+		addSecretWrapper(pod, s.vpnConf)
+		if s.vpnConf != nil {
+			s.addVPNClient(pod)
+		}
 		container := &pod.Spec.Containers[0]
 		container.Env = append(container.Env, []coreapi.EnvVar{
 			{Name: "NAMESPACE", Value: s.jobSpec.Namespace()},
@@ -176,12 +183,29 @@ func (s *multiStageTestStep) generatePods(
 		if step.RunAsScript != nil && *step.RunAsScript {
 			addCommandScript(commandConfigMapForTest(s.name), pod)
 		}
+		if s.vpnConf != nil {
+			caps := coreapi.Capabilities{
+				Add:  []coreapi.Capability{"NET_ADMIN"},
+				Drop: []coreapi.Capability{"ALL"},
+			}
+			seLinuxOpts := coreapi.SELinuxOptions{
+				User: "system_u",
+				Role: "system_r",
+				// TODO create a more restricted SELinux context
+				// This one happens to be in every cluster and have the
+				// permission to use /dev/net/tun and configure networking, but
+				// has *many* more permissions than are required here.
+				Type:  "container_runtime_t",
+				Level: "s0",
+			}
+			setSecurityContexts(pod, vpnContainerName, s.vpnConf.namespaceUID, &caps, &seLinuxOpts)
+		}
 		ret = append(ret, *pod)
 	}
 	return ret, bestEffortSteps, utilerrors.NewAggregate(errs)
 }
 
-func addSecretWrapper(pod *coreapi.Pod) {
+func addSecretWrapper(pod *coreapi.Pod, vpnConf *vpnConf) {
 	volume := "entrypoint-wrapper"
 	dir := "/tmp/entrypoint-wrapper"
 	bin := filepath.Join(dir, "entrypoint-wrapper")
@@ -201,9 +225,86 @@ func addSecretWrapper(pod *coreapi.Pod) {
 		TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
 	})
 	container := &pod.Spec.Containers[0]
-	container.Args = append([]string{}, append(container.Command, container.Args...)...)
+	args := container.Args
+	container.Args = make([]string, 0)
+	if c := vpnConf; c != nil && c.WaitTimeout != nil {
+		container.Args = append(container.Args,
+			"--wait-for-file", "/tmp/vpn/up",
+			"--wait-timeout", *c.WaitTimeout)
+	}
+	container.Args = append(container.Args, container.Command...)
+	container.Args = append(container.Args, args...)
 	container.Command = []string{bin}
 	container.VolumeMounts = append(container.VolumeMounts, mount)
+}
+
+func (s *multiStageTestStep) addVPNClient(pod *coreapi.Pod) {
+	profileMount := "/tmp/profile"
+	vpnVolMount := coreapi.VolumeMount{Name: "vpn", MountPath: "/tmp/vpn"}
+	container := coreapi.Container{
+		Name:       vpnContainerName,
+		Image:      s.vpnConf.Image,
+		Command:    []string{"bash", "-c", s.vpnConf.Commands},
+		WorkingDir: profileMount,
+		VolumeMounts: []coreapi.VolumeMount{
+			{Name: "tun", MountPath: "/dev/net/tun"},
+			vpnVolMount,
+			{Name: "logs", MountPath: "/logs"},
+			{Name: profileVolumeName, MountPath: profileMount},
+		},
+	}
+	pod.Spec.Containers = append(pod.Spec.Containers, container)
+	charDev := coreapi.HostPathCharDev
+	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+		Name: "vpn",
+		VolumeSource: coreapi.VolumeSource{
+			EmptyDir: &coreapi.EmptyDirVolumeSource{},
+		},
+	})
+	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+		Name: "tun",
+		VolumeSource: coreapi.VolumeSource{
+			HostPath: &coreapi.HostPathVolumeSource{
+				Path: "/dev/net/tun",
+				Type: &charDev,
+			},
+		},
+	})
+	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, vpnVolMount)
+}
+
+// setSecurityContexts configures the context of all containers in a pod
+// `root` specifies a container (or init container) which should be run as UID 0
+// and with `capabilities` and `seLinuxOpts`.  All others are explicitly set to
+// run as non-root with `uid`.  The latter is necessary since the SCC defaults
+// apply to all containers.
+func setSecurityContexts(
+	pod *coreapi.Pod,
+	root string,
+	uid int64,
+	capabilities *coreapi.Capabilities,
+	seLinuxOpts *coreapi.SELinuxOptions,
+) {
+	f := func(l []coreapi.Container) {
+		for i := range l {
+			if l[i].Name == root {
+				var uid int64
+				l[i].SecurityContext = &coreapi.SecurityContext{
+					RunAsUser:      &uid,
+					Capabilities:   capabilities,
+					SELinuxOptions: seLinuxOpts,
+				}
+			} else {
+				nonRoot := true
+				l[i].SecurityContext = &coreapi.SecurityContext{
+					RunAsNonRoot: &nonRoot,
+					RunAsUser:    &uid,
+				}
+			}
+		}
+	}
+	f(pod.Spec.InitContainers)
+	f(pod.Spec.Containers)
 }
 
 func (s *multiStageTestStep) generateParams(env []api.StepParameter) []coreapi.EnvVar {
@@ -299,9 +400,8 @@ func addDshmVolume(shmSize *resource.Quantity, pod *coreapi.Pod, container *core
 }
 
 func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
-	volumeName := "cluster-profile"
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
-		Name: volumeName,
+		Name: profileVolumeName,
 		VolumeSource: coreapi.VolumeSource{
 			Secret: &coreapi.SecretVolumeSource{
 				SecretName: name,
@@ -310,7 +410,7 @@ func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
 	})
 	container := &pod.Spec.Containers[0]
 	container.VolumeMounts = append(container.VolumeMounts, coreapi.VolumeMount{
-		Name:      volumeName,
+		Name:      profileVolumeName,
 		MountPath: ClusterProfileMountPath,
 	})
 	container.Env = append(container.Env, []coreapi.EnvVar{{

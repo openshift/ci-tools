@@ -82,9 +82,10 @@ var envForProfile = []string{
 }
 
 type multiStageTestStep struct {
-	name    string
-	profile api.ClusterProfile
-	config  *api.ReleaseBuildConfiguration
+	name     string
+	nodeName string
+	profile  api.ClusterProfile
+	config   *api.ReleaseBuildConfiguration
 	// params exposes getters for variables created by other steps
 	params          api.Parameters
 	env             api.TestEnvironment
@@ -106,8 +107,9 @@ func MultiStageTestStep(
 	client kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
+	nodeName string,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases)
+	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName)
 }
 
 func newMultiStageTestStep(
@@ -117,6 +119,7 @@ func newMultiStageTestStep(
 	client kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
+	nodeName string,
 ) *multiStageTestStep {
 	ms := testConfig.MultiStageTestConfigurationLiteral
 	var flags stepFlag
@@ -128,6 +131,7 @@ func newMultiStageTestStep(
 	}
 	return &multiStageTestStep{
 		name:         testConfig.As,
+		nodeName:     nodeName,
 		profile:      ms.ClusterProfile,
 		config:       config,
 		params:       params,

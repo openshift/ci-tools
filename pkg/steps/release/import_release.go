@@ -50,8 +50,9 @@ import (
 // branches of those releases.
 type importReleaseStep struct {
 	// name is the name of the release we're importing, like 'latest'
-	name   string
-	target string
+	name     string
+	nodeName string
+	target   string
 	// pullSpec is the fully-resolved pull spec of the release payload image we are importing
 	pullSpec string
 	// append determines if we wait for other processes to create images first
@@ -194,6 +195,7 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 		As:                 target,
 		From:               *cliImage,
 		Labels:             map[string]string{Label: s.name},
+		NodeName:           s.nodeName,
 		ServiceAccountName: "ci-operator",
 		Secrets:            secrets,
 		Commands:           commands,
@@ -388,7 +390,7 @@ func (s *importReleaseStep) Objects() []ctrlruntimeclient.Object {
 
 // ImportReleaseStep imports an existing update payload image
 func ImportReleaseStep(
-	name, target string,
+	name, nodeName, target string,
 	pullSpec string,
 	append bool,
 	resources api.ResourceConfiguration,
@@ -398,6 +400,7 @@ func ImportReleaseStep(
 	overrideCLIReleaseExtractImage *coreapi.ObjectReference) api.Step {
 	return &importReleaseStep{
 		name:                           name,
+		nodeName:                       nodeName,
 		target:                         target,
 		pullSpec:                       pullSpec,
 		append:                         append,

@@ -50,6 +50,7 @@ type PodStepConfiguration struct {
 	From               api.ImageStreamTagReference
 	Commands           string
 	Labels             map[string]string
+	NodeName           string
 	ServiceAccountName string
 	Secrets            []*api.Secret
 	MemoryBackedVolume *api.MemoryBackedVolume
@@ -156,13 +157,14 @@ func (s *podStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client kubernetes.PodClient, jobSpec *api.JobSpec) api.Step {
+func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client kubernetes.PodClient, jobSpec *api.JobSpec, nodeName string) api.Step {
 	return PodStep(
 		"test",
 		PodStepConfiguration{
 			As:                 config.As,
 			From:               api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
 			Commands:           config.Commands,
+			NodeName:           nodeName,
 			Secrets:            config.Secrets,
 			MemoryBackedVolume: config.ContainerTestConfiguration.MemoryBackedVolume,
 			Clone:              *config.ContainerTestConfiguration.Clone,
@@ -189,6 +191,7 @@ func GenerateBasePod(
 	jobSpec *api.JobSpec,
 	baseLabels map[string]string,
 	name string,
+	nodeName string,
 	containerName string,
 	command []string,
 	image string,
@@ -215,6 +218,7 @@ func GenerateBasePod(
 			},
 		},
 		Spec: coreapi.PodSpec{
+			NodeName:      nodeName,
 			RestartPolicy: coreapi.RestartPolicyNever,
 			Containers: []coreapi.Container{
 				{
@@ -276,7 +280,7 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	}
 
 	artifactDir := s.name
-	pod, err := GenerateBasePod(s.jobSpec, s.config.Labels, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts, clone)
+	pod, err := GenerateBasePod(s.jobSpec, s.config.Labels, s.config.As, s.config.NodeName, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts, clone)
 	if err != nil {
 		return nil, err
 	}

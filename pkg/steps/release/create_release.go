@@ -49,6 +49,7 @@ import (
 type assembleReleaseStep struct {
 	config    *api.ReleaseTagConfiguration
 	name      string
+	nodeName  string
 	resources api.ResourceConfiguration
 	client    kubernetes.PodClient
 	jobSpec   *api.JobSpec
@@ -201,6 +202,7 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 			Tag:  "cli",
 		},
 		Labels:             map[string]string{Label: s.name},
+		NodeName:           s.nodeName,
 		ServiceAccountName: "ci-operator",
 		Commands: fmt.Sprintf(`
 set -xeuo pipefail
@@ -260,11 +262,12 @@ func (s *assembleReleaseStep) Objects() []ctrlruntimeclient.Object {
 
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
-func AssembleReleaseStep(name string, config *api.ReleaseTagConfiguration, resources api.ResourceConfiguration,
+func AssembleReleaseStep(name, nodeName string, config *api.ReleaseTagConfiguration, resources api.ResourceConfiguration,
 	client kubernetes.PodClient, jobSpec *api.JobSpec) api.Step {
 	return &assembleReleaseStep{
 		config:    config,
 		name:      name,
+		nodeName:  nodeName,
 		resources: resources,
 		client:    client,
 		jobSpec:   jobSpec,

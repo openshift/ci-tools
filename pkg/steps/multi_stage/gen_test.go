@@ -75,7 +75,7 @@ func TestGeneratePods(t *testing.T) {
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name")
 	step.test[0].Resources = api.ResourceRequirements{
 		Requests: api.ResourceList{api.ShmResource: "2G"},
 		Limits:   api.ResourceList{api.ShmResource: "2G"}}
@@ -164,7 +164,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 					Test:        test,
 					Environment: tc.env,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, nil, &jobSpec, nil)
+			}, &api.ReleaseBuildConfiguration{}, nil, nil, &jobSpec, nil, "node-name")
 			pods, _, err := step.(*multiStageTestStep).generatePods(test, nil, nil, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -232,7 +232,7 @@ func TestGeneratePodBestEffort(t *testing.T) {
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name")
 	_, bestEffortSteps, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Post, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)

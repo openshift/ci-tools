@@ -433,7 +433,7 @@ func (p* Prioritization) scaleDown(node *corev1.Node) error {
 
 	instanceState, ok := machineAnnotations[MachineInstanceStateAnnotationKey]
 
-	if !ok || instanceState.(string) != "running" {
+	if !ok || strings.ToLower(instanceState.(string)) != "running" {  // AWS is lowercase, GCE is uppercase
 		return fmt.Errorf("unable to scale down machine which is not in the running state node %v / machine %v", node.Name, machineName)
 	}
 
@@ -486,8 +486,8 @@ func (p* Prioritization) scaleDown(node *corev1.Node) error {
 	}
 
 	replicas--
-	if replicas < 1 {
-		return fmt.Errorf("refusing to fully scale down machineset %v: %#v", machineSetName, err)
+	if replicas < 0 {
+		return fmt.Errorf("computed replicas < 0 for machineset %v ; abort this scale down due to race", machineSetName)
 	}
 
 	klog.Infof("About to scale down machineset %v to %v replicas", machineSetName, replicas)

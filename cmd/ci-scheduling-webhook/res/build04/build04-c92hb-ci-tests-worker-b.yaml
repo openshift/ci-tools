@@ -2,18 +2,27 @@
 apiVersion: machine.openshift.io/v1beta1
 kind: MachineSet
 metadata:
+  annotations:
+    # if instance type is unknown, so the autoscaler must be told about capacity:  https://access.redhat.com/solutions/6640721
+    machine.openshift.io/GPU: "0"
+    machine.openshift.io/memoryMb: "32768"
+    machine.openshift.io/vCPU: "32"
   labels:
     machine.openshift.io/cluster-api-cluster: build04-c92hb
   name: build04-c92hb-ci-tests-worker-b
   namespace: openshift-machine-api
 spec:
-  replicas: 1
   selector:
     matchLabels:
       machine.openshift.io/cluster-api-cluster: build04-c92hb
       machine.openshift.io/cluster-api-machineset: build04-c92hb-ci-tests-worker-b
   template:
     metadata:
+      annotations:
+        # By the time we delete a machine, there should be nothing we care about.
+        # The only times this is violated is pods in weird states. Ignore them.
+        # https://github.com/openshift/machine-api-operator/blob/master/FAQ.md#i-want-to-skip-draining-when-i-delete-a-machine
+        machine.openshift.io/exclude-node-draining: "true"
       labels:
         machine.openshift.io/cluster-api-cluster: build04-c92hb
         machine.openshift.io/cluster-api-machine-role: worker
@@ -34,12 +43,11 @@ spec:
           - autoDelete: true
             boot: true
             image: projects/rhcos-cloud/global/images/rhcos-49-84-202110081407-0-gcp-x86-64
-            sizeGb: 128
+            sizeGb: 256
             type: pd-ssd
           kind: GCPMachineProviderSpec
-          machineType: n1-standard-16
-          metadata:
-            creationTimestamp: null
+          machineType: n1-highcpu-32
+          metadata: {}
           networkInterfaces:
           - network: build04-c92hb-network
             subnetwork: build04-c92hb-worker-subnet
@@ -65,8 +73,8 @@ metadata:
   name: build04-c92hb-ci-tests-worker-b
   namespace: openshift-machine-api
 spec:
-  maxReplicas: 80
-  minReplicas: 1
+  maxReplicas: 120
+  minReplicas: 0
   scaleTargetRef:
     apiVersion: machine.openshift.io/v1beta1
     kind: MachineSet

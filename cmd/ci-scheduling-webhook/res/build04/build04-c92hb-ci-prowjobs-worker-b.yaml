@@ -9,13 +9,13 @@ metadata:
     machine.openshift.io/vCPU: "32"
   labels:
     machine.openshift.io/cluster-api-cluster: build04-c92hb
-  name: build04-c92hb-ci-builds-worker-b
+  name: build04-c92hb-ci-prowjobs-worker-b
   namespace: openshift-machine-api
 spec:
   selector:
     matchLabels:
       machine.openshift.io/cluster-api-cluster: build04-c92hb
-      machine.openshift.io/cluster-api-machineset: build04-c92hb-ci-builds-worker-b
+      machine.openshift.io/cluster-api-machineset: build04-c92hb-ci-prowjobs-worker-b
   template:
     metadata:
       annotations:
@@ -27,11 +27,11 @@ spec:
         machine.openshift.io/cluster-api-cluster: build04-c92hb
         machine.openshift.io/cluster-api-machine-role: worker
         machine.openshift.io/cluster-api-machine-type: worker
-        machine.openshift.io/cluster-api-machineset: build04-c92hb-ci-builds-worker-b
+        machine.openshift.io/cluster-api-machineset: build04-c92hb-ci-prowjobs-worker-b
     spec:
       metadata:
         labels:
-          ci-workload: builds
+          ci-workload: prowjobs
       providerSpec:
         value:
           apiVersion: machine.openshift.io/v1beta1
@@ -43,7 +43,7 @@ spec:
           - autoDelete: true
             boot: true
             image: projects/rhcos-cloud/global/images/rhcos-49-84-202110081407-0-gcp-x86-64
-            sizeGb: 1200
+            sizeGb: 256
             type: pd-ssd
           kind: GCPMachineProviderSpec
           machineType: n1-highcpu-32
@@ -64,13 +64,13 @@ spec:
           zone: us-east1-b
       taints:
       - effect: NoSchedule
-        key: node-role.kubernetes.io/ci-builds-worker
-        value: ci-builds-worker
+        key: node-role.kubernetes.io/ci-prowjobs-worker
+        value: ci-prowjobs-worker
 ---
 apiVersion: autoscaling.openshift.io/v1beta1
 kind: MachineAutoscaler
 metadata:
-  name: build04-c92hb-ci-builds-worker-b
+  name: build04-c92hb-ci-prowjobs-worker-b
   namespace: openshift-machine-api
 spec:
   maxReplicas: 120
@@ -78,4 +78,4 @@ spec:
   scaleTargetRef:
     apiVersion: machine.openshift.io/v1beta1
     kind: MachineSet
-    name: build04-c92hb-ci-builds-worker-b
+    name: build04-c92hb-ci-prowjobs-worker-b

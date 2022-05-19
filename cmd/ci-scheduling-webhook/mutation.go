@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
@@ -299,6 +300,59 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			klog.Errorf("No node affinity will be set in pod due to error: %v", err)
+		}
+
+		// There is currently an issue with cluster scale up where pods are stacked up, unschedulable.
+		// A machine is provisioned. As soon as the machine is provisioned, pods are scheduled to the
+		// node and they begin to run before DNS daemonset pods can successfully configure the pod.
+		// These leads to issues like being unable to resolve github.com in clonerefs.
+		initContainers := pod.Spec.InitContainers
+		if initContainers == nil {
+			initContainers = make([]corev1.Container, 0)
+		}
+
+		initContainerName := "ci-scheduling-dns-wait"
+
+		// This webhook supports reinvocation. Don't add an initContainer every time we are invoked.
+		found := false
+		for _, container := range initContainers {
+			if container.Name == initContainerName {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+
+			delayInitContainer := []corev1.Container{
+				{
+					Name:                     initContainerName,
+					Image:                    "registry.access.redhat.com/ubi8",
+					Command:                  []string{
+						"/bin/sh",
+						"-c",
+						`declare -i T; until [[ "$ret" == "0" ]] || [[ "$T" -gt "120" ]]; do curl https://github.com > /dev/null; ret=$?; sleep 1; let "T+=1"; done`,
+					},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("100m"),
+							corev1.ResourceMemory: resource.MustParse("200Mi"),
+						},
+					},
+				},
+			}
+
+
+			initContainersMap := map[string][]corev1.Container {
+				"initContainers": append(delayInitContainer, initContainers...), // prepend sleep container
+			}
+			unstructuredAffinity, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&initContainersMap)
+			if err != nil {
+				writeHttpError(500, fmt.Errorf("error decoding initContainers to unstructured data: %v", err))
+				return
+			}
+
+			addPatchEntry("replace", "/spec/initContainers", unstructuredAffinity["initContainers"])
 		}
 
 		addPatchEntry("add", "/metadata/labels", labels)

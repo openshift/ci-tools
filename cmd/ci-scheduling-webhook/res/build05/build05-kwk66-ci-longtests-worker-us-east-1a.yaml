@@ -48,7 +48,7 @@ spec:
           deviceIndex: 0
           iamInstanceProfile:
             id: build05-kwk66-worker-profile
-          instanceType: c6i.4xlarge
+          instanceType: c5a.4xlarge
           kind: AWSMachineProviderConfig
           metadata: {}
           placement:

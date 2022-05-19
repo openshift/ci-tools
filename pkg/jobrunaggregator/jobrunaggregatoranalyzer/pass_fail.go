@@ -273,11 +273,16 @@ func (a *weeklyAverageFromTenDays) checkDisruptionMean(ctx context.Context, jobR
 			max = disruption.SecondsUnavailable
 		}
 	}
+
+	successRuns := []string{} // each string example: jobRunID=5s
+	failureRuns := []string{} // each string example: jobRunID=5s
 	for jobRunID, disruption := range jobRunIDToAvailabilityResultForBackend {
 		if float64(disruption.SecondsUnavailable) > disruptionThreshold {
 			failedJobRunsIDs = append(failedJobRunsIDs, jobRunID)
+			failureRuns = append(failureRuns, fmt.Sprintf("%s=%ds", jobRunID, disruption.SecondsUnavailable))
 		} else {
 			successfulJobRunIDs = append(successfulJobRunIDs, jobRunID)
+			successRuns = append(successRuns, fmt.Sprintf("%s=%ds", jobRunID, disruption.SecondsUnavailable))
 		}
 	}
 
@@ -288,24 +293,27 @@ func (a *weeklyAverageFromTenDays) checkDisruptionMean(ctx context.Context, jobR
 		totalDisruption -= max
 	}
 	meanDisruption := float64(totalDisruption) / float64(totalRuns)
-	historicalString := fmt.Sprintf("historicalMean=%.2fs standardDeviation=%.2fs failureThreshold=%.2fs historicalP95=%.2fs",
+	historicalString := fmt.Sprintf("historicalMean=%.2fs standardDeviation=%.2fs failureThreshold=%.2fs historicalP95=%.2fs successes=%v failures=%v",
 		historicalDisruptionStatistic.rowData.Mean,
 		historicalDisruptionStatistic.rowData.StandardDeviation,
 		disruptionThreshold,
-		historicalDisruptionStatistic.rowData.P95)
+		historicalDisruptionStatistic.rowData.P95,
+		successRuns,
+		failureRuns,
+	)
 	fmt.Printf("%s disruption calculated for current runs (%s runs=%d totalDisruptionSecs=%ds mean=%.2fs max=%ds)\n",
 		backend, historicalString, totalRuns, totalDisruption, meanDisruption, max)
 
 	if meanDisruption > disruptionThreshold {
 		return failedJobRunsIDs, successfulJobRunIDs, testCaseFailed, fmt.Sprintf(
-			"Mean disruption of %s is %.2f seconds, which is more than the failureThreshold of the weekly historical mean from 10 days ago: %s, marking this as a failure",
+			"Failed: Mean disruption of %s is %.2f seconds is more than the failureThreshold of the weekly historical mean from 10 days ago: %s",
 			backend,
 			meanDisruption,
 			historicalString), nil
 	}
 
 	return failedJobRunsIDs, successfulJobRunIDs, testCasePassed, fmt.Sprintf(
-		"Mean disruption of %s is %.2f seconds, which is no more than failureThreshold of the weekly historical mean from 10 days ago: %s. This is OK.",
+		"Passed: Mean disruption of %s is %.2f seconds is less than failureThreshold of the weekly historical mean from 10 days ago: %s",
 		backend,
 		meanDisruption,
 		historicalString,
@@ -336,12 +344,16 @@ func (a *weeklyAverageFromTenDays) checkPercentileDisruption(jobRunIDToAvailabil
 	failureJobRunIDs := []string{}
 	successJobRunIDs := []string{}
 	threshold := historicalDisruptionStatistic.percentileByIndex[thresholdPercentile]
+	successRuns := []string{} // each string example: jobRunID=5s
+	failureRuns := []string{} // each string example: jobRunID=5s
 
 	for jobRunID, disruption := range jobRunIDToAvailabilityResultForBackend {
 		if float64(disruption.SecondsUnavailable) > threshold {
 			failureJobRunIDs = append(failureJobRunIDs, jobRunID)
+			failureRuns = append(failureRuns, fmt.Sprintf("%s=%ds", jobRunID, disruption.SecondsUnavailable))
 		} else {
 			successJobRunIDs = append(successJobRunIDs, jobRunID)
+			successRuns = append(successRuns, fmt.Sprintf("%s=%ds", jobRunID, disruption.SecondsUnavailable))
 		}
 	}
 	numberOfAttempts := len(successJobRunIDs) + len(failureJobRunIDs)
@@ -353,35 +365,38 @@ func (a *weeklyAverageFromTenDays) checkPercentileDisruption(jobRunIDToAvailabil
 	requiredNumberOfPasses = requiredNumberOfPasses - 1 // subtracting one because our current sample missed by one
 
 	if requiredNumberOfPasses <= 0 {
-		message := fmt.Sprintf("current percentile is so low that we cannot latch, skipping P%d=%.2fs", thresholdPercentile, threshold)
+		message := fmt.Sprintf("Current percentile is so low that we cannot latch, skipping (P%d=%.2fs successes=%v failures=%v)", thresholdPercentile, threshold, successRuns, failureRuns)
 		failureJobRunIDs = sets.StringKeySet(jobRunIDToAvailabilityResultForBackend).List()
 		return failureJobRunIDs, successJobRunIDs, testCaseSkipped, message, nil
 	}
 
 	if numberOfPasses == 0 {
-		summary := fmt.Sprintf("Zero successful runs, we require at least one success to pass.  P%d=%.2fs", thresholdPercentile, threshold)
+		summary := fmt.Sprintf("Zero successful runs, we require at least one success to pass  (P%d=%.2fs failures=%v)", thresholdPercentile, threshold, failureRuns)
 		return failureJobRunIDs, successJobRunIDs, testCaseFailed, summary, nil
 	}
 	if numberOfAttempts < 3 {
-		summary := fmt.Sprintf("We require at least three attempts to pass.  P%d=%.2fs", thresholdPercentile, threshold)
+		summary := fmt.Sprintf("We require at least three attempts to pass  (P%d=%.2fs successes=%v failures=%v)",
+			thresholdPercentile, threshold, successRuns, failureRuns)
 		return failureJobRunIDs, successJobRunIDs, testCaseFailed, summary, nil
 	}
 
 	if numberOfPasses < requiredNumberOfPasses {
-		summary := fmt.Sprintf("Failed: Passed %d times, failed %d times.  The historical P%d=%.2fs.  The required number of passes is %d.",
+		summary := fmt.Sprintf("Failed: Passed %d times, failed %d times.  (P%d=%.2fs requiredPasses=%d successes=%v failures=%v)",
 			numberOfPasses,
 			numberOfFailures,
 			thresholdPercentile, threshold,
 			requiredNumberOfPasses,
+			successRuns, failureRuns,
 		)
 		return failureJobRunIDs, successJobRunIDs, testCaseFailed, summary, nil
 	}
 
-	summary := fmt.Sprintf("Passed: Passed %d times, failed %d times.  The historical P%d=%.2fs.  The required number of passes is %d.",
+	summary := fmt.Sprintf("Passed: Passed %d times, failed %d times.  (P%d=%.2fs requiredPasses=%d successes=%v failures=%v)",
 		numberOfPasses,
 		numberOfFailures,
 		thresholdPercentile, threshold,
 		requiredNumberOfPasses,
+		successRuns, failureRuns,
 	)
 	return failureJobRunIDs, successJobRunIDs, testCasePassed, summary, nil
 }

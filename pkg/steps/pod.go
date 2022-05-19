@@ -204,6 +204,7 @@ func GenerateBasePod(
 	if err != nil {
 		return nil, err
 	}
+	nonRoot := true
 	pod := &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Namespace: jobSpec.Namespace(),
@@ -216,6 +217,9 @@ func GenerateBasePod(
 		},
 		Spec: coreapi.PodSpec{
 			RestartPolicy: coreapi.RestartPolicyNever,
+			SecurityContext: &coreapi.PodSecurityContext{
+				RunAsNonRoot: &nonRoot,
+			},
 			Containers: []coreapi.Container{
 				{
 					Image:                    image,

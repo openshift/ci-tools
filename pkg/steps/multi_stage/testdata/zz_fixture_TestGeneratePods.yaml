@@ -131,6 +131,8 @@
       - mountPath: /tmp/entrypoint-wrapper
         name: entrypoint-wrapper
     restartPolicy: Never
+    securityContext:
+      runAsNonRoot: true
     serviceAccountName: test
     terminationGracePeriodSeconds: 18
     volumes:
@@ -287,6 +289,8 @@
       - mountPath: /tmp/entrypoint-wrapper
         name: entrypoint-wrapper
     restartPolicy: Never
+    securityContext:
+      runAsNonRoot: true
     serviceAccountName: test
     terminationGracePeriodSeconds: 18
     volumes:
@@ -439,6 +443,8 @@
       - mountPath: /tmp/entrypoint-wrapper
         name: entrypoint-wrapper
     restartPolicy: Never
+    securityContext:
+      runAsNonRoot: true
     serviceAccountName: test
     terminationGracePeriodSeconds: 18
     volumes:
@@ -603,6 +609,8 @@
       - mountPath: /tmp/entrypoint-wrapper
         name: entrypoint-wrapper
     restartPolicy: Never
+    securityContext:
+      runAsNonRoot: true
     serviceAccountName: test
     terminationGracePeriodSeconds: 18
     volumes:

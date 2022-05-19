@@ -112,6 +112,8 @@ spec:
     - mountPath: /tools
       name: tools
   restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
   volumes:
   - emptyDir: {}
     name: logs

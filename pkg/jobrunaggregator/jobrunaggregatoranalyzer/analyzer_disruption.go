@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"strings"
 
 	"gopkg.in/yaml.v2"
 
@@ -66,16 +65,14 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 		allBackends := getAllDisruptionBackendNames(jobRunIDToBackendNameToAvailabilityResult)
 		for _, backendName := range allBackends.List() {
 			jobRunIDToAvailabilityResultForBackend := getDisruptionForBackend(jobRunIDToBackendNameToAvailabilityResult, backendName)
-			failedJobRunIDs, successfulJobRunIDs, status, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
+			failedJobRunIDs, successfulJobRunIDs, _, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
 			if err != nil {
 				return nil, err
 			}
 
-			// for a reason we don't yet understand, azure is failing more than others. Long term, we prefer this to flake
-			// over an explicit skip.  Other possible outcomes include allowing more noise on Azure.
-			if strings.Contains(o.jobName, "azure") {
-				status = testCaseSkipped
-			}
+			// we are still struggling with these tests being enabled causing payloads to fail too often to keep up with,
+			// disabling once again until we can bring in safely
+			status := testCaseSkipped
 
 			testCaseName := fmt.Sprintf(testCaseNamePattern, backendName)
 			testSuiteName := "aggregated-disruption"

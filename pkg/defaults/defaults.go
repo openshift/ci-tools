@@ -73,6 +73,7 @@ func FromConfig(
 	censor *secrets.DynamicCensor,
 	hiveKubeconfig *rest.Config,
 	consoleHost string,
+	nodeName string,
 ) ([]api.Step, []api.Step, error) {
 	crclient, err := ctrlruntimeclient.NewWithWatch(clusterConfig, ctrlruntimeclient.Options{})
 	crclient = secretrecordingclient.Wrap(crclient, censor)
@@ -109,7 +110,7 @@ func FromConfig(
 	httpClient := retryablehttp.NewClient()
 	httpClient.Logger = nil
 
-	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost)
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost, nodeName)
 }
 
 func fromConfig(
@@ -133,6 +134,7 @@ func fromConfig(
 	params *api.DeferredParameters,
 	censor *secrets.DynamicCensor,
 	consoleHost string,
+	nodeName string,
 ) ([]api.Step, []api.Step, error) {
 	requiredNames := sets.NewString()
 	for _, target := range requiredTargets {
@@ -155,7 +157,7 @@ func fromConfig(
 	rawSteps = append(graphConf.Steps, rawSteps...)
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			steps, testHasReleaseStep, err := stepForTest(ctx, config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor)
+			steps, testHasReleaseStep, err := stepForTest(ctx, config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor, nodeName)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -202,7 +204,7 @@ func fromConfig(
 					logrus.Infof("Building release %s from a snapshot of %s/%s", resolveConfig.Name, resolveConfig.Integration.Namespace, resolveConfig.Integration.Name)
 					// this is the one case where we're not importing a payload, we need to get the images and build one
 					snapshot := releasesteps.ReleaseSnapshotStep(resolveConfig.Name, *resolveConfig.Integration, podClient, jobSpec)
-					assemble := releasesteps.AssembleReleaseStep(resolveConfig.Name, &api.ReleaseTagConfiguration{
+					assemble := releasesteps.AssembleReleaseStep(resolveConfig.Name, nodeName, &api.ReleaseTagConfiguration{
 						Namespace:          resolveConfig.Integration.Namespace,
 						Name:               resolveConfig.Integration.Name,
 						IncludeBuiltImages: resolveConfig.Integration.IncludeBuiltImages,
@@ -225,7 +227,7 @@ func fromConfig(
 			}
 			if value != "" {
 				logrus.Infof("Resolved release %s to %s", resolveConfig.Name, value)
-				step := releasesteps.ImportReleaseStep(resolveConfig.Name, resolveConfig.TargetName(), value, false, config.Resources, podClient, jobSpec, pullSecret, overrideCLIReleaseExtractImage)
+				step := releasesteps.ImportReleaseStep(resolveConfig.Name, nodeName, resolveConfig.TargetName(), value, false, config.Resources, podClient, jobSpec, pullSecret, overrideCLIReleaseExtractImage)
 				buildSteps = append(buildSteps, step)
 				addProvidesForStep(step, params)
 			}
@@ -285,12 +287,12 @@ func fromConfig(
 					}
 					logrus.Infof("Resolved release %s to %s", name, pullSpec)
 					target := rawStep.ReleaseImagesTagStepConfiguration.TargetName(name)
-					releaseStep = releasesteps.ImportReleaseStep(name, target, pullSpec, true, config.Resources, podClient, jobSpec, pullSecret, nil)
+					releaseStep = releasesteps.ImportReleaseStep(name, nodeName, target, pullSpec, true, config.Resources, podClient, jobSpec, pullSecret, nil)
 				} else {
 					// for backwards compatibility, users get inclusion for free with tag_spec
 					cfg := *rawStep.ReleaseImagesTagStepConfiguration
 					cfg.IncludeBuiltImages = name == api.LatestReleaseName
-					releaseStep = releasesteps.AssembleReleaseStep(name, &cfg, config.Resources, podClient, jobSpec)
+					releaseStep = releasesteps.AssembleReleaseStep(name, nodeName, &cfg, config.Resources, podClient, jobSpec)
 				}
 				overridableSteps = append(overridableSteps, releaseStep)
 				addProvidesForStep(releaseStep, params)
@@ -381,6 +383,7 @@ func stepForTest(
 	imageConfigs *[]*api.InputImageTagStepConfiguration,
 	pullSecret *coreapi.Secret,
 	censor *secrets.DynamicCensor,
+	nodeName string,
 ) ([]api.Step, bool, error) {
 	var hasReleaseStep bool
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
@@ -389,7 +392,7 @@ func stepForTest(
 			params = api.NewDeferredParameters(params)
 		}
 		var testSteps []api.Step
-		step := multi_stage.MultiStageTestStep(*c, config, params, podClient, jobSpec, leases)
+		step := multi_stage.MultiStageTestStep(*c, config, params, podClient, jobSpec, leases, nodeName)
 		if len(leases) != 0 {
 			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
 			addProvidesForStep(step, params)
@@ -405,7 +408,7 @@ func stepForTest(
 			claimRelease := c.ClusterClaim.ClaimRelease(c.As)
 			logrus.Infof("Resolved release %s to %s", claimRelease.ReleaseName, pullSpec)
 			target := api.ReleaseConfiguration{Name: claimRelease.ReleaseName}.TargetName()
-			importStep := releasesteps.ImportReleaseStep(claimRelease.ReleaseName, target, pullSpec, false, config.Resources, podClient, jobSpec, pullSecret, nil)
+			importStep := releasesteps.ImportReleaseStep(claimRelease.ReleaseName, nodeName, target, pullSpec, false, config.Resources, podClient, jobSpec, pullSecret, nil)
 			testSteps = append(testSteps, importStep)
 			addProvidesForStep(step, params)
 		}
@@ -430,7 +433,7 @@ func stepForTest(
 		addProvidesForStep(step, params)
 		return []api.Step{step}, hasReleaseStep, nil
 	}
-	step := steps.TestStep(*c, config.Resources, podClient, jobSpec)
+	step := steps.TestStep(*c, config.Resources, podClient, jobSpec, nodeName)
 	if c.ClusterClaim != nil {
 		step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step, censor)
 	}

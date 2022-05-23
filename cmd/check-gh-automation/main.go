@@ -4,15 +4,18 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/diffs"
+	"os"
+	"strings"
+
 	"github.com/sirupsen/logrus"
+
 	"k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
-	"os"
-	"strings"
+
+	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/diffs"
 )
 
 type options struct {

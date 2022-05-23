@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
-	"testing"
 )
 
 type fakeCollaboratorClient struct {

@@ -11,6 +11,7 @@ spec:
     resources: {}
     securityContext:
       capabilities: {}
+      runAsNonRoot: false
       runAsUser: 0
       seLinuxOptions: {}
   initContainers:

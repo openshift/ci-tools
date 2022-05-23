@@ -1,0 +1,152 @@
+package main
+
+import (
+	"errors"
+	"flag"
+	"fmt"
+	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/diffs"
+	"github.com/sirupsen/logrus"
+	"k8s.io/test-infra/prow/flagutil"
+	configflagutil "k8s.io/test-infra/prow/flagutil/config"
+	"k8s.io/test-infra/prow/logrusutil"
+	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+	"os"
+	"strings"
+)
+
+type options struct {
+	config          configflagutil.ConfigOptions
+	bots            flagutil.Strings
+	releaseRepoPath string
+	flagutil.GitHubOptions
+}
+
+func gatherOptions() options {
+	o := options{}
+	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+
+	fs.Var(&o.bots, "bot", "Check if this bot is a collaborator. Can be passed multiple times.")
+	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
+
+	o.GitHubOptions.AddFlags(fs)
+	o.config.AddFlags(fs)
+
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		logrus.WithError(err).Fatal("could not parse input")
+	}
+	return o
+}
+
+func (o *options) validate() error {
+	if len(o.bots.Strings()) < 1 {
+		return errors.New("at least one bot must be configured")
+	}
+
+	// We either need the release repo path, or a proper prow config
+	if o.releaseRepoPath == "" {
+		if err := o.config.Validate(true); err != nil {
+			return fmt.Errorf("candidate-path not provided, and error when validating prow config: %v", err)
+		}
+	} else {
+		if o.config.ConfigPath != "" {
+			return errors.New("candidate-path and prow config provided, these are mutually exclusive")
+		}
+	}
+
+	return o.GitHubOptions.Validate(true)
+}
+
+type collaboratorClient interface {
+	IsCollaborator(org, repo, user string) (bool, error)
+}
+
+func main() {
+	logrusutil.ComponentInit()
+	logger := logrus.WithField("component", "check-gh-automation")
+
+	o := gatherOptions()
+	if err := o.validate(); err != nil {
+		logger.Fatalf("validation error: %v", err)
+	}
+
+	client, err := o.GitHubOptions.GitHubClient(false)
+	if err != nil {
+		logger.Fatalf("error creating client: %v", err)
+	}
+
+	var repos []string
+	if o.config.ConfigPath != "" {
+		configAgent, err := o.config.ConfigAgent()
+		if err != nil {
+			logger.Fatalf("error loading prow config: %v", err)
+		}
+		repos = configAgent.Config().AllRepos.List()
+	} else {
+		repos = gatherModifiedRepos(o.releaseRepoPath, logger)
+	}
+	failing, err := checkRepos(repos, o.bots.Strings(), client, logger)
+	if err != nil {
+		logger.Fatalf("error checking repos: %v", err)
+	}
+
+	if len(failing) > 0 {
+		logger.Fatalf("Repo(s) missing github automation: %s", strings.Join(failing, ", "))
+	}
+
+	logger.Infof("All repos have github automation configured.")
+}
+
+func checkRepos(repos []string, bots []string, client collaboratorClient, logger *logrus.Entry) ([]string, error) {
+	var failing []string
+	for _, orgRepo := range repos {
+		split := strings.Split(orgRepo, "/")
+		org, repo := split[0], split[1]
+		repoLogger := logger.WithFields(logrus.Fields{
+			"org":  org,
+			"repo": repo,
+		})
+
+		var missingBots []string
+		for _, bot := range bots {
+			isCollaborator, err := client.IsCollaborator(org, repo, bot)
+			if err != nil {
+				return nil, fmt.Errorf("unable to determine if: %s is a collaborator on %s/%s: %v", bot, org, repo, err)
+			}
+			if !isCollaborator {
+				missingBots = append(missingBots, bot)
+			}
+		}
+
+		if len(missingBots) > 0 {
+			failing = append(failing, orgRepo)
+			repoLogger.Errorf("bots that are not collaborators: %s", strings.Join(missingBots, ", "))
+		} else {
+			repoLogger.Info("all bots are collaborators")
+		}
+	}
+
+	return failing, nil
+}
+
+func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string {
+	jobSpec, err := downwardapi.ResolveSpecFromEnv()
+	if err != nil {
+		logger.Fatalf("error resolving JobSpec: %v", err)
+	}
+	prConfig := config.GetAllConfigs(releaseRepoPath, logger)
+	masterConfig, err := config.GetAllConfigsFromSHA(releaseRepoPath, jobSpec.Refs.BaseSHA, logger)
+	if err != nil {
+		logger.Fatalf("error getting master configs: %v", err)
+	}
+
+	var orgRepos []string
+	if masterConfig.CiOperator != nil && prConfig.CiOperator != nil {
+		changedConfigs, _ := diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
+		for _, c := range changedConfigs {
+			orgRepos = append(orgRepos, fmt.Sprintf("%s/%s", c.Info.Org, c.Info.Repo))
+		}
+	}
+
+	return orgRepos
+}

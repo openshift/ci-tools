@@ -288,10 +288,8 @@ func setSecurityContexts(
 	f := func(l []coreapi.Container) {
 		for i := range l {
 			if l[i].Name == root {
-				nonRoot := false
 				var uid int64
 				l[i].SecurityContext = &coreapi.SecurityContext{
-					RunAsNonRoot:   &nonRoot,
 					RunAsUser:      &uid,
 					Capabilities:   capabilities,
 					SELinuxOptions: seLinuxOpts,

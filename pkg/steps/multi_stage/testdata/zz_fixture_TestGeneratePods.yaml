@@ -132,8 +132,6 @@
         name: entrypoint-wrapper
     nodeName: node-name
     restartPolicy: Never
-    securityContext:
-      runAsNonRoot: true
     serviceAccountName: test
     terminationGracePeriodSeconds: 18
     volumes:
@@ -291,8 +289,6 @@
         name: entrypoint-wrapper
     nodeName: node-name
     restartPolicy: Never
-    securityContext:
-      runAsNonRoot: true
     serviceAccountName: test
     terminationGracePeriodSeconds: 18
     volumes:
@@ -446,8 +442,6 @@
         name: entrypoint-wrapper
     nodeName: node-name
     restartPolicy: Never
-    securityContext:
-      runAsNonRoot: true
     serviceAccountName: test
     terminationGracePeriodSeconds: 18
     volumes:
@@ -613,8 +607,6 @@
         name: entrypoint-wrapper
     nodeName: node-name
     restartPolicy: Never
-    securityContext:
-      runAsNonRoot: true
     serviceAccountName: test
     terminationGracePeriodSeconds: 18
     volumes:

@@ -47,7 +47,7 @@ spec:
           deviceIndex: 0
           iamInstanceProfile:
             id: build03-vqlvf-worker-profile
-          instanceType: c5a.4xlarge
+          instanceType: c6a.4xlarge
           kind: AWSMachineProviderConfig
           metadata: {}
           placement:

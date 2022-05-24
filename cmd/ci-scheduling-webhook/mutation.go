@@ -346,13 +346,13 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 			initContainersMap := map[string][]corev1.Container {
 				"initContainers": append(delayInitContainer, initContainers...), // prepend sleep container
 			}
-			unstructuredAffinity, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&initContainersMap)
+			unstructedInitContainersMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&initContainersMap)
 			if err != nil {
 				writeHttpError(500, fmt.Errorf("error decoding initContainers to unstructured data: %v", err))
 				return
 			}
 
-			addPatchEntry("replace", "/spec/initContainers", unstructuredAffinity["initContainers"])
+			addPatchEntry("replace", "/spec/initContainers", unstructedInitContainersMap["initContainers"])
 		}
 
 		addPatchEntry("add", "/metadata/labels", labels)

@@ -5,18 +5,18 @@ metadata:
   annotations:
     # if instance type is unknown, so the autoscaler must be told about capacity:  https://access.redhat.com/solutions/6640721
     machine.openshift.io/GPU: "0"
-    machine.openshift.io/memoryMb: "32768"
-    machine.openshift.io/vCPU: "16"
+    machine.openshift.io/memoryMb: "16384"
+    machine.openshift.io/vCPU: "4"
   labels:
-    machine.openshift.io/cluster-api-cluster: build03-vqlvf
-  name: build03-vqlvf-ci-tests-worker-us-east-1a
+    machine.openshift.io/cluster-api-cluster: build01-9hdwj
+  name: build01-9hdwj-ci-t3abuilds-worker-us-east-1a
   namespace: openshift-machine-api
 spec:
   deletePolicy: Oldest
   selector:
     matchLabels:
-      machine.openshift.io/cluster-api-cluster: build03-vqlvf
-      machine.openshift.io/cluster-api-machineset: build03-vqlvf-ci-tests-worker-us-east-1a
+      machine.openshift.io/cluster-api-cluster: build01-9hdwj
+      machine.openshift.io/cluster-api-machineset: build01-9hdwj-ci-t3abuilds-worker-us-east-1a
   template:
     metadata:
       annotations:
@@ -25,30 +25,24 @@ spec:
         # https://github.com/openshift/machine-api-operator/blob/master/FAQ.md#i-want-to-skip-draining-when-i-delete-a-machine
         machine.openshift.io/exclude-node-draining: "true"
       labels:
-        machine.openshift.io/cluster-api-cluster: build03-vqlvf
+        machine.openshift.io/cluster-api-cluster: build01-9hdwj
         machine.openshift.io/cluster-api-machine-role: worker
         machine.openshift.io/cluster-api-machine-type: worker
-        machine.openshift.io/cluster-api-machineset: build03-vqlvf-ci-tests-worker-us-east-1a
+        machine.openshift.io/cluster-api-machineset: build01-9hdwj-ci-t3abuilds-worker-us-east-1a
     spec:
       metadata:
         labels:
-          ci-workload: tests
+          ci-workload: t3abuilds
       providerSpec:
         value:
           ami:
-            id: ami-0b35795bcab04ee70
+            id: ami-06f85a7940faa3217
           apiVersion: awsproviderconfig.openshift.io/v1beta1
-          blockDevices:
-          - ebs:
-              # Disk pressure was spotted at 300
-              volumeSize: 500
-              volumeType: io1
-              iops: 5000
           credentialsSecret:
             name: aws-cloud-credentials
           deviceIndex: 0
           iamInstanceProfile:
-            id: build03-vqlvf-worker-profile
+            id: build01-9hdwj-worker-profile
           instanceType: c6a.4xlarge
           kind: AWSMachineProviderConfig
           metadata: {}
@@ -59,31 +53,18 @@ spec:
           - filters:
             - name: tag:Name
               values:
-              - build03-vqlvf-worker-sg
+              - build01-9hdwj-worker-sg
           subnet:
             filters:
             - name: tag:Name
               values:
-              - build03-vqlvf-private-us-east-1a
+              - build01-9hdwj-private-us-east-1a
           tags:
-          - name: kubernetes.io/cluster/build03-vqlvf
+          - name: kubernetes.io/cluster/build01-9hdwj
             value: owned
           userDataSecret:
             name: worker-user-data
       taints:
       - effect: NoSchedule
-        key: node-role.kubernetes.io/ci-tests-worker
-        value: ci-tests-worker
----
-apiVersion: autoscaling.openshift.io/v1beta1
-kind: MachineAutoscaler
-metadata:
-  name: build03-vqlvf-ci-tests-worker-us-east-1a
-  namespace: openshift-machine-api
-spec:
-  maxReplicas: 120
-  minReplicas: 0
-  scaleTargetRef:
-    apiVersion: machine.openshift.io/v1beta1
-    kind: MachineSet
-    name: build03-vqlvf-ci-tests-worker-us-east-1a
+        key: node-role.kubernetes.io/ci-t3abuilds-worker
+        value: ci-t3abuilds-worker

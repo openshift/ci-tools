@@ -48,7 +48,7 @@ spec:
           deviceIndex: 0
           iamInstanceProfile:
             id: build01-9hdwj-worker-profile
-          instanceType: c5a.4xlarge
+          instanceType: c6a.4xlarge
           kind: AWSMachineProviderConfig
           metadata: {}
           placement:

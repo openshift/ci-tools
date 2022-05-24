@@ -236,7 +236,7 @@ func GetChangedClusterProfiles(path, baseRev string) ([]string, error) {
 func getRevChanges(root, path, base string) ([]string, error) {
 	// Sample output (with abbreviated hashes) from git-diff-tree(1):
 	// :100644 100644 bcd1234 0123456 M file0
-	cmd := []string{"diff-tree", "-r", "--diff-filter=ABCMRTUX", base + ":" + path, "HEAD:" + path}
+	cmd := []string{"diff-tree", "-r", "--diff-filter=d", base + ":" + path, "HEAD:" + path}
 	diff, err := git(root, cmd...)
 	if err != nil || diff == "" {
 		return nil, err

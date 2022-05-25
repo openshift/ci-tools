@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/util/diff"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowdapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 
@@ -74,7 +75,7 @@ func TestGeneratePods(t *testing.T) {
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name")
 	step.test[0].Resources = api.ResourceRequirements{
 		Requests: api.ResourceList{api.ShmResource: "2G"},
 		Limits:   api.ResourceList{api.ShmResource: "2G"}}
@@ -163,7 +164,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 					Test:        test,
 					Environment: tc.env,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, nil, &jobSpec, nil)
+			}, &api.ReleaseBuildConfiguration{}, nil, nil, &jobSpec, nil, "node-name")
 			pods, _, err := step.(*multiStageTestStep).generatePods(test, nil, nil, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -231,7 +232,7 @@ func TestGeneratePodBestEffort(t *testing.T) {
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name")
 	_, bestEffortSteps, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Post, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -376,6 +377,42 @@ func TestGetClusterClaimPodParams(t *testing.T) {
 			if diff := cmp.Diff(tc.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
+		})
+	}
+}
+
+func TestSetSecurityContexts(t *testing.T) {
+	for _, tc := range []struct {
+		name, root string
+		pod        coreapi.Pod
+		expected   sets.String
+	}{{
+		name: "empty",
+	}, {
+		name: "no match",
+		pod: coreapi.Pod{
+			Spec: coreapi.PodSpec{
+				InitContainers: []coreapi.Container{{Name: "i0"}, {Name: "i1"}},
+				Containers:     []coreapi.Container{{Name: "c0"}, {Name: "c1"}},
+			},
+		},
+	}, {
+		name: "match",
+		pod: coreapi.Pod{
+			Spec: coreapi.PodSpec{
+				InitContainers: []coreapi.Container{{Name: "i0"}, {Name: "i1"}},
+				Containers:     []coreapi.Container{{Name: "c0"}, {Name: "c1"}},
+			},
+		},
+		root: "c1",
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			const uid = 1007160000
+			var capabilities coreapi.Capabilities
+			var seLinuxOpts coreapi.SELinuxOptions
+			pod := &tc.pod
+			setSecurityContexts(pod, tc.root, uid, &capabilities, &seLinuxOpts)
+			testhelper.CompareWithFixture(t, pod)
 		})
 	}
 }

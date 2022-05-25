@@ -106,7 +106,11 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 
 	maxCustomDuration := time.Hour * 8
 	if test.Timeout != nil && test.Timeout.Duration <= maxCustomDuration {
-		p.base.UtilityConfig.DecorationConfig.Timeout = test.Timeout
+		u := &p.base.UtilityConfig
+		if u.DecorationConfig == nil {
+			u.DecorationConfig = &prowv1.DecorationConfig{}
+		}
+		u.DecorationConfig.Timeout = test.Timeout
 	}
 
 	p.PodSpec.Add(Secrets(test.Secret), Secrets(test.Secrets...))

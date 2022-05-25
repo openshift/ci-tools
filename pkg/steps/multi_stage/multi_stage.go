@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -22,6 +24,22 @@ import (
 
 // stepFlag controls the behavior of a test throughout its execution.
 type stepFlag uint8
+
+// vpnConf is the format of the VPN configuration file in the cluster profile.
+// The presence of this file triggers the addition of a VPN client to each step
+// pod according to information in this configuration.
+type vpnConf struct {
+	// image is the pull spec of the image used for the container.
+	Image string `json:"image"`
+	// commands is the entry point of the container, executed as a bash script.
+	// Initially refers to the key in the Secret, later replaced by the actual
+	// script.
+	Commands string `json:"commands"`
+	// waitTimeout is how long to wait for the connection before failing.
+	WaitTimeout *string `json:"wait_timeout"`
+	// Runtime data for the step, not present in the configuration.
+	namespaceUID int64
+}
 
 const (
 	// A test failure should terminate the current phase.
@@ -54,6 +72,8 @@ const (
 	// CommandScriptMountPath is where we mount the command script
 	CommandScriptMountPath = "/var/run/configmaps/ci.openshift.io/multi-stage"
 	homeVolumeName         = "home"
+	// vpnConfPath is the path of the configuration file in the cluster profile.
+	vpnConfPath = "vpn.yaml"
 )
 
 var envForProfile = []string{
@@ -62,9 +82,10 @@ var envForProfile = []string{
 }
 
 type multiStageTestStep struct {
-	name    string
-	profile api.ClusterProfile
-	config  *api.ReleaseBuildConfiguration
+	name     string
+	nodeName string
+	profile  api.ClusterProfile
+	config   *api.ReleaseBuildConfiguration
 	// params exposes getters for variables created by other steps
 	params          api.Parameters
 	env             api.TestEnvironment
@@ -76,6 +97,7 @@ type multiStageTestStep struct {
 	flags           stepFlag
 	leases          []api.StepLease
 	clusterClaim    *api.ClusterClaim
+	vpnConf         *vpnConf
 }
 
 func MultiStageTestStep(
@@ -85,8 +107,9 @@ func MultiStageTestStep(
 	client kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
+	nodeName string,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases)
+	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName)
 }
 
 func newMultiStageTestStep(
@@ -96,6 +119,7 @@ func newMultiStageTestStep(
 	client kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
+	nodeName string,
 ) *multiStageTestStep {
 	ms := testConfig.MultiStageTestConfigurationLiteral
 	var flags stepFlag
@@ -107,6 +131,7 @@ func newMultiStageTestStep(
 	}
 	return &multiStageTestStep{
 		name:         testConfig.As,
+		nodeName:     nodeName,
 		profile:      ms.ClusterProfile,
 		config:       config,
 		params:       params,
@@ -138,6 +163,11 @@ func (s *multiStageTestStep) Run(ctx context.Context) error {
 
 func (s *multiStageTestStep) run(ctx context.Context) error {
 	logrus.Infof("Running multi-stage test %s", s.name)
+	if s.profile != "" {
+		if err := s.getProfileData(ctx); err != nil {
+			return err
+		}
+	}
 	env, err := s.environment(ctx)
 	if err != nil {
 		return err
@@ -153,6 +183,11 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	}
 	if err := s.setupRBAC(ctx); err != nil {
 		return fmt.Errorf("failed to create RBAC objects: %w", err)
+	}
+	if s.vpnConf != nil {
+		if s.vpnConf.namespaceUID, err = getNamespaceUID(ctx, s.jobSpec.Namespace(), s.client); err != nil {
+			return fmt.Errorf("failed to determine namespace UID range: %w", err)
+		}
 	}
 	secretVolumes, secretVolumeMounts, err := secretsForCensoring(s.client, s.jobSpec.Namespace(), ctx)
 	if err != nil {
@@ -249,6 +284,51 @@ func (s *multiStageTestStep) Provides() api.ParameterMap {
 }
 func (s *multiStageTestStep) SubTests() []*junit.TestCase { return s.subTests }
 
+// getProfileData fetches the content of the cluster profile secret.
+// This is done both to guarantee it has been correctly imported into the test
+// namespace and to gather information used when generating the test pods.
+func (s *multiStageTestStep) getProfileData(ctx context.Context) error {
+	var secret coreapi.Secret
+	name := s.profileSecretName()
+	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: name}, &secret); err != nil {
+		return fmt.Errorf("could not get cluster profile secret %q: %w", name, err)
+	}
+	if err := s.readVPNData(&secret); err != nil {
+		return fmt.Errorf("failed to read VPN configuration from cluster profile: %w", err)
+	}
+	return nil
+}
+
+func (s *multiStageTestStep) readVPNData(secret *coreapi.Secret) error {
+	bytes, ok := secret.Data[vpnConfPath]
+	if !ok {
+		return nil
+	}
+	var c vpnConf
+	if err := yaml.UnmarshalStrict(bytes, &c); err != nil {
+		return fmt.Errorf("failed to read VPN configuration file: %w", err)
+	}
+	if c.Image == "" {
+		return fmt.Errorf("VPN image missing in configuration file")
+	}
+	if c.Commands == "" {
+		return fmt.Errorf("VPN script missing in configuration file")
+	}
+	cmd, ok := secret.Data[c.Commands]
+	if !ok {
+		return fmt.Errorf(`invalid "commands" value %q, not found`, c.Commands)
+	}
+	c.Commands = string(cmd)
+	if w := c.WaitTimeout; w != nil {
+		var err error
+		if _, err = time.ParseDuration(*w); err != nil {
+			return fmt.Errorf("invalid VPN wait timeout %q: %w", *w, err)
+		}
+	}
+	s.vpnConf = &c
+	return nil
+}
+
 func (s *multiStageTestStep) environment(ctx context.Context) ([]coreapi.EnvVar, error) {
 	var ret []coreapi.EnvVar
 	for _, l := range s.leases {
@@ -260,10 +340,6 @@ func (s *multiStageTestStep) environment(ctx context.Context) ([]coreapi.EnvVar,
 	}
 
 	if s.profile != "" {
-		secret := s.profileSecretName()
-		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: secret}, &coreapi.Secret{}); err != nil {
-			return nil, fmt.Errorf("could not find secret %q: %w", secret, err)
-		}
 		for _, e := range envForProfile {
 			val, err := s.params.Get(e)
 			if err != nil {

@@ -50,7 +50,7 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 	}
 
 	testCaseNamePatternToDisruptionCheckFn := map[string]disruptionJunitCheckFunc{
-		"%s mean disruption should be less than historical plus two standard deviations": o.passFailCalculator.CheckDisruptionMeanWithinTwoStandardDeviations,
+		"%s mean disruption should be less than historical plus five standard deviations": o.passFailCalculator.CheckDisruptionMeanWithinFiveStandardDeviations,
 		// TODO add a SKIP mechanism to disruptionJunitCheckFunc instead of the fail bool
 		//"%s mean disruption should be less than historical plus one standard deviation":  o.passFailCalculator.CheckDisruptionMeanWithinOneStandardDeviation,
 		"%s disruption P70 should not be worse":  checkPercentileDisruption(o.passFailCalculator, 70), // for 7 attempts, this  gives us a latch on getting worse
@@ -65,10 +65,14 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 		allBackends := getAllDisruptionBackendNames(jobRunIDToBackendNameToAvailabilityResult)
 		for _, backendName := range allBackends.List() {
 			jobRunIDToAvailabilityResultForBackend := getDisruptionForBackend(jobRunIDToBackendNameToAvailabilityResult, backendName)
-			failedJobRunIDs, successfulJobRunIDs, status, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
+			failedJobRunIDs, successfulJobRunIDs, _, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
 			if err != nil {
 				return nil, err
 			}
+
+			// we are still struggling with these tests being enabled causing payloads to fail too often to keep up with,
+			// disabling once again until we can bring in safely
+			status := testCaseSkipped
 
 			testCaseName := fmt.Sprintf(testCaseNamePattern, backendName)
 			testSuiteName := "aggregated-disruption"

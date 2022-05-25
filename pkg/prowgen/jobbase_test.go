@@ -279,6 +279,22 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			},
 		},
 		{
+			name: "simple container-based test with timeout and no decoration",
+			cfg: &ciop.ReleaseBuildConfiguration{
+				InputConfiguration: ciop.InputConfiguration{
+					BuildRootImage: &ciop.BuildRootImageConfiguration{
+						FromRepository: true,
+					},
+				},
+			},
+			test: ciop.TestStepConfiguration{
+				As:                         "simple",
+				Commands:                   "make",
+				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
+				Timeout:                    &v1.Duration{Duration: time.Second},
+			},
+		},
+		{
 			name: "simple container-based test with secret",
 			test: ciop.TestStepConfiguration{
 				As:                         "simple",

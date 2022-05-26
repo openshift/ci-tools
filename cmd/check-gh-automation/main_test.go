@@ -1,11 +1,14 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
+
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 type fakeCollaboratorClient struct {
@@ -20,6 +23,9 @@ func (c fakeCollaboratorClient) IsCollaborator(org, repo, user string) (bool, er
 			return true, nil
 		}
 	}
+	if repo == "fake" {
+		return false, errors.New("intentional error")
+	}
 
 	return false, nil
 }
@@ -31,10 +37,11 @@ func TestCheckRepos(t *testing.T) {
 	}}
 
 	testCases := []struct {
-		name     string
-		repos    []string
-		bots     []string
-		expected []string
+		name        string
+		repos       []string
+		bots        []string
+		expected    []string
+		expectedErr error
 	}{
 		{
 			name:  "repo has bots as collaborators",
@@ -53,12 +60,18 @@ func TestCheckRepos(t *testing.T) {
 			bots:     []string{"a-bot", "b-bot"},
 			expected: []string{"org-2/repo-z"},
 		},
+		{
+			name:        "collaborator check returns error",
+			repos:       []string{"org-1/fake"},
+			bots:        []string{"a-bot"},
+			expectedErr: errors.New("unable to determine if: a-bot is a collaborator on org-1/fake: intentional error"),
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			failing, err := checkRepos(tc.repos, tc.bots, client, logrus.NewEntry(logrus.New()))
-			if err != nil {
-				t.Fatalf("unexpected error returned: %v", err)
+			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
+				t.Fatalf("error doesn't match expected, diff: %s", diff)
 			}
 			if diff := cmp.Diff(tc.expected, failing); diff != "" {
 				t.Fatalf("returned failing repos did not match expected, diff: %s", diff)

@@ -9,7 +9,7 @@ var (
 	//go:embed style.css
 	styleCSS []byte
 
-	//go:embed index.js
+	//go:embed index.ts
 	indexJS []byte
 
 	//go:embed index.template.html

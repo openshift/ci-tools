@@ -9,13 +9,13 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/diffs"
 )
 
 type options struct {
@@ -137,19 +137,17 @@ func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string 
 	if err != nil {
 		logger.Fatalf("error resolving JobSpec: %v", err)
 	}
-	prConfig := config.GetAllConfigs(releaseRepoPath, logger)
-	masterConfig, err := config.GetAllConfigsFromSHA(releaseRepoPath, jobSpec.Refs.BaseSHA, logger)
+	configs, err := config.GetChangedConfigs(releaseRepoPath, jobSpec.Refs.BaseSHA)
 	if err != nil {
-		logger.Fatalf("error getting master configs: %v", err)
+		logger.Fatalf("error determining changed configs: %v", err)
 	}
 
-	var orgRepos []string
-	if masterConfig.CiOperator != nil && prConfig.CiOperator != nil {
-		changedConfigs, _ := diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
-		for _, c := range changedConfigs {
-			orgRepos = append(orgRepos, fmt.Sprintf("%s/%s", c.Info.Org, c.Info.Repo))
-		}
+	orgRepos := sets.String{}
+	for _, c := range configs {
+		path := strings.TrimPrefix(c, config.CiopConfigInRepoPath+"/")
+		split := strings.Split(path, "/")
+		orgRepos.Insert(fmt.Sprintf("%s/%s", split[0], split[1]))
 	}
 
-	return orgRepos
+	return orgRepos.List()
 }

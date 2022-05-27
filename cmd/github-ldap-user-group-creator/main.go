@@ -243,6 +243,8 @@ type GroupClusters struct {
 	Group    *userv1.Group
 }
 
+var githubRobotIds = sets.NewString("RH-Cachito", "openshift-bot", "openshift-ci-robot", "openshift-merge-robot")
+
 func makeGroups(openshiftPrivAdmins sets.String, peribolosConfig string, mapping map[string]string, roverGroups map[string][]string, config *group.Config, clusters sets.String) (map[string]GroupClusters, error) {
 	groups := map[string]GroupClusters{}
 	var errs []error
@@ -252,7 +254,7 @@ func makeGroups(openshiftPrivAdmins sets.String, peribolosConfig string, mapping
 		kerberosIDs := sets.NewString()
 		for _, admin := range openshiftPrivAdmins.List() {
 			kerberosID, ok := mapping[admin]
-			if !ok {
+			if !ok && !githubRobotIds.Has(admin) {
 				ignoredOpenshiftPrivAdminNames.Insert(admin)
 				continue
 			}
@@ -268,7 +270,7 @@ func makeGroups(openshiftPrivAdmins sets.String, peribolosConfig string, mapping
 	}
 	if ignoredOpenshiftPrivAdminNames.Len() > 0 {
 		logrus.WithField("ignoredOpenshiftPrivAdminNames", ignoredOpenshiftPrivAdminNames.List()).
-			Warn("These logins are members of openshift-priv but have no mapping to RH login.")
+			Error("These logins are members of openshift-priv but have no mapping to RH login.")
 	}
 
 	clustersExceptHive := clusters.Difference(sets.NewString(string(api.HiveCluster)))

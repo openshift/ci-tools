@@ -110,21 +110,21 @@ type retestController struct {
 	usesGitHubApp bool
 	backoff       *backoffCache
 
-	commentOnRepos sets.String
-	commentOnOrgs  sets.String
+	enableOnRepos sets.String
+	enableOnOrgs  sets.String
 }
 
 func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, enableOnRepos prowflagutil.Strings, enableOnOrgs prowflagutil.Strings) *retestController {
 	logger := logrus.NewEntry(logrus.StandardLogger())
 	ret := &retestController{
-		ghClient:       ghClient,
-		gitClient:      gitClient,
-		configGetter:   cfg,
-		logger:         logger,
-		usesGitHubApp:  usesApp,
-		backoff:        &backoffCache{cache: map[string]*PullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger},
-		commentOnRepos: enableOnRepos.StringSet(),
-		commentOnOrgs:  enableOnOrgs.StringSet(),
+		ghClient:      ghClient,
+		gitClient:     gitClient,
+		configGetter:  cfg,
+		logger:        logger,
+		usesGitHubApp: usesApp,
+		backoff:       &backoffCache{cache: map[string]*PullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger},
+		enableOnRepos: enableOnRepos.StringSet(),
+		enableOnOrgs:  enableOnOrgs.StringSet(),
 	}
 	if err := ret.backoff.loadFromDisk(); err != nil {
 		logger.WithError(err).Warn("Failed to load backoff cache from disk")
@@ -148,6 +148,9 @@ func (c *retestController) sync() error {
 	for _, pr := range candidates {
 		logrus.Infof("Candidate PR: %s", prUrl(pr))
 	}
+
+	candidates = c.enabledPRs(candidates)
+	logrus.Infof("Remaining %d candidates for retest (from an enabled org or repo)", len(candidates))
 
 	candidates, err = c.atLeastOneRequiredJob(candidates)
 	if err != nil {
@@ -215,15 +218,10 @@ func (b *backoffCache) check(pr tide.PullRequest, baseSha string) (retestBackoff
 	return retestBackoffRetest, fmt.Sprintf("Remaining retests: %d against base HEAD %s and %d for PR HEAD %s in total", maxRetestsForShaAndBase-record.RetestsForBaseSha, record.BaseSha, maxRetestsForSha-record.RetestsForPrSha, record.PRSha)
 }
 
-func (c *retestController) createComment(pr tide.PullRequest, org, repoName, cmd, message string) {
-	repo := fmt.Sprintf("%s/%s", pr.Repository.Owner.Login, pr.Repository.Name)
-	if c.commentOnOrgs.Has(org) || c.commentOnRepos.Has(repo) {
-		comment := fmt.Sprintf("%s\n\n%s\n", cmd, message)
-		if err := c.ghClient.CreateComment(string(pr.Repository.Owner.Login), string(pr.Repository.Name), int(pr.Number), comment); err != nil {
-			c.logger.WithError(err).Error("failed to create a comment")
-		}
-	} else {
-		c.logger.Infof("%s: %s (%s)", prUrl(pr), cmd, message)
+func (c *retestController) createComment(pr tide.PullRequest, cmd, message string) {
+	comment := fmt.Sprintf("%s\n\n%s\n", cmd, message)
+	if err := c.ghClient.CreateComment(string(pr.Repository.Owner.Login), string(pr.Repository.Name), int(pr.Number), comment); err != nil {
+		c.logger.WithField("comment", comment).WithError(err).Error("failed to create a comment")
 	}
 }
 
@@ -234,16 +232,14 @@ func (c *retestController) retestOrBackoff(pr tide.PullRequest) error {
 		return err
 	}
 
-	org := string(pr.Repository.Owner.Login)
-	repoName := string(pr.Repository.Name)
 	action, message := c.backoff.check(pr, baseSha)
 	switch action {
 	case retestBackoffHold:
-		c.createComment(pr, org, repoName, "/hold", message)
+		c.createComment(pr, "/hold", message)
 	case retestBackoffPause:
 		c.logger.Infof("%s: %s (%s)", prUrl(pr), "no comment", message)
 	case retestBackoffRetest:
-		c.createComment(pr, org, repoName, "/retest-required", message)
+		c.createComment(pr, "/retest-required", message)
 	}
 	return nil
 }
@@ -446,6 +442,20 @@ func (c *retestController) presubmitsForPRByContext(pr tide.PullRequest) map[str
 	}
 
 	return presubmits
+}
+
+func (c *retestController) enabledPRs(candidates map[string]tide.PullRequest) map[string]tide.PullRequest {
+	output := map[string]tide.PullRequest{}
+	for key, pr := range candidates {
+		org := string(pr.Repository.Owner.Login)
+		orgRepo := fmt.Sprintf("%s/%s", org, pr.Repository.Name)
+		if c.enableOnOrgs.Has(org) || c.enableOnRepos.Has(orgRepo) {
+			output[key] = pr
+		} else {
+			c.logger.Infof("PR %s is not from an enabled org or repo", key)
+		}
+	}
+	return output
 }
 
 // headContexts gets the status contexts for the commit with OID == pr.HeadRefOID

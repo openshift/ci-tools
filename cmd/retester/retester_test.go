@@ -9,7 +9,7 @@ import (
 	"github.com/shurcooL/githubv4"
 	"github.com/sirupsen/logrus"
 
-	prowflagutil "k8s.io/test-infra/prow/flagutil"
+	"k8s.io/apimachinery/pkg/util/sets"
 	github "k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/github/fakegithub"
 	"k8s.io/test-infra/prow/tide"
@@ -35,9 +35,7 @@ func (f *MyFakeClient) GetRef(owner, repo, ref string) (string, error) {
 func TestRetestOrBackoff(t *testing.T) {
 	ghc := &MyFakeClient{fakegithub.NewFakeClient()}
 	var name githubv4.String = "repo"
-	var notEnabledRepo githubv4.String = "other-repo"
 	var owner githubv4.String = "org"
-	var notEnabledOwner githubv4.String = "other-org"
 	var fail githubv4.String = "failed test"
 	var num githubv4.Int = 123
 	var num2 githubv4.Int = 321
@@ -45,9 +43,6 @@ func TestRetestOrBackoff(t *testing.T) {
 	pr321 := github.PullRequest{}
 	ghc.PullRequests = map[int]*github.PullRequest{123: &pr123, 321: &pr321}
 	logger := logrus.NewEntry(logrus.StandardLogger())
-
-	enableOnRepos := prowflagutil.NewStrings("org/repo")
-	enableOnOrgs := prowflagutil.NewStrings("org")
 
 	testCases := []struct {
 		name          string
@@ -68,31 +63,11 @@ func TestRetestOrBackoff(t *testing.T) {
 				}{Name: name, Owner: struct{ Login githubv4.String }{Login: owner}},
 			},
 			c: &retestController{
-				ghClient:       ghc,
-				logger:         logger,
-				backoff:        &backoffCache{cache: map[string]*PullRequest{}, logger: logger},
-				commentOnRepos: enableOnRepos.StringSet(),
+				ghClient: ghc,
+				logger:   logger,
+				backoff:  &backoffCache{cache: map[string]*PullRequest{}, logger: logger},
 			},
 			expected: "/retest-required\n\nRemaining retests: 2 against base HEAD abcde and 8 for PR HEAD  in total\n",
-		},
-		{
-			name: "no comment",
-			pr: tide.PullRequest{
-				Number: num2,
-				Author: struct{ Login githubv4.String }{Login: owner},
-				Repository: struct {
-					Name          githubv4.String
-					NameWithOwner githubv4.String
-					Owner         struct{ Login githubv4.String }
-				}{Name: notEnabledRepo, Owner: struct{ Login githubv4.String }{Login: owner}},
-			},
-			c: &retestController{
-				ghClient:       ghc,
-				logger:         logger,
-				backoff:        &backoffCache{cache: map[string]*PullRequest{}, logger: logger},
-				commentOnRepos: enableOnRepos.StringSet(),
-			},
-			expected: "",
 		},
 		{
 			name: "failed test",
@@ -103,72 +78,12 @@ func TestRetestOrBackoff(t *testing.T) {
 					Name          githubv4.String
 					NameWithOwner githubv4.String
 					Owner         struct{ Login githubv4.String }
-				}{Name: notEnabledRepo, Owner: struct{ Login githubv4.String }{Login: fail}},
+				}{Name: name, Owner: struct{ Login githubv4.String }{Login: fail}},
 			},
 			c: &retestController{
-				ghClient:       ghc,
-				logger:         logger,
-				backoff:        &backoffCache{cache: map[string]*PullRequest{}, logger: logger},
-				commentOnRepos: enableOnRepos.StringSet(),
-			},
-			expected:      "",
-			expectedError: fmt.Errorf("failed"),
-		},
-		{
-			name: "basic case org",
-			pr: tide.PullRequest{
-				Number: num,
-				Author: struct{ Login githubv4.String }{Login: owner},
-				Repository: struct {
-					Name          githubv4.String
-					NameWithOwner githubv4.String
-					Owner         struct{ Login githubv4.String }
-				}{Name: notEnabledRepo, Owner: struct{ Login githubv4.String }{Login: owner}},
-			},
-			c: &retestController{
-				ghClient:      ghc,
-				logger:        logger,
-				backoff:       &backoffCache{cache: map[string]*PullRequest{}, logger: logger},
-				commentOnOrgs: enableOnOrgs.StringSet(),
-			},
-			expected: "/retest-required\n\nRemaining retests: 2 against base HEAD abcde and 8 for PR HEAD  in total\n",
-		},
-		{
-			name: "no comment org",
-			pr: tide.PullRequest{
-				Number: num2,
-				Author: struct{ Login githubv4.String }{Login: owner},
-				Repository: struct {
-					Name          githubv4.String
-					NameWithOwner githubv4.String
-					Owner         struct{ Login githubv4.String }
-				}{Name: notEnabledRepo, Owner: struct{ Login githubv4.String }{Login: notEnabledOwner}},
-			},
-			c: &retestController{
-				ghClient:      ghc,
-				logger:        logger,
-				backoff:       &backoffCache{cache: map[string]*PullRequest{}, logger: logger},
-				commentOnOrgs: enableOnOrgs.StringSet(),
-			},
-			expected: "",
-		},
-		{
-			name: "failed test org",
-			pr: tide.PullRequest{
-				Number: num2,
-				Author: struct{ Login githubv4.String }{Login: fail},
-				Repository: struct {
-					Name          githubv4.String
-					NameWithOwner githubv4.String
-					Owner         struct{ Login githubv4.String }
-				}{Name: notEnabledRepo, Owner: struct{ Login githubv4.String }{Login: fail}},
-			},
-			c: &retestController{
-				ghClient:       ghc,
-				logger:         logger,
-				backoff:        &backoffCache{cache: map[string]*PullRequest{}, logger: logger},
-				commentOnRepos: enableOnRepos.StringSet(),
-				commentOnOrgs:  enableOnOrgs.StringSet(),
+				ghClient: ghc,
+				logger:   logger,
+				backoff:  &backoffCache{cache: map[string]*PullRequest{}, logger: logger},
 			},
 			expected:      "",
 			expectedError: fmt.Errorf("failed"),
@@ -188,6 +103,85 @@ func TestRetestOrBackoff(t *testing.T) {
 				if diff := cmp.Diff(tc.expected, actual); diff != "" {
 					t.Errorf("%s differs from expected:\n%s", tc.name, diff)
 				}
+			}
+		})
+	}
+}
+
+func TestEnabledPRs(t *testing.T) {
+	logger := logrus.NewEntry(logrus.StandardLogger())
+	testCases := []struct {
+		name       string
+		c          *retestController
+		candidates map[string]tide.PullRequest
+		expected   map[string]tide.PullRequest
+	}{
+		{
+			name: "basic case",
+			c: &retestController{
+				enableOnRepos: sets.NewString("openshift/ci-tools"),
+				enableOnOrgs:  sets.NewString("org-a"),
+				logger:        logger,
+			},
+			candidates: map[string]tide.PullRequest{
+				"a": {
+					Number: 1,
+					Repository: struct {
+						Name          githubv4.String
+						NameWithOwner githubv4.String
+						Owner         struct{ Login githubv4.String }
+					}{Name: "ci-tools", Owner: struct{ Login githubv4.String }{Login: "openshift"}},
+				},
+				"b": {
+					Number: 1,
+					Repository: struct {
+						Name          githubv4.String
+						NameWithOwner githubv4.String
+						Owner         struct{ Login githubv4.String }
+					}{Name: "some-tools", Owner: struct{ Login githubv4.String }{Login: "openshift"}},
+				},
+				"c": {
+					Number: 1,
+					Repository: struct {
+						Name          githubv4.String
+						NameWithOwner githubv4.String
+						Owner         struct{ Login githubv4.String }
+					}{Name: "some-tools", Owner: struct{ Login githubv4.String }{Login: "org-a"}},
+				},
+				"d": {
+					Number: 1,
+					Repository: struct {
+						Name          githubv4.String
+						NameWithOwner githubv4.String
+						Owner         struct{ Login githubv4.String }
+					}{Name: "some-tools", Owner: struct{ Login githubv4.String }{Login: "org-b"}},
+				},
+			},
+			expected: map[string]tide.PullRequest{
+				"a": {
+					Number: 1,
+					Repository: struct {
+						Name          githubv4.String
+						NameWithOwner githubv4.String
+						Owner         struct{ Login githubv4.String }
+					}{Name: "ci-tools", Owner: struct{ Login githubv4.String }{Login: "openshift"}},
+				},
+				"c": {
+					Number: 1,
+					Repository: struct {
+						Name          githubv4.String
+						NameWithOwner githubv4.String
+						Owner         struct{ Login githubv4.String }
+					}{Name: "some-tools", Owner: struct{ Login githubv4.String }{Login: "org-a"}},
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := tc.c.enabledPRs(tc.candidates)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
 			}
 		})
 	}

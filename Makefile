@@ -441,3 +441,7 @@ $(TMPDIR)/.cluster-display-kubeconfig-dir:
 cluster-display: $(TMPDIR)/.cluster-display-kubeconfig-dir
 	@go run  ./cmd/cluster-display --kubeconfig-dir=$(TMPDIR)/.cluster-display-kubeconfig-dir
 .PHONY: cluster-display
+
+analyse-deps: cmd/vault-secret-collection-manager/index.js
+	@snyk test --project-name=ci-tools --org=red-hat-org
+.PHONY: analyse-deps

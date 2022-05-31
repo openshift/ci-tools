@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/clock"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
+	"github.com/openshift/ci-tools/pkg/junit"
 )
 
 type JobRunGetter interface {
@@ -119,4 +120,26 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 	fmt.Printf("found %d finished jobRuns: %v and %d unfinished jobRuns: %v\n",
 		len(finishedJobRunNames), strings.Join(finishedJobRunNames, ", "), len(unfinishedJobRunNames), strings.Join(unfinishedJobRunNames, ", "))
 	return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, nil
+}
+
+// OutputTestCaseFailures prints detailed test failures
+func OutputTestCaseFailures(parents []string, suite *junit.TestSuite) {
+	currSuite := append(parents, suite.Name)
+	for _, testCase := range suite.TestCases {
+		if testCase.FailureOutput == nil {
+			continue
+		}
+		if len(testCase.FailureOutput.Output) == 0 && len(testCase.FailureOutput.Message) == 0 {
+			continue
+		}
+		fmt.Printf("Test Failed! suite=[%s], testCase=%v\nMessage: %v\n%v\n\n",
+			strings.Join(currSuite, "  "),
+			testCase.Name,
+			testCase.FailureOutput.Message,
+			testCase.SystemOut)
+	}
+
+	for _, child := range suite.Children {
+		OutputTestCaseFailures(currSuite, child)
+	}
 }

@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 	"github.com/openshift/ci-tools/pkg/junit"
 )
 
@@ -102,7 +103,7 @@ func combineTestSuite(parentSuiteNames []string, combined *junit.TestSuite, jobG
 	currentSuiteNames := []string{}
 	currentSuiteNames = append(currentSuiteNames, parentSuiteNames...)
 	currentSuiteNames = append(currentSuiteNames, combined.Name)
-	suiteAsSingleString := strings.Join(currentSuiteNames, "|||")
+	suiteAsSingleString := strings.Join(currentSuiteNames, jobrunaggregatorlib.TestSuitesSeparator)
 
 	for _, testCaseToAdd := range toAdd.TestCases {
 		combinedTestCase := ensureTestCaseInSuite(combined, testCaseToAdd.Name)
@@ -182,7 +183,7 @@ func ensureTestCaseInSuite(o *junit.TestSuite, name string) *junit.TestCase {
 }
 
 func aggregateTestCase(testSuiteName string, combined *junit.TestCase, jobGCSBucketRoot, toAddJobRunID string, toAdd *junit.TestCase) error {
-	currDetails := &TestCaseDetails{
+	currDetails := &jobrunaggregatorlib.TestCaseDetails{
 		Name:          toAdd.Name,
 		TestSuiteName: testSuiteName,
 	}
@@ -197,7 +198,7 @@ func aggregateTestCase(testSuiteName string, combined *junit.TestCase, jobGCSBuc
 		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID))
 		currDetails.Failures = append(
 			currDetails.Failures,
-			TestCaseFailure{
+			jobrunaggregatorlib.TestCaseFailure{
 				JobRunID:       toAddJobRunID,
 				HumanURL:       humanURL,
 				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID)),
@@ -206,7 +207,7 @@ func aggregateTestCase(testSuiteName string, combined *junit.TestCase, jobGCSBuc
 	case toAdd.SkipMessage != nil:
 		currDetails.Skips = append(
 			currDetails.Skips,
-			TestCaseSkip{
+			jobrunaggregatorlib.TestCaseSkip{
 				JobRunID:       toAddJobRunID,
 				HumanURL:       jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID)),
 				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID)),
@@ -215,7 +216,7 @@ func aggregateTestCase(testSuiteName string, combined *junit.TestCase, jobGCSBuc
 	default:
 		currDetails.Passes = append(
 			currDetails.Passes,
-			TestCasePass{
+			jobrunaggregatorlib.TestCasePass{
 				JobRunID:       toAddJobRunID,
 				HumanURL:       jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID)),
 				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID)),
@@ -229,40 +230,4 @@ func aggregateTestCase(testSuiteName string, combined *junit.TestCase, jobGCSBuc
 	}
 	combined.SystemOut = string(detailsYaml)
 	return nil
-}
-
-type TestCaseDetails struct {
-	Name          string
-	TestSuiteName string
-	// Summary is filled in during the pass/fail calculation
-	Summary string
-
-	Passes   []TestCasePass
-	Failures []TestCaseFailure
-	Skips    []TestCaseSkip
-	//NeverExecuted []TestCaseNeverExecuted
-}
-
-type TestCasePass struct {
-	JobRunID       string
-	HumanURL       string
-	GCSArtifactURL string
-}
-
-type TestCaseFailure struct {
-	JobRunID       string
-	HumanURL       string
-	GCSArtifactURL string
-}
-
-type TestCaseSkip struct {
-	JobRunID       string
-	HumanURL       string
-	GCSArtifactURL string
-}
-
-type TestCaseNeverExecuted struct {
-	JobRunID       string
-	HumanURL       string
-	GCSArtifactURL string
 }

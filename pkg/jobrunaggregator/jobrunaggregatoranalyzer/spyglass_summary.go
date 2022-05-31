@@ -8,6 +8,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 	"github.com/openshift/ci-tools/pkg/junit"
 )
 
@@ -119,7 +120,7 @@ func htmlForTestCase(jobName string, parents []string, testCase *junit.TestCase,
 
 	var failureHTML string
 	var flakeHTML string
-	currDetails := &TestCaseDetails{}
+	currDetails := &jobrunaggregatorlib.TestCaseDetails{}
 	_ = yaml.Unmarshal([]byte(testCase.SystemOut), currDetails)
 
 	if len(currDetails.Failures) == 0 && !strings.Contains(currDetails.Summary, ": we require at least") {

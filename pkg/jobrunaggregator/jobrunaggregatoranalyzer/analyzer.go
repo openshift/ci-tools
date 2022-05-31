@@ -195,7 +195,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 
 	// now scan for a failure
 	fakeSuite := &junit.TestSuite{Children: currentAggregationJunitSuites.Suites}
-	outputTestCaseFailures([]string{"root"}, fakeSuite)
+	jobrunaggregatorlib.OutputTestCaseFailures([]string{"root"}, fakeSuite)
 
 	summaryHTML := htmlForTestRuns(o.jobName, fakeSuite)
 	if err := ioutil.WriteFile(filepath.Join(o.workingDir, "aggregation-testrun-summary.html"), []byte(summaryHTML), 0644); err != nil {
@@ -208,27 +208,6 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func outputTestCaseFailures(parents []string, suite *junit.TestSuite) {
-	currSuite := append(parents, suite.Name)
-	for _, testCase := range suite.TestCases {
-		if testCase.FailureOutput == nil {
-			continue
-		}
-		if len(testCase.FailureOutput.Output) == 0 && len(testCase.FailureOutput.Message) == 0 {
-			continue
-		}
-		fmt.Printf("Test Failed! suite=[%s], testCase=%v\nMessage: %v\n%v\n\n",
-			strings.Join(currSuite, "  "),
-			testCase.Name,
-			testCase.FailureOutput.Message,
-			testCase.SystemOut)
-	}
-
-	for _, child := range suite.Children {
-		outputTestCaseFailures(currSuite, child)
-	}
 }
 
 func hasFailedTestCase(suite *junit.TestSuite) bool {

@@ -12,6 +12,8 @@ import (
 const (
 	// AggregationIDLabel is the name of the label for the aggregation id in prow job
 	AggregationIDLabel = "release.openshift.io/aggregation-id"
+	// PayloadInvocationIDLabel is the name of the label for the payload invocation id in prow job
+	PayloadInvocationIDLabel = "release.openshift.io/aggregation-id"
 )
 
 func NewPayloadAnalysisJobLocatorForPR(

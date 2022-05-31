@@ -67,7 +67,7 @@ func (o *testRunUploader) uploadTestSuite(ctx context.Context, jobRun jobrunaggr
 			status = "Passed"
 		}
 
-		testSuiteStr := strings.Join(currSuites, "|||")
+		testSuiteStr := strings.Join(currSuites, jobrunaggregatorlib.TestSuitesSeparator)
 		toInsert = append(toInsert, newTestRunRow(jobRun, status, testSuiteStr, testCase))
 	}
 	if err := o.testRunInserter.Put(ctx, toInsert); err != nil {

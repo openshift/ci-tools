@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
+	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/git/types"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/plugins"
@@ -36,6 +37,9 @@ type options struct {
 
 	config.WhitelistOptions
 	config.Options
+
+	github prowflagutil.GitHubOptions
+	dryRun bool
 }
 
 type orgReposWithOfficialImages map[string]sets.String
@@ -62,6 +66,8 @@ func gatherOptions() (options, error) {
 
 	fs.StringVar(&o.releaseRepoPath, "release-repo-path", "", "Path to a openshift/release repository directory")
 
+	fs.BoolVar(&o.dryRun, "dry-run", true, "Dry run for testing. Uses API tokens but does not mutate.")
+	o.github.AddFlags(fs)
 	o.Options.Bind(fs)
 	o.WhitelistOptions.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -82,7 +88,9 @@ func (o *options) validate() error {
 	if err := o.Options.Complete(); err != nil {
 		return fmt.Errorf("failed to complete config options: %w", err)
 	}
-
+	if err := o.github.Validate(o.dryRun); err != nil {
+		return err
+	}
 	return o.WhitelistOptions.Validate()
 }
 
@@ -120,15 +128,17 @@ func privateOrgRepo(repo string) string {
 	return fmt.Sprintf("%s/%s", openshiftPrivOrg, repo)
 }
 
-func getOrgReposWithOfficialImages(configDir string, whitelist map[string][]string) (orgReposWithOfficialImages, error) {
+func getOrgReposWithOfficialImages(configDir string, whitelist map[string][]string, reposInOpenShiftPrivOrg sets.String) (orgReposWithOfficialImages, error) {
 	ret := make(orgReposWithOfficialImages)
 
 	for org, repos := range whitelist {
 		for _, repo := range repos {
 			if _, ok := ret[org]; !ok {
 				ret[org] = sets.NewString(repo)
-			} else {
+			} else if reposInOpenShiftPrivOrg.Has(repo) {
 				ret[org].Insert(repo)
+			} else {
+				logrus.WithField("repo", repo).Info("the repo does not exist in the openshift-priv org")
 			}
 		}
 	}
@@ -146,8 +156,10 @@ func getOrgReposWithOfficialImages(configDir string, whitelist map[string][]stri
 
 		if _, ok := ret[i.Org]; !ok {
 			ret[i.Org] = sets.NewString(i.Repo)
-		} else {
+		} else if reposInOpenShiftPrivOrg.Has(i.Repo) {
 			ret[i.Org].Insert(i.Repo)
+		} else {
+			logrus.WithField("repo", i.Repo).Info("the repo does not exist in the openshift-priv org")
 		}
 
 		return nil
@@ -428,8 +440,21 @@ func main() {
 		logrus.WithError(err).Fatal("could not load Prow plugin configuration")
 	}
 
+	ghClient, err := o.github.GitHubClient(o.dryRun)
+	if err != nil {
+		logrus.WithError(err).Fatal("Error creating github client.")
+	}
+	repos, err := ghClient.GetRepos("openshift-priv", false)
+	if err != nil {
+		logrus.WithError(err).Fatal("couldn't get openshift-priv repos")
+	}
+	reposInOpenShiftPrivOrg := sets.NewString()
+	for _, repo := range repos {
+		reposInOpenShiftPrivOrg.Insert(repo.Name)
+	}
+
 	logrus.Info("Getting a summary of the orgs/repos that promote official images")
-	orgRepos, err := getOrgReposWithOfficialImages(o.ConfigDir, o.WhitelistOptions.WhitelistConfig.Whitelist)
+	orgRepos, err := getOrgReposWithOfficialImages(o.ConfigDir, o.WhitelistOptions.WhitelistConfig.Whitelist, reposInOpenShiftPrivOrg)
 	if err != nil {
 		logrus.WithError(err).Fatal("couldn't get the list of org/repos that promote official images")
 	}

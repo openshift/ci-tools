@@ -204,7 +204,10 @@ func main() {
 		{
 			command: "/usr/bin/private-prow-configs-mirror",
 			arguments: func() []string {
-				args := []string{"--release-repo-path", "."}
+				args := []string{"--release-repo-path", ".",
+					"--github-token-path", "/etc/github/oauth",
+					"--github-endpoint", "http://ghproxy",
+					"--dry-run", "false"}
 				if o.whitelist != "" {
 					args = append(args, []string{"--whitelist-file", o.whitelist}...)
 				}

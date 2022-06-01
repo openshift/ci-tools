@@ -63,6 +63,42 @@ func TestSpecsFromComment(t *testing.T) {
 	}
 }
 
+func TestJobNamesFromComment(t *testing.T) {
+	testCases := []struct {
+		name     string
+		comment  string
+		expected []string
+	}{
+		{
+			name:    "no job name",
+			comment: "/payload-job",
+		},
+		{
+			name:     "/payload-job periodic-ci-openshift-release-some-job",
+			comment:  "/payload-job periodic-ci-openshift-release-some-job",
+			expected: []string{"periodic-ci-openshift-release-some-job"},
+		},
+		{
+			name:     "multiple job",
+			comment:  "/payload-job periodic-ci-openshift-release-some-job periodic-ci-openshift-release-another-job",
+			expected: []string{"periodic-ci-openshift-release-some-job", "periodic-ci-openshift-release-another-job"},
+		},
+		{
+			name:     "multiple match",
+			comment:  "/payload-job periodic-ci-openshift-release-some-job periodic-ci-openshift-release-another-job\n/cmd 4.8 ci all\n/payload-job periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial",
+			expected: []string{"periodic-ci-openshift-release-some-job", "periodic-ci-openshift-release-another-job", "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial"},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := jobNamesFromComment(tc.comment)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+			}
+		})
+	}
+}
+
 func TestMessage(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -72,7 +108,7 @@ func TestMessage(t *testing.T) {
 		{
 			name: "basic case",
 			spec: jobSetSpecification{ocp: "4.10", releaseType: "nightly", jobs: "informing"},
-			expected: `trigger 2 jobs of type informing for the nightly release of OCP 4.10
+			expected: `trigger 2 job(s) of type informing for the nightly release of OCP 4.10
 - dummy-ocp-4.10-nightly-informing-job1
 - dummy-ocp-4.10-nightly-informing-job2
 `,
@@ -101,12 +137,17 @@ func init() {
 func TestBuild(t *testing.T) {
 	testCases := []struct {
 		name      string
-		b         *prpqrBuilder
+		spec      jobSetSpecification
 		jobTuples []prpqv1.ReleaseJobSpec
 		expected  *prpqv1.PullRequestPayloadQualificationRun
 	}{
 		{
 			name: "basic case",
+			spec: jobSetSpecification{
+				ocp:         "4.10",
+				releaseType: "nightly",
+				jobs:        "ci",
+			},
 			jobTuples: []prpqv1.ReleaseJobSpec{
 				{
 					CIOperatorConfig: prpqv1.CIOperatorMetadata{
@@ -166,6 +207,63 @@ func TestBuild(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "empty spec",
+			spec: jobSetSpecification{},
+			jobTuples: []prpqv1.ReleaseJobSpec{
+				{
+					CIOperatorConfig: prpqv1.CIOperatorMetadata{
+						Org:     "openshift",
+						Repo:    "release",
+						Branch:  "master",
+						Variant: "nightly-4.10",
+					},
+					Test: "e2e-aws-serial",
+				},
+				{
+					CIOperatorConfig: prpqv1.CIOperatorMetadata{
+						Org:     "openshift",
+						Repo:    "release",
+						Branch:  "master",
+						Variant: "nightly-4.10",
+					},
+					Test: "e2e-metal-ipi",
+				},
+			},
+			expected: &prpqv1.PullRequestPayloadQualificationRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "some-guid-0",
+					Namespace: "ci",
+					Labels: map[string]string{
+						"dptp.openshift.io/requester": "payload-testing",
+						"event-GUID":                  "some-guid",
+						"prow.k8s.io/refs.org":        "org",
+						"prow.k8s.io/refs.pull":       "123",
+						"prow.k8s.io/refs.repo":       "repo",
+						"prow.k8s.io/refs.base_ref":   "ref",
+					},
+				},
+				Spec: prpqv1.PullRequestPayloadTestSpec{
+					PullRequest: prpqv1.PullRequestUnderTest{Org: "org",
+						Repo:        "repo",
+						BaseRef:     "ref",
+						BaseSHA:     "sha",
+						PullRequest: prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"}},
+					Jobs: prpqv1.PullRequestPayloadJobSpec{
+						Jobs: []prpqv1.ReleaseJobSpec{
+							{
+								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
+								Test:             "e2e-aws-serial",
+							},
+							{
+								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
+								Test:             "e2e-metal-ipi",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -188,11 +286,7 @@ func TestBuild(t *testing.T) {
 						Login: "login",
 					},
 				},
-				spec: jobSetSpecification{
-					ocp:         "4.10",
-					releaseType: "nightly",
-					jobs:        "ci",
-				},
+				spec: tc.spec,
 			}
 			actual := builder.build(tc.jobTuples)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
@@ -249,9 +343,37 @@ func TestHandle(t *testing.T) {
 					Body: "/payload 4.10 nightly informing",
 				},
 			},
-			expected: `trigger 2 jobs of type informing for the nightly release of OCP 4.10
+			expected: `trigger 2 job(s) of type informing for the nightly release of OCP 4.10
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi
+
+See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
+`,
+		},
+		{
+			name: "payload-job",
+			s: &server{
+				ghc:                ghc,
+				ctx:                context.TODO(),
+				kubeClient:         fakeclient.NewClientBuilder().Build(),
+				namespace:          "ci",
+				testResolver:       newFakeTestResolver(),
+				trustedChecker:     &fakeTrustedChecker{},
+				ciOpConfigResolver: &fakeCIOpConfigResolver{},
+			},
+			ic: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}},
+				Issue: github.Issue{
+					Number:      123,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: "/payload-job periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial periodic-ci-openshift-release-another-job",
+				},
+			},
+			expected: `trigger 1 job(s) for the /payload-job command
+- periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 
 See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 `,
@@ -285,13 +407,13 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 					Body: "/payload 4.10 nightly informing\n/payload 4.8 ci all",
 				},
 			},
-			expected: `trigger 2 jobs of type informing for the nightly release of OCP 4.10
+			expected: `trigger 2 job(s) of type informing for the nightly release of OCP 4.10
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi
 
 See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 
-trigger 0 jobs of type all for the ci release of OCP 4.8
+trigger 0 job(s) of type all for the ci release of OCP 4.8
 `,
 		},
 		{

@@ -3,11 +3,12 @@ package main
 import (
 	"errors"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )

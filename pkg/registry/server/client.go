@@ -94,9 +94,30 @@ func (r *resolverClient) Resolve(raw []byte) (*api.ReleaseBuildConfiguration, er
 	return configFromResolverRequest(req)
 }
 
+type adapter struct{}
+
+func (a adapter) Error(s string, i ...interface{}) {
+	logrus.Errorf(s, i...)
+}
+
+func (a adapter) Info(s string, i ...interface{}) {
+	logrus.Infof(s, i...)
+}
+
+func (a adapter) Debug(s string, i ...interface{}) {
+	logrus.Debugf(s, i...)
+}
+
+func (a adapter) Warn(s string, i ...interface{}) {
+	logrus.Warnf(s, i...)
+}
+
+var _ retryablehttp.LeveledLogger = adapter{}
+
 func configFromResolverRequest(req *http.Request) (*api.ReleaseBuildConfiguration, error) {
 	retryClient := retryablehttp.NewClient()
 	retryClient.RetryMax = 5
+	retryClient.Logger = adapter{}
 	client := retryClient.StandardClient()
 
 	resp, err := client.Do(req)

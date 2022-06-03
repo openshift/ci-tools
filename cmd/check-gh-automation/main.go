@@ -21,6 +21,7 @@ import (
 type options struct {
 	config          configflagutil.ConfigOptions
 	bots            flagutil.Strings
+	ignoreRepos     flagutil.Strings
 	releaseRepoPath string
 	flagutil.GitHubOptions
 }
@@ -30,6 +31,7 @@ func gatherOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
 	fs.Var(&o.bots, "bot", "Check if this bot is a collaborator. Can be passed multiple times.")
+	fs.Var(&o.ignoreRepos, "ignore-repo", "Ignore a repo. Formatted org/repo. Can be passed multiple times.")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
 
 	o.GitHubOptions.AddFlags(fs)
@@ -88,7 +90,7 @@ func main() {
 	} else {
 		repos = gatherModifiedRepos(o.releaseRepoPath, logger)
 	}
-	failing, err := checkRepos(repos, o.bots.Strings(), client, logger)
+	failing, err := checkRepos(repos, o.bots.Strings(), o.ignoreRepos.StringSet(), client, logger)
 	if err != nil {
 		logger.Fatalf("error checking repos: %v", err)
 	}
@@ -100,7 +102,7 @@ func main() {
 	logger.Infof("All repos have github automation configured.")
 }
 
-func checkRepos(repos []string, bots []string, client collaboratorClient, logger *logrus.Entry) ([]string, error) {
+func checkRepos(repos []string, bots []string, ignoreRepos sets.String, client collaboratorClient, logger *logrus.Entry) ([]string, error) {
 	var failing []string
 	for _, orgRepo := range repos {
 		split := strings.Split(orgRepo, "/")
@@ -109,6 +111,11 @@ func checkRepos(repos []string, bots []string, client collaboratorClient, logger
 			"org":  org,
 			"repo": repo,
 		})
+
+		if ignoreRepos.Has(orgRepo) {
+			repoLogger.Infof("skipping ignored repo")
+			continue
+		}
 
 		var missingBots []string
 		for _, bot := range bots {

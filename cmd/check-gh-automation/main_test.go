@@ -70,6 +70,12 @@ func TestCheckRepos(t *testing.T) {
 			ignoreRepos: sets.NewString("org-2/repo-z"),
 		},
 		{
+			name:        "ignored org",
+			repos:       []string{"org-2/repo-z"},
+			bots:        []string{"a-bot", "b-bot"},
+			ignoreRepos: sets.NewString("org-2"),
+		},
+		{
 			name:        "collaborator check returns error",
 			repos:       []string{"org-1/fake"},
 			bots:        []string{"a-bot"},

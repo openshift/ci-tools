@@ -67,7 +67,7 @@ func TestJobNamesFromComment(t *testing.T) {
 	testCases := []struct {
 		name     string
 		comment  string
-		expected []string
+		expected []config.Job
 	}{
 		{
 			name:    "no job name",
@@ -76,22 +76,27 @@ func TestJobNamesFromComment(t *testing.T) {
 		{
 			name:     "/payload-job periodic-ci-openshift-release-some-job",
 			comment:  "/payload-job periodic-ci-openshift-release-some-job",
-			expected: []string{"periodic-ci-openshift-release-some-job"},
+			expected: []config.Job{{Name: "periodic-ci-openshift-release-some-job"}},
 		},
 		{
 			name:     "multiple job",
 			comment:  "/payload-job periodic-ci-openshift-release-some-job periodic-ci-openshift-release-another-job",
-			expected: []string{"periodic-ci-openshift-release-some-job", "periodic-ci-openshift-release-another-job"},
+			expected: []config.Job{{Name: "periodic-ci-openshift-release-some-job"}, {Name: "periodic-ci-openshift-release-another-job"}},
 		},
 		{
 			name:     "multiple match",
 			comment:  "/payload-job periodic-ci-openshift-release-some-job periodic-ci-openshift-release-another-job\n/cmd 4.8 ci all\n/payload-job periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial",
-			expected: []string{"periodic-ci-openshift-release-some-job", "periodic-ci-openshift-release-another-job", "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial"},
+			expected: []config.Job{{Name: "periodic-ci-openshift-release-some-job"}, {Name: "periodic-ci-openshift-release-another-job"}, {Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial"}},
+		},
+		{
+			name:     "/payload-aggregate periodic-ci-openshift-release-some-job   10  ",
+			comment:  "/payload-aggregate periodic-ci-openshift-release-some-job   10  ",
+			expected: []config.Job{{Name: "periodic-ci-openshift-release-some-job", AggregatedCount: 10}},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := jobNamesFromComment(tc.comment)
+			actual := jobsFromComment(tc.comment)
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
 			}
@@ -372,8 +377,38 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 					Body: "/payload-job periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial periodic-ci-openshift-release-another-job",
 				},
 			},
-			expected: `trigger 1 job(s) for the /payload-job command
+			expected: `trigger 1 job(s) for the /payload-(job|aggregate) command
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
+
+See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
+`,
+		},
+		{
+			name: "payload-aggregate",
+			s: &server{
+				ghc:                ghc,
+				ctx:                context.TODO(),
+				kubeClient:         fakeclient.NewClientBuilder().Build(),
+				namespace:          "ci",
+				testResolver:       newFakeTestResolver(),
+				trustedChecker:     &fakeTrustedChecker{},
+				ciOpConfigResolver: &fakeCIOpConfigResolver{},
+			},
+			ic: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}},
+				Issue: github.Issue{
+					Number:      123,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: `/payload-aggregate periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial 10
+/payload-aggregate periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi 10`,
+				},
+			},
+			expected: `trigger 2 job(s) for the /payload-(job|aggregate) command
+- periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
+- periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi
 
 See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 `,

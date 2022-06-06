@@ -208,6 +208,10 @@ func (m MajorMinor) Less(other MajorMinor) bool {
 	return m.Minor < other.Minor
 }
 
+func (m MajorMinor) GetPastVersion() string {
+	return fmt.Sprintf("%d.%d", m.Major, m.Minor-1)
+}
+
 func (m MajorMinor) GetVersion() string {
 	return fmt.Sprintf("%d.%d", m.Major, m.Minor)
 }

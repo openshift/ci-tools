@@ -9,11 +9,39 @@ import (
 
 	"k8s.io/test-infra/prow/config"
 	prowconfig "k8s.io/test-infra/prow/config"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api/ocplifecycle"
+	"github.com/openshift/ci-tools/pkg/api/shardprowconfig"
 )
 
+func prepareProwConfig(repos, labels, branches []string) string {
+	return prepareProwConfigWithExcludedBranches(repos, labels, branches, []string{})
+}
+
+func prepareProwConfigWithExcludedBranches(repos, labels, branches, excludedBranches []string) string {
+	config := &shardprowconfig.ProwConfigWithPointers{Tide: &shardprowconfig.TideConfig{Queries: config.TideQueries{
+		{
+			Repos:            repos,
+			Labels:           labels,
+			IncludedBranches: branches,
+			ExcludedBranches: excludedBranches,
+		},
+	}}}
+	bytes, err := yaml.Marshal(config)
+	if err != nil {
+		panic("Error marshaling prow config for comparison")
+	}
+	return string(bytes)
+}
+
 func TestReconcile(t *testing.T) {
+	path := "openshift/dummy/_prowconfig.yaml"
+	privPath := "openshift-priv/dummy/_prowconfig.yaml"
+
+	repos := []string{"openshift/dummy"}
+	privRepos := []string{"openshift-priv/dummy"}
+
 	featureFreezeEvent := &ocplifecycle.Event{
 		LifecyclePhase: ocplifecycle.LifecyclePhase{
 			Event: ocplifecycle.LifecycleEventFeatureFreeze},
@@ -21,6 +49,10 @@ func TestReconcile(t *testing.T) {
 	codeFreezeEvent := &ocplifecycle.Event{
 		LifecyclePhase: ocplifecycle.LifecyclePhase{
 			Event: ocplifecycle.LifecycleEventCodeFreeze},
+		ProductVersion: "4.9"}
+	generalAvailabilityEvent := &ocplifecycle.Event{
+		LifecyclePhase: ocplifecycle.LifecyclePhase{
+			Event: ocplifecycle.LifecycleEventGenerallyAvailable},
 		ProductVersion: "4.9"}
 
 	type args struct {
@@ -41,25 +73,15 @@ func TestReconcile(t *testing.T) {
 				event:  featureFreezeEvent,
 				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
 					{
-						Repos:            []string{"openshift/dummy"},
-						Labels:           []string{"qe-approved"},
-						IncludedBranches: []string{"master"},
+						Repos:            repos,
+						Labels:           []string{qeApproved},
+						IncludedBranches: []string{masterBranch},
 					},
 				}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
-				"openshift/dummy/_prowconfig.yaml": `tide:
-  queries:
-  - includedBranches:
-    - master
-    labels:
-    - docs-approved
-    - px-approved
-    - qe-approved
-    repos:
-    - openshift/dummy
-`},
+				path: prepareProwConfig(repos, []string{docsApproved, pxApproved, qeApproved}, []string{masterBranch})},
 		},
 		{
 			name: "label cherry-pick-approved together with branches main and release will trigger addition of bugzilla/valid-bug label",
@@ -68,25 +90,15 @@ func TestReconcile(t *testing.T) {
 				event:  featureFreezeEvent,
 				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
 					{
-						Repos:            []string{"openshift/dummy"},
-						Labels:           []string{"cherry-pick-approved"},
-						IncludedBranches: []string{"main", "release-4.9"},
+						Repos:            repos,
+						Labels:           []string{cherryPickApproved},
+						IncludedBranches: []string{mainBranch, "release-4.9"},
 					},
 				}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
-				"openshift/dummy/_prowconfig.yaml": `tide:
-  queries:
-  - includedBranches:
-    - main
-    - release-4.9
-    labels:
-    - bugzilla/valid-bug
-    - cherry-pick-approved
-    repos:
-    - openshift/dummy
-`},
+				path: prepareProwConfig(repos, []string{validBug, cherryPickApproved}, []string{mainBranch, "release-4.9"})},
 		},
 		{
 			name: "openshift-priv repo will not be modified",
@@ -95,24 +107,15 @@ func TestReconcile(t *testing.T) {
 				event:  featureFreezeEvent,
 				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
 					{
-						Repos:            []string{"openshift-priv/dummy"},
-						Labels:           []string{"cherry-pick-approved"},
-						IncludedBranches: []string{"main", "openshift-4.9"},
+						Repos:            privRepos,
+						Labels:           []string{cherryPickApproved},
+						IncludedBranches: []string{mainBranch, "openshift-4.9"},
 					},
 				}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
-				"openshift-priv/dummy/_prowconfig.yaml": `tide:
-  queries:
-  - includedBranches:
-    - main
-    - openshift-4.9
-    labels:
-    - cherry-pick-approved
-    repos:
-    - openshift-priv/dummy
-`},
+				privPath: prepareProwConfig(privRepos, []string{cherryPickApproved}, []string{mainBranch, "openshift-4.9"})},
 		},
 		{
 			name: "lack of main/master won't trigger modification",
@@ -121,23 +124,15 @@ func TestReconcile(t *testing.T) {
 				event:  featureFreezeEvent,
 				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
 					{
-						Repos:            []string{"openshift/dummy"},
-						Labels:           []string{"cherry-pick-approved"},
+						Repos:            repos,
+						Labels:           []string{cherryPickApproved},
 						IncludedBranches: []string{"openshift-4.9"},
 					},
 				}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
-				"openshift/dummy/_prowconfig.yaml": `tide:
-  queries:
-  - includedBranches:
-    - openshift-4.9
-    labels:
-    - cherry-pick-approved
-    repos:
-    - openshift/dummy
-`},
+				path: prepareProwConfig(repos, []string{cherryPickApproved}, []string{"openshift-4.9"})},
 		},
 		{
 			name: "lack of cherry-pick-approved label won't trigger modification",
@@ -146,21 +141,14 @@ func TestReconcile(t *testing.T) {
 				event:  featureFreezeEvent,
 				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
 					{
-						Repos:            []string{"openshift/dummy"},
-						IncludedBranches: []string{"master", "openshift-4.9"},
+						Repos:            repos,
+						IncludedBranches: []string{masterBranch, "openshift-4.9"},
 					},
 				}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
-				"openshift/dummy/_prowconfig.yaml": `tide:
-  queries:
-  - includedBranches:
-    - master
-    - openshift-4.9
-    repos:
-    - openshift/dummy
-`},
+				path: prepareProwConfig(repos, []string{}, []string{masterBranch, "openshift-4.9"})},
 		},
 		{
 			name: "bugzilla/valid-bug will be removed during code freeze from repo with main",
@@ -169,22 +157,15 @@ func TestReconcile(t *testing.T) {
 				event:  codeFreezeEvent,
 				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
 					{
-						Repos:            []string{"openshift/dummy"},
-						Labels:           []string{"bugzilla/valid-bug"},
-						IncludedBranches: []string{"main", "release-4.9"},
+						Repos:            repos,
+						Labels:           []string{validBug},
+						IncludedBranches: []string{mainBranch, "release-4.9"},
 					},
 				}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
-				"openshift/dummy/_prowconfig.yaml": `tide:
-  queries:
-  - includedBranches:
-    - main
-    - release-4.9
-    repos:
-    - openshift/dummy
-`},
+				path: prepareProwConfig(repos, []string{}, []string{mainBranch, "release-4.9"})},
 		},
 		{
 			name: "bugzilla/valid-bug will not be removed as repo is no feature freeze due to a qe-approved label",
@@ -193,25 +174,15 @@ func TestReconcile(t *testing.T) {
 				event:  codeFreezeEvent,
 				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
 					{
-						Repos:            []string{"openshift/dummy"},
-						Labels:           []string{"bugzilla/valid-bug", "qe-approved"},
-						IncludedBranches: []string{"main", "release-4.9"},
+						Repos:            repos,
+						Labels:           []string{validBug, qeApproved},
+						IncludedBranches: []string{mainBranch, "release-4.9"},
 					},
 				}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
-				"openshift/dummy/_prowconfig.yaml": `tide:
-  queries:
-  - includedBranches:
-    - main
-    - release-4.9
-    labels:
-    - bugzilla/valid-bug
-    - qe-approved
-    repos:
-    - openshift/dummy
-`},
+				path: prepareProwConfig(repos, []string{validBug, qeApproved}, []string{mainBranch, "release-4.9"})},
 		},
 		{
 			name: "no master or main will lead to ignoring the config during code freeze",
@@ -220,29 +191,92 @@ func TestReconcile(t *testing.T) {
 				event:  codeFreezeEvent,
 				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
 					{
-						Repos:            []string{"openshift/dummy"},
-						Labels:           []string{"bugzilla/valid-bug"},
+						Repos:            repos,
+						Labels:           []string{validBug},
 						IncludedBranches: []string{"openshift-4.9", "release-4.9"},
 					},
 				}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
-				"openshift/dummy/_prowconfig.yaml": `tide:
-  queries:
-  - includedBranches:
-    - openshift-4.9
-    - release-4.9
-    labels:
-    - bugzilla/valid-bug
-    repos:
-    - openshift/dummy
-`},
+				path: prepareProwConfig(repos, []string{validBug}, []string{"openshift-4.9", "release-4.9"})},
+		},
+		{
+			name: "staff-eng-approved changes current to future during GA",
+			args: args{
+				target: afero.NewMemMapFs(),
+				event:  generalAvailabilityEvent,
+				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+					{
+						Repos:            repos,
+						Labels:           []string{staffEngApproved},
+						IncludedBranches: []string{"openshift-4.9", "release-4.9"},
+					},
+				}}},
+			},
+			wantErr: false,
+			expectedShardFiles: map[string]string{
+				path: prepareProwConfig(repos, []string{staffEngApproved}, []string{"openshift-4.10", "release-4.10"})},
+		},
+		{
+			name: "staff-eng-approved changes current to future during GA",
+			args: args{
+				target: afero.NewMemMapFs(),
+				event:  generalAvailabilityEvent,
+				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+					{
+						Repos:            repos,
+						Labels:           []string{staffEngApproved},
+						IncludedBranches: []string{"openshift-4.9", "release-4.9"},
+					},
+				}}},
+			},
+			wantErr: false,
+			expectedShardFiles: map[string]string{
+				path: prepareProwConfig(repos, []string{staffEngApproved}, []string{"openshift-4.10", "release-4.10"})},
+		},
+		{
+			name: "cherry-pick-approved changes past release to current during GA",
+			args: args{
+				target: afero.NewMemMapFs(),
+				event:  generalAvailabilityEvent,
+				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+					{
+						Repos:            repos,
+						Labels:           []string{cherryPickApproved},
+						IncludedBranches: []string{"openshift-4.8", "release-4.8"},
+					},
+				}}},
+			},
+			wantErr: false,
+			expectedShardFiles: map[string]string{
+				path: prepareProwConfig(repos, []string{cherryPickApproved}, []string{"openshift-4.8", "openshift-4.9", "release-4.8", "release-4.9"})},
+		},
+		{
+			name: "past release excluded branches complemented with current and future during GA",
+			args: args{
+				target: afero.NewMemMapFs(),
+				event:  generalAvailabilityEvent,
+				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+					{
+						Repos:            repos,
+						ExcludedBranches: []string{"openshift-4.8", "release-4.8"},
+					},
+				}}},
+			},
+			wantErr: false,
+			expectedShardFiles: map[string]string{
+				path: prepareProwConfigWithExcludedBranches(
+					repos,
+					[]string{},
+					[]string{},
+					[]string{"openshift-4.10", "openshift-4.8", "openshift-4.9", "release-4.10", "release-4.8", "release-4.9"})},
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := reconcile(tt.args.event, tt.args.config, tt.args.target); (err != nil) != tt.wantErr {
+			if err := reconcile(tt.args.event, tt.args.config, tt.args.target, excludedRepos{}); (err != nil) != tt.wantErr {
 				t.Errorf("reconcile() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			shardedConfigFiles := map[string]string{}

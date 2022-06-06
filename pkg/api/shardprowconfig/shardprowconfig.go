@@ -23,22 +23,22 @@ type ShardProwConfigFunctors interface {
 
 // prowConfigWithPointers mimics the upstream prowConfig but has pointer fields only
 // in order to avoid serializing empty structs.
-type prowConfigWithPointers struct {
+type ProwConfigWithPointers struct {
 	BranchProtection *prowconfig.BranchProtection `json:"branch-protection,omitempty"`
-	Tide             *tideConfig                  `json:"tide,omitempty"`
+	Tide             *TideConfig                  `json:"tide,omitempty"`
 }
 
-type tideConfig struct {
+type TideConfig struct {
 	MergeType map[string]types.PullRequestMergeType `json:"merge_method,omitempty"`
 	Queries   prowconfig.TideQueries                `json:"queries,omitempty"`
 }
 
 func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConfigFunctors) (*prowconfig.ProwConfig, error) {
-	configsByOrgRepo := map[prowconfig.OrgRepo]*prowConfigWithPointers{}
+	configsByOrgRepo := map[prowconfig.OrgRepo]*ProwConfigWithPointers{}
 	for org, orgConfig := range pc.BranchProtection.Orgs {
 		for repo, repoConfig := range orgConfig.Repos {
 			if configsByOrgRepo[prowconfig.OrgRepo{Org: org, Repo: repo}] == nil {
-				configsByOrgRepo[prowconfig.OrgRepo{Org: org, Repo: repo}] = &prowConfigWithPointers{}
+				configsByOrgRepo[prowconfig.OrgRepo{Org: org, Repo: repo}] = &ProwConfigWithPointers{}
 			}
 			configsByOrgRepo[prowconfig.OrgRepo{Org: org, Repo: repo}].BranchProtection = &prowconfig.BranchProtection{
 				Orgs: map[string]prowconfig.Org{org: {Repos: map[string]prowconfig.Repo{repo: repoConfig}}},
@@ -48,7 +48,7 @@ func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConf
 
 		if isPolicySet(orgConfig.Policy) {
 			if configsByOrgRepo[prowconfig.OrgRepo{Org: org}] == nil {
-				configsByOrgRepo[prowconfig.OrgRepo{Org: org}] = &prowConfigWithPointers{}
+				configsByOrgRepo[prowconfig.OrgRepo{Org: org}] = &ProwConfigWithPointers{}
 			}
 			configsByOrgRepo[prowconfig.OrgRepo{Org: org}].BranchProtection = &prowconfig.BranchProtection{
 				Orgs: map[string]prowconfig.Org{org: orgConfig},
@@ -67,9 +67,9 @@ func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConf
 		}
 
 		if configsByOrgRepo[orgRepo] == nil {
-			configsByOrgRepo[orgRepo] = &prowConfigWithPointers{}
+			configsByOrgRepo[orgRepo] = &ProwConfigWithPointers{}
 		}
-		configsByOrgRepo[orgRepo].Tide = &tideConfig{MergeType: map[string]types.PullRequestMergeType{orgOrgRepoString: mergeMethod}}
+		configsByOrgRepo[orgRepo].Tide = &TideConfig{MergeType: map[string]types.PullRequestMergeType{orgOrgRepoString: mergeMethod}}
 		delete(pc.Tide.MergeType, orgOrgRepoString)
 	}
 
@@ -78,10 +78,10 @@ func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConf
 	for _, query := range pc.Tide.Queries {
 		for _, org := range query.Orgs {
 			if configsByOrgRepo[prowconfig.OrgRepo{Org: org}] == nil {
-				configsByOrgRepo[prowconfig.OrgRepo{Org: org}] = &prowConfigWithPointers{}
+				configsByOrgRepo[prowconfig.OrgRepo{Org: org}] = &ProwConfigWithPointers{}
 			}
 			if configsByOrgRepo[prowconfig.OrgRepo{Org: org}].Tide == nil {
-				configsByOrgRepo[prowconfig.OrgRepo{Org: org}].Tide = &tideConfig{}
+				configsByOrgRepo[prowconfig.OrgRepo{Org: org}].Tide = &TideConfig{}
 			}
 			queryCopy, err := deepCopyTideQuery(&query)
 			if err != nil {
@@ -98,10 +98,10 @@ func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConf
 			}
 			orgRepo := prowconfig.OrgRepo{Org: slashSplit[0], Repo: slashSplit[1]}
 			if configsByOrgRepo[orgRepo] == nil {
-				configsByOrgRepo[orgRepo] = &prowConfigWithPointers{}
+				configsByOrgRepo[orgRepo] = &ProwConfigWithPointers{}
 			}
 			if configsByOrgRepo[orgRepo].Tide == nil {
-				configsByOrgRepo[orgRepo].Tide = &tideConfig{}
+				configsByOrgRepo[orgRepo].Tide = &TideConfig{}
 			}
 			queryCopy, err := deepCopyTideQuery(&query)
 			if err != nil {

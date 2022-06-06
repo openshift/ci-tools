@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
+	"gopkg.in/yaml.v2"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -25,8 +27,9 @@ type options struct {
 	prowConfigDir            string
 	shardedProwConfigBaseDir string
 	lifecycleConfigFile      string
-	overwriteTimeRaw         string
-	overwriteTime            *time.Time
+	excludedReposFile        string
+	overrideTimeRaw          string
+	overrideTime             *time.Time
 }
 
 func gatherOptions() (*options, error) {
@@ -37,7 +40,8 @@ func gatherOptions() (*options, error) {
 	fs.StringVar(&o.prowConfigDir, "prow-config-dir", "", "Path to the Prow configuration directory.")
 	fs.StringVar(&o.shardedProwConfigBaseDir, "sharded-prow-config-base-dir", "", "Basedir for the sharded prow config. If set, org and repo-specific config will get removed from the main prow config and written out in an org/repo tree below the base dir.")
 	fs.StringVar(&o.lifecycleConfigFile, "lifecycle-config", "", "Path to the lifecycle config file")
-	fs.StringVar(&o.overwriteTimeRaw, "overwrite-time", "", "Act as if this was the current time, must be in RFC3339 format")
+	fs.StringVar(&o.excludedReposFile, "excluded-repos-config", "", "Path to the GA's excluded repos config file.")
+	fs.StringVar(&o.overrideTimeRaw, "override-time", "", "Act as if this was the current time, must be in RFC3339 format")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
@@ -56,11 +60,11 @@ func gatherOptions() (*options, error) {
 		errs = append(errs, errors.New("--sharded-prow-config-base-dir is required"))
 	}
 
-	if o.overwriteTimeRaw != "" {
-		if parsed, err := time.Parse(time.RFC3339, o.overwriteTimeRaw); err != nil {
-			errs = append(errs, fmt.Errorf("failed to parse %q as RFC3339 time: %w", o.overwriteTimeRaw, err))
+	if o.overrideTimeRaw != "" {
+		if parsed, err := time.Parse(time.RFC3339, o.overrideTimeRaw); err != nil {
+			errs = append(errs, fmt.Errorf("failed to parse %q as RFC3339 time: %w", o.overrideTimeRaw, err))
 		} else {
-			o.overwriteTime = &parsed
+			o.overrideTime = &parsed
 		}
 	}
 
@@ -237,6 +241,128 @@ func (cfe codeFreezeEvent) GetDataFromProwConfig(pc *prowconfig.ProwConfig) {
 	}
 }
 
+type excludedRepos struct {
+	NoXYAllowList     []string `yaml:"NoXYAllowList,flow"`
+	ExcludedAllowList []string `yaml:"ExcludedAllowList,flow"`
+}
+
+func (er *excludedRepos) loadExcludedReposConfig(path string) error {
+	cfgBytes, err := ioutil.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read excluded repos config from path %s: %w", path, err)
+	}
+	if err := yaml.Unmarshal(cfgBytes, er); err != nil {
+		return fmt.Errorf("failed to deserialize the excluded repos config: %w", err)
+	}
+	return nil
+}
+
+type generalAvailabilityEvent struct {
+	repos                         sets.String
+	excludedAllowList             sets.String
+	noXYAllowList                 sets.String
+	openshiftReleaseBranches      sets.String
+	openshiftReleaseBranchesPlus1 sets.String
+	releasePast                   string
+	openshiftPast                 string
+	releaseCurrent                string
+	openshiftCurrent              string
+	releaseFuture                 string
+	openshiftFuture               string
+	past                          string
+	current                       string
+	future                        string
+}
+
+func newGeneralAvailabilityEvent(past, current, future string, repos excludedRepos) generalAvailabilityEvent {
+	noXYAllowList := sets.NewString(repos.NoXYAllowList...)
+	excludedAllowList := sets.NewString(repos.ExcludedAllowList...).Union(noXYAllowList)
+
+	return generalAvailabilityEvent{
+		repos:                         sets.NewString(),
+		excludedAllowList:             excludedAllowList,
+		noXYAllowList:                 noXYAllowList,
+		openshiftReleaseBranches:      sets.NewString(release+current, openshift+current),
+		openshiftReleaseBranchesPlus1: sets.NewString(release+future, openshift+future),
+		releasePast:                   release + past,
+		releaseCurrent:                release + current,
+		releaseFuture:                 release + future,
+		openshiftPast:                 openshift + past,
+		openshiftCurrent:              openshift + current,
+		openshiftFuture:               openshift + future,
+		past:                          past,
+		current:                       current,
+		future:                        future,
+	}
+}
+
+func (gae generalAvailabilityEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
+	gae.ensureStaffEngApprovedLabel(q)
+	gae.ensureCherryPickApprovedLabel(q)
+	gae.overrideExcludedBranches(q)
+}
+
+func (gae generalAvailabilityEvent) GetDataFromProwConfig(*prowconfig.ProwConfig) {}
+
+func (gae *generalAvailabilityEvent) ensureCherryPickApprovedLabel(q *prowconfig.TideQuery) {
+	reqLabels := sets.NewString(q.Labels...)
+	branches := sets.NewString(q.IncludedBranches...)
+	if reqLabels.Has(cherryPickApproved) {
+		if branches.Has(gae.releasePast) {
+			branches.Insert(gae.releaseCurrent)
+		}
+		if branches.Has(gae.openshiftPast) {
+			branches.Insert(gae.openshiftCurrent)
+		}
+		if branches.Intersection(gae.openshiftReleaseBranches).Len() == 0 && !gae.noXYAllowList.Has(q.Repos[0]) {
+			fmt.Printf("Suspicious cherry-pick-approved query (without %s): %s\n", gae.current, q.Repos)
+		}
+		if branches.Intersection(gae.openshiftReleaseBranchesPlus1).Len() != 0 {
+			fmt.Printf("Suspicious cherry-pick-approved query (with %s): %s\n", gae.future, q.Repos)
+		}
+	}
+	q.IncludedBranches = branches.List()
+}
+
+func (gae *generalAvailabilityEvent) ensureStaffEngApprovedLabel(q *prowconfig.TideQuery) {
+	reqLabels := sets.NewString(q.Labels...)
+	branches := sets.NewString(q.IncludedBranches...)
+
+	if reqLabels.Has(staffEngApproved) {
+		if branches.Has(gae.releaseCurrent) {
+			branches.Delete(gae.releaseCurrent)
+			branches.Insert(gae.releaseFuture)
+		}
+		if branches.Has(gae.openshiftCurrent) {
+			branches.Delete(gae.openshiftCurrent)
+			branches.Insert(gae.openshiftFuture)
+		}
+
+		if !(branches.Equal(sets.NewString(gae.releaseFuture)) || branches.Equal(sets.NewString(gae.openshiftFuture)) || branches.Equal(gae.openshiftReleaseBranchesPlus1)) {
+			fmt.Printf("Suspicious staff-eng-approved query: %s\n", q.Repos)
+		}
+	}
+	q.IncludedBranches = branches.List()
+}
+
+func (gae *generalAvailabilityEvent) overrideExcludedBranches(q *prowconfig.TideQuery) {
+	branches := sets.NewString(q.ExcludedBranches...)
+	if branches.Has(gae.releasePast) {
+		branches.Insert(gae.releaseCurrent)
+		branches.Insert(gae.releaseFuture)
+	}
+	if branches.Has(gae.openshiftPast) {
+		branches.Insert(gae.openshiftCurrent)
+		branches.Insert(gae.openshiftFuture)
+	}
+	if branches.Len() > 0 {
+		if branches.Intersection(gae.openshiftReleaseBranchesPlus1).Len() == 0 && !gae.excludedAllowList.Has(q.Repos[0]) {
+			fmt.Printf("Suspicious complement query (without %s): %s\n", gae.future, q.Repos)
+		}
+	}
+	q.ExcludedBranches = branches.List()
+}
+
 func updateProwConfigs(o *options, now time.Time) error {
 	configPath := path.Join(o.prowConfigDir, config.ProwConfigFile)
 	var additionalConfigs []string
@@ -266,10 +392,16 @@ func updateProwConfigs(o *options, now time.Time) error {
 		return nil
 	}
 
-	return reconcile(event, &config.ProwConfig, afero.NewBasePathFs(afero.NewOsFs(), o.shardedProwConfigBaseDir))
+	repos := excludedRepos{}
+	if o.excludedReposFile != "" {
+		if err = repos.loadExcludedReposConfig(o.excludedReposFile); err != nil {
+			return fmt.Errorf("failed to load the excluded repos configuration: %w", err)
+		}
+	}
+	return reconcile(event, &config.ProwConfig, afero.NewBasePathFs(afero.NewOsFs(), o.shardedProwConfigBaseDir), repos)
 }
 
-func reconcile(event *ocplifecycle.Event, config *prowconfig.ProwConfig, target afero.Fs) error {
+func reconcile(event *ocplifecycle.Event, config *prowconfig.ProwConfig, target afero.Fs, repos excludedRepos) error {
 	delegate := newSharedDataDelegate()
 	currentVersion, err := ocplifecycle.ParseMajorMinor(event.ProductVersion)
 	if err != nil {
@@ -285,6 +417,15 @@ func reconcile(event *ocplifecycle.Event, config *prowconfig.ProwConfig, target 
 	}
 	if event.LifecyclePhase.Event == ocplifecycle.LifecycleEventCodeFreeze {
 		_, err = shardprowconfig.ShardProwConfig(config, target, newCodeFreezeEvent(delegate))
+	}
+	if event.LifecyclePhase.Event == ocplifecycle.LifecycleEventGenerallyAvailable {
+		_, err = shardprowconfig.ShardProwConfig(config, target,
+			newGeneralAvailabilityEvent(
+				currentVersion.GetPastVersion(),
+				currentVersion.GetVersion(),
+				currentVersion.GetFutureVersion(),
+				repos),
+		)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to shard the prow config: %w", err)

@@ -254,8 +254,10 @@ func makeGroups(openshiftPrivAdmins sets.String, peribolosConfig string, mapping
 		kerberosIDs := sets.NewString()
 		for _, admin := range openshiftPrivAdmins.List() {
 			kerberosID, ok := mapping[admin]
-			if !ok && !githubRobotIds.Has(admin) {
-				ignoredOpenshiftPrivAdminNames.Insert(admin)
+			if !ok {
+				if !githubRobotIds.Has(admin) {
+					ignoredOpenshiftPrivAdminNames.Insert(admin)
+				}
 				continue
 			}
 			kerberosIDs.Insert(kerberosID)

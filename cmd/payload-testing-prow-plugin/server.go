@@ -32,7 +32,10 @@ type githubClient interface {
 	GetPullRequest(org, repo string, number int) (*github.PullRequest, error)
 }
 
-var ocpPayloadTestsPattern = regexp.MustCompile(`(?mi)^/payload\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s*$`)
+var (
+	ocpPayloadTestsPattern    = regexp.MustCompile(`(?mi)^/payload\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s*$`)
+	ocpPayloadJobTestsPattern = regexp.MustCompile(`(?mi)^/payload-job\s+((?:[-\w.]+\s*?)+)\s*$`)
+)
 
 func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
 	// TODO(DPTP-2540): Better descriptions, better help
@@ -111,6 +114,19 @@ func specsFromComment(comment string) []jobSetSpecification {
 	return specs
 }
 
+func jobNamesFromComment(comment string) []string {
+	var ret []string
+	for _, match := range ocpPayloadJobTestsPattern.FindAllStringSubmatch(comment, -1) {
+		if len(match) < 2 {
+			// This should never happen
+			logrus.WithField("match", match).WithField("comment", comment).Error("failed to parse the comment because len(match)<2")
+			continue
+		}
+		ret = append(ret, strings.Fields(match[1])...)
+	}
+	return ret
+}
+
 const (
 	pluginName = "payload-testing"
 )
@@ -144,8 +160,25 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 
 	logger.WithField("ic.Comment.Body", ic.Comment.Body).Trace("received a comment")
 	specs := specsFromComment(ic.Comment.Body)
+	jobNamesFromComment := jobNamesFromComment(ic.Comment.Body)
 	if len(specs) == 0 {
-		logger.Trace("found no specs from comments")
+		logger.Trace("found no specs from comment")
+	}
+
+	var jobsFromComment []config.Job
+	if len(jobNamesFromComment) == 0 {
+		logger.Trace("found no job names from comment")
+	} else {
+		logger.WithField("jobNamesFromComment", jobNamesFromComment).Trace("found job names from comment")
+		specs = append(specs, jobSetSpecification{})
+		for _, jobName := range jobNamesFromComment {
+			jobsFromComment = append(jobsFromComment, config.Job{
+				Name: jobName,
+			})
+		}
+	}
+
+	if len(specs) == 0 && len(jobNamesFromComment) == 0 {
 		return ""
 	}
 
@@ -189,6 +222,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		counter:   0,
 		pr:        pr,
 	}
+
 	for _, spec := range specs {
 		specLogger := logger.WithFields(logrus.Fields{
 			"ocp":         spec.ocp,
@@ -197,19 +231,27 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		})
 		builder.spec = spec
 		var jobNames []string
-		specLogger.Debug("resolving jobs ...")
-		startResolveJobs := time.Now()
-		jobs, err := s.jobResolver.resolve(spec.ocp, spec.releaseType, spec.jobs)
-		specLogger.WithField("duration", time.Since(startResolveJobs)).WithField("len(jobs)", len(jobs)).
-			Debug("resolving jobs completed")
-		if err != nil {
-			specLogger.WithError(err).Error("could not resolve jobs")
-			return formatError(fmt.Errorf("could not resolve jobs for %s %s %s: %w", spec.ocp, spec.releaseType, spec.jobs, err))
+		var releaseJobSpecs []prpqv1.ReleaseJobSpec
+
+		var jobs []config.Job
+		if spec.ocp == "" {
+			jobs = jobsFromComment
+		} else {
+			specLogger.Debug("resolving jobs ...")
+			startResolveJobs := time.Now()
+			resolvedJobs, err := s.jobResolver.resolve(spec.ocp, spec.releaseType, spec.jobs)
+			specLogger.WithField("duration", time.Since(startResolveJobs)).WithField("len(jobs)", len(jobs)).
+				Debug("resolving jobs completed")
+			if err != nil {
+				specLogger.WithError(err).Error("could not resolve jobs")
+				return formatError(fmt.Errorf("could not resolve jobs for %s %s %s: %w", spec.ocp, spec.releaseType, spec.jobs, err))
+			}
+			jobs = resolvedJobs
 		}
+
 		specLogger.Debug("resolving tests ...")
 		startResolveTests := time.Now()
 
-		var releaseJobSpecs []prpqv1.ReleaseJobSpec
 		for _, job := range jobs {
 			if job.Test != "" {
 				jobNames = append(jobNames, job.Name)
@@ -322,7 +364,11 @@ func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec) *prpqv1.Pu
 
 func message(spec jobSetSpecification, tests []string) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("trigger %d jobs of type %s for the %s release of OCP %s\n", len(tests), spec.jobs, spec.releaseType, spec.ocp))
+	if spec.ocp == "" {
+		b.WriteString(fmt.Sprintf("trigger %d job(s) for the /payload-job command\n", len(tests)))
+	} else {
+		b.WriteString(fmt.Sprintf("trigger %d job(s) of type %s for the %s release of OCP %s\n", len(tests), spec.jobs, spec.releaseType, spec.ocp))
+	}
 	for _, test := range tests {
 		b.WriteString(fmt.Sprintf("- %s\n", test))
 	}

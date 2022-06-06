@@ -42,7 +42,7 @@ func TestCheckRepos(t *testing.T) {
 		name        string
 		repos       []string
 		bots        []string
-		ignoreRepos sets.String
+		ignore      sets.String
 		expected    []string
 		expectedErr error
 	}{
@@ -64,10 +64,16 @@ func TestCheckRepos(t *testing.T) {
 			expected: []string{"org-2/repo-z"},
 		},
 		{
-			name:        "ignored repo",
-			repos:       []string{"org-2/repo-z"},
-			bots:        []string{"a-bot", "b-bot"},
-			ignoreRepos: sets.NewString("org-2/repo-z"),
+			name:   "ignored repo",
+			repos:  []string{"org-2/repo-z"},
+			bots:   []string{"a-bot", "b-bot"},
+			ignore: sets.NewString("org-2/repo-z"),
+		},
+		{
+			name:   "ignored org",
+			repos:  []string{"org-2/repo-z"},
+			bots:   []string{"a-bot", "b-bot"},
+			ignore: sets.NewString("org-2"),
 		},
 		{
 			name:        "collaborator check returns error",
@@ -78,7 +84,7 @@ func TestCheckRepos(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			failing, err := checkRepos(tc.repos, tc.bots, tc.ignoreRepos, client, logrus.NewEntry(logrus.New()))
+			failing, err := checkRepos(tc.repos, tc.bots, tc.ignore, client, logrus.NewEntry(logrus.New()))
 			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("error doesn't match expected, diff: %s", diff)
 			}

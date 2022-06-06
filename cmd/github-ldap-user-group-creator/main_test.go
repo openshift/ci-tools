@@ -43,7 +43,7 @@ func TestMakeGroups(t *testing.T) {
 		{
 			name:                "basic case",
 			peribolosConfig:     "bar",
-			openshiftPrivAdmins: sets.NewString("a"),
+			openshiftPrivAdmins: sets.NewString("a", "RH-Cachito"),
 			mapping:             map[string]string{"a": "b", "c": "c"},
 			roverGroups:         map[string][]string{"old-group-name": {"b", "c"}, "x": {"y", "y"}},
 			config: &group.Config{

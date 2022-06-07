@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
@@ -19,6 +21,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -31,10 +34,12 @@ const (
 	PodClassProwJobs PodClass = "prowjobs"
 	PodClassNone PodClass = ""
 
-	// When a machine is annotated with this and the machineset is scaled down,
+	// MachineDeleteAnnotationKey When a machine is annotated with this and the machineset is scaled down,
 	// it will target machines with this annotation to satisfy the change.
 	MachineDeleteAnnotationKey         = "machine.openshift.io/cluster-api-delete-machine"
-	NodeDisableScaleDownLabelKey      = "cluster-autoscaler.kubernetes.io/scale-down-disabled"
+
+	// NodeDisableScaleDownAnnotationKey makes the autoscaler ignore a node for scale down consideration.
+	NodeDisableScaleDownAnnotationKey = "cluster-autoscaler.kubernetes.io/scale-down-disabled"
 	PodMachineAnnotationKey           = "machine.openshift.io/machine"
 	MachineInstanceStateAnnotationKey = "machine.openshift.io/instance-state"
 )
@@ -44,9 +49,17 @@ var (
 	podsInformer           cache.SharedIndexInformer
 	machineSetResource = schema.GroupVersionResource{Group: "machine.openshift.io", Version: "v1beta1", Resource: "machinesets"}
 	machineResource = schema.GroupVersionResource{Group: "machine.openshift.io", Version: "v1beta1", Resource: "machines"}
-	scaleDownMutex sync.Mutex
-)
 
+	// Used to ensure only that one evaluation for final scale down, per pod class, is running at a given time.
+	nodeClassScaleDown = map[PodClass]*uint32 {
+		PodClassBuilds: new(uint32),
+		PodClassTests: new(uint32),
+		PodClassLongTests: new(uint32),
+		PodClassProwJobs: new(uint32),
+	}
+
+	nodeAvoidanceLock sync.Mutex
+)
 
 type Prioritization struct {
 	context context.Context
@@ -200,7 +213,24 @@ func (p* Prioritization) getWorkloadNodes(podClass PodClass) ([]*corev1.Node, er
 }
 
 func (p* Prioritization) isPodActive(pod *corev1.Pod) bool {
-	return pod.Status.Phase == corev1.PodPending || pod.Status.Phase == corev1.PodRunning
+	active := pod.Status.Phase == corev1.PodPending || pod.Status.Phase == corev1.PodRunning
+	if !active {
+		if len(pod.Finalizers) > 0 {
+			return true
+		}
+		// For the sake of timing conditions, like this:
+		// https://github.com/openshift/ci-tools/blob/361bb525d35f7fc5ec8eed87d5014b61a99300fc/pkg/steps/template.go#L577
+		// count the pod as active for several minutes after actual termination.
+		for _, cs := range pod.Status.ContainerStatuses {
+			if cs.State.Terminated == nil {
+				return true
+			}
+			if time.Since(cs.State.Terminated.FinishedAt.Time) < 5 * time.Minute {
+				return true
+			}
+		}
+	}
+	return active
 }
 
 
@@ -231,9 +261,56 @@ func (p* Prioritization) getNodeHostname(node *corev1.Node) string {
 	}
 }
 
+func (p* Prioritization) evaluateScaleDown(podClass PodClass, node *corev1.Node) {
+	defer atomic.StoreUint32(nodeClassScaleDown[podClass], 0) // once the evaluation completes, allow a new one to be started for this PodClass
+
+	klog.Infof("Evaluating second stage of scale down for podClass %v node: %v", podClass, node.Name)
+
+	abortScaleDown := func(err error) {
+		// We can't leave nodes in NoSchedule with a custom taint. This confuses the autoscalers
+		// simulated fit calculations.
+		klog.Errorf("Aborting scale down of node %v due to: %v", node.Name, err)
+		_ = p.setNodeAvoidanceTaint(node, corev1.TaintEffectPreferNoSchedule) // might was well use it for something
+	}
+
+	podCount := 0
+
+	// Final live query to see if there are really no pods. This is done out of band of the webhook
+	// invocation as the API is heavier than using the shared informer indexer used for quick checks.
+	queriedPods, err := p.k8sClientSet.CoreV1().Pods(metav1.NamespaceAll).List(p.context, metav1.ListOptions{
+		FieldSelector:        fmt.Sprintf("spec.nodeName=%v", node.Name),
+	})
+
+	if err !=  nil {
+		abortScaleDown(fmt.Errorf("unable to determine real-time pods for node: %#v", err))
+		return
+	}
+
+	for _, queriedPod := range queriedPods.Items {
+		_, ok := queriedPod.Labels[CiWorkloadLabelName] // only count CI workload pods
+		if ok && p.isPodActive(&queriedPod) {
+			podCount++
+		}
+	}
+
+	if podCount != 0 {
+		abortScaleDown(fmt.Errorf("found non zero real-time pod count: %v", podCount))
+		return
+	}
+
+	klog.Warningf("Triggering final stage of scale down for podClass %v node: %v", podClass, node.Name)
+	err = p.scaleDown(node)
+	if err != nil {
+		abortScaleDown(fmt.Errorf("unable to scale down node %v: %v", node.Name, err))
+		return
+	}
+
+}
+
 func (p* Prioritization) runNodeAvoidance(podClass PodClass) ([]*corev1.Node, error) {
-	scaleDownMutex.Lock()
-	defer scaleDownMutex.Unlock()
+	nodeAvoidanceLock.Lock()
+	defer nodeAvoidanceLock.Unlock()
+
 	workloadNodes, err := p.getWorkloadNodes(podClass)  // find all nodes that are relevant to this workload class
 
 	if err != nil {
@@ -268,8 +345,6 @@ func (p* Prioritization) runNodeAvoidance(podClass PodClass) ([]*corev1.Node, er
 		return classedPodCount
 	}
 
-	avoidanceNodes := make([]*corev1.Node, 0)
-
 	// Sort first by podCount then by oldest. The goal is to always be psuedo-draining the node
 	// with the fewest pods which is at least 15 minutes old. Sorting by oldest helps make this
 	// search deterministic -- we want to report the same node consistently unless there is a node
@@ -288,54 +363,11 @@ func (p* Prioritization) runNodeAvoidance(podClass PodClass) ([]*corev1.Node, er
 		}
 	})
 
+
 	precludeNodes := make([]*corev1.Node, 0)
+	avoidanceNodes := make([]*corev1.Node, 0)
 
 	for _, node := range workloadNodes {
-
-		for _, taint := range node.Spec.Taints {
-			// If we find a workload node that has out NoSchedule taint, we need might be able to delete it.
-			if taint.Key == CiWorkloadAvoidanceTaintName && taint.Effect == corev1.TaintEffectNoSchedule {
-
-				abortScaleDown := func(err error) {
-					// We can't leave nodes in NoSchedule with a custom taint. This confuses the autoscalers
-					// simulated fit calculations.
-					klog.Errorf("Aborting scale down of node %v due to: %v", node.Name, err)
-					_ = p.setNodeAvoidanceState(node, CiAvoidanceStatePreferNoSchedule) // might was well use it for something
-				}
-
-				// podCount := getCachedPodCount(node.Name)
-				podCount := 0
-
-				// The node was tainted before we arrived and there a no pods on currently. We can trigger a scale down!
-				queriedPods, err := p.k8sClientSet.CoreV1().Pods(metav1.NamespaceAll).List(p.context, metav1.ListOptions{
-					FieldSelector:        fmt.Sprintf("spec.nodeName=%v", node.Name),
-				})
-
-				if err !=  nil {
-					abortScaleDown(fmt.Errorf("unable to determine real-time pods for node: %#v", err))
-					continue
-				}
-
-				for _, queriedPod := range queriedPods.Items {
-					_, ok := queriedPod.Labels[CiWorkloadLabelName] // only count CI workload pods
-					if ok && p.isPodActive(&queriedPod) {
-						podCount++
-					}
-				}
-
-				if podCount != 0 {
-					abortScaleDown(fmt.Errorf("found non zero real-time pod count: %v", podCount))
-					continue
-				}
-
-				klog.Warningf("Preparing for scale down of tainted node with %v=%v and pods=%v: %v", taint.Key, taint.Effect, podCount, node.Name)
-				err = p.scaleDown(node)
-				if err != nil {
-					abortScaleDown(fmt.Errorf("unable to scale down node %v: %v", node.Name, err))
-					continue
-				}
-			}
-		}
 
 		maxTargets := int(math.Ceil(float64(len(workloadNodes)) / 4)) // find appox 25% of nodes
 
@@ -346,31 +378,42 @@ func (p* Prioritization) runNodeAvoidance(podClass PodClass) ([]*corev1.Node, er
 				precludeNodes = append(precludeNodes, node)
 			}
 
-			if p.getNodeAvoidanceState(node) == CiAvoidanceStateNoSchedule && getCachedPodCount(node.Name) != 0 {
-				// If the webhook is shutdown after we label, but before the taint is applied, there
-				// will be no "update" to the node to trigger the taint application when we start back up.
-				// fall back to PreferNoSchedule.
-				err := p.setNodeAvoidanceState(node, CiAvoidanceStatePreferNoSchedule)
-				if err != nil {
-					klog.Errorf("Unable to turn on PreferNoSchedule avoidance for node %v: %#v", node.Name, err)
+			if p.getNodeAvoidanceTaint(node) == corev1.TaintEffectNoSchedule {
+
+				if getCachedPodCount(node.Name) == 0 {
+					// If there are no other active scale downs for this pod class, kick one off
+					if atomic.CompareAndSwapUint32(nodeClassScaleDown[podClass], 0, 1) {
+						// There is no ongoing scale down evaluation, so trigger a new one.
+						go p.evaluateScaleDown(podClass, node)
+					}
+				} else {
+					// We applied NoSchedule on a previous invocation, but found pods scheduled
+					// anyway.
+					// The scenario here may be that we set NoSchedule, but a pod was scheduled before the NoSchedule taint fully respected.
+					// Go back to preferring no schedule so that node can be utilized it necessary
+					err := p.setNodeAvoidanceTaint(node, corev1.TaintEffectPreferNoSchedule)
+					if err != nil {
+						klog.Errorf("Unable to turn on PreferNoSchedule avoidance for node %v: %#v", node.Name, err)
+					}
 				}
+
 			}
 
 			if len(avoidanceNodes) >= maxTargets {
-				err := p.setNodeAvoidanceState(node, CiAvoidanceStateOff)
+				err := p.setNodeAvoidanceTaint(node, TaintEffectNone)
 				if err != nil {
 					klog.Errorf("Unable to turn off avoidance for node %v: %#v", node.Name, err)
 				}
 			} else {
 				avoidanceNodes = append(avoidanceNodes, node)
 				if getCachedPodCount(node.Name) == 0 {
-					err := p.setNodeAvoidanceState(node, CiAvoidanceStateNoSchedule)
+					err := p.setNodeAvoidanceTaint(node, corev1.TaintEffectNoSchedule)
 					if err != nil {
 						klog.Errorf("Unable to turn on NoSchedule avoidance for node %v: %#v", node.Name, err)
 					}
 					precludeNodes = append(precludeNodes, node)
 				} else {
-					err := p.setNodeAvoidanceState(node, CiAvoidanceStatePreferNoSchedule)
+					err := p.setNodeAvoidanceTaint(node, corev1.TaintEffectPreferNoSchedule)
 					if err != nil {
 						klog.Errorf("Unable to turn on PreferNoSchedule avoidance for node %v: %#v", node.Name, err)
 					}
@@ -395,15 +438,12 @@ func (p* Prioritization) runNodeAvoidance(podClass PodClass) ([]*corev1.Node, er
 	return precludeNodes, nil
 }
 
-type patchStringValue struct {
-	Op    string `json:"op"`
-	Path  string `json:"path"`
-	Value string   `json:"value"`
-}
-
-// scaleDown - caller must hold scaleDownMutex
+// scaleDown should be called by only one thread at a time. It assesses a node which has been staged for
+// safe scale down (e.g. is running with the NoSchedule taint). Final checks are performed. If an error is
+// returned, the caller must unstage the scale down.
 func (p* Prioritization) scaleDown(node *corev1.Node) error {
 	if _, ok := node.Labels[CiWorkloadLabelName]; !ok {
+		// Just a sanity check
 		return fmt.Errorf("will not scale down non-ci-workload node")
 	}
 
@@ -434,20 +474,7 @@ func (p* Prioritization) scaleDown(node *corev1.Node) error {
 	instanceState, ok := machineAnnotations[MachineInstanceStateAnnotationKey]
 
 	if !ok || strings.ToLower(instanceState.(string)) != "running" {  // AWS is lowercase, GCE is uppercase
-		return fmt.Errorf("unable to scale down machine which is not in the running state node %v / machine %v", node.Name, machineName)
-	}
-
-	_, ok = machineAnnotations[MachineDeleteAnnotationKey]
-	if ok {
-		// This is an important check as it will prevent us from trying to scale down a machineset
-		// multiple times for the same machine.
-		klog.Infof("will not attempt to scale down machine - it is already annotated for deletion: %v", machineName)
-		return nil
-	}
-
-	if node.Spec.Unschedulable == true {
-		klog.Infof("will not attempt to scale down machine - it is Unschedulable; node %v / machine %v", node.Name, machineName)
-		return nil
+		return fmt.Errorf("refusing to scale down machine which is not in the running state machine %v / node %v", machineName, node.Name)
 	}
 
 	machineMetadata, found, err := unstructured.NestedMap(machineObj.UnstructuredContent(), "metadata")
@@ -475,103 +502,184 @@ func (p* Prioritization) scaleDown(node *corev1.Node) error {
 		return fmt.Errorf("unable to find machineset name in machine owner references: %v node: %v", machineName, node.Name)
 	}
 
-	ms, err := machinesetClient.Get(p.context, machineSetName, metav1.GetOptions{})
+	_, err = machinesetClient.Get(p.context, machineSetName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to get machineset %v: %#v", machineSetName, err)
 	}
 
-	replicas, found, err := unstructured.NestedInt64(ms.UnstructuredContent(), "spec", "replicas")
-	if err != nil || !found{
-		return fmt.Errorf("unable to get current replicas in machineset %v: %#v", machineSetName, err)
-	}
-
-	replicas--
-	if replicas < 0 {
-		return fmt.Errorf("computed replicas < 0 for machineset %v ; abort this scale down due to race", machineSetName)
-	}
-
-	klog.Infof("About to scale down machineset %v to %v replicas", machineSetName, replicas)
-
-	setDeletionAnnotation := func(op string) error {
-		deletionAnnotationPatch := []interface{}{
-			map[string]interface{}{
-				"op":    op,
-				"path":  "/metadata/annotations/" + strings.ReplaceAll(MachineDeleteAnnotationKey, "/", "~1"),
-				"value": "true",
-			},
-		}
-
-		deletionPayload, err := json.Marshal(deletionAnnotationPatch)
-		if err != nil {
-			return fmt.Errorf("unable to marshal machine annotation deletion patch: %#v", err)
-		}
-
-		_, err = machineClient.Patch(p.context, machineName, types.JSONPatchType, deletionPayload, metav1.PatchOptions{})
-		if err != nil {
-			return fmt.Errorf("error patching machine annotations: %v", err)
-		}
-
-		return nil
-	}
-
-	err = setDeletionAnnotation("add")
-	if err != nil {
-		return fmt.Errorf("error setting deletion annotation for machine: %#v", err)
-	}
-
-	scaleDownPatch := []interface{}{
+	klog.Infof("Setting machine deletion annotation on machine %v for node %v", machineName, node.Name)
+	deletionAnnotationPatch := []interface{}{
 		map[string]interface{}{
-			"op":    "replace",
-			"path":  "/spec/replicas",
-			"value": replicas,
+			"op":    "add",
+			"path":  "/metadata/annotations/" + strings.ReplaceAll(MachineDeleteAnnotationKey, "/", "~1"),
+			"value": "true",
 		},
 	}
 
-	scaleDownPayload, err := json.Marshal(scaleDownPatch)
+	deletionPayload, err := json.Marshal(deletionAnnotationPatch)
 	if err != nil {
-		_ = setDeletionAnnotation("remove") // try to remove the annotation we added
-		return fmt.Errorf("unable to marshal machineset scale down patch: %#v", err)
+		return fmt.Errorf("unable to marshal machine %v annotation deletion patch: %#v", machineName, err)
 	}
 
-	_, err = machinesetClient.Patch(p.context, machineSetName, types.JSONPatchType, scaleDownPayload, metav1.PatchOptions{})
+	// setting this annotation is the point of no return -- if successful, we will try to scale down indefinitely
+	_, err = machineClient.Patch(p.context, machineName, types.JSONPatchType, deletionPayload, metav1.PatchOptions{})
 	if err != nil {
-		_ = setDeletionAnnotation("remove") // try to remove the annotation we added
-		return fmt.Errorf("error patching machineset: %v", err)
+		return fmt.Errorf("unable to apply machine %v annotation deletion patch: %#v", machineName, err)
 	}
 
-	klog.Infof("Triggered scale down machineset %v to %v replicas with target node: %v", machineSetName, replicas, node.Name)
+	attempt := 0
+	for {
+		if attempt > 0 {
+			time.Sleep(30 * time.Second)
+		}
+
+		ms, err := machinesetClient.Get(p.context, machineSetName, metav1.GetOptions{})
+		if err != nil {
+			if kerrors.IsNotFound(err) {
+				klog.Errorf("Machineset %v has disappeared -- canceling scaledown", machineSetName)
+				return nil
+			}
+			return fmt.Errorf("unable to get machineset %v: %#v", machineSetName, err)
+		}
+
+		klog.Infof("Trying to scale down machineset %v in order to eliminate machine %v / node %v [attempt %v]", machineSetName, machineName, node.Name, attempt)
+		attempt++
+
+		replicas, found, err := unstructured.NestedInt64(ms.UnstructuredContent(), "spec", "replicas")
+		if err != nil || !found{
+			klog.Errorf("unable to get current replicas in machineset %v: %#v", machineSetName, err)
+			continue
+		}
+
+		readyReplicas, found, err := unstructured.NestedInt64(ms.UnstructuredContent(), "status", "readyReplicas")
+		if err != nil || !found{
+			klog.Errorf("unable to get current status.readyReplicas in machineset %v: %#v", machineSetName, err)
+			continue
+		}
+
+		if replicas != readyReplicas {
+			klog.Warningf("existing replicas (%v) != status.readyReplicas (%v) in machineset %v ; waiting until these value match", replicas, readyReplicas, machineSetName)
+			continue
+		}
+
+		if replicas == 0 {
+			// This is unexpected -- something has changed replicas and we don't think it was us.
+			klog.Errorf("computed replicas < 0 for machineset %v ; abort this scale down due to race", machineSetName)
+			return nil
+		}
+
+		machineObj, err = machineClient.Get(p.context, machineName, metav1.GetOptions{})
+		if err != nil {
+			if kerrors.IsNotFound(err) {
+				klog.Infof("Machine is no longer present %v / node %v", machineName, node.Name)
+				return nil
+			}
+			klog.Errorf("unable to get machine for scale down node %v / machine %v: %#v", node.Name, machineName, err)
+			continue
+		}
+
+		replicas--
+		klog.Infof("Scaling down machineset %v to %v replicas in order to eliminate machine %v / node %v", machineSetName, replicas, machineName, node.Name)
+
+		scaleDownPatch := []interface{}{
+			map[string]interface{}{
+				"op":    "replace",
+				"path":  "/spec/replicas",
+				"value": replicas,
+			},
+		}
+
+		scaleDownPayload, err := json.Marshal(scaleDownPatch)
+		if err != nil {
+			klog.Errorf("unable to marshal machineset scale down patch: %#v", err)
+			continue
+		}
+
+		_, err = machinesetClient.Patch(p.context, machineSetName, types.JSONPatchType, scaleDownPayload, metav1.PatchOptions{})
+		if err != nil {
+			klog.Errorf("unable to patch machineset %v with scale down patch: %#v", machineSetName, err)
+			continue
+		}
+	}
+}
+
+const TaintEffectNone corev1.TaintEffect = "None"
+
+func (p* Prioritization) getNodeAvoidanceTaint(node *corev1.Node) corev1.TaintEffect {
+	for _, taint := range node.Spec.Taints {
+		if taint.Key == CiWorkloadAvoidanceTaintName {
+			return taint.Effect
+		}
+	}
+	return TaintEffectNone
+}
+
+func (p* Prioritization) setNodeAvoidanceTaint(node *corev1.Node, desiredEffect corev1.TaintEffect) error {
+	nodeTaints := node.Spec.Taints
+	if nodeTaints == nil {
+		nodeTaints = make([]corev1.Taint, 0)
+	}
+
+	foundIndex := -1
+	var foundEffect corev1.TaintEffect
+	for i, taint := range nodeTaints {
+		if taint.Key == CiWorkloadAvoidanceTaintName {
+			foundIndex = i
+			foundEffect = taint.Effect
+		}
+	}
+
+	modified := false // whether there is reason to patch the node taints
+
+	if foundIndex == -1 && desiredEffect != TaintEffectNone {
+		nodeTaints = append(nodeTaints, corev1.Taint{
+			Key:    CiWorkloadAvoidanceTaintName,
+			Value:  "on",
+			Effect: desiredEffect,
+		})
+		modified = true
+	}
+
+	if foundIndex >= 0 {
+		if desiredEffect == TaintEffectNone {
+			// remove our taint from the list
+			nodeTaints = append(nodeTaints[:foundIndex], nodeTaints[foundIndex+1:]...)
+			modified = true
+		} else if foundEffect != desiredEffect {
+			nodeTaints[foundIndex].Effect = desiredEffect
+			modified = true
+		}
+	}
+
+	if modified {
+		taintMap := map[string][]corev1.Taint {
+			"taints": nodeTaints,
+		}
+		unstructuredTaints, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&taintMap)
+		if err != nil {
+			return fmt.Errorf("error decoding modified taints to unstructured data: %v", err)
+		}
+
+		patch := map[string]interface{}{
+			"op":    "add",
+			"path":  "/spec/taints",
+			"value": unstructuredTaints["taints"],
+		}
+
+		patchEntries := make([]map[string]interface{}, 0)
+		patchEntries = append(patchEntries, patch)
+
+		payloadBytes, _ := json.Marshal(patchEntries)
+		_, err = p.k8sClientSet.CoreV1().Nodes().Patch(p.context, node.Name, types.JSONPatchType, payloadBytes, metav1.PatchOptions{})
+		if err == nil {
+			klog.Infof("Avoidance taint state changed (old effect [%v]) to %v for node: %v", foundEffect, desiredEffect, node.Name)
+		} else {
+			return fmt.Errorf("failed to change avoidance taint (existing effect [%v]) to %v for node %v: %#v", foundEffect, desiredEffect, node.Name, err)
+		}
+	}
 	return nil
 }
 
-func (p* Prioritization) getNodeAvoidanceState(node *corev1.Node) string {
-	if val, ok := node.Labels[CiWorkloadAvoidanceLabelName]; ok {
-		return val
-	}
-	return CiAvoidanceStateOff
-}
-
-func (p* Prioritization) setNodeAvoidanceState(node *corev1.Node, newState string) error {
-	currentState := p.getNodeAvoidanceState(node)
-	if currentState == newState {
-		// already set, no need to update
-		return nil
-	}
-
-	payload := []patchStringValue{{
-		Op:    "add",
-		Path:  "/metadata/labels/" + CiWorkloadAvoidanceLabelName,
-		Value: newState,
-	}}
-
-	payloadBytes, _ := json.Marshal(payload)
-	_, err := p.k8sClientSet.CoreV1().Nodes().Patch(p.context, node.Name, types.JSONPatchType, payloadBytes, metav1.PatchOptions{})
-	if err == nil {
-		klog.Infof("Avoidance label state changed (old state %v) to %v for node: %v", currentState, newState, node.Name)
-	} else {
-		klog.Errorf("Failed to change avoidance label (old state %v) to %v for node %v: %#v", currentState, newState, node.Name, err)
-	}
-	return err
-}
 
 
 func (p* Prioritization) findHostnamesToPreclude(podClass PodClass) ([]string, error) {

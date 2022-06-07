@@ -30,12 +30,7 @@ import (
 const (
 	CiWorkloadLabelName          = "ci-workload"
 	CiWorkloadAvoidanceTaintName = "ci-workload-avoid"
-	CiWorkloadAvoidanceLabelName = "ci-workload-avoid"
 	CiWorkloadNamespaceLabelName      = "ci-workload-namespace"
-
-	CiAvoidanceStateOff = "off"
-	CiAvoidanceStatePreferNoSchedule = "prefer"
-	CiAvoidanceStateNoSchedule = "on"
 )
 
 var (

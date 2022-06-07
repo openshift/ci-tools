@@ -430,7 +430,7 @@ func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.Resp
 		return
 	}
 
-	// Decode the pod from the AdmissionReview.
+	// Decode the Node from the AdmissionReview.
 	rawRequest := admissionReviewRequest.Request.Object.Raw
 	node := corev1.Node{}
 	if _, _, err := deserializer.Decode(rawRequest, nil, &node); err != nil {
@@ -469,87 +469,18 @@ func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.Resp
 		}
 	}
 
-	taintDesired := false
-	var desiredEffect corev1.TaintEffect
-
 	if podClass != PodClassNone {
 		profile("classified request")
 
-		state := prioritization.getNodeAvoidanceState(&node)
-		switch state {
-		case CiAvoidanceStateOff:
-			taintDesired = false
-		case CiAvoidanceStatePreferNoSchedule:
-			taintDesired = true
-			desiredEffect = corev1.TaintEffectPreferNoSchedule
-		case CiAvoidanceStateNoSchedule:
-			taintDesired = true
-			desiredEffect = corev1.TaintEffectNoSchedule
-		}
-
-		// We want to ensure this node taint matches the intent of the label
-		taints := node.Spec.Taints
-		if taints == nil {
-			taints = make([]corev1.Taint, 0)
-		}
-
-		okToTaint := true
-		foundIndex := -1
-		var foundEffect corev1.TaintEffect
-		for i, taint := range taints {
-			if taint.Effect == corev1.TaintEffectNoSchedule && strings.Contains(taint.Key, "ci-") == false {
-				klog.Infof("will not attempt to mutate node - it is tainted with %v:%v=%v:  node %v", taint.Key, taint.Value, taint.Effect, node.Name)
-				okToTaint = false
-				break
-			}
-			if taint.Key == CiWorkloadAvoidanceTaintName {
-				foundIndex = i
-				foundEffect = taint.Effect
-			}
-		}
-
-		modified := false
-
-		if foundIndex == -1 && taintDesired {
-			taints = append(taints, corev1.Taint{
-				Key:    CiWorkloadAvoidanceTaintName,
-				Value:  string(podClass),
-				Effect: desiredEffect,
-			})
-			modified = true
-		}
-
-		if foundIndex >= 0 {
-			if !taintDesired {
-				// remove our taint from the list
-				taints = append(taints[:foundIndex], taints[foundIndex+1:]...)
-				modified = true
-			} else if foundEffect != desiredEffect {
-				taints[foundIndex].Effect = desiredEffect
-				modified = true
-			}
-		}
-
-		if okToTaint && modified {
-			taintMap := map[string][]corev1.Taint {
-				"taints": taints,
-			}
-			unstructedTaints, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&taintMap)
-			if err != nil {
-				writeHttpError(500, fmt.Errorf("error decoding taints to unstructured data: %v", err))
-				return
-			}
-			addPatchEntry("add", "/spec/taints", unstructedTaints["taints"])
-
-			// If the webhook is preparing to scale down a machine, label the node so that the
-			// cluster autoscaler ignores it. We don't want them trying to scale down the same
-			// node at the same time.
+		if _, ok := node.Annotations[NodeDisableScaleDownAnnotationKey]; !ok {
+			// If this webhook owns this class of node, then we own its scale down in order to prevent
+			// contention with the autoscaler. Ideally, we would apply this annotation declaratively
+			// in the machineset, but it doesn't appear to support annotations. Instead,
+			// we apply it on first sight of it not being present.
 			// https://github.com/kubernetes/autoscaler/blob/a13c59c2430e5fe0e07d8233a536326394e0c925/cluster-autoscaler/FAQ.md#how-can-i-prevent-cluster-autoscaler-from-scaling-down-a-particular-node
-			prepareScaleDown := desiredEffect == corev1.TaintEffectNoSchedule
-			escapedKey := strings.ReplaceAll(NodeDisableScaleDownLabelKey, "/", "~1")
-			addPatchEntry("add", "/metadata/labels/" + escapedKey, fmt.Sprintf("%v", prepareScaleDown))
+			escapedKey := strings.ReplaceAll(NodeDisableScaleDownAnnotationKey, "/", "~1")
+			addPatchEntry("add", "/metadata/annotations/" + escapedKey, "true")
 		}
-
 	}
 
 	admissionResponse := &admissionv1.AdmissionResponse{}
@@ -568,11 +499,11 @@ func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.Resp
 
 	admissionResponse.Allowed = true
 	if len(patch) > 0 {
-		klog.InfoS("Incoming node to be modified", "podClass", podClass, "node", fmt.Sprintf(nodeName), "taintDesired", taintDesired, "desiredEffect", desiredEffect)
+		klog.InfoS("Incoming node to be modified", "podClass", podClass, "node", fmt.Sprintf(nodeName))
 		admissionResponse.PatchType = &patchType
 		admissionResponse.Patch = patch
 	} else {
-		klog.InfoS("Incoming node to be ignored", "podClass", podClass, "node", fmt.Sprintf(nodeName), "taintDesired", taintDesired, "desiredEffect", desiredEffect)
+		klog.InfoS("Incoming node to be ignored", "podClass", podClass, "node", fmt.Sprintf(nodeName))
 	}
 
 	// Construct the response, which is just another AdmissionReview.

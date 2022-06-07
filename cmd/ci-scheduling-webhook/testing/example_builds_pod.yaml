@@ -17,7 +17,7 @@ spec:
     image: registry.access.redhat.com/ubi8
     command:
     - sleep
-    - "600"
+    - "30"
     resources:
       requests:
         cpu: "100m"

@@ -15,8 +15,8 @@
       prow.k8s.io/refs.pull: "100"
       prow.k8s.io/refs.repo: test-repo
       prow.k8s.io/type: periodic
-      release.openshift.io/aggregation-id: a0e1bddfc1d7a5e78e6c2e483f238b15
-      releaseJobNameHash: 3cfd4050d8c5f92e2a61b67055742651
+      release.openshift.io/aggregation-id: ba10bb8398ca6a8023d32d52b10282b851622c22
+      releaseJobNameHash: 2ca90b0590522c9c9db49f9953c2e5d63ac2d6c2
     name: some-uuid
     namespace: test-namespace
     resourceVersion: "1"
@@ -93,8 +93,8 @@
       prow.k8s.io/refs.pull: "100"
       prow.k8s.io/refs.repo: test-repo
       prow.k8s.io/type: periodic
-      release.openshift.io/aggregation-id: a0e1bddfc1d7a5e78e6c2e483f238b15
-      releaseJobNameHash: 283d99c0dcbd80070e6816420ac68caa
+      release.openshift.io/aggregation-id: ba10bb8398ca6a8023d32d52b10282b851622c22
+      releaseJobNameHash: 3f0af5d66fb219d461a94c835edf6ff4a23ed5a7
     name: some-uuid
     namespace: test-namespace
     resourceVersion: "1"
@@ -160,7 +160,7 @@
     annotations:
       prow.k8s.io/context: ""
       prow.k8s.io/job: aggregator-periodic-ci-test-org-test-repo-test-branch-test-name
-      releaseJobName: e2bd00d6b219bda9ee14b9e9e3c8300e
+      releaseJobName: 4ead5eccc876bb18a1d582ff779ad545a2b5e043
     creationTimestamp: null
     labels:
       created-by-prow: "true"
@@ -168,7 +168,7 @@
       prow.k8s.io/job: aggregator-periodic-ci-test-org-test-repo-test-branch-test-name
       prow.k8s.io/type: periodic
       pullrequestpayloadqualificationruns.ci.openshift.io: prpqr-test
-      release.openshift.io/aggregation-id: a0e1bddfc1d7a5e78e6c2e483f238b15
+      release.openshift.io/aggregation-id: ba10bb8398ca6a8023d32d52b10282b851622c22
     name: some-uuid
     namespace: test-namespace
     resourceVersion: "1"
@@ -202,7 +202,7 @@
             - as: release-analysis-prpqr-aggregator
               steps:
                 env:
-                  AGGREGATION_ID: a0e1bddfc1d7a5e78e6c2e483f238b15
+                  AGGREGATION_ID: ba10bb8398ca6a8023d32d52b10282b851622c22
                   EXPLICIT_GCS_PREFIX: logs/test-org-test-repo-100-test-name
                   GOOGLE_SA_CREDENTIAL_FILE: /var/run/secrets/google-serviceaccount-credentials.json
                   JOB_START_TIME: "1970-01-01T01:00:00+01:00"

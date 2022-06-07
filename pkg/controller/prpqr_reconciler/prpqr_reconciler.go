@@ -2,7 +2,7 @@ package prpqr_reconciler
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
 	"reflect"
@@ -419,10 +419,11 @@ func constructCondition(statuses map[string]*v1.PullRequestPayloadJobStatus) met
 }
 
 func jobNameHash(name string) string {
-	hasher := md5.New()
-	// MD5 Write never returns error
-	_, _ = hasher.Write([]byte(name))
-	return hex.EncodeToString(hasher.Sum(nil))
+	h := sha1.New()
+	if n, err := h.Write([]byte(name)); err != nil {
+		logrus.WithField("n", n).WithError(err).Error("failed to write")
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func resolveCiopConfig(rc injectingResolverClient, baseCiop *api.Metadata, inject *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error) {

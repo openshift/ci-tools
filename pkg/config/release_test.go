@@ -109,6 +109,29 @@ git mv renameme/file renamed/file
 	compareChanges(t, ClusterProfilesPath, files, cmd, GetChangedClusterProfiles, expected)
 }
 
+func TestGetAddedConfigs(t *testing.T) {
+	files := []string{
+		"nochanges/file", "changeme/file", "removeme/file", "moveme/file",
+		"renameme/file", "dir/dir/file",
+	}
+	cmd := `
+> changeme/file
+git rm --quiet removeme/file
+mkdir new/ renamed/
+> new/file
+git add new/file
+git mv moveme/file moveme/moved
+git mv renameme/file renamed/file
+> dir/dir/file
+`
+	expected := []string{
+		filepath.Join(CiopConfigInRepoPath, "moveme", "moved"),
+		filepath.Join(CiopConfigInRepoPath, "new", "file"),
+		filepath.Join(CiopConfigInRepoPath, "renamed", "file"),
+	}
+	compareChanges(t, CiopConfigInRepoPath, files, cmd, GetAddedConfigs, expected)
+}
+
 func TestConfigMapName(t *testing.T) {
 	path := "path/to/a-file.yaml"
 	dnfError := fmt.Errorf("path not covered by any config-updater pattern: path/to/a-file.yaml")

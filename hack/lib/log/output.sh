@@ -97,8 +97,8 @@ function os::log::internal::prefix_lines() {
 
 	local old_ifs="${IFS}"
 	IFS=$'\n'
-	for line in "${content}"; do
+	while read -r line; do
 		echo "${prefix} ${line}"
-	done
+	done <<< "${content}"
 	IFS="${old_ifs}"
 }

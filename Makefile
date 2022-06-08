@@ -125,9 +125,7 @@ cmd/vault-secret-collection-manager/index.js: cmd/vault-secret-collection-manage
 # Example:
 #   make production-install
 production-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/frontend/dist cmd/repo-init/frontend/dist
-	rm -f cmd/pod-scaler/frontend/dist/dummy # we keep this file in git to keep the thing compiling without static assets
-	rm -f cmd/repo-init/frontend/dist/dummy
-	hack/install.sh
+	hack/install.sh no-race remove-dummy
 .PHONY: production-install
 
 # Install Go binaries with enabled race detector to $GOPATH/bin.
@@ -136,7 +134,7 @@ production-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/
 # Example:
 #   make production-install
 race-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/frontend/dist cmd/repo-init/frontend/dist
-	hack/install.sh race
+	hack/install.sh race keep-dummy
 
 # Run integration tests.
 #

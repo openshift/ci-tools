@@ -152,7 +152,8 @@ func (p* Prioritization) initializePrioritization() error {
 }
 
 func (p* Prioritization) pollNodeClassForScaleDown(podClass PodClass) {
-	for _ = range time.Tick(time.Minute * 3) {
+	p.evaluateNodeClassScaleDown(podClass)
+	for _ = range time.Tick(time.Minute) {
 		p.evaluateNodeClassScaleDown(podClass)
 	}
 }
@@ -173,7 +174,7 @@ func (p* Prioritization) isNodeReady(node *corev1.Node) bool {
 
 // getWorkloadNodes returns all nodes presently available which support a given
 // podClass (workload type).
-func (p* Prioritization) getWorkloadNodes(podClass PodClass, minNodeAge time.Duration) ([]*corev1.Node, error) {
+func (p* Prioritization) getWorkloadNodes(podClass PodClass, readyNodesOnly bool, minNodeAge time.Duration) ([]*corev1.Node, error) {
 	items, err := nodesInformer.GetIndexer().ByIndex(IndexNodesByCiWorkload, string(podClass))
 	if err != nil {
 		return nil, err
@@ -197,7 +198,7 @@ func (p* Prioritization) getWorkloadNodes(podClass PodClass, minNodeAge time.Dur
 		}
 
 		node := nodeObj.(*corev1.Node)
-		if !p.isNodeReady(node) {
+		if readyNodesOnly && p.isNodeReady(node) == false {
 			// If the node is cordoned or otherwise unavailable, don't
 			// include it. We should only return viable nodes for new workloads.
 			continue
@@ -235,7 +236,7 @@ func (p* Prioritization) isPodActive(pod *corev1.Pod) bool {
 }
 
 
-func (p* Prioritization) getPodsUsingNode(nodeName string) ([]*corev1.Pod, error) {
+func (p* Prioritization) getPodsUsingNode(nodeName string, classedPodsOnly bool) ([]*corev1.Pod, error) {
 	items, err := podsInformer.GetIndexer().ByIndex(IndexPodsByNode, nodeName)
 	if err != nil {
 		return nil, err
@@ -244,6 +245,13 @@ func (p* Prioritization) getPodsUsingNode(nodeName string) ([]*corev1.Pod, error
 	pods := make([]*corev1.Pod, 0)
 	for i := range items {
 		pod := items[i].(*corev1.Pod)
+
+		if classedPodsOnly {
+			if _, ok := pod.Labels[CiWorkloadLabelName]; !ok {
+				continue
+			}
+		}
+
 		if p.isPodActive(pod) {
 			// Count only pods which are consuming resources
 			pods = append(pods, pod)
@@ -271,7 +279,7 @@ func (p* Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.N
 		// We can't leave nodes in NoSchedule with a custom taint. This confuses the autoscalers
 		// simulated fit calculations.
 		klog.Errorf("Aborting scale down of node %v due to: %v", node.Name, err)
-		_ = p.setNodeAvoidanceTaint(node, corev1.TaintEffectPreferNoSchedule) // might was well use it for something
+		_ = p.setNodeAvoidanceState(node, podClass, corev1.TaintEffectPreferNoSchedule) // might was well use it for something
 	}
 
 	podCount := 0
@@ -310,7 +318,7 @@ func (p* Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.N
 
 func (p* Prioritization) evaluateNodeClassScaleDown(podClass PodClass) {
 	// find all nodes that are relevant to this workload class and at least x minutes old
-	workloadNodes, err := p.getWorkloadNodesInAvoidanceOrder(podClass)
+	workloadNodes, err := p.getWorkloadNodesInAvoidanceOrder(podClass, false)
 
 	if err != nil {
 		klog.Errorf("Error finding workload nodes for scale down assessment of podClass %v: %v", podClass, err)
@@ -331,24 +339,23 @@ func (p* Prioritization) evaluateNodeClassScaleDown(podClass PodClass) {
 		if len(avoidanceNodes) >= maxAvoidanceTargets {
 			// Allow any remaining node to be scheduled if it is beyond our
 			// maximum target count.
-			err := p.setNodeAvoidanceTaint(node, TaintEffectNone)
+			err := p.setNodeAvoidanceState(node, podClass, TaintEffectNone)
 			if err != nil {
 				klog.Errorf("Unable to turn off avoidance for node %v: %#v", node.Name, err)
 			}
 		} else {
 			// Otherwise, we want to encourage pods away from this node.
 
-			pods, err := p.getPodsUsingNode(node.Name)
+			pods, err := p.getPodsUsingNode(node.Name, true)
 			if err != nil {
 				klog.Errorf("Unable to check pod count during class scale down eval for node %v: %#v", node.Name, err)
 				continue
 			}
 
 			avoidanceNodes = append(avoidanceNodes, node)
-			avoidanceInfo = append(avoidanceInfo, fmt.Sprintf("%v:%v", node.Name, len(pods)))
 
 			if len(pods) == 0 {
-				if p.getNodeAvoidanceTaint(node) == corev1.TaintEffectNoSchedule {
+				if p.getNodeAvoidanceState(node) == corev1.TaintEffectNoSchedule {
 					// We set NoSchedule in a previous loop and there are still no pods on the
 					// node (e.g. a race between our patch and a pod being scheduled might
 					// have violated that expectation). Time to scale it down.
@@ -359,26 +366,28 @@ func (p* Prioritization) evaluateNodeClassScaleDown(podClass PodClass) {
 						go p.evaluateNodeScaleDown(podClass, node)
 					}
 				} else {
-					err := p.setNodeAvoidanceTaint(node, corev1.TaintEffectNoSchedule)
+					err := p.setNodeAvoidanceState(node, podClass, corev1.TaintEffectNoSchedule)
 					if err != nil {
 						klog.Errorf("Unable to turn on NoSchedule avoidance for node %v: %#v", node.Name, err)
 					}
 				}
 			} else {
-				err := p.setNodeAvoidanceTaint(node, corev1.TaintEffectPreferNoSchedule)
+				err := p.setNodeAvoidanceState(node, podClass, corev1.TaintEffectPreferNoSchedule)
 				if err != nil {
 					klog.Errorf("Unable to turn on PreferNoSchedule avoidance for node %v: %#v", node.Name, err)
 				}
 			}
+
+			avoidanceInfo = append(avoidanceInfo, fmt.Sprintf("%v;pods=%v;avoidance=%v", node.Name, len(pods), p.getNodeAvoidanceState(node)))
 		}
 	}
 
 	klog.Infof("Avoidance info for podClass %v ; avoiding: %v", podClass, avoidanceInfo)
 }
 
-func (p* Prioritization) getWorkloadNodesInAvoidanceOrder(podClass PodClass) ([]*corev1.Node, error) {
+func (p* Prioritization) getWorkloadNodesInAvoidanceOrder(podClass PodClass, readyNodesOnly bool) ([]*corev1.Node, error) {
 	// find all nodes that are relevant to this workload class and have been around at least x minutes.
-	workloadNodes, err := p.getWorkloadNodes(podClass, 15 * time.Minute)
+	workloadNodes, err := p.getWorkloadNodes(podClass, readyNodesOnly, 15 * time.Minute)
 
 	if err != nil {
 		return nil, fmt.Errorf("unable to find workload nodes for %v: %v", podClass, err)
@@ -395,19 +404,13 @@ func (p* Prioritization) getWorkloadNodesInAvoidanceOrder(podClass PodClass) ([]
 			return val
 		}
 
-		pods, err := p.getPodsUsingNode(nodeName)
+		pods, err := p.getPodsUsingNode(nodeName, true)
 		if err != nil {
 			klog.Errorf("Unable to get pod count for node: %v: %v", nodeName, err)
 			return 255
 		}
 
-		classedPodCount := 0  // we only care about pods relevant to CI (i.e. ignore daemonsets)
-		for _, pod := range pods {
-			if _, ok := pod.Labels[CiWorkloadLabelName]; ok {
-				classedPodCount++
-			}
-		}
-
+		classedPodCount := len(pods)
 		cachedPodCount[nodeName] = classedPodCount
 		return classedPodCount
 	}
@@ -437,7 +440,7 @@ func (p* Prioritization) findNodesToPreclude(podClass PodClass) ([]*corev1.Node,
 	nodeAvoidanceLock.Lock()
 	defer nodeAvoidanceLock.Unlock()
 
-	workloadNodes, err := p.getWorkloadNodesInAvoidanceOrder(podClass)
+	workloadNodes, err := p.getWorkloadNodesInAvoidanceOrder(podClass, true)
 
 	if err != nil {
 		return nil, fmt.Errorf("unable to get sorted workload nodes for %v: %v", podClass, err)
@@ -546,7 +549,7 @@ func (p* Prioritization) scaleDown(node *corev1.Node) error {
 	attempt := 0
 	for {
 		if attempt > 0 {
-			time.Sleep(30 * time.Second)
+			time.Sleep(10 * time.Second)
 		}
 
 		ms, err := machinesetClient.Get(p.context, machineSetName, metav1.GetOptions{})
@@ -565,12 +568,6 @@ func (p* Prioritization) scaleDown(node *corev1.Node) error {
 		if err != nil || !found{
 			klog.Errorf("unable to get current replicas in machineset %v: %#v", machineSetName, err)
 			continue
-		}
-
-		if replicas == 0 {
-			// This is unexpected -- something has changed replicas and we don't think it was us.
-			klog.Errorf("computed replicas < 0 for machineset %v ; abort this scale down due to race", machineSetName)
-			return nil
 		}
 
 		// Check if machineset status.replicas matches spec.replicas. Should be eventually consistent.
@@ -619,13 +616,26 @@ func (p* Prioritization) scaleDown(node *corev1.Node) error {
 			continue
 		}
 
+		if strings.ToLower(machinePhase) == "deleting" {
+			// This is also treated as a successful scale down
+			klog.Infof("Machine is in deleting state %v / node %v", machineName, node.Name)
+			return nil
+		}
+
 		if strings.ToLower(machinePhase) != "running" {
 			klog.Infof("Waiting until machine phase is running or machine is deleted; machine %v / node %v is in phase %v", machineName, node.Name, machinePhase)
 			continue
 		}
 
-		// There's no indicate the machine is scaling down. Commit to decrementing the replica count.
+		// There's no indication that the machine is scaling down. Commit to decrementing the replica count.
 		replicas--
+
+		if replicas < 0 {
+			// This is unexpected -- something has changed replicas and we don't think it was us.
+			klog.Errorf("computed replicas < 0 for machineset %v ; abort this scale down due to race", machineSetName)
+			continue
+		}
+
 		klog.Infof("Scaling down machineset %v to %v replicas in order to eliminate machine %v / node %v", machineSetName, replicas, machineName, node.Name)
 
 		scaleDownPatch := []interface{}{
@@ -659,50 +669,76 @@ func (p* Prioritization) scaleDown(node *corev1.Node) error {
 
 const TaintEffectNone corev1.TaintEffect = "None"
 
-func (p* Prioritization) getNodeAvoidanceTaint(node *corev1.Node) corev1.TaintEffect {
+func (p* Prioritization) getNodeAvoidanceState(node *corev1.Node) corev1.TaintEffect {
+	if node.Spec.Unschedulable {
+		return corev1.TaintEffectNoSchedule
+	}
 	for _, taint := range node.Spec.Taints {
-		if taint.Key == CiWorkloadAvoidanceTaintName {
+		if taint.Key == CiWorkloadPreferNoScheduleTaintName {
 			return taint.Effect
 		}
 	}
 	return TaintEffectNone
 }
 
-func (p* Prioritization) setNodeAvoidanceTaint(node *corev1.Node, desiredEffect corev1.TaintEffect) error {
+func (p* Prioritization) setNodeCordoned(node *corev1.Node, cordoned bool) error {
+	if node.Spec.Unschedulable == cordoned {
+		// we are already at the desired state
+		return nil
+	}
+
+	cordonPatch := []interface{}{
+		map[string]interface{}{
+			"op":    "replace",
+			"path":  "/spec/unschedulable",
+			"value": cordoned,
+		},
+	}
+
+	payloadBytes, _ := json.Marshal(cordonPatch)
+	_, err := p.k8sClientSet.CoreV1().Nodes().Patch(p.context, node.Name, types.JSONPatchType, payloadBytes, metav1.PatchOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to change cordoned state for node %v to %v: %#v", node.Name, cordoned, err)
+	}
+
+	klog.Infof("Set node %v to cordoned=%v", node.Name, cordoned)
+	return nil
+}
+
+func (p* Prioritization) setNodeAvoidanceState(node *corev1.Node, podClass PodClass, desiredEffect corev1.TaintEffect) error {
 	nodeTaints := node.Spec.Taints
 	if nodeTaints == nil {
 		nodeTaints = make([]corev1.Taint, 0)
 	}
 
+	// We enforce NoSchedule avoidance with cordon
+	p.setNodeCordoned(node, desiredEffect == corev1.TaintEffectNoSchedule)
+
+	// PreferNoSchedule is implemented as a custom taint. Depending on
+	// caller's request, add or remove that taint.
 	foundIndex := -1
 	var foundEffect corev1.TaintEffect
 	for i, taint := range nodeTaints {
-		if taint.Key == CiWorkloadAvoidanceTaintName {
+		if taint.Key == CiWorkloadPreferNoScheduleTaintName {
 			foundIndex = i
-			foundEffect = taint.Effect
 		}
 	}
 
 	modified := false // whether there is reason to patch the node taints
 
-	if foundIndex == -1 && desiredEffect != TaintEffectNone {
+	if foundIndex == -1 && desiredEffect == corev1.TaintEffectPreferNoSchedule {
 		nodeTaints = append(nodeTaints, corev1.Taint{
-			Key:    CiWorkloadAvoidanceTaintName,
-			Value:  "on",
+			Key:    CiWorkloadPreferNoScheduleTaintName,
+			Value:  fmt.Sprintf("%v", podClass),
 			Effect: desiredEffect,
 		})
 		modified = true
 	}
 
-	if foundIndex >= 0 {
-		if desiredEffect == TaintEffectNone {
-			// remove our taint from the list
-			nodeTaints = append(nodeTaints[:foundIndex], nodeTaints[foundIndex+1:]...)
-			modified = true
-		} else if foundEffect != desiredEffect {
-			nodeTaints[foundIndex].Effect = desiredEffect
-			modified = true
-		}
+	if foundIndex >= 0 && desiredEffect != corev1.TaintEffectPreferNoSchedule {
+		// remove our taint from the list
+		nodeTaints = append(nodeTaints[:foundIndex], nodeTaints[foundIndex+1:]...)
+		modified = true
 	}
 
 	if modified {

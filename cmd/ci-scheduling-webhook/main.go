@@ -28,9 +28,9 @@ import (
 )
 
 const (
-	CiWorkloadLabelName          = "ci-workload"
-	CiWorkloadAvoidanceTaintName = "ci-workload-avoid"
-	CiWorkloadNamespaceLabelName      = "ci-workload-namespace"
+	CiWorkloadLabelName                 = "ci-workload"
+	CiWorkloadPreferNoScheduleTaintName = "ci-workload-avoid"
+	CiWorkloadNamespaceLabelName        = "ci-workload-namespace"
 )
 
 var (

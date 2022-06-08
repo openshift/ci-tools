@@ -358,7 +358,6 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		addPatchEntry("add", "/metadata/labels", labels)
 	}
 
-
 	// Create a response that will add a label to the pod if it does
 	// not already have a label with the key of "hello". In this case
 	// it does not matter what the value is, as long as the key exists.

@@ -214,20 +214,21 @@ func (p* Prioritization) getWorkloadNodes(podClass PodClass, readyNodesOnly bool
 	return nodes, nil
 }
 
-func (p* Prioritization) isPodActive(pod *corev1.Pod) bool {
+func (p* Prioritization) isPodActive(pod *corev1.Pod, within time.Duration) bool {
 	active := pod.Status.Phase == corev1.PodPending || pod.Status.Phase == corev1.PodRunning
 	if !active {
 		if len(pod.Finalizers) > 0 {
 			return true
 		}
-		// For the sake of timing conditions, like this:
+		// For the sake of timing conditions, like this, allow pods to be considered
+		// active within to caller's window:
 		// https://github.com/openshift/ci-tools/blob/361bb525d35f7fc5ec8eed87d5014b61a99300fc/pkg/steps/template.go#L577
 		// count the pod as active for several minutes after actual termination.
 		for _, cs := range pod.Status.ContainerStatuses {
 			if cs.State.Terminated == nil {
 				return true
 			}
-			if time.Since(cs.State.Terminated.FinishedAt.Time) < 5 * time.Minute {
+			if time.Since(cs.State.Terminated.FinishedAt.Time) < within {
 				return true
 			}
 		}
@@ -236,7 +237,7 @@ func (p* Prioritization) isPodActive(pod *corev1.Pod) bool {
 }
 
 
-func (p* Prioritization) getPodsUsingNode(nodeName string, classedPodsOnly bool) ([]*corev1.Pod, error) {
+func (p* Prioritization) getPodsUsingNode(nodeName string, classedPodsOnly bool, activeWithin time.Duration) ([]*corev1.Pod, error) {
 	items, err := podsInformer.GetIndexer().ByIndex(IndexPodsByNode, nodeName)
 	if err != nil {
 		return nil, err
@@ -252,7 +253,7 @@ func (p* Prioritization) getPodsUsingNode(nodeName string, classedPodsOnly bool)
 			}
 		}
 
-		if p.isPodActive(pod) {
+		if p.isPodActive(pod, activeWithin) {
 			// Count only pods which are consuming resources
 			pods = append(pods, pod)
 		}
@@ -271,7 +272,7 @@ func (p* Prioritization) getNodeHostname(node *corev1.Node) string {
 }
 
 func (p* Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.Node) {
-	defer atomic.StoreUint32(nodeClassScaleDown[podClass], 0) // once the evaluation completes, allow a new one to be started for this PodClass
+	defer atomic.StoreUint32(nodeClassScaleDown[podClass], 0) // once the evaluation and possible scale down completes, allow a new one to be started for this PodClass
 
 	klog.Infof("Evaluating second stage of scale down for podClass %v node: %v", podClass, node.Name)
 
@@ -297,7 +298,7 @@ func (p* Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.N
 
 	for _, queriedPod := range queriedPods.Items {
 		_, ok := queriedPod.Labels[CiWorkloadLabelName] // only count CI workload pods
-		if ok && p.isPodActive(&queriedPod) {
+		if ok && p.isPodActive(&queriedPod, 0) {
 			podCount++
 		}
 	}
@@ -345,8 +346,7 @@ func (p* Prioritization) evaluateNodeClassScaleDown(podClass PodClass) {
 			}
 		} else {
 			// Otherwise, we want to encourage pods away from this node.
-
-			pods, err := p.getPodsUsingNode(node.Name, true)
+			pods, err := p.getPodsUsingNode(node.Name, true, 0)
 			if err != nil {
 				klog.Errorf("Unable to check pod count during class scale down eval for node %v: %#v", node.Name, err)
 				continue
@@ -404,7 +404,9 @@ func (p* Prioritization) getWorkloadNodesInAvoidanceOrder(podClass PodClass, rea
 			return val
 		}
 
-		pods, err := p.getPodsUsingNode(nodeName, true)
+		// For the purposes of node avoidance, we only want to look at pods that are
+		// actively running (activeWithin 0s).
+		pods, err := p.getPodsUsingNode(nodeName, true, 0)
 		if err != nil {
 			klog.Errorf("Unable to get pod count for node: %v: %v", nodeName, err)
 			return 255
@@ -494,6 +496,20 @@ func (p* Prioritization) scaleDown(node *corev1.Node) error {
 
 	if strings.ToLower(machinePhase) != "running" {
 		return fmt.Errorf("refusing to scale down machine which is not in the running state machine %v / node %v ; is in phase %v", machineName, node.Name, machinePhase)
+	}
+
+	for {
+		// Wait until terminated pods are X minutes old so that prow / ci-operator have a change to check final status
+		// extract logs / etc (they poll).
+		pods, err := p.getPodsUsingNode(node.Name, true, 5 *time.Minute)
+		if err != nil {
+			return fmt.Errorf("error during scale down evaluation while checking for pods running on machine %v / node %v: %v", machineName, node.Name, err)
+		}
+		if len(pods) == 0 {
+			break
+		}
+		klog.Infof("Waiting for all terminated pods on machine %v / node %v to have been so for several minutes' %v remaining", machineName, node.Name, len(pods))
+		time.Sleep(1 * time.Minute)
 	}
 
 	machineMetadata, found, err := unstructured.NestedMap(machineObj.UnstructuredContent(), "metadata")

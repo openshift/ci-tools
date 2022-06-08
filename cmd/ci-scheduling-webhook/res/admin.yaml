@@ -21,10 +21,6 @@ scheduling:
     - effect: NoSchedule
       key: node-role.kubernetes.io/ci-builds-worker
       operator: Exists
-    # legacy name
-    - effect: NoSchedule
-      key: node-role.kubernetes.io/ci-build-worker
-      operator: Exists
 ---
 apiVersion: node.k8s.io/v1
 kind: RuntimeClass
@@ -33,7 +29,7 @@ metadata:
 handler: runc
 overhead:
   podFixed:
-    # Reserve an CPU and memory for each build on crio as overhead for the runtime
+    # Reserve a CPU and memory for each build on crio as overhead for the runtime
     memory: "600Mi"
     cpu: "300m"
 scheduling:
@@ -51,7 +47,7 @@ metadata:
 handler: runc
 overhead:
   podFixed:
-    # Reserve an CPU and memory for each build on crio as overhead for the runtime
+    # Reserve a CPU and memory for each build on crio as overhead for the runtime
     memory: "600Mi"
     cpu: "300m"
 scheduling:
@@ -74,3 +70,4 @@ scheduling:
     - effect: NoSchedule
       key: node-role.kubernetes.io/ci-prowjobs-worker
       operator: Exists
+

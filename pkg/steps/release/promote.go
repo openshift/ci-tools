@@ -222,7 +222,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *cor
 				{
 					Name: "push-secret",
 					VolumeSource: coreapi.VolumeSource{
-						Secret: &coreapi.SecretVolumeSource{SecretName: api.RegistryPushCredentialsCICentralSecret},
+						Secret: &coreapi.SecretVolumeSource{SecretName: api.RegistryPushCredentialsCICentralSecretName},
 					},
 				},
 			},

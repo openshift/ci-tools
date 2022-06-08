@@ -249,30 +249,30 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	if s.clusterClaim != nil {
 		secretVolumeMounts = append(secretVolumeMounts, []coreapi.VolumeMount{
 			{
-				Name:      NamePerTest(api.HiveAdminKubeconfigSecret, s.config.As),
+				Name:      NamePerTest(api.HiveAdminKubeconfigSecretName, s.config.As),
 				ReadOnly:  true,
-				MountPath: filepath.Join(testSecretDefaultPath, NamePerTest(api.HiveAdminKubeconfigSecret, s.config.As)),
+				MountPath: filepath.Join(testSecretDefaultPath, NamePerTest(api.HiveAdminKubeconfigSecretName, s.config.As)),
 			},
 			{
-				Name:      NamePerTest(api.HiveAdminPasswordSecret, s.config.As),
+				Name:      NamePerTest(api.HiveAdminPasswordSecretName, s.config.As),
 				ReadOnly:  true,
-				MountPath: filepath.Join(testSecretDefaultPath, NamePerTest(api.HiveAdminPasswordSecret, s.config.As)),
+				MountPath: filepath.Join(testSecretDefaultPath, NamePerTest(api.HiveAdminPasswordSecretName, s.config.As)),
 			},
 		}...)
 		secretVolumes = append(secretVolumes, []coreapi.Volume{
 			{
-				Name: NamePerTest(api.HiveAdminKubeconfigSecret, s.config.As),
+				Name: NamePerTest(api.HiveAdminKubeconfigSecretName, s.config.As),
 				VolumeSource: coreapi.VolumeSource{
 					Secret: &coreapi.SecretVolumeSource{
-						SecretName: NamePerTest(api.HiveAdminKubeconfigSecret, s.config.As),
+						SecretName: NamePerTest(api.HiveAdminKubeconfigSecretName, s.config.As),
 					},
 				},
 			},
 			{
-				Name: NamePerTest(api.HiveAdminPasswordSecret, s.config.As),
+				Name: NamePerTest(api.HiveAdminPasswordSecretName, s.config.As),
 				VolumeSource: coreapi.VolumeSource{
 					Secret: &coreapi.SecretVolumeSource{
-						SecretName: NamePerTest(api.HiveAdminPasswordSecret, s.config.As),
+						SecretName: NamePerTest(api.HiveAdminPasswordSecretName, s.config.As),
 					},
 				},
 			},
@@ -289,8 +289,8 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	container.VolumeMounts = append(container.VolumeMounts, secretVolumeMounts...)
 	if s.clusterClaim != nil {
 		container.Env = append(container.Env, []coreapi.EnvVar{
-			{Name: "KUBECONFIG", Value: filepath.Join(filepath.Join(testSecretDefaultPath, NamePerTest(api.HiveAdminKubeconfigSecret, s.config.As)), api.HiveAdminKubeconfigSecretKey)},
-			{Name: "KUBEADMIN_PASSWORD_FILE", Value: filepath.Join(filepath.Join(testSecretDefaultPath, NamePerTest(api.HiveAdminPasswordSecret, s.config.As)), api.HiveAdminPasswordSecretKey)},
+			{Name: "KUBECONFIG", Value: filepath.Join(filepath.Join(testSecretDefaultPath, NamePerTest(api.HiveAdminKubeconfigSecretName, s.config.As)), api.HiveAdminKubeconfigSecretKey)},
+			{Name: "KUBEADMIN_PASSWORD_FILE", Value: filepath.Join(filepath.Join(testSecretDefaultPath, NamePerTest(api.HiveAdminPasswordSecretName, s.config.As)), api.HiveAdminPasswordSecretKey)},
 		}...)
 	}
 	pod.Spec.Volumes = append(pod.Spec.Volumes, secretVolumes...)

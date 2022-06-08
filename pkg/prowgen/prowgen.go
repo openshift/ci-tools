@@ -16,7 +16,7 @@ import (
 
 const (
 	oauthTokenPath              = "/usr/local/github-credentials"
-	oauthKey                    = "oauth"
+	oauthKeyName                = "oauth"
 	Generator      jc.Generator = "prowgen"
 )
 

@@ -7,12 +7,12 @@ import (
 )
 
 const (
-	RegistryPullCredentialsSecret = "registry-pull-credentials"
+	RegistryPullCredentialsSecretName = "registry-pull-credentials"
 
-	RegistryPushCredentialsCICentralSecret          = "registry-push-credentials-ci-central"
+	RegistryPushCredentialsCICentralSecretName      = "registry-push-credentials-ci-central"
 	RegistryPushCredentialsCICentralSecretMountPath = "/etc/push-secret"
 
-	GCSUploadCredentialsSecret          = "gce-sa-credentials-gcs-publisher"
+	GCSUploadCredentialsSecretName      = "gce-sa-credentials-gcs-publisher"
 	GCSUploadCredentialsSecretMountPath = "/secrets/gcs"
 
 	ReleaseAnnotationSoftDelete = "release.openshift.io/soft-delete"
@@ -31,17 +31,17 @@ const (
 	// HiveCluster is the cluster where Hive is deployed
 	HiveCluster = ClusterHive
 
-	// HiveAdminKubeconfigSecret is the name of the secret in ci-op-<hash> namespace that stores the Admin's kubeconfig for the ephemeral cluster provisioned by Hive.
-	HiveAdminKubeconfigSecret = "hive-admin-kubeconfig"
-	// HiveAdminKubeconfigSecretKey is the key to the kubeconfig in the secret HiveAdminKubeconfigSecret
+	// HiveAdminKubeconfigSecretName is the name of the secret in ci-op-<hash> namespace that stores the Admin's kubeconfig for the ephemeral cluster provisioned by Hive.
+	HiveAdminKubeconfigSecretName = "hive-admin-kubeconfig"
+	// HiveAdminKubeconfigSecretKey is the key to the kubeconfig in the secret HiveAdminKubeconfigSecretName
 	HiveAdminKubeconfigSecretKey = "kubeconfig"
-	// HiveAdminPasswordSecret the name of the secret in ci-op-<hash> namespace that stores the password for the user "kubeadmin" for the ephemeral cluster provisioned by Hive.
-	HiveAdminPasswordSecret = "hive-admin-password"
-	// HiveAdminPasswordSecretKey is the key to the password in the secret HiveAdminKubeconfigSecret
+	// HiveAdminPasswordSecretName the name of the secret in ci-op-<hash> namespace that stores the password for the user "kubeadmin" for the ephemeral cluster provisioned by Hive.
+	HiveAdminPasswordSecretName = "hive-admin-password"
+	// HiveAdminPasswordSecretKey is the key to the password in the secret HiveAdminKubeconfigSecretName
 	HiveAdminPasswordSecretKey = "password"
 
-	// HiveControlPlaneKubeconfigSecret is the name of the secret that stores kubeconfig to contact the cluster where Hive is deployed
-	HiveControlPlaneKubeconfigSecret = "hive-hive-credentials"
+	// HiveControlPlaneKubeconfigSecretName is the name of the secret that stores kubeconfig to contact the cluster where Hive is deployed
+	HiveControlPlaneKubeconfigSecretName = "hive-hive-credentials"
 	// HiveControlPlaneKubeconfigSecretArg is the flag to ci-operator
 	HiveControlPlaneKubeconfigSecretArg = "--hive-kubeconfig=/secrets/hive-hive-credentials/kubeconfig"
 

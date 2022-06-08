@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -659,7 +660,7 @@ func (s server) generateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	_, err = w.Write([]byte(fmt.Sprintf("https://github.com/%s/release/pull/new/%s", githubUser, branch)))
+	_, err = fmt.Fprint(w, html.EscapeString(fmt.Sprintf("https://github.com/%s/release/pull/new/%s", githubUser, branch)))
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

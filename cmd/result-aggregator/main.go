@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"html"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -90,7 +91,7 @@ func validateRequest(request *results.Request) error {
 
 func handleError(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusBadRequest)
-	fmt.Fprint(w, err)
+	fmt.Fprint(w, html.EscapeString(err.Error()))
 }
 
 func withErrorRate(request *results.Request) {

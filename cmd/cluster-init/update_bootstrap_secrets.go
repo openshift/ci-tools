@@ -117,8 +117,8 @@ func generateRegistryPushCredentialsSecret(o options) secretbootstrap.SecretConf
 			}),
 		},
 		To: []secretbootstrap.SecretContext{
-			generateDockerConfigJsonSecretConfigTo(api.RegistryPushCredentialsCICentralSecret, ci, o.clusterName),
-			generateDockerConfigJsonSecretConfigTo(api.RegistryPushCredentialsCICentralSecret, testCredentials, o.clusterName),
+			generateDockerConfigJsonSecretConfigTo(api.RegistryPushCredentialsCICentralSecretName, ci, o.clusterName),
+			generateDockerConfigJsonSecretConfigTo(api.RegistryPushCredentialsCICentralSecretName, testCredentials, o.clusterName),
 		},
 	}
 }
@@ -135,8 +135,8 @@ func generateRegistryPullCredentialsSecret(o options) secretbootstrap.SecretConf
 			}),
 		},
 		To: []secretbootstrap.SecretContext{
-			generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecret, ci, o.clusterName),
-			generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecret, testCredentials, o.clusterName),
+			generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecretName, ci, o.clusterName),
+			generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecretName, testCredentials, o.clusterName),
 		},
 	}
 }

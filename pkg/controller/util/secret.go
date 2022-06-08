@@ -24,7 +24,7 @@ func EnsureImagePullSecret(ctx context.Context, namespace string, client ctrlrun
 		return nil
 	}
 	secret := &corev1.Secret{}
-	key := types.NamespacedName{Name: api.RegistryPullCredentialsSecret, Namespace: "ci"}
+	key := types.NamespacedName{Name: api.RegistryPullCredentialsSecretName, Namespace: "ci"}
 	if err := client.Get(ctx, key, secret); err != nil {
 		return fmt.Errorf("failed to get the source secret %s: %w", key.String(), err)
 	}

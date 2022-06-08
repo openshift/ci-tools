@@ -356,17 +356,17 @@ func getClusterClaimPodParams(secretVolumeMounts []coreapi.VolumeMount, testName
 	var retMount []coreapi.VolumeMount
 	var errs []error
 
-	for _, secretName := range []string{api.HiveAdminKubeconfigSecret, api.HiveAdminPasswordSecret} {
+	for _, secretName := range []string{api.HiveAdminKubeconfigSecretName, api.HiveAdminPasswordSecretName} {
 		mountPath := getMountPath(base_steps.NamePerTest(secretName, testName))
 		var foundMountPath bool
 		for _, secretVolumeMount := range secretVolumeMounts {
 			if secretVolumeMount.MountPath == mountPath {
 				foundMountPath = true
 				retMount = append(retMount, secretVolumeMount)
-				if secretName == api.HiveAdminKubeconfigSecret {
+				if secretName == api.HiveAdminKubeconfigSecretName {
 					retEnv = append(retEnv, coreapi.EnvVar{Name: "KUBECONFIG", Value: filepath.Join(secretVolumeMount.MountPath, api.HiveAdminKubeconfigSecretKey)})
 				}
-				if secretName == api.HiveAdminPasswordSecret {
+				if secretName == api.HiveAdminPasswordSecretName {
 					retEnv = append(retEnv, coreapi.EnvVar{Name: "KUBEADMIN_PASSWORD_FILE", Value: filepath.Join(secretVolumeMount.MountPath, api.HiveAdminPasswordSecretKey)})
 				}
 				break

@@ -257,7 +257,7 @@ var (
 	pushSecretVolume = corev1.Volume{
 		Name: pushSecretVolumeName,
 		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{SecretName: cioperatorapi.RegistryPushCredentialsCICentralSecret},
+			Secret: &corev1.SecretVolumeSource{SecretName: cioperatorapi.RegistryPushCredentialsCICentralSecretName},
 		},
 	}
 
@@ -468,14 +468,14 @@ func LeaseClient() PodSpecMutator {
 
 var (
 	hiveSecretVolume = corev1.Volume{
-		Name: cioperatorapi.HiveControlPlaneKubeconfigSecret,
+		Name: cioperatorapi.HiveControlPlaneKubeconfigSecretName,
 		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{SecretName: cioperatorapi.HiveControlPlaneKubeconfigSecret},
+			Secret: &corev1.SecretVolumeSource{SecretName: cioperatorapi.HiveControlPlaneKubeconfigSecretName},
 		},
 	}
 	hiveSecretVolumeMount = corev1.VolumeMount{
-		Name:      cioperatorapi.HiveControlPlaneKubeconfigSecret,
-		MountPath: fmt.Sprintf("/secrets/%s", cioperatorapi.HiveControlPlaneKubeconfigSecret),
+		Name:      cioperatorapi.HiveControlPlaneKubeconfigSecretName,
+		MountPath: fmt.Sprintf("/secrets/%s", cioperatorapi.HiveControlPlaneKubeconfigSecretName),
 		ReadOnly:  true,
 	}
 )
@@ -522,7 +522,7 @@ var (
 		MountPath: oauthTokenPath,
 		ReadOnly:  true,
 	}
-	githubTokenParameter = fmt.Sprintf("--oauth-token-path=%s", filepath.Join(oauthTokenPath, oauthKey))
+	githubTokenParameter = fmt.Sprintf("--oauth-token-path=%s", filepath.Join(oauthTokenPath, oauthKeyName))
 )
 
 // GitHubToken configures ci-operator to use a GH token to authenticate to GitHub

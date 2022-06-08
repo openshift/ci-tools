@@ -664,8 +664,8 @@ func (o *options) Complete() error {
 		}
 	}
 	if o.pushSecretPath != "" {
-		if o.pushSecret, err = getDockerConfigSecret(api.RegistryPushCredentialsCICentralSecret, o.pushSecretPath); err != nil {
-			return fmt.Errorf("could not get push secret %s from path %s: %w", api.RegistryPushCredentialsCICentralSecret, o.pushSecretPath, err)
+		if o.pushSecret, err = getDockerConfigSecret(api.RegistryPushCredentialsCICentralSecretName, o.pushSecretPath); err != nil {
+			return fmt.Errorf("could not get push secret %s from path %s: %w", api.RegistryPushCredentialsCICentralSecretName, o.pushSecretPath, err)
 		}
 	}
 
@@ -1943,7 +1943,7 @@ func resolveGCSCredentialsSecret(jobSpec *api.JobSpec) string {
 		return *jobSpec.DecorationConfig.GCSCredentialsSecret
 	}
 
-	return api.GCSUploadCredentialsSecret
+	return api.GCSUploadCredentialsSecretName
 }
 
 func (o *options) getResolverInfo(jobSpec *api.JobSpec) *api.Metadata {

@@ -380,8 +380,6 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		klog.InfoS("Incoming pod to be modified", "podClass", podClass, "pod", fmt.Sprintf("-n %v pod/%v", namespace, podName))
 		admissionResponse.PatchType = &patchType
 		admissionResponse.Patch = patch
-	} else {
-		klog.InfoS("Incoming pod to be ignored", "podClass", podClass, "pod", fmt.Sprintf("-n %v pod/%v", namespace, podName))
 	}
 
 	// Construct the response, which is just another AdmissionReview.

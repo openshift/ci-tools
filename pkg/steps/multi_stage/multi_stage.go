@@ -304,6 +304,7 @@ func (s *multiStageTestStep) readVPNData(secret *coreapi.Secret) error {
 	if !ok {
 		return nil
 	}
+	logrus.Debug("found VPN configuration file in cluster profile")
 	var c vpnConf
 	if err := yaml.UnmarshalStrict(bytes, &c); err != nil {
 		return fmt.Errorf("failed to read VPN configuration file: %w", err)

@@ -6,7 +6,7 @@ interface secretCollection {
 
 function displayCreateSecretCollectionError(attemptedAction: string, msg: string) {
   const div = document.getElementById('modalError') as HTMLDivElement;
-  div.innerHTML = `Failed to ${attemptedAction}: ${msg}`;
+  div.textContent = `Failed to ${attemptedAction}: ${msg}`;
   div.classList.remove('hidden');
 }
 
@@ -127,7 +127,7 @@ function moveSelectedOptions(source: HTMLSelectElement | HTMLDataListElement, ta
 function optionWithValue(value: string): HTMLOptionElement {
   let option = document.createElement('option') as HTMLOptionElement;
   option.value = value;
-  option.innerHTML = value;
+  option.textContent = value;
   return option;
 }
 
@@ -141,10 +141,14 @@ function getSelectValues(select: HTMLSelectElement): string[] {
   return result;
 }
 
-function deleteColectionEventHandler(collectionName: string) {
+function deleteCollectionEventHandler(collectionName: string) {
   return function () {
     const deleteConfirmation = document.getElementById('deleteConfirmation') as HTMLDivElement;
-    deleteConfirmation.innerHTML = `Are you sure you want to irreversibly delete the secret collection ${collectionName} and all its content?<br><br>`;
+    // line break together with textContent
+    // https://stackoverflow.com/questions/9980416/how-can-i-insert-new-line-carriage-returns-into-an-element-textcontent
+    // https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html#rule-7-fixing-dom-cross-site-scripting-vulnerabilities
+    deleteConfirmation.setAttribute('style', 'white-space: pre;');
+    deleteConfirmation.textContent = `Are you sure you want to irreversibly delete the secret collection ${collectionName} and all its content?\r\n\r\n`;
 
     const cancelButton = document.createElement('button') as HTMLButtonElement;
     cancelButton.type = 'button';
@@ -189,9 +193,9 @@ function renderCollectionTable(data: secretCollection[]) {
   newTableBody.id = 'secretCollectionTableBody';
   for (const secretCollection of data) {
     const row = newTableBody.insertRow();
-    row.insertCell().innerHTML = secretCollection.name;
-    row.insertCell().innerHTML = secretCollection.path;
-    row.insertCell().innerHTML = secretCollection.members.toString();
+    row.insertCell().textContent = secretCollection.name;
+    row.insertCell().textContent = secretCollection.path;
+    row.insertCell().textContent = secretCollection.members.toString();
 
     const buttonCell = row.insertCell();
     let editMembersButton = document.createElement('button') as HTMLButtonElement;
@@ -205,7 +209,7 @@ function renderCollectionTable(data: secretCollection[]) {
     let deleteButton = document.createElement('button') as HTMLButtonElement;
     deleteButton.classList.add('red-button');
     deleteButton.innerHTML = '<i class="fa fa-trash"></i> Delete';
-    const deleteHandler = deleteColectionEventHandler(secretCollection.name);
+    const deleteHandler = deleteCollectionEventHandler(secretCollection.name);
     deleteButton.addEventListener('click', () => deleteHandler());
     buttonCell.appendChild(deleteButton);
   }

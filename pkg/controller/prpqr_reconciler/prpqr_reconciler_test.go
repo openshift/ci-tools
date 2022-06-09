@@ -91,7 +91,7 @@ func TestReconcile(t *testing.T) {
 							"prow.k8s.io/refs.repo":     "test-repo",
 							"prow.k8s.io/type":          "periodic",
 							"pullrequestpayloadqualificationruns.ci.openshift.io": "prpqr-test",
-							"releaseJobNameHash": "ee3858eff62263cd7266320c00d1d38b",
+							"releaseJobNameHash": "5bc8c9b483e0c3b3",
 						},
 					},
 					Status: prowv1.ProwJobStatus{State: "triggered"},

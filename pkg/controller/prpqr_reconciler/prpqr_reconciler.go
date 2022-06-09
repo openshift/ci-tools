@@ -2,9 +2,9 @@ package prpqr_reconciler
 
 import (
 	"context"
-	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"hash/crc64"
 	"reflect"
 	"strings"
 	"time"
@@ -418,10 +418,12 @@ func constructCondition(statuses map[string]*v1.PullRequestPayloadJobStatus) met
 	}
 }
 
+var ECMATable = crc64.MakeTable(crc64.ECMA)
+
 func jobNameHash(name string) string {
-	hasher := md5.New()
-	// MD5 Write never returns error
-	_, _ = hasher.Write([]byte(name))
+	hasher := crc64.New(ECMATable)
+	hasher.Reset()
+	hasher.Write([]byte(name))
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 

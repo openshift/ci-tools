@@ -73,7 +73,7 @@ format: frontend-format gofmt
 # Example:
 #   make gofmt
 gofmt: cmd/vault-secret-collection-manager/index.js
-	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )
+	gofmt -s -w $(shell go list --tags e2e,e2e_framework -f '{{ .Dir }}' ./... )
 .PHONY: gofmt
 
 # Update vendored code and manifests to ensure formatting.

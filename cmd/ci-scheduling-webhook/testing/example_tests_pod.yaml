@@ -12,7 +12,7 @@ metadata:
 spec:
   containers:
   - name: busybox
-    image: busybox
+    image: registry.access.redhat.com/ubi8
     command:
     - sleep
     - "600"

@@ -2,7 +2,9 @@
 # Why do we need this?
 
 ## Workload Segmentation
-We have two different types of workloads: builds and tests. Builds are intense and short-lived. Tests are long-running and less intensive. We want to segment these workloads for multiple reasons.
+We have several types of workloads: builds, short running tests, long running tests, and prowjobs. Builds are intense and short-lived. Most tests are longer-running than builds and less intensive. Even longer tests can run hours. Prowjobs must run the summation of the length of time of suborinates tests.
+
+In short, these things run different amounts of time. We want to segment these workloads for multiple reasons.
 
 ### KubeletConfig Container Runtime Reserved Resources
 Builds drive significant overhead on the container runtime that is not accounted for by the pod-autoscaler. Historically, we've tried to accommodate that with hope(tm) and reserved system CPU for the kubelet via `kind: KubeletConfig`. Problems with this include:
@@ -46,36 +48,39 @@ For what it is worth, another problem was that did not have enough system reserv
 Why not try (insert clever solution here)? Well you have to contend with:
 1. https://github.com/kubernetes/kubernetes/issues/106884#issuecomment-1005074672
 2. The fact that the autoscaler will only scale up if it can't fit unschedulable pods into existing nodes (unless those nodes are cordoned).
-3. That OSD won't let us cordon.
-4. That the autoscaler can't figure out complex scheduling patterns (taints, anti-pod affinity, ...).
+3. That OSD won't let us cordon for longer than 10 minutes without raising alerts.
+4. That the autoscaler can't figure out complex scheduling patterns (custom taints, anti-pod affinity, ...).
 5. The huge influxes of pods common to our testing infrastructure.
-6. It has to be simple, safe, and effective. 
+6. It has to be simple, reliable, and effective. 
 
-The idea implemented in the webhook has two aspects:
-Aspect 1:
-1. Scan nodes on the cluster and taint any that have 1 or 0 pods as PreferredNoSchedule.
-2. If the cluster is not under load, these taints will help ensure the autoscaler will scale these nodes down.
-3. If new pods are scheduled onto this PreferredNoSchedule nodes, the taint is removed. This indicates the cluster is under pressure. 
+# Design
 
-Aspect 2:
-1. Scan nodes and find 10% of nodes in the cluster that look close to being able to be scaled down (assessed by low pod count).
-2. Begin modifying all incoming pods to have anti-node affinity for those "sacrificial nodes".
-3. Preventing new pods from being scheduled on these nodes means they stand in improving chance of being selected for scale down once their final pod(s) terminate gracefully.
-4. Keep using anti-affinity on these nodes until they disappear from the cluster (by the autoscaler scaling them down).
-5. As nodes disappear, keep 10% of the nodes in the cluster as sacrificial nodes.
+## Workload classes
+Workload class: tests, builds, longtests, prowjobs. Each class has its own machineset & autoscaler. Each machineset creates nodes with taints & labels. As pods are created, the webhook will classify them and, by applying a runtimeclass to them, ensure that they only land on nodes created by their classes' machineset.
 
-This provides a gentle pressure to the cluster to allows nodes to be scaled down over time. The only known downsides to this approach are:
-1. It slowly drives up utilization of nodes, which adds full to the OutOfCpu (but not nearly as much as using the "most allocated" scoring).
-2. It means that, even if the cluster is scaling up, a subset of nodes (the sacrificial ones) will be considered unschedulable by the system. The webhook tries to reduce the cost of this by detecting when the node count is reaching its maximum size and limiting the sacrificial nodes to 1, once it is reaching that level. In short, if the cluster is actually being maxed out, the webhook tries to step back.
+## The cluster autoscaler scales up
+The autoscaler scales up machinesets when there are unschedulable / Pending pods that match the respective machineset class. This is its normal behavior and we rely on it.
+
+## The webhook scales down
+The webhook will modify nodes in each classed machineset to ensure the autoscaler does not try to scale them down. The webhook is solely in charge of scale downs. The out-of-the-box autoscaler is very slow to reclaim resources, so we do it ourselves.
+
+## Avoidance states
+As the system evolves, the webhook tries to steer workloads away from nodes it wants to reclaim. Generally, it will be trying to claim ceil(25%) of nodes in the class at any given moment. It does this with avoidance states. The states are None (no avoidance of node), PreferNoSchedule (implemented as a PreferNoSchedule taint effect), and NoSchedule (implemented with cordon). 
+
+There is a periodic evaluation loop running for each node class. During each evaluation loop, the webhook will at least want to set 25% of the class' nodes to PreferNoSchedule. However, if it finds that a node has zero running pods associated with the workload class (e.g. ignoring daemonsets), it will set NoSchedule (cordon the node). If the loop runs again and finds a node cordoned and still running zero classed pods, it will trigger a scale down of that node.
+
+## Pod Node Affinity
+To keep focus on scaling down nodes (PreferNoSchedule is not perfect), incoming pods are also given a node to preclude (this means their nodeAffinity is configured to guarantee it is not scheduled to a specific node). Incoming pods generally always preclude a node if there is more node available in the class. The precluded node is the first node selected by the node avoidance ceil(25%) algorithm (i.e. the most likely to scale down next). This ensure there is always pressure on the system to try to reclaim a node. 
 
 # Deploying
-1. Create two new machinesets and machineautoscalers. One for "tests" and one for "builds". Unfortunately, these machinesets are cluster  & cloud specific. Model on existing machinesets (take care to include node ci-workload label and taint). Min=1, Max=80 on each autoscaler.
+1. Create one machineset and machineautoscaler per class. Unfortunately, these machinesets are cluster  & cloud specific. Model on existing machinesets (take care to include node ci-workload label and taint). Min=1, Max=80 on each autoscaler.
 2. Apply cmd/ci-scheduling-webhook/res/admin.yaml .
 3. Apply cmd/ci-scheduling-webhook/res/rbac.yaml .
 4. Apply cmd/ci-scheduling-webhook/res/deployment.yaml .
-5. Verify deployment is running in ci-scheduling-webhook.
-6. Verify machinesets have scaled up to at least one node.
-7. Apply cmd/ci-scheduling-webhook/res/webhook.yaml .
+5. Apply cmd/ci-scheduling-webhook/res/dns.yaml . This makes sure DNS can schedule daemonset pods to tainted nodes (https://bugzilla.redhat.com/show_bug.cgi?id=2086887).
+6. Verify deployment is running in ci-scheduling-webhook.
+7. Verify machinesets have scaled up to at least one node.
+8. Apply cmd/ci-scheduling-webhook/res/webhook.yaml .
 
 # Hack
 
@@ -90,14 +95,6 @@ This provides a gentle pressure to the cluster to allows nodes to be scaled down
 ## Local Test
 ```shell
 [ci-tools]$ export KUBECONFIG=~/.kube/config
-[ci-tools]$ go run github.com/openshift/ci-tools/cmd/ci-scheduling-webhook --as system:admin --port 8443 --shrink-cpu-requests-tests 0.3 &
+[ci-tools]$ go run github.com/openshift/ci-tools/cmd/ci-scheduling-webhook --as system:admin --port 8443
 [ci-tools]$ cmd/ci-scheduling-webhook/testing/post-pods.sh
-```
-
-## Manual Deployment
-```shell
-[ci-tools]$ oc --as system:admin apply -f ./cmd/ci-scheduling-webhook/res/admin.yaml
-[ci-tools]$ oc --as system:admin apply -f ./cmd/ci-scheduling-webhook/res/deployment.yaml
-# Check deployment is running
-[ci-tools]$ oc --as system:admin apply -f ./cmd/ci-scheduling-webhook/res/webhook.yaml
 ```

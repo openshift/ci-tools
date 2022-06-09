@@ -499,8 +499,6 @@ func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.Resp
 		klog.InfoS("Incoming node to be modified", "podClass", podClass, "node", fmt.Sprintf(nodeName))
 		admissionResponse.PatchType = &patchType
 		admissionResponse.Patch = patch
-	} else {
-		klog.InfoS("Incoming node to be ignored", "podClass", podClass, "node", fmt.Sprintf(nodeName))
 	}
 
 	// Construct the response, which is just another AdmissionReview.

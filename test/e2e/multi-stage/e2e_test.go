@@ -223,3 +223,45 @@ func TestMultiStage(t *testing.T) {
 		}))
 	}
 }
+
+func TestVPN(t *testing.T) {
+	args := []string{
+		"--config", "vpn/ci_operator.yaml",
+		"--target", "test",
+	}
+	for _, tc := range []struct {
+		name, output string
+		args         []string
+		success      bool
+	}{{
+		name:    "success",
+		args:    append(args, "--secret-dir", "vpn/success/test-cluster-profile"),
+		success: true,
+	}, {
+		name:   "VPN client failure",
+		args:   append(args, "--secret-dir", "vpn/failure/test-cluster-profile"),
+		output: "Container vpn-client exited with code 1",
+	}, {
+		name:   "VPN timeout",
+		args:   append(args, "--secret-dir", "vpn/timeout/test-cluster-profile"),
+		output: `warning: timeout after waiting 5s for file \"/tmp/vpn/up\"`,
+	}} {
+		tc := tc
+		framework.Run(t, tc.name, func(t *framework.T, cmd *framework.CiOperatorCommand) {
+			cmd.AddArgs(framework.LocalPullSecretFlag(t), framework.RemotePullSecretFlag(t))
+			cmd.AddArgs(tc.args...)
+			cmd.AddEnv(defaultJobSpec)
+			output, err := cmd.Run()
+			if tc.success != (err == nil) {
+				expect := "expected"
+				if tc.success {
+					expect = "didn't expect"
+				}
+				t.Fatalf("%s an error from ci-operator, output:\n%v", expect, string(output))
+			}
+			if tc.output != "" {
+				cmd.VerboseOutputContains(t, tc.name, tc.output)
+			}
+		}, framework.Boskos(framework.BoskosOptions{ConfigPath: "vpn/boskos.yaml"}))
+	}
+}

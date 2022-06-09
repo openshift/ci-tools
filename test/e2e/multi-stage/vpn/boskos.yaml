@@ -1,0 +1,4 @@
+resources:
+- type: aws-quota-slice
+  min-count: 1
+  max-count: 1

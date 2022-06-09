@@ -1,0 +1,63 @@
+build_root:
+  image_stream_tag:
+    namespace: origin
+    name: centos
+    tag: stream8
+releases:
+  latest:
+    release:
+      channel: stable
+      version: "4.10"
+tests:
+- as: test
+  literal_steps:
+    cluster_profile: aws
+    test:
+    - as: check-vpn-up
+      from: root
+      commands: |
+        [[ -e /tmp/vpn/up ]] && exit
+        echo >&2 /tmp/vpn/up not found
+        echo >&2 /tmp/vpn:
+        ls >&2 --list --all --recursive /tmp/vpn
+        exit 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 8M
+    - as: check-uid
+      from: root
+      commands: |
+        [[ "$UID" -ne 0 ]] && exit
+        echo >&2 Test container executing as UID 0!
+        exit 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 8M
+    - as: check-capabilities
+      from: root
+      commands: |
+        caps=$(grep ^Cap /proc/1/status)
+        expected=$(cat <<-'EOF'
+        	CapInh:	0000000000000000
+        	CapPrm:	0000000000000000
+        	CapEff:	0000000000000000
+        	CapBnd:	0000000000000000
+        	CapAmb:	0000000000000000
+        EOF
+        )
+        if [[ "$caps" != "$expected" ]]; then
+          echo >&2 Wrong capability sets:
+          echo "$caps"
+          exit 1
+        fi
+      resources:
+        requests:
+          cpu: 100m
+          memory: 8M
+resources:
+  "*":
+    requests:
+      cpu: 100m
+      memory: 8M

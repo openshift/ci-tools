@@ -1112,6 +1112,7 @@ const (
 	ClusterProfileGCPLoggingCRIO        ClusterProfile = "gcp-logging-crio"
 	ClusterProfileGCP2                  ClusterProfile = "gcp-openshift-gce-devel-ci-2"
 	ClusterProfileIBMCloud              ClusterProfile = "ibmcloud"
+	ClusterProfilePOWERVS               ClusterProfile = "powervs"
 	ClusterProfileLibvirtPpc64le        ClusterProfile = "libvirt-ppc64le"
 	ClusterProfileLibvirtS390x          ClusterProfile = "libvirt-s390x"
 	ClusterProfileNutanix               ClusterProfile = "nutanix"
@@ -1182,6 +1183,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCPQE,
 		ClusterProfileHyperShift,
 		ClusterProfileIBMCloud,
+		ClusterProfilePOWERVS,
 		ClusterProfileKubevirt,
 		ClusterProfileLibvirtPpc64le,
 		ClusterProfileLibvirtS390x,
@@ -1267,6 +1269,8 @@ func (p ClusterProfile) ClusterType() string {
 		return string(CloudGCP)
 	case ClusterProfileIBMCloud:
 		return "ibmcloud"
+	case ClusterProfilePOWERVS:
+		return "powervs"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le"
 	case ClusterProfileLibvirtS390x:
@@ -1380,6 +1384,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "gcp-openshift-gce-devel-ci-2-quota-slice"
 	case ClusterProfileIBMCloud:
 		return "ibmcloud-quota-slice"
+	case ClusterProfilePOWERVS:
+		return "powervs-quota-slice"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le-quota-slice"
 	case ClusterProfileLibvirtS390x:
@@ -1495,7 +1501,7 @@ func (p ClusterProfile) Secret() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "alibaba", "azure-2", "azure4", "azure-arc", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "libvirt-ppc64le", "libvirt-s390x", "nutanix", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "packet-edge", "kubevirt", "aws-cpaas", "osd-ephemeral":
+	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "alibaba", "azure-2", "azure4", "azure-arc", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "libvirt-ppc64le", "libvirt-s390x", "nutanix", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "packet-edge", "powervs", "kubevirt", "aws-cpaas", "osd-ephemeral":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

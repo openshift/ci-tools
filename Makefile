@@ -163,6 +163,8 @@ PACKAGES ?= ./test/e2e/...
 # Example:
 #   make e2e
 #   make e2e PACKAGES=test/e2e/pod-scaler
+#   make e2e PACKAGES=test/e2e/pod-scaler TESTFLAGS='--run TestProduce'
+#   make e2e PACKAGES=test/e2e/pod-scaler TESTFLAGS='--count 1'
 e2e: $(TMPDIR)/.boskos-credentials
 	BOSKOS_CREDENTIALS_FILE="$(TMPDIR)/.boskos-credentials" PACKAGES="$(PACKAGES)" TESTFLAGS="$(TESTFLAGS) -tags $(TAGS) -timeout 70m -parallel 100" hack/test-go.sh
 .PHONY: e2e

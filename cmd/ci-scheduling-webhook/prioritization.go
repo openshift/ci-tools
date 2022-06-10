@@ -348,29 +348,84 @@ func (p* Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.N
 	}
 
 	klog.Warningf("Triggering final stage of scale down for podClass %v node: %v", podClass, node.Name)
-	err = p.scaleDown(podClass, node)
+	machineSetNamespace, machineSetName, err := p.scaleDown(podClass, node)
 	if err != nil {
 		abortScaleDown(fmt.Errorf("unable to scale down node %v: %v", node.Name, err))
 		return
 	}
 
-	// Try to only return after successful removal of the node to not trigger
-	// redundant attempts after removal of this node name from scalingDownNodes
+	// Hold in this method waiting for this node to disappear. This method holds a lock
+	// which will prevent the code from trying to scale down this particular node again,
+	// but it will allow attempts on other nodes to proceed.
+	// There are three ways out of this loop:
+	// - 1h timeout  (machineapi controller is wedged?)
+	// - Node disappears
+	// - Machineset says that it is reconciled
+
 	for i := 0; i < 60; i++ {
-		time.Sleep(5 * time.Second)
+		time.Sleep(1 * time.Minute)
+
 		_, exists, err := nodesInformer.GetIndexer().GetByKey(node.Name)
 		if err != nil {
 			klog.Errorf("Error checking scaled down node %v existence: %v", node.Name, err)
 		} else {
 			if !exists {
 				// Success! This node should no longer show up in the avoidance nodes,
+				klog.Infof("Successfully scaled down node: %v", node.Name)
 				return
 			} else {
 				klog.Infof("Check [%v] - node %v still exists after scale down attempt. This is fine if it is in the process of shutting down.", i, node.Name)
 			}
 		}
+
+		machineSetClient := p.dynamicClient.Resource(machineSetResource).Namespace(machineSetNamespace)
+		ms, err := machineSetClient.Get(p.context, machineSetName, metav1.GetOptions{})
+		if err != nil {
+			klog.Errorf("Error finding machineset %v after scale down attempt for %v existence: %v", machineSetName, node.Name, err)
+			continue
+		}
+
+		// Check if machineset status.replicas matches spec.replicas. Should be eventually consistent.
+		replicas, found, err := unstructured.NestedInt64(ms.UnstructuredContent(), "spec", "replicas")
+		if err != nil || !found{
+			klog.Errorf("unable to get current replicas in machineset %v: %#v", machineSetName, err)
+			continue
+		}
+
+		statusReplicas, found, err := unstructured.NestedInt64(ms.UnstructuredContent(), "status", "replicas")
+		if err != nil || !found{
+			klog.Errorf("unable to get current status.replicas in machineset %v: %#v", machineSetName, err)
+			continue
+		}
+
+		if replicas != statusReplicas {
+			klog.Warningf("existing replicas (%v) != status.replicas (%v) in machineset %v ; still waiting for scale down of %v", replicas, statusReplicas, machineSetName, node.Name)
+			continue
+		}
+
+		// Check if machineset status.readyReplicas matches spec.replicas. Should be eventually consistent or not present
+		// if replicas == 0.
+		readyReplicas, found, err := unstructured.NestedInt64(ms.UnstructuredContent(), "status", "readyReplicas")
+		if err != nil {
+			klog.Errorf("unable to get current status.readyReplicas in machineset %v: %#v", machineSetName, err)
+			continue
+		}
+
+		if found && replicas != readyReplicas {
+			klog.Warningf("existing replicas (%v) != status.readyReplicas (%v) in machineset %v ; still waiting for scale down of %v", replicas, statusReplicas, machineSetName, node.Name)
+			continue
+		} else {
+			// If these values match, the machineset thinks it is reconciled, so we are clear to try again if the nodes
+			// is still present.
+			klog.Errorf("machineset %v appears reconciled but node %v was not removed -- will try again later", machineSetName, node.Name)
+			return
+		}
+
 	}
-	klog.Errorf("Expected node %v to have disappeared after scale down attempt", node.Name)
+
+	// Its possible some other node was annotated with the deletion annotation and was chosen by
+	// the machine controller to scale down instead of our node. Allow other scale down attempts.
+	klog.Errorf("Expected node %v to have disappeared after scale down attempt -- will try again later", node.Name)
 }
 
 // evaluateNodeClassScaleDown is called by a single thread, periodically, to see what
@@ -576,20 +631,20 @@ func (p* Prioritization) findNodesToPreclude(podClass PodClass) ([]*corev1.Node,
 // scaleDown should be called by only one thread at a time. It assesses a node which has been staged for
 // safe scale down (e.g. is running with the NoSchedule taint). Final checks are performed. If an error is
 // returned, the caller must unstage the scale down.
-func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) error {
+func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machineSetNamespace string, machineSetName string, err error) {
 	if _, ok := node.Labels[CiWorkloadLabelName]; !ok {
 		// Just a sanity check
-		return fmt.Errorf("will not scale down non-ci-workload node")
+		return "", "", fmt.Errorf("will not scale down non-ci-workload node")
 	}
 
 	machineKey, ok := node.Annotations[PodMachineAnnotationKey]
 	if !ok {
-		return fmt.Errorf("could not find machine annotation associated with node: %v", node.Name)
+		return "", "", fmt.Errorf("could not find machine annotation associated with node: %v", node.Name)
 	}
 	components := strings.Split(machineKey, "/")
-
-	machinesetClient := p.dynamicClient.Resource(machineSetResource).Namespace(components[0])
-	machineClient := p.dynamicClient.Resource(machineResource).Namespace(components[0])
+	machineSetNamespace = components[0]
+	machineSetClient := p.dynamicClient.Resource(machineSetResource).Namespace(machineSetNamespace)
+	machineClient := p.dynamicClient.Resource(machineResource).Namespace(machineSetNamespace)
 
 	machineName := components[1]
 
@@ -614,14 +669,14 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) error {
 
 	machinePhase, machineExists, machineObj, err := getMachinePhase()
 	if !machineExists {
-		return nil
+		return machineSetNamespace, "", nil
 	}
 	if err != nil {
-		return err
+		return machineSetNamespace, "", err
 	}
 
 	if machinePhase != "running" {
-		return fmt.Errorf("refusing to scale down machine which is not in the running state machine %v / node %v ; is in phase %v", machineName, node.Name, machinePhase)
+		return machineSetNamespace, "", fmt.Errorf("refusing to scale down machine which is not in the running state machine %v / node %v ; is in phase %v", machineName, node.Name, machinePhase)
 	}
 
 	for {
@@ -629,7 +684,7 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) error {
 		// extract logs / etc (they poll).
 		pods, err := p.getPodsUsingNode(node.Name, true, 5 *time.Minute)
 		if err != nil {
-			return fmt.Errorf("error during scale down evaluation while checking for pods running on machine %v / node %v: %v", machineName, node.Name, err)
+			return machineSetNamespace, "", fmt.Errorf("error during scale down evaluation while checking for pods running on machine %v / node %v: %v", machineName, node.Name, err)
 		}
 		if len(pods) == 0 {
 			break
@@ -640,17 +695,16 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) error {
 
 	machineMetadata, found, err := unstructured.NestedMap(machineObj.UnstructuredContent(), "metadata")
 	if !found || err != nil {
-		return fmt.Errorf("could not get machine metadata for node %v / machine %v: %#v", node.Name, machineName, err)
+		return machineSetNamespace, "", fmt.Errorf("could not get machine metadata for node %v / machine %v: %#v", node.Name, machineName, err)
 	}
 
 	machineOwnerReferencesInterface, ok := machineMetadata["ownerReferences"]
 	if !ok {
-		return fmt.Errorf("could not find machineset ownerReferences associated with machine: %v node: %v", machineName, node.Name)
+		return machineSetNamespace, "", fmt.Errorf("could not find machineset ownerReferences associated with machine: %v node: %v", machineName, node.Name)
 	}
 
 	machineOwnerReferences := machineOwnerReferencesInterface.([]interface{})
 
-	var machineSetName string
 	for _, ownerInterface := range machineOwnerReferences {
 		owner := ownerInterface.(map[string]interface{})
 		ownerKind := owner["kind"].(string)
@@ -660,12 +714,12 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) error {
 	}
 
 	if len(machineSetName) == 0 {
-		return fmt.Errorf("unable to find machineset name in machine owner references: %v node: %v", machineName, node.Name)
+		return machineSetNamespace, "", fmt.Errorf("unable to find machineset name in machine owner references: %v node: %v", machineName, node.Name)
 	}
 
-	_, err = machinesetClient.Get(p.context, machineSetName, metav1.GetOptions{})
+	_, err = machineSetClient.Get(p.context, machineSetName, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("unable to get machineset %v: %#v", machineSetName, err)
+		return machineSetNamespace, machineSetName, fmt.Errorf("unable to get machineset %v: %#v", machineSetName, err)
 	}
 
 	klog.Infof("Setting machine deletion annotation on machine %v for node %v", machineName, node.Name)
@@ -679,13 +733,13 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) error {
 
 	deletionPayload, err := json.Marshal(deletionAnnotationPatch)
 	if err != nil {
-		return fmt.Errorf("unable to marshal machine %v annotation deletion patch: %#v", machineName, err)
+		return machineSetNamespace, machineSetName, fmt.Errorf("unable to marshal machine %v annotation deletion patch: %#v", machineName, err)
 	}
 
 	// setting this annotation is the point of no return -- if successful, we will try to scale down indefinitely
 	_, err = machineClient.Patch(p.context, machineName, types.JSONPatchType, deletionPayload, metav1.PatchOptions{})
 	if err != nil {
-		return fmt.Errorf("unable to apply machine %v annotation deletion patch: %#v", machineName, err)
+		return machineSetNamespace, machineSetName, fmt.Errorf("unable to apply machine %v annotation deletion patch: %#v", machineName, err)
 	}
 
 	// We will now interact with the machineset for this pod class. Hold a lock until we successfully
@@ -699,11 +753,11 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) error {
 			time.Sleep(10 * time.Second)
 		}
 
-		ms, err := machinesetClient.Get(p.context, machineSetName, metav1.GetOptions{})
+		ms, err := machineSetClient.Get(p.context, machineSetName, metav1.GetOptions{})
 		if err != nil {
 			if kerrors.IsNotFound(err) {
 				klog.Errorf("Machineset %v has disappeared -- canceling scaledown", machineSetName)
-				return nil
+				return machineSetNamespace, machineSetName, nil
 			}
 			klog.Errorf("Unable to get machineset %v: %#v", machineSetName, err)
 			continue
@@ -718,33 +772,8 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) error {
 			continue
 		}
 
-		// Check if machineset status.replicas matches spec.replicas. Should be eventually consistent.
-		statusReplicas, found, err := unstructured.NestedInt64(ms.UnstructuredContent(), "status", "replicas")
-		if err != nil || !found{
-			klog.Errorf("unable to get current status.replicas in machineset %v: %#v", machineSetName, err)
-			continue
-		}
-
-		if replicas != statusReplicas {
-			klog.Warningf("existing replicas (%v) != status.replicas (%v) in machineset %v ; waiting until these value match", replicas, statusReplicas, machineSetName)
-			continue
-		}
-
-		// Check if machineset status.readyReplicas matches spec.replicas. Should be eventually consistent or not present
-		// if replicas == 0.
-		readyReplicas, found, err := unstructured.NestedInt64(ms.UnstructuredContent(), "status", "readyReplicas")
-		if err != nil {
-			klog.Errorf("unable to get current status.readyReplicas in machineset %v: %#v", machineSetName, err)
-			continue
-		}
-		if found && replicas != readyReplicas {
-			klog.Warningf("existing replicas (%v) != status.readyReplicas (%v) in machineset %v ; waiting until these value match", replicas, readyReplicas, machineSetName)
-			continue
-		}
-
-		// When replicas is reduced, machineset status fields look to be quick to follow even if the machine
-		// still exists. The machine does go through different phases (deleting / shutting down). Don't
-		// interact with machineset while the machine is not in the running state -- a previous iteration may have already
+		// When replicas is reduced, the machine should through different phases (deleting / shutting down). Don't
+		// interact with machineset while the machine is not in the running state -- a previous scan may have already
 		// decremented the replica count. This check should prevent it from happening again while the
 		// machine shuts down.
 
@@ -758,13 +787,13 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) error {
 		if machinePhase == "deleting" {
 			// This is also treated as a successful scale down
 			klog.Infof("Machine is in deleting state %v / node %v", machineName, node.Name)
-			return nil
+			return machineSetNamespace, machineSetName, nil
 		}
 
 		if !machineExists {
 			// This is also treated as a successful scale down
 			klog.Infof("Machine %v no longer exists according to API / node %v", machineName, node.Name)
-			return nil
+			return machineSetNamespace, machineSetName, nil
 		}
 
 		if machinePhase != "running" {
@@ -777,8 +806,8 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) error {
 
 		if replicas < 0 {
 			// This is unexpected -- something has changed replicas and we don't think it was us.
-			klog.Errorf("computed replicas < 0 for machineset %v ; abort this scale down due to race", machineSetName)
-			continue
+			klog.Errorf("computed replicas < 0 for machineset %v ; aborting this scale down due to race", machineSetName)
+			return machineSetNamespace, machineSetName, nil
 		}
 
 		klog.Infof("Scaling down machineset %v to %v replicas in order to eliminate machine %v / node %v", machineSetName, replicas, machineName, node.Name)
@@ -797,28 +826,17 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) error {
 			continue
 		}
 
-		_, err = machinesetClient.Patch(p.context, machineSetName, types.JSONPatchType, scaleDownPayload, metav1.PatchOptions{})
+		_, err = machineSetClient.Patch(p.context, machineSetName, types.JSONPatchType, scaleDownPayload, metav1.PatchOptions{})
 		if err != nil {
 			klog.Errorf("unable to patch machineset %v with scale down patch: %#v", machineSetName, err)
 			continue
 		}
 
-		// Replica count has been decreased. Wait a minute for the machine-api controllers to start tearing down the machine.
-		// On the next loop, we should see the phase of machine having changed. We loop just in case the machine-api tore down
-		// another machine instead of our target (e.g. we are in a recovery state and another machine was annotated with
-		// MachineDeleteAnnotationKey before we started the loop).
-		klog.Infof("Scale down patch applied successfully; waiting before assessing machine api status again for machine %v / node %v scale down", machineName, node.Name)
-		for i := 0; i < 60; i++ {
-			machinePhase, machineExists, _, err := getMachinePhase()
-			if err != nil {
-				if machinePhase == "deleting" || !machineExists {
-					// the patch has affected our target machine, break out of the wait and let the main loop
-					klog.Infof("Machine is in deleting state or no longer exists %v / node %v", machineName, node.Name)
-					return nil
-				}
-			}
-			time.Sleep(1 * time.Second)
-		}
+		// The machine was annotated for deletion and a corresponding decrement to the machineset was applied.
+		// This method is done. Returning from this method releases a lock which allows other machines in this
+		// class to scale down. Waiting too long in this method means that the number of cordoned machines may
+		// grow faster than they can be scaled done.
+		return machineSetNamespace, machineSetName, nil
 	}
 }
 
@@ -931,7 +949,7 @@ func (p* Prioritization) setNodeAvoidanceState(node *corev1.Node, podClass PodCl
 
 		payloadBytes, _ := json.Marshal(patchEntries)
 		_, err = p.k8sClientSet.CoreV1().Nodes().Patch(p.context, node.Name, types.JSONPatchType, payloadBytes, metav1.PatchOptions{})
-		if err == nil {
+		if err != nil {
 			return fmt.Errorf("failed to change avoidance taint (existing effect [%v]) to %v for node %v: %#v", foundEffect, desiredEffect, node.Name, err)
 		}
 	}

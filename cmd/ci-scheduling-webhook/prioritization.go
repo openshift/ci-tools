@@ -19,6 +19,7 @@ import (
 	"k8s.io/kubernetes/pkg/util/taints"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -39,7 +40,13 @@ const (
 
 	// NodeDisableScaleDownAnnotationKey makes the autoscaler ignore a node for scale down consideration.
 	NodeDisableScaleDownAnnotationKey = "cluster-autoscaler.kubernetes.io/scale-down-disabled"
-	PodMachineAnnotationKey           = "machine.openshift.io/machine"
+
+	// NodeMachineAnnotationKey Value is the machine name associated with this node
+	NodeMachineAnnotationKey = "machine.openshift.io/machine"
+
+	// CiSchedulingKeepNodeAnnotationKey is an annotation with "true" / "false" value which
+	// can be used by humans to prevent specific nodes from being scaled down (or being avoided).
+	CiSchedulingKeepNodeAnnotationKey = "ci-scheduling.ci.openshift.io/keep-node"
 )
 
 var (
@@ -76,7 +83,6 @@ type Prioritization struct {
 
 
 const IndexPodsByNode = "IndexPodsByNode"
-const IndexPodsByCiWorkload = "IndexPodsByCiWorkload"
 const IndexNodesByCiWorkload = "IndexNodesByCiWorkload"
 
 func (p *Prioritization) nodeUpdated(old, new interface{}) {
@@ -182,7 +188,7 @@ func (p* Prioritization) initializePrioritization() error {
 
 func (p* Prioritization) pollNodeClassForScaleDown(podClass PodClass) {
 	p.evaluateNodeClassScaleDown(podClass) // just for faster debug
-	for _ = range time.Tick(time.Minute) {
+	for range time.Tick(time.Minute) {
 		p.evaluateNodeClassScaleDown(podClass)
 	}
 }
@@ -231,6 +237,17 @@ func (p* Prioritization) getWorkloadNodes(podClass PodClass, schedulableNodesOnl
 			// If the node is cordoned or otherwise unavailable, don't
 			// include it. We should only return viable nodes for new workloads.
 			continue
+		}
+
+		if node.Annotations != nil {
+			if val, ok := node.Annotations[CiSchedulingKeepNodeAnnotationKey]; ok {
+				keepNode, _ := strconv.ParseBool(val)
+				if keepNode {
+					// If the node should be kept, hide it from all calculations about workloads.
+					// This prevents it from being scaled down or avoided.
+					continue
+				}
+			}
 		}
 
 		if now.Sub(node.CreationTimestamp.Time) < minNodeAge {
@@ -637,7 +654,7 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 		return "", "", fmt.Errorf("will not scale down non-ci-workload node")
 	}
 
-	machineKey, ok := node.Annotations[PodMachineAnnotationKey]
+	machineKey, ok := node.Annotations[NodeMachineAnnotationKey]
 	if !ok {
 		return "", "", fmt.Errorf("could not find machine annotation associated with node: %v", node.Name)
 	}
@@ -897,7 +914,7 @@ func (p* Prioritization) setNodeAvoidanceState(node *corev1.Node, podClass PodCl
 
 	// We enforce NoSchedule avoidance with cordon. CiWorkloadPreferNoScheduleTaintName
 	// will be set to unless desiredEffect == TaintEffectNone
-	p.setNodeCordoned(node, desiredEffect == corev1.TaintEffectNoSchedule)
+	_ = p.setNodeCordoned(node, desiredEffect == corev1.TaintEffectNoSchedule)
 
 	// PreferNoSchedule is implemented as a custom taint. Depending on
 	// caller's request, add or remove that taint.

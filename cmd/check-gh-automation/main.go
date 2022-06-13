@@ -144,7 +144,7 @@ func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string 
 	if err != nil {
 		logger.Fatalf("error resolving JobSpec: %v", err)
 	}
-	configs, err := config.GetChangedConfigs(releaseRepoPath, jobSpec.Refs.BaseSHA)
+	configs, err := config.GetAddedConfigs(releaseRepoPath, jobSpec.Refs.BaseSHA)
 	if err != nil {
 		logger.Fatalf("error determining changed configs: %v", err)
 	}

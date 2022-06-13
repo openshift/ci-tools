@@ -4,12 +4,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"html/template"
 	"net/http"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -181,10 +181,6 @@ func resolveProduct(ctx context.Context, client ctrlruntimeclient.Client, versio
 	return "OSD", nil
 }
 
-var (
-	callbackTemplate = template.Must(template.New("callback").Parse(`{{.callbackName}}({{.content}});`))
-)
-
 func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients map[string]ctrlruntimeclient.Client) *http.ServeMux {
 	handler := http.NewServeMux()
 
@@ -229,9 +225,9 @@ func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients
 			}
 			w.Header().Set("Content-Type", "application/javascript")
 			content := string(bytes)
-
-			if err := callbackTemplate.Execute(w, map[string]string{"callbackName": callbackName, "content": content}); err != nil {
-				logrus.WithError(err).WithField("content", content).Error("failed to execute the callback template")
+			template.JSEscape(w, []byte(callbackName))
+			if n, err := fmt.Fprintf(w, "(%s);", content); err != nil {
+				logrus.WithError(err).WithField("n", n).WithField("content", content).Error("failed to write content")
 			}
 			return
 		} else {

@@ -73,7 +73,7 @@ format: frontend-format gofmt
 # Example:
 #   make gofmt
 gofmt: cmd/vault-secret-collection-manager/index.js
-	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )
+	gofmt -s -w $(shell go list --tags e2e,e2e_framework -f '{{ .Dir }}' ./... )
 .PHONY: gofmt
 
 # Update vendored code and manifests to ensure formatting.
@@ -125,9 +125,7 @@ cmd/vault-secret-collection-manager/index.js: cmd/vault-secret-collection-manage
 # Example:
 #   make production-install
 production-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/frontend/dist cmd/repo-init/frontend/dist
-	rm -f cmd/pod-scaler/frontend/dist/dummy # we keep this file in git to keep the thing compiling without static assets
-	rm -f cmd/repo-init/frontend/dist/dummy
-	hack/install.sh
+	hack/install.sh no-race remove-dummy
 .PHONY: production-install
 
 # Install Go binaries with enabled race detector to $GOPATH/bin.
@@ -136,7 +134,7 @@ production-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/
 # Example:
 #   make production-install
 race-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/frontend/dist cmd/repo-init/frontend/dist
-	hack/install.sh race
+	hack/install.sh race keep-dummy
 
 # Run integration tests.
 #
@@ -165,6 +163,8 @@ PACKAGES ?= ./test/e2e/...
 # Example:
 #   make e2e
 #   make e2e PACKAGES=test/e2e/pod-scaler
+#   make e2e PACKAGES=test/e2e/pod-scaler TESTFLAGS='--run TestProduce'
+#   make e2e PACKAGES=test/e2e/pod-scaler TESTFLAGS='--count 1'
 e2e: $(TMPDIR)/.boskos-credentials
 	BOSKOS_CREDENTIALS_FILE="$(TMPDIR)/.boskos-credentials" PACKAGES="$(PACKAGES)" TESTFLAGS="$(TESTFLAGS) -tags $(TAGS) -timeout 70m -parallel 100" hack/test-go.sh
 .PHONY: e2e

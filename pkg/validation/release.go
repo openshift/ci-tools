@@ -118,7 +118,7 @@ func validateProduct(fieldRoot string, product api.ReleaseProduct) error {
 }
 
 func validateArchitecture(fieldRoot string, architecture api.ReleaseArchitecture) error {
-	architectures := sets.NewString(string(api.ReleaseArchitectureAMD64), string(api.ReleaseArchitecturePPC64le), string(api.ReleaseArchitectureS390x), string(api.ReleaseArchitectureARM64))
+	architectures := sets.NewString(string(api.ReleaseArchitectureAMD64), string(api.ReleaseArchitecturePPC64le), string(api.ReleaseArchitectureS390x), string(api.ReleaseArchitectureARM64), string(api.ReleaseArchitectureMULTI))
 	if !architectures.Has(string(architecture)) {
 		return fmt.Errorf("%s: must be one of %s", fieldRoot, strings.Join(architectures.List(), ", "))
 	}

@@ -64,7 +64,7 @@ func Handler(client messagePoster, keywordsConfig KeywordsConfig) events.Partial
 				timestamp = event.ThreadTimeStamp
 			}
 
-			responseChannel, responseTimestamp, err := client.PostMessage(event.Channel, slack.MsgOptionBlocks(getResponse(event.Text, keywordsConfig)...), slack.MsgOptionTS(timestamp))
+			responseChannel, responseTimestamp, err := client.PostMessage(event.Channel, slack.MsgOptionBlocks(getResponse(event.Text, keywordsConfig)...), slack.MsgOptionTS(timestamp), slack.MsgOptionDisableLinkUnfurl())
 			if err != nil {
 				log.WithError(err).Warn("Failed to post a response")
 			} else {
@@ -99,7 +99,7 @@ func getResponse(message string, keywordsConfig KeywordsConfig) []slack.Block {
 			Type: slack.MBTDivider,
 		})
 
-		docLinks := "It looks like you are asking about a few known topics, have you checked these pages:"
+		docLinks := "It looks like you are asking about a few known topics. Have you checked these pages:"
 		for name, link := range keywords {
 			docLinks = fmt.Sprintf("%s\n• <%s|%s>", docLinks, link, name)
 		}

@@ -56,7 +56,8 @@ type RegistryAgentOptions struct {
 	ErrorMetric *prometheus.CounterVec
 	// FlatRegistry describes if the registry is flat, which means org/repo/branch info can not be inferred
 	// from the filepath. Defaults to true.
-	FlatRegistry *bool
+	FlatRegistry            *bool
+	UniversalSymlinkWatcher *UniversalSymlinkWatcher
 }
 
 type RegistryAgentOption func(*RegistryAgentOptions)
@@ -101,12 +102,11 @@ func NewRegistryAgent(registryPath string, opts ...RegistryAgentOption) (Registr
 		return nil, fmt.Errorf("failed to load registry: %w", err)
 	}
 
-	return a, startWatchers(a.registryPath, a.loadRegistry, a.recordError)
-}
+	if opt.UniversalSymlinkWatcher != nil {
+		opt.UniversalSymlinkWatcher.RegistryEventFn = a.loadRegistry
+	}
 
-func (a *registryAgent) recordError(label string) {
-	labels := prometheus.Labels{"error": label}
-	a.errorMetrics.With(labels).Inc()
+	return a, startWatchers(registryPath, a.loadRegistry, a.errorMetrics, opt.UniversalSymlinkWatcher)
 }
 
 // ResolveConfig uses the registryAgent's resolver to resolve a provided ReleaseBuildConfiguration
@@ -134,7 +134,7 @@ func (a *registryAgent) loadRegistry() error {
 		startTime := time.Now()
 		references, chains, workflows, documentation, metadata, observers, err := load.Registry(a.registryPath, a.flags)
 		if err != nil {
-			a.recordError("failed to load ci-operator registry")
+			recordErrorForMetric(a.errorMetrics, "failed to load ci-operator registry")
 			return time.Duration(0), fmt.Errorf("failed to load ci-operator registry (%w)", err)
 		}
 		a.references = references

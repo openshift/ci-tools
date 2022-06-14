@@ -17,6 +17,7 @@ import (
 	"github.com/slack-go/slack/slackevents"
 	"google.golang.org/api/option"
 
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/test-infra/pkg/flagutil"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
@@ -31,6 +32,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/jira"
 	eventhandler "github.com/openshift/ci-tools/pkg/slack/events"
+	"github.com/openshift/ci-tools/pkg/slack/events/helpdesk"
 	eventrouter "github.com/openshift/ci-tools/pkg/slack/events/router"
 	interactionhandler "github.com/openshift/ci-tools/pkg/slack/interactions"
 	interactionrouter "github.com/openshift/ci-tools/pkg/slack/interactions/router"
@@ -48,6 +50,8 @@ type options struct {
 
 	slackTokenPath         string
 	slackSigningSecretPath string
+
+	keywordsConfigPath string
 }
 
 func (o *options) Validate() error {
@@ -88,6 +92,7 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 
 	fs.StringVar(&o.slackTokenPath, "slack-token-path", "", "Path to the file containing the Slack token to use.")
 	fs.StringVar(&o.slackSigningSecretPath, "slack-signing-secret-path", "", "Path to the file containing the Slack signing secret to use.")
+	fs.StringVar(&o.keywordsConfigPath, "keywords-config-path", "", "Path to the slack-bot keywords config file.")
 
 	if err := fs.Parse(args); err != nil {
 		logrus.WithError(err).Fatal("Could not parse args.")
@@ -139,6 +144,13 @@ func main() {
 		logrus.WithError(err).Fatal("Could not initialize GCS client.")
 	}
 
+	var keywordsConfig helpdesk.KeywordsConfig
+	if o.keywordsConfigPath != "" {
+		if err := loadKeywordsConfig(o.keywordsConfigPath, &keywordsConfig); err != nil {
+			logrus.WithError(err).Warn("Could not load keywords config.")
+		}
+	}
+
 	metrics.ExposeMetrics("slack-bot", config.PushGateway{}, o.instrumentationOptions.MetricsPort)
 	simplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root
 		l(""), // for black-box health checks
@@ -156,13 +168,24 @@ func main() {
 	// handle the root to allow for a simple uptime probe
 	mux.Handle("/", handler(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) { writer.WriteHeader(http.StatusOK) })))
 	mux.Handle("/slack/interactive-endpoint", handler(handleInteraction(secret.GetTokenGenerator(o.slackSigningSecretPath), interactionrouter.ForModals(issueFiler, slackClient))))
-	mux.Handle("/slack/events-endpoint", handler(handleEvent(secret.GetTokenGenerator(o.slackSigningSecretPath), eventrouter.ForEvents(slackClient, configAgent.Config, gcsClient))))
+	mux.Handle("/slack/events-endpoint", handler(handleEvent(secret.GetTokenGenerator(o.slackSigningSecretPath), eventrouter.ForEvents(slackClient, configAgent.Config, gcsClient, keywordsConfig))))
 	server := &http.Server{Addr: ":" + strconv.Itoa(o.port), Handler: mux}
 
 	health.ServeReady()
 
 	interrupts.ListenAndServe(server, o.gracePeriod)
 	interrupts.WaitForGracefulShutdown()
+}
+
+func loadKeywordsConfig(configPath string, config interface{}) error {
+	configContent, err := ioutil.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read config: %v", err)
+	}
+	if err = yaml.Unmarshal(configContent, &config); err != nil {
+		return fmt.Errorf("failed to unmarshall config: %v", err)
+	}
+	return nil
 }
 
 func verifiedBody(logger *logrus.Entry, request *http.Request, signingSecret func() []byte) ([]byte, bool) {

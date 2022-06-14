@@ -44,6 +44,11 @@ func TestServiceHost(t *testing.T) {
 			architecture: api.ReleaseArchitectureARM64,
 			output:       "https://arm64.ocp.releases.ci.openshift.org/api/v1/releasestream",
 		},
+		{
+			product:      api.ReleaseProductOCP,
+			architecture: api.ReleaseArchitectureMULTI,
+			output:       "https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream",
+		},
 	}
 
 	for _, testCase := range testCases {

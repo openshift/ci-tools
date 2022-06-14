@@ -50,6 +50,13 @@ func TestEndpoint(t *testing.T) {
 			},
 			output: "https://arm64.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-arm64/latest",
 		},
+		{
+			input: api.Prerelease{
+				Product:      api.ReleaseProductOCP,
+				Architecture: api.ReleaseArchitectureMULTI,
+			},
+			output: "https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-multi/latest",
+		},
 	}
 
 	for _, testCase := range testCases {

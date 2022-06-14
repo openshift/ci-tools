@@ -315,6 +315,7 @@ const (
 	ReleaseArchitecturePPC64le ReleaseArchitecture = "ppc64le"
 	ReleaseArchitectureS390x   ReleaseArchitecture = "s390x"
 	ReleaseArchitectureARM64   ReleaseArchitecture = "arm64"
+	ReleaseArchitectureMULTI   ReleaseArchitecture = "multi" //heterogeneous payload
 )
 
 type ReleaseStream string

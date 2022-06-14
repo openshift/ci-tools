@@ -68,10 +68,6 @@ func (o *options) Validate() error {
 		return fmt.Errorf("--slack-signing-secret-path is required")
 	}
 
-	if o.keywordsConfigPath == "" {
-		return fmt.Errorf("--keywords-config-path is required")
-	}
-
 	for _, group := range []flagutil.OptionGroup{&o.instrumentationOptions, &o.jiraOptions, &o.prowconfig} {
 		if err := group.Validate(false); err != nil {
 			return err
@@ -149,8 +145,11 @@ func main() {
 	}
 
 	var keywordsConfig helpdesk.KeywordsConfig
-	if err = loadKeywordsConfig(o.keywordsConfigPath, &keywordsConfig); err != nil {
-		logrus.WithError(err).Warn("Could not load keywords config.")
+	if o.keywordsConfigPath != "" {
+		err = loadKeywordsConfig(o.keywordsConfigPath, &keywordsConfig)
+		if err != nil {
+			logrus.WithError(err).Warn("Could not load keywords config.")
+		}
 	}
 
 	metrics.ExposeMetrics("slack-bot", config.PushGateway{}, o.instrumentationOptions.MetricsPort)

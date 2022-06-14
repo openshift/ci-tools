@@ -101,7 +101,7 @@ func getResponse(message string, keywordsConfig KeywordsConfig) []slack.Block {
 
 		docLinks := "It looks like you are asking about a few known topics. Have you checked these pages:"
 		for name, link := range keywords {
-			docLinks = fmt.Sprintf("%s\n• <%s|%s>", docLinks, link, name)
+			docLinks += fmt.Sprintf("\n• <%s|%s>", link, name)
 		}
 		blocks = append(blocks, &slack.SectionBlock{
 			Type: slack.MBTSection,
@@ -123,6 +123,7 @@ func getPresentKeywords(message string, keywordsConfig KeywordsConfig) map[strin
 		for _, keyword := range item.Keywords {
 			if strings.Contains(message, keyword) {
 				keywordMap[item.Name] = item.Link
+				break
 			}
 		}
 	}

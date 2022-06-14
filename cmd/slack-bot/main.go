@@ -146,8 +146,7 @@ func main() {
 
 	var keywordsConfig helpdesk.KeywordsConfig
 	if o.keywordsConfigPath != "" {
-		err = loadKeywordsConfig(o.keywordsConfigPath, &keywordsConfig)
-		if err != nil {
+		if err := loadKeywordsConfig(o.keywordsConfigPath, &keywordsConfig); err != nil {
 			logrus.WithError(err).Warn("Could not load keywords config.")
 		}
 	}

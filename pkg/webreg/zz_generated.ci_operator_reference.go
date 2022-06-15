@@ -499,6 +499,16 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    tag: ' '\n" +
 	"                  # Name is the name of this observer\n" +
 	"                  name: ' '\n" +
+	"                  # Resources defines the resource requirements for the step.\n" +
+	"                  resources:\n" +
+	"                    # Limits are resource limits applied to an individual step in the job.\n" +
+	"                    # These are directly used in creating the Pods that execute the Job.\n" +
+	"                    limits:\n" +
+	"                        \"\": \"\"\n" +
+	"                    # Requests are resource requests applied to an individual step in the job.\n" +
+	"                    # These are directly used in creating the Pods that execute the Job.\n" +
+	"                    requests:\n" +
+	"                        \"\": \"\"\n" +
 	"            # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"            # Post steps always run, even if previous steps fail.\n" +
 	"            post:\n" +
@@ -1240,6 +1250,16 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                tag: ' '\n" +
 	"              # Name is the name of this observer\n" +
 	"              name: ' '\n" +
+	"              # Resources defines the resource requirements for the step.\n" +
+	"              resources:\n" +
+	"                # Limits are resource limits applied to an individual step in the job.\n" +
+	"                # These are directly used in creating the Pods that execute the Job.\n" +
+	"                limits:\n" +
+	"                    \"\": \"\"\n" +
+	"                # Requests are resource requests applied to an individual step in the job.\n" +
+	"                # These are directly used in creating the Pods that execute the Job.\n" +
+	"                requests:\n" +
+	"                    \"\": \"\"\n" +
 	"        # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"        # Post steps always run, even if previous steps fail.\n" +
 	"        post:\n" +

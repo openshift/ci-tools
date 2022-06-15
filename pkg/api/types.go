@@ -819,6 +819,8 @@ type Observer struct {
 	FromImage *ImageStreamTagReference `json:"from_image,omitempty"`
 	// Commands is the command(s) that will be run inside the image.
 	Commands string `json:"commands,omitempty"`
+	// Resources defines the resource requirements for the step.
+	Resources ResourceRequirements `json:"resources,omitempty"`
 }
 
 // Observers is a configuration for which observer pods should and should not

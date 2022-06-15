@@ -7,6 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/validation"
 )
 
 type Resolver interface {
@@ -37,6 +38,9 @@ func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 			}
 		}
 		ret = append(ret, stack.checkUnused(&stack.records[0], nil, &reg)...)
+	}
+	for _, v := range observersByName {
+		ret = append(ret, validation.Observer(v)...)
 	}
 	return utilerrors.NewAggregate(ret)
 }

@@ -32,6 +32,140 @@ func (f *MyFakeClient) GetRef(owner, repo, ref string) (string, error) {
 	return "abcde", nil
 }
 
+func TestLoadConfig(t *testing.T) {
+	i := &Info{
+		Retester: Retester{
+			map[string]Oranization{"openshift": {
+				MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9, Repos: map[string]Repo{"ci-tools": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 8}},
+			},
+				"no-openshift": {
+					MaxRetestsForShaAndBase: 1, MaxRetestsForSha: 1, Repos: map[string]Repo{"test": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 7}},
+				}},
+		}}
+
+	testCases := []struct {
+		name          string
+		file          string
+		expected      *Info
+		expectedError error
+	}{
+		{
+			name:     "basic case",
+			file:     "testdata/testconfig/config.yaml",
+			expected: i,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := loadConfig(tc.file)
+			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("Error differs from expected:\n%s", diff)
+			}
+			if tc.expectedError == nil {
+				if diff := cmp.Diff(tc.expected, actual); diff != "" {
+					t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+				}
+			}
+		})
+	}
+}
+
+func TestGetMaxRetests(t *testing.T) {
+	c := &Info{
+		Retester: Retester{
+			map[string]Oranization{"openshift": {
+				MaxRetestsForShaAndBase: 6, MaxRetestsForSha: 15, Repos: map[string]Repo{"ci-tools": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 8}},
+			},
+				"no-openshift": {
+					MaxRetestsForShaAndBase: 1, MaxRetestsForSha: 1, Repos: map[string]Repo{"test": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 7}},
+				}},
+		}}
+	var configuredRepo githubv4.String = "ci-tools"
+	var nonConfiguredRepo githubv4.String = "repo"
+	var configuredOrg githubv4.String = "openshift"
+	var nonconfiguredOrg githubv4.String = "org"
+	var num githubv4.Int = 123
+	testCases := []struct {
+		name               string
+		pr                 tide.PullRequest
+		config             *Info
+		expectedSha        int
+		expectedShaAndBase int
+	}{
+		{
+			name: "configured org and non-configured repo",
+			pr: tide.PullRequest{
+				Number: num,
+				Author: struct{ Login githubv4.String }{Login: configuredOrg},
+				Repository: struct {
+					Name          githubv4.String
+					NameWithOwner githubv4.String
+					Owner         struct{ Login githubv4.String }
+				}{Name: nonConfiguredRepo, Owner: struct{ Login githubv4.String }{Login: configuredOrg}},
+			},
+			config:             c,
+			expectedSha:        15,
+			expectedShaAndBase: 6,
+		},
+		{
+			name: "configured org and configured repo",
+			pr: tide.PullRequest{
+				Number: num,
+				Author: struct{ Login githubv4.String }{Login: configuredOrg},
+				Repository: struct {
+					Name          githubv4.String
+					NameWithOwner githubv4.String
+					Owner         struct{ Login githubv4.String }
+				}{Name: configuredRepo, Owner: struct{ Login githubv4.String }{Login: configuredOrg}},
+			},
+			config:             c,
+			expectedSha:        8,
+			expectedShaAndBase: 3,
+		},
+		{
+			name: "non-configured org and non-configured repo",
+			pr: tide.PullRequest{
+				Number: num,
+				Author: struct{ Login githubv4.String }{Login: nonconfiguredOrg},
+				Repository: struct {
+					Name          githubv4.String
+					NameWithOwner githubv4.String
+					Owner         struct{ Login githubv4.String }
+				}{Name: nonConfiguredRepo, Owner: struct{ Login githubv4.String }{Login: nonconfiguredOrg}},
+			},
+			config:             c,
+			expectedSha:        9,
+			expectedShaAndBase: 3,
+		},
+		{
+			name: "non-configured org and configured repo",
+			pr: tide.PullRequest{
+				Number: num,
+				Author: struct{ Login githubv4.String }{Login: nonconfiguredOrg},
+				Repository: struct {
+					Name          githubv4.String
+					NameWithOwner githubv4.String
+					Owner         struct{ Login githubv4.String }
+				}{Name: configuredRepo, Owner: struct{ Login githubv4.String }{Login: nonconfiguredOrg}},
+			},
+			config:             c,
+			expectedSha:        9,
+			expectedShaAndBase: 3,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualSha, actualShaAndBase := tc.config.getMaxRetests(tc.pr)
+			if diff := cmp.Diff(tc.expectedSha, actualSha); diff != "" {
+				t.Errorf("%s differs from expectedSha:\n%s", tc.name, diff)
+			}
+			if diff := cmp.Diff(tc.expectedShaAndBase, actualShaAndBase); diff != "" {
+				t.Errorf("%s differs from expectedShaAndBase:\n%s", tc.name, diff)
+			}
+		})
+	}
+}
+
 func TestRetestOrBackoff(t *testing.T) {
 	ghc := &MyFakeClient{fakegithub.NewFakeClient()}
 	var name githubv4.String = "repo"

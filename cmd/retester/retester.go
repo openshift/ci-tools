@@ -100,6 +100,39 @@ func (b *backoffCache) saveToDisk() (ret error) {
 	return ret
 }
 
+type Info struct {
+	Retester Retester `json:"retester"`
+}
+
+type Retester struct {
+	Oranizations map[string]Oranization `json:"orgs"`
+}
+
+type Oranization struct {
+	MaxRetestsForShaAndBase int             `json:"max_retests_for_sha_and_base"`
+	MaxRetestsForSha        int             `json:"max_retests_for_sha"`
+	Repos                   map[string]Repo `json:"repos"`
+}
+
+type Repo struct {
+	MaxRetestsForShaAndBase int `json:"max_retests_for_sha_and_base"`
+	MaxRetestsForSha        int `json:"max_retests_for_sha"`
+}
+
+func loadConfig(configFilePath string) (*Info, error) {
+	data, err := ioutil.ReadFile(configFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config (%w)", err)
+	}
+
+	var configRetester Info
+	if err := yaml.Unmarshal(data, &configRetester); err != nil {
+		return nil, fmt.Errorf("failed to load config (%w)", err)
+	}
+
+	return &configRetester, nil
+}
+
 type retestController struct {
 	ghClient     githubClient
 	gitClient    git.ClientFactory
@@ -110,21 +143,29 @@ type retestController struct {
 	usesGitHubApp bool
 	backoff       *backoffCache
 
+	configRetester *Info
+
 	enableOnRepos sets.String
 	enableOnOrgs  sets.String
 }
 
-func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, enableOnRepos prowflagutil.Strings, enableOnOrgs prowflagutil.Strings) *retestController {
+func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, configFile string, enableOnRepos prowflagutil.Strings, enableOnOrgs prowflagutil.Strings) *retestController {
 	logger := logrus.NewEntry(logrus.StandardLogger())
+	fmt.Println(cacheFile)
+	configRetester, err := loadConfig(cacheFile)
+	if err != nil {
+		logger.WithError(err).Warn("Failed to load config from file")
+	}
 	ret := &retestController{
-		ghClient:      ghClient,
-		gitClient:     gitClient,
-		configGetter:  cfg,
-		logger:        logger,
-		usesGitHubApp: usesApp,
-		backoff:       &backoffCache{cache: map[string]*PullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger},
-		enableOnRepos: enableOnRepos.StringSet(),
-		enableOnOrgs:  enableOnOrgs.StringSet(),
+		ghClient:       ghClient,
+		gitClient:      gitClient,
+		configGetter:   cfg,
+		logger:         logger,
+		usesGitHubApp:  usesApp,
+		backoff:        &backoffCache{cache: map[string]*PullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger},
+		configRetester: configRetester,
+		enableOnRepos:  enableOnRepos.StringSet(),
+		enableOnOrgs:   enableOnOrgs.StringSet(),
 	}
 	if err := ret.backoff.loadFromDisk(); err != nil {
 		logger.WithError(err).Warn("Failed to load backoff cache from disk")
@@ -180,12 +221,34 @@ const (
 	retestBackoffHold = iota
 	retestBackoffPause
 	retestBackoffRetest
-
-	maxRetestsForShaAndBase = 3
-	maxRetestsForSha        = 3 * maxRetestsForShaAndBase
+	maxRetestsForShaAndBaseDefault = 3
+	maxRetestsForShaDefault        = 3 * maxRetestsForShaAndBaseDefault
 )
 
-func (b *backoffCache) check(pr tide.PullRequest, baseSha string) (retestBackoffAction, string) {
+// Getter for max retests from config
+func (i *Info) getMaxRetests(pr tide.PullRequest) (int, int) {
+	org := string(pr.Repository.Owner.Login)
+	orgStruct := i.Retester.Oranizations[org]
+	fmt.Println(orgStruct)
+	if orgStruct, ok := i.Retester.Oranizations[org]; ok {
+		repo := string(pr.Repository.Name)
+		if repoStruct, ok := orgStruct.Repos[repo]; ok {
+			return repoStruct.MaxRetestsForSha, repoStruct.MaxRetestsForShaAndBase
+		}
+		return orgStruct.MaxRetestsForSha, orgStruct.MaxRetestsForShaAndBase
+	}
+	return maxRetestsForShaDefault, maxRetestsForShaAndBaseDefault
+}
+
+func (b *backoffCache) check(pr tide.PullRequest, baseSha string, retesterConfig *Info) (retestBackoffAction, string) {
+	var maxRetestsForSha, maxRetestsForShaAndBase int
+	if retesterConfig != nil {
+		maxRetestsForSha, maxRetestsForShaAndBase = retesterConfig.getMaxRetests(pr)
+	} else {
+		maxRetestsForSha = maxRetestsForShaDefault
+		maxRetestsForShaAndBase = maxRetestsForShaAndBaseDefault
+	}
+
 	key := prKey(&pr)
 	if _, has := b.cache[key]; !has {
 		b.cache[key] = &PullRequest{}
@@ -232,7 +295,7 @@ func (c *retestController) retestOrBackoff(pr tide.PullRequest) error {
 		return err
 	}
 
-	action, message := c.backoff.check(pr, baseSha)
+	action, message := c.backoff.check(pr, baseSha, c.configRetester)
 	switch action {
 	case retestBackoffHold:
 		c.createComment(pr, "/hold", message)

@@ -9,7 +9,7 @@ import (
 
 func TestGatherOptions(t *testing.T) {
 	expected := []string{"org/repo", "other-org/other-repo"}
-	os.Args = []string{"cmd", "--enable-on-repo=org/repo", "--cache-record-age=100h", "--enable-on-repo=other-org/other-repo"}
+	os.Args = []string{"cmd", "--enable-on-repo=org/repo", "--cache-record-age=100h", "--config-file=config.yaml", "--enable-on-repo=other-org/other-repo"}
 
 	actual := gatherOptions()
 

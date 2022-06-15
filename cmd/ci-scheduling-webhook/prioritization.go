@@ -47,6 +47,10 @@ const (
 	// CiSchedulingKeepNodeAnnotationKey is an annotation with "true" / "false" value which
 	// can be used by humans to prevent specific nodes from being scaled down (or being avoided).
 	CiSchedulingKeepNodeAnnotationKey = "ci-scheduling.ci.openshift.io/keep-node"
+
+	// NodeMachineConfigurationStateAnnotationKey is an annotation machine the machine config
+	// controller describing whether the machine is being updated or node.
+	NodeMachineConfigurationStateAnnotationKey = "machineconfiguration.openshift.io/state"
 )
 
 var (
@@ -239,6 +243,20 @@ func (p* Prioritization) getWorkloadNodes(podClass PodClass, schedulableNodesOnl
 			continue
 		}
 
+		// If machine config is doing anything with the node, ignore it.
+		// machineconfig will taint the node and try to drain it. If we uncordon
+		// during that time, more pods will be scheduled and redrained leading to
+		// ci workload pods being deleted unexpectedly.
+		if mcState, ok := node.Annotations[NodeMachineConfigurationStateAnnotationKey]; ok {
+			if strings.ToLower(mcState) != "done" {
+				klog.Warningf("Node %v does not have valid configuration yet %v is in state %v; waiting for done state", nodeByIndex.Name, NodeMachineConfigurationStateAnnotationKey, mcState)
+				continue
+			}
+		} else {
+			klog.Errorf("Unable to find %v annotation for node: %v", NodeMachineConfigurationStateAnnotationKey, nodeByIndex.Name)
+			continue
+		}
+
 		if node.Annotations != nil {
 			if val, ok := node.Annotations[CiSchedulingKeepNodeAnnotationKey]; ok {
 				keepNode, _ := strconv.ParseBool(val)
@@ -365,7 +383,7 @@ func (p* Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.N
 	}
 
 	klog.Warningf("Triggering final stage of scale down for podClass %v node: %v", podClass, node.Name)
-	machineSetNamespace, machineSetName, err := p.scaleDown(podClass, node)
+	machineSetNamespace, machineSetName, machineName, err := p.scaleDown(podClass, node)
 	if err != nil {
 		abortScaleDown(fmt.Errorf("unable to scale down node %v: %v", node.Name, err))
 		return
@@ -377,7 +395,7 @@ func (p* Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.N
 	// There are three ways out of this loop:
 	// - 1h timeout  (machineapi controller is wedged?)
 	// - Node disappears
-	// - Machineset says that it is reconciled
+	// - Machineset says that it is reconciled AND machine is in the "running" phase
 
 	for i := 0; i < 60; i++ {
 		time.Sleep(1 * time.Minute)
@@ -428,14 +446,22 @@ func (p* Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.N
 			continue
 		}
 
+		machinePhase, _, _, err := p.getMachinePhase(machineSetNamespace, machineName)
+		if err != nil {
+			klog.Errorf("unable to get machine phase for machine %v / node %v: %v", machineName, node.Name, err)
+			continue
+		}
+
 		if found && replicas != readyReplicas {
 			klog.Warningf("existing replicas (%v) != status.readyReplicas (%v) in machineset %v ; still waiting for scale down of %v", replicas, statusReplicas, machineSetName, node.Name)
 			continue
 		} else {
-			// If these values match, the machineset thinks it is reconciled, so we are clear to try again if the nodes
-			// is still present.
-			klog.Errorf("machineset %v appears reconciled but node %v was not removed -- will try again later", machineSetName, node.Name)
-			return
+			if machinePhase == "running" {
+				// If these values match and our machine is "running", the machineset thinks it is reconciled, so we are clear to try again if the nodes
+				// is still present.
+				klog.Errorf("machineset %v appears reconciled but node %v was not removed -- will try again later", machineSetName, node.Name)
+				return
+			}
 		}
 
 	}
@@ -645,55 +671,68 @@ func (p* Prioritization) findNodesToPreclude(podClass PodClass) ([]*corev1.Node,
 	return precludeNodes, nil
 }
 
+func (p* Prioritization) getMachinePhase(machineNamespace string, machineName string)(machinePhase string, machineExists bool, machineObj *unstructured.Unstructured, err error) {
+	machineClient := p.dynamicClient.Resource(machineResource).Namespace(machineNamespace)
+
+	machineObj, err = machineClient.Get(p.context, machineName, metav1.GetOptions{})
+	if err != nil {
+		if kerrors.IsNotFound(err) {
+			return "", false, nil, nil
+		}
+		return "", true, nil, fmt.Errorf("unable to get machine for scale down machine %v: %#v", machineName, err)
+	}
+
+	machinePhase, found, err := unstructured.NestedString(machineObj.UnstructuredContent(), "status", "phase")
+	if !found || err != nil {
+		return "", true, machineObj, fmt.Errorf("could not get machine phase machine %v: %#v", machineName, err)
+	}
+
+	machinePhase = strings.ToLower(machinePhase)
+	return machinePhase, true, machineObj, nil
+}
+
 // scaleDown should be called by only one thread at a time. It assesses a node which has been staged for
 // safe scale down (e.g. is running with the NoSchedule taint). Final checks are performed. If an error is
 // returned, the caller must unstage the scale down.
-func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machineSetNamespace string, machineSetName string, err error) {
+func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machineSetNamespace string, machineSetName string, machineName string, err error) {
 	if _, ok := node.Labels[CiWorkloadLabelName]; !ok {
 		// Just a sanity check
-		return "", "", fmt.Errorf("will not scale down non-ci-workload node")
+		return "", "", "", fmt.Errorf("will not scale down non-ci-workload node")
 	}
 
 	machineKey, ok := node.Annotations[NodeMachineAnnotationKey]
 	if !ok {
-		return "", "", fmt.Errorf("could not find machine annotation associated with node: %v", node.Name)
+		return "", "", "", fmt.Errorf("could not find machine annotation associated with node: %v", node.Name)
 	}
 	components := strings.Split(machineKey, "/")
 	machineSetNamespace = components[0]
 	machineSetClient := p.dynamicClient.Resource(machineSetResource).Namespace(machineSetNamespace)
 	machineClient := p.dynamicClient.Resource(machineResource).Namespace(machineSetNamespace)
 
-	machineName := components[1]
+	machineName = components[1]
 
-	getMachinePhase := func() (machinePhase string, machineExists bool, machineObj *unstructured.Unstructured, err error) {
-		machineObj, err = machineClient.Get(p.context, machineName, metav1.GetOptions{})
-		if err != nil {
-			if kerrors.IsNotFound(err) {
-				return "", false, nil, nil
-			}
-			return "", true, nil, fmt.Errorf("unable to get machine for scale down node %v / machine %v: %#v", node.Name, machineName, err)
-		}
-
-		machinePhase, found, err := unstructured.NestedString(machineObj.UnstructuredContent(), "status", "phase")
-		if !found || err != nil {
-			return "", true, machineObj, fmt.Errorf("could not get machine phase node %v / machine %v: %#v", node.Name, machineName, err)
-		}
-
-		machinePhase = strings.ToLower(machinePhase)
-		return machinePhase, true, machineObj, nil
-	}
-
-
-	machinePhase, machineExists, machineObj, err := getMachinePhase()
+	machinePhase, machineExists, machineObj, err := p.getMachinePhase(machineSetNamespace, machineName)
 	if !machineExists {
-		return machineSetNamespace, "", nil
+		return machineSetNamespace, "", machineName,nil
 	}
 	if err != nil {
-		return machineSetNamespace, "", err
+		return machineSetNamespace, "", machineName, err
 	}
 
 	if machinePhase != "running" {
-		return machineSetNamespace, "", fmt.Errorf("refusing to scale down machine which is not in the running state machine %v / node %v ; is in phase %v", machineName, node.Name, machinePhase)
+		/**
+		 * The following scenario was observed:
+		 * 1. cluster wants to scale down node ip-10-0-130-5.ec2.internal
+		 * 2. ip-10-0-130-5.ec2.internal's machine is stuck in 'Deleting'
+		 * 3. ip-10-0-130-5.ec2.internal is stuck in deleting because it can't drain
+		 * 4. ip-10-0-130-5.ec2.internal was created 2 days ago
+		 * 5. it can't drain because a pod created in April (ci/11ab1667-b3fd-11ec-9cb6-0a580a822c83-debug) that happens to have been scheduled to a completely distinct node of the same IP address and therefore node name is stuck in 'Terminating' (prow finalizer)
+		 * 6. An old incarnation of the ci scheduling webhook would detect that the machine cannot be disposed of successfully keeps making it schedulable
+		 * 7. machine api keeps cordoning and draining it (unsuccessfully).. evicting our workload pods.
+		 * So (6) has changed. Don't throw an error if the machine is not in running.
+		 */
+		klog.Infof("Refusing to scale down machine %v / node %v because it is not in the running phase. It is in: %v", machineName, node.Name, machinePhase)
+		return machineSetNamespace, "", machineName, nil
 	}
 
 	for {
@@ -701,7 +740,7 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 		// extract logs / etc (they poll).
 		pods, err := p.getPodsUsingNode(node.Name, true, 5 *time.Minute)
 		if err != nil {
-			return machineSetNamespace, "", fmt.Errorf("error during scale down evaluation while checking for pods running on machine %v / node %v: %v", machineName, node.Name, err)
+			return machineSetNamespace, "", machineName, fmt.Errorf("error during scale down evaluation while checking for pods running on machine %v / node %v: %v", machineName, node.Name, err)
 		}
 		if len(pods) == 0 {
 			break
@@ -712,12 +751,12 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 
 	machineMetadata, found, err := unstructured.NestedMap(machineObj.UnstructuredContent(), "metadata")
 	if !found || err != nil {
-		return machineSetNamespace, "", fmt.Errorf("could not get machine metadata for node %v / machine %v: %#v", node.Name, machineName, err)
+		return machineSetNamespace, "", machineName, fmt.Errorf("could not get machine metadata for node %v / machine %v: %#v", node.Name, machineName, err)
 	}
 
 	machineOwnerReferencesInterface, ok := machineMetadata["ownerReferences"]
 	if !ok {
-		return machineSetNamespace, "", fmt.Errorf("could not find machineset ownerReferences associated with machine: %v node: %v", machineName, node.Name)
+		return machineSetNamespace, "", machineName, fmt.Errorf("could not find machineset ownerReferences associated with machine: %v node: %v", machineName, node.Name)
 	}
 
 	machineOwnerReferences := machineOwnerReferencesInterface.([]interface{})
@@ -731,12 +770,12 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 	}
 
 	if len(machineSetName) == 0 {
-		return machineSetNamespace, "", fmt.Errorf("unable to find machineset name in machine owner references: %v node: %v", machineName, node.Name)
+		return machineSetNamespace, "", machineName, fmt.Errorf("unable to find machineset name in machine owner references: %v node: %v", machineName, node.Name)
 	}
 
 	_, err = machineSetClient.Get(p.context, machineSetName, metav1.GetOptions{})
 	if err != nil {
-		return machineSetNamespace, machineSetName, fmt.Errorf("unable to get machineset %v: %#v", machineSetName, err)
+		return machineSetNamespace, machineSetName, machineName, fmt.Errorf("unable to get machineset %v: %#v", machineSetName, err)
 	}
 
 	klog.Infof("Setting machine deletion annotation on machine %v for node %v", machineName, node.Name)
@@ -750,13 +789,13 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 
 	deletionPayload, err := json.Marshal(deletionAnnotationPatch)
 	if err != nil {
-		return machineSetNamespace, machineSetName, fmt.Errorf("unable to marshal machine %v annotation deletion patch: %#v", machineName, err)
+		return machineSetNamespace, machineSetName, machineName, fmt.Errorf("unable to marshal machine %v annotation deletion patch: %#v", machineName, err)
 	}
 
 	// setting this annotation is the point of no return -- if successful, we will try to scale down indefinitely
 	_, err = machineClient.Patch(p.context, machineName, types.JSONPatchType, deletionPayload, metav1.PatchOptions{})
 	if err != nil {
-		return machineSetNamespace, machineSetName, fmt.Errorf("unable to apply machine %v annotation deletion patch: %#v", machineName, err)
+		return machineSetNamespace, machineSetName, machineName, fmt.Errorf("unable to apply machine %v annotation deletion patch: %#v", machineName, err)
 	}
 
 	// We will now interact with the machineset for this pod class. Hold a lock until we successfully
@@ -774,7 +813,7 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 		if err != nil {
 			if kerrors.IsNotFound(err) {
 				klog.Errorf("Machineset %v has disappeared -- canceling scaledown", machineSetName)
-				return machineSetNamespace, machineSetName, nil
+				return machineSetNamespace, machineSetName, machineName, nil
 			}
 			klog.Errorf("Unable to get machineset %v: %#v", machineSetName, err)
 			continue
@@ -794,7 +833,7 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 		// decremented the replica count. This check should prevent it from happening again while the
 		// machine shuts down.
 
-		machinePhase, machineExists, _, err := getMachinePhase()
+		machinePhase, machineExists, _, err := p.getMachinePhase(machineSetNamespace, machineName)
 
 		if err != nil {
 			klog.Errorf("Error trying to determine machine phase %v / node %v: %v", machineName, node.Name, err)
@@ -802,15 +841,15 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 		}
 
 		if machinePhase == "deleting" {
-			// This is also treated as a successful scale down
+			// This is treated as a successful scale down
 			klog.Infof("Machine is in deleting state %v / node %v", machineName, node.Name)
-			return machineSetNamespace, machineSetName, nil
+			return machineSetNamespace, machineSetName, machineName, nil
 		}
 
 		if !machineExists {
 			// This is also treated as a successful scale down
 			klog.Infof("Machine %v no longer exists according to API / node %v", machineName, node.Name)
-			return machineSetNamespace, machineSetName, nil
+			return machineSetNamespace, machineSetName, machineName, nil
 		}
 
 		if machinePhase != "running" {
@@ -824,7 +863,7 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 		if replicas < 0 {
 			// This is unexpected -- something has changed replicas and we don't think it was us.
 			klog.Errorf("computed replicas < 0 for machineset %v ; aborting this scale down due to race", machineSetName)
-			return machineSetNamespace, machineSetName, nil
+			return machineSetNamespace, machineSetName, machineName, nil
 		}
 
 		klog.Infof("Scaling down machineset %v to %v replicas in order to eliminate machine %v / node %v", machineSetName, replicas, machineName, node.Name)
@@ -853,7 +892,7 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 		// This method is done. Returning from this method releases a lock which allows other machines in this
 		// class to scale down. Waiting too long in this method means that the number of cordoned machines may
 		// grow faster than they can be scaled done.
-		return machineSetNamespace, machineSetName, nil
+		return machineSetNamespace, machineSetName, machineName, nil
 	}
 }
 

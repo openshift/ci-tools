@@ -164,6 +164,45 @@ test_copy_kubeconfig() {
     wait
 }
 
+test_upload_on_interrupt() {
+    echo '[INFO] Verifying secret data is uploaded when created after interrupted'
+    local pid
+    entrypoint-wrapper \
+        --dry-run \
+        bash -c 'trap "echo cleanup > ${SHARED_DIR}/file" EXIT; sleep 30' \
+        > "${OUT}" 2> "${ERR}" &
+    pid=$!
+    sleep 1
+    kill -s SIGTERM "${pid}"
+    if wait "$pid"; then
+        fail "[ERROR] secret-wrapper did not fail as expected:"
+        return 1
+    fi
+    printf %s > "${SECRET}" '{' \
+        '"kind":"Secret",' \
+        '"apiVersion":"v1",' \
+        '"metadata":{' \
+            '"name":"test",' \
+            '"creationTimestamp":null,' \
+            '"labels":{' \
+                '"ci.openshift.io/skip-censoring":"true"' \
+            '}' \
+        '},' \
+        '"data":{' \
+            '"file":"Y2xlYW51cAo=",' \
+            '"test0.txt":"dGVzdDAK"' \
+        '},' \
+        '"type":"Opaque"' \
+    $'}\n'
+    if ! cmp --quiet "${OUT}" "${SECRET}"; then
+        echo '[ERROR] output:'
+        cat "${OUT}"
+        echo '[ERROR] error output:'
+        cat "${ERR}"
+        return 1
+    fi
+}
+
 test_copy_dir() {
     local data_dir=..2020_03_09_17_18_45.291041453
     echo '[INFO] Verifying SHARED_DIR is copied correctly'
@@ -236,6 +275,7 @@ os::cmd::expect_success 'run_test test_cli_dir'
 os::cmd::expect_success 'run_test test_copy_dir'
 os::cmd::expect_success 'run_test test_home_dir'
 os::cmd::expect_success 'run_test test_copy_kubeconfig'
+os::cmd::expect_success 'run_test test_upload_on_interrupt'
 os::cmd::expect_success "run_test entrypoint-wrapper --dry-run true \> ${OUT}"
 os::integration::compare "${OUT}" "${SECRET}"
 os::cmd::expect_failure "run_test entrypoint-wrapper --dry-run false \> ${OUT}"

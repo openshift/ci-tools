@@ -166,6 +166,54 @@ func TestGetMaxRetests(t *testing.T) {
 	}
 }
 
+func TestUpdateEnabledOrgAndRepo(t *testing.T) {
+	i := &Info{
+		Retester: Retester{
+			map[string]Oranization{"openshift": {
+				MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9, Repos: map[string]Repo{"ci-tools": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 8}},
+			},
+				"no-openshift": {
+					MaxRetestsForShaAndBase: 1, MaxRetestsForSha: 1, Repos: map[string]Repo{"test": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 7}},
+				}},
+		}}
+	testCases := []struct {
+		name          string
+		config        *Info
+		repos         sets.String
+		orgs          sets.String
+		expectedRepos sets.String
+		expectedOrgs  sets.String
+	}{
+		{
+			name:          "basic case",
+			config:        i,
+			repos:         sets.NewString("openshift/test"),
+			orgs:          sets.NewString("openshift"),
+			expectedRepos: sets.NewString("openshift/test", "openshift/ci-tools", "no-openshift/test"),
+			expectedOrgs:  sets.NewString("openshift"),
+		},
+		{
+			name:          "no repo and no org from arguments",
+			config:        i,
+			repos:         sets.NewString(),
+			orgs:          sets.NewString(),
+			expectedRepos: sets.NewString("openshift/ci-tools", "no-openshift/test"),
+			expectedOrgs:  sets.NewString(),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.config.updateEnabledRepos(&tc.repos)
+			if diff := cmp.Diff(tc.expectedOrgs, tc.orgs); diff != "" {
+				t.Errorf("%s differs from expectedOrgs:\n%s", tc.name, diff)
+			}
+			if diff := cmp.Diff(tc.expectedRepos, tc.repos); diff != "" {
+				t.Errorf("%s differs from expectedRepos:\n%s", tc.name, diff)
+			}
+		})
+	}
+}
+
 func TestRetestOrBackoff(t *testing.T) {
 	ghc := &MyFakeClient{fakegithub.NewFakeClient()}
 	var name githubv4.String = "repo"

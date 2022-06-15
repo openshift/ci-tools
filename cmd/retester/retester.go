@@ -149,6 +149,16 @@ type retestController struct {
 	enableOnOrgs  sets.String
 }
 
+func (i *Info) updateEnabledRepos(repos *sets.String) {
+	for orgKey, org := range i.Retester.Oranizations {
+		for key := range org.Repos {
+			if !repos.Has(orgKey + "/" + key) {
+				repos.Insert(orgKey + "/" + key)
+			}
+		}
+	}
+}
+
 func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, configFile string, enableOnRepos prowflagutil.Strings, enableOnOrgs prowflagutil.Strings) *retestController {
 	logger := logrus.NewEntry(logrus.StandardLogger())
 	fmt.Println(cacheFile)
@@ -156,6 +166,13 @@ func newController(ghClient githubClient, cfg config.Getter, gitClient git.Clien
 	if err != nil {
 		logger.WithError(err).Warn("Failed to load config from file")
 	}
+
+	reposSet := enableOnRepos.StringSet()
+	orgsSet := enableOnOrgs.StringSet()
+	if configRetester != nil {
+		configRetester.updateEnabledRepos(&reposSet)
+	}
+
 	ret := &retestController{
 		ghClient:       ghClient,
 		gitClient:      gitClient,
@@ -164,8 +181,8 @@ func newController(ghClient githubClient, cfg config.Getter, gitClient git.Clien
 		usesGitHubApp:  usesApp,
 		backoff:        &backoffCache{cache: map[string]*PullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger},
 		configRetester: configRetester,
-		enableOnRepos:  enableOnRepos.StringSet(),
-		enableOnOrgs:   enableOnOrgs.StringSet(),
+		enableOnRepos:  reposSet,
+		enableOnOrgs:   orgsSet,
 	}
 	if err := ret.backoff.loadFromDisk(); err != nil {
 		logger.WithError(err).Warn("Failed to load backoff cache from disk")

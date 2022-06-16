@@ -152,8 +152,9 @@ type retestController struct {
 func (i *Info) updateEnabledRepos(repos *sets.String) {
 	for orgKey, org := range i.Retester.Oranizations {
 		for key := range org.Repos {
-			if !repos.Has(orgKey + "/" + key) {
-				repos.Insert(orgKey + "/" + key)
+			repo := orgKey + "/" + key
+			if !repos.Has(repo) {
+				repos.Insert(repo)
 			}
 		}
 	}
@@ -161,7 +162,6 @@ func (i *Info) updateEnabledRepos(repos *sets.String) {
 
 func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, configFile string, enableOnRepos prowflagutil.Strings, enableOnOrgs prowflagutil.Strings) *retestController {
 	logger := logrus.NewEntry(logrus.StandardLogger())
-	fmt.Println(cacheFile)
 	configRetester, err := loadConfig(cacheFile)
 	if err != nil {
 		logger.WithError(err).Warn("Failed to load config from file")
@@ -242,25 +242,30 @@ const (
 	maxRetestsForShaDefault        = 3 * maxRetestsForShaAndBaseDefault
 )
 
+type MaxRetests struct {
+	ForSha        int
+	ForShaAndBase int
+}
+
 // Getter for max retests from config
-func (i *Info) getMaxRetests(pr tide.PullRequest) (int, int) {
+func (i *Info) getMaxRetests(pr tide.PullRequest) MaxRetests {
 	org := string(pr.Repository.Owner.Login)
-	orgStruct := i.Retester.Oranizations[org]
-	fmt.Println(orgStruct)
 	if orgStruct, ok := i.Retester.Oranizations[org]; ok {
 		repo := string(pr.Repository.Name)
 		if repoStruct, ok := orgStruct.Repos[repo]; ok {
-			return repoStruct.MaxRetestsForSha, repoStruct.MaxRetestsForShaAndBase
+			return MaxRetests{repoStruct.MaxRetestsForSha, repoStruct.MaxRetestsForShaAndBase}
 		}
-		return orgStruct.MaxRetestsForSha, orgStruct.MaxRetestsForShaAndBase
+		return MaxRetests{orgStruct.MaxRetestsForSha, orgStruct.MaxRetestsForShaAndBase}
 	}
-	return maxRetestsForShaDefault, maxRetestsForShaAndBaseDefault
+	return MaxRetests{maxRetestsForShaDefault, maxRetestsForShaAndBaseDefault}
 }
 
 func (b *backoffCache) check(pr tide.PullRequest, baseSha string, retesterConfig *Info) (retestBackoffAction, string) {
 	var maxRetestsForSha, maxRetestsForShaAndBase int
 	if retesterConfig != nil {
-		maxRetestsForSha, maxRetestsForShaAndBase = retesterConfig.getMaxRetests(pr)
+		maxRetests := retesterConfig.getMaxRetests(pr)
+		maxRetestsForSha = maxRetests.ForSha
+		maxRetestsForShaAndBase = maxRetests.ForShaAndBase
 	} else {
 		maxRetestsForSha = maxRetestsForShaDefault
 		maxRetestsForShaAndBase = maxRetestsForShaAndBaseDefault

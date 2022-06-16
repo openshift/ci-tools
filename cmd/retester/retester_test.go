@@ -86,11 +86,10 @@ func TestGetMaxRetests(t *testing.T) {
 	var nonconfiguredOrg githubv4.String = "org"
 	var num githubv4.Int = 123
 	testCases := []struct {
-		name               string
-		pr                 tide.PullRequest
-		config             *Info
-		expectedSha        int
-		expectedShaAndBase int
+		name     string
+		pr       tide.PullRequest
+		config   *Info
+		expected MaxRetests
 	}{
 		{
 			name: "configured org and non-configured repo",
@@ -103,9 +102,8 @@ func TestGetMaxRetests(t *testing.T) {
 					Owner         struct{ Login githubv4.String }
 				}{Name: nonConfiguredRepo, Owner: struct{ Login githubv4.String }{Login: configuredOrg}},
 			},
-			config:             c,
-			expectedSha:        15,
-			expectedShaAndBase: 6,
+			config:   c,
+			expected: MaxRetests{15, 6},
 		},
 		{
 			name: "configured org and configured repo",
@@ -118,9 +116,8 @@ func TestGetMaxRetests(t *testing.T) {
 					Owner         struct{ Login githubv4.String }
 				}{Name: configuredRepo, Owner: struct{ Login githubv4.String }{Login: configuredOrg}},
 			},
-			config:             c,
-			expectedSha:        8,
-			expectedShaAndBase: 3,
+			config:   c,
+			expected: MaxRetests{8, 3},
 		},
 		{
 			name: "non-configured org and non-configured repo",
@@ -133,9 +130,8 @@ func TestGetMaxRetests(t *testing.T) {
 					Owner         struct{ Login githubv4.String }
 				}{Name: nonConfiguredRepo, Owner: struct{ Login githubv4.String }{Login: nonconfiguredOrg}},
 			},
-			config:             c,
-			expectedSha:        9,
-			expectedShaAndBase: 3,
+			config:   c,
+			expected: MaxRetests{9, 3},
 		},
 		{
 			name: "non-configured org and configured repo",
@@ -148,19 +144,15 @@ func TestGetMaxRetests(t *testing.T) {
 					Owner         struct{ Login githubv4.String }
 				}{Name: configuredRepo, Owner: struct{ Login githubv4.String }{Login: nonconfiguredOrg}},
 			},
-			config:             c,
-			expectedSha:        9,
-			expectedShaAndBase: 3,
+			config:   c,
+			expected: MaxRetests{9, 3},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualSha, actualShaAndBase := tc.config.getMaxRetests(tc.pr)
-			if diff := cmp.Diff(tc.expectedSha, actualSha); diff != "" {
-				t.Errorf("%s differs from expectedSha:\n%s", tc.name, diff)
-			}
-			if diff := cmp.Diff(tc.expectedShaAndBase, actualShaAndBase); diff != "" {
-				t.Errorf("%s differs from expectedShaAndBase:\n%s", tc.name, diff)
+			actual := tc.config.getMaxRetests(tc.pr)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
 			}
 		})
 	}

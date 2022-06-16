@@ -40,7 +40,6 @@ spec:
           apiVersion: awsproviderconfig.openshift.io/v1beta1
           blockDevices:
           - ebs:
-              # Disk pressure was spotted at 300
               volumeSize: 500
               volumeType: io1
               iops: 600

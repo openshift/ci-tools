@@ -41,7 +41,7 @@ spec:
           blockDevices:
           - ebs:
               iops: 5000
-              volumeSize: 2000
+              volumeSize: 500
               volumeType: io1
           credentialsSecret:
             name: aws-cloud-credentials

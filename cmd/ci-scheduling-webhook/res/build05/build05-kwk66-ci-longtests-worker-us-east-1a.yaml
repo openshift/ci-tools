@@ -42,7 +42,7 @@ spec:
           - ebs:
               volumeSize: 500
               volumeType: io1
-              iops: 5000
+              iops: 600
           credentialsSecret:
             name: aws-cloud-credentials
           deviceIndex: 0

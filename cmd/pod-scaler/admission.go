@@ -32,7 +32,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 )
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool) {
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string) {
 	logger := logrus.WithField("component", "pod-scaler admission")
 	logger.Info("Initializing admission webhook server.")
 	health := pjutil.NewHealthOnPort(healthPort)
@@ -45,7 +45,7 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 		Port:    port,
 		CertDir: certDir,
 	}
-	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits}})
+	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap}})
 	logger.Info("Serving admission webhooks.")
 	if err := server.StartStandalone(interrupts.Context(), nil); err != nil {
 		logrus.WithError(err).Fatal("Failed to serve webhooks.")
@@ -58,6 +58,8 @@ type podMutator struct {
 	resources            *resourceServer
 	mutateResourceLimits bool
 	decoder              *admission.Decoder
+	cpuCap               int64
+	memoryCap            string
 }
 
 func (m *podMutator) Handle(ctx context.Context, req admission.Request) admission.Response {
@@ -94,7 +96,7 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		logger.WithError(err).Error("Failed to handle rehearsal Pod.")
 		return admission.Allowed("Failed to handle rehearsal Pod, ignoring.")
 	}
-	mutatePodResources(pod, m.resources, m.mutateResourceLimits)
+	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap)
 
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
@@ -239,31 +241,28 @@ func reconcileLimits(resources *corev1.ResourceRequirements) {
 	}
 }
 
-func preventUnschedulable(resources *corev1.ResourceRequirements) {
+func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, memoryCap string) {
 	if resources.Requests == nil {
 		return
 	}
 
 	if _, ok := resources.Requests[corev1.ResourceCPU]; ok {
-		// 10 CPU is a ballpark number. Current build farm nodes have 16 CPU so pods get unschedulable
-		// around 14 CPU
-		// TODO(DPTP-2525): Make configurable and perhaps cluster-specific?
-		cpuRequestCap := *resource.NewQuantity(10, resource.DecimalSI)
+		// TODO(DPTP-2525): Make cluster-specific?
+		cpuRequestCap := *resource.NewQuantity(cpuCap, resource.DecimalSI)
 		if resources.Requests.Cpu().Cmp(cpuRequestCap) == 1 {
 			resources.Requests[corev1.ResourceCPU] = cpuRequestCap
 		}
 	}
 
 	if _, ok := resources.Requests[corev1.ResourceMemory]; ok {
-		// Our instances are not currently large enough to support a memory request larger than 20Gi
-		memoryRequestCap := resource.MustParse("20Gi")
+		memoryRequestCap := resource.MustParse(memoryCap)
 		if resources.Requests.Memory().Cmp(memoryRequestCap) == 1 {
 			resources.Requests[corev1.ResourceMemory] = memoryRequestCap
 		}
 	}
 }
 
-func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool) {
+func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string) {
 	for i := range pod.Spec.InitContainers {
 		meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, pod.Spec.InitContainers[i].Name)
 		resources, recommendationExists := server.recommendedRequestFor(meta)
@@ -273,7 +272,7 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 				reconcileLimits(&pod.Spec.InitContainers[i].Resources)
 			}
 		}
-		preventUnschedulable(&pod.Spec.InitContainers[i].Resources)
+		preventUnschedulable(&pod.Spec.InitContainers[i].Resources, cpuCap, memoryCap)
 	}
 	for i := range pod.Spec.Containers {
 		meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, pod.Spec.Containers[i].Name)
@@ -284,6 +283,6 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 				reconcileLimits(&pod.Spec.Containers[i].Resources)
 			}
 		}
-		preventUnschedulable(&pod.Spec.Containers[i].Resources)
+		preventUnschedulable(&pod.Spec.Containers[i].Resources, cpuCap, memoryCap)
 	}
 }

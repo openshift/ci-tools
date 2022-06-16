@@ -80,7 +80,7 @@ func TestMutatePods(t *testing.T) {
 			}: {
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    *resource.NewQuantity(9, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+					corev1.ResourceMemory: *resource.NewQuantity(2e4, resource.BinarySI),
 				},
 			},
 		},
@@ -91,6 +91,8 @@ func TestMutatePods(t *testing.T) {
 		decoder:              decoder,
 		resources:            resources,
 		mutateResourceLimits: true,
+		cpuCap:               10,
+		memoryCap:            "20Gi",
 	}
 
 	var testCases = []struct {
@@ -539,7 +541,7 @@ func TestMutatePodResources(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			original := testCase.pod.DeepCopy()
-			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits)
+			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi")
 			diff := cmp.Diff(original, testCase.pod)
 			// In some cases, cmp.Diff decides to use non-breaking spaces, and it's not
 			// particularly deterministic about this. We don't care.
@@ -824,6 +826,8 @@ func TestRehearsalMetadata(t *testing.T) {
 }
 
 func TestPreventUnschedulable(t *testing.T) {
+	cpuCap := int64(10)
+	memoryCap := "20Gi"
 	testCases := []struct {
 		name      string
 		resources *corev1.ResourceRequirements
@@ -853,7 +857,7 @@ func TestPreventUnschedulable(t *testing.T) {
 			},
 			expected: &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceCPU: *resource.NewQuantity(10, resource.DecimalSI),
+					corev1.ResourceCPU: *resource.NewQuantity(cpuCap, resource.DecimalSI),
 				},
 			},
 		},
@@ -866,7 +870,7 @@ func TestPreventUnschedulable(t *testing.T) {
 			},
 			expected: &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceMemory: resource.MustParse("20Gi"),
+					corev1.ResourceMemory: resource.MustParse(memoryCap),
 				},
 			},
 		},
@@ -880,8 +884,8 @@ func TestPreventUnschedulable(t *testing.T) {
 			},
 			expected: &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(10, resource.DecimalSI),
-					corev1.ResourceMemory: resource.MustParse("20Gi"),
+					corev1.ResourceCPU:    *resource.NewQuantity(cpuCap, resource.DecimalSI),
+					corev1.ResourceMemory: resource.MustParse(memoryCap),
 				},
 			},
 		},
@@ -893,7 +897,7 @@ func TestPreventUnschedulable(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			preventUnschedulable(tc.resources)
+			preventUnschedulable(tc.resources, cpuCap, memoryCap)
 			if diff := cmp.Diff(tc.expected, tc.resources); diff != "" {
 				t.Fatalf("result doesn't match expected, diff: %s", diff)
 			}

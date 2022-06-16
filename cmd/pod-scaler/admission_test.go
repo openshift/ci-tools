@@ -371,25 +371,25 @@ func TestMutatePodResources(t *testing.T) {
 					baseWithContainer(&metaBase, "large"): {
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    *resource.NewQuantity(5, resource.DecimalSI),
-							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+							corev1.ResourceMemory: *resource.NewQuantity(2e8, resource.BinarySI),
 						},
 					},
 					baseWithContainer(&metaBase, "medium"): {
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    *resource.NewQuantity(5, resource.DecimalSI),
-							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+							corev1.ResourceMemory: *resource.NewQuantity(2e8, resource.BinarySI),
 						},
 					},
 					baseWithContainer(&metaBase, "small"): {
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    *resource.NewQuantity(5, resource.DecimalSI),
-							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+							corev1.ResourceMemory: *resource.NewQuantity(2e8, resource.BinarySI),
 						},
 					},
 					baseWithContainer(&metaBase, "overcap"): {
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    *resource.NewQuantity(20, resource.DecimalSI),
-							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+							corev1.ResourceMemory: *resource.NewQuantity(2e8, resource.BinarySI),
 						},
 					},
 				},
@@ -414,11 +414,11 @@ func TestMutatePodResources(t *testing.T) {
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									corev1.ResourceCPU:    *resource.NewQuantity(8, resource.DecimalSI),
-									corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+									corev1.ResourceMemory: *resource.NewQuantity(3e8, resource.BinarySI),
 								},
 								Limits: corev1.ResourceList{
 									corev1.ResourceCPU:    *resource.NewQuantity(16, resource.DecimalSI),
-									corev1.ResourceMemory: *resource.NewQuantity(4e10, resource.BinarySI),
+									corev1.ResourceMemory: *resource.NewQuantity(4e8, resource.BinarySI),
 								},
 							},
 						},
@@ -427,7 +427,7 @@ func TestMutatePodResources(t *testing.T) {
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									corev1.ResourceCPU:    *resource.NewQuantity(8, resource.DecimalSI),
-									corev1.ResourceMemory: *resource.NewQuantity(1e10, resource.BinarySI),
+									corev1.ResourceMemory: *resource.NewQuantity(1e8, resource.BinarySI),
 								},
 								Limits: corev1.ResourceList{},
 							},
@@ -820,5 +820,83 @@ func TestRehearsalMetadata(t *testing.T) {
 	}
 	if diff := cmp.Diff(pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, "test"), meta); diff != "" {
 		t.Errorf("rehearsal job: got incorrect metadata: %v", diff)
+	}
+}
+
+func TestPreventUnschedulable(t *testing.T) {
+	testCases := []struct {
+		name      string
+		resources *corev1.ResourceRequirements
+		expected  *corev1.ResourceRequirements
+	}{
+		{
+			name: "valid CPU and memory",
+			resources: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(9, resource.DecimalSI),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+			},
+			expected: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(9, resource.DecimalSI),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+			},
+		},
+		{
+			name: "too much CPU",
+			resources: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
+				},
+			},
+			expected: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(10, resource.DecimalSI),
+				},
+			},
+		},
+		{
+			name: "too much memory",
+			resources: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("25Gi"),
+				},
+			},
+			expected: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("20Gi"),
+				},
+			},
+		},
+		{
+			name: "too much CPU and memory",
+			resources: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+					corev1.ResourceMemory: resource.MustParse("25Gi"),
+				},
+			},
+			expected: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(10, resource.DecimalSI),
+					corev1.ResourceMemory: resource.MustParse("20Gi"),
+				},
+			},
+		},
+		{
+			name:      "no requests",
+			resources: &corev1.ResourceRequirements{},
+			expected:  &corev1.ResourceRequirements{},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			preventUnschedulable(tc.resources)
+			if diff := cmp.Diff(tc.expected, tc.resources); diff != "" {
+				t.Fatalf("result doesn't match expected, diff: %s", diff)
+			}
+		})
 	}
 }

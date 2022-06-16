@@ -243,16 +243,23 @@ func preventUnschedulable(resources *corev1.ResourceRequirements) {
 	if resources.Requests == nil {
 		return
 	}
-	if _, ok := resources.Requests[corev1.ResourceCPU]; !ok {
-		return
+
+	if _, ok := resources.Requests[corev1.ResourceCPU]; ok {
+		// 10 CPU is a ballpark number. Current build farm nodes have 16 CPU so pods get unschedulable
+		// around 14 CPU
+		// TODO(DPTP-2525): Make configurable and perhaps cluster-specific?
+		cpuRequestCap := *resource.NewQuantity(10, resource.DecimalSI)
+		if resources.Requests.Cpu().Cmp(cpuRequestCap) == 1 {
+			resources.Requests[corev1.ResourceCPU] = cpuRequestCap
+		}
 	}
 
-	// 10 CPU is a ballpark number. Current build farm nodes have 16 CPU so pods get unschedulable
-	// around 14 CPU
-	// TODO(DPTP-2525): Make configurable and perhaps cluster-specific?
-	cpuRequestCap := *resource.NewQuantity(10, resource.DecimalSI)
-	if resources.Requests.Cpu().Cmp(cpuRequestCap) == 1 {
-		resources.Requests[corev1.ResourceCPU] = cpuRequestCap
+	if _, ok := resources.Requests[corev1.ResourceMemory]; ok {
+		// Our instances are not currently large enough to support a memory request larger than 20Gi
+		memoryRequestCap := resource.MustParse("20Gi")
+		if resources.Requests.Memory().Cmp(memoryRequestCap) == 1 {
+			resources.Requests[corev1.ResourceMemory] = memoryRequestCap
+		}
 	}
 }
 

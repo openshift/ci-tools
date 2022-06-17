@@ -14,12 +14,26 @@ import (
 )
 
 type fakeCollaboratorClient struct {
-	repos map[string][]string
+	collaboratorsByRepo map[string][]string
+	membersByOrg        map[string][]string
+}
+
+func (c fakeCollaboratorClient) IsMember(org, user string) (bool, error) {
+	for _, member := range c.membersByOrg[org] {
+		if user == member {
+			return true, nil
+		}
+	}
+	if org == "fake" {
+		return false, errors.New("intentional error")
+	}
+
+	return false, nil
 }
 
 func (c fakeCollaboratorClient) IsCollaborator(org, repo, user string) (bool, error) {
 	orgRepo := fmt.Sprintf("%s/%s", org, repo)
-	collaborators := c.repos[orgRepo]
+	collaborators := c.collaboratorsByRepo[orgRepo]
 	for _, collaborator := range collaborators {
 		if collaborator == user {
 			return true, nil
@@ -33,10 +47,15 @@ func (c fakeCollaboratorClient) IsCollaborator(org, repo, user string) (bool, er
 }
 
 func TestCheckRepos(t *testing.T) {
-	client := fakeCollaboratorClient{repos: map[string][]string{
-		"org-1/repo-a": {"a-bot", "b-bot", "c-bot"},
-		"org-2/repo-z": {"c-bot", "some-user"},
-	}}
+	client := fakeCollaboratorClient{
+		collaboratorsByRepo: map[string][]string{
+			"org-1/repo-a": {"a-bot", "b-bot", "c-bot"},
+			"org-2/repo-z": {"c-bot", "some-user"},
+		},
+		membersByOrg: map[string][]string{
+			"org-1": {"a-user", "d-bot", "e-bot"},
+			"org-2": {"some-user", "z-bot"},
+		}}
 
 	testCases := []struct {
 		name        string
@@ -47,12 +66,22 @@ func TestCheckRepos(t *testing.T) {
 		expectedErr error
 	}{
 		{
+			name:  "org has bots as members",
+			repos: []string{"org-1/repo-a"},
+			bots:  []string{"d-bot", "e-bot"},
+		},
+		{
+			name:  "org has one bot as member, and one as collaborator",
+			repos: []string{"org-1/repo-a"},
+			bots:  []string{"a-bot", "e-bot"},
+		},
+		{
 			name:  "repo has bots as collaborators",
 			repos: []string{"org-1/repo-a"},
 			bots:  []string{"a-bot", "b-bot"},
 		},
 		{
-			name:     "repo doesn't have bots as collaborators",
+			name:     "org doesn't have bots as members, and repo doesn't have bots as collaborators",
 			repos:    []string{"org-2/repo-z"},
 			bots:     []string{"a-bot", "b-bot"},
 			expected: []string{"org-2/repo-z"},
@@ -74,6 +103,12 @@ func TestCheckRepos(t *testing.T) {
 			repos:  []string{"org-2/repo-z"},
 			bots:   []string{"a-bot", "b-bot"},
 			ignore: sets.NewString("org-2"),
+		},
+		{
+			name:        "org member check returns error",
+			repos:       []string{"fake/repo"},
+			bots:        []string{"a-bot"},
+			expectedErr: errors.New("unable to determine if: a-bot is a member of fake: intentional error"),
 		},
 		{
 			name:        "collaborator check returns error",

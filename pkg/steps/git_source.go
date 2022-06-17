@@ -44,7 +44,7 @@ func (s *gitSourceStep) run(ctx context.Context) error {
 			secretName = s.cloneAuthConfig.Secret.Name
 		}
 
-		return handleBuilds(ctx, s.buildClient, *buildFromSource(s.jobSpec, "", api.PipelineImageStreamTagReferenceRoot, buildapi.BuildSource{
+		return handleBuilds(ctx, s.buildClient, s.podClient, *buildFromSource(s.jobSpec, "", api.PipelineImageStreamTagReferenceRoot, buildapi.BuildSource{
 			Type:         buildapi.BuildSourceGit,
 			Dockerfile:   s.config.DockerfileLiteral,
 			ContextDir:   s.config.ContextDir,

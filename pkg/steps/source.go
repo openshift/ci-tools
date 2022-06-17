@@ -15,7 +15,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/clonerefs"
@@ -161,7 +161,7 @@ func (s *sourceStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return handleBuild(ctx, s.client, *createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest))
+	return handleBuild(ctx, s.client, s.podClient, *createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest))
 }
 
 func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef corev1.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret, fromDigest string) *buildapi.Build {
@@ -371,7 +371,7 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 	return true
 }
 
-func handleBuild(ctx context.Context, buildClient BuildClient, build buildapi.Build) error {
+func handleBuild(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, build buildapi.Build) error {
 	var buildErrs []error
 	attempts := 5
 	if boErr := wait.ExponentialBackoff(wait.Backoff{Duration: time.Minute, Factor: 1.5, Steps: attempts}, func() (bool, error) {
@@ -381,7 +381,7 @@ func handleBuild(ctx context.Context, buildClient BuildClient, build buildapi.Bu
 			return false, fmt.Errorf("could not create build %s: %w", buildAttempt.Name, err)
 		}
 
-		buildErr := waitForBuildOrTimeout(ctx, buildClient, buildAttempt.Namespace, buildAttempt.Name)
+		buildErr := waitForBuildOrTimeout(ctx, buildClient, podClient, buildAttempt.Namespace, buildAttempt.Name)
 		if buildErr == nil {
 			if err := gatherSuccessfulBuildLog(buildClient, buildAttempt.Namespace, buildAttempt.Name); err != nil {
 				// log error but do not fail successful build
@@ -421,7 +421,7 @@ func handleBuild(ctx context.Context, buildClient BuildClient, build buildapi.Bu
 		return false, nil
 	}); boErr != nil {
 		if boErr == wait.ErrWaitTimeout {
-			return fmt.Errorf("build not successful after %d attempts: %w", attempts, errors.NewAggregate(buildErrs))
+			return fmt.Errorf("build not successful after %d attempts: %w", attempts, utilerrors.NewAggregate(buildErrs))
 		}
 		return boErr
 	}
@@ -486,7 +486,7 @@ func hintsAtInfraReason(logSnippet string) bool {
 		strings.Contains(logSnippet, "connection reset by peer")
 }
 
-func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespace, name string) error {
+func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, namespace, name string) error {
 	isOK := func(b *buildapi.Build) bool {
 		return b.Status.Phase == buildapi.BuildPhaseComplete
 	}
@@ -514,6 +514,7 @@ func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespa
 	}
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
+	var ran bool
 	for {
 		select {
 		case <-ctx.Done():
@@ -522,6 +523,12 @@ func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespa
 			if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, build); err != nil {
 				logrus.WithError(err).Warnf("Failed to get build %s.", name)
 				continue
+			}
+			ran = ran || (build.Status.Phase == buildapi.BuildPhaseRunning)
+			if !ran && api.PodStartTimeout < time.Since(build.CreationTimestamp.Time) {
+				err := util.PendingBuildError(ctx, podClient, build)
+				logrus.Infof(err.Error())
+				return err
 			}
 			if isOK(build) {
 				logrus.Infof("Build %s succeeded after %s", build.Name, buildDuration(build).Truncate(time.Second))

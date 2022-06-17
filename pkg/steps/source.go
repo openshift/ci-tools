@@ -26,6 +26,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -134,6 +135,7 @@ type sourceStep struct {
 	config          api.SourceStepConfiguration
 	resources       api.ResourceConfiguration
 	client          BuildClient
+	podClient       kubernetes.PodClient
 	jobSpec         *api.JobSpec
 	cloneAuthConfig *CloneAuthConfig
 	pullSecret      *corev1.Secret
@@ -609,12 +611,20 @@ func (s *sourceStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient,
-	jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret) api.Step {
+func SourceStep(
+	config api.SourceStepConfiguration,
+	resources api.ResourceConfiguration,
+	buildClient BuildClient,
+	podClient kubernetes.PodClient,
+	jobSpec *api.JobSpec,
+	cloneAuthConfig *CloneAuthConfig,
+	pullSecret *corev1.Secret,
+) api.Step {
 	return &sourceStep{
 		config:          config,
 		resources:       resources,
 		client:          buildClient,
+		podClient:       podClient,
 		jobSpec:         jobSpec,
 		cloneAuthConfig: cloneAuthConfig,
 		pullSecret:      pullSecret,

@@ -6,7 +6,7 @@ metadata:
     # if instance type is unknown, so the autoscaler must be told about capacity:  https://access.redhat.com/solutions/6640721
     machine.openshift.io/GPU: "0"
     machine.openshift.io/memoryMb: "32768"
-    machine.openshift.io/vCPU: "32"
+    machine.openshift.io/vCPU: "16"
   labels:
     machine.openshift.io/cluster-api-cluster: build0-gstfj
   name: build0-gstfj-ci-prowjobs-worker-b
@@ -43,10 +43,11 @@ spec:
           - autoDelete: true
             boot: true
             image: projects/rhcos-cloud/global/images/rhcos-46-82-202011260640-0-gcp-x86-64
-            sizeGb: 256
-            type: pd-ssd
+            sizeGb: 100
+            #   PD BALANCED IS NOT SUPPORTED UNTIL 4.11
+            type: pd-balanced
           kind: GCPMachineProviderSpec
-          machineType: n1-highcpu-32
+          machineType: e2-custom-16-32768
           metadata: {}
           networkInterfaces:
           - network: build0-gstfj-network

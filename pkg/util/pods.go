@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 )
 
@@ -178,7 +179,6 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient kubernetes.Pod
 
 	podCheckTicker := time.NewTicker(10 * time.Second)
 	defer podCheckTicker.Stop()
-	podStartTimeout := 30 * time.Minute
 	var podSeenRunning bool
 
 	for {
@@ -197,8 +197,8 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient kubernetes.Pod
 			if !podSeenRunning {
 				if podHasStarted(pod) {
 					podSeenRunning = true
-				} else if time.Since(pod.CreationTimestamp.Time) > podStartTimeout {
-					message := fmt.Sprintf("pod didn't start running within %s: %s\n%s", podStartTimeout, getReasonsForUnreadyContainers(pod), getEventsForPod(ctx, pod, podClient))
+				} else if time.Since(pod.CreationTimestamp.Time) > api.PodStartTimeout {
+					message := fmt.Sprintf("pod didn't start running within %s: %s\n%s", api.PodStartTimeout, getReasonsForUnreadyContainers(pod), getEventsForPod(ctx, pod, podClient))
 					logrus.Infof(message)
 					notifier.Complete(name)
 					return pod, errors.New(message)

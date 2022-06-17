@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 )
@@ -51,6 +52,11 @@ const (
 
 	APPCIKubeAPIURL = "https://api.ci.l2s4.p1.openshiftapps.com:6443"
 
+	// PodStartTimeout is the maximum amount of time for pods to begin running.
+	// It causes builds and tests to fail if their pods cannot be scheduled for
+	// whatever reason, instead of failing due to the Prow job timeout, which is
+	// much longer and generates errors that are less descriptive.
+	PodStartTimeout = 30 * time.Minute
 	// CliEnv if the env we use to expose the path to the cli
 	CliEnv          = "CLI_DIR"
 	DefaultLeaseEnv = "LEASED_RESOURCE"

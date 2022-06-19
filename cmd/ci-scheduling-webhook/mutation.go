@@ -324,6 +324,10 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 
 		if !found {
 
+			// We've found DNS issues with pods coming up and not being able
+			// to resolve hosts. This initContainer is a workaround which
+			// will poll for a successful DNS lookup to a file that should
+			// always be available.
 			delayInitContainer := []corev1.Container{
 				{
 					Name:                     initContainerName,
@@ -331,7 +335,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 					Command:                  []string{
 						"/bin/sh",
 						"-c",
-						`declare -i T; until [[ "$ret" == "0" ]] || [[ "$T" -gt "120" ]]; do curl https://github.com > /dev/null; ret=$?; sleep 1; let "T+=1"; done`,
+						`declare -i T; until [[ "$ret" == "0" ]] || [[ "$T" -gt "120" ]]; do curl http://static.redhat.com/test/rhel-networkmanager.txt > /dev/null; ret=$?; sleep 1; let "T+=1"; done`,
 					},
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{

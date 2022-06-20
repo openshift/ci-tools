@@ -12,7 +12,9 @@ import (
 
 	buildapi "github.com/openshift/api/build/v1"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 // PendingBuildError fetches scheduling errors from the build pod's events
@@ -28,5 +30,6 @@ func PendingBuildError(ctx context.Context, client kubernetes.PodClient, build *
 	} else {
 		ret = fmt.Errorf("%s:%s\n%s", msg, getReasonsForUnreadyContainers(&pod), getEventsForPod(ctx, &pod, client))
 	}
+	ret = results.ForReason(api.ReasonPending).ForError(ret)
 	return
 }

@@ -60,6 +60,13 @@ def lambda_handler(event, context):
         # pass right through
         return request
 
+    request_method = request.get('method', None)
+    if request_method.lower() != "get":
+        # The S3 signed URL is only for GET operations.
+        # The registry itself will issue HEAD when checking for images.
+        # Just let CloudFront handle these.
+        return request
+
     request_ip = request['clientIp']
     ip_as_int = int(ip_address(request_ip))
 
@@ -82,7 +89,7 @@ def lambda_handler(event, context):
         return request
 
     uri = request.get('uri', '')
-    s3 = boto3.client('s3')
+    s3 = boto3.client('s3', region_name='us-east-1')
 
     # Generate a signed URL for the caller to go back to S3 and read the object
     url = s3.generate_presigned_url(

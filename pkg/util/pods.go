@@ -22,6 +22,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 func CreateOrRestartPod(ctx context.Context, podClient ctrlruntimeclient.Client, pod *corev1.Pod) (*corev1.Pod, error) {
@@ -201,7 +202,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient kubernetes.Pod
 					message := fmt.Sprintf("pod didn't start running within %s: %s\n%s", api.PodStartTimeout, getReasonsForUnreadyContainers(pod), getEventsForPod(ctx, pod, podClient))
 					logrus.Infof(message)
 					notifier.Complete(name)
-					return pod, errors.New(message)
+					return pod, results.ForReason(api.ReasonPending).ForError(errors.New(message))
 				}
 			}
 			podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)

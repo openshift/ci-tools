@@ -52,6 +52,10 @@ const (
 
 	APPCIKubeAPIURL = "https://api.ci.l2s4.p1.openshiftapps.com:6443"
 
+	// ReasonPending is the error reason for pods not scheduled in time.
+	// It is generated when pods are for whatever reason not scheduled before
+	// `podStartTimeout`.
+	ReasonPending = "pod_pending"
 	// PodStartTimeout is the maximum amount of time for pods to begin running.
 	// It causes builds and tests to fail if their pods cannot be scheduled for
 	// whatever reason, instead of failing due to the Prow job timeout, which is

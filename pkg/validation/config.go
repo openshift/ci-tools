@@ -8,6 +8,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -531,4 +532,23 @@ func partOfImageStreamName(name string) error {
 		return fmt.Errorf("must not contain '.'")
 	}
 	return nil
+}
+
+func Observer(observer api.Observer) []error {
+	var errs []error
+	fieldRoot := fmt.Sprintf("observer %q: ", observer.Name)
+	if len(validation.IsDNS1123Subdomain(observer.Name)) != 0 {
+		errs = append(errs, fmt.Errorf("%s.name is not a valid Kubernetes object identifier", fieldRoot))
+	}
+	if observer.Commands == "" {
+		errs = append(errs, fmt.Errorf("%s.commands cannot be empty", fieldRoot))
+	}
+	errs = append(errs, validateResourceRequirements(fieldRoot+".resources", observer.Resources)...)
+	// we're validating unresolved configuration outside of a full test config, so
+	// we cannot know the releases that may or may not be contained in a config using
+	// this observer in the future. This technically disallows users from using `from:`
+	// to refer to an image from a release payload for an observer, but this should be
+	// not of any real issue and will at least be obvious to the user on presubmit.
+	errs = append(errs, validateFromAndFromImage(newContext("", nil, nil, nil), observer.From, observer.FromImage, nil, nil)...)
+	return errs
 }

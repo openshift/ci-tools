@@ -129,6 +129,9 @@ func TestRegistry(t *testing.T) {
 				Name:      "resourcewatcher",
 				FromImage: &api.ImageStreamTagReference{Namespace: "ocp", Name: "resourcewatcher", Tag: "latest"},
 				Commands:  "#!/bin/bash\n\nsleep 300",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m", "memory": "2Gi"},
+				},
 			},
 		}
 

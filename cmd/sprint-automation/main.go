@@ -471,8 +471,8 @@ func getIssuesNeedingApproval(jiraClient *jiraapi.Client) ([]slack.Block, error)
 }
 
 const (
-	dptpTeamChannel = "team-dp-testplatform"
-	dptpOpsChannel  = "ops-testplatform"
+	dptpTeamChannel       = "team-dp-testplatform"
+	dptpBuildFarmsChannel = "alerts-testplatform-build-farms"
 
 	privateChannelType = "private_channel"
 	publicChannelType  = "public_channel"
@@ -656,9 +656,9 @@ func sendTriageBuild02Upgrade(slackClient *slack.Client, version, stableDuration
 		},
 	}
 
-	channelID, err := channelID(slackClient, dptpOpsChannel, publicChannelType)
+	channelID, err := channelID(slackClient, dptpBuildFarmsChannel, publicChannelType)
 	if err != nil {
-		return fmt.Errorf("failed for get channel ID for %s", dptpOpsChannel)
+		return fmt.Errorf("failed for get channel ID for %s", dptpBuildFarmsChannel)
 	}
 	responseChannel, responseTimestamp, err := slackClient.PostMessage(channelID, slack.MsgOptionBlocks(blocks...))
 	if err != nil {

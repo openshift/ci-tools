@@ -885,13 +885,6 @@ func (o *options) Run() []error {
 	if err := o.writeMetadataJSON(); err != nil {
 		return []error{fmt.Errorf("unable to write metadata.json for build: %w", err)}
 	}
-	if o.printGraph {
-		if err := printDigraph(os.Stdout, buildSteps); err != nil {
-			return []error{fmt.Errorf("could not print graph: %w", err)}
-		}
-		return nil
-	}
-
 	// convert the full graph into the subset we must run
 	nodes, err := api.BuildPartialGraph(buildSteps, o.targets.values)
 	if err != nil {
@@ -902,6 +895,12 @@ func (o *options) Run() []error {
 		return append([]error{errors.New("could not sort nodes")}, errs...)
 	}
 	logrus.Infof("Running %s", strings.Join(nodeNames(stepList), ", "))
+	if o.printGraph {
+		if err := printDigraph(os.Stdout, stepList); err != nil {
+			return []error{fmt.Errorf("could not print graph: %w", err)}
+		}
+		return nil
+	}
 	graph, errs := calculateGraph(stepList)
 	if errs != nil {
 		return errs
@@ -1823,14 +1822,14 @@ func nodeNames(nodes []*api.StepNode) []string {
 	return names
 }
 
-func printDigraph(w io.Writer, steps []api.Step) error {
-	for _, step := range steps {
-		for _, other := range steps {
-			if step == other {
-				continue
-			}
-			if api.HasAnyLinks(step.Requires(), other.Creates()) {
-				if _, err := fmt.Fprintf(w, "%s %s\n", step.Name(), other.Name()); err != nil {
+func printDigraph(w io.Writer, steps api.OrderedStepList) error {
+	for i, step := range steps {
+		req := step.Step.Requires()
+		// Only the first `i` elements can fulfill the requirements since
+		// `OrderedStepList` is a topological order.
+		for _, other := range steps[:i] {
+			if api.HasAnyLinks(req, other.Step.Creates()) {
+				if _, err := fmt.Fprintf(w, "%s %s\n", step.Step.Name(), other.Step.Name()); err != nil {
 					return err
 				}
 			}

@@ -62,7 +62,7 @@ func gatherOptions() options {
 	fs.StringVar(&intervalRaw, "interval", "1h", "Parseable duration string that specifies the sync period")
 	fs.StringVar(&o.cacheFile, "cache-file", "", "File to persist cache. No persistence of cache if not set")
 	fs.StringVar(&cacheRecordAgeRaw, "cache-record-age", "168h", "Parseable duration string that specifies how long a cache record lives in cache after the last time it was considered")
-	fs.StringVar(&o.configFile, "config-file", "", "File to configure maxRetestsForShaAndBase and maxRetestsForSha. Default maxRetestsForShaAndBase is 3 and maxRetestsForSha is 9 if config is not not set")
+	fs.StringVar(&o.configFile, "config-file", "", "Path to the configure file of the retest.")
 	fs.Var(&o.enableOnRepos, "enable-on-repo", "Repository that the retester is enabled on, e.g., 'openshift/ci-tools'. It can be used more than once.")
 	fs.Var(&o.enableOnOrgs, "enable-on-org", "Organization that the retester is enabled on, e.g., 'openshift'. It can be used more than once.")
 

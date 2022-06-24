@@ -5,6 +5,7 @@ retester:
       max_retests_for_sha: 9
       repos:
         ci-tools:
+          enabled: true
           max_retests_for_sha_and_base: 3
           max_retests_for_sha: 8
     no-openshift:
@@ -12,5 +13,10 @@ retester:
       max_retests_for_sha: 1
       repos:
         test:
+          enabled: true
           max_retests_for_sha_and_base: 3
           max_retests_for_sha: 7
+        disabled-repo:
+          enabled: false
+          max_retests_for_sha_and_base: 2
+          max_retests_for_sha: 4

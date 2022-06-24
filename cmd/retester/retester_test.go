@@ -33,26 +33,27 @@ func (f *MyFakeClient) GetRef(owner, repo, ref string) (string, error) {
 }
 
 func TestLoadConfig(t *testing.T) {
-	i := &Info{
+	c := &Config{
 		Retester: Retester{
 			map[string]Oranization{"openshift": {
-				MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9, Repos: map[string]Repo{"ci-tools": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 8}},
+				MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9, Repos: map[string]Repo{"ci-tools": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 8, Enabled: true}},
 			},
 				"no-openshift": {
-					MaxRetestsForShaAndBase: 1, MaxRetestsForSha: 1, Repos: map[string]Repo{"test": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 7}},
+					MaxRetestsForShaAndBase: 1, MaxRetestsForSha: 1, Repos: map[string]Repo{"test": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 7, Enabled: true},
+						"disabled-repo": {MaxRetestsForShaAndBase: 2, MaxRetestsForSha: 4}},
 				}},
 		}}
 
 	testCases := []struct {
 		name          string
 		file          string
-		expected      *Info
+		expected      *Config
 		expectedError error
 	}{
 		{
 			name:     "basic case",
 			file:     "testdata/testconfig/config.yaml",
-			expected: i,
+			expected: c,
 		},
 	}
 	for _, tc := range testCases {
@@ -71,14 +72,12 @@ func TestLoadConfig(t *testing.T) {
 }
 
 func TestGetMaxRetests(t *testing.T) {
-	c := &Info{
+	c := &Config{
 		Retester: Retester{
 			map[string]Oranization{"openshift": {
-				MaxRetestsForShaAndBase: 6, MaxRetestsForSha: 15, Repos: map[string]Repo{"ci-tools": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 8}},
-			},
-				"no-openshift": {
-					MaxRetestsForShaAndBase: 1, MaxRetestsForSha: 1, Repos: map[string]Repo{"test": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 7}},
-				}},
+				MaxRetestsForShaAndBase: 6, MaxRetestsForSha: 15, Repos: map[string]Repo{"ci-tools": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 8, Enabled: true},
+					"repo": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 8, Enabled: false}},
+			}},
 		}}
 	var configuredRepo githubv4.String = "ci-tools"
 	var nonConfiguredRepo githubv4.String = "repo"
@@ -88,7 +87,7 @@ func TestGetMaxRetests(t *testing.T) {
 	testCases := []struct {
 		name     string
 		pr       tide.PullRequest
-		config   *Info
+		config   *Config
 		expected MaxRetests
 	}{
 		{
@@ -159,18 +158,19 @@ func TestGetMaxRetests(t *testing.T) {
 }
 
 func TestUpdateEnabledOrgAndRepo(t *testing.T) {
-	i := &Info{
+	c := &Config{
 		Retester: Retester{
 			map[string]Oranization{"openshift": {
-				MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9, Repos: map[string]Repo{"ci-tools": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 8}},
+				MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9, Repos: map[string]Repo{"ci-tools": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 8, Enabled: true}},
 			},
 				"no-openshift": {
-					MaxRetestsForShaAndBase: 1, MaxRetestsForSha: 1, Repos: map[string]Repo{"test": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 7}},
+					MaxRetestsForShaAndBase: 1, MaxRetestsForSha: 1, Repos: map[string]Repo{"test": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 7, Enabled: true},
+						"disabled-repo": {MaxRetestsForShaAndBase: 2, MaxRetestsForSha: 4}},
 				}},
 		}}
 	testCases := []struct {
 		name          string
-		config        *Info
+		config        *Config
 		repos         sets.String
 		orgs          sets.String
 		expectedRepos sets.String
@@ -178,7 +178,7 @@ func TestUpdateEnabledOrgAndRepo(t *testing.T) {
 	}{
 		{
 			name:          "basic case",
-			config:        i,
+			config:        c,
 			repos:         sets.NewString("openshift/test"),
 			orgs:          sets.NewString("openshift"),
 			expectedRepos: sets.NewString("openshift/test", "openshift/ci-tools", "no-openshift/test"),
@@ -186,7 +186,7 @@ func TestUpdateEnabledOrgAndRepo(t *testing.T) {
 		},
 		{
 			name:          "no repo and no org from arguments",
-			config:        i,
+			config:        c,
 			repos:         sets.NewString(),
 			orgs:          sets.NewString(),
 			expectedRepos: sets.NewString("openshift/ci-tools", "no-openshift/test"),

@@ -155,7 +155,11 @@ func (c *Config) updateEnabledRepos(repos *sets.String) {
 		for key, repo := range org.Repos {
 			repoName := orgKey + "/" + key
 			if !repos.Has(repoName) && repo.Enabled {
+				// every enabled repo in config which is not already in array will be inserted
 				repos.Insert(repoName)
+			} else if repos.Has(repoName) && !repo.Enabled {
+				// every disabled repo in config which is already in array will be deleted
+				repos.Delete(repoName)
 			}
 		}
 	}
@@ -171,6 +175,7 @@ func newController(ghClient githubClient, cfg config.Getter, gitClient git.Clien
 	reposSet := enableOnRepos.StringSet()
 	orgsSet := enableOnOrgs.StringSet()
 	if config != nil {
+		// Updating reposSet from config file
 		config.updateEnabledRepos(&reposSet)
 	}
 
@@ -254,18 +259,30 @@ func (c *Config) getMaxRetests(pr tide.PullRequest) MaxRetests {
 	org := string(pr.Repository.Owner.Login)
 	if orgStruct, ok := c.Retester.Oranizations[org]; ok {
 		repo := string(pr.Repository.Name)
-		if repoStruct, ok := orgStruct.Repos[repo]; ok && repoStruct.Enabled {
-			return MaxRetests{repoStruct.MaxRetestsForSha, repoStruct.MaxRetestsForShaAndBase}
+		var repoStruct Repo
+		if repoStruct, ok = orgStruct.Repos[repo]; ok {
+			if !repoStruct.Enabled {
+				// returns max retests default value
+				return MaxRetests{maxRetestsForShaDefault, maxRetestsForShaAndBaseDefault}
+			}
+			if repoStruct.MaxRetestsForSha != 0 && repoStruct.MaxRetestsForShaAndBase != 0 {
+				// returns max retests from repo if repo is enabled and configured
+				return MaxRetests{repoStruct.MaxRetestsForSha, repoStruct.MaxRetestsForShaAndBase}
+			}
+			if orgStruct.MaxRetestsForSha != 0 && orgStruct.MaxRetestsForShaAndBase != 0 {
+				// returns max retests from org
+				return MaxRetests{orgStruct.MaxRetestsForSha, orgStruct.MaxRetestsForShaAndBase}
+			}
 		}
-		return MaxRetests{orgStruct.MaxRetestsForSha, orgStruct.MaxRetestsForShaAndBase}
 	}
 	return MaxRetests{maxRetestsForShaDefault, maxRetestsForShaAndBaseDefault}
 }
 
-func (b *backoffCache) check(pr tide.PullRequest, baseSha string, retesterConfig *Config) (retestBackoffAction, string) {
+func (b *backoffCache) check(pr tide.PullRequest, baseSha string, config *Config) (retestBackoffAction, string) {
 	var maxRetestsForSha, maxRetestsForShaAndBase int
-	if retesterConfig != nil {
-		maxRetests := retesterConfig.getMaxRetests(pr)
+	// set maxRetests to default if config is not set up
+	if config != nil {
+		maxRetests := config.getMaxRetests(pr)
 		maxRetestsForSha = maxRetests.ForSha
 		maxRetestsForShaAndBase = maxRetests.ForShaAndBase
 	} else {

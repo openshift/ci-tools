@@ -36,7 +36,8 @@ func TestLoadConfig(t *testing.T) {
 	c := &Config{
 		Retester: Retester{
 			map[string]Oranization{"openshift": {
-				MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9, Repos: map[string]Repo{"ci-tools": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 8, Enabled: true}},
+				MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9, Repos: map[string]Repo{"ci-docs": {Enabled: true},
+					"ci-tools": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 8, Enabled: true}},
 			},
 				"no-openshift": {
 					MaxRetestsForShaAndBase: 1, MaxRetestsForSha: 1, Repos: map[string]Repo{"test": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 7, Enabled: true},
@@ -75,14 +76,21 @@ func TestGetMaxRetests(t *testing.T) {
 	c := &Config{
 		Retester: Retester{
 			map[string]Oranization{"openshift": {
-				MaxRetestsForShaAndBase: 6, MaxRetestsForSha: 15, Repos: map[string]Repo{"ci-tools": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 8, Enabled: true},
-					"repo": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 8, Enabled: false}},
-			}},
+				MaxRetestsForShaAndBase: 1, MaxRetestsForSha: 1, Repos: map[string]Repo{"ci-docs": {Enabled: true},
+					"ci-tools": {MaxRetestsForShaAndBase: 2, MaxRetestsForSha: 2, Enabled: true},
+					"repo":     {Enabled: false}}},
+				"no-openshift": {
+					MaxRetestsForShaAndBase: 0, MaxRetestsForSha: 0, Repos: map[string]Repo{"ci-docs": {Enabled: true},
+						"ci-tools": {MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 3, Enabled: true},
+						"repo":     {Enabled: false}},
+				}},
 		}}
-	var configuredRepo githubv4.String = "ci-tools"
-	var nonConfiguredRepo githubv4.String = "repo"
-	var configuredOrg githubv4.String = "openshift"
-	var nonconfiguredOrg githubv4.String = "org"
+	var confRepo githubv4.String = "ci-tools"
+	var nonConfDisableRepo githubv4.String = "repo"
+	var nonConfEnableRepo githubv4.String = "ci-docs"
+	var confOrg githubv4.String = "openshift"
+	var confZeroOrg githubv4.String = "no-openshift"
+	var nonConfOrg githubv4.String = "org"
 	var num githubv4.Int = 123
 	testCases := []struct {
 		name     string
@@ -91,43 +99,85 @@ func TestGetMaxRetests(t *testing.T) {
 		expected MaxRetests
 	}{
 		{
-			name: "configured org and non-configured repo",
+			name: "configured org and non-configured disabled repo",
 			pr: tide.PullRequest{
 				Number: num,
-				Author: struct{ Login githubv4.String }{Login: configuredOrg},
+				Author: struct{ Login githubv4.String }{Login: confOrg},
 				Repository: struct {
 					Name          githubv4.String
 					NameWithOwner githubv4.String
 					Owner         struct{ Login githubv4.String }
-				}{Name: nonConfiguredRepo, Owner: struct{ Login githubv4.String }{Login: configuredOrg}},
+				}{Name: nonConfDisableRepo, Owner: struct{ Login githubv4.String }{Login: confOrg}},
 			},
 			config:   c,
-			expected: MaxRetests{15, 6},
+			expected: MaxRetests{9, 3},
+		},
+		{
+			name: "configured org and non-configured enabled repo",
+			pr: tide.PullRequest{
+				Number: num,
+				Author: struct{ Login githubv4.String }{Login: confOrg},
+				Repository: struct {
+					Name          githubv4.String
+					NameWithOwner githubv4.String
+					Owner         struct{ Login githubv4.String }
+				}{Name: nonConfEnableRepo, Owner: struct{ Login githubv4.String }{Login: confOrg}},
+			},
+			config:   c,
+			expected: MaxRetests{1, 1},
 		},
 		{
 			name: "configured org and configured repo",
 			pr: tide.PullRequest{
 				Number: num,
-				Author: struct{ Login githubv4.String }{Login: configuredOrg},
+				Author: struct{ Login githubv4.String }{Login: confOrg},
 				Repository: struct {
 					Name          githubv4.String
 					NameWithOwner githubv4.String
 					Owner         struct{ Login githubv4.String }
-				}{Name: configuredRepo, Owner: struct{ Login githubv4.String }{Login: configuredOrg}},
+				}{Name: confRepo, Owner: struct{ Login githubv4.String }{Login: confOrg}},
 			},
 			config:   c,
-			expected: MaxRetests{8, 3},
+			expected: MaxRetests{2, 2},
 		},
 		{
-			name: "non-configured org and non-configured repo",
+			name: "configured zero org and non-configured enabled repo",
 			pr: tide.PullRequest{
 				Number: num,
-				Author: struct{ Login githubv4.String }{Login: nonconfiguredOrg},
+				Author: struct{ Login githubv4.String }{Login: confOrg},
 				Repository: struct {
 					Name          githubv4.String
 					NameWithOwner githubv4.String
 					Owner         struct{ Login githubv4.String }
-				}{Name: nonConfiguredRepo, Owner: struct{ Login githubv4.String }{Login: nonconfiguredOrg}},
+				}{Name: nonConfEnableRepo, Owner: struct{ Login githubv4.String }{Login: confZeroOrg}},
+			},
+			config:   c,
+			expected: MaxRetests{9, 3},
+		},
+		{
+			name: "configured zero org and configured repo",
+			pr: tide.PullRequest{
+				Number: num,
+				Author: struct{ Login githubv4.String }{Login: confOrg},
+				Repository: struct {
+					Name          githubv4.String
+					NameWithOwner githubv4.String
+					Owner         struct{ Login githubv4.String }
+				}{Name: confRepo, Owner: struct{ Login githubv4.String }{Login: confZeroOrg}},
+			},
+			config:   c,
+			expected: MaxRetests{3, 3},
+		},
+		{
+			name: "non-configured org and non-configured disabled repo",
+			pr: tide.PullRequest{
+				Number: num,
+				Author: struct{ Login githubv4.String }{Login: nonConfOrg},
+				Repository: struct {
+					Name          githubv4.String
+					NameWithOwner githubv4.String
+					Owner         struct{ Login githubv4.String }
+				}{Name: nonConfDisableRepo, Owner: struct{ Login githubv4.String }{Login: nonConfOrg}},
 			},
 			config:   c,
 			expected: MaxRetests{9, 3},
@@ -136,12 +186,12 @@ func TestGetMaxRetests(t *testing.T) {
 			name: "non-configured org and configured repo",
 			pr: tide.PullRequest{
 				Number: num,
-				Author: struct{ Login githubv4.String }{Login: nonconfiguredOrg},
+				Author: struct{ Login githubv4.String }{Login: nonConfOrg},
 				Repository: struct {
 					Name          githubv4.String
 					NameWithOwner githubv4.String
 					Owner         struct{ Login githubv4.String }
-				}{Name: configuredRepo, Owner: struct{ Login githubv4.String }{Login: nonconfiguredOrg}},
+				}{Name: confRepo, Owner: struct{ Login githubv4.String }{Login: nonConfOrg}},
 			},
 			config:   c,
 			expected: MaxRetests{9, 3},
@@ -157,7 +207,7 @@ func TestGetMaxRetests(t *testing.T) {
 	}
 }
 
-func TestUpdateEnabledOrgAndRepo(t *testing.T) {
+func TestUpdateEnabledRepos(t *testing.T) {
 	c := &Config{
 		Retester: Retester{
 			map[string]Oranization{"openshift": {

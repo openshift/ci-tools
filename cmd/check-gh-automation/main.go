@@ -63,6 +63,7 @@ func (o *options) validate() error {
 }
 
 type collaboratorClient interface {
+	IsMember(org, user string) (bool, error)
 	IsCollaborator(org, repo, user string) (bool, error)
 }
 
@@ -103,6 +104,7 @@ func main() {
 }
 
 func checkRepos(repos []string, bots []string, ignore sets.String, client collaboratorClient, logger *logrus.Entry) ([]string, error) {
+	logger.Infof("checking %d repo(s): %s", len(repos), strings.Join(repos, ", "))
 	var failing []string
 	for _, orgRepo := range repos {
 		split := strings.Split(orgRepo, "/")
@@ -119,6 +121,15 @@ func checkRepos(repos []string, bots []string, ignore sets.String, client collab
 
 		var missingBots []string
 		for _, bot := range bots {
+			isMember, err := client.IsMember(org, bot)
+			if err != nil {
+				return nil, fmt.Errorf("unable to determine if: %s is a member of %s: %v", bot, org, err)
+			}
+			if isMember {
+				repoLogger.WithField("bot", bot).Info("bot is an org member")
+				continue
+			}
+
 			isCollaborator, err := client.IsCollaborator(org, repo, bot)
 			if err != nil {
 				return nil, fmt.Errorf("unable to determine if: %s is a collaborator on %s/%s: %v", bot, org, repo, err)
@@ -132,7 +143,7 @@ func checkRepos(repos []string, bots []string, ignore sets.String, client collab
 			failing = append(failing, orgRepo)
 			repoLogger.Errorf("bots that are not collaborators: %s", strings.Join(missingBots, ", "))
 		} else {
-			repoLogger.Info("all bots are collaborators")
+			repoLogger.Info("all bots are org members or repo collaborators")
 		}
 	}
 

@@ -125,14 +125,17 @@ func checkRepos(repos []string, bots []string, ignore sets.String, client collab
 			if err != nil {
 				return nil, fmt.Errorf("unable to determine if: %s is a member of %s: %v", bot, org, err)
 			}
-			if !isMember {
-				isCollaborator, err := client.IsCollaborator(org, repo, bot)
-				if err != nil {
-					return nil, fmt.Errorf("unable to determine if: %s is a collaborator on %s/%s: %v", bot, org, repo, err)
-				}
-				if !isCollaborator {
-					missingBots = append(missingBots, bot)
-				}
+			if isMember {
+				repoLogger.WithField("bot", bot).Info("bot is an org member")
+				continue
+			}
+
+			isCollaborator, err := client.IsCollaborator(org, repo, bot)
+			if err != nil {
+				return nil, fmt.Errorf("unable to determine if: %s is a collaborator on %s/%s: %v", bot, org, repo, err)
+			}
+			if !isCollaborator {
+				missingBots = append(missingBots, bot)
 			}
 		}
 

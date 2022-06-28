@@ -42,7 +42,8 @@ spec:
           - ebs:
               iops: 5000
               volumeSize: 100
-              volumeType: io1
+              volumeType: gp3
+              throughput: 500
           credentialsSecret:
             name: aws-cloud-credentials
           deviceIndex: 0

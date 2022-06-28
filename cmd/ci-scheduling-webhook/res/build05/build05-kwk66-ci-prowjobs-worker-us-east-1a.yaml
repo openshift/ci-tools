@@ -41,8 +41,7 @@ spec:
           blockDevices:
           - ebs:
               volumeSize: 100
-              volumeType: io1
-              iops: 700
+              volumeType: gp3
           credentialsSecret:
             name: aws-cloud-credentials
           deviceIndex: 0

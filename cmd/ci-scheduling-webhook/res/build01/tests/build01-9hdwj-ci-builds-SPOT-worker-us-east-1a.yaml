@@ -37,9 +37,10 @@ spec:
           blockDevices:
           - ebs:
               iops: 5000
-              volumeSize: 2000
-              volumeType: io1
-          credentialsSecret:
+              volumeSize: 100
+              volumeType: gp3
+              throughput: 500
+  credentialsSecret:
             name: aws-cloud-credentials
           deviceIndex: 0
           iamInstanceProfile:

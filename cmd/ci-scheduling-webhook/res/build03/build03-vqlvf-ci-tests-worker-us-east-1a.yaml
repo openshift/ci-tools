@@ -42,8 +42,7 @@ spec:
           - ebs:
               # Disk pressure was spotted at 300
               volumeSize: 500
-              volumeType: io1
-              iops: 1000
+              volumeType: gp3
           credentialsSecret:
             name: aws-cloud-credentials
           deviceIndex: 0

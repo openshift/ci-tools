@@ -46,6 +46,7 @@ func Handler(client messagePoster, keywordsConfig KeywordsConfig) events.Partial
 			if !ok {
 				return false, nil
 			}
+			log = log.WithFields(logrus.Fields{"user": event.User, "bot_id": event.BotID})
 			if event.ChannelType != "channel" {
 				return false, nil
 			}

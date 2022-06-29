@@ -98,35 +98,34 @@ func (b *backoffCache) saveToDisk() (ret error) {
 	return ret
 }
 
+// Config is retester config for all configured repos and orgs.
+// Every level (retester/org/repo) has attributes MaxRetestsForShaAndBase, MaxRetestsForSha, Enabled
 type Config struct {
 	Retester Retester `json:"retester"`
 }
 
 type Retester struct {
-	RetesterPolicy          `json:",inline"`
-	MaxRetestsForShaAndBase int                    `json:"max_retests_for_sha_and_base"`
-	MaxRetestsForSha        int                    `json:"max_retests_for_sha"`
-	Oranizations            map[string]Oranization `json:"orgs"`
+	RetesterPolicy `json:",inline"`
+	Oranizations   map[string]Oranization `json:"orgs"`
 }
 
 type Oranization struct {
-	MaxRetestsForShaAndBase int             `json:"max_retests_for_sha_and_base"`
-	MaxRetestsForSha        int             `json:"max_retests_for_sha"`
-	Enabled                 bool            `json:"enabled"`
-	Repos                   map[string]Repo `json:"repos"`
+	RetesterPolicy `json:",inline"`
+	Repos          map[string]Repo `json:"repos"`
 }
 
 type Repo struct {
-	MaxRetestsForShaAndBase int  `json:"max_retests_for_sha_and_base"`
-	MaxRetestsForSha        int  `json:"max_retests_for_sha"`
-	Enabled                 bool `json:"enabled"`
+	RetesterPolicy `json:",inline"`
 }
 
 // RetesterPolicy for the retester/org/repo.
-// When merging policies, a nil value results in inheriting the parent policy.
+// When merging policies, a 0 value results in inheriting the parent policy.
+// False in level repo means disabled repo. Nothing can change that.
+// True/False in level org means enabled/disabled org. But repo can be disabled/enabled.
 type RetesterPolicy struct {
-	OrgEnabled  *bool
-	RepoEnabled *bool
+	MaxRetestsForShaAndBase int  `json:"max_retests_for_sha_and_base"`
+	MaxRetestsForSha        int  `json:"max_retests_for_sha"`
+	Enabled                 bool `json:"enabled"`
 }
 
 func loadConfig(configFilePath string) (*Config, error) {
@@ -157,14 +156,36 @@ type retestController struct {
 }
 
 func (c *Config) GetRetesterPolicy(org, repo string) (*RetesterPolicy, error) {
-	policy := RetesterPolicy{}
+	policy := &RetesterPolicy{}
 	if orgStruct, ok := c.Retester.Oranizations[org]; ok {
-		policy.OrgEnabled = &orgStruct.Enabled
-		if repoStruct, ok := orgStruct.Repos[repo]; ok {
-			policy.RepoEnabled = &repoStruct.Enabled
+		var repoStruct Repo
+		if repoStruct, ok = orgStruct.Repos[repo]; ok {
+			if repoStruct.Enabled {
+				policy.Enabled = true
+				if repoStruct.MaxRetestsForSha != 0 && repoStruct.MaxRetestsForShaAndBase != 0 {
+					// returns max retests from repo if repo is enabled and configured
+					return &repoStruct.RetesterPolicy, nil
+				}
+			} else {
+				policy.Enabled = false
+				return policy, fmt.Errorf("repo is disabled")
+			}
 		}
+		if orgStruct.Enabled {
+			policy.Enabled = true
+			if orgStruct.MaxRetestsForSha != 0 && orgStruct.MaxRetestsForShaAndBase != 0 {
+				// returns max retests from org
+				return &orgStruct.RetesterPolicy, nil
+			}
+		}
+	} else {
+		policy.Enabled = false
+		return policy, fmt.Errorf("not configured org")
 	}
-	return &policy, nil
+	// returns max retests default value
+	policy.MaxRetestsForSha = c.Retester.MaxRetestsForSha
+	policy.MaxRetestsForShaAndBase = c.Retester.MaxRetestsForShaAndBase
+	return policy, nil
 }
 
 func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, config *Config) *retestController {
@@ -241,45 +262,17 @@ type MaxRetests struct {
 	ForShaAndBase int
 }
 
-// getMaxRetests returns MaxRetests for specific PullRequest
-func (c *Config) getMaxRetests(pr tide.PullRequest) (*MaxRetests, error) {
-	org := string(pr.Repository.Owner.Login)
-	if orgStruct, ok := c.Retester.Oranizations[org]; ok {
-		repo := string(pr.Repository.Name)
-		var repoStruct Repo
-		if repoStruct, ok = orgStruct.Repos[repo]; ok {
-			if repoStruct.Enabled {
-				if repoStruct.MaxRetestsForSha != 0 && repoStruct.MaxRetestsForShaAndBase != 0 {
-					// returns max retests from repo if repo is enabled and configured
-					return &MaxRetests{repoStruct.MaxRetestsForSha, repoStruct.MaxRetestsForShaAndBase}, nil
-				}
-			} else {
-				return nil, fmt.Errorf("repo is disabled")
-			}
-		}
-		if orgStruct.Enabled {
-			if orgStruct.MaxRetestsForSha != 0 && orgStruct.MaxRetestsForShaAndBase != 0 {
-				// returns max retests from org
-				return &MaxRetests{orgStruct.MaxRetestsForSha, orgStruct.MaxRetestsForShaAndBase}, nil
-			}
-		}
-	} else {
-		return nil, fmt.Errorf("not configured org")
-	}
-	// returns max retests default value
-	return &MaxRetests{c.Retester.MaxRetestsForSha, c.Retester.MaxRetestsForShaAndBase}, nil
-}
-
 func (b *backoffCache) check(pr tide.PullRequest, baseSha string, config *Config) (retestBackoffAction, string) {
 	var maxRetestsForSha, maxRetestsForShaAndBase int
-	var maxRetests *MaxRetests
 	var err error
-	if maxRetests, err = config.getMaxRetests(pr); err != nil {
+	var policy *RetesterPolicy
+	org := string(pr.Repository.Owner.Login)
+	repo := string(pr.Repository.Name)
+	if policy, err = config.GetRetesterPolicy(org, repo); err != nil {
 		fmt.Errorf("failed to get the max retests: %w", err)
 	}
-	maxRetestsForSha = maxRetests.ForSha
-	maxRetestsForShaAndBase = maxRetests.ForShaAndBase
-
+	maxRetestsForSha = policy.MaxRetestsForSha
+	maxRetestsForShaAndBase = policy.MaxRetestsForShaAndBase
 	key := prKey(&pr)
 	if _, has := b.cache[key]; !has {
 		b.cache[key] = &PullRequest{}
@@ -547,8 +540,7 @@ func (c *retestController) enabledPRs(candidates map[string]tide.PullRequest) ma
 		if err != nil {
 			c.logger.WithError(err).Warn("Failed to get retester policy")
 		}
-
-		if (policy.OrgEnabled != nil && policy.RepoEnabled != nil && (*policy.OrgEnabled || *policy.RepoEnabled)) || (policy.OrgEnabled != nil && (*policy.OrgEnabled)) {
+		if policy.Enabled {
 			output[key] = pr
 		} else {
 			c.logger.Infof("PR %s is not from an enabled org or repo", key)

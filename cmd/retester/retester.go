@@ -15,9 +15,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/config"
-	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/tide"
@@ -105,12 +103,16 @@ type Config struct {
 }
 
 type Retester struct {
-	Oranizations map[string]Oranization `json:"orgs"`
+	RetesterPolicy          `json:",inline"`
+	MaxRetestsForShaAndBase int                    `json:"max_retests_for_sha_and_base"`
+	MaxRetestsForSha        int                    `json:"max_retests_for_sha"`
+	Oranizations            map[string]Oranization `json:"orgs"`
 }
 
 type Oranization struct {
 	MaxRetestsForShaAndBase int             `json:"max_retests_for_sha_and_base"`
 	MaxRetestsForSha        int             `json:"max_retests_for_sha"`
+	Enabled                 bool            `json:"enabled"`
 	Repos                   map[string]Repo `json:"repos"`
 }
 
@@ -118,6 +120,13 @@ type Repo struct {
 	MaxRetestsForShaAndBase int  `json:"max_retests_for_sha_and_base"`
 	MaxRetestsForSha        int  `json:"max_retests_for_sha"`
 	Enabled                 bool `json:"enabled"`
+}
+
+// RetesterPolicy for the retester/org/repo.
+// When merging policies, a nil value results in inheriting the parent policy.
+type RetesterPolicy struct {
+	OrgEnabled  *bool
+	RepoEnabled *bool
 }
 
 func loadConfig(configFilePath string) (*Config, error) {
@@ -145,39 +154,21 @@ type retestController struct {
 	backoff       *backoffCache
 
 	config *Config
-
-	enableOnRepos sets.String
-	enableOnOrgs  sets.String
 }
 
-func (c *Config) updateEnabledRepos(repos *sets.String) {
-	for orgKey, org := range c.Retester.Oranizations {
-		for key, repo := range org.Repos {
-			repoName := orgKey + "/" + key
-			if !repos.Has(repoName) && repo.Enabled {
-				// every enabled repo in config which is not already in array will be inserted
-				repos.Insert(repoName)
-			} else if repos.Has(repoName) && !repo.Enabled {
-				// every disabled repo in config which is already in array will be deleted
-				repos.Delete(repoName)
-			}
+func (c *Config) GetRetesterPolicy(org, repo string) (*RetesterPolicy, error) {
+	policy := RetesterPolicy{}
+	if orgStruct, ok := c.Retester.Oranizations[org]; ok {
+		policy.OrgEnabled = &orgStruct.Enabled
+		if repoStruct, ok := orgStruct.Repos[repo]; ok {
+			policy.RepoEnabled = &repoStruct.Enabled
 		}
 	}
+	return &policy, nil
 }
 
-func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, configFile string, enableOnRepos prowflagutil.Strings, enableOnOrgs prowflagutil.Strings) *retestController {
+func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, config *Config) *retestController {
 	logger := logrus.NewEntry(logrus.StandardLogger())
-	config, err := loadConfig(cacheFile)
-	if err != nil {
-		logger.WithError(err).Warn("Failed to load config from file")
-	}
-
-	reposSet := enableOnRepos.StringSet()
-	orgsSet := enableOnOrgs.StringSet()
-	if config != nil {
-		// Updating reposSet from config file
-		config.updateEnabledRepos(&reposSet)
-	}
 
 	ret := &retestController{
 		ghClient:      ghClient,
@@ -187,8 +178,6 @@ func newController(ghClient githubClient, cfg config.Getter, gitClient git.Clien
 		usesGitHubApp: usesApp,
 		backoff:       &backoffCache{cache: map[string]*PullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger},
 		config:        config,
-		enableOnRepos: reposSet,
-		enableOnOrgs:  orgsSet,
 	}
 	if err := ret.backoff.loadFromDisk(); err != nil {
 		logger.WithError(err).Warn("Failed to load backoff cache from disk")
@@ -244,8 +233,6 @@ const (
 	retestBackoffHold = iota
 	retestBackoffPause
 	retestBackoffRetest
-	maxRetestsForShaAndBaseDefault = 3
-	maxRetestsForShaDefault        = 3 * maxRetestsForShaAndBaseDefault
 )
 
 // MaxRetests contains MaxRetestsForSha and MaxRetestsForShaAndBase as in Repo in Config
@@ -255,40 +242,43 @@ type MaxRetests struct {
 }
 
 // getMaxRetests returns MaxRetests for specific PullRequest
-func (c *Config) getMaxRetests(pr tide.PullRequest) MaxRetests {
+func (c *Config) getMaxRetests(pr tide.PullRequest) (*MaxRetests, error) {
 	org := string(pr.Repository.Owner.Login)
 	if orgStruct, ok := c.Retester.Oranizations[org]; ok {
 		repo := string(pr.Repository.Name)
 		var repoStruct Repo
 		if repoStruct, ok = orgStruct.Repos[repo]; ok {
-			if !repoStruct.Enabled {
-				// returns max retests default value
-				return MaxRetests{maxRetestsForShaDefault, maxRetestsForShaAndBaseDefault}
-			}
-			if repoStruct.MaxRetestsForSha != 0 && repoStruct.MaxRetestsForShaAndBase != 0 {
-				// returns max retests from repo if repo is enabled and configured
-				return MaxRetests{repoStruct.MaxRetestsForSha, repoStruct.MaxRetestsForShaAndBase}
-			}
-			if orgStruct.MaxRetestsForSha != 0 && orgStruct.MaxRetestsForShaAndBase != 0 {
-				// returns max retests from org
-				return MaxRetests{orgStruct.MaxRetestsForSha, orgStruct.MaxRetestsForShaAndBase}
+			if repoStruct.Enabled {
+				if repoStruct.MaxRetestsForSha != 0 && repoStruct.MaxRetestsForShaAndBase != 0 {
+					// returns max retests from repo if repo is enabled and configured
+					return &MaxRetests{repoStruct.MaxRetestsForSha, repoStruct.MaxRetestsForShaAndBase}, nil
+				}
+			} else {
+				return nil, fmt.Errorf("repo is disabled")
 			}
 		}
+		if orgStruct.Enabled {
+			if orgStruct.MaxRetestsForSha != 0 && orgStruct.MaxRetestsForShaAndBase != 0 {
+				// returns max retests from org
+				return &MaxRetests{orgStruct.MaxRetestsForSha, orgStruct.MaxRetestsForShaAndBase}, nil
+			}
+		}
+	} else {
+		return nil, fmt.Errorf("not configured org")
 	}
-	return MaxRetests{maxRetestsForShaDefault, maxRetestsForShaAndBaseDefault}
+	// returns max retests default value
+	return &MaxRetests{c.Retester.MaxRetestsForSha, c.Retester.MaxRetestsForShaAndBase}, nil
 }
 
 func (b *backoffCache) check(pr tide.PullRequest, baseSha string, config *Config) (retestBackoffAction, string) {
 	var maxRetestsForSha, maxRetestsForShaAndBase int
-	// set maxRetests to default if config is not set up
-	if config != nil {
-		maxRetests := config.getMaxRetests(pr)
-		maxRetestsForSha = maxRetests.ForSha
-		maxRetestsForShaAndBase = maxRetests.ForShaAndBase
-	} else {
-		maxRetestsForSha = maxRetestsForShaDefault
-		maxRetestsForShaAndBase = maxRetestsForShaAndBaseDefault
+	var maxRetests *MaxRetests
+	var err error
+	if maxRetests, err = config.getMaxRetests(pr); err != nil {
+		fmt.Errorf("failed to get the max retests: %w", err)
 	}
+	maxRetestsForSha = maxRetests.ForSha
+	maxRetestsForShaAndBase = maxRetests.ForShaAndBase
 
 	key := prKey(&pr)
 	if _, has := b.cache[key]; !has {
@@ -552,8 +542,13 @@ func (c *retestController) enabledPRs(candidates map[string]tide.PullRequest) ma
 	output := map[string]tide.PullRequest{}
 	for key, pr := range candidates {
 		org := string(pr.Repository.Owner.Login)
-		orgRepo := fmt.Sprintf("%s/%s", org, pr.Repository.Name)
-		if c.enableOnOrgs.Has(org) || c.enableOnRepos.Has(orgRepo) {
+		repo := string(pr.Repository.Name)
+		policy, err := c.config.GetRetesterPolicy(org, repo)
+		if err != nil {
+			c.logger.WithError(err).Warn("Failed to get retester policy")
+		}
+
+		if (policy.OrgEnabled != nil && policy.RepoEnabled != nil && (*policy.OrgEnabled || *policy.RepoEnabled)) || (policy.OrgEnabled != nil && (*policy.OrgEnabled)) {
 			output[key] = pr
 		} else {
 			c.logger.Infof("PR %s is not from an enabled org or repo", key)

@@ -124,10 +124,15 @@ func main() {
 					Regexp: make([]string, 0),
 				}
 			}
-			sippyConfig.Releases[release].Jobs[p.Name] = true
+			if _, ok := sippyConfig.Releases[release].Jobs[p.Name]; !ok {
+				sippyConfig.Releases[release].Jobs[p.Name] = true
+			}
+
 			if aggregates, ok := aggregateJobsMap[p.Name]; ok {
 				for _, aggregate := range aggregates {
-					sippyConfig.Releases[release].Jobs[aggregate] = true
+					if _, ok := sippyConfig.Releases[release].Jobs[aggregate]; !ok {
+						sippyConfig.Releases[release].Jobs[aggregate] = true
+					}
 				}
 			}
 		}

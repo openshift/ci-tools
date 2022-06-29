@@ -12,6 +12,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	v1sippy "github.com/openshift/ci-tools/pkg/api/sippy/v1"

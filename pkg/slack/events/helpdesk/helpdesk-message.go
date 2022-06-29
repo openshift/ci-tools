@@ -11,11 +11,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/slack/events"
 )
 
-const (
-	channelId       = "CBN38N3MW"
-	helpdeskMention = "@dptp-helpdesk"
-)
-
 type messagePoster interface {
 	PostMessage(channelID string, options ...slack.MsgOption) (string, string, error)
 }
@@ -32,7 +27,7 @@ type KeywordsListItem struct {
 
 // Handler returns a handler that knows how to respond to new messages
 // in forum-testplatform channel that mention @dptp-helpdesk.
-func Handler(client messagePoster, keywordsConfig KeywordsConfig) events.PartialHandler {
+func Handler(client messagePoster, keywordsConfig KeywordsConfig, helpdeskAlias, forumChannelId string, requireWorkflowsInForum bool) events.PartialHandler {
 	return events.PartialHandlerFunc("helpdesk",
 		func(callback *slackevents.EventsAPIEvent, logger *logrus.Entry) (handled bool, err error) {
 			log := logger.WithField("handler", "helpdesk-message")
@@ -50,22 +45,28 @@ func Handler(client messagePoster, keywordsConfig KeywordsConfig) events.Partial
 			if event.ChannelType != "channel" {
 				return false, nil
 			}
-			if event.Channel != channelId {
-				log.Debugf("not in correct channel. wanted: %s, message was in: %s", channelId, event.Channel)
+			if event.Channel != forumChannelId {
+				log.Debugf("not in correct channel. wanted: %s, message was in: %s", forumChannelId, event.Channel)
 				return false, nil
 			}
-			if !strings.Contains(event.Text, helpdeskMention) {
+
+			var response []slack.Block
+			if requireWorkflowsInForum && event.ThreadTimeStamp == "" && event.BotID == "" {
+				log.Debugf("Top level message not from a workflow, notifying user")
+				response = getTopLevelDirectMessageResponse(event.User)
+			} else if strings.Contains(event.Text, helpdeskAlias) {
+				log.Info("Handling response in forum-testplatform channel...")
+				response = getContactedHelpdeskResponse(event.Text, keywordsConfig)
+			} else {
 				log.Debugf("dptp-helpdesk not mentioned in message: %s", event.Text)
 				return false, nil
 			}
-			log.Info("Handling response in forum-testplatform channel...")
 
 			timestamp := event.TimeStamp
 			if event.ThreadTimeStamp != "" {
 				timestamp = event.ThreadTimeStamp
 			}
-
-			responseChannel, responseTimestamp, err := client.PostMessage(event.Channel, slack.MsgOptionBlocks(getResponse(event.Text, keywordsConfig)...), slack.MsgOptionTS(timestamp), slack.MsgOptionDisableLinkUnfurl())
+			responseChannel, responseTimestamp, err := client.PostMessage(event.Channel, slack.MsgOptionBlocks(response...), slack.MsgOptionTS(timestamp), slack.MsgOptionDisableLinkUnfurl())
 			if err != nil {
 				log.WithError(err).Warn("Failed to post a response")
 			} else {
@@ -76,7 +77,18 @@ func Handler(client messagePoster, keywordsConfig KeywordsConfig) events.Partial
 		})
 }
 
-func getResponse(message string, keywordsConfig KeywordsConfig) []slack.Block {
+func getTopLevelDirectMessageResponse(user string) []slack.Block {
+	return []slack.Block{&slack.SectionBlock{
+		Type: slack.MBTSection,
+		Text: &slack.TextBlockObject{
+			Type: slack.MarkdownType,
+			Text: fmt.Sprintf("<@%s>, Test Platform responds to questions and requests via workflows located in this channel. "+
+				"Please click the :heavy_plus_sign: on the bottom left of the message box, and look for the :zap: to utilize the appropriate workflow.", user),
+		},
+	}}
+}
+
+func getContactedHelpdeskResponse(message string, keywordsConfig KeywordsConfig) []slack.Block {
 	sections := []string{
 		":wave: You have reached the Test Platform Help Desk. An assigned engineer will respond in several hours during their working hours.",
 		"Please see if our documentation can be of use: https://docs.ci.openshift.org/docs/",

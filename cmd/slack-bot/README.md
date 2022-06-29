@@ -11,5 +11,6 @@ There is an alpha instance of Slack Bot running on the app.ci cluster that you c
 
 - Make sure to join the `dptp-robot-testing` slack space.
 - Add your personal ssh key to `authorized_keys` at https://vault.ci.openshift.org/ui/vault/secrets/kv/show/dptp/sshd-bastion-slack-bot-alpha
+- If attempting to test the helpdesk-message handler, update the `helpdesk_alias` var to your slack user-id in the `dptp-robot-testing` space
 - Run the `hack/local-slack-bot.sh` script like so: `RELEASE_REPO_DIR=<your openshift/release repo dir> bash local-slack-bot.sh`
 - Now you can go into the `dptp-robot-testing` space and execute one of the `/dptp-*` commands, and it should interact with your local slack bot.

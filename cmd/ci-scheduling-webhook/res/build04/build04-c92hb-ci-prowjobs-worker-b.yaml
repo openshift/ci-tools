@@ -43,9 +43,8 @@ spec:
           - autoDelete: true
             boot: true
             image: projects/rhcos-cloud/global/images/rhcos-49-84-202110081407-0-gcp-x86-64
-            #   PD BALANCED IS NOT SUPPORTED UNTIL 4.11
-            sizeGb: 100
-            type: pd-balanced
+            sizeGb: 512
+            type: pd-standard
           kind: GCPMachineProviderSpec
           machineType: e2-custom-16-32768
           metadata: {}

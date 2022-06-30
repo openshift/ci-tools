@@ -135,7 +135,7 @@ func generateData(t testhelper.TestingTInterface, retentionPeriod time.Duration,
 			Metric: []*prometheus_client.Metric{},
 		}
 		for _, item := range series() {
-			mean := float64(r.Int31())
+			mean := float64(r.Int31()) / 10
 			stddev := r.Float64() * mean / 20.0
 			for _, offset := range offsets(retentionPeriod) {
 				for j := 0; j < numSeries; j++ {

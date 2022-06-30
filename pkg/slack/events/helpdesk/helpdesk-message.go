@@ -73,6 +73,15 @@ func Handler(client messagePoster, keywordsConfig KeywordsConfig, helpdeskAlias,
 				log.Infof("Posted response in a new thread in channel %s to user %s at %s", responseChannel, event.User, responseTimestamp)
 			}
 
+			if keywords := getPresentKeywords(event.Text, keywordsConfig); len(keywords) > 0 {
+				responseChannel, responseTimestamp, err = client.PostMessage(event.Channel, slack.MsgOptionBlocks(getDocsLinks(keywords)...), slack.MsgOptionTS(timestamp), slack.MsgOptionDisableLinkUnfurl())
+				if err != nil {
+					log.WithError(err).Warn("Failed to post links to ci docs")
+				} else {
+					log.Infof("Posted links to ci docs in %s at %s", responseChannel, responseTimestamp)
+				}
+			}
+
 			return true, err
 		})
 }
@@ -88,7 +97,7 @@ func getTopLevelDirectMessageResponse(user string) []slack.Block {
 	}}
 }
 
-func getContactedHelpdeskResponse(message string, keywordsConfig KeywordsConfig) []slack.Block {
+func getContactedHelpdeskResponse() []slack.Block {
 	sections := []string{
 		":wave: You have reached the Test Platform Help Desk. An assigned engineer will respond in several hours during their working hours.",
 		"Please see if our documentation can be of use: https://docs.ci.openshift.org/docs/",
@@ -107,23 +116,24 @@ func getContactedHelpdeskResponse(message string, keywordsConfig KeywordsConfig)
 		})
 	}
 
-	if keywords := getPresentKeywords(message, keywordsConfig); len(keywords) > 0 {
-		blocks = append(blocks, &slack.DividerBlock{
-			Type: slack.MBTDivider,
-		})
+	return blocks
+}
 
-		docLinks := "It looks like you are asking about a few known topics. Have you checked these pages:"
-		for name, link := range keywords {
-			docLinks += fmt.Sprintf("\n• <%s|%s>", link, name)
-		}
-		blocks = append(blocks, &slack.SectionBlock{
-			Type: slack.MBTSection,
-			Text: &slack.TextBlockObject{
-				Type: slack.MarkdownType,
-				Text: docLinks,
-			},
-		})
+func getDocsLinks(keywords map[string]string) []slack.Block {
+	var blocks []slack.Block
+	docLinks := ":bulb: It looks like you are asking about a few known topics. Have you checked these pages:"
+
+	for name, link := range keywords {
+		docLinks += fmt.Sprintf("\n• <%s|%s>", link, name)
 	}
+
+	blocks = append(blocks, &slack.SectionBlock{
+		Type: slack.MBTSection,
+		Text: &slack.TextBlockObject{
+			Type: slack.MarkdownType,
+			Text: docLinks,
+		},
+	})
 
 	return blocks
 }

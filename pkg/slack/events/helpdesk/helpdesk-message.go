@@ -51,12 +51,13 @@ func Handler(client messagePoster, keywordsConfig KeywordsConfig, helpdeskAlias,
 			}
 
 			var response []slack.Block
-			if requireWorkflowsInForum && event.ThreadTimeStamp == "" && event.BotID == "" {
+			notifyToUseWorkflow := requireWorkflowsInForum && event.ThreadTimeStamp == "" && event.BotID == ""
+			if notifyToUseWorkflow {
 				log.Debugf("Top level message not from a workflow, notifying user")
 				response = getTopLevelDirectMessageResponse(event.User)
 			} else if strings.Contains(event.Text, helpdeskAlias) {
 				log.Info("Handling response in forum-testplatform channel...")
-				response = getContactedHelpdeskResponse(event.Text, keywordsConfig)
+				response = getContactedHelpdeskResponse()
 			} else {
 				log.Debugf("dptp-helpdesk not mentioned in message: %s", event.Text)
 				return false, nil
@@ -66,11 +67,14 @@ func Handler(client messagePoster, keywordsConfig KeywordsConfig, helpdeskAlias,
 			if event.ThreadTimeStamp != "" {
 				timestamp = event.ThreadTimeStamp
 			}
-			responseChannel, responseTimestamp, err := client.PostMessage(event.Channel, slack.MsgOptionBlocks(response...), slack.MsgOptionTS(timestamp), slack.MsgOptionDisableLinkUnfurl())
+			responseChannel, responseTimestamp, err := client.PostMessage(event.Channel, slack.MsgOptionBlocks(response...), slack.MsgOptionTS(timestamp))
 			if err != nil {
 				log.WithError(err).Warn("Failed to post a response")
 			} else {
 				log.Infof("Posted response in a new thread in channel %s to user %s at %s", responseChannel, event.User, responseTimestamp)
+			}
+			if notifyToUseWorkflow {
+				return true, nil
 			}
 
 			if keywords := getPresentKeywords(event.Text, keywordsConfig); len(keywords) > 0 {

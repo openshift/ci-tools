@@ -33,8 +33,9 @@ type githubClient interface {
 }
 
 var (
-	ocpPayloadTestsPattern    = regexp.MustCompile(`(?mi)^/payload\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s*$`)
-	ocpPayloadJobTestsPattern = regexp.MustCompile(`(?mi)^/payload-job\s+((?:[-\w.]+\s*?)+)\s*$`)
+	ocpPayloadTestsPattern              = regexp.MustCompile(`(?mi)^/payload\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s*$`)
+	ocpPayloadJobTestsPattern           = regexp.MustCompile(`(?mi)^/payload-job\s+((?:[-\w.]+\s*?)+)\s*$`)
+	ocpPayloadAggregatedJobTestsPattern = regexp.MustCompile(`(?mi)^/payload-aggregate\s+(?P<job>[-\w.]+)\s+(?P<aggregate>\d+)\s*$`)
 )
 
 func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
@@ -114,15 +115,34 @@ func specsFromComment(comment string) []jobSetSpecification {
 	return specs
 }
 
-func jobNamesFromComment(comment string) []string {
-	var ret []string
+func jobsFromComment(comment string) []config.Job {
+	var ret []config.Job
 	for _, match := range ocpPayloadJobTestsPattern.FindAllStringSubmatch(comment, -1) {
 		if len(match) < 2 {
 			// This should never happen
 			logrus.WithField("match", match).WithField("comment", comment).Error("failed to parse the comment because len(match)<2")
 			continue
 		}
-		ret = append(ret, strings.Fields(match[1])...)
+		for _, jobName := range strings.Fields(match[1]) {
+			ret = append(ret, config.Job{
+				Name: jobName,
+			})
+		}
+	}
+	for _, match := range ocpPayloadAggregatedJobTestsPattern.FindAllStringSubmatch(comment, -1) {
+		jobIndex := ocpPayloadAggregatedJobTestsPattern.SubexpIndex("job")
+		aggregateIndex := ocpPayloadAggregatedJobTestsPattern.SubexpIndex("aggregate")
+		aggregatedCount, err := strconv.Atoi(match[aggregateIndex])
+		if err != nil {
+			// This should never happen
+			logrus.WithField("match", match).WithField("comment", comment).WithError(err).Error("failed to parse the aggregated job")
+			continue
+		}
+		ret = append(ret, config.Job{
+			Name:            match[jobIndex],
+			AggregatedCount: aggregatedCount,
+		})
+
 	}
 	return ret
 }
@@ -160,25 +180,19 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 
 	logger.WithField("ic.Comment.Body", ic.Comment.Body).Trace("received a comment")
 	specs := specsFromComment(ic.Comment.Body)
-	jobNamesFromComment := jobNamesFromComment(ic.Comment.Body)
+	jobsFromComment := jobsFromComment(ic.Comment.Body)
 	if len(specs) == 0 {
 		logger.Trace("found no specs from comment")
 	}
 
-	var jobsFromComment []config.Job
-	if len(jobNamesFromComment) == 0 {
+	if len(jobsFromComment) == 0 {
 		logger.Trace("found no job names from comment")
 	} else {
-		logger.WithField("jobNamesFromComment", jobNamesFromComment).Trace("found job names from comment")
+		logger.WithField("jobsFromComment", jobsFromComment).Trace("found job names from comment")
 		specs = append(specs, jobSetSpecification{})
-		for _, jobName := range jobNamesFromComment {
-			jobsFromComment = append(jobsFromComment, config.Job{
-				Name: jobName,
-			})
-		}
 	}
 
-	if len(specs) == 0 && len(jobNamesFromComment) == 0 {
+	if len(specs) == 0 {
 		return ""
 	}
 
@@ -365,7 +379,7 @@ func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec) *prpqv1.Pu
 func message(spec jobSetSpecification, tests []string) string {
 	var b strings.Builder
 	if spec.ocp == "" {
-		b.WriteString(fmt.Sprintf("trigger %d job(s) for the /payload-job command\n", len(tests)))
+		b.WriteString(fmt.Sprintf("trigger %d job(s) for the /payload-(job|aggregate) command\n", len(tests)))
 	} else {
 		b.WriteString(fmt.Sprintf("trigger %d job(s) of type %s for the %s release of OCP %s\n", len(tests), spec.jobs, spec.releaseType, spec.ocp))
 	}

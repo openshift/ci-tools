@@ -1,6 +1,9 @@
 import bisect
 
 import boto3
+import json
+import traceback
+
 from botocore.exceptions import ClientError
 from botocore.client import Config
 
@@ -11,11 +14,11 @@ from ipaddress import ip_address
 
 # According to https://docs.aws.amazon.com/codeguru/detector-library/python/lambda-client-reuse/
 # s3 clients can and should be reused. This allows the client to be cached in an execution
-# environment and reused if possible.
+# environment and reused if possible. Initialize these lazily so we can handle ANY s3 errors easily.
 
 # If the lambda wants to sign a URL for a bucket within the account
 # it is currently executing, a vanilla client will do.
-local_account_s3_client = boto3.client('s3', region_name='us-east-1', config=Config(signature_version='s3v4'))
+local_account_s3_client = None
 
 # If the lambda wants to sign a URL for a bucket in app.ci's account,
 # it should use the STS s3 client constructed below.
@@ -89,6 +92,10 @@ DISTRIBUTION_TO_BUCKET = {
         'us-east-2': 'build05-kwk66-image-registry-us-east-1-vuabtweixqvnbprjlctjacx',
     }
 }
+
+
+# Ensure the client times out before the lambda (5 seconds) so we can catch and handle the exception
+S3_CLIENT_CONFIG = Config(signature_version='s3v4', connect_timeout=2, read_timeout=2, retries={'max_attempts': 0})
 
 # Set to None for normal operation and everything will route through
 # CloudFront or S3. Set to your IP address, and you will be sent to
@@ -165,83 +172,97 @@ def lambda_handler(event, context):
         # Caller does not appear to be an ec2 instance within a region we care about.
         return request
 
-    if distribution_name != APP_CI_DISTRIBUTION and app_ci_sts_s3_client is None:
-        # Only initialize the cached sts client if we are not in the app.ci account.
-        sts_client = boto3.client('sts')
-        # Call the assume_role method of the STSConnection object and pass the role
-        # ARN and a role session name.
-        assumed_role_object = sts_client.assume_role(
-            RoleArn="arn:aws:iam::059165973077:role/service-role/cloudfront-us-east-to-s3-direct-role-ioj0vsn0",
-            RoleSessionName="build-farm-registry-cloudfront-lambda"
-        )
-        # From the response that contains the assumed role, get the temporary
-        # credentials that can be used to make subsequent API calls
-        credentials = assumed_role_object['Credentials']
-        app_ci_sts_s3_client = boto3.client('s3', region_name='us-east-1', aws_access_key_id=credentials['AccessKeyId'],
-                                            aws_secret_access_key=credentials['SecretAccessKey'],
-                                            aws_session_token=credentials['SessionToken'],
-                                            config=Config(signature_version='s3v4'))
-
-    uri: str = request.get('uri', '')
-    s3_key = uri[1:]  # Strip '/'
-    redirect_to_bucket = None
-
-    if found_region != 'us-east-1' and uri.startswith('/docker/registry/v2/blobs/') and found_region in API_CI_REPLICAS:
-        # If the request is for a blob and NOT in us-east-1, let's check to see
-        # if the replicas of the app.ci internal registry S3 bucket in that caller's
-        # region. If the caller is in us-east-1, all of our build farms have their
-        # s3 bucket in us-east-1, so let the caller go there instead of trying to find
-        # the resource in app.ci's replicas.
-        # Note that we never do this for /docker/repositories/* as these track tags.
-        # Tags can point to different, cluster specific images (whereas a blob
-        # sha uniquely and permanently defines its content), so we don't want to draw tags from replicas.
-        # Replicas can take up to 15 minutes to be synchronized -- so another reason to never rely on
-        # tag values.
-
-        # find the name of app.ci's internal registry replicated bucket in us-west-1
-        ideal_replica_bucket = API_CI_REPLICAS[found_region]
-
-        if distribution_name == APP_CI_DISTRIBUTION:
-            # This lambda is operating in the app.ci account and will use the role
-            # associated with the lambda to read s3.
-            s3 = local_account_s3_client
-        else:
-            # This lambda is operating in another account. We need to use STS
-            # to assume a role in the app.ci account so that we can read the
-            # replica buckets in that account.
-
-            s3 = app_ci_sts_s3_client
-
+    try:
         try:
-            s3.head_object(Bucket=ideal_replica_bucket, Key=s3_key)
-            # The blob was found. Use the replica bucket.
-            redirect_to_bucket = ideal_replica_bucket
-        except ClientError:
-            pass
+            if local_account_s3_client is None:
+                local_account_s3_client = boto3.client('s3', region_name='us-east-1', config=S3_CLIENT_CONFIG)
 
-    if not redirect_to_bucket:
-        # If we reach this point, the lambda should try to talk to the bucket associated
-        # with this distribution & region.
-        redirect_to_bucket = regions_to_redirect.get(found_region, None)
-        if not redirect_to_bucket:
-            # Distribution does not want to redirect caller's region to S3.
+            if distribution_name != APP_CI_DISTRIBUTION and app_ci_sts_s3_client is None:
+                # Only initialize the cached sts client if we are not in the app.ci account.
+                sts_client = boto3.client('sts')
+                # Call the assume_role method of the STSConnection object and pass the role
+                # ARN and a role session name.
+                assumed_role_object = sts_client.assume_role(
+                    RoleArn="arn:aws:iam::059165973077:role/service-role/cloudfront-us-east-to-s3-direct-role-ioj0vsn0",
+                    RoleSessionName="build-farm-registry-cloudfront-lambda"
+                )
+                # From the response that contains the assumed role, get the temporary
+                # credentials that can be used to make subsequent API calls
+                credentials = assumed_role_object['Credentials']
+                app_ci_sts_s3_client = boto3.client('s3', region_name='us-east-1', aws_access_key_id=credentials['AccessKeyId'],
+                                                    aws_secret_access_key=credentials['SecretAccessKey'],
+                                                    aws_session_token=credentials['SessionToken'],
+                                                    config=S3_CLIENT_CONFIG)
+
+            uri: str = request.get('uri', '')
+            s3_key = uri[1:]  # Strip '/'
+            redirect_to_bucket = None
+
+            if found_region != 'us-east-1' and uri.startswith('/docker/registry/v2/blobs/') and found_region in API_CI_REPLICAS:
+                # If the request is for a blob and NOT in us-east-1, let's check to see
+                # if the replicas of the app.ci internal registry S3 bucket in that caller's
+                # region. If the caller is in us-east-1, all of our build farms have their
+                # s3 bucket in us-east-1, so let the caller go there instead of trying to find
+                # the resource in app.ci's replicas.
+                # Note that we never do this for /docker/repositories/* as these track tags.
+                # Tags can point to different, cluster specific images (whereas a blob
+                # sha uniquely and permanently defines its content), so we don't want to draw tags from replicas.
+                # Replicas can take up to 15 minutes to be synchronized -- so another reason to never rely on
+                # tag values.
+
+                # find the name of app.ci's internal registry replicated bucket in us-west-1
+                ideal_replica_bucket = API_CI_REPLICAS[found_region]
+
+                if distribution_name == APP_CI_DISTRIBUTION:
+                    # This lambda is operating in the app.ci account and will use the role
+                    # associated with the lambda to read s3.
+                    s3 = local_account_s3_client
+                else:
+                    # This lambda is operating in another account. We need to use STS
+                    # to assume a role in the app.ci account so that we can read the
+                    # replica buckets in that account.
+
+                    s3 = app_ci_sts_s3_client
+
+                try:
+                    s3.head_object(Bucket=ideal_replica_bucket, Key=s3_key)
+                    # The blob was found. Use the replica bucket.
+                    redirect_to_bucket = ideal_replica_bucket
+                except ClientError:
+                    pass
+
+            if not redirect_to_bucket:
+                # If we reach this point, the lambda should try to talk to the bucket associated
+                # with this distribution & region.
+                redirect_to_bucket = regions_to_redirect.get(found_region, None)
+                if not redirect_to_bucket:
+                    # Distribution does not want to redirect caller's region to S3.
+                    return request
+
+                # Prep the client to talk to the distribution's / cluster's us-east-1
+                # internal registry bucket.
+                s3 = local_account_s3_client
+
+            # Depending on the codepath here, s3 may be an STS assumed role client
+            # to app.ci or just a direct client to the distribution's underlying s3 bucket.
+            # Generate a signed URL for the caller to go back to S3 and read the object
+            url = s3.generate_presigned_url(
+                ClientMethod='get_object',
+                Params={
+                    'Bucket': redirect_to_bucket,
+                    'Key': s3_key,
+                },
+                ExpiresIn=20*60,  # Expire in 20 minutes
+            )
+        except ClientError as ce:
+            print(f'ERROR - boto3 ClientError\n{ce}')
             return request
 
-        # Prep the client to talk to the distribution's / cluster's us-east-1
-        # internal registry bucket.
-        s3 = local_account_s3_client
-
-    # Depending on the codepath here, s3 may be an STS assumed role client
-    # to app.ci or just a direct client to the distribution's underlying s3 bucket.
-    # Generate a signed URL for the caller to go back to S3 and read the object
-    url = s3.generate_presigned_url(
-        ClientMethod='get_object',
-        Params={
-            'Bucket': redirect_to_bucket,
-            'Key': s3_key,
-        },
-        ExpiresIn=20*60,  # Expire in 20 minutes
-    )
+    except Exception as e:
+        # Not sure what is going on; just let CloudFront handle the request
+        print(f'ERROR - UNKNOWN\n{e}')
+        print(traceback.format_exc())
+        return request
 
     return {
         'status': '307',

@@ -95,7 +95,7 @@ DISTRIBUTION_TO_BUCKET = {
 
 
 # Ensure the client times out before the lambda (5 seconds) so we can catch and handle the exception
-S3_CLIENT_CONFIG = Config(signature_version='s3v4', connect_timeout=2, read_timeout=2, retries={'max_attempts': 0})
+BOTO3_CLIENT_CONFIG = Config(signature_version='s3v4', connect_timeout=1, read_timeout=1, retries={'max_attempts': 0})
 
 # Set to None for normal operation and everything will route through
 # CloudFront or S3. Set to your IP address, and you will be sent to
@@ -175,11 +175,11 @@ def lambda_handler(event, context):
     try:
         try:
             if local_account_s3_client is None:
-                local_account_s3_client = boto3.client('s3', region_name='us-east-1', config=S3_CLIENT_CONFIG)
+                local_account_s3_client = boto3.client('s3', region_name='us-east-1', config=BOTO3_CLIENT_CONFIG)
 
             if distribution_name != APP_CI_DISTRIBUTION and app_ci_sts_s3_client is None:
                 # Only initialize the cached sts client if we are not in the app.ci account.
-                sts_client = boto3.client('sts')
+                sts_client = boto3.client('sts', config=BOTO3_CLIENT_CONFIG)
                 # Call the assume_role method of the STSConnection object and pass the role
                 # ARN and a role session name.
                 assumed_role_object = sts_client.assume_role(
@@ -192,7 +192,7 @@ def lambda_handler(event, context):
                 app_ci_sts_s3_client = boto3.client('s3', region_name='us-east-1', aws_access_key_id=credentials['AccessKeyId'],
                                                     aws_secret_access_key=credentials['SecretAccessKey'],
                                                     aws_session_token=credentials['SessionToken'],
-                                                    config=S3_CLIENT_CONFIG)
+                                                    config=BOTO3_CLIENT_CONFIG)
 
             uri: str = request.get('uri', '')
             s3_key = uri[1:]  # Strip '/'

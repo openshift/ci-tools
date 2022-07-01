@@ -24,6 +24,8 @@ func newReloader(name string, cache cache) *cacheReloader {
 		lock: &sync.RWMutex{},
 	}
 	interrupts.TickLiteral(reloader.reload, 10*time.Minute)
+	// Doing an additional load 2 minutes after startup prevents a race error where subscribers won't exist yet
+	time.AfterFunc(2*time.Minute, reloader.reload)
 	return reloader
 }
 
@@ -72,9 +74,13 @@ func (c *cacheReloader) reload() {
 		return
 	}
 	c.lock.Lock()
-	c.lastUpdated = lastUpdated
-	for _, subscriber := range c.subscribers {
-		subscriber <- data
+	if len(c.subscribers) > 0 {
+		c.lastUpdated = lastUpdated
+		for _, subscriber := range c.subscribers {
+			subscriber <- data
+		}
+	} else {
+		logger.Warn("no subscribers yet, won't mark as loaded")
 	}
 	c.lock.Unlock()
 	logger.Debug("Newer update loaded.")
@@ -87,6 +93,7 @@ func digestAll(data map[string][]*cacheReloader, digesters map[string]digester, 
 			infos = append(infos, digestInfo{name: item.name, data: item, digest: d})
 		}
 	}
+	logger.Debugf("digesting %d infos.", len(infos))
 	loadDone := digest(logger, infos...)
 	interrupts.Run(func(ctx context.Context) {
 		select {

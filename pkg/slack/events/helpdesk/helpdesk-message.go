@@ -31,7 +31,7 @@ func Handler(client messagePoster, keywordsConfig KeywordsConfig, helpdeskAlias,
 	return events.PartialHandlerFunc("helpdesk",
 		func(callback *slackevents.EventsAPIEvent, logger *logrus.Entry) (handled bool, err error) {
 			log := logger.WithField("handler", "helpdesk-message")
-			log.Debugf("checking event payload")
+			log.Debug("checking event payload")
 
 			if callback.Type != slackevents.CallbackEvent {
 				return false, nil
@@ -53,7 +53,7 @@ func Handler(client messagePoster, keywordsConfig KeywordsConfig, helpdeskAlias,
 			var response []slack.Block
 			notifyToUseWorkflow := requireWorkflowsInForum && event.ThreadTimeStamp == "" && event.BotID == ""
 			if notifyToUseWorkflow {
-				log.Debugf("Top level message not from a workflow, notifying user")
+				log.Debug("Top level message not from a workflow, notifying user")
 				response = getTopLevelDirectMessageResponse(event.User)
 			} else if strings.Contains(event.Text, helpdeskAlias) {
 				log.Info("Handling response in forum-testplatform channel...")

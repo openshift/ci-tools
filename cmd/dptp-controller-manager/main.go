@@ -89,8 +89,9 @@ type imagePusherOptions struct {
 }
 
 type serviceAccountSecretRefresherOptions struct {
-	enabledNamespaces flagutil.Strings
-	removeOldSecrets  bool
+	enabledNamespaces     flagutil.Strings
+	removeOldSecrets      bool
+	ignoreServiceAccounts flagutil.Strings
 }
 
 func newOpts() (*options, error) {
@@ -115,6 +116,7 @@ func newOpts() (*options, error) {
 	fs.StringVar(&opts.registryClusterName, "registry-cluster-name", "app.ci", "the cluster name on which the CI central registry is running")
 	fs.Var(&opts.serviceAccountSecretRefresherOptions.enabledNamespaces, "serviceAccountRefresherOptions.enabled-namespace", "A namespace for which the serviceaccount_secret_refresher should be enabled. Can be passed multiple times.")
 	fs.BoolVar(&opts.serviceAccountSecretRefresherOptions.removeOldSecrets, "serviceAccountRefresherOptions.remove-old-secrets", false, "whether the serviceaccountsecretrefresher should delete secrets older than 30 days")
+	fs.Var(&opts.serviceAccountSecretRefresherOptions.ignoreServiceAccounts, "serviceAccountRefresherOptions.ignore-service-account", "The service account to ignore. It must be in namespace/name format (e.G `ci/sync-rover-groups-updater`). Can be passed multiple times.")
 	fs.Var(&opts.imagePusherOptions.imageStreamsRaw, "imagePusherOptions.image-stream", "An imagestream that will be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -412,7 +414,7 @@ func main() {
 
 	if opts.enabledControllersSet.Has(serviceaccountsecretrefresher.ControllerName) {
 		for clusterName, clusterMgr := range allManagers {
-			if err := serviceaccountsecretrefresher.AddToManager(clusterName, clusterMgr, opts.serviceAccountSecretRefresherOptions.enabledNamespaces.StringSet(), opts.serviceAccountSecretRefresherOptions.removeOldSecrets); err != nil {
+			if err := serviceaccountsecretrefresher.AddToManager(clusterName, clusterMgr, opts.serviceAccountSecretRefresherOptions.enabledNamespaces.StringSet(), opts.serviceAccountSecretRefresherOptions.ignoreServiceAccounts.StringSet(), opts.serviceAccountSecretRefresherOptions.removeOldSecrets); err != nil {
 				logrus.WithError(err).Fatalf("Failed to add the %s controller to the %s cluster", serviceaccountsecretrefresher.ControllerName, clusterName)
 			}
 		}

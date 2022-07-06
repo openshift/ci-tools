@@ -51,7 +51,7 @@ func Handler(client messagePoster, keywordsConfig KeywordsConfig, helpdeskAlias,
 			}
 
 			var response []slack.Block
-			notifyToUseWorkflow := requireWorkflowsInForum && event.ThreadTimeStamp == "" && event.BotID == ""
+			notifyToUseWorkflow := requireWorkflowsInForum && event.ThreadTimeStamp == "" && event.BotID == "" && event.User != ""
 			if notifyToUseWorkflow {
 				log.Debug("Top level message not from a workflow, notifying user")
 				response = getTopLevelDirectMessageResponse(event.User)

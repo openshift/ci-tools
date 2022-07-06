@@ -47,7 +47,9 @@ const (
 	runTemplate = `
 <h1>{{ .ObjectMeta.Namespace }}/{{ .ObjectMeta.Name }}</h1>
 
-Created: {{ .ObjectMeta.CreationTimestamp }}
+<p class="text-right">{{ returnLink }}</p>
+
+Created: {{ .ObjectMeta.CreationTimestamp }} 
 
 {{ with .Spec }}
 
@@ -193,6 +195,9 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 	}
 	tmpl := template.New("runTemplate")
 	tmpl.Funcs(template.FuncMap{
+		"returnLink": func() template.HTML {
+			return template.HTML(fmt.Sprintf(`<a href="%s">%s</a>`, runsURL, "back to runs"))
+		},
 		"prLink": func(pr *prpqv1.PullRequestUnderTest) template.HTML {
 			org := template.HTMLEscapeString(pr.Org)
 			repo := template.HTMLEscapeString(pr.Repo)

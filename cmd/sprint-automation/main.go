@@ -624,13 +624,9 @@ func upgradeBuild02(ctx context.Context, build01Client, build02Client ctrlruntim
 		logrus.WithField("state", build02VI.state).Info("The previous upgrade of build02 has not been completed")
 		return nil, nil
 	}
-	if build02VI.semanticVersion.Equals(build01VI.semanticVersion) {
-		logrus.WithField("version", build01VI.version).Info("build01 and build02 have the same version and hence no need to upgrade build02")
+	if build02VI.semanticVersion.GE(build01VI.semanticVersion) {
+		logrus.WithField("build01VI.version", build01VI.version).WithField("build02VI.version", build02VI.version).Info("no need to upgrade build02")
 		return nil, nil
-	}
-
-	if build02VI.semanticVersion.GT(build01VI.semanticVersion) {
-		return nil, fmt.Errorf("version of build02 %s is newer than build01 %s", build02VI.version, build01VI.version)
 	}
 	return build01VI, nil
 }

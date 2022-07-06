@@ -242,7 +242,6 @@ func TestUpgradeBuild02(t *testing.T) {
 					},
 				},
 			),
-			expectedErr: fmt.Errorf("version of build02 4.9.17 is newer than build01 4.9.6"),
 		},
 		{
 			name: "upgrade of build02 is still ongoing",

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bombsimon/logrusr"
+	"github.com/bombsimon/logrusr/v3"
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -24,7 +24,6 @@ import (
 	"k8s.io/test-infra/prow/pjutil/pprof"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
-	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
@@ -223,7 +222,7 @@ func completeSet(raw flagutil.Strings) sets.String {
 
 func main() {
 	logrusutil.ComponentInit()
-	controllerruntime.SetLogger(logrusr.NewLogger(logrus.StandardLogger()))
+	controllerruntime.SetLogger(logrusr.New(logrus.StandardLogger()))
 
 	opts, err := newOpts()
 	if err != nil {
@@ -285,7 +284,6 @@ func main() {
 
 		options := controllerruntime.Options{
 			DryRunClient: opts.dryRun,
-			Logger:       ctrlruntimelog.NullLogger{},
 		}
 		if cluster == appCIContextName {
 			options.LeaderElection = true

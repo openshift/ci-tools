@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/bombsimon/logrusr"
+	"github.com/bombsimon/logrusr/v3"
 	prometheusclient "github.com/prometheus/client_golang/api"
 	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/sirupsen/logrus"
@@ -235,7 +235,7 @@ func mainUI(opts *options, cache cache) {
 }
 
 func mainAdmission(opts *options, cache cache) {
-	controllerruntime.SetLogger(logrusr.NewLogger(logrus.StandardLogger()))
+	controllerruntime.SetLogger(logrusr.New(logrus.StandardLogger()))
 
 	restConfig, err := util.LoadClusterConfig()
 	if err != nil {

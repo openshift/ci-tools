@@ -17,6 +17,7 @@ limitations under the License.
 package jira
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -51,6 +52,9 @@ const (
 
 type Client interface {
 	GetIssue(id string) (*jira.Issue, error)
+	// SearchWithContext will search for tickets according to the jql
+	// Jira API docs: https://developer.atlassian.com/jiradev/jira-apis/jira-rest-apis/jira-rest-api-tutorials/jira-rest-api-example-query-issues
+	SearchWithContext(ctx context.Context, jql string, options *jira.SearchOptions) ([]jira.Issue, *jira.Response, error)
 	UpdateIssue(*jira.Issue) (*jira.Issue, error)
 	CreateIssue(*jira.Issue) (*jira.Issue, error)
 	CreateIssueLink(*jira.IssueLink) error
@@ -67,6 +71,10 @@ type Client interface {
 	// is set for the issue, the returned SecurityLevel and error will both be nil and
 	// the issue will follow the default project security level.
 	GetIssueSecurityLevel(*jira.Issue) (*SecurityLevel, error)
+	// GetIssueQaContact get the user details for the QA contact. The QA contact is a custom field in Jira
+	GetIssueQaContact(*jira.Issue) (*jira.User, error)
+	// GetIssueTargetVersion get the issue Target Release. The target release is a custom field in Jira
+	GetIssueTargetVersion(issue *jira.Issue) (*[]*jira.Version, error)
 	// FindUser returns all users with a field matching the queryParam (ex: email, display name, etc.)
 	FindUser(queryParam string) ([]*jira.User, error)
 	GetRemoteLinks(id string) ([]jira.RemoteLink, error)
@@ -75,8 +83,10 @@ type Client interface {
 	DeleteLink(id string) error
 	DeleteRemoteLink(issueID string, linkID int) error
 	// DeleteRemoteLinkViaURL identifies and removes a remote link from an issue
-	// the has the provided URL.
-	DeleteRemoteLinkViaURL(issueID, url string) error
+	// the has the provided URL. The returned bool indicates whether a change
+	// was made during the operation as a remote link with the URL not existing
+	// is not consider an error for this function.
+	DeleteRemoteLinkViaURL(issueID, url string) (bool, error)
 	ForPlugin(plugin string) Client
 	AddComment(issueID string, comment *jira.Comment) (*jira.Comment, error)
 	ListProjects() (*jira.ProjectList, error)
@@ -320,21 +330,23 @@ func (jc *client) DeleteRemoteLink(issueID string, linkID int) error {
 }
 
 // DeleteRemoteLinkViaURL identifies and removes a remote link from an issue
-// the has the provided URL.
-func DeleteRemoteLinkViaURL(jc Client, issueID, url string) error {
+// the has the provided URL. The returned bool indicates whether a change
+// was made during the operation as a remote link with the URL not existing
+// is not consider an error for this function.
+func DeleteRemoteLinkViaURL(jc Client, issueID, url string) (bool, error) {
 	links, err := jc.GetRemoteLinks(issueID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	for _, link := range links {
 		if link.Object.URL == url {
-			return jc.DeleteRemoteLink(issueID, link.ID)
+			return true, jc.DeleteRemoteLink(issueID, link.ID)
 		}
 	}
-	return fmt.Errorf("could not find remote link on issue with URL `%s`", url)
+	return false, fmt.Errorf("could not find remote link on issue with URL `%s`", url)
 }
 
-func (jc *client) DeleteRemoteLinkViaURL(issueID, url string) error {
+func (jc *client) DeleteRemoteLinkViaURL(issueID, url string) (bool, error) {
 	return DeleteRemoteLinkViaURL(jc, issueID, url)
 }
 
@@ -506,7 +518,7 @@ func (jc *client) CloneIssue(parent *jira.Issue) (*jira.Issue, error) {
 
 func unsetProblematicFields(issue *jira.Issue, responseBody string) (*jira.Issue, error) {
 	// handle unsettable "unknown" fields
-	processedResponse := createIssueError{}
+	processedResponse := CreateIssueError{}
 	if newErr := json.Unmarshal([]byte(responseBody), &processedResponse); newErr != nil {
 		return nil, fmt.Errorf("Error processing jira error: %w", newErr)
 	}
@@ -536,36 +548,9 @@ func unsetProblematicFields(issue *jira.Issue, responseBody string) (*jira.Issue
 	return &newIssue, nil
 }
 
-type createIssueError struct {
+type CreateIssueError struct {
 	ErrorMessages []string          `json:"errorMessages"`
 	Errors        map[string]string `json:"errors"`
-}
-
-// GetIssueSecurityLevel returns the security level of an issue. If no security level
-// is set for the issue, the returned SecurityLevel and error will both be nil and
-// the issue will follow the default project security level.
-func GetIssueSecurityLevel(client Client, issue *jira.Issue) (*SecurityLevel, error) {
-	// TODO: Add field to the upstream go-jira package; if a security level exists, it is returned
-	// as part of the issue fields
-	// See https://github.com/andygrunwald/go-jira/issues/456
-	securityField, ok := issue.Fields.Unknowns["security"]
-	if !ok {
-		return nil, nil
-	}
-	bytes, err := json.Marshal(securityField)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to process issue security level: %v", err)
-	}
-	securityLevel := &SecurityLevel{}
-	if err := json.Unmarshal(bytes, securityLevel); err != nil {
-		return nil, fmt.Errorf("failed to convert security level json to struct: %v", err)
-	} else {
-		return securityLevel, nil
-	}
-}
-
-func (jc *client) GetIssueSecurityLevel(issue *jira.Issue) (*SecurityLevel, error) {
-	return GetIssueSecurityLevel(jc, issue)
 }
 
 type SecurityLevel struct {
@@ -781,4 +766,77 @@ func (l *retryableHTTPLogrusWrapper) Debug(msg string, context ...interface{}) {
 
 func (l *retryableHTTPLogrusWrapper) Warn(msg string, context ...interface{}) {
 	l.log.WithFields(l.fieldsForContext(context...)).Warn(msg)
+}
+
+func (jc *client) SearchWithContext(ctx context.Context, jql string, options *jira.SearchOptions) ([]jira.Issue, *jira.Response, error) {
+	issues, response, err := jc.upstream.Issue.SearchWithContext(ctx, jql, options)
+	if err != nil {
+		if response != nil && response.StatusCode == http.StatusNotFound {
+			return nil, response, NotFoundError{err}
+		}
+		return nil, response, HandleJiraError(response, err)
+	}
+	return issues, response, nil
+}
+
+func GetUnknownField(field string, issue *jira.Issue, fn func() interface{}) error {
+	obj := fn()
+	unknownField, ok := issue.Fields.Unknowns[field]
+	if !ok {
+		return nil
+	}
+	bytes, err := json.Marshal(unknownField)
+	if err != nil {
+		return fmt.Errorf("failed to process the custom field %s. Error : %v", field, err)
+	}
+	if err := json.Unmarshal(bytes, obj); err != nil {
+		return fmt.Errorf("failed to unmarshall the json to struct for %s. Error: %v", field, err)
+	}
+	return err
+
+}
+
+// GetIssueSecurityLevel returns the security level of an issue. If no security level
+// is set for the issue, the returned SecurityLevel and error will both be nil and
+// the issue will follow the default project security level.
+func GetIssueSecurityLevel(issue *jira.Issue) (*SecurityLevel, error) {
+	// TODO: Add field to the upstream go-jira package; if a security level exists, it is returned
+	// as part of the issue fields
+	// See https://github.com/andygrunwald/go-jira/issues/456
+	var obj *SecurityLevel
+	err := GetUnknownField("security", issue, func() interface{} {
+		obj = &SecurityLevel{}
+		return obj
+	})
+	return obj, err
+}
+
+func (jc *client) GetIssueSecurityLevel(issue *jira.Issue) (*SecurityLevel, error) {
+	return GetIssueSecurityLevel(issue)
+}
+
+func GetIssueQaContact(issue *jira.Issue) (*jira.User, error) {
+	var obj *jira.User
+	err := GetUnknownField("customfield_12316243", issue, func() interface{} {
+		obj = &jira.User{}
+		return obj
+	})
+	return obj, err
+}
+
+func (jc *client) GetIssueQaContact(issue *jira.Issue) (*jira.User, error) {
+	return GetIssueQaContact(issue)
+}
+
+func GetIssueTargetVersion(issue *jira.Issue) (*[]*jira.Version, error) {
+	var obj *[]*jira.Version
+	err := GetUnknownField("customfield_12319940", issue, func() interface{} {
+		obj = &[]*jira.Version{{}}
+		return obj
+	})
+	return obj, err
+}
+
+func (jc *client) GetIssueTargetVersion(issue *jira.Issue) (*[]*jira.Version, error) {
+	return GetIssueTargetVersion(issue)
 }

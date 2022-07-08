@@ -231,6 +231,7 @@ func (pm *profileMerger) mapLocation(src *Location) *Location {
 	}
 
 	if l, ok := pm.locationsByID[src.ID]; ok {
+		pm.locationsByID[src.ID] = l
 		return l
 	}
 

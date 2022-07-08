@@ -17,7 +17,6 @@ limitations under the License.
 package sidecar
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -27,13 +26,11 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/test-infra/prow/flagutil"
-	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/pjutil/pprof"
 
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -42,18 +39,6 @@ import (
 	"k8s.io/test-infra/prow/pod-utils/gcs"
 	"k8s.io/test-infra/prow/pod-utils/wrapper"
 )
-
-const LogFileName = "sidecar-logs.json"
-
-func LogSetup() (*os.File, error) {
-	logrusutil.ComponentInit()
-	logrus.SetLevel(logrus.DebugLevel)
-	logFile, err := ioutil.TempFile("", "sidecar-logs*.txt")
-	if err == nil {
-		logrus.SetOutput(io.MultiWriter(os.Stderr, logFile))
-	}
-	return logFile, err
-}
 
 func nameEntry(idx int, opt wrapper.Options) string {
 	return fmt.Sprintf("entry %d: %s", idx, strings.Join(opt.Args, " "))
@@ -88,7 +73,7 @@ func wait(ctx context.Context, entries []wrapper.Options) (bool, bool, int) {
 // Run will watch for the process being wrapped to exit
 // and then post the status of that process and any artifacts
 // to cloud storage.
-func (o Options) Run(ctx context.Context, logFile *os.File) (int, error) {
+func (o Options) Run(ctx context.Context) (int, error) {
 	if o.WriteMemoryProfile {
 		pprof.WriteMemoryProfiles(flagutil.DefaultMemoryProfileInterval)
 	}
@@ -98,7 +83,6 @@ func (o Options) Run(ctx context.Context, logFile *os.File) (int, error) {
 	}
 
 	entries := o.entries()
-	var once sync.Once
 
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -125,7 +109,7 @@ func (o Options) Run(ctx context.Context, logFile *os.File) (int, error) {
 				metadata := combineMetadata(entries)
 
 				//Peform best-effort upload
-				err := o.doUpload(ctx, spec, false, true, metadata, buildLogs, logFile, &once)
+				err := o.doUpload(ctx, spec, false, true, metadata, buildLogs)
 				if err != nil {
 					logrus.WithError(err).Error("Failed to perform best-effort upload")
 				} else {
@@ -150,7 +134,7 @@ func (o Options) Run(ctx context.Context, logFile *os.File) (int, error) {
 
 	buildLogs := logReaders(entries)
 	metadata := combineMetadata(entries)
-	return failures, o.doUpload(context.Background(), spec, passed, aborted, metadata, buildLogs, logFile, &once)
+	return failures, o.doUpload(context.Background(), spec, passed, aborted, metadata, buildLogs)
 }
 
 const errorKey = "sidecar-errors"
@@ -224,33 +208,15 @@ func (o Options) preUpload() {
 	}
 }
 
-func (o Options) doUpload(ctx context.Context, spec *downwardapi.JobSpec, passed, aborted bool, metadata map[string]interface{}, logReaders map[string]io.Reader, logFile *os.File, once *sync.Once) error {
+func (o Options) doUpload(ctx context.Context, spec *downwardapi.JobSpec, passed, aborted bool, metadata map[string]interface{}, logReaders map[string]io.Reader) error {
 	startTime := time.Now()
 	logrus.Info("Starting to upload")
-	uploadTargets := make(map[string]gcs.UploadFunc)
+	defer func() { logrus.WithField("duration", time.Since(startTime).String()).Info("Finished uploading") }()
 
-	defer func() {
-		logrus.WithField("duration", time.Since(startTime).String()).Info("Finished uploading")
-	}()
+	uploadTargets := make(map[string]gcs.UploadFunc)
 
 	for logName, reader := range logReaders {
 		uploadTargets[logName] = gcs.DataUpload(reader)
-	}
-
-	logFileName := logFile.Name()
-
-	once.Do(func() {
-		logrus.SetOutput(os.Stderr)
-		logFile.Sync()
-		logFile.Close()
-	})
-
-	f, err := os.Open(logFileName)
-	if err != nil {
-		logrus.WithError(err).Error("Could not open log file")
-	} else {
-		defer f.Close()
-		uploadTargets[LogFileName] = gcs.DataUpload(bufio.NewReader(f))
 	}
 
 	var result string

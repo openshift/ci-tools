@@ -175,10 +175,6 @@ func defaultBaseTransport(ctx context.Context, clientCertSource cert.Source) htt
 		}
 	}
 
-	// If possible, configure http2 transport in order to use ReadIdleTimeout
-	// setting. This can only be done in Go 1.16 and up.
-	configureHTTP2(trans)
-
 	return trans
 }
 
@@ -209,15 +205,4 @@ func addOCTransport(trans http.RoundTripper, settings *internal.DialSettings) ht
 		Base:        trans,
 		Propagation: &propagation.HTTPFormat{},
 	}
-}
-
-// clonedTransport returns the given RoundTripper as a cloned *http.Transport.
-// It returns nil if the RoundTripper can't be cloned or coerced to
-// *http.Transport.
-func clonedTransport(rt http.RoundTripper) *http.Transport {
-	t, ok := rt.(*http.Transport)
-	if !ok {
-		return nil
-	}
-	return t.Clone()
 }

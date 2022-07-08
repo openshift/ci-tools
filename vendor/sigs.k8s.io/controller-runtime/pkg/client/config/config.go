@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os"
 	"os/user"
-	"path/filepath"
+	"path"
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -123,9 +123,9 @@ func loadConfig(context string) (*rest.Config, error) {
 	if _, ok := os.LookupEnv("HOME"); !ok {
 		u, err := user.Current()
 		if err != nil {
-			return nil, fmt.Errorf("could not get current user: %w", err)
+			return nil, fmt.Errorf("could not get current user: %v", err)
 		}
-		loadingRules.Precedence = append(loadingRules.Precedence, filepath.Join(u.HomeDir, clientcmd.RecommendedHomeDir, clientcmd.RecommendedFileName))
+		loadingRules.Precedence = append(loadingRules.Precedence, path.Join(u.HomeDir, clientcmd.RecommendedHomeDir, clientcmd.RecommendedFileName))
 	}
 
 	return loadConfigWithContext("", loadingRules, context)

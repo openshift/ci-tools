@@ -1252,12 +1252,17 @@ func isBugAllowed(bug *bugzilla.Bug, allowedGroups []string) bool {
 		return true
 	}
 
-	allowed := sets.NewString(allowedGroups...)
 	for _, group := range bug.Groups {
-		if !allowed.Has(group) {
+		found := false
+		for _, allowed := range allowedGroups {
+			if group == allowed {
+				found = true
+				break
+			}
+		}
+		if !found {
 			return false
 		}
 	}
-
 	return true
 }

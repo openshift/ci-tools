@@ -14,6 +14,7 @@ import (
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/logrusutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
+	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
@@ -86,6 +87,7 @@ func main() {
 
 	mgr, err := controllerruntime.NewManager(inClusterConfig, controllerruntime.Options{
 		DryRunClient:                  opts.dryRun,
+		Logger:                        ctrlruntimelog.NullLogger{},
 		LeaderElection:                true,
 		LeaderElectionReleaseOnCancel: true,
 		LeaderElectionNamespace:       opts.leaderElectionNamespace,

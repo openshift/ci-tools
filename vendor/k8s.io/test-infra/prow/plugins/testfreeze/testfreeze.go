@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/test-infra/prow/config"
@@ -136,7 +137,7 @@ func (h *handler) handle(
 
 	result, err := h.verifier.CheckInTestFreeze(log)
 	if err != nil {
-		return fmt.Errorf("get test freeze result: %w", err)
+		return errors.Wrap(err, "get test freeze result")
 	}
 
 	if !result.InTestFreeze {
@@ -147,16 +148,18 @@ func (h *handler) handle(
 	comment := &strings.Builder{}
 	tpl, err := template.New(PluginName).Parse(templateString)
 	if err != nil {
-		return fmt.Errorf("parse template: %w", err)
+		return errors.Wrap(err, "parse template")
 	}
 	if err := tpl.Execute(comment, result); err != nil {
-		return fmt.Errorf("execute template: %w", err)
+		return errors.Wrap(err, "execute template")
 	}
 
 	if err := h.verifier.CreateComment(
 		client, org, repo, number, comment.String(),
 	); err != nil {
-		return fmt.Errorf("create comment on %s/%s#%d: %q: %w", org, repo, number, comment, err)
+		return errors.Wrapf(err,
+			"create comment on %s/%s#%d: %q", org, repo, number, comment,
+		)
 	}
 
 	return nil

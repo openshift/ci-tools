@@ -186,10 +186,10 @@ func main() {
 func loadKeywordsConfig(configPath string, config interface{}) error {
 	configContent, err := ioutil.ReadFile(configPath)
 	if err != nil {
-		return fmt.Errorf("failed to read config: %w", err)
+		return fmt.Errorf("failed to read config: %v", err)
 	}
 	if err = yaml.Unmarshal(configContent, &config); err != nil {
-		return fmt.Errorf("failed to unmarshall config: %w", err)
+		return fmt.Errorf("failed to unmarshall config: %v", err)
 	}
 	return nil
 }

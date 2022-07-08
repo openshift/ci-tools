@@ -233,10 +233,10 @@ func findPrsForUsers(users map[string]user, repos []string, ghClient prClient) m
 func loadConfig(filename string, config interface{}) error {
 	configData, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return fmt.Errorf("failed to read config: %w", err)
+		return fmt.Errorf("failed to read config: %v", err)
 	}
 	if err = yaml.Unmarshal(configData, &config); err != nil {
-		return fmt.Errorf("failed to unmarshall config: %w", err)
+		return fmt.Errorf("failed to unmarshall config: %v", err)
 	}
 	return nil
 }

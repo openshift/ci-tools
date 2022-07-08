@@ -19,7 +19,6 @@ import (
 	"fmt"
 
 	"go.opencensus.io/trace"
-	"golang.org/x/xerrors"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc/status"
@@ -43,8 +42,7 @@ func EndSpan(ctx context.Context, err error) {
 // toStatus interrogates an error and converts it to an appropriate
 // OpenCensus status.
 func toStatus(err error) trace.Status {
-	var err2 *googleapi.Error
-	if ok := xerrors.As(err, &err2); ok {
+	if err2, ok := err.(*googleapi.Error); ok {
 		return trace.Status{Code: httpStatusCodeToOCCode(err2.Code), Message: err2.Message}
 	} else if s, ok := status.FromError(err); ok {
 		return trace.Status{Code: int32(s.Code()), Message: s.Message()}

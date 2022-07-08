@@ -107,11 +107,6 @@ func (d1 Date) After(d2 Date) bool {
 	return d2.Before(d1)
 }
 
-// IsZero reports whether date fields are set to their default value.
-func (d Date) IsZero() bool {
-	return (d.Year == 0) && (int(d.Month) == 0) && (d.Day == 0)
-}
-
 // MarshalText implements the encoding.TextMarshaler interface.
 // The output is the result of d.String().
 func (d Date) MarshalText() ([]byte, error) {
@@ -178,31 +173,6 @@ func (t Time) IsValid() bool {
 	// Construct a non-zero time.
 	tm := time.Date(2, 2, 2, t.Hour, t.Minute, t.Second, t.Nanosecond, time.UTC)
 	return TimeOf(tm) == t
-}
-
-// IsZero reports whether time fields are set to their default value.
-func (t Time) IsZero() bool {
-	return (t.Hour == 0) && (t.Minute == 0) && (t.Second == 0) && (t.Nanosecond == 0)
-}
-
-// Before reports whether t1 occurs before t2.
-func (t1 Time) Before(t2 Time) bool {
-	if t1.Hour != t2.Hour {
-		return t1.Hour < t2.Hour
-	}
-	if t1.Minute != t2.Minute {
-		return t1.Minute < t2.Minute
-	}
-	if t1.Second != t2.Second {
-		return t1.Second < t2.Second
-	}
-
-	return t1.Nanosecond < t2.Nanosecond
-}
-
-// After reports whether t1 occurs after t2.
-func (t1 Time) After(t2 Time) bool {
-	return t2.Before(t1)
 }
 
 // MarshalText implements the encoding.TextMarshaler interface.
@@ -290,11 +260,6 @@ func (dt1 DateTime) Before(dt2 DateTime) bool {
 // After reports whether dt1 occurs after dt2.
 func (dt1 DateTime) After(dt2 DateTime) bool {
 	return dt2.Before(dt1)
-}
-
-// IsZero reports whether datetime fields are set to their default value.
-func (dt DateTime) IsZero() bool {
-	return dt.Date.IsZero() && dt.Time.IsZero()
 }
 
 // MarshalText implements the encoding.TextMarshaler interface.

@@ -129,7 +129,7 @@ func newOpts() (*options, error) {
 	var errs []error
 	if opts.releaseRepoGitSyncPath != "" {
 		if opts.ciOperatorconfigPath != "" || opts.stepConfigPath != "" || opts.prowconfig.JobConfigPath != "" || opts.prowconfig.SupplementalProwConfigDirs.String() != "" {
-			errs = append(errs, fmt.Errorf("--release-repo-path is mutually exclusive with --ci-operator-config-path and --step-config-path and --%s and --%s", opts.prowconfig.JobConfigPathFlagName, "supplemental-prow-config-dir"))
+			errs = append(errs, fmt.Errorf("--release-repo-path is mutually exclusive with --ci-operator-config-path and --step-config-path and --%s and --supplemental-prow-config-dir", opts.prowconfig.JobConfigPathFlagName))
 		} else {
 			if _, err := os.Stat(opts.releaseRepoGitSyncPath); err != nil {
 				if os.IsNotExist(err) {

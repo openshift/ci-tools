@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -28,6 +29,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
 	serviceaccountsecretrefresher "github.com/openshift/ci-tools/pkg/controller/serviceaccount_secret_refresher"
 	testimagesdistributor "github.com/openshift/ci-tools/pkg/controller/test-images-distributor"
@@ -63,6 +65,7 @@ type options struct {
 	serviceAccountSecretRefresherOptions serviceAccountSecretRefresherOptions
 	imagePusherOptions                   imagePusherOptions
 	*flagutil.GitHubOptions
+	releaseRepoGitSyncPath string
 }
 
 func (o *options) addDefaults() {
@@ -118,11 +121,33 @@ func newOpts() (*options, error) {
 	fs.Var(&opts.serviceAccountSecretRefresherOptions.ignoreServiceAccounts, "serviceAccountRefresherOptions.ignore-service-account", "The service account to ignore. It must be in namespace/name format (e.G `ci/sync-rover-groups-updater`). Can be passed multiple times.")
 	fs.Var(&opts.imagePusherOptions.imageStreamsRaw, "imagePusherOptions.image-stream", "An imagestream that will be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
+	fs.StringVar(&opts.releaseRepoGitSyncPath, "release-repo-git-sync-path", "", "Path to release repository dir")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
 	}
 
 	var errs []error
+	if opts.releaseRepoGitSyncPath != "" {
+		if opts.ciOperatorconfigPath != "" || opts.stepConfigPath != "" || opts.prowconfig.JobConfigPath != "" || opts.prowconfig.SupplementalProwConfigDirs.String() != "" {
+			errs = append(errs, fmt.Errorf("--release-repo-path is mutually exclusive with --ci-operator-config-path and --step-config-path and --%s and --%s", opts.prowconfig.JobConfigPathFlagName, "supplemental-prow-config-dir"))
+		} else {
+			if _, err := os.Stat(opts.releaseRepoGitSyncPath); err != nil {
+				if os.IsNotExist(err) {
+					errs = append(errs, fmt.Errorf("--release-repo-path points to a nonexistent directory: %w", err))
+				}
+				errs = append(errs, fmt.Errorf("error getting stat info for --release-repo-path directory: %w", err))
+			}
+
+			opts.ciOperatorconfigPath = filepath.Join(opts.releaseRepoGitSyncPath, config.CiopConfigInRepoPath)
+			opts.stepConfigPath = filepath.Join(opts.releaseRepoGitSyncPath, config.RegistryPath)
+			opts.prowconfig.JobConfigPath = filepath.Join(opts.releaseRepoGitSyncPath, config.JobConfigInRepoPath)
+			opts.prowconfig.ConfigPath = filepath.Join(opts.releaseRepoGitSyncPath, config.ConfigInRepoPath)
+			if err := opts.prowconfig.SupplementalProwConfigDirs.Set(filepath.Dir(filepath.Join(opts.releaseRepoGitSyncPath, config.ConfigInRepoPath))); err != nil {
+				errs = append(errs, fmt.Errorf("could not set supplemental prow config dirs: %w", err))
+			}
+
+		}
+	}
 	if opts.leaderElectionNamespace == "" {
 		errs = append(errs, errors.New("--leader-election-namespace must be set"))
 	}

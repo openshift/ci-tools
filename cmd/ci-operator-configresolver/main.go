@@ -22,15 +22,11 @@ import (
 	"k8s.io/test-infra/prow/pjutil"
 	"k8s.io/test-infra/prow/simplifypath"
 
+	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/html"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	registryserver "github.com/openshift/ci-tools/pkg/registry/server"
 	"github.com/openshift/ci-tools/pkg/webreg"
-)
-
-const (
-	releaseRepoConfigsPath  = "ci-operator/config"
-	releaseRepoRegistryPath = "ci-operator/step-registry"
 )
 
 type options struct {
@@ -114,8 +110,8 @@ func validateOptions(o *options) error {
 			return fmt.Errorf("error getting stat info for --release-repo-path directory: %w", err)
 		}
 
-		o.configPath = filepath.Join(o.releaseRepoGitSyncPath, releaseRepoConfigsPath)
-		o.registryPath = filepath.Join(o.releaseRepoGitSyncPath, releaseRepoRegistryPath)
+		o.configPath = filepath.Join(o.releaseRepoGitSyncPath, config.CiopConfigInRepoPath)
+		o.registryPath = filepath.Join(o.releaseRepoGitSyncPath, config.RegistryPath)
 	}
 
 	if o.validateOnly && o.flatRegistry {

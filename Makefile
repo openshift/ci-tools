@@ -209,7 +209,6 @@ pr-deploy-configresolver:
 	$(eval USER=$(shell curl --fail -Ss https://api.github.com/repos/openshift/ci-tools/pulls/$(PULL_REQUEST)|jq -r .head.user.login))
 	$(eval BRANCH=$(shell curl --fail -Ss https://api.github.com/repos/openshift/ci-tools/pulls/$(PULL_REQUEST)|jq -r .head.ref))
 	oc --context app.ci --as system:admin process -p USER=$(USER) -p BRANCH=$(BRANCH) -p PULL_REQUEST=$(PULL_REQUEST) -f hack/pr-deploy.yaml | oc  --context app.ci --as system:admin apply -f -
-	for cm in ci-operator-master-configs step-registry config; do oc  --context app.ci --as system:admin get configmap $${cm} -n ci -o json | eval $(kubeExport)|oc  --context app.ci --as system:admin create -f - -n ci-tools-$(PULL_REQUEST); done
 	echo "server is at https://$$( oc  --context app.ci --as system:admin get route server -n ci-tools-$(PULL_REQUEST) -o jsonpath={.spec.host} )"
 .PHONY: pr-deploy
 

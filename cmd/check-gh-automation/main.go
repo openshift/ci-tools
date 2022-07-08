@@ -51,7 +51,7 @@ func (o *options) validate() error {
 	// We either need the release repo path, or a proper prow config
 	if o.releaseRepoPath == "" {
 		if err := o.config.Validate(true); err != nil {
-			return fmt.Errorf("candidate-path not provided, and error when validating prow config: %v", err)
+			return fmt.Errorf("candidate-path not provided, and error when validating prow config: %w", err)
 		}
 	} else {
 		if o.config.ConfigPath != "" {
@@ -123,7 +123,7 @@ func checkRepos(repos []string, bots []string, ignore sets.String, client collab
 		for _, bot := range bots {
 			isMember, err := client.IsMember(org, bot)
 			if err != nil {
-				return nil, fmt.Errorf("unable to determine if: %s is a member of %s: %v", bot, org, err)
+				return nil, fmt.Errorf("unable to determine if: %s is a member of %s: %w", bot, org, err)
 			}
 			if isMember {
 				repoLogger.WithField("bot", bot).Info("bot is an org member")
@@ -132,7 +132,7 @@ func checkRepos(repos []string, bots []string, ignore sets.String, client collab
 
 			isCollaborator, err := client.IsCollaborator(org, repo, bot)
 			if err != nil {
-				return nil, fmt.Errorf("unable to determine if: %s is a collaborator on %s/%s: %v", bot, org, repo, err)
+				return nil, fmt.Errorf("unable to determine if: %s is a collaborator on %s/%s: %w", bot, org, repo, err)
 			}
 			if !isCollaborator {
 				missingBots = append(missingBots, bot)

@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bombsimon/logrusr"
+	"github.com/bombsimon/logrusr/v3"
 	"github.com/sirupsen/logrus"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -216,7 +216,7 @@ func main() {
 		logrus.SetLevel(logrus.TraceLevel)
 		logrus.SetFormatter(&logrus.JSONFormatter{})
 		logrus.SetReportCaller(true)
-		controllerruntime.SetLogger(logrusr.NewLogger(logrus.StandardLogger()))
+		controllerruntime.SetLogger(logrusr.New(logrus.StandardLogger()))
 	}
 	if opt.help {
 		fmt.Print(usage)

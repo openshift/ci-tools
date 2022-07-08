@@ -71,7 +71,7 @@ func (s *rpmServerStep) run(ctx context.Context) error {
 	}
 
 	probe := &coreapi.Probe{
-		Handler: coreapi.Handler{
+		ProbeHandler: coreapi.ProbeHandler{
 			HTTPGet: &coreapi.HTTPGetAction{
 				Path:   "/",
 				Port:   intstr.FromInt(8080),

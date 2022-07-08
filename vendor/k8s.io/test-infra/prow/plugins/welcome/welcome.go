@@ -82,7 +82,7 @@ func helpProvider(config *plugins.Configuration, enabledRepos []config.OrgRepo) 
 
 type githubClient interface {
 	CreateComment(owner, repo string, number int, comment string) error
-	FindIssues(query, sort string, asc bool) ([]github.Issue, error)
+	FindIssuesWithOrg(org, query, sort string, asc bool) ([]github.Issue, error)
 	IsCollaborator(org, repo, user string) (bool, error)
 	IsMember(org, user string) (bool, error)
 	BotUserChecker() (func(candidate string) bool, error)
@@ -112,26 +112,31 @@ func handlePR(c client, t plugins.Trigger, pre github.PullRequestEvent, welcomeT
 		return nil
 	}
 
-	// ignore bots, we can't query their PRs
-	if pre.PullRequest.User.Type != github.UserTypeUser {
-		return nil
-	}
-
 	org := pre.PullRequest.Base.Repo.Owner.Login
 	repo := pre.PullRequest.Base.Repo.Name
 	user := pre.PullRequest.User.Login
+	pullRequestNumber := pre.PullRequest.Number
+
+	log := c.Logger.WithFields(logrus.Fields{"org": org, "repo": repo, "user": user, "number": pullRequestNumber})
+
+	// ignore bots, we can't query their PRs
+	if pre.PullRequest.User.Type != github.UserTypeUser {
+		log.Debug("Ignoring bot user, as querying their PRs is not possible")
+		return nil
+	}
 
 	trustedResponse, err := trigger.TrustedUser(c.GitHubClient, t.OnlyOrgMembers, t.TrustedApps, t.TrustedOrg, user, org, repo)
 	if err != nil {
 		return fmt.Errorf("check if user %s is trusted: %w", user, err)
 	}
-	if trustedResponse.IsTrusted {
+	if !alwaysPost && trustedResponse.IsTrusted {
+		log.Debug("User is trusted. Skipping their welcome message")
 		return nil
 	}
 
 	// search for PRs from the author in this repo
 	query := fmt.Sprintf("is:pr repo:%s/%s author:%s", org, repo, user)
-	issues, err := c.GitHubClient.FindIssues(query, "", false)
+	issues, err := c.GitHubClient.FindIssuesWithOrg(org, query, "", false)
 	if err != nil {
 		return err
 	}
@@ -154,8 +159,10 @@ func handlePR(c client, t plugins.Trigger, pre github.PullRequestEvent, welcomeT
 			return err
 		}
 
-		// actually post the comment
-		return c.GitHubClient.CreateComment(org, repo, pre.PullRequest.Number, msgBuffer.String())
+		log.Debug("Posting a welcome message for pull request")
+		return c.GitHubClient.CreateComment(org, repo, pullRequestNumber, msgBuffer.String())
+	} else {
+		log.WithField("issues_count", len(issues)).Debug("Ignoring PR, as user already has previous contributions")
 	}
 
 	return nil

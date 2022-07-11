@@ -98,22 +98,28 @@ func (b *backoffCache) saveToDisk() (ret error) {
 	return ret
 }
 
-// Config is retester config for all configured repos and orgs.
-// Every level (retester/org/repo) has attributes MaxRetestsForShaAndBase, MaxRetestsForSha, Enabled
+// Config is retester configuration for all configured repos and orgs.
+// It has three levels: global, org, and repo. A specific level overrides general ones.
 type Config struct {
 	Retester Retester `json:"retester"`
 }
 
+// Retester is global level configuration for retester configuration.
+// Policy is override by specific levels when they are enabled.
 type Retester struct {
 	RetesterPolicy `json:",inline"`
 	Oranizations   map[string]Oranization `json:"orgs"`
 }
 
+// Oranization is org level configuration for retester configuration.
+// Policy is override by repo level when it is enabled.
 type Oranization struct {
 	RetesterPolicy `json:",inline"`
 	Repos          map[string]Repo `json:"repos"`
 }
 
+// Repo is repo level configuration for retester configuration.
+// Policy override all general levels.
 type Repo struct {
 	RetesterPolicy `json:",inline"`
 }
@@ -155,16 +161,17 @@ type retestController struct {
 	config *Config
 }
 
-func (c *Config) GetRetesterPolicy(org, repo string) (*RetesterPolicy, error) {
-	policy := &RetesterPolicy{}
+func (c *Config) GetRetesterPolicy(org, repo string) (RetesterPolicy, error) {
+	policy := RetesterPolicy{}
 	if orgStruct, ok := c.Retester.Oranizations[org]; ok {
 		var repoStruct Repo
-		if repoStruct, ok = orgStruct.Repos[repo]; ok {
+		var repoConfigured bool
+		if repoStruct, repoConfigured = orgStruct.Repos[repo]; repoConfigured {
 			if repoStruct.Enabled {
 				policy.Enabled = true
 				if repoStruct.MaxRetestsForSha != 0 && repoStruct.MaxRetestsForShaAndBase != 0 {
 					// returns max retests from repo if repo is enabled and configured
-					return &repoStruct.RetesterPolicy, nil
+					return repoStruct.RetesterPolicy, nil
 				}
 			} else {
 				policy.Enabled = false
@@ -175,8 +182,11 @@ func (c *Config) GetRetesterPolicy(org, repo string) (*RetesterPolicy, error) {
 			policy.Enabled = true
 			if orgStruct.MaxRetestsForSha != 0 && orgStruct.MaxRetestsForShaAndBase != 0 {
 				// returns max retests from org
-				return &orgStruct.RetesterPolicy, nil
+				return orgStruct.RetesterPolicy, nil
 			}
+		}
+		if !repoConfigured && !orgStruct.Enabled {
+			return orgStruct.RetesterPolicy, fmt.Errorf("not configured repo and disabled org")
 		}
 	} else {
 		policy.Enabled = false
@@ -186,6 +196,23 @@ func (c *Config) GetRetesterPolicy(org, repo string) (*RetesterPolicy, error) {
 	policy.MaxRetestsForSha = c.Retester.MaxRetestsForSha
 	policy.MaxRetestsForShaAndBase = c.Retester.MaxRetestsForShaAndBase
 	return policy, nil
+}
+
+func validatePolicies(policy RetesterPolicy) []error {
+	if policy.Enabled {
+		var errs []error
+		if policy.MaxRetestsForSha < 0 {
+			errs = append(errs, fmt.Errorf("max_retest_for_sha has invalid value: %d", policy.MaxRetestsForSha))
+		}
+		if policy.MaxRetestsForShaAndBase < 0 {
+			errs = append(errs, fmt.Errorf("max_retests_for_sha_and_base has invalid value: %d", policy.MaxRetestsForShaAndBase))
+		}
+		if policy.MaxRetestsForSha < policy.MaxRetestsForShaAndBase {
+			errs = append(errs, fmt.Errorf("max_retest_for_sha value can't be lower than max_retests_for_sha_and_base value: %d < %d", policy.MaxRetestsForSha, policy.MaxRetestsForShaAndBase))
+		}
+		return errs
+	}
+	return nil
 }
 
 func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, config *Config) *retestController {
@@ -262,17 +289,7 @@ type MaxRetests struct {
 	ForShaAndBase int
 }
 
-func (b *backoffCache) check(pr tide.PullRequest, baseSha string, config *Config) (retestBackoffAction, string) {
-	var maxRetestsForSha, maxRetestsForShaAndBase int
-	var err error
-	var policy *RetesterPolicy
-	org := string(pr.Repository.Owner.Login)
-	repo := string(pr.Repository.Name)
-	if policy, err = config.GetRetesterPolicy(org, repo); err != nil {
-		fmt.Errorf("failed to get the max retests: %w", err)
-	}
-	maxRetestsForSha = policy.MaxRetestsForSha
-	maxRetestsForShaAndBase = policy.MaxRetestsForShaAndBase
+func (b *backoffCache) check(pr tide.PullRequest, baseSha string, config *Config, policy RetesterPolicy) (retestBackoffAction, string) {
 	key := prKey(&pr)
 	if _, has := b.cache[key]; !has {
 		b.cache[key] = &PullRequest{}
@@ -289,20 +306,20 @@ func (b *backoffCache) check(pr tide.PullRequest, baseSha string, config *Config
 		record.RetestsForBaseSha = 0
 	}
 
-	if record.RetestsForPrSha == maxRetestsForSha {
+	if record.RetestsForPrSha == policy.MaxRetestsForSha {
 		record.RetestsForPrSha = 0
 		record.RetestsForBaseSha = 0
-		return retestBackoffHold, fmt.Sprintf("Revision %s was retested %d times: holding", record.PRSha, maxRetestsForSha)
+		return retestBackoffHold, fmt.Sprintf("Revision %s was retested %d times: holding", record.PRSha, policy.MaxRetestsForSha)
 	}
 
-	if record.RetestsForBaseSha == maxRetestsForShaAndBase {
-		return retestBackoffPause, fmt.Sprintf("Revision %s was retested %d times against base HEAD %s: pausing", record.PRSha, maxRetestsForShaAndBase, record.BaseSha)
+	if record.RetestsForBaseSha == policy.MaxRetestsForShaAndBase {
+		return retestBackoffPause, fmt.Sprintf("Revision %s was retested %d times against base HEAD %s: pausing", record.PRSha, policy.MaxRetestsForShaAndBase, record.BaseSha)
 	}
 
 	record.RetestsForBaseSha++
 	record.RetestsForPrSha++
 
-	return retestBackoffRetest, fmt.Sprintf("Remaining retests: %d against base HEAD %s and %d for PR HEAD %s in total", maxRetestsForShaAndBase-record.RetestsForBaseSha, record.BaseSha, maxRetestsForSha-record.RetestsForPrSha, record.PRSha)
+	return retestBackoffRetest, fmt.Sprintf("Remaining retests: %d against base HEAD %s and %d for PR HEAD %s in total", policy.MaxRetestsForShaAndBase-record.RetestsForBaseSha, record.BaseSha, policy.MaxRetestsForSha-record.RetestsForPrSha, record.PRSha)
 }
 
 func (c *retestController) createComment(pr tide.PullRequest, cmd, message string) {
@@ -319,7 +336,17 @@ func (c *retestController) retestOrBackoff(pr tide.PullRequest) error {
 		return err
 	}
 
-	action, message := c.backoff.check(pr, baseSha, c.config)
+	var policy RetesterPolicy
+	org := string(pr.Repository.Owner.Login)
+	repo := string(pr.Repository.Name)
+	if policy, err = c.config.GetRetesterPolicy(org, repo); err != nil {
+		return fmt.Errorf("failed to get the max retests: %w", err)
+	}
+	if validationErrors := validatePolicies(policy); len(validationErrors) != 0 {
+		return fmt.Errorf("failed to validate retester policy: %v", validationErrors)
+	}
+
+	action, message := c.backoff.check(pr, baseSha, c.config, policy)
 	switch action {
 	case retestBackoffHold:
 		c.createComment(pr, "/hold", message)
@@ -539,6 +566,9 @@ func (c *retestController) enabledPRs(candidates map[string]tide.PullRequest) ma
 		policy, err := c.config.GetRetesterPolicy(org, repo)
 		if err != nil {
 			c.logger.WithError(err).Warn("Failed to get retester policy")
+		}
+		if validationErrors := validatePolicies(policy); len(validationErrors) != 0 {
+			c.logger.Warnf("Failed to validate retester policy: %v", validationErrors)
 		}
 		if policy.Enabled {
 			output[key] = pr

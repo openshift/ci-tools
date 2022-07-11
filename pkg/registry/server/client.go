@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/sirupsen/logrus"
@@ -96,20 +97,30 @@ func (r *resolverClient) Resolve(raw []byte) (*api.ReleaseBuildConfiguration, er
 
 type adapter struct{}
 
+func (a adapter) format(s string, i ...interface{}) string {
+	builder := strings.Builder{}
+	builder.WriteString(s)
+	for _, x := range i {
+		builder.WriteString(" ")
+		builder.WriteString(fmt.Sprintf("%v", x))
+	}
+	return builder.String()
+}
+
 func (a adapter) Error(s string, i ...interface{}) {
-	logrus.Errorf(s, i...)
+	logrus.Error(a.format(s, i...))
 }
 
 func (a adapter) Info(s string, i ...interface{}) {
-	logrus.Infof(s, i...)
+	logrus.Info(a.format(s, i...))
 }
 
 func (a adapter) Debug(s string, i ...interface{}) {
-	logrus.Debugf(s, i...)
+	logrus.Debug(a.format(s, i...))
 }
 
 func (a adapter) Warn(s string, i ...interface{}) {
-	logrus.Warnf(s, i...)
+	logrus.Warn(a.format(s, i...))
 }
 
 var _ retryablehttp.LeveledLogger = adapter{}

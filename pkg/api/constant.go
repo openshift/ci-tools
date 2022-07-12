@@ -68,6 +68,7 @@ const (
 var (
 	clusterNames = sets.NewString(
 		string(ClusterAPPCI),
+		string(ClusterARM01),
 		string(ClusterBuild01),
 		string(ClusterBuild02),
 		string(ClusterBuild03),

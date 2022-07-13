@@ -207,14 +207,35 @@ const (
 // is not configured to produce a template test (see `Template`)
 func ReleaseRpms(version string, meta cioperatorapi.Metadata) PodSpecMutator {
 	return func(spec *corev1.PodSpec) error {
+		foundOriginE2eAws := false
 		if meta.Org == "openshift" && meta.Repo == "origin" {
-			return nil
+
+			// openshift/origin e2e-aws in 3.11 is a test where we will calculated the value
+			// of RPM_REPO_OPENSHIFT_ORIGIN in the test.
+			if version == "origin-v3.11" && meta.Branch == "release-3.11" && len(spec.Containers) > 0 && len(spec.Containers[0].Env) > 0 {
+				for _, envVar := range spec.Containers[0].Env {
+					if envVar.Name == "JOB_NAME_SAFE" {
+						if envVar.Value == "e2e-aws" {
+							foundOriginE2eAws = true
+						}
+						break
+					}
+				}
+			}
+			if !foundOriginE2eAws {
+				return nil
+			}
 		}
 		container := &spec.Containers[0]
 		url := cioperatorapi.URLForService(cioperatorapi.ServiceRPMs)
 		var repoPath = fmt.Sprintf("%s/openshift-origin-v%s/", url, version)
 		if strings.HasPrefix(version, "origin-v") {
 			repoPath = fmt.Sprintf("%s/openshift-%s/", url, version)
+		}
+		if foundOriginE2eAws {
+			// Return an non value so that we know to calculate it in the test.
+			//
+			repoPath = "to-be-calculated"
 		}
 		return addEnvVar(container, corev1.EnvVar{
 			Name:  envRepoPath,

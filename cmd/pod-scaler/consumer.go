@@ -24,8 +24,6 @@ func newReloader(name string, cache cache) *cacheReloader {
 		lock: &sync.RWMutex{},
 	}
 	interrupts.TickLiteral(reloader.reload, 10*time.Minute)
-	// Doing an additional load 2 minutes after startup prevents a race error where subscribers won't exist yet
-	time.AfterFunc(2*time.Minute, reloader.reload)
 	return reloader
 }
 
@@ -95,6 +93,10 @@ func digestAll(data map[string][]*cacheReloader, digesters map[string]digester, 
 	}
 	logger.Debugf("digesting %d infos.", len(infos))
 	loadDone := digest(logger, infos...)
+	// Now that the initial subscriptions are completed, lets make sure they are updated
+	for _, info := range infos {
+		info.data.reload()
+	}
 	interrupts.Run(func(ctx context.Context) {
 		select {
 		case <-ctx.Done():

@@ -37,6 +37,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 const (
@@ -53,32 +54,6 @@ const (
 	artifactEnv = "ARTIFACT_DIR"
 )
 
-// ContainerNotifier receives updates about the status of a poll action on a pod. The caller
-// is required to define what notifications are made.
-type ContainerNotifier interface {
-	// Notify indicates that the provided container name has transitioned to an appropriate state and
-	// any per container actions should be taken.
-	Notify(pod *coreapi.Pod, containerName string)
-	// Complete indicates the specified pod has completed execution, been deleted, or that no further
-	// Notify() calls can be made.
-	Complete(podName string)
-	// Done returns a channel that can be used to wait for the specified pod name to complete the work it has pending.
-	Done(podName string) <-chan struct{}
-}
-
-// NopNotifier takes no action when notified.
-var NopNotifier = nopNotifier{}
-
-type nopNotifier struct{}
-
-func (nopNotifier) Notify(_ *coreapi.Pod, _ string) {}
-func (nopNotifier) Complete(_ string)               {}
-func (nopNotifier) Done(string) <-chan struct{} {
-	ret := make(chan struct{})
-	close(ret)
-	return ret
-}
-
 // TestCaseNotifier allows a caller to generate per container JUnit test
 // reports that provide better granularity for debugging problems when
 // running tests in multi-container pods. It intercepts notifications and
@@ -86,14 +61,14 @@ func (nopNotifier) Done(string) <-chan struct{} {
 //
 // TestCaseNotifier must be called from a single thread.
 type TestCaseNotifier struct {
-	nested  ContainerNotifier
-	lastPod *coreapi.Pod
+	nested  util.ContainerNotifier
+	lastPod *corev1.Pod
 }
 
 // NewTestCaseNotifier wraps the provided ContainerNotifier and will
 // create JUnit TestCase records for each container in the most recent
 // pod to have completed.
-func NewTestCaseNotifier(nested ContainerNotifier) *TestCaseNotifier {
+func NewTestCaseNotifier(nested util.ContainerNotifier) *TestCaseNotifier {
 	return &TestCaseNotifier{nested: nested}
 }
 

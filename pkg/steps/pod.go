@@ -21,6 +21,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 const (
@@ -97,7 +98,7 @@ func (s *podStep) run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("pod step was invalid: %w", err)
 	}
-	testCaseNotifier := NewTestCaseNotifier(NopNotifier)
+	testCaseNotifier := NewTestCaseNotifier(util.NopNotifier)
 
 	if owner := s.jobSpec.Owner(); owner != nil {
 		pod.OwnerReferences = append(pod.OwnerReferences, *owner)
@@ -111,7 +112,7 @@ func (s *podStep) run(ctx context.Context) error {
 		}
 	}()
 
-	pod, err = CreateOrRestartPod(ctx, s.client, pod)
+	pod, err = util.CreateOrRestartPod(ctx, s.client, pod)
 	if err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %w", s.name, err)
 	}
@@ -120,7 +121,7 @@ func (s *podStep) run(ctx context.Context) error {
 		s.subTests = testCaseNotifier.SubTests(s.Description() + " - ")
 	}()
 
-	if _, err := WaitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
+	if _, err := util.WaitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
 		return fmt.Errorf("%s %q failed: %w", s.name, pod.Name, err)
 	}
 	return nil
@@ -365,9 +366,9 @@ func getSecretVolumeMountFromSecret(secretMountPath string, secretIndex int) []c
 // This pod will not be able to gather artifacts, nor will it report log messages
 // unless it fails.
 func RunPod(ctx context.Context, podClient kubernetes.PodClient, pod *coreapi.Pod) (*coreapi.Pod, error) {
-	pod, err := CreateOrRestartPod(ctx, podClient, pod)
+	pod, err := util.CreateOrRestartPod(ctx, podClient, pod)
 	if err != nil {
 		return pod, err
 	}
-	return WaitForPodCompletion(ctx, podClient, pod.Namespace, pod.Name, nil, true)
+	return util.WaitForPodCompletion(ctx, podClient, pod.Namespace, pod.Name, nil, true)
 }

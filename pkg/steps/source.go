@@ -15,7 +15,6 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -30,6 +29,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 const (
@@ -508,7 +508,7 @@ func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespa
 	if isFailed(build) {
 		logrus.Infof("Build %s failed, printing logs:", build.Name)
 		printBuildLogs(buildClient, build.Namespace, build.Name)
-		return appendLogToError(fmt.Errorf("the build %s failed with reason %s: %s", build.Name, build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
+		return util.AppendLogToError(fmt.Errorf("the build %s failed with reason %s: %s", build.Name, build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 	}
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -528,18 +528,10 @@ func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespa
 			if isFailed(build) {
 				logrus.Infof("Build %s failed, printing logs:", build.Name)
 				printBuildLogs(buildClient, build.Namespace, build.Name)
-				return appendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
+				return util.AppendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 			}
 		}
 	}
-}
-
-func appendLogToError(err error, log string) error {
-	log = strings.TrimSpace(log)
-	if len(log) == 0 {
-		return err
-	}
-	return fmt.Errorf("%s\n\n%s", err.Error(), log)
 }
 
 func buildDuration(build *buildapi.Build) time.Duration {
@@ -634,53 +626,6 @@ func getSourceSecretFromName(secretName string) *corev1.LocalObjectReference {
 		return nil
 	}
 	return &corev1.LocalObjectReference{Name: secretName}
-}
-
-func getReasonsForUnreadyContainers(p *corev1.Pod) string {
-	builder := &strings.Builder{}
-	for _, c := range p.Status.ContainerStatuses {
-		if c.Ready {
-			continue
-		}
-		var reason, message string
-		switch {
-		case c.State.Waiting != nil:
-			reason = c.State.Waiting.Reason
-			message = c.State.Waiting.Message
-		case c.State.Running != nil:
-			reason = c.State.Waiting.Reason
-			message = c.State.Waiting.Message
-		case c.State.Terminated != nil:
-			reason = c.State.Terminated.Reason
-			message = c.State.Terminated.Message
-		default:
-			reason = "unknown"
-			message = "unknown"
-		}
-		if message != "" {
-			message = fmt.Sprintf(" and message %s", message)
-		}
-		_, _ = builder.WriteString(fmt.Sprintf("\n* Container %s is not ready with reason %s%s", c.Name, reason, message))
-	}
-	return builder.String()
-}
-
-func getEventsForPod(ctx context.Context, pod *corev1.Pod, client ctrlruntimeclient.Client) string {
-	events := &corev1.EventList{}
-	listOpts := &ctrlruntimeclient.ListOptions{
-		Namespace:     pod.Namespace,
-		FieldSelector: fields.OneTermEqualSelector("involvedObject.uid", string(pod.GetUID())),
-	}
-	if err := client.List(ctx, events, listOpts); err != nil {
-		logrus.WithError(err).Warn("Could not fetch events.")
-		return ""
-	}
-	builder := &strings.Builder{}
-	_, _ = builder.WriteString(fmt.Sprintf("Found %d events for Pod %s:", len(events.Items), pod.Name))
-	for _, event := range events.Items {
-		_, _ = builder.WriteString(fmt.Sprintf("\n* %dx %s: %s", event.Count, event.Source.Component, event.Message))
-	}
-	return builder.String()
 }
 
 func addLabelsToBuild(refs *prowv1.Refs, build *buildapi.Build, contextDir string) {

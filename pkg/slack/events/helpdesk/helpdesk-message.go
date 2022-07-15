@@ -25,6 +25,8 @@ type KeywordsListItem struct {
 	Link     string   `json:"link"`
 }
 
+const reviewRequestWorkflow = "B03KCKGCBC7"
+
 // Handler returns a handler that knows how to respond to new messages
 // in forum-testplatform channel that mention @dptp-helpdesk.
 func Handler(client messagePoster, keywordsConfig KeywordsConfig, helpdeskAlias, forumChannelId string, requireWorkflowsInForum bool) events.PartialHandler {
@@ -57,7 +59,7 @@ func Handler(client messagePoster, keywordsConfig KeywordsConfig, helpdeskAlias,
 				response = getTopLevelDirectMessageResponse(event.User)
 			} else if strings.Contains(event.Text, helpdeskAlias) {
 				log.Info("Handling response in forum-testplatform channel...")
-				response = getContactedHelpdeskResponse()
+				response = getContactedHelpdeskResponse(event.BotID)
 			} else {
 				log.Debugf("dptp-helpdesk not mentioned in message: %s", event.Text)
 				return false, nil
@@ -77,12 +79,14 @@ func Handler(client messagePoster, keywordsConfig KeywordsConfig, helpdeskAlias,
 				return true, nil
 			}
 
-			if keywords := getPresentKeywords(event.Text, keywordsConfig); len(keywords) > 0 {
-				responseChannel, responseTimestamp, err = client.PostMessage(event.Channel, slack.MsgOptionBlocks(getDocsLinks(keywords)...), slack.MsgOptionTS(timestamp), slack.MsgOptionDisableLinkUnfurl())
-				if err != nil {
-					log.WithError(err).Warn("Failed to post links to ci docs")
-				} else {
-					log.Infof("Posted links to ci docs in %s at %s", responseChannel, responseTimestamp)
+			if reviewRequestWorkflow != event.BotID {
+				if keywords := getPresentKeywords(event.Text, keywordsConfig); len(keywords) > 0 {
+					responseChannel, responseTimestamp, err = client.PostMessage(event.Channel, slack.MsgOptionBlocks(getDocsLinks(keywords)...), slack.MsgOptionTS(timestamp), slack.MsgOptionDisableLinkUnfurl())
+					if err != nil {
+						log.WithError(err).Warn("Failed to post links to ci docs")
+					} else {
+						log.Infof("Posted links to ci docs in %s at %s", responseChannel, responseTimestamp)
+					}
 				}
 			}
 
@@ -101,11 +105,14 @@ func getTopLevelDirectMessageResponse(user string) []slack.Block {
 	}}
 }
 
-func getContactedHelpdeskResponse() []slack.Block {
-	sections := []string{
-		":wave: You have reached the Test Platform Help Desk. An assigned engineer will respond in several hours during their working hours.",
-		"Please see if our documentation can be of use: https://docs.ci.openshift.org/docs/",
-		"If this is an urgent CI outage, please ping `(@)dptp-triage`",
+func getContactedHelpdeskResponse(botId string) []slack.Block {
+	sections := []string{":wave: You have reached the Test Platform Help Desk. An assigned engineer will respond in several hours during their working hours."}
+	if reviewRequestWorkflow == botId {
+		sections = append(sections, "Your PR will be reviewed based on: age, priority, and capacity.")
+	} else {
+		sections = append(sections,
+			"Please see if our documentation can be of use: https://docs.ci.openshift.org/docs/",
+			"If this is an urgent CI outage, please ping `(@)dptp-triage`")
 	}
 
 	var blocks []slack.Block

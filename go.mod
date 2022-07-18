@@ -97,7 +97,6 @@ require (
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
 	github.com/Microsoft/go-winio v0.4.16 // indirect
 	github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 // indirect
-	github.com/anaskhan96/soup v1.2.4
 	github.com/andygrunwald/go-gerrit v0.0.0-20210709065208-9d38b0be0268 // indirect
 	github.com/aws/aws-sdk-go v1.37.22 // indirect
 	github.com/bazelbuild/buildtools v0.0.0-20200922170545-10384511ce98 // indirect

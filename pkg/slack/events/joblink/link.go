@@ -230,6 +230,11 @@ func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClie
 			logger.Warn("No job was found but a non-nil job was returned.")
 			continue
 		}
+
+		if !generated {
+			// We don't want to add noise when we have nothing useful to contribute
+			continue
+		}
 		text := bytes.Buffer{}
 		text.WriteString("*" + job.metadata.TestNameFromJobName(name, prefix) + ":*")
 		if rehearsalPR != "" {
@@ -237,8 +242,6 @@ func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClie
 		}
 		if generated {
 			text.WriteString("\n - `ci-operator` <https://github.com/openshift/release/tree/master/ci-operator/config/" + job.metadata.RelativePath() + "|config>.")
-		} else {
-			text.WriteString("\n - This job is not generated from `ci-operator` configuration; DPTP may not be able to support questions for it.")
 		}
 
 		if info.Id != "" && rehearsalPR == "" {

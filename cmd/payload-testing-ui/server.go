@@ -51,6 +51,8 @@ const (
 
 Created: {{ .ObjectMeta.CreationTimestamp }} 
 
+{{ commentParagraph .Spec.Comment }}
+
 {{ with .Spec }}
 
 <h2>Pull request</h2>
@@ -197,6 +199,9 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 	tmpl.Funcs(template.FuncMap{
 		"returnLink": func() template.HTML {
 			return template.HTML(fmt.Sprintf(`<a href="%s">%s</a>`, runsURL, "back to runs"))
+		},
+		"commentParagraph": func(comment prpqv1.Comment) template.HTML {
+			return template.HTML(fmt.Sprintf(`<p><a href="%s">Comment</a>: %s's "%s" at %s</p>`, comment.HTMLURL, comment.Author, comment.Command, comment.CreatedAt))
 		},
 		"prLink": func(pr *prpqv1.PullRequestUnderTest) template.HTML {
 			org := template.HTMLEscapeString(pr.Org)

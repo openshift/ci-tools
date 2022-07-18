@@ -31,7 +31,20 @@ type PullRequestPayloadTestSpec struct {
 	// PullRequest specifies the code to be tested. Immutable and required.
 	PullRequest PullRequestUnderTest `json:"pullRequest"`
 	// Jobs specifies the jobs to be executed. Immutable.
-	Jobs PullRequestPayloadJobSpec `json:"jobs"`
+	Jobs    PullRequestPayloadJobSpec `json:"jobs"`
+	Comment Comment                   `json:"comment"`
+}
+
+// Comment specifies the comment that triggers the payload qualification run
+type Comment struct {
+	// Author is the author of the comment
+	Author string `json:"author,omitempty"`
+	// HTMLURL is the HTML URL of the comment
+	HTMLURL string `json:"htmlURL,omitempty"`
+	// CreatedAt is the created time of the comment
+	CreatedAt metav1.Time `json:"createdAt,omitempty"`
+	// Command is the payload command in the comment
+	Command string `json:"command,omitempty"`
 }
 
 // PullRequestUnderTest describes the state of the repo that will be under test

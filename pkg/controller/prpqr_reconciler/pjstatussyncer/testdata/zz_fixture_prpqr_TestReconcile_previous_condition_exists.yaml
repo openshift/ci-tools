@@ -5,6 +5,8 @@
     name: prpqr-test
     namespace: test-namespace
   spec:
+    comment:
+      createdAt: null
     jobs:
       releaseControllerConfig:
         ocp: ""

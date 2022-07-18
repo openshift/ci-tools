@@ -6,6 +6,8 @@
     namespace: test-namespace
     resourceVersion: "1000"
   spec:
+    comment:
+      createdAt: null
     jobs:
       releaseControllerConfig:
         ocp: "4.9"

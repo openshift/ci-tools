@@ -87,6 +87,13 @@ type jobSetSpecification struct {
 	jobs        config.JobType
 }
 
+func (s jobSetSpecification) toCommand() string {
+	if s.ocp == "" {
+		return "/payload-(job|aggregate)"
+	}
+	return fmt.Sprintf("/payload %s %s %s", s.ocp, s.releaseType, s.jobs)
+}
+
 type jobResolver interface {
 	resolve(ocp string, releaseType api.ReleaseStream, jobType config.JobType) ([]config.Job, error)
 }
@@ -235,6 +242,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		guid:      guid,
 		counter:   0,
 		pr:        pr,
+		comment:   ic.Comment,
 	}
 
 	for _, spec := range specs {
@@ -333,6 +341,7 @@ type prpqrBuilder struct {
 	counter   int
 	pr        *github.PullRequest
 	spec      jobSetSpecification
+	comment   github.IssueComment
 }
 
 func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec) *prpqv1.PullRequestPayloadQualificationRun {
@@ -369,6 +378,12 @@ func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec) *prpqv1.Pu
 					SHA:    b.pr.Head.SHA,
 					Title:  b.pr.Title,
 				},
+			},
+			Comment: prpqv1.Comment{
+				Author:    b.comment.User.Name,
+				HTMLURL:   b.comment.HTMLURL,
+				CreatedAt: metav1.NewTime(b.comment.CreatedAt),
+				Command:   b.spec.toCommand(),
 			},
 		},
 	}

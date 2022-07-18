@@ -40,6 +40,24 @@ spec:
             description: Spec is considered immutable and should be entirely created
               by the requestor
             properties:
+              comment:
+                description: Comment specifies the comment that triggers the payload
+                  qualification run
+                properties:
+                  author:
+                    description: Author is the author of the comment
+                    type: string
+                  command:
+                    description: Command is the payload command in the comment
+                    type: string
+                  createdAt:
+                    description: CreatedAt is the created time of the comment
+                    format: date-time
+                    type: string
+                  htmlURL:
+                    description: HTMLURL is the HTML URL of the comment
+                    type: string
+                type: object
               jobs:
                 description: Jobs specifies the jobs to be executed. Immutable.
                 properties:
@@ -157,6 +175,7 @@ spec:
                 - repo
                 type: object
             required:
+            - comment
             - jobs
             - pullRequest
             type: object

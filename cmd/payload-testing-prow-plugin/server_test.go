@@ -21,8 +21,8 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-func (j1 jobSetSpecification) Equals(j2 jobSetSpecification) bool {
-	return cmp.Equal(j1, j2, cmp.AllowUnexported(jobSetSpecification{}))
+func (s jobSetSpecification) Equals(s1 jobSetSpecification) bool {
+	return cmp.Equal(s, s1, cmp.AllowUnexported(jobSetSpecification{}))
 }
 
 func TestSpecsFromComment(t *testing.T) {
@@ -194,6 +194,7 @@ func TestBuild(t *testing.T) {
 						BaseRef:     "ref",
 						BaseSHA:     "sha",
 						PullRequest: prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"}},
+					Comment: prpqv1.Comment{Command: "/payload 4.10 nightly ci"},
 					Jobs: prpqv1.PullRequestPayloadJobSpec{
 						ReleaseControllerConfig: prpqv1.ReleaseControllerConfig{OCP: "4.10", Release: "nightly", Specifier: "ci"},
 						Jobs: []prpqv1.ReleaseJobSpec{
@@ -254,6 +255,7 @@ func TestBuild(t *testing.T) {
 						BaseRef:     "ref",
 						BaseSHA:     "sha",
 						PullRequest: prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"}},
+					Comment: prpqv1.Comment{Command: "/payload-(job|aggregate)"},
 					Jobs: prpqv1.PullRequestPayloadJobSpec{
 						Jobs: []prpqv1.ReleaseJobSpec{
 							{

@@ -24,6 +24,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 var testArtifactsContainer = coreapi.Container{
@@ -480,7 +481,7 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			n := &TestCaseNotifier{
-				nested:  nopNotifier{},
+				nested:  util.NopNotifier,
 				lastPod: tt.pod,
 			}
 			tests := n.SubTests(tt.prefix)

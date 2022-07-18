@@ -18,6 +18,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	base_steps "github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 func (s *multiStageTestStep) runSteps(
@@ -62,7 +63,7 @@ func (s *multiStageTestStep) runSteps(
 					errs = append(errs, fmt.Errorf("failed to delete pod %s with label %s=%s: %w", pod.Name, MultiStageTestLabel, s.name, err))
 					continue
 				}
-				if err := base_steps.WaitForPodDeletion(base_steps.CleanupCtx, s.client, s.jobSpec.Namespace(), pod.Name, pod.UID); err != nil {
+				if err := util.WaitForPodDeletion(base_steps.CleanupCtx, s.client, s.jobSpec.Namespace(), pod.Name, pod.UID); err != nil {
 					errs = append(errs, fmt.Errorf("failed waiting for pod %s with label %s=%s to be deleted: %w", pod.Name, MultiStageTestLabel, s.name, err))
 					continue
 				}
@@ -97,7 +98,7 @@ func (s *multiStageTestStep) runSteps(
 func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, bestEffortSteps sets.String) error {
 	var errs []error
 	for _, pod := range pods {
-		err := s.runPod(ctx, &pod, base_steps.NewTestCaseNotifier(base_steps.NopNotifier))
+		err := s.runPod(ctx, &pod, base_steps.NewTestCaseNotifier(util.NopNotifier))
 		if err == nil {
 			continue
 		}
@@ -117,10 +118,10 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	start := time.Now()
 	logrus.Infof("Running step %s.", pod.Name)
 	client := s.client.WithNewLoggingClient()
-	if _, err := base_steps.CreateOrRestartPod(ctx, client, pod); err != nil {
+	if _, err := util.CreateOrRestartPod(ctx, client, pod); err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %w", pod.Name, err)
 	}
-	newPod, err := base_steps.WaitForPodCompletion(ctx, client, pod.Namespace, pod.Name, notifier, false)
+	newPod, err := util.WaitForPodCompletion(ctx, client, pod.Namespace, pod.Name, notifier, false)
 	if newPod != nil {
 		pod = newPod
 	}

@@ -221,7 +221,9 @@ type TestingTInterface interface {
 // WaitForHTTP200 waits waitFor seconds for the provided addr to return a http/200. If that doesn't
 // happen, it will call t.Fatalf
 func WaitForHTTP200(addr, command string, waitFor int64, t TestingTInterface) {
+	start := time.Now()
 	if waitErr := wait.PollImmediate(1*time.Second, time.Duration(waitFor)*time.Second, func() (done bool, err error) {
+		elapsed := time.Since(start)
 		resp, getErr := http.Get(addr)
 		defer func() {
 			if resp == nil || resp.Body == nil {
@@ -232,7 +234,7 @@ func WaitForHTTP200(addr, command string, waitFor int64, t TestingTInterface) {
 			}
 		}()
 		if resp != nil {
-			t.Logf("`%s` readiness probe: %v", command, resp.StatusCode)
+			t.Logf("`%s` readiness probe: %v after %s", command, resp.StatusCode, elapsed)
 		}
 		if getErr != nil {
 			t.Logf("`%s` readiness probe error: %v:", command, getErr)

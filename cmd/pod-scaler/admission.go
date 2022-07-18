@@ -34,7 +34,7 @@ import (
 
 func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string) {
 	logger := logrus.WithField("component", "pod-scaler admission")
-	logger.Info("Initializing admission webhook server.")
+	logger.Infof("Initializing admission webhook server with %d loaders.", len(loaders))
 	health := pjutil.NewHealthOnPort(healthPort)
 	resources := newResourceServer(loaders, health)
 	decoder, err := admission.NewDecoder(scheme.Scheme)
@@ -96,7 +96,7 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		logger.WithError(err).Error("Failed to handle rehearsal Pod.")
 		return admission.Allowed("Failed to handle rehearsal Pod, ignoring.")
 	}
-	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap)
+	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, logger)
 
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
@@ -195,7 +195,7 @@ func mutatePodLabels(pod *corev1.Pod, build *buildv1.Build) {
 }
 
 // useOursIfLarger updates fields in theirs when ours are larger
-func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements) {
+func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, logger *logrus.Entry) {
 	for _, item := range []*corev1.ResourceRequirements{allOfOurs, allOfTheirs} {
 		if item.Requests == nil {
 			item.Requests = corev1.ResourceList{}
@@ -206,14 +206,16 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements) {
 	}
 	for _, pair := range []struct {
 		ours, theirs *corev1.ResourceList
+		resource     string
 	}{
-		{ours: &allOfOurs.Requests, theirs: &allOfTheirs.Requests},
-		{ours: &allOfOurs.Limits, theirs: &allOfTheirs.Limits},
+		{ours: &allOfOurs.Requests, theirs: &allOfTheirs.Requests, resource: "request"},
+		{ours: &allOfOurs.Limits, theirs: &allOfTheirs.Limits, resource: "limit"},
 	} {
 		for _, field := range []corev1.ResourceName{corev1.ResourceCPU, corev1.ResourceMemory} {
 			our := (*pair.ours)[field]
 			their := (*pair.theirs)[field]
 			if our.Cmp(their) == 1 {
+				logger.Debugf("determined %s %s of %s to be larger than %s configured", field, pair.resource, our.String(), their.String())
 				(*pair.theirs)[field] = our
 			}
 		}
@@ -241,8 +243,9 @@ func reconcileLimits(resources *corev1.ResourceRequirements) {
 	}
 }
 
-func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, memoryCap string) {
+func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, memoryCap string, logger *logrus.Entry) {
 	if resources.Requests == nil {
+		logger.Debug("no requests, skipping")
 		return
 	}
 
@@ -250,6 +253,7 @@ func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, 
 		// TODO(DPTP-2525): Make cluster-specific?
 		cpuRequestCap := *resource.NewQuantity(cpuCap, resource.DecimalSI)
 		if resources.Requests.Cpu().Cmp(cpuRequestCap) == 1 {
+			logger.Debugf("setting original CPU request of: %s to cap", resources.Requests.Cpu())
 			resources.Requests[corev1.ResourceCPU] = cpuRequestCap
 		}
 	}
@@ -257,32 +261,35 @@ func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, 
 	if _, ok := resources.Requests[corev1.ResourceMemory]; ok {
 		memoryRequestCap := resource.MustParse(memoryCap)
 		if resources.Requests.Memory().Cmp(memoryRequestCap) == 1 {
+			logger.Debugf("setting original memory request of: %s to cap", resources.Requests.Memory())
 			resources.Requests[corev1.ResourceMemory] = memoryRequestCap
 		}
 	}
 }
 
-func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string) {
+func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, logger *logrus.Entry) {
 	for i := range pod.Spec.InitContainers {
 		meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, pod.Spec.InitContainers[i].Name)
 		resources, recommendationExists := server.recommendedRequestFor(meta)
 		if recommendationExists {
-			useOursIfLarger(&resources, &pod.Spec.InitContainers[i].Resources)
+			logger.Debugf("recommendation exists for: %s", pod.Spec.InitContainers[i].Name)
+			useOursIfLarger(&resources, &pod.Spec.InitContainers[i].Resources, logger)
 			if mutateResourceLimits {
 				reconcileLimits(&pod.Spec.InitContainers[i].Resources)
 			}
 		}
-		preventUnschedulable(&pod.Spec.InitContainers[i].Resources, cpuCap, memoryCap)
+		preventUnschedulable(&pod.Spec.InitContainers[i].Resources, cpuCap, memoryCap, logger)
 	}
 	for i := range pod.Spec.Containers {
 		meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, pod.Spec.Containers[i].Name)
 		resources, recommendationExists := server.recommendedRequestFor(meta)
 		if recommendationExists {
-			useOursIfLarger(&resources, &pod.Spec.Containers[i].Resources)
+			logger.Debugf("recommendation exists for: %s", pod.Spec.Containers[i].Name)
+			useOursIfLarger(&resources, &pod.Spec.Containers[i].Resources, logger)
 			if mutateResourceLimits {
 				reconcileLimits(&pod.Spec.Containers[i].Resources)
 			}
 		}
-		preventUnschedulable(&pod.Spec.Containers[i].Resources, cpuCap, memoryCap)
+		preventUnschedulable(&pod.Spec.Containers[i].Resources, cpuCap, memoryCap, logger)
 	}
 }

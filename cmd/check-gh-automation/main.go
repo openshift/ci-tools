@@ -150,6 +150,8 @@ func checkRepos(repos []string, bots []string, ignore sets.String, client collab
 	return failing, nil
 }
 
+const maxRepos = 10
+
 func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string {
 	jobSpec, err := downwardapi.ResolveSpecFromEnv()
 	if err != nil {
@@ -165,6 +167,11 @@ func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string 
 		path := strings.TrimPrefix(c, config.CiopConfigInRepoPath+"/")
 		split := strings.Split(path, "/")
 		orgRepos.Insert(fmt.Sprintf("%s/%s", split[0], split[1]))
+	}
+
+	if orgRepos.Len() > maxRepos {
+		logger.Warnf("Found %d repos, which is more than we will check for a PR. It is likely that this PR is a config update on many repos, and doesn't need to be checked.", orgRepos.Len())
+		return []string{}
 	}
 
 	return orgRepos.List()

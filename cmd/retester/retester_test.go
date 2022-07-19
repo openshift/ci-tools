@@ -33,19 +33,20 @@ func (f *MyFakeClient) GetRef(owner, repo, ref string) (string, error) {
 }
 
 func TestLoadConfig(t *testing.T) {
+	True := true
 	c := &Config{
 		Retester: Retester{
 			RetesterPolicy: RetesterPolicy{
-				MaxRetestsForSha: 1, MaxRetestsForShaAndBase: 1,
+				MaxRetestsForSha: 1, MaxRetestsForShaAndBase: 1, Enabled: &True,
 			},
 			Oranizations: map[string]Oranization{"openshift": {
 				RetesterPolicy: RetesterPolicy{
-					MaxRetestsForSha: 2, MaxRetestsForShaAndBase: 2, Enabled: true,
+					MaxRetestsForSha: 2, MaxRetestsForShaAndBase: 2, Enabled: &True,
 				},
 				Repos: map[string]Repo{
-					"ci-docs": {RetesterPolicy: RetesterPolicy{Enabled: true}},
+					"ci-docs": {RetesterPolicy: RetesterPolicy{Enabled: &True}},
 					"ci-tools": {RetesterPolicy: RetesterPolicy{
-						MaxRetestsForSha: 3, MaxRetestsForShaAndBase: 3, Enabled: true,
+						MaxRetestsForSha: 3, MaxRetestsForShaAndBase: 3, Enabled: &True,
 					}},
 				}},
 			},
@@ -78,29 +79,31 @@ func TestLoadConfig(t *testing.T) {
 }
 
 func TestGetRetesterPolicy(t *testing.T) {
+	True := true
+	False := false
 	c := &Config{
 		Retester: Retester{
-			RetesterPolicy: RetesterPolicy{MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9},
+			RetesterPolicy: RetesterPolicy{MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9, Enabled: &True},
 			Oranizations: map[string]Oranization{
 				"openshift": {
 					RetesterPolicy: RetesterPolicy{
-						MaxRetestsForSha: 2, MaxRetestsForShaAndBase: 2, Enabled: true,
+						MaxRetestsForSha: 2, MaxRetestsForShaAndBase: 2, Enabled: &True,
 					},
 					Repos: map[string]Repo{
-						"ci-docs": {RetesterPolicy: RetesterPolicy{Enabled: true}},
+						"ci-docs": {RetesterPolicy: RetesterPolicy{}},
 						"ci-tools": {RetesterPolicy: RetesterPolicy{
-							MaxRetestsForSha: 3, MaxRetestsForShaAndBase: 3, Enabled: true,
+							MaxRetestsForSha: 3, MaxRetestsForShaAndBase: 3, Enabled: &True,
 						}},
-						"repo": {RetesterPolicy: RetesterPolicy{Enabled: false}},
+						"repo": {RetesterPolicy: RetesterPolicy{Enabled: &False}},
 					}},
 				"no-openshift": {
-					RetesterPolicy: RetesterPolicy{Enabled: false},
+					RetesterPolicy: RetesterPolicy{Enabled: &False},
 					Repos: map[string]Repo{
-						"ci-docs": {RetesterPolicy: RetesterPolicy{Enabled: true}},
+						"ci-docs": {RetesterPolicy: RetesterPolicy{}},
 						"ci-tools": {RetesterPolicy: RetesterPolicy{
-							MaxRetestsForSha: 4, MaxRetestsForShaAndBase: 4, Enabled: true,
+							MaxRetestsForSha: 4, MaxRetestsForShaAndBase: 4, Enabled: &True,
 						}},
-						"repo": {RetesterPolicy: RetesterPolicy{Enabled: false}},
+						"repo": {RetesterPolicy: RetesterPolicy{Enabled: &False}},
 					}},
 			},
 		}}
@@ -124,7 +127,7 @@ func TestGetRetesterPolicy(t *testing.T) {
 				}{Name: "ci-tools", Owner: struct{ Login githubv4.String }{Login: "openshift"}},
 			},
 			config:   c,
-			expected: RetesterPolicy{3, 3, true},
+			expected: RetesterPolicy{3, 3, &True},
 		},
 		{
 			name: "enabled repo and disabled org",
@@ -138,22 +141,7 @@ func TestGetRetesterPolicy(t *testing.T) {
 				}{Name: "ci-tools", Owner: struct{ Login githubv4.String }{Login: "no-openshift"}},
 			},
 			config:   c,
-			expected: RetesterPolicy{4, 4, true},
-		},
-		{
-			name: "enabled repo and not configured org",
-			pr: tide.PullRequest{
-				Number: num,
-				Author: struct{ Login githubv4.String }{Login: "org"},
-				Repository: struct {
-					Name          githubv4.String
-					NameWithOwner githubv4.String
-					Owner         struct{ Login githubv4.String }
-				}{Name: "ci-tools", Owner: struct{ Login githubv4.String }{Login: "org"}},
-			},
-			config:        c,
-			expected:      RetesterPolicy{Enabled: false},
-			expectedError: fmt.Errorf("not configured org"),
+			expected: RetesterPolicy{4, 4, &True},
 		},
 		{
 			name: "disabled repo and enabled org",
@@ -167,7 +155,7 @@ func TestGetRetesterPolicy(t *testing.T) {
 				}{Name: "repo", Owner: struct{ Login githubv4.String }{Login: "openshift"}},
 			},
 			config:        c,
-			expected:      RetesterPolicy{Enabled: false},
+			expected:      RetesterPolicy{},
 			expectedError: fmt.Errorf("repo is disabled"),
 		},
 		{
@@ -182,66 +170,8 @@ func TestGetRetesterPolicy(t *testing.T) {
 				}{Name: "repo", Owner: struct{ Login githubv4.String }{Login: "no-openshift"}},
 			},
 			config:        c,
-			expected:      RetesterPolicy{Enabled: false},
+			expected:      RetesterPolicy{},
 			expectedError: fmt.Errorf("repo is disabled"),
-		},
-		{
-			name: "disabled repo and not configured org",
-			pr: tide.PullRequest{
-				Number: num,
-				Author: struct{ Login githubv4.String }{Login: "org"},
-				Repository: struct {
-					Name          githubv4.String
-					NameWithOwner githubv4.String
-					Owner         struct{ Login githubv4.String }
-				}{Name: "repo", Owner: struct{ Login githubv4.String }{Login: "org"}},
-			},
-			config:        c,
-			expected:      RetesterPolicy{Enabled: false},
-			expectedError: fmt.Errorf("not configured org"),
-		},
-		{
-			name: "enabled not configured repo and enabled org",
-			pr: tide.PullRequest{
-				Number: num,
-				Author: struct{ Login githubv4.String }{Login: "openshift"},
-				Repository: struct {
-					Name          githubv4.String
-					NameWithOwner githubv4.String
-					Owner         struct{ Login githubv4.String }
-				}{Name: "ci-docs", Owner: struct{ Login githubv4.String }{Login: "openshift"}},
-			},
-			config:   c,
-			expected: RetesterPolicy{2, 2, true},
-		},
-		{
-			name: "enabled not configured repo and disabled org",
-			pr: tide.PullRequest{
-				Number: num,
-				Author: struct{ Login githubv4.String }{Login: "no-openshift"},
-				Repository: struct {
-					Name          githubv4.String
-					NameWithOwner githubv4.String
-					Owner         struct{ Login githubv4.String }
-				}{Name: "ci-docs", Owner: struct{ Login githubv4.String }{Login: "no-openshift"}},
-			},
-			config:   c,
-			expected: RetesterPolicy{3, 9, true},
-		},
-		{
-			name: "enabled not configured repo and not configured org",
-			pr: tide.PullRequest{
-				Number: num,
-				Author: struct{ Login githubv4.String }{Login: "org"},
-				Repository: struct {
-					Name          githubv4.String
-					NameWithOwner githubv4.String
-					Owner         struct{ Login githubv4.String }
-				}{Name: "ci-docs", Owner: struct{ Login githubv4.String }{Login: "org"}},
-			},
-			config:        c,
-			expected:      RetesterPolicy{Enabled: false},
-			expectedError: fmt.Errorf("not configured org"),
 		},
 		{
 			name: "not configured repo and enabled org",
@@ -252,10 +182,10 @@ func TestGetRetesterPolicy(t *testing.T) {
 					Name          githubv4.String
 					NameWithOwner githubv4.String
 					Owner         struct{ Login githubv4.String }
-				}{Name: "some-repo", Owner: struct{ Login githubv4.String }{Login: "openshift"}},
+				}{Name: "ci-docs", Owner: struct{ Login githubv4.String }{Login: "openshift"}},
 			},
 			config:   c,
-			expected: RetesterPolicy{2, 2, true},
+			expected: RetesterPolicy{2, 2, &True},
 		},
 		{
 			name: "not configured repo and disabled org",
@@ -266,10 +196,10 @@ func TestGetRetesterPolicy(t *testing.T) {
 					Name          githubv4.String
 					NameWithOwner githubv4.String
 					Owner         struct{ Login githubv4.String }
-				}{Name: "some-repo", Owner: struct{ Login githubv4.String }{Login: "no-openshift"}},
+				}{Name: "ci-docs", Owner: struct{ Login githubv4.String }{Login: "no-openshift"}},
 			},
 			config:        c,
-			expected:      RetesterPolicy{Enabled: false},
+			expected:      RetesterPolicy{},
 			expectedError: fmt.Errorf("not configured repo and disabled org"),
 		},
 		{
@@ -281,10 +211,10 @@ func TestGetRetesterPolicy(t *testing.T) {
 					Name          githubv4.String
 					NameWithOwner githubv4.String
 					Owner         struct{ Login githubv4.String }
-				}{Name: "some-repo", Owner: struct{ Login githubv4.String }{Login: "org"}},
+				}{Name: "ci-docs", Owner: struct{ Login githubv4.String }{Login: "org"}},
 			},
 			config:        c,
-			expected:      RetesterPolicy{Enabled: false},
+			expected:      RetesterPolicy{},
 			expectedError: fmt.Errorf("not configured org"),
 		},
 		{
@@ -299,7 +229,7 @@ func TestGetRetesterPolicy(t *testing.T) {
 				}{Name: "ci-tools", Owner: struct{ Login githubv4.String }{Login: "openshift"}},
 			},
 			config:        &Config{Retester{}},
-			expected:      RetesterPolicy{Enabled: false},
+			expected:      RetesterPolicy{},
 			expectedError: fmt.Errorf("not configured org"),
 		},
 	}
@@ -321,6 +251,8 @@ func TestGetRetesterPolicy(t *testing.T) {
 }
 
 func TestValidatePolicies(t *testing.T) {
+	True := true
+	False := false
 	testCases := []struct {
 		name     string
 		policy   RetesterPolicy
@@ -328,29 +260,30 @@ func TestValidatePolicies(t *testing.T) {
 	}{
 		{
 			name:     "basic case",
-			policy:   RetesterPolicy{3, 9, true},
+			policy:   RetesterPolicy{3, 9, &True},
 			expected: nil,
 		},
 		{
-			name:     "empty",
-			policy:   RetesterPolicy{},
-			expected: nil,
+			name:   "empty",
+			policy: RetesterPolicy{},
+			expected: []error{
+				errors.New("policy is not enabled by default")},
 		},
 		{
 			name:     "disable",
-			policy:   RetesterPolicy{-1, -1, false},
+			policy:   RetesterPolicy{-1, -1, &False},
 			expected: nil,
 		},
 		{
 			name:   "negative",
-			policy: RetesterPolicy{-1, -1, true},
+			policy: RetesterPolicy{-1, -1, &True},
 			expected: []error{
 				errors.New("max_retest_for_sha has invalid value: -1"),
 				errors.New("max_retests_for_sha_and_base has invalid value: -1")},
 		},
 		{
 			name:     "lower",
-			policy:   RetesterPolicy{9, 3, true},
+			policy:   RetesterPolicy{9, 3, &True},
 			expected: []error{errors.New("max_retest_for_sha value can't be lower than max_retests_for_sha_and_base value: 3 < 9")},
 		},
 	}
@@ -365,9 +298,10 @@ func TestValidatePolicies(t *testing.T) {
 }
 
 func TestRetestOrBackoff(t *testing.T) {
+	True := true
 	config := &Config{Retester: Retester{
 		RetesterPolicy: RetesterPolicy{MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9}, Oranizations: map[string]Oranization{
-			"org": {RetesterPolicy: RetesterPolicy{Enabled: true}},
+			"org": {RetesterPolicy: RetesterPolicy{Enabled: &True}},
 		},
 	}}
 	ghc := &MyFakeClient{fakegithub.NewFakeClient()}
@@ -446,6 +380,8 @@ func TestRetestOrBackoff(t *testing.T) {
 }
 
 func TestEnabledPRs(t *testing.T) {
+	True := true
+	False := false
 	logger := logrus.NewEntry(logrus.StandardLogger())
 	testCases := []struct {
 		name       string
@@ -457,11 +393,11 @@ func TestEnabledPRs(t *testing.T) {
 			name: "basic case",
 			c: &retestController{
 				config: &Config{Retester: Retester{
-					RetesterPolicy: RetesterPolicy{MaxRetestsForShaAndBase: 1, MaxRetestsForSha: 1}, Oranizations: map[string]Oranization{
-						"openshift": {RetesterPolicy: RetesterPolicy{Enabled: false},
-							Repos: map[string]Repo{"ci-tools": {RetesterPolicy: RetesterPolicy{Enabled: true}}},
+					RetesterPolicy: RetesterPolicy{MaxRetestsForShaAndBase: 1, MaxRetestsForSha: 1, Enabled: &True}, Oranizations: map[string]Oranization{
+						"openshift": {RetesterPolicy: RetesterPolicy{Enabled: &False},
+							Repos: map[string]Repo{"ci-tools": {RetesterPolicy: RetesterPolicy{Enabled: &True}}},
 						},
-						"org-a": {RetesterPolicy: RetesterPolicy{Enabled: true}},
+						"org-a": {RetesterPolicy: RetesterPolicy{Enabled: &True}},
 					},
 				}},
 				logger: logger,

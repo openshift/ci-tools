@@ -1,4 +1,5 @@
 retester:
+  enabled: true
   max_retests_for_sha_and_base: 1
   max_retests_for_sha: 1
   orgs:

@@ -105,21 +105,21 @@ type Config struct {
 }
 
 // Retester is global level configuration for retester configuration.
-// Policy is override by specific levels when they are enabled.
+// Policy is overridden by specific levels when they are enabled.
 type Retester struct {
 	RetesterPolicy `json:",inline"`
 	Oranizations   map[string]Oranization `json:"orgs"`
 }
 
 // Oranization is org level configuration for retester configuration.
-// Policy is override by repo level when it is enabled.
+// Policy is overridden by repo level when it is enabled.
 type Oranization struct {
 	RetesterPolicy `json:",inline"`
 	Repos          map[string]Repo `json:"repos"`
 }
 
 // Repo is repo level configuration for retester configuration.
-// Policy override all general levels.
+// Policy overridden all general levels.
 type Repo struct {
 	RetesterPolicy `json:",inline"`
 }
@@ -129,9 +129,9 @@ type Repo struct {
 // False in level repo means disabled repo. Nothing can change that.
 // True/False in level org means enabled/disabled org. But repo can be disabled/enabled.
 type RetesterPolicy struct {
-	MaxRetestsForShaAndBase int  `json:"max_retests_for_sha_and_base"`
-	MaxRetestsForSha        int  `json:"max_retests_for_sha"`
-	Enabled                 bool `json:"enabled"`
+	MaxRetestsForShaAndBase int   `json:"max_retests_for_sha_and_base"`
+	MaxRetestsForSha        int   `json:"max_retests_for_sha"`
+	Enabled                 *bool `json:"enabled"`
 }
 
 func loadConfig(configFilePath string) (*Config, error) {
@@ -163,33 +163,30 @@ type retestController struct {
 
 func (c *Config) GetRetesterPolicy(org, repo string) (RetesterPolicy, error) {
 	policy := RetesterPolicy{}
-	if orgStruct, ok := c.Retester.Oranizations[org]; ok {
+	if orgStruct, ok := c.Retester.Oranizations[org]; ok && orgStruct.Enabled != nil {
+		policy.Enabled = orgStruct.Enabled
 		var repoStruct Repo
-		var repoConfigured bool
-		if repoStruct, repoConfigured = orgStruct.Repos[repo]; repoConfigured {
-			if repoStruct.Enabled {
-				policy.Enabled = true
+		if repoStruct, ok = orgStruct.Repos[repo]; ok && repoStruct.Enabled != nil {
+			policy.Enabled = repoStruct.Enabled
+			if *repoStruct.Enabled {
 				if repoStruct.MaxRetestsForSha != 0 && repoStruct.MaxRetestsForShaAndBase != 0 {
 					// returns max retests from repo if repo is enabled and configured
 					return repoStruct.RetesterPolicy, nil
 				}
 			} else {
-				policy.Enabled = false
 				return policy, fmt.Errorf("repo is disabled")
 			}
 		}
-		if orgStruct.Enabled {
-			policy.Enabled = true
+		if *orgStruct.Enabled {
 			if orgStruct.MaxRetestsForSha != 0 && orgStruct.MaxRetestsForShaAndBase != 0 {
 				// returns max retests from org
 				return orgStruct.RetesterPolicy, nil
 			}
 		}
-		if !repoConfigured && !orgStruct.Enabled {
+		if !*policy.Enabled {
 			return orgStruct.RetesterPolicy, fmt.Errorf("not configured repo and disabled org")
 		}
 	} else {
-		policy.Enabled = false
 		return policy, fmt.Errorf("not configured org")
 	}
 	// returns max retests default value
@@ -199,20 +196,25 @@ func (c *Config) GetRetesterPolicy(org, repo string) (RetesterPolicy, error) {
 }
 
 func validatePolicies(policy RetesterPolicy) []error {
-	if policy.Enabled {
-		var errs []error
-		if policy.MaxRetestsForSha < 0 {
-			errs = append(errs, fmt.Errorf("max_retest_for_sha has invalid value: %d", policy.MaxRetestsForSha))
+	var errs []error
+	if policy.Enabled != nil {
+		if *policy.Enabled {
+			if policy.MaxRetestsForSha < 0 {
+				errs = append(errs, fmt.Errorf("max_retest_for_sha has invalid value: %d", policy.MaxRetestsForSha))
+			}
+			if policy.MaxRetestsForShaAndBase < 0 {
+				errs = append(errs, fmt.Errorf("max_retests_for_sha_and_base has invalid value: %d", policy.MaxRetestsForShaAndBase))
+			}
+			if policy.MaxRetestsForSha < policy.MaxRetestsForShaAndBase {
+				errs = append(errs, fmt.Errorf("max_retest_for_sha value can't be lower than max_retests_for_sha_and_base value: %d < %d", policy.MaxRetestsForSha, policy.MaxRetestsForShaAndBase))
+			}
+		} else {
+			return nil
 		}
-		if policy.MaxRetestsForShaAndBase < 0 {
-			errs = append(errs, fmt.Errorf("max_retests_for_sha_and_base has invalid value: %d", policy.MaxRetestsForShaAndBase))
-		}
-		if policy.MaxRetestsForSha < policy.MaxRetestsForShaAndBase {
-			errs = append(errs, fmt.Errorf("max_retest_for_sha value can't be lower than max_retests_for_sha_and_base value: %d < %d", policy.MaxRetestsForSha, policy.MaxRetestsForShaAndBase))
-		}
-		return errs
+	} else {
+		errs = append(errs, fmt.Errorf("policy is not enabled by default"))
 	}
-	return nil
+	return errs
 }
 
 func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, config *Config) *retestController {
@@ -570,10 +572,12 @@ func (c *retestController) enabledPRs(candidates map[string]tide.PullRequest) ma
 		if validationErrors := validatePolicies(policy); len(validationErrors) != 0 {
 			c.logger.Warnf("Failed to validate retester policy: %v", validationErrors)
 		}
-		if policy.Enabled {
-			output[key] = pr
-		} else {
-			c.logger.Infof("PR %s is not from an enabled org or repo", key)
+		if policy.Enabled != nil {
+			if *policy.Enabled {
+				output[key] = pr
+			} else {
+				c.logger.Infof("PR %s is not from an enabled org or repo", key)
+			}
 		}
 	}
 	return output

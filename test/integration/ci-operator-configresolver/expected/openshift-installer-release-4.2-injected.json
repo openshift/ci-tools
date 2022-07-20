@@ -112,7 +112,13 @@
               "name": "resourcewatcher",
               "tag": "latest"
             },
-            "commands": "#!/bin/bash\n\nsleep 300"
+            "commands": "#!/bin/bash\n\nsleep 300",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            }
           }
         ]
       }

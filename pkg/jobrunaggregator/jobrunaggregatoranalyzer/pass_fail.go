@@ -146,6 +146,7 @@ func getWorkingPercentage(testCaseDetails *TestCaseDetails) float32 {
 type weeklyAverageFromTenDays struct {
 	jobName                 string
 	startDay                time.Time
+	aggrDataTime            time.Time
 	minimumNumberOfAttempts int
 	bigQueryClient          jobrunaggregatorlib.CIDataClient
 
@@ -163,12 +164,13 @@ type TestKey struct {
 	CombinedTestSuiteName string
 }
 
-func newWeeklyAverageFromTenDaysAgo(jobName string, startDay time.Time, minimumNumberOfAttempts int, bigQueryClient jobrunaggregatorlib.CIDataClient) baseline {
+func newWeeklyAverageFromTenDaysAgo(jobName string, startDay, aggrDataTime time.Time, minimumNumberOfAttempts int, bigQueryClient jobrunaggregatorlib.CIDataClient) baseline {
 	tenDayAgo := jobrunaggregatorlib.GetUTCDay(startDay).Add(-10 * 24 * time.Hour)
 
 	return &weeklyAverageFromTenDays{
 		jobName:                  jobName,
 		startDay:                 tenDayAgo,
+		aggrDataTime:             aggrDataTime,
 		minimumNumberOfAttempts:  minimumNumberOfAttempts,
 		bigQueryClient:           bigQueryClient,
 		queryTestRunsOnce:        sync.Once{},
@@ -205,7 +207,7 @@ func (a *weeklyAverageFromTenDays) getAggregatedTestRuns(ctx context.Context) (m
 
 func (a *weeklyAverageFromTenDays) getDisruptionByBackend(ctx context.Context) (map[string]backendDisruptionStats, error) {
 	a.queryDisruptionOnce.Do(func() {
-		rows, err := a.bigQueryClient.GetBackendDisruptionStatisticsByJob(ctx, a.jobName)
+		rows, err := a.bigQueryClient.GetBackendDisruptionStatisticsByJob(ctx, a.jobName, a.aggrDataTime)
 		if err != nil {
 			a.queryDisruptionErr = err
 			return

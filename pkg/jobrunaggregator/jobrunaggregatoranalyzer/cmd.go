@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -25,6 +26,7 @@ type JobRunsAnalyzerFlags struct {
 	ExplicitGCSPrefix           string
 	Timeout                     time.Duration
 	EstimatedJobStartTimeString string
+	AggrDataTime                string
 }
 
 func NewJobRunsAnalyzerFlags() *JobRunsAnalyzerFlags {
@@ -50,7 +52,8 @@ func (f *JobRunsAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.AggregationID, "aggregation-id", f.AggregationID, "mutually exclusive to --payload-tag.  Matches the .label[release.openshift.io/aggregation-id] on the prowjob, which is a UID")
 	fs.StringVar(&f.ExplicitGCSPrefix, "explicit-gcs-prefix", f.ExplicitGCSPrefix, "only used by per PR payload promotion jobs.  This overrides the well-known mapping and becomes the required prefix for the GCS query")
 	fs.DurationVar(&f.Timeout, "timeout", f.Timeout, "Time to wait for aggregation to complete.")
-	fs.StringVar(&f.EstimatedJobStartTimeString, "job-start-time", f.EstimatedJobStartTimeString, fmt.Sprintf("Start time in RFC822Z: %s", kubeTimeSerializationLayout))
+	fs.StringVar(&f.EstimatedJobStartTimeString, "job-start-time", f.EstimatedJobStartTimeString, fmt.Sprintf("Start time in RFC3399: %s", kubeTimeSerializationLayout))
+	fs.StringVar(&f.AggrDataTime, "aggr-data-start-time", f.AggrDataTime, fmt.Sprintf("Aggregation data start time (used to target specific aggregation data) in RFC3399: %s", kubeTimeSerializationLayout))
 }
 
 func NewJobRunsAnalyzerCommand() *cobra.Command {
@@ -113,7 +116,12 @@ func (f *JobRunsAnalyzerFlags) Validate() error {
 	if len(f.AggregationID) > 0 && len(f.ExplicitGCSPrefix) == 0 {
 		return fmt.Errorf("if --aggregation-id is specified, you must specify --explicit-gcs-prefix")
 	}
-
+	if len(f.AggrDataTime) > 0 {
+		_, err := time.Parse(kubeTimeSerializationLayout, f.AggrDataTime)
+		if err != nil {
+			return errors.Wrap(err, "The --aggr-data-start-time value needs to be a valid time")
+		}
+	}
 	return nil
 }
 
@@ -124,7 +132,15 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 	if err != nil {
 		return nil, err
 	}
-
+	var aggrDataTime time.Time
+	if len(f.AggrDataTime) == 0 {
+		aggrDataTime = estimatedStartTime
+	} else {
+		aggrDataTime, err = time.Parse(kubeTimeSerializationLayout, f.AggrDataTime)
+		if err != nil {
+			return nil, err
+		}
+	}
 	bigQueryClient, err := f.Authentication.NewBigQueryClient(ctx, f.DataCoordinates.ProjectID)
 	if err != nil {
 		return nil, err
@@ -171,7 +187,7 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 	return &JobRunAggregatorAnalyzerOptions{
 		explicitGCSPrefix:   f.ExplicitGCSPrefix,
 		jobRunLocator:       jobRunLocator,
-		passFailCalculator:  newWeeklyAverageFromTenDaysAgo(f.JobName, estimatedStartTime, 3, ciDataClient),
+		passFailCalculator:  newWeeklyAverageFromTenDaysAgo(f.JobName, estimatedStartTime, aggrDataTime, 3, ciDataClient),
 		jobName:             f.JobName,
 		payloadTag:          f.PayloadTag,
 		workingDir:          f.WorkingDir,

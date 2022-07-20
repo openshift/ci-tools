@@ -25,8 +25,9 @@ type AggregationJobClient interface {
 	// nil means that no jobRun as found after the specified time.
 	GetJobRunForJobNameAfterTime(ctx context.Context, jobName string, targetTime time.Time) (*jobrunaggregatorapi.JobRunRow, error)
 
-	// GetBackendDisruptionStatisticsByJob gets the mean and p95 disruption per backend from the week from 10 days ago.
-	GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error)
+	// GetBackendDisruptionStatisticsByJob gets the mean and p95 disruption per backend from the week from 10 days ago
+	// relative to aggrDataTime.
+	GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName string, aggrDataTime time.Time) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error)
 
 	ListAggregatedTestRunsForJob(ctx context.Context, frequency, jobName string, startDay time.Time) ([]jobrunaggregatorapi.AggregatedTestRunRow, error)
 }
@@ -163,7 +164,7 @@ LIMIT 1
 	return lastJobRun, nil
 }
 
-func (c *ciDataClient) GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {
+func (c *ciDataClient) GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName string, aggrDataTime time.Time) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {
 	rows := make([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, 0)
 
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
@@ -500,9 +501,9 @@ LEFT JOIN
             INNER JOIN
                 DATA_SET_LOCATION.BackendDisruption_JobRuns as JobRuns on JobRuns.Name = BackendDisruption.JobRunName
             WHERE
-                JobRuns.StartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
+                JobRuns.StartTime BETWEEN TIMESTAMP_SUB(@AggrDataTime, INTERVAL 10 DAY)
             AND
-                TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
+                TIMESTAMP_SUB(@AggrDataTime, INTERVAL 3 DAY)
             AND
                 JobRuns.JobName = @JobName
             GROUP BY
@@ -514,6 +515,7 @@ ON
 	query := c.client.Query(queryString)
 	query.QueryConfig.Parameters = []bigquery.QueryParameter{
 		{Name: "JobName", Value: jobName},
+		{Name: "AggrDataTime", Value: aggrDataTime},
 	}
 
 	it, err := query.Read(ctx)

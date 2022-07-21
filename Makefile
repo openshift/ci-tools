@@ -444,3 +444,7 @@ cluster-display: $(TMPDIR)/.cluster-display-kubeconfig-dir
 analyse-deps: cmd/vault-secret-collection-manager/index.js
 	@snyk test --project-name=ci-tools --org=red-hat-org
 .PHONY: analyse-deps
+
+analyse-code:
+	@(snyk code test --project-name=ci-tools --org=red-hat-org --sarif || true) | jq -r '.runs[].results[].fingerprints[]' | sort | diff -u .snyk-ignore -
+.PHONY: analyse-code

@@ -1,0 +1,13 @@
+- text:
+    text: ':wave: You have reached the Test Platform Help Desk. An assigned engineer
+      will respond in several hours during their working hours.'
+    type: mrkdwn
+  type: section
+- text:
+    text: 'Please see if our documentation can be of use: https://docs.ci.openshift.org/docs/'
+    type: mrkdwn
+  type: section
+- text:
+    text: If this is an urgent CI outage, please ping `(@)dptp-triage`
+    type: mrkdwn
+  type: section

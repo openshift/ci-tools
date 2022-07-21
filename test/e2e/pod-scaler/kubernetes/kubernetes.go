@@ -5,15 +5,14 @@ package kubernetes
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
-	"k8s.io/test-infra/prow/interrupts"
 
 	buildv1 "github.com/openshift/api/build/v1"
 
@@ -91,7 +90,17 @@ func Fake(t testhelper.TestingTInterface, tmpDir string, options ...Option) stri
 		Addr:    k8sAddr,
 		Handler: mux,
 	}
-	interrupts.ListenAndServe(server, 10*time.Second)
+
+	go func() {
+		if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			t.Fatalf("kubernetes server failed to listen: %v", err)
+		}
+	}()
+	t.Cleanup(func() {
+		if err := server.Close(); err != nil {
+			t.Errorf("failed to close kubernetes server: %v", err)
+		}
+	})
 
 	kubeconfig := clientcmdapi.Config{
 		Clusters: map[string]*clientcmdapi.Cluster{

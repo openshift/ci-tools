@@ -438,6 +438,7 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics)
 		}
 		apihelper.MergeImageStreamTagMaps(allImageStreamTags, imageStreamTags)
 
+		jobLogger.Infof("Imagestream tags required for job %s: %s", job.Name, imageStreamTags.String())
 		jobLogger.WithField(logRehearsalJob, job.Name).Info("Created a rehearsal job to be submitted")
 		rehearsals = append(rehearsals, job)
 	}
@@ -485,6 +486,7 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 			}
 			apihelper.MergeImageStreamTagMaps(allImageStreamTags, imageStreamTags)
 
+			jobLogger.Infof("Imagestream tags required for job %s: %s", job.Name, imageStreamTags.String())
 			jobLogger.WithField(logRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
 			rehearsals = append(rehearsals, rehearsal)
 		}

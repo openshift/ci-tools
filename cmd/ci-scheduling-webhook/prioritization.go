@@ -36,7 +36,8 @@ const (
 
 	// MachineDeleteAnnotationKey When a machine is annotated with this and the machineset is scaled down,
 	// it will target machines with this annotation to satisfy the change.
-	MachineDeleteAnnotationKey         = "machine.openshift.io/cluster-api-delete-machine"
+	OldMachineDeleteAnnotationKey         = "machine.openshift.io/cluster-api-delete-machine"
+	MachineDeleteAnnotationKey = "machine.openshift.io/delete-machine"
 
 	// NodeDisableScaleDownAnnotationKey makes the autoscaler ignore a node for scale down consideration.
 	NodeDisableScaleDownAnnotationKey = "cluster-autoscaler.kubernetes.io/scale-down-disabled"
@@ -778,24 +779,26 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 		return machineSetNamespace, machineSetName, machineName, fmt.Errorf("unable to get machineset %v: %#v", machineSetName, err)
 	}
 
-	klog.Infof("Setting machine deletion annotation on machine %v for node %v", machineName, node.Name)
-	deletionAnnotationPatch := []interface{}{
-		map[string]interface{}{
-			"op":    "add",
-			"path":  "/metadata/annotations/" + strings.ReplaceAll(MachineDeleteAnnotationKey, "/", "~1"),
-			"value": "true",
-		},
-	}
+	for _, deletionAnnotationName := range []string{MachineDeleteAnnotationKey, OldMachineDeleteAnnotationKey} {
+		klog.Infof("Setting machine deletion annotation %v on machine %v for node %v", deletionAnnotationName, machineName, node.Name)
+		deletionAnnotationPatch := []interface{}{
+			map[string]interface{}{
+				"op":    "add",
+				"path":  "/metadata/annotations/" + strings.ReplaceAll(deletionAnnotationName, "/", "~1"),
+				"value": "true",
+			},
+		}
 
-	deletionPayload, err := json.Marshal(deletionAnnotationPatch)
-	if err != nil {
-		return machineSetNamespace, machineSetName, machineName, fmt.Errorf("unable to marshal machine %v annotation deletion patch: %#v", machineName, err)
-	}
+		deletionPayload, err := json.Marshal(deletionAnnotationPatch)
+		if err != nil {
+			return machineSetNamespace, machineSetName, machineName, fmt.Errorf("unable to marshal machine %v annotation deletion patch: %#v", machineName, err)
+		}
 
-	// setting this annotation is the point of no return -- if successful, we will try to scale down indefinitely
-	_, err = machineClient.Patch(p.context, machineName, types.JSONPatchType, deletionPayload, metav1.PatchOptions{})
-	if err != nil {
-		return machineSetNamespace, machineSetName, machineName, fmt.Errorf("unable to apply machine %v annotation deletion patch: %#v", machineName, err)
+		// setting this annotation is the point of no return -- if successful, we will try to scale down indefinitely
+		_, err = machineClient.Patch(p.context, machineName, types.JSONPatchType, deletionPayload, metav1.PatchOptions{})
+		if err != nil {
+			return machineSetNamespace, machineSetName, machineName, fmt.Errorf("unable to apply machine %v annotation %v deletion patch: %#v", machineName, deletionAnnotationName, err)
+		}
 	}
 
 	// We will now interact with the machineset for this pod class. Hold a lock until we successfully

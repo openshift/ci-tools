@@ -17,7 +17,7 @@ SERVICE_ACCOUNT=$3
 readonly SERVICE_ACCOUNT
 
 TMP_KUBE_CONFIG_FILE="$(mktemp)"
-trap 'rm -rf {TMP_KUBE_CONFIG_FILE}' EXIT
+trap 'rm -rf ${TMP_KUBE_CONFIG_FILE}' EXIT
 
 
 URL=$(oc --kubeconfig "${CONFIG_UPDATER_DIR}/sa.config-updater.${CLUSTER}.config" config view -o jsonpath="{.clusters[0].cluster.server}")

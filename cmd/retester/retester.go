@@ -129,7 +129,7 @@ type Repo struct {
 // False in level repo means disabled repo. Nothing can change that.
 // True/False in level org means enabled/disabled org. But repo can be disabled/enabled.
 type RetesterPolicy struct {
-	MaxRetestsForShaAndBase int   `json:"max_retests_for_sha_and_base"`
+	MaxRetestsForShaAndBase int   `json:"max_retests_for_sha_and_base,omitempty"`
 	MaxRetestsForSha        int   `json:"max_retests_for_sha"`
 	Enabled                 *bool `json:"enabled"`
 }

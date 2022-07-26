@@ -108,7 +108,7 @@ type Config struct {
 // Policy is overridden by specific levels when they are enabled.
 type Retester struct {
 	RetesterPolicy `json:",inline"`
-	Oranizations   map[string]Oranization `json:"orgs"`
+	Oranizations   map[string]Oranization `json:"orgs,omitempty"`
 }
 
 // Oranization is org level configuration for retester configuration.
@@ -130,8 +130,8 @@ type Repo struct {
 // True/False in level org means enabled/disabled org. But repo can be disabled/enabled.
 type RetesterPolicy struct {
 	MaxRetestsForShaAndBase int   `json:"max_retests_for_sha_and_base,omitempty"`
-	MaxRetestsForSha        int   `json:"max_retests_for_sha"`
-	Enabled                 *bool `json:"enabled"`
+	MaxRetestsForSha        int   `json:"max_retests_for_sha,omitempty"`
+	Enabled                 *bool `json:"enabled,omitempty"`
 }
 
 func loadConfig(configFilePath string) (*Config, error) {

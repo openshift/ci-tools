@@ -94,6 +94,9 @@ func TestGetRetesterPolicy(t *testing.T) {
 						"ci-tools": {RetesterPolicy: RetesterPolicy{
 							MaxRetestsForSha: 3, MaxRetestsForShaAndBase: 3, Enabled: &True,
 						}},
+						"repo-max": {RetesterPolicy: RetesterPolicy{
+							MaxRetestsForSha: 6, Enabled: &True,
+						}},
 						"repo": {RetesterPolicy: RetesterPolicy{Enabled: &False}},
 					}},
 				"no-openshift": {
@@ -128,6 +131,20 @@ func TestGetRetesterPolicy(t *testing.T) {
 			},
 			config:   c,
 			expected: RetesterPolicy{3, 3, &True},
+		},
+		{
+			name: "enabled repo with one max retest value and enabled org",
+			pr: tide.PullRequest{
+				Number: num,
+				Author: struct{ Login githubv4.String }{Login: "openshift"},
+				Repository: struct {
+					Name          githubv4.String
+					NameWithOwner githubv4.String
+					Owner         struct{ Login githubv4.String }
+				}{Name: "repo-max", Owner: struct{ Login githubv4.String }{Login: "openshift"}},
+			},
+			config:   c,
+			expected: RetesterPolicy{2, 6, &True},
 		},
 		{
 			name: "enabled repo and disabled org",

@@ -58,9 +58,24 @@ func TestLoadConfig(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:     "basic case",
+			name:     "config",
 			file:     "testdata/testconfig/config.yaml",
 			expected: c,
+		},
+		{
+			name:     "default",
+			file:     "testdata/testconfig/default.yaml",
+			expected: &Config{Retester: Retester{RetesterPolicy: RetesterPolicy{MaxRetestsForSha: 9, MaxRetestsForShaAndBase: 3}}},
+		},
+		{
+			name:     "empty",
+			file:     "testdata/testconfig/empty.yaml",
+			expected: &Config{Retester: Retester{}},
+		},
+		{
+			name:     "no-config",
+			file:     "testdata/testconfig/no-config.yaml",
+			expected: &Config{Retester: Retester{}},
 		},
 	}
 	for _, tc := range testCases {
@@ -83,7 +98,7 @@ func TestGetRetesterPolicy(t *testing.T) {
 	False := false
 	c := &Config{
 		Retester: Retester{
-			RetesterPolicy: RetesterPolicy{MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9, Enabled: &True},
+			RetesterPolicy: RetesterPolicy{MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9},
 			Oranizations: map[string]Oranization{
 				"openshift": {
 					RetesterPolicy: RetesterPolicy{
@@ -103,6 +118,7 @@ func TestGetRetesterPolicy(t *testing.T) {
 					RetesterPolicy: RetesterPolicy{Enabled: &False},
 					Repos: map[string]Repo{
 						"ci-docs": {RetesterPolicy: RetesterPolicy{}},
+						"true":    {RetesterPolicy: RetesterPolicy{Enabled: &True}},
 						"ci-tools": {RetesterPolicy: RetesterPolicy{
 							MaxRetestsForSha: 4, MaxRetestsForShaAndBase: 4, Enabled: &True,
 						}},
@@ -173,7 +189,7 @@ func TestGetRetesterPolicy(t *testing.T) {
 			},
 			config:        c,
 			expected:      RetesterPolicy{},
-			expectedError: fmt.Errorf("repo is disabled"),
+			expectedError: nil,
 		},
 		{
 			name: "disabled repo and disabled org",
@@ -188,7 +204,7 @@ func TestGetRetesterPolicy(t *testing.T) {
 			},
 			config:        c,
 			expected:      RetesterPolicy{},
-			expectedError: fmt.Errorf("repo is disabled"),
+			expectedError: nil,
 		},
 		{
 			name: "not configured repo and enabled org",
@@ -217,7 +233,21 @@ func TestGetRetesterPolicy(t *testing.T) {
 			},
 			config:        c,
 			expected:      RetesterPolicy{},
-			expectedError: fmt.Errorf("not configured repo and disabled org"),
+			expectedError: nil,
+		},
+		{
+			name: "configured repo and disabled org",
+			pr: tide.PullRequest{
+				Number: num,
+				Author: struct{ Login githubv4.String }{Login: "no-openshift"},
+				Repository: struct {
+					Name          githubv4.String
+					NameWithOwner githubv4.String
+					Owner         struct{ Login githubv4.String }
+				}{Name: "true", Owner: struct{ Login githubv4.String }{Login: "no-openshift"}},
+			},
+			config:   c,
+			expected: RetesterPolicy{3, 9, &True},
 		},
 		{
 			name: "not configured repo and not configured org",
@@ -232,7 +262,7 @@ func TestGetRetesterPolicy(t *testing.T) {
 			},
 			config:        c,
 			expected:      RetesterPolicy{},
-			expectedError: fmt.Errorf("not configured org"),
+			expectedError: nil,
 		},
 		{
 			name: "Empty config",
@@ -247,7 +277,7 @@ func TestGetRetesterPolicy(t *testing.T) {
 			},
 			config:        &Config{Retester{}},
 			expected:      RetesterPolicy{},
-			expectedError: fmt.Errorf("not configured org"),
+			expectedError: nil,
 		},
 	}
 	for _, tc := range testCases {

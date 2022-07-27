@@ -163,6 +163,9 @@ type retestController struct {
 
 func (c *Config) GetRetesterPolicy(org, repo string) (RetesterPolicy, error) {
 	policy := RetesterPolicy{}
+	if c.Retester.RetesterPolicy == policy && len(c.Retester.Oranizations) == 0 {
+		return policy, nil
+	}
 	if orgStruct, ok := c.Retester.Oranizations[org]; ok && orgStruct.Enabled != nil {
 		policy.Enabled = orgStruct.Enabled
 		var repoStruct Repo
@@ -177,7 +180,7 @@ func (c *Config) GetRetesterPolicy(org, repo string) (RetesterPolicy, error) {
 					policy.MaxRetestsForShaAndBase = repoStruct.MaxRetestsForShaAndBase
 				}
 			} else {
-				return policy, fmt.Errorf("repo is disabled")
+				return RetesterPolicy{}, nil
 			}
 		}
 		if *orgStruct.Enabled {
@@ -189,11 +192,11 @@ func (c *Config) GetRetesterPolicy(org, repo string) (RetesterPolicy, error) {
 				policy.MaxRetestsForShaAndBase = orgStruct.MaxRetestsForShaAndBase
 			}
 		}
-		if !*policy.Enabled {
-			return orgStruct.RetesterPolicy, fmt.Errorf("not configured repo and disabled org")
+		if !*policy.Enabled && (c.Retester.Enabled == nil || !*c.Retester.Enabled) {
+			return RetesterPolicy{}, nil
 		}
-	} else {
-		return policy, fmt.Errorf("not configured org")
+	} else if c.Retester.Enabled == nil || !*c.Retester.Enabled {
+		return RetesterPolicy{}, nil
 	}
 	// set max retests default value
 	if policy.MaxRetestsForSha == 0 {

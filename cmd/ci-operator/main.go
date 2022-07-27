@@ -31,7 +31,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	authapi "k8s.io/api/authorization/v1"
 	coreapi "k8s.io/api/core/v1"
-	policyv1beta1 "k8s.io/api/policy/v1beta1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1315,8 +1315,8 @@ func generateAuthorAccessRoleBinding(namespace string, authors []string) *rbacap
 	}
 }
 
-func pdb(labelKey, namespace string) (*policyv1beta1.PodDisruptionBudget, crcontrollerutil.MutateFn) {
-	pdb := &policyv1beta1.PodDisruptionBudget{
+func pdb(labelKey, namespace string) (*policyv1.PodDisruptionBudget, crcontrollerutil.MutateFn) {
+	pdb := &policyv1.PodDisruptionBudget{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      fmt.Sprintf("ci-operator-%s", strings.ReplaceAll(labelKey, "/", "-")),
 			Namespace: namespace,

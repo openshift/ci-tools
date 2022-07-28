@@ -63,6 +63,23 @@ func TestRPMServerStepProvides(t *testing.T) {
 		},
 		expected: [][2]string{
 			{"RPM_REPO_ORG0_REPO0", "http://host"},
+			{"RPM_REPO_ORG1_REPO1", "http://host"},
+		},
+	}, {
+		name: "refs + extra refs",
+		jobSpec: api.JobSpec{
+			JobSpec: downwardapi.JobSpec{
+				Refs: &prowapi.Refs{Org: "org", Repo: "repo"},
+				ExtraRefs: []prowapi.Refs{
+					{Org: "org0", Repo: "repo0"},
+					{Org: "org1", Repo: "repo1"},
+				},
+			},
+		},
+		expected: [][2]string{
+			{"RPM_REPO_ORG0_REPO0", "http://host"},
+			{"RPM_REPO_ORG1_REPO1", "http://host"},
+			{"RPM_REPO_ORG_REPO", "http://host"},
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {

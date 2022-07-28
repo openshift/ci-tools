@@ -120,9 +120,18 @@ func (o *options) validateConfig() error {
 }
 
 func executeCommand(command string) ([]byte, error) {
-	out, err := exec.Command("bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c", command).CombinedOutput()
+	cmd := exec.Command("bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c", command)
+	err := cmd.Wait()
 	if err != nil {
+		out, outErr := cmd.CombinedOutput()
+		if outErr != nil {
+			return nil, fmt.Errorf("failed to read command output after prior failure (%v): %w", err, outErr)
+		}
 		return nil, fmt.Errorf("%s : %w", string(out), err)
+	}
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read command output: %w", err)
 	}
 	if len(out) == 0 || len(bytes.TrimSpace(out)) == 0 {
 		return nil, fmt.Errorf("command %q returned no output", command)

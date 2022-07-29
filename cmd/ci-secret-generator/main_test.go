@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -224,6 +225,50 @@ func TestValidateContexts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := validateContexts(itemContextsFromConfig(tc.cfg), tc.bootstrapCfg); err != nil {
 				t.Errorf("validation failed unexpectedly: %v", err)
+			}
+		})
+	}
+}
+func TestExecuteCommand(t *testing.T) {
+	testCases := []struct {
+		name          string
+		cmd           string
+		expected      []byte
+		expectedError error
+	}{
+		{
+			name:     "basic case",
+			cmd:      "echo basic case",
+			expected: []byte("basic case\n"),
+		},
+		{
+			name:          "error on no output",
+			cmd:           "true",
+			expectedError: fmt.Errorf("command \"true\" returned no output"),
+		},
+		{
+			name:          "error on cmd failure",
+			cmd:           "false",
+			expectedError: fmt.Errorf(" : exit status 1"),
+		},
+		{
+			name:          "error if stderr is not empty",
+			cmd:           ">&2 echo some error",
+			expectedError: fmt.Errorf("command \">&2 echo some error\" has error output"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "error if stderr is not empty" {
+				t.Skip("Skipping a test before https://issues.redhat.com/browse/DPTP-3033 is complete:", tc.name)
+			}
+			actual, actualError := executeCommand(tc.cmd)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("%s: mismatch (-expected +actual), diff: %s", tc.name, diff)
+			}
+			if diff := cmp.Diff(tc.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: mismatch (-expected +actual), diff: %s", tc.name, diff)
 			}
 		})
 	}

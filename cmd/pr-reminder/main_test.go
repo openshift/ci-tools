@@ -9,6 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/slack-go/slack"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/github"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -35,7 +36,7 @@ func Test_user_requestedToReview(t *testing.T) {
 		},
 		{
 			name: "team requested",
-			user: user{GithubId: "some-id", TeamName: "some-team"},
+			user: user{GithubId: "some-id", TeamNames: sets.NewString("some-team")},
 			pr: github.PullRequest{
 				RequestedTeams: []github.Team{
 					{
@@ -47,7 +48,7 @@ func Test_user_requestedToReview(t *testing.T) {
 		},
 		{
 			name: "team requested while user is author",
-			user: user{GithubId: "some-id", TeamName: "some-team"},
+			user: user{GithubId: "some-id", TeamNames: sets.NewString("some-team")},
 			pr: github.PullRequest{
 				User: github.User{
 					Login: "some-id",
@@ -201,7 +202,6 @@ func TestFindPRsForUsers(t *testing.T) {
 	testCases := []struct {
 		name     string
 		users    map[string]user
-		repos    []string
 		expected map[string]user
 	}{
 		{
@@ -210,20 +210,22 @@ func TestFindPRsForUsers(t *testing.T) {
 				"someuser": {
 					KerberosId: "someuser",
 					GithubId:   "id-1",
-					TeamName:   "some-team",
+					TeamNames:  sets.NewString("some-team"),
+					Repos:      sets.NewString("org/repo-1", "org/repo-2"),
 				},
 				"user-b": {
 					KerberosId: "user-b",
 					GithubId:   "id-2",
-					TeamName:   "some-team",
+					TeamNames:  sets.NewString("some-team"),
+					Repos:      sets.NewString("org/repo-1", "org/repo-2"),
 				},
 			},
-			repos: []string{"org/repo-1", "org/repo-2"},
 			expected: map[string]user{
 				"someuser": {
 					KerberosId: "someuser",
 					GithubId:   "id-1",
-					TeamName:   "some-team",
+					TeamNames:  sets.NewString("some-team"),
+					Repos:      sets.NewString("org/repo-1", "org/repo-2"),
 					PrRequests: []prRequest{
 						{
 							Repo:        "org/repo-1",
@@ -248,7 +250,8 @@ func TestFindPRsForUsers(t *testing.T) {
 				"user-b": {
 					KerberosId: "user-b",
 					GithubId:   "id-2",
-					TeamName:   "some-team",
+					TeamNames:  sets.NewString("some-team"),
+					Repos:      sets.NewString("org/repo-1", "org/repo-2"),
 					PrRequests: []prRequest{
 						{
 							Repo:        "org/repo-1",
@@ -284,7 +287,7 @@ func TestFindPRsForUsers(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			prs := findPrsForUsers(tc.users, tc.repos, client)
+			prs := findPrsForUsers(tc.users, client)
 			if diff := cmp.Diff(tc.expected, prs); diff != "" {
 				t.Fatalf("findPRsForUsers resulted didn't match expected, diff: %s", diff)
 			}
@@ -310,8 +313,8 @@ func (c fakeSlackClient) PostMessage(channelID string, options ...slack.MsgOptio
 	return "", "", nil
 }
 
-func TestCreateUsers(t *testing.T) {
-	client := fakeSlackClient{userIdsByEmail: map[string]string{"user1@redhat.com": "U1000000", "user2@redhat.com": "U222222"}}
+func Test_config_CreateUsers(t *testing.T) {
+	client := fakeSlackClient{userIdsByEmail: map[string]string{"user1@redhat.com": "U1000000", "user2@redhat.com": "U222222", "user3@redhat.com": "U333333"}}
 	testCases := []struct {
 		name        string
 		config      config
@@ -322,8 +325,46 @@ func TestCreateUsers(t *testing.T) {
 		{
 			name: "valid inputs",
 			config: config{
-				TeamMembers: []string{"user1", "user2"},
-				TeamName:    "some-team",
+				Teams: []team{
+					{
+						TeamMembers: []string{"user1", "user2"},
+						TeamNames:   []string{"some-team", "other-team"},
+					},
+					{
+						TeamMembers: []string{"user3"},
+						TeamNames:   []string{"some-team"},
+					},
+				},
+			},
+			gtk: githubToKerberos{"user-1": "user1", "user-2": "user2", "user-3": "user3"},
+			expected: map[string]user{
+				"user1": {
+					KerberosId: "user1",
+					GithubId:   "user-1",
+					SlackId:    "U1000000",
+					TeamNames:  sets.NewString("some-team", "other-team"),
+				},
+				"user2": {
+					KerberosId: "user2",
+					GithubId:   "user-2",
+					SlackId:    "U222222",
+					TeamNames:  sets.NewString("some-team", "other-team"),
+				},
+				"user3": {
+					KerberosId: "user3",
+					GithubId:   "user-3",
+					SlackId:    "U333333",
+					TeamNames:  sets.NewString("some-team"),
+				},
+			},
+		},
+		{
+			name: "no slack user found for a configured user",
+			config: config{
+				Teams: []team{{
+					TeamMembers: []string{"user1", "user4"},
+					TeamNames:   []string{"some-team"},
+				}},
 			},
 			gtk: githubToKerberos{"user-1": "user1", "user-2": "user2"},
 			expected: map[string]user{
@@ -331,44 +372,134 @@ func TestCreateUsers(t *testing.T) {
 					KerberosId: "user1",
 					GithubId:   "user-1",
 					SlackId:    "U1000000",
-					TeamName:   "some-team",
-				},
-				"user2": {
-					KerberosId: "user2",
-					GithubId:   "user-2",
-					SlackId:    "U222222",
-					TeamName:   "some-team",
+					TeamNames:  sets.NewString("some-team"),
 				},
 			},
+			expectedErr: errors.New("[could not get slack id for: user4: no userId found for email: user4@redhat.com, no githubId found for: user4]"),
 		},
 		{
-			name: "no slack user found",
+			name: "no github user found for a configured user",
 			config: config{
-				TeamMembers: []string{"user1", "user3"},
-				TeamName:    "some-team",
+				Teams: []team{{
+					TeamMembers: []string{"user1", "user2"},
+					TeamNames:   []string{"some-team"},
+				}},
 			},
-			gtk:         githubToKerberos{"user-1": "user1", "user-2": "user2"},
-			expectedErr: errors.New("could not get slack user for user3: no userId found for email: user3@redhat.com"),
+			gtk: githubToKerberos{"user-1": "user1"},
+			expected: map[string]user{
+				"user1": {
+					KerberosId: "user1",
+					GithubId:   "user-1",
+					SlackId:    "U1000000",
+					TeamNames:  sets.NewString("some-team"),
+				},
+			},
+			expectedErr: errors.New("no githubId found for: user2"),
 		},
 		{
-			name: "no github user found",
+			name: "missing github id and missing slack id for different users",
 			config: config{
-				TeamMembers: []string{"user1", "user2"},
-				TeamName:    "some-team",
+				Teams: []team{{
+					TeamMembers: []string{"user1", "user2", "user4"},
+					TeamNames:   []string{"some-team"},
+				}},
 			},
-			gtk:         githubToKerberos{"user-1": "user1"},
-			expectedErr: errors.New("no githubId found for user(s): [user2]"),
+			gtk: githubToKerberos{"user-1": "user1", "user-4": "user4"},
+			expected: map[string]user{
+				"user1": {
+					KerberosId: "user1",
+					GithubId:   "user-1",
+					SlackId:    "U1000000",
+					TeamNames:  sets.NewString("some-team"),
+				},
+			},
+			expectedErr: errors.New("[could not get slack id for: user4: no userId found for email: user4@redhat.com, no githubId found for: user2]"),
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			users, err := createUsers(tc.config, tc.gtk, client)
+			users, err := tc.config.createUsers(tc.gtk, client)
 			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("returned error doesn't match expected, diff: %s", diff)
 			}
 
 			if diff := cmp.Diff(tc.expected, users); diff != "" {
 				t.Fatalf("returned users don't match expected, diff: %s", diff)
+			}
+		})
+	}
+}
+
+func Test_config_validate(t *testing.T) {
+	client := fakeSlackClient{userIdsByEmail: map[string]string{"user1@redhat.com": "U1000000", "user2@redhat.com": "U222222", "no-gh@redhat.com": "U4444", "user5@redhat.com": "U55555555"}}
+	gtk := githubToKerberos{"user-1": "user1", "user-2": "user2", "noslack": "no-slack", "user-5": "user5"}
+
+	testCases := []struct {
+		name     string
+		config   config
+		expected error
+	}{
+		{
+			name: "valid",
+			config: config{
+				Teams: []team{
+					{
+						TeamMembers: []string{"user1", "user2"},
+						TeamNames:   []string{"some-team"},
+						Repos:       []string{"org/repo", "org/repo2", "org2/repo"},
+					},
+					{
+						TeamMembers: []string{"user5"},
+						TeamNames:   []string{"some-other-team"},
+						Repos:       []string{"org2/repo"},
+					},
+				},
+			},
+		},
+		{
+			name: "no teamMembers",
+			config: config{
+				Teams: []team{
+					{
+						TeamNames: []string{"some-team"},
+						Repos:     []string{"org/repo", "org/repo2", "org2/repo"},
+					},
+				},
+			},
+			expected: errors.New("teams[0] doesn't contain any teamMembers"),
+		},
+		{
+			name: "invalid repo",
+			config: config{
+				Teams: []team{
+					{
+						TeamMembers: []string{"user1", "user2"},
+						TeamNames:   []string{"some-team"},
+						Repos:       []string{"repo", "org/repo2", "org2/repo"},
+					},
+				},
+			},
+			expected: errors.New("teams[0] has improperly formatted org/repo: repo"),
+		},
+		{
+			name: "invalid teamMembers",
+			config: config{
+				Teams: []team{
+					{
+						TeamMembers: []string{"no-slack", "no-gh"},
+						TeamNames:   []string{"some-team"},
+						Repos:       []string{"org/repo"},
+					},
+				},
+			},
+			expected: errors.New("[could not get slack id for: no-slack: no userId found for email: no-slack@redhat.com, no githubId found for: no-gh]"),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.config.validate(gtk, client)
+			if diff := cmp.Diff(tc.expected, err, testhelper.EquateErrorMessage); diff != "" {
+				t.Fatalf("returned error doesn't match expected, diff: %s", diff)
 			}
 		})
 	}

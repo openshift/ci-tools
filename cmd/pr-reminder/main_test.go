@@ -329,10 +329,12 @@ func Test_config_CreateUsers(t *testing.T) {
 					{
 						TeamMembers: []string{"user1", "user2"},
 						TeamNames:   []string{"some-team", "other-team"},
+						Repos:       []string{"org/repo"},
 					},
 					{
 						TeamMembers: []string{"user3"},
 						TeamNames:   []string{"some-team"},
+						Repos:       []string{"other-org/repo"},
 					},
 				},
 			},
@@ -343,18 +345,48 @@ func Test_config_CreateUsers(t *testing.T) {
 					GithubId:   "user-1",
 					SlackId:    "U1000000",
 					TeamNames:  sets.NewString("some-team", "other-team"),
+					Repos:      sets.NewString("org/repo"),
 				},
 				"user2": {
 					KerberosId: "user2",
 					GithubId:   "user-2",
 					SlackId:    "U222222",
 					TeamNames:  sets.NewString("some-team", "other-team"),
+					Repos:      sets.NewString("org/repo"),
 				},
 				"user3": {
 					KerberosId: "user3",
 					GithubId:   "user-3",
 					SlackId:    "U333333",
 					TeamNames:  sets.NewString("some-team"),
+					Repos:      sets.NewString("other-org/repo"),
+				},
+			},
+		},
+		{
+			name: "user on multiple teams",
+			config: config{
+				Teams: []team{
+					{
+						TeamMembers: []string{"user1"},
+						TeamNames:   []string{"some-team", "other-team"},
+						Repos:       []string{"org/repo"},
+					},
+					{
+						TeamMembers: []string{"user1"},
+						TeamNames:   []string{"some-team", "additional-team"},
+						Repos:       []string{"other-org/repo"},
+					},
+				},
+			},
+			gtk: githubToKerberos{"user-1": "user1"},
+			expected: map[string]user{
+				"user1": {
+					KerberosId: "user1",
+					GithubId:   "user-1",
+					SlackId:    "U1000000",
+					TeamNames:  sets.NewString("some-team", "other-team", "additional-team"),
+					Repos:      sets.NewString("org/repo", "other-org/repo"),
 				},
 			},
 		},

@@ -120,17 +120,36 @@ func (o *options) validateConfig() error {
 }
 
 func executeCommand(command string) ([]byte, error) {
-	out, err := exec.Command("bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c", command).CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("%s : %w", string(out), err)
+	cmd := exec.Command("bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c", command)
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+	if err := cmd.Run(); err != nil {
+		// The command completed with non zero exit code, standard streams *should* be available.
+		if _, ok := err.(*exec.ExitError); ok {
+			errStr := errBuf.String()
+			if len(errStr) == 0 {
+				return nil, fmt.Errorf(" : %w", err)
+			}
+			return nil, fmt.Errorf("%s: %w", errStr, err)
+		}
+		// At this point we can't easily tell why the command failed,
+		// there is no guarantee neither stdout nor stderr are valid.
+		return nil, fmt.Errorf("failed to run the command: %w", err)
 	}
-	if len(out) == 0 || len(bytes.TrimSpace(out)) == 0 {
+
+	if len(errBuf.Bytes()) != 0 {
+		return nil, fmt.Errorf("command %q has error output", command)
+	}
+
+	stdout := outBuf.Bytes()
+	if len(stdout) == 0 || len(bytes.TrimSpace(stdout)) == 0 {
 		return nil, fmt.Errorf("command %q returned no output", command)
 	}
-	if string(bytes.TrimSpace(out)) == "null" {
+	if string(bytes.TrimSpace(stdout)) == "null" {
 		return nil, fmt.Errorf("command %s returned 'null' as output", command)
 	}
-	return out, nil
+	return stdout, nil
 }
 
 func updateSecrets(config secretgenerator.Config, client secrets.Client) error {

@@ -19,8 +19,7 @@ function OC() {
 
 os::log::info "Extracting production data we need to run pr-reminder..."
 OC extract secret/slack-credentials-dptp-bot-alpha --keys oauth_token --to "${data}"
-OC extract configmap/pr-reminder-config --keys config.yaml --to "${data}"
 OC extract configmap/sync-rover-groups --keys mapping.yaml --to "${data}"
 
 os::log::info "Running pr-reminder"
-go run ./cmd/pr-reminder --config-path="${data}/config.yaml" --github-mapping-config-path="${data}/mapping.yaml" --slack-token-path="${data}/oauth_token"
+go run ./cmd/pr-reminder --validate-only=false --config-path="./hack/pr-reminder-config.yaml" --github-mapping-config-path="${data}/mapping.yaml" --slack-token-path="${data}/oauth_token"

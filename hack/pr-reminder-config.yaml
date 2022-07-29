@@ -1,0 +1,10 @@
+teams:
+- teamMembers:
+  - sgoeddel
+  teamNames:
+  - test-platform
+  repos:
+  - openshift/ci-tools
+  - openshift/ci-docs
+  - openshift/release
+  - kubernetes/test-infra

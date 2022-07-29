@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/slack-go/slack"
 
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
@@ -24,6 +26,7 @@ type options struct {
 	config              string
 	githubMappingConfig string
 	slackTokenPath      string
+	validateOnly        bool
 	logLevel            string
 
 	flagutil.GitHubOptions
@@ -56,6 +59,7 @@ func parseOptions() (options, error) {
 	fs.StringVar(&o.config, "config-path", "", "The config file location")
 	fs.StringVar(&o.githubMappingConfig, "github-mapping-config-path", "", "the github-mapping config file location")
 	fs.StringVar(&o.slackTokenPath, "slack-token-path", "", "Path to the file containing the Slack token to use.")
+	fs.BoolVar(&o.validateOnly, "validate-only", false, "Run the tool in validate-only mode. This will simply validate the config.")
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 
 	o.GitHubOptions.AddFlags(fs)
@@ -63,8 +67,88 @@ func parseOptions() (options, error) {
 }
 
 type config struct {
+	Teams []team `json:"teams"`
+}
+
+var orgRepoFormat = regexp.MustCompile(`\w+/\w+`)
+
+func (c *config) validate(gtk githubToKerberos, slackClient slackClient) error {
+	var errors []error
+	for i, t := range c.Teams {
+		if len(t.TeamMembers) == 0 {
+			errors = append(errors, fmt.Errorf("teams[%d] doesn't contain any teamMembers", i))
+		}
+
+		for _, r := range t.Repos {
+			if !orgRepoFormat.MatchString(r) {
+				errors = append(errors, fmt.Errorf("teams[%d] has improperly formatted org/repo: %s", i, r))
+			}
+		}
+	}
+
+	_, err := c.createUsers(gtk, slackClient)
+	if err != nil {
+		errors = append(errors, err)
+	}
+
+	return kerrors.NewAggregate(errors)
+}
+
+func (c *config) createUsers(gtk githubToKerberos, slackClient slackClient) (map[string]user, error) {
+	users := make(map[string]user)
+	var errors []error
+	for _, team := range c.Teams {
+		for _, member := range team.TeamMembers {
+			u, exists := users[member]
+			if exists {
+				u.TeamNames.Insert(team.TeamNames...)
+				u.Repos.Insert(team.Repos...)
+			} else {
+				email := fmt.Sprintf("%s@redhat.com", member)
+				slackUser, err := slackClient.GetUserByEmail(email)
+				var slackId string
+				if err != nil {
+					// Even though we won't be able to find PRs for this user we should leave them in the list for now to determine if there is a github ID found
+					errors = append(errors, fmt.Errorf("could not get slack id for: %s: %w", member, err))
+				} else {
+					slackId = slackUser.ID
+				}
+				u = user{
+					KerberosId: member,
+					TeamNames:  sets.NewString(team.TeamNames...),
+					SlackId:    slackId,
+					Repos:      sets.NewString(team.Repos...),
+				}
+			}
+			users[member] = u
+		}
+	}
+
+	for githubId, kerberosId := range gtk {
+		userInfo, exists := users[kerberosId]
+		if exists {
+			userInfo.GithubId = githubId
+			users[kerberosId] = userInfo
+		}
+	}
+
+	for id, userInfo := range users {
+		if userInfo.GithubId == "" {
+			errors = append(errors, fmt.Errorf("no githubId found for: %v", id))
+			delete(users, id)
+		}
+		if userInfo.SlackId == "" {
+			// The error was already found and added, but we don't want to include this user
+			delete(users, id)
+		}
+	}
+
+	return users, kerrors.NewAggregate(errors)
+}
+
+type team struct {
 	TeamMembers []string `json:"teamMembers"`
-	TeamName    string   `json:"teamName"`
+	TeamNames   []string `json:"teamNames"`
 	Repos       []string `json:"repos"`
 }
 
@@ -74,7 +158,8 @@ type user struct {
 	KerberosId string
 	GithubId   string
 	SlackId    string
-	TeamName   string
+	TeamNames  sets.String
+	Repos      sets.String
 	PrRequests []prRequest
 }
 
@@ -82,8 +167,10 @@ func (u *user) requestedToReview(pr github.PullRequest) bool {
 	// only check PRs that the user is not the author of, as they could have requested their own team
 	if u.GithubId != pr.User.Login {
 		for _, team := range pr.RequestedTeams {
-			if u.TeamName == team.Slug {
-				return true
+			for _, teamName := range u.TeamNames.List() {
+				if teamName == team.Slug {
+					return true
+				}
 			}
 		}
 
@@ -176,44 +263,66 @@ func main() {
 	}
 	slackClient := slack.New(string(secret.GetSecret(o.slackTokenPath)))
 
-	users, err := createUsers(c, gtk, slackClient)
-	if err != nil {
-		logrus.WithError(err).Fatal("failed to create users")
-	}
+	if o.validateOnly {
+		if err := c.validate(gtk, slackClient); err != nil {
+			logrus.WithError(err).Fatal("validation failed")
+		} else {
+			logrus.Infof("config is valid")
+		}
+	} else {
+		users, err := c.createUsers(gtk, slackClient)
+		if err != nil {
+			logrus.WithError(err).Error("failed to create some users")
+		}
 
-	ghClient, err := o.GitHubOptions.GitHubClient(false)
-	if err != nil {
-		logrus.WithError(err).Fatal("failed to create github client")
-	}
+		if len(users) > 0 {
+			ghClient, err := o.GitHubOptions.GitHubClient(false)
+			if err != nil {
+				logrus.WithError(err).Fatal("failed to create github client")
+			}
 
-	for _, user := range findPrsForUsers(users, c.Repos, ghClient) {
-		if len(user.PrRequests) > 0 {
-			// sort by most recent update first
-			sort.Slice(user.PrRequests, func(i, j int) bool {
-				return user.PrRequests[i].LastUpdated.After(user.PrRequests[j].LastUpdated)
-			})
+			for _, user := range findPrsForUsers(users, ghClient) {
+				if len(user.PrRequests) > 0 {
+					// sort by most recent update first
+					sort.Slice(user.PrRequests, func(i, j int) bool {
+						return user.PrRequests[i].LastUpdated.After(user.PrRequests[j].LastUpdated)
+					})
 
-			if err = messageUser(user, slackClient); err != nil {
-				logrus.WithError(err).Fatal("failed to message users")
+					if err = messageUser(user, slackClient); err != nil {
+						logrus.WithError(err).Fatal("failed to message users")
+					}
+				}
 			}
 		}
 	}
 }
 
-func findPrsForUsers(users map[string]user, repos []string, ghClient prClient) map[string]user {
-	for _, orgRepo := range repos {
+func findPrsForUsers(users map[string]user, ghClient prClient) map[string]user {
+	repos := sets.NewString()
+	for _, u := range users {
+		repos.Insert(u.Repos.List()...)
+	}
+
+	logrus.Infof("finding PRs for %d users in %d repos", len(users), len(repos))
+
+	repoToPRs := make(map[string][]github.PullRequest, len(repos))
+	for _, orgRepo := range repos.List() {
 		split := strings.Split(orgRepo, "/")
 		org, repo := split[0], split[1]
 
 		prs, err := ghClient.GetPullRequests(org, repo)
 		if err != nil {
-			logrus.Errorf("failed to get pull requests: %v", err)
+			logrus.Errorf("failed to get pull requests for: %s: %v", repo, err)
 		}
-		for _, pr := range prs {
-			for i, u := range users {
+		repoToPRs[orgRepo] = prs
+	}
+
+	for i, u := range users {
+		for _, repo := range u.Repos.List() {
+			for _, pr := range repoToPRs[repo] {
 				if u.requestedToReview(pr) {
 					u.PrRequests = append(u.PrRequests, prRequest{
-						Repo:        orgRepo,
+						Repo:        repo,
 						Number:      pr.Number,
 						Url:         pr.HTMLURL,
 						Title:       pr.Title,
@@ -239,42 +348,6 @@ func loadConfig(filename string, config interface{}) error {
 		return fmt.Errorf("failed to unmarshall config: %w", err)
 	}
 	return nil
-}
-
-func createUsers(config config, gtk githubToKerberos, slackClient slackClient) (map[string]user, error) {
-	users := make(map[string]user, len(config.TeamMembers))
-	for _, member := range config.TeamMembers {
-		email := fmt.Sprintf("%s@redhat.com", member)
-		slackUser, err := slackClient.GetUserByEmail(email)
-		if err != nil {
-			return nil, fmt.Errorf("could not get slack user for %s: %w", member, err)
-		}
-		users[member] = user{
-			KerberosId: member,
-			TeamName:   config.TeamName,
-			SlackId:    slackUser.ID,
-		}
-	}
-
-	for githubId, kerberosId := range gtk {
-		userInfo, exists := users[kerberosId]
-		if exists {
-			userInfo.GithubId = githubId
-			users[kerberosId] = userInfo
-		}
-	}
-
-	var usersMissingGithubId []string
-	for _, userInfo := range users {
-		if userInfo.GithubId == "" {
-			usersMissingGithubId = append(usersMissingGithubId, userInfo.KerberosId)
-		}
-	}
-	if len(usersMissingGithubId) > 0 {
-		return nil, fmt.Errorf("no githubId found for user(s): %v", usersMissingGithubId)
-	}
-
-	return users, nil
 }
 
 func messageUser(user user, slackClient slackClient) error {

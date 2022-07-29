@@ -224,8 +224,6 @@ func validatePolicies(policy RetesterPolicy) []error {
 		} else {
 			return nil
 		}
-	} else {
-		errs = append(errs, fmt.Errorf("policy is not enabled by default"))
 	}
 	return errs
 }
@@ -297,12 +295,6 @@ const (
 	retestBackoffPause
 	retestBackoffRetest
 )
-
-// MaxRetests contains MaxRetestsForSha and MaxRetestsForShaAndBase as in Repo in Config
-type MaxRetests struct {
-	ForSha        int
-	ForShaAndBase int
-}
 
 func (b *backoffCache) check(pr tide.PullRequest, baseSha string, config *Config, policy RetesterPolicy) (retestBackoffAction, string) {
 	key := prKey(&pr)

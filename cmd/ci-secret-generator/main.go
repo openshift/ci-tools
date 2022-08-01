@@ -128,14 +128,12 @@ func executeCommand(command string) ([]byte, error) {
 		// The command completed with non zero exit code, standard streams *should* be available.
 		if _, ok := err.(*exec.ExitError); ok {
 			errStr := errBuf.String()
-			if len(errStr) == 0 {
-				return nil, fmt.Errorf(" : %w", err)
-			}
-			return nil, fmt.Errorf("%s: %w", errStr, err)
+			return nil, fmt.Errorf("failed to run the command %q: %w\nerror output: %q",
+				command, err, errStr)
 		}
 		// At this point we can't easily tell why the command failed,
 		// there is no guarantee neither stdout nor stderr are valid.
-		return nil, fmt.Errorf("failed to run the command: %w", err)
+		return nil, fmt.Errorf("failed to run the command %q: %w", command, err)
 	}
 
 	if len(errBuf.Bytes()) != 0 {

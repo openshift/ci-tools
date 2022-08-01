@@ -35,6 +35,18 @@ func Test_user_requestedToReview(t *testing.T) {
 			expected: true,
 		},
 		{
+			name: "user assigned",
+			user: user{GithubId: "some-id"},
+			pr: github.PullRequest{
+				Assignees: []github.User{
+					{
+						Login: "some-id",
+					},
+				},
+			},
+			expected: true,
+		},
+		{
 			name: "team requested",
 			user: user{GithubId: "some-id", TeamNames: sets.NewString("some-team")},
 			pr: github.PullRequest{

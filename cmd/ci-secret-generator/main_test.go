@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -229,6 +230,53 @@ func TestValidateContexts(t *testing.T) {
 		})
 	}
 }
+
+func TestFmtExecCmdErr(t *testing.T) {
+	testCases := []struct {
+		name           string
+		action         string
+		cmd            string
+		wrapErr        error
+		stdout         []byte
+		stderr         []byte
+		partialStreams bool
+		expected       error
+	}{
+		{
+			"no stdout and stderr",
+			"run", "echo", errors.New("wrapped"), []byte{}, []byte{}, false,
+			fmt.Errorf(execCmdErrFmt, "run", "echo", errors.New("wrapped"), "output", "",
+				"error output", ""),
+		},
+		{
+			"stdout and stderr exist",
+			"run", "echo", errors.New("wrapped"), []byte("test out"), []byte("test err"), false,
+			fmt.Errorf(execCmdErrFmt, "run", "echo", errors.New("wrapped"), "output", "test out",
+				"error output", "test err"),
+		},
+		{
+			"no error",
+			"run", "echo", nil, []byte("test out"), []byte("test err"), false,
+			fmt.Errorf(execCmdErrFmt, "run", "echo", nil, "output", "test out",
+				"error output", "test err"),
+		},
+		{
+			"partial streams",
+			"run", "false", errors.New("wrapped"), []byte("stdou..."), []byte("stder..."), true,
+			fmt.Errorf(execCmdErrFmt, "run", "false", errors.New("wrapped"),
+				"output (may be incomplete)", "stdou...", "error output (may be incomplete)", "stder..."),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := fmtExecCmdErr(tc.action, tc.cmd, tc.wrapErr, tc.stdout, tc.stderr, tc.partialStreams)
+			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: mismatch (-expected +actual), diff: %s", tc.name, diff)
+			}
+		})
+	}
+}
+
 func TestExecuteCommand(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -242,27 +290,33 @@ func TestExecuteCommand(t *testing.T) {
 			expected: []byte("basic case\n"),
 		},
 		{
-			name:          "error on no output",
-			cmd:           "true",
-			expectedError: fmt.Errorf("command \"true\" returned no output"),
+			name: "error on no output",
+			cmd:  "true",
+			expectedError: fmtExecCmdErr(execCmdValidateStdoutErrAction, "true",
+				errExecCmdNoStdout, []byte{}, []byte{}, false),
 		},
 		{
-			name:          "error on cmd failure",
-			cmd:           "false",
-			expectedError: fmt.Errorf(" : exit status 1"),
+			name: "error on cmd failure",
+			cmd:  "false",
+			expectedError: fmtExecCmdErr(execCmdRunErrAction, "false",
+				errors.New("exit status 1"), []byte{}, []byte{}, false),
 		},
 		{
-			name:          "error if stderr is not empty",
-			cmd:           ">&2 echo some error",
-			expectedError: fmt.Errorf("command \">&2 echo some error\" has error output"),
+			name: "error if stderr is not empty",
+			cmd:  ">&2 echo some error",
+			expectedError: fmtExecCmdErr(execCmdValidateStderrErrAction, ">&2 echo some error",
+				errExecCmdNotEmptyStderr, []byte{}, []byte("some error\n"), false),
+		},
+		{
+			name: "error if stdout is 'null'",
+			cmd:  "echo null",
+			expectedError: fmtExecCmdErr(execCmdValidateStdoutErrAction, "echo null",
+				errExecCmdNullStdout, []byte("null\n"), []byte{}, false),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.name == "error if stderr is not empty" {
-				t.Skip("Skipping a test before https://issues.redhat.com/browse/DPTP-3033 is complete:", tc.name)
-			}
 			actual, actualError := executeCommand(tc.cmd)
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("%s: mismatch (-expected +actual), diff: %s", tc.name, diff)

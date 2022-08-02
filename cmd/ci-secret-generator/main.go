@@ -23,8 +23,8 @@ import (
 
 const (
 	execCmdRunErrAction            = "run"
-	execCmdValidateStdoutErrAction = "validate stdout"
-	execCmdValidateStderrErrAction = "validate stderr"
+	execCmdValidateStdoutErrAction = "validate stdout of"
+	execCmdValidateStderrErrAction = "validate stderr of"
 	execCmdErrFmt                  = "failed to %s command %q: %w\n%s:\n%s\n%s:\n%s"
 )
 

@@ -292,26 +292,44 @@ func TestExecuteCommand(t *testing.T) {
 		{
 			name: "error on no output",
 			cmd:  "true",
-			expectedError: fmtExecCmdErr(execCmdValidateStdoutErrAction, "true",
-				errExecCmdNoStdout, []byte{}, []byte{}, false),
+			expectedError: errors.New(
+				`failed to validate stdout of command "true": no output returned
+output:
+
+error output:
+`),
 		},
 		{
 			name: "error on cmd failure",
 			cmd:  "false",
-			expectedError: fmtExecCmdErr(execCmdRunErrAction, "false",
-				errors.New("exit status 1"), []byte{}, []byte{}, false),
+			expectedError: errors.New(
+				`failed to run command "false": exit status 1
+output:
+
+error output:
+`),
 		},
 		{
 			name: "error if stderr is not empty",
 			cmd:  ">&2 echo some error",
-			expectedError: fmtExecCmdErr(execCmdValidateStderrErrAction, ">&2 echo some error",
-				errExecCmdNotEmptyStderr, []byte{}, []byte("some error\n"), false),
+			expectedError: errors.New(
+				`failed to validate stderr of command ">&2 echo some error": stderr is not empty
+output:
+
+error output:
+some error
+`),
 		},
 		{
 			name: "error if stdout is 'null'",
 			cmd:  "echo null",
-			expectedError: fmtExecCmdErr(execCmdValidateStdoutErrAction, "echo null",
-				errExecCmdNullStdout, []byte("null\n"), []byte{}, false),
+			expectedError: errors.New(
+				`failed to validate stdout of command "echo null": 'null' output returned
+output:
+null
+
+error output:
+`),
 		},
 	}
 

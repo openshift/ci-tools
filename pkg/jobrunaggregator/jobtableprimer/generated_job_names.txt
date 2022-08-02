@@ -113,6 +113,7 @@ periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-aws-ov
 periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-aws-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-aws-upgrade
 periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-azure-upgrade
+periodic-ci-openshift-release-master-nightly-4.11-credentials-request-freeze
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11-ci.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11-multi.json
@@ -244,30 +245,31 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-alibaba
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-driver-toolkit
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-fips
+periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-ovn-single-node
+periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-ovn-single-node-serial
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-proxy
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn
+periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn-cgroupsv2
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn-serial
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn-upgrade
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn-upgrade
-periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-single-node
-periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-single-node-serial
 periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-sdn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-rt
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-sdn
-periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-assisted
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-ovn-dualstack
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-ovn-ipv6
-periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ipv4
+periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn
+periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-serial-ipv4
+periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-upgrade
+periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-virtualmedia
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-dualstack
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-virtualmedia
-periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-upgrade
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-upgrade-ovn-ipv6
-periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-virtualmedia
-periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-sdn-ipi
-periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-single-node-live-iso
+periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-single-node-live-iso
+periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-sdn-assisted
 periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt
 periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere
@@ -383,7 +385,6 @@ periodic-ci-openshift-release-master-nightly-4.10-credentials-request-freeze
 periodic-ci-openshift-release-master-nightly-4.10-e2e-alibaba
 periodic-ci-openshift-release-master-nightly-4.10-e2e-alibaba-csi
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws
-periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-canary
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-cgroupsv2
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-crun
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-csi

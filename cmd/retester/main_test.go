@@ -8,12 +8,12 @@ import (
 )
 
 func TestGatherOptions(t *testing.T) {
-	expected := []string{"org/repo", "other-org/other-repo"}
-	os.Args = []string{"cmd", "--enable-on-repo=org/repo", "--cache-record-age=100h", "--enable-on-repo=other-org/other-repo"}
+	expected := "config.yaml"
+	os.Args = []string{"cmd", "--cache-record-age=100h", "--config-file=config.yaml"}
 
 	actual := gatherOptions()
 
-	if diff := cmp.Diff(expected, actual.enableOnRepos.Strings()); diff != "" {
-		t.Errorf("Test failed, expected: '%+v', got:  '%+v'", expected, actual.enableOnRepos)
+	if diff := cmp.Diff(expected, actual.configFile); diff != "" {
+		t.Errorf("Test failed, expected: '%+v', got:  '%+v'", expected, actual.configFile)
 	}
 }

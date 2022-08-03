@@ -35,8 +35,7 @@ type options struct {
 	cacheFile      string
 	cacheRecordAge time.Duration
 
-	enableOnRepos prowflagutil.Strings
-	enableOnOrgs  prowflagutil.Strings
+	configFile string
 }
 
 func (o *options) Validate() error {
@@ -60,8 +59,7 @@ func gatherOptions() options {
 	fs.StringVar(&intervalRaw, "interval", "1h", "Parseable duration string that specifies the sync period")
 	fs.StringVar(&o.cacheFile, "cache-file", "", "File to persist cache. No persistence of cache if not set")
 	fs.StringVar(&cacheRecordAgeRaw, "cache-record-age", "168h", "Parseable duration string that specifies how long a cache record lives in cache after the last time it was considered")
-	fs.Var(&o.enableOnRepos, "enable-on-repo", "Repository that the retester is enabled on, e.g., 'openshift/ci-tools'. It can be used more than once.")
-	fs.Var(&o.enableOnOrgs, "enable-on-org", "Organization that the retester is enabled on, e.g., 'openshift'. It can be used more than once.")
+	fs.StringVar(&o.configFile, "config-file", "", "Path to the configure file of the retest.")
 
 	for _, group := range []flagutil.OptionGroup{&o.github, &o.config} {
 		group.AddFlags(fs)
@@ -105,7 +103,12 @@ func main() {
 		logrus.WithError(err).Fatal("Error starting config agent.")
 	}
 
-	c := newController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, o.enableOnRepos, o.enableOnOrgs)
+	config, err := loadConfig(o.configFile)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to load config from file")
+	}
+
+	c := newController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, config)
 
 	interrupts.OnInterrupt(func() {
 		if err := gitClient.Clean(); err != nil {

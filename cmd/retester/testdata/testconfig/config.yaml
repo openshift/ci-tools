@@ -1,0 +1,16 @@
+retester:
+  enabled: true
+  max_retests_for_sha_and_base: 1
+  max_retests_for_sha: 1
+  orgs:
+    openshift:
+      enabled: true
+      max_retests_for_sha_and_base: 2
+      max_retests_for_sha: 2
+      repos:
+        ci-tools:
+          enabled: true
+          max_retests_for_sha_and_base: 3
+          max_retests_for_sha: 3
+        ci-docs:
+          enabled: true

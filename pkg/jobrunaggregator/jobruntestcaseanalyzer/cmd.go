@@ -112,6 +112,7 @@ type JobRunsTestCaseAnalyzerFlags struct {
 	MinimumSuccessfulTestCount  int
 	PayloadInvocationID         string
 	JobGCSPrefixes              []jobGCSPrefix
+	ExcludeJobNames             []string
 }
 
 func NewJobRunsTestCaseAnalyzerFlags() *JobRunsTestCaseAnalyzerFlags {
@@ -145,6 +146,8 @@ func (f *JobRunsTestCaseAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.WorkingDir, "working-dir", f.WorkingDir, "The directory to store caches, output, and the like.")
 	fs.DurationVar(&f.Timeout, "timeout", f.Timeout, "Time to wait for analyzing job to complete.")
 	fs.Var(&jobGCSPrefixSlice{&f.JobGCSPrefixes}, "explicit-gcs-prefixes", "a list of gcs prefixes for jobs created for payload. Only used by per PR payload promotion jobs. The format is comma-separated elements, each consisting of job name and gcs prefix separated by =, like openshift-machine-config-operator=3028-ci-4.11-e2e-aws-ovn-upgrade~logs/openshift-machine-config-operator-3028-ci-4.11-e2e-aws-ovn-upgrade")
+
+	fs.StringArrayVar(&f.ExcludeJobNames, "exclude-job-names", f.ExcludeJobNames, "Applied only when --explicit-gcs-prefixes is not specified.  The flag can be specified multiple times to create a list of substrings used to filter JobNames from the analysis")
 }
 
 func NewJobRunsTestCaseAnalyzerCommand() *cobra.Command {
@@ -160,6 +163,8 @@ func NewJobRunsTestCaseAnalyzerCommand() *cobra.Command {
 	    --payload-tag=4.11.0-0.nightly-2022-04-28-102605
 	    --job-start-time=2022-04-28T10:28:48Z
 	    --minimum-successful-count=10
+		--exclude-job-names=upgrade
+		--exclude-job-names=ipv6
 
 	Example runs for PR based paylaod:
 	 ./job-run-aggregator analyze-test-case
@@ -334,6 +339,11 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		network:        f.Network,
 		jobGCSPrefixes: &f.JobGCSPrefixes,
 		ciDataClient:   ciDataClient,
+	}
+
+	if f.ExcludeJobNames != nil && len(f.ExcludeJobNames) > 0 {
+		jobGetter.excludeJobNames = sets.String{}
+		jobGetter.excludeJobNames.Insert(f.ExcludeJobNames...)
 	}
 
 	return &JobRunTestCaseAnalyzerOptions{

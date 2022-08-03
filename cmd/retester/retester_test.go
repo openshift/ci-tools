@@ -4,15 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
-	"github.com/openshift/ci-tools/pkg/testhelper"
-	"github.com/shurcooL/githubv4"
-	"github.com/sirupsen/logrus"
-	"k8s.io/test-infra/prow/github"
-	"k8s.io/test-infra/prow/tide"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/shurcooL/githubv4"
+	"github.com/sirupsen/logrus"
+
+	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/github/fakegithub"
+	"k8s.io/test-infra/prow/tide"
+
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 type MyFakeClient struct {

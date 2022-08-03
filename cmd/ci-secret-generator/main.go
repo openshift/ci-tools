@@ -141,14 +141,9 @@ func executeCommand(command string) ([]byte, error) {
 	if err := cmd.Run(); err != nil {
 		stderr := errBuf.Bytes()
 		stdout := outBuf.Bytes()
-		partialStreams := true
 		// The command completed with non zero exit code, standard streams *should* be available.
-		if _, ok := err.(*exec.ExitError); ok {
-			partialStreams = false
-		}
-		// At this point we can't easily tell why the command failed,
-		// there is no guarantee neither stdout nor stderr have been properly filled.
-		return nil, fmtExecCmdErr(execCmdRunErrAction, command, err, stdout, stderr, partialStreams)
+		_, partialStreams := err.(*exec.ExitError)
+		return nil, fmtExecCmdErr(execCmdRunErrAction, command, err, stdout, stderr, !partialStreams)
 	}
 
 	stderr := errBuf.Bytes()

@@ -39,6 +39,7 @@ func TestDomainForService(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(string(tc.service), func(t *testing.T) {
+			t.Fatal("fail the test intentionally")
 			if result := DomainForService(tc.service); result != tc.expected {
 				t.Errorf("expected %s, got %s", tc.expected, result)
 			}

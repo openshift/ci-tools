@@ -518,6 +518,11 @@ func (in *LiteralTestStep) DeepCopyInto(out *LiteralTestStep) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.NoKubeconfig != nil {
+		in, out := &in.NoKubeconfig, &out.NoKubeconfig
+		*out = new(bool)
+		**out = **in
+	}
 	if in.Observers != nil {
 		in, out := &in.Observers, &out.Observers
 		*out = make([]string, len(*in))

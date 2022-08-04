@@ -70,6 +70,7 @@ type options struct {
 	waitPath       string
 	waitTimeoutStr string
 	waitTimeout    time.Duration
+	skipKubeconfig bool
 	cmd            []string
 	client         coreclientset.SecretInterface
 }
@@ -79,6 +80,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.dry, "dry-run", false, "Print the secret instead of creating it")
 	flag.StringVar(&opt.waitPath, "wait-for-file", "", "Wait for a file to appear at this path before starting the program")
 	flag.StringVar(&opt.waitTimeoutStr, "wait-timeout", "", "Used with --wait-for-file, maximum wait time before starting the program")
+	flag.BoolVar(&opt.skipKubeconfig, "skip-kubeconfig", false, "Skip managing the $KUBECONFIG copy")
 	return opt
 }
 
@@ -108,7 +110,7 @@ func (o *options) complete() error {
 	if o.name = os.Getenv("JOB_NAME_SAFE"); o.name == "" {
 		return fmt.Errorf("environment variable JOB_NAME_SAFE is empty")
 	}
-	if !o.dry {
+	if !o.dry && !o.skipKubeconfig {
 		var err error
 		if o.client, err = loadClient(ns); err != nil {
 			return err
@@ -128,16 +130,20 @@ func (o *options) run() error {
 	}
 	var errs []error
 	ctx, cancel := context.WithCancel(context.Background())
-	go uploadKubeconfig(ctx, o.client, o.name, o.dstPath, o.dry)
-	if err := execCmd(o.cmd); err != nil {
+	if !o.skipKubeconfig {
+		go uploadKubeconfig(ctx, o.client, o.name, o.dstPath, o.dry)
+	}
+	if err := execCmd(o.cmd, o.skipKubeconfig); err != nil {
 		errs = append(errs, fmt.Errorf("failed to execute wrapped command: %w", err))
 	}
 	// we will upload the secret from the post-execution state, so we know
 	// that the best-effort upload of the kubeconfig can exit now and so as
 	// not to race with the post-execution one
 	cancel()
-	if err := createSecret(o.client, o.name, o.dstPath, o.dry); err != nil {
-		errs = append(errs, fmt.Errorf("failed to create/update secret: %w", err))
+	if !o.skipKubeconfig {
+		if err := createSecret(o.client, o.name, o.dstPath, o.dry); err != nil {
+			errs = append(errs, fmt.Errorf("failed to create/update secret: %w", err))
+		}
 	}
 	return utilerrors.NewAggregate(errs)
 }
@@ -225,7 +231,7 @@ func waitForFile(path string, timeout time.Duration) error {
 	}
 }
 
-func execCmd(argv []string) error {
+func execCmd(argv []string, skipKubeconfig bool) error {
 	proc := exec.Command(argv[0], argv[1:]...)
 	proc.Stdout = os.Stdout
 	proc.Stderr = os.Stderr
@@ -237,8 +243,10 @@ func execCmd(argv []string) error {
 	}
 	manageHome(proc)
 	manageCLI(proc)
-	if err := manageKubeconfig(proc); err != nil {
-		return err
+	if !skipKubeconfig {
+		if err := manageKubeconfig(proc); err != nil {
+			return err
+		}
 	}
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

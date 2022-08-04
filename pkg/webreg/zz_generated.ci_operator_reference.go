@@ -573,6 +573,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      env: ' '\n" +
 	"                      # ResourceType is the type of resource that will be leased.\n" +
 	"                      resource_type: ' '\n" +
+	"                  # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
+	"                  # so no local copy of it will be created for the step and if the step\n" +
+	"                  # creates one, it will not be propagated.\n" +
+	"                  no_kubeconfig: false\n" +
 	"                  # Observers are the observers that should be running\n" +
 	"                  observers:\n" +
 	"                    - \"\"\n" +
@@ -659,6 +663,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      env: ' '\n" +
 	"                      # ResourceType is the type of resource that will be leased.\n" +
 	"                      resource_type: ' '\n" +
+	"                  # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
+	"                  # so no local copy of it will be created for the step and if the step\n" +
+	"                  # creates one, it will not be propagated.\n" +
+	"                  no_kubeconfig: false\n" +
 	"                  # Observers are the observers that should be running\n" +
 	"                  observers:\n" +
 	"                    - \"\"\n" +
@@ -745,6 +753,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      env: ' '\n" +
 	"                      # ResourceType is the type of resource that will be leased.\n" +
 	"                      resource_type: ' '\n" +
+	"                  # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
+	"                  # so no local copy of it will be created for the step and if the step\n" +
+	"                  # creates one, it will not be propagated.\n" +
+	"                  no_kubeconfig: false\n" +
 	"                  # Observers are the observers that should be running\n" +
 	"                  observers:\n" +
 	"                    - \"\"\n" +
@@ -915,6 +927,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
 	"                      resource_type: ' '\n" +
+	"                  no_kubeconfig: false\n" +
 	"                  observers:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - \"\"\n" +
@@ -977,6 +990,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
 	"                      resource_type: ' '\n" +
+	"                  no_kubeconfig: false\n" +
 	"                  observers:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - \"\"\n" +
@@ -1039,6 +1053,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
 	"                      resource_type: ' '\n" +
+	"                  no_kubeconfig: false\n" +
 	"                  observers:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - \"\"\n" +
@@ -1324,6 +1339,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  env: ' '\n" +
 	"                  # ResourceType is the type of resource that will be leased.\n" +
 	"                  resource_type: ' '\n" +
+	"              # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
+	"              # so no local copy of it will be created for the step and if the step\n" +
+	"              # creates one, it will not be propagated.\n" +
+	"              no_kubeconfig: false\n" +
 	"              # Observers are the observers that should be running\n" +
 	"              observers:\n" +
 	"                - \"\"\n" +
@@ -1410,6 +1429,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  env: ' '\n" +
 	"                  # ResourceType is the type of resource that will be leased.\n" +
 	"                  resource_type: ' '\n" +
+	"              # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
+	"              # so no local copy of it will be created for the step and if the step\n" +
+	"              # creates one, it will not be propagated.\n" +
+	"              no_kubeconfig: false\n" +
 	"              # Observers are the observers that should be running\n" +
 	"              observers:\n" +
 	"                - \"\"\n" +
@@ -1496,6 +1519,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  env: ' '\n" +
 	"                  # ResourceType is the type of resource that will be leased.\n" +
 	"                  resource_type: ' '\n" +
+	"              # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
+	"              # so no local copy of it will be created for the step and if the step\n" +
+	"              # creates one, it will not be propagated.\n" +
+	"              no_kubeconfig: false\n" +
 	"              # Observers are the observers that should be running\n" +
 	"              observers:\n" +
 	"                - \"\"\n" +
@@ -1666,6 +1693,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
 	"                  resource_type: ' '\n" +
+	"              no_kubeconfig: false\n" +
 	"              observers:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - \"\"\n" +
@@ -1728,6 +1756,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
 	"                  resource_type: ' '\n" +
+	"              no_kubeconfig: false\n" +
 	"              observers:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - \"\"\n" +
@@ -1790,6 +1819,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
 	"                  resource_type: ' '\n" +
+	"              no_kubeconfig: false\n" +
 	"              observers:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - \"\"\n" +

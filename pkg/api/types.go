@@ -872,6 +872,10 @@ type LiteralTestStep struct {
 	// to true in MultiStageTestConfiguration. This option is applicable to
 	// `post` steps.
 	BestEffort *bool `json:"best_effort,omitempty"`
+	// NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,
+	// so no local copy of it will be created for the step and if the step
+	// creates one, it will not be propagated.
+	NoKubeconfig *bool `json:"no_kubeconfig,omitempty"`
 	// Cli is the (optional) name of the release from which the `oc` binary
 	// will be injected into this step.
 	Cli string `json:"cli,omitempty"`

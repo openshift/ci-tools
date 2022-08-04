@@ -21,6 +21,19 @@ import (
 	"github.com/openshift/ci-tools/pkg/secrets"
 )
 
+const (
+	execCmdRunErrAction            = "run"
+	execCmdValidateStdoutErrAction = "validate stdout of"
+	execCmdValidateStderrErrAction = "validate stderr of"
+	execCmdErrFmt                  = "failed to %s command %q: %w\n%s:\n%s\n%s:\n%s"
+)
+
+var (
+	errExecCmdNotEmptyStderr = errors.New("stderr is not empty")
+	errExecCmdNoStdout       = errors.New("no output returned")
+	errExecCmdNullStdout     = errors.New("'null' output returned")
+)
+
 type options struct {
 	secrets secrets.CLIOptions
 
@@ -120,17 +133,49 @@ func (o *options) validateConfig() error {
 }
 
 func executeCommand(command string) ([]byte, error) {
-	out, err := exec.Command("bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c", command).CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("%s : %w", string(out), err)
+	cmd := exec.Command("bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c", command)
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+
+	if err := cmd.Run(); err != nil {
+		stderr := errBuf.Bytes()
+		stdout := outBuf.Bytes()
+		// The command completed with non zero exit code, standard streams *should* be available.
+		_, partialStreams := err.(*exec.ExitError)
+		return nil, fmtExecCmdErr(execCmdRunErrAction, command, err, stdout, stderr, !partialStreams)
 	}
-	if len(out) == 0 || len(bytes.TrimSpace(out)) == 0 {
-		return nil, fmt.Errorf("command %q returned no output", command)
+
+	stderr := errBuf.Bytes()
+	stdout := outBuf.Bytes()
+
+	if len(stderr) != 0 {
+		return nil, fmtExecCmdErr(execCmdValidateStderrErrAction, command,
+			errExecCmdNotEmptyStderr, stdout, stderr, false)
 	}
-	if string(bytes.TrimSpace(out)) == "null" {
-		return nil, fmt.Errorf("command %s returned 'null' as output", command)
+
+	if len(stdout) == 0 || len(bytes.TrimSpace(stdout)) == 0 {
+		return nil, fmtExecCmdErr(execCmdValidateStdoutErrAction, command,
+			errExecCmdNoStdout, stdout, stderr, false)
 	}
-	return out, nil
+
+	if string(bytes.TrimSpace(stdout)) == "null" {
+		return nil, fmtExecCmdErr(execCmdValidateStdoutErrAction, command,
+			errExecCmdNullStdout, stdout, stderr, false)
+	}
+
+	return stdout, nil
+}
+
+func fmtExecCmdErr(action, cmd string, wrappedErr error, stdout, stderr []byte, partialStreams bool) error {
+	stdoutPreamble := "output"
+	stderrPreamble := "error output"
+	if partialStreams {
+		stdoutPreamble = "output (may be incomplete)"
+		stderrPreamble = "error output (may be incomplete)"
+	}
+	return fmt.Errorf(execCmdErrFmt, action, cmd, wrappedErr, stdoutPreamble,
+		stdout, stderrPreamble, stderr)
 }
 
 func updateSecrets(config secretgenerator.Config, client secrets.Client) error {

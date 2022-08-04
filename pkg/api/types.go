@@ -438,6 +438,12 @@ type PromotionConfiguration struct {
 	// build image's ImageStream.
 	Tag string `json:"tag,omitempty"`
 
+	// TagByCommit determines if an image should be tagged by the
+	// git commit that was used to build it. If Tag is also set,
+	// this will cause both a floating tag and commit-specific tags
+	// to be promoted.
+	TagByCommit bool `json:"tag_by_commit,omitempty"`
+
 	// ExcludedImages are image names that will not be promoted.
 	// Exclusions are made before additional_images are included.
 	// Use exclusions when you want to build images for testing

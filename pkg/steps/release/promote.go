@@ -56,7 +56,7 @@ func (s *promotionStep) Run(ctx context.Context) error {
 }
 
 func (s *promotionStep) run(ctx context.Context) error {
-	tags, names := PromotedTagsWithRequiredImages(s.configuration, s.requiredImages)
+	tags, names := PromotedTagsWithRequiredImages(s.configuration, WithRequiredImages(s.requiredImages), WithCommitSha(s.jobSpec.MainRefs().BaseSHA))
 	if len(names) == 0 {
 		logrus.Info("Nothing to promote, skipping...")
 		return nil
@@ -277,7 +277,7 @@ func toPromote(config api.PromotionConfiguration, images []api.ProjectDirectoryI
 // PromotedTags returns the tags that are being promoted for the given ReleaseBuildConfiguration
 func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStreamTagReference {
 	var tags []api.ImageStreamTagReference
-	mapping, _ := PromotedTagsWithRequiredImages(configuration, sets.NewString())
+	mapping, _ := PromotedTagsWithRequiredImages(configuration)
 	for _, dest := range mapping {
 		tags = append(tags, dest...)
 	}
@@ -287,14 +287,42 @@ func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStrea
 	return tags
 }
 
+type PromotedTagsOptions struct {
+	requiredImages sets.String
+	commitSha      string
+}
+
+type PromotedTagsOption func(options *PromotedTagsOptions)
+
+// WithRequiredImages ensures that the images are promoted, even if they would otherwise be skipped.
+func WithRequiredImages(images sets.String) PromotedTagsOption {
+	return func(options *PromotedTagsOptions) {
+		options.requiredImages = images
+	}
+}
+
+// WithCommitSha ensures that images are tagged by the commit SHA as well as any other options in the configuration.
+func WithCommitSha(commitSha string) PromotedTagsOption {
+	return func(options *PromotedTagsOptions) {
+		options.commitSha = commitSha
+	}
+}
+
 // PromotedTagsWithRequiredImages returns the tags that are being promoted for the given ReleaseBuildConfiguration
 // accounting for the list of required images. Promoted tags are mapped by the source tag in the pipeline ImageStream
 // we will promote to the output.
-func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration, requiredImages sets.String) (map[string][]api.ImageStreamTagReference, sets.String) {
+func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration, options ...PromotedTagsOption) (map[string][]api.ImageStreamTagReference, sets.String) {
+	opts := &PromotedTagsOptions{
+		requiredImages: sets.NewString(),
+	}
+	for _, opt := range options {
+		opt(opts)
+	}
+
 	if configuration == nil || configuration.PromotionConfiguration == nil || configuration.PromotionConfiguration.Disabled {
 		return nil, nil
 	}
-	tags, names := toPromote(*configuration.PromotionConfiguration, configuration.Images, requiredImages)
+	tags, names := toPromote(*configuration.PromotionConfiguration, configuration.Images, opts.requiredImages)
 	promotedTags := map[string][]api.ImageStreamTagReference{}
 	for dst, src := range tags {
 		var tag api.ImageStreamTagReference
@@ -312,6 +340,13 @@ func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration
 			}
 		}
 		promotedTags[src] = append(promotedTags[src], tag)
+		if configuration.PromotionConfiguration.TagByCommit && opts.commitSha != "" {
+			promotedTags[src] = append(promotedTags[src], api.ImageStreamTagReference{
+				Namespace: configuration.PromotionConfiguration.Namespace,
+				Name:      dst,
+				Tag:       opts.commitSha,
+			})
+		}
 	}
 	// promote the binary build if one exists and this isn't disabled
 	if configuration.BinaryBuildCommands != "" && !configuration.PromotionConfiguration.DisableBuildCache {

@@ -19,8 +19,17 @@ readonly SERVICE_ACCOUNT
 TMP_KUBE_CONFIG_FILE="$(mktemp)"
 trap 'rm -rf ${TMP_KUBE_CONFIG_FILE}' EXIT
 
+SA_NAMESPACE="${SA_NAMESPACE:-ci}"
 
 URL=$(oc --kubeconfig "${CONFIG_UPDATER_DIR}/sa.config-updater.${CLUSTER}.config" config view -o jsonpath="{.clusters[0].cluster.server}")
-TOKEN=$(oc --kubeconfig "${CONFIG_UPDATER_DIR}/sa.config-updater.${CLUSTER}.config" create token -n ci ${SERVICE_ACCOUNT} --duration=2419200s)
-oc --kubeconfig "${TMP_KUBE_CONFIG_FILE}" login "${URL}" --token "${TOKEN}" > /dev/null
+TOKEN=$(oc --kubeconfig "${CONFIG_UPDATER_DIR}/sa.config-updater.${CLUSTER}.config" create token -n ${SA_NAMESPACE} ${SERVICE_ACCOUNT} --duration=2419200s)
+
+INSECURE_SKIP_TLS_VERIFY="false"
+
+# vsphere uses a self signed cluster
+if [[ "${CLUSTER}" == "vsphere" ]]; then
+  INSECURE_SKIP_TLS_VERIFY="true"
+fi
+
+oc --kubeconfig "${TMP_KUBE_CONFIG_FILE}" login "${URL}" --token "${TOKEN}" --insecure-skip-tls-verify=${INSECURE_SKIP_TLS_VERIFY} > /dev/null
 cat "${TMP_KUBE_CONFIG_FILE}" | sed "s/${SERVICE_ACCOUNT}/${CLUSTER}/g"

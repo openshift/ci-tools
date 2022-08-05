@@ -200,7 +200,6 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	}
 	var errs []error
 	observers, err := s.generateObservers(s.observers, secretVolumes, secretVolumeMounts)
-
 	if err != nil {
 		// if we can't even generate the Pods there's no reason to run the job
 		return err
@@ -208,7 +207,6 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	observerContext, cancel := context.WithCancel(ctx)
 	observerDone := make(chan struct{})
 	go s.runObservers(observerContext, ctx, observers, observerDone)
-
 	s.flags |= shortCircuit
 	if err := s.runSteps(ctx, "pre", s.pre, env, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q pre steps failed: %w", s.name, err))
@@ -220,7 +218,6 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	if err := s.runSteps(context.Background(), "post", s.post, env, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q post steps failed: %w", s.name, err))
 	}
-
 	<-observerDone // wait for the observers to finish so we get their jUnit
 	return utilerrors.NewAggregate(errs)
 }

@@ -124,7 +124,14 @@ func (s *multiStageTestStep) generatePods(
 		delete(pod.Labels, base_steps.ProwJobIdLabel)
 		pod.Annotations[base_steps.AnnotationSaveContainerLogs] = "true"
 		pod.Labels[MultiStageTestLabel] = s.name
-		pod.Spec.ServiceAccountName = s.name
+		needsKubeConfig := step.NoKubeconfig == nil || !*step.NoKubeconfig
+		if needsKubeConfig {
+			pod.Spec.ServiceAccountName = s.name
+		} else {
+			pod.Spec.ServiceAccountName = ""
+			no := false
+			pod.Spec.AutomountServiceAccountToken = &no
+		}
 		pod.Spec.TerminationGracePeriodSeconds = terminationGracePeriodSeconds
 		if step.DNSConfig != nil {
 			if pod.Spec.DNSConfig == nil {
@@ -145,7 +152,7 @@ func (s *multiStageTestStep) generatePods(
 			pod.Spec.Containers[idx].VolumeMounts = append(pod.Spec.Containers[idx].VolumeMounts, coreapi.VolumeMount{Name: homeVolumeName, MountPath: "/alabama"})
 		}
 
-		addSecretWrapper(pod, s.vpnConf)
+		addSecretWrapper(pod, s.vpnConf, !needsKubeConfig)
 		if s.vpnConf != nil {
 			s.addVPNClient(pod)
 		}
@@ -180,7 +187,7 @@ func (s *multiStageTestStep) generatePods(
 				// We mount them here to the test container.
 				container.VolumeMounts = append(container.VolumeMounts, clusterClaimMount...)
 			}
-		} else {
+		} else if needsKubeConfig {
 			container.Env = append(container.Env, []coreapi.EnvVar{
 				{Name: "KUBECONFIG", Value: filepath.Join(SecretMountPath, "kubeconfig")},
 				{Name: "KUBEADMIN_PASSWORD_FILE", Value: filepath.Join(SecretMountPath, "kubeadmin-password")},
@@ -225,7 +232,7 @@ func (s *multiStageTestStep) generatePods(
 	return ret, bestEffortSteps, utilerrors.NewAggregate(errs)
 }
 
-func addSecretWrapper(pod *coreapi.Pod, vpnConf *vpnConf) {
+func addSecretWrapper(pod *coreapi.Pod, vpnConf *vpnConf, skipKubeconfig bool) {
 	volume := "entrypoint-wrapper"
 	dir := "/tmp/entrypoint-wrapper"
 	bin := filepath.Join(dir, "entrypoint-wrapper")
@@ -251,6 +258,9 @@ func addSecretWrapper(pod *coreapi.Pod, vpnConf *vpnConf) {
 		container.Args = append(container.Args,
 			"--wait-for-file", "/tmp/vpn/up",
 			"--wait-timeout", *c.WaitTimeout)
+	}
+	if skipKubeconfig {
+		container.Args = append(container.Args, "--skip-kubeconfig")
 	}
 	container.Args = append(container.Args, container.Command...)
 	container.Args = append(container.Args, args...)

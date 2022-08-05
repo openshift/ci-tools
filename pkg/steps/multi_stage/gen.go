@@ -41,7 +41,7 @@ func (s *multiStageTestStep) generateObservers(
 			Resources: observer.Resources,
 		})
 	}
-	pods, _, err := s.generatePods(adapted, nil, secretVolumes, secretVolumeMounts)
+	pods, _, err := s.generatePods(adapted, nil, secretVolumes, secretVolumeMounts, true)
 	return pods, err
 }
 
@@ -50,6 +50,7 @@ func (s *multiStageTestStep) generatePods(
 	env []coreapi.EnvVar,
 	secretVolumes []coreapi.Volume,
 	secretVolumeMounts []coreapi.VolumeMount,
+	isObserver bool,
 ) ([]coreapi.Pod, sets.String, error) {
 	var bestEffortSteps sets.String
 	if s.flags&allowBestEffortPostSteps != 0 {
@@ -145,7 +146,7 @@ func (s *multiStageTestStep) generatePods(
 			pod.Spec.Containers[idx].VolumeMounts = append(pod.Spec.Containers[idx].VolumeMounts, coreapi.VolumeMount{Name: homeVolumeName, MountPath: "/alabama"})
 		}
 
-		addSecretWrapper(pod, s.vpnConf)
+		addSecretWrapper(pod, s.vpnConf, isObserver)
 		if s.vpnConf != nil {
 			s.addVPNClient(pod)
 		}
@@ -225,7 +226,7 @@ func (s *multiStageTestStep) generatePods(
 	return ret, bestEffortSteps, utilerrors.NewAggregate(errs)
 }
 
-func addSecretWrapper(pod *coreapi.Pod, vpnConf *vpnConf) {
+func addSecretWrapper(pod *coreapi.Pod, vpnConf *vpnConf, isObserver bool) {
 	volume := "entrypoint-wrapper"
 	dir := "/tmp/entrypoint-wrapper"
 	bin := filepath.Join(dir, "entrypoint-wrapper")
@@ -247,6 +248,9 @@ func addSecretWrapper(pod *coreapi.Pod, vpnConf *vpnConf) {
 	container := &pod.Spec.Containers[0]
 	args := container.Args
 	container.Args = make([]string, 0)
+	if isObserver {
+		container.Args = append(container.Args, "--ro-kubeconfig")
+	}
 	if c := vpnConf; c != nil && c.WaitTimeout != nil {
 		container.Args = append(container.Args,
 			"--wait-for-file", "/tmp/vpn/up",

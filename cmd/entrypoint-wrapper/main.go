@@ -72,6 +72,7 @@ type options struct {
 	waitTimeout    time.Duration
 	cmd            []string
 	client         coreclientset.SecretInterface
+	roKubeconfig   bool
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -79,6 +80,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.dry, "dry-run", false, "Print the secret instead of creating it")
 	flag.StringVar(&opt.waitPath, "wait-for-file", "", "Wait for a file to appear at this path before starting the program")
 	flag.StringVar(&opt.waitTimeoutStr, "wait-timeout", "", "Used with --wait-for-file, maximum wait time before starting the program")
+	flag.BoolVar(&opt.roKubeconfig, "ro-kubeconfig", false, "If set do not copy kubeconfig to a writable location")
 	return opt
 }
 
@@ -129,7 +131,7 @@ func (o *options) run() error {
 	var errs []error
 	ctx, cancel := context.WithCancel(context.Background())
 	go uploadKubeconfig(ctx, o.client, o.name, o.dstPath, o.dry)
-	if err := execCmd(o.cmd); err != nil {
+	if err := execCmd(o.cmd, o.roKubeconfig); err != nil {
 		errs = append(errs, fmt.Errorf("failed to execute wrapped command: %w", err))
 	}
 	// we will upload the secret from the post-execution state, so we know
@@ -225,7 +227,7 @@ func waitForFile(path string, timeout time.Duration) error {
 	}
 }
 
-func execCmd(argv []string) error {
+func execCmd(argv []string, skipManageKubeconfig bool) error {
 	proc := exec.Command(argv[0], argv[1:]...)
 	proc.Stdout = os.Stdout
 	proc.Stderr = os.Stderr
@@ -237,9 +239,13 @@ func execCmd(argv []string) error {
 	}
 	manageHome(proc)
 	manageCLI(proc)
-	if err := manageKubeconfig(proc); err != nil {
-		return err
+
+	if !skipManageKubeconfig {
+		if err := manageKubeconfig(proc); err != nil {
+			return err
+		}
 	}
+
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	if err := proc.Start(); err != nil {

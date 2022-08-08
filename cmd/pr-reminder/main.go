@@ -179,6 +179,12 @@ func (u *user) requestedToReview(pr github.PullRequest) bool {
 				return true
 			}
 		}
+
+		for _, assignee := range pr.Assignees {
+			if u.GithubId == assignee.Login {
+				return true
+			}
+		}
 	}
 
 	return false

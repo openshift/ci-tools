@@ -208,7 +208,7 @@ periodic-ci-openshift-release-master-ci-4.12-e2e-gcp-sdn-upgrade
 periodic-ci-openshift-release-master-ci-4.12-upgrade-from-stable-4.11-e2e-aws-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.12-upgrade-from-stable-4.11-e2e-aws-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.12-upgrade-from-stable-4.11-e2e-aws-sdn-upgrade
-periodic-ci-openshift-release-master-ci-4.12-upgrade-from-stable-4.11-e2e-azure-upgrade
+periodic-ci-openshift-release-master-ci-4.12-upgrade-from-stable-4.11-e2e-azure-sdn-upgrade
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12-ci.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12-multi.json

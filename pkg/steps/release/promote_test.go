@@ -296,7 +296,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 	var testCases = []struct {
 		name     string
 		input    *api.ReleaseBuildConfiguration
-		images   sets.String
+		options  []PromotedTagsOption
 		expected map[string][]api.ImageStreamTagReference
 		names    sets.String
 	}{
@@ -350,7 +350,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					Name:      "fred",
 				},
 			},
-			images: sets.NewString("foo"),
+			options: []PromotedTagsOption{WithRequiredImages(sets.NewString("foo"))},
 			expected: map[string][]api.ImageStreamTagReference{"foo": {{
 				Namespace: "roger",
 				Name:      "fred",
@@ -386,6 +386,29 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				Namespace: "roger",
 				Name:      "foo",
 				Tag:       "fred",
+			}}},
+		},
+		{
+			name: "promoted image tagged by commit means an additional tag",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("foo")},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace:   "roger",
+					Tag:         "fred",
+					TagByCommit: true,
+				},
+			},
+			options: []PromotedTagsOption{WithCommitSha("sha")},
+			expected: map[string][]api.ImageStreamTagReference{"foo": {{
+				Namespace: "roger",
+				Name:      "foo",
+				Tag:       "fred",
+			}, {
+				Namespace: "roger",
+				Name:      "foo",
+				Tag:       "sha",
 			}}},
 		},
 		{
@@ -490,7 +513,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			mapping, _ := PromotedTagsWithRequiredImages(testCase.input, testCase.images)
+			mapping, _ := PromotedTagsWithRequiredImages(testCase.input, testCase.options...)
 			if actual, expected := mapping, testCase.expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect promoted tags: %v", testCase.name, diff.ObjectDiff(actual, expected))
 			}

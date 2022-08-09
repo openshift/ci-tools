@@ -18,6 +18,7 @@ import (
 	"k8s.io/test-infra/prow/entrypoint"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/kube"
+	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -61,6 +62,8 @@ type podMutator struct {
 	cpuCap               int64
 	memoryCap            string
 }
+
+var promMetrics = metrics.NewMetrics("pod_scaler_admission")
 
 func (m *podMutator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	pod := &corev1.Pod{}
@@ -217,6 +220,9 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, logger
 			if our.Cmp(their) == 1 {
 				logger.Debugf("determined %s %s of %s to be larger than %s configured", field, pair.resource, our.String(), their.String())
 				(*pair.theirs)[field] = our
+				if our.Value() > (their.Value() * 10) {
+					metrics.RecordError("actual memory 10x more than configured amount", promMetrics.ErrorRate)
+				}
 			}
 		}
 	}

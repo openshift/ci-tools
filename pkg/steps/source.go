@@ -499,7 +499,7 @@ func waitForBuildDeletion(ctx context.Context, client ctrlruntimeclient.Client, 
 
 func isInfraReason(reason buildapi.StatusReason) bool {
 	infraReasons := []buildapi.StatusReason{
-		buildapi.StatusReason("BuildPodEvicted"), // vendoring to get this is so hard
+		buildapi.StatusReasonBuildPodEvicted,
 		buildapi.StatusReasonBuildPodDeleted,
 		buildapi.StatusReasonBuildPodExists,
 		buildapi.StatusReasonCannotCreateBuildPod,

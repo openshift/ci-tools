@@ -381,7 +381,7 @@ func TestBuildFromSource(t *testing.T) {
 
 func init() {
 	if err := buildapi.AddToScheme(scheme.Scheme); err != nil {
-		panic(fmt.Sprintf("failed to add hivev1 to scheme: %v", err))
+		panic(fmt.Sprintf("failed to add buildapi to scheme: %v", err))
 	}
 }
 

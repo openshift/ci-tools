@@ -367,10 +367,12 @@ func handleFailedBuild(ctx context.Context, client BuildClient, ns, name string,
 	}
 
 	if !isBuildPhaseTerminated(b.Status.Phase) {
+		logrus.Debugf("Build %q (created at %v) still in phase %q", name, b.CreationTimestamp, b.Status.Phase)
 		return err
 	}
 
 	if !(isInfraReason(b.Status.Reason) || hintsAtInfraReason(b.Status.LogSnippet)) {
+		logrus.Debugf("Build %q (created at %v) classified as legitimate failure, will not be retried", name, b.CreationTimestamp)
 		return err
 	}
 
@@ -454,7 +456,11 @@ func handleBuild(ctx context.Context, client BuildClient, build buildapi.Build) 
 	if err := wait.ExponentialBackoff(wait.Backoff{Duration: time.Minute, Factor: 1.5, Steps: attempts}, func() (bool, error) {
 		var attempt buildapi.Build
 		build.DeepCopyInto(&attempt)
-		if err := client.Create(ctx, &attempt); err != nil && !kerrors.IsAlreadyExists(err) {
+		if err := client.Create(ctx, &attempt); err == nil {
+			logrus.Infof("Created build %q", name)
+		} else if kerrors.IsAlreadyExists(err) {
+			logrus.Infof("Found existing build %q", name)
+		} else {
 			return false, fmt.Errorf("could not create build %s: %w", name, err)
 		}
 		if err := waitForBuildOrTimeout(ctx, client, ns, name); err != nil {

@@ -288,6 +288,7 @@ func main() {
 			}
 
 			for _, user := range findPrsForUsers(users, ghClient) {
+				logrus.Infof("%d PRs were found for user: %s", len(user.PrRequests), user.KerberosId)
 				if len(user.PrRequests) > 0 {
 					// sort by most recent update first
 					sort.Slice(user.PrRequests, func(i, j int) bool {
@@ -416,9 +417,9 @@ func messageUser(user user, slackClient slackClient) error {
 		slack.MsgOptionText("PR Review Reminders.", false),
 		slack.MsgOptionBlocks(message...))
 	if err != nil {
-		errors = append(errors, fmt.Errorf("failed to message userId: %s about PR review reminder: %w", user.SlackId, err))
+		errors = append(errors, fmt.Errorf("failed to message user: %s about PR review reminder: %w", user.KerberosId, err))
 	} else {
-		logrus.Infof("Posted PR review reminder in channel %s at %s", responseChannel, responseTimestamp)
+		logrus.Infof("Posted PR review reminder for user: %s in channel: %s at: %s", user.KerberosId, responseChannel, responseTimestamp)
 	}
 
 	return kerrors.NewAggregate(errors)

@@ -15,6 +15,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -485,6 +486,10 @@ func hintsAtInfraReason(logSnippet string) bool {
 }
 
 func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespace, name string) error {
+	return waitForBuild(ctx, buildClient, namespace, name, 0, buildDuration)
+}
+
+func waitForBuild(ctx context.Context, buildClient BuildClient, namespace, name string, timeout time.Duration, buildDurationFunc func(*buildapi.Build) time.Duration) error {
 	isOK := func(b *buildapi.Build) bool {
 		return b.Status.Phase == buildapi.BuildPhaseComplete
 	}
@@ -495,43 +500,30 @@ func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespa
 	}
 
 	build := &buildapi.Build{}
-	if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, build); err != nil {
-		if kerrors.IsNotFound(err) {
-			return fmt.Errorf("could not find build %s", name)
-		}
-		return fmt.Errorf("could not get build: %w", err)
-	}
-	if isOK(build) {
-		logrus.Infof("Build %s already succeeded in %s", build.Name, buildDuration(build))
-		return nil
-	}
-	if isFailed(build) {
-		logrus.Infof("Build %s failed, printing logs:", build.Name)
-		printBuildLogs(buildClient, build.Namespace, build.Name)
-		return util.AppendLogToError(fmt.Errorf("the build %s failed with reason %s: %s", build.Name, build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
-	}
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, build); err != nil {
-				logrus.WithError(err).Warnf("Failed to get build %s.", name)
-				continue
-			}
+	logrus.WithFields(logrus.Fields{
+		"namespace": namespace,
+		"name":      name,
+	}).Trace("Waiting for build to be complete.")
+
+	evaluatorFunc := func(obj runtime.Object) (bool, error) {
+		switch build := obj.(type) {
+		case *buildapi.Build:
 			if isOK(build) {
-				logrus.Infof("Build %s succeeded after %s", build.Name, buildDuration(build).Truncate(time.Second))
-				return nil
+				logrus.Infof("Build %s succeeded after %s", build.Name, buildDurationFunc(build).Truncate(time.Second))
+				return true, nil
 			}
 			if isFailed(build) {
 				logrus.Infof("Build %s failed, printing logs:", build.Name)
 				printBuildLogs(buildClient, build.Namespace, build.Name)
-				return util.AppendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
+				return true, util.AppendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDurationFunc(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 			}
+		default:
+			return false, fmt.Errorf("build/%v ns/%v got an event that did not contain a build: %v", name, namespace, obj)
 		}
+		return false, nil
 	}
+
+	return waitForConditionOnObject(ctx, buildClient, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, &buildapi.BuildList{}, build, evaluatorFunc, timeout)
 }
 
 func buildDuration(build *buildapi.Build) time.Duration {

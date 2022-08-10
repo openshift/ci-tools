@@ -250,7 +250,9 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn-serial
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn-upgrade
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn-upgrade
 periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-csi
+periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-deploy-cnv
 periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-sdn
+periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-upgrade-cnv
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-rt
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-sdn
@@ -258,11 +260,11 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-ovn-dualstack
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-ovn-ipv6
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-serial-ipv4
+periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-serial-virtualmedia
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-upgrade
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-virtualmedia
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-dualstack
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6
-periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-virtualmedia
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-upgrade-ovn-ipv6
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-single-node-live-iso
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-sdn-assisted

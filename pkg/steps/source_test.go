@@ -386,6 +386,8 @@ func init() {
 }
 
 func TestWaitForBuild(t *testing.T) {
+	now := meta.Time{Time: time.Now()}
+	start, end := meta.Time{Time: now.Time.Add(-3 * time.Second)}, now
 	var testCases = []struct {
 		name        string
 		buildClient BuildClient
@@ -400,7 +402,9 @@ func TestWaitForBuild(t *testing.T) {
 						Namespace: "some-ns",
 					},
 					Status: buildapi.BuildStatus{
-						Phase: buildapi.BuildPhaseComplete,
+						Phase:               buildapi.BuildPhaseComplete,
+						StartTimestamp:      &start,
+						CompletionTimestamp: &end,
 					},
 				}).Build()), nil, nil),
 		},
@@ -413,10 +417,12 @@ func TestWaitForBuild(t *testing.T) {
 						Namespace: "some-ns",
 					},
 					Status: buildapi.BuildStatus{
-						Phase:      buildapi.BuildPhaseCancelled,
-						Reason:     "reason",
-						Message:    "msg",
-						LogSnippet: "snippet",
+						Phase:               buildapi.BuildPhaseCancelled,
+						Reason:              "reason",
+						Message:             "msg",
+						LogSnippet:          "snippet",
+						StartTimestamp:      &start,
+						CompletionTimestamp: &end,
 					},
 				}).Build()), "abc\n"), // the line break is for gotestsum https://github.com/gotestyourself/gotestsum/issues/141#issuecomment-1209146526
 			expected: fmt.Errorf("%s\n\n%s", "the build some-build failed after 3s with reason reason: msg", "snippet"),
@@ -425,9 +431,7 @@ func TestWaitForBuild(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			actual := waitForBuild(context.TODO(), testCase.buildClient, "some-ns", "some-build", func(build *buildapi.Build) time.Duration {
-				return 3 * time.Second
-			})
+			actual := waitForBuild(context.TODO(), testCase.buildClient, "some-ns", "some-build")
 			if diff := cmp.Diff(testCase.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: mismatch (-expected +actual), diff: %s", testCase.name, diff)
 			}

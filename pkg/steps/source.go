@@ -17,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -417,40 +416,41 @@ func constructMultiArchBuilds(build buildapi.Build, nodeArchitectures []string) 
 	return ret
 }
 
-func handleBuild(ctx context.Context, buildClient BuildClient, build buildapi.Build) error {
-	var buildErrs []error
-	attempts := 5
-	if boErr := wait.ExponentialBackoff(wait.Backoff{Duration: time.Minute, Factor: 1.5, Steps: attempts}, func() (bool, error) {
-		var buildAttempt buildapi.Build
-		build.DeepCopyInto(&buildAttempt)
-		if err := buildClient.Create(ctx, &buildAttempt); err != nil && !kerrors.IsAlreadyExists(err) {
-			return false, fmt.Errorf("could not create build %s: %w", buildAttempt.Name, err)
+func handleBuild(ctx context.Context, client BuildClient, build buildapi.Build) error {
+	const attempts = 5
+	ns, name := build.Namespace, build.Name
+	var errs []error
+	if err := wait.ExponentialBackoff(wait.Backoff{Duration: time.Minute, Factor: 1.5, Steps: attempts}, func() (bool, error) {
+		var attempt buildapi.Build
+		build.DeepCopyInto(&attempt)
+		if err := client.Create(ctx, &attempt); err != nil && !kerrors.IsAlreadyExists(err) {
+			return false, fmt.Errorf("could not create build %s: %w", name, err)
 		}
 
-		buildErr := waitForBuildOrTimeout(ctx, buildClient, buildAttempt.Namespace, buildAttempt.Name)
-		if buildErr == nil {
-			if err := gatherSuccessfulBuildLog(buildClient, buildAttempt.Namespace, buildAttempt.Name); err != nil {
+		err := waitForBuildOrTimeout(ctx, client, ns, name)
+		if err == nil {
+			if err := gatherSuccessfulBuildLog(client, ns, name); err != nil {
 				// log error but do not fail successful build
-				logrus.WithError(err).Warnf("Failed gathering successful build %s logs into artifacts.", buildAttempt.Name)
+				logrus.WithError(err).Warnf("Failed gathering successful build %s logs into artifacts.", name)
 			}
 			return true, nil
 		}
-		buildErrs = append(buildErrs, buildErr)
+		errs = append(errs, err)
 
 		b := &buildapi.Build{}
-		if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: buildAttempt.Namespace, Name: buildAttempt.Name}, b); err != nil {
-			return false, fmt.Errorf("could not get build %s: %w", buildAttempt.Name, err)
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, b); err != nil {
+			return false, fmt.Errorf("could not get build %s: %w", name, err)
 		}
 
 		if !isBuildPhaseTerminated(b.Status.Phase) {
-			return false, buildErr
+			return false, err
 		}
 
 		if !(isInfraReason(b.Status.Reason) || hintsAtInfraReason(b.Status.LogSnippet)) {
-			return false, buildErr
+			return false, err
 		}
 
-		logrus.Infof("Build %s previously failed from an infrastructure error (%s), retrying...", b.Name, b.Status.Reason)
+		logrus.Infof("Build %s previously failed from an infrastructure error (%s), retrying...", name, b.Status.Reason)
 		zero := int64(0)
 		foreground := metav1.DeletePropagationForeground
 		opts := metav1.DeleteOptions{
@@ -458,18 +458,18 @@ func handleBuild(ctx context.Context, buildClient BuildClient, build buildapi.Bu
 			Preconditions:      &metav1.Preconditions{UID: &b.UID},
 			PropagationPolicy:  &foreground,
 		}
-		if err := buildClient.Delete(ctx, &buildAttempt, &ctrlruntimeclient.DeleteOptions{Raw: &opts}); err != nil && !kerrors.IsNotFound(err) && !kerrors.IsConflict(err) {
-			return false, fmt.Errorf("could not delete build %s: %w", buildAttempt.Name, err)
+		if err := client.Delete(ctx, &attempt, &ctrlruntimeclient.DeleteOptions{Raw: &opts}); err != nil && !kerrors.IsNotFound(err) && !kerrors.IsConflict(err) {
+			return false, fmt.Errorf("could not delete build %s: %w", name, err)
 		}
-		if err := waitForBuildDeletion(ctx, buildClient, buildAttempt.Namespace, buildAttempt.Name); err != nil {
-			return false, fmt.Errorf("could not wait for build %s to be deleted: %w", buildAttempt.Name, err)
+		if err := waitForBuildDeletion(ctx, client, ns, name); err != nil {
+			return false, fmt.Errorf("could not wait for build %s to be deleted: %w", name, err)
 		}
 		return false, nil
-	}); boErr != nil {
-		if boErr == wait.ErrWaitTimeout {
-			return fmt.Errorf("build not successful after %d attempts: %w", attempts, errors.NewAggregate(buildErrs))
+	}); err != nil {
+		if err == wait.ErrWaitTimeout {
+			return fmt.Errorf("build not successful after %d attempts: %w", attempts, utilerrors.NewAggregate(errs))
 		}
-		return boErr
+		return err
 	}
 	return nil
 }
@@ -533,19 +533,10 @@ func hintsAtInfraReason(logSnippet string) bool {
 }
 
 func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespace, name string) error {
-	return waitForBuild(ctx, buildClient, namespace, name, buildDuration)
+	return waitForBuild(ctx, buildClient, namespace, name)
 }
 
-func waitForBuild(ctx context.Context, buildClient BuildClient, namespace, name string, buildDurationFunc func(*buildapi.Build) time.Duration) error {
-	isOK := func(b *buildapi.Build) bool {
-		return b.Status.Phase == buildapi.BuildPhaseComplete
-	}
-	isFailed := func(b *buildapi.Build) bool {
-		return b.Status.Phase == buildapi.BuildPhaseFailed ||
-			b.Status.Phase == buildapi.BuildPhaseCancelled ||
-			b.Status.Phase == buildapi.BuildPhaseError
-	}
-
+func waitForBuild(ctx context.Context, buildClient BuildClient, namespace, name string) error {
 	logrus.WithFields(logrus.Fields{
 		"namespace": namespace,
 		"name":      name,
@@ -554,14 +545,14 @@ func waitForBuild(ctx context.Context, buildClient BuildClient, namespace, name 
 	evaluatorFunc := func(obj runtime.Object) (bool, error) {
 		switch build := obj.(type) {
 		case *buildapi.Build:
-			if isOK(build) {
-				logrus.Infof("Build %s succeeded after %s", build.Name, buildDurationFunc(build).Truncate(time.Second))
+			switch build.Status.Phase {
+			case buildapi.BuildPhaseComplete:
+				logrus.Infof("Build %s succeeded after %s", build.Name, buildDuration(build).Truncate(time.Second))
 				return true, nil
-			}
-			if isFailed(build) {
+			case buildapi.BuildPhaseFailed, buildapi.BuildPhaseCancelled, buildapi.BuildPhaseError:
 				logrus.Infof("Build %s failed, printing logs:", build.Name)
 				printBuildLogs(buildClient, build.Namespace, build.Name)
-				return true, util.AppendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDurationFunc(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
+				return true, util.AppendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 			}
 		default:
 			return false, fmt.Errorf("build/%v ns/%v got an event that did not contain a build: %v", name, namespace, obj)

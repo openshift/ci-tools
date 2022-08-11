@@ -56,7 +56,13 @@ func (s *promotionStep) Run(ctx context.Context) error {
 }
 
 func (s *promotionStep) run(ctx context.Context) error {
-	tags, names := PromotedTagsWithRequiredImages(s.configuration, WithRequiredImages(s.requiredImages), WithCommitSha(s.jobSpec.MainRefs().BaseSHA))
+	opts := []PromotedTagsOption{
+		WithRequiredImages(s.requiredImages),
+	}
+	if refs := s.jobSpec.MainRefs(); refs != nil {
+		opts = append(opts, WithCommitSha(refs.BaseSHA))
+	}
+	tags, names := PromotedTagsWithRequiredImages(s.configuration, opts...)
 	if len(names) == 0 {
 		logrus.Info("Nothing to promote, skipping...")
 		return nil

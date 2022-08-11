@@ -1,4 +1,4 @@
-package main
+package retester
 
 import (
 	"context"
@@ -22,6 +22,14 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+type githubClient interface {
+	GetCombinedStatus(org, repo, ref string) (*github.CombinedStatus, error)
+	GetRef(string, string, string) (string, error)
+	QueryWithGitHubAppsSupport(ctx context.Context, q interface{}, vars map[string]interface{}, org string) error
+	CreateComment(owner, repo string, number int, comment string) error
+}
+
+// PullRequest represents GitHub PR and number of retests.
 type PullRequest struct {
 	PRSha              string      `json:"pr_sha,omitempty"`
 	BaseSha            string      `json:"base_sha,omitempty"`
@@ -134,7 +142,8 @@ type RetesterPolicy struct {
 	Enabled                 *bool `json:"enabled,omitempty"`
 }
 
-func loadConfig(configFilePath string) (*Config, error) {
+// LoadConfig loads retester configuration via file.
+func LoadConfig(configFilePath string) (*Config, error) {
 	data, err := ioutil.ReadFile(configFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config %w", err)
@@ -148,7 +157,8 @@ func loadConfig(configFilePath string) (*Config, error) {
 	return &config, nil
 }
 
-type retestController struct {
+// RetestController has the retester configuration, github client, prow config getter.
+type RetestController struct {
 	ghClient     githubClient
 	gitClient    git.ClientFactory
 	configGetter config.Getter
@@ -228,10 +238,11 @@ func validatePolicies(policy RetesterPolicy) []error {
 	return errs
 }
 
-func newController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, config *Config) *retestController {
+// NewController is constructor for RetestController.
+func NewController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, config *Config) *RetestController {
 	logger := logrus.NewEntry(logrus.StandardLogger())
 
-	ret := &retestController{
+	ret := &RetestController{
 		ghClient:      ghClient,
 		gitClient:     gitClient,
 		configGetter:  cfg,
@@ -250,7 +261,8 @@ func prUrl(pr tide.PullRequest) string {
 	return fmt.Sprintf("https://github.com/%s/%s/pull/%d", pr.Repository.Owner.Login, pr.Repository.Name, pr.Number)
 }
 
-func (c *retestController) sync() error {
+// Sync takes Tide config and gets a list of PRs that are filter out by the queries in Tide's config.
+func (c *RetestController) Sync() error {
 	// Input: Tide Config
 	// Output: A list of PRs that are filter out by the queries in Tide's config
 	candidates, err := findCandidates(c.configGetter, c.ghClient, c.usesGitHubApp, c.logger)
@@ -329,14 +341,14 @@ func (b *backoffCache) check(pr tide.PullRequest, baseSha string, config *Config
 	return retestBackoffRetest, fmt.Sprintf("Remaining retests: %d against base HEAD %s and %d for PR HEAD %s in total", policy.MaxRetestsForShaAndBase-record.RetestsForBaseSha, record.BaseSha, policy.MaxRetestsForSha-record.RetestsForPrSha, record.PRSha)
 }
 
-func (c *retestController) createComment(pr tide.PullRequest, cmd, message string) {
+func (c *RetestController) createComment(pr tide.PullRequest, cmd, message string) {
 	comment := fmt.Sprintf("%s\n\n%s\n", cmd, message)
 	if err := c.ghClient.CreateComment(string(pr.Repository.Owner.Login), string(pr.Repository.Name), int(pr.Number), comment); err != nil {
 		c.logger.WithField("comment", comment).WithError(err).Error("failed to create a comment")
 	}
 }
 
-func (c *retestController) retestOrBackoff(pr tide.PullRequest) error {
+func (c *RetestController) retestOrBackoff(pr tide.PullRequest) error {
 	branchRef := string(pr.BaseRef.Prefix) + string(pr.BaseRef.Name)
 	baseSha, err := c.ghClient.GetRef(string(pr.Repository.Owner.Login), string(pr.Repository.Name), strings.TrimPrefix(branchRef, "refs/"))
 	if err != nil {
@@ -374,7 +386,7 @@ func findCandidates(config config.Getter, gc githubClient, usesGitHubAppsAuth bo
 	return prs, nil
 }
 
-func (c *retestController) atLeastOneRequiredJob(candidates map[string]tide.PullRequest) (map[string]tide.PullRequest, error) {
+func (c *RetestController) atLeastOneRequiredJob(candidates map[string]tide.PullRequest) (map[string]tide.PullRequest, error) {
 	output := map[string]tide.PullRequest{}
 	for key, pr := range candidates {
 		// Get all non-optional Prowjobs configured for this org/repo/branch that could run on this PR
@@ -551,7 +563,7 @@ func search(query querier, log *logrus.Entry, q string, start, end time.Time, or
 	return ret, nil
 }
 
-func (c *retestController) presubmitsForPRByContext(pr tide.PullRequest) map[string]config.Presubmit {
+func (c *RetestController) presubmitsForPRByContext(pr tide.PullRequest) map[string]config.Presubmit {
 	presubmits := map[string]config.Presubmit{}
 
 	presubmitsForRepo := c.configGetter().GetPresubmitsStatic(string(pr.Repository.Owner.Login) + "/" + string(pr.Repository.Name))
@@ -565,7 +577,7 @@ func (c *retestController) presubmitsForPRByContext(pr tide.PullRequest) map[str
 	return presubmits
 }
 
-func (c *retestController) enabledPRs(candidates map[string]tide.PullRequest) map[string]tide.PullRequest {
+func (c *RetestController) enabledPRs(candidates map[string]tide.PullRequest) map[string]tide.PullRequest {
 	output := map[string]tide.PullRequest{}
 	for key, pr := range candidates {
 		org := string(pr.Repository.Owner.Login)

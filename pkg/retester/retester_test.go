@@ -1,4 +1,4 @@
-package main
+package retester
 
 import (
 	"context"
@@ -109,7 +109,7 @@ func TestLoadConfig(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := loadConfig(tc.file)
+			actual, err := LoadConfig(tc.file)
 			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("Error differs from expected:\n%s", diff)
 			}
@@ -294,7 +294,7 @@ func TestRetestOrBackoff(t *testing.T) {
 	testCases := []struct {
 		name          string
 		pr            tide.PullRequest
-		c             *retestController
+		c             *RetestController
 		expected      string
 		expectedError error
 	}{
@@ -309,7 +309,7 @@ func TestRetestOrBackoff(t *testing.T) {
 					Owner         struct{ Login githubv4.String }
 				}{Name: "repo", Owner: struct{ Login githubv4.String }{Login: "org"}},
 			},
-			c: &retestController{
+			c: &RetestController{
 				ghClient: ghc,
 				logger:   logger,
 				backoff:  &backoffCache{cache: map[string]*PullRequest{}, logger: logger},
@@ -328,7 +328,7 @@ func TestRetestOrBackoff(t *testing.T) {
 					Owner         struct{ Login githubv4.String }
 				}{Name: "repo", Owner: struct{ Login githubv4.String }{Login: "failed test"}},
 			},
-			c: &retestController{
+			c: &RetestController{
 				ghClient: ghc,
 				logger:   logger,
 				backoff:  &backoffCache{cache: map[string]*PullRequest{}, logger: logger},
@@ -363,13 +363,13 @@ func TestEnabledPRs(t *testing.T) {
 	logger := logrus.NewEntry(logrus.StandardLogger())
 	testCases := []struct {
 		name       string
-		c          *retestController
+		c          *RetestController
 		candidates map[string]tide.PullRequest
 		expected   map[string]tide.PullRequest
 	}{
 		{
 			name: "basic case",
-			c: &retestController{
+			c: &RetestController{
 				config: &Config{Retester: Retester{
 					RetesterPolicy: RetesterPolicy{MaxRetestsForShaAndBase: 1, MaxRetestsForSha: 1, Enabled: &True}, Oranizations: map[string]Oranization{
 						"openshift": {RetesterPolicy: RetesterPolicy{Enabled: &False},

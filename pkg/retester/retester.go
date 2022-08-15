@@ -157,7 +157,7 @@ func LoadConfig(configFilePath string) (*Config, error) {
 	return &config, nil
 }
 
-// RetestController has the retester configuration, github client, prow config getter.
+// RetestController represents a retest controller which controls what the retester does.
 type RetestController struct {
 	ghClient     githubClient
 	gitClient    git.ClientFactory
@@ -238,7 +238,7 @@ func validatePolicies(policy RetesterPolicy) []error {
 	return errs
 }
 
-// NewController is constructor for RetestController.
+// NewController generates a retest controller.
 func NewController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, config *Config) *RetestController {
 	logger := logrus.NewEntry(logrus.StandardLogger())
 
@@ -261,8 +261,8 @@ func prUrl(pr tide.PullRequest) string {
 	return fmt.Sprintf("https://github.com/%s/%s/pull/%d", pr.Repository.Owner.Login, pr.Repository.Name, pr.Number)
 }
 
-// Sync takes Tide config and gets a list of PRs that are filter out by the queries in Tide's config.
-func (c *RetestController) Sync() error {
+// Run implements the business of the controller: filters out the pull requests satisfying the Tide's merge criteria except some required job failed and issue "/retest required" command on them.
+func (c *RetestController) Run() error {
 	// Input: Tide Config
 	// Output: A list of PRs that are filter out by the queries in Tide's config
 	candidates, err := findCandidates(c.configGetter, c.ghClient, c.usesGitHubApp, c.logger)

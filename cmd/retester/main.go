@@ -5,7 +5,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/openshift/ci-tools/pkg/retester"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/test-infra/pkg/flagutil"
@@ -13,6 +12,8 @@ import (
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/interrupts"
+
+	"github.com/openshift/ci-tools/pkg/retester"
 )
 
 type options struct {

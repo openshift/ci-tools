@@ -29,8 +29,8 @@ type githubClient interface {
 	CreateComment(owner, repo string, number int, comment string) error
 }
 
-// PullRequest represents GitHub PR and number of retests.
-type PullRequest struct {
+// pullRequest represents GitHub PR and number of retests.
+type pullRequest struct {
 	PRSha              string      `json:"pr_sha,omitempty"`
 	BaseSha            string      `json:"base_sha,omitempty"`
 	RetestsForPrSha    int         `json:"retests_for_pr_sha,omitempty"`
@@ -39,7 +39,7 @@ type PullRequest struct {
 }
 
 type backoffCache struct {
-	cache          map[string]*PullRequest
+	cache          map[string]*pullRequest
 	file           string
 	cacheRecordAge time.Duration
 	logger         *logrus.Entry
@@ -57,7 +57,7 @@ func (b *backoffCache) loadFromDisk() error {
 	if err != nil {
 		return fmt.Errorf("failed to read file %s: %w", b.file, err)
 	}
-	cache := map[string]*PullRequest{}
+	cache := map[string]*pullRequest{}
 	if err := yaml.Unmarshal(bytes, &cache); err != nil {
 		return fmt.Errorf("failed to unmarshal: %w", err)
 	}
@@ -248,7 +248,7 @@ func NewController(ghClient githubClient, cfg config.Getter, gitClient git.Clien
 		configGetter:  cfg,
 		logger:        logger,
 		usesGitHubApp: usesApp,
-		backoff:       &backoffCache{cache: map[string]*PullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger},
+		backoff:       &backoffCache{cache: map[string]*pullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger},
 		config:        config,
 	}
 	if err := ret.backoff.loadFromDisk(); err != nil {
@@ -311,7 +311,7 @@ const (
 func (b *backoffCache) check(pr tide.PullRequest, baseSha string, config *Config, policy RetesterPolicy) (retestBackoffAction, string) {
 	key := prKey(&pr)
 	if _, has := b.cache[key]; !has {
-		b.cache[key] = &PullRequest{}
+		b.cache[key] = &pullRequest{}
 	}
 	record := b.cache[key]
 	record.LastConsideredTime = metav1.Now()

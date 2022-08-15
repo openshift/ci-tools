@@ -312,7 +312,7 @@ func TestRetestOrBackoff(t *testing.T) {
 			c: &RetestController{
 				ghClient: ghc,
 				logger:   logger,
-				backoff:  &backoffCache{cache: map[string]*PullRequest{}, logger: logger},
+				backoff:  &backoffCache{cache: map[string]*pullRequest{}, logger: logger},
 				config:   config,
 			},
 			expected: "/retest-required\n\nRemaining retests: 2 against base HEAD abcde and 8 for PR HEAD  in total\n",
@@ -331,7 +331,7 @@ func TestRetestOrBackoff(t *testing.T) {
 			c: &RetestController{
 				ghClient: ghc,
 				logger:   logger,
-				backoff:  &backoffCache{cache: map[string]*PullRequest{}, logger: logger},
+				backoff:  &backoffCache{cache: map[string]*pullRequest{}, logger: logger},
 				config:   config,
 			},
 			expected:      "",

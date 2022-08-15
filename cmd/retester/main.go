@@ -125,7 +125,7 @@ func main() {
 }
 
 func execute(c *retester.RetestController) {
-	if err := c.Sync(); err != nil {
+	if err := c.Run(); err != nil {
 		logrus.WithError(err).Error("Error syncing")
 	}
 }

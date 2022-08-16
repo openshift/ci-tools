@@ -112,6 +112,11 @@ func TestMetadata_ConfigMapName(t *testing.T) {
 			expected: "ci-operator-master-configs",
 		},
 		{
+			name:     "openshift 3.6 branch goes to 3.x configmap",
+			branch:   "openshift-3.6",
+			expected: "ci-operator-3.x-configs",
+		},
+		{
 			name:     "enterprise 3.6 branch goes to 3.x configmap",
 			branch:   "enterprise-3.6",
 			expected: "ci-operator-3.x-configs",
@@ -135,6 +140,16 @@ func TestMetadata_ConfigMapName(t *testing.T) {
 			name:     "openshift 3.11 branch goes to 3.x configmap",
 			branch:   "openshift-3.11",
 			expected: "ci-operator-3.x-configs",
+		},
+		{
+			name:     "release 1.0 branch goes to 1.x configmap",
+			branch:   "release-1.0",
+			expected: "ci-operator-1.x-configs",
+		},
+		{
+			name:     "release 2.5 branch goes to 2.x configmap",
+			branch:   "release-2.5",
+			expected: "ci-operator-2.x-configs",
 		},
 		{
 			name:     "release 3.11 branch goes to 3.x configmap",

@@ -4,12 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
+	"io/ioutil"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/shurcooL/githubv4"
 	"github.com/sirupsen/logrus"
 
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/github/fakegithub"
 	"k8s.io/test-infra/prow/tide"
@@ -439,6 +444,131 @@ func TestEnabledPRs(t *testing.T) {
 			actual := tc.c.enabledPRs(tc.candidates)
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+			}
+		})
+	}
+}
+
+func TestLoadFromDisk(t *testing.T) {
+	logger := logrus.NewEntry(logrus.StandardLogger())
+	testCases := []struct {
+		name           string
+		file           string
+		cacheRecordAge string
+		bytes          []byte
+		perm           fs.FileMode
+		expectedError  error
+	}{
+		{
+			name:           "basic case",
+			file:           "backoff.cache",
+			cacheRecordAge: "24h",
+			bytes: []byte(`pr:
+  last_considered_time: "2200-01-01T00:00:00Z"`),
+			perm:          0644,
+			expectedError: nil,
+		},
+		{
+			name:           "empty file",
+			file:           "",
+			cacheRecordAge: "24h",
+			perm:           0644,
+			expectedError:  nil,
+		},
+		{
+			name:           "file no exist",
+			file:           "no-exist.cache",
+			cacheRecordAge: "24h",
+			perm:           0644,
+			expectedError:  nil,
+		},
+		{
+			name:           "file no read perm",
+			file:           "backoff.cache",
+			cacheRecordAge: "24h",
+			perm:           0000,
+			expectedError:  errors.New("failed to read file backoff.cache: open backoff.cache: permission denied"),
+		},
+		{
+			name:           "wrong formatting",
+			file:           "backoff.cache",
+			cacheRecordAge: "24h",
+			bytes: []byte(`wrong:
+			formating"`),
+			perm:          0644,
+			expectedError: errors.New("failed to unmarshal: error converting YAML to JSON: yaml: line 2: found character that cannot start any token"),
+		},
+		{
+			name:           "old case",
+			file:           "backoff.cache",
+			cacheRecordAge: "24h",
+			bytes: []byte(`pr:
+  last_considered_time: "1970-01-01T00:00:00Z"`),
+			perm:          0644,
+			expectedError: nil,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				tmp := "backoff.cache"
+				err := os.Remove(tmp)
+				if err != nil {
+					fmt.Errorf("failed to write file %s: %w", tmp, err)
+				}
+			}()
+			tmp := "backoff.cache"
+			if err := ioutil.WriteFile(tmp, tc.bytes, tc.perm); err != nil {
+				fmt.Errorf("failed to write file %s: %w", tmp, err)
+			}
+			cacheRecordAge, _ := time.ParseDuration(tc.cacheRecordAge)
+			backoff := &backoffCache{file: tc.file, cacheRecordAge: cacheRecordAge, logger: logger}
+			err := backoff.loadFromDisk()
+			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("Error differs from expected:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestSaveToDisk(t *testing.T) {
+	logger := logrus.NewEntry(logrus.StandardLogger())
+	testCases := []struct {
+		name           string
+		cache          map[string]*pullRequest
+		file           string
+		cacheRecordAge string
+		expectedError  error
+	}{
+		{
+			name:           "basic case",
+			cache:          map[string]*pullRequest{"pr": {LastConsideredTime: v1.Now()}},
+			file:           "backoff.cache",
+			cacheRecordAge: "24h",
+			expectedError:  nil,
+		},
+		{
+			name:           "empty file",
+			cache:          map[string]*pullRequest{},
+			file:           "",
+			cacheRecordAge: "24h",
+			expectedError:  nil,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				tmp := "backoff.cache"
+				err := os.Remove(tmp)
+				if err != nil {
+					fmt.Errorf("failed to write file %s: %w", tmp, err)
+				}
+			}()
+			cacheRecordAge, _ := time.ParseDuration(tc.cacheRecordAge)
+			backoff := &backoffCache{cache: tc.cache, file: tc.file, cacheRecordAge: cacheRecordAge, logger: logger}
+			err := backoff.saveToDisk()
+			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("Error differs from expected:\n%s", diff)
 			}
 		})
 	}

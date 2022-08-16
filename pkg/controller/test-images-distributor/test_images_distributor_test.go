@@ -713,11 +713,18 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 		},
 		{
 			name: "imagestreamtag is referenced by config",
-			config: api.ReleaseBuildConfiguration{RawSteps: []api.StepConfiguration{{
-				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-					InputImage: api.InputImage{BaseImage: api.ImageStreamTagReference{Namespace: namespace, Name: streamName, Tag: tagName}},
+			config: api.ReleaseBuildConfiguration{
+				RawSteps: []api.StepConfiguration{
+					{
+						InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+							InputImage: api.InputImage{
+								BaseImage: api.MultiArchImageStreamTagReference{
+									ImageStreamTagReference: api.ImageStreamTagReference{Namespace: namespace, Name: streamName, Tag: tagName}},
+							},
+						},
+					},
 				},
-			}}},
+			},
 			expectedResult: true,
 		},
 		{

@@ -484,7 +484,7 @@ func (s server) validateConfig(w http.ResponseWriter, r *http.Request) {
 				rawSteps = append(rawSteps, api.StepConfiguration{
 					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 						InputImage: api.InputImage{
-							BaseImage: image,
+							BaseImage: api.MultiArchImageStreamTagReference{ImageStreamTagReference: image},
 							To:        api.PipelineImageStreamTagReference(image.Name),
 						}}})
 			}

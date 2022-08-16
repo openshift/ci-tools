@@ -454,7 +454,7 @@ func stepsForStepImages(
 
 			config := api.InputImageTagStepConfiguration{
 				InputImage: api.InputImage{
-					BaseImage: *subStep.FromImage,
+					BaseImage: api.MultiArchImageStreamTagReference{ImageStreamTagReference: *subStep.FromImage},
 					To:        link,
 				},
 				Sources: []api.ImageStreamSource{source},
@@ -576,7 +576,7 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 		} else if isTagRef := target.ImageStreamTagReference; isTagRef != nil {
 			config := api.InputImageTagStepConfiguration{
 				InputImage: api.InputImage{
-					BaseImage: *isTagRef,
+					BaseImage: api.MultiArchImageStreamTagReference{ImageStreamTagReference: *isTagRef},
 					To:        api.PipelineImageStreamTagReferenceRoot,
 				},
 				Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceRoot}},
@@ -635,8 +635,10 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 	for alias, baseImage := range config.BaseImages {
 		config := api.InputImageTagStepConfiguration{
 			InputImage: api.InputImage{
-				BaseImage: defaultImageFromReleaseTag(alias, baseImage, config.ReleaseTagConfiguration),
-				To:        api.PipelineImageStreamTagReference(alias),
+				BaseImage: api.MultiArchImageStreamTagReference{
+					ImageStreamTagReference: defaultImageFromReleaseTag(alias, baseImage, config.ReleaseTagConfiguration),
+				},
+				To: api.PipelineImageStreamTagReference(alias),
 			},
 			Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBase, Name: alias}},
 		}
@@ -648,8 +650,10 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 		intermediateTag := api.PipelineImageStreamTagReference(fmt.Sprintf("%s-without-rpms", alias))
 		config := api.InputImageTagStepConfiguration{
 			InputImage: api.InputImage{
-				BaseImage: defaultImageFromReleaseTag(alias, target, config.ReleaseTagConfiguration),
-				To:        intermediateTag,
+				BaseImage: api.MultiArchImageStreamTagReference{
+					ImageStreamTagReference: defaultImageFromReleaseTag(alias, target, config.ReleaseTagConfiguration),
+				},
+				To: intermediateTag,
 			},
 			Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBaseRpm, Name: alias}},
 		}
@@ -801,7 +805,7 @@ func runtimeStepConfigsForBuild(
 			}
 		}
 		if target != nil {
-			istTagRef := &target.InputImage.BaseImage
+			istTagRef := &target.InputImage.BaseImage.ImageStreamTagReference
 			if root.FromRepository {
 				var err error
 				istTagRef, err = buildRootImageStreamFromRepository(readFile)
@@ -822,7 +826,7 @@ func runtimeStepConfigsForBuild(
 			if root.FromRepository && !strings.HasSuffix(consoleHost, api.ServiceDomainAPPCI) {
 				ensureImageStreamTag(ctx, client, istTagRef, second)
 			}
-			target.InputImage.BaseImage = *istTagRef
+			target.InputImage.BaseImage.ImageStreamTagReference = *istTagRef
 		}
 	}
 	if jobSpec.Refs != nil || len(jobSpec.ExtraRefs) > 0 {

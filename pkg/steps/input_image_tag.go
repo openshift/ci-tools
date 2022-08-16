@@ -38,7 +38,7 @@ func (s *inputImageTagStep) Inputs() (api.InputDefinition, error) {
 		return api.InputDefinition{s.imageName}, nil
 	}
 	from := imagev1.ImageStreamTag{}
-	namespace := s.config.BaseImage.Namespace
+	namespace := s.config.BaseImage.ResolveNamespace()
 	name := fmt.Sprintf("%s:%s", s.config.BaseImage.Name, s.config.BaseImage.Tag)
 	if err := s.client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{
 		Namespace: namespace,
@@ -81,7 +81,7 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 			From: &coreapi.ObjectReference{
 				Kind:      "ImageStreamImage",
 				Name:      fmt.Sprintf("%s@%s", s.config.BaseImage.Name, s.imageName),
-				Namespace: s.config.BaseImage.Namespace,
+				Namespace: s.config.BaseImage.ResolveNamespace(),
 			},
 		},
 	}

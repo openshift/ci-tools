@@ -29,7 +29,7 @@ func TestInputImageTagStep(t *testing.T) {
 	config := api.InputImageTagStepConfiguration{
 		InputImage: api.InputImage{
 			To:        "TO",
-			BaseImage: baseImage,
+			BaseImage: api.MultiArchImageStreamTagReference{ImageStreamTagReference: baseImage},
 		},
 	}
 

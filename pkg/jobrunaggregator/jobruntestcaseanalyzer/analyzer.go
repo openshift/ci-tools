@@ -99,13 +99,16 @@ func (s *testCaseAnalyzerJobGetter) filterJobsForPayload(allJobs []jobrunaggrega
 
 func (s *testCaseAnalyzerJobGetter) isJobNameFiltered(jobName string) bool {
 
-	if s.excludeJobNames != nil {
-		for key := range s.excludeJobNames {
-			if strings.Contains(jobName, key) {
-				return true
-			}
+	if s.excludeJobNames == nil {
+		return false
+	}
+
+	for key := range s.excludeJobNames {
+		if strings.Contains(jobName, key) {
+			return true
 		}
 	}
+
 	return false
 }
 

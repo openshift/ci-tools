@@ -4,9 +4,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/spf13/pflag"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
 func TestGetJobs(t *testing.T) {
@@ -23,11 +26,18 @@ func TestGetJobs(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 
+			ctx := context.TODO()
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			mockCIDataClient := NewMockCIDataClient(mockCtrl)
+			mockCIDataClient.EXPECT().ListAllJobs(ctx).Return(createJobs(), nil)
+
 			jobGetter := &testCaseAnalyzerJobGetter{
 				platform:       "metal",
 				infrastructure: "ipi",
 				network:        "sdn",
-				ciDataClient:   &ciDataClientTester{},
+				ciDataClient:   mockCIDataClient,
 				jobGCSPrefixes: &[]jobGCSPrefix{},
 			}
 
@@ -53,7 +63,7 @@ func TestGetJobs(t *testing.T) {
 				jobGetter.excludeJobNames.Insert(f.ExcludeJobNames...)
 			}
 
-			returnedJobs, err := jobGetter.GetJobs(context.TODO())
+			returnedJobs, err := jobGetter.GetJobs(ctx)
 
 			if nil != err {
 				t.Fatalf("%s returned error %#v", name, err)
@@ -81,4 +91,13 @@ func TestGetJobs(t *testing.T) {
 		})
 	}
 
+}
+
+func createJobs() []jobrunaggregatorapi.JobRow {
+	jobs := make([]jobrunaggregatorapi.JobRow, 3)
+	jobs[0] = jobrunaggregatorapi.JobRow{JobName: "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-upgrade", Platform: "metal", Network: "sdn"}
+	jobs[1] = jobrunaggregatorapi.JobRow{JobName: "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-serial-ipv4", Platform: "metal", Network: "sdn"}
+	jobs[2] = jobrunaggregatorapi.JobRow{JobName: "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6", Platform: "metal", Network: "sdn"}
+
+	return jobs
 }

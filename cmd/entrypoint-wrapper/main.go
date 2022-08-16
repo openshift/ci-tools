@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -299,38 +300,51 @@ func manageHome(proc *exec.Cmd) {
 // but changes are not propagated to subsequent steps to limit the amount of possible mistakes
 func manageKubeconfig(proc *exec.Cmd) error {
 	if original, set := os.LookupEnv("KUBECONFIG"); set {
-		writableCopy, err := ioutil.TempFile("", "kubeconfig-*")
+		tempPrefix := "temp-"
+		writableCopy, err := ioutil.TempFile("", tempPrefix+"kubeconfig-*")
 		if err != nil {
 			return fmt.Errorf("could not create unique, writeable $KUBECONFIG copy: %w", err)
 		}
-		proc.Env = append(proc.Env, fmt.Sprintf("KUBECONFIG=%s", writableCopy.Name()))
-		// the source KUBECONFIG may begin to exist if it does not exist at the start, so poll for it
-		go func() {
-			if err := wait.PollImmediateInfinite(time.Second, func() (done bool, err error) {
-				if _, err := os.Stat(original); err != nil {
-					if os.IsNotExist(err) {
-						return false, nil
-					}
-					return false, err
+		newPath := strings.ReplaceAll(writableCopy.Name(), tempPrefix, "")
+
+		renameKubeconfig := func() (done bool, err error) {
+			if _, err := os.Stat(original); err != nil {
+				if os.IsNotExist(err) {
+					return false, nil
 				}
-				source, err := os.Open(original)
-				if err != nil {
-					return true, err
-				}
-				if _, err := io.Copy(writableCopy, source); err != nil {
-					return true, err
-				}
-				if err := writableCopy.Close(); err != nil {
-					return true, err
-				}
-				if err := source.Close(); err != nil {
-					return true, err
-				}
-				return true, nil
-			}); err != nil {
-				logrus.WithError(err).Warn("could not populate unique, writeable $KUBECONFIG copy: %w", err)
+				return false, err
 			}
-		}()
+			source, err := os.Open(original)
+			if err != nil {
+				return true, err
+			}
+			if _, err := io.Copy(writableCopy, source); err != nil {
+				return true, err
+			}
+			if err := writableCopy.Close(); err != nil {
+				return true, err
+			}
+			if err := source.Close(); err != nil {
+				return true, err
+			}
+			if err := os.Rename(writableCopy.Name(), newPath); err != nil {
+				return true, err
+			}
+			return true, nil
+		}
+		exist, err := renameKubeconfig()
+		proc.Env = append(proc.Env, fmt.Sprintf("KUBECONFIG=%s", newPath))
+		if !exist || err != nil {
+			if err != nil {
+				logrus.WithError(err).Warn("could not populate unique, writeable $KUBECONFIG copy during first iteration: %w", err)
+			}
+			// the source KUBECONFIG may begin to exist if it does not exist at the start, so poll for it
+			go func() {
+				if err := wait.PollImmediateInfinite(time.Second, renameKubeconfig); err != nil {
+					logrus.WithError(err).Warn("could not populate unique, writeable $KUBECONFIG copy: %w", err)
+				}
+			}()
+		}
 	}
 	return nil
 }

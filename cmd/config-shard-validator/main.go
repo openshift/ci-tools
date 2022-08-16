@@ -213,7 +213,7 @@ func validatePaths(pathsToCheck []pathWithConfig, pcfg *plugins.ConfigUpdater) (
 				if glob.Match(pathToCheck.path) {
 					matches = append(matches, globStr)
 					if updateConfig.Name != pathToCheck.configMap {
-						errCh <- field.Invalid(path.Child(globStr), "", fmt.Sprintf("File matches glob from unexpected ConfigMap %s instead of %s.", updateConfig.Name, pathToCheck.configMap))
+						errCh <- field.Invalid(path.Child(globStr), "", fmt.Sprintf("File %q matches glob from unexpected ConfigMap %s instead of %s.", pathToCheck.path, updateConfig.Name, pathToCheck.configMap))
 					}
 				}
 			}

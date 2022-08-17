@@ -1,0 +1,5 @@
+pr:
+  last_considered_time: null
+  pr_sha: basic
+  retests_for_base_sha: 3
+  retests_for_pr_sha: 9

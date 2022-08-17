@@ -268,8 +268,8 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-upgrade-ovn-ipv6
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-single-node-live-iso
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-sdn-assisted
-periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt
 periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt-csi
+periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt-sdn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-sdn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-serial

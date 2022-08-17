@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -381,6 +382,20 @@ func (i *ImageStreamTagReference) ISTagName() string {
 	return fmt.Sprintf("%s/%s:%s", i.Namespace, i.Name, i.Tag)
 }
 
+// MultiArchImageStreamTagReference is a ImageStreamTagReference that can resolve
+// the namespace on the runtime based on the os architecture
+type MultiArchImageStreamTagReference struct {
+	ImageStreamTagReference `json:",inline"`
+}
+
+func (m *MultiArchImageStreamTagReference) ResolveNamespace() string {
+	arch := runtime.GOARCH
+	if arch == "amd64" {
+		return m.ImageStreamTagReference.Namespace
+	}
+	return fmt.Sprintf("%s-%s", m.ImageStreamTagReference.Namespace, arch)
+}
+
 // ReleaseTagConfiguration describes how a release is
 // assembled from release artifacts. A release image stream is a
 // single stream with multiple tags (openshift/origin-v3.9:control-plane),
@@ -542,8 +557,8 @@ func (config *InputImageTagStepConfiguration) AddSources(sources ...ImageStreamS
 }
 
 type InputImage struct {
-	BaseImage ImageStreamTagReference         `json:"base_image"`
-	To        PipelineImageStreamTagReference `json:"to,omitempty"`
+	BaseImage MultiArchImageStreamTagReference `json:"base_image"`
+	To        PipelineImageStreamTagReference  `json:"to,omitempty"`
 }
 
 type ImageStreamSourceType string

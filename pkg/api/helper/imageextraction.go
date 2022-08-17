@@ -85,7 +85,7 @@ func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguratio
 
 	for _, rawStep := range cfg.RawSteps {
 		if rawStep.InputImageTagStepConfiguration != nil {
-			insert(rawStep.InputImageTagStepConfiguration.BaseImage, result)
+			insert(rawStep.InputImageTagStepConfiguration.BaseImage.ImageStreamTagReference, result)
 		}
 		if rawStep.SourceStepConfiguration != nil {
 			insert(rawStep.SourceStepConfiguration.ClonerefsImage, result)

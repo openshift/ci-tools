@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
@@ -18,6 +19,7 @@ import (
 	"k8s.io/test-infra/prow/entrypoint"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/kube"
+	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -61,6 +63,11 @@ type podMutator struct {
 	cpuCap               int64
 	memoryCap            string
 }
+
+var (
+	promMetrics        = metrics.NewMetrics("pod_scaler_admission")
+	admittedPodsMetric = initPodCounterMetric()
+)
 
 func (m *podMutator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	pod := &corev1.Pod{}
@@ -195,7 +202,7 @@ func mutatePodLabels(pod *corev1.Pod, build *buildv1.Build) {
 }
 
 // useOursIfLarger updates fields in theirs when ours are larger
-func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, logger *logrus.Entry) {
+func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, containerName string, logger *logrus.Entry) {
 	for _, item := range []*corev1.ResourceRequirements{allOfOurs, allOfTheirs} {
 		if item.Requests == nil {
 			item.Requests = corev1.ResourceList{}
@@ -217,9 +224,30 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, logger
 			if our.Cmp(their) == 1 {
 				logger.Debugf("determined %s %s of %s to be larger than %s configured", field, pair.resource, our.String(), their.String())
 				(*pair.theirs)[field] = our
+				if our.Value() > (their.Value() * 10) {
+					metrics.RecordError(fmt.Sprintf("actual memory 10x more than configured amount for: %s", containerName), promMetrics.ErrorRate)
+				}
 			}
 		}
 	}
+	recordPodAdmitted(containerName, admittedPodsMetric)
+}
+
+func initPodCounterMetric() *prometheus.CounterVec {
+	m := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "pod_scaler_admission_pods_admitted",
+			Help: "number of pods admitted",
+		},
+		[]string{"pod_name"},
+	)
+	prometheus.MustRegister(m)
+	return m
+}
+
+func recordPodAdmitted(name string, vec *prometheus.CounterVec) {
+	labels := prometheus.Labels{"pod_name": name}
+	vec.With(labels).Inc()
 }
 
 // reconcileLimits ensures that container resource limits do not set anything for CPU (as we
@@ -273,7 +301,7 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 		resources, recommendationExists := server.recommendedRequestFor(meta)
 		if recommendationExists {
 			logger.Debugf("recommendation exists for: %s", pod.Spec.InitContainers[i].Name)
-			useOursIfLarger(&resources, &pod.Spec.InitContainers[i].Resources, logger)
+			useOursIfLarger(&resources, &pod.Spec.InitContainers[i].Resources, pod.Spec.InitContainers[i].Name, logger)
 			if mutateResourceLimits {
 				reconcileLimits(&pod.Spec.InitContainers[i].Resources)
 			}
@@ -285,7 +313,7 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 		resources, recommendationExists := server.recommendedRequestFor(meta)
 		if recommendationExists {
 			logger.Debugf("recommendation exists for: %s", pod.Spec.Containers[i].Name)
-			useOursIfLarger(&resources, &pod.Spec.Containers[i].Resources, logger)
+			useOursIfLarger(&resources, &pod.Spec.Containers[i].Resources, pod.Spec.Containers[i].Name, logger)
 			if mutateResourceLimits {
 				reconcileLimits(&pod.Spec.Containers[i].Resources)
 			}

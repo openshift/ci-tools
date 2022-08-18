@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus"
 	"net/http"
 	"sort"
 	"strconv"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
@@ -224,13 +224,13 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, contai
 			if our.Cmp(their) == 1 {
 				logger.Debugf("determined %s %s of %s to be larger than %s configured", field, pair.resource, our.String(), their.String())
 				(*pair.theirs)[field] = our
-				recordPodAdmitted(containerName, admittedPodsMetric)
 				if our.Value() > (their.Value() * 10) {
 					metrics.RecordError(fmt.Sprintf("actual memory 10x more than configured amount for: %s", containerName), promMetrics.ErrorRate)
 				}
 			}
 		}
 	}
+	recordPodAdmitted(containerName, admittedPodsMetric)
 }
 
 func initPodCounterMetric() *prometheus.CounterVec {

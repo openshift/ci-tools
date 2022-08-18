@@ -46,6 +46,10 @@ type backoffCache struct {
 }
 
 func (b *backoffCache) loadFromDisk() error {
+	return b.loadFromDiskNow(time.Now())
+}
+
+func (b *backoffCache) loadFromDiskNow(now time.Time) error {
 	if b.file == "" {
 		return nil
 	}
@@ -62,8 +66,8 @@ func (b *backoffCache) loadFromDisk() error {
 		return fmt.Errorf("failed to unmarshal: %w", err)
 	}
 	for key, pr := range cache {
-		if age := time.Since(pr.LastConsideredTime.Time); age > b.cacheRecordAge {
-			b.logger.WithField("key", key).WithField("LastConsideredTime", pr.LastConsideredTime.Time).
+		if age := now.Sub(pr.LastConsideredTime.Time); age > b.cacheRecordAge {
+			b.logger.WithField("key", key).WithField("LastConsideredTime", pr.LastConsideredTime).
 				WithField("age", age).Info("deleting old record from cache")
 			delete(cache, key)
 		}

@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,7 +14,7 @@ import (
 	"github.com/shurcooL/githubv4"
 	"github.com/sirupsen/logrus"
 
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/github/fakegithub"
 	"k8s.io/test-infra/prow/tide"
@@ -449,105 +449,63 @@ func TestEnabledPRs(t *testing.T) {
 	}
 }
 
-func TestLoadFromDisk(t *testing.T) {
-	dir, err := ioutil.TempDir("", "backoff-cache")
-	if err != nil {
-		t.Errorf("failed to create temporary file %s: %s", dir, err.Error())
-	}
-	defer os.RemoveAll(dir)
-	defer os.Remove("backoff.cache")
-	layout := "01/02 03:04:05PM 2006 -0700"
-	str := "01/01 01:00:00AM 2200 +0100"
-	basicTime, err := time.Parse(layout, str)
-	if err != nil {
-		fmt.Println(err)
-	}
+var (
+	now     = metav1.NewTime(time.Date(2022, 8, 18, 0, 0, 0, 0, time.UTC))
+	justNow = metav1.NewTime(now.Add(-time.Minute))
+)
+
+func TestLoadFromDiskNow(t *testing.T) {
 	logger := logrus.NewEntry(logrus.StandardLogger())
 	testCases := []struct {
-		name           string
-		file           string
-		cacheRecordAge string
-		bytes          []byte
-		perm           fs.FileMode
-		expected       map[string]*pullRequest
-		expectedError  error
+		name        string
+		cache       backoffCache
+		now         time.Time
+		file        string
+		expectedMap map[string]*pullRequest
+		expected    error
 	}{
 		{
-			name:           "basic case",
-			file:           "tmp-file",
-			cacheRecordAge: "24h",
-			bytes: []byte(`pr:
-  last_considered_time: "2200-01-01T00:00:00Z"`),
-			perm:          0644,
-			expected:      map[string]*pullRequest{"pr": {LastConsideredTime: v1.NewTime(basicTime)}},
-			expectedError: nil,
+			name: "basic case",
+			file: "basic_case.yaml",
+			cache: backoffCache{
+				cacheRecordAge: time.Hour,
+				logger:         logger,
+			},
+			expectedMap: map[string]*pullRequest{"pr1": {PRSha: "sha1", RetestsForBaseSha: 2, RetestsForPrSha: 3, LastConsideredTime: now},
+				"pr3": {PRSha: "sha2", RetestsForBaseSha: 1, RetestsForPrSha: 3, LastConsideredTime: justNow}},
+			now: time.Date(2022, 8, 18, 0, 0, 0, 0, time.UTC),
 		},
 		{
-			name:           "empty file",
-			file:           "",
-			cacheRecordAge: "24h",
-			perm:           0644,
-			expectedError:  nil,
+			name: "empty file name",
+			file: "",
 		},
 		{
-			name:           "file no exist",
-			file:           "no-exist.cache",
-			cacheRecordAge: "24h",
-			perm:           0644,
-			expectedError:  nil,
+			name: "file no exist",
+			file: "no-exist.cache",
+			cache: backoffCache{
+				logger: logger,
+			},
 		},
 		{
-			name:           "file no read perm",
-			file:           "backoff.cache",
-			cacheRecordAge: "24h",
-			perm:           0000,
-			expectedError:  fmt.Errorf("failed to read file backoff.cache: open backoff.cache: permission denied"),
-		},
-		{
-			name:           "wrong formatting",
-			file:           "tmp-file",
-			cacheRecordAge: "24h",
-			bytes: []byte(`wrong:
-			formating"`),
-			perm:          0644,
-			expectedError: errors.New("failed to unmarshal: error converting YAML to JSON: yaml: line 2: found character that cannot start any token"),
-		},
-		{
-			name:           "old case",
-			file:           "tmp-file",
-			cacheRecordAge: "24h",
-			bytes: []byte(`pr:
-  last_considered_time: "1970-01-01T00:00:00Z"`),
-			perm:          0644,
-			expected:      map[string]*pullRequest{},
-			expectedError: nil,
+			name: "wrong format",
+			file: "wrong_format.yaml",
+			cache: backoffCache{
+				logger: logger,
+			},
+			expected: errors.New("failed to unmarshal: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type map[string]*retester.pullRequest"),
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			file, err := ioutil.TempFile(dir, "tmp-cache")
-			if err != nil {
-				t.Errorf("failed to create temporary file %s: %s", file.Name(), err.Error())
+			if tc.file != "" {
+				tc.cache.file = filepath.Join("testdata", "loadFromDiskNow", tc.file)
 			}
-			defer os.Remove(file.Name())
-			// use temporary file
-			if tc.file == "tmp-file" {
-				tc.file = file.Name()
-			}
-			if tc.file != "no-exist.cache" && tc.file != "" {
-				if err := ioutil.WriteFile(tc.file, tc.bytes, tc.perm); err != nil {
-					t.Errorf("failed to write file %s: %s", file.Name(), err.Error())
-				}
-			}
-			cacheRecordAge, _ := time.ParseDuration(tc.cacheRecordAge)
-			backoff := &backoffCache{file: tc.file, cacheRecordAge: cacheRecordAge, logger: logger}
-			err = backoff.loadFromDisk()
-			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
+			actual := tc.cache.loadFromDiskNow(tc.now)
+			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("Error differs from expected:\n%s", diff)
 			}
-			if tc.expectedError == nil {
-				actual := backoff.cache
-				if diff := cmp.Diff(tc.expected, actual); diff != "" {
+			if tc.expected == nil && actual == nil {
+				if diff := cmp.Diff(tc.expectedMap, tc.cache.cache); diff != "" {
 					t.Errorf("%s differs from expected:\n%s", tc.name, diff)
 				}
 			}
@@ -556,63 +514,53 @@ func TestLoadFromDisk(t *testing.T) {
 }
 
 func TestSaveToDisk(t *testing.T) {
-	dir, err := ioutil.TempDir("", "backoff-cache")
+	dir, err := ioutil.TempDir("", "saveToDisk")
 	if err != nil {
 		t.Errorf("failed to create temporary directory %s: %s", dir, err.Error())
 	}
 	defer os.RemoveAll(dir)
-	logger := logrus.NewEntry(logrus.StandardLogger())
 	testCases := []struct {
-		name           string
-		cache          map[string]*pullRequest
-		file           string
-		cacheRecordAge string
-		filepath       string
-		expectedError  error
+		name            string
+		cache           backoffCache
+		expected        error
+		expectedContent string
 	}{
 		{
-			name:           "basic case",
-			cache:          map[string]*pullRequest{"pr": {PRSha: "basic", RetestsForBaseSha: 3, RetestsForPrSha: 9}},
-			file:           "tmp-file",
-			cacheRecordAge: "24h",
-			filepath:       "testdata/testcache/basic.yaml",
-			expectedError:  nil,
+			name: "basic case",
+			cache: backoffCache{cache: map[string]*pullRequest{"pr1": {PRSha: "sha1", RetestsForBaseSha: 2, RetestsForPrSha: 3, LastConsideredTime: now},
+				"pr3": {PRSha: "sha2", RetestsForBaseSha: 1, RetestsForPrSha: 3, LastConsideredTime: justNow}}},
+			expectedContent: `pr1:
+  last_considered_time: "2022-08-18T00:00:00Z"
+  pr_sha: sha1
+  retests_for_base_sha: 2
+  retests_for_pr_sha: 3
+pr3:
+  last_considered_time: "2022-08-17T23:59:00Z"
+  pr_sha: sha2
+  retests_for_base_sha: 1
+  retests_for_pr_sha: 3
+`,
 		},
 		{
-			name:           "empty file",
-			cache:          map[string]*pullRequest{},
-			file:           "",
-			cacheRecordAge: "24h",
-			expectedError:  nil,
+			name: "empty file name",
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			file, err := ioutil.TempFile(dir, "tmp-cache")
-			if err != nil {
-				t.Errorf("failed to create temporary file %s: %s", file.Name(), err.Error())
+			if tc.name != "empty file name" {
+				tc.cache.file = filepath.Join(dir, tc.name)
 			}
-			defer os.Remove(file.Name())
-			// use temporary file
-			if tc.file == "tmp-file" {
-				tc.file = file.Name()
-			}
-			cacheRecordAge, _ := time.ParseDuration(tc.cacheRecordAge)
-			backoff := &backoffCache{cache: tc.cache, file: tc.file, cacheRecordAge: cacheRecordAge, logger: logger}
-			err = backoff.saveToDisk()
-			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
+			actual := tc.cache.saveToDisk()
+			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("Error differs from expected:\n%s", diff)
 			}
-			if tc.expectedError == nil && tc.file != "" {
-				expected, err := ioutil.ReadFile(tc.filepath)
+			if tc.expected == nil && tc.cache.file != "" {
+				actualBytes, err := ioutil.ReadFile(tc.cache.file)
 				if err != nil {
-					t.Errorf("failed to open file %s: %s", tc.filepath, err.Error())
+					t.Errorf("failed to read file %s: %s", tc.cache.file, err.Error())
 				}
-				actual, err := ioutil.ReadFile(file.Name())
-				if err != nil {
-					t.Errorf("failed to open file %s: %s", tc.filepath, err.Error())
-				}
-				if diff := cmp.Diff(string(expected), string(actual)); diff != "" {
+				actualContent := string(actualBytes)
+				if diff := cmp.Diff(tc.expectedContent, actualContent); diff != "" {
 					t.Errorf("%s differs from expected:\n%s", tc.name, diff)
 				}
 			}

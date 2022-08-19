@@ -1,15 +1,20 @@
-package main
+package retester
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/shurcooL/githubv4"
 	"github.com/sirupsen/logrus"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/github/fakegithub"
 	"k8s.io/test-infra/prow/tide"
@@ -109,7 +114,7 @@ func TestLoadConfig(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := loadConfig(tc.file)
+			actual, err := LoadConfig(tc.file)
 			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("Error differs from expected:\n%s", diff)
 			}
@@ -294,7 +299,7 @@ func TestRetestOrBackoff(t *testing.T) {
 	testCases := []struct {
 		name          string
 		pr            tide.PullRequest
-		c             *retestController
+		c             *RetestController
 		expected      string
 		expectedError error
 	}{
@@ -309,10 +314,10 @@ func TestRetestOrBackoff(t *testing.T) {
 					Owner         struct{ Login githubv4.String }
 				}{Name: "repo", Owner: struct{ Login githubv4.String }{Login: "org"}},
 			},
-			c: &retestController{
+			c: &RetestController{
 				ghClient: ghc,
 				logger:   logger,
-				backoff:  &backoffCache{cache: map[string]*PullRequest{}, logger: logger},
+				backoff:  &backoffCache{cache: map[string]*pullRequest{}, logger: logger},
 				config:   config,
 			},
 			expected: "/retest-required\n\nRemaining retests: 2 against base HEAD abcde and 8 for PR HEAD  in total\n",
@@ -328,10 +333,10 @@ func TestRetestOrBackoff(t *testing.T) {
 					Owner         struct{ Login githubv4.String }
 				}{Name: "repo", Owner: struct{ Login githubv4.String }{Login: "failed test"}},
 			},
-			c: &retestController{
+			c: &RetestController{
 				ghClient: ghc,
 				logger:   logger,
-				backoff:  &backoffCache{cache: map[string]*PullRequest{}, logger: logger},
+				backoff:  &backoffCache{cache: map[string]*pullRequest{}, logger: logger},
 				config:   config,
 			},
 			expected:      "",
@@ -363,13 +368,13 @@ func TestEnabledPRs(t *testing.T) {
 	logger := logrus.NewEntry(logrus.StandardLogger())
 	testCases := []struct {
 		name       string
-		c          *retestController
+		c          *RetestController
 		candidates map[string]tide.PullRequest
 		expected   map[string]tide.PullRequest
 	}{
 		{
 			name: "basic case",
-			c: &retestController{
+			c: &RetestController{
 				config: &Config{Retester: Retester{
 					RetesterPolicy: RetesterPolicy{MaxRetestsForShaAndBase: 1, MaxRetestsForSha: 1, Enabled: &True}, Oranizations: map[string]Oranization{
 						"openshift": {RetesterPolicy: RetesterPolicy{Enabled: &False},
@@ -439,6 +444,125 @@ func TestEnabledPRs(t *testing.T) {
 			actual := tc.c.enabledPRs(tc.candidates)
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+			}
+		})
+	}
+}
+
+var (
+	now     = metav1.NewTime(time.Date(2022, 8, 18, 0, 0, 0, 0, time.UTC))
+	justNow = metav1.NewTime(now.Add(-time.Minute))
+)
+
+func TestLoadFromDiskNow(t *testing.T) {
+	logger := logrus.NewEntry(logrus.StandardLogger())
+	testCases := []struct {
+		name        string
+		cache       backoffCache
+		now         time.Time
+		file        string
+		expectedMap map[string]*pullRequest
+		expected    error
+	}{
+		{
+			name: "basic case",
+			file: "basic_case.yaml",
+			cache: backoffCache{
+				cacheRecordAge: time.Hour,
+				logger:         logger,
+			},
+			expectedMap: map[string]*pullRequest{"pr1": {PRSha: "sha1", RetestsForBaseSha: 2, RetestsForPrSha: 3, LastConsideredTime: now},
+				"pr3": {PRSha: "sha2", RetestsForBaseSha: 1, RetestsForPrSha: 3, LastConsideredTime: justNow}},
+			now: time.Date(2022, 8, 18, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "empty file name",
+			file: "",
+		},
+		{
+			name: "file no exist",
+			file: "no-exist.cache",
+			cache: backoffCache{
+				logger: logger,
+			},
+		},
+		{
+			name: "wrong format",
+			file: "wrong_format.yaml",
+			cache: backoffCache{
+				logger: logger,
+			},
+			expected: errors.New("failed to unmarshal: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type map[string]*retester.pullRequest"),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.file != "" {
+				tc.cache.file = filepath.Join("testdata", "loadFromDiskNow", tc.file)
+			}
+			actual := tc.cache.loadFromDiskNow(tc.now)
+			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("Error differs from expected:\n%s", diff)
+			}
+			if tc.expected == nil && actual == nil {
+				if diff := cmp.Diff(tc.expectedMap, tc.cache.cache); diff != "" {
+					t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+				}
+			}
+		})
+	}
+}
+
+func TestSaveToDisk(t *testing.T) {
+	dir, err := ioutil.TempDir("", "saveToDisk")
+	if err != nil {
+		t.Errorf("failed to create temporary directory %s: %s", dir, err.Error())
+	}
+	defer os.RemoveAll(dir)
+	testCases := []struct {
+		name            string
+		cache           backoffCache
+		expected        error
+		expectedContent string
+	}{
+		{
+			name: "basic case",
+			cache: backoffCache{cache: map[string]*pullRequest{"pr1": {PRSha: "sha1", RetestsForBaseSha: 2, RetestsForPrSha: 3, LastConsideredTime: now},
+				"pr3": {PRSha: "sha2", RetestsForBaseSha: 1, RetestsForPrSha: 3, LastConsideredTime: justNow}}},
+			expectedContent: `pr1:
+  last_considered_time: "2022-08-18T00:00:00Z"
+  pr_sha: sha1
+  retests_for_base_sha: 2
+  retests_for_pr_sha: 3
+pr3:
+  last_considered_time: "2022-08-17T23:59:00Z"
+  pr_sha: sha2
+  retests_for_base_sha: 1
+  retests_for_pr_sha: 3
+`,
+		},
+		{
+			name: "empty file name",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.name != "empty file name" {
+				tc.cache.file = filepath.Join(dir, tc.name)
+			}
+			actual := tc.cache.saveToDisk()
+			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("Error differs from expected:\n%s", diff)
+			}
+			if tc.expected == nil && tc.cache.file != "" {
+				actualBytes, err := ioutil.ReadFile(tc.cache.file)
+				if err != nil {
+					t.Errorf("failed to read file %s: %s", tc.cache.file, err.Error())
+				}
+				actualContent := string(actualBytes)
+				if diff := cmp.Diff(tc.expectedContent, actualContent); diff != "" {
+					t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+				}
 			}
 		})
 	}

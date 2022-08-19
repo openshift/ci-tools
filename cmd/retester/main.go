@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"os"
 	"time"
@@ -12,16 +11,10 @@ import (
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/git/v2"
-	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/interrupts"
-)
 
-type githubClient interface {
-	GetCombinedStatus(org, repo, ref string) (*github.CombinedStatus, error)
-	GetRef(string, string, string) (string, error)
-	QueryWithGitHubAppsSupport(ctx context.Context, q interface{}, vars map[string]interface{}, org string) error
-	CreateComment(owner, repo string, number int, comment string) error
-}
+	"github.com/openshift/ci-tools/pkg/retester"
+)
 
 type options struct {
 	config configflagutil.ConfigOptions
@@ -103,12 +96,12 @@ func main() {
 		logrus.WithError(err).Fatal("Error starting config agent.")
 	}
 
-	config, err := loadConfig(o.configFile)
+	config, err := retester.LoadConfig(o.configFile)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to load config from file")
 	}
 
-	c := newController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, config)
+	c := retester.NewController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, config)
 
 	interrupts.OnInterrupt(func() {
 		if err := gitClient.Clean(); err != nil {
@@ -132,8 +125,8 @@ func main() {
 	interrupts.WaitForGracefulShutdown()
 }
 
-func execute(c *retestController) {
-	if err := c.sync(); err != nil {
-		logrus.WithError(err).Error("Error syncing")
+func execute(c *retester.RetestController) {
+	if err := c.Run(); err != nil {
+		logrus.WithError(err).Error("Error running")
 	}
 }

@@ -101,7 +101,7 @@ func TestReconcile(t *testing.T) {
 			githubClient: func(_, _, _ string) (string, error) { return "", fmt.Errorf("wrapped: %w", github.NewNotFound()) },
 			verify: func(e error, _ *prowjobreconciler.OrgRepoBranchCommit) error {
 				if !controllerutil.IsTerminal(e) {
-					return fmt.Errorf("expected to get terminal error, got %v", e)
+					return fmt.Errorf("expected to get terminal error, got %w", e)
 				}
 				return nil
 			},
@@ -113,7 +113,7 @@ func TestReconcile(t *testing.T) {
 			},
 			verify: func(e error, _ *prowjobreconciler.OrgRepoBranchCommit) error {
 				if !controllerutil.IsTerminal(e) {
-					return fmt.Errorf("expected to get terminal error, got %v", e)
+					return fmt.Errorf("expected to get terminal error, got %w", e)
 				}
 				return nil
 			},

@@ -329,7 +329,7 @@ func TestReconcile(t *testing.T) {
 			Name:      imageStreamImport.Name,
 		}
 		if err := c.Get(ctx, imageImportName, actualImport); err != nil {
-			return fmt.Errorf("failed to get import %s: %v", imageImportName.String(), err)
+			return fmt.Errorf("failed to get import %s: %w", imageImportName.String(), err)
 		}
 		if diff := cmp.Diff(imageStreamImport, actualImport, cmpopts.IgnoreFields(imagev1.ImageStreamImport{}, "ResourceVersion", "Kind", "APIVersion")); diff != "" {
 			return fmt.Errorf("actual import differs from expected: %s", diff)
@@ -341,7 +341,7 @@ func TestReconcile(t *testing.T) {
 			Name:      "ci-operator-image-puller",
 		}
 		if err := c.Get(ctx, roleBindingName, actualRoleBinding); err != nil {
-			return fmt.Errorf("failed to get rolebinding %s: %v", roleBindingName.String(), err)
+			return fmt.Errorf("failed to get rolebinding %s: %w", roleBindingName.String(), err)
 		}
 		if diff := cmp.Diff(expectedRoleBindig, actualRoleBinding, cmpopts.IgnoreFields(rbacv1.RoleBinding{}, "ResourceVersion", "Kind", "APIVersion")); diff != "" {
 			return fmt.Errorf("actual rolebinding differs from expected: %s", diff)
@@ -387,7 +387,7 @@ func TestReconcile(t *testing.T) {
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": fakeclient.NewFakeClient()},
 			verify: func(_ ctrlruntimeclient.Client, _ map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
-					return fmt.Errorf("unexpected error: %v", err)
+					return fmt.Errorf("unexpected error: %w", err)
 				}
 				return nil
 			},
@@ -400,7 +400,7 @@ func TestReconcile(t *testing.T) {
 					return errors.New("expected error, got none")
 				}
 				if err := controllerutil.SwallowIfTerminal(err); err != nil {
-					return fmt.Errorf("error %v is not terminal", err)
+					return fmt.Errorf("error %w is not terminal", err)
 				}
 				return nil
 			},
@@ -422,7 +422,7 @@ func TestReconcile(t *testing.T) {
 					Name:      referenceImageStreamTag.Name,
 				}
 				if err := bc["01"].Get(ctx, name, &imagev1.ImageStreamImport{}); !apierrors.IsNotFound(err) {
-					return fmt.Errorf("expected to get not found err, but got %v", err)
+					return fmt.Errorf("expected to get not found err, but got %w", err)
 				}
 				return nil
 			},
@@ -437,14 +437,14 @@ func TestReconcile(t *testing.T) {
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": fakeclient.NewFakeClient(referenceImageStreamTag.DeepCopy())},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
-					return fmt.Errorf("unexpected error: %v", err)
+					return fmt.Errorf("unexpected error: %w", err)
 				}
 				name := types.NamespacedName{
 					Namespace: referenceImageStreamTag.Namespace,
 					Name:      referenceImageStreamTag.Name,
 				}
 				if err := bc["01"].Get(ctx, name, &imagev1.ImageStreamImport{}); !apierrors.IsNotFound(err) {
-					return fmt.Errorf("expected to get not found err, but got %v", err)
+					return fmt.Errorf("expected to get not found err, but got %w", err)
 				}
 				return nil
 			},
@@ -459,7 +459,7 @@ func TestReconcile(t *testing.T) {
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(secret.DeepCopy(), outdatedImageStreamTag()))},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
-					return fmt.Errorf("unexpected error: %v", err)
+					return fmt.Errorf("unexpected error: %w", err)
 				}
 				return verifyEverythingCreated(bc["01"])
 			},
@@ -478,7 +478,7 @@ func TestReconcile(t *testing.T) {
 			))},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
-					return fmt.Errorf("unexpected error: %v", err)
+					return fmt.Errorf("unexpected error: %w", err)
 				}
 				return verifyEverythingCreated(bc["01"])
 			},
@@ -498,7 +498,7 @@ func TestReconcile(t *testing.T) {
 			))},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
-					return fmt.Errorf("unexpected error: %v", err)
+					return fmt.Errorf("unexpected error: %w", err)
 				}
 				return verifyEverythingCreated(bc["01"])
 			},
@@ -520,7 +520,7 @@ func TestReconcile(t *testing.T) {
 			))},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
-					return fmt.Errorf("unexpected error: %v", err)
+					return fmt.Errorf("unexpected error: %w", err)
 				}
 				return verifyEverythingCreated(bc["01"])
 			},
@@ -541,7 +541,7 @@ func TestReconcile(t *testing.T) {
 			))},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
-					return fmt.Errorf("unexpected error: %v", err)
+					return fmt.Errorf("unexpected error: %w", err)
 				}
 				return verifyEverythingCreated(bc["01"])
 			},
@@ -562,7 +562,7 @@ func TestReconcile(t *testing.T) {
 			))},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
-					return fmt.Errorf("unexpected error: %v", err)
+					return fmt.Errorf("unexpected error: %w", err)
 				}
 				return verifyEverythingCreated(bc["01"])
 			},
@@ -585,7 +585,7 @@ func TestReconcile(t *testing.T) {
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				exp := "imageStreamImport did not succeed: reason: , message: failing as requested"
 				if err == nil || err.Error() != exp {
-					return fmt.Errorf("expected error message %s, got %v", exp, err)
+					return fmt.Errorf("expected error message %s, got %w", exp, err)
 				}
 				return nil
 			},

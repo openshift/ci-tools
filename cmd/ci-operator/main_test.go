@@ -110,7 +110,7 @@ func TestProwMetadata(t *testing.T) {
 func verifyMetadata(jobSpec *api.JobSpec, namespace string, customMetadata map[string]string) error {
 	tempDir, err := ioutil.TempDir("", "")
 	if err != nil {
-		return fmt.Errorf("Unable to create temporary directory: %v", err)
+		return fmt.Errorf("unable to create temporary directory: %w", err)
 	}
 	defer os.RemoveAll(tempDir)
 	if err := os.Setenv("ARTIFACTS", tempDir); err != nil {
@@ -128,17 +128,17 @@ func verifyMetadata(jobSpec *api.JobSpec, namespace string, customMetadata map[s
 	}
 
 	if err := o.writeMetadataJSON(); err != nil {
-		return fmt.Errorf("error while writing metadata JSON: %v", err)
+		return fmt.Errorf("error while writing metadata JSON: %w", err)
 	}
 
 	metadataFileContents, err := ioutil.ReadFile(metadataFile)
 	if err != nil {
-		return fmt.Errorf("error reading metadata file: %v", err)
+		return fmt.Errorf("error reading metadata file: %w", err)
 	}
 
 	var writtenMetadata prowResultMetadata
 	if err := json.Unmarshal(metadataFileContents, &writtenMetadata); err != nil {
-		return fmt.Errorf("error parsing prow metadata: %v", err)
+		return fmt.Errorf("error parsing prow metadata: %w", err)
 	}
 
 	expectedMetadata := prowResultMetadata{
@@ -165,11 +165,11 @@ func verifyMetadata(jobSpec *api.JobSpec, namespace string, customMetadata map[s
 	if len(customMetadata) > 0 {
 		testJSON, err := json.MarshalIndent(customMetadata, "", "")
 		if err != nil {
-			return fmt.Errorf("error marshalling custom metadata: %v", err)
+			return fmt.Errorf("error marshalling custom metadata: %w", err)
 		}
 		err = ioutil.WriteFile(filepath.Join(testArtifactDirectory, "custom-prow-metadata.json"), testJSON, os.FileMode(0644))
 		if err != nil {
-			return fmt.Errorf("unable to create custom metadata file: %v", err)
+			return fmt.Errorf("unable to create custom metadata file: %w", err)
 		}
 	}
 
@@ -184,16 +184,16 @@ func verifyMetadata(jobSpec *api.JobSpec, namespace string, customMetadata map[s
 	}
 
 	if err := o.writeMetadataJSON(); err != nil {
-		return fmt.Errorf("error while writing metadata JSON: %v", err)
+		return fmt.Errorf("error while writing metadata JSON: %w", err)
 	}
 
 	metadataFileContents, err = ioutil.ReadFile(metadataFile)
 	if err != nil {
-		return fmt.Errorf("error reading metadata file (second revision): %v", err)
+		return fmt.Errorf("error reading metadata file (second revision): %w", err)
 	}
 
 	if err = json.Unmarshal(metadataFileContents, &writtenMetadata); err != nil {
-		return fmt.Errorf("error parsing prow metadata (second revision): %v", err)
+		return fmt.Errorf("error parsing prow metadata (second revision): %w", err)
 	}
 
 	revision := "1"

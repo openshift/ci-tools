@@ -223,7 +223,7 @@ periodic-ci-openshift-multiarch-master-nightly-4.12-ocp-e2e-serial-aws-heterogen
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12-s390x.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12.json
-periodic-ci-openshift-hypershift-main-periodics-aws-conformance
+periodic-ci-openshift-hypershift-main-periodics-conformance-aws-ovn-4-12
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-ovn
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-sdn-techpreview
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-sdn-techpreview-serial

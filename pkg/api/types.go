@@ -5,6 +5,8 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/repoowners"
@@ -393,7 +395,9 @@ func (m *MultiArchImageStreamTagReference) ResolveNamespace() string {
 	if arch == "amd64" {
 		return m.ImageStreamTagReference.Namespace
 	}
-	return fmt.Sprintf("%s-%s", m.ImageStreamTagReference.Namespace, arch)
+	ret := fmt.Sprintf("%s-%s", m.ImageStreamTagReference.Namespace, arch)
+	logrus.Infof("Resolved multi-arch namespace for %s to %s", m.ImageStreamTagReference.Namespace, ret)
+	return ret
 }
 
 // ReleaseTagConfiguration describes how a release is

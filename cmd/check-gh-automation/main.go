@@ -62,9 +62,10 @@ func (o *options) validate() error {
 	return o.GitHubOptions.Validate(true)
 }
 
-type collaboratorClient interface {
+type automationClient interface {
 	IsMember(org, user string) (bool, error)
 	IsCollaborator(org, repo, user string) (bool, error)
+	IsAppInstalled(org, repo string) (bool, error)
 }
 
 func main() {
@@ -103,9 +104,9 @@ func main() {
 	logger.Infof("All repos have github automation configured.")
 }
 
-func checkRepos(repos []string, bots []string, ignore sets.String, client collaboratorClient, logger *logrus.Entry) ([]string, error) {
+func checkRepos(repos []string, bots []string, ignore sets.String, client automationClient, logger *logrus.Entry) ([]string, error) {
 	logger.Infof("checking %d repo(s): %s", len(repos), strings.Join(repos, ", "))
-	var failing []string
+	failing := sets.NewString()
 	for _, orgRepo := range repos {
 		split := strings.Split(orgRepo, "/")
 		org, repo := split[0], split[1]
@@ -140,14 +141,26 @@ func checkRepos(repos []string, bots []string, ignore sets.String, client collab
 		}
 
 		if len(missingBots) > 0 {
-			failing = append(failing, orgRepo)
+			failing.Insert(orgRepo)
 			repoLogger.Errorf("bots that are not collaborators: %s", strings.Join(missingBots, ", "))
 		} else {
 			repoLogger.Info("all bots are org members or repo collaborators")
 		}
+
+		appInstalled, err := client.IsAppInstalled(org, repo)
+		if err != nil {
+			return nil, fmt.Errorf("unable to determine if openshift-ci app is installed on %s/%s: %w", org, repo, err)
+		}
+		if !appInstalled {
+			failing.Insert(orgRepo)
+			repoLogger.Error("openshift-ci app is not installed for repo")
+		} else {
+			repoLogger.Info("openshift-ci app is installed for repo")
+		}
+
 	}
 
-	return failing, nil
+	return failing.List(), nil
 }
 
 const maxRepos = 10

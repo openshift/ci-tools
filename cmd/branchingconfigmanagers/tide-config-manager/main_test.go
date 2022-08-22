@@ -71,13 +71,13 @@ func TestReconcile(t *testing.T) {
 			args: args{
 				target: afero.NewMemMapFs(),
 				event:  featureFreezeEvent,
-				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+				config: &prowconfig.ProwConfig{Tide: config.Tide{TideGitHubConfig: config.TideGitHubConfig{Queries: config.TideQueries{
 					{
 						Repos:            repos,
 						Labels:           []string{qeApproved},
 						IncludedBranches: []string{masterBranch},
 					},
-				}}},
+				}}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
@@ -88,13 +88,13 @@ func TestReconcile(t *testing.T) {
 			args: args{
 				target: afero.NewMemMapFs(),
 				event:  featureFreezeEvent,
-				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+				config: &prowconfig.ProwConfig{Tide: config.Tide{TideGitHubConfig: config.TideGitHubConfig{Queries: config.TideQueries{
 					{
 						Repos:            repos,
 						Labels:           []string{cherryPickApproved},
 						IncludedBranches: []string{mainBranch, "release-4.9"},
 					},
-				}}},
+				}}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
@@ -105,13 +105,13 @@ func TestReconcile(t *testing.T) {
 			args: args{
 				target: afero.NewMemMapFs(),
 				event:  featureFreezeEvent,
-				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+				config: &prowconfig.ProwConfig{Tide: config.Tide{TideGitHubConfig: config.TideGitHubConfig{Queries: config.TideQueries{
 					{
 						Repos:            privRepos,
 						Labels:           []string{cherryPickApproved},
 						IncludedBranches: []string{mainBranch, "openshift-4.9"},
 					},
-				}}},
+				}}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
@@ -122,13 +122,13 @@ func TestReconcile(t *testing.T) {
 			args: args{
 				target: afero.NewMemMapFs(),
 				event:  featureFreezeEvent,
-				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+				config: &prowconfig.ProwConfig{Tide: config.Tide{TideGitHubConfig: config.TideGitHubConfig{Queries: config.TideQueries{
 					{
 						Repos:            repos,
 						Labels:           []string{cherryPickApproved},
 						IncludedBranches: []string{"openshift-4.9"},
 					},
-				}}},
+				}}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
@@ -139,12 +139,12 @@ func TestReconcile(t *testing.T) {
 			args: args{
 				target: afero.NewMemMapFs(),
 				event:  featureFreezeEvent,
-				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+				config: &prowconfig.ProwConfig{Tide: config.Tide{TideGitHubConfig: config.TideGitHubConfig{Queries: config.TideQueries{
 					{
 						Repos:            repos,
 						IncludedBranches: []string{masterBranch, "openshift-4.9"},
 					},
-				}}},
+				}}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
@@ -155,13 +155,13 @@ func TestReconcile(t *testing.T) {
 			args: args{
 				target: afero.NewMemMapFs(),
 				event:  codeFreezeEvent,
-				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+				config: &prowconfig.ProwConfig{Tide: config.Tide{TideGitHubConfig: config.TideGitHubConfig{Queries: config.TideQueries{
 					{
 						Repos:            repos,
 						Labels:           []string{validBug},
 						IncludedBranches: []string{mainBranch, "release-4.9"},
 					},
-				}}},
+				}}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
@@ -172,13 +172,13 @@ func TestReconcile(t *testing.T) {
 			args: args{
 				target: afero.NewMemMapFs(),
 				event:  codeFreezeEvent,
-				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+				config: &prowconfig.ProwConfig{Tide: config.Tide{TideGitHubConfig: config.TideGitHubConfig{Queries: config.TideQueries{
 					{
 						Repos:            repos,
 						Labels:           []string{validBug, qeApproved},
 						IncludedBranches: []string{mainBranch, "release-4.9"},
 					},
-				}}},
+				}}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
@@ -189,13 +189,13 @@ func TestReconcile(t *testing.T) {
 			args: args{
 				target: afero.NewMemMapFs(),
 				event:  codeFreezeEvent,
-				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+				config: &prowconfig.ProwConfig{Tide: config.Tide{TideGitHubConfig: config.TideGitHubConfig{Queries: config.TideQueries{
 					{
 						Repos:            repos,
 						Labels:           []string{validBug},
 						IncludedBranches: []string{"openshift-4.9", "release-4.9"},
 					},
-				}}},
+				}}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
@@ -206,13 +206,13 @@ func TestReconcile(t *testing.T) {
 			args: args{
 				target: afero.NewMemMapFs(),
 				event:  generalAvailabilityEvent,
-				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+				config: &prowconfig.ProwConfig{Tide: config.Tide{TideGitHubConfig: config.TideGitHubConfig{Queries: config.TideQueries{
 					{
 						Repos:            repos,
 						Labels:           []string{staffEngApproved},
 						IncludedBranches: []string{"openshift-4.9", "release-4.9"},
 					},
-				}}},
+				}}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
@@ -223,13 +223,13 @@ func TestReconcile(t *testing.T) {
 			args: args{
 				target: afero.NewMemMapFs(),
 				event:  generalAvailabilityEvent,
-				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+				config: &prowconfig.ProwConfig{Tide: config.Tide{TideGitHubConfig: config.TideGitHubConfig{Queries: config.TideQueries{
 					{
 						Repos:            repos,
 						Labels:           []string{staffEngApproved},
 						IncludedBranches: []string{"openshift-4.9", "release-4.9"},
 					},
-				}}},
+				}}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
@@ -240,13 +240,13 @@ func TestReconcile(t *testing.T) {
 			args: args{
 				target: afero.NewMemMapFs(),
 				event:  generalAvailabilityEvent,
-				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+				config: &prowconfig.ProwConfig{Tide: config.Tide{TideGitHubConfig: config.TideGitHubConfig{Queries: config.TideQueries{
 					{
 						Repos:            repos,
 						Labels:           []string{cherryPickApproved},
 						IncludedBranches: []string{"openshift-4.8", "release-4.8"},
 					},
-				}}},
+				}}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
@@ -257,12 +257,12 @@ func TestReconcile(t *testing.T) {
 			args: args{
 				target: afero.NewMemMapFs(),
 				event:  generalAvailabilityEvent,
-				config: &prowconfig.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+				config: &prowconfig.ProwConfig{Tide: config.Tide{TideGitHubConfig: config.TideGitHubConfig{Queries: config.TideQueries{
 					{
 						Repos:            repos,
 						ExcludedBranches: []string{"openshift-4.8", "release-4.8"},
 					},
-				}}},
+				}}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{

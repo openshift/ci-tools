@@ -182,7 +182,7 @@ func TestMergeAndPushToRemote(t *testing.T) {
 	fixedTimeUnix := fixedTime.Unix()
 	makeRepo := func(localgit *localgit.LocalGit, org, repo string, init func() error) error {
 		if err := localgit.MakeFakeRepo(org, repo); err != nil {
-			return fmt.Errorf("couldn't create fake repo for %s/%s: %v", org, repo, err)
+			return fmt.Errorf("couldn't create fake repo for %s/%s: %w", org, repo, err)
 		}
 		// The test relies on the repository created by MakeFakeRepo generating
 		// the same history across calls, which can only happen if time remains
@@ -270,7 +270,7 @@ and the repository exists.
 			privateGitRepo: func() error {
 				filesToCommit := map[string][]byte{"test-file": []byte("TEST")}
 				if err := localgit.AddCommit(privateOrg, privateRepo, filesToCommit); err != nil {
-					return fmt.Errorf("couldn't add commit: %v", err)
+					return fmt.Errorf("couldn't add commit: %w", err)
 				}
 				return nil
 			},
@@ -288,7 +288,7 @@ and the repository exists.
 					"test-file3": []byte("TEST"),
 				}
 				if err := localgit.AddCommit(privateOrg, privateRepo, filesToCommit); err != nil {
-					return fmt.Errorf("couldn't add commit: %v", err)
+					return fmt.Errorf("couldn't add commit: %w", err)
 				}
 				return nil
 			},
@@ -306,7 +306,7 @@ and the repository exists.
 					"test-file3": []byte("TEST"),
 				}
 				if err := localgit.AddCommit(privateOrg, privateRepo, filesToCommit); err != nil {
-					return fmt.Errorf("couldn't add commit: %v", err)
+					return fmt.Errorf("couldn't add commit: %w", err)
 				}
 				return nil
 			},
@@ -317,7 +317,7 @@ and the repository exists.
 					"test-file6": []byte("TEST"),
 				}
 				if err := localgit.AddCommit(publicOrg, publicRepo, filesToCommit); err != nil {
-					return fmt.Errorf("couldn't add commit: %v", err)
+					return fmt.Errorf("couldn't add commit: %w", err)
 				}
 				return nil
 			},
@@ -331,14 +331,14 @@ and the repository exists.
 			privateGitRepo: func() error {
 				filesToCommit := map[string][]byte{"test-file": []byte("CONFLICT")}
 				if err := localgit.AddCommit(privateOrg, privateRepo, filesToCommit); err != nil {
-					return fmt.Errorf("couldn't add commit: %v", err)
+					return fmt.Errorf("couldn't add commit: %w", err)
 				}
 				return nil
 			},
 			publicGitRepo: func() error {
 				filesToCommit := map[string][]byte{"test-file": []byte("TEST")}
 				if err := localgit.AddCommit(publicOrg, publicRepo, filesToCommit); err != nil {
-					return fmt.Errorf("couldn't add commit: %v", err)
+					return fmt.Errorf("couldn't add commit: %w", err)
 				}
 				return nil
 			},
@@ -357,7 +357,7 @@ and the repository exists.
 					"test-file3": []byte("TEST"),
 				}
 				if err := localgit.AddCommit(privateOrg, privateRepo, filesToCommit); err != nil {
-					return fmt.Errorf("couldn't add commit: %v", err)
+					return fmt.Errorf("couldn't add commit: %w", err)
 				}
 				return nil
 			},
@@ -368,7 +368,7 @@ and the repository exists.
 					"test-file6": []byte("TEST"),
 				}
 				if err := localgit.AddCommit(publicOrg, publicRepo, filesToCommit); err != nil {
-					return fmt.Errorf("couldn't add commit: %v", err)
+					return fmt.Errorf("couldn't add commit: %w", err)
 				}
 				return nil
 			},

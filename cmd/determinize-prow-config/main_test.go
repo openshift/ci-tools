@@ -94,10 +94,10 @@ func TestShardProwConfig(t *testing.T) {
 			name: "Org and repo mergemethod config gets written out",
 			in: &config.ProwConfig{
 				Tide: config.Tide{
-					MergeType: map[string]types.PullRequestMergeType{
+					TideGitHubConfig: config.TideGitHubConfig{MergeType: map[string]types.PullRequestMergeType{
 						"openshift":         types.MergeSquash,
 						"openshift/release": types.MergeRebase,
-					},
+					}},
 				},
 			},
 
@@ -130,10 +130,10 @@ func TestShardProwConfig(t *testing.T) {
 					},
 				},
 				Tide: config.Tide{
-					MergeType: map[string]types.PullRequestMergeType{
+					TideGitHubConfig: config.TideGitHubConfig{MergeType: map[string]types.PullRequestMergeType{
 						"openshift":         types.MergeSquash,
 						"openshift/release": types.MergeRebase,
-					},
+					}},
 				},
 			},
 
@@ -164,12 +164,12 @@ func TestShardProwConfig(t *testing.T) {
 		},
 		{
 			name: "Tide queries get sharded",
-			in: &config.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+			in: &config.ProwConfig{Tide: config.Tide{TideGitHubConfig: config.TideGitHubConfig{Queries: config.TideQueries{
 				{Orgs: []string{"openshift", "openshift-priv"}, Repos: []string{"kube-reporting/ghostunnel", "kube-reporting/presto"}, Labels: []string{"lgtm", "approved", "bugzilla/valid-bug"}},
 				{Orgs: []string{"codeready-toolchain", "integr8ly"}, Repos: []string{"containers/buildah", "containers/common"}, Labels: []string{"lgtm", "approved"}},
 				{Orgs: []string{"integr8ly"}, Author: "openshift-bot"},
 				{Repos: []string{"openshift/release"}, Author: "openshift-bot"},
-			}}},
+			}}}},
 			expectedShardFiles: map[string]string{
 				"codeready-toolchain/_prowconfig.yaml": `tide:
   queries:

@@ -26,14 +26,7 @@ trap 'rm -rf ${TMP_KUBE_CONFIG_FILE}' EXIT
 URL=$(${oc_cmd} --kubeconfig "${CONFIG_UPDATER_DIR}/sa.config-updater.${CLUSTER}.config" config view -o jsonpath="{.clusters[0].cluster.server}")
 TOKEN=$(${oc_cmd} --kubeconfig "${CONFIG_UPDATER_DIR}/sa.config-updater.${CLUSTER}.config" create token -n ${SA_NAMESPACE} ${SERVICE_ACCOUNT} --duration=2419200s)
 
-INSECURE_SKIP_TLS_VERIFY="false"
-
-# vsphere uses a self signed cluster
-if [[ "${CLUSTER}" == "vsphere" ]]; then
-  INSECURE_SKIP_TLS_VERIFY="true"
-fi
-
-${oc_cmd} --kubeconfig "${TMP_KUBE_CONFIG_FILE}" login "${URL}" --token "${TOKEN}" --insecure-skip-tls-verify=${INSECURE_SKIP_TLS_VERIFY} > /dev/null
+${oc_cmd} --kubeconfig "${TMP_KUBE_CONFIG_FILE}" login "${URL}" --token "${TOKEN}" > /dev/null
 
 CONTEXT_NAME=$(${oc_cmd} --kubeconfig "${TMP_KUBE_CONFIG_FILE}" config current-context)
 #It is required by Prow that the current context name is the cluster name

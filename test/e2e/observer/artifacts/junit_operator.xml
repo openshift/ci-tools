@@ -1,9 +1,17 @@
 <testsuites>
-  <testsuite name="operator" tests="5" skipped="0" failures="0" time="whatever">
-    <testcase name="All images are built and tagged into stable" time="whatever"></testcase>
-    <testcase name="Create the release image &#34;latest&#34; containing all images built by this job" time="whatever"></testcase>
-    <testcase name="Find all of the input images from ocp/4.5:${component} and tag them into the output image stream" time="whatever"></testcase>
+  <testsuite name="step graph" tests="7" skipped="0" failures="0" time="whatever">
     <testcase name="Find the input image os and tag it into the pipeline" time="whatever"></testcase>
+    <testcase name="Run multi-stage test post phase" time="whatever">
+      <system-out>The collected steps of multi-stage phase post.</system-out>
+    </testcase>
+    <testcase name="Run multi-stage test pre phase" time="whatever">
+      <system-out>The collected steps of multi-stage phase pre.</system-out>
+    </testcase>
+    <testcase name="Run multi-stage test test phase" time="whatever">
+      <system-out>The collected steps of multi-stage phase test.</system-out>
+    </testcase>
+    <testcase name="Run multi-stage test with-observer - with-observer-check-shared-dir container test" time="whatever"></testcase>
     <testcase name="Run multi-stage test with-observer - with-observer-create-kubeconfig container test" time="whatever"></testcase>
+    <testcase name="Run multi-stage test with-observer - with-observer-observer container test" time="whatever"></testcase>
   </testsuite>
 </testsuites>

@@ -5,24 +5,31 @@ set -o nounset
 set -o pipefail
 set -o xtrace
 
+kubeconfig_received=0
+
 function cleanup() {
   echo "Running cleanup after being terminated."
-  echo -n "cancelled" > "${SHARED_DIR}/cancelled"
+  if test $kubeconfig_received -eq 0
+  then
+    echo 'kubeconfig was not received'
+    exit 1
+  fi
   exit 0
 }
 
 trap cleanup EXIT
 trap cleanup INT
 
-while true; do
-    if [[ -f "${KUBECONFIG}" ]]; then
-      echo "\$KUBECONFIG exists"
-      break
-    fi
-    echo "\$KUBECONFIG does not exist, waiting..."
-    sleep 1
-done
+echo "do-not-upload-me" >"${SHARED_DIR}/intruder"
 
-echo -n "waited" > "${SHARED_DIR}/output"
-sleep 360 &
-wait
+for (( i=1; i<=300; i++ ))
+do 
+  echo "${i}: checking ${KUBECONFIG}"
+  if test -s "$KUBECONFIG"
+  then
+    echo 'kubeconfig received!'
+    kubeconfig_received=1
+    break
+  fi
+  sleep 1
+done

@@ -278,6 +278,11 @@ update-unit:
 	UPDATE=true go test ./...
 .PHONY: update-unit
 
+# requires github.com/golang/mock/mockgen
+update-mocks:
+	hack/update-mocks.sh
+.PHONY: update-mocks
+
 validate-registry-metadata:
 	generate-registry-metadata -registry test/multistage-registry/registry
 	git status -s ./test/multistage-registry/registry

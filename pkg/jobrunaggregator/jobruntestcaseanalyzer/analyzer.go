@@ -38,11 +38,12 @@ type JobGetter interface {
 }
 
 type testCaseAnalyzerJobGetter struct {
-	platform       string
-	infrastructure string
-	network        string
-	jobGCSPrefixes *[]jobGCSPrefix
-	ciDataClient   jobrunaggregatorlib.CIDataClient
+	platform        string
+	infrastructure  string
+	network         string
+	excludeJobNames sets.String
+	jobGCSPrefixes  *[]jobGCSPrefix
+	ciDataClient    jobrunaggregatorlib.CIDataClient
 }
 
 // GetJobs find all related jobs for the test case analyzer
@@ -56,7 +57,7 @@ func (s *testCaseAnalyzerJobGetter) GetJobs(ctx context.Context) ([]jobrunaggreg
 	}
 
 	// if PR payload, only find the exact jobs
-	if len(*s.jobGCSPrefixes) > 0 {
+	if s.jobGCSPrefixes != nil && len(*s.jobGCSPrefixes) > 0 {
 		jobNames := sets.String{}
 		for i := range *s.jobGCSPrefixes {
 			jobGCSPrefix := (*s.jobGCSPrefixes)[i]
@@ -86,9 +87,29 @@ func (s *testCaseAnalyzerJobGetter) filterJobsForPayload(allJobs []jobrunaggrega
 			(len(s.infrastructure) != 0 && s.infrastructure != getJobInfrastructure(job.JobName)) {
 			continue
 		}
+
+		if s.isJobNameFiltered(job.JobName) {
+			continue
+		}
+
 		jobs = append(jobs, job)
 	}
 	return jobs
+}
+
+func (s *testCaseAnalyzerJobGetter) isJobNameFiltered(jobName string) bool {
+
+	if s.excludeJobNames == nil {
+		return false
+	}
+
+	for key := range s.excludeJobNames {
+		if strings.Contains(jobName, key) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (s *testCaseAnalyzerJobGetter) filterJobsByNames(jobNames sets.String, allJobs []jobrunaggregatorapi.JobRow) []jobrunaggregatorapi.JobRow {
@@ -460,7 +481,7 @@ func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
 		return err
 	}
 	if testSuite.NumFailed > 0 {
-		return fmt.Errorf("Some test checker failed.  See above for details.")
+		return fmt.Errorf("some test checker failed,  see above for details")
 	}
 	return nil
 }

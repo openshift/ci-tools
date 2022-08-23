@@ -111,6 +111,18 @@ func TestLoadConfig(t *testing.T) {
 			file:     "testdata/testconfig/no-config.yaml",
 			expected: &Config{Retester: Retester{}},
 		},
+		{
+			name:          "no such file",
+			file:          "testdata/testconfig/not_found",
+			expected:      nil,
+			expectedError: fmt.Errorf("failed to read config open testdata/testconfig/not_found: no such file or directory"),
+		},
+		{
+			name:          "unmarshal config error",
+			file:          "testdata/testconfig/wrong_format.yaml",
+			expected:      nil,
+			expectedError: fmt.Errorf("failed to unmarshal config error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type retester.Config"),
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -200,7 +212,7 @@ func TestGetRetesterPolicy(t *testing.T) {
 		},
 		{
 			name:   "not configured repo and disabled org",
-			org:    "no-openshifft",
+			org:    "no-openshift",
 			repo:   "ci-docs",
 			config: c,
 		},
@@ -563,6 +575,108 @@ pr3:
 				if diff := cmp.Diff(tc.expectedContent, actualContent); diff != "" {
 					t.Errorf("%s differs from expected:\n%s", tc.name, diff)
 				}
+			}
+		})
+	}
+}
+
+func TestPrUrl(t *testing.T) {
+	pr := tide.PullRequest{
+		Number: githubv4.Int(1234),
+		Author: struct{ Login githubv4.String }{Login: "org"},
+		Repository: struct {
+			Name          githubv4.String
+			NameWithOwner githubv4.String
+			Owner         struct{ Login githubv4.String }
+		}{Name: "repo", Owner: struct{ Login githubv4.String }{Login: "org"}},
+	}
+	expected := "https://github.com/org/repo/pull/1234"
+	t.Run("basic case", func(t *testing.T) {
+		actual := prUrl(pr)
+		if diff := cmp.Diff(expected, actual); diff != "" {
+			t.Errorf("basic case differs from expected:\n%s", diff)
+		}
+	})
+}
+
+func TestPrKey(t *testing.T) {
+	pr := tide.PullRequest{
+		Number: githubv4.Int(1234),
+		Author: struct{ Login githubv4.String }{Login: "org"},
+		Repository: struct {
+			Name          githubv4.String
+			NameWithOwner githubv4.String
+			Owner         struct{ Login githubv4.String }
+		}{Name: "repo", NameWithOwner: "org/repo", Owner: struct{ Login githubv4.String }{Login: "org"}},
+	}
+	expected := "org/repo#1234"
+	t.Run("basic case", func(t *testing.T) {
+		actual := prKey(&pr)
+		if diff := cmp.Diff(expected, actual); diff != "" {
+			t.Errorf("basic case differs from expected:\n%s", diff)
+		}
+	})
+}
+
+func TestCheck(t *testing.T) {
+	True := true
+	logger := logrus.NewEntry(logrus.StandardLogger())
+
+	testCases := []struct {
+		name           string
+		cache          backoffCache
+		pr             tide.PullRequest
+		baseSha        string
+		policy         RetesterPolicy
+		expected       retestBackoffAction
+		expectedString string
+	}{
+		{
+			name:  "cache key",
+			cache: backoffCache{cache: map[string]*pullRequest{"org/repo#123": {PRSha: "sha1", RetestsForBaseSha: 0, RetestsForPrSha: 0}}, logger: logger},
+			pr: tide.PullRequest{Number: githubv4.Int(123),
+				Repository: struct {
+					Name          githubv4.String
+					NameWithOwner githubv4.String
+					Owner         struct{ Login githubv4.String }
+				}{Name: "repo", NameWithOwner: "org/repo", Owner: struct{ Login githubv4.String }{Login: "org"}},
+				HeadRefOID: "key"},
+			expected:       0,
+			expectedString: "Revision key was retested 0 times: holding",
+		},
+		{
+			name:           "hold",
+			cache:          backoffCache{cache: map[string]*pullRequest{}, logger: logger},
+			pr:             tide.PullRequest{HeadRefOID: "holdPR"},
+			baseSha:        "sha1",
+			expected:       0,
+			expectedString: "Revision holdPR was retested 0 times: holding",
+		},
+		{
+			name:           "pause",
+			cache:          backoffCache{cache: map[string]*pullRequest{}, logger: logger},
+			pr:             tide.PullRequest{HeadRefOID: "pausePR"},
+			policy:         RetesterPolicy{0, 9, &True},
+			expected:       1,
+			expectedString: "Revision pausePR was retested 0 times against base HEAD : pausing",
+		},
+		{
+			name:           "retest",
+			cache:          backoffCache{cache: map[string]*pullRequest{}, logger: logger},
+			pr:             tide.PullRequest{HeadRefOID: "retestPR"},
+			policy:         RetesterPolicy{3, 9, &True},
+			expected:       2,
+			expectedString: "Remaining retests: 2 against base HEAD  and 8 for PR HEAD retestPR in total",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, actualString := tc.cache.check(tc.pr, tc.baseSha, tc.policy)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+			}
+			if diff := cmp.Diff(tc.expectedString, actualString); diff != "" {
+				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
 			}
 		})
 	}

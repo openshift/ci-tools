@@ -312,7 +312,7 @@ const (
 	retestBackoffRetest
 )
 
-func (b *backoffCache) check(pr tide.PullRequest, baseSha string, config *Config, policy RetesterPolicy) (retestBackoffAction, string) {
+func (b *backoffCache) check(pr tide.PullRequest, baseSha string, policy RetesterPolicy) (retestBackoffAction, string) {
 	key := prKey(&pr)
 	if _, has := b.cache[key]; !has {
 		b.cache[key] = &pullRequest{}
@@ -369,7 +369,7 @@ func (c *RetestController) retestOrBackoff(pr tide.PullRequest) error {
 		return fmt.Errorf("failed to validate retester policy: %v", validationErrors)
 	}
 
-	action, message := c.backoff.check(pr, baseSha, c.config, policy)
+	action, message := c.backoff.check(pr, baseSha, policy)
 	switch action {
 	case retestBackoffHold:
 		c.createComment(pr, "/hold", message)

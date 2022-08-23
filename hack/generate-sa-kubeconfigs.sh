@@ -20,5 +20,5 @@ declare -a StringArray=( "app.ci" "build01" "build02" "build03" "build04" "build
 
 # Iterate the string array using for loop
 for cluster in ${StringArray[@]}; do
-   oc_cmd="${oc_cmd:-oc}" images/ci-secret-generator/oc_sa_create_kubeconfig.sh /tmp $cluster $SERVICE_ACCOUNT $SA_NAMESPACE > ${OUTPUT_DIR}/sa.$SERVICE_ACCOUNT.$cluster.config
+   oc_cmd="${oc_cmd:-oc}" /usr/bin/oc_sa_create_kubeconfig.sh /tmp $cluster $SERVICE_ACCOUNT $SA_NAMESPACE > ${OUTPUT_DIR}/sa.$SERVICE_ACCOUNT.$cluster.config
 done

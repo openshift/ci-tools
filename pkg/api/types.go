@@ -1168,6 +1168,7 @@ const (
 	ClusterProfileVSphereClusterbot     ClusterProfile = "vsphere-clusterbot"
 	ClusterProfileVSpherePlatformNone   ClusterProfile = "vsphere-platform-none"
 	ClusterProfileVSphereMultizone      ClusterProfile = "vsphere-multizone"
+	ClusterProfileVSphereConnected      ClusterProfile = "vsphere-connected"
 	ClusterProfileKubevirt              ClusterProfile = "kubevirt"
 	ClusterProfileAWSCPaaS              ClusterProfile = "aws-cpaas"
 	ClusterProfileOSDEphemeral          ClusterProfile = "osd-ephemeral"
@@ -1242,6 +1243,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileVSphereClusterbot,
 		ClusterProfileVSphereDiscon,
 		ClusterProfileVSphereMultizone,
+		ClusterProfileVSphereConnected,
 		ClusterProfileVSpherePlatformNone,
 	}
 }
@@ -1340,6 +1342,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileVSphereDiscon,
 		ClusterProfileVSphereClusterbot,
 		ClusterProfileVSpherePlatformNone,
+		ClusterProfileVSphereConnected,
 		ClusterProfileVSphereMultizone:
 		return "vsphere"
 	case ClusterProfileOvirt:
@@ -1472,6 +1475,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "vsphere-platform-none-quota-slice"
 	case ClusterProfileVSphereMultizone:
 		return "vsphere-multizone-quota-slice"
+	case ClusterProfileVSphereConnected:
+		return "vsphere-connected-quota-slice"
 	case ClusterProfileKubevirt:
 		return "kubevirt-quota-slice"
 	case ClusterProfileAWSCPaaS:
@@ -1533,6 +1538,7 @@ func (p ClusterProfile) Secret() string {
 		ClusterProfileGCPLoggingJournald,
 		ClusterProfileVSphereClusterbot,
 		ClusterProfileVSphereDiscon,
+		ClusterProfileVSphereConnected,
 		ClusterProfileVSphereMultizone,
 		ClusterProfileVSpherePlatformNone:
 		name = p.ClusterType()

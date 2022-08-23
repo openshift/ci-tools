@@ -140,6 +140,9 @@ github.com/alecthomas/chroma/styles
 # github.com/anaskhan96/soup v1.2.4
 ## explicit; go 1.13
 github.com/anaskhan96/soup
+# github.com/andygrunwald/go-gerrit v0.0.0-20210709065208-9d38b0be0268
+## explicit; go 1.15
+github.com/andygrunwald/go-gerrit
 # github.com/andygrunwald/go-jira v1.14.0
 ## explicit; go 1.12
 github.com/andygrunwald/go-jira
@@ -1521,7 +1524,7 @@ k8s.io/kube-openapi/pkg/validation/spec
 # k8s.io/kubernetes v1.14.7
 ## explicit
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20220819100351-b4517655726e
+# k8s.io/test-infra v0.0.0-20220823143124-e655beaa3871
 ## explicit; go 1.18
 k8s.io/test-infra/ghproxy/ghcache
 k8s.io/test-infra/ghproxy/ghmetrics
@@ -1549,6 +1552,7 @@ k8s.io/test-infra/prow/flagutil/config
 k8s.io/test-infra/prow/flagutil/plugins
 k8s.io/test-infra/prow/gcsupload
 k8s.io/test-infra/prow/genfiles
+k8s.io/test-infra/prow/gerrit/client
 k8s.io/test-infra/prow/git
 k8s.io/test-infra/prow/git/localgit
 k8s.io/test-infra/prow/git/types

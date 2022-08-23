@@ -391,12 +391,14 @@ type MultiArchImageStreamTagReference struct {
 }
 
 func (m *MultiArchImageStreamTagReference) ResolveNamespace() string {
+	var ret string
 	arch := runtime.GOARCH
 	if arch == "amd64" {
-		return m.ImageStreamTagReference.Namespace
+		ret = m.ImageStreamTagReference.Namespace
+	} else {
+		ret = fmt.Sprintf("%s-%s", m.ImageStreamTagReference.Namespace, arch)
 	}
-	ret := fmt.Sprintf("%s-%s", m.ImageStreamTagReference.Namespace, arch)
-	logrus.Infof("Resolved multi-arch namespace for %s to %s", m.ImageStreamTagReference.Namespace, ret)
+	logrus.Infof("Resolved multi-arch namespace for %s to %s for %s architecture", m.ImageStreamTagReference.Namespace, ret, arch)
 	return ret
 }
 

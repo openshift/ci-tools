@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -80,19 +79,22 @@ func TestCheckRepos(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name:  "org has bots as members",
-			repos: []string{"org-1/repo-a"},
-			bots:  []string{"d-bot", "e-bot"},
+			name:     "org has bots as members",
+			repos:    []string{"org-1/repo-a"},
+			bots:     []string{"d-bot", "e-bot"},
+			expected: []string{},
 		},
 		{
-			name:  "org has one bot as member, and one as collaborator",
-			repos: []string{"org-1/repo-a"},
-			bots:  []string{"a-bot", "e-bot"},
+			name:     "org has one bot as member, and one as collaborator",
+			repos:    []string{"org-1/repo-a"},
+			bots:     []string{"a-bot", "e-bot"},
+			expected: []string{},
 		},
 		{
-			name:  "repo has bots as collaborators",
-			repos: []string{"org-1/repo-a"},
-			bots:  []string{"a-bot", "b-bot"},
+			name:     "repo has bots as collaborators",
+			repos:    []string{"org-1/repo-a"},
+			bots:     []string{"a-bot", "b-bot"},
+			expected: []string{},
 		},
 		{
 			name:     "org doesn't have bots as members, and repo doesn't have bots as collaborators",
@@ -107,8 +109,9 @@ func TestCheckRepos(t *testing.T) {
 			expected: []string{"org-2/repo-z"},
 		},
 		{
-			name:  "app installed, no bots",
-			repos: []string{"org-1/repo-a"},
+			name:     "app installed, no bots",
+			repos:    []string{"org-1/repo-a"},
+			expected: []string{},
 		},
 		{
 			name:     "app not installed",
@@ -117,16 +120,18 @@ func TestCheckRepos(t *testing.T) {
 			expected: []string{"org-3/repo-y"},
 		},
 		{
-			name:   "ignored repo",
-			repos:  []string{"org-2/repo-z"},
-			bots:   []string{"a-bot", "b-bot"},
-			ignore: sets.NewString("org-2/repo-z"),
+			name:     "ignored repo",
+			repos:    []string{"org-2/repo-z"},
+			bots:     []string{"a-bot", "b-bot"},
+			ignore:   sets.NewString("org-2/repo-z"),
+			expected: []string{},
 		},
 		{
-			name:   "ignored org",
-			repos:  []string{"org-2/repo-z"},
-			bots:   []string{"a-bot", "b-bot"},
-			ignore: sets.NewString("org-2"),
+			name:     "ignored org",
+			repos:    []string{"org-2/repo-z"},
+			bots:     []string{"a-bot", "b-bot"},
+			ignore:   sets.NewString("org-2"),
+			expected: []string{},
 		},
 		{
 			name:        "org member check returns error",
@@ -153,7 +158,7 @@ func TestCheckRepos(t *testing.T) {
 			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("error doesn't match expected, diff: %s", diff)
 			}
-			if diff := cmp.Diff(tc.expected, failing, cmpopts.EquateEmpty()); diff != "" {
+			if diff := cmp.Diff(tc.expected, failing); diff != "" {
 				t.Fatalf("returned failing repos did not match expected, diff: %s", diff)
 			}
 		})

@@ -30,6 +30,7 @@ func (s *multiStageTestStep) generateObservers(
 	observers []api.Observer,
 	secretVolumes []coreapi.Volume,
 	secretVolumeMounts []coreapi.VolumeMount,
+	genPodOpts *generatePodOptions,
 ) ([]coreapi.Pod, error) {
 	var adapted []api.LiteralTestStep
 	for _, observer := range observers {
@@ -42,8 +43,18 @@ func (s *multiStageTestStep) generateObservers(
 			Resources: observer.Resources,
 		})
 	}
-	pods, _, err := s.generatePods(adapted, nil, secretVolumes, secretVolumeMounts)
+	pods, _, err := s.generatePods(adapted, nil, secretVolumes, secretVolumeMounts, genPodOpts)
 	return pods, err
+}
+
+type generatePodOptions struct {
+	IsObserver bool
+}
+
+func defaultGeneratePodOptions() *generatePodOptions {
+	return &generatePodOptions{
+		IsObserver: false,
+	}
 }
 
 func (s *multiStageTestStep) generatePods(
@@ -51,7 +62,11 @@ func (s *multiStageTestStep) generatePods(
 	env []coreapi.EnvVar,
 	secretVolumes []coreapi.Volume,
 	secretVolumeMounts []coreapi.VolumeMount,
+	genPodOpts *generatePodOptions,
 ) ([]coreapi.Pod, sets.String, error) {
+	if genPodOpts == nil {
+		genPodOpts = defaultGeneratePodOptions()
+	}
 	var bestEffortSteps sets.String
 	if s.flags&allowBestEffortPostSteps != 0 {
 		bestEffortSteps = sets.NewString()
@@ -125,7 +140,7 @@ func (s *multiStageTestStep) generatePods(
 		delete(pod.Labels, base_steps.ProwJobIdLabel)
 		pod.Annotations[base_steps.AnnotationSaveContainerLogs] = "true"
 		pod.Labels[MultiStageTestLabel] = s.name
-		needsKubeConfig := step.NoKubeconfig == nil || !*step.NoKubeconfig
+		needsKubeConfig := isKubeconfigNeeded(&step, genPodOpts)
 		if needsKubeConfig {
 			pod.Spec.ServiceAccountName = s.name
 		} else {
@@ -153,7 +168,7 @@ func (s *multiStageTestStep) generatePods(
 			pod.Spec.Containers[idx].VolumeMounts = append(pod.Spec.Containers[idx].VolumeMounts, coreapi.VolumeMount{Name: homeVolumeName, MountPath: "/alabama"})
 		}
 
-		addSecretWrapper(pod, s.vpnConf, !needsKubeConfig)
+		addSecretWrapper(pod, s.vpnConf, !needsKubeConfig, genPodOpts)
 		if s.vpnConf != nil {
 			s.addVPNClient(pod)
 		}
@@ -233,7 +248,12 @@ func (s *multiStageTestStep) generatePods(
 	return ret, bestEffortSteps, utilerrors.NewAggregate(errs)
 }
 
-func addSecretWrapper(pod *coreapi.Pod, vpnConf *vpnConf, skipKubeconfig bool) {
+func isKubeconfigNeeded(step *api.LiteralTestStep, opts *generatePodOptions) bool {
+	needsKubeconfig := step.NoKubeconfig == nil || !*step.NoKubeconfig
+	return needsKubeconfig || opts.IsObserver
+}
+
+func addSecretWrapper(pod *coreapi.Pod, vpnConf *vpnConf, skipKubeconfig bool, genPodOpts *generatePodOptions) {
 	volume := "entrypoint-wrapper"
 	dir := "/tmp/entrypoint-wrapper"
 	bin := filepath.Join(dir, "entrypoint-wrapper")
@@ -261,7 +281,10 @@ func addSecretWrapper(pod *coreapi.Pod, vpnConf *vpnConf, skipKubeconfig bool) {
 			"--wait-timeout", *c.WaitTimeout)
 	}
 	if skipKubeconfig {
-		container.Args = append(container.Args, "--skip-kubeconfig")
+		container.Args = append(container.Args, "--mode=skip-kubeconfig")
+	}
+	if genPodOpts.IsObserver {
+		container.Args = append(container.Args, "--mode=observer")
 	}
 	container.Args = append(container.Args, container.Command...)
 	container.Args = append(container.Args, args...)

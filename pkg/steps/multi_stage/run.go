@@ -33,7 +33,7 @@ func (s *multiStageTestStep) runSteps(
 ) error {
 	start := time.Now()
 	logrus.Infof("Running multi-stage phase %s", phase)
-	pods, bestEffortSteps, err := s.generatePods(steps, env, secretVolumes, secretVolumeMounts)
+	pods, bestEffortSteps, err := s.generatePods(steps, env, secretVolumes, secretVolumeMounts, nil)
 	if err != nil {
 		s.flags |= hasPrevErrs
 		return err
@@ -141,7 +141,7 @@ func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []c
 	wg.Wait()
 	close(errs)
 	for err := range errs {
-		if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+		if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 			logrus.WithError(err).Warn("observer failed")
 		}
 	}

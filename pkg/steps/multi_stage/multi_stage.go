@@ -199,7 +199,9 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 		return err
 	}
 	var errs []error
-	observers, err := s.generateObservers(s.observers, secretVolumes, secretVolumeMounts)
+	generateObserverOpt := defaultGeneratePodOptions()
+	generateObserverOpt.IsObserver = true
+	observers, err := s.generateObservers(s.observers, secretVolumes, secretVolumeMounts, generateObserverOpt)
 	if err != nil {
 		// if we can't even generate the Pods there's no reason to run the job
 		return err

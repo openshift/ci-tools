@@ -41,6 +41,12 @@ var (
 	encoder runtime.Encoder
 )
 
+const (
+	manageKubeconfigMode = "manage-kubeconfig"
+	skipKubeconfigMode   = "skip-kubeconfig"
+	observerMode         = "observer"
+)
+
 func init() {
 	utilruntime.Must(coreapi.AddToScheme(coreScheme))
 	encoder = codecFactory.LegacyCodec(coreapi.SchemeGroupVersion)
@@ -53,7 +59,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed to parse flag set")
 	}
 	opt.cmd = flagSet.Args()
-	if err := opt.complete(); err != nil {
+	if err := opt.complete(flagSet); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
@@ -64,16 +70,19 @@ func main() {
 }
 
 type options struct {
-	dry            bool
-	name           string
-	srcPath        string
-	dstPath        string
-	waitPath       string
-	waitTimeoutStr string
-	waitTimeout    time.Duration
-	skipKubeconfig bool
-	cmd            []string
-	client         coreclientset.SecretInterface
+	dry              bool
+	name             string
+	srcPath          string
+	dstPath          string
+	waitPath         string
+	waitTimeoutStr   string
+	waitTimeout      time.Duration
+	mode             string
+	rwKubeconfig     bool
+	uploadKubeconfig bool
+	updateSharedDir  bool
+	cmd              []string
+	client           coreclientset.SecretInterface
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -81,11 +90,11 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.dry, "dry-run", false, "Print the secret instead of creating it")
 	flag.StringVar(&opt.waitPath, "wait-for-file", "", "Wait for a file to appear at this path before starting the program")
 	flag.StringVar(&opt.waitTimeoutStr, "wait-timeout", "", "Used with --wait-for-file, maximum wait time before starting the program")
-	flag.BoolVar(&opt.skipKubeconfig, "skip-kubeconfig", false, "Skip managing the $KUBECONFIG copy")
+	flag.StringVar(&opt.mode, "mode", manageKubeconfigMode, fmt.Sprintf("Set how kubeconfig should be managed. Allowed values are: %s, %s or %s", manageKubeconfigMode, skipKubeconfigMode, observerMode))
 	return opt
 }
 
-func (o *options) complete() error {
+func (o *options) complete(flagSet *flag.FlagSet) error {
 	if len(o.cmd) == 0 {
 		return fmt.Errorf("a command is required")
 	}
@@ -111,11 +120,36 @@ func (o *options) complete() error {
 	if o.name = os.Getenv("JOB_NAME_SAFE"); o.name == "" {
 		return fmt.Errorf("environment variable JOB_NAME_SAFE is empty")
 	}
-	if !o.dry && !o.skipKubeconfig {
+
+	if err := o.validateMode(); err != nil {
+		return err
+	}
+
+	if !o.dry && o.mode != skipKubeconfigMode {
 		var err error
 		if o.client, err = loadClient(ns); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (o *options) validateMode() error {
+	switch o.mode {
+	case manageKubeconfigMode:
+		o.uploadKubeconfig = true
+		o.updateSharedDir = true
+		o.rwKubeconfig = true
+	case skipKubeconfigMode:
+		o.uploadKubeconfig = false
+		o.updateSharedDir = false
+		o.rwKubeconfig = false
+	case observerMode:
+		o.uploadKubeconfig = false
+		o.updateSharedDir = false
+		o.rwKubeconfig = true
+	default:
+		return errors.New("unrecognized mode: " + o.mode)
 	}
 	return nil
 }
@@ -131,17 +165,17 @@ func (o *options) run() error {
 	}
 	var errs []error
 	ctx, cancel := context.WithCancel(context.Background())
-	if !o.skipKubeconfig {
+	if o.uploadKubeconfig {
 		go uploadKubeconfig(ctx, o.client, o.name, o.dstPath, o.dry)
 	}
-	if err := execCmd(o.cmd, o.skipKubeconfig); err != nil {
+	if err := o.execCmd(); err != nil {
 		errs = append(errs, fmt.Errorf("failed to execute wrapped command: %w", err))
 	}
 	// we will upload the secret from the post-execution state, so we know
 	// that the best-effort upload of the kubeconfig can exit now and so as
 	// not to race with the post-execution one
 	cancel()
-	if !o.skipKubeconfig {
+	if o.updateSharedDir {
 		if err := createSecret(o.client, o.name, o.dstPath, o.dry); err != nil {
 			errs = append(errs, fmt.Errorf("failed to create/update secret: %w", err))
 		}
@@ -232,7 +266,8 @@ func waitForFile(path string, timeout time.Duration) error {
 	}
 }
 
-func execCmd(argv []string, skipKubeconfig bool) error {
+func (o *options) execCmd() error {
+	argv := o.cmd
 	proc := exec.Command(argv[0], argv[1:]...)
 	proc.Stdout = os.Stdout
 	proc.Stderr = os.Stderr
@@ -244,7 +279,7 @@ func execCmd(argv []string, skipKubeconfig bool) error {
 	}
 	manageHome(proc)
 	manageCLI(proc)
-	if !skipKubeconfig {
+	if o.rwKubeconfig {
 		if err := manageKubeconfig(proc); err != nil {
 			return err
 		}
@@ -392,7 +427,7 @@ func uploadKubeconfig(ctx context.Context, client coreclientset.SecretInterface,
 		// kubeconfig exists, we can upload it
 		uploadErr = createSecret(client, name, dir, dry)
 		return uploadErr == nil, nil // retry errors
-	}, ctx.Done()); !errors.Is(err, wait.ErrWaitTimeout) {
+	}, ctx.Done()); err != nil && !errors.Is(err, wait.ErrWaitTimeout) {
 		log.Printf("Failed to upload $KUBECONFIG: %v: %v\n", err, uploadErr)
 	}
 }

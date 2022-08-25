@@ -15,6 +15,9 @@ import (
 	"github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/test-infra/prow/config"
+	configflagutil "k8s.io/test-infra/prow/flagutil/config"
+	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/github/fakegithub"
 	"k8s.io/test-infra/prow/tide"
@@ -677,6 +680,106 @@ func TestCheck(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expectedString, actualString); diff != "" {
 				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+			}
+		})
+	}
+}
+
+var (
+	hour                  = time.Duration(1000000000 * 3600)
+	sevenDays             = 168 * hour
+	emptyRetestController = &RetestController{}
+)
+
+func TestNewController(t *testing.T) {
+	testCases := []struct {
+		name           string
+		ghClient       githubClient
+		cfg            config.Getter
+		gitClient      git.ClientFactory
+		usesApp        bool
+		cacheFile      string
+		cacheRecordAge time.Duration
+		config         *Config
+		expected       *RetestController
+	}{
+		{
+			name:           "basic",
+			cacheFile:      "basic_case.yaml",
+			cacheRecordAge: sevenDays,
+			expected:       &RetestController{backoff: &backoffCache{file: "testdata/loadFromDiskNow/basic_case.yaml", cacheRecordAge: sevenDays}},
+		},
+		{
+			name:           "wrong",
+			cacheFile:      "wrong_format.yaml",
+			cacheRecordAge: sevenDays,
+			expected:       emptyRetestController,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.cacheFile != "" {
+				tc.cacheFile = filepath.Join("testdata", "loadFromDiskNow", tc.cacheFile)
+			}
+			actual := NewController(tc.ghClient, tc.cfg, tc.gitClient, tc.usesApp, tc.cacheFile, tc.cacheRecordAge, tc.config)
+			if tc.expected != emptyRetestController {
+				if diff := cmp.Diff(tc.expected.backoff.file, actual.backoff.file); diff != "" {
+					t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+				}
+			}
+		})
+	}
+}
+
+func TestRun(t *testing.T) {
+	config := &Config{Retester: Retester{
+		RetesterPolicy: RetesterPolicy{MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9}, Oranizations: map[string]Oranization{
+			"org": {RetesterPolicy: RetesterPolicy{Enabled: &True}},
+		},
+	}}
+	ghc := &MyFakeClient{fakegithub.NewFakeClient()}
+	pr123 := github.PullRequest{ID: 1}
+	ghc.PullRequests = map[int]*github.PullRequest{123: &pr123}
+
+	logger := logrus.NewEntry(logrus.StandardLogger())
+
+	testCases := []struct {
+		name       string
+		prowconfig string
+		expected   error
+	}{
+		{
+			name:       "basic",
+			prowconfig: "simple.yaml",
+			expected:   nil,
+		},
+		{
+			name:       "empty",
+			prowconfig: "empty.yaml",
+			expected:   nil,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.prowconfig != "" {
+				tc.prowconfig = filepath.Join("testdata", "prowconfig", tc.prowconfig)
+			}
+			configOpts := configflagutil.ConfigOptions{ConfigPath: tc.prowconfig}
+			configAgent, err := configOpts.ConfigAgent()
+			if err != nil {
+				logrus.WithError(err).Fatal("Error starting config agent.")
+			}
+			c := &RetestController{
+				ghClient:      ghc,
+				configGetter:  configAgent.Config,
+				logger:        logger,
+				usesGitHubApp: true,
+				backoff:       &backoffCache{cache: map[string]*pullRequest{}, logger: logger},
+				config:        config,
+			}
+			actual := c.Run()
+			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("Error differs from expected:\n%s", diff)
 			}
 		})
 	}

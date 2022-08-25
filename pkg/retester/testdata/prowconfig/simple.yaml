@@ -1,0 +1,98 @@
+tide:
+  batch_size_limit:
+    cri-o/cri-o: -1
+  blocker_label: tide/merge-blocker
+  context_options:
+    from-branch-protection: true
+    orgs:
+      containers:
+        repos:
+          aardvark-dns:
+            skip-unknown-contexts: true
+          common:
+            skip-unknown-contexts: true
+          dnsname:
+            skip-unknown-contexts: true
+          gvisor-tap-vsock:
+            skip-unknown-contexts: true
+          netavark:
+            skip-unknown-contexts: true
+          podman:
+            skip-unknown-contexts: true
+          podman-py:
+            skip-unknown-contexts: true
+      cri-o:
+        repos:
+          cri-o:
+            skip-unknown-contexts: true
+      openshift:
+        repos:
+          assisted-installer:
+            skip-unknown-contexts: true
+          assisted-test-infra:
+            skip-unknown-contexts: true
+          ci-docs:
+            skip-unknown-contexts: true
+          release:
+            skip-unknown-contexts: true
+      openshift-priv:
+        repos:
+          assisted-installer:
+            skip-unknown-contexts: true
+      operator-framework:
+        repos:
+          operator-registry:
+            branches:
+              master:
+                skip-unknown-contexts: true
+      red-hat-storage:
+        repos:
+          ceph-csi:
+            skip-unknown-contexts: true
+      redhat-developer:
+        repos:
+          build:
+            skip-unknown-contexts: true
+          service-binding-operator:
+            skip-unknown-contexts: true
+      redhat-openshift-ecosystem:
+        repos:
+          release:
+            skip-unknown-contexts: true
+  queries:
+    - author: ''
+      orgs:
+        - "openshift"
+      reviewApprovedRequired: true
+  display_all_tide_queries_in_status: true
+  max_goroutines: 100
+  merge_label: tide/merge-method-merge
+  pr_status_base_urls:
+    '*': https://prow.ci.openshift.org/pr
+    openshift-priv: https://deck-internal-ci.apps.ci.l2s4.p1.openshiftapps.com/pr
+    smg247: https://qe-private-deck-ci.apps.ci.l2s4.p1.openshiftapps.com/pr
+  priority:
+  - labels:
+    - jira/severity-critical
+  - labels:
+    - bugzilla/severity-urgent
+  - labels:
+    - jira/severity-important
+  - labels:
+    - bugzilla/severity-high
+  - labels:
+    - jira/severity-moderate
+  - labels:
+    - bugzilla/severity-medium
+  - labels:
+    - jira/severity-low
+  - labels:
+    - bugzilla/severity-low
+  - labels:
+    - jira/severity-informational
+  - labels:
+    - bugzilla/severity-unspecified
+  rebase_label: tide/merge-method-rebase
+  squash_label: tide/merge-method-squash
+  status_update_period: 2m35s
+  sync_period: 2m35s

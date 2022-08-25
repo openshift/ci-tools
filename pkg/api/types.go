@@ -390,6 +390,10 @@ type MultiArchImageStreamTagReference struct {
 	ImageStreamTagReference `json:",inline"`
 }
 
+func (m *MultiArchImageStreamTagReference) ISTagName() string {
+	return fmt.Sprintf("%s/%s:%s", m.ResolveNamespace(), m.Name, m.Tag)
+}
+
 func (m *MultiArchImageStreamTagReference) ResolveNamespace() string {
 	var ret string
 	arch := runtime.GOARCH

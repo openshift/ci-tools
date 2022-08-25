@@ -278,6 +278,7 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-ovn-techpreview-se
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-ovn-upi-serial
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-sdn
+periodic-ci-openshift-release-master-nightly-4.12-install-analysis-all
 periodic-ci-openshift-release-master-nightly-4.12-upgrade-from-stable-4.11-e2e-aws-sdn-upgrade
 periodic-ci-openshift-release-master-nightly-4.12-upgrade-from-stable-4.11-e2e-metal-ipi-upgrade
 periodic-ci-openshift-release-master-nightly-4.12-upgrade-from-stable-4.11-e2e-metal-ipi-upgrade-ovn-ipv6

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
 
 	flagutil "k8s.io/test-infra/prow/flagutil/config"
@@ -16,8 +15,7 @@ import (
 )
 
 var (
-	hour      = time.Duration(1000000000 * 3600)
-	sevenDays = 168 * hour
+	sevenDays = 7 * 24 * time.Hour
 )
 
 func TestGatherOptions(t *testing.T) {
@@ -28,10 +26,9 @@ func TestGatherOptions(t *testing.T) {
 	logrus.StandardLogger().ExitFunc = func(int) { fatalErr = true }
 
 	testCases := []struct {
-		name        string
-		args        []string
-		expected    options
-		expectFatal bool
+		name     string
+		args     []string
+		expected options
 	}{
 		{
 			name: "default",
@@ -39,12 +36,11 @@ func TestGatherOptions(t *testing.T) {
 			expected: options{
 				runOnce:        false,
 				dryRun:         true,
-				interval:       hour,
+				interval:       time.Hour,
 				cacheFile:      "",
 				cacheRecordAge: sevenDays,
 				configFile:     "",
 			},
-			expectFatal: false,
 		},
 		{
 			name: "basic case",
@@ -52,34 +48,40 @@ func TestGatherOptions(t *testing.T) {
 			expected: options{
 				runOnce:        true,
 				dryRun:         true,
-				interval:       2 * hour,
+				interval:       2 * time.Hour,
 				cacheFile:      "cache.yaml",
-				cacheRecordAge: 100 * hour,
+				cacheRecordAge: 100 * time.Hour,
 				configFile:     "config.yaml",
 			},
-			expectFatal: false,
 		},
 		{
-			name:        "wrong interval and empty cache record age",
-			args:        []string{"cmd", "--interval=notNumber", "--cache-record-age="},
-			expected:    options{dryRun: true},
-			expectFatal: true,
+			name:     "wrong interval and empty cache record age",
+			args:     []string{"cmd", "--interval=notNumber", "--cache-record-age="},
+			expected: options{dryRun: true},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fatalErr = false
 			os.Args = tc.args
 			actual := gatherOptions()
-			if diff := cmp.Diff(tc.expectFatal, fatalErr); diff != "" {
-				t.Errorf("Unexpected fatal error:\n%s", diff)
-			} else {
-				opts := []cmp.Option{
-					cmpopts.IgnoreFields(options{}, "config", "github"),
-					cmp.AllowUnexported(options{}),
+			if !fatalErr {
+				if diff := cmp.Diff(tc.expected.runOnce, actual.runOnce); diff != "" {
+					t.Errorf("%s runOnce differs from expected:\n%s", tc.name, diff)
 				}
-				if diff := cmp.Diff(tc.expected, actual, opts...); diff != "" {
-					t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+				if diff := cmp.Diff(tc.expected.dryRun, actual.dryRun); diff != "" {
+					t.Errorf("%s dryRun differs from expected:\n%s", tc.name, diff)
+				}
+				if diff := cmp.Diff(tc.expected.interval, actual.interval); diff != "" {
+					t.Errorf("%s interval differs from expected:\n%s", tc.name, diff)
+				}
+				if diff := cmp.Diff(tc.expected.cacheFile, actual.cacheFile); diff != "" {
+					t.Errorf("%s cacheFile differs from expected:\n%s", tc.name, diff)
+				}
+				if diff := cmp.Diff(tc.expected.cacheRecordAge, actual.cacheRecordAge); diff != "" {
+					t.Errorf("%s cacheRecordAge differs from expected:\n%s", tc.name, diff)
+				}
+				if diff := cmp.Diff(tc.expected.configFile, actual.configFile); diff != "" {
+					t.Errorf("%s configFile differs from expected:\n%s", tc.name, diff)
 				}
 			}
 		})
@@ -98,12 +100,24 @@ func TestValidate(t *testing.T) {
 				config:         flagutil.ConfigOptions{ConfigPath: "/etc/config/config.yaml"},
 				runOnce:        false,
 				dryRun:         true,
-				interval:       hour,
+				interval:       time.Hour,
+				cacheFile:      "",
+				cacheRecordAge: sevenDays,
+				configFile:     "/etc/retester/config.yaml",
+			},
+		},
+		{
+			name: "no-config-file",
+			o: options{
+				config:         flagutil.ConfigOptions{ConfigPath: "/etc/config/config.yaml"},
+				runOnce:        false,
+				dryRun:         true,
+				interval:       time.Hour,
 				cacheFile:      "",
 				cacheRecordAge: sevenDays,
 				configFile:     "",
 			},
-			expected: nil,
+			expected: errors.New("--config-file is mandatory, configuration file path of the retest is empty"),
 		},
 		{
 			name: "no-config-path",

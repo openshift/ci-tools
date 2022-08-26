@@ -117,13 +117,11 @@ func TestLoadConfig(t *testing.T) {
 		{
 			name:          "no such file",
 			file:          "testdata/testconfig/not_found",
-			expected:      nil,
 			expectedError: fmt.Errorf("failed to read config open testdata/testconfig/not_found: no such file or directory"),
 		},
 		{
 			name:          "unmarshal config error",
 			file:          "testdata/testconfig/wrong_format.yaml",
-			expected:      nil,
 			expectedError: fmt.Errorf("failed to unmarshal config error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type retester.Config"),
 		},
 	}
@@ -635,7 +633,7 @@ func TestCheck(t *testing.T) {
 		expectedString string
 	}{
 		{
-			name:  "cache key",
+			name:  "getting PR from backoffCache",
 			cache: backoffCache{cache: map[string]*pullRequest{"org/repo#123": {PRSha: "sha1", RetestsForBaseSha: 0, RetestsForPrSha: 0}}, logger: logger},
 			pr: tide.PullRequest{Number: githubv4.Int(123),
 				Repository: struct {
@@ -648,7 +646,7 @@ func TestCheck(t *testing.T) {
 			expectedString: "Revision key was retested 0 times: holding",
 		},
 		{
-			name:           "hold",
+			name:           "hold PR",
 			cache:          backoffCache{cache: map[string]*pullRequest{}, logger: logger},
 			pr:             tide.PullRequest{HeadRefOID: "holdPR"},
 			baseSha:        "sha1",
@@ -656,7 +654,7 @@ func TestCheck(t *testing.T) {
 			expectedString: "Revision holdPR was retested 0 times: holding",
 		},
 		{
-			name:           "pause",
+			name:           "pause PR",
 			cache:          backoffCache{cache: map[string]*pullRequest{}, logger: logger},
 			pr:             tide.PullRequest{HeadRefOID: "pausePR"},
 			policy:         RetesterPolicy{0, 9, &True},
@@ -664,7 +662,7 @@ func TestCheck(t *testing.T) {
 			expectedString: "Revision pausePR was retested 0 times against base HEAD : pausing",
 		},
 		{
-			name:           "retest",
+			name:           "retest PR",
 			cache:          backoffCache{cache: map[string]*pullRequest{}, logger: logger},
 			pr:             tide.PullRequest{HeadRefOID: "retestPR"},
 			policy:         RetesterPolicy{3, 9, &True},
@@ -686,8 +684,7 @@ func TestCheck(t *testing.T) {
 }
 
 var (
-	hour                  = time.Duration(1000000000 * 3600)
-	sevenDays             = 168 * hour
+	sevenDays             = 24 * 7 * time.Hour
 	emptyRetestController = &RetestController{}
 )
 

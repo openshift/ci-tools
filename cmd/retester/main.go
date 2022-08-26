@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"os"
 	"time"
@@ -36,6 +37,9 @@ func (o *options) Validate() error {
 		if err := group.Validate(o.dryRun); err != nil {
 			return err
 		}
+	}
+	if o.configFile == "" {
+		return errors.New("--config-file is mandatory, configuration file path of the retest is empty")
 	}
 	return nil
 }

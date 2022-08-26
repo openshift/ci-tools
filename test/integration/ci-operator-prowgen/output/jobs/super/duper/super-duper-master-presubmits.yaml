@@ -521,7 +521,6 @@ presubmits:
       skip_cloning: true
     labels:
       ci.openshift.io/generator: prowgen
-      pj-rehearse.openshift.io/can-be-rehearsed: "true"
     name: pull-ci-super-duper-master-unit
     rerun_command: /test unit
     spec:

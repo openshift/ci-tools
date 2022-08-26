@@ -27,13 +27,13 @@ func IsPromotionJob(jobLabels map[string]string) bool {
 // ReleaseBuildConfiguration describes how release
 // artifacts are built from a repository of source
 // code. The configuration is made up of two parts:
-//  - minimal fields that allow the user to buy into
-//    our normal conventions without worrying about
-//    how the pipeline flows. Use these preferentially
-//    for new projects with simple/conventional build
-//    configurations.
-//  - raw steps that can be used to create custom and
-//    fine-grained build flows
+//   - minimal fields that allow the user to buy into
+//     our normal conventions without worrying about
+//     how the pipeline flows. Use these preferentially
+//     for new projects with simple/conventional build
+//     configurations.
+//   - raw steps that can be used to create custom and
+//     fine-grained build flows
 type ReleaseBuildConfiguration struct {
 	Metadata Metadata `json:"zz_generated_metadata"`
 
@@ -688,6 +688,10 @@ type TestStepConfiguration struct {
 
 	// Timeout overrides maximum prowjob duration
 	Timeout *prowv1.Duration `json:"timeout,omitempty"`
+
+	// DisableRehearsal will exclude the "can-be-rehearsed" label from the pj spec.
+	// Which will mean the test will not be picked up for rehearsals. Not valid on postsubmits.
+	DisableRehearsal bool `json:"disable_rehearsal,omitempty"`
 
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty"`

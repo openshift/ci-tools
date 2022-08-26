@@ -285,6 +285,21 @@ func TestIsValidGraph_ContainerTestFrom(t *testing.T) {
 			},
 			Tests: tests("root"),
 		},
+	}, {
+		name: "disable_rehearsal set on postsubmit invalid",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: api.InputConfiguration{
+				BaseImages: map[string]api.ImageStreamTagReference{"from": {}},
+			},
+			Tests: []api.TestStepConfiguration{{
+				As: "test-invalid-postsubmit-config",
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{
+					From: api.PipelineImageStreamTagReference("from"),
+				},
+				Postsubmit:       true,
+				DisableRehearsal: true,
+			}}},
+		expected: errs(`tests[test-invalid-postsubmit-config] is a postsubmit, but disable_rehearsal has been set, this is not a valid configuration for postsubmits`),
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			graphConf := defaults.FromConfigStatic(&tc.config)

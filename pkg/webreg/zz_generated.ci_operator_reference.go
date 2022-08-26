@@ -450,6 +450,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # of pull request workflows. Setting this field will\n" +
 	"        # create a periodic job instead of a presubmit\n" +
 	"        cron: \"\"\n" +
+	"        # DisableRehearsal will exclude the \"can-be-rehearsed\" label from the pj spec.\n" +
+	"        # Which will mean the test will not be picked up for rehearsals. Not valid on postsubmits.\n" +
+	"        disable_rehearsal: true\n" +
 	"        # Interval is how frequently the test should be run based\n" +
 	"        # on the last time the test ran. Setting this field will\n" +
 	"        # create a periodic job instead of a presubmit\n" +
@@ -1216,6 +1219,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # of pull request workflows. Setting this field will\n" +
 	"      # create a periodic job instead of a presubmit\n" +
 	"      cron: \"\"\n" +
+	"      # DisableRehearsal will exclude the \"can-be-rehearsed\" label from the pj spec.\n" +
+	"      # Which will mean the test will not be picked up for rehearsals. Not valid on postsubmits.\n" +
+	"      disable_rehearsal: true\n" +
 	"      # Interval is how frequently the test should be run based\n" +
 	"      # on the last time the test ran. Setting this field will\n" +
 	"      # create a periodic job instead of a presubmit\n" +

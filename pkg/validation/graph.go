@@ -88,5 +88,9 @@ func validateTestStepConfiguration(
 	if _, ok := pipelineImages[c.From]; !ok {
 		ret = append(ret, fmt.Errorf("tests[%s].from: unknown image %q", s.As, c.From))
 	}
+
+	if s.Postsubmit && s.DisableRehearsal {
+		ret = append(ret, fmt.Errorf("tests[%s] is a postsubmit, but disable_rehearsal has been set, this is not a valid configuration for postsubmits", s.As))
+	}
 	return
 }

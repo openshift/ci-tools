@@ -48,6 +48,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		runIfChanged      string
 		skipIfOnlyChanged string
 		optional          bool
+		disableRehearsal  bool
 	}{
 		{
 			description: "presubmit for standard test",
@@ -77,12 +78,18 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			optional:    true,
 		},
+		{
+			description:      "rehearsal disabled",
+			test:             "testname",
+			repoInfo:         &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			disableRehearsal: true,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
 			test := ciop.TestStepConfiguration{As: tc.test}
 			jobBaseGen := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo, newFakePodSpecBuilder(), test)
-			testhelper.CompareWithFixture(t, generatePresubmitForTest(jobBaseGen, tc.test, tc.repoInfo, tc.runIfChanged, tc.skipIfOnlyChanged, tc.optional))
+			testhelper.CompareWithFixture(t, generatePresubmitForTest(jobBaseGen, tc.test, tc.repoInfo, tc.runIfChanged, tc.skipIfOnlyChanged, tc.optional, tc.disableRehearsal))
 		})
 	}
 }
@@ -98,6 +105,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 		cron              string
 		interval          string
 		releaseController bool
+		disableRehearsal  bool
 	}{
 		{
 			description: "periodic for standard test",
@@ -117,12 +125,19 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			interval:    "6h",
 		},
+		{
+			description:      "periodic with disabled rehearsal",
+			test:             "testname",
+			repoInfo:         &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			cron:             "@yearly",
+			disableRehearsal: true,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
 			test := ciop.TestStepConfiguration{As: tc.test}
 			jobBaseGen := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo, newFakePodSpecBuilder(), test)
-			testhelper.CompareWithFixture(t, GeneratePeriodicForTest(jobBaseGen, tc.repoInfo, tc.cron, tc.interval, tc.releaseController, nil))
+			testhelper.CompareWithFixture(t, GeneratePeriodicForTest(jobBaseGen, tc.repoInfo, tc.cron, tc.interval, tc.releaseController, nil, tc.disableRehearsal))
 		})
 	}
 }
@@ -345,7 +360,7 @@ func TestGenerateJobs(t *testing.T) {
 			id: "cluster label for periodic",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
-					{As: "unit", Cron: utilpointer.StringPtr(cron), Cluster: "build01", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "unit", Cron: utilpointer.String(cron), Cluster: "build01", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
 				},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
@@ -359,6 +374,22 @@ func TestGenerateJobs(t *testing.T) {
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
 					{As: "unit", Postsubmit: true, Cluster: "build01", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id: "disabled rehearsals",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}, DisableRehearsal: true},
+					{As: "lint", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "periodic-unit", Cron: utilpointer.String(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}, DisableRehearsal: true},
+					{As: "periodic-lint", Cron: utilpointer.String(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
 				},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{

@@ -488,7 +488,7 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 			jobBaseGen.Cluster("build01")
 		}
 
-		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, "@yearly", "", false, ciopConfig.CanonicalGoRepository)
+		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, "@yearly", "", false, ciopConfig.CanonicalGoRepository, false)
 		periodic.Name = generateJobNameToSubmit(baseCiop, inject, pr)
 		break
 	}
@@ -595,7 +595,7 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 
 	jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, &prowgen.ProwgenInfo{}, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[0])
 
-	periodic := prowgen.GeneratePeriodicForTest(jobBaseGen, &prowgen.ProwgenInfo{}, "@yearly", "", false, ciopConfig.CanonicalGoRepository)
+	periodic := prowgen.GeneratePeriodicForTest(jobBaseGen, &prowgen.ProwgenInfo{}, "@yearly", "", false, ciopConfig.CanonicalGoRepository, false)
 	periodic.Name = aggregatorJobName
 
 	// Aggregator jobs need more time to finish than the jobs they are aggregating. The default job timeout in CI is set to 4h

@@ -962,5 +962,14 @@ func resolveCLIOverrideImage(architecture api.ReleaseArchitecture, version strin
 	if err != nil {
 		return nil, err
 	}
-	return &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "ocp", Name: majorMinor + ":cli"}, nil
+
+	isTagRef := api.MultiArchImageStreamTagReference{
+		ImageStreamTagReference: api.ImageStreamTagReference{
+			Namespace: "ocp",
+			Name:      majorMinor,
+			Tag:       "cli",
+		},
+	}
+
+	return &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: isTagRef.ResolveNamespace(), Name: fmt.Sprintf("%s:%s", isTagRef.Name, isTagRef.Tag)}, nil
 }

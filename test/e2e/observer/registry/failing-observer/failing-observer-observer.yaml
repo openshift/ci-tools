@@ -1,0 +1,10 @@
+observer:
+  name: failing-observer
+  from: os
+  commands: failing-observer-commands.sh
+  resources:
+    requests:
+      cpu: 10m
+      memory: 10Mi
+  documentation: |-
+    An ever failing observer

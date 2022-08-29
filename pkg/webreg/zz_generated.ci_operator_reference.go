@@ -787,6 +787,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  timeout: 0s\n" +
 	"            # Override job timeout\n" +
 	"            timeout: 0s\n" +
+	"        # MinimumInterval to wait between two runs of the job. Consecutive\n" +
+	"        # jobs are run at `minimum_interval` + `duration of previous job`\n" +
+	"        # apart. Setting this field will create a periodic job instead of a\n" +
+	"        # presubmit\n" +
+	"        minimum_interval: \"\"\n" +
 	"        openshift_ansible:\n" +
 	"            cluster_profile: ' '\n" +
 	"        openshift_ansible_custom:\n" +
@@ -1553,6 +1558,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              timeout: 0s\n" +
 	"        # Override job timeout\n" +
 	"        timeout: 0s\n" +
+	"      # MinimumInterval to wait between two runs of the job. Consecutive\n" +
+	"      # jobs are run at `minimum_interval` + `duration of previous job`\n" +
+	"      # apart. Setting this field will create a periodic job instead of a\n" +
+	"      # presubmit\n" +
+	"      minimum_interval: \"\"\n" +
 	"      openshift_ansible:\n" +
 	"        cluster_profile: ' '\n" +
 	"      openshift_ansible_custom:\n" +

@@ -406,6 +406,19 @@ func TestValidateTests(t *testing.T) {
 			expectedError: errors.New("tests[0]: `cron` and `postsubmit` are mututally exclusive"),
 		},
 		{
+			id: "minimum_interval and postsubmit together are invalid",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					MinimumInterval:            &intervalString,
+					Postsubmit:                 true,
+				},
+			},
+			expectedError: errors.New("tests[0]: `minimum_interval` and `postsubmit` are mututally exclusive"),
+		},
+		{
 			id: "valid cron",
 			tests: []api.TestStepConfiguration{
 				{
@@ -428,6 +441,17 @@ func TestValidateTests(t *testing.T) {
 			},
 		},
 		{
+			id: "valid minimum_interval",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					MinimumInterval:            &intervalString,
+				},
+			},
+		},
+		{
 			id: "cron and interval together are invalid",
 			tests: []api.TestStepConfiguration{
 				{
@@ -439,6 +463,32 @@ func TestValidateTests(t *testing.T) {
 				},
 			},
 			expectedError: errors.New("tests[0]: `interval` and `cron` cannot both be set"),
+		},
+		{
+			id: "cron and minimum_interval together are invalid",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Cron:                       &cronString,
+					MinimumInterval:            &intervalString,
+				},
+			},
+			expectedError: errors.New("tests[0]: `cron` and `minimum_interval` cannot both be set"),
+		},
+		{
+			id: "interval and minimum_interval together are invalid",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Interval:                   &intervalString,
+					MinimumInterval:            &intervalString,
+				},
+			},
+			expectedError: errors.New("tests[0]: `interval` and `minimum_interval` cannot both be set"),
 		},
 		{
 			id: "cron and releaseInforming together are invalid",
@@ -465,6 +515,19 @@ func TestValidateTests(t *testing.T) {
 				},
 			},
 			expectedError: errors.New("tests[0]: `interval` cannot be set for release controller jobs"),
+		},
+		{
+			id: "minimum_interval and releaseInforming together are invalid",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					ReleaseController:          true,
+					MinimumInterval:            &intervalString,
+				},
+			},
+			expectedError: errors.New("tests[0]: `minimum_interval` cannot be set for release controller jobs"),
 		},
 		{
 			id: "invalid cron",
@@ -498,7 +561,7 @@ func TestValidateTests(t *testing.T) {
 				Cron:         &cronString,
 				RunIfChanged: "^README.md$",
 			}},
-			expectedError: errors.New("tests[0]: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
+			expectedError: errors.New("tests[0]: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
 		},
 		{
 			id: "interval is mutually exclusive with run_if_changed",
@@ -508,7 +571,17 @@ func TestValidateTests(t *testing.T) {
 				Interval:     &intervalString,
 				RunIfChanged: "^README.md$",
 			}},
-			expectedError: errors.New("tests[0]: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
+			expectedError: errors.New("tests[0]: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
+		},
+		{
+			id: "minimum_interval is mutually exclusive with run_if_changed",
+			tests: []api.TestStepConfiguration{{
+				As:              "unit",
+				Commands:        "commands",
+				MinimumInterval: &intervalString,
+				RunIfChanged:    "^README.md$",
+			}},
+			expectedError: errors.New("tests[0]: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
 		},
 		{
 			id: "Run if changed and skip_if_only_changed are mutually exclusive",
@@ -547,7 +620,7 @@ func TestValidateTests(t *testing.T) {
 				Cron:     &cronString,
 				Optional: true,
 			}},
-			expectedError: errors.New("tests[0]: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
+			expectedError: errors.New("tests[0]: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
 		},
 		{
 			id: "interval is mutually exclusive with optional",
@@ -557,7 +630,17 @@ func TestValidateTests(t *testing.T) {
 				Interval: &intervalString,
 				Optional: true,
 			}},
-			expectedError: errors.New("tests[0]: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
+			expectedError: errors.New("tests[0]: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
+		},
+		{
+			id: "minimum_interval is mutually exclusive with optional",
+			tests: []api.TestStepConfiguration{{
+				As:              "unit",
+				Commands:        "commands",
+				MinimumInterval: &intervalString,
+				Optional:        true,
+			}},
+			expectedError: errors.New("tests[0]: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
 		},
 		{
 			id: "postsubmit job is mutually exclusive with optional",

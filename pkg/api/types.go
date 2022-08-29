@@ -669,6 +669,12 @@ type TestStepConfiguration struct {
 	// create a periodic job instead of a presubmit
 	Interval *string `json:"interval,omitempty"`
 
+	// MinimumInterval to wait between two runs of the job. Consecutive
+	// jobs are run at `minimum_interval` + `duration of previous job`
+	// apart. Setting this field will create a periodic job instead of a
+	// presubmit
+	MinimumInterval *string `json:"minimum_interval,omitempty"`
+
 	// ReleaseController configures prowgen to create a periodic that
 	// does not get run by prow and instead is run by release-controller.
 	// The job must be configured as a verification or periodic job in a

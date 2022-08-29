@@ -50,7 +50,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		g := NewProwJobBaseBuilderForTest(configSpec, info, NewCiOperatorPodSpecGenerator(), element)
 		disableRehearsal := rehearsals.DisableAll || disabledRehearsals.Has(element.As)
 
-		if element.Cron != nil || element.Interval != nil || element.ReleaseController {
+		if element.Cron != nil || element.Interval != nil || element.MinimumInterval != nil || element.ReleaseController {
 			cron := ""
 			if element.Cron != nil {
 				cron = *element.Cron
@@ -59,9 +59,14 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			if element.Interval != nil {
 				interval = *element.Interval
 			}
+			minimumInterval := ""
+			if element.MinimumInterval != nil {
+				minimumInterval = *element.MinimumInterval
+			}
 			periodic := GeneratePeriodicForTest(g, info, FromConfigSpec(configSpec), func(options *GeneratePeriodicOptions) {
 				options.Cron = cron
 				options.Interval = interval
+				options.MinimumInterval = minimumInterval
 				options.ReleaseController = element.ReleaseController
 				options.DisableRehearsal = disableRehearsal
 			})
@@ -227,6 +232,7 @@ func hashDailyCron(job string) string {
 
 type GeneratePeriodicOptions struct {
 	Interval          string
+	MinimumInterval   string
 	Cron              string
 	ReleaseController bool
 	PathAlias         *string
@@ -273,8 +279,9 @@ func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenIn
 		base.Labels[jc.ReleaseControllerLabel] = jc.ReleaseControllerValue
 	}
 	return &prowconfig.Periodic{
-		JobBase:  base,
-		Cron:     cron,
-		Interval: opts.Interval,
+		JobBase:         base,
+		Cron:            cron,
+		Interval:        opts.Interval,
+		MinimumInterval: opts.MinimumInterval,
 	}
 }

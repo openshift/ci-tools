@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -13,12 +14,13 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-type fakeCollaboratorClient struct {
-	collaboratorsByRepo map[string][]string
-	membersByOrg        map[string][]string
+type fakeAutomationClient struct {
+	collaboratorsByRepo   map[string][]string
+	membersByOrg          map[string][]string
+	reposWithAppInstalled sets.String
 }
 
-func (c fakeCollaboratorClient) IsMember(org, user string) (bool, error) {
+func (c fakeAutomationClient) IsMember(org, user string) (bool, error) {
 	for _, member := range c.membersByOrg[org] {
 		if user == member {
 			return true, nil
@@ -31,7 +33,7 @@ func (c fakeCollaboratorClient) IsMember(org, user string) (bool, error) {
 	return false, nil
 }
 
-func (c fakeCollaboratorClient) IsCollaborator(org, repo, user string) (bool, error) {
+func (c fakeAutomationClient) IsCollaborator(org, repo, user string) (bool, error) {
 	orgRepo := fmt.Sprintf("%s/%s", org, repo)
 	collaborators := c.collaboratorsByRepo[orgRepo]
 	for _, collaborator := range collaborators {
@@ -46,8 +48,17 @@ func (c fakeCollaboratorClient) IsCollaborator(org, repo, user string) (bool, er
 	return false, nil
 }
 
+func (c fakeAutomationClient) IsAppInstalled(org, repo string) (bool, error) {
+	if repo == "error" {
+		return false, errors.New("intentional error")
+	}
+
+	orgRepo := fmt.Sprintf("%s/%s", org, repo)
+	return c.reposWithAppInstalled.Has(orgRepo), nil
+}
+
 func TestCheckRepos(t *testing.T) {
-	client := fakeCollaboratorClient{
+	client := fakeAutomationClient{
 		collaboratorsByRepo: map[string][]string{
 			"org-1/repo-a": {"a-bot", "b-bot", "c-bot"},
 			"org-2/repo-z": {"c-bot", "some-user"},
@@ -55,7 +66,10 @@ func TestCheckRepos(t *testing.T) {
 		membersByOrg: map[string][]string{
 			"org-1": {"a-user", "d-bot", "e-bot"},
 			"org-2": {"some-user", "z-bot"},
-		}}
+			"org-3": {"a-user"},
+		},
+		reposWithAppInstalled: sets.NewString("org-1/repo-a", "org-2/repo-z"),
+	}
 
 	testCases := []struct {
 		name        string
@@ -93,6 +107,16 @@ func TestCheckRepos(t *testing.T) {
 			expected: []string{"org-2/repo-z"},
 		},
 		{
+			name:  "app installed, no bots",
+			repos: []string{"org-1/repo-a"},
+		},
+		{
+			name:     "app not installed",
+			repos:    []string{"org-3/repo-y"},
+			bots:     []string{"a-bot", "b-bot"},
+			expected: []string{"org-3/repo-y"},
+		},
+		{
 			name:   "ignored repo",
 			repos:  []string{"org-2/repo-z"},
 			bots:   []string{"a-bot", "b-bot"},
@@ -116,6 +140,12 @@ func TestCheckRepos(t *testing.T) {
 			bots:        []string{"a-bot"},
 			expectedErr: errors.New("unable to determine if: a-bot is a collaborator on org-1/fake: intentional error"),
 		},
+		{
+			name:        "app install check returns error",
+			repos:       []string{"org-1/error"},
+			bots:        []string{"a-bot"},
+			expectedErr: errors.New("unable to determine if openshift-ci app is installed on org-1/error: intentional error"),
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -123,7 +153,7 @@ func TestCheckRepos(t *testing.T) {
 			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("error doesn't match expected, diff: %s", diff)
 			}
-			if diff := cmp.Diff(tc.expected, failing); diff != "" {
+			if diff := cmp.Diff(tc.expected, failing, cmpopts.EquateEmpty()); diff != "" {
 				t.Fatalf("returned failing repos did not match expected, diff: %s", diff)
 			}
 		})

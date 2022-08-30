@@ -14,7 +14,7 @@ data="${BASETMPDIR}/data"
 mkdir -p "${data}"
 
 function OC() {
-	oc --context app.ci --namespace ci --as system:admin "$@"
+	oc --context app.ci --namespace ci "$@"
 }
 
 os::log::info "Extracting production data we need to run check-gh-automation..."

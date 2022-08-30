@@ -58,14 +58,22 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			if element.Interval != nil {
 				interval = *element.Interval
 			}
-			periodic := GeneratePeriodicForTest(g, info, cron, interval, element.ReleaseController, configSpec.CanonicalGoRepository, disableRehearsal)
+			periodic := GeneratePeriodicForTest(g, info, cron, interval, FromConfigSpec(configSpec), func(options *GeneratePeriodicOptions) {
+				options.releaseController = element.ReleaseController
+				options.disableRehearsal = disableRehearsal
+			})
 			periodics = append(periodics, *periodic)
 		} else if element.Postsubmit {
 			postsubmit := generatePostsubmitForTest(g, info, element.RunIfChanged, element.SkipIfOnlyChanged)
 			postsubmit.MaxConcurrency = 1
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
 		} else {
-			presubmit := generatePresubmitForTest(g, element.As, info, element.RunIfChanged, element.SkipIfOnlyChanged, element.Optional, disableRehearsal)
+			presubmit := generatePresubmitForTest(g, element.As, info, func(options *generatePresubmitOptions) {
+				options.runIfChanged = element.RunIfChanged
+				options.skipIfOnlyChanged = element.SkipIfOnlyChanged
+				options.optional = element.Optional
+				options.disableRehearsal = disableRehearsal
+			})
 			v, requestingKVM := configSpec.Resources.RequirementsForStep(element.As).Requests[cioperatorapi.KVMDeviceLabel]
 			if requestingKVM {
 				presubmit.Labels[cioperatorapi.KVMDeviceLabel] = v
@@ -88,7 +96,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		}
 		jobBaseGen := newJobBaseBuilder().TestName("images")
 		jobBaseGen.PodSpec.Add(Targets(presubmitTargets...))
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, "images", info, "", "", false, false))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, "images", info))
 
 		if configSpec.PromotionConfiguration != nil {
 			jobBaseGen = newJobBaseBuilder().TestName("images")
@@ -113,13 +121,13 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			indexName := api.IndexName(bundle.As)
 			jobBaseGen := newJobBaseBuilder().TestName(indexName)
 			jobBaseGen.PodSpec.Add(Targets(indexName))
-			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, indexName, info, "", "", false, false))
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, indexName, info))
 		}
 		if containsUnnamedBundle {
 			name := string(api.PipelineImageStreamTagReferenceIndexImage)
 			jobBaseGen := newJobBaseBuilder().TestName(name)
 			jobBaseGen.PodSpec.Add(Targets(name))
-			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, name, info, "", "", false, false))
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, name, info))
 		}
 	}
 
@@ -139,12 +147,26 @@ func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
 	return len(api.LeasesForTest(test.MultiStageTestConfigurationLiteral)) > 0
 }
 
-func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, info *ProwgenInfo, runIfChanged, skipIfOnlyChanged string, optional, disableRehearsal bool) *prowconfig.Presubmit {
+type generatePresubmitOptions struct {
+	runIfChanged      string
+	skipIfOnlyChanged string
+	optional          bool
+	disableRehearsal  bool
+}
+
+type generatePresubmitOption func(options *generatePresubmitOptions)
+
+func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, info *ProwgenInfo, options ...generatePresubmitOption) *prowconfig.Presubmit {
+	opts := &generatePresubmitOptions{}
+	for _, opt := range options {
+		opt(opts)
+	}
+
 	shortName := info.TestName(name)
-	base := jobBaseBuilder.Rehearsable(!disableRehearsal).Build(jc.PresubmitPrefix)
+	base := jobBaseBuilder.Rehearsable(!opts.disableRehearsal).Build(jc.PresubmitPrefix)
 	return &prowconfig.Presubmit{
 		JobBase:   base,
-		AlwaysRun: runIfChanged == "" && skipIfOnlyChanged == "",
+		AlwaysRun: opts.runIfChanged == "" && opts.skipIfOnlyChanged == "",
 		Brancher:  prowconfig.Brancher{Branches: sets.NewString(jc.ExactlyBranch(info.Branch), jc.FeatureBranch(info.Branch)).List()},
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/prow/%s", shortName),
@@ -152,10 +174,10 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 		RerunCommand: prowconfig.DefaultRerunCommandFor(shortName),
 		Trigger:      prowconfig.DefaultTriggerFor(shortName),
 		RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{
-			RunIfChanged:      runIfChanged,
-			SkipIfOnlyChanged: skipIfOnlyChanged,
+			RunIfChanged:      opts.runIfChanged,
+			SkipIfOnlyChanged: opts.skipIfOnlyChanged,
 		},
-		Optional: optional,
+		Optional: opts.optional,
 	}
 }
 
@@ -185,10 +207,28 @@ func hashDailyCron(job string) string {
 	return fmt.Sprintf("%d %d * * *", minute, hour)
 }
 
-func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenInfo, cron string, interval string, releaseController bool, pathAlias *string, disableRehearsal bool) *prowconfig.Periodic {
-	// Periodics are rehearsable
+type GeneratePeriodicOptions struct {
+	releaseController bool
+	pathAlias         *string
+	disableRehearsal  bool
+}
+
+type GeneratePeriodicOption func(options *GeneratePeriodicOptions)
+
+func FromConfigSpec(configSpec *cioperatorapi.ReleaseBuildConfiguration) GeneratePeriodicOption {
+	return func(options *GeneratePeriodicOptions) {
+		options.pathAlias = configSpec.CanonicalGoRepository
+	}
+}
+
+func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenInfo, cron string, interval string, options ...GeneratePeriodicOption) *prowconfig.Periodic {
+	opts := &GeneratePeriodicOptions{}
+	for _, opt := range options {
+		opt(opts)
+	}
+
 	// We are resetting PathAlias because it will be set on the `ExtraRefs` item
-	base := jobBaseBuilder.Rehearsable(!disableRehearsal).PathAlias("").Build(jc.PeriodicPrefix)
+	base := jobBaseBuilder.Rehearsable(!opts.disableRehearsal).PathAlias("").Build(jc.PeriodicPrefix)
 
 	if cron == "@daily" {
 		cron = hashDailyCron(base.Name)
@@ -202,11 +242,11 @@ func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenIn
 		Repo:    info.Repo,
 		BaseRef: info.Branch,
 	}
-	if pathAlias != nil {
-		ref.PathAlias = *pathAlias
+	if opts.pathAlias != nil {
+		ref.PathAlias = *opts.pathAlias
 	}
 	base.ExtraRefs = append([]prowv1.Refs{ref}, base.ExtraRefs...)
-	if releaseController {
+	if opts.releaseController {
 		interval = ""
 		cron = "@yearly"
 		base.Labels[jc.ReleaseControllerLabel] = jc.ReleaseControllerValue

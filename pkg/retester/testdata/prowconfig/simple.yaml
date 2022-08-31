@@ -1,23 +1,4 @@
 tide:
-  blocker_label: tide/merge-blocker
-  context_options:
-    from-branch-protection: true
-    orgs:
-      openshift:
-        repos:
-          release:
-            skip-unknown-contexts: true
   queries:
-    - author: ''
-      orgs:
+    - orgs:
         - "openshift"
-      reviewApprovedRequired: true
-  display_all_tide_queries_in_status: true
-  max_goroutines: 100
-  merge_label: tide/merge-method-merge
-  pr_status_base_urls:
-    '*': https://prow.ci.openshift.org/pr
-  rebase_label: tide/merge-method-rebase
-  squash_label: tide/merge-method-squash
-  status_update_period: 2m35s
-  sync_period: 2m35s

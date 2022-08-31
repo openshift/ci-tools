@@ -372,6 +372,9 @@ func TestGetClusterForJob(t *testing.T) {
 }
 
 func TestDetermineClusterForJob(t *testing.T) {
+	configIgnoreE2EByJobAssignment := configWithBuildFarmWithJobsAndDetermineE2EByJob
+	configIgnoreE2EByJobAssignment.DetermineE2EByJob = false
+	configIgnoreE2EByJobAssignment.IgnoreE2EByJobAssignment = true
 	testCases := []struct {
 		name                   string
 		config                 *Config
@@ -520,6 +523,26 @@ func TestDetermineClusterForJob(t *testing.T) {
 			},
 			expected:               "build01",
 			expectedCanBeRelocated: false,
+		},
+		{
+			name:   "IgnoreE2EByJobAssignment: aws assigned",
+			config: &configIgnoreE2EByJobAssignment,
+			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
+				Labels:  map[string]string{"ci-operator.openshift.io/cloud": "aws"},
+				Cluster: "build01",
+			},
+			expected:               "build01",
+			expectedCanBeRelocated: false,
+		},
+		{
+			name:   "IgnoreE2EByJobAssignment: gcp assigned",
+			config: &configIgnoreE2EByJobAssignment,
+			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
+				Labels:  map[string]string{"ci-operator.openshift.io/cloud": "aws"},
+				Cluster: "build02",
+			},
+			expected:               "api.ci",
+			expectedCanBeRelocated: true,
 		},
 	}
 	for _, tc := range testCases {

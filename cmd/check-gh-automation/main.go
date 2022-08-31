@@ -22,6 +22,7 @@ type options struct {
 	config          configflagutil.ConfigOptions
 	bots            flagutil.Strings
 	ignore          flagutil.Strings
+	repos           flagutil.Strings
 	releaseRepoPath string
 	flagutil.GitHubOptions
 }
@@ -32,6 +33,7 @@ func gatherOptions() options {
 
 	fs.Var(&o.bots, "bot", "Check if this bot is a collaborator. Can be passed multiple times.")
 	fs.Var(&o.ignore, "ignore", "Ignore a repo or entire org. Formatted org or org/repo. Can be passed multiple times.")
+	fs.Var(&o.repos, "repo", "Specifically check only an org/repo. Can be passed multiple times.")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
 
 	o.GitHubOptions.AddFlags(fs)
@@ -48,14 +50,21 @@ func (o *options) validate() error {
 		return errors.New("at least one bot must be configured")
 	}
 
-	// We either need the release repo path, or a proper prow config
-	if o.releaseRepoPath == "" {
-		if err := o.config.Validate(true); err != nil {
-			return fmt.Errorf("candidate-path not provided, and error when validating prow config: %w", err)
+	repos := o.repos.Strings()
+	if len(repos) == 0 {
+		// If we need to find repos, we either need the release repo path, or a proper prow config
+		if o.releaseRepoPath == "" {
+			if err := o.config.Validate(true); err != nil {
+				return fmt.Errorf("candidate-path not provided, and error when validating prow config: %w", err)
+			}
+		} else {
+			if o.config.ConfigPath != "" {
+				return errors.New("candidate-path and prow config provided, these are mutually exclusive")
+			}
 		}
 	} else {
-		if o.config.ConfigPath != "" {
-			return errors.New("candidate-path and prow config provided, these are mutually exclusive")
+		if o.releaseRepoPath != "" || o.config.ConfigPath != "" {
+			return errors.New("repo and candidate-path or prow config provided, these are mutually exclusive")
 		}
 	}
 
@@ -82,16 +91,7 @@ func main() {
 		logger.Fatalf("error creating client: %v", err)
 	}
 
-	var repos []string
-	if o.config.ConfigPath != "" {
-		configAgent, err := o.config.ConfigAgent()
-		if err != nil {
-			logger.Fatalf("error loading prow config: %v", err)
-		}
-		repos = configAgent.Config().AllRepos.List()
-	} else {
-		repos = gatherModifiedRepos(o.releaseRepoPath, logger)
-	}
+	repos := determineRepos(o, logger)
 	failing, err := checkRepos(repos, o.bots.Strings(), o.ignore.StringSet(), client, logger)
 	if err != nil {
 		logger.Fatalf("error checking repos: %v", err)
@@ -102,6 +102,23 @@ func main() {
 	}
 
 	logger.Infof("All repos have github automation configured.")
+}
+
+func determineRepos(o options, logger *logrus.Entry) []string {
+	repos := o.repos.Strings()
+	if len(repos) > 0 {
+		return repos
+	}
+
+	if o.config.ConfigPath != "" {
+		configAgent, err := o.config.ConfigAgent()
+		if err != nil {
+			logger.Fatalf("error loading prow config: %v", err)
+		}
+		return configAgent.Config().AllRepos.List()
+	}
+
+	return gatherModifiedRepos(o.releaseRepoPath, logger)
 }
 
 func checkRepos(repos []string, bots []string, ignore sets.String, client automationClient, logger *logrus.Entry) ([]string, error) {

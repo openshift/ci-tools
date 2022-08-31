@@ -1,5 +1,6 @@
 # Check GH Automation
 A tool to check that our bots (`openshift-merge-robot` and `openshift-ci-robot`) have access to repositories that have CI configured.
+It also checks that the app used to run it is installed in the repositories.
 This can be run in multiple modes:
 
 ## Pass Prow Config Options
@@ -26,3 +27,14 @@ check-gh-automation
 --github-app-id={APP_ID} \
 --github-app-private-key-path={CERT_PATH}
 ```
+
+## Pass specific Repo(s) to check
+The `--repo` parameter can be used to pass one or more repos in to be checked.
+When using this mode do not supply the prow config options or the `candidate-path`
+
+## Local Development
+A `hack/local-check-gh-automation.sh` script exists to test out the tool locally. Usage is simple:
+```bash
+hack/local-check-gh-automation.sh some-org/repo
+```
+The script will pull the necessary secrets from the `app.ci` cluster and run the tool locally, checking the provided repo.

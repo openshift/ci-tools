@@ -49,7 +49,7 @@ func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration
 }
 
 func TestStepConfigsForBuild(t *testing.T) {
-	noopResolver := func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
+	noopResolver := func(root, cache *api.MultiArchImageStreamTagReference) (*api.MultiArchImageStreamTagReference, error) {
 		return root, nil
 	}
 	var testCases = []struct {
@@ -129,7 +129,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
+			resolver: func(root, cache *api.MultiArchImageStreamTagReference) (*api.MultiArchImageStreamTagReference, error) {
 				return cache, nil
 			},
 			output: []api.StepConfiguration{{
@@ -238,7 +238,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
+			resolver: func(root, cache *api.MultiArchImageStreamTagReference) (*api.MultiArchImageStreamTagReference, error) {
 				return cache, nil
 			},
 			output: []api.StepConfiguration{{

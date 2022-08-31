@@ -425,9 +425,9 @@ func main() {
 	var promotedTags []api.ImageStreamTagReference
 	if err := config.OperateOnCIOperatorConfigDir(abs, func(cfg *api.ReleaseBuildConfiguration, metadata *config.Info) error {
 		for _, isTagRef := range release.PromotedTags(cfg) {
-			promotedTags = append(promotedTags, isTagRef)
-			if _, ok := opts.explains[isTagRef]; ok {
-				opts.explains[isTagRef] = cfg.Metadata.AsString()
+			promotedTags = append(promotedTags, isTagRef.ImageStreamTagReference)
+			if _, ok := opts.explains[isTagRef.ImageStreamTagReference]; ok {
+				opts.explains[isTagRef.ImageStreamTagReference] = cfg.Metadata.AsString()
 			}
 		}
 		return nil

@@ -423,11 +423,19 @@ func main() {
 		logrus.WithError(err).Fatal("failed to determine absolute CI Operator configuration path")
 	}
 	var promotedTags []api.ImageStreamTagReference
+	var ignoredCommitTags []*regexp.Regexp
 	if err := config.OperateOnCIOperatorConfigDir(abs, func(cfg *api.ReleaseBuildConfiguration, metadata *config.Info) error {
 		for _, isTagRef := range release.PromotedTags(cfg) {
 			promotedTags = append(promotedTags, isTagRef)
 			if _, ok := opts.explains[isTagRef]; ok {
 				opts.explains[isTagRef] = cfg.Metadata.AsString()
+			}
+			if cfg.PromotionConfiguration.TagByCommit {
+				ignoreRegex, err := regexp.Compile(fmt.Sprintf("%s/%s:[0-9a-f]{5,40}", isTagRef.Namespace, isTagRef.Name))
+				if err != nil {
+					return fmt.Errorf("could not create a regex for ignoring tagged-by-commit images for %s: %w", isTagRef.ISTagName(), err)
+				}
+				ignoredCommitTags = append(ignoredCommitTags, ignoreRegex)
 			}
 		}
 		return nil
@@ -520,7 +528,7 @@ func main() {
 		return
 	}
 
-	toDelete, imageStreamsWithPromotedTags, err := tagsToDelete(ctx, appCIClient, promotedTags, opts.ignoredImageStreamTags, imageStreamRefs)
+	toDelete, imageStreamsWithPromotedTags, err := tagsToDelete(ctx, appCIClient, promotedTags, append(opts.ignoredImageStreamTags, ignoredCommitTags...), imageStreamRefs)
 	if err != nil {
 		logrus.WithError(err).Fatal("could not get tags to delete")
 	}

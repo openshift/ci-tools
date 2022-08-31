@@ -779,26 +779,51 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 		return machineSetNamespace, machineSetName, machineName, fmt.Errorf("unable to get machineset %v: %#v", machineSetName, err)
 	}
 
-	for _, deletionAnnotationName := range []string{MachineDeleteAnnotationKey, OldMachineDeleteAnnotationKey} {
-		klog.Infof("Setting machine deletion annotation %v on machine %v for node %v", deletionAnnotationName, machineName, node.Name)
-		deletionAnnotationPatch := []interface{}{
+	// setting this Taint is the point of no return -- if successful, we will try to scale down indefinitely.
+	// This taint is set to work around a DNS bug where DNS pods need time to gracefully shutdown before a
+	// drain operation. Draining without a graceful termination period causes brief outages in DNS.
+	// https://issues.redhat.com/browse/OCPBUGS-488 is intended to fix this behavior.
+	err = p.setNoExecuteTaint(node.Name, podClass)
+	if err != nil {
+		return machineSetNamespace, machineSetName, machineName, fmt.Errorf("unable to set NoExecute node %v: %#v", node.Name, err)
+	}
+
+	klog.Infof("Sleeping to allow graceful DNS pod termination...")
+	time.Sleep(40 * time.Second)
+
+	attempt := 0
+	for {
+		if attempt > 0 {
+			time.Sleep(10 * time.Second)
+		}
+
+		klog.Infof("Setting machine deletion annotation on machine %v for node %v [attempt=%v]", machineName, node.Name, attempt)
+		deletionAnnotationsPatch := []interface{}{
 			map[string]interface{}{
 				"op":    "add",
-				"path":  "/metadata/annotations/" + strings.ReplaceAll(deletionAnnotationName, "/", "~1"),
+				"path":  "/metadata/annotations/" + strings.ReplaceAll(MachineDeleteAnnotationKey, "/", "~1"),
+				"value": "true",
+			},
+			map[string]interface{}{
+				"op":    "add",
+				"path":  "/metadata/annotations/" + strings.ReplaceAll(OldMachineDeleteAnnotationKey, "/", "~1"),
 				"value": "true",
 			},
 		}
 
-		deletionPayload, err := json.Marshal(deletionAnnotationPatch)
+		deletionPayload, err := json.Marshal(deletionAnnotationsPatch)
 		if err != nil {
-			return machineSetNamespace, machineSetName, machineName, fmt.Errorf("unable to marshal machine %v annotation deletion patch: %#v", machineName, err)
+			klog.Errorf("Unable to marshal machine %v annotation deletion patch: %#v", machineName, err)
+			continue
 		}
 
-		// setting this annotation is the point of no return -- if successful, we will try to scale down indefinitely
 		_, err = machineClient.Patch(p.context, machineName, types.JSONPatchType, deletionPayload, metav1.PatchOptions{})
 		if err != nil {
-			return machineSetNamespace, machineSetName, machineName, fmt.Errorf("unable to apply machine %v annotation %v deletion patch: %#v", machineName, deletionAnnotationName, err)
+			klog.Errorf("Unable to apply machine %v annotation %v deletion patch: %#v", machineName, MachineDeleteAnnotationKey, err)
+			continue
 		}
+
+		break
 	}
 
 	// We will now interact with the machineset for this pod class. Hold a lock until we successfully
@@ -806,7 +831,7 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 	nodeClassScaleDownLock[podClass].Lock()
 	defer nodeClassScaleDownLock[podClass].Unlock()
 
-	attempt := 0
+	attempt = 0
 	for {
 		if attempt > 0 {
 			time.Sleep(10 * time.Second)
@@ -960,10 +985,10 @@ func (p* Prioritization) setNodeAvoidanceState(node *corev1.Node, podClass PodCl
 
 	// PreferNoSchedule is implemented as a custom taint. Depending on
 	// caller's request, add or remove that taint.
-	foundIndex := -1
+	foundPreferNoScheduleIndex := -1
 	for i, taint := range nodeTaints {
 		if taint.Key == CiWorkloadPreferNoScheduleTaintName {
-			foundIndex = i
+			foundPreferNoScheduleIndex = i
 			if !node.Spec.Unschedulable {
 				foundEffect = corev1.TaintEffectPreferNoSchedule
 			}
@@ -972,7 +997,7 @@ func (p* Prioritization) setNodeAvoidanceState(node *corev1.Node, podClass PodCl
 
 	modified := false // whether there is reason to patch the node taints
 
-	if foundIndex == -1 && desiredEffect != TaintEffectNone {
+	if foundPreferNoScheduleIndex == -1 && desiredEffect != TaintEffectNone {
 		// Both non-none avoidance levels should set the PreferNoSchedule taint.
 		nodeTaints = append(nodeTaints, corev1.Taint{
 			Key:    CiWorkloadPreferNoScheduleTaintName,
@@ -982,9 +1007,9 @@ func (p* Prioritization) setNodeAvoidanceState(node *corev1.Node, podClass PodCl
 		modified = true
 	}
 
-	if foundIndex >= 0 && desiredEffect == TaintEffectNone {
+	if foundPreferNoScheduleIndex >= 0 && desiredEffect == TaintEffectNone {
 		// remove our taint from the list
-		nodeTaints = append(nodeTaints[:foundIndex], nodeTaints[foundIndex+1:]...)
+		nodeTaints = append(nodeTaints[:foundPreferNoScheduleIndex], nodeTaints[foundPreferNoScheduleIndex+1:]...)
 		modified = true
 	}
 
@@ -1020,6 +1045,63 @@ func (p* Prioritization) setNodeAvoidanceState(node *corev1.Node, podClass PodCl
 	return nil
 }
 
+
+func (p* Prioritization) setNoExecuteTaint(nodeName string, podClass PodClass) error {
+	nodeObj, exists, err := nodesInformer.GetIndexer().GetByKey(nodeName)
+
+	if err != nil {
+		return fmt.Errorf("error getting node to set NoExecute: %v", err)
+	}
+
+	if !exists {
+		return fmt.Errorf("node targeted for NoExecute no longer exists")
+	}
+
+	node := nodeObj.(*corev1.Node)
+	nodeTaints := node.Spec.Taints
+	if nodeTaints == nil {
+		nodeTaints = make([]corev1.Taint, 0)
+	}
+
+	// See if NoExecute is already set
+	for _, taint := range nodeTaints {
+		if taint.Key == CiWorkloadPreferNoExecuteTaintName {
+			// Nothing to do if the taint exists
+			return nil
+		}
+	}
+
+	nodeTaints = append(nodeTaints, corev1.Taint{
+		Key:    CiWorkloadPreferNoExecuteTaintName,
+		Value:  fmt.Sprintf("%v", podClass),
+		Effect: corev1.TaintEffectNoExecute,
+	})
+
+	taintMap := map[string][]corev1.Taint {
+		"taints": nodeTaints,
+	}
+	unstructuredTaints, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&taintMap)
+	if err != nil {
+		return fmt.Errorf("error decoding modified taints to unstructured data: %v", err)
+	}
+
+	patch := map[string]interface{}{
+		"op":    "add",
+		"path":  "/spec/taints",
+		"value": unstructuredTaints["taints"],
+	}
+
+	patchEntries := make([]map[string]interface{}, 0)
+	patchEntries = append(patchEntries, patch)
+
+	payloadBytes, _ := json.Marshal(patchEntries)
+	_, err = p.k8sClientSet.CoreV1().Nodes().Patch(p.context, node.Name, types.JSONPatchType, payloadBytes, metav1.PatchOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to change set NoExecute taint for node %v: %#v", node.Name, err)
+	}
+
+	return nil
+}
 
 
 func (p* Prioritization) findHostnamesToPreclude(podClass PodClass) ([]string, error) {

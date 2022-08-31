@@ -30,6 +30,7 @@ import (
 const (
 	CiWorkloadLabelName                 = "ci-workload"
 	CiWorkloadPreferNoScheduleTaintName = "ci-workload-avoid"
+	CiWorkloadPreferNoExecuteTaintName  = "ci-workload-evict"
 	CiWorkloadNamespaceLabelName        = "ci-workload-namespace"
 )
 

@@ -415,6 +415,7 @@ periodic-ci-openshift-release-master-nightly-4.10-e2e-gcp-fips-serial
 periodic-ci-openshift-release-master-nightly-4.10-e2e-gcp-libvirt-cert-rotation
 periodic-ci-openshift-release-master-nightly-4.10-e2e-gcp-rt
 periodic-ci-openshift-release-master-nightly-4.10-e2e-gcp-upi
+periodic-ci-openshift-release-master-nightly-4.10-e2e-ibmcloud-csi
 periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi
 periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi-bm
 periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi-compact

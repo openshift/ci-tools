@@ -19,11 +19,6 @@ spec:
       machine.openshift.io/cluster-api-machineset: build03-vqlvf-ci-tests-worker-us-east-1a
   template:
     metadata:
-      annotations:
-        # By the time we delete a machine, there should be nothing we care about.
-        # The only times this is violated is pods in weird states. Ignore them.
-        # https://github.com/openshift/machine-api-operator/blob/master/FAQ.md#i-want-to-skip-draining-when-i-delete-a-machine
-        machine.openshift.io/exclude-node-draining: "true"
       labels:
         machine.openshift.io/cluster-api-cluster: build03-vqlvf
         machine.openshift.io/cluster-api-machine-role: worker
@@ -67,6 +62,10 @@ spec:
           tags:
           - name: kubernetes.io/cluster/build03-vqlvf
             value: owned
+          - name: ci-cluster
+            value: build03
+          - name: ci-workload
+            value: tests
           userDataSecret:
             name: worker-user-data
       taints:

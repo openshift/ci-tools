@@ -788,7 +788,7 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 		return machineSetNamespace, machineSetName, machineName, fmt.Errorf("unable to set NoExecute node %v: %#v", node.Name, err)
 	}
 
-	klog.Infof("Sleeping to allow graceful DNS pod termination...")
+	klog.Infof("Sleeping to allow graceful DNS pod termination on %v / %v", machineName, node.Name)
 	time.Sleep(40 * time.Second)
 
 	attempt := 0

@@ -1,4 +1,3 @@
----
 apiVersion: machine.openshift.io/v1beta1
 kind: MachineSet
 metadata:
@@ -9,35 +8,40 @@ metadata:
     machine.openshift.io/vCPU: "16"
   labels:
     machine.openshift.io/cluster-api-cluster: build01-9hdwj
-  name: build01-9hdwj-ci-c6gdbuilds-worker-us-east-1a
+  name: build01-9hdwj-ci-builds-spot-worker-us-east-1a
   namespace: openshift-machine-api
 spec:
   deletePolicy: Oldest
   selector:
     matchLabels:
       machine.openshift.io/cluster-api-cluster: build01-9hdwj
-      machine.openshift.io/cluster-api-machineset: build01-9hdwj-ci-c6gdbuilds-worker-us-east-1a
+      machine.openshift.io/cluster-api-machineset: build01-9hdwj-ci-builds-spot-worker-us-east-1a
   template:
     metadata:
       annotations:
-        # By the time we delete a machine, there should be nothing we care about.
-        # The only times this is violated is pods in weird states. Ignore them.
-        # https://github.com/openshift/machine-api-operator/blob/master/FAQ.md#i-want-to-skip-draining-when-i-delete-a-machine
-        machine.openshift.io/exclude-node-draining: "true"
+        ci-scheduling.ci.openshift.io/keep-node: "true"
       labels:
         machine.openshift.io/cluster-api-cluster: build01-9hdwj
         machine.openshift.io/cluster-api-machine-role: worker
         machine.openshift.io/cluster-api-machine-type: worker
-        machine.openshift.io/cluster-api-machineset: build01-9hdwj-ci-c6gdbuilds-worker-us-east-1a
+        machine.openshift.io/cluster-api-machineset: build01-9hdwj-ci-builds-spot-worker-us-east-1a
     spec:
       metadata:
         labels:
-          ci-workload: c6gdbuilds
+          ci-workload: builds
       providerSpec:
         value:
+          spotMarketOptions: {}
           ami:
             id: ami-06f85a7940faa3217
           apiVersion: awsproviderconfig.openshift.io/v1beta1
+          blockDevices:
+          - ebs:
+              iops: 5000
+              # Observed disk pressure for builds at 100G
+              volumeSize: 200
+              volumeType: gp3
+              throughput: 500
           credentialsSecret:
             name: aws-cloud-credentials
           deviceIndex: 0
@@ -62,9 +66,13 @@ spec:
           tags:
           - name: kubernetes.io/cluster/build01-9hdwj
             value: owned
+          - name: ci-cluster
+            value: build01
+          - name: ci-workload
+            value: spot-builds
           userDataSecret:
             name: worker-user-data
       taints:
       - effect: NoSchedule
-        key: node-role.kubernetes.io/ci-c6gdbuilds-worker
-        value: ci-c6gdbuilds-worker
+        key: node-role.kubernetes.io/ci-builds-worker
+        value: ci-builds-worker

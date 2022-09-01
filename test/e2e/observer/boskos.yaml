@@ -1,6 +1,0 @@
----
-resources:
-- type: aws-quota-slice
-  state: free
-  min-count: 1
-  max-count: 1

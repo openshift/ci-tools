@@ -408,7 +408,7 @@ func TestGenerateJobs(t *testing.T) {
 				},
 			},
 			repoInfo: &ProwgenInfo{
-				Config: config.Prowgen{DisabledRehearsals: []string{"unit", "periodic-unit"}},
+				Config: config.Prowgen{Rehearsals: config.Rehearsals{DisabledRehearsals: []string{"unit", "periodic-unit"}}},
 				Metadata: ciop.Metadata{
 					Org:    "organization",
 					Repo:   "repository",
@@ -424,7 +424,7 @@ func TestGenerateJobs(t *testing.T) {
 				},
 			},
 			repoInfo: &ProwgenInfo{
-				Config: config.Prowgen{DisableAllRehearsals: true},
+				Config: config.Prowgen{Rehearsals: config.Rehearsals{DisableAll: true}},
 				Metadata: ciop.Metadata{
 					Org:    "organization",
 					Repo:   "repository",

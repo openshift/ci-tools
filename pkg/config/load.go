@@ -31,9 +31,14 @@ type Prowgen struct {
 	// are private.
 	// This field has no effect if private is not set.
 	Expose bool `json:"expose,omitempty"`
-	// DisableAllRehearsals indicates that all jobs will not have their "can-be-rehearsed" label set
+	// Rehearsals declares any disabled rehearsals for jobs
+	Rehearsals Rehearsals `json:"rehearsals,omitempty"`
+}
+
+type Rehearsals struct {
+	// DisableAll indicates that all jobs will not have their "can-be-rehearsed" label set
 	// and therefore will not be picked up for rehearsals.
-	DisableAllRehearsals bool `json:"disable_all_rehearsals,omitempty"`
+	DisableAll bool `json:"disable_all,omitempty"`
 	// DisabledRehearsals contains a list of jobs that will not have their "can-be-rehearsed" label set
 	// and therefore will not be picked up for rehearsals.
 	DisabledRehearsals []string `json:"disabled_rehearsals,omitempty"`

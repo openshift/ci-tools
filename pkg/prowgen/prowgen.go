@@ -43,11 +43,12 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	presubmits := map[string][]prowconfig.Presubmit{}
 	postsubmits := map[string][]prowconfig.Postsubmit{}
 	var periodics []prowconfig.Periodic
-	disabledRehearsals := sets.NewString(info.Config.DisabledRehearsals...)
+	rehearsals := info.Config.Rehearsals
+	disabledRehearsals := sets.NewString(rehearsals.DisabledRehearsals...)
 
 	for _, element := range configSpec.Tests {
 		g := NewProwJobBaseBuilderForTest(configSpec, info, NewCiOperatorPodSpecGenerator(), element)
-		disableRehearsal := info.Config.DisableAllRehearsals || disabledRehearsals.Has(element.As)
+		disableRehearsal := rehearsals.DisableAll || disabledRehearsals.Has(element.As)
 
 		if element.Cron != nil || element.Interval != nil || element.ReleaseController {
 			cron := ""

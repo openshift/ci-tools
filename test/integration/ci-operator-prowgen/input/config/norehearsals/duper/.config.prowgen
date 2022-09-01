@@ -1,1 +1,2 @@
-disable_all_rehearsals: true
+rehearsals:
+    disable_all: true

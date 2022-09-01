@@ -1,2 +1,3 @@
-disabled_rehearsals:
-- unit
+rehearsals:
+    disabled_rehearsals:
+    - unit

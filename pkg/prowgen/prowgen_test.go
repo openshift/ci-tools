@@ -164,12 +164,10 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 func TestGeneratePostSubmitForTest(t *testing.T) {
 	testname := "postsubmit"
 	tests := []struct {
-		name              string
-		repoInfo          *ProwgenInfo
-		jobRelease        string
-		runIfChanged      string
-		skipIfOnlyChanged string
-		clone             bool
+		name           string
+		repoInfo       *ProwgenInfo
+		jobRelease     string
+		generateOption generatePostsubmitOption
 	}{
 		{
 			name: "Lowercase org repo and branch",
@@ -194,7 +192,9 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				Repo:   "repository",
 				Branch: "branch",
 			}},
-			runIfChanged: "^README.md$",
+			generateOption: func(options *generatePostsubmitOptions) {
+				options.runIfChanged = "^README.md$"
+			},
 		},
 		{
 			name: "postsubmit with skip_if_only_changed",
@@ -203,14 +203,20 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				Repo:   "repository",
 				Branch: "branch",
 			}},
-			skipIfOnlyChanged: "^README.md$",
+			generateOption: func(options *generatePostsubmitOptions) {
+				options.skipIfOnlyChanged = "^README.md$"
+			},
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			generateOption := tc.generateOption
+			if generateOption == nil {
+				generateOption = func(options *generatePostsubmitOptions) {}
+			}
 			test := ciop.TestStepConfiguration{As: testname}
 			jobBaseGen := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo, newFakePodSpecBuilder(), test)
-			testhelper.CompareWithFixture(t, generatePostsubmitForTest(jobBaseGen, tc.repoInfo, tc.runIfChanged, tc.skipIfOnlyChanged))
+			testhelper.CompareWithFixture(t, generatePostsubmitForTest(jobBaseGen, tc.repoInfo, generateOption))
 		})
 	}
 }

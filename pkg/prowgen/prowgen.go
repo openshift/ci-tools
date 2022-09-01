@@ -67,7 +67,10 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			})
 			periodics = append(periodics, *periodic)
 		} else if element.Postsubmit {
-			postsubmit := generatePostsubmitForTest(g, info, element.RunIfChanged, element.SkipIfOnlyChanged)
+			postsubmit := generatePostsubmitForTest(g, info, func(options *generatePostsubmitOptions) {
+				options.runIfChanged = element.RunIfChanged
+				options.skipIfOnlyChanged = element.SkipIfOnlyChanged
+			})
 			postsubmit.MaxConcurrency = 1
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
 		} else {
@@ -104,7 +107,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		if configSpec.PromotionConfiguration != nil {
 			jobBaseGen = newJobBaseBuilder().TestName("images")
 			jobBaseGen.PodSpec.Add(Promotion(), Targets(imageTargets.List()...))
-			postsubmit := generatePostsubmitForTest(jobBaseGen, info, "", "")
+			postsubmit := generatePostsubmitForTest(jobBaseGen, info)
 			postsubmit.MaxConcurrency = 1
 			if postsubmit.Labels == nil {
 				postsubmit.Labels = map[string]string{}
@@ -184,15 +187,27 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 	}
 }
 
-func generatePostsubmitForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenInfo, runIfChanged, skipIfOnlyChanged string) *prowconfig.Postsubmit {
+type generatePostsubmitOptions struct {
+	runIfChanged      string
+	skipIfOnlyChanged string
+}
+
+type generatePostsubmitOption func(options *generatePostsubmitOptions)
+
+func generatePostsubmitForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenInfo, options ...generatePostsubmitOption) *prowconfig.Postsubmit {
+	opts := &generatePostsubmitOptions{}
+	for _, opt := range options {
+		opt(opts)
+	}
+
 	base := jobBaseBuilder.Build(jc.PostsubmitPrefix)
-	alwaysRun := runIfChanged == "" && skipIfOnlyChanged == ""
+	alwaysRun := opts.runIfChanged == "" && opts.skipIfOnlyChanged == ""
 	return &prowconfig.Postsubmit{
 		JobBase:   base,
 		AlwaysRun: &alwaysRun,
 		RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{
-			RunIfChanged:      runIfChanged,
-			SkipIfOnlyChanged: skipIfOnlyChanged,
+			RunIfChanged:      opts.runIfChanged,
+			SkipIfOnlyChanged: opts.skipIfOnlyChanged,
 		},
 		Brancher: prowconfig.Brancher{Branches: []string{jc.ExactlyBranch(info.Branch)}},
 	}

@@ -59,9 +59,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			if element.Interval != nil {
 				interval = *element.Interval
 			}
-			periodic := GeneratePeriodicForTest(g, info, cron, interval, FromConfigSpec(configSpec), func(options *GeneratePeriodicOptions) {
-				options.releaseController = element.ReleaseController
-				options.disableRehearsal = disableRehearsal
+			periodic := GeneratePeriodicForTest(g, info, FromConfigSpec(configSpec), func(options *GeneratePeriodicOptions) {
+				options.Cron = cron
+				options.Interval = interval
+				options.ReleaseController = element.ReleaseController
+				options.DisableRehearsal = disableRehearsal
 			})
 			periodics = append(periodics, *periodic)
 		} else if element.Postsubmit {
@@ -209,28 +211,31 @@ func hashDailyCron(job string) string {
 }
 
 type GeneratePeriodicOptions struct {
-	releaseController bool
-	pathAlias         *string
-	disableRehearsal  bool
+	Interval          string
+	Cron              string
+	ReleaseController bool
+	PathAlias         *string
+	DisableRehearsal  bool
 }
 
 type GeneratePeriodicOption func(options *GeneratePeriodicOptions)
 
 func FromConfigSpec(configSpec *cioperatorapi.ReleaseBuildConfiguration) GeneratePeriodicOption {
 	return func(options *GeneratePeriodicOptions) {
-		options.pathAlias = configSpec.CanonicalGoRepository
+		options.PathAlias = configSpec.CanonicalGoRepository
 	}
 }
 
-func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenInfo, cron string, interval string, options ...GeneratePeriodicOption) *prowconfig.Periodic {
+func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenInfo, options ...GeneratePeriodicOption) *prowconfig.Periodic {
 	opts := &GeneratePeriodicOptions{}
 	for _, opt := range options {
 		opt(opts)
 	}
 
 	// We are resetting PathAlias because it will be set on the `ExtraRefs` item
-	base := jobBaseBuilder.Rehearsable(!opts.disableRehearsal).PathAlias("").Build(jc.PeriodicPrefix)
+	base := jobBaseBuilder.Rehearsable(!opts.DisableRehearsal).PathAlias("").Build(jc.PeriodicPrefix)
 
+	cron := opts.Cron
 	if cron == "@daily" {
 		cron = hashDailyCron(base.Name)
 	}
@@ -243,18 +248,18 @@ func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenIn
 		Repo:    info.Repo,
 		BaseRef: info.Branch,
 	}
-	if opts.pathAlias != nil {
-		ref.PathAlias = *opts.pathAlias
+	if opts.PathAlias != nil {
+		ref.PathAlias = *opts.PathAlias
 	}
 	base.ExtraRefs = append([]prowv1.Refs{ref}, base.ExtraRefs...)
-	if opts.releaseController {
-		interval = ""
+	if opts.ReleaseController {
+		opts.Interval = ""
 		cron = "@yearly"
 		base.Labels[jc.ReleaseControllerLabel] = jc.ReleaseControllerValue
 	}
 	return &prowconfig.Periodic{
 		JobBase:  base,
 		Cron:     cron,
-		Interval: interval,
+		Interval: opts.Interval,
 	}
 }

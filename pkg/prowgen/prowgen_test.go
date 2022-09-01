@@ -112,35 +112,39 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 		repoInfo       *ProwgenInfo
 		jobRelease     string
 		clone          bool
-		cron           string
-		interval       string
 		generateOption GeneratePeriodicOption
 	}{
 		{
 			description: "periodic for standard test",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			cron:        "@yearly",
+			generateOption: func(options *GeneratePeriodicOptions) {
+				options.Cron = "@yearly"
+			},
 		},
 		{
 			description: "periodic for a test in a variant config",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"}},
-			cron:        "@yearly",
+			generateOption: func(options *GeneratePeriodicOptions) {
+				options.Cron = "@yearly"
+			},
 		},
 		{
 			description: "periodic using interval",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			interval:    "6h",
+			generateOption: func(options *GeneratePeriodicOptions) {
+				options.Interval = "6h"
+			},
 		},
 		{
 			description: "periodic with disabled rehearsal",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			cron:        "@yearly",
 			generateOption: func(options *GeneratePeriodicOptions) {
-				options.disableRehearsal = true
+				options.DisableRehearsal = true
+				options.Cron = "@yearly"
 			},
 		},
 	}
@@ -152,7 +156,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 			}
 			test := ciop.TestStepConfiguration{As: tc.test}
 			jobBaseGen := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo, newFakePodSpecBuilder(), test)
-			testhelper.CompareWithFixture(t, GeneratePeriodicForTest(jobBaseGen, tc.repoInfo, tc.cron, tc.interval, generateOption))
+			testhelper.CompareWithFixture(t, GeneratePeriodicForTest(jobBaseGen, tc.repoInfo, generateOption))
 		})
 	}
 }

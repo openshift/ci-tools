@@ -1,3 +1,4 @@
+---
 apiVersion: machine.openshift.io/v1beta1
 kind: MachineSet
 metadata:
@@ -18,8 +19,6 @@ spec:
       machine.openshift.io/cluster-api-machineset: build01-9hdwj-ci-builds-spot-worker-us-east-1a
   template:
     metadata:
-      annotations:
-        ci-scheduling.ci.openshift.io/keep-node: "true"
       labels:
         machine.openshift.io/cluster-api-cluster: build01-9hdwj
         machine.openshift.io/cluster-api-machine-role: worker
@@ -29,6 +28,8 @@ spec:
       metadata:
         labels:
           ci-workload: builds
+          # During testing, prevent scale down of these nodes by the webhook
+          ci-scheduling.ci.openshift.io/keep-node: "true"
       providerSpec:
         value:
           spotMarketOptions: {}
@@ -76,3 +77,16 @@ spec:
       - effect: NoSchedule
         key: node-role.kubernetes.io/ci-builds-worker
         value: ci-builds-worker
+---
+apiVersion: autoscaling.openshift.io/v1beta1
+kind: MachineAutoscaler
+metadata:
+  name: build01-9hdwj-ci-builds-spot-worker-us-east-1a
+  namespace: openshift-machine-api
+spec:
+  maxReplicas: 3
+  minReplicas: 3
+  scaleTargetRef:
+    apiVersion: machine.openshift.io/v1beta1
+    kind: MachineSet
+    name: build01-9hdwj-ci-builds-spot-worker-us-east-1a

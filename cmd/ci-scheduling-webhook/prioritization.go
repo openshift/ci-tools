@@ -48,6 +48,8 @@ const (
 	// CiSchedulingKeepNodeAnnotationKey is an annotation with "true" / "false" value which
 	// can be used by humans to prevent specific nodes from being scaled down (or being avoided).
 	CiSchedulingKeepNodeAnnotationKey = "ci-scheduling.ci.openshift.io/keep-node"
+	// Also available as a label applicable by machineset
+	CiSchedulingKeepNodeLabelKey = "ci-scheduling.ci.openshift.io/keep-node"
 
 	// NodeMachineConfigurationStateAnnotationKey is an annotation machine the machine config
 	// controller describing whether the machine is being updated or node.
@@ -269,8 +271,19 @@ func (p* Prioritization) getWorkloadNodes(podClass PodClass, schedulableNodesOnl
 			}
 		}
 
+		if node.Labels != nil {
+			if val, ok := node.Labels[CiSchedulingKeepNodeLabelKey]; ok {
+				keepNode, _ := strconv.ParseBool(val)
+				if keepNode {
+					// If the node should be kept, hide it from all calculations about workloads.
+					// This prevents it from being scaled down or avoided.
+					continue
+				}
+			}
+		}
+
 		if now.Sub(node.CreationTimestamp.Time) < minNodeAge {
-			// node does not meat caller's criteria
+			// node does not meet caller's criteria
 			continue
 		}
 

@@ -27,13 +27,13 @@ func IsPromotionJob(jobLabels map[string]string) bool {
 // ReleaseBuildConfiguration describes how release
 // artifacts are built from a repository of source
 // code. The configuration is made up of two parts:
-//  - minimal fields that allow the user to buy into
-//    our normal conventions without worrying about
-//    how the pipeline flows. Use these preferentially
-//    for new projects with simple/conventional build
-//    configurations.
-//  - raw steps that can be used to create custom and
-//    fine-grained build flows
+//   - minimal fields that allow the user to buy into
+//     our normal conventions without worrying about
+//     how the pipeline flows. Use these preferentially
+//     for new projects with simple/conventional build
+//     configurations.
+//   - raw steps that can be used to create custom and
+//     fine-grained build flows
 type ReleaseBuildConfiguration struct {
 	Metadata Metadata `json:"zz_generated_metadata"`
 

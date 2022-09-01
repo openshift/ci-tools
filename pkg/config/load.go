@@ -31,6 +31,17 @@ type Prowgen struct {
 	// are private.
 	// This field has no effect if private is not set.
 	Expose bool `json:"expose,omitempty"`
+	// Rehearsals declares any disabled rehearsals for jobs
+	Rehearsals Rehearsals `json:"rehearsals,omitempty"`
+}
+
+type Rehearsals struct {
+	// DisableAll indicates that all jobs will not have their "can-be-rehearsed" label set
+	// and therefore will not be picked up for rehearsals.
+	DisableAll bool `json:"disable_all,omitempty"`
+	// DisabledRehearsals contains a list of jobs that will not have their "can-be-rehearsed" label set
+	// and therefore will not be picked up for rehearsals.
+	DisabledRehearsals []string `json:"disabled_rehearsals,omitempty"`
 }
 
 func readCiOperatorConfig(configFilePath string, info Info) (*cioperatorapi.ReleaseBuildConfiguration, error) {
@@ -120,13 +131,13 @@ func isConfigFile(info fs.DirEntry) bool {
 // isMountSpecialFile identifies special files in Kubernetes mounts
 // The general structure of a mount is:
 //
-//     config
-//     ├── ..2019_11_15_19_57_20.547184898
-//     │   ├── foo-bar-master.yaml
-//     │   └── super-duper-master.yaml
-//     ├── ..data -> ..2019_11_15_19_57_20.547184898
-//     ├── foo-bar-master.yaml -> ..data/foo-bar-master.yaml
-//     └── super-duper-master.yaml -> ..data/super-duper-master.yaml
+//	config
+//	├── ..2019_11_15_19_57_20.547184898
+//	│   ├── foo-bar-master.yaml
+//	│   └── super-duper-master.yaml
+//	├── ..data -> ..2019_11_15_19_57_20.547184898
+//	├── foo-bar-master.yaml -> ..data/foo-bar-master.yaml
+//	└── super-duper-master.yaml -> ..data/super-duper-master.yaml
 //
 // In a recursive directory traversal, paths starting with `..` are skipped so
 // files are not processed twice.

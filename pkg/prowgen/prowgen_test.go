@@ -10,6 +10,7 @@ import (
 	utilpointer "k8s.io/utils/pointer"
 
 	ciop "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -41,13 +42,11 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 	tests := []struct {
 		description string
 
-		test              string
-		repoInfo          *ProwgenInfo
-		jobRelease        string
-		clone             bool
-		runIfChanged      string
-		skipIfOnlyChanged string
-		optional          bool
+		test           string
+		repoInfo       *ProwgenInfo
+		jobRelease     string
+		clone          bool
+		generateOption generatePresubmitOption
 	}{
 		{
 			description: "presubmit for standard test",
@@ -60,29 +59,47 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"}},
 		},
 		{
-			description:  "presubmit with run_if_changed",
-			test:         "testname",
-			repoInfo:     &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			runIfChanged: "^README.md$",
+			description: "presubmit with run_if_changed",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			generateOption: func(options *generatePresubmitOptions) {
+				options.runIfChanged = "^README.md$"
+			},
 		},
 		{
-			description:       "presubmit with skip_if_only_changed",
-			test:              "testname",
-			repoInfo:          &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			skipIfOnlyChanged: "^README.md$",
+			description: "presubmit with skip_if_only_changed",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			generateOption: func(options *generatePresubmitOptions) {
+				options.skipIfOnlyChanged = "^README.md$"
+			},
 		},
 		{
 			description: "optional presubmit",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			optional:    true,
+			generateOption: func(options *generatePresubmitOptions) {
+				options.optional = true
+			},
+		},
+		{
+			description: "rehearsal disabled",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			generateOption: func(options *generatePresubmitOptions) {
+				options.disableRehearsal = true
+			},
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
+			generateOption := tc.generateOption
+			if generateOption == nil {
+				generateOption = func(options *generatePresubmitOptions) {}
+			}
 			test := ciop.TestStepConfiguration{As: tc.test}
 			jobBaseGen := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo, newFakePodSpecBuilder(), test)
-			testhelper.CompareWithFixture(t, generatePresubmitForTest(jobBaseGen, tc.test, tc.repoInfo, tc.runIfChanged, tc.skipIfOnlyChanged, tc.optional))
+			testhelper.CompareWithFixture(t, generatePresubmitForTest(jobBaseGen, tc.test, tc.repoInfo, generateOption))
 		})
 	}
 }
@@ -91,38 +108,55 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 	tests := []struct {
 		description string
 
-		test              string
-		repoInfo          *ProwgenInfo
-		jobRelease        string
-		clone             bool
-		cron              string
-		interval          string
-		releaseController bool
+		test           string
+		repoInfo       *ProwgenInfo
+		jobRelease     string
+		clone          bool
+		generateOption GeneratePeriodicOption
 	}{
 		{
 			description: "periodic for standard test",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			cron:        "@yearly",
+			generateOption: func(options *GeneratePeriodicOptions) {
+				options.Cron = "@yearly"
+			},
 		},
 		{
 			description: "periodic for a test in a variant config",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"}},
-			cron:        "@yearly",
+			generateOption: func(options *GeneratePeriodicOptions) {
+				options.Cron = "@yearly"
+			},
 		},
 		{
 			description: "periodic using interval",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			interval:    "6h",
+			generateOption: func(options *GeneratePeriodicOptions) {
+				options.Interval = "6h"
+			},
+		},
+		{
+			description: "periodic with disabled rehearsal",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			generateOption: func(options *GeneratePeriodicOptions) {
+				options.DisableRehearsal = true
+				options.Cron = "@yearly"
+			},
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
+			generateOption := tc.generateOption
+			if generateOption == nil {
+				generateOption = func(options *GeneratePeriodicOptions) {}
+			}
 			test := ciop.TestStepConfiguration{As: tc.test}
 			jobBaseGen := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo, newFakePodSpecBuilder(), test)
-			testhelper.CompareWithFixture(t, GeneratePeriodicForTest(jobBaseGen, tc.repoInfo, tc.cron, tc.interval, tc.releaseController, nil))
+			testhelper.CompareWithFixture(t, GeneratePeriodicForTest(jobBaseGen, tc.repoInfo, generateOption))
 		})
 	}
 }
@@ -130,12 +164,10 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 func TestGeneratePostSubmitForTest(t *testing.T) {
 	testname := "postsubmit"
 	tests := []struct {
-		name              string
-		repoInfo          *ProwgenInfo
-		jobRelease        string
-		runIfChanged      string
-		skipIfOnlyChanged string
-		clone             bool
+		name           string
+		repoInfo       *ProwgenInfo
+		jobRelease     string
+		generateOption generatePostsubmitOption
 	}{
 		{
 			name: "Lowercase org repo and branch",
@@ -160,7 +192,9 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				Repo:   "repository",
 				Branch: "branch",
 			}},
-			runIfChanged: "^README.md$",
+			generateOption: func(options *generatePostsubmitOptions) {
+				options.runIfChanged = "^README.md$"
+			},
 		},
 		{
 			name: "postsubmit with skip_if_only_changed",
@@ -169,14 +203,20 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				Repo:   "repository",
 				Branch: "branch",
 			}},
-			skipIfOnlyChanged: "^README.md$",
+			generateOption: func(options *generatePostsubmitOptions) {
+				options.skipIfOnlyChanged = "^README.md$"
+			},
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			generateOption := tc.generateOption
+			if generateOption == nil {
+				generateOption = func(options *generatePostsubmitOptions) {}
+			}
 			test := ciop.TestStepConfiguration{As: testname}
 			jobBaseGen := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo, newFakePodSpecBuilder(), test)
-			testhelper.CompareWithFixture(t, generatePostsubmitForTest(jobBaseGen, tc.repoInfo, tc.runIfChanged, tc.skipIfOnlyChanged))
+			testhelper.CompareWithFixture(t, generatePostsubmitForTest(jobBaseGen, tc.repoInfo, generateOption))
 		})
 	}
 }
@@ -345,7 +385,7 @@ func TestGenerateJobs(t *testing.T) {
 			id: "cluster label for periodic",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
-					{As: "unit", Cron: utilpointer.StringPtr(cron), Cluster: "build01", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "unit", Cron: utilpointer.String(cron), Cluster: "build01", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
 				},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
@@ -366,6 +406,40 @@ func TestGenerateJobs(t *testing.T) {
 				Repo:   "repository",
 				Branch: "branch",
 			}},
+		},
+		{
+			id: "disabled rehearsals at job level",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "lint", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "periodic-unit", Cron: utilpointer.String(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "periodic-lint", Cron: utilpointer.String(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{
+				Config: config.Prowgen{Rehearsals: config.Rehearsals{DisabledRehearsals: []string{"unit", "periodic-unit"}}},
+				Metadata: ciop.Metadata{
+					Org:    "organization",
+					Repo:   "repository",
+					Branch: "branch",
+				}},
+		},
+		{
+			id: "disabled rehearsals at repo level",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "periodic-unit", Cron: utilpointer.String(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{
+				Config: config.Prowgen{Rehearsals: config.Rehearsals{DisableAll: true}},
+				Metadata: ciop.Metadata{
+					Org:    "organization",
+					Repo:   "repository",
+					Branch: "branch",
+				}},
 		},
 	}
 

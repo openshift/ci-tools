@@ -1,0 +1,15 @@
+pr1:
+  last_considered_time: "2022-08-18T00:00:00Z"
+  pr_sha: sha1
+  retests_for_base_sha: 2
+  retests_for_pr_sha: 3
+pr3:
+  last_considered_time: "2022-08-17T23:59:00Z"
+  pr_sha: sha2
+  retests_for_base_sha: 1
+  retests_for_pr_sha: 3
+prOld:
+  last_considered_time: "2021-08-17T23:59:00Z"
+  pr_sha: sha2
+  retests_for_base_sha: 1
+  retests_for_pr_sha: 3

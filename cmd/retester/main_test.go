@@ -95,7 +95,7 @@ func TestValidate(t *testing.T) {
 				interval:       time.Hour,
 				cacheRecordAge: sevenDays,
 			},
-			expected: errors.New("config file is required"),
+			expected: errors.New("--config-file is required"),
 		},
 		{
 			name: "no-config-path",
@@ -135,18 +135,18 @@ func TestComplete(t *testing.T) {
 				intervalRaw:       "wrong format",
 				cacheRecordAgeRaw: "168h",
 			},
-			expected: errors.New("invalid interval"),
+			expected: errors.New("invalid --interval: time: invalid duration \"wrong format\""),
 		}, {
 			name: "empty",
 			o: options{
-				intervalRaw:       "1h",
+				intervalRaw: "1h",
 			},
-			expected: errors.New("invalid cache record age"),
+			expected: errors.New("invalid --cache-record-age: time: invalid duration \"\""),
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.o.Complete()
+			err := tc.o.complete()
 			if diff := cmp.Diff(tc.expected, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("Error differs from expected:\n%s", diff)
 			}

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"time"
 
@@ -42,7 +42,7 @@ func (o *options) Validate() error {
 		}
 	}
 	if o.configFile == "" {
-		return errors.New("config file is required")
+		return fmt.Errorf("--config-file is required")
 	}
 	return nil
 }
@@ -84,7 +84,7 @@ func gatherOptions() options {
 
 func main() {
 	o := gatherOptions()
-	if err := o.Complete(); err != nil {
+	if err := o.complete(); err != nil {
 		logrus.WithError(err).Fatal("failed to complete options")
 	}
 	if err := o.Validate(); err != nil {

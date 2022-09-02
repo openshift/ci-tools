@@ -592,12 +592,10 @@ func TestPrUrl(t *testing.T) {
 		}{Name: "repo", Owner: struct{ Login githubv4.String }{Login: "org"}},
 	}
 	expected := "https://github.com/org/repo/pull/1234"
-	t.Run("basic case", func(t *testing.T) {
-		actual := prUrl(pr)
-		if diff := cmp.Diff(expected, actual); diff != "" {
-			t.Errorf("basic case differs from expected:\n%s", diff)
-		}
-	})
+	actual := prUrl(pr)
+	if diff := cmp.Diff(expected, actual); diff != "" {
+		t.Errorf("basic case differs from expected:\n%s", diff)
+	}
 }
 
 func TestPrKey(t *testing.T) {
@@ -611,12 +609,10 @@ func TestPrKey(t *testing.T) {
 		}{Name: "repo", NameWithOwner: "org/repo", Owner: struct{ Login githubv4.String }{Login: "org"}},
 	}
 	expected := "org/repo#1234"
-	t.Run("basic case", func(t *testing.T) {
-		actual := prKey(&pr)
-		if diff := cmp.Diff(expected, actual); diff != "" {
-			t.Errorf("basic case differs from expected:\n%s", diff)
-		}
-	})
+	actual := prKey(&pr)
+	if diff := cmp.Diff(expected, actual); diff != "" {
+		t.Errorf("basic case differs from expected:\n%s", diff)
+	}
 }
 
 func TestCheck(t *testing.T) {
@@ -633,33 +629,32 @@ func TestCheck(t *testing.T) {
 		expectedString string
 	}{
 		{
-			name:  "getting PR from backoffCache",
-			cache: backoffCache{cache: map[string]*pullRequest{"org/repo#123": {PRSha: "sha1", RetestsForBaseSha: 0, RetestsForPrSha: 0}}, logger: logger},
+			name:  "hold PR",
+			cache: backoffCache{cache: map[string]*pullRequest{"org/repo#123": {PRSha: "holdPR", RetestsForBaseSha: 3, RetestsForPrSha: 9}}, logger: logger},
 			pr: tide.PullRequest{Number: githubv4.Int(123),
 				Repository: struct {
 					Name          githubv4.String
 					NameWithOwner githubv4.String
 					Owner         struct{ Login githubv4.String }
 				}{Name: "repo", NameWithOwner: "org/repo", Owner: struct{ Login githubv4.String }{Login: "org"}},
-				HeadRefOID: "key"},
+				HeadRefOID: "holdPR"},
+			policy:         RetesterPolicy{3, 9, &True},
 			expected:       0,
-			expectedString: "Revision key was retested 0 times: holding",
+			expectedString: "Revision holdPR was retested 9 times: holding",
 		},
 		{
-			name:           "hold PR",
-			cache:          backoffCache{cache: map[string]*pullRequest{}, logger: logger},
-			pr:             tide.PullRequest{HeadRefOID: "holdPR"},
-			baseSha:        "sha1",
-			expected:       0,
-			expectedString: "Revision holdPR was retested 0 times: holding",
-		},
-		{
-			name:           "pause PR",
-			cache:          backoffCache{cache: map[string]*pullRequest{}, logger: logger},
-			pr:             tide.PullRequest{HeadRefOID: "pausePR"},
-			policy:         RetesterPolicy{0, 9, &True},
+			name:  "pause PR",
+			cache: backoffCache{cache: map[string]*pullRequest{"org/repo#123": {PRSha: "pausePR", RetestsForBaseSha: 3, RetestsForPrSha: 3}}, logger: logger},
+			pr: tide.PullRequest{Number: githubv4.Int(123),
+				Repository: struct {
+					Name          githubv4.String
+					NameWithOwner githubv4.String
+					Owner         struct{ Login githubv4.String }
+				}{Name: "repo", NameWithOwner: "org/repo", Owner: struct{ Login githubv4.String }{Login: "org"}},
+				HeadRefOID: "pausePR"},
+			policy:         RetesterPolicy{3, 9, &True},
 			expected:       1,
-			expectedString: "Revision pausePR was retested 0 times against base HEAD : pausing",
+			expectedString: "Revision pausePR was retested 3 times against base HEAD : pausing",
 		},
 		{
 			name:           "retest PR",
@@ -704,20 +699,18 @@ func TestNewController(t *testing.T) {
 			name:           "basic",
 			cacheFile:      "basic_case.yaml",
 			cacheRecordAge: sevenDays,
-			expected:       &RetestController{backoff: &backoffCache{file: "testdata/loadFromDiskNow/basic_case.yaml", cacheRecordAge: sevenDays}},
+			expected:       &RetestController{backoff: &backoffCache{file: "testdata/NewController/basic_case.yaml", cacheRecordAge: sevenDays}},
 		},
 		{
-			name:           "wrong",
-			cacheFile:      "wrong_format.yaml",
+			name:           "empty",
+			cacheFile:      "",
 			cacheRecordAge: sevenDays,
 			expected:       emptyRetestController,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.cacheFile != "" {
-				tc.cacheFile = filepath.Join("testdata", "loadFromDiskNow", tc.cacheFile)
-			}
+			tc.cacheFile = filepath.Join("testdata", "NewController", tc.cacheFile)
 			actual := NewController(tc.ghClient, tc.cfg, tc.gitClient, tc.usesApp, tc.cacheFile, tc.cacheRecordAge, tc.config)
 			if tc.expected != emptyRetestController {
 				if diff := cmp.Diff(tc.expected.backoff.file, actual.backoff.file); diff != "" {

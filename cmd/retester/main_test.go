@@ -27,12 +27,9 @@ func TestGatherOptions(t *testing.T) {
 			name: "default",
 			args: []string{"cmd"},
 			expected: options{
-				runOnce:           false,
 				dryRun:            true,
 				intervalRaw:       "1h",
-				cacheFile:         "",
 				cacheRecordAgeRaw: "168h",
-				configFile:        "",
 			},
 		},
 		{
@@ -84,10 +81,8 @@ func TestValidate(t *testing.T) {
 			name: "basic",
 			o: options{
 				config:         flagutil.ConfigOptions{ConfigPath: "/etc/config/config.yaml"},
-				runOnce:        false,
 				dryRun:         true,
 				interval:       time.Hour,
-				cacheFile:      "",
 				cacheRecordAge: sevenDays,
 				configFile:     "/etc/retester/config.yaml",
 			},
@@ -96,12 +91,9 @@ func TestValidate(t *testing.T) {
 			name: "no-config-file",
 			o: options{
 				config:         flagutil.ConfigOptions{ConfigPath: "/etc/config/config.yaml"},
-				runOnce:        false,
 				dryRun:         true,
 				interval:       time.Hour,
-				cacheFile:      "",
 				cacheRecordAge: sevenDays,
-				configFile:     "",
 			},
 			expected: errors.New("config file is required"),
 		},
@@ -148,7 +140,6 @@ func TestComplete(t *testing.T) {
 			name: "empty",
 			o: options{
 				intervalRaw:       "1h",
-				cacheRecordAgeRaw: "",
 			},
 			expected: errors.New("invalid cache record age"),
 		},

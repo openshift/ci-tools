@@ -748,12 +748,10 @@ func TestRun(t *testing.T) {
 		{
 			name:       "basic",
 			prowconfig: "simple.yaml",
-			expected:   nil,
 		},
 		{
 			name:       "empty",
 			prowconfig: "empty.yaml",
-			expected:   nil,
 		},
 	}
 	for _, tc := range testCases {

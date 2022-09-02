@@ -47,15 +47,15 @@ func (o *options) Validate() error {
 	return nil
 }
 
-func (o *options) Complete() error {
+func (o *options) complete() error {
 	var err error
 	o.interval, err = time.ParseDuration(o.intervalRaw)
 	if err != nil {
-		return errors.New("invalid interval")
+		return fmt.Errorf("invalid --interval: %w", err)
 	}
 	o.cacheRecordAge, err = time.ParseDuration(o.cacheRecordAgeRaw)
 	if err != nil {
-		return errors.New("invalid cache record age")
+		return fmt.Errorf("invalid --cache-record-age: %w", err)
 	}
 	return nil
 }
@@ -85,10 +85,10 @@ func gatherOptions() options {
 func main() {
 	o := gatherOptions()
 	if err := o.Complete(); err != nil {
-		logrus.Fatalf("Invalid options: %v", err)
+		logrus.WithError(err).Fatal("failed to complete options")
 	}
 	if err := o.Validate(); err != nil {
-		logrus.Fatalf("Invalid options: %v", err)
+		logrus.WithError(err).Fatal("failed to validate options")
 	}
 
 	gc, err := o.github.GitHubClient(o.dryRun)

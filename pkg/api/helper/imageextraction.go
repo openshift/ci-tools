@@ -69,7 +69,7 @@ func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguratio
 			insert(*cfg.BuildRootImage.ImageStreamTagReference, result)
 		}
 		if cfg.BuildRootImage.UseBuildCache {
-			insert(api.BuildCacheFor(cfg.Metadata), result)
+			insert(api.BuildCacheFor(cfg.Metadata).ImageStreamTagReference, result)
 		}
 	}
 

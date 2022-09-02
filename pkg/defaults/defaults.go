@@ -513,15 +513,15 @@ func checkForFullyQualifiedStep(step api.Step, params *api.DeferredParameters) (
 // rootImageResolver creates a resolver for the root image import step. We attempt to resolve the root image and
 // the build cache. If we are able to successfully determine that the build cache is up-to-date, we import it as
 // the root image.
-func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context, promote bool) func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
-	return func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
+func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context, promote bool) func(root, cache *api.MultiArchImageStreamTagReference) (*api.MultiArchImageStreamTagReference, error) {
+	return func(root, cache *api.MultiArchImageStreamTagReference) (*api.MultiArchImageStreamTagReference, error) {
 		logrus.Debugf("Determining if build cache %s can be used in place of root %s", cache.ISTagName(), root.ISTagName())
 		if promote {
 			logrus.Debugf("Promotions cannot use the build cache, so using default image %s as root image.", root.ISTagName())
 			return root, nil
 		}
 		cacheTag := &imagev1.ImageStreamTag{}
-		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: cache.Namespace, Name: fmt.Sprintf("%s:%s", cache.Name, cache.Tag)}, cacheTag); err != nil {
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: cache.ResolveNamespace(), Name: fmt.Sprintf("%s:%s", cache.Name, cache.Tag)}, cacheTag); err != nil {
 			if kapierrors.IsNotFound(err) {
 				logrus.Debugf("Build cache %s not found, falling back to %s", cache.ISTagName(), root.ISTagName())
 				// no build cache, use the normal root
@@ -541,7 +541,7 @@ func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context, 
 		logrus.Debugf("Build cache %s is based on root image at %s", cache.ISTagName(), prior)
 
 		rootTag := &imagev1.ImageStreamTag{}
-		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: root.Namespace, Name: fmt.Sprintf("%s:%s", root.Name, root.Tag)}, rootTag); err != nil {
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: root.ResolveNamespace(), Name: fmt.Sprintf("%s:%s", root.Name, root.Tag)}, rootTag); err != nil {
 			return nil, fmt.Errorf("could not resolve build root image stream tag %s: %w", root.ISTagName(), err)
 		}
 		logrus.Debugf("Resolved root image %s to %s", root.ISTagName(), rootTag.Image.Name)
@@ -556,7 +556,7 @@ func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context, 
 }
 
 type readFile func(string) ([]byte, error)
-type resolveRoot func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error)
+type resolveRoot func(root, cache *api.MultiArchImageStreamTagReference) (*api.MultiArchImageStreamTagReference, error)
 
 // FromConfigStatic pre-parses the configuration into step graph configuration.
 // This graph configuration can then be used to perform validation and build the
@@ -806,7 +806,7 @@ func runtimeStepConfigsForBuild(
 			}
 		}
 		if target != nil {
-			istTagRef := &target.InputImage.BaseImage.ImageStreamTagReference
+			istTagRef := &target.InputImage.BaseImage
 			if root.FromRepository {
 				var err error
 				istTagRef, err = buildRootImageStreamFromRepository(readFile)
@@ -827,7 +827,7 @@ func runtimeStepConfigsForBuild(
 			if root.FromRepository && !strings.HasSuffix(consoleHost, api.ServiceDomainAPPCI) {
 				ensureImageStreamTag(ctx, client, istTagRef, second)
 			}
-			target.InputImage.BaseImage.ImageStreamTagReference = *istTagRef
+			target.InputImage.BaseImage = *istTagRef
 		}
 	}
 	if jobSpec.Refs != nil || len(jobSpec.ExtraRefs) > 0 {
@@ -892,7 +892,7 @@ func validateCIOperatorInrepoConfig(inrepoConfig *api.CIOperatorInrepoConfig) er
 	return nil
 }
 
-func buildRootImageStreamFromRepository(readFile readFile) (*api.ImageStreamTagReference, error) {
+func buildRootImageStreamFromRepository(readFile readFile) (*api.MultiArchImageStreamTagReference, error) {
 	data, err := readFile(api.CIOperatorInrepoConfigFileName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s file: %w", api.CIOperatorInrepoConfigFileName, err)
@@ -902,17 +902,17 @@ func buildRootImageStreamFromRepository(readFile readFile) (*api.ImageStreamTagR
 		return nil, fmt.Errorf("failed to unmarshal %s: %w", api.CIOperatorInrepoConfigFileName, err)
 	}
 
-	return &config.BuildRootImage, validateCIOperatorInrepoConfig(&config)
+	return &api.MultiArchImageStreamTagReference{ImageStreamTagReference: config.BuildRootImage}, validateCIOperatorInrepoConfig(&config)
 }
 
-func ensureImageStreamTag(ctx context.Context, client ctrlruntimeclient.Client, isTagRef *api.ImageStreamTagReference, second time.Duration) {
+func ensureImageStreamTag(ctx context.Context, client ctrlruntimeclient.Client, isTagRef *api.MultiArchImageStreamTagReference, second time.Duration) {
 	istImport := &testimagestreamtagimportv1.TestImageStreamTagImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      isTagRef.Name + "-" + isTagRef.Tag,
 			Namespace: "ci",
 		},
 		Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
-			Namespace: isTagRef.Namespace,
+			Namespace: isTagRef.ResolveNamespace(),
 			Name:      isTagRef.Name + ":" + isTagRef.Tag,
 		},
 	}
@@ -923,7 +923,7 @@ func ensureImageStreamTag(ctx context.Context, client ctrlruntimeclient.Client, 
 		logrus.WithError(err).Warnf("Failed to create imagestreamtagimport for root %s", isTagRef.ISTagName())
 	}
 
-	name := types.NamespacedName{Namespace: isTagRef.Namespace, Name: isTagRef.Name + ":" + isTagRef.Tag}
+	name := types.NamespacedName{Namespace: isTagRef.ResolveNamespace(), Name: isTagRef.Name + ":" + isTagRef.Tag}
 	if err := wait.PollImmediate(5*second, 30*second, func() (bool, error) {
 		if err := client.Get(ctx, name, &imagev1.ImageStreamTag{}); err != nil {
 			if kapierrors.IsNotFound(err) {

@@ -118,9 +118,11 @@ func TestValidate(t *testing.T) {
 
 func TestComplete(t *testing.T) {
 	testCases := []struct {
-		name     string
-		o        options
-		expected error
+		name                   string
+		o                      options
+		expected               error
+		expectedInterval       time.Duration
+		expectedCacheRecordAge time.Duration
 	}{
 		{
 			name: "basic",
@@ -128,6 +130,8 @@ func TestComplete(t *testing.T) {
 				intervalRaw:       "1h",
 				cacheRecordAgeRaw: "168h",
 			},
+			expectedInterval:       time.Hour,
+			expectedCacheRecordAge: sevenDays,
 		},
 		{
 			name: "wrong format",
@@ -141,7 +145,8 @@ func TestComplete(t *testing.T) {
 			o: options{
 				intervalRaw: "1h",
 			},
-			expected: errors.New("invalid --cache-record-age: time: invalid duration \"\""),
+			expected:         errors.New("invalid --cache-record-age: time: invalid duration \"\""),
+			expectedInterval: time.Hour,
 		},
 	}
 	for _, tc := range testCases {
@@ -149,6 +154,12 @@ func TestComplete(t *testing.T) {
 			err := tc.o.complete()
 			if diff := cmp.Diff(tc.expected, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("Error differs from expected:\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedInterval, tc.o.interval); diff != "" {
+				t.Errorf("%s interval differs from expected:\n%s", tc.name, diff)
+			}
+			if diff := cmp.Diff(tc.expectedCacheRecordAge, tc.o.cacheRecordAge); diff != "" {
+				t.Errorf("%s cache record age differs from expected:\n%s", tc.name, diff)
 			}
 		})
 	}

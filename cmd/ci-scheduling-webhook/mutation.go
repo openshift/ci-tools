@@ -265,11 +265,12 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 
 		precludedHostnames, err := prioritization.findHostnamesToPreclude(podClass)
 
+		affinity := corev1.Affinity{
+			NodeAffinity: &corev1.NodeAffinity{},
+		}
+		affinityChanged := false
 		if err == nil {
 			if len(precludedHostnames) > 0 {
-				affinity := corev1.Affinity{
-					NodeAffinity: &corev1.NodeAffinity{},
-				}
 
 				if len(precludedHostnames) > 0 {
 					// Use MatchExpressions here because MatchFields because MatchExpressions
@@ -288,18 +289,41 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 						},
 					}
 					affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &requiredNoSchedulingSelector
+					affinityChanged = true
 				}
 
-				unstructuredAffinity, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&affinity)
-				if err != nil {
-					writeHttpError(500, fmt.Errorf("error decoding affinity to unstructured data: %v", err))
-					return
-				}
-
-				addPatchEntry("add", "/spec/affinity", unstructuredAffinity)
 			}
 		} else {
-			klog.Errorf("No node affinity will be set in pod due to error: %v", err)
+			klog.Errorf("No node precludes will be set in pod due to error: %v", err)
+		}
+		
+		if podClass == PodClassBuilds {
+			// If this is a build pod, prefer to be scheduled to spot instances for cost efficiency.
+			// If there are no spot instances, this will be ignored.
+			affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = []corev1.PreferredSchedulingTerm {
+				{
+					Weight: 1,
+					Preference: corev1.NodeSelectorTerm{
+						MatchExpressions: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "machine.openshift.io/interruptible-instance",
+								Operator: "Exists",
+							},
+						},
+					},
+				},
+			}
+			affinityChanged = true
+		}
+		
+		if affinityChanged {
+			unstructuredAffinity, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&affinity)
+			if err != nil {
+				writeHttpError(500, fmt.Errorf("error decoding affinity to unstructured data: %v", err))
+				return
+			}
+
+			addPatchEntry("add", "/spec/affinity", unstructuredAffinity)
 		}
 
 		// There is currently an issue with cluster scale up where pods are stacked up, unschedulable.

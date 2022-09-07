@@ -271,7 +271,9 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 
-	var labelsToAdd []string
+	labelsToAdd := []string{
+		"tide/merge-method-merge",
+	}
 	if o.selfApprove {
 		logrus.Infof("Self-approving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)

@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -56,11 +57,22 @@ func (s *promotionStep) Run(ctx context.Context) error {
 	return results.ForReason("promoting_images").ForError(s.run(ctx))
 }
 
+func mainRefs(refs *prowapi.Refs, extra []prowapi.Refs) *prowapi.Refs {
+	if refs != nil {
+		return refs
+	}
+	if len(extra) > 0 {
+		return &extra[0]
+	}
+	return nil
+}
+
 func (s *promotionStep) run(ctx context.Context) error {
 	opts := []PromotedTagsOption{
 		WithRequiredImages(s.requiredImages),
 	}
-	if refs := s.jobSpec.MainRefs(); refs != nil {
+
+	if refs := mainRefs(s.jobSpec.Refs, s.jobSpec.ExtraRefs); refs != nil {
 		opts = append(opts, WithCommitSha(refs.BaseSHA))
 	}
 	tags, names := PromotedTagsWithRequiredImages(s.configuration, opts...)

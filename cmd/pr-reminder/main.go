@@ -70,6 +70,9 @@ type config struct {
 	Teams []team `json:"teams"`
 }
 
+// TODO: how to store labels we don't want to filter out?
+const holdLabel = "do-not-merge/hold"
+
 var orgRepoFormat = regexp.MustCompile(`\w+/\w+`)
 
 func (c *config) validate(gtk githubToKerberos, slackClient slackClient) error {
@@ -198,6 +201,7 @@ type prRequest struct {
 	Author      string
 	Created     time.Time
 	LastUpdated time.Time
+	Labels      []string
 }
 
 func (p prRequest) link() string {
@@ -336,6 +340,7 @@ func findPrsForUsers(users map[string]user, ghClient prClient) map[string]user {
 						Author:      pr.User.Login,
 						Created:     pr.CreatedAt,
 						LastUpdated: pr.UpdatedAt,
+						Labels:      filterLabels(pr.Labels),
 					})
 					users[i] = u
 				}
@@ -344,6 +349,16 @@ func findPrsForUsers(users map[string]user, ghClient prClient) map[string]user {
 	}
 
 	return users
+}
+
+func filterLabels(labels []github.Label) []string {
+	var result []string
+	for _, label := range labels {
+		if label.Name == holdLabel {
+			result = append(result, label.Name)
+		}
+	}
+	return result
 }
 
 func loadConfig(filename string, config interface{}) error {
@@ -408,6 +423,10 @@ func messageUser(user user, slackClient slackClient) error {
 						Type: slack.MarkdownType,
 						Text: pr.createdUpdatedMessage(),
 					},
+					&slack.TextBlockObject{
+						Type: slack.MarkdownType,
+						Text: appendLabels(pr.Labels),
+					},
 				},
 			},
 		})
@@ -423,4 +442,13 @@ func messageUser(user user, slackClient slackClient) error {
 	}
 
 	return kerrors.NewAggregate(errors)
+}
+
+// appendLabels checks the PR's labels and returns a message if PR is held,
+// or empty string if the PR is not held.
+func appendLabels(labels []string) string {
+	if len(labels) == 0 {
+		return " " //if PR has no labels, this adds nothing to the slack message
+	}
+	return fmt.Sprintf(":warning: This PR is labeled: *%v*", strings.Join(labels[:], ", "))
 }

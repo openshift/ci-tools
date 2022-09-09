@@ -1837,6 +1837,11 @@ func (in *TestStepConfiguration) DeepCopyInto(out *TestStepConfiguration) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.MinimumInterval != nil {
+		in, out := &in.MinimumInterval, &out.MinimumInterval
+		*out = new(string)
+		**out = **in
+	}
 	if in.ClusterClaim != nil {
 		in, out := &in.ClusterClaim, &out.ClusterClaim
 		*out = new(ClusterClaim)

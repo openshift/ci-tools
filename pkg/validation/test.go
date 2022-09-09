@@ -156,6 +156,9 @@ func (v *Validator) validateTestStepConfiguration(
 		if test.Postsubmit && test.Interval != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` and `postsubmit` are mututally exclusive", fieldRootN))
 		}
+		if test.Postsubmit && test.MinimumInterval != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `minimum_interval` and `postsubmit` are mututally exclusive", fieldRootN))
+		}
 		if test.Postsubmit && test.Optional {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `optional` and `postsubmit` are mututally exclusive", fieldRootN))
 		}
@@ -163,14 +166,23 @@ func (v *Validator) validateTestStepConfiguration(
 		if test.Cron != nil && test.Interval != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` and `cron` cannot both be set", fieldRootN))
 		}
+		if test.Cron != nil && test.MinimumInterval != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron` and `minimum_interval` cannot both be set", fieldRootN))
+		}
+		if test.MinimumInterval != nil && test.Interval != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` and `minimum_interval` cannot both be set", fieldRootN))
+		}
 		if test.Cron != nil && test.ReleaseController {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron` cannot be set for release controller jobs", fieldRootN))
 		}
 		if test.Interval != nil && test.ReleaseController {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` cannot be set for release controller jobs", fieldRootN))
 		}
-		if (test.Cron != nil || test.Interval != nil) && (test.RunIfChanged != "" || test.SkipIfOnlyChanged != "" || test.Optional) {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`", fieldRootN))
+		if test.MinimumInterval != nil && test.ReleaseController {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `minimum_interval` cannot be set for release controller jobs", fieldRootN))
+		}
+		if (test.Cron != nil || test.Interval != nil || test.MinimumInterval != nil) && (test.RunIfChanged != "" || test.SkipIfOnlyChanged != "" || test.Optional) {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`", fieldRootN))
 		}
 		if test.RunIfChanged != "" && test.SkipIfOnlyChanged != "" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `run_if_changed` and `skip_if_only_changed` are mutually exclusive", fieldRootN))
@@ -181,7 +193,11 @@ func (v *Validator) validateTestStepConfiguration(
 				validationErrors = append(validationErrors, fmt.Errorf("%s: cannot parse interval: %w", fieldRootN, err))
 			}
 		}
-
+		if test.MinimumInterval != nil {
+			if _, err := time.ParseDuration(*test.MinimumInterval); err != nil {
+				validationErrors = append(validationErrors, fmt.Errorf("%s: cannot parse minimum_interval: %w", fieldRootN, err))
+			}
+		}
 		if test.Cron != nil {
 			if _, err := cron.Parse(*test.Cron); err != nil {
 				validationErrors = append(validationErrors, fmt.Errorf("%s: cannot parse cron: %w", fieldRootN, err))

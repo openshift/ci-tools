@@ -147,6 +147,14 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 				options.Cron = "@yearly"
 			},
 		},
+		{
+			description: "periodic using minimum_interval",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			generateOption: func(options *GeneratePeriodicOptions) {
+				options.MinimumInterval = "4h"
+			},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {

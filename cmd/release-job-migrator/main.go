@@ -511,7 +511,7 @@ func run(o options) error {
 					return err
 				}
 			}
-			var cron, interval *string
+			var cron, interval, minimumInterval *string
 			if periodic.Cron != "" {
 				// yaml.Marshal doesn't properly see &periodic.Cron, but does see &cronCopy...
 				cronCopy := periodic.Cron
@@ -521,6 +521,10 @@ func run(o options) error {
 				// yaml.Marshal doesn't properly see &periodic.Interval, but does see &intervalCopy...
 				intervalCopy := periodic.Interval
 				interval = &intervalCopy
+			}
+			if periodic.MinimumInterval != "" {
+				minimumIntervalCopy := periodic.MinimumInterval
+				minimumInterval = &minimumIntervalCopy
 			}
 			// check that test does not already exist in config
 			combinedTests := append(replacements[filename].tests, ciopConfigs[filename].Configuration.Tests...)
@@ -535,6 +539,7 @@ func run(o options) error {
 				MultiStageTestConfiguration: conf.Steps,
 				Cron:                        cron,
 				Interval:                    interval,
+				MinimumInterval:             minimumInterval,
 			})
 			replacements[filename] = testsAndImages
 			replacedJobs[periodic.Name] = metadata.JobName(jobconfig.PeriodicPrefix, info.As)

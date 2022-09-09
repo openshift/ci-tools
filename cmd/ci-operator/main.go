@@ -418,7 +418,7 @@ type options struct {
 func bindOptions(flag *flag.FlagSet) *options {
 	opt := &options{
 		idleCleanupDuration: 1 * time.Hour,
-		cleanupDuration:     12 * time.Hour,
+		cleanupDuration:     24 * time.Hour,
 	}
 
 	// command specific options
@@ -1343,20 +1343,19 @@ func pdb(labelKey, namespace string) (*policyv1.PodDisruptionBudget, crcontrolle
 //
 // Example from k8s:
 //
-// "metadata": {
-// 	"repo-commit": "253f03e0055b6649f8b25e84122748d39a284141",
-// 	"node_os_image": "cos-stable-65-10323-64-0",
-// 	"repos": {
-// 		"k8s.io/kubernetes": "master:1c04caa04325e1f64d9a15714ad61acdd2a81013,71936:353a0b391d6cb0c26e1c0c6b180b300f64039e0e",
-// 		"k8s.io/release": "master"
-// 	},
-// 	"infra-commit": "de7741746",
-// 	"repo": "k8s.io/kubernetes",
-// 	"master_os_image": "cos-stable-65-10323-64-0",
-// 	"job-version": "v1.14.0-alpha.0.1012+253f03e0055b66",
-// 	"pod": "dd8d320f-ff64-11e8-b091-0a580a6c02ef"
-// }
-//
+//	"metadata": {
+//		"repo-commit": "253f03e0055b6649f8b25e84122748d39a284141",
+//		"node_os_image": "cos-stable-65-10323-64-0",
+//		"repos": {
+//			"k8s.io/kubernetes": "master:1c04caa04325e1f64d9a15714ad61acdd2a81013,71936:353a0b391d6cb0c26e1c0c6b180b300f64039e0e",
+//			"k8s.io/release": "master"
+//		},
+//		"infra-commit": "de7741746",
+//		"repo": "k8s.io/kubernetes",
+//		"master_os_image": "cos-stable-65-10323-64-0",
+//		"job-version": "v1.14.0-alpha.0.1012+253f03e0055b66",
+//		"pod": "dd8d320f-ff64-11e8-b091-0a580a6c02ef"
+//	}
 type prowResultMetadata struct {
 	Revision      string            `json:"revision"`
 	RepoCommit    string            `json:"repo-commit"`

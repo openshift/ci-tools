@@ -423,7 +423,7 @@ func TestWaitForBuild(t *testing.T) {
 						Message:    "msg",
 						LogSnippet: "snippet",
 					},
-				}).Build()), "abc"),
+				}).Build()), "abc\n"), // the line break is for gotestsum https://github.com/gotestyourself/gotestsum/issues/141#issuecomment-1209146526
 			expected: fmt.Errorf("%s\n\n%s", "the build some-build failed after 3s with reason reason: msg", "snippet"),
 		},
 	}

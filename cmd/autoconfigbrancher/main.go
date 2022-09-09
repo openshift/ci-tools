@@ -126,6 +126,11 @@ func main() {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
 
+	versionSplit := strings.Split(o.CurrentRelease, ".")
+	if len(versionSplit) != 2 {
+		logrus.WithError(fmt.Errorf("version %s split by dot doesn't have two elements", o.CurrentRelease)).Fatal("Failed to parse the current version")
+	}
+
 	if err := secret.Add(o.GitHubOptions.TokenPath); err != nil {
 		logrus.WithError(err).Fatal("Failed to start secrets agent")
 	}
@@ -166,7 +171,7 @@ func main() {
 				"--prune-ocp-builder-replacements",
 				"--prune-unused-base-images",
 				"--ensure-correct-promotion-dockerfile",
-				"--current-release-minor=8",
+				"--current-release-minor=" + versionSplit[1],
 				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/origin-aggregated-logging",
 				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/console",
 			},

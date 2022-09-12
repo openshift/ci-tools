@@ -32,6 +32,13 @@ var (
 		},
 		[]string{"job_name", "type", "state", "reason", "cluster"},
 	)
+	podScalerErrorRate = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "pod_scaler_admission_error_rate",
+			Help: "number of errors, sorted by label/type",
+		},
+		[]string{"workload_name", "configured_memory", "determined_memory"},
+	)
 )
 
 func init() {
@@ -43,6 +50,12 @@ type options struct {
 	address     string
 	gracePeriod time.Duration
 	passwdFile  string
+}
+
+type podScalerRequest struct {
+	workloadName     string
+	configuredMemory string
+	determinedMemory string
 }
 
 func gatherOptions() (options, error) {
@@ -88,6 +101,19 @@ func validateRequest(request *results.Request) error {
 	return nil
 }
 
+func validatePodScalerRequest(request *podScalerRequest) error {
+	if request.workloadName == "" {
+		return fmt.Errorf("workload_name field in request is empty")
+	}
+	if request.configuredMemory == "" {
+		return fmt.Errorf("configured_memory field in request is empty")
+	}
+	if request.determinedMemory == "" {
+		return fmt.Errorf("determined_memory field in request is empty")
+	}
+	return nil
+}
+
 func handleError(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusBadRequest)
 	fmt.Fprint(w, err)
@@ -102,6 +128,15 @@ func withErrorRate(request *results.Request) {
 		"cluster":  request.Cluster,
 	}
 	errorRate.With(labels).Inc()
+}
+
+func recordPodScalerError(request *podScalerRequest) {
+	labels := prometheus.Labels{
+		"workload_name":     request.workloadName,
+		"configured_memory": request.configuredMemory,
+		"determined_memory": request.determinedMemory,
+	}
+	podScalerErrorRate.With(labels).Inc()
 }
 
 type validator interface {
@@ -148,6 +183,32 @@ func handleCIOperatorResult() http.HandlerFunc {
 	}
 }
 
+func handlePodScalerResult() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		bytes, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			handleError(w, fmt.Errorf("unable to read pod-scaler request body: %w", err))
+			return
+		}
+
+		request := &podScalerRequest{}
+		if err = json.Unmarshal(bytes, request); err != nil {
+			handleError(w, fmt.Errorf("unable to decode pod-scaler request body: %w", err))
+			return
+		}
+
+		if err := validatePodScalerRequest(request); err != nil {
+			handleError(w, err)
+			return
+		}
+
+		recordPodScalerError(request)
+		w.WriteHeader(http.StatusOK)
+		log.WithFields(log.Fields{"request": request, "duration": time.Since(start).String()}).Info("Pod-scaler request processed")
+	}
+}
+
 func main() {
 	o, err := gatherOptions()
 	if err != nil {
@@ -167,6 +228,8 @@ func main() {
 	validator := &multi{delegates: []validator{&passwdFile{file: o.passwdFile}}}
 
 	http.Handle("/result", loginHandler(validator, handleCIOperatorResult()))
+	http.Handle("/pod-scaler", loginHandler(validator, handlePodScalerResult()))
+
 	metrics.ExposeMetrics("result-aggregator", prowConfig.PushGateway{}, flagutil.DefaultMetricsPort)
 
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)

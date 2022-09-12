@@ -37,7 +37,7 @@ var (
 			Name: "pod_scaler_admission_error_rate",
 			Help: "number of errors, sorted by label/type",
 		},
-		[]string{"test_name", "configured_memory", "actual_memory"},
+		[]string{"workload_name", "configured_memory", "determined_memory"},
 	)
 )
 
@@ -53,9 +53,9 @@ type options struct {
 }
 
 type podScalerRequest struct {
-	testName         string
+	workloadName     string
 	configuredMemory string
-	actualMemory     string
+	determinedMemory string
 }
 
 func gatherOptions() (options, error) {
@@ -102,14 +102,14 @@ func validateRequest(request *results.Request) error {
 }
 
 func validatePodScalerRequest(request *podScalerRequest) error {
-	if request.testName == "" {
-		return fmt.Errorf("test_name field in request is empty")
+	if request.workloadName == "" {
+		return fmt.Errorf("workload_name field in request is empty")
 	}
 	if request.configuredMemory == "" {
 		return fmt.Errorf("configured_memory field in request is empty")
 	}
-	if request.actualMemory == "" {
-		return fmt.Errorf("actual_memory field in request is empty")
+	if request.determinedMemory == "" {
+		return fmt.Errorf("determined_memory field in request is empty")
 	}
 	return nil
 }
@@ -132,9 +132,9 @@ func withErrorRate(request *results.Request) {
 
 func recordPodScalerError(request *podScalerRequest) {
 	labels := prometheus.Labels{
-		"test_name":         request.testName,
+		"workload_name":     request.workloadName,
 		"configured_memory": request.configuredMemory,
-		"actual_memory":     request.actualMemory,
+		"determined_memory": request.determinedMemory,
 	}
 	podScalerErrorRate.With(labels).Inc()
 }

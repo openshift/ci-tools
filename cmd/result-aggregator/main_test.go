@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -146,5 +147,74 @@ func TestLoginHandler(t *testing.T) {
 		if diff := cmp.Diff(tc.expectedBody, responseRecorder.Body.String()); diff != "" {
 			t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 		}
+	}
+}
+
+func TestValidatePodScalerRequest(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		request  *podScalerRequest
+		expected error
+	}{
+		{
+			name: "everything ok",
+			request: &podScalerRequest{
+				workloadName:     "name",
+				configuredMemory: "100",
+				determinedMemory: "400",
+			},
+			expected: nil,
+		},
+		{
+			name: "empty workload name",
+			request: &podScalerRequest{
+				workloadName:     "",
+				configuredMemory: "100",
+				determinedMemory: "400",
+			},
+			expected: fmt.Errorf("workload_name field in request is empty"),
+		},
+		{
+			name: "empty configured memory",
+			request: &podScalerRequest{
+				workloadName:     "name",
+				configuredMemory: "",
+				determinedMemory: "400",
+			},
+			expected: fmt.Errorf("configured_memory field in request is empty"),
+		},
+		{
+			name: "empty determined memory",
+			request: &podScalerRequest{
+				workloadName:     "name",
+				configuredMemory: "100",
+				determinedMemory: "",
+			},
+			expected: fmt.Errorf("determined_memory field in request is empty"),
+		},
+		{
+			name: "empty determined memory",
+			request: &podScalerRequest{
+				workloadName:     "name",
+				configuredMemory: "100",
+				determinedMemory: "",
+			},
+			expected: fmt.Errorf("determined_memory field in request is empty"),
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			actual := validatePodScalerRequest(testCase.request)
+			if actual == nil {
+				if testCase.expected != nil {
+					t.Fatalf("got error when test case was ok, error: %v", actual.Error())
+				}
+			} else {
+				if actual.Error() != testCase.expected.Error() {
+					t.Fatalf("error: %v doesn't match expected error: %v", actual.Error(), testCase.expected.Error())
+				}
+			}
+		})
 	}
 }

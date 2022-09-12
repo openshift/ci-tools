@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestValidator(t *testing.T) {
@@ -206,14 +208,8 @@ func TestValidatePodScalerRequest(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			actual := validatePodScalerRequest(testCase.request)
-			if actual == nil {
-				if testCase.expected != nil {
-					t.Fatalf("got error when test case was ok, error: %v", actual.Error())
-				}
-			} else {
-				if actual.Error() != testCase.expected.Error() {
-					t.Fatalf("error: %v doesn't match expected error: %v", actual.Error(), testCase.expected.Error())
-				}
+			if diff := cmp.Diff(testCase.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+				t.Fatalf("actual error doesn't match expected error, diff: %v", diff)
 			}
 		})
 	}

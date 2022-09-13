@@ -278,10 +278,6 @@ secret_configs:
       - auth_field: token_image-puller_newCluster_reg_auth_value.txt
         item: build_farm
         registry_url: registry.newCluster.ci.openshift.org
-      - auth_field: auth
-        email_field: email
-        item: quay.io-pull-secret
-        registry_url: quay.io
       - auth_field: token_image-pusher_app.ci_reg_auth_value.txt
         item: build_farm
         registry_url: registry.ci.openshift.org
@@ -306,10 +302,6 @@ secret_configs:
       - auth_field: token_image-puller_newCluster_reg_auth_value.txt
         item: build_farm
         registry_url: registry.newCluster.ci.openshift.org
-      - auth_field: auth
-        email_field: email
-        item: quay.io-pull-secret
-        registry_url: quay.io
       - auth_field: token_image-puller_app.ci_reg_auth_value.txt
         item: build_farm
         registry_url: registry.ci.openshift.org
@@ -342,10 +334,6 @@ secret_configs:
       - auth_field: token_image-puller_newCluster_reg_auth_value.txt
         item: build_farm
         registry_url: registry.newCluster.ci.openshift.org
-      - auth_field: auth
-        email_field: email
-        item: quay.io-pull-secret
-        registry_url: quay.io
       - auth_field: auth
         email_field: email
         item: cloud.openshift.com-pull-secret

@@ -352,10 +352,6 @@ secret_configs:
         registry_url: cloud.openshift.com
       - auth_field: auth
         email_field: email
-        item: quay.io-pull-secret
-        registry_url: quay.io
-      - auth_field: auth
-        email_field: email
         item: registry.connect.redhat.com-pull-secret
         registry_url: registry.connect.redhat.com
       - auth_field: auth

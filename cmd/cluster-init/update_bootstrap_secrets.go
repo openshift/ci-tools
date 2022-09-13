@@ -281,12 +281,6 @@ func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config) func(o
 			},
 			{
 				AuthField:   "auth",
-				Item:        "quay.io-pull-secret",
-				RegistryURL: "quay.io",
-				EmailField:  "email",
-			},
-			{
-				AuthField:   "auth",
 				Item:        "registry.connect.redhat.com-pull-secret",
 				RegistryURL: "registry.connect.redhat.com",
 				EmailField:  "email",

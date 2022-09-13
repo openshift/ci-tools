@@ -70,8 +70,12 @@ type config struct {
 	Teams []team `json:"teams"`
 }
 
-// TODO: how to store labels we don't want to filter out?
-const holdLabel = "do-not-merge/hold"
+// getInterestedLabels returns a set of those labels we are interested in when using the PR reminder
+func getInterestedLabels() sets.String {
+	var labels = sets.String{}
+	labels.Insert("do-not-merge/hold")
+	return labels
+}
 
 var orgRepoFormat = regexp.MustCompile(`\w+/\w+`)
 
@@ -340,7 +344,7 @@ func findPrsForUsers(users map[string]user, ghClient prClient) map[string]user {
 						Author:      pr.User.Login,
 						Created:     pr.CreatedAt,
 						LastUpdated: pr.UpdatedAt,
-						Labels:      filterLabels(pr.Labels),
+						Labels:      filterLabels(pr.Labels, getInterestedLabels()),
 					})
 					users[i] = u
 				}
@@ -351,13 +355,16 @@ func findPrsForUsers(users map[string]user, ghClient prClient) map[string]user {
 	return users
 }
 
-func filterLabels(labels []github.Label) []string {
+// filterLabels filters out those labels from the PR we are not interested in
+// and returns only those that are included in the interestedLabels set
+func filterLabels(labels []github.Label, interestedLabels sets.String) []string {
 	var result []string
 	for _, label := range labels {
-		if label.Name == holdLabel {
+		if interestedLabels.Has(label.Name) {
 			result = append(result, label.Name)
 		}
 	}
+	sort.Sort(sort.StringSlice(result))
 	return result
 }
 
@@ -411,7 +418,7 @@ func messageUser(user user, slackClient slackClient) error {
 	}
 
 	for _, pr := range user.PrRequests {
-		message = append(message, &slack.ContextBlock{
+		prBlock := &slack.ContextBlock{
 			Type: slack.MBTContext,
 			ContextElements: slack.ContextElements{
 				Elements: []slack.MixedElement{
@@ -423,13 +430,16 @@ func messageUser(user user, slackClient slackClient) error {
 						Type: slack.MarkdownType,
 						Text: pr.createdUpdatedMessage(),
 					},
-					&slack.TextBlockObject{
-						Type: slack.MarkdownType,
-						Text: appendLabels(pr.Labels),
-					},
 				},
 			},
-		})
+		}
+		if len(pr.Labels) > 0 {
+			prBlock.ContextElements.Elements = append(prBlock.ContextElements.Elements, &slack.TextBlockObject{
+				Type: slack.MarkdownType,
+				Text: getLabelMessage(pr.Labels),
+			})
+		}
+		message = append(message, prBlock)
 	}
 
 	responseChannel, responseTimestamp, err := slackClient.PostMessage(user.SlackId,
@@ -444,11 +454,10 @@ func messageUser(user user, slackClient slackClient) error {
 	return kerrors.NewAggregate(errors)
 }
 
-// appendLabels checks the PR's labels and returns a message if PR is held,
-// or empty string if the PR is not held.
-func appendLabels(labels []string) string {
+// getLabelMessage returns a string listing te PR's labels
+func getLabelMessage(labels []string) string {
 	if len(labels) == 0 {
-		return " " //if PR has no labels, this adds nothing to the slack message
+		return ""
 	}
-	return fmt.Sprintf(":warning: This PR is labeled: *%v*", strings.Join(labels[:], ", "))
+	return fmt.Sprintf(":label: labeled: *%v*", strings.Join(labels[:], ", "))
 }

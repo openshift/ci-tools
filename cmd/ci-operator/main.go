@@ -659,8 +659,8 @@ func (o *options) Complete() error {
 	o.clusterConfig = clusterConfig
 
 	if o.pullSecretPath != "" {
-		if o.pullSecret, err = getDockerConfigSecret(steps.PullSecretName, o.pullSecretPath); err != nil {
-			return fmt.Errorf("could not get pull secret %s from path %s: %w", steps.PullSecretName, o.pullSecretPath, err)
+		if o.pullSecret, err = getDockerConfigSecret(api.RegistryPullCredentialsSecret, o.pullSecretPath); err != nil {
+			return fmt.Errorf("could not get pull secret %s from path %s: %w", api.RegistryPullCredentialsSecret, o.pullSecretPath, err)
 		}
 	}
 	if o.pushSecretPath != "" {

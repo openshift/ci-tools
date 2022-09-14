@@ -259,11 +259,11 @@ secret_configs:
         registry_url: registry.newCluster.ci.openshift.org
   to:
   - cluster: app.ci
-    name: registry-pull-credentials-all
+    name: registry-pull-credentials
     namespace: ci
     type: kubernetes.io/dockerconfigjson
   - cluster: app.ci
-    name: registry-pull-credentials-all
+    name: registry-pull-credentials
     namespace: test-credentials
     type: kubernetes.io/dockerconfigjson
 - from:
@@ -290,38 +290,6 @@ secret_configs:
     name: registry-push-credentials-ci-central
     namespace: test-credentials
     type: kubernetes.io/dockerconfigjson
-- from:
-    .dockerconfigjson:
-      dockerconfigJSON:
-      - auth_field: token_image-puller_newCluster_reg_auth_value.txt
-        item: build_farm
-        registry_url: image-registry.openshift-image-registry.svc.cluster.local:5000
-      - auth_field: token_image-puller_newCluster_reg_auth_value.txt
-        item: build_farm
-        registry_url: image-registry.openshift-image-registry.svc:5000
-      - auth_field: token_image-puller_newCluster_reg_auth_value.txt
-        item: build_farm
-        registry_url: registry.newCluster.ci.openshift.org
-      - auth_field: token_image-puller_app.ci_reg_auth_value.txt
-        item: build_farm
-        registry_url: registry.ci.openshift.org
-  to:
-  - cluster: newCluster
-    name: registry-pull-credentials
-    namespace: ci
-    type: kubernetes.io/dockerconfigjson
-  - cluster: newCluster
-    name: registry-pull-credentials
-    namespace: test-credentials
-    type: kubernetes.io/dockerconfigjson
-- from:
-    kubeconfig:
-      field: sa.ci-operator.newCluster.config
-      item: build_farm
-  to:
-  - cluster: newCluster
-    name: ci-operator
-    namespace: test-credentials
 - from:
     .dockerconfigjson:
       dockerconfigJSON:
@@ -361,13 +329,21 @@ secret_configs:
         registry_url: registry.build01.ci.openshift.org
   to:
   - cluster: newCluster
-    name: registry-pull-credentials-all
+    name: registry-pull-credentials
     namespace: ci
     type: kubernetes.io/dockerconfigjson
   - cluster: newCluster
-    name: registry-pull-credentials-all
+    name: registry-pull-credentials
     namespace: test-credentials
     type: kubernetes.io/dockerconfigjson
+- from:
+    kubeconfig:
+      field: sa.ci-operator.newCluster.config
+      item: build_farm
+  to:
+  - cluster: newCluster
+    name: ci-operator
+    namespace: test-credentials
 user_secrets_target_clusters:
 - app.ci
 - arm01

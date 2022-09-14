@@ -215,11 +215,11 @@ secret_configs:
             registry_url: registry.build01.ci.openshift.org
     to:
       - cluster: app.ci
-        name: registry-pull-credentials-all
+        name: registry-pull-credentials
         namespace: ci
         type: kubernetes.io/dockerconfigjson
       - cluster: app.ci
-        name: registry-pull-credentials-all
+        name: registry-pull-credentials
         namespace: test-credentials
         type: kubernetes.io/dockerconfigjson
 user_secrets_target_clusters:

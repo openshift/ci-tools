@@ -14,7 +14,7 @@ import (
 
 const (
 	credentials         = "credentials"
-	regPullCredsAll     = "registry-pull-credentials-all"
+	regPullCredsAll     = "registry-pull-credentials"
 	dotDockerConfigJson = ".dockerconfigjson"
 	testCredentials     = "test-credentials"
 	kubeconfig          = "kubeconfig"

@@ -481,7 +481,7 @@ func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
 		return err
 	}
 	if testSuite.NumFailed > 0 {
-		return fmt.Errorf("some test checker failed,  see above for details")
+		return jobrunaggregatorlib.ErrorTestCheckerFailed
 	}
 	return nil
 }

@@ -218,7 +218,12 @@ payload 4.11.0-0.nightly-2022-04-28-102605, run this command:
 			}
 
 			if err := o.Run(ctx); err != nil {
-				logrus.WithError(err).Fatal("Command failed")
+				switch err {
+				case jobrunaggregatorlib.ErrorNoRelatedJobs, jobrunaggregatorlib.ErrorTestCheckerFailed:
+					logrus.WithError(err).Warning("Unable to perform test analysis")
+				default:
+					logrus.WithError(err).Fatal("Command failed")
+				}
 			}
 
 			return nil

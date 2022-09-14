@@ -2,6 +2,7 @@ package jobrunaggregatorlib
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -13,6 +14,9 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/junit"
 )
+
+var ErrorNoRelatedJobs = errors.New("found no related jobRuns")
+var ErrorTestCheckerFailed = errors.New("some test checker failed,  see above for details")
 
 type JobRunGetter interface {
 	// GetRelatedJobRuns gets all related job runs for analysis
@@ -63,7 +67,7 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 		}
 
 		if len(relatedJobRuns) == 0 {
-			return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, fmt.Errorf("found no related jobRuns")
+			return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, ErrorNoRelatedJobs
 		}
 
 		for i := range relatedJobRuns {

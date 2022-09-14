@@ -14,7 +14,6 @@ import (
 
 const (
 	credentials         = "credentials"
-	regPullCredsAll     = "registry-pull-credentials-all"
 	dotDockerConfigJson = ".dockerconfigjson"
 	testCredentials     = "test-credentials"
 	kubeconfig          = "kubeconfig"
@@ -58,11 +57,9 @@ func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
 		updatePromotedImageGovernor,
 		updateClusterDisplay,
 		updateChatBotSecret,
-		updateExistingRegistryPullCredentialsAllSecrets,
 		updateSecret(generateRegistryPushCredentialsSecret),
 		updateSecret(generateRegistryPullCredentialsSecret),
 		updateSecret(generateCiOperatorSecret),
-		updateSecret(generateRegistryPullCredentialsAllSecrets(c)),
 	} {
 		if err := step(c, o); err != nil {
 			return err
@@ -251,68 +248,6 @@ func updateSecretItemContext(c *secretbootstrap.Config, name, cluster, key strin
 	return nil
 }
 
-func updateExistingRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config, o options) error {
-	for _, cluster := range c.UserSecretsTargetClusters {
-		if cluster != string(api.ClusterHive) && cluster != string(api.ClusterARM01) && cluster != o.clusterName {
-			return updateRegistrySecretItemContext(c, regPullCredsAll, cluster, secretbootstrap.DockerConfigJSONData{
-				AuthField:   registryCommandTokenField(o.clusterName, pull),
-				Item:        buildUFarm,
-				RegistryURL: registryUrlFor(o.clusterName),
-			})
-		}
-	}
-	return nil
-}
-
-func generateRegistryPullCredentialsAllSecrets(c *secretbootstrap.Config) func(options) secretbootstrap.SecretConfig {
-	return func(o options) secretbootstrap.SecretConfig {
-		items := []secretbootstrap.DockerConfigJSONData{
-			{
-				AuthField:   "auth",
-				Item:        "cloud.openshift.com-pull-secret",
-				RegistryURL: "cloud.openshift.com",
-				EmailField:  "email",
-			},
-			{
-				AuthField:   "auth",
-				Item:        "quay.io-pull-secret",
-				RegistryURL: "quay.io",
-				EmailField:  "email",
-			},
-			{
-				AuthField:   "auth",
-				Item:        "registry.connect.redhat.com-pull-secret",
-				RegistryURL: "registry.connect.redhat.com",
-				EmailField:  "email",
-			},
-			{
-				AuthField:   "auth",
-				Item:        "registry.redhat.io-pull-secret",
-				RegistryURL: "registry.redhat.io",
-				EmailField:  "email",
-			},
-		}
-		for _, cluster := range c.UserSecretsTargetClusters {
-			if cluster != string(api.ClusterHive) && cluster != o.clusterName { // This cluster's SecretItem is added in generatePushPullSecretFrom
-				items = append(items, secretbootstrap.DockerConfigJSONData{
-					AuthField:   registryCommandTokenField(cluster, pull),
-					Item:        buildUFarm,
-					RegistryURL: registryUrlFor(cluster),
-				})
-			}
-		}
-		return secretbootstrap.SecretConfig{
-			From: map[string]secretbootstrap.ItemContext{
-				dotDockerConfigJson: generatePushPullSecretFrom(o.clusterName, items),
-			},
-			To: []secretbootstrap.SecretContext{
-				generateDockerConfigJsonSecretConfigTo(regPullCredsAll, ci, o.clusterName),
-				generateDockerConfigJsonSecretConfigTo(regPullCredsAll, testCredentials, o.clusterName),
-			},
-		}
-	}
-}
-
 func registryUrlFor(cluster string) string {
 	switch cluster {
 	case string(api.ClusterVSphere):
@@ -324,23 +259,6 @@ func registryUrlFor(cluster string) string {
 	default:
 		return fmt.Sprintf("registry.%s.ci.openshift.org", cluster)
 	}
-}
-
-func updateRegistrySecretItemContext(c *secretbootstrap.Config, name, cluster string, value secretbootstrap.DockerConfigJSONData) error {
-	logrus.Infof("Appending registry secret item to: {name: %s, cluster: %s}", name, cluster)
-	_, sc, err := findSecretConfig(name, cluster, c.Secrets)
-	if err != nil {
-		return err
-	}
-	for _, si := range sc.From[dotDockerConfigJson].DockerConfigJSONData {
-		if si.AuthField == value.AuthField && si.RegistryURL == value.RegistryURL {
-			return nil
-		}
-	}
-	sc.From[dotDockerConfigJson] = secretbootstrap.ItemContext{
-		DockerConfigJSONData: append(sc.From[dotDockerConfigJson].DockerConfigJSONData, value),
-	}
-	return nil
 }
 
 func updateBuildFarmSecrets(c *secretbootstrap.Config, o options) error {

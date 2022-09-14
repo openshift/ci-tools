@@ -52,7 +52,7 @@ var defaultPodSpec = corev1.PodSpec{
 		{
 			Name: "pull-secret",
 			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{SecretName: "registry-pull-credentials"},
+				Secret: &corev1.SecretVolumeSource{SecretName: cioperatorapi.RegistryPullCredentialsSecret},
 			},
 		},
 		{

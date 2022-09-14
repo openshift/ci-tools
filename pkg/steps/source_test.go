@@ -133,7 +133,7 @@ func TestCreateBuild(t *testing.T) {
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
 			pullSecret: &coreapi.Secret{
 				Data:       map[string][]byte{coreapi.DockerConfigJsonKey: []byte("secret")},
-				ObjectMeta: meta.ObjectMeta{Name: PullSecretName},
+				ObjectMeta: meta.ObjectMeta{Name: api.RegistryPullCredentialsSecret},
 				Type:       coreapi.SecretTypeDockerConfigJson,
 			},
 		},

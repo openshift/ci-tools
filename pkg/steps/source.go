@@ -46,8 +46,6 @@ const (
 	oauthToken    = "/oauth-token"
 
 	OauthSecretKey = "oauth-token"
-
-	PullSecretName = "registry-pull-credentials"
 )
 
 type CloneAuthType string
@@ -314,7 +312,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 		})
 	}
 	if pullSecret != nil {
-		build.Spec.Strategy.DockerStrategy.PullSecret = getSourceSecretFromName(PullSecretName)
+		build.Spec.Strategy.DockerStrategy.PullSecret = getSourceSecretFromName(api.RegistryPullCredentialsSecret)
 	}
 	if owner := jobSpec.Owner(); owner != nil {
 		build.OwnerReferences = append(build.OwnerReferences, *owner)

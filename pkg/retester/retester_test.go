@@ -15,9 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/test-infra/prow/config"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
-	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/github/fakegithub"
 	"k8s.io/test-infra/prow/tide"
@@ -678,49 +676,6 @@ func TestCheck(t *testing.T) {
 	}
 }
 
-var (
-	sevenDays             = 24 * 7 * time.Hour
-	emptyRetestController = &RetestController{}
-)
-
-func TestNewController(t *testing.T) {
-	testCases := []struct {
-		name           string
-		ghClient       githubClient
-		cfg            config.Getter
-		gitClient      git.ClientFactory
-		usesApp        bool
-		cacheFile      string
-		cacheRecordAge time.Duration
-		config         *Config
-		expected       *RetestController
-	}{
-		{
-			name:           "basic",
-			cacheFile:      "basic_case.yaml",
-			cacheRecordAge: sevenDays,
-			expected:       &RetestController{backoff: &backoffCache{file: "testdata/NewController/basic_case.yaml", cacheRecordAge: sevenDays}},
-		},
-		{
-			name:           "empty",
-			cacheFile:      "",
-			cacheRecordAge: sevenDays,
-			expected:       emptyRetestController,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			tc.cacheFile = filepath.Join("testdata", "NewController", tc.cacheFile)
-			actual := NewController(tc.ghClient, tc.cfg, tc.gitClient, tc.usesApp, tc.cacheFile, tc.cacheRecordAge, tc.config)
-			if tc.expected != emptyRetestController {
-				if diff := cmp.Diff(tc.expected.backoff.file, actual.backoff.file); diff != "" {
-					t.Errorf("%s differs from expected:\n%s", tc.name, diff)
-				}
-			}
-		})
-	}
-}
-
 func TestRun(t *testing.T) {
 	config := &Config{Retester: Retester{
 		RetesterPolicy: RetesterPolicy{MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9}, Oranizations: map[string]Oranization{
@@ -742,20 +697,14 @@ func TestRun(t *testing.T) {
 			name:       "basic",
 			prowconfig: "simple.yaml",
 		},
-		{
-			name:       "empty",
-			prowconfig: "empty.yaml",
-		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.prowconfig != "" {
-				tc.prowconfig = filepath.Join("testdata", "prowconfig", tc.prowconfig)
-			}
+			tc.prowconfig = filepath.Join("testdata", "prowconfig", tc.prowconfig)
 			configOpts := configflagutil.ConfigOptions{ConfigPath: tc.prowconfig}
 			configAgent, err := configOpts.ConfigAgent()
 			if err != nil {
-				logrus.WithError(err).Fatal("Error starting config agent.")
+				t.Errorf("Error starting config agent.")
 			}
 			c := &RetestController{
 				ghClient:      ghc,

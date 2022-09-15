@@ -548,3 +548,53 @@ func Test_config_validate(t *testing.T) {
 		})
 	}
 }
+
+func Test_filterLabels(t *testing.T) {
+	holdLabel := github.Label{Name: "do-not-merge/hold"}
+	acceptedLabel := github.Label{Name: "accepted"}
+	unwantedLabel := github.Label{Name: "not interesting label"}
+
+	interestingLabels := sets.String{}
+	interestingLabels.Insert(holdLabel.Name, acceptedLabel.Name)
+
+	testCases := []struct {
+		name     string
+		prLabels []github.Label
+		expected []string
+	}{
+		{
+			name:     "pr with no labels",
+			prLabels: []github.Label{},
+			expected: nil,
+		},
+		{
+			name:     "pr with one label we are interested in",
+			prLabels: []github.Label{holdLabel},
+			expected: []string{holdLabel.Name},
+		},
+		{
+			name:     "returned labels are in correct order",
+			prLabels: []github.Label{holdLabel, acceptedLabel},
+			expected: []string{acceptedLabel.Name, holdLabel.Name},
+		},
+		{
+			name:     "pr with only uninteresting labels",
+			prLabels: []github.Label{unwantedLabel},
+			expected: nil,
+		},
+		{
+			name:     "pr has one label we are not interested in",
+			prLabels: []github.Label{holdLabel, unwantedLabel},
+			expected: []string{holdLabel.Name},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := filterLabels(tc.prLabels, interestingLabels)
+			if diff := cmp.Diff(actual, tc.expected); diff != "" {
+				t.Fatalf("returned labels do not match expected labels, diff:%s", diff)
+			}
+		})
+	}
+}

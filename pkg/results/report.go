@@ -149,10 +149,11 @@ func (r *reporter) report(request Request) {
 	sendRequest(req, r.client, r.username, r.password)
 }
 
+// PodScalerRequest holds the data from pod-scaler used to report a result to an aggregation server
 type PodScalerRequest struct {
-	workloadName     string
-	configuredMemory string
-	determinedMemory string
+	WorkloadName     string
+	ConfiguredMemory string
+	DeterminedMemory string
 }
 
 type PodScalerReporter struct {
@@ -177,11 +178,11 @@ func (o *Options) PodScalerReporter() (*PodScalerReporter, error) {
 
 // ReportMemoryConfigurationWarning is used to send the information about memory configuration
 // from pod-scaler-admission to result-aggregator.
-func (r *PodScalerReporter) ReportMemoryConfigurationWarning(workflowName, configuredMemory, determinedMemory string) {
+func (r *PodScalerReporter) ReportMemoryConfigurationWarning(workloadName, configuredMemory, determinedMemory string) {
 	request := PodScalerRequest{
-		workloadName:     workflowName,
-		configuredMemory: configuredMemory,
-		determinedMemory: determinedMemory,
+		WorkloadName:     workloadName,
+		ConfiguredMemory: configuredMemory,
+		DeterminedMemory: determinedMemory,
 	}
 
 	data, err := json.Marshal(request)

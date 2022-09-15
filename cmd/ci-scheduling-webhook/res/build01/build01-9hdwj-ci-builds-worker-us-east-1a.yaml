@@ -9,6 +9,7 @@ metadata:
     machine.openshift.io/vCPU: "16"
   labels:
     machine.openshift.io/cluster-api-cluster: build01-9hdwj
+    ci-machineset-class: builds
   name: build01-9hdwj-ci-builds-worker-us-east-1a
   namespace: openshift-machine-api
 spec:

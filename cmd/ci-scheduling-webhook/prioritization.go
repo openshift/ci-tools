@@ -18,6 +18,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/util/taints"
 	"math"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
@@ -54,6 +55,8 @@ const (
 	// NodeMachineConfigurationStateAnnotationKey is an annotation machine the machine config
 	// controller describing whether the machine is being updated or node.
 	NodeMachineConfigurationStateAnnotationKey = "machineconfiguration.openshift.io/state"
+
+	CiMachineSetClassLabelKey = "ci-machineset-class"
 )
 
 var (
@@ -190,8 +193,175 @@ func (p* Prioritization) initializePrioritization() error {
 		go p.pollNodeClassForScaleDown(podClass)
 	}
 
+	// go p.encourageSpotInstances()
+
 	return nil
 }
+
+func (p* Prioritization) encourageSpotInstances() {
+
+	onDemandBuildsMachineSetSelector := CiMachineSetClassLabelKey + "=builds"
+	interruptibleBuildsMachineSetSelector := CiMachineSetClassLabelKey + "=interruptible-builds"
+
+	machineSetClient := p.dynamicClient.Resource(machineSetResource).Namespace("openshift-machine-api") // connect or reconnect client on error
+	lastOnDemandReplicas := int64(-1)
+	for range time.Tick(10 * time.Second) {
+
+		onDemandMachineSetList, err := machineSetClient.List(p.context, metav1.ListOptions{LabelSelector: onDemandBuildsMachineSetSelector})
+		if err != nil {
+			klog.Errorf("Error finding on demand machinesets to assess spot instance usage: %v", err)
+			continue
+		}
+
+		var currentOnDemandReplicas int64
+		for _, onDemandMachineSet := range onDemandMachineSetList.Items {
+			msName := onDemandMachineSet.GetName()
+			replicas, found, err := unstructured.NestedInt64(onDemandMachineSet.Object, "spec", "replicas")
+			if err != nil {
+				klog.Errorf("Error finding replicas in on demand machineset %v: %v", msName, err)
+				continue
+			}
+			if !found {
+				klog.Errorf("Did not finding replica count in on demand machineset %v", msName)
+				continue
+			}
+			currentOnDemandReplicas += replicas
+		}
+
+		minimumInterruptibleReplicas := currentOnDemandReplicas
+		interruptiblesToEncourage := int64(0)
+
+		if lastOnDemandReplicas > -1 {
+			// If there are more ondemand than when we checked last time, ensure that
+			// spot instances are added to match.
+			if currentOnDemandReplicas > lastOnDemandReplicas {
+				interruptiblesToEncourage += currentOnDemandReplicas - lastOnDemandReplicas
+			}
+		}
+		lastOnDemandReplicas = currentOnDemandReplicas
+
+		interruptibleMachineSetList, err := machineSetClient.List(p.context, metav1.ListOptions{LabelSelector: interruptibleBuildsMachineSetSelector})
+		if err != nil {
+			klog.Errorf("Error finding interruptible machinesets to assess spot instance usage: %v", err)
+			continue
+		}
+
+		adjustableInterruptibleMachineSets := make([]unstructured.Unstructured, 0)
+		for _, interruptibleMachineSet := range interruptibleMachineSetList.Items {
+			msName := interruptibleMachineSet.GetName()
+			replicas, found, err := unstructured.NestedInt64(interruptibleMachineSet.Object, "spec", "replicas")
+			if err != nil {
+				klog.Errorf("Error finding replicas in interruptible machineset %v: %v", msName, err)
+				continue
+			}
+			if !found {
+				klog.Errorf("Did not finding replica count in interruptible machineset %v", msName)
+				continue
+			}
+			availableReplicas, found, err := unstructured.NestedInt64(interruptibleMachineSet.Object, "status", "availableReplicas")
+			if err != nil {
+				klog.Errorf("Error finding available replicas in interruptible machineset %v: %v", msName, err)
+				continue
+			}
+			if !found {
+				klog.Errorf("Did not finding available replica count in interruptible machineset %v", msName)
+				continue
+			}
+
+			if replicas > availableReplicas {
+				// We are already requesting spot instances that have not been successfully provisioned.
+				klog.Infof("Ignoring interruptible machineset because replica count is greater than available")
+				continue
+			}
+
+			adjustableInterruptibleMachineSets = append(adjustableInterruptibleMachineSets, interruptibleMachineSet)
+		}
+
+		interruptibleMachineSetCount := len(adjustableInterruptibleMachineSets)
+		if interruptibleMachineSetCount == 0 {
+			klog.Infof("No interruptible machinesets which can be adjusted. Will check again in 5 minutes.")
+			time.Sleep(5 * time.Minute)
+			continue
+		}
+
+		var totalInterruptibleReplicas int64
+		interruptibleReplicaCounts := make([]int64, interruptibleMachineSetCount)
+		for i, interruptibleMachineSet := range adjustableInterruptibleMachineSets {
+			msName := interruptibleMachineSet.GetName()
+			replicas, found, err := unstructured.NestedInt64(interruptibleMachineSet.Object, "spec", "replicas")
+			if err != nil {
+				klog.Errorf("Error finding replicas in interruptible machineset %v: %v", msName, err)
+				totalInterruptibleReplicas = -1
+				break
+			}
+			if !found {
+				klog.Errorf("Did not finding replica count in interruptible machineset %v", msName)
+				totalInterruptibleReplicas = -1
+				break
+			}
+			totalInterruptibleReplicas += replicas
+			interruptibleReplicaCounts[i] = replicas
+		}
+
+		if totalInterruptibleReplicas < 0 {
+			continue
+		}
+
+		targetInterruptibleReplicas := totalInterruptibleReplicas + interruptiblesToEncourage
+		if minimumInterruptibleReplicas > targetInterruptibleReplicas {
+			targetInterruptibleReplicas = minimumInterruptibleReplicas
+		}
+
+		interruptiblesToAllocate := targetInterruptibleReplicas - totalInterruptibleReplicas
+
+		if interruptiblesToAllocate == 0 {
+			klog.Infof("No additional interruptible instances are desired.")
+			continue
+		}
+
+		// Randomly allocate the number of new desired interruptibles across interruptible machinesets.
+		// We don't want the machinesets balanced necessarily. We want to use interruptible instances
+		// wherever we can successfully get them. Random allocation will succeed in locations
+		// with available instances and so gravitate in that direction after multiple iterations.
+		for interruptiblesToAllocate > 0 {
+			interruptibleReplicaCounts[rand.Intn(interruptibleMachineSetCount)]++
+			interruptiblesToAllocate--
+		}
+
+		nodeClassScaleDownLock[PodClassBuilds].Lock()
+		for i, interruptibleMachineSet := range adjustableInterruptibleMachineSets {
+			msName := interruptibleMachineSet.GetName()
+
+			if interruptibleReplicaCounts[i] > 50 {
+				// Sanity check
+				klog.Errorf("Refusing to increase interruptible machineset %v scale beyond 50", msName, err)
+				continue
+			}
+
+			scaleUpPatch := []interface{}{
+				map[string]interface{}{
+					"op":    "replace",
+					"path":  "/spec/replicas",
+					"value": interruptibleReplicaCounts[i],
+				},
+			}
+			scaleUpPayload, err := json.Marshal(scaleUpPatch)
+			if err != nil {
+				klog.Errorf("unable to marshal interruptible machineset %v scale up patch: %#v", msName, err)
+				continue
+			}
+
+			_, err = machineSetClient.Patch(p.context, msName, types.JSONPatchType, scaleUpPayload, metav1.PatchOptions{})
+			if err != nil {
+				klog.Errorf("unable to patch interruptible machineset %v with scale down patch: %#v", msName, err)
+				continue
+			}
+
+		}
+		nodeClassScaleDownLock[PodClassBuilds].Unlock()
+	}
+}
+
 
 func (p* Prioritization) pollNodeClassForScaleDown(podClass PodClass) {
 	p.evaluateNodeClassScaleDown(podClass) // just for faster debug
@@ -365,13 +535,6 @@ func (p* Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.N
 
 	klog.Infof("Evaluating second stage of scale down for podClass %v node: %v", podClass, node.Name)
 
-	abortScaleDown := func(err error) {
-		// We can't leave nodes in NoSchedule with a custom taint. This confuses the autoscalers
-		// simulated fit calculations.
-		klog.Errorf("Aborting scale down of node %v due to: %v", node.Name, err)
-		_ = p.setNodeAvoidanceState(node, podClass, corev1.TaintEffectPreferNoSchedule) // might was well use it for something
-	}
-
 	podCount := 0
 
 	// Final live query to see if there are really no pods vs shared informer indexer used for quick checks.
@@ -380,8 +543,8 @@ func (p* Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.N
 	})
 
 	if err !=  nil {
-		abortScaleDown(fmt.Errorf("unable to determine real-time pods for node: %#v", err))
-		return
+		klog.Errorf("Unable to determine real-time pods for node %v: %#v", node.Name, err)
+		return // Try again later
 	}
 
 	for _, queriedPod := range queriedPods.Items {
@@ -392,14 +555,15 @@ func (p* Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.N
 	}
 
 	if podCount != 0 {
-		abortScaleDown(fmt.Errorf("found non zero real-time pod count: %v", podCount))
-		return
+		klog.Errorf("found non zero real-time pod count %v for %v", podCount, node.Name)
+		return // Try again later
 	}
 
 	klog.Warningf("Triggering final stage of scale down for podClass %v node: %v", podClass, node.Name)
 	machineSetNamespace, machineSetName, machineName, err := p.scaleDown(podClass, node)
 	if err != nil {
-		abortScaleDown(fmt.Errorf("unable to scale down node %v: %v", node.Name, err))
+		// Keep the node cordoned and try again later.
+		klog.Errorf("Unable to scale down node %v: %v", node.Name, err)
 		return
 	}
 
@@ -467,7 +631,7 @@ func (p* Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.N
 		}
 
 		if found && replicas != readyReplicas {
-			klog.Warningf("existing replicas (%v) != status.readyReplicas (%v) in machineset %v ; still waiting for scale down of %v", replicas, statusReplicas, machineSetName, node.Name)
+			klog.Warningf("existing replicas (%v) != status.readyReplicas (%v) in machineset %v ; still waiting for scale down of %v", replicas, readyReplicas, machineSetName, node.Name)
 			continue
 		} else {
 			if machinePhase == "running" {
@@ -518,12 +682,7 @@ func (p* Prioritization) evaluateNodeClassScaleDown(podClass PodClass) {
 					go p.evaluateNodeScaleDown(podClass, node)
 				}
 			} else {
-				// The node was targeted, but the cordon raced with one or more pods being scheduled. Might
-				// as well go back to PreferNoSchedule if we can.
-				err := p.setNodeAvoidanceState(node, podClass, corev1.TaintEffectPreferNoSchedule)
-				if err != nil {
-					klog.Errorf("Unable to turn on PreferNoSchedule avoidance for node %v: %#v", node.Name, err)
-				}
+				klog.Warningf("Pods are still running on node targeted for scale down: %v", node.Name)
 			}
 		}
 	}
@@ -535,7 +694,7 @@ func (p* Prioritization) evaluateNodeClassScaleDown(podClass PodClass) {
 		return true
 	})
 
-	if len(nodeNamesUnderActiveScaleDown) > 0{
+	if len(nodeNamesUnderActiveScaleDown) > 0 {
 		klog.Infof("Active attempts to scale down the following %v nodes are underway: %v", podClass, nodeNamesUnderActiveScaleDown)
 	}
 
@@ -619,7 +778,8 @@ func (p* Prioritization) getWorkloadNodesInAvoidanceOrder(podClass PodClass) ([]
 	}
 
 	cachedPodCount := make(map[string]int) // maps node name to running pod count
-	getCachedPodCount := func(nodeName string) int {
+	getCachedPodCount := func(node *corev1.Node) int {
+		nodeName := node.Name
 		if val, ok := cachedPodCount[nodeName]; ok {
 			return val
 		}
@@ -633,6 +793,13 @@ func (p* Prioritization) getWorkloadNodesInAvoidanceOrder(podClass PodClass) ([]
 		}
 
 		classedPodCount := len(pods)
+
+		if _, ok := node.Labels["machine.openshift.io/interruptible-instance"]; ok {
+			// Ensure spot instances always sort AFTER on demand instances; i.e. favor
+			// eliminating the more expensive on demand instance.
+			classedPodCount += 100
+		}
+
 		cachedPodCount[nodeName] = classedPodCount
 		return classedPodCount
 	}
@@ -643,9 +810,9 @@ func (p* Prioritization) getWorkloadNodesInAvoidanceOrder(podClass PodClass) ([]
 	// with fewer pods.
 	sort.Slice(workloadNodes, func(i, j int) bool {
 		nodeI := workloadNodes[i]
-		podsI := getCachedPodCount(nodeI.Name)
+		podsI := getCachedPodCount(nodeI)
 		nodeJ := workloadNodes[j]
-		podsJ := getCachedPodCount(nodeJ.Name)
+		podsJ := getCachedPodCount(nodeJ)
 		if podsI < podsJ {
 			return true
 		} else if podsI == podsJ {
@@ -706,8 +873,7 @@ func (p* Prioritization) getMachinePhase(machineNamespace string, machineName st
 }
 
 // scaleDown should be called by only one thread at a time. It assesses a node which has been staged for
-// safe scale down (e.g. is running with the NoSchedule taint). Final checks are performed. If an error is
-// returned, the caller must unstage the scale down.
+// safe scale down (e.g. is running with the NoSchedule taint). Final checks are performed.
 func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machineSetNamespace string, machineSetName string, machineName string, err error) {
 	if _, ok := node.Labels[CiWorkloadLabelName]; !ok {
 		// Just a sanity check
@@ -725,28 +891,14 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 
 	machineName = components[1]
 
-	machinePhase, machineExists, machineObj, err := p.getMachinePhase(machineSetNamespace, machineName)
+	_, machineExists, _, err := p.getMachinePhase(machineSetNamespace, machineName)
+
 	if !machineExists {
 		return machineSetNamespace, "", machineName,nil
 	}
-	if err != nil {
-		return machineSetNamespace, "", machineName, err
-	}
 
-	if machinePhase != "running" {
-		/**
-		 * The following scenario was observed:
-		 * 1. cluster wants to scale down node ip-10-0-130-5.ec2.internal
-		 * 2. ip-10-0-130-5.ec2.internal's machine is stuck in 'Deleting'
-		 * 3. ip-10-0-130-5.ec2.internal is stuck in deleting because it can't drain
-		 * 4. ip-10-0-130-5.ec2.internal was created 2 days ago
-		 * 5. it can't drain because a pod created in April (ci/11ab1667-b3fd-11ec-9cb6-0a580a822c83-debug) that happens to have been scheduled to a completely distinct node of the same IP address and therefore node name is stuck in 'Terminating' (prow finalizer)
-		 * 6. An old incarnation of the ci scheduling webhook would detect that the machine cannot be disposed of successfully keeps making it schedulable
-		 * 7. machine api keeps cordoning and draining it (unsuccessfully).. evicting our workload pods.
-		 * So (6) has changed. Don't throw an error if the machine is not in running.
-		 */
-		klog.Infof("Refusing to scale down machine %v / node %v because it is not in the running phase. It is in: %v", machineName, node.Name, machinePhase)
-		return machineSetNamespace, "", machineName, nil
+	if err != nil {
+		return machineSetNamespace, "", machineName, fmt.Errorf("error checking machine phase %v / node %v: %v", machineName, node.Name, err)
 	}
 
 	for {
@@ -754,13 +906,24 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 		// extract logs / etc (they poll).
 		pods, err := p.getPodsUsingNode(node.Name, true, 5 *time.Minute)
 		if err != nil {
-			return machineSetNamespace, "", machineName, fmt.Errorf("error during scale down evaluation while checking for pods running on machine %v / node %v: %v", machineName, node.Name, err)
+			klog.Errorf("Unable to query for pod age requirement. Encountered error: %v", err)
+			break
 		}
 		if len(pods) == 0 {
 			break
 		}
 		klog.Infof("Waiting for all terminated pods on machine %v / node %v to have been so for several minutes' %v remaining", machineName, node.Name, len(pods))
 		time.Sleep(1 * time.Minute)
+	}
+
+	_, machineExists, machineObj, err := p.getMachinePhase(machineSetNamespace, machineName)
+
+	if !machineExists {
+		return machineSetNamespace, "", machineName,nil
+	}
+
+	if err != nil {
+		return machineSetNamespace, "", machineName, fmt.Errorf("error checking machine phase %v / node %v: %v", machineName, node.Name, err)
 	}
 
 	machineMetadata, found, err := unstructured.NestedMap(machineObj.UnstructuredContent(), "metadata")
@@ -990,6 +1153,13 @@ func (p* Prioritization) setNodeAvoidanceState(node *corev1.Node, podClass PodCl
 
 	if node.Spec.Unschedulable {
 		foundEffect = corev1.TaintEffectNoSchedule
+	}
+
+	if foundEffect == corev1.TaintEffectNoSchedule {
+		// Never uncordon nodes. This gets really complex if someone is manually cordoning nodes.
+		// Just avoid the complexity.
+		klog.Errorf("Attempt to new avoidance state %v for node %v targeted for scale down", desiredEffect, node.Name)
+		return nil
 	}
 
 	// We enforce NoSchedule avoidance with cordon. CiWorkloadPreferNoScheduleTaintName

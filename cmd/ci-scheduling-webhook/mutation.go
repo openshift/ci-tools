@@ -254,7 +254,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		reduceCPURequests("containers", pod.Spec.Containers, cpuFactor)
 
 		// Setup toleration appropriate for podClass so that it can only land on desired machineset.
-		// This is achieved by virtue of using a RuntimeClass object which specifies the necsesary
+		// This is achieved by virtue of using a RuntimeClass object which specifies the necessary
 		// tolerations for each workload.
 		addPatchEntry("add", "/spec/runtimeClassName", "ci-scheduler-runtime-"+podClass)
 
@@ -302,7 +302,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 			// If there are no spot instances, this will be ignored.
 			affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = []corev1.PreferredSchedulingTerm {
 				{
-					Weight: 1,
+					Weight: 100,
 					Preference: corev1.NodeSelectorTerm{
 						MatchExpressions: []corev1.NodeSelectorRequirement{
 							{

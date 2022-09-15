@@ -37,6 +37,9 @@ spec:
         app: ci-scheduling-admission-webhook
     spec:
       serviceAccountName: ci-scheduling-webhook
+      tolerations:
+        - key: node-role.kubernetes.io/infra
+          operator: Exists
       containers:
         # Temporary hosting location
         - image: quay.io/jupierce/ci-scheduling-webhook:latest

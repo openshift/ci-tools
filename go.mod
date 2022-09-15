@@ -49,10 +49,10 @@ require (
 	github.com/montanaflynn/stats v0.6.3
 	github.com/openhistogram/circonusllhist v0.3.1-0.20210608220433-1bd1bfa6c998
 	github.com/openshift-eng/openshift-goimports v0.0.0-20220201193023-4f8ea117352c
-	github.com/openshift/api v0.0.0-20210730095913-85e1d547cdee
+	github.com/openshift/api v0.0.0-20220531073726-6c4f186339a7
 	github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0
 	github.com/openshift/client-go v3.9.0+incompatible
-	github.com/openshift/hive/apis v0.0.0-20220308072022-688681d11095
+	github.com/openshift/hive/apis v0.0.0-20220914191453-366466c2d2ca
 	github.com/openshift/imagebuilder v1.1.1
 	github.com/openshift/library-go v0.0.0-20200127110935-527e40ed17d9
 	github.com/openshift/openshift-apiserver v0.0.0-alpha.0
@@ -244,6 +244,7 @@ require (
 	github.com/kevinburke/ssh_config v0.0.0-20201106050909-4977a11b4351 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87 // indirect
 	github.com/prometheus/statsd_exporter v0.21.0 // indirect
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.0 // indirect

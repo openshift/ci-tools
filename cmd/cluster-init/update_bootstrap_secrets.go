@@ -156,6 +156,12 @@ func generatePushPullSecretFrom(clusterName string, items []secretbootstrap.Dock
 				Item:        buildUFarm,
 				RegistryURL: registryUrlFor(clusterName),
 			},
+			{
+				AuthField:   "auth",
+				EmailField:  "email",
+				Item:        "quay.io-pull-secret",
+				RegistryURL: "quay.io",
+			},
 		},
 	}
 	itemContext.DockerConfigJSONData =

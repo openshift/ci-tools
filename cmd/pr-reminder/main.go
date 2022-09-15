@@ -456,8 +456,5 @@ func messageUser(user user, slackClient slackClient) error {
 
 // getLabelMessage returns a string listing te PR's labels
 func getLabelMessage(labels []string) string {
-	if len(labels) == 0 {
-		return ""
-	}
 	return fmt.Sprintf(":label: labeled: *%v*", strings.Join(labels[:], ", "))
 }

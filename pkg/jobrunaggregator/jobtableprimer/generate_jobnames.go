@@ -193,10 +193,20 @@ func (o *GenerateJobNamesOptions) Run(ctx context.Context) error {
 		lines = append(lines, fmt.Sprintf("// begin %v", url))
 		localLines := []string{}
 		for _, curr := range periodicConfig.Periodics {
-			// the single file for say "master" actually contains every release, so we only those containing 4.10
-			// we want to extend this for future releases, but we need to get out of the ditch at the moment and parsing
-			// this is a strict improvement over where we are.
-			if !strings.Contains(curr.Name, "-4.10") {
+			// TODO: the single file for say "master" actually contains every release, but we only want jobs 4.10+
+			// where we started disruption monitoring. Adding a bunch of future rows to buy us time but this could
+			// stand some logic.
+			if !strings.Contains(curr.Name, "-4.10") &&
+				!strings.Contains(curr.Name, "-4.11") &&
+				!strings.Contains(curr.Name, "-4.12") &&
+				!strings.Contains(curr.Name, "-4.13") &&
+				!strings.Contains(curr.Name, "-4.14") &&
+				!strings.Contains(curr.Name, "-4.15") &&
+				!strings.Contains(curr.Name, "-4.16") &&
+				!strings.Contains(curr.Name, "-4.17") &&
+				!strings.Contains(curr.Name, "-4.18") &&
+				!strings.Contains(curr.Name, "-4.19") &&
+				!strings.Contains(curr.Name, "-4.20") {
 				continue
 			}
 			localLines = append(localLines, curr.Name)

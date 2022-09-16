@@ -12,7 +12,6 @@ import (
 	"github.com/getlantern/deepcopy"
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -891,7 +890,7 @@ func printAsYaml(pjs []*pjapi.ProwJob) error {
 // a "trial" execution of a Prow job configuration when the *job config* config
 // is changed, giving feedback to Prow config authors on how the changes of the
 // config would affect the "production" Prow jobs run on the actual target repos
-func (e *Executor) ExecuteJobs() (bool, error) {
+func (e *Executor) ExecuteJobs(waitForJobs bool) (bool, error) {
 	submitSuccess := true
 	pjs, err := e.submitRehearsals()
 	if err != nil {
@@ -915,11 +914,16 @@ func (e *Executor) ExecuteJobs() (bool, error) {
 	for _, job := range pjs {
 		names.Insert(job.Name)
 	}
-	waitSuccess, err := e.waitForJobs(names, selector)
-	if !submitSuccess {
-		return waitSuccess, fmt.Errorf("failed to submit all rehearsal jobs")
+	//TODO: waiting for jobs is not something that we should do once we remove the original pj-rehearse
+	if waitForJobs {
+		waitSuccess, err := e.waitForJobs(names, selector)
+		if !submitSuccess {
+			return waitSuccess, fmt.Errorf("failed to submit all rehearsal jobs")
+		}
+		return waitSuccess, err
 	}
-	return waitSuccess, err
+
+	return true, err
 }
 
 func (e *Executor) waitForJobs(jobs sets.String, selector ctrlruntimeclient.ListOption) (bool, error) {

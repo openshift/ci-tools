@@ -581,7 +581,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 			}
 			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, client, testNamespace)
 			executor.pollFunc = threetimesTryingPoller
-			_, err = executor.ExecuteJobs()
+			_, err = executor.ExecuteJobs(true)
 
 			if err == nil {
 				t.Errorf("Expected to return error, got nil")
@@ -647,7 +647,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 			}
 			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, false, testLoggers, client, testNamespace)
 			executor.pollFunc = threetimesTryingPoller
-			success, _ := executor.ExecuteJobs()
+			success, _ := executor.ExecuteJobs(true)
 
 			if success {
 				t.Errorf("Expected to return success=false, got true")
@@ -770,7 +770,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 				t.Errorf("returned imageStreamTags do not match expected: %s", diff)
 			}
 			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, client, testNamespace)
-			success, err := executor.ExecuteJobs()
+			success, err := executor.ExecuteJobs(true)
 
 			if err != nil {
 				t.Errorf("Expected ExecuteJobs() to not return error, returned %v", err)

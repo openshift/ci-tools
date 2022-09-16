@@ -381,7 +381,7 @@ func rehearseMain() error {
 	}
 
 	executor := rehearse.NewExecutor(presubmitsToRehearse, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient, prConfig.Prow.ProwJobNamespace)
-	success, err := executor.ExecuteJobs()
+	success, err := executor.ExecuteJobs(true)
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")
 		return fmt.Errorf(rehearseFailureOutput)

@@ -70,6 +70,13 @@ type config struct {
 	Teams []team `json:"teams"`
 }
 
+// getInterestedLabels returns a set of those labels we are interested in when using the PR reminder
+func getInterestedLabels() sets.String {
+	var labels = sets.String{}
+	labels.Insert("do-not-merge/hold")
+	return labels
+}
+
 var orgRepoFormat = regexp.MustCompile(`\w+/\w+`)
 
 func (c *config) validate(gtk githubToKerberos, slackClient slackClient) error {
@@ -198,6 +205,7 @@ type prRequest struct {
 	Author      string
 	Created     time.Time
 	LastUpdated time.Time
+	Labels      []string
 }
 
 func (p prRequest) link() string {
@@ -336,6 +344,7 @@ func findPrsForUsers(users map[string]user, ghClient prClient) map[string]user {
 						Author:      pr.User.Login,
 						Created:     pr.CreatedAt,
 						LastUpdated: pr.UpdatedAt,
+						Labels:      filterLabels(pr.Labels, getInterestedLabels()),
 					})
 					users[i] = u
 				}
@@ -344,6 +353,19 @@ func findPrsForUsers(users map[string]user, ghClient prClient) map[string]user {
 	}
 
 	return users
+}
+
+// filterLabels filters out those labels from the PR we are not interested in
+// and returns only those that are included in the interestedLabels set
+func filterLabels(labels []github.Label, interestedLabels sets.String) []string {
+	var result []string
+	for _, label := range labels {
+		if interestedLabels.Has(label.Name) {
+			result = append(result, label.Name)
+		}
+	}
+	sort.Sort(sort.StringSlice(result))
+	return result
 }
 
 func loadConfig(filename string, config interface{}) error {
@@ -396,7 +418,7 @@ func messageUser(user user, slackClient slackClient) error {
 	}
 
 	for _, pr := range user.PrRequests {
-		message = append(message, &slack.ContextBlock{
+		prBlock := &slack.ContextBlock{
 			Type: slack.MBTContext,
 			ContextElements: slack.ContextElements{
 				Elements: []slack.MixedElement{
@@ -410,7 +432,14 @@ func messageUser(user user, slackClient slackClient) error {
 					},
 				},
 			},
-		})
+		}
+		if len(pr.Labels) > 0 {
+			prBlock.ContextElements.Elements = append(prBlock.ContextElements.Elements, &slack.TextBlockObject{
+				Type: slack.MarkdownType,
+				Text: getLabelMessage(pr.Labels),
+			})
+		}
+		message = append(message, prBlock)
 	}
 
 	responseChannel, responseTimestamp, err := slackClient.PostMessage(user.SlackId,
@@ -423,4 +452,9 @@ func messageUser(user user, slackClient slackClient) error {
 	}
 
 	return kerrors.NewAggregate(errors)
+}
+
+// getLabelMessage returns a string listing te PR's labels
+func getLabelMessage(labels []string) string {
+	return fmt.Sprintf(":label: labeled: *%v*", strings.Join(labels[:], ", "))
 }

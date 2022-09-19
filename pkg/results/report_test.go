@@ -182,3 +182,69 @@ func TestGetUsernameAndPassword(t *testing.T) {
 		}
 	}
 }
+
+func TestReportMemoryConfigurationWarning(t *testing.T) {
+	testCases := []struct {
+		name             string
+		workloadName     string
+		configuredMemory string
+		determinedMemory string
+		expected         string
+	}{
+		{
+			name:             "valid request",
+			workloadName:     "name",
+			configuredMemory: "100",
+			determinedMemory: "200",
+			expected:         `{"WorkloadName":"name","ConfiguredMemory":"100","DeterminedMemory":"200"}`,
+		},
+		{
+			name:             "empty workload name",
+			workloadName:     "",
+			configuredMemory: "100",
+			determinedMemory: "200",
+			expected:         `{"WorkloadName":"","ConfiguredMemory":"100","DeterminedMemory":"200"}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			testServer := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				if request.Header.Get("Content-Type") != "application/json" {
+					t.Errorf("incorrectly sent content-type header for JSON")
+					return
+				}
+
+				if request.Method != http.MethodPost {
+					t.Errorf("incorrect method: %s", request.Method)
+					return
+				}
+
+				if !strings.HasSuffix(request.URL.Path, "/pod-scaler") {
+					t.Errorf("incorrect path: %s", request.URL.Path)
+					return
+				}
+
+				data, err := ioutil.ReadAll(request.Body)
+				if err != nil {
+					t.Errorf("failed to read request body: %v", err)
+				}
+
+				if actual := string(data); actual != tc.expected {
+					t.Errorf("expected %v, got %v", tc.expected, actual)
+				}
+			}))
+			defer testServer.Close()
+
+			podScalerReporter := PodScalerReporter{
+				client: &http.Client{
+					Transport: &http.Transport{
+						TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+					},
+				},
+				address: testServer.URL,
+			}
+			podScalerReporter.ReportMemoryConfigurationWarning(tc.workloadName, tc.configuredMemory, tc.determinedMemory)
+		})
+	}
+}

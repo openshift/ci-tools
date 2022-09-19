@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -155,51 +156,51 @@ func TestLoginHandler(t *testing.T) {
 func TestValidatePodScalerRequest(t *testing.T) {
 	var testCases = []struct {
 		name     string
-		request  *podScalerRequest
+		request  *results.PodScalerRequest
 		expected error
 	}{
 		{
 			name: "everything ok",
-			request: &podScalerRequest{
-				workloadName:     "name",
-				configuredMemory: "100",
-				determinedMemory: "400",
+			request: &results.PodScalerRequest{
+				WorkloadName:     "name",
+				ConfiguredMemory: "100",
+				DeterminedMemory: "400",
 			},
 			expected: nil,
 		},
 		{
 			name: "empty workload name",
-			request: &podScalerRequest{
-				workloadName:     "",
-				configuredMemory: "100",
-				determinedMemory: "400",
+			request: &results.PodScalerRequest{
+				WorkloadName:     "",
+				ConfiguredMemory: "100",
+				DeterminedMemory: "400",
 			},
 			expected: fmt.Errorf("workload_name field in request is empty"),
 		},
 		{
 			name: "empty configured memory",
-			request: &podScalerRequest{
-				workloadName:     "name",
-				configuredMemory: "",
-				determinedMemory: "400",
+			request: &results.PodScalerRequest{
+				WorkloadName:     "name",
+				ConfiguredMemory: "",
+				DeterminedMemory: "400",
 			},
 			expected: fmt.Errorf("configured_memory field in request is empty"),
 		},
 		{
 			name: "empty determined memory",
-			request: &podScalerRequest{
-				workloadName:     "name",
-				configuredMemory: "100",
-				determinedMemory: "",
+			request: &results.PodScalerRequest{
+				WorkloadName:     "name",
+				ConfiguredMemory: "100",
+				DeterminedMemory: "",
 			},
 			expected: fmt.Errorf("determined_memory field in request is empty"),
 		},
 		{
 			name: "empty determined memory",
-			request: &podScalerRequest{
-				workloadName:     "name",
-				configuredMemory: "100",
-				determinedMemory: "",
+			request: &results.PodScalerRequest{
+				WorkloadName:     "name",
+				ConfiguredMemory: "100",
+				DeterminedMemory: "",
 			},
 			expected: fmt.Errorf("determined_memory field in request is empty"),
 		},

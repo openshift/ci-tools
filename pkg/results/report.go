@@ -146,9 +146,64 @@ func (r *reporter) report(request Request) {
 		logrus.Tracef("could not create report request: %v", err)
 		return
 	}
+	sendRequest(req, r.client, r.username, r.password)
+}
+
+// PodScalerRequest holds the data from pod-scaler used to report a result to an aggregation server
+type PodScalerRequest struct {
+	WorkloadName     string
+	ConfiguredMemory string
+	DeterminedMemory string
+}
+
+type PodScalerReporter struct {
+	client             *http.Client
+	username, password string
+	address            string
+}
+
+func (o *Options) PodScalerReporter() (*PodScalerReporter, error) {
+	username, password, err := getUsernameAndPassword(o.credentials)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get username and password: %w", err)
+	}
+
+	return &PodScalerReporter{
+		client:   &http.Client{},
+		username: username,
+		password: password,
+		address:  o.address,
+	}, nil
+}
+
+// ReportMemoryConfigurationWarning is used to send the information about memory configuration
+// from pod-scaler-admission to result-aggregator.
+func (r *PodScalerReporter) ReportMemoryConfigurationWarning(workloadName, configuredMemory, determinedMemory string) {
+	request := PodScalerRequest{
+		WorkloadName:     workloadName,
+		ConfiguredMemory: configuredMemory,
+		DeterminedMemory: determinedMemory,
+	}
+
+	data, err := json.Marshal(request)
+	if err != nil {
+		logrus.Tracef("could not marshal pod-scaler request: %v", err)
+		return
+	}
+
+	httpRequest, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/pod-scaler", r.address), bytes.NewReader(data))
+	if err != nil {
+		logrus.Tracef("could not create pod-scaler request: %v", err)
+		return
+	}
+
+	sendRequest(httpRequest, r.client, r.username, r.password)
+}
+
+func sendRequest(req *http.Request, client *http.Client, username, password string) {
 	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(r.username, r.password)
-	resp, err := r.client.Do(req)
+	req.SetBasicAuth(username, password)
+	resp, err := client.Do(req)
 	if err != nil {
 		logrus.Tracef("could not send report request: %v", err)
 		return

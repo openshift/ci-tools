@@ -52,12 +52,6 @@ type options struct {
 	passwdFile  string
 }
 
-type podScalerRequest struct {
-	workloadName     string
-	configuredMemory string
-	determinedMemory string
-}
-
 func gatherOptions() (options, error) {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
@@ -101,14 +95,14 @@ func validateRequest(request *results.Request) error {
 	return nil
 }
 
-func validatePodScalerRequest(request *podScalerRequest) error {
-	if request.workloadName == "" {
+func validatePodScalerRequest(request *results.PodScalerRequest) error {
+	if request.WorkloadName == "" {
 		return fmt.Errorf("workload_name field in request is empty")
 	}
-	if request.configuredMemory == "" {
+	if request.ConfiguredMemory == "" {
 		return fmt.Errorf("configured_memory field in request is empty")
 	}
-	if request.determinedMemory == "" {
+	if request.DeterminedMemory == "" {
 		return fmt.Errorf("determined_memory field in request is empty")
 	}
 	return nil
@@ -130,11 +124,11 @@ func withErrorRate(request *results.Request) {
 	errorRate.With(labels).Inc()
 }
 
-func recordPodScalerError(request *podScalerRequest) {
+func recordPodScalerError(request *results.PodScalerRequest) {
 	labels := prometheus.Labels{
-		"workload_name":     request.workloadName,
-		"configured_memory": request.configuredMemory,
-		"determined_memory": request.determinedMemory,
+		"workload_name":     request.WorkloadName,
+		"configured_memory": request.ConfiguredMemory,
+		"determined_memory": request.DeterminedMemory,
 	}
 	podScalerErrorRate.With(labels).Inc()
 }
@@ -192,7 +186,7 @@ func handlePodScalerResult() http.HandlerFunc {
 			return
 		}
 
-		request := &podScalerRequest{}
+		request := &results.PodScalerRequest{}
 		if err = json.Unmarshal(bytes, request); err != nil {
 			handleError(w, fmt.Errorf("unable to decode pod-scaler request body: %w", err))
 			return

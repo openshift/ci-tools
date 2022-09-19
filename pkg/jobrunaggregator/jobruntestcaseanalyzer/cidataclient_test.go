@@ -199,8 +199,33 @@ func (m *MockCIDataClient) ListUnifiedTestRunsForJobAfterDay(arg0 context.Contex
 	return ret0, ret1
 }
 
+func (m *MockCIDataClient) ListDisruptionHistoricalData(arg0 context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListDisruptionHistoricalData", arg0)
+	ret0, _ := ret[0].([]jobrunaggregatorapi.HistoricalDataRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+func (m *MockCIDataClient) ListAlertHistoricalData(arg0 context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAlertHistoricalData", arg0)
+	ret0, _ := ret[0].([]jobrunaggregatorapi.HistoricalDataRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
 // ListUnifiedTestRunsForJobAfterDay indicates an expected call of ListUnifiedTestRunsForJobAfterDay
 func (mr *MockCIDataClientMockRecorder) ListUnifiedTestRunsForJobAfterDay(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUnifiedTestRunsForJobAfterDay", reflect.TypeOf((*MockCIDataClient)(nil).ListUnifiedTestRunsForJobAfterDay), arg0, arg1, arg2)
+}
+
+func (mr *MockCIDataClientMockRecorder)  ListDisruptionHistoricalData(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDisruptionHistoricalData", reflect.TypeOf((*MockCIDataClient)(nil).ListDisruptionHistoricalData), arg0)
+}
+
+func (mr *MockCIDataClientMockRecorder)  ListAlertHistoricalData(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUnifiedTestRunsForJobAfterDay", reflect.TypeOf((*MockCIDataClient)(nil).ListAlertHistoricalData), arg0)
 }

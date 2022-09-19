@@ -1,6 +1,7 @@
 package prowgen
 
 import (
+	"fmt"
 	"time"
 
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -17,6 +18,7 @@ type prowJobBaseBuilder struct {
 
 	info     *ProwgenInfo
 	testName string
+	cluster  string
 }
 
 func jobRelease(configSpec *cioperatorapi.ReleaseBuildConfiguration) string {
@@ -103,6 +105,7 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo, podSpecGenerator CiOperatorPodSpecGenerator, test cioperatorapi.TestStepConfiguration) *prowJobBaseBuilder {
 	p := NewProwJobBaseBuilder(configSpec, info, podSpecGenerator)
 	p.testName = test.As
+	p.cluster = string(test.Cluster)
 
 	maxCustomDuration := time.Hour * 8
 	if test.Timeout != nil && test.Timeout.Duration <= maxCustomDuration {
@@ -222,5 +225,10 @@ func (p *prowJobBaseBuilder) WithLabel(key, value string) *prowJobBaseBuilder {
 func (p *prowJobBaseBuilder) Build(namePrefix string) prowconfig.JobBase {
 	p.base.Name = p.info.JobName(namePrefix, p.testName)
 	p.base.Spec = p.PodSpec.MustBuild()
+
+	if p.cluster == string(cioperatorapi.ClusterARM01) {
+		p.base.Spec.Containers[0].Image = fmt.Sprintf("%s/ci-arm64/ci-operator:latest", cioperatorapi.ServiceDomainArm01Registry)
+	}
+
 	return p.base
 }

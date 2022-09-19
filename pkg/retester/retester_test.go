@@ -676,10 +676,10 @@ func TestCheck(t *testing.T) {
 	}
 }
 
-func TestRun(t *testing.T) {
+func TestRunWithCandidates(t *testing.T) {
 	config := &Config{Retester: Retester{
 		RetesterPolicy: RetesterPolicy{MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9}, Oranizations: map[string]Oranization{
-			"org": {RetesterPolicy: RetesterPolicy{Enabled: &True}},
+			"openshift": {RetesterPolicy: RetesterPolicy{Enabled: &True}},
 		},
 	}}
 	ghc := &MyFakeClient{fakegithub.NewFakeClient()}
@@ -691,21 +691,48 @@ func TestRun(t *testing.T) {
 	testCases := []struct {
 		name       string
 		prowconfig string
+		jobconfig  string
+		candidates map[string]tide.PullRequest
 		expected   error
 	}{
 		{
-			name:       "basic",
+			name:       "one candidate",
 			prowconfig: "simple.yaml",
+			jobconfig:  "simple.yaml",
+			candidates: map[string]tide.PullRequest{
+				"a": {
+					Number:     1,
+					HeadRefOID: "a",
+					Repository: struct {
+						Name          githubv4.String
+						NameWithOwner githubv4.String
+						Owner         struct{ Login githubv4.String }
+					}{Name: "ci-tools", Owner: struct{ Login githubv4.String }{Login: "openshift"}},
+				},
+			},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.prowconfig = filepath.Join("testdata", "prowconfig", tc.prowconfig)
-			configOpts := configflagutil.ConfigOptions{ConfigPath: tc.prowconfig}
+			tc.jobconfig = filepath.Join("testdata", "jobconfig", tc.jobconfig)
+			configOpts := configflagutil.ConfigOptions{ConfigPath: tc.prowconfig, JobConfigPath: tc.jobconfig}
 			configAgent, err := configOpts.ConfigAgent()
 			if err != nil {
 				t.Errorf("Error starting config agent.")
 			}
+			fakeStatus := map[string]*github.CombinedStatus{
+				"a": {
+					Statuses: []github.Status{
+						{
+							State:       "failure",
+							Context:     "test-presubmit",
+							Description: "Job failed",
+						},
+					},
+				},
+			}
+			ghc.CombinedStatuses = fakeStatus
 			c := &RetestController{
 				ghClient:      ghc,
 				configGetter:  configAgent.Config,
@@ -714,10 +741,11 @@ func TestRun(t *testing.T) {
 				backoff:       &backoffCache{cache: map[string]*pullRequest{}, logger: logger},
 				config:        config,
 			}
-			actual := c.Run()
+			actual := c.runWithCandidates(tc.candidates)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("Error differs from expected:\n%s", diff)
 			}
+
 		})
 	}
 }

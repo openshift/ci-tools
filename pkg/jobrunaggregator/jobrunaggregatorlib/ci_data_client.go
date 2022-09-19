@@ -57,6 +57,11 @@ type JobLister interface {
 	ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error)
 }
 
+type HistoricalDataClient interface {
+	ListDisruptionHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error)
+	ListAlertHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error)
+}
+
 type CIDataClient interface {
 	JobLister
 	AggregationJobClient
@@ -64,7 +69,7 @@ type CIDataClient interface {
 	DisruptionUploadClient
 	AlertUploadClient
 	TestRunSummarizerClient
-
+	HistoricalDataClient
 	// these deal with release tags
 	ListReleaseTags(ctx context.Context) (sets.String, error)
 }
@@ -84,6 +89,111 @@ func NewCIDataClient(dataCoordinates BigQueryDataCoordinates, client *bigquery.C
 		disruptionJobRunTableName: jobrunaggregatorapi.DisruptionJobRunTableName,
 		testJobRunTableName:       jobrunaggregatorapi.LegacyJobRunTableName,
 	}
+}
+
+func (c *ciDataClient) ListDisruptionHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
+	return c.listDisruptionHistoricalData(ctx)
+}
+func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
+	return c.listAlertHistoricalData(ctx)
+}
+
+func (c *ciDataClient) listDisruptionHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
+	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
+    SELECT
+    BackendName AS Name,
+    Release,
+    FromRelease,
+    Platform,
+    Architecture,
+    Network,
+    Topology,
+    ANY_VALUE(P95) AS P95,
+    ANY_VALUE(P99) AS P99,
+    FROM (
+        SELECT
+            Jobs.Release,
+            Jobs.FromRelease,
+            Jobs.Platform,
+        Jobs.Architecture,
+            Jobs.Network,
+            Jobs.Topology,
+            BackendName,
+            PERCENTILE_CONT(BackendDisruption.DisruptionSeconds, 0.95) OVER(PARTITION BY BackendDisruption.BackendName, Jobs.Network, Jobs.Platform, Jobs.Release, Jobs.FromRelease, Jobs.Topology) AS P95,
+            PERCENTILE_CONT(BackendDisruption.DisruptionSeconds, 0.99) OVER(PARTITION BY BackendDisruption.BackendName, Jobs.Network, Jobs.Platform, Jobs.Release, Jobs.FromRelease, Jobs.Topology) AS P99,
+        FROM
+            DATA_SET_LOCATION.BackendDisruption as BackendDisruption
+        INNER JOIN
+            DATA_SET_LOCATION.BackendDisruption_JobRuns as JobRuns on JobRuns.Name = BackendDisruption.JobRunName
+        INNER JOIN
+            DATA_SET_LOCATION.Jobs as Jobs on Jobs.JobName = JobRuns.JobName
+        WHERE
+            JobRuns.StartTime > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 21 DAY)
+    )
+    GROUP BY
+        BackendName, Release, FromRelease, Platform, Architecture, Network, Topology
+    `)
+	query := c.client.Query(queryString)
+	disruptionRow, err := query.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query disruption tables with %q: %w", queryString, err)
+	}
+	disruptionDataSet := []jobrunaggregatorapi.HistoricalDataRow{}
+	for {
+		data := &jobrunaggregatorapi.HistoricalDataRow{}
+		err = disruptionRow.Next(data)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		disruptionDataSet = append(disruptionDataSet, *data)
+	}
+	return disruptionDataSet, nil
+}
+
+func (c *ciDataClient) listAlertHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
+	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
+    SELECT *, AlertName as Name 
+    FROM DATA_SET_LOCATION.Alerts_Unified_LastWeek_P95
+    WHERE
+        alertName = "etcdMembersDown" or 
+        alertName = "etcdGRPCRequestsSlow" or 
+        alertName = "etcdHighNumberOfFailedGRPCRequests" or 
+        alertName = "etcdMemberCommunicationSlow" or 
+        alertName = "etcdNoLeader" or 
+        alertName = "etcdHighFsyncDurations" or 
+        alertName = "etcdHighCommitDurations" or 
+        alertName = "etcdInsufficientMembers" or 
+        alertName = "etcdHighNumberOfLeaderChanges" or 
+        alertName = "KubeAPIErrorBudgetBurn" or 
+        alertName = "KubeClientErrors" or 
+        alertName = "KubePersistentVolumeErrors" or 
+        alertName = "MCDDrainError" or 
+        alertName = "PrometheusOperatorWatchErrors" or
+        alertName = "VSphereOpenshiftNodeHealthFail"
+    ORDER BY 
+        AlertName, Release, FromRelease, Topology, Platform, Network
+    `)
+	query := c.client.Query(queryString)
+	disruptionRow, err := query.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query disruption tables with %q: %w", queryString, err)
+	}
+	disruptionDataSet := []jobrunaggregatorapi.HistoricalDataRow{}
+	for {
+		data := &jobrunaggregatorapi.HistoricalDataRow{}
+		err = disruptionRow.Next(data)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		disruptionDataSet = append(disruptionDataSet, *data)
+	}
+	return disruptionDataSet, nil
 }
 
 func (c *ciDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error) {

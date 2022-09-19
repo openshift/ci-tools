@@ -225,13 +225,13 @@ func TestReportMemoryConfigurationWarning(t *testing.T) {
 					return
 				}
 
-				data, err := ioutil.ReadAll(request.Body)
+				requestBody, err := ioutil.ReadAll(request.Body)
 				if err != nil {
 					t.Errorf("failed to read request body: %v", err)
 				}
 
-				if actual := string(data); actual != tc.expected {
-					t.Errorf("expected %v, got %v", tc.expected, actual)
+				if diff := cmp.Diff(tc.expected, string(requestBody)); diff != "" {
+					t.Errorf("actual and expected response don't match, diff: %v", diff)
 				}
 			}))
 			defer testServer.Close()

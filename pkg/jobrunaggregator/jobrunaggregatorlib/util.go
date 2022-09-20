@@ -41,7 +41,8 @@ func WaitUntilTime(ctx context.Context, readyAt time.Time) error {
 func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 	timeToStopWaiting time.Time,
 	jobRunGetter JobRunGetter,
-	outputDir string) ([]jobrunaggregatorapi.JobRunInfo, []jobrunaggregatorapi.JobRunInfo, []string, []string, error) {
+	outputDir string,
+	variantInfo string) ([]jobrunaggregatorapi.JobRunInfo, []jobrunaggregatorapi.JobRunInfo, []string, []string, error) {
 	clock := clock.RealClock{}
 
 	var finishedJobRuns []jobrunaggregatorapi.JobRunInfo
@@ -93,7 +94,7 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 			finishedJobRunNames = append(finishedJobRunNames, jobRun.GetJobName()+jobRun.GetJobRunID())
 		}
 
-		summaryHTML := htmlForJobRuns(ctx, finishedJobRuns, unfinishedJobRuns)
+		summaryHTML := htmlForJobRuns(ctx, finishedJobRuns, unfinishedJobRuns, variantInfo)
 		if err := ioutil.WriteFile(filepath.Join(outputDir, "job-run-summary.html"), []byte(summaryHTML), 0644); err != nil {
 			return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, err
 		}

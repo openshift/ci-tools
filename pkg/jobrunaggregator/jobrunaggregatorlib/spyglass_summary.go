@@ -8,10 +8,13 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
-func htmlForJobRuns(ctx context.Context, finishedJobsToAggregate, unfinishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo) string {
-	html := `<!DOCTYPE html>
+func htmlForJobRuns(ctx context.Context, finishedJobsToAggregate, unfinishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo, jobSummaryInfo string) string {
+	html := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
+<title>
+job-run-summary for %s
+</title>
 <style>
 a {
 	color: #ff8caa;
@@ -28,13 +31,13 @@ body {
 }
 </style>
 </head>
-<body>`
+<body>`, jobSummaryInfo)
 
 	if len(unfinishedJobsToAggregate) > 0 {
-		html += `
-<h2>Unfinished Jobs</h2>
+		html += fmt.Sprintf(`
+<h2>Unfinished Jobs %s</h2>
 <ol>
-`
+`, jobSummaryInfo)
 		for _, job := range unfinishedJobsToAggregate {
 			html += `<li>`
 			html += fmt.Sprintf(`<a target="_blank" href="%s">%s/%s</a>`, job.GetHumanURL(), job.GetJobName(), job.GetJobRunID())
@@ -54,10 +57,10 @@ body {
 	}
 
 	if len(finishedJobsToAggregate) > 0 {
-		html += `
-<h2>Finished Jobs</h2>
+		html += fmt.Sprintf(`
+<h2>Finished Jobs %s</h2>
 <ol>
-`
+`, jobSummaryInfo)
 		for _, job := range finishedJobsToAggregate {
 			html += `<li>`
 			html += fmt.Sprintf(`<a target="_blank" href="%s">%s/%s</a>`, job.GetHumanURL(), job.GetJobName(), job.GetJobRunID())

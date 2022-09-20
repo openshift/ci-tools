@@ -29,6 +29,7 @@ import (
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 
+	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
@@ -45,6 +46,8 @@ type options struct {
 	cacheDir           string
 	cacheBucket        string
 	gcsCredentialsFile string
+
+	resultsOptions results.Options
 }
 
 type producerOptions struct {
@@ -83,6 +86,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.StringVar(&o.gcsCredentialsFile, "gcs-credentials-file", "", "File where GCS credentials are stored.")
 	fs.Int64Var(&o.cpuCap, "cpu-cap", 10, "The maximum CPU request value, ex: 10")
 	fs.StringVar(&o.memoryCap, "memory-cap", "20Gi", "The maximum memory request value, ex: '20Gi'")
+	o.resultsOptions.Bind(fs)
 	return &o
 }
 
@@ -114,6 +118,9 @@ func (o *options) validate() error {
 		}
 		if memoryCap := resource.MustParse(o.memoryCap); memoryCap.Sign() <= 0 {
 			return errors.New("--memory-cap must be greater than 0")
+		}
+		if err := o.resultsOptions.Validate(); err != nil {
+			return err
 		}
 
 	default:
@@ -245,8 +252,12 @@ func mainAdmission(opts *options, cache cache) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct client.")
 	}
+	reporter, err := opts.resultsOptions.PodScalerReporter()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create pod-scaler reporter.")
+	}
 
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, reporter)
 }
 
 func loaders(cache cache) map[string][]*cacheReloader {

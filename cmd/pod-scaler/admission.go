@@ -19,7 +19,6 @@ import (
 	"k8s.io/test-infra/prow/entrypoint"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/kube"
-	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -31,10 +30,11 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 	"github.com/openshift/ci-tools/pkg/rehearse"
+	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 )
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string) {
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, reporter *results.PodScalerReporter) {
 	logger := logrus.WithField("component", "pod-scaler admission")
 	logger.Infof("Initializing admission webhook server with %d loaders.", len(loaders))
 	health := pjutil.NewHealthOnPort(healthPort)
@@ -47,7 +47,7 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 		Port:    port,
 		CertDir: certDir,
 	}
-	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap}})
+	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, reporter: reporter}})
 	logger.Info("Serving admission webhooks.")
 	if err := server.StartStandalone(interrupts.Context(), nil); err != nil {
 		logrus.WithError(err).Fatal("Failed to serve webhooks.")
@@ -62,10 +62,10 @@ type podMutator struct {
 	decoder              *admission.Decoder
 	cpuCap               int64
 	memoryCap            string
+	reporter             *results.PodScalerReporter
 }
 
 var (
-	promMetrics        = metrics.NewMetrics("pod_scaler_admission")
 	admittedPodsMetric = initPodCounterMetric()
 )
 
@@ -103,7 +103,7 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		logger.WithError(err).Error("Failed to handle rehearsal Pod.")
 		return admission.Allowed("Failed to handle rehearsal Pod, ignoring.")
 	}
-	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, logger)
+	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, m.reporter, logger)
 
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
@@ -202,7 +202,7 @@ func mutatePodLabels(pod *corev1.Pod, build *buildv1.Build) {
 }
 
 // useOursIfLarger updates fields in theirs when ours are larger
-func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, containerName string, logger *logrus.Entry) {
+func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, podName string, reporter *results.PodScalerReporter, logger *logrus.Entry) {
 	for _, item := range []*corev1.ResourceRequirements{allOfOurs, allOfTheirs} {
 		if item.Requests == nil {
 			item.Requests = corev1.ResourceList{}
@@ -225,12 +225,12 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, contai
 				logger.Debugf("determined %s %s of %s to be larger than %s configured", field, pair.resource, our.String(), their.String())
 				(*pair.theirs)[field] = our
 				if our.Value() > (their.Value() * 10) {
-					metrics.RecordError(fmt.Sprintf("actual memory 10x more than configured amount for: %s", containerName), promMetrics.ErrorRate)
+					reporter.ReportMemoryConfigurationWarning(podName, their.String(), our.String())
 				}
 			}
 		}
 	}
-	recordPodAdmitted(containerName, admittedPodsMetric)
+	recordPodAdmitted(podName, admittedPodsMetric)
 }
 
 func initPodCounterMetric() *prometheus.CounterVec {
@@ -295,13 +295,13 @@ func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, 
 	}
 }
 
-func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, logger *logrus.Entry) {
+func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, reporter *results.PodScalerReporter, logger *logrus.Entry) {
 	for i := range pod.Spec.InitContainers {
 		meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, pod.Spec.InitContainers[i].Name)
 		resources, recommendationExists := server.recommendedRequestFor(meta)
 		if recommendationExists {
 			logger.Debugf("recommendation exists for: %s", pod.Spec.InitContainers[i].Name)
-			useOursIfLarger(&resources, &pod.Spec.InitContainers[i].Resources, pod.Spec.InitContainers[i].Name, logger)
+			useOursIfLarger(&resources, &pod.Spec.InitContainers[i].Resources, pod.Spec.InitContainers[i].Name, reporter, logger)
 			if mutateResourceLimits {
 				reconcileLimits(&pod.Spec.InitContainers[i].Resources)
 			}
@@ -313,7 +313,7 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 		resources, recommendationExists := server.recommendedRequestFor(meta)
 		if recommendationExists {
 			logger.Debugf("recommendation exists for: %s", pod.Spec.Containers[i].Name)
-			useOursIfLarger(&resources, &pod.Spec.Containers[i].Resources, pod.Spec.Containers[i].Name, logger)
+			useOursIfLarger(&resources, &pod.Spec.Containers[i].Resources, pod.Name, reporter, logger)
 			if mutateResourceLimits {
 				reconcileLimits(&pod.Spec.Containers[i].Resources)
 			}

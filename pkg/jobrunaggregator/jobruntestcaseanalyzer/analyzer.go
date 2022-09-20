@@ -464,7 +464,13 @@ func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	finishedJobRuns, unfinishedJobRuns, _, _, err := jobrunaggregatorlib.WaitAndGetAllFinishedJobRuns(ctx, timeToStopWaiting, o, outputDir)
+
+	platform := o.jobGetter.(*testCaseAnalyzerJobGetter).platform
+	network := o.jobGetter.(*testCaseAnalyzerJobGetter).network
+	infrastructure := o.jobGetter.(*testCaseAnalyzerJobGetter).infrastructure
+	testVariantName := fmt.Sprintf("%s-%s-%s", platform, network, infrastructure)
+
+	finishedJobRuns, unfinishedJobRuns, _, _, err := jobrunaggregatorlib.WaitAndGetAllFinishedJobRuns(ctx, timeToStopWaiting, o, outputDir, testVariantName)
 	if err != nil {
 		return err
 	}

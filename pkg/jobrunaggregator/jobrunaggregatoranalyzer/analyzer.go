@@ -92,7 +92,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	finishedJobsToAggregate, _, finishedJobRunNames, unfinishedJobNames, err := jobrunaggregatorlib.WaitAndGetAllFinishedJobRuns(ctx, timeToStopWaiting, o, o.workingDir)
+	finishedJobsToAggregate, _, finishedJobRunNames, unfinishedJobNames, err := jobrunaggregatorlib.WaitAndGetAllFinishedJobRuns(ctx, timeToStopWaiting, o, o.workingDir, "aggregated")
 	if err != nil {
 		return err
 	}

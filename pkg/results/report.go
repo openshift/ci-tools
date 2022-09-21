@@ -3,6 +3,7 @@ package results
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -30,6 +31,17 @@ type Options struct {
 func (o *Options) Bind(flag *flag.FlagSet) {
 	flag.StringVar(&o.address, "report-address", reportAddress, "Address of the aggregate reporting server.")
 	flag.StringVar(&o.credentials, "report-credentials-file", "", "File holding the <username>:<password> for the aggregate reporting server.")
+}
+
+// Validate checks if the Options elements are empty
+func (o *Options) Validate() error {
+	if o.address == "" {
+		return errors.New("report-address is required")
+	}
+	if o.credentials == "" {
+		return errors.New("report-credentials-file is required")
+	}
+	return nil
 }
 
 func getUsernameAndPassword(credentials string) (string, string, error) {

@@ -3,10 +3,9 @@ log:
   fields:
     service: registry
 storage:
-  cache:
-    blobdescriptor: inmemory
-  filesystem:
-    rootdirectory: /var/lib/registry
+  s3:
+    encrypt: true
+    rootdirectory: /quay.io
 http:
   addr: :5000
   headers:
@@ -16,11 +15,10 @@ health:
     enabled: true
     interval: 10s
     threshold: 3
-htpasswd:
-  realm: basic-realm
-  path: /etc/htpasswd
+auth:
+  htpasswd:
+    realm: quay-realm
+    path: /tmp/htpasswd
 proxy:
   remoteurl: https://quay.io
-s3:
-  encrypt: true
-  rootdirectory: /quay.io
+

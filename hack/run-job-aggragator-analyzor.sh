@@ -8,6 +8,7 @@ ORIGIN_DIR=""
 ALERTS_FILE=""
 DISRUPTION_FILE=""
 DISRUPTION_FILE=""
+GC_CREDS=""
 UPDATE=""
 TEMP_DIR=""
 
@@ -16,6 +17,7 @@ function print_usage() {
         -o | Required: root directory location for openshift/origin
         -a | Required: local alerts file to compare against
         -d | Required: local disruption file to compare against
+        -g | Optional: google auth file to query ci data from
         -u | Optional: copy output files back into openshift/origin
 "
 }
@@ -24,7 +26,7 @@ function cleanup() {
     rm -rf $TEMP_DIR
 }
 
-while getopts "o:a:d:u" f; do
+while getopts "o:a:d:g:u" f; do
     case "$f" in
     o)
         ORIGIN_DIR=${OPTARG}
@@ -34,6 +36,9 @@ while getopts "o:a:d:u" f; do
         ;;
     d)
         DISRUPTION_FILE=${OPTARG}
+        ;;
+    g)
+        GC_CREDS=${OPTARG}
         ;;
     u)
         UPDATE="true"
@@ -45,7 +50,12 @@ while getopts "o:a:d:u" f; do
     esac
 done
 
-if [ -z "$ORIGIN_DIR" ] || [ -z "$ALERTS_FILE" ] || [ -z "$DISRUPTION_FILE" ]; then
+if [ -z "$ORIGIN_DIR" ]; then
+        print_usage
+        exit 1
+fi
+
+if ([ -z "$ALERTS_FILE" ] || [ -z "$DISRUPTION_FILE" ]) && [ -z "$GC_CREDS" ] ; then
         print_usage
         exit 1
 fi
@@ -60,17 +70,31 @@ cp "$ORIGIN_DIR/pkg/synthetictests/allowedalerts/query_results.json" "$TEMP_DIR/
 cp "$ORIGIN_DIR/pkg/synthetictests/allowedbackenddisruption/query_results.json" "$TEMP_DIR/current-disruptions.json"
 
 
-./job-run-aggregator analyze-historical-data  \
-    --current $TEMP_DIR/current-alerts.json \
-    --data-type alerts \
-    --new $ALERTS_FILE \
-    --leeway 1m
+if ! [ -z "$GC_CREDS" ]; then
+    ./job-run-aggregator analyze-historical-data  \
+        --current $TEMP_DIR/current-alerts.json \
+        --data-type alerts \
+        --leeway 1m \
+        --google-service-account-credential-file $GC_CREDS
 
-./job-run-aggregator analyze-historical-data  \
-    --current $TEMP_DIR/current-disruptions.json \
-    --data-type disruptions \
-    --new $DISRUPTION_FILE \
-    --leeway 1m
+    ./job-run-aggregator analyze-historical-data  \
+        --current $TEMP_DIR/current-disruptions.json \
+        --data-type disruptions \
+        --leeway 1m \
+        --google-service-account-credential-file $GC_CREDS
+else
+    ./job-run-aggregator analyze-historical-data  \
+        --current $TEMP_DIR/current-alerts.json \
+        --data-type alerts \
+        --new $ALERTS_FILE \
+        --leeway 1m
+
+    ./job-run-aggregator analyze-historical-data  \
+        --current $TEMP_DIR/current-disruptions.json \
+        --data-type disruptions \
+        --new $DISRUPTION_FILE \
+        --leeway 1m
+fi
 
 cleanup
 

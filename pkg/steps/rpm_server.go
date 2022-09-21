@@ -83,14 +83,14 @@ func (s *rpmServerStep) run(ctx context.Context) error {
 		SuccessThreshold:    1,
 		TimeoutSeconds:      1,
 	}
-	one := int64(1)
-	two := int32(2)
-	progressDeadline := int32(1200) // It can take 10 minutes for a machine to come up, so double default deadline
+	oneI64 := int64(1)
+	oneI32 := int32(2)
+	progressDeadline := int32(3600) // If a build farm is scaling up, provide plenty of time for pods to schedule
 	deployment := &appsapi.Deployment{
 		ObjectMeta: commonMeta,
 		Spec: appsapi.DeploymentSpec{
 			ProgressDeadlineSeconds: &progressDeadline,
-			Replicas:                &two,
+			Replicas:                &oneI32,
 			Selector: &meta.LabelSelector{
 				MatchLabels: labelSet,
 			},
@@ -187,7 +187,7 @@ fi
 							},
 						},
 					}},
-					TerminationGracePeriodSeconds: &one,
+					TerminationGracePeriodSeconds: &oneI64,
 				},
 			},
 		},

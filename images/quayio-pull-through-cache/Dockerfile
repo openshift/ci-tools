@@ -1,4 +1,5 @@
 FROM quay.io/centos/centos:stream8
+LABEL maintainer="jguzik@redhat.com"
 RUN yum -y install httpd-tools wget jq && yum -y clean all  && rm -rf /var/cache
 
 RUN set -eux; \
@@ -20,7 +21,6 @@ RUN set -eux; \
 	registry --version
 
 COPY ./config.yml /etc/docker/registry/config.yml
-VOLUME ["/var/lib/registry"]
 EXPOSE 5000
 COPY docker-entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]

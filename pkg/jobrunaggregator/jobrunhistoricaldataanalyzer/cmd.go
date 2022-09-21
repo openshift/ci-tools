@@ -3,7 +3,6 @@ package jobrunhistoricaldataanalyzer
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
@@ -38,11 +37,11 @@ func (f *JobRunHistoricalDataAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	f.DataCoordinates.BindFlags(fs)
 	f.Authentication.BindFlags(fs)
 
-	fs.StringVar(&f.DataType, "data-type", f.DataType, "data type to use")
-	fs.StringVar(&f.NewFile, "new", f.NewFile, "new file")
-	fs.StringVar(&f.CurrentFile, "current", f.CurrentFile, "old file")
-	fs.StringVar(&f.Leeway, "leeway", f.DurationLeeway.String(), "time leeway")
-	fs.StringVar(&f.OutputFile, "output-file", f.OutputFile, "save merge output, add missing json data")
+	fs.StringVar(&f.DataType, "data-type", f.DataType, fmt.Sprintf("data type we are fetching %s", supportedDataTypes.List()))
+	fs.StringVar(&f.NewFile, "new", f.NewFile, "local file with the new query results to compare against")
+	fs.StringVar(&f.CurrentFile, "current", f.CurrentFile, "local file with the current query results")
+	fs.StringVar(&f.Leeway, "leeway", f.DurationLeeway.String(), "time leeway threshold for increased time diff")
+	fs.StringVar(&f.OutputFile, "output-file", f.OutputFile, "output file for the resulting comparison results")
 }
 
 func (f *JobRunHistoricalDataAnalyzerFlags) Validate() error {
@@ -53,7 +52,7 @@ func (f *JobRunHistoricalDataAnalyzerFlags) Validate() error {
 		return err
 	}
 
-	if !supportedDataTypes.Has(strings.ToLower(f.DataType)) {
+	if !supportedDataTypes.Has(f.DataType) {
 		return fmt.Errorf("must provide supported datatype %v", supportedDataTypes.List())
 	}
 
@@ -79,6 +78,10 @@ func (f *JobRunHistoricalDataAnalyzerFlags) ToOptions(ctx context.Context) (*Job
 	ciDataClient := jobrunaggregatorlib.NewRetryingCIDataClient(
 		jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
 	)
+
+	if f.OutputFile == "" {
+		f.OutputFile = fmt.Sprintf("results_%s.json", f.DataType)
+	}
 
 	return &JobRunHistoricalDataAnalyzerOptions{
 		ciDataClient: ciDataClient,

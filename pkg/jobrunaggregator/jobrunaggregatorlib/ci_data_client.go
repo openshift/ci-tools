@@ -108,8 +108,8 @@ func (c *ciDataClient) listDisruptionHistoricalData(ctx context.Context) ([]jobr
     Architecture,
     Network,
     Topology,
-    ANY_VALUE(P95) AS P95,
-    ANY_VALUE(P99) AS P99,
+    IFNULL(SAFE_CAST(ANY_VALUE(P95) AS STRING), "0.0") AS P95,
+    IFNULL(SAFE_CAST(ANY_VALUE(P99) AS STRING), "0.0") AS P99,
     FROM (
         SELECT
             Jobs.Release,
@@ -148,6 +148,16 @@ func (c *ciDataClient) listDisruptionHistoricalData(ctx context.Context) ([]jobr
 		if err != nil {
 			return nil, err
 		}
+		// When querying the P99 and P95 data via code there is no single precision trailing zeros as apposed to manually
+		// downloading the JSON from the BigQuery UI which includes the single precision trailing zero for whole numbers.
+		// In order to make it easy and avoid unnecessary diffs, we are adding a trailing zero here and recording the type of data.
+		data.Type = "disruptions"
+		if !strings.Contains(data.P99, ".") {
+			data.P99 = data.P99 + ".0"
+		}
+		if !strings.Contains(data.P95, ".") {
+			data.P95 = data.P95 + ".0"
+		}
 		disruptionDataSet = append(disruptionDataSet, *data)
 	}
 	return disruptionDataSet, nil
@@ -155,7 +165,9 @@ func (c *ciDataClient) listDisruptionHistoricalData(ctx context.Context) ([]jobr
 
 func (c *ciDataClient) listAlertHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
-    SELECT *, AlertName as Name 
+    SELECT AlertName as Name,
+            Release, FromRelease, Platform, Architecture, Network, Topology,
+            IFNULL(SAFE_CAST(P95 AS STRING), "0.0") AS P95, IFNULL(SAFE_CAST(P99 AS STRING), "0.0") AS P99
     FROM DATA_SET_LOCATION.Alerts_Unified_LastWeek_P95
     WHERE
         alertName = "etcdMembersDown" or 
@@ -190,6 +202,16 @@ func (c *ciDataClient) listAlertHistoricalData(ctx context.Context) ([]jobrunagg
 		}
 		if err != nil {
 			return nil, err
+		}
+		// When querying the P99 and P95 data via code there is no single precision trailing zeros as apposed to manually
+		// downloading the JSON from the BigQuery UI which includes the single precision trailing zero for whole numbers.
+		// In order to make it easy and avoid unnecessary diffs, we are adding a trailing zero here and recording the type of data.
+		data.Type = "alerts"
+		if !strings.Contains(data.P99, ".") {
+			data.P99 = data.P99 + ".0"
+		}
+		if !strings.Contains(data.P95, ".") {
+			data.P95 = data.P95 + ".0"
 		}
 		disruptionDataSet = append(disruptionDataSet, *data)
 	}

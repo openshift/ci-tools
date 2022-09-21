@@ -19,5 +19,5 @@ while true; do
         kill $pid
         break
     fi
-    sleep 30
+    sleep 20
 done

@@ -236,7 +236,7 @@ func TestReportMemoryConfigurationWarning(t *testing.T) {
 			}))
 			defer testServer.Close()
 
-			podScalerReporter := PodScalerReporter{
+			podScalerReporter := podScalerReporter{
 				client: &http.Client{
 					Transport: &http.Transport{
 						TLSClientConfig: &tls.Config{InsecureSkipVerify: true},

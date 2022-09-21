@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
@@ -34,7 +33,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 )
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, reporter *results.PodScalerReporter) {
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, reporter results.PodScalerReporter) {
 	logger := logrus.WithField("component", "pod-scaler admission")
 	logger.Infof("Initializing admission webhook server with %d loaders.", len(loaders))
 	health := pjutil.NewHealthOnPort(healthPort)
@@ -62,12 +61,8 @@ type podMutator struct {
 	decoder              *admission.Decoder
 	cpuCap               int64
 	memoryCap            string
-	reporter             *results.PodScalerReporter
+	reporter             results.PodScalerReporter
 }
-
-var (
-	admittedPodsMetric = initPodCounterMetric()
-)
 
 func (m *podMutator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	pod := &corev1.Pod{}
@@ -202,7 +197,7 @@ func mutatePodLabels(pod *corev1.Pod, build *buildv1.Build) {
 }
 
 // useOursIfLarger updates fields in theirs when ours are larger
-func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, podName string, reporter *results.PodScalerReporter, logger *logrus.Entry) {
+func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, podName string, reporter results.PodScalerReporter, logger *logrus.Entry) {
 	for _, item := range []*corev1.ResourceRequirements{allOfOurs, allOfTheirs} {
 		if item.Requests == nil {
 			item.Requests = corev1.ResourceList{}
@@ -230,24 +225,6 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, podNam
 			}
 		}
 	}
-	recordPodAdmitted(podName, admittedPodsMetric)
-}
-
-func initPodCounterMetric() *prometheus.CounterVec {
-	m := prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "pod_scaler_admission_pods_admitted",
-			Help: "number of pods admitted",
-		},
-		[]string{"pod_name"},
-	)
-	prometheus.MustRegister(m)
-	return m
-}
-
-func recordPodAdmitted(name string, vec *prometheus.CounterVec) {
-	labels := prometheus.Labels{"pod_name": name}
-	vec.With(labels).Inc()
 }
 
 // reconcileLimits ensures that container resource limits do not set anything for CPU (as we
@@ -295,7 +272,7 @@ func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, 
 	}
 }
 
-func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, reporter *results.PodScalerReporter, logger *logrus.Entry) {
+func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, reporter results.PodScalerReporter, logger *logrus.Entry) {
 	for i := range pod.Spec.InitContainers {
 		meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, pod.Spec.InitContainers[i].Name)
 		resources, recommendationExists := server.recommendedRequestFor(meta)

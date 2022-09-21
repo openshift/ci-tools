@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -27,6 +28,15 @@ import (
 	"github.com/openshift/ci-tools/pkg/rehearse"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
+
+type mockReporter struct {
+	client *http.Client
+}
+
+func (r mockReporter) ReportMemoryConfigurationWarning(string, string, string) {
+}
+
+var reporter = mockReporter{client: &http.Client{}}
 
 func TestMutatePods(t *testing.T) {
 	client := fakebuildv1client.NewSimpleClientset(
@@ -85,14 +95,16 @@ func TestMutatePods(t *testing.T) {
 			},
 		},
 	}
+
 	mutator := podMutator{
 		logger:               logger,
 		client:               client.BuildV1(),
-		decoder:              decoder,
 		resources:            resources,
 		mutateResourceLimits: true,
+		decoder:              decoder,
 		cpuCap:               10,
 		memoryCap:            "20Gi",
+		reporter:             reporter,
 	}
 
 	var testCases = []struct {
@@ -541,7 +553,7 @@ func TestMutatePodResources(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			original := testCase.pod.DeepCopy()
-			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", logrus.WithField("test", testCase.name))
+			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", reporter, logrus.WithField("test", testCase.name))
 			diff := cmp.Diff(original, testCase.pod)
 			// In some cases, cmp.Diff decides to use non-breaking spaces, and it's not
 			// particularly deterministic about this. We don't care.
@@ -716,7 +728,7 @@ func TestUseOursIfLarger(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", logrus.WithField("test", testCase.name))
+			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", reporter, logrus.WithField("test", testCase.name))
 			if diff := cmp.Diff(testCase.theirs, testCase.expected); diff != "" {
 				t.Errorf("%s: got incorrect resources after mutation: %v", testCase.name, diff)
 			}

@@ -95,6 +95,13 @@ type Request struct {
 	Reason string `json:"reason"`
 }
 
+// PodScalerRequest holds the data from pod-scaler used to report a result to an aggregation server
+type PodScalerRequest struct {
+	WorkloadName     string
+	ConfiguredMemory string
+	DeterminedMemory string
+}
+
 const (
 	StateSucceeded string = "succeeded"
 	StateFailed    string = "failed"
@@ -161,26 +168,23 @@ func (r *reporter) report(request Request) {
 	sendRequest(req, r.client, r.username, r.password)
 }
 
-// PodScalerRequest holds the data from pod-scaler used to report a result to an aggregation server
-type PodScalerRequest struct {
-	WorkloadName     string
-	ConfiguredMemory string
-	DeterminedMemory string
+type PodScalerReporter interface {
+	ReportMemoryConfigurationWarning(workloadName, configuredMemory, determinedMemory string)
 }
 
-type PodScalerReporter struct {
+type podScalerReporter struct {
 	client             *http.Client
 	username, password string
 	address            string
 }
 
-func (o *Options) PodScalerReporter() (*PodScalerReporter, error) {
+func (o *Options) PodScalerReporter() (PodScalerReporter, error) {
 	username, password, err := getUsernameAndPassword(o.credentials)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get username and password: %w", err)
 	}
 
-	return &PodScalerReporter{
+	return &podScalerReporter{
 		client:   &http.Client{},
 		username: username,
 		password: password,
@@ -190,7 +194,7 @@ func (o *Options) PodScalerReporter() (*PodScalerReporter, error) {
 
 // ReportMemoryConfigurationWarning is used to send the information about memory configuration
 // from pod-scaler-admission to result-aggregator.
-func (r *PodScalerReporter) ReportMemoryConfigurationWarning(workloadName, configuredMemory, determinedMemory string) {
+func (r *podScalerReporter) ReportMemoryConfigurationWarning(workloadName, configuredMemory, determinedMemory string) {
 	request := PodScalerRequest{
 		WorkloadName:     workloadName,
 		ConfiguredMemory: configuredMemory,

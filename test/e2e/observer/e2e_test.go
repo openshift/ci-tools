@@ -9,8 +9,10 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
+	"github.com/openshift/ci-tools/pkg/steps/multi_stage"
 	"github.com/openshift/ci-tools/test/e2e/framework"
 )
 
@@ -18,17 +20,22 @@ const (
 	defaultJobSpec = `JOB_SPEC={"type":"presubmit","job":"pull-ci-test-test-master-success","buildid":"0","prowjobid":"uuid","refs":{"org":"test","repo":"test","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[{"number":1234,"author":"droslean","sha":"538680dfd2f6cff3b3506c80ca182dcb0dd22a58"}]},"decoration_config":{"timeout":"4h0m0s","grace_period":"30m0s","utility_images":{"clonerefs":"registry.ci.openshift.org/ci/clonerefs:latest","initupload":"registry.ci.openshift.org/ci/initupload:latest","entrypoint":"registry.ci.openshift.org/ci/entrypoint:latest","sidecar":"registry.ci.openshift.org/ci/sidecar:latest"},"resources":{"clonerefs":{"limits":{"memory":"3Gi"},"requests":{"cpu":"100m","memory":"500Mi"}},"initupload":{"limits":{"memory":"200Mi"},"requests":{"cpu":"100m","memory":"50Mi"}},"place_entrypoint":{"limits":{"memory":"100Mi"},"requests":{"cpu":"100m","memory":"25Mi"}},"sidecar":{"limits":{"memory":"2Gi"},"requests":{"cpu":"100m","memory":"250Mi"}}},"gcs_configuration":{"bucket":"origin-ci-test","path_strategy":"single","default_org":"openshift","default_repo":"origin","mediaTypes":{"log":"text/plain"}},"gcs_credentials_secret":"gce-sa-credentials-gcs-publisher"}}`
 )
 
+var (
+	observerHasFailedRegexp = regexp.MustCompile("Step (.+-observer) failed after")
+)
+
 var timeRegex = regexp.MustCompile(`time=".*"`)
 var failureTimeRegex = regexp.MustCompile(`time&#34;:&#34;.*&#34;`)
 
 func TestObservers(t *testing.T) {
 	var testCases = []struct {
-		name          string
-		args          []string
-		env           []string
-		success       bool
-		output        []string
-		junitOperator string
+		name                    string
+		args                    []string
+		env                     []string
+		success                 bool
+		output                  []string
+		junitOperator           string
+		skipIfObserverDidNotRun bool
 	}{
 		{
 			name: "running with an observer",
@@ -62,7 +69,8 @@ func TestObservers(t *testing.T) {
 				`Step with-failing-observer-failing-observer failed after`,
 				`Step with-failing-observer-noop-test succeeded after`,
 			},
-			junitOperator: "failing-observer-junit_operator.xml",
+			junitOperator:           "failing-observer-junit_operator.xml",
+			skipIfObserverDidNotRun: true,
 		},
 		{
 			name: "running with multi observers",
@@ -97,6 +105,12 @@ func TestObservers(t *testing.T) {
 			if testCase.success != (err == nil) {
 				t.Fatalf("%s: didn't expect an error from ci-operator: %v; output:\n%v", testCase.name, err, string(output))
 			}
+			if testCase.skipIfObserverDidNotRun {
+				if notRun, observers := checkObserversNotRun(output); notRun {
+					t.Logf("observers %s did not run, skipping this test to avoid flakiness", strings.Join(observers, ", "))
+					return
+				}
+			}
 			for _, line := range testCase.output {
 				if !bytes.Contains(output, []byte(line)) {
 					t.Errorf("%s: could not find line %q in output; output:\n%v", testCase.name, line, string(output))
@@ -119,4 +133,30 @@ func TestObservers(t *testing.T) {
 			FlatRegistry: true,
 		}))
 	}
+}
+
+func checkObserversNotRun(ciOperatorLogs []byte) (bool, []string) {
+	ciOperatorStrOutput := strings.Split(string(ciOperatorLogs), "\n")
+	observers := getObserversNotRun(ciOperatorStrOutput)
+	if len(observers) > 0 {
+		return true, observers
+	}
+	return false, []string{}
+}
+
+func getObserversNotRun(ciOperatorLogs []string) []string {
+	notStarted := make([]string, 0, 10)
+	sigTermSent := false
+	for _, logLine := range ciOperatorLogs {
+		if !sigTermSent && strings.Contains(logLine, multi_stage.TerminateObserversLog) {
+			sigTermSent = true
+		}
+		if sigTermSent {
+			matches := observerHasFailedRegexp.FindAllStringSubmatch(logLine, -1)
+			if len(matches) > 0 {
+				notStarted = append(notStarted, matches[0][1])
+			}
+		}
+	}
+	return notStarted
 }

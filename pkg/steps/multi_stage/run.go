@@ -23,6 +23,10 @@ import (
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
+const (
+	TerminateObserversLog string = "Signalling observers to terminate..."
+)
+
 func (s *multiStageTestStep) runSteps(
 	ctx context.Context,
 	phase string,
@@ -123,7 +127,7 @@ func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []c
 	for _, pod := range pods {
 		go func(p coreapi.Pod) {
 			<-ctx.Done()
-			logrus.Info("Signalling observers to terminate...")
+			logrus.Info(TerminateObserversLog)
 			if err := s.client.Delete(context.Background(), &p); err != nil {
 				logrus.WithError(err).Warn("failed to trigger observer to stop")
 			}

@@ -31,17 +31,14 @@ import (
 
 type mockReporter struct {
 	client *http.Client
-	state  *string
+	state  string
 }
 
-func (r mockReporter) ReportMemoryConfigurationWarning(string, string, string) {
-	*r.state = "ReportMemoryConfigurationWarning was called"
+func (r *mockReporter) ReportMemoryConfigurationWarning(string, string, string) {
+	r.state = "ReportMemoryConfigurationWarning was called"
 }
 
-var (
-	defaultReporterState = ""
-	defaultReporter      = mockReporter{client: &http.Client{}, state: &defaultReporterState}
-)
+var defaultReporter = mockReporter{client: &http.Client{}}
 
 func TestMutatePods(t *testing.T) {
 	client := fakebuildv1client.NewSimpleClientset(
@@ -109,7 +106,7 @@ func TestMutatePods(t *testing.T) {
 		decoder:              decoder,
 		cpuCap:               10,
 		memoryCap:            "20Gi",
-		reporter:             defaultReporter,
+		reporter:             &defaultReporter,
 	}
 
 	var testCases = []struct {
@@ -558,7 +555,7 @@ func TestMutatePodResources(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			original := testCase.pod.DeepCopy()
-			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", defaultReporter, logrus.WithField("test", testCase.name))
+			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", &defaultReporter, logrus.WithField("test", testCase.name))
 			diff := cmp.Diff(original, testCase.pod)
 			// In some cases, cmp.Diff decides to use non-breaking spaces, and it's not
 			// particularly deterministic about this. We don't care.
@@ -733,7 +730,7 @@ func TestUseOursIfLarger(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", defaultReporter, logrus.WithField("test", testCase.name))
+			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", &defaultReporter, logrus.WithField("test", testCase.name))
 			if diff := cmp.Diff(testCase.theirs, testCase.expected); diff != "" {
 				t.Errorf("%s: got incorrect resources after mutation: %v", testCase.name, diff)
 			}
@@ -790,18 +787,15 @@ func TestUseOursIsLarger_ReporterReports(t *testing.T) {
 				},
 			},
 			reporter: mockReporter{client: &http.Client{}},
-			expected: "ReportMemoryConfigurationWarning was not called",
+			expected: "",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			defaultState := "ReportMemoryConfigurationWarning was not called"
-			tc.reporter.state = &defaultState
+			useOursIfLarger(&tc.ours, &tc.theirs, "test", &tc.reporter, logrus.WithField("test", tc.name))
 
-			useOursIfLarger(&tc.ours, &tc.theirs, "test", tc.reporter, logrus.WithField("test", tc.name))
-
-			if diff := cmp.Diff(*tc.reporter.state, tc.expected); diff != "" {
+			if diff := cmp.Diff(tc.reporter.state, tc.expected); diff != "" {
 				t.Errorf("actual and expected reporter states don't match, : %v", diff)
 			}
 		})

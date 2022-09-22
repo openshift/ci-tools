@@ -598,3 +598,50 @@ func Test_filterLabels(t *testing.T) {
 		})
 	}
 }
+
+func Test_hasUnactionableLabels(t *testing.T) {
+	holdLabel := github.Label{Name: "do-not-merge/hold"}
+	acceptedLabel := github.Label{Name: "accepted"}
+	wipLabel := github.Label{Name: "do-not-merge/work-in-progress"}
+	needsRebaseLabel := github.Label{Name: "needs-rebase"}
+
+	var testCases = []struct {
+		name     string
+		labels   []github.Label
+		expected bool
+	}{
+		{
+			name:     "no labels",
+			labels:   []github.Label{},
+			expected: false,
+		},
+		{
+			name:     "no unwanted labels",
+			labels:   []github.Label{acceptedLabel},
+			expected: false,
+		},
+		{
+			name:     "only one label and it is unwanted",
+			labels:   []github.Label{wipLabel},
+			expected: true,
+		},
+		{
+			name:     "one unwanted label among ok labels",
+			labels:   []github.Label{acceptedLabel, needsRebaseLabel, holdLabel},
+			expected: true,
+		},
+		{
+			name:     "only unwanted labels",
+			labels:   []github.Label{wipLabel, needsRebaseLabel},
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(hasUnactionableLabels(tc.labels), tc.expected); diff != "" {
+				t.Fatalf("actual result desn't match expected, diff: %s", diff)
+			}
+		})
+	}
+}

@@ -77,6 +77,13 @@ func getInterestedLabels() sets.String {
 	return labels
 }
 
+// getUnactionablePrLabels returns a set of those labels that mark a PR which can't be reviewed in its current state
+func getUnactionablePrLabels() sets.String {
+	var labels = sets.String{}
+	labels.Insert("do-not-merge/work-in-progress", "needs-rebase")
+	return labels
+}
+
 var orgRepoFormat = regexp.MustCompile(`\w+/\w+`)
 
 func (c *config) validate(gtk githubToKerberos, slackClient slackClient) error {
@@ -335,7 +342,7 @@ func findPrsForUsers(users map[string]user, ghClient prClient) map[string]user {
 	for i, u := range users {
 		for _, repo := range u.Repos.List() {
 			for _, pr := range repoToPRs[repo] {
-				if u.requestedToReview(pr) {
+				if !hasUnactionableLabels(pr.Labels) && u.requestedToReview(pr) {
 					u.PrRequests = append(u.PrRequests, prRequest{
 						Repo:        repo,
 						Number:      pr.Number,
@@ -457,4 +464,16 @@ func messageUser(user user, slackClient slackClient) error {
 // getLabelMessage returns a string listing te PR's labels
 func getLabelMessage(labels []string) string {
 	return fmt.Sprintf(":label: labeled: *%v*", strings.Join(labels[:], ", "))
+}
+
+// hasUnactionableLabels returns whether a PR has any labels which mark a PR
+// that can't be reviewed in its current state
+func hasUnactionableLabels(labels []github.Label) bool {
+	unactionableLabels := getUnactionablePrLabels()
+	for _, label := range labels {
+		if unactionableLabels.Has(label.Name) {
+			return true
+		}
+	}
+	return false
 }

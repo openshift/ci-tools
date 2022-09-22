@@ -683,8 +683,6 @@ func TestRunWithCandidates(t *testing.T) {
 		},
 	}}
 	ghc := &MyFakeClient{fakegithub.NewFakeClient()}
-	pr123 := github.PullRequest{ID: 1}
-	ghc.PullRequests = map[int]*github.PullRequest{123: &pr123}
 
 	logger := logrus.NewEntry(logrus.StandardLogger())
 
@@ -746,6 +744,66 @@ func TestRunWithCandidates(t *testing.T) {
 				t.Errorf("Error differs from expected:\n%s", diff)
 			}
 
+		})
+	}
+}
+
+func TestFindCandidates(t *testing.T) {
+	config := &Config{Retester: Retester{
+		RetesterPolicy: RetesterPolicy{MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9}, Oranizations: map[string]Oranization{
+			"openshift": {RetesterPolicy: RetesterPolicy{Enabled: &True}},
+		},
+	}}
+	ghc := &MyFakeClient{fakegithub.NewFakeClient()}
+
+	logger := logrus.NewEntry(logrus.StandardLogger())
+
+	testCases := []struct {
+		name       string
+		prowconfig string
+		candidates map[string]tide.PullRequest
+		expected   map[string]tide.PullRequest
+	}{
+		{
+			name:       "no candidates",
+			prowconfig: "simple.yaml",
+			candidates: map[string]tide.PullRequest{
+				"a": {
+					Number:     1,
+					HeadRefOID: "a",
+					Repository: struct {
+						Name          githubv4.String
+						NameWithOwner githubv4.String
+						Owner         struct{ Login githubv4.String }
+					}{Name: "ci-tools", Owner: struct{ Login githubv4.String }{Login: "openshift"}},
+				},
+			},
+			expected: map[string]tide.PullRequest{},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.prowconfig = filepath.Join("testdata", "prowconfig", tc.prowconfig)
+			configOpts := configflagutil.ConfigOptions{ConfigPath: tc.prowconfig}
+			configAgent, err := configOpts.ConfigAgent()
+			if err != nil {
+				t.Errorf("Error starting config agent.")
+			}
+			c := &RetestController{
+				ghClient:      ghc,
+				configGetter:  configAgent.Config,
+				logger:        logger,
+				usesGitHubApp: true,
+				backoff:       &backoffCache{cache: map[string]*pullRequest{}, logger: logger},
+				config:        config,
+			}
+			actual, err := findCandidates(c.configGetter, c.ghClient, c.usesGitHubApp, c.logger)
+			if err != nil {
+				t.Errorf("Error finding candidates: %v", err)
+			}
+			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("Error differs from expected:\n%s", diff)
+			}
 		})
 	}
 }

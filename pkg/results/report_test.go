@@ -236,7 +236,7 @@ func TestReportMemoryConfigurationWarning(t *testing.T) {
 			}))
 			defer testServer.Close()
 
-			podScalerReporter := PodScalerReporter{
+			podScalerReporter := podScalerReporter{
 				client: &http.Client{
 					Transport: &http.Transport{
 						TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -245,6 +245,38 @@ func TestReportMemoryConfigurationWarning(t *testing.T) {
 				address: testServer.URL,
 			}
 			podScalerReporter.ReportMemoryConfigurationWarning(tc.workloadName, tc.configuredMemory, tc.determinedMemory)
+		})
+	}
+}
+
+func TestOptions_Validate(t *testing.T) {
+	testCases := []struct {
+		name     string
+		options  *Options
+		expected error
+	}{
+		{
+			name:     "valid options",
+			options:  &Options{address: "foo.com", credentials: "<username>:<password>"},
+			expected: nil,
+		},
+		{
+			name:     "empty address",
+			options:  &Options{address: "", credentials: "<username>:<password>"},
+			expected: errors.New("report-address is required"),
+		},
+		{
+			name:     "empty credentials",
+			options:  &Options{address: "foo.com", credentials: ""},
+			expected: errors.New("report-credentials-file is required"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(tc.options.Validate(), tc.expected, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("actual and expected result don't match, diff: %v", diff)
+			}
 		})
 	}
 }

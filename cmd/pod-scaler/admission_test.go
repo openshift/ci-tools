@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -27,6 +28,17 @@ import (
 	"github.com/openshift/ci-tools/pkg/rehearse"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
+
+type mockReporter struct {
+	client *http.Client
+	called bool
+}
+
+func (r *mockReporter) ReportMemoryConfigurationWarning(string, string, string) {
+	r.called = true
+}
+
+var defaultReporter = mockReporter{client: &http.Client{}}
 
 func TestMutatePods(t *testing.T) {
 	client := fakebuildv1client.NewSimpleClientset(
@@ -85,14 +97,16 @@ func TestMutatePods(t *testing.T) {
 			},
 		},
 	}
+
 	mutator := podMutator{
 		logger:               logger,
 		client:               client.BuildV1(),
-		decoder:              decoder,
 		resources:            resources,
 		mutateResourceLimits: true,
+		decoder:              decoder,
 		cpuCap:               10,
 		memoryCap:            "20Gi",
+		reporter:             &defaultReporter,
 	}
 
 	var testCases = []struct {
@@ -541,7 +555,7 @@ func TestMutatePodResources(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			original := testCase.pod.DeepCopy()
-			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", logrus.WithField("test", testCase.name))
+			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", &defaultReporter, logrus.WithField("test", testCase.name))
 			diff := cmp.Diff(original, testCase.pod)
 			// In some cases, cmp.Diff decides to use non-breaking spaces, and it's not
 			// particularly deterministic about this. We don't care.
@@ -716,9 +730,73 @@ func TestUseOursIfLarger(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", logrus.WithField("test", testCase.name))
+			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", &defaultReporter, logrus.WithField("test", testCase.name))
 			if diff := cmp.Diff(testCase.theirs, testCase.expected); diff != "" {
 				t.Errorf("%s: got incorrect resources after mutation: %v", testCase.name, diff)
+			}
+		})
+	}
+}
+
+// TestUseOursIsLarger_ReporterReports tests the behaviour of useOursIsLarger
+// when our determined resources are 10 times larger than the memory request.
+func TestUseOursIsLarger_ReporterReports(t *testing.T) {
+	var testCases = []struct {
+		name         string
+		ours, theirs corev1.ResourceRequirements
+		reporter     mockReporter
+		expected     bool
+	}{
+		{
+			name: "ours is 10 times larger than theirs",
+			ours: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(1e1, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(1, resource.BinarySI),
+				},
+			},
+			reporter: mockReporter{client: &http.Client{}},
+			expected: true,
+		},
+		{
+			name: "ours is not 10 times larger than theirs",
+			ours: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+			reporter: mockReporter{client: &http.Client{}},
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			useOursIfLarger(&tc.ours, &tc.theirs, "test", &tc.reporter, logrus.WithField("test", tc.name))
+
+			if diff := cmp.Diff(tc.reporter.called, tc.expected); diff != "" {
+				t.Errorf("actual and expected reporter states don't match, : %v", diff)
 			}
 		})
 	}

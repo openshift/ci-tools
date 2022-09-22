@@ -31,11 +31,11 @@ import (
 
 type mockReporter struct {
 	client *http.Client
-	state  string
+	called bool
 }
 
 func (r *mockReporter) ReportMemoryConfigurationWarning(string, string, string) {
-	r.state = "ReportMemoryConfigurationWarning was called"
+	r.called = true
 }
 
 var defaultReporter = mockReporter{client: &http.Client{}}
@@ -745,7 +745,7 @@ func TestUseOursIsLarger_ReporterReports(t *testing.T) {
 		name         string
 		ours, theirs corev1.ResourceRequirements
 		reporter     mockReporter
-		expected     string
+		expected     bool
 	}{
 		{
 			name: "ours is 10 times larger than theirs",
@@ -766,7 +766,7 @@ func TestUseOursIsLarger_ReporterReports(t *testing.T) {
 				},
 			},
 			reporter: mockReporter{client: &http.Client{}},
-			expected: "ReportMemoryConfigurationWarning was called",
+			expected: true,
 		},
 		{
 			name: "ours is not 10 times larger than theirs",
@@ -787,7 +787,7 @@ func TestUseOursIsLarger_ReporterReports(t *testing.T) {
 				},
 			},
 			reporter: mockReporter{client: &http.Client{}},
-			expected: "",
+			expected: false,
 		},
 	}
 
@@ -795,7 +795,7 @@ func TestUseOursIsLarger_ReporterReports(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			useOursIfLarger(&tc.ours, &tc.theirs, "test", &tc.reporter, logrus.WithField("test", tc.name))
 
-			if diff := cmp.Diff(tc.reporter.state, tc.expected); diff != "" {
+			if diff := cmp.Diff(tc.reporter.called, tc.expected); diff != "" {
 				t.Errorf("actual and expected reporter states don't match, : %v", diff)
 			}
 		})

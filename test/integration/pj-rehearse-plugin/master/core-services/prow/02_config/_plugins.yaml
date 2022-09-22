@@ -1,0 +1,12 @@
+config_updater:
+  maps:
+    cluster/test-deploy/test-profile/*.yaml:
+      name: cluster-profile-test-profile
+      clusters:
+        default:
+        - test-namespace
+    ci-operator/templates/subdir/test-template.yaml:
+      name: prow-job-test-template
+      clusters:
+        default:
+        - test-namespace

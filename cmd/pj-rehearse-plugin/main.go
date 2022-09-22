@@ -1,28 +1,26 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"time"
 
-	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/sirupsen/logrus"
+
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
-	"k8s.io/test-infra/prow/githubeventserver"
-	"k8s.io/test-infra/prow/interrupts"
-	"k8s.io/test-infra/prow/logrusutil"
-	"k8s.io/test-infra/prow/pjutil"
-
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
+	"k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/githubeventserver"
+	"k8s.io/test-infra/prow/logrusutil"
+
+	imagev1 "github.com/openshift/api/image/v1"
 )
 
-// TODO: for now keeping all the options, determine if this is necessary
 type options struct {
-	dryRun   bool
 	logLevel string
 
 	debugLogPath      string
@@ -39,6 +37,9 @@ type options struct {
 
 	webhookSecretFile string
 
+	dryRun          bool
+	releaseRepoPath string
+
 	githubEventServerOptions githubeventserver.Options
 	github                   prowflagutil.GitHubOptions
 	git                      prowflagutil.GitOptions
@@ -48,7 +49,6 @@ func gatherOptions() options {
 	o := options{kubernetesOptions: flagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
 	fs := flag.CommandLine
 
-	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow")
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr") //TODO: not sure this one makes sense anymore
@@ -64,6 +64,10 @@ func gatherOptions() options {
 	fs.IntVar(&o.maxLimit, "max-limit", 35, "Upper limit of jobs attempted to rehearse with max command (if more jobs are being touched, only this many will be rehearsed)")
 
 	fs.StringVar(&o.webhookSecretFile, "hmac-secret-file", "/etc/webhook/hmac", "Path to the file containing the GitHub HMAC secret.")
+
+	//The following fields are only surfaced for integration testing
+	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow. Only used for integration testing.")
+	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested. Only used for integration testing.")
 
 	o.github.AddFlags(fs)
 	o.githubEventServerOptions.Bind(fs)
@@ -83,12 +87,22 @@ func (o *options) validate() error {
 	}
 	logrus.SetLevel(level)
 
+	if o.dryRun {
+		if o.releaseRepoPath == "" {
+			errs = append(errs, errors.New("candidate-path must be supplied when in dry-run mode"))
+		}
+	}
+
 	errs = append(errs, o.githubEventServerOptions.DefaultAndValidate())
 	errs = append(errs, o.github.Validate(o.dryRun))
 	errs = append(errs, o.kubernetesOptions.Validate(o.dryRun))
 
 	return utilerrors.NewAggregate(errs)
 }
+
+const (
+	PrEnv = "PR"
+)
 
 func main() {
 	logrusutil.ComponentInit()
@@ -103,29 +117,20 @@ func main() {
 		logrus.WithError(err).Fatal("failed to register imagev1 scheme")
 	}
 
-	if err := secret.Add(o.github.TokenPath, o.webhookSecretFile); err != nil {
-		logger.WithError(err).Fatal("Error starting secrets agent.")
+	if o.dryRun {
+		rc := rehearsalConfigFromOptions(o)
+		prEnv, ok := os.LookupEnv(PrEnv)
+		if !ok {
+			logrus.Fatalf("couldn't get PR from env")
+		}
+		pr := &github.PullRequest{}
+		if err := json.Unmarshal([]byte(prEnv), pr); err != nil {
+			logrus.WithError(err).Fatal("couldn't unmarshall PR")
+		}
+
+		presubmits, periodics, changedTemplates, changedClusterProfiles := rc.determineAffectedJobs(*pr, o.releaseRepoPath, logger)
+		if err := rc.rehearseJobs(*pr, o.releaseRepoPath, presubmits, periodics, changedTemplates, changedClusterProfiles, o.moreLimit, logger); err != nil {
+			logrus.WithError(err).Fatal("failed to rehearse jobs")
+		}
 	}
-	webhookTokenGenerator := secret.GetTokenGenerator(o.webhookSecretFile)
-
-	server, err := serverFromOptions(o)
-	if err != nil {
-		logger.WithError(err).Fatal("couldn't create server")
-	}
-
-	logger.Debug("starting eventServer")
-	eventServer := githubeventserver.New(o.githubEventServerOptions, webhookTokenGenerator, logger)
-	eventServer.RegisterHandlePullRequestEvent(server.handlePullRequestCreation)
-	eventServer.RegisterHandleIssueCommentEvent(server.handleIssueComment)
-	eventServer.RegisterHelpProvider(helpProvider, logger)
-
-	interrupts.OnInterrupt(func() {
-		eventServer.GracefulShutdown()
-	})
-
-	health := pjutil.NewHealth()
-	health.ServeReady()
-
-	interrupts.ListenAndServe(eventServer, time.Second*30)
-	interrupts.WaitForGracefulShutdown()
 }

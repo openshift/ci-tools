@@ -1,0 +1,103 @@
+presubmits:
+  super/duper:
+  - agent: kubernetes
+    always_run: true
+    branches:
+    - ^cluster-profile$
+    - ^cluster-profile-
+    context: ci/prow/images
+    decorate: true
+    decoration_config:
+      skip_cloning: true
+    labels:
+      ci-operator.openshift.io/prowgen-controlled: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    name: pull-ci-super-duper-cluster-profile-images
+    rerun_command: /test images
+    spec:
+      containers:
+      - args:
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --report-credentials-file=/etc/report/credentials
+        - --target=[images]
+        command:
+        - ci-operator
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
+    trigger: (?m)^/test( | .* )images,?($|\s.*)
+  - agent: kubernetes
+    always_run: false
+    branches:
+    - cluster-profile
+    context: ci/prow/test-profile
+    decorate: true
+    decoration_config:
+      skip_cloning: true
+    labels:
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    name: pull-ci-super-duper-cluster-profile-test-profile
+    rerun_command: /test test-profile
+    spec:
+      containers:
+      - args:
+        - --give-pr-author-access-to-namespace=true
+        - --secret-dir=/usr/local/test-profile-cluster-profile
+        - --target=test-profile
+        - --template=/usr/local/test-profile
+        command:
+        - ci-operator
+        env:
+        - name: CLUSTER_TYPE
+          value: gcp
+        - name: JOB_NAME_SAFE
+          value: test-profile
+        - name: TEST_COMMAND
+          value: make test
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /usr/local/test-profile-cluster-profile
+          name: cluster-profile
+        - mountPath: /usr/local/test-profile
+          name: job-definition
+          subPath: test-template.yaml
+      serviceAccountName: ci-operator
+      volumes:
+      - name: cluster-profile
+        projected:
+          sources:
+          - secret:
+              name: cluster-secrets-test-profile
+          - configMap:
+              name: cluster-profile-test-profile
+      - configMap:
+          name: prow-job-cluster-launch-src
+        name: job-definition
+    trigger: '(?m)^/test (?:.*? )?test-profile(?: .*?)?$'

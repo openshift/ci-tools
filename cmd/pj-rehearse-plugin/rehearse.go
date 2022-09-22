@@ -10,17 +10,9 @@ import (
 	"sync"
 	"time"
 
-	imagev1 "github.com/openshift/api/image/v1"
-	"github.com/openshift/ci-tools/pkg/api"
-	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
-	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
-	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/diffs"
-	"github.com/openshift/ci-tools/pkg/load"
-	"github.com/openshift/ci-tools/pkg/registry"
-	"github.com/openshift/ci-tools/pkg/rehearse"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -35,6 +27,17 @@ import (
 	"k8s.io/test-infra/prow/github"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	imagev1 "github.com/openshift/api/image/v1"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
+	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
+	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/diffs"
+	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/registry"
+	"github.com/openshift/ci-tools/pkg/rehearse"
 )
 
 const (
@@ -54,6 +57,89 @@ type rehearsalConfig struct {
 	maxLimit    int
 
 	dryRun bool
+}
+
+func rehearsalConfigFromOptions(o options) rehearsalConfig {
+	return rehearsalConfig{
+		prowjobKubeconfig: o.prowjobKubeconfig,
+		kubernetesOptions: o.kubernetesOptions,
+		noTemplates:       o.noTemplates,
+		noRegistry:        o.noRegistry,
+		noClusterProfiles: o.noClusterProfiles,
+		normalLimit:       o.normalLimit,
+		moreLimit:         o.moreLimit,
+		maxLimit:          o.maxLimit,
+		dryRun:            o.dryRun,
+	}
+}
+
+func (r rehearsalConfig) determineAffectedJobs(pullRequest github.PullRequest, candidate string, logger *logrus.Entry) (config.Presubmits, config.Periodics, rehearse.ConfigMaps, rehearse.ConfigMaps) {
+	start := time.Now()
+	defer func() {
+		logger.Infof("determinedAffectedJobs ran in %s", time.Since(start).Truncate(time.Second))
+	}()
+
+	prConfig := config.GetAllConfigs(candidate, logger)
+	baseSHA := pullRequest.Base.SHA
+	masterConfig, err := config.GetAllConfigsFromSHA(candidate, baseSHA, logger)
+	if err != nil {
+		logger.WithError(err).Fatal("could not load configuration from base revision of release repo")
+	}
+
+	// We always need both Prow config versions, otherwise we cannot compare them
+	if masterConfig.Prow == nil || prConfig.Prow == nil {
+		logger.WithError(err).Fatal("could not load Prow configs from base or tested revision of release repo")
+	}
+	// We always need PR versions of ciop config, otherwise we cannot provide them to rehearsed jobs
+	if prConfig.CiOperator == nil {
+		logger.WithError(err).Fatal("could not load ci-operator configs from tested revision of release repo")
+	}
+
+	configUpdaterCfg, err := loadConfigUpdaterCfg(candidate)
+	if err != nil {
+		logger.WithError(err).Fatal("could not load plugin configuration from tested revision of release repo")
+	}
+
+	presubmits := config.Presubmits{}
+	periodics := config.Periodics{}
+
+	changedPeriodics := diffs.GetChangedPeriodics(masterConfig.Prow, prConfig.Prow, logger)
+	periodics.AddAll(changedPeriodics, config.ChangedPeriodic)
+	changedPresubmits := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
+	presubmits.AddAll(changedPresubmits, config.ChangedPresubmit)
+
+	// We can only detect changes if we managed to load both ci-operator config versions
+	if masterConfig.CiOperator != nil && prConfig.CiOperator != nil {
+		changedCiopConfigData, affectedJobs := diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
+		presubmitsForCiopConfigs, periodicsForCiopConfigs := diffs.GetJobsForCiopConfigs(prConfig.Prow, changedCiopConfigData, affectedJobs, logger)
+		presubmits.AddAll(presubmitsForCiopConfigs, config.ChangedCiopConfig)
+		periodics.AddAll(periodicsForCiopConfigs, config.ChangedCiopConfig)
+	}
+
+	loggers := rehearse.Loggers{Job: logger, Debug: logger} //TODO: same logger for both. Once the original pj-rehearse is gone we can clean this up and just pass a logger
+	var changedRegistrySteps []registry.Node
+	if !r.noRegistry {
+		changedRegistrySteps = determineChangedRegistrySteps(candidate, baseSHA, logger)
+		presubmitsForRegistry, periodicsForRegistry := rehearse.SelectJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, prConfig.Prow.JobConfig.Periodics, prConfig.CiOperator, loggers)
+		presubmits.AddAll(presubmitsForRegistry, config.ChangedRegistryContent)
+		periodics.AddAll(periodicsForRegistry, config.ChangedRegistryContent)
+	}
+
+	var changedTemplates rehearse.ConfigMaps
+	if !r.noTemplates {
+		changedTemplates = determineChangedTemplates(candidate, baseSHA, pullRequest.Head.SHA, pullRequest.Number, configUpdaterCfg, logger)
+		randomJobsForChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(changedTemplates.ProductionNames, presubmits, prConfig.Prow.JobConfig.PresubmitsStatic, loggers)
+		presubmits.AddAll(randomJobsForChangedTemplates, config.ChangedTemplate)
+	}
+
+	var changedClusterProfiles rehearse.ConfigMaps
+	if !r.noClusterProfiles {
+		changedClusterProfiles = determineChangedClusterProfiles(candidate, baseSHA, pullRequest.Head.SHA, pullRequest.Number, configUpdaterCfg, logger)
+		presubmitsForClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, changedClusterProfiles.ProductionNames, logger)
+		presubmits.AddAll(presubmitsForClusterProfiles, config.ChangedClusterProfile)
+	}
+
+	return presubmits, periodics, changedTemplates, changedClusterProfiles
 }
 
 func (r rehearsalConfig) rehearseJobs(pullRequest github.PullRequest, candidate string, presubmits config.Presubmits, periodics config.Periodics, rehearsalTemplates, rehearsalClusterProfiles rehearse.ConfigMaps, limit int, logger *logrus.Entry) error {
@@ -192,75 +278,6 @@ func (r rehearsalConfig) rehearseJobs(pullRequest github.PullRequest, candidate 
 	}
 
 	return utilerrors.NewAggregate(errs)
-}
-
-func (r rehearsalConfig) determineAffectedJobs(pullRequest github.PullRequest, candidate string, logger *logrus.Entry) (config.Presubmits, config.Periodics, rehearse.ConfigMaps, rehearse.ConfigMaps) {
-	start := time.Now()
-	defer func() {
-		logger.Infof("determinedAffectedJobs ran in %s", time.Since(start).Truncate(time.Second))
-	}()
-
-	prConfig := config.GetAllConfigs(candidate, logger)
-	baseSHA := pullRequest.Base.SHA
-	masterConfig, err := config.GetAllConfigsFromSHA(candidate, baseSHA, logger)
-	if err != nil {
-		logger.WithError(err).Fatal("could not load configuration from base revision of release repo")
-	}
-
-	// We always need both Prow config versions, otherwise we cannot compare them
-	if masterConfig.Prow == nil || prConfig.Prow == nil {
-		logger.WithError(err).Fatal("could not load Prow configs from base or tested revision of release repo")
-	}
-	// We always need PR versions of ciop config, otherwise we cannot provide them to rehearsed jobs
-	if prConfig.CiOperator == nil {
-		logger.WithError(err).Fatal("could not load ci-operator configs from tested revision of release repo")
-	}
-
-	configUpdaterCfg, err := loadConfigUpdaterCfg(candidate)
-	if err != nil {
-		logger.WithError(err).Fatal("could not load plugin configuration from tested revision of release repo")
-	}
-
-	presubmits := config.Presubmits{}
-	periodics := config.Periodics{}
-
-	changedPeriodics := diffs.GetChangedPeriodics(masterConfig.Prow, prConfig.Prow, logger)
-	periodics.AddAll(changedPeriodics, config.ChangedPeriodic)
-	changedPresubmits := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
-	presubmits.AddAll(changedPresubmits, config.ChangedPresubmit)
-
-	// We can only detect changes if we managed to load both ci-operator config versions
-	if masterConfig.CiOperator != nil && prConfig.CiOperator != nil {
-		changedCiopConfigData, affectedJobs := diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
-		presubmitsForCiopConfigs, periodicsForCiopConfigs := diffs.GetJobsForCiopConfigs(prConfig.Prow, changedCiopConfigData, affectedJobs, logger)
-		presubmits.AddAll(presubmitsForCiopConfigs, config.ChangedCiopConfig)
-		periodics.AddAll(periodicsForCiopConfigs, config.ChangedCiopConfig)
-	}
-
-	loggers := rehearse.Loggers{Job: logger, Debug: logger} //TODO: same logger for both. Once the original pj-rehearse is gone we can clean this up and just pass a logger
-	var changedRegistrySteps []registry.Node
-	if !r.noRegistry {
-		changedRegistrySteps = determineChangedRegistrySteps(candidate, baseSHA, logger)
-		presubmitsForRegistry, periodicsForRegistry := rehearse.SelectJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, prConfig.Prow.JobConfig.Periodics, prConfig.CiOperator, loggers)
-		presubmits.AddAll(presubmitsForRegistry, config.ChangedRegistryContent)
-		periodics.AddAll(periodicsForRegistry, config.ChangedRegistryContent)
-	}
-
-	var changedTemplates rehearse.ConfigMaps
-	if !r.noTemplates {
-		changedTemplates = determineChangedTemplates(candidate, baseSHA, pullRequest.Head.SHA, pullRequest.Number, configUpdaterCfg, logger)
-		randomJobsForChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(changedTemplates.ProductionNames, presubmits, prConfig.Prow.JobConfig.PresubmitsStatic, loggers)
-		presubmits.AddAll(randomJobsForChangedTemplates, config.ChangedTemplate)
-	}
-
-	var changedClusterProfiles rehearse.ConfigMaps
-	if !r.noClusterProfiles {
-		changedClusterProfiles = determineChangedClusterProfiles(candidate, baseSHA, pullRequest.Head.SHA, pullRequest.Number, configUpdaterCfg, logger)
-		presubmitsForClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, changedClusterProfiles.ProductionNames, logger)
-		presubmits.AddAll(presubmitsForClusterProfiles, config.ChangedClusterProfile)
-	}
-
-	return presubmits, periodics, changedTemplates, changedClusterProfiles
 }
 
 func determineChangedTemplates(candidate, baseSHA, SHA string, prNumber int, configUpdaterCfg prowplugins.ConfigUpdater, logger *logrus.Entry) rehearse.ConfigMaps {

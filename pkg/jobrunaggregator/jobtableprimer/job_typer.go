@@ -53,9 +53,14 @@ func newJob(name string) *jobRowBuilder {
 		network = ovn
 	}
 
-	topology := ha
-	if strings.Contains(name, "single") {
+	topology := ""
+	switch {
+	case strings.Contains(name, "single"):
 		topology = single
+	case strings.Contains(name, "hypershift"):
+		topology = external
+	default:
+		topology = ha
 	}
 
 	// figure out some way to do the ip mode

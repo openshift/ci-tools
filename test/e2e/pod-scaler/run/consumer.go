@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"io/ioutil"
 	"net/http"
 	"path"
 
@@ -44,6 +45,13 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 		t.Fatalf("Failed to ensure client cert and key for admission: %v", err)
 	}
 
+	// create mock report credentials
+	credFile := path.Join(t.TempDir(), "credentials")
+	err = ioutil.WriteFile(credFile, []byte{"<username>:<password>"}, filemode.Regular)
+	if err != nil {
+		t.Fatalf("Failed to create a mock file for report-credentials: %v", err)
+	}
+
 	podScalerFlags := []string{
 		"--loglevel=trace",
 		"--log-style=text",
@@ -52,6 +60,7 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 		"--mutate-resource-limits",
 		"--serving-cert-dir=" + authDir,
 		"--metrics-port=9092",
+		"--report-credentials-file=" + credFile,
 	}
 	podScaler := testhelper.NewAccessory("pod-scaler", podScalerFlags, func(port, healthPort string) []string {
 		t.Logf("pod-scaler admission starting on port %s", port)

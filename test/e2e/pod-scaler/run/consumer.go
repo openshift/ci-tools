@@ -47,7 +47,8 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 
 	// create mock report credentials
 	credFile := path.Join(t.TempDir(), "credentials")
-	err = ioutil.WriteFile(credFile, []byte{"<username>:<password>"}, filemode.Regular)
+	var content string = "<username>:<password>"
+	err = ioutil.WriteFile(credFile, []byte(content), 0400)
 	if err != nil {
 		t.Fatalf("Failed to create a mock file for report-credentials: %v", err)
 	}

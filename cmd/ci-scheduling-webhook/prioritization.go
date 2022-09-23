@@ -995,6 +995,10 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 
 		_, err = machineClient.Patch(p.context, machineName, types.JSONPatchType, deletionPayload, metav1.PatchOptions{})
 		if err != nil {
+			if kerrors.IsNotFound(err) {
+				klog.Warningf("Machine %v has disappeared -- canceling scaledown", machineName)
+				return machineSetNamespace, machineSetName, machineName, nil
+			}
 			klog.Errorf("Unable to apply machine %v annotation %v deletion patch: %#v", machineName, MachineDeleteAnnotationKey, err)
 			continue
 		}

@@ -32,17 +32,17 @@ var (
 		},
 		[]string{"job_name", "type", "state", "reason", "cluster"},
 	)
-	podScalerErrorRate = prometheus.NewCounterVec(
+	podScalerHighMemCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "pod_scaler_admission_error_rate",
-			Help: "number of errors, sorted by label/type",
+			Name: "pod_scaler_admission_high_determined_memory",
+			Help: "number of times pod-scaler determined higher memory than configured, sorted by label/type",
 		},
 		[]string{"workload_name", "configured_memory", "determined_memory"},
 	)
 )
 
 func init() {
-	prometheus.MustRegister(errorRate)
+	prometheus.MustRegister(errorRate, podScalerHighMemCounter)
 }
 
 type options struct {
@@ -124,13 +124,13 @@ func withErrorRate(request *results.Request) {
 	errorRate.With(labels).Inc()
 }
 
-func recordPodScalerError(request *results.PodScalerRequest) {
+func recordHighMemory(request *results.PodScalerRequest) {
 	labels := prometheus.Labels{
 		"workload_name":     request.WorkloadName,
 		"configured_memory": request.ConfiguredMemory,
 		"determined_memory": request.DeterminedMemory,
 	}
-	podScalerErrorRate.With(labels).Inc()
+	podScalerHighMemCounter.With(labels).Inc()
 }
 
 type validator interface {
@@ -197,7 +197,7 @@ func handlePodScalerResult() http.HandlerFunc {
 			return
 		}
 
-		recordPodScalerError(request)
+		recordHighMemory(request)
 		w.WriteHeader(http.StatusOK)
 		log.WithFields(log.Fields{"request": request, "duration": time.Since(start).String()}).Info("Pod-scaler request processed")
 	}

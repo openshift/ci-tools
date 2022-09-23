@@ -108,7 +108,14 @@ func (s *multiStageTestStep) setupRBAC(ctx context.Context) error {
 	labels := map[string]string{MultiStageTestLabel: s.name}
 	ns := s.jobSpec.Namespace()
 	m := meta.ObjectMeta{Namespace: ns, Name: s.name, Labels: labels}
-	sa := &coreapi.ServiceAccount{ObjectMeta: m}
+	sa := &coreapi.ServiceAccount{
+		ObjectMeta: m,
+		ImagePullSecrets: []coreapi.LocalObjectReference{
+			{
+				Name: api.RegistryPullCredentialsSecret,
+			},
+		},
+	}
 	role := &rbacapi.Role{
 		ObjectMeta: m,
 		Rules: []rbacapi.PolicyRule{{

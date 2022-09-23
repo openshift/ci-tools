@@ -482,9 +482,12 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 
 		// TODO(muller): Solve cluster assignment.
 		// The proper solution is to wire DetermineClusterForJob here but it is a more invasive change
-		if strings.Contains(inject.Test, "vsphere") {
+		switch {
+		case strings.Contains(inject.Test, "vsphere"):
 			jobBaseGen.Cluster("vsphere")
-		} else {
+		case strings.Contains(inject.Test, "metal"):
+			jobBaseGen.Cluster("build05")
+		default:
 			jobBaseGen.Cluster("build01")
 		}
 
@@ -498,6 +501,9 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 	if periodic == nil {
 		return nil, fmt.Errorf("BUG: test '%s' not found in injected config", inject.Test)
 	}
+
+	// TODO: Temporarily bumping the timeout to 6 hours to allow extra time for the Kube rebase.  We'll remove this once the rebase lands...
+	periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: 6 * time.Hour}
 
 	extraRefs := prowv1.Refs{
 		Org:  baseCiop.Org,

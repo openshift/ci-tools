@@ -24,6 +24,9 @@ secret_configs:
     existingCluster.config:
       field: sa.pod-scaler.existingCluster.config
       item: pod-scaler
+    sa.pod-scaler.existingCluster.token.txt:
+      field: sa.pod-scaler.existingCluster.token.txt
+      item: pod-scaler
   to:
   - cluster: app.ci
     name: pod-scaler
@@ -48,6 +51,9 @@ secret_configs:
       item: build_farm
     sa.crier.existingCluster.config:
       field: sa.crier.existingCluster.config
+      item: build_farm
+    sa.crier.existingCluster.token.txt:
+      field: sa.crier.existingCluster.token.txt
       item: build_farm
   to:
   - cluster: app.ci
@@ -86,6 +92,9 @@ secret_configs:
     sa.deck.existingCluster.config:
       field: sa.deck.existingCluster.config
       item: build_farm
+    sa.deck.existingCluster.token.txt:
+      field: sa.deck.existingCluster.token.txt
+      item: build_farm
   to:
   - cluster: app.ci
     name: deck
@@ -102,6 +111,9 @@ secret_configs:
       item: build_farm
     sa.hook.existingCluster.config:
       field: sa.hook.existingCluster.config
+      item: build_farm
+    sa.hook.existingCluster.token.txt:
+      field: sa.hook.existingCluster.token.txt
       item: build_farm
   to:
   - cluster: app.ci
@@ -120,6 +132,9 @@ secret_configs:
     sa.prow-controller-manager.existingCluster.config:
       field: sa.prow-controller-manager.existingCluster.config
       item: build_farm
+    sa.prow-controller-manager.existingCluster.token.txt:
+      field: sa.prow-controller-manager.existingCluster.token.txt
+      item: build_farm
   to:
   - cluster: app.ci
     name: prow-controller-manager
@@ -137,6 +152,9 @@ secret_configs:
     sa.sinker.existingCluster.config:
       field: sa.sinker.existingCluster.config
       item: build_farm
+    sa.sinker.existingCluster.token.txt:
+      field: sa.sinker.existingCluster.token.txt
+      item: build_farm
   to:
   - cluster: app.ci
     name: sinker
@@ -147,6 +165,9 @@ secret_configs:
       item: build_farm
     sa.dptp-controller-manager.existingCluster.config:
       field: sa.dptp-controller-manager.existingCluster.config
+      item: build_farm
+    sa.dptp-controller-manager.existingCluster.token.txt:
+      field: sa.dptp-controller-manager.existingCluster.token.txt
       item: build_farm
   to:
   - cluster: app.ci
@@ -161,6 +182,9 @@ secret_configs:
       item: build_farm
     sa.ci-operator.existingCluster.config:
       field: sa.ci-operator.existingCluster.config
+      item: build_farm
+    sa.ci-operator.existingCluster.token.txt:
+      field: sa.ci-operator.existingCluster.token.txt
       item: build_farm
     sa.pj-rehearse.app.ci.config:
       field: sa.pj-rehearse.app.ci.config
@@ -180,6 +204,9 @@ secret_configs:
     sa.github-ldap-user-group-creator.existingCluster.config:
       field: sa.github-ldap-user-group-creator.existingCluster.config
       item: build_farm
+    sa.github-ldap-user-group-creator.existingCluster.token.txt:
+      field: sa.github-ldap-user-group-creator.existingCluster.token.txt
+      item: build_farm
   to:
   - cluster: app.ci
     name: github-ldap-user-group-creator
@@ -191,6 +218,9 @@ secret_configs:
     sa.promoted-image-governor.existingCluster.config:
       field: sa.promoted-image-governor.existingCluster.config
       item: build_farm
+    sa.promoted-image-governor.existingCluster.token.txt:
+      field: sa.promoted-image-governor.existingCluster.token.txt
+      item: build_farm
   to:
   - cluster: app.ci
     name: promoted-image-governor
@@ -201,6 +231,9 @@ secret_configs:
       item: build_farm
     sa.cluster-display.existingCluster.config:
       field: sa.cluster-display.existingCluster.config
+      item: build_farm
+    sa.cluster-display.existingCluster.token.txt:
+      field: sa.cluster-display.existingCluster.token.txt
       item: build_farm
   to:
   - cluster: app.ci

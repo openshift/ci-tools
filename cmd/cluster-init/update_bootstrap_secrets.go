@@ -18,6 +18,7 @@ const (
 	testCredentials     = "test-credentials"
 	kubeconfig          = "kubeconfig"
 	config              = "config"
+	pjRehearse          = "pj-rehearse"
 )
 
 type pushPull string
@@ -191,6 +192,16 @@ func generateDockerConfigJsonSecretConfigTo(name string, namespace string, clust
 }
 
 func updatePodScalerSecret(c *secretbootstrap.Config, o options) error {
+	if o.useTokenFileInKubeconfig {
+		key := serviceAccountTokenFile(podScaler, o.clusterName)
+		if err := updateSecretItemContext(c, podScaler, string(api.ClusterAPPCI),
+			key, secretbootstrap.ItemContext{
+				Field: key,
+				Item:  podScaler,
+			}); err != nil {
+			return err
+		}
+	}
 	key := fmt.Sprintf("%s.%s", o.clusterName, config)
 	return updateSecretItemContext(c, podScaler, string(api.ClusterAPPCI), key, secretbootstrap.ItemContext{
 		Field: serviceAccountKubeconfigPath(podScaler, o.clusterName),
@@ -200,6 +211,15 @@ func updatePodScalerSecret(c *secretbootstrap.Config, o options) error {
 
 func updateDPTPControllerManagerSecret(c *secretbootstrap.Config, o options) error {
 	const DPTPControllerManager = "dptp-controller-manager"
+	if o.useTokenFileInKubeconfig {
+		keyAndFieldToken := serviceAccountTokenFile(DPTPControllerManager, o.clusterName)
+		if err := updateSecretItemContext(c, DPTPControllerManager, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
+			Field: keyAndFieldToken,
+			Item:  buildUFarm,
+		}); err != nil {
+			return err
+		}
+	}
 	keyAndField := serviceAccountKubeconfigPath(DPTPControllerManager, o.clusterName)
 	return updateSecretItemContext(c, DPTPControllerManager, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
@@ -208,14 +228,32 @@ func updateDPTPControllerManagerSecret(c *secretbootstrap.Config, o options) err
 }
 
 func updateRehearseSecret(c *secretbootstrap.Config, o options) error {
+	if o.useTokenFileInKubeconfig {
+		keyAndFieldToken := serviceAccountTokenFile(ciOperator, o.clusterName)
+		if err := updateSecretItemContext(c, pjRehearse, string(api.ClusterBuild01), keyAndFieldToken, secretbootstrap.ItemContext{
+			Field: keyAndFieldToken,
+			Item:  buildUFarm,
+		}); err != nil {
+			return err
+		}
+	}
 	keyAndField := serviceAccountKubeconfigPath(ciOperator, o.clusterName)
-	return updateSecretItemContext(c, "pj-rehearse", string(api.ClusterBuild01), keyAndField, secretbootstrap.ItemContext{
+	return updateSecretItemContext(c, pjRehearse, string(api.ClusterBuild01), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
 		Item:  buildUFarm,
 	})
 }
 
 func updateGithubLdapUserGroupCreatorSecret(c *secretbootstrap.Config, o options) error {
+	if o.useTokenFileInKubeconfig {
+		keyAndFieldToken := serviceAccountTokenFile(githubLdapUserGroupCreator, o.clusterName)
+		if err := updateSecretItemContext(c, githubLdapUserGroupCreator, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
+			Field: keyAndFieldToken,
+			Item:  buildUFarm,
+		}); err != nil {
+			return err
+		}
+	}
 	keyAndField := serviceAccountKubeconfigPath(githubLdapUserGroupCreator, o.clusterName)
 	return updateSecretItemContext(c, githubLdapUserGroupCreator, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
@@ -224,6 +262,15 @@ func updateGithubLdapUserGroupCreatorSecret(c *secretbootstrap.Config, o options
 }
 
 func updatePromotedImageGovernor(c *secretbootstrap.Config, o options) error {
+	if o.useTokenFileInKubeconfig {
+		keyAndFieldToken := serviceAccountTokenFile(promotedImageGovernor, o.clusterName)
+		if err := updateSecretItemContext(c, promotedImageGovernor, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
+			Field: keyAndFieldToken,
+			Item:  buildUFarm,
+		}); err != nil {
+			return err
+		}
+	}
 	keyAndField := serviceAccountKubeconfigPath(promotedImageGovernor, o.clusterName)
 	return updateSecretItemContext(c, promotedImageGovernor, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
@@ -232,6 +279,15 @@ func updatePromotedImageGovernor(c *secretbootstrap.Config, o options) error {
 }
 
 func updateClusterDisplay(c *secretbootstrap.Config, o options) error {
+	if o.useTokenFileInKubeconfig {
+		keyAndFieldToken := serviceAccountTokenFile(clusterDisplay, o.clusterName)
+		if err := updateSecretItemContext(c, clusterDisplay, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
+			Field: keyAndFieldToken,
+			Item:  buildUFarm,
+		}); err != nil {
+			return err
+		}
+	}
 	keyAndField := serviceAccountKubeconfigPath(clusterDisplay, o.clusterName)
 	return updateSecretItemContext(c, clusterDisplay, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
@@ -300,6 +356,13 @@ func updateBuildFarmSecrets(c *secretbootstrap.Config, o options) error {
 		sc.From[keyAndField] = secretbootstrap.ItemContext{
 			Field: keyAndField,
 			Item:  item,
+		}
+		if o.useTokenFileInKubeconfig && s != configUpdater {
+			keyAndFieldToken := serviceAccountTokenFile(s, o.clusterName)
+			sc.From[keyAndFieldToken] = secretbootstrap.ItemContext{
+				Field: keyAndFieldToken,
+				Item:  buildUFarm,
+			}
 		}
 	}
 

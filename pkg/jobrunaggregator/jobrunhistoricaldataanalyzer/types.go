@@ -12,8 +12,9 @@ import (
 var prTemplate string
 
 type parsedJobData struct {
-	NoPrevData                            bool          `json:"-"`
+	PercentTimeDiff                       float64       `json:"-"`
 	TimeDiff                              time.Duration `json:"-"`
+	PrevP99                               time.Duration `json:"-"`
 	DurationP95                           time.Duration `json:"-"`
 	DurationP99                           time.Duration `json:"-"`
 	jobrunaggregatorapi.HistoricalDataRow `json:",inline"`

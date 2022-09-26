@@ -3,7 +3,6 @@ package jobrunhistoricaldataanalyzer
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 	"github.com/sirupsen/logrus"
@@ -16,12 +15,11 @@ type JobRunHistoricalDataAnalyzerFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
 
-	NewFile        string
-	CurrentFile    string
-	DataType       string
-	Leeway         string
-	OutputFile     string
-	DurationLeeway time.Duration
+	NewFile     string
+	CurrentFile string
+	DataType    string
+	Leeway      float64
+	OutputFile  string
 }
 
 var supportedDataTypes = sets.NewString("alerts", "disruptions")
@@ -40,8 +38,8 @@ func (f *JobRunHistoricalDataAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.DataType, "data-type", f.DataType, fmt.Sprintf("data type we are fetching %s", supportedDataTypes.List()))
 	fs.StringVar(&f.NewFile, "new", f.NewFile, "local file with the new query results to compare against")
 	fs.StringVar(&f.CurrentFile, "current", f.CurrentFile, "local file with the current query results")
-	fs.StringVar(&f.Leeway, "leeway", f.DurationLeeway.String(), "time leeway threshold for increased time diff")
 	fs.StringVar(&f.OutputFile, "output-file", f.OutputFile, "output file for the resulting comparison results")
+	fs.Float64Var(&f.Leeway, "leeway", f.Leeway, "percent leeway threshold for increased time diff")
 }
 
 func (f *JobRunHistoricalDataAnalyzerFlags) Validate() error {
@@ -60,11 +58,9 @@ func (f *JobRunHistoricalDataAnalyzerFlags) Validate() error {
 		return fmt.Errorf("must provide --current [file_path] flag to compare against")
 	}
 
-	leeway, err := time.ParseDuration(f.Leeway)
-	if err != nil {
-		return err
+	if f.Leeway < 0 {
+		return fmt.Errorf("leeway percent must be above 0")
 	}
-	f.DurationLeeway = leeway
 
 	return nil
 }
@@ -87,7 +83,7 @@ func (f *JobRunHistoricalDataAnalyzerFlags) ToOptions(ctx context.Context) (*Job
 		ciDataClient: ciDataClient,
 		newFile:      f.NewFile,
 		currentFile:  f.CurrentFile,
-		leeway:       f.DurationLeeway,
+		leeway:       f.Leeway,
 		dataType:     f.DataType,
 		outputFile:   f.OutputFile,
 	}, nil

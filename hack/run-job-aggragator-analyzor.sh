@@ -74,26 +74,26 @@ if ! [ -z "$GC_CREDS" ]; then
     ./job-run-aggregator analyze-historical-data  \
         --current $TEMP_DIR/current-alerts.json \
         --data-type alerts \
-        --leeway 1m \
+        --leeway 30 \
         --google-service-account-credential-file $GC_CREDS
 
     ./job-run-aggregator analyze-historical-data  \
         --current $TEMP_DIR/current-disruptions.json \
         --data-type disruptions \
-        --leeway 1m \
+        --leeway 30 \
         --google-service-account-credential-file $GC_CREDS
 else
     ./job-run-aggregator analyze-historical-data  \
         --current $TEMP_DIR/current-alerts.json \
         --data-type alerts \
         --new $ALERTS_FILE \
-        --leeway 1m
+        --leeway 30
 
     ./job-run-aggregator analyze-historical-data  \
         --current $TEMP_DIR/current-disruptions.json \
         --data-type disruptions \
         --new $DISRUPTION_FILE \
-        --leeway 1m
+        --leeway 30
 fi
 
 cleanup

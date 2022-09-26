@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"html/template"
 	"os"
-	"time"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
@@ -18,7 +17,7 @@ type JobRunHistoricalDataAnalyzerOptions struct {
 	newFile      string
 	currentFile  string
 	dataType     string
-	leeway       time.Duration
+	leeway       float64
 }
 
 func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
@@ -81,7 +80,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	fmt.Printf("successfully compared (%s) with specified leeway of %s\n", o.dataType, o.leeway)
+	fmt.Printf("successfully compared (%s) with specified leeway of %.2f%%\n", o.dataType, o.leeway)
 	return nil
 }
 
@@ -114,10 +113,15 @@ func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentD
 			d.DurationP95 = newP95
 
 			timeDiff := newP99 - oldP99
-			hasPrevData := oldP99 != 0
-			if newP99 > oldP99 && timeDiff > o.leeway && hasPrevData {
+			percentDiff := 0.0
+			if oldP99 != 0 {
+				percentDiff = (float64(timeDiff) / float64(oldP99)) * 100
+			}
+			if newP99 > oldP99 && percentDiff > o.leeway {
 				increaseCount += 1
 				d.TimeDiff = timeDiff
+				d.PercentTimeDiff = percentDiff
+				d.PrevP99 = oldP99
 			}
 			if newP99 < oldP99 {
 				decreaseCount += 1
@@ -142,7 +146,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentD
 			break
 		}
 		if _, ok := newData[key]; !ok {
-			d := parsedJobData{NoPrevData: true}
+			d := parsedJobData{}
 			d.HistoricalDataRow = old
 			missingJobs = append(missingJobs, d)
 		}
@@ -176,7 +180,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) renderResultFiles(result compareRe
 		Jobs           []parsedJobData
 	}{
 		DataType:       o.dataType,
-		Leeway:         o.leeway.String(),
+		Leeway:         fmt.Sprintf("%.2f%%", o.leeway),
 		IncreasedCount: result.increaseCount,
 		DecreasedCount: result.decreaseCount,
 		AddedJobs:      result.addedJobs,
@@ -185,7 +189,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) renderResultFiles(result compareRe
 	}
 
 	if result.increaseCount > 0 {
-		log := fmt.Sprintf("(%s) had (%d) results increased in duration beyond specified leeway of %s\n", o.dataType, result.increaseCount, o.leeway)
+		log := fmt.Sprintf("(%s) had (%d) results increased in duration beyond specified leeway of %.2f%%\n", o.dataType, result.increaseCount, o.leeway)
 		if err := requireReviewFile(log); err != nil {
 			return err
 		}

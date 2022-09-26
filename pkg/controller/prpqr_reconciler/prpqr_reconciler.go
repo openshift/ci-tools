@@ -495,15 +495,16 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 			options.Cron = "@yearly"
 		})
 		periodic.Name = generateJobNameToSubmit(baseCiop, inject, pr)
+
+		// TODO: Temporarily bumping the timeout to 6 hours to allow extra time for the Kube rebase.  We'll remove this once the rebase lands...
+		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: 6 * time.Hour}
+
 		break
 	}
 	// We did not find the injected test: this is a bug
 	if periodic == nil {
 		return nil, fmt.Errorf("BUG: test '%s' not found in injected config", inject.Test)
 	}
-
-	// TODO: Temporarily bumping the timeout to 6 hours to allow extra time for the Kube rebase.  We'll remove this once the rebase lands...
-	periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: 6 * time.Hour}
 
 	extraRefs := prowv1.Refs{
 		Org:  baseCiop.Org,

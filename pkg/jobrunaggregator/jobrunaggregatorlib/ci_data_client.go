@@ -92,13 +92,6 @@ func NewCIDataClient(dataCoordinates BigQueryDataCoordinates, client *bigquery.C
 }
 
 func (c *ciDataClient) ListDisruptionHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
-	return c.listDisruptionHistoricalData(ctx)
-}
-func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
-	return c.listAlertHistoricalData(ctx)
-}
-
-func (c *ciDataClient) listDisruptionHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
     SELECT
     BackendName AS Name,
@@ -148,7 +141,7 @@ func (c *ciDataClient) listDisruptionHistoricalData(ctx context.Context) ([]jobr
 		if err != nil {
 			return nil, err
 		}
-		// When querying the P99 and P95 data via code there is no single precision trailing zeros as apposed to manually
+		// When querying the P99 and P95 data via code there is no single precision trailing zeros as opposed to manually
 		// downloading the JSON from the BigQuery UI which includes the single precision trailing zero for whole numbers.
 		// In order to make it easy and avoid unnecessary diffs, we are adding a trailing zero here and recording the type of data.
 		data.Type = "disruptions"
@@ -163,7 +156,7 @@ func (c *ciDataClient) listDisruptionHistoricalData(ctx context.Context) ([]jobr
 	return disruptionDataSet, nil
 }
 
-func (c *ciDataClient) listAlertHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
+func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
     SELECT AlertName as Name,
             Release, FromRelease, Platform, Architecture, Network, Topology,
@@ -203,7 +196,7 @@ func (c *ciDataClient) listAlertHistoricalData(ctx context.Context) ([]jobrunagg
 		if err != nil {
 			return nil, err
 		}
-		// When querying the P99 and P95 data via code there is no single precision trailing zeros as apposed to manually
+		// When querying the P99 and P95 data via code there is no single precision trailing zeros as opposed to manually
 		// downloading the JSON from the BigQuery UI which includes the single precision trailing zero for whole numbers.
 		// In order to make it easy and avoid unnecessary diffs, we are adding a trailing zero here and recording the type of data.
 		data.Type = "alerts"

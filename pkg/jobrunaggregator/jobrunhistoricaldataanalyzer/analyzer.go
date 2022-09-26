@@ -62,8 +62,8 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 	// We check to make sure the current data set doesn't contain the previous release version
 	// If that's the case, then we are in a new release event (i.e. a new branch has been cut)
 	// We then write to a `require_review` file to record why a review would be required.
-	currentVersionUpdate := currentDataContainsPreviousRelease(previousRelease, currentHistoricalData)
-	if currentVersionUpdate {
+	newReleaseUpdate := currentDataContainsPreviousRelease(previousRelease, currentHistoricalData)
+	if newReleaseUpdate {
 		if err := requireReviewFile("The current data contains previous release version"); err != nil {
 			return err
 		}
@@ -73,7 +73,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 	newDataMap := convertToMap(newHistoricalData)
 	currentDataMap := convertToMap(currentHistoricalData)
 
-	result := o.compareAndUpdate(newDataMap, currentDataMap, currentRelease, currentVersionUpdate)
+	result := o.compareAndUpdate(newDataMap, currentDataMap, currentRelease, newReleaseUpdate)
 
 	err = o.renderResultFiles(result)
 	if err != nil {
@@ -84,6 +84,16 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 	return nil
 }
 
+// compareAndUpdate This will compare the recently pulled information and compare it to the currently existing data.
+// We run our comparison by first checking if we are in a newReleaseEvent, meaning master is now pointing on a new release, then we clean out the current data and generate the results new.
+//
+// If we re in a normal cycle, we then run through our regular comparisons, the primary one being P99.
+// We check if the old P99 value is higher than the new by calculating the time difference and the percentage difference.
+// If a new value is higher AND the percent difference is higher than the leeway desired, we count that as an increase and record it as part of the results,
+// we also record the decreases.
+//
+// Once we've completed recording the results of the compare, we then do a check to see which jobs were removed and we make a note of those jobs to present.
+// The missing jobs are not added back to the final list, the final list is always driven by the new data supplied for comparison gathered from Big Query.
 func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentData map[string]jobrunaggregatorapi.HistoricalDataRow, release string, newReleaseEvent bool) compareResults {
 	// If we're in a new release event, we don't care about the current data
 	if newReleaseEvent {

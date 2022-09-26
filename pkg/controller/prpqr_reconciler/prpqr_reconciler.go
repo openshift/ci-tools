@@ -497,6 +497,9 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		periodic.Name = generateJobNameToSubmit(baseCiop, inject, pr)
 
 		// TODO: Temporarily bumping the timeout to 6 hours to allow extra time for the Kube rebase.  We'll remove this once the rebase lands...
+		if periodic.DecorationConfig == nil {
+			periodic.DecorationConfig = &prowv1.DecorationConfig{}
+		}
 		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: 6 * time.Hour}
 
 		break

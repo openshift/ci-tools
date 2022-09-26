@@ -226,6 +226,8 @@ periodic-ci-openshift-multiarch-master-nightly-4.12-ocp-e2e-sdn-remote-libvirt-s
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12.json
 periodic-ci-openshift-hypershift-main-periodics-conformance-aws-ovn-4-12
+periodic-ci-openshift-microshift-main-periodics-e2e-openshift-conformance-parallel
+periodic-ci-openshift-microshift-main-periodics-e2e-openshift-conformance-serial
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-ovn
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-sdn-techpreview
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-sdn-techpreview-serial

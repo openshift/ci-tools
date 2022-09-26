@@ -120,7 +120,9 @@ func insertTagReferencesFromSteps(config api.MultiStageTestConfigurationLiteral,
 		}
 	}
 	for _, observer := range config.Observers {
-		insert(*observer.FromImage, m)
+		if observer.FromImage != nil {
+			insert(*observer.FromImage, m)
+		}
 	}
 }
 

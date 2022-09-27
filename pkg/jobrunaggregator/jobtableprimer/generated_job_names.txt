@@ -492,8 +492,8 @@ periodic-ci-openshift-release-master-ci-4.12-e2e-azure-sdn-techpreview-serial
 periodic-ci-openshift-release-master-ci-4.12-e2e-azure-sdn-upgrade
 periodic-ci-openshift-release-master-ci-4.12-e2e-azure-upgrade-ovn-single-node
 periodic-ci-openshift-release-master-ci-4.12-e2e-gcp-cilium
-periodic-ci-openshift-release-master-ci-4.12-e2e-gcp-mount-ns-hiding
 periodic-ci-openshift-release-master-ci-4.12-e2e-gcp-ovn
+periodic-ci-openshift-release-master-ci-4.12-e2e-gcp-ovn-mount-ns-hiding
 periodic-ci-openshift-release-master-ci-4.12-e2e-gcp-sdn
 periodic-ci-openshift-release-master-ci-4.12-e2e-gcp-sdn-serial
 periodic-ci-openshift-release-master-ci-4.12-e2e-gcp-sdn-techpreview
@@ -745,7 +745,7 @@ periodic-ci-openshift-release-master-okd-4.11-e2e-vsphere-upi
 periodic-ci-openshift-release-master-okd-4.11-upgrade-from-okd-4.10-e2e-upgrade-aws
 periodic-ci-openshift-release-master-okd-4.11-upgrade-from-okd-4.10-e2e-upgrade-gcp
 periodic-ci-openshift-release-master-okd-4.12-e2e-aws-ovn
-periodic-ci-openshift-release-master-okd-4.12-e2e-vsphere
+periodic-ci-openshift-release-master-okd-4.12-e2e-vsphere-ovn
 periodic-ci-openshift-release-master-okd-4.12-e2e-vsphere-upi
 periodic-ci-openshift-release-master-okd-4.12-upgrade-from-okd-4.11-e2e-upgrade-aws
 periodic-ci-openshift-release-master-okd-4.12-upgrade-from-okd-4.11-e2e-upgrade-gcp
@@ -786,9 +786,9 @@ release-openshift-origin-installer-e2e-gcp-shared-vpc-4.11
 // end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.11-periodics.yaml
 
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.12-periodics.yaml
-promote-release-openshift-machine-os-content-e2e-aws-4.12
 promote-release-openshift-machine-os-content-e2e-aws-4.12-ppc64le
 promote-release-openshift-machine-os-content-e2e-aws-4.12-s390x
+promote-release-openshift-machine-os-content-e2e-aws-ovn-4.12
 release-openshift-ocp-installer-e2e-aws-csi-4.12
 release-openshift-ocp-installer-e2e-aws-mirrors-4.12
 release-openshift-ocp-installer-e2e-aws-upi-4.12

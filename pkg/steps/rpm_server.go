@@ -33,6 +33,7 @@ const (
 	RPMRepoName    = "rpm-repo"
 	AppLabel       = "app"
 	TTLIgnoreLabel = "ci.openshift.io/ttl.ignore"
+	RoleLabel      = "ci.openshift.io/role"
 )
 
 type rpmServerStep struct {
@@ -60,7 +61,7 @@ func (s *rpmServerStep) run(ctx context.Context) error {
 		return fmt.Errorf("could not find source ImageStreamTag for RPM repo deployment: %w", err)
 	}
 
-	labelSet := labelsFor(s.jobSpec, map[string]string{AppLabel: RPMRepoName, TTLIgnoreLabel: "true"})
+	labelSet := labelsFor(s.jobSpec, map[string]string{AppLabel: RPMRepoName, TTLIgnoreLabel: "true", RoleLabel: "infra"})
 	selectorSet := map[string]string{
 		AppLabel: RPMRepoName,
 	}

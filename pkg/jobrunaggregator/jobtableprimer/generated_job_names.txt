@@ -668,7 +668,6 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-alibaba-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-alibaba-ovn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-driver-toolkit
-periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-ovn-csi-migration
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-ovn-fips
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-ovn-fips-serial
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-ovn-local-gateway
@@ -692,7 +691,6 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-upgrade-cnv
 periodic-ci-openshift-release-master-nightly-4.12-e2e-azurestack-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-libvirt-cert-rotation
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-ovn-csi
-periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-ovn-csi-migration
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-ovn-fips
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-ovn-rt
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-sdn

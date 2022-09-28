@@ -108,7 +108,7 @@ func (c *ciDataClient) ListDisruptionHistoricalData(ctx context.Context) ([]jobr
             Jobs.Release,
             Jobs.FromRelease,
             Jobs.Platform,
-        Jobs.Architecture,
+            Jobs.Architecture,
             Jobs.Network,
             Jobs.Topology,
             BackendName,

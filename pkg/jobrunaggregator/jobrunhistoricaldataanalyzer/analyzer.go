@@ -87,7 +87,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 // compareAndUpdate This will compare the recently pulled information and compare it to the currently existing data.
 // We run our comparison by first checking if we are in a newReleaseEvent, meaning master is now pointing on a new release, then we clean out the current data and generate the results new.
 //
-// If we re in a normal cycle, we then run through our regular comparisons, the primary one being P99.
+// If we're in a normal cycle, we then run through our regular comparisons, the primary one being P99.
 // We check if the old P99 value is higher than the new by calculating the time difference and the percentage difference.
 // If a new value is higher AND the percent difference is higher than the leeway desired, we count that as an increase and record it as part of the results,
 // we also record the decreases.

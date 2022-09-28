@@ -134,8 +134,8 @@ func (c *retryingCIDataClient) ListAggregatedTestRunsForJob(ctx context.Context,
 	return ret, err
 }
 
-func (c *retryingCIDataClient) ListDisruptionHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
-	var ret []jobrunaggregatorapi.HistoricalDataRow
+func (c *retryingCIDataClient) ListDisruptionHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalData, error) {
+	var ret []jobrunaggregatorapi.HistoricalData
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
 		ret, innerErr = c.delegate.ListDisruptionHistoricalData(ctx)
@@ -144,8 +144,8 @@ func (c *retryingCIDataClient) ListDisruptionHistoricalData(ctx context.Context)
 	return ret, err
 }
 
-func (c *retryingCIDataClient) ListAlertHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
-	var ret []jobrunaggregatorapi.HistoricalDataRow
+func (c *retryingCIDataClient) ListAlertHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalData, error) {
+	var ret []jobrunaggregatorapi.HistoricalData
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
 		ret, innerErr = c.delegate.ListAlertHistoricalData(ctx)

@@ -15,20 +15,30 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
-func readHistoricalDataFile(filePath string) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
-	historicalData := []jobrunaggregatorapi.HistoricalDataRow{}
+func readHistoricalDataFile(filePath, dataType string) ([]jobrunaggregatorapi.HistoricalData, error) {
 	currentData, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file at path (%s): %v", filePath, err)
 	}
-	if err := json.Unmarshal(currentData, &historicalData); err != nil {
-		return nil, err
+
+	switch dataType {
+	case "alerts":
+		historicalData := []*jobrunaggregatorapi.AlertHistoricalDataRow{}
+		if err := json.Unmarshal(currentData, &historicalData); err != nil {
+			return nil, err
+		}
+		return jobrunaggregatorapi.ConvertToHistoricalData(historicalData), nil
+	default:
+		historicalData := []*jobrunaggregatorapi.DisruptionHistoricalDataRow{}
+		if err := json.Unmarshal(currentData, &historicalData); err != nil {
+			return nil, err
+		}
+		return jobrunaggregatorapi.ConvertToHistoricalData(historicalData), nil
 	}
-	return historicalData, nil
 }
 
-func convertToMap(data []jobrunaggregatorapi.HistoricalDataRow) map[string]jobrunaggregatorapi.HistoricalDataRow {
-	converted := map[string]jobrunaggregatorapi.HistoricalDataRow{}
+func convertToMap(data []jobrunaggregatorapi.HistoricalData) map[string]jobrunaggregatorapi.HistoricalData {
+	converted := make(map[string]jobrunaggregatorapi.HistoricalData)
 	for _, v := range data {
 		converted[v.GetKey()] = v
 	}
@@ -67,9 +77,9 @@ func getDurationFromString(floatString string) time.Duration {
 
 // If current data contains the previous release, we can assume we are in the time frame of new release branching cycle
 // This means we need to trigger a manual review of this PR
-func currentDataContainsPreviousRelease(prevVersion string, data []jobrunaggregatorapi.HistoricalDataRow) bool {
+func currentDataContainsPreviousRelease(prevVersion string, data []jobrunaggregatorapi.HistoricalData) bool {
 	for _, d := range data {
-		if d.Release == prevVersion {
+		if d.GetJobData().Release == prevVersion {
 			return true
 		}
 	}
@@ -126,13 +136,13 @@ func formatTableOutput(data []parsedJobData, filter bool) string {
 		}
 		buffer.WriteString(
 			fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %.2f%% |\n",
-				d.Name,
-				d.Release,
-				d.FromRelease,
-				d.Architecture,
-				d.Network,
-				d.Platform,
-				d.Topology,
+				d.GetName(),
+				d.GetJobData().Release,
+				d.GetJobData().FromRelease,
+				d.GetJobData().Architecture,
+				d.GetJobData().Network,
+				d.GetJobData().Platform,
+				d.GetJobData().Topology,
 				d.PrevP99,
 				d.DurationP99,
 				d.TimeDiff,
@@ -147,12 +157,16 @@ func formatOutput(data []parsedJobData, format string) ([]byte, error) {
 	if len(data) == 0 {
 		return nil, nil
 	}
+	collectedResults := make([]jobrunaggregatorapi.HistoricalData, len(data))
+	for i, v := range data {
+		collectedResults[i] = v.HistoricalData
+	}
 	switch format {
 	case "json":
-		sort.SliceStable(data, func(i, j int) bool {
-			return data[i].GetKey() < data[j].GetKey()
+		sort.SliceStable(collectedResults, func(i, j int) bool {
+			return collectedResults[i].GetKey() < collectedResults[j].GetKey()
 		})
-		return json.MarshalIndent(data, "", "  ")
+		return json.MarshalIndent(collectedResults, "", "  ")
 	default:
 		return nil, fmt.Errorf("invalid output format (%s)", format)
 	}

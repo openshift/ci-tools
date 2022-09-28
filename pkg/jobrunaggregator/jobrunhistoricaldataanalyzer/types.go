@@ -12,12 +12,12 @@ import (
 var prTemplate string
 
 type parsedJobData struct {
-	PercentTimeDiff                       float64       `json:"-"`
-	TimeDiff                              time.Duration `json:"-"`
-	PrevP99                               time.Duration `json:"-"`
-	DurationP95                           time.Duration `json:"-"`
-	DurationP99                           time.Duration `json:"-"`
-	jobrunaggregatorapi.HistoricalDataRow `json:",inline"`
+	PercentTimeDiff                    float64       `json:"-"`
+	TimeDiff                           time.Duration `json:"-"`
+	PrevP99                            time.Duration `json:"-"`
+	DurationP95                        time.Duration `json:"-"`
+	DurationP99                        time.Duration `json:"-"`
+	jobrunaggregatorapi.HistoricalData `json:",inline"`
 }
 
 type compareResults struct {

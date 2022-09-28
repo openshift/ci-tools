@@ -21,7 +21,7 @@ type JobRunHistoricalDataAnalyzerOptions struct {
 }
 
 func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
-	newHistoricalData := []jobrunaggregatorapi.HistoricalDataRow{}
+	var newHistoricalData []jobrunaggregatorapi.HistoricalData
 
 	// We check what the current active release version is
 	currentRelease, previousRelease, err := fetchCurrentRelease()
@@ -29,7 +29,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	currentHistoricalData, err := readHistoricalDataFile(o.currentFile)
+	currentHistoricalData, err := readHistoricalDataFile(o.currentFile, o.dataType)
 	if err != nil {
 		return err
 	}
@@ -49,7 +49,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 			return err
 		}
 	default:
-		newHistoricalData, err = readHistoricalDataFile(o.newFile)
+		newHistoricalData, err = readHistoricalDataFile(o.newFile, o.dataType)
 		if err != nil {
 			return err
 		}
@@ -94,10 +94,10 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 //
 // Once we've completed recording the results of the compare, we then do a check to see which jobs were removed and we make a note of those jobs to present.
 // The missing jobs are not added back to the final list, the final list is always driven by the new data supplied for comparison gathered from Big Query.
-func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentData map[string]jobrunaggregatorapi.HistoricalDataRow, release string, newReleaseEvent bool) compareResults {
+func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentData map[string]jobrunaggregatorapi.HistoricalData, release string, newReleaseEvent bool) compareResults {
 	// If we're in a new release event, we don't care about the current data
 	if newReleaseEvent {
-		currentData = make(map[string]jobrunaggregatorapi.HistoricalDataRow)
+		currentData = make(map[string]jobrunaggregatorapi.HistoricalData, 0)
 	}
 	increaseCount := 0
 	decreaseCount := 0
@@ -106,19 +106,19 @@ func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentD
 	for key, new := range newData {
 
 		// We only care about the current active release data, we skip all others
-		if new.Release != release {
+		if new.GetJobData().Release != release {
 			continue
 		}
 
-		newP99 := getDurationFromString(new.P99)
-		newP95 := getDurationFromString(new.P95)
+		newP99 := getDurationFromString(new.GetP99())
+		newP95 := getDurationFromString(new.GetP99())
 		d := parsedJobData{}
 
 		// If the current data contains the new data, check and record the time diff
 		if old, ok := currentData[key]; ok {
-			oldP99 := getDurationFromString(old.P99)
+			oldP99 := getDurationFromString(old.GetP99())
 
-			d.HistoricalDataRow = new
+			d.HistoricalData = new
 			d.DurationP99 = newP99
 			d.DurationP95 = newP95
 
@@ -137,12 +137,11 @@ func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentD
 				decreaseCount += 1
 			}
 		} else {
-			d.HistoricalDataRow = new
+			d.HistoricalData = new
 			d.DurationP99 = newP99
 			d.DurationP95 = newP95
 			added = append(added, key)
 		}
-		d.Type = o.dataType
 
 		results = append(results, d)
 	}
@@ -157,7 +156,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentD
 		}
 		if _, ok := newData[key]; !ok {
 			d := parsedJobData{}
-			d.HistoricalDataRow = old
+			d.HistoricalData = old
 			missingJobs = append(missingJobs, d)
 		}
 	}

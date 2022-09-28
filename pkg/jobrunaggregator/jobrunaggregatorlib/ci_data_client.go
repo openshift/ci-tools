@@ -58,8 +58,8 @@ type JobLister interface {
 }
 
 type HistoricalDataClient interface {
-	ListDisruptionHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error)
-	ListAlertHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error)
+	ListDisruptionHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalData, error)
+	ListAlertHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalData, error)
 }
 
 type CIDataClient interface {
@@ -91,10 +91,10 @@ func NewCIDataClient(dataCoordinates BigQueryDataCoordinates, client *bigquery.C
 	}
 }
 
-func (c *ciDataClient) ListDisruptionHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
+func (c *ciDataClient) ListDisruptionHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalData, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
     SELECT
-    BackendName AS Name,
+    BackendName,
     Release,
     FromRelease,
     Platform,
@@ -131,9 +131,9 @@ func (c *ciDataClient) ListDisruptionHistoricalData(ctx context.Context) ([]jobr
 	if err != nil {
 		return nil, fmt.Errorf("failed to query disruption tables with %q: %w", queryString, err)
 	}
-	disruptionDataSet := []jobrunaggregatorapi.HistoricalDataRow{}
+	disruptionDataSet := []*jobrunaggregatorapi.DisruptionHistoricalDataRow{}
 	for {
-		data := &jobrunaggregatorapi.HistoricalDataRow{}
+		data := &jobrunaggregatorapi.DisruptionHistoricalDataRow{}
 		err = disruptionRow.Next(data)
 		if err == iterator.Done {
 			break
@@ -144,21 +144,20 @@ func (c *ciDataClient) ListDisruptionHistoricalData(ctx context.Context) ([]jobr
 		// When querying the P99 and P95 data via code there is no single precision trailing zeros as opposed to manually
 		// downloading the JSON from the BigQuery UI which includes the single precision trailing zero for whole numbers.
 		// In order to make it easy and avoid unnecessary diffs, we are adding a trailing zero here and recording the type of data.
-		data.Type = "disruptions"
 		if !strings.Contains(data.P99, ".") {
 			data.P99 = data.P99 + ".0"
 		}
 		if !strings.Contains(data.P95, ".") {
 			data.P95 = data.P95 + ".0"
 		}
-		disruptionDataSet = append(disruptionDataSet, *data)
+		disruptionDataSet = append(disruptionDataSet, data)
 	}
-	return disruptionDataSet, nil
+	return jobrunaggregatorapi.ConvertToHistoricalData(disruptionDataSet), nil
 }
 
-func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalDataRow, error) {
+func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalData, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
-    SELECT AlertName as Name,
+    SELECT AlertName,
             Release, FromRelease, Platform, Architecture, Network, Topology,
             IFNULL(SAFE_CAST(P95 AS STRING), "0.0") AS P95, IFNULL(SAFE_CAST(P99 AS STRING), "0.0") AS P99
     FROM DATA_SET_LOCATION.Alerts_Unified_LastWeek_P95
@@ -186,9 +185,9 @@ func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]jobrunagg
 	if err != nil {
 		return nil, fmt.Errorf("failed to query disruption tables with %q: %w", queryString, err)
 	}
-	disruptionDataSet := []jobrunaggregatorapi.HistoricalDataRow{}
+	alertDataSet := []*jobrunaggregatorapi.AlertHistoricalDataRow{}
 	for {
-		data := &jobrunaggregatorapi.HistoricalDataRow{}
+		data := &jobrunaggregatorapi.AlertHistoricalDataRow{}
 		err = disruptionRow.Next(data)
 		if err == iterator.Done {
 			break
@@ -199,16 +198,15 @@ func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]jobrunagg
 		// When querying the P99 and P95 data via code there is no single precision trailing zeros as opposed to manually
 		// downloading the JSON from the BigQuery UI which includes the single precision trailing zero for whole numbers.
 		// In order to make it easy and avoid unnecessary diffs, we are adding a trailing zero here and recording the type of data.
-		data.Type = "alerts"
 		if !strings.Contains(data.P99, ".") {
 			data.P99 = data.P99 + ".0"
 		}
 		if !strings.Contains(data.P95, ".") {
 			data.P95 = data.P95 + ".0"
 		}
-		disruptionDataSet = append(disruptionDataSet, *data)
+		alertDataSet = append(alertDataSet, data)
 	}
-	return disruptionDataSet, nil
+	return jobrunaggregatorapi.ConvertToHistoricalData(alertDataSet), nil
 }
 
 func (c *ciDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error) {

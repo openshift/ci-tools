@@ -1,90 +1,48 @@
 package jobrunaggregatorapi
 
 import (
-	"encoding/json"
 	"fmt"
 )
 
-type HistoricalDataRow struct {
-	Name         string
+type HistoricalData interface {
+	GetJobData() HistoricalJobData
+	GetName() string
+	GetP99() string
+	GetP95() string
+	GetKey() string
+}
+
+type HistoricalJobData struct {
 	Release      string
 	FromRelease  string
 	Platform     string
 	Architecture string
 	Network      string
 	Topology     string
-	P95          string
-	P99          string
-	Type         string
 }
 
-func (c *HistoricalDataRow) UnmarshalJSON(data []byte) error {
-	var values struct {
-		AlertName    string
-		BackendName  string
-		Release      string
-		FromRelease  string
-		Platform     string
-		Architecture string
-		Network      string
-		Topology     string
-		P95          string
-		P99          string
-	}
-	err := json.Unmarshal(data, &values)
-	if err != nil {
-		return err
-	}
-	c.Name = values.BackendName
-	c.Type = "disruption"
-	if values.AlertName != "" {
-		c.Name = values.AlertName
-		c.Type = "alert"
-	}
-	c.Release = values.Release
-	c.FromRelease = values.FromRelease
-	c.Platform = values.Platform
-	c.Architecture = values.Architecture
-	c.Network = values.Network
-	c.Topology = values.Topology
-	c.P95 = values.P95
-	c.P99 = values.P99
-	return nil
+type AlertHistoricalDataRow struct {
+	AlertName string
+	HistoricalJobData
+	P95 string
+	P99 string
 }
 
-func (c *HistoricalDataRow) MarshalJSON() ([]byte, error) {
-	var values struct {
-		AlertName    string `json:",omitempty"`
-		BackendName  string `json:",omitempty"`
-		Release      string
-		FromRelease  string
-		Platform     string
-		Architecture string
-		Network      string
-		Topology     string
-		P95          string
-		P99          string
-	}
-	if c.Type == "alerts" {
-		values.AlertName = c.Name
-	} else {
-		values.BackendName = c.Name
-	}
-	values.Release = c.Release
-	values.FromRelease = c.FromRelease
-	values.Platform = c.Platform
-	values.Architecture = c.Architecture
-	values.Network = c.Network
-	values.Topology = c.Topology
-	values.P95 = c.P95
-	values.P99 = c.P99
-
-	return json.Marshal(values)
+func (a *AlertHistoricalDataRow) GetJobData() HistoricalJobData {
+	return a.HistoricalJobData
 }
-
-func (a *HistoricalDataRow) GetKey() string {
+func (a *AlertHistoricalDataRow) GetName() string {
+	return a.AlertName
+}
+func (a *AlertHistoricalDataRow) GetP99() string {
+	return a.P99
+}
+func (a *AlertHistoricalDataRow) GetP95() string {
+	return a.P95
+}
+func (a *AlertHistoricalDataRow) GetKey() string {
 	return fmt.Sprintf("%s_%s_%s_%s_%s_%s_%s",
-		a.Name,
+		a.AlertName,
 		a.FromRelease,
 		a.Release,
 		a.Architecture,
@@ -92,4 +50,43 @@ func (a *HistoricalDataRow) GetKey() string {
 		a.Network,
 		a.Topology,
 	)
+}
+
+type DisruptionHistoricalDataRow struct {
+	BackendName string
+	HistoricalJobData
+	P95 string
+	P99 string
+}
+
+func (a *DisruptionHistoricalDataRow) GetJobData() HistoricalJobData {
+	return a.HistoricalJobData
+}
+func (a *DisruptionHistoricalDataRow) GetName() string {
+	return a.BackendName
+}
+func (a *DisruptionHistoricalDataRow) GetP99() string {
+	return a.P99
+}
+func (a *DisruptionHistoricalDataRow) GetP95() string {
+	return a.P95
+}
+func (a *DisruptionHistoricalDataRow) GetKey() string {
+	return fmt.Sprintf("%s_%s_%s_%s_%s_%s_%s",
+		a.BackendName,
+		a.FromRelease,
+		a.Release,
+		a.Architecture,
+		a.Platform,
+		a.Network,
+		a.Topology,
+	)
+}
+
+func ConvertToHistoricalData[D *AlertHistoricalDataRow | *DisruptionHistoricalDataRow](data []D) []HistoricalData {
+	historicalData := make([]HistoricalData, len(data))
+	for i, v := range data {
+		historicalData[i] = HistoricalData(v)
+	}
+	return historicalData
 }

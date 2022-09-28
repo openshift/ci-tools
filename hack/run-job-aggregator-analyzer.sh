@@ -2,7 +2,15 @@
 
 set -euo pipefail
 
-## Run this script to locally analyze data for disruption
+## Run this script to locally analyze data for disruption.
+## This helper script allows you the ability to compare against local data or directly pulling all data from 
+## Big Query using provided GC Credentials.
+##
+## Because a local file will be treated as authoritative just as if we were querying against Big Query it can provide a way
+## to run a much more refined query via the Big Query UI, downloading the results and feeding it through.
+##
+## In the event where you can't wait for the automation to run, or you need to quickly update, you can just provide a GC Token locally
+## and this script will generate the `pr_message.md` to provide in your PR as well as the results.
 
 ORIGIN_DIR=""
 ALERTS_FILE=""

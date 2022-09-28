@@ -204,6 +204,13 @@ func (o *JobRunHistoricalDataAnalyzerOptions) renderResultFiles(result compareRe
 		}
 	}
 
+	if result.decreaseCount > 0 {
+		log := fmt.Sprintf("(%s) had (%d) results decreased in duration beyond specified leeway of %.2f%%\n", o.dataType, result.decreaseCount, o.leeway)
+		if err := requireReviewFile(log); err != nil {
+			return err
+		}
+	}
+
 	buff := bytes.Buffer{}
 	if err := prTempl.Execute(&buff, args); err != nil {
 		return err

@@ -209,6 +209,11 @@ func (o *GenerateJobNamesOptions) Run(ctx context.Context) error {
 				!strings.Contains(curr.Name, "-4.20") {
 				continue
 			}
+
+			// Disruptive jobs can dramatically alter our data for certain NURP combos:
+			if strings.Contains(curr.Name, "-disruptive") {
+				continue
+			}
 			localLines = append(localLines, curr.Name)
 		}
 		sort.Strings(localLines)

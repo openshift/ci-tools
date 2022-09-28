@@ -3,6 +3,7 @@ package results
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -30,6 +31,17 @@ type Options struct {
 func (o *Options) Bind(flag *flag.FlagSet) {
 	flag.StringVar(&o.address, "report-address", reportAddress, "Address of the aggregate reporting server.")
 	flag.StringVar(&o.credentials, "report-credentials-file", "", "File holding the <username>:<password> for the aggregate reporting server.")
+}
+
+// Validate checks if the Options elements are empty
+func (o *Options) Validate() error {
+	if o.address == "" {
+		return errors.New("report-address is required")
+	}
+	if o.credentials == "" {
+		return errors.New("report-credentials-file is required")
+	}
+	return nil
 }
 
 func getUsernameAndPassword(credentials string) (string, string, error) {
@@ -81,6 +93,13 @@ type Request struct {
 	State string `json:"state"`
 	// Reason is a colon-delimited list of reasons for failure
 	Reason string `json:"reason"`
+}
+
+// PodScalerRequest holds the data from pod-scaler used to report a result to an aggregation server
+type PodScalerRequest struct {
+	WorkloadName     string
+	ConfiguredMemory string
+	DeterminedMemory string
 }
 
 const (
@@ -149,26 +168,23 @@ func (r *reporter) report(request Request) {
 	sendRequest(req, r.client, r.username, r.password)
 }
 
-// PodScalerRequest holds the data from pod-scaler used to report a result to an aggregation server
-type PodScalerRequest struct {
-	WorkloadName     string
-	ConfiguredMemory string
-	DeterminedMemory string
+type PodScalerReporter interface {
+	ReportMemoryConfigurationWarning(workloadName, configuredMemory, determinedMemory string)
 }
 
-type PodScalerReporter struct {
+type podScalerReporter struct {
 	client             *http.Client
 	username, password string
 	address            string
 }
 
-func (o *Options) PodScalerReporter() (*PodScalerReporter, error) {
+func (o *Options) PodScalerReporter() (PodScalerReporter, error) {
 	username, password, err := getUsernameAndPassword(o.credentials)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get username and password: %w", err)
 	}
 
-	return &PodScalerReporter{
+	return &podScalerReporter{
 		client:   &http.Client{},
 		username: username,
 		password: password,
@@ -178,7 +194,7 @@ func (o *Options) PodScalerReporter() (*PodScalerReporter, error) {
 
 // ReportMemoryConfigurationWarning is used to send the information about memory configuration
 // from pod-scaler-admission to result-aggregator.
-func (r *PodScalerReporter) ReportMemoryConfigurationWarning(workloadName, configuredMemory, determinedMemory string) {
+func (r *podScalerReporter) ReportMemoryConfigurationWarning(workloadName, configuredMemory, determinedMemory string) {
 	request := PodScalerRequest{
 		WorkloadName:     workloadName,
 		ConfiguredMemory: configuredMemory,

@@ -165,7 +165,14 @@ func main() {
 	if err := config.Validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to validate the config")
 	}
-	if err := determinizeJobs(opt.prowJobConfigDir, config); err != nil {
-		logrus.WithError(err).Fatal("Failed to determinize")
+	args := flagSet.Args()
+	if len(args) == 0 {
+		args = append(args, "")
+	}
+	for _, subDir := range args {
+		subDir = filepath.Join(opt.prowJobConfigDir, subDir)
+		if err := determinizeJobs(subDir, config); err != nil {
+			logrus.WithError(err).Fatal("Failed to determinize")
+		}
 	}
 }

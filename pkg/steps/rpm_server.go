@@ -84,7 +84,7 @@ func (s *rpmServerStep) run(ctx context.Context) error {
 		TimeoutSeconds:      1,
 	}
 	oneI64 := int64(1)
-	oneI32 := int32(2)
+	oneI32 := int32(1)
 	progressDeadline := int32(3600) // If a build farm is scaling up, provide plenty of time for pods to schedule
 	deployment := &appsapi.Deployment{
 		ObjectMeta: commonMeta,

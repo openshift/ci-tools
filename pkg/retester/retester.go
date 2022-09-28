@@ -273,7 +273,10 @@ func (c *RetestController) Run() error {
 	if err != nil {
 		return fmt.Errorf("failed to find retestable candidates: %w", err)
 	}
+	return c.runWithCandidates(candidates)
+}
 
+func (c *RetestController) runWithCandidates(candidates map[string]tide.PullRequest) error {
 	logrus.Infof("Found %d candidates for retest (pass label criteria, fail some tests)", len(candidates))
 	for _, pr := range candidates {
 		logrus.Infof("Candidate PR: %s", prUrl(pr))
@@ -282,7 +285,7 @@ func (c *RetestController) Run() error {
 	candidates = c.enabledPRs(candidates)
 	logrus.Infof("Remaining %d candidates for retest (from an enabled org or repo)", len(candidates))
 
-	candidates, err = c.atLeastOneRequiredJob(candidates)
+	candidates, err := c.atLeastOneRequiredJob(candidates)
 	if err != nil {
 		return fmt.Errorf("failed to filter candidate PRs that have at least one required job: %w", err)
 	}
@@ -312,7 +315,7 @@ const (
 	retestBackoffRetest
 )
 
-func (b *backoffCache) check(pr tide.PullRequest, baseSha string, config *Config, policy RetesterPolicy) (retestBackoffAction, string) {
+func (b *backoffCache) check(pr tide.PullRequest, baseSha string, policy RetesterPolicy) (retestBackoffAction, string) {
 	key := prKey(&pr)
 	if _, has := b.cache[key]; !has {
 		b.cache[key] = &pullRequest{}
@@ -369,7 +372,7 @@ func (c *RetestController) retestOrBackoff(pr tide.PullRequest) error {
 		return fmt.Errorf("failed to validate retester policy: %v", validationErrors)
 	}
 
-	action, message := c.backoff.check(pr, baseSha, c.config, policy)
+	action, message := c.backoff.check(pr, baseSha, policy)
 	switch action {
 	case retestBackoffHold:
 		c.createComment(pr, "/hold", message)

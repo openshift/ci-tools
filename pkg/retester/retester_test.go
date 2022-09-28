@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/github/fakegithub"
 	"k8s.io/test-infra/prow/tide"
@@ -111,6 +112,16 @@ func TestLoadConfig(t *testing.T) {
 			file:     "testdata/testconfig/no-config.yaml",
 			expected: &Config{Retester: Retester{}},
 		},
+		{
+			name:          "no such file",
+			file:          "testdata/testconfig/not_found",
+			expectedError: fmt.Errorf("failed to read config open testdata/testconfig/not_found: no such file or directory"),
+		},
+		{
+			name:          "unmarshal config error",
+			file:          "testdata/testconfig/wrong_format.yaml",
+			expectedError: fmt.Errorf("failed to unmarshal config error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type retester.Config"),
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -200,7 +211,7 @@ func TestGetRetesterPolicy(t *testing.T) {
 		},
 		{
 			name:   "not configured repo and disabled org",
-			org:    "no-openshifft",
+			org:    "no-openshift",
 			repo:   "ci-docs",
 			config: c,
 		},
@@ -563,6 +574,235 @@ pr3:
 				if diff := cmp.Diff(tc.expectedContent, actualContent); diff != "" {
 					t.Errorf("%s differs from expected:\n%s", tc.name, diff)
 				}
+			}
+		})
+	}
+}
+
+func TestPrUrl(t *testing.T) {
+	pr := tide.PullRequest{
+		Number: githubv4.Int(1234),
+		Author: struct{ Login githubv4.String }{Login: "org"},
+		Repository: struct {
+			Name          githubv4.String
+			NameWithOwner githubv4.String
+			Owner         struct{ Login githubv4.String }
+		}{Name: "repo", Owner: struct{ Login githubv4.String }{Login: "org"}},
+	}
+	expected := "https://github.com/org/repo/pull/1234"
+	actual := prUrl(pr)
+	if diff := cmp.Diff(expected, actual); diff != "" {
+		t.Errorf("basic case differs from expected:\n%s", diff)
+	}
+}
+
+func TestPrKey(t *testing.T) {
+	pr := tide.PullRequest{
+		Number: githubv4.Int(1234),
+		Author: struct{ Login githubv4.String }{Login: "org"},
+		Repository: struct {
+			Name          githubv4.String
+			NameWithOwner githubv4.String
+			Owner         struct{ Login githubv4.String }
+		}{Name: "repo", NameWithOwner: "org/repo", Owner: struct{ Login githubv4.String }{Login: "org"}},
+	}
+	expected := "org/repo#1234"
+	actual := prKey(&pr)
+	if diff := cmp.Diff(expected, actual); diff != "" {
+		t.Errorf("basic case differs from expected:\n%s", diff)
+	}
+}
+
+func TestCheck(t *testing.T) {
+	True := true
+	logger := logrus.NewEntry(logrus.StandardLogger())
+
+	testCases := []struct {
+		name           string
+		cache          backoffCache
+		pr             tide.PullRequest
+		baseSha        string
+		policy         RetesterPolicy
+		expected       retestBackoffAction
+		expectedString string
+	}{
+		{
+			name:  "hold PR",
+			cache: backoffCache{cache: map[string]*pullRequest{"org/repo#123": {PRSha: "holdPR", RetestsForBaseSha: 3, RetestsForPrSha: 9}}, logger: logger},
+			pr: tide.PullRequest{Number: githubv4.Int(123),
+				Repository: struct {
+					Name          githubv4.String
+					NameWithOwner githubv4.String
+					Owner         struct{ Login githubv4.String }
+				}{Name: "repo", NameWithOwner: "org/repo", Owner: struct{ Login githubv4.String }{Login: "org"}},
+				HeadRefOID: "holdPR"},
+			policy:         RetesterPolicy{3, 9, &True},
+			expected:       0,
+			expectedString: "Revision holdPR was retested 9 times: holding",
+		},
+		{
+			name:  "pause PR",
+			cache: backoffCache{cache: map[string]*pullRequest{"org/repo#123": {PRSha: "pausePR", RetestsForBaseSha: 3, RetestsForPrSha: 3}}, logger: logger},
+			pr: tide.PullRequest{Number: githubv4.Int(123),
+				Repository: struct {
+					Name          githubv4.String
+					NameWithOwner githubv4.String
+					Owner         struct{ Login githubv4.String }
+				}{Name: "repo", NameWithOwner: "org/repo", Owner: struct{ Login githubv4.String }{Login: "org"}},
+				HeadRefOID: "pausePR"},
+			policy:         RetesterPolicy{3, 9, &True},
+			expected:       1,
+			expectedString: "Revision pausePR was retested 3 times against base HEAD : pausing",
+		},
+		{
+			name:           "retest PR",
+			cache:          backoffCache{cache: map[string]*pullRequest{}, logger: logger},
+			pr:             tide.PullRequest{HeadRefOID: "retestPR"},
+			policy:         RetesterPolicy{3, 9, &True},
+			expected:       2,
+			expectedString: "Remaining retests: 2 against base HEAD  and 8 for PR HEAD retestPR in total",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, actualString := tc.cache.check(tc.pr, tc.baseSha, tc.policy)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+			}
+			if diff := cmp.Diff(tc.expectedString, actualString); diff != "" {
+				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+			}
+		})
+	}
+}
+
+func TestRunWithCandidates(t *testing.T) {
+	config := &Config{Retester: Retester{
+		RetesterPolicy: RetesterPolicy{MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9}, Oranizations: map[string]Oranization{
+			"openshift": {RetesterPolicy: RetesterPolicy{Enabled: &True}},
+		},
+	}}
+	ghc := &MyFakeClient{fakegithub.NewFakeClient()}
+
+	logger := logrus.NewEntry(logrus.StandardLogger())
+
+	testCases := []struct {
+		name       string
+		prowconfig string
+		jobconfig  string
+		candidates map[string]tide.PullRequest
+		expected   error
+	}{
+		{
+			name:       "one candidate",
+			prowconfig: "simple.yaml",
+			jobconfig:  "simple.yaml",
+			candidates: map[string]tide.PullRequest{
+				"a": {
+					Number:     1,
+					HeadRefOID: "a",
+					Repository: struct {
+						Name          githubv4.String
+						NameWithOwner githubv4.String
+						Owner         struct{ Login githubv4.String }
+					}{Name: "ci-tools", Owner: struct{ Login githubv4.String }{Login: "openshift"}},
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.prowconfig = filepath.Join("testdata", "prowconfig", tc.prowconfig)
+			tc.jobconfig = filepath.Join("testdata", "jobconfig", tc.jobconfig)
+			configOpts := configflagutil.ConfigOptions{ConfigPath: tc.prowconfig, JobConfigPath: tc.jobconfig}
+			configAgent, err := configOpts.ConfigAgent()
+			if err != nil {
+				t.Errorf("Error starting config agent.")
+			}
+			fakeStatus := map[string]*github.CombinedStatus{
+				"a": {
+					Statuses: []github.Status{
+						{
+							State:       "failure",
+							Context:     "test-presubmit",
+							Description: "Job failed",
+						},
+					},
+				},
+			}
+			ghc.CombinedStatuses = fakeStatus
+			c := &RetestController{
+				ghClient:      ghc,
+				configGetter:  configAgent.Config,
+				logger:        logger,
+				usesGitHubApp: true,
+				backoff:       &backoffCache{cache: map[string]*pullRequest{}, logger: logger},
+				config:        config,
+			}
+			actual := c.runWithCandidates(tc.candidates)
+			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("Error differs from expected:\n%s", diff)
+			}
+
+		})
+	}
+}
+
+func TestFindCandidates(t *testing.T) {
+	config := &Config{Retester: Retester{
+		RetesterPolicy: RetesterPolicy{MaxRetestsForShaAndBase: 3, MaxRetestsForSha: 9}, Oranizations: map[string]Oranization{
+			"openshift": {RetesterPolicy: RetesterPolicy{Enabled: &True}},
+		},
+	}}
+	ghc := &MyFakeClient{fakegithub.NewFakeClient()}
+
+	logger := logrus.NewEntry(logrus.StandardLogger())
+
+	testCases := []struct {
+		name       string
+		prowconfig string
+		candidates map[string]tide.PullRequest
+		expected   map[string]tide.PullRequest
+	}{
+		{
+			name:       "no candidates",
+			prowconfig: "simple.yaml",
+			candidates: map[string]tide.PullRequest{
+				"a": {
+					Number:     1,
+					HeadRefOID: "a",
+					Repository: struct {
+						Name          githubv4.String
+						NameWithOwner githubv4.String
+						Owner         struct{ Login githubv4.String }
+					}{Name: "ci-tools", Owner: struct{ Login githubv4.String }{Login: "openshift"}},
+				},
+			},
+			expected: map[string]tide.PullRequest{},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.prowconfig = filepath.Join("testdata", "prowconfig", tc.prowconfig)
+			configOpts := configflagutil.ConfigOptions{ConfigPath: tc.prowconfig}
+			configAgent, err := configOpts.ConfigAgent()
+			if err != nil {
+				t.Errorf("Error starting config agent.")
+			}
+			c := &RetestController{
+				ghClient:      ghc,
+				configGetter:  configAgent.Config,
+				logger:        logger,
+				usesGitHubApp: true,
+				backoff:       &backoffCache{cache: map[string]*pullRequest{}, logger: logger},
+				config:        config,
+			}
+			actual, err := findCandidates(c.configGetter, c.ghClient, c.usesGitHubApp, c.logger)
+			if err != nil {
+				t.Errorf("Error finding candidates: %v", err)
+			}
+			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("Error differs from expected:\n%s", diff)
 			}
 		})
 	}

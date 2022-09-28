@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"time"
 
@@ -23,6 +24,9 @@ type options struct {
 	runOnce bool
 	dryRun  bool
 
+	intervalRaw       string
+	cacheRecordAgeRaw string
+
 	interval time.Duration
 
 	cacheFile      string
@@ -37,6 +41,22 @@ func (o *options) Validate() error {
 			return err
 		}
 	}
+	if o.configFile == "" {
+		return fmt.Errorf("--config-file is required")
+	}
+	return nil
+}
+
+func (o *options) complete() error {
+	var err error
+	o.interval, err = time.ParseDuration(o.intervalRaw)
+	if err != nil {
+		return fmt.Errorf("invalid --interval: %w", err)
+	}
+	o.cacheRecordAge, err = time.ParseDuration(o.cacheRecordAgeRaw)
+	if err != nil {
+		return fmt.Errorf("invalid --cache-record-age: %w", err)
+	}
 	return nil
 }
 
@@ -44,14 +64,11 @@ func gatherOptions() options {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
-	var intervalRaw string
-	var cacheRecordAgeRaw string
-
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Dry run for testing. Uses API tokens but does not mutate.")
 	fs.BoolVar(&o.runOnce, "run-once", false, "If true, run only once then quit.")
-	fs.StringVar(&intervalRaw, "interval", "1h", "Parseable duration string that specifies the sync period")
+	fs.StringVar(&o.intervalRaw, "interval", "1h", "Parseable duration string that specifies the sync period")
 	fs.StringVar(&o.cacheFile, "cache-file", "", "File to persist cache. No persistence of cache if not set")
-	fs.StringVar(&cacheRecordAgeRaw, "cache-record-age", "168h", "Parseable duration string that specifies how long a cache record lives in cache after the last time it was considered")
+	fs.StringVar(&o.cacheRecordAgeRaw, "cache-record-age", "168h", "Parseable duration string that specifies how long a cache record lives in cache after the last time it was considered")
 	fs.StringVar(&o.configFile, "config-file", "", "Path to the configure file of the retest.")
 
 	for _, group := range []flagutil.OptionGroup{&o.github, &o.config} {
@@ -62,23 +79,16 @@ func gatherOptions() options {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
 
-	var err error
-	o.interval, err = time.ParseDuration(intervalRaw)
-	if err != nil {
-		logrus.WithError(err).Fatal("could not parse interval")
-	}
-	o.cacheRecordAge, err = time.ParseDuration(cacheRecordAgeRaw)
-	if err != nil {
-		logrus.WithError(err).Fatal("could not parse cache record age")
-	}
-
 	return o
 }
 
 func main() {
 	o := gatherOptions()
+	if err := o.complete(); err != nil {
+		logrus.WithError(err).Fatal("failed to complete options")
+	}
 	if err := o.Validate(); err != nil {
-		logrus.Fatalf("Invalid options: %v", err)
+		logrus.WithError(err).Fatal("failed to validate options")
 	}
 
 	gc, err := o.github.GitHubClient(o.dryRun)

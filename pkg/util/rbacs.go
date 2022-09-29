@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
@@ -42,6 +45,15 @@ func CreateRBACs(ctx context.Context, sa *coreapi.ServiceAccount, role *rbacapi.
 		return nil
 	}
 
+	hasDockerCfgImagePullSecretSet := func(imagePullSecrets []coreapi.LocalObjectReference) bool {
+		for _, secret := range imagePullSecrets {
+			if api.RegistryPullCredentialsSecret != secret.Name {
+				return true
+			}
+		}
+		return false
+	}
+
 	if err := wait.PollImmediate(retryDuration, timeout, func() (bool, error) {
 		actualSA := &coreapi.ServiceAccount{}
 		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{
@@ -51,15 +63,14 @@ func CreateRBACs(ctx context.Context, sa *coreapi.ServiceAccount, role *rbacapi.
 			return false, fmt.Errorf("couldn't get service account %s: %w", sa.Name, err)
 		}
 
-		if len(actualSA.ImagePullSecrets) == 0 {
+		if !hasDockerCfgImagePullSecretSet(actualSA.ImagePullSecrets) {
 			return false, nil
 		}
 
 		return true, nil
-	},
-	); err != nil {
-		return results.ForReason("create_dockercfg_secrets").WithError(err).Errorf("timeout while waiting for dockercfg secret creation for service account %q: %v", sa.Name, err)
+	}); err != nil {
+		_ = results.ForReason("create_dockercfg_secrets").WithError(err).Errorf("timeout while waiting for dockercfg secret creation for service account %q: %v", sa.Name, err)
+		logrus.WithError(err).Debugf("timeout while waiting for dockercfg secret creation for service account %q", sa.Name)
 	}
-
 	return nil
 }

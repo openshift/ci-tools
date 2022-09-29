@@ -18,7 +18,7 @@ import (
 func readHistoricalDataFile(filePath, dataType string) ([]jobrunaggregatorapi.HistoricalData, error) {
 	currentData, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open file at path (%s): %v", filePath, err)
+		return nil, fmt.Errorf("failed to open file at path (%s): %w", filePath, err)
 	}
 
 	switch dataType {
@@ -59,7 +59,7 @@ func addToPRMessage(message string) error {
 	if err != nil {
 		return err
 	}
-	_, err = file.WriteString(string(message))
+	_, err = file.WriteString(message)
 	return err
 }
 

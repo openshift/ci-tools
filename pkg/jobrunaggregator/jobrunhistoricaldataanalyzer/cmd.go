@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
 
 type JobRunHistoricalDataAnalyzerFlags struct {

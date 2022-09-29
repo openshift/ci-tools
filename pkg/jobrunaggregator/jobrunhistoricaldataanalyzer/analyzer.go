@@ -222,7 +222,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) renderResultFiles(result compareRe
 
 	out, err := formatOutput(result.jobs, "json")
 	if err != nil {
-		return fmt.Errorf("error merging missing release data %s", err)
+		return fmt.Errorf("error merging missing release data %w", err)
 	}
 
 	return os.WriteFile(o.outputFile, out, 0644)

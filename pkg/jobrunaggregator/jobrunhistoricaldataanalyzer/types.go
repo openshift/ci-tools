@@ -1,9 +1,8 @@
 package jobrunhistoricaldataanalyzer
 
 import (
-	"time"
-
 	_ "embed"
+	"time"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )

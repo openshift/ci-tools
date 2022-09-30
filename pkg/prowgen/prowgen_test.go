@@ -9,6 +9,7 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	utilpointer "k8s.io/utils/pointer"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	ciop "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -449,11 +450,38 @@ func TestGenerateJobs(t *testing.T) {
 					Branch: "branch",
 				}},
 		},
+		{
+			id: "multiarch postsubmit images: default arch and others",
+			config: &ciop.ReleaseBuildConfiguration{
+				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						From: "os",
+						To:   "ci-tools",
+					},
+				},
+				PromotionConfiguration: &ciop.PromotionConfiguration{},
+			},
+			repoInfo: &ProwgenInfo{
+				Config: config.Prowgen{
+					AdditionalArchitectures: []ciop.Architecture{
+						api.ARM64Arch,
+					},
+				},
+				Metadata: ciop.Metadata{
+					Org:    "organization",
+					Repo:   "repository",
+					Branch: "branch",
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.id, func(t *testing.T) {
-			jobConfig := GenerateJobs(tc.config, tc.repoInfo)
+			jobConfig, err := GenerateJobs(tc.config, tc.repoInfo)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			if !tc.keep {
 				pruneForTests(jobConfig) // prune the fields that are tested in TestGeneratePre/PostsubmitForTest
 			}

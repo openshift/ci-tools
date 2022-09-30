@@ -499,7 +499,10 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 					errs = append(errs, fmt.Errorf("failed to check if namespace %s exists: %w", secret.Namespace, err))
 					continue
 				}
-				if _, err := nsClient.Create(context.TODO(), &coreapi.Namespace{ObjectMeta: metav1.ObjectMeta{Name: secret.Namespace}}, metav1.CreateOptions{DryRun: dryRunOptions}); err != nil && !kerrors.IsAlreadyExists(err) {
+				if _, err := nsClient.Create(context.TODO(), &coreapi.Namespace{ObjectMeta: metav1.ObjectMeta{
+					Name:   secret.Namespace,
+					Labels: map[string]string{api.DPTPRequesterLabel: "ci-secret-bootstrap"},
+				}}, metav1.CreateOptions{DryRun: dryRunOptions}); err != nil && !kerrors.IsAlreadyExists(err) {
 					errs = append(errs, fmt.Errorf("failed to create namespace %s: %w", secret.Namespace, err))
 					continue
 				}

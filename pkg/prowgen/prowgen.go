@@ -38,7 +38,7 @@ type ProwgenInfo struct {
 // new jobs are generated with GenerateJobs, the call site should also use
 // Prune() function to remove all stale jobs and label the jobs as simply
 // "generated".
-func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) *prowconfig.JobConfig {
+func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) (*prowconfig.JobConfig, error) {
 	orgrepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
 	presubmits := map[string][]prowconfig.Presubmit{}
 	postsubmits := map[string][]prowconfig.Postsubmit{}
@@ -110,15 +110,13 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, "images", info))
 
 		if configSpec.PromotionConfiguration != nil {
-			jobBaseGen = newJobBaseBuilder().TestName("images")
-			jobBaseGen.PodSpec.Add(Promotion(), Targets(imageTargets.List()...))
-			postsubmit := generatePostsubmitForTest(jobBaseGen, info)
-			postsubmit.MaxConcurrency = 1
-			if postsubmit.Labels == nil {
-				postsubmit.Labels = map[string]string{}
+			postsubmitsForPromotion, err := generatePostsubmitsForPromotion(newJobBaseBuilder, info, func(options *generatePostsubmitOptions) {
+				options.imageTargets = imageTargets
+			})
+			if err != nil {
+				return nil, fmt.Errorf("error generating postsubmits for promotion: %w", err)
 			}
-			postsubmit.Labels[cioperatorapi.PromotionJobLabelKey] = "true"
-			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
+			postsubmits[orgrepo] = append(postsubmits[orgrepo], postsubmitsForPromotion...)
 		}
 	}
 
@@ -146,7 +144,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		PresubmitsStatic:  presubmits,
 		PostsubmitsStatic: postsubmits,
 		Periodics:         periodics,
-	}
+	}, nil
 }
 
 func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
@@ -195,6 +193,7 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 type generatePostsubmitOptions struct {
 	runIfChanged      string
 	skipIfOnlyChanged string
+	imageTargets      sets.String
 }
 
 type generatePostsubmitOption func(options *generatePostsubmitOptions)
@@ -216,6 +215,41 @@ func generatePostsubmitForTest(jobBaseBuilder *prowJobBaseBuilder, info *Prowgen
 		},
 		Brancher: prowconfig.Brancher{Branches: []string{jc.ExactlyBranch(info.Branch)}},
 	}
+}
+
+func generatePostsubmitsForPromotion(jobBaseBuilderFactory func() *prowJobBaseBuilder, info *ProwgenInfo, options ...generatePostsubmitOption) ([]prowconfig.Postsubmit, error) {
+	opts := &generatePostsubmitOptions{}
+	for _, opt := range options {
+		opt(opts)
+	}
+	architectures := append([]api.Architecture{api.AMD64Arch}, info.Config.AdditionalArchitectures...)
+	postsubmits := make([]prowconfig.Postsubmit, 0, len(architectures))
+	for _, arch := range architectures {
+		jobBaseBuilder := jobBaseBuilderFactory()
+		var jobBaseGen *prowJobBaseBuilder
+		if arch != api.AMD64Arch {
+			testName := fmt.Sprintf("images-%s", string(arch))
+			cluster := arch.GetMappedCluster()
+			if cluster == "" {
+				return nil, fmt.Errorf("no cluster found for arch %s", string(arch))
+			}
+			jobBaseGen = jobBaseBuilder.TestName(testName).WithLabel(api.ClusterLabel, string(cluster))
+		} else {
+			jobBaseGen = jobBaseBuilder.TestName("images")
+		}
+
+		jobBaseGen.PodSpec.Add(Promotion(), Targets(opts.imageTargets.List()...))
+		postsubmit := generatePostsubmitForTest(jobBaseGen, info)
+		postsubmit.MaxConcurrency = 1
+		if postsubmit.Labels == nil {
+			postsubmit.Labels = map[string]string{}
+		}
+		postsubmit.Labels[cioperatorapi.PromotionJobLabelKey] = "true"
+
+		postsubmits = append(postsubmits, *postsubmit)
+	}
+
+	return postsubmits, nil
 }
 
 // hashDailyCron returns a cron pattern derived from a hash of the job name that

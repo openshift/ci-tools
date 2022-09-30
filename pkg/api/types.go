@@ -1980,3 +1980,34 @@ type MetadataWithTest struct {
 func (m *MetadataWithTest) JobName(prefix string) string {
 	return m.Metadata.JobName(prefix, m.Test)
 }
+
+type Architecture string
+
+const (
+	AMD64Arch Architecture = "amd64"
+	ARM64Arch Architecture = "arm64"
+)
+
+var archToCluster = map[Architecture]Cluster{
+	ARM64Arch: ClusterARM01,
+}
+
+func (a Architecture) IsValid() bool {
+	return a.GetMappedCluster() != ""
+}
+
+func (a Architecture) GetMappedCluster() Cluster {
+	c, found := archToCluster[a]
+	if !found {
+		return ""
+	}
+	return c
+}
+
+func GetAvailableArchitectures() []string {
+	architectures := make([]string, 0, len(archToCluster))
+	for arch := range archToCluster {
+		architectures = append(architectures, string(arch))
+	}
+	return architectures
+}

@@ -108,6 +108,9 @@ func readProwgenConfig(path string) (*config.Prowgen, error) {
 		if err := yaml.Unmarshal(b, &pConfig); err != nil {
 			return nil, fmt.Errorf("prowgen config found in path %sbut couldn't unmarshal it: %w", path, err)
 		}
+		if err := pConfig.Validate(); err != nil {
+			return nil, fmt.Errorf("prowgen config found in path %s is not valid: %w", path, err)
+		}
 	}
 
 	return pConfig, nil
@@ -168,7 +171,10 @@ func generateJobs(resolver registry.Resolver, cache map[string]*config.Prowgen, 
 			}
 			configSpec = &resolved
 		}
-		generated := prowgen.GenerateJobs(configSpec, pInfo)
+		generated, err := prowgen.GenerateJobs(configSpec, pInfo)
+		if err != nil {
+			return err
+		}
 		if o, ok := output[orgRepo]; ok {
 			jc.Append(o, generated)
 		} else {

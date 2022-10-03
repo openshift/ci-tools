@@ -191,6 +191,8 @@ func loadRegistryStep(filename string, graph registry.NodeByName) (registry.Node
 	switch {
 	case strings.HasSuffix(filename, load.RefSuffix):
 		node, ok = graph.References[strings.TrimSuffix(filename, load.RefSuffix)]
+	case strings.HasSuffix(filename, load.ObserverSuffix):
+		node, ok = graph.References[strings.TrimSuffix(filename, load.ObserverSuffix)]
 	case strings.HasSuffix(filename, load.ChainSuffix):
 		node, ok = graph.Chains[strings.TrimSuffix(filename, load.ChainSuffix)]
 	case strings.HasSuffix(filename, load.WorkflowSuffix):

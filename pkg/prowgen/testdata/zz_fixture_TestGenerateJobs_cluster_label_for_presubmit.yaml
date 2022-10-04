@@ -1,6 +1,7 @@
 presubmits:
   organization/repository:
   - always_run: false
+    cluster: build01
     labels:
       ci-operator.openshift.io/cluster: build01
       pj-rehearse.openshift.io/can-be-rehearsed: "true"

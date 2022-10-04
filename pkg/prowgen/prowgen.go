@@ -233,13 +233,14 @@ func generatePostsubmitsForPromotion(jobBaseBuilderFactory func() *prowJobBaseBu
 			if cluster == "" {
 				return nil, fmt.Errorf("no cluster found for arch %s", string(arch))
 			}
-			jobBaseGen = jobBaseBuilder.TestName(testName).WithLabel(api.ClusterLabel, string(cluster))
+			jobBaseGen = jobBaseBuilder.Cluster(cluster).TestName(testName).WithLabel(api.ClusterLabel, string(cluster))
 		} else {
 			jobBaseGen = jobBaseBuilder.TestName("images")
 		}
 
 		jobBaseGen.PodSpec.Add(Promotion(), Targets(opts.imageTargets.List()...))
 		postsubmit := generatePostsubmitForTest(jobBaseGen, info)
+
 		postsubmit.MaxConcurrency = 1
 		if postsubmit.Labels == nil {
 			postsubmit.Labels = map[string]string{}

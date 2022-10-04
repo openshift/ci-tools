@@ -35,6 +35,8 @@ type options struct {
 
 	bumper.GitAuthorOptions
 	prcreation.PRCreationOptions
+
+	useTokenFileInKubeconfig bool
 }
 
 func (o options) String() string {
@@ -50,6 +52,7 @@ func parseOptions() (options, error) {
 	fs.BoolVar(&o.createPR, "create-pr", true, "If a PR should be created. Set to true by default")
 	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use. Set to "+githubLogin+" by default")
 	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to. Set to Test Platform by default")
+	fs.BoolVar(&o.useTokenFileInKubeconfig, "use-token-file-in-kubeconfig", true, "Set true if the token files are used in kubeconfigs. Set to true by default")
 
 	o.GitAuthorOptions.AddFlags(fs)
 	o.PRCreationOptions.AddFlags(fs)
@@ -255,5 +258,13 @@ func buildFarmDirFor(releaseRepo, clusterName string) string {
 }
 
 func serviceAccountKubeconfigPath(serviceAccount, clusterName string) string {
-	return fmt.Sprintf("sa.%s.%s.config", serviceAccount, clusterName)
+	return serviceAccountFile(serviceAccount, clusterName, config)
+}
+
+func serviceAccountTokenFile(serviceAccount, clusterName string) string {
+	return serviceAccountFile(serviceAccount, clusterName, "token.txt")
+}
+
+func serviceAccountFile(serviceAccount, clusterName, fileType string) string {
+	return fmt.Sprintf("sa.%s.%s.%s", serviceAccount, clusterName, fileType)
 }

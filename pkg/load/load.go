@@ -188,7 +188,7 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 		return nil, nil, nil, nil, nil, nil, err
 	}
 	// create graph to verify that there are no cycles
-	if _, err = registry.NewGraph(references, chains, workflows); err != nil {
+	if _, err = registry.NewGraph(references, chains, workflows, observers); err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
 	err = registry.Validate(references, chains, workflows, observers)

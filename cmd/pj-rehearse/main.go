@@ -210,7 +210,7 @@ func rehearseMain() error {
 			logger.WithError(err).Error("could not load step registry")
 			return fmt.Errorf(misconfigurationOutput)
 		}
-		graph, err := registry.NewGraph(refs, chains, workflows)
+		graph, err := registry.NewGraph(refs, chains, workflows, observers)
 		if err != nil {
 			logger.WithError(err).Error("could not create step registry graph")
 			return fmt.Errorf(misconfigurationOutput)

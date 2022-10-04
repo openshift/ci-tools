@@ -6,6 +6,7 @@ postsubmits:
     max_concurrency: 1
     name: branch-ci-organization-repository-branch-images
   - always_run: true
+    cluster: arm01
     labels:
       ci-operator.openshift.io/cluster: arm01
       ci-operator.openshift.io/is-promotion: "true"

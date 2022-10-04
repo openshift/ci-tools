@@ -18,6 +18,7 @@ var ipi = "ipi"
 var nested = "nested"
 var ipiConf = "ipi-conf"
 var ipiConfAWS = "ipi-conf-aws"
+var simpleObserver = "simple-observer"
 
 var referenceMap = ReferenceByName{
 	ipiInstallInstall:         {},
@@ -26,6 +27,10 @@ var referenceMap = ReferenceByName{
 	ipiDeprovisionMustGather:  {},
 	ipiConf:                   {},
 	ipiConfAWS:                {},
+}
+
+var observerMap = ObserverByName{
+	simpleObserver: {},
 }
 var chainMap = ChainByName{
 	ipiConfAWS: {
@@ -59,6 +64,9 @@ var chainMap = ChainByName{
 }
 var workflowMap = WorkflowByName{
 	ipi: {
+		Observers: &api.Observers{
+			Enable: []string{simpleObserver},
+		},
 		Pre: []api.TestStep{{
 			Chain: &ipiInstall,
 		}},
@@ -119,7 +127,7 @@ func TestAncestors(t *testing.T) {
 		},
 	}}
 
-	graph, err := NewGraph(referenceMap, chainMap, workflowMap)
+	graph, err := NewGraph(referenceMap, chainMap, workflowMap, observerMap)
 	if err != nil {
 		t.Fatalf("failed to create graph: %v", err)
 	}
@@ -154,6 +162,7 @@ func TestDescendants(t *testing.T) {
 			&chainNode{nodeWithName: nodeWithName{name: ipiDeprovision}},
 			&referenceNode{nodeWithName: nodeWithName{name: ipiDeprovisionMustGather}},
 			&referenceNode{nodeWithName: nodeWithName{name: ipiDeprovisionDeprovision}},
+			&referenceNode{nodeWithName: nodeWithName{name: simpleObserver}},
 		},
 	}, {
 		name:     ipiInstall,
@@ -186,7 +195,7 @@ func TestDescendants(t *testing.T) {
 		},
 	}}
 
-	graph, err := NewGraph(referenceMap, chainMap, workflowMap)
+	graph, err := NewGraph(referenceMap, chainMap, workflowMap, observerMap)
 	if err != nil {
 		t.Fatalf("failed to create graph: %v", err)
 	}
@@ -323,7 +332,7 @@ func TestNewGraph(t *testing.T) {
 	for _, testCase := range testCases {
 		workflows := combineWorkflows(workflowMap, testCase.workflows)
 		chains := combineChains(chainMap, testCase.chains)
-		if _, err := NewGraph(referenceMap, chains, workflows); err == nil {
+		if _, err := NewGraph(referenceMap, chains, workflows, observerMap); err == nil {
 			t.Errorf("%s: No error returned on invalid registry", testCase.name)
 		}
 	}

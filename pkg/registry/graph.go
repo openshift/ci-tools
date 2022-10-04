@@ -230,7 +230,7 @@ func hasCycles(node *chainNode, ancestors sets.String, traversedPath []string) e
 }
 
 // NewGraph returns a NodeByType map representing the provided step references, chains, and workflows as a directed graph.
-func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName) (NodeByName, error) {
+func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName, observersByName ObserverByName) (NodeByName, error) {
 	nodesByName := NodeByName{
 		References: make(map[string]Node),
 		Chains:     make(map[string]Node),
@@ -246,6 +246,17 @@ func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 		referenceNodes[name] = node
 		nodesByName.References[name] = node
 	}
+
+	// Treat observers as reference nodes
+	for name := range observersByName {
+		node := &referenceNode{
+			nodeWithName:    newNodeWithName(name),
+			nodeWithParents: newNodeWithParents(),
+		}
+		referenceNodes[name] = node
+		nodesByName.References[name] = node
+	}
+
 	// since we may load the parent chain before a child chain, we need to make the parent->child links after loading all chains
 	parentChildChain := make(map[*chainNode][]string)
 	chainNodes := make(chainNodeByName)
@@ -291,6 +302,14 @@ func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 		}
 		workflowNodes[name] = node
 		nodesByName.Workflows[name] = node
+		if workflow.Observers != nil {
+			for _, observer := range workflow.Observers.Enable {
+				if _, exists := referenceNodes[observer]; !exists {
+					return nodesByName, fmt.Errorf("Workflow %s contains non-existent observer %s", name, observer)
+				}
+				node.addReferenceChild(referenceNodes[observer])
+			}
+		}
 		steps := append(workflow.Pre, append(workflow.Test, workflow.Post...)...)
 		for _, step := range steps {
 			if step.Reference != nil {

@@ -114,21 +114,21 @@ func (r rehearsalConfig) determineAffectedJobs(candidate rehearsalCandidate, can
 	baseSHA := candidate.base.sha
 	masterConfig, err := config.GetAllConfigsFromSHA(candidatePath, baseSHA, logger)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("could not load configuration from base revision of release repo: %v", err)
+		return nil, nil, nil, nil, fmt.Errorf("could not load configuration from base revision of release repo: %w", err)
 	}
 
 	// We always need both Prow config versions, otherwise we cannot compare them
 	if masterConfig.Prow == nil || prConfig.Prow == nil {
-		return nil, nil, nil, nil, fmt.Errorf("could not load Prow configs from base or tested revision of release repo: %v", err)
+		return nil, nil, nil, nil, fmt.Errorf("could not load Prow configs from base or tested revision of release repo: %w", err)
 	}
 	// We always need PR versions of ciop config, otherwise we cannot provide them to rehearsed jobs
 	if prConfig.CiOperator == nil {
-		return nil, nil, nil, nil, fmt.Errorf("could not load ci-operator configs from tested revision of release repo: %v", err)
+		return nil, nil, nil, nil, fmt.Errorf("could not load ci-operator configs from tested revision of release repo: %w", err)
 	}
 
 	configUpdaterCfg, err := loadConfigUpdaterCfg(candidatePath)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("could not load plugin configuration from tested revision of release repo: %v", err)
+		return nil, nil, nil, nil, fmt.Errorf("could not load plugin configuration from tested revision of release repo: %w", err)
 	}
 
 	presubmits := config.Presubmits{}
@@ -152,7 +152,7 @@ func (r rehearsalConfig) determineAffectedJobs(candidate rehearsalCandidate, can
 	if !r.noRegistry {
 		changedRegistrySteps, err = determineChangedRegistrySteps(candidatePath, baseSHA, logger)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("could not determine change registry steps: %v", err)
+			return nil, nil, nil, nil, fmt.Errorf("could not determine change registry steps: %w", err)
 		}
 		presubmitsForRegistry, periodicsForRegistry := rehearse.SelectJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, prConfig.Prow.JobConfig.Periodics, prConfig.CiOperator, loggers)
 		presubmits.AddAll(presubmitsForRegistry, config.ChangedRegistryContent)
@@ -163,7 +163,7 @@ func (r rehearsalConfig) determineAffectedJobs(candidate rehearsalCandidate, can
 	if !r.noTemplates {
 		changedTemplates, err = determineChangedTemplates(candidatePath, baseSHA, candidate.head.sha, candidate.prNumber, configUpdaterCfg, logger)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("could not determine changed templates: %v", err)
+			return nil, nil, nil, nil, fmt.Errorf("could not determine changed templates: %w", err)
 		}
 		randomJobsForChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(changedTemplates.ProductionNames, presubmits, prConfig.Prow.JobConfig.PresubmitsStatic, loggers)
 		presubmits.AddAll(randomJobsForChangedTemplates, config.ChangedTemplate)
@@ -173,7 +173,7 @@ func (r rehearsalConfig) determineAffectedJobs(candidate rehearsalCandidate, can
 	if !r.noClusterProfiles {
 		changedClusterProfiles, err = determineChangedClusterProfiles(candidatePath, baseSHA, candidate.head.sha, candidate.prNumber, configUpdaterCfg, logger)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("could not determine changed cluster profiles: %v", err)
+			return nil, nil, nil, nil, fmt.Errorf("could not determine changed cluster profiles: %w", err)
 		}
 		presubmitsForClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, changedClusterProfiles.ProductionNames, logger)
 		presubmits.AddAll(presubmitsForClusterProfiles, config.ChangedClusterProfile)
@@ -243,7 +243,7 @@ func (r rehearsalConfig) createResolver(candidatePath string) (registry.Resolver
 		var err error
 		registryRefs, chains, workflows, _, _, observers, err = load.Registry(filepath.Join(candidatePath, config.RegistryPath), load.RegistryFlag(0))
 		if err != nil {
-			return nil, fmt.Errorf("could not load step registry: %v", err)
+			return nil, fmt.Errorf("could not load step registry: %w", err)
 		}
 	}
 	resolver := registry.NewResolver(registryRefs, chains, workflows, observers)
@@ -319,12 +319,12 @@ func determineChangedTemplates(candidate, baseSHA, id string, prNumber int, conf
 	var rehearsalTemplates rehearse.ConfigMaps
 	changedTemplates, err := config.GetChangedTemplates(candidate, baseSHA)
 	if err != nil {
-		return nil, fmt.Errorf("could not get template differences: %v", err)
+		return nil, fmt.Errorf("could not get template differences: %w", err)
 	}
 	//TODO: going back to using SHA instead of buildID. The NewConfigMaps function will change to reflect that once original pj-rehearse is removed. See https://github.com/openshift/ci-tools/pull/996#discussion_r453704753.
 	rehearsalTemplates, err = rehearse.NewConfigMaps(changedTemplates, "template", id, prNumber, configUpdaterCfg)
 	if err != nil {
-		return nil, fmt.Errorf("could not match changed templates with cluster configmaps: %v", err)
+		return nil, fmt.Errorf("could not match changed templates with cluster configmaps: %w", err)
 	}
 
 	if len(rehearsalTemplates.Paths) != 0 {
@@ -338,15 +338,15 @@ func determineChangedRegistrySteps(candidate, baseSHA string, logger *logrus.Ent
 	var changedRegistrySteps []registry.Node
 	refs, chains, workflows, _, _, observers, err := load.Registry(filepath.Join(candidate, config.RegistryPath), load.RegistryFlag(0))
 	if err != nil {
-		return nil, fmt.Errorf("could not load step registry: %v", err)
+		return nil, fmt.Errorf("could not load step registry: %w", err)
 	}
 	graph, err := registry.NewGraph(refs, chains, workflows, observers)
 	if err != nil {
-		return nil, fmt.Errorf("could not create step registry graph: %v", err)
+		return nil, fmt.Errorf("could not create step registry graph: %w", err)
 	}
 	changedRegistrySteps, err = config.GetChangedRegistrySteps(candidate, baseSHA, graph)
 	if err != nil {
-		return nil, fmt.Errorf("could not get step registry differences: %v", err)
+		return nil, fmt.Errorf("could not get step registry differences: %w", err)
 	}
 	if len(changedRegistrySteps) != 0 {
 		var names []string
@@ -363,13 +363,13 @@ func determineChangedClusterProfiles(candidate, baseSHA, id string, prNumber int
 	var rehearsalClusterProfiles rehearse.ConfigMaps
 	changedClusterProfiles, err := config.GetChangedClusterProfiles(candidate, baseSHA)
 	if err != nil {
-		return nil, fmt.Errorf("could not get cluster profile differences: %v", err)
+		return nil, fmt.Errorf("could not get cluster profile differences: %w", err)
 	}
 	//TODO: going back to using SHA instead of buildID. The NewConfigMaps function will change to reflect that once original pj-rehearse is removed. See https://github.com/openshift/ci-tools/pull/996#discussion_r453704753.
 	rehearsalClusterProfiles, err = rehearse.NewConfigMaps(changedClusterProfiles, "cluster-profile", id, prNumber, configUpdaterCfg)
 	if err != nil {
 		logger.WithError(err).Error("could not match changed cluster profiles with cluster configmaps")
-		return nil, fmt.Errorf("could not match changed cluster profiles with cluster configmaps: %v", err)
+		return nil, fmt.Errorf("could not match changed cluster profiles with cluster configmaps: %w", err)
 	}
 
 	if len(rehearsalClusterProfiles.Paths) != 0 {

@@ -134,6 +134,8 @@ func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []c
 				// when the observer is cancelled, we get an error here that we need to ignore, as it's not an error
 				// for the Pod to be deleted when it's cancelled, it's just expected
 				errs <- err
+			} else {
+				logrus.Debugf("ignoring observer error after cancellation: %v", err)
 			}
 			wg.Done()
 		}(pod)

@@ -85,13 +85,21 @@ func updateSecret(secretGenerator func(options) secretbootstrap.SecretConfig) fu
 }
 
 func generateCiOperatorSecret(o options) secretbootstrap.SecretConfig {
-	return secretbootstrap.SecretConfig{
-		From: map[string]secretbootstrap.ItemContext{
-			kubeconfig: {
-				Field: serviceAccountKubeconfigPath(ciOperator, o.clusterName),
-				Item:  buildUFarm,
-			},
+	from := map[string]secretbootstrap.ItemContext{
+		kubeconfig: {
+			Field: serviceAccountKubeconfigPath(ciOperator, o.clusterName),
+			Item:  buildUFarm,
 		},
+	}
+	if o.useTokenFileInKubeconfig {
+		tokenFile := serviceAccountTokenFile(ciOperator, o.clusterName)
+		from[tokenFile] = secretbootstrap.ItemContext{
+			Field: tokenFile,
+			Item:  buildUFarm,
+		}
+	}
+	return secretbootstrap.SecretConfig{
+		From: from,
 		To: []secretbootstrap.SecretContext{
 			{
 				Cluster:   o.clusterName,

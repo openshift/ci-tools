@@ -290,6 +290,9 @@ secret_configs:
     kubeconfig:
       field: sa.ci-operator.existingCluster.config
       item: build_farm
+    sa.ci-operator.existingCluster.token.txt:
+      field: sa.ci-operator.existingCluster.token.txt
+      item: build_farm
   to:
   - cluster: existingCluster
     name: ci-operator

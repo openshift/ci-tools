@@ -45,11 +45,11 @@ func (o *PRCreationOptions) Finalize() error {
 
 // PrOptions allows optional parameters to upsertPR
 type PrOptions struct {
-	prBody          string
-	matchTitle      string
-	prAssignee      string
-	prCommitMessage string
-	skipPRCreation  bool
+	prBody           string
+	matchTitle       string
+	prAssignee       string
+	gitCommitMessage string
+	skipPRCreation   bool
 }
 
 // PrOption is the type for Optional Parameters
@@ -62,11 +62,11 @@ func PrBody(prBody string) PrOption {
 	}
 }
 
-// PrCommitMessage is the wrapper to pass in PrCommitMessage that's different from the PrBody
+// GitCommitMessage is the wrapper to pass in PrCommitMessage that's different from the PrBody
 // This is useful when you wish to provide large markdown information for the PR, but wish to keep the commit simple.
-func PrCommitMessage(prCommitMessage string) PrOption {
+func GitCommitMessage(gitCommitMessage string) PrOption {
 	return func(args *PrOptions) {
-		args.prCommitMessage = prCommitMessage
+		args.gitCommitMessage = gitCommitMessage
 	}
 }
 
@@ -157,8 +157,8 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 	}
 
 	commitMessage := prArgs.prBody
-	if prArgs.prCommitMessage != "" {
-		commitMessage = prArgs.prCommitMessage
+	if prArgs.gitCommitMessage != "" {
+		commitMessage = prArgs.gitCommitMessage
 	}
 
 	if err := bumper.GitCommitAndPush(

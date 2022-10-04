@@ -9,10 +9,12 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/test-infra/pkg/flagutil"
+	prowConfig "k8s.io/test-infra/prow/config"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/interrupts"
+	"k8s.io/test-infra/prow/metrics"
 
 	"github.com/openshift/ci-tools/pkg/retester"
 )
@@ -112,6 +114,8 @@ func main() {
 	}
 
 	c := retester.NewController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, config)
+
+	metrics.ExposeMetrics("retester", prowConfig.PushGateway{}, prowflagutil.DefaultMetricsPort)
 
 	interrupts.OnInterrupt(func() {
 		if err := gitClient.Clean(); err != nil {

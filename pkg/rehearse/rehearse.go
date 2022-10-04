@@ -1,4 +1,4 @@
-package main
+package rehearse
 
 import (
 	"context"
@@ -25,6 +25,7 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/flagutil"
 	prowplugins "k8s.io/test-infra/prow/plugins"
+	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -36,40 +37,28 @@ import (
 	"github.com/openshift/ci-tools/pkg/diffs"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
-	"github.com/openshift/ci-tools/pkg/rehearse"
 )
 
 const (
 	appCIContextName = string(api.ClusterAPPCI)
 )
 
-type rehearsalConfig struct {
-	prowjobKubeconfig string
-	kubernetesOptions flagutil.KubernetesOptions
+type RehearsalConfig struct {
+	ProwjobKubeconfig string
+	KubernetesOptions flagutil.KubernetesOptions
 
-	noTemplates       bool
-	noRegistry        bool
-	noClusterProfiles bool
+	NoTemplates       bool
+	NoRegistry        bool
+	NoClusterProfiles bool
 
-	normalLimit int
-	moreLimit   int
-	maxLimit    int
+	NormalLimit int
+	MoreLimit   int
+	MaxLimit    int
 
-	dryRun bool
+	DryRun bool
 }
 
-func rehearsalConfigFromOptions(o options) rehearsalConfig {
-	return rehearsalConfig{
-		prowjobKubeconfig: o.prowjobKubeconfig,
-		kubernetesOptions: o.kubernetesOptions,
-		noTemplates:       o.noTemplates,
-		noRegistry:        o.noRegistry,
-		noClusterProfiles: o.noClusterProfiles,
-		dryRun:            o.dryRun,
-	}
-}
-
-type rehearsalCandidate struct {
+type RehearsalCandidate struct {
 	org      string
 	repo     string
 	base     ref
@@ -80,7 +69,27 @@ type rehearsalCandidate struct {
 	link     string
 }
 
-func (rc rehearsalCandidate) createRefs() *pjapi.Refs {
+func RehearsalCandidateFromJobSpec(jobSpec *pjdwapi.JobSpec) RehearsalCandidate {
+	pr := jobSpec.Refs.Pulls[0]
+	return RehearsalCandidate{
+		org:  jobSpec.Refs.Org,
+		repo: jobSpec.Refs.Repo,
+		base: ref{
+			sha: jobSpec.Refs.BaseSHA,
+			ref: jobSpec.Refs.BaseRef,
+		},
+		head: ref{
+			sha: pr.SHA,
+			ref: pr.Ref,
+		},
+		prNumber: pr.Number,
+		author:   pr.Author,
+		title:    pr.Title,
+		link:     pr.Link,
+	}
+}
+
+func (rc RehearsalCandidate) createRefs() *pjapi.Refs {
 	return &pjapi.Refs{
 		Org:     rc.org,
 		Repo:    rc.repo,
@@ -104,7 +113,7 @@ type ref struct {
 	ref string
 }
 
-func (r rehearsalConfig) determineAffectedJobs(candidate rehearsalCandidate, candidatePath string, logger *logrus.Entry) (config.Presubmits, config.Periodics, *rehearse.ConfigMaps, *rehearse.ConfigMaps, error) {
+func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, candidatePath string, logger *logrus.Entry) (config.Presubmits, config.Periodics, *ConfigMaps, *ConfigMaps, error) {
 	start := time.Now()
 	defer func() {
 		logger.Infof("determinedAffectedJobs ran in %s", time.Since(start).Truncate(time.Second))
@@ -147,30 +156,30 @@ func (r rehearsalConfig) determineAffectedJobs(candidate rehearsalCandidate, can
 		periodics.AddAll(periodicsForCiopConfigs, config.ChangedCiopConfig)
 	}
 
-	loggers := rehearse.Loggers{Job: logger, Debug: logger} //TODO: same logger for both. Once the original pj-rehearse is gone we can clean this up and just pass a logger
+	loggers := Loggers{Job: logger, Debug: logger} //TODO: same logger for both. Once the original pj-rehearse is gone we can clean this up and just pass a logger
 	var changedRegistrySteps []registry.Node
-	if !r.noRegistry {
+	if !r.NoRegistry {
 		changedRegistrySteps, err = determineChangedRegistrySteps(candidatePath, baseSHA, logger)
 		if err != nil {
 			return nil, nil, nil, nil, fmt.Errorf("could not determine change registry steps: %w", err)
 		}
-		presubmitsForRegistry, periodicsForRegistry := rehearse.SelectJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, prConfig.Prow.JobConfig.Periodics, prConfig.CiOperator, loggers)
+		presubmitsForRegistry, periodicsForRegistry := SelectJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, prConfig.Prow.JobConfig.Periodics, prConfig.CiOperator, loggers)
 		presubmits.AddAll(presubmitsForRegistry, config.ChangedRegistryContent)
 		periodics.AddAll(periodicsForRegistry, config.ChangedRegistryContent)
 	}
 
-	var changedTemplates *rehearse.ConfigMaps
-	if !r.noTemplates {
+	var changedTemplates *ConfigMaps
+	if !r.NoTemplates {
 		changedTemplates, err = determineChangedTemplates(candidatePath, baseSHA, candidate.head.sha, candidate.prNumber, configUpdaterCfg, logger)
 		if err != nil {
 			return nil, nil, nil, nil, fmt.Errorf("could not determine changed templates: %w", err)
 		}
-		randomJobsForChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(changedTemplates.ProductionNames, presubmits, prConfig.Prow.JobConfig.PresubmitsStatic, loggers)
+		randomJobsForChangedTemplates := AddRandomJobsForChangedTemplates(changedTemplates.ProductionNames, presubmits, prConfig.Prow.JobConfig.PresubmitsStatic, loggers)
 		presubmits.AddAll(randomJobsForChangedTemplates, config.ChangedTemplate)
 	}
 
-	var changedClusterProfiles *rehearse.ConfigMaps
-	if !r.noClusterProfiles {
+	var changedClusterProfiles *ConfigMaps
+	if !r.NoClusterProfiles {
 		changedClusterProfiles, err = determineChangedClusterProfiles(candidatePath, baseSHA, candidate.head.sha, candidate.prNumber, configUpdaterCfg, logger)
 		if err != nil {
 			return nil, nil, nil, nil, fmt.Errorf("could not determine changed cluster profiles: %w", err)
@@ -182,7 +191,7 @@ func (r rehearsalConfig) determineAffectedJobs(candidate rehearsalCandidate, can
 	return presubmits, periodics, changedTemplates, changedClusterProfiles, nil
 }
 
-func (r rehearsalConfig) setupJobs(candidate rehearsalCandidate, candidatePath string, presubmits config.Presubmits, periodics config.Periodics, rehearsalTemplates, rehearsalClusterProfiles *rehearse.ConfigMaps, limit int, loggers rehearse.Loggers) (*config.ReleaseRepoConfig, *pjapi.Refs, apihelper.ImageStreamTagMap, []*prowconfig.Presubmit, error) {
+func (r RehearsalConfig) SetupJobs(candidate RehearsalCandidate, candidatePath string, presubmits config.Presubmits, periodics config.Periodics, rehearsalTemplates, rehearsalClusterProfiles *ConfigMaps, limit int, loggers Loggers) (*config.ReleaseRepoConfig, *pjapi.Refs, apihelper.ImageStreamTagMap, []*prowconfig.Presubmit, error) {
 	jobLogger := loggers.Job.WithFields(nil)
 
 	resolver, err := r.createResolver(candidatePath)
@@ -195,7 +204,7 @@ func (r rehearsalConfig) setupJobs(candidate rehearsalCandidate, candidatePath s
 	prNumber := candidate.prNumber
 	prRefs := candidate.createRefs()
 
-	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, prConfig.Prow, resolver, prNumber, loggers, rehearsalTemplates.Names, rehearsalClusterProfiles.Names, prRefs)
+	jobConfigurer := NewJobConfigurer(prConfig.CiOperator, prConfig.Prow, resolver, prNumber, loggers, rehearsalTemplates.Names, rehearsalClusterProfiles.Names, prRefs)
 	imageStreamTags, presubmitsToRehearse, err := jobConfigurer.ConfigurePresubmitRehearsals(presubmits)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -234,12 +243,12 @@ func (r rehearsalConfig) setupJobs(candidate rehearsalCandidate, candidatePath s
 	return prConfig, prRefs, imageStreamTags, presubmitsToRehearse, nil
 }
 
-func (r rehearsalConfig) createResolver(candidatePath string) (registry.Resolver, error) {
+func (r RehearsalConfig) createResolver(candidatePath string) (registry.Resolver, error) {
 	var registryRefs registry.ReferenceByName
 	var chains registry.ChainByName
 	var workflows registry.WorkflowByName
 	var observers registry.ObserverByName
-	if !r.noRegistry {
+	if !r.NoRegistry {
 		var err error
 		registryRefs, chains, workflows, _, _, observers, err = load.Registry(filepath.Join(candidatePath, config.RegistryPath), load.RegistryFlag(0))
 		if err != nil {
@@ -250,24 +259,25 @@ func (r rehearsalConfig) createResolver(candidatePath string) (registry.Resolver
 	return resolver, nil
 }
 
-func (r rehearsalConfig) rehearseJobs(candidate rehearsalCandidate, candidatePath string, prConfig *config.ReleaseRepoConfig, prRefs *pjapi.Refs, imageStreamTags apihelper.ImageStreamTagMap, presubmitsToRehearse []*prowconfig.Presubmit, rehearsalTemplates, rehearsalClusterProfiles *rehearse.ConfigMaps, loggers rehearse.Loggers) error {
+// RehearseJobs returns true if the jobs were triggered
+func (r RehearsalConfig) RehearseJobs(candidate RehearsalCandidate, candidatePath string, prConfig *config.ReleaseRepoConfig, prRefs *pjapi.Refs, imageStreamTags apihelper.ImageStreamTagMap, presubmitsToRehearse []*prowconfig.Presubmit, rehearsalTemplates, rehearsalClusterProfiles *ConfigMaps, loggers Loggers) (bool, error) {
 	jobLogger := loggers.Job.WithFields(nil)
 
 	buildClusterConfigs := map[string]rest.Config{}
 	var prowJobConfig *rest.Config
-	if !r.dryRun {
-		buildClusterConfigs, err := r.kubernetesOptions.LoadClusterConfigs()
+	if !r.DryRun {
+		buildClusterConfigs, err := r.KubernetesOptions.LoadClusterConfigs()
 		if err != nil {
 			jobLogger.WithError(err).Fatal("failed to read kubeconfigs")
 		}
 		defaultKubeconfig := buildClusterConfigs[appCIContextName]
-		prowJobConfig, err = pjKubeconfig(r.prowjobKubeconfig, &defaultKubeconfig)
+		prowJobConfig, err = pjKubeconfig(r.ProwjobKubeconfig, &defaultKubeconfig)
 		if err != nil {
 			jobLogger.WithError(err).Fatal("Could not load prowjob kubeconfig")
 		}
 	}
 
-	pjclient, err := rehearse.NewProwJobClient(prowJobConfig, r.dryRun)
+	pjclient, err := NewProwJobClient(prowJobConfig, r.DryRun)
 	if err != nil {
 		jobLogger.WithError(err).Fatal("could not create a ProwJob client")
 	}
@@ -288,7 +298,7 @@ func (r rehearsalConfig) rehearseJobs(candidate rehearsalCandidate, candidatePat
 		prConfig.Prow.PodNamespace,
 		configUpdaterCfg,
 		candidatePath,
-		r.dryRun,
+		r.DryRun,
 		rehearsalTemplates,
 		rehearsalClusterProfiles,
 		imageStreamTags)
@@ -300,29 +310,28 @@ func (r rehearsalConfig) rehearseJobs(candidate rehearsalCandidate, candidatePat
 		defer cleanup()
 	}
 
-	executor := rehearse.NewExecutor(presubmitsToRehearse, candidate.prNumber, candidatePath, prRefs, r.dryRun, loggers, pjclient, prConfig.Prow.ProwJobNamespace)
+	executor := NewExecutor(presubmitsToRehearse, candidate.prNumber, candidatePath, prRefs, r.DryRun, loggers, pjclient, prConfig.Prow.ProwJobNamespace)
 	success, err := executor.ExecuteJobs()
 	if err != nil {
 		jobLogger.WithError(err).Error("Failed to rehearse jobs")
-		errs = append(errs, fmt.Errorf(rehearseFailureOutput))
+		return false, utilerrors.NewAggregate(errs)
 	} else if !success {
 		jobLogger.Error("Some jobs failed their rehearsal runs")
-		errs = append(errs, fmt.Errorf(jobsFailureOutput))
 	} else {
 		jobLogger.Info("All jobs were rehearsed successfully")
 	}
 
-	return utilerrors.NewAggregate(errs)
+	return true, utilerrors.NewAggregate(errs)
 }
 
-func determineChangedTemplates(candidate, baseSHA, id string, prNumber int, configUpdaterCfg prowplugins.ConfigUpdater, logger *logrus.Entry) (*rehearse.ConfigMaps, error) {
-	var rehearsalTemplates rehearse.ConfigMaps
+func determineChangedTemplates(candidate, baseSHA, id string, prNumber int, configUpdaterCfg prowplugins.ConfigUpdater, logger *logrus.Entry) (*ConfigMaps, error) {
+	var rehearsalTemplates ConfigMaps
 	changedTemplates, err := config.GetChangedTemplates(candidate, baseSHA)
 	if err != nil {
 		return nil, fmt.Errorf("could not get template differences: %w", err)
 	}
 	//TODO: going back to using SHA instead of buildID. The NewConfigMaps function will change to reflect that once original pj-rehearse is removed. See https://github.com/openshift/ci-tools/pull/996#discussion_r453704753.
-	rehearsalTemplates, err = rehearse.NewConfigMaps(changedTemplates, "template", id, prNumber, configUpdaterCfg)
+	rehearsalTemplates, err = NewConfigMaps(changedTemplates, "template", id, prNumber, configUpdaterCfg)
 	if err != nil {
 		return nil, fmt.Errorf("could not match changed templates with cluster configmaps: %w", err)
 	}
@@ -359,14 +368,14 @@ func determineChangedRegistrySteps(candidate, baseSHA string, logger *logrus.Ent
 	return changedRegistrySteps, nil
 }
 
-func determineChangedClusterProfiles(candidate, baseSHA, id string, prNumber int, configUpdaterCfg prowplugins.ConfigUpdater, logger *logrus.Entry) (*rehearse.ConfigMaps, error) {
-	var rehearsalClusterProfiles rehearse.ConfigMaps
+func determineChangedClusterProfiles(candidate, baseSHA, id string, prNumber int, configUpdaterCfg prowplugins.ConfigUpdater, logger *logrus.Entry) (*ConfigMaps, error) {
+	var rehearsalClusterProfiles ConfigMaps
 	changedClusterProfiles, err := config.GetChangedClusterProfiles(candidate, baseSHA)
 	if err != nil {
 		return nil, fmt.Errorf("could not get cluster profile differences: %w", err)
 	}
 	//TODO: going back to using SHA instead of buildID. The NewConfigMaps function will change to reflect that once original pj-rehearse is removed. See https://github.com/openshift/ci-tools/pull/996#discussion_r453704753.
-	rehearsalClusterProfiles, err = rehearse.NewConfigMaps(changedClusterProfiles, "cluster-profile", id, prNumber, configUpdaterCfg)
+	rehearsalClusterProfiles, err = NewConfigMaps(changedClusterProfiles, "cluster-profile", id, prNumber, configUpdaterCfg)
 	if err != nil {
 		logger.WithError(err).Error("could not match changed cluster profiles with cluster configmaps")
 		return nil, fmt.Errorf("could not match changed cluster profiles with cluster configmaps: %w", err)
@@ -446,8 +455,8 @@ func setupDependencies(
 	configUpdaterCfg prowplugins.ConfigUpdater,
 	releaseRepoPath string,
 	dryRun bool,
-	changedTemplates *rehearse.ConfigMaps,
-	changedClusterProfiles *rehearse.ConfigMaps,
+	changedTemplates *ConfigMaps,
+	changedClusterProfiles *ConfigMaps,
 	requiredImageStreamTags apihelper.ImageStreamTagMap,
 ) (cleanup, error) {
 	buildClusters := sets.String{}
@@ -477,13 +486,13 @@ func setupDependencies(
 		g.Go(func() error {
 			log := log.WithField("buildCluster", buildCluster)
 			clusterConfig := configs[buildCluster]
-			cmClient, err := rehearse.NewCMClient(&clusterConfig, podNamespace, dryRun)
+			cmClient, err := NewCMClient(&clusterConfig, podNamespace, dryRun)
 			if err != nil {
 				log.WithError(err).Error("could not create a configMap client")
 				//return errors.New(misconfigurationOutput)
 			}
 
-			cmManager := rehearse.NewCMManager(buildCluster, prowJobNamespace, cmClient, configUpdaterCfg, prNumber, releaseRepoPath, log)
+			cmManager := NewCMManager(buildCluster, prowJobNamespace, cmClient, configUpdaterCfg, prNumber, releaseRepoPath, log)
 
 			cleanupsLock.Lock()
 			cleanups = append(cleanups, func() {

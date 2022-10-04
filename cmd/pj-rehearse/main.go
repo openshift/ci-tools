@@ -60,6 +60,17 @@ func validateOptions(o options) error {
 	return o.kubernetesOptions.Validate(o.dryRun)
 }
 
+func rehearsalConfigFromOptions(o options) rehearse.RehearsalConfig {
+	return rehearse.RehearsalConfig{
+		ProwjobKubeconfig: o.prowjobKubeconfig,
+		KubernetesOptions: o.kubernetesOptions,
+		NoTemplates:       o.noTemplates,
+		NoRegistry:        o.noRegistry,
+		NoClusterProfiles: o.noClusterProfiles,
+		DryRun:            o.dryRun,
+	}
+}
+
 const (
 	misconfigurationOutput = `ERROR: pj-rehearse: misconfiguration
 
@@ -117,25 +128,10 @@ func rehearseMain() error {
 	logger.Infof("Rehearsing Prow jobs for configuration PR %s/%s#%d", org, repo, prNumber)
 
 	rc := rehearsalConfigFromOptions(o)
-	candidate := rehearsalCandidate{
-		org:  org,
-		repo: repo,
-		base: ref{
-			sha: jobSpec.Refs.BaseSHA,
-			ref: jobSpec.Refs.BaseRef,
-		},
-		head: ref{
-			sha: pr.SHA,
-			ref: pr.Ref,
-		},
-		prNumber: pr.Number,
-		author:   pr.Author,
-		title:    pr.Title,
-		link:     pr.Link,
-	}
-	presubmits, periodics, changedTemplates, changedClusterProfiles, err := rc.determineAffectedJobs(candidate, o.releaseRepoPath, logger)
+	candidate := rehearse.RehearsalCandidateFromJobSpec(jobSpec)
+	presubmits, periodics, changedTemplates, changedClusterProfiles, err := rc.DetermineAffectedJobs(candidate, o.releaseRepoPath, logger)
 	if err != nil {
-		return fmt.Errorf("error determining affected jobs: %v: %s", err, misconfigurationOutput)
+		return fmt.Errorf("error determining affected jobs: %w: %s", err, misconfigurationOutput)
 	}
 
 	debugLogger := logrus.New()
@@ -151,16 +147,25 @@ func rehearseMain() error {
 	}
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
 
-	prConfig, prRefs, imageStreamTags, presubmitsToRehearse, err := rc.setupJobs(candidate, o.releaseRepoPath, presubmits, periodics, changedTemplates, changedClusterProfiles, o.rehearsalLimit, loggers)
+	prConfig, prRefs, imageStreamTags, presubmitsToRehearse, err := rc.SetupJobs(candidate, o.releaseRepoPath, presubmits, periodics, changedTemplates, changedClusterProfiles, o.rehearsalLimit, loggers)
 	if err != nil {
-		return fmt.Errorf("error setting up jobs: %v: %s", err, failedSetupOutput)
+		return fmt.Errorf("error setting up jobs: %w: %s", err, failedSetupOutput)
 	}
 
 	if err := prConfig.Prow.ValidateJobConfig(); err != nil {
-		return fmt.Errorf("%s: %v", jobValidationOutput, err)
+		return fmt.Errorf("%s: %w", jobValidationOutput, err)
 	}
 
-	return rc.rehearseJobs(candidate, o.releaseRepoPath, prConfig, prRefs, imageStreamTags, presubmitsToRehearse, changedTemplates, changedClusterProfiles, loggers)
+	jobsTriggered, err := rc.RehearseJobs(candidate, o.releaseRepoPath, prConfig, prRefs, imageStreamTags, presubmitsToRehearse, changedTemplates, changedClusterProfiles, loggers)
+	if err != nil {
+		if jobsTriggered {
+			return fmt.Errorf(jobsFailureOutput)
+		} else {
+			return fmt.Errorf(rehearseFailureOutput)
+		}
+	}
+
+	return nil
 }
 
 func main() {

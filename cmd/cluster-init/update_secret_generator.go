@@ -19,9 +19,9 @@ const (
 	clusterWildcard        = "$(cluster)"
 )
 
-//SecretGenConfig is used here as using secretgenerator.Config results in 'special' unmarshalling
-//where '$(*)' wildcards from the yaml are expanded in the output. Doing so for this purpose results in
-//incorrect re-serialization
+// SecretGenConfig is used here as using secretgenerator.Config results in 'special' unmarshalling
+// where '$(*)' wildcards from the yaml are expanded in the output. Doing so for this purpose results in
+// incorrect re-serialization
 type SecretGenConfig []secretgenerator.SecretItem
 
 func updateSecretGenerator(o options) error {

@@ -102,10 +102,10 @@ func latestPullSpecAndVersion(options []Release) (string, string) {
 // processVersionChannel takes the configured version and channel and
 // returns:
 //
-// * Whether the version is explicit (e.g. 4.7.0) or just a
-//   major.minor (e.g. 4.7).
-// * The appropriate channel for a Cincinnati request, e.g. stable-4.7.
-// * Any errors that turn up while processing.
+//   - Whether the version is explicit (e.g. 4.7.0) or just a
+//     major.minor (e.g. 4.7).
+//   - The appropriate channel for a Cincinnati request, e.g. stable-4.7.
+//   - Any errors that turn up while processing.
 func processVersionChannel(version string, channel api.ReleaseChannel) (explicitVersion bool, cincinnatiChannel string, err error) {
 	explicitVersion, majorMinor, err := extractMajorMinor(version)
 	if err != nil {

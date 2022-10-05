@@ -1,7 +1,7 @@
 /*
- package credentialprovider copies the DockerConfigJSON-related parts from
- https://github.com/kubernetes/kubernetes/tree/b259c92dda81e18822b790501445d98d7c0ed339/pkg/credentialprovider in order to avoid
- depending on k8s.io/kubernetes directly, which is unsupported.
+package credentialprovider copies the DockerConfigJSON-related parts from
+https://github.com/kubernetes/kubernetes/tree/b259c92dda81e18822b790501445d98d7c0ed339/pkg/credentialprovider in order to avoid
+depending on k8s.io/kubernetes directly, which is unsupported.
 */
 package credentialprovider
 

@@ -402,6 +402,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        from: ' '\n" +
 	"        to: ' '\n" +
 	"      test_step:\n" +
+	"        # AlwaysRun can be set to false to disable running the job on every PR\n" +
+	"        always_run: false\n" +
 	"        # As is the name of the test.\n" +
 	"        as: ' '\n" +
 	"        # Cluster specifies the name of the cluster where the test runs.\n" +
@@ -1173,7 +1175,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# The images launched as pods but have no explicit access to\n" +
 	"# the cluster they are running on.\n" +
 	"tests:\n" +
-	"    - # As is the name of the test.\n" +
+	"    - # AlwaysRun can be set to false to disable running the job on every PR\n" +
+	"      always_run: false\n" +
+	"      # As is the name of the test.\n" +
 	"      as: ' '\n" +
 	"      # Cluster specifies the name of the cluster where the test runs.\n" +
 	"      cluster: ' '\n" +

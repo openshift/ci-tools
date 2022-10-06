@@ -19,6 +19,7 @@ import (
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/labels"
 	"k8s.io/test-infra/prow/logrusutil"
 )
 
@@ -72,16 +73,16 @@ type config struct {
 
 // getInterestedLabels returns a set of those labels we are interested in when using the PR reminder
 func getInterestedLabels() sets.String {
-	var labels = sets.String{}
-	labels.Insert("do-not-merge/hold")
-	return labels
+	var prLabels = sets.String{}
+	prLabels.Insert("do-not-merge/hold")
+	return prLabels
 }
 
 // getUnactionablePrLabels returns a set of those labels that mark a PR which can't be reviewed in its current state
 func getUnactionablePrLabels() sets.String {
-	var labels = sets.String{}
-	labels.Insert("do-not-merge/work-in-progress", "needs-rebase")
-	return labels
+	var prLabels = sets.String{}
+	prLabels.Insert(labels.WorkInProgress, labels.NeedsRebase)
+	return prLabels
 }
 
 var orgRepoFormat = regexp.MustCompile(`\w+/\w+`)

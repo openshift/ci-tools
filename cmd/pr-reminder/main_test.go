@@ -11,6 +11,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/labels"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -600,10 +601,10 @@ func Test_filterLabels(t *testing.T) {
 }
 
 func Test_hasUnactionableLabels(t *testing.T) {
-	holdLabel := github.Label{Name: "do-not-merge/hold"}
-	acceptedLabel := github.Label{Name: "accepted"}
-	wipLabel := github.Label{Name: "do-not-merge/work-in-progress"}
-	needsRebaseLabel := github.Label{Name: "needs-rebase"}
+	holdLabel := github.Label{Name: labels.Hold}
+	approvedLabel := github.Label{Name: labels.Approved}
+	wipLabel := github.Label{Name: labels.WorkInProgress}
+	needsRebaseLabel := github.Label{Name: labels.NeedsRebase}
 
 	var testCases = []struct {
 		name     string
@@ -617,7 +618,7 @@ func Test_hasUnactionableLabels(t *testing.T) {
 		},
 		{
 			name:     "no unwanted labels",
-			labels:   []github.Label{acceptedLabel},
+			labels:   []github.Label{approvedLabel},
 			expected: false,
 		},
 		{
@@ -627,7 +628,7 @@ func Test_hasUnactionableLabels(t *testing.T) {
 		},
 		{
 			name:     "one unwanted label among ok labels",
-			labels:   []github.Label{acceptedLabel, needsRebaseLabel, holdLabel},
+			labels:   []github.Label{approvedLabel, needsRebaseLabel, holdLabel},
 			expected: true,
 		},
 		{

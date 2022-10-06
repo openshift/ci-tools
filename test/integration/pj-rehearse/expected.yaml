@@ -129,7 +129,7 @@
     labels:
       ci.openshift.org/rehearse-pull: "1234"
       created-by-pj-rehearse: "true"
-    name: rehearse-1234-0-template-prow-job-test-template
+    name: rehearse-1234-4de8ab7c20656998264a2593116288f5eb070b32-template-prow-job-test-template
     namespace: test-namespace
 - data:
     vars-origin.yaml: |
@@ -141,7 +141,7 @@
     labels:
       ci.openshift.org/rehearse-pull: "1234"
       created-by-pj-rehearse: "true"
-    name: rehearse-1234-0-cluster-profile-cluster-profile-test-profile
+    name: rehearse-1234-4de8ab7c20656998264a2593116288f5eb070b32-cluster-profile-cluster-profile-test-profile
     namespace: test-namespace
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -988,7 +988,7 @@
           - secret:
               name: cluster-secrets-test-profile
           - configMap:
-              name: rehearse-1234-0-cluster-profile-cluster-profile-test-profile
+              name: rehearse-1234-4de8ab7c20656998264a2593116288f5eb070b32-cluster-profile-cluster-profile-test-profile
       - configMap:
           name: prow-job-cluster-launch-src
         name: job-definition

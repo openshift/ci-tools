@@ -1,4 +1,4 @@
-package rehearse
+package main
 
 import (
 	"context"

@@ -266,7 +266,8 @@ func (r RehearsalConfig) RehearseJobs(candidate RehearsalCandidate, candidatePat
 	buildClusterConfigs := map[string]rest.Config{}
 	var prowJobConfig *rest.Config
 	if !r.DryRun {
-		buildClusterConfigs, err := r.KubernetesOptions.LoadClusterConfigs()
+		var err error
+		buildClusterConfigs, err = r.KubernetesOptions.LoadClusterConfigs()
 		if err != nil {
 			jobLogger.WithError(err).Fatal("failed to read kubeconfigs")
 		}

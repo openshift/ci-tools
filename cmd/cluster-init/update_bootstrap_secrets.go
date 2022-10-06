@@ -293,9 +293,13 @@ func updateBuildFarmSecrets(c *secretbootstrap.Config, o options) error {
 			return err
 		}
 		keyAndField := serviceAccountKubeconfigPath(s, o.clusterName)
+		item := buildUFarm
+		if s == configUpdater {
+			item = configUpdater
+		}
 		sc.From[keyAndField] = secretbootstrap.ItemContext{
 			Field: keyAndField,
-			Item:  buildUFarm,
+			Item:  item,
 		}
 	}
 

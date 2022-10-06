@@ -789,6 +789,28 @@ func TestUseOursIsLarger_ReporterReports(t *testing.T) {
 			reporter: mockReporter{client: &http.Client{}},
 			expected: false,
 		},
+		{
+			//pod-scaler admission should not report the warning when their configured memory is 0
+			name: "ours is 10x larger, their memory is 0",
+			ours: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(0, resource.BinarySI),
+				},
+			},
+			reporter: mockReporter{client: &http.Client{}},
+			expected: false,
+		},
 	}
 
 	for _, tc := range testCases {

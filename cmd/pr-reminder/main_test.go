@@ -11,6 +11,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/labels"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -594,6 +595,53 @@ func Test_filterLabels(t *testing.T) {
 			actual := filterLabels(tc.prLabels, interestingLabels)
 			if diff := cmp.Diff(actual, tc.expected); diff != "" {
 				t.Fatalf("returned labels do not match expected labels, diff:%s", diff)
+			}
+		})
+	}
+}
+
+func Test_hasUnactionableLabels(t *testing.T) {
+	holdLabel := github.Label{Name: labels.Hold}
+	approvedLabel := github.Label{Name: labels.Approved}
+	wipLabel := github.Label{Name: labels.WorkInProgress}
+	needsRebaseLabel := github.Label{Name: labels.NeedsRebase}
+
+	var testCases = []struct {
+		name     string
+		labels   []github.Label
+		expected bool
+	}{
+		{
+			name:     "no labels",
+			labels:   []github.Label{},
+			expected: false,
+		},
+		{
+			name:     "no unwanted labels",
+			labels:   []github.Label{approvedLabel},
+			expected: false,
+		},
+		{
+			name:     "only one label and it is unwanted",
+			labels:   []github.Label{wipLabel},
+			expected: true,
+		},
+		{
+			name:     "one unwanted label among ok labels",
+			labels:   []github.Label{approvedLabel, needsRebaseLabel, holdLabel},
+			expected: true,
+		},
+		{
+			name:     "only unwanted labels",
+			labels:   []github.Label{wipLabel, needsRebaseLabel},
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(hasUnactionableLabels(tc.labels), tc.expected); diff != "" {
+				t.Fatalf("actual result desn't match expected, diff: %s", diff)
 			}
 		})
 	}

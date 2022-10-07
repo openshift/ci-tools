@@ -133,6 +133,10 @@ func rehearseMain() error {
 	if err != nil {
 		return fmt.Errorf("error determining affected jobs: %w: %s", err, misconfigurationOutput)
 	}
+	if len(presubmits) == 0 && len(periodics) == 0 {
+		// Nothing to rehearse
+		return nil
+	}
 
 	debugLogger := logrus.New()
 	debugLogger.Level = logrus.DebugLevel

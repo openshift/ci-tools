@@ -135,6 +135,8 @@ func TestGetChangedRegistrySteps(t *testing.T) {
 		"ipi/conf/aws/ipi-conf-gcp-chain.yaml",
 		"ipi/conf/aws/ipi-conf-gcp-ref.yaml",
 		"ipi/conf/aws/ipi-conf-gcp-commands.sh",
+		"observer/test/observer-test-observer.yaml",
+		"observer/test/observer-test-commands.sh",
 		"openshift/e2e/test/openshift-e2e-test-ref.yaml",
 		"openshift/e2e/test/openshift-e2e-test-commands.sh",
 		"upi/aws/upi-aws-workflow.yaml",
@@ -142,11 +144,15 @@ func TestGetChangedRegistrySteps(t *testing.T) {
 	}
 	cmd := `
 > ipi/conf/aws/ipi-conf-aws-chain.yaml
+> observer/test/observer-test-observer.yaml
+> observer/test/observer-test-commands.sh
 > openshift/e2e/test/openshift-e2e-test-ref.yaml
 > openshift/e2e/test/openshift-e2e-test-commands.sh
 > upi/aws/upi-aws-workflow.yaml
 git add \
     ipi/conf/aws/ipi-conf-aws-chain.yaml \
+    observer/test/observer-test-observer.yaml \
+    observer/test/observer-test-commands.sh \
     openshift/e2e/test/openshift-e2e-test-ref.yaml \
     openshift/e2e/test/openshift-e2e-test-commands.sh \
     upi/aws/upi-aws-workflow.yaml
@@ -156,9 +162,15 @@ git add \
 			"ipi-conf-aws": &testNode{"chain/ipi-conf-aws"},
 			"ipi-conf-gcp": &testNode{"chain/ipi-conf-gcp"},
 		},
+		// TODO create observer field
+		// Observers: map[string]registry.Node{
+		// 	"observer-test": &testNode{"observer/test"},
+		// },
 		References: map[string]registry.Node{
-			"ipi-conf-aws":       &testNode{"ref/ipi-conf-aws"},
-			"ipi-conf-gcp":       &testNode{"ref/ipi-conf-gcp"},
+			"ipi-conf-aws": &testNode{"ref/ipi-conf-aws"},
+			"ipi-conf-gcp": &testNode{"ref/ipi-conf-gcp"},
+			// TODO create observer field
+			"observer-test":      &testNode{"observer/test"},
 			"openshift-e2e-test": &testNode{"ref/openshift-e2e-test"},
 		},
 		Workflows: map[string]registry.Node{
@@ -175,6 +187,8 @@ git add \
 	}
 	compareChanges(t, RegistryPath, files, cmd, f, []string{
 		"chain/ipi-conf-aws",
+		"observer/test",
+		"observer/test",
 		"ref/openshift-e2e-test",
 		"ref/openshift-e2e-test",
 		"workflow/upi-aws",

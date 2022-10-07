@@ -394,15 +394,19 @@ func (m *MultiArchImageStreamTagReference) ISTagName() string {
 	return fmt.Sprintf("%s/%s:%s", m.ResolveNamespace(), m.Name, m.Tag)
 }
 
-func (m *MultiArchImageStreamTagReference) ResolveNamespace() string {
+func (m MultiArchImageStreamTagReference) ResolveNamespace() string {
+	return ResolveMultiArchNamespaceFor(m.ImageStreamTagReference.Namespace)
+}
+
+func ResolveMultiArchNamespaceFor(namespace string) string {
 	var ret string
 	arch := runtime.GOARCH
 	if arch == "amd64" {
-		return m.ImageStreamTagReference.Namespace
+		return namespace
 	}
 
-	ret = fmt.Sprintf("%s-%s", m.ImageStreamTagReference.Namespace, arch)
-	logrus.Infof("Resolved multi-arch namespace for %s to %s for %s architecture", m.ImageStreamTagReference.Namespace, ret, arch)
+	ret = fmt.Sprintf("%s-%s", namespace, arch)
+	logrus.Infof("Resolved multi-arch namespace for %s to %s for %s architecture", namespace, ret, arch)
 	return ret
 }
 

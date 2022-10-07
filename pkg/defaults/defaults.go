@@ -48,7 +48,6 @@ import (
 	releasesteps "github.com/openshift/ci-tools/pkg/steps/release"
 	"github.com/openshift/ci-tools/pkg/steps/secretrecordingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
-	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type inputImageSet map[api.InputImage]struct{}
@@ -835,7 +834,7 @@ func runtimeStepConfigsForBuild(
 			From: api.PipelineImageStreamTagReferenceRoot,
 			To:   api.PipelineImageStreamTagReferenceSource,
 			ClonerefsImage: api.ImageStreamTagReference{
-				Namespace: util.ResolveMultiArchNamespaceFor("ci"),
+				Namespace: api.ResolveMultiArchNamespaceFor("ci"),
 				Name:      "managed-clonerefs",
 				Tag:       "latest",
 			},

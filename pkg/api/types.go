@@ -406,7 +406,7 @@ func ResolveMultiArchNamespaceFor(namespace string) string {
 	}
 
 	ret = fmt.Sprintf("%s-%s", namespace, arch)
-	logrus.Infof("Resolved multi-arch namespace for %s to %s for %s architecture", namespace, ret, arch)
+	logrus.Debugf("Resolved multi-arch namespace for %s to %s for %s architecture", namespace, ret, arch)
 	return ret
 }
 

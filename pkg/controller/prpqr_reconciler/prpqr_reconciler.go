@@ -502,9 +502,6 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		return nil, fmt.Errorf("BUG: test '%s' not found in injected config", inject.Test)
 	}
 
-	// TODO: Temporarily bumping the timeout to 6 hours to allow extra time for the Kube rebase.  We'll remove this once the rebase lands...
-	periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: 6 * time.Hour}
-
 	extraRefs := prowv1.Refs{
 		Org:  baseCiop.Org,
 		Repo: baseCiop.Repo,

@@ -15,9 +15,15 @@ const (
 	Workflow Type = iota
 	Chain
 	Reference
+	Observer
 )
 
-var nodeTypes = [3]string{Workflow: "workflow", Reference: "reference", Chain: "chain"}
+var nodeTypes = [4]string{
+	Workflow:  "workflow",
+	Reference: "reference",
+	Chain:     "chain",
+	Observer:  "observer",
+}
 
 // Node is an interface that allows a user to identify ancestors and descendants of a step registry element
 type Node interface {
@@ -40,6 +46,7 @@ type NodeByName struct {
 	References map[string]Node
 	Chains     map[string]Node
 	Workflows  map[string]Node
+	Observers  map[string]Node
 }
 
 type nodeWithName struct {
@@ -59,6 +66,7 @@ type nodeWithChildren struct {
 type workflowNode struct {
 	nodeWithName
 	nodeWithChildren
+	observerChildren observerNodeSet
 }
 
 type chainNode struct {
@@ -72,15 +80,22 @@ type referenceNode struct {
 	nodeWithParents
 }
 
+type observerNode struct {
+	nodeWithName
+	workflowParents workflowNodeSet
+}
+
 // Verify that all node types implement Node
 var _ Node = &workflowNode{}
 var _ Node = &chainNode{}
 var _ Node = &referenceNode{}
+var _ Node = &observerNode{}
 
 // internal node type sets
 type workflowNodeSet map[*workflowNode]sets.Empty
 type chainNodeSet map[*chainNode]sets.Empty
 type referenceNodeSet map[*referenceNode]sets.Empty
+type observerNodeSet map[*observerNode]sets.Empty
 
 // Name -> internal node type maps
 type workflowNodeByName map[string]*workflowNode
@@ -99,6 +114,10 @@ func (set referenceNodeSet) insert(node *referenceNode) {
 	set[node] = sets.Empty{}
 }
 
+func (set observerNodeSet) insert(node *observerNode) {
+	set[node] = sets.Empty{}
+}
+
 func (n *nodeWithName) Name() string {
 	return n.name
 }
@@ -113,6 +132,10 @@ func (*chainNode) Type() Type {
 
 func (*referenceNode) Type() Type {
 	return Reference
+}
+
+func (*observerNode) Type() Type {
+	return Observer
 }
 
 func (n *nodeWithParents) Parents() []Node {
@@ -140,6 +163,7 @@ func (n *nodeWithChildren) Children() []Node {
 }
 
 func (*referenceNode) Children() []Node { return nil }
+func (*observerNode) Children() []Node  { return nil }
 
 func (n *nodeWithParents) Ancestors() []Node {
 	ancestors := n.Parents()
@@ -151,6 +175,22 @@ func (n *nodeWithParents) Ancestors() []Node {
 
 func (*workflowNode) Ancestors() []Node { return nil }
 
+func (n *observerNode) Ancestors() []Node {
+	ret := n.Parents()
+	for x := range n.workflowParents {
+		ret = append(ret, x.Ancestors()...)
+	}
+	return ret
+}
+
+func (n *observerNode) Parents() []Node {
+	var ret []Node
+	for x := range n.workflowParents {
+		ret = append(ret, x)
+	}
+	return ret
+}
+
 func (n *nodeWithChildren) Descendants() []Node {
 	descendants := n.Children()
 	for child := range n.chainChildren {
@@ -159,7 +199,16 @@ func (n *nodeWithChildren) Descendants() []Node {
 	return descendants
 }
 
+func (n *workflowNode) Descendants() []Node {
+	ret := n.nodeWithChildren.Descendants()
+	for child := range n.observerChildren {
+		ret = append(ret, child)
+	}
+	return ret
+}
+
 func (*referenceNode) Descendants() []Node { return nil }
+func (*observerNode) Descendants() []Node  { return nil }
 
 func (n *workflowNode) addChainChild(child *chainNode) {
 	n.chainChildren.insert(child)
@@ -168,6 +217,11 @@ func (n *workflowNode) addChainChild(child *chainNode) {
 
 func (n *workflowNode) addReferenceChild(child *referenceNode) {
 	n.referenceChildren.insert(child)
+	child.workflowParents.insert(n)
+}
+
+func (n *workflowNode) addObserverChild(child *observerNode) {
+	n.observerChildren.insert(child)
 	child.workflowParents.insert(n)
 }
 
@@ -235,6 +289,7 @@ func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 		References: make(map[string]Node, len(stepsByName)),
 		Chains:     make(map[string]Node, len(chainsByName)),
 		Workflows:  make(map[string]Node, len(workflowsByName)),
+		Observers:  make(map[string]Node, len(observersByName)),
 	}
 	// References can only be children; load them so they can be added as children by workflows and chains
 	referenceNodes := make(referenceNodeByName, len(stepsByName))
@@ -246,15 +301,11 @@ func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 		referenceNodes[name] = node
 		nodesByName.References[name] = node
 	}
-
-	// Treat observers as reference nodes
 	for name := range observersByName {
-		node := &referenceNode{
-			nodeWithName:    newNodeWithName(name),
-			nodeWithParents: newNodeWithParents(),
+		node := &observerNode{
+			nodeWithName: newNodeWithName(name),
 		}
-		referenceNodes[name] = node
-		nodesByName.References[name] = node
+		nodesByName.Observers[name] = node
 	}
 
 	// since we may load the parent chain before a child chain, we need to make the parent->child links after loading all chains
@@ -304,10 +355,18 @@ func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 		nodesByName.Workflows[name] = node
 		if workflow.Observers != nil {
 			for _, observer := range workflow.Observers.Enable {
-				if _, exists := referenceNodes[observer]; !exists {
+				if child, exists := nodesByName.Observers[observer]; !exists {
 					return nodesByName, fmt.Errorf("Workflow %s contains non-existent observer %s", name, observer)
+				} else {
+					if node.observerChildren == nil {
+						node.observerChildren = make(observerNodeSet)
+					}
+					child := child.(*observerNode)
+					if child.workflowParents == nil {
+						child.workflowParents = make(workflowNodeSet)
+					}
+					node.addObserverChild(child)
 				}
-				node.addReferenceChild(referenceNodes[observer])
 			}
 		}
 		steps := append(workflow.Pre, append(workflow.Test, workflow.Post...)...)

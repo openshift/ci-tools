@@ -140,6 +140,8 @@ func TestAncestors(t *testing.T) {
 			node = graph.Chains[testCase.name]
 		case Workflow:
 			node = graph.Workflows[testCase.name]
+		case Observer:
+			node = graph.Observers[testCase.name]
 		}
 		if !nodesEqual(node.Ancestors(), testCase.expected) {
 			t.Errorf("%s: ancestor sets not equal", testCase.name)
@@ -162,7 +164,7 @@ func TestDescendants(t *testing.T) {
 			&chainNode{nodeWithName: nodeWithName{name: ipiDeprovision}},
 			&referenceNode{nodeWithName: nodeWithName{name: ipiDeprovisionMustGather}},
 			&referenceNode{nodeWithName: nodeWithName{name: ipiDeprovisionDeprovision}},
-			&referenceNode{nodeWithName: nodeWithName{name: simpleObserver}},
+			&observerNode{nodeWithName: nodeWithName{name: simpleObserver}},
 		},
 	}, {
 		name:     ipiInstall,
@@ -208,6 +210,8 @@ func TestDescendants(t *testing.T) {
 			node = graph.Chains[testCase.name]
 		case Workflow:
 			node = graph.Workflows[testCase.name]
+		case Observer:
+			node = graph.Observers[testCase.name]
 		}
 		if !nodesEqual(node.Descendants(), testCase.expected) {
 			t.Errorf("%s: descendant sets not equal", testCase.name)
@@ -320,6 +324,20 @@ func TestNewGraph(t *testing.T) {
 	}, {
 		name:      "Invalid chain in chain",
 		workflows: WorkflowByName{},
+		chains: ChainByName{
+			"ipi-install-2": {
+				Steps: []api.TestStep{{
+					Chain: &ipiInstallInstall,
+				}},
+			},
+		},
+	}, {
+		name: "Invalid observer in workflow",
+		workflows: WorkflowByName{
+			"ipi2": api.MultiStageTestConfiguration{
+				Observers: &api.Observers{Enable: []string{simpleObserver}},
+			},
+		},
 		chains: ChainByName{
 			"ipi-install-2": {
 				Steps: []api.TestStep{{

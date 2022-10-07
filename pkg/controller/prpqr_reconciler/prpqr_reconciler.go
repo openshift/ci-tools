@@ -46,10 +46,8 @@ const (
 	conditionAllJobsTriggered = "AllJobsTriggered"
 	conditionWithErrors       = "WithErrors"
 
-	aggregationIDLabel = "release.openshift.io/aggregation-id"
-
-	// TODO: Bumping this to 8 hours to hopefully allow more time for the k8s bump.  Will revert once the bump is complete.
-	defaultAggregatorJobTimeout = 8 * time.Hour
+	aggregationIDLabel          = "release.openshift.io/aggregation-id"
+	defaultAggregatorJobTimeout = 6 * time.Hour
 )
 
 type injectingResolverClient interface {

@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-//bugzillaCache tests
+// bugzillaCache tests
 func TestBugzillaCacheSet(t *testing.T) {
 	testcases := []struct {
 		name         string

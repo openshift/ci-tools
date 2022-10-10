@@ -63,11 +63,11 @@ func ProduceMap(
 // The pipeline is constituted of a single producer, a single reducer, and `n`
 // mapper workers, i.e.:
 //
-//       producer
-//      / /   \ \
-//     m m  …  m m ---> done
-//      \ \   / /        |
-//       reducer <-------'
+//	  producer
+//	 / /   \ \
+//	m m  …  m m ---> done
+//	 \ \   / /        |
+//	  reducer <-------'
 //
 // All processes are executed to completion even if an error occurs in any of
 // them (as opposed to, for example, `x/sync/errorgroup`).  Errors sent to

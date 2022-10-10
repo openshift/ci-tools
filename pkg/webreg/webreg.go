@@ -866,7 +866,8 @@ type dependencyLine struct {
 type dependencyVars map[string]dependencyLine
 
 // release:latest --> ENV_VAR_1 -> { override=false steps=step1,step2 }
-//                \-> ENV_VAR_2 -> { override=true steps=step3 }
+//
+//	\-> ENV_VAR_2 -> { override=true steps=step3 }
 type dependencyData struct {
 	Items map[string]dependencyVars
 	Type  string

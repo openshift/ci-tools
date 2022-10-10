@@ -24,11 +24,11 @@ func init() {
 
 // CiOperatorCommand exposes a ci-operator invocation to a test and
 // ensures the following semantics:
-//  - the command will get SIGINT 1 minutes before the test deadline
-//  - the command will get SIGKILL 10 seconds before the test deadline
-//  - unique hashes ensure unique test namespaces for concurrent runs
-//  - artifacts will be persisted and jUnit will be mangled to not
-//    pollute the owning test's jUnit output
+//   - the command will get SIGINT 1 minutes before the test deadline
+//   - the command will get SIGKILL 10 seconds before the test deadline
+//   - unique hashes ensure unique test namespaces for concurrent runs
+//   - artifacts will be persisted and jUnit will be mangled to not
+//     pollute the owning test's jUnit output
 type CiOperatorCommand struct {
 	cmd         *exec.Cmd
 	artifactDir string

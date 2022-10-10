@@ -8,9 +8,9 @@ import (
 // Error holds a message and a child, allowing for an error
 // The common use-case here will be to wrap errors from callsites:
 //
-// if err := doSomething(data); err != nil {
-//     return results.ForReason(results.ReasonFoo).WithError(err).Errorf("could not do something for data: %v", data)
-// }
+//	if err := doSomething(data); err != nil {
+//	    return results.ForReason(results.ReasonFoo).WithError(err).Errorf("could not do something for data: %v", data)
+//	}
 type Error struct {
 	reason  Reason
 	message string
@@ -106,7 +106,7 @@ func (e *BuilderWithReasonAndError) Errorf(format string, args ...interface{}) e
 // a child but instead wants a simple error. For instance, wrapping
 // the outcome of a function that doesn't return an Error itself:
 //
-//  err := results.ForReason(results.ReasonLoadingArgs).ForError(doSomething())
+//	err := results.ForReason(results.ReasonLoadingArgs).ForError(doSomething())
 func (e *BuilderWithReason) ForError(err error) error {
 	if err == nil {
 		return nil

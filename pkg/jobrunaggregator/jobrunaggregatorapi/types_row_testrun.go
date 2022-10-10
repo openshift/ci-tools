@@ -42,7 +42,6 @@ const (
 )
 
 // Move here from jobrunbigqueryloader/types.go
-//
 type TestRunRow struct {
 	Name       string
 	JobRunName string

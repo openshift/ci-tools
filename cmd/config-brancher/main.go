@@ -53,15 +53,15 @@ func gatherOptions() options {
 // repos that actively promote to this release are considered to be our dev branches.
 //
 // Once we've chosen a set of configurations to operate on, we can do one of two actions:
-//  - mirror configuration out, copying the development branch config to all branches for
-//    the provided `--future-release` values, not changing the configuration for the dev
-//    branch and making sure that the release branch for the version that matches that in
-//    the dev branch has a disabled promotion stanza to ensure only one branch feeds a
-//    release ImageStream
-//  - bump configuration files, moving the development branch to promote to the version in
-//    the `--bump` flag, enabling the promotion in the release branch that used to match
-//    the dev branch version and disabling promotion in the release branch that now matches
-//    the dev branch version.
+//   - mirror configuration out, copying the development branch config to all branches for
+//     the provided `--future-release` values, not changing the configuration for the dev
+//     branch and making sure that the release branch for the version that matches that in
+//     the dev branch has a disabled promotion stanza to ensure only one branch feeds a
+//     release ImageStream
+//   - bump configuration files, moving the development branch to promote to the version in
+//     the `--bump` flag, enabling the promotion in the release branch that used to match
+//     the dev branch version and disabling promotion in the release branch that now matches
+//     the dev branch version.
 func main() {
 	o := gatherOptions()
 	if err := o.Validate(); err != nil {

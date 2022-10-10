@@ -253,9 +253,9 @@ type configResult struct {
 // dispatchJobs loads the Prow jobs and chooses a cluster in the build farm if possible.
 // The current implementation walks through the Prow Job config files.
 // For each file, it tries to assign all jobs in it to a cluster in the build farm.
-//  - When all the e2e tests are targeting the same cloud provider, we run the test pod on the that cloud provider too.
-//  - When the e2e tests are targeting different cloud providers, or there is no e2e tests at all, we can run the tests
-//    on any cluster in the build farm. Those jobs are used to load balance the workload of clusters in the build farm.
+//   - When all the e2e tests are targeting the same cloud provider, we run the test pod on the that cloud provider too.
+//   - When the e2e tests are targeting different cloud providers, or there is no e2e tests at all, we can run the tests
+//     on any cluster in the build farm. Those jobs are used to load balance the workload of clusters in the build farm.
 func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency int, config *dispatcher.Config, jobVolumes map[string]float64) error {
 	if config == nil {
 		return fmt.Errorf("config is nil")

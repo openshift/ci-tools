@@ -126,7 +126,7 @@ func (n *nodeWithParents) Parents() []Node {
 	return parents
 }
 
-func (*workflowNode) Parents() []Node { return []Node{} }
+func (*workflowNode) Parents() []Node { return nil }
 
 func (n *nodeWithChildren) Children() []Node {
 	var children []Node
@@ -139,7 +139,7 @@ func (n *nodeWithChildren) Children() []Node {
 	return children
 }
 
-func (*referenceNode) Children() []Node { return []Node{} }
+func (*referenceNode) Children() []Node { return nil }
 
 func (n *nodeWithParents) Ancestors() []Node {
 	ancestors := n.Parents()
@@ -149,7 +149,7 @@ func (n *nodeWithParents) Ancestors() []Node {
 	return ancestors
 }
 
-func (*workflowNode) Ancestors() []Node { return []Node{} }
+func (*workflowNode) Ancestors() []Node { return nil }
 
 func (n *nodeWithChildren) Descendants() []Node {
 	descendants := n.Children()
@@ -159,7 +159,7 @@ func (n *nodeWithChildren) Descendants() []Node {
 	return descendants
 }
 
-func (*referenceNode) Descendants() []Node { return []Node{} }
+func (*referenceNode) Descendants() []Node { return nil }
 
 func (n *workflowNode) addChainChild(child *chainNode) {
 	n.chainChildren.insert(child)

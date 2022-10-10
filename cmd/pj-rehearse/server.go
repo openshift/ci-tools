@@ -84,12 +84,12 @@ func serverFromOptions(o options) (*server, error) {
 	githubTokenGenerator := secret.GetTokenGenerator(o.github.TokenPath)
 	ghc, err := o.github.GitHubClient(o.dryRun)
 	if err != nil {
-		return nil, fmt.Errorf("error creating GitHub client: %v", err)
+		return nil, fmt.Errorf("error creating GitHub client: %w", err)
 	}
 
 	gc, err := o.git.GitClient(ghc, githubTokenGenerator, secret.Censor, o.dryRun)
 	if err != nil {
-		return nil, fmt.Errorf("error creating git client: %v", err)
+		return nil, fmt.Errorf("error creating git client: %w", err)
 	}
 
 	return &server{

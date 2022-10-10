@@ -2,7 +2,6 @@ package rehearse
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -223,7 +222,8 @@ func (r RehearsalConfig) SetupJobs(candidate RehearsalCandidate, candidatePath s
 	presubmitsToRehearse = append(presubmitsToRehearse, periodicPresubmits...)
 
 	if rehearsals := len(presubmitsToRehearse); rehearsals == 0 {
-		return nil, nil, nil, nil, errors.New("no jobs found to rehearse")
+		jobLogger.Info("no jobs to rehearse have been found")
+		return nil, nil, nil, nil, nil
 	} else if rehearsals > limit {
 		jobCountFields := logrus.Fields{
 			"rehearsal-threshold": limit,

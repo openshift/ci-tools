@@ -27,7 +27,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
-	"github.com/openshift/ci-tools/pkg/util"
 )
 
 // promotionStep will tag a full release suite
@@ -225,7 +224,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *cor
 			Containers: []coreapi.Container{
 				{
 					Name:    "promotion",
-					Image:   fmt.Sprintf("%s/%s/4.8:cli", api.DomainForService(api.ServiceRegistry), util.ResolveMultiArchNamespaceFor("ocp")),
+					Image:   fmt.Sprintf("%s/%s/4.8:cli", api.DomainForService(api.ServiceRegistry), api.ResolveMultiArchNamespaceFor("ocp")),
 					Command: command,
 					Args:    args,
 					VolumeMounts: []coreapi.VolumeMount{

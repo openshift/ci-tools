@@ -17,7 +17,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	base_steps "github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
-	"github.com/openshift/ci-tools/pkg/util"
 )
 
 const (
@@ -265,7 +264,7 @@ func addSecretWrapper(pod *coreapi.Pod, vpnConf *vpnConf, skipKubeconfig bool, g
 	})
 	mount := coreapi.VolumeMount{Name: volume, MountPath: dir}
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, coreapi.Container{
-		Image:                    fmt.Sprintf("%s/%s/entrypoint-wrapper:latest", api.DomainForService(api.ServiceRegistry), util.ResolveMultiArchNamespaceFor("ci")),
+		Image:                    fmt.Sprintf("%s/%s/entrypoint-wrapper:latest", api.DomainForService(api.ServiceRegistry), api.ResolveMultiArchNamespaceFor("ci")),
 		Name:                     "cp-entrypoint-wrapper",
 		Command:                  []string{"cp"},
 		Args:                     []string{"/bin/entrypoint-wrapper", bin},

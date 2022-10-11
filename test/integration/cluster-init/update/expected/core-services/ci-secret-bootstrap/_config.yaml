@@ -65,7 +65,7 @@ secret_configs:
       item: build_farm
     sa.config-updater.existingCluster.config:
       field: sa.config-updater.existingCluster.config
-      item: build_farm
+      item: config-updater
   to:
   - cluster: app.ci
     name: config-updater

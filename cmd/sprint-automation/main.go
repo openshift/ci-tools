@@ -135,7 +135,7 @@ func main() {
 		if err := sendNextWeeksRoleDigest(pagerDutyClient, slackClient); err != nil {
 			logrus.WithError(err).Fatal("Could not post next week's role digest to Slack.")
 		}
-		if err := notifyTriageOfHandover(slackClient, userIdsByRole[roleTriagePrimary]); err != nil {
+		if err := notifyTriageOfHandover(slackClient, userIdsByRole[roleTriagePrimary].slackId); err != nil {
 			logrus.WithError(err).Fatal("Could not notify triage engineer of handover doc via Slack.")
 		}
 	}
@@ -187,7 +187,7 @@ const (
 	roleIntake             = "@dptp-intake"
 )
 
-func sendTeamDigest(userIdsByRole map[string]string, jiraClient *jiraapi.Client, slackClient *slack.Client) error {
+func sendTeamDigest(userIdsByRole map[string]user, jiraClient *jiraapi.Client, slackClient *slack.Client) error {
 	blocks := getPagerDutyBlocks(userIdsByRole)
 
 	if approvalBlocks, err := getIssuesNeedingApproval(jiraClient); err != nil {
@@ -199,7 +199,7 @@ func sendTeamDigest(userIdsByRole map[string]string, jiraClient *jiraapi.Client,
 	return postBlocks(slackClient, blocks)
 }
 
-func getPagerDutyBlocks(userIdsByRole map[string]string) []slack.Block {
+func getPagerDutyBlocks(userIdsByRole map[string]user) []slack.Block {
 	var fields []*slack.TextBlockObject
 	for _, role := range []string{roleTriagePrimary, roleTriageSecondaryUS, roleTriageSecondaryEU, roleHelpdesk, roleIntake} {
 		fields = append(fields, &slack.TextBlockObject{
@@ -207,7 +207,7 @@ func getPagerDutyBlocks(userIdsByRole map[string]string) []slack.Block {
 			Text: role,
 		}, &slack.TextBlockObject{
 			Type: slack.MarkdownType,
-			Text: fmt.Sprintf("<@%s>", userIdsByRole[role]),
+			Text: fmt.Sprintf("<@%s>", userIdsByRole[role].slackId),
 		})
 	}
 
@@ -242,15 +242,20 @@ func getPagerDutyBlocks(userIdsByRole map[string]string) []slack.Block {
 	return blocks
 }
 
-func users(client *pagerduty.Client, slackClient *slack.Client) (map[string]string, error) {
+type user struct {
+	slackId string
+	email   string
+}
+
+func users(client *pagerduty.Client, slackClient *slack.Client) (map[string]user, error) {
 	now := time.Now()
 	userIdsByRole, errors := usersOnCallAtTime(client, slackClient, now.Year(), now.Month(), now.Day())
 	return userIdsByRole, kerrors.NewAggregate(errors)
 }
 
-func usersOnCallAtTime(client *pagerduty.Client, slackClient *slack.Client, year int, month time.Month, day int) (map[string]string, []error) {
+func usersOnCallAtTime(client *pagerduty.Client, slackClient *slack.Client, year int, month time.Month, day int) (map[string]user, []error) {
 	var errors []error
-	userIdsByRole := map[string]string{}
+	userIdsByRole := map[string]user{}
 
 	for _, item := range []struct {
 		role  string
@@ -290,7 +295,7 @@ func usersOnCallAtTime(client *pagerduty.Client, slackClient *slack.Client, year
 			errors = append(errors, fmt.Errorf("could not get slack user for %s: %w", pagerDutyUser.Name, err))
 			continue
 		}
-		userIdsByRole[item.role] = slackUser.ID
+		userIdsByRole[item.role] = user{slackId: slackUser.ID, email: pagerDutyUser.Email}
 	}
 	return userIdsByRole, errors
 }
@@ -356,7 +361,8 @@ func sendNextWeeksRoleDigest(client *pagerduty.Client, slackClient *slack.Client
 
 	// Invert to group all roles for each userId as a user can be in multiple roles
 	rolesByUserId := make(map[string][]string)
-	for role, userId := range userIdsByRole {
+	for role, u := range userIdsByRole {
+		userId := u.slackId
 		if roles, ok := rolesByUserId[userId]; ok {
 			rolesByUserId[userId] = append(roles, role)
 		} else {
@@ -516,7 +522,7 @@ func postBlocks(slackClient *slack.Client, blocks []slack.Block) error {
 	return nil
 }
 
-func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, userId string) error {
+func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, user user) error {
 	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND (labels is EMPTY OR NOT (labels=ready OR labels=no-intake)) AND created >= -30d AND status = "To Do" AND issuetype != Sub-task`, jira.ProjectDPTP), nil)
 	if err := jirautil.HandleJiraError(response, err); err != nil {
 		return fmt.Errorf("could not query for Jira issues: %w", err)
@@ -545,7 +551,7 @@ func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, use
 	for _, issue := range issues {
 		blocks = append(blocks, blockForIssue(issue))
 	}
-	responseChannel, responseTimestamp, err := slackClient.PostMessage(userId, slack.MsgOptionText("Jira card digest.", false), slack.MsgOptionBlocks(blocks...))
+	responseChannel, responseTimestamp, err := slackClient.PostMessage(user.slackId, slack.MsgOptionText("Jira card digest.", false), slack.MsgOptionBlocks(blocks...))
 	if err != nil {
 		return fmt.Errorf("failed to message @dptp-intake: %w", err)
 	}
@@ -698,7 +704,7 @@ const (
 	userGroupHelpdesk = "dptp-helpdesk"
 )
 
-func ensureGroupMembership(client *slack.Client, userIdsByRole map[string]string) error {
+func ensureGroupMembership(client *slack.Client, userIdsByRole map[string]user) error {
 	groups, err := client.GetUserGroups(slack.GetUserGroupsOptionIncludeUsers(true))
 	if err != nil {
 		return fmt.Errorf("could not query Slack for groups: %w", err)
@@ -716,7 +722,7 @@ func ensureGroupMembership(client *slack.Client, userIdsByRole map[string]string
 			return fmt.Errorf("could not find user group %s", handle)
 		}
 
-		if expected, actual := sets.NewString(userIdsByRole[role]), sets.NewString(group.Users...); !expected.Equal(actual) {
+		if expected, actual := sets.NewString(userIdsByRole[role].slackId), sets.NewString(group.Users...); !expected.Equal(actual) {
 			if _, err := client.UpdateUserGroupMembers(group.ID, strings.Join(expected.List(), ",")); err != nil {
 				return fmt.Errorf("failed to update group %s: %w", handle, err)
 			}

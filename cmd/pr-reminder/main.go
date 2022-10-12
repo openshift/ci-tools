@@ -372,7 +372,7 @@ func filterLabels(labels []github.Label, interestedLabels sets.String) []string 
 			result = append(result, label.Name)
 		}
 	}
-	sort.Sort(sort.StringSlice(result))
+	sort.Strings(result)
 	return result
 }
 

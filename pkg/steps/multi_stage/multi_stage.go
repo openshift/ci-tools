@@ -173,7 +173,7 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 			return err
 		}
 	}
-	env, err := s.environment(ctx)
+	env, err := s.environment()
 	if err != nil {
 		return err
 	}
@@ -346,7 +346,7 @@ func (s *multiStageTestStep) readVPNData(secret *coreapi.Secret) error {
 	return nil
 }
 
-func (s *multiStageTestStep) environment(ctx context.Context) ([]coreapi.EnvVar, error) {
+func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 	var ret []coreapi.EnvVar
 	for _, l := range s.leases {
 		val, err := s.params.Get(l.Env)

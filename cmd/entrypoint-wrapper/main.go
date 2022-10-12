@@ -59,7 +59,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed to parse flag set")
 	}
 	opt.cmd = flagSet.Args()
-	if err := opt.complete(flagSet); err != nil {
+	if err := opt.complete(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
@@ -94,7 +94,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	return opt
 }
 
-func (o *options) complete(flagSet *flag.FlagSet) error {
+func (o *options) complete() error {
 	if len(o.cmd) == 0 {
 		return fmt.Errorf("a command is required")
 	}

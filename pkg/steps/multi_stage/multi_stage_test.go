@@ -236,7 +236,7 @@ func TestEnvironment(t *testing.T) {
 				params: tc.params,
 				leases: tc.leases,
 			}
-			got, err := s.environment(context.TODO())
+			got, err := s.environment()
 			if (err != nil) != tc.expectErr {
 				t.Errorf("environment() error = %v, wantErr %v", err, tc.expectErr)
 				return

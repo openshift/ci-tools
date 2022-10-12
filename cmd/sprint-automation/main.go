@@ -523,7 +523,7 @@ func postBlocks(slackClient *slack.Client, blocks []slack.Block) error {
 }
 
 func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, user user) error {
-	opts := jiraapi.SearchOptions{Fields: []string{"comment"}}
+	opts := jiraapi.SearchOptions{Fields: []string{"*navigable", "comment"}}
 	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND (labels is EMPTY OR NOT (labels=ready OR labels=no-intake)) AND created >= -30d AND status = "To Do" AND issuetype != Sub-task`, jira.ProjectDPTP), &opts)
 	if err := jirautil.HandleJiraError(response, err); err != nil {
 		return fmt.Errorf("could not query for Jira issues: %w", err)

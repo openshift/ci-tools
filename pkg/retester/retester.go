@@ -66,10 +66,10 @@ var (
 	)
 	retestPRShaConter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "retests_for_pr_sha",
-			Help: "Number of retests for PR sha they have already happened.",
+			Name: "retest_total",
+			Help: "Number of retest command in total issued by the tool.",
 		},
-		[]string{"pr"},
+		[]string{"org", "repo"},
 	)
 )
 

@@ -64,7 +64,7 @@ var (
 		},
 		[]string{"pr"},
 	)
-	retestPRShaConter = prometheus.NewCounterVec(
+	retestTotalConter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "retest_total",
 			Help: "Number of retest command in total issued by the tool.",
@@ -76,7 +76,7 @@ var (
 func init() {
 	// Metrics have to be registered to be exposed:
 	prometheus.MustRegister(maxRetestsForShaAndBaseGauge, maxRetestsForShaGauge)
-	prometheus.MustRegister(retestBaseShaConter, retestPRShaConter)
+	prometheus.MustRegister(retestBaseShaConter, retestTotalConter)
 }
 
 func (b *backoffCache) loadFromDisk() error {
@@ -379,7 +379,7 @@ func (b *backoffCache) check(pr tide.PullRequest, baseSha string, policy Reteste
 	record.RetestsForBaseSha++
 	record.RetestsForPrSha++
 	retestBaseShaConter.With(prometheus.Labels{"pr": record.BaseSha}).Inc()
-	retestPRShaConter.With(prometheus.Labels{"pr": record.PRSha}).Inc()
+	retestTotalConter.With(prometheus.Labels{"org": string(pr.Author.Login), "repo": string(pr.Repository.NameWithOwner)}).Inc()
 
 	return retestBackoffRetest, fmt.Sprintf("Remaining retests: %d against base HEAD %s and %d for PR HEAD %s in total", policy.MaxRetestsForShaAndBase-record.RetestsForBaseSha, record.BaseSha, policy.MaxRetestsForSha-record.RetestsForPrSha, record.PRSha)
 }

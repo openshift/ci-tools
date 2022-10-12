@@ -71,11 +71,6 @@ func setupReleaseImageStream(ctx context.Context, namespace string, client ctrlr
 			Name:      "ci-operator",
 			Namespace: namespace,
 		},
-		ImagePullSecrets: []coreapi.LocalObjectReference{
-			{
-				Name: api.RegistryPullCredentialsSecret,
-			},
-		},
 	}
 
 	role := &rbacapi.Role{

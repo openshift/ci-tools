@@ -523,7 +523,8 @@ func postBlocks(slackClient *slack.Client, blocks []slack.Block) error {
 }
 
 func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, user user) error {
-	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND (labels is EMPTY OR NOT (labels=ready OR labels=no-intake)) AND created >= -30d AND status = "To Do" AND issuetype != Sub-task`, jira.ProjectDPTP), nil)
+	opts := jiraapi.SearchOptions{Fields: []string{"comment"}}
+	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND (labels is EMPTY OR NOT (labels=ready OR labels=no-intake)) AND created >= -30d AND status = "To Do" AND issuetype != Sub-task`, jira.ProjectDPTP), &opts)
 	if err := jirautil.HandleJiraError(response, err); err != nil {
 		return fmt.Errorf("could not query for Jira issues: %w", err)
 	}
@@ -549,7 +550,9 @@ func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, use
 		},
 	}
 	for _, issue := range issues {
-		blocks = append(blocks, blockForIssue(issue))
+		if cardIsReady(issue.Fields.Comments.Comments, user.email) {
+			blocks = append(blocks, blockForIssue(issue))
+		}
 	}
 	responseChannel, responseTimestamp, err := slackClient.PostMessage(user.slackId, slack.MsgOptionText("Jira card digest.", false), slack.MsgOptionBlocks(blocks...))
 	if err != nil {
@@ -558,6 +561,16 @@ func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, use
 
 	logrus.Infof("Posted intake digest in channel %s at %s", responseChannel, responseTimestamp)
 	return nil
+}
+
+// cardIsReady returns false if the last comment left on a card is by the person
+// that is currently on Intake (in which case, we can assume the card is not ready),
+// otherwise returns true.
+func cardIsReady(comments []*jiraapi.Comment, intakeEmail string) bool {
+	if comments != nil && len(comments) > 0 {
+		return comments[len(comments)-1].Author.EmailAddress != intakeEmail
+	}
+	return true
 }
 
 type versionInfo struct {

@@ -20,6 +20,7 @@ const (
 
 var timeRegex = regexp.MustCompile(`time=".*"`)
 var failureTimeRegex = regexp.MustCompile(`time&#34;:&#34;.*&#34;`)
+var sourceCodeLineRegex = regexp.MustCompile(`(/\w+\.go):\d+`)
 
 func TestObservers(t *testing.T) {
 	var testCases = []struct {
@@ -108,7 +109,9 @@ func TestObservers(t *testing.T) {
 				t.Fatalf("could not read jUnit artifact: %v", err)
 			}
 			mungedJunit := timeRegex.ReplaceAll(raw, []byte(`time="whatever"`))
-			if err := ioutil.WriteFile(outputjUnit, failureTimeRegex.ReplaceAll(mungedJunit, []byte(`time&#34;:&#34;whatever&#34;`)), 0755); err != nil {
+			mungedJunit = failureTimeRegex.ReplaceAll(mungedJunit, []byte(`time&#34;:&#34;whatever&#34;`))
+			mungedJunit = sourceCodeLineRegex.ReplaceAll(mungedJunit, []byte(`$1`))
+			if err := ioutil.WriteFile(outputjUnit, mungedJunit, 0755); err != nil {
 				t.Fatalf("could not munge jUnit artifact: %v", err)
 			}
 			expectedJunit := path.Join("artifacts", testCase.junitOperator)

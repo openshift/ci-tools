@@ -45,10 +45,11 @@ func (o *PRCreationOptions) Finalize() error {
 
 // PrOptions allows optional parameters to upsertPR
 type PrOptions struct {
-	prBody         string
-	matchTitle     string
-	prAssignee     string
-	skipPRCreation bool
+	prBody           string
+	matchTitle       string
+	prAssignee       string
+	gitCommitMessage string
+	skipPRCreation   bool
 }
 
 // PrOption is the type for Optional Parameters
@@ -58,6 +59,14 @@ type PrOption func(*PrOptions)
 func PrBody(prBody string) PrOption {
 	return func(args *PrOptions) {
 		args.prBody = prBody
+	}
+}
+
+// GitCommitMessage is the wrapper to pass in PrCommitMessage that's different from the PrBody
+// This is useful when you wish to provide large markdown information for the PR, but wish to keep the commit simple.
+func GitCommitMessage(gitCommitMessage string) PrOption {
+	return func(args *PrOptions) {
+		args.gitCommitMessage = gitCommitMessage
 	}
 }
 
@@ -147,12 +156,17 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		return fmt.Errorf("failed to configure disabling gpg signing: %w", err)
 	}
 
+	commitMessage := prArgs.prBody
+	if prArgs.gitCommitMessage != "" {
+		commitMessage = prArgs.gitCommitMessage
+	}
+
 	if err := bumper.GitCommitAndPush(
 		fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", username, string(token), username, repo),
 		sourceBranchName,
 		username,
 		fmt.Sprintf("%s@users.noreply.github.com", username),
-		prTitle+"\n\n"+prArgs.prBody,
+		prTitle+"\n\n"+commitMessage,
 		stdout,
 		stderr,
 		false,

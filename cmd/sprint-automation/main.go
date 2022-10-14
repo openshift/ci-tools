@@ -567,7 +567,7 @@ func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, use
 // that is currently on Intake (in which case, we can assume the card is not ready),
 // otherwise returns true.
 func cardIsReady(comments []*jiraapi.Comment, intakeEmail string) bool {
-	if comments != nil && len(comments) > 0 {
+	if len(comments) > 0 {
 		return comments[len(comments)-1].Author.EmailAddress != intakeEmail
 	}
 	return true

@@ -1145,9 +1145,11 @@ const (
 	ClusterProfileAzure2                ClusterProfile = "azure-2"
 	ClusterProfileAzure4                ClusterProfile = "azure4"
 	ClusterProfileAzureArc              ClusterProfile = "azure-arc"
+	ClusterProfileAzureArm64            ClusterProfile = "azure-arm64"
 	ClusterProfileAzureStack            ClusterProfile = "azurestack"
 	ClusterProfileAzureMag              ClusterProfile = "azuremag"
 	ClusterProfileAzureQE               ClusterProfile = "azure-qe"
+	ClusterProfileAzureArm64QE          ClusterProfile = "azure-arm64-qe"
 	ClusterProfileAzureMagQE            ClusterProfile = "azuremag-qe"
 	ClusterProfileEquinixOcpMetal       ClusterProfile = "equinix-ocp-metal"
 	ClusterProfileEquinixOcpMetalQE     ClusterProfile = "equinix-ocp-metal-qe"
@@ -1220,6 +1222,8 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAzure2,
 		ClusterProfileAzure4,
 		ClusterProfileAzureArc,
+		ClusterProfileAzureArm64,
+		ClusterProfileAzureArm64QE,
 		ClusterProfileAzureMag,
 		ClusterProfileAzureMagQE,
 		ClusterProfileAzureQE,
@@ -1306,6 +1310,10 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAzureArc,
 		ClusterProfileAzureQE:
 		return "azure4"
+	case
+		ClusterProfileAzureArm64,
+		ClusterProfileAzureArm64QE:
+		return "azure-arm64"
 	case ClusterProfileAzureStack:
 		return "azurestack"
 	case
@@ -1422,6 +1430,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "azure-2-quota-slice"
 	case ClusterProfileAzure4:
 		return "azure4-quota-slice"
+	case ClusterProfileAzureArm64:
+		return "azure-arm64-quota-slice"
 	case ClusterProfileAzureArc:
 		return "azure-arc-quota-slice"
 	case ClusterProfileAzureStack:
@@ -1434,6 +1444,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "azure-qe-quota-slice"
 	case ClusterProfileAzureMagQE:
 		return "azuremag-qe-quota-slice"
+	case ClusterProfileAzureArm64QE:
+		return "azure-arm64-qe-quota-slice"
 	case ClusterProfileEquinixOcpMetal:
 		return "equinix-ocp-metal-quota-slice"
 	case ClusterProfileEquinixOcpMetalQE:
@@ -1580,7 +1592,7 @@ func (p ClusterProfile) Secret() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-outpost", "alibaba", "azure-2", "azure4", "azure-arc", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "libvirt-ppc64le", "libvirt-s390x", "nutanix", "nutanix-qe", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "packet-edge", "powervs", "kubevirt", "aws-cpaas", "osd-ephemeral":
+	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-outpost", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "libvirt-ppc64le", "libvirt-s390x", "nutanix", "nutanix-qe", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "packet-edge", "powervs", "kubevirt", "aws-cpaas", "osd-ephemeral":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

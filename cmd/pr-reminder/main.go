@@ -221,6 +221,13 @@ func (p prRequest) link() string {
 }
 
 func (p prRequest) createdUpdatedMessage() string {
+	if time.Since(p.LastUpdated).Hours() <= 24 {
+		return fmt.Sprintf("%s Created: %s | %s Updated: %s",
+			p.recency(),
+			p.Created.Format(time.RFC1123),
+			newUpdate,
+			p.LastUpdated.Format(time.RFC1123))
+	}
 	return fmt.Sprintf("%s Created: %s | Updated: %s",
 		p.recency(),
 		p.Created.Format(time.RFC1123),
@@ -228,11 +235,12 @@ func (p prRequest) createdUpdatedMessage() string {
 }
 
 const (
-	recent  = ":large_green_circle:"
-	normal  = ":large_orange_circle:"
-	old     = ":red_circle:"
-	twoDays = time.Hour * 24 * 2
-	oneWeek = time.Hour * 24 * 7
+	recent    = ":large_green_circle:"
+	normal    = ":large_orange_circle:"
+	old       = ":red_circle:"
+	newUpdate = ":new:"
+	twoDays   = time.Hour * 24 * 2
+	oneWeek   = time.Hour * 24 * 7
 )
 
 func (p prRequest) recency() string {

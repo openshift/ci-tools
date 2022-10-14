@@ -42,7 +42,7 @@ postsubmits:
     cluster: app.ci
     decorate: true
     labels:
-      ci.openshift.io/cluster: newCluster
+      ci.openshift.io/build-farm: newCluster
       ci.openshift.io/generator: cluster-init
       ci.openshift.io/role: infra
     max_concurrency: 1

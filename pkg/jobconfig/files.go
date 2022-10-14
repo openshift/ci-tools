@@ -33,7 +33,7 @@ const (
 	SSHBastionLabel              = "dptp.openshift.io/ssh-bastion"
 	ProwJobLabelVariant          = "ci-operator.openshift.io/variant"
 	ReleaseControllerLabel       = "ci-operator.openshift.io/release-controller"
-	LabelCluster                 = "ci.openshift.io/cluster"
+	LabelBuildFarm               = "ci.openshift.io/build-farm"
 	LabelGenerator               = "ci.openshift.io/generator"
 	ReleaseControllerValue       = "true"
 	JobReleaseKey                = "job-release"

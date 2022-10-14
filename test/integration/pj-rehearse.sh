@@ -35,6 +35,8 @@ git commit -m "Candidate version of openshift/release" --quiet
 candidate_sha="$(git rev-parse HEAD)"
 popd >/dev/null
 
+os::cmd::expect_success "ci-operator-checkconfig --config-dir ${suite_dir}/master/ci-operator/config --registry ${suite_dir}/master/ci-operator/step-registry"
+os::cmd::expect_success "ci-operator-checkconfig --config-dir ${suite_dir}/candidate/ci-operator/config --registry ${suite_dir}/candidate/ci-operator/step-registry"
 os::cmd::expect_success "ci-operator-prowgen --from-dir ${suite_dir}/master/ci-operator/config --to-dir ${suite_dir}/master/ci-operator/jobs --registry ${suite_dir}/master/ci-operator/step-registry"
 os::cmd::expect_success '[[ -z "$(git -C '"${suite_dir}"'/master status --short -- .)" ]]'
 os::cmd::expect_success "ci-operator-prowgen --from-dir ${suite_dir}/candidate/ci-operator/config --to-dir ${suite_dir}/candidate/ci-operator/jobs --registry ${suite_dir}/candidate/ci-operator/step-registry"
@@ -49,5 +51,4 @@ os::integration::sanitize_prowjob_yaml ${actual}
 sed -i -E -e "s/-${candidate_sha}-/-4de8ab7c20656998264a2593116288f5eb070b32-/g" ${actual}
 
 os::integration::compare "${actual}" "${suite_dir}/expected.yaml"
-
 os::test::junit::declare_suite_end

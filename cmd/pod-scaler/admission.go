@@ -278,7 +278,7 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 		resources, recommendationExists := server.recommendedRequestFor(meta)
 		if recommendationExists {
 			logger.Debugf("recommendation exists for: %s", pod.Spec.InitContainers[i].Name)
-			useOursIfLarger(&resources, &pod.Spec.InitContainers[i].Resources, pod.Spec.InitContainers[i].Name, reporter, logger)
+			useOursIfLarger(&resources, &pod.Spec.InitContainers[i].Resources, determineName(pod.Labels, pod.Name, pod.Spec.InitContainers[i].Name), reporter, logger)
 			if mutateResourceLimits {
 				reconcileLimits(&pod.Spec.InitContainers[i].Resources)
 			}
@@ -290,11 +290,19 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 		resources, recommendationExists := server.recommendedRequestFor(meta)
 		if recommendationExists {
 			logger.Debugf("recommendation exists for: %s", pod.Spec.Containers[i].Name)
-			useOursIfLarger(&resources, &pod.Spec.Containers[i].Resources, pod.Name, reporter, logger)
+			useOursIfLarger(&resources, &pod.Spec.Containers[i].Resources, determineName(pod.Labels, pod.Name, pod.Spec.Containers[i].Name), reporter, logger)
 			if mutateResourceLimits {
 				reconcileLimits(&pod.Spec.Containers[i].Resources)
 			}
 		}
 		preventUnschedulable(&pod.Spec.Containers[i].Resources, cpuCap, memoryCap, logger)
 	}
+}
+
+// determineName returns the string that will be used in Prometheus metrics to identify the workload
+func determineName(podLabels map[string]string, podName, containerName string) string {
+	if value, exists := podLabels["prow.k8s.io/job"]; exists {
+		return value
+	}
+	return fmt.Sprintf("%s-%s", podName, containerName)
 }

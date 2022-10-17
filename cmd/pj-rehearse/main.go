@@ -156,16 +156,18 @@ func rehearseMain() error {
 		return fmt.Errorf("error setting up jobs: %w: %s", err, failedSetupOutput)
 	}
 
-	if err := prConfig.Prow.ValidateJobConfig(); err != nil {
-		return fmt.Errorf("%s: %w", jobValidationOutput, err)
-	}
+	if len(presubmitsToRehearse) > 0 {
+		if err := prConfig.Prow.ValidateJobConfig(); err != nil {
+			return fmt.Errorf("%s: %w", jobValidationOutput, err)
+		}
 
-	jobsTriggered, err := rc.RehearseJobs(candidate, o.releaseRepoPath, prConfig, prRefs, imageStreamTags, presubmitsToRehearse, changedTemplates, changedClusterProfiles, loggers)
-	if err != nil {
-		if jobsTriggered {
-			return fmt.Errorf(jobsFailureOutput)
-		} else {
-			return fmt.Errorf(rehearseFailureOutput)
+		jobsTriggered, err := rc.RehearseJobs(candidate, o.releaseRepoPath, prConfig, prRefs, imageStreamTags, presubmitsToRehearse, changedTemplates, changedClusterProfiles, loggers)
+		if err != nil {
+			if jobsTriggered {
+				return fmt.Errorf(jobsFailureOutput)
+			} else {
+				return fmt.Errorf(rehearseFailureOutput)
+			}
 		}
 	}
 

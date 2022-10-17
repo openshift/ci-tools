@@ -278,6 +278,11 @@ type Prerelease struct {
 	Architecture ReleaseArchitecture `json:"architecture,omitempty"`
 	// VersionBounds describe the allowable version bounds to search in
 	VersionBounds VersionBounds `json:"version_bounds"`
+
+	// Stream allows for custom release streams to be selected,
+	// e.g. 4-dev-preview.  The architecture suffix should not be
+	// included.  Defaults to 4-stable.
+	Stream string `json:"stream,omitempty"`
 }
 
 // VersionBounds describe the upper and lower bounds on a version search

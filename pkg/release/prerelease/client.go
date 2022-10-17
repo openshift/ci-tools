@@ -16,7 +16,11 @@ import (
 
 // endpoint determines the API endpoint to use for a prerelease
 func endpoint(prerelease api.Prerelease) string {
-	return fmt.Sprintf("%s/4-stable%s/latest", candidate.ServiceHost(prerelease.Product, prerelease.Architecture), candidate.Architecture(prerelease.Architecture))
+	if prerelease.Stream == "" {
+		prerelease.Stream = "4-stable"
+	}
+
+	return fmt.Sprintf("%s/%s%s/latest", candidate.ServiceHost(prerelease.Product, prerelease.Architecture), prerelease.Stream, candidate.Architecture(prerelease.Architecture))
 }
 
 func defaultFields(prerelease api.Prerelease) api.Prerelease {

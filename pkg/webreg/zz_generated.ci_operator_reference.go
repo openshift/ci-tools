@@ -370,6 +370,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            architecture: ' '\n" +
 	"            # Product is the name of the product being released\n" +
 	"            product: ' '\n" +
+	"            # Stream allows for custom release streams to be selected,\n" +
+	"            # e.g. 4-dev-preview. The architecture suffix should not be\n" +
+	"            # included. Defaults to 4-stable.\n" +
+	"            stream: ' '\n" +
 	"            # VersionBounds describe the allowable version bounds to search in\n" +
 	"            version_bounds:\n" +
 	"                lower: ' '\n" +
@@ -1121,6 +1125,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            architecture: ' '\n" +
 	"            # Product is the name of the product being released\n" +
 	"            product: ' '\n" +
+	"            # Stream allows for custom release streams to be selected,\n" +
+	"            # e.g. 4-dev-preview. The architecture suffix should not be\n" +
+	"            # included. Defaults to 4-stable.\n" +
+	"            stream: ' '\n" +
 	"            # VersionBounds describe the allowable version bounds to search in\n" +
 	"            version_bounds:\n" +
 	"                lower: ' '\n" +

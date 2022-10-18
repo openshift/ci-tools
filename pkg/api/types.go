@@ -1169,6 +1169,7 @@ const (
 	ClusterProfileGCPLoggingCRIO        ClusterProfile = "gcp-logging-crio"
 	ClusterProfileGCP2                  ClusterProfile = "gcp-openshift-gce-devel-ci-2"
 	ClusterProfileIBMCloud              ClusterProfile = "ibmcloud"
+	ClusterProfileIBMCloudQE            ClusterProfile = "ibmcloud-qe"
 	ClusterProfilePOWERVS               ClusterProfile = "powervs"
 	ClusterProfileLibvirtPpc64le        ClusterProfile = "libvirt-ppc64le"
 	ClusterProfileLibvirtS390x          ClusterProfile = "libvirt-s390x"
@@ -1247,6 +1248,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCPQE,
 		ClusterProfileHyperShift,
 		ClusterProfileIBMCloud,
+		ClusterProfileIBMCloudQE,
 		ClusterProfilePOWERVS,
 		ClusterProfileKubevirt,
 		ClusterProfileLibvirtPpc64le,
@@ -1341,7 +1343,9 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileGCPLoggingCRIO,
 		ClusterProfileGCP2:
 		return string(CloudGCP)
-	case ClusterProfileIBMCloud:
+	case
+		ClusterProfileIBMCloud,
+		ClusterProfileIBMCloudQE:
 		return "ibmcloud"
 	case ClusterProfilePOWERVS:
 		return "powervs"
@@ -1471,6 +1475,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "gcp-openshift-gce-devel-ci-2-quota-slice"
 	case ClusterProfileIBMCloud:
 		return "ibmcloud-quota-slice"
+	case ClusterProfileIBMCloudQE:
+		return "ibmcloud-qe-quota-slice"
 	case ClusterProfilePOWERVS:
 		return "powervs-quota-slice"
 	case ClusterProfileLibvirtPpc64le:

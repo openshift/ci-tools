@@ -23,6 +23,7 @@ import (
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/flagutil"
+	"k8s.io/test-infra/prow/github"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -88,6 +89,26 @@ func RehearsalCandidateFromJobSpec(jobSpec *pjdwapi.JobSpec) RehearsalCandidate 
 	}
 }
 
+func RehearsalCandidateFromPullRequest(pullRequest github.PullRequest) RehearsalCandidate {
+	repo := pullRequest.Head.Repo
+	return RehearsalCandidate{
+		org:  repo.Owner.Login,
+		repo: repo.Name,
+		base: ref{
+			sha: pullRequest.Base.SHA,
+			ref: pullRequest.Base.Ref,
+		},
+		head: ref{
+			sha: pullRequest.Head.SHA,
+			ref: pullRequest.Head.Ref,
+		},
+		prNumber: pullRequest.Number,
+		author:   pullRequest.User.Login,
+		title:    pullRequest.Title,
+		link:     pullRequest.HTMLURL,
+	}
+}
+
 func (rc RehearsalCandidate) createRefs() *pjapi.Refs {
 	return &pjapi.Refs{
 		Org:     rc.org,
@@ -115,7 +136,7 @@ type ref struct {
 func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, candidatePath string, logger *logrus.Entry) (config.Presubmits, config.Periodics, *ConfigMaps, *ConfigMaps, error) {
 	start := time.Now()
 	defer func() {
-		logger.Infof("determinedAffectedJobs ran in %s", time.Since(start).Truncate(time.Second))
+		logger.Infof("determineAffectedJobs ran in %s", time.Since(start).Truncate(time.Second))
 	}()
 
 	prConfig := config.GetAllConfigs(candidatePath, logger)

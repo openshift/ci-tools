@@ -1,16 +1,25 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes/scheme"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
+	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	prowgithub "k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/githubeventserver"
+	"k8s.io/test-infra/prow/interrupts"
+	"k8s.io/test-infra/prow/logrusutil"
+	"k8s.io/test-infra/prow/pjutil"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -19,6 +28,9 @@ import (
 )
 
 type options struct {
+	logLevel string
+
+	serverMode        bool
 	dryRun            bool
 	debugLogPath      string
 	prowjobKubeconfig string
@@ -27,14 +39,29 @@ type options struct {
 	noRegistry        bool
 	noClusterProfiles bool
 
-	releaseRepoPath string
-	rehearsalLimit  int
+	preCheck            bool
+	commentOnPrCreation bool //TODO: this is useful for a soft rollout of the plugin. remove once that is complete
+
+	normalLimit int
+	moreLimit   int
+	maxLimit    int
+
+	releaseRepoPath string //TODO: this will be removed when the old pj-rehearse job is gone
+	rehearsalLimit  int    //TODO: this will be removed when the old pj-rehearse job is gone
+
+	webhookSecretFile        string
+	githubEventServerOptions githubeventserver.Options
+	github                   prowflagutil.GitHubOptions
+	git                      prowflagutil.GitOptions
 }
 
 func gatherOptions() (options, error) {
 	o := options{kubernetesOptions: flagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
 	fs := flag.CommandLine
 
+	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
+
+	fs.BoolVar(&o.serverMode, "server", false, "Run as a github event server, external prow plugin rather than as a job")
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow")
 
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
@@ -45,7 +72,19 @@ func gatherOptions() (options, error) {
 	fs.BoolVar(&o.noRegistry, "no-registry", false, "If true, do not attempt to compare step registry content")
 	fs.BoolVar(&o.noClusterProfiles, "no-cluster-profiles", false, "If true, do not attempt to compare cluster profiles")
 
+	fs.BoolVar(&o.preCheck, "pre-check", false, "If true, check for rehearsable jobs and provide the list upon PR creation")
+	fs.BoolVar(&o.preCheck, "comment-on-pr-creation", true, "If true, provide an explanatory comment when a new PR is opened in a repo with the plugin configured.")
+
+	fs.IntVar(&o.normalLimit, "normal-limit", 10, "Upper limit of jobs attempted to rehearse with normal command (if more jobs are being touched, only this many will be rehearsed)")
+	fs.IntVar(&o.moreLimit, "more-limit", 20, "Upper limit of jobs attempted to rehearse with more command (if more jobs are being touched, only this many will be rehearsed)")
+	fs.IntVar(&o.maxLimit, "max-limit", 35, "Upper limit of jobs attempted to rehearse with max command (if more jobs are being touched, only this many will be rehearsed)")
+
+	fs.StringVar(&o.webhookSecretFile, "hmac-secret-file", "/etc/webhook/hmac", "Path to the file containing the GitHub HMAC secret.")
+
 	fs.IntVar(&o.rehearsalLimit, "rehearsal-limit", 35, "Upper limit of jobs attempted to rehearse (if more jobs are being touched, only this many will be rehearsed)")
+
+	o.github.AddFlags(fs)
+	o.githubEventServerOptions.Bind(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)
@@ -53,11 +92,26 @@ func gatherOptions() (options, error) {
 	return o, nil
 }
 
-func validateOptions(o options) error {
-	if len(o.releaseRepoPath) == 0 {
-		return fmt.Errorf("--candidate-path was not provided")
+func (o *options) validate() error {
+	var errs []error
+	level, err := logrus.ParseLevel(o.logLevel)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("invalid log level specified: %w", err))
 	}
-	return o.kubernetesOptions.Validate(o.dryRun)
+	logrus.SetLevel(level)
+
+	errs = append(errs, o.kubernetesOptions.Validate(o.dryRun))
+
+	if o.serverMode {
+		errs = append(errs, o.githubEventServerOptions.DefaultAndValidate())
+		errs = append(errs, o.github.Validate(o.dryRun))
+	} else {
+		if len(o.releaseRepoPath) == 0 {
+			errs = append(errs, errors.New("--candidate-path was not provided"))
+		}
+	}
+
+	return utilerrors.NewAggregate(errs)
 }
 
 func rehearsalConfigFromOptions(o options) rehearse.RehearsalConfig {
@@ -68,6 +122,9 @@ func rehearsalConfigFromOptions(o options) rehearse.RehearsalConfig {
 		NoRegistry:        o.noRegistry,
 		NoClusterProfiles: o.noClusterProfiles,
 		DryRun:            o.dryRun,
+		NormalLimit:       o.normalLimit,
+		MoreLimit:         o.moreLimit,
+		MaxLimit:          o.maxLimit,
 	}
 }
 
@@ -95,20 +152,9 @@ pj-rehearse created invalid rehearsal jobs.This is either a pj-rehearse bug, or
 the rehearsed jobs themselves are invalid.`
 )
 
-func rehearseMain() error {
-	o, err := gatherOptions()
+func rehearseAsJob(o options) error {
+	jobSpec, err := pjdwapi.ResolveSpecFromEnv()
 	if err != nil {
-		logrus.WithError(err).Fatal("failed to gather options")
-	}
-	if err := validateOptions(o); err != nil {
-		logrus.WithError(err).Fatal("invalid options")
-	}
-	if err := imagev1.Install(scheme.Scheme); err != nil {
-		logrus.WithError(err).Fatal("failed to register imagev1 scheme")
-	}
-
-	var jobSpec *pjdwapi.JobSpec
-	if jobSpec, err = pjdwapi.ResolveSpecFromEnv(); err != nil {
 		logrus.WithError(err).Error("could not read JOB_SPEC")
 		return fmt.Errorf(misconfigurationOutput)
 	}
@@ -174,9 +220,57 @@ func rehearseMain() error {
 	return nil
 }
 
+func rehearsalServer(o options) {
+	logrusutil.ComponentInit()
+	logger := logrus.WithField("plugin", "pj-rehearse")
+
+	if err := secret.Add(o.github.TokenPath, o.webhookSecretFile); err != nil {
+		logger.WithError(err).Fatal("Error starting secrets agent.")
+	}
+	webhookTokenGenerator := secret.GetTokenGenerator(o.webhookSecretFile)
+
+	s, err := serverFromOptions(o)
+	if err != nil {
+		logger.WithError(err).Fatal("couldn't create server")
+	}
+
+	logger.Debug("starting eventServer")
+	eventServer := githubeventserver.New(o.githubEventServerOptions, webhookTokenGenerator, logger)
+	if o.commentOnPrCreation {
+		eventServer.RegisterHandlePullRequestEvent(s.handlePullRequestCreation)
+	}
+	eventServer.RegisterHandleIssueCommentEvent(s.handleIssueComment)
+	eventServer.RegisterHelpProvider(s.helpProvider, logger)
+
+	interrupts.OnInterrupt(func() {
+		eventServer.GracefulShutdown()
+	})
+
+	health := pjutil.NewHealth()
+	health.ServeReady()
+
+	interrupts.ListenAndServe(eventServer, time.Second*30)
+	interrupts.WaitForGracefulShutdown()
+}
+
 func main() {
-	if err := rehearseMain(); err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		os.Exit(1)
+	o, err := gatherOptions()
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to gather options")
+	}
+	if err := o.validate(); err != nil {
+		logrus.WithError(err).Fatal("invalid options")
+	}
+	if err := imagev1.Install(scheme.Scheme); err != nil {
+		logrus.WithError(err).Fatal("failed to register imagev1 scheme")
+	}
+
+	if o.serverMode {
+		rehearsalServer(o)
+	} else {
+		if err := rehearseAsJob(o); err != nil {
+			fmt.Fprintln(os.Stderr, err.Error())
+			os.Exit(1)
+		}
 	}
 }

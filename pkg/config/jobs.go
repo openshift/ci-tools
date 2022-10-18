@@ -42,6 +42,25 @@ func GetSourceType(labels map[string]string) SourceType {
 	}
 }
 
+func (sourceType SourceType) GetDisplayText() string {
+	switch sourceType {
+	case ChangedPresubmit:
+		return "Presubmit changed"
+	case ChangedPeriodic:
+		return "Periodic changed"
+	case ChangedCiopConfig:
+		return "Ci-operator config changed"
+	case ChangedClusterProfile:
+		return "Cluster Profile changed"
+	case ChangedTemplate:
+		return "Template changed"
+	case ChangedRegistryContent:
+		return "Registry content changed"
+	default:
+		return "Unknown change occurred"
+	}
+}
+
 type Presubmits map[string][]prowconfig.Presubmit
 
 // AddAll adds all jobs from a different instance.

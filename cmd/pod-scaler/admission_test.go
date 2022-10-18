@@ -1004,3 +1004,38 @@ func TestPreventUnschedulable(t *testing.T) {
 		})
 	}
 }
+
+func TestDetermineName(t *testing.T) {
+	testCases := []struct {
+		name          string
+		containerName string
+		podName       string
+		labels        map[string]string
+		expected      string
+	}{
+		{
+			name:          "prowjob",
+			containerName: "container",
+			podName:       "pod",
+			labels: map[string]string{
+				"prow.k8s.io/job": "prowJob",
+			},
+			expected: "prowJob",
+		},
+		{
+			name:          "not a prowjob",
+			containerName: "container",
+			podName:       "pod",
+			labels:        nil,
+			expected:      "pod-container",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(determineName(tc.labels, tc.podName, tc.containerName), tc.expected); diff != "" {
+				t.Errorf("result differs from expected output, diff:\n%s", diff)
+			}
+		})
+	}
+}

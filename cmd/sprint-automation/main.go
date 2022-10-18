@@ -227,14 +227,14 @@ func getPagerDutyBlocks(userIdsByRole map[string]user) []slack.Block {
 			Type: slack.MBTSection,
 			Text: &slack.TextBlockObject{
 				Type: slack.MarkdownType,
-				Text: "Role manuals for: <https://docs.google.com/document/d/1eM2H_q9wMHfaJOqT08tO0fYxhAx3hxZp9_Fj1KsmJhA|triage>, <https://docs.google.com/document/d/1CYRzqE2Y4L-SRdp2DB1hXGnpk0tCd5Tm1SjgBI0ihnY|help-desk>, and <https://docs.google.com/document/d/1-zJGyiXiVqUvFWRQ5IYDwxSYmLQPD_cfJeEFXhfjDLA|intake>.",
+				Text: "Role manuals for: <https://docs.google.com/document/d/1x2C0CISvCxr7IWz6dCHj7lYqxo6GG7CpxohinxllUnE|triage>, <https://docs.google.com/document/d/1cgNYGgyXQsi9YpHNPbxE7lVDff-74uVCzAd4o1xcwGo|help-desk>, and <https://docs.google.com/document/d/1Wmy9F8-SBEG4Cd_he9aiZUS8c66DUE0XmRTmu04uW6U|intake>.",
 			},
 		},
 		&slack.SectionBlock{
 			Type: slack.MBTSection,
 			Text: &slack.TextBlockObject{
 				Type: slack.MarkdownType,
-				Text: "Team definitions for: <https://docs.google.com/document/d/19TRTNxaA3-qC4CM-stBxGTC8RqHs86Qb6mjITBsRpG4|ready>, <https://docs.google.com/document/d/1Qd4qcRHUxk5-eiFIjQm2TTH1TaGQ-zhbphLNXxyvr00|done>.",
+				Text: "Team definitions for: <https://docs.google.com/document/d/1pvTfPovr1zGmt-CKTQEfJ2Y6UYanbGO8-3RvujE-rpw|ready>, <https://docs.google.com/document/d/1f2zJHg9evsrY2BArfmhuhavFbdghPD4jzW1pxRUL35o|done>.",
 			},
 		},
 	}

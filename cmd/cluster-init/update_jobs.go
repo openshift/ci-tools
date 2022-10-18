@@ -41,7 +41,7 @@ func updateJobs(o options) error {
 		metadata.Repo,
 		&config,
 		generator,
-		map[string]string{jobconfig.LabelCluster: o.clusterName})
+		map[string]string{jobconfig.LabelBuildFarm: o.clusterName})
 }
 
 func generatePeriodic(clusterName string) prowconfig.Periodic {
@@ -69,8 +69,8 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 				}},
 			},
 			Labels: map[string]string{
-				labelRole:              jobRoleInfra,
-				jobconfig.LabelCluster: clusterName,
+				labelRole:                jobRoleInfra,
+				jobconfig.LabelBuildFarm: clusterName,
 			},
 		},
 		Interval: "12h",
@@ -95,8 +95,8 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 			},
 			MaxConcurrency: 1,
 			Labels: map[string]string{
-				labelRole:              jobRoleInfra,
-				jobconfig.LabelCluster: clusterName,
+				labelRole:                jobRoleInfra,
+				jobconfig.LabelBuildFarm: clusterName,
 			},
 		},
 		Brancher: prowconfig.Brancher{
@@ -134,7 +134,7 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 			UtilityConfig: prowconfig.UtilityConfig{Decorate: utilpointer.BoolPtr(true)},
 			Labels: map[string]string{
 				jobconfig.CanBeRehearsedLabel: "true",
-				jobconfig.LabelCluster:        clusterName,
+				jobconfig.LabelBuildFarm:      clusterName,
 			},
 		},
 		AlwaysRun:    false,

@@ -941,10 +941,10 @@ func TestPrune(t *testing.T) {
 			jobconfig: &prowconfig.JobConfig{
 				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{
 					Name:   "job",
-					Labels: map[string]string{LabelCluster: "existingCluster", LabelGenerator: "cluster-init"}}}},
+					Labels: map[string]string{LabelBuildFarm: "existingCluster", LabelGenerator: "cluster-init"}}}},
 			},
 			Generator:      "cluster-init",
-			pruneLabels:    map[string]string{LabelCluster: "existingCluster"},
+			pruneLabels:    map[string]string{LabelBuildFarm: "existingCluster"},
 			expectedConfig: &prowconfig.JobConfig{},
 		},
 		{
@@ -952,14 +952,14 @@ func TestPrune(t *testing.T) {
 			jobconfig: &prowconfig.JobConfig{
 				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{
 					Name:   "job",
-					Labels: map[string]string{LabelCluster: "existingCluster", LabelGenerator: "cluster-init"}}}},
+					Labels: map[string]string{LabelBuildFarm: "existingCluster", LabelGenerator: "cluster-init"}}}},
 			},
 			Generator:   "cluster-init",
-			pruneLabels: map[string]string{LabelCluster: "newCluster"},
+			pruneLabels: map[string]string{LabelBuildFarm: "newCluster"},
 			expectedConfig: &prowconfig.JobConfig{
 				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{
 					Name:   "job",
-					Labels: map[string]string{LabelCluster: "existingCluster", LabelGenerator: "cluster-init"}}}},
+					Labels: map[string]string{LabelBuildFarm: "existingCluster", LabelGenerator: "cluster-init"}}}},
 			},
 		},
 	}
@@ -1049,16 +1049,16 @@ func TestStaleSelectorFor(t *testing.T) {
 		},
 		{
 			description: "job with existing cluster label is not stale",
-			labels:      map[string]string{LabelGenerator: "cluster-init", LabelCluster: "existingCluster"},
+			labels:      map[string]string{LabelGenerator: "cluster-init", LabelBuildFarm: "existingCluster"},
 			generator:   "cluster-init",
-			pruneLabels: map[string]string{LabelCluster: "newCluster"},
+			pruneLabels: map[string]string{LabelBuildFarm: "newCluster"},
 			expected:    false,
 		},
 		{
 			description: "job with passed in cluster label is stale",
-			labels:      map[string]string{LabelGenerator: "cluster-init", LabelCluster: "newCluster"},
+			labels:      map[string]string{LabelGenerator: "cluster-init", LabelBuildFarm: "newCluster"},
 			generator:   "cluster-init",
-			pruneLabels: map[string]string{LabelCluster: "newCluster"},
+			pruneLabels: map[string]string{LabelBuildFarm: "newCluster"},
 			expected:    true,
 		},
 	}

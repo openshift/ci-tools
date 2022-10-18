@@ -36,12 +36,13 @@ func (s *multiStageTestStep) generateObservers(
 	for _, observer := range observers {
 		// observers are just like steps, so we can adapt one to the other
 		adapted = append(adapted, api.LiteralTestStep{
-			As:        observer.Name,
-			From:      observer.From,
-			FromImage: observer.FromImage,
-			Commands:  observer.Commands,
-			Resources: observer.Resources,
-			Timeout:   &prowapi.Duration{Duration: 24 * time.Hour},
+			As:          observer.Name,
+			From:        observer.From,
+			FromImage:   observer.FromImage,
+			Commands:    observer.Commands,
+			Resources:   observer.Resources,
+			Timeout:     &prowapi.Duration{Duration: 24 * time.Hour},
+			GracePeriod: &prowapi.Duration{Duration: time.Hour},
 		})
 	}
 	pods, _, err := s.generatePods(adapted, nil, secretVolumes, secretVolumeMounts, genPodOpts)

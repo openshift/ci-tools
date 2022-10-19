@@ -221,17 +221,15 @@ func (p prRequest) link() string {
 }
 
 func (p prRequest) createdUpdatedMessage() string {
-	if time.Since(p.LastUpdated).Hours() <= 24 {
-		return fmt.Sprintf("%s Created: %s | %s Updated: %s",
-			p.recency(),
-			p.Created.Format(time.RFC1123),
-			newUpdate,
-			p.LastUpdated.Format(time.RFC1123))
-	}
-	return fmt.Sprintf("%s Created: %s | Updated: %s",
+	message := fmt.Sprintf("%s Created: %s | Updated: %s",
 		p.recency(),
 		p.Created.Format(time.RFC1123),
 		p.LastUpdated.Format(time.RFC1123))
+
+	if time.Since(p.LastUpdated).Hours() <= 24 {
+		message = fmt.Sprintf("%s %s", newUpdate, message)
+	}
+	return message
 }
 
 const (

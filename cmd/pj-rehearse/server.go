@@ -33,6 +33,7 @@ type githubClient interface {
 	CreateComment(owner, repo string, number int, comment string) error
 	AddLabel(org, repo string, number int, label string) error
 	GetPullRequest(org, repo string, number int) (*github.PullRequest, error)
+	GetRef(org, repo, ref string) (string, error)
 }
 
 type server struct {
@@ -129,7 +130,10 @@ func (s *server) handlePullRequestCreation(l *logrus.Entry, event github.PullReq
 				logger.WithError(err).Error("couldn't checkout pull request")
 			}
 
-			candidate := rehearse.RehearsalCandidateFromPullRequest(event.PullRequest)
+			candidate, err := s.getCandidate(event.PullRequest)
+			if err != nil {
+				logger.WithError(err).Error("couldn't get candidate from pull request")
+			}
 			presubmits, periodics, _, _, err := s.rehearsalConfig.DetermineAffectedJobs(candidate, repoClient.Directory(), logger)
 			if err != nil {
 				logger.WithError(err).Error("couldn't determine affected jobs")
@@ -223,7 +227,10 @@ func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEv
 				}
 
 				candidatePath := repoClient.Directory()
-				candidate := rehearse.RehearsalCandidateFromPullRequest(*pullRequest)
+				candidate, err := s.getCandidate(*pullRequest)
+				if err != nil {
+					logger.WithError(err).Error("couldn't get candidate from pull request")
+				}
 				presubmits, periodics, changedTemplates, changedClusterProfiles, err := rc.DetermineAffectedJobs(candidate, candidatePath, logger)
 				if err != nil {
 					logger.WithError(err).Error("couldn't determine affected jobs")
@@ -272,6 +279,16 @@ func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEv
 			}
 		}
 	}
+}
+
+func (s *server) getCandidate(pullRequest github.PullRequest) (rehearse.RehearsalCandidate, error) {
+	// We can't just use the base SHA from the pullRequest as there may be changes to the branches head in the meantime
+	repo := pullRequest.Base.Repo
+	baseSHA, err := s.ghc.GetRef(repo.Owner.Login, repo.Name, fmt.Sprintf("heads/%s", pullRequest.Base.Ref))
+	if err != nil {
+		return rehearse.RehearsalCandidate{}, err
+	}
+	return rehearse.RehearsalCandidateFromPullRequest(pullRequest, baseSHA), nil
 }
 
 func (s *server) getJobsTableLines(presubmits config.Presubmits, periodics config.Periodics, user string) []string {

@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -117,6 +118,11 @@ func main() {
 		logrus.WithError(err).Fatalf("Failed to load Prow jobs %s", o.prowJobConfigDir)
 	}
 	for _, p := range jobConfig.Periodics {
+		if strings.Contains(p.Name, "-okd") {
+			// Don't include OKD jobs
+			continue
+		}
+
 		if release, ok := p.Labels["job-release"]; ok {
 			if _, ok := sippyConfig.Releases[release]; !ok {
 				sippyConfig.Releases[release] = v1sippy.ReleaseConfig{

@@ -19,6 +19,8 @@ type HistoricalJobData struct {
 	Architecture string
 	Network      string
 	Topology     string
+	// JobRuns is the number of job runs that were included when we queried the historical data.
+	JobRuns int
 }
 
 type AlertHistoricalDataRow struct {

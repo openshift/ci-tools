@@ -294,7 +294,9 @@ validate-checkconfig:
 .PHONY: validate-checkconfig
 
 $(TMPDIR)/.ci-operator-kubeconfig:
-	oc --context $(CLUSTER) --as system:admin --namespace ci serviceaccounts create-kubeconfig ci-operator > $(TMPDIR)/.ci-operator-kubeconfig
+	oc --context $(CLUSTER) -n test-credentials extract secret/ci-operator --keys kubeconfig --keys sa.ci-operator.$(CLUSTER).token.txt --to $(TMPDIR)
+	mv $(TMPDIR)/kubeconfig "$@"
+
 
 $(TMPDIR)/hive-kubeconfig:
 	oc --context $(CLUSTER) --as system:admin --namespace test-credentials get secret hive-hive-credentials -o 'jsonpath={.data.kubeconfig}' | base64 --decode > "$@"

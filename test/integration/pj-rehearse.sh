@@ -35,6 +35,11 @@ git commit -m "Candidate version of openshift/release" --quiet
 candidate_sha="$(git rev-parse HEAD)"
 popd >/dev/null
 
+os::cmd::expect_success "ci-operator-prowgen --from-dir ${suite_dir}/master/ci-operator/config --to-dir ${suite_dir}/master/ci-operator/jobs --registry ${suite_dir}/master/ci-operator/step-registry"
+os::cmd::expect_success '[[ -z "$(git -C '"${suite_dir}"'/master status --short -- .)" ]]'
+os::cmd::expect_success "ci-operator-prowgen --from-dir ${suite_dir}/candidate/ci-operator/config --to-dir ${suite_dir}/candidate/ci-operator/jobs --registry ${suite_dir}/candidate/ci-operator/step-registry"
+os::cmd::expect_success '[[ -z "$(git -C '"${suite_dir}"'/candidate status --short -- .)" ]]'
+
 export JOB_SPEC='{"type":"presubmit","job":"pull-ci-openshift-release-master-rehearse","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"release","base_ref":"master","base_sha":"'${base_sha}'","pulls":[{"number":1234,"author":"petr-muller","sha":"'${candidate_sha}'"}]}}'
 
 actual="${workdir}/rehearsals.yaml"

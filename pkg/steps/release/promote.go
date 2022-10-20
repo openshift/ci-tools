@@ -41,9 +41,9 @@ type promotionStep struct {
 
 func targetName(config api.PromotionConfiguration) string {
 	if len(config.Name) > 0 {
-		return fmt.Sprintf("%s/%s:${component}", config.Namespace, config.Name)
+		return fmt.Sprintf("%s/%s:${component}", api.ResolveMultiArchNamespaceFor(config.Namespace), config.Name)
 	}
-	return fmt.Sprintf("%s/${component}:%s", config.Namespace, config.Tag)
+	return fmt.Sprintf("%s/${component}:%s", api.ResolveMultiArchNamespaceFor(config.Namespace), config.Tag)
 }
 
 func (s *promotionStep) Inputs() (api.InputDefinition, error) {

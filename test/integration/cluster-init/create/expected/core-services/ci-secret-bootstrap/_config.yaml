@@ -24,6 +24,9 @@ secret_configs:
     newCluster.config:
       field: sa.pod-scaler.newCluster.config
       item: pod-scaler
+    sa.pod-scaler.newCluster.token.txt:
+      field: sa.pod-scaler.newCluster.token.txt
+      item: pod-scaler
   to:
   - cluster: app.ci
     name: pod-scaler
@@ -48,6 +51,9 @@ secret_configs:
       item: build_farm
     sa.crier.newCluster.config:
       field: sa.crier.newCluster.config
+      item: build_farm
+    sa.crier.newCluster.token.txt:
+      field: sa.crier.newCluster.token.txt
       item: build_farm
   to:
   - cluster: app.ci
@@ -86,6 +92,9 @@ secret_configs:
     sa.deck.newCluster.config:
       field: sa.deck.newCluster.config
       item: build_farm
+    sa.deck.newCluster.token.txt:
+      field: sa.deck.newCluster.token.txt
+      item: build_farm
   to:
   - cluster: app.ci
     name: deck
@@ -102,6 +111,9 @@ secret_configs:
       item: build_farm
     sa.hook.newCluster.config:
       field: sa.hook.newCluster.config
+      item: build_farm
+    sa.hook.newCluster.token.txt:
+      field: sa.hook.newCluster.token.txt
       item: build_farm
   to:
   - cluster: app.ci
@@ -120,6 +132,9 @@ secret_configs:
     sa.prow-controller-manager.newCluster.config:
       field: sa.prow-controller-manager.newCluster.config
       item: build_farm
+    sa.prow-controller-manager.newCluster.token.txt:
+      field: sa.prow-controller-manager.newCluster.token.txt
+      item: build_farm
   to:
   - cluster: app.ci
     name: prow-controller-manager
@@ -137,6 +152,9 @@ secret_configs:
     sa.sinker.newCluster.config:
       field: sa.sinker.newCluster.config
       item: build_farm
+    sa.sinker.newCluster.token.txt:
+      field: sa.sinker.newCluster.token.txt
+      item: build_farm
   to:
   - cluster: app.ci
     name: sinker
@@ -147,6 +165,9 @@ secret_configs:
       item: build_farm
     sa.dptp-controller-manager.newCluster.config:
       field: sa.dptp-controller-manager.newCluster.config
+      item: build_farm
+    sa.dptp-controller-manager.newCluster.token.txt:
+      field: sa.dptp-controller-manager.newCluster.token.txt
       item: build_farm
   to:
   - cluster: app.ci
@@ -161,6 +182,9 @@ secret_configs:
       item: build_farm
     sa.ci-operator.newCluster.config:
       field: sa.ci-operator.newCluster.config
+      item: build_farm
+    sa.ci-operator.newCluster.token.txt:
+      field: sa.ci-operator.newCluster.token.txt
       item: build_farm
     sa.pj-rehearse.app.ci.config:
       field: sa.pj-rehearse.app.ci.config
@@ -180,6 +204,9 @@ secret_configs:
     sa.github-ldap-user-group-creator.newCluster.config:
       field: sa.github-ldap-user-group-creator.newCluster.config
       item: build_farm
+    sa.github-ldap-user-group-creator.newCluster.token.txt:
+      field: sa.github-ldap-user-group-creator.newCluster.token.txt
+      item: build_farm
   to:
   - cluster: app.ci
     name: github-ldap-user-group-creator
@@ -191,6 +218,9 @@ secret_configs:
     sa.promoted-image-governor.newCluster.config:
       field: sa.promoted-image-governor.newCluster.config
       item: build_farm
+    sa.promoted-image-governor.newCluster.token.txt:
+      field: sa.promoted-image-governor.newCluster.token.txt
+      item: build_farm
   to:
   - cluster: app.ci
     name: promoted-image-governor
@@ -201,6 +231,9 @@ secret_configs:
       item: build_farm
     sa.cluster-display.newCluster.config:
       field: sa.cluster-display.newCluster.config
+      item: build_farm
+    sa.cluster-display.newCluster.token.txt:
+      field: sa.cluster-display.newCluster.token.txt
       item: build_farm
   to:
   - cluster: app.ci

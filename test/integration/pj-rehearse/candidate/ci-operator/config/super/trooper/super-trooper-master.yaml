@@ -83,19 +83,6 @@ tests:
         requests:
           cpu: 1000m
           memory: 2Gi
-- as: changed-and-uses-changed-workflow
-  cron: '@yearly'
-  steps:
-    cluster_profile: ""
-    test:
-    - as: e2e
-      commands: make integration
-      from: my-image
-      resources:
-        requests:
-          cpu: 1000m
-          memory: 2Gi
-    workflow: ipi-changed
 - as: changed-periodic
   cron: '@yearly'
   steps:

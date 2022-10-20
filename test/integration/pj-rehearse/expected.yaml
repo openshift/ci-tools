@@ -505,7 +505,6 @@
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-trooper-master-changed-and-uses-changed-workflow
     creationTimestamp: null
     labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: periodic-ci-super-trooper-master-changed-and-uses-changed-woxxx
       created-by-prow: "true"
@@ -551,16 +550,16 @@
     pod_spec:
       containers:
       - args:
+        - --CHANGED-CI-OPERATOR-PARAMS
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --report-credentials-file=/etc/report/credentials
         - --target=changed-and-uses-changed-workflow
-        - --CHANGED-CI-OPERATOR-PARAMS
         command:
         - ci-operator
         env:
         - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/8SUTWvcQAyG7/4VIpeFwgQntBefmkPaU6CkuRvFlmeHzFclOcuG/vgy/lh207ClUNKTPa800jPvMHpEodYFtCRNBVCW5QsQMVADiZ110Tx/vKwPqmTsSihTlK0bdAoo2mbaXT2Ozvctp6Sl0FS6FWXC0Jako+JMnsqOPxe2yWO05uryqq5WWAMDp7A0BdDUgJKomeIVk6SRu/lUmw+bua93wanM/wBdHhv4VNd3bhKYfowkr8JXJapoW8nUucF1qC7FkvKWQW+eQueiBlAa6LYYLfUGY29GITGrsEv8NPi0qwA6TrGBzec9Ifv9pircSoy+FaW88HV+FCVuM6fBeWrg4mLScxKdM+aGLjvTU+b07MSlaMIoaizqlng9ZwoBYy8N/FwUgJOE2WcXRdH7g3ri8CqdOnjkYl2HIzFQSLxv4PqrO4N69H8G9WC0WSyBnkQ57d+NPjO9dnxpZ/gRuzPsQjrmKclc/wezV8rl+1cmL3vAmEi7Lx7tkkvxeSUy0NOAo9f5ZUJGxkDzDU36ofz8lh5uvz+0327ub+5uH27v382PwnZ8f3RNvzkR8InARSXL0wA4gQv7Zej8W7aXl9ZSJEalvg2k2KPiNKQZY7ctUOUmKoDEtgEZ87RgymUUckpl/SsAAP//TjbJeuAFAAA=
+          value: H4sIAAAAAAAC/4SQQWr0MAyF9zmFdgM/ZMjA343v0DMYjUfxCGLLlZQu5vTFTltKGegqefqkJz9d0ShywUwWJoAu+xegYqEAopy5zu//z8t31RqmjhpVu/PqAzjmMKan687bLaqId6NhHc2VsMTe9MNcaaM+8bdxlg1rni/nyzJ9PXaGVaV8LgVwCeBkPg8+KZnsmo5Up3+nY+/Ghd2Of4DU9gAvy/LKo6D0tpP9wpdOHXO0RolXTugstbc8O9DTFI9HzFRJ0ekWCzne0HEcW7Gme4CC5qQTgGgOYHsbQqn1SCrS9UcAAAD//wzMfwOoAQAA
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -610,7 +609,7 @@
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-trooper-master-changed-periodic
     creationTimestamp: null
     labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: periodic-ci-super-trooper-master-changed-periodic
       created-by-prow: "true"
@@ -804,7 +803,7 @@
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-images
     creationTimestamp: null
     labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: images
       created-by-prow: "true"
@@ -1321,7 +1320,7 @@
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage
     creationTimestamp: null
     labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: multistage
       created-by-prow: "true"
@@ -1425,7 +1424,7 @@
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage5
     creationTimestamp: null
     labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: multistage5
       created-by-prow: "true"
@@ -1529,7 +1528,7 @@
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-unit
     creationTimestamp: null
     labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: unit
       created-by-prow: "true"

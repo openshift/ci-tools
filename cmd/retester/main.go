@@ -15,6 +15,7 @@ import (
 	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/metrics"
+	"k8s.io/test-infra/prow/pjutil"
 
 	"github.com/openshift/ci-tools/pkg/retester"
 )
@@ -92,7 +93,7 @@ func main() {
 	if err := o.Validate(); err != nil {
 		logrus.WithError(err).Fatal("failed to validate options")
 	}
-
+	health := pjutil.NewHealth()
 	gc, err := o.github.GitHubClient(o.dryRun)
 	if err != nil {
 		logrus.WithError(err).Fatal("Error creating github client")
@@ -136,6 +137,7 @@ func main() {
 	}
 
 	interrupts.Tick(func() { execute(c) }, func() time.Duration { return o.interval })
+	health.ServeReady()
 	interrupts.WaitForGracefulShutdown()
 }
 

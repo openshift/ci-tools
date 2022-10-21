@@ -269,7 +269,7 @@ func TestValidateCandidate(t *testing.T) {
 				Version:      "4.4",
 			},
 			output: []error{
-				errors.New("root.stream: must be one of , okd"),
+				errors.New("root.stream: must be one of , okd, okd-scos"),
 			},
 		},
 		{

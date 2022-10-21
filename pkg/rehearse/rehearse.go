@@ -89,7 +89,7 @@ func RehearsalCandidateFromJobSpec(jobSpec *pjdwapi.JobSpec) RehearsalCandidate 
 	}
 }
 
-func RehearsalCandidateFromPullRequest(pullRequest github.PullRequest, baseSHA string) RehearsalCandidate {
+func RehearsalCandidateFromPullRequest(pullRequest *github.PullRequest, baseSHA string) RehearsalCandidate {
 	repo := pullRequest.Head.Repo
 	return RehearsalCandidate{
 		org:  pullRequest.Base.Repo.Owner.Login,
@@ -121,7 +121,6 @@ func (rc RehearsalCandidate) createRefs() *pjapi.Refs {
 				Author: rc.author,
 				SHA:    rc.head.sha,
 				Title:  rc.title,
-				Ref:    rc.head.ref,
 				Link:   rc.link,
 			},
 		},

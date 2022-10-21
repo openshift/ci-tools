@@ -332,6 +332,7 @@ const (
 	ReleaseStreamCI      ReleaseStream = "ci"
 	ReleaseStreamNightly ReleaseStream = "nightly"
 	ReleaseStreamOKD     ReleaseStream = "okd"
+	ReleaseStreamOKDScos ReleaseStream = "okd-scos"
 )
 
 // Release describes a generally available release payload

@@ -115,25 +115,26 @@ func (s *server) handlePullRequestCreation(l *logrus.Entry, event github.PullReq
 
 		var comment string
 		if s.preCheck {
-			repoClient, err := s.gc.ClientFor(org, repo)
+			repoClient, err := s.getRepoClient(org, repo)
 			if err != nil {
-				logger.WithError(err).Error("couldn't get git client")
+				logger.WithError(err).Error("couldn't create repo client")
 			}
-
 			defer func() {
 				if err := repoClient.Clean(); err != nil {
 					logrus.WithError(err).Error("couldn't clean temporary repo folder")
 				}
 			}()
 
-			if err := repoClient.CheckoutPullRequest(number); err != nil {
-				logger.WithError(err).Error("couldn't checkout pull request")
+			candidate, err := s.prepareCandidate(repoClient, &event.PullRequest)
+			if err != nil {
+				if err := s.ghc.CreateComment(org, repo, number, fmt.Sprintf("pj-rehearse couldn't prepare a candidate for rehearsal; rehearsals will not be run. This could be due to a branch that needs to be rebased.")); err != nil {
+					logger.WithError(err).Error("failed to create comment")
+				}
+				return
 			}
 
-			candidate, err := s.getCandidate(event.PullRequest)
-			if err != nil {
-				logger.WithError(err).Error("couldn't get candidate from pull request")
-			}
+			//TODO(DPTP-2888): this is the point at which we can use repoClient.RevParse() to see if we even need to load the configs at all, and also prune the set of loaded configs to only the changed files
+
 			presubmits, periodics, _, _, err := s.rehearsalConfig.DetermineAffectedJobs(candidate, repoClient.Directory(), logger)
 			if err != nil {
 				logger.WithError(err).Error("couldn't determine affected jobs")
@@ -199,16 +200,6 @@ func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEv
 			}
 		}
 
-		repoClient, err := s.gc.ClientFor(org, repo)
-		if err != nil {
-			logger.WithError(err).Error("couldn't get git client")
-		}
-		defer func() {
-			if err := repoClient.Clean(); err != nil {
-				logrus.WithError(err).Error("couldn't clean temporary repo folder")
-			}
-		}()
-
 		rehearsalsTriggered := false
 		for _, command := range pjRehearseComments {
 			switch command {
@@ -222,15 +213,27 @@ func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEv
 					continue
 				}
 				rc := s.rehearsalConfig
-				if err := repoClient.CheckoutPullRequest(pullRequest.Number); err != nil {
-					logger.WithError(err).Error("couldn't checkout pull request")
+				repoClient, err := s.getRepoClient(org, repo)
+				if err != nil {
+					logger.WithError(err).Error("couldn't create repo client")
+				}
+				defer func() {
+					if err := repoClient.Clean(); err != nil {
+						logrus.WithError(err).Error("couldn't clean temporary repo folder")
+					}
+				}()
+
+				candidate, err := s.prepareCandidate(repoClient, pullRequest)
+				if err != nil {
+					if err := s.ghc.CreateComment(org, repo, number, fmt.Sprintf("pj-rehearse couldn't prepare a candidate for rehearsal; rehearsals will not be run. This could be due to a branch that needs to be rebased.")); err != nil {
+						logger.WithError(err).Error("failed to create comment")
+					}
+					continue
 				}
 
+				//TODO(DPTP-2888): this is the point at which we can use repoClient.RevParse() to see if we even need to load the configs at all, and also prune the set of loaded configs to only the changed files
+
 				candidatePath := repoClient.Directory()
-				candidate, err := s.getCandidate(*pullRequest)
-				if err != nil {
-					logger.WithError(err).Error("couldn't get candidate from pull request")
-				}
 				presubmits, periodics, changedTemplates, changedClusterProfiles, err := rc.DetermineAffectedJobs(candidate, candidatePath, logger)
 				if err != nil {
 					logger.WithError(err).Error("couldn't determine affected jobs")
@@ -281,14 +284,40 @@ func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEv
 	}
 }
 
-func (s *server) getCandidate(pullRequest github.PullRequest) (rehearse.RehearsalCandidate, error) {
-	// We can't just use the base SHA from the pullRequest as there may be changes to the branches head in the meantime
+func (s *server) getRepoClient(org, repo string) (git.RepoClient, error) {
+	repoClient, err := s.gc.ClientFor(org, repo)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't get git client: %w", err)
+	}
+	if err := repoClient.Config("user.name", "prow"); err != nil {
+		return nil, fmt.Errorf("couldn't set user.name in git client: %w", err)
+	}
+	if err := repoClient.Config("user.email", "prow@localhost"); err != nil {
+		return nil, fmt.Errorf("couldn't set user.email in git client: %w", err)
+	}
+
+	return repoClient, nil
+}
+
+func (s *server) prepareCandidate(repoClient git.RepoClient, pullRequest *github.PullRequest) (rehearse.RehearsalCandidate, error) {
+	if err := repoClient.CheckoutPullRequest(pullRequest.Number); err != nil {
+		return rehearse.RehearsalCandidate{}, fmt.Errorf("couldn't checkout pull request: %w", err)
+	}
+
 	repo := pullRequest.Base.Repo
 	baseSHA, err := s.ghc.GetRef(repo.Owner.Login, repo.Name, fmt.Sprintf("heads/%s", pullRequest.Base.Ref))
 	if err != nil {
-		return rehearse.RehearsalCandidate{}, err
+		return rehearse.RehearsalCandidate{}, fmt.Errorf("couldn't get ref: %w", err)
 	}
-	return rehearse.RehearsalCandidateFromPullRequest(pullRequest, baseSHA), nil
+	candidate := rehearse.RehearsalCandidateFromPullRequest(pullRequest, baseSHA)
+
+	// In order to determine *only* the affected jobs from the changes in the PR, we need to rebase onto master
+	baseRef := pullRequest.Base.Ref
+	if _, err := repoClient.MergeWithStrategy(baseRef, "rebase"); err != nil {
+		return rehearse.RehearsalCandidate{}, fmt.Errorf("couldn't rebase repo client: %w", err)
+	}
+
+	return candidate, nil
 }
 
 func (s *server) getJobsTableLines(presubmits config.Presubmits, periodics config.Periodics, user string) []string {

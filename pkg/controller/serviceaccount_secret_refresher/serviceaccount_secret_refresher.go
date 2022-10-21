@@ -135,6 +135,11 @@ func (r *reconciler) reconcile(ctx context.Context, l *logrus.Entry, req reconci
 		if err != nil {
 			return nil, fmt.Errorf("failed to check if secret should be kept: %w", err)
 		}
+		if secret.Type == corev1.SecretTypeServiceAccountToken {
+			// This controller does not rotate token secrets
+			tokenSecretsToKeep = append(tokenSecretsToKeep, tokenSecretRef)
+			continue
+		}
 		if deleteObjectIn := objectExpiredIn(l, secret, thirtyDays); deleteObjectIn != 0 {
 			tokenSecretsToKeep = append(tokenSecretsToKeep, tokenSecretRef)
 			if requeueAfter == 0 || deleteObjectIn < requeueAfter {
@@ -145,10 +150,10 @@ func (r *reconciler) reconcile(ctx context.Context, l *logrus.Entry, req reconci
 		l.Info("Not keeping token secret")
 	}
 
-	dockerSecretDiffCount, tokenSecretDiffCount := len(imagePullSecretsToKeep)-len(sa.ImagePullSecrets), len(tokenSecretsToKeep)-len(sa.Secrets)
+	dockerSecretDiffCount := len(imagePullSecretsToKeep) - len(sa.ImagePullSecrets)
 
-	if dockerSecretDiffCount != 0 || tokenSecretDiffCount != 0 {
-		l.WithField("docker_secret_diff_count", dockerSecretDiffCount).WithField("token_secret_diff_count", tokenSecretDiffCount).Info("Updating ServiceAccount")
+	if dockerSecretDiffCount != 0 {
+		l.WithField("docker_secret_diff_count", dockerSecretDiffCount).Info("Updating ServiceAccount")
 		sa.ImagePullSecrets = imagePullSecretsToKeep
 		sa.Secrets = tokenSecretsToKeep
 		if err := r.client.Update(ctx, sa); err != nil {
@@ -160,10 +165,10 @@ func (r *reconciler) reconcile(ctx context.Context, l *logrus.Entry, req reconci
 		if err := r.client.Get(ctx, req.NamespacedName, sa); err != nil {
 			return false, err
 		}
-		// Secrets includes the pull secret, hence the >= 2 instead of >=1
-		return len(sa.ImagePullSecrets) >= 1 && len(sa.Secrets) >= 2, nil
+		// Secrets include the pull secrets
+		return len(sa.ImagePullSecrets) >= 1 && len(sa.Secrets) >= 1, nil
 	}); err != nil {
-		return nil, fmt.Errorf("failed to wait for ServiceAccount to have a pull and a tokenSecret: %w", err)
+		return nil, fmt.Errorf("failed to wait for ServiceAccount to have a pull secret: %w", err)
 	}
 
 	if !r.removeOldSecrets {

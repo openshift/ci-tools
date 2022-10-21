@@ -46,9 +46,9 @@ func TestReconcile(t *testing.T) {
 			},
 			removeOldSecrets:           true,
 			expectedNumImagePullSecret: 1,
-			expectedNumTokenSecret:     1,
+			expectedNumTokenSecret:     0,
 			expectedPullSecretName:     "new-pull-secret",
-			expectedTokenSecretName:    "new-token-secret",
+			expectedTokenSecretName:    "token-secret",
 		},
 		{
 			name: "secrets are rotated but not old enough to be cleaned",
@@ -65,9 +65,9 @@ func TestReconcile(t *testing.T) {
 			},
 			removeOldSecrets:           true,
 			expectedNumImagePullSecret: 2,
-			expectedNumTokenSecret:     2,
+			expectedNumTokenSecret:     1,
 			expectedPullSecretName:     "new-pull-secret",
-			expectedTokenSecretName:    "new-token-secret",
+			expectedTokenSecretName:    "token-secret",
 			expectedRequeAfterHours:    23,
 		},
 		{
@@ -79,9 +79,9 @@ func TestReconcile(t *testing.T) {
 			},
 			removeOldSecrets:           false,
 			expectedNumImagePullSecret: 2,
-			expectedNumTokenSecret:     2,
+			expectedNumTokenSecret:     1,
 			expectedPullSecretName:     "new-pull-secret",
-			expectedTokenSecretName:    "new-token-secret",
+			expectedTokenSecretName:    "token-secret",
 		},
 		{
 			name: "secrets are up to date, reconcileAfter is returned",
@@ -134,9 +134,9 @@ func TestReconcile(t *testing.T) {
 			},
 			removeOldSecrets:           true,
 			expectedNumImagePullSecret: 1,
-			expectedNumTokenSecret:     1,
+			expectedNumTokenSecret:     0,
 			expectedPullSecretName:     "new-pull-secret",
-			expectedTokenSecretName:    "new-token-secret",
+			expectedTokenSecretName:    "token-secret",
 		},
 	}
 

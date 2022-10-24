@@ -7,7 +7,6 @@ function cleanup() {
 }
 trap "cleanup" EXIT
 
-registry="${OS_ROOT}/test/multistage-registry/"
 suite_dir="${OS_ROOT}/test/integration/pj-rehearse/"
 workdir="${BASETMPDIR}/pj-rehearse"
 repo="${workdir}/release"
@@ -26,13 +25,11 @@ git init --quiet
 git config --local user.name test
 git config --local user.email test
 cp -R "${suite_dir}/master"/* .
-cp -R "${registry}/registry"/ ./ci-operator/step-registry
 git add ci-operator core-services cluster
 git commit -m "Master version of openshift/release" --quiet
 base_sha="$(git rev-parse HEAD)"
-cp -R "${suite_dir}/candidate"/* .
 rm -rf ./ci-operator/step-registry
-cp -R "${registry}/registry2"/ ./ci-operator/step-registry
+cp -R "${suite_dir}/candidate"/* .
 git add ci-operator core-services cluster
 git commit -m "Candidate version of openshift/release" --quiet
 candidate_sha="$(git rev-parse HEAD)"

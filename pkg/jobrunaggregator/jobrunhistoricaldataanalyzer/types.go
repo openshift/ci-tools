@@ -16,6 +16,7 @@ type parsedJobData struct {
 	PrevP99                            time.Duration `json:"-"`
 	DurationP95                        time.Duration `json:"-"`
 	DurationP99                        time.Duration `json:"-"`
+	JobResults                         int           `json:"-"`
 	jobrunaggregatorapi.HistoricalData `json:",inline"`
 }
 

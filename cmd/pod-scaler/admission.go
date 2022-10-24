@@ -273,30 +273,22 @@ func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, 
 }
 
 func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, reporter results.PodScalerReporter, logger *logrus.Entry) {
-	for i := range pod.Spec.InitContainers {
-		meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, pod.Spec.InitContainers[i].Name)
-		resources, recommendationExists := server.recommendedRequestFor(meta)
-		if recommendationExists {
-			logger.Debugf("recommendation exists for: %s", pod.Spec.InitContainers[i].Name)
-			useOursIfLarger(&resources, &pod.Spec.InitContainers[i].Resources, determineName(pod.Labels, pod.Name, pod.Spec.InitContainers[i].Name), reporter, logger)
-			if mutateResourceLimits {
-				reconcileLimits(&pod.Spec.InitContainers[i].Resources)
+	mutateResources := func(containers []corev1.Container) {
+		for i := range containers {
+			meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, containers[i].Name)
+			resources, recommendationExists := server.recommendedRequestFor(meta)
+			if recommendationExists {
+				logger.Debugf("recommendation exists for: %s", containers[i].Name)
+				useOursIfLarger(&resources, &containers[i].Resources, determineName(pod.Labels, pod.Name, containers[i].Name), reporter, logger)
+				if mutateResourceLimits {
+					reconcileLimits(&containers[i].Resources)
+				}
 			}
+			preventUnschedulable(&containers[i].Resources, cpuCap, memoryCap, logger)
 		}
-		preventUnschedulable(&pod.Spec.InitContainers[i].Resources, cpuCap, memoryCap, logger)
 	}
-	for i := range pod.Spec.Containers {
-		meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, pod.Spec.Containers[i].Name)
-		resources, recommendationExists := server.recommendedRequestFor(meta)
-		if recommendationExists {
-			logger.Debugf("recommendation exists for: %s", pod.Spec.Containers[i].Name)
-			useOursIfLarger(&resources, &pod.Spec.Containers[i].Resources, determineName(pod.Labels, pod.Name, pod.Spec.Containers[i].Name), reporter, logger)
-			if mutateResourceLimits {
-				reconcileLimits(&pod.Spec.Containers[i].Resources)
-			}
-		}
-		preventUnschedulable(&pod.Spec.Containers[i].Resources, cpuCap, memoryCap, logger)
-	}
+	mutateResources(pod.Spec.InitContainers)
+	mutateResources(pod.Spec.Containers)
 }
 
 // determineName returns the string that will be used in Prometheus metrics to identify the workload

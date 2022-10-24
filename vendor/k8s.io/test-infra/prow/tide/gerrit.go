@@ -31,8 +31,9 @@ import (
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/flagutil"
+	gerritadaptor "k8s.io/test-infra/prow/gerrit/adapter"
 	"k8s.io/test-infra/prow/gerrit/client"
+	gerritsource "k8s.io/test-infra/prow/gerrit/source"
 	"k8s.io/test-infra/prow/git/types"
 	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/io"
@@ -54,19 +55,37 @@ const (
 	// ref:
 	// https://gerrit-review.googlesource.com/Documentation/user-search.html#_search_operators.
 	// Also good to know: `(repo:repo-A OR repo:repo-B)`
-	gerritDefaultQueryParam = "status:open+-is:wip+is:submittable+label:" + tideEnablementLabel
+	gerritDefaultQueryParam = "status:open+-is:wip+is:submittable"
 )
+
+func gerritQueryParam(optInByDefault bool) string {
+	// Whenever a the `Prow-Auto-Submit` label is voted with -1 by anyone, the
+	// PR has to be excluded from Tide.
+	enablementLabelQueryParam := "+-label:" + tideEnablementLabel + "=-1"
+	// By default require `Prow-Auto-Submit` label.
+	// If the repo enabled optInByDefault, `Prow-Auto-Submit` is no longer
+	// required. But users can still temporarily opting out of merge automation
+	// by voting -1 on this label.
+	if !optInByDefault {
+		// We want `-label:Prow-Auto-Submit=-1 label:Prow-Auto-Submit`
+		enablementLabelQueryParam += "+label:" + tideEnablementLabel
+	}
+	return gerritDefaultQueryParam + enablementLabelQueryParam
+}
 
 type gerritClient interface {
 	QueryChangesForProject(instance, project string, lastUpdate time.Time, rateLimit int, addtionalFilters ...string) ([]gerrit.ChangeInfo, error)
-	GetChange(instance, id string) (*gerrit.ChangeInfo, error)
+	GetChange(instance, id string, addtionalFeilds ...string) (*gerrit.ChangeInfo, error)
 	GetBranchRevision(instance, project, branch string) (string, error)
+	SubmitChange(instance, id string, wait bool) (*gerrit.ChangeInfo, error)
+	SetReview(instance, id, revision, message string, _ map[string]string) error
 }
 
 // NewController makes a Controller out of the given clients.
 func NewGerritController(
 	mgr manager,
 	cfgAgent *config.Agent,
+	gc git.ClientFactory,
 	maxRecordsPerPool int,
 	opener io.Opener,
 	historyURI,
@@ -90,12 +109,12 @@ func NewGerritController(
 		newPoolPending:   make(chan bool),
 	}
 
-	cacheGetter, err := config.NewInRepoConfigCacheGetter(cfgAgent, configOptions.InRepoConfigCacheSize, configOptions.InRepoConfigCacheCopies, configOptions.InRepoConfigCacheDirBase, flagutil.GitHubOptions{}, cookieFilePath, false)
+	cacheGetter, err := config.NewInRepoConfigCacheHandler(configOptions.InRepoConfigCacheSize, cfgAgent, gc, configOptions.InRepoConfigCacheCopies)
 	if err != nil {
 		return nil, fmt.Errorf("failed creating inrepoconfig cache getter: %v", err)
 	}
-	provider := newGerritProvider(logger, cfgAgent.Config, nil, cacheGetter, cookieFilePath, "")
-	syncCtrl, err := newSyncController(ctx, logger, mgr, provider, cfgAgent.Config, nil, hist, false, statusUpdate)
+	provider := newGerritProvider(logger, cfgAgent.Config, mgr.GetClient(), cacheGetter, cookieFilePath, "")
+	syncCtrl, err := newSyncController(ctx, logger, mgr, provider, cfgAgent.Config, gc, hist, false, statusUpdate)
 	if err != nil {
 		return nil, err
 	}
@@ -114,9 +133,9 @@ type GerritProvider struct {
 	gc          gerritClient
 	pjclientset ctrlruntimeclient.Client
 
-	cookiefilePath          string
-	inRepoConfigCacheGetter *config.InRepoConfigCacheGetter
-	tokenPathOverride       string
+	cookiefilePath           string
+	inRepoConfigCacheHandler *config.InRepoConfigCacheHandler
+	tokenPathOverride        string
 
 	logger *logrus.Entry
 }
@@ -125,7 +144,7 @@ func newGerritProvider(
 	logger *logrus.Entry,
 	cfg config.Getter,
 	pjclientset ctrlruntimeclient.Client,
-	inRepoConfigCacheGetter *config.InRepoConfigCacheGetter,
+	inRepoConfigCacheHandler *config.InRepoConfigCacheHandler,
 	cookiefilePath string,
 	tokenPathOverride string,
 ) *GerritProvider {
@@ -139,13 +158,13 @@ func newGerritProvider(
 	gerritClient.ApplyGlobalConfig(orgRepoConfigGetter, nil, cookiefilePath, tokenPathOverride, nil)
 
 	return &GerritProvider{
-		logger:                  logger,
-		cfg:                     cfg,
-		pjclientset:             pjclientset,
-		gc:                      gerritClient,
-		inRepoConfigCacheGetter: inRepoConfigCacheGetter,
-		cookiefilePath:          cookiefilePath,
-		tokenPathOverride:       tokenPathOverride,
+		logger:                   logger,
+		cfg:                      cfg,
+		pjclientset:              pjclientset,
+		gc:                       gerritClient,
+		inRepoConfigCacheHandler: inRepoConfigCacheHandler,
+		cookiefilePath:           cookiefilePath,
+		tokenPathOverride:        tokenPathOverride,
 	}
 }
 
@@ -168,17 +187,21 @@ func (p *GerritProvider) Query() (map[string]CodeReviewCommon, error) {
 	// TODO(chaodai): parallize this to boot the performance.
 	for instance, projs := range p.cfg().Tide.Gerrit.Queries.AllRepos() {
 		instance, projs := instance, projs
-		for projName := range projs {
+		for projName, projFilter := range projs {
 			wg.Add(1)
-			go func(projName string) {
-				changes, err := p.gc.QueryChangesForProject(instance, projName, lastUpdate, p.cfg().Gerrit.RateLimit, gerritDefaultQueryParam)
+			var optInByDefault bool
+			if projFilter != nil {
+				optInByDefault = projFilter.OptInByDefault
+			}
+			go func(projName string, optInByDefault bool) {
+				changes, err := p.gc.QueryChangesForProject(instance, projName, lastUpdate, p.cfg().Gerrit.RateLimit, gerritQueryParam(optInByDefault))
 				if err != nil {
 					p.logger.WithFields(logrus.Fields{"instance": instance, "project": projName}).WithError(err).Warn("Querying gerrit project for changes.")
 					errChan <- fmt.Errorf("failed querying project '%s' from instance '%s': %v", projName, instance, err)
 					return
 				}
 				resChan <- changesFromProject{instance: instance, project: projName, changes: changes}
-			}(projName)
+			}(projName, optInByDefault)
 		}
 	}
 
@@ -270,14 +293,39 @@ func (p *GerritProvider) headContexts(crc *CodeReviewCommon) ([]Context, error) 
 	return res, nil
 }
 
-func (p *GerritProvider) mergePRs(sp subpool, prs []CodeReviewCommon, dontUpdateStatus *threadSafePRSet) error {
-	p.logger.Info("The merge function hasn't been implemented yet, just logging for now.")
-	return nil
+func (p *GerritProvider) mergePRs(sp subpool, prs []CodeReviewCommon, _ *threadSafePRSet) error {
+	logger := p.logger.WithFields(logrus.Fields{"repo": sp.repo, "org": sp.org, "branch": sp.branch, "prs": len(prs)})
+	logger.Info("Merging subpool.")
+
+	isBatch := len(prs) > 1
+
+	var errs []error
+	for _, pr := range prs {
+		logger := logger.WithField("id", pr.Gerrit.ID)
+		logger.Info("Submitting change.")
+		_, err := p.gc.SubmitChange(sp.org, pr.Gerrit.ID, true)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed submitting change '%s' from org '%s': %v", sp.org, pr.Gerrit.ID, err))
+		}
+		// Comment on the PR if it's a batch.
+		// In case of flaky tests, Tide triggered prowjobs for highest priority
+		// PR might fail even when batch prowjobs passed. And in this case Crier
+		// would report this failure on the PR before Tide merges the PR, this
+		// might cause confusing to users so comment on the PR explaining that
+		// the merge was based on batch testing.
+		if isBatch && err != nil {
+			msg := fmt.Sprintf("The Tide batch containing current change passed all required prowjobs, so this submission was performed by Tide. See %s/tide-history for record", p.cfg().Gerrit.DeckURL)
+			if err := p.gc.SetReview(sp.org, pr.Gerrit.ID, pr.Gerrit.CurrentRevision, msg, nil); err != nil {
+				logger.WithError(err).Warn("Failed commenting after batch submission.")
+			}
+		}
+	}
+	return utilerrors.NewAggregate(errs)
 }
 
 // GetTideContextPolicy gets context policy defined by users + requirements from
 // prow jobs.
-func (p *GerritProvider) GetTideContextPolicy(gitClient git.ClientFactory, org, repo, branch, cloneURI string, baseSHAGetter config.RefGetter, crc *CodeReviewCommon) (contextChecker, error) {
+func (p *GerritProvider) GetTideContextPolicy(org, repo, branch string, baseSHAGetter config.RefGetter, crc *CodeReviewCommon) (contextChecker, error) {
 	pr := crc.Gerrit
 	if pr == nil {
 		return nil, errors.New("programmer error: crc.Gerrit cannot be nil for GerritProvider")
@@ -290,21 +338,11 @@ func (p *GerritProvider) GetTideContextPolicy(gitClient git.ClientFactory, org, 
 	headSHAGetter := func() (string, error) {
 		return crc.HeadRefOID, nil
 	}
-	orgRepo := org + "/" + repo
+	cloneURI := gerritsource.CloneURIFromOrgRepo(org, repo)
 	// Get presubmits from Config alone.
-	presubmits := p.cfg().GetPresubmitsStatic(orgRepo)
-	// If InRepoConfigCache is provided, then it means that we also want to fetch
-	// from an inrepoconfig.
-	if p.inRepoConfigCacheGetter != nil {
-		handler, err := p.inRepoConfigCacheGetter.GetCache(cloneURI, org)
-		if err != nil {
-			return nil, fmt.Errorf("faled to get inrepoconfig cache: %v", err)
-		}
-		presubmitsFromCache, err := handler.GetPresubmits(orgRepo, baseSHAGetter, headSHAGetter)
-		if err != nil {
-			return nil, fmt.Errorf("faled to get presubmits from cache: %v", err)
-		}
-		presubmits = append(presubmits, presubmitsFromCache...)
+	presubmits, err := p.GetPresubmits(cloneURI, baseSHAGetter, headSHAGetter)
+	if err != nil {
+		return nil, fmt.Errorf("failed getting presubmits: %v", err)
 	}
 
 	requireLabels := sets.NewString()
@@ -320,20 +358,28 @@ func (p *GerritProvider) GetTideContextPolicy(gitClient git.ClientFactory, org, 
 			continue
 		}
 
+		// jobs that produce required contexts and will
+		// always run should be required at all times.
+		// jobs with `RunBeforeMerge` are also required.
 		var isJobRequired bool
-		if val, ok := pj.Labels[kube.GerritReportLabel]; ok && requireLabels.Has(val) {
+		// jobs that trigger conditionally are required if present.
+		var isJobRequiredWhenPresent bool
+
+		if pj.RunBeforeMerge {
 			isJobRequired = true
+		}
+		if val, ok := pj.Labels[kube.GerritReportLabel]; ok && requireLabels.Has(val) {
+			if pj.TriggersConditionally() {
+				isJobRequiredWhenPresent = true
+			} else {
+				isJobRequired = true
+			}
 		}
 
 		if isJobRequired {
-			if pj.TriggersConditionally() {
-				// jobs that trigger conditionally are required if present.
-				requiredIfPresent.Insert(pj.Context)
-			} else {
-				// jobs that produce required contexts and will
-				// always run should be required at all times
-				required.Insert(pj.Context)
-			}
+			required.Insert(pj.Context)
+		} else if isJobRequiredWhenPresent {
+			requiredIfPresent.Insert(pj.Context)
 		} else {
 			optional.Insert(pj.Context)
 		}
@@ -379,14 +425,50 @@ func (p *GerritProvider) prMergeMethod(crc *CodeReviewCommon) (types.PullRequest
 	return res, nil
 }
 
+// GetPresubmits gets presubmit jobs for a PR.
+//
+// (TODO:chaodaiG): deduplicate this with GitHub, which means inrepoconfig
+// processing all use cache client.
+func (p *GerritProvider) GetPresubmits(identifier string, baseSHAGetter config.RefGetter, headSHAGetters ...config.RefGetter) ([]config.Presubmit, error) {
+	// Get presubmits from Config alone.
+	presubmits := p.cfg().GetPresubmitsStatic(identifier)
+	// If InRepoConfigCache is provided, then it means that we also want to fetch
+	// from an inrepoconfig.
+	if p.inRepoConfigCacheHandler != nil {
+		presubmitsFromCache, err := p.inRepoConfigCacheHandler.GetPresubmits(identifier, baseSHAGetter, headSHAGetters...)
+		if err != nil {
+			return nil, fmt.Errorf("faled to get presubmits from cache: %v", err)
+		}
+		presubmits = append(presubmits, presubmitsFromCache...)
+	}
+	return presubmits, nil
+}
+
 func (p *GerritProvider) GetChangedFiles(org, repo string, number int) ([]string, error) {
-	change, err := p.gc.GetChange(org, strconv.Itoa(number))
+	// "CURRENT_FILES" lists all changed files from current revision, which is
+	// what we want, "CURRENT_REVISION" is required for "CURRENT_FILES"
+	// according to
+	// https://gerrit-review.googlesource.com/Documentation/rest-api-changes.html#list-changes.
+	change, err := p.gc.GetChange(org, strconv.Itoa(number), "CURRENT_FILES", "CURRENT_REVISION")
 	if err != nil {
 		return nil, fmt.Errorf("failed get change: %v", err)
 	}
-	var files []string
-	for f := range change.Revisions[change.CurrentRevision].Files {
-		files = append(files, f)
+	return client.ChangedFilesProvider(change)()
+}
+
+func (p *GerritProvider) refsForJob(sp subpool, prs []CodeReviewCommon) (prowapi.Refs, error) {
+	var changes []client.ChangeInfo
+	for _, pr := range prs {
+		changes = append(changes, *pr.Gerrit)
 	}
-	return files, nil
+	return gerritadaptor.CreateRefs(sp.org, sp.repo, sp.branch, sp.sha, changes...)
+}
+
+func (p *GerritProvider) labelsAndAnnotations(instance string, jobLabels, jobAnnotations map[string]string, prs ...CodeReviewCommon) (labels, annotations map[string]string) {
+	var changes []client.ChangeInfo
+	for _, pr := range prs {
+		changes = append(changes, *pr.Gerrit)
+	}
+	labels, annotations = gerritadaptor.LabelsAndAnnotations(instance, jobLabels, jobAnnotations, changes...)
+	return
 }

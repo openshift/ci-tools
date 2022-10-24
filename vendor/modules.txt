@@ -1530,7 +1530,7 @@ k8s.io/kube-openapi/pkg/validation/spec
 # k8s.io/kubernetes v1.14.7
 ## explicit
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20220913010905-3bc71e6c7a20
+# k8s.io/test-infra v0.0.0-20221024114632-d0c013ee2d07
 ## explicit; go 1.18
 k8s.io/test-infra/ghproxy/ghcache
 k8s.io/test-infra/ghproxy/ghmetrics
@@ -1550,6 +1550,7 @@ k8s.io/test-infra/prow/config
 k8s.io/test-infra/prow/config/org
 k8s.io/test-infra/prow/config/secret
 k8s.io/test-infra/prow/crier/reporters/criercommonlib
+k8s.io/test-infra/prow/crier/reporters/gerrit
 k8s.io/test-infra/prow/crier/reporters/github
 k8s.io/test-infra/prow/deck/jobs
 k8s.io/test-infra/prow/entrypoint
@@ -1558,7 +1559,9 @@ k8s.io/test-infra/prow/flagutil/config
 k8s.io/test-infra/prow/flagutil/plugins
 k8s.io/test-infra/prow/gcsupload
 k8s.io/test-infra/prow/genfiles
+k8s.io/test-infra/prow/gerrit/adapter
 k8s.io/test-infra/prow/gerrit/client
+k8s.io/test-infra/prow/gerrit/source
 k8s.io/test-infra/prow/git
 k8s.io/test-infra/prow/git/localgit
 k8s.io/test-infra/prow/git/types

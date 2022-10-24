@@ -22,8 +22,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -34,6 +35,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/version"
 )
@@ -75,45 +77,6 @@ func init() {
 	prometheus.MustRegister(clientMetrics.queryResults)
 }
 
-// ProjectsFlag is the flag type for gerrit projects when initializing a gerrit client
-type ProjectsFlag map[string][]string
-
-func (p ProjectsFlag) String() string {
-	var hosts []string
-	for host, repos := range p {
-		hosts = append(hosts, host+"="+strings.Join(repos, ","))
-	}
-	return strings.Join(hosts, " ")
-}
-
-// Set populates ProjectsFlag upon flag.Parse()
-func (p ProjectsFlag) Set(value string) error {
-	parts := strings.SplitN(value, "=", 2)
-	if len(parts) != 2 {
-		return fmt.Errorf("%s not in the form of host=repo-a,repo-b,etc", value)
-	}
-	host := parts[0]
-	if _, ok := p[host]; ok {
-		return fmt.Errorf("duplicate host: %s", host)
-	}
-	repos := strings.Split(parts[1], ",")
-	p[host] = repos
-	return nil
-}
-
-// ProjectsFlagToConfig converts Gerrit project configured as command line args
-// to prow config struct for backward compatilibity
-func ProjectsFlagToConfig(hostProjects ProjectsFlag) map[string]map[string]*config.GerritQueryFilter {
-	res := make(map[string]map[string]*config.GerritQueryFilter)
-	for host, projects := range hostProjects {
-		res[host] = make(map[string]*config.GerritQueryFilter)
-		for _, project := range projects {
-			res[host][project] = nil
-		}
-	}
-	return res
-}
-
 type gerritAuthentication interface {
 	SetCookieAuth(name, value string)
 }
@@ -128,6 +91,8 @@ type gerritChange interface {
 	SetReview(changeID, revisionID string, input *gerrit.ReviewInput) (*gerrit.ReviewResult, *gerrit.Response, error)
 	ListChangeComments(changeID string) (*map[string][]gerrit.CommentInfo, *gerrit.Response, error)
 	GetChange(changeId string, opt *gerrit.ChangeOptions) (*ChangeInfo, *gerrit.Response, error)
+	SubmitChange(id string, opt *gerrit.SubmitInput) (*ChangeInfo, *gerrit.Response, error)
+	GetRelatedChanges(changeID string, revisionID string) (*gerrit.RelatedChangesInfo, *gerrit.Response, error)
 }
 
 type gerritProjects interface {
@@ -297,7 +262,7 @@ func (c *Client) Authenticate(cookiefilePath, tokenPath string) {
 		}
 		auth = func() (string, error) {
 			// TODO(fejta): listen for changes
-			raw, err := ioutil.ReadFile(cookiefilePath)
+			raw, err := os.ReadFile(cookiefilePath)
 			if err != nil {
 				return "", fmt.Errorf("read cookie: %w", err)
 			}
@@ -307,7 +272,7 @@ func (c *Client) Authenticate(cookiefilePath, tokenPath string) {
 		}
 	case tokenPath != "":
 		auth = func() (string, error) {
-			raw, err := ioutil.ReadFile(tokenPath)
+			raw, err := os.ReadFile(tokenPath)
 			if err != nil {
 				return "", fmt.Errorf("read token: %w", err)
 			}
@@ -427,7 +392,7 @@ func (c *Client) QueryChangesForProject(instance, project string, lastUpdate tim
 	return changes, nil
 }
 
-func (c *Client) GetChange(instance, id string) (*ChangeInfo, error) {
+func (c *Client) GetChange(instance, id string, addtionalFields ...string) (*ChangeInfo, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	h, ok := c.handlers[instance]
@@ -435,9 +400,25 @@ func (c *Client) GetChange(instance, id string) (*ChangeInfo, error) {
 		return nil, fmt.Errorf("not activated gerrit instance: %s", instance)
 	}
 
-	info, resp, err := h.changeService.GetChange(id, nil)
+	info, resp, err := h.changeService.GetChange(id, &gerrit.ChangeOptions{AdditionalFields: addtionalFields})
 	if err != nil {
 		return nil, fmt.Errorf("error getting current change: %w", responseBodyError(err, resp))
+	}
+
+	return info, nil
+}
+
+func (c *Client) SubmitChange(instance, id string, wait bool) (*ChangeInfo, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	h, ok := c.handlers[instance]
+	if !ok {
+		return nil, fmt.Errorf("not activated gerrit instance: %s", instance)
+	}
+
+	info, resp, err := h.changeService.SubmitChange(id, &gerrit.SubmitInput{WaitForMerge: wait})
+	if err != nil {
+		return nil, fmt.Errorf("error submitting current change: %w", responseBodyError(err, resp))
 	}
 
 	return info, nil
@@ -468,7 +449,7 @@ func responseBodyError(err error, resp *gerrit.Response) error {
 		return err
 	}
 	defer resp.Body.Close()
-	b, _ := ioutil.ReadAll(resp.Body) // Ignore the error since this is best effort.
+	b, _ := io.ReadAll(resp.Body) // Ignore the error since this is best effort.
 	return fmt.Errorf("%w, response body: %q", err, string(b))
 }
 
@@ -722,4 +703,43 @@ func (h *gerritInstanceHandler) QueryChangesForProject(log logrus.FieldLogger, p
 			}
 		}
 	}
+}
+
+// ChangedFilesProvider lists (in lexicographic order) the files changed as part of a Gerrit patchset.
+// It includes the original paths of renamed files.
+func ChangedFilesProvider(changeInfo *ChangeInfo) config.ChangedFilesProvider {
+	return func() ([]string, error) {
+		if changeInfo == nil {
+			return nil, fmt.Errorf("programmer error! The passed '*ChangeInfo' was nil which shouldn't ever happen")
+		}
+		changed := sets.NewString()
+		revision := changeInfo.Revisions[changeInfo.CurrentRevision]
+		for file, info := range revision.Files {
+			changed.Insert(file)
+			// If the file is renamed (R) or copied (C) the old file path is included.
+			// We care about the old path in the rename case, but not the copy case.
+			if info.Status == "R" {
+				changed.Insert(info.OldPath)
+			}
+		}
+		return changed.List(), nil
+	}
+}
+
+// HasRelatedChanges determines if the specified change is part of a chain.
+// In other words, it determines if this change depends on any other changes or if any other changes depend on this change.
+func (c *Client) HasRelatedChanges(instance, id, revision string) (bool, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	h, ok := c.handlers[instance]
+	if !ok {
+		return false, fmt.Errorf("not activated gerrit instance: %s", instance)
+	}
+
+	info, resp, err := h.changeService.GetRelatedChanges(id, revision)
+	if err != nil {
+		return false, fmt.Errorf("error getting related changes: %w", responseBodyError(err, resp))
+	}
+
+	return len(info.Changes) > 0, nil
 }

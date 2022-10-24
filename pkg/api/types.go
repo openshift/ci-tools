@@ -1417,7 +1417,6 @@ func (p ClusterProfile) LeaseType() string {
 		ClusterProfileAWSAtomic,
 		ClusterProfileAWSCentos,
 		ClusterProfileAWSCentos40,
-		ClusterProfileAWSCSPIQE,
 		ClusterProfileAWSGluster:
 		return "aws-quota-slice"
 	case ClusterProfileAWSArm64:
@@ -1430,6 +1429,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-c2s-qe-quota-slice"
 	case ClusterProfileAWSChinaQE:
 		return "aws-china-qe-quota-slice"
+	case ClusterProfileAWSCSPIQE:
+		return "aws-cspi-qe-quota-slice"
 	case ClusterProfileAWSGovCloudQE:
 		return "aws-usgov-qe-quota-slice"
 	case ClusterProfileAWSSC2SQE:

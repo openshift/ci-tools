@@ -47,24 +47,7 @@ type backoffCache struct {
 }
 
 var (
-	maxRetestsForShaAndBaseGauge = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "max_retests_for_sha_and_base",
-			Help: "Max retests for sha and base.",
-		})
-	maxRetestsForShaGauge = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "max_retests_for_sha",
-			Help: "Max retests for sha.",
-		})
-	retestBaseShaConter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "retests_for_base_sha",
-			Help: "Number of retests for base sha they have already happened.",
-		},
-		[]string{"pr"},
-	)
-	retestTotalConter = prometheus.NewCounterVec(
+	retestTotalCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "retest_total",
 			Help: "Number of retest command in total issued by the tool.",
@@ -75,8 +58,7 @@ var (
 
 func init() {
 	// Metrics have to be registered to be exposed:
-	prometheus.MustRegister(maxRetestsForShaAndBaseGauge, maxRetestsForShaGauge)
-	prometheus.MustRegister(retestBaseShaConter, retestTotalConter)
+	prometheus.MustRegister(retestTotalCounter)
 }
 
 func (b *backoffCache) loadFromDisk() error {
@@ -378,8 +360,6 @@ func (b *backoffCache) check(pr tide.PullRequest, baseSha string, policy Reteste
 
 	record.RetestsForBaseSha++
 	record.RetestsForPrSha++
-	retestBaseShaConter.With(prometheus.Labels{"pr": record.BaseSha}).Inc()
-	retestTotalConter.With(prometheus.Labels{"org": string(pr.Author.Login), "repo": string(pr.Repository.NameWithOwner)}).Inc()
 
 	return retestBackoffRetest, fmt.Sprintf("Remaining retests: %d against base HEAD %s and %d for PR HEAD %s in total", policy.MaxRetestsForShaAndBase-record.RetestsForBaseSha, record.BaseSha, policy.MaxRetestsForSha-record.RetestsForPrSha, record.PRSha)
 }
@@ -407,8 +387,6 @@ func (c *RetestController) retestOrBackoff(pr tide.PullRequest) error {
 	if validationErrors := validatePolicies(policy); len(validationErrors) != 0 {
 		return fmt.Errorf("failed to validate retester policy: %v", validationErrors)
 	}
-	maxRetestsForShaAndBaseGauge.Set(float64(policy.MaxRetestsForShaAndBase))
-	maxRetestsForShaGauge.Set(float64(policy.MaxRetestsForSha))
 
 	action, message := c.backoff.check(pr, baseSha, policy)
 	switch action {
@@ -417,6 +395,7 @@ func (c *RetestController) retestOrBackoff(pr tide.PullRequest) error {
 	case retestBackoffPause:
 		c.logger.Infof("%s: %s (%s)", prUrl(pr), "no comment", message)
 	case retestBackoffRetest:
+		retestTotalCounter.With(prometheus.Labels{"org": string(pr.Author.Login), "repo": string(pr.Repository.NameWithOwner)}).Inc()
 		c.createComment(pr, "/retest-required", message)
 	}
 	return nil

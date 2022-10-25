@@ -128,14 +128,14 @@ func formatTableOutput(data []parsedJobData, filter bool) string {
 		return data[i].TimeDiff > data[j].TimeDiff
 	})
 	var buffer bytes.Buffer
-	buffer.WriteString("| Name | Release | From | Arch | Network | Platform | Topology | Prev P99 | P99 | Time Increase | Percent Increase |\n")
-	buffer.WriteString("| ---- | ------- | ---- | ---- | ------- | -------- |--------- | -------- | --- | ------------- | ---------------- |\n")
+	buffer.WriteString("| Name | Release | From | Arch | Network | Platform | Topology | Prev P99 | P99 | Job Results | Time Increase | Percent Increase |\n")
+	buffer.WriteString("| ---- | ------- | ---- | ---- | ------- | -------- |--------- | -------- | --- | ----------- | ------------- | ---------------- |\n")
 	for _, d := range data {
 		if d.TimeDiff == 0 && filter {
 			continue
 		}
 		buffer.WriteString(
-			fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %.2f%% |\n",
+			fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %d| %s | %.2f%% |\n",
 				d.GetName(),
 				d.GetJobData().Release,
 				d.GetJobData().FromRelease,
@@ -145,6 +145,7 @@ func formatTableOutput(data []parsedJobData, filter bool) string {
 				d.GetJobData().Topology,
 				d.PrevP99,
 				d.DurationP99,
+				d.JobResults,
 				d.TimeDiff,
 				d.PercentTimeDiff,
 			),

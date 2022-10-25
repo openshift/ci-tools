@@ -121,6 +121,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentD
 			d.HistoricalData = new
 			d.DurationP99 = newP99
 			d.DurationP95 = newP95
+			d.JobResults = new.GetJobRuns()
 
 			timeDiff := newP99 - oldP99
 			percentDiff := 0.0

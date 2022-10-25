@@ -25,8 +25,9 @@ const (
 	sdn = "sdn"
 	ovn = "ovn"
 
-	ha     = "ha"
-	single = "single"
+	ha       = "ha"
+	single   = "single"
+	external = "external"
 
 	ipv4 = "ipv4"
 	//ipv6 = "ipv6"

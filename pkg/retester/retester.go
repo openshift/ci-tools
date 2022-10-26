@@ -47,10 +47,10 @@ type backoffCache struct {
 }
 
 var (
-	retestTotalCounter = prometheus.NewCounterVec(
+	retestTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "retest_total",
-			Help: "Number of retest command in total issued by the tool.",
+			Help: "Number of retest commands in total issued by the tool.",
 		},
 		[]string{"org", "repo"},
 	)
@@ -58,7 +58,7 @@ var (
 
 func init() {
 	// Metrics have to be registered to be exposed:
-	prometheus.MustRegister(retestTotalCounter)
+	prometheus.MustRegister(retestTotal)
 }
 
 func (b *backoffCache) loadFromDisk() error {
@@ -368,6 +368,8 @@ func (c *RetestController) createComment(pr tide.PullRequest, cmd, message strin
 	comment := fmt.Sprintf("%s\n\n%s\n", cmd, message)
 	if err := c.ghClient.CreateComment(string(pr.Repository.Owner.Login), string(pr.Repository.Name), int(pr.Number), comment); err != nil {
 		c.logger.WithField("comment", comment).WithError(err).Error("failed to create a comment")
+	} else if cmd == "/retest-required" {
+		retestTotal.With(prometheus.Labels{"org": string(pr.Author.Login), "repo": string(pr.Repository.NameWithOwner)}).Inc()
 	}
 }
 
@@ -395,7 +397,6 @@ func (c *RetestController) retestOrBackoff(pr tide.PullRequest) error {
 	case retestBackoffPause:
 		c.logger.Infof("%s: %s (%s)", prUrl(pr), "no comment", message)
 	case retestBackoffRetest:
-		retestTotalCounter.With(prometheus.Labels{"org": string(pr.Author.Login), "repo": string(pr.Repository.NameWithOwner)}).Inc()
 		c.createComment(pr, "/retest-required", message)
 	}
 	return nil

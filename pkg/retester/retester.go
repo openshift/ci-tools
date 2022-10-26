@@ -369,7 +369,7 @@ func (c *RetestController) createComment(pr tide.PullRequest, cmd, message strin
 	if err := c.ghClient.CreateComment(string(pr.Repository.Owner.Login), string(pr.Repository.Name), int(pr.Number), comment); err != nil {
 		c.logger.WithField("comment", comment).WithError(err).Error("failed to create a comment")
 	} else if cmd == "/retest-required" {
-		retestTotal.With(prometheus.Labels{"org": string(pr.Author.Login), "repo": string(pr.Repository.NameWithOwner)}).Inc()
+		retestTotal.With(prometheus.Labels{"org": string(pr.Repository.Owner.Login), "repo": string(pr.Repository.Name)}).Inc()
 	}
 }
 

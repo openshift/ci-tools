@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -314,8 +315,8 @@ func (s *server) prepareCandidate(repoClient git.RepoClient, pullRequest *github
 
 	// In order to determine *only* the affected jobs from the changes in the PR, we need to rebase onto master
 	baseRef := pullRequest.Base.Ref
-	if _, err := repoClient.MergeWithStrategy(baseRef, "rebase"); err != nil {
-		return rehearse.RehearsalCandidate{}, fmt.Errorf("couldn't rebase repo client: %w", err)
+	if rebased, _ := repoClient.MergeWithStrategy(baseRef, "rebase"); !rebased {
+		return rehearse.RehearsalCandidate{}, errors.New("couldn't rebase repo client")
 	}
 
 	return candidate, nil

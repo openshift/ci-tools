@@ -35,6 +35,10 @@ func TestDomainForService(t *testing.T) {
 			service:  ServiceConfig,
 			expected: "config.ci.openshift.org",
 		},
+		{
+			service:  ServiceGCSStorage,
+			expected: "storage.googleapis.com",
+		},
 	}
 
 	for _, tc := range testCases {

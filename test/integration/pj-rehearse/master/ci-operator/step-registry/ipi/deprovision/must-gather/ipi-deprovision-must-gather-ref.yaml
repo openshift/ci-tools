@@ -1,0 +1,10 @@
+ref:
+  as: ipi-deprovision-must-gather
+  from: installer
+  commands: ipi-deprovision-must-gather-commands.sh
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+  documentation: |-
+    The IPI deprovision gather step

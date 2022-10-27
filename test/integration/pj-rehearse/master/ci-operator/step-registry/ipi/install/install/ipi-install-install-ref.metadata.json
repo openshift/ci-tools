@@ -1,0 +1,13 @@
+{
+	"path": "ipi/install/install/ipi-install-install-ref.yaml",
+	"owners": {
+		"approvers": [
+			"AlexNPavel",
+			"stevekuznetsov"
+		],
+		"reviewers": [
+			"AlexNPavel",
+			"stevekuznetsov"
+		]
+	}
+}

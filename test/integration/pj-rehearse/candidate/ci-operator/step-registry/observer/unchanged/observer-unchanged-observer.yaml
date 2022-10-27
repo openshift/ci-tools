@@ -1,0 +1,7 @@
+observer:
+  name: observer-unchanged
+  from: from
+  commands: observer-unchanged-commands.sh
+  resources:
+    requests:
+      cpu: "1"

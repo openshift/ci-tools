@@ -35,6 +35,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
@@ -637,6 +638,13 @@ func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInf
 				}
 				continue
 			}
+			if node.Type() == registry.Observer {
+				if testUsesObserver(test, node.Name()) {
+					selectJob()
+					return selectedPresubmits, selectedPeriodics
+				}
+				continue
+			}
 			testSteps := append(test.MultiStageTestConfiguration.Pre, append(test.MultiStageTestConfiguration.Test, test.MultiStageTestConfiguration.Post...)...)
 			for _, testStep := range testSteps {
 				hasRef := testStep.Reference != nil && node.Type() == registry.Reference && node.Name() == *testStep.Reference
@@ -650,6 +658,13 @@ func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInf
 	}
 	logger.WithField("node-name", node.Name()).Debug("Found no jobs using node")
 	return selectedPresubmits, selectedPeriodics
+}
+
+func testUsesObserver(test api.TestStepConfiguration, o string) bool {
+	t := test.MultiStageTestConfiguration
+	return t != nil &&
+		t.Observers != nil &&
+		util.Contains(t.Observers.Enable, o)
 }
 
 // getAffectedNodes returns a sorted list of all nodes affected by a seed list

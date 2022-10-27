@@ -1,0 +1,6 @@
+workflow:
+  as: uses-unchanged-observer
+  steps:
+    observers:
+      enable:
+      - observer-unchanged

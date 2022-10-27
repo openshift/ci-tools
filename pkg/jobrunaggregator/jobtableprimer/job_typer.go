@@ -29,6 +29,10 @@ func newJob(name string) *jobRowBuilder {
 		platform = openstack
 	case strings.Contains(name, "libvirt"):
 		platform = libvirt
+	case strings.Contains(name, "alibaba"):
+		platform = alibaba
+	case strings.Contains(name, "ibmcloud"):
+		platform = ibmcloud
 	}
 
 	architecture := ""

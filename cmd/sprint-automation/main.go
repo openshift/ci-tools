@@ -530,6 +530,7 @@ func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, use
 	}
 
 	if len(issues) == 0 {
+		logrus.Debug("No issues have been found for intake")
 		return nil
 	}
 

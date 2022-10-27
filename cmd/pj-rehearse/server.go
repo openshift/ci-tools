@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -139,20 +140,20 @@ func (s *server) handlePullRequestCreation(l *logrus.Entry, event github.PullReq
 			if err != nil {
 				logger.WithError(err).Error("couldn't determine affected jobs")
 			}
-			if len(presubmits) > 0 || len(periodics) > 0 {
-				lines := s.getJobsTableLines(presubmits, periodics, event.PullRequest.User.Login)
+			foundJobsToRehearse := len(presubmits) > 0 || len(periodics) > 0
+			if !foundJobsToRehearse {
+				s.acknowledgeRehearsals(org, repo, number, logger)
+			}
+
+			lines := s.getJobsTableLines(presubmits, periodics, event.PullRequest.User.Login)
+			if foundJobsToRehearse {
 				lines = append(lines, []string{
 					"Prior to this PR being merged, you will need to either run and acknowledge or opt to skip these rehearsals.",
 					"",
 				}...)
 				lines = append(lines, s.getUsageDetailsLines()...)
-				comment = strings.Join(lines, "\n")
-			} else {
-				comment = fmt.Sprintf("@%s: no rehearsable tests are affected by this change", event.PullRequest.User.Login)
-				if err := s.ghc.AddLabel(org, repo, event.Number, rehearsalsAckLabel); err != nil {
-					logger.WithError(err).Error("failed to add rehearsals-ack label")
-				}
 			}
+			comment = strings.Join(lines, "\n")
 		} else {
 			lines := []string{
 				fmt.Sprintf("@%s: changes from this PR may affect rehearsable jobs. The `pj-rehearse` plugin is available to rehearse these jobs.", event.PullRequest.User.Login),
@@ -204,14 +205,14 @@ func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEv
 		for _, command := range pjRehearseComments {
 			switch command {
 			case rehearseAck, rehearseSkip:
-				if err := s.ghc.AddLabel(org, repo, number, rehearsalsAckLabel); err != nil {
-					logger.WithError(err).Error("failed to add rehearsals-ack label")
-				}
+				s.acknowledgeRehearsals(org, repo, number, logger)
 			case rehearseNormal, rehearseMore, rehearseMax:
 				if rehearsalsTriggered {
 					// We don't want to trigger rehearsals more than once per comment
 					continue
 				}
+				rehearsalsTriggered = true
+
 				rc := s.rehearsalConfig
 				repoClient, err := s.getRepoClient(org, repo)
 				if err != nil {
@@ -277,8 +278,9 @@ func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEv
 							logger.WithError(err).Error("couldn't create comment")
 						}
 					}
+				} else {
+					s.acknowledgeRehearsals(org, repo, number, logger)
 				}
-				rehearsalsTriggered = true
 			}
 		}
 	}
@@ -313,14 +315,18 @@ func (s *server) prepareCandidate(repoClient git.RepoClient, pullRequest *github
 
 	// In order to determine *only* the affected jobs from the changes in the PR, we need to rebase onto master
 	baseRef := pullRequest.Base.Ref
-	if _, err := repoClient.MergeWithStrategy(baseRef, "rebase"); err != nil {
-		return rehearse.RehearsalCandidate{}, fmt.Errorf("couldn't rebase repo client: %w", err)
+	if rebased, _ := repoClient.MergeWithStrategy(baseRef, "rebase"); !rebased {
+		return rehearse.RehearsalCandidate{}, errors.New("couldn't rebase repo client")
 	}
 
 	return candidate, nil
 }
 
 func (s *server) getJobsTableLines(presubmits config.Presubmits, periodics config.Periodics, user string) []string {
+	if len(presubmits) == 0 && len(periodics) == 0 {
+		return []string{fmt.Sprintf("@%s: no rehearsable tests are affected by this change", user)}
+	}
+
 	lines := []string{
 		fmt.Sprintf("@%s: the following rehearsable tests have been affected by this change:", user),
 		"",
@@ -366,5 +372,11 @@ func (s *server) getUsageDetailsLines() []string {
 		"",
 		fmt.Sprintf("Once you are satisfied with the results of the rehearsals, comment: `%s` to unblock merge. When the `%s` label is present on your PR, merge will no longer be blocked by rehearsals", rehearseAck, rehearsalsAckLabel),
 		"</details>",
+	}
+}
+
+func (s *server) acknowledgeRehearsals(org, repo string, number int, logger *logrus.Entry) {
+	if err := s.ghc.AddLabel(org, repo, number, rehearsalsAckLabel); err != nil {
+		logger.WithError(err).Error("failed to add rehearsals-ack label")
 	}
 }

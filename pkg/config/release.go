@@ -186,25 +186,31 @@ func GetChangedTemplates(path, baseRev string) ([]string, error) {
 
 func loadRegistryStep(filename string, graph registry.NodeByName) (registry.Node, error) {
 	// if a commands script changed, mark reference as changed
+	var type_, name string
 	var node registry.Node
 	var ok bool
 	switch {
 	case strings.HasSuffix(filename, load.RefSuffix):
-		node, ok = graph.References[strings.TrimSuffix(filename, load.RefSuffix)]
+		type_, name = "ref", strings.TrimSuffix(filename, load.RefSuffix)
+		node, ok = graph.References[name]
 	case strings.HasSuffix(filename, load.ObserverSuffix):
-		node, ok = graph.References[strings.TrimSuffix(filename, load.ObserverSuffix)]
+		type_, name = "observer", strings.TrimSuffix(filename, load.ObserverSuffix)
+		node, ok = graph.References[name]
 	case strings.HasSuffix(filename, load.ChainSuffix):
-		node, ok = graph.Chains[strings.TrimSuffix(filename, load.ChainSuffix)]
+		type_, name = "chain", strings.TrimSuffix(filename, load.ChainSuffix)
+		node, ok = graph.Chains[name]
 	case strings.HasSuffix(filename, load.WorkflowSuffix):
-		node, ok = graph.Workflows[strings.TrimSuffix(filename, load.WorkflowSuffix)]
+		type_, name = "workflow", strings.TrimSuffix(filename, load.WorkflowSuffix)
+		node, ok = graph.Workflows[name]
 	case strings.Contains(filename, load.CommandsSuffix):
 		extension := filepath.Ext(filename)
-		node, ok = graph.References[strings.TrimSuffix(filename[0:len(filename)-len(extension)], load.CommandsSuffix)]
+		type_, name = "ref", strings.TrimSuffix(filename[0:len(filename)-len(extension)], load.CommandsSuffix)
+		node, ok = graph.References[name]
 	default:
-		return nil, fmt.Errorf("invalid step filename: %s", filename)
+		return nil, fmt.Errorf("invalid step registry filename: %s", filename)
 	}
 	if !ok {
-		return nil, fmt.Errorf("could not find registry component in registry graph: %s", filename)
+		return nil, fmt.Errorf("could not find registry component in registry graph: %s/%s", type_, name)
 	}
 	return node, nil
 }

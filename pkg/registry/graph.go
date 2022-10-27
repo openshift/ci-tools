@@ -126,7 +126,7 @@ func (n *nodeWithParents) Parents() []Node {
 	return parents
 }
 
-func (*workflowNode) Parents() []Node { return []Node{} }
+func (*workflowNode) Parents() []Node { return nil }
 
 func (n *nodeWithChildren) Children() []Node {
 	var children []Node
@@ -139,7 +139,7 @@ func (n *nodeWithChildren) Children() []Node {
 	return children
 }
 
-func (*referenceNode) Children() []Node { return []Node{} }
+func (*referenceNode) Children() []Node { return nil }
 
 func (n *nodeWithParents) Ancestors() []Node {
 	ancestors := n.Parents()
@@ -149,7 +149,7 @@ func (n *nodeWithParents) Ancestors() []Node {
 	return ancestors
 }
 
-func (*workflowNode) Ancestors() []Node { return []Node{} }
+func (*workflowNode) Ancestors() []Node { return nil }
 
 func (n *nodeWithChildren) Descendants() []Node {
 	descendants := n.Children()
@@ -159,7 +159,7 @@ func (n *nodeWithChildren) Descendants() []Node {
 	return descendants
 }
 
-func (*referenceNode) Descendants() []Node { return []Node{} }
+func (*referenceNode) Descendants() []Node { return nil }
 
 func (n *workflowNode) addChainChild(child *chainNode) {
 	n.chainChildren.insert(child)
@@ -232,12 +232,12 @@ func hasCycles(node *chainNode, ancestors sets.String, traversedPath []string) e
 // NewGraph returns a NodeByType map representing the provided step references, chains, and workflows as a directed graph.
 func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName, observersByName ObserverByName) (NodeByName, error) {
 	nodesByName := NodeByName{
-		References: make(map[string]Node),
-		Chains:     make(map[string]Node),
-		Workflows:  make(map[string]Node),
+		References: make(map[string]Node, len(stepsByName)),
+		Chains:     make(map[string]Node, len(chainsByName)),
+		Workflows:  make(map[string]Node, len(workflowsByName)),
 	}
 	// References can only be children; load them so they can be added as children by workflows and chains
-	referenceNodes := make(referenceNodeByName)
+	referenceNodes := make(referenceNodeByName, len(stepsByName))
 	for name := range stepsByName {
 		node := &referenceNode{
 			nodeWithName:    newNodeWithName(name),
@@ -259,7 +259,7 @@ func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 
 	// since we may load the parent chain before a child chain, we need to make the parent->child links after loading all chains
 	parentChildChain := make(map[*chainNode][]string)
-	chainNodes := make(chainNodeByName)
+	chainNodes := make(chainNodeByName, len(chainsByName))
 	for name, chain := range chainsByName {
 		node := &chainNode{
 			nodeWithName:     newNodeWithName(name),
@@ -294,7 +294,7 @@ func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 			return nodesByName, err
 		}
 	}
-	workflowNodes := make(workflowNodeByName)
+	workflowNodes := make(workflowNodeByName, len(workflowsByName))
 	for name, workflow := range workflowsByName {
 		node := &workflowNode{
 			nodeWithName:     newNodeWithName(name),

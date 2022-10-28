@@ -916,8 +916,6 @@ periodic-ci-openshift-release-master-okd-4.13-e2e-vsphere-ovn
 periodic-ci-openshift-release-master-okd-4.13-e2e-vsphere-upi
 periodic-ci-openshift-release-master-okd-4.13-upgrade-from-okd-4.12-e2e-upgrade-aws
 periodic-ci-openshift-release-master-okd-4.13-upgrade-from-okd-4.12-e2e-upgrade-gcp
-periodic-ci-openshift-release-master-okd-scos-4.12-e2e-aws-ovn
-periodic-ci-openshift-release-master-okd-scos-4.13-e2e-aws-ovn
 // end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-master-periodics.yaml
 
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.10-periodics.yaml

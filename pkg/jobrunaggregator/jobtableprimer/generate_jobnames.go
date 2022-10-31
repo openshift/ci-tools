@@ -215,6 +215,14 @@ func (o *GenerateJobNamesOptions) Run(ctx context.Context) error {
 			if strings.Contains(curr.Name, "-disruptive") {
 				continue
 			}
+
+			// Microshift is not yet stable, jobs are not clearly named, and we're unsure what platform/topology
+			// they should be lumped in with.
+			// Today they run using a single UPI GCP vm, HA may be coming later.
+			if strings.Contains(curr.Name, "microshift") {
+				continue
+			}
+
 			localLines = append(localLines, curr.Name)
 		}
 		sort.Strings(localLines)

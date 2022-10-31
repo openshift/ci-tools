@@ -57,7 +57,7 @@ func TestManageIssues(t *testing.T) {
 			expectedIssues: []github.Issue{
 				{
 					ID:     1,
-					Title:  "Future Release Branches Frozen For Merging | branch:release-4.9",
+					Title:  "Future Release Branches Frozen For Merging | branch:release-7.77",
 					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/docs/architecture/branching/).",
 					Labels: []github.Label{{Name: "tide/merge-blocker"}},
 				},

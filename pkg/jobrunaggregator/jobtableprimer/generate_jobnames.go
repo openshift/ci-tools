@@ -223,6 +223,11 @@ func (o *GenerateJobNamesOptions) Run(ctx context.Context) error {
 				continue
 			}
 
+			// OKD jobs are not something we monitor and keep slipping into our disruption data skewing results quite badly.
+			if strings.Contains(curr.Name, "okd") {
+				continue
+			}
+
 			localLines = append(localLines, curr.Name)
 		}
 		sort.Strings(localLines)

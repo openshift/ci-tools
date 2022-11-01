@@ -196,13 +196,14 @@ func TestValidatePodScalerRequest(t *testing.T) {
 			expected: fmt.Errorf("determined_memory field in request is empty"),
 		},
 		{
-			name: "empty determined memory",
+			name: "empty workload type",
 			request: &results.PodScalerRequest{
 				WorkloadName:     "name",
+				WorkloadType:     "",
 				ConfiguredMemory: "100",
-				DeterminedMemory: "",
+				DeterminedMemory: "200",
 			},
-			expected: fmt.Errorf("determined_memory field in request is empty"),
+			expected: fmt.Errorf("workload_type field in request is empty"),
 		},
 	}
 

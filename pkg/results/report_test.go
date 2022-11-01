@@ -187,6 +187,7 @@ func TestReportMemoryConfigurationWarning(t *testing.T) {
 	testCases := []struct {
 		name             string
 		workloadName     string
+		workloadType     string
 		configuredMemory string
 		determinedMemory string
 		expected         string
@@ -194,6 +195,7 @@ func TestReportMemoryConfigurationWarning(t *testing.T) {
 		{
 			name:             "valid request",
 			workloadName:     "name",
+			workloadType:     "build",
 			configuredMemory: "100",
 			determinedMemory: "200",
 			expected:         `{"WorkloadName":"name","ConfiguredMemory":"100","DeterminedMemory":"200"}`,
@@ -201,6 +203,7 @@ func TestReportMemoryConfigurationWarning(t *testing.T) {
 		{
 			name:             "empty workload name",
 			workloadName:     "",
+			workloadType:     "build",
 			configuredMemory: "100",
 			determinedMemory: "200",
 			expected:         `{"WorkloadName":"","ConfiguredMemory":"100","DeterminedMemory":"200"}`,
@@ -244,7 +247,7 @@ func TestReportMemoryConfigurationWarning(t *testing.T) {
 				},
 				address: testServer.URL,
 			}
-			podScalerReporter.ReportMemoryConfigurationWarning(tc.workloadName, tc.configuredMemory, tc.determinedMemory)
+			podScalerReporter.ReportMemoryConfigurationWarning(tc.workloadName, tc.workloadType, tc.configuredMemory, tc.determinedMemory)
 		})
 	}
 }

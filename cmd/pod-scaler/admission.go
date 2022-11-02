@@ -299,8 +299,5 @@ func determineWorkloadType(annotations, labels map[string]string) string {
 	if _, isProwjob := labels["prow.k8s.io/job"]; isProwjob {
 		return "prowjob"
 	}
-	if _, isRehearsal := labels[rehearse.Label]; isRehearsal {
-		return "rehearsal"
-	}
 	return "undefined"
 }

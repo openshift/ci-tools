@@ -73,7 +73,7 @@ func gatherOptions() (options, error) {
 	fs.BoolVar(&o.noClusterProfiles, "no-cluster-profiles", false, "If true, do not attempt to compare cluster profiles")
 
 	fs.BoolVar(&o.preCheck, "pre-check", false, "If true, check for rehearsable jobs and provide the list upon PR creation")
-	fs.BoolVar(&o.preCheck, "comment-on-pr-creation", true, "If true, provide an explanatory comment when a new PR is opened in a repo with the plugin configured.")
+	fs.BoolVar(&o.commentOnPrCreation, "comment-on-pr-creation", true, "If true, provide an explanatory comment when a new PR is opened in a repo with the plugin configured.")
 
 	fs.IntVar(&o.normalLimit, "normal-limit", 10, "Upper limit of jobs attempted to rehearse with normal command (if more jobs are being touched, only this many will be rehearsed)")
 	fs.IntVar(&o.moreLimit, "more-limit", 20, "Upper limit of jobs attempted to rehearse with more command (if more jobs are being touched, only this many will be rehearsed)")

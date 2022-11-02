@@ -291,7 +291,7 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 	mutateResources(pod.Spec.Containers)
 }
 
-// determineWorkloadType returns the workflow type
+// determineWorkloadType returns the workload type to be used in metrics
 func determineWorkloadType(annotations, labels map[string]string) string {
 	if _, isBuildPod := annotations[buildv1.BuildLabel]; isBuildPod {
 		return "build"

@@ -1028,11 +1028,6 @@ func TestDetermineWorkloadType(t *testing.T) {
 			labels:   map[string]string{"prow.k8s.io/job": "jobName"},
 			expected: "prowjob",
 		},
-		{
-			name:     "rehearsal",
-			labels:   map[string]string{rehearse.Label: "rehearsalName"},
-			expected: "rehearsal",
-		},
 	}
 
 	for _, tc := range testCases {

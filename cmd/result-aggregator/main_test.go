@@ -163,6 +163,7 @@ func TestValidatePodScalerRequest(t *testing.T) {
 			name: "everything ok",
 			request: &results.PodScalerRequest{
 				WorkloadName:     "name",
+				WorkloadType:     "build",
 				ConfiguredMemory: "100",
 				DeterminedMemory: "400",
 			},
@@ -181,6 +182,7 @@ func TestValidatePodScalerRequest(t *testing.T) {
 			name: "empty configured memory",
 			request: &results.PodScalerRequest{
 				WorkloadName:     "name",
+				WorkloadType:     "build",
 				ConfiguredMemory: "",
 				DeterminedMemory: "400",
 			},
@@ -190,6 +192,7 @@ func TestValidatePodScalerRequest(t *testing.T) {
 			name: "empty determined memory",
 			request: &results.PodScalerRequest{
 				WorkloadName:     "name",
+				WorkloadType:     "build",
 				ConfiguredMemory: "100",
 				DeterminedMemory: "",
 			},

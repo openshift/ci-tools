@@ -37,7 +37,7 @@ var (
 			Name: "pod_scaler_admission_high_determined_memory",
 			Help: "number of times pod-scaler determined higher memory than configured, sorted by label/type",
 		},
-		[]string{"workload_name", "configured_memory", "determined_memory"},
+		[]string{"workload_name", "workload_type", "configured_memory", "determined_memory"},
 	)
 )
 
@@ -99,6 +99,9 @@ func validatePodScalerRequest(request *results.PodScalerRequest) error {
 	if request.WorkloadName == "" {
 		return fmt.Errorf("workload_name field in request is empty")
 	}
+	if request.WorkloadType == "" {
+		return fmt.Errorf("workload_type field in request is empty")
+	}
 	if request.ConfiguredMemory == "" {
 		return fmt.Errorf("configured_memory field in request is empty")
 	}
@@ -127,6 +130,7 @@ func withErrorRate(request *results.Request) {
 func recordHighMemory(request *results.PodScalerRequest) {
 	labels := prometheus.Labels{
 		"workload_name":     request.WorkloadName,
+		"workload_type":     request.WorkloadType,
 		"configured_memory": request.ConfiguredMemory,
 		"determined_memory": request.DeterminedMemory,
 	}

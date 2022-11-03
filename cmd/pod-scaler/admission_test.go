@@ -34,7 +34,7 @@ type mockReporter struct {
 	called bool
 }
 
-func (r *mockReporter) ReportMemoryConfigurationWarning(string, string, string) {
+func (r *mockReporter) ReportMemoryConfigurationWarning(string, string, string, string) {
 	r.called = true
 }
 
@@ -730,7 +730,7 @@ func TestUseOursIfLarger(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", &defaultReporter, logrus.WithField("test", testCase.name))
+			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", "build", &defaultReporter, logrus.WithField("test", testCase.name))
 			if diff := cmp.Diff(testCase.theirs, testCase.expected); diff != "" {
 				t.Errorf("%s: got incorrect resources after mutation: %v", testCase.name, diff)
 			}
@@ -815,7 +815,7 @@ func TestUseOursIsLarger_ReporterReports(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			useOursIfLarger(&tc.ours, &tc.theirs, "test", &tc.reporter, logrus.WithField("test", tc.name))
+			useOursIfLarger(&tc.ours, &tc.theirs, "test", "build", &tc.reporter, logrus.WithField("test", tc.name))
 
 			if diff := cmp.Diff(tc.reporter.called, tc.expected); diff != "" {
 				t.Errorf("actual and expected reporter states don't match, : %v", diff)
@@ -1005,35 +1005,34 @@ func TestPreventUnschedulable(t *testing.T) {
 	}
 }
 
-func TestDetermineName(t *testing.T) {
+func TestDetermineWorkloadType(t *testing.T) {
 	testCases := []struct {
-		name          string
-		containerName string
-		podName       string
-		labels        map[string]string
-		expected      string
+		name        string
+		annotations map[string]string
+		labels      map[string]string
+		expected    string
 	}{
 		{
-			name:          "prowjob",
-			containerName: "container",
-			podName:       "pod",
-			labels: map[string]string{
-				"prow.k8s.io/job": "prowJob",
-			},
-			expected: "prowJob",
+			name:        "no labels or annotations",
+			annotations: map[string]string{},
+			labels:      map[string]string{},
+			expected:    "undefined",
 		},
 		{
-			name:          "not a prowjob",
-			containerName: "container",
-			podName:       "pod",
-			labels:        nil,
-			expected:      "pod-container",
+			name:        "build pod",
+			annotations: map[string]string{buildv1.BuildLabel: "buildName"},
+			expected:    "build",
+		},
+		{
+			name:     "prowjob",
+			labels:   map[string]string{"prow.k8s.io/job": "jobName"},
+			expected: "prowjob",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if diff := cmp.Diff(determineName(tc.labels, tc.podName, tc.containerName), tc.expected); diff != "" {
+			if diff := cmp.Diff(determineWorkloadType(tc.annotations, tc.labels), tc.expected); diff != "" {
 				t.Errorf("result differs from expected output, diff:\n%s", diff)
 			}
 		})

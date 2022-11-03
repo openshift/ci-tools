@@ -426,10 +426,16 @@ func messageUser(user user, slackClient slackClient) error {
 						Type: slack.MarkdownType,
 						Text: fmt.Sprintf("%s: created more than a week ago", old),
 					},
+					&slack.TextBlockObject{
+						Type: slack.MarkdownType,
+						Text: fmt.Sprintf("%s: updated in the last 24 hours", newUpdate),
+					},
 				},
 			},
 		},
 	}
+
+	message = append(message, &slack.DividerBlock{Type: slack.MBTDivider})
 
 	for _, pr := range user.PrRequests {
 		prBlock := &slack.ContextBlock{

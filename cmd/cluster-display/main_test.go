@@ -77,7 +77,7 @@ func TestGetRouter(t *testing.T) {
 			url:          "/api/v1/clusterpools",
 			hiveClient:   fakectrlruntimeclient.NewFakeClient(aClusterPool("4.7.0"), aClusterPool("4.6.0"), aClusterImageSet("4.7.0"), aClusterImageSet("4.6.0")),
 			expectedCode: 200,
-			expectedBody: `{"data":[{"imageSet":"ocp-4.6.0-amd64","labels":"architecture=amd64,cloud=aws,owner=dpp,product=ocp,region=us-east-1,version=4.6.0","maxSize":"nil","name":"ci-ocp-4.6.0-amd64-aws-us-east-1","namespace":"ci-cluster-pool","owner":"dpp","ready":"0","releaseImage":"quay.io/openshift-release-dev/ocp-release:4.6.0-x86_64","size":"0"},{"imageSet":"ocp-4.7.0-amd64","labels":"architecture=amd64,cloud=aws,owner=dpp,product=ocp,region=us-east-1,version=4.7.0","maxSize":"nil","name":"ci-ocp-4.7.0-amd64-aws-us-east-1","namespace":"ci-cluster-pool","owner":"dpp","ready":"0","releaseImage":"quay.io/openshift-release-dev/ocp-release:4.7.0-x86_64","size":"0"}]}
+			expectedBody: `{"data":[{"imageSet":"ocp-4.6.0-amd64","labels":"architecture=amd64,cloud=aws,owner=dpp,product=ocp,region=us-east-1,version=4.6.0","maxSize":"nil","name":"ci-ocp-4.6.0-amd64-aws-us-east-1","namespace":"ci-cluster-pool","owner":"dpp","ready":"0","releaseImage":"quay.io/openshift-release-dev/ocp-release:4.6.0-x86_64","size":"0","standby":"0"},{"imageSet":"ocp-4.7.0-amd64","labels":"architecture=amd64,cloud=aws,owner=dpp,product=ocp,region=us-east-1,version=4.7.0","maxSize":"nil","name":"ci-ocp-4.7.0-amd64-aws-us-east-1","namespace":"ci-cluster-pool","owner":"dpp","ready":"0","releaseImage":"quay.io/openshift-release-dev/ocp-release:4.7.0-x86_64","size":"0","standby":"0"}]}
 `,
 			expectedContentType: "application/json",
 		},
@@ -94,7 +94,7 @@ func TestGetRouter(t *testing.T) {
 			url:                 "/api/v1/clusterpools?callback=jQuery35103321760038853385_1623880606193&_=1623880606194",
 			hiveClient:          fakectrlruntimeclient.NewFakeClient(aClusterPool("4.7.0"), aClusterPool("4.6.0"), aClusterImageSet("4.7.0"), aClusterImageSet("4.6.0")),
 			expectedCode:        200,
-			expectedBody:        `jQuery35103321760038853385_1623880606193({"data":[{"imageSet":"ocp-4.6.0-amd64","labels":"architecture=amd64,cloud=aws,owner=dpp,product=ocp,region=us-east-1,version=4.6.0","maxSize":"nil","name":"ci-ocp-4.6.0-amd64-aws-us-east-1","namespace":"ci-cluster-pool","owner":"dpp","ready":"0","releaseImage":"quay.io/openshift-release-dev/ocp-release:4.6.0-x86_64","size":"0"},{"imageSet":"ocp-4.7.0-amd64","labels":"architecture=amd64,cloud=aws,owner=dpp,product=ocp,region=us-east-1,version=4.7.0","maxSize":"nil","name":"ci-ocp-4.7.0-amd64-aws-us-east-1","namespace":"ci-cluster-pool","owner":"dpp","ready":"0","releaseImage":"quay.io/openshift-release-dev/ocp-release:4.7.0-x86_64","size":"0"}]});`,
+			expectedBody:        `jQuery35103321760038853385_1623880606193({"data":[{"imageSet":"ocp-4.6.0-amd64","labels":"architecture=amd64,cloud=aws,owner=dpp,product=ocp,region=us-east-1,version=4.6.0","maxSize":"nil","name":"ci-ocp-4.6.0-amd64-aws-us-east-1","namespace":"ci-cluster-pool","owner":"dpp","ready":"0","releaseImage":"quay.io/openshift-release-dev/ocp-release:4.6.0-x86_64","size":"0","standby":"0"},{"imageSet":"ocp-4.7.0-amd64","labels":"architecture=amd64,cloud=aws,owner=dpp,product=ocp,region=us-east-1,version=4.7.0","maxSize":"nil","name":"ci-ocp-4.7.0-amd64-aws-us-east-1","namespace":"ci-cluster-pool","owner":"dpp","ready":"0","releaseImage":"quay.io/openshift-release-dev/ocp-release:4.7.0-x86_64","size":"0","standby":"0"}]});`,
 			expectedContentType: "application/javascript",
 		},
 		{

@@ -111,6 +111,7 @@ func getClusterPoolPage(ctx context.Context, hiveClient ctrlruntimeclient.Client
 				"labels":       labels.FormatLabels(p.Labels),
 				"releaseImage": releaseImage,
 				"owner":        owner,
+				"standby":      strconv.FormatInt(int64(p.Status.Standby), 10),
 			},
 		)
 	}

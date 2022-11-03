@@ -8,7 +8,7 @@ labels:
   ci.openshift.io/rehearse.context: test
 name: rehearse-123-pull-ci-org-repo-branch-test
 optional: true
-rerun_command: /test pj-rehearse
+rerun_command: /pj-rehearse
 spec:
   containers:
   - args:

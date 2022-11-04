@@ -35,6 +35,38 @@ import (
 
 const ControllerName = "test_images_distributor"
 
+// Everything but default arch (amd64)
+var multiarchSuffixToCluster = map[string]sets.String{
+	"-arm64": sets.NewString(string(api.ClusterARM01)),
+}
+
+func isMultiarchNamespace(namespace string) bool {
+	for suffix := range multiarchSuffixToCluster {
+		if strings.HasSuffix(namespace, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+func isNamespaceAllowedOnCluster(namespace, cluster string) bool {
+	for suffix, clusters := range multiarchSuffixToCluster {
+		if strings.HasSuffix(namespace, suffix) {
+			return clusters.Has(cluster)
+		}
+	}
+	return false
+}
+
+func isAmd64Cluster(cluster string) bool {
+	for _, clusters := range multiarchSuffixToCluster {
+		if clusters.Has(cluster) {
+			return false
+		}
+	}
+	return true
+}
+
 func AddToManager(mgr manager.Manager,
 	registryClusterName string,
 	registryManager manager.Manager,
@@ -291,6 +323,20 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 	*log = *log.WithField("cluster", cluster).WithField("namespace", decoded.Namespace).WithField("name", decoded.Name)
 	log.Info("Starting reconciliation")
 
+	// One of the following is allowed:
+	// - multiarch namespaces to distribute on the proper non-amd64 clusters (ex.: ci-arm64 on arm01)
+	// or
+	// - non-multiarch namespaces to distribute on any amd64 clusters (ex.: ci on build03)
+	if isMultiarchNamespace(decoded.Namespace) {
+		if !isNamespaceAllowedOnCluster(decoded.Namespace, cluster) {
+			log.Debug("multiarch imageStreamTag not allowed on cluster")
+			return nil
+		}
+	} else if !isAmd64Cluster(cluster) {
+		log.Debug("imageStreamTag not allowed on non-amd64 cluster")
+		return nil
+	}
+
 	// Fail asap if we cannot reconcile this
 	client, ok := r.buildClusterClients[cluster]
 	if !ok {
@@ -535,6 +581,9 @@ func testInputImageStreamTagFilterFactory(
 			return true
 		}
 		if additionalImageStreamNamespaces.Has(nn.Namespace) {
+			return true
+		}
+		if isMultiarchNamespace(nn.Namespace) {
 			return true
 		}
 		imageStreamTagResult, err := ca.GetFromIndex(indexName, nn.String())

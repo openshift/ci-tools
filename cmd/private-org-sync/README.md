@@ -71,3 +71,30 @@ INFO[0005] Branches are already in sync                  branch=release-4.4 (mor
 INFO[0005] Syncing content between locations             branch=release-4.5 (more fields...)
 INFO[0006] Branches are already in sync                  branch=release-4.5 (more fields...)
 ```
+
+## Testing
+
+The `--prefix` argument can be used for local tests.  Its default value points
+all operations to GitHub, but another host or a local directory can be used
+instead:
+
+```console
+$ mkdir --parents config/src/repo src tmp
+$ cat > config/src/repo/src-repo-master.yaml <<EOF
+promotion: {"namespace":"ocp","name":4.13}
+resources: {"*":{"requests":{"cpu":1}}}
+tests: [{"as":"test","commands":"commands","container":{"from":"src"}}]
+EOF
+$ git init --quiet src/repo
+$ git init --quiet dst/repo
+$ git -C src/repo commit --allow-empty --message initial
+$ git -C dst/repo commit --allow-empty --message initial
+$ private-org-sync \
+    --prefix $PWD --token-path /dev/null --config-dir config --target-org dst \
+    --git-name test --git-email test --git-dir tmp
+INFO[0000] Syncing content between locations             branch=master destination=dst/repo@master local-repo=tmp/src/repo org=src repo=repo source=src/repo@master source-file=src-repo-master.yaml variant=
+INFO[0000] Fetching from source (--depth=2)              branch=master destination=dst/repo@master local-repo=tmp/src/repo org=src repo=repo source=src/repo@master source-file=src-repo-master.yaml variant=
+INFO[0000] Pushing to destination (dry-run)              branch=master destination=dst/repo@master local-repo=tmp/src/repo org=src repo=repo source=src/repo@master source-file=src-repo-master.yaml variant=
+INFO[0000] Trying to fetch source and destination full history and perform a merge  branch=master destination=dst/repo@master local-repo=tmp/src/repo org=src repo=repo source=src/repo@master source-file=src-repo-master.yaml variant=
+WARN[0000] error occurred while fetching remote and merge  branch=master destination=dst/repo@master error="[failed to merge src-repo/master: failed with 128 exit-code: fatal: refusing to merge unrelated histories\n, failed to perform merge --abort: failed with 128 exit-code: fatal: There is no merge to abort (MERGE_HEAD missing).\n]" local-repo=tmp/src/repo org=src repo=repo source=src/repo@master source-file=src-repo-master.yaml variant=
+```

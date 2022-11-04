@@ -627,6 +627,7 @@ func TestMirror(t *testing.T) {
 			}
 			m := gitSyncer{
 				logger:               logrus.WithField("test", tc.description),
+				prefix:               defaultPrefix,
 				token:                token,
 				confirm:              tc.confirm,
 				root:                 "git-dir",

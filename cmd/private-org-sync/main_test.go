@@ -616,6 +616,31 @@ func TestMirror(t *testing.T) {
 				{call: "merge --abort"},
 			},
 		},
+		{
+			description: "conflicting histories after a force-push result in an error",
+			src:         location{org: org, repo: repo, branch: branch},
+			dst:         location{org: destOrg, repo: repo, branch: branch},
+			expectedGitCalls: []mockGitCall{
+				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo"},
+				{call: "init"},
+				{call: "remote get-url org-repo"},
+				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
+				{call: "fetch --tags org-repo branch"},
+				{
+					call: "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
+					output: `To https://TOKEN@github.com/dest/repo
+ ! [rejected]        branch -> branch (non-fast-forward)
+error: failed to push some refs to 'https://TOKEN@github.com/dest/repo'
+hint: Updates were rejected because the tip of your current branch is behind
+hint: its remote counterpart. Integrate the remote changes (e.g.
+hint: 'git pull ...') before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+`,
+					exitCode: 1,
+				},
+			},
+			expectError: true,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {

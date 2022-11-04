@@ -9,7 +9,7 @@ the failure percentages, giving a path to improvement.
 
 ## Development and Debugging tips
 
-When you run this in debugging mode, use a credential that has read-only access.  This way, you
+When you run this in debugging mode, use a credential that has read-only access. This way, you
 can set breakpoints and study the behavior without risk of overwriting anything.
 You will, of course, get "permission denied" errors if write access is required.
 At that point, you can (cautiously) switch to a credential that has write access.
@@ -51,4 +51,46 @@ cd ci-tools
 
 # If something fails, this might fix it; then rerun the linter
 gofmt -s -w <someFileThatFailsLint>/cmd.go
+```
+
+## Running Locally
+
+### Analyze Historical Data
+
+> Note: We also contain a helper script at the root of this repo that can be used to generate the files run `./hack/run-job-aggregator-analyzer.sh` for a list of options.
+
+You can compare the historical data locally, the documentation on how to download the recent historical data can be found [here](https://docs.ci.openshift.org/docs/release-oversight/disruption-testing/data-architecture/#query).
+
+```sh
+# Disruptions data
+./job-run-aggregator analyze-historical-data  \
+--current ./<current-disruptions>.json \
+--data-type disruptions \
+--new ./<new-disruptions>.json \
+--leeway 30
+
+# Alerts data
+./job-run-aggregator analyze-historical-data  \
+--current ./<current-alerts>.json \
+--data-type alerts \
+--new ./<new-alerts>.json \
+--leeway 30
+```
+
+You can also automatically pull the latest from BigQuery if you have read credentials.
+
+```sh
+# Disruptions data
+./job-run-aggregator analyze-historical-data  \
+--current ./<current-disruptions>.json \
+--data-type disruptions \
+--leeway 30 \
+--google-service-account-credential-file <gcs_creds.json>
+
+# Alerts data
+./job-run-aggregator analyze-historical-data  \
+--current ./<current-alerts>.json \
+--data-type alerts \
+--leeway 30 \
+--google-service-account-credential-file <gcs_creds.json>
 ```

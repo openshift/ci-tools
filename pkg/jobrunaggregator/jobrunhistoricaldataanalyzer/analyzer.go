@@ -64,7 +64,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 	// We then write to a `require_review` file to record why a review would be required.
 	newReleaseUpdate := currentDataContainsPreviousRelease(previousRelease, currentHistoricalData)
 	if newReleaseUpdate {
-		if err := requireReviewFile("The current data contains previous release version"); err != nil {
+		if err := requireReviewFile("The current data contains previous release version\n"); err != nil {
 			return err
 		}
 	}
@@ -163,11 +163,12 @@ func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentD
 	}
 
 	return compareResults{
-		increaseCount: increaseCount,
-		decreaseCount: decreaseCount,
-		addedJobs:     added,
-		jobs:          results,
-		missingJobs:   missingJobs,
+		increaseCount:   increaseCount,
+		decreaseCount:   decreaseCount,
+		addedJobs:       added,
+		jobs:            results,
+		missingJobs:     missingJobs,
+		newReleaseEvent: newReleaseEvent,
 	}
 }
 
@@ -183,6 +184,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) renderResultFiles(result compareRe
 	args := struct {
 		DataType       string
 		Leeway         string
+		NewReleaseData bool
 		IncreasedCount int
 		DecreasedCount int
 		AddedJobs      []string
@@ -191,6 +193,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) renderResultFiles(result compareRe
 	}{
 		DataType:       o.dataType,
 		Leeway:         fmt.Sprintf("%.2f%%", o.leeway),
+		NewReleaseData: result.newReleaseEvent,
 		IncreasedCount: result.increaseCount,
 		DecreasedCount: result.decreaseCount,
 		AddedJobs:      result.addedJobs,

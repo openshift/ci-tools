@@ -21,9 +21,10 @@ type parsedJobData struct {
 }
 
 type compareResults struct {
-	increaseCount int
-	decreaseCount int
-	addedJobs     []string
-	jobs          []parsedJobData
-	missingJobs   []parsedJobData
+	newReleaseEvent bool
+	increaseCount   int
+	decreaseCount   int
+	addedJobs       []string
+	jobs            []parsedJobData
+	missingJobs     []parsedJobData
 }

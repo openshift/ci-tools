@@ -215,18 +215,17 @@ type mockGit struct {
 	next     int
 	expected []mockGitCall
 
-	tc string
-	t  *testing.T
+	t *testing.T
 }
 
 func (m *mockGit) exec(_ *logrus.Entry, _ string, command ...string) (string, int, error) {
 	cmd := strings.Join(command, " ")
 	if m.next >= len(m.expected) {
-		m.t.Fatalf("%s:\nunexpected git call: %s", m.tc, cmd)
+		m.t.Fatalf("unexpected git call: %s", cmd)
 		return "", 0, nil
 	}
 	if m.expected[m.next].call != cmd {
-		m.t.Fatalf("%s:\nunexpected git call:\n  expected: %s\n  called:   %s", m.tc, m.expected[m.next].call, cmd)
+		m.t.Fatalf("unexpected git call:\n  expected: %s\n  called:   %s", m.expected[m.next].call, cmd)
 		return "", 0, nil
 	}
 
@@ -622,7 +621,6 @@ func TestMirror(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			git := mockGit{
 				expected: tc.expectedGitCalls,
-				tc:       tc.description,
 				t:        t,
 			}
 			m := gitSyncer{
@@ -638,13 +636,13 @@ func TestMirror(t *testing.T) {
 			}
 			err := m.mirror("repo-dir", tc.src, tc.dst)
 			if err == nil && tc.expectError {
-				t.Errorf("%s:\nexpected error, got nil", tc.description)
+				t.Error("expected error, got nil")
 			}
 			if err != nil && !tc.expectError {
-				t.Errorf("%s:\nunexpected error: %v", tc.description, err)
+				t.Errorf("unexpected error: %v", err)
 			}
 			if err = git.check(); err != nil {
-				t.Errorf("%s:\nbad git operation: %v", tc.description, err)
+				t.Errorf("bad git operation: %v", err)
 			}
 		})
 	}

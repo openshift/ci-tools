@@ -27,9 +27,8 @@ type HistoricalJobData struct {
 type AlertHistoricalDataRow struct {
 	AlertName string
 	HistoricalJobData
-	P95     string
-	P99     string
-	JobRuns int
+	P95 string
+	P99 string
 }
 
 func (a *AlertHistoricalDataRow) GetJobData() HistoricalJobData {

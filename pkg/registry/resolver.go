@@ -75,6 +75,9 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 		if config.ClusterProfile == "" {
 			config.ClusterProfile = workflow.ClusterProfile
 		}
+		if config.ClusterClaim == nil {
+			config.ClusterClaim = workflow.ClusterClaim
+		}
 		if config.Pre == nil {
 			config.Pre = workflow.Pre
 		} else {
@@ -107,6 +110,7 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 	}
 	expandedFlow := api.MultiStageTestConfigurationLiteral{
 		ClusterProfile:           config.ClusterProfile,
+		ClusterClaim:             config.ClusterClaim,
 		AllowSkipOnSuccess:       config.AllowSkipOnSuccess,
 		AllowBestEffortPostSteps: config.AllowBestEffortPostSteps,
 		Leases:                   config.Leases,

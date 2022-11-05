@@ -467,6 +467,29 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"            # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
 	"            allow_skip_on_success: false\n" +
+	"            # ClusterClaim claims an OpenShift cluster and exposes environment variable ${KUBECONFIG} to the test container\n" +
+	"            cluster_claim:\n" +
+	"                # Architecture is the architecture for the product.\n" +
+	"                # Defaults to amd64.\n" +
+	"                architecture: ' '\n" +
+	"                # As is the name to use when importing the cluster claim release payload.\n" +
+	"                # If unset, claim release will be imported as `latest`.\n" +
+	"                as: ' '\n" +
+	"                # Cloud is the cloud where the product is installed, e.g., aws.\n" +
+	"                cloud: ' '\n" +
+	"                # Labels is the labels to select the cluster pools\n" +
+	"                labels:\n" +
+	"                    \"\": \"\"\n" +
+	"                # Owner is the owner of cloud account used to install the product, e.g., dpp.\n" +
+	"                owner: ' '\n" +
+	"                # Product is the name of the product being released.\n" +
+	"                # Defaults to ocp.\n" +
+	"                product: ' '\n" +
+	"                # Timeout is how long ci-operator will wait for the cluster to be ready.\n" +
+	"                # Defaults to 1h.\n" +
+	"                timeout: 0s\n" +
+	"                # Version is the version of the product\n" +
+	"                version: ' '\n" +
 	"            # ClusterProfile defines the profile/cloud provider for end-to-end test steps.\n" +
 	"            cluster_profile: ' '\n" +
 	"            # Dependencies holds override values for dependency parameters.\n" +
@@ -860,6 +883,29 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"            # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
 	"            allow_skip_on_success: false\n" +
+	"            # ClusterClaim claims an OpenShift cluster and exposes environment variable ${KUBECONFIG} to the test container\n" +
+	"            cluster_claim:\n" +
+	"                # Architecture is the architecture for the product.\n" +
+	"                # Defaults to amd64.\n" +
+	"                architecture: ' '\n" +
+	"                # As is the name to use when importing the cluster claim release payload.\n" +
+	"                # If unset, claim release will be imported as `latest`.\n" +
+	"                as: ' '\n" +
+	"                # Cloud is the cloud where the product is installed, e.g., aws.\n" +
+	"                cloud: ' '\n" +
+	"                # Labels is the labels to select the cluster pools\n" +
+	"                labels:\n" +
+	"                    \"\": \"\"\n" +
+	"                # Owner is the owner of cloud account used to install the product, e.g., dpp.\n" +
+	"                owner: ' '\n" +
+	"                # Product is the name of the product being released.\n" +
+	"                # Defaults to ocp.\n" +
+	"                product: ' '\n" +
+	"                # Timeout is how long ci-operator will wait for the cluster to be ready.\n" +
+	"                # Defaults to 1h.\n" +
+	"                timeout: 0s\n" +
+	"                # Version is the version of the product\n" +
+	"                version: ' '\n" +
 	"            # ClusterProfile defines the profile/cloud provider for end-to-end test steps.\n" +
 	"            cluster_profile: ' '\n" +
 	"            # Dependencies holds override values for dependency parameters.\n" +
@@ -1242,6 +1288,29 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"        # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
 	"        allow_skip_on_success: false\n" +
+	"        # ClusterClaim claims an OpenShift cluster and exposes environment variable ${KUBECONFIG} to the test container\n" +
+	"        cluster_claim:\n" +
+	"            # Architecture is the architecture for the product.\n" +
+	"            # Defaults to amd64.\n" +
+	"            architecture: ' '\n" +
+	"            # As is the name to use when importing the cluster claim release payload.\n" +
+	"            # If unset, claim release will be imported as `latest`.\n" +
+	"            as: ' '\n" +
+	"            # Cloud is the cloud where the product is installed, e.g., aws.\n" +
+	"            cloud: ' '\n" +
+	"            # Labels is the labels to select the cluster pools\n" +
+	"            labels:\n" +
+	"                \"\": \"\"\n" +
+	"            # Owner is the owner of cloud account used to install the product, e.g., dpp.\n" +
+	"            owner: ' '\n" +
+	"            # Product is the name of the product being released.\n" +
+	"            # Defaults to ocp.\n" +
+	"            product: ' '\n" +
+	"            # Timeout is how long ci-operator will wait for the cluster to be ready.\n" +
+	"            # Defaults to 1h.\n" +
+	"            timeout: 0s\n" +
+	"            # Version is the version of the product\n" +
+	"            version: ' '\n" +
 	"        # ClusterProfile defines the profile/cloud provider for end-to-end test steps.\n" +
 	"        cluster_profile: ' '\n" +
 	"        # Dependencies holds override values for dependency parameters.\n" +
@@ -1635,6 +1704,29 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"        # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
 	"        allow_skip_on_success: false\n" +
+	"        # ClusterClaim claims an OpenShift cluster and exposes environment variable ${KUBECONFIG} to the test container\n" +
+	"        cluster_claim:\n" +
+	"            # Architecture is the architecture for the product.\n" +
+	"            # Defaults to amd64.\n" +
+	"            architecture: ' '\n" +
+	"            # As is the name to use when importing the cluster claim release payload.\n" +
+	"            # If unset, claim release will be imported as `latest`.\n" +
+	"            as: ' '\n" +
+	"            # Cloud is the cloud where the product is installed, e.g., aws.\n" +
+	"            cloud: ' '\n" +
+	"            # Labels is the labels to select the cluster pools\n" +
+	"            labels:\n" +
+	"                \"\": \"\"\n" +
+	"            # Owner is the owner of cloud account used to install the product, e.g., dpp.\n" +
+	"            owner: ' '\n" +
+	"            # Product is the name of the product being released.\n" +
+	"            # Defaults to ocp.\n" +
+	"            product: ' '\n" +
+	"            # Timeout is how long ci-operator will wait for the cluster to be ready.\n" +
+	"            # Defaults to 1h.\n" +
+	"            timeout: 0s\n" +
+	"            # Version is the version of the product\n" +
+	"            version: ' '\n" +
 	"        # ClusterProfile defines the profile/cloud provider for end-to-end test steps.\n" +
 	"        cluster_profile: ' '\n" +
 	"        # Dependencies holds override values for dependency parameters.\n" +

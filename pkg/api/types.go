@@ -1011,6 +1011,8 @@ type TestStep struct {
 type MultiStageTestConfiguration struct {
 	// ClusterProfile defines the profile/cloud provider for end-to-end test steps.
 	ClusterProfile ClusterProfile `json:"cluster_profile,omitempty"`
+	// ClusterClaim claims an OpenShift cluster and exposes environment variable ${KUBECONFIG} to the test container
+	ClusterClaim *ClusterClaim `json:"cluster_claim,omitempty"`
 	// Pre is the array of test steps run to set up the environment for the test.
 	Pre []TestStep `json:"pre,omitempty"`
 	// Test is the array of test steps that define the actual test.
@@ -1052,6 +1054,8 @@ type DependencyOverrides map[string]string
 type MultiStageTestConfigurationLiteral struct {
 	// ClusterProfile defines the profile/cloud provider for end-to-end test steps.
 	ClusterProfile ClusterProfile `json:"cluster_profile"`
+	// ClusterClaim claims an OpenShift cluster and exposes environment variable ${KUBECONFIG} to the test container
+	ClusterClaim *ClusterClaim `json:"cluster_claim,omitempty"`
 	// Pre is the array of test steps run to set up the environment for the test.
 	Pre []LiteralTestStep `json:"pre,omitempty"`
 	// Test is the array of test steps that define the actual test.

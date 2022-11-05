@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
 	"k8s.io/apimachinery/pkg/util/diff"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -683,6 +685,202 @@ func TestResolve(t *testing.T) {
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
 			ClusterProfile: api.ClusterProfileAzure4,
+			Pre: []api.LiteralTestStep{{
+				As:       "ipi-install",
+				From:     "installer",
+				Commands: "openshift-cluster install",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+			Test: []api.LiteralTestStep{{
+				As:       "custom-e2e",
+				From:     "test-image",
+				Commands: "make custom-e2e-2",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+			Post: []api.LiteralTestStep{{
+				As:       "ipi-teardown",
+				From:     "installer",
+				Commands: "openshift-cluster destroy",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+		},
+	}, {
+		name: "Workflow with Test and ClusterClaim overridden",
+		config: api.MultiStageTestConfiguration{
+			Workflow: &awsWorkflow,
+			ClusterClaim: &api.ClusterClaim{
+				Architecture: "arm64",
+				Cloud:        "gcp",
+				Owner:        "openshift-ci2",
+				Product:      "rhcos",
+				Timeout:      &prowv1.Duration{Duration: time.Minute},
+				Version:      "4.11",
+			},
+			Test: []api.TestStep{{
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "custom-e2e",
+					From:     "test-image",
+					Commands: "make custom-e2e-2",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			}},
+		},
+		workflowMap: WorkflowByName{
+			awsWorkflow: {
+				ClusterClaim: &api.ClusterClaim{
+					Architecture: "amd64",
+					Cloud:        "aws",
+					Owner:        "openshift-ci",
+					Product:      "ocp",
+					Timeout:      &prowv1.Duration{Duration: time.Hour},
+					Version:      "4.10",
+				},
+				Pre: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "ipi-install",
+						From:     "installer",
+						Commands: "openshift-cluster install",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+				Test: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "e2e",
+						From:     "my-image",
+						Commands: "make custom-e2e",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+				Post: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "ipi-teardown",
+						From:     "installer",
+						Commands: "openshift-cluster destroy",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+			},
+		},
+		expectedRes: api.MultiStageTestConfigurationLiteral{
+			ClusterClaim: &api.ClusterClaim{
+				Architecture: "arm64",
+				Cloud:        "gcp",
+				Owner:        "openshift-ci2",
+				Product:      "rhcos",
+				Timeout:      &prowv1.Duration{Duration: time.Minute},
+				Version:      "4.11",
+			},
+			Pre: []api.LiteralTestStep{{
+				As:       "ipi-install",
+				From:     "installer",
+				Commands: "openshift-cluster install",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+			Test: []api.LiteralTestStep{{
+				As:       "custom-e2e",
+				From:     "test-image",
+				Commands: "make custom-e2e-2",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+			Post: []api.LiteralTestStep{{
+				As:       "ipi-teardown",
+				From:     "installer",
+				Commands: "openshift-cluster destroy",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+		},
+	}, {
+		name: "Propagating ClusterClaim from Workflow to Config",
+		config: api.MultiStageTestConfiguration{
+			Workflow: &awsWorkflow,
+			Test: []api.TestStep{{
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "custom-e2e",
+					From:     "test-image",
+					Commands: "make custom-e2e-2",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			}},
+		},
+		workflowMap: WorkflowByName{
+			awsWorkflow: {
+				ClusterClaim: &api.ClusterClaim{
+					Architecture: "amd64",
+					Cloud:        "aws",
+					Owner:        "openshift-ci",
+					Product:      "ocp",
+					Timeout:      &prowv1.Duration{Duration: time.Hour},
+					Version:      "4.10",
+				},
+				Pre: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "ipi-install",
+						From:     "installer",
+						Commands: "openshift-cluster install",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+				Test: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "e2e",
+						From:     "my-image",
+						Commands: "make custom-e2e",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+				Post: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "ipi-teardown",
+						From:     "installer",
+						Commands: "openshift-cluster destroy",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+			},
+		},
+		expectedRes: api.MultiStageTestConfigurationLiteral{
+			ClusterClaim: &api.ClusterClaim{
+				Architecture: "amd64",
+				Cloud:        "aws",
+				Owner:        "openshift-ci",
+				Product:      "ocp",
+				Timeout:      &prowv1.Duration{Duration: time.Hour},
+				Version:      "4.10",
+			},
 			Pre: []api.LiteralTestStep{{
 				As:       "ipi-install",
 				From:     "installer",

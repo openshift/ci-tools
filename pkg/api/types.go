@@ -1429,7 +1429,7 @@ func (p ClusterProfile) LeaseType() string {
 	case ClusterProfileAWS1QE:
 		return "aws-1-qe-quota-slice"
 	case ClusterProfileAWSOutpost:
-		return "aws-qe-quota-slice"
+		return "aws-outpost-quota-slice"
 	case ClusterProfileAWSC2SQE:
 		return "aws-c2s-qe-quota-slice"
 	case ClusterProfileAWSChinaQE:

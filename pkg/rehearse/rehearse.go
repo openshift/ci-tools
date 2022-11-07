@@ -90,9 +90,9 @@ func RehearsalCandidateFromJobSpec(jobSpec *pjdwapi.JobSpec) RehearsalCandidate 
 }
 
 func RehearsalCandidateFromPullRequest(pullRequest *github.PullRequest, baseSHA string) RehearsalCandidate {
-	repo := pullRequest.Head.Repo
+	repo := pullRequest.Base.Repo
 	return RehearsalCandidate{
-		org:  pullRequest.Base.Repo.Owner.Login,
+		org:  repo.Owner.Login,
 		repo: repo.Name,
 		base: ref{
 			sha: baseSHA,
@@ -163,8 +163,11 @@ func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, can
 	periodics := config.Periodics{}
 
 	changedPeriodics := diffs.GetChangedPeriodics(masterConfig.Prow, prConfig.Prow, logger)
+	filterPeriodics(changedPeriodics, logger)
 	periodics.AddAll(changedPeriodics, config.ChangedPeriodic)
+
 	changedPresubmits := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
+	filterPresubmits(&changedPresubmits, logger)
 	presubmits.AddAll(changedPresubmits, config.ChangedPresubmit)
 
 	// We can only detect changes if we managed to load both ci-operator config versions
@@ -332,6 +335,7 @@ func (r RehearsalConfig) RehearseJobs(candidate RehearsalCandidate, candidatePat
 	}
 
 	executor := NewExecutor(presubmitsToRehearse, candidate.prNumber, candidatePath, prRefs, r.DryRun, loggers, pjclient, prConfig.Prow.ProwJobNamespace)
+	//TODO: once the old pj-rehearse is removed we should not wait for success
 	success, err := executor.ExecuteJobs()
 	if err != nil {
 		jobLogger.WithError(err).Error("Failed to rehearse jobs")

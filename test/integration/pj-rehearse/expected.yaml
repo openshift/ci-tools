@@ -247,7 +247,7 @@
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -327,7 +327,7 @@
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -410,7 +410,7 @@
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -492,7 +492,7 @@
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -596,7 +596,7 @@
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -700,7 +700,7 @@
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -790,7 +790,7 @@
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -894,7 +894,7 @@
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -1003,7 +1003,7 @@
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -1089,7 +1089,7 @@
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -1198,7 +1198,7 @@
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -1307,7 +1307,7 @@
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -1411,7 +1411,7 @@
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -1515,7 +1515,7 @@
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -1619,7 +1619,7 @@
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z

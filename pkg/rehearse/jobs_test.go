@@ -341,7 +341,7 @@ func makeTestingPresubmit(name, context, branch string) *prowconfig.Presubmit {
 				}},
 			},
 		},
-		RerunCommand: "/test pj-rehearse",
+		RerunCommand: "/pj-rehearse",
 		Reporter:     prowconfig.Reporter{Context: context},
 		Brancher: prowconfig.Brancher{Branches: []string{
 			fmt.Sprintf("^%s$", branch),
@@ -480,7 +480,7 @@ func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, or
 			Refs:         refs,
 			Report:       true,
 			Context:      context,
-			RerunCommand: "/test pj-rehearse",
+			RerunCommand: "/pj-rehearse",
 			ExtraRefs: []pjapi.Refs{
 				{
 					Org:     org,
@@ -953,77 +953,140 @@ func TestWaitForJobsLog(t *testing.T) {
 }
 
 func TestFilterPresubmits(t *testing.T) {
-	labels := map[string]string{"pj-rehearse.openshift.io/can-be-rehearsed": "true"}
+	canBeRehearsed := map[string]string{"pj-rehearse.openshift.io/can-be-rehearsed": "true"}
 
 	testCases := []struct {
 		description string
-		crippleFunc func(*prowconfig.Presubmit) map[string][]prowconfig.Presubmit
-		expected    func(*prowconfig.Presubmit) config.Presubmits
+		presubmits  config.Presubmits
+		expected    config.Presubmits
 	}{
 		{
 			description: "basic presubmit job, allowed",
-			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
-				j.Spec.Volumes = []v1.Volume{{Name: "volume"}}
-				j.Labels = labels
-				return map[string][]prowconfig.Presubmit{"org/repo": {*j}}
-			},
-			expected: func(j *prowconfig.Presubmit) config.Presubmits {
-				j.Spec.Volumes = []v1.Volume{{Name: "volume"}}
-				return config.Presubmits{"org/repo": {*j}}
-			},
+			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false)}},
+			expected:    config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false)}},
 		},
 		{
 			description: "job with no rehearse label, not allowed",
-			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
-				return map[string][]prowconfig.Presubmit{"org/repo": {*j}}
-			},
-			expected: func(j *prowconfig.Presubmit) config.Presubmits {
-				return config.Presubmits{}
-			},
+			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(map[string]string{}, false)}},
+			expected:    config.Presubmits{},
 		},
 		{
 			description: "hidden job, not allowed",
-			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
-				j.Labels = labels
-				j.Hidden = true
-				return map[string][]prowconfig.Presubmit{"org/repo": {*j}}
-			},
-			expected: func(j *prowconfig.Presubmit) config.Presubmits {
-				return config.Presubmits{}
-			},
+			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, true)}},
+			expected:    config.Presubmits{},
+		},
+		{
+			description: "multiple jobs, one allowed",
+			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false), *makePresubmit(map[string]string{}, false)}},
+			expected:    config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false)}},
+		},
+		{
+			description: "multiple repos, some jobs allowed",
+			presubmits: config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false), *makePresubmit(map[string]string{}, false)},
+				"org/different": {*makePresubmit(canBeRehearsed, false)}},
+			expected: config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false)},
+				"org/different": {*makePresubmit(canBeRehearsed, false)}},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			basePresubmit := makeBasePresubmit()
-			tc.crippleFunc(basePresubmit)
-			p := filterPresubmits(map[string][]prowconfig.Presubmit{"org/repo": {*basePresubmit}}, logrus.New())
-
-			expected := tc.expected(basePresubmit)
-			if !equality.Semantic.DeepEqual(expected, p) {
-				t.Fatalf("Found: %#v\nExpected: %#v", p, expected)
+			filterPresubmits(&tc.presubmits, logrus.New())
+			if diff := cmp.Diff(tc.expected, tc.presubmits, cmp.AllowUnexported(prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{}, prowconfig.Presubmit{})); diff != "" {
+				t.Fatalf("filtered didn't match expected, diff: %s", diff)
 			}
 		})
 
 	}
 }
 
-func makeBasePresubmit() *prowconfig.Presubmit {
+func makePresubmit(extraLabels map[string]string, hidden bool) *prowconfig.Presubmit {
+	labels := make(map[string]string)
+	if len(extraLabels) > 0 {
+		labels = extraLabels
+	}
+	labels["ci.openshift.org/rehearse"] = "123"
+
 	return &prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
 			Agent:  "kubernetes",
 			Name:   "pull-ci-organization-repo-master-test",
-			Labels: map[string]string{"ci.openshift.org/rehearse": "123"},
+			Labels: labels,
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{{
 					Command: []string{"ci-operator"},
 					Args:    []string{"arg"},
 				}},
 			},
+			Hidden: hidden,
 		},
-		RerunCommand: "/test pj-rehearse",
+		RerunCommand: "/pj-rehearse",
 		Reporter:     prowconfig.Reporter{Context: "ci/prow/test"},
 		Brancher:     prowconfig.Brancher{Branches: []string{"^master$"}},
+	}
+}
+
+func TestFilterPeriodics(t *testing.T) {
+	canBeRehearsed := map[string]string{"pj-rehearse.openshift.io/can-be-rehearsed": "true"}
+
+	testCases := []struct {
+		description string
+		periodics   config.Periodics
+		expected    config.Periodics
+	}{
+		{
+			description: "basic periodic job, allowed",
+			periodics:   config.Periodics{"org/repo": *makePeriodic(canBeRehearsed, false)},
+			expected:    config.Periodics{"org/repo": *makePeriodic(canBeRehearsed, false)},
+		},
+		{
+			description: "job with no rehearse label, not allowed",
+			periodics:   config.Periodics{"org/repo": *makePeriodic(map[string]string{}, false)},
+			expected:    config.Periodics{},
+		},
+		{
+			description: "hidden job, not allowed",
+			periodics:   config.Periodics{"org/repo": *makePeriodic(canBeRehearsed, true)},
+			expected:    config.Periodics{},
+		},
+		{
+			description: "multiple repos, some jobs allowed",
+			periodics: config.Periodics{"org/repo": *makePeriodic(canBeRehearsed, false),
+				"org/different": *makePeriodic(map[string]string{}, false)},
+			expected: config.Periodics{"org/repo": *makePeriodic(canBeRehearsed, false)},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			filterPeriodics(tc.periodics, logrus.New())
+			if diff := cmp.Diff(tc.expected, tc.periodics, cmp.AllowUnexported(prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{}, prowconfig.Periodic{})); diff != "" {
+				t.Fatalf("filtered didn't match expected, diff: %s", diff)
+			}
+		})
+
+	}
+}
+
+func makePeriodic(extraLabels map[string]string, hidden bool) *prowconfig.Periodic {
+	labels := make(map[string]string)
+	if len(extraLabels) > 0 {
+		labels = extraLabels
+	}
+	labels["ci.openshift.org/rehearse"] = "123"
+
+	return &prowconfig.Periodic{
+		JobBase: prowconfig.JobBase{
+			Agent:  "kubernetes",
+			Name:   "periodic-test",
+			Labels: labels,
+			Spec: &v1.PodSpec{
+				Containers: []v1.Container{{
+					Command: []string{"ci-operator"},
+					Args:    []string{"arg"},
+				}},
+			},
+			Hidden: hidden,
+		},
+		Cron: "0 * * * *",
 	}
 }
 

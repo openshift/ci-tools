@@ -44,7 +44,7 @@ const (
 	// LabelContext exposes the context the job would have had running normally
 	LabelContext = "ci.openshift.io/rehearse.context"
 
-	defaultRehearsalRerunCommand = "/test pj-rehearse"
+	defaultRehearsalRerunCommand = "/pj-rehearse"
 	defaultRehearsalTrigger      = `(?m)^/test (?:.*? )?pj-rehearse(?: .*?)?$`
 	logRehearsalJob              = "rehearsal-job"
 	logCiopConfigFile            = "ciop-config-file"
@@ -200,51 +200,55 @@ func contextFor(source *prowconfig.Presubmit) string {
 
 }
 
-func filterPresubmits(changedPresubmits map[string][]prowconfig.Presubmit, logger logrus.FieldLogger) config.Presubmits {
-	presubmits := config.Presubmits{}
-	for repo, jobs := range changedPresubmits {
-		for _, job := range jobs {
+func filterPresubmits(changedPresubmits *config.Presubmits, logger logrus.FieldLogger) {
+	for repo, jobs := range *changedPresubmits {
+		for i, job := range jobs {
 			jobLogger := logger.WithFields(logrus.Fields{"repo": repo, "job": job.Name})
 
 			if job.Hidden {
 				jobLogger.Warn("hidden jobs are not allowed to be rehearsed")
+				jobs = append(jobs[:i], jobs[i+1:]...)
 				continue
 			}
 
 			if !hasRehearsableLabel(job.Labels) {
 				jobLogger.Warnf("job is not allowed to be rehearsed. Label %s is required", jobconfig.CanBeRehearsedLabel)
+				jobs = append(jobs[:i], jobs[i+1:]...)
 				continue
 			}
 
 			if len(job.Branches) == 0 {
 				jobLogger.Warn("cannot rehearse jobs with no branches")
+				jobs = append(jobs[:i], jobs[i+1:]...)
 				continue
 			}
+		}
 
-			presubmits.Add(repo, job, config.GetSourceType(job.Labels))
+		// Get rid of the originals so we can update in-place
+		delete(*changedPresubmits, repo)
+
+		for _, job := range jobs {
+			changedPresubmits.Add(repo, job, config.GetSourceType(job.Labels))
 		}
 	}
-	return presubmits
 }
 
-func filterPeriodics(changedPeriodics config.Periodics, logger logrus.FieldLogger) []prowconfig.Periodic {
-	var periodics []prowconfig.Periodic
-	for _, periodic := range changedPeriodics {
+func filterPeriodics(changedPeriodics config.Periodics, logger logrus.FieldLogger) {
+	for key, periodic := range changedPeriodics {
 		jobLogger := logger.WithField("job", periodic.Name)
 
 		if periodic.Hidden {
 			jobLogger.Warn("hidden jobs are not allowed to be rehearsed")
+			delete(changedPeriodics, key)
 			continue
 		}
 
 		if !hasRehearsableLabel(periodic.Labels) {
 			jobLogger.Warnf("job is not allowed to be rehearsed. Label %s is required", jobconfig.CanBeRehearsedLabel)
+			delete(changedPeriodics, key)
 			continue
 		}
-
-		periodics = append(periodics, periodic)
 	}
-	return periodics
 }
 
 func hasRehearsableLabel(labels map[string]string) bool {
@@ -418,8 +422,7 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics)
 	var rehearsals []prowconfig.Periodic
 	allImageStreamTags := apihelper.ImageStreamTagMap{}
 
-	filteredPeriodics := filterPeriodics(periodics, jc.loggers.Job)
-	for _, job := range filteredPeriodics {
+	for _, job := range periodics {
 		jobLogger := jc.loggers.Job.WithField("target-job", job.Name)
 		metadata := api.Metadata{
 			Variant: VariantFromLabels(job.Labels),
@@ -451,8 +454,7 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 	var rehearsals []*prowconfig.Presubmit
 	allImageStreamTags := apihelper.ImageStreamTagMap{}
 
-	presubmitsFiltered := filterPresubmits(presubmits, jc.loggers.Job)
-	for orgrepo, jobs := range presubmitsFiltered {
+	for orgrepo, jobs := range presubmits {
 		splitOrgRepo := strings.Split(orgrepo, "/")
 		if len(splitOrgRepo) != 2 {
 			jc.loggers.Job.WithError(fmt.Errorf("failed to identify org and repo from string %s", orgrepo)).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")

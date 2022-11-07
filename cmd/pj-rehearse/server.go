@@ -259,30 +259,33 @@ func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEv
 					prConfig, prRefs, imageStreamTags, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, changedTemplates, changedClusterProfiles, limit, loggers)
 					if err != nil {
 						logger.WithError(err).Error("couldn't set up jobs")
-						if err = s.ghc.CreateComment(org, repo, number, "`pj-rehearse` was unable to set up jobs"); err != nil {
-							logger.WithError(err).Error("failed to create comment")
-						}
+						s.reportFailure("unable to set up jobs", event, logger)
 					}
 
 					if err := prConfig.Prow.ValidateJobConfig(); err != nil {
 						logger.WithError(err).Error("validation of job config failed")
-						if err = s.ghc.CreateComment(org, repo, number, "`pj-rehearse` validation of job config failed"); err != nil {
-							logger.WithError(err).Error("failed to create comment")
-						}
+						s.reportFailure("config validation failed", event, logger)
 					}
 
 					_, err = rc.RehearseJobs(candidate, candidatePath, prConfig, prRefs, imageStreamTags, presubmitsToRehearse, changedTemplates, changedClusterProfiles, loggers)
 					if err != nil {
 						logger.WithError(err).Error("couldn't rehearse jobs")
-						if err := s.ghc.CreateComment(org, repo, number, "Failed to create rehearsal jobs"); err != nil {
-							logger.WithError(err).Error("couldn't create comment")
-						}
+						s.reportFailure("failed to create rehearsal jobs", event, logger)
 					}
 				} else {
 					s.acknowledgeRehearsals(org, repo, number, logger)
+					if err = s.ghc.CreateComment(org, repo, number, fmt.Sprintf("@%s: no rehearsable tests are affected by this change", event.Comment.User.Login)); err != nil {
+						logger.WithError(err).Error("failed to create comment")
+					}
 				}
 			}
 		}
+	}
+}
+
+func (s *server) reportFailure(message string, event github.IssueCommentEvent, l *logrus.Entry) {
+	if err := s.ghc.CreateComment(event.Repo.Owner.Login, event.Repo.Name, event.Issue.Number, fmt.Sprintf("@%s, `pj-rehearse`: %s", event.Comment.User.Login, message)); err != nil {
+		l.WithError(err).Error("failed to create comment")
 	}
 }
 

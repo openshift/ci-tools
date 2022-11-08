@@ -39,7 +39,7 @@ spec:
             boot: true
             image: projects/rhcos-cloud/global/images/rhcos-49-84-202110081407-0-gcp-x86-64
             sizeGb: 700
-            type: pd-standard
+            type: pd-balanced
           kind: GCPMachineProviderSpec
           machineType: e2-custom-16-32768
           metadata: {}

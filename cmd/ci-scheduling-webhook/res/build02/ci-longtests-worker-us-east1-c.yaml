@@ -9,20 +9,20 @@ metadata:
     machine.openshift.io/vCPU: "16"
   labels:
     machine.openshift.io/cluster-api-cluster: build0-gstfj
-  name: build0-gstfj-ci-longtests-worker-b
+  name: build0-gstfj-ci-longtests-worker-c
   namespace: openshift-machine-api
 spec:
   selector:
     matchLabels:
       machine.openshift.io/cluster-api-cluster: build0-gstfj
-      machine.openshift.io/cluster-api-machineset: build0-gstfj-ci-longtests-worker-b
+      machine.openshift.io/cluster-api-machineset: build0-gstfj-ci-longtests-worker-c
   template:
     metadata:
       labels:
         machine.openshift.io/cluster-api-cluster: build0-gstfj
         machine.openshift.io/cluster-api-machine-role: worker
         machine.openshift.io/cluster-api-machine-type: worker
-        machine.openshift.io/cluster-api-machineset: build0-gstfj-ci-longtests-worker-b
+        machine.openshift.io/cluster-api-machineset: build0-gstfj-ci-longtests-worker-c
     spec:
       metadata:
         labels:
@@ -58,7 +58,7 @@ spec:
           - ci-workload-longtests
           userDataSecret:
             name: worker-user-data-ignv3
-          zone: us-east1-b
+          zone: us-east1-c
       taints:
         - effect: NoSchedule
           key: node-role.kubernetes.io/ci-longtests-worker
@@ -67,7 +67,7 @@ spec:
 apiVersion: autoscaling.openshift.io/v1beta1
 kind: MachineAutoscaler
 metadata:
-  name: build0-gstfj-ci-longtests-worker-b
+  name: build0-gstfj-ci-longtests-worker-c
   namespace: openshift-machine-api
 spec:
   maxReplicas: 120
@@ -75,4 +75,4 @@ spec:
   scaleTargetRef:
     apiVersion: machine.openshift.io/v1beta1
     kind: MachineSet
-    name: build0-gstfj-ci-longtests-worker-b
+    name: build0-gstfj-ci-longtests-worker-c

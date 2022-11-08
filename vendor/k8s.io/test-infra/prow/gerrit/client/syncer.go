@@ -21,7 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	stdio "io"
 	"sync"
 	"time"
 
@@ -52,15 +52,14 @@ func NewSyncTime(path string, opener opener, ctx context.Context) *SyncTime {
 	}
 }
 
-func (st *SyncTime) Init(hostProjects ProjectsFlag) error {
-	logrus.WithField("projects", hostProjects).Info(st.val)
+func (st *SyncTime) Init(hostProjects map[string]map[string]*config.GerritQueryFilter) error {
 	st.lock.RLock()
 	zero := st.val == nil
 	st.lock.RUnlock()
 	if !zero {
 		return nil
 	}
-	return st.update(ProjectsFlagToConfig(hostProjects))
+	return st.update(hostProjects)
 }
 
 func (st *SyncTime) update(hostProjects map[string]map[string]*config.GerritQueryFilter) error {
@@ -107,7 +106,7 @@ func (st *SyncTime) currentState() (LastSyncState, error) {
 		return nil, fmt.Errorf("open: %w", err)
 	}
 	defer io.LogClose(r)
-	buf, err := ioutil.ReadAll(r)
+	buf, err := stdio.ReadAll(r)
 	if err != nil {
 		return nil, fmt.Errorf("read: %w", err)
 	}

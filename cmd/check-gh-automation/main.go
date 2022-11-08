@@ -196,6 +196,10 @@ func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string 
 	for _, c := range configs {
 		path := strings.TrimPrefix(c, config.CiopConfigInRepoPath+"/")
 		split := strings.Split(path, "/")
+		if split[1] == ".config.prowgen" {
+			continue
+		}
+
 		orgRepos.Insert(fmt.Sprintf("%s/%s", split[0], split[1]))
 	}
 

@@ -56,6 +56,19 @@ func (p *Prowgen) Validate() error {
 	return utilerrors.NewAggregate(errs)
 }
 
+func (p *Prowgen) MergeDefaults(defaults *Prowgen) {
+	if defaults.Private {
+		p.Private = true
+	}
+	if defaults.Expose {
+		p.Expose = true
+	}
+	if defaults.Rehearsals.DisableAll {
+		p.Rehearsals.DisableAll = true
+	}
+	p.Rehearsals.DisabledRehearsals = append(p.Rehearsals.DisabledRehearsals, defaults.Rehearsals.DisabledRehearsals...)
+}
+
 type Rehearsals struct {
 	// DisableAll indicates that all jobs will not have their "can-be-rehearsed" label set
 	// and therefore will not be picked up for rehearsals.

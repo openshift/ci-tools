@@ -161,6 +161,9 @@ func generateJobs(resolver registry.Resolver, cache map[string]*config.Prowgen, 
 		switch {
 		case orgConfig != nil:
 			pInfo.Config = *orgConfig
+			if repoConfig != nil {
+				pInfo.Config.MergeDefaults(repoConfig)
+			}
 		case repoConfig != nil:
 			pInfo.Config = *repoConfig
 		}

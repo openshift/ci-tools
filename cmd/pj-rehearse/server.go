@@ -26,6 +26,7 @@ const (
 	rehearseMax        = "/pj-rehearse max"
 	rehearseSkip       = "/pj-rehearse skip"
 	rehearseAck        = "/pj-rehearse ack"
+	rehearseReject     = "/pj-rehearse reject"
 )
 
 var commentRegex = regexp.MustCompile(`(?m)^/pj-rehearse\s*(.*)$`)
@@ -33,6 +34,7 @@ var commentRegex = regexp.MustCompile(`(?m)^/pj-rehearse\s*(.*)$`)
 type githubClient interface {
 	CreateComment(owner, repo string, number int, comment string) error
 	AddLabel(org, repo string, number int, label string) error
+	RemoveLabel(org, repo string, number int, label string) error
 	GetPullRequest(org, repo string, number int) (*github.PullRequest, error)
 	GetRef(org, repo, ref string) (string, error)
 }
@@ -78,6 +80,12 @@ func (s *server) helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, e
 		Description: fmt.Sprintf("Opt-out of rehearsals for this PR, and add the '%s' label allowing merge once other requirements are met.", rehearsalsAckLabel),
 		WhoCanUse:   "Anyone can use on trusted PRs",
 		Examples:    []string{rehearseSkip},
+	})
+	pluginHelp.AddCommand(pluginhelp.Command{
+		Usage:       rehearseReject,
+		Description: fmt.Sprintf("Un-acknowledge the rehearsals and remove the '%s' label blocking merge until it is added back.", rehearsalsAckLabel),
+		WhoCanUse:   "Anyone can use on trusted PRs",
+		Examples:    []string{rehearseReject},
 	})
 	return pluginHelp, nil
 }
@@ -206,6 +214,10 @@ func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEv
 			switch command {
 			case rehearseAck, rehearseSkip:
 				s.acknowledgeRehearsals(org, repo, number, logger)
+			case rehearseReject:
+				if err := s.ghc.RemoveLabel(org, repo, number, rehearsalsAckLabel); err != nil {
+					logger.WithError(err).Errorf("failed to remove '%s' label", rehearsalsAckLabel)
+				}
 			case rehearseNormal, rehearseMore, rehearseMax:
 				if rehearsalsTriggered {
 					// We don't want to trigger rehearsals more than once per comment
@@ -356,7 +368,7 @@ func (s *server) getJobsTableLines(presubmits config.Presubmits, periodics confi
 
 	if jobCount > limitToList {
 		lines = append(lines, "") // For formatting
-		lines = append(lines, fmt.Sprintf("A total of %d jobs were affected by this change. The above listing is non-exhaustive and limited to %d jobs", jobCount, limitToList))
+		lines = append(lines, fmt.Sprintf("A total of %d jobs have been affected by this change. The above listing is non-exhaustive and limited to %d jobs.", jobCount, limitToList))
 	}
 
 	return append(lines, "") // For formatting
@@ -373,13 +385,14 @@ func (s *server) getUsageDetailsLines() []string {
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals", rehearseMore, rc.MoreLimit),
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals", rehearseMax, rc.MaxLimit),
 		"",
-		fmt.Sprintf("Once you are satisfied with the results of the rehearsals, comment: `%s` to unblock merge. When the `%s` label is present on your PR, merge will no longer be blocked by rehearsals", rehearseAck, rehearsalsAckLabel),
+		fmt.Sprintf("Once you are satisfied with the results of the rehearsals, comment: `%s` to unblock merge. When the `%s` label is present on your PR, merge will no longer be blocked by rehearsals.", rehearseAck, rehearsalsAckLabel),
+		fmt.Sprintf("If you would like the `%s` label removed, comment: `%s` to re-block merging.", rehearsalsAckLabel, rehearseReject),
 		"</details>",
 	}
 }
 
 func (s *server) acknowledgeRehearsals(org, repo string, number int, logger *logrus.Entry) {
 	if err := s.ghc.AddLabel(org, repo, number, rehearsalsAckLabel); err != nil {
-		logger.WithError(err).Error("failed to add rehearsals-ack label")
+		logger.WithError(err).Errorf("failed to add '%s' label", rehearsalsAckLabel)
 	}
 }

@@ -156,6 +156,20 @@ func TestMultiStage(t *testing.T) {
 			output:   []string{`Imported release 4.7.`, `to tag release:latest-e2e-claim-depend-on-release-image`, `e2e-claim-depend-on-release-image-claim-step succeeded`},
 		},
 		{
+			name:     "workflow claims a cluster",
+			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-claim-in-workflow"},
+			needHive: true,
+			success:  true,
+			output:   []string{`Imported release 4.7.`, `to tag release:latest-e2e-claim-in-workflow`, `e2e-claim-in-workflow-step succeeded`},
+		},
+		{
+			name:     "workflow claims a cluster but config overrides claiming configuration",
+			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-claim-overridden-in-config"},
+			needHive: true,
+			success:  true,
+			output:   []string{`Imported release 4.8.`, `to tag release:latest-e2e-claim-overridden-in-config`, `e2e-claim-overridden-in-config-step succeeded`},
+		},
+		{
 			name:    "assembled releases function",
 			args:    []string{"--unresolved-config=integration-releases.yaml", "--target=verify-releases"},
 			env:     []string{defaultJobSpec},

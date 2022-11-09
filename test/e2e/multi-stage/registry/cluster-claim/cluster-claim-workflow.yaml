@@ -1,0 +1,15 @@
+
+workflow:
+  as: cluster-claim
+  steps:
+    cluster_claim:
+      architecture: amd64
+      cloud: aws
+      owner: fake
+      product: ocp
+      timeout: 3m # a claim from a fake pool should become ready very soon
+      version: "4.7"
+    test:
+      - ref: step
+  documentation: |-
+    Workflow that claims a cluster by itself.

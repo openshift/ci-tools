@@ -93,7 +93,8 @@ tests:
           - env: RELEASE_IMAGE_LATEST
             name: release:latest
   - as: e2e-claim-in-workflow
-    workflow: cluster-claim
+    steps:
+      workflow: cluster-claim
   - as: e2e-claim-overridden-in-config
     cluster_claim:
       architecture: amd64
@@ -102,7 +103,8 @@ tests:
       product: ocp
       timeout: 3m # a claim from a fake pool should become ready very soon
       version: "4.8"
-    workflow: cluster-claim
+    steps:
+      workflow: cluster-claim
 zz_generated_metadata:
   branch: master
   org: test

@@ -125,7 +125,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		p.WithLabel(cioperatorapi.ClusterLabel, string(test.Cluster))
 	}
 
-	if test.ClusterClaim != nil {
+	if testContainsClusterClaim(&test) {
 		p.PodSpec.Add(Claims())
 	}
 	if testContainsLease(&test) {

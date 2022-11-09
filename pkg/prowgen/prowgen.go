@@ -156,6 +156,10 @@ func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
 	return len(api.LeasesForTest(test.MultiStageTestConfigurationLiteral)) > 0
 }
 
+func testContainsClusterClaim(test *cioperatorapi.TestStepConfiguration) bool {
+	return test.ClusterClaim != nil || (test.MultiStageTestConfiguration != nil && test.MultiStageTestConfiguration.ClusterClaim != nil) || (test.MultiStageTestConfigurationLiteral != nil && test.MultiStageTestConfigurationLiteral.ClusterClaim != nil)
+}
+
 type generatePresubmitOptions struct {
 	runIfChanged      string
 	skipIfOnlyChanged string

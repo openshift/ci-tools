@@ -1,0 +1,10 @@
+workflow:
+  as: workflow-with-claim
+  steps:
+    cluster_claim:
+      architecture: amd64
+      cloud: aws
+      owner: fake
+      product: ocp
+      timeout: 1h
+      version: "4.7"

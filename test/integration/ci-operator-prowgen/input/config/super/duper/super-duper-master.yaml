@@ -80,6 +80,19 @@ tests:
   steps:
     cluster_profile: aws
     workflow: workflow
+- as: config-with-cluster-claim
+  cluster_claim:
+    architecture: amd64
+    cloud: aws
+    owner: fake
+    product: ocp
+    timeout: 1h
+    version: "4.7"
+  steps:
+    workflow: workflow
+- as: workflow-with-cluster-claim
+  steps:
+    workflow: workflow-with-claim
 - as: informer
   commands: make unit
   container:

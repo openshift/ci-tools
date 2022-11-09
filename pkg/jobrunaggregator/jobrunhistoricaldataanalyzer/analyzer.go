@@ -11,6 +11,13 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
 
+// releaseTransitionDataMinThresholdRatio defines the minimum threshold ratio we require to
+// make the transition from using old release data to using new release data. During a release
+// transition (new release cut), it will take time for the new release job run data to reach to
+// certain required size to be meaningful to use. During this transition period, we continue
+// using data collected from the old release for disruption and alert comparisons.
+const releaseTransitionDataMinThresholdRatio = 0.6
+
 type JobRunHistoricalDataAnalyzerOptions struct {
 	ciDataClient jobrunaggregatorlib.CIDataClient
 	outputFile   string
@@ -59,19 +66,43 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 		return fmt.Errorf("new historical data is empty, can not compare")
 	}
 
-	// We check to make sure the current data set doesn't contain the previous release version
-	// If that's the case, then we are in a new release event (i.e. a new branch has been cut)
-	// We then write to a `require_review` file to record why a review would be required.
-	newReleaseUpdate := currentDataContainsPreviousRelease(previousRelease, currentHistoricalData)
-	if newReleaseUpdate {
-		if err := requireReviewFile("The current data contains previous release version\n"); err != nil {
-			return err
-		}
-	}
-
 	// We convert our query data to maps to make it easier to handle
 	newDataMap := convertToMap(newHistoricalData)
 	currentDataMap := convertToMap(currentHistoricalData)
+
+	// We check to see if we need to transition to use new release data. We decide based on:
+	// 1. The current data set contains the previous release version
+	// 2. We have enough data count from the new release
+	// If that's the case, we will transition to use data set from the new release.
+	// We also write to a `require_review` file to record why a review would be required.
+	newReleaseUpdate := currentDataContainsPreviousRelease(previousRelease, currentHistoricalData)
+	if newReleaseUpdate {
+		newReleaseDataCount := 0
+		for _, data := range newDataMap {
+			if data.GetJobData().Release == currentRelease {
+				newReleaseDataCount++
+			}
+		}
+		if float64(newReleaseDataCount) < float64(len(currentDataMap))*releaseTransitionDataMinThresholdRatio {
+			// Not enough data for the new release, continue using old release data
+			fmt.Printf("We are in release transition from %s to %s. We continue to use old release data set for the following reason:\n"+
+				"- The number of new release data set need to reach at least %d percent of the number of the old release data set.\n"+
+				"- Currently we have only %d new release data set and the required number is %d based on old release data set count of %d\n",
+				previousRelease, currentRelease, int(releaseTransitionDataMinThresholdRatio*100), newReleaseDataCount,
+				int(float64(len(currentDataMap))*releaseTransitionDataMinThresholdRatio), len(currentDataMap))
+			newReleaseUpdate = false
+			currentRelease = previousRelease
+		} else {
+			msg := fmt.Sprintf("We are transitioning to use data set from new release %s for the following reason:\n"+
+				"- The number of new release data set has reached at least %d percent of the number of the old release data set.\n"+
+				"- Currently we have %d new release data set and the required number is %d based on old release data set count of %d\n",
+				currentRelease, int(releaseTransitionDataMinThresholdRatio*100), newReleaseDataCount,
+				int(float64(len(currentDataMap))*releaseTransitionDataMinThresholdRatio), len(currentDataMap))
+			if err := requireReviewFile(msg); err != nil {
+				return err
+			}
+		}
+	}
 
 	result := o.compareAndUpdate(newDataMap, currentDataMap, currentRelease, newReleaseUpdate)
 

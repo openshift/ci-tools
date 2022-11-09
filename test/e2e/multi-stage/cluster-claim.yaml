@@ -101,8 +101,8 @@ tests:
       cloud: aws
       owner: fake
       product: ocp
-      timeout: 3m # a claim from a fake pool should become ready very soon
-      version: "4.8"
+      timeout: 4m # a claim from a fake pool should become ready very soon
+      version: "4.7"
     steps:
       workflow: cluster-claim
 zz_generated_metadata:

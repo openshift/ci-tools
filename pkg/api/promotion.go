@@ -1,6 +1,14 @@
 package api
 
-import "k8s.io/apimachinery/pkg/util/sets"
+import (
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+
+	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/sets"
+)
 
 type OKDInclusion bool
 
@@ -65,4 +73,46 @@ func ExtractPromotionName(configSpec *ReleaseBuildConfiguration) string {
 		return configSpec.PromotionConfiguration.Name
 	}
 	return ""
+}
+
+// GetGitTags returns the git tags that point to the commit for a GitHub repo/org
+func GetGitTags(org, repo, commit string) ([]string, error) {
+	if org == "" {
+		return nil, errors.New("org must not be empty")
+	}
+	if repo == "" {
+		return nil, errors.New("repo must not be empty")
+	}
+	if commit == "" {
+		return nil, errors.New("commit must not be empty")
+	}
+
+	response, err := http.Get(fmt.Sprintf("https://api.github.com/repos/%s/%s/tags", org, repo))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get git tags via GitHub's API: %w", err)
+	}
+	bytes, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response's body: %w", err)
+	}
+	var gitTags []GitTag
+	if err := json.Unmarshal(bytes, &gitTags); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal git tags: %w", err)
+	}
+	var ret []string
+	for _, gitTag := range gitTags {
+		if gitTag.Commit.Sha == commit {
+			ret = append(ret, gitTag.Name)
+		}
+	}
+	return ret, nil
+}
+
+type GitTag struct {
+	Name   string `json:"name,omitempty"`
+	Commit Commit `json:"commit"`
+}
+
+type Commit struct {
+	Sha string `json:"sha,omitempty"`
 }

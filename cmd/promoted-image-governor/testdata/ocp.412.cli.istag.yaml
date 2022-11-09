@@ -1,0 +1,195 @@
+apiVersion: image.openshift.io/v1
+generation: 1011
+image:
+  dockerImageLayers:
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:97da74cc6d8fa5d1634eb1760fd1da5c6048619c264c23e62d75f3bf6b8ef5c4
+    size: 79524639
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:d8190195889efb5333eeec18af9b6c82313edd4db62989bd3a357caca4f13f0e
+    size: 1438
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:82247a4314f9e140ab17d9a3dc7c5e5408f1644eb3c0a7f25e4fdbdd4eedbe10
+    size: 21808908
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:195d1601770091d080fff1e08d4c5ea3702da3bc6b017d6145f93a4e7f6fd8c8
+    size: 11947273
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:c694e73eab245256098913210378c6a167f1ea50e0a0df5be6e06ec794157e3b
+    size: 492285
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:0a035b8057918e19d5c356c4cfdaae76f2cede18f6870fd8ca7839eaa328595c
+    size: 54522442
+  dockerImageManifestMediaType: application/vnd.docker.distribution.manifest.v2+json
+  dockerImageMetadata:
+    Architecture: amd64
+    Config:
+      Cmd:
+      - /bin/bash
+      Env:
+      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - container=oci
+      - __doozer=merge
+      - BUILD_RELEASE=202211032036.p0.g7e8a010.assembly.stream
+      - BUILD_VERSION=v4.12.0
+      - OS_GIT_MAJOR=4
+      - OS_GIT_MINOR=12
+      - OS_GIT_PATCH=0
+      - OS_GIT_TREE_STATE=clean
+      - OS_GIT_VERSION=4.12.0-202211032036.p0.g7e8a010.assembly.stream-7e8a010
+      - SOURCE_GIT_TREE_STATE=clean
+      - OS_GIT_COMMIT=7e8a010
+      - SOURCE_DATE_EPOCH=1666997438
+      - SOURCE_GIT_COMMIT=7e8a0105eb7369f3f92ad7b2581a2efffab5b28e
+      - SOURCE_GIT_TAG=7e8a010
+      - SOURCE_GIT_URL=https://github.com/openshift/images
+      - GODEBUG=x509ignoreCN=0,madvdontneed=1
+      - OPENSHIFT_CI=true
+      - BUILD_LOGLEVEL=0
+      - OPENSHIFT_BUILD_NAME=cli
+      - OPENSHIFT_BUILD_NAMESPACE=ci-op-fsf7k9kg
+      Hostname: dfeb7a588988
+      Labels:
+        License: GPLv2+
+        architecture: x86_64
+        build-date: 2022-11-04T01:50:57
+        com.redhat.build-host: cpt-1001.osbs.prod.upshift.rdu2.redhat.com
+        com.redhat.component: openshift-enterprise-base-container
+        com.redhat.license_terms: https://www.redhat.com/agreements
+        description: This is the base image from which all OpenShift Container Platform
+          images inherit.
+        distribution-scope: public
+        io.buildah.version: 1.26.4
+        io.k8s.description: OpenShift is a platform for developing, building, and
+          deploying containerized applications.
+        io.k8s.display-name: OpenShift Client
+        io.openshift.build.commit.author: ""
+        io.openshift.build.commit.date: ""
+        io.openshift.build.commit.id: 854f807d8a84dde710c062a5281bca5bc07cb562
+        io.openshift.build.commit.message: ""
+        io.openshift.build.commit.ref: release-4.12
+        io.openshift.build.commit.url: https://github.com/openshift/images/commit/7e8a0105eb7369f3f92ad7b2581a2efffab5b28e
+        io.openshift.build.name: ""
+        io.openshift.build.namespace: ""
+        io.openshift.build.source-context-dir: ""
+        io.openshift.build.source-location: https://github.com/openshift/oc
+        io.openshift.ci.from.base: sha256:fd680d0e8eff6025f0eb01d2e8256610b7b35f7444e0933ae063ec09e2b8a6a9
+        io.openshift.expose-services: ""
+        io.openshift.maintainer.component: Release
+        io.openshift.maintainer.product: OpenShift Container Platform
+        io.openshift.tags: openshift,cli
+        maintainer: Red Hat, Inc.
+        name: openshift/ose-base
+        release: 202211032036.p0.g7e8a010.assembly.stream
+        summary: Provides the latest release of the Red Hat Extended Life Base Image.
+        url: https://access.redhat.com/containers/#/registry.access.redhat.com/openshift/ose-base/images/v4.12.0-202211032036.p0.g7e8a010.assembly.stream
+        vcs-ref: 854f807d8a84dde710c062a5281bca5bc07cb562
+        vcs-type: git
+        vcs-url: https://github.com/openshift/oc
+        vendor: Red Hat, Inc.
+        version: v4.12.0
+      User: "0"
+    Container: 2ab327f49d30cbcd9fe306de51cc5842836f34c327b5e9e5cf298860f26e2e93
+    ContainerConfig:
+      Cmd:
+      - /bin/bash
+      Env:
+      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - container=oci
+      - __doozer=merge
+      - BUILD_RELEASE=202211032036.p0.g7e8a010.assembly.stream
+      - BUILD_VERSION=v4.12.0
+      - OS_GIT_MAJOR=4
+      - OS_GIT_MINOR=12
+      - OS_GIT_PATCH=0
+      - OS_GIT_TREE_STATE=clean
+      - OS_GIT_VERSION=4.12.0-202211032036.p0.g7e8a010.assembly.stream-7e8a010
+      - SOURCE_GIT_TREE_STATE=clean
+      - OS_GIT_COMMIT=7e8a010
+      - SOURCE_DATE_EPOCH=1666997438
+      - SOURCE_GIT_COMMIT=7e8a0105eb7369f3f92ad7b2581a2efffab5b28e
+      - SOURCE_GIT_TAG=7e8a010
+      - SOURCE_GIT_URL=https://github.com/openshift/images
+      - GODEBUG=x509ignoreCN=0,madvdontneed=1
+      - OPENSHIFT_CI=true
+      - BUILD_LOGLEVEL=0
+      - OPENSHIFT_BUILD_NAME=cli
+      - OPENSHIFT_BUILD_NAMESPACE=ci-op-fsf7k9kg
+      Hostname: dfeb7a588988
+      Labels:
+        License: GPLv2+
+        architecture: x86_64
+        build-date: 2022-11-04T01:50:57
+        com.redhat.build-host: cpt-1001.osbs.prod.upshift.rdu2.redhat.com
+        com.redhat.component: openshift-enterprise-base-container
+        com.redhat.license_terms: https://www.redhat.com/agreements
+        description: This is the base image from which all OpenShift Container Platform
+          images inherit.
+        distribution-scope: public
+        io.buildah.version: 1.26.4
+        io.k8s.description: OpenShift is a platform for developing, building, and
+          deploying containerized applications.
+        io.k8s.display-name: OpenShift Client
+        io.openshift.build.commit.author: ""
+        io.openshift.build.commit.date: ""
+        io.openshift.build.commit.id: 854f807d8a84dde710c062a5281bca5bc07cb562
+        io.openshift.build.commit.message: ""
+        io.openshift.build.commit.ref: release-4.12
+        io.openshift.build.commit.url: https://github.com/openshift/images/commit/7e8a0105eb7369f3f92ad7b2581a2efffab5b28e
+        io.openshift.build.name: ""
+        io.openshift.build.namespace: ""
+        io.openshift.build.source-context-dir: ""
+        io.openshift.build.source-location: https://github.com/openshift/oc
+        io.openshift.ci.from.base: sha256:fd680d0e8eff6025f0eb01d2e8256610b7b35f7444e0933ae063ec09e2b8a6a9
+        io.openshift.expose-services: ""
+        io.openshift.maintainer.component: Release
+        io.openshift.maintainer.product: OpenShift Container Platform
+        io.openshift.tags: openshift,cli
+        maintainer: Red Hat, Inc.
+        name: openshift/ose-base
+        release: 202211032036.p0.g7e8a010.assembly.stream
+        summary: Provides the latest release of the Red Hat Extended Life Base Image.
+        url: https://access.redhat.com/containers/#/registry.access.redhat.com/openshift/ose-base/images/v4.12.0-202211032036.p0.g7e8a010.assembly.stream
+        vcs-ref: 854f807d8a84dde710c062a5281bca5bc07cb562
+        vcs-type: git
+        vcs-url: https://github.com/openshift/oc
+        vendor: Red Hat, Inc.
+        version: v4.12.0
+      User: "0"
+    Created: "2022-11-05T01:01:50Z"
+    Id: sha256:f6efb73bf40c415ae1b178b07402a918bf1b54eafadf5729065e70a125007038
+    Parent: sha256:8ae74cdca698217134d25f8ea50847309c4ea3b73fa132b0cb0350098aa7f0da
+    Size: 168320477
+    apiVersion: image.openshift.io/1.0
+    kind: DockerImage
+  dockerImageMetadataVersion: "1.0"
+  dockerImageReference: image-registry.openshift-image-registry.svc:5000/ocp/4.12@sha256:d228d0586f8e85e78760e2cf36bce661748e29424b062b40898e22cec043ddb1
+  metadata:
+    annotations:
+      image.openshift.io/dockerLayersOrder: ascending
+      image.openshift.io/manifestBlobStored: "true"
+      openshift.io/image.managed: "true"
+    creationTimestamp: "2022-11-05T01:21:59Z"
+    name: sha256:d228d0586f8e85e78760e2cf36bce661748e29424b062b40898e22cec043ddb1
+    resourceVersion: "2442427721"
+    uid: 0f1b2856-4d27-4c3e-9233-874a5d620d57
+kind: ImageStreamTag
+lookupPolicy:
+  local: false
+metadata:
+  creationTimestamp: "2022-11-05T01:21:59Z"
+  name: 4.12:cli
+  namespace: ocp
+  resourceVersion: "2455468823"
+  uid: 858adf61-4bd9-426d-8629-e0bbff2992d9
+tag:
+  annotations: null
+  from:
+    kind: ImageStreamImage
+    name: 4.11@sha256:b74c65738d50afb38d41d8df1162d131a41c6111735d1613c672823e59f43f1d
+    namespace: ocp
+  generation: 41
+  importPolicy: {}
+  name: cli
+  referencePolicy:
+    type: Source

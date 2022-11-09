@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"regexp"
+	"sigs.k8s.io/yaml"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -474,6 +476,63 @@ func TestDeleteTagsOnBuildFarm(t *testing.T) {
 				if err := tc.verify(ctx, tc.appCIClient, tc.buildClusterClients); err != nil {
 					t.Errorf("unexpected error occurred: %v", err)
 				}
+			}
+		})
+	}
+}
+
+func TestGetCommit(t *testing.T) {
+
+	testCases := []struct {
+		name        string
+		srcFile     string
+		ref         api.MultiArchImageStreamTagReference
+		expected    string
+		expectedErr error
+	}{
+		{
+			name: "commit from env",
+			ref: api.MultiArchImageStreamTagReference{
+				ImageStreamTagReference: api.ImageStreamTagReference{
+					Namespace: "ocp",
+					Name:      "4.13",
+					Tag:       "grafana",
+				},
+			},
+			srcFile:  "testdata/ocp.413.grafana.istag.yaml",
+			expected: "f17f5523faca5bd928d5cc65484a66b20f04f366",
+		},
+		{
+			name: "commit from label",
+			ref: api.MultiArchImageStreamTagReference{
+				ImageStreamTagReference: api.ImageStreamTagReference{
+					Namespace: "ocp",
+					Name:      "4.12",
+					Tag:       "cli",
+				},
+			},
+			srcFile:  "testdata/ocp.412.cli.istag.yaml",
+			expected: "854f807d8a84dde710c062a5281bca5bc07cb562",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rawImageStreamTag, err := ioutil.ReadFile(tc.srcFile)
+			if err != nil {
+				t.Fatalf("failed to read imagestreamtag fixture: %v", err)
+			}
+			ist := &imagev1.ImageStreamTag{}
+			if err := yaml.Unmarshal(rawImageStreamTag, ist); err != nil {
+				t.Fatalf("failed to unmarshal imagestreamTag: %v", err)
+			}
+			appCIClient := fakeclient.NewClientBuilder().WithObjects(ist).Build()
+			ctx := context.TODO()
+			actual, actualErr := getCommit(ctx, appCIClient, tc.ref)
+			if diff := cmp.Diff(tc.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			}
+			if diff := cmp.Diff(tc.expected, actual); actualErr == nil && diff != "" {
+				t.Errorf("commit differs from expected:\n%s", diff)
 			}
 		})
 	}

@@ -28,6 +28,7 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/api/image/docker10"
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -418,56 +419,6 @@ func main() {
 
 	logrus.WithField("imageStreamRefs", imageStreamRefs).Info("Found imageStreamRefs from release controller config directory")
 
-	abs, err = filepath.Abs(opts.ciOperatorconfigPath)
-	if err != nil {
-		logrus.WithError(err).Fatal("failed to determine absolute CI Operator configuration path")
-	}
-	var promotedTags []api.ImageStreamTagReference
-	var ignoredCommitTags []*regexp.Regexp
-	if err := config.OperateOnCIOperatorConfigDir(abs, func(cfg *api.ReleaseBuildConfiguration, metadata *config.Info) error {
-		for _, isTagRef := range release.PromotedTags(cfg) {
-			promotedTags = append(promotedTags, isTagRef.ImageStreamTagReference)
-			if _, ok := opts.explains[isTagRef.ImageStreamTagReference]; ok {
-				opts.explains[isTagRef.ImageStreamTagReference] = cfg.Metadata.AsString()
-			}
-			if cfg.PromotionConfiguration.TagByCommit {
-				ignoreRegex, err := regexp.Compile(fmt.Sprintf("%s/%s:[0-9a-f]{5,40}", isTagRef.Namespace, isTagRef.Name))
-				if err != nil {
-					return fmt.Errorf("could not create a regex for ignoring tagged-by-commit images for %s: %w", isTagRef.ISTagName(), err)
-				}
-				ignoredCommitTags = append(ignoredCommitTags, ignoreRegex)
-			}
-		}
-		return nil
-	}); err != nil {
-		logrus.WithField("path", abs).Fatal("failed to operate on CI Operator's config directory")
-	}
-
-	if opts.openshiftMappingConfigPath != "" {
-		mappings, err := generateMappings(promotedTags, opts.openshiftMappingConfig, imageStreamRefs)
-		if err != nil {
-			logrus.WithError(err).Fatal("failed to generate the openshift mapping files for image mirroring")
-		}
-		for filename, mapping := range mappings {
-			var b bytes.Buffer
-			keys := make([]string, 0, len(mapping))
-			for k := range mapping {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-
-			for _, src := range keys {
-				b.WriteString(fmt.Sprintf("%s\n", strings.Join(append([]string{src}, mapping[src].List()...), " ")))
-			}
-			f := filepath.Join(opts.openshiftMappingDir, filename)
-			logrus.WithField("filename", f).Info("Writing to file")
-			if err := ioutil.WriteFile(f, b.Bytes(), 0644); err != nil {
-				logrus.WithError(err).WithField("filename", f).Fatal("could not write to file")
-			}
-		}
-		return
-	}
-
 	kubeconfigs, err := opts.kubernetesOptions.LoadClusterConfigs()
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to load kubeconfigs")
@@ -505,6 +456,73 @@ func main() {
 	}
 
 	ctx := interrupts.Context()
+
+	abs, err = filepath.Abs(opts.ciOperatorconfigPath)
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to determine absolute CI Operator configuration path")
+	}
+	var promotedTags []api.ImageStreamTagReference
+	var ignoredCommitTags []*regexp.Regexp
+	if err := config.OperateOnCIOperatorConfigDir(abs, func(cfg *api.ReleaseBuildConfiguration, metadata *config.Info) error {
+		for _, isTagRef := range release.PromotedTags(cfg) {
+			promotedTags = append(promotedTags, isTagRef.ImageStreamTagReference)
+			if _, ok := opts.explains[isTagRef.ImageStreamTagReference]; ok {
+				opts.explains[isTagRef.ImageStreamTagReference] = cfg.Metadata.AsString()
+			}
+			if cfg.PromotionConfiguration.TagByCommit {
+				ignoreRegex, err := regexp.Compile(fmt.Sprintf("%s/%s:[0-9a-f]{5,40}", isTagRef.Namespace, isTagRef.Name))
+				if err != nil {
+					return fmt.Errorf("could not create a regex for ignoring tagged-by-commit images for %s: %w", isTagRef.ISTagName(), err)
+				}
+				ignoredCommitTags = append(ignoredCommitTags, ignoreRegex)
+			}
+			if cfg.PromotionConfiguration.TagByGitTag {
+				commit, err := getCommit(ctx, appCIClient, isTagRef)
+				if err != nil {
+					return fmt.Errorf("could not get commit for %s: %w", isTagRef.ISTagName(), err)
+				}
+				gitTags, err := api.GetGitTags(isTagRef.Namespace, isTagRef.Name, commit)
+				if err != nil {
+					return fmt.Errorf("could not get git tags for commit %s and isTag %s: %w", commit, isTagRef.ISTagName(), err)
+				}
+				for _, gitTag := range gitTags {
+					ignoreRegex, err := regexp.Compile(fmt.Sprintf("^%s/%s:%s$", isTagRef.Namespace, isTagRef.Name, gitTag))
+					if err != nil {
+						return fmt.Errorf("could not create a regex for ignoring tag-by-git-tag images for %s: %w", isTagRef.ISTagName(), err)
+					}
+					ignoredCommitTags = append(ignoredCommitTags, ignoreRegex)
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		logrus.WithField("path", abs).Fatal("failed to operate on CI Operator's config directory")
+	}
+
+	if opts.openshiftMappingConfigPath != "" {
+		mappings, err := generateMappings(promotedTags, opts.openshiftMappingConfig, imageStreamRefs)
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to generate the openshift mapping files for image mirroring")
+		}
+		for filename, mapping := range mappings {
+			var b bytes.Buffer
+			keys := make([]string, 0, len(mapping))
+			for k := range mapping {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+
+			for _, src := range keys {
+				b.WriteString(fmt.Sprintf("%s\n", strings.Join(append([]string{src}, mapping[src].List()...), " ")))
+			}
+			f := filepath.Join(opts.openshiftMappingDir, filename)
+			logrus.WithField("filename", f).Info("Writing to file")
+			if err := ioutil.WriteFile(f, b.Bytes(), 0644); err != nil {
+				logrus.WithError(err).WithField("filename", f).Fatal("could not write to file")
+			}
+		}
+		return
+	}
 
 	if len(opts.explains) > 0 {
 		w := tabwriter.NewWriter(os.Stdout, 20, 30, 1, ' ', tabwriter.AlignRight)
@@ -555,4 +573,31 @@ func main() {
 	if err := deleteTagsOnBuildFarm(ctx, appCIClient, clients, imageStreamsWithPromotedTags, opts.dryRun); err != nil {
 		logrus.WithError(err).Fatal("could not delete tags on build farm")
 	}
+}
+
+func getCommit(ctx context.Context, client ctrlruntimeclient.Client, ref api.MultiArchImageStreamTagReference) (string, error) {
+	ist := &imagev1.ImageStreamTag{}
+	if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: ref.Namespace, Name: fmt.Sprintf("%s:%s", ref.Name, ref.Tag)}, ist); err != nil {
+		return "", fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
+	}
+	metadata := &docker10.DockerImage{}
+	if len(ist.Image.DockerImageMetadata.Raw) == 0 {
+		return "", fmt.Errorf("could not fetch Docker image metadata for ImageStreamTag %s", ref.ISTagName())
+	}
+	if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, metadata); err != nil {
+		return "", fmt.Errorf("malformed Docker image metadata on ImageStreamTag %s: %w", ref.ISTagName(), err)
+	}
+	if metadata.Config.Labels != nil {
+		if commit, ok := metadata.Config.Labels["io.openshift.build.commit.id"]; ok && commit != "" {
+			return commit, nil
+		}
+	}
+	for _, e := range metadata.Config.Env {
+		if strings.HasPrefix(e, "SOURCE_GIT_COMMIT=") {
+			if commit := strings.Replace(e, "SOURCE_GIT_COMMIT=", "", 1); commit != "" {
+				return commit, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("failed to find commit from ImageStreamTag %s", ref.ISTagName())
 }

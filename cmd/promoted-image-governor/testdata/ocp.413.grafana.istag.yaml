@@ -1,0 +1,217 @@
+apiVersion: image.openshift.io/v1
+generation: 146
+image:
+  dockerImageLayers:
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:eac1b95df832dc9f172fd1f07e7cb50c1929b118a4249ddd02c6318a677b506a
+    size: 83303635
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:47aa3ed2034c4f27622b989b26c06087de17067268a19a1b3642a7e2686cd1a3
+    size: 1789
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:4faf6d0e05df8c3aac88f12f0fdf5d967121cff63787bfb9c716947312f7ba6b
+    size: 17001180
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:abdd42b48a77fa84a6cf84cc48c94ae607b6699d1b7b0d5a37cedc6ab3ecf382
+    size: 474512
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:9986306e3f5dc5d82cc5d43e770e11288ddb61039fe39467da02f17197e82d0a
+    size: 12076325
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:8dddce76952be363bffcc39bcf59d790917a9f6bc61c3ce8763bac47b7d4a897
+    size: 72696466
+  dockerImageManifestMediaType: application/vnd.docker.distribution.manifest.v2+json
+  dockerImageMetadata:
+    Architecture: amd64
+    Config:
+      Entrypoint:
+      - /run.sh
+      Env:
+      - __doozer=merge
+      - BUILD_RELEASE=202202280820.p0.gf17f552.assembly.art3171
+      - BUILD_VERSION=v4.11.0
+      - OS_GIT_MAJOR=4
+      - OS_GIT_MINOR=11
+      - OS_GIT_PATCH=0
+      - OS_GIT_TREE_STATE=clean
+      - OS_GIT_VERSION=4.11.0-202202280820.p0.gf17f552.assembly.art3171-f17f552
+      - SOURCE_GIT_TREE_STATE=clean
+      - OS_GIT_COMMIT=f17f552
+      - SOURCE_DATE_EPOCH=1617214817
+      - SOURCE_GIT_COMMIT=f17f5523faca5bd928d5cc65484a66b20f04f366
+      - SOURCE_GIT_TAG=f17f5523
+      - SOURCE_GIT_URL=https://github.com/openshift/ocp-build-data
+      - container=oci
+      - OPENSHIFT_CI=true
+      - GODEBUG=x509ignoreCN=0,madvdontneed=1
+      - BUILD_LOGLEVEL=0
+      - PATH=/usr/share/grafana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - GF_PATHS_CONFIG=/etc/grafana/grafana.ini
+      - GF_PATHS_DATA=/var/lib/grafana
+      - GF_PATHS_HOME=/usr/share/grafana
+      - GF_PATHS_LOGS=/var/log/grafana
+      - GF_PATHS_PLUGINS=/var/lib/grafana/plugins
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - OPENSHIFT_BUILD_NAME=grafana
+      - OPENSHIFT_BUILD_NAMESPACE=ci-op-pqljsry5
+      ExposedPorts:
+        3000/tcp: {}
+      Hostname: 4f9012b22b61
+      Labels:
+        architecture: x86_64
+        build-date: 2022-02-28T18:14:52.384326
+        com.redhat.build-host: censor.redhat.com
+        com.redhat.component: openshift-base-rhel8-container
+        com.redhat.license_terms: https://www.redhat.com/agreements
+        description: The Universal Base Image is designed and engineered to be the
+          base layer for all of your containerized applications, middleware and utilities.
+          This base image is freely redistributable, but Red Hat only supports Red
+          Hat technologies through subscriptions for Red Hat products. This image
+          is maintained by Red Hat and updated regularly.
+        distribution-scope: public
+        io.buildah.version: 1.22.4
+        io.k8s.description: Grafana is an open-source, general purpose dashboard and
+          graph composer
+        io.k8s.display-name: Grafana
+        io.openshift.build.commit.author: ""
+        io.openshift.build.commit.date: ""
+        io.openshift.build.commit.id: ""
+        io.openshift.build.commit.message: ""
+        io.openshift.build.commit.ref: release-4.12
+        io.openshift.build.commit.url: https://github.com/openshift/ocp-build-data/commit/f17f5523faca5bd928d5cc65484a66b20f04f366
+        io.openshift.build.name: ""
+        io.openshift.build.namespace: ""
+        io.openshift.build.source-context-dir: ""
+        io.openshift.build.source-location: https://github.com/openshift/grafana
+        io.openshift.ci.from.base: sha256:0ffbe466d46529ba3b25efc4599d5bcfd272092dc8571552629f4ef6b8469f2c
+        io.openshift.expose-services: ""
+        io.openshift.maintainer.component: Release
+        io.openshift.maintainer.product: OpenShift Container Platform
+        io.openshift.tags: openshift
+        maintainer: OpenShift Monitoring Team <team-monitoring@redhat.com>
+        name: openshift/base-rhel8
+        release: 202202280820.p0.gf17f552.assembly.art3171
+        summary: Grafana is an open-source, general purpose dashboard and graph composer
+        url: https://access.redhat.com/containers/#/registry.access.redhat.com/openshift/base-rhel8/images/v4.11.0-202202280820.p0.gf17f552.assembly.art3171
+        vcs-ref: ""
+        vcs-type: git
+        vcs-url: https://github.com/openshift/grafana
+        vendor: Red Hat, Inc.
+        version: v4.11.0
+      User: grafana
+      WorkingDir: /usr/share/grafana
+    Container: 0795d63b64a639022357ad293f95eda91b9850b2c940f51cea6085f2df6b455a
+    ContainerConfig:
+      Entrypoint:
+      - /run.sh
+      Env:
+      - __doozer=merge
+      - BUILD_RELEASE=202202280820.p0.gf17f552.assembly.art3171
+      - BUILD_VERSION=v4.11.0
+      - OS_GIT_MAJOR=4
+      - OS_GIT_MINOR=11
+      - OS_GIT_PATCH=0
+      - OS_GIT_TREE_STATE=clean
+      - OS_GIT_VERSION=4.11.0-202202280820.p0.gf17f552.assembly.art3171-f17f552
+      - SOURCE_GIT_TREE_STATE=clean
+      - OS_GIT_COMMIT=f17f552
+      - SOURCE_DATE_EPOCH=1617214817
+      - SOURCE_GIT_COMMIT=f17f5523faca5bd928d5cc65484a66b20f04f366
+      - SOURCE_GIT_TAG=f17f5523
+      - SOURCE_GIT_URL=https://github.com/openshift/ocp-build-data
+      - container=oci
+      - OPENSHIFT_CI=true
+      - GODEBUG=x509ignoreCN=0,madvdontneed=1
+      - BUILD_LOGLEVEL=0
+      - PATH=/usr/share/grafana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - GF_PATHS_CONFIG=/etc/grafana/grafana.ini
+      - GF_PATHS_DATA=/var/lib/grafana
+      - GF_PATHS_HOME=/usr/share/grafana
+      - GF_PATHS_LOGS=/var/log/grafana
+      - GF_PATHS_PLUGINS=/var/lib/grafana/plugins
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - OPENSHIFT_BUILD_NAME=grafana
+      - OPENSHIFT_BUILD_NAMESPACE=ci-op-pqljsry5
+      ExposedPorts:
+        3000/tcp: {}
+      Hostname: 4f9012b22b61
+      Labels:
+        architecture: x86_64
+        build-date: 2022-02-28T18:14:52.384326
+        com.redhat.build-host: censor.redhat.com
+        com.redhat.component: openshift-base-rhel8-container
+        com.redhat.license_terms: https://www.redhat.com/agreements
+        description: The Universal Base Image is designed and engineered to be the
+          base layer for all of your containerized applications, middleware and utilities.
+          This base image is freely redistributable, but Red Hat only supports Red
+          Hat technologies through subscriptions for Red Hat products. This image
+          is maintained by Red Hat and updated regularly.
+        distribution-scope: public
+        io.buildah.version: 1.22.4
+        io.k8s.description: Grafana is an open-source, general purpose dashboard and
+          graph composer
+        io.k8s.display-name: Grafana
+        io.openshift.build.commit.author: ""
+        io.openshift.build.commit.date: ""
+        io.openshift.build.commit.id: ""
+        io.openshift.build.commit.message: ""
+        io.openshift.build.commit.ref: release-4.12
+        io.openshift.build.commit.url: https://github.com/openshift/ocp-build-data/commit/f17f5523faca5bd928d5cc65484a66b20f04f366
+        io.openshift.build.name: ""
+        io.openshift.build.namespace: ""
+        io.openshift.build.source-context-dir: ""
+        io.openshift.build.source-location: https://github.com/openshift/grafana
+        io.openshift.ci.from.base: sha256:0ffbe466d46529ba3b25efc4599d5bcfd272092dc8571552629f4ef6b8469f2c
+        io.openshift.expose-services: ""
+        io.openshift.maintainer.component: Release
+        io.openshift.maintainer.product: OpenShift Container Platform
+        io.openshift.tags: openshift
+        maintainer: OpenShift Monitoring Team <team-monitoring@redhat.com>
+        name: openshift/base-rhel8
+        release: 202202280820.p0.gf17f552.assembly.art3171
+        summary: Grafana is an open-source, general purpose dashboard and graph composer
+        url: https://access.redhat.com/containers/#/registry.access.redhat.com/openshift/base-rhel8/images/v4.11.0-202202280820.p0.gf17f552.assembly.art3171
+        vcs-ref: ""
+        vcs-type: git
+        vcs-url: https://github.com/openshift/grafana
+        vendor: Red Hat, Inc.
+        version: v4.11.0
+      User: grafana
+      WorkingDir: /usr/share/grafana
+    Created: "2022-04-01T23:18:52Z"
+    Id: sha256:37ae34f5b56b7b01c983b979abd7107c4cdcc6e1f900c0006bd0812f81ee437a
+    Parent: sha256:1ec3cdc264014d18fd4ad144656413b24934ba6dbe4ed3fb2aa026548a581d7f
+    Size: 185573542
+    apiVersion: image.openshift.io/1.0
+    kind: DockerImage
+  dockerImageMetadataVersion: "1.0"
+  dockerImageReference: image-registry.openshift-image-registry.svc:5000/ocp/4.13@sha256:9ddd3508be53821ed7abf47b2e53c4ef9cecafd8492802a89da3e0820e3b304b
+  metadata:
+    annotations:
+      image.openshift.io/dockerLayersOrder: ascending
+      image.openshift.io/manifestBlobStored: "true"
+      openshift.io/image.managed: "true"
+    creationTimestamp: "2022-04-01T23:19:45Z"
+    name: sha256:9ddd3508be53821ed7abf47b2e53c4ef9cecafd8492802a89da3e0820e3b304b
+    resourceVersion: "1884146958"
+    uid: 3b203ecb-8fdc-419b-8010-8bc097f6d3c7
+kind: ImageStreamTag
+lookupPolicy:
+  local: false
+metadata:
+  creationTimestamp: "2022-07-07T12:14:22Z"
+  name: 4.13:grafana
+  namespace: ocp
+  resourceVersion: "2455346296"
+  uid: 21e7c1d1-e536-4c27-ab96-cf32911de73b
+tag:
+  annotations: null
+  from:
+    kind: ImageStreamImage
+    name: 4.12@sha256:9ddd3508be53821ed7abf47b2e53c4ef9cecafd8492802a89da3e0820e3b304b
+    namespace: ocp
+  generation: 146
+  importPolicy: {}
+  name: grafana
+  referencePolicy:
+    type: Source

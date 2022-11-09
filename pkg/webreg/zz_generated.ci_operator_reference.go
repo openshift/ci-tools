@@ -202,6 +202,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"    # this will cause both a floating tag and commit-specific tags\n" +
 	"    # to be promoted.\n" +
 	"    tag_by_commit: true\n" +
+	"    # TagByGitTag determines if an image should be tagged additionally by the\n" +
+	"    # git tags pointing to the commit from which the images were built.\n" +
+	"    tag_by_git_tag: true\n" +
 	"# RawSteps are literal Steps that should be\n" +
 	"# included in the final pipeline.\n" +
 	"raw_steps:\n" +

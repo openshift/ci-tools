@@ -479,6 +479,10 @@ type PromotionConfiguration struct {
 	// to be promoted.
 	TagByCommit bool `json:"tag_by_commit,omitempty"`
 
+	// TagByGitTag determines if an image should be tagged additionally by the
+	// git tags pointing to the commit from which the images were built.
+	TagByGitTag bool `json:"tag_by_git_tag,omitempty"`
+
 	// ExcludedImages are image names that will not be promoted.
 	// Exclusions are made before additional_images are included.
 	// Use exclusions when you want to build images for testing

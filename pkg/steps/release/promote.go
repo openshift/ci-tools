@@ -3,6 +3,7 @@ package release
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -72,7 +73,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 	}
 
 	if refs := mainRefs(s.jobSpec.Refs, s.jobSpec.ExtraRefs); refs != nil {
-		opts = append(opts, WithCommitSha(refs.BaseSHA))
+		opts = append(opts, WithGitTags(api.GetGitTags, refs.Org, refs.Repo, refs.BaseSHA), WithCommitSha(refs.BaseSHA))
 	}
 	tags, names := PromotedTagsWithRequiredImages(s.configuration, opts...)
 	if len(names) == 0 {
@@ -308,6 +309,10 @@ func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.MultiArchI
 type PromotedTagsOptions struct {
 	requiredImages sets.String
 	commitSha      string
+	org            string
+	repo           string
+	gitTagCommit   string
+	getGitTagsFunc func(org, repo, commit string) ([]string, error)
 }
 
 type PromotedTagsOption func(options *PromotedTagsOptions)
@@ -324,6 +329,24 @@ func WithCommitSha(commitSha string) PromotedTagsOption {
 	return func(options *PromotedTagsOptions) {
 		options.commitSha = commitSha
 	}
+}
+
+// WithGitTags ensures that images are tagged by the git tags that points to the commit for a given org/repo.
+func WithGitTags(fn func(org, repo, commit string) ([]string, error), org, repo, commit string) PromotedTagsOption {
+	return func(options *PromotedTagsOptions) {
+		options.getGitTagsFunc = fn
+		options.org = org
+		options.repo = repo
+		options.gitTagCommit = commit
+	}
+}
+
+// GetGitTags returns the git tags that points to the commit for a given org/rep specified in the options
+func (o *PromotedTagsOptions) GetGitTags() ([]string, error) {
+	if o.getGitTagsFunc == nil {
+		return nil, errors.New("getGitTagsFunc is not set")
+	}
+	return o.getGitTagsFunc(o.org, o.repo, o.gitTagCommit)
 }
 
 // PromotedTagsWithRequiredImages returns the tags that are being promoted for the given ReleaseBuildConfiguration
@@ -370,6 +393,22 @@ func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration
 					Tag:       opts.commitSha,
 				},
 			})
+		}
+		if configuration.PromotionConfiguration.TagByGitTag && opts.commitSha != "" {
+			if gitTags, err := opts.GetGitTags(); err != nil {
+				// TODO: bubble up the error
+				logrus.WithError(err).Warning("failed to get git tags")
+			} else {
+				for _, gitTag := range gitTags {
+					promotedTags[src] = append(promotedTags[src], api.MultiArchImageStreamTagReference{
+						ImageStreamTagReference: api.ImageStreamTagReference{
+							Namespace: configuration.PromotionConfiguration.Namespace,
+							Name:      dst,
+							Tag:       gitTag,
+						},
+					})
+				}
+			}
 		}
 	}
 	// promote the binary build if one exists and this isn't disabled

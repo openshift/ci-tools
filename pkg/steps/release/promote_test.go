@@ -402,6 +402,29 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 			},
 		},
 		{
+			name: "promoted image tagged by git tag means an additional tag",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("foo")},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace:   "roger",
+					Tag:         "fred",
+					TagByGitTag: true,
+				},
+			},
+			options: []PromotedTagsOption{WithCommitSha("sha"), WithGitTags(func(org, repo, commit string) ([]string, error) {
+				return []string{"v1.0.1", "other-tag"}, nil
+			}, "org", "repo", "sha")},
+			expected: map[string][]api.MultiArchImageStreamTagReference{
+				"foo": {
+					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "roger", Name: "foo", Tag: "fred"}},
+					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "roger", Name: "foo", Tag: "other-tag"}},
+					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "roger", Name: "foo", Tag: "v1.0.1"}},
+				},
+			},
+		},
+		{
 			name: "promoted additional image with rename",
 			input: &api.ReleaseBuildConfiguration{
 				Images: []api.ProjectDirectoryImageBuildStepConfiguration{

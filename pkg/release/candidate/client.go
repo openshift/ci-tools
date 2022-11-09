@@ -72,7 +72,7 @@ func resolvePullSpec(client release.HTTPClient, endpoint string, relative int) (
 		q.Add("rel", strconv.Itoa(relative))
 		req.URL.RawQuery = q.Encode()
 	}
-	logrus.Debugf("Requesting a release from %s", req.URL.String())
+	logrus.Infof("Requesting a release from %s", req.URL.String())
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to request latest release: %w", err)

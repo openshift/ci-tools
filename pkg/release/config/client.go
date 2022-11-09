@@ -42,7 +42,7 @@ func resolveJobs(client release.HTTPClient, endpoint string, jobType JobType) ([
 	q.Add("jobType", string(jobType))
 	req.URL.RawQuery = q.Encode()
 
-	logrus.Debugf("Requesting a release controller's jobs in config from %s", req.URL.String())
+	logrus.Infof("Requesting a release controller's jobs in config from %s", req.URL.String())
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request release controller's jobs in config: %w", err)

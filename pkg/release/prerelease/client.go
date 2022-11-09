@@ -44,7 +44,7 @@ func resolvePullSpec(client release.HTTPClient, endpoint string, bounds api.Vers
 	q := req.URL.Query()
 	q.Add("in", bounds.Query())
 	req.URL.RawQuery = q.Encode()
-	logrus.Debugf("Requesting a release from %s", req.URL.String())
+	logrus.Infof("Requesting a release from %s", req.URL.String())
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to request latest release: %w", err)

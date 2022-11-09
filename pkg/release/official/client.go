@@ -51,7 +51,7 @@ func resolvePullSpec(client release.HTTPClient, endpoint string, release api.Rel
 	query.Add("channel", channel)
 	query.Add("arch", string(release.Architecture))
 	req.URL.RawQuery = query.Encode()
-	logrus.Debugf("Requesting %s from %s", targetName, req.URL.String())
+	logrus.Infof("Requesting %s from %s", targetName, req.URL.String())
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to request %s: %w", targetName, err)

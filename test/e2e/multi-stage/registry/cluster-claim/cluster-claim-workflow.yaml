@@ -10,6 +10,6 @@ workflow:
       timeout: 3m # a claim from a fake pool should become ready very soon
       version: "4.7"
     test:
-      - ref: step
+      - ref: cluster-claim
   documentation: |-
     Workflow that claims a cluster by itself.

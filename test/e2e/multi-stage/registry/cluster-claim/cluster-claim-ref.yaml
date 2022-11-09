@@ -1,0 +1,10 @@
+ref:
+  as: cluster-claim
+  from: cli
+  commands: cluster-claim-commands.sh
+  resources:
+    requests:
+      cpu: 100m
+      memory: 200Mi
+  documentation: |-
+    A simple step that uses claimed cluster.

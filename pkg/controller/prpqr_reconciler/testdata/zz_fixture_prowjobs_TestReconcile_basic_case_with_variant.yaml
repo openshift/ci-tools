@@ -22,7 +22,7 @@
     resourceVersion: "1"
   spec:
     agent: kubernetes
-    cluster: this-job-was-defaulted
+    cluster: cluster-name-defaulted
     decoration_config:
       skip_cloning: true
     extra_refs:

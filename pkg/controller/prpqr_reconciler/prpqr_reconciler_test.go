@@ -45,6 +45,36 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			name: "basic case with vsphere override",
+			prpqr: []ctrlruntimeclient.Object{
+				&v1.PullRequestPayloadQualificationRun{
+					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
+					Spec: v1.PullRequestPayloadTestSpec{
+						PullRequest: v1.PullRequestUnderTest{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}},
+						Jobs: v1.PullRequestPayloadJobSpec{
+							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
+							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name-vsphere"}},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "basic case with metal override",
+			prpqr: []ctrlruntimeclient.Object{
+				&v1.PullRequestPayloadQualificationRun{
+					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
+					Spec: v1.PullRequestPayloadTestSpec{
+						PullRequest: v1.PullRequestUnderTest{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}},
+						Jobs: v1.PullRequestPayloadJobSpec{
+							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
+							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name-metal"}},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "basic case with variant",
 			prpqr: []ctrlruntimeclient.Object{
 				&v1.PullRequestPayloadQualificationRun{
@@ -254,6 +284,13 @@ func (f *fakeProwConfigGetter) Config() periodicDefaulter {
 type fakePeriodicDefaulter struct{}
 
 func (f *fakePeriodicDefaulter) DefaultPeriodic(periodic *prowconfig.Periodic) error {
-	periodic.Cluster = "this-job-was-defaulted"
+	// The current default cluster is hardcoded to "build01".  If there is a different value, then
+	// the underlying logic purposefully overwrote the default.  There are currently 2 tests to verify
+	// the existing overrides.
+	if periodic.Cluster != "build01" {
+		periodic.Cluster = "cluster-name-overwritten"
+	} else {
+		periodic.Cluster = "cluster-name-defaulted"
+	}
 	return nil
 }

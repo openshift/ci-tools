@@ -41,6 +41,7 @@ import (
 
 const (
 	appCIContextName = string(api.ClusterAPPCI)
+	buildCache       = "build-cache"
 )
 
 type RehearsalConfig struct {
@@ -568,6 +569,10 @@ func ensureImageStreamTags(ctx context.Context, client ctrlruntimeclient.Client,
 	g, ctx := errgroup.WithContext(ctx)
 
 	for _, ist := range ists {
+		// We can't import build-cache ists, and ci-operator doesn't care that it is missing
+		if ist.Namespace == buildCache {
+			continue
+		}
 		requiredImageStreamTag := ist
 		g.Go(func() error {
 			istLog := log.WithFields(logrus.Fields{"ist-namespace": requiredImageStreamTag.Namespace, "ist-name": requiredImageStreamTag.Name})

@@ -27,6 +27,7 @@ const (
 	rehearseSkip       = "/pj-rehearse skip"
 	rehearseAck        = "/pj-rehearse ack"
 	rehearseReject     = "/pj-rehearse reject"
+	rehearseRefresh    = "/pj-rehearse refresh"
 )
 
 var commentRegex = regexp.MustCompile(`(?m)^/pj-rehearse\s*(.*)$`)
@@ -76,6 +77,12 @@ func (s *server) helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, e
 		Examples:    []string{rehearseMax},
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
+		Usage:       rehearseRefresh,
+		Description: "Request an updated list of affected jobs. Useful when there is a new push to the branch.",
+		WhoCanUse:   "Anyone can use on trusted PRs",
+		Examples:    []string{rehearseRefresh},
+	})
+	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       rehearseSkip,
 		Description: fmt.Sprintf("Opt-out of rehearsals for this PR, and add the '%s' label allowing merge once other requirements are met.", rehearsalsAckLabel),
 		WhoCanUse:   "Anyone can use on trusted PRs",
@@ -115,6 +122,7 @@ func (s *server) handlePullRequestCreation(l *logrus.Entry, event github.PullReq
 		org := event.Repo.Owner.Login
 		repo := event.Repo.Name
 		number := event.Number
+		user := event.PullRequest.User.Login
 		logger := l.WithFields(logrus.Fields{
 			"org":  org,
 			"repo": repo,
@@ -124,36 +132,18 @@ func (s *server) handlePullRequestCreation(l *logrus.Entry, event github.PullReq
 
 		var comment string
 		if s.preCheck {
-			repoClient, err := s.getRepoClient(org, repo)
+			presubmits, periodics, _, _, err := s.getAffectedJobs(&event.PullRequest, logger)
 			if err != nil {
-				logger.WithError(err).Error("couldn't create repo client")
-			}
-			defer func() {
-				if err := repoClient.Clean(); err != nil {
-					logrus.WithError(err).Error("couldn't clean temporary repo folder")
-				}
-			}()
-
-			candidate, err := s.prepareCandidate(repoClient, &event.PullRequest)
-			if err != nil {
-				if err := s.ghc.CreateComment(org, repo, number, fmt.Sprintf("pj-rehearse couldn't prepare a candidate for rehearsal; rehearsals will not be run. This could be due to a branch that needs to be rebased.")); err != nil {
+				if err := s.ghc.CreateComment(org, repo, event.Number, fmt.Sprintf("@%s, pj-rehearse couldn't determine affected jobs. This could be due to a branch that needs to be rebased.", user)); err != nil {
 					logger.WithError(err).Error("failed to create comment")
 				}
-				return
-			}
-
-			//TODO(DPTP-2888): this is the point at which we can use repoClient.RevParse() to see if we even need to load the configs at all, and also prune the set of loaded configs to only the changed files
-
-			presubmits, periodics, _, _, err := s.rehearsalConfig.DetermineAffectedJobs(candidate, repoClient.Directory(), logger)
-			if err != nil {
-				logger.WithError(err).Error("couldn't determine affected jobs")
 			}
 			foundJobsToRehearse := len(presubmits) > 0 || len(periodics) > 0
 			if !foundJobsToRehearse {
 				s.acknowledgeRehearsals(org, repo, number, logger)
 			}
 
-			lines := s.getJobsTableLines(presubmits, periodics, event.PullRequest.User.Login)
+			lines := s.getJobsTableLines(presubmits, periodics, user)
 			if foundJobsToRehearse {
 				lines = append(lines, []string{
 					"Prior to this PR being merged, you will need to either run and acknowledge or opt to skip these rehearsals.",
@@ -164,7 +154,7 @@ func (s *server) handlePullRequestCreation(l *logrus.Entry, event github.PullReq
 			comment = strings.Join(lines, "\n")
 		} else {
 			lines := []string{
-				fmt.Sprintf("@%s: changes from this PR may affect rehearsable jobs. The `pj-rehearse` plugin is available to rehearse these jobs.", event.PullRequest.User.Login),
+				fmt.Sprintf("@%s: changes from this PR may affect rehearsable jobs. The `pj-rehearse` plugin is available to rehearse these jobs.", user),
 				"", // For formatting
 			}
 			lines = append(lines, s.getUsageDetailsLines()...)
@@ -188,6 +178,7 @@ func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEv
 		org := event.Repo.Owner.Login
 		repo := event.Repo.Name
 		number := event.Issue.Number
+		user := event.Comment.User.Login
 		logger := l.WithFields(logrus.Fields{
 			"org":  org,
 			"repo": repo,
@@ -217,6 +208,21 @@ func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEv
 			case rehearseReject:
 				if err := s.ghc.RemoveLabel(org, repo, number, rehearsalsAckLabel); err != nil {
 					logger.WithError(err).Errorf("failed to remove '%s' label", rehearsalsAckLabel)
+				}
+			case rehearseRefresh:
+				presubmits, periodics, _, _, err := s.getAffectedJobs(pullRequest, logger)
+				if err != nil {
+					if err := s.ghc.CreateComment(org, repo, pullRequest.Number, fmt.Sprintf("@%s, pj-rehearse couldn't determine affected jobs. This could be due to a branch that needs to be rebased.", user)); err != nil {
+						logger.WithError(err).Error("failed to create comment")
+					}
+				}
+				foundJobsToRehearse := len(presubmits) > 0 || len(periodics) > 0
+				if !foundJobsToRehearse {
+					s.acknowledgeRehearsals(org, repo, number, logger)
+				}
+				comment = strings.Join(s.getJobsTableLines(presubmits, periodics, user), "\n")
+				if err := s.ghc.CreateComment(org, repo, number, comment); err != nil {
+					logger.WithError(err).Error("failed to create comment")
 				}
 			case rehearseNormal, rehearseMore, rehearseMax:
 				if rehearsalsTriggered {
@@ -286,13 +292,40 @@ func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEv
 					}
 				} else {
 					s.acknowledgeRehearsals(org, repo, number, logger)
-					if err = s.ghc.CreateComment(org, repo, number, fmt.Sprintf("@%s: no rehearsable tests are affected by this change", event.Comment.User.Login)); err != nil {
+					if err = s.ghc.CreateComment(org, repo, number, fmt.Sprintf("@%s: no rehearsable tests are affected by this change", user)); err != nil {
 						logger.WithError(err).Error("failed to create comment")
 					}
 				}
 			}
 		}
 	}
+}
+
+func (s *server) getAffectedJobs(pullRequest *github.PullRequest, logger *logrus.Entry) (config.Presubmits, config.Periodics, *rehearse.ConfigMaps, *rehearse.ConfigMaps, error) {
+	rc := s.rehearsalConfig
+	org := pullRequest.Base.Repo.Owner.Login
+	repo := pullRequest.Base.Repo.Name
+	repoClient, err := s.getRepoClient(org, repo)
+	if err != nil {
+		logger.WithError(err).Error("couldn't create repo client")
+		return nil, nil, nil, nil, fmt.Errorf("couldn't create repo client: %w", err)
+	}
+	defer func() {
+		if err := repoClient.Clean(); err != nil {
+			logrus.WithError(err).Error("couldn't clean temporary repo folder")
+		}
+	}()
+
+	candidate, err := s.prepareCandidate(repoClient, pullRequest)
+	if err != nil {
+		logger.WithError(err).Error("couldn't prepare candidate")
+		return nil, nil, nil, nil, fmt.Errorf("couldn't prepare candidate: %w", err)
+	}
+
+	//TODO(DPTP-2888): this is the point at which we can use repoClient.RevParse() to see if we even need to load the configs at all, and also prune the set of loaded configs to only the changed files
+
+	candidatePath := repoClient.Directory()
+	return rc.DetermineAffectedJobs(candidate, candidatePath, logger)
 }
 
 func (s *server) reportFailure(message string, event github.IssueCommentEvent, l *logrus.Entry) {
@@ -384,6 +417,7 @@ func (s *server) getUsageDetailsLines() []string {
 		fmt.Sprintf("Comment: `%s` to opt-out of rehearsals", rehearseSkip),
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals", rehearseMore, rc.MoreLimit),
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals", rehearseMax, rc.MaxLimit),
+		fmt.Sprintf("Comment: `%s` to get an updated list of affected jobs (useful if you have new pushes to the branch)", rehearseRefresh),
 		"",
 		fmt.Sprintf("Once you are satisfied with the results of the rehearsals, comment: `%s` to unblock merge. When the `%s` label is present on your PR, merge will no longer be blocked by rehearsals.", rehearseAck, rehearsalsAckLabel),
 		fmt.Sprintf("If you would like the `%s` label removed, comment: `%s` to re-block merging.", rehearsalsAckLabel, rehearseReject),

@@ -1146,6 +1146,7 @@ const (
 	ClusterProfileAWSGluster            ClusterProfile = "aws-gluster"
 	ClusterProfileAWSOSDMSP             ClusterProfile = "aws-osd-msp"
 	ClusterProfileAWSOutpost            ClusterProfile = "aws-outpost"
+	ClusterProfileAWSINTEROPQE          ClusterProfile = "aws-interop-qe"
 	ClusterProfileAlibabaCloud          ClusterProfile = "alibabacloud"
 	ClusterProfileAlibabaCloudQE        ClusterProfile = "alibabacloud-qe"
 	ClusterProfileAlibabaCloudCNQE      ClusterProfile = "alibabacloud-cn-qe"
@@ -1227,6 +1228,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWS1QE,
 		ClusterProfileAWSSC2SQE,
 		ClusterProfileAWSOutpost,
+		ClusterProfileAWSINTEROPQE,
 		ClusterProfileAlibabaCloud,
 		ClusterProfileAlibabaCloudQE,
 		ClusterProfileAlibabaCloudCNQE,
@@ -1299,6 +1301,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWS3,
 		ClusterProfileAWSOutpost,
 		ClusterProfileAWSQE,
+		ClusterProfileAWSINTEROPQE,
 		ClusterProfileAWS1QE:
 		return string(CloudAWS)
 	case
@@ -1440,6 +1443,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-usgov-qe-quota-slice"
 	case ClusterProfileAWSSC2SQE:
 		return "aws-sc2s-qe-quota-slice"
+	case ClusterProfileAWSINTEROPQE:
+		return "aws-interop-qe-quota-slice"
 	case ClusterProfileAlibabaCloud:
 		return "alibabacloud-quota-slice"
 	case ClusterProfileAlibabaCloudQE:

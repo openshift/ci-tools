@@ -48,6 +48,11 @@ func TestCommitForIST(t *testing.T) {
 			srcFile:        "testdata/ist_with_git_suffix.yaml",
 			expectedCommit: "71e03eafe37b34af3768c8fcae077885d29e16f7",
 		},
+		{
+			name:           "commit from env",
+			srcFile:        "testdata/ocp.413.grafana.istag.yaml",
+			expectedCommit: "f17f5523faca5bd928d5cc65484a66b20f04f366",
+		},
 	}
 
 	for _, tc := range testCases {

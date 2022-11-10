@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -195,18 +196,29 @@ func (r *reconciler) promotionConfig(ist *imagev1.ImageStreamTag) (*cioperatorap
 	}
 }
 
+// commitForIST returns the commit from an isTag
 func commitForIST(ist *imagev1.ImageStreamTag) (string, error) {
+	nn := fmt.Sprintf("%s/%s", ist.Namespace, ist.Name)
 	metadata := &docker10.DockerImage{}
+	if len(ist.Image.DockerImageMetadata.Raw) == 0 {
+		return "", fmt.Errorf("could not fetch Docker image metadata for ImageStreamTag %s", nn)
+	}
 	if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, metadata); err != nil {
-		return "", fmt.Errorf("failed to unmarshal imagestream.image.dockerImageMetadata: %w", err)
+		return "", fmt.Errorf("malformed Docker image metadata on ImageStreamTag %s: %w", nn, err)
 	}
-
-	commit := metadata.Config.Labels["io.openshift.build.commit.id"]
-	if commit == "" {
-		return "", controllerutil.TerminalError(errors.New("ImageStreamTag has no `io.openshift.build.commit.id` label, can't find out source commit"))
+	if metadata.Config.Labels != nil {
+		if commit, ok := metadata.Config.Labels["io.openshift.build.commit.id"]; ok && commit != "" {
+			return commit, nil
+		}
 	}
-
-	return commit, nil
+	for _, e := range metadata.Config.Env {
+		if strings.HasPrefix(e, "SOURCE_GIT_COMMIT=") {
+			if commit := strings.Replace(e, "SOURCE_GIT_COMMIT=", "", 1); commit != "" {
+				return commit, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("failed to find commit from ImageStreamTag %s", nn)
 }
 
 func (r *reconciler) currentHEADForBranch(metadata cioperatorapi.Metadata, log *logrus.Entry) (string, bool, error) {

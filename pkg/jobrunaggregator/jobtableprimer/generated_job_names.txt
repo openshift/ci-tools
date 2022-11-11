@@ -115,6 +115,7 @@ periodic-ci-openshift-release-master-nightly-4.11-credentials-request-freeze
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11-multi.json
 periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-e2e-aws-heterogeneous
+periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-e2e-aws-ovn-heterogeneous-upgrade
 periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-e2e-serial-aws-heterogeneous
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11-multi.json
 
@@ -212,7 +213,9 @@ periodic-ci-openshift-release-master-ci-4.12-upgrade-from-stable-4.11-e2e-azure-
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12-multi.json
 periodic-ci-openshift-multiarch-master-nightly-4.12-ocp-e2e-aws-ovn-heterogeneous
+periodic-ci-openshift-multiarch-master-nightly-4.12-ocp-e2e-aws-ovn-heterogeneous-upgrade
 periodic-ci-openshift-multiarch-master-nightly-4.12-ocp-e2e-serial-aws-ovn-heterogeneous
+periodic-ci-openshift-multiarch-master-nightly-4.12-upgrade-from-stable-4.11-ocp-e2e-aws-heterogeneous-upgrade
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12-multi.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12-ppc64le.json

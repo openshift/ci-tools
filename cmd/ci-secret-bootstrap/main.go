@@ -477,7 +477,7 @@ type Getter interface {
 	coreclientset.NamespacesGetter
 }
 
-func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.Secret, force bool, confirm bool) error {
+func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.Secret, force bool, confirm bool, osdGlobalPullSecretGroup sets.String) error {
 	var errs []error
 
 	var dryRunOptions []string
@@ -511,6 +511,24 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 			secretClient := getters[cluster].Secrets(secret.Namespace)
 
 			existingSecret, err := secretClient.Get(context.TODO(), secret.Name, metav1.GetOptions{})
+
+			if secret.Namespace == "openshift-config" && secret.Name == "pull-secret" && osdGlobalPullSecretGroup.Has(cluster) {
+				logger.Debug("handling the global pull secret on an OSD cluster")
+				if mutated, err := mutateGlobalPullSecret(existingSecret, secret); err != nil {
+					errs = append(errs, fmt.Errorf("failed to mutate secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
+				} else {
+					if mutated {
+						if _, err := secretClient.Update(context.TODO(), secret, metav1.UpdateOptions{DryRun: dryRunOptions}); err != nil {
+							errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
+						}
+						logger.Debug("global pull secret updated")
+					} else {
+						logger.Debug("global pull secret skipped")
+					}
+				}
+				continue
+			}
+
 			if err != nil && !kerrors.IsNotFound(err) {
 				errs = append(errs, fmt.Errorf("error reading secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 				continue
@@ -563,6 +581,53 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 		}
 	}
 	return utilerrors.NewAggregate(errs)
+}
+
+func mutateGlobalPullSecret(original, secret *coreapi.Secret) (bool, error) {
+	dockerConfigJson, err := dockerConfigJSON(secret)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse the constructed secret: %w", err)
+	}
+	registryDomain := api.DomainForService(api.ServiceRegistry)
+	if dockerConfigJson.Auths == nil || dockerConfigJson.Auths[api.DomainForService(api.ServiceRegistry)].Auth == "" {
+		return false, fmt.Errorf("failed to get token for %s", registryDomain)
+	}
+	token := dockerConfigJson.Auths[api.DomainForService(api.ServiceRegistry)].Auth
+	dockerConfigJson, err = dockerConfigJSON(original)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse the original secret: %w", err)
+	}
+	orignalToken := dockerConfigJson.Auths[api.DomainForService(api.ServiceRegistry)].Auth
+	if orignalToken == token {
+		return false, nil
+	}
+	dockerConfigJson.Auths[api.DomainForService(api.ServiceRegistry)] = secretbootstrap.DockerAuth{
+		Auth: token,
+	}
+	data, err := json.Marshal(dockerConfigJson)
+	if err != nil {
+		return false, fmt.Errorf("failed to marshal the docker config: %w", err)
+	}
+	original.Data[coreapi.DockerConfigJsonKey] = data
+	return true, nil
+}
+
+func dockerConfigJSON(secret *coreapi.Secret) (*secretbootstrap.DockerConfigJSON, error) {
+	if secret == nil {
+		return nil, fmt.Errorf("failed to get content from nil secret")
+	}
+	if secret.Data == nil {
+		return nil, fmt.Errorf("failed to get content from an secret with no data")
+	}
+	bytes, ok := secret.Data[coreapi.DockerConfigJsonKey]
+	if !ok {
+		return nil, fmt.Errorf("there is no key in the secret: %s", coreapi.DockerConfigJsonKey)
+	}
+	var ret secretbootstrap.DockerConfigJSON
+	if err := json.Unmarshal(bytes, &ret); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal the docker config: %w", err)
+	}
+	return &ret, nil
 }
 
 func writeSecrets(secretsMap map[string][]*coreapi.Secret) error {
@@ -868,7 +933,7 @@ func reconcileSecrets(o options, client secrets.ReadOnlyClient) (errs []error) {
 			errs = append(errs, fmt.Errorf("failed to write secrets on dry run: %w", err))
 		}
 	} else {
-		if err := updateSecrets(o.secretsGetters, secretsMap, o.force, o.confirm); err != nil {
+		if err := updateSecrets(o.secretsGetters, secretsMap, o.force, o.confirm, sets.NewString(o.config.OSDGlobalPullSecretGroup()...)); err != nil {
 			errs = append(errs, fmt.Errorf("failed to update secrets: %w", err))
 		}
 		logrus.Info("Updated secrets.")

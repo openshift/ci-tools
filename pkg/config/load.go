@@ -66,6 +66,9 @@ func (p *Prowgen) MergeDefaults(defaults *Prowgen) {
 	if defaults.Rehearsals.DisableAll {
 		p.Rehearsals.DisableAll = true
 	}
+	if defaults.AdditionalArchitectures != nil {
+		p.AdditionalArchitectures = defaults.AdditionalArchitectures
+	}
 	p.Rehearsals.DisabledRehearsals = append(p.Rehearsals.DisabledRehearsals, defaults.Rehearsals.DisabledRehearsals...)
 }
 

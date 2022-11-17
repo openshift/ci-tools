@@ -13,6 +13,7 @@ import (
 
 	"github.com/bombsimon/logrusr/v3"
 	"github.com/sirupsen/logrus"
+	"gopkg.in/fsnotify.v1"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -20,6 +21,7 @@ import (
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
+	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/pjutil/pprof"
@@ -286,8 +288,32 @@ func main() {
 	if _, hasRegistryCluster := kubeconfigs[opts.registryClusterName]; !hasRegistryCluster {
 		logrus.Fatalf("--kubeconfig must include a context named `%s`", opts.registryClusterName)
 	}
+	configAgentOption := func(*agents.ConfigAgentOptions) {}
+	registryAgentOption := func(*agents.RegistryAgentOptions) {}
+	if opts.releaseRepoGitSyncPath != "" {
+		eventCh := make(chan fsnotify.Event)
+		errCh := make(chan error)
 
-	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath)
+		universalSymlinkWatcher := &agents.UniversalSymlinkWatcher{
+			EventCh:   eventCh,
+			ErrCh:     errCh,
+			WatchPath: opts.releaseRepoGitSyncPath,
+		}
+
+		configAgentOption = func(opt *agents.ConfigAgentOptions) {
+			opt.UniversalSymlinkWatcher = universalSymlinkWatcher
+		}
+		registryAgentOption = func(opt *agents.RegistryAgentOptions) {
+			opt.UniversalSymlinkWatcher = universalSymlinkWatcher
+		}
+
+		watcher, err := universalSymlinkWatcher.GetWatcher()
+		if err != nil {
+			logrus.Fatalf("Failed to get the universal symlink watcher: %v", err)
+		}
+		interrupts.Run(watcher)
+	}
+	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath, configAgentOption)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct ci-operator config agent")
 	}
@@ -402,7 +428,7 @@ func main() {
 	}
 
 	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) {
-		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath)
+		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath, registryAgentOption)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to construct registryAgent")
 		}

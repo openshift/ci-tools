@@ -584,27 +584,26 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 }
 
 func mutateGlobalPullSecret(original, secret *coreapi.Secret) (bool, error) {
-	dockerConfigJson, err := dockerConfigJSON(secret)
+	dockerConfig, err := dockerConfigJSON(secret)
 	if err != nil {
 		return false, fmt.Errorf("failed to parse the constructed secret: %w", err)
 	}
 	registryDomain := api.DomainForService(api.ServiceRegistry)
-	if dockerConfigJson.Auths == nil || dockerConfigJson.Auths[api.DomainForService(api.ServiceRegistry)].Auth == "" {
+	if dockerConfig.Auths == nil || dockerConfig.Auths[api.DomainForService(api.ServiceRegistry)].Auth == "" {
 		return false, fmt.Errorf("failed to get token for %s", registryDomain)
 	}
-	token := dockerConfigJson.Auths[api.DomainForService(api.ServiceRegistry)].Auth
-	dockerConfigJson, err = dockerConfigJSON(original)
+	token := dockerConfig.Auths[api.DomainForService(api.ServiceRegistry)].Auth
+	dockerConfig, err = dockerConfigJSON(original)
 	if err != nil {
 		return false, fmt.Errorf("failed to parse the original secret: %w", err)
 	}
-	orignalToken := dockerConfigJson.Auths[api.DomainForService(api.ServiceRegistry)].Auth
-	if orignalToken == token {
+	if dockerConfig.Auths[api.DomainForService(api.ServiceRegistry)].Auth == token {
 		return false, nil
 	}
-	dockerConfigJson.Auths[api.DomainForService(api.ServiceRegistry)] = secretbootstrap.DockerAuth{
+	dockerConfig.Auths[api.DomainForService(api.ServiceRegistry)] = secretbootstrap.DockerAuth{
 		Auth: token,
 	}
-	data, err := json.Marshal(dockerConfigJson)
+	data, err := json.Marshal(dockerConfig)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal the docker config: %w", err)
 	}

@@ -74,6 +74,8 @@ type config struct {
 // getInterestedLabels returns a set of those labels we are interested in when using the PR reminder
 func getInterestedLabels() sets.String {
 	var prLabels = sets.String{}
+	prLabels.Insert("approved")
+	prLabels.Insert("lgtm")
 	prLabels.Insert("do-not-merge/hold")
 	return prLabels
 }

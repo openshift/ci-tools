@@ -26,6 +26,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 	"github.com/openshift/ci-tools/pkg/rehearse"
+	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -1027,6 +1028,11 @@ func TestDetermineWorkloadType(t *testing.T) {
 			name:     "prowjob",
 			labels:   map[string]string{"prow.k8s.io/job": "jobName"},
 			expected: "prowjob",
+		},
+		{
+			name:     "step",
+			labels:   map[string]string{steps.LabelMetadataStep: "e2e"},
+			expected: "step",
 		},
 	}
 

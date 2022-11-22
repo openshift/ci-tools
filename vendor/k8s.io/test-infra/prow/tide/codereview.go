@@ -26,7 +26,6 @@ import (
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/git/types"
-	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/tide/blockers"
 
 	githubql "github.com/shurcooL/githubv4"
@@ -139,27 +138,6 @@ func (crc *CodeReviewCommon) GitHubCommits() *Commits {
 	return &crc.GitHub.Commits
 }
 
-func refsForJob(sp subpool, prs []CodeReviewCommon) prowapi.Refs {
-	refs := prowapi.Refs{
-		Org:     sp.org,
-		Repo:    sp.repo,
-		BaseRef: sp.branch,
-		BaseSHA: sp.sha,
-	}
-	for _, pr := range prs {
-		refs.Pulls = append(
-			refs.Pulls,
-			prowapi.Pull{
-				Number: pr.Number,
-				Title:  pr.Title,
-				Author: string(pr.AuthorLogin),
-				SHA:    pr.HeadRefOID,
-			},
-		)
-	}
-	return refs
-}
-
 // CodeReviewCommonFromPullRequest derives CodeReviewCommon struct from GitHub
 // PullRequest struct, by extracting shared fields among different code review
 // providers.
@@ -255,9 +233,20 @@ type provider interface {
 	// merging. And also transform any other label that is not voted by prow
 	// into a context.
 	headContexts(pr *CodeReviewCommon) ([]Context, error)
-	mergePRs(sp subpool, prs []CodeReviewCommon, dontUpdateStatus *threadSafePRSet) error
-	GetTideContextPolicy(gitClient git.ClientFactory, org, repo, branch, cloneURI string, baseSHAGetter config.RefGetter, pr *CodeReviewCommon) (contextChecker, error)
+	// mergePRs attempts to merge the specified PRs and returns the prs that were successfully merged.
+	mergePRs(sp subpool, prs []CodeReviewCommon, dontUpdateStatus *threadSafePRSet) ([]CodeReviewCommon, error)
+	GetTideContextPolicy(org, repo, branch string, baseSHAGetter config.RefGetter, pr *CodeReviewCommon) (contextChecker, error)
 	prMergeMethod(crc *CodeReviewCommon) (types.PullRequestMergeType, error)
 
+	// GetPresubmits will return all presubmits for the given identifier. This includes
+	// Presubmits that are versioned inside the tested repo, if the inrepoconfig feature
+	// is enabled.
+	// Consumers that pass in a RefGetter implementation that does a call to GitHub and who
+	// also need the result of that GitHub call just keep a pointer to its result, but must
+	// nilcheck that pointer before accessing it.
+	GetPresubmits(identifier string, baseSHAGetter config.RefGetter, headSHAGetters ...config.RefGetter) ([]config.Presubmit, error)
 	GetChangedFiles(org, repo string, number int) ([]string, error)
+
+	refsForJob(sp subpool, prs []CodeReviewCommon) (prowapi.Refs, error)
+	labelsAndAnnotations(instance string, jobLabels, jobAnnotations map[string]string, changes ...CodeReviewCommon) (labels, annotations map[string]string)
 }

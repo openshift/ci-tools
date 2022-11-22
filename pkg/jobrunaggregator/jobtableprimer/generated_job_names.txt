@@ -816,6 +816,7 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-assisted
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-ipi-compact
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-single-node-live-iso
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-single-node-with-worker-live-iso
+periodic-ci-openshift-release-master-nightly-4.12-e2e-nutanix
 periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt-ovn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt-sdn
@@ -889,6 +890,7 @@ periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ovn-ipi-compact
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ovn-single-node-live-iso
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ovn-single-node-with-worker-live-iso
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-sdn-assisted
+periodic-ci-openshift-release-master-nightly-4.13-e2e-nutanix
 periodic-ci-openshift-release-master-nightly-4.13-e2e-ovirt-csi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-ovirt-ovn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-ovirt-sdn

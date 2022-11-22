@@ -30,7 +30,7 @@ const (
 	rehearseRefresh    = "/pj-rehearse refresh"
 )
 
-var commentRegex = regexp.MustCompile(`(?m)^/pj-rehearse\s*(.*)$`)
+var commentRegex = regexp.MustCompile(`(?m)^/pj-rehearse\f*.*$`)
 
 type githubClient interface {
 	CreateComment(owner, repo string, number int, comment string) error
@@ -129,41 +129,50 @@ func (s *server) handlePullRequestCreation(l *logrus.Entry, event github.PullReq
 			"pr":   number,
 		})
 		logger.Debug("handling pull request creation")
+		pullRequest := &event.PullRequest
+		s.respondToNewPR(pullRequest, logger)
+		s.handlePotentialCommands(pullRequest, event.PullRequest.Body, user, logger)
+	}
+}
 
-		var comment string
-		if s.preCheck {
-			presubmits, periodics, _, _, err := s.getAffectedJobs(&event.PullRequest, logger)
-			if err != nil {
-				if err := s.ghc.CreateComment(org, repo, event.Number, fmt.Sprintf("@%s, pj-rehearse couldn't determine affected jobs. This could be due to a branch that needs to be rebased.", user)); err != nil {
-					logger.WithError(err).Error("failed to create comment")
-				}
+func (s *server) respondToNewPR(pullRequest *github.PullRequest, logger *logrus.Entry) {
+	org := pullRequest.Base.Repo.Owner.Login
+	repo := pullRequest.Base.Repo.Name
+	number := pullRequest.Number
+	user := pullRequest.User.Login
+	var comment string
+	if s.preCheck {
+		presubmits, periodics, _, _, err := s.getAffectedJobs(pullRequest, logger)
+		if err != nil {
+			if err := s.ghc.CreateComment(org, repo, number, fmt.Sprintf("@%s, pj-rehearse couldn't determine affected jobs. This could be due to a branch that needs to be rebased.", user)); err != nil {
+				logger.WithError(err).Error("failed to create comment")
 			}
-			foundJobsToRehearse := len(presubmits) > 0 || len(periodics) > 0
-			if !foundJobsToRehearse {
-				s.acknowledgeRehearsals(org, repo, number, logger)
-			}
+		}
+		foundJobsToRehearse := len(presubmits) > 0 || len(periodics) > 0
+		if !foundJobsToRehearse {
+			s.acknowledgeRehearsals(org, repo, number, logger)
+		}
 
-			lines := s.getJobsTableLines(presubmits, periodics, user)
-			if foundJobsToRehearse {
-				lines = append(lines, []string{
-					"Prior to this PR being merged, you will need to either run and acknowledge or opt to skip these rehearsals.",
-					"",
-				}...)
-				lines = append(lines, s.getUsageDetailsLines()...)
-			}
-			comment = strings.Join(lines, "\n")
-		} else {
-			lines := []string{
-				fmt.Sprintf("@%s: changes from this PR may affect rehearsable jobs. The `pj-rehearse` plugin is available to rehearse these jobs.", user),
-				"", // For formatting
-			}
+		lines := s.getJobsTableLines(presubmits, periodics, user)
+		if foundJobsToRehearse {
+			lines = append(lines, []string{
+				"Prior to this PR being merged, you will need to either run and acknowledge or opt to skip these rehearsals.",
+				"",
+			}...)
 			lines = append(lines, s.getUsageDetailsLines()...)
-			comment = strings.Join(lines, "\n")
 		}
+		comment = strings.Join(lines, "\n")
+	} else {
+		lines := []string{
+			fmt.Sprintf("@%s: changes from this PR may affect rehearsable jobs. The `pj-rehearse` plugin is available to rehearse these jobs.", user),
+			"", // For formatting
+		}
+		lines = append(lines, s.getUsageDetailsLines()...)
+		comment = strings.Join(lines, "\n")
+	}
 
-		if err := s.ghc.CreateComment(org, repo, event.Number, comment); err != nil {
-			logger.WithError(err).Error("failed to create comment")
-		}
+	if err := s.ghc.CreateComment(org, repo, number, comment); err != nil {
+		logger.WithError(err).Error("failed to create comment")
 	}
 }
 
@@ -171,27 +180,32 @@ func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEv
 	if !event.Issue.IsPullRequest() || github.IssueCommentActionCreated != event.Action {
 		return
 	}
-
+	org := event.Repo.Owner.Login
+	repo := event.Repo.Name
+	number := event.Issue.Number
+	logger := l.WithFields(logrus.Fields{
+		"org":  org,
+		"repo": repo,
+		"pr":   number,
+	})
 	comment := event.Comment.Body
+	pullRequest, err := s.ghc.GetPullRequest(org, repo, number)
+	if err != nil {
+		logger.WithError(err).Error("failed to get PR for issue comment event")
+		// We shouldn't continue here
+		return
+	}
+	s.handlePotentialCommands(pullRequest, comment, event.Comment.User.Login, logger)
+}
+
+func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, comment, user string, logger *logrus.Entry) {
 	pjRehearseComments := commentRegex.FindAllString(comment, -1)
 	if len(pjRehearseComments) > 0 {
-		org := event.Repo.Owner.Login
-		repo := event.Repo.Name
-		number := event.Issue.Number
-		user := event.Comment.User.Login
-		logger := l.WithFields(logrus.Fields{
-			"org":  org,
-			"repo": repo,
-			"pr":   number,
-		})
-		logger.Debugf("handling issue comment: %s", comment)
+		logger.Debugf("handling commands: %s", comment)
+		org := pullRequest.Base.Repo.Owner.Login
+		repo := pullRequest.Base.Repo.Name
+		number := pullRequest.Number
 
-		pullRequest, err := s.ghc.GetPullRequest(org, repo, number)
-		if err != nil {
-			logger.WithError(err).Error("failed to get PR for issue comment event")
-			// We shouldn't continue here
-			return
-		}
 		// We shouldn't allow rehearsals to run (or be ack'd) on untrusted PRs
 		for _, label := range pullRequest.Labels {
 			if needsOkToTestLabel == label.Name {
@@ -202,6 +216,8 @@ func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEv
 
 		rehearsalsTriggered := false
 		for _, command := range pjRehearseComments {
+			command = strings.TrimSpace(command)
+			logger.Debugf("handling command: %s", command)
 			switch command {
 			case rehearseAck, rehearseSkip:
 				s.acknowledgeRehearsals(org, repo, number, logger)
@@ -277,18 +293,18 @@ func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEv
 					prConfig, prRefs, imageStreamTags, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, changedTemplates, changedClusterProfiles, limit, loggers)
 					if err != nil {
 						logger.WithError(err).Error("couldn't set up jobs")
-						s.reportFailure("unable to set up jobs", event, logger)
+						s.reportFailure("unable to set up jobs", org, repo, user, number, logger)
 					}
 
 					if err := prConfig.Prow.ValidateJobConfig(); err != nil {
 						logger.WithError(err).Error("validation of job config failed")
-						s.reportFailure("config validation failed", event, logger)
+						s.reportFailure("config validation failed", org, repo, user, number, logger)
 					}
 
 					_, err = rc.RehearseJobs(candidate, candidatePath, prConfig, prRefs, imageStreamTags, presubmitsToRehearse, changedTemplates, changedClusterProfiles, loggers)
 					if err != nil {
 						logger.WithError(err).Error("couldn't rehearse jobs")
-						s.reportFailure("failed to create rehearsal jobs", event, logger)
+						s.reportFailure("failed to create rehearsal jobs", org, repo, user, number, logger)
 					}
 				} else {
 					s.acknowledgeRehearsals(org, repo, number, logger)
@@ -328,8 +344,8 @@ func (s *server) getAffectedJobs(pullRequest *github.PullRequest, logger *logrus
 	return rc.DetermineAffectedJobs(candidate, candidatePath, logger)
 }
 
-func (s *server) reportFailure(message string, event github.IssueCommentEvent, l *logrus.Entry) {
-	if err := s.ghc.CreateComment(event.Repo.Owner.Login, event.Repo.Name, event.Issue.Number, fmt.Sprintf("@%s, `pj-rehearse`: %s", event.Comment.User.Login, message)); err != nil {
+func (s *server) reportFailure(message, org, repo, user string, number int, l *logrus.Entry) {
+	if err := s.ghc.CreateComment(org, repo, number, fmt.Sprintf("@%s, `pj-rehearse`: %s", user, message)); err != nil {
 		l.WithError(err).Error("failed to create comment")
 	}
 }

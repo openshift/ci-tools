@@ -13,6 +13,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/spf13/afero"
 
+	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/git/types"
@@ -248,6 +249,68 @@ func TestShardProwConfig(t *testing.T) {
     repos:
     - openshift/release
 `,
+			},
+		},
+		{
+			name: "Org and repo slack-reporter configs get written out",
+			in: &config.ProwConfig{
+				SlackReporterConfigs: map[string](config.SlackReporter){
+					"*": {
+						SlackReporterConfig: prowjobv1.SlackReporterConfig{
+							Channel:           "general-channel",
+							JobStatesToReport: []prowjobv1.ProwJobState{"error"},
+							ReportTemplate:    "Job {{.Spec.Job}} of type ended with an error",
+						},
+					},
+					"openshift": {
+						SlackReporterConfig: prowjobv1.SlackReporterConfig{
+							Channel:           "openshift-channel",
+							JobStatesToReport: []prowjobv1.ProwJobState{"error"},
+							ReportTemplate:    "Job {{.Spec.Job}} of type ended with an error",
+						},
+					},
+					"openshift/installer": {
+						SlackReporterConfig: prowjobv1.SlackReporterConfig{
+							Channel:           "installer-channel",
+							JobStatesToReport: []prowjobv1.ProwJobState{"failure", "error"},
+							ReportTemplate:    "Job {{.Spec.Job}} of type ended with state {{.Status.State}}",
+						},
+					},
+				},
+			},
+
+			expectedConfig: config.ProwConfig{
+				SlackReporterConfigs: map[string](config.SlackReporter){
+					"*": {
+						SlackReporterConfig: prowjobv1.SlackReporterConfig{
+							Channel:           "general-channel",
+							JobStatesToReport: []prowjobv1.ProwJobState{"error"},
+							ReportTemplate:    "Job {{.Spec.Job}} of type ended with an error",
+						},
+					},
+				},
+			},
+
+			expectedShardFiles: map[string]string{
+				"openshift/_prowconfig.yaml": strings.Join([]string{
+					"slack_reporter_configs:",
+					"  openshift:",
+					"    channel: openshift-channel",
+					"    job_states_to_report:",
+					"    - error",
+					"    report_template: Job {{.Spec.Job}} of type ended with an error",
+					"",
+				}, "\n"),
+				"openshift/installer/_prowconfig.yaml": strings.Join([]string{
+					"slack_reporter_configs:",
+					"  openshift/installer:",
+					"    channel: installer-channel",
+					"    job_states_to_report:",
+					"    - failure",
+					"    - error",
+					"    report_template: Job {{.Spec.Job}} of type ended with state {{.Status.State}}",
+					"",
+				}, "\n"),
 			},
 		},
 	}

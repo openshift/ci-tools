@@ -24,8 +24,9 @@ type ShardProwConfigFunctors interface {
 // prowConfigWithPointers mimics the upstream prowConfig but has pointer fields only
 // in order to avoid serializing empty structs.
 type ProwConfigWithPointers struct {
-	BranchProtection *prowconfig.BranchProtection `json:"branch-protection,omitempty"`
-	Tide             *TideConfig                  `json:"tide,omitempty"`
+	BranchProtection     *prowconfig.BranchProtection     `json:"branch-protection,omitempty"`
+	Tide                 *TideConfig                      `json:"tide,omitempty"`
+	SlackReporterConfigs *prowconfig.SlackReporterConfigs `json:"slack_reporter_configs,omitempty"`
 }
 
 type TideConfig struct {
@@ -117,6 +118,23 @@ func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConf
 		}
 	}
 	pc.Tide.Queries = nil
+
+	for orgOrRepo, slackReporter := range pc.SlackReporterConfigs {
+		if orgOrRepo == "*" {
+			// Value of "*" is for applying global configurations, so no need to shard it
+			continue
+		}
+		orgRepo := prowconfig.NewOrgRepo(orgOrRepo)
+		if configsByOrgRepo[*orgRepo] == nil {
+			configsByOrgRepo[*orgRepo] = &ProwConfigWithPointers{}
+		}
+
+		configsByOrgRepo[*orgRepo].SlackReporterConfigs = &prowconfig.SlackReporterConfigs{
+			orgOrRepo: slackReporter,
+		}
+
+		delete(pc.SlackReporterConfigs, orgOrRepo)
+	}
 
 	for orgOrRepo, cfg := range configsByOrgRepo {
 		if err := prowconfigsharding.MkdirAndWrite(target, filepath.Join(orgOrRepo.Org, orgOrRepo.Repo, config.SupplementalProwConfigFileName), cfg); err != nil {

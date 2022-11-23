@@ -767,6 +767,7 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-alibaba-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-alibaba-ovn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-driver-toolkit
+periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-ovn-etcd-scaling
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-ovn-fips
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-ovn-fips-serial
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-ovn-local-gateway
@@ -785,6 +786,7 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn-serial
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn-upgrade
 periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-deploy-cnv
+periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-ovn-etcd-scaling
 periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-sdn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-sdn-fips
@@ -794,6 +796,7 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-azurestack-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-azurestack-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-libvirt-cert-rotation
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-ovn-csi
+periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-ovn-etcd-scaling
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-ovn-fips
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-ovn-rt
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-ovn-upi
@@ -823,6 +826,7 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt-sdn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-telco5g
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-ovn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-ovn-csi
+periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-ovn-etcd-scaling
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-ovn-serial
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-ovn-techpreview
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-ovn-techpreview-serial
@@ -841,6 +845,7 @@ periodic-ci-openshift-release-master-nightly-4.13-e2e-alibaba-csi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-alibaba-ovn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-csi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-driver-toolkit
+periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-ovn-etcd-scaling
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-ovn-fips
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-ovn-fips-serial
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-ovn-local-gateway
@@ -859,6 +864,7 @@ periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-sdn-serial
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-sdn-upgrade
 periodic-ci-openshift-release-master-nightly-4.13-e2e-azure-csi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-azure-deploy-cnv
+periodic-ci-openshift-release-master-nightly-4.13-e2e-azure-ovn-etcd-scaling
 periodic-ci-openshift-release-master-nightly-4.13-e2e-azure-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-azure-sdn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-azure-sdn-fips
@@ -868,6 +874,7 @@ periodic-ci-openshift-release-master-nightly-4.13-e2e-azurestack-csi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-azurestack-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-libvirt-cert-rotation
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-csi
+periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-etcd-scaling
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-fips
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-rt
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-upi
@@ -897,6 +904,7 @@ periodic-ci-openshift-release-master-nightly-4.13-e2e-ovirt-sdn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-telco5g
 periodic-ci-openshift-release-master-nightly-4.13-e2e-vsphere-ovn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-vsphere-ovn-csi
+periodic-ci-openshift-release-master-nightly-4.13-e2e-vsphere-ovn-etcd-scaling
 periodic-ci-openshift-release-master-nightly-4.13-e2e-vsphere-ovn-serial
 periodic-ci-openshift-release-master-nightly-4.13-e2e-vsphere-ovn-techpreview
 periodic-ci-openshift-release-master-nightly-4.13-e2e-vsphere-ovn-techpreview-serial

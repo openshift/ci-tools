@@ -868,6 +868,11 @@ type Observer struct {
 	Commands string `json:"commands,omitempty"`
 	// Resources defines the resource requirements for the step.
 	Resources ResourceRequirements `json:"resources,omitempty"`
+	// Timeout is how long the we will wait before aborting a job with SIGINT.
+	Timeout *prowv1.Duration `json:"timeout,omitempty"`
+	// GracePeriod is how long the we will wait after sending SIGINT to send
+	// SIGKILL when aborting this observer.
+	GracePeriod *prowv1.Duration `json:"grace_period,omitempty"`
 }
 
 // Observers is a configuration for which observer pods should and should not

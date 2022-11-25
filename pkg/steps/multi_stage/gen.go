@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -41,8 +40,8 @@ func (s *multiStageTestStep) generateObservers(
 			FromImage:   observer.FromImage,
 			Commands:    observer.Commands,
 			Resources:   observer.Resources,
-			Timeout:     &prowapi.Duration{Duration: 24 * time.Hour},
-			GracePeriod: &prowapi.Duration{Duration: time.Hour},
+			Timeout:     observer.Timeout,
+			GracePeriod: observer.GracePeriod,
 		})
 	}
 	pods, _, err := s.generatePods(adapted, nil, secretVolumes, secretVolumeMounts, genPodOpts)

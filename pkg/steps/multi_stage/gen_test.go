@@ -101,6 +101,69 @@ func TestGeneratePods(t *testing.T) {
 	testhelper.CompareWithFixture(t, ret)
 }
 
+func TestGenerateObservers(t *testing.T) {
+	config := api.ReleaseBuildConfiguration{
+		Tests: []api.TestStepConfiguration{{
+			As: "test",
+			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+				ClusterProfile: api.ClusterProfileAWS,
+				Test: []api.LiteralTestStep{{
+					As: "step0", From: "src", Commands: "command0",
+				}},
+			}},
+		},
+	}
+
+	observers := []api.Observer{{
+		Name:        "observer0",
+		From:        "src",
+		Commands:    "command0",
+		Timeout:     &prowapi.Duration{Duration: 2 * time.Minute},
+		GracePeriod: &prowapi.Duration{Duration: 4 * time.Second},
+	}, {
+		Name:     "observer1",
+		From:     "src",
+		Commands: "command1",
+	}}
+	jobSpec := api.JobSpec{
+		Metadata: api.Metadata{
+			Org:     "org",
+			Repo:    "repo",
+			Branch:  "base ref",
+			Variant: "variant",
+		},
+		Target: "target",
+		JobSpec: prowdapi.JobSpec{
+			Job:       "job",
+			BuildID:   "build id",
+			ProwJobID: "prow job id",
+			Refs: &prowapi.Refs{
+				Org:     "org",
+				Repo:    "repo",
+				BaseRef: "base ref",
+				BaseSHA: "base sha",
+			},
+			Type: "postsubmit",
+			DecorationConfig: &prowapi.DecorationConfig{
+				Timeout:     &prowapi.Duration{Duration: time.Minute},
+				GracePeriod: &prowapi.Duration{Duration: time.Second},
+				UtilityImages: &prowapi.UtilityImages{
+					Sidecar:    "sidecar",
+					Entrypoint: "entrypoint",
+				},
+			},
+		},
+	}
+	jobSpec.SetNamespace("namespace")
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name")
+	ret, err := step.generateObservers(observers, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testhelper.CompareWithFixture(t, ret)
+}
+
 func TestGeneratePodsEnvironment(t *testing.T) {
 	value := "test"
 	defValue := "default"

@@ -60,7 +60,7 @@ func TestIndexGenDockerfile(t *testing.T) {
 		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
-RUN mkdir index && mkdir index/ci-bundle0 && opm render some-reg/target-namespace/pipeline@ci-bundle0 > index/ci-bundle0/index.yaml && opm generate dockerfile index
+RUN mkdir index && mkdir index/ci-bundle0 && opm init ci-bundle0 --default-channel test-channel -o yaml > index/ci-bundle0/index.yaml && opm render some-reg/target-namespace/pipeline@ci-bundle0 -o yaml >> index/ci-bundle0/index.yaml && opm generate dockerfile index && opm validate index
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile
@@ -78,7 +78,7 @@ COPY --from=builder index index`,
 		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
-RUN mkdir index && mkdir index/ci-bundle0 && opm render some-reg/target-namespace/pipeline@ci-bundle0 > index/ci-bundle0/index.yaml && mkdir index/ci-bundle1 && opm render some-reg/target-namespace/pipeline@ci-bundle1 > index/ci-bundle1/index.yaml && opm generate dockerfile index
+RUN mkdir index && mkdir index/ci-bundle0 && opm init ci-bundle0 --default-channel test-channel -o yaml > index/ci-bundle0/index.yaml && opm render some-reg/target-namespace/pipeline@ci-bundle0 -o yaml >> index/ci-bundle0/index.yaml && mkdir index/ci-bundle1 && opm init ci-bundle1 --default-channel test-channel -o yaml > index/ci-bundle1/index.yaml && opm render some-reg/target-namespace/pipeline@ci-bundle1 -o yaml >> index/ci-bundle1/index.yaml && opm generate dockerfile index && opm validate index
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile
@@ -97,7 +97,7 @@ COPY --from=builder index index`,
 		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
-RUN mkdir index && mkdir index/ci-bundle0 && opm render some-reg/target-namespace/pipeline@ci-bundle0 > index/ci-bundle0/index.yaml && mkdir index/the-index && opm render some-reg/target-namespace/pipeline@the-index > index/the-index/index.yaml && opm generate dockerfile index
+RUN mkdir index && mkdir index/ci-bundle0 && opm init ci-bundle0 --default-channel test-channel -o yaml > index/ci-bundle0/index.yaml && opm render some-reg/target-namespace/pipeline@ci-bundle0 -o yaml >> index/ci-bundle0/index.yaml && mkdir index/the-index && opm render some-reg/target-namespace/pipeline@the-index -o yaml > index/the-index/index.yaml && opm generate dockerfile index && opm validate index
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile

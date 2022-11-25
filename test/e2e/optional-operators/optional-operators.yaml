@@ -49,7 +49,7 @@ tests:
         set -o pipefail
         # need a writable directory for grpcurl binary and for index database during test; $HOME is always writable
         cd $HOME
-        /bin/opm serve /configs &
+        /bin/opm serve /configs --termination-log /tmp/termination-log --debug &
         OPM_PID=$!
         trap 'kill -9 $OPM_PID' EXIT
         wget -O - https://github.com/fullstorydev/grpcurl/releases/download/v1.8.0/grpcurl_1.8.0_linux_x86_64.tar.gz | tar xz grpcurl
@@ -78,7 +78,7 @@ tests:
         set -o pipefail
         # need a writable directory for grpcurl binary and for index database during test; $HOME is always writable
         cd $HOME
-        /bin/opm serve /configs &
+        /bin/opm serve /configs --termination-log /tmp/termination-log --debug &
         OPM_PID=$!
         trap 'kill -9 $OPM_PID' EXIT
         wget -O - https://github.com/fullstorydev/grpcurl/releases/download/v1.8.0/grpcurl_1.8.0_linux_x86_64.tar.gz | tar xz grpcurl

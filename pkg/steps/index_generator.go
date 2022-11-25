@@ -23,11 +23,13 @@ type indexGeneratorStep struct {
 	client             BuildClient
 	jobSpec            *api.JobSpec
 	pullSecret         *coreapi.Secret
-	fileBasedCatalog   bool
 }
 
-const IndexDataDirectory = "/index-data"
-const dir = "index"
+const (
+	IndexDataDirectory = "/index-data"
+	dir                = "index"
+	channelName        = "test-channel"
+)
 
 var (
 	IndexDockerfileName = fmt.Sprintf("%s.Dockerfile", dir)
@@ -99,22 +101,35 @@ func (s *indexGeneratorStep) indexGenDockerfile() (string, error) {
 	dockerCommands = append(dockerCommands, "COPY .dockerconfigjson .")
 	dockerCommands = append(dockerCommands, "RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json")
 	commands := []string{fmt.Sprintf("mkdir %s", dir)}
-	references := s.config.OperatorIndex
-	if s.config.BaseIndex != "" {
-		references = append(references, s.config.BaseIndex)
-	}
-	for _, bundleName := range references {
+
+	for _, bundleName := range s.config.OperatorIndex {
 		fullSpec, err := utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.PipelineImageStream, bundleName)()
 		if err != nil {
 			return "", fmt.Errorf("failed to get image digest for bundle `%s`: %w", bundleName, err)
 		}
 		subFolder := filepath.Join(dir, bundleName)
+		indexFile := filepath.Join(subFolder, "index.yaml")
 		commands = append(commands, []string{
 			fmt.Sprintf("mkdir %s", subFolder),
-			fmt.Sprintf("opm render %s > %s", fullSpec, filepath.Join(subFolder, "index.yaml")),
+			fmt.Sprintf("opm init %s --default-channel %s -o yaml > %s", bundleName, channelName, indexFile),
+			fmt.Sprintf("opm render %s -o yaml >> %s", fullSpec, indexFile),
 		}...)
 	}
+
+	if s.config.BaseIndex != "" {
+		fullSpec, err := utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.PipelineImageStream, s.config.BaseIndex)()
+		if err != nil {
+			return "", fmt.Errorf("failed to get image digest for the base index `%s`: %w", s.config.BaseIndex, err)
+		}
+		subFolder := filepath.Join(dir, s.config.BaseIndex)
+		commands = append(commands, []string{
+			fmt.Sprintf("mkdir %s", subFolder),
+			fmt.Sprintf("opm render %s -o yaml > %s", fullSpec, filepath.Join(subFolder, "index.yaml")),
+		}...)
+	}
+
 	commands = append(commands, fmt.Sprintf("opm generate dockerfile %s", dir))
+	commands = append(commands, fmt.Sprintf("opm validate %s", dir))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("RUN %s", strings.Join(commands, " && ")))
 
 	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource))

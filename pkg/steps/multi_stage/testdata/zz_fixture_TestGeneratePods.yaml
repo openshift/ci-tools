@@ -32,7 +32,7 @@
       - name: JOB_SPEC
         value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow
           job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base
-          sha"},"decoration_config":{"timeout":"2h0m0s","grace_period":"15s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
+          sha"},"decoration_config":{"timeout":"1h0m0s","grace_period":"20s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
       - name: JOB_TYPE
         value: postsubmit
       - name: OPENSHIFT_CI
@@ -50,7 +50,7 @@
       - name: REPO_OWNER
         value: org
       - name: ENTRYPOINT_OPTIONS
-        value: '{"timeout":7200000000000,"grace_period":15000000000,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset
+        value: '{"timeout":3600000000000,"grace_period":20000000000,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset
           -eu\ncommand0"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
       - name: ARTIFACT_DIR
         value: /logs/artifacts
@@ -133,7 +133,7 @@
     nodeName: node-name
     restartPolicy: Never
     serviceAccountName: test
-    terminationGracePeriodSeconds: 18
+    terminationGracePeriodSeconds: 25
     volumes:
     - emptyDir: {}
       name: logs

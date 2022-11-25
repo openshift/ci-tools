@@ -29,6 +29,8 @@ func TestGeneratePods(t *testing.T) {
 				ClusterProfile: api.ClusterProfileAWS,
 				Test: []api.LiteralTestStep{{
 					As: "step0", From: "src", Commands: "command0",
+					Timeout:     &prowapi.Duration{Duration: time.Hour},
+					GracePeriod: &prowapi.Duration{Duration: 20 * time.Second},
 				}, {
 					As:       "step1",
 					From:     "image1",

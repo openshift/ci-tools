@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	coreapi "k8s.io/api/core/v1"
@@ -22,10 +23,15 @@ type indexGeneratorStep struct {
 	client             BuildClient
 	jobSpec            *api.JobSpec
 	pullSecret         *coreapi.Secret
+	fileBasedCatalog   bool
 }
 
 const IndexDataDirectory = "/index-data"
-const IndexDockerfileName = "index.Dockerfile"
+const dir = "index"
+
+var (
+	IndexDockerfileName = fmt.Sprintf("%s.Dockerfile", dir)
+)
 
 func (s *indexGeneratorStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
@@ -92,33 +98,30 @@ func (s *indexGeneratorStep) indexGenDockerfile() (string, error) {
 	// pull secret is needed for opm command
 	dockerCommands = append(dockerCommands, "COPY .dockerconfigjson .")
 	dockerCommands = append(dockerCommands, "RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json")
-	var bundles []string
-	for _, bundleName := range s.config.OperatorIndex {
+	commands := []string{fmt.Sprintf("mkdir %s", dir)}
+	references := s.config.OperatorIndex
+	if s.config.BaseIndex != "" {
+		references = append(references, s.config.BaseIndex)
+	}
+	for _, bundleName := range references {
 		fullSpec, err := utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.PipelineImageStream, bundleName)()
 		if err != nil {
 			return "", fmt.Errorf("failed to get image digest for bundle `%s`: %w", bundleName, err)
 		}
-		bundles = append(bundles, fullSpec)
+		subFolder := filepath.Join(dir, bundleName)
+		commands = append(commands, []string{
+			fmt.Sprintf("mkdir %s", subFolder),
+			fmt.Sprintf("opm render %s > %s", fullSpec, filepath.Join(subFolder, "index.yaml")),
+		}...)
 	}
-	baseIndex := ""
-	if s.config.BaseIndex != "" {
-		fullSpec, err := utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.PipelineImageStream, s.config.BaseIndex)()
-		if err != nil {
-			return "", fmt.Errorf("failed to get image digest for bundle `%s`: %w", s.config.BaseIndex, err)
-		}
-		baseIndex = fullSpec
-	}
-	opmCommand := fmt.Sprintf(`RUN ["opm", "index", "add", "--mode", "%s", "--bundles", "%s", "--out-dockerfile", "%s", "--generate"`, s.config.UpdateGraph, strings.Join(bundles, ","), IndexDockerfileName)
-	if baseIndex != "" {
-		opmCommand = fmt.Sprintf(`%s, "--from-index", "%s"`, opmCommand, baseIndex)
-	}
-	opmCommand = fmt.Sprintf("%s]", opmCommand)
-	dockerCommands = append(dockerCommands, opmCommand)
-	dockerCommands = append(dockerCommands, fmt.Sprintf("RUN (! grep -q 'operators.operatorframework.io.index.configs.v1=' %s) || (>&2 echo 'error: This is a file-based catalog index and opm index commands are not possible against this type of index. Please refer to the FBC docs here: https://olm.operatorframework.io/docs/reference/file-based-catalogs/'; exit 1)", IndexDockerfileName))
+	commands = append(commands, fmt.Sprintf("opm generate dockerfile %s", dir))
+	dockerCommands = append(dockerCommands, fmt.Sprintf("RUN %s", strings.Join(commands, " && ")))
+
 	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("WORKDIR %s", IndexDataDirectory))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("COPY --from=builder %s %s", IndexDockerfileName, IndexDockerfileName))
-	dockerCommands = append(dockerCommands, "COPY --from=builder /database/ database")
+	dockerCommands = append(dockerCommands, fmt.Sprintf("COPY --from=builder %s %s", dir, dir))
+
 	return strings.Join(dockerCommands, "\n"), nil
 }
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestIndexGenDockerfile(t *testing.T) {
@@ -42,9 +43,10 @@ func TestIndexGenDockerfile(t *testing.T) {
 			},
 		})
 	testCases := []struct {
-		name     string
-		step     indexGeneratorStep
-		expected string
+		name        string
+		step        indexGeneratorStep
+		expected    string
+		expectedErr error
 	}{{
 		name: "single bundle",
 		step: indexGeneratorStep{
@@ -58,12 +60,11 @@ func TestIndexGenDockerfile(t *testing.T) {
 		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
-RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate"]
-RUN (! grep -q 'operators.operatorframework.io.index.configs.v1=' index.Dockerfile) || (>&2 echo 'error: This is a file-based catalog index and opm index commands are not possible against this type of index. Please refer to the FBC docs here: https://olm.operatorframework.io/docs/reference/file-based-catalogs/'; exit 1)
+RUN mkdir index && mkdir index/ci-bundle0 && opm render some-reg/target-namespace/pipeline@ci-bundle0 > index/ci-bundle0/index.yaml && opm generate dockerfile index
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile
-COPY --from=builder /database/ database`,
+COPY --from=builder index index`,
 	}, {
 		name: "multiple bundles",
 		step: indexGeneratorStep{
@@ -77,12 +78,11 @@ COPY --from=builder /database/ database`,
 		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
-RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0,some-reg/target-namespace/pipeline@ci-bundle1", "--out-dockerfile", "index.Dockerfile", "--generate"]
-RUN (! grep -q 'operators.operatorframework.io.index.configs.v1=' index.Dockerfile) || (>&2 echo 'error: This is a file-based catalog index and opm index commands are not possible against this type of index. Please refer to the FBC docs here: https://olm.operatorframework.io/docs/reference/file-based-catalogs/'; exit 1)
+RUN mkdir index && mkdir index/ci-bundle0 && opm render some-reg/target-namespace/pipeline@ci-bundle0 > index/ci-bundle0/index.yaml && mkdir index/ci-bundle1 && opm render some-reg/target-namespace/pipeline@ci-bundle1 > index/ci-bundle1/index.yaml && opm generate dockerfile index
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile
-COPY --from=builder /database/ database`,
+COPY --from=builder index index`,
 	}, {
 		name: "With base index",
 		step: indexGeneratorStep{
@@ -97,22 +97,21 @@ COPY --from=builder /database/ database`,
 		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
-RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate", "--from-index", "some-reg/target-namespace/pipeline@the-index"]
-RUN (! grep -q 'operators.operatorframework.io.index.configs.v1=' index.Dockerfile) || (>&2 echo 'error: This is a file-based catalog index and opm index commands are not possible against this type of index. Please refer to the FBC docs here: https://olm.operatorframework.io/docs/reference/file-based-catalogs/'; exit 1)
+RUN mkdir index && mkdir index/ci-bundle0 && opm render some-reg/target-namespace/pipeline@ci-bundle0 > index/ci-bundle0/index.yaml && mkdir index/the-index && opm render some-reg/target-namespace/pipeline@the-index > index/the-index/index.yaml && opm generate dockerfile index
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile
-COPY --from=builder /database/ database`,
+COPY --from=builder index index`,
 	}}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			testCase.step.jobSpec.SetNamespace("target-namespace")
-			generated, err := testCase.step.indexGenDockerfile()
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
+			actual, actualErr := testCase.step.indexGenDockerfile()
+			if diff := cmp.Diff(testCase.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
+				t.Fatalf("error did not match expectedError, diff: %s", diff)
 			}
-			if testCase.expected != generated {
-				t.Errorf("Generated opm index dockerfile does not equal expected:\n%s", cmp.Diff(testCase.expected, generated))
+			if diff := cmp.Diff(testCase.expected, actual); actualErr == nil && diff != "" {
+				t.Fatalf("actual did not match expected, diff: %s", diff)
 			}
 		})
 	}

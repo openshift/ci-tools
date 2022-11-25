@@ -35,7 +35,7 @@ tag_specification:
   namespace: ocp
   name: "4.6"
 tests:
-- as: verify-db-unnamed
+- as: verify-index-unnamed
   literal_steps:
     test:
     - as: verify
@@ -49,8 +49,7 @@ tests:
         set -o pipefail
         # need a writable directory for grpcurl binary and for index database during test; $HOME is always writable
         cd $HOME
-        cp /database/index.db index.db
-        opm registry serve --database index.db &
+        /bin/opm serve /configs &
         OPM_PID=$!
         trap 'kill -9 $OPM_PID' EXIT
         wget -O - https://github.com/fullstorydev/grpcurl/releases/download/v1.8.0/grpcurl_1.8.0_linux_x86_64.tar.gz | tar xz grpcurl
@@ -65,7 +64,7 @@ tests:
         requests:
           cpu: 100m
           memory: 100Mi
-- as: verify-db-named
+- as: verify-index-named
   literal_steps:
     test:
     - as: verify
@@ -79,8 +78,7 @@ tests:
         set -o pipefail
         # need a writable directory for grpcurl binary and for index database during test; $HOME is always writable
         cd $HOME
-        cp /database/index.db index.db
-        opm registry serve --database index.db &
+        /bin/opm serve /configs &
         OPM_PID=$!
         trap 'kill -9 $OPM_PID' EXIT
         wget -O - https://github.com/fullstorydev/grpcurl/releases/download/v1.8.0/grpcurl_1.8.0_linux_x86_64.tar.gz | tar xz grpcurl

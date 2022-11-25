@@ -13,6 +13,8 @@ cluster_groups:
   - arm01
   non_osd_x86:
   - build01
+  osd_global_pull_secret:
+  - existingCluster
 secret_configs:
 - from:
     app.ci.config:

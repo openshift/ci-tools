@@ -114,7 +114,6 @@ func (s *indexGeneratorStep) indexGenDockerfile() (string, error) {
 	}
 	opmCommand = fmt.Sprintf("%s]", opmCommand)
 	dockerCommands = append(dockerCommands, opmCommand)
-	dockerCommands = append(dockerCommands, fmt.Sprintf("RUN (! grep -q 'operators.operatorframework.io.index.configs.v1=' %s) || (>&2 echo 'error: This is a file-based catalog index and opm index commands are not possible against this type of index. Please refer to the FBC docs here: https://olm.operatorframework.io/docs/reference/file-based-catalogs/'; exit 1)", IndexDockerfileName))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("WORKDIR %s", IndexDataDirectory))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("COPY --from=builder %s %s", IndexDockerfileName, IndexDockerfileName))

@@ -190,7 +190,10 @@ func (q *querier) execute(ctx context.Context, c *clusterMetadata, until time.Ti
 	if err != nil {
 		return fmt.Errorf("could not query Prometheus runtime info: %w", err)
 	}
-	retention, err := model.ParseDuration(runtime.StorageRetention)
+	storageRetention := runtime.StorageRetention
+	// storageRetention may look like "11d or 90Gib" or "30d" depending on the configuration
+	parts := strings.Split(storageRetention, " ")
+	retention, err := model.ParseDuration(parts[0])
 	if err != nil {
 		return fmt.Errorf("could not determine Prometheus retention duration: %w", err)
 	}

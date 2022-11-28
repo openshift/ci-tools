@@ -283,7 +283,7 @@ func (r RehearsalConfig) createResolver(candidatePath string) (registry.Resolver
 	return resolver, nil
 }
 
-// RehearseJobs returns true if the jobs were triggered
+// RehearseJobs returns true if the jobs were triggered and succeed
 func (r RehearsalConfig) RehearseJobs(candidate RehearsalCandidate, candidatePath string, prConfig *config.ReleaseRepoConfig, prRefs *pjapi.Refs, imageStreamTags apihelper.ImageStreamTagMap, presubmitsToRehearse []*prowconfig.Presubmit, rehearsalTemplates, rehearsalClusterProfiles *ConfigMaps, loggers Loggers) (bool, error) {
 	jobLogger := loggers.Job.WithFields(nil)
 
@@ -336,7 +336,6 @@ func (r RehearsalConfig) RehearseJobs(candidate RehearsalCandidate, candidatePat
 	}
 
 	executor := NewExecutor(presubmitsToRehearse, candidate.prNumber, candidatePath, prRefs, r.DryRun, loggers, pjclient, prConfig.Prow.ProwJobNamespace)
-	//TODO: once the old pj-rehearse is removed we should not wait for success
 	success, err := executor.ExecuteJobs()
 	if err != nil {
 		jobLogger.WithError(err).Error("Failed to rehearse jobs")
@@ -347,7 +346,7 @@ func (r RehearsalConfig) RehearseJobs(candidate RehearsalCandidate, candidatePat
 		jobLogger.Info("All jobs were rehearsed successfully")
 	}
 
-	return true, utilerrors.NewAggregate(errs)
+	return success, utilerrors.NewAggregate(errs)
 }
 
 func determineChangedTemplates(candidate, baseSHA, id string, prNumber int, configUpdaterCfg prowplugins.ConfigUpdater, logger *logrus.Entry) (*ConfigMaps, error) {
@@ -515,7 +514,6 @@ func setupDependencies(
 			cmClient, err := NewCMClient(&clusterConfig, podNamespace, dryRun)
 			if err != nil {
 				log.WithError(err).Error("could not create a configMap client")
-				//return errors.New(misconfigurationOutput)
 			}
 
 			cmManager := NewCMManager(buildCluster, prowJobNamespace, cmClient, configUpdaterCfg, prNumber, releaseRepoPath, log)
@@ -530,11 +528,9 @@ func setupDependencies(
 
 			if err := cmManager.Create(*changedTemplates); err != nil {
 				log.WithError(err).Error("couldn't create temporary template ConfigMaps for rehearsals")
-				//return errors.New(failedSetupOutput)
 			}
 			if err := cmManager.Create(*changedClusterProfiles); err != nil {
 				log.WithError(err).Error("couldn't create temporary cluster profile ConfigMaps for rehearsals")
-				//return errors.New(failedSetupOutput)
 			}
 
 			if dryRun {

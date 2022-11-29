@@ -113,6 +113,7 @@ type JobRunsTestCaseAnalyzerFlags struct {
 	PayloadInvocationID         string
 	JobGCSPrefixes              []jobGCSPrefix
 	ExcludeJobNames             []string
+	IncludeJobNames             []string
 }
 
 func NewJobRunsTestCaseAnalyzerFlags() *JobRunsTestCaseAnalyzerFlags {
@@ -148,6 +149,7 @@ func (f *JobRunsTestCaseAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.Var(&jobGCSPrefixSlice{&f.JobGCSPrefixes}, "explicit-gcs-prefixes", "a list of gcs prefixes for jobs created for payload. Only used by per PR payload promotion jobs. The format is comma-separated elements, each consisting of job name and gcs prefix separated by =, like openshift-machine-config-operator=3028-ci-4.11-e2e-aws-ovn-upgrade~logs/openshift-machine-config-operator-3028-ci-4.11-e2e-aws-ovn-upgrade")
 
 	fs.StringArrayVar(&f.ExcludeJobNames, "exclude-job-names", f.ExcludeJobNames, "Applied only when --explicit-gcs-prefixes is not specified.  The flag can be specified multiple times to create a list of substrings used to filter JobNames from the analysis")
+	fs.StringArrayVar(&f.IncludeJobNames, "include-job-names", f.IncludeJobNames, "Applied only when --explicit-gcs-prefixes is not specified.  The flag can be specified multiple times to create a list of substrings to include in matching JobNames for analysis")
 }
 
 func NewJobRunsTestCaseAnalyzerCommand() *cobra.Command {
@@ -344,6 +346,11 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 	if f.ExcludeJobNames != nil && len(f.ExcludeJobNames) > 0 {
 		jobGetter.excludeJobNames = sets.String{}
 		jobGetter.excludeJobNames.Insert(f.ExcludeJobNames...)
+	}
+
+	if f.IncludeJobNames != nil && len(f.IncludeJobNames) > 0 {
+		jobGetter.includeJobNames = sets.String{}
+		jobGetter.includeJobNames.Insert(f.IncludeJobNames...)
 	}
 
 	return &JobRunTestCaseAnalyzerOptions{

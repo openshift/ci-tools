@@ -21,6 +21,7 @@ func TestGetJobs(t *testing.T) {
 		"test upgrade filter":   {expectedJobNames: sets.String{"periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-serial-ipv4": sets.Empty{}, "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6": sets.Empty{}}, filters: map[string][]string{"exclude-job-names": {"upgrade"}}},
 		"test no filter":        {expectedJobNames: sets.String{"periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-serial-ipv4": sets.Empty{}, "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6": sets.Empty{}, "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-upgrade": sets.Empty{}}},
 		"test multiple filters": {expectedJobNames: sets.String{"periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-serial-ipv4": sets.Empty{}}, filters: map[string][]string{"exclude-job-names": {"upgrade", "ipv6"}}},
+		"test include arg":      {expectedJobNames: sets.String{"periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6": sets.Empty{}}, filters: map[string][]string{"include-job-names": {"ipv6"}}},
 	}
 
 	for name, tc := range tests {
@@ -53,6 +54,7 @@ func TestGetJobs(t *testing.T) {
 			f := &JobRunsTestCaseAnalyzerFlags{}
 
 			fs.StringArrayVar(&f.ExcludeJobNames, "exclude-job-names", f.ExcludeJobNames, "Applied only when --explicit-gcs-prefixes is not specified.  The flag can be specified multiple times to create a list of substrings used to filter JobNames from the analysis")
+			fs.StringArrayVar(&f.IncludeJobNames, "include-job-names", f.IncludeJobNames, "Applied only when --explicit-gcs-prefixes is not specified.  The flag can be specified multiple times to create a list of substrings to include in matching JobNames for analysis")
 
 			if err := fs.Parse(args); err != nil {
 				t.Fatalf("%s flag set parse returned error %#v", name, err)
@@ -61,6 +63,11 @@ func TestGetJobs(t *testing.T) {
 			if f.ExcludeJobNames != nil && len(f.ExcludeJobNames) > 0 {
 				jobGetter.excludeJobNames = sets.String{}
 				jobGetter.excludeJobNames.Insert(f.ExcludeJobNames...)
+			}
+
+			if f.IncludeJobNames != nil && len(f.IncludeJobNames) > 0 {
+				jobGetter.includeJobNames = sets.String{}
+				jobGetter.includeJobNames.Insert(f.IncludeJobNames...)
 			}
 
 			returnedJobs, err := jobGetter.GetJobs(ctx)

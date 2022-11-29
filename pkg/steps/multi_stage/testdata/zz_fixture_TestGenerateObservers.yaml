@@ -1,0 +1,284 @@
+- metadata:
+    annotations:
+      ci-operator.openshift.io/container-sub-tests: test
+      ci-operator.openshift.io/save-container-logs: "true"
+      ci.openshift.io/job-spec: ""
+    creationTimestamp: null
+    labels:
+      OPENSHIFT_CI: "true"
+      ci.openshift.io/metadata.branch: base_ref
+      ci.openshift.io/metadata.org: org
+      ci.openshift.io/metadata.repo: repo
+      ci.openshift.io/metadata.step: observer0
+      ci.openshift.io/metadata.target: target
+      ci.openshift.io/metadata.variant: variant
+      ci.openshift.io/multi-stage-test: test
+      created-by-ci: "true"
+    name: test-observer0
+    namespace: namespace
+  spec:
+    containers:
+    - args:
+      - /tools/entrypoint
+      command:
+      - /tmp/entrypoint-wrapper/entrypoint-wrapper
+      env:
+      - name: BUILD_ID
+        value: build id
+      - name: CI
+        value: "true"
+      - name: JOB_NAME
+        value: job
+      - name: JOB_SPEC
+        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow
+          job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base
+          sha"},"decoration_config":{"timeout":"2m0s","grace_period":"4s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
+      - name: JOB_TYPE
+        value: postsubmit
+      - name: OPENSHIFT_CI
+        value: "true"
+      - name: PROW_JOB_ID
+        value: prow job id
+      - name: PULL_BASE_REF
+        value: base ref
+      - name: PULL_BASE_SHA
+        value: base sha
+      - name: PULL_REFS
+        value: base ref:base sha
+      - name: REPO_NAME
+        value: repo
+      - name: REPO_OWNER
+        value: org
+      - name: ENTRYPOINT_OPTIONS
+        value: '{"timeout":120000000000,"grace_period":4000000000,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset
+          -eu\ncommand0"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
+      - name: ARTIFACT_DIR
+        value: /logs/artifacts
+      - name: NAMESPACE
+        value: namespace
+      - name: JOB_NAME_SAFE
+        value: test
+      - name: JOB_NAME_HASH
+        value: 5e8c9
+      - name: KUBECONFIG
+        value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig
+      - name: KUBEADMIN_PASSWORD_FILE
+        value: /var/run/secrets/ci.openshift.io/multi-stage/kubeadmin-password
+      - name: CLUSTER_TYPE
+        value: aws
+      - name: CLUSTER_PROFILE_DIR
+        value: /var/run/secrets/ci.openshift.io/cluster-profile
+      - name: SHARED_DIR
+        value: /var/run/secrets/ci.openshift.io/multi-stage
+      image: pipeline:src
+      name: test
+      resources: {}
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - mountPath: /logs
+        name: logs
+      - mountPath: /tools
+        name: tools
+      - mountPath: /alabama
+        name: home
+      - mountPath: /tmp/entrypoint-wrapper
+        name: entrypoint-wrapper
+      - mountPath: /var/run/secrets/ci.openshift.io/cluster-profile
+        name: cluster-profile
+      - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
+        name: test
+    - env:
+      - name: JOB_SPEC
+      - name: SIDECAR_OPTIONS
+        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/observer0","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset
+          -eu\ncommand0"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"censoring_options":{}}'
+      image: sidecar
+      name: sidecar
+      resources: {}
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - mountPath: /logs
+        name: logs
+    initContainers:
+    - args:
+      - --copy-mode-only
+      image: entrypoint
+      name: place-entrypoint
+      resources: {}
+      volumeMounts:
+      - mountPath: /tools
+        name: tools
+    - args:
+      - /bin/entrypoint-wrapper
+      - /tmp/entrypoint-wrapper/entrypoint-wrapper
+      command:
+      - cp
+      image: registry.ci.openshift.org/ci/entrypoint-wrapper:latest
+      name: cp-entrypoint-wrapper
+      resources: {}
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - mountPath: /tmp/entrypoint-wrapper
+        name: entrypoint-wrapper
+    nodeName: node-name
+    restartPolicy: Never
+    serviceAccountName: test
+    terminationGracePeriodSeconds: 5
+    volumes:
+    - emptyDir: {}
+      name: logs
+    - emptyDir: {}
+      name: tools
+    - emptyDir: {}
+      name: home
+    - emptyDir: {}
+      name: entrypoint-wrapper
+    - name: cluster-profile
+      secret:
+        secretName: test-cluster-profile
+    - name: test
+      secret:
+        secretName: test
+  status: {}
+- metadata:
+    annotations:
+      ci-operator.openshift.io/container-sub-tests: test
+      ci-operator.openshift.io/save-container-logs: "true"
+      ci.openshift.io/job-spec: ""
+    creationTimestamp: null
+    labels:
+      OPENSHIFT_CI: "true"
+      ci.openshift.io/metadata.branch: base_ref
+      ci.openshift.io/metadata.org: org
+      ci.openshift.io/metadata.repo: repo
+      ci.openshift.io/metadata.step: observer1
+      ci.openshift.io/metadata.target: target
+      ci.openshift.io/metadata.variant: variant
+      ci.openshift.io/multi-stage-test: test
+      created-by-ci: "true"
+    name: test-observer1
+    namespace: namespace
+  spec:
+    containers:
+    - args:
+      - /tools/entrypoint
+      command:
+      - /tmp/entrypoint-wrapper/entrypoint-wrapper
+      env:
+      - name: BUILD_ID
+        value: build id
+      - name: CI
+        value: "true"
+      - name: JOB_NAME
+        value: job
+      - name: JOB_SPEC
+        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow
+          job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base
+          sha"},"decoration_config":{"timeout":"2h0m0s","grace_period":"15s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
+      - name: JOB_TYPE
+        value: postsubmit
+      - name: OPENSHIFT_CI
+        value: "true"
+      - name: PROW_JOB_ID
+        value: prow job id
+      - name: PULL_BASE_REF
+        value: base ref
+      - name: PULL_BASE_SHA
+        value: base sha
+      - name: PULL_REFS
+        value: base ref:base sha
+      - name: REPO_NAME
+        value: repo
+      - name: REPO_OWNER
+        value: org
+      - name: ENTRYPOINT_OPTIONS
+        value: '{"timeout":7200000000000,"grace_period":15000000000,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset
+          -eu\ncommand1"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
+      - name: ARTIFACT_DIR
+        value: /logs/artifacts
+      - name: NAMESPACE
+        value: namespace
+      - name: JOB_NAME_SAFE
+        value: test
+      - name: JOB_NAME_HASH
+        value: 5e8c9
+      - name: KUBECONFIG
+        value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig
+      - name: KUBEADMIN_PASSWORD_FILE
+        value: /var/run/secrets/ci.openshift.io/multi-stage/kubeadmin-password
+      - name: CLUSTER_TYPE
+        value: aws
+      - name: CLUSTER_PROFILE_DIR
+        value: /var/run/secrets/ci.openshift.io/cluster-profile
+      - name: SHARED_DIR
+        value: /var/run/secrets/ci.openshift.io/multi-stage
+      image: pipeline:src
+      name: test
+      resources: {}
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - mountPath: /logs
+        name: logs
+      - mountPath: /tools
+        name: tools
+      - mountPath: /alabama
+        name: home
+      - mountPath: /tmp/entrypoint-wrapper
+        name: entrypoint-wrapper
+      - mountPath: /var/run/secrets/ci.openshift.io/cluster-profile
+        name: cluster-profile
+      - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
+        name: test
+    - env:
+      - name: JOB_SPEC
+      - name: SIDECAR_OPTIONS
+        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/test/observer1","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset
+          -eu\ncommand1"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"censoring_options":{}}'
+      image: sidecar
+      name: sidecar
+      resources: {}
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - mountPath: /logs
+        name: logs
+    initContainers:
+    - args:
+      - --copy-mode-only
+      image: entrypoint
+      name: place-entrypoint
+      resources: {}
+      volumeMounts:
+      - mountPath: /tools
+        name: tools
+    - args:
+      - /bin/entrypoint-wrapper
+      - /tmp/entrypoint-wrapper/entrypoint-wrapper
+      command:
+      - cp
+      image: registry.ci.openshift.org/ci/entrypoint-wrapper:latest
+      name: cp-entrypoint-wrapper
+      resources: {}
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - mountPath: /tmp/entrypoint-wrapper
+        name: entrypoint-wrapper
+    nodeName: node-name
+    restartPolicy: Never
+    serviceAccountName: test
+    terminationGracePeriodSeconds: 18
+    volumes:
+    - emptyDir: {}
+      name: logs
+    - emptyDir: {}
+      name: tools
+    - emptyDir: {}
+      name: home
+    - emptyDir: {}
+      name: entrypoint-wrapper
+    - name: cluster-profile
+      secret:
+        secretName: test-cluster-profile
+    - name: test
+      secret:
+        secretName: test
+  status: {}

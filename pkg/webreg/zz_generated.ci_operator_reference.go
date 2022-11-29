@@ -506,6 +506,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
+	"                  # SIGKILL when aborting this observer.\n" +
+	"                  grace_period: 0s\n" +
 	"                  # Name is the name of this observer\n" +
 	"                  name: ' '\n" +
 	"                  # Resources defines the resource requirements for the step.\n" +
@@ -518,6 +521,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # These are directly used in creating the Pods that execute the Job.\n" +
 	"                    requests:\n" +
 	"                        \"\": \"\"\n" +
+	"                  # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
+	"                  timeout: 0s\n" +
 	"            # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"            # Post steps always run, even if previous steps fail.\n" +
 	"            post:\n" +
@@ -1281,6 +1286,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
+	"              # SIGKILL when aborting this observer.\n" +
+	"              grace_period: 0s\n" +
 	"              # Name is the name of this observer\n" +
 	"              name: ' '\n" +
 	"              # Resources defines the resource requirements for the step.\n" +
@@ -1293,6 +1301,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # These are directly used in creating the Pods that execute the Job.\n" +
 	"                requests:\n" +
 	"                    \"\": \"\"\n" +
+	"              # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
+	"              timeout: 0s\n" +
 	"        # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"        # Post steps always run, even if previous steps fail.\n" +
 	"        post:\n" +

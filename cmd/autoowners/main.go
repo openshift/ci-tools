@@ -24,6 +24,8 @@ import (
 	"k8s.io/test-infra/prow/plugins"
 	"k8s.io/test-infra/prow/plugins/ownersconfig"
 	"k8s.io/test-infra/prow/repoowners"
+
+	"github.com/openshift/ci-tools/pkg/rehearse"
 )
 
 const (
@@ -504,7 +506,9 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 
-	var labelsToAdd []string
+	labelsToAdd := []string{
+		rehearse.RehearsalsAckLabel,
+	}
 	if o.selfApprove {
 		logrus.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)

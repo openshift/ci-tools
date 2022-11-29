@@ -40,8 +40,9 @@ import (
 )
 
 const (
-	appCIContextName = string(api.ClusterAPPCI)
-	buildCache       = "build-cache"
+	RehearsalsAckLabel = "rehearsals-ack"
+	appCIContextName   = string(api.ClusterAPPCI)
+	buildCache         = "build-cache"
 )
 
 type RehearsalConfig struct {

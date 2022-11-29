@@ -18,6 +18,7 @@ import (
 	"k8s.io/test-infra/prow/labels"
 
 	"github.com/openshift/ci-tools/pkg/promotion"
+	"github.com/openshift/ci-tools/pkg/rehearse"
 )
 
 const (
@@ -278,6 +279,7 @@ func main() {
 
 	labelsToAdd := []string{
 		"tide/merge-method-merge",
+		rehearse.RehearsalsAckLabel,
 	}
 	if o.selfApprove {
 		logrus.Infof("Self-approving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)

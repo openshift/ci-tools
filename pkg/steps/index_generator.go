@@ -2,13 +2,19 @@ package steps
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
+	"github.com/openshift/api/image/docker10"
+	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -33,6 +39,25 @@ func (s *indexGeneratorStep) Inputs() (api.InputDefinition, error) {
 
 func (*indexGeneratorStep) Validate() error { return nil }
 
+func databaseIndex(client ctrlruntimeclient.Client, name, namespace string) (bool, error) {
+	ist := &imagev1.ImageStreamTag{}
+	if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, ist); err != nil {
+		return false, fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
+	}
+	metadata := &docker10.DockerImage{}
+	if len(ist.Image.DockerImageMetadata.Raw) == 0 {
+		return false, fmt.Errorf("could not fetch Docker image metadata for ImageStreamTag %s", ist.Name)
+	}
+	if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, metadata); err != nil {
+		return false, fmt.Errorf("malformed Docker image metadata on ImageStreamTag: %w", err)
+	}
+	if metadata.Config == nil || metadata.Config.Labels == nil {
+		return false, nil
+	}
+	_, ok := metadata.Config.Labels["operators.operatorframework.io.index.database.v1"]
+	return ok, nil
+}
+
 func (s *indexGeneratorStep) Run(ctx context.Context) error {
 	return results.ForReason("building_index_generator").ForError(s.run(ctx))
 }
@@ -42,6 +67,18 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 	workingDir, err := getWorkingDir(s.client, source, s.jobSpec.Namespace())
 	if err != nil {
 		return fmt.Errorf("failed to get workingDir: %w", err)
+	}
+	if s.config.BaseIndex != "" {
+		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.BaseIndex)
+		ok, err := databaseIndex(s.client, source, s.jobSpec.Namespace())
+		if err != nil {
+			return fmt.Errorf("failed to determine if the image %s/%s is sqlite based index: %w", s.jobSpec.Namespace(), source, err)
+		}
+		if !ok {
+			return errors.New("opm index commands, which are used by the ci-operator, interact only with a database index, but the base index is not one. Please refer to the FBC docs here: https://olm.operatorframework.io/docs/reference/file-based-catalogs/")
+		} else {
+			logrus.Debug("The base index image is sqlite based")
+		}
 	}
 	dockerfile, err := s.indexGenDockerfile()
 	if err != nil {
@@ -114,7 +151,6 @@ func (s *indexGeneratorStep) indexGenDockerfile() (string, error) {
 	}
 	opmCommand = fmt.Sprintf("%s]", opmCommand)
 	dockerCommands = append(dockerCommands, opmCommand)
-	dockerCommands = append(dockerCommands, fmt.Sprintf("RUN (! grep -q 'operators.operatorframework.io.index.configs.v1=' %s) || (>&2 echo 'error: This is a file-based catalog index and opm index commands are not possible against this type of index. Please refer to the FBC docs here: https://olm.operatorframework.io/docs/reference/file-based-catalogs/'; exit 1)", IndexDockerfileName))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("WORKDIR %s", IndexDataDirectory))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("COPY --from=builder %s %s", IndexDockerfileName, IndexDockerfileName))

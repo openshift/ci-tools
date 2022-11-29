@@ -1,17 +1,21 @@
 package steps
 
 import (
+	"fmt"
+	"io/ioutil"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/yaml"
 
 	apiimagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestIndexGenDockerfile(t *testing.T) {
@@ -59,7 +63,6 @@ func TestIndexGenDockerfile(t *testing.T) {
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
 RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate"]
-RUN (! grep -q 'operators.operatorframework.io.index.configs.v1=' index.Dockerfile) || (>&2 echo 'error: This is a file-based catalog index and opm index commands are not possible against this type of index. Please refer to the FBC docs here: https://olm.operatorframework.io/docs/reference/file-based-catalogs/'; exit 1)
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile
@@ -78,7 +81,6 @@ COPY --from=builder /database/ database`,
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
 RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0,some-reg/target-namespace/pipeline@ci-bundle1", "--out-dockerfile", "index.Dockerfile", "--generate"]
-RUN (! grep -q 'operators.operatorframework.io.index.configs.v1=' index.Dockerfile) || (>&2 echo 'error: This is a file-based catalog index and opm index commands are not possible against this type of index. Please refer to the FBC docs here: https://olm.operatorframework.io/docs/reference/file-based-catalogs/'; exit 1)
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile
@@ -98,7 +100,6 @@ COPY --from=builder /database/ database`,
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
 RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate", "--from-index", "some-reg/target-namespace/pipeline@the-index"]
-RUN (! grep -q 'operators.operatorframework.io.index.configs.v1=' index.Dockerfile) || (>&2 echo 'error: This is a file-based catalog index and opm index commands are not possible against this type of index. Please refer to the FBC docs here: https://olm.operatorframework.io/docs/reference/file-based-catalogs/'; exit 1)
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile
@@ -113,6 +114,64 @@ COPY --from=builder /database/ database`,
 			}
 			if testCase.expected != generated {
 				t.Errorf("Generated opm index dockerfile does not equal expected:\n%s", cmp.Diff(testCase.expected, generated))
+			}
+		})
+	}
+}
+
+func TestDatabaseIndex(t *testing.T) {
+	testCases := []struct {
+		name        string
+		istFile     string
+		isTagName   string
+		expected    bool
+		expectedErr error
+	}{{
+		name:      "base case",
+		istFile:   "testdata/isTags/pipeline_v4.10_istag.yaml",
+		isTagName: "pipeline:v4.10",
+		expected:  true,
+	}, {
+		name:        "not found",
+		istFile:     "testdata/isTags/pipeline_v4.10_istag.yaml",
+		isTagName:   "ghost:ghost",
+		expectedErr: fmt.Errorf(`could not fetch source ImageStreamTag: imagestreamtags.image.openshift.io "ghost:ghost" not found`),
+	}, {
+		name:        "no metadata",
+		istFile:     "testdata/isTags/pipeline_no_bytes_istag.yaml",
+		isTagName:   "pipeline:v4.10",
+		expectedErr: fmt.Errorf(`could not fetch Docker image metadata for ImageStreamTag pipeline:v4.10`),
+	}, {
+		name:        "malformed json",
+		istFile:     "testdata/isTags/pipeline_malformed_istag.yaml",
+		isTagName:   "pipeline:v4.10",
+		expectedErr: fmt.Errorf(`malformed Docker image metadata on ImageStreamTag: json: cannot unmarshal string into Go value of type docker10.DockerImage`),
+	}, {
+		name:      "no labels",
+		istFile:   "testdata/isTags/pipeline_no_label_istag.yaml",
+		isTagName: "pipeline:v4.10",
+	}, {
+		name:      "v4.11",
+		istFile:   "testdata/isTags/pipeline_v4.11_istag.yaml",
+		isTagName: "pipeline:v4.11",
+	}}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			rawImageStreamTag, err := ioutil.ReadFile(testCase.istFile)
+			if err != nil {
+				t.Fatalf("failed to read imagestreamtag fixture: %v", err)
+			}
+			ist := &apiimagev1.ImageStreamTag{}
+			if err := yaml.Unmarshal(rawImageStreamTag, ist); err != nil {
+				t.Fatalf("failed to unmarshal imagestreamTag: %v", err)
+			}
+			actual, actualErr := databaseIndex(NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithObjects(ist).Build()), nil),
+				testCase.isTagName, "ns")
+			if diff := cmp.Diff(testCase.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
+				t.Fatalf("actual did not match expected, diff: %s", diff)
+			}
+			if diff := cmp.Diff(testCase.expected, actual); actualErr == nil && diff != "" {
+				t.Fatalf("error did not match expected, diff: %s", diff)
 			}
 		})
 	}

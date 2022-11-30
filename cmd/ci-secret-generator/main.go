@@ -22,10 +22,12 @@ import (
 )
 
 const (
-	execCmdRunErrAction            = "run"
-	execCmdValidateStdoutErrAction = "validate stdout of"
-	execCmdValidateStderrErrAction = "validate stderr of"
-	execCmdErrFmt                  = "failed to %s command %q: %w\n%s:\n%s\n%s:\n%s"
+	execCmdRunErrAction                      = "run"
+	execCmdValidateStdoutErrAction           = "validate stdout of"
+	execCmdValidateStderrErrAction           = "validate stderr of"
+	execCmdErrFmt                            = "failed to %s command %q: %w\n%s:\n%s\n%s:\n%s"
+	execValidationCmdRunErrAction            = "run validation"
+	execValidationCmdValidateStderrErrAction = "validate stderr of validation"
 )
 
 var (
@@ -132,6 +134,33 @@ func (o *options) validateConfig() error {
 	return nil
 }
 
+func validateCommandOutput(cmdOutput []byte, validationCmd string) error {
+	if validationCmd == "" {
+		return nil
+	}
+	cmd := exec.Command("bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c", validationCmd)
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdin = bytes.NewReader(cmdOutput)
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+	if err := cmd.Run(); err != nil {
+		stderr := errBuf.Bytes()
+		stdout := outBuf.Bytes()
+		_, partialStreams := err.(*exec.ExitError)
+		return fmtExecCmdErr(execValidationCmdRunErrAction, validationCmd, err, stdout, stderr, !partialStreams)
+	}
+
+	stderr := errBuf.Bytes()
+	stdout := outBuf.Bytes()
+
+	if len(stderr) != 0 {
+		return fmtExecCmdErr(execValidationCmdValidateStderrErrAction, validationCmd,
+			errExecCmdNotEmptyStderr, stdout, stderr, false)
+	}
+
+	return nil
+}
+
 func executeCommand(command string) ([]byte, error) {
 	cmd := exec.Command("bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c", command)
 	var outBuf, errBuf bytes.Buffer
@@ -191,6 +220,12 @@ func updateSecrets(config secretgenerator.Config, client secrets.Client) error {
 			out, err := executeCommand(field.Cmd)
 			if err != nil {
 				msg := "failed to generate field"
+				logger.WithError(err).Error(msg)
+				errs = append(errs, errors.New(msg))
+				continue
+			}
+			if err := validateCommandOutput(out, field.Validation); err != nil {
+				msg := fmt.Sprintf("failed to validate command output:\n%s", string(out))
 				logger.WithError(err).Error(msg)
 				errs = append(errs, errors.New(msg))
 				continue

@@ -345,3 +345,79 @@ error output:
 		})
 	}
 }
+
+func TestValidateCommand(t *testing.T) {
+	testCases := []struct {
+		name          string
+		outToValidate []byte
+		validationCmd string
+		expectedError error
+	}{
+		{
+			name:          "No validate at all",
+			outToValidate: []byte("whatever"),
+		},
+		{
+			name:          "Always failing",
+			outToValidate: []byte("it-doesnt-matter"),
+			validationCmd: "false",
+			expectedError: errors.New(
+				`failed to run validation command "false": exit status 1
+output:
+
+error output:
+`),
+		},
+		{
+			name:          "Always passing",
+			outToValidate: []byte("it-doesnt-matter"),
+			validationCmd: "true",
+		},
+		{
+			name:          "Grep a string and succeed",
+			validationCmd: "grep 'a-string'",
+			outToValidate: []byte("this is going to be matched: a-string"),
+		},
+		{
+			name:          "Fail cause grep has no input",
+			validationCmd: "grep 'something'",
+			expectedError: errors.New(
+				`failed to run validation command "grep 'something'": exit status 1
+output:
+
+error output:
+`),
+		},
+		{
+			name:          "Replace, grep and fail",
+			validationCmd: "sed s/abc/123/|grep 'abc'",
+			outToValidate: []byte("abc"),
+			expectedError: errors.New(
+				`failed to run validation command "sed s/abc/123/|grep 'abc'": exit status 1
+output:
+
+error output:
+`),
+		},
+		{
+			name:          "Fail as stderr is not empty",
+			validationCmd: ">&2 echo 'an error'",
+			outToValidate: []byte("abc"),
+			expectedError: errors.New(
+				`failed to validate stderr of validation command ">&2 echo 'an error'": stderr is not empty
+output:
+
+error output:
+an error
+`),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualError := validateCommandOutput(tc.outToValidate, tc.validationCmd)
+			if diff := cmp.Diff(tc.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: mismatch (-expected +actual), diff: %s", tc.name, diff)
+			}
+		})
+	}
+}

@@ -763,6 +763,7 @@ periodic-ci-openshift-release-master-nightly-4.11-upgrade-from-stable-4.10-e2e-m
 periodic-ci-openshift-release-master-nightly-4.11-upgrade-from-stable-4.10-e2e-metal-ipi-upgrade-ovn-ipv6
 periodic-ci-openshift-release-master-nightly-4.11-upgrade-from-stable-4.9-e2e-aws-upgrade-paused
 periodic-ci-openshift-release-master-nightly-4.12-console-aws
+periodic-ci-openshift-release-master-nightly-4.12-credentials-request-freeze
 periodic-ci-openshift-release-master-nightly-4.12-e2e-alibaba-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-alibaba-ovn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-csi
@@ -784,6 +785,7 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn-cgroupsv2
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn-crun
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn-serial
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn-upgrade
+periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-deploy-cnv
 periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-ovn-etcd-scaling
@@ -954,9 +956,6 @@ release-openshift-origin-installer-e2e-gcp-shared-vpc-4.11
 // end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.11-periodics.yaml
 
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.12-periodics.yaml
-promote-release-openshift-machine-os-content-e2e-aws-4.12-ppc64le
-promote-release-openshift-machine-os-content-e2e-aws-4.12-s390x
-promote-release-openshift-machine-os-content-e2e-aws-ovn-4.12
 release-openshift-ocp-installer-e2e-aws-csi-4.12
 release-openshift-ocp-installer-e2e-aws-mirrors-4.12
 release-openshift-ocp-installer-e2e-aws-upi-4.12

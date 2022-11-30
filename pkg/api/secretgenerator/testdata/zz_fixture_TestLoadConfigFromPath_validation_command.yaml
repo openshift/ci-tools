@@ -1,0 +1,5 @@
+- fields:
+  - cmd: echo -n Attachment1
+    name: Attachment1
+    validation: grep -E ^Attachment1$
+  item_name: Item1

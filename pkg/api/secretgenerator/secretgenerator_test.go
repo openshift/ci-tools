@@ -28,6 +28,9 @@ func TestLoadConfigFromPath(t *testing.T) {
 		{
 			name: "two parameters with multiple values",
 		},
+		{
+			name: "validation_command",
+		},
 	}
 
 	for _, tc := range testcases {

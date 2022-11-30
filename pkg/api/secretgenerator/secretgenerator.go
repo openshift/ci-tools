@@ -80,8 +80,9 @@ func (c Config) IsFieldGenerated(name, component string) bool {
 }
 
 type FieldGenerator struct {
-	Name string `json:"name,omitempty"`
-	Cmd  string `json:"cmd,omitempty"`
+	Name       string `json:"name,omitempty"`
+	Cmd        string `json:"cmd,omitempty"`
+	Validation string `json:"validation,omitempty"`
 }
 
 type SecretItem struct {

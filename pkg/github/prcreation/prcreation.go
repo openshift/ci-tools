@@ -47,6 +47,7 @@ func (o *PRCreationOptions) Finalize() error {
 type PrOptions struct {
 	prBody           string
 	matchTitle       string
+	additionalLabels []string
 	prAssignee       string
 	gitCommitMessage string
 	skipPRCreation   bool
@@ -74,6 +75,12 @@ func GitCommitMessage(gitCommitMessage string) PrOption {
 func MatchTitle(matchTitle string) PrOption {
 	return func(args *PrOptions) {
 		args.matchTitle = matchTitle
+	}
+}
+
+func AdditionalLabels(additionalLabels []string) PrOption {
+	return func(args *PrOptions) {
+		args.additionalLabels = additionalLabels
 	}
 }
 
@@ -180,7 +187,7 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		return nil
 	}
 
-	var labelsToAdd []string
+	labelsToAdd := prArgs.additionalLabels
 	if o.SelfApprove {
 		l.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)

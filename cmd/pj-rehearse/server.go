@@ -19,7 +19,6 @@ import (
 )
 
 const (
-	rehearsalsAckLabel = "rehearsals-ack"
 	needsOkToTestLabel = "needs-ok-to-test"
 	rehearseNormal     = "/pj-rehearse"
 	rehearseMore       = "/pj-rehearse more"
@@ -61,7 +60,7 @@ func (s *server) helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, e
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       rehearseAck,
-		Description: fmt.Sprintf("Acknowledge the rehearsal result (either passing, failing, or skipped), and add the '%s' label allowing merge once other requirements are met.", rehearsalsAckLabel),
+		Description: fmt.Sprintf("Acknowledge the rehearsal result (either passing, failing, or skipped), and add the '%s' label allowing merge once other requirements are met.", rehearse.RehearsalsAckLabel),
 		WhoCanUse:   "Anyone can use on trusted PRs",
 		Examples:    []string{rehearseAck},
 	})
@@ -85,19 +84,19 @@ func (s *server) helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, e
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       rehearseSkip,
-		Description: fmt.Sprintf("Opt-out of rehearsals for this PR, and add the '%s' label allowing merge once other requirements are met.", rehearsalsAckLabel),
+		Description: fmt.Sprintf("Opt-out of rehearsals for this PR, and add the '%s' label allowing merge once other requirements are met.", rehearse.RehearsalsAckLabel),
 		WhoCanUse:   "Anyone can use on trusted PRs",
 		Examples:    []string{rehearseSkip},
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       rehearseReject,
-		Description: fmt.Sprintf("Un-acknowledge the rehearsals and remove the '%s' label blocking merge until it is added back.", rehearsalsAckLabel),
+		Description: fmt.Sprintf("Un-acknowledge the rehearsals and remove the '%s' label blocking merge until it is added back.", rehearse.RehearsalsAckLabel),
 		WhoCanUse:   "Anyone can use on trusted PRs",
 		Examples:    []string{rehearseReject},
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       rehearseAutoAck,
-		Description: fmt.Sprintf("Run up to %d affected job rehearsals for the change in the PR, and add the '%s' label on success.", s.rehearsalConfig.NormalLimit, rehearsalsAckLabel),
+		Description: fmt.Sprintf("Run up to %d affected job rehearsals for the change in the PR, and add the '%s' label on success.", s.rehearsalConfig.NormalLimit, rehearse.RehearsalsAckLabel),
 		WhoCanUse:   "Anyone can use on trusted PRs",
 		Examples:    []string{rehearseAutoAck},
 	})
@@ -229,8 +228,8 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 			case rehearseAck, rehearseSkip:
 				s.acknowledgeRehearsals(org, repo, number, logger)
 			case rehearseReject:
-				if err := s.ghc.RemoveLabel(org, repo, number, rehearsalsAckLabel); err != nil {
-					logger.WithError(err).Errorf("failed to remove '%s' label", rehearsalsAckLabel)
+				if err := s.ghc.RemoveLabel(org, repo, number, rehearse.RehearsalsAckLabel); err != nil {
+					logger.WithError(err).Errorf("failed to remove '%s' label", rehearse.RehearsalsAckLabel)
 				}
 			case rehearseRefresh:
 				presubmits, periodics, _, _, err := s.getAffectedJobs(pullRequest, logger)
@@ -445,17 +444,17 @@ func (s *server) getUsageDetailsLines() []string {
 		fmt.Sprintf("Comment: `%s` to opt-out of rehearsals", rehearseSkip),
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals", rehearseMore, rc.MoreLimit),
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals", rehearseMax, rc.MaxLimit),
-		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals, and add the `%s` label on success", rehearseAutoAck, rc.NormalLimit, rehearsalsAckLabel),
+		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals, and add the `%s` label on success", rehearseAutoAck, rc.NormalLimit, rehearse.RehearsalsAckLabel),
 		fmt.Sprintf("Comment: `%s` to get an updated list of affected jobs (useful if you have new pushes to the branch)", rehearseRefresh),
 		"",
-		fmt.Sprintf("Once you are satisfied with the results of the rehearsals, comment: `%s` to unblock merge. When the `%s` label is present on your PR, merge will no longer be blocked by rehearsals.", rehearseAck, rehearsalsAckLabel),
-		fmt.Sprintf("If you would like the `%s` label removed, comment: `%s` to re-block merging.", rehearsalsAckLabel, rehearseReject),
+		fmt.Sprintf("Once you are satisfied with the results of the rehearsals, comment: `%s` to unblock merge. When the `%s` label is present on your PR, merge will no longer be blocked by rehearsals.", rehearseAck, rehearse.RehearsalsAckLabel),
+		fmt.Sprintf("If you would like the `%s` label removed, comment: `%s` to re-block merging.", rehearse.RehearsalsAckLabel, rehearseReject),
 		"</details>",
 	}
 }
 
 func (s *server) acknowledgeRehearsals(org, repo string, number int, logger *logrus.Entry) {
-	if err := s.ghc.AddLabel(org, repo, number, rehearsalsAckLabel); err != nil {
-		logger.WithError(err).Errorf("failed to add '%s' label", rehearsalsAckLabel)
+	if err := s.ghc.AddLabel(org, repo, number, rehearse.RehearsalsAckLabel); err != nil {
+		logger.WithError(err).Errorf("failed to add '%s' label", rehearse.RehearsalsAckLabel)
 	}
 }

@@ -444,6 +444,15 @@ func main() {
 		}
 	}
 
+	if config.DetermineE2EByJob == true && config.IsAnyBuildClusterDisabled() {
+		config.DetermineE2EByJob = false
+		config.IgnoreE2EByJobAssignment = true
+	}
+	if config.IgnoreE2EByJobAssignment == true && !config.IsAnyBuildClusterDisabled() {
+		config.DetermineE2EByJob = true
+		config.IgnoreE2EByJobAssignment = false
+	}
+
 	logrus.Info("Dispatching ...")
 	if err := dispatchJobs(context.TODO(), o.prowJobConfigDir, o.maxConcurrency, config, jobVolumes); err != nil {
 		logrus.WithError(err).Fatal("Failed to dispatch")

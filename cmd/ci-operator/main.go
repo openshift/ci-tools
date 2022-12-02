@@ -1049,7 +1049,8 @@ func (o *options) initializeNamespace() error {
 	for {
 		project, err := projectGetter.ProjectV1().ProjectRequests().Create(context.TODO(), &projectapi.ProjectRequest{
 			ObjectMeta: meta.ObjectMeta{
-				Name: o.namespace,
+				Name:   o.namespace,
+				Labels: map[string]string{api.DPTPRequesterLabel: "ci-operator"},
 			},
 			DisplayName: fmt.Sprintf("%s - %s", o.namespace, o.jobSpec.Job),
 			Description: jobDescription(o.jobSpec),

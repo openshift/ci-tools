@@ -94,13 +94,23 @@ func TestChainDotFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to load registry: %v", err)
 	}
-	ipiInstall := chainDotFile("ipi-install", chains)
-	if ipiInstall != installChain {
-		t.Errorf("Generated dot file for ipi-install differs from expected: %s", diff.StringDiff(installChain, ipiInstall))
-	}
-	ipiDeprovision := chainDotFile("ipi-deprovision", chains)
-	if ipiDeprovision != deprovisionChain {
-		t.Errorf("Generated dot file for ipi-deprovision differs from expected: %s", diff.StringDiff(deprovisionChain, ipiDeprovision))
+	for _, tc := range []struct {
+		name, chain, expected string
+	}{{
+		name:     "ipi-install",
+		chain:    "ipi-install",
+		expected: installChain,
+	}, {
+		name:     "ipi-deprovision",
+		chain:    "ipi-deprovision",
+		expected: deprovisionChain,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := chainDotFile(tc.chain, chains)
+			if actual != tc.expected {
+				t.Errorf("Generated dot file for ipi-deprovision differs from expected: %s", diff.StringDiff(actual, tc.expected))
+			}
+		})
 	}
 }
 
@@ -109,8 +119,18 @@ func TestWorkflowDotFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to load registry: %v", err)
 	}
-	ipi := workflowDotFile("ipi", workflows, chains, workflowType)
-	if ipi != ipiWorkflow {
-		t.Errorf("Generated dot file for ipi differs from expected: %s", diff.StringDiff(ipiWorkflow, ipi))
+	for _, tc := range []struct {
+		name, workflow, expected string
+	}{{
+		name:     "ipi",
+		workflow: "ipi",
+		expected: ipiWorkflow,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := workflowDotFile(tc.name, workflows, chains, workflowType)
+			if actual != tc.expected {
+				t.Errorf("Generated dot file for ipi differs from expected: %s", diff.StringDiff(actual, tc.expected))
+			}
+		})
 	}
 }

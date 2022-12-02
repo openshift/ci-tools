@@ -295,8 +295,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 						limit = rc.MaxLimit
 					}
 
-					loggers := rehearse.Loggers{Job: logger, Debug: logger} // TODO: for now use the same logger, the dual logger concept will go away when orignal pj-rehearse does
-					prConfig, prRefs, imageStreamTags, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, changedTemplates, changedClusterProfiles, limit, loggers)
+					prConfig, prRefs, imageStreamTags, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, changedTemplates, changedClusterProfiles, limit, logger)
 					if err != nil {
 						logger.WithError(err).Error("couldn't set up jobs")
 						s.reportFailure("unable to set up jobs", org, repo, user, number, logger)
@@ -307,7 +306,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 						s.reportFailure("config validation failed", org, repo, user, number, logger)
 					}
 
-					success, err := rc.RehearseJobs(candidate, candidatePath, prConfig, prRefs, imageStreamTags, presubmitsToRehearse, changedTemplates, changedClusterProfiles, loggers)
+					success, err := rc.RehearseJobs(candidate, candidatePath, prConfig, prRefs, imageStreamTags, presubmitsToRehearse, changedTemplates, changedClusterProfiles, logger)
 					if err != nil {
 						logger.WithError(err).Error("couldn't rehearse jobs")
 						s.reportFailure("failed to create rehearsal jobs", org, repo, user, number, logger)

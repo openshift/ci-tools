@@ -77,9 +77,9 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	})
 	client := cs.CoreV1().ConfigMaps(ns)
 	pr := 1234
-	buildId := "1234567890"
+	SHA := "SOMESHA"
 	cmManager := NewCMManager(cluster, ns, client, configUpdaterCfg, pr, testRepoPath, logrus.NewEntry(logrus.New()))
-	ciTemplates, err := NewConfigMaps([]string{testTemplatePath}, "template", buildId, pr, configUpdaterCfg)
+	ciTemplates, err := NewConfigMaps([]string{testTemplatePath}, "template", SHA, pr, configUpdaterCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 	cluster := "cluster"
 	ns := "test"
 	pr := 1234
-	buildId := "1234567890"
+	SHA := "SOMESHA"
 	configUpdaterCfg := prowplugins.ConfigUpdater{
 		Maps: map[string]prowplugins.ConfigMapSpec{
 			filepath.Join(config.ClusterProfilesPath, "profile0", "file"): {
@@ -158,7 +158,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 	cs := fake.NewSimpleClientset()
 	client := cs.CoreV1().ConfigMaps(ns)
 	m := NewCMManager(cluster, ns, client, configUpdaterCfg, pr, dir, logrus.NewEntry(logrus.New()))
-	ciProfiles, err := NewConfigMaps(profiles, "cluster-profile", buildId, pr, configUpdaterCfg)
+	ciProfiles, err := NewConfigMaps(profiles, "cluster-profile", SHA, pr, configUpdaterCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +277,7 @@ func TestNewConfigMaps(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(*testing.T) {
-			cms, err := NewConfigMaps(tc.paths, "test", "buildid", 1234, cuCfg)
+			cms, err := NewConfigMaps(tc.paths, "test", "SOMESHA", 1234, cuCfg)
 
 			if (tc.expectError == nil) != (err == nil) {
 				t.Fatalf("Did not return error as expected:\n%s", cmp.Diff(tc.expectError, err))

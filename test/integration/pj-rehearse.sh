@@ -42,10 +42,10 @@ os::cmd::expect_success '[[ -z "$(git -C '"${suite_dir}"'/master status --short 
 os::cmd::expect_success "ci-operator-prowgen --from-dir ${suite_dir}/candidate/ci-operator/config --to-dir ${suite_dir}/candidate/ci-operator/jobs --registry ${suite_dir}/candidate/ci-operator/step-registry"
 os::cmd::expect_success '[[ -z "$(git -C '"${suite_dir}"'/candidate status --short -- .)" ]]'
 
-export JOB_SPEC='{"type":"presubmit","job":"pull-ci-openshift-release-master-rehearse","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"release","base_ref":"master","base_sha":"'${base_sha}'","pulls":[{"number":1234,"author":"petr-muller","sha":"'${candidate_sha}'"}]}}'
+export PR='{"number": 1234, "user": {"login": "username"},  "base": {"sha": "'${base_sha}'", "ref": "master", "repo": {"name": "release", "owner": {"login": "openshift"}}}, "head": {"sha": "'${candidate_sha}'"}}'
 
 actual="${workdir}/rehearsals.yaml"
-os::cmd::expect_success "pj-rehearse --dry-run=true --candidate-path ${repo} --rehearsal-limit 20 > ${actual}"
+os::cmd::expect_success "pj-rehearse --dry-run=true --dry-run-path ${repo} --pull-request-var PR > ${actual}"
 os::integration::sanitize_prowjob_yaml ${actual}
 # Substitute the SHA in the job names to a known SHA for comparison
 sed -i -E -e "s/-${candidate_sha}-/-4de8ab7c20656998264a2593116288f5eb070b32-/g" ${actual}

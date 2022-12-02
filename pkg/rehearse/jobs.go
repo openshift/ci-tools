@@ -52,11 +52,6 @@ const (
 	clusterTypeEnvName = "CLUSTER_TYPE"
 )
 
-// Loggers holds the two loggers that will be used for normal and debug logging respectively.
-type Loggers struct {
-	Job, Debug logrus.FieldLogger
-}
-
 // Number of openshift versions
 var numVersion = 50
 
@@ -303,7 +298,7 @@ func getResolvedConfigForTest(ciopConfig config.DataWithInfo, resolver registry.
 // Also returns an ImageStreamTagMap with that contains all imagestreamtags used
 // within the inlined config (this is needed to later ensure they exist on all
 // target clusters where the rehearsals will execute).
-func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename, resolver registry.Resolver, metadata api.Metadata, testname string, loggers Loggers) (apihelper.ImageStreamTagMap, error) {
+func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename, resolver registry.Resolver, metadata api.Metadata, testname string, logger *logrus.Entry) (apihelper.ImageStreamTagMap, error) {
 	allImageStreamTags := apihelper.ImageStreamTagMap{}
 	if len(container.Command) < 1 || container.Command[0] != "ci-operator" {
 		return allImageStreamTags, nil
@@ -366,12 +361,12 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename
 			return nil, fmt.Errorf("ci-operator config file %s was not found", filename)
 		}
 		ciopConfig = ciopConfigs[filename]
-		loggers.Debug.WithField(logCiopConfigFile, filename).Debug("Rehearsal job would use ci-operator config from registry, its content will be inlined")
+		logger.WithField(logCiopConfigFile, filename).Debug("Rehearsal job would use ci-operator config from registry, its content will be inlined")
 	}
 
 	ciOpConfigContent, imageStreamTags, err := getResolvedConfigForTest(ciopConfig, resolver, testname)
 	if err != nil {
-		loggers.Job.WithError(err).Error("Failed to get resolved config for test")
+		logger.WithError(err).Error("Failed to get resolved config for test")
 		return nil, err
 	}
 	apihelper.MergeImageStreamTagMaps(allImageStreamTags, imageStreamTags)
@@ -392,11 +387,11 @@ type JobConfigurer struct {
 	templateCMNames       map[string]string
 	prNumber              int
 	refs                  *pjapi.Refs
-	loggers               Loggers
+	logger                *logrus.Entry
 }
 
 // NewJobConfigurer filters the jobs and returns a new JobConfigurer.
-func NewJobConfigurer(ciopConfigs config.DataByFilename, prowConfig *prowconfig.Config, resolver registry.Resolver, prNumber int, loggers Loggers, templates, profiles map[string]string, refs *pjapi.Refs) *JobConfigurer {
+func NewJobConfigurer(ciopConfigs config.DataByFilename, prowConfig *prowconfig.Config, resolver registry.Resolver, prNumber int, logger *logrus.Entry, templates, profiles map[string]string, refs *pjapi.Refs) *JobConfigurer {
 	return &JobConfigurer{
 		ciopConfigs:           ciopConfigs,
 		prowConfig:            prowConfig,
@@ -405,7 +400,7 @@ func NewJobConfigurer(ciopConfigs config.DataByFilename, prowConfig *prowconfig.
 		templateCMNames:       templates,
 		prNumber:              prNumber,
 		refs:                  refs,
-		loggers:               loggers,
+		logger:                logger,
 	}
 }
 
@@ -423,7 +418,7 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics)
 	allImageStreamTags := apihelper.ImageStreamTagMap{}
 
 	for _, job := range periodics {
-		jobLogger := jc.loggers.Job.WithField("target-job", job.Name)
+		jobLogger := jc.logger.WithField("target-job", job.Name)
 		metadata := api.Metadata{
 			Variant: VariantFromLabels(job.Labels),
 		}
@@ -434,7 +429,7 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics)
 		}
 		jc.configureDecorationConfig(&job.JobBase, metadata)
 		testname := metadata.TestNameFromJobName(job.Name, jobconfig.PeriodicPrefix)
-		imageStreamTags, err := jc.configureJobSpec(job.Spec, metadata, testname, jc.loggers.Debug.WithField("name", job.Name))
+		imageStreamTags, err := jc.configureJobSpec(job.Spec, metadata, testname, jc.logger.WithField("name", job.Name))
 		if err != nil {
 			jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal periodic job")
 			return nil, nil, err
@@ -457,11 +452,11 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 	for orgrepo, jobs := range presubmits {
 		splitOrgRepo := strings.Split(orgrepo, "/")
 		if len(splitOrgRepo) != 2 {
-			jc.loggers.Job.WithError(fmt.Errorf("failed to identify org and repo from string %s", orgrepo)).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")
+			jc.logger.WithError(fmt.Errorf("failed to identify org and repo from string %s", orgrepo)).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")
 		}
 
 		for _, job := range jobs {
-			jobLogger := jc.loggers.Job.WithFields(logrus.Fields{"target-repo": orgrepo, "target-job": job.Name})
+			jobLogger := jc.logger.WithFields(logrus.Fields{"target-repo": orgrepo, "target-job": job.Name})
 			branch := BranchFromRegexes(job.Branches)
 			if branch == "" {
 				jobLogger.Warn("failed to extract a simple branch name for a presubmit")
@@ -481,7 +476,7 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 			}
 			testname := metadata.TestNameFromJobName(job.Name, jobconfig.PresubmitPrefix)
 
-			imageStreamTags, err := jc.configureJobSpec(rehearsal.Spec, metadata, testname, jc.loggers.Debug.WithField("name", job.Name))
+			imageStreamTags, err := jc.configureJobSpec(rehearsal.Spec, metadata, testname, jc.logger.WithField("name", job.Name))
 			if err != nil {
 				jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")
 				return nil, nil, err
@@ -520,7 +515,7 @@ func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadat
 		metadata = metadataFromFlags
 	}
 
-	imageStreamTags, err := inlineCiOpConfig(&spec.Containers[0], jc.ciopConfigs, jc.registryResolver, metadata, testName, jc.loggers)
+	imageStreamTags, err := inlineCiOpConfig(&spec.Containers[0], jc.ciopConfigs, jc.registryResolver, metadata, testName, jc.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -555,7 +550,7 @@ func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Per
 // AddRandomJobsForChangedTemplates finds jobs from the PR config that are using a specific template with a specific cluster type.
 // The job selection is done by iterating in an unspecified order, which avoids picking the same job
 // So if a template will be changed, find the jobs that are using a template in combination with the `aws`,`openstack`,`gcs` and `libvirt` cluster types.
-func AddRandomJobsForChangedTemplates(templates sets.String, toBeRehearsed config.Presubmits, prConfigPresubmits map[string][]prowconfig.Presubmit, loggers Loggers) config.Presubmits {
+func AddRandomJobsForChangedTemplates(templates sets.String, toBeRehearsed config.Presubmits, prConfigPresubmits map[string][]prowconfig.Presubmit, logger *logrus.Entry) config.Presubmits {
 	clusterTypes := getClusterTypes(prConfigPresubmits)
 	rehearsals := make(config.Presubmits)
 
@@ -567,7 +562,7 @@ func AddRandomJobsForChangedTemplates(templates sets.String, toBeRehearsed confi
 
 			if repo, job := pickTemplateJob(prConfigPresubmits, template, clusterType); job != nil {
 				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("template %s changed", template)}
-				loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
+				logger.WithFields(selectionFields).Info(diffs.ChosenJob)
 				rehearsals[repo] = append(rehearsals[repo], *job)
 			}
 		}
@@ -585,11 +580,11 @@ type periodicsByName map[string]prowconfig.Periodic
 type presubmitsByName map[string]prowconfig.Presubmit
 
 // selectJobsForRegistryStep returns a sample from all jobs affected by the provided registry node.
-func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInfo, allPresubmits presubmitsByName, allPeriodics periodicsByName, skipJobs sets.String, loggers Loggers) (presubmitsByRepo, periodicsByRepo) {
+func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInfo, allPresubmits presubmitsByName, allPeriodics periodicsByName, skipJobs sets.String, logger *logrus.Entry) (presubmitsByRepo, periodicsByRepo) {
 	selectedPresubmits := make(map[string][]prowconfig.Presubmit)
 	selectedPeriodics := make(map[string][]prowconfig.Periodic)
 
-	nodeLogger := loggers.Debug.WithFields(registry.FieldsForNode(node))
+	nodeLogger := logger.WithFields(registry.FieldsForNode(node))
 	nodeLogger.Debug("Searching for jobs affected by changed node")
 	for _, cfg := range configs {
 		cfgLogger := nodeLogger.WithFields(cfg.Info.LogFields())
@@ -655,7 +650,7 @@ func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInf
 			}
 		}
 	}
-	loggers.Debug.WithField("node-name", node.Name()).Debug("Found no jobs using node")
+	logger.WithField("node-name", node.Name()).Debug("Found no jobs using node")
 	return selectedPresubmits, selectedPeriodics
 }
 
@@ -687,7 +682,7 @@ func getAffectedNodes(changed []registry.Node) []registry.Node {
 	return worklist
 }
 
-func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presubmitsByRepo, allPeriodics []prowconfig.Periodic, ciopConfigs config.DataByFilename, loggers Loggers) (config.Presubmits, config.Periodics) {
+func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presubmitsByRepo, allPeriodics []prowconfig.Periodic, ciopConfigs config.DataByFilename, logger *logrus.Entry) (config.Presubmits, config.Periodics) {
 	// We need a sorted index of ci-operator configs for deterministic behavior
 	var sortedConfigs []*config.DataWithInfo
 	for idx := range ciopConfigs {
@@ -717,11 +712,11 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 	selectedPeriodics := config.Periodics{}
 	selectedNames := sets.NewString()
 	for _, step := range stepWorklist {
-		presubmits, periodics := selectJobsForRegistryStep(step, sortedConfigs, presubmitIndex, periodicsIndex, selectedNames, loggers)
+		presubmits, periodics := selectJobsForRegistryStep(step, sortedConfigs, presubmitIndex, periodicsIndex, selectedNames, logger)
 		for repo, jobs := range presubmits {
 			for _, job := range jobs {
 				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", step.Name())}
-				loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
+				logger.WithFields(selectionFields).Info(diffs.ChosenJob)
 				selectedPresubmits.Add(repo, job, config.ChangedRegistryContent)
 				selectedNames.Insert(job.Name)
 			}
@@ -729,7 +724,7 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 		for repo, jobs := range periodics {
 			for _, job := range jobs {
 				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", step.Name())}
-				loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
+				logger.WithFields(selectionFields).Info(diffs.ChosenJob)
 				selectedPeriodics.Add(job, config.ChangedRegistryContent)
 				selectedNames.Insert(job.Name)
 			}
@@ -855,7 +850,7 @@ type Executor struct {
 	prNumber   int
 	prRepo     string
 	refs       *pjapi.Refs
-	loggers    Loggers
+	logger     *logrus.Entry
 	pjclient   ctrlruntimeclient.Client
 	namespace  string
 	// Allow faking this in tests
@@ -864,14 +859,14 @@ type Executor struct {
 
 // NewExecutor creates an executor. It also configures the rehearsal jobs as a list of presubmits.
 func NewExecutor(presubmits []*prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs,
-	dryRun bool, loggers Loggers, pjclient ctrlruntimeclient.Client, namespace string) *Executor {
+	dryRun bool, logger *logrus.Entry, pjclient ctrlruntimeclient.Client, namespace string) *Executor {
 	return &Executor{
 		dryRun:     dryRun,
 		presubmits: presubmits,
 		prNumber:   prNumber,
 		prRepo:     prRepo,
 		refs:       refs,
-		loggers:    loggers,
+		logger:     logger,
 		pjclient:   pjclient,
 		namespace:  namespace,
 		pollFunc:   wait.Poll,
@@ -946,17 +941,17 @@ func (e *Executor) waitForJobs(jobs sets.String, selector ctrlruntimeclient.List
 		for _, pj := range result.Items {
 			fields := pjutil.ProwJobFields(&pj)
 			fields["state"] = pj.Status.State
-			e.loggers.Debug.WithFields(fields).Debug("Processing ProwJob")
+			e.logger.WithFields(fields).Debug("Processing ProwJob")
 			if !jobs.Has(pj.Name) {
 				continue
 			}
 
 			switch pj.Status.State {
 			case pjapi.FailureState, pjapi.AbortedState, pjapi.ErrorState:
-				e.loggers.Job.WithFields(fields).Error("Job failed")
+				e.logger.WithFields(fields).Error("Job failed")
 				success = false
 			case pjapi.SuccessState:
-				e.loggers.Job.WithFields(fields).Info("Job succeeded")
+				e.logger.WithFields(fields).Info("Job succeeded")
 			default:
 				continue
 			}
@@ -1040,7 +1035,7 @@ func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 	for _, job := range e.presubmits {
 		created, err := e.submitPresubmit(job)
 		if err != nil {
-			e.loggers.Job.WithError(err).Warn("Failed to execute a rehearsal presubmit")
+			e.logger.WithError(err).Warn("Failed to execute a rehearsal presubmit")
 			errs = append(errs, err)
 			continue
 		}
@@ -1053,7 +1048,7 @@ func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 func (e *Executor) submitPresubmit(job *prowconfig.Presubmit) (*pjapi.ProwJob, error) {
 	prowJob := pjutil.NewProwJob(pjutil.PresubmitSpec(*job, *e.refs), job.Labels, job.Annotations)
 	prowJob.Namespace = e.namespace
-	e.loggers.Job.WithFields(pjutil.ProwJobFields(&prowJob)).Info("Submitting a new prowjob.")
+	e.logger.WithFields(pjutil.ProwJobFields(&prowJob)).Info("Submitting a new prowjob.")
 	return &prowJob, e.pjclient.Create(context.Background(), &prowJob)
 }
 

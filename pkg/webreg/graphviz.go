@@ -2,9 +2,10 @@ package webreg
 
 import (
 	"bytes"
+	_ "embed"
 	"errors"
 	"fmt"
-	"html"
+	"html/template"
 	"os/exec"
 	"strings"
 
@@ -101,6 +102,43 @@ const (
 	bootstrap413monospace = "fontname=\"SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace\""
 )
 
+var (
+	//go:embed graphviz.go.tmpl
+	graphvizTemplateStr string
+	//go:embed graphviz_subgraph.go.tmpl
+	graphvizSGTemplateStr string
+	graphvizTemplate      = template.Must(
+		template.New("webreg").Funcs(template.FuncMap{
+			"label":    func(n node) string { return n.label },
+			"linkable": func(n node) bool { return n.linkable },
+			"srcNode":  func(e edge) int { return e.srcNode },
+			"dstNode":  func(e edge) int { return e.dstNode },
+			"attrs": func(e edge) string {
+				var a []string
+				if e.srcType == subgraphType {
+					a = append(a, fmt.Sprintf("ltail=cluster_%d", e.srcGraph))
+				}
+				if e.dstType == subgraphType {
+					a = append(a, fmt.Sprintf("lhead=cluster_%d", e.dstGraph))
+					a = append(a, "minlen=2")
+				}
+				if len(a) == 0 {
+					return ""
+				}
+				return fmt.Sprintf("[%s]", strings.Join(a, " "))
+			},
+		}).Parse(graphvizTemplateStr))
+	graphvizSGTemplate = template.Must(
+		template.New("webreg_sg").Funcs(template.FuncMap{
+			"label": func(g graph, i int) string {
+				return g.subgraphs[i].label
+			},
+			"nodes": func(g graph, i int) []int {
+				return g.subgraphs[i].nodes
+			},
+		}).Parse(graphvizSGTemplateStr))
+)
+
 // addSubgraph creates a sub-graph for a sequence of steps
 func (b *graphBuilder) addSubgraph(label string, steps []api.TestStep) int {
 	sg := subgraph{label: label}
@@ -193,7 +231,6 @@ func renderDotFile(dot string) ([]byte, error) {
 	cmd.Stderr = buf
 	out, err := cmd.Output()
 	if execErr, ok := err.(*exec.Error); ok && execErr.Err == exec.ErrNotFound {
-		//http.Error(w, "The 'dot' binary is not installed", http.StatusBadRequest)
 		return []byte{}, errors.New("The 'dot' binary is not installed")
 	} else if err != nil {
 		return out, errors.New(buf.String())
@@ -201,75 +238,38 @@ func renderDotFile(dot string) ([]byte, error) {
 	return out, err
 }
 
-func writeSubgraph(mainGraph graph, sg subgraph, index int, indentPrefix string, linkable bool) string {
-	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("%ssubgraph cluster_%d {\n", indentPrefix, index))
-	indentPrefix = fmt.Sprint(indentPrefix, "\t")
-	builder.WriteString(fmt.Sprintf("%slabel=\"%s\";\n", indentPrefix, html.EscapeString(sg.label)))
-	builder.WriteString(fmt.Sprint(indentPrefix, "labeljust=\"l\";\n"))
-	if linkable {
-		builder.WriteString(fmt.Sprintf("%shref=\"/%s/%s\";\n", indentPrefix, "chain", html.EscapeString(sg.label)))
-		builder.WriteString(fmt.Sprint(indentPrefix, bootstrap413monospace, ";\n"))
-	} else {
-		builder.WriteString(fmt.Sprint(indentPrefix, bootstrap413fonts, ";\n"))
+func writeSubgraph(g graph, tmpl *template.Template, b *strings.Builder, i int, prefix string, linkable bool) {
+	if err := tmpl.Execute(b, map[string]any{
+		"bootstrap413fonts":     template.HTML(bootstrap413fonts),
+		"bootstrap413monospace": template.HTML(bootstrap413monospace),
+		"g":                     g,
+		"sg":                    i,
+		"prefix":                prefix,
+		"linkable":              linkable,
+	}); err != nil {
+		panic(fmt.Errorf("subgraph template rendering failed: %w", err))
 	}
-	for _, node := range sg.nodes {
-		builder.WriteString(fmt.Sprintf("%s%d;\n", indentPrefix, node))
+	for _, i := range g.subgraphs[i].subgraphs {
+		writeSubgraph(g, tmpl, b, i, prefix+"\t", true)
 	}
-	for _, sub := range sg.subgraphs {
-		builder.WriteString(writeSubgraph(mainGraph, mainGraph.subgraphs[sub], sub, indentPrefix, true))
-	}
-	indentPrefix = strings.Replace(indentPrefix, "\t", "", 1)
-	builder.WriteString(fmt.Sprint(indentPrefix, "}\n"))
-	return builder.String()
+	b.WriteString(prefix)
+	b.WriteString("}\n")
 }
 
-func writeDotFile(mainGraph graph, roots []int, linkable bool) string {
-	indentPrefix := ""
-	var builder strings.Builder
-	builder.WriteString("digraph Webreg {\n")
-	indentPrefix = fmt.Sprint(indentPrefix, "\t")
-	builder.WriteString(fmt.Sprint(indentPrefix, "compound=true;\n"))
-	builder.WriteString(fmt.Sprint(indentPrefix, "color=blue;\n"))
-	// fonts from bootstrap 4.1.3 css
-	builder.WriteString(fmt.Sprint(indentPrefix, bootstrap413fonts, ";\n"))
-	builder.WriteString(fmt.Sprint(indentPrefix, "node[shape=rectangle ", bootstrap413monospace, "];\n"))
-	builder.WriteString(fmt.Sprint(indentPrefix, "rankdir=TB;\n"))
-	builder.WriteString(fmt.Sprintf("%slabel=\"%s\";\n", indentPrefix, html.EscapeString(mainGraph.label)))
-	builder.WriteString("\n")
-	for index, node := range mainGraph.nodes {
-		href := ""
-		if node.linkable {
-			href = fmt.Sprintf(" href=\"/%s/%s\"", "reference", html.EscapeString(node.label))
-		}
-		builder.WriteString(fmt.Sprintf("%s%d [label=\"%s\"%s];\n", indentPrefix, index, node.label, href))
+func writeDotFile(g graph, roots []int, linkable bool) string {
+	var b strings.Builder
+	if err := graphvizTemplate.Execute(&b, map[string]any{
+		"bootstrap413fonts":     template.HTML(bootstrap413fonts),
+		"bootstrap413monospace": template.HTML(bootstrap413monospace),
+		"label":                 g.label,
+		"nodes":                 g.nodes,
+		"edges":                 g.edges,
+	}); err != nil {
+		panic(fmt.Errorf("graphviz template rendering failed: %w", err))
 	}
-	builder.WriteString("\n")
-	for _, edge := range mainGraph.edges {
-		var attrs []string
-		if edge.srcType == subgraphType {
-			attrs = append(attrs, fmt.Sprintf("ltail=cluster_%d", edge.srcGraph))
-		}
-		if edge.dstType == subgraphType {
-			attrs = append(attrs, fmt.Sprintf("lhead=cluster_%d", edge.dstGraph))
-		}
-		builder.WriteString(fmt.Sprintf("%s%d -> %d ", indentPrefix, edge.srcNode, edge.dstNode))
-		if len(attrs) > 0 {
-			builder.WriteString(fmt.Sprintf("[%s", attrs[0]))
-			if len(attrs) > 1 {
-				builder.WriteString(fmt.Sprintf(" %s", attrs[1]))
-			}
-			if edge.dstType == subgraphType {
-				builder.WriteString(" minlen=2")
-			}
-			builder.WriteString("]")
-		}
-		builder.WriteString(";\n")
-	}
-	builder.WriteString("\n")
 	for _, i := range roots {
-		builder.WriteString(writeSubgraph(mainGraph, mainGraph.subgraphs[i], i, indentPrefix, linkable))
+		writeSubgraph(g, graphvizSGTemplate, &b, i, "\t", linkable)
 	}
-	builder.WriteString("}\n")
-	return builder.String()
+	b.WriteString("}\n")
+	return b.String()
 }

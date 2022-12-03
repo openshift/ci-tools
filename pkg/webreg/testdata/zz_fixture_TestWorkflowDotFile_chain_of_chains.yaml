@@ -14,8 +14,8 @@ digraph Webreg {
 	5 [label="Intentionally left blank"];
 
 	0 -> 1 ;
-	2 -> 3 ;
 	1 -> 2 [ltail=cluster_0 lhead=cluster_1 minlen=2];
+	2 -> 3 ;
 	3 -> 4 [ltail=cluster_3 lhead=cluster_4 minlen=2];
 	4 -> 5 [ltail=cluster_4 lhead=cluster_5 minlen=2];
 

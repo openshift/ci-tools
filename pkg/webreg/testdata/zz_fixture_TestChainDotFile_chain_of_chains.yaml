@@ -12,8 +12,8 @@ digraph Webreg {
 	3 [label="ipi-deprovision-deprovision" href="/reference/ipi-deprovision-deprovision"];
 
 	0 -> 1 ;
-	2 -> 3 ;
 	1 -> 2 [ltail=cluster_0 lhead=cluster_1 minlen=2];
+	2 -> 3 ;
 
 	subgraph cluster_0 {
 		label="ipi-install";

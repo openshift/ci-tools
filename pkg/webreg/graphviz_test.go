@@ -37,10 +37,13 @@ func TestChainDotFile(t *testing.T) {
 		name  string
 		chain api.RegistryChain
 	}{{
-		name: installChain,
+		name:  "empty",
+		chain: api.RegistryChain{As: "empty"},
+	}, {
+		name:  installChain,
 		chain: chains[installChain],
 	}, {
-		name: deprovisionChain,
+		name:  deprovisionChain,
 		chain: chains[deprovisionChain],
 	}, {
 		name: chainOfChains,
@@ -62,6 +65,7 @@ func TestChainDotFile(t *testing.T) {
 }
 
 func TestWorkflowDotFile(t *testing.T) {
+	empty := "empty"
 	installChain := "ipi-install"
 	deprovisionChain := "ipi-deprovision"
 	rbac := "ipi-install-rbac"
@@ -70,6 +74,7 @@ func TestWorkflowDotFile(t *testing.T) {
 	deprovision := "ipi-deprovision-deprovision"
 	chainOfChains := "chain-of-chains"
 	chains := registry.ChainByName{
+		"empty": {},
 		installChain: {
 			Steps: []api.TestStep{
 				{Reference: &rbac},
@@ -107,6 +112,17 @@ func TestWorkflowDotFile(t *testing.T) {
 			Pre: []api.TestStep{{
 				LiteralTestStep: &api.LiteralTestStep{As: "pre"},
 			}},
+			Post: []api.TestStep{{
+				LiteralTestStep: &api.LiteralTestStep{As: "post"},
+			}},
+		},
+	}, {
+		name: "empty-chain",
+		workflow: api.MultiStageTestConfiguration{
+			Pre: []api.TestStep{{
+				LiteralTestStep: &api.LiteralTestStep{As: "pre"},
+			}},
+			Test: []api.TestStep{{Chain: &empty}},
 			Post: []api.TestStep{{
 				LiteralTestStep: &api.LiteralTestStep{As: "post"},
 			}},

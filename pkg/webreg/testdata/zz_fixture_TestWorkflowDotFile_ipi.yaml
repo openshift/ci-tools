@@ -13,9 +13,9 @@ digraph Webreg {
 	4 [label="ipi-deprovision-deprovision" href="/reference/ipi-deprovision-deprovision"];
 
 	0 -> 1 ;
-	3 -> 4 ;
 	1 -> 2 [ltail=cluster_1 lhead=cluster_2 minlen=2];
 	2 -> 3 [ltail=cluster_2 lhead=cluster_4 minlen=2];
+	3 -> 4 ;
 
 	subgraph cluster_1 {
 		label="Pre";

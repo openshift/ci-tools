@@ -274,6 +274,6 @@ func writeDotFile(mainGraph graph) string {
 			builder.WriteString(writeSubgraph(mainGraph, sg, index, indentPrefix))
 		}
 	}
-	builder.WriteString("}")
+	builder.WriteString("}\n")
 	return builder.String()
 }

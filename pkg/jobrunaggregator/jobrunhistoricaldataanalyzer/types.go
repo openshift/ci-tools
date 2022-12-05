@@ -11,9 +11,9 @@ import (
 var prTemplate string
 
 type parsedJobData struct {
-	PercentTimeDiff                    float64       `json:"-"`
-	TimeDiff                           time.Duration `json:"-"`
-	PrevP99                            time.Duration `json:"-"`
+	PercentTimeDiffP95                 float64       `json:"-"`
+	TimeDiffP95                        time.Duration `json:"-"`
+	PrevP95                            time.Duration `json:"-"`
 	DurationP95                        time.Duration `json:"-"`
 	DurationP99                        time.Duration `json:"-"`
 	JobResults                         int           `json:"-"`

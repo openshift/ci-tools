@@ -125,13 +125,13 @@ func fetchCurrentRelease() (current string, previous string, err error) {
 
 func formatTableOutput(data []parsedJobData, filter bool) string {
 	sort.SliceStable(data, func(i, j int) bool {
-		return data[i].TimeDiff > data[j].TimeDiff
+		return data[i].TimeDiffP95 > data[j].TimeDiffP95
 	})
 	var buffer bytes.Buffer
-	buffer.WriteString("| Name | Release | From | Arch | Network | Platform | Topology | Prev P99 | P99 | Job Results | Time Increase | Percent Increase |\n")
-	buffer.WriteString("| ---- | ------- | ---- | ---- | ------- | -------- |--------- | -------- | --- | ----------- | ------------- | ---------------- |\n")
+	buffer.WriteString("| Name | Release | From | Arch | Network | Platform | Topology | Prev P95 | P95 | Job Results | P95 Time Increase | P95 Percent Increase |\n")
+	buffer.WriteString("| ---- | ------- | ---- | ---- | ------- | -------- |--------- | -------- | --- | ----------- | ----------------- | -------------------- |\n")
 	for _, d := range data {
-		if d.TimeDiff == 0 && filter {
+		if d.TimeDiffP95 == 0 && filter {
 			continue
 		}
 		buffer.WriteString(
@@ -143,11 +143,11 @@ func formatTableOutput(data []parsedJobData, filter bool) string {
 				d.GetJobData().Network,
 				d.GetJobData().Platform,
 				d.GetJobData().Topology,
-				d.PrevP99,
-				d.DurationP99,
+				d.PrevP95,
+				d.DurationP95,
 				d.JobResults,
-				d.TimeDiff,
-				d.PercentTimeDiff,
+				d.TimeDiffP95,
+				d.PercentTimeDiffP95,
 			),
 		)
 	}

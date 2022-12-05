@@ -150,9 +150,8 @@ func (s *server) respondToNewPR(pullRequest *github.PullRequest, logger *logrus.
 	if s.preCheck {
 		presubmits, periodics, _, _, err := s.getAffectedJobs(pullRequest, logger)
 		if err != nil {
-			if err := s.ghc.CreateComment(org, repo, number, fmt.Sprintf("@%s, pj-rehearse couldn't determine affected jobs. This could be due to a branch that needs to be rebased.", user)); err != nil {
-				logger.WithError(err).Error("failed to create comment")
-			}
+			s.reportFailure("unable to determine affected jobs. This could be due to a branch that needs to be rebased.", err, org, repo, user, number, false, logger)
+			return
 		}
 		foundJobsToRehearse := len(presubmits) > 0 || len(periodics) > 0
 		if !foundJobsToRehearse {
@@ -266,9 +265,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 
 				candidate, err := s.prepareCandidate(repoClient, pullRequest)
 				if err != nil {
-					if err := s.ghc.CreateComment(org, repo, number, fmt.Sprintf("pj-rehearse couldn't prepare a candidate for rehearsal; rehearsals will not be run. This could be due to a branch that needs to be rebased.")); err != nil {
-						logger.WithError(err).Error("failed to create comment")
-					}
+					s.reportFailure("unable prepare a candidate for rehearsal; rehearsals will not be run. This could be due to a branch that needs to be rebased.", err, org, repo, user, number, false, logger)
 					continue
 				}
 
@@ -278,6 +275,8 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 				presubmits, periodics, changedTemplates, changedClusterProfiles, err := rc.DetermineAffectedJobs(candidate, candidatePath, logger)
 				if err != nil {
 					logger.WithError(err).Error("couldn't determine affected jobs")
+					s.reportFailure("unable to determine affected jobs", err, org, repo, user, number, true, logger)
+					continue
 				}
 				if !s.preCheck {
 					// Since we didn't provide a comment about the rehearsable jobs prior to the user selecting to run, list them now
@@ -299,18 +298,21 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 					prConfig, prRefs, imageStreamTags, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, changedTemplates, changedClusterProfiles, limit, loggers)
 					if err != nil {
 						logger.WithError(err).Error("couldn't set up jobs")
-						s.reportFailure("unable to set up jobs", org, repo, user, number, logger)
+						s.reportFailure("unable to set up jobs", err, org, repo, user, number, true, logger)
+						continue
 					}
 
 					if err := prConfig.Prow.ValidateJobConfig(); err != nil {
 						logger.WithError(err).Error("validation of job config failed")
-						s.reportFailure("config validation failed", org, repo, user, number, logger)
+						s.reportFailure("config validation failed", err, org, repo, user, number, false, logger)
+						continue
 					}
 
 					success, err := rc.RehearseJobs(candidate, candidatePath, prConfig, prRefs, imageStreamTags, presubmitsToRehearse, changedTemplates, changedClusterProfiles, loggers)
 					if err != nil {
 						logger.WithError(err).Error("couldn't rehearse jobs")
-						s.reportFailure("failed to create rehearsal jobs", org, repo, user, number, logger)
+						s.reportFailure("failed to create rehearsal jobs", err, org, repo, user, number, true, logger)
+						continue
 					}
 
 					autoAckMode := rehearseAutoAck == command
@@ -355,8 +357,12 @@ func (s *server) getAffectedJobs(pullRequest *github.PullRequest, logger *logrus
 	return rc.DetermineAffectedJobs(candidate, candidatePath, logger)
 }
 
-func (s *server) reportFailure(message, org, repo, user string, number int, l *logrus.Entry) {
-	if err := s.ghc.CreateComment(org, repo, number, fmt.Sprintf("@%s, `pj-rehearse`: %s", user, message)); err != nil {
+func (s *server) reportFailure(message string, err error, org, repo, user string, number int, addContact bool, l *logrus.Entry) {
+	comment := fmt.Sprintf("@%s, `pj-rehearse`: %s ERROR: '%v'.", user, message, err)
+	if addContact {
+		comment += " If the problem persists, please [contact](https://docs.ci.openshift.org/docs/getting-started/useful-links/#contact) Test Platform."
+	}
+	if err := s.ghc.CreateComment(org, repo, number, comment); err != nil {
 		l.WithError(err).Error("failed to create comment")
 	}
 }

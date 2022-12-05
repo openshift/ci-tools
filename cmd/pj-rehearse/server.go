@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 
@@ -57,6 +58,12 @@ func (s *server) helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, e
 		Description: fmt.Sprintf("Run up to %d affected job rehearsals for the change in the PR.", s.rehearsalConfig.NormalLimit),
 		WhoCanUse:   "Anyone can use on trusted PRs",
 		Examples:    []string{rehearseNormal},
+	})
+	pluginHelp.AddCommand(pluginhelp.Command{
+		Usage:       fmt.Sprintf("%s {test-name}", rehearseNormal),
+		Description: "Run one or more specific rehearsals",
+		WhoCanUse:   "Anyone can use on trusted PRs",
+		Examples:    []string{fmt.Sprintf("%s {some-test} {another-test}", rehearseNormal)},
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       rehearseAck,
@@ -148,7 +155,7 @@ func (s *server) respondToNewPR(pullRequest *github.PullRequest, logger *logrus.
 	user := pullRequest.User.Login
 	var comment string
 	if s.preCheck {
-		presubmits, periodics, _, _, err := s.getAffectedJobs(pullRequest, logger)
+		presubmits, periodics, err := s.getAffectedJobs(pullRequest, logger)
 		if err != nil {
 			s.reportFailure("unable to determine affected jobs. This could be due to a branch that needs to be rebased.", err, org, repo, user, number, false, logger)
 			return
@@ -231,7 +238,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 					logger.WithError(err).Errorf("failed to remove '%s' label", rehearse.RehearsalsAckLabel)
 				}
 			case rehearseRefresh:
-				presubmits, periodics, _, _, err := s.getAffectedJobs(pullRequest, logger)
+				presubmits, periodics, err := s.getAffectedJobs(pullRequest, logger)
 				if err != nil {
 					if err := s.ghc.CreateComment(org, repo, pullRequest.Number, fmt.Sprintf("@%s, pj-rehearse couldn't determine affected jobs. This could be due to a branch that needs to be rebased.", user)); err != nil {
 						logger.WithError(err).Error("failed to create comment")
@@ -245,7 +252,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 				if err := s.ghc.CreateComment(org, repo, number, comment); err != nil {
 					logger.WithError(err).Error("failed to create comment")
 				}
-			case rehearseNormal, rehearseMore, rehearseMax, rehearseAutoAck:
+			default:
 				if rehearsalsTriggered {
 					// We don't want to trigger rehearsals more than once per comment
 					continue
@@ -278,7 +285,8 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 					s.reportFailure("unable to determine affected jobs", err, org, repo, user, number, true, logger)
 					continue
 				}
-				if !s.preCheck {
+				requestedOnly := command != rehearseNormal && command != rehearseMore && command != rehearseMax && command != rehearseAutoAck
+				if !requestedOnly && !s.preCheck {
 					// Since we didn't provide a comment about the rehearsable jobs prior to the user selecting to run, list them now
 					jobListComment := strings.Join(s.getJobsTableLines(presubmits, periodics, pullRequest.User.Login), "\n")
 					if err := s.ghc.CreateComment(org, repo, number, jobListComment); err != nil {
@@ -286,9 +294,23 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 					}
 				}
 
+				if requestedOnly {
+					rawJobs := strings.TrimPrefix(command, rehearseNormal+" ")
+					requestedJobs := strings.Split(rawJobs, " ")
+					var unaffected []string
+					presubmits, periodics, unaffected = rehearse.FilterJobsByRequested(requestedJobs, presubmits, periodics, logger)
+					if len(unaffected) > 0 {
+						message := fmt.Sprintf("@%s: job(s): %s either don't exist or were not found to be affected, and cannot be rehearsed", user, strings.Join(unaffected, ", "))
+						if err = s.ghc.CreateComment(org, repo, number, message); err != nil {
+							logger.WithError(err).Error("failed to create comment")
+						}
+					}
+				}
 				if len(presubmits) > 0 || len(periodics) > 0 {
-					limit := rc.NormalLimit
-					if command == rehearseMore {
+					limit := math.MaxInt
+					if command == rehearseNormal || command == rehearseAutoAck {
+						limit = rc.NormalLimit
+					} else if command == rehearseMore {
 						limit = rc.MoreLimit
 					} else if command == rehearseMax {
 						limit = rc.MaxLimit
@@ -329,14 +351,14 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 	}
 }
 
-func (s *server) getAffectedJobs(pullRequest *github.PullRequest, logger *logrus.Entry) (config.Presubmits, config.Periodics, *rehearse.ConfigMaps, *rehearse.ConfigMaps, error) {
+func (s *server) getAffectedJobs(pullRequest *github.PullRequest, logger *logrus.Entry) (config.Presubmits, config.Periodics, error) {
 	rc := s.rehearsalConfig
 	org := pullRequest.Base.Repo.Owner.Login
 	repo := pullRequest.Base.Repo.Name
 	repoClient, err := s.getRepoClient(org, repo)
 	if err != nil {
 		logger.WithError(err).Error("couldn't create repo client")
-		return nil, nil, nil, nil, fmt.Errorf("couldn't create repo client: %w", err)
+		return nil, nil, fmt.Errorf("couldn't create repo client: %w", err)
 	}
 	defer func() {
 		if err := repoClient.Clean(); err != nil {
@@ -347,13 +369,14 @@ func (s *server) getAffectedJobs(pullRequest *github.PullRequest, logger *logrus
 	candidate, err := s.prepareCandidate(repoClient, pullRequest)
 	if err != nil {
 		logger.WithError(err).Error("couldn't prepare candidate")
-		return nil, nil, nil, nil, fmt.Errorf("couldn't prepare candidate: %w", err)
+		return nil, nil, fmt.Errorf("couldn't prepare candidate: %w", err)
 	}
 
 	//TODO(DPTP-2888): this is the point at which we can use repoClient.RevParse() to see if we even need to load the configs at all, and also prune the set of loaded configs to only the changed files
 
 	candidatePath := repoClient.Directory()
-	return rc.DetermineAffectedJobs(candidate, candidatePath, logger)
+	presubmits, periodics, _, _, err := rc.DetermineAffectedJobs(candidate, candidatePath, logger)
+	return presubmits, periodics, err
 }
 
 func (s *server) reportFailure(message string, err error, org, repo, user string, number int, addContact bool, l *logrus.Entry) {
@@ -447,6 +470,7 @@ func (s *server) getUsageDetailsLines() []string {
 		"",
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals", rehearseNormal, rc.NormalLimit),
 		fmt.Sprintf("Comment: `%s` to opt-out of rehearsals", rehearseSkip),
+		fmt.Sprintf("Comment: `%s {test-name}`, with each test separated by a space, to run one or more specific rehearsals", rehearseNormal),
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals", rehearseMore, rc.MoreLimit),
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals", rehearseMax, rc.MaxLimit),
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals, and add the `%s` label on success", rehearseAutoAck, rc.NormalLimit, rehearse.RehearsalsAckLabel),

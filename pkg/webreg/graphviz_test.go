@@ -6,6 +6,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/testhelper"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 func TestChainDotFile(t *testing.T) {
@@ -13,31 +14,48 @@ func TestChainDotFile(t *testing.T) {
 	install := "ipi-install-install"
 	gather := "ipi-deprovision-must-gather"
 	deprovision := "ipi-deprovision-deprovision"
-	for _, tc := range []struct {
-		name  string
-		chain api.RegistryChain
-	}{{
-		name: "ipi-install",
-		chain: api.RegistryChain{
-			As: "ipi-install",
+	installChain := "ipi-install"
+	deprovisionChain := "ipi-deprovision"
+	chainOfChains := "chain-of-chains"
+	chains := registry.ChainByName{
+		installChain: api.RegistryChain{
+			As: installChain,
 			Steps: []api.TestStep{
 				{Reference: &rbac},
 				{Reference: &install},
 			},
 		},
-	}, {
-		name: "ipi-deprovision",
-		chain: api.RegistryChain{
-			As: "ipi-deprovision",
+		deprovisionChain: api.RegistryChain{
+			As: deprovisionChain,
 			Steps: []api.TestStep{
 				{Reference: &gather},
 				{Reference: &deprovision},
 			},
 		},
+	}
+	for _, tc := range []struct {
+		name  string
+		chain api.RegistryChain
+	}{{
+		name: installChain,
+		chain: chains[installChain],
+	}, {
+		name: deprovisionChain,
+		chain: chains[deprovisionChain],
+	}, {
+		name: chainOfChains,
+		chain: api.RegistryChain{
+			As: chainOfChains,
+			Steps: []api.TestStep{
+				{Chain: &installChain},
+				{Chain: &deprovisionChain},
+			},
+		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			chains := registry.ChainByName{tc.chain.As: tc.chain}
-			actual := chainDotFile(tc.chain.As, chains)
+			c := util.CopyMap(chains)
+			c[tc.chain.As] = tc.chain
+			actual := chainDotFile(tc.chain.As, c)
 			testhelper.CompareWithFixture(t, actual)
 		})
 	}
@@ -50,17 +68,24 @@ func TestWorkflowDotFile(t *testing.T) {
 	install := "ipi-install-install"
 	gather := "ipi-deprovision-must-gather"
 	deprovision := "ipi-deprovision-deprovision"
+	chainOfChains := "chain-of-chains"
 	chains := registry.ChainByName{
-		"ipi-install": {
+		installChain: {
 			Steps: []api.TestStep{
 				{Reference: &rbac},
 				{Reference: &install},
 			},
 		},
-		"ipi-deprovision": {
+		deprovisionChain: {
 			Steps: []api.TestStep{
 				{Reference: &gather},
 				{Reference: &deprovision},
+			},
+		},
+		chainOfChains: {
+			Steps: []api.TestStep{
+				{Chain: &installChain},
+				{Chain: &deprovisionChain},
 			},
 		},
 	}
@@ -68,10 +93,46 @@ func TestWorkflowDotFile(t *testing.T) {
 		name     string
 		workflow api.MultiStageTestConfiguration
 	}{{
+		name:     "empty",
+		workflow: api.MultiStageTestConfiguration{},
+	}, {
 		name: "ipi",
 		workflow: api.MultiStageTestConfiguration{
 			Pre:  []api.TestStep{{Chain: &installChain}},
 			Post: []api.TestStep{{Chain: &deprovisionChain}},
+		},
+	}, {
+		name: "empty-phase",
+		workflow: api.MultiStageTestConfiguration{
+			Pre: []api.TestStep{{
+				LiteralTestStep: &api.LiteralTestStep{As: "pre"},
+			}},
+			Post: []api.TestStep{{
+				LiteralTestStep: &api.LiteralTestStep{As: "post"},
+			}},
+		},
+	}, {
+		name: "step-to-chain",
+		workflow: api.MultiStageTestConfiguration{
+			Pre: []api.TestStep{
+				{Reference: &deprovision},
+				{Chain: &installChain},
+			},
+		},
+	}, {
+		name: "chain-to-step",
+		workflow: api.MultiStageTestConfiguration{
+			Pre: []api.TestStep{
+				{Chain: &installChain},
+				{Reference: &deprovision},
+			},
+		},
+	}, {
+		name: "chain-of-chains",
+		workflow: api.MultiStageTestConfiguration{
+			Pre: []api.TestStep{
+				{Chain: &chainOfChains},
+			},
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {

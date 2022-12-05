@@ -294,7 +294,7 @@ func TestInlineCiopConfig(t *testing.T) {
 	resolver := registry.NewResolver(references, chains, workflows, observers)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			testLoggers := Loggers{logrus.New(), logrus.New()}
+			logger := logrus.NewEntry(logrus.New())
 			if tc.command == "" {
 				tc.command = "ci-operator"
 			}
@@ -305,7 +305,7 @@ func TestInlineCiopConfig(t *testing.T) {
 			job := makePresubmit(tc.command, tc.sourceEnv, args)
 			expectedJob := makePresubmit(tc.command, tc.expectedEnv, args)
 
-			imageStreamTags, err := inlineCiOpConfig(&job.Spec.Containers[0], configs, resolver, tc.metadata, tc.testname, testLoggers)
+			imageStreamTags, err := inlineCiOpConfig(&job.Spec.Containers[0], configs, resolver, tc.metadata, tc.testname, logger)
 
 			if tc.expectedError && err == nil {
 				t.Fatalf("Expected inlineCiopConfig() to return an error, none returned")
@@ -560,7 +560,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 	resolver := registry.NewResolver(references, chains, workflows, observers)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			testLoggers := Loggers{logrus.New(), logrus.New()}
+			logger := logrus.NewEntry(logrus.New())
 			client := newTC()
 			client.createReactors = append(client.createReactors,
 				func(in runtime.Object) error {
@@ -573,13 +573,13 @@ func TestExecuteJobsErrors(t *testing.T) {
 				setSuccessCreateReactor,
 			)
 
-			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, logger, nil, nil, makeBaseRefs())
 
 			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, client, testNamespace)
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, logger, client, testNamespace)
 			executor.pollFunc = threetimesTryingPoller
 			_, err = executor.ExecuteJobs()
 
@@ -630,7 +630,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 	resolver := registry.NewResolver(references, chains, workflows, observers)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			testLoggers := Loggers{logrus.New(), logrus.New()}
+			logger := logrus.NewEntry(logrus.New())
 			client := newTC()
 			client.createReactors = append(client.createReactors,
 				func(in runtime.Object) error {
@@ -640,12 +640,12 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 				},
 			)
 
-			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, logger, nil, nil, makeBaseRefs())
 			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, false, testLoggers, client, testNamespace)
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, false, logger, client, testNamespace)
 			executor.pollFunc = threetimesTryingPoller
 			success, _ := executor.ExecuteJobs()
 
@@ -748,7 +748,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 	resolver := registry.NewResolver(references, chains, workflows, observers)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			testLoggers := Loggers{logrus.New(), logrus.New()}
+			logger := logrus.NewEntry(logrus.New())
 			client := newTC()
 			client.createReactors = append(client.createReactors, setSuccessCreateReactor)
 
@@ -761,7 +761,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 							targetOrgRepo: targetOrgRepoPrefix,
 						}},
 				}}
-			jc := NewJobConfigurer(testCiopConfigs, &pc, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, &pc, resolver, testPrNumber, logger, nil, nil, makeBaseRefs())
 			imageStreamTags, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
@@ -769,7 +769,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 			if diff := cmp.Diff(imageStreamTags, tc.expectedImageStreamTagMap, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("returned imageStreamTags do not match expected: %s", diff)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, client, testNamespace)
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, logger, client, testNamespace)
 			success, err := executor.ExecuteJobs()
 
 			if err != nil {
@@ -803,7 +803,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 }
 
 func TestWaitForJobs(t *testing.T) {
-	loggers := Loggers{logrus.New(), logrus.New()}
+	logger := logrus.NewEntry(logrus.New())
 	pjSuccess0 := pjapi.ProwJob{
 		ObjectMeta: metav1.ObjectMeta{Name: "success0"},
 		Status:     pjapi.ProwJobStatus{State: pjapi.SuccessState},
@@ -873,7 +873,7 @@ func TestWaitForJobs(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			client := newTC(tc.events...)
 
-			executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, loggers, client, "")
+			executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logger, client, "")
 			executor.pollFunc = threetimesTryingPoller
 			success, err := executor.waitForJobs(tc.pjs, &ctrlruntimeclient.ListOptions{})
 			if err != tc.err {
@@ -902,7 +902,7 @@ func TestWaitForJobsRetries(t *testing.T) {
 		return nil
 	})
 
-	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, Loggers{logrus.New(), logrus.New()}, client, "")
+	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logrus.NewEntry(logrus.New()), client, "")
 	executor.pollFunc = threetimesTryingPoller
 	success, err := executor.waitForJobs(sets.String{"j": {}}, &ctrlruntimeclient.ListOptions{})
 	if err != nil {
@@ -914,9 +914,7 @@ func TestWaitForJobsRetries(t *testing.T) {
 }
 
 func TestWaitForJobsLog(t *testing.T) {
-	jobLogger, jobHook := logrustest.NewNullLogger()
-	dbgLogger, dbgHook := logrustest.NewNullLogger()
-	dbgLogger.SetLevel(logrus.DebugLevel)
+	logger, hook := logrustest.NewNullLogger()
 	client := fakectrlruntimeclient.NewFakeClient(
 		&pjapi.ProwJob{
 			ObjectMeta: metav1.ObjectMeta{Name: "success"},
@@ -925,9 +923,8 @@ func TestWaitForJobsLog(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: "failure"},
 			Status:     pjapi.ProwJobStatus{State: pjapi.FailureState}},
 	)
-	loggers := Loggers{jobLogger, dbgLogger}
 
-	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, loggers, client, "")
+	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logger.WithFields(nil), client, "")
 	executor.pollFunc = threetimesTryingPoller
 	_, err := executor.waitForJobs(sets.NewString("success", "failure"), &ctrlruntimeclient.ListOptions{})
 	if err != nil {
@@ -946,10 +943,8 @@ func TestWaitForJobsLog(t *testing.T) {
 		}
 	}
 	successState, failureState := pjapi.SuccessState, pjapi.FailureState
-	check(jobHook, "success", logrus.InfoLevel, &successState)
-	check(jobHook, "failure", logrus.ErrorLevel, &failureState)
-	check(dbgHook, "success", logrus.DebugLevel, nil)
-	check(dbgHook, "failure", logrus.DebugLevel, nil)
+	check(hook, "success", logrus.InfoLevel, &successState)
+	check(hook, "failure", logrus.ErrorLevel, &failureState)
 }
 
 func TestFilterPresubmits(t *testing.T) {

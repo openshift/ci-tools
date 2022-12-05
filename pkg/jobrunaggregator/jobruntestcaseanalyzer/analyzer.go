@@ -42,6 +42,7 @@ type testCaseAnalyzerJobGetter struct {
 	infrastructure  string
 	network         string
 	excludeJobNames sets.String
+	includeJobNames sets.String
 	jobGCSPrefixes  *[]jobGCSPrefix
 	ciDataClient    jobrunaggregatorlib.CIDataClient
 }
@@ -88,7 +89,11 @@ func (s *testCaseAnalyzerJobGetter) filterJobsForPayload(allJobs []jobrunaggrega
 			continue
 		}
 
-		if s.isJobNameFiltered(job.JobName) {
+		if !s.isJobNameIncluded(job.JobName) {
+			continue
+		}
+
+		if s.isJobNameExcluded(job.JobName) {
 			continue
 		}
 
@@ -97,7 +102,23 @@ func (s *testCaseAnalyzerJobGetter) filterJobsForPayload(allJobs []jobrunaggrega
 	return jobs
 }
 
-func (s *testCaseAnalyzerJobGetter) isJobNameFiltered(jobName string) bool {
+// isJobNameIncluded checks to see the job name contains all strings defined in includeJobNames
+func (s *testCaseAnalyzerJobGetter) isJobNameIncluded(jobName string) bool {
+
+	if s.includeJobNames == nil {
+		return true
+	}
+
+	for key := range s.includeJobNames {
+		if !strings.Contains(jobName, key) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (s *testCaseAnalyzerJobGetter) isJobNameExcluded(jobName string) bool {
 
 	if s.excludeJobNames == nil {
 		return false

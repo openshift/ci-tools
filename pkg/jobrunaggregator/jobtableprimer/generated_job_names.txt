@@ -294,6 +294,7 @@ release-openshift-ocp-osd-gcp-nightly-4.12
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-main-periodics.yaml
+periodic-ci-openshift-hypershift-main-periodics-4.12-conformance-agent-ovn
 periodic-ci-openshift-hypershift-main-periodics-4.12-conformance-aws-ovn
 periodic-ci-openshift-hypershift-main-periodics-4.12-conformance-aws-ovn-proxy
 periodic-ci-openshift-hypershift-main-periodics-4.12-conformance-mce-aws-ovn

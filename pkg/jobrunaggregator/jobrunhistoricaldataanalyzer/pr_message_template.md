@@ -12,7 +12,7 @@ There were (`{{len .AddedJobs}}`) added jobs and (`{{len .MissingJobs}}`) were r
 
 ### Comparisons were above allowed leeway of `{{.Leeway}}`
 
-Note: {{.DataType}} had `{{.IncreasedCount}}` jobs increased and `{{.DecreasedCount}}` jobs decreased.
+Note: For P99, {{.DataType}} had `{{.IncreasedCount}}` jobs increased and `{{.DecreasedCount}}` jobs decreased.
 
 <details>
   <summary>Click To Show Table</summary>

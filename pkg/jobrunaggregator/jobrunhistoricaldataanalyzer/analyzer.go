@@ -118,9 +118,9 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 // compareAndUpdate This will compare the recently pulled information and compare it to the currently existing data.
 // We run our comparison by first checking if we are in a newReleaseEvent, meaning master is now pointing on a new release, then we clean out the current data and generate the results new.
 //
-// If we're in a normal cycle, we then run through our regular comparisons, the primary one being P99.
-// We check if the old P99 value is higher than the new by calculating the time difference and the percentage difference.
-// If a new value is higher AND the percent difference is higher than the leeway desired, we count that as an increase and record it as part of the results,
+// If we're in a normal cycle, we then run through our regular comparisons, for P95 and P99 (we only count jobs for P95).
+// We check if the old P95 and/or P99 values are higher, than the new, by calculating the time difference and the percentage difference.
+// If a new value is higher AND the percent difference is higher than the leeway desired, we count (for P95 only) that as an increase and record it as part of the results,
 // we also record the decreases.
 //
 // Once we've completed recording the results of the compare, we then do a check to see which jobs were removed and we make a note of those jobs to present.
@@ -130,8 +130,8 @@ func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentD
 	if newReleaseEvent {
 		currentData = make(map[string]jobrunaggregatorapi.HistoricalData, 0)
 	}
-	increaseCount := 0
-	decreaseCount := 0
+	increaseCountP99 := 0
+	decreaseCountP99 := 0
 	results := []parsedJobData{}
 	added := []string{}
 	for key, new := range newData {
@@ -142,11 +142,12 @@ func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentD
 		}
 
 		newP99 := getDurationFromString(new.GetP99())
-		newP95 := getDurationFromString(new.GetP99())
+		newP95 := getDurationFromString(new.GetP95())
 		d := parsedJobData{}
 
 		// If the current data contains the new data, check and record the time diff
 		if old, ok := currentData[key]; ok {
+			oldP95 := getDurationFromString(old.GetP95())
 			oldP99 := getDurationFromString(old.GetP99())
 
 			d.HistoricalData = new
@@ -154,19 +155,29 @@ func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentD
 			d.DurationP95 = newP95
 			d.JobResults = new.GetJobRuns()
 
-			timeDiff := newP99 - oldP99
-			percentDiff := 0.0
-			if oldP99 != 0 {
-				percentDiff = (float64(timeDiff) / float64(oldP99)) * 100
+			timeDiffP95 := newP95 - oldP95
+			timeDiffP99 := newP99 - oldP99
+			percentDiffP95 := 0.0
+			if oldP95 != 0 {
+				percentDiffP95 = (float64(timeDiffP95) / float64(oldP95)) * 100
 			}
-			if newP99 > oldP99 && percentDiff > o.leeway {
-				increaseCount += 1
-				d.TimeDiff = timeDiff
-				d.PercentTimeDiff = percentDiff
+			percentDiffP99 := 0.0
+			if oldP99 != 0 {
+				percentDiffP99 = (float64(timeDiffP99) / float64(oldP99)) * 100
+			}
+			if newP95 > oldP95 && percentDiffP95 > o.leeway {
+				d.TimeDiffP95 = timeDiffP95
+				d.PercentTimeDiffP95 = percentDiffP95
+				d.PrevP95 = oldP95
+			}
+			if newP99 > oldP99 && percentDiffP99 > o.leeway {
+				increaseCountP99 += 1
+				d.TimeDiffP99 = timeDiffP99
+				d.PercentTimeDiffP99 = percentDiffP99
 				d.PrevP99 = oldP99
 			}
 			if newP99 < oldP99 {
-				decreaseCount += 1
+				decreaseCountP99 += 1
 			}
 		} else {
 			d.HistoricalData = new
@@ -194,8 +205,8 @@ func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentD
 	}
 
 	return compareResults{
-		increaseCount:   increaseCount,
-		decreaseCount:   decreaseCount,
+		increaseCount:   increaseCountP99,
+		decreaseCount:   decreaseCountP99,
 		addedJobs:       added,
 		jobs:            results,
 		missingJobs:     missingJobs,

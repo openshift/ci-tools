@@ -296,11 +296,9 @@ release-openshift-ocp-osd-gcp-nightly-4.12
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-main-periodics.yaml
 periodic-ci-openshift-hypershift-main-periodics-4.12-conformance-aws-ovn
 periodic-ci-openshift-hypershift-main-periodics-4.12-conformance-aws-ovn-proxy
-periodic-ci-openshift-hypershift-main-periodics-4.12-conformance-azure-ovn
 periodic-ci-openshift-hypershift-main-periodics-4.12-conformance-mce-aws-ovn
 periodic-ci-openshift-hypershift-main-periodics-4.12-e2e-aws-ovn-periodic-conformance-serial
 periodic-ci-openshift-hypershift-main-periodics-4.12-e2e-aws-periodic
-periodic-ci-openshift-hypershift-main-periodics-4.12-e2e-conformance-kubevirt
 periodic-ci-openshift-hypershift-main-periodics-4.12-e2e-ibmcloud-iks
 periodic-ci-openshift-hypershift-main-periodics-4.12-e2e-ibmcloud-roks
 periodic-ci-openshift-hypershift-main-periodics-4.12-e2e-powervs-periodic

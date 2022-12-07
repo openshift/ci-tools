@@ -302,3 +302,106 @@ func TestDetermineSubsetToRehearse(t *testing.T) {
 		})
 	}
 }
+
+func TestFilterJobsByRequested(t *testing.T) {
+	testCases := []struct {
+		name                   string
+		requested              []string
+		presubmits             config.Presubmits
+		periodics              config.Periodics
+		expectedPresubmits     config.Presubmits
+		expectedPeriodics      config.Periodics
+		expectedUnaffectedJobs []string
+	}{
+		{
+			name:      "one job requested",
+			requested: []string{"presubmit-test"},
+			presubmits: config.Presubmits{
+				"repo": {
+					{JobBase: prowconfig.JobBase{Name: "presubmit-test", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+					{JobBase: prowconfig.JobBase{Name: "some-other-test", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				},
+			},
+			periodics: config.Periodics{
+				"some-periodic": {JobBase: prowconfig.JobBase{Name: "some-periodic", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+			},
+			expectedPresubmits: config.Presubmits{
+				"repo": {
+					{JobBase: prowconfig.JobBase{Name: "presubmit-test", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				},
+			},
+			expectedPeriodics: config.Periodics{},
+		},
+		{
+			name:      "multiple jobs requested",
+			requested: []string{"presubmit-test", "some-periodic"},
+			presubmits: config.Presubmits{
+				"repo": {
+					{JobBase: prowconfig.JobBase{Name: "presubmit-test", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+					{JobBase: prowconfig.JobBase{Name: "some-other-test", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				},
+			},
+			periodics: config.Periodics{
+				"some-periodic": {JobBase: prowconfig.JobBase{Name: "some-periodic", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+			},
+			expectedPresubmits: config.Presubmits{
+				"repo": {
+					{JobBase: prowconfig.JobBase{Name: "presubmit-test", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				},
+			},
+			expectedPeriodics: config.Periodics{
+				"some-periodic": {JobBase: prowconfig.JobBase{Name: "some-periodic", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+			},
+		},
+		{
+			name:      "one unaffected job requested",
+			requested: []string{"non-existent-test"},
+			presubmits: config.Presubmits{
+				"repo": {
+					{JobBase: prowconfig.JobBase{Name: "presubmit-test", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+					{JobBase: prowconfig.JobBase{Name: "some-other-test", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				},
+			},
+			periodics: config.Periodics{
+				"some-periodic": {JobBase: prowconfig.JobBase{Name: "some-periodic", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+			},
+			expectedPresubmits:     config.Presubmits{},
+			expectedPeriodics:      config.Periodics{},
+			expectedUnaffectedJobs: []string{"non-existent-test"},
+		},
+		{
+			name:      "one job and one unaffected job requested",
+			requested: []string{"presubmit-test", "non-existent-test"},
+			presubmits: config.Presubmits{
+				"repo": {
+					{JobBase: prowconfig.JobBase{Name: "presubmit-test", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+					{JobBase: prowconfig.JobBase{Name: "some-other-test", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				},
+			},
+			periodics: config.Periodics{
+				"some-periodic": {JobBase: prowconfig.JobBase{Name: "some-periodic", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+			},
+			expectedPresubmits: config.Presubmits{
+				"repo": {
+					{JobBase: prowconfig.JobBase{Name: "presubmit-test", Labels: map[string]string{config.SourceTypeLabel: "changedPresubmit"}}},
+				},
+			},
+			expectedPeriodics:      config.Periodics{},
+			expectedUnaffectedJobs: []string{"non-existent-test"},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			filteredPresubmits, filteredPeriodics, unaffectedJobs := FilterJobsByRequested(tc.requested, tc.presubmits, tc.periodics, logrus.NewEntry(logrus.StandardLogger()))
+			if diff := cmp.Diff(tc.expectedPresubmits, filteredPresubmits, ignoreUnexported); diff != "" {
+				t.Fatalf("filteredPresubmits don't match expected, diff: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedPeriodics, filteredPeriodics, ignoreUnexported); diff != "" {
+				t.Fatalf("filteredPeriodics don't match expected, diff: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedUnaffectedJobs, unaffectedJobs); diff != "" {
+				t.Fatalf("unaffectedJobs don't match expected, diff: %s", diff)
+			}
+		})
+	}
+}

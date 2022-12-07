@@ -594,3 +594,44 @@ func pjKubeconfig(path string, defaultKubeconfig *rest.Config) (*rest.Config, er
 		&clientcmd.ConfigOverrides{},
 	).ClientConfig()
 }
+
+// FilterJobsByRequested returns only those presubmits and periodics that appear in the requested slice. It also returns a slice of all jobs not found in the original sets.
+func FilterJobsByRequested(requested []string, presubmits config.Presubmits, periodics config.Periodics, logger *logrus.Entry) (config.Presubmits, config.Periodics, []string) {
+	filteredPresubmits, FilteredPeriodics := config.Presubmits{}, config.Periodics{}
+	var unaffected []string
+	for _, requestedJob := range requested {
+		logger.Debugf("requested to run: %s", requestedJob)
+
+		found := false
+		for repo, jobs := range presubmits {
+			for _, job := range jobs {
+				if job.Name == requestedJob {
+					found = true
+					logger.Debugf("presubmit: %s was found to be affected", requestedJob)
+					filteredPresubmits.Add(repo, job, config.ChangedPresubmit)
+					break
+				}
+			}
+			if found {
+				break
+			}
+		}
+
+		if !found {
+			for _, job := range periodics {
+				if job.Name == requestedJob {
+					found = true
+					logger.Debugf("periodic: %s was found to be affected", requestedJob)
+					FilteredPeriodics.Add(job, config.ChangedPeriodic)
+					break
+				}
+			}
+		}
+
+		if !found {
+			unaffected = append(unaffected, requestedJob)
+		}
+	}
+
+	return filteredPresubmits, FilteredPeriodics, unaffected
+}

@@ -114,7 +114,7 @@ func generateTestConfigFiles() config.DataByFilename {
 	}
 }
 
-var ignoreUnexported = cmpopts.IgnoreUnexported(prowconfig.Presubmit{}, prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{})
+var ignoreUnexported = cmpopts.IgnoreUnexported(prowconfig.Presubmit{}, prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{}, prowconfig.Periodic{})
 
 func TestInlineCiopConfig(t *testing.T) {
 	unresolvedConfig := api.ReleaseBuildConfiguration{
@@ -341,7 +341,7 @@ func makeTestingPresubmit(name, context, branch string) *prowconfig.Presubmit {
 				}},
 			},
 		},
-		RerunCommand: "/pj-rehearse",
+		RerunCommand: fmt.Sprintf("/pj-rehearse %s", name),
 		Reporter:     prowconfig.Reporter{Context: context},
 		Brancher: prowconfig.Brancher{Branches: []string{
 			fmt.Sprintf("^%s$", branch),
@@ -456,7 +456,7 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 	}
 }
 
-func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, org, repo, branch, configSpec, jobURLPrefix string) *pjapi.ProwJob {
+func makeTestingProwJob(namespace, rehearseJobName, context, testName string, refs *pjapi.Refs, org, repo, branch, configSpec, jobURLPrefix string) *pjapi.ProwJob {
 	return &pjapi.ProwJob{
 		TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -464,23 +464,23 @@ func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, or
 			Namespace: namespace,
 			Labels: map[string]string{
 				"created-by-prow":       "true",
-				"prow.k8s.io/job":       jobName,
+				"prow.k8s.io/job":       rehearseJobName,
 				"prow.k8s.io/refs.org":  refs.Org,
 				"prow.k8s.io/refs.repo": refs.Repo,
 				"prow.k8s.io/type":      "presubmit",
 				"prow.k8s.io/refs.pull": strconv.Itoa(refs.Pulls[0].Number),
 				Label:                   strconv.Itoa(refs.Pulls[0].Number),
 			},
-			Annotations: map[string]string{"prow.k8s.io/job": jobName},
+			Annotations: map[string]string{"prow.k8s.io/job": rehearseJobName},
 		},
 		Spec: pjapi.ProwJobSpec{
 			Agent:        "kubernetes",
 			Type:         pjapi.PresubmitJob,
-			Job:          jobName,
+			Job:          rehearseJobName,
 			Refs:         refs,
 			Report:       true,
 			Context:      context,
-			RerunCommand: "/pj-rehearse",
+			RerunCommand: fmt.Sprintf("/pj-rehearse %s", testName),
 			ExtraRefs: []pjapi.Refs{
 				{
 					Org:     org,
@@ -692,11 +692,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
+					"job1", testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job2"),
-					testRefs, targetOrg, targetRepo, "master", job2Cfg, targetOrgRepoPrefix).Spec,
+					"job2", testRefs, targetOrg, targetRepo, "master", job2Cfg, targetOrgRepoPrefix).Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		}, {
@@ -709,11 +709,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
+					"job1", testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "not-master", "job2"),
-					testRefs, targetOrg, targetRepo, "not-master", job2Cfg, targetOrgRepoPrefix).Spec,
+					"job2", testRefs, targetOrg, targetRepo, "not-master", job2Cfg, targetOrgRepoPrefix).Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		},
@@ -727,11 +727,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
+					"job1", testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
 					fmt.Sprintf(rehearseJobContextTemplate, anotherTargetOrgRepo, "master", "job2"),
-					testRefs, anotherTargetOrg, anotherTargetRepo, "master", job2Cfg, "https://star.com/").Spec,
+					"job2", testRefs, anotherTargetOrg, anotherTargetRepo, "master", job2Cfg, "https://star.com/").Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		}, {
@@ -1014,7 +1014,7 @@ func makePresubmit(extraLabels map[string]string, hidden bool) *prowconfig.Presu
 			},
 			Hidden: hidden,
 		},
-		RerunCommand: "/pj-rehearse",
+		RerunCommand: "/pj-rehearse pull-ci-organization-repo-master-test",
 		Reporter:     prowconfig.Reporter{Context: "ci/prow/test"},
 		Brancher:     prowconfig.Brancher{Branches: []string{"^master$"}},
 	}

@@ -44,10 +44,8 @@ const (
 	// LabelContext exposes the context the job would have had running normally
 	LabelContext = "ci.openshift.io/rehearse.context"
 
-	defaultRehearsalRerunCommand = "/pj-rehearse"
-	defaultRehearsalTrigger      = `(?m)^/test (?:.*? )?pj-rehearse(?: .*?)?$`
-	logRehearsalJob              = "rehearsal-job"
-	logCiopConfigFile            = "ciop-config-file"
+	logRehearsalJob   = "rehearsal-job"
+	logCiopConfigFile = "ciop-config-file"
 
 	clusterTypeEnvName = "CLUSTER_TYPE"
 )
@@ -166,8 +164,8 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	shortName := contextFor(source)
 	rehearsal.Context = fmt.Sprintf("ci/rehearse/%s%s", ghContext, shortName)
 
-	rehearsal.RerunCommand = defaultRehearsalRerunCommand
-	rehearsal.Trigger = defaultRehearsalTrigger
+	rehearsal.RerunCommand = "/pj-rehearse " + source.Name
+	rehearsal.Trigger = "/pj-rehearse " + source.Name
 	rehearsal.Optional = true
 	if rehearsal.Labels == nil {
 		rehearsal.Labels = map[string]string{}

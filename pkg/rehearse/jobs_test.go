@@ -957,30 +957,39 @@ func TestFilterPresubmits(t *testing.T) {
 	}{
 		{
 			description: "basic presubmit job, allowed",
-			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false)}},
-			expected:    config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false)}},
+			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")}},
+			expected:    config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")}},
 		},
 		{
 			description: "job with no rehearse label, not allowed",
-			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(map[string]string{}, false)}},
+			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-master-test")}},
 			expected:    config.Presubmits{},
 		},
 		{
 			description: "hidden job, not allowed",
-			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, true)}},
+			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, true, "pull-ci-organization-repo-master-test")}},
 			expected:    config.Presubmits{},
 		},
 		{
-			description: "multiple jobs, one allowed",
-			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false), *makePresubmit(map[string]string{}, false)}},
-			expected:    config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false)}},
+			description: "multiple jobs, some allowed",
+			presubmits: config.Presubmits{"org/repo": {
+				*makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-master-test-1"),
+				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-2"),
+				*makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-master-test-3"),
+				*makePresubmit(canBeRehearsed, true, "pull-ci-organization-repo-master-test-4"),
+				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-5")},
+			},
+			expected: config.Presubmits{"org/repo": {
+				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-2"),
+				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-5")},
+			},
 		},
 		{
 			description: "multiple repos, some jobs allowed",
-			presubmits: config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false), *makePresubmit(map[string]string{}, false)},
-				"org/different": {*makePresubmit(canBeRehearsed, false)}},
-			expected: config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false)},
-				"org/different": {*makePresubmit(canBeRehearsed, false)}},
+			presubmits: config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test"), *makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-master-test")},
+				"org/different": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")}},
+			expected: config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")},
+				"org/different": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")}},
 		},
 	}
 	for _, tc := range testCases {
@@ -994,7 +1003,7 @@ func TestFilterPresubmits(t *testing.T) {
 	}
 }
 
-func makePresubmit(extraLabels map[string]string, hidden bool) *prowconfig.Presubmit {
+func makePresubmit(extraLabels map[string]string, hidden bool, name string) *prowconfig.Presubmit {
 	labels := make(map[string]string)
 	if len(extraLabels) > 0 {
 		labels = extraLabels
@@ -1004,7 +1013,7 @@ func makePresubmit(extraLabels map[string]string, hidden bool) *prowconfig.Presu
 	return &prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
 			Agent:  "kubernetes",
-			Name:   "pull-ci-organization-repo-master-test",
+			Name:   name,
 			Labels: labels,
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{{
@@ -1014,7 +1023,7 @@ func makePresubmit(extraLabels map[string]string, hidden bool) *prowconfig.Presu
 			},
 			Hidden: hidden,
 		},
-		RerunCommand: "/pj-rehearse pull-ci-organization-repo-master-test",
+		RerunCommand: fmt.Sprintf("/pj-rehearse %s", name),
 		Reporter:     prowconfig.Reporter{Context: "ci/prow/test"},
 		Brancher:     prowconfig.Brancher{Branches: []string{"^master$"}},
 	}

@@ -195,26 +195,30 @@ func contextFor(source *prowconfig.Presubmit) string {
 
 func filterPresubmits(changedPresubmits *config.Presubmits, logger logrus.FieldLogger) {
 	for repo, jobs := range *changedPresubmits {
-		for i, job := range jobs {
+		index := 0
+		for index < len(jobs) {
+			job := jobs[index]
 			jobLogger := logger.WithFields(logrus.Fields{"repo": repo, "job": job.Name})
 
 			if job.Hidden {
-				jobLogger.Warn("hidden jobs are not allowed to be rehearsed")
-				jobs = append(jobs[:i], jobs[i+1:]...)
+				jobLogger.Debug("hidden jobs are not allowed to be rehearsed")
+				jobs = append(jobs[:index], jobs[index+1:]...)
 				continue
 			}
 
 			if !hasRehearsableLabel(job.Labels) {
-				jobLogger.Warnf("job is not allowed to be rehearsed. Label %s is required", jobconfig.CanBeRehearsedLabel)
-				jobs = append(jobs[:i], jobs[i+1:]...)
+				jobLogger.Debugf("job is not allowed to be rehearsed. Label %s is required", jobconfig.CanBeRehearsedLabel)
+				jobs = append(jobs[:index], jobs[index+1:]...)
 				continue
 			}
 
 			if len(job.Branches) == 0 {
-				jobLogger.Warn("cannot rehearse jobs with no branches")
-				jobs = append(jobs[:i], jobs[i+1:]...)
+				jobLogger.Debug("cannot rehearse jobs with no branches")
+				jobs = append(jobs[:index], jobs[index+1:]...)
 				continue
 			}
+			// Only increment the index when the job hasn't been removed from the slice
+			index++
 		}
 
 		// Get rid of the originals so we can update in-place

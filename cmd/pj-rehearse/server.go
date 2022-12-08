@@ -340,7 +340,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 					if autoAckMode && success {
 						s.acknowledgeRehearsals(org, repo, number, logger)
 					}
-				} else {
+				} else if !requestedOnly {
 					s.acknowledgeRehearsals(org, repo, number, logger)
 					if err = s.ghc.CreateComment(org, repo, number, fmt.Sprintf("@%s: no rehearsable tests are affected by this change", user)); err != nil {
 						logger.WithError(err).Error("failed to create comment")

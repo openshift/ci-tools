@@ -162,15 +162,12 @@ git add \
 			"ipi-conf-aws": &testNode{"chain/ipi-conf-aws"},
 			"ipi-conf-gcp": &testNode{"chain/ipi-conf-gcp"},
 		},
-		// TODO create observer field
-		// Observers: map[string]registry.Node{
-		// 	"observer-test": &testNode{"observer/test"},
-		// },
+		Observers: map[string]registry.Node{
+			"observer-test": &testNode{"observer/test"},
+		},
 		References: map[string]registry.Node{
-			"ipi-conf-aws": &testNode{"ref/ipi-conf-aws"},
-			"ipi-conf-gcp": &testNode{"ref/ipi-conf-gcp"},
-			// TODO create observer field
-			"observer-test":      &testNode{"observer/test"},
+			"ipi-conf-aws":       &testNode{"ref/ipi-conf-aws"},
+			"ipi-conf-gcp":       &testNode{"ref/ipi-conf-gcp"},
 			"openshift-e2e-test": &testNode{"ref/openshift-e2e-test"},
 		},
 		Workflows: map[string]registry.Node{

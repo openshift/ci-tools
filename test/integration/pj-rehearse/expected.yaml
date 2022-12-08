@@ -1624,4 +1624,316 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/context: ci/rehearse/uses/observer/master/test-with-changed-observer
+      prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-observer
+    creationTimestamp: null
+    labels:
+      ci.openshift.io/generator: prowgen
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: test-with-changed-observer
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedRegistryContent
+      prow.k8s.io/context: test-with-changed-observer
+      prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-ob
+      prow.k8s.io/refs.base_ref: master
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: test-prowjob
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/uses/observer/master/test-with-changed-observer
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        job_url_prefix: https://openshift-gce-devel.appspot.com/build/
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      skip_cloning: true
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: uses
+      repo: observer
+      workdir: true
+    job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-observer
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --report-credentials-file=/etc/report/credentials
+        - --target=test-with-changed-observer
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          value: H4sIAAAAAAAC/1SPwWrDMBBE7/6KwZdAQYde9TNmI09sgyW5u+sWQj8+OFECPmn3aTSaUVrdNdFiB1y+LscBKH92mttrA9K2R/TffecvGiAWcSzhb/E5pFnKxDHUq1F/qR2wLk6VdTDn1nzSuptTh03rbVkZ0fdP/n7VZAGp5ixltIj/FgAf1sBNa45o/zZWJDN+3ML58lT0jc4tT03v92FioYpzHDJdRnE5lFeVkuYWvurUJuVWn+MjAAD//9q+PeZSAQAA
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
+    refs:
+      base_ref: master
+      base_sha: test_sha
+      org: openshift
+      pulls:
+      - author: username
+        number: 1234
+        sha: test_sha
+      repo: release
+    report: true
+    rerun_command: /pj-rehearse pull-ci-uses-observer-master-test-with-changed-observer
+    type: presubmit
+  status:
+    startTime: 2020-06-22T22:25:00Z
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/context: ci/rehearse/uses/observer/master/test-with-changed-observer-commands
+      prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-observer-commands
+    creationTimestamp: null
+    labels:
+      ci.openshift.io/generator: prowgen
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: test-with-changed-observer-commands
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedRegistryContent
+      prow.k8s.io/context: test-with-changed-observer-com
+      prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-ob
+      prow.k8s.io/refs.base_ref: master
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: test-prowjob
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/uses/observer/master/test-with-changed-observer-commands
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        job_url_prefix: https://openshift-gce-devel.appspot.com/build/
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      skip_cloning: true
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: uses
+      repo: observer
+      workdir: true
+    job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-observer-commands
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --report-credentials-file=/etc/report/credentials
+        - --target=test-with-changed-observer-commands
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          value: H4sIAAAAAAAC/1SPwWrEMAxE7/kKkctCwYde/TNB68wmgdhOJbmFpR9fkih092JrBnk8T6C1SYLGjuj2cdsvIsFXg5qeiihtLVL/2Xd2uoFYI+0i/Cw2hzRzmTCGelfINySkmjOXUTuidTEIr4MaNg9Ma1ODDJvUx7IiUt8f/vXc1wJdMZF+vQmR/+X6ITXH43SjcEak/yLe7KXQCfiCfVnvzG/cz+cwoUDYMA4ZxiMb75t34ZJmJ6gy+STY6jH+BQAA//++qiZfYAEAAA==
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
+    refs:
+      base_ref: master
+      base_sha: test_sha
+      org: openshift
+      pulls:
+      - author: username
+        number: 1234
+        sha: test_sha
+      repo: release
+    report: true
+    rerun_command: /pj-rehearse pull-ci-uses-observer-master-test-with-changed-observer-commands
+    type: presubmit
+  status:
+    startTime: 2020-06-22T22:25:00Z
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/context: ci/rehearse/uses/observer/master/test-with-changed-observer-workflow
+      prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-observer-workflow
+    creationTimestamp: null
+    labels:
+      ci.openshift.io/generator: prowgen
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: test-with-changed-observer-workflow
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedRegistryContent
+      prow.k8s.io/context: test-with-changed-observer-wor
+      prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-ob
+      prow.k8s.io/refs.base_ref: master
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: test-prowjob
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/uses/observer/master/test-with-changed-observer-workflow
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        job_url_prefix: https://openshift-gce-devel.appspot.com/build/
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      skip_cloning: true
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: uses
+      repo: observer
+      workdir: true
+    job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-observer-workflow
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --report-credentials-file=/etc/report/credentials
+        - --target=test-with-changed-observer-workflow
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          value: H4sIAAAAAAAC/yyMS2rGMAwG9z6F8CZQ8KJbX8YozpcHdWNXkhvI6X/yWGlGDJ9Aa5cMjY5o+BquQyT461DTx4hy65H8t3f2fAOxRrokHJutIa+8L5hCHRXyDwlHlZ+51MMRlc0gXJIa2juYS1eDpCZ13goiee/OMy3YIWyY0i+MJza+8lF4z+vdEFVZXhK0euMnAAD//2+y4PrCAAAA
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
+    refs:
+      base_ref: master
+      base_sha: test_sha
+      org: openshift
+      pulls:
+      - author: username
+        number: 1234
+        sha: test_sha
+      repo: release
+    report: true
+    rerun_command: /pj-rehearse pull-ci-uses-observer-master-test-with-changed-observer-workflow
+    type: presubmit
+  status:
+    startTime: 2020-06-22T22:25:00Z
+    state: triggered
 

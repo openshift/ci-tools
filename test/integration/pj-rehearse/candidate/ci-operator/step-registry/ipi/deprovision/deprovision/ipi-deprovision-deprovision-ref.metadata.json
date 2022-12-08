@@ -1,0 +1,13 @@
+{
+	"path": "ipi/deprovision/deprovision/ipi-deprovision-deprovision-ref.yaml",
+	"owners": {
+		"approvers": [
+			"petr-muller",
+			"droslean"
+		],
+		"reviewers": [
+			"petr-muller",
+			"droslean"
+		]
+	}
+}

@@ -195,7 +195,7 @@ func loadRegistryStep(filename string, graph registry.NodeByName) (registry.Node
 		node, ok = graph.References[name]
 	case strings.HasSuffix(filename, load.ObserverSuffix):
 		type_, name = "observer", strings.TrimSuffix(filename, load.ObserverSuffix)
-		node, ok = graph.References[name]
+		node, ok = graph.Observers[name]
 	case strings.HasSuffix(filename, load.ChainSuffix):
 		type_, name = "chain", strings.TrimSuffix(filename, load.ChainSuffix)
 		node, ok = graph.Chains[name]
@@ -205,7 +205,9 @@ func loadRegistryStep(filename string, graph registry.NodeByName) (registry.Node
 	case strings.Contains(filename, load.CommandsSuffix):
 		extension := filepath.Ext(filename)
 		type_, name = "ref", strings.TrimSuffix(filename[0:len(filename)-len(extension)], load.CommandsSuffix)
-		node, ok = graph.References[name]
+		if node, ok = graph.References[name]; !ok {
+			node, ok = graph.Observers[name]
+		}
 	default:
 		return nil, fmt.Errorf("invalid step registry filename: %s", filename)
 	}
@@ -215,7 +217,7 @@ func loadRegistryStep(filename string, graph registry.NodeByName) (registry.Node
 	return node, nil
 }
 
-// GetChangedRegistrySteps identifies all registry components (refs, chains, and workflows) that changed.
+// GetChangedRegistrySteps identifies all registry components that changed.
 func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) ([]registry.Node, error) {
 	var changes []registry.Node
 	revChanges, err := getRevChanges(path, RegistryPath, baseRev, false)

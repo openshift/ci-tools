@@ -22,6 +22,7 @@ const (
 	aggregatorPrefix = "aggregator-"
 
 	runsURL   = "/runs/"
+	docURL    = "https://docs.ci.openshift.org/docs/release-oversight/payload-testing/"
 	bodyStart = `
 <div class="container">`
 	pageEnd = `
@@ -48,6 +49,7 @@ const (
 <h1>{{ .ObjectMeta.Namespace }}/{{ .ObjectMeta.Name }}</h1>
 
 <p class="text-right">{{ returnLink }}</p>
+<p class="text-right">{{ documentationLink }}</p>
 
 Created: {{ .ObjectMeta.CreationTimestamp }} 
 
@@ -197,6 +199,9 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 	tmpl.Funcs(template.FuncMap{
 		"returnLink": func() template.HTML {
 			return template.HTML(fmt.Sprintf(`<a href="%s">%s</a>`, runsURL, "back to runs"))
+		},
+		"documentationLink": func() template.HTML {
+			return template.HTML(fmt.Sprintf(`<a href="%s" target="_blank">%s</a>`, docURL, "documentation"))
 		},
 		"prLink": func(pr *prpqv1.PullRequestUnderTest) template.HTML {
 			org := template.HTMLEscapeString(pr.Org)

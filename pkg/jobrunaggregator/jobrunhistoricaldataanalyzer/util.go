@@ -131,7 +131,7 @@ func formatTableOutput(data []parsedJobData, filter bool) string {
 	buffer.WriteString("| Name | Release | From | Arch | Network | Platform | Topology | Job Results | P95 | P95 % Increase | P99 | P99 % Increase |\n")
 	buffer.WriteString("| ---- | ------- | ---- | ---- | ------- | -------- |--------- | ----------- | --- | -------------- | --- | -------------- |\n")
 	for _, d := range data {
-		if d.TimeDiffP95 == 0 && filter {
+		if d.TimeDiffP99 == 0 && filter {
 			continue
 		}
 		buffer.WriteString(

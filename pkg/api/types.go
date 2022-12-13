@@ -1201,6 +1201,7 @@ const (
 	ClusterProfilePacketAssisted        ClusterProfile = "packet-assisted"
 	ClusterProfilePacketSNO             ClusterProfile = "packet-sno"
 	ClusterProfileVSphere               ClusterProfile = "vsphere"
+	ClusterProfileVSphere8              ClusterProfile = "vsphere-8"
 	ClusterProfileVSphereDiscon         ClusterProfile = "vsphere-discon"
 	ClusterProfileVSphereClusterbot     ClusterProfile = "vsphere-clusterbot"
 	ClusterProfileVSpherePlatformNone   ClusterProfile = "vsphere-platform-none"
@@ -1287,6 +1288,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfilePacketAssisted,
 		ClusterProfilePacketSNO,
 		ClusterProfileVSphere,
+		ClusterProfileVSphere8,
 		ClusterProfileVSphereClusterbot,
 		ClusterProfileVSphereDiscon,
 		ClusterProfileVSphereMultizone,
@@ -1401,6 +1403,7 @@ func (p ClusterProfile) ClusterType() string {
 		return "openstack-operators-vexxhost"
 	case
 		ClusterProfileVSphere,
+		ClusterProfileVSphere8,
 		ClusterProfileVSphereDiscon,
 		ClusterProfileVSphereClusterbot,
 		ClusterProfileVSpherePlatformNone,
@@ -1549,6 +1552,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "packet-edge-quota-slice"
 	case ClusterProfileVSphere:
 		return "vsphere-quota-slice"
+	case ClusterProfileVSphere8:
+		return "vsphere-8-quota-slice"
 	case ClusterProfileVSphereDiscon:
 		return "vsphere-discon-quota-slice"
 	case ClusterProfileVSphereClusterbot:
@@ -1620,6 +1625,7 @@ func (p ClusterProfile) Secret() string {
 		ClusterProfileGCPLoggingCRIO,
 		ClusterProfileGCPLoggingJSONFile,
 		ClusterProfileGCPLoggingJournald,
+		ClusterProfileVSphere8,
 		ClusterProfileVSphereClusterbot,
 		ClusterProfileVSphereDiscon,
 		ClusterProfileVSphereConnected,

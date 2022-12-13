@@ -402,6 +402,12 @@ func main() {
 		}
 	}
 
+	if o.PrometheusOptions.PrometheusBearerTokenPath != "" {
+		if err := secret.Add(o.PrometheusOptions.PrometheusBearerTokenPath); err != nil {
+			logrus.WithError(err).Fatal("Failed to start secrets agent")
+		}
+	}
+
 	promClient, err := o.PrometheusOptions.NewPrometheusClient(secret.GetSecret)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create prometheus client.")

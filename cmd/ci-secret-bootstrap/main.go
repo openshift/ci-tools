@@ -518,8 +518,8 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 					errs = append(errs, fmt.Errorf("failed to mutate secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 				} else {
 					if mutated {
-						if _, err := secretClient.Update(context.TODO(), secret, metav1.UpdateOptions{DryRun: dryRunOptions}); err != nil {
-							errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
+						if _, err := secretClient.Update(context.TODO(), existingSecret, metav1.UpdateOptions{DryRun: dryRunOptions}); err != nil {
+							errs = append(errs, fmt.Errorf("error updating global pull secret %s:%s/%s: %w", cluster, existingSecret.Namespace, existingSecret.Name, err))
 						}
 						logger.Debug("global pull secret updated")
 					} else {
@@ -583,6 +583,7 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 	return utilerrors.NewAggregate(errs)
 }
 
+// mutateGlobalPullSecret mutates the original secret based on the refreshed value stored in another secret.
 func mutateGlobalPullSecret(original, secret *coreapi.Secret) (bool, error) {
 	dockerConfig, err := dockerConfigJSON(secret)
 	if err != nil {

@@ -2990,29 +2990,6 @@ func TestMutateGlobalPullSecret(t *testing.T) {
 			expectedErr: fmt.Errorf("failed to parse the original secret: failed to get content from nil secret"),
 		},
 		{
-			name: "bad original",
-			secret: &coreapi.Secret{
-				Data: map[string][]byte{
-					".dockerconfigjson": []byte(`{
-	"auths": {
-		"a": {
-			"auth": "foo",
-			"email": "e"
-		},
-		"registry.ci.openshift.org": {
-			"auth": "cool"
-		},
-		"c": {
-			"auth": "bar",
-			"email": "g"
-		}
-	}
-}`),
-				},
-			},
-			expectedErr: fmt.Errorf("failed to parse the original secret: failed to get content from nil secret"),
-		},
-		{
 			name: "basic case: expired auth is replaced",
 			secret: &coreapi.Secret{
 				Data: map[string][]byte{
@@ -3047,12 +3024,14 @@ func TestMutateGlobalPullSecret(t *testing.T) {
 	}
 }`),
 				},
+				Type: coreapi.SecretTypeDockerConfigJson,
 			},
 			expected: true,
 			mutatedSecret: &coreapi.Secret{
 				Data: map[string][]byte{
 					".dockerconfigjson": []byte("{\"auths\":{\"osd\":{\"auth\":\"foo\",\"email\":\"e\"},\"registry.ci.openshift.org\":{\"auth\":\"cool\"}}}"),
 				},
+				Type: coreapi.SecretTypeDockerConfigJson,
 			},
 		},
 		{
@@ -3125,12 +3104,14 @@ func TestMutateGlobalPullSecret(t *testing.T) {
 	}
 }`),
 				},
+				Type: coreapi.SecretTypeDockerConfigJson,
 			},
 			expected: true,
 			mutatedSecret: &coreapi.Secret{
 				Data: map[string][]byte{
 					".dockerconfigjson": []byte("{\"auths\":{\"osd\":{\"auth\":\"foo\",\"email\":\"e\"},\"registry.ci.openshift.org\":{\"auth\":\"cool\"}}}"),
 				},
+				Type: coreapi.SecretTypeDockerConfigJson,
 			},
 		},
 	}

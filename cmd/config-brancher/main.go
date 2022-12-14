@@ -18,7 +18,8 @@ import (
 type options struct {
 	promotion.FutureOptions
 
-	BumpRelease string
+	BumpRelease   string
+	skipPeriodics bool
 }
 
 func (o *options) Validate() error {
@@ -38,6 +39,7 @@ func (o *options) Bind(fs *flag.FlagSet) {
 func gatherOptions() options {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	fs.BoolVar(&o.skipPeriodics, "skip-periodics", false, "Do not duplicate periodics configuration for the current and future releases.")
 	o.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
@@ -70,7 +72,7 @@ func main() {
 
 	var toCommit []config.DataWithInfo
 	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, api.WithOKD, func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
-		for _, output := range generateBranchedConfigs(o.CurrentRelease, o.BumpRelease, o.FutureReleases.Strings(), config.DataWithInfo{Configuration: *configuration, Info: *info}) {
+		for _, output := range generateBranchedConfigs(o.CurrentRelease, o.BumpRelease, o.FutureReleases.Strings(), config.DataWithInfo{Configuration: *configuration, Info: *info}, o.skipPeriodics) {
 			if !o.Confirm {
 				output.Logger().Info("Would commit new file.")
 				continue
@@ -96,7 +98,7 @@ func main() {
 	}
 }
 
-func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases []string, input config.DataWithInfo) []config.DataWithInfo {
+func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases []string, input config.DataWithInfo, skipPeriodics bool) []config.DataWithInfo {
 	var output []config.DataWithInfo
 	input.Logger().Info("Branching configuration.")
 	currentConfig := input.Configuration
@@ -139,11 +141,23 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 		updateImages(&futureConfig, devRelease, futureRelease)
 		// we need to make sure this relates to the right branch
 		futureConfig.Metadata.Branch = futureBranch
+		if skipPeriodics {
+			removePeriodics(&futureConfig.Tests)
+		}
 
 		// this config will promote to the new location on the release branch
 		output = append(output, config.DataWithInfo{Configuration: futureConfig, Info: copyInfoSwappingBranches(input.Info, futureBranch)})
 	}
 	return output
+}
+
+// removePeriodics removes periodic tests from the configuration
+func removePeriodics(tests *[]api.TestStepConfiguration) {
+	for i := len(*tests) - 1; i >= 0; i-- {
+		if !(*tests)[i].Portable && ((*tests)[i].Cron != nil || (*tests)[i].Interval != nil) {
+			*tests = append((*tests)[:i], (*tests)[i+1:]...)
+		}
+	}
 }
 
 // updateRelease updates the release that is promoted to and that

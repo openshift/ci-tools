@@ -77,9 +77,9 @@ func TestEndpoint(t *testing.T) {
 				Product:      api.ReleaseProductOCP,
 				Architecture: api.ReleaseArchitectureAMD64,
 				Stream:       api.ReleaseStreamCI,
-				Version:      "4.5",
+				Version:      "4.11",
 			},
-			output: "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.5.0-0.ci/latest",
+			output: "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.11.0-0.ci/latest",
 		},
 		{
 			input: api.Candidate{

@@ -973,6 +973,7 @@ func TestFilterPresubmits(t *testing.T) {
 		{
 			description: "multiple jobs, some allowed",
 			presubmits: config.Presubmits{"org/repo": {
+				*makePresubmit(canBeRehearsed, true, "pull-ci-organization-repo-master-test-0"),
 				*makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-master-test-1"),
 				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-2"),
 				*makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-master-test-3"),
@@ -994,8 +995,8 @@ func TestFilterPresubmits(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			filterPresubmits(&tc.presubmits, logrus.New())
-			if diff := cmp.Diff(tc.expected, tc.presubmits, cmp.AllowUnexported(prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{}, prowconfig.Presubmit{})); diff != "" {
+			presubmits := filterPresubmits(tc.presubmits, logrus.New())
+			if diff := cmp.Diff(tc.expected, presubmits, cmp.AllowUnexported(prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{}, prowconfig.Presubmit{})); diff != "" {
 				t.Fatalf("filtered didn't match expected, diff: %s", diff)
 			}
 		})
@@ -1039,30 +1040,30 @@ func TestFilterPeriodics(t *testing.T) {
 	}{
 		{
 			description: "basic periodic job, allowed",
-			periodics:   config.Periodics{"org/repo": *makePeriodic(canBeRehearsed, false)},
-			expected:    config.Periodics{"org/repo": *makePeriodic(canBeRehearsed, false)},
+			periodics:   config.Periodics{"periodic-test": *makePeriodic(canBeRehearsed, false)},
+			expected:    config.Periodics{"periodic-test": *makePeriodic(canBeRehearsed, false)},
 		},
 		{
 			description: "job with no rehearse label, not allowed",
-			periodics:   config.Periodics{"org/repo": *makePeriodic(map[string]string{}, false)},
+			periodics:   config.Periodics{"periodic-test": *makePeriodic(map[string]string{}, false)},
 			expected:    config.Periodics{},
 		},
 		{
 			description: "hidden job, not allowed",
-			periodics:   config.Periodics{"org/repo": *makePeriodic(canBeRehearsed, true)},
+			periodics:   config.Periodics{"periodic-test": *makePeriodic(canBeRehearsed, true)},
 			expected:    config.Periodics{},
 		},
 		{
 			description: "multiple repos, some jobs allowed",
-			periodics: config.Periodics{"org/repo": *makePeriodic(canBeRehearsed, false),
-				"org/different": *makePeriodic(map[string]string{}, false)},
-			expected: config.Periodics{"org/repo": *makePeriodic(canBeRehearsed, false)},
+			periodics: config.Periodics{"periodic-test": *makePeriodic(canBeRehearsed, false),
+				"other-test": *makePeriodic(map[string]string{}, false)},
+			expected: config.Periodics{"periodic-test": *makePeriodic(canBeRehearsed, false)},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			filterPeriodics(tc.periodics, logrus.New())
-			if diff := cmp.Diff(tc.expected, tc.periodics, cmp.AllowUnexported(prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{}, prowconfig.Periodic{})); diff != "" {
+			periodics := filterPeriodics(tc.periodics, logrus.New())
+			if diff := cmp.Diff(tc.expected, periodics, cmp.AllowUnexported(prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{}, prowconfig.Periodic{})); diff != "" {
 				t.Fatalf("filtered didn't match expected, diff: %s", diff)
 			}
 		})

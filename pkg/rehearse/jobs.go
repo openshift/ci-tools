@@ -194,59 +194,53 @@ func contextFor(source *prowconfig.Presubmit) string {
 
 }
 
-func filterPresubmits(changedPresubmits *config.Presubmits, logger logrus.FieldLogger) {
-	for repo, jobs := range *changedPresubmits {
-		index := 0
-		for index < len(jobs) {
-			job := jobs[index]
+func filterPresubmits(changedPresubmits config.Presubmits, logger logrus.FieldLogger) config.Presubmits {
+	presubmits := config.Presubmits{}
+	for repo, jobs := range changedPresubmits {
+		for _, job := range jobs {
 			jobLogger := logger.WithFields(logrus.Fields{"repo": repo, "job": job.Name})
 
 			if job.Hidden {
 				jobLogger.Debug("hidden jobs are not allowed to be rehearsed")
-				jobs = append(jobs[:index], jobs[index+1:]...)
 				continue
 			}
 
 			if !hasRehearsableLabel(job.Labels) {
 				jobLogger.Debugf("job is not allowed to be rehearsed. Label %s is required", jobconfig.CanBeRehearsedLabel)
-				jobs = append(jobs[:index], jobs[index+1:]...)
 				continue
 			}
 
 			if len(job.Branches) == 0 {
 				jobLogger.Debug("cannot rehearse jobs with no branches")
-				jobs = append(jobs[:index], jobs[index+1:]...)
 				continue
 			}
-			// Only increment the index when the job hasn't been removed from the slice
-			index++
-		}
 
-		// Get rid of the originals so we can update in-place
-		delete(*changedPresubmits, repo)
-
-		for _, job := range jobs {
-			changedPresubmits.Add(repo, job, config.GetSourceType(job.Labels))
+			presubmits.Add(repo, job, config.GetSourceType(job.Labels))
 		}
 	}
+
+	return presubmits
 }
 
-func filterPeriodics(changedPeriodics config.Periodics, logger logrus.FieldLogger) {
-	for key, periodic := range changedPeriodics {
+func filterPeriodics(changedPeriodics config.Periodics, logger logrus.FieldLogger) config.Periodics {
+	periodics := config.Periodics{}
+	for _, periodic := range changedPeriodics {
 		jobLogger := logger.WithField("job", periodic.Name)
 
 		if periodic.Hidden {
 			jobLogger.Warn("hidden jobs are not allowed to be rehearsed")
-			delete(changedPeriodics, key)
 			continue
 		}
 
 		if !hasRehearsableLabel(periodic.Labels) {
 			jobLogger.Warnf("job is not allowed to be rehearsed. Label %s is required", jobconfig.CanBeRehearsedLabel)
-			delete(changedPeriodics, key)
 			continue
 		}
+
+		periodics.Add(periodic, config.GetSourceType(periodic.Labels))
 	}
+
+	return periodics
 }
 
 func hasRehearsableLabel(labels map[string]string) bool {

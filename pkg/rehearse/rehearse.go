@@ -141,15 +141,9 @@ func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, can
 	}
 
 	presubmits := config.Presubmits{}
+	presubmits.AddAll(diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger), config.ChangedPresubmit)
 	periodics := config.Periodics{}
-
-	changedPeriodics := diffs.GetChangedPeriodics(masterConfig.Prow, prConfig.Prow, logger)
-	filterPeriodics(changedPeriodics, logger)
-	periodics.AddAll(changedPeriodics, config.ChangedPeriodic)
-
-	changedPresubmits := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
-	filterPresubmits(&changedPresubmits, logger)
-	presubmits.AddAll(changedPresubmits, config.ChangedPresubmit)
+	periodics.AddAll(diffs.GetChangedPeriodics(masterConfig.Prow, prConfig.Prow, logger), config.ChangedPeriodic)
 
 	// We can only detect changes if we managed to load both ci-operator config versions
 	if masterConfig.CiOperator != nil && prConfig.CiOperator != nil {
@@ -190,7 +184,7 @@ func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, can
 		presubmits.AddAll(presubmitsForClusterProfiles, config.ChangedClusterProfile)
 	}
 
-	return presubmits, periodics, changedTemplates, changedClusterProfiles, nil
+	return filterPresubmits(presubmits, logger), filterPeriodics(periodics, logger), changedTemplates, changedClusterProfiles, nil
 }
 
 func (r RehearsalConfig) SetupJobs(candidate RehearsalCandidate, candidatePath string, presubmits config.Presubmits, periodics config.Periodics, rehearsalTemplates, rehearsalClusterProfiles *ConfigMaps, limit int, logger *logrus.Entry) (*config.ReleaseRepoConfig, *pjapi.Refs, apihelper.ImageStreamTagMap, []*prowconfig.Presubmit, error) {

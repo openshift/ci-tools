@@ -825,6 +825,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            cluster_profile: ' '\n" +
 	"        # Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.\n" +
 	"        optional: true\n" +
+	"        # Portable allows to port periodic tests to current and future release despite the demand to skip periodics\n" +
+	"        portable: true\n" +
 	"        # Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit\n" +
 	"        postsubmit: true\n" +
 	"        # ReleaseController configures prowgen to create a periodic that\n" +
@@ -1605,6 +1607,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        cluster_profile: ' '\n" +
 	"      # Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.\n" +
 	"      optional: true\n" +
+	"      # Portable allows to port periodic tests to current and future release despite the demand to skip periodics\n" +
+	"      portable: true\n" +
 	"      # Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit\n" +
 	"      postsubmit: true\n" +
 	"      # ReleaseController configures prowgen to create a periodic that\n" +

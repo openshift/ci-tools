@@ -703,6 +703,9 @@ type TestStepConfiguration struct {
 	// Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.
 	Optional bool `json:"optional,omitempty"`
 
+	// Portable allows to port periodic tests to current and future release despite the demand to skip periodics
+	Portable bool `json:"portable,omitempty"`
+
 	// SkipIfOnlyChanged is a regex that will result in the test being skipped if all changed files match that regex.
 	SkipIfOnlyChanged string `json:"skip_if_only_changed,omitempty"`
 

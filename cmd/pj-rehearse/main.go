@@ -15,6 +15,7 @@ import (
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
+	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/githubeventserver"
 	"k8s.io/test-infra/prow/interrupts"
@@ -48,6 +49,7 @@ type options struct {
 	githubEventServerOptions githubeventserver.Options
 	github                   prowflagutil.GitHubOptions
 	git                      prowflagutil.GitOptions
+	config                   configflagutil.ConfigOptions
 }
 
 func gatherOptions() (options, error) {
@@ -73,6 +75,7 @@ func gatherOptions() (options, error) {
 
 	o.github.AddFlags(fs)
 	o.githubEventServerOptions.Bind(fs)
+	o.config.AddFlags(fs)
 	o.dryRunOptions.bind(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -89,12 +92,13 @@ func (o *options) validate() error {
 	}
 	logrus.SetLevel(level)
 
-	errs = append(errs, o.kubernetesOptions.Validate(o.dryRun))
-	errs = append(errs, o.githubEventServerOptions.DefaultAndValidate())
-	errs = append(errs, o.github.Validate(o.dryRun))
-
 	if o.dryRun {
 		errs = append(errs, o.dryRunOptions.validate())
+	} else {
+		errs = append(errs, o.githubEventServerOptions.DefaultAndValidate())
+		errs = append(errs, o.github.Validate(o.dryRun))
+		errs = append(errs, o.config.Validate(o.dryRun))
+		errs = append(errs, o.kubernetesOptions.Validate(o.dryRun))
 	}
 
 	return utilerrors.NewAggregate(errs)
@@ -104,12 +108,14 @@ type dryRunOptions struct {
 	dryRunPath     string
 	pullRequestVar string
 	limit          int
+	testNamespace  string
 }
 
 func (o *dryRunOptions) bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.dryRunPath, "dry-run-path", "", "Path to a openshift/release working copy with a revision to be tested")
 	fs.StringVar(&o.pullRequestVar, "pull-request-var", "PR", "Name of ENV var containing the PullRequest JSON")
 	fs.IntVar(&o.limit, "limit", 20, "Upper limit of jobs attempted to rehearse")
+	fs.StringVar(&o.testNamespace, "test-namespace", "test-namespace", "The namespace to use for prowjobs AND pods")
 }
 
 func (o *dryRunOptions) validate() error {
@@ -134,11 +140,14 @@ func rehearsalConfigFromOptions(o options) rehearse.RehearsalConfig {
 }
 
 func dryRun(o options, logger *logrus.Entry) error {
-	rc := rehearsalConfigFromOptions(o)
 	dro := o.dryRunOptions
+	rc := rehearsalConfigFromOptions(o)
+	rc.ProwjobNamespace = dro.testNamespace
+	rc.PodNamespace = dro.testNamespace
+
 	prEnv, ok := os.LookupEnv(dro.pullRequestVar)
 	if !ok {
-		logrus.Fatalf("couldn't get PR from env")
+		logrus.Fatal("couldn't get PR from env")
 	}
 	pr := &github.PullRequest{}
 	if err := json.Unmarshal([]byte(prEnv), pr); err != nil {
@@ -163,7 +172,7 @@ func dryRun(o options, logger *logrus.Entry) error {
 			return fmt.Errorf("%s: %w", "ERROR: pj-rehearse: failed to validate rehearsal jobs", err)
 		}
 
-		_, err := rc.RehearseJobs(candidate, candidatePath, prConfig, prRefs, imageStreamTags, presubmitsToRehearse, changedTemplates, changedClusterProfiles, logger)
+		_, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, presubmitsToRehearse, changedTemplates, changedClusterProfiles, logger)
 		return err
 	}
 

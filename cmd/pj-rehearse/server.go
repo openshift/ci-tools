@@ -29,6 +29,7 @@ const (
 	rehearseReject     = "/pj-rehearse reject"
 	rehearseRefresh    = "/pj-rehearse refresh"
 	rehearseAutoAck    = "/pj-rehearse auto-ack"
+	rehearseAbort      = "/pj-rehearse abort"
 )
 
 var commentRegex = regexp.MustCompile(`(?m)^/pj-rehearse\f*.*$`)
@@ -107,6 +108,12 @@ func (s *server) helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, e
 		WhoCanUse:   "Anyone can use on trusted PRs",
 		Examples:    []string{rehearseAutoAck},
 	})
+	pluginHelp.AddCommand(pluginhelp.Command{
+		Usage:       rehearseAbort,
+		Description: "Abort all active rehearsal jobs for the PR",
+		WhoCanUse:   "Anyone can use on trusted PRs",
+		Examples:    []string{rehearseAbort},
+	})
 	return pluginHelp, nil
 }
 
@@ -122,11 +129,21 @@ func serverFromOptions(o options) (*server, error) {
 		return nil, fmt.Errorf("error creating git client: %w", err)
 	}
 
+	configAgent, err := o.config.ConfigAgent()
+	if err != nil {
+		return nil, fmt.Errorf("error creating configAgent: %w", err)
+	}
+	c := configAgent.Config()
+
+	rehearsalConfig := rehearsalConfigFromOptions(o)
+	rehearsalConfig.ProwjobNamespace = c.ProwJobNamespace
+	rehearsalConfig.PodNamespace = c.PodNamespace
+
 	return &server{
 		ghc:             ghc,
 		gc:              gc,
 		preCheck:        o.preCheck,
-		rehearsalConfig: rehearsalConfigFromOptions(o),
+		rehearsalConfig: rehearsalConfig,
 	}, nil
 }
 
@@ -252,6 +269,8 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 				if err := s.ghc.CreateComment(org, repo, number, comment); err != nil {
 					logger.WithError(err).Error("failed to create comment")
 				}
+			case rehearseAbort:
+				s.rehearsalConfig.AbortAllRehearsalJobs(org, repo, number, logger)
 			default:
 				if rehearsalsTriggered {
 					// We don't want to trigger rehearsals more than once per comment
@@ -329,7 +348,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 						continue
 					}
 
-					success, err := rc.RehearseJobs(candidate, candidatePath, prConfig, prRefs, imageStreamTags, presubmitsToRehearse, changedTemplates, changedClusterProfiles, logger)
+					success, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, presubmitsToRehearse, changedTemplates, changedClusterProfiles, logger)
 					if err != nil {
 						logger.WithError(err).Error("couldn't rehearse jobs")
 						s.reportFailure("failed to create rehearsal jobs", err, org, repo, user, number, true, logger)
@@ -474,6 +493,7 @@ func (s *server) getUsageDetailsLines() []string {
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals", rehearseMore, rc.MoreLimit),
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals", rehearseMax, rc.MaxLimit),
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals, and add the `%s` label on success", rehearseAutoAck, rc.NormalLimit, rehearse.RehearsalsAckLabel),
+		fmt.Sprintf("Comment: `%s` to abort all active rehearsals", rehearseAbort),
 		fmt.Sprintf("Comment: `%s` to get an updated list of affected jobs (useful if you have new pushes to the branch)", rehearseRefresh),
 		"",
 		fmt.Sprintf("Once you are satisfied with the results of the rehearsals, comment: `%s` to unblock merge. When the `%s` label is present on your PR, merge will no longer be blocked by rehearsals.", rehearseAck, rehearse.RehearsalsAckLabel),

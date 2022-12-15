@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,7 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/github"
+	kube "k8s.io/test-infra/prow/kube"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -47,6 +49,9 @@ const (
 type RehearsalConfig struct {
 	ProwjobKubeconfig string
 	KubernetesOptions flagutil.KubernetesOptions
+
+	ProwjobNamespace string
+	PodNamespace     string
 
 	NoTemplates       bool
 	NoRegistry        bool
@@ -254,23 +259,54 @@ func (r RehearsalConfig) createResolver(candidatePath string) (registry.Resolver
 	return resolver, nil
 }
 
-// RehearseJobs returns true if the jobs were triggered and succeed
-func (r RehearsalConfig) RehearseJobs(candidate RehearsalCandidate, candidatePath string, prConfig *config.ReleaseRepoConfig, prRefs *pjapi.Refs, imageStreamTags apihelper.ImageStreamTagMap, presubmitsToRehearse []*prowconfig.Presubmit, rehearsalTemplates, rehearsalClusterProfiles *ConfigMaps, logger *logrus.Entry) (bool, error) {
-	buildClusterConfigs := map[string]rest.Config{}
-	var prowJobConfig *rest.Config
-	if !r.DryRun {
-		var err error
-		buildClusterConfigs, err = r.KubernetesOptions.LoadClusterConfigs()
-		if err != nil {
-			logger.WithError(err).Fatal("failed to read kubeconfigs")
-		}
-		defaultKubeconfig := buildClusterConfigs[appCIContextName]
-		prowJobConfig, err = pjKubeconfig(r.ProwjobKubeconfig, &defaultKubeconfig)
-		if err != nil {
-			logger.WithError(err).Fatal("Could not load prowjob kubeconfig")
-		}
+func (r RehearsalConfig) AbortAllRehearsalJobs(org, repo string, number int, logger *logrus.Entry) {
+	_, prowJobConfig := r.getBuildClusterAndProwJobConfigs(logger)
+	pjclient, err := NewProwJobClient(prowJobConfig, r.DryRun)
+	if err != nil {
+		logger.WithError(err).Fatal("could not create a ProwJob client")
 	}
 
+	selector := labelSelectorForRehearsalJobs(org, repo, number)
+	jobs := &pjapi.ProwJobList{}
+	err = pjclient.List(context.TODO(), jobs, selector, ctrlruntimeclient.InNamespace(r.ProwjobNamespace))
+	if err != nil {
+		logger.WithError(err).Error("failed to list prowjobs for pr")
+	}
+	logger.Debugf("found %d prowjob(s) to abort", len(jobs.Items))
+
+	for _, job := range jobs.Items {
+		// Do not abort jobs that already completed
+		if job.Complete() {
+			continue
+		}
+		logger.Debugf("aborting prowjob: %s", job.Name)
+		job.Status.State = prowapi.AbortedState
+		// We use Update and not Patch here, because we are not the authority of the .Status.State field
+		// and must not overwrite changes made to it in the interim by the responsible agent.
+		// The accepted trade-off for now is that this leads to failure if unrelated fields where changed
+		// by another different actor.
+		if err = pjclient.Update(context.TODO(), &job); err != nil && !apierrors.IsConflict(err) {
+			logger.WithError(err).Errorf("failed to abort prowjob: %s", job.Name)
+		} else {
+			logger.Debugf("aborted prowjob: %s", job.Name)
+		}
+	}
+}
+
+func labelSelectorForRehearsalJobs(org, repo string, prNumber int) ctrlruntimeclient.ListOption {
+	number := strconv.Itoa(prNumber)
+	return ctrlruntimeclient.MatchingLabels{
+		kube.OrgLabel:         org,
+		kube.RepoLabel:        repo,
+		kube.PullLabel:        number,
+		kube.ProwJobTypeLabel: string(prowapi.PresubmitJob),
+		Label:                 number,
+	}
+}
+
+// RehearseJobs returns true if the jobs were triggered and succeed
+func (r RehearsalConfig) RehearseJobs(candidate RehearsalCandidate, candidatePath string, prRefs *pjapi.Refs, imageStreamTags apihelper.ImageStreamTagMap, presubmitsToRehearse []*prowconfig.Presubmit, rehearsalTemplates, rehearsalClusterProfiles *ConfigMaps, logger *logrus.Entry) (bool, error) {
+	buildClusterConfigs, prowJobConfig := r.getBuildClusterAndProwJobConfigs(logger)
 	pjclient, err := NewProwJobClient(prowJobConfig, r.DryRun)
 	if err != nil {
 		logger.WithError(err).Fatal("could not create a ProwJob client")
@@ -287,9 +323,9 @@ func (r RehearsalConfig) RehearseJobs(candidate RehearsalCandidate, candidatePat
 		candidate.prNumber,
 		buildClusterConfigs,
 		logger,
-		prConfig.Prow.ProwJobNamespace,
+		r.ProwjobNamespace,
 		pjclient,
-		prConfig.Prow.PodNamespace,
+		r.PodNamespace,
 		configUpdaterCfg,
 		candidatePath,
 		r.DryRun,
@@ -304,7 +340,7 @@ func (r RehearsalConfig) RehearseJobs(candidate RehearsalCandidate, candidatePat
 		defer cleanup()
 	}
 
-	executor := NewExecutor(presubmitsToRehearse, candidate.prNumber, candidatePath, prRefs, r.DryRun, logger, pjclient, prConfig.Prow.ProwJobNamespace)
+	executor := NewExecutor(presubmitsToRehearse, candidate.prNumber, candidatePath, prRefs, r.DryRun, logger, pjclient, r.ProwjobNamespace)
 	success, err := executor.ExecuteJobs()
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")
@@ -316,6 +352,25 @@ func (r RehearsalConfig) RehearseJobs(candidate RehearsalCandidate, candidatePat
 	}
 
 	return success, utilerrors.NewAggregate(errs)
+}
+
+func (r RehearsalConfig) getBuildClusterAndProwJobConfigs(logger *logrus.Entry) (map[string]rest.Config, *rest.Config) {
+	buildClusterConfigs := map[string]rest.Config{}
+	var prowJobConfig *rest.Config
+	if !r.DryRun {
+		var err error
+		buildClusterConfigs, err = r.KubernetesOptions.LoadClusterConfigs()
+		if err != nil {
+			logger.WithError(err).Fatal("failed to read kubeconfigs")
+		}
+		defaultKubeconfig := buildClusterConfigs[appCIContextName]
+		prowJobConfig, err = pjKubeconfig(r.ProwjobKubeconfig, &defaultKubeconfig)
+		if err != nil {
+			logger.WithError(err).Fatal("Could not load prowjob kubeconfig")
+		}
+	}
+
+	return buildClusterConfigs, prowJobConfig
 }
 
 func determineChangedTemplates(candidate, baseSHA, headSHA string, prNumber int, configUpdaterCfg prowplugins.ConfigUpdater, logger *logrus.Entry) (*ConfigMaps, error) {

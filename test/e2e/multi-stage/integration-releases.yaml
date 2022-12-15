@@ -8,11 +8,11 @@ releases:
     candidate:
       product: ocp
       stream: nightly
-      version: "4.5"
+      version: "4.11"
   latest:
     integration:
       namespace: ocp
-      name: "4.7"
+      name: "4.13"
 resources:
   '*':
     requests:
@@ -22,14 +22,14 @@ tests:
     steps:
       test:
         - as: initial
-          commands: grep -q '4.5' <<<"$( cluster-version-operator version )"
+          commands: grep -q '4.11' <<<"$( cluster-version-operator version )"
           from: "release:initial"
           resources:
             requests:
               cpu: 10m
               memory: 10Mi
         - as: initial-cli
-          commands: grep -q '4.5' <<<"$( oc version )"
+          commands: grep -q '4.11' <<<"$( oc version )"
           from: "stable-initial:cli"
           resources:
             requests:

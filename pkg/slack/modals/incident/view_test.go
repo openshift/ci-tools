@@ -101,9 +101,9 @@ func TestProcessSubmissionHandler(t *testing.T) {
 The bootstrap node auto-approver is down for the fiftieth time.
 
 ||Name||Link||
-|Slack Incident Channel|[#secret|https://coreos.slack.com/archives/C01B31AT7K4]|
+|Slack Incident Channel|[#secret|https://redhat-internal.slack.com/archives/C01B31AT7K4]|
 |Tracking Bugzilla Bug(s)|https://bugzilla.redhat.com/show_bug.cgi?id=123123123213123|
-|SME Name|[The Dude|https://coreos.slack.com/team/U01AZU9H0BF]|
+|SME Name|[The Dude|https://redhat-internal.slack.com/team/U01AZU9H0BF]|
 
 h3. Impact
 Nodes are not ready and no jobs run.
@@ -147,9 +147,9 @@ func TestIssueParameters(t *testing.T) {
 The bootstrap node auto-approver is down for the fiftieth time.
 
 ||Name||Link||
-|Slack Incident Channel|[channel|https://coreos.slack.com/archives/C01B31AT7K4]|
+|Slack Incident Channel|[channel|https://redhat-internal.slack.com/archives/C01B31AT7K4]|
 |Tracking Bugzilla Bug(s)|https://bugzilla.redhat.com/show_bug.cgi?id=123123123213123|
-|SME Name|[user profile|https://coreos.slack.com/team/U01AZU9H0BF]|
+|SME Name|[user profile|https://redhat-internal.slack.com/team/U01AZU9H0BF]|
 
 h3. Impact
 Nodes are not ready and no jobs run.
@@ -164,9 +164,9 @@ So surprising!`,
 The bootstrap node auto-approver is down for the fiftieth time.
 
 ||Name||Link||
-|Slack Incident Channel|[#secret|https://coreos.slack.com/archives/C01B31AT7K5]|
+|Slack Incident Channel|[#secret|https://redhat-internal.slack.com/archives/C01B31AT7K5]|
 |Tracking Bugzilla Bug(s)|https://bugzilla.redhat.com/show_bug.cgi?id=123123123213123|
-|SME Name|[The Dude|https://coreos.slack.com/team/U01AZU9H0BG]|
+|SME Name|[The Dude|https://redhat-internal.slack.com/team/U01AZU9H0BG]|
 
 h3. Impact
 Nodes are not ready and no jobs run.

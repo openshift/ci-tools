@@ -97,7 +97,7 @@ func TestResolveRequester(t *testing.T) {
 				},
 			},
 			reporter:       "skuznets",
-			expectedSuffix: "Slack user [Steve Kuznetsov|https://coreos.slack.com/team/slackIdentifier]",
+			expectedSuffix: "Slack user [Steve Kuznetsov|https://redhat-internal.slack.com/team/slackIdentifier]",
 			expectedUser:   &jira.User{AccountID: "jiraIdentifier"},
 		},
 		{
@@ -118,7 +118,7 @@ func TestResolveRequester(t *testing.T) {
 				botUser: &jira.User{AccountID: "jiraBotIdentifier"},
 			},
 			reporter:       "skuznets",
-			expectedSuffix: "Slack user [Steve Kuznetsov|https://coreos.slack.com/team/slackIdentifier]",
+			expectedSuffix: "Slack user [Steve Kuznetsov|https://redhat-internal.slack.com/team/slackIdentifier]",
 			expectedUser:   &jira.User{AccountID: "jiraBotIdentifier"},
 		},
 		{
@@ -139,7 +139,7 @@ func TestResolveRequester(t *testing.T) {
 				botUser: &jira.User{AccountID: "jiraBotIdentifier"},
 			},
 			reporter:       "skuznets",
-			expectedSuffix: "Slack user [Steve Kuznetsov|https://coreos.slack.com/team/slackIdentifier]",
+			expectedSuffix: "Slack user [Steve Kuznetsov|https://redhat-internal.slack.com/team/slackIdentifier]",
 			expectedUser:   &jira.User{AccountID: "jiraBotIdentifier"},
 		},
 		{
@@ -154,7 +154,7 @@ func TestResolveRequester(t *testing.T) {
 				botUser: &jira.User{AccountID: "jiraBotIdentifier"},
 			},
 			reporter:       "skuznets",
-			expectedSuffix: "[a Slack user|https://coreos.slack.com/team/skuznets]",
+			expectedSuffix: "[a Slack user|https://redhat-internal.slack.com/team/skuznets]",
 			expectedUser:   &jira.User{AccountID: "jiraBotIdentifier"},
 		},
 	}

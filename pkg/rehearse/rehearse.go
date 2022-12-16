@@ -646,17 +646,21 @@ func pjKubeconfig(path string, defaultKubeconfig *rest.Config) (*rest.Config, er
 
 // FilterJobsByRequested returns only those presubmits and periodics that appear in the requested slice. It also returns a slice of all jobs not found in the original sets.
 func FilterJobsByRequested(requested []string, presubmits config.Presubmits, periodics config.Periodics, logger *logrus.Entry) (config.Presubmits, config.Periodics, []string) {
-	filteredPresubmits, FilteredPeriodics := config.Presubmits{}, config.Periodics{}
+	filteredPresubmits, filteredPeriodics := config.Presubmits{}, config.Periodics{}
 	var unaffected []string
 	for _, requestedJob := range requested {
-		logger.Debugf("requested to run: %s", requestedJob)
+		numChecked := 0
+		logger = logger.WithField("requestedJob", requestedJob)
+		logger.Debug("requested to run")
 
 		found := false
 		for repo, jobs := range presubmits {
 			for _, job := range jobs {
+				numChecked++
+				logger.Tracef("checking against: %s", job.Name)
 				if job.Name == requestedJob {
 					found = true
-					logger.Debugf("presubmit: %s was found to be affected", requestedJob)
+					logger.Debug("presubmit was found to be affected")
 					filteredPresubmits.Add(repo, job, config.ChangedPresubmit)
 					break
 				}
@@ -668,19 +672,24 @@ func FilterJobsByRequested(requested []string, presubmits config.Presubmits, per
 
 		if !found {
 			for _, job := range periodics {
+				numChecked++
+				logger.Tracef("checking against: %s", job.Name)
 				if job.Name == requestedJob {
 					found = true
-					logger.Debugf("periodic: %s was found to be affected", requestedJob)
-					FilteredPeriodics.Add(job, config.ChangedPeriodic)
+					logger.Debug("periodic was found to be affected")
+					filteredPeriodics.Add(job, config.ChangedPeriodic)
 					break
 				}
 			}
 		}
 
 		if !found {
+			logger.Debug("job wasn't found to be affected")
 			unaffected = append(unaffected, requestedJob)
 		}
+
+		logger.Debugf("total number of jobs checked: %d", numChecked)
 	}
 
-	return filteredPresubmits, FilteredPeriodics, unaffected
+	return filteredPresubmits, filteredPeriodics, unaffected
 }

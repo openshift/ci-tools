@@ -73,6 +73,21 @@ func main() {
 		sippyConfig.Releases = make(map[string]v1sippy.ReleaseConfig)
 
 	}
+	for key, release := range sippyConfig.Releases {
+		if release.Jobs == nil {
+			release.Jobs = make(map[string]bool)
+		}
+		if release.Regexp == nil {
+			release.Regexp = make([]string, 0)
+		}
+		if release.BlockingJobs == nil {
+			release.BlockingJobs = make([]string, 0)
+		}
+		if release.InformingJobs == nil {
+			release.InformingJobs = make([]string, 0)
+		}
+		sippyConfig.Releases[key] = release
+	}
 
 	informingJobs := sets.NewString()
 	blockingingJobs := sets.NewString()

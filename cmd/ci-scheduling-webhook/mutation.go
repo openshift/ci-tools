@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	CiBuildNameLabelName     = "openshift.io/build.name"
-	CiNamepsace              = "ci"
-	CiCreatedByProwLabelName = "created-by-prow"
+	CiBuildNameLabelName        = "openshift.io/build.name"
+	CiNamepsace                 = "ci"
+	CiCreatedByProwLabelName    = "created-by-prow"
 	KubernetesHostnameLabelName = "kubernetes.io/hostname"
 )
 
@@ -223,15 +223,15 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 						// value of xxxxxx1m on the end of the millicore value. If found, assume we have
 						// touched this request before and leave it be (instead of reducing it a second
 						// time by the reduction factor).
-						if c.Resources.Requests.Cpu().MilliValue() % 10 == 1 {
+						if c.Resources.Requests.Cpu().MilliValue()%10 == 1 {
 							continue
 						}
 
 						// Apply the reduction factory and add our signature 1 millicore.
-						reduced := int64(float32(c.Resources.Requests.Cpu().MilliValue())*factor) / 10 * 10 + 1
+						reduced := int64(float32(c.Resources.Requests.Cpu().MilliValue())*factor)/10*10 + 1
 
 						newRequests := map[string]interface{}{
-							string(corev1.ResourceCPU):    fmt.Sprintf("%vm", reduced),
+							string(corev1.ResourceCPU): fmt.Sprintf("%vm", reduced),
 						}
 
 						if c.Resources.Requests.Memory().Value() > 0 {
@@ -296,18 +296,20 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		} else {
 			klog.Errorf("No node precludes will be set in pod due to error: %v", err)
 		}
-		
+
 		if podClass == PodClassBuilds {
 			// If this is a build pod, prefer to be scheduled to spot instances for cost efficiency.
 			// If there are no spot instances, this will be ignored.
-			affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = []corev1.PreferredSchedulingTerm {
+			affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = []corev1.PreferredSchedulingTerm{
 				{
 					Weight: 100,
 					Preference: corev1.NodeSelectorTerm{
 						MatchExpressions: []corev1.NodeSelectorRequirement{
 							{
-								Key:      "machine.openshift.io/interruptible-instance",
-								Operator: "Exists",
+								// Prefer spot.io instances that are actual spot instances
+								Key:      "spotinst.io/node-lifecycle",
+								Operator: "In",
+								Values:   []string{"spot"},
 							},
 						},
 					},
@@ -315,7 +317,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 			}
 			affinityChanged = true
 		}
-		
+
 		if affinityChanged {
 			unstructuredAffinity, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&affinity)
 			if err != nil {
@@ -354,9 +356,9 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 			// always be available.
 			delayInitContainer := []corev1.Container{
 				{
-					Name:                     initContainerName,
-					Image:                    "registry.access.redhat.com/ubi8",
-					Command:                  []string{
+					Name:  initContainerName,
+					Image: "registry.access.redhat.com/ubi8",
+					Command: []string{
 						"/bin/sh",
 						"-c",
 						`declare -i T; until [[ "$ret" == "0" ]] || [[ "$T" -gt "120" ]]; do curl http://static.redhat.com/test/rhel-networkmanager.txt > /dev/null; ret=$?; sleep 1; let "T+=1"; done`,
@@ -370,8 +372,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 				},
 			}
 
-
-			initContainersMap := map[string][]corev1.Container {
+			initContainersMap := map[string][]corev1.Container{
 				"initContainers": append(delayInitContainer, initContainers...), // prepend sleep container
 			}
 			unstructedInitContainersMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&initContainersMap)
@@ -504,7 +505,7 @@ func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.Resp
 			// we apply it on first sight of it not being present.
 			// https://github.com/kubernetes/autoscaler/blob/a13c59c2430e5fe0e07d8233a536326394e0c925/cluster-autoscaler/FAQ.md#how-can-i-prevent-cluster-autoscaler-from-scaling-down-a-particular-node
 			escapedKey := strings.ReplaceAll(NodeDisableScaleDownAnnotationKey, "/", "~1")
-			addPatchEntry("add", "/metadata/annotations/" + escapedKey, "true")
+			addPatchEntry("add", "/metadata/annotations/"+escapedKey, "true")
 		}
 	}
 

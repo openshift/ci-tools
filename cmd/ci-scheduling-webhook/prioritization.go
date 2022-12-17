@@ -29,16 +29,16 @@ import (
 type PodClass string
 
 const (
-	PodClassBuilds PodClass = "builds"
-	PodClassTests PodClass = "tests"
+	PodClassBuilds    PodClass = "builds"
+	PodClassTests     PodClass = "tests"
 	PodClassLongTests PodClass = "longtests"
-	PodClassProwJobs PodClass = "prowjobs"
-	PodClassNone PodClass = ""
+	PodClassProwJobs  PodClass = "prowjobs"
+	PodClassNone      PodClass = ""
 
 	// MachineDeleteAnnotationKey When a machine is annotated with this and the machineset is scaled down,
 	// it will target machines with this annotation to satisfy the change.
-	OldMachineDeleteAnnotationKey         = "machine.openshift.io/cluster-api-delete-machine"
-	MachineDeleteAnnotationKey = "machine.openshift.io/delete-machine"
+	OldMachineDeleteAnnotationKey = "machine.openshift.io/cluster-api-delete-machine"
+	MachineDeleteAnnotationKey    = "machine.openshift.io/delete-machine"
 
 	// NodeDisableScaleDownAnnotationKey makes the autoscaler ignore a node for scale down consideration.
 	NodeDisableScaleDownAnnotationKey = "cluster-autoscaler.kubernetes.io/scale-down-disabled"
@@ -60,37 +60,36 @@ const (
 )
 
 var (
-	nodesInformer  cache.SharedIndexInformer
-	podsInformer           cache.SharedIndexInformer
+	nodesInformer      cache.SharedIndexInformer
+	podsInformer       cache.SharedIndexInformer
 	machineSetResource = schema.GroupVersionResource{Group: "machine.openshift.io", Version: "v1beta1", Resource: "machinesets"}
-	machineResource = schema.GroupVersionResource{Group: "machine.openshift.io", Version: "v1beta1", Resource: "machines"}
+	machineResource    = schema.GroupVersionResource{Group: "machine.openshift.io", Version: "v1beta1", Resource: "machines"}
 
 	// If a node name exists in this map, scale down operations are being attempted for it.
-	scalingDownNodesByClass = map[PodClass]*sync.Map {
-		PodClassBuilds: &sync.Map{},
-		PodClassTests: &sync.Map{},
+	scalingDownNodesByClass = map[PodClass]*sync.Map{
+		PodClassBuilds:    &sync.Map{},
+		PodClassTests:     &sync.Map{},
 		PodClassLongTests: &sync.Map{},
-		PodClassProwJobs: &sync.Map{},
+		PodClassProwJobs:  &sync.Map{},
 	}
 	scalingDownAddLock sync.Mutex
 
 	// Locks used to make sure access to machineset and other races are prevented for scale down operations.
-	nodeClassScaleDownLock = map[PodClass]*sync.Mutex {
-		PodClassBuilds: &sync.Mutex{},
-		PodClassTests: &sync.Mutex{},
+	nodeClassScaleDownLock = map[PodClass]*sync.Mutex{
+		PodClassBuilds:    &sync.Mutex{},
+		PodClassTests:     &sync.Mutex{},
 		PodClassLongTests: &sync.Mutex{},
-		PodClassProwJobs: &sync.Mutex{},
+		PodClassProwJobs:  &sync.Mutex{},
 	}
 
 	nodeAvoidanceLock sync.Mutex
 )
 
 type Prioritization struct {
-	context context.Context
-	k8sClientSet *kubernetes.Clientset
+	context       context.Context
+	k8sClientSet  *kubernetes.Clientset
 	dynamicClient dynamic.Interface
 }
-
 
 const IndexPodsByNode = "IndexPodsByNode"
 const IndexNodesByCiWorkload = "IndexNodesByCiWorkload"
@@ -122,7 +121,7 @@ func (p *Prioritization) nodeUpdated(old, new interface{}) {
 	}
 }
 
-func (p* Prioritization) initializePrioritization() error {
+func (p *Prioritization) initializePrioritization() error {
 
 	informerFactory := informers.NewSharedInformerFactory(p.k8sClientSet, 0)
 	nodesInformer = informerFactory.Core().V1().Nodes().Informer()
@@ -182,8 +181,6 @@ func (p* Prioritization) initializePrioritization() error {
 		return fmt.Errorf("unable to create new pod informer index: %v", err)
 	}
 
-
-
 	stopCh := make(chan struct{})
 	informerFactory.Start(stopCh) // runs in background
 	informerFactory.WaitForCacheSync(stopCh)
@@ -198,7 +195,7 @@ func (p* Prioritization) initializePrioritization() error {
 	return nil
 }
 
-func (p* Prioritization) encourageSpotInstances() {
+func (p *Prioritization) encourageSpotInstances() {
 
 	onDemandBuildsMachineSetSelector := CiMachineSetClassLabelKey + "=builds"
 	interruptibleBuildsMachineSetSelector := CiMachineSetClassLabelKey + "=interruptible-builds"
@@ -362,15 +359,14 @@ func (p* Prioritization) encourageSpotInstances() {
 	}
 }
 
-
-func (p* Prioritization) pollNodeClassForScaleDown(podClass PodClass) {
+func (p *Prioritization) pollNodeClassForScaleDown(podClass PodClass) {
 	p.evaluateNodeClassScaleDown(podClass) // just for faster debug
 	for range time.Tick(time.Minute) {
 		p.evaluateNodeClassScaleDown(podClass)
 	}
 }
 
-func (p* Prioritization) isNodeSchedulable(node *corev1.Node) bool {
+func (p *Prioritization) isNodeSchedulable(node *corev1.Node) bool {
 	if node.Spec.Unschedulable {
 		return false
 	}
@@ -386,7 +382,7 @@ func (p* Prioritization) isNodeSchedulable(node *corev1.Node) bool {
 
 // getWorkloadNodes returns all nodes presently available which support a given
 // podClass (workload type).
-func (p* Prioritization) getWorkloadNodes(podClass PodClass, schedulableNodesOnly bool, minNodeAge time.Duration) ([]*corev1.Node, error) {
+func (p *Prioritization) getWorkloadNodes(podClass PodClass, schedulableNodesOnly bool, minNodeAge time.Duration) ([]*corev1.Node, error) {
 	items, err := nodesInformer.GetIndexer().ByIndex(IndexNodesByCiWorkload, string(podClass))
 	if err != nil {
 		return nil, err
@@ -462,7 +458,7 @@ func (p* Prioritization) getWorkloadNodes(podClass PodClass, schedulableNodesOnl
 	return nodes, nil
 }
 
-func (p* Prioritization) isPodActive(pod *corev1.Pod, within time.Duration) bool {
+func (p *Prioritization) isPodActive(pod *corev1.Pod, within time.Duration) bool {
 	active := pod.Status.Phase == corev1.PodPending || pod.Status.Phase == corev1.PodRunning
 	if !active {
 		if len(pod.Finalizers) > 0 {
@@ -484,8 +480,7 @@ func (p* Prioritization) isPodActive(pod *corev1.Pod, within time.Duration) bool
 	return active
 }
 
-
-func (p* Prioritization) getPodsUsingNode(nodeName string, classedPodsOnly bool, activeWithin time.Duration) ([]*corev1.Pod, error) {
+func (p *Prioritization) getPodsUsingNode(nodeName string, classedPodsOnly bool, activeWithin time.Duration) ([]*corev1.Pod, error) {
 	items, err := podsInformer.GetIndexer().ByIndex(IndexPodsByNode, nodeName)
 	if err != nil {
 		return nil, err
@@ -510,7 +505,7 @@ func (p* Prioritization) getPodsUsingNode(nodeName string, classedPodsOnly bool,
 	return pods, nil
 }
 
-func (p* Prioritization) getNodeHostname(node *corev1.Node) string {
+func (p *Prioritization) getNodeHostname(node *corev1.Node) string {
 	val, ok := node.Labels[KubernetesHostnameLabelName]
 	if ok {
 		return val
@@ -519,7 +514,7 @@ func (p* Prioritization) getNodeHostname(node *corev1.Node) string {
 	}
 }
 
-func (p* Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.Node) {
+func (p *Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.Node) {
 
 	// Prevent multiple evaluations on the same node at the same time
 	scalingDownAddLock.Lock()
@@ -539,10 +534,10 @@ func (p* Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.N
 
 	// Final live query to see if there are really no pods vs shared informer indexer used for quick checks.
 	queriedPods, err := p.k8sClientSet.CoreV1().Pods(metav1.NamespaceAll).List(p.context, metav1.ListOptions{
-		FieldSelector:        fmt.Sprintf("spec.nodeName=%v", node.Name),
+		FieldSelector: fmt.Sprintf("spec.nodeName=%v", node.Name),
 	})
 
-	if err !=  nil {
+	if err != nil {
 		klog.Errorf("Unable to determine real-time pods for node %v: %#v", node.Name, err)
 		return // Try again later
 	}
@@ -600,13 +595,13 @@ func (p* Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.N
 
 		// Check if machineset status.replicas matches spec.replicas. Should be eventually consistent.
 		replicas, found, err := unstructured.NestedInt64(ms.UnstructuredContent(), "spec", "replicas")
-		if err != nil || !found{
+		if err != nil || !found {
 			klog.Errorf("unable to get current replicas in machineset %v: %#v", machineSetName, err)
 			continue
 		}
 
 		statusReplicas, found, err := unstructured.NestedInt64(ms.UnstructuredContent(), "status", "replicas")
-		if err != nil || !found{
+		if err != nil || !found {
 			klog.Errorf("unable to get current status.replicas in machineset %v: %#v", machineSetName, err)
 			continue
 		}
@@ -651,20 +646,26 @@ func (p* Prioritization) evaluateNodeScaleDown(podClass PodClass, node *corev1.N
 
 // evaluateNodeClassScaleDown is called by a single thread, periodically, to see what
 // nodes should be updated in order to scale down or to encourage scale down conditions.
-func (p* Prioritization) evaluateNodeClassScaleDown(podClass PodClass) {
+func (p *Prioritization) evaluateNodeClassScaleDown(podClass PodClass) {
 
 	// First, check to see if any nodes have been targeted for scale down in this class.
 	// Nodes which have been targeted have getNodeAvoidanceState of TaintEffectNoSchedule
 	// and they are actually cordoned on the cluster.
 	// Make sure the nodes are at least 15 minutes old, or you might catch one that is cordoned
 	// during initialization.
-	allWorkloadNodes, err := p.getWorkloadNodes(podClass, false, 15 * time.Minute)
+	allWorkloadNodes, err := p.getWorkloadNodes(podClass, false, 15*time.Minute)
 	if err != nil {
 		klog.Errorf("Error finding workload nodes for scale down assessment of podClass %v: %v", podClass, err)
 		return
 	}
 
 	for _, node := range allWorkloadNodes {
+
+		if _, ok := node.Labels["spot-io"]; ok {
+			// This is a spot.io node. It is responsible for scale down, so ignore it.
+			continue
+		}
+
 		if p.getNodeAvoidanceState(node) == corev1.TaintEffectNoSchedule {
 			pods, err := p.getPodsUsingNode(node.Name, true, 0)
 			if err != nil {
@@ -764,9 +765,9 @@ func (p* Prioritization) evaluateNodeClassScaleDown(podClass PodClass) {
 	klog.Infof("Avoidance info for podClass %v ; avoiding: %v", podClass, avoidanceInfo)
 }
 
-func (p* Prioritization) getWorkloadNodesInAvoidanceOrder(podClass PodClass) ([]*corev1.Node, error) {
+func (p *Prioritization) getWorkloadNodesInAvoidanceOrder(podClass PodClass) ([]*corev1.Node, error) {
 	// find all nodes that are relevant to this workload class and have been around at least x minutes.
-	workloadNodes, err := p.getWorkloadNodes(podClass, true, 15 * time.Minute)
+	workloadNodes, err := p.getWorkloadNodes(podClass, true, 15*time.Minute)
 
 	if err != nil {
 		return nil, fmt.Errorf("unable to find workload nodes for %v: %v", podClass, err)
@@ -794,7 +795,7 @@ func (p* Prioritization) getWorkloadNodesInAvoidanceOrder(podClass PodClass) ([]
 
 		classedPodCount := len(pods)
 
-		if _, ok := node.Labels["machine.openshift.io/interruptible-instance"]; ok {
+		if spot_io_lifecycle, ok := node.Labels["spotinst.io/node-lifecycle"]; ok && spot_io_lifecycle == "spot" {
 			// Ensure spot instances always sort AFTER on demand instances; i.e. favor
 			// eliminating the more expensive on demand instance.
 			classedPodCount += 100
@@ -825,7 +826,7 @@ func (p* Prioritization) getWorkloadNodesInAvoidanceOrder(podClass PodClass) ([]
 	return workloadNodes, nil
 }
 
-func (p* Prioritization) findNodesToPreclude(podClass PodClass) ([]*corev1.Node, error) {
+func (p *Prioritization) findNodesToPreclude(podClass PodClass) ([]*corev1.Node, error) {
 	nodeAvoidanceLock.Lock()
 	defer nodeAvoidanceLock.Unlock()
 
@@ -852,7 +853,7 @@ func (p* Prioritization) findNodesToPreclude(podClass PodClass) ([]*corev1.Node,
 	return precludeNodes, nil
 }
 
-func (p* Prioritization) getMachinePhase(machineNamespace string, machineName string)(machinePhase string, machineExists bool, machineObj *unstructured.Unstructured, err error) {
+func (p *Prioritization) getMachinePhase(machineNamespace string, machineName string) (machinePhase string, machineExists bool, machineObj *unstructured.Unstructured, err error) {
 	machineClient := p.dynamicClient.Resource(machineResource).Namespace(machineNamespace)
 
 	machineObj, err = machineClient.Get(p.context, machineName, metav1.GetOptions{})
@@ -874,7 +875,7 @@ func (p* Prioritization) getMachinePhase(machineNamespace string, machineName st
 
 // scaleDown should be called by only one thread at a time. It assesses a node which has been staged for
 // safe scale down (e.g. is running with the NoSchedule taint). Final checks are performed.
-func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machineSetNamespace string, machineSetName string, machineName string, err error) {
+func (p *Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machineSetNamespace string, machineSetName string, machineName string, err error) {
 	if _, ok := node.Labels[CiWorkloadLabelName]; !ok {
 		// Just a sanity check
 		return "", "", "", fmt.Errorf("will not scale down non-ci-workload node")
@@ -894,7 +895,7 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 	_, machineExists, _, err := p.getMachinePhase(machineSetNamespace, machineName)
 
 	if !machineExists {
-		return machineSetNamespace, "", machineName,nil
+		return machineSetNamespace, "", machineName, nil
 	}
 
 	if err != nil {
@@ -904,7 +905,7 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 	for {
 		// Wait until terminated pods are X minutes old so that prow / ci-operator have a change to check final status
 		// extract logs / etc (they poll).
-		pods, err := p.getPodsUsingNode(node.Name, true, 5 *time.Minute)
+		pods, err := p.getPodsUsingNode(node.Name, true, 5*time.Minute)
 		if err != nil {
 			klog.Errorf("Unable to query for pod age requirement. Encountered error: %v", err)
 			break
@@ -919,7 +920,7 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 	_, machineExists, machineObj, err := p.getMachinePhase(machineSetNamespace, machineName)
 
 	if !machineExists {
-		return machineSetNamespace, "", machineName,nil
+		return machineSetNamespace, "", machineName, nil
 	}
 
 	if err != nil {
@@ -1031,7 +1032,7 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 		attempt++
 
 		replicas, found, err := unstructured.NestedInt64(ms.UnstructuredContent(), "spec", "replicas")
-		if err != nil || !found{
+		if err != nil || !found {
 			klog.Errorf("unable to get current replicas in machineset %v: %#v", machineSetName, err)
 			continue
 		}
@@ -1106,7 +1107,7 @@ func (p* Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 
 const TaintEffectNone corev1.TaintEffect = "None"
 
-func (p* Prioritization) getNodeAvoidanceState(node *corev1.Node) corev1.TaintEffect {
+func (p *Prioritization) getNodeAvoidanceState(node *corev1.Node) corev1.TaintEffect {
 	avoidanceState := TaintEffectNone
 
 	for _, taint := range node.Spec.Taints {
@@ -1123,7 +1124,7 @@ func (p* Prioritization) getNodeAvoidanceState(node *corev1.Node) corev1.TaintEf
 	return avoidanceState
 }
 
-func (p* Prioritization) setNodeCordoned(node *corev1.Node, cordoned bool) error {
+func (p *Prioritization) setNodeCordoned(node *corev1.Node, cordoned bool) error {
 	if node.Spec.Unschedulable == cordoned {
 		// we are already at the desired state
 		return nil
@@ -1147,7 +1148,7 @@ func (p* Prioritization) setNodeCordoned(node *corev1.Node, cordoned bool) error
 	return nil
 }
 
-func (p* Prioritization) setNodeAvoidanceState(node *corev1.Node, podClass PodClass, desiredEffect corev1.TaintEffect) error {
+func (p *Prioritization) setNodeAvoidanceState(node *corev1.Node, podClass PodClass, desiredEffect corev1.TaintEffect) error {
 	nodeTaints := node.Spec.Taints
 	if nodeTaints == nil {
 		nodeTaints = make([]corev1.Taint, 0)
@@ -1201,7 +1202,7 @@ func (p* Prioritization) setNodeAvoidanceState(node *corev1.Node, podClass PodCl
 	}
 
 	if modified {
-		taintMap := map[string][]corev1.Taint {
+		taintMap := map[string][]corev1.Taint{
 			"taints": nodeTaints,
 		}
 		unstructuredTaints, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&taintMap)
@@ -1232,8 +1233,7 @@ func (p* Prioritization) setNodeAvoidanceState(node *corev1.Node, podClass PodCl
 	return nil
 }
 
-
-func (p* Prioritization) setNoExecuteTaint(nodeName string, podClass PodClass) error {
+func (p *Prioritization) setNoExecuteTaint(nodeName string, podClass PodClass) error {
 	nodeObj, exists, err := nodesInformer.GetIndexer().GetByKey(nodeName)
 
 	if err != nil {
@@ -1264,7 +1264,7 @@ func (p* Prioritization) setNoExecuteTaint(nodeName string, podClass PodClass) e
 		Effect: corev1.TaintEffectNoExecute,
 	})
 
-	taintMap := map[string][]corev1.Taint {
+	taintMap := map[string][]corev1.Taint{
 		"taints": nodeTaints,
 	}
 	unstructuredTaints, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&taintMap)
@@ -1290,8 +1290,7 @@ func (p* Prioritization) setNoExecuteTaint(nodeName string, podClass PodClass) e
 	return nil
 }
 
-
-func (p* Prioritization) findHostnamesToPreclude(podClass PodClass) ([]string, error) {
+func (p *Prioritization) findHostnamesToPreclude(podClass PodClass) ([]string, error) {
 	hostnamesToPreclude := make([]string, 0)
 	nodesToPreclude, err := p.findNodesToPreclude(podClass)
 	if err != nil {

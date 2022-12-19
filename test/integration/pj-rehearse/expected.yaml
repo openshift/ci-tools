@@ -1420,6 +1420,232 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/super/trooper/master/multistage2
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage2
+    creationTimestamp: null
+    labels:
+      ci.openshift.io/generator: prowgen
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: multistage2
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedRegistryContent
+      prow.k8s.io/context: multistage2
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage2
+      prow.k8s.io/refs.base_ref: master
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: test-prowjob
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/super/trooper/master/multistage2
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        job_url_prefix: https://openshift-gce-devel.appspot.com/build/
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      skip_cloning: true
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: trooper
+      workdir: true
+    job: rehearse-1234-pull-ci-super-trooper-master-multistage2
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --report-credentials-file=/etc/report/credentials
+        - --target=multistage2
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          value: H4sIAAAAAAAC/8SUT2sbPRDG7/sphlwCLyhszNvL3nJIewqU1PdlvDuWRfWvM7MuDv3wRdq1sdPgUijpSdIzo5mfHiFtUKh3AS1J1wCUZRkBIgbqILGzLpr9/3ftSZWMQwllirJzW60BRdvV3c1mcn7sOSUthWrpXpQJQ1+SzoozeSo7fl/YJo/Rmvu7+7Y5whrYcgpLUwBNHSiJmhpvmCRNPMynuv3vdu7rXXAq8xxgyFMHH9r2yVWB6dtE8ip8X6KKtpdMg9u6AdWlWFLeMujNU+hc1ABKB2Hy6kTR0qopPEqMvhelvPQd/CRK3GdOW+epg5ubquckOmfMhVx2ZqTMae/EpWjCJGos6o74yJ9CwDhKBz8WBeAiYfbPRVH0/qReOHeULp05c6dtw5kYKCQ+dLD65K6gns2voJ4MNIslMJIop8O70Wem144v7QxvcLjCLqRTrklm9Q/MPlIu4x+ZvOwBYyJ9/+jRLrkU90ciAyNtcfI6vzjIyBhovqGqn8rPb2T9+GXdf354fnh6XD8+v5sfhe38/mhFvzgR8CuBi0qW68O+gAuH5TP5u2wvL72lSIxKYx9IcUTF+vkyxmFXoMpNNACJbQcy5bpgyuWL45TK+mcAAAD///ilu7C4BQAA
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
+    refs:
+      base_ref: master
+      base_sha: test_sha
+      org: openshift
+      pulls:
+      - author: username
+        number: 1234
+        sha: test_sha
+      repo: release
+    report: true
+    rerun_command: /pj-rehearse pull-ci-super-trooper-master-multistage2
+    type: presubmit
+  status:
+    startTime: 2020-06-22T22:25:00Z
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/context: ci/rehearse/super/trooper/master/multistage3
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage3
+    creationTimestamp: null
+    labels:
+      ci-operator.openshift.io/cloud: azure4
+      ci-operator.openshift.io/cloud-cluster-profile: azure4
+      ci.openshift.io/generator: prowgen
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: multistage3
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedRegistryContent
+      prow.k8s.io/context: multistage3
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage3
+      prow.k8s.io/refs.base_ref: master
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: test-prowjob
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/super/trooper/master/multistage3
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        job_url_prefix: https://openshift-gce-devel.appspot.com/build/
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      skip_cloning: true
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: trooper
+      workdir: true
+    job: rehearse-1234-pull-ci-super-trooper-master-multistage3
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --lease-server-credentials-file=/etc/boskos/credentials
+        - --report-credentials-file=/etc/report/credentials
+        - --secret-dir=/usr/local/multistage3-cluster-profile
+        - --target=multistage3
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          value: H4sIAAAAAAAC/8RUTWsbMRC976+YW6CgsHbTy95ycHsKlNT3Zbw7lkX11ZlZF5v++KLdtbHT4FIoyUnSm6c3T09IGxRqXUBL0lQAZVlGgIiBGkjsrItm/3Bfn1HJ2JVSpig7t9WxoGibcXe1GZzvW05Ji9Ao3YoyYWgL6UKcyVPZ8XdhmzxGaxb3i7o6mTWw5RTmpgCaGlASNWO9YpI0cDed6u7D3dTXu+BUpjlAl4cGPtX1kxsBph8DyYvyolQVbSuZOrd1HapLsVBeC+jVU+gkagClgTB4daJo6WNV/Cgx+laU8ty384MocZs5bZ2nBvA4MD2MtZxEJ9Yk5rIzPWVOeycuRRMGUWNRd8SnM6QQMPbSwK8ZAbgiTBm6KIren9Gr9E7QdToXCdV1uAADhcSHBpZf3A2rF/MbVs8hmjkW6EmU0+HN3Geml4nP7QxvsLvhXUiHPJLM8h3CPrmcx38Ked4DxkT6+dmjnbkU9ydHBnra4uB1enWQkTHQdEMjfpaf3sl69W3dfn18fnxarVfPb5ZH8XZ5f7SkP5II+J3ARSXL4+O+MhcO84fyf70dj62lSIxKfRtIsUfF8QNmjN2umCo3UQEktg3IkMcFUy7fHKdU1r8DAAD//6N08j28BQAA
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/boskos
+          name: boskos
+          readOnly: true
+        - mountPath: /usr/local/multistage3-cluster-profile
+          name: cluster-profile
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: boskos
+        secret:
+          items:
+          - key: credentials
+            path: credentials
+          secretName: boskos-credentials
+      - name: cluster-profile
+        secret:
+          secretName: cluster-secrets-azure4
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
+    refs:
+      base_ref: master
+      base_sha: test_sha
+      org: openshift
+      pulls:
+      - author: username
+        number: 1234
+        sha: test_sha
+      repo: release
+    report: true
+    rerun_command: /pj-rehearse pull-ci-super-trooper-master-multistage3
+    type: presubmit
+  status:
+    startTime: 2020-06-22T22:25:00Z
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
       prow.k8s.io/context: ci/rehearse/super/trooper/master/multistage5
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage5
     creationTimestamp: null

@@ -576,13 +576,13 @@ type presubmitsByRepo map[string][]prowconfig.Presubmit
 type periodicsByName map[string]prowconfig.Periodic
 type presubmitsByName map[string]prowconfig.Presubmit
 
-// selectJobsForRegistryStep returns a sample from all jobs affected by the provided registry node.
+// selectJobsForRegistryStep returns all jobs affected by the provided registry node.
 func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInfo, allPresubmits presubmitsByName, allPeriodics periodicsByName, skipJobs sets.String, logger *logrus.Entry) (presubmitsByRepo, periodicsByRepo) {
 	selectedPresubmits := make(map[string][]prowconfig.Presubmit)
 	selectedPeriodics := make(map[string][]prowconfig.Periodic)
 
 	nodeLogger := logger.WithFields(registry.FieldsForNode(node))
-	nodeLogger.Debug("Searching for jobs affected by changed node")
+	nodeLogger.Debugf("Searching %d configs for jobs affected by changed node", len(configs))
 	for _, cfg := range configs {
 		cfgLogger := nodeLogger.WithFields(cfg.Info.LogFields())
 		orgRepo := fmt.Sprintf("%s/%s", cfg.Info.Org, cfg.Info.Repo)
@@ -600,28 +600,28 @@ func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInf
 				jobName = cfg.Info.JobName(jobconfig.PeriodicPrefix, test.As)
 				if periodic, ok := allPeriodics[jobName]; ok {
 					selectJob = func() {
-						testLogger.WithField("job-name", jobName).Debug("Periodic job uses the node: selecting for rehearse")
+						testLogger.WithField("job-name", jobName).Trace("Periodic job uses the node: selecting for rehearse")
 						selectedPeriodics[orgRepo] = append(selectedPeriodics[orgRepo], periodic)
 					}
 				} else {
-					testLogger.WithField("job-name", jobName).Debug("Could not find a periodic job for test")
+					testLogger.WithField("job-name", jobName).Trace("Could not find a periodic job for test")
 					continue
 				}
 			default: // Everything else is a presubmit
 				jobName = cfg.Info.JobName(jobconfig.PresubmitPrefix, test.As)
 				if presubmit, ok := allPresubmits[jobName]; ok {
 					selectJob = func() {
-						testLogger.WithField("job-name", jobName).Debug("Presubmit job uses the node: selecting for rehearse")
+						testLogger.WithField("job-name", jobName).Trace("Presubmit job uses the node: selecting for rehearse")
 						selectedPresubmits[orgRepo] = append(selectedPresubmits[orgRepo], presubmit)
 					}
 				} else {
-					testLogger.WithField("job-name", jobName).Debug("Could not find a presubmit job for test")
+					testLogger.WithField("job-name", jobName).Trace("Could not find a presubmit job for test")
 					continue
 				}
 			}
 
 			if skipJobs.Has(jobName) {
-				testLogger.WithField("job-name", jobName).Debug("Already saw this job, skipping")
+				testLogger.WithField("job-name", jobName).Trace("Already saw this job, skipping")
 				continue
 			}
 
@@ -632,14 +632,12 @@ func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInf
 			if node.Type() == registry.Workflow {
 				if test.MultiStageTestConfiguration.Workflow != nil && node.Name() == *test.MultiStageTestConfiguration.Workflow {
 					selectJob()
-					return selectedPresubmits, selectedPeriodics
 				}
 				continue
 			}
 			if node.Type() == registry.Observer {
 				if testUsesObserver(test, node.Name()) {
 					selectJob()
-					return selectedPresubmits, selectedPeriodics
 				}
 				continue
 			}
@@ -649,12 +647,14 @@ func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInf
 				hasChain := testStep.Chain != nil && node.Type() == registry.Chain && node.Name() == *testStep.Chain
 				if hasRef || hasChain {
 					selectJob()
-					return selectedPresubmits, selectedPeriodics
 				}
 			}
 		}
 	}
-	logger.WithField("node-name", node.Name()).Debug("Found no jobs using node")
+
+	if len(selectedPresubmits) == 0 && len(selectedPeriodics) == 0 {
+		logger.WithField("node-name", node.Name()).Debug("Found no jobs using node")
+	}
 	return selectedPresubmits, selectedPeriodics
 }
 

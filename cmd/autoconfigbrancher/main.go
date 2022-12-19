@@ -180,7 +180,7 @@ func main() {
 		{
 			command: "/usr/bin/config-brancher",
 			arguments: func() []string {
-				args := []string{"--config-dir", "./ci-operator/config", "--current-release", o.CurrentRelease}
+				args := []string{"--config-dir", "./ci-operator/config", "--current-release", o.CurrentRelease, "--skip-periodics"}
 				for _, fr := range o.FutureReleases.Strings() {
 					args = append(args, []string{"--future-release", fr}...)
 				}

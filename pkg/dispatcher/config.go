@@ -208,21 +208,6 @@ func isSSHBastionJob(base prowconfig.JobBase) bool {
 	return false
 }
 
-// IsAnyBuildClusterDisabled returns if any of the build clusters is disabled
-func (config *Config) IsAnyBuildClusterDisabled() bool {
-	if len(config.BuildFarm) == 0 {
-		return true
-	}
-	for provider := range config.BuildFarm {
-		for cluster := range config.BuildFarm[provider] {
-			if config.BuildFarm[provider][cluster].Disabled == true {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // IsInBuildFarm returns the cloudProvider if the cluster is in the build farm; empty string otherwise.
 func (config *Config) IsInBuildFarm(clusterName api.Cluster) api.Cloud {
 	for cloudProvider, v := range config.BuildFarm {

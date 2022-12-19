@@ -687,36 +687,3 @@ func TestValidate(t *testing.T) {
 		})
 	}
 }
-
-func TestConfigIsAnyBuildClusterDisabled(t *testing.T) {
-	tests := []struct {
-		name      string
-		buildFarm map[api.Cloud]map[api.Cluster]*BuildFarmConfig
-		want      bool
-	}{
-		{
-			name: "empty BuildFarm",
-			want: true,
-		},
-		{
-			name:      "Buildfarm not disabled",
-			buildFarm: map[api.Cloud]map[api.Cluster]*BuildFarmConfig{"aws": {"build01": &BuildFarmConfig{Disabled: false}}},
-			want:      false,
-		},
-		{
-			name:      "Buildfarm disabled",
-			buildFarm: map[api.Cloud]map[api.Cluster]*BuildFarmConfig{"aws": {"build01": &BuildFarmConfig{Disabled: true}}},
-			want:      true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := &Config{
-				BuildFarm: tt.buildFarm,
-			}
-			if got := config.IsAnyBuildClusterDisabled(); got != tt.want {
-				t.Errorf("Config.IsAnyBuildClusterDisabled() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}

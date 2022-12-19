@@ -73,8 +73,24 @@ func main() {
 		sippyConfig.Releases = make(map[string]v1sippy.ReleaseConfig)
 
 	}
+	for key, release := range sippyConfig.Releases {
+		if release.Jobs == nil {
+			release.Jobs = make(map[string]bool)
+		}
+		if release.Regexp == nil {
+			release.Regexp = make([]string, 0)
+		}
+		if release.BlockingJobs == nil {
+			release.BlockingJobs = make([]string, 0)
+		}
+		if release.InformingJobs == nil {
+			release.InformingJobs = make([]string, 0)
+		}
+		sippyConfig.Releases[key] = release
+	}
 
-	configuredJobs := sets.NewString()
+	informingJobs := sets.NewString()
+	blockingingJobs := sets.NewString()
 	aggregateJobsMap := make(map[string][]string)
 	if err := filepath.WalkDir(o.releaseConfigDir, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
@@ -106,7 +122,11 @@ func main() {
 					aggregateJobsMap[job.ProwJob.Name] = append(aggregateJobsMap[job.ProwJob.Name], aggregateJobName)
 				}
 			}
-			configuredJobs.Insert(job.ProwJob.Name)
+			if job.Optional {
+				informingJobs.Insert(job.ProwJob.Name)
+			} else {
+				blockingingJobs.Insert(job.ProwJob.Name)
+			}
 		}
 		return nil
 	}); err != nil {
@@ -126,8 +146,10 @@ func main() {
 		if release, ok := p.Labels["job-release"]; ok {
 			if _, ok := sippyConfig.Releases[release]; !ok {
 				sippyConfig.Releases[release] = v1sippy.ReleaseConfig{
-					Jobs:   make(map[string]bool),
-					Regexp: make([]string, 0),
+					Jobs:          make(map[string]bool),
+					Regexp:        make([]string, 0),
+					BlockingJobs:  make([]string, 0),
+					InformingJobs: make([]string, 0),
 				}
 			}
 			if _, ok := sippyConfig.Releases[release].Jobs[p.Name]; !ok {
@@ -140,6 +162,17 @@ func main() {
 						sippyConfig.Releases[release].Jobs[aggregate] = true
 					}
 				}
+			}
+
+			if releaseConfig, ok := sippyConfig.Releases[release]; ok {
+				if blockingingJobs.Has(p.Name) {
+					releaseConfig.BlockingJobs = append(releaseConfig.BlockingJobs, p.Name)
+				}
+
+				if informingJobs.Has(p.Name) {
+					releaseConfig.InformingJobs = append(releaseConfig.InformingJobs, p.Name)
+				}
+				sippyConfig.Releases[release] = releaseConfig
 			}
 		}
 	}

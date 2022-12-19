@@ -16,4 +16,10 @@ type ReleaseConfig struct {
 
 	// Regexp is a list of regular expressions that match a job to a release.
 	Regexp []string `yaml:"regexp,omitempty"`
+
+	// BlockingJobs is the list of blocking payload jobs
+	BlockingJobs []string `yaml:"blockingJobs,omitempty"`
+
+	// InformingJobs is the list of informing payload jobs
+	InformingJobs []string `yaml:"informingJobs,omitempty"`
 }

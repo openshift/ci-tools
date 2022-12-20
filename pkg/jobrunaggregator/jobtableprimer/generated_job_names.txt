@@ -227,7 +227,6 @@ periodic-ci-openshift-multiarch-master-nightly-4.12-ocp-e2e-ovn-remote-libvirt-s
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12-s390x.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12.json
-periodic-ci-openshift-hypershift-main-periodics-4.12-conformance-aws-ovn
 periodic-ci-openshift-microshift-main-periodic-ocp-4.12-conformance-parallel
 periodic-ci-openshift-microshift-main-periodic-ocp-4.12-conformance-serial
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-ovn
@@ -294,15 +293,15 @@ release-openshift-ocp-osd-gcp-nightly-4.12
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-main-periodics.yaml
-periodic-ci-openshift-hypershift-main-periodics-4.12-conformance-agent-ovn
-periodic-ci-openshift-hypershift-main-periodics-4.12-conformance-aws-ovn
-periodic-ci-openshift-hypershift-main-periodics-4.12-conformance-aws-ovn-proxy
-periodic-ci-openshift-hypershift-main-periodics-4.12-conformance-mce-aws-ovn
-periodic-ci-openshift-hypershift-main-periodics-4.12-e2e-aws-ovn-periodic-conformance-serial
-periodic-ci-openshift-hypershift-main-periodics-4.12-e2e-aws-periodic
-periodic-ci-openshift-hypershift-main-periodics-4.12-e2e-ibmcloud-iks
-periodic-ci-openshift-hypershift-main-periodics-4.12-e2e-ibmcloud-roks
-periodic-ci-openshift-hypershift-main-periodics-4.12-e2e-powervs-periodic
+periodic-ci-openshift-hypershift-main-periodics-4.13-conformance-agent-ovn
+periodic-ci-openshift-hypershift-main-periodics-4.13-conformance-aws-ovn
+periodic-ci-openshift-hypershift-main-periodics-4.13-conformance-aws-ovn-proxy
+periodic-ci-openshift-hypershift-main-periodics-4.13-conformance-mce-aws-ovn
+periodic-ci-openshift-hypershift-main-periodics-4.13-e2e-aws-ovn-periodic-conformance-serial
+periodic-ci-openshift-hypershift-main-periodics-4.13-e2e-aws-periodic
+periodic-ci-openshift-hypershift-main-periodics-4.13-e2e-ibmcloud-iks
+periodic-ci-openshift-hypershift-main-periodics-4.13-e2e-ibmcloud-roks
+periodic-ci-openshift-hypershift-main-periodics-4.13-e2e-powervs-periodic
 // end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-main-periodics.yaml
 
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/multiarch/openshift-multiarch-master-periodics.yaml

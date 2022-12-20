@@ -585,10 +585,12 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 						Releases: map[string]api.UnresolvedRelease{
 							"latest": {
 								Candidate: &api.Candidate{
-									Architecture: "amd64",
-									Product:      "ocp",
-									Stream:       "nightly",
-									Version:      "4.5",
+									ReleaseDescriptor: api.ReleaseDescriptor{
+										Product:      "ocp",
+										Architecture: "amd64",
+									},
+									Stream:  "nightly",
+									Version: "4.5",
 								},
 							},
 						},

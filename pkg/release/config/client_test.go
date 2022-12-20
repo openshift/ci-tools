@@ -15,19 +15,23 @@ func TestEndpoint(t *testing.T) {
 	}{
 		{
 			input: api.Candidate{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamCI,
-				Version:      "4.10",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+				Stream:  api.ReleaseStreamCI,
+				Version: "4.10",
 			},
 			output: "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.10.0-0.ci/config",
 		},
 		{
 			input: api.Candidate{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamNightly,
-				Version:      "4.10",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+				Stream:  api.ReleaseStreamNightly,
+				Version: "4.10",
 			},
 			output: "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.10.0-0.nightly/config",
 		},

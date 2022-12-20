@@ -82,13 +82,11 @@ func (b *GeneratedReleaseGatingJobsBumper) BumpFilename(
 	return dataWithInfo.Info.Metadata.Basename(), nil
 }
 
-/*
-	Candidate bumping fields:
-	.base_images.*.name
-	.releases.*.{release,candidate}.version
-	.releases.*.prerelease.version_bounds.{lower,upper}
-	.tests[].steps.test[].env[].default
-*/
+// Candidate bumping fields:
+// .base_images.*.name
+// .releases.*.{release,candidate}.version
+// .releases.*.prerelease.version_bounds.{lower,upper}
+// .tests[].steps.test[].env[].default
 func (b *GeneratedReleaseGatingJobsBumper) BumpContent(dataWithInfo *cioperatorcfg.DataWithInfo) (*cioperatorcfg.DataWithInfo, error) {
 	major := b.mm.Major
 	config := &dataWithInfo.Configuration

@@ -17,43 +17,55 @@ func TestEndpoint(t *testing.T) {
 	}{
 		{
 			input: api.Prerelease{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
 			},
 			output: "https://amd64.origin.releases.ci.openshift.org/api/v1/releasestream/4-stable/latest",
 		},
 		{
 			input: api.Prerelease{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureAMD64,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
 			},
 			output: "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable/latest",
 		},
 		{
 			input: api.Prerelease{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitecturePPC64le,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitecturePPC64le,
+				},
 			},
 			output: "https://ppc64le.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-ppc64le/latest",
 		},
 		{
 			input: api.Prerelease{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureS390x,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureS390x,
+				},
 			},
 			output: "https://s390x.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-s390x/latest",
 		},
 		{
 			input: api.Prerelease{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureARM64,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureARM64,
+				},
 			},
 			output: "https://arm64.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-arm64/latest",
 		},
 		{
 			input: api.Prerelease{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureMULTI,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureMULTI,
+				},
 			},
 			output: "https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-multi/latest",
 		},
@@ -75,16 +87,20 @@ func TestDefaultFields(t *testing.T) {
 		{
 			name: "nothing to do",
 			input: api.Prerelease{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
 				VersionBounds: api.VersionBounds{
 					Lower: "4.4.0",
 					Upper: "4.5.0-0",
 				},
 			},
 			output: api.Prerelease{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
 				VersionBounds: api.VersionBounds{
 					Lower: "4.4.0",
 					Upper: "4.5.0-0",
@@ -94,15 +110,19 @@ func TestDefaultFields(t *testing.T) {
 		{
 			name: "default architecture",
 			input: api.Prerelease{
-				Product: api.ReleaseProductOKD,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product: api.ReleaseProductOKD,
+				},
 				VersionBounds: api.VersionBounds{
 					Lower: "4.4.0",
 					Upper: "4.5.0-0",
 				},
 			},
 			output: api.Prerelease{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
 				VersionBounds: api.VersionBounds{
 					Lower: "4.4.0",
 					Upper: "4.5.0-0",

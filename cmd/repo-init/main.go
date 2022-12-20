@@ -800,10 +800,12 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 		switch config.ReleaseType {
 		case "nightly":
 			release.Candidate = &api.Candidate{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamNightly,
-				Version:      config.ReleaseVersion,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+				Stream:  api.ReleaseStreamNightly,
+				Version: config.ReleaseVersion,
 			}
 		case "published":
 			release.Release = &api.Release{

@@ -285,7 +285,9 @@ func newDataWithInfoFromFilename(filename string) configlib.DataWithInfo {
 				Releases: map[string]api.UnresolvedRelease{
 					"latest": {
 						Candidate: &api.Candidate{
-							Product: product,
+							ReleaseDescriptor: api.ReleaseDescriptor{
+								Product: product,
+							},
 							Stream:  stream,
 							Version: version,
 						},
@@ -315,7 +317,9 @@ func newDataWithInfoFromFilename(filename string) configlib.DataWithInfo {
 	if fromVersion == "" {
 		data.Configuration.InputConfiguration.Releases["initial"] = api.UnresolvedRelease{
 			Candidate: &api.Candidate{
-				Product:  product,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product: product,
+				},
 				Stream:   stream,
 				Version:  version,
 				Relative: 1,
@@ -326,7 +330,9 @@ func newDataWithInfoFromFilename(filename string) configlib.DataWithInfo {
 		minorVer, _ := strconv.Atoi(strings.Split(fromVersion, ".")[1])
 		data.Configuration.InputConfiguration.Releases["initial"] = api.UnresolvedRelease{
 			Prerelease: &api.Prerelease{
-				Product: product,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product: product,
+				},
 				VersionBounds: api.VersionBounds{
 					Lower: fmt.Sprintf("4.%d.0-0", minorVer),
 					Upper: fmt.Sprintf("4.%d.0-0", minorVer+1),
@@ -343,7 +349,9 @@ func newDataWithInfoFromFilename(filename string) configlib.DataWithInfo {
 		}
 		data.Configuration.InputConfiguration.Releases["initial"] = api.UnresolvedRelease{
 			Candidate: &api.Candidate{
-				Product: product,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product: product,
+				},
 				Stream:  fromReleaseStream,
 				Version: fromVersion,
 			},

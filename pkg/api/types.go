@@ -258,6 +258,11 @@ type ReleaseDescriptor struct {
 	// Architecture is the architecture for the product.
 	// Defaults to amd64.
 	Architecture ReleaseArchitecture `json:"architecture,omitempty"`
+	// Relative optionally specifies how old of a release
+	// is requested from this stream. For instance, a value
+	// of 1 will resolve to the previous validated release
+	// for this stream.
+	Relative int `json:"relative,omitempty"`
 }
 
 // Candidate describes a validated candidate release payload
@@ -267,11 +272,6 @@ type Candidate struct {
 	Stream ReleaseStream `json:"stream"`
 	// Version is the minor version to search for
 	Version string `json:"version"`
-	// Relative optionally specifies how old of a release
-	// is requested from this stream. For instance, a value
-	// of 1 will resolve to the previous validated release
-	// for this stream.
-	Relative int `json:"relative,omitempty"`
 }
 
 // Prerelease describes a validated release payload before it is exposed

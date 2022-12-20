@@ -222,10 +222,10 @@ func TestValidateCandidate(t *testing.T) {
 				ReleaseDescriptor: api.ReleaseDescriptor{
 					Product:      api.ReleaseProductOKD,
 					Architecture: api.ReleaseArchitectureAMD64,
+					Relative:     10,
 				},
-				Stream:   api.ReleaseStreamOKD,
-				Version:  "4.4",
-				Relative: 10,
+				Stream:  api.ReleaseStreamOKD,
+				Version: "4.4",
 			},
 		},
 		{
@@ -334,10 +334,10 @@ func TestValidateCandidate(t *testing.T) {
 				ReleaseDescriptor: api.ReleaseDescriptor{
 					Product:      api.ReleaseProductOCP,
 					Architecture: api.ReleaseArchitectureAMD64,
+					Relative:     -1,
 				},
-				Stream:   api.ReleaseStreamCI,
-				Version:  "4.4",
-				Relative: -1,
+				Stream:  api.ReleaseStreamCI,
+				Version: "4.4",
 			},
 			output: []error{
 				errors.New("root.relative: must be a positive integer"),

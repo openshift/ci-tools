@@ -318,11 +318,11 @@ func newDataWithInfoFromFilename(filename string) configlib.DataWithInfo {
 		data.Configuration.InputConfiguration.Releases["initial"] = api.UnresolvedRelease{
 			Candidate: &api.Candidate{
 				ReleaseDescriptor: api.ReleaseDescriptor{
-					Product: product,
+					Product:  product,
+					Relative: 1,
 				},
-				Stream:   stream,
-				Version:  version,
-				Relative: 1,
+				Stream:  stream,
+				Version: version,
 			},
 		}
 	} else if fromStream == "stable" || fromStream == "" {

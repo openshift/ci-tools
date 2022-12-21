@@ -58,19 +58,24 @@ func DefaultFields(candidate api.Candidate) api.Candidate {
 
 // ResolvePullSpec determines the pull spec for the candidate release
 func ResolvePullSpec(client release.HTTPClient, candidate api.Candidate) (string, error) {
-	return resolvePullSpec(client, endpoint(DefaultFields(candidate)), candidate.Relative)
+	return ResolvePullSpecCommon(client, endpoint(DefaultFields(candidate)), nil, candidate.Relative)
 }
 
-func resolvePullSpec(client release.HTTPClient, endpoint string, relative int) (string, error) {
+func ResolvePullSpecCommon(client release.HTTPClient, endpoint string, bounds *api.VersionBounds, relative int) (string, error) {
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Accept", "application/json")
+	q := req.URL.Query()
+	if bounds != nil {
+		q.Add("in", bounds.Query())
+	}
 	if relative != 0 {
-		q := req.URL.Query()
 		q.Add("rel", strconv.Itoa(relative))
-		req.URL.RawQuery = q.Encode()
+	}
+	if s := q.Encode(); s != "" {
+		req.URL.RawQuery = s
 	}
 	logrus.Infof("Requesting a release from %s", req.URL.String())
 	resp, err := client.Do(req)

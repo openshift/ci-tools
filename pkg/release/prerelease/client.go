@@ -1,13 +1,7 @@
 package prerelease
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io/ioutil"
-	"net/http"
-
-	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/release"
@@ -36,34 +30,5 @@ func ResolvePullSpec(client release.HTTPClient, prerelease api.Prerelease) (stri
 }
 
 func resolvePullSpec(client release.HTTPClient, endpoint string, bounds api.VersionBounds) (string, error) {
-	req, err := http.NewRequest("GET", endpoint, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Accept", "application/json")
-	q := req.URL.Query()
-	q.Add("in", bounds.Query())
-	req.URL.RawQuery = q.Encode()
-	logrus.Infof("Requesting a release from %s", req.URL.String())
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to request latest release: %w", err)
-	}
-	if resp == nil {
-		return "", errors.New("failed to request latest release: got a nil response")
-	}
-	defer resp.Body.Close()
-	data, readErr := ioutil.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to request latest release: server responded with %d: %s", resp.StatusCode, data)
-	}
-	if readErr != nil {
-		return "", fmt.Errorf("failed to read response body: %w", readErr)
-	}
-	release := candidate.Release{}
-	err = json.Unmarshal(data, &release)
-	if err != nil {
-		return "", fmt.Errorf("failed to unmarshal release: %w (%s)", err, data)
-	}
-	return release.PullSpec, nil
+	return candidate.ResolvePullSpecCommon(client, endpoint, &bounds, 0)
 }

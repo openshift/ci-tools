@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -35,11 +36,7 @@ const (
 <ul>
 {{ range .Items }}
   <li>
-    {{ with .ObjectMeta }}
-      {{ with $url := printf "%s/%s" .Namespace .Name }}
-        <a href="` + runsURL + `{{ $url }}">{{ $url }}</a>
-      {{ end }}
-    {{ end }}
+	{{ runLink .ObjectMeta .Spec.PullRequest.PullRequest }}
   </li>
 {{ end }}
 </ul>
@@ -128,7 +125,18 @@ type server struct {
 }
 
 func newServer(client ctrlruntimeclient.Client, ctx context.Context, namespace string) (server, error) {
-	runsListTemplate, err := template.New("runsListTemplate").Parse(runsListTemplate)
+	runsListTemplate, err := template.New("runsListTemplate").Funcs(template.FuncMap{
+		"runLink": func(obj *metav1.ObjectMeta, pr *prpqv1.PullRequest) template.HTML {
+			objName := obj.GetName()
+			objNS := obj.GetNamespace()
+			ident := objName[len(objName)-6:]
+			author := template.HTMLEscapeString(pr.Author)
+			title := template.HTMLEscapeString(pr.Title)
+			ret := fmt.Sprintf(`<a href="`+runsURL+`%s/%s">%s-%s-%s</a>`, objNS, objName, author, title, ident)
+			return template.HTML(ret)
+		},
+	}).Parse(runsListTemplate)
+
 	if err != nil {
 		return server{}, err
 	}

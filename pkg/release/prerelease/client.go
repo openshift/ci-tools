@@ -1,8 +1,6 @@
 package prerelease
 
 import (
-	"fmt"
-
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/release"
 	"github.com/openshift/ci-tools/pkg/release/candidate"
@@ -10,11 +8,11 @@ import (
 
 // endpoint determines the API endpoint to use for a prerelease
 func endpoint(prerelease api.Prerelease) string {
-	if prerelease.Stream == "" {
-		prerelease.Stream = "4-stable"
+	stream := prerelease.Stream
+	if stream == "" {
+		stream = "4-stable"
 	}
-
-	return fmt.Sprintf("%s/%s%s/latest", candidate.ServiceHost(prerelease.Product, prerelease.Architecture), prerelease.Stream, candidate.Architecture(prerelease.Architecture))
+	return candidate.Endpoint(prerelease.ReleaseDescriptor, "", stream, "/latest")
 }
 
 func defaultFields(prerelease api.Prerelease) api.Prerelease {

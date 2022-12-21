@@ -61,7 +61,7 @@ func TestServiceHost(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		if actual, expected := ServiceHost(testCase.desc.Product, testCase.desc.Architecture), testCase.output; actual != expected {
+		if actual, expected := ServiceHost(testCase.desc), testCase.output; actual != expected {
 			t.Errorf("got incorrect service host: %v", cmp.Diff(actual, expected))
 		}
 	}

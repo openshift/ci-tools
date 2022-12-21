@@ -16,7 +16,7 @@ import (
 )
 
 func endpoint(c api.Candidate) string {
-	return fmt.Sprintf("%s/%s.0-0.%s%s/config", candidate.ServiceHost(c.Product, c.Architecture), c.Version, c.Stream, candidate.Architecture(c.Architecture))
+	return candidate.Endpoint(c.ReleaseDescriptor, c.Version+".0-0.", string(c.Stream), "/config")
 }
 
 type JobType string

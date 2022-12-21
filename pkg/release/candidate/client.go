@@ -14,20 +14,20 @@ import (
 	"github.com/openshift/ci-tools/pkg/release"
 )
 
-func ServiceHost(releaseProduct api.ReleaseProduct, arch api.ReleaseArchitecture) string {
+func ServiceHost(d api.ReleaseDescriptor) string {
 	var product string
-	switch releaseProduct {
+	switch d.Product {
 	case api.ReleaseProductOCP:
 		product = "ocp"
 	case api.ReleaseProductOKD:
 		product = "origin"
 	}
 
-	return fmt.Sprintf("https://%s.%s.releases.%s/api/v1/releasestream", arch, product, api.ServiceDomainCI)
+	return fmt.Sprintf("https://%s.%s.releases.%s/api/v1/releasestream", d.Architecture, product, api.ServiceDomainCI)
 }
 
-// Architecture determines the architecture in the Release Controllers' endpoints
-func Architecture(architecture api.ReleaseArchitecture) string {
+// architecture determines the architecture in the Release Controllers' endpoints
+func architecture(architecture api.ReleaseArchitecture) string {
 	switch architecture {
 	case api.ReleaseArchitectureAMD64:
 		// default, no postfix
@@ -38,9 +38,13 @@ func Architecture(architecture api.ReleaseArchitecture) string {
 	return ""
 }
 
+func Endpoint(d api.ReleaseDescriptor, version, stream, suffix string) string {
+	return fmt.Sprintf("%s/%s%s%s%s", ServiceHost(d), version, stream, architecture(d.Architecture), suffix)
+}
+
 // endpoint determines the API endpoint to use for a candidate release
 func endpoint(candidate api.Candidate) string {
-	return fmt.Sprintf("%s/%s.0-0.%s%s/latest", ServiceHost(candidate.Product, candidate.Architecture), candidate.Version, candidate.Stream, Architecture(candidate.Architecture))
+	return Endpoint(candidate.ReleaseDescriptor, candidate.Version+".0-0.", string(candidate.Stream), "/latest")
 }
 
 // DefaultFields add default values to the fields of candidate

@@ -48,6 +48,8 @@ const (
 <p class="text-right">{{ returnLink }}</p>
 <p class="text-right">{{ documentationLink }}</p>
 
+<h3>Requestor: {{ commentLink .ObjectMeta .Spec.PullRequest.PullRequest .Spec.Jobs.ReleaseControllerConfig }}</h3>
+
 Created: {{ .ObjectMeta.CreationTimestamp }} 
 
 {{ with .Spec }}
@@ -236,6 +238,15 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 			org := template.HTMLEscapeString(pr.Org)
 			repo := template.HTMLEscapeString(pr.Repo)
 			ret := fmt.Sprintf(`<a href="https://github.com/%s/%s/commit/%s">%s</a>`, org, repo, h, h)
+			return template.HTML(ret)
+		},
+		"commentLink": func(obj *metav1.ObjectMeta, pr *prpqv1.PullRequest, config *prpqv1.ReleaseControllerConfig) template.HTML {
+			created := obj.GetCreationTimestamp().Format("Jan 2, 2006 15:04")
+			author := template.HTMLEscapeString(pr.Author)
+			ocp := template.HTMLEscapeString(config.OCP)
+			release := template.HTMLEscapeString(config.Release)
+			spec := template.HTMLEscapeString(config.Specifier)
+			ret := fmt.Sprintf(`%s's '/payload %s %s %s' on %s`, author, ocp, release, spec, created)
 			return template.HTML(ret)
 		},
 		"jobStatus": func(i int) *prpqv1.PullRequestPayloadJobStatus {

@@ -76,8 +76,9 @@ Created: {{ .ObjectMeta.CreationTimestamp }}
   <li>Release: {{ .Release }}</li>
   <li>Specifier: {{ .Specifier }}</li>
   {{ with .Revision }}<li>Revision: {{ . }}</li>{{ end }}
-{{ end }}
+  {{ configLink . }}
 </ul>
+{{ end }}
 
 <h2>Jobs</h2>
 <ul>
@@ -247,6 +248,18 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 			release := template.HTMLEscapeString(config.Release)
 			spec := template.HTMLEscapeString(config.Specifier)
 			ret := fmt.Sprintf(`%s's '/payload %s %s %s' on %s`, author, ocp, release, spec, created)
+			return template.HTML(ret)
+		},
+		"configLink": func(config *prpqv1.ReleaseControllerConfig) template.HTML {
+			ocp := template.HTMLEscapeString(config.OCP)
+			release := template.HTMLEscapeString(config.Release)
+			suffix := ""
+			if release == "ci" {
+				suffix = "-ci"
+			}
+			ret := fmt.Sprintf(`<li><a href="https://amd64.ocp.releases.ci.openshift.org/#%s.0-0.%s">Release controller %s %s</a></li>
+				<li><a href="https://github.com/openshift/release/blob/master/core-services/release-controller/_releases/release-ocp-%s%s.json">Release controller config %s %s</a></li>`,
+				ocp, release, ocp, release, ocp, suffix, ocp, release)
 			return template.HTML(ret)
 		},
 		"jobStatus": func(i int) *prpqv1.PullRequestPayloadJobStatus {

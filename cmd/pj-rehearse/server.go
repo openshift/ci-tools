@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"regexp"
 	"strings"
@@ -14,12 +16,14 @@ import (
 	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/pluginhelp"
+	"k8s.io/test-infra/prow/pod-utils/gcs"
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/rehearse"
 )
 
 const (
+	pjRehearse         = "pj-rehearse"
 	needsOkToTestLabel = "needs-ok-to-test"
 	rehearseNormal     = "/pj-rehearse"
 	rehearseMore       = "/pj-rehearse more"
@@ -46,7 +50,6 @@ type server struct {
 	ghc githubClient
 	gc  git.ClientFactory
 
-	preCheck        bool
 	rehearsalConfig rehearse.RehearsalConfig
 }
 
@@ -142,7 +145,6 @@ func serverFromOptions(o options) (*server, error) {
 	return &server{
 		ghc:             ghc,
 		gc:              gc,
-		preCheck:        o.preCheck,
 		rehearsalConfig: rehearsalConfig,
 	}, nil
 }
@@ -171,35 +173,29 @@ func (s *server) respondToNewPR(pullRequest *github.PullRequest, logger *logrus.
 	number := pullRequest.Number
 	user := pullRequest.User.Login
 	var comment string
-	if s.preCheck {
-		presubmits, periodics, err := s.getAffectedJobs(pullRequest, logger)
-		if err != nil {
-			s.reportFailure("unable to determine affected jobs. This could be due to a branch that needs to be rebased.", err, org, repo, user, number, false, logger)
-			return
-		}
-		foundJobsToRehearse := len(presubmits) > 0 || len(periodics) > 0
-		if !foundJobsToRehearse {
-			s.acknowledgeRehearsals(org, repo, number, logger)
-		}
-
-		lines := s.getJobsTableLines(presubmits, periodics, user)
-		if foundJobsToRehearse {
-			lines = append(lines, []string{
-				"Prior to this PR being merged, you will need to either run and acknowledge or opt to skip these rehearsals.",
-				"",
-			}...)
-			lines = append(lines, s.getUsageDetailsLines()...)
-		}
-		comment = strings.Join(lines, "\n")
-	} else {
-		lines := []string{
-			fmt.Sprintf("@%s: changes from this PR may affect rehearsable jobs. The `pj-rehearse` plugin is available to rehearse these jobs.", user),
-			"", // For formatting
-		}
-		lines = append(lines, s.getUsageDetailsLines()...)
-		comment = strings.Join(lines, "\n")
+	presubmits, periodics, err := s.getAffectedJobs(pullRequest, logger)
+	if err != nil {
+		s.reportFailure("unable to determine affected jobs. This could be due to a branch that needs to be rebased.", err, org, repo, user, number, false, logger)
+		return
+	}
+	foundJobsToRehearse := len(presubmits) > 0 || len(periodics) > 0
+	if !foundJobsToRehearse {
+		s.acknowledgeRehearsals(org, repo, number, logger)
 	}
 
+	lines, jobCount := s.getJobsTableLines(presubmits, periodics, user)
+	if foundJobsToRehearse {
+		if jobCount > s.rehearsalConfig.MaxLimit {
+			fileLocation := s.dumpAffectedJobsToGCS(pullRequest, presubmits, periodics, jobCount, logger)
+			lines = append(lines, fmt.Sprintf("A full list of affected jobs can be found [here](%s%s)", s.rehearsalConfig.GCSBrowserPrefix, fileLocation))
+		}
+		lines = append(lines, []string{
+			"Prior to this PR being merged, you will need to either run and acknowledge or opt to skip these rehearsals.",
+			"",
+		}...)
+		lines = append(lines, s.getUsageDetailsLines()...)
+	}
+	comment = strings.Join(lines, "\n")
 	if err := s.ghc.CreateComment(org, repo, number, comment); err != nil {
 		logger.WithError(err).Error("failed to create comment")
 	}
@@ -257,7 +253,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 			case rehearseRefresh:
 				presubmits, periodics, err := s.getAffectedJobs(pullRequest, logger)
 				if err != nil {
-					if err := s.ghc.CreateComment(org, repo, pullRequest.Number, fmt.Sprintf("@%s, pj-rehearse couldn't determine affected jobs. This could be due to a branch that needs to be rebased.", user)); err != nil {
+					if err = s.ghc.CreateComment(org, repo, pullRequest.Number, fmt.Sprintf("@%s, pj-rehearse couldn't determine affected jobs. This could be due to a branch that needs to be rebased.", user)); err != nil {
 						logger.WithError(err).Error("failed to create comment")
 					}
 				}
@@ -265,8 +261,12 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 				if !foundJobsToRehearse {
 					s.acknowledgeRehearsals(org, repo, number, logger)
 				}
-				comment = strings.Join(s.getJobsTableLines(presubmits, periodics, user), "\n")
-				if err := s.ghc.CreateComment(org, repo, number, comment); err != nil {
+				jobTableLines, jobCount := s.getJobsTableLines(presubmits, periodics, user)
+				if jobCount > s.rehearsalConfig.MaxLimit {
+					fileLocation := s.dumpAffectedJobsToGCS(pullRequest, presubmits, periodics, jobCount, logger)
+					jobTableLines = append(jobTableLines, fmt.Sprintf("A full list of affected jobs can be found [here](%s%s)", s.rehearsalConfig.GCSBrowserPrefix, fileLocation))
+				}
+				if err = s.ghc.CreateComment(org, repo, number, strings.Join(jobTableLines, "\n")); err != nil {
 					logger.WithError(err).Error("failed to create comment")
 				}
 			case rehearseAbort:
@@ -305,13 +305,6 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 					continue
 				}
 				requestedOnly := command != rehearseNormal && command != rehearseMore && command != rehearseMax && command != rehearseAutoAck
-				if !requestedOnly && !s.preCheck {
-					// Since we didn't provide a comment about the rehearsable jobs prior to the user selecting to run, list them now
-					jobListComment := strings.Join(s.getJobsTableLines(presubmits, periodics, pullRequest.User.Login), "\n")
-					if err := s.ghc.CreateComment(org, repo, number, jobListComment); err != nil {
-						logger.WithError(err).Error("failed to create comment")
-					}
-				}
 
 				if requestedOnly {
 					rawJobs := strings.TrimPrefix(command, rehearseNormal+" ")
@@ -444,9 +437,11 @@ func (s *server) prepareCandidate(repoClient git.RepoClient, pullRequest *github
 	return candidate, nil
 }
 
-func (s *server) getJobsTableLines(presubmits config.Presubmits, periodics config.Periodics, user string) []string {
+// getJobsTableLines returns a Markdown formatted table of all affected jobs in the form of a []string
+// and the total number of affected jobs
+func (s *server) getJobsTableLines(presubmits config.Presubmits, periodics config.Periodics, user string) ([]string, int) {
 	if len(presubmits) == 0 && len(periodics) == 0 {
-		return []string{fmt.Sprintf("@%s: no rehearsable tests are affected by this change", user)}
+		return []string{fmt.Sprintf("@%s: no rehearsable tests are affected by this change", user)}, 0
 	}
 
 	lines := []string{
@@ -457,28 +452,34 @@ func (s *server) getJobsTableLines(presubmits config.Presubmits, periodics confi
 	}
 
 	limitToList := s.rehearsalConfig.MaxLimit
-	jobCount := 0
-	for repoName, jobs := range presubmits {
-		for _, presubmit := range jobs {
-			jobCount++
-			if jobCount < limitToList {
-				lines = append(lines, fmt.Sprintf("%s | %s | %s | %s", presubmit.Name, repoName, "presubmit", config.GetSourceType(presubmit.Labels).GetDisplayText()))
-			}
+	affectedJobs := getAffectedJobFormattedList(presubmits, periodics)
+	for i, job := range affectedJobs {
+		if i >= limitToList {
+			break
 		}
-	}
-	for jobName, periodic := range periodics {
-		jobCount++
-		if jobCount < limitToList {
-			lines = append(lines, fmt.Sprintf("%s | N/A | %s | %s", jobName, "periodic", config.GetSourceType(periodic.Labels).GetDisplayText()))
-		}
+		lines = append(lines, job)
 	}
 
+	jobCount := len(affectedJobs)
 	if jobCount > limitToList {
 		lines = append(lines, "") // For formatting
 		lines = append(lines, fmt.Sprintf("A total of %d jobs have been affected by this change. The above listing is non-exhaustive and limited to %d jobs.", jobCount, limitToList))
 	}
 
-	return append(lines, "") // For formatting
+	return append(lines, ""), jobCount
+}
+
+func getAffectedJobFormattedList(presubmits config.Presubmits, periodics config.Periodics) []string {
+	var jobs []string
+	for repoName, tests := range presubmits {
+		for _, presubmit := range tests {
+			jobs = append(jobs, fmt.Sprintf("%s | %s | %s | %s", presubmit.Name, repoName, "presubmit", config.GetSourceType(presubmit.Labels).GetDisplayText()))
+		}
+	}
+	for jobName, periodic := range periodics {
+		jobs = append(jobs, fmt.Sprintf("%s | N/A | %s | %s", jobName, "periodic", config.GetSourceType(periodic.Labels).GetDisplayText()))
+	}
+	return jobs
 }
 
 func (s *server) getUsageDetailsLines() []string {
@@ -506,4 +507,20 @@ func (s *server) acknowledgeRehearsals(org, repo string, number int, logger *log
 	if err := s.ghc.AddLabel(org, repo, number, rehearse.RehearsalsAckLabel); err != nil {
 		logger.WithError(err).Errorf("failed to add '%s' label", rehearse.RehearsalsAckLabel)
 	}
+}
+
+func (s *server) dumpAffectedJobsToGCS(pullRequest *github.PullRequest, presubmits config.Presubmits, periodics config.Periodics, jobCount int, logger *logrus.Entry) string {
+	logger.WithField("jobCount", jobCount).Debugf("jobCount is above %d. cannot comment all jobs, writing out to file", s.rehearsalConfig.MaxLimit)
+	fileContent := []string{"Test Name | Repo | Type | Reason"}
+	fileLocation := fmt.Sprintf("%s/%s/%s/%d/%s", pjRehearse, pullRequest.Base.Repo.Owner.Login, pullRequest.Base.Repo.Name, pullRequest.Number, pullRequest.Head.SHA)
+	uploadTargets := map[string]gcs.UploadFunc{
+		fileLocation: gcs.DataUpload(func() (io.ReadCloser, error) {
+			fileContent = append(fileContent, getAffectedJobFormattedList(presubmits, periodics)...)
+			return io.NopCloser(strings.NewReader(strings.Join(fileContent, "\n"))), nil
+		}),
+	}
+	if err := gcs.Upload(context.Background(), s.rehearsalConfig.GCSBucket, s.rehearsalConfig.GCSCredentialsFile, "", uploadTargets); err != nil {
+		logger.WithError(err).Error("couldn't upload affected job data to GCS")
+	}
+	return fileLocation
 }

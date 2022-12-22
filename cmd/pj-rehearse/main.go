@@ -12,6 +12,7 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes/scheme"
+	prowConfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
@@ -20,7 +21,9 @@ import (
 	"k8s.io/test-infra/prow/githubeventserver"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
+	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
+	pprofutil "k8s.io/test-infra/prow/pjutil/pprof"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
@@ -28,7 +31,8 @@ import (
 )
 
 type options struct {
-	logLevel string
+	logLevel               string
+	instrumentationOptions prowflagutil.InstrumentationOptions
 
 	prowjobKubeconfig string
 	kubernetesOptions flagutil.KubernetesOptions
@@ -57,7 +61,10 @@ func gatherOptions() (options, error) {
 	fs := flag.CommandLine
 
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
+	o.instrumentationOptions.AddFlags(fs)
+
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Run in integration test mode; no event server is created, and no jobs are submitted")
+	o.dryRunOptions.bind(fs)
 
 	fs.StringVar(&o.prowjobKubeconfig, "prowjob-kubeconfig", "", "Path to the prowjob kubeconfig. If unset, default kubeconfig will be used for prowjobs.")
 	o.kubernetesOptions.AddFlags(fs)
@@ -76,7 +83,6 @@ func gatherOptions() (options, error) {
 	o.github.AddFlags(fs)
 	o.githubEventServerOptions.Bind(fs)
 	o.config.AddFlags(fs)
-	o.dryRunOptions.bind(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)
@@ -200,6 +206,8 @@ func main() {
 			os.Exit(1)
 		}
 	} else {
+		pprofutil.Instrument(o.instrumentationOptions)
+		metrics.ExposeMetrics("pj-rehearse", prowConfig.PushGateway{}, o.instrumentationOptions.MetricsPort)
 
 		if err = secret.Add(o.github.TokenPath, o.webhookSecretFile); err != nil {
 			logger.WithError(err).Fatal("Error starting secrets agent.")
@@ -221,7 +229,7 @@ func main() {
 			eventServer.GracefulShutdown()
 		})
 
-		health := pjutil.NewHealth()
+		health := pjutil.NewHealthOnPort(o.instrumentationOptions.HealthPort)
 		health.ServeReady()
 
 		interrupts.ListenAndServe(eventServer, time.Second*30)

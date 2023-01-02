@@ -1215,6 +1215,9 @@ const (
 	ClusterProfileAWS2                  ClusterProfile = "aws-2"
 	ClusterProfileHyperShift            ClusterProfile = "hypershift"
 	ClusterProfileAWS3                  ClusterProfile = "aws-3"
+	ClusterProfileGCPVirtualization     ClusterProfile = "gcp-virtualization"
+	ClusterProfileAWSVirtualization     ClusterProfile = "aws-virtualization"
+	ClusterProfileAzureVirtualization   ClusterProfile = "azure-virtualization"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1265,6 +1268,9 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCPLoggingJSONFile,
 		ClusterProfileGCPLoggingJournald,
 		ClusterProfileGCPQE,
+		ClusterProfileGCPVirtualization,
+		ClusterProfileAWSVirtualization,
+		ClusterProfileAzureVirtualization,
 		ClusterProfileHyperShift,
 		ClusterProfileIBMCloud,
 		ClusterProfileIBMCloudQE,
@@ -1315,7 +1321,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSQE,
 		ClusterProfileAWSINTEROPQE,
 		ClusterProfileAWS1QE,
-		ClusterProfileAWSSdQE:
+		ClusterProfileAWSSdQE,
+		ClusterProfileAWSVirtualization:
 		return string(CloudAWS)
 	case
 		ClusterProfileAlibabaCloud,
@@ -1338,7 +1345,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAzure2,
 		ClusterProfileAzure4,
 		ClusterProfileAzureArc,
-		ClusterProfileAzureQE:
+		ClusterProfileAzureQE,
+		ClusterProfileAzureVirtualization:
 		return "azure4"
 	case
 		ClusterProfileAzureArm64,
@@ -1366,7 +1374,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileGCPLoggingJournald,
 		ClusterProfileGCPLoggingJSONFile,
 		ClusterProfileGCPLoggingCRIO,
-		ClusterProfileGCP2:
+		ClusterProfileGCP2,
+		ClusterProfileGCPVirtualization:
 		return string(CloudGCP)
 	case
 		ClusterProfileIBMCloud,
@@ -1462,6 +1471,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-sc2s-qe-quota-slice"
 	case ClusterProfileAWSINTEROPQE:
 		return "aws-interop-qe-quota-slice"
+	case ClusterProfileAWSVirtualization:
+		return "aws-virtualization-quota-slice"
 	case ClusterProfileAlibabaCloud:
 		return "alibabacloud-quota-slice"
 	case ClusterProfileAlibabaCloudQE:
@@ -1490,6 +1501,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "azuremag-qe-quota-slice"
 	case ClusterProfileAzureArm64QE:
 		return "azure-arm64-qe-quota-slice"
+	case ClusterProfileAzureVirtualization:
+		return "azure-virtualization-quota-slice"
 	case ClusterProfileEquinixOcpMetal:
 		return "equinix-ocp-metal-quota-slice"
 	case ClusterProfileEquinixOcpMetalQE:
@@ -1508,6 +1521,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "gcp-quota-slice"
 	case ClusterProfileGCP2:
 		return "gcp-openshift-gce-devel-ci-2-quota-slice"
+	case ClusterProfileGCPVirtualization:
+		return "gcp-virtualization-quota-slice"
 	case ClusterProfileIBMCloud:
 		return "ibmcloud-quota-slice"
 	case ClusterProfileIBMCloudQE:
@@ -1638,7 +1653,7 @@ func (p ClusterProfile) Secret() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-outpost", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "libvirt-ppc64le", "libvirt-s390x", "nutanix", "nutanix-qe", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "packet-edge", "powervs", "kubevirt", "aws-cpaas", "osd-ephemeral":
+	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-outpost", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "libvirt-ppc64le", "libvirt-s390x", "nutanix", "nutanix-qe", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "packet-edge", "powervs", "kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization", "azure-virtualization":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

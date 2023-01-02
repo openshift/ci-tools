@@ -586,8 +586,8 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 							"latest": {
 								Candidate: &api.Candidate{
 									ReleaseDescriptor: api.ReleaseDescriptor{
-										Product:      "ocp",
 										Architecture: "amd64",
+										Product:      "ocp",
 									},
 									Stream:  "nightly",
 									Version: "4.5",

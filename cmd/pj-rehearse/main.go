@@ -40,11 +40,13 @@ type options struct {
 	noRegistry        bool
 	noClusterProfiles bool
 
-	preCheck bool
-
 	normalLimit int
 	moreLimit   int
 	maxLimit    int
+
+	gcsBucket          string
+	gcsCredentialsFile string
+	gcsBrowserPrefix   string
 
 	dryRun        bool
 	dryRunOptions dryRunOptions
@@ -72,13 +74,15 @@ func gatherOptions() (options, error) {
 	fs.BoolVar(&o.noRegistry, "no-registry", false, "If true, do not attempt to compare step registry content")
 	fs.BoolVar(&o.noClusterProfiles, "no-cluster-profiles", false, "If true, do not attempt to compare cluster profiles")
 
-	fs.BoolVar(&o.preCheck, "pre-check", false, "If true, check for rehearsable jobs and provide the list upon PR creation")
-
 	fs.IntVar(&o.normalLimit, "normal-limit", 10, "Upper limit of jobs attempted to rehearse with normal command (if more jobs are being touched, only this many will be rehearsed)")
 	fs.IntVar(&o.moreLimit, "more-limit", 20, "Upper limit of jobs attempted to rehearse with more command (if more jobs are being touched, only this many will be rehearsed)")
 	fs.IntVar(&o.maxLimit, "max-limit", 35, "Upper limit of jobs attempted to rehearse with max command (if more jobs are being touched, only this many will be rehearsed)")
 
 	fs.StringVar(&o.webhookSecretFile, "hmac-secret-file", "/etc/webhook/hmac", "Path to the file containing the GitHub HMAC secret.")
+
+	fs.StringVar(&o.gcsBucket, "gcs-bucket", "origin-ci-test", "GCS Bucket to upload affected jobs list")
+	fs.StringVar(&o.gcsCredentialsFile, "gcs-credentials-file", "/etc/gcs/service-account.json", "GCS Credentials file to upload affected jobs list")
+	fs.StringVar(&o.gcsBrowserPrefix, "gcs-browser-prefix", "https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/", "Prefix for the GCS Browser for viewing the affected jobs list")
 
 	o.github.AddFlags(fs)
 	o.githubEventServerOptions.Bind(fs)
@@ -133,15 +137,18 @@ func (o *dryRunOptions) validate() error {
 
 func rehearsalConfigFromOptions(o options) rehearse.RehearsalConfig {
 	return rehearse.RehearsalConfig{
-		ProwjobKubeconfig: o.prowjobKubeconfig,
-		KubernetesOptions: o.kubernetesOptions,
-		NoTemplates:       o.noTemplates,
-		NoRegistry:        o.noRegistry,
-		NoClusterProfiles: o.noClusterProfiles,
-		DryRun:            o.dryRun,
-		NormalLimit:       o.normalLimit,
-		MoreLimit:         o.moreLimit,
-		MaxLimit:          o.maxLimit,
+		ProwjobKubeconfig:  o.prowjobKubeconfig,
+		KubernetesOptions:  o.kubernetesOptions,
+		NoTemplates:        o.noTemplates,
+		NoRegistry:         o.noRegistry,
+		NoClusterProfiles:  o.noClusterProfiles,
+		DryRun:             o.dryRun,
+		NormalLimit:        o.normalLimit,
+		MoreLimit:          o.moreLimit,
+		MaxLimit:           o.maxLimit,
+		GCSBucket:          o.gcsBucket,
+		GCSCredentialsFile: o.gcsCredentialsFile,
+		GCSBrowserPrefix:   o.gcsBrowserPrefix,
 	}
 }
 

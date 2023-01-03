@@ -61,6 +61,10 @@ type RehearsalConfig struct {
 	MoreLimit   int
 	MaxLimit    int
 
+	GCSBucket          string
+	GCSCredentialsFile string
+	GCSBrowserPrefix   string
+
 	DryRun bool
 }
 

@@ -521,6 +521,7 @@ periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-e2e-vspher
 periodic-ci-openshift-release-master-ci-4.11-upgrade-from-stable-4.10-from-stable-4.9-e2e-aws-upgrade
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-cilium
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-ovn
+periodic-ci-openshift-release-master-ci-4.12-e2e-aws-ovn-network-migration
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-ovn-serial
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-sdn
@@ -551,7 +552,6 @@ periodic-ci-openshift-release-master-ci-4.12-e2e-gcp-sdn-serial
 periodic-ci-openshift-release-master-ci-4.12-e2e-gcp-sdn-techpreview
 periodic-ci-openshift-release-master-ci-4.12-e2e-gcp-sdn-techpreview-serial
 periodic-ci-openshift-release-master-ci-4.12-e2e-gcp-sdn-upgrade
-periodic-ci-openshift-release-master-ci-4.12-e2e-network-migration
 periodic-ci-openshift-release-master-ci-4.12-e2e-network-migration-rollback
 periodic-ci-openshift-release-master-ci-4.12-upgrade-from-stable-4.11-e2e-aws-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.12-upgrade-from-stable-4.11-e2e-aws-ovn-upgrade-rollback
@@ -570,6 +570,7 @@ periodic-ci-openshift-release-master-ci-4.12-upgrade-from-stable-4.11-e2e-vspher
 periodic-ci-openshift-release-master-ci-4.12-upgrade-from-stable-4.11-from-stable-4.10-e2e-aws-sdn-upgrade
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-cilium
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-ovn
+periodic-ci-openshift-release-master-ci-4.13-e2e-aws-ovn-network-migration
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-ovn-serial
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-sdn
@@ -600,7 +601,6 @@ periodic-ci-openshift-release-master-ci-4.13-e2e-gcp-sdn-serial
 periodic-ci-openshift-release-master-ci-4.13-e2e-gcp-sdn-techpreview
 periodic-ci-openshift-release-master-ci-4.13-e2e-gcp-sdn-techpreview-serial
 periodic-ci-openshift-release-master-ci-4.13-e2e-gcp-sdn-upgrade
-periodic-ci-openshift-release-master-ci-4.13-e2e-network-migration
 periodic-ci-openshift-release-master-ci-4.13-e2e-network-migration-rollback
 periodic-ci-openshift-release-master-ci-4.13-upgrade-from-stable-4.12-e2e-aws-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.13-upgrade-from-stable-4.12-e2e-aws-ovn-upgrade-rollback
@@ -821,7 +821,7 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-assisted
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-ipi-compact
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-single-node-live-iso
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-single-node-with-worker-live-iso
-periodic-ci-openshift-release-master-nightly-4.12-e2e-nutanix
+periodic-ci-openshift-release-master-nightly-4.12-e2e-nutanix-ovn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt-ovn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt-sdn
@@ -899,7 +899,7 @@ periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ovn-ipi-compact
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ovn-single-node-live-iso
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ovn-single-node-with-worker-live-iso
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-sdn-assisted
-periodic-ci-openshift-release-master-nightly-4.13-e2e-nutanix
+periodic-ci-openshift-release-master-nightly-4.13-e2e-nutanix-ovn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-ovirt-csi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-ovirt-ovn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-ovirt-sdn

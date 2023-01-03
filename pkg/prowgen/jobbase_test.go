@@ -345,7 +345,15 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			name: "multi-stage test with releases",
 			cfg: &ciop.ReleaseBuildConfiguration{
 				InputConfiguration: ciop.InputConfiguration{
-					Releases: map[string]ciop.UnresolvedRelease{"latest": {Candidate: &ciop.Candidate{Product: "ocp"}}}},
+					Releases: map[string]ciop.UnresolvedRelease{
+						"latest": {
+							Candidate: &ciop.Candidate{
+								ReleaseDescriptor: ciop.ReleaseDescriptor{
+									Product: "ocp",
+								},
+							},
+						},
+					}},
 			},
 			test: ciop.TestStepConfiguration{
 				As: "simple",

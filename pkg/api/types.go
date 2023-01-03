@@ -251,17 +251,13 @@ type Integration struct {
 	IncludeBuiltImages bool `json:"include_built_images,omitempty"`
 }
 
-// Candidate describes a validated candidate release payload
-type Candidate struct {
+// ReleaseDescriptor holds common data for different types of release payloads
+type ReleaseDescriptor struct {
 	// Product is the name of the product being released
 	Product ReleaseProduct `json:"product"`
 	// Architecture is the architecture for the product.
 	// Defaults to amd64.
 	Architecture ReleaseArchitecture `json:"architecture,omitempty"`
-	// ReleaseStream is the stream from which we pick the latest candidate
-	Stream ReleaseStream `json:"stream"`
-	// Version is the minor version to search for
-	Version string `json:"version"`
 	// Relative optionally specifies how old of a release
 	// is requested from this stream. For instance, a value
 	// of 1 will resolve to the previous validated release
@@ -269,13 +265,18 @@ type Candidate struct {
 	Relative int `json:"relative,omitempty"`
 }
 
+// Candidate describes a validated candidate release payload
+type Candidate struct {
+	ReleaseDescriptor
+	// ReleaseStream is the stream from which we pick the latest candidate
+	Stream ReleaseStream `json:"stream"`
+	// Version is the minor version to search for
+	Version string `json:"version"`
+}
+
 // Prerelease describes a validated release payload before it is exposed
 type Prerelease struct {
-	// Product is the name of the product being released
-	Product ReleaseProduct `json:"product"`
-	// Architecture is the architecture for the product.
-	// Defaults to amd64.
-	Architecture ReleaseArchitecture `json:"architecture,omitempty"`
+	ReleaseDescriptor
 	// VersionBounds describe the allowable version bounds to search in
 	VersionBounds VersionBounds `json:"version_bounds"`
 

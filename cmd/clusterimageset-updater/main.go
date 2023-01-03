@@ -97,8 +97,10 @@ func main() {
 	boundsToPullspec := make(map[api.VersionBounds]string)
 	for versionBounds := range poolFilesByBounds {
 		release := api.Prerelease{
-			Product:       api.ReleaseProductOCP,
-			Architecture:  api.ReleaseArchitectureAMD64,
+			ReleaseDescriptor: api.ReleaseDescriptor{
+				Product:      api.ReleaseProductOCP,
+				Architecture: api.ReleaseArchitectureAMD64,
+			},
 			VersionBounds: versionBounds,
 		}
 		pullSpec, err := prerelease.ResolvePullSpec(&http.Client{}, release)

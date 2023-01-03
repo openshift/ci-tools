@@ -344,10 +344,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      resolved_release_images_step:\n" +
 	"        # Candidate describes a candidate release payload\n" +
 	"        candidate:\n" +
-	"            # Architecture is the architecture for the product.\n" +
-	"            # Defaults to amd64.\n" +
 	"            architecture: ' '\n" +
-	"            # Product is the name of the product being released\n" +
 	"            product: ' '\n" +
 	"            # ReleaseStream is the stream from which we pick the latest candidate\n" +
 	"            stream: ' '\n" +
@@ -365,10 +362,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        name: ' '\n" +
 	"        # Prerelease describes a yet-to-be released payload\n" +
 	"        prerelease:\n" +
-	"            # Architecture is the architecture for the product.\n" +
-	"            # Defaults to amd64.\n" +
 	"            architecture: ' '\n" +
-	"            # Product is the name of the product being released\n" +
 	"            product: ' '\n" +
 	"            # Stream allows for custom release streams to be selected,\n" +
 	"            # e.g. 4-dev-preview. The architecture suffix should not be\n" +
@@ -1107,10 +1101,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"    \"\":\n" +
 	"        # Candidate describes a candidate release payload\n" +
 	"        candidate:\n" +
-	"            # Architecture is the architecture for the product.\n" +
-	"            # Defaults to amd64.\n" +
 	"            architecture: ' '\n" +
-	"            # Product is the name of the product being released\n" +
 	"            product: ' '\n" +
 	"            # ReleaseStream is the stream from which we pick the latest candidate\n" +
 	"            stream: ' '\n" +
@@ -1127,10 +1118,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            namespace: ' '\n" +
 	"        # Prerelease describes a yet-to-be released payload\n" +
 	"        prerelease:\n" +
-	"            # Architecture is the architecture for the product.\n" +
-	"            # Defaults to amd64.\n" +
 	"            architecture: ' '\n" +
-	"            # Product is the name of the product being released\n" +
 	"            product: ' '\n" +
 	"            # Stream allows for custom release streams to be selected,\n" +
 	"            # e.g. 4-dev-preview. The architecture suffix should not be\n" +

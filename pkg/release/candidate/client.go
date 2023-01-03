@@ -14,20 +14,20 @@ import (
 	"github.com/openshift/ci-tools/pkg/release"
 )
 
-func ServiceHost(releaseProduct api.ReleaseProduct, arch api.ReleaseArchitecture) string {
+func ServiceHost(d api.ReleaseDescriptor) string {
 	var product string
-	switch releaseProduct {
+	switch d.Product {
 	case api.ReleaseProductOCP:
 		product = "ocp"
 	case api.ReleaseProductOKD:
 		product = "origin"
 	}
 
-	return fmt.Sprintf("https://%s.%s.releases.%s/api/v1/releasestream", arch, product, api.ServiceDomainCI)
+	return fmt.Sprintf("https://%s.%s.releases.%s/api/v1/releasestream", d.Architecture, product, api.ServiceDomainCI)
 }
 
-// Architecture determines the architecture in the Release Controllers' endpoints
-func Architecture(architecture api.ReleaseArchitecture) string {
+// architecture determines the architecture in the Release Controllers' endpoints
+func architecture(architecture api.ReleaseArchitecture) string {
 	switch architecture {
 	case api.ReleaseArchitectureAMD64:
 		// default, no postfix
@@ -38,9 +38,13 @@ func Architecture(architecture api.ReleaseArchitecture) string {
 	return ""
 }
 
+func Endpoint(d api.ReleaseDescriptor, version, stream, suffix string) string {
+	return fmt.Sprintf("%s/%s%s%s%s", ServiceHost(d), version, stream, architecture(d.Architecture), suffix)
+}
+
 // endpoint determines the API endpoint to use for a candidate release
 func endpoint(candidate api.Candidate) string {
-	return fmt.Sprintf("%s/%s.0-0.%s%s/latest", ServiceHost(candidate.Product, candidate.Architecture), candidate.Version, candidate.Stream, Architecture(candidate.Architecture))
+	return Endpoint(candidate.ReleaseDescriptor, candidate.Version+".0-0.", string(candidate.Stream), "/latest")
 }
 
 // DefaultFields add default values to the fields of candidate
@@ -58,19 +62,24 @@ func DefaultFields(candidate api.Candidate) api.Candidate {
 
 // ResolvePullSpec determines the pull spec for the candidate release
 func ResolvePullSpec(client release.HTTPClient, candidate api.Candidate) (string, error) {
-	return resolvePullSpec(client, endpoint(DefaultFields(candidate)), candidate.Relative)
+	return ResolvePullSpecCommon(client, endpoint(DefaultFields(candidate)), nil, candidate.Relative)
 }
 
-func resolvePullSpec(client release.HTTPClient, endpoint string, relative int) (string, error) {
+func ResolvePullSpecCommon(client release.HTTPClient, endpoint string, bounds *api.VersionBounds, relative int) (string, error) {
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Accept", "application/json")
+	q := req.URL.Query()
+	if bounds != nil {
+		q.Add("in", bounds.Query())
+	}
 	if relative != 0 {
-		q := req.URL.Query()
 		q.Add("rel", strconv.Itoa(relative))
-		req.URL.RawQuery = q.Encode()
+	}
+	if s := q.Encode(); s != "" {
+		req.URL.RawQuery = s
 	}
 	logrus.Infof("Requesting a release from %s", req.URL.String())
 	resp, err := client.Do(req)

@@ -249,6 +249,7 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-ovn-multi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-ovn-proxy
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-ovn-single-node
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-ovn-single-node-serial
+periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn-cgroupsv2
 periodic-ci-openshift-release-master-nightly-4.12-e2e-aws-sdn-serial
@@ -285,7 +286,6 @@ periodic-ci-openshift-release-master-nightly-4.12-install-analysis-all
 periodic-ci-openshift-release-master-nightly-4.12-upgrade-from-stable-4.11-e2e-aws-sdn-upgrade
 periodic-ci-openshift-release-master-nightly-4.12-upgrade-from-stable-4.11-e2e-metal-ipi-sdn-bm-upgrade
 periodic-ci-openshift-release-master-nightly-4.12-upgrade-from-stable-4.11-e2e-metal-ipi-upgrade-ovn-ipv6
-release-openshift-ocp-installer-e2e-aws-upi-4.12
 release-openshift-ocp-installer-e2e-azure-serial-4.12
 release-openshift-ocp-installer-e2e-gcp-serial-4.12
 release-openshift-ocp-osd-aws-nightly-4.12
@@ -959,7 +959,6 @@ release-openshift-origin-installer-e2e-gcp-shared-vpc-4.11
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.12-periodics.yaml
 release-openshift-ocp-installer-e2e-aws-csi-4.12
 release-openshift-ocp-installer-e2e-aws-mirrors-4.12
-release-openshift-ocp-installer-e2e-aws-upi-4.12
 release-openshift-ocp-installer-e2e-azure-serial-4.12
 release-openshift-ocp-installer-e2e-gcp-serial-4.12
 release-openshift-ocp-osd-aws-nightly-4.12

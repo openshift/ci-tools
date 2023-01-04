@@ -730,6 +730,10 @@ func (config TestStepConfiguration) TargetName() string {
 	return config.As
 }
 
+func (config TestStepConfiguration) IsPeriodic() bool {
+	return config.Interval != nil || config.MinimumInterval != nil || config.Cron != nil || config.ReleaseController
+}
+
 // Cloud is the name of a cloud provider, e.g., aws cluster topology, etc.
 type Cloud string
 

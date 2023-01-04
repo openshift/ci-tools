@@ -52,7 +52,7 @@ var (
 func NewRepoBumper(o *RepoBumperOptions) (*RepoBumper, error) {
 	mm, err := ocplifecycle.ParseMajorMinor(o.CurOCPRelease)
 	if err != nil {
-		return nil, fmt.Errorf("Error parsing %s", o.CurOCPRelease)
+		return nil, fmt.Errorf("parse release: %w", err)
 	}
 	return &RepoBumper{
 		GlobPattern: o.GlobPattern,

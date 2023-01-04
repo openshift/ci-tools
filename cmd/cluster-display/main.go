@@ -124,47 +124,59 @@ func getClusterPage(ctx context.Context, clients map[string]ctrlruntimeclient.Cl
 		if skipHive && cluster == string(api.HiveCluster) {
 			continue
 		}
-		consoleHost, err := api.ResolveConsoleHost(ctx, client)
+		clusterInfo, err := getClusterInfo(ctx, cluster, client)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve the console host for cluster %s: %w", cluster, err)
+			logrus.WithError(err)
+			clusterInfo["error"] = "cannot reach cluster"
 		}
-		registryHost, err := api.ResolveImageRegistryHost(ctx, client)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve the image registry host for cluster %s: %w", cluster, err)
-		}
-		cv := &configv1.ClusterVersion{}
-		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "version"}, cv); err != nil {
-			return nil, fmt.Errorf("failed to get ClusterVersion for cluster %s: %w", cluster, err)
-		}
-		if len(cv.Status.History) == 0 {
-			return nil, fmt.Errorf("failed to get ClusterVersion for cluster %s: no history found", cluster)
-		}
-		infra := &configv1.Infrastructure{}
-		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "cluster"}, infra); err != nil {
-			return nil, fmt.Errorf("failed to get Infrastructure for cluster %s: %w", cluster, err)
-		}
-		version := cv.Status.History[0].Version
-		product, err := resolveProduct(ctx, client, version)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve the product for cluster %s: %w", cluster, err)
-		}
-
-		cloud := string(infra.Status.PlatformStatus.Type)
-		data = append(data, map[string]string{
-			"cluster":      cluster,
-			"consoleHost":  consoleHost,
-			"registryHost": registryHost,
-			"version":      version,
-			"product":      product,
-			"cloud":        cloud,
-		})
-
+		data = append(data, clusterInfo)
 	}
 
 	sort.Slice(data, func(i, j int) bool {
 		return data[i]["cluster"] < data[j]["cluster"]
 	})
 	return &Page{Data: data}, nil
+}
+
+func getClusterInfo(ctx context.Context, cluster string, client ctrlruntimeclient.Client) (map[string]string, error) {
+	var data = map[string]string{
+		"cluster": cluster,
+	}
+	consoleHost, err := api.ResolveConsoleHost(ctx, client)
+	if err != nil {
+		return data, fmt.Errorf("failed to resolve the console host for cluster %s: %w", cluster, err)
+	}
+	registryHost, err := api.ResolveImageRegistryHost(ctx, client)
+	if err != nil {
+		return data, fmt.Errorf("failed to resolve the image registry host for cluster %s: %w", cluster, err)
+	}
+	cv := &configv1.ClusterVersion{}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "version"}, cv); err != nil {
+		return data, fmt.Errorf("failed to get ClusterVersion for cluster %s: %w", cluster, err)
+	}
+	if len(cv.Status.History) == 0 {
+		return data, fmt.Errorf("failed to get ClusterVersion for cluster %s: no history found", cluster)
+	}
+	infra := &configv1.Infrastructure{}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "cluster"}, infra); err != nil {
+		return data, fmt.Errorf("failed to get Infrastructure for cluster %s: %w", cluster, err)
+	}
+	version := cv.Status.History[0].Version
+	product, err := resolveProduct(ctx, client, version)
+	if err != nil {
+		return data, fmt.Errorf("failed to resolve the product for cluster %s: %w", cluster, err)
+	}
+	cloud := string(infra.Status.PlatformStatus.Type)
+
+	return map[string]string{
+		"cluster":      cluster,
+		"consoleHost":  consoleHost,
+		"registryHost": registryHost,
+		"version":      version,
+		"product":      product,
+		"cloud":        cloud,
+		"error":        "",
+	}, nil
 }
 
 func resolveProduct(ctx context.Context, client ctrlruntimeclient.Client, version string) (string, error) {
@@ -208,10 +220,6 @@ func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients
 			page, err = getClusterPage(ctx, allClients, skipHive)
 		default:
 			http.Error(w, fmt.Sprintf("Unknown crd: %s", crd), http.StatusBadRequest)
-			return
-		}
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if err != nil {

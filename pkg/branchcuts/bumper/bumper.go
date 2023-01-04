@@ -80,7 +80,7 @@ func BumpObject[T any](b Bumper[T], file, outDir string) error {
 	dstFileFullPath := path.Join(outDir, bumpedFilename)
 
 	if _, err := os.Stat(dstFileFullPath); err == nil {
-		logrus.WithError(err).Warnf("file %s already exists, skipping", dstFileFullPath)
+		logrus.Warnf("file %s already exists, skipping", dstFileFullPath)
 		return fmt.Errorf("file %s already exists", dstFileFullPath)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("file exists: %w", err)
@@ -95,7 +95,7 @@ func BumpObject[T any](b Bumper[T], file, outDir string) error {
 
 	logrus.Infof("marshalling obj %s to %s", bumpedFilename, outDir)
 	if err := b.Marshall(bumpedObj, bumpedFilename, outDir); err != nil {
-		logrus.WithError(err).Error("error marshalling2 obj")
+		logrus.WithError(err).Error("error marshalling obj")
 		return fmt.Errorf("marshall obj: %w", err)
 	}
 

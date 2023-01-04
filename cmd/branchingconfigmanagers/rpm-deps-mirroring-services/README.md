@@ -4,7 +4,7 @@ This manager attempts to automatize step (1.) of "[Few weeks before branching da
 ## Usage
 ### Options:
 - `--current-release` specifies the current OCP version
-- `--release-repo` is the absolution path to `openshift/release` repository
+- `--release-repo` is the absolute path to `openshift/release` repository
 
 ### Example
 ```sh

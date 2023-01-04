@@ -50,7 +50,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		g := NewProwJobBaseBuilderForTest(configSpec, info, NewCiOperatorPodSpecGenerator(), element)
 		disableRehearsal := rehearsals.DisableAll || disabledRehearsals.Has(element.As)
 
-		if element.Cron != nil || element.Interval != nil || element.MinimumInterval != nil || element.ReleaseController {
+		if element.IsPeriodic() {
 			cron := ""
 			if element.Cron != nil {
 				cron = *element.Cron

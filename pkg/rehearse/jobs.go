@@ -596,7 +596,7 @@ func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInf
 			switch {
 			case test.Postsubmit:
 				continue // We do not handle postsubmits
-			case test.Cron != nil || test.Interval != nil:
+			case test.IsPeriodic():
 				jobName = cfg.Info.JobName(jobconfig.PeriodicPrefix, test.As)
 				if periodic, ok := allPeriodics[jobName]; ok {
 					selectJob = func() {

@@ -154,7 +154,7 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 // removePeriodics removes periodic tests from the configuration
 func removePeriodics(tests *[]api.TestStepConfiguration) {
 	for i := len(*tests) - 1; i >= 0; i-- {
-		if !(*tests)[i].Portable && ((*tests)[i].Cron != nil || (*tests)[i].Interval != nil) {
+		if !(*tests)[i].Portable && (*tests)[i].IsPeriodic() {
 			*tests = append((*tests)[:i], (*tests)[i+1:]...)
 		}
 	}

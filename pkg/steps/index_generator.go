@@ -89,6 +89,12 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	var secrets []buildapi.SecretBuildSource
+	if s.pullSecret != nil {
+		secrets = append(secrets, buildapi.SecretBuildSource{
+			Secret: coreapi.LocalObjectReference{Name: s.pullSecret.Name},
+		})
+	}
 	build := buildFromSource(
 		s.jobSpec, fromTag, s.config.To,
 		buildapi.BuildSource{
@@ -106,9 +112,7 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 					}},
 				},
 			},
-			Secrets: []buildapi.SecretBuildSource{{
-				Secret: coreapi.LocalObjectReference{Name: s.pullSecret.Name},
-			}},
+			Secrets: secrets,
 		},
 		fromDigest,
 		"",
@@ -126,9 +130,10 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 func (s *indexGeneratorStep) indexGenDockerfile() (string, error) {
 	var dockerCommands []string
 	dockerCommands = append(dockerCommands, "FROM quay.io/operator-framework/upstream-opm-builder AS builder")
-	// pull secret is needed for opm command
-	dockerCommands = append(dockerCommands, "COPY .dockerconfigjson .")
-	dockerCommands = append(dockerCommands, "RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json")
+	if s.pullSecret != nil {
+		dockerCommands = append(dockerCommands, "COPY .dockerconfigjson .")
+		dockerCommands = append(dockerCommands, "RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json")
+	}
 	var bundles []string
 	for _, bundleName := range s.config.OperatorIndex {
 		fullSpec, err := utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.PipelineImageStream, bundleName)()

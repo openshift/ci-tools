@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	coreapi "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/yaml"
@@ -60,6 +61,23 @@ func TestIndexGenDockerfile(t *testing.T) {
 			client:  &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
 		},
 		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
+RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate"]
+FROM pipeline:src
+WORKDIR /index-data
+COPY --from=builder index.Dockerfile index.Dockerfile
+COPY --from=builder /database/ database`,
+	}, {
+		name: "single bundle with pull secret",
+		step: indexGeneratorStep{
+			config: api.IndexGeneratorStepConfiguration{
+				OperatorIndex: []string{"ci-bundle0"},
+				UpdateGraph:   api.IndexUpdateSemver,
+			},
+			jobSpec:    &api.JobSpec{},
+			pullSecret: &coreapi.Secret{},
+			client:     &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
+		},
+		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
 RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate"]
@@ -76,6 +94,23 @@ COPY --from=builder /database/ database`,
 			},
 			jobSpec: &api.JobSpec{},
 			client:  &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
+		},
+		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
+RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0,some-reg/target-namespace/pipeline@ci-bundle1", "--out-dockerfile", "index.Dockerfile", "--generate"]
+FROM pipeline:src
+WORKDIR /index-data
+COPY --from=builder index.Dockerfile index.Dockerfile
+COPY --from=builder /database/ database`,
+	}, {
+		name: "multiple bundles with pull secret",
+		step: indexGeneratorStep{
+			config: api.IndexGeneratorStepConfiguration{
+				OperatorIndex: []string{"ci-bundle0", "ci-bundle1"},
+				UpdateGraph:   api.IndexUpdateSemver,
+			},
+			jobSpec:    &api.JobSpec{},
+			pullSecret: &coreapi.Secret{},
+			client:     &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
 		},
 		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
@@ -95,6 +130,24 @@ COPY --from=builder /database/ database`,
 			},
 			jobSpec: &api.JobSpec{},
 			client:  &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
+		},
+		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
+RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate", "--from-index", "some-reg/target-namespace/pipeline@the-index"]
+FROM pipeline:src
+WORKDIR /index-data
+COPY --from=builder index.Dockerfile index.Dockerfile
+COPY --from=builder /database/ database`,
+	}, {
+		name: "With base index with pull secret",
+		step: indexGeneratorStep{
+			config: api.IndexGeneratorStepConfiguration{
+				OperatorIndex: []string{"ci-bundle0"},
+				UpdateGraph:   api.IndexUpdateSemver,
+				BaseIndex:     "the-index",
+			},
+			jobSpec:    &api.JobSpec{},
+			pullSecret: &coreapi.Secret{},
+			client:     &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
 		},
 		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .

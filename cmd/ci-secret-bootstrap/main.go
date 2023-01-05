@@ -397,10 +397,14 @@ func constructSecrets(config secretbootstrap.Config, client secrets.ReadOnlyClie
 	}
 
 	var err error
+	statBefore := generateSecretStats(secretsByClusterAndName)
+	logrus.WithField("count", statBefore.count).WithField("median", statBefore.median).Info("Secret stats before fetching user secrets")
 	secretsByClusterAndName, err = fetchUserSecrets(secretsByClusterAndName, client, config.UserSecretsTargetClusters)
 	if err != nil {
 		errs = append(errs, err)
 	}
+	statAfter := generateSecretStats(secretsByClusterAndName)
+	logrus.WithField("count", statAfter.count).WithField("median", statAfter.median).Info("Secret stats after fetching user secrets")
 
 	result := map[string][]*coreapi.Secret{}
 	for cluster, secretMap := range secretsByClusterAndName {

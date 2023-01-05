@@ -1,0 +1,43 @@
+{
+  "name": "4.11.0-0.nightly",
+  "to": "release",
+  "message": "This release contains OSBS official image builds of all code in release-4.11 (master) branches, and is updated after those builds are synced to quay.io.",
+  "mirrorPrefix": "4.11-art-latest",
+  "expires": "126h",
+  "maxUnreadyReleases": 1,
+  "minCreationIntervalSeconds": 2400,
+  "referenceMode": "source",
+  "pullSecretName": "source",
+  "check": {
+    "OCP and Origin images should match": {
+      "consistentImages": {
+        "parent": "4.11.0-0.ci"
+      }
+    }
+  },
+  "publish": {
+    "bugs": {
+      "verifyBugs": {
+        "previousReleaseTag": {
+          "namespace": "ocp",
+          "name": "release",
+          "tag": "4.11.0-fc.1"
+        }
+      }
+    },
+    "tag": {
+      "tagRef": {
+        "name": "4.11"
+      }
+    }
+  },
+  "verify": {
+    "aws-4.11": {
+      "maxRetries": 3,
+      "optional": true,
+      "prowJob": {
+        "name": "periodic-ci-openshift-release-master-nightly-4.11-e2e-aws"
+      }
+    }
+  }
+}

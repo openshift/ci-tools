@@ -1,0 +1,74 @@
+releases:
+  initial:
+    prerelease:
+      product: ocp
+      version_bounds:
+        lower: 4.4.0-0
+        upper: 4.5.0-0
+  latest:
+    candidate:
+      product: ocp
+      stream: ci
+      version: "4.5"
+resources:
+  '*':
+    requests:
+      cpu: 100m
+      memory: 200Mi
+tests:
+- as: e2e-aws-upgrade
+  interval: 720h
+  steps:
+    cluster_profile: aws
+    workflow: openshift-upgrade-aws
+- as: e2e-gcp-upgrade
+  interval: 720h
+  steps:
+    cluster_profile: gcp
+    workflow: openshift-upgrade-gcp
+- as: e2e-azure-upgrade
+  interval: 720h
+  steps:
+    cluster_profile: azure-2
+    env:
+      BASE_DOMAIN: ci2.azure.devcluster.openshift.com
+    workflow: openshift-upgrade-azure
+- as: e2e-ovirt-upgrade
+  interval: 720h
+  steps:
+    cluster_profile: ovirt
+    env:
+      BASE_DOMAIN: ci2.azure.devcluster.openshift.com
+    test:
+    - as: test
+      commands: make upgrade_test
+      credentials:
+      - mount_path: /var/run/cnv-ci-brew-pull-secret
+        name: cnv-ci-brew-pull-secret
+        namespace: test-credentials
+      env:
+      - default: '|7820aea2-0d75-11e7-9259-28d244ea5a6d.hhav.f63e13'
+        name: BREW_IMAGE_REGISTRY_USERNAME
+      - default: /var/run/cnv-ci-brew-pull-secret/token
+        name: BREW_IMAGE_REGISTRY_TOKEN_PATH
+      - default: v0.45.0
+        name: KUBEVIRT_RELEASE
+      - default: "4.5"
+        name: OCP_VERSION
+      - default: /tmp/artifacts
+        name: ARTIFACTS_DIR
+      - default: openshift-cnv
+        name: TARGET_NAMESPACE
+      - default: "true"
+        name: PRODUCTION_RELEASE
+      from: cnv-ci-src-upgrade
+      resources:
+        requests:
+          cpu: 100m
+          memory: 600Mi
+    workflow: openshift-upgrade-ovirt-release-4.4-4.5
+zz_generated_metadata:
+  branch: master
+  org: openshift
+  repo: release
+  variant: ci-4.5-upgrade-from-stable-4.4

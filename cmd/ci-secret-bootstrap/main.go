@@ -562,16 +562,21 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 				}
 
 				if !shouldCreate {
-					if !force && !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data) {
+					differentData := !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data)
+					if !force && differentData {
 						logger.Errorf("actual secret data differs the expected")
 						errs = append(errs, fmt.Errorf("secret %s:%s/%s needs updating in place, use --force to do so", cluster, secret.Namespace, secret.Name))
 						continue
 					}
-					if _, err := secretClient.Update(context.TODO(), secret, metav1.UpdateOptions{DryRun: dryRunOptions}); err != nil {
-						errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
-						continue
+					if existingSecret.Labels == nil || existingSecret.Labels[api.DPTPRequesterLabel] != "ci-secret-bootstrap" || differentData {
+						if _, err := secretClient.Update(context.TODO(), secret, metav1.UpdateOptions{DryRun: dryRunOptions}); err != nil {
+							errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
+							continue
+						}
+						logger.Debug("secret updated")
+					} else {
+						logger.Debug("secret skipped")
 					}
-					logger.Debug("secret updated")
 				}
 			}
 

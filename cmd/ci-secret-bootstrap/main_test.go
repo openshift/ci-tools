@@ -1404,10 +1404,9 @@ func TestUpdateSecrets(t *testing.T) {
 			existSecretsOnDefault: []runtime.Object{
 				&coreapi.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:              "prod-secret-1",
-						Namespace:         "namespace-1",
-						Labels:            map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
-						CreationTimestamp: metav1.NewTime(time.Now()),
+						Name:      "prod-secret-1",
+						Namespace: "namespace-1",
+						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 					},
 					Data: map[string][]byte{
 						"key-name-1": []byte("abc"),

@@ -18,6 +18,7 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	poolspullsecretprovider "github.com/openshift/ci-tools/pkg/controller/cluster_pools_pull_secret_provider"
+	hypershiftnamespacereconciler "github.com/openshift/ci-tools/pkg/controller/hypershift_namespace_reconciler"
 )
 
 var allControllers = sets.NewString(
@@ -101,7 +102,13 @@ func main() {
 
 	if opts.enabledControllersSet.Has(poolspullsecretprovider.ControllerName) {
 		if err := poolspullsecretprovider.AddToManager(mgr, opts.poolsPullSecretProviderOptions.sourcePullSecretNamespace, opts.poolsPullSecretProviderOptions.sourcePullSecretName); err != nil {
-			logrus.WithError(err).Fatal("Failed to construct the testimagestreamimportcleaner controller")
+			logrus.WithField("name", poolspullsecretprovider.ControllerName).WithError(err).Fatal("Failed to construct the controller")
+		}
+	}
+
+	if opts.enabledControllersSet.Has(hypershiftnamespacereconciler.ControllerName) {
+		if err := hypershiftnamespacereconciler.AddToManager(mgr); err != nil {
+			logrus.WithField("name", hypershiftnamespacereconciler.ControllerName).WithError(err).Fatal("Failed to construct the controller")
 		}
 	}
 

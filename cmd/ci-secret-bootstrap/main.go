@@ -496,7 +496,7 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 			nsClient := getters[cluster].Namespaces()
 			if _, err := nsClient.Get(context.TODO(), secret.Namespace, metav1.GetOptions{}); err != nil {
 				if !kerrors.IsNotFound(err) {
-					errs = append(errs, fmt.Errorf("failed to check if namespace %s exists: %w", secret.Namespace, err))
+					errs = append(errs, fmt.Errorf("failed to check if namespace %s exists on cluster %s: %w", secret.Namespace, cluster, err))
 					continue
 				}
 				if _, err := nsClient.Create(context.TODO(), &coreapi.Namespace{ObjectMeta: metav1.ObjectMeta{

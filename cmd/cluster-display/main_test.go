@@ -129,3 +129,33 @@ func TestGetRouter(t *testing.T) {
 		})
 	}
 }
+
+func TestGetClusterPage(t *testing.T) {
+	testCases := []struct {
+		name     string
+		clients  map[string]ctrlruntimeclient.Client
+		expected []map[string]string
+	}{
+		{
+			name: "Client with error",
+			clients: map[string]ctrlruntimeclient.Client{
+				"app.ci": fakectrlruntimeclient.NewClientBuilder().Build(),
+			},
+			expected: []map[string]string{
+				{
+					"cluster": "app.ci",
+					"error":   "cannot reach cluster",
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			page, _ := getClusterPage(context.TODO(), tc.clients, true)
+			if diff := cmp.Diff(page.Data, tc.expected); diff != "" {
+				t.Errorf("result differs from expected output, diff:\n%s", diff)
+			}
+		})
+	}
+}

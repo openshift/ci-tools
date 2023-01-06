@@ -698,6 +698,9 @@ type TestStepConfiguration struct {
 	// ClusterClaim claims an OpenShift cluster and exposes environment variable ${KUBECONFIG} to the test container
 	ClusterClaim *ClusterClaim `json:"cluster_claim,omitempty"`
 
+	// AlwaysRun can be set to false to disable running the job on every PR
+	AlwaysRun *bool `json:"always_run,omitempty"`
+
 	// RunIfChanged is a regex that will result in the test only running if something that matches it was changed.
 	RunIfChanged string `json:"run_if_changed,omitempty"`
 

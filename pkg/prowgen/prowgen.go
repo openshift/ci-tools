@@ -82,6 +82,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			presubmit := generatePresubmitForTest(g, element.As, info, func(options *generatePresubmitOptions) {
 				options.runIfChanged = element.RunIfChanged
 				options.skipIfOnlyChanged = element.SkipIfOnlyChanged
+				options.defaultDisable = element.AlwaysRun != nil && !*element.AlwaysRun
 				options.optional = element.Optional
 				options.disableRehearsal = disableRehearsal
 			})
@@ -159,6 +160,7 @@ func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
 type generatePresubmitOptions struct {
 	runIfChanged      string
 	skipIfOnlyChanged string
+	defaultDisable    bool
 	optional          bool
 	disableRehearsal  bool
 }
@@ -175,7 +177,7 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 	base := jobBaseBuilder.Rehearsable(!opts.disableRehearsal).Build(jc.PresubmitPrefix)
 	return &prowconfig.Presubmit{
 		JobBase:   base,
-		AlwaysRun: opts.runIfChanged == "" && opts.skipIfOnlyChanged == "",
+		AlwaysRun: opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable,
 		Brancher:  prowconfig.Brancher{Branches: sets.NewString(jc.ExactlyBranch(info.Branch), jc.FeatureBranch(info.Branch)).List()},
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/prow/%s", shortName),

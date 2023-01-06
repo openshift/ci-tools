@@ -1874,6 +1874,11 @@ func (in *TestStepConfiguration) DeepCopyInto(out *TestStepConfiguration) {
 		*out = new(ClusterClaim)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.AlwaysRun != nil {
+		in, out := &in.AlwaysRun, &out.AlwaysRun
+		*out = new(bool)
+		**out = **in
+	}
 	if in.Timeout != nil {
 		in, out := &in.Timeout, &out.Timeout
 		*out = new(v1.Duration)

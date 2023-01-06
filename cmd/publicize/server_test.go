@@ -218,6 +218,7 @@ func TestMergeAndPushToRemote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("couldn't create localgit: %v", err)
 	}
+	localgit.InitialBranch = "master"
 
 	defer func() {
 		if err := gc.Clean(); err != nil {

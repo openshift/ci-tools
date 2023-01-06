@@ -109,6 +109,7 @@ zz_generated_metadata:
 			if err != nil {
 				t.Fatalf("failed to create localgit: %v", err)
 			}
+			localgit.InitialBranch = "master"
 			defer func() {
 				if err := localgit.Clean(); err != nil {
 					t.Errorf("localgit cleanup failed: %v", err)

@@ -493,23 +493,27 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 	for cluster, secrets := range secretsMap {
 		logger := logrus.WithField("cluster", cluster)
 		logger.Debug("Syncing secrets for cluster")
+		existingNamespaces := sets.NewString()
 		for _, secret := range secrets {
 			logger := logger.WithFields(logrus.Fields{"namespace": secret.Namespace, "name": secret.Name, "type": secret.Type})
 			logger.Debug("handling secret")
 
-			nsClient := getters[cluster].Namespaces()
-			if _, err := nsClient.Get(context.TODO(), secret.Namespace, metav1.GetOptions{}); err != nil {
-				if !kerrors.IsNotFound(err) {
-					errs = append(errs, fmt.Errorf("failed to check if namespace %s exists on cluster %s: %w", secret.Namespace, cluster, err))
-					continue
+			if !existingNamespaces.Has(secret.Namespace) {
+				nsClient := getters[cluster].Namespaces()
+				if _, err := nsClient.Get(context.TODO(), secret.Namespace, metav1.GetOptions{}); err != nil {
+					if !kerrors.IsNotFound(err) {
+						errs = append(errs, fmt.Errorf("failed to check if namespace %s exists on cluster %s: %w", secret.Namespace, cluster, err))
+						continue
+					}
+					if _, err := nsClient.Create(context.TODO(), &coreapi.Namespace{ObjectMeta: metav1.ObjectMeta{
+						Name:   secret.Namespace,
+						Labels: map[string]string{api.DPTPRequesterLabel: "ci-secret-bootstrap"},
+					}}, metav1.CreateOptions{DryRun: dryRunOptions}); err != nil && !kerrors.IsAlreadyExists(err) {
+						errs = append(errs, fmt.Errorf("failed to create namespace %s: %w", secret.Namespace, err))
+						continue
+					}
 				}
-				if _, err := nsClient.Create(context.TODO(), &coreapi.Namespace{ObjectMeta: metav1.ObjectMeta{
-					Name:   secret.Namespace,
-					Labels: map[string]string{api.DPTPRequesterLabel: "ci-secret-bootstrap"},
-				}}, metav1.CreateOptions{DryRun: dryRunOptions}); err != nil && !kerrors.IsAlreadyExists(err) {
-					errs = append(errs, fmt.Errorf("failed to create namespace %s: %w", secret.Namespace, err))
-					continue
-				}
+				existingNamespaces.Insert(secret.Namespace)
 			}
 
 			secretClient := getters[cluster].Secrets(secret.Namespace)

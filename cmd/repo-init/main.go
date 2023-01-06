@@ -586,8 +586,23 @@ No prior Prow plugin configuration was found for this organization or repository
 Ensure that webhooks are set up for Prow to watch GitHub state.`)
 		pluginConfig.Plugins[orgRepo] = plugins.OrgPlugins{Plugins: append(pluginConfig.Plugins["openshift"].Plugins, pluginConfig.Plugins["openshift/origin"].Plugins...)}
 	case orgRegistered && !repoRegistered:
-		// we just need the repo-specific bits
-		pluginConfig.Plugins[orgRepo] = plugins.OrgPlugins{Plugins: pluginConfig.Plugins["openshift/origin"].Plugins}
+		// we just need the repo-specific bits that are not already added to the org
+		originPlugins := pluginConfig.Plugins["openshift/origin"].Plugins
+		orgPlugins := pluginConfig.Plugins[config.Org].Plugins
+		var missingPlugins []string
+		for _, originPlugin := range originPlugins {
+			found := false
+			for _, orgPlugin := range orgPlugins {
+				if originPlugin == orgPlugin {
+					found = true
+					break
+				}
+			}
+			if !found {
+				missingPlugins = append(missingPlugins, originPlugin)
+			}
+		}
+		pluginConfig.Plugins[orgRepo] = plugins.OrgPlugins{Plugins: missingPlugins}
 	}
 
 	_, orgRegisteredExternal := pluginConfig.ExternalPlugins[config.Org]

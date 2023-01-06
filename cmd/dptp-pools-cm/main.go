@@ -23,6 +23,7 @@ import (
 
 var allControllers = sets.NewString(
 	poolspullsecretprovider.ControllerName,
+	hypershiftnamespacereconciler.ControllerName,
 )
 
 type options struct {

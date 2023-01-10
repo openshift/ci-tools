@@ -275,6 +275,7 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-assisted
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-single-node-live-iso
 periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt-sdn
+periodic-ci-openshift-release-master-nightly-4.12-e2e-telco5g
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-ovn-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-ovn-serial
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-ovn-techpreview

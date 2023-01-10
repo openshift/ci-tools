@@ -23,6 +23,7 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
@@ -90,7 +91,7 @@ func (s *clusterClaimStep) run(ctx context.Context) error {
 			return false, nil
 		}
 
-		return waitForConditionOnObject(ctx, client, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &hivev1.ClusterClaimList{}, claim, evaluatorFunc, timeout)
+		return kubernetes.WaitForConditionOnObject(ctx, client, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &hivev1.ClusterClaimList{}, claim, evaluatorFunc, timeout)
 	}
 
 	clusterClaim, err := s.acquireCluster(ctx, waitForClaim)

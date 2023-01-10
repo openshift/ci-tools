@@ -118,27 +118,13 @@ func getClusterPoolPage(ctx context.Context, hiveClient ctrlruntimeclient.Client
 	return &page, nil
 }
 
-func getClusterPage(ctx context.Context, clients map[string]ctrlruntimeclient.Client, skipHive bool) (*Page, error) {
-	var data []map[string]string
-	for cluster, client := range clients {
-		if skipHive && cluster == string(api.HiveCluster) {
-			continue
-		}
-		clusterInfo, err := getClusterInfo(ctx, cluster, client)
-		if err != nil {
-			logrus.WithError(err)
-			clusterInfo["error"] = "cannot reach cluster"
-		}
-		data = append(data, clusterInfo)
-	}
-
-	sort.Slice(data, func(i, j int) bool {
-		return data[i]["cluster"] < data[j]["cluster"]
-	})
-	return &Page{Data: data}, nil
+type ClusterInfoGetter interface {
+	GetClusterDetails(ctx context.Context, cluster string, client ctrlruntimeclient.Client) (map[string]string, error)
 }
 
-func getClusterInfo(ctx context.Context, cluster string, client ctrlruntimeclient.Client) (map[string]string, error) {
+type clusterInfoGetter struct{}
+
+func (g *clusterInfoGetter) GetClusterDetails(ctx context.Context, cluster string, client ctrlruntimeclient.Client) (map[string]string, error) {
 	var data = map[string]string{
 		"cluster": cluster,
 	}
@@ -179,6 +165,27 @@ func getClusterInfo(ctx context.Context, cluster string, client ctrlruntimeclien
 	}, nil
 }
 
+func getClusterPage(ctx context.Context, clients map[string]ctrlruntimeclient.Client, skipHive bool, getter ClusterInfoGetter) (*Page, error) {
+	var data []map[string]string
+
+	for cluster, client := range clients {
+		if skipHive && cluster == string(api.HiveCluster) {
+			continue
+		}
+		clusterInfo, err := getter.GetClusterDetails(ctx, cluster, client)
+		if err != nil {
+			logrus.WithError(err)
+			clusterInfo["error"] = "cannot reach cluster"
+		}
+		data = append(data, clusterInfo)
+	}
+
+	sort.Slice(data, func(i, j int) bool {
+		return data[i]["cluster"] < data[j]["cluster"]
+	})
+	return &Page{Data: data}, nil
+}
+
 func resolveProduct(ctx context.Context, client ctrlruntimeclient.Client, version string) (string, error) {
 	ns := "openshift-monitoring"
 	name := "configure-alertmanager-operator"
@@ -217,7 +224,7 @@ func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients
 			page, err = getClusterPoolPage(ctx, hiveClient)
 		case "clusters":
 			skipHive := r.URL.Query().Get("skipHive") == "true"
-			page, err = getClusterPage(ctx, allClients, skipHive)
+			page, err = getClusterPage(ctx, allClients, skipHive, &clusterInfoGetter{})
 		default:
 			http.Error(w, fmt.Sprintf("Unknown crd: %s", crd), http.StatusBadRequest)
 			return

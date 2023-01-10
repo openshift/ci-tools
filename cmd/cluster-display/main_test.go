@@ -129,3 +129,86 @@ func TestGetRouter(t *testing.T) {
 		})
 	}
 }
+
+type fakeClusterGetter struct{}
+
+func (g *fakeClusterGetter) GetClusterDetails(ctx context.Context, cluster string, client ctrlruntimeclient.Client) (map[string]string, error) {
+	if cluster == "badCluster" {
+		return map[string]string{
+			"cluster": cluster,
+			"error":   "cannot reach cluster",
+		}, fmt.Errorf("an error occurred")
+	}
+	return map[string]string{
+		"cluster": cluster,
+		"error":   "",
+	}, nil
+}
+
+func TestGetClusterPage(t *testing.T) {
+	testCases := []struct {
+		name     string
+		clients  map[string]ctrlruntimeclient.Client
+		getter   ClusterInfoGetter
+		expected []map[string]string
+	}{
+		{
+			name: "Clients without errors",
+			clients: map[string]ctrlruntimeclient.Client{
+				"cluster1": fakectrlruntimeclient.NewClientBuilder().Build(),
+				"cluster2": fakectrlruntimeclient.NewClientBuilder().Build(),
+			},
+			expected: []map[string]string{
+				{
+					"cluster": "cluster1",
+					"error":   "",
+				},
+				{
+					"cluster": "cluster2",
+					"error":   "",
+				},
+			},
+			getter: &fakeClusterGetter{},
+		},
+		{
+			name: "Client with error",
+			clients: map[string]ctrlruntimeclient.Client{
+				"badCluster": fakectrlruntimeclient.NewClientBuilder().Build(),
+			},
+			expected: []map[string]string{
+				{
+					"cluster": "badCluster",
+					"error":   "cannot reach cluster",
+				},
+			},
+			getter: &clusterInfoGetter{},
+		},
+		{
+			name: "One client with error",
+			clients: map[string]ctrlruntimeclient.Client{
+				"okCluster":  fakectrlruntimeclient.NewClientBuilder().Build(),
+				"badCluster": fakectrlruntimeclient.NewClientBuilder().Build(),
+			},
+			expected: []map[string]string{
+				{
+					"cluster": "badCluster",
+					"error":   "cannot reach cluster",
+				},
+				{
+					"cluster": "okCluster",
+					"error":   "",
+				},
+			},
+			getter: &fakeClusterGetter{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			page, _ := getClusterPage(context.TODO(), tc.clients, true, tc.getter)
+			if diff := cmp.Diff(page.Data, tc.expected); diff != "" {
+				t.Errorf("result differs from expected output, diff:\n%s", diff)
+			}
+		})
+	}
+}

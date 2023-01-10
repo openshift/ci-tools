@@ -137,7 +137,7 @@ func (g *fakeClusterGetter) GetClusterDetails(ctx context.Context, cluster strin
 		return map[string]string{
 			"cluster": cluster,
 			"error":   "cannot reach cluster",
-		}, fmt.Errorf("an error occured")
+		}, fmt.Errorf("an error occurred")
 	}
 	return map[string]string{
 		"cluster": cluster,

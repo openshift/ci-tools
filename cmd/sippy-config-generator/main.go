@@ -19,6 +19,7 @@ import (
 	v1sippy "github.com/openshift/ci-tools/pkg/api/sippy/v1"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 	releaseconfig "github.com/openshift/ci-tools/pkg/release/config"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 const defaultAggregateProwJobName = "release-openshift-release-analysis-aggregator"
@@ -169,7 +170,7 @@ func main() {
 					releaseConfig.BlockingJobs = append(releaseConfig.BlockingJobs, p.Name)
 				}
 
-				if informingJobs.Has(p.Name) {
+				if informingJobs.Has(p.Name) || util.IsSpecialInformingJobOnTestGrid(p.Name) {
 					releaseConfig.InformingJobs = append(releaseConfig.InformingJobs, p.Name)
 				}
 				sippyConfig.Releases[release] = releaseConfig

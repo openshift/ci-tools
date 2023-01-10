@@ -445,7 +445,7 @@ func (s *server) getJobsTableLines(presubmits config.Presubmits, periodics confi
 	}
 
 	lines := []string{
-		fmt.Sprintf("@%s: the following rehearsable tests have been affected by this change:", user),
+		fmt.Sprintf("@%s: the `pj-rehearse` plugin accommodates running rehearsal tests for the changes in this PR. Expand **'Interacting with pj-rehearse'** for usage details. The following rehearsable tests have been affected by this change:", user),
 		"",
 		"Test name | Repo | Type | Reason",
 		"--- | --- | --- | ---",

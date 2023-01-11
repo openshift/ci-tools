@@ -3,18 +3,22 @@ package util
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -134,79 +138,70 @@ func WaitForPodCompletion(ctx context.Context, podClient kubernetes.PodClient, n
 }
 
 func waitForPodCompletionOrTimeout(ctx context.Context, podClient kubernetes.PodClient, namespace, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (*corev1.Pod, error) {
-	// Warning: this is extremely fragile, inherited legacy code.  Please be
-	// careful and test thoroughly when making changes, as they very frequently
-	// lead to systemic production failures.  Some guidance:
-	// - There is a complex interaction between this code and the container
-	//   notifier.  Updates to the state of the pod are received via the watch
-	//   and communicated to the notifier.  Even in case of interruption (i.e.
-	//   cancellation of `ctx`) and/or failure, events should continue to be
-	//   processed until the notifier signals that it is done.  This ensures
-	//   the state of the pod is correctly reported, artifacts are gathered,
-	//   and termination happens deterministically for both success and failure
-	//   scenarios.
-	// - Since ea8f62fcf, most of the above only applies to template tests.
-	//   Container and multi-stage tests now solely rely on `test-infra`'s
-	//   `pod-utils` for artifact gathering and so use a notifier which
-	//   instantly reports itself as done when the watched containers finish.
-	pod := &corev1.Pod{}
-	if err := podClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, pod); err != nil {
-		if kerrors.IsNotFound(err) {
-			notifier.Complete(name)
-			logrus.Infof("error: could not wait for pod '%s': it is no longer present on the cluster"+
-				" (usually a result of a race or resource pressure. re-running the job should help)", name)
-			return nil, fmt.Errorf("pod was deleted while ci-operator step was waiting for it")
+	var ret atomic.Pointer[corev1.Pod]
+	var eg *errgroup.Group
+	eg, ctx = errgroup.WithContext(ctx)
+	pendingCtx, cancel := context.WithCancel(ctx)
+	pendingCheck := func() error {
+		timeout := podClient.PendingTimeout()
+		if pod, err := checkPendingPeriodic(pendingCtx.Done(), timeout, &ret); err != nil {
+			err = fmt.Errorf("pod pending for more than %s: %w: %s\n%s", timeout, err, getReasonsForUnreadyContainers(pod), getEventsForPod(ctx, pod, podClient))
+			logrus.Info(err)
+			notifier.Complete(pod.Name)
+			return err
 		}
-		return nil, fmt.Errorf("could not list pod: %w", err)
+		return nil
 	}
+	eg.Go(func() error {
+		defer cancel()
+		if err := kubernetes.WaitForConditionOnObject(ctx, podClient, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, &corev1.PodList{}, &corev1.Pod{}, func(obj runtime.Object) (bool, error) {
+			pod := obj.(*corev1.Pod)
+			// Start the periodic pending checks as soon as a pod object is
+			// available.  This will happen (once) after the initial list.
+			if ret.Swap(pod) == nil {
+				eg.Go(pendingCheck)
+			}
+			return processPodEvent(podClient, completed, notifier, skipLogs, pod)
+		}, 0); err != nil {
+			if errors.Is(err, wait.ErrWaitTimeout) {
+				err = ctx.Err()
+			} else if kerrors.IsNotFound(err) {
+				notifier.Complete(name)
+				logrus.Infof("error: could not wait for pod '%s': it is no longer present on the cluster"+
+					" (usually a result of a race or resource pressure. re-running the job should help)", name)
+			}
+			return fmt.Errorf("could not watch pod: %w", err)
+		}
+		return nil
+	})
+	err := eg.Wait()
+	return ret.Load(), err
+}
 
+func processPodEvent(
+	podClient kubernetes.PodClient,
+	completed map[string]time.Time,
+	notifier ContainerNotifier,
+	skipLogs bool,
+	pod *corev1.Pod,
+) (done bool, err error) {
 	if pod.Spec.RestartPolicy == corev1.RestartPolicyAlways {
-		return pod, nil
+		return true, nil
 	}
 	podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
+	if pod.DeletionTimestamp != nil {
+		logrus.Warningf("Pod %s is being unexpectedly deleted", pod.Name)
+	}
 	if podJobIsOK(pod) {
 		if !skipLogs {
-			logrus.Debugf("Pod %s already succeeded in %s", pod.Name, podDuration(pod).Truncate(time.Second))
+			logrus.Debugf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
 		}
-		return pod, nil
+		return true, nil
 	}
 	if podJobIsFailed(pod) {
-		return pod, AppendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
+		return true, AppendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
 	}
-	done := ctx.Done()
-	pendingTimeout := podClient.PendingTimeout()
-	podCheckTicker := time.NewTicker(10 * time.Second)
-	defer podCheckTicker.Stop()
-	for {
-		select {
-		case <-done:
-			return pod, ctx.Err()
-		case <-podCheckTicker.C:
-			if err := podClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, pod); err != nil {
-				if kerrors.IsNotFound(err) {
-					return pod, AppendLogToError(fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", ")), podMessages(pod))
-				}
-				logrus.WithError(err).Warnf("Failed to get pod %s.", name)
-				continue
-			}
-			if err := checkPending(*pod, pendingTimeout, time.Now()); err != nil {
-				err = fmt.Errorf("pod pending timeout: %w: %s\n%s", err, getReasonsForUnreadyContainers(pod), getEventsForPod(ctx, pod, podClient))
-				logrus.Info(err)
-				notifier.Complete(name)
-				return pod, err
-			}
-			podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
-			if podJobIsOK(pod) {
-				if !skipLogs {
-					logrus.Debugf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
-				}
-				return pod, nil
-			}
-			if podJobIsFailed(pod) {
-				return pod, AppendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
-			}
-		}
-	}
+	return false, nil
 }
 
 // podReason returns the pod's reason and message for exit or tries to find one from the pod.
@@ -323,6 +318,48 @@ func podJobIsFailed(pod *corev1.Pod) bool {
 	return false
 }
 
+// checkPendingPeriodic continually calls checkPending
+// After each verification is performed based on the value loaded from the
+// pointer, the timer is reset based on the result or an error is returned.
+// This function only returns when `done` is signaled or an error occurs; for
+// the latter case, the pod which caused the failure is also returned.
+func checkPendingPeriodic(
+	done <-chan struct{},
+	timeout time.Duration,
+	pod *atomic.Pointer[corev1.Pod],
+) (*corev1.Pod, error) {
+	timer := time.NewTimer(0)
+	for {
+		select {
+		case <-done:
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return nil, nil
+		case <-timer.C:
+			// This is based on the invariant that the time point at which the
+			// verification should be performed only moves forward with changes
+			// in pod status.  Whenever the timer expires, the latest version
+			// of the pod is examined and one of two cases can occur:
+			// - No containers have have started/finished during the waiting
+			//   period.  Since the period was the pending timeout, this means
+			//   `checkPending` will return an error.
+			// - More likely, one or more containers started/finished during
+			//   the waiting period.  This means the point at which the test
+			//   can fail due to a pending timeout will move forward in time,
+			//   based on the current state of the pod (i.e. the return value
+			//   of `checkPending`).  The timer can then be reset based on that
+			//   time.
+			pod, now := pod.Load(), time.Now()
+			if next, err := checkPending(*pod, timeout, now); err != nil {
+				return pod, err
+			} else {
+				timer.Reset(next.Sub(now))
+			}
+		}
+	}
+}
+
 // checkPending checks if a pod has been pending for too long
 // The purpose of this function is to cause a failure when a pod is found to be
 // potentially permanently "pending", so that the test fails earlier than its
@@ -354,20 +391,33 @@ func podJobIsFailed(pod *corev1.Pod) bool {
 //     "waiting" for more than the maximum period, relative to the finishing
 //     time of the last "init" container (or to the creation time of the pod,
 //     if there are none), an error is returned.
-func checkPending(pod corev1.Pod, timeout time.Duration, now time.Time) error {
-	if pod.Status.Phase != corev1.PodPending {
-		return nil
+//
+// If the pod is considered to be acceptable, the time at which the next check
+// should be performed (i.e. after which this function may return an error) is
+// returned.  This can be used to schedule the next call.
+func checkPending(pod corev1.Pod, timeout time.Duration, now time.Time) (time.Time, error) {
+	switch pod.Status.Phase {
+	case corev1.PodSucceeded, corev1.PodFailed:
+		return time.Time{}, nil
+	case corev1.PodUnknown:
+		logrus.Warningf(`received status "unknown" for pod %s`, pod.Name)
+		fallthrough
+	case corev1.PodRunning:
+		return now.Add(timeout), nil
+	case corev1.PodPending:
+	default:
+		panic(fmt.Sprintf("unknown pod phase: %s", pod.Status.Phase))
 	}
-	check := func(t time.Time, name string) error {
-		if now.Before(t.Add(timeout)) {
-			return nil
+	check := func(t0 time.Time, name string) (time.Time, error) {
+		if t := t0.Add(timeout); now.Before(t) {
+			return t, nil
 		}
-		return fmt.Errorf("container %q has not started in %s", name, timeout)
+		return time.Time{}, fmt.Errorf("container %q has not started in %s", name, now.Sub(t0))
 	}
 	prev := pod.CreationTimestamp.Time
 	for _, s := range pod.Status.InitContainerStatuses {
 		if s.State.Running != nil {
-			return nil
+			return now.Add(timeout), nil
 		} else if w := s.State.Waiting; w != nil {
 			return check(prev, s.Name)
 		} else if t := s.State.Terminated; t != nil {
@@ -378,12 +428,12 @@ func checkPending(pod corev1.Pod, timeout time.Duration, now time.Time) error {
 	}
 	for _, s := range pod.Status.ContainerStatuses {
 		if s.State.Waiting != nil {
-			if err := check(prev, s.Name); err != nil {
-				return err
+			if ret, err := check(prev, s.Name); err != nil {
+				return ret, err
 			}
 		}
 	}
-	return nil
+	return prev.Add(timeout), nil
 }
 
 func failedContainerNames(pod *corev1.Pod) []string {

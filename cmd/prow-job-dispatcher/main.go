@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/fs"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -262,21 +265,10 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 		return fmt.Errorf("config is nil")
 	}
 
-	disabledClusters := map[api.Cloud][]api.Cluster{}
-
 	// cv stores the volume for each cluster in the build farm
 	cv := &clusterVolume{clusterVolumeMap: map[string]map[string]float64{}, cloudProviders: sets.NewString()}
 	for cloudProvider, v := range config.BuildFarm {
-		for cluster, cfg := range v {
-			if cfg.Disabled {
-				if cluster == config.Default {
-					return fmt.Errorf("Default cluster %s is disabled", cluster)
-				}
-				disabledClusters[cloudProvider] = append(disabledClusters[cloudProvider], cluster)
-				delete(config.BuildFarm[cloudProvider], cluster)
-				continue
-			}
-
+		for cluster := range v {
 			cloudProviderString := string(cloudProvider)
 			if _, ok := cv.clusterVolumeMap[cloudProviderString]; !ok {
 				cv.clusterVolumeMap[cloudProviderString] = map[string]float64{}
@@ -375,13 +367,84 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 		}
 	}
 
-	for provider, clusters := range disabledClusters {
-		for _, cluster := range clusters {
-			config.BuildFarm[provider][cluster] = &dispatcher.BuildFarmConfig{Disabled: true}
+	return utilerrors.NewAggregate(errs)
+}
+
+// getClusterProvider gets information using get request what is the current cloud provider for the given cluster
+func getClusterProvider(cluster string) (api.Cloud, error) {
+	type pageData struct {
+		Data []map[string]string `json:"data"`
+	}
+	resp, err := http.Get("https://cluster-display.ci.openshift.org/api/v1/clusters")
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	var page pageData
+	if err := json.Unmarshal(body, &page); err != nil {
+		return "", err
+	}
+	for _, data := range page.Data {
+		if errMsg, exists := data["error"]; exists && errMsg == "cannot reach cluster" {
+			continue
+		}
+		if c, exists := data["cluster"]; exists && c == cluster {
+			if provider, exists := data["cloud"]; exists {
+				return api.Cloud(strings.ToLower(provider)), nil
+			}
 		}
 	}
+	return "", fmt.Errorf("Have not found provider for cluster %s", cluster)
+}
 
-	return utilerrors.NewAggregate(errs)
+// removeDisabledClusters removes disabled clusters from BuildFarm and BuildFarmConfig
+func removeDisabledClusters(config *dispatcher.Config, disabled sets.String) {
+	for provider := range config.BuildFarm {
+		for cluster := range config.BuildFarm[provider] {
+			if disabled.Has(string(cluster)) {
+				delete(config.BuildFarm[provider], cluster)
+				if clusters, ok := config.BuildFarmCloud[provider]; ok {
+					c := sets.NewString(clusters...)
+					c = c.Delete(string(cluster))
+					config.BuildFarmCloud[provider] = c.List()
+				}
+			}
+		}
+	}
+}
+
+type clusterProviderGetter func(cluster string) (api.Cloud, error)
+
+// addEnabledClusters adds enabled clusters to the BuildFarm and BuildFarmConfig
+func addEnabledClusters(config *dispatcher.Config, enabled sets.String, getter clusterProviderGetter) {
+	if len(enabled) > 0 && config.BuildFarm == nil {
+		config.BuildFarm = make(map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig)
+	}
+	for cluster := range enabled {
+		provider, err := getter(cluster)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to get cluster cloud provider information")
+		}
+		if _, exists := config.BuildFarm[provider][api.Cluster(cluster)]; !exists {
+			if config.BuildFarm[provider] == nil {
+				config.BuildFarm[provider] = make(map[api.Cluster]*dispatcher.BuildFarmConfig)
+			}
+			config.BuildFarm[provider][api.Cluster(cluster)] = &dispatcher.BuildFarmConfig{FilenamesRaw: []string{}, Filenames: sets.NewString()}
+		}
+		if clusters, ok := config.BuildFarmCloud[provider]; ok {
+			clusters = append(clusters, cluster)
+			config.BuildFarmCloud[provider] = clusters
+		} else {
+			if config.BuildFarmCloud == nil {
+				config.BuildFarmCloud = make(map[api.Cloud][]string)
+			}
+			config.BuildFarmCloud[provider] = []string{cluster}
+		}
+	}
 }
 
 func main() {
@@ -437,18 +500,10 @@ func main() {
 
 	enabled := o.enableClusters.StringSet()
 	disabled := o.disableClusters.StringSet()
-	if len(enabled) > 0 || len(disabled) > 0 {
-		for provider := range config.BuildFarm {
-			for cluster := range config.BuildFarm[provider] {
-				if enabled.Has(string(cluster)) {
-					config.BuildFarm[provider][cluster].Disabled = false
-				}
-				if disabled.Has(string(cluster)) {
-					config.BuildFarm[provider][cluster].Disabled = true
-				}
-			}
-		}
+	if len(disabled) > 0 {
+		removeDisabledClusters(config, disabled)
 	}
+	addEnabledClusters(config, enabled, getClusterProvider)
 
 	logrus.Info("Dispatching ...")
 	if err := dispatchJobs(context.TODO(), o.prowJobConfigDir, o.maxConcurrency, config, jobVolumes); err != nil {

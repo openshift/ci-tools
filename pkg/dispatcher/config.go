@@ -24,8 +24,6 @@ type Config struct {
 	DetermineE2EByJob bool `json:"determineE2EByJob,omitempty"`
 	// the cluster cluster name if no other condition matches
 	Default api.Cluster `json:"default"`
-	// Do not change the cluster setting if the job is manually assigned to the same cloud as the one for the e2e test
-	IgnoreE2EByJobAssignment bool `json:"ignoreE2EByJobAssignment,omitempty"`
 	// the cluster name for ssh bastion jobs
 	SSHBastion api.Cluster `json:"sshBastion"`
 	// the cluster names for kvm jobs
@@ -43,8 +41,6 @@ type Config struct {
 type BuildFarmConfig struct {
 	FilenamesRaw []string    `json:"filenames,omitempty"`
 	Filenames    sets.String `json:"-"`
-
-	Disabled bool `json:"disabled,omitempty"`
 }
 
 // JobGroups maps a group of jobs to a cluster
@@ -134,15 +130,7 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 	if config.DetermineE2EByJob {
 		if cloud := DetermineCloud(jobBase); cloud != "" {
 			if clusters, ok := config.BuildFarmCloud[api.Cloud(cloud)]; ok {
-				return api.Cluster(clusters[len(filepath.Base(path))%len(clusters)]), false, nil
-			}
-		}
-	}
-
-	if config.IgnoreE2EByJobAssignment {
-		if cloud := DetermineCloud(jobBase); cloud != "" {
-			if clusters, ok := config.BuildFarmCloud[api.Cloud(cloud)]; ok {
-				if jobBase.Cluster == clusters[len(filepath.Base(path))%len(clusters)] {
+				if len(clusters) > 0 {
 					return api.Cluster(clusters[len(filepath.Base(path))%len(clusters)]), false, nil
 				}
 			}

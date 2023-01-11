@@ -363,3 +363,94 @@ func equalError(t *testing.T, expected, actual error) {
 		t.Errorf("%s: expecting error msg %q, got %q", t.Name(), expected.Error(), actual.Error())
 	}
 }
+
+func TestAddEnabledClusters(t *testing.T) {
+	getProvider := func(cluster string) (api.Cloud, error) {
+		if cluster == "build02" || cluster == "build04" {
+			return "gcp", nil
+		}
+		return "aws", nil
+	}
+	tests := []struct {
+		name    string
+		config  *dispatcher.Config
+		enabled sets.String
+	}{
+		{
+			name:    "Add gcp cluster build04",
+			config:  &dispatcher.Config{},
+			enabled: sets.NewString("build04"),
+		},
+		{
+			name:    "Add multiple clusters, different providers",
+			config:  &dispatcher.Config{},
+			enabled: sets.NewString("build03", "build04", "build05"),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			addEnabledClusters(tc.config, tc.enabled, getProvider)
+			for cluster := range tc.enabled {
+				provider, _ := getProvider(cluster)
+				if _, exists := tc.config.BuildFarm[provider][api.Cluster(cluster)]; !exists {
+					t.Errorf("%s: expected %s cluster to be added under %s provider in BuildFarm", t.Name(), cluster, provider)
+				}
+				c, exists := tc.config.BuildFarmCloud[provider]
+				if !exists {
+					t.Errorf("%s: cloud provider %s not found in BuildFarmCloud", t.Name(), provider)
+				}
+				clusters := sets.NewString(c...)
+				if !clusters.Has(cluster) {
+					t.Errorf("%s: expected %s cluster to be added under %s provider in BuildFarmCloud", t.Name(), cluster, provider)
+				}
+			}
+		})
+	}
+}
+
+func TestRemoveDisabledClusters(t *testing.T) {
+	cfgWithCloud := &dispatcher.Config{
+		BuildFarmCloud: map[api.Cloud][]string{
+			"aws": {"build01"},
+			"gcp": {"build02"},
+		},
+		BuildFarm: map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{
+			api.CloudAWS: {
+				api.ClusterBuild01: {},
+			},
+			api.CloudGCP: {
+				api.ClusterBuild02: {},
+			},
+		},
+	}
+	tests := []struct {
+		name     string
+		config   *dispatcher.Config
+		disabled sets.String
+	}{
+		{
+			name:     "Remove gcp and aws clusters",
+			config:   cfgWithCloud,
+			disabled: sets.NewString("build01", "build02"),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			removeDisabledClusters(tc.config, tc.disabled)
+			for provider := range tc.config.BuildFarm {
+				for cluster := range tc.config.BuildFarm[provider] {
+					if tc.disabled.Has(string(cluster)) {
+						t.Errorf("%s: expected %s cluster to be removed from BuildFarm config", t.Name(), cluster)
+
+					}
+					if clusters, ok := tc.config.BuildFarmCloud[provider]; ok {
+						if has := tc.disabled.HasAny(clusters...); has {
+							t.Errorf("%s: expected %s cluster to be removed from BuildFarmCloud config", t.Name(), cluster)
+						}
+					}
+				}
+			}
+
+		})
+	}
+}

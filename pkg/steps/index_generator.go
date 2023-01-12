@@ -3,7 +3,6 @@ package steps
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -63,6 +62,7 @@ func (s *indexGeneratorStep) Run(ctx context.Context) error {
 }
 
 func (s *indexGeneratorStep) run(ctx context.Context) error {
+	logrus.Warn("DEPRECATION WARNING: Building index images is deprecated and will be removed from ci-operator soon. See https://docs.ci.openshift.org/docs/how-tos/testing-operator-sdk-operators/#moving-to-file-based-catalog for details.")
 	source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
 	workingDir, err := getWorkingDir(s.client, source, s.jobSpec.Namespace())
 	if err != nil {
@@ -75,7 +75,8 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 			return fmt.Errorf("failed to determine if the image %s/%s is sqlite based index: %w", s.jobSpec.Namespace(), source, err)
 		}
 		if !ok {
-			return errors.New("opm index commands, which are used by the ci-operator, interact only with a database index, but the base index is not one. Please refer to the FBC docs here: https://olm.operatorframework.io/docs/reference/file-based-catalogs/")
+			logrus.Warn("Skipped building the index image: opm index commands, which are used by the ci-operator, interact only with a database index, but the base index is not one. Please refer to the FBC docs here: https://olm.operatorframework.io/docs/reference/file-based-catalogs/.")
+			return nil
 		} else {
 			logrus.Debug("The base index image is sqlite based")
 		}

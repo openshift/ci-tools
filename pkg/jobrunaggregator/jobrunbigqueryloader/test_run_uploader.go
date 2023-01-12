@@ -2,8 +2,9 @@ package jobrunbigqueryloader
 
 import (
 	"context"
-	"fmt"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
@@ -22,8 +23,8 @@ func newTestRunUploader(testRunInserter jobrunaggregatorlib.BigQueryInserter) up
 	}
 }
 
-func (o *testRunUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob) error {
-	fmt.Printf("  uploading junit test runs: %q/%q\n", jobRun.GetJobName(), jobRun.GetJobRunID())
+func (o *testRunUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error {
+	logger.Infof("uploading junit test runs: %q/%q", jobRun.GetJobName(), jobRun.GetJobRunID())
 	combinedJunitContent, err := jobRun.GetCombinedJUnitTestSuites(ctx)
 	if err != nil {
 		return err

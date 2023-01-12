@@ -9,17 +9,18 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/api/iterator"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
 type CIGCSClient interface {
-	ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation, jobName, jobRunID string) (jobrunaggregatorapi.JobRunInfo, error)
+	ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation, jobName, jobRunID string, logger logrus.FieldLogger) (jobrunaggregatorapi.JobRunInfo, error)
 
 	// ListJobRunNames returns a string channel for jobRunNames, an error channel for reporting errors during listing,
 	// and an error if the listing cannot begin.
-	ListJobRunNamesOlderThanFourHours(ctx context.Context, jobName, startingID string) (chan string, chan error, error)
+	ListJobRunNamesOlderThanFourHours(ctx context.Context, jobName, startingID string, logger logrus.FieldLogger) (chan string, chan error, error)
 }
 
 type ciGCSClient struct {
@@ -27,7 +28,7 @@ type ciGCSClient struct {
 	gcsBucketName string
 }
 
-func (o *ciGCSClient) ListJobRunNamesOlderThanFourHours(ctx context.Context, jobName, startingID string) (chan string, chan error, error) {
+func (o *ciGCSClient) ListJobRunNamesOlderThanFourHours(ctx context.Context, jobName, startingID string, logger logrus.FieldLogger) (chan string, chan error, error) {
 	query := &storage.Query{
 		// This ends up being the equivalent of:
 		// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade
@@ -46,7 +47,7 @@ func (o *ciGCSClient) ListJobRunNamesOlderThanFourHours(ctx context.Context, job
 	// When debugging, you can set the starting ID to a number such that you
 	// will process a relatively small number of jobsRuns.
 	query.StartOffset = fmt.Sprintf("logs/%s/%s", jobName, startingID)
-	fmt.Printf("  starting from %v\n", query.StartOffset)
+	logger.Debugf("starting from %v", query.StartOffset)
 
 	now := time.Now()
 
@@ -89,7 +90,7 @@ func (o *ciGCSClient) ListJobRunNamesOlderThanFourHours(ctx context.Context, job
 			switch {
 			case strings.HasSuffix(attrs.Name, "prowjob.json"):
 				jobRunId := filepath.Base(filepath.Dir(attrs.Name))
-				fmt.Printf("Queued jobrun/%q/%q\n", jobName, jobRunId)
+				logger.WithField("jobRun", jobRunId).Debug("Queued jobrun")
 				jobRunProcessingCh <- jobRunId
 
 			default:
@@ -101,8 +102,8 @@ func (o *ciGCSClient) ListJobRunNamesOlderThanFourHours(ctx context.Context, job
 	return jobRunProcessingCh, errorCh, nil
 }
 
-func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation, jobName, jobRunID string) (jobrunaggregatorapi.JobRunInfo, error) {
-	fmt.Printf("reading job run %v/%v.\n", jobGCSRootLocation, jobRunID)
+func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation, jobName, jobRunID string, logger logrus.FieldLogger) (jobrunaggregatorapi.JobRunInfo, error) {
+	logger.Infof("reading job run %v/%v", jobGCSRootLocation, jobRunID)
 
 	query := &storage.Query{
 		// This ends up being the equivalent of:
@@ -143,7 +144,7 @@ func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation,
 
 		switch {
 		case strings.HasSuffix(attrs.Name, "prowjob.json"):
-			fmt.Printf("  found %s\n", attrs.Name)
+			logger.Infof("found %s", attrs.Name)
 			jobRunId := filepath.Base(filepath.Dir(attrs.Name))
 			if jobRun == nil {
 				jobRun = jobrunaggregatorapi.NewGCSJobRun(bkt, jobGCSRootLocation, jobName, jobRunId)
@@ -151,7 +152,7 @@ func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation,
 			jobRun.SetGCSProwJobPath(attrs.Name)
 
 		case strings.HasSuffix(attrs.Name, ".xml") && strings.Contains(attrs.Name, "/junit"):
-			fmt.Printf("  found %s\n", attrs.Name)
+			logger.Infof("found %s", attrs.Name)
 			nameParts := strings.Split(attrs.Name, "/")
 			if len(nameParts) < 4 {
 				continue
@@ -169,15 +170,16 @@ func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation,
 
 	// eliminate items without prowjob.json and ones that aren't finished
 	if jobRun == nil {
-		fmt.Printf("  removing %q/%q because it doesn't have a prowjob.json\n", jobName, jobRunID)
+		logger.Info("removing job run because it doesn't have a prowjob.json")
 		return nil, nil
 	}
 	if len(jobRun.GetGCSProwJobPath()) == 0 {
-		fmt.Printf("  removing %q/%q because it doesn't have a prowjob.json but does have junit\n", jobName, jobRunID)
+		logger.Info("removing job run because it doesn't have a prowjob.json but does have junit")
 		return nil, nil
 	}
 	_, err := jobRun.GetProwJob(ctx)
 	if err != nil {
+		logger.WithError(err).Error("failed to get prowjob")
 		return nil, fmt.Errorf("failed to get prowjob for %q/%q: %w", jobName, jobRunID, err)
 	}
 

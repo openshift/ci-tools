@@ -125,32 +125,29 @@ type ClusterInfoGetter interface {
 type clusterInfoGetter struct{}
 
 func (g *clusterInfoGetter) GetClusterDetails(ctx context.Context, cluster string, client ctrlruntimeclient.Client) (map[string]string, error) {
-	var data = map[string]string{
-		"cluster": cluster,
-	}
 	consoleHost, err := api.ResolveConsoleHost(ctx, client)
 	if err != nil {
-		return data, fmt.Errorf("failed to resolve the console host for cluster %s: %w", cluster, err)
+		return nil, fmt.Errorf("failed to resolve the console host for cluster %s: %w", cluster, err)
 	}
 	registryHost, err := api.ResolveImageRegistryHost(ctx, client)
 	if err != nil {
-		return data, fmt.Errorf("failed to resolve the image registry host for cluster %s: %w", cluster, err)
+		return nil, fmt.Errorf("failed to resolve the image registry host for cluster %s: %w", cluster, err)
 	}
 	cv := &configv1.ClusterVersion{}
 	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "version"}, cv); err != nil {
-		return data, fmt.Errorf("failed to get ClusterVersion for cluster %s: %w", cluster, err)
+		return nil, fmt.Errorf("failed to get ClusterVersion for cluster %s: %w", cluster, err)
 	}
 	if len(cv.Status.History) == 0 {
-		return data, fmt.Errorf("failed to get ClusterVersion for cluster %s: no history found", cluster)
+		return nil, fmt.Errorf("failed to get ClusterVersion for cluster %s: no history found", cluster)
 	}
 	infra := &configv1.Infrastructure{}
 	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "cluster"}, infra); err != nil {
-		return data, fmt.Errorf("failed to get Infrastructure for cluster %s: %w", cluster, err)
+		return nil, fmt.Errorf("failed to get Infrastructure for cluster %s: %w", cluster, err)
 	}
 	version := cv.Status.History[0].Version
 	product, err := resolveProduct(ctx, client, version)
 	if err != nil {
-		return data, fmt.Errorf("failed to resolve the product for cluster %s: %w", cluster, err)
+		return nil, fmt.Errorf("failed to resolve the product for cluster %s: %w", cluster, err)
 	}
 	cloud := string(infra.Status.PlatformStatus.Type)
 
@@ -161,7 +158,6 @@ func (g *clusterInfoGetter) GetClusterDetails(ctx context.Context, cluster strin
 		"version":      version,
 		"product":      product,
 		"cloud":        cloud,
-		"error":        "",
 	}, nil
 }
 
@@ -175,7 +171,7 @@ func getClusterPage(ctx context.Context, clients map[string]ctrlruntimeclient.Cl
 		clusterInfo, err := getter.GetClusterDetails(ctx, cluster, client)
 		if err != nil {
 			logrus.WithError(err)
-			clusterInfo["error"] = "cannot reach cluster"
+			clusterInfo = map[string]string{"cluster": cluster, "error": "cannot reach cluster"}
 		}
 		data = append(data, clusterInfo)
 	}

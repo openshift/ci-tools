@@ -174,7 +174,7 @@ func getAllowList(data []byte) (map[string]string, error) {
 	for jobName, releaseType := range allowList {
 		if releaseType == "blocking" {
 			errs = append(errs, fmt.Errorf("release_type 'blocking' not permitted in the allow-list for %s, blocking jobs must be in the release controller configuration", jobName))
-		} else if releaseType != "informing" && releaseType != "broken" && releaseType != "generic-informing" {
+		} else if releaseType != "informing" && releaseType != "broken" && releaseType != "generic-informing" && releaseType != "osde2e" {
 			errs = append(errs, fmt.Errorf("%s: release_type must be one of 'informing', 'broken' or 'generic-informing'", jobName))
 		}
 	}
@@ -202,9 +202,9 @@ func addDashboardTab(p prowConfig.Periodic,
 	}
 
 	switch label {
-	case "informing", "blocking", "broken", "generic-informing":
+	case "informing", "blocking", "broken", "generic-informing", "osde2e":
 		dashboardType = label
-		if label == "informing" && (aggregateJobName != nil || configuredJobs[p.Name] == "blocking") {
+		if (label == "informing" || label == "osde2e") && (aggregateJobName != nil || configuredJobs[p.Name] == "blocking") {
 			dashboardType = "blocking"
 		}
 	default:
@@ -236,6 +236,8 @@ func addDashboardTab(p prowConfig.Periodic,
 	switch dashboardType {
 	case "generic-informing":
 		current = genericDashboardFor("informing")
+	case "osde2e":
+		current = genericDashboardFor("osd")
 	default:
 		var stream string
 		switch {
@@ -275,12 +277,6 @@ func addDashboardTab(p prowConfig.Periodic,
 		current = dashboardFor(stream, version, dashboardType)
 	}
 
-	if existing, ok := dashboards[current.Name]; ok {
-		current = existing
-	} else {
-		dashboards[current.Name] = current
-	}
-
 	daysOfResults := int32(0)
 	// for infrequently run jobs (at 12h or 24h intervals) we'd prefer to have more history than just the default
 	// 7-10 days (specified by the default testgrid config), so try to set number of days of results so that we
@@ -298,7 +294,14 @@ func addDashboardTab(p prowConfig.Periodic,
 		}
 	}
 
+	if existing, ok := dashboards[current.Name]; ok {
+		current = existing
+	} else {
+		dashboards[current.Name] = current
+	}
+
 	current.add(jobName, p.Annotations["description"], daysOfResults)
+
 }
 
 // This tool is intended to make the process of maintaining TestGrid dashboards for

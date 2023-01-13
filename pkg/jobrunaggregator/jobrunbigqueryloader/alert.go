@@ -3,7 +3,6 @@ package jobrunbigqueryloader
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math"
 	"os"
 	"sort"
@@ -140,17 +139,21 @@ func newAlertUploader(alertInserter jobrunaggregatorlib.BigQueryInserter) upload
 	}
 }
 
-func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob) error {
-	fmt.Printf("  uploading alert results: %q/%q\n", jobRun.GetJobName(), jobRun.GetJobRunID())
+func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error {
+	logger.Infof("uploading alert results: %q/%q", jobRun.GetJobName(), jobRun.GetJobRunID())
 	alertData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "alert")
 	if err != nil {
 		return err
 	}
+	logger.Debug("got test files with prefix")
 	if len(alertData) > 0 {
 		alertsToPersist := getAlertsFromPerJobRunData(alertData, jobRun.GetJobRunID())
 		if err := o.alertInserter.Put(ctx, alertsToPersist); err != nil {
 			return err
 		}
+		logger.Debug("insert complete")
+	} else {
+		logger.Debug("no alert data found, skipping insert")
 	}
 
 	return nil

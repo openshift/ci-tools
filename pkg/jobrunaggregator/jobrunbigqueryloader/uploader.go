@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -37,31 +38,37 @@ type allJobsLoaderOptions struct {
 }
 
 func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
-	fmt.Printf("Locating jobs\n")
+	logrus.Infof("Locating jobs")
 
 	jobs, err := o.ciDataClient.ListAllJobs(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get jobs: %w", err)
 	}
+	jobCount := len(jobs)
 
-	fmt.Printf("Launching threads to upload test runs for %d jobs\n", len(jobs))
+	logrus.Infof("Launching threads to upload test runs for %d jobs", jobCount)
 
 	waitGroup := sync.WaitGroup{}
 	errCh := make(chan error, len(jobs))
 	for i := range jobs {
 		job := jobs[i]
+
+		jobLogger := logrus.WithFields(logrus.Fields{
+			"job": job.JobName,
+		})
+
 		if !o.shouldCollectedDataForJobFn(job) {
-			fmt.Printf("  skipping %q\n", job.JobName)
+			jobLogger.Info("skipping job")
 			continue
 		}
 
-		fmt.Printf("  launching %q\n", job.JobName)
+		jobLogger.Info("launching")
 
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
 
-			jobLoader := o.newJobBigQueryLoaderOptions(job)
+			jobLoader := o.newJobBigQueryLoaderOptions(job, jobLogger)
 			err := jobLoader.Run(ctx)
 			if err != nil {
 				errCh <- err
@@ -71,6 +78,8 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 	waitGroup.Wait()
 	close(errCh)
 
+	logrus.Infof("completed upload for %d jobs", jobCount)
+
 	errs := []error{}
 	for err := range errCh {
 		errs = append(errs, err)
@@ -79,7 +88,7 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 	return utilerrors.NewAggregate(errs)
 }
 
-func (o *allJobsLoaderOptions) newJobBigQueryLoaderOptions(job jobrunaggregatorapi.JobRow) *jobLoaderOptions {
+func (o *allJobsLoaderOptions) newJobBigQueryLoaderOptions(job jobrunaggregatorapi.JobRow, logger logrus.FieldLogger) *jobLoaderOptions {
 
 	return &jobLoaderOptions{
 		jobName:                   job.JobName,
@@ -88,6 +97,7 @@ func (o *allJobsLoaderOptions) newJobBigQueryLoaderOptions(job jobrunaggregatora
 		jobRunInserter:            o.jobRunInserter,
 		getLastJobRunWithDataFn:   o.getLastJobRunWithDataFn,
 		jobRunUploader:            o.jobRunUploader,
+		logger:                    logger,
 	}
 }
 
@@ -107,10 +117,12 @@ type jobLoaderOptions struct {
 
 	getLastJobRunWithDataFn getLastJobRunWithDataFunc
 	jobRunUploader          uploader
+
+	logger logrus.FieldLogger
 }
 
 func (o *jobLoaderOptions) Run(ctx context.Context) error {
-	fmt.Printf("Analyzing job %q.\n", o.jobName)
+	o.logger.Info("Analyzing job")
 
 	lastJobRun, err := o.getLastJobRunWithDataFn(ctx, o.jobName)
 	if err != nil {
@@ -121,7 +133,7 @@ func (o *jobLoaderOptions) Run(ctx context.Context) error {
 		startingJobRunID = jobrunaggregatorlib.NextJobRunID(lastJobRun.Name)
 	}
 
-	jobRunProcessingCh, errorCh, err := o.gcsClient.ListJobRunNamesOlderThanFourHours(ctx, o.jobName, startingJobRunID)
+	jobRunProcessingCh, errorCh, err := o.gcsClient.ListJobRunNamesOlderThanFourHours(ctx, o.jobName, startingJobRunID, o.logger)
 	if err != nil {
 		return err
 	}
@@ -144,7 +156,7 @@ func (o *jobLoaderOptions) Run(ctx context.Context) error {
 	currentUploaders := sync.WaitGroup{}
 	close(lastDoneUploadingCh)
 	for jobRunID := range jobRunProcessingCh {
-		jobRunInserter := o.newJobRunBigQueryLoaderOptions(jobRunID, lastDoneUploadingCh)
+		jobRunInserter := o.newJobRunBigQueryLoaderOptions(jobRunID, lastDoneUploadingCh, o.logger)
 		lastDoneUploadingCh = jobRunInserter.doneUploading
 
 		if err := concurrentWorkers.Acquire(ctx, 1); err != nil {
@@ -175,20 +187,21 @@ func (o *jobLoaderOptions) Run(ctx context.Context) error {
 	return utilerrors.NewAggregate(insertionErrors)
 }
 
-func (o *jobLoaderOptions) newJobRunBigQueryLoaderOptions(jobRunID string, readyToUpload chan struct{}) *jobRunLoaderOptions {
+func (o *jobLoaderOptions) newJobRunBigQueryLoaderOptions(jobRunID string, readyToUpload chan struct{}, logger logrus.FieldLogger) *jobRunLoaderOptions {
 	return &jobRunLoaderOptions{
 		jobName:        o.jobName,
-		hobRunID:       jobRunID,
+		jobRunID:       jobRunID,
 		gcsClient:      o.gcsClient,
 		readyToUpload:  readyToUpload,
 		jobRunInserter: o.jobRunInserter,
 		doneUploading:  make(chan struct{}),
 		jobRunUploader: o.jobRunUploader,
+		logger:         logger.WithField("jobRun", jobRunID),
 	}
 }
 
 type uploader interface {
-	uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob) error
+	uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error
 }
 
 // jobRunLoaderOptions
@@ -197,7 +210,7 @@ type uploader interface {
 // 3. uploads all results to bigquery
 type jobRunLoaderOptions struct {
 	jobName  string
-	hobRunID string
+	jobRunID string
 
 	// GCSClient is used to read the prowjob data
 	gcsClient jobrunaggregatorlib.CIGCSClient
@@ -207,12 +220,13 @@ type jobRunLoaderOptions struct {
 	doneUploading  chan struct{}
 
 	jobRunUploader uploader
+	logger         logrus.FieldLogger
 }
 
 func (o *jobRunLoaderOptions) Run(ctx context.Context) error {
 	defer close(o.doneUploading)
 
-	fmt.Printf("Analyzing jobrun/%v/%v.\n", o.jobName, o.hobRunID)
+	o.logger.Debug("Analyzing jobrun")
 
 	jobRun, err := o.readJobRunFromGCS(ctx)
 	if err != nil {
@@ -234,7 +248,8 @@ func (o *jobRunLoaderOptions) Run(ctx context.Context) error {
 	}
 
 	if err := o.uploadJobRun(ctx, jobRun); err != nil {
-		return fmt.Errorf("jobrun/%v/%v failed to upload to bigquery: %w", o.jobName, o.hobRunID, err)
+		o.logger.WithError(err).Error("failed to upload jobrun to bigquery")
+		return fmt.Errorf("jobrun/%v/%v failed to upload to bigquery: %w", o.jobName, o.jobRunID, err)
 	}
 
 	return nil
@@ -245,14 +260,16 @@ func (o *jobRunLoaderOptions) uploadJobRun(ctx context.Context, jobRun jobrunagg
 	if err != nil {
 		return err
 	}
-	fmt.Printf("uploading prowjob.yaml: jobrun/%v/%v\n", jobRun.GetJobName(), jobRun.GetJobRunID())
+	o.logger.Info("uploading prowjob.yaml")
 	jobRunRow := newJobRunRow(jobRun, prowJob)
 	if err := o.jobRunInserter.Put(ctx, jobRunRow); err != nil {
+		o.logger.WithError(err).Error("error inserting job run row")
 		return err
 	}
 
-	fmt.Printf("  uploading content: jobrun/%v/%v\n", jobRun.GetJobName(), jobRun.GetJobRunID())
-	if err := o.jobRunUploader.uploadContent(ctx, jobRun, prowJob); err != nil {
+	o.logger.Infof("uploading content for jobrun")
+	if err := o.jobRunUploader.uploadContent(ctx, jobRun, prowJob, o.logger); err != nil {
+		o.logger.WithError(err).Error("error uploading content")
 		return err
 	}
 
@@ -261,24 +278,28 @@ func (o *jobRunLoaderOptions) uploadJobRun(ctx context.Context, jobRun jobrunagg
 
 // associateJobRuns returns allJobRuns and currentAggregationTargetJobRuns
 func (o *jobRunLoaderOptions) readJobRunFromGCS(ctx context.Context) (jobrunaggregatorapi.JobRunInfo, error) {
-	jobRunInfo, err := o.gcsClient.ReadJobRunFromGCS(ctx, "logs/"+o.jobName, o.jobName, o.hobRunID)
+	jobRunInfo, err := o.gcsClient.ReadJobRunFromGCS(ctx, "logs/"+o.jobName, o.jobName, o.jobRunID, o.logger)
 	if err != nil {
+		o.logger.WithError(err).Error("error in ReadJobRunFromGCS")
 		return nil, err
 	}
 	// this can happen if there is no prowjob.json
 	if jobRunInfo == nil {
+		o.logger.Debug("no prowjob.json found")
 		return nil, nil
 	}
 	prowjob, err := jobRunInfo.GetProwJob(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get prowjob for jobrun/%v/%v: %w", o.jobName, o.hobRunID, err)
+		o.logger.WithError(err).Error("error in GetProwJob")
+		return nil, fmt.Errorf("failed to get prowjob for jobrun/%v/%v: %w", o.jobName, o.jobRunID, err)
 	}
 	if prowjob.Status.CompletionTime == nil {
-		fmt.Printf("Removing %q/%q because it isn't finished\n", o.jobName, o.hobRunID)
+		o.logger.Info("Removing job run because it isn't finished")
 		return nil, nil
 	}
 	if _, err := jobRunInfo.GetAllContent(ctx); err != nil {
-		return nil, fmt.Errorf("failed to get all content for jobrun/%v/%v: %w", o.jobName, o.hobRunID, err)
+		o.logger.WithError(err).Error("error getting all content for jobrun")
+		return nil, fmt.Errorf("failed to get all content for jobrun/%v/%v: %w", o.jobName, o.jobRunID, err)
 	}
 
 	return jobRunInfo, nil

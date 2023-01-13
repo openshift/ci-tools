@@ -2,7 +2,6 @@ package jobrunbigqueryloader
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/sirupsen/logrus"
@@ -134,26 +133,35 @@ func newDisruptionUploader(backendDisruptionInserter jobrunaggregatorlib.BigQuer
 	}
 }
 
-func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob) error {
-	fmt.Printf("  uploading backend disruption results: %q/%q\n", jobRun.GetJobName(), jobRun.GetJobRunID())
+func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob,
+	logger logrus.FieldLogger) error {
+	logger.Info("uploading backend disruption results")
 	backendDisruptionData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "backend-disruption")
 	if err != nil {
+		logger.WithError(err).Error("error in GetOpenShiftTestsFilesWithPrefix")
 		return err
 	}
+	logger.Debug("got test files with prefix")
 	if len(backendDisruptionData) == 0 {
-		fmt.Printf("  no backend disruption results found for: %q/%q\n", jobRun.GetJobName(), jobRun.GetJobRunID())
+		logger.Info("no backend disruption results found for")
 		return nil
 	}
 
-	return o.uploadBackendDisruptionFromDirectData(ctx, jobRun.GetJobRunID(), backendDisruptionData)
+	return o.uploadBackendDisruptionFromDirectData(ctx, jobRun.GetJobRunID(), backendDisruptionData, logger)
 }
 
-func (o *disruptionUploader) uploadBackendDisruptionFromDirectData(ctx context.Context, jobRunName string, backendDisruptionData map[string]string) error {
+func (o *disruptionUploader) uploadBackendDisruptionFromDirectData(ctx context.Context, jobRunName string, backendDisruptionData map[string]string,
+	logger logrus.FieldLogger) error {
+
 	serverAvailabilityResults := jobrunaggregatorlib.GetServerAvailabilityResultsFromDirectData(backendDisruptionData)
-	return o.uploadBackendDisruption(ctx, jobRunName, serverAvailabilityResults)
+	return o.uploadBackendDisruption(ctx, jobRunName, serverAvailabilityResults, logger)
 }
 
-func (o *disruptionUploader) uploadBackendDisruption(ctx context.Context, jobRunName string, serverAvailabilityResults map[string]jobrunaggregatorlib.AvailabilityResult) error {
+func (o *disruptionUploader) uploadBackendDisruption(ctx context.Context, jobRunName string,
+	serverAvailabilityResults map[string]jobrunaggregatorlib.AvailabilityResult,
+	logger logrus.FieldLogger) error {
+
+	logger.Debug("inserting backend disruption rows")
 	rows := []*jobrunaggregatorapi.BackendDisruptionRow{}
 	for _, backendName := range sets.StringKeySet(serverAvailabilityResults).List() {
 		unavailability := serverAvailabilityResults[backendName]
@@ -165,7 +173,9 @@ func (o *disruptionUploader) uploadBackendDisruption(ctx context.Context, jobRun
 		rows = append(rows, row)
 	}
 	if err := o.backendDisruptionInserter.Put(ctx, rows); err != nil {
+		logger.WithError(err).Error("error inserting backend disruption")
 		return err
 	}
+	logger.Debug("insert complete")
 	return nil
 }

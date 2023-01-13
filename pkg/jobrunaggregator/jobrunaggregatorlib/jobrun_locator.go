@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/api/iterator"
 
 	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -126,7 +127,10 @@ func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunag
 		switch {
 		case strings.HasSuffix(attrs.Name, "prowjob.json"):
 			jobRunId := filepath.Base(filepath.Dir(attrs.Name))
-			jobRunInfo, err := a.ciGCSClient.ReadJobRunFromGCS(ctx, a.gcsPrefix, a.jobName, jobRunId)
+			jobRunInfo, err := a.ciGCSClient.ReadJobRunFromGCS(ctx, a.gcsPrefix, a.jobName, jobRunId, logrus.WithFields(logrus.Fields{
+				"job":    a.jobName,
+				"jobRun": jobRunId,
+			}))
 			if err != nil {
 				return nil, err
 			}

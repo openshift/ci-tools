@@ -23,7 +23,8 @@ type BigQueryAlertUploadFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
 
-	DryRun bool
+	DryRun   bool
+	LogLevel string
 }
 
 func NewBigQueryAlertUploadFlags() *BigQueryAlertUploadFlags {
@@ -38,6 +39,7 @@ func (f *BigQueryAlertUploadFlags) BindFlags(fs *pflag.FlagSet) {
 	f.Authentication.BindFlags(fs)
 
 	fs.BoolVar(&f.DryRun, "dry-run", f.DryRun, "Run the command, but don't mutate data.")
+	fs.StringVar(&f.LogLevel, "log-level", f.LogLevel, "Log level (trace,debug,info,warn,error) (default: info)")
 }
 
 func NewBigQueryAlertUploadFlagsCommand() *cobra.Command {
@@ -126,6 +128,7 @@ func (f *BigQueryAlertUploadFlags) ToOptions(ctx context.Context) (*allJobsLoade
 		},
 		getLastJobRunWithDataFn: ciDataClient.GetLastJobRunWithAlertDataForJobName,
 		jobRunUploader:          newAlertUploader(backendAlertTableInserter),
+		logLevel:                f.LogLevel,
 	}, nil
 }
 
@@ -140,7 +143,7 @@ func newAlertUploader(alertInserter jobrunaggregatorlib.BigQueryInserter) upload
 }
 
 func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error {
-	logger.Infof("uploading alert results: %q/%q", jobRun.GetJobName(), jobRun.GetJobRunID())
+	logger.Info("uploading alert results")
 	alertData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "alert")
 	if err != nil {
 		return err

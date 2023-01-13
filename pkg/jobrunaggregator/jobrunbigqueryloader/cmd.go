@@ -16,7 +16,8 @@ type BigQueryTestRunUploadFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
 
-	DryRun bool
+	DryRun   bool
+	LogLevel string
 }
 
 func NewBigQueryTestRunUploadFlags() *BigQueryTestRunUploadFlags {
@@ -31,6 +32,7 @@ func (f *BigQueryTestRunUploadFlags) BindFlags(fs *pflag.FlagSet) {
 	f.Authentication.BindFlags(fs)
 
 	fs.BoolVar(&f.DryRun, "dry-run", f.DryRun, "Run the command, but don't mutate data.")
+	fs.StringVar(&f.LogLevel, "log-level", f.LogLevel, "Log level (trace,debug,info,warn,error) (default: info)")
 }
 
 func NewBigQueryTestRunUploadFlagsCommand() *cobra.Command {
@@ -117,5 +119,6 @@ func (f *BigQueryTestRunUploadFlags) ToOptions(ctx context.Context) (*allJobsLoa
 		shouldCollectedDataForJobFn: wantsTestRunData,
 		getLastJobRunWithDataFn:     ciDataClient.GetLastJobRunWithTestRunDataForJobName,
 		jobRunUploader:              newTestRunUploader(testRunTableInserter),
+		logLevel:                    f.LogLevel,
 	}, nil
 }

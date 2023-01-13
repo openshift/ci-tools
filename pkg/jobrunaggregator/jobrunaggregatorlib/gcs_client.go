@@ -83,6 +83,7 @@ func (o *ciGCSClient) ListJobRunNamesOlderThanFourHours(ctx context.Context, job
 				continue
 			}
 			// chosen because CI jobs only take four hours max (so far), so we only get completed jobs
+			// TODO: this needs to go up, we often bump beyond this.
 			if now.Sub(attrs.Created) < (4 * time.Hour) {
 				continue
 			}
@@ -103,7 +104,7 @@ func (o *ciGCSClient) ListJobRunNamesOlderThanFourHours(ctx context.Context, job
 }
 
 func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation, jobName, jobRunID string, logger logrus.FieldLogger) (jobrunaggregatorapi.JobRunInfo, error) {
-	logger.Infof("reading job run %v/%v", jobGCSRootLocation, jobRunID)
+	logger.Debugf("reading job run %s/%s", jobGCSRootLocation, jobRunID)
 
 	query := &storage.Query{
 		// This ends up being the equivalent of:
@@ -144,7 +145,7 @@ func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation,
 
 		switch {
 		case strings.HasSuffix(attrs.Name, "prowjob.json"):
-			logger.Infof("found %s", attrs.Name)
+			logger.Debugf("found %s", attrs.Name)
 			jobRunId := filepath.Base(filepath.Dir(attrs.Name))
 			if jobRun == nil {
 				jobRun = jobrunaggregatorapi.NewGCSJobRun(bkt, jobGCSRootLocation, jobName, jobRunId)
@@ -152,7 +153,7 @@ func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation,
 			jobRun.SetGCSProwJobPath(attrs.Name)
 
 		case strings.HasSuffix(attrs.Name, ".xml") && strings.Contains(attrs.Name, "/junit"):
-			logger.Infof("found %s", attrs.Name)
+			logger.Debugf("found %s", attrs.Name)
 			nameParts := strings.Split(attrs.Name, "/")
 			if len(nameParts) < 4 {
 				continue

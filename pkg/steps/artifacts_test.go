@@ -24,6 +24,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
+	testhelper_kube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
@@ -503,8 +504,8 @@ func TestArtifactWorker(t *testing.T) {
 		}
 	}()
 	pod := "pod"
-	podClient := &testhelper.FakePodClient{
-		FakePodExecutor: &testhelper.FakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(
+	podClient := &testhelper_kube.FakePodClient{
+		FakePodExecutor: &testhelper_kube.FakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(
 			&coreapi.Pod{
 				ObjectMeta: meta.ObjectMeta{
 					Name:      pod,

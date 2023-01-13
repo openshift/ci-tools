@@ -530,7 +530,6 @@ periodic-ci-openshift-release-master-ci-4.12-e2e-aws-sdn-cgroupsv2
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-sdn-crun
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-sdn-imdsv2
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-sdn-multitenant
-periodic-ci-openshift-release-master-ci-4.12-e2e-aws-sdn-no-capabilities
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-sdn-serial
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-sdn-techpreview
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-sdn-techpreview-serial
@@ -911,6 +910,7 @@ periodic-ci-openshift-release-master-nightly-4.13-e2e-telco5g
 periodic-ci-openshift-release-master-nightly-4.13-e2e-telco5g-cnftests
 periodic-ci-openshift-release-master-nightly-4.13-e2e-vsphere-8-ovn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-vsphere-8-ovn-upi
+periodic-ci-openshift-release-master-nightly-4.13-e2e-vsphere-externallb-ovn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-vsphere-ovn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-vsphere-ovn-csi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-vsphere-ovn-etcd-scaling

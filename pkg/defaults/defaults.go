@@ -66,6 +66,7 @@ func FromConfig(
 	paramFile string,
 	promote bool,
 	clusterConfig *rest.Config,
+	podPendingTimeout time.Duration,
 	leaseClient *lease.Client,
 	requiredTargets []string,
 	cloneAuthConfig *steps.CloneAuthConfig,
@@ -98,7 +99,7 @@ func FromConfig(
 		return nil, nil, fmt.Errorf("could not get core client for cluster config: %w", err)
 	}
 
-	podClient := kubernetes.NewPodClient(client, clusterConfig, coreGetter.RESTClient())
+	podClient := kubernetes.NewPodClient(client, clusterConfig, coreGetter.RESTClient(), podPendingTimeout)
 
 	var hiveClient ctrlruntimeclient.WithWatch
 	if hiveKubeconfig != nil {

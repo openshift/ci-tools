@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"time"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -63,6 +64,8 @@ type FakePodClient struct {
 	*FakePodExecutor
 	Namespace, Name string
 }
+
+func (FakePodClient) PendingTimeout() time.Duration { return 0 }
 
 func (f *FakePodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
 	if namespace != f.Namespace {

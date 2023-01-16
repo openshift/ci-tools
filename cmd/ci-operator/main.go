@@ -369,6 +369,7 @@ type options struct {
 	configSpec                 *api.ReleaseBuildConfiguration
 	jobSpec                    *api.JobSpec
 	clusterConfig              *rest.Config
+	podPendingTimeout          time.Duration
 	consoleHost                string
 	nodeName                   string
 	leaseServer                string
@@ -428,6 +429,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	// what we will run
 	flag.StringVar(&opt.nodeName, "node", "", "Restrict scheduling of pods to a single node in the cluster. Does not afffect indirectly created pods (e.g. builds).")
+	flag.DurationVar(&opt.podPendingTimeout, "pod-pending-timeout", 30*time.Minute, "Maximum amount of time created containers can spend before the running state")
 	flag.StringVar(&opt.leaseServer, "lease-server", leaseServerAddress, "Address of the server that manages leases. Required if any test is configured to acquire a lease.")
 	flag.StringVar(&opt.leaseServerCredentialsFile, "lease-server-credentials-file", "", "The path to credentials file used to access the lease server. The content is of the form <username>:<password>.")
 	flag.DurationVar(&opt.leaseAcquireTimeout, "lease-acquire-timeout", leaseAcquireTimeout, "Maximum amount of time to wait for lease acquisition")
@@ -831,7 +833,7 @@ func (o *options) Run() []error {
 	o.resolveConsoleHost()
 
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig, o.consoleHost, o.nodeName)
+	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig, o.consoleHost, o.nodeName)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}

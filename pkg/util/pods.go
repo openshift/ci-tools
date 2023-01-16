@@ -175,10 +175,9 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient kubernetes.Pod
 		return pod, AppendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
 	}
 	done := ctx.Done()
-
+	pendingTimeout := podClient.PendingTimeout()
 	podCheckTicker := time.NewTicker(10 * time.Second)
 	defer podCheckTicker.Stop()
-	podStartTimeout := 30 * time.Minute
 	var podSeenRunning bool
 
 	for {
@@ -197,8 +196,8 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient kubernetes.Pod
 			if !podSeenRunning {
 				if podHasStarted(pod) {
 					podSeenRunning = true
-				} else if time.Since(pod.CreationTimestamp.Time) > podStartTimeout {
-					message := fmt.Sprintf("pod didn't start running within %s: %s\n%s", podStartTimeout, getReasonsForUnreadyContainers(pod), getEventsForPod(ctx, pod, podClient))
+				} else if time.Since(pod.CreationTimestamp.Time) > pendingTimeout {
+					message := fmt.Sprintf("pod didn't start running within %s: %s\n%s", pendingTimeout, getReasonsForUnreadyContainers(pod), getEventsForPod(ctx, pod, podClient))
 					logrus.Infof(message)
 					notifier.Complete(name)
 					return pod, errors.New(message)

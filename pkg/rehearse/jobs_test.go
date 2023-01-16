@@ -944,7 +944,7 @@ func TestWaitForJobsLog(t *testing.T) {
 	}
 	successState, failureState := pjapi.SuccessState, pjapi.FailureState
 	check(hook, "success", logrus.InfoLevel, &successState)
-	check(hook, "failure", logrus.ErrorLevel, &failureState)
+	check(hook, "failure", logrus.InfoLevel, &failureState)
 }
 
 func TestFilterPresubmits(t *testing.T) {

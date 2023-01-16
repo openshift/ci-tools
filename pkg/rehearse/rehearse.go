@@ -350,7 +350,7 @@ func (r RehearsalConfig) RehearseJobs(candidate RehearsalCandidate, candidatePat
 		logger.WithError(err).Error("Failed to rehearse jobs")
 		return false, utilerrors.NewAggregate(errs)
 	} else if !success {
-		logger.Error("Some jobs failed their rehearsal runs")
+		logger.Info("Some jobs failed their rehearsal runs")
 	} else {
 		logger.Info("All jobs were rehearsed successfully")
 	}

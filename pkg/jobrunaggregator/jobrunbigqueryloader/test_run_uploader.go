@@ -24,7 +24,7 @@ func newTestRunUploader(testRunInserter jobrunaggregatorlib.BigQueryInserter) up
 }
 
 func (o *testRunUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error {
-	logger.Infof("uploading junit test runs: %q/%q", jobRun.GetJobName(), jobRun.GetJobRunID())
+	logger.Info("uploading junit test runs")
 	combinedJunitContent, err := jobRun.GetCombinedJUnitTestSuites(ctx)
 	if err != nil {
 		return err

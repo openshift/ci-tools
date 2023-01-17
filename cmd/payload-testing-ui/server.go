@@ -25,6 +25,22 @@ const (
 	runsURL   = "/runs/"
 	docURL    = "https://docs.ci.openshift.org/docs/release-oversight/payload-testing/"
 	bodyStart = `
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+<a class="navbar-brand" href=` + runsURL + `>Pull Request Payload Qualification Runs</a>
+<button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+	<span class="navbar-toggler-icon"></span>
+</button>
+<div class="collapse navbar-collapse" id="navbarSupportedContent">
+	<ul class="navbar-nav mr-auto">
+	<li class="nav-item">
+		<a class="nav-link" href=` + docURL + ` target="_blank">Documentation</a>
+	</li>
+	<li class="nav-item">
+	<a class="nav-link" href=` + runsURL + `>Back to runs</a>
+	</li>
+	</ul>
+</div>
+</nav>
 <div class="container">`
 	pageEnd = `
   <p class="small">Source code for this page located on <a href="https://github.com/openshift/ci-tools">GitHub</a></p>
@@ -44,9 +60,6 @@ const (
 	runTitle    = "Pull Request Payload Qualification Run - %s"
 	runTemplate = `
 <h1>{{ .ObjectMeta.Namespace }}/{{ .ObjectMeta.Name }}</h1>
-
-<p class="text-right">{{ returnLink }}</p>
-<p class="text-right">{{ documentationLink }}</p>
 
 <h3>Requestor: {{ commentLink .ObjectMeta .Spec.PullRequest.PullRequest .Spec.Jobs.ReleaseControllerConfig }}</h3>
 
@@ -208,12 +221,6 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 	}
 	tmpl := template.New("runTemplate")
 	tmpl.Funcs(template.FuncMap{
-		"returnLink": func() template.HTML {
-			return template.HTML(fmt.Sprintf(`<a href="%s">%s</a>`, runsURL, "back to runs"))
-		},
-		"documentationLink": func() template.HTML {
-			return template.HTML(fmt.Sprintf(`<a href="%s" target="_blank">%s</a>`, docURL, "documentation"))
-		},
 		"prLink": func(pr *prpqv1.PullRequestUnderTest) template.HTML {
 			org := template.HTMLEscapeString(pr.Org)
 			repo := template.HTMLEscapeString(pr.Repo)

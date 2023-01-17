@@ -50,13 +50,33 @@ const (
 	runsListTemplate = `
 <h1>Pull Request Payload Qualification Runs</h1>
 {{ len .Items }} run(s)
-<ul>
-{{ range .Items }}
-  <li>
-	{{ runLink .ObjectMeta .Spec.PullRequest.PullRequest }}
-  </li>
-{{ end }}
-</ul>
+<table class="table">
+	<thead>
+		<tr>
+			<th title="The name of the Pull Request Payload Qualification Run" class="info">Name</th>
+			<th title="The author of Pull Request and the name of Pull Request" class="info">Pull Request</th>
+		</tr>
+	</thead>
+	<tbody>
+		{{ range .Items }}
+		<tr>
+			<td>
+			{{ with .ObjectMeta }}
+				{{ with $url := printf "%s/%s" .Namespace .Name }}
+				<b>Name:</b> <a href="` + runsURL + `{{ $url }}">{{ $url }}</a>
+				{{ end }}
+			{{ end }}
+			</td>
+			<td>
+			{{ with .Spec.PullRequest }}
+				<p>Author: {{ .PullRequest.Author }}</p>
+				<p>Name: {{ prLink . }}</p>
+			{{ end }}
+			</td>
+		</tr>
+		{{ end }}
+	</tbody>
+</table>
 `
 	runTitle    = "Pull Request Payload Qualification Run - %s"
 	runTemplate = `
@@ -141,17 +161,18 @@ type server struct {
 	runsListTemplate *template.Template
 }
 
+func prLink(pr *prpqv1.PullRequestUnderTest) template.HTML {
+	org := template.HTMLEscapeString(pr.Org)
+	repo := template.HTMLEscapeString(pr.Repo)
+	title := template.HTMLEscapeString(pr.PullRequest.Title)
+	n := pr.PullRequest.Number
+	ret := fmt.Sprintf(`<a href="http://github.com/%s/%s/pull/%d">%s</a>`, org, repo, n, title)
+	return template.HTML(ret)
+}
+
 func newServer(client ctrlruntimeclient.Client, ctx context.Context, namespace string) (server, error) {
 	runsListTemplate, err := template.New("runsListTemplate").Funcs(template.FuncMap{
-		"runLink": func(obj *metav1.ObjectMeta, pr *prpqv1.PullRequest) template.HTML {
-			objName := obj.Name
-			objNS := obj.Namespace
-			ident := objName[len(objName)-6:]
-			author := template.HTMLEscapeString(pr.Author)
-			title := template.HTMLEscapeString(pr.Title)
-			ret := fmt.Sprintf(`<a href="`+runsURL+`%s/%s">%s-%s-%s</a>`, objNS, objName, author, title, ident)
-			return template.HTML(ret)
-		},
+		"prLink": prLink,
 	}).Parse(runsListTemplate)
 
 	if err != nil {
@@ -222,14 +243,7 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 	}
 	tmpl := template.New("runTemplate")
 	tmpl.Funcs(template.FuncMap{
-		"prLink": func(pr *prpqv1.PullRequestUnderTest) template.HTML {
-			org := template.HTMLEscapeString(pr.Org)
-			repo := template.HTMLEscapeString(pr.Repo)
-			title := template.HTMLEscapeString(pr.PullRequest.Title)
-			n := pr.PullRequest.Number
-			ret := fmt.Sprintf(`<a href="http://github.com/%s/%s/pull/%d">%s</a>`, org, repo, n, title)
-			return template.HTML(ret)
-		},
+		"prLink": prLink,
 		"authorLink": func(a string) template.HTML {
 			a = template.HTMLEscapeString(a)
 			ret := fmt.Sprintf(`<a href="https://github.com/%s">%s</a>`, a, a)

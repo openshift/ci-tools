@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -143,8 +144,8 @@ type server struct {
 func newServer(client ctrlruntimeclient.Client, ctx context.Context, namespace string) (server, error) {
 	runsListTemplate, err := template.New("runsListTemplate").Funcs(template.FuncMap{
 		"runLink": func(obj *metav1.ObjectMeta, pr *prpqv1.PullRequest) template.HTML {
-			objName := obj.GetName()
-			objNS := obj.GetNamespace()
+			objName := obj.Name
+			objNS := obj.Namespace
 			ident := objName[len(objName)-6:]
 			author := template.HTMLEscapeString(pr.Author)
 			title := template.HTMLEscapeString(pr.Title)
@@ -249,7 +250,7 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 			return template.HTML(ret)
 		},
 		"commentLink": func(obj *metav1.ObjectMeta, pr *prpqv1.PullRequest, config *prpqv1.ReleaseControllerConfig) template.HTML {
-			created := obj.GetCreationTimestamp().Format("Jan 2, 2006 15:04")
+			created := obj.CreationTimestamp.Format(time.RFC3339)
 			author := template.HTMLEscapeString(pr.Author)
 			ocp := template.HTMLEscapeString(config.OCP)
 			release := template.HTMLEscapeString(config.Release)

@@ -44,9 +44,6 @@ func (c podClient) GetLogs(namespace, name string, opts *coreapi.PodLogOptions) 
 }
 
 func (c podClient) WithNewLoggingClient() PodClient {
-	return podClient{
-		LoggingClient: c.New(),
-		config:        c.config,
-		client:        c.client,
-	}
+	c.LoggingClient = c.New()
+	return c
 }

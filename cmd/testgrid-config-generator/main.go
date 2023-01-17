@@ -27,6 +27,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 	releaseconfig "github.com/openshift/ci-tools/pkg/release/config"
+	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
@@ -216,14 +217,7 @@ func addDashboardTab(p prowConfig.Periodic,
 			break
 		}
 		switch {
-		case strings.HasPrefix(prowName, "release-openshift-"),
-			strings.HasPrefix(prowName, "promote-release-openshift-"),
-			strings.HasPrefix(prowName, "periodic-ci-openshift-hypershift-main-periodics-"),
-			strings.HasPrefix(prowName, "periodic-ci-openshift-multiarch"),
-			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-ci-"),
-			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-okd-"),
-			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-nightly-"),
-			strings.HasPrefix(prowName, "periodic-ci-shiftstack-shiftstack-ci-main-periodic-"):
+		case util.IsSpecialInformingJobOnTestGrid(prowName):
 			// the standard release periodics should always appear in testgrid
 			dashboardType = "informing"
 		default:

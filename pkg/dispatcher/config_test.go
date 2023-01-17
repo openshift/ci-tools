@@ -372,9 +372,6 @@ func TestGetClusterForJob(t *testing.T) {
 }
 
 func TestDetermineClusterForJob(t *testing.T) {
-	configIgnoreE2EByJobAssignment := configWithBuildFarmWithJobsAndDetermineE2EByJob
-	configIgnoreE2EByJobAssignment.DetermineE2EByJob = false
-	configIgnoreE2EByJobAssignment.IgnoreE2EByJobAssignment = true
 	testCases := []struct {
 		name                   string
 		config                 *Config
@@ -524,26 +521,6 @@ func TestDetermineClusterForJob(t *testing.T) {
 			expected:               "build01",
 			expectedCanBeRelocated: false,
 		},
-		{
-			name:   "IgnoreE2EByJobAssignment: aws assigned",
-			config: &configIgnoreE2EByJobAssignment,
-			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
-				Labels:  map[string]string{"ci-operator.openshift.io/cloud": "aws"},
-				Cluster: "build01",
-			},
-			expected:               "build01",
-			expectedCanBeRelocated: false,
-		},
-		{
-			name:   "IgnoreE2EByJobAssignment: gcp assigned",
-			config: &configIgnoreE2EByJobAssignment,
-			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
-				Labels:  map[string]string{"ci-operator.openshift.io/cloud": "aws"},
-				Cluster: "build02",
-			},
-			expected:               "api.ci",
-			expectedCanBeRelocated: true,
-		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -683,39 +660,6 @@ func TestValidate(t *testing.T) {
 			actual := tc.config.Validate()
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
-			}
-		})
-	}
-}
-
-func TestConfigIsAnyBuildClusterDisabled(t *testing.T) {
-	tests := []struct {
-		name      string
-		buildFarm map[api.Cloud]map[api.Cluster]*BuildFarmConfig
-		want      bool
-	}{
-		{
-			name: "empty BuildFarm",
-			want: true,
-		},
-		{
-			name:      "Buildfarm not disabled",
-			buildFarm: map[api.Cloud]map[api.Cluster]*BuildFarmConfig{"aws": {"build01": &BuildFarmConfig{Disabled: false}}},
-			want:      false,
-		},
-		{
-			name:      "Buildfarm disabled",
-			buildFarm: map[api.Cloud]map[api.Cluster]*BuildFarmConfig{"aws": {"build01": &BuildFarmConfig{Disabled: true}}},
-			want:      true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := &Config{
-				BuildFarm: tt.buildFarm,
-			}
-			if got := config.IsAnyBuildClusterDisabled(); got != tt.want {
-				t.Errorf("Config.IsAnyBuildClusterDisabled() = %v, want %v", got, tt.want)
 			}
 		})
 	}

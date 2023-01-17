@@ -959,7 +959,7 @@ func (e *Executor) waitForJobs(jobs sets.String, selector ctrlruntimeclient.List
 
 			switch pj.Status.State {
 			case pjapi.FailureState, pjapi.AbortedState, pjapi.ErrorState:
-				e.logger.WithFields(fields).Error("Job failed")
+				e.logger.WithFields(fields).Info("Job failed")
 				success = false
 			case pjapi.SuccessState:
 				e.logger.WithFields(fields).Info("Job succeeded")

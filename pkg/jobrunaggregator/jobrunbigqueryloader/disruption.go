@@ -35,7 +35,7 @@ func (f *BigQueryDisruptionUploadFlags) BindFlags(fs *pflag.FlagSet) {
 	f.Authentication.BindFlags(fs)
 
 	fs.BoolVar(&f.DryRun, "dry-run", f.DryRun, "Run the command, but don't mutate data.")
-	fs.StringVar(&f.LogLevel, "log-level", f.LogLevel, "Log level (trace,debug,info,warn,error) (default: info)")
+	fs.StringVar(&f.LogLevel, "log-level", "info", "Log level (trace,debug,info,warn,error) (default: info)")
 }
 
 func NewBigQueryDisruptionUploadFlagsCommand() *cobra.Command {

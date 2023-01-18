@@ -178,6 +178,7 @@ CLUSTER ?= build01
 local-e2e: \
 	$(TMPDIR)/.ci-operator-kubeconfig \
 	$(TMPDIR)/hive-kubeconfig \
+	$(TMPDIR)/sa.hive.hive.token.txt \
 	$(TMPDIR)/local-secret/.dockerconfigjson \
 	$(TMPDIR)/remote-secret/.dockerconfigjson \
 	$(TMPDIR)/gcs/service-account.json \
@@ -297,9 +298,11 @@ $(TMPDIR)/.ci-operator-kubeconfig:
 	oc --context $(CLUSTER) -n test-credentials extract secret/ci-operator --keys kubeconfig --keys sa.ci-operator.$(CLUSTER).token.txt --to $(TMPDIR)
 	mv $(TMPDIR)/kubeconfig "$@"
 
-
 $(TMPDIR)/hive-kubeconfig:
 	oc --context $(CLUSTER) --as system:admin --namespace test-credentials get secret hive-hive-credentials -o 'jsonpath={.data.kubeconfig}' | base64 --decode > "$@"
+
+$(TMPDIR)/sa.hive.hive.token.txt:
+	oc --context $(CLUSTER) --namespace test-credentials extract secret/hive-hive-credentials --keys sa.hive.hive.token.txt --to $(TMPDIR)
 
 $(TMPDIR)/local-secret/.dockerconfigjson:
 	mkdir -p $(TMPDIR)/local-secret

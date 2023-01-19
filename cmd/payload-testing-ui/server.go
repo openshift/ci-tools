@@ -69,8 +69,13 @@ const (
 			</td>
 			<td>
 			{{ with .Spec.PullRequest }}
-				<p>Author: {{ .PullRequest.Author }}</p>
-				<p>Title: {{ prLink . }}</p>
+			<ul>
+				<li>Title: {{ prLink . }}</li>
+				<li>Author: {{ authorLink .PullRequest.Author }}</li>
+				<li>Organization: {{ orgLink .Org }}</li>
+				<li>Repository: {{ repoLink .Org .Repo }}</li>
+				<li>Number: {{ .PullRequest.Number }}</li>
+			</ul>
 			{{ end }}
 			</td>
 		</tr>
@@ -94,6 +99,9 @@ Created: {{ .ObjectMeta.CreationTimestamp }}
 {{ prLink . }}
 <ul>
     <li>Author: {{ authorLink .PullRequest.Author }}</li>
+	<li>Organization: {{ orgLink .Org }}</li>
+	<li>Repository: {{ repoLink .Org .Repo }}</li>
+	<li>Number: {{ .PullRequest.Number }}</li>
     <li>SHA: <tt>{{ shaLink . .PullRequest.SHA }}</tt></li>
   <li>
     Base: <tt>{{ refLink . .BaseRef }}</tt> (<tt>{{ shaLink . .BaseSHA }}</tt>)
@@ -170,9 +178,27 @@ func prLink(pr *prpqv1.PullRequestUnderTest) template.HTML {
 	return template.HTML(ret)
 }
 
+func authorLink(a string) template.HTML {
+	a = template.HTMLEscapeString(a)
+	ret := fmt.Sprintf(`<a href="https://github.com/%s">%s</a>`, a, a)
+	return template.HTML(ret)
+}
+
+var orgLink = authorLink
+
+func repoLink(org string, repo string) template.HTML {
+	org = template.HTMLEscapeString(org)
+	repo = template.HTMLEscapeString(repo)
+	ret := fmt.Sprintf(`<a href="https://github.com/%s/%s">%s</a>`, org, repo, repo)
+	return template.HTML(ret)
+}
+
 func newServer(client ctrlruntimeclient.Client, ctx context.Context, namespace string) (server, error) {
 	runsListTemplate, err := template.New("runsListTemplate").Funcs(template.FuncMap{
-		"prLink": prLink,
+		"prLink":     prLink,
+		"authorLink": authorLink,
+		"orgLink":    orgLink,
+		"repoLink":   repoLink,
 	}).Parse(runsListTemplate)
 
 	if err != nil {
@@ -243,12 +269,10 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 	}
 	tmpl := template.New("runTemplate")
 	tmpl.Funcs(template.FuncMap{
-		"prLink": prLink,
-		"authorLink": func(a string) template.HTML {
-			a = template.HTMLEscapeString(a)
-			ret := fmt.Sprintf(`<a href="https://github.com/%s">%s</a>`, a, a)
-			return template.HTML(ret)
-		},
+		"prLink":     prLink,
+		"authorLink": authorLink,
+		"orgLink":    orgLink,
+		"repoLink":   repoLink,
 		"refLink": func(pr *prpqv1.PullRequestUnderTest, r string) template.HTML {
 			r = template.HTMLEscapeString(r)
 			org := template.HTMLEscapeString(pr.Org)

@@ -6,12 +6,10 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -86,8 +84,6 @@ const (
 	runTitle    = "Pull Request Payload Qualification Run - %s"
 	runTemplate = `
 <h1>{{ .ObjectMeta.Namespace }}/{{ .ObjectMeta.Name }}</h1>
-
-<h3>Requestor: {{ commentLink .ObjectMeta .Spec.PullRequest.PullRequest .Spec.Jobs.ReleaseControllerConfig }}</h3>
 
 Created: {{ .ObjectMeta.CreationTimestamp }} 
 
@@ -285,15 +281,6 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 			org := template.HTMLEscapeString(pr.Org)
 			repo := template.HTMLEscapeString(pr.Repo)
 			ret := fmt.Sprintf(`<a href="https://github.com/%s/%s/commit/%s">%s</a>`, org, repo, h, h)
-			return template.HTML(ret)
-		},
-		"commentLink": func(obj *metav1.ObjectMeta, pr *prpqv1.PullRequest, config *prpqv1.ReleaseControllerConfig) template.HTML {
-			created := obj.CreationTimestamp.Format(time.RFC3339)
-			author := template.HTMLEscapeString(pr.Author)
-			ocp := template.HTMLEscapeString(config.OCP)
-			release := template.HTMLEscapeString(config.Release)
-			spec := template.HTMLEscapeString(config.Specifier)
-			ret := fmt.Sprintf(`%s's '/payload %s %s %s' on %s`, author, ocp, release, spec, created)
 			return template.HTML(ret)
 		},
 		"configLink": func(config *prpqv1.ReleaseControllerConfig) template.HTML {

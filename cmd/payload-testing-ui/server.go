@@ -37,7 +37,7 @@ const (
 		<a class="nav-link" href=` + docURL + ` target="_blank">Documentation</a>
 	</li>
 	<li class="nav-item">
-	<a class="nav-link" href=` + runsURL + `>Back to runs</a>
+	<a class="nav-link" href=` + runsURL + `>Runs</a>
 	</li>
 	</ul>
 </div>
@@ -63,14 +63,14 @@ const (
 			<td>
 			{{ with .ObjectMeta }}
 				{{ with $url := printf "%s/%s" .Namespace .Name }}
-				<b>Name:</b> <a href="` + runsURL + `{{ $url }}">{{ $url }}</a>
+				<a href="` + runsURL + `{{ $url }}">{{ $url }}</a>
 				{{ end }}
 			{{ end }}
 			</td>
 			<td>
 			{{ with .Spec.PullRequest }}
 				<p>Author: {{ .PullRequest.Author }}</p>
-				<p>Name: {{ prLink . }}</p>
+				<p>Title: {{ prLink . }}</p>
 			{{ end }}
 			</td>
 		</tr>

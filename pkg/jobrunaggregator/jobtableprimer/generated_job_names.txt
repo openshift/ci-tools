@@ -615,6 +615,7 @@ periodic-ci-openshift-release-master-ci-4.13-upgrade-from-stable-4.12-e2e-gcp-ov
 periodic-ci-openshift-release-master-ci-4.13-upgrade-from-stable-4.12-e2e-gcp-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.13-upgrade-from-stable-4.12-e2e-gcp-sdn-upgrade
 periodic-ci-openshift-release-master-ci-4.13-upgrade-from-stable-4.12-e2e-ovirt-sdn-upgrade
+periodic-ci-openshift-release-master-ci-4.13-upgrade-from-stable-4.12-e2e-vsphere-ovn-upgrade-storage-data
 periodic-ci-openshift-release-master-ci-4.13-upgrade-from-stable-4.12-e2e-vsphere-sdn-upgrade
 periodic-ci-openshift-release-master-ci-4.13-upgrade-from-stable-4.12-from-stable-4.11-e2e-aws-sdn-upgrade
 periodic-ci-openshift-release-master-nightly-4.10-console-aws
@@ -806,6 +807,7 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-sdn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-sdn-fips-serial
 periodic-ci-openshift-release-master-nightly-4.12-e2e-ibmcloud-csi
+periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-ovn-compact
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-ovn-dualstack
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-ovn-dualstack-local-gateway
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-ovn-ipv4
@@ -819,7 +821,6 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-duals
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-upgrade-ovn-ipv6
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-assisted
-periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-ipi-compact
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-single-node-live-iso
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ovn-single-node-with-worker-live-iso
 periodic-ci-openshift-release-master-nightly-4.12-e2e-nutanix-ovn
@@ -887,6 +888,7 @@ periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-sdn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-sdn-fips-serial
 periodic-ci-openshift-release-master-nightly-4.13-e2e-ibmcloud-csi
+periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ipi-ovn-compact
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ipi-ovn-dualstack
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ipi-ovn-dualstack-local-gateway
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ipi-ovn-ipv4
@@ -900,7 +902,6 @@ periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ipi-sdn-serial-virtu
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ipi-serial-ovn-dualstack
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ipi-serial-ovn-ipv6
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ipi-upgrade-ovn-ipv6
-periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ovn-ipi-compact
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ovn-single-node-live-iso
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ovn-single-node-with-worker-live-iso
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-sdn-assisted

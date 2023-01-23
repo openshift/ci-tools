@@ -1041,7 +1041,7 @@ func TestFromConfig(t *testing.T) {
 	}
 	buildClient := steps.NewBuildClient(client, nil)
 	var templateClient steps.TemplateClient
-	podClient := kubernetes.NewPodClient(client, nil, nil)
+	podClient := kubernetes.NewPodClient(client, nil, nil, 0)
 
 	clusterPool := hivev1.ClusterPool{
 		ObjectMeta: meta.ObjectMeta{

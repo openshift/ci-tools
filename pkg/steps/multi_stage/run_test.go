@@ -21,7 +21,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
-	"github.com/openshift/ci-tools/pkg/testhelper"
+	testhelper_kube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
 )
 
 func TestRun(t *testing.T) {
@@ -67,7 +67,7 @@ func TestRun(t *testing.T) {
 				ImagePullSecrets: []v1.LocalObjectReference{{Name: "ci-operator-dockercfg-12345"}},
 			}
 			name := "test"
-			crclient := &testhelper.FakePodExecutor{
+			crclient := &testhelper_kube.FakePodExecutor{
 				LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(sa.DeepCopyObject())),
 				Failures:      tc.failures,
 			}
@@ -88,7 +88,7 @@ func TestRun(t *testing.T) {
 				},
 			}
 			jobSpec.SetNamespace("ns")
-			client := &testhelper.FakePodClient{FakePodExecutor: crclient}
+			client := &testhelper_kube.FakePodClient{FakePodExecutor: crclient}
 			step := MultiStageTestStep(api.TestStepConfiguration{
 				As: name,
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
@@ -181,7 +181,7 @@ func TestJUnit(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sa := &coreapi.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-namespace", Labels: map[string]string{"ci.openshift.io/multi-stage-test": "test"}}}
 
-			crclient := &testhelper.FakePodExecutor{
+			crclient := &testhelper_kube.FakePodExecutor{
 				LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(sa.DeepCopyObject())),
 				Failures:      tc.failures,
 			}
@@ -202,7 +202,7 @@ func TestJUnit(t *testing.T) {
 				},
 			}
 			jobSpec.SetNamespace("test-namespace")
-			client := &testhelper.FakePodClient{FakePodExecutor: crclient}
+			client := &testhelper_kube.FakePodClient{FakePodExecutor: crclient}
 			step := MultiStageTestStep(api.TestStepConfiguration{
 				As: "test",
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{

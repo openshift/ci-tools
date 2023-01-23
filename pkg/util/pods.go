@@ -3,7 +3,6 @@ package util
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -175,12 +174,9 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient kubernetes.Pod
 		return pod, AppendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
 	}
 	done := ctx.Done()
-
+	pendingTimeout := podClient.PendingTimeout()
 	podCheckTicker := time.NewTicker(10 * time.Second)
 	defer podCheckTicker.Stop()
-	podStartTimeout := 30 * time.Minute
-	var podSeenRunning bool
-
 	for {
 		select {
 		case <-done:
@@ -193,16 +189,11 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient kubernetes.Pod
 				logrus.WithError(err).Warnf("Failed to get pod %s.", name)
 				continue
 			}
-
-			if !podSeenRunning {
-				if podHasStarted(pod) {
-					podSeenRunning = true
-				} else if time.Since(pod.CreationTimestamp.Time) > podStartTimeout {
-					message := fmt.Sprintf("pod didn't start running within %s: %s\n%s", podStartTimeout, getReasonsForUnreadyContainers(pod), getEventsForPod(ctx, pod, podClient))
-					logrus.Infof(message)
-					notifier.Complete(name)
-					return pod, errors.New(message)
-				}
+			if err := checkPending(*pod, pendingTimeout, time.Now()); err != nil {
+				err = fmt.Errorf("pod pending timeout: %w: %s\n%s", err, getReasonsForUnreadyContainers(pod), getEventsForPod(ctx, pod, podClient))
+				logrus.Info(err)
+				notifier.Complete(name)
+				return pod, err
 			}
 			podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
 			if podJobIsOK(pod) {
@@ -332,20 +323,67 @@ func podJobIsFailed(pod *corev1.Pod) bool {
 	return false
 }
 
-// podHasStarted checks if a test pod can be considered as "running".
-// Init containers are also checked because they can be declared in template
-// tests, but those added by the test infrastructure are ignored.
-func podHasStarted(pod *corev1.Pod) bool {
-	if pod.Status.Phase == corev1.PodRunning {
-		return true
+// checkPending checks if a pod has been pending for too long
+// The purpose of this function is to cause a failure when a pod is found to be
+// potentially permanently "pending", so that the test fails earlier than its
+// timeout period, which is usually much longer to accommodate legitimate tests.
+//
+// A pod can be in one of the following states (as described in
+// https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#pod-phase):
+//
+//   - Running/succeeded/failed: all containers have successfully started, no
+//     error is returned.
+//   - Unknown: pod state cannot be recovered, likely indicating a cluster
+//     failure.  This state has been deprecated since Kubernetes 1.22
+//     (https://relnotes.k8s.io/?kinds=deprecation&releaseVersions=1.22.0).
+//     This implementation chooses to ignore it.
+//   - Pending: either "init" containers are being executed or they are done and
+//     not all containers have started.  The verification described below is
+//     performed.
+//
+// Individual containers in a pending pod can be in either the waiting,
+// running, or terminated state.  Only those in the first state are considered
+// by this function.  The verification performed is different for "init" and
+// regular containers:
+//
+//   - "Init" containers execute serially, so they are checked in sequence.  If
+//     any is found to be "waiting" for more than the maximum period, relative
+//     to the finishing time of the previous (or to the creation time of the
+//     pod, when checking the first), an error is returned.
+//   - Regular containers are started in parallel.  If any is found to be
+//     "waiting" for more than the maximum period, relative to the finishing
+//     time of the last "init" container (or to the creation time of the pod,
+//     if there are none), an error is returned.
+func checkPending(pod corev1.Pod, timeout time.Duration, now time.Time) error {
+	if pod.Status.Phase != corev1.PodPending {
+		return nil
 	}
-	// Status is still `Pending` while init containers are executed.
+	check := func(t time.Time, name string) error {
+		if now.Before(t.Add(timeout)) {
+			return nil
+		}
+		return fmt.Errorf("container %q has not started in %s", name, timeout)
+	}
+	prev := pod.CreationTimestamp.Time
 	for _, s := range pod.Status.InitContainerStatuses {
-		if s.Name != "cp-secret-wrapper" && s.State.Running != nil {
-			return true
+		if s.State.Running != nil {
+			return nil
+		} else if w := s.State.Waiting; w != nil {
+			return check(prev, s.Name)
+		} else if t := s.State.Terminated; t != nil {
+			prev = t.FinishedAt.Time
+		} else {
+			panic(fmt.Sprintf("invalid container status: %#v", s))
 		}
 	}
-	return false
+	for _, s := range pod.Status.ContainerStatuses {
+		if s.State.Waiting != nil {
+			if err := check(prev, s.Name); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func failedContainerNames(pod *corev1.Pod) []string {

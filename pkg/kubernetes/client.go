@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"fmt"
+	"time"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -13,6 +14,7 @@ import (
 
 type PodClient interface {
 	loggingclient.LoggingClient
+	PendingTimeout() time.Duration
 	// WithNewLoggingClient returns a new instance of the PodClient that resets
 	// its LoggingClient.
 	WithNewLoggingClient() PodClient
@@ -20,15 +22,23 @@ type PodClient interface {
 	GetLogs(namespace, name string, opts *coreapi.PodLogOptions) *rest.Request
 }
 
-func NewPodClient(ctrlclient loggingclient.LoggingClient, config *rest.Config, client rest.Interface) PodClient {
-	return &podClient{LoggingClient: ctrlclient, config: config, client: client}
+func NewPodClient(ctrlclient loggingclient.LoggingClient, config *rest.Config, client rest.Interface, pendingTimeout time.Duration) PodClient {
+	return &podClient{
+		LoggingClient:  ctrlclient,
+		config:         config,
+		client:         client,
+		pendingTimeout: pendingTimeout,
+	}
 }
 
 type podClient struct {
 	loggingclient.LoggingClient
-	config *rest.Config
-	client rest.Interface
+	config         *rest.Config
+	client         rest.Interface
+	pendingTimeout time.Duration
 }
+
+func (c podClient) PendingTimeout() time.Duration { return c.pendingTimeout }
 
 func (c podClient) Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
 	u := c.client.Post().Resource("pods").Namespace(namespace).Name(pod).SubResource("exec").VersionedParams(opts, scheme.ParameterCodec).URL()
@@ -44,9 +54,6 @@ func (c podClient) GetLogs(namespace, name string, opts *coreapi.PodLogOptions) 
 }
 
 func (c podClient) WithNewLoggingClient() PodClient {
-	return podClient{
-		LoggingClient: c.New(),
-		config:        c.config,
-		client:        c.client,
-	}
+	c.LoggingClient = c.New()
+	return c
 }

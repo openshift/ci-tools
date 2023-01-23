@@ -138,7 +138,7 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 	errChan := make(chan error, jobCount)
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
-		go o.processJobRuns(ctx, &wg, i, runsToImportCount, jobRunsToImportCh, errChan)
+		go o.processJobRuns(ctx, jobRowsMap, &wg, i, runsToImportCount, jobRunsToImportCh, errChan)
 	}
 
 	wg.Wait()
@@ -150,7 +150,7 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 		errs = append(errs, e)
 	}
 
-	duration := time.Now().Sub(start)
+	duration := time.Since(start)
 	logrus.WithFields(logrus.Fields{
 		"duration": duration,
 		"errors":   len(errs),
@@ -161,7 +161,7 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 
 // processJobRuns is started in several concurrent goroutines to pull job runs to process from the channel. Errors are sent
 // to the errChan for aggregation in the main thread.
-func (o *allJobsLoaderOptions) processJobRuns(ctx context.Context, wg *sync.WaitGroup, workerThread, origRunsToImportCount int, jobRunsToImportCh <-chan *jobrunaggregatorapi.TestPlatformProwJobRow, errChan chan<- error) {
+func (o *allJobsLoaderOptions) processJobRuns(ctx context.Context, jobsMap map[string]jobrunaggregatorapi.JobRow, wg *sync.WaitGroup, workerThread, origRunsToImportCount int, jobRunsToImportCh <-chan *jobrunaggregatorapi.TestPlatformProwJobRow, errChan chan<- error) {
 	defer wg.Done()
 	for job := range jobRunsToImportCh {
 		jrLogger := logrus.WithFields(logrus.Fields{
@@ -173,7 +173,8 @@ func (o *allJobsLoaderOptions) processJobRuns(ctx context.Context, wg *sync.Wait
 		// log how many job runs remain to be processed
 		jrLogger.Info("pulled job run from queue")
 
-		jobRunInserter := o.newJobRunBigQueryLoaderOptions(job.JobName, job.BuildID, jrLogger)
+		jobRunInserter := o.newJobRunBigQueryLoaderOptions(job.JobName, job.BuildID,
+			jobsMap[job.JobName].Release, jrLogger)
 		if err := jobRunInserter.Run(ctx); err != nil {
 			jrLogger.WithError(err).Error("error inserting job run")
 			errChan <- err
@@ -183,10 +184,11 @@ func (o *allJobsLoaderOptions) processJobRuns(ctx context.Context, wg *sync.Wait
 	logrus.WithField("worker", workerThread).Info("worker thread complete")
 }
 
-func (o *allJobsLoaderOptions) newJobRunBigQueryLoaderOptions(jobName, jobRunID string, logger logrus.FieldLogger) *jobRunLoaderOptions {
+func (o *allJobsLoaderOptions) newJobRunBigQueryLoaderOptions(jobName, jobRunID, jobRelease string, logger logrus.FieldLogger) *jobRunLoaderOptions {
 	return &jobRunLoaderOptions{
 		jobName:        jobName,
 		jobRunID:       jobRunID,
+		jobRelease:     jobRelease,
 		gcsClient:      o.gcsClient,
 		jobRunInserter: o.jobRunInserter,
 		jobRunUploader: o.jobRunUploader,
@@ -196,7 +198,7 @@ func (o *allJobsLoaderOptions) newJobRunBigQueryLoaderOptions(jobName, jobRunID 
 
 // uploader encapsulates the logic for lookups and uploads specific to each type of content we ingest. (disruption, alerting, test runs, etc)
 type uploader interface {
-	uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error
+	uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, release string, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error
 	getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error)
 	listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) (map[string]bool, error)
 }
@@ -206,8 +208,9 @@ type uploader interface {
 // 2. combines all junit for the job run
 // 3. uploads all results to bigquery
 type jobRunLoaderOptions struct {
-	jobName  string
-	jobRunID string
+	jobName    string
+	jobRunID   string
+	jobRelease string
 
 	// GCSClient is used to read the prowjob data
 	gcsClient jobrunaggregatorlib.CIGCSClient
@@ -252,7 +255,7 @@ func (o *jobRunLoaderOptions) uploadJobRun(ctx context.Context, jobRun jobrunagg
 	}
 
 	o.logger.Infof("uploading content for jobrun")
-	if err := o.jobRunUploader.uploadContent(ctx, jobRun, prowJob, o.logger); err != nil {
+	if err := o.jobRunUploader.uploadContent(ctx, jobRun, o.jobRelease, prowJob, o.logger); err != nil {
 		o.logger.WithError(err).Error("error uploading content")
 		return err
 	}

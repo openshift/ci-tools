@@ -148,8 +148,9 @@ func (o *disruptionUploader) listUploadedJobRunIDsSince(ctx context.Context, sin
 	return o.ciDataClient.ListUploadedJobRunIDsSinceFromTable(ctx, jobrunaggregatorapi.DisruptionJobRunTableName, since)
 }
 
-func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob,
-	logger logrus.FieldLogger) error {
+func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo,
+	jobRelease string, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error {
+
 	logger.Info("uploading backend disruption results")
 	backendDisruptionData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "backend-disruption")
 	if err != nil {

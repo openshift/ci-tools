@@ -160,6 +160,21 @@ func (mr *MockCIDataClientMockRecorder) ListAllJobs(arg0 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAllJobs", reflect.TypeOf((*MockCIDataClient)(nil).ListAllJobs), arg0)
 }
 
+// ListAllKnownAlerts mocks base method.
+func (m *MockCIDataClient) ListAllKnownAlerts(arg0 context.Context) ([]*jobrunaggregatorapi.KnownAlertRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAllKnownAlerts", arg0)
+	ret0, _ := ret[0].([]*jobrunaggregatorapi.KnownAlertRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAllKnownAlerts indicates an expected call of ListAllKnownAlerts.
+func (mr *MockCIDataClientMockRecorder) ListAllKnownAlerts(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAllKnownAlerts", reflect.TypeOf((*MockCIDataClient)(nil).ListAllKnownAlerts), arg0)
+}
+
 // ListDisruptionHistoricalData mocks base method.
 func (m *MockCIDataClient) ListDisruptionHistoricalData(arg0 context.Context) ([]jobrunaggregatorapi.HistoricalData, error) {
 	m.ctrl.T.Helper()

@@ -35,7 +35,9 @@ func (o *testRunUploader) listUploadedJobRunIDsSince(ctx context.Context, since 
 	return o.ciDataClient.ListUploadedJobRunIDsSinceFromTable(ctx, jobrunaggregatorapi.LegacyJobRunTableName, since)
 }
 
-func (o *testRunUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error {
+func (o *testRunUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, jobRelease string,
+	prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error {
+
 	logger.Info("uploading junit test runs")
 	combinedJunitContent, err := jobRun.GetCombinedJUnitTestSuites(ctx)
 	if err != nil {

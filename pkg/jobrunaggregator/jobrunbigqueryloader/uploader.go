@@ -159,15 +159,18 @@ func (o *jobLoaderOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	o.logger.WithField("lastJobRun", lastJobRun).Info("found last job run")
 	startingJobRunID := "0"
 	if lastJobRun != nil {
 		startingJobRunID = jobrunaggregatorlib.NextJobRunID(lastJobRun.Name)
 	}
+	o.logger.WithField("startingJobRunID", startingJobRunID).Info("startingJobRunID")
 
 	jobRunProcessingCh, errorCh, err := o.gcsClient.ListJobRunNamesOlderThanFourHours(ctx, o.jobName, startingJobRunID, o.logger)
 	if err != nil {
 		return err
 	}
+	o.logger.Info("job run processing channels established")
 
 	insertionErrorLock := sync.Mutex{}
 	insertionErrors := []error{}
@@ -177,6 +180,7 @@ func (o *jobLoaderOptions) Run(ctx context.Context) error {
 
 		// exits when the channel closes
 		for err := range errorCh {
+			o.logger.WithError(err).Error("insertion error")
 			insertionErrors = append(insertionErrors, err)
 		}
 	}()
@@ -189,23 +193,30 @@ func (o *jobLoaderOptions) Run(ctx context.Context) error {
 	for jobRunID := range jobRunProcessingCh {
 		jobRunInserter := o.newJobRunBigQueryLoaderOptions(jobRunID, lastDoneUploadingCh, o.logger)
 		lastDoneUploadingCh = jobRunInserter.doneUploading
+		jrLogger := o.logger.WithField("jobRun", jobRunID)
 
+		jrLogger.Info("acquiring concurrentWorker")
 		if err := concurrentWorkers.Acquire(ctx, 1); err != nil {
-			o.logger.WithError(err).Info("context is done")
+			jrLogger.WithError(err).Info("context is done")
 			// this means the context is done
 			return err
 		}
+		jrLogger.Info("concurrentWorker acquired")
 
 		currentUploaders.Add(1)
 		go func(jrID string) {
 			defer concurrentWorkers.Release(1)
+			defer jrLogger.Info("concurrentWorker released")
 			defer currentUploaders.Done()
+			defer jrLogger.Info("concurrentUploader Done")
 
+			jrLogger.WithField("jobRunID", jrID).Info("inserting job run")
 			if err := jobRunInserter.Run(ctx); err != nil {
-				o.logger.WithField("jobRun", jrID).WithError(err).Error("error inserting job run")
+				jrLogger.WithField("jobRun", jrID).WithError(err).Error("error inserting job run")
 				errorCh <- err
 			}
 		}(jobRunID)
+		jrLogger.Info("finished processing job run")
 	}
 	currentUploaders.Wait()
 

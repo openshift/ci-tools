@@ -1,5 +1,6 @@
 <testsuites>
   <testsuite name="step graph" tests="9" skipped="0" failures="1" time="whatever">
+    <properties></properties>
     <testcase name="Find the input image os and tag it into the pipeline" time="whatever"></testcase>
     <testcase name="Run multi-stage test multi-observers - multi-observers-check-shared-dir container test" time="whatever"></testcase>
     <testcase name="Run multi-stage test multi-observers - multi-observers-create-kubeconfig container test" time="whatever"></testcase>

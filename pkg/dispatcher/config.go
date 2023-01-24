@@ -22,6 +22,8 @@ import (
 type Config struct {
 	// the job will be run on the same cloud as the one for the e2e test
 	DetermineE2EByJob bool `json:"determineE2EByJob,omitempty"`
+	// the job will have exchanged cloud label if mapping defined
+	CloudMapping map[api.Cloud]api.Cloud `json:"cloudMapping,omitempty"`
 	// the cluster cluster name if no other condition matches
 	Default api.Cluster `json:"default"`
 	// the cluster name for ssh bastion jobs
@@ -128,7 +130,7 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 	}
 
 	if config.DetermineE2EByJob {
-		if cloud := DetermineCloud(jobBase); cloud != "" {
+		if cloud := config.DetermineCloudMapping(jobBase); cloud != "" {
 			if clusters, ok := config.BuildFarmCloud[api.Cloud(cloud)]; ok {
 				if len(clusters) > 0 {
 					return api.Cluster(clusters[len(filepath.Base(path))%len(clusters)]), false, nil
@@ -194,6 +196,15 @@ func isSSHBastionJob(base prowconfig.JobBase) bool {
 		}
 	}
 	return false
+}
+
+// DetermineCloudMapping determines if for a given cloud there is a replacement to map, eg for cost saving reasons
+func (config *Config) DetermineCloudMapping(jobBase prowconfig.JobBase) string {
+	cloud := DetermineCloud(jobBase)
+	if mapping, ok := config.CloudMapping[api.Cloud(cloud)]; ok {
+		cloud = string(mapping)
+	}
+	return cloud
 }
 
 // IsInBuildFarm returns the cloudProvider if the cluster is in the build farm; empty string otherwise.

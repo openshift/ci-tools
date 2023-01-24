@@ -72,6 +72,23 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 	}
 	logrus.WithField("lastUploadedJobRun", lastUploadedJobEndTime).Info("got last uploaded job run end time")
 
+	// Handle the very unlikely case where it's a fresh db and we got no last uploaded job run end time:
+	if lastUploadedJobEndTime.IsZero() {
+		logrus.Warn("got an empty lastUploadedJobRun time, importing past two weeks of job runs")
+		t := time.Now().Add(-14 * 24 * time.Hour)
+		lastUploadedJobEndTime = &t
+	}
+
+	// Subtract 12 hours from our last upload, we're going to list all prow jobs ending 12 hours prior
+	// to our last import. This is because we cannot assume jobs finish in the order they were created.
+	// We know we sometimes have long job timeouts allowed, so we go back 12 hours to be safe.
+	listProwJobsSince := lastUploadedJobEndTime.Add(-12 * time.Hour)
+	logrus.WithField("since", listProwJobsSince).Info("listing prow jobs since")
+
+	// Lookup the known prow job IDs (already uploaded) that ended within this window. BigQuery does not
+	// prevent us from inserting duplicate rows, we have to do it ourselves. We'll compare
+	// each incoming prow job to make sure it's not in the list we've already inserted.
+
 	errs := []error{}
 	/*
 		wg := sync.WaitGroup{}

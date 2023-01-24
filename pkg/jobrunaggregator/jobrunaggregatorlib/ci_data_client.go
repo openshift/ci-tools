@@ -32,29 +32,10 @@ type AggregationJobClient interface {
 	ListAggregatedTestRunsForJob(ctx context.Context, frequency, jobName string, startDay time.Time) ([]jobrunaggregatorapi.AggregatedTestRunRow, error)
 }
 
-// TestRunUploadClient client view used by the test run uploader.  This is separated to make it easier to reason about which tables
-// are in use by this client
-type TestRunUploadClient interface {
-	GetLastJobRunWithTestRunDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
-	GetLastJobRunWithTestRunDataEndTime(ctx context.Context) (*time.Time, error)
-}
-
 // TestRunSummarizerClient client view used by the test run summarization client.
 type TestRunSummarizerClient interface {
 	GetLastAggregationForJob(ctx context.Context, frequency, jobName string) (*jobrunaggregatorapi.AggregatedTestRunRow, error)
 	ListUnifiedTestRunsForJobAfterDay(ctx context.Context, jobName string, startDay time.Time) (*UnifiedTestRunRowIterator, error)
-}
-
-// DisruptionUploadClient client view used by the disruption loader so its easier to reason about which tables are in play
-type DisruptionUploadClient interface {
-	GetLastJobRunWithDisruptionDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
-	GetLastJobRunWithDisruptionDataEndTime(ctx context.Context) (*time.Time, error)
-}
-
-// AlertUploadClient client view used by the alert loader so its easier to reason about which tables are in play
-type AlertUploadClient interface {
-	GetLastJobRunWithAlertDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
-	GetLastJobRunWithAlertDataEndTime(ctx context.Context) (*time.Time, error)
 }
 
 type JobLister interface {
@@ -69,13 +50,14 @@ type HistoricalDataClient interface {
 type CIDataClient interface {
 	JobLister
 	AggregationJobClient
-	TestRunUploadClient
-	DisruptionUploadClient
-	AlertUploadClient
 	TestRunSummarizerClient
 	HistoricalDataClient
+
 	// these deal with release tags
 	ListReleaseTags(ctx context.Context) (sets.String, error)
+
+	GetLastJobRunFromTableForJobName(ctx context.Context, tableName, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
+	GetLastJobRunEndTimeFromTable(ctx context.Context, table string) (*time.Time, error)
 }
 
 type ciDataClient struct {
@@ -253,7 +235,7 @@ ORDER BY Jobs.JobName ASC
 }
 
 // LastJobTimestamp retrieves the last imported job timestamp.
-func (c *ciDataClient) getLastJobRunEndTimeFromTable(ctx context.Context, table string) (*time.Time, error) {
+func (c *ciDataClient) GetLastJobRunEndTimeFromTable(ctx context.Context, table string) (*time.Time, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
 		`SELECT max(EndTime) AS EndTime FROM DATA_SET_LOCATION.` + table)
 	logrus.Debug(queryString)
@@ -281,31 +263,7 @@ func (c *ciDataClient) getLastJobRunEndTimeFromTable(ctx context.Context, table 
 	return &maxEndTime.EndTime, nil
 }
 
-func (c *ciDataClient) GetLastJobRunWithTestRunDataEndTime(ctx context.Context) (*time.Time, error) {
-	return c.getLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.LegacyJobRunTableName)
-}
-
-func (c *ciDataClient) GetLastJobRunWithDisruptionDataEndTime(ctx context.Context) (*time.Time, error) {
-	return c.getLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.DisruptionJobRunTableName)
-}
-
-func (c *ciDataClient) GetLastJobRunWithAlertDataEndTime(ctx context.Context) (*time.Time, error) {
-	return c.getLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.AlertJobRunTableName)
-}
-
-func (c *ciDataClient) GetLastJobRunWithTestRunDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	return c.getLastJobRunWithTestRunDataForJobName(ctx, jobrunaggregatorapi.LegacyJobRunTableName, jobName)
-}
-
-func (c *ciDataClient) GetLastJobRunWithDisruptionDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	return c.getLastJobRunWithTestRunDataForJobName(ctx, jobrunaggregatorapi.DisruptionJobRunTableName, jobName)
-}
-
-func (c *ciDataClient) GetLastJobRunWithAlertDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	return c.getLastJobRunWithTestRunDataForJobName(ctx, jobrunaggregatorapi.AlertJobRunTableName, jobName)
-}
-
-func (c *ciDataClient) getLastJobRunWithTestRunDataForJobName(ctx context.Context, tableName, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
+func (c *ciDataClient) GetLastJobRunFromTableForJobName(ctx context.Context, tableName, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
 	// the JobRun.Name is always increasing, so we can sort by that name.  The starttime is based on the prowjob
 	// time and I don't think that is coordinated.
 	// the testruns jobrun table is now distinct, so we will use the jobrun table as authoritative for what data should and should not

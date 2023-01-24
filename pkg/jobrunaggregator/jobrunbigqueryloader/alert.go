@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -126,21 +127,31 @@ func (f *BigQueryAlertUploadFlags) ToOptions(ctx context.Context) (*allJobsLoade
 		shouldCollectedDataForJobFn: func(job jobrunaggregatorapi.JobRow) bool {
 			return true
 		},
-		getLastJobRunWithDataFn: ciDataClient.GetLastJobRunWithAlertDataForJobName,
-		getLastJobRunEndTimeFn:  ciDataClient.GetLastJobRunWithAlertDataEndTime,
-		jobRunUploader:          newAlertUploader(backendAlertTableInserter),
-		logLevel:                f.LogLevel,
+		jobRunUploader: newAlertUploader(backendAlertTableInserter, ciDataClient),
+		logLevel:       f.LogLevel,
 	}, nil
 }
 
 type alertUploader struct {
 	alertInserter jobrunaggregatorlib.BigQueryInserter
+	ciDataClient  jobrunaggregatorlib.CIDataClient
 }
 
-func newAlertUploader(alertInserter jobrunaggregatorlib.BigQueryInserter) uploader {
+func newAlertUploader(alertInserter jobrunaggregatorlib.BigQueryInserter,
+	ciDataClient jobrunaggregatorlib.CIDataClient) uploader {
+
 	return &alertUploader{
 		alertInserter: alertInserter,
+		ciDataClient:  ciDataClient,
 	}
+}
+
+func (o *alertUploader) getLastUploadedJobRunForJob(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
+	return o.ciDataClient.GetLastJobRunFromTableForJobName(ctx, jobrunaggregatorapi.AlertJobRunTableName, jobName)
+}
+
+func (o *alertUploader) getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error) {
+	return o.ciDataClient.GetLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.AlertJobRunTableName)
 }
 
 func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error {

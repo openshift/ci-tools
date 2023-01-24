@@ -3,6 +3,7 @@ package jobrunbigqueryloader
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -15,12 +16,23 @@ import (
 
 type testRunUploader struct {
 	testRunInserter jobrunaggregatorlib.BigQueryInserter
+	ciDataClient    jobrunaggregatorlib.CIDataClient
 }
 
-func newTestRunUploader(testRunInserter jobrunaggregatorlib.BigQueryInserter) uploader {
+func newTestRunUploader(testRunInserter jobrunaggregatorlib.BigQueryInserter,
+	ciDataClient jobrunaggregatorlib.CIDataClient) uploader {
 	return &testRunUploader{
 		testRunInserter: testRunInserter,
+		ciDataClient:    ciDataClient,
 	}
+}
+
+func (o *testRunUploader) getLastUploadedJobRunForJob(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
+	return o.ciDataClient.GetLastJobRunFromTableForJobName(ctx, jobrunaggregatorapi.LegacyJobRunTableName, jobName)
+}
+
+func (o *testRunUploader) getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error) {
+	return o.ciDataClient.GetLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.LegacyJobRunTableName)
 }
 
 func (o *testRunUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error {

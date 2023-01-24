@@ -3,6 +3,7 @@ package jobrunbigqueryloader
 import (
 	"context"
 	"os"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -120,21 +121,31 @@ func (f *BigQueryDisruptionUploadFlags) ToOptions(ctx context.Context) (*allJobs
 
 		jobRunInserter:              jobRunTableInserter,
 		shouldCollectedDataForJobFn: wantsDisruptionData,
-		getLastJobRunWithDataFn:     ciDataClient.GetLastJobRunWithDisruptionDataForJobName,
-		getLastJobRunEndTimeFn:      ciDataClient.GetLastJobRunWithDisruptionDataEndTime,
-		jobRunUploader:              newDisruptionUploader(backendDisruptionTableInserter),
+		jobRunUploader:              newDisruptionUploader(backendDisruptionTableInserter, ciDataClient),
 		logLevel:                    f.LogLevel,
 	}, nil
 }
 
 type disruptionUploader struct {
 	backendDisruptionInserter jobrunaggregatorlib.BigQueryInserter
+	ciDataClient              jobrunaggregatorlib.CIDataClient
 }
 
-func newDisruptionUploader(backendDisruptionInserter jobrunaggregatorlib.BigQueryInserter) uploader {
+func newDisruptionUploader(backendDisruptionInserter jobrunaggregatorlib.BigQueryInserter,
+	ciDataClient jobrunaggregatorlib.CIDataClient) uploader {
+
 	return &disruptionUploader{
 		backendDisruptionInserter: backendDisruptionInserter,
+		ciDataClient:              ciDataClient,
 	}
+}
+
+func (o *disruptionUploader) getLastUploadedJobRunForJob(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
+	return o.ciDataClient.GetLastJobRunFromTableForJobName(ctx, jobrunaggregatorapi.DisruptionJobRunTableName, jobName)
+}
+
+func (o *disruptionUploader) getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error) {
+	return o.ciDataClient.GetLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.DisruptionJobRunTableName)
 }
 
 func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob,

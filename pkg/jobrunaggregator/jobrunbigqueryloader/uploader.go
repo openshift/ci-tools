@@ -35,8 +35,6 @@ type allJobsLoaderOptions struct {
 	jobRunInserter jobrunaggregatorlib.BigQueryInserter
 
 	shouldCollectedDataForJobFn shouldCollectDataForJobFunc
-	getLastJobRunWithDataFn     getLastJobRunWithDataFunc
-	getLastJobRunEndTimeFn      getLastJobRunEndTimeFunc
 	jobRunUploader              uploader
 	logLevel                    string
 }
@@ -66,7 +64,7 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 
 	jobCount := len(jobs)
 
-	lastUploadedJobEndTime, err := o.getLastJobRunEndTimeFn(ctx)
+	lastUploadedJobEndTime, err := o.jobRunUploader.getLastUploadedJobRunEndTime(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get last job run end time: %w", err)
 	}
@@ -153,7 +151,6 @@ func (o *allJobsLoaderOptions) newJobBigQueryLoaderOptions(job jobrunaggregatora
 		gcsClient:                 o.gcsClient,
 		numberOfConcurrentReaders: 20,
 		jobRunInserter:            o.jobRunInserter,
-		getLastJobRunWithDataFn:   o.getLastJobRunWithDataFn,
 		jobRunUploader:            o.jobRunUploader,
 		logger:                    logger,
 	}
@@ -173,9 +170,7 @@ type jobLoaderOptions struct {
 	numberOfConcurrentReaders int64
 	jobRunInserter            jobrunaggregatorlib.BigQueryInserter
 
-	getLastJobRunWithDataFn getLastJobRunWithDataFunc
-	getLastJobRunEndTimeFn  getLastJobRunEndTimeFunc
-	jobRunUploader          uploader
+	jobRunUploader uploader
 
 	logger logrus.FieldLogger
 }
@@ -183,7 +178,7 @@ type jobLoaderOptions struct {
 func (o *jobLoaderOptions) Run(ctx context.Context) error {
 
 	o.logger.Info("processing job")
-	lastJobRun, err := o.getLastJobRunWithDataFn(ctx, o.jobName)
+	lastJobRun, err := o.jobRunUploader.getLastUploadedJobRunForJob(ctx, o.jobName)
 	if err != nil {
 		return err
 	}
@@ -275,6 +270,8 @@ func (o *jobLoaderOptions) newJobRunBigQueryLoaderOptions(jobRunID string, ready
 
 type uploader interface {
 	uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error
+	getLastUploadedJobRunForJob(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
+	getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error)
 }
 
 // jobRunLoaderOptions

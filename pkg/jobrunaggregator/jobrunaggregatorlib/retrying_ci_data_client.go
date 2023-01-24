@@ -74,6 +74,36 @@ func (c *retryingCIDataClient) GetLastJobRunWithAlertDataForJobName(ctx context.
 	return ret, err
 }
 
+func (c *retryingCIDataClient) GetLastJobRunWithTestRunDataEndTime(ctx context.Context) (*time.Time, error) {
+	var ret *time.Time
+	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
+		var innerErr error
+		ret, innerErr = c.delegate.GetLastJobRunWithTestRunDataEndTime(ctx)
+		return innerErr
+	})
+	return ret, err
+}
+
+func (c *retryingCIDataClient) GetLastJobRunWithDisruptionDataEndTime(ctx context.Context) (*time.Time, error) {
+	var ret *time.Time
+	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
+		var innerErr error
+		ret, innerErr = c.delegate.GetLastJobRunWithDisruptionDataEndTime(ctx)
+		return innerErr
+	})
+	return ret, err
+}
+
+func (c *retryingCIDataClient) GetLastJobRunWithAlertDataEndTime(ctx context.Context) (*time.Time, error) {
+	var ret *time.Time
+	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
+		var innerErr error
+		ret, innerErr = c.delegate.GetLastJobRunWithAlertDataEndTime(ctx)
+		return innerErr
+	})
+	return ret, err
+}
+
 func (c *retryingCIDataClient) GetLastAggregationForJob(ctx context.Context, frequency, jobName string) (*jobrunaggregatorapi.AggregatedTestRunRow, error) {
 	var ret *jobrunaggregatorapi.AggregatedTestRunRow
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/bigquery"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/api/iterator"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -35,6 +36,7 @@ type AggregationJobClient interface {
 // are in use by this client
 type TestRunUploadClient interface {
 	GetLastJobRunWithTestRunDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
+	GetLastJobRunWithTestRunDataEndTime(ctx context.Context) (*time.Time, error)
 }
 
 // TestRunSummarizerClient client view used by the test run summarization client.
@@ -46,11 +48,13 @@ type TestRunSummarizerClient interface {
 // DisruptionUploadClient client view used by the disruption loader so its easier to reason about which tables are in play
 type DisruptionUploadClient interface {
 	GetLastJobRunWithDisruptionDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
+	GetLastJobRunWithDisruptionDataEndTime(ctx context.Context) (*time.Time, error)
 }
 
 // AlertUploadClient client view used by the alert loader so its easier to reason about which tables are in play
 type AlertUploadClient interface {
 	GetLastJobRunWithAlertDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
+	GetLastJobRunWithAlertDataEndTime(ctx context.Context) (*time.Time, error)
 }
 
 type JobLister interface {
@@ -246,6 +250,47 @@ ORDER BY Jobs.JobName ASC
 	}
 
 	return jobs, nil
+}
+
+// LastJobTimestamp retrieves the last imported job timestamp.
+func (c *ciDataClient) getLastJobRunEndTimeFromTable(ctx context.Context, table string) (*time.Time, error) {
+	queryString := c.dataCoordinates.SubstituteDataSetLocation(
+		`SELECT max(EndTime) AS EndTime FROM DATA_SET_LOCATION.` + table)
+	logrus.Debug(queryString)
+
+	type endTime struct {
+		EndTime time.Time `bigquery:"EndTime"`
+	}
+
+	query := c.client.Query(queryString)
+	rows, err := query.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query job table with %q: %w", queryString, err)
+	}
+	maxEndTime := &endTime{}
+	for {
+		err = rows.Next(maxEndTime)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			logrus.Error("error getting max end time")
+			return nil, err
+		}
+	}
+	return &maxEndTime.EndTime, nil
+}
+
+func (c *ciDataClient) GetLastJobRunWithTestRunDataEndTime(ctx context.Context) (*time.Time, error) {
+	return c.getLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.LegacyJobRunTableName)
+}
+
+func (c *ciDataClient) GetLastJobRunWithDisruptionDataEndTime(ctx context.Context) (*time.Time, error) {
+	return c.getLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.DisruptionJobRunTableName)
+}
+
+func (c *ciDataClient) GetLastJobRunWithAlertDataEndTime(ctx context.Context) (*time.Time, error) {
+	return c.getLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.AlertJobRunTableName)
 }
 
 func (c *ciDataClient) GetLastJobRunWithTestRunDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {

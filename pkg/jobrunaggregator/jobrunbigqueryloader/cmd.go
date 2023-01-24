@@ -118,6 +118,7 @@ func (f *BigQueryTestRunUploadFlags) ToOptions(ctx context.Context) (*allJobsLoa
 		jobRunInserter:              jobRunTableInserter,
 		shouldCollectedDataForJobFn: wantsTestRunData,
 		getLastJobRunWithDataFn:     ciDataClient.GetLastJobRunWithTestRunDataForJobName,
+		getLastJobRunEndTimeFn:      ciDataClient.GetLastJobRunWithTestRunDataEndTime,
 		jobRunUploader:              newTestRunUploader(testRunTableInserter),
 		logLevel:                    f.LogLevel,
 	}, nil

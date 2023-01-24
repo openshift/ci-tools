@@ -17,6 +17,7 @@ import (
 )
 
 type getLastJobRunWithDataFunc func(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
+type getLastJobRunEndTimeFunc func(ctx context.Context) (*time.Time, error)
 type shouldCollectDataForJobFunc func(job jobrunaggregatorapi.JobRow) bool
 
 func wantsTestRunData(job jobrunaggregatorapi.JobRow) bool {
@@ -35,6 +36,7 @@ type allJobsLoaderOptions struct {
 
 	shouldCollectedDataForJobFn shouldCollectDataForJobFunc
 	getLastJobRunWithDataFn     getLastJobRunWithDataFunc
+	getLastJobRunEndTimeFn      getLastJobRunEndTimeFunc
 	jobRunUploader              uploader
 	logLevel                    string
 }
@@ -55,33 +57,41 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to get jobs: %w", err)
 	}
+
+	// Convert list of JobRows to a map by job name, we're going to want quick lookups
+	jobRowsMap := map[string]jobrunaggregatorapi.JobRow{}
+	for _, job := range jobs {
+		jobRowsMap[job.JobName] = job
+	}
+
 	jobCount := len(jobs)
 
-	jobChan := make(chan jobrunaggregatorapi.JobRow, jobCount)
-	for i := range jobs {
-		job := jobs[i]
-		jobChan <- job
+	lastUploadedJobEndTime, err := o.getLastJobRunEndTimeFn(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get last job run end time: %w", err)
 	}
-	close(jobChan)
-
-	// Max concurrent job imports but note there's another layer of concurrency beneath this for the file uploads
-	wg := sync.WaitGroup{}
-	logrus.Infof("Launching threads to upload test runs for %d jobs", jobCount)
-	errChan := make(chan error, jobCount)
-	for i := 0; i < 20; i++ {
-		wg.Add(1)
-		go o.processJobs(ctx, &wg, i, jobCount, jobChan, errChan)
-	}
-
-	wg.Wait()
-	logrus.Infof("WaitGroup completed")
-	close(errChan)
+	logrus.WithField("lastUploadedJobRun", lastUploadedJobEndTime).Info("got last uploaded job run end time")
 
 	errs := []error{}
-	for e := range errChan {
-		logrus.WithError(e).Error("error encountered during upload")
-		errs = append(errs, e)
-	}
+	/*
+		wg := sync.WaitGroup{}
+		logrus.Infof("Launching threads to upload test runs for %d jobs", jobCount)
+		errChan := make(chan error, jobCount)
+		for i := 0; i < 20; i++ {
+			wg.Add(1)
+			go o.processJobs(ctx, &wg, i, jobCount, jobChan, errChan)
+		}
+
+		wg.Wait()
+		logrus.Infof("WaitGroup completed")
+		close(errChan)
+
+
+		for e := range errChan {
+			logrus.WithError(e).Error("error encountered during upload")
+			errs = append(errs, e)
+		}
+	*/
 
 	duration := time.Now().Sub(start)
 	logrus.WithFields(logrus.Fields{
@@ -147,6 +157,7 @@ type jobLoaderOptions struct {
 	jobRunInserter            jobrunaggregatorlib.BigQueryInserter
 
 	getLastJobRunWithDataFn getLastJobRunWithDataFunc
+	getLastJobRunEndTimeFn  getLastJobRunEndTimeFunc
 	jobRunUploader          uploader
 
 	logger logrus.FieldLogger

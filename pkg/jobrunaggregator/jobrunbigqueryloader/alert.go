@@ -127,6 +127,7 @@ func (f *BigQueryAlertUploadFlags) ToOptions(ctx context.Context) (*allJobsLoade
 			return true
 		},
 		getLastJobRunWithDataFn: ciDataClient.GetLastJobRunWithAlertDataForJobName,
+		getLastJobRunEndTimeFn:  ciDataClient.GetLastJobRunWithAlertDataEndTime,
 		jobRunUploader:          newAlertUploader(backendAlertTableInserter),
 		logLevel:                f.LogLevel,
 	}, nil

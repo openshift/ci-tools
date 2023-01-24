@@ -121,6 +121,7 @@ func (f *BigQueryDisruptionUploadFlags) ToOptions(ctx context.Context) (*allJobs
 		jobRunInserter:              jobRunTableInserter,
 		shouldCollectedDataForJobFn: wantsDisruptionData,
 		getLastJobRunWithDataFn:     ciDataClient.GetLastJobRunWithDisruptionDataForJobName,
+		getLastJobRunEndTimeFn:      ciDataClient.GetLastJobRunWithDisruptionDataEndTime,
 		jobRunUploader:              newDisruptionUploader(backendDisruptionTableInserter),
 		logLevel:                    f.LogLevel,
 	}, nil

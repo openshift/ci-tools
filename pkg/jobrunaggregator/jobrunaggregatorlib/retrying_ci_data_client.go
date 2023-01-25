@@ -54,6 +54,16 @@ func (c *retryingCIDataClient) GetLastJobRunFromTableForJobName(ctx context.Cont
 	return ret, err
 }
 
+func (c *retryingCIDataClient) ListProwJobRunsSince(ctx context.Context, since *time.Time) ([]*jobrunaggregatorapi.BigQueryJobRunRow, error) {
+	var ret []*jobrunaggregatorapi.BigQueryJobRunRow
+	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
+		var innerErr error
+		ret, innerErr = c.delegate.ListProwJobRunsSince(ctx, since)
+		return innerErr
+	})
+	return ret, err
+}
+
 func (c *retryingCIDataClient) GetLastJobRunEndTimeFromTable(ctx context.Context, tableName string) (*time.Time, error) {
 	var ret *time.Time
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {

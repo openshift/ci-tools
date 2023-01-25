@@ -84,3 +84,16 @@ type JobRunRow struct {
 	ReleaseTag string
 	Cluster    string
 }
+
+// BigQueryJobRunRow is a transient struct for processing results from the bigquery jobs table.
+// Ultimately just used to convert to a prow.ProwJob.
+type BigQueryJobRunRow struct {
+	JobName        string    `bigquery:"prowjob_job_name"`
+	State          string    `bigquery:"prowjob_state"`
+	BuildID        string    `bigquery:"prowjob_build_id"`
+	Type           string    `bigquery:"prowjob_type"`
+	Cluster        string    `bigquery:"prowjob_cluster"`
+	StartTime      time.Time `bigquery:"prowjob_start_ts"`
+	CompletionTime time.Time `bigquery:"prowjob_completion_ts"`
+	URL            string    `bigquery:"prowjob_url"`
+}

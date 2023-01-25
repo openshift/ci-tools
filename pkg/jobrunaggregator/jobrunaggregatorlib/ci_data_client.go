@@ -40,6 +40,11 @@ type TestRunSummarizerClient interface {
 
 type JobLister interface {
 	ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error)
+
+	// ListProwJobRunsSince lists from the testplatform BigQuery dataset in a separate project from
+	// where we normally operate. Job runs are inserted here just after their GCS artifacts are uploaded.
+	// This function is used for importing runs we do not yet have into our tables.
+	ListProwJobRunsSince(ctx context.Context, since *time.Time) ([]*jobrunaggregatorapi.BigQueryJobRunRow, error)
 }
 
 type HistoricalDataClient interface {
@@ -336,7 +341,47 @@ ORDER BY EndTime ASC
 	}
 
 	return jobRunIDs, nil
+}
 
+func (c *ciDataClient) ListProwJobRunsSince(ctx context.Context, since *time.Time) ([]*jobrunaggregatorapi.BigQueryJobRunRow, error) {
+	// NOTE: this query is going to a different GCP project and data set to list the
+	// prow jobs stored by testplatform.
+	queryString := `SELECT 
+			prowjob_job_name, 
+			prowjob_state, 
+			prowjob_build_id, 
+			prowjob_type, 
+			prowjob_cluster, 
+            prowjob_url,
+			TIMESTAMP(prowjob_start) AS prowjob_start_ts, 
+			TIMESTAMP(prowjob_completion) AS prowjob_completion_ts ` +
+		"FROM `openshift-gce-devel.ci_analysis_us.jobs` " +
+		`WHERE TIMESTAMP(prowjob_completion) > @Since 
+           AND prowjob_url IS NOT NULL 
+           ORDER BY prowjob_completion_ts`
+	query := c.client.Query(queryString)
+	query.QueryConfig.Parameters = []bigquery.QueryParameter{
+		{Name: "Since", Value: *since},
+	}
+	jobRows, err := query.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query job table with %q: %w", queryString, err)
+	}
+
+	jobRuns := []*jobrunaggregatorapi.BigQueryJobRunRow{}
+	for {
+		bqjr := &jobrunaggregatorapi.BigQueryJobRunRow{}
+		err := jobRows.Next(bqjr)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		jobRuns = append(jobRuns, bqjr)
+	}
+
+	return jobRuns, nil
 }
 
 func (c *ciDataClient) GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {

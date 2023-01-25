@@ -16,8 +16,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
 
-type getLastJobRunWithDataFunc func(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
-type getLastJobRunEndTimeFunc func(ctx context.Context) (*time.Time, error)
 type shouldCollectDataForJobFunc func(job jobrunaggregatorapi.JobRow) bool
 
 func wantsTestRunData(job jobrunaggregatorapi.JobRow) bool {
@@ -77,10 +75,9 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 		lastUploadedJobEndTime = &t
 	}
 
-	// Subtract 12 hours from our last upload, we're going to list all prow jobs ending 12 hours prior
-	// to our last import. This is because we cannot assume jobs finish in the order they were created.
-	// We know we sometimes have long job timeouts allowed, so we go back 12 hours to be safe.
-	listProwJobsSince := lastUploadedJobEndTime.Add(-12 * time.Hour)
+	// Subtract 30 min from our last upload, we're going to list all prow jobs ending this amount prior
+	// to our last import just incase jobs get inserted slightly out of order from their actual recorded end time.
+	listProwJobsSince := lastUploadedJobEndTime.Add(-30 * time.Minute)
 	logrus.WithField("since", listProwJobsSince).Info("listing prow jobs since")
 
 	// Lookup the known prow job IDs (already uploaded) that ended within this window. BigQuery does not
@@ -91,6 +88,13 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 		return fmt.Errorf("error listing uploaded job run IDs: %w", err)
 	}
 	logrus.WithField("idCount", len(existingJobRunIDs)).Info("found existing job run IDs")
+
+	// Lookup the jobs that have run and we may need to import. There will be some overlap with what we already have.
+	jobRunsToImport, err := o.ciDataClient.ListProwJobRunsSince(ctx, &listProwJobsSince)
+	if err != nil {
+		return fmt.Errorf("error listing job runs to import: %w", err)
+	}
+	logrus.WithField("importCount", len(jobRunsToImport)).Info("found job runs to import")
 
 	errs := []error{}
 	/*

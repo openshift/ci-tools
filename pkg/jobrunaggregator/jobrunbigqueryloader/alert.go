@@ -154,6 +154,10 @@ func (o *alertUploader) getLastUploadedJobRunEndTime(ctx context.Context) (*time
 	return o.ciDataClient.GetLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.AlertJobRunTableName)
 }
 
+func (o *alertUploader) listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) ([]string, error) {
+	return o.ciDataClient.ListUploadedJobRunIDsSinceFromTable(ctx, jobrunaggregatorapi.AlertJobRunTableName, since)
+}
+
 func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error {
 	logger.Info("uploading alert results")
 	alertData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "alert")

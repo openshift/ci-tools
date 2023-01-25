@@ -56,8 +56,13 @@ type CIDataClient interface {
 	// these deal with release tags
 	ListReleaseTags(ctx context.Context) (sets.String, error)
 
+	// GetLastJobRunFromTableForJobName returns the last uploaded job run for the given job name and table.
 	GetLastJobRunFromTableForJobName(ctx context.Context, tableName, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
+
+	// GetLastJobRunEndTimeFromTable returns the last uploaded job runs EndTime in the given table.
 	GetLastJobRunEndTimeFromTable(ctx context.Context, table string) (*time.Time, error)
+
+	ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) ([]string, error)
 }
 
 type ciDataClient struct {
@@ -295,6 +300,43 @@ LIMIT 1
 		return nil, err
 	}
 	return lastJobRun, nil
+}
+
+func (c *ciDataClient) ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) ([]string, error) {
+	queryString := c.dataCoordinates.SubstituteDataSetLocation(
+		`SELECT Name as JobRunID  
+FROM DATA_SET_LOCATION.` + table + `
+WHERE EndTime >= @Since
+ORDER BY EndTime ASC
+`)
+	query := c.client.Query(queryString)
+	query.QueryConfig.Parameters = []bigquery.QueryParameter{
+		{Name: "Since", Value: *since},
+	}
+	jobRows, err := query.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query job table with %q: %w", queryString, err)
+	}
+
+	type jobRunID struct {
+		JobRunID string
+	}
+
+	jobRunIDs := []string{}
+	for {
+		jobRunID := &jobRunID{}
+		err = jobRows.Next(jobRunID)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		jobRunIDs = append(jobRunIDs, jobRunID.JobRunID)
+	}
+
+	return jobRunIDs, nil
+
 }
 
 func (c *ciDataClient) GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {

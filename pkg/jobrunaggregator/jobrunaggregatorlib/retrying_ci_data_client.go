@@ -64,6 +64,16 @@ func (c *retryingCIDataClient) GetLastJobRunEndTimeFromTable(ctx context.Context
 	return ret, err
 }
 
+func (c *retryingCIDataClient) ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) ([]string, error) {
+	var ret []string
+	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
+		var innerErr error
+		ret, innerErr = c.delegate.ListUploadedJobRunIDsSinceFromTable(ctx, table, since)
+		return innerErr
+	})
+	return ret, err
+}
+
 func (c *retryingCIDataClient) GetLastAggregationForJob(ctx context.Context, frequency, jobName string) (*jobrunaggregatorapi.AggregatedTestRunRow, error) {
 	var ret *jobrunaggregatorapi.AggregatedTestRunRow
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {

@@ -86,6 +86,11 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 	// Lookup the known prow job IDs (already uploaded) that ended within this window. BigQuery does not
 	// prevent us from inserting duplicate rows, we have to do it ourselves. We'll compare
 	// each incoming prow job to make sure it's not in the list we've already inserted.
+	existingJobRunIDs, err := o.jobRunUploader.listUploadedJobRunIDsSince(ctx, &listProwJobsSince)
+	if err != nil {
+		return fmt.Errorf("error listing uploaded job run IDs: %w", err)
+	}
+	logrus.WithField("idCount", len(existingJobRunIDs)).Info("found existing job run IDs")
 
 	errs := []error{}
 	/*
@@ -272,6 +277,7 @@ type uploader interface {
 	uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error
 	getLastUploadedJobRunForJob(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
 	getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error)
+	listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) ([]string, error)
 }
 
 // jobRunLoaderOptions

@@ -148,6 +148,10 @@ func (o *disruptionUploader) getLastUploadedJobRunEndTime(ctx context.Context) (
 	return o.ciDataClient.GetLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.DisruptionJobRunTableName)
 }
 
+func (o *disruptionUploader) listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) ([]string, error) {
+	return o.ciDataClient.ListUploadedJobRunIDsSinceFromTable(ctx, jobrunaggregatorapi.DisruptionJobRunTableName, since)
+}
+
 func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob,
 	logger logrus.FieldLogger) error {
 	logger.Info("uploading backend disruption results")

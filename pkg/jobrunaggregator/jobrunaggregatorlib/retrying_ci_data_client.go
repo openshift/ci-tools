@@ -74,8 +74,8 @@ func (c *retryingCIDataClient) GetLastJobRunEndTimeFromTable(ctx context.Context
 	return ret, err
 }
 
-func (c *retryingCIDataClient) ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) ([]string, error) {
-	var ret []string
+func (c *retryingCIDataClient) ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) (map[string]bool, error) {
+	var ret map[string]bool
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
 		ret, innerErr = c.delegate.ListUploadedJobRunIDsSinceFromTable(ctx, table, since)

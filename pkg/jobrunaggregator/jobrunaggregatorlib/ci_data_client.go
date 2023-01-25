@@ -67,7 +67,7 @@ type CIDataClient interface {
 	// GetLastJobRunEndTimeFromTable returns the last uploaded job runs EndTime in the given table.
 	GetLastJobRunEndTimeFromTable(ctx context.Context, table string) (*time.Time, error)
 
-	ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) ([]string, error)
+	ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) (map[string]bool, error)
 }
 
 type ciDataClient struct {
@@ -244,7 +244,7 @@ ORDER BY Jobs.JobName ASC
 	return jobs, nil
 }
 
-// LastJobTimestamp retrieves the last imported job timestamp.
+// GetLastJobRunEndTimeFromTable retrieves the last imported job end time.
 func (c *ciDataClient) GetLastJobRunEndTimeFromTable(ctx context.Context, table string) (*time.Time, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
 		`SELECT max(EndTime) AS EndTime FROM DATA_SET_LOCATION.` + table)
@@ -307,7 +307,7 @@ LIMIT 1
 	return lastJobRun, nil
 }
 
-func (c *ciDataClient) ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) ([]string, error) {
+func (c *ciDataClient) ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) (map[string]bool, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
 		`SELECT Name as JobRunID  
 FROM DATA_SET_LOCATION.` + table + `
@@ -327,7 +327,7 @@ ORDER BY EndTime ASC
 		JobRunID string
 	}
 
-	jobRunIDs := []string{}
+	jobRunIDs := map[string]bool{}
 	for {
 		jobRunID := &jobRunID{}
 		err = jobRows.Next(jobRunID)
@@ -337,7 +337,7 @@ ORDER BY EndTime ASC
 		if err != nil {
 			return nil, err
 		}
-		jobRunIDs = append(jobRunIDs, jobRunID.JobRunID)
+		jobRunIDs[jobRunID.JobRunID] = true
 	}
 
 	return jobRunIDs, nil

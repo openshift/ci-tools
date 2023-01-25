@@ -154,7 +154,7 @@ func (o *alertUploader) getLastUploadedJobRunEndTime(ctx context.Context) (*time
 	return o.ciDataClient.GetLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.AlertJobRunTableName)
 }
 
-func (o *alertUploader) listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) ([]string, error) {
+func (o *alertUploader) listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) (map[string]bool, error) {
 	return o.ciDataClient.ListUploadedJobRunIDsSinceFromTable(ctx, jobrunaggregatorapi.AlertJobRunTableName, since)
 }
 

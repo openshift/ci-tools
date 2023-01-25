@@ -35,7 +35,7 @@ func (o *testRunUploader) getLastUploadedJobRunEndTime(ctx context.Context) (*ti
 	return o.ciDataClient.GetLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.LegacyJobRunTableName)
 }
 
-func (o *testRunUploader) listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) ([]string, error) {
+func (o *testRunUploader) listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) (map[string]bool, error) {
 	return o.ciDataClient.ListUploadedJobRunIDsSinceFromTable(ctx, jobrunaggregatorapi.LegacyJobRunTableName, since)
 }
 

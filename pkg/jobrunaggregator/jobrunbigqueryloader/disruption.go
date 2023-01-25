@@ -148,7 +148,7 @@ func (o *disruptionUploader) getLastUploadedJobRunEndTime(ctx context.Context) (
 	return o.ciDataClient.GetLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.DisruptionJobRunTableName)
 }
 
-func (o *disruptionUploader) listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) ([]string, error) {
+func (o *disruptionUploader) listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) (map[string]bool, error) {
 	return o.ciDataClient.ListUploadedJobRunIDsSinceFromTable(ctx, jobrunaggregatorapi.DisruptionJobRunTableName, since)
 }
 

@@ -18,7 +18,7 @@ const (
 	// workerCount is the number of goroutines we run for concurrently importing job runs.
 	// This bounds both our access to reading artifacts from GCS, as well as our writes
 	// to BigQuery.
-	workerCount = 20
+	workerCount = 10
 )
 
 type shouldCollectDataForJobFunc func(job jobrunaggregatorapi.JobRow) bool
@@ -127,7 +127,8 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 		jobRunsToImportCh <- jr
 	}
 	close(jobRunsToImportCh)
-	logrus.WithField("runsToImport", len(jobRunsToImportCh)).Info("job runs to import after filtering")
+	runsToImportCount := len(jobRunsToImportCh)
+	logrus.WithField("runsToImport", runsToImportCount).Info("job runs to import after filtering")
 
 	errs := []error{}
 
@@ -136,7 +137,7 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 	errChan := make(chan error, jobCount)
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
-		go o.processJobRuns(ctx, &wg, i, jobCount, jobRunsToImportCh, errChan)
+		go o.processJobRuns(ctx, &wg, i, runsToImportCount, jobRunsToImportCh, errChan)
 	}
 
 	wg.Wait()
@@ -150,7 +151,6 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 
 	duration := time.Now().Sub(start)
 	logrus.WithFields(logrus.Fields{
-		"jobs":     jobCount,
 		"duration": duration,
 		"errors":   len(errs),
 	}).Info("completed upload")
@@ -160,16 +160,17 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 
 // processJobRuns is started in several concurrent goroutines to pull job runs to process from the channel. Errors are sent
 // to the errChan for aggregation in the main thread.
-func (o *allJobsLoaderOptions) processJobRuns(ctx context.Context, wg *sync.WaitGroup, workerThread, jobCount int, jobRunsToImportCh <-chan *jobrunaggregatorapi.BigQueryJobRunRow, errChan chan<- error) {
+func (o *allJobsLoaderOptions) processJobRuns(ctx context.Context, wg *sync.WaitGroup, workerThread, origRunsToImportCount int, jobRunsToImportCh <-chan *jobrunaggregatorapi.BigQueryJobRunRow, errChan chan<- error) {
 	defer wg.Done()
 	for job := range jobRunsToImportCh {
 		jrLogger := logrus.WithFields(logrus.Fields{
-			"worker": workerThread,
-			"job":    job.JobName,
-			"run":    job.BuildID,
+			"worker":   workerThread,
+			"job":      job.JobName,
+			"run":      job.BuildID,
+			"progress": fmt.Sprintf("%d/%d", origRunsToImportCount-len(jobRunsToImportCh), origRunsToImportCount),
 		})
 		// log how many job runs remain to be processed
-		jrLogger.WithField("remaining", fmt.Sprintf("%d/%d", len(jobRunsToImportCh), jobCount)).Info("pulled job run from queue")
+		jrLogger.Info("pulled job run from queue")
 
 		jobRunInserter := o.newJobRunBigQueryLoaderOptions(job.JobName, job.BuildID, jrLogger)
 		if err := jobRunInserter.Run(ctx); err != nil {

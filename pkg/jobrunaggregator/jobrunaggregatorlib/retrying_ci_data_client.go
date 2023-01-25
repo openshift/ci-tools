@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
@@ -177,6 +178,7 @@ func isReadQuotaError(err error) bool {
 		return false
 	}
 	if strings.Contains(err.Error(), "exceeded quota for concurrent queries") {
+		logrus.WithError(err).Warn("hit a read quota error")
 		return true
 	}
 	return false

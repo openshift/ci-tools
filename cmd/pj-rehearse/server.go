@@ -266,6 +266,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 					fileLocation := s.dumpAffectedJobsToGCS(pullRequest, presubmits, periodics, jobCount, logger)
 					jobTableLines = append(jobTableLines, fmt.Sprintf("A full list of affected jobs can be found [here](%s%s)", s.rehearsalConfig.GCSBrowserPrefix, fileLocation))
 				}
+				jobTableLines = append(jobTableLines, s.getUsageDetailsLines()...)
 				if err = s.ghc.CreateComment(org, repo, number, strings.Join(jobTableLines, "\n")); err != nil {
 					logger.WithError(err).Error("failed to create comment")
 				}

@@ -27,10 +27,6 @@ func newTestRunUploader(testRunInserter jobrunaggregatorlib.BigQueryInserter,
 	}
 }
 
-func (o *testRunUploader) getLastUploadedJobRunForJob(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	return o.ciDataClient.GetLastJobRunFromTableForJobName(ctx, jobrunaggregatorapi.LegacyJobRunTableName, jobName)
-}
-
 func (o *testRunUploader) getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error) {
 	return o.ciDataClient.GetLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.LegacyJobRunTableName)
 }

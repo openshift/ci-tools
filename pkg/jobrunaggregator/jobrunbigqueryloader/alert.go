@@ -146,10 +146,6 @@ func newAlertUploader(alertInserter jobrunaggregatorlib.BigQueryInserter,
 	}
 }
 
-func (o *alertUploader) getLastUploadedJobRunForJob(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	return o.ciDataClient.GetLastJobRunFromTableForJobName(ctx, jobrunaggregatorapi.AlertJobRunTableName, jobName)
-}
-
 func (o *alertUploader) getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error) {
 	return o.ciDataClient.GetLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.AlertJobRunTableName)
 }

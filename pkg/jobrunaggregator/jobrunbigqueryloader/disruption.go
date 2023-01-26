@@ -140,10 +140,6 @@ func newDisruptionUploader(backendDisruptionInserter jobrunaggregatorlib.BigQuer
 	}
 }
 
-func (o *disruptionUploader) getLastUploadedJobRunForJob(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	return o.ciDataClient.GetLastJobRunFromTableForJobName(ctx, jobrunaggregatorapi.DisruptionJobRunTableName, jobName)
-}
-
 func (o *disruptionUploader) getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error) {
 	return o.ciDataClient.GetLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.DisruptionJobRunTableName)
 }

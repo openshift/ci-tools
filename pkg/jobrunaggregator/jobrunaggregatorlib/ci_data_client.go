@@ -61,9 +61,6 @@ type CIDataClient interface {
 	// these deal with release tags
 	ListReleaseTags(ctx context.Context) (sets.String, error)
 
-	// GetLastJobRunFromTableForJobName returns the last uploaded job run for the given job name and table.
-	GetLastJobRunFromTableForJobName(ctx context.Context, tableName, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
-
 	// GetLastJobRunEndTimeFromTable returns the last uploaded job runs EndTime in the given table.
 	GetLastJobRunEndTimeFromTable(ctx context.Context, table string) (*time.Time, error)
 
@@ -271,40 +268,6 @@ func (c *ciDataClient) GetLastJobRunEndTimeFromTable(ctx context.Context, table 
 		}
 	}
 	return &maxEndTime.EndTime, nil
-}
-
-func (c *ciDataClient) GetLastJobRunFromTableForJobName(ctx context.Context, tableName, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	// the JobRun.Name is always increasing, so we can sort by that name.  The starttime is based on the prowjob
-	// time and I don't think that is coordinated.
-	// the testruns jobrun table is now distinct, so we will use the jobrun table as authoritative for what data should and should not
-	// be uploaded rather than using the absence of testruns itself.  This will avoid having a large join and if a jobrun lacks test runs
-	// for some reason, this avoids duplicate jobruns being created.
-	queryString := c.dataCoordinates.SubstituteDataSetLocation(
-		`
-SELECT *
-FROM DATA_SET_LOCATION.` + tableName + ` as JobRuns 
-WHERE JobRuns.JobName = @JobName
-ORDER BY JobRuns.Name DESC
-LIMIT 1
-`)
-
-	query := c.client.Query(queryString)
-	query.QueryConfig.Parameters = []bigquery.QueryParameter{
-		{Name: "JobName", Value: jobName},
-	}
-	lastJobRunRow, err := query.Read(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query aggregation table with %q: %w", queryString, err)
-	}
-	lastJobRun := &jobrunaggregatorapi.JobRunRow{}
-	err = lastJobRunRow.Next(lastJobRun)
-	if err == iterator.Done {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return lastJobRun, nil
 }
 
 func (c *ciDataClient) ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) (map[string]bool, error) {

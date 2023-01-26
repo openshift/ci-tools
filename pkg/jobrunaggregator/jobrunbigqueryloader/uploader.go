@@ -193,9 +193,9 @@ func (o *allJobsLoaderOptions) newJobRunBigQueryLoaderOptions(jobName, jobRunID 
 	}
 }
 
+// uploader encapsulates the logic for lookups and uploads specific to each type of content we ingest. (disruption, alerting, test runs, etc)
 type uploader interface {
 	uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error
-	getLastUploadedJobRunForJob(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
 	getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error)
 	listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) (map[string]bool, error)
 }
@@ -221,8 +221,6 @@ func (o *jobRunLoaderOptions) Run(ctx context.Context) error {
 
 	o.logger.Debug("Analyzing jobrun")
 
-	// TODO: probably don't need to read the prowjob.json anymore, remove this, we already got it
-	// from bigquery.
 	jobRun, err := o.readJobRunFromGCS(ctx)
 	if err != nil {
 		o.logger.WithError(err).Error("error reading job run from GCS")

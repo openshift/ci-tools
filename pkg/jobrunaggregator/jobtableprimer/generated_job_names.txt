@@ -572,6 +572,7 @@ periodic-ci-openshift-release-master-ci-4.12-upgrade-from-stable-4.11-from-stabl
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-cilium
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-ovn
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-ovn-network-migration
+periodic-ci-openshift-release-master-ci-4.13-e2e-aws-ovn-no-capabilities
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-ovn-serial
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-sdn
@@ -579,7 +580,6 @@ periodic-ci-openshift-release-master-ci-4.13-e2e-aws-sdn-cgroupsv2
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-sdn-crun
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-sdn-imdsv2
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-sdn-multitenant
-periodic-ci-openshift-release-master-ci-4.13-e2e-aws-sdn-no-capabilities
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-sdn-serial
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-sdn-techpreview
 periodic-ci-openshift-release-master-ci-4.13-e2e-aws-sdn-techpreview-serial

@@ -52,7 +52,8 @@ const (
 	<thead>
 		<tr>
 			<th title="The name of the Pull Request Payload Qualification Run" class="info">Name</th>
-			<th title="The author of Pull Request and the name of Pull Request" class="info">Pull Request</th>
+			<th title="The repository of pull request" class="info">Repository</th>
+			<th title="Hovering over the number will display the name of the pull request" class="info">Pull Request</th>
 		</tr>
 	</thead>
 	<tbody>
@@ -67,13 +68,10 @@ const (
 			</td>
 			<td>
 			{{ with .Spec.PullRequest }}
-			<ul>
-				<li>Title: {{ prLink . }}</li>
-				<li>Author: {{ authorLink .PullRequest.Author }}</li>
-				<li>Organization: {{ orgLink .Org }}</li>
-				<li>Repository: {{ repoLink .Org .Repo }}</li>
-				<li>Number: {{ .PullRequest.Number }}</li>
-			</ul>
+				<p>{{ repoLink .Org .Repo }}</p>
+			</td>
+			<td>
+				<p>{{ prLink . }} by {{ authorLink .PullRequest.Author }}</p>
 			{{ end }}
 			</td>
 		</tr>
@@ -92,16 +90,13 @@ Created: {{ .ObjectMeta.CreationTimestamp }}
 <h2>Pull request</h2>
 
 {{ with .PullRequest }}
-{{ prLink . }}
+{{ prLink . }} by {{ authorLink .PullRequest.Author }}
 <ul>
-    <li>Author: {{ authorLink .PullRequest.Author }}</li>
-	<li>Organization: {{ orgLink .Org }}</li>
 	<li>Repository: {{ repoLink .Org .Repo }}</li>
-	<li>Number: {{ .PullRequest.Number }}</li>
     <li>SHA: <tt>{{ shaLink . .PullRequest.SHA }}</tt></li>
-  <li>
-    Base: <tt>{{ refLink . .BaseRef }}</tt> (<tt>{{ shaLink . .BaseSHA }}</tt>)
-  </li>
+	<li>
+		Base: <tt>{{ refLink . .BaseRef }}</tt> (<tt>{{ shaLink . .BaseSHA }}</tt>)
+	</li>
 </ul>
 {{ end }}{{/* with .PullRequest */}}
 
@@ -170,7 +165,8 @@ func prLink(pr *prpqv1.PullRequestUnderTest) template.HTML {
 	repo := template.HTMLEscapeString(pr.Repo)
 	title := template.HTMLEscapeString(pr.PullRequest.Title)
 	n := pr.PullRequest.Number
-	ret := fmt.Sprintf(`<a href="http://github.com/%s/%s/pull/%d">%s</a>`, org, repo, n, title)
+	ret := fmt.Sprintf(`#<a href="http://github.com/%s/%s/pull/%d" title="%s" class="info">%d</a>`,
+		org, repo, n, title, n)
 	return template.HTML(ret)
 }
 
@@ -180,12 +176,10 @@ func authorLink(a string) template.HTML {
 	return template.HTML(ret)
 }
 
-var orgLink = authorLink
-
 func repoLink(org string, repo string) template.HTML {
 	org = template.HTMLEscapeString(org)
 	repo = template.HTMLEscapeString(repo)
-	ret := fmt.Sprintf(`<a href="https://github.com/%s/%s">%s</a>`, org, repo, repo)
+	ret := fmt.Sprintf(`<a href="https://github.com/%s/%s">%s/%s</a>`, org, repo, org, repo)
 	return template.HTML(ret)
 }
 
@@ -193,7 +187,6 @@ func newServer(client ctrlruntimeclient.Client, ctx context.Context, namespace s
 	runsListTemplate, err := template.New("runsListTemplate").Funcs(template.FuncMap{
 		"prLink":     prLink,
 		"authorLink": authorLink,
-		"orgLink":    orgLink,
 		"repoLink":   repoLink,
 	}).Parse(runsListTemplate)
 
@@ -267,7 +260,6 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 	tmpl.Funcs(template.FuncMap{
 		"prLink":     prLink,
 		"authorLink": authorLink,
-		"orgLink":    orgLink,
 		"repoLink":   repoLink,
 		"refLink": func(pr *prpqv1.PullRequestUnderTest, r string) template.HTML {
 			r = template.HTMLEscapeString(r)

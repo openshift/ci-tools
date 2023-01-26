@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/sirupsen/logrus"
@@ -17,90 +16,11 @@ import (
 
 type CIGCSClient interface {
 	ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation, jobName, jobRunID string, logger logrus.FieldLogger) (jobrunaggregatorapi.JobRunInfo, error)
-
-	// ListJobRunNames returns a string channel for jobRunNames, an error channel for reporting errors during listing,
-	// and an error if the listing cannot begin.
-	ListJobRunNamesOlderThanFourHours(ctx context.Context, jobName, startingID string, logger logrus.FieldLogger) (chan string, chan error, error)
 }
 
 type ciGCSClient struct {
 	gcsClient     *storage.Client
 	gcsBucketName string
-}
-
-func (o *ciGCSClient) ListJobRunNamesOlderThanFourHours(ctx context.Context, jobName, startingID string, logger logrus.FieldLogger) (chan string, chan error, error) {
-	query := &storage.Query{
-		// This ends up being the equivalent of:
-		// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade
-		Prefix: "logs/" + jobName,
-
-		// TODO this field is apparently missing from this level of go/storage
-		// Omit owner and ACL fields for performance
-		//Projection: storage.ProjectionNoACL,
-	}
-
-	// Only retrieve the name and creation time for performance
-	if err := query.SetAttrSelection([]string{"Name", "Created"}); err != nil {
-		return nil, nil, err
-	}
-
-	// When debugging, you can set the starting ID to a number such that you
-	// will process a relatively small number of jobsRuns.
-	query.StartOffset = fmt.Sprintf("logs/%s/%s", jobName, startingID)
-	logger.Debugf("starting from %v", query.StartOffset)
-
-	now := time.Now()
-
-	// Returns an iterator which iterates over the bucket query results.
-	// Unfortunately, this will list *all* files with the query prefix.
-	bkt := o.gcsClient.Bucket(o.gcsBucketName)
-	it := bkt.Objects(ctx, query)
-
-	errorCh := make(chan error, 100)
-	jobRunProcessingCh := make(chan string, 100)
-	// Find the query results we're the most interested in. In this case, we're interested in files called prowjob.json
-	// so that we only get each jobrun once and we queue them in a channel
-	go func() {
-		defer close(jobRunProcessingCh)
-
-		for {
-			if ctx.Err() != nil {
-				return
-			}
-
-			attrs, err := it.Next()
-			if err == iterator.Done {
-				// we're done adding values, so close the channel
-				return
-			}
-			if err != nil {
-				errorCh <- err
-				return
-			}
-
-			// TODO if it's more than 100 days old, we don't need it
-			if now.Sub(attrs.Created) > (100 * 24 * time.Hour) {
-				continue
-			}
-			// chosen because CI jobs only take four hours max (so far), so we only get completed jobs
-			// TODO: this needs to go up, we often bump beyond this.
-			if now.Sub(attrs.Created) < (4 * time.Hour) {
-				continue
-			}
-
-			switch {
-			case strings.HasSuffix(attrs.Name, "prowjob.json"):
-				jobRunId := filepath.Base(filepath.Dir(attrs.Name))
-				logger.WithField("jobRun", jobRunId).Debug("Queued jobrun")
-				jobRunProcessingCh <- jobRunId
-
-			default:
-				//fmt.Printf("checking %q\n", attrs.Name)
-			}
-		}
-	}()
-
-	return jobRunProcessingCh, errorCh, nil
 }
 
 func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation, jobName, jobRunID string, logger logrus.FieldLogger) (jobrunaggregatorapi.JobRunInfo, error) {

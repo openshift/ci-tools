@@ -243,7 +243,7 @@ func (o *jobRunLoaderOptions) uploadJobRun(ctx context.Context, jobRun jobrunagg
 	if err != nil {
 		return err
 	}
-	o.logger.Info("uploading prowjob.yaml")
+	o.logger.Info("inserting job run row")
 	jobRunRow := newJobRunRow(jobRun, prowJob)
 	if err := o.jobRunInserter.Put(ctx, jobRunRow); err != nil {
 		o.logger.WithError(err).Error("error inserting job run row")

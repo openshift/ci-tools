@@ -45,8 +45,8 @@ func (c *retryingCIDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggrega
 	return ret, err
 }
 
-func (c *retryingCIDataClient) ListProwJobRunsSince(ctx context.Context, since *time.Time) ([]*jobrunaggregatorapi.BigQueryJobRunRow, error) {
-	var ret []*jobrunaggregatorapi.BigQueryJobRunRow
+func (c *retryingCIDataClient) ListProwJobRunsSince(ctx context.Context, since *time.Time) ([]*jobrunaggregatorapi.TestPlatformProwJobRow, error) {
+	var ret []*jobrunaggregatorapi.TestPlatformProwJobRow
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
 		ret, innerErr = c.delegate.ListProwJobRunsSince(ctx, since)

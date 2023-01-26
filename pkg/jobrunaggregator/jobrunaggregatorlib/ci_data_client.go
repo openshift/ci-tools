@@ -44,7 +44,7 @@ type JobLister interface {
 	// ListProwJobRunsSince lists from the testplatform BigQuery dataset in a separate project from
 	// where we normally operate. Job runs are inserted here just after their GCS artifacts are uploaded.
 	// This function is used for importing runs we do not yet have into our tables.
-	ListProwJobRunsSince(ctx context.Context, since *time.Time) ([]*jobrunaggregatorapi.BigQueryJobRunRow, error)
+	ListProwJobRunsSince(ctx context.Context, since *time.Time) ([]*jobrunaggregatorapi.TestPlatformProwJobRow, error)
 }
 
 type HistoricalDataClient interface {
@@ -306,7 +306,7 @@ ORDER BY EndTime ASC
 	return jobRunIDs, nil
 }
 
-func (c *ciDataClient) ListProwJobRunsSince(ctx context.Context, since *time.Time) ([]*jobrunaggregatorapi.BigQueryJobRunRow, error) {
+func (c *ciDataClient) ListProwJobRunsSince(ctx context.Context, since *time.Time) ([]*jobrunaggregatorapi.TestPlatformProwJobRow, error) {
 	// NOTE: this query is going to a different GCP project and data set to list the
 	// prow jobs stored by testplatform.
 	queryString := `SELECT 
@@ -331,9 +331,9 @@ func (c *ciDataClient) ListProwJobRunsSince(ctx context.Context, since *time.Tim
 		return nil, fmt.Errorf("failed to query job table with %q: %w", queryString, err)
 	}
 
-	jobRuns := []*jobrunaggregatorapi.BigQueryJobRunRow{}
+	jobRuns := []*jobrunaggregatorapi.TestPlatformProwJobRow{}
 	for {
-		bqjr := &jobrunaggregatorapi.BigQueryJobRunRow{}
+		bqjr := &jobrunaggregatorapi.TestPlatformProwJobRow{}
 		err := jobRows.Next(bqjr)
 		if err == iterator.Done {
 			break

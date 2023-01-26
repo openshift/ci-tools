@@ -103,7 +103,7 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 
 	// Populate a channel with all the job runs we want to import, worker threads will pull
 	// from here until there's nothing left.
-	jobRunsToImportCh := make(chan *jobrunaggregatorapi.BigQueryJobRunRow, jobCount)
+	jobRunsToImportCh := make(chan *jobrunaggregatorapi.TestPlatformProwJobRow, jobCount)
 	for i := range jobRunsToImport {
 		jr := jobRunsToImport[i]
 
@@ -160,7 +160,7 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 
 // processJobRuns is started in several concurrent goroutines to pull job runs to process from the channel. Errors are sent
 // to the errChan for aggregation in the main thread.
-func (o *allJobsLoaderOptions) processJobRuns(ctx context.Context, wg *sync.WaitGroup, workerThread, origRunsToImportCount int, jobRunsToImportCh <-chan *jobrunaggregatorapi.BigQueryJobRunRow, errChan chan<- error) {
+func (o *allJobsLoaderOptions) processJobRuns(ctx context.Context, wg *sync.WaitGroup, workerThread, origRunsToImportCount int, jobRunsToImportCh <-chan *jobrunaggregatorapi.TestPlatformProwJobRow, errChan chan<- error) {
 	defer wg.Done()
 	for job := range jobRunsToImportCh {
 		jrLogger := logrus.WithFields(logrus.Fields{

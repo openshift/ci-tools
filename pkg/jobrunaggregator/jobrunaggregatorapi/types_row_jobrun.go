@@ -85,9 +85,9 @@ type JobRunRow struct {
 	Cluster    string
 }
 
-// BigQueryJobRunRow is a transient struct for processing results from the bigquery jobs table.
-// Ultimately just used to convert to a prow.ProwJob.
-type BigQueryJobRunRow struct {
+// TestPlatformProwJobRow is a transient struct for processing results from the bigquery jobs table populated
+// by testplatform. ProwJob kube resources are stored here after we upload job artifacts to GCS.
+type TestPlatformProwJobRow struct {
 	JobName        string    `bigquery:"prowjob_job_name"`
 	State          string    `bigquery:"prowjob_state"`
 	BuildID        string    `bigquery:"prowjob_build_id"`

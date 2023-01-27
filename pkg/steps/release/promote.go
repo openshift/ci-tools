@@ -224,7 +224,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *cor
 			Containers: []coreapi.Container{
 				{
 					Name:    "promotion",
-					Image:   fmt.Sprintf("%s/%s/4.8:cli", api.DomainForService(api.ServiceRegistry), api.ResolveMultiArchNamespaceFor("ocp")),
+					Image:   fmt.Sprintf("%s/%s/4.12:cli", api.DomainForService(api.ServiceRegistry), api.ResolveMultiArchNamespaceFor("ocp")),
 					Command: command,
 					Args:    args,
 					VolumeMounts: []coreapi.VolumeMount{

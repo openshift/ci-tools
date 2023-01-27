@@ -27,7 +27,7 @@ import (
 
 const (
 	// numSeries is the number of individual series of data generated for a given label set
-	numSeries = 10
+	numSeries = 5
 	// numSamples is the number of samples in an individual series
 	numSamples = 250
 	// samplingDuration is the duration between samples in a series

@@ -65,14 +65,10 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 		allBackends := getAllDisruptionBackendNames(jobRunIDToBackendNameToAvailabilityResult)
 		for _, backendName := range allBackends.List() {
 			jobRunIDToAvailabilityResultForBackend := getDisruptionForBackend(jobRunIDToBackendNameToAvailabilityResult, backendName)
-			failedJobRunIDs, successfulJobRunIDs, _, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
+			failedJobRunIDs, successfulJobRunIDs, status, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
 			if err != nil {
 				return nil, err
 			}
-
-			// we are still struggling with these tests being enabled causing payloads to fail too often to keep up with,
-			// disabling once again until we can bring in safely
-			status := testCaseSkipped
 
 			testCaseName := fmt.Sprintf(testCaseNamePattern, backendName)
 			testSuiteName := "aggregated-disruption"

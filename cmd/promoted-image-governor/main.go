@@ -545,6 +545,7 @@ func main() {
 		},
 		}); err != nil {
 			errs = append(errs, err)
+			continue
 		}
 		logrus.WithField("tag", tag.ISTagName()).Info("image stream tag is deleted")
 	}

@@ -316,7 +316,7 @@ func deleteTagsOnBuildFarm(ctx context.Context, appCIClient ctrlruntimeclient.Cl
 					}
 					if err := client.Delete(ctx, imageStream); err != nil {
 						if !kerrors.IsNotFound(err) {
-							errs = append(errs, fmt.Errorf("could not delete image stream %s in namespace %s on cluster %s", streamKey.Name, streamKey.Namespace, cluster))
+							errs = append(errs, fmt.Errorf("could not delete image stream %s in namespace %s on cluster %s: %w", streamKey.Name, streamKey.Namespace, cluster, err))
 						} else {
 							logrus.WithField("cluster", cluster).WithField("streamKey", streamKey).Debug("image stream not found upon deleting")
 						}
